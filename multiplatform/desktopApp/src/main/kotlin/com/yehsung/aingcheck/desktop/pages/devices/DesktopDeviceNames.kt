@@ -8,13 +8,15 @@ package com.yehsung.aingcheck.desktop.pages.devices
 
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDevice
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDeviceNameParts
+import com.yehsung.aingcheck.desktop.platform.windows.identity.WindowsDeviceIdentity
 
 object DesktopDeviceWord {
     const val PC = "PC"
     const val MAC = "맥"
     /** 종류를 모르는 자리(빈 id)만. */
     const val UNKNOWN = "컴퓨터"
-    const val WINDOWS_PREFIX = "win:"
+    /** 접두 글자는 기기 id 를 짓는 상수 한 곳(WindowsDeviceIdentity.DEVICE_ID_PREFIX — DeviceIdSingleSourceTest).*/
+    const val WINDOWS_PREFIX = WindowsDeviceIdentity.DEVICE_ID_PREFIX
 
     fun of(deviceID: String?): String = when {
         deviceID.isNullOrBlank() -> UNKNOWN

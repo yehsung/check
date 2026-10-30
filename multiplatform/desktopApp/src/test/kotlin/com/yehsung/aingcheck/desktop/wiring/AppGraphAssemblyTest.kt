@@ -57,8 +57,12 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
 import java.util.concurrent.Executor
+import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
+import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
+import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertSame
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Clock
@@ -98,7 +102,11 @@ private class RecordingPlatform(val log: MutableList<String>) : DesktopPlatform 
     override val loginItem: LoginItem? = null
 }
 
-private class AssemblyRig(val test: TestScope, config: DesktopAppConfig = DesktopAppConfig()) {
+private class AssemblyRig(
+    val test: TestScope,
+    config: DesktopAppConfig = DesktopAppConfig(),
+    kv: DesktopKeyValueStore = InMemoryDesktopKeyValueStore(),
+) {
     val log = mutableListOf<String>()
     val hosts = mutableSetOf<String>()
     val requests = mutableListOf<String>()
@@ -148,6 +156,7 @@ private class AssemblyRig(val test: TestScope, config: DesktopAppConfig = Deskto
         codexAccountRunner = { _ -> awaitCancellation() },
         computeDiagnostics = { _, _ -> null },
         runningTests = object : RunningTests { override val isRunningTests: Boolean = true },
+        keyValueStore = kv,
     )
     val app: AppWirings = graph.assemble(seams, scope)
 
@@ -155,43 +164,57 @@ private class AssemblyRig(val test: TestScope, config: DesktopAppConfig = Deskto
 }
 
 class AppGraphAssemblyTest {
-    /** W-6 #6: 조립 → 시작 → 종료 한 벌. 근무 마무리가 맨 앞, 실시간 shutdown 뒤에 껍데기, tray.remove 가 맨 끝. */
+    /** W-6 #6: 조립 → 시작 → 종료 한 벌(실패해도 리그를 닫는다 — 안 닫으면 틱 루프가 가상 시계를 끝없이 돌려 runTest 가 멈춘다). 근무 마무리가 맨 앞, 실시간 shutdown 뒤에 껍데기, tray.remove 가 맨 끝. */
     @Test
     fun assembledGraphStartsThenShutsDownInW6Order() = runTest {
         val r = AssemblyRig(this)
-        r.app.start()
-        advanceTimeBy(5_000)
-        runCurrent()
-        assertEquals(1, r.port.attached, "shell.start 가 플라이아웃 창을 한 번 잇는다")
-        assertTrue("tray.show" in r.log, "트레이 첫 그림은 shell.start 몫(고정 Off 아이콘 없음)")
-        assertTrue(r.platform.powerOpen > 0, "업데이트·근무·오버레이가 전원 사건을 듣는다")
+        try {
+            r.app.start()
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertEquals(1, r.port.attached, "shell.start 가 플라이아웃 창을 한 번 잇는다")
+            // W-3 #6: 말풍선 큐 한 벌 — 소셜이 쌓은 메시지를 오버레이가 띄운다.
+            assertSame(r.app.overlay.bubbles, r.app.social.bubbles, "오버레이·소셜 말풍선 큐가 둘이다")
+            assertTrue(r.app.os.isStarted, "os.start 는 shell.start 뒤 start() 안에서")
+            // 첫 실행(동의·자동 실행 값 없음): 플라이아웃을 한 번 연다 — 공용 호스트가 첫 실행 화면을 그린다(W-13 #5·#6).
+            assertTrue(r.app.pages.firstRun.pending.value, "빈 설정이면 첫 실행 대기")
+            assertTrue(r.app.shell.handle.nav.visible.value, "첫 실행이면 start() 가 플라이아웃을 연다")
+            assertTrue("tray.show" in r.log, "트레이 첫 그림은 shell.start 몫(고정 Off 아이콘 없음)")
+            assertTrue(r.platform.powerOpen > 0, "업데이트·근무·오버레이가 전원 사건을 듣는다")
 
-        val steps = mutableListOf<String>()
-        ShutdownSequence.run(r.app.shutdownSteps(), elapsedMillis = { testScheduler.currentTime }) { name ->
-            steps += name
-            r.log += "step:$name"
+            val steps = mutableListOf<String>()
+            ShutdownSequence.run(r.app.shutdownSteps(), elapsedMillis = { testScheduler.currentTime }) { name ->
+                steps += name
+                r.log += "step:$name"
+            }
+            assertEquals(
+                listOf(
+                    AppWirings.STEP_WORK_FINISH,
+                    AppWirings.STEP_TOKENS_PERSIST,
+                    AppWirings.STEP_TOKENS_STOP,
+                    AppWirings.STEP_REALTIME_SHUTDOWN,
+                    AppWirings.STEP_GAMES_STOP,
+                    AppWirings.STEP_OVERLAY_STOP,
+                    AppWirings.STEP_WORK_STOP,
+                    AppWirings.STEP_OS_STOP,
+                    AppWirings.STEP_SHELL_STOP,
+                    AppWirings.STEP_KV_FLUSH,
+                ),
+                steps,
+            )
+            assertEquals("os.stop", AppWirings.STEP_OS_STOP)
+            assertEquals("kv.flush", AppWirings.STEP_KV_FLUSH)
+            // 트레이는 껍데기의 맨 끝, kv flush 는 그 뒤(W3-d — 앞 단계들이 kv 에 쓴 뒤).
+            assertEquals(listOf("tray.remove", "step:${AppWirings.STEP_KV_FLUSH}"), r.log.takeLast(2), "트레이 → kv flush 가 맨 끝: ${r.log.takeLast(6)}")
+            val realtimeAt = r.log.indexOf("step:${AppWirings.STEP_REALTIME_SHUTDOWN}")
+            val firstPowerClose = r.log.indexOf("power.close")
+            assertTrue(firstPowerClose > realtimeAt, "전원·업데이트 구독은 실시간 shutdown 뒤에 닫힌다: ${r.log}")
+            assertEquals(0, r.platform.powerOpen, "종료 뒤 전원 구독 0")
+            assertTrue(r.hosts.all { it == "assembly.invalid" }, "망은 MockEngine 의 .invalid 만: ${r.hosts}")
+            assertTrue(r.uncaught.isEmpty(), "잡히지 않은 예외: ${r.uncaught}")
+        } finally {
+            r.close()
         }
-        assertEquals(
-            listOf(
-                AppWirings.STEP_WORK_FINISH,
-                AppWirings.STEP_TOKENS_PERSIST,
-                AppWirings.STEP_TOKENS_STOP,
-                AppWirings.STEP_REALTIME_SHUTDOWN,
-                AppWirings.STEP_GAMES_STOP,
-                AppWirings.STEP_OVERLAY_STOP,
-                AppWirings.STEP_WORK_STOP,
-                AppWirings.STEP_SHELL_STOP,
-            ),
-            steps,
-        )
-        assertEquals("tray.remove", r.log.last(), "트레이는 맨 끝에 걷는다: ${r.log.takeLast(6)}")
-        val realtimeAt = r.log.indexOf("step:${AppWirings.STEP_REALTIME_SHUTDOWN}")
-        val firstPowerClose = r.log.indexOf("power.close")
-        assertTrue(firstPowerClose > realtimeAt, "전원·업데이트 구독은 실시간 shutdown 뒤에 닫힌다: ${r.log}")
-        assertEquals(0, r.platform.powerOpen, "종료 뒤 전원 구독 0")
-        assertTrue(r.hosts.all { it == "assembly.invalid" }, "망은 MockEngine 의 .invalid 만: ${r.hosts}")
-        assertTrue(r.uncaught.isEmpty(), "잡히지 않은 예외: ${r.uncaught}")
-        r.close()
     }
 
     /** W-6 #1: poke=false 면 찌르기 발신을 조립하지 않는다(받기 0 · 보내기 0), 켜면 조립한다. */
@@ -209,6 +232,25 @@ class AppGraphAssemblyTest {
         val on = AssemblyRig(this, DesktopAppConfig(poke = true))
         assertTrue(on.app.social.actions.canPoke)
         on.close()
+    }
+
+    /** 첫 실행 화면은 동의·자동 실행 값이 하나라도 없을 때만 — 둘 다 답한 설치는 시작해도 플라이아웃을 열지 않는다. */
+    @Test
+    fun firstRunOpensFlyoutOnlyWhileSettingsAreUnanswered() = runTest {
+        val answered = InMemoryDesktopKeyValueStore().apply {
+            putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
+            putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
+        }
+        val r = AssemblyRig(this, kv = answered)
+        try {
+            assertFalse(r.app.pages.firstRun.pending.value, "둘 다 답했으면 첫 실행 아님")
+            r.app.start()
+            runCurrent()
+            assertFalse(r.app.shell.handle.nav.visible.value, "첫 실행이 아니면 시작해도 플라이아웃을 열지 않는다")
+            r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            r.close()
+        }
     }
 
     /** 전체 상한: 끝나지 않는 Bounded 단계는 상한에서 끊기고, 뒤의 Always 단계(트레이 걷기)는 상한이 지나도 돈다. */

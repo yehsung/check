@@ -92,6 +92,37 @@ import com.yehsung.aingcheck.ui.games.chess.ChessGamesLink
 import com.yehsung.aingcheck.ui.games.gomoku.GomokuGamesLink
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsScreenRules
 import com.yehsung.aingcheck.ui.screens.settingscommon.AppearanceStore
+import androidx.compose.runtime.snapshotFlow
+import com.yehsung.aingcheck.core.rules.insights.KstCalendar
+import com.yehsung.aingcheck.core.stores.me.evaluateRetroBanner
+import com.yehsung.aingcheck.core.stores.me.loadRecords
+import com.yehsung.aingcheck.core.stores.me.loadShop
+import com.yehsung.aingcheck.core.stores.me.markRetroBannerDisplayed
+import com.yehsung.aingcheck.core.stores.me.markRetroBannerSeen
+import com.yehsung.aingcheck.core.stores.me.retroBannerMenuDidClose
+import com.yehsung.aingcheck.core.wire.models.TeamWeeklyGoal
+import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfaces
+import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfacesConfig
+import com.yehsung.aingcheck.desktop.pages.aitokens.AiTokensPageDeps
+import com.yehsung.aingcheck.desktop.pages.ailimits.asActions
+import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsStore
+import com.yehsung.aingcheck.desktop.pages.focus.FocusModeModel
+import com.yehsung.aingcheck.desktop.pages.poke.PokeListDeps
+import com.yehsung.aingcheck.desktop.pages.work.HomeBannerActions
+import com.yehsung.aingcheck.desktop.pages.work.HomePageDeps
+import com.yehsung.aingcheck.desktop.pages.work.HomeRetroBanner
+import com.yehsung.aingcheck.desktop.pages.work.WorkShortcutGate
+import com.yehsung.aingcheck.desktop.platform.windows.network.NetworkReadiness
+import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
+import com.yehsung.aingcheck.desktop.wiring.AiLimitsInputs
+import com.yehsung.aingcheck.desktop.wiring.DesktopRealtimeGamesOf
+import com.yehsung.aingcheck.desktop.wiring.DesktopSocialHooks
+import com.yehsung.aingcheck.desktop.wiring.InviteDots
+import com.yehsung.aingcheck.desktop.wiring.OsDeps
+import com.yehsung.aingcheck.desktop.wiring.OsWiring
+import com.yehsung.aingcheck.desktop.wiring.PagesWiring
+import com.yehsung.aingcheck.desktop.wiring.PagesWiringDeps
+import com.yehsung.aingcheck.desktop.wiring.UltraPageInputs
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import kotlinx.coroutines.CancellationException
@@ -100,6 +131,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -200,6 +236,14 @@ class AppSeams(
     val share: (String) -> Unit = {},
     /** 사용자 '종료'(트레이 메뉴). Main 은 EDT 밖 스레드에서 exitProcess → 종료 훅이 [AppWirings.shutdownSteps] 를 돈다. */
     val quit: () -> Unit = {},
+    /** 앱 한 벌의 kv(W3-d — Windows 는 FileDesktopKeyValueStore: 근무 큐 키 즉시 쓰기 · 나머지 250ms 묶음, W-13 #2). 시험은 메모리. */
+    val keyValueStore: DesktopKeyValueStore = InMemoryDesktopKeyValueStore(),
+    /** 깨움 뒤 망 준비(W3-d). null 이면 기다리지 않는다. */
+    val networkReadiness: NetworkReadiness? = null,
+    /** 오버레이 실물 표면(W5-b4 — Windows 는 OverlaySurfaces.create). null 이면 seams 의 sink·presenter(그리지 않음) 그대로. */
+    val overlaySurfaces: ((OverlaySurfacesConfig) -> OverlaySurfaces?)? = null,
+    /** 단축키가 지금 근무를 바꿀 수 없을 때(맥 NSSound.beep). */
+    val beep: () -> Unit = {},
 )
 
 /** [DesktopKeyValueStore] 위의 세션 prefs(K3 KeyValueStore). 실영속은 W3-d — 그 전엔 [AppWirings.kv] 와 같은 칸을 쓴다. */
@@ -237,9 +281,12 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
     private val wallNow: () -> SwiftDate = { SwiftDate.fromEpochMillis(graph.clock.now().toEpochMilliseconds()) }
     val sessionClock = SessionClock { wallNow() }
 
-    /** W3-d 실영속(파일) 전까지 메모리(pins.md C). 큐·잠자기 마커·소유 id·창 자리·세션 prefs 가 같은 칸을 쓴다. */
-    val kv: DesktopKeyValueStore = InMemoryDesktopKeyValueStore()
+    /** 앱 한 벌의 kv(W3-d — Windows 는 파일 영속, 시험은 메모리). 큐·잠자기 마커·소유 id·창 자리·세션 prefs·설정이 같은 칸을 쓴다. */
+    val kv: DesktopKeyValueStore = seams.keyValueStore
     val prefs: KeyValueStore = DesktopPrefs(kv)
+
+    /** 데스크톱 설정 한 벌(W3-c4 — 키는 맥 UserDefaults 글자 그대로). 페이지·OS·오버레이·토큰·근무가 이 값만 읽는다. */
+    val desktopSettings = DesktopSettingsStore(kv)
     val ruby = RubyBalanceCell()
 
     val service = SupabaseWorkService(
@@ -295,9 +342,6 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         gamesStore.miniGames.visibleKinds = com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure.desktopVisible
     }
 
-    /** 설정 '캐릭터 켜짐'(설정 화면이 바꾼다 — 맥 기본 켜짐). */
-    val overlayEnabled = MutableStateFlow(true)
-
     /** 설정 '토큰 사용량 수집'. 설정·MeStore 칸이 오기 전에는 꺼 둔다(동의 없는 스캔 0 — 안전 쪽). */
     @Volatile var tokenUsageCollect: Boolean = false
 
@@ -313,7 +357,7 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             clock = graph.clock,
             monotonic = graph.monotonic,
             workState = { work.store },
-            overlayEnabled = overlayEnabled.asStateFlow(),
+            overlayEnabled = desktopSettings.overlayEnabled,
             sink = seams.characterSink,
             measure = seams.bubbleMeasure,
             power = graph.platform.power,
@@ -321,8 +365,27 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             consoleSessionUsable = seams.consoleSessionUsable,
             presenter = seams.overlayPresenter,
             onPointerOutcome = seams.onOverlayPointer,
+            accountIds = sessionStore.sessionFlow.map { it?.userID },
+            todoBoard = desktopSettings.todoBoard,
+            onBoardOpacityChanged = desktopSettings::setTodoBoardOpacity,
+            weeklyRubyGrants = OverlayWiring.weeklyRubyGrants(snapshotFlow { me.weeklyGrantSerial to me.weeklyGrantNotice?.ruby }),
+        ),
+        // 실물 표면이 있으면 sink·presenter·board 를 표면 것으로 바꾼다(seams 값은 Windows 밖 대체값). 할 일 저장소는 아직 없다(보드 없음).
+        seams.overlaySurfaces?.invoke(
+            OverlaySurfacesConfig(
+                keyValueStore = kv,
+                todoStore = null,
+                boardEnabled = { desktopSettings.todoBoard.value.enabled },
+                initialCharacterId = me.equippedServerID,
+            ),
         ),
     )
+
+    /** 미션 화면이 보이는가(지갑 박자 — 소셜이 껍데기보다 먼저 지어지므로 껍데기 생성 뒤 갈아 끼운다). */
+    private var missionsVisible: () -> Boolean = { false }
+
+    /** 콕 목록 디렉터리 다시 읽기(발신 훅 — 페이지는 소셜 뒤에 지어진다). */
+    private var pokeDirectoryReload: () -> Unit = {}
 
     init {
         work = WorkWiring(
@@ -337,7 +400,11 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
                 teamId = { sessionStore.profile?.teamID },
                 events = overlay.workEventSink,
                 social = { social.lifecycle },
-                wakeNetworkReady = null,
+                autoWorkStartEnabled = { desktopSettings.autoWorkStart.value },
+                wakeNetworkReady = seams.networkReadiness?.let { r -> suspend { r.awaitReady() } },
+                consoleSessionUsable = seams.consoleSessionUsable,
+                // 빠른 주기 3항(근무 || 플라이아웃 열림 || 큐 대기) — 틱 루프는 work.start 뒤에만 부른다(shell 은 그때 서 있다).
+                menuPresented = { shell.handle.nav.visible.value },
             ),
         )
         social = SocialWiring(
@@ -357,6 +424,15 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
                 receivedPokes = overlay.receivedPokeSink,
                 consumedRows = MessagesStoreConsumedRowsSink(messages),
                 ultraCharged = overlay.ultraChargedSink,
+                walletCadence = DesktopSocialHooks.walletCadence(me) { missionsVisible() },
+                beatOthers = DesktopSocialHooks.beatOthers(me),
+                sendHooks = DesktopSocialHooks.sendHooks(messages) { pokeDirectoryReload() },
+                onShopMutation = DesktopSocialHooks.shopMutation(scope, me),
+                games = DesktopRealtimeGamesOf.stores(graph.desktopConfig, gomoku, chess, tetris),
+                // 공용 18(MeStore.ultraPrice — Compose 상태를 읽는 람다라 값이 오면 다시 그린다).
+                ultraPrice = { me.ultraPrice },
+                // W-3 #6: 말풍선 큐 한 벌 — 소셜이 쌓고 오버레이가 띄운다.
+                bubbles = overlay.bubbles,
             ),
         )
     }
@@ -373,6 +449,9 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             cacheBase = seams.tokenCacheFile,
             appBuild = graph.clientIdentity.build,
             tokenUsageCollect = { tokenUsageCollect },
+            // W-13 #5: AI 도구 기록 동의(check.mas.aiToolDataConsent, 기본 거절) — 동의 전 스캔·리밋 읽기·업로드 0, 철회는 흐름으로 즉시.
+            aiToolDataAllowed = { desktopSettings.tokenUsageCollect.value },
+            aiToolDataConsentChanges = desktopSettings.tokenUsageCollect,
             workState = work.store,
             aiLimitRunner = seams.aiLimitRunner,
             deviceLabel = seams.deviceLabel,
@@ -381,12 +460,80 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         ),
     )
 
+    /**
+     * int-w2 페이지(W-9 #2 · W-13 #1·#4·#5·#6·#8·#9): 홈·콕 목록·울트라·AI 토큰·AI 리밋·기기·PC 설정·첫 실행. 껍데기보다 먼저 —
+     * 홈 람다의 shell 참조는 Content 때 읽으므로 늦게 묶여도 된다.
+     */
+    val pages: PagesWiring = PagesWiring(
+        PagesWiringDeps(
+            desktopConfig = graph.desktopConfig,
+            settings = desktopSettings,
+            wallNow = wallNow,
+            home = { nav ->
+                HomePageDeps(
+                    work = work.state,
+                    commands = work.commands,
+                    teamStatuses = work.teamStatuses,
+                    clock = wallNow,
+                    isSignedIn = { sessionStore.session != null },
+                    isTeamless = { sessionStore.profile?.teamID == null },
+                    myUserId = { sessionStore.session?.userID },
+                    teamName = { sessionStore.profile?.teamName.orEmpty() },
+                    teamGoalSeconds = { (sessionStore.profile?.teamGoalHours ?: TeamWeeklyGoal.defaultGoalHours) * 3600 },
+                    duelsEnabled = graph.desktopConfig.duels,
+                    update = shell.handle.updateChecker.state,
+                    canSync = { graph.backend.anonKey != null },
+                    actions = HomeBannerActions(openRecords = { nav.navigate(FlyoutRoute.Records) }),
+                )
+            },
+            // 공용 19 회고 배너(맥 WorkTimerStore.swift:1130 showsRetroBanner · CheckMenuView.swift:480-500 X→Seen · onAppear→Displayed).
+            retroBanner = HomeRetroBanner(
+                due = { me.showsRetroBanner },
+                seen = { me.markRetroBannerSeen() },
+                displayed = { me.markRetroBannerDisplayed() },
+            ),
+            pokeList = PokeListDeps(
+                host = sessionStore,
+                config = graph.desktopConfig,
+                sender = social.sender,
+                wallet = social.wallet,
+                focus = FocusModeModel(social.focus, wallNow),
+                scope = scope,
+                clock = wallNow,
+                localSessionOpen = { work.store.pokeConsumeFacts().localSessionOpen },
+                workChanges = work.store.snapshot,
+                hiddenBlockedPeerIDs = { messages.hiddenBlockedPeerIDs },
+            ),
+            ultra = UltraPageInputs(wallet = social.wallet, purchase = social.purchase, ruby = ruby, reloadShop = { scope.launch { me.loadShop() } }),
+            ultraPrice = { me.ultraPrice },
+            aiTokens = AiTokensPageDeps(
+                settings = desktopSettings,
+                usage = tokens.scan.currentMonthUsage,
+                scanning = tokens.scan.isScanning,
+                account = { tokens.account.snapshot },
+                serverRow = { tokens.upload.myTokenRow },
+                userID = { sessionStore.session?.userID },
+                currentMonth = { KstCalendar.monthKey(wallNow().timeIntervalSince1970) },
+                onConsentGranted = { tokens.scan.refreshNow() },
+            ),
+            aiLimits = AiLimitsInputs(tokens.aiLimits, tokens.aiLimitSync.asActions(wallNow)),
+            onConsentGranted = { tokens.scan.refreshNow() },
+            openUrl = seams.openUrl,
+        ),
+    )
+
+    init {
+        pokeDirectoryReload = { pages.pokeListPage?.model?.directory?.load() }
+        // 로그아웃·계정 전환: 콕 디렉터리 비우기(c3 notes).
+        social.addSignedOutListener { pages.pokeListPage?.model?.directory?.reset() }
+    }
+
     /** 트레이·메뉴가 읽는 근무 값(조정 ⑩ — DesktopWorkSnapshot 을 값으로 옮긴다, 판정 없음). 근무 중이면 30초마다 경과를 새로 적는다. */
     private val workStatus = MutableStateFlow(WorkStatusSnapshot(WorkStatus.offWork, 0))
 
     private var lateGames: GamesWiring? = null
 
-    val shell = ShellWiring(
+    val shell: ShellWiring = ShellWiring(
         ShellDeps(
             session = sessionStore,
             sessionContext = sessionContext,
@@ -426,8 +573,16 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             rubyBalance = { ruby.rubyBalance },
             openUrl = seams.openUrl,
             share = seams.share,
+            inviteDots = InviteDots.from(gomoku, chess, tetris),
+            onUltraPageLeft = { social.onUltraPageLeft() },
+            routePages = pages.routePages,
+            firstRun = pages.firstRun,
         ),
     )
+
+    init {
+        missionsVisible = { shell.handle.nav.visible.value && shell.handle.nav.route.value == FlyoutRoute.Missions }
+    }
 
     val games = GamesWiring(
         GamesDeps(
@@ -444,15 +599,35 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
             reduceMotion = seams.reduceMotion,
             now = { sessionClock.now() },
             factory = seams.gameWindows,
+            boardMe = { overlay.boardMe(me.displayName, me.equippedServerID) },
+            onInviteNotice = { shell.handle.notifyDuelInvite(it) },
+            characters = { shell.handle.characters.directory },
         ),
     ).also { lateGames = it }
 
+    /** OS 배선(W3-d · W-13 #2·#3·#6): 단축키 → 근무 토글 · 자동 실행 적용 · 플라이아웃 열림 기기 재등록 · 종료 kv flush. */
+    val os: OsWiring = OsWiring(
+        OsDeps.fromSettings(
+            settings = desktopSettings,
+            hotkeys = graph.platform.hotkeys,
+            // 맥 canToggleWorkByShortcut(로그인 · 팀 · canSync)의 짝 — 홈 알약 조건과 같은 함수(W-13 #4).
+            canToggleWork = { WorkShortcutGate.canToggle(sessionStore.phaseFlow.value, sessionStore.profile, canSync = graph.backend.anonKey != null) },
+            toggleWork = { work.commands.toggle() },
+            onHotkeyRejected = { seams.beep() },
+            loginItem = graph.platform.loginItem,
+            flyoutOpen = shell.handle.nav.visible,
+            appDidBecomeActive = sessionStore::appDidBecomeActive,
+            kv = kv,
+        ),
+    )
+
     private var workStatusJob: Job? = null
     private var launchJob: Job? = null
+    private val flyoutJobs = mutableListOf<Job>()
 
     /**
      * 시작 순서(W-6 #6 · 배선 notes): 세션 복원 → work → social(로그인 변화를 스스로 본다) → overlay → tokens → shell(창 attach·트레이
-     * 첫 그림·클릭·두 번째 실행·메시지 60초·업데이트 감시) → games. [scope] 줄기(EDT)에서 부른다.
+     * 첫 그림·클릭·두 번째 실행·메시지 60초·업데이트 감시) → os(nav.visible 이 서 있어야 첫 열림을 본다) → games. [scope] 줄기(EDT)에서 부른다.
      */
     fun start() {
         launchJob = scope.launch { sessionStore.launch() }
@@ -470,13 +645,54 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         overlay.start(scope)
         tokens.start(scope)
         shell.start(scope)
+        os.start(scope)
         games.start(scope)
+        startFlyoutHooks()
+        // 첫 실행 화면(W-13 #5·#6): 동의·자동 실행 값 중 하나라도 없으면 한 번 연다 — 공용 호스트가 페이지·레일 대신 그린다.
+        if (pages.firstRun.pending.value) shell.handle.nav.open(null)
+    }
+
+    /**
+     * 플라이아웃 열림·경로에 거는 일: 토큰 열림 주기(스캔·리밋 강제·내 행) · 회고 배너 판정(공용 19 — 맥 WorkTimerStore.swift:316-321
+     * 열림 판정 · 381-386 닫힘 내림 · 2972-2976 기록 패널 · WorkTimerStoreInsights.swift:162 loadInsights 끝) · 설정 화면 진입 때 OS 재적용.
+     */
+    private fun startFlyoutHooks() {
+        val nav = shell.handle.nav
+        val recordsShown = { nav.visible.value && nav.route.value == FlyoutRoute.Records }
+        flyoutJobs += scope.launch {
+            nav.visible.dropWhile { !it }.distinctUntilChanged().collect { open ->
+                if (open) {
+                    tokens.onFlyoutOpened()
+                    // 맥은 열 때 회고가 아직 없으면 기록을 조용히 받아 온다 — 월요일 첫 열림에 배너가 뜨게.
+                    if (!me.recordsState.hasLoaded) scope.launch { me.loadRecords() }
+                    me.evaluateRetroBanner(isInsightsPanelVisible = recordsShown(), isMenuPresented = true)
+                } else {
+                    tokens.onFlyoutClosed()
+                    me.retroBannerMenuDidClose()
+                }
+            }
+        }
+        flyoutJobs += scope.launch {
+            snapshotFlow { me.retro }.drop(1).collect {
+                me.evaluateRetroBanner(isInsightsPanelVisible = recordsShown(), isMenuPresented = nav.visible.value)
+            }
+        }
+        flyoutJobs += scope.launch {
+            combine(nav.visible, nav.route) { v, r -> v to r }.distinctUntilChanged().collect { (visible, route) ->
+                if (!visible) return@collect
+                when (route) {
+                    FlyoutRoute.Records -> me.evaluateRetroBanner(isInsightsPanelVisible = true, isMenuPresented = true)
+                    FlyoutRoute.DesktopSettings -> os.reapply()
+                    else -> Unit
+                }
+            }
+        }
     }
 
     /**
      * W-6 #6 종료 순서 한 벌(이름은 시험이 녹음한다): 근무 마무리(beginTermination → QuitFinisher 3초, UI 줄기) → 토큰 캐시 저장 →
-     * 토큰 루프 내림 → 실시간 shutdown(social) → 게임 구독 걷기 → 오버레이 내림 → 근무 루프·OS 구독 내림 → 껍데기(구독 취소 → 업데이트
-     * 감시·전원 Registration close → nav.hide → **tray.remove** 마지막). 플랫폼 닫기는 Main 몫(이 뒤).
+     * 토큰 루프 내림 → 실시간 shutdown(social) → 게임 구독 걷기 → 오버레이 내림 → 근무 루프·OS 구독 내림 → 단축키 등록 풀기(os) → 껍데기(구독 취소 → 업데이트
+     * 감시·전원 Registration close → nav.hide → **tray.remove**) → kv flush(W3-d — 앞 단계들이 kv 에 쓴 뒤). 플랫폼 닫기는 Main 몫(이 뒤).
      */
     fun shutdownSteps(): List<ShutdownStep> = listOf(
         ShutdownStep.Bounded(STEP_WORK_FINISH, WORK_FINISH_MILLIS) { withContext(seams.mainDispatcher) { work.finishForQuit() } },
@@ -488,9 +704,15 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         ShutdownStep.Always(STEP_WORK_STOP) {
             workStatusJob?.cancel()
             launchJob?.cancel()
+            flyoutJobs.forEach { it.cancel() }
+            flyoutJobs.clear()
             work.stop()
         },
+        // 단축키 등록 풀기 — 근무 루프가 내려간 뒤라 늦은 토글 없음.
+        ShutdownStep.Always(STEP_OS_STOP) { os.stop() },
         ShutdownStep.Always(STEP_SHELL_STOP) { shell.stop() },
+        // 근무 마무리·토큰 캐시·오버레이 자리·껍데기 저장이 모두 kv 에 쓴 뒤(close 뒤 늦은 put 은 바로 쓴다).
+        ShutdownStep.Always(STEP_KV_FLUSH) { os.flushKeyValueStore() },
     )
 
     companion object {
@@ -502,6 +724,8 @@ class AppWirings internal constructor(val graph: AppGraph, val seams: AppSeams, 
         const val STEP_OVERLAY_STOP = "overlay.stop"
         const val STEP_WORK_STOP = "work.stop"
         const val STEP_SHELL_STOP = "shell.stop"
+        const val STEP_OS_STOP = OsWiring.STEP_OS_STOP
+        const val STEP_KV_FLUSH = OsWiring.STEP_KV_FLUSH
 
         /** 근무 마무리 상한(QuitFinisher 3초 + 줄기 왕복 여유). */
         const val WORK_FINISH_MILLIS = 3_500L

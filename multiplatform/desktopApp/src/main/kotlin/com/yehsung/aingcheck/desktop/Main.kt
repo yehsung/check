@@ -10,7 +10,10 @@ package com.yehsung.aingcheck.desktop
 
 import com.sun.jna.platform.win32.User32
 import com.yehsung.aingcheck.core.foundation.platform.RunningTests
+import com.yehsung.aingcheck.desktop.overlay.assembly.OverlaySurfaces
 import com.yehsung.aingcheck.desktop.overlay.bubble.PretendardBubbleMeasure
+import com.yehsung.aingcheck.desktop.platform.windows.network.NetworkReadiness
+import com.yehsung.aingcheck.desktop.platform.windows.store.FileDesktopKeyValueStore
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.TaskbarProbe
 import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutIconLocator
@@ -245,6 +248,12 @@ internal fun windowsSeams(platform: WindowsPlatform, graph: AppGraph, events: Ex
         share = { text -> runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) } },
         // EDT 밖에서 끝낸다 — 종료 훅이 근무 마무리를 EDT 로 돌려 보내므로 EDT 가 exitProcess 에 묶여 있으면 상한까지 멈춘다.
         quit = { Thread({ exitProcess(0) }, "aingcheck-quit").start() },
+        // W3-d 파일 영속 kv(즉시 쓰기 키 = 근무 큐, 나머지 250ms 묶음 — W-13 #2). 생성자는 읽기만 한다.
+        keyValueStore = FileDesktopKeyValueStore.inDataDir(platform.paths.dataDir),
+        networkReadiness = NetworkReadiness.forHost(HostOs.isWindows()),
+        consoleSessionUsable = platform::consoleSessionUsable,
+        overlaySurfaces = { config -> OverlaySurfaces.create(platform, config) },
+        beep = { runCatching { Toolkit.getDefaultToolkit().beep() } },
     )
 }
 

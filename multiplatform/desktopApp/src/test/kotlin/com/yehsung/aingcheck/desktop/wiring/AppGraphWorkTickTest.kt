@@ -33,6 +33,8 @@ import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
 import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutScreen
 import com.yehsung.aingcheck.desktop.shell.flyout.SyntheticScreen
 import com.yehsung.aingcheck.feature.desktop.DesktopAiHomes
+import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
+import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.ailimits.AILimitReadOutcome
 import com.yehsung.aingcheck.feature.desktop.ailimits.AILimitRunner
@@ -188,6 +190,11 @@ private class TickRig(val test: TestScope, var mode: TickMode, installation: Str
             codexAccountRunner = { _ -> awaitCancellation() },
             computeDiagnostics = { _, _ -> null },
             runningTests = object : RunningTests { override val isRunningTests: Boolean = true },
+            // 첫 실행을 마친 설치(동의·자동 실행 값이 있다) — 첫 실행 화면이 플라이아웃을 열어 빠른 주기로 바꾸지 않게.
+            keyValueStore = InMemoryDesktopKeyValueStore().apply {
+                putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
+                putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
+            },
         ),
         scope,
     )

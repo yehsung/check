@@ -91,6 +91,8 @@ data class SocialDeps(
     val onFocusNotice: (String) -> Unit = {},
     /** 폴링 박자의 다른 갈래 훅(주간 근무 빚·케이크 선물 — W2-g2 PokeBeatHooks.others). */
     val beatOthers: List<suspend (SwiftDate) -> Unit> = emptyList(),
+    /** 메시지 말풍선 큐 — 오버레이와 **한 벌**(W-3 #6, 조립: overlay.bubbles). 기본은 자기 큐(시험·오버레이 없는 조립). */
+    val bubbles: DesktopMessageBubbleQueue = DesktopMessageBubbleQueue(),
 )
 
 /** 화면이 부르는 찌르기·울트라 문 — 깃발 판정을 여기 한 곳에 둔다(W-6 #1). 꺼진 기능은 null(요청 0). */
@@ -118,7 +120,7 @@ class SocialWiring(private val deps: SocialDeps) {
 
     /** 소비 게이트 한 벌 — 폴링과 실시간 .drain/따라잡기가 같은 인스턴스(W2-g2). */
     val gate = DesktopPokeConsumeGate(deps.pokeFacts, config)
-    val bubbles = DesktopMessageBubbleQueue()
+    val bubbles: DesktopMessageBubbleQueue = deps.bubbles
 
     val focus = FocusModeController(session, deps.kv, lateScope, clockFn, onNotice = deps.onFocusNotice)
     val wallet = UltraWalletStore(

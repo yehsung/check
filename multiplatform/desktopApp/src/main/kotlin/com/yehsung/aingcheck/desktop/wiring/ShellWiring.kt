@@ -44,6 +44,8 @@ import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.wire.models.AppUserCharacterDirectory
 import com.yehsung.aingcheck.desktop.pages.missions.MissionsFlyoutPage
+import com.yehsung.aingcheck.desktop.pages.onboarding.FirstRunOnboarding
+import com.yehsung.aingcheck.desktop.pages.shared.RoutePages
 import com.yehsung.aingcheck.desktop.pages.shared.MessagesBackgroundRefresh
 import com.yehsung.aingcheck.desktop.pages.shared.MessagesUnreadDot
 import com.yehsung.aingcheck.desktop.pages.shared.SharedFlyoutPageHost
@@ -234,6 +236,12 @@ data class ShellDeps(
     val onUltraPageLeft: () -> Unit = {},
     /** 최소 빌드 미달 화면의 [업데이트] 목적지(W-13 #7). null 이면 단추 숨김(공용 화면 그대로). */
     val storeUpdateDestination: String? = StoreUpdateDestination.windows,
+    /**
+     * int-w2 3차 페이지·첫 실행(PagesWiring.routePages · firstRun). 상점·미션이 비어 있으면 여기서 W4-f 페이지로 채워 **공용 호스트의
+     * 본문 자리**(레일 옆)에 꽂는다 — 맥 CheckMenuView.swift:421-429 · 762-799 · 1002-1010 @ db93317f(미션·상점도 본문 열 안, 레일은 옆에 선다).
+     */
+    val routePages: RoutePages = RoutePages.NONE,
+    val firstRun: FirstRunOnboarding? = null,
 ) {
     companion object {
         const val DEFAULT_TRAY_ICON_PX = 16
@@ -286,12 +294,19 @@ class ShellWiring(private val deps: ShellDeps) {
             openMiniGame = { gameWindows.openGames() },
             openUrl = deps.openUrl,
             share = deps.share,
+            routePages = deps.routePages.withShellPages(
+                shop = ShopFlyoutPage(deps.me, gameWindows),
+                missions = MissionsFlyoutPage(deps.me, deps.reduceMotion),
+            ),
+            firstRun = deps.firstRun,
         ),
     )
+
+    /** 상점·미션은 공용 호스트 본문(레일 옆)이 그린다 — 전체 폭 덮개는 Store 업데이트 화면만 남는다(W-13 #9). */
     private val pages = ShellPageHost(
         shared = sharedPages,
-        shop = ShopFlyoutPage(deps.me, gameWindows),
-        missions = MissionsFlyoutPage(deps.me, deps.reduceMotion),
+        shop = null,
+        missions = null,
         appearance = deps.appearance,
         characters = { deps.characters.directory },
         update = ShellUpdatePage(deps.storeUpdateDestination, deps.clientIdentity.build, deps.openUrl),
@@ -478,8 +493,9 @@ class ShellUpdatePage(val destination: String?, private val currentBuild: Long, 
  */
 class ShellPageHost(
     private val shared: SharedFlyoutPageHost,
-    private val shop: FlyoutPageHost,
-    private val missions: FlyoutPageHost,
+    /** null 이면 덮지 않는다(공용 호스트가 [RoutePages] 로 본문 자리에 그린다 — int-w2 조립). */
+    private val shop: FlyoutPageHost?,
+    private val missions: FlyoutPageHost?,
     private val appearance: AppearanceStore,
     /** 착용 캐릭터 표(LocalAppUserCharacters — 메시지·순위·콕 아바타). Compose 상태를 읽는 람다. */
     private val characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
@@ -497,13 +513,19 @@ class ShellPageHost(
         val visible by nav.visible.collectAsState()
         Box {
             shared.Content(nav, widthDip)
-            val overlay = if (visible) ShellPages.overlayFor(page, update.destination) else null
+            val overlay = (if (visible) ShellPages.overlayFor(page, update.destination) else null)?.takeIf {
+                when (it) {
+                    ShellOverlayPage.SHOP -> shop != null
+                    ShellOverlayPage.MISSIONS -> missions != null
+                    ShellOverlayPage.UPDATE -> true
+                }
+            }
             if (overlay != null) {
                 AingTheme(appearance.mode) {
                     Box(Modifier.width(widthDip.dp).fillMaxHeight().background(AingTheme.colors.background)) {
                         when (overlay) {
-                            ShellOverlayPage.SHOP -> shop.Content(nav, widthDip)
-                            ShellOverlayPage.MISSIONS -> missions.Content(nav, widthDip)
+                            ShellOverlayPage.SHOP -> shop?.Content(nav, widthDip)
+                            ShellOverlayPage.MISSIONS -> missions?.Content(nav, widthDip)
                             ShellOverlayPage.UPDATE -> (page as? SharedPage.NeedsUpdate)?.let { update.Content(it.minBuild) }
                         }
                     }
@@ -512,6 +534,20 @@ class ShellPageHost(
         }
     }
 }
+
+/** 비어 있는 상점·미션 자리만 껍데기 페이지로 채운 사본([RoutePages] 는 값 묶음 — 나머지 칸은 그대로). */
+fun RoutePages.withShellPages(shop: FlyoutPageHost, missions: FlyoutPageHost): RoutePages = RoutePages(
+    home = home,
+    pokeList = pokeList,
+    ultra = ultra,
+    aiTokens = aiTokens,
+    aiLimits = aiLimits,
+    devices = devices,
+    desktopSettings = desktopSettings,
+    shop = this.shop ?: shop,
+    missions = this.missions ?: missions,
+    runtimeShown = runtimeShown,
+)
 
 /** 늦게 묶는 게임 창 문 — 껍데기와 게임 배선이 서로를 받기 때문(부를 때 [target] 을 읽는다). */
 class LateGameWindows(private val target: () -> DesktopGameWindows) : DesktopGameWindows {

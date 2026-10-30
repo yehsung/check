@@ -9,6 +9,9 @@
 // ⚠️ 창이 숨으면(visible=false) 페이지를 **그리지 않는다** — 화면 안 DisposableEffect(목록·대화·제보의 DidAppear/DidDisappear)도 같이
 //    닫혀야 숨은 창 뒤에서 읽음이 올라가지 않는다. 수명 고리는 프레임과 무관하게 흐름(follow)으로 돈다(숨은 창은 프레임을 안 그린다).
 // ⚠️ 배너는 여기 겹쳐 쌓지 않는다(shell.md §2 ⑤ — W3-c2). 색은 AingTheme 토큰만(D5 — desktopApp main 색 리터럴 금지).
+// int-w3(W-14 #2·#9): 뿌리에서 차단 문구 판을 맥으로 준다(LocalBlockReportPlatform — 공용 20, 맥 WorkTimerStoreBlocks.swift:126 `.mac`:
+// Windows 엔 '나' 탭이 없어 길 안내가 '설정 → 차단한 사람'). 업데이트 필요 화면의 [업데이트] 목적지는 Store 제품 페이지
+// (SharedPagesDeps.updateDestination = StoreUpdateDestination.windows — 생성 상수 STORE_PRODUCT_ID, 비면 AppLinks = 단추 숨김).
 package com.yehsung.aingcheck.desktop.pages.shared
 
 import androidx.compose.foundation.background
@@ -31,6 +34,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,10 +56,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.foundation.identity.ClientPlatform
+import com.yehsung.aingcheck.core.rules.text.BlockReportPlatform
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.SessionStore
 import com.yehsung.aingcheck.core.session.SessionText
-import com.yehsung.aingcheck.core.session.app.AppLinks
 import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.session.reset.PasswordResetStore
 import com.yehsung.aingcheck.core.session.signup.SignUpStore
@@ -69,6 +73,8 @@ import com.yehsung.aingcheck.core.stores.me.settingsDidDisappear
 import com.yehsung.aingcheck.core.stores.me.signOut
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.desktop.pages.onboarding.FirstRunOnboarding
+import com.yehsung.aingcheck.desktop.shell.update.StoreUpdateDestination
 import com.yehsung.aingcheck.desktop.shellapi.Entry
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutPageHost
@@ -84,6 +90,7 @@ import com.yehsung.aingcheck.ui.screens.me.GrassDetailScreen
 import com.yehsung.aingcheck.ui.screens.me.MeHomeScreen
 import com.yehsung.aingcheck.ui.screens.me.ProfileScreen
 import com.yehsung.aingcheck.ui.screens.messages.ConversationScreen
+import com.yehsung.aingcheck.ui.screens.messages.LocalBlockReportPlatform
 import com.yehsung.aingcheck.ui.screens.messages.MessagesListScreen
 import com.yehsung.aingcheck.ui.screens.messages.MessagesMegaphoneSheet
 import com.yehsung.aingcheck.ui.screens.messages.MessagesNewConversationSheet
@@ -105,7 +112,6 @@ import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsActions
 import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsScreen
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import com.yehsung.aingcheck.desktop.pages.onboarding.FirstRunOnboarding
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -127,6 +133,11 @@ object SharedText {
     const val pendingTitle = "준비 중이에요"
     const val pendingBody = "다음 업데이트에서 열려요."
     const val anotherInstance = "아잉체크가 이미 실행 중이에요. 작업 표시줄의 아이콘을 눌러 주세요."
+    /**
+     * 업데이트 필요 화면 단추(목적지가 Store 제품 페이지일 때만). 폰 'App Store 열기'(MobileSessionStore.swift:790) · 'Play 스토어 열기' 자리 —
+     * 공용 SessionText.updateButton(WINDOWS) 는 목적지가 없던 때의 null 이라 여기 둔다(core 는 이 갈래 밖).
+     */
+    const val storeUpdateButton = "Microsoft Store 열기"
 }
 
 /** 조립(AppGraph — 조정자)이 넘기는 것. 스토어는 조립이 하나씩 만든다(이 호스트는 만들지 않는다). */
@@ -154,6 +165,11 @@ class SharedPagesDeps(
     val routePages: RoutePages = RoutePages.NONE,
     /** 첫 실행 화면(PagesWiring.firstRun). pending 동안 [SharedRouter.showsFirstRun] 이면 페이지·레일 대신 이것을 전체 폭으로 그린다. */
     val firstRun: FirstRunOnboarding? = null,
+    /**
+     * 업데이트 필요 화면 [업데이트]의 목적지(W-12 · W-13 #7). 기본 = 이 빌드의 Store 제품 페이지(생성 상수) — 상수가 비었거나 꼴이 틀리면
+     * AppLinks.updateDestination(WINDOWS)(= null → 단추 숨김). 껍데기 덮개(ShellUpdatePage)는 이 값으로 대신한다.
+     */
+    val updateDestination: String? = StoreUpdateDestination.windows,
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -195,18 +211,20 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
         val page by pageFlow.collectAsState(SharedPage.Launching)
         val firstRunPending by (deps.firstRun?.pending ?: NO_FIRST_RUN).collectAsState()
         AingTheme(deps.appearance.mode) {
-            val colors = AingTheme.colors
-            val firstRun = deps.firstRun
-            if (visible && firstRun != null && SharedRouter.showsFirstRun(firstRunPending, page)) {
-                Box(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) { firstRun.Content(nav, widthDip) }
-            } else {
-                val slots = SharedRail.slots(page, deps.config, deps.openMiniGame != null)
-                val railShown = visible && slots.isNotEmpty()
-                Row(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) {
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        if (visible) PageBody(page, nav, RouteBodyWidth.of(widthDip, railShown))
+            CompositionLocalProvider(LocalBlockReportPlatform provides BlockReportPlatform.mac) {
+                val colors = AingTheme.colors
+                val firstRun = deps.firstRun
+                if (visible && firstRun != null && SharedRouter.showsFirstRun(firstRunPending, page)) {
+                    Box(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) { firstRun.Content(nav, widthDip) }
+                } else {
+                    val slots = SharedRail.slots(page, deps.config, deps.openMiniGame != null)
+                    val railShown = visible && slots.isNotEmpty()
+                    Row(Modifier.width(widthDip.dp).fillMaxHeight().background(colors.background)) {
+                        Box(Modifier.weight(1f).fillMaxHeight()) {
+                            if (visible) PageBody(page, nav, RouteBodyWidth.of(widthDip, railShown))
+                        }
+                        if (railShown) Rail(slots, page, nav)
                     }
-                    if (railShown) Rail(slots, page, nav)
                 }
             }
         }
@@ -225,12 +243,12 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
         when (page) {
             SharedPage.Launching -> LaunchScreen(fill)
             is SharedPage.NeedsUpdate -> {
-                val destination = AppLinks.updateDestination(ClientPlatform.WINDOWS)
+                val destination = deps.updateDestination
                 UpdateRequiredScreen(
                     minBuild = page.minBuild,
                     currentBuild = deps.currentBuild,
                     body = SessionText.updateBody(ClientPlatform.WINDOWS),
-                    buttonTitle = destination?.let { SessionText.updateButton(ClientPlatform.WINDOWS) },
+                    buttonTitle = destination?.let { SessionText.updateButton(ClientPlatform.WINDOWS) ?: SharedText.storeUpdateButton },
                     onOpenStore = { destination?.let(deps.openUrl) },
                     modifier = fill,
                 )

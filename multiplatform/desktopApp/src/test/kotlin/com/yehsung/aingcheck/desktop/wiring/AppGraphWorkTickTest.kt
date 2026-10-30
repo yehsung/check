@@ -100,7 +100,7 @@ private class TickPlatform(private val installation: String?) : DesktopPlatform 
 }
 
 /** work_tick 응답 갈래. */
-private enum class TickMode { OK, MISSING, OVERLOAD }
+private enum class TickMode { OK, MISSING, OVERLOAD, TRANSPORT }
 
 private data class TickReq(val t: Long, val method: String, val path: String, val body: String) {
     val isWorkTick: Boolean get() = path.endsWith("/rpc/work_tick")
@@ -112,6 +112,12 @@ private data class TickReq(val t: Long, val method: String, val path: String, va
 private class TickRig(val test: TestScope, var mode: TickMode, installation: String? = WiringTestRig.INSTALLATION) {
     val requests = mutableListOf<TickReq>()
     val uncaught = mutableListOf<Throwable>()
+
+    /** 소속 읽기를 503 으로 막는다(오프라인 부팅 — 실행 킥이 망 결합 전에 실패). */
+    var membershipFail = false
+
+    /** work_tick 응답의 자기 행을 off_work 로(서버가 이미 이 세션을 닫았다 — 다른 기기 종료·백스톱). */
+    var ownOff = false
     private val engine = MockEngine(
         MockEngineConfig().apply {
             dispatcher = StandardTestDispatcher(test.testScheduler)
@@ -127,13 +133,16 @@ private class TickRig(val test: TestScope, var mode: TickMode, installation: Str
                 val json = headersOf(HttpHeaders.ContentType, "application/json")
                 when {
                     p.endsWith("/rpc/work_tick") -> when (mode) {
-                        TickMode.OK -> respond(TICK_OK, HttpStatusCode.OK, json)
+                        TickMode.OK -> respond(if (ownOff) tickOwnOff(test.testScheduler.currentTime) else TICK_OK, HttpStatusCode.OK, json)
                         TickMode.MISSING -> respond("""{"code":"PGRST202","message":"missing"}""", HttpStatusCode.NotFound, json)
                         TickMode.OVERLOAD -> respond("""{"message":"overloaded"}""", HttpStatusCode.ServiceUnavailable, json)
+                        TickMode.TRANSPORT -> throw java.io.IOException("unreachable (synthetic)")
                     }
                     p.endsWith("/rpc/register_device") || p.endsWith("/rpc/unregister_device") ->
                         respond("""{"status":"ok"}""", HttpStatusCode.OK, json)
                     p.endsWith("/rpc/take_pokes") -> respond("[]", HttpStatusCode.OK, json)
+                    p.endsWith("/rest/v1/memberships") && membershipFail ->
+                        respond("""{"message":"unavailable"}""", HttpStatusCode.ServiceUnavailable, json)
                     p.endsWith("/rest/v1/memberships") ->
                         respond(
                             """[{"team_id":"${WiringTestRig.TEAM}","role":"member","teams":{"name":"T","weekly_goal_hours":40}}]""",
@@ -195,6 +204,16 @@ private class TickRig(val test: TestScope, var mode: TickMode, installation: Str
     fun between(from: Long, to: Long) = requests.filter { it.t in from..to }
 
     fun close() = job.cancel()
+
+    val working: Boolean get() = app.work.store.snapshot.value.isWorking
+
+    private fun iso(ms: Long) = Instant.fromEpochMilliseconds(WiringTestRig.BASE_MS + ms).toString()
+
+    private fun tickOwnOff(ms: Long): String =
+        """{"v":1,"server_now":"${iso(ms)}","team_id":"${WiringTestRig.TEAM}","heartbeat":null,""" +
+            """"statuses":[{"user_id":"${WiringTestRig.USER}","status":"off_work","updated_at":"${iso(ms)}",""" +
+            """"last_seen_at":"${iso(ms)}","active_session_id":null,"profiles":{"display_name":"나","avatar_url":null}}],""" +
+            """"sessions_active":[],"sessions_weekly":[],"devices":[],"away":null}"""
 
     companion object {
         const val TEAMMATE = "d0000000-0000-4000-8000-0000000000c3"
@@ -303,11 +322,112 @@ class AppGraphWorkTickTest {
             val window = r.between(start, end)
             assertEquals(0, window.count { it.method == "GET" && it.path.endsWith("/rest/v1/work_statuses") }, "과부하 중 팀 GET 펼침 0")
             assertEquals(0, window.count { it.path.endsWith("/rpc/away_sync") }, "과부하 중 away_sync 0")
-            assertTrue(window.count { it.isWorkTick } <= 4, "일시 실패 3연속이면 1시간 쉰다 — work_tick ${window.count { it.isWorkTick }}건")
+            // (b) 과부하는 30·60·120·120…초 × 지터(0.8~1.2) 백오프 — 회복 확인 1건이 120초 안팎마다 나간다(1시간 정지 아님).
+            val ticks = window.filter { it.isWorkTick }.map { it.t }
+            assertTrue(ticks.size in 20..45, "과부하 60분 work_tick ${ticks.size}건 — 백오프 상한 120초×지터마다 한 건이어야 한다")
+            val tickGap = maxGap(start, ticks, end)
+            assertTrue(tickGap <= 180, "과부하 중 회복 확인(work_tick) 공백 최대 ${tickGap}초 — 상한 120초×1.2 + 슬라이스")
+            val gate = r.app.work.workTickGate.snapshot
+            assertEquals(0, gate.consecutiveTransientFailures, "과부하는 (c) 정지 카운터에 세지 않는다 — $gate")
+            assertEquals(null, gate.suspendedUntil, "과부하로 정지(폴백 고정)에 들어가지 않는다 — $gate")
             val beats = window.filter { it.isLegacyWorkingBeat }
             val gap = maxGap(start, beats.map { it.t }, end)
             assertTrue(gap <= 180, "과부하 중 하트비트 공백 최대 ${gap}초 — 10분 스캐빈저보다 한참 안쪽이어야 한다")
             assertTrue(beats.size <= 60 * 60 / 120 + 2, "과부하 중 하트비트 ${beats.size}건 — 120초에 한 번 이하")
+        }
+    }
+
+    /**
+     * 오프라인 부팅(반박 검증 must_fix 1 · s1): 첫 소속 읽기가 실패해도 틱 루프가 슬라이스마다 소속을 다시 확인한다
+     * (Swift confirmMembershipIfNeeded). 망이 붙으면 한 슬라이스 안에 팀이 서고, 근무가 서버에 오르고, 확정 뒤엔 요청 0.
+     */
+    @Test
+    fun offlineBootRecoversMembershipWithinOneSliceSoWorkReachesServer() = runTest(timeout = 2.minutes) {
+        TickRig(this, TickMode.OK).use { r ->
+            r.membershipFail = true
+            r.app.start(); runCurrent()
+            r.signIn()
+            advanceInSteps(1.minutes, 10.seconds)
+            assertEquals(null, r.app.sessionStore.profile?.teamID, "전제: 첫 소속 읽기가 실패해 팀이 비었다")
+            r.membershipFail = false
+            val back = r.nowSeconds
+            advanceInSteps(40.seconds, 10.seconds)
+            assertEquals(WiringTestRig.TEAM, r.app.sessionStore.profile?.teamID, "망이 붙은 뒤 한 슬라이스(30초) 안에 팀이 선다")
+            val start = r.nowSeconds
+            r.app.work.commands.start(WorkStartOrigin.MANUAL); runCurrent()
+            advanceInSteps(40.minutes)
+            val end = r.nowSeconds
+            val window = r.between(start, end)
+            assertTrue(window.any { it.method == "POST" && it.path.endsWith("/rest/v1/work_sessions") }, "근무 세션이 서버에 오른다")
+            val beats = window.filter { it.carriesHeartbeat }
+            val gap = maxGap(start, beats.map { it.t }, end)
+            assertTrue(gap <= 60, "하트비트 공백 최대 ${gap}초 (${beats.size}건) — 팀이 서야 work_tick 이 하트비트를 싣는다")
+            val later = r.between(back + 31, end).count { it.path.endsWith("/rest/v1/memberships") }
+            assertEquals(0, later, "소속이 확정되면 소속 확인 요청 0")
+            assertTrue(r.uncaught.isEmpty(), "잡히지 않은 예외 ${r.uncaught}")
+        }
+    }
+
+    /** 오프라인 부팅 중에 시작한 근무(큐에 noTeam 으로 남음)는 망이 붙은 그 틱에 재생된다 — 팀 확정이 큐 드레인보다 앞이다. */
+    @Test
+    fun workStartedDuringOfflineBootReplaysOnTheTickAfterMembershipRecovers() = runTest(timeout = 2.minutes) {
+        TickRig(this, TickMode.OK).use { r ->
+            r.membershipFail = true
+            r.app.start(); runCurrent()
+            r.signIn()
+            advanceInSteps(20.seconds, 10.seconds)
+            r.app.work.commands.start(WorkStartOrigin.MANUAL); runCurrent()
+            advanceInSteps(40.seconds, 10.seconds)
+            assertEquals(0, r.count("/rest/v1/work_sessions", "POST"), "전제: 팀이 없어 근무가 서버에 못 올랐다")
+            r.membershipFail = false
+            val back = r.nowSeconds
+            advanceInSteps(10.minutes, 10.seconds)
+            val post = r.between(back, r.nowSeconds).firstOrNull { it.method == "POST" && it.path.endsWith("/rest/v1/work_sessions") }
+            assertTrue(post != null && post.t - back <= 31, "망이 붙은 다음 틱(≤30초)에 근무 세션이 오른다 — ${post?.t?.minus(back)}초")
+            val beats = r.between(post.t, r.nowSeconds).filter { it.carriesHeartbeat }
+            val gap = maxGap(post.t, beats.map { it.t }, r.nowSeconds)
+            assertTrue(gap <= 60, "하트비트 공백 최대 ${gap}초")
+            assertTrue(r.working)
+        }
+    }
+
+    /**
+     * 과부하·도달 불가 100초(반박 검증 must_fix 2 · s2): 회복 확인 work_tick 이 백오프 상한(120초×지터) 안에 돌아오고, 서버가
+     * 그새 닫은 세션을 그 틱에 안다. (b) 는 (c) 정지 카운터에 세지 않는다 — 1시간 정지로 빠지지 않는다.
+     */
+    @Test
+    fun overloadBlipResumesWorkTickWithinBackoffCap() = runTest(timeout = 2.minutes) { blipResumes(TickMode.OVERLOAD) }
+
+    @Test
+    fun transportBlipResumesWorkTickWithinBackoffCap() = runTest(timeout = 2.minutes) { blipResumes(TickMode.TRANSPORT) }
+
+    private suspend fun TestScope.blipResumes(mode: TickMode) {
+        TickRig(this, TickMode.OK).use { r ->
+            r.app.start(); runCurrent()
+            r.signIn()
+            advanceInSteps(2.minutes)
+            r.app.work.commands.start(WorkStartOrigin.MANUAL); runCurrent()
+            advanceInSteps(5.minutes)
+            val blipAt = r.nowSeconds
+            r.mode = mode
+            advanceInSteps(100.seconds, 10.seconds)
+            r.mode = TickMode.OK
+            r.ownOff = true
+            val rec = r.nowSeconds
+            var learnedAt: Long? = null
+            repeat(30) {
+                advanceInSteps(10.seconds, 10.seconds)
+                if (learnedAt == null && !r.working) learnedAt = r.nowSeconds
+            }
+            val during = r.between(blipAt, rec)
+            assertEquals(0, during.count { it.method == "GET" && it.path.endsWith("/rest/v1/work_statuses") }, "깜빡임 중 팀 GET 펼침 0")
+            assertEquals(0, during.count { it.path.endsWith("/rpc/away_sync") }, "깜빡임 중 away_sync 0")
+            val first = r.between(rec + 1, r.nowSeconds).firstOrNull { it.isWorkTick }?.t
+            assertTrue(first != null && first - rec <= 180, "회복 뒤 첫 work_tick +${first?.minus(rec)}초 — 백오프 상한 120초×1.2 + 슬라이스 안")
+            assertTrue(learnedAt != null && learnedAt!! - rec <= 210, "서버가 닫은 세션을 +${learnedAt?.minus(rec)}초에 알았다")
+            val gate = r.app.work.workTickGate.snapshot
+            assertEquals(null, gate.suspendedUntil, "과부하·도달 불가는 1시간 정지를 걸지 않는다 — $gate")
+            assertTrue(r.uncaught.isEmpty(), "잡히지 않은 예외 ${r.uncaught}")
         }
     }
 

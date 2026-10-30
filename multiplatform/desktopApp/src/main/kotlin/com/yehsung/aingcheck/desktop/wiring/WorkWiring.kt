@@ -12,6 +12,7 @@ import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvents
 import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
 import com.yehsung.aingcheck.core.foundation.platform.desktop.SessionEvents
 import com.yehsung.aingcheck.core.net.assembleTeamStatuses
+import com.yehsung.aingcheck.core.net.fetchOwnMembership
 import com.yehsung.aingcheck.core.net.fetchTeamStatuses
 import com.yehsung.aingcheck.core.session.SessionStore
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
@@ -242,17 +243,20 @@ class WorkWiring(private val deps: WorkDeps) {
         isSessionUsable = { usability.isUsable },
     )
 
-    /** work_tick 사용 가능 판정(⑨ — 404·403·계약은 이 실행 동안 끄고, 일시 실패 3연속이면 1시간). */
+    /** work_tick 사용 가능 판정(⑨ — 404·403·계약은 이 실행 동안 끄고, (c) 일시 실패 3연속이면 정지). (b) 과부하는 세지 않는다. */
     val workTickGate = WorkTickGate()
+
+    /** (b) 과부하·도달 불가 백오프(≤120초×지터) — [workTickGate] 의 정지 카운터와 따로 센다(Swift recordOverloadFailure). */
+    val workTickBackoff = WorkTickOverloadBackoff()
+
+    /** 소속 읽기가 성공한 계정(Swift membershipConfirmed — 로그아웃·계정 전환이면 다른 uid 라 미확정으로 돌아간다). */
+    @Volatile private var membershipConfirmedFor: String? = null
     private val teamStatusFlow = MutableStateFlow<List<TeamMemberStatus>>(emptyList())
 
     /** 마지막으로 반영한 팀 상태(work_tick 조각 또는 폴백 4 GET). 팀 목록·트레이가 읽는다. 로그아웃이면 빈 목록. */
     val teamStatuses: StateFlow<List<TeamMemberStatus>> = teamStatusFlow.asStateFlow()
     private var lastHeartbeatSucceededAt: SwiftDate? = null
     private var lastLegacyHeartbeatAt: SwiftDate? = null
-
-    /** 과부하·도달 불가로 work_tick 을 못 쓰는 동안(성공 한 번이면 내린다) — 이때는 폴백 4 GET 으로 펼치지 않는다. */
-    private var overloaded = false
 
     val quitFinisher = QuitFinisher(
         state = store,
@@ -311,6 +315,9 @@ class WorkWiring(private val deps: WorkDeps) {
                     while (slices < IDLE_TICK_SLICES) {
                         delay(deps.tickSliceMillis)
                         slices += 1
+                        // 소속 미확정(실행 킥이 망 결합 전에 실패)은 유휴 1주기를 기다리지 않는다 — 그동안 팀이 null 이라
+                        // 하트비트·큐 드레인이 전부 죽어 있다. 확정돼 있으면 요청 0(Swift 느린 주기 안 confirmMembershipIfNeeded).
+                        swallow { confirmMembershipIfNeeded() }
                         if (store.snapshot.value.isWorking) break
                     }
                 }
@@ -331,6 +338,8 @@ class WorkWiring(private val deps: WorkDeps) {
             away.shouldSync(now, signedIn = false)
             return
         }
+        // 본문 맨 앞: 큐는 팀이 없으면 noTeam 으로 던지므로, 팀 확정이 드레인보다 앞서야 오프라인에서 쌓인 근무가 같은 틱에 재생된다.
+        swallow { confirmMembershipIfNeeded() }
         swallow { queue.retryPending() }
         when (val outcome = performWorkTick(now)) {
             is TickOutcome.Applied -> {
@@ -352,6 +361,31 @@ class WorkWiring(private val deps: WorkDeps) {
         }
     }
 
+    /**
+     * Swift confirmMembershipIfNeeded: 이 계정의 소속 읽기가 아직 성공하지 않았으면 한 번 읽는다(확정 상태면 요청 0).
+     * 로그인 직후 SessionStore.refreshProfile 이 실패하면(오프라인 부팅) 팀이 이 실행 내내 null 로 남고, 근무가 서버에
+     * 한 건도 오르지 않는다(반박 검증 must_fix 1 · s1) — 틱 루프가 유일한 회복 경로다. refreshProfile 은 성패를 알려 주지 않아
+     * (공용 core) 읽기 자체는 여기서 하고, 읽은 팀이 프로필과 다를 때만 refreshProfile 로 프로필에 싣는다.
+     */
+    suspend fun confirmMembershipIfNeeded() {
+        val uid = session.session?.userID ?: return
+        if (membershipConfirmedFor == uid) return
+        // 프로필에 팀이 이미 섰다 = 이 계정의 소속 읽기가 성공했다(enterSignedIn · 팀 참여 · 기록 화면).
+        if (deps.teamId() != null) {
+            membershipConfirmedFor = uid
+            return
+        }
+        val generation = session.sessionGeneration
+        val service = session.service
+        val membership = session.withSessionRetry { s -> service.fetchOwnMembership(s.accessToken, s.userID) }
+        if (generation != session.sessionGeneration || session.session?.userID != uid) return
+        if (membership?.teamID != deps.teamId()) {
+            session.refreshProfile()
+            if (membership?.teamID != deps.teamId()) return // 싣기 실패 — 다음 슬라이스가 다시 본다
+        }
+        membershipConfirmedFor = uid
+    }
+
     private sealed interface TickOutcome {
         data class Applied(val members: List<TeamMemberStatus>, val writeGeneration: Int, val away: AwaySyncResponse?) : TickOutcome
         data object Fallback : TickOutcome
@@ -363,10 +397,12 @@ class WorkWiring(private val deps: WorkDeps) {
         // 무소속은 통합 대상이 아니다(Swift — 팀 GET 이 없어 합칠 것이 없다): 폴백(하트비트·팀 조회는 팀이 없어 0, away 만).
         if (deps.teamId() == null) return TickOutcome.Fallback
         if (!workTickGate.isAvailable(now)) {
-            if (overloaded) return TickOutcome.Overloaded
+            // (a) 이 실행 동안 끔 · (c) 정지 — 기존 경로 그대로(Swift .disabled/.suspended).
             workTickGate.recordFallback()
             return TickOutcome.Fallback
         }
+        // (b) 과부하 백오프 중 — work_tick 도 기존 경로도 내지 않는다(Swift .backingOff → holdTickDuringOverload).
+        if (workTickBackoff.isBackingOff(now)) return TickOutcome.Overloaded
         val args = store.planWorkTick(now) ?: return TickOutcome.Fallback
         val generation = session.sessionGeneration
         val service = session.service
@@ -383,7 +419,7 @@ class WorkWiring(private val deps: WorkDeps) {
         return try {
             val response = session.withSessionRetry { s -> service.workTick(s.accessToken, request) }
             workTickGate.recordSuccess(response.serverNow?.let(service::parseDate), clockFn())
-            overloaded = false
+            workTickBackoff.recordSuccess()
             if (generation != session.sessionGeneration) return TickOutcome.Skipped
             if (args.heartbeat) lastHeartbeatSucceededAt = now
             val members = service.assembleTeamStatuses(
@@ -401,13 +437,13 @@ class WorkWiring(private val deps: WorkDeps) {
             when {
                 e.disablesForRun -> {
                     workTickGate.disable(reason, now)
-                    overloaded = false // 이 실행 동안 꺼졌다 — 붙들지 말고 폴백으로 산다
+                    workTickBackoff.recordSuccess() // 이 실행 동안 꺼졌다 — 백오프로 붙들지 말고 폴백으로 산다
                     workTickGate.recordFallback()
                     TickOutcome.Fallback
                 }
                 isOverload(e) -> {
-                    workTickGate.recordTransientFailure(reason, now)
-                    overloaded = true
+                    // (b) 는 (c) 정지 카운터에 세지도 지우지도 않는다 — 따로 백오프(≤120초×지터).
+                    workTickBackoff.recordFailure(reason, now)
                     TickOutcome.Overloaded
                 }
                 else -> {
@@ -423,8 +459,7 @@ class WorkWiring(private val deps: WorkDeps) {
             TickOutcome.Fallback
         } catch (e: Exception) {
             // 서버에 닿지 못했다(시간 초과·연결 실패·오프라인) — 펼쳐도 같은 벽이다(b).
-            workTickGate.recordTransientFailure(e::class.simpleName ?: "transport", now)
-            overloaded = true
+            workTickBackoff.recordFailure(e::class.simpleName ?: "transport", now)
             TickOutcome.Overloaded
         }
     }

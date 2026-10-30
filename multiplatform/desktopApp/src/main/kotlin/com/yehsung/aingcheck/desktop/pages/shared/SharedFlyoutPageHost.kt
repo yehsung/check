@@ -80,6 +80,7 @@ import com.yehsung.aingcheck.ui.icons.SfSymbols
 import com.yehsung.aingcheck.ui.missions.MeMissionsScreen
 import com.yehsung.aingcheck.ui.screens.me.CharacterPickerScreen
 import com.yehsung.aingcheck.ui.screens.me.FeedbackScreen
+import com.yehsung.aingcheck.ui.screens.me.GrassDetailScreen
 import com.yehsung.aingcheck.ui.screens.me.MeHomeScreen
 import com.yehsung.aingcheck.ui.screens.me.ProfileScreen
 import com.yehsung.aingcheck.ui.screens.messages.ConversationScreen
@@ -163,7 +164,8 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
     /** 페이지 수명 고리(화면 안에서 스스로 하지 않는 것만 — 목록·대화·제보·차단 목록은 화면이 DisposableEffect 로 한다). */
     fun hooks(key: SharedPageKey): PageHooks? = when (key) {
         SharedPageKey.RANKINGS -> PageHooks({ deps.rankings.tabDidAppear() }, { deps.rankings.tabDidDisappear() })
-        SharedPageKey.RECORDS -> PageHooks({ deps.me.tabDidAppear() }, { deps.me.tabDidDisappear() })
+        // 잔디 상세는 폰에서 나 탭 안의 화면 — 같은 수명(바로 열려도 기록을 읽는다).
+        SharedPageKey.RECORDS, SharedPageKey.GRASS -> PageHooks({ deps.me.tabDidAppear() }, { deps.me.tabDidDisappear() })
         SharedPageKey.SETTINGS -> PageHooks({ deps.me.settingsDidAppear() }, { deps.me.settingsDidDisappear() })
         else -> null
     }
@@ -227,7 +229,8 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
                     modifier = fill,
                 )
             }
-            SharedPage.Records -> MeHomeScreen(deps.me, presence = null, open = { nav.navigate(routeOf(it) ?: return@MeHomeScreen) }, scope = scope, modifier = fill)
+            SharedPage.Records -> MeHomeScreen(deps.me, presence = null, open = { nav.navigate(SharedRouter.routeOf(it)) }, scope = scope, modifier = fill)
+            is SharedPage.Grass -> GrassDetailScreen(deps.me, initialAxis = page.axis, scope = scope, modifier = fill)
             SharedPage.Missions -> MeMissionsScreen(deps.me, onBack = null, modifier = fill)
             SharedPage.Settings -> SettingsPage(nav, fill)
             SharedPage.Profile -> ProfileScreen(deps.me, scope, onPickPhoto = {}, openCharacters = { nav.navigate(FlyoutRoute.Characters) }, modifier = fill)
@@ -242,18 +245,6 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
             )
             is SharedPage.Pending -> CenteredNote(SharedText.pendingTitle, SharedText.pendingBody, fill)
         }
-    }
-
-    /** 나 하위 화면 → 플라이아웃 라우트. 잔디 상세는 핀에 라우트가 없다(보고 coordinator_patches) — 그 자리에 머문다. */
-    private fun routeOf(destination: MeDestination): FlyoutRoute? = when (destination) {
-        MeDestination.Shop -> FlyoutRoute.Shop
-        MeDestination.Characters -> FlyoutRoute.Characters
-        MeDestination.Profile -> FlyoutRoute.Profile
-        MeDestination.Feedback -> FlyoutRoute.Feedback
-        MeDestination.Settings -> FlyoutRoute.Settings
-        MeDestination.Blocked -> FlyoutRoute.Blocked
-        is MeDestination.Grass -> null
-        MeDestination.Missions -> FlyoutRoute.Missions
     }
 
     /** 로그아웃 단계: 로그인 + 그 위에 쌓이는 가입 · 재설정(폰 SignedOutEntry 와 같은 자기 스택 — 지금 친 이메일을 들고 간다). */

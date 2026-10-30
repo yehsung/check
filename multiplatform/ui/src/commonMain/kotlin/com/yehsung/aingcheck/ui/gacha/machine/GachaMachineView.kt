@@ -5,6 +5,8 @@
 //  - isActive: 보이는가(앱이 앞 · 덮개가 떠 있음 · 확률 시트가 안 가림). false 면 매 프레임 그리기를 멈추고 **커밋 전 예약(자동 회전 ·
 //    [한 번 더])을 거둔다** — 안 보이는 기계는 루비를 쓰지 않는다.
 //  - pull: 한 바퀴를 다 돌린 순간 **한 번** 부른다. 던지면 한 줄을 2.4초 띄우고 처음으로 — 공개는 없다.
+//  - onUnrevealedChanged: 루비를 낸 판의 결과를 사용자가 아직 못 봤는가(감독 hasUnrevealedTurn — 맥 GachaMachineLink)가 바뀔 때만 부른다.
+//    맥은 호스트(뽑기 창)가 열 때 감독에게 묻고, 여기는 값을 밀어 준다. 기본 {} — 기계 동작은 그대로다.
 // 프레임: 감독이 그림을 원할 때(framesWanted)만 매 프레임 시계를 읽는다(잦아든 뒤엔 CPU 0).
 package com.yehsung.aingcheck.ui.gacha.machine
 
@@ -19,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -27,6 +30,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import kotlinx.coroutines.delay
 import kotlin.math.min
 import kotlin.time.TimeSource
 
@@ -48,6 +52,7 @@ fun GachaMachineView(
     reduceMotion: Boolean = false,
     teaseChance: Double = 0.3,
     onAgain: () -> Unit = {},
+    onUnrevealedChanged: (Boolean) -> Unit = {},
 ) {
     val origin = remember { TimeSource.Monotonic.markNow() }
     val clock = remember(origin) { { origin.elapsedNow().inWholeNanoseconds / 1e9 } }
@@ -84,6 +89,27 @@ fun GachaMachineView(
     }
     LaunchedEffect(reduceMotion, balance, blockedReason) { d.touched(clock()) }
     DisposableEffect(d) { onDispose { d.stop() } }
+
+    // 루비 낸 판 미공개(공용 패치 5). 그릴 때마다 감독 시계로 다시 재고(왕복·결과·터짐은 스냅숏 상태라 바뀌면 다시 그린다 — 프레임이 도는 동안은
+    // 매 프레임) 값이 바뀐 그 그리기에서만 호스트에 알린다. 숨는 순간의 판정(안 보이는 동안 자리 잡은 공개 = 못 봄)은 위 d.update 가 먼저 적는다.
+    val unrevealed = d.hasUnrevealedTurn(clock())
+    val onUnrevealed by rememberUpdatedState(onUnrevealedChanged)
+    val reportedUnrevealed = remember { arrayOfNulls<Boolean>(1) }
+    SideEffect {
+        if (reportedUnrevealed[0] != unrevealed) {
+            reportedUnrevealed[0] = unrevealed
+            onUnrevealed(unrevealed)
+        }
+    }
+    // 보이는 채로 프레임이 먼저 잦아들고 공개가 그 뒤에 자리 잡는 판(판 도중 움직임 줄이기)은 다시 그릴 일이 없다 — 자리 잡는 때 한 번만 깨운다.
+    LaunchedEffect(unrevealed, running, isActive) {
+        val b = d.burstTime
+        val r = d.result
+        if (!unrevealed || running || !isActive || b == null || r == null) return@LaunchedEffect
+        val wait = b + d.goldBuild + d.buttonsAt(r.kind) - clock()
+        if (wait > 0) delay((wait * 1000).toLong() + 1)
+        now = clock()
+    }
 
     GachaMachineScaler(modifier) {
         GachaMachineStage(d, env, GachaMachineTheme.of(AingTheme.colors.isDark), sprites, now, portrait, ruby)

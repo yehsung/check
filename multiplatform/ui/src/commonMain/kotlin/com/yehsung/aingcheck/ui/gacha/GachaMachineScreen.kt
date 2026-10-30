@@ -63,6 +63,8 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 /**
  * @param isAppActive 앱이 앞에 있는가(Android 껍데기가 수명 RESUMED 로 넘긴다).
  * @param oddsSheet 확률 시트를 띄우는 그릇 — 보이는 동안 기계를 멈춘다(isActive=false). 기본은 [MeGachaOddsSheetHost](ModalBottomSheet).
+ * @param onUnrevealedChanged 루비를 낸 판의 결과를 아직 못 봤는가가 바뀔 때(GachaMachineDirector.hasUnrevealedTurn — 맥 GachaMachineLink).
+ *   데스크톱 뽑기 창이 다시 열 때 기계를 새로 세울지 가르는 데 쓴다. 기본 {} — Android 는 안 쓴다.
  */
 @Composable
 fun MeGachaMachineScreen(
@@ -73,6 +75,7 @@ fun MeGachaMachineScreen(
     haptics: GachaMachineHaptics = GachaMachineHaptics.None,
     reduceMotion: Boolean = false,
     teaseChance: Double = 0.3,
+    onUnrevealedChanged: (Boolean) -> Unit = {},
 ) {
     var ownsPull by remember { mutableStateOf(false) }
     var showsOdds by remember { mutableStateOf(false) }
@@ -107,6 +110,7 @@ fun MeGachaMachineScreen(
             againEnabled = !store.isPulling,
             reduceMotion = reduceMotion,
             teaseChance = teaseChance,
+            onUnrevealedChanged = onUnrevealedChanged,
         )
         MachineChrome(onClose = onClose, onOdds = { showsOdds = true })
     }

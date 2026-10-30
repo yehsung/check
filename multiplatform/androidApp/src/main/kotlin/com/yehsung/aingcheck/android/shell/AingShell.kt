@@ -23,6 +23,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalScreenArt
 import com.yehsung.aingcheck.ui.shop.LiveCharacterPreview
 import com.yehsung.aingcheck.ui.shop.LocalLiveCharacterPreview
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -34,6 +35,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -43,6 +45,7 @@ import com.yehsung.aingcheck.android.nav.CurrentDest
 import com.yehsung.aingcheck.android.nav.RoutePlans
 import com.yehsung.aingcheck.android.nav.SessionNavHost
 import com.yehsung.aingcheck.android.nav.ShellNavigator
+import com.yehsung.aingcheck.android.nav.ShellSystemBarRules
 import com.yehsung.aingcheck.android.nav.ShellTabBarRules
 import com.yehsung.aingcheck.android.nav.TabsNavHost
 import com.yehsung.aingcheck.android.routing.AingRoute
@@ -210,7 +213,9 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
             }
         },
     ) { padding ->
-        TabsNavHost(navController, Modifier.padding(padding), app = app, onTabBarHidden = { screenHidesTabBar = it })
+        // 뽑기 기계처럼 배경을 막대 뒤까지 까는 목적지는 셸 여백을 받지 않는다(ShellSystemBarRules — 내용 inset 은 그 화면이 스스로 단다).
+        val bars = if (ShellSystemBarRules.drawsBehindSystemBars(destination)) PaddingValues(0.dp) else padding
+        TabsNavHost(navController, Modifier.padding(bars), app = app, onTabBarHidden = { screenHidesTabBar = it })
     }
     // 생일 선물 고르기 창 — 어느 탭에 있든 뜬다(W4-c §4, 스토어가 대국 · 관전 중엔 스스로 안 띄운다).
     CakeGiftSheetRoute(phone.me)

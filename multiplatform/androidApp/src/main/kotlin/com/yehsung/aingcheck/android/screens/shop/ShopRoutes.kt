@@ -9,6 +9,10 @@
 // 조립(K11 — NavGraph · AppContainer)은 통합 갈래가 한다: 어느 목적지에 무엇을 거는지는 갈래 스크래치 assembly.md.
 package com.yehsung.aingcheck.android.screens.shop
 
+import androidx.core.view.WindowCompat
+import androidx.compose.runtime.DisposableEffect
+import android.content.ContextWrapper
+import android.app.Activity
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -52,6 +56,7 @@ fun GachaMachineRoute(store: MeStore, onClose: () -> Unit) {
     val view = LocalView.current
     val haptics = remember(view) { AndroidGachaHaptics(view) }
     BackHandler(onBack = onClose)
+    LightSystemBarIcons(view)
     MeGachaMachineScreen(
         store,
         onClose = onClose,
@@ -59,6 +64,32 @@ fun GachaMachineRoute(store: MeStore, onClose: () -> Unit) {
         haptics = haptics,
         reduceMotion = rememberReduceMotion(),
     )
+}
+
+/**
+ * 기계가 보이는 동안 상태 바 · 내비 막대 아이콘을 밝게(보라 배경 위 — 앱이 라이트 모드여도). 떠나면 들어올 때 값으로 되돌린다.
+ * iOS fullScreenCover 의 어두운 덮개 위 흰 상태 바 자리(MeGachaViews.swift:174 `.ignoresSafeArea()` — 배경은 셸이 막대 뒤까지 깐다, ShellSystemBarRules).
+ */
+@Composable
+private fun LightSystemBarIcons(view: View) {
+    DisposableEffect(view) {
+        val window = view.context.findActivity()?.window ?: return@DisposableEffect onDispose {}
+        val bars = WindowCompat.getInsetsController(window, view)
+        val status = bars.isAppearanceLightStatusBars
+        val navigation = bars.isAppearanceLightNavigationBars
+        bars.isAppearanceLightStatusBars = false
+        bars.isAppearanceLightNavigationBars = false
+        onDispose {
+            bars.isAppearanceLightStatusBars = status
+            bars.isAppearanceLightNavigationBars = navigation
+        }
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
 
 /** 「미션」 화면(조립이 목적지를 더한다 — iOS MeDestination.missions, 딥링크 없음). */

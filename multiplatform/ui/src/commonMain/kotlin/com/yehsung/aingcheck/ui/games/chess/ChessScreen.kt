@@ -430,7 +430,7 @@ private fun ChessIncoming(games: GamesStore, chess: ChessStore, state: ChessScre
     BoardGroup {
         Row(Modifier.fillMaxWidth().padding(start = AingDimens.cardPadding, end = AingDimens.cardPadding, top = 14.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(AingDimens.space3), verticalAlignment = Alignment.CenterVertically) {
-            BoardAvatar(invite.peer.displayName, invite.peer.id, 44.dp, working = invite.peer.isWorking)
+            BoardAvatar(invite.peer.displayName, invite.peer.id, 44.dp, working = invite.peer.isWorking, url = invite.peer.avatarURL)
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 BoardPersonName(ChessPhoneText.incomingTitle(invite.peer.displayName), center = invite.peer.center)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -461,7 +461,7 @@ private fun ChessOutgoing(chess: ChessStore) {
     BoardSectionHeader(ChessPhoneText.outgoingTitle)
     BoardGroup {
         BoardRow(minHeight = 56.dp) {
-            BoardAvatar(invite.peer.displayName, invite.peer.id, 36.dp, working = invite.peer.isWorking)
+            BoardAvatar(invite.peer.displayName, invite.peer.id, 36.dp, working = invite.peer.isWorking, url = invite.peer.avatarURL)
             Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Text(ChessPhoneText.outgoingTitle(invite.peer.displayName), style = BoardText.rowTitle(), color = colors.label)
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -494,7 +494,7 @@ private fun ChessOpponents(games: GamesStore, chess: ChessStore, roster: GamesLo
                 //   모았다(두 자리가 각자 고르면 한 줄이 같은 문장을 두 번 말하고 근무 중 표시가 사라졌다). 서버 capable 이 null 이면 false(모르는 상대는 불가).
                 val lines = ChessPhoneText.opponentRow(user)
                 BoardRow(divider = index != users.size - 1, dividerInset = AingDimens.cardPadding + 36.dp + AingDimens.space3, minHeight = 56.dp) {
-                    BoardAvatar(user.displayName, user.id, 36.dp, working = user.isWorking)
+                    BoardAvatar(user.displayName, user.id, 36.dp, working = user.isWorking, url = user.avatarURL)
                     Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                         BoardPersonName(user.displayName, center = user.center)
                         Text(lines.subtitle, style = BoardText.rowSubtitle(), color = colors.label2)

@@ -136,6 +136,13 @@ class DesktopSettingsStore(private val kv: DesktopKeyValueStore) {
     }
 
     /** 스위치(맥 applyUserToggle): 끈 사실만 남긴다 — 켜면 표식을 내린다. */
+    /**
+     * 첫 실행 화면(pages/onboarding)을 띄울 때인가 — 동의 키나 자동 실행 키 중 하나라도 **한 번도 쓰인 적 없으면** 참.
+     * 동의 키는 맥 MAS 판처럼 '없음 = 거절'로 읽지만(위 collectState), 없음과 '나중에'(거짓을 적음)는 여기서 갈린다. 첫 실행 화면이 둘 다 적는다.
+     */
+    fun firstRunPending(): Boolean =
+        kv.getBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT) == null || kv.getBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF) == null
+
     fun setLaunchAtLogin(enabled: Boolean) {
         kv.putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, !enabled)
         launchState.value = enabled

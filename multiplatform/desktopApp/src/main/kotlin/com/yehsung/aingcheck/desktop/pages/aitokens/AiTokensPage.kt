@@ -54,12 +54,12 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-/** 맥 AIToolConsentSettingsText(:1739-1742) — '이 맥의' 자리만 '이 컴퓨터의'. */
+/** 맥 AIToolConsentSettingsText(:1739-1742) — '이 맥의' 자리만 '이 PC의'(W-13 #8 · 데스크톱 자기 호칭 'PC'). */
 object AiToolConsentText {
     const val TITLE = "AI 사용 기록 읽기"
-    const val DETAIL = "이 컴퓨터의 AI 코딩 도구 기록에서 토큰 숫자만 세어 순위에 올려요. 끄면 읽지도 올리지도 않아요."
+    const val DETAIL = "이 PC의 AI 코딩 도구 기록에서 토큰 숫자만 세어 순위에 올려요. 끄면 읽지도 올리지도 않아요."
     const val ALLOW = "허용"
-    const val LATER = "컴퓨터 설정에서 언제든 바꿀 수 있어요."
+    const val LATER = "PC 설정에서 언제든 바꿀 수 있어요."
 }
 
 /** 페이지가 그릴 것 한 가지. */

@@ -55,6 +55,8 @@ import com.yehsung.aingcheck.desktop.pages.devices.DevicePickerModel
 import com.yehsung.aingcheck.desktop.pages.devices.DevicePickerSection
 import com.yehsung.aingcheck.desktop.platform.windows.hotkey.HotkeyPolicy
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
+import com.yehsung.aingcheck.core.session.app.AppLinks
+import com.yehsung.aingcheck.desktop.pages.ailimits.LinkLine
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutPageHost
 import com.yehsung.aingcheck.feature.desktop.ailimits.AILimitStore
 import com.yehsung.aingcheck.ui.screens.settingscommon.ToggleRow
@@ -62,20 +64,24 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 
 /** 행 글자(맥 :1520-1548 — '맥에 로그인하면 메뉴바에' · '메뉴바를 열지 않아도' 두 자리만 Windows 말로). */
 object DesktopSettingsText {
-    const val TITLE = "컴퓨터 설정"
+    const val TITLE = "PC 설정"
     const val SECTION_GENERAL = "일반"
     const val SECTION_AI_DATA = "AI 사용 기록"
     const val SECTION_AI_LIMITS = "AI 리밋"
     const val LAUNCH_TITLE = "로그인 시 자동 실행"
     const val LAUNCH_DETAIL = "Windows 에 로그인하면 작업 표시줄 알림 영역에 자동으로 올라와요."
     const val AUTO_START_TITLE = "자동 근무 시작"
-    const val AUTO_START_DETAIL = "컴퓨터를 5분쯤 쓰면 알아서 근무를 시작해요. 끄면 직접 눌러야 해요."
+    const val AUTO_START_DETAIL = "PC를 5분쯤 쓰면 알아서 근무를 시작해요. 끄면 직접 눌러야 해요."
     const val SHORTCUT_TITLE = "근무 시작·종료 단축키"
     const val SHORTCUT_DETAIL = "알림 영역을 열지 않아도 이 키로 근무를 시작하거나 끝내요."
     const val TODO_TITLE = "캐릭터를 눌러 할 일 열기"
     const val TODO_DETAIL = "켜면 캐릭터 클릭이 할 일 보드를 열고, 끄면 캐릭터가 콕 반응만 해요."
     const val KEYCAP_RECORDING = "새 조합을 누르세요"
     const val RESET = "기본값으로"
+    /** W-12 막힘(11.12 · 10.5.1) · W-13 #10: 설정에서 이용약관·개인정보 처리방침에 닿는다. */
+    const val SECTION_LEGAL = "약관·정책"
+    const val TERMS = "이용약관"
+    const val PRIVACY = "개인정보 처리방침"
 }
 
 class DesktopSettingsDeps(
@@ -85,6 +91,8 @@ class DesktopSettingsDeps(
     val aiLimitActions: AiLimitsActions?,
     /** 동의를 막 켰다(조립: 토큰 스캔 refreshNow). */
     val onConsentGranted: suspend () -> Unit = {},
+    /** 링크 열기(조립: SharedPagesDeps.openUrl 과 같은 Desktop.browse). */
+    val openUrl: (String) -> Unit = {},
 )
 
 class DesktopSettingsFlyoutPage(private val deps: DesktopSettingsDeps) : FlyoutPageHost {
@@ -122,6 +130,10 @@ fun DesktopSettingsPageContent(deps: DesktopSettingsDeps, onBack: () -> Unit, mo
                 s.setTokenUsageCollect(on)
                 if (on) grantTick += 1
             })
+        }
+        MacSection(DesktopSettingsText.SECTION_LEGAL) {
+            LinkLine(DesktopSettingsText.TERMS) { deps.openUrl(AppLinks.termsOfService) }
+            LinkLine(DesktopSettingsText.PRIVACY) { deps.openUrl(AppLinks.privacyPolicy) }
         }
         val limits = deps.aiLimits
         val actions = deps.aiLimitActions

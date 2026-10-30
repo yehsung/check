@@ -3,8 +3,11 @@
 // Windows 는 껍데기 알림 한 문(ShellNotifier — 말풍선/풍선/점 중재)으로 보낸다(int-w2 onInvite→알림).
 package com.yehsung.aingcheck.desktop.windows.kit
 
-/** 받은 대결 신청 한 건(알림에 실을 값만). 대결 깃발이 꺼진 빌드는 만들지 않는다(GameWindowWiring — W-3 #7). */
-data class DuelInviteNotice(val kind: GameWindowKind, val peerName: String, val stake: Long) {
+/**
+ * 받은 대결 신청 한 건(알림에 실을 값만). 대결 깃발이 꺼진 빌드는 만들지 않는다(GameWindowWiring — W-3 #7).
+ * [inviteId] = 스토어 신청 id — 셸 알림(ShellNotice.ref)이 실어 오버레이의 구조 신청과 짝짓는다(글로 짝지으면 같은 상대·같은 판돈 두 건이 겹친다).
+ */
+data class DuelInviteNotice(val kind: GameWindowKind, val peerName: String, val stake: Long, val inviteId: String? = null) {
     /** 게임 이름(맥 말풍선 낱말). 미니게임 창은 신청이 없다. */
     val gameName: String
         get() = when (kind) {

@@ -25,6 +25,7 @@ import com.yehsung.aingcheck.desktop.windows.gacha.GachaWindowHost
 import com.yehsung.aingcheck.desktop.windows.games.minigame.ComposeGamesWindows
 import com.yehsung.aingcheck.desktop.windows.games.minigame.DuelInviteArrival
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
 import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.desktop.windows.kit.KeyValueWindowBoundsStore
@@ -85,6 +86,7 @@ interface GameWindowFactory {
                 characters = deps.characters,
                 messages = deps.messages,
                 onInviteArrival = deps.onInviteArrival,
+                onDuelAttention = deps.onDuelAttention,
             )
 
         override fun gacha(deps: GamesDeps, bounds: WindowBoundsStore): GachaDoor {
@@ -141,6 +143,8 @@ data class GamesDeps(
     val messages: MessagesStore? = null,
     /** 구조 신청(id·만료) → 오버레이 말풍선. 조립: `overlay.onDuelInvite`. 글 알림([onInviteNotice])보다 먼저 온다. duels=false 면 오지 않는다. */
     val onInviteArrival: DuelInviteArrival = { _, _, _, _, _ -> },
+    /** 차례 알림 구조 정보(판 id·종류) → 오버레이 말풍선. 조립: `overlay.onDuelAttention`(누르면 그 판 창). duels=false 면 오지 않는다. */
+    val onDuelAttention: (DuelAttention) -> Unit = {},
 )
 
 data class GamesHandle(

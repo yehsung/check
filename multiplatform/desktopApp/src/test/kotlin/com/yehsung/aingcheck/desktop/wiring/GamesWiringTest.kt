@@ -32,10 +32,12 @@ import kotlin.test.assertTrue
 internal class FakeBoardWindows : DesktopGameWindows {
     var closeAlls = 0
     var others: DesktopGameWindows = DesktopGameWindows.None
+    /** 판 창 열기 기록("gomoku:<판 id>" — 오버레이 말풍선 클릭 시험). */
+    val opened = mutableListOf<String>()
     override fun openGames(kind: MiniGameKind?) = Unit
-    override fun openGomoku(focusMatchID: String?) = Unit
-    override fun openChess(focusMatchID: String?) = Unit
-    override fun openTetrisDuel(focusMatchID: String?) = Unit
+    override fun openGomoku(focusMatchID: String?) { opened += "gomoku:$focusMatchID" }
+    override fun openChess(focusMatchID: String?) { opened += "chess:$focusMatchID" }
+    override fun openTetrisDuel(focusMatchID: String?) { opened += "tetris:$focusMatchID" }
     override fun openGacha() = others.openGacha()
     override fun openCakeGift() = others.openCakeGift()
     override fun closeAll() { closeAlls++; others.closeAll() }
@@ -43,6 +45,8 @@ internal class FakeBoardWindows : DesktopGameWindows {
 
 internal class FakeGameFactory(private val realBoard: Boolean = false) : GameWindowFactory {
     val board = FakeBoardWindows()
+    /** 조립이 넘긴 GamesDeps(구조 신청·차례 알림 문을 실제 그래프 그대로 부르는 시험용). */
+    var deps: GamesDeps? = null
     var gachaOpens = 0
     var gachaCloses = 0
     var cakeStarts = 0
@@ -50,8 +54,10 @@ internal class FakeGameFactory(private val realBoard: Boolean = false) : GameWin
     var cakeCloses = 0
     var cakeJob: Job? = null
 
-    override fun board(deps: GamesDeps, bounds: WindowBoundsStore, others: DesktopGameWindows): DesktopGameWindows =
-        if (realBoard) GameWindowFactory.Compose.board(deps, bounds, others) else board.also { it.others = others }
+    override fun board(deps: GamesDeps, bounds: WindowBoundsStore, others: DesktopGameWindows): DesktopGameWindows {
+        this.deps = deps
+        return if (realBoard) GameWindowFactory.Compose.board(deps, bounds, others) else board.also { it.others = others }
+    }
 
     override fun gacha(deps: GamesDeps, bounds: WindowBoundsStore): GachaDoor = object : GachaDoor {
         override fun open() { gachaOpens++ }

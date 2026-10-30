@@ -338,7 +338,7 @@ class ShellWiring(private val deps: ShellDeps) {
 
     /** 받은 대결 신청 한 건 → 알림 중재(말풍선/풍선/점). 깃발(duels)은 notifier 가 한 번 더 본다. 띄운 표면(꺼졌으면 null). */
     fun notifyDuelInvite(invite: DuelInviteNotice): NotifySurface? =
-        notifier.deliver(ShellNotice(NotifyKind.DUEL_INVITE, invite.title, invite.body), deps.notifyContext())
+        notifier.deliver(ShellNotice(NotifyKind.DUEL_INVITE, invite.title, invite.body, ref = invite.inviteId), deps.notifyContext())
 
     private val jobs = mutableListOf<Job>()
     private val registrations = mutableListOf<Registration>()

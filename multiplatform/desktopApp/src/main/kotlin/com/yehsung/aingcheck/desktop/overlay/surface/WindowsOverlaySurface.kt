@@ -33,6 +33,8 @@ class WindowsOverlaySurface(
     private val thread: Win32MessageThread,
     val className: String = DEFAULT_CLASS_NAME,
     private val listener: OverlaySurfaceListener = OverlaySurfaceListener { _, _, _ -> },
+    /** 이 창의 WM_DPICHANGED(캐릭터가 있는 모니터의 배율 — 보조 모니터 포함) → OverlaySurfaces.displayChanges. */
+    private val dpiRelay: OverlayWindowDpiRelay? = null,
 ) : AutoCloseable {
     private val overlayClass = OverlayWindowClass(className)
     private val dimClass = OverlayWindowClass("$className$DIM_SUFFIX", blackBackground = true)
@@ -143,6 +145,7 @@ class WindowsOverlaySurface(
     fun hideUltraDim() = thread.call { _ -> dimHwnd?.let { OverlayWindowClass.hide(it) } }
 
     private fun handle(h: WinDef.HWND, msg: Int, wParam: WinDef.WPARAM, lParam: WinDef.LPARAM): WinDef.LRESULT? {
+        dpiRelay?.handle(msg)?.let { return it }
         when (msg) {
             // 눌러도 활성화하지 않는다(맥 nonactivatingPanel) — 사용자가 치던 창의 포커스를 뺏지 않는다.
             OverlayWin32.WM_MOUSEACTIVATE -> return WinDef.LRESULT(OverlayWin32.MA_NOACTIVATE.toLong())

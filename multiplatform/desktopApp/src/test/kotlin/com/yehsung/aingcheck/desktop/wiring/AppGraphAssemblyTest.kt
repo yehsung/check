@@ -29,6 +29,19 @@ import com.yehsung.aingcheck.desktop.ShutdownSequence
 import com.yehsung.aingcheck.desktop.ShutdownStep
 import com.yehsung.aingcheck.desktop.SilentCharacterSink
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
+import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.desktop.overlay.engine.BubbleKind
+import com.yehsung.aingcheck.desktop.overlay.engine.ClickAction
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttention
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelAttentionKind
+import com.yehsung.aingcheck.desktop.overlay.engine.DuelGame
+import com.yehsung.aingcheck.desktop.overlay.engine.OverlayView
+import com.yehsung.aingcheck.desktop.overlay.engine.PointerOutcome
+import com.yehsung.aingcheck.desktop.shellapi.NotifySurface
+import com.yehsung.aingcheck.desktop.todo.TodoQuarantineLog
+import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
+import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
+import java.nio.file.Files
 import com.yehsung.aingcheck.desktop.platform.windows.display.DisplayChangeSource
 import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutScreen
 import com.yehsung.aingcheck.desktop.shell.flyout.SyntheticScreen
@@ -61,6 +74,7 @@ import java.util.concurrent.Executor
 import com.yehsung.aingcheck.desktop.pages.desktopsettings.DesktopSettingsKeys
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
 import com.yehsung.aingcheck.feature.desktop.InMemoryDesktopKeyValueStore
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertSame
@@ -71,10 +85,10 @@ import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
 /** 부작용 녹음 플랫폼: 트레이 show/remove · 전원 구독 열고 닫기를 한 줄 장부에 적는다. */
-private class RecordingPlatform(val log: MutableList<String>) : DesktopPlatform {
-    // 할 일 목록(TodoWiring)이 dataDir 아래 todos.<계정>.json 을 쓴다 — 저장소 안 상대 경로("D")에 흘리지 않게 임시 폴더.
+private class RecordingPlatform(val log: MutableList<String>, dataDir: Path) : DesktopPlatform {
+    // 할 일 목록(TodoWiring)이 dataDir 아래 todos.<계정>.json 을 쓴다 — 저장소 안 상대 경로("D")에 흘리지 않게 임시 폴더(시험 끝에 통째로 지운다 — TempDataDirs).
     override val paths = object : AppPaths {
-        override val dataDir: String = java.nio.file.Files.createTempDirectory("asm-data").toFile().apply { deleteOnExit() }.path
+        override val dataDir: String = dataDir.toString()
         override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
     }
     override val env = object : EnvReader { override fun get(name: String): String? = null }
@@ -107,14 +121,20 @@ private class RecordingPlatform(val log: MutableList<String>) : DesktopPlatform 
 
 private class AssemblyRig(
     val test: TestScope,
+    dirs: TempDataDirs,
     config: DesktopAppConfig = DesktopAppConfig(),
     kv: DesktopKeyValueStore = InMemoryDesktopKeyValueStore(),
+    val gameWindows: FakeGameFactory = FakeGameFactory(),
+    overlayPresenter: OverlayPresenter = OverlayPresenter.None,
+    /** 조립 전에 dataDir 를 채운다(할 일 손상 파일 등 — 합성만). */
+    prepareDataDir: (Path) -> Unit = {},
 ) {
     val log = mutableListOf<String>()
     val hosts = mutableSetOf<String>()
     val requests = mutableListOf<String>()
     val uncaught = mutableListOf<Throwable>()
-    val platform = RecordingPlatform(log)
+    val dataDir: Path = dirs.new("asm-data").also(prepareDataDir)
+    val platform = RecordingPlatform(log, dataDir)
     val port = FakeWindowPort()
     var displayOpen = 0
     private val engine = MockEngine(
@@ -153,7 +173,8 @@ private class AssemblyRig(
         screen = FlyoutScreen { SyntheticScreen.facts },
         characterSink = SilentCharacterSink(),
         bubbleMeasure = FakeMeasure(),
-        gameWindows = FakeGameFactory(),
+        gameWindows = gameWindows,
+        overlayPresenter = overlayPresenter,
         homes = DesktopAiHomes(Path.of("synthetic-home")) { Path.of("synthetic-home", ".codex") },
         tokenCacheFile = null,
         aiLimitRunner = AILimitRunner { _, _ -> AILimitReadOutcome(emptyMap()) },
@@ -172,10 +193,16 @@ private class AssemblyRig(
 }
 
 class AppGraphAssemblyTest {
+    /** 시험마다 임시 dataDir — 끝나면 안의 todos.*.json·로그째 지운다(deleteOnExit 는 빈 폴더만 지운다). */
+    private val dirs = TempDataDirs()
+
+    @AfterTest
+    fun removeDataDirs() = dirs.close()
+
     /** W-6 #6: 조립 → 시작 → 종료 한 벌(실패해도 리그를 닫는다 — 안 닫으면 틱 루프가 가상 시계를 끝없이 돌려 runTest 가 멈춘다). 근무 마무리가 맨 앞, 실시간 shutdown 뒤에 껍데기, tray.remove 가 맨 끝. */
     @Test
     fun assembledGraphStartsThenShutsDownInW6Order() = runTest {
-        val r = AssemblyRig(this)
+        val r = AssemblyRig(this, dirs)
         try {
             r.app.start()
             advanceTimeBy(5_000)
@@ -233,7 +260,7 @@ class AppGraphAssemblyTest {
     /** W-6 #1: poke=false 면 찌르기 발신을 조립하지 않는다(받기 0 · 보내기 0), 켜면 조립한다. */
     @Test
     fun pokeFlagDecidesWhetherSenderIsAssembled() = runTest {
-        val off = AssemblyRig(this, DesktopAppConfig(poke = false))
+        val off = AssemblyRig(this, dirs, DesktopAppConfig(poke = false))
         assertFalse(off.app.social.actions.canPoke)
         off.app.start()
         advanceTimeBy(120_000)
@@ -242,7 +269,7 @@ class AppGraphAssemblyTest {
         off.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
         off.close()
 
-        val on = AssemblyRig(this, DesktopAppConfig(poke = true))
+        val on = AssemblyRig(this, dirs, DesktopAppConfig(poke = true))
         assertTrue(on.app.social.actions.canPoke)
         on.close()
     }
@@ -254,7 +281,7 @@ class AppGraphAssemblyTest {
             putBoolean(DesktopSettingsKeys.AI_TOOL_DATA_CONSENT, false)
             putBoolean(DesktopSettingsKeys.LAUNCH_AT_LOGIN_USER_TURNED_OFF, false)
         }
-        val r = AssemblyRig(this, kv = answered)
+        val r = AssemblyRig(this, dirs, kv = answered)
         try {
             assertFalse(r.app.pages.firstRun.pending.value, "둘 다 답했으면 첫 실행 아님")
             r.app.start()
@@ -281,5 +308,86 @@ class AppGraphAssemblyTest {
         )
         assertEquals(4_500, testScheduler.currentTime, "상한에서 정확히 끊는다")
         assertEquals(listOf("tray"), ran, "상한이 지나면 Bounded 는 건너뛰고 Always 는 돈다")
+    }
+
+    // ───────────────────────── int-w4a polish — 실제 조립 그래프 ─────────────────────────
+
+    /**
+     * ①③ 실제 AppGraph: 게임 배선 문(GamesDeps.onInviteArrival → overlay.onDuelInvite · 셸 notifyDuelInvite → overlay.shellBubble)으로
+     * 같은 상대·같은 판돈 두 건을 보내면 말풍선이 신청 id 로 정확히 둘. 차례 알림(GamesDeps.onDuelAttention)은 그 판의 말풍선이 되고,
+     * 대결 말풍선 클릭 결과(OpenDuel)는 조립의 포인터 문이 게임 창을 그 판 id 로 연다(맥 CheckApp.swift:370·407·443).
+     */
+    @Test
+    fun duelBubblesPairByInviteIdAndAttentionClickOpensThatMatchInAssembledGraph() = runTest {
+        val views = ArrayList<OverlayView>()
+        val r = AssemblyRig(this, dirs, DesktopAppConfig(duels = true), overlayPresenter = { v, _ -> views += v })
+        try {
+            r.app.start()
+            advanceTimeBy(1_000)
+            runCurrent()
+            val deps = requireNotNull(r.gameWindows.deps) { "조립이 게임 배선을 짓지 않았다" }
+            fun bubbles() = views.mapNotNull { it.bubble }.distinctBy { it.text to it.shownAt }
+            val exp = SwiftDate.fromEpochMillis(WiringTestRig.BASE_MS + testScheduler.currentTime + 60_000)
+
+            deps.onInviteArrival(DuelGame.GOMOKU, "inv-1", "합성상대", 5, exp)
+            deps.onInviteArrival(DuelGame.GOMOKU, "inv-2", "합성상대", 5, exp)
+            val n1 = DuelInviteNotice(GameWindowKind.Gomoku, "합성상대", 5, "inv-1")
+            val n2 = DuelInviteNotice(GameWindowKind.Gomoku, "합성상대", 5, "inv-2")
+            assertEquals(NotifySurface.BUBBLE, r.app.shell.handle.notifyDuelInvite(n1), "캐릭터 켜짐 → 말풍선이 맡는다(토스트 0)")
+            assertEquals(NotifySurface.BUBBLE, r.app.shell.handle.notifyDuelInvite(n2))
+            advanceTimeBy(40_000)
+            runCurrent()
+            assertEquals(
+                listOf(BubbleKind.Invite(DuelGame.GOMOKU, "inv-1"), BubbleKind.Invite(DuelGame.GOMOKU, "inv-2")),
+                bubbles().map { it.kind }.filterIsInstance<BubbleKind.Invite>(),
+                "신청 말풍선 정확히 둘: ${bubbles()}",
+            )
+            assertEquals(0, bubbles().count { it.kind !is BubbleKind.Invite && it.text == n1.body }, "글만 말풍선 0: ${bubbles()}")
+
+            deps.onDuelAttention(DuelAttention(DuelGame.CHESS, "c-7", DuelAttentionKind.MY_TURN, "합성상대", 3))
+            advanceTimeBy(500)
+            runCurrent()
+            assertEquals(BubbleKind.Invite(DuelGame.CHESS, "c-7"), bubbles().last().kind, "차례 알림 → 그 판 말풍선: ${bubbles()}")
+
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.Hit))
+            assertEquals(emptyList(), r.gameWindows.board.opened, "음성 대조: 때리기 클릭은 창 0")
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.CHESS, "c-7")))
+            r.app.overlayPointerOutcome(PointerOutcome(click = ClickAction.OpenDuel(DuelGame.GOMOKU, "inv-2")))
+            assertEquals(listOf("chess:c-7", "gomoku:inv-2"), r.gameWindows.board.opened)
+            r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            r.close()
+        }
+    }
+
+    /** ⑤ 실제 AppGraph: 할 일 손상 파일 격리 → 앱 로그 폴더(logDir 가 절대 경로가 아니면 dataDir/logs) 한 줄. 깨끗하면 로그 파일 0. */
+    @Test
+    fun todoQuarantineGoesToAppLogFileInAssembledGraph() = runTest {
+        val clean = AssemblyRig(this, dirs)
+        try {
+            clean.app.start()
+            advanceTimeBy(1_000)
+            runCurrent()
+            assertFalse(Files.exists(clean.dataDir.resolve("logs").resolve(TodoQuarantineLog.FILE_NAME)), "음성 대조: 손상 없으면 로그 0")
+            clean.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            clean.close()
+        }
+
+        val r = AssemblyRig(this, dirs, prepareDataDir = { d -> Files.writeString(d.resolve("todos.local.json"), "{ 합성 손상") })
+        try {
+            r.app.start()
+            advanceTimeBy(1_000)
+            runCurrent()
+            val log = r.dataDir.resolve("logs").resolve(TodoQuarantineLog.FILE_NAME)
+            assertTrue(Files.exists(log), "격리 보고가 앱 로그 파일에 없다: ${Files.list(r.dataDir).use { it.toList() }}")
+            val lines = Files.readAllLines(log)
+            assertEquals(1, lines.size, "한 줄: $lines")
+            assertTrue(lines.single().contains("todo quarantine") && lines.single().contains("todos.local.json") && lines.single().contains("preserved=true"), lines.single())
+            assertFalse(lines.single().contains("합성 손상"), "사용자 문장은 싣지 않는다")
+            r.app.shutdownSteps().forEach { if (it is ShutdownStep.Always) it.run() }
+        } finally {
+            r.close()
+        }
     }
 }

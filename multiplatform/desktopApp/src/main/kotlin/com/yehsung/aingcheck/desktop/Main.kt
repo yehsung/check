@@ -3,11 +3,39 @@
 //
 // 에이전트·시험은 이 진입점을 실행하지 않는다(:desktopApp:run 금지 — 창). 순서가 계약이다:
 //   ① JNA 속성(첫 JNA 클래스 로드 전) → ② Windows 확인 → ③ --selfcheck 면 진단만 찍고 끝 → ④ 단일 실행 가드(세션 시작 전 필수)
-//   → 못 잡으면 첫 실행에 "열어 달라" 신호만 보내고 끝 → ⑤ 플랫폼·그래프 → ⑥ shutdown hook(로그오프·종료 = SIGTERM, D§2-3)
-//   → ⑦ 트레이 아이콘. 플라이아웃·메뉴·근무 마무리(finishWorkBeforeQuit 3초)는 껍데기·스토어 갈래(W3-c1·W2-g)가 여기 잇는다.
+//   → 못 잡으면 첫 실행에 "열어 달라" 신호만 보내고 끝 → ⑤ 플랫폼·그래프 → ⑥ EDT 에서 조립(AppGraph.assemble — 배선 여섯)
+//   → ⑦ shutdown hook(로그오프·종료 = SIGTERM, D§2-3 — W-6 #6 순서를 ShutdownSequence 가 상한 안에서) → ⑧ 시작(AppWirings.start:
+//   트레이 발표자·InstanceActivation·트레이 클릭·업데이트 감시는 shell.start 하나가 한다 — 고정 Off 아이콘·빈 신호 듣기는 두지 않는다).
 package com.yehsung.aingcheck.desktop
 
 import com.sun.jna.platform.win32.User32
+import com.yehsung.aingcheck.core.foundation.platform.RunningTests
+import com.yehsung.aingcheck.desktop.overlay.bubble.PretendardBubbleMeasure
+import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
+import com.yehsung.aingcheck.desktop.platform.windows.flyout.TaskbarProbe
+import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutIconLocator
+import com.yehsung.aingcheck.desktop.shell.flyout.FlyoutScreen
+import com.yehsung.aingcheck.desktop.shell.flyout.native.NativeTrayMenu
+import com.yehsung.aingcheck.desktop.wiring.SwingFlyoutWindowPort
+import com.yehsung.aingcheck.feature.desktop.DesktopAiHomes
+import com.yehsung.aingcheck.feature.desktop.ailimits.AILimitHTTPKtor
+import com.yehsung.aingcheck.feature.desktop.ailimits.AILimitWindowsRunner
+import com.yehsung.aingcheck.feature.desktop.tokens.account.CodexAccountProbe
+import com.yehsung.aingcheck.feature.desktop.tokens.account.CodexAppServerSession
+import com.yehsung.aingcheck.feature.desktop.tokens.account.CodexToolchain
+import com.yehsung.aingcheck.feature.desktop.tokens.account.CodexToolchainCandidates
+import com.yehsung.aingcheck.feature.desktop.tokens.diag.CodexUsageDiagnosticsScanner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.swing.Swing
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.awt.Desktop
+import java.awt.Toolkit
+import java.awt.datatransfer.StringSelection
+import java.io.File
 import com.yehsung.aingcheck.desktop.generated.BuildIdentity
 import com.yehsung.aingcheck.desktop.generated.ProdConfig
 import com.yehsung.aingcheck.desktop.platform.windows.HostOs
@@ -20,11 +48,6 @@ import com.yehsung.aingcheck.desktop.platform.windows.instance.WindowsSingleInst
 import com.yehsung.aingcheck.desktop.platform.windows.jna.JnaBootstrap
 import com.yehsung.aingcheck.desktop.platform.windows.paths.PackageIdentity
 import com.yehsung.aingcheck.desktop.platform.windows.paths.WindowsAppPaths
-import com.yehsung.aingcheck.desktop.platform.windows.tray.TaskbarThemeProbe
-import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayIconRenderer
-import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayIconSpec
-import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayIconStatus
-import com.yehsung.aingcheck.desktop.platform.windows.tray.TrayTooltip
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -159,28 +182,72 @@ fun main(args: Array<String>) {
         events = events,
         executable = ProcessHandle.current().info().command().orElse(null),
     )
-    // 조정자가 웨이브 병합 때 세션·스토어·껍데기를 이 그래프에 잇는다(K11).
-    @Suppress("UNUSED_VARIABLE")
     val graph = AppGraph(platform)
+    // UI 한 줄기(Swing EDT): 스토어·근무 상태·창이 모두 여기서 돈다. 조립도 EDT 에서(FlyoutWindow·게임 창 생성자가 EDT 요구).
+    val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Swing)
+    var wirings: AppWirings? = null
+    SwingUtilities.invokeAndWait { wirings = graph.assemble(windowsSeams(platform, graph, events), appScope) }
+    val app = checkNotNull(wirings)
     val done = CountDownLatch(1)
     Runtime.getRuntime().addShutdownHook(
         Thread({
-            // 로그오프·시스템 종료도 여기로 온다(WM_QUERYENDSESSION → SIGTERM, D§2-3). 근무 마무리(3초)는 W2-g 가 여기 잇는다.
+            // 로그오프·시스템 종료·트레이 '종료'가 모두 여기로 온다(WM_QUERYENDSESSION → SIGTERM, D§2-3). W-6 #6 순서 그대로, 전체 상한 안.
+            val startNanos = System.nanoTime()
+            runCatching {
+                runBlocking {
+                    withTimeoutOrNull(ShutdownSequence.TOTAL_BUDGET_MILLIS + SHUTDOWN_GRACE_MILLIS) {
+                        withContext(Dispatchers.Swing) {
+                            ShutdownSequence.run(app.shutdownSteps(), elapsedMillis = { (System.nanoTime() - startNanos) / 1_000_000 })
+                        }
+                    }
+                }
+            }
             platform.desktopEvents.onShutdown()
             platform.close()
             done.countDown()
         }, "aingcheck-shutdown"),
     )
-    InstanceSignal.listen(platform.messageThread, events) {
-        // 두 번째 실행·시작 메뉴 재실행 → 플라이아웃 열기(W3-c1 이 잇는다).
-    }
-    val size = User32.INSTANCE.GetSystemMetrics(SM_CXSMICON).takeIf { it in 8..256 } ?: 16
-    val status = TrayIconStatus.Off
-    platform.tray.show(
-        TrayIconRenderer.render(TrayIconSpec(status, redDot = false, theme = TaskbarThemeProbe.current(), sizePx = size)),
-        TrayTooltip.text(status),
-    )
+    SwingUtilities.invokeLater { app.start() }
     done.await()
 }
 
+/** Windows 실물 이음(AppSeams). EDT 에서 부른다 — SwingFlyoutWindowPort 가 창을 만든다. */
+internal fun windowsSeams(platform: WindowsPlatform, graph: AppGraph, events: Executor): AppSeams {
+    val homes = DesktopAiHomes(Path.of(platform.paths.userHome)) { Path.of(platform.environment.codexHome().path) }
+    val pathDirs = System.getenv("PATH").orEmpty().split(File.pathSeparatorChar).filter { it.isNotBlank() }
+        .mapNotNull { runCatching { Path.of(it) }.getOrNull() }
+    val codexProbe = CodexAccountProbe(
+        candidates = { CodexToolchainCandidates.nativeCandidates(pathDirs).map { CodexToolchain(listOf(it.toString())) } },
+        run = { t, now -> CodexAppServerSession.run(t, BuildIdentity.VERSION, now) },
+    )
+    return AppSeams(
+        events = events,
+        mainDispatcher = Dispatchers.Swing,
+        window = SwingFlyoutWindowPort(),
+        screen = FlyoutScreen { TaskbarProbe.probe(it) },
+        iconLocator = FlyoutIconLocator { platform.tray.iconRect()?.let { PxRect(it.left, it.top, it.right, it.bottom) } },
+        menu = NativeTrayMenu(platform.messageThread),
+        instanceListen = { onActivate -> InstanceSignal.listen(platform.messageThread, events, onActivate) },
+        trayIconSizePx = { User32.INSTANCE.GetSystemMetrics(SM_CXSMICON).takeIf { it in 8..256 } ?: 16 },
+        characterSink = SilentCharacterSink(),
+        bubbleMeasure = PretendardBubbleMeasure.bundled,
+        homes = homes,
+        tokenCacheFile = Path.of(platform.paths.dataDir, "token-usage-cache.json"),
+        aiLimitRunner = AILimitWindowsRunner.live(homes, AILimitHTTPKtor.fetcher(graph.httpClient()), BuildIdentity.VERSION),
+        codexAccountRunner = { now -> withContext(Dispatchers.IO) { codexProbe.fetch(now) } },
+        computeDiagnostics = { m, b -> withContext(Dispatchers.IO) { CodexUsageDiagnosticsScanner.compute(homes.codexHome(), m, b) } },
+        deviceLabel = { System.getenv("COMPUTERNAME") },
+        runningTests = object : RunningTests {
+            override val isRunningTests: Boolean = false
+        },
+        environment = System.getenv(),
+        openUrl = { url -> runCatching { Desktop.getDesktop().browse(URI(url)) } },
+        share = { text -> runCatching { Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null) } },
+        // EDT 밖에서 끝낸다 — 종료 훅이 근무 마무리를 EDT 로 돌려 보내므로 EDT 가 exitProcess 에 묶여 있으면 상한까지 멈춘다.
+        quit = { Thread({ exitProcess(0) }, "aingcheck-quit").start() },
+    )
+}
+
+/** 종료 훅 바깥 여유(EDT 왕복·플랫폼 닫기). */
+private const val SHUTDOWN_GRACE_MILLIS = 1_000L
 private const val SM_CXSMICON = 49

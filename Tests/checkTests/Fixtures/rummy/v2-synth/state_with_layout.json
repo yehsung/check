@@ -1,0 +1,139 @@
+{
+  "state": {
+    "consecutive_passes": 0,
+    "draft": null,
+    "end_reason": null,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "grace_ms": 2000,
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "id": "a14165d9-933d-4186-8a1c-dfc5f1b6a687",
+    "is_public": true,
+    "last_event": {
+      "at_ms": 1793317458142,
+      "count": 7,
+      "kind": "forfeit",
+      "seat_no": 1
+    },
+    "max_seats": 4,
+    "my_initial_done": false,
+    "my_rack": null,
+    "my_seat_no": 1,
+    "pool_count": 15,
+    "reactions": [
+      {
+        "at_ms": 1793317457142,
+        "key": "heart",
+        "seat_no": 2
+      },
+      {
+        "at_ms": 1793317455142,
+        "key": "joy",
+        "seat_no": 1
+      },
+      {
+        "at_ms": 1793317454142,
+        "key": "unknown_future",
+        "seat_no": 2
+      }
+    ],
+    "seat_count": 4,
+    "seats": [
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험01",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": true,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 7,
+        "seat_no": 0,
+        "state": "playing",
+        "timeout_streak": 1,
+        "user_id": "d0000000-0000-4000-8000-000000000001"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험02",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": 1,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 0,
+        "seat_no": 1,
+        "state": "forfeit",
+        "timeout_streak": 0,
+        "user_id": "d0000000-0000-4000-8000-000000000002"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험08",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 7,
+        "seat_no": 2,
+        "state": "playing",
+        "timeout_streak": 1,
+        "user_id": "d0000000-0000-4000-8000-000000000008"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "디시험04",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": true,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 3,
+        "seat_no": 3,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "d0000000-0000-4000-8000-000000000004"
+      }
+    ],
+    "seq": 7,
+    "server_now_ms": 1793317458142,
+    "stake": 5,
+    "status": "active",
+    "table": [
+      [
+        "A10",
+        "A11",
+        "A12"
+      ],
+      [
+        "D11",
+        "D12",
+        "D13"
+      ]
+    ],
+    "table_layout": [
+      [
+        96,
+        64
+      ],
+      null
+    ],
+    "turn_deadline_ms": 1793317518142,
+    "turn_seat_no": 2,
+    "turn_started_ms": 1793317458142
+  },
+  "status": "ok"
+}

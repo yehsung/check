@@ -100,6 +100,13 @@ class MeStore(
     val recordsState = MeLoadState()
     internal var recordsWeekKey: String? = null
 
+    /**
+     * 지난주 회고 안내 배너를 지금 띄우는가(맥 `showsRetroBanner`, WorkTimerStore.swift 1130 @ db93317f — 주당 1회). 판정·소비는
+     * MeStoreRetroBanner.kt(맥 WorkTimerStoreInsights.swift 207-261 이식)만 쓴다. **데스크톱 홈 전용** — 폰은 이 칸을 읽지 않는다.
+     */
+    var showsRetroBanner by mutableStateOf(false)
+        internal set
+
     // MARK: 기록 — 공유 Codex 계정 비율(v0.3.36)
     /**
      * 서버 일별 **계정 버킷**을 내 몫으로 줄이는 비율. null = 아직 한 번도 못 쟀다(= 1.0).
@@ -431,6 +438,8 @@ class MeStore(
         showsTokenGrid = true
         recordsState.reset()
         recordsWeekKey = null
+        // 회고 배너도 계정의 것이다(맥 signOut WorkTimerStore.swift 4245 @ db93317f). '봤음' 저장 키는 계정별이라 지우지 않는다.
+        showsRetroBanner = false
         // 계정에 묶인 값이다 — 안 비우면 계정을 바꾼 뒤 앞 사람의 비율로 내 잔디가 깎인다. 저장본은 계정별 키라 그대로 둔다.
         tokenShareRatio = null
         lastTokenBoardFetchAt = null

@@ -302,6 +302,9 @@ extension RummyStore {
     package func resetTurn() {
         guard var working = editor, isMyTurn else { return }
         working.reset()
+        // 0.3.70 검증: 정렬이 살아 있으면 돌아온 타일도 정렬 자리로 — 판에 낸 채 정렬했으면 나간 자리는 정렬 전 자리라, 그대로
+        // 돌리면 받침대는 정렬이 아닌데 정렬 버튼은 '선택됨'이고 다음 뽑기 때 받침대 전체가 갑자기 다시 정렬된다.
+        if let mode = rackSortMode { working.sortRack(mode) }
         if editor != working { editor = working }
         saveRack()
         setNotice(nil)

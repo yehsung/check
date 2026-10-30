@@ -304,6 +304,28 @@ struct V0369RummyV2StoreTests {
         #expect(events.count == 1)
     }
 
+    @Test("0.3.70 검증: 판에 낸 채 정렬하고 [되돌리기] 하면 돌아온 타일도 정렬 자리 — '선택됨'과 받침대가 어긋나지 않는다")
+    func resetKeepsLiveSort() async throws {
+        // 없으면: A4 를 판에 낸 채 789 로 정렬하고 되돌리면 A4 가 정렬 전 자리(정렬 뒤 다른 타일이 선 자리 → 가까운 빈자리)로
+        // 돌아와 받침대는 정렬이 아닌데 789 버튼은 '선택됨'이고, 다음 뽑기 때 받침대 전체가 갑자기 다시 정렬되는 결함이 초록이 된다.
+        let script = V2SScript()
+        script.stand("rummy_draft", #"{"status":"ok","draft_seq":1}"#)
+        let (store, _, _) = v2sMake("reset-sorted", script: script)
+        store.applyState(try v2sDecodeState(v2sState(rack: ["D13", "B9", "A4", "J", "C2"])))
+        let a4 = try #require(store.editor?.rack.first { $0.face.text == "A4" }?.id)
+        store.moveTiles([a4], to: .newMeldAt(RummyPoint(x: 400, y: 300)))
+        store.sortRack(.color)
+        #expect(store.rackSortMode == .color)
+        store.resetTurn()
+        #expect(store.rackSortMode == .color)
+        let editor = try #require(store.editor)
+        var expected = editor
+        expected.sortRack(.color)
+        #expect(editor.rackLayout == expected.rackLayout, "\(editor.rackEntries.map { "\($0.face.text)@\($0.slot.row),\($0.slot.halfCol)" })")
+        #expect(editor.rackEntries.map(\.face.text) == ["A4", "B9", "C2", "D13", "J"])
+        #expect(editor.melds.map { $0.map(\.face.text) } == [["A1", "A2", "A3"]] && !editor.isChanged)
+    }
+
     @Test("0.3.70 정렬 뒤 손대지 않았으면 뽑은 타일을 정렬 자리에 끼운다(반 칸 단위 유지) · 받침대로 놓기만 정렬을 끈다 · 새 판이면 지운다")
     func drawJoinsLiveSort() async throws {
         // 없으면: 789 로 정렬해 둔 받침대에 뽑은 B10 이 맨 끝 빈칸으로 가 B9 옆을 다시 손으로 옮겨야 하는 결함(감사 #10)이 초록이 된다.

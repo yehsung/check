@@ -28,7 +28,7 @@ enum RummyText {
     static let rankTab = "순위"
     static let publicRoomsTitle = "공개 방"
     static let noPublicRooms = "지금 열린 공개 방이 없어요"
-    static let peopleCaptionNoRoom = "방장이 되면 여기서 사람을 골라 초대해요"
+    static let peopleCaptionNoRoom = "[초대]를 누르면 탁자가 열리고 바로 불러요"
     static let peopleCaptionHost = "초대할 사람을 골라요"
     static let peopleCaptionGuest = "방장만 초대할 수 있어요"
     static let emptyUsers = "함께할 사람이 아직 없어요"
@@ -198,7 +198,7 @@ enum RummyText {
 enum RummyLobbyTab: Equatable { case users, ranking }
 
 /// 렌더 시험이 띄우는 덮개.
-enum RummyPreviewOverlay: Equatable { case rules, confirmLeave }
+enum RummyPreviewOverlay: Equatable { case rules, confirmLeave, closeForfeit, finalBoard, outdatedExpanded }
 
 /// 한 장면에 그릴 값 — 스토어 또는 렌더 주입구에서 한 번에 모은다.
 struct RummyScene {
@@ -241,6 +241,12 @@ struct RummyScene {
     /// 남의 차례에 보일 판 — 그 사람 작업 판, 없으면 확정 판.
     var othersBoard: [[RummyFace]] { otherDraft ?? match?.table ?? [] }
 
+    /// 앵커 없는 자리의 B 배치 방위(반응 말풍선 기본 자리).
+    func compass(of seatNo: Int) -> RummySeatCompass {
+        RummySeatCompass.of(seatNo: seatNo, mySeatNo: match?.mySeatNo,
+                            seatNos: (match?.seats ?? []).compactMap(\.seatNo))
+    }
+
     func name(of seatNo: Int?) -> String? {
         guard let seatNo, let seat = match?.seats?.first(where: { $0.seatNo == seatNo }) else { return nil }
         return seat.displayName ?? "?"
@@ -270,9 +276,15 @@ struct RummyPanel: View {
     var previewOverlay: RummyPreviewOverlay? = nil
     /// 스냅샷 전용: 이 타일을 이 자리(판 화면 좌표)로 끌고 있는 장면.
     var previewDrag: RummyPreviewDrag? = nil
+    /// 스냅샷 전용: 이 반응 말풍선들을 띄운 장면(2판 ⑧).
+    var previewReactions: [RummyReactionBubble]? = nil
 
     @State private var lobbyTab: RummyLobbyTab = .users
     @State private var confirmLeave = false
+    /// 방 없이 누른 [초대] · [한 판 더] 의 부를 사람 줄(2판 — 방이 서면 한 사람씩 초대).
+    @State private var inviteQueue = RummyInviteQueue()
+    /// 창 닫기 확인(창 컨트롤러가 환경으로 준다 — 렌더·시험은 없다).
+    @Environment(RummyExitPrompt.self) private var exitPrompt: RummyExitPrompt?
 
     private var isPreview: Bool {
         previewPhase != nil || previewLobby != nil || previewMatch != nil || previewEditor != nil
@@ -319,15 +331,21 @@ struct RummyPanel: View {
         ZStack(alignment: .topLeading) {
             VStack(alignment: .leading, spacing: RummyWindowLayout.headerSpacing) {
                 RummyHeader(scene: scene, onRules: { store.rulesShown = true },
-                            onForfeit: { confirmLeave = true })
+                            onForfeit: { confirmLeave = true },
+                            reactionButton: scene.match == nil ? nil : RummyReactionButton(store: store))
                     .frame(height: RummyWindowLayout.headerHeight)
                 content(scene)
                     .frame(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.bodyHeight,
                            alignment: .topLeading)
             }
             .padding(RummyWindowLayout.contentPadding)
+            // 반응 말풍선 — 자리 앵커(`rummyReactionAnchor`) 위에, 덮개들 아래.
+            .rummyReactionLayer(bubbles: reactionBubbles, compass: { scene.compass(of: $0) }, fixedNow: scene.fixedNow)
             // 덮개는 한 번에 하나.
-            if store.rulesShown || previewOverlay == .rules {
+            if let decision = exitPrompt?.pending ?? (previewOverlay == .closeForfeit ? .confirmForfeit : nil) {
+                RummyExitConfirmOverlay(decision: decision, onConfirm: { exitPrompt?.confirm() },
+                                        onCancel: { exitPrompt?.cancel() })
+            } else if store.rulesShown || previewOverlay == .rules {
                 RummyRulesOverlay(onClose: { store.rulesShown = false })
             } else if confirmLeave || previewOverlay == .confirmLeave {
                 RummyConfirmOverlay(scene: scene,
@@ -344,37 +362,47 @@ struct RummyPanel: View {
         // 사람 아바타의 캐릭터 한 표. nil 이면 빈 표 = 모르는 사람은 착용값·그마저 없으면 이니셜.
         .appUserAvatarCharacters(from: safety)
         // 기권·나가기 확인은 **그 화면에서 연 것**만 산다.
-        .onChange(of: store.phase) { _, _ in confirmLeave = false }
+        .onChange(of: store.phase) { _, _ in confirmLeave = false; exitPrompt?.cancel() }
+        .rummyInviteQueue(inviteQueue, store: store)
         .onChange(of: store.match?.id) { _, _ in confirmLeave = false }
         .onChange(of: lobbyTab) { _, tab in
             if tab == .ranking { store.refreshRanking() }
         }
     }
 
+    private var reactionBubbles: [RummyReactionBubble] {
+        if isPreview { return previewReactions ?? [] }
+        return store.reactionFeed.map(RummyReactionBubble.init)
+    }
+
+    private func lobby(_ scene: RummyScene) -> RummyLobbyView {
+        RummyLobbyView(store: store, scene: scene, tab: activeTab, onSelectTab: { lobbyTab = $0 },
+                       onLeaveRoom: { confirmLeave = true },
+                       clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll, me: me(),
+                       calling: inviteQueue.pending, onInvite: { inviteQueue.invite($0, store: store) },
+                       showsOutdated: previewOverlay == .outdatedExpanded)
+    }
+
     @ViewBuilder
     private func content(_ scene: RummyScene) -> some View {
         switch scene.phase {
         case .lobby, .room:
-            RummyLobbyView(store: store, scene: scene, tab: activeTab, onSelectTab: { lobbyTab = $0 },
-                           onLeaveRoom: { confirmLeave = true },
-                           clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
+            lobby(scene)
         case .playing:
             if let match = scene.match {
                 RummyMatchView(store: store, scene: scene, match: match, me: me(),
                                clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
                                previewDrag: previewDrag)
             } else {
-                RummyLobbyView(store: store, scene: scene, tab: activeTab, onSelectTab: { lobbyTab = $0 },
-                               onLeaveRoom: { confirmLeave = true },
-                               clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
+                lobby(scene)
             }
         case .finished:
             if let match = scene.match {
-                RummyResultView(store: store, scene: scene, match: match)
+                RummyResultView(store: store, scene: scene, match: match,
+                                onPlayAgain: { inviteQueue.createAndInvite($0, store: store) },
+                                startsWithBoard: previewOverlay == .finalBoard)
             } else {
-                RummyLobbyView(store: store, scene: scene, tab: activeTab, onSelectTab: { lobbyTab = $0 },
-                               onLeaveRoom: { confirmLeave = true },
-                               clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
+                lobby(scene)
             }
         }
     }
@@ -386,6 +414,7 @@ private struct RummyHeader: View {
     let scene: RummyScene
     let onRules: () -> Void
     let onForfeit: () -> Void
+    var reactionButton: RummyReactionButton? = nil
 
     var body: some View {
         HStack(spacing: 12) {
@@ -423,6 +452,7 @@ private struct RummyHeader: View {
             }
             RubyBalanceChip(balance: scene.lobby?.me?.rubyBalance, large: true)
                 .checkTooltip("내 루비")
+            if let reactionButton { reactionButton }
             TetrisDuelActionButton(title: RummyText.rulesButton, icon: "book.fill", style: .outline,
                                    height: 30, action: onRules)
             if scene.phase == .playing, scene.mySeat?.state == .playing {

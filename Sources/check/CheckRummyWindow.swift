@@ -10,14 +10,18 @@ import CheckCore
 // 테트리스와 달라지는 것.
 //   · **키 모니터가 없다.** 판은 마우스 끌기로만 움직인다 — 미니게임 창의 스페이스 모니터와 다툴 키가 없다.
 //   · 스토어 통지 문이 둘이다: `setWindowVisible(_:)`(보임/안 보임 — 열기·닫기·최소화) · `setWindowOccluded(_:)`(가림 —
-//     폴링만 멈춘다). 닫기는 '안 보임'이지 기권이 아니다 — 판은 서버 시계로 흐르고 60초가 지나면 서버가 시간 판정을 한다.
+//     폴링만 멈춘다). 최소화·가림은 '안 보임'일 뿐 판은 서버 시계로 흐른다.
+//   · **사람이 누른 닫기(빨간 점 · ⌘W)는 의도적 이탈이다**(2판 §3 ⑨ — `windowShouldClose`). 판 중이면 "창을 닫으면 기권돼요"
+//     확인 → `leaveForExit(.windowClosed)`, 방 손님은 묻지 않고 나가고, 방장은 "방이 닫혀요" 확인. 판단은
+//     `RummyExitPolicy.closeDecision`, 확인 덮개는 패널 안(`RummyExitPrompt` 를 환경으로 받는다). 프로그램이 내리는
+//     `close()`(로그아웃 정리·계정 전환)는 이 문을 거치지 않는다.
 //   · 창이 키를 잃어도 아무것도 하지 않는다(`windowDidResignKey` 가 없는 것이 계약이다).
 // 루트는 `RummyPanel(store:me:safety:)` + `.checkTooltipLayer().appUserAvatarCharacters(from: safety)`(패널 안에 있다).
 
 /// 아잉 큐브 창의 **고정** 레이아웃. 순수 상수 — 창 크기를 두 곳에 적지 않는다.
 ///
 /// 화면은 셋이다.
-///   · 로비·방 = 두 열 [사람·순위 탭 440 | 오른쪽 740(내 방 또는 방 만들기 · 받은 초대 · 내 전적)].
+///   · 로비·방 = 두 열 [사람·순위 탭 440 | 오른쪽 740(탁자 — 새 탁자 또는 내 탁자 · 받은 초대 + 공개 방 한 줄)].
 ///   · 판 = 위 자리 띠 72 · 가운데 판 356 · 아래 랙 칸 160(상태 줄 22 + 간격 8 + 랙 카드 130).
 ///   · 결과 = 판 자리에 등수 카드.
 ///
@@ -50,14 +54,17 @@ enum RummyWindowLayout {
     static let lobbyRowSpacing: CGFloat = 6
     static let cardPadding: CGFloat = 14
     static let sideSpacing: CGFloat = 12
-    /// 방 카드(내 방 · 방 만들기) 높이.
-    static let roomCardHeight: CGFloat = 268
-    /// 내 전적 줄 높이.
-    static let recordHeight: CGFloat = 64
-    /// 받은 초대 칸 = 나머지.
-    static var invitesHeight: CGFloat { bodyHeight - roomCardHeight - recordHeight - sideSpacing * 2 }
-    /// 방 자리 한 칸(4칸이 한 줄).
-    static let roomSeatHeight: CGFloat = 104
+    /// 받은 초대 + 공개 방 카드 한 줄의 높이(카드 셋이 한 줄에 든다 — 넘치면 가로 스크롤).
+    static let joinCardHeight: CGFloat = 176
+    static var joinCardWidth: CGFloat { (lobbySideWidth - sideSpacing * 2) / 3 }
+    /// 받을 것이 없을 때의 한 줄(빈 카드 대신).
+    static let joinEmptyHeight: CGFloat = 44
+    /// 탁자 카드 = 나머지(받을 것이 없으면 그만큼 커진다).
+    static func tableCardHeight(hasJoinables: Bool) -> CGFloat {
+        bodyHeight - (hasJoinables ? joinCardHeight : joinEmptyHeight) - sideSpacing
+    }
+    /// 탁자 그림(둥근 판 + 의자 넷)이 차지하는 높이 — 위·아래 의자가 판 가장자리에 18pt 걸친다.
+    static let tableStageHeight: CGFloat = 280
 
     // MARK: 판
     static let seatBarHeight: CGFloat = 72
@@ -109,6 +116,10 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
 
     private var wiring: Wiring?
     private weak var safety: WorkTimerStore?
+    /// 창 닫기 확인(패널 안 덮개)의 상태 — 패널이 환경으로 받는다.
+    let exitPrompt = RummyExitPrompt()
+    /// 마지막 닫기 판단(헤드리스 검증 문).
+    private(set) var lastCloseDecision: RummyCloseDecision?
     private var windowStorage: NSWindow?
 
     private(set) var isOpen = false
@@ -137,9 +148,11 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
         safety: WorkTimerStore? = nil
     ) {
         self.safety = safety
+        let prompt = exitPrompt
         configure(store: store, content: { rummy in
             AnyView(
                 RummyPanel(store: rummy, me: me, safety: safety)
+                    .environment(prompt)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(CheckTheme.background)
             )
@@ -215,6 +228,7 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
 
     /// 창을 내린다(멱등). **판은 끝나지 않는다** — 로그아웃·계정 전환에서도 이 문을 부른다.
     func close() {
+        exitPrompt.cancel()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         windowStorage?.orderOut(nil)
@@ -222,9 +236,39 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
         notifyVisibility(false)
     }
 
-    /// 빨간 점. '안 보임'을 알린다 — 기권이 아니다.
+    /// 사람이 누른 닫기(빨간 점 · ⌘W)만 온다 — `close()`(orderOut)는 여기를 거치지 않는다.
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender === windowStorage, let store = wiring?.store else { return true }
+        return requestClose(store: store)
+    }
+
+    /// 닫기 판단을 실행한다(헤드리스 검증 문). true = 지금 닫는다, false = 패널 안 확인을 띄웠다.
+    @discardableResult
+    func requestClose(store: RummyStore) -> Bool {
+        let decision = RummyExitPolicy.closeDecision(for: store)
+        lastCloseDecision = decision
+        switch decision {
+        case .close:
+            return true
+        case .leaveRoom:
+            Task { @MainActor in _ = await store.leaveForExit(reason: .windowClosed) }
+            return true
+        case .confirmForfeit, .confirmCloseRoom:
+            exitPrompt.ask(decision) { [weak self] in self?.closeAndLeave(store: store) }
+            return false
+        }
+    }
+
+    /// 확인을 골랐다 — 창을 바로 내리고 이탈은 뒤에서(최대 2초, 못 닿아도 이 기기에선 판을 접는다).
+    private func closeAndLeave(store: RummyStore) {
+        close()
+        Task { @MainActor in _ = await store.leaveForExit(reason: .windowClosed) }
+    }
+
+    /// 창이 닫혔다(사람이 닫았거나 확인 뒤). '안 보임'을 알린다 — 이탈은 위 `requestClose` 가 이미 정했다.
     func windowWillClose(_ notification: Notification) {
         guard (notification.object as AnyObject?) === windowStorage else { return }
+        exitPrompt.cancel()
         stuckWindowWatchdog?.cancel()
         stuckWindowWatchdog = nil
         isOpen = false

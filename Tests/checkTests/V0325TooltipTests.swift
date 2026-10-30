@@ -718,10 +718,22 @@ struct V0325TooltipTests {
         // 돌아왔다 — 리밋 카드는 팝오버 안에 있고 팝오버 루트의 레이어를 쓴다(`CheckAILimitsRow.swift` 머리말).
         // 그 카드의 `.checkTooltip` 이 실제로 말풍선을 받는다는 사실은 아래 `.checkTooltip(` 자리 대조가 잰다.
         // v0.3.60: 1:1 테트리스 창(TetrisDuelPanel) 루트가 일곱 번째다.
+        // v0.3.69: 아잉 큐브 창(RummyPanel) 루트가 여덟 번째다 — 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
         #expect(layerSites == [
             "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
-            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "TetrisDuelPanel.swift:1",
+            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "RummyPanel.swift:1",
+            "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")
+        // 아잉 큐브 창: 오목·체스와 **같은 자리**(창 고정 프레임·배경·전경색 뒤). 판·랙·목록·덮개 ZStack 은 전부 그 안쪽이라
+        // 어느 클립(`RummyScrollBox` 의 clipped · 로비 열의 clipped)도 레이어를 자르지 않는다. 반응 말풍선 덮개
+        // (`rummyReactionLayer`)는 본문 VStack 에 붙어 레이어 **안쪽**이다 — 레이어 뒤로 빠지면 말풍선이 툴팁을 덮는다.
+        let rummy = try #require(Self.between(sources["RummyPanel.swift"] ?? "",
+                                              "struct RummyPanel: View {", "private var reactionBubbles: [RummyReactionBubble] {"))
+        #expect(rummy.contains("height: RummyWindowLayout.contentSize.height, alignment: .topLeading) .background(CheckTheme.background) .foregroundStyle(CheckTheme.primaryText) .checkTooltipLayer()"))
+        let rummyLayer = try #require(rummy.range(of: ".checkTooltipLayer()"))
+        let rummyBubbles = try #require(rummy.range(of: ".rummyReactionLayer("))
+        #expect(rummyBubbles.upperBound <= rummyLayer.lowerBound, "반응 말풍선 덮개가 툴팁 레이어 바깥에 붙었다")
+        #expect(!rummy.contains(".clipped()") && !rummy.contains(".clipShape("), "창 루트 체인에 클립이 생겼다")
         // 체스 창도 오목과 **같은 자리**다: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
         let chess = try #require(Self.between(sources["ChessPanel.swift"] ?? "",
                                               "struct ChessPanel: View {", "private var content: some View {"))

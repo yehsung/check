@@ -232,17 +232,7 @@ private func rpRackRect(_ rect: CGRect) -> CGRect {
     return rpInBody(rect.offsetBy(dx: origin.x, dy: origin.y))
 }
 
-/// 로비 오른쪽 열의 세 칸.
-private var rpRoomCardRect: CGRect {
-    rpInBody(CGRect(x: L.lobbyListWidth + L.columnSpacing, y: 0, width: L.lobbySideWidth, height: L.roomCardHeight))
-}
-private var rpInvitesRect: CGRect {
-    rpInBody(CGRect(x: L.lobbyListWidth + L.columnSpacing, y: L.roomCardHeight + L.sideSpacing,
-                    width: L.lobbySideWidth, height: L.invitesHeight))
-}
-private var rpPeopleRect: CGRect {
-    rpInBody(CGRect(x: 0, y: L.lobbyTabHeight + 10, width: L.lobbyListWidth, height: L.bodyHeight - L.lobbyTabHeight - 10))
-}
+// 로비·방·결과 렌더는 2판에서 `V0369RummyV2LobbyTests.swift` 로 옮겼다(탁자 배치 · 받을 것 한 줄 · 한 판 더 · 최종 판).
 
 /// 세트 테두리 띠(틀 바깥 3pt ~ 안쪽 3pt) 안의 빨간 잉크 — 무효 세트 표시.
 private func rpRedRing(_ bitmap: NSBitmapImageRep, _ frame: CGRect) -> Int {
@@ -301,61 +291,6 @@ struct V0369RummyPanelRenderTests {
     }
 
     // MARK: 로비
-
-    @Test("로비 — 방 없음: 방 만들기 카드(고른 판돈 파랑) · 공개 방 없음 줄 · 기준선 = 공개 방 하나")
-    func lobbyWithoutRoom() throws {
-        // 없으면: 방 만들기 카드가 비어 그려지거나, 공개 방 목록이 사람 목록에 묻혀 [참가] 가 안 보인다.
-        let store = RummyStore()
-        store.selectedStake = 5
-        store.createPublic = true
-        let none = try rpRender(store: store, lobby: try rpLobby(), name: "lobby-none")
-        let withPublic = try rpRender(store: store, lobby: try rpLobby(publicRooms: [
-            rpRoom(roomB, host: uJunho, stake: 10, isPublic: true, seats: [(uJunho, "joined", 0), (uSeoyeon, "joined", 1)]),
-        ]), name: "lobby-public-room")
-        #expect(rpYellowBoxes(none) == 0 && rpYellowBoxes(withPublic) == 0, "노란 상자 — 렌더 못 하는 컨트롤이 섞였다")
-        // 고른 판돈 칩(파랑 채움)이 방 만들기 카드에 있다.
-        #expect(rpCount(none, near: rpAccent, tolerance: 24, in: rpRoomCardRect) > 800, "고른 판돈 칩 · [방 만들기] 파랑이 없다")
-        // 공개 방 줄([참가] 파랑)은 공개 방이 있을 때만.
-        let publicBand = rpInBody(CGRect(x: 0, y: L.lobbyTabHeight + 10, width: L.lobbyListWidth, height: 90))
-        let joinNone = rpCount(none, near: rpAccent, tolerance: 24, in: publicBand)
-        let joinSome = rpCount(withPublic, near: rpAccent, tolerance: 24, in: publicBand)
-        #expect(joinSome > joinNone + 150, "공개 방 [참가] 버튼 잉크가 안 생겼다(\(joinNone) → \(joinSome))")
-        // ★ 기준선: 오른쪽 열은 공개 방 유무와 상관없이 같다.
-        #expect(rpDiff(none, withPublic, in: rpRoomCardRect) < 0.002)
-    }
-
-    @Test("로비 — 방장 방: 자리 4칸 · [시작] 초록 · 사람 행 [초대] · 기준선 = 같은 방의 손님")
-    func lobbyHostRoom() throws {
-        // 없으면: 방장인데 [시작]·[초대] 가 없어 판을 못 열거나, 손님에게 [시작] 이 보여 눌러 봐야 거절만 받는다.
-        let seats: [(String, String, Int?)] = [(uMe, "joined", 0), (uMinsu, "joined", 1), (uJunho, "invited", nil)]
-        let host = try rpRender(lobby: try rpLobby(room: rpRoom(roomA, host: uMe, seats: seats)), name: "lobby-host-room")
-        let guestSeats: [(String, String, Int?)] = [(uMinsu, "joined", 0), (uMe, "joined", 1), (uJunho, "invited", nil)]
-        let guest = try rpRender(lobby: try rpLobby(room: rpRoom(roomA, host: uMinsu, seats: guestSeats)),
-                                 name: "lobby-guest-room")
-        #expect(rpYellowBoxes(host) == 0)
-        let startBand = CGRect(x: rpRoomCardRect.midX, y: rpRoomCardRect.maxY - 60, width: rpRoomCardRect.width / 2,
-                               height: 60)
-        let startHost = rpCount(host, near: rpWorking, tolerance: 24, in: startBand)
-        let startGuest = rpCount(guest, near: rpWorking, tolerance: 24, in: startBand)
-        #expect(startHost > startGuest + 1500, "방장의 [시작] 초록이 없다(방장 \(startHost) · 손님 \(startGuest))")
-        let inviteColumn = CGRect(x: rpPeopleRect.maxX - 110, y: rpPeopleRect.minY + 60, width: 100, height: 300)
-        let inviteHost = rpCount(host, near: rpAccent, tolerance: 24, in: inviteColumn)
-        let inviteGuest = rpCount(guest, near: rpAccent, tolerance: 24, in: inviteColumn)
-        #expect(inviteHost > inviteGuest + 500, "방장의 사람 행에 [초대] 가 없다(방장 \(inviteHost) · 손님 \(inviteGuest))")
-    }
-
-    @Test("로비 — 초대 받음: 받은 초대 칸에 [참가] 초록 · [거절] · 기준선 = 초대 없음")
-    func lobbyInvited() throws {
-        // 없으면: 초대가 와도 창 안에서 받을 곳이 없어 메뉴바 점만 깜박인다.
-        let invite = rpRoom(roomA, host: uMinsu, stake: 10, seats: [(uMinsu, "joined", 0), (uMe, "invited", nil)])
-        let invited = try rpRender(lobby: try rpLobby(invites: [invite]), name: "lobby-invited")
-        let plain = try rpRender(lobby: try rpLobby())
-        #expect(rpYellowBoxes(invited) == 0)
-        let joinInk = rpCount(invited, near: rpWorking, tolerance: 24, in: rpInvitesRect)
-        let joinPlain = rpCount(plain, near: rpWorking, tolerance: 24, in: rpInvitesRect)
-        #expect(joinInk > joinPlain + 500, "받은 초대 [참가] 초록이 없다(\(joinPlain) → \(joinInk))")
-        #expect(rpDiff(invited, plain, in: rpInvitesRect) > 0.03)
-    }
 
     // MARK: 판
 
@@ -484,39 +419,6 @@ struct V0369RummyPanelRenderTests {
     }
 
     // MARK: 결과 · 규칙
-
-    @Test("결과 — 등수 순 줄 · 루비 순수익(+10 초록 / −5 빨강) · 남은 랙 타일 · 기준선 = 모두 본전")
-    func resultScreen() throws {
-        // 없으면: 결과가 자리 순으로 서거나, 순수익이 아니라 받은 몫(15)을 보여 잃은 사람이 땄다고 읽는다.
-        let finals: [(rank: Int, score: Int, payout: Int, winner: Bool, rack: [String])] = [
-            (1, 42, 15, true, []), (3, -14, 0, false, ["B9", "C5"]), (2, -9, 5, false, ["A9"]),
-            (4, -19, 0, false, ["J", "A6", "B3"]),
-        ]
-        let seats: [RPSeat] = [(uMe, 0, true, "done", 0), (uMinsu, 2, true, "done", 0),
-                               (uJunho, 1, true, "done", 0), (uSeoyeon, 3, true, "forfeit", 0)]
-        let result = try rpRender(match: try rpMatch(status: "finished", seats: seats, rack: nil, finals: finals,
-                                                     endReason: "rack_empty"), name: "result")
-        let even = finals.map { (rank: $0.rank, score: $0.score, payout: 5, winner: $0.winner, rack: $0.rack) }
-        let flat = try rpRender(match: try rpMatch(status: "finished", seats: seats, rack: nil, finals: even,
-                                                   endReason: "rack_empty"))
-        #expect(rpYellowBoxes(result) == 0)
-        // 순수익 열(등수 64 + 얼굴 44 + 이름 190 + 간격 16×3 + 여백 18+16 ≈ 380pt 부터 96pt).
-        let top = 18 + 48 + L.resultRowSpacing
-        func netCell(_ row: Int) -> CGRect {
-            rpInBody(CGRect(x: 370, y: top + CGFloat(row) * (L.resultRowHeight + L.resultRowSpacing),
-                            width: 120, height: L.resultRowHeight))
-        }
-        let winGreen = rpCount(result, near: rpWorking, tolerance: 24, in: netCell(0))
-        let flatGreen = rpCount(flat, near: rpWorking, tolerance: 24, in: netCell(0))
-        #expect(winGreen > flatGreen + 100, "1등 줄 +10 초록이 없다(\(flatGreen) → \(winGreen))")
-        let loseRed = rpCount(result, near: rpDanger, tolerance: 24, in: netCell(3))
-        let flatRed = rpCount(flat, near: rpDanger, tolerance: 24, in: netCell(3))
-        #expect(loseRed > flatRed + 60, "꼴찌 줄 −5 빨강이 없다(\(flatRed) → \(loseRed))")
-        // 남은 랙 타일: 꼴찌 줄(조커·A6·B3) 오른쪽에 타일 몸체.
-        let rackCell = rpInBody(CGRect(x: 520, y: top + 3 * (L.resultRowHeight + L.resultRowSpacing),
-                                       width: 400, height: L.resultRowHeight))
-        #expect(rpCount(result, near: rpRGB(RummyTilePalette.bodyTop), tolerance: 10, in: rackCell) > 150, "남은 타일이 안 보인다")
-    }
 
     @Test("규칙 — 시트에 예시 타일(네 색) · 기준선 = 시트 없는 로비")
     func rulesSheet() throws {

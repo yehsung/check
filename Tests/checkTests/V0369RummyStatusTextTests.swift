@@ -65,7 +65,7 @@ struct V0369RummyStatusTextTests {
 
     @Test("로비 사람 목록 머리 — 방 없음 · 내가 방장 · 남의 방")
     func peopleCaptionFollowsMyRole() {
-        #expect(RummyText.peopleCaption(inRoom: false, amHost: false) == "방장이 되면 여기서 사람을 골라 초대해요")
+        #expect(RummyText.peopleCaption(inRoom: false, amHost: false) == "[초대]를 누르면 탁자가 열리고 바로 불러요")
         #expect(RummyText.peopleCaption(inRoom: true, amHost: true) == "초대할 사람을 골라요")
         #expect(RummyText.peopleCaption(inRoom: true, amHost: false) == "방장만 초대할 수 있어요")
     }

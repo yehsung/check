@@ -28,8 +28,13 @@ func theRummyWindowLayoutAddsUp() {
     #expect(L.contentPadding * 2 + L.headerHeight + L.headerSpacing + L.bodyHeight == L.contentSize.height)
     #expect(L.lobbyListWidth + L.columnSpacing + L.lobbySideWidth == L.innerWidth, "로비 두 열이 안쪽 폭과 안 맞는다")
     #expect(L.lobbyListWidth == 440)
-    #expect(L.roomCardHeight + L.invitesHeight + L.recordHeight + L.sideSpacing * 2 == L.bodyHeight)
-    #expect(L.invitesHeight >= 56 * 2 + 40, "받은 초대 칸이 두 줄도 못 담는다(\(L.invitesHeight)pt)")
+    // 2판 로비: 탁자 + (받은 초대·공개 방 카드 한 줄 | 없으면 한 줄 안내) = 본문. 카드 셋이 한 줄 폭에 든다.
+    for has in [true, false] {
+        #expect(L.tableCardHeight(hasJoinables: has) + L.sideSpacing + (has ? L.joinCardHeight : L.joinEmptyHeight) == L.bodyHeight)
+    }
+    #expect(L.joinCardWidth * 3 + L.sideSpacing * 2 == L.lobbySideWidth)
+    #expect(L.tableCardHeight(hasJoinables: true) >= L.tableStageHeight + 26 + 38 + 16 + 8 * 3 + 28,
+            "탁자 카드가 머리·탁자 그림·안내·버튼을 다 못 담는다(\(L.tableCardHeight(hasJoinables: true))pt)")
     // 판 세로 예산: 자리 띠 + 판 + 아래 칸(상태 줄 + 랙 카드) = 본문.
     #expect(L.seatBarHeight + L.sectionSpacing + L.boardHeight + L.sectionSpacing + L.bottomHeight == L.bodyHeight)
     #expect(L.bottomHeight == L.statusLineHeight + L.statusSpacing + L.rackCardHeight)

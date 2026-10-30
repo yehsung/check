@@ -5640,7 +5640,8 @@ private struct FooterBar: View {
                 store.refreshFromFooterButton()
             }
             IconButton(icon: "rectangle.portrait.and.arrow.right", help: "로그아웃") {
-                store.signOut()
+                // 아잉 큐브 판·방 중이면 나가기(기권)를 먼저 서버에 알린다(최대 2초 — `RummyExitFlow.swift`).
+                store.signOutLeavingRummy()
             }
             // 전원 버튼: **그냥 버튼이다.** v0.2.17 이 '로그인 시 자동 실행' 토글을 숨길 자리를 찾다가 이 자리를
             // Menu 로 바꿨는데, 딸려온 대가가 셋이었다:

@@ -3,6 +3,7 @@
 // - 여는 Intent 는 MainActivity 를 가리키는 명시적 Intent + 라우트 extra(RouteIntents). MainActivity 는 singleTask 라
 //   떠 있으면 onNewIntent 로 받는다(E-U16).
 // - [수락] 은 Activity 를 직접 열고 수락 증표(RouteProof)를 싣는다 — 다른 앱이 수락을 흉내 내지 못하게.
+//   확성기 탭도 같은 증표를 싣는다 — 다른 앱이 지어낸 보낸 사람 · 본문으로 앱 배너를 띄우지 못하게.
 // - 알림 권한이 꺼져 있으면 게시하지 않는다(시스템이 어차피 버린다 — 예외 대신 조용히).
 package com.yehsung.aingcheck.android.push
 
@@ -26,7 +27,7 @@ class NotificationPoster(
     fun post(spec: NotificationSpec): Boolean {
         val manager = NotificationManagerCompat.from(context)
         if (!manager.areNotificationsEnabled()) return false
-        val proof = if (spec.actions.any { it.request.accept }) acceptProof() else null
+        val proof = if (spec.actions.any { it.request.accept } || spec.tap.megaphone != null) acceptProof() else null
         val builder = NotificationCompat.Builder(context, spec.channel.id)
             // 앱 알림 아이콘 = 아잉이 실루엣(흰 단색 · 눈 구멍) + accent 색(알림 머리의 아이콘 · 앱 이름 색).
             .setSmallIcon(SMALL_ICON)
@@ -37,7 +38,7 @@ class NotificationPoster(
             .setCategory(spec.category)
             .setPriority(if (spec.channel.importance == ChannelImportance.HIGH) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .setContentIntent(pendingIntent(spec.tap, proof = null, requestCode = requestCode(spec.tag, 0)))
+            .setContentIntent(pendingIntent(spec.tap, proof = if (spec.tap.megaphone != null) proof else null, requestCode = requestCode(spec.tag, 0)))
         spec.group?.let { builder.setGroup(it) }
         spec.actions.forEachIndexed { index, action ->
             if (action.request.accept && proof == null) return@forEachIndexed // 증표 없이 수락 버튼을 만들지 않는다

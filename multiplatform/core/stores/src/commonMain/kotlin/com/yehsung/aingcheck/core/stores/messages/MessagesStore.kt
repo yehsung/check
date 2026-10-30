@@ -103,6 +103,16 @@ class MessagesStore(
     /** 라우터(조립이 채운다). */
     var router: MessagesRouterLink? = null
 
+    /**
+     * 확성기 배너 스토어(약참조 자리 — Swift `context.links.megaphoneBanner` @ a6791165). **폰 조립만 채운다** — 비어 있으면(데스크톱 ·
+     * 시험) 지금처럼 확성기 줄이 메시지로 보이고 요약은 옛 함수다.
+     */
+    var megaphoneBanner: MegaphoneBannerStore? = null
+
+    /** 확성기 [답장]이 넘긴 이름·아바타(사람 id → 값). 대화 머리의 마지막 기댈 곳 — 확성기 줄이 빠져 대화가 비어 있어도 빈 칸이 아니게. */
+    var replyPeerHints: Map<String, MegaphoneReplyPeerHint> by mutableStateOf(emptyMap())
+        private set
+
     // ---------------------------------------------------------------- 이력 · 읽음
 
     /** 이력(오래된 것 → 최신, 같은 초는 서버 순서). 모든 대화가 이 한 배열에서 묶인다([threads]). */
@@ -246,6 +256,8 @@ class MessagesStore(
         isAppActive = true
         syncRouterVisibility()
         if (!isSignedIn) return
+        // 확성기 배너 한 번 — 켜 둔 사이 놓친 신선한 확성기 · 메시지함 필터 id · 요약 함수(v1/v2) 판정. 요약이 이 첫 판정을 기다린다.
+        startMegaphoneProbe()
         if (activeRefreshDue(activityRefreshThrottleSeconds)) requestActivityRefresh()
         evaluateReadMarking()
     }
@@ -315,6 +327,7 @@ class MessagesStore(
         isSending = false
         // 확성기 글·요청 id·정보도 계정에 묶인다 — 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
+        replyPeerHints = emptyMap()
         router?.visibleConversationPeerID = null
     }
 
@@ -340,9 +353,21 @@ class MessagesStore(
     val visibleHistory: List<MessageEntry>
         get() {
             val hidden = hiddenBlockedPeerIDs
-            if (hidden.isEmpty()) return history
-            return history.filter { it.peerUserID !in hidden }
+            val megaphone = megaphoneFilter
+            if (hidden.isEmpty() && megaphone == null) return history
+            return history.filter { it.peerUserID !in hidden && (megaphone == null || !holdsMegaphoneRow(it, megaphone)) }
         }
+
+    /*
+     * ↑ **확성기 줄도 여기 한 자리에서 뺀다**(계약 C3 — Swift MessagesStore.visibleHistory @ a6791165): 배너 스토어가 확성기로 판정한 줄(`hides` —
+     * inbox 가 말한 id, 필터가 켜졌을 때만)과 판정 보류 줄(받은 줄인데 본문이 `📢` 로 시작하고 id 를 아직 모름 — `needsVerification`).
+     * 보류 줄은 [verifyMegaphoneRows] 가 refresh 한 번을 기다린 뒤 풀거나(메시지로) 숨긴다. 대화 목록·열린 대화·안 읽음 점·탭 배지·
+     * 앱 아이콘 배지가 이 값을 따라온다. 요약은 같은 판정의 짝(v2 — [performLoadSummary])이라 **숨김과 배지가 함께** 움직인다.
+     */
+
+    /** 메시지함 필터로 쓸 배너 스토어. 서버가 배너를 모르는 동안(unavailable)은 null — 거를 것도 보류할 것도 없다. */
+    private val megaphoneFilter: MegaphoneBannerStore?
+        get() = megaphoneBanner?.takeIf { it.capability != MegaphoneBannerStore.Capability.unavailable }
 
     /** **차단해 숨긴 상대를 걷어낸 요약**(이력만 거르면 요약이 더 새것인 창에서 탭 배지에만 세어진다). */
     val visibleSummary: MessagesSummarySnapshot?
@@ -449,7 +474,13 @@ class MessagesStore(
     fun peerName(peerID: String): String? {
         thread(peerID)?.let { return it.peerName }
         visiblePokeLog.lastOrNull { it.peerUserID == peerID }?.let { return it.peerName }
-        return directory.firstOrNull { it.userID == peerID }?.name
+        return directory.firstOrNull { it.userID == peerID }?.name ?: replyPeerHints[peerID]?.name
+    }
+
+    /** 확성기 [답장]이 여는 대화의 이름·아바타를 적어 둔다([peerName]·[peerAvatarURL] 의 마지막 기댈 곳). */
+    fun rememberPeerHint(peerID: String, name: String?, avatarURL: String?) {
+        if (name == null && avatarURL == null) return
+        replyPeerHints = replyPeerHints + (peerID to MegaphoneReplyPeerHint(name, avatarURL))
     }
 
     /** 대화 머리. "받는 중" = 이력·사람 찾기 중 하나라도 날아가는 중이거나, 이력이 아직 한 번도 끝나지 않았다(실패도 아님). */
@@ -461,7 +492,7 @@ class MessagesStore(
     fun peerAvatarURL(peerID: String): String? {
         thread(peerID)?.peerAvatarURL?.let { return it }
         visiblePokeLog.lastOrNull { it.peerUserID == peerID }?.peerAvatarURL?.let { return it.absoluteString }
-        return directory.firstOrNull { it.userID == peerID }?.avatarURL?.absoluteString
+        return directory.firstOrNull { it.userID == peerID }?.avatarURL?.absoluteString ?: replyPeerHints[peerID]?.avatarURL
     }
 
     fun isHiddenByBlock(peerID: String): Boolean = peerID in hiddenBlockedPeerIDs
@@ -733,6 +764,8 @@ class MessagesStore(
             if (historyFailed) historyFailed = false
             // 새 이력 — 떠 있는 대화에 서버 기준 안 읽은 말이 있으면 올린다(새로 도착한 말 포함).
             evaluateReadMarking()
+            // 📢 로 시작하는데 확성기인지 아직 모르는 받은 줄 — refresh 한 번 뒤 판정(계약 C3 경합).
+            verifyMegaphoneRows()
         } catch (error: Throwable) {
             if (generation != context.generation) return
             if (AuthErrorRules.classify(error) == AuthErrorDisposition.cancelled) return
@@ -815,8 +848,21 @@ class MessagesStore(
         val owner = runtime
         val serial = owner.nextSerial()
         owner.lastSummaryLaunchSerial = serial
+        val banner = megaphoneBanner
+        // 배너 필터의 첫 판정(로그인 직후 unknown)이 돌고 있으면 기다린다 — 요약 함수(v1/v2)는 필터와 짝이어야 한다(필터가 켜졌는데 옛 요약을
+        // 쓰면 숨긴 확성기 줄을 세어 배지가 안 꺼진다). 판정이 끝난 뒤의 요약은 기다리지 않는다.
+        if (banner != null && banner.capability == MegaphoneBannerStore.Capability.unknown) {
+            owner.megaphoneProbe?.join()
+            if (generation != context.generation) return
+        }
         try {
-            val response = context.withSessionRetry { session -> context.service.fetchMessageUnreadSummary(session.accessToken) }
+            val response = if (banner != null) {
+                // 필터가 켜져 있으면 v2(확성기 줄을 안 센다), 아니면 옛 함수. v2 가 없으면 배너 스토어가 필터를 끄고 옛 함수로 다시 부른다.
+                owner.lastSummaryFunction = banner.unreadSummaryFunction
+                banner.fetchUnreadSummary()
+            } else {
+                context.withSessionRetry { session -> context.service.fetchMessageUnreadSummary(session.accessToken) }
+            }
             if (generation != context.generation) return
             val value = response.summary ?: return
             // 늦게 온 옛 요약이 새 요약을 덮지 않게(이력과 같은 번호 규칙).
@@ -826,6 +872,70 @@ class MessagesStore(
         } catch (error: Throwable) {
             // 함수 없음·장애 — 요약 없이 이력(또는 옛 도장) 기준으로 산다. 문구를 세우지 않는다(배지 재료일 뿐이다).
         }
+    }
+
+    // ---------------------------------------------------------------- 확성기 배너(계약 docs/plan/megaphone-banner-contract.md — 폰)
+
+    /**
+     * 이 줄을 메시지함에서 붙드는가 — 확성기로 판정됐거나(`hides`), 받은 줄인데 판정 보류(`needsVerification`).
+     * 보낸 줄은 보류하지 않는다(서버 이력은 보낸 사람 자신의 확성기 줄을 이미 숨긴다 — 내가 📢 로 시작해 보낸 1:1 은 그냥 내 말이다).
+     */
+    private fun holdsMegaphoneRow(entry: MessageEntry, banner: MegaphoneBannerStore): Boolean {
+        if (banner.hides(entry.id)) return true
+        return !entry.isMine && banner.needsVerification(entry.id, entry.wire.body)
+    }
+
+    /**
+     * 배너 스토어가 `megaphone_inbox` 를 한 번 읽는다(앞으로 올 때마다). 돌고 있으면 또 띄우지 않는다 — 배너 스토어의 refresh 는
+     * 진행 중에 들어온 호출을 **한 번 더** 돌리므로 겹쳐 부르면 inbox 가 두 번 나간다.
+     */
+    private fun startMegaphoneProbe() {
+        val banner = megaphoneBanner ?: return
+        val owner = runtime
+        if (owner.megaphoneProbeRunning) return
+        owner.megaphoneProbeRunning = true
+        val generation = context.generation
+        owner.megaphoneProbe = scope.launch {
+            banner.refresh()
+            if (generation != context.generation || owner !== runtime) return@launch
+            owner.megaphoneProbeRunning = false
+            megaphoneFilterDidSettle()
+        }
+    }
+
+    /**
+     * 판정 보류 줄(받은 줄 · `📢` 접두 · id 모름)을 refresh 한 번 뒤 판정한다(계약 C3 — 울림·이력이 배너 신호보다 먼저 올 수 있다).
+     * 첫 판정(probe)이 돌고 있으면 그것을 먼저 기다리고, 그래도 모르는 줄만 `refresh(verifying)` 에 넘긴다. 그 뒤에도 모르면
+     * (위조 DM · 연결 실패) 배너 스토어가 "확인함"으로 적어 메시지로 보인다 — 접두만 보고 숨기지 않는다.
+     */
+    private fun verifyMegaphoneRows() {
+        val banner = megaphoneFilter ?: return
+        val owner = runtime
+        val pending = history.filter { !it.isMine && banner.needsVerification(it.id, it.wire.body) }.map { it.id }.toSet()
+        if (pending.isEmpty() || owner.megaphoneVerifying.containsAll(pending)) return
+        owner.megaphoneVerifying.addAll(pending)
+        val generation = context.generation
+        scope.launch {
+            owner.megaphoneProbe?.join()
+            if (generation != context.generation) return@launch
+            val still = history.filter { it.id in pending && banner.needsVerification(it.id, it.wire.body) }.map { it.id }.toSet()
+            if (still.isNotEmpty()) banner.refresh(verifying = still)
+            if (generation != context.generation) return@launch
+            owner.megaphoneVerifying.removeAll(pending)
+            megaphoneFilterDidSettle()
+        }
+    }
+
+    /**
+     * 배너 판정이 바뀌었을 수 있다 — 요약 함수 짝을 맞추고(옛 함수로 받은 요약 뒤에 필터가 켜졌으면 다시 받는다),
+     * 보류에서 풀린 줄이 떠 있는 대화에 있으면 읽음을 올린다.
+     */
+    private fun megaphoneFilterDidSettle() {
+        if (!isSignedIn) return
+        val used = runtime.lastSummaryFunction
+        val banner = megaphoneBanner
+        if (used != null && banner != null && used != banner.unreadSummaryFunction) requestActivityRefresh()
+        evaluateReadMarking()
     }
 
     // ---------------------------------------------------------------- 읽음
@@ -1214,7 +1324,19 @@ private class MessagesRuntime {
         return current.filter { keepIDs.contains(id(it)) && seen.add(id(it)) }
     }
 
+    /** 확성기 배너 첫 판정(앞으로 올 때마다 한 번 — startMegaphoneProbe). 요약이 unknown 동안 이것을 기다린다. */
+    var megaphoneProbe: Job? = null
+    var megaphoneProbeRunning = false
+
+    /** 판정 보류 줄 중 refresh 를 기다리는 id(같은 줄로 refresh 를 겹쳐 띄우지 않게). */
+    val megaphoneVerifying: MutableSet<String> = LinkedHashSet()
+
+    /** 마지막 요약을 받은 함수 이름(v1/v2) — 필터가 바뀌면 다시 받을지 가른다. */
+    var lastSummaryFunction: String? = null
+
     fun cancelAll() {
+        megaphoneProbe?.cancel()
+        megaphoneProbe = null
         activityTask?.cancel()
         activityTask = null
         postMarkWindowTask?.cancel()

@@ -7,6 +7,8 @@
 //   - onNewIntent: 새 라우트를 연다. 런처(MAIN)·모르는 모양이면 아무것도 바꾸지 않는다(복원된 화면 그대로).
 //   - 최근 앱(기록)에서 다시 띄운 작업 뿌리 Intent(FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY)는 extra 째 다시 온다 — 수락은 버리고
 //     화면만 연다(판돈이 걸린 respond 가 두 번 실리지 않게, G §8-13). 처리한 Intent 는 setIntent 로 라우트·수락 extra 를 지운다.
+//   - 확성기 알림 탭(증표가 맞은 표식)은 라우터로 보내지 않고 푸시 조정자의 handleResponse(open)로 — 대화가 아니라 그 확성기 배너(Swift
+//     PushCoordinator.handleResponse @ a6791165). 자리표시 셸(조립 화면 없음)이면 그 대화를 연다.
 package com.yehsung.aingcheck.android.shell
 
 import android.content.Intent
@@ -131,16 +133,23 @@ class MainActivity : ComponentActivity() {
         val incoming = RouteIntents.read(intent) ?: return
         // 증표는 수락을 요청한 Intent 에서만 꺼낸다(처음 쓸 때 만들어 저장한다 — 화면만 여는 딥링크에 디스크 쓰기를 붙이지 않는다).
         // 기록에서 다시 온 Intent 의 수락을 버리는 문은 parse 한 곳이다(시험이 그 한 곳을 잰다 — 겹문으로 가리지 않는다).
-        val proof = if (incoming.acceptExtra) container.routeProof.value() else null
+        val proof = if (incoming.acceptExtra || incoming.megaphoneIdExtra != null) container.routeProof.value() else null
         val request = RouteIntents.parse(incoming, expectedProof = proof)
-        if (intent != null && (incoming.routeExtra != null || incoming.acceptExtra || incoming.proofExtra != null)) {
+        if (intent != null && (incoming.routeExtra != null || incoming.acceptExtra || incoming.proofExtra != null || incoming.megaphoneIdExtra != null)) {
             setIntent(RouteIntents.consumed(intent))
         }
         // 기기 시나리오(E-U16 · §8-13)가 읽는 한 줄. 증표는 있었는지(참·거짓)만 싣는다 — 값은 싣지 않는다.
         container.logger.log(
             LogLevel.INFO, "AingShell",
-            "route accept=${request?.accept} history=${incoming.launchedFromHistory} proof=${incoming.proofExtra != null} opened=${request != null}",
+            "route accept=${request?.accept} history=${incoming.launchedFromHistory} proof=${incoming.proofExtra != null} opened=${request != null}" +
+                " megaphone=${request?.megaphone != null}",
         )
+        val megaphone = request?.let(RouteTargets::megaphoneTapContent)
+        val screens = container.shellScreens
+        if (megaphone != null && screens != null) {
+            container.mainScope.launch { screens.phone.push.handleResponse(megaphone, PhonePushAction.open) }
+            return
+        }
         request?.let { requests.trySend(it) }
     }
 

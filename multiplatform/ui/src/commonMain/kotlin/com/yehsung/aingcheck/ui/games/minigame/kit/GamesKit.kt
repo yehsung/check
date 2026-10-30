@@ -66,6 +66,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
 import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
 import com.yehsung.aingcheck.core.wire.SwiftURL
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 
 /** 숫자 글자(고정폭 숫자 — iOS `.monospacedDigit()`). */
 const val TNUM: String = "tnum"
@@ -450,6 +451,7 @@ fun GamesHeaderBar(title: String, modifier: Modifier = Modifier, subtitle: Strin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GamesSheet(onDismiss: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
+    ModalPresenceMark()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

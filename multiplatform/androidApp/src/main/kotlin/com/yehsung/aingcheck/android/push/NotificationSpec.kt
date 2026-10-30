@@ -7,12 +7,15 @@
 // - 모르는 `type` · 필수 id 가 없거나 모양이 틀림 → **게시하지 않는다**(Swift PushPayload: 조용히 "지금"으로 접지 않는다).
 // - id 는 다듬고 소문자로(서버 uuid, PushPayload.safeID). 라우트 id 규칙과 같다(영문·숫자·`-`·`_`, 1~64자).
 // - 앞에서 **보고 있는 대화**의 메시지는 숨긴다(PushCoordinator 2). 다른 종류는 앞이어도 게시한다(헤즈업).
+// - 확성기(메시지 푸시의 `megaphone_id`)는 **앱이 앞이면 어느 화면이든** 숨기고 앱 배너로, 뒤면 게시하고 탭에 표식을 싣는다(눌러 들어오면
+//   대화가 아니라 그 확성기 배너 — Swift PushCoordinator `isAppActive` · handleResponse @ a6791165).
 // - 체스 신청(chess_invite)은 iOS 에 아직 없고 Android 는 처리한다(E§6.1). 새 kind 는 만들지 않는다.
 // - 짧은 실행 창 안에서 끝낸다: 이 판정은 네트워크·디스크를 쓰지 않는다.
 package com.yehsung.aingcheck.android.push
 
 import com.yehsung.aingcheck.android.routing.AingRoute
 import com.yehsung.aingcheck.android.routing.RouteRequest
+import com.yehsung.aingcheck.feature.phone.push.PhonePushMegaphone
 
 /** 알림 버튼 하나. 누르면 앱을 연다(앱을 열지 않는 액션은 두지 않는다 — iOS w10 결정). */
 data class NotificationActionSpec(val id: String, val title: String, val request: RouteRequest)
@@ -36,8 +39,11 @@ data class NotificationSpec(
 /** 받은 data 메시지로 할 일. 셋 다 [refresh] 로 "그 스토어를 다시 읽어라"를 알린다(W2-f 가 쓴다). */
 sealed interface PushDecision {
     data class Post(val spec: NotificationSpec, val refresh: AingChannel) : PushDecision
-    /** 앞에서 그 대화를 보고 있다 — 게시하지 않고 대화만 다시 읽는다. */
-    data class Hide(val route: AingRoute, val refresh: AingChannel) : PushDecision
+    /**
+     * 게시하지 않는다 — 앞에서 그 대화를 보고 있다(대화만 다시 읽는다), 또는 **앞에서 받은 확성기**다([megaphone] — 시스템 알림 대신 앱 배너로,
+     * Swift PushCoordinator `.hidden` + presentFromPush @ a6791165).
+     */
+    data class Hide(val route: AingRoute, val refresh: AingChannel, val megaphone: PhonePushMegaphone? = null) : PushDecision
     /** 게시하지 않는다(모르는 type · id 없음 · 모양 틀림). */
     data class Drop(val reason: String) : PushDecision
 }
@@ -54,11 +60,17 @@ object NotificationSpecs {
     const val CATEGORY_REMINDER = "reminder"
 
     /**
-     * [data] = RemoteMessage.data. [viewing] = 앱이 앞일 때 보고 있는 라우트(뒤면 null).
+     * [data] = RemoteMessage.data. [viewing] = 앱이 앞일 때 보고 있는 라우트(뒤면 null — 앞이어도 라우트 없는 화면이면 null).
+     * [isForeground] = 앱이 앞인가(`VisibleRoute.isForeground` — 화면과 상관없이). 기본값은 viewing 이 있으면 앞(순수 시험 표 몫 — 서비스는 넘긴다).
      * [duelsEnabled] = 이 빌드의 판돈 대결 깃발(`AppConfig.duelsEnabled`). 꺼진 빌드(§8-17 #1 — 신청·수락 진입은 켜진 빌드에서만 보인다)는
      * 신청 알림에 [수락] 단추를 달지 않는다 — 본문 탭(신청 화면 열기)만 남는다. 기본값은 꺼짐(안전한 쪽 — 깃발을 잊은 호출이 진입을 열지 않게).
      */
-    fun decide(data: Map<String, String>, viewing: AingRoute?, duelsEnabled: Boolean = false): PushDecision {
+    fun decide(
+        data: Map<String, String>,
+        viewing: AingRoute?,
+        duelsEnabled: Boolean = false,
+        isForeground: Boolean = viewing != null,
+    ): PushDecision {
         val rawType = data["type"]?.trim()?.lowercase() ?: return PushDecision.Drop("type 없음")
         val channel = AingChannel.fromId(rawType) ?: return PushDecision.Drop("모르는 type '$rawType'")
         val title = data["title"]?.takeIf { it.isNotBlank() } ?: channel.title
@@ -67,6 +79,20 @@ object NotificationSpecs {
             AingChannel.MESSAGE -> {
                 val peer = safeId(data["peer_id"]) ?: return PushDecision.Drop("message 에 peer_id 가 없거나 모양이 틀렸다")
                 val route = AingRoute.Message(peer)
+                // 확성기(계약 S6 — 메시지 푸시의 최상위 `megaphone_id`, 옵셔널 키 · 새 type 없음): 앱이 앞이면 **어느 화면이든** 시스템 알림 대신
+                // 앱 배너(Swift `isAppActive` — 보고 있는 라우트로 가르지 않는다). 모양이 틀린 id 는 없는 것으로 접는다(평범한 메시지로 산다).
+                // 뒤면 게시하고 탭에 표식을 싣는다 — 눌러 들어오면 대화가 아니라 그 확성기 배너다(메시지함 · 대화에서는 그 줄이 숨겨져 있다).
+                // 태그는 확성기별: 같은 상대의 평범한 메시지 알림이 갈아 끼우지 않게(그러면 내용을 볼 길이 사라진다).
+                val megaphoneID = safeId(data["megaphone_id"])
+                if (megaphoneID != null) {
+                    val megaphone = PhonePushMegaphone(megaphoneID, data["title"]?.takeIf { it.isNotBlank() }, body)
+                    if (isForeground) return PushDecision.Hide(route, channel, megaphone)
+                    return PushDecision.Post(
+                        NotificationSpec(channel, title, body, tag = "megaphone-$megaphoneID", group = MESSAGE_GROUP,
+                            tap = RouteRequest(route, megaphone = megaphone), actions = emptyList(), category = CATEGORY_MESSAGE),
+                        refresh = channel,
+                    )
+                }
                 if (viewing == route) return PushDecision.Hide(route, channel)
                 post(channel, title, body, tag = "message-$peer", group = MESSAGE_GROUP, route = route, CATEGORY_MESSAGE)
             }

@@ -66,6 +66,7 @@ import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 
 object CakeGiftTags {
     fun option(id: String) = "cakeGift.option.$id"
@@ -97,6 +98,7 @@ internal object CakeGiftTitleParts {
 @Composable
 fun MeCakeGiftSheetHost(store: MeStore) {
     val sheet = store.cakeGiftSheet ?: return
+    ModalPresenceMark()
     ModalBottomSheet(
         onDismissRequest = { store.dismissCakeGiftSheet() },
         // 상태 판정은 부를 때의 스토어 값으로(시트 상태는 처음 람다를 쥔다 — 그때의 '받는 중'을 굳히면 안 된다).

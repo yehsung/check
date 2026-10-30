@@ -81,6 +81,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.rememberNow
 import com.yehsung.aingcheck.ui.screens.session.kit.sf
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import kotlinx.coroutines.launch
 
 /**
@@ -196,6 +197,7 @@ private fun StatusSection(store: NowStore, work: NowWorkActions?, characterID: S
         }
     }
     if (confirmingStop && work != null) {
+        ModalPresenceMark()
         AlertDialog(
             onDismissRequest = { confirmingStop = false },
             title = { Text(NowText.workStopConfirmTitle) },

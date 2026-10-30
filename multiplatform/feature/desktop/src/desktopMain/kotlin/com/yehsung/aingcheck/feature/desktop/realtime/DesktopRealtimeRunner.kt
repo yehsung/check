@@ -251,6 +251,8 @@ class DesktopRealtimeRunner(
                 RealtimeEffect.GomokuSignal -> games.gomoku?.handleSignal()
                 RealtimeEffect.ChessSignal -> games.chess?.handleSignal()
                 RealtimeEffect.TetrisSignal -> games.tetris?.handleSignal()
+                // 확성기 배너(2026-10-30)는 아직 데스크톱 화면이 없다(데스크톱 세션 몫) — 같은 묶음의 `ring` 이 메시지를 갚는다.
+                RealtimeEffect.MegaphoneSignal -> Unit
                 is RealtimeEffect.PushAccessToken -> transport?.pushAccessToken(effect.token)
                 is RealtimeEffect.ScheduleTokenRefresh -> scheduleTokenRefresh(effect.at, now)
                 is RealtimeEffect.RefreshToken -> startTokenRefresh()

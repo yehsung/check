@@ -16,13 +16,16 @@ class AingMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(message: RemoteMessage) {
         val c = container
-        val decision = NotificationSpecs.decide(message.data, viewing = c.visibleRoute.viewing(), duelsEnabled = c.appConfig.duelsEnabled)
+        val decision = NotificationSpecs.decide(
+            message.data, viewing = c.visibleRoute.viewing(), duelsEnabled = c.appConfig.duelsEnabled, isForeground = c.visibleRoute.isForeground(),
+        )
         when (decision) {
             is PushDecision.Post -> {
                 val posted = c.notificationPoster.post(decision.spec)
                 c.logger.log(LogLevel.INFO, TAG, "push ${decision.spec.channel.id} posted=$posted")
             }
-            is PushDecision.Hide -> c.logger.log(LogLevel.INFO, TAG, "push ${decision.refresh.id} hidden(보고 있는 대화)")
+            is PushDecision.Hide ->
+                c.logger.log(LogLevel.INFO, TAG, "push ${decision.refresh.id} hidden(${if (decision.megaphone != null) "확성기 — 앱 배너" else "보고 있는 대화"})")
             is PushDecision.Drop -> c.logger.log(LogLevel.WARN, TAG, "push dropped: ${decision.reason}")
         }
         c.pushInbox.publish(decision)

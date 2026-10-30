@@ -29,6 +29,7 @@ import com.yehsung.aingcheck.core.stores.me.equippedCharacterID
 import com.yehsung.aingcheck.core.stores.me.presentCakeGiftIfDue
 import com.yehsung.aingcheck.core.stores.me.refreshAchievementsAfterGameResult
 import com.yehsung.aingcheck.core.stores.me.weeklyWorkDidChange
+import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
@@ -115,6 +116,12 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
     val push: PhonePushCoordinator
     val now: NowStore
     val messages: MessagesStore
+
+    /** 확성기 배너(2026-10-30 — Swift `MobileAppModel.megaphoneBanner` @ a6791165). 셸이 탭 위 오버레이로 [MegaphoneBannerStore.current] 를 그린다. */
+    val megaphoneBanner: MegaphoneBannerStore
+
+    /** 지금 시트·대화상자가 떠 있는가(셸이 채운다 — 오버레이가 그 밑에 깔리면 미룬다). Swift `megaphoneModalProbe`. */
+    var megaphoneModalProbe: () -> Boolean = { false }
     val rankings: RankingsStore
     val gamesContext: PhoneGamesContext
     val games: GamesStore
@@ -186,6 +193,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
         now = NowStore(context, scope, env.todoStorage, runsPeriodicRefresh = env.runsTimers)
         messages = MessagesStore(context, scope, env.collation, megaphoneHost = PhoneMegaphoneHost(context, ruby))
+        megaphoneBanner = MegaphoneBannerStore(PhoneMegaphoneHost(context, ruby), scope, env.prefs, clock = { env.clock.now() })
         rankings = RankingsStore(context, scope, env.collation)
         gamesContext = PhoneGamesContext(context, PhoneGomokuLink(gomoku), PhoneChessLink(chess))
         games = GamesStore(gamesContext)
@@ -206,6 +214,15 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         links.me = me
         links.work = work
         links.widgetSink = widgetSink
+        links.megaphoneBanner = megaphoneBanner
+        // 확성기 배너 배선(Swift cec08cb1 · 8b40bd44): 메시지함 필터(visibleHistory · 요약 v2) · 미룸 · 실시간 'megaphone' · 보낸 뒤 내 배너.
+        // 메시지 스토어에 이 한 줄이 없으면 확성기 줄이 메시지로 남고 요약은 옛 함수다(배너와 메시지함에 두 번 보인다).
+        messages.megaphoneBanner = megaphoneBanner
+        megaphoneBanner.isBannerDeferred = { isMegaphoneBannerDeferred }
+        realtime.megaphone = { scope.launch { megaphoneBanner.refresh() } }
+        messages.megaphone.onSent = { body, megaphoneID ->
+            megaphoneBanner.presentOwn(body, me.displayName.orEmpty(), me.avatarURL?.absoluteString, megaphoneID)
+        }
         // 딥링크 대상 해석 한 문 — 푸시 조정자(알림 탭 · [수락] 뒤 열기)가 라우터를 바로 부르지 않고 이 규칙을 지난다(W2-f 검증 7차 지적).
         links.routeResolver = { target -> openRoute(target) }
         now.phoneWork = work
@@ -355,6 +372,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         router.reset()
         widgets.forgetCurrent()
         now.reset()
+        // 배너 스토어가 먼저 — 메시지 스토어의 필터가 앞 계정의 확성기 id 로 다음 계정의 줄을 거르지 않게.
+        megaphoneBanner.reset()
         messages.reset()
         rankings.reset()
         games.reset()

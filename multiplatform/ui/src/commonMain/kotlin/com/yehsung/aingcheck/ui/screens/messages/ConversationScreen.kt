@@ -104,6 +104,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.rememberStickerArt
 import com.yehsung.aingcheck.ui.screens.session.kit.sf
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -186,6 +187,7 @@ fun ConversationScreen(
     }
 
     if (showsBlock) {
+        ModalPresenceMark()
         ModalBottomSheet(onDismissRequest = { showsBlock = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
             containerColor = colors.surface) {
             MessagesBlockConfirmSheet(
@@ -201,6 +203,7 @@ fun ConversationScreen(
         }
     }
     reportTarget?.let { target ->
+        ModalPresenceMark()
         ModalBottomSheet(onDismissRequest = { if (!store.isSendingReport) reportTarget = null },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = colors.surface) {
             MessagesReportSheet(
@@ -216,6 +219,7 @@ fun ConversationScreen(
         }
     }
     if (showsStickers) {
+        ModalPresenceMark()
         ModalBottomSheet(onDismissRequest = { showsStickers = false }, containerColor = colors.background) {
             MessagesStickerSheet(store, peerID, onClose = { showsStickers = false })
         }

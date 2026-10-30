@@ -342,6 +342,9 @@ class PhoneHarness(
         // 로그인 직후 캐릭터 한 표(AppUserCharacterStore.refresh) · 근무 종료 뒤 주간 보상 재조회(MeStore.weeklyWorkDidChange).
         r.rpcName == "app_user_characters" -> Reply.Json("[]")
         r.rpcName == "weekly_work_status" -> Reply.Json("""{"status":"ok"}""")
+        // 확성기 배너(a6791165): 메시지 스토어가 앞으로 올 때 `megaphone_inbox` 를 한 번 묻는다. 기본은 옛 서버(함수 없음 = 필터 끔 · 지금처럼 메시지)다 —
+        // 배너를 재는 시험(MegaphoneBannerPhoneTest)은 자기 응답을 준다.
+        r.rpcName == "megaphone_inbox" -> Reply.missingFunction
         else -> null
     }
 

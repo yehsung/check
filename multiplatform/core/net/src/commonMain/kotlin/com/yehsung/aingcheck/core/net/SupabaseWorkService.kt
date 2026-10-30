@@ -81,6 +81,8 @@ class SupabaseWorkService(
         const val weeklyWorkClaimPath = "/rest/v1/rpc/weekly_work_claim"
         const val sendMegaphonePath = "/rest/v1/rpc/send_megaphone"
         const val megaphoneInfoPath = "/rest/v1/rpc/megaphone_info"
+        /** 확성기 배너(2026-10-30) — 내게 온 확성기 줄(24시간 창 · 차단 상대 제외). Swift `megaphoneInboxPath`. */
+        const val megaphoneInboxPath = "/rest/v1/rpc/megaphone_inbox"
         const val aiLimitsPath = "/rest/v1/ai_limits"
         const val aiLimitsPrefsPath = "/rest/v1/ai_limits_prefs"
     }

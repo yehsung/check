@@ -37,6 +37,7 @@ import com.yehsung.aingcheck.ui.screens.settingscommon.AppearanceStore
 import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationSettingsSection
 import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsActions
 import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsScreen
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import kotlinx.coroutines.launch
 
 /** 런타임 알림 권한을 한 번이라도 물었는가(설정 저장소 한 칸 — 기기 값, 로그아웃과 무관). */
@@ -121,6 +122,7 @@ fun SettingsRouteScreen(
     SettingsScreen(store, appearance, actions, modifier, notifications = { NotificationSettingsSection(model) })
 
     if (confirmingSignOut) {
+        ModalPresenceMark()
         AlertDialog(
             onDismissRequest = { confirmingSignOut = false },
             title = { Text(MeText.signOutConfirmTitle) },

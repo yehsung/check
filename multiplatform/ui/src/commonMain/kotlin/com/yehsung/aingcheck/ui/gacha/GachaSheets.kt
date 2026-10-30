@@ -64,6 +64,7 @@ import com.yehsung.aingcheck.ui.shop.MeType.digits
 import com.yehsung.aingcheck.ui.shop.rememberRuby
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 
 /** "확률 보기" 시트 내용(머리 ✕ · 표 · 규칙 한 줄). [scrolls] 가 거짓이면 스크롤 없이 다 그린다(스냅숏). */
 @Composable
@@ -164,6 +165,7 @@ fun MeGachaExchangeSheetContent(store: MeStore, onClose: () -> Unit, modifier: M
     val row = confirming
     val cost = row?.availability?.cost
     if (row != null && cost != null) {
+        ModalPresenceMark()
         AlertDialog(
             onDismissRequest = { confirming = null },
             title = { Text(MeText.exchangeConfirmTitle(row.name, cost)) },
@@ -212,6 +214,7 @@ private fun costLine(availability: GachaExchangeAvailability, cost: Long): Strin
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeGachaOddsSheetHost(store: MeStore, onDismiss: () -> Unit) {
+    ModalPresenceMark()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -224,6 +227,7 @@ fun MeGachaOddsSheetHost(store: MeStore, onDismiss: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeGachaExchangeSheetHost(store: MeStore, onDismiss: () -> Unit) {
+    ModalPresenceMark()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),

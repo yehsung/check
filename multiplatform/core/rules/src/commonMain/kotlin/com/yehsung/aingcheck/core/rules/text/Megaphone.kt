@@ -1,5 +1,8 @@
 // 원본: Sources/CheckCore/Megaphone.swift @ 1b8260d (요청·응답 모양 · 결과 · 본문 판정 · 문구 · 정보 · 보내기 전 판정 · request_id 쥐기 —
 //       @MainActor 스토어 MegaphoneStore 의 배선 · 세대 · 비동기는 메시지 스토어 갈래(W2-b)가 이 규칙 위에 옮긴다. HTTP 래퍼는 W1-d)
+// 확성기 배너(main a6791165 · b056075b — 계약 docs/plan/megaphone-banner-contract.md C1 · C4): 앱 전체에 한 번에 하나 — 누가 보내면 그 뒤
+// 5분은 아무도 못 보낸다(info 의 global_* 키 · 전송 cooldown 의 scope). 작성 화면 문구 explainer · reach 는 a6791165 문구(계약 C4 — 받는 쪽
+// 화면에 배너로 뜬다)다. 이 레인 골든(옛 Swift 기준선)은 아직 옛 문구라 MessageGoldenChecks 의 '기준선 뒤 문구' 표가 그 둘만 갈아 잰다.
 package com.yehsung.aingcheck.core.rules.text
 
 import com.yehsung.aingcheck.core.rules.format.SharedText
@@ -24,6 +27,12 @@ data class MegaphoneInfoResponse(
     val recipients: Long? = null,
     val maxLength: Long? = null,
     val rubyBalance: Long? = null,
+    /** 앱 전체에 한 번에 하나: 누가 보내면 그 뒤 이만큼은 아무도 못 보낸다(서버 300). 옛 서버엔 없다. */
+    val globalCooldownSeconds: Long? = null,
+    /** 앱 전체 대기의 남은 초. [cooldownRemainingSeconds] 는 이미 **사람당·전체 중 긴 쪽**이다(옛 앱이 그대로 맞는 시간을 말하게). */
+    val globalCooldownRemainingSeconds: Long? = null,
+    /** 지금 막는 쪽: `"self"`(사람당) · `"global"`(앱 전체) · null(안 막힘 · 옛 서버). */
+    val cooldownScope: String? = null,
 ) {
     companion object {
         fun decode(element: JsonElement): MegaphoneInfoResponse {
@@ -32,8 +41,25 @@ data class MegaphoneInfoResponse(
                 status = k.stringIfPresent("status"), enabled = k.boolIfPresent("enabled"), price = k.intIfPresent("price"),
                 cooldownSeconds = k.intIfPresent("cooldownSeconds"), cooldownRemainingSeconds = k.intIfPresent("cooldownRemainingSeconds"),
                 recipients = k.intIfPresent("recipients"), maxLength = k.intIfPresent("maxLength"), rubyBalance = k.intIfPresent("rubyBalance"),
+                globalCooldownSeconds = k.intIfPresent("globalCooldownSeconds"),
+                globalCooldownRemainingSeconds = k.intIfPresent("globalCooldownRemainingSeconds"),
+                cooldownScope = k.stringIfPresent("cooldownScope"),
             )
         }
+    }
+}
+
+/** 확성기 대기가 누구 몫인가. 서버 어휘 `'self'` 는 Swift 의 `.self` 와 겹쳐 `.personal` 로 옮겼다(Kotlin 도 같은 이름). */
+enum class MegaphoneCooldownScope {
+    /** 사람당(보낸 사람 본인 10분). */
+    personal,
+
+    /** 앱 전체(누가 보내면 그 뒤 5분은 아무도). */
+    global;
+
+    companion object {
+        /** 서버 문자열 → 값. 모르는 값·null 은 사람당(옛 서버가 말하던 유일한 대기다). */
+        fun of(serverValue: String?): MegaphoneCooldownScope = if (serverValue == "global") global else personal
     }
 }
 
@@ -50,6 +76,8 @@ data class MegaphoneSendResponse(
     val maxLength: Long? = null,
     val retryAfterSeconds: Long? = null,
     val cooldownSeconds: Long? = null,
+    /** cooldown 응답이 어느 쪽에 막혔는가: `"self"`(사람당) · `"global"`(앱 전체). 옛 서버엔 없다(= 사람당). */
+    val scope: String? = null,
 ) {
     companion object {
         fun decode(element: JsonElement): MegaphoneSendResponse {
@@ -59,6 +87,7 @@ data class MegaphoneSendResponse(
                 price = k.intIfPresent("price"), rubyBalance = k.intIfPresent("rubyBalance"), duplicate = k.boolIfPresent("duplicate"),
                 need = k.intIfPresent("need"), have = k.intIfPresent("have"), maxLength = k.intIfPresent("maxLength"),
                 retryAfterSeconds = k.intIfPresent("retryAfterSeconds"), cooldownSeconds = k.intIfPresent("cooldownSeconds"),
+                scope = k.stringIfPresent("scope"),
             )
         }
     }
@@ -68,7 +97,7 @@ data class MegaphoneSendResponse(
 sealed interface MegaphoneSendOutcome {
     data class sent(val recipients: Long, val duplicate: Boolean) : MegaphoneSendOutcome
     data class insufficient(val need: Long?, val have: Long?) : MegaphoneSendOutcome
-    data class cooldown(val retryAfterSeconds: Long?) : MegaphoneSendOutcome
+    data class cooldown(val retryAfterSeconds: Long?, val scope: MegaphoneCooldownScope = MegaphoneCooldownScope.personal) : MegaphoneSendOutcome
     data object noRecipients : MegaphoneSendOutcome
     data object empty : MegaphoneSendOutcome
     data class tooLong(val maxLength: Long?) : MegaphoneSendOutcome
@@ -82,7 +111,7 @@ sealed interface MegaphoneSendOutcome {
         fun from(response: MegaphoneSendResponse): MegaphoneSendOutcome = when (response.status) {
             "ok" -> sent(response.recipients ?: 0, response.duplicate ?: false)
             "insufficient" -> insufficient(response.need, response.have)
-            "cooldown" -> cooldown(response.retryAfterSeconds)
+            "cooldown" -> cooldown(response.retryAfterSeconds, MegaphoneCooldownScope.of(response.scope))
             "no_recipients" -> noRecipients
             "empty" -> empty
             "too_long" -> tooLong(response.maxLength)
@@ -120,7 +149,7 @@ object MegaphoneText {
     const val title = "확성기"
     const val icon = "📢"
     val badgeTitle: String get() = "$icon $title"
-    const val explainer = "앱을 쓰는 모두에게 메시지로 가요 · 집중 중인 사람은 빼요"
+    const val explainer = "앱 사용자 모두의 화면에 크게 떠요 · 집중 중인 사람은 빼요"
     const val placeholder = "모두에게 할 말을 적어 주세요"
     const val sendButton = "보내기"
     const val cancelButton = "취소"
@@ -128,6 +157,19 @@ object MegaphoneText {
     fun alreadySent(recipients: Long): String = "이미 보냈어요 · ${recipients}명에게"
     fun shortfall(need: Long?, have: Long?): String = SharedText.shortfallNotice(need, have)
     fun cooldown(seconds: Long): String = "${cooldownMinutes(seconds)}분 뒤에 다시 보낼 수 있어요"
+    /** 앱 전체 대기(누가 보내면 그 뒤 5분). 분 단위 올림. */
+    fun globalCooldown(seconds: Long): String = "다음 확성기까지 ${cooldownMinutes(seconds)}분"
+
+    /**
+     * 작성 화면·거절 한 줄의 대기 문구. 사람당·앱 전체 중 **더 긴 쪽**을 말하고, 같으면 앱 전체 문구다. 둘 다 0 이하면 null.
+     * [remaining] 은 지금 막는 전체 남은 초(= 둘 중 긴 쪽 — 서버 `cooldown_remaining_seconds` 와 같은 뜻), [globalRemaining] 은 그중 앱 전체 몫.
+     */
+    fun cooldownLine(remaining: Long, globalRemaining: Long): String? {
+        val total = maxOf(remaining, globalRemaining)
+        if (total <= 0) return null
+        return if (globalRemaining >= total) globalCooldown(total) else cooldown(total)
+    }
+
     /** 남은 초 → 분(올림, 최소 1). 음수는 0 으로. */
     fun cooldownMinutes(seconds: Long): Long = maxOf(1L, (maxOf(0L, seconds) + 59) / 60)
     const val noRecipients = "받을 사람이 없어요"
@@ -140,7 +182,7 @@ object MegaphoneText {
     const val failed = "보내지 못했어요. 잠시 후 다시 시도해 주세요"
     const val loadingInfo = "받을 사람을 세는 중이에요"
     const val infoFailed = "받을 사람 수를 못 읽었어요"
-    fun reach(recipients: Long): String = "지금 보내면 ${recipients}명에게 가요"
+    fun reach(recipients: Long): String = "지금 보내면 ${recipients}명의 화면에 떠요"
     fun confirm(price: Long, recipients: Long): String = "루비 ${price}개로 ${recipients}명에게 보낼까요?"
     fun counter(length: Int, maxLength: Int): String = "$length/$maxLength"
 
@@ -148,7 +190,8 @@ object MegaphoneText {
     fun notice(outcome: MegaphoneSendOutcome, cooldownLeft: Long): Pair<String, Boolean> = when (outcome) {
         is MegaphoneSendOutcome.sent -> (if (outcome.duplicate) alreadySent(outcome.recipients) else sent(outcome.recipients)) to false
         is MegaphoneSendOutcome.insufficient -> shortfall(outcome.need, outcome.have) to true
-        is MegaphoneSendOutcome.cooldown -> cooldown(cooldownLeft) to true
+        is MegaphoneSendOutcome.cooldown ->
+            (if (outcome.scope == MegaphoneCooldownScope.global) globalCooldown(cooldownLeft) else cooldown(cooldownLeft)) to true
         MegaphoneSendOutcome.noRecipients -> noRecipients to true
         MegaphoneSendOutcome.empty -> empty to true
         is MegaphoneSendOutcome.tooLong -> tooLong(outcome.maxLength) to true
@@ -168,11 +211,22 @@ data class MegaphoneInfo(
     val maxLength: Long,
     val cooldownSeconds: Long,
     val cooldownEndsAt: Double?,
+    /** 앱 전체 대기의 설계값(서버가 말해 준 값 · 모르면 null). */
+    val globalCooldownSeconds: Long? = null,
+    /** 앱 전체 대기가 끝나는 시각(없으면 null). [cooldownEndsAt] 과 둘 중 늦은 쪽까지 막힌다. */
+    val globalCooldownEndsAt: Double? = null,
 ) {
-    /** 남은 쿨다운 초(올림). 끝났거나 모르면 0. */
-    fun cooldownRemaining(now: Double): Long {
-        val ends = cooldownEndsAt ?: return 0
-        val left = ends - now
+    /** 지금 남은 대기(초, 올림) — 사람당·앱 전체 중 긴 쪽. 없으면 0. */
+    fun cooldownRemaining(now: Double): Long = maxOf(secondsLeft(cooldownEndsAt, now), globalCooldownRemaining(now))
+
+    /** 그중 앱 전체 몫(초, 올림). 없으면 0. */
+    fun globalCooldownRemaining(now: Double): Long = secondsLeft(globalCooldownEndsAt, now)
+
+    /** 지금 막혀 있으면 그 한 줄(더 긴 쪽 · 같으면 앱 전체 문구), 아니면 null. */
+    fun cooldownLine(now: Double): String? = MegaphoneText.cooldownLine(cooldownRemaining(now), globalCooldownRemaining(now))
+
+    private fun secondsLeft(ends: Double?, now: Double): Long {
+        val left = (ends ?: return 0) - now
         return if (left > 0) ceil(left).toLong() else 0
     }
 
@@ -183,6 +237,8 @@ data class MegaphoneInfo(
             val price = response.price ?: return null
             val recipients = response.recipients ?: return null
             val left = maxOf(0L, response.cooldownRemainingSeconds ?: 0)
+            // 앱 전체 몫: 새 키가 있으면 그 값, 없고 scope 만 'global' 이면 남은 시간 전부가 앱 전체 몫이다(옛 서버는 둘 다 없다 = 0).
+            val globalLeft = maxOf(0L, response.globalCooldownRemainingSeconds ?: (if (response.cooldownScope == "global") left else 0))
             return MegaphoneInfo(
                 enabled = response.enabled ?: true,
                 price = price,
@@ -190,6 +246,8 @@ data class MegaphoneInfo(
                 maxLength = response.maxLength ?: MegaphoneBody.maxLength.toLong(),
                 cooldownSeconds = response.cooldownSeconds ?: MegaphoneRules.defaultCooldownSeconds,
                 cooldownEndsAt = if (left > 0) now + left.toDouble() else null,
+                globalCooldownSeconds = response.globalCooldownSeconds,
+                globalCooldownEndsAt = if (globalLeft > 0) now + globalLeft.toDouble() else null,
             )
         }
     }
@@ -237,8 +295,7 @@ object MegaphoneRules {
             return MegaphoneSendGate.notice(if (infoFailed) MegaphoneText.infoFailed else MegaphoneText.loadingInfo, infoFailed, reloadInfo = true)
         }
         if (!info.enabled) return MegaphoneSendGate.notice(MegaphoneText.unavailable, true)
-        val left = info.cooldownRemaining(now)
-        if (left > 0) return MegaphoneSendGate.notice(MegaphoneText.cooldown(left), true)
+        info.cooldownLine(now)?.let { return MegaphoneSendGate.notice(it, true) }
         if (info.recipients <= 0) return MegaphoneSendGate.notice(MegaphoneText.noRecipients, true)
         if (rubyBalance != null && rubyBalance < info.price) {
             return MegaphoneSendGate.notice(MegaphoneText.shortfall(info.price, rubyBalance), true)
@@ -251,8 +308,7 @@ object MegaphoneRules {
         if (serverUnavailable) return MegaphoneText.unavailable
         if (info == null) return if (infoFailed) MegaphoneText.infoFailed else MegaphoneText.loadingInfo
         if (!info.enabled) return MegaphoneText.unavailable
-        val left = info.cooldownRemaining(now)
-        if (left > 0) return MegaphoneText.cooldown(left)
+        info.cooldownLine(now)?.let { return it }
         if (info.recipients <= 0) return MegaphoneText.noRecipients
         return MegaphoneText.reach(info.recipients)
     }
@@ -272,16 +328,29 @@ object MegaphoneRules {
         else -> MegaphoneFailureEffect(notice = MegaphoneText.connection, dropRequestID = false, serverUnavailable = false, endsConfirm = false)
     }
 
-    /** cooldown 응답 뒤 남은 초: 서버가 준 값 → 아는 정보의 쿨다운 → 기본 600, 최소 1. */
-    fun cooldownSecondsAfter(outcome: MegaphoneSendOutcome.cooldown, info: MegaphoneInfo?): Long =
-        maxOf(1L, outcome.retryAfterSeconds ?: info?.cooldownSeconds ?: defaultCooldownSeconds)
+    /** cooldown 응답 뒤 남은 초: 서버가 준 값 → 아는 정보의 그 쪽(사람당 · 앱 전체) 쿨다운 → 기본 600, 최소 1. */
+    fun cooldownSecondsAfter(outcome: MegaphoneSendOutcome.cooldown, info: MegaphoneInfo?): Long {
+        val fallback = if (outcome.scope == MegaphoneCooldownScope.global) info?.globalCooldownSeconds else info?.cooldownSeconds
+        return maxOf(1L, outcome.retryAfterSeconds ?: fallback ?: defaultCooldownSeconds)
+    }
 
     /** 보낸 뒤의 정보 갱신(Swift `apply`): 새로 보냈으면 지금부터 쿨다운, cooldown 이면 남은 초, 받는 사람 0 · 꺼짐 반영. */
     fun infoAfter(outcome: MegaphoneSendOutcome, info: MegaphoneInfo?, now: Double): MegaphoneInfo? {
         val known = info ?: return null
         return when (outcome) {
-            is MegaphoneSendOutcome.sent -> if (outcome.duplicate) known else known.copy(cooldownEndsAt = now + known.cooldownSeconds.toDouble())
-            is MegaphoneSendOutcome.cooldown -> known.copy(cooldownEndsAt = now + cooldownSecondsAfter(outcome, known).toDouble())
+            is MegaphoneSendOutcome.sent -> if (outcome.duplicate) {
+                known
+            } else {
+                val global = known.globalCooldownSeconds?.takeIf { it > 0 }
+                known.copy(
+                    cooldownEndsAt = now + known.cooldownSeconds.toDouble(),
+                    globalCooldownEndsAt = global?.let { now + it.toDouble() } ?: known.globalCooldownEndsAt,
+                )
+            }
+            is MegaphoneSendOutcome.cooldown -> {
+                val ends = now + cooldownSecondsAfter(outcome, known).toDouble()
+                if (outcome.scope == MegaphoneCooldownScope.global) known.copy(globalCooldownEndsAt = ends) else known.copy(cooldownEndsAt = ends)
+            }
             MegaphoneSendOutcome.noRecipients -> known.copy(recipients = 0)
             MegaphoneSendOutcome.disabled -> known.copy(enabled = false)
             else -> known

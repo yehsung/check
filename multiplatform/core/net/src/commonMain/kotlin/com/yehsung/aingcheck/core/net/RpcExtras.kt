@@ -59,6 +59,8 @@ import com.yehsung.aingcheck.core.wire.models.swiftTrimSpaces
 import com.yehsung.aingcheck.core.wire.models.weeklyWorkClaimBody
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 private fun SupabaseWorkService.emptyBody(): ByteArray = encode(EmptyBody.serializer(), EmptyBody())
 
@@ -330,6 +332,28 @@ suspend fun SupabaseWorkService.sendMegaphoneRaw(accessToken: String, normalized
 
 suspend fun SupabaseWorkService.megaphoneInfoRaw(accessToken: String): JsonElement =
     decodeRaw(send(SupabaseWorkService.megaphoneInfoPath, "POST", emptyList(), emptyBody(), accessToken, null))
+
+/**
+ * megaphone_inbox(p_hours) — 원본 MegaphoneBanner.swift `fetchMegaphoneInbox` @ a6791165. 키를 언제나 싣는다(PostgREST 는 키 집합으로 함수를 고른다).
+ * 줄 해석(한 줄이 깨져도 나머지 · from_user · 밀리초)은 core/rules `MegaphoneInboxItem.banners` 가 한다. 함수가 없는 서버(PGRST202 · 404)는 던진다 —
+ * 배너 스토어가 "필터 끔"으로 접는다.
+ */
+suspend fun SupabaseWorkService.megaphoneInboxRaw(accessToken: String, hours: Int): JsonElement =
+    decodeRaw(
+        send(
+            SupabaseWorkService.megaphoneInboxPath, "POST", emptyList(),
+            encode(JsonObject(mapOf("p_hours" to JsonPrimitive(hours)))), accessToken, null,
+        ),
+    )
+
+/**
+ * 안 읽음 요약을 **이름으로 고른 함수**에서 받는다(`message_unread_summary` · `message_unread_summary_v2`). 어느 것을 부를지는
+ * 배너 스토어의 `unreadSummaryFunction` 이 정한다(둘은 한 마이그레이션에 같이 왔다). 둘 다 인자 없는 RPC 라 본문은 `{}` 다.
+ */
+suspend fun SupabaseWorkService.fetchMessageUnreadSummary(accessToken: String, function: String): MessageUnreadSummaryResponse {
+    val data = send("/rest/v1/rpc/$function", "POST", emptyList(), emptyBody(), accessToken, null)
+    return decode(MessageUnreadSummaryResponse.serializer(), data)
+}
 
 // ======================================================================== 기기 등록 · 릴리스(폰)
 

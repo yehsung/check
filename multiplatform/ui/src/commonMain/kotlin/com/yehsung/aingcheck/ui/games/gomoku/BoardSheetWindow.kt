@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 
 /**
  * 시트 · 확인 덮개의 막 색 — **검정** 반투명(iOS 시트의 어두운 막). 테마 글자색으로 칠하면 다크에서 흰 막이 되어 아래를 오히려 밝힌다(8c 05 결함).
@@ -53,6 +54,7 @@ private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 internal fun BoxScope.BoardSheetHost(onDismiss: (() -> Unit)?, container: Color, testTag: String, body: @Composable () -> Unit) {
     val dismissible = onDismiss != null
     if (LocalBoardSheetsInWindow.current) {
+        ModalPresenceMark()
         ModalBottomSheet(
             onDismissRequest = { onDismiss?.invoke() },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { dismissible || it != SheetValue.Hidden }),

@@ -91,6 +91,12 @@ class MegaphoneStore(
 
     private var resetGeneration = 0
 
+    /**
+     * 전송이 `sent`(중복 포함)로 끝났을 때 — 보낸 본문(정규화된 것)과 서버가 준 확성기 id(원본 Megaphone.swift `onSent` @ a6791165).
+     * 소유자(폰 조립)가 자기 배너를 한 번 띄운다([MegaphoneBannerStore.presentOwn] — 서버 fan-out 에는 본인이 없다).
+     */
+    var onSent: ((body: String, megaphoneID: String?) -> Unit)? = null
+
     fun attach(host: MegaphoneHost) {
         this.host = host
     }
@@ -187,6 +193,7 @@ class MegaphoneStore(
                 if (host.sessionGeneration != sessionGeneration || generation != resetGeneration) return@launch
                 isSending = false
                 apply(response, id)
+                if (MegaphoneSendOutcome.from(response) is MegaphoneSendOutcome.sent) onSent?.invoke(validation.value, response.megaphoneId)
             } catch (error: Throwable) {
                 if (host.sessionGeneration != sessionGeneration || generation != resetGeneration) return@launch
                 isSending = false

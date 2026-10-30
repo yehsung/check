@@ -103,6 +103,7 @@ import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -171,6 +172,7 @@ fun GamesTetrisDuelMatchView(
     }
     // 확인은 **불투명 대화상자**로 — 기권만 확인을 받는다(판돈을 잃는다). 조작 버튼에는 확인을 넣지 않는다(계약 ⑥).
     if (confirmsResign) {
+        ModalPresenceMark()
         AlertDialog(
             onDismissRequest = { confirmsResign = false },
             title = { Text(TetrisPhoneText.resignConfirmTitle) },

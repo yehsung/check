@@ -11,8 +11,10 @@ import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.net.fetchMessageUnreadSummary
 import com.yehsung.aingcheck.core.session.DeviceRegistrationReason
 import com.yehsung.aingcheck.core.session.SessionPhase
+import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
 import com.yehsung.aingcheck.core.stores.games.GamesRouteRequest
 import com.yehsung.aingcheck.core.stores.me.didReceiveFeedbackReplyPush
+import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
 import com.yehsung.aingcheck.feature.phone.app.PhoneContext
 import com.yehsung.aingcheck.feature.phone.app.rethrowIfOwnCancellation
@@ -590,6 +592,14 @@ class PhonePushCoordinator(
         if (!isAppActive) return PhonePushPresentation.banner
         refreshStores(content)
         settleBadgeInForeground()
+        // 확성기(계약 — 폰 푸시 · Swift presentation(for:alert:) @ a6791165): 앱을 보고 있으면 시스템 알림을 **숨기고** 앱 배너로 — 알림의
+        // 제목·본문으로 바로 띄운다. 메시지함은 위 refreshStores 가 요약을 맞추고, 배너 스토어의 refresh 가 그 줄을 거를 id 를 받는다.
+        val megaphone = (content as? PhonePushContent.Message)?.megaphone
+        val banner = context.links.megaphoneBanner
+        if (megaphone != null && banner != null) {
+            presentMegaphone(banner, megaphone, content.messagePeerID)
+            return PhonePushPresentation.hidden
+        }
         val peer = content.messagePeerID
         val visible = context.router.visibleConversationPeerID
         if (peer != null && isAppActive && visible != null && visible.lowercase() == peer) return PhonePushPresentation.hidden
@@ -597,6 +607,19 @@ class PhonePushCoordinator(
         // 앱 안에서 띄우면 이미 연 사람에게 열라고 말하게 된다.
         if (content is PhonePushContent.WorkCheck && isAppActive) return PhonePushPresentation.hidden
         return PhonePushPresentation.banner
+    }
+
+    /**
+     * 확성기 푸시 → 앱 배너. 본문이 있으면 presentFromPush 가 띄우고 스스로 refresh 한다(그래서 여기서 또 부르지 않는다 — 겹친 refresh 는
+     * 한 번 더 돈다). 본문이 없는 알림(모양이 틀림)이면 띄울 것이 없으니 refresh 만 — inbox 가 신선한 것을 줄 세운다.
+     */
+    private fun presentMegaphone(banner: MegaphoneBannerStore, megaphone: PhonePushMegaphone, peerID: String?) {
+        val body = megaphone.body.orEmpty()
+        if (MegaphoneBanner.displayBody(body) == null) {
+            context.scope.launch { banner.refresh() }
+            return
+        }
+        banner.presentFromPush(megaphone.megaphoneID, senderName = megaphone.title, body = body, senderID = peerID)
     }
 
     private fun refreshStores(content: PhonePushContent) {
@@ -618,6 +641,14 @@ class PhonePushCoordinator(
         if (content == null || action == PhonePushAction.dismiss) return
         // 로그인이 풀려 있으면(복원이 로그아웃으로 끝남) 열지 않는다 — 로그인 화면이 선다.
         if (!waitForSessionSettled()) return
+        // 확성기 푸시를 눌러 들어왔다: **대화로 가지 않고** 그 확성기를 배너로 띄운다(24시간 안이면 신선도 무시 — presentFromPush). 탭은 그대로.
+        val megaphone = (content as? PhonePushContent.Message)?.megaphone
+        val banner = context.links.megaphoneBanner
+        if (megaphone != null && banner != null) {
+            presentMegaphone(banner, megaphone, content.messagePeerID)
+            refreshStores(content)
+            return
+        }
         if (action == PhonePushAction.acceptInvite) {
             when (content) {
                 is PhonePushContent.GomokuInvite -> return acceptGomokuInvite(content.matchID)

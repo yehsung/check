@@ -8,7 +8,7 @@ import Testing
 // **관행**: 버전 고정과 "맨 위 섹션" 단언은 *그 릴리스의 시험 파일*이 든다(0.3.60 → … → 0.3.67 → 0.3.68 → 여기).
 // 다음 릴리스가 오면 이 둘을 그쪽 파일로 옮기고, 여기는 0.3.69 섹션의 **내용**만 남겨라 —
 // 안 옮기면 버전을 올리는 그 커밋에서 전체 스위트가 빨개진다.
-@Test("버전 0.3.69 / 122 · CHANGELOG 0.3.69 가 맨 위(아잉 큐브 · 공개 방과 초대 · 일일 미션 · 메시지 · 플래피 · 4줄 이하 · 배너 폭 안)")
+@Test("버전 0.3.69 / 122 · CHANGELOG 0.3.69 가 맨 위(아잉 큐브 · 공개 방과 초대 · 일일 미션 · 메시지 · 플래피 · 버그 수리 · 4줄 이하 · 배너 폭 안)")
 func v0369VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
     let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
@@ -34,6 +34,7 @@ func v0369VersionAndChangelog() throws {
     #expect(items.contains { $0.contains("일일 미션") }, "일일 미션 줄이 없다")
     #expect(items.contains { $0.contains("메시지") }, "메시지 즉시 확정 줄이 없다(서버 안정화 맥 변경)")
     #expect(items.contains { $0.contains("플래피") && $0.contains("붉게") }, "플래피 기둥 예고 줄이 없다(버그 개선 db93317f)")
+    #expect(items.contains { $0.contains("테트리스") && $0.contains("두 개") && $0.contains("선물") }, "버그 개선 세 건 줄이 없다(main 8d761790)")
     #expect(changelog.range(of: "## 0.3.69")!.lowerBound < changelog.range(of: "## 0.3.68")!.lowerBound,
             "0.3.69 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }

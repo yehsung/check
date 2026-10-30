@@ -1,0 +1,61 @@
+# GameWindowEvents.notices(kind, event) — 6 kind × 9 event(Visibility 는 참·거짓 둘 = 10열). '-' = 통지 없음
+MiniGame | Shown | ReadRefreshRate
+MiniGame | Minimized | PauseIfPlaying
+MiniGame | Restored | -
+MiniGame | UserClosed | EndRound
+MiniGame | AppClosed | -
+MiniGame | FocusLost | PauseIfPlaying
+MiniGame | FocusGained | -
+MiniGame | Visibility(true) | -
+MiniGame | Visibility(false) | PauseIfPlaying
+MiniGame | ScreenChanged | ReadRefreshRate
+Gomoku | Shown | DidShow
+Gomoku | Minimized | DidHide
+Gomoku | Restored | DidShow
+Gomoku | UserClosed | DidHide, DidClose
+Gomoku | AppClosed | DidHide, DidClose
+Gomoku | FocusLost | -
+Gomoku | FocusGained | -
+Gomoku | Visibility(true) | Occlusion(true)
+Gomoku | Visibility(false) | Occlusion(false)
+Gomoku | ScreenChanged | -
+Chess | Shown | DidShow
+Chess | Minimized | DidHide
+Chess | Restored | DidShow
+Chess | UserClosed | DidHide, DidClose
+Chess | AppClosed | DidHide, DidClose
+Chess | FocusLost | -
+Chess | FocusGained | -
+Chess | Visibility(true) | Occlusion(true)
+Chess | Visibility(false) | Occlusion(false)
+Chess | ScreenChanged | -
+TetrisDuel | Shown | DidShow, ReadRefreshRate
+TetrisDuel | Minimized | DidHide
+TetrisDuel | Restored | DidShow
+TetrisDuel | UserClosed | DidHide, DidClose
+TetrisDuel | AppClosed | DidHide, DidClose
+TetrisDuel | FocusLost | -
+TetrisDuel | FocusGained | -
+TetrisDuel | Visibility(true) | Occlusion(true)
+TetrisDuel | Visibility(false) | Occlusion(false)
+TetrisDuel | ScreenChanged | ReadRefreshRate
+Gacha | Shown | MachineActive
+Gacha | Minimized | MachineInactive
+Gacha | Restored | MachineActive
+Gacha | UserClosed | MachineInactive
+Gacha | AppClosed | MachineInactive
+Gacha | FocusLost | -
+Gacha | FocusGained | -
+Gacha | Visibility(true) | MachineActive
+Gacha | Visibility(false) | MachineInactive
+Gacha | ScreenChanged | -
+CakeGift | Shown | -
+CakeGift | Minimized | -
+CakeGift | Restored | -
+CakeGift | UserClosed | DidClose
+CakeGift | AppClosed | -
+CakeGift | FocusLost | -
+CakeGift | FocusGained | -
+CakeGift | Visibility(true) | -
+CakeGift | Visibility(false) | -
+CakeGift | ScreenChanged | -

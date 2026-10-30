@@ -23,6 +23,8 @@ import CheckCore
 //   · 뽑기: `store.lastDraw` 가 바뀌면 새 타일이 [뽑기] 버튼 자리에서 받침대 빈자리로 스프링(0.45초).
 //   · 정렬: 정렬 뒤 화면 순서대로 타일마다 25ms 시차로 미끄러진다.
 //   · 남의 작업 판·확정 판 변화: 묶음을 면 글자 키로 잡아 제자리에서 부드럽게 옮긴다.
+//   · 3판 놓기: 끄는 동안 편집기 미리보기(`previewDrop`·`previewMoveSet`)로 붙을 끝 자석 · 끼울 자리 캐럿 · 새 묶음 점선을
+//     그리고, 놓으면 타일이 손을 놓은 자리에서 들어갈 자리로 미끄러진다(타일 id 로 잡아 나뉨·붙기·끼우기 모두 튀지 않는다).
 
 /// 판 화면 칸 자리(판 화면 좌표, 왼쪽 위 원점). 순수 값 — 그리는 자리·놓는 자리·시험이 같은 산식을 쓴다.
 struct RummyMatchLayout: Equatable {
@@ -214,6 +216,13 @@ private struct RummyDragState: Equatable {
     var ids: [Int] { tiles.map(\.id) }
 }
 
+/// 방금 판에 놓은 타일의 출발 자리(논리 왼쪽 위). `landed` 가 켜지면 캔버스가 제자리로 미끄러뜨린다.
+private struct RummyArrival: Equatable {
+    let serial: Int
+    let starts: [Int: CGPoint]
+    var landed: Bool
+}
+
 private struct RummyPressState: Equatable {
     enum Surface: Equatable { case rack, board }
     let tileID: Int
@@ -242,6 +251,10 @@ struct RummyMatchView: View {
     @State private var stagger: [Int: Double] = [:]
     @State private var flyIn: RummyFlyIn?
     @State private var lastSort: RummyRackSort?
+    @State private var arrival: RummyArrival?
+    @State private var arrivalSerial = 0
+    /// 마지막으로 판에 놓은 타일(묶음 상자 모션 키에서 뺀다 — 캔버스 `recentTileIDs`).
+    @State private var recentDrop: Set<Int> = []
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.rummyBoardZoomPreview) private var zoomPreview
 
@@ -259,6 +272,8 @@ struct RummyMatchView: View {
         .onChange(of: match.seq) { _, _ in
             drag = nil
             press = nil
+            arrival = nil
+            recentDrop = []
         }
         .onChange(of: store.lastDraw?.serial) { _, serial in
             guard let serial, let event = store.lastDraw, !reduceMotion else { return }
@@ -449,24 +464,7 @@ struct RummyMatchView: View {
     private func tableArea(_ L: RummyMatchLayout, model: (melds: [RummyBoardMeld], layout: RummyTableLayout),
                            canvas: RummyCanvasTransform, dragging: RummyDragState?, target: RummyDropTarget?,
                            lift: (tileID: Int, ids: [Int])?) -> some View {
-        let preview: RummyBoardPreview? = {
-            guard let dragging, let target else { return nil }
-            switch target {
-            case .meld(let m, let index?): return .meld(m, index: index)
-            case .newMeldAt(let p):
-                let n: Int
-                let skip: Int?
-                if case .set(let index) = dragging.kind {
-                    n = model.layout.counts.indices.contains(index) ? model.layout.counts[index] : dragging.tiles.count
-                    skip = index
-                } else {
-                    n = dragging.tiles.count
-                    skip = wholeMeld(dragging.ids)
-                }
-                return .ghost(RummyTableLayout.frame(at: model.layout.snap(p, tiles: n, excluding: skip), tiles: n))
-            default: return nil
-            }
-        }()
+        let preview = dragging.flatMap { boardPreview($0, target: target, layout: model.layout) }
         let movingSet: Int? = {
             if case .set(let index)? = dragging?.kind { return index }
             return nil
@@ -475,7 +473,9 @@ struct RummyMatchView: View {
             RummyTableCanvasView(
                 melds: model.melds, transform: canvas, size: L.table.size, editable: isMyTurn && !scene.isWorking,
                 draggingTileIDs: dragging.map { Set($0.ids) } ?? [], liftedTileIDs: Set(lift?.ids ?? []),
-                movingSet: movingSet, preview: preview, reduceMotion: reduceMotion,
+                movingSet: movingSet, preview: preview,
+                arrivals: arrival.flatMap { $0.landed ? nil : $0.starts } ?? [:], recentTileIDs: recentDrop,
+                reduceMotion: reduceMotion,
                 onTileDrag: { id, value in tileChanged(id, value, surface: .board) },
                 onTileDragEnd: { id, value in tileEnded(id, value, L: L) },
                 onHandleDrag: { index, value in handleChanged(index, value, L: L, canvas: canvas, layout: model.layout) },
@@ -618,7 +618,10 @@ struct RummyMatchView: View {
         guard let target = resolve(finished, L: L, layout: model.layout, canvas: canvas) else { return }
         switch finished.kind {
         case .set(let index):
-            if case .newMeldAt(let point) = target { store.moveSet(index, to: point) }
+            if case .newMeldAt(let point) = target {
+                land(finished, L: L, canvas: canvas)
+                store.moveSet(index, to: point)
+            }
         case .tiles:
             if RummyStore.isRackTarget(target), finished.ids.contains(where: editor.isFromTable) {
                 // 판에 있던 타일은 받침대로 안 간다(R-14) — 놓지 않고 받침대를 잠깐 빨갛게.
@@ -629,11 +632,70 @@ struct RummyMatchView: View {
                 }
                 return
             }
+            if !RummyStore.isRackTarget(target) { land(finished, L: L, canvas: canvas) }
             if case .newMeldAt(let point) = target, let whole = wholeMeld(finished.ids) {
                 store.moveSet(whole, to: point)
             } else {
                 store.moveTiles(finished.ids, to: target)
             }
+        }
+    }
+
+    /// 놓기 미리보기(3판) — 편집기에 "놓으면 어떻게 되는가"를 묻는다(바꾸지 않는다). 놓을 때 부르는 길과 **같은 갈래**:
+    /// 손잡이 끌기 · 묶음 통째를 빈 곳에 = `previewMoveSet`, 나머지 = `previewDrop`. 받침대행·거절·남의 차례는 nil.
+    private func boardPreview(_ dragging: RummyDragState, target: RummyDropTarget?,
+                              layout: RummyTableLayout) -> RummyBoardPreview? {
+        guard isMyTurn, let editor, let target, !RummyStore.isRackTarget(target) else { return nil }
+        let ids = editor.melds.map { $0.map(\.id) }
+        let dragged = Set(dragging.ids)
+        func moveSet(_ index: Int, _ point: RummyPoint) -> RummyBoardPreview? {
+            guard editor.melds.indices.contains(index) else { return nil }
+            return .make(editor.previewMoveSet(index, to: point), blockCount: editor.melds[index].count,
+                         meldTileIDs: ids, frames: layout.frames, dragged: dragged)
+        }
+        switch (dragging.kind, target) {
+        case (.set(let index), .newMeldAt(let point)):
+            return moveSet(index, point)
+        case (.set, _):
+            return nil
+        case (.tiles, .newMeldAt(let point)) where wholeMeld(dragging.ids) != nil:
+            return moveSet(wholeMeld(dragging.ids) ?? 0, point)
+        case (.tiles, _):
+            return .make(editor.previewDrop(dragging.ids, to: target), blockCount: dragging.ids.count,
+                         meldTileIDs: ids, frames: layout.frames, dragged: dragged)
+        }
+    }
+
+    /// 판에 놓는 순간 — 손에 든 타일이 떠 있던 자리(논리 왼쪽 위)를 출발점으로 적어 둔다. 캔버스는 한 장면만 거기 그리고,
+    /// 다음 장면부터 편집기가 정한 자리(붙은 끝 · 맞는 정렬 자리 · 새 자리)로 스프링으로 미끄러뜨린다. 동작 줄이기면 바로 제자리.
+    private func land(_ drag: RummyDragState, L: RummyMatchLayout, canvas: RummyCanvasTransform) {
+        recentDrop = Set(drag.ids)
+        guard !reduceMotion, L.table.contains(drag.point) else {
+            arrival = nil
+            return
+        }
+        // `floatingBlock` 과 같은 산식: 판 위에선 판 크기 타일 · 1pt 간격 · 1.06 배(가운데 기준).
+        let step = CGFloat(RummyTableLayout.tileWidth) * canvas.scale + 1
+        let n = CGFloat(drag.tiles.count)
+        let grab: CGFloat
+        if case .set = drag.kind { grab = 0 } else { grab = CGFloat(drag.grabIndex) + 0.5 }
+        let center = drag.point.x + (n / 2 - grab) * step
+        var starts: [Int: CGPoint] = [:]
+        for (i, tile) in drag.tiles.enumerated() {
+            let x = center + (CGFloat(i) + 0.5 - n / 2) * step * 1.06
+            let logical = canvas.toLogical(CGPoint(x: x - L.table.minX, y: drag.point.y - L.table.minY))
+            starts[tile.id] = CGPoint(x: logical.x - CGFloat(RummyTableLayout.tileWidth) / 2,
+                                      y: logical.y - CGFloat(RummyTableLayout.tileHeight) / 2)
+        }
+        arrivalSerial += 1
+        let serial = arrivalSerial
+        arrival = RummyArrival(serial: serial, starts: starts, landed: false)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(24))
+            guard arrival?.serial == serial else { return }
+            arrival?.landed = true
+            try? await Task.sleep(for: .milliseconds(900))
+            if arrival?.serial == serial { arrival = nil }
         }
     }
 

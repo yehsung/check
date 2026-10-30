@@ -1,6 +1,6 @@
 // 원본: Sources/check/WorkTimerStoreMessages.swift `requestMessageActivityRefreshCoalesced`·`closeMessageActivityWindow`(724-761)
-//       — Windows 공용 패치 8.
-// 데스크톱(트레이 상주) 몫만 잰다. 폰 경로(realtimeMessageRead)는 MessagesStoreTest 가 그대로 잰다.
+//       · `refreshMessageActivityOnMenuOpen`(774-786, `messageMenuRefreshThrottleSeconds` 60초) — Windows 공용 패치 8·9.
+// 데스크톱(트레이 상주) 몫만 잰다. 폰 경로(realtimeMessageRead · 인자 없는 appDidBecomeActive)는 MessagesStoreTest 가 그대로 잰다.
 package com.yehsung.aingcheck.core.stores.messages
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -79,6 +79,69 @@ class MessagesStoreDesktopTest {
         assertNotNull(store.readSignalWindowClosed())
         advanceUntilIdle()
         assertEquals(history + 1, h.count("message_history_with_pokes"), "보이는 화면인데 창 뒤 이력을 안 받았다")
+        h.assertClean()
+    }
+
+    // ---------------------------------------------------------------- 9 · 활성 새로고침 스로틀
+
+    @Test
+    fun defaultActivationRefreshesEveryTime() = runTest {
+        val (h, _, store) = make()
+        repeat(3) {
+            store.appDidBecomeActive()
+            advanceUntilIdle()
+            store.appDidEnterBackground()
+        }
+        assertEquals(3, h.count("message_unread_summary"), "기본값은 지금처럼 열 때마다 요약")
+        h.assertClean()
+    }
+
+    @Test
+    fun throttledActivationWaitsSixtySeconds() = runTest {
+        val (h, _, store) = make()
+        store.appDidBecomeActive(activityRefreshThrottleSeconds = 60.0)
+        advanceUntilIdle()
+        assertEquals(1, h.count("message_unread_summary"), "첫 열기는 언제나 받는다")
+        store.appDidEnterBackground()
+        h.clockShift += 59.0
+        store.appDidBecomeActive(activityRefreshThrottleSeconds = 60.0)
+        advanceUntilIdle()
+        assertEquals(1, h.count("message_unread_summary"), "60초 안 다시 열기에 요약을 또 받았다")
+        assertTrue(store.isAppActive, "스로틀이 활성 표시까지 막았다")
+        store.appDidEnterBackground()
+        h.clockShift += 1.0
+        store.appDidBecomeActive(activityRefreshThrottleSeconds = 60.0)
+        advanceUntilIdle()
+        assertEquals(2, h.count("message_unread_summary"), "60초가 지났는데 안 받았다")
+        h.assertClean()
+    }
+
+    @Test
+    fun staleVisibleScreenBypassesThrottleOnce() = runTest {
+        val (h, _, store) = make()
+        store.appDidBecomeActive(activityRefreshThrottleSeconds = 60.0)
+        store.listDidAppear()
+        advanceUntilIdle()
+        val history = h.count("message_history_with_pokes")
+        val summaries = h.count("message_unread_summary")
+        store.appDidEnterBackground()
+        // 닫힌 동안 온 읽음 신호 — 화면이 안 보여 이력을 건너뛰고 낡음을 적는다.
+        store.readSignalArrived()
+        store.readSignalWindowClosed()
+        advanceUntilIdle()
+        assertTrue(store.isHistoryStale)
+        val afterSignal = h.count("message_unread_summary")
+        assertEquals(summaries + 1, afterSignal)
+        h.clockShift += 5.0
+        store.appDidBecomeActive(activityRefreshThrottleSeconds = 60.0)
+        advanceUntilIdle()
+        assertEquals(history + 1, h.count("message_history_with_pokes"), "화면이 서 있고 이력이 낡았는데 스로틀에 막혔다")
+        assertFalse(store.isHistoryStale)
+        store.appDidEnterBackground()
+        h.clockShift += 5.0
+        store.appDidBecomeActive(activityRefreshThrottleSeconds = 60.0)
+        advanceUntilIdle()
+        assertEquals(afterSignal + 1, h.count("message_unread_summary"), "낡음이 풀린 뒤에도 스로틀을 우회했다")
         h.assertClean()
     }
 }

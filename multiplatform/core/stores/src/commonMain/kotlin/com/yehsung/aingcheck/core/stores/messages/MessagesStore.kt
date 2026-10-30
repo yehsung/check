@@ -236,12 +236,34 @@ class MessagesStore(
 
     // ---------------------------------------------------------------- 자리 API
 
-    fun appDidBecomeActive() {
+    /**
+     * 앱(데스크톱은 플라이아웃)이 앞에 섰다. [activityRefreshThrottleSeconds] 가 0 이하(기본)면 지금처럼 **매번** 요약을 새로 받는다.
+     * 양수면 마지막으로 띄운 뒤 그만큼 지나야 받는다 — 맥 팝오버 열기 스로틀(Swift `messageMenuRefreshThrottleSeconds` 60초 ·
+     * `refreshMessageActivityOnMenuOpen`, Windows 공용 패치 9). 메시지 화면이 서 있는데 이력이 낡았으면 스로틀 없이 받되
+     * **같은 낡음 표시로는 한 번만**이다(Swift m-fix F1 · m-reverify R3). 읽음 판정([evaluateReadMarking])은 스로틀과 무관하게 돈다.
+     */
+    fun appDidBecomeActive(activityRefreshThrottleSeconds: Double = 0.0) {
         isAppActive = true
         syncRouterVisibility()
         if (!isSignedIn) return
-        requestActivityRefresh()
+        if (activeRefreshDue(activityRefreshThrottleSeconds)) requestActivityRefresh()
         evaluateReadMarking()
+    }
+
+    private fun activeRefreshDue(throttleSeconds: Double): Boolean {
+        val owner = runtime
+        val now = context.clock.now()
+        if (throttleSeconds <= 0.0) {
+            owner.lastActiveRefreshAt = now
+            return true
+        }
+        val stale = owner.historyStaleSerial
+        val staleScreenBypass = isMessagesScreenVisible && stale != null && stale != owner.activeBypassStaleSerial
+        val last = owner.lastActiveRefreshAt
+        if (!staleScreenBypass && last != null && now.timeIntervalSince(last) < throttleSeconds) return false
+        if (staleScreenBypass) owner.activeBypassStaleSerial = stale
+        owner.lastActiveRefreshAt = now
+        return true
     }
 
     fun appDidEnterBackground() {
@@ -1122,6 +1144,9 @@ private class MessagesRuntime {
     /** 데스크톱 읽음 신호 창의 계기 번호(공용 패치 8 — Swift `activityWindowSerial`). null = 창에 얹힌 신호 없음. */
     var readSignalWindowSerial: Int? = null
 
+    /** 활성 새로고침 스로틀(공용 패치 9): 마지막으로 띄운 순간 · 스로틀을 이미 우회한 낡음 표시(같은 표시로는 한 번만 — Swift R3). */
+    var lastActiveRefreshAt: SwiftDate? = null
+    var activeBypassStaleSerial: Int? = null
     var lastListRefreshAt: SwiftDate = MessagesThreadListRules.distantPast
     var lastDirectoryLoadAt: SwiftDate = MessagesThreadListRules.distantPast
     val markInFlight: MutableSet<String> = LinkedHashSet()

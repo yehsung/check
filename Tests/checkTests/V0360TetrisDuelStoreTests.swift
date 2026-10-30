@@ -84,20 +84,25 @@ private struct TDPlayer {
 }
 
 /// §2.5 상태 한 벌(서버 `tetris__state` 와 같은 키).
+/// `myDevice` 기본값 'this' = **이 기기가 두는 판**(v0.3.69 서버 20261103124000 의 my_device). 이 파일의 한 기기 시험들은
+/// 그 전제로 판을 세운다. nil 이면 키를 아예 안 싣는다(옛 서버) — 그때는 '이 기기가 연 판' 기록이 가른다.
 private func tdState(_ status: String = "active", id: String = tdMatch, seed: Int? = 4_242, stake: Int = 3,
                      nowMs: Double = tdNowMs,
                      startAtMs: Double? = nil, me: TDPlayer = TDPlayer(id: tdMe, name: "나"),
                      opponent: TDPlayer = TDPlayer(id: tdRival, name: "라이벌"),
                      result: String? = nil, winner: String? = nil, endReason: String? = nil,
-                     ruby: Int = 97) -> [String: Any] {
-    ["match_id": id, "status": status, "stake": stake, "seed": tdOpt(seed),
-     "server_now_ms": nowMs, "accepted_at_ms": nowMs - 2_000,
-     "start_at_ms": tdOpt(startAtMs), "ready_deadline_ms": nowMs + 28_000,
-     "max_end_ms": tdOpt(startAtMs.map { $0 + 480_000 }),
-     "finished_at_ms": tdOpt(status == "finished" ? nowMs : nil),
-     "me": me.json, "opponent": opponent.json,
-     "result": tdOpt(result), "winner": tdOpt(winner), "end_reason": tdOpt(endReason),
-     "ruby_balance": ruby]
+                     ruby: Int = 97, myDevice: String? = "this") -> [String: Any] {
+    var state: [String: Any] = [
+        "match_id": id, "status": status, "stake": stake, "seed": tdOpt(seed),
+        "server_now_ms": nowMs, "accepted_at_ms": nowMs - 2_000,
+        "start_at_ms": tdOpt(startAtMs), "ready_deadline_ms": nowMs + 28_000,
+        "max_end_ms": tdOpt(startAtMs.map { $0 + 480_000 }),
+        "finished_at_ms": tdOpt(status == "finished" ? nowMs : nil),
+        "me": me.json, "opponent": opponent.json,
+        "result": tdOpt(result), "winner": tdOpt(winner), "end_reason": tdOpt(endReason),
+        "ruby_balance": ruby]
+    if let myDevice { state["my_device"] = myDevice }
+    return state
 }
 
 private func tdJSON(_ object: Any) -> String {
@@ -180,6 +185,13 @@ private final class TDServer: @unchecked Sendable {
     var endReason: String?
     var seed = 4_242
     var reports: [[String: Any]] = []
+    // ── 한 판 한 기기 흉내(v0.3.69 — 서버 20261103124000) ──
+    /// 내 자리를 연 기기 이름(nil = 기록 없음 → my_device null · 잠금 없음). 신청·수락 흉내가 적는다.
+    var writer: String?
+    /// false 면 **옛 서버**다: my_device 를 안 싣고 기기를 가르지 않는다(누가 보고해도 쓴다).
+    var knowsDevices = true
+    /// 기기 이름별 보고 건수(`report(_:device:)` 로 온 것 — 막힌 것까지).
+    var reportsByDevice: [String: Int] = [:]
 
     func edit(_ change: (TDServer) -> Void) {
         lock.lock()
@@ -187,17 +199,71 @@ private final class TDServer: @unchecked Sendable {
         lock.unlock()
     }
 
-    func state() -> [String: Any] {
-        tdState(status, seed: seed, nowMs: nowMs, startAtMs: startAtMs, me: me, opponent: opponent,
-                result: winner.map { $0 == tdMe ? "opponent_win" : "challenger_win" }, winner: winner,
-                endReason: endReason)
+    /// 한 기기 시험의 상태(my_device 'this').
+    func state() -> [String: Any] { state(myDevice: "this") }
+
+    /// 그 기기가 부른 상태 — 서버의 my_device 판정을 흉내 낸다(옛 서버면 키 없음).
+    func state(for device: String) -> [String: Any] {
+        guard knowsDevices else { return state(myDevice: nil) }
+        guard let writer else { return state(myDevice: nil) }
+        return state(myDevice: writer == device ? "this" : "other")
     }
 
-    func report(_ body: String) -> GomokuStubProtocol.Reply {
+    private func state(myDevice: String?) -> [String: Any] {
+        tdState(status, seed: seed, nowMs: nowMs, startAtMs: startAtMs, me: me, opponent: opponent,
+                result: winner.map { $0 == tdMe ? "opponent_win" : "challenger_win" }, winner: winner,
+                endReason: endReason, myDevice: myDevice)
+    }
+
+    /// 그 기기의 신청(내가 신청자) — 신청한 기기가 자리를 연다.
+    func challenge(by device: String) -> GomokuStubProtocol.Reply {
+        lock.lock()
+        defer { lock.unlock() }
+        status = "pending"
+        writer = knowsDevices ? device : nil
+        return GomokuStubProtocol.Reply(body: tdJSON(["status": "ok", "match_id": tdMatch,
+                                                      "expires_at_ms": nowMs + 60_000, "server_now_ms": nowMs]))
+    }
+
+    /// 그 기기의 수락(내가 받는 사람) — 수락한 기기가 자리를 연다. 응답 상태는 그 기기 시점이다.
+    func accept(by device: String) -> GomokuStubProtocol.Reply {
+        lock.lock()
+        defer { lock.unlock() }
+        status = "active"
+        writer = knowsDevices ? device : nil
+        return GomokuStubProtocol.Reply(body: tdJSON(["status": "ok", "accepted": true,
+                                                      "state": state(for: device)]))
+    }
+
+    /// 그 기기의 기권 — 자리를 연 기기가 따로 있으면 정산 없이 other_device.
+    func resign(by device: String) -> GomokuStubProtocol.Reply {
+        lock.lock()
+        defer { lock.unlock() }
+        if knowsDevices, let writer, writer != device {
+            return GomokuStubProtocol.Reply(body: tdEnvelope("other_device", state: state(for: device)))
+        }
+        status = "finished"
+        winner = tdRival
+        endReason = "resign"
+        return GomokuStubProtocol.Reply(body: tdEnvelope(state: state(for: device)))
+    }
+
+    func report(_ body: String) -> GomokuStubProtocol.Reply { report(body, device: nil) }
+
+    /// `device` 가 nil 이면 한 기기 시험(상태 my_device 'this' · 잠금 없음). 이름이 있으면 서버 쓰기 규칙을 흉내 낸다:
+    /// 자리를 연 기기가 따로 있으면 **아무것도 안 쓰고** other_device.
+    func report(_ body: String, device: String?) -> GomokuStubProtocol.Reply {
         lock.lock()
         defer { lock.unlock() }
         let args = (try? JSONSerialization.jsonObject(with: Data(body.utf8))) as? [String: Any] ?? [:]
         reports.append(args)
+        func state() -> [String: Any] { device.map { self.state(for: $0) } ?? self.state(myDevice: "this") }
+        if let device {
+            reportsByDevice[device, default: 0] += 1
+            if knowsDevices, let writer, writer != device {
+                return GomokuStubProtocol.Reply(body: tdEnvelope("other_device", state: state()))
+            }
+        }
         guard status == "active" else { return GomokuStubProtocol.Reply(body: tdEnvelope("stale", state: state())) }
         if !me.ready {
             me.ready = true
@@ -319,6 +385,30 @@ private func tdLobby(incoming: [[String: Any]] = [], outgoing: [String: Any]? = 
 private func tdInvite(_ id: String = tdMatch, peerKey: String, stake: Int = 3, expiresMs: Double = tdNowMs + 60_000)
     -> [String: Any] {
     ["match_id": id, peerKey: ["id": tdRival, "display_name": "라이벌"], "stake": stake, "expires_at_ms": expiresMs]
+}
+
+/// 같은 사람(`tdMe`)의 **기기 하나**(v0.3.69 한 판 한 기기). 자기 스텁 호스트를 갖고, 공유 흉내 서버 위에서 `device`
+/// 이름으로 상태·보고·수락·신청·기권을 부른다. `defaults` 는 '이 기기가 연 판' 기록을 둘 곳(nil = 프로세스 안).
+@MainActor
+private func tdDevice(_ label: String, device: String, server: TDServer, defaults: UserDefaults? = nil)
+    -> (store: TetrisDuelStore, clock: TDClock, host: String, tally: TDTally) {
+    let script = TDScript()
+    script.stand("tetris_lobby", tdLobby(active: tdMatch))
+    script.respond("tetris_state") { _ in GomokuStubProtocol.Reply(body: tdEnvelope(state: server.state(for: device))) }
+    script.respond("tetris_report") { server.report($0, device: device) }
+    script.respond("tetris_respond") { _ in server.accept(by: device) }
+    script.respond("tetris_challenge") { _ in server.challenge(by: device) }
+    script.respond("tetris_resign") { _ in server.resign(by: device) }
+    let (store, clock, host, tally) = tdMake(label, script: script)
+    store.defaults = defaults
+    return (store, clock, host, tally)
+}
+
+/// 초인종 한 번이 끝까지 돈다(로비 → 진행 중 판 상태).
+@MainActor
+private func tdRing(_ store: TetrisDuelStore) async {
+    store.handleSignal()
+    await store.syncTask?.value
 }
 
 /// 진행 중 판을 들고 **시작까지 지난** 스토어(창 보임 · 준비 보고 · 시작 시각 확정 · 판 시계 0.5초).
@@ -1081,5 +1171,256 @@ struct V0360TetrisDuelStoreTests {
         #expect(Set(TetrisDuelEndReason.allCases.map(\.rawValue))
                 == ["topout", "resign", "disconnect", "time_cap", "no_show", "abandoned"])
         store.reset()
+    }
+}
+
+// MARK: - 한 판 한 기기 (v0.3.69 · 서버 20261103124000)
+//
+// 2026-10-30 '꼭대기 안 찼는데 졌다' 두 판: 같은 계정의 맥 두 대가 초인종을 함께 받고 둘 다 판을 세웠다. 입력 없는 쪽의 판이
+// 1초마다 같은 서버 행을 덮어쓰고, 그 판의 탑아웃이 진짜 판을 대신 닫았다. 이 절은 **두 스토어(같은 사람 · 다른 기기)** 를
+// 한 흉내 서버 위에 세우고, 판을 두는 기기가 하나뿐인지를 **보고 건수 · 판 루프 · 창 띄우기 횟수**로 잰다.
+// 서버 쪽 규칙(other_device · my_device)의 실서버 왕복은 마이그레이션 §6 프로브가 잰다 — 여기 흉내 서버는 그 응답 모양만 낸다.
+
+/// 받는 사람 쪽 두 기기: A 가 수락하고, B 는 초인종·상태만 받는다. `knowsDevices` = 새 서버(my_device) / 옛 서버(기록으로 가른다).
+@MainActor
+private func tdAcceptOnTwoDevices(_ label: String, knowsDevices: Bool) async {
+    let server = TDServer()
+    server.edit { $0.knowsDevices = knowsDevices; $0.status = "pending"; $0.opponent.ready = false }
+    let a = tdDevice("\(label)-a", device: "A", server: server)
+    let b = tdDevice("\(label)-b", device: "B", server: server)
+
+    await a.store.respond(inviteID: tdMatch, accept: true)
+    #expect(a.store.match?.id == tdMatch && a.store.duel != nil && a.store.gameLoopTask != nil, "수락한 A 가 판을 안 세웠다")
+    #expect(a.tally.presents == 1, "수락한 A 가 창을 안 띄웠다 — 준비가 안 나가 no_show 로 접힌다")
+    #expect(a.store.ownsMatch(tdMatch) && !a.store.playingElsewhere)
+
+    // B: 서버는 사람의 **모든 기기**에 초인종을 울린다(둘째 준비 · 공격 · 정산).
+    await tdRing(b.store)
+    #expect(b.store.match?.id == tdMatch, "전제: B 도 진행 중 판을 안다(초인종 → 로비 → 상태)")
+    #expect(b.store.duel == nil && b.store.gameLoopTask == nil, "B 가 판을 세웠다 — 입력 없는 판이 1초마다 보고한다")
+    #expect(b.tally.presents == 0 && b.tally.attentionRequests == 0 && b.tally.attentions.isEmpty, "B 가 창·주의를 불렀다")
+    #expect(b.store.playingElsewhere && b.store.notice == TetrisDuelNoticeText.otherDevice)
+    #expect(b.store.phase == .ready && !b.store.ownsMatch(tdMatch))
+
+    // A 가 둔다: 창 → 준비 → (상대 준비) → 시작 → 하트비트. 그동안 B 는 창을 열고 틱·초인종을 받아도 보고 0.
+    a.store.windowDidShow()
+    await tdSettle(a.store)
+    server.edit { $0.opponent.ready = true; $0.startAtMs = $0.nowMs + 3_000 }
+    b.store.windowDidShow()
+    for _ in 0..<6 {
+        a.clock.uptime += 1.0
+        a.store.tick()
+        await tdSettle(a.store)
+        b.clock.uptime += 1.0
+        b.store.tick()
+        await tdSettle(b.store)
+    }
+    await tdRing(b.store)
+    #expect(a.store.phase == .playing, "A 의 판이 안 흘렀다")
+    #expect((server.reportsByDevice["A"] ?? 0) >= 5, "A 의 보고가 \(server.reportsByDevice["A"] ?? 0)건뿐이다")
+    #expect(server.reportsByDevice["B"] == nil && tdCount(b.host, "tetris_report") == 0,
+            "B 가 보고를 \(tdCount(b.host, "tetris_report"))건 냈다")
+    #expect(b.store.duel == nil && b.store.gameLoopTask == nil && b.tally.presents == 0)
+    #expect(server.me.ready && server.me.seq == a.store.duel?.seq, "서버 행이 A 의 판이 아니다")
+    a.store.reset()
+    b.store.reset()
+}
+
+@Suite("v0.3.69 테트리스 대결 — 한 판 한 기기(같은 계정 여러 기기)")
+struct V0369TetrisOneWriterStoreTests {
+
+    @MainActor
+    @Test("① 받는 쪽 두 기기(새 서버 my_device): 수락한 A 만 판을 두고, 초인종·상태만 받은 B 는 판 루프·보고·창이 0 이다")
+    func onlyTheAcceptingDevicePlaysOnTheNewServer() async {
+        // 없으면(0.3.60~0.3.68): B 도 판을 세워 입력 없이 1초마다 보고하고 그 판의 탑아웃이 A 의 판을 닫는다(2026-10-30 두 판).
+        await tdAcceptOnTwoDevices("tow-accept-new", knowsDevices: true)
+    }
+
+    @MainActor
+    @Test("③ 받는 쪽 두 기기(옛 서버 — my_device 없음): '이 기기가 연 판' 기록이 가른다 — 수락한 A 만 두고 B 는 아무것도 안 한다")
+    func onlyTheAcceptingDevicePlaysOnAnOldServer() async {
+        // 없으면: 서버 마이그레이션 전(또는 되돌린 뒤) 창에서 클라 마개가 통째로 빠진다 — my_device 만 믿으면 nil 이 '둔다' 로 읽힌다.
+        await tdAcceptOnTwoDevices("tow-accept-old", knowsDevices: false)
+    }
+
+    @MainActor
+    @Test("② 신청 쪽 두 기기: 수락 초인종이 둘 다에 가도 창·준비·보고는 신청을 보낸 A 뿐이다(새 서버 · 옛 서버)",
+          arguments: [true, false])
+    func onlyTheChallengingDevicePlays(knowsDevices: Bool) async throws {
+        // 없으면: 수락 초인종을 받은 신청자의 모든 맥이 창을 띄우고, 보이는 창은 곧바로 준비를 낸다 — 입력 없는 맥이
+        // 진짜 판을 덮거나 그 판의 탑아웃으로 대결을 닫는다.
+        let server = TDServer()
+        server.edit { $0.knowsDevices = knowsDevices; $0.opponent.ready = false }
+        let tag = knowsDevices ? "new" : "old"
+        let a = tdDevice("tow-challenge-a-\(tag)", device: "A", server: server)
+        let b = tdDevice("tow-challenge-b-\(tag)", device: "B", server: server)
+        // 둘 다 창이 열려 있다(최악 — 보이는 창은 판이 서는 순간 준비를 낸다).
+        a.store.isWindowVisible = true
+        b.store.isWindowVisible = true
+        await a.store.challenge(userID: tdRival, stake: .three)
+        #expect(a.store.outgoing?.id == tdMatch && a.store.ownsMatch(tdMatch))
+        #expect(!b.store.ownsMatch(tdMatch))
+
+        server.edit { $0.status = "active" }           // 상대가 수락했다 — 신청자의 모든 기기에 초인종
+        await tdRing(a.store)
+        await tdRing(b.store)
+        #expect(a.store.duel != nil && a.store.gameLoopTask != nil && a.tally.presents == 1, "신청한 A 가 판·창을 안 세웠다")
+        #expect(b.store.match?.id == tdMatch, "전제: B 도 판을 안다")
+        #expect(b.store.duel == nil && b.store.gameLoopTask == nil, "B 가 판을 세웠다")
+        #expect(b.tally.presents == 0 && b.tally.attentionRequests == 0 && b.tally.attentions.isEmpty, "B 가 창을 띄웠다")
+        #expect(b.store.playingElsewhere && b.store.notice == TetrisDuelNoticeText.otherDevice)
+
+        // 보이는 창의 준비는 곧바로 — A 만. 상대 준비 뒤 하트비트도 A 만.
+        a.store.tick()
+        await tdSettle(a.store)
+        b.store.tick()
+        await tdSettle(b.store)
+        #expect(server.reportsByDevice["A"] == 1 && server.me.ready, "신청한 A 가 준비를 안 냈다")
+        server.edit { $0.opponent.ready = true; $0.startAtMs = $0.nowMs + 3_000 }
+        for _ in 0..<5 {
+            a.clock.uptime += 1.0
+            a.store.tick()
+            await tdSettle(a.store)
+            b.clock.uptime += 1.0
+            b.store.tick()
+            await tdSettle(b.store)
+        }
+        #expect(a.store.phase == .playing && (server.reportsByDevice["A"] ?? 0) >= 5)
+        #expect(server.reportsByDevice["B"] == nil && tdCount(b.host, "tetris_report") == 0, "B 가 보고를 냈다")
+        a.store.reset()
+        b.store.reset()
+    }
+
+    @MainActor
+    @Test("④ 보고·기권이 other_device 로 돌아오면 곧바로 물러난다 — 판 루프·구동기·기록이 내려가고 안내 한 줄 · 그 뒤 보고 0")
+    func anOtherDeviceReplyStopsTheLoop() async throws {
+        // 없으면: 서버가 거절한 보고를 '보고 거절' 로그만 남기고 1초마다 계속 낸다(옛 코어의 .unknown 갈래) — 판은 흐르는데
+        // 서버에는 한 줄도 안 닿아 사용자는 화면의 판으로 15초 침묵 패를 한다.
+        let server = TDServer()
+        server.edit { $0.writer = "A" }
+        let a = tdDevice("tow-yield", device: "A", server: server)
+        await a.store.refreshMatch(id: tdMatch)
+        a.store.windowDidShow()
+        await tdSettle(a.store)
+        a.clock.uptime += 3.5
+        a.store.tick()
+        await tdSettle(a.store)
+        #expect(a.store.phase == .playing && a.store.gameLoopTask != nil && a.store.ownsMatch(tdMatch))
+
+        // 같은 계정이 이 판을 다른 기기 세션으로 잡았다(예: 판 중 다시 로그인) — 서버가 A 의 다음 보고를 돌려보낸다.
+        server.edit { $0.writer = "Z" }
+        let before = server.reportsByDevice["A"] ?? 0
+        a.clock.uptime += 1.0
+        a.store.tick()
+        await tdSettle(a.store)
+        #expect(server.reportsByDevice["A"] == before + 1)
+        #expect(a.store.duel == nil && a.store.gameLoopTask == nil, "other_device 뒤에도 판 루프·구동기가 남았다")
+        #expect(a.store.notice == TetrisDuelNoticeText.otherDevice && a.store.playingElsewhere)
+        #expect(!a.store.ownsMatch(tdMatch) && a.store.yieldedMatchIDs.contains(tdMatch))
+        #expect(a.store.phase == .ready && a.store.match?.isFinished == false, "물러났는데 판 상태까지 지웠다(안내를 그릴 자리가 없다)")
+
+        // 그 뒤로는 보고가 한 건도 안 나간다(틱 · 창 · 초인종 모두).
+        for _ in 0..<5 {
+            a.clock.uptime += 1.0
+            a.store.tick()
+        }
+        a.store.windowDidShow()
+        await tdRing(a.store)
+        await tdSettle(a.store)
+        #expect(server.reportsByDevice["A"] == before + 1, "물러난 판에 보고를 또 냈다")
+        // ★ 물러난 판은 서버가 다시 'this' 라 해도 두지 않는다(같은 세션을 쓰는 두 프로세스가 번갈아 자리를 뺏지 않게).
+        server.edit { $0.writer = "A" }
+        await a.store.refreshMatch(id: tdMatch)
+        #expect(a.store.duel == nil && a.store.playingElsewhere)
+
+        // 기권도 같은 문 — 서버가 정산하지 않았다. 결과 없이 안내 한 줄.
+        server.edit { $0.writer = "Z" }
+        await a.store.resign()
+        #expect(tdCount(a.host, "tetris_resign") == 1)
+        #expect(a.store.match?.isFinished == false && a.store.notice == TetrisDuelNoticeText.otherDevice)
+        #expect(TetrisDuelNoticeText.resign(.otherDevice) == TetrisDuelNoticeText.otherDevice)
+        a.store.reset()
+        #expect(a.store.yieldedMatchIDs.isEmpty && !a.store.playingElsewhere)
+    }
+
+    @MainActor
+    @Test("⑤ '이 기기가 연 판' 기록은 앱을 다시 켜도 산다(defaults) — 옛 서버에서도 다시 켠 A 가 자기 판을 둔다 · 끝나면 걷힌다 · 한 시간 뒤 안 쓴다")
+    func ownershipSurvivesARestart() async throws {
+        // 없으면: 판 중에 앱을 다시 켠 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아봐 보고를 멈추고 15초 침묵 패를 한다.
+        let shared = CheckTestScratch.defaults("shared")
+        let fresh = CheckTestScratch.defaults("fresh")
+        let key = TetrisDuelStore.ownedMatchesKey(userID: tdMe)
+        let server = TDServer()
+        server.edit { $0.knowsDevices = false; $0.status = "pending" }
+        let first = tdDevice("tow-restart-1", device: "A", server: server, defaults: shared)
+        await first.store.respond(inviteID: tdMatch, accept: true)
+        #expect(first.store.duel != nil && first.store.ownsMatch(tdMatch))
+        #expect(shared.dictionary(forKey: key)?.keys.contains(tdMatch) == true, "수락 기록이 defaults 에 안 남았다")
+
+        // 앱을 껐다 켰다 — 새 프로세스의 새 스토어가 **같은 defaults** 로 선다.
+        let again = tdDevice("tow-restart-2", device: "A", server: server, defaults: shared)
+        #expect(again.store.ownsMatch(tdMatch))
+        await again.store.refreshMatch(id: tdMatch)
+        #expect(again.store.duel != nil && again.store.gameLoopTask != nil && !again.store.playingElsewhere,
+                "다시 켠 A 가 자기 판을 못 알아봤다")
+        // ★ 기준선: 기록이 없는 defaults 로 선 스토어(같은 사람 · 같은 옛 서버 응답)는 안 둔다.
+        let stranger = tdDevice("tow-restart-3", device: "B", server: server, defaults: fresh)
+        await stranger.store.refreshMatch(id: tdMatch)
+        #expect(stranger.store.match?.id == tdMatch && stranger.store.duel == nil && stranger.store.playingElsewhere)
+
+        // 끝나면 기록이 걷힌다(쌓이지 않는다).
+        server.edit { $0.status = "finished"; $0.winner = tdMe; $0.endReason = "topout" }
+        await again.store.refreshMatch(id: tdMatch)
+        #expect(again.store.match?.isFinished == true && !again.store.playingElsewhere)
+        #expect(!again.store.ownsMatch(tdMatch) && shared.object(forKey: key) == nil, "끝난 판의 기록이 남았다")
+
+        // 유효 기간: 한 시간 지난 기록으로는 두지 않는다.
+        let other = "7e7e0000-0000-4000-8000-0000000000aa"
+        again.store.noteOwnsMatch(other)
+        #expect(again.store.ownsMatch(other))
+        again.clock.wall = again.clock.wall.addingTimeInterval(TetrisDuelStore.ownedMatchTTLSeconds + 1)
+        #expect(!again.store.ownsMatch(other), "한 시간 지난 기록으로 판을 뒀다")
+        first.store.reset()
+        again.store.reset()
+        stranger.store.reset()
+    }
+
+    @MainActor
+    @Test("⑥ 기록이 없어도 서버가 my_device 'this' 라 하면 둔다(재설치·기록 유실) · 기록이 있어도 'other' 면 안 둔다 — 서버 말이 앞선다")
+    func theServerSaysThisDevice() async throws {
+        // 없으면: 앱을 지웠다 깐 기기(기록 없음)가 자기가 연 판을 못 두고 침묵 패를 하거나, 서버가 막은 기기가 기록만 믿고 판을 세운다.
+        let server = TDServer()
+        server.edit { $0.writer = "A" }
+        let a = tdDevice("tow-this", device: "A", server: server)
+        #expect(!a.store.ownsMatch(tdMatch))
+        await a.store.refreshMatch(id: tdMatch)
+        #expect(a.store.duel != nil && a.store.gameLoopTask != nil && !a.store.playingElsewhere)
+        #expect(a.tally.presents == 1, "서버가 이 기기라 했는데 창을 안 띄웠다")
+        #expect(a.store.ownsMatch(tdMatch), "서버 말로 기록을 맞추지 않았다")
+        a.store.windowDidShow()
+        await tdSettle(a.store)
+        #expect(server.reportsByDevice["A"] == 1)
+
+        // ★ 기준선: 같은 판에 기록이 있다고 믿는 B 라도 서버가 'other' 라 하면 안 둔다(기록도 지운다).
+        let b = tdDevice("tow-this-b", device: "B", server: server)
+        b.store.noteOwnsMatch(tdMatch)
+        #expect(b.store.ownsMatch(tdMatch))
+        await b.store.refreshMatch(id: tdMatch)
+        #expect(b.store.duel == nil && b.store.playingElsewhere && !b.store.ownsMatch(tdMatch) && b.tally.presents == 0)
+        #expect(server.reportsByDevice["B"] == nil)
+        a.store.reset()
+        b.store.reset()
+    }
+
+    @Test("와이어: other_device 는 자기 status 로 읽고 state 를 싣는다 · my_device 는 this/other/없음(nil)")
+    func wireReadsOtherDeviceAndMyDevice() throws {
+        // 없으면: other_device 가 .unknown 으로 접혀 '보고 거절' 로그만 남고 판 루프가 돈다(옛 코어의 바로 그 갈래).
+        let refused = try tdDecode(TetrisActionResponse.self, tdEnvelope("other_device", state: tdState(myDevice: "other")))
+        #expect(refused.status == .otherDevice && refused.state?.myDevice == "other" && refused.state?.matchId == tdMatch)
+        #expect(try tdDecode(TetrisStatePayload.self, tdJSON(tdState())).myDevice == "this")
+        #expect(try tdDecode(TetrisStatePayload.self, tdJSON(tdState(myDevice: nil))).myDevice == nil)
+        var nullDevice = tdState()
+        nullDevice["my_device"] = NSNull()
+        #expect(try tdDecode(TetrisStatePayload.self, tdJSON(nullDevice)).myDevice == nil)
     }
 }

@@ -282,17 +282,17 @@
       }
     },
     "duel/resume": {
-      "file": "60bf760151a656db05f9267ec1540f165cbb8d621181458dd4e5473b165902bb",
+      "file": "8a8c4b340bfb03d5bf6359ed96f802f280151058cc7761a85dcbc7a3caec9cd4",
       "generator": {
-        "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift": "be536e2f8e5d533143f205ea6f7d13fe60ce13286e5ed1599718a2b011044069"
+        "Tests/checkTests/GoldenExport/duel/GoldenExportDuel.swift": "7d20730debe6e2fcb92c1306b6a35dddb9829c5f3ca3a64e6e238cd30fc54091"
       },
       "swiftSources": {
         "Sources/CheckCore/TetrisDuelBoard.swift": "99594e62723d91506f295d8a2ff788deff4afe0446d8b1b64ad79890ad5952d9",
         "Sources/CheckCore/TetrisDuelSession.swift": "3b0300c82e9c777a640dcbe5cab313fee9ea4f4a2790408d8065562f795b5cd8",
-        "Sources/CheckCore/TetrisDuelStore.swift": "d1af186a06a36b00f436e89d5b06068513923c6dc6f6b3164d9d92c0a0735c05",
-        "Sources/CheckCore/TetrisDuelStoreGame.swift": "2b4ede828b3aedfe0e6f609247d4d8301db1072eb596a7c6e440b266c551bc6d",
+        "Sources/CheckCore/TetrisDuelStore.swift": "a9d650a971a9381dafd29443a372389b1d6fb689be03559d65a85fe1324c40cc",
+        "Sources/CheckCore/TetrisDuelStoreGame.swift": "0244728a0f7d53c022502cedcf98021c79f6086a557b0da1cdaf7952784e82ff",
         "Sources/CheckCore/TetrisGame.swift": "37e5fa3d35131071b360f7a4203c070b8b8326db6072938b3efb5fbfc005071c",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935"
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202"
       }
     },
     "errors/classify": {
@@ -624,7 +624,7 @@
         "Sources/CheckCore/ChessStore.swift": "8bcc708b82f0e017260b21259e3d16f3d1ca2a7b5ebc5a5472dded08e4227f33",
         "Sources/CheckCore/GomokuStore.swift": "1df7462115e2e6ed2143b6aad9f6b2b685fa74719ae244c1cdfbf9c6ebe9dc2d",
         "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
-        "Sources/CheckCore/TetrisDuelStore.swift": "d1af186a06a36b00f436e89d5b06068513923c6dc6f6b3164d9d92c0a0735c05"
+        "Sources/CheckCore/TetrisDuelStore.swift": "a9d650a971a9381dafd29443a372389b1d6fb689be03559d65a85fe1324c40cc"
       }
     },
     "stickers/tokens": {
@@ -935,7 +935,7 @@
       }
     },
     "wire/decode-demo-games": {
-      "file": "70399cec6ec4af353818eaec33d76e1df9e72b5620f252eb9fba75126994f0a7",
+      "file": "829c57072aa5853b9c3c6392bc1c869aa667c7ec53744ba8ca83f7455e21824c",
       "generator": {
         "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "aeeaacf933453c65d656f621fa5b9dbd865d21fb117592e04bbe326da08357dc"
       },
@@ -950,7 +950,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -974,7 +974,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -998,7 +998,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -1022,7 +1022,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -1046,7 +1046,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -1070,7 +1070,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -1094,7 +1094,7 @@
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",
         "Sources/CheckMobileKit/Me/MeProfileService.swift": "8df55e5e899ed294c66192f72cfad30132a86d5d4034ab589fc1065009f99bea",
@@ -1137,7 +1137,7 @@
         "Sources/CheckCore/SupabaseWorkServiceSignUp.swift": "693bc09edac543d12fa9b7728c725c8633195cf38f5924b5974265496f364e4c",
         "Sources/CheckCore/SupabaseWorkServiceSignUpOTP.swift": "c9fd40299932cec40b4c8afffba218e1b843f2d25c15ca6a9203522b33d59258",
         "Sources/CheckCore/SupabaseWorkServiceTodoSync.swift": "97521aa07eae7036d6dc11284e64a2f82958f667d586ed6addf5a486d6e7e1c7",
-        "Sources/CheckCore/TetrisWire.swift": "cb5492b757c4762aef8184e14cd57dccd44c8d4469e934a09f51133db360f935",
+        "Sources/CheckCore/TetrisWire.swift": "9633994a4a0c2bba283d22eb0f2114d0f342f4e24b571f95ba3ee1ed7e93e202",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift": "b4273a8129a91c4da0b0d4cb91221e093b5a3eb0abf19a4460869c70d3521e4e",

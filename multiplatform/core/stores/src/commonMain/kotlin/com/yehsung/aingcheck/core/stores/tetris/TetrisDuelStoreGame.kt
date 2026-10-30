@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/TetrisDuelStoreGame.swift @ 1b8260d
+// 원본: Sources/CheckCore/TetrisDuelStoreGame.swift @ 1b8260d · 한 판 한 기기 절 @ 75c31cd2
 package com.yehsung.aingcheck.core.stores.tetris
 
 import com.yehsung.aingcheck.core.net.tetrisRanking
@@ -17,6 +17,11 @@ import com.yehsung.aingcheck.core.wire.games.TetrisReportRequest
 import com.yehsung.aingcheck.core.wire.games.TetrisUserRow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.jsonObject
 
 // 테트리스 대결 스토어의 **판 갈래** — 판 구동기 수명 · 판 루프(D10) · 입력 문 · 보고 루프(§4.1) · 순위.
 // 저장 프로퍼티는 본문(TetrisDuelStore.kt)에 있고 여기는 로직만 둔다(Swift extension 그대로 — 같은 모듈 internal 로 닿는다).
@@ -34,6 +39,8 @@ import kotlinx.coroutines.launch
 //   (오프라인 · 멎어서 버림) 다음 보고가 같은 사실을 다시 싣고, 서버 seq 가 늦게 온 옛 보고를 `stale` 로 버린다 — 재전송 큐가 필요 없다.
 // INV-TetrisDuelStoreGame-6bd5749a 이식: 앱을 다시 열면 판은 서버가 들고 있는 내 마지막 보고에서 다시 선다(`prepareDuel` ·
 //   `resumePoint`) — 빈 판이 아니다. 골든 `duel/resume` 이 Swift 스토어와 같은 재개 판정·판 상태를 잰다.
+// ★ 구동기는 **이 기기가 두는 판**에서만 선다(`playsMatch` — 본문 머리말 ⑩ · 아래 '한 판 한 기기' 절). 구동기가 없으면 판 루프 ·
+//   준비/보고 · 입력 문이 전부 서지 않는다 — 같은 계정의 다른 기기가 두는 판을 이 기기가 덮어쓰지 않게 하는 한 자리다.
 
 // MARK: - 판 구동기 수명
 
@@ -320,6 +327,14 @@ fun TetrisDuelStore.applyReportResult(result: DuelCall<TetrisActionResponse>, ma
             noteServerNow(response.serverNowMs)
             when (response.status) {
                 TetrisRPCStatus.ok, TetrisRPCStatus.stale -> response.state?.let { applyState(it, receivedAt) }
+                TetrisRPCStatus.otherDevice -> {
+                    // 이 판은 같은 계정의 다른 기기가 둔다(서버가 쓰지도 정산하지도 않았다 — 머리말 ⑩). 곧바로 물러난다:
+                    // 판 루프를 멈추고 구동기를 버리고 '이 기기가 연 판' 기록을 지운다. 실려 온 상태는 그다음에 옮긴다
+                    // (물러난 판이라 그 상태가 my_device 'this' 를 말해도 구동기를 다시 세우지 않는다).
+                    logNotice("report refused — another device plays this match")
+                    yieldMatchToOtherDevice(matchID)
+                    response.state?.let { applyState(it, receivedAt) }
+                }
                 TetrisRPCStatus.notFound -> {
                     // 판이 사라졌다(계정 삭제의 cascade 등) — 그 판을 내린다.
                     if (match?.id == matchID) {
@@ -333,6 +348,102 @@ fun TetrisDuelStore.applyReportResult(result: DuelCall<TetrisActionResponse>, ma
             }
         }
     }
+}
+
+// MARK: - 한 판 한 기기 (머리말 ⑩ · 서버 20261103124000)
+//
+// 초인종은 사람의 모든 기기로 간다. 판을 두는 기기는 **하나**다 — 그 판을 연 기기(신청을 보냈다 · 수락했다).
+// 서버가 `my_device` 로 말하면 그 말이 권위이고, 옛 서버(말이 없다)에서는 이 기기의 기록이 가른다.
+
+/**
+ * 이 기기가 이 판을 **두는가**(순수 판정 — 기록을 맞추는 일은 `applyState` 가 한다).
+ *  · 서버가 `other_device` 로 돌려보내 물러난 판이면 아니다(서버가 다시 'this' 라 해도 — [TetrisDuelStore.yieldedMatchIDs]).
+ *  · 서버 `my_device` 가 'this' 면 둔다 · 'other' 면 안 둔다.
+ *  · 말이 없으면(옛 서버 · 기록 없는 판 · 세션 없는 토큰) 이 기기가 그 판을 열었는가([ownsMatch]).
+ */
+fun TetrisDuelStore.playsMatch(matchID: String, myDevice: String?): Boolean {
+    val id = matchID.lowercase()
+    if (id in yieldedMatchIDs) return false
+    return when (myDevice) {
+        "this" -> true
+        "other" -> false
+        else -> ownsMatch(id)
+    }
+}
+
+/** 이 기기가 이 판을 열었다는 기록이 있는가(지금 로그인한 사람의 기록만 — 로그인 전이면 언제나 아니다). */
+fun TetrisDuelStore.ownsMatch(matchID: String): Boolean = ownedMatches()[matchID.lowercase()] != null
+
+/** 이 기기가 이 판을 열었다(신청 ok · 수락 ok · 서버가 'this' 라 했다). 이미 있으면 그대로 둔다(처음 시각 유지). */
+internal fun TetrisDuelStore.noteOwnsMatch(matchID: String) {
+    val id = matchID.lowercase()
+    val owned = ownedMatches().toMutableMap()
+    if (owned[id] != null) return
+    owned[id] = clock().timeIntervalSince1970
+    storeOwnedMatches(owned)
+}
+
+/** 이 판의 기록을 지운다(끝났다 · 거절·만료 · 서버가 'other' 라 했다 · 물러났다). 없으면 아무것도 안 쓴다. */
+internal fun TetrisDuelStore.dropOwnership(matchID: String) {
+    val owned = ownedMatches().toMutableMap()
+    if (owned.remove(matchID.lowercase()) == null) return
+    storeOwnedMatches(owned)
+}
+
+/**
+ * 서버가 이 판의 보고·기권을 다른 기기의 것으로 돌려보냈다(`other_device`). 판 루프를 **곧바로** 멈추고 구동기를 버리고
+ * 기록을 지우고, 같은 판은 다시 두지 않는다. 판 상태는 남겨 화면이 안내 한 줄을 그린다.
+ */
+internal fun TetrisDuelStore.yieldMatchToOtherDevice(matchID: String) {
+    val id = matchID.lowercase()
+    yieldedMatchIDs = yieldedMatchIDs + id
+    dropOwnership(id)
+    if (duelMatchID == id || match?.id == id) discardDuel()
+    val current = match
+    if (current != null && current.id == id && !current.isFinished) {
+        if (!playingElsewhere) playingElsewhere = true
+        setNotice(TetrisDuelNoticeText.otherDevice)
+    }
+    refreshPhase()
+    syncStats()
+}
+
+/**
+ * 지금 로그인한 사람의 기록(유효 기간 안의 것만). 로그인 전이면 빈 표.
+ * Kotlin 이식: [KeyValueStore] 에는 사전 칸이 없어 `{판 id: epoch 초}` JSON 글자 한 칸으로 둔다(깨진 글자는 빈 표 — 기록이 없는 것과 같다).
+ */
+private fun TetrisDuelStore.ownedMatches(): Map<String, Double> {
+    val user = host?.session?.userID?.lowercase()?.takeIf { it.isNotEmpty() } ?: return emptyMap()
+    val store = defaults
+    val raw: Map<String, Double> = if (store != null) decodeOwnedMatches(store.getString(TetrisDuelStore.ownedMatchesKey(user))) else ownedMatchesInMemory[user] ?: emptyMap()
+    val cutoff = clock().timeIntervalSince1970 - TetrisDuelStore.ownedMatchTTLSeconds
+    return raw.filterValues { it >= cutoff }
+}
+
+/** 기록을 쓴다 — 새것부터 [TetrisDuelStore.ownedMatchLimit] 개만(유효 기간이 지난 것은 [ownedMatches] 가 이미 걸렀다). */
+private fun TetrisDuelStore.storeOwnedMatches(owned: Map<String, Double>) {
+    val user = host?.session?.userID?.lowercase()?.takeIf { it.isNotEmpty() } ?: return
+    val kept = owned.entries.sortedByDescending { it.value }.take(TetrisDuelStore.ownedMatchLimit).associate { it.key to it.value }
+    val store = defaults
+    if (store != null) {
+        val key = TetrisDuelStore.ownedMatchesKey(user)
+        if (kept.isEmpty()) store.remove(key) else store.putString(key, JsonObject(kept.mapValues { JsonPrimitive(it.value) }).toString())
+    } else {
+        if (kept.isEmpty()) ownedMatchesInMemory.remove(user) else ownedMatchesInMemory[user] = kept
+    }
+}
+
+private fun decodeOwnedMatches(text: String?): Map<String, Double> {
+    if (text.isNullOrEmpty()) return emptyMap()
+    val obj = try {
+        Json.parseToJsonElement(text).jsonObject
+    } catch (e: IllegalArgumentException) {
+        return emptyMap()
+    }
+    return obj.entries.mapNotNull { (key, value) ->
+        val seconds = (value as? JsonPrimitive)?.doubleOrNull ?: return@mapNotNull null
+        key to seconds
+    }.toMap()
 }
 
 // MARK: - 순위

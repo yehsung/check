@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/TetrisWire.swift @ 1b8260d
+// 원본: Sources/CheckCore/TetrisWire.swift @ 1b8260d · 한 판 한 기기(otherDevice · myDevice) @ 75c31cd2
 package com.yehsung.aingcheck.core.wire.games
 
 import com.yehsung.aingcheck.core.wire.json.SwiftRawEnumSerializer
@@ -20,7 +20,15 @@ enum class TetrisRPCStatus(override val rawValue: String) : SwiftRawValued {
     ok("ok"), notSignedIn("not_signed_in"), unsupportedClient("unsupported_client"), invalid("invalid"), blackout("blackout"),
     targetFocused("target_focused"), targetOutdated("target_outdated"), busy("busy"), targetBusy("target_busy"),
     alreadyPending("already_pending"), insufficient("insufficient"), notFound("not_found"), notPending("not_pending"),
-    expired("expired"), notActive("not_active"), stale("stale"), unknown("unknown");
+    expired("expired"), notActive("not_active"), stale("stale"),
+
+    /**
+     * 보고·기권이 **이 판을 연 기기의 것이 아니다**(서버 20261103124000 — 한 판 한 기기). 같은 계정의 다른 기기가 신청·수락한
+     * 판이거나, 보낸 누계(지운 줄·공격)가 서버 값보다 뒤로 갔다. 서버는 **쓰지도 정산하지도 않았고** `state` 는 실려 온다.
+     * 클라는 판 루프를 멈추고 그 판에서 물러난다(`yieldMatchToOtherDevice`). 옛 코어(≤ 0.3.68)는 [unknown] 으로 접는다.
+     */
+    otherDevice("other_device"),
+    unknown("unknown");
 
     object Serializer : SwiftRawEnumSerializer<TetrisRPCStatus>("TetrisRPCStatus", entries, unknown)
 }
@@ -172,6 +180,11 @@ data class TetrisStatePayload(
     @SerialName("end_reason") val endReason: String? = null,
     @SerialName("ruby_balance") val rubyBalance: Long? = null,
     @SerialName("watchers") val watchers: Long? = null,
+    /**
+     * 이 판의 내 자리를 **이 기기가** 두는가(서버 20261103124000 — 부르는 토큰의 로그인 세션을 그 자리를 연 세션과 견준다).
+     * 'this' | 'other' | null. null 은 "모른다" 다(옛 서버 · 기록 없는 판 · 세션 없는 토큰) — 스토어가 '이 기기가 연 판' 기록으로 가른다.
+     */
+    @SerialName("my_device") val myDevice: String? = null,
 )
 
 /** Swift `TetrisActionResponse`: Decodable, Equatable, Sendable. */

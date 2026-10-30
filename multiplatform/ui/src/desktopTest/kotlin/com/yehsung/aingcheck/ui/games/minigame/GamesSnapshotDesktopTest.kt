@@ -106,8 +106,10 @@ class GamesSnapshotDesktopTest {
     private fun matchScene(meName: String): @Composable () -> Unit {
         val store = store()
         val state = SwiftJson.decode(TetrisActionResponse.serializer(), RepoFiles.readText("$FIXTURES/rpc.tetris_state@demo-tetris-playing.json"))
+        // 한 판 한 기기(Swift 75c31cd2): 데모 픽스처는 my_device 'this' 를 싣는다(GamesTetrisFixtureContractTests ①-b) — 구동기가 서야 스틸이 판이다.
         store.tetris.applyState(requireNotNull(state.state))
         check(store.tetris.match != null) { "픽스처로 판이 서지 않았다" }
+        check(store.tetris.duel != null && !store.tetris.playingElsewhere) { "픽스처 판에 구동기가 안 섰다" }
         return {
             AingTheme(dark = true) {
                 GamesTetrisDuelMatchView(store, refreshHz = 60, appActive = true, reduceMotion = true, meName = meName, modifier = Modifier.size(PHONE_W.dp, PHONE_H.dp))

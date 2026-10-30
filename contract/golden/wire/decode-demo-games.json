@@ -23809,6 +23809,7 @@
             "seq": 74,
             "toppedOut": false
           },
+          "myDevice": null,
           "opponent": {
             "avatarUrl": null,
             "board": "............................................................................................................................................................OO...SSIIIIOO.GG.GGGGGGGGG.GGGGGGGGGGGGGGGG.",
@@ -25614,6 +25615,7 @@
             "seq": 1,
             "toppedOut": false
           },
+          "myDevice": "this",
           "opponent": {
             "avatarUrl": null,
             "board": null,
@@ -25680,6 +25682,41 @@
               {
                 "$f64": "4008000000000000"
               }
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.state.my_device",
+          "result": [
+            [
+              "$.state.myDevice",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.state.my_device",
+          "result": [
+            [
+              "$.state.myDevice",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.state.my_device",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.state.my_device",
+          "result": [
+            [
+              "$.state.myDevice",
+              "zz_unknown_value"
             ]
           ]
         },
@@ -25778,6 +25815,7 @@
             "seq": 3,
             "toppedOut": false
           },
+          "myDevice": "this",
           "opponent": {
             "avatarUrl": null,
             "board": "........................................................................................................................................................................................................",
@@ -25851,6 +25889,7 @@
             "seq": null,
             "toppedOut": null
           },
+          "myDevice": null,
           "opponent": {
             "avatarUrl": null,
             "board": null,
@@ -26083,6 +26122,7 @@
             "seq": 150,
             "toppedOut": true
           },
+          "myDevice": null,
           "opponent": {
             "avatarUrl": null,
             "board": "..............................................................................................L........LL.......SLTT......SSTJJ....IIIJJO....ZZOOOO...GG.GGGGGGGGG.GGGGGGGGGGGGGG.GGGGGGGGG.GG.GGGGGGGGG",
@@ -26162,6 +26202,7 @@
             "seq": 74,
             "toppedOut": false
           },
+          "myDevice": "this",
           "opponent": {
             "avatarUrl": null,
             "board": "............................................................................................................................................................OO...SSIIIIOO.GG.GGGGGGGGG.GGGGGGGGGGGGGGGG.",
@@ -26239,6 +26280,7 @@
             "seq": 1,
             "toppedOut": false
           },
+          "myDevice": "this",
           "opponent": {
             "avatarUrl": null,
             "board": null,
@@ -26314,6 +26356,7 @@
             "seq": 169,
             "toppedOut": false
           },
+          "myDevice": "this",
           "opponent": {
             "avatarUrl": null,
             "board": "............................................................................................................................Z........ZZT......LZTTT....OOLLJJI..GGG.GGGGGGGGG.GGGGGGGGGGG.GGGGGGGGG.GGGG",
@@ -26395,6 +26438,7 @@
             "seq": 213,
             "toppedOut": false
           },
+          "myDevice": null,
           "opponent": {
             "avatarUrl": null,
             "board": ".............I.........I.J......TIJJ......TTIZZ....OTLLZZ....OOLLSSJ..ZZOOSSJJ..IZZTTTJ...IIILLLO...SSJJOOO...GGGGGGG.GGGGGGGGG.GGGG.GGGGGGGGG.GGGGGGGGGGGG.GGGGGGGGG.GGGG.GGGGGGGGG.GGGGGGGGGGGG.GGGGGG",

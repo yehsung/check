@@ -15,6 +15,8 @@ import Foundation
 // ★ 보고 값은 전부 **누계**다(지운 줄 · 보낸 공격 · 받아들인 공격). 그래서 보고 하나가 사라져도(오프라인 · 멎어서 버림)
 //   다음 보고가 같은 사실을 다시 싣고, 서버 seq 가 늦게 온 옛 보고를 `stale` 로 버린다 — 재전송 큐가 필요 없다.
 // ★ 앱을 다시 열면 판은 서버가 들고 있는 내 마지막 보고에서 다시 선다(`prepareDuel` · `resumePoint`) — 빈 판이 아니다.
+// ★ 구동기는 **이 기기가 두는 판**에서만 선다(`playsMatch` — 본문 머리말 ⑩ · 아래 '한 판 한 기기' 절). 구동기가 없으면 판 루프 ·
+//   준비/보고 · 입력 문이 전부 서지 않는다 — 같은 계정의 다른 기기가 두는 판을 이 기기가 덮어쓰지 않게 하는 한 자리다.
 
 extension TetrisDuelStore {
     // MARK: - 판 구동기 수명
@@ -292,6 +294,13 @@ extension TetrisDuelStore {
             switch response.status {
             case .ok, .stale:
                 if let state = response.state { applyState(state, receivedAt: receivedAt) }
+            case .otherDevice:
+                // 이 판은 같은 계정의 다른 기기가 둔다(서버가 쓰지도 정산하지도 않았다 — 머리말 ⑩). 곧바로 물러난다:
+                // 판 루프를 멈추고 구동기를 버리고 '이 기기가 연 판' 기록을 지운다. 실려 온 상태는 그다음에 옮긴다
+                // (물러난 판이라 그 상태가 my_device 'this' 를 말해도 구동기를 다시 세우지 않는다).
+                Self.logger.notice("report refused — another device plays this match")
+                yieldMatchToOtherDevice(matchID)
+                if let state = response.state { applyState(state, receivedAt: receivedAt) }
             case .notFound:
                 // 판이 사라졌다(계정 삭제의 cascade 등) — 그 판을 내린다.
                 if match?.id == matchID {
@@ -305,6 +314,98 @@ extension TetrisDuelStore {
             default:
                 Self.logger.notice("report refused status=\(response.status.rawValue, privacy: .public)")
             }
+        }
+    }
+
+    // MARK: - 한 판 한 기기 (머리말 ⑩ · 서버 20261103124000)
+    //
+    // 초인종은 사람의 모든 기기로 간다. 판을 두는 기기는 **하나**다 — 그 판을 연 기기(신청을 보냈다 · 수락했다).
+    // 서버가 `my_device` 로 말하면 그 말이 권위이고, 옛 서버(말이 없다)에서는 이 기기의 기록이 가른다.
+
+    /// '이 기기가 연 판' 기록을 이만큼(초) 지나면 걷는다. 판 하나의 수명은 신청 60초 + 준비 30초 + 상한 480초로 10분이
+    /// 안 된다 — 한 시간이면 판 중에 앱을 다시 켜도 넉넉히 남고, 끝난 판의 기록이 쌓이지 않는다.
+    package nonisolated static let ownedMatchTTLSeconds: TimeInterval = 3_600
+    /// 기록을 이만큼만 둔다(새것부터). 한 사람은 한 판만이라 둘이면 충분하지만 신청·수락이 겹치는 창을 넉넉히 둔다.
+    package nonisolated static let ownedMatchLimit = 8
+
+    /// 기록 키. **사용자별**이다 — 같은 기기에서 계정을 바꿔도 앞 사람의 판을 두지 않는다.
+    package nonisolated static func ownedMatchesKey(userID: String) -> String {
+        "tetris.duel.ownedMatches.\(userID.lowercased())"
+    }
+
+    /// 이 기기가 이 판을 **두는가**(순수 판정 — 기록을 맞추는 일은 `applyState` 가 한다).
+    ///  · 서버가 `other_device` 로 돌려보내 물러난 판이면 아니다(서버가 다시 'this' 라 해도 — `yieldedMatchIDs`).
+    ///  · 서버 `my_device` 가 'this' 면 둔다 · 'other' 면 안 둔다.
+    ///  · 말이 없으면(옛 서버 · 기록 없는 판 · 세션 없는 토큰) 이 기기가 그 판을 열었는가(`ownsMatch`).
+    package func playsMatch(_ matchID: String, serverSays myDevice: String?) -> Bool {
+        let id = matchID.lowercased()
+        if yieldedMatchIDs.contains(id) { return false }
+        switch myDevice {
+        case "this": return true
+        case "other": return false
+        default: return ownsMatch(id)
+        }
+    }
+
+    /// 이 기기가 이 판을 열었다는 기록이 있는가(지금 로그인한 사람의 기록만 — 로그인 전이면 언제나 아니다).
+    package func ownsMatch(_ matchID: String) -> Bool {
+        ownedMatches()[matchID.lowercased()] != nil
+    }
+
+    /// 이 기기가 이 판을 열었다(신청 ok · 수락 ok · 서버가 'this' 라 했다). 이미 있으면 그대로 둔다(처음 시각 유지).
+    func noteOwnsMatch(_ matchID: String) {
+        let id = matchID.lowercased()
+        var owned = ownedMatches()
+        guard owned[id] == nil else { return }
+        owned[id] = clock().timeIntervalSince1970
+        storeOwnedMatches(owned)
+    }
+
+    /// 이 판의 기록을 지운다(끝났다 · 거절·만료 · 서버가 'other' 라 했다 · 물러났다). 없으면 아무것도 안 쓴다.
+    func dropOwnership(_ matchID: String) {
+        var owned = ownedMatches()
+        guard owned.removeValue(forKey: matchID.lowercased()) != nil else { return }
+        storeOwnedMatches(owned)
+    }
+
+    /// 서버가 이 판의 보고·기권을 다른 기기의 것으로 돌려보냈다(`other_device`). 판 루프를 **곧바로** 멈추고 구동기를 버리고
+    /// 기록을 지우고, 같은 판은 다시 두지 않는다. 판 상태는 남겨 화면이 안내 한 줄을 그린다.
+    func yieldMatchToOtherDevice(_ matchID: String) {
+        let id = matchID.lowercased()
+        yieldedMatchIDs.insert(id)
+        dropOwnership(id)
+        if duelMatchID == id || match?.id == id { discardDuel() }
+        if let current = match, current.id == id, !current.isFinished {
+            if !playingElsewhere { playingElsewhere = true }
+            setNotice(TetrisDuelNoticeText.otherDevice)
+        }
+        refreshPhase()
+        syncStats()
+    }
+
+    /// 지금 로그인한 사람의 기록(유효 기간 안의 것만). 로그인 전이면 빈 표.
+    private func ownedMatches() -> [String: Double] {
+        guard let user = host?.session?.userID.lowercased(), !user.isEmpty else { return [:] }
+        let raw: [String: Double]
+        if let defaults {
+            raw = defaults.dictionary(forKey: Self.ownedMatchesKey(userID: user)) as? [String: Double] ?? [:]
+        } else {
+            raw = ownedMatchesInMemory[user] ?? [:]
+        }
+        let cutoff = clock().timeIntervalSince1970 - Self.ownedMatchTTLSeconds
+        return raw.filter { $0.value >= cutoff }
+    }
+
+    /// 기록을 쓴다 — 새것부터 `ownedMatchLimit` 개만(유효 기간이 지난 것은 `ownedMatches` 가 이미 걸렀다).
+    private func storeOwnedMatches(_ owned: [String: Double]) {
+        guard let user = host?.session?.userID.lowercased(), !user.isEmpty else { return }
+        let kept = Dictionary(uniqueKeysWithValues: owned.sorted { $0.value > $1.value }.prefix(Self.ownedMatchLimit)
+            .map { ($0.key, $0.value) })
+        if let defaults {
+            let key = Self.ownedMatchesKey(userID: user)
+            if kept.isEmpty { defaults.removeObject(forKey: key) } else { defaults.set(kept, forKey: key) }
+        } else {
+            ownedMatchesInMemory[user] = kept.isEmpty ? nil : kept
         }
     }
 

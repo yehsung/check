@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesTetrisDuelMatch.swift:1-325(GamesTetrisDuelTone · GamesTetrisDuelChrome · GamesTetrisDuelTouch) @ 1b8260d
+// 원본: Sources/CheckMobileKit/Games/GamesTetrisDuelMatch.swift:1-325(GamesTetrisDuelTone · GamesTetrisDuelChrome · GamesTetrisDuelTouch) @ 1b8260d · playingElsewhere @ 75c31cd2
 package com.yehsung.aingcheck.core.stores.tetris
 
 import com.yehsung.aingcheck.core.rules.duel.DuelFee
@@ -48,6 +48,8 @@ enum class GamesTetrisDuelTone {
  */
 class GamesTetrisDuelChrome(
     match: TetrisDuelMatchState, phase: TetrisDuelPhase, myStats: TetrisDuelMyStats?, notice: String?, connectionTrouble: Boolean,
+    /** 코어 `playingElsewhere`(다른 기기가 두는 판 — TetrisDuelStore 머리말 ⑩). */
+    playingElsewhere: Boolean = false,
 ) {
     /** 지금 어느 단계인가(코어 흐름에서 왔고 `.lobby` 는 이 화면이 뜨지 않는 단계다). */
     enum class Stage { waiting, countdown, playing, finished }
@@ -105,8 +107,15 @@ class GamesTetrisDuelChrome(
     val canResign: Boolean
     val result: Result?
 
+    /**
+     * 같은 계정의 **다른 기기**가 두는 판이다(코어 `playingElsewhere` · 0.3.69 한 판 한 기기). 이 폰에는 구동기가 없어
+     * 단계가 [Stage.waiting] 에 머문다 — 그래서 덮개가 "상대를 기다리는 중 · 앱을 켜 둔 채" 대신 그 사실을 말하고,
+     * "판 중에 앱을 나가면 져요" 를 걸지 않는다(이 폰이 나가도 아무도 지지 않는다). 끝난 판에서는 거짓이다.
+     */
+    val playingElsewhere: Boolean
+
     /** 안내 한 줄(코어 `notice` — 신청·기권 응답 문구). 없으면 null. */
-    val notice: String? = notice
+    val notice: String?
 
     init {
         val finished = match.isFinished || phase == TetrisDuelPhase.finished
@@ -119,7 +128,11 @@ class GamesTetrisDuelChrome(
         }
         // INV-GamesTetrisDuelMatch-29bd9a0f 이식: 입력은 **판이 흐르는 동안만**이다. 탑아웃한 판은 서버 응답을 기다리는 중이고 조각이 없다.
         acceptsInput = stage == Stage.playing && !(myStats?.toppedOut ?: false)
-        showsLeaveWarning = stage != Stage.finished
+        val elsewhere = playingElsewhere && stage != Stage.finished
+        this.playingElsewhere = elsewhere
+        showsLeaveWarning = stage != Stage.finished && !elsewhere
+        // 덮개 카드 제목이 이미 그 안내다 — 같은 줄을 판 밑에 두 번 쓰지 않는다(맥 `detail` 과 같은 규칙).
+        this.notice = if (elsewhere && notice == TetrisDuelNoticeText.otherDevice) null else notice
         val floor = myStats?.levelFloor ?: 1
         showsSpeedUp = floor > 1 && stage != Stage.finished
         speedLevel = floor
@@ -141,7 +154,7 @@ class GamesTetrisDuelChrome(
             other.speedLevel == speedLevel && other.connectionTrouble == connectionTrouble && other.opponentLines == opponentLines &&
             other.opponentAttack == opponentAttack && other.opponentPending == opponentPending && other.opponentName == opponentName &&
             other.opponentToppedOut == opponentToppedOut && other.toppedOut == toppedOut && other.canResign == canResign &&
-            other.result == result && other.notice == notice
+            other.result == result && other.notice == notice && other.playingElsewhere == playingElsewhere
 
     override fun hashCode(): Int = stage.hashCode() * 31 + stake
 

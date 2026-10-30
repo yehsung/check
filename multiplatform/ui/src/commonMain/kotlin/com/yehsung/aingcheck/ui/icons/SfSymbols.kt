@@ -114,6 +114,7 @@ object SfSymbols {
         "lock" to AppIcon.Lock,
         "lock.fill" to AppIcon.LockFill,
         "lock.rotation" to AppIcon.LockReset,
+        "macbook.and.iphone" to AppIcon.DesktopWindows,
         "megaphone" to AppIcon.Campaign,
         "menubar.arrow.up.rectangle" to AppIcon.TopPanelOpen,
         "metronome.fill" to AppIcon.AvTimerFill,

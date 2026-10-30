@@ -161,6 +161,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 체스 순위·관전의 주 스위치(오목 한 줄과 짝).
         chess.spectatorFeaturesEnabled = true
         tetris = TetrisDuelStore(PhoneTetrisHost(context, ruby), scope, clock = { env.clock.now() }, collation = env.collation, logger = env.logger)
+        // 한 판 한 기기(0.3.69 — 코어 머리말 ⑩ · Swift MobileAppModel 75c31cd2): '이 기기가 연 판' 기록을 둘 곳. 빠지면 기록이 프로세스 안에만
+        // 살아, 판 중에 앱을 다시 켠 폰이 옛 서버(my_device 없음)에서 자기 판을 못 알아본다.
+        tetris.defaults = env.prefs
         // 테트리스 순위 · 관전의 주 스위치(순위와 관전은 **따로** — 코어 규약).
         tetris.rankingEnabled = true
         tetris.spectatorFeaturesEnabled = true

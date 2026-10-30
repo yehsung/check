@@ -23,7 +23,8 @@ object NowText {
 
     const val workingOnMac = "맥에서 근무 중"
     const val workingOnPhone = "폰에서 근무 중"
-    const val workingOnWindows = "윈도우에서 근무 중"
+    /** Windows 앱은 어디서나 'PC' 라 부른다(사용자 결정 2026-10-30). */
+    const val workingOnWindows = "PC에서 근무 중"
     const val working = "근무 중"
     const val notWorking = "근무 안 함"
     fun sessionSince(time: String): String = "이번 세션 ${time}부터"
@@ -87,7 +88,7 @@ object NowText {
     const val workStopConfirmTitle = "근무를 끝낼까요?"
     fun workStopConfirmMessage(origin: NowWorkOrigin): String = when (origin) {
         NowWorkOrigin.mac -> "맥에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
-        NowWorkOrigin.windows -> "윈도우에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
+        NowWorkOrigin.windows -> "PC에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
         NowWorkOrigin.phone, NowWorkOrigin.unknown -> "지금까지의 시간은 그대로 기록돼요."
     }
     const val workStarted = "근무를 시작했어요"

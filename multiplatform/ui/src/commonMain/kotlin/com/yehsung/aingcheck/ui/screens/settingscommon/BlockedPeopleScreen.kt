@@ -28,7 +28,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import com.yehsung.aingcheck.core.rules.text.BlockReportPlatform
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.messages.blockedAtLine
@@ -38,6 +37,7 @@ import com.yehsung.aingcheck.core.stores.messages.unblock
 import com.yehsung.aingcheck.core.stores.me.MeText
 import com.yehsung.aingcheck.core.wire.models.BlockedUser
 import com.yehsung.aingcheck.ui.icons.AppIcon
+import com.yehsung.aingcheck.ui.screens.messages.LocalBlockReportPlatform
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 
@@ -82,13 +82,13 @@ fun BlockedPeopleScreen(messages: MessagesStore?, modifier: Modifier = Modifier,
         verticalArrangement = Arrangement.spacedBy(AingDimens.rowSpacing),
     ) {
         Text(
-            BlockReportText.blockedListLede(BlockReportPlatform.phone),
+            BlockReportText.blockedListLede(LocalBlockReportPlatform.current),
             style = MaterialTheme.typography.bodySmall,
             color = colors.label2,
             modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin),
         )
         if (messages == null) {
-            AingCard { EmptyStateView(AppIcon.Block, BlockReportText.blockedEmptyTitle, BlockReportText.blockedEmptyMessage(BlockReportPlatform.phone)) }
+            AingCard { EmptyStateView(AppIcon.Block, BlockReportText.blockedEmptyTitle, BlockReportText.blockedEmptyMessage(LocalBlockReportPlatform.current)) }
             return@Column
         }
         messages.blockedListNotice?.let { InlineNotice(it, NoticeKind.Error) }
@@ -101,7 +101,7 @@ fun BlockedPeopleScreen(messages: MessagesStore?, modifier: Modifier = Modifier,
                     BlockedEmptyCard.Failed -> LoadFailureRow(BlockReportText.blockedListFailed, MeText.retry, isRetrying = messages.blocksLoading) {
                         messages.loadBlocks(force = true)
                     }
-                    BlockedEmptyCard.Empty -> EmptyStateView(AppIcon.Block, BlockReportText.blockedEmptyTitle, BlockReportText.blockedEmptyMessage(BlockReportPlatform.phone))
+                    BlockedEmptyCard.Empty -> EmptyStateView(AppIcon.Block, BlockReportText.blockedEmptyTitle, BlockReportText.blockedEmptyMessage(LocalBlockReportPlatform.current))
                 }
             }
         } else {

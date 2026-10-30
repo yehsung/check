@@ -67,7 +67,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.yehsung.aingcheck.core.rules.text.BlockReportPlatform
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.games.GamesWatcherCount
 import com.yehsung.aingcheck.ui.components.CharacterExpression
@@ -84,6 +83,7 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.delay
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
+import com.yehsung.aingcheck.ui.screens.messages.LocalBlockReportPlatform
 import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
 import com.yehsung.aingcheck.core.wire.SwiftURL
 
@@ -589,14 +589,14 @@ fun BoxScope.BoardSheetFrame(onDismiss: (() -> Unit)?, testTag: String, content:
 
 /**
  * 차단 확인(Swift `MessagesBlockConfirmSheet` — 메시지 탭과 **같은 문구**): 무엇이 막히는지 세 줄 → 무엇이 안 막히는지 한 줄 → 되돌릴 수 있다는 한 줄 → [차단하기].
- * 문구는 한 벌(`BlockReportText` · 폰 판)에서만 온다. 차단을 부르는 곳은 이 확인의 [onConfirm] 하나다 — 확인 없는 차단은 만들지 않는다(차단은 상대에게
+ * 문구는 한 벌(`BlockReportText` · 판은 [LocalBlockReportPlatform] — 기본 폰, Windows 는 맥)에서만 온다. 차단을 부르는 곳은 이 확인의 [onConfirm] 하나다 — 확인 없는 차단은 만들지 않는다(차단은 상대에게
  * 알리지 않는 조용한 동작이라 잘못 눌러도 알아챌 신호가 없다). 메시지 탭 시트(W3-a `MessagesBlockConfirmSheet`)가 서면 조립이
  * [BoardGameSafety.blockConfirmSheet] 로 그것을 넣는다 — 이것은 그 자리의 기본값이다(assembly.md).
  */
 @Composable
 fun BoardBlockConfirmSheet(peerName: String, onConfirm: () -> Unit, onClose: () -> Unit) {
     val colors = AingTheme.colors
-    val items = BlockReportText.blockConfirmItems(BlockReportPlatform.phone)
+    val items = BlockReportText.blockConfirmItems(LocalBlockReportPlatform.current)
     Column(Modifier.fillMaxWidth().padding(bottom = AingDimens.space3)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -626,7 +626,7 @@ fun BoardBlockConfirmSheet(peerName: String, onConfirm: () -> Unit, onClose: () 
             }
             Text(BlockReportText.blockConfirmScopeNote, style = BoardText.rowSubtitle(), color = colors.label2,
                 modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin))
-            Text(BlockReportText.blockConfirmUndoNote(BlockReportPlatform.phone), style = BoardText.rowSubtitle(), color = colors.label2,
+            Text(BlockReportText.blockConfirmUndoNote(LocalBlockReportPlatform.current), style = BoardText.rowSubtitle(), color = colors.label2,
                 modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin))
             BoardButton(BlockReportText.blockConfirm, Modifier.padding(top = 4.dp), kind = BoardButtonKind.Destructive, fillsWidth = true,
                 testTag = BoardSafetyTags.blockConfirm, onClick = onConfirm)

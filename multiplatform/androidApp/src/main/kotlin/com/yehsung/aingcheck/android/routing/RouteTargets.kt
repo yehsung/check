@@ -115,8 +115,21 @@ object RouteTargets {
      */
     fun content(decision: PushDecision): PhonePushContent? = when (decision) {
         is PushDecision.Post -> content(decision.spec.tap.route, decision.refresh)
-        is PushDecision.Hide -> content(decision.route, decision.refresh)
+        // 앞에서 받은 확성기는 표식을 실어 조정자에 넘긴다(조정자가 앱 배너로 띄운다).
+        is PushDecision.Hide -> content(decision.route, decision.refresh)?.let { content ->
+            if (decision.megaphone != null && content is PhonePushContent.Message) content.copy(megaphone = decision.megaphone) else content
+        }
         is PushDecision.Drop -> null
+    }
+
+    /**
+     * 알림을 눌러 연 확성기(셸이 증표를 확인한 요청 — [RouteIntents.parse]) → 조정자의 열기 대상(`handleResponse(…, open)` — 대화로 가지 않고
+     * 그 확성기를 배너로, 24시간 예외). 확성기 탭이 아니면 null — 라우터가 화면을 연다.
+     */
+    fun megaphoneTapContent(request: RouteRequest): PhonePushContent? {
+        val megaphone = request.megaphone ?: return null
+        val route = request.route as? AingRoute.Message ?: return null
+        return PhonePushContent.Message(route.peerId, megaphone)
     }
 
     /** 알림 [수락]으로 연 신청(셸이 증표를 확인한 라우트) → 조정자의 수락 대상. 신청 라우트가 아니면 null. */

@@ -23,4 +23,10 @@ class VisibleRoute {
 
     /** 사용자가 지금 **보고 있는** 라우트: 앱이 앞일 때만 값이 있다. */
     fun viewing(): AingRoute? = if (foreground.value) onScreen.value else null
+
+    /**
+     * 앱이 앞인가(화면과 상관없이). 앞이어도 라우트로 나타낼 수 없는 화면(미션 · 프로필 · 뽑기 · nav 대화상자 …)에서는 [viewing] 이 null 이라
+     * '앞/뒤'를 viewing 으로 읽으면 안 된다 — 확성기 푸시 판정(Swift `isAppActive`)은 이 값을 본다.
+     */
+    fun isForeground(): Boolean = foreground.value
 }

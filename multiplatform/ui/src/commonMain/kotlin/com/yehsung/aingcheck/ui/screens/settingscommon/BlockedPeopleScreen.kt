@@ -40,6 +40,7 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.messages.LocalBlockReportPlatform
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 
 object BlockedPeopleTags {
     const val LIST = "blocked-list"
@@ -115,6 +116,7 @@ fun BlockedPeopleScreen(messages: MessagesStore?, modifier: Modifier = Modifier,
 
     val pending = pendingID?.let { id -> messages?.blockedPeople?.firstOrNull { it.userID == id } }
     if (messages != null && pending != null) {
+        ModalPresenceMark()
         AlertDialog(
             onDismissRequest = { pendingID = null },
             title = { Text(BlockReportText.unblockConfirmTitle(pending.name)) },

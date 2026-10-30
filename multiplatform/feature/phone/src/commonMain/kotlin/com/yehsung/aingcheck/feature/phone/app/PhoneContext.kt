@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.games.GamesStore
+import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetPanel
 import com.yehsung.aingcheck.core.stores.me.MeContext
@@ -44,6 +45,9 @@ import kotlinx.coroutines.CoroutineScope
  */
 class PhoneStoreLinks {
     var now: NowStore? = null
+
+    /** 확성기 배너(2026-10-30 — Swift `MobileStoreLinks.megaphoneBanner`). 푸시 조정자가 앱 배너로 옮길 때 본다. */
+    var megaphoneBanner: MegaphoneBannerStore? = null
     var messages: MessagesStore? = null
     var rankings: RankingsStore? = null
     var games: GamesStore? = null

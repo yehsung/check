@@ -50,7 +50,8 @@ enum class PhonePushKind(val rawValue: String, val settingTitle: String, val set
  * 조립이 그 판정(게시 · 숨김)의 라우트를 이 값으로 옮겨 [PhonePushCoordinator.didReceive] 에 넘긴다(파서를 두 벌 두지 않는다).
  */
 sealed interface PhonePushContent {
-    data class Message(val peerID: String) : PhonePushContent
+    /** [megaphone] — 확성기로 온 메시지면 그 표식(서버 `push_on_message_insert` 의 최상위 `megaphone_id` · 계약 S6). 새 종류를 만들지 않는다. */
+    data class Message(val peerID: String, val megaphone: PhonePushMegaphone? = null) : PhonePushContent
     data class GomokuInvite(val matchID: String) : PhonePushContent
 
     /** Android 에만(E§6.1). */
@@ -84,6 +85,12 @@ sealed interface PhonePushContent {
     /** 메시지 알림이면 보낸 사람(대화 상대). */
     val messagePeerID: String? get() = (this as? Message)?.peerID
 }
+
+/**
+ * 확성기 푸시의 표식과 알림 글(Swift `PushPayload.megaphoneID` + `PushAlert` @ a6791165). 제목 = 보낸 사람 닉네임 · 본문 = 메시지.
+ * 앱이 앞일 때 시스템 알림 대신 앱 배너로 옮길 때만 쓴다.
+ */
+data class PhonePushMegaphone(val megaphoneID: String, val title: String?, val body: String?)
 
 /** 사용자가 알림에 한 일(Swift `PushAction`). 앱을 열지 않고 도는 액션은 없다(w10 — 알림을 눌러 앱에서 한다). */
 enum class PhonePushAction {

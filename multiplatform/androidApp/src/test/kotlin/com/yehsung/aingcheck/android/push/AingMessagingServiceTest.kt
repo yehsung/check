@@ -16,9 +16,15 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.firebase.messaging.RemoteMessage
 import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.AingRoute
+import com.yehsung.aingcheck.android.routing.RouteIntents
+import com.yehsung.aingcheck.android.routing.RouteRequest
+import com.yehsung.aingcheck.android.routing.RouteTargets
+import com.yehsung.aingcheck.feature.phone.push.PhonePushContent
+import com.yehsung.aingcheck.feature.phone.push.PhonePushMegaphone
 import com.yehsung.aingcheck.android.shell.MainActivity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -92,6 +98,101 @@ class AingMessagingServiceTest {
             controller.destroy()
             // ProcessLifecycleOwner 는 JVM 싱글턴이라 같은 샌드박스의 다음 시험에 상태가 남는다 — 앞(STARTED)으로 남기지 않는다.
             if (processLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) processLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        }
+    }
+
+    private fun megaphoneFrom(peer: String, megaphoneId: String): RemoteMessage =
+        RemoteMessage.Builder("aingcheck-test@fcm.googleapis.com")
+            .setData(mapOf("type" to "message", "peer_id" to peer, "megaphone_id" to megaphoneId, "title" to "보낸사람", "body" to "다들 화이팅"))
+            .build()
+
+    /** 그 상대·그 확성기로 게시된 알림 수(태그가 상대별이든 확성기별이든 센다). */
+    private fun postedMegaphone(peer: String, megaphoneId: String): Int =
+        shadowOf(manager).activeNotifications.count { it.tag == "message-$peer" || it.tag == "megaphone-$megaphoneId" }
+
+    /**
+     * 확성기 푸시 · 앞/뒤 판정(Swift PushCoordinator.presentation `isAppActive` 하나로 가른다 @ a6791165): 앞이면 **어느 화면이든** 시스템 알림을
+     * 내지 않는다(앱 배너로). 라우트로 나타낼 수 없는 화면(미션 · 프로필 · 뽑기 · nav 대화상자 …)에서는 보이는 라우트가 null 이라 viewing() 도
+     * null 이다 — 그것을 '뒤'로 읽으면 헤즈업 알림과 앱 배너가 겹친다.
+     */
+    @Test
+    fun megaphoneInFrontIsNotPostedEvenOnAScreenWithoutARoute() {
+        shadowOf(manager).setNotificationsEnabled(true)
+        val controller = Robolectric.buildService(AingMessagingService::class.java).create()
+        val service = controller.get()
+        val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse(AingRoute.Now.url), app, MainActivity::class.java)
+        try {
+            ActivityScenario.launch<MainActivity>(deepLink).use {
+                compose.waitUntil { app.container.visibleRoute.route.value == AingRoute.Now }
+                processLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_START)
+                // 라우트 없는 화면(셸은 RoutePlans.routeOf 가 null 인 목적지에서 null 을 적는다).
+                app.container.visibleRoute.setRoute(null)
+                assertTrue(app.container.lifecycle.isForeground.value)
+                assertEquals("전제: 라우트 없는 화면에서는 viewing() 이 null", null, app.container.visibleRoute.viewing())
+
+                // 앞 + 라우트 없는 화면 + 확성기 → 게시 0.
+                service.onMessageReceived(megaphoneFrom("mega-1", "mp-1"))
+                assertEquals("앞에서 받은 확성기가 시스템 알림으로 게시됐다(라우트 없는 화면)", 0, postedMegaphone("mega-1", "mp-1"))
+                // 기준선(같은 순간 · megaphone_id 없는 평범한 메시지): 앞이어도 보고 있지 않은 대화면 게시한다 — 위 0 이 '게시가 안 되는 환경' 탓이 아니다.
+                service.onMessageReceived(messageFrom("plain-1"))
+                assertEquals(1, posted("plain-1"))
+
+                // 뒤 → 확성기도 시스템 알림으로 게시한다.
+                processLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+                service.onMessageReceived(megaphoneFrom("mega-2", "mp-2"))
+                assertEquals("뒤에서 받은 확성기가 게시되지 않았다", 1, postedMegaphone("mega-2", "mp-2"))
+            }
+        } finally {
+            controller.destroy()
+            if (processLifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) processLifecycle.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+        }
+    }
+
+    /** 게시된 알림(태그)의 본문 탭이 MainActivity 에 실어 보내는 요청 — 셸과 같은 길(RouteIntents.read → parse, 이 설치의 증표). */
+    private fun tapRequest(tag: String): RouteRequest? {
+        val notification = shadowOf(manager).activeNotifications.single { it.tag == tag }.notification
+        val tapped = shadowOf(notification.contentIntent).savedIntent
+        return RouteIntents.parse(RouteIntents.read(tapped)!!, expectedProof = app.container.routeProof.value())
+    }
+
+    /**
+     * 뒤에서 받은 확성기 알림을 누르면 **대화가 아니라 그 확성기 배너**(Swift PushCoordinator.handleResponse 의 megaphoneID 가지 @ a6791165 ·
+     * 계약 '푸시를 눌러 들어오면 대화로 가지 않고 그 항목을 배너로(24시간 안)'). 진짜 서비스가 게시한 알림의 PendingIntent 를 셸과 같은 길로 풀어,
+     * MainActivity 가 조정자에 넘기는 내용이 표식을 실은 Message 인지 잰다 — 그 내용 → banner.current 는
+     * feature/phone MegaphoneBannerPhoneTest.tappedPushOpensBannerNotThread 가 잰다(같은 값).
+     */
+    @Test
+    fun tappedBackgroundMegaphoneOpensBannerNotThread() {
+        shadowOf(manager).setNotificationsEnabled(true)
+        val controller = Robolectric.buildService(AingMessagingService::class.java).create()
+        val service = controller.get()
+        try {
+            // 뒤(프로세스 ON_START 없음).
+            assertFalse(app.container.visibleRoute.isForeground())
+            service.onMessageReceived(megaphoneFrom("mega-3", "mp-3"))
+            val request = tapRequest("megaphone-mp-3")!!
+            assertEquals(
+                "확성기 알림 탭이 조정자에 표식을 싣지 않았다(대화로 간다)",
+                PhonePushContent.Message("mega-3", PhonePushMegaphone("mp-3", "보낸사람", "다들 화이팅")),
+                RouteTargets.megaphoneTapContent(request),
+            )
+
+            // 기준선(megaphone_id 없는 메시지 알림): 표식 없음 → 라우터가 그 대화를 연다.
+            service.onMessageReceived(messageFrom("plain-3"))
+            val plain = tapRequest("message-plain-3")!!
+            assertEquals(AingRoute.Message("plain-3"), plain.route)
+            assertNull(RouteTargets.megaphoneTapContent(plain))
+
+            // 증표 없는 같은 표식(다른 앱이 보낸 명시적 Intent)은 믿지 않는다 — 배너도 대화도 아닌 메시지 탭.
+            val forged = RouteIntents.Incoming(
+                RouteIntents.ACTION_OPEN_ROUTE, dataString = null, routeExtra = AingRoute.Message("mega-3").url, acceptExtra = false,
+                proofExtra = null, megaphoneIdExtra = "mp-3", megaphoneTitleExtra = "가짜", megaphoneBodyExtra = "가짜 본문",
+            )
+            val forgedRequest = RouteIntents.parse(forged, expectedProof = app.container.routeProof.value())!!
+            assertEquals(RouteRequest(AingRoute.Messages), forgedRequest)
+            assertNull(RouteTargets.megaphoneTapContent(forgedRequest))
+        } finally {
+            controller.destroy()
         }
     }
 }

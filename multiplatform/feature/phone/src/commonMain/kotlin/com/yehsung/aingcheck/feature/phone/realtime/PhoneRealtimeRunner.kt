@@ -75,6 +75,9 @@ class PhoneRealtimeRunner(
     /** 테트리스 대결 신호를 받을 스토어(조립이 붙인다 — 오목 칸과 같은 꼴·같은 자리). */
     var tetris: RealtimeSignalReceiver? = null
 
+    /** 확성기 배너 신호('megaphone')를 받을 자리(조립이 붙인다 — 배너 스토어 refresh). 비어 있으면 아무 일도 안 한다(같은 묶음의 ring 이 메시지를 갚는다). */
+    var megaphone: (() -> Unit)? = null
+
     /** 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 시험은 크게 두고 [flushCoalescedSignals] 를 직접 부른다. */
     var coalesceSeconds: Double = 1.0
 
@@ -231,6 +234,9 @@ class PhoneRealtimeRunner(
                 // INV-MobileRealtimeRunner-d94b411a 이식: 테트리스 초인종은 판 중 공격마다 울린다 — **`.drain` 으로 떨어뜨리면** 그 울림마다 메시지
                 //   요약·이력 조회가 한 번씩 더 나간다. 잇는 것(방해 줄이 늦지 않게 — 맥과 같은 구조)과 따로 두는 것은 별개의 요구다.
                 RealtimeEffect.TetrisSignal -> tetris?.handleSignal()
+                // 확성기 배너(Swift MobileRealtimeRunner .megaphoneSignal @ 8b40bd44): 배너 목록 재조회 — **take_pokes 도 메시지 조회도 아니다**
+                //   (확성기 줄의 소비·요약은 같은 묶음의 ring → .drain 이 맡는다). `.drain` 으로 떨어뜨리면 배너가 안 뜬다.
+                RealtimeEffect.MegaphoneSignal -> megaphone?.invoke()
                 is RealtimeEffect.PushAccessToken -> transport?.pushAccessToken(effect.token)
                 is RealtimeEffect.ScheduleTokenRefresh -> scheduleTokenRefresh(effect.at, now)
                 is RealtimeEffect.RefreshToken -> startTokenRefresh()

@@ -235,7 +235,7 @@ object MessageGoldenChecks {
         return when (outcome) {
             is MegaphoneSendOutcome.sent -> "sent(recipients: ${outcome.recipients}, duplicate: ${outcome.duplicate})"
             is MegaphoneSendOutcome.insufficient -> "insufficient(need: ${opt(outcome.need)}, have: ${opt(outcome.have)})"
-            is MegaphoneSendOutcome.cooldown -> "cooldown(retryAfterSeconds: ${opt(outcome.retryAfterSeconds)})"
+            is MegaphoneSendOutcome.cooldown -> "cooldown(retryAfterSeconds: ${opt(outcome.retryAfterSeconds)}, scope: CheckCore.MegaphoneCooldownScope.${outcome.scope.name})"
             is MegaphoneSendOutcome.tooLong -> "tooLong(maxLength: ${opt(outcome.maxLength)})"
             MegaphoneSendOutcome.noRecipients -> "noRecipients"
             MegaphoneSendOutcome.empty -> "empty"

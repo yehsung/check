@@ -82,6 +82,7 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.shop.MeType.digits
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import kotlinx.coroutines.launch
 
 object ShopTags {
@@ -139,6 +140,7 @@ fun MeShopScreen(
     if (confirming) {
         val price = store.shopSelectionPrice
         val balance = store.rubyBalance
+        ModalPresenceMark()
         AlertDialog(
             onDismissRequest = { confirming = false },
             title = { Text(MeText.purchaseConfirmTitle(store.shopSelection?.let(MeCharacterName::display) ?: "")) },

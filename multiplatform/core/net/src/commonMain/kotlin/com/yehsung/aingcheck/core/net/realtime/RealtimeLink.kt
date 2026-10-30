@@ -43,6 +43,14 @@ object RealtimeLinkConstants {
     const val messageReadBroadcastEvent = "message_read"
     const val chessBroadcastEvent = "chess"
     const val tetrisBroadcastEvent = "tetris"
+
+    /**
+     * 확성기 배너 신호(2026-10-30 — 원본 RealtimeLink.swift `megaphoneBroadcastEvent` @ a6791165). 서버 `send_megaphone` 이 받는 사람마다
+     * `poke_ring` 다음에 보내는 `realtime.send({v:1, m:<megaphone_id>}, 'megaphone', poke_topic(…), true)` 와 **문자 그대로 같다**.
+     * payload 는 믿지 않고 "배너 목록(`megaphone_inbox`)을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 확성기 줄의 소비는
+     * 같은 묶음의 `ring` 이 맡는다.
+     */
+    const val megaphoneBroadcastEvent = "megaphone"
 }
 
 /** Swift `RealtimeTransportEvent`. */
@@ -89,6 +97,9 @@ sealed interface RealtimeEffect {
     data object ChessSignal : RealtimeEffect
     data object TetrisSignal : RealtimeEffect
     data object MessageReadSignal : RealtimeEffect
+
+    /** 확성기 신호('megaphone')를 받았다 → 배너 목록 재조회 1회(겹치면 배너 스토어 refresh 가 하나로 모은다). **take_pokes 가 아니다.** */
+    data object MegaphoneSignal : RealtimeEffect
     data class PushAccessToken(val token: String) : RealtimeEffect
     data class ScheduleTokenRefresh(val at: SwiftDate) : RealtimeEffect
     data class RefreshToken(val force: Boolean) : RealtimeEffect
@@ -292,6 +303,9 @@ class RealtimeLink(transportAvailable: Boolean = false) {
                 state = RealtimeState.Subscribed(s.since, now)
                 when (event.event) {
                     RealtimeLinkConstants.messageReadBroadcastEvent -> listOf(RealtimeEffect.MessageReadSignal)
+                    // 확성기(2026-10-30)는 테트리스 가지 앞에 선다(Swift 와 같은 순서). 이 줄이 없으면 아래 기본값으로 떨어져 배너는 안 뜨고
+                    // 메시지 조회만 한 번 더 나간다.
+                    RealtimeLinkConstants.megaphoneBroadcastEvent -> listOf(RealtimeEffect.MegaphoneSignal)
                     RealtimeLinkConstants.tetrisBroadcastEvent -> listOf(RealtimeEffect.TetrisSignal)
                     RealtimeLinkConstants.gomokuBroadcastEvent -> listOf(RealtimeEffect.GomokuSignal)
                     RealtimeLinkConstants.chessBroadcastEvent -> listOf(RealtimeEffect.ChessSignal)

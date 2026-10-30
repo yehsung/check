@@ -59,7 +59,7 @@ class MegaphoneStoreTest {
         mega.open()
         advanceUntilIdle()
         assertEquals(120L, host.rubyBalance, "정보 응답의 잔량을 미러로")
-        assertEquals("지금 보내면 9명에게 가요", mega.infoLine(h.now()))
+        assertEquals("지금 보내면 9명의 화면에 떠요", mega.infoLine(h.now()))
         mega.setDraft("  모두 안녕  ")
         mega.requestSend()
         assertTrue(mega.isConfirming)

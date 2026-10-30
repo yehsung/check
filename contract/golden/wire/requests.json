@@ -3146,8 +3146,11 @@
       "result": {
         "ok": {
           "cooldownRemainingSeconds": null,
+          "cooldownScope": null,
           "cooldownSeconds": null,
           "enabled": null,
+          "globalCooldownRemainingSeconds": null,
+          "globalCooldownSeconds": null,
           "maxLength": null,
           "price": null,
           "recipients": null,
@@ -9711,6 +9714,7 @@
             "recipients": null,
             "retryAfterSeconds": null,
             "rubyBalance": null,
+            "scope": null,
             "status": "empty"
           },
           {
@@ -9724,6 +9728,7 @@
             "recipients": null,
             "retryAfterSeconds": null,
             "rubyBalance": null,
+            "scope": null,
             "status": "too_long"
           },
           {
@@ -9737,6 +9742,7 @@
             "recipients": 12,
             "retryAfterSeconds": null,
             "rubyBalance": null,
+            "scope": null,
             "status": "ok"
           },
           {
@@ -9750,6 +9756,7 @@
             "recipients": null,
             "retryAfterSeconds": 420,
             "rubyBalance": null,
+            "scope": null,
             "status": "cooldown"
           },
           {
@@ -9763,6 +9770,7 @@
             "recipients": null,
             "retryAfterSeconds": null,
             "rubyBalance": 12,
+            "scope": null,
             "status": "insufficient_ruby"
           },
           {
@@ -9776,6 +9784,7 @@
             "recipients": 3,
             "retryAfterSeconds": null,
             "rubyBalance": 0,
+            "scope": null,
             "status": "ok"
           }
         ]
@@ -9887,8 +9896,11 @@
         "ok": [
           {
             "cooldownRemainingSeconds": 0,
+            "cooldownScope": null,
             "cooldownSeconds": 600,
             "enabled": true,
+            "globalCooldownRemainingSeconds": null,
+            "globalCooldownSeconds": null,
             "maxLength": 198,
             "price": 50,
             "recipients": 12,
@@ -9897,8 +9909,11 @@
           },
           {
             "cooldownRemainingSeconds": null,
+            "cooldownScope": null,
             "cooldownSeconds": null,
             "enabled": false,
+            "globalCooldownRemainingSeconds": null,
+            "globalCooldownSeconds": null,
             "maxLength": null,
             "price": null,
             "recipients": null,

@@ -23,7 +23,9 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalScreenArt
 import com.yehsung.aingcheck.ui.shop.LiveCharacterPreview
 import com.yehsung.aingcheck.ui.shop.LocalLiveCharacterPreview
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
@@ -34,7 +36,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.yehsung.aingcheck.feature.phone.app.replyToMegaphoneBanner
+import com.yehsung.aingcheck.ui.components.LocalModalPresence
+import com.yehsung.aingcheck.ui.components.ModalPresence
+import com.yehsung.aingcheck.feature.phone.app.syncMegaphoneBannerDeferral
+import com.yehsung.aingcheck.feature.phone.messages.MegaphoneBannerPhoneRules
+import kotlinx.coroutines.delay
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -198,6 +207,22 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
     // 그 알림은 위에 대화상자가 떠도 살아 있게 표 밖에서도 한 번 더 본다.
     val play = ShellTabBarRules.Play(tetrisMatch = phone.games.tetris.match != null, boardScreenHides = screenHidesTabBar)
     val hideTabBar = screenHidesTabBar || ShellTabBarRules.hidesTabBar(destination, play)
+    // 확성기 배너 미룸(iOS MegaphoneBannerModalProbe): 대화상자 목적지(시트 · 알림 권한 설명)나 화면 안에서 직접 띄운 시트·대화상자
+    // (ModalBottomSheet · AlertDialog — 액티비티 위 별도 창, LocalModalPresence 로 센다)가 떠 있으면 배너가 그 밑에 깔린다 — 미룬다.
+    // 창 수가 바뀌면 바로 맞추고, 그 밖의 미룸 판정(목적지 · 대결 화면 · 미니게임 판)은 다시 보기 고리가 1초마다 맞춘다(배너가 떠 있거나 기다릴 때만).
+    val modals = remember(phone) { ModalPresence(onChange = { phone.syncMegaphoneBannerDeferral() }) }
+    phone.megaphoneModalProbe = ShellMegaphoneDeferral.modalProbe({ navController.currentDestination?.navigatorName }, modals)
+    val banner = phone.megaphoneBanner
+    val pollKey = MegaphoneBannerPhoneRules.deferralPollKey(banner.current?.megaphoneID, banner.queue.size)
+    LaunchedEffect(pollKey, destination, phone.games.isAnyMatchScreenVisible) {
+        phone.syncMegaphoneBannerDeferral()
+        while (pollKey != null) {
+            delay((MegaphoneBannerPhoneRules.deferralPollSeconds * 1000).toLong())
+            phone.syncMegaphoneBannerDeferral()
+        }
+    }
+    CompositionLocalProvider(LocalModalPresence provides modals) {
+    Box(Modifier.fillMaxSize()) {
     Scaffold(
         bottomBar = {
             if (!hideTabBar) {
@@ -217,8 +242,19 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
         val bars = if (ShellSystemBarRules.drawsBehindSystemBars(destination)) PaddingValues(0.dp) else padding
         TabsNavHost(navController, Modifier.padding(bars), app = app, onTabBarHidden = { screenHidesTabBar = it })
     }
+    // 확성기 배너 — 어느 탭이든 위에서 내려온다(iOS TabView .overlay(alignment: .top)). 카드만 손을 받는다.
+    MegaphoneBannerOverlay(banner, onReply = { phone.replyToMegaphoneBanner(it) }, modifier = Modifier.align(Alignment.TopCenter))
+    }
     // 생일 선물 고르기 창 — 어느 탭에 있든 뜬다(W4-c §4, 스토어가 대국 · 관전 중엔 스스로 안 띄운다).
     CakeGiftSheetRoute(phone.me)
+    }
+}
+
+/** 셸의 확성기 배너 미룸 판정 한 자리(AingShell 이 쓰고 ShellMegaphoneDeferralTest 가 같은 함수를 잰다). */
+internal object ShellMegaphoneDeferral {
+    /** 대화상자 목적지 **또는** 화면 안 시트·대화상자가 하나라도 떠 있으면 참. [navigatorName] = 지금 목적지의 navigator 이름. */
+    fun modalProbe(navigatorName: () -> String?, modals: ModalPresence): () -> Boolean =
+        { navigatorName() == "dialog" || modals.isPresented }
 }
 
 /**

@@ -8,7 +8,7 @@
       "counter": "12/197",
       "defaultCooldownSeconds": 600,
       "empty": "보낼 말을 적어 주세요",
-      "explainer": "앱을 쓰는 모두에게 메시지로 가요 · 집중 중인 사람은 빼요",
+      "explainer": "앱 사용자 모두의 화면에 크게 떠요 · 집중 중인 사람은 빼요",
       "failed": "보내지 못했어요. 잠시 후 다시 시도해 주세요",
       "icon": "1f4e2",
       "id": "constants",
@@ -74,21 +74,21 @@
           "alreadySent": "이미 보냈어요 · 0명에게",
           "confirm": "루비 5개로 0명에게 보낼까요?",
           "n": 0,
-          "reach": "지금 보내면 0명에게 가요",
+          "reach": "지금 보내면 0명의 화면에 떠요",
           "sent": "보냈어요 · 0명에게"
         },
         {
           "alreadySent": "이미 보냈어요 · 1명에게",
           "confirm": "루비 6개로 1명에게 보낼까요?",
           "n": 1,
-          "reach": "지금 보내면 1명에게 가요",
+          "reach": "지금 보내면 1명의 화면에 떠요",
           "sent": "보냈어요 · 1명에게"
         },
         {
           "alreadySent": "이미 보냈어요 · 37명에게",
           "confirm": "루비 42개로 37명에게 보낼까요?",
           "n": 37,
-          "reach": "지금 보내면 37명에게 가요",
+          "reach": "지금 보내면 37명의 화면에 떠요",
           "sent": "보냈어요 · 37명에게"
         }
       ],
@@ -414,27 +414,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -454,27 +454,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -494,27 +494,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 41명에게 가요",
+              "line": "지금 보내면 41명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -701,12 +701,12 @@
               "remaining": 1
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -741,12 +741,12 @@
               "remaining": 1
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -781,12 +781,12 @@
               "remaining": 1
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -1308,27 +1308,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -1348,27 +1348,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -1388,27 +1388,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -1684,27 +1684,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -1724,27 +1724,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -1764,27 +1764,27 @@
           "infoFailed": false,
           "lines": [
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7be9c200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7beab200000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb466666",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bebb600000",
               "remaining": 0
             },
             {
-              "line": "지금 보내면 5명에게 가요",
+              "line": "지금 보내면 5명의 화면에 떠요",
               "nowBits": "41dab7bf4b200000",
               "remaining": 0
             }
@@ -2057,7 +2057,7 @@
     {
       "id": "send-05",
       "json": "{\"status\":\"cooldown\",\"retry_after_seconds\":125}",
-      "outcome": "cooldown(retryAfterSeconds: Optional(125))",
+      "outcome": "cooldown(retryAfterSeconds: Optional(125), scope: CheckCore.MegaphoneCooldownScope.personal)",
       "response": {
         "cooldownSeconds": null,
         "duplicate": null,
@@ -2109,7 +2109,7 @@
     {
       "id": "send-06",
       "json": "{\"status\":\"cooldown\",\"retry_after_seconds\":0}",
-      "outcome": "cooldown(retryAfterSeconds: Optional(0))",
+      "outcome": "cooldown(retryAfterSeconds: Optional(0), scope: CheckCore.MegaphoneCooldownScope.personal)",
       "response": {
         "cooldownSeconds": null,
         "duplicate": null,
@@ -2161,7 +2161,7 @@
     {
       "id": "send-07",
       "json": "{\"status\":\"cooldown\"}",
-      "outcome": "cooldown(retryAfterSeconds: nil)",
+      "outcome": "cooldown(retryAfterSeconds: nil, scope: CheckCore.MegaphoneCooldownScope.personal)",
       "response": {
         "cooldownSeconds": null,
         "duplicate": null,

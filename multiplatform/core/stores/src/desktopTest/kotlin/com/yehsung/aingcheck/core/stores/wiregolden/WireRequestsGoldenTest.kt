@@ -6,8 +6,6 @@ package com.yehsung.aingcheck.core.stores.wiregolden
 
 import com.yehsung.aingcheck.core.net.*
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
-import com.yehsung.aingcheck.core.rules.text.MegaphoneInfoResponse
-import com.yehsung.aingcheck.core.rules.text.MegaphoneSendResponse
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
 import com.yehsung.aingcheck.core.stores.service.achievementClaim
 import com.yehsung.aingcheck.core.stores.service.achievementsStatus
@@ -379,14 +377,6 @@ class WireRequestsGoldenTest {
                 (GoldenDump().dump(v) as JsonObject) -
                     setOf(ClientReleaseResponse::latestVersion.name, ClientReleaseResponse::downloadUrl.name, ClientReleaseResponse::updatedAt.name),
             )
-            // Swift 기준선(이 레인 골든 = main 75c31cd2) **뒤에** 더한 확성기 칸(main a6791165 b056075b — 앱 전체 5분 대기). 이 칸만 빼고 맞춘다.
-            // 골든을 a6791165 이후로 다시 뜨면 Swift 덤프에 이 칸이 생긴다 — 그때 이 두 줄을 지운다.
-            is MegaphoneInfoResponse -> JsonObject(
-                (GoldenDump().dump(v) as JsonObject) -
-                    setOf(MegaphoneInfoResponse::globalCooldownSeconds.name, MegaphoneInfoResponse::globalCooldownRemainingSeconds.name,
-                        MegaphoneInfoResponse::cooldownScope.name),
-            )
-            is MegaphoneSendResponse -> JsonObject((GoldenDump().dump(v) as JsonObject) - MegaphoneSendResponse::scope.name)
             else -> null
         }
     })

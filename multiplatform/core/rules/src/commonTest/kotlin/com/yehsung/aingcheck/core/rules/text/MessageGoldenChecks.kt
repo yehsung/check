@@ -235,7 +235,7 @@ object MessageGoldenChecks {
         return when (outcome) {
             is MegaphoneSendOutcome.sent -> "sent(recipients: ${outcome.recipients}, duplicate: ${outcome.duplicate})"
             is MegaphoneSendOutcome.insufficient -> "insufficient(need: ${opt(outcome.need)}, have: ${opt(outcome.have)})"
-            is MegaphoneSendOutcome.cooldown -> "cooldown(retryAfterSeconds: ${opt(outcome.retryAfterSeconds)})"
+            is MegaphoneSendOutcome.cooldown -> "cooldown(retryAfterSeconds: ${opt(outcome.retryAfterSeconds)}, scope: CheckCore.MegaphoneCooldownScope.${outcome.scope.name})"
             is MegaphoneSendOutcome.tooLong -> "tooLong(maxLength: ${opt(outcome.maxLength)})"
             MegaphoneSendOutcome.noRecipients -> "noRecipients"
             MegaphoneSendOutcome.empty -> "empty"
@@ -246,25 +246,6 @@ object MessageGoldenChecks {
             MegaphoneSendOutcome.failed -> "failed"
         }
     }
-
-    /**
-     * Swift 기준선(이 레인 골든 = main 75c31cd2) **뒤에** 바뀐 확성기 작성 문구 — main a6791165(b056075b) · 계약 C4(사용자 결정: 받는 쪽 화면에
-     * 배너로 뜬다). 골든이 옛 문구일 때만 새 문구로 갈아 잰다. 골든을 a6791165 이후로 다시 뜨면 옛 문구가 사라져 여기서 빨갛다 — 그때 이 표를 지운다.
-     * 이 두 키(와 reach 인 infoLine 줄) 말고는 갈지 않는다.
-     */
-    private fun megaphoneAfterBaseline(key: String, golden: String): String = when (key) {
-        "explainer" -> {
-            assertEquals("앱을 쓰는 모두에게 메시지로 가요 · 집중 중인 사람은 빼요", golden, "골든이 새 기준선이다 — megaphoneAfterBaseline 표를 지운다")
-            "앱 사용자 모두의 화면에 크게 떠요 · 집중 중인 사람은 빼요"
-        }
-        "reach" -> megaphoneReachBefore.matchEntire(golden)?.let { "지금 보내면 ${it.groupValues[1]}명의 화면에 떠요" }
-            ?: fail("골든이 새 기준선이다 — megaphoneAfterBaseline 표를 지운다: $golden")
-        // 작성 화면 한 줄(infoLine)은 reach 일 때만 간다(대기 · 받을 사람 없음 · 못 읽음 문구는 그대로).
-        "infoLine" -> if (megaphoneReachBefore.matches(golden)) megaphoneAfterBaseline("reach", golden) else golden
-        else -> golden
-    }
-
-    private val megaphoneReachBefore = Regex("^지금 보내면 (\\d+)명에게 가요$")
 
     /** text/megaphone. */
     fun megaphone(golden: GoldenFile) {
@@ -278,7 +259,7 @@ object MessageGoldenChecks {
             "notText" to MegaphoneText.notText, "blackout" to MegaphoneText.blackout, "connection" to MegaphoneText.connection,
             "failed" to MegaphoneText.failed, "loadingInfo" to MegaphoneText.loadingInfo, "infoFailed" to MegaphoneText.infoFailed,
             "tooLongNil" to MegaphoneText.tooLong(null), "tooLong50" to MegaphoneText.tooLong(50), "counter" to MegaphoneText.counter(12, 197))) {
-            assertEquals(megaphoneAfterBaseline(key, c.string(key)), value, golden.failure("constants", key))
+            assertEquals(c.string(key), value, golden.failure("constants", key))
         }
         assertEquals(c.string("icon"), TextGoldenChecks.cps(MegaphoneText.icon))
         for (row in c.array("minutes")) {
@@ -292,7 +273,7 @@ object MessageGoldenChecks {
             val n = r.int("n").toLong()
             assertEquals(r.string("sent"), MegaphoneText.sent(n))
             assertEquals(r.string("alreadySent"), MegaphoneText.alreadySent(n))
-            assertEquals(megaphoneAfterBaseline("reach", r.string("reach")), MegaphoneText.reach(n))
+            assertEquals(r.string("reach"), MegaphoneText.reach(n))
             assertEquals(r.string("confirm"), MegaphoneText.confirm(n + 5, n))
         }
         for (row in c.array("shortfall")) {
@@ -351,8 +332,7 @@ object MessageGoldenChecks {
                 for (line in o.array("lines")) {
                     val l = line.jsonObject
                     val t = Golden.bits(l.string("nowBits"))
-                    assertEquals(megaphoneAfterBaseline("infoLine", l.string("line")), MegaphoneRules.infoLine(false, info, info == null, t),
-                        golden.failure(id, "infoLine"))
+                    assertEquals(l.string("line"), MegaphoneRules.infoLine(false, info, info == null, t), golden.failure(id, "infoLine"))
                     assertEquals(l.int("remaining").toLong(), info?.cooldownRemaining(t) ?: -1L, golden.failure(id, "cooldownRemaining"))
                 }
             }

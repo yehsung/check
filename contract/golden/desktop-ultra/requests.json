@@ -1,0 +1,215 @@
+{
+  "cases": [
+    {
+      "body": "{\"p_days_back\":1}",
+      "id": "wallet-default",
+      "method": "POST",
+      "path": "/rest/v1/rpc/ultra_wallet_sync",
+      "prefer": null,
+      "query": []
+    },
+    {
+      "body": "{\"p_days_back\":0}",
+      "id": "wallet-0",
+      "method": "POST",
+      "path": "/rest/v1/rpc/ultra_wallet_sync",
+      "prefer": null,
+      "query": []
+    },
+    {
+      "body": "{\"p_days_back\":7}",
+      "id": "wallet-7",
+      "method": "POST",
+      "path": "/rest/v1/rpc/ultra_wallet_sync",
+      "prefer": null,
+      "query": []
+    },
+    {
+      "body": "{\"p_count\":1}",
+      "id": "buy-1",
+      "method": "POST",
+      "path": "/rest/v1/rpc/buy_ultra",
+      "prefer": null,
+      "query": []
+    },
+    {
+      "body": "{\"p_count\":3}",
+      "id": "buy-3",
+      "method": "POST",
+      "path": "/rest/v1/rpc/buy_ultra",
+      "prefer": null,
+      "query": []
+    },
+    {
+      "body": "{\"focus_mode\":true}",
+      "id": "focus-on",
+      "method": "PATCH",
+      "path": "/rest/v1/profiles",
+      "prefer": "return=minimal",
+      "query": [
+        [
+          "id",
+          "eq.00000000-0000-0000-0000-0000000000AB"
+        ]
+      ]
+    },
+    {
+      "body": "{\"focus_mode\":false}",
+      "id": "focus-off",
+      "method": "PATCH",
+      "path": "/rest/v1/profiles",
+      "prefer": "return=minimal",
+      "query": [
+        [
+          "id",
+          "eq.00000000-0000-0000-0000-0000000000AB"
+        ]
+      ]
+    },
+    {
+      "decodeError": false,
+      "decoded": {
+        "count": 1,
+        "have": null,
+        "max": null,
+        "need": null,
+        "rubyBalance": 17,
+        "status": "ok",
+        "ultraBalance": 4,
+        "unit": 10
+      },
+      "id": "buy-ok",
+      "response": "{\"status\":\"ok\",\"ultra_balance\":4,\"ruby_balance\":17,\"unit\":10,\"count\":1}"
+    },
+    {
+      "decodeError": false,
+      "decoded": {
+        "count": 3,
+        "have": 12,
+        "max": null,
+        "need": 30,
+        "rubyBalance": null,
+        "status": "insufficient",
+        "ultraBalance": null,
+        "unit": 10
+      },
+      "id": "buy-insufficient",
+      "response": "{\"status\":\"insufficient\",\"need\":30,\"have\":12,\"unit\":10,\"count\":3}"
+    },
+    {
+      "decodeError": false,
+      "decoded": {
+        "count": null,
+        "have": null,
+        "max": null,
+        "need": null,
+        "rubyBalance": null,
+        "status": "insufficient",
+        "ultraBalance": null,
+        "unit": null
+      },
+      "id": "buy-insufficient-bare",
+      "response": "{\"status\":\"insufficient\"}"
+    },
+    {
+      "decodeError": false,
+      "decoded": {
+        "count": null,
+        "have": null,
+        "max": 10,
+        "need": null,
+        "rubyBalance": null,
+        "status": "invalid",
+        "ultraBalance": null,
+        "unit": null
+      },
+      "id": "buy-invalid-max",
+      "response": "{\"status\":\"invalid\",\"max\":10}"
+    },
+    {
+      "decodeError": false,
+      "decoded": {
+        "count": null,
+        "have": null,
+        "max": null,
+        "need": null,
+        "rubyBalance": null,
+        "status": "ok",
+        "ultraBalance": null,
+        "unit": null
+      },
+      "id": "buy-null-balances",
+      "response": "{\"status\":\"ok\",\"ultra_balance\":null,\"ruby_balance\":null}"
+    },
+    {
+      "decodeError": true,
+      "id": "buy-missing-status",
+      "response": "{\"ultra_balance\":4}"
+    },
+    {
+      "decodeError": true,
+      "id": "buy-ruby-string",
+      "response": "{\"status\":\"ok\",\"ruby_balance\":\"17\"}"
+    },
+    {
+      "id": "shortfall",
+      "rows": [
+        {
+          "have": null,
+          "need": null,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": null,
+          "need": 30,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 12,
+          "need": null,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 12,
+          "need": 30,
+          "text": "루비 18개 더 필요해요"
+        },
+        {
+          "have": 12,
+          "need": 12,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 30,
+          "need": 12,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 0,
+          "need": 0,
+          "text": "루비가 모자라요"
+        },
+        {
+          "have": 0,
+          "need": 1,
+          "text": "루비 1개 더 필요해요"
+        }
+      ]
+    }
+  ],
+  "equivalence": "discrete",
+  "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+  "golden": "desktop-ultra/requests",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "buy-*": "buy_ultra 응답 원문 → BuyUltraResponse(합성 디코더 · convertFromSnakeCase). 실패면 decodeError",
+    "requests": "URLProtocolStub 이 기록한 요청 — 방법 · 경로 · 쿼리 쌍 · Prefer · 본문 글자(service.encoder, convertToSnakeCase)",
+    "shortfall": "shortfallNotice(need:have:) — 둘 다 알고 need > have 일 때만 개수"
+  },
+  "swiftSources": [
+    "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+    "Sources/CheckCore/SupabaseWorkModels.swift",
+    "Sources/CheckCore/CheckCoreShared.swift"
+  ]
+}

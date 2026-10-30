@@ -1,0 +1,242 @@
+{
+  "cases": [
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "always"
+      },
+      "id": "none",
+      "isExpired": null,
+      "now": "41dab7c090000000",
+      "record": null,
+      "stageServerOff": "off",
+      "stageServerOn": "always",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "always"
+    },
+    {
+      "face": {
+        "remainingSeconds": 1,
+        "stage": "timed"
+      },
+      "id": "timed-future",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": "41dab7c090400000"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "timed",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "timed"
+    },
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "off"
+      },
+      "id": "timed-now",
+      "isExpired": true,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": "41dab7c090000000"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "off",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "off"
+    },
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "off"
+      },
+      "id": "timed-past",
+      "isExpired": true,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": "41dab7c08fc00000"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "off",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "off"
+    },
+    {
+      "face": {
+        "remainingSeconds": 100,
+        "stage": "timed"
+      },
+      "id": "timed-100.7",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": "41dab7c0a92ccccd"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "timed",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "timed"
+    },
+    {
+      "face": {
+        "remainingSeconds": 0,
+        "stage": "timed"
+      },
+      "id": "timed-0.4",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": "41dab7c09019999a"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "timed",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "timed"
+    },
+    {
+      "face": {
+        "remainingSeconds": 10800,
+        "stage": "timed"
+      },
+      "id": "timed-3h",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": "41dab7cb1c000000"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "timed",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "timed"
+    },
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "off"
+      },
+      "id": "timed-nil",
+      "isExpired": true,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "timed",
+        "until": null
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "off",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "off"
+    },
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "always"
+      },
+      "id": "always",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "always",
+        "until": null
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "always",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "always"
+    },
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "always"
+      },
+      "id": "always-with-past-until",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "always",
+        "until": "41dab7c08ec00000"
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "always",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "always"
+    },
+    {
+      "face": {
+        "remainingSeconds": null,
+        "stage": "always"
+      },
+      "id": "off",
+      "isExpired": false,
+      "now": "41dab7c090000000",
+      "record": {
+        "stage": "off",
+        "until": null
+      },
+      "stageServerOff": "off",
+      "stageServerOn": "always",
+      "storeStageFocusOff": "off",
+      "storeStageFocusOn": "always"
+    },
+    {
+      "id": "record-keys",
+      "keys": [
+        {
+          "key": "focusStageRecord.00000000-0000-0000-0000-0000000000ab",
+          "userID": "00000000-0000-0000-0000-0000000000AB"
+        },
+        {
+          "key": "focusStageRecord.abcdef",
+          "userID": "ABCDEF"
+        },
+        {
+          "key": "focusStageRecord.already-lower",
+          "userID": "already-lower"
+        },
+        {
+          "key": "focusStageRecord.title-i-ı-i̇",
+          "userID": "TITLE-I-ı-İ"
+        },
+        {
+          "key": "focusStageRecord.äöü-ß",
+          "userID": "ÄÖÜ-ẞ"
+        },
+        {
+          "key": "focusStageRecord.σασ",
+          "userID": "ΣΑΣ"
+        }
+      ]
+    },
+    {
+      "changeFailedNotice": "집중 모드를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요",
+      "expiryRetryBits": "404e000000000000",
+      "id": "constants",
+      "stageRaw": [
+        "off",
+        "timed",
+        "always"
+      ],
+      "timedDurationBits": "40c5180000000000"
+    }
+  ],
+  "equivalence": "discrete",
+  "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+  "golden": "desktop-ultra/focus-stage",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "face": "store.focusStageFace(now:) — timed 일 때만 남은 초(0 쪽으로 자름)",
+    "record-keys": "focusStageRecordKey(userID:) — ★F3 사용자별 소문자(로캘 무관)",
+    "stageServerOn/Off": "FocusStagePolicy.stage(serverOn:record:now:) — ★F4 서버 켜짐 + 기록 없음 = always",
+    "storeStageFocusOff/On": "store.focusStage(now:) — focusMode 가 거짓이면 off(★F8 부수효과 없음)"
+  },
+  "swiftSources": [
+    "Sources/check/WorkTimerStorePoke.swift"
+  ]
+}

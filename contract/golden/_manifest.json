@@ -179,35 +179,35 @@
       ]
     },
     {
-      "cases": 3,
-      "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
-      "golden": "desktop-poke/fresh",
-      "path": "contract/golden/desktop-poke/fresh.json",
+      "cases": 13,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/focus-stage",
+      "path": "contract/golden/desktop-ultra/focus-stage.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/check/WorkTimerStorePoke.swift",
-        "Sources/CheckCore/SupabaseWorkModels.swift"
+        "Sources/check/WorkTimerStorePoke.swift"
       ]
     },
     {
-      "cases": 4,
-      "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
-      "golden": "desktop-poke/requests",
-      "path": "contract/golden/desktop-poke/requests.json",
+      "cases": 15,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/requests",
+      "path": "contract/golden/desktop-ultra/requests.json",
       "platformSensitive": false,
       "swiftSources": [
         "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
-        "Sources/CheckCore/SupabaseWorkModels.swift"
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckCoreShared.swift"
       ]
     },
     {
-      "cases": 3,
-      "equivalence": "bit",
-      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
-      "golden": "desktop-poke/send-notice",
-      "path": "contract/golden/desktop-poke/send-notice.json",
+      "cases": 39,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/wallet-apply",
+      "path": "contract/golden/desktop-ultra/wallet-apply.json",
       "platformSensitive": false,
       "swiftSources": [
         "Sources/check/WorkTimerStorePoke.swift",

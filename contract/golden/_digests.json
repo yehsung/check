@@ -150,30 +150,30 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
-    "desktop-poke/fresh": {
-      "file": "5c692722574c6f1997b231f70d4db577b7257edced8f3577af27b1ff6283ac25",
+    "desktop-ultra/focus-stage": {
+      "file": "c7b41fe55316084e151c422cbbacacc3a07bdd5dabb1c04a535634628781b938",
       "generator": {
-        "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "feb0424f4318945a2751bf0136362d362e01efc8832204e48c18b37826b7a4cd"
+        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
         "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
       }
     },
-    "desktop-poke/requests": {
-      "file": "96b03065ea330d8860d4c9aa976a9dadb99f3f518c00248c1f004580634c5527",
+    "desktop-ultra/requests": {
+      "file": "aedc7f7c25d42933cf12e8026234dc7ba23c2c7a490ed5b62cb1fcf37a52cbd0",
       "generator": {
-        "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "feb0424f4318945a2751bf0136362d362e01efc8832204e48c18b37826b7a4cd"
+        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
       },
       "swiftSources": {
+        "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
         "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
         "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75"
       }
     },
-    "desktop-poke/send-notice": {
-      "file": "36ada8eab2e6073b03431c8b265b8fb24649f06fa2b4da76fb813cd515d8dd47",
+    "desktop-ultra/wallet-apply": {
+      "file": "c49fc291343f5830e2b3fcf32a1e01622b0d30132949c43c8cbe59e8a44af0b7",
       "generator": {
-        "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "feb0424f4318945a2751bf0136362d362e01efc8832204e48c18b37826b7a4cd"
+        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
       },
       "swiftSources": {
         "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",

@@ -26,6 +26,9 @@ import com.yehsung.aingcheck.testkit.mock.MockRouter
 import com.yehsung.aingcheck.testkit.mock.StubResponse
 import io.ktor.client.HttpClient
 import io.ktor.http.HttpMethod
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -39,6 +42,7 @@ import kotlin.io.path.writeText
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -84,7 +88,13 @@ class TokensWiringTest {
         return home
     }
 
-    private inner class Rig(val scope: TestScope, config: DesktopAppConfig, consent: () -> Boolean = { true }) {
+    private inner class Rig(
+        val scope: TestScope,
+        config: DesktopAppConfig,
+        consentChanges: Flow<Boolean> = emptyFlow(),
+        codexLoggedIn: Boolean = false,
+        consent: () -> Boolean = { true },
+    ) {
         val router = MockRouter()
             .on(HttpMethod.Post, "/rest/v1/ai_limits", StubResponse.Json("", status = 201))
             .on(HttpMethod.Post, "/rest/v1/token_usage_device_monthly", StubResponse.Json("", status = 201))
@@ -95,7 +105,9 @@ class TokensWiringTest {
         ) { "ABCDEF12-0000-4000-8000-000000000000" }
         val session = FakeSession(service)
         val kv = InMemoryDesktopKeyValueStore()
-        val home = syntheticHome()
+        val home = syntheticHome().also { h ->
+            if (codexLoggedIn) h.resolve(".codex").createDirectories().resolve("auth.json").writeText("{}")
+        }
         val work = InMemoryDesktopWorkState(DesktopWorkSnapshot(isWorking = true))
         var accountRunnerCalls = 0
         var limitRunnerCalls = 0
@@ -114,6 +126,7 @@ class TokensWiringTest {
                 appBuild = 0,
                 tokenUsageCollect = { true },
                 aiToolDataAllowed = consent,
+                aiToolDataConsentChanges = consentChanges,
                 workState = work,
                 aiLimitRunner = AILimitRunner { now, providers ->
                     limitRunnerCalls += 1
@@ -137,6 +150,7 @@ class TokensWiringTest {
 
         fun paths(): List<String> = router.requests.map { "${it.method} ${it.path}" }
         fun tokenWrites(): List<String> = paths().filter { it.contains("/rest/v1/token_usage") }
+        fun limitWrites(): List<String> = paths().filter { it.contains("/rest/v1/ai_limits") }
     }
 
     private fun TestScope.step(ms: Long) { advanceTimeBy(ms); runCurrent() }
@@ -248,6 +262,58 @@ class TokensWiringTest {
             rig.wiring.scan.scanCount >= 1 && "POST /rest/v1/token_usage_device_monthly" in rig.tokenWrites()
         }
         rig.wiring.stop()
+    }
+
+    /**
+     * W-13 #5 끝까지: 동의 전엔 토큰 스캔·AI 리밋 자격 파일 읽기(가짜 리더)·codex.exe 실행(가짜 실행기)·업로드 0. 켜면(흐름) 다 돈다.
+     * 끄면 그 자리에서 다시 0 — 리밋 마스터는 같은 문으로 꺼져 올라가 있던 행을 비우는 행 한 번만 나간다(맥 setAIToolDataConsent).
+     */
+    @Test
+    fun `동의 끝까지 — 전엔 리밋 읽기·codex 실행·스캔·업로드 0, 켜면 돈다, 끄면 즉시 다시 0(W-13 #5)`() = runTest {
+        val consent = MutableStateFlow(false)
+        val rig = Rig(this, DesktopAppConfig(tokenUpload = true), consentChanges = consent, codexLoggedIn = true) { consent.value }
+        rig.wiring.start(backgroundScope)
+        step(100)
+        settle("첫 틱") { rig.wiring.ticks >= 1 }
+        rig.wiring.onFlyoutOpened()
+        ticks(rig, 20)                            // 600초 — 리밋 주기·스캔 주기를 여러 번 넘긴다
+        assertEquals(0, rig.limitRunnerCalls, "동의 전: 자격 파일 읽기(리밋 러너) 0")
+        assertEquals(0, rig.accountRunnerCalls, "동의 전: codex.exe 실행 0(auth.json 있음)")
+        assertEquals(0, rig.wiring.scan.scanCount, "동의 전: 스캔 0")
+        assertEquals(emptyList(), rig.limitWrites() + rig.tokenWrites(), "동의 전: ai_limits·token_usage_* 요청 0")
+
+        consent.value = true
+        step(TokensWiring.TICK_MILLIS)
+        settle("동의 뒤 리밋·프로브·스캔·업로드") {
+            rig.limitRunnerCalls >= 1 && rig.accountRunnerCalls >= 1 && rig.wiring.scan.scanCount >= 1 &&
+                "POST /rest/v1/ai_limits" in rig.limitWrites() && "POST /rest/v1/token_usage_device_monthly" in rig.tokenWrites()
+        }
+        val limitWritesAtGrant = rig.limitWrites().size
+
+        consent.value = false
+        step(100)
+        settle("철회 → 비우는 행 한 번") { rig.limitWrites().size == limitWritesAtGrant + 1 }
+        val reads = rig.limitRunnerCalls
+        val runs = rig.accountRunnerCalls
+        val scans = rig.wiring.scan.scanCount
+        val writes = rig.paths().size
+        ticks(rig, 70)                            // 35분 — 리밋 10분·프로브 30분·플라이아웃 스캔 2분 주기를 모두 넘긴다
+        assertEquals(reads, rig.limitRunnerCalls, "철회 뒤: 자격 파일 읽기 0")
+        assertEquals(runs, rig.accountRunnerCalls, "철회 뒤: codex.exe 실행 0")
+        assertEquals(scans, rig.wiring.scan.scanCount, "철회 뒤: 스캔 0(플라이아웃 주기도 내렸다)")
+        assertEquals(writes, rig.paths().size, "철회 뒤: 요청 0 — ${rig.paths().drop(writes)}")
+        assertFalse(rig.wiring.aiLimits.visibility.masterEnabled, "철회 → 리밋 마스터 끔")
+        rig.wiring.onFlyoutClosed()
+        rig.wiring.stop()
+    }
+
+    /** 30초 틱을 하나씩 민다(틱이 MockEngine 응답을 기다리는 동안 가상 시간만 앞서 가지 않게). */
+    private fun TestScope.ticks(rig: Rig, n: Int) {
+        repeat(n) {
+            val target = rig.wiring.ticks + 1
+            step(TokensWiring.TICK_MILLIS)
+            settle("틱 $target") { rig.wiring.ticks >= target }
+        }
     }
 
     @Test

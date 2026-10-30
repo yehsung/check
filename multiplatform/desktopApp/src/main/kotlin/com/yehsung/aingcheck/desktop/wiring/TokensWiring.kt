@@ -4,6 +4,8 @@
 // 토큰 쪽 한 벌: 로컬 스캔(깃발 무관 — 로컬 표시) · AI 리밋 읽기·업로드(ai_limits — **깃발 없이 연다**, W-3 #11) ·
 // 토큰 업로드 조정자(tokenUpload=false 면 token_usage_device_{monthly,daily}·하트비트 쓰기 0 — 게이트는 조정자 맨 앞 ★1).
 // 서버·파일 작업은 [serial] 한 줄로만 돈다(조정자·계정 스토어는 스레드 안전하지 않다).
+// **동의(W-13 #5 · Store 10.5.2)**: [TokensWiringDeps.aiToolDataAllowed] 하나가 맥 aiToolDataAllowed(WorkTimerStoreMacEdition.swift:54-64)처럼
+// 토큰 스캔·업로드·하트비트·Codex 계정 프로브(codex.exe)·AI 리밋 자격 파일 읽기·리밋 값 업로드를 함께 막는다. 철회는 [applyAiToolDataConsent].
 package com.yehsung.aingcheck.desktop.wiring
 
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
@@ -30,7 +32,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -61,6 +66,11 @@ data class TokensWiringDeps(
      * 맥 aiToolDataAllowed(WorkTimerStoreMacEdition.swift:54-64)처럼 **스캔 문과 업로드 문 둘 다** 이 값을 본다. 기본 false = 동의 전 스캔 0.
      */
     val aiToolDataAllowed: () -> Boolean = { false },
+    /**
+     * 동의 스위치 변화(`DesktopSettingsStore.tokenUsageCollect` StateFlow — 첫 값은 지금 상태라 건너뛴다). 바뀔 때마다
+     * [TokensWiring.applyAiToolDataConsent] — 철회하면 그 자리에서 스캔 주기를 내리고 리밋 마스터를 끈다(맥 setAIToolDataConsent).
+     */
+    val aiToolDataConsentChanges: Flow<Boolean> = emptyFlow(),
     /** 배경 스캔은 근무 중일 때만(Swift refreshTokenUsageInBackgroundIfDue). */
     val workState: DesktopWorkState,
     /** `AILimitWindowsRunner.live(homes, AILimitHTTPKtor.fetcher(httpClient()), BuildIdentity.VERSION)`. */
@@ -101,7 +111,8 @@ class TokensWiring(private val deps: TokensWiringDeps) {
     }
 
     /** W2-h3 Codex 계정 스토어(auth.json 부재면 프로세스 0). */
-    val account: CodexAccountUsageStore = CodexAccountUsageStore(deps.keyValueStore, deps.homes::codexHome, deps.codexAccountRunner)
+    val account: CodexAccountUsageStore =
+        CodexAccountUsageStore(deps.keyValueStore, deps.homes::codexHome, isPermitted = deps.aiToolDataAllowed, runner = deps.codexAccountRunner)
 
     /** W2-h3 업로드 조정자 — tokenUpload 깃발은 조정자 안 ★1 게이트가 맨 앞에서 본다(여기서 바꾸지 않는다). */
     val upload: TokenUploadCoordinator = TokenUploadCoordinator(
@@ -122,17 +133,20 @@ class TokensWiring(private val deps: TokensWiringDeps) {
         runner = deps.aiLimitRunner,
     )
 
-    /** W2-h2 리밋 업로드 — 깃발 없이 연다(W-3 #11). 게이트는 세션·기기 id·지문뿐. */
+    /** W2-h2 리밋 업로드 — 깃발 없이 연다(W-3 #11). 게이트는 세션·기기 id·지문 + 동의(읽기·값 행 — 비우기는 지난다). */
     val aiLimitSync: DesktopAILimitSync = DesktopAILimitSync(
         store = aiLimits,
         service = deps.service,
         session = { deps.sessionStore.session?.let { AILimitSession(it.accessToken, it.userID) } },
         deviceId = deps.deviceId,
+        aiToolDataAllowed = deps.aiToolDataAllowed,
     )
 
     private val serial = Mutex()
     private var job: Job? = null
     private var flyoutJob: Job? = null
+    private var scanLoopJob: Job? = null
+    @Volatile private var flyoutOpen = false
     private var scope: CoroutineScope? = null
 
     /** 끝난 30초 틱 수(시험·진단). */
@@ -147,6 +161,7 @@ class TokensWiring(private val deps: TokensWiringDeps) {
             launch {
                 scan.currentMonthUsage.drop(1).collect { serially { upload.uploadTokenUsageIfNeeded(scanSource, account, wallNow()) } }
             }
+            launch { deps.aiToolDataConsentChanges.distinctUntilChanged().drop(1).collect { applyAiToolDataConsent(it) } }
             while (isActive) {
                 tick()
                 delay(deps.tickMillis)
@@ -166,17 +181,42 @@ class TokensWiring(private val deps: TokensWiringDeps) {
     /** 플라이아웃이 열렸다: 스캔 주기(즉시·120초) · 리밋 강제(5분 하한 유지) · 내 행. 닫히면 [onFlyoutClosed]. */
     fun onFlyoutOpened() {
         val s = scope ?: return
+        flyoutOpen = true
+        startScanLoopIfPermitted()
         if (flyoutJob?.isActive == true) return
         flyoutJob = s.launch {
-            launch { scan.runRefreshLoop() }
             serially { aiLimitSync.refreshAILimitsIfNeeded(wallNow(), force = true) }
             serially { upload.loadMyTokenRowIfDue(wallNow()) }
         }
     }
 
     fun onFlyoutClosed() {
+        flyoutOpen = false
+        scanLoopJob?.cancel()
+        scanLoopJob = null
         flyoutJob?.cancel()
         flyoutJob = null
+    }
+
+    /**
+     * 동의가 바뀌었다(맥 setAIToolDataConsent — WorkTimerStoreMacEdition.swift:75-87). **철회**: 스캔 주기를 그 자리에서 내리고(다음 스캔 0 —
+     * 스캔·업로드·프로브·리밋 읽기 문은 [TokensWiringDeps.aiToolDataAllowed] 를 매번 다시 본다) 리밋 마스터를 끈다(올라가 있던 행은 비우기로
+     * 지운다). **동의**: 우리가 끈 마스터만 되살리고 플라이아웃이 열려 있으면 스캔 주기를 다시 건다(즉시 스캔은 페이지 onConsentGranted 몫).
+     */
+    suspend fun applyAiToolDataConsent(granted: Boolean) {
+        if (!granted) {
+            scanLoopJob?.cancel()
+            scanLoopJob = null
+        } else if (flyoutOpen) {
+            startScanLoopIfPermitted()
+        }
+        serially { aiLimitSync.applyAIToolDataConsent(granted) }
+    }
+
+    private fun startScanLoopIfPermitted() {
+        val s = scope ?: return
+        if (!deps.aiToolDataAllowed() || scanLoopJob?.isActive == true) return
+        scanLoopJob = s.launch { scan.runRefreshLoop() }
     }
 
     /** Main 종료 훅(W-6 #6: QuitFinisher 뒤, 실시간 shutdown 앞) — 맥 willTerminate 의 스캔 캐시 강제 저장. */
@@ -185,6 +225,9 @@ class TokensWiring(private val deps: TokensWiringDeps) {
     }
 
     fun stop() {
+        flyoutOpen = false
+        scanLoopJob?.cancel()
+        scanLoopJob = null
         flyoutJob?.cancel()
         flyoutJob = null
         job?.cancel()

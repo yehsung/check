@@ -70,9 +70,15 @@ object AILimitHTTPKtor {
  * 요청 집합 밖의 리더는 만들지도 부르지도 않는다(파일 손 0).
  */
 object AILimitWindowsRunner {
-    fun live(homes: DesktopAiHomes, fetcher: AILimitHTTPFetcher, appVersion: String): AILimitRunner {
-        val claude = AILimitClaudeReader({ AILimitCredentialFiles.read(AILimitCredentialFiles.claudeCredentials(homes)) }, fetcher, appVersion)
-        val codex = AILimitCodexReader({ AILimitCredentialFiles.read(AILimitCredentialFiles.codexAuth(homes)) }, fetcher, appVersion)
+    /** [readFile] 는 자격 파일 읽기 한 자리(시험은 세는 가짜를 넣는다 — 동의 전 열기 0 판정, W-13 #5). */
+    fun live(
+        homes: DesktopAiHomes,
+        fetcher: AILimitHTTPFetcher,
+        appVersion: String,
+        readFile: (Path) -> AILimitFileRead = AILimitCredentialFiles::read,
+    ): AILimitRunner {
+        val claude = AILimitClaudeReader({ readFile(AILimitCredentialFiles.claudeCredentials(homes)) }, fetcher, appVersion)
+        val codex = AILimitCodexReader({ readFile(AILimitCredentialFiles.codexAuth(homes)) }, fetcher, appVersion)
         return AILimitRunner { now, providers ->
             coroutineScope {
                 val jobs = ArrayList<Pair<AILimitProvider, kotlinx.coroutines.Deferred<AILimitOutcome<AILimitProviderSnapshot>>>>()

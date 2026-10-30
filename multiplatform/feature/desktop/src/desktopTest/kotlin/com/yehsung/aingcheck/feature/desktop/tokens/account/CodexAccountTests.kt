@@ -256,6 +256,37 @@ class CodexAccountTests {
         }
     }
 
+    /**
+     * W-13 #5: 동의 전이면 auth.json 이 있어도 codex.exe 실행 0 · 주기도 쓰지 않는다(맥 WorkTimerStoreSync.swift:790 aiToolDataAllowed).
+     * 켜면 같은 시각에 바로 돈다(양성 짝), 끄면 하한이 지나도 다시 0(음성 대조).
+     */
+    @Test
+    fun consentGatesTheCodexProcess_beforeGrantZeroRuns_grantRuns_revokeZeroAgain() = runTest {
+        val home = Files.createTempDirectory("h3-codex-consent")
+        try {
+            Files.writeString(home.resolve("auth.json"), "{}")
+            var runs = 0
+            var consent = false
+            val store = CodexAccountUsageStore(InMemoryDesktopKeyValueStore(), { home }, isPermitted = { consent }) { now ->
+                runs += 1
+                CodexProbeResult.Success(CodexAccountUsage(now, 9, mapOf("2026-10-29" to 4L)))
+            }
+            store.refreshIfDue(fetchedAt, force = true)
+            store.refreshIfDue(fetchedAt.addingTimeInterval(3600.0))
+            assertEquals(0, runs, "동의 전: 실행 0")
+            assertEquals(null, store.lastProbeAt, "동의 전: 주기를 쓰지 않는다")
+            assertEquals(null, store.lastStatus, "동의 전: '미로그인'으로도 적지 않는다(auth.json 확인조차 0)")
+            consent = true
+            store.refreshIfDue(fetchedAt.addingTimeInterval(3600.0))
+            assertEquals(1, runs, "동의 뒤: 같은 시각에 바로 돈다")
+            consent = false
+            store.refreshIfDue(fetchedAt.addingTimeInterval(3600.0 * 3), force = true)
+            assertEquals(1, runs, "철회 뒤: 하한이 지나도 실행 0")
+        } finally {
+            home.toFile().deleteRecursively()
+        }
+    }
+
     @Suppress("unused")
     private fun unusedSwiftDate(): SwiftDate = fetchedAt
 }

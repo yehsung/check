@@ -14,6 +14,11 @@ class CodexAccountUsageStore(
     private val store: DesktopKeyValueStore,
     /** 부를 때마다 다시 푼다(DesktopAiHomes.codexHome — 조립 지점이 넘긴다). */
     private val codexHome: () -> Path,
+    /**
+     * AI 도구 기록 읽기 동의(W-13 #5 · 맥 aiToolDataAllowed — WorkTimerStoreMacEdition.swift:54-64 · WorkTimerStoreSync.swift:790).
+     * 거짓이면 auth.json 존재 확인도 codex.exe 실행도 하지 않고, 주기도 쓰지 않는다(동의하면 바로 다음 틱이 돈다). 기본 참 = 옛 호출 그대로.
+     */
+    private val isPermitted: () -> Boolean = { true },
     private val runner: suspend (now: SwiftDate) -> CodexProbeResult,
 ) : CodexAccountSource {
     override var snapshot: CodexAccountUsage? = restore()
@@ -34,6 +39,7 @@ class CodexAccountUsageStore(
     }
 
     override suspend fun refreshIfDue(now: SwiftDate, force: Boolean) {
+        if (!isPermitted()) return
         if (!isDue(now, force)) return
         lastProbeAt = now
         inFlight = true

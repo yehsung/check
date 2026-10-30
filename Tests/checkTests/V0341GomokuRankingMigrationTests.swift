@@ -346,6 +346,18 @@ private let t41IntendedGomokuRewrites: [String: (why: String, required: [String]
         ["when 'ios' then public.gomoku_ios_min_build()", "when 'android' then public.gomoku_chat_android_min_build()", "when 'windows' then public.gomoku_chat_windows_min_build()"],
         ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
     ),
+    // 서버 ⑤(안드로이드 첫 출시 판 versionCode 1 에 1:1 대결): M2 가 도달 불가로 둔 android 상수를 1 로 내리는 한 줄 파일.
+    // 상수는 정수만 내고 전적을 보고하지 않는다 → 컷을 못 지운다. required 는 내린 값 그 자체다(다른 값이면 빨강).
+    "20261102100000_android_duels_min_build_1.sql:gomoku_android_min_build": (
+        "서버 ⑤ — gomoku_android_min_build 를 1(versionCode 1 = 안드로이드 첫 출시 판)로 내린다",
+        ["select 1"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
+    "20261102100000_android_duels_min_build_1.sql:gomoku_chat_android_min_build": (
+        "서버 ⑤ — gomoku_chat_android_min_build 를 1(versionCode 1 = 안드로이드 첫 출시 판)로 내린다",
+        ["select 1"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner", "d.platform = 'ios'"]
+    ),
 ]
 
 @Test

@@ -10,8 +10,10 @@ import CheckCore
 // ── 끌기 ──
 // 타일마다 `DragGesture(minimumDistance: 0)` 하나로 받고 시간·거리를 스스로 잰다(키 창에서 확실히 도는 길):
 //   · 3pt 넘게 움직이면 **한 장** 끌기.
-//   · 3pt 안에서 0.35초 버티면 **묶음째 집기** — 받침대 = `editor.rackChain(around:)`(딱 붙은 이어진 덩어리),
-//     판 = `editor.meldPick(for:fromTileToEnd:)`(묶음 전체, ⌥ = 그 타일부터 끝). 들어 올림 · 장수 뱃지 · 햅틱. 그다음 끌면 묶음째.
+//   · 3pt 안에서 0.5초(`liftDelay` — 0.3.70, 0.35초는 천천히 누르는 사람이 한 장을 집으려다 덩어리째 집었다) 버티면
+//     **묶음째 집기** — 받침대 = `editor.rackChain(around:)`(딱 붙은 이어진 덩어리), 판 = `editor.meldChunk(for:)`(누른 타일에서
+//     가까운 끝까지 — 오른쪽 절반이면 그 타일부터 끝, 왼쪽 절반이면 처음부터 그 타일, 정확히 가운데면 묶음 전체. ⌥ 없이 쪼개기).
+//     들어 올림 · 장수 뱃지 · 햅틱. 그다음 끌면 묶음째.
 //   · 묶음 왼쪽 손잡이를 끌면 묶음 통째 위치 이동(`store.moveSet`). 묶음 전체를 집어 빈 곳에 놓아도 같은 길로 간다.
 // 놓을 자리는 순수 판정(`RummyDropResolver`)이 정하고, 규칙(놓아도 되는가)은 편집기·서버가 정한다:
 //   · 받침대 위 = `.rackSlot`(반 칸 격자, 겹치면 편집기가 가장 가까운 빈자리로) · 묶음 위 = `.meld(m, index:)` ·
@@ -23,6 +25,8 @@ import CheckCore
 //   · 뽑기: `store.lastDraw` 가 바뀌면 새 타일이 [뽑기] 버튼 자리에서 받침대 빈자리로 스프링(0.45초).
 //   · 정렬: 정렬 뒤 화면 순서대로 타일마다 25ms 시차로 미끄러진다.
 //   · 남의 작업 판·확정 판 변화: 묶음을 면 글자 키로 잡아 제자리에서 부드럽게 옮긴다.
+//   · 0.3.70: [판 확대]가 기본이다(놓인 묶음에 맞춰 최대 타일 56pt). 끄는 동안·누르는 동안은 판 변환을 굳힌다 — 놓을 때마다
+//     배율이 바뀌어 손 아래 판이 움직이지 않게. 놓으면 새 변환으로 미끄러진다. 창 머리글은 위 띠 빈칸으로 들어왔다.
 //   · 3판 놓기: 끄는 동안 편집기 미리보기(`previewDrop`·`previewMoveSet`)로 붙을 끝 자석 · 끼울 자리 캐럿 · 새 묶음 점선을
 //     그리고, 놓으면 타일이 손을 놓은 자리에서 들어갈 자리로 미끄러진다(타일 id 로 잡아 나뉨·붙기·끼우기 모두 튀지 않는다).
 
@@ -42,7 +46,7 @@ struct RummyMatchLayout: Equatable {
     let size: CGSize
 
     static var standard: RummyMatchLayout {
-        RummyMatchLayout(size: CGSize(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.bodyHeight))
+        RummyMatchLayout(size: CGSize(width: RummyWindowLayout.innerWidth, height: RummyWindowLayout.matchBodyHeight))
     }
 
     var rackHeight: CGFloat { RummyRackGeometry.standHeight }
@@ -57,6 +61,13 @@ struct RummyMatchLayout: Equatable {
     }
     var topSeat: CGRect {
         CGRect(x: (size.width - Self.topSeatWidth) / 2, y: 0, width: Self.topSeatWidth, height: Self.topBandHeight)
+    }
+    /// 0.3.70 — 창 머리글이 들어오는 위 띠 빈칸(판돈 카드와 위쪽 상대 사이: 루비 · 반응, 위쪽 상대와 더미 사이: 규칙 · 기권).
+    var chromeLeft: CGRect {
+        CGRect(x: potCard.maxX + Self.gap, y: 0, width: topSeat.minX - potCard.maxX - Self.gap * 2, height: Self.topBandHeight)
+    }
+    var chromeRight: CGRect {
+        CGRect(x: topSeat.maxX + Self.gap, y: 0, width: poolCard.minX - topSeat.maxX - Self.gap * 2, height: Self.topBandHeight)
     }
     var leftSeat: CGRect { sideCard(x: 0) }
     var rightSeat: CGRect { sideCard(x: size.width - Self.sideColumnWidth) }
@@ -242,12 +253,20 @@ struct RummyMatchView: View {
     let me: ChessPlayerFace
     let clipsOverflowInsteadOfScroll: Bool
     let previewDrag: RummyPreviewDrag?
+    /// 위 띠 [기권] — 확인 덮개는 창 루트가 띄운다.
+    var onForfeit: () -> Void = {}
+
+    /// 길게 눌러 묶음째 집기까지(초).
+    static let liftDelay: Double = 0.5
 
     @State private var drag: RummyDragState?
     @State private var press: RummyPressState?
     @State private var pressSerial = 0
     @State private var refusedFlash = false
-    @State private var zoomed = false
+    /// [판 확대] — 0.3.70 기본 켬(전체 보기면 판 타일 37pt, 확대면 놓인 묶음에 맞춰 최대 56pt).
+    @State private var zoomed = true
+    /// 끄는 동안 굳힌 판 변환(놓으면 nil — 새 변환으로 미끄러진다).
+    @State private var frozenCanvas: RummyCanvasTransform?
     @State private var stagger: [Int: Double] = [:]
     @State private var flyIn: RummyFlyIn?
     @State private var lastSort: RummyRackSort?
@@ -272,6 +291,7 @@ struct RummyMatchView: View {
         .onChange(of: match.seq) { _, _ in
             drag = nil
             press = nil
+            frozenCanvas = nil
             arrival = nil
             recentDrop = []
         }
@@ -331,7 +351,19 @@ struct RummyMatchView: View {
     }
 
     private func transform(_ L: RummyMatchLayout, layout: RummyTableLayout) -> RummyCanvasTransform {
-        isZoomed ? .zoom(viewport: L.table.size, content: layout.frames) : .fit(viewport: L.table.size)
+        if let frozenCanvas { return frozenCanvas }
+        return isZoomed ? .zoom(viewport: L.table.size, content: layout.frames) : .fit(viewport: L.table.size)
+    }
+
+    /// 끌기·누르기 시작 — 지금 변환을 굳힌다(놓을 때까지 손 아래 판이 안 움직인다).
+    private func freeze(_ canvas: RummyCanvasTransform) {
+        if frozenCanvas == nil { frozenCanvas = canvas }
+    }
+
+    /// 놓은 뒤 — 굳힌 변환을 풀어 새 변환으로 미끄러진다.
+    private func thaw() {
+        guard frozenCanvas != nil else { return }
+        withAnimation(reduceMotion ? nil : RummyTableCanvasView.slide) { frozenCanvas = nil }
     }
 
     private func rackGeometry(_ L: RummyMatchLayout) -> RummyRackGeometry {
@@ -355,7 +387,7 @@ struct RummyMatchView: View {
         if let drag { return drag }
         guard let previewDrag, let point = previewDrag.point, let editor, let grabbed = tile(previewDrag.tileID)
         else { return nil }
-        let ids = previewDrag.block ? pick(around: grabbed.id, in: editor, option: false) : [grabbed.id]
+        let ids = previewDrag.block ? pick(around: grabbed.id, in: editor) : [grabbed.id]
         let tiles = ids.compactMap(tile)
         return RummyDragState(kind: .tiles, tiles: tiles, grabIndex: ids.firstIndex(of: grabbed.id) ?? 0, point: point)
     }
@@ -364,11 +396,12 @@ struct RummyMatchView: View {
     private var activeLift: (tileID: Int, ids: [Int])? {
         if drag == nil, let press, let picked = press.picked { return (press.tileID, picked) }
         guard drag == nil, let previewDrag, previewDrag.point == nil, let editor else { return nil }
-        return (previewDrag.tileID, pick(around: previewDrag.tileID, in: editor, option: false))
+        return (previewDrag.tileID, pick(around: previewDrag.tileID, in: editor))
     }
 
-    private func pick(around id: Int, in editor: RummyTurnEditor, option: Bool) -> [Int] {
-        editor.rack.contains { $0.id == id } ? editor.rackChain(around: id) : editor.meldPick(for: id, fromTileToEnd: option)
+    /// 길게 눌러 집히는 덩어리 — 받침대는 딱 붙은 이어진 타일, 판은 누른 타일에서 가까운 끝까지(⌥ 없이 쪼개기).
+    private func pick(around id: Int, in editor: RummyTurnEditor) -> [Int] {
+        editor.rack.contains { $0.id == id } ? editor.rackChain(around: id) : editor.meldChunk(for: id)
     }
 
     private func resolve(_ drag: RummyDragState, L: RummyMatchLayout, layout: RummyTableLayout,
@@ -410,6 +443,24 @@ struct RummyMatchView: View {
             RummyPoolCard(count: match.poolCount)
                 .frame(width: L.poolCard.width, height: L.poolCard.height)
                 .offset(x: L.poolCard.minX, y: L.poolCard.minY)
+            // 0.3.70: 창 머리글(루비 · 반응 · 규칙 · 기권)이 위 띠 빈칸으로 — 판 칸이 그만큼 높다.
+            HStack(spacing: 8) {
+                RubyBalanceChip(balance: scene.shownRubyBalance, large: true)
+                    .checkTooltip("내 루비")
+                RummyReactionButton(store: store)
+            }
+            .frame(width: L.chromeLeft.width, height: L.chromeLeft.height)
+            .offset(x: L.chromeLeft.minX, y: L.chromeLeft.minY)
+            HStack(spacing: 8) {
+                TetrisDuelActionButton(title: RummyText.rulesButton, icon: "book.fill", style: .outline,
+                                       height: 30, action: { store.rulesShown = true })
+                if scene.mySeat?.state == .playing {
+                    TetrisDuelActionButton(title: RummyText.forfeit, icon: "flag.fill", tint: CheckTheme.danger,
+                                           style: .outline, height: 30, action: onForfeit)
+                }
+            }
+            .frame(width: L.chromeRight.width, height: L.chromeRight.height)
+            .offset(x: L.chromeRight.minX, y: L.chromeRight.minY)
             if let seat = seat(arrangement.top) {
                 RummySeatCard(store: store, scene: scene, match: match, seat: seat, style: .top)
                     .frame(width: L.topSeat.width, height: L.topSeat.height)
@@ -437,7 +488,7 @@ struct RummyMatchView: View {
                     .rummyReactionAnchor(seatNo: mine.seatNo, edge: .top)
                     .offset(x: L.mySeat.minX, y: L.mySeat.minY)
             }
-            rackArea(L, geometry: geometry, dragging: dragging, target: target, refused: isRefused, lift: lift)
+            rackArea(L, geometry: geometry, dragging: dragging, target: target, refused: isRefused, lift: lift, canvas: canvas)
                 .frame(width: L.rack.width, height: L.rack.height)
                 .offset(x: L.rack.minX, y: L.rack.minY)
             actions(L)
@@ -476,9 +527,12 @@ struct RummyMatchView: View {
                 movingSet: movingSet, preview: preview,
                 arrivals: arrival.flatMap { $0.landed ? nil : $0.starts } ?? [:], recentTileIDs: recentDrop,
                 reduceMotion: reduceMotion,
-                onTileDrag: { id, value in tileChanged(id, value, surface: .board) },
+                onTileDrag: { id, value in tileChanged(id, value, surface: .board, canvas: canvas) },
                 onTileDragEnd: { id, value in tileEnded(id, value, L: L) },
-                onHandleDrag: { index, value in handleChanged(index, value, L: L, canvas: canvas, layout: model.layout) },
+                onHandleDrag: { index, value in
+                    freeze(canvas)
+                    handleChanged(index, value, L: L, canvas: canvas, layout: model.layout)
+                },
                 onHandleDragEnd: { _, value in tileEnded(-1, value, L: L) })
             HStack(alignment: .bottom, spacing: 8) {
                 if let event = RummyText.lastEvent(match.lastEvent, name: scene.name(of: match.lastEvent?.seatNo)) {
@@ -510,7 +564,8 @@ struct RummyMatchView: View {
     // MARK: 받침대
 
     private func rackArea(_ L: RummyMatchLayout, geometry: RummyRackGeometry, dragging: RummyDragState?,
-                          target: RummyDropTarget?, refused: Bool, lift: (tileID: Int, ids: [Int])?) -> some View {
+                          target: RummyDropTarget?, refused: Bool, lift: (tileID: Int, ids: [Int])?,
+                          canvas: RummyCanvasTransform) -> some View {
         let ghosts: [RummyRackSlot] = {
             guard !refused, let dragging, case .rackSlot(let wanted)? = target, let editor else { return [] }
             let n = dragging.tiles.count
@@ -526,7 +581,7 @@ struct RummyMatchView: View {
             liftedTileIDs: Set(lift?.ids ?? []), liftBadge: lift.map { ($0.tileID, $0.ids.count) },
             ghostSlots: ghosts, refused: refused || refusedFlash, stagger: stagger, flyIn: flyIn, flyOrigin: origin,
             reduceMotion: reduceMotion,
-            onTileDrag: { id, value in tileChanged(id, value, surface: .rack) },
+            onTileDrag: { id, value in tileChanged(id, value, surface: .rack, canvas: canvas) },
             onTileDragEnd: { id, value in tileEnded(id, value, L: L) })
     }
 
@@ -565,8 +620,10 @@ struct RummyMatchView: View {
 
     // MARK: 끌기
 
-    private func tileChanged(_ id: Int, _ value: DragGesture.Value, surface: RummyPressState.Surface) {
+    private func tileChanged(_ id: Int, _ value: DragGesture.Value, surface: RummyPressState.Surface,
+                             canvas: RummyCanvasTransform) {
         guard editor != nil else { return }
+        freeze(canvas)
         if drag != nil {
             drag?.point = value.location
             return
@@ -576,10 +633,9 @@ struct RummyMatchView: View {
             let token = pressSerial
             press = RummyPressState(tileID: id, token: token, surface: surface, picked: nil)
             Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(350))
+                try? await Task.sleep(for: .milliseconds(Int(Self.liftDelay * 1000)))
                 guard press?.token == token, drag == nil, let editor else { return }
-                let option = NSEvent.modifierFlags.contains(.option)
-                let ids = surface == .rack ? editor.rackChain(around: id) : editor.meldPick(for: id, fromTileToEnd: option)
+                let ids = surface == .rack ? editor.rackChain(around: id) : editor.meldChunk(for: id)
                 guard !ids.isEmpty else { return }
                 press?.picked = ids
                 NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
@@ -610,6 +666,7 @@ struct RummyMatchView: View {
         defer {
             drag = nil
             press = nil
+            thaw()
         }
         guard var finished = drag, let editor else { return }
         finished.point = value.location

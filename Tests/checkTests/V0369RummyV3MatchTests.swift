@@ -77,6 +77,7 @@ private func v3Render(_ editor: RummyTurnEditor, drag: RummyPreviewDrag? = nil, 
                            previewEditor: editor, previewNow: v3Now, previewMyUserID: UUID(uuidString: v3People[0].id),
                            previewDrag: drag)
         .environment(\.colorScheme, .dark)
+        .environment(\.rummyBoardZoomPreview, false)   // 0.3.70 기본은 [판 확대] — 이 시험들은 전체 보기 좌표로 잰다
     _ = try v3Bitmap(panel)
     let bitmap = try v3Bitmap(panel)
     if let name { MiniGameSnapshots.save(bitmap, name: "rummy3-\(name).png", sub: "stills") }
@@ -130,7 +131,7 @@ private let v3Canvas = RummyCanvasTransform.fit(viewport: v3L.table.size)
 
 /// 판 화면 좌표 → 창 좌표.
 private func v3Win(_ rect: CGRect) -> CGRect {
-    rect.offsetBy(dx: W.contentPadding, dy: W.contentPadding + W.headerHeight + W.headerSpacing)
+    rect.offsetBy(dx: W.matchBodyOrigin.x, dy: W.matchBodyOrigin.y)   // 0.3.70: 판 화면은 머리글 없음
 }
 
 /// 논리 판 사각형 → 창 좌표.

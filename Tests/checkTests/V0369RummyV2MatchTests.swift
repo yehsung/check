@@ -80,7 +80,7 @@ private func mvBitmap(_ view: some View) throws -> NSBitmapImageRep {
 /// 창 화면 한 장(1240×700 · scale 2). 첫 두 장은 다르게 나온다(실측) — 굳힌 뒤 둘째 장을 쓴다.
 @MainActor
 private func mvRender(match: RummyMatchState, editor: RummyTurnEditor?, drag: RummyPreviewDrag? = nil,
-                      zoom: Bool? = nil, art: RummyArtStyle = .automatic, reactions: [RummyReactionBubble]? = nil,
+                      zoom: Bool? = false, art: RummyArtStyle = .automatic, reactions: [RummyReactionBubble]? = nil,
                       name: String? = nil) throws -> NSBitmapImageRep {
     let panel = RummyPanel(store: RummyStore(), me: { mvMe }, clipsOverflowInsteadOfScroll: true, previewMatch: match,
                            previewEditor: editor, previewNow: mvNow, previewMyUserID: UUID(uuidString: mvPeople[0].id),
@@ -138,11 +138,12 @@ private let mvWorking = (89, 224, 161)
 private typealias W = RummyWindowLayout
 private let mvL = RummyMatchLayout.standard
 /// 판 화면 좌표 → 창 좌표.
+/// 0.3.70: 판 화면은 머리글이 없다(위 띠로 옮겼다) — 본문이 `matchBodyOrigin` 에서 시작한다.
 private func mvWin(_ rect: CGRect) -> CGRect {
-    rect.offsetBy(dx: W.contentPadding, dy: W.contentPadding + W.headerHeight + W.headerSpacing)
+    rect.offsetBy(dx: W.matchBodyOrigin.x, dy: W.matchBodyOrigin.y)
 }
 private func mvWin(_ point: CGPoint) -> CGPoint {
-    CGPoint(x: point.x + W.contentPadding, y: point.y + W.contentPadding + W.headerHeight + W.headerSpacing)
+    CGPoint(x: point.x + W.matchBodyOrigin.x, y: point.y + W.matchBodyOrigin.y)
 }
 /// 논리 판 사각형 → 창 좌표(전체 맞춤 또는 확대).
 private func mvBoard(_ r: RummyRect, _ canvas: RummyCanvasTransform = .fit(viewport: mvL.table.size)) -> CGRect {

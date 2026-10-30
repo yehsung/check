@@ -42,7 +42,9 @@ struct RummyCanvasTransform: Equatable {
 
     /// 놓인 묶음을 다 담는 사각형(+ 가로 두 장·세로 한 줄 여백)에 맞춰 확대. 배율은 [전체 맞춤, `maxScale`] 사이.
     /// 묶음이 없으면 캔버스 왼쪽 위 1/4 를 본다. 보이는 구간은 되도록 캔버스 안으로 민다.
-    static func zoom(viewport: CGSize, content: [RummyRect], inset: CGFloat = 12, maxScale: CGFloat = 1) -> RummyCanvasTransform {
+    /// 여백 20(0.3.70 — 12 였다): [판 확대]가 기본이 되며 캔버스 왼끝(x 0) 묶음의 손잡이(묶음 왼쪽 13 단위 밖)가 판 테두리에
+    /// 잘렸다(렌더 `rummy370-board-default`).
+    static func zoom(viewport: CGSize, content: [RummyRect], inset: CGFloat = 20, maxScale: CGFloat = 1) -> RummyCanvasTransform {
         let base = fit(viewport: viewport, inset: inset)
         var region: CGRect
         if let first = content.first {
@@ -311,7 +313,8 @@ struct RummyTableCanvasView: View {
     /// 묶음 손잡이(왼쪽 끝) — 잡고 끌면 묶음 통째 위치 이동.
     private func handle(index: Int, frame logical: RummyRect) -> some View {
         let frame = transform.rect(logical)
-        let width = max(7, 9 * transform.scale)
+        // 0.3.70: 조금 굵게(타일폭 1/4) · 잡는 자리는 묶음 높이 전체 — 옆 묶음과의 틈(16 단위)을 넘지 않게 옆으로는 안 넓힌다.
+        let width = max(8, 10 * transform.scale)
         let height = frame.height
         return VStack(spacing: max(2, height * 0.08)) {
             ForEach(0..<3, id: \.self) { _ in
@@ -321,6 +324,7 @@ struct RummyTableCanvasView: View {
         .frame(width: width, height: height * 0.86)
         .background(Capsule().fill(Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.55)))
         .overlay(Capsule().stroke(Color.white.opacity(0.25), lineWidth: 0.8))
+        .frame(height: height)
         .contentShape(Rectangle())
         .gesture(DragGesture(minimumDistance: 2, coordinateSpace: .named(RummyMatchView.space))
             .onChanged { onHandleDrag(index, $0) }

@@ -375,7 +375,8 @@ struct V0369RummyV2EditorTests {
         #expect(editor.points[0] == v2p(0, 0))
         let moved103 = editor.moveBlock([v2RackID(editor, "A5")], to: .meld(0, index: nil))   // 5장 = 200 → 막힘
         #expect(moved103)
-        #expect(editor.points[0] != v2p(0, 0))
+        // 0.3.70 ④: 왼쪽은 판 끝이라 못 늘고 → 만지던 A1-A5 는 제자리, 막은 B7-D7 이 가장 가까운 빈자리(200+16)로 비켜난다.
+        #expect(editor.points == [v2p(0, 0), v2p(216, 0)])
         #expect(v2Disjoint(editor.tableLayout))
         let reason = editor.reason
         let moved20 = editor.moveSet(1, to: v2p(640, 480))

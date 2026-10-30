@@ -67,6 +67,11 @@ enum RummyWindowLayout {
     static let tableStageHeight: CGFloat = 280
 
     // MARK: 판
+    /// 0.3.70: 판 화면은 창 머리글을 따로 두지 않는다(루비·반응·규칙·기권이 판의 위 띠 빈칸으로 들어간다 — `RummyMatchLayout`
+    /// `chromeLeft`·`chromeRight`). 그만큼(머리글 40 + 간격 12) 판 칸이 높아진다: 판 타일 33 → 37pt(전체 보기), [판 확대] 기본.
+    static var matchBodyHeight: CGFloat { headerHeight + headerSpacing + bodyHeight }
+    /// 판 화면 본문의 창 안 왼쪽 위(머리글 없음).
+    static var matchBodyOrigin: CGPoint { CGPoint(x: contentPadding, y: contentPadding) }
     static let seatBarHeight: CGFloat = 72
     static let sectionSpacing: CGFloat = 10
     static let statusLineHeight: CGFloat = 22

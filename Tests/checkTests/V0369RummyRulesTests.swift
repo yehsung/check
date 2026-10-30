@@ -421,7 +421,8 @@ private let payoutCases: [PayoutCase] = [
         // 다시 합치면(순서는 섞여도) 안 바뀜 — R-19 "쪼갰다 원래대로 돌려놓은 것".
         for tile in tiles[3...].reversed() { move(&editor, tile, .meld(0, index: 0)) }
         #expect(editor.melds.count == 1)
-        #expect(editor.submissionTable[0] != fs("A1 A2 A3 A4 A5 A6"))
+        // 0.3.70: 다시 맞는 세트가 되면 편집기가 R-09 표시 순서로 늘어놓는다(확정 뒤와 같은 순서) — 판정은 여전히 K 비교.
+        #expect(editor.submissionTable[0] == fs("A1 A2 A3 A4 A5 A6"))
         #expect(!editor.isChanged)
         // 내 타일을 내면 바뀜, 거두면 다시 안 바뀜.
         let b9 = id(editor, rack: "B9")

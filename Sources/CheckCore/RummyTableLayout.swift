@@ -258,6 +258,12 @@ package struct RummyTableLayout: Equatable, Sendable {
 
     /// 놓기 스냅: `point` 에서 가장 가까운(유클리드) 빈 격자점. 같으면 위 → 왼쪽. 빈 곳이 없으면 `firstFree` 와 같은 대체.
     package static func snap(_ point: RummyPoint, tiles: Int, among obstacles: [RummyRect]) -> RummyPoint {
+        freeSpot(point, tiles: tiles, among: obstacles) ?? firstFree(tiles: tiles, among: obstacles)
+    }
+
+    /// `snap` 의 빈자리 찾기만(0.3.70) — 여백 16 → 여백 0 순으로 `point` 에서 가장 가까운 빈 격자점, **없으면 nil**(구석으로 안 보낸다).
+    /// 편집기가 판이 꽉 찼을 때 구석에 겹쳐 놓는 대신 이웃을 비켜 놓으려고 쓴다(`RummyTableEdit.settle`). `place` 는 안 쓴다.
+    package static func freeSpot(_ point: RummyPoint, tiles: Int, among obstacles: [RummyRect]) -> RummyPoint? {
         let w = width(tiles: tiles)
         for gap in [clearance, 0] {
             var best: (distance: Int, point: RummyPoint)?
@@ -271,7 +277,7 @@ package struct RummyTableLayout: Equatable, Sendable {
             }
             if let best { return best.point }
         }
-        return firstFree(tiles: tiles, among: obstacles)
+        return nil
     }
 
     /// 길이가 바뀐 묶음의 새 자리: 지금 자리에서 오른쪽으로 늘어난 사각형이 들어가면 그대로, 막히면(판 밖·겹침) 가장 가까운 빈자리.

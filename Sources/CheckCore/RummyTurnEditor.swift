@@ -13,7 +13,8 @@ import Foundation
 //
 // ── v2(설계서 v2 §2.2·§2.3) — 더하기만, v1 서명 그대로 ──
 //  · 판 배치: 묶음마다 왼쪽 위 점(`points`)을 함께 든다. 시작 점은 `RummyTableLayout.place`(결정적 자동 배치)이고, 묶음 길이가
-//    바뀌면 오른쪽으로 늘어나다 막히면 가장 가까운 빈자리로(`RummyTableLayout.refit`). `moveSet` = 묶음 통째 위치 이동.
+//    바뀌면 오른쪽으로 늘어나다 막히면 옆으로 · 그래도 막히면 이웃을 비켜 놓는다(0.3.70 `RummyTableEdit.settle` — 옛 `refit` 은
+//    가장 가까운 빈자리로 튀었다). `moveSet` = 묶음 통째 위치 이동.
 //    `.newMeldAt(점)` = 빈 곳에 놓아 새 묶음(그 점에서 가장 가까운 빈자리). 배치는 판정과 무관하다(`reason` 은 면만 본다).
 //  · 받침대: `rackLayout`(줄 · 반 칸 자유 배치)이 랙 자리의 정본이고 `rack` 배열은 늘 그 화면 순서다. `.rackSlot(자리)` = 그 자리
 //    가까운 빈자리로. 옛 `.rack(index: i)` 는 선형 자리 규약 그대로 꽂은 뒤 **빈칸 없이 다시 채운다**(v2 화면은 `.rackSlot`),
@@ -26,6 +27,12 @@ import Foundation
 //  ② 빈 곳에 놓기(`.newMeldAt`)·묶음 옮기기(`moveSet`)가 다른 묶음 끝 가까이면 이어질 때 그 끝에 합친다(대상 제자리).
 //  ③ 묶음 위에 놓기(`.meld`)는 슬롯보다 알맞은 정렬 자리가 먼저(없으면 슬롯 — 위 자리 규약), 앞에 꽂히면 왼쪽으로 늘어난다.
 //  화면은 `previewDrop` · `previewMoveSet` 으로 놓기 전에 계획(붙기 · 꽂기 · 새 자리)을 묻는다.
+//
+// ── 0.3.70 판 조작감 — 서명 그대로(더하기만), 판정과 무관 ──
+//  · 받은 묶음이 맞는 세트가 되면 R-09 표시 순서로 늘어놓는다(그룹 색 순 · 런의 조커 자리) — 확정 전후가 같다.
+//  · 늘어난 묶음이 막히면 옆으로(왼쪽 먼저) → 그래도 막히면 이웃을 비켜 놓는다(`RummyTableEdit.settle`, 편집기 전용).
+//  · 판이 꽉 차도 구석에 겹쳐 놓지 않는다(`RummyTableLayout.freeSpot` 이 없으면 놓은 자리 + 이웃 비켜 놓기).
+//  · 판 길게 누르기 = `meldChunk`(누른 타일에서 가까운 끝까지 — ⌥ 없이 쪼개기).
 
 /// 끌기용 타일 한 장. `id` 는 이 편집기 안에서만 뜻이 있는 로컬 번호다(와이어엔 면 문자열만 간다 — 설계서 §1).
 package struct RummyTile: Identifiable, Hashable, Sendable {
@@ -241,6 +248,14 @@ package struct RummyTurnEditor: Equatable, Sendable {
         return (fromTileToEnd ? Array(meld[index...]) : meld).map(\.id)
     }
 
+    /// 판에서 길게 눌러 집히는 토막(0.3.70 — ⌥ 없이 쪼개기): 누른 타일에서 가까운 끝까지(`RummyTableEdit.pickRange` —
+    /// 오른쪽 절반이면 그 타일부터 끝까지, 왼쪽 절반이면 처음부터 그 타일까지, 정확히 가운데면 묶음 전체). 판에 없는 id 면 빈 배열.
+    package func meldChunk(for tileID: Int) -> [Int] {
+        guard case .meld(let meldIndex, let index)? = locate(tileID) else { return [] }
+        let meld = melds[meldIndex]
+        return meld[RummyTableEdit.pickRange(count: meld.count, pressed: index)].map(\.id)
+    }
+
     /// 고른 타일들의 화면 순서(판 묶음 순 → 묶음 안 순 → 랙 화면 순). 모르는 id 는 버린다.
     package func screenOrder(_ tileIDs: Set<Int>) -> [Int] {
         (melds.flatMap { $0 } + rack).map(\.id).filter { tileIDs.contains($0) }
@@ -258,7 +273,8 @@ package struct RummyTurnEditor: Equatable, Sendable {
     /// 랙에서 판으로 나간 타일은 나갈 때의 받침대 자리를 하나씩 기억한다(→ `reset` 이 고칠 것 없이 맞는다).
     /// v3(K3) 판 손맛(`RummyTableEdit` 머리말): ① 판 묶음에서 빼면 남은 토막이 제자리에 남는다(가운데면 둘로 — 오른 토막은
     /// 원래 묶음 바로 뒤 번호) ② `.newMeldAt` 이 다른 묶음 끝 가까이면 이어질 때 그 끝에 붙는다 ③ `.meld` 는 슬롯보다
-    /// 알맞은 정렬 자리가 먼저다(없으면 슬롯). 받은 묶음은 붙기 → 늘어나다 막히면 가장 가까운 빈자리(`refit`) 순.
+    /// 알맞은 정렬 자리가 먼저다(없으면 슬롯). 받은 묶음은 붙기 → 맞는 세트면 R-09 표시 순서 → 앉히기(`settle` — 막히면 옆으로,
+    /// 그래도 막히면 이웃을 비켜 놓는다) 순(0.3.70).
     @discardableResult
     package mutating func moveBlock(_ tileIDs: [Int], to target: RummyDropTarget) -> Bool {
         apply(tileIDs, to: target) != nil
@@ -317,11 +333,14 @@ package struct RummyTurnEditor: Equatable, Sendable {
         var pieces: [Piece] = []
         var receiving: Int?
         var plan: RummyDropPlan = .rack
+        /// 꽂기 대상 묶음의 남은 타일(캐럿 자리를 표시 순서로 다시 셀 때).
+        var keptIDs: Set<Int> = []
         let width = RummyTableLayout.tileWidth
         for (index, meld) in melds.enumerated() {
             let removed = Set(meld.indices.filter { moving.contains(meld[$0].id) })
             if index == targetSet {
                 let rest = meld.filter { !moving.contains($0.id) }
+                keptIDs = Set(rest.map(\.id))
                 var preferred = rest.count
                 if let slot = targetSlot {
                     let before = meld.prefix(max(slot, 0)).filter { moving.contains($0.id) }.count
@@ -355,7 +374,6 @@ package struct RummyTurnEditor: Equatable, Sendable {
                 let grewLeft = at == 0 && pieces[landed].tiles.count > block.count
                 let sides: [RummyAttachSide] = pieces[landed].tiles.count == block.count ? [] : (grewLeft ? [.right] : [.left])
                 _ = Self.attachAll(&pieces, receiving: &landed, sides: sides, fixed: attachFixed)
-                Self.refit(&pieces, landed)
                 receiving = landed
             }
         case .newMeld:
@@ -367,11 +385,12 @@ package struct RummyTurnEditor: Equatable, Sendable {
             var landed = pieces.count
             pieces.append(Piece(tiles: block, point: wanted, origin: nil))
             if let attached = Self.attachAll(&pieces, receiving: &landed, fixed: attachFixed) {
-                Self.refit(&pieces, landed)
                 plan = attached
             } else {
+                // 가장 가까운 빈자리 — 판이 꽉 찼으면 구석 대신 놓은 자리(④ 가 이웃을 비켜 놓는다).
                 let others = pieces.indices.filter { $0 != landed }.map { pieces[$0].frame }
-                pieces[landed].point = RummyTableLayout.snap(wanted, tiles: block.count, among: others)
+                pieces[landed].point = RummyTableLayout.freeSpot(wanted, tiles: block.count, among: others)
+                    ?? RummyTableLayout.clampInside(wanted, tiles: block.count)
                 plan = .newSet(pieces[landed].point)
             }
             receiving = landed
@@ -387,6 +406,21 @@ package struct RummyTurnEditor: Equatable, Sendable {
             let slot = rackLayout.isFree(wanted, tiles: tileIDs.count)
                 ? wanted : rackLayout.nearestFree(to: wanted, tiles: tileIDs.count)
             rackLayout.set(tileIDs, at: slot)
+        }
+
+        // 4) 받은 묶음 마무리(0.3.70): 맞는 세트면 R-09 표시 순서로(③), 그다음 판에 앉힌다(④).
+        if !toRack, let landed = receiving {
+            Self.finish(&pieces, landed, moving: moving, reorder: true)
+            switch plan {
+            case .insert(let set, _):
+                let tiles = pieces[landed].tiles
+                let first = tiles.firstIndex { moving.contains($0.id) } ?? 0
+                plan = .insert(set: set, index: tiles[..<first].filter { keptIDs.contains($0.id) }.count)
+            case .newSet:
+                plan = .newSet(pieces[landed].point)
+            case .rack, .attach:
+                break
+            }
         }
 
         melds = pieces.map(\.tiles)
@@ -432,10 +466,34 @@ package struct RummyTurnEditor: Equatable, Sendable {
     /// 그 묶음을 골라 놓은 것이라 그대로 두고 판정이 이유를 말한다. 3판 검증에서 찾은 결함.
     private var attachFixed: Set<Int> { initialDone ? [] : tableTileIDs }
 
-    /// 받은 묶음 다시 맞추기: 그 자리가 판 안이고 안 겹치면 그대로, 아니면 가장 가까운 빈자리(`RummyTableLayout.refit`).
-    private static func refit(_ pieces: inout [Piece], _ index: Int) {
-        let others = pieces.indices.filter { $0 != index }.map { pieces[$0].frame }
-        pieces[index].point = RummyTableLayout.refit(pieces[index].point, tiles: pieces[index].tiles.count, among: others)
+    /// 받은 묶음 마무리(0.3.70, `RummyTableEdit` ③·④): `reorder` 면 맞는 세트일 때 R-09 표시 순서로 늘어놓고(첫 남은 타일 제자리 —
+    /// 남은 타일이 없으면 점 그대로), 그다음 `RummyTableEdit.settle` 로 앉힌다(늘어난 장수 = 이번에 옮긴 타일 수 — 막히면 옆으로,
+    /// 그래도 막히면 이웃을 비켜 놓는다). 옛 `RummyTableLayout.refit`(막히면 가장 가까운 빈자리로 튄다)을 갈음한다.
+    private static func finish(_ pieces: inout [Piece], _ index: Int, moving: Set<Int>, reorder: Bool) {
+        if reorder { arrange(&pieces[index], moving: moving) }
+        let grown = pieces[index].tiles.filter { moving.contains($0.id) }.count
+        let settled = RummyTableEdit.settle(pieces.map(\.frame), index: index, grown: grown)
+        for i in pieces.indices { pieces[i].point = settled[i] }
+    }
+
+    /// 맞는 세트면 R-09 표시 순서로(`RummyRules.displayOrder` — 확정 판·남의 화면과 같은 순서). 같은 면(조커 둘)은 원래 순서를 잇는다.
+    /// 옮기지 않은 첫 타일이 화면에서 제자리가 되게 점을 민다.
+    private static func arrange(_ piece: inout Piece, moving: Set<Int>) {
+        let faces = piece.faces
+        guard RummyRules.analyze(faces).valid else { return }
+        let order = RummyRules.displayOrder(faces)
+        guard order != faces else { return }
+        var pool = piece.tiles
+        var arranged: [RummyTile] = []
+        for face in order {
+            guard let at = pool.firstIndex(where: { $0.face == face }) else { return }
+            arranged.append(pool.remove(at: at))
+        }
+        if let anchor = piece.tiles.firstIndex(where: { !moving.contains($0.id) }),
+           let now = arranged.firstIndex(where: { $0.id == piece.tiles[anchor].id }) {
+            piece.point.x += (anchor - now) * RummyTableLayout.tileWidth
+        }
+        piece.tiles = arranged
     }
 
     /// v2: 묶음 통째 위치 이동(판 좌표 왼쪽 위). 가장 가까운 빈자리로 스냅한다(자기 자리는 장애물에서 뺀다). 없는 번호면 false.
@@ -453,11 +511,18 @@ package struct RummyTurnEditor: Equatable, Sendable {
         var landed = setIndex
         pieces[setIndex].point = point
         let plan: RummyDropPlan
+        let moved = Set(melds[setIndex].map(\.id))
         if let attached = Self.attachAll(&pieces, receiving: &landed, fixed: attachFixed) {
-            Self.refit(&pieces, landed)
+            Self.finish(&pieces, landed, moving: moved, reorder: true)
             plan = attached
         } else {
-            pieces[setIndex].point = tableLayout.snap(point, tiles: melds[setIndex].count, excluding: setIndex)
+            // 가장 가까운 빈자리 — 판이 꽉 찼으면 구석 대신 놓은 자리에 두고 이웃을 비켜 놓는다(④). 만진 묶음이 맞는 세트인데 표시
+            // 순서가 아니면(무효였던 묶음에서 끝을 빼 맞게 된 토막 등) 이때 표시 순서로 — 확정 뒤와 같게.
+            let others = pieces.indices.filter { $0 != setIndex }.map { pieces[$0].frame }
+            let count = melds[setIndex].count
+            pieces[setIndex].point = RummyTableLayout.freeSpot(point, tiles: count, among: others)
+                ?? RummyTableLayout.clampInside(point, tiles: count)
+            Self.finish(&pieces, setIndex, moving: moved, reorder: true)
             plan = .newSet(pieces[setIndex].point)
         }
         melds = pieces.map(\.tiles)

@@ -79,6 +79,28 @@ private func fuzzSpots(_ e: RummyTurnEditor) -> [Int: RummyPoint] {
     return spots
 }
 
+/// 0.3.70 ④(비켜 놓기): 손대지 않은 판 타일은 제자리거나, 그 묶음이 **통째로** 비켜났다 — 묶음의 타일이 옮기기 전에도 한 줄로
+/// 나란히 있었고(쪼개진 토막 포함), 그 옛 사각형이 놓은 묶음의 새 사각형과 겹쳤다(막은 이웃만 비킨다). 어기면 그 까닭.
+private func fuzzUntouched(before: RummyTurnEditor, after: RummyTurnEditor, landedSet: Int?, moving: Set<Int>) -> String? {
+    let landedIDs = landedSet.flatMap { after.melds.indices.contains($0) ? Set(after.melds[$0].map(\.id)) : nil } ?? []
+    let landedFrame = landedSet.flatMap { after.tableLayout.frame(of: $0) }
+    let was = fuzzSpots(before), now = fuzzSpots(after)
+    for meld in after.melds {
+        let ids = meld.map(\.id)
+        guard !ids.contains(where: { moving.contains($0) || landedIDs.contains($0) }) else { continue }
+        if ids.allSatisfy({ was[$0] == now[$0] }) { continue }
+        guard let first = was[ids[0]] else { return "손대지 않은 묶음 \(ids) 이 판에 없었다" }
+        let rigid = ids.indices.allSatisfy {
+            was[ids[$0]] == RummyPoint(x: first.x + $0 * RummyTableLayout.tileWidth, y: first.y)
+        }
+        let old = RummyTableLayout.frame(at: first, tiles: ids.count)
+        guard rigid, let landedFrame, RummyTableLayout.overlaps(old, landedFrame) else {
+            return "손대지 않은 타일 이동(막은 이웃 통째 비켜 놓기가 아님) \(ids) \(first) → \(String(describing: now[ids[0]]))"
+        }
+    }
+    return nil
+}
+
 private func fuzzFrames(_ e: RummyTurnEditor) -> [RummyRect] {
     e.melds.indices.map { RummyTableLayout.frame(at: e.points[$0], tiles: e.melds[$0].count) }
 }
@@ -225,7 +247,11 @@ private func fuzzCheck(
         if landing.valid != RummyRules.analyze(meld.map(\.face)).valid { bad.append("landing 유효 ≠ 실제") }
         let ids = meld.map(\.id)
         let start = landing.blockStart
-        if start + block.count > ids.count || Array(ids[start..<(start + block.count)]) != block {
+        if landing.valid {
+            // 0.3.70 ③: 맞는 세트는 R-09 표시 순서(확정 뒤와 같다) — 블록은 흩어질 수 있다.
+            if meld.map(\.face) != RummyRules.displayOrder(meld.map(\.face)) { bad.append("맞는 세트인데 표시 순서가 아니다") }
+            if ids.firstIndex(of: block[0]) != start { bad.append("blockStart ≠ 블록 첫 장 자리") }
+        } else if start + block.count > ids.count || Array(ids[start..<(start + block.count)]) != block {
             bad.append("블록이 놓은 묶음 안에서 한 덩어리가 아니다")
         }
         if case .attach = preview.plan, !RummyRules.isChainable(meld.map(\.face)) { bad.append("붙였는데 이어질 수 없는 모양") }
@@ -236,11 +262,9 @@ private func fuzzCheck(
         if (preview == nil) == accepted { bad.append("묶음 옮기기 미리보기 거절 여부 ≠ 실제") }
         if let preview, accepted, let first = before.melds.indices.contains(set) ? before.melds[set].map(\.id) : nil {
             checkLanding(preview, block: first)
-            // 옮긴 묶음·붙은 묶음 말고는 제자리.
-            let landed = preview.landing.map { Set(after.melds[$0.set].map(\.id)) } ?? []
-            let was = fuzzSpots(before), now = fuzzSpots(after)
-            for (id, spot) in was where !landed.contains(id) && now[id] != spot {
-                bad.append("묶음 옮기기: 손대지 않은 타일 \(id) 이동"); break
+            // 옮긴 묶음·붙은 묶음 말고는 제자리(막은 이웃은 통째 비켜 놓기만 — 0.3.70 ④).
+            if let why = fuzzUntouched(before: before, after: after, landedSet: preview.landing?.set, moving: Set(first)) {
+                bad.append("묶음 옮기기: \(why)")
             }
         }
     }
@@ -279,19 +303,11 @@ private func fuzzCheck(
         if (preview == nil) == accepted { bad.append("미리보기 거절 여부 ≠ 실제") }
         if let preview, accepted { checkLanding(preview, block: ids) }
     }
-    // 9) 손대지 않은 타일은 제자리: 블록도 아니고 놓은 묶음에도 없는 판 타일.
+    // 9) 손대지 않은 타일은 제자리: 블록도 아니고 놓은 묶음에도 없는 판 타일. 0.3.70 ④: 놓은 묶음을 막은 이웃은 통째 비켜날 수 있다.
     if accepted {
-        let landed: Set<Int>
-        if let preview, let set = preview?.landing?.set, after.melds.indices.contains(set) {
-            landed = Set(after.melds[set].map(\.id))
-        } else {
-            landed = []
-        }
-        let was = fuzzSpots(before), now = fuzzSpots(after)
-        let moving = Set(ids)
-        for (id, spot) in was where !moving.contains(id) && !landed.contains(id) {
-            if now[id] != spot { bad.append("손대지 않은 타일 \(id) 이동 \(spot) → \(String(describing: now[id]))"); break }
-        }
+        let set: Int? = { if let preview, let set = preview?.landing?.set { return set }; return nil }()
+        // 쪼개진 토막(놓은 묶음 밖)은 제자리 — 그 타일이 비켜났다면 토막째(한 줄 그대로)여야 한다.
+        if let why = fuzzUntouched(before: before, after: after, landedSet: set, moving: Set(ids)) { bad.append(why) }
     }
     return bad
 }

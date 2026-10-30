@@ -253,9 +253,9 @@ struct V0369RummyV3InsertTests {
         #expect(eTexts(editor) == ["A5 A6 B2 A7 A8 A9"] && !editor.analysis(ofMeld: 0).valid)
     }
 
-    @Test("조커 자리 · 그룹은 오른끝(색 상관없이 기존 타일 제자리) · 판 끝에 막히면 가장 가까운 빈자리")
+    @Test("조커 자리 · 그룹은 표시 순서 자리(색 A→D — 확정 뒤와 같다, 0.3.70) · 판 끝에 막히면 판 안으로")
     func jokerGroupAndEdge() {
-        // 없으면: 조커가 메우는 숫자를 무시해 엉뚱한 자리에 꽂히거나, 그룹 가운데에 끼워 기존 타일이 밀리는 결함이 초록이 된다.
+        // 없으면: 조커가 메우는 숫자를 무시해 엉뚱한 자리에 꽂히거나, 그룹 오른끝에 꽂혀 확정 뒤 서버 표시 순서(R-09)로 타일이 튀는 결함이 초록이 된다.
         var joker = eEditor(["A6 A7 J"], at: [ep(300, 200)], rack: "A8")
         #expect(joker.melds[0].map(\.face.text) == ["A6", "A7", "J"])
         let ok24 = joker.moveBlock([eRack(joker, "A8")], to: .meld(0, index: 3))
@@ -265,7 +265,7 @@ struct V0369RummyV3InsertTests {
         var group = eEditor(["A5 B5 D5"], at: [ep(300, 200)], rack: "C5")
         let ok25 = group.moveBlock([eRack(group, "C5")], to: .meld(0, index: 0))
         #expect(ok25)
-        #expect(eTexts(group) == ["A5 B5 D5 C5"] && group.points == [ep(300, 200)] && group.analysis(ofMeld: 0).valid)
+        #expect(eTexts(group) == ["A5 B5 C5 D5"] && group.points == [ep(300, 200)] && group.analysis(ofMeld: 0).valid)
 
         var edge = eEditor(["A6 A7 A8"], at: [ep(0, 0)], rack: "A5")
         let ok26 = edge.moveBlock([eRack(edge, "A5")], to: .meld(0, index: nil))

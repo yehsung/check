@@ -9,11 +9,13 @@
 -- ── 무엇을 바꾸나 ──────────────────────────────────────────────────────────────────────────
 --   S1 상수 megaphone_global_cooldown_seconds() = 300 (immutable · PUBLIC 실행권 유지 — 42501 함정).
 --   S2 send_megaphone 재정의(정본 + 치환 3곳): 멱등키 → 사람당 창(scope 'self') → 전역 자물쇠 → 앱 전체 창(scope 'global').
+--      사람당 창에 걸려도 앱 전체 창이 같거나 더 남으면 global · 그 초로 답한다(옛 앱은 retry_after 만큼 기다렸다 다시 연다).
 --      앱 전체 창은 **같은 쪽 계정**(same_visibility)의 마지막 확성기로 잰다 — 숨김(심사 · 시험) 계정이 실사용자를 막지 않는다.
 --      받는 사람마다 poke_ring 다음에 realtime 'megaphone' 신호 {v:1, m:<확성기 id>} — 실패는 삼킨다(루비 · fan-out 은 그대로).
 --   S3 megaphone_info 재정의(정본 + 치환 3곳): 기존 키 그대로 + global_cooldown_seconds · global_cooldown_remaining_seconds ·
 --      cooldown_scope('self' | 'global' | null). cooldown_remaining_seconds = 둘 중 긴 쪽(옛 앱 작성 화면이 그대로 맞는 시간).
---   S4 새 megaphone_inbox(p_hours default 24): 내가 받은 확성기 줄(최근 24시간 · 차단 제외 · 최신 20개). 벽은 to_user 한 줄.
+--   S4 새 megaphone_inbox(p_hours default 24): 내가 받은 확성기 줄(최근 24시간 · 차단 제외 · 자르지 않는다). 벽은 to_user 한 줄.
+--      개수로 자르면 24시간 안의 옛 줄이 새 앱 메시지함 필터 집합에서 빠져 📢 1:1 로 보인다. 상한은 앱 전체 5분 창(하루 288).
 --   S5 새 message_unread_summary_v2(): 안 읽음 집계(v1 은 그대로) + 확성기 줄 제외. 새 앱 배지가 이것만 센다.
 --   S6 push_on_message_insert 재정의(정본 + 치환 1곳): 확성기 줄이면 최상위 megaphone_id 한 키. 나머지 페이로드는 그대로.
 --
@@ -81,9 +83,9 @@ create table pg_temp.mgb_before (
 insert into pg_temp.mgb_before (sig, canon_md5, self_md5, md5, attrs)
 select t.sig, t.canon_md5, t.self_md5, md5(p.prosrc), pg_temp.mgb_attrs(p.oid)
   from (values
-    ('public.megaphone_info()',           'aac80255efae548333eb9b2a71f0bb1f', '4b5645fcb482d013e9815180339ed373'),
+    ('public.megaphone_info()',           'aac80255efae548333eb9b2a71f0bb1f', 'dbb803b526cadede16cbd29c12ef7d11'),
     ('public.push_on_message_insert()',   'ebbeefee1a3296d78a362fa36bc8e440', '97bc8547dc451a76b4b2e6b4cafd3fb1'),
-    ('public.send_megaphone(text,uuid)',  'da0ec946b8cb1cf01acad8ba26dba2b1', '715a5b9778ee02730d9d28805bdd846f')
+    ('public.send_megaphone(text,uuid)',  'da0ec946b8cb1cf01acad8ba26dba2b1', 'c929c175595ab2132dca80bee56f3705')
   ) as t(sig, canon_md5, self_md5)
   left join pg_proc p on p.oid = to_regprocedure(t.sig);
 
@@ -197,6 +199,8 @@ declare
   v_prev    public.megaphones%rowtype;
   v_last    timestamptz;
   v_glast   timestamptz;
+  v_left    int;
+  v_gleft   int := 0;
   v_targets uuid[];
   v_n       int;
   v_bal     int;
@@ -247,13 +251,27 @@ begin
   -- 쿨타임: 보낸이당 megaphone_cooldown_seconds() 에 한 번.
   select max(m.created_at) into v_last from public.megaphones m where m.sender = uid;
   if v_last is not null and v_last + make_interval(secs => v_cool) > now() then
+    v_left := greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int);
+    -- 앱 전체 창도 닫혀 있으면 더 긴 쪽으로 답한다(같으면 앱 전체 · 20261105120000). 사람당(10분)이 앱 전체(5분)보다 길어도
+    --   남이 방금 보냈으면 앱 전체가 더 남는다 — 옛 앱은 retry_after 만큼 기다렸다 다시 열므로 짧은 쪽을 말하면 또 막힌다.
+    --   읽기만 한다(자물쇠는 아래) — 어느 쪽이든 여기서 끝나고 아무것도 깎지 않는다.
+    select max(m.created_at) into v_glast
+      from public.megaphones m
+     where m.created_at > now() - make_interval(secs => v_gcool)
+       and public.same_visibility(uid, m.sender);
+    if v_glast is not null then
+      v_gleft := greatest(0, ceil(extract(epoch from (v_glast + make_interval(secs => v_gcool) - now())))::int);
+    end if;
+    if v_gleft >= v_left then
+      return jsonb_build_object('status', 'cooldown', 'scope', 'global', 'cooldown_seconds', v_gcool,
+                                'retry_after_seconds', v_gleft);
+    end if;
     return jsonb_build_object('status', 'cooldown', 'scope', 'self', 'cooldown_seconds', v_cool,
-                              'retry_after_seconds',
-                              greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int));
+                              'retry_after_seconds', v_left);
   end if;
 
   -- 앱 전체 한 번에 하나(20261105120000): 누가 보내면 그 뒤 megaphone_global_cooldown_seconds() 동안 아무도 못 보낸다.
-  --   멱등키 · 사람당 창 **뒤**라 같은 요청 재시도는 자기가 연 창에 안 막히고, 자기 창이면 self 로 답한다.
+  --   멱등키 · 사람당 창 **뒤**라 같은 요청 재시도는 자기가 연 창에 안 막히고, 사람당 창이면 위에서 긴 쪽으로 답했다.
   --   자물쇠(지갑 다음 · 언제나 이 순서)를 쥔 뒤의 새 스냅숏으로 읽는다 — 동시에 온 두 사람 중 하나만 지난다.
   --   같은 쪽 계정(same_visibility)만 센다 — 숨김(심사 · 시험) 계정의 확성기가 실사용자를 막지 않는다.
   perform pg_advisory_xact_lock(hashtext('megaphone_global'));
@@ -324,7 +342,7 @@ $send$;
 comment on function public.send_megaphone(text, uuid) is
   '확성기(20261014122000 · 배너 20261105120000): 루비 megaphone_ruby_price() 개로 받는 사람(megaphone__recipients) 모두에게 📢 표식을 붙인 1:1 메시지를 한 줄씩 보낸다. '
   '한 트랜잭션: 자물쇠(ultra_wallet:) → 멱등키 → 사람당 창(scope self) → 자물쇠(megaphone_global) → 앱 전체 창(scope global, 같은 쪽 계정) → 받는 사람 → 잔량 → 차감+장부(spend:megaphone) → 원장 → fan-out → 초인종 + megaphone 신호. '
-  '응답: ok{megaphone_id, recipients, price, ruby_balance, body, duplicate} · cooldown{scope, cooldown_seconds, retry_after_seconds} · insufficient{need, have} · '
+  '응답: ok{megaphone_id, recipients, price, ruby_balance, body, duplicate} · cooldown{scope, cooldown_seconds, retry_after_seconds — 사람당 창이면 앱 전체와 견줘 긴 쪽, 같으면 global} · insufficient{need, have} · '
   'no_recipients · empty · not_text · too_long{max_length} · disabled · blackout · no_profile · unauthorized. 같은 p_request_id 는 처음 결과를 duplicate:true 로.';
 
 
@@ -373,7 +391,7 @@ begin
     'cooldown_remaining_seconds', greatest(v_remain, v_gleft),
     'global_cooldown_seconds', public.megaphone_global_cooldown_seconds(),
     'global_cooldown_remaining_seconds', v_gleft,
-    'cooldown_scope', case when v_remain > 0 and v_remain >= v_gleft then 'self'
+    'cooldown_scope', case when v_remain > v_gleft then 'self'
                            when v_gleft > 0 then 'global' end,
     'recipients', v_n,
     'max_length', public.megaphone_max_length(),
@@ -384,7 +402,7 @@ $info$;
 comment on function public.megaphone_info() is
   '확성기 작성 화면용(20261014122000 · 배너 20261105120000): {status:ok, enabled, price, cooldown_seconds, cooldown_remaining_seconds, recipients, '
   'max_length, ruby_balance, global_cooldown_seconds, global_cooldown_remaining_seconds, cooldown_scope} · unauthorized. '
-  'cooldown_remaining_seconds = max(사람당 남은 초, 앱 전체 남은 초) — 옛 앱이 이 한 칸만 본다. cooldown_scope 는 긴 쪽(self | global | null).';
+  'cooldown_remaining_seconds = max(사람당 남은 초, 앱 전체 남은 초) — 옛 앱이 이 한 칸만 본다. cooldown_scope 는 긴 쪽(self | global | null · 같으면 global).';
 
 
 -- ── §4 megaphone_inbox(S4) — 내가 받은 확성기 줄 ───────────────────────────────────────────
@@ -416,11 +434,10 @@ as $inbox$
      and not public.blocked_between(auth.uid(), m.from_user)
      and m.created_at >= now() - make_interval(hours => least(greatest(coalesce(p_hours, 24), 1), 24))
    order by m.created_at desc, m.id desc
-   limit 20
 $inbox$;
 
 comment on function public.megaphone_inbox(integer) is
-  '내가 받은 확성기 줄(20261105120000): to_user = 나 · megaphone_id 있음 · 차단 아님 · 최근 least(greatest(p_hours,1),24) 시간 · 최신 20개. '
+  '내가 받은 확성기 줄(20261105120000): to_user = 나 · megaphone_id 있음 · 차단 아님 · 최근 least(greatest(p_hours,1),24) 시간 · 전부(개수로 자르지 않는다 — 새 앱 메시지함 필터의 집합이다). '
   '{message_id, megaphone_id, sender_id, sender_display_name, sender_avatar_url, body(접두 뗌), created_at, created_epoch}.';
 revoke all on function public.megaphone_inbox(integer) from public, anon;
 grant execute on function public.megaphone_inbox(integer) to authenticated;
@@ -543,6 +560,7 @@ declare
   v_wallet int;
   v_dup    int;
   v_self   int;
+  v_tie    int;
   v_lock   int;
   v_glob   int;
   v_charge int;
@@ -606,17 +624,21 @@ begin
   end loop;
   v_probes := v_probes + 1;
 
-  -- (4) send_megaphone 순서: 지갑 자물쇠 → 멱등키 → 사람당(self) → 전역 자물쇠 → 앱 전체 창(global) → 차감, 초인종 → 신호(삼킴)
+  -- (4) send_megaphone 순서: 지갑 자물쇠 → 멱등키 → 사람당(긴 쪽 견주기 → self) → 전역 자물쇠 → 앱 전체 창(global) → 차감,
+  --     초인종 → 신호(삼킴). 사람당 갈래 안의 global 답(자물쇠 앞 · 깎지 않음)과 가르려고 앱 전체 창은 자물쇠 **뒤**에서 찾는다.
   select p.prosrc into v_src from pg_proc p where p.oid = 'public.send_megaphone(text,uuid)'::regprocedure;
   v_wallet := strpos(v_src, 'perform pg_advisory_xact_lock(hashtext(''ultra_wallet:'' || uid::text));');
   v_dup    := strpos(v_src, 'select m.* into v_prev from public.megaphones m where m.sender = uid and m.request_id = v_req;');
+  v_tie    := strpos(v_src, 'if v_gleft >= v_left then');
   v_self   := strpos(v_src, '''status'', ''cooldown'', ''scope'', ''self''');
   v_lock   := strpos(v_src, 'perform pg_advisory_xact_lock(hashtext(''megaphone_global''));');
-  v_glob   := strpos(v_src, '''status'', ''cooldown'', ''scope'', ''global''');
+  v_glob   := strpos(substr(v_src, greatest(v_lock, 1)), '''status'', ''cooldown'', ''scope'', ''global''');
+  v_glob   := case when v_glob > 0 then v_glob + greatest(v_lock, 1) - 1 else 0 end;
   v_charge := strpos(v_src, 'update public.profiles set ruby_balance = ruby_balance - v_price');
-  if not (0 < v_wallet and v_wallet < v_dup and v_dup < v_self and v_self < v_lock and v_lock < v_glob and v_glob < v_charge) then
-    raise exception '(4) send_megaphone 순서가 지갑(%) → 멱등(%) → 사람당(%) → 전역 자물쇠(%) → 앱 전체(%) → 차감(%) 이 아니다. 배포 중단',
-      v_wallet, v_dup, v_self, v_lock, v_glob, v_charge;
+  if not (0 < v_wallet and v_wallet < v_dup and v_dup < v_tie and v_tie < v_self and v_self < v_lock
+          and v_lock < v_glob and v_glob < v_charge) then
+    raise exception '(4) send_megaphone 순서가 지갑(%) → 멱등(%) → 긴 쪽 견주기(%) → 사람당(%) → 전역 자물쇠(%) → 앱 전체(%) → 차감(%) 이 아니다. 배포 중단',
+      v_wallet, v_dup, v_tie, v_self, v_lock, v_glob, v_charge;
   end if;
   if strpos(v_src, 'and public.same_visibility(uid, m.sender)') = 0 or strpos(v_src, 'public.megaphone_ruby_price()') = 0 then
     raise exception '(4) send_megaphone 앱 전체 창에 same_visibility 가 없거나 가격을 megaphone_ruby_price() 로 안 부른다. 배포 중단';
@@ -636,11 +658,16 @@ begin
   end if;
   select p.prosrc into v_src from pg_proc p where p.oid = 'public.megaphone_inbox(integer)'::regprocedure;
   foreach v_tok in array array['where m.to_user = auth.uid()', 'and m.megaphone_id is not null',
-                               'and not public.blocked_between(auth.uid(), m.from_user)', 'limit 20'] loop
+                               'and not public.blocked_between(auth.uid(), m.from_user)',
+                               'make_interval(hours => least(greatest(coalesce(p_hours, 24), 1), 24))'] loop
     if strpos(v_src, v_tok) = 0 then
       raise exception '(5) megaphone_inbox 에 "%" 가 없다. 배포 중단', v_tok;
     end if;
   end loop;
+  -- 개수로 자르면 24시간 안의 옛 줄이 새 앱 메시지함 필터 집합에서 빠져 📢 1:1 로 보인다(상한은 시간 창 하나).
+  if strpos(lower(v_src), 'limit') > 0 then
+    raise exception '(5) megaphone_inbox 가 개수로 자른다 — 메시지함 필터 집합이 모자란다. 배포 중단';
+  end if;
   select p.prosrc into v_src from pg_proc p where p.oid = 'public.message_unread_summary_v2()'::regprocedure;
   foreach v_tok in array array['where m.to_user = v_uid', 'and not public.blocked_between(v_uid, m.from_user)',
                                'and m.megaphone_id is null'] loop
@@ -718,7 +745,7 @@ end $tmp$;
 do $probe$
 declare
   v_exec_role text := current_user;
-  v_expected  constant int := 13;
+  v_expected  constant int := 15;
   probes      int := 0;
   v_synth     boolean := false;
   v_price     constant int := public.megaphone_ruby_price();
@@ -740,6 +767,7 @@ declare
   b_msg  uuid;
   fake   uuid;
   old_id uuid;
+  v_ids  uuid[];
   v_blk  text;
   v_en   text;
 begin
@@ -999,6 +1027,64 @@ begin
        or pg_temp.mgb_err(c, 'select * from public.megaphone_inbox()') <> 'ok'
        or pg_temp.mgb_err(c, 'select public.message_unread_summary_v2()') <> 'ok' then
       raise exception '⑬ 새 RPC 실행권이 기대와 다르다';
+    end if;
+    probes := probes + 1;
+
+    --------------------------------------------------------------------------------------------
+    -- ⑭ megaphone_inbox 는 24시간 안 줄을 개수로 자르지 않는다 — 옛 줄이 빠지면 새 앱 필터 집합에서 빠져 📢 1:1 로 보인다.
+    --    기준선: 예전 상한(20)보다 많은 30줄을 23시간에 걸쳐 깐다 · 25시간 전 줄(⑩)은 여전히 빠진다
+    --------------------------------------------------------------------------------------------
+    with ins as (
+      insert into public.messages (from_user, to_user, body, megaphone_id, created_at)
+      select a, c, v_pre || '하루치 ' || g, a_mid, now() - make_interval(mins => g * 46)
+        from generate_series(1, 30) as g
+      returning id)
+    select array_agg(ins.id) into v_ids from ins;
+    v := pg_temp.mgb_rpc(c, 'select coalesce(jsonb_agg(to_jsonb(i)), ''[]''::jsonb) from public.megaphone_inbox() i');
+    if coalesce(array_length(v_ids, 1), 0) <> 30
+       or exists (select 1 from unnest(v_ids) as x(id)
+                   where not exists (select 1 from jsonb_array_elements(v) e where (e ->> 'message_id')::uuid = x.id))
+       or not exists (select 1 from jsonb_array_elements(v) e where (e ->> 'message_id')::uuid = c_msg)
+       or exists (select 1 from jsonb_array_elements(v) e where (e ->> 'message_id')::uuid in (fake, old_id))
+       or jsonb_array_length(v) < 31 then
+      raise exception '⑭ c 의 확성기 목록이 %줄이다(기대 하루치 30줄 + a 줄 전부 · 25시간 전 · 가짜 없음)', jsonb_array_length(v);
+    end if;
+    probes := probes + 1;
+
+    --------------------------------------------------------------------------------------------
+    -- ⑮ 사람당 창이 앱 전체 창보다 짧으면(남이 방금 보냈다) 앱 전체 · 그 초로 답한다 — 옛 앱은 retry_after 만큼 기다렸다
+    --    다시 연다. 같으면 앱 전체(C4). 이 블록은 한 트랜잭션이라 now() 가 고정이다 — 남은 초가 정확히 정해진다.
+    --------------------------------------------------------------------------------------------
+    -- a 의 사람당 남은 초를 30 으로(앱 전체 창 밖으로 밀린다) → b 가 보낸다(창이 비었다) → 앱 전체 남은 초 = v_gcool
+    update public.megaphones set created_at = now() - make_interval(secs => v_cool - 30) where id = a_mid;
+    v := pg_temp.mgb_send(b, '방금 보낸 사람', gen_random_uuid());
+    if v ->> 'status' is distinct from 'ok' then
+      raise exception '⑮ 앱 전체 창이 빈 때 b 의 확성기가 % (기대 ok)', v;
+    end if;
+    -- 기준선: a 의 사람당 창은 아직 닫혀 있다(30초) — 예전 본문은 여기서 self · 30 을 말했다
+    v := pg_temp.mgb_send(a, '사람당 30초 남음', gen_random_uuid());
+    if v ->> 'status' is distinct from 'cooldown' or v ->> 'scope' is distinct from 'global'
+       or (v ->> 'cooldown_seconds')::int is distinct from v_gcool
+       or (v ->> 'retry_after_seconds')::int is distinct from v_gcool
+       or (select p.ruby_balance from public.profiles p where p.id = a) is distinct from 100 - v_price
+       or (select count(*) from public.megaphones m where m.sender = a) <> 1 then
+      raise exception '⑮ 사람당 30초 · 앱 전체 %초에 a 의 확성기가 % (기대 global · %초 · 안 깎임)', v_gcool, v, v_gcool;
+    end if;
+    v := pg_temp.mgb_rpc(a, 'select public.megaphone_info()');
+    if v ->> 'cooldown_scope' is distinct from 'global'
+       or (v ->> 'cooldown_remaining_seconds')::int is distinct from v_gcool
+       or (v ->> 'global_cooldown_remaining_seconds')::int is distinct from v_gcool then
+      raise exception '⑮ 사람당 30초 · 앱 전체 %초에 a 의 작성 화면이 % (기대 global · %초)', v_gcool, v, v_gcool;
+    end if;
+    -- 같으면 앱 전체: a 의 사람당 남은 초 = 앱 전체 남은 초(v_gcool)
+    update public.megaphones set created_at = now() - make_interval(secs => v_cool - v_gcool) where id = a_mid;
+    v := pg_temp.mgb_send(a, '둘이 같다', gen_random_uuid());
+    if v ->> 'scope' is distinct from 'global' or (v ->> 'retry_after_seconds')::int is distinct from v_gcool then
+      raise exception '⑮ 사람당 = 앱 전체(%초)에 a 의 확성기가 % (기대 global — 같으면 앱 전체)', v_gcool, v;
+    end if;
+    v := pg_temp.mgb_rpc(a, 'select public.megaphone_info()');
+    if v ->> 'cooldown_scope' is distinct from 'global' or (v ->> 'cooldown_remaining_seconds')::int is distinct from v_gcool then
+      raise exception '⑮ 사람당 = 앱 전체(%초)에 a 의 작성 화면이 % (기대 global — 같으면 앱 전체)', v_gcool, v;
     end if;
     probes := probes + 1;
 

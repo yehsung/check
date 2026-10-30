@@ -6,7 +6,7 @@ import Testing
 // 확성기 배너 — 서버 마이그레이션 계약(20261105120000_megaphone_banner.sql · docs/plan/megaphone-banner-contract.md S1~S6).
 //
 // 확성기를 메시지함 한 줄 대신 화면 배너로 띄우고, 앱 전체에 한 번에 하나(5분)만 나가게 한다. 서버는 전부 덧붙이기다.
-// 마이그레이션은 **적용 시점에 자기를 증명한다**(§0 정본 본문 md5 · §8 사후 단언 · §9 실호출 프로브 13건 — 어긋나면 통째 롤백).
+// 마이그레이션은 **적용 시점에 자기를 증명한다**(§0 정본 본문 md5 · §8 사후 단언 · §9 실호출 프로브 15건 — 어긋나면 통째 롤백).
 // 그 단언·프로브는 재생 하네스(tools/replay-harness-v2 사본)에서 체인 재생 + 세 번 적용으로 통과했다. 여기서 지키는 것은
 // **사람 손이 저장소 안에서 조용히 깨뜨릴 수 있는 것**이다:
 //   ① 이 파일이 세 함수의 마지막 정의이고, 본문 = 직전 정본 + 치환표(바이트). 새 셋은 이 파일이 처음 만든다.
@@ -125,20 +125,36 @@ private let mgbPatches: [(name: String, canon: String, patches: [MGBPatch])] = [
                                "  v_gcool   constant int := public.megaphone_global_cooldown_seconds();")),
         MGBPatch(old: mgbLines("  v_last    timestamptz;"),
                  new: mgbLines("  v_last    timestamptz;",
-                               "  v_glast   timestamptz;")),
+                               "  v_glast   timestamptz;",
+                               "  v_left    int;",
+                               "  v_gleft   int := 0;")),
         MGBPatch(old: mgbLines(
                     "    return jsonb_build_object('status', 'cooldown', 'cooldown_seconds', v_cool,",
                     "                              'retry_after_seconds',",
                     "                              greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int));",
                     "  end if;"),
                  new: mgbLines(
+                    "    v_left := greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int);",
+                    "    -- 앱 전체 창도 닫혀 있으면 더 긴 쪽으로 답한다(같으면 앱 전체 · 20261105120000). 사람당(10분)이 앱 전체(5분)보다 길어도",
+                    "    --   남이 방금 보냈으면 앱 전체가 더 남는다 — 옛 앱은 retry_after 만큼 기다렸다 다시 열므로 짧은 쪽을 말하면 또 막힌다.",
+                    "    --   읽기만 한다(자물쇠는 아래) — 어느 쪽이든 여기서 끝나고 아무것도 깎지 않는다.",
+                    "    select max(m.created_at) into v_glast",
+                    "      from public.megaphones m",
+                    "     where m.created_at > now() - make_interval(secs => v_gcool)",
+                    "       and public.same_visibility(uid, m.sender);",
+                    "    if v_glast is not null then",
+                    "      v_gleft := greatest(0, ceil(extract(epoch from (v_glast + make_interval(secs => v_gcool) - now())))::int);",
+                    "    end if;",
+                    "    if v_gleft >= v_left then",
+                    "      return jsonb_build_object('status', 'cooldown', 'scope', 'global', 'cooldown_seconds', v_gcool,",
+                    "                                'retry_after_seconds', v_gleft);",
+                    "    end if;",
                     "    return jsonb_build_object('status', 'cooldown', 'scope', 'self', 'cooldown_seconds', v_cool,",
-                    "                              'retry_after_seconds',",
-                    "                              greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int));",
+                    "                              'retry_after_seconds', v_left);",
                     "  end if;",
                     "",
                     "  -- 앱 전체 한 번에 하나(20261105120000): 누가 보내면 그 뒤 megaphone_global_cooldown_seconds() 동안 아무도 못 보낸다.",
-                    "  --   멱등키 · 사람당 창 **뒤**라 같은 요청 재시도는 자기가 연 창에 안 막히고, 자기 창이면 self 로 답한다.",
+                    "  --   멱등키 · 사람당 창 **뒤**라 같은 요청 재시도는 자기가 연 창에 안 막히고, 사람당 창이면 위에서 긴 쪽으로 답했다.",
                     "  --   자물쇠(지갑 다음 · 언제나 이 순서)를 쥔 뒤의 새 스냅숏으로 읽는다 — 동시에 온 두 사람 중 하나만 지난다.",
                     "  --   같은 쪽 계정(same_visibility)만 센다 — 숨김(심사 · 시험) 계정의 확성기가 실사용자를 막지 않는다.",
                     "  perform pg_advisory_xact_lock(hashtext('megaphone_global'));",
@@ -188,7 +204,7 @@ private let mgbPatches: [(name: String, canon: String, patches: [MGBPatch])] = [
                     "    'cooldown_remaining_seconds', greatest(v_remain, v_gleft),",
                     "    'global_cooldown_seconds', public.megaphone_global_cooldown_seconds(),",
                     "    'global_cooldown_remaining_seconds', v_gleft,",
-                    "    'cooldown_scope', case when v_remain > 0 and v_remain >= v_gleft then 'self'",
+                    "    'cooldown_scope', case when v_remain > v_gleft then 'self'",
                     "                           when v_gleft > 0 then 'global' end,")),
     ]),
     ("push_on_message_insert", mgbStickerPushMigration, [
@@ -304,10 +320,11 @@ struct MegaphoneBannerMigrationTests {
         let order = [
             "perform pg_advisory_xact_lock(hashtext('ultra_wallet:' || uid::text));",
             "select m.* into v_prev from public.megaphones m where m.sender = uid and m.request_id = v_req;",
+            "v_left := greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int);",
+            "if v_gleft >= v_left then",
             "return jsonb_build_object('status', 'cooldown', 'scope', 'self',",
             "perform pg_advisory_xact_lock(hashtext('megaphone_global'));",
-            "select max(m.created_at) into v_glast",
-            "return jsonb_build_object('status', 'cooldown', 'scope', 'global',",
+            "if v_glast is not null and v_glast + make_interval(secs => v_gcool) > now() then",
             "from public.megaphone__recipients(uid) as r(id);",
             "update public.profiles set ruby_balance = ruby_balance - v_price",
         ]
@@ -318,6 +335,13 @@ struct MegaphoneBannerMigrationTests {
             if let previous { #expect(previous < at, Comment(rawValue: "send_megaphone 에서 \"\(token)\" 이 앞 단계보다 앞이다")) }
             previous = at
         }
+        // 앱 전체 답은 두 자리 — 사람당 갈래 안(자물쇠 앞 · 깎지 않음)과 자물쇠 뒤. 차감 앞을 지키는 것은 자물쇠 뒤의 것이다.
+        let globalReply = "return jsonb_build_object('status', 'cooldown', 'scope', 'global',"
+        #expect(mgbCount(body, globalReply) == 2, "앱 전체 답이 두 자리(사람당 갈래 · 자물쇠 뒤)가 아니다")
+        let lockAt = try #require(mgbAt(body, "perform pg_advisory_xact_lock(hashtext('megaphone_global'));"))
+        let lastGlobal = try #require(body.range(of: globalReply, options: .backwards)?.lowerBound)
+        let chargeAt = try #require(mgbAt(body, "update public.profiles set ruby_balance = ruby_balance - v_price"))
+        #expect(lockAt < lastGlobal && lastGlobal < chargeAt, "자물쇠 뒤 앱 전체 창이 차감 앞에 없다")
         // 비교 기준선: 정본에는 전역 자물쇠가 없다 — 이 순서는 이 파일이 만든 것이다.
         let canon = mgbStrip(try #require(mgbDefinition("send_megaphone", in: try mgbRaw(mgbMegaphoneMigration))).body)
         #expect(!canon.contains("megaphone_global"))
@@ -332,14 +356,14 @@ struct MegaphoneBannerMigrationTests {
     func cooldownScopes() throws {
         // 없으면: 숨김(심사) 계정의 확성기가 실사용자 5분을 막거나, 새 앱이 '다음 확성기까지' 와 '내 쿨' 을 못 가른다.
         let body = mgbFlat(try mgbBody("send_megaphone"))
-        #expect(body.contains("return jsonb_build_object('status', 'cooldown', 'scope', 'self', 'cooldown_seconds', v_cool, 'retry_after_seconds', greatest(1, ceil(extract(epoch from (v_last + make_interval(secs => v_cool) - now())))::int));"))
+        #expect(body.contains("return jsonb_build_object('status', 'cooldown', 'scope', 'self', 'cooldown_seconds', v_cool, 'retry_after_seconds', v_left);"))
         #expect(body.contains("return jsonb_build_object('status', 'cooldown', 'scope', 'global', 'cooldown_seconds', v_gcool, 'retry_after_seconds', greatest(1, ceil(extract(epoch from (v_glast + make_interval(secs => v_gcool) - now())))::int));"))
-        #expect(body.contains("from public.megaphones m where m.created_at > now() - make_interval(secs => v_gcool) and public.same_visibility(uid, m.sender);"),
-                "앱 전체 창이 같은 쪽 계정(same_visibility)으로 안 잰다")
+        #expect(mgbCount(body, "from public.megaphones m where m.created_at > now() - make_interval(secs => v_gcool) and public.same_visibility(uid, m.sender);") == 2,
+                "앱 전체 창(사람당 갈래 · 자물쇠 뒤)이 같은 쪽 계정(same_visibility)으로 안 잰다")
         #expect(body.contains("v_gcool constant int := public.megaphone_global_cooldown_seconds();"))
         #expect(body.contains("v_price constant int := public.megaphone_ruby_price();"), "가격을 megaphone_ruby_price() 로 안 부른다(V0354)")
         #expect(!body.contains("300"), "앱 전체 초를 리터럴로 적었다 — 상수 함수만 부른다")
-        #expect(mgbCount(body, "'status', 'cooldown'") == 2, "cooldown 응답이 두 갈래가 아니다")
+        #expect(mgbCount(body, "'status', 'cooldown'") == 3, "cooldown 응답이 세 자리(사람당 · 사람당 갈래의 앱 전체 · 자물쇠 뒤 앱 전체)가 아니다")
         // 비교 기준선: 정본의 cooldown 응답에는 scope 가 없다(옛 앱이 받던 모양 — 키만 더했다).
         let canon = mgbFlat(mgbStrip(try #require(mgbDefinition("send_megaphone", in: try mgbRaw(mgbMegaphoneMigration))).body))
         #expect(canon.contains("return jsonb_build_object('status', 'cooldown', 'cooldown_seconds', v_cool,"))
@@ -349,6 +373,30 @@ struct MegaphoneBannerMigrationTests {
         #expect(mgbFlat(constant.header + "as $fn$" + constant.body) == "create or replace function public.megaphone_global_cooldown_seconds() returns int language sql immutable as $fn$ select 300")
         #expect(!mgbStrip(try mgbRaw(mgbMigration)).contains("on function public.megaphone_global_cooldown_seconds() from"),
                 "상수의 실행권을 회수한다 — definer 함수가 42501 로 죽는다")
+    }
+
+    @Test("사람당 창에 걸려도 앱 전체 창이 같거나 더 남으면 global · 그 초로 답한다 · 그 갈래는 자물쇠 · 차감으로 안 흘러내린다")
+    func selfBranchAnswersTheLongerWindow() throws {
+        // 없으면: 사람당 30초 · 앱 전체 300초에 send 가 self · 30 을 말해 옛 앱이 30초 뒤 열었다가 또 막힌다(C4 '둘 다면 긴 쪽').
+        let body = mgbFlat(try mgbBody("send_megaphone"))
+        let selfOpen = "if v_last is not null and v_last + make_interval(secs => v_cool) > now() then"
+        let start = try #require(body.range(of: selfOpen)?.upperBound, "사람당 창 갈래가 없다")
+        let end = try #require(body.range(of: "perform pg_advisory_xact_lock(hashtext('megaphone_global'));")?.lowerBound)
+        try #require(start < end, "사람당 창 갈래가 전역 자물쇠 뒤다")
+        let branch = String(body[start..<end])
+        // 부르는 자리: 앱 전체 창을 자물쇠 뒤와 같은 술어로 읽고, 같거나 길면 global · 앱 전체 초 · 아니면 self · 사람당 초.
+        #expect(branch.contains("select max(m.created_at) into v_glast from public.megaphones m where m.created_at > now() - make_interval(secs => v_gcool) and public.same_visibility(uid, m.sender);"),
+                "사람당 갈래가 앱 전체 창을 같은 술어로 안 읽는다")
+        #expect(branch.contains("if v_gleft >= v_left then return jsonb_build_object('status', 'cooldown', 'scope', 'global', 'cooldown_seconds', v_gcool, 'retry_after_seconds', v_gleft); end if; return jsonb_build_object('status', 'cooldown', 'scope', 'self', 'cooldown_seconds', v_cool, 'retry_after_seconds', v_left); end if;"),
+                "사람당 갈래가 긴 쪽(같으면 global)으로 답하지 않는다")
+        // 앱 전체 창이 비면 v_gleft 는 0 이라 self 로 답한다(초깃값이 없으면 null >= n 이 거짓이라 우연히 맞을 뿐이다).
+        #expect(body.contains("v_gleft int := 0;") && body.contains("v_left int;"))
+        // 어느 쪽이든 여기서 끝난다 — 자물쇠 · 차감으로 흘러내리지 않는다(돈 경로를 막는 것은 자물쇠 뒤 창 하나다).
+        #expect(!branch.contains("pg_advisory_xact_lock") && !branch.contains("ruby_balance"))
+        // 비교 기준선: 정본의 사람당 갈래는 앱 전체 창을 몰랐다 — 열자마자 사람당 초로 답했다.
+        let canon = mgbFlat(mgbStrip(try #require(mgbDefinition("send_megaphone", in: try mgbRaw(mgbMegaphoneMigration))).body))
+        #expect(canon.contains(selfOpen + " return jsonb_build_object('status', 'cooldown', 'cooldown_seconds', v_cool,"))
+        #expect(!canon.contains("v_gleft"))
     }
 
     @Test("배너 신호: 받는 사람마다 초인종 다음에 realtime 'megaphone' {v:1, m:id} · 예외는 삼킨다(루비 · fan-out 을 안 되돌린다)")
@@ -377,7 +425,9 @@ struct MegaphoneBannerMigrationTests {
         #expect(body.contains("'cooldown_remaining_seconds', greatest(v_remain, v_gleft),"))
         #expect(body.contains("'global_cooldown_seconds', public.megaphone_global_cooldown_seconds(),"))
         #expect(body.contains("'global_cooldown_remaining_seconds', v_gleft,"))
-        #expect(body.contains("'cooldown_scope', case when v_remain > 0 and v_remain >= v_gleft then 'self' when v_gleft > 0 then 'global' end,"))
+        #expect(body.contains("'cooldown_scope', case when v_remain > v_gleft then 'self' when v_gleft > 0 then 'global' end,"),
+                "cooldown_scope 가 긴 쪽 · 같으면 앱 전체(C4)가 아니다")
+        #expect(!body.contains("v_remain >= v_gleft"), "같을 때 self 로 답한다 — C4 는 같으면 앱 전체 문구다")
         #expect(body.contains("where m.created_at > now() - make_interval(secs => public.megaphone_global_cooldown_seconds()) and public.same_visibility(uid, m.sender);"))
         #expect(body.contains("'price', public.megaphone_ruby_price(),"), "가격을 megaphone_ruby_price() 로 안 부른다(V0354)")
         for key in ["'status', 'ok'", "'enabled',", "'price',", "'cooldown_seconds',", "'recipients',", "'max_length',", "'ruby_balance',"] {
@@ -388,7 +438,7 @@ struct MegaphoneBannerMigrationTests {
         #expect(canon.contains("'cooldown_remaining_seconds', v_remain,"))
     }
 
-    @Test("megaphone_inbox: 벽은 to_user = auth.uid() 한 줄 · 확성기 표식 · 차단 · 24시간 상한 · 최신 20 · 로그인만 · 인자 DEFAULT")
+    @Test("megaphone_inbox: 벽은 to_user = auth.uid() 한 줄 · 확성기 표식 · 차단 · 24시간 상한 · 개수로 안 자름 · 로그인만 · 인자 DEFAULT")
     func inboxWall() throws {
         // 없으면: 남이 받은 확성기 줄이 보이거나(벽), 아무나 보낸 📢 1:1 이 배너가 되거나(표식), 차단한 사람이 화면에 뜬다.
         let raw = try mgbRaw(mgbMigration)
@@ -397,7 +447,9 @@ struct MegaphoneBannerMigrationTests {
         #expect(mgbFlat(def.header).hasPrefix("create or replace function public.megaphone_inbox(p_hours integer default 24) returns table(message_id uuid, megaphone_id uuid, sender_id uuid, sender_display_name text, sender_avatar_url text, body text, created_at timestamptz, created_epoch bigint) language sql stable security definer set search_path = public"))
         #expect(mgbCount(body, "to_user") == 1, "벽 줄 말고 to_user 를 또 본다 — 벽은 한 줄이다")
         #expect(body.contains("where m.to_user = auth.uid() and m.megaphone_id is not null and not public.blocked_between(auth.uid(), m.from_user) and m.created_at >= now() - make_interval(hours => least(greatest(coalesce(p_hours, 24), 1), 24))"))
-        #expect(body.contains("order by m.created_at desc, m.id desc limit 20"))
+        // 개수로 자르지 않는다 — 새 앱 메시지함 필터의 집합이다. 잘리면 24시간 안 옛 줄이 📢 1:1 로 보인다(상한은 시간 창 · 앱 전체 5분).
+        #expect(body.hasSuffix("order by m.created_at desc, m.id desc"), "목록 끝이 정렬이 아니다 — 뒤에 자르기가 붙었다")
+        #expect(!body.lowercased().contains("limit"), "megaphone_inbox 가 개수로 자른다 — 메시지함 필터 집합이 모자란다")
         #expect(body.contains("left join public.profiles pr on pr.id = m.from_user"), "profiles 를 함수 안에서 조인하지 않는다(임베드 모호성)")
         #expect(body.contains("coalesce(pr.display_name, '사용자')"))
         #expect(body.contains("then substr(m.body, char_length(public.megaphone_prefix()) + 1)"), "본문 접두를 안 뗀다")
@@ -463,7 +515,7 @@ struct MegaphoneBannerMigrationTests {
         }
     }
 
-    @Test("적용 시점 가드가 그대로다 — 잠금 3초 · 정본/재적용 md5 · 사후 단언 · 프로브 13건 · 센티널 롤백 · 스키마 리로드")
+    @Test("적용 시점 가드가 그대로다 — 잠금 3초 · 정본/재적용 md5 · 사후 단언 · 프로브 15건 · 센티널 롤백 · 스키마 리로드")
     func deployTimeGuardsAreIntact() throws {
         // 없으면: 운영 적용이 프로브 없이 지나가거나, 프로브의 확성기 · 메시지 · 발송함 행이 운영에 남는다.
         let raw = try mgbRaw(mgbMigration)
@@ -471,7 +523,7 @@ struct MegaphoneBannerMigrationTests {
         #expect(sql.contains("perform set_config('lock_timeout', '3s', true);"))
         #expect(sql.contains("elsif r.md5 = r.canon_md5 then") && sql.contains("elsif r.md5 = r.self_md5 then"))
         #expect(sql.contains("if not (v_first = 3 or v_again = 3) then"), "섞인 상태(일부만 손댄 서버)를 안 멈춘다")
-        #expect(sql.contains("v_expected  constant int := 13;"), "프로브 기대 건수가 13 이 아니다")
+        #expect(sql.contains("v_expected  constant int := 15;"), "프로브 기대 건수가 15 가 아니다")
         #expect(sql.contains("raise exception 'MEGAPHONE_BANNER_PROBE_ROLLBACK';"), "센티널 롤백이 없다 — 프로브 행이 운영에 남는다")
         #expect(sql.contains("if sqlerrm = 'MEGAPHONE_BANNER_PROBE_ROLLBACK' then"))
         #expect(sql.contains("notify pgrst, 'reload schema';"))
@@ -482,7 +534,10 @@ struct MegaphoneBannerMigrationTests {
                       "v := pg_temp.mgb_send(a, '또 보낸다', gen_random_uuid()); if v ->> 'status' is distinct from 'cooldown' or v ->> 'scope' is distinct from 'self'",
                       "v := pg_temp.mgb_send(h1, '숨김 쪽 확성기', gen_random_uuid()); if v ->> 'status' is distinct from 'ok' then",
                       "(v2 ->> 'total')::int - (v2_0 ->> 'total')::int is distinct from 1",
-                      "or v ? 'megaphone_id' or v ->> 'type' is distinct from 'message' then"] {
+                      "or v ? 'megaphone_id' or v ->> 'type' is distinct from 'message' then",
+                      "from generate_series(1, 30) as g returning id) select array_agg(ins.id) into v_ids from ins; v := pg_temp.mgb_rpc(c, 'select coalesce(jsonb_agg(to_jsonb(i)), ''[]''::jsonb) from public.megaphone_inbox() i');",
+                      "v := pg_temp.mgb_send(a, '사람당 30초 남음', gen_random_uuid()); if v ->> 'status' is distinct from 'cooldown' or v ->> 'scope' is distinct from 'global' or (v ->> 'cooldown_seconds')::int is distinct from v_gcool or (v ->> 'retry_after_seconds')::int is distinct from v_gcool",
+                      "v := pg_temp.mgb_send(a, '둘이 같다', gen_random_uuid()); if v ->> 'scope' is distinct from 'global'"] {
             #expect(flat.contains(token), Comment(rawValue: "§9 프로브에서 실호출 줄이 빠졌다: \(token.prefix(60))"))
         }
         for line in sql.split(separator: "\n") {

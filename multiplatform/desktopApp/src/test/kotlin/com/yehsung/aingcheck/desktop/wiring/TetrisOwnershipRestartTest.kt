@@ -304,4 +304,19 @@ class TetrisOwnershipRestartTest {
         again.close()
         strangerDoesNotPlay()
     }
+
+    /**
+     * 즉시 쓰기 머리는 점까지 — `tetris.duel.ownedMatches.` 로 끝난다. 머리가 점을 잃으면 이름이 비슷한 다른 키
+     * (`…ownedMatchesBackup` 같은 것)까지 즉시 쓰기로 잡아 묶음 창이 무너진다. 사용자 id 가 붙은 키만 잡는다.
+     */
+    @Test
+    fun immediatePrefixCatchesOnlyPerUserOwnedMatchKeys() {
+        assertEquals(setOf("tetris.duel.ownedMatches."), FileDesktopKeyValueStore.WORK_IMMEDIATE_KEY_PREFIXES)
+        val kv = appKv(newDir())
+        assertTrue(kv.isImmediate(key), "사용자별 기록 키가 즉시 쓰기가 아니다: $key")
+        assertTrue(kv.isImmediate(TetrisDuelStore.ownedMatchesKey("Other-User")), "다른 사용자 기록 키도 즉시 쓰기여야 한다")
+        for (near in listOf("tetris.duel.ownedMatches", "tetris.duel.ownedMatchesBackup", "tetris.duel.ownedMatch.x", "tetris.duel.hold", "tetris.lobby")) {
+            assertFalse(kv.isImmediate(near), "머리가 비슷한 다른 키를 즉시 쓰기로 잡았다: $near")
+        }
+    }
 }

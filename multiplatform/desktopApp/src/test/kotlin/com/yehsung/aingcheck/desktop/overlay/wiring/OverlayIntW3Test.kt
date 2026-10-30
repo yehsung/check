@@ -232,7 +232,7 @@ class OverlayIntW3Test {
         TeamMemberStatus(id, name, if (working) WorkStatus.working else WorkStatus.offWork, updatedAt = null, currentSessionStartedAt = null)
 
     @Test
-    fun `팀 소식 — 첫 목록은 시드만, 퇴근→출근 전이만 "○○님 출근!", 나와 새로 나타난 근무자는 인사 0`() = runTest {
+    fun `팀 소식 — 첫 목록은 시드만, 퇴근→출근 전이만 '○○님 출근!', 나와 새로 나타난 근무자는 인사 0`() = runTest {
         val team = MutableStateFlow(listOf(member("me", "나", false), member("u-a", "합성가", false), member("u-b", "합성나", true)))
         val r = rig(extra = { it.copy(teamStatuses = team, selfUserId = { "me" }) })
         r.wiring.start(backgroundScope)
@@ -248,7 +248,7 @@ class OverlayIntW3Test {
     }
 
     @Test
-    fun `새 버전 — 공급이 온 순간 보이고 한가하면 "새 업데이트가 있어요!" 한 번, 새 빌드가 아니면 0`() = runTest {
+    fun `새 버전 — 공급이 온 순간 보이고 한가하면 '새 업데이트가 있어요!' 한 번, 새 빌드가 아니면 0`() = runTest {
         val state = MutableStateFlow(DesktopUpdateState(currentBuild = 80))
         val r = rig(extra = { it.copy(updateVersions = OverlayWiring.updateVersions(state)) })
         r.wiring.start(backgroundScope)

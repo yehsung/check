@@ -1,5 +1,5 @@
 {
-  "exportTests": 95,
+  "exportTests": 111,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -176,6 +176,152 @@
         "Sources/CheckCore/MilestoneTracker.swift",
         "Sources/CheckCore/SupabaseWorkModels.swift",
         "Sources/CheckCore/CheckTodoModel.swift"
+      ]
+    },
+    {
+      "cases": 3,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/fresh",
+      "path": "contract/golden/desktop-poke/fresh.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
+      ]
+    },
+    {
+      "cases": 4,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/requests",
+      "path": "contract/golden/desktop-poke/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
+      ]
+    },
+    {
+      "cases": 3,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift",
+      "golden": "desktop-poke/send-notice",
+      "path": "contract/golden/desktop-poke/send-notice.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
+      ]
+    },
+    {
+      "cases": 13,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/focus-stage",
+      "path": "contract/golden/desktop-ultra/focus-stage.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift"
+      ]
+    },
+    {
+      "cases": 15,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/requests",
+      "path": "contract/golden/desktop-ultra/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/CheckCoreShared.swift"
+      ]
+    },
+    {
+      "cases": 39,
+      "equivalence": "discrete",
+      "generator": "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift",
+      "golden": "desktop-ultra/wallet-apply",
+      "path": "contract/golden/desktop-ultra/wallet-apply.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStorePoke.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
+      ]
+    },
+    {
+      "cases": 24,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+      "golden": "desktop-work-policy/constants",
+      "path": "contract/golden/desktop-work-policy/constants.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStore.swift",
+        "Sources/check/CheckWorkNudge.swift",
+        "Sources/CheckCore/MilestoneTracker.swift"
+      ]
+    },
+    {
+      "cases": 19,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+      "golden": "desktop-work-policy/laps",
+      "path": "contract/golden/desktop-work-policy/laps.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStore.swift",
+        "Sources/CheckCore/MilestoneTracker.swift"
+      ]
+    },
+    {
+      "cases": 11,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-policy/GoldenExportDesktopWorkPolicy.swift",
+      "golden": "desktop-work-policy/nudge",
+      "path": "contract/golden/desktop-work-policy/nudge.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/CheckWorkNudge.swift"
+      ]
+    },
+    {
+      "cases": 14,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift",
+      "golden": "desktop-work-queue/scenarios",
+      "path": "contract/golden/desktop-work-queue/scenarios.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStoreSync.swift",
+        "Sources/check/WorkTimerStore.swift",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift"
+      ]
+    },
+    {
+      "cases": 17,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift",
+      "golden": "desktop-work-state/ownership",
+      "path": "contract/golden/desktop-work-state/ownership.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/check/WorkTimerStore.swift",
+        "Sources/check/WorkTimerStoreSync.swift"
+      ]
+    },
+    {
+      "cases": 46,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/desktop-work/GoldenExportDesktopWorkRequests.swift",
+      "golden": "desktop-work/requests",
+      "path": "contract/golden/desktop-work/requests.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift",
+        "Sources/CheckCore/SupabaseWorkHTTP.swift"
       ]
     },
     {
@@ -859,6 +1005,41 @@
       ]
     },
     {
+      "cases": 146,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
+      "golden": "token-usage/limits/readers",
+      "path": "contract/golden/token-usage/limits/readers.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/AILimitReaders.swift",
+        "Sources/CheckCore/JWTClaims.swift"
+      ]
+    },
+    {
+      "cases": 37,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift",
+      "golden": "token-usage/limits/upload",
+      "path": "contract/golden/token-usage/limits/upload.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
+        "Sources/check/WorkTimerStoreAILimits.swift"
+      ]
+    },
+    {
+      "cases": 14,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan.swift",
+      "golden": "token-usage/scan/scanner",
+      "path": "contract/golden/token-usage/scan/scanner.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/CheckTokenUsage.swift"
+      ]
+    },
+    {
       "cases": 23,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift",
@@ -1176,6 +1357,18 @@
         "Sources/CheckCore/TodoSync.swift",
         "Sources/CheckCore/SupabaseWorkService.swift",
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift"
+      ]
+    },
+    {
+      "cases": 17,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireScalars.swift",
+      "golden": "wire/scalar-props",
+      "path": "contract/golden/wire/scalar-props.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/SupabaseWorkService.swift",
+        "Sources/CheckCore/RealtimeTransport.swift"
       ]
     }
   ],

@@ -79,8 +79,11 @@ final class MessageReadStubProtocol: URLProtocol {
         switch call.rpc {
         // v0.3.65: 찌르기 기록까지 싣는 `message_history_with_pokes` 도 **없는 서버**가 기본이다 — 이 스위트들의 스크립트는
         // `message_history_with_reads` 를 쓰고, 스토어는 새 함수가 없을 때 그쪽으로 접는다(새 경로는 V0365MessagePoke* 가 잰다).
+        // 2026-10-30: 확성기 배너의 `megaphone_inbox` · `message_unread_summary_v2` 도 **없는 서버**가 기본이다 — `[]` 로 답하면 필터가
+        // 켜져 요약이 v2 로 옮겨 가고, `message_unread_summary` 를 스크립트한 이 스위트들이 조용히 요약을 잃는다(새 경로는 MegaphoneBanner* 가 잰다).
         case "message_history_with_pokes", "mark_conversation_read",
-             "message_history_with_reads", "message_unread_summary", "mark_messages_read":
+             "message_history_with_reads", "message_unread_summary", "mark_messages_read",
+             "megaphone_inbox", "message_unread_summary_v2":
             return MessageReadFixture.missingFunction(call.rpc)
         default:
             return Reply(body: "[]")

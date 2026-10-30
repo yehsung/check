@@ -343,6 +343,9 @@ package final class MegaphoneStore {
     @ObservationIgnored package var clock: () -> Date = { Date() }
     /// 요청 id 를 만드는 곳(테스트가 바꾼다).
     @ObservationIgnored package var makeRequestID: () -> String = { UUID().uuidString.lowercased() }
+    /// 전송이 `sent`(중복 포함)로 끝났을 때 — 보낸 본문(정규화된 것)과 서버가 준 확성기 id. 소유자가 자기 배너를 한 번 띄운다
+    /// (`MegaphoneBannerStore.presentOwn` — 서버 fan-out 에는 본인이 없다). 같은 id 는 배너 스토어의 본 것 기록이 두 번 안 띄운다.
+    @ObservationIgnored package var onSent: (@MainActor (_ body: String, _ megaphoneID: String?) -> Void)?
 
     /// 작성 칸(화면이 바인딩한다 — 고칠 때는 `setDraft` 를 지난다).
     package private(set) var draft = ""
@@ -493,6 +496,7 @@ package final class MegaphoneStore {
                 guard host.sessionGeneration == sessionGeneration, generation == self.resetGeneration else { return }
                 self.isSending = false
                 self.apply(response, requestID: requestID)
+                if case .sent = MegaphoneSendOutcome(response: response) { self.onSent?(body, response.megaphoneId) }
             } catch {
                 guard host.sessionGeneration == sessionGeneration, generation == self.resetGeneration else { return }
                 self.isSending = false

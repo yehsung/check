@@ -355,6 +355,8 @@ final class WorkTimerStore {
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
+            // 확성기 배너의 예비 경로(2026-10-30) — 소켓이 끊겨 'megaphone' 신호를 놓쳐도 여는 순간 60초 스로틀로 한 번 맞춘다.
+            refreshMegaphoneBannerIfStale()
             // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
             // 도착하면 그 응답 자리에서 한 번 더 판정한다).
             evaluateMessageReadMarking()
@@ -1299,6 +1301,13 @@ final class WorkTimerStore {
     /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
     let megaphone: MegaphoneStore
 
+    /// 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로 띄우고, **메시지함 필터의 유일한 근거**(`hides(messageID:)`)를 쥔다.
+    /// 폰과 같은 코어 스토어다(`MegaphoneBannerStore`). 소유 규약은 `megaphone` 과 같다(약참조 호스트 · 로그아웃에 reset).
+    /// 맥 배선(필터 자리 · 실시간 · 예비 새로고침 · 본인 배너)은 `WorkTimerStoreMegaphoneBanner.swift`.
+    let megaphoneBanner: MegaphoneBannerStore
+    /// 배너 예비 새로고침(팝오버 열기 · 폴링 틱)의 60초 스로틀 장부. 실시간 신호·판정 보류는 이 스로틀을 지나지 않는다.
+    @ObservationIgnored var megaphoneBannerLastRefreshAt: Date = .distantPast
+
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
     /// 그 게이트를 우회해 peek 으로라도 알려야 한다(배선은 agent-overlay/W2 몫이다).
@@ -1964,6 +1973,8 @@ final class WorkTimerStore {
         self.tetris = TetrisDuelStore()
         // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.megaphone = MegaphoneStore()
+        // 확성기 배너도 같다(2026-10-30). 본 것 기록은 이 앱의 defaults 에 둔다(시험은 격리 스위트).
+        self.megaphoneBanner = MegaphoneBannerStore(defaults: defaults)
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -2031,6 +2042,11 @@ final class WorkTimerStore {
         chess.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "chess") }
         tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         megaphone.attach(host: self)
+        megaphoneBanner.attach(host: self)
+        // 보낸 사람 본인에게도 보낸 직후 자기 배너를 한 번(서버 fan-out 에는 본인이 없다 — 계약 C2).
+        megaphone.onSent = { [weak self] body, megaphoneID in
+            self?.presentOwnMegaphoneBanner(body: body, megaphoneID: megaphoneID)
+        }
     }
 
     /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
@@ -3451,6 +3467,8 @@ final class WorkTimerStore {
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
+                // 확성기 배너의 예비 경로(2026-10-30) — 폴링 틱마다 60초 스로틀로(실시간 신호를 놓친 맥이 다음 틱에 따라잡는다).
+                self?.refreshMegaphoneBannerIfStale()
                 // 내 월간 토큰 사용량을 변경 게이트+60초 스로틀로 서버에 올린다(팀원 보드 최신화). 대부분 게이트에서 즉시 반환.
                 // 팝오버가 **열려 있으면** 스캔의 소유자는 뷰 루프(CheckMenuView 의 runRefreshLoop)이므로 여기서는
                 // 업로드만 한다. **닫혀 있으면** 그 뷰 루프가 없어 스캔 자체가 돌지 않는다 — 메뉴바를 안 여는 사람은
@@ -4175,6 +4193,8 @@ extension WorkTimerStore {
         tetris.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
+        // 확성기 배너의 큐·필터 id·스로틀도 계정에 묶인다(2026-10-30). 남기면 앞 사람이 받은 확성기 id 로 다음 사람의 줄을 거른다.
+        resetMegaphoneBanner()
         // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
         resetGachaState()
         // 생일 선물(v0.3.66)도 계정에 묶인다 — 앞 사람의 선물 창 · 다시 열기 카드를 다음 사람이 보지 않게.
@@ -4316,6 +4336,7 @@ extension WorkTimerStore {
         chess.reset()
         tetris.reset()
         megaphone.reset()
+        resetMegaphoneBanner()
         resetGachaState()
         resetCakeGiftState()
         startedAt = nil

@@ -118,6 +118,12 @@ package enum RealtimeLinkConstants {
     /// 체스보다 잦다. (구버전 — 맥 ≤ 0.3.59 · 폰 ≤ 1.0.10 — 은 이 이름을 몰라 drain 한다. 같은 계정의 옛 기기만 해당하고
     /// 서버가 하트비트마다 울리지 않는 것이 그 누수를 묶는 장치다 — 설계 D3.)
     package static let tetrisBroadcastEvent = "tetris"
+
+    /// 확성기 배너 신호의 브로드캐스트 이벤트 이름(2026-10-30). 서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보내는
+    /// `realtime.send({v:1, m:<megaphone_id>}, 'megaphone', poke_topic(…), true)` 와 **문자 그대로 같다**.
+    /// payload 는 믿지 않고 "배너 목록(`megaphone_inbox`)을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 확성기 줄의
+    /// 소비는 같은 묶음의 `ring` 이 맡는다(옛 맥·폰은 이 이름을 몰라 drain 한다 — 한 번 더 부를 뿐 소비할 것이 없다).
+    package static let megaphoneBroadcastEvent = "megaphone"
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -201,6 +207,9 @@ package enum RealtimeEffect: Equatable, Sendable {
     /// 읽음 신호('message_read')를 받았다 → 메시지 활동 새로고침(요약 + 대화 패널이 보이면 이력) 1회.
     /// **take_pokes 가 아니다**(v0.3.30) — 읽음은 소비할 행을 만들지 않는다.
     case messageReadSignal
+    /// 확성기 신호('megaphone')를 받았다 → 배너 목록 재조회 1회(겹치면 `MegaphoneBannerStore.refresh` 가 하나로 모은다).
+    /// **take_pokes 가 아니다** — 확성기 줄의 소비는 같은 묶음의 `ring` 이 맡는다.
+    case megaphoneSignal
     case pushAccessToken(String)
     case scheduleTokenRefresh(at: Date)
     /// 강제 갱신(만료 토큰 조인 거절 직후). force=true 는 "예정보다 앞당겨서라도 지금".
@@ -496,6 +505,9 @@ package struct RealtimeLink: Equatable, Sendable {
             // 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다. 이 줄이 없으면 테트리스 초인종이 아래
             // 기본값으로 떨어져 **울릴 때마다 take_pokes 가 한 번씩 더** 나가고 소켓은 테트리스 상태를 한 번도 당기지 않는다.
             if event == RealtimeLinkConstants.tetrisBroadcastEvent { return [.tetrisSignal] }
+            // 확성기(2026-10-30)도 오목 줄 **앞**에 선다 — 테트리스와 같은 이유(오목·체스 가지와 drain 기본값이 한 문장으로 붙어 있어야
+            // 하는 소스 계약). 이 줄이 없으면 확성기 신호가 아래 기본값으로 떨어져 배너는 안 뜨고 take_pokes 만 한 번 더 나간다.
+            if event == RealtimeLinkConstants.megaphoneBroadcastEvent { return [.megaphoneSignal] }
             if event == RealtimeLinkConstants.gomokuBroadcastEvent { return [.gomokuSignal] }
             // 체스(v0.3.44)도 같은 자리에 선다. 이 줄이 없으면 체스 초인종이 아래 기본값으로 떨어져
             // **수마다 take_pokes 가 한 번씩 더** 나가고(블리츠 한 판 40수 = 왕복 80회) 소켓은 체스 상태를

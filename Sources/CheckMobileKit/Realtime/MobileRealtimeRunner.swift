@@ -256,6 +256,10 @@ package final class MobileRealtimeRunner {
                 //   공격마다 울린다. `.drain` 으로 새면 그 울림마다 **메시지** 요약·이력 조회가 한 번씩 더 나간다 —
                 //   테트리스와 아무 상관 없는 조회다. 잇는 것과 따로 두는 것은 별개의 요구다.
                 tetris?.handleSignal()
+            case .megaphoneSignal:
+                // 확성기 배너 신호(2026-10-30). 폰 배너 배선은 폰 갈래가 잇는다(`MegaphoneBannerStore.refresh()`) — 그때까지 비워 둔다.
+                // `.drain` 으로 떨어뜨리지 않는 까닭은 위 체스 가지 ③과 같다(소비할 것이 없는 메시지 조회가 한 번 더 나간다).
+                break
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

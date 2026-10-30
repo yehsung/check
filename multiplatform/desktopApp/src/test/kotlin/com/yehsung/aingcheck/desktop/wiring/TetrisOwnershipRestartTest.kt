@@ -351,7 +351,7 @@ class TetrisOwnershipRestartTest {
             first.close()
         }
         // kv 를 닫지 않고(flush 없음) 같은 파일로 새 실행.
-        val again = OwnershipRig(this, appKv(dir))
+        val again = OwnershipRig(this, appKv(dir), newDir())
         again.signIn()
         runCurrent()
         assertTrue(again.tetris.ownsMatch(OldServer.CHALLENGED), "강제 종료 뒤 다시 켠 앱이 자기가 신청한 판을 모른다")

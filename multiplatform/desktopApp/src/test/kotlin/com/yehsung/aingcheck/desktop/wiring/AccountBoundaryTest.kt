@@ -68,9 +68,9 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.Executor
+import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -79,9 +79,10 @@ import kotlin.time.Clock
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-private class BoundaryPlatform : DesktopPlatform {
+private class BoundaryPlatform(dataDir: Path) : DesktopPlatform {
     override val paths = object : AppPaths {
-        override val dataDir: String = Files.createTempDirectory("boundary-data").toFile().apply { deleteOnExit() }.path
+        // 시험이 끝나면 TempDataDirs.close 가 안의 todos.*.json·로그째 지운다(deleteOnExit 는 빈 폴더만 — int-w4a polish ⑥).
+        override val dataDir: String = dataDir.toString()
         override val cacheDir = "C"; override val logDir = "L"; override val userHome = "H"
     }
     override val env = object : EnvReader { override fun get(name: String): String? = null }
@@ -115,7 +116,7 @@ private object Accounts {
 }
 
 /** 앱 한 벌 — 실제 AppGraph 조립(start 포함). 요청은 (누구의 토큰, 경로)로 적는다. */
-private class BoundaryRig(test: TestScope) {
+private class BoundaryRig(test: TestScope, dataDir: Path) {
     data class Sent(val user: String?, val path: String)
 
     val sent = mutableListOf<Sent>()
@@ -154,7 +155,7 @@ private class BoundaryRig(test: TestScope) {
         },
     )
     val graph = AppGraph(
-        platform = BoundaryPlatform(),
+        platform = BoundaryPlatform(dataDir),
         clock = object : Clock {
             override fun now(): Instant = Instant.fromEpochMilliseconds(WiringTestRig.BASE_MS + test.testScheduler.currentTime)
         },
@@ -208,6 +209,11 @@ private class BoundaryRig(test: TestScope) {
 }
 
 class AccountBoundaryTest {
+    private val dirs = TempDataDirs()
+
+    @AfterTest
+    fun cleanupDataDirs() = dirs.close()
+
     /**
      * A 의 계정 묶음 상태를 채운다 — 화면이 쓰는 공개 문(초안 입력 · 보드 넘기기 · 공개 고르기 · 창 열기)과 서버 응답(합성 픽스처)으로만.
      * 스토어 안쪽 값을 직접 꽂지 않는다(코어가 막아 두기도 했다) — 화면·서버가 채우는 그 길로 채워야 지우는 길도 그 길에서 잰다.
@@ -275,7 +281,7 @@ class AccountBoundaryTest {
     )
 
     private suspend fun TestScope.startedWithA(): BoundaryRig {
-        val rig = BoundaryRig(this)
+        val rig = BoundaryRig(this, dirs.new("boundary-data"))
         rig.app.start()
         runCurrent()
         rig.signIn(Accounts.A)

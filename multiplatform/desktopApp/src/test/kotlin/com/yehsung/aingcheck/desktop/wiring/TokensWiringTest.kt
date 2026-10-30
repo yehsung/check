@@ -84,7 +84,7 @@ class TokensWiringTest {
         return home
     }
 
-    private inner class Rig(val scope: TestScope, config: DesktopAppConfig) {
+    private inner class Rig(val scope: TestScope, config: DesktopAppConfig, consent: () -> Boolean = { true }) {
         val router = MockRouter()
             .on(HttpMethod.Post, "/rest/v1/ai_limits", StubResponse.Json("", status = 201))
             .on(HttpMethod.Post, "/rest/v1/token_usage_device_monthly", StubResponse.Json("", status = 201))
@@ -113,6 +113,7 @@ class TokensWiringTest {
                 cacheBase = home.resolve("token-usage-cache.json"),
                 appBuild = 0,
                 tokenUsageCollect = { true },
+                aiToolDataAllowed = consent,
                 workState = work,
                 aiLimitRunner = AILimitRunner { now, providers ->
                     limitRunnerCalls += 1
@@ -219,6 +220,33 @@ class TokensWiringTest {
         step(100)
         assertEquals(1, rig.wiring.scan.scanCount, "플라이아웃 열림 → 즉시 스캔")
         rig.wiring.onFlyoutClosed()
+        rig.wiring.stop()
+    }
+
+    /**
+     * 동의(W-13 #5 · Store 10.5.2): 맥 aiToolDataAllowed(WorkTimerStoreMacEdition.swift:54-64)처럼 스캔 문과 업로드 문 둘 다 동의를 본다.
+     * 동의 전엔 근무 중 틱·플라이아웃·지금 스캔 어느 입구로도 스캔 0 · token_usage_* 쓰기 0. 같은 장치에서 동의하면 다음 틱이 스캔하고 올린다(양성 짝).
+     */
+    @Test
+    fun `동의 전이면 근무 중이어도 스캔·token_usage 쓰기 0 · 동의하면 같은 입력이 스캔하고 올린다(W-13 #5)`() = runTest {
+        var consent = false
+        val rig = Rig(this, DesktopAppConfig(tokenUpload = true)) { consent }
+        rig.wiring.start(backgroundScope)
+        step(100)
+        settle("첫 틱") { rig.wiring.ticks >= 1 }
+        rig.wiring.onFlyoutOpened()
+        step(100)
+        rig.wiring.scanSource.refreshNow()
+        runCurrent()
+        assertEquals(0, rig.wiring.scan.scanCount, "동의 전: 배경·플라이아웃·지금 스캔 0")
+        assertEquals(emptyList(), rig.tokenWrites(), "동의 전: token_usage_* 요청 0")
+        rig.wiring.onFlyoutClosed()
+
+        consent = true
+        step(TokensWiring.TICK_MILLIS)
+        settle("동의 뒤 틱이 스캔하고 올린다") {
+            rig.wiring.scan.scanCount >= 1 && "POST /rest/v1/token_usage_device_monthly" in rig.tokenWrites()
+        }
         rig.wiring.stop()
     }
 

@@ -56,6 +56,11 @@ data class TokensWiringDeps(
     val appBuild: Long,
     /** 서버 수집 설정(fetchTokenUsageSettings 값 && 불러옴 — MeStore). */
     val tokenUsageCollect: () -> Boolean,
+    /**
+     * 이 PC 의 AI 도구 기록 읽기 동의(W-9 #3 — `DesktopSettingsStore.tokenUsageCollect.value`, 기본 거절).
+     * 맥 aiToolDataAllowed(WorkTimerStoreMacEdition.swift:54-64)처럼 **스캔 문과 업로드 문 둘 다** 이 값을 본다. 기본 false = 동의 전 스캔 0.
+     */
+    val aiToolDataAllowed: () -> Boolean = { false },
     /** 배경 스캔은 근무 중일 때만(Swift refreshTokenUsageInBackgroundIfDue). */
     val workState: DesktopWorkState,
     /** `AILimitWindowsRunner.live(homes, AILimitHTTPKtor.fetcher(httpClient()), BuildIdentity.VERSION)`. */
@@ -82,7 +87,7 @@ class TokensWiring(private val deps: TokensWiringDeps) {
         keyValueStore = deps.keyValueStore,
         cacheBase = deps.cacheBase,
         clock = ::wallNow,
-        isScanPermitted = { true },
+        isScanPermitted = deps.aiToolDataAllowed,
         ioDispatcher = deps.ioDispatcher,
     )
 
@@ -103,7 +108,7 @@ class TokensWiring(private val deps: TokensWiringDeps) {
         config = deps.desktopConfig,
         host = deps.sessionStore,
         deviceId = deps.deviceId,
-        tokenUsageCollect = deps.tokenUsageCollect,
+        tokenUsageCollect = { deps.tokenUsageCollect() && deps.aiToolDataAllowed() },
         store = deps.keyValueStore,
         appBuild = deps.appBuild,
         computeDiagnostics = deps.computeDiagnostics,

@@ -29,9 +29,12 @@ import com.yehsung.aingcheck.desktop.overlay.surface.OverlayPlacementStore
 import com.yehsung.aingcheck.desktop.overlay.surface.OverlaySurfaceListener
 import com.yehsung.aingcheck.desktop.overlay.surface.WindowsMonitors
 import com.yehsung.aingcheck.desktop.overlay.surface.WindowsOverlaySurface
+import com.yehsung.aingcheck.desktop.overlay.todoboard.BoardTimer
+import com.yehsung.aingcheck.desktop.overlay.todoboard.SwingBoardTimer
 import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardAppearanceStore
 import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardController
 import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardRoot
+import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardSurface
 import com.yehsung.aingcheck.desktop.overlay.todoboard.TodoBoardWindow
 import com.yehsung.aingcheck.desktop.platform.windows.HostOs
 import com.yehsung.aingcheck.desktop.platform.windows.WindowsPlatform
@@ -211,9 +214,21 @@ class OverlaySurfaces internal constructor(
                 onDeactivated = { controller.onDeactivated() },
                 translucent = true,
             )
-            controller = TodoBoardController(store, window, enabled = config.boardEnabled)
-            controller.onOpened = config.onBoardOpened
+            controller = boardController(config, store, window)
             return controller to window
         }
+
+        /**
+         * 보드 판정 한 곳(창과 무관 — 시험은 가짜 표면): 설정 켜짐([OverlaySurfacesConfig.boardEnabled])이면 캐릭터 클릭이 보드,
+         * 꺼짐이면 엔진이 콕 반응(때리기)으로 돌린다(맥 CheckApp.swift:617-622 `guard …, isTodoEnabled() else { return false }`).
+         * 닫혀 있다 열린 순간에만 [OverlaySurfacesConfig.onBoardOpened](맥 TodoSyncCoordinator.swift:49 `board?.onOpened = { sync.requestSync(.boardOpened) }`).
+         */
+        internal fun boardController(
+            config: OverlaySurfacesConfig,
+            store: TodoListStore,
+            surface: TodoBoardSurface,
+            timer: BoardTimer = SwingBoardTimer,
+        ): TodoBoardController =
+            TodoBoardController(store, surface, timer, enabled = config.boardEnabled).also { it.onOpened = config.onBoardOpened }
     }
 }

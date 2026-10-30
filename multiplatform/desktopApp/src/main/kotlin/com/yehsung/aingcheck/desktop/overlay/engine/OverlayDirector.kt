@@ -468,6 +468,17 @@ class OverlayDirector(
         return true
     }
 
+    /**
+     * 셸 알림 말풍선(ShellNotice — 구조 사건 없이 글만 온 것. OverlayWiring.showShellNotice 의 대체 길). 메시지·대결과 같은 물러남
+     * (규약 10 — 울트라 중·말풍선 표시 중·재생 중이면 false, 부른 쪽이 다음 틱에 다시). 숨어 있으면 peek(캐릭터 꺼짐이면 false).
+     */
+    fun showNoticeBubble(text: String, now: Double): Boolean {
+        if (ultraActive || bubbleActive(now)) return false
+        if (state(now) == EngineState.PLAYING) return false
+        val reaction = ReactionKind.Poked(text)
+        return if (isShowing()) request(reaction, now) else beginPeek(reaction, now)
+    }
+
     override fun enqueueDuelInvite(invite: DuelInvite, now: Double) {
         val lane = duels.getValue(invite.game)
         if (lane.invites.any { it.id == invite.id }) return // 규약 10 — id 중복 제거

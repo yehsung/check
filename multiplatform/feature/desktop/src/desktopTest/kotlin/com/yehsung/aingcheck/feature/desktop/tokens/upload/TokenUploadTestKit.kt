@@ -20,8 +20,14 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
-class RecordingBackend(private val statusFor: (path: String) -> Int = { 201 }) {
+class RecordingBackend(
+    private val statusFor: (path: String) -> Int = { 201 },
+    /** 응답 본문(null 이면 RPC 는 "[]", 나머지는 빈 본문). 스키마 부재 같은 오류 본문을 흉내 낼 때 쓴다. */
+    private val bodyFor: (path: String) -> String? = { null },
+) {
     val requests = ArrayList<JsonObject>()
+    /** 요청이 '날아가는 중'에 부르는 갈고리 — 응답 전에 계정 전환(세대 증가)을 끼워 넣는 데 쓴다. */
+    @Volatile var onRequest: (path: String) -> Unit = {}
     val engine = MockEngine { request ->
         val bytes = (request.body as? OutgoingContent.ByteArrayContent)?.bytes()
         val body: JsonElement = if (bytes == null || bytes.isEmpty()) JsonNull else Json.parseToJsonElement(bytes.decodeToString())
@@ -35,8 +41,9 @@ class RecordingBackend(private val statusFor: (path: String) -> Int = { 201 }) {
                 "body" to body,
             ))
         }
+        onRequest(request.url.encodedPath)
         val status = statusFor(request.url.encodedPath)
-        val text = if (request.url.encodedPath.contains("/rpc/")) "[]" else ""
+        val text = bodyFor(request.url.encodedPath) ?: if (request.url.encodedPath.contains("/rpc/")) "[]" else ""
         respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
     }
     val service: SupabaseWorkService = SupabaseWorkService(

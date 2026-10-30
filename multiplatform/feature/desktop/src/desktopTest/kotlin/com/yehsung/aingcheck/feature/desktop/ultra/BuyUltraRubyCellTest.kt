@@ -1,6 +1,7 @@
 // 원본: Sources/check/WorkTimerStoreAuth.swift 805-846(buyUltra) · Sources/check/WorkTimerStore.swift 822-826(rubyBalance didSet serial) @ a90d8623
 package com.yehsung.aingcheck.feature.desktop.ultra
 
+import com.yehsung.aingcheck.core.wire.SupabaseSession
 import com.yehsung.aingcheck.core.stores.me.RubyBalanceCell
 import com.yehsung.aingcheck.feature.desktop.work.InMemoryDesktopWorkState
 import kotlinx.coroutines.test.TestScope
@@ -88,5 +89,33 @@ class BuyUltraRubyCellTest {
         assertEquals(50L, rig.cell.rubyBalance, "떠난 세대의 응답은 버린다")
         assertNull(rig.purchase.notice.value)
         assertFalse(rig.purchase.isPurchasing.value)
+    }
+
+    /** A → B 직행(세대 그대로) — 주인이 바뀐 뒤 도착한 구매 응답은 루비 칸·울트라·안내 어디에도 닿지 않는다(int-w4b 반박 검증, 발신과 같은 모양). */
+    @Test
+    fun directSwitchDropsLatePurchase() = runTest {
+        val rig = Rig(this, Reply.Json("""{"status":"ok","ultra_balance":2,"ruby_balance":40}"""))
+        rig.purchase.buy(1)
+        rig.host.session = SupabaseSession("access-token-b", null, "other-account")
+        advanceUntilIdle()
+        assertEquals(1, rig.server.calls.size, "요청은 나갔다 — 막힌 건 응답의 착지")
+        assertEquals("ruby=50 ultra=1 notice=null purchasing=false",
+            "ruby=${rig.cell.rubyBalance} ultra=${rig.wallet.state.value.balance} notice=${rig.purchase.notice.value} purchasing=${rig.purchase.isPurchasing.value}")
+    }
+
+    /** 순번 가드 — 주인이 같아도 그 사이 [UltraPurchase.resetForAccount] 가 돌았으면 버린다. 대조: reset 없으면 서버 값이 선다. */
+    @Test
+    fun resetForAccountDropsLatePurchase() = runTest {
+        val ok = Reply.Json("""{"status":"ok","ultra_balance":2,"ruby_balance":40}""")
+        val rig = Rig(this, ok, ok)
+        rig.purchase.buy(1)
+        rig.purchase.resetForAccount()
+        advanceUntilIdle()
+        assertEquals("ruby=50 ultra=1 notice=null purchasing=false",
+            "ruby=${rig.cell.rubyBalance} ultra=${rig.wallet.state.value.balance} notice=${rig.purchase.notice.value} purchasing=${rig.purchase.isPurchasing.value}")
+        rig.purchase.buy(1)
+        advanceUntilIdle()
+        assertEquals("ruby=40 ultra=2 notice=울트라 1개를 샀어요!",
+            "ruby=${rig.cell.rubyBalance} ultra=${rig.wallet.state.value.balance} notice=${rig.purchase.notice.value}")
     }
 }

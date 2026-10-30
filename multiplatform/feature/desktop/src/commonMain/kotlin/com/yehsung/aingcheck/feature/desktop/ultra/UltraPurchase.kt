@@ -41,11 +41,30 @@ class UltraPurchase(
     private val _purchasing = MutableStateFlow(false)
     val isPurchasing: StateFlow<Boolean> = _purchasing.asStateFlow()
 
+    /**
+     * 계정 순번 — [resetForAccount] 가 올린다. A → B 직행은 세대가 그대로라(core SessionStore.adoptSignedInSession) 세대만 보면
+     * 전환 전에 떠난 A 의 구매 응답이 B 의 루비 칸·울트라 잔량·안내에 닿는다(int-w4b 반박 검증 — DesktopPokeSender 와 같은 모양).
+     * 맥은 세대만 보고(WorkTimerStoreAuth.swift:817·835) 계정 바뀜엔 clearPersistedSession 이 세대를 올린다(WorkTimerStore.swift:4034).
+     * 세대·순번·주인 userID 가 **모두** 그대로일 때만 적는다.
+     */
+    private var accountEpoch = 0
+
+    private fun isStale(generation: Int, epoch: Int, owner: String?) =
+        generation != host.sessionGeneration || epoch != accountEpoch || owner != host.session?.userID
+
+    /** 로그아웃·계정 전환 — 안내를 지우고 떠 있던 앞 계정의 응답을 버린다(구매 깃발은 그 응답의 finally 가 내린다). */
+    fun resetForAccount() {
+        accountEpoch += 1
+        _notice.value = null
+    }
+
     fun buy(count: Int = 1): Job? {
         if (_purchasing.value) return null
         _purchasing.value = true
         _notice.value = null
         val generation = host.sessionGeneration
+        val epoch = accountEpoch
+        val owner = host.session?.userID
         return scope.launch {
             try {
                 val response = try {
@@ -53,12 +72,12 @@ class UltraPurchase(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
-                    if (generation != host.sessionGeneration) return@launch
+                    if (isStale(generation, epoch, owner)) return@launch
                     if (host.classifyAuthError(e) == AuthErrorDisposition.cancelled) return@launch
                     _notice.value = FAILED
                     return@launch
                 }
-                if (generation != host.sessionGeneration) return@launch
+                if (isStale(generation, epoch, owner)) return@launch
                 apply(response, count)
             } finally {
                 _purchasing.value = false

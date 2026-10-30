@@ -207,7 +207,10 @@ class SocialWiring(private val deps: SocialDeps) {
             runner.onSignedOut()
             ultraFocus.onSignedOut()
             // W3-c3 nice: 로그아웃하면 구매 안내 · 화면이 고른 것을 푼다(다음 사람에게 앞사람의 '샀어요'가 남지 않게).
-            purchase?.clearNotice()
+            // 순번도 올린다 — A → B 직행은 세대가 그대로라 떠 있던 A 의 구매·발신 응답을 세대로는 못 버린다(int-w4b 반박 검증 P5).
+            purchase?.resetForAccount()
+            // 발신 안내·쿨타임도 계정에 묶인 상태다(맥 clearPersistedSession WorkTimerStore.swift:4091-4092).
+            sender?.resetForAccount()
             signedOutListeners.toList().forEach { swallowSync(it) }
         }
 

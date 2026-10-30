@@ -46,6 +46,7 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.TokenUsageDayKey
 import com.yehsung.aingcheck.core.wire.models.TokenUsageMonthKey
 import com.yehsung.aingcheck.feature.desktop.socialapi.UltraSyncReason
+import com.yehsung.aingcheck.feature.desktop.work.WorkStartOrigin
 import com.yehsung.aingcheck.feature.desktop.tokens.TokenUsageMonthly
 import com.yehsung.aingcheck.feature.desktop.tokens.upload.TokenUploadCoordinator
 import com.yehsung.aingcheck.desktop.overlay.engine.FakeMeasure
@@ -194,6 +195,11 @@ private class BoundaryRig(
                     // 울트라 지갑(합성 잔량 777 — A 의 것).
                     p.endsWith("/rpc/ultra_wallet_sync") && user == Accounts.A ->
                         respond("""{"status":"ok","balance":777,"day":"2026-10-30"}""", HttpStatusCode.OK, json)
+                    // A 의 울트라 발신 성공(합성 잔량 4)·울트라 구매 성공(합성 울트라 9 · 루비 31) — 늦은 응답 시험(int-w4b 반박 검증 P5).
+                    p.endsWith("/rpc/ultra_poke_user") && user == Accounts.A ->
+                        respond("""{"status":"ok","ultra_balance":4}""", HttpStatusCode.OK, json)
+                    p.endsWith("/rpc/buy_ultra") && user == Accounts.A ->
+                        respond("""{"status":"ok","ultra_balance":9,"ruby_balance":31,"unit":10,"count":1}""", HttpStatusCode.OK, json)
                     // 안 읽음 요약 — A 5통 · B 2통(서로 다른 사람에게서). 함수 이름은 배너 스토어가 고른다(_v2 포함).
                     p.contains("/rpc/message_unread_summary") && user == Accounts.A ->
                         respond("""{"status":"ok","total":5,"peers":[{"peer_user_id":"${Accounts.PEER}","count":5}]}""", HttpStatusCode.OK, json)
@@ -517,6 +523,123 @@ class AccountBoundaryTest {
 
     /** ② A→B 직행은 세대가 그대로다(core SessionStore.adoptSignedInSession) — 지갑이 스스로 순번을 올려 늦은 응답을 버려야 한다. */
     @Test fun lateWalletOfADoesNotLandOnBAfterDirectSwitch() = runTest { assertNull(walletAfterLateA("switch"), "A→B 직행 뒤 B 지갑에 A 의 잔량") }
+
+    /**
+     * A 의 울트라 발신(잔량 4)을 붙잡았다가 [mode] 뒤에 푼다 → (지갑 잔량, 발신 안내, PEER 쿨타임). int-w4b 반박 검증 P5 의 상설판.
+     * 지갑 sync 의 순번을 지나치는 두 번째 쓰기 길(발신 성공 → applyUltraBalance → wallet.applyBalance)이다. 맥은 같은 자리를 세대로 막고
+     * (WorkTimerStorePoke.swift:175) 계정 바뀜엔 clearPersistedSession 이 세대를 올린다(WorkTimerStore.swift:4033) — 직행은 세대가 그대로라
+     * 발신기가 주인 계정·순번으로 막는다.
+     */
+    private suspend fun TestScope.ultraSendAfterLateA(mode: String): Triple<Long?, String?, Boolean> {
+        val rig = signedInA(BoundaryRig(this, dirs.new("send-$mode"), DesktopAppConfig(duels = true, poke = true, ultra = true)))
+        try {
+            rig.app.work.commands.start(WorkStartOrigin.MANUAL); runCurrent(); advanceTimeBy(1_000); runCurrent()
+            assertTrue(rig.app.work.store.pokeConsumeFacts().localSessionOpen, "전제: A 근무 중(로컬 세션)")
+            rig.gated = listOf("/rpc/ultra_poke_user")
+            rig.gateArmed = true
+            assertNotNull(rig.app.social.actions.sendUltraPoke(Accounts.PEER), "전제: 발신 Job")
+            runCurrent()
+            assertTrue(rig.held.any { it.endsWith("ultra_poke_user") }, "전제: A 의 울트라 발신이 붙잡혔다 — ${rig.held}")
+            switchAway(rig, mode)
+            rig.gate.complete(Unit); advanceTimeBy(500); runCurrent()
+            assertTrue(rig.uncaught.isEmpty(), "예외: ${rig.uncaught}")
+            val sender = requireNotNull(rig.app.social.sender)
+            return Triple(rig.app.social.wallet.state.value.balance, sender.notice.value, Accounts.PEER in sender.cooldownUntil.value)
+        } finally { rig.close() }
+    }
+
+    private suspend fun TestScope.switchAway(rig: BoundaryRig, mode: String) {
+        when (mode) {
+            "switch" -> { rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent() }
+            "signout" -> {
+                rig.scope.launch { rig.app.sessionStore.signOut() }; advanceTimeBy(5_000); runCurrent()
+                rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent()
+            }
+            // A → B → A 직행 두 번 — 주인은 다시 A 라 주인 대조로는 못 가른다. 리스너의 reset(순번)만 막는다(맥은 세대가 두 번 오른다).
+            "roundtrip" -> {
+                rig.signIn(Accounts.B); advanceTimeBy(2_000); runCurrent()
+                rig.signIn(Accounts.A); advanceTimeBy(2_000); runCurrent()
+            }
+        }
+        if (mode == "switch" || mode == "signout") {
+            assertEquals(Accounts.B, rig.app.sessionStore.session?.userID, "전제: B 로 넘어갔다")
+            assertNull(rig.app.social.wallet.state.value.balance, "전제: 전환이 지갑을 비웠다")
+        }
+        if (mode == "roundtrip") assertEquals(Accounts.A, rig.app.sessionStore.session?.userID, "전제: A 로 돌아왔다")
+    }
+
+    /** 음성 대조: 계정이 그대로면 붙잡았던 발신 응답은 잔량·안내·쿨타임에 **닿는다**(가드가 모든 응답을 버리는 고장이면 빨개진다). */
+    @Test fun lateUltraSendLandsWhenTheAccountIsUnchanged() = runTest {
+        val (balance, notice, cooldown) = ultraSendAfterLateA("control")
+        assertNotNull(balance, "대조: 잔량이 선다(4 → 미션 후보 동기화 777)")
+        assertNotNull(notice, "대조: 발신 안내")
+        assertTrue(cooldown, "대조: PEER 쿨타임")
+    }
+
+    @Test fun lateUltraSendOfADoesNotLandOnBAfterSignOut() = runTest {
+        assertEquals(Triple<Long?, String?, Boolean>(null, null, false), ultraSendAfterLateA("signout"), "로그아웃→B 뒤 A 의 늦은 울트라 발신 응답")
+    }
+
+    @Test fun lateUltraSendOfADoesNotLandOnBAfterDirectSwitch() = runTest {
+        assertEquals(Triple<Long?, String?, Boolean>(null, null, false), ultraSendAfterLateA("switch"), "A→B 직행 뒤 A 의 늦은 울트라 발신 응답이 B 에 (잔량, 안내, PEER 쿨타임)")
+    }
+
+    /** A 의 울트라 구매(울트라 9 · 루비 31)를 붙잡았다가 [mode] 뒤에 푼다 → (지갑 잔량, 루비 칸, 구매 안내). 같은 모양의 세 번째 쓰기 길(UltraPurchase.apply). */
+    private suspend fun TestScope.purchaseAfterLateA(mode: String): Triple<Long?, Long?, String?> {
+        val rig = signedInA(BoundaryRig(this, dirs.new("buy-$mode"), DesktopAppConfig(duels = true, poke = true, ultra = true)))
+        try {
+            rig.gated = listOf("/rpc/buy_ultra")
+            rig.gateArmed = true
+            assertNotNull(rig.app.social.actions.buyUltra(1), "전제: 구매 Job")
+            runCurrent()
+            assertTrue(rig.held.any { it.endsWith("buy_ultra") }, "전제: A 의 구매가 붙잡혔다 — ${rig.held}")
+            switchAway(rig, mode)
+            if (mode == "switch" || mode == "signout") assertNull(rig.app.ruby.rubyBalance, "전제: 전환이 루비 칸을 비웠다")
+            rig.gate.complete(Unit); advanceTimeBy(500); runCurrent()
+            assertTrue(rig.uncaught.isEmpty(), "예외: ${rig.uncaught}")
+            val purchase = requireNotNull(rig.app.social.purchase)
+            assertFalse(purchase.isPurchasing.value, "구매 깃발은 어느 경우든 내려간다")
+            return Triple(rig.app.social.wallet.state.value.balance, rig.app.ruby.rubyBalance, purchase.notice.value)
+        } finally { rig.close() }
+    }
+
+    @Test fun latePurchaseLandsWhenTheAccountIsUnchanged() = runTest {
+        assertEquals(Triple<Long?, Long?, String?>(9L, 31L, "울트라 1개를 샀어요!"), purchaseAfterLateA("control"), "대조: 계정 그대로면 서버 값이 선다")
+    }
+
+    @Test fun latePurchaseOfADoesNotLandOnBAfterSignOut() = runTest {
+        assertEquals(Triple<Long?, Long?, String?>(null, null, null), purchaseAfterLateA("signout"), "로그아웃→B 뒤 A 의 늦은 구매 응답")
+    }
+
+    @Test fun latePurchaseOfADoesNotLandOnBAfterDirectSwitch() = runTest {
+        assertEquals(Triple<Long?, Long?, String?>(null, null, null), purchaseAfterLateA("switch"), "A→B 직행 뒤 A 의 늦은 구매 응답이 B 에 (울트라, 루비, 안내)")
+    }
+
+    /** A → B → A: 돌아온 A 의 화면에도 전환 전 응답은 닿지 않는다(지갑 잔량은 A 의 새 sync 가 정당하게 채울 수 있어 안내·쿨타임으로 잰다). */
+    @Test fun lateUltraSendDoesNotLandAfterRoundTrip() = runTest {
+        val (_, notice, cooldown) = ultraSendAfterLateA("roundtrip")
+        assertEquals(null to false, notice to cooldown, "A→B→A 뒤 떠 있던 발신 응답이 (안내, PEER 쿨타임)에")
+    }
+
+    @Test fun latePurchaseDoesNotLandAfterRoundTrip() = runTest {
+        val (ultra, ruby, notice) = purchaseAfterLateA("roundtrip")
+        assertTrue(ultra != 9L && ruby != 31L && notice == null, "A→B→A 뒤 떠 있던 구매 응답이 닿았다: ultra=$ultra ruby=$ruby notice=$notice")
+    }
+
+    /** 끝난 발신의 안내·쿨타임도 계정에 묶인다(맥 clearPersistedSession WorkTimerStore.swift:4091-4092) — B 는 A 가 찌른 PEER 를 바로 찌를 수 있다. */
+    @Test fun settledSendStateOfADoesNotCarryOverToB() = runTest {
+        for (mode in listOf("switch", "signout")) {
+            val rig = signedInA(BoundaryRig(this, dirs.new("settled-$mode"), DesktopAppConfig(duels = true, poke = true, ultra = true)))
+            try {
+                rig.app.work.commands.start(WorkStartOrigin.MANUAL); runCurrent(); advanceTimeBy(1_000); runCurrent()
+                assertNotNull(rig.app.social.actions.sendUltraPoke(Accounts.PEER)); advanceTimeBy(500); runCurrent()
+                val sender = requireNotNull(rig.app.social.sender)
+                assertTrue(sender.notice.value != null && Accounts.PEER in sender.cooldownUntil.value, "전제($mode): A 의 발신이 끝나 안내·쿨타임이 섰다")
+                switchAway(rig, mode)
+                assertEquals(null to emptyMap(), sender.notice.value to sender.cooldownUntil.value, "$mode 뒤 A 의 발신 안내·쿨타임이 B 에 남았다")
+            } finally { rig.close() }
+        }
+    }
 
     // ------------------------------------------------------------------ ① 토큰 업로드 장부·내 행(맥 4074-4088)
 

@@ -111,6 +111,29 @@ class DesktopPokeSender(
         _cooldownUntil.update { map -> map.filterValues { it > now } }
     }
 
+    /**
+     * 계정 순번 — [resetForAccount] 가 올린다. 세대(host.sessionGeneration)는 로그아웃에만 오르고 A → B 직행에선 그대로라(core
+     * SessionStore.adoptSignedInSession), 전환 전에 떠난 A 의 발신 응답이 B 의 울트라 잔량(지갑)·안내·쿨타임에 닿았다(int-w4b 반박 검증 P5).
+     * 맥은 응답 뒤 세대만 보고(WorkTimerStorePoke.swift:175·232) 계정이 바뀌면 clearPersistedSession 이 세대를 올린다(WorkTimerStore.swift:4034).
+     * 데스크톱은 [Ticket] 의 세 값(세대·순번·주인 userID)이 **모두** 그대로일 때만 적는다 — 주인 대조는 리스너의 reset 이 돌기 전 틈도 막는다.
+     */
+    private var accountEpoch = 0
+
+    /** 발신 때 잡는 값들. 응답 때 하나라도 바뀌었으면 그 응답은 앞 계정의 것이다. */
+    private class Ticket(val generation: Int, val epoch: Int, val owner: String?)
+
+    private fun ticket() = Ticket(host.sessionGeneration, accountEpoch, host.session?.userID)
+
+    private fun isStale(t: Ticket) =
+        t.generation != host.sessionGeneration || t.epoch != accountEpoch || t.owner != host.session?.userID
+
+    /** 로그아웃·계정 전환(맥 clearPersistedSession 의 `pokeCooldownUntil = [:]` · `pokeNotice = nil` — WorkTimerStore.swift:4091-4092). 떠 있던 응답은 버린다. */
+    fun resetForAccount() {
+        accountEpoch += 1
+        _notice.value = null
+        _cooldownUntil.value = emptyMap()
+    }
+
     fun sendPoke(to: String): Job? = send(to, ultra = false)
 
     /** 울트라 — 선게이트는 일반과 **정확히 같다**. 로컬 잔량으로 막지 않는다(잔량은 그날 중에 늘어난다 — 서버 판정이 발사 허용). */
@@ -122,7 +145,7 @@ class DesktopPokeSender(
             _notice.value = DesktopPokeRules.NOT_WORKING_NOTICE
             return null
         }
-        val generation = host.sessionGeneration
+        val ticket = ticket()
         return scope.launch {
             val response = try {
                 host.withSessionRetry { session ->
@@ -132,12 +155,12 @@ class DesktopPokeSender(
                 throw e
             } catch (e: Throwable) {
                 if (host.classifyAuthError(e) == AuthErrorDisposition.cancelled) return@launch
-                if (generation != host.sessionGeneration) return@launch
+                if (isStale(ticket)) return@launch
                 // 마이그레이션 미적용 서버(PGRST202)도 여기 — 울트라만 조용히 못 쓰고 일반 찌르기는 산다.
                 _notice.value = DesktopPokeRules.NETWORK_NOTICE
                 return@launch
             }
-            if (generation != host.sessionGeneration) return@launch
+            if (isStale(ticket)) return@launch
             apply(to, PokeSendEffects.of(ultra, response, hooks.currentUltraBalance))
         }
     }

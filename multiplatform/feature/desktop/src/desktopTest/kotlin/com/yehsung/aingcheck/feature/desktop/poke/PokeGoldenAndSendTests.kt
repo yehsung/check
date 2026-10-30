@@ -3,6 +3,7 @@
 package com.yehsung.aingcheck.feature.desktop.poke
 
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
+import com.yehsung.aingcheck.core.wire.SupabaseSession
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.PokeSendOutcome
 import com.yehsung.aingcheck.core.wire.models.PokeSendResponse
@@ -259,6 +260,62 @@ class PokeSendEffectsTest {
             send()!!.join()
             assertEquals(DesktopPokeRules.NETWORK_NOTICE, sender.notice.value, "ultra=$ultra 대조: 세대 그대로면 네트워크 안내")
         }
+    }
+
+    /**
+     * A → B 직행 가드(int-w4b 반박 검증 P5 — 세대가 그대로인 전환). 응답 도중 주인 계정이 바뀌면(세대·순번 그대로) 옛 응답은 아무 데도 닿지 않는다.
+     * 주인 대조 하나만 재는 시험이다 — 조립 리스너의 reset(순번)이 아직 안 돈 틈을 흉내 낸다.
+     */
+    @Test
+    fun successResponseAfterDirectSwitchTouchesNothing() = runBlocking {
+        val ok = StubResponse.Json("""{"status":"ok","ultra_balance":2}""")
+        val notWorking = StubResponse.Json("""{"status":"target_not_working"}""")
+        val router = MockRouter().rpc("ultra_poke_user", ok, ok).rpc("poke_user", notWorking, notWorking)
+        val host = FakeSessionHost(pokeService(router))
+        val touches = Touches()
+        val sender = DesktopPokeSender(host, this, { T0 }, { true }, { touches.wallet += it }, touches)
+        host.onOperationEnd = { host.current = SupabaseSession("token-b", "refresh-b", "other-account") }
+        val generation = host.generation
+        sender.sendUltraPoke("peer-u")!!.join()
+        host.current = SupabaseSession("token-1", "refresh-1", "me")
+        sender.sendPoke("peer-n")!!.join()
+        assertEquals(generation, host.generation, "전제: 세대는 그대로(직행)")
+        assertEquals("notice=null cooldown=[0, 0] balances=[] wallet=[] refreshed=[] reloads=0", touches.line(sender, "peer-u", "peer-n"),
+            "주인이 바뀐 뒤 도착한 성공 응답은 아무 데도 닿지 않는다")
+        // 대조: 같은 응답, 주인 그대로 → 다 닿는다.
+        host.onOperationEnd = null
+        sender.sendUltraPoke("peer-u")!!.join()
+        sender.sendPoke("peer-n")!!.join()
+        assertEquals(
+            "notice=${DesktopPokeRules.TARGET_NOT_WORKING_NOTICE} cooldown=[60, 0] balances=[2] wallet=[MissionCandidate] refreshed=[peer-u] reloads=1",
+            touches.line(sender, "peer-u", "peer-n"),
+        )
+        router.assertAllRouted()
+    }
+
+    /**
+     * 순번 가드 — 주인이 같아도(A → B → A 처럼 돌아온 경우) 그 사이 [DesktopPokeSender.resetForAccount] 가 돌았으면 떠 있던 응답은 버린다(맥은 세대가 두 번 오른다).
+     * 순번 하나만 재는 시험. 실패 경로도 같은 가드다(새 계정에 옛 네트워크 안내 없음).
+     */
+    @Test
+    fun responseAfterResetForAccountTouchesNothing() = runBlocking {
+        val ok = StubResponse.Json("""{"status":"ok","ultra_balance":2}""")
+        val router = MockRouter().rpc("ultra_poke_user", ok, ok).rpc("poke_user", StubResponse.TransportFailure())
+        val host = FakeSessionHost(pokeService(router))
+        val touches = Touches()
+        val sender = DesktopPokeSender(host, this, { T0 }, { true }, { touches.wallet += it }, touches)
+        host.onOperationEnd = { sender.resetForAccount() }
+        sender.sendUltraPoke("peer-u")!!.join()
+        sender.sendPoke("peer-n")!!.join()
+        assertEquals("notice=null cooldown=[0, 0] balances=[] wallet=[] refreshed=[] reloads=0", touches.line(sender, "peer-u", "peer-n"),
+            "reset 뒤 도착한 응답(성공·실패)은 아무 데도 닿지 않는다")
+        host.onOperationEnd = null
+        sender.sendUltraPoke("peer-u")!!.join()
+        assertEquals(listOf(2L), touches.balances, "대조: reset 이 없으면 닿는다")
+        // reset 은 안내·쿨타임도 비운다(맥 WorkTimerStore.swift:4091-4092).
+        sender.resetForAccount()
+        assertEquals("notice=null cooldown=[0]", "notice=${sender.notice.value} cooldown=${listOf(sender.cooldownRemaining("peer-u", T0))}")
+        router.assertAllRouted()
     }
 }
 

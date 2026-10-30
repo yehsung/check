@@ -1,0 +1,2 @@
+# 합성: keyring 모드 — auth.json 이 없다(W-3 #11 부재로만 판정, 이 파일은 읽지 않는다)
+cli_auth_credentials_store = "keyring"

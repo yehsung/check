@@ -150,36 +150,6 @@
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
-    "desktop-ultra/focus-stage": {
-      "file": "c7b41fe55316084e151c422cbbacacc3a07bdd5dabb1c04a535634628781b938",
-      "generator": {
-        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
-      },
-      "swiftSources": {
-        "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
-      }
-    },
-    "desktop-ultra/requests": {
-      "file": "aedc7f7c25d42933cf12e8026234dc7ba23c2c7a490ed5b62cb1fcf37a52cbd0",
-      "generator": {
-        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
-      },
-      "swiftSources": {
-        "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "292375f4804646901184275fc5a51e960c301aec7affb620e67e710cff2b1a75"
-      }
-    },
-    "desktop-ultra/wallet-apply": {
-      "file": "c49fc291343f5830e2b3fcf32a1e01622b0d30132949c43c8cbe59e8a44af0b7",
-      "generator": {
-        "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
-      },
-      "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "ccb192ed7063718043d604d825ddd79df6edd2981632b58949cd597b6981312d",
-        "Sources/check/WorkTimerStorePoke.swift": "62948627e9a45f7e8f17eceb1c70d0600489f2b6d41b6c9a3c9f0d6f662abc18"
-      }
-    },
     "duel-fee/fee": {
       "file": "481256ab041f96314be76b958171097adbf5a0443790ad94197927599c585dfd",
       "generator": {
@@ -752,13 +722,24 @@
         "Tests/checkTests/Fixtures/todo-rpc/_manifest.json": "dd985dcb27324c7b6a6fc202d8f3bcbef459d5147824987ba967f59460f2e67f"
       }
     },
-    "token-usage/scan/scanner": {
-      "file": "0b97d4e5860ed2fb4f6e51fb841dda359b9124f48352ed064a567fb9501a0660",
+    "token-usage/limits/readers": {
+      "file": "17ab6156e42c1af8c2bc1e5b4bfc40864fc2d175d1d3ce1a1aa781abe429b457",
       "generator": {
-        "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan.swift": "bfbbc8a198c6bb006b5b18759f88df45149f59c2789831dbc89f785e9aefd0a4"
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift": "ac40f2fc974f1e55b87f2faea245c52cab535405366fb27b0a633e7eeb0741a1"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckTokenUsage.swift": "5707ba6fecc5742f6c3239a78b0029f86a76c9845ce10309a80f206866621e85"
+        "Sources/CheckCore/AILimitReaders.swift": "f8fb4bcc314db740e2c3d4cc40682eb2c6d33917fcc0abf2eaf29fd1ea1667ef",
+        "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696"
+      }
+    },
+    "token-usage/limits/upload": {
+      "file": "809b51da1859669c8753fa2afe890959b4fd2688930e4d33b0c3047f5f2031d8",
+      "generator": {
+        "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift": "ac40f2fc974f1e55b87f2faea245c52cab535405366fb27b0a633e7eeb0741a1"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift": "eba8ed3bb06401cb4b17784a7a8c31f74d25900e573f77939a4d2b1de93f7423",
+        "Sources/check/WorkTimerStoreAILimits.swift": "f5e1d2b24008f9bc58bb8e1ea615aa7d9c5f9e4989740901a17d591f8620bf41"
       }
     },
     "weekly/status": {

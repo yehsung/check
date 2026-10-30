@@ -5,6 +5,7 @@ package com.yehsung.aingcheck.desktop.windows.games.minigame
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
+import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 
@@ -28,27 +29,43 @@ object GameWindowWiring {
         config: DesktopAppConfig,
         onInvite: (GameWindowKind) -> Unit = {},
         onTurnWhileHidden: (GameWindowKind) -> Unit = {},
+        onInviteNotice: (DuelInviteNotice) -> Unit = {},
     ) {
         val duels = config.toAppConfig().duelsEnabled
 
         gomoku.presentWindow = { windows.present(GameWindowKind.Gomoku) }
         gomoku.dismissWindow = { windows.dismiss(GameWindowKind.Gomoku) }
         gomoku.requestAttention = { windows.requestAttention(GameWindowKind.Gomoku) }
-        gomoku.onInviteArrived = { if (duels) onInvite(GameWindowKind.Gomoku) }
+        gomoku.onInviteArrived = { invite ->
+            if (duels) {
+                onInvite(GameWindowKind.Gomoku)
+                onInviteNotice(DuelInviteNotice(GameWindowKind.Gomoku, invite.peer.displayName, invite.stake))
+            }
+        }
         gomoku.onAttention = { onTurnWhileHidden(GameWindowKind.Gomoku) }
         gomoku.spectatorFeaturesEnabled = config.spectator
 
         chess.presentWindow = { windows.present(GameWindowKind.Chess) }
         chess.dismissWindow = { windows.dismiss(GameWindowKind.Chess) }
         chess.requestAttention = { windows.requestAttention(GameWindowKind.Chess) }
-        chess.onInviteArrived = { if (duels) onInvite(GameWindowKind.Chess) }
+        chess.onInviteArrived = { invite ->
+            if (duels) {
+                onInvite(GameWindowKind.Chess)
+                onInviteNotice(DuelInviteNotice(GameWindowKind.Chess, invite.peer.displayName, invite.stake))
+            }
+        }
         chess.onAttention = { onTurnWhileHidden(GameWindowKind.Chess) }
         chess.spectatorFeaturesEnabled = config.spectator
 
         tetris.presentWindow = { windows.present(GameWindowKind.TetrisDuel) }
         tetris.dismissWindow = { windows.dismiss(GameWindowKind.TetrisDuel) }
         tetris.requestAttention = { windows.requestAttention(GameWindowKind.TetrisDuel) }
-        tetris.onInviteArrived = { if (duels) onInvite(GameWindowKind.TetrisDuel) }
+        tetris.onInviteArrived = { invite ->
+            if (duels) {
+                onInvite(GameWindowKind.TetrisDuel)
+                onInviteNotice(DuelInviteNotice(GameWindowKind.TetrisDuel, invite.peer.displayName, invite.stake.toLong()))
+            }
+        }
         tetris.onAttention = { onTurnWhileHidden(GameWindowKind.TetrisDuel) }
         tetris.spectatorFeaturesEnabled = config.spectator
         tetris.rankingEnabled = true

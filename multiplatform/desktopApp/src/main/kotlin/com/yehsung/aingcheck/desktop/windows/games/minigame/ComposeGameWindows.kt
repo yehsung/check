@@ -4,6 +4,7 @@
 package com.yehsung.aingcheck.desktop.windows.games.minigame
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.awt.ComposeWindow
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
@@ -13,6 +14,7 @@ import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.models.AppUserCharacterDirectory
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
 import com.yehsung.aingcheck.desktop.windows.games.chess.ChessWindowContent
 import com.yehsung.aingcheck.desktop.windows.games.chess.ChessWindowDoors
@@ -27,6 +29,7 @@ import com.yehsung.aingcheck.desktop.windows.games.tetris.TetrisDuelWindowState
 import com.yehsung.aingcheck.desktop.windows.kit.AttentionFlash
 import com.yehsung.aingcheck.desktop.windows.kit.CloakProbe
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameKeyMap
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowHandle
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
@@ -36,9 +39,11 @@ import com.yehsung.aingcheck.desktop.windows.kit.StoreNotice
 import com.yehsung.aingcheck.desktop.windows.kit.WindowBoundsStore
 import com.yehsung.aingcheck.desktop.windows.kit.WindowEvent
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
+import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.games.gomoku.BoardGameMe
-import com.yehsung.aingcheck.ui.games.minigame.rememberMiniGameArt
 import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubBoardFacts
+import com.yehsung.aingcheck.ui.games.minigame.rememberMiniGameArt
+import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import java.awt.Dimension
 import java.awt.KeyEventDispatcher
 import java.awt.KeyboardFocusManager
@@ -46,11 +51,11 @@ import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
 import java.awt.event.KeyEvent
 import java.awt.event.WindowAdapter
+import java.awt.event.WindowEvent as AwtWindowEvent
 import java.awt.event.WindowFocusListener
 import javax.swing.SwingUtilities
 import javax.swing.Timer
 import javax.swing.WindowConstants
-import java.awt.event.WindowEvent as AwtWindowEvent
 
 /**
  * 창이 받은 키 하나. [ownsKeys] = 키가 실제로 향한 창이 이 창이다(맥 strokeBelongsToGame). 받았으면 true(삼킨다).
@@ -226,6 +231,12 @@ class ComposeGameWindowShell(
 }
 
 /** 조립 지점(AppGraph — 조정자 C3)이 부르는 한 입구. EDT 에서 부른다. 배선(GameWindowWiring.wire)도 여기서 한다. */
+/** 게임 창 내용에 착용 캐릭터 표를 흘린다(LocalAppUserCharacters — 로비·대결 아바타 BoardAvatar/PersonAvatar 가 읽는다). */
+@Composable
+internal fun WithCharacters(characters: () -> AppUserCharacterDirectory, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalAppUserCharacters provides characters(), content = content)
+}
+
 object ComposeGamesWindows {
     @Suppress("LongParameterList")
     fun create(
@@ -246,6 +257,9 @@ object ComposeGamesWindows {
         others: DesktopGameWindows = DesktopGameWindows.None,
         onInvite: (GameWindowKind) -> Unit = {},
         onTurnWhileHidden: (GameWindowKind) -> Unit = {},
+        onInviteNotice: (DuelInviteNotice) -> Unit = {},
+        /** 착용 캐릭터 표(W-8 3차 — 안드로이드 AingShell 과 같은 자리). Compose 상태를 읽는 람다라 표가 오면 다시 그린다. 기본 = 빈 표(이니셜). */
+        characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
     ): GamesWindowsHost {
         lateinit var host: GamesWindowsHost
         lateinit var miniShell: ComposeGameWindowShell
@@ -261,6 +275,7 @@ object ComposeGamesWindows {
             keys = miniGameKeys(games, miniState),
             onCreated = { ImeGate.detach(it) }, // 물리 키 자리로 받아야 한글 상태에서도 Z/X 가 먹는다
         ) {
+            WithCharacters(characters) {
             val facts = remember(gomoku, chess) { GamesHubBoardFacts.of(gomoku, chess) }
             MiniGameWindowContent(
                 games, miniState, facts, rememberMiniGameArt(), myUserID(), now, dark(), reduceMotion(),
@@ -274,18 +289,21 @@ object ComposeGamesWindows {
                 },
                 onOpenShop = onOpenShop, onOpenRankings = onOpenRankings,
             )
+            }
         }
         val gomokuShell = ComposeGameWindowShell(GameWindowKind.Gomoku, "오목", { BoardGameNoticeSink.apply(gomokuDoors, it) }) {
-            GomokuWindowContent(games, gomoku, me(), dark(), onLeave = closeOf(GameWindowKind.Gomoku))
+            WithCharacters(characters) { GomokuWindowContent(games, gomoku, me(), dark(), onLeave = closeOf(GameWindowKind.Gomoku)) }
         }
         val chessShell = ComposeGameWindowShell(GameWindowKind.Chess, "체스", { BoardGameNoticeSink.apply(chessDoors, it) }) {
-            ChessWindowContent(games, chess, me(), dark(), onLeave = closeOf(GameWindowKind.Chess))
+            WithCharacters(characters) { ChessWindowContent(games, chess, me(), dark(), onLeave = closeOf(GameWindowKind.Chess)) }
         }
         duelShell = ComposeGameWindowShell(
             GameWindowKind.TetrisDuel, "테트리스 1:1", duelState::apply, keys = duelKeys(games),
             onCreated = TetrisDuelIme::detach,
         ) {
-            TetrisDuelWindowContent(games, duelState, myUserID(), me().name, dark(), reduceMotion(), onBack = closeOf(GameWindowKind.TetrisDuel))
+            WithCharacters(characters) {
+                TetrisDuelWindowContent(games, duelState, myUserID(), me().name, dark(), reduceMotion(), onBack = closeOf(GameWindowKind.TetrisDuel))
+            }
         }
 
         host = GamesWindowsHost(
@@ -297,7 +315,7 @@ object ComposeGamesWindows {
             storeOpen = GameWindowWiring.openers(gomoku, chess, games.tetris), others = others,
             later = { ms, action -> Timer(ms.toInt()) { action() }.apply { isRepeats = false; start() } },
         )
-        GameWindowWiring.wire(gomoku, chess, games.tetris, host, config, onInvite, onTurnWhileHidden)
+        GameWindowWiring.wire(gomoku, chess, games.tetris, host, config, onInvite, onTurnWhileHidden, onInviteNotice)
         return host
     }
 

@@ -13,7 +13,14 @@ import com.yehsung.aingcheck.core.foundation.platform.RunningTests
 import com.yehsung.aingcheck.core.net.realtime.KtorRealtimeTransport
 import com.yehsung.aingcheck.core.net.realtime.RealtimeTransport
 import com.yehsung.aingcheck.core.session.SessionStore
+import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.RubyBalanceMirror
+import com.yehsung.aingcheck.core.stores.me.WeeklyWorkRules
+import com.yehsung.aingcheck.core.stores.me.loadShop
+import com.yehsung.aingcheck.core.stores.me.refreshAchievementsIfStale
+import com.yehsung.aingcheck.core.stores.me.refreshCakeGiftIfStale
+import com.yehsung.aingcheck.core.stores.me.refreshWeeklyWorkIfStale
+import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
@@ -34,6 +41,7 @@ import com.yehsung.aingcheck.feature.desktop.socialapi.ConsumedRowsSink
 import com.yehsung.aingcheck.feature.desktop.socialapi.DesktopSocialLifecycle
 import com.yehsung.aingcheck.feature.desktop.socialapi.ReceivedPokeSink
 import com.yehsung.aingcheck.feature.desktop.socialapi.UltraChargedSink
+import com.yehsung.aingcheck.feature.desktop.socialapi.UltraSyncReason
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraFocusLifecycle
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraPurchase
 import com.yehsung.aingcheck.feature.desktop.ultra.UltraWalletCadence
@@ -124,6 +132,9 @@ class SocialWiring(private val deps: SocialDeps) {
     )
     val ultraFocus = UltraFocusLifecycle(wallet, focus)
 
+    /** 울트라 1개 값 공급자(조립: `{ me.ultraPrice }` — 공용 패치 18). 구매·울트라 화면이 **같은** 공급자를 읽게 그대로 내보낸다. */
+    val ultraPrice: () -> Long? = deps.ultraPrice
+
     /** ultra=false 면 만들지 않는다(구매 요청 0). */
     val purchase: UltraPurchase? =
         if (config.ultra) UltraPurchase(session, deps.ruby, wallet, lateScope, deps.ultraPrice, deps.onShopMutation) else null
@@ -193,6 +204,9 @@ class SocialWiring(private val deps: SocialDeps) {
             bubbles.reset()
             runner.onSignedOut()
             ultraFocus.onSignedOut()
+            // W3-c3 nice: 로그아웃하면 구매 안내 · 화면이 고른 것을 푼다(다음 사람에게 앞사람의 '샀어요'가 남지 않게).
+            purchase?.clearNotice()
+            signedOutListeners.toList().forEach { swallowSync(it) }
         }
 
         /** requestDrain 은 여기 한 곳(W2-g3: 러너의 onWorkStarted 는 빚 지우기 + startIfPossible 만 — 둘 다면 take_pokes 2회). */
@@ -216,6 +230,20 @@ class SocialWiring(private val deps: SocialDeps) {
 
     private var scope: CoroutineScope? = null
     private val jobs = mutableListOf<Job>()
+    private val signedOutListeners = mutableListOf<() -> Unit>()
+
+    /** 로그아웃·계정 전환 때 부를 일(울트라 화면의 고른 개수 풀기 · 콕 디렉터리 reset 등 — 화면 모델이 건다). */
+    fun addSignedOutListener(listener: () -> Unit) {
+        signedOutListeners += listener
+    }
+
+    /**
+     * 울트라 화면을 떠났다(맥 closeShopPanel 의 `shopNotice = nil` — W3-c3 nice). 껍데기가 nav 를 보고 부른다
+     * ([ShellDeps.onUltraPageLeft]). ultra=false 면 구매기가 없어 아무것도 안 한다.
+     */
+    fun onUltraPageLeft() {
+        purchase?.clearNotice()
+    }
 
     /** 앱 시작. 로그인 변화를 보고 onSignedIn/onSignedOut 를 낸다(처음의 null 은 건너뛴다). 멱등. */
     fun start(scope: CoroutineScope) {
@@ -271,4 +299,76 @@ class SocialWiring(private val deps: SocialDeps) {
         }
         override val currentUltraBalance: Long? get() = wallet.state.value.balance
     }
+}
+
+/** 화면 쪽 훅 하나가 던져도 나머지 정리는 돈다. */
+private inline fun swallowSync(block: () -> Unit) {
+    try {
+        block()
+    } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+    }
+}
+
+/**
+ * int-asm 이 비워 둔 소셜 훅의 실물(int-w2). AppGraph 가 [SocialDeps] 칸에 넣는다 — 판정은 여기, 요청은 각 스토어의 IfStale 문 뒤.
+ * 원본: Sources/check/WorkTimerStorePoke.swift:270-277(syncUltraWallet → refreshWeeklyWork(.walletCadence) · achievementsReason(forWallet:)) ·
+ * WorkTimerStoreAchievements.swift:85-93 · WorkTimerStorePoke.swift:415-432(폴링 tick: 지갑 → 주간 빚 → 케이크 10분) ·
+ * WorkTimerStoreWeeklyWork.swift:38-55(주 바뀜은 1분 창을 건너뛴다) · WorkTimerStoreMessagePokes.swift:151-155(발신 뒤 대화 갱신).
+ */
+object DesktopSocialHooks {
+    /** 지갑 박자 → 도전 미션(맥 achievementsReason(forWallet:)): 미션 화면이 떠 있는 panelOpen · periodic · signIn 만, missionCandidate 는 아님. */
+    fun achievementsOnWallet(reason: UltraSyncReason, missionPanelVisible: Boolean): Boolean = when (reason) {
+        UltraSyncReason.PanelOpen -> missionPanelVisible
+        UltraSyncReason.Periodic, UltraSyncReason.SignIn -> true
+        UltraSyncReason.MissionCandidate -> false
+    }
+
+    /** U4: 주간 근무는 **모든** 지갑 박자에(그쪽 60초 창이 거른다), 도전 미션은 [achievementsOnWallet] 일 때만. */
+    fun walletCadence(weekly: () -> Unit, achievements: () -> Unit, missionPanelVisible: () -> Boolean): UltraWalletCadence =
+        UltraWalletCadence { reason ->
+            weekly()
+            if (achievementsOnWallet(reason, missionPanelVisible())) achievements()
+        }
+
+    /** 조립용: 나 스토어의 IfStale 문 둘(MeStoreWeeklyWork.kt:34 · MeStoreAchievements.kt:112). */
+    fun walletCadence(me: MeStore, missionPanelVisible: () -> Boolean): UltraWalletCadence =
+        walletCadence({ me.refreshWeeklyWorkIfStale() }, { me.refreshAchievementsIfStale() }, missionPanelVisible)
+
+    /**
+     * 폴링 박자의 다른 갈래(P10 순서 — 집중 만료 · 지갑 periodic 뒤). ① 주가 바뀌었으면 주간 근무 한 번(맥 weekRolled — 1분 창을 건너뛴다,
+     * 아니면 요청 0) ② 케이크 선물 10분 문(맥 refreshCakeGiftIfDue — MeStore.refreshCakeGiftIfStale 의 10분 스로틀).
+     */
+    fun beatOthers(
+        weekRolled: (SwiftDate) -> Boolean,
+        refreshWeekly: () -> Unit,
+        refreshCakeGift: () -> Unit,
+    ): List<suspend (SwiftDate) -> Unit> = listOf(
+        { now -> if (weekRolled(now)) refreshWeekly() },
+        { _ -> refreshCakeGift() },
+    )
+
+    fun beatOthers(me: MeStore): List<suspend (SwiftDate) -> Unit> = beatOthers(
+        weekRolled = { now -> WeeklyWorkRules.weekHasRolled(me.weeklyWork, now) },
+        refreshWeekly = { me.refreshWeeklyWorkIfStale() },
+        refreshCakeGift = { me.refreshCakeGiftIfStale() },
+    )
+
+    /** 발신 성공의 바깥 몫: 콕 디렉터리 다시 읽기(화면 모델이 늦게 건다) · 그 사람 대화가 떠 있으면 이력 한 번(MessagesStore:1022). */
+    fun sendHooks(onReloadDirectory: () -> Unit, onRefreshConversation: (String) -> Unit): PokeSendHooks = object : PokeSendHooks {
+        override fun reloadDirectory() = onReloadDirectory()
+        override fun refreshConversationAfterPokeSent(peerUserID: String) = onRefreshConversation(peerUserID)
+    }
+
+    fun sendHooks(messages: MessagesStore, reloadDirectory: () -> Unit = {}): PokeSendHooks =
+        sendHooks(reloadDirectory) { peer -> messages.refreshConversationAfterPokeSent(peer) }
+
+    /**
+     * 맥 noteShopMutation(WorkTimerStoreAuth.swift:613-617)은 늦게 온 상점 조회가 구매 응답을 덮지 않게 하는 순번이다 — Kotlin 은 같은 몫을
+     * 루비 칸 serial 이 진다(UltraPurchase 가 rubyBalance 를 쓰면 +1). 여기서는 W3-c3 대로 상점 상태를 **구매 반영 뒤** 한 번 다시 읽는다
+     * (scope.launch — apply 가 끝난 다음 차례). ultra=false 면 구매기가 없어 불리지 않는다(요청 0).
+     */
+    fun shopMutation(scope: CoroutineScope, reloadShop: suspend () -> Unit): () -> Unit = { scope.launch { swallow { reloadShop() } } }
+
+    fun shopMutation(scope: CoroutineScope, me: MeStore): () -> Unit = shopMutation(scope) { me.loadShop() }
 }

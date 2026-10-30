@@ -66,3 +66,28 @@ val aingcheckJnaAppResources = tasks.register<Sync>("aingcheckJnaAppResources") 
 compose.desktop.application.nativeDistributions.appResourcesRootDir.set(
     aingcheckJnaAppResources.map { layout.buildDirectory.dir("aingcheck/app-resources").get() },
 )
+
+// W-13 #7 · W-12(Store 업데이트 목적지): 생성 상수 STORE_PRODUCT_ID — packaging/identity/store.properties 의 productId 가 원천(공개 값).
+// 자리표시(__U7_…)이거나 비면 "" → 최소 빌드 미달 화면의 [업데이트] 단추를 숨긴다(AppLinks.updateDestination(WINDOWS)=null 과 같음).
+// 값이 있으면 Store 제품 ID 꼴(영숫자 12자, 대문자)만 받는다 — 틀린 값으로 빌드되면 사용자를 엉뚱한 Store 페이지로 보낸다.
+val aingcheckStoreProductId: String = run {
+    val file = project.file("packaging/identity/store.properties")
+    // java.util.Properties 대신 줄 읽기(스크립트 안 `java` 는 JavaPluginExtension 을 가리킨다). 키=값 한 줄, # 주석.
+    val raw = if (!file.isFile) "" else file.readLines()
+        .map { it.trim() }
+        .firstOrNull { !it.startsWith("#") && it.substringBefore('=').trim() == "productId" }
+        ?.substringAfter('=')?.trim().orEmpty()
+    when {
+        raw.isEmpty() || raw.startsWith("__U7_") -> ""
+        Regex("^[0-9A-Z]{12}$").matches(raw) -> raw
+        else -> throw GradleException("store.properties productId 는 Store 제품 ID(영숫자 대문자 12자)여야 한다: '$raw'")
+    }
+}
+val generateStoreIdentity = tasks.register<GenerateKotlinConstants>("generateStoreIdentity") {
+    packageName.set("com.yehsung.aingcheck.desktop.generated")
+    objectName.set("StoreIdentity")
+    header.set("Store 신원(W-13 #7). packaging/identity/store.properties 의 productId — 자리표시면 빈 값")
+    constants.put("STORE_PRODUCT_ID", aingcheckStoreProductId)
+    outputDir.set(layout.buildDirectory.dir("generated/aingcheck/storeIdentity/main"))
+}
+sourceSets.named("main") { kotlin.srcDir(generateStoreIdentity.flatMap { it.outputDir }) }

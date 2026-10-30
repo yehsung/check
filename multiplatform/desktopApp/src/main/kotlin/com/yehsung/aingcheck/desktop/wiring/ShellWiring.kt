@@ -13,12 +13,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
+import com.yehsung.aingcheck.core.foundation.identity.ClientPlatform
 import com.yehsung.aingcheck.core.foundation.platform.MonotonicClock
 import com.yehsung.aingcheck.core.foundation.platform.desktop.PowerEvents
 import com.yehsung.aingcheck.core.foundation.platform.desktop.Registration
@@ -30,10 +33,16 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.SessionProfile
 import com.yehsung.aingcheck.core.session.SessionStore
+import com.yehsung.aingcheck.core.session.SessionText
 import com.yehsung.aingcheck.core.session.context.SessionContext
+import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
+import com.yehsung.aingcheck.core.stores.chess.ChessStore
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
+import com.yehsung.aingcheck.core.wire.models.AppUserCharacterDirectory
 import com.yehsung.aingcheck.desktop.pages.missions.MissionsFlyoutPage
 import com.yehsung.aingcheck.desktop.pages.shared.MessagesBackgroundRefresh
 import com.yehsung.aingcheck.desktop.pages.shared.MessagesUnreadDot
@@ -61,16 +70,24 @@ import com.yehsung.aingcheck.desktop.shell.tray.TrayMenuPresenter
 import com.yehsung.aingcheck.desktop.shell.tray.TrayPresenter
 import com.yehsung.aingcheck.desktop.shell.update.DesktopUpdateChecker
 import com.yehsung.aingcheck.desktop.shell.update.ServiceUpdateRpc
+import com.yehsung.aingcheck.desktop.shell.update.StoreUpdateDestination
 import com.yehsung.aingcheck.desktop.shell.update.UpdatePollSchedule
 import com.yehsung.aingcheck.desktop.shell.update.UpdateRpc
 import com.yehsung.aingcheck.desktop.shellapi.BalloonNotifier
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutPageHost
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
+import com.yehsung.aingcheck.desktop.shellapi.NotifyContext
+import com.yehsung.aingcheck.desktop.shellapi.NotifyKind
+import com.yehsung.aingcheck.desktop.shellapi.NotifySurface
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
+import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsMyFace
+import com.yehsung.aingcheck.ui.screens.session.UpdateRequiredScreen
+import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.settingscommon.AppearanceStore
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.CoroutineScope
@@ -80,6 +97,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -135,6 +153,18 @@ interface TaskbarThemeSource {
 data class InviteDots(val gomoku: Boolean = false, val chess: Boolean = false, val tetris: Boolean = false) {
     companion object {
         val NONE = InviteDots()
+
+        /**
+         * 맥 CheckApp.swift:55-80 점 사유 배선 그대로: 오목 = pendingIncomingInvites 비지 않음 · 체스 = visibleIncoming · 테트리스 = visibleIncoming.
+         * 스토어 값은 Compose 상태라 snapshotFlow 로 읽는다(MessagesUnreadDot 과 같은 길). duels 깃발은 [TrayDotReasons.of] 가 건다.
+         */
+        fun from(gomoku: GomokuStore, chess: ChessStore, tetris: TetrisDuelStore): Flow<InviteDots> = snapshotFlow {
+            InviteDots(
+                gomoku = gomoku.pendingIncomingInvites.isNotEmpty(),
+                chess = chess.visibleIncoming != null,
+                tetris = tetris.visibleIncoming != null,
+            )
+        }.distinctUntilChanged()
     }
 }
 
@@ -193,9 +223,23 @@ data class ShellDeps(
     val updateRpc: UpdateRpc = ServiceUpdateRpc(service, clientIdentity.platform.wire),
     val updateSchedule: UpdatePollSchedule = UpdatePollSchedule.DEFAULT,
     val messagesRefreshIntervalMillis: Long = MessagesBackgroundRefresh.INTERVAL_SECONDS * 1000,
+    /**
+     * 착용 캐릭터 표(W-8 3차 — 안드로이드 AingShell:162 와 같은 자리). 기본은 여기서 짓는다(세션 문맥 · 앱 범위 · 초상 번들 id) —
+     * 로그인 직후 한 번 · 플라이아웃을 열 때 60초 스로틀 · 로그아웃 reset · 내 착용값 즉시 반영은 [ShellWiring.start] 가 건다.
+     */
+    val characters: AppUserCharacterStore = AppUserCharacterStore(sessionContext, scope, CharacterArt.portraitIds),
+    /** 알림 표면 고르기 사실(오버레이 보임·전체화면·집중·토스트). 조립 전 기본 = 오버레이 없음 · 토스트 켬. */
+    val notifyContext: () -> NotifyContext = { DEFAULT_NOTIFY_CONTEXT },
+    /** 울트라 화면을 떠났다(조립: `{ social.onUltraPageLeft() }` — 맥 closeShopPanel 의 shopNotice = nil). */
+    val onUltraPageLeft: () -> Unit = {},
+    /** 최소 빌드 미달 화면의 [업데이트] 목적지(W-13 #7). null 이면 단추 숨김(공용 화면 그대로). */
+    val storeUpdateDestination: String? = StoreUpdateDestination.windows,
 ) {
     companion object {
         const val DEFAULT_TRAY_ICON_PX = 16
+        val DEFAULT_NOTIFY_CONTEXT = NotifyContext(
+            overlayVisible = false, fullscreenQuiet = false, bubbleAllowedByFocus = true, toastEnabled = true,
+        )
     }
 }
 
@@ -212,6 +256,10 @@ data class ShellHandle(
     val theme: StateFlow<TaskbarTheme>,
     /** 트레이 점 사유(안 읽음 · 대결 신청(duels) · 업데이트). [ShellWiring.start] 뒤에 흐른다. */
     val dots: StateFlow<TrayDotReasons>,
+    /** 착용 캐릭터 표(게임 배선이 `{ characters.directory }` 로 받는다). */
+    val characters: AppUserCharacterStore,
+    /** 받은 대결 신청 → 알림 한 문(게임 배선 GamesDeps.onInviteNotice). duels=false 면 notifier 가 거른다. */
+    val notifyDuelInvite: (DuelInviteNotice) -> NotifySurface?,
 )
 
 class ShellWiring(private val deps: ShellDeps) {
@@ -245,6 +293,8 @@ class ShellWiring(private val deps: ShellDeps) {
         shop = ShopFlyoutPage(deps.me, gameWindows),
         missions = MissionsFlyoutPage(deps.me, deps.reduceMotion),
         appearance = deps.appearance,
+        characters = { deps.characters.directory },
+        update = ShellUpdatePage(deps.storeUpdateDestination, deps.clientIdentity.build, deps.openUrl),
     )
     private val notifier = ShellNotifier(deps.desktopConfig, deps.balloon, nav, deps.bubble)
     private val updateChecker = DesktopUpdateChecker(
@@ -263,8 +313,12 @@ class ShellWiring(private val deps: ShellDeps) {
 
     val handle = ShellHandle(
         nav, pages, sharedPages, notifier, updateChecker, messagesRefresh, trayPresenter, menuActions, themeState.asStateFlow(),
-        dotsState.asStateFlow(),
+        dotsState.asStateFlow(), deps.characters, ::notifyDuelInvite,
     )
+
+    /** 받은 대결 신청 한 건 → 알림 중재(말풍선/풍선/점). 깃발(duels)은 notifier 가 한 번 더 본다. 띄운 표면(꺼졌으면 null). */
+    fun notifyDuelInvite(invite: DuelInviteNotice): NotifySurface? =
+        notifier.deliver(ShellNotice(NotifyKind.DUEL_INVITE, invite.title, invite.body), deps.notifyContext())
 
     private val jobs = mutableListOf<Job>()
     private val registrations = mutableListOf<Registration>()
@@ -303,11 +357,44 @@ class ShellWiring(private val deps: ShellDeps) {
         deps.instanceListen?.let { listen -> registrations += InstanceActivation.bind(listen, nav) }
 
         jobs += messagesRefresh.start(scope)
+        jobs += startCharacters(scope)
+        // W3-c3 nice: 울트라 화면이 보이다가 안 보이게 되면(다른 화면 · 플라이아웃 닫힘) 구매 안내를 지운다.
+        jobs += scope.launch {
+            var wasUltra = false
+            combine(nav.route, nav.visible) { route, visible -> visible && route == FlyoutRoute.Ultra }.distinctUntilChanged().collect { ultra ->
+                if (wasUltra && !ultra) deps.onUltraPageLeft()
+                wasUltra = ultra
+            }
+        }
         // W3-c5: 플라이아웃이 열릴 때마다 조회(60초 스로틀은 조회기 안).
         jobs += scope.launch { nav.visible.filter { it }.collect { updateChecker.onFlyoutOpened() } }
         updateChecker.startWatch()
         updatePower = updateChecker.attach(deps.power)
     }
+
+    /**
+     * 캐릭터 표 수명(폰 PhoneAppModel.kt:335 refresh · :360 reset · :240/:370 refreshIfStale · PhoneContext.kt:141 noteMyEquipped 와 같은 자리).
+     * 새 폴링 없음 — 로그인 직후 한 번, 플라이아웃을 열 때마다 60초 스로틀, 로그아웃·계정 전환이면 reset.
+     */
+    private fun startCharacters(scope: CoroutineScope): Job = scope.launch {
+        launch {
+            var last: String? = null
+            deps.session.profileFlow.map { it?.userID }.distinctUntilChanged().collect { uid ->
+                if (uid == last) return@collect
+                if (last != null) deps.characters.reset()
+                last = uid
+                if (uid != null) deps.characters.refresh()
+            }
+        }
+        launch { nav.visible.filter { it }.collect { deps.characters.refreshIfStale() } }
+        launch {
+            snapshotFlow { if (deps.me.equippedLoaded) Equipped(deps.me.equippedServerID) else null }
+                .distinctUntilChanged()
+                .collect { mine -> if (mine != null) deps.characters.noteMyEquipped(mine.serverID) }
+        }
+    }
+
+    private data class Equipped(val serverID: String?)
 
     /** 트레이 클릭: 왼쪽 = EDT 에서 열기/닫기, 오른쪽 = 메시지 스레드에서 바로 메뉴(W3-c1). */
     private fun onTrayClick(click: TrayClick, x: Int, y: Int) {
@@ -355,13 +442,33 @@ object ShellWidths {
 }
 
 /** 공용 페이지 위에 올리는 갈래 페이지(W4-f). 세션·소속·깃발 판정은 공용 라우터가 먼저 한다 — 로그아웃이면 상점도 로그인 화면이다. */
-enum class ShellOverlayPage { SHOP, MISSIONS }
+enum class ShellOverlayPage { SHOP, MISSIONS, UPDATE }
 
 object ShellPages {
-    fun overlayFor(page: SharedPage): ShellOverlayPage? = when {
+    /**
+     * [storeDestination] 이 있으면 최소 빌드 미달 화면을 [업데이트] 단추가 있는 판으로 덮는다(W-13 #7 — 공용 화면은 AppLinks(WINDOWS)=null 이라
+     * 단추를 숨긴다). 없으면 공용 화면 그대로.
+     */
+    fun overlayFor(page: SharedPage, storeDestination: String? = null): ShellOverlayPage? = when {
         page is SharedPage.Pending && page.route == FlyoutRoute.Shop -> ShellOverlayPage.SHOP
         page == SharedPage.Missions -> ShellOverlayPage.MISSIONS
+        page is SharedPage.NeedsUpdate && storeDestination != null -> ShellOverlayPage.UPDATE
         else -> null
+    }
+}
+
+/** 최소 빌드 미달 화면 + Store 단추(W-13 #7). 문구는 공용 SessionText(WINDOWS) 그대로, 목적지만 Store 제품 페이지. */
+class ShellUpdatePage(val destination: String?, private val currentBuild: Long, private val openUrl: (String) -> Unit) {
+    @Composable
+    fun Content(minBuild: Long) {
+        val target = destination ?: return
+        UpdateRequiredScreen(
+            minBuild = minBuild,
+            currentBuild = currentBuild,
+            body = SessionText.updateBody(ClientPlatform.WINDOWS),
+            buttonTitle = SessionText.updateButton(ClientPlatform.WINDOWS),
+            onOpenStore = { openUrl(target) },
+        )
     }
 }
 
@@ -374,21 +481,30 @@ class ShellPageHost(
     private val shop: FlyoutPageHost,
     private val missions: FlyoutPageHost,
     private val appearance: AppearanceStore,
+    /** 착용 캐릭터 표(LocalAppUserCharacters — 메시지·순위·콕 아바타). Compose 상태를 읽는 람다. */
+    private val characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
+    private val update: ShellUpdatePage = ShellUpdatePage(null, 0) {},
 ) : FlyoutPageHost {
     @Composable
     override fun Content(nav: FlyoutNavigator, widthDip: Double) {
+        CompositionLocalProvider(LocalAppUserCharacters provides characters()) { Pages(nav, widthDip) }
+    }
+
+    @Composable
+    private fun Pages(nav: FlyoutNavigator, widthDip: Double) {
         val pageFlow = remember(nav) { shared.pages(nav) }
         val page by pageFlow.collectAsState(SharedPage.Launching)
         val visible by nav.visible.collectAsState()
         Box {
             shared.Content(nav, widthDip)
-            val overlay = if (visible) ShellPages.overlayFor(page) else null
+            val overlay = if (visible) ShellPages.overlayFor(page, update.destination) else null
             if (overlay != null) {
                 AingTheme(appearance.mode) {
                     Box(Modifier.width(widthDip.dp).fillMaxHeight().background(AingTheme.colors.background)) {
                         when (overlay) {
                             ShellOverlayPage.SHOP -> shop.Content(nav, widthDip)
                             ShellOverlayPage.MISSIONS -> missions.Content(nav, widthDip)
+                            ShellOverlayPage.UPDATE -> (page as? SharedPage.NeedsUpdate)?.let { update.Content(it.minBuild) }
                         }
                     }
                 }

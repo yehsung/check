@@ -71,7 +71,8 @@ package enum MegaphoneBannerPhoneText {
         "\(name)님의 확성기, \(body)"
     }
 
-    package static let accessibilityHint = "위로 쓸면 닫혀요. 누르고 있으면 멈춰요."
+    /// 보이스오버만 읽는 글이다 — 그 사용자에게 배너는 저절로 닫히지 않는다(코어 `holdsAutoDismiss`). 손짓(쓸기·누르기) 말고 동작으로 닫는 길을 말한다.
+    package static let accessibilityHint = "저절로 닫히지 않아요. 위아래로 쓸어 닫기 동작을 고르세요."
 }
 
 /// 지금 시트·풀스크린 커버가 앱 주 창에 떠 있는가(UIKit — SwiftUI 는 이 상태를 알려 주지 않는다). 맥 빌드는 언제나 false.

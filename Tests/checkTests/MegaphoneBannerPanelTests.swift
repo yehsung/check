@@ -320,6 +320,11 @@ struct MegaphoneBannerPanelTests {
         let wire = try #require(mbpBody(app, after: "private func wireMegaphoneBanner()"))
         #expect(wire.contains("MegaphoneBannerWindowController(store: store)") && wire.contains(".start()")
                 && wire.contains("megaphoneBannerController = controller"), "배선 함수가 컨트롤러를 세워 쥐지 않는다")
+        // 보이스오버(2026-10-31): 켜져 있으면 저절로 닫지 않는다 · 켬·끔을 KVO 로 받아 다시 판단한다.
+        #expect(wire.contains("store.megaphoneBanner.holdsAutoDismiss = { NSWorkspace.shared.isVoiceOverEnabled }"),
+                "맥이 보이스오버 상태를 배너 스토어에 안 넘긴다")
+        #expect(wire.contains("NSWorkspace.shared.observe(\\.isVoiceOverEnabled)") && wire.contains("autoDismissHoldChanged()")
+                && wire.contains("megaphoneVoiceOverObservation ="), "보이스오버 켬·끔을 다시 판단하지 않는다(감시를 쥐지 않으면 바로 풀린다)")
 
         let window = try mbpSource("Sources/check/CheckMegaphoneBannerWindow.swift")
         let live = try #require(mbpBody(window, after: "static var live: Hooks"))

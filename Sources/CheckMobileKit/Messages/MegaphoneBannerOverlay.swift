@@ -1,6 +1,7 @@
 #if os(iOS)
 import CheckCore
 import SwiftUI
+import UIKit
 
 /// 확성기 배너(폰) — 앱을 보고 있으면 어느 탭이든 위에서 내려오는 카드(계약 docs/plan/megaphone-banner-contract.md — 폰 배너).
 ///
@@ -9,6 +10,8 @@ import SwiftUI
 /// - 손: **카드만** 손을 받는다. 바깥은 빈 자리라 터치가 그대로 아래 화면(게임 캔버스 포함)으로 간다 — 화면 가득한 틀·바탕을 두지 마라.
 ///   누르고 있는 동안 보여 주는 시간(코어 `MegaphoneBannerRules.displaySeconds` — 5초) 타이머가 멈추고(`pauseTimer`),
 ///   놓으면 다시 센다(`resumeTimer`). 위로 쓸거나 [닫기]를 누르면 닫힌다. 아무것도 안 하면 그 시간 뒤 스스로 올라간다.
+///   ★ 보이스오버가 켜져 있으면 저절로 올리지 않는다(코어 `holdsAutoDismiss` — 5초 안에 본문을 다 못 듣는다). [닫기] 동작으로만 닫힌다.
+///   켬·끔은 `voiceOverStatusDidChangeNotification` 으로 다시 판단한다.
 /// - 단추: [닫기] 하나뿐이다(2026-10-30 사용자 결정 — [답장]을 걷었다).
 /// - 움직임: 위에서 미끄러져 내려오고 올라가며 나간다(이동만 — 불투명도는 이징하지 않는다). 동작 줄이기면 페이드만.
 /// - 미룸: 시트·풀스크린 커버 · 대결 화면 · 미니게임 판(`MobileAppModel.isMegaphoneBannerDeferred`). 시트는 SwiftUI 가 알려 주지 않으므로
@@ -36,6 +39,10 @@ struct MegaphoneBannerOverlay: View {
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeOut(duration: 0.25), value: store.current?.id)
+        .onAppear { store.holdsAutoDismiss = { UIAccessibility.isVoiceOverRunning } }
+        .onReceive(NotificationCenter.default.publisher(for: UIAccessibility.voiceOverStatusDidChangeNotification)) { _ in
+            store.autoDismissHoldChanged()
+        }
         .onChange(of: model.games.isAnyMatchScreenVisible) { _, _ in
             model.syncMegaphoneBannerDeferral()
         }

@@ -54,6 +54,10 @@ package final class MegaphoneBannerStore {
     /// refresh 를 **어느 길로** 불렀든(첫 판정 · 실시간 · 푸시 · 판정 보류) 한 곳에서 잡는다. 없으면 첫 판정이 네트워크로 실패한 뒤
     /// 실시간·푸시의 refresh 가 필터를 켜도 옛 요약이 숨긴 확성기 줄을 세어 배지가 남는다(2026-10-30 안드로이드 이식 검증에서 발견).
     @ObservationIgnored package var onCapabilityChange: (@MainActor () -> Void)?
+    /// 저절로 닫기를 붙드는가 — 보이스오버가 켜져 있으면 참(맥 `NSWorkspace.isVoiceOverEnabled` · 폰 `UIAccessibility.isVoiceOverRunning`).
+    /// 본문은 최대 198자라 읽어 주는 데 5초를 훌쩍 넘고, "누르고 있으면 멈춤"은 보이스오버 사용자의 조작이 아니다 — 참이면 [닫기] 동작으로만
+    /// 닫힌다(2026-10-31 모바일 세션 지적). 켬·끔이 바뀌면 소유자가 `autoDismissHoldChanged()` 를 부른다.
+    @ObservationIgnored package var holdsAutoDismiss: () -> Bool = { false }
 
     // MARK: 상태(화면이 읽는다)
 
@@ -298,6 +302,12 @@ package final class MegaphoneBannerStore {
         startTimer(after: max(pausedRemaining, MegaphoneBannerRules.resumeMinimum))
     }
 
+    /// `holdsAutoDismiss` 가 바뀌었다(보이스오버 켬·끔). 붙들기 시작이면 걸린 타이머를 버리고, 풀렸으면 떠 있는 배너를 처음부터 다시 센다.
+    package func autoDismissHoldChanged() {
+        guard current != nil, !isTimerPaused else { return }
+        startTimer(after: MegaphoneBannerRules.displaySeconds)
+    }
+
     /// `isBannerDeferred` 가 바뀌었다. 미루기 시작이면 떠 있던 배너를 줄 맨 앞으로 되돌리고, 풀렸으면 **신선한 것만** 띄운다.
     package func deferralChanged() {
         if isBannerDeferred() {
@@ -420,6 +430,11 @@ package final class MegaphoneBannerStore {
 
     private func startTimer(after delay: TimeInterval) {
         timerToken += 1
+        // 보이스오버: 저절로 닫지 않는다 — 걸린 타이머는 위 한 줄로 이미 버렸다. [닫기] 동작(`dismissCurrent`)으로만 닫힌다.
+        guard !holdsAutoDismiss() else {
+            currentDeadline = nil
+            return
+        }
         let token = timerToken
         currentDeadline = clock().addingTimeInterval(delay)
         schedule(delay) { [weak self] in

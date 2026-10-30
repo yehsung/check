@@ -93,6 +93,9 @@ profiles 는 함수 안에서 조인한다(PostgREST 임베드 모호성 회피)
   `presentOwn` 을 부르는 유일한 문. 실시간 `'megaphone'` 은 `RealtimeEffect.megaphoneSignal` 로 갈린다(맥·폰 러너 모두 `refresh()`).
 - `MegaphoneBannerStore.onCapabilityChange` — `capability` 가 바뀔 때마다(첫 판정 · 실시간 · 푸시 · 판정 보류 어느 길이든) 한 번.
   폰 메시지함은 여기서 요약 함수 짝(v1/v2)을 다시 맞춘다(첫 판정이 네트워크로 실패한 뒤 배지 고착 — 2026-10-30 안드로이드 검증에서 발견).
+- `MegaphoneBannerStore.holdsAutoDismiss` / `autoDismissHoldChanged()` — **보이스오버가 켜져 있으면 저절로 닫지 않는다**([닫기] 동작으로만).
+  본문 최대 198자는 5초 안에 다 못 듣고, 누르기·호버 멈춤은 보이스오버 조작이 아니다(2026-10-31 모바일 세션 지적). 맥 `NSWorkspace.isVoiceOverEnabled`(KVO) ·
+  폰 `UIAccessibility.isVoiceOverRunning`(`voiceOverStatusDidChangeNotification`). 미룸에서 돌아와 다시 뜨는 배너도 같은 `startTimer` 를 지난다.
 
 ### C2. `MegaphoneBannerStore`(@Observable, `GomokuStoreHost` 를 빌린다 — 기존 `MegaphoneStore` 와 같은 결)
 - `knownMessageIDs: Set<String>` — **메시지함 필터의 유일한 근거.** `megaphone_inbox` 가 성공했을 때만 채운다.

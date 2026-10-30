@@ -496,8 +496,8 @@ fun BoardSummary(leftTitle: String, leftValue: String, rightTitle: String, rubyB
 // MARK: - 덮개(시트 · 확인)
 
 /**
- * 화면 안 시트(Swift `.sheet` 자리). 바깥(어두운 막)을 누르면 [onDismiss]. **새 목적지가 아니다** — 아래 화면은 컴포지션에 그대로 남는다
- * (오목·체스 한 화면 규약 · 폴링이 살아 있다).
+ * 판 시트(Swift `.sheet` 자리). 바깥(검정 막 [BoardSheetScrim])을 누르면 [onDismiss]. Android 앱은 창 전체에 띄운다(상태 바 · 탭 막대까지 덮는다 —
+ * [BoardSheetHost]). **새 목적지가 아니다** — 아래 화면은 컴포지션에 그대로 남는다(오목·체스 한 화면 규약 · 폴링이 살아 있다).
  */
 @Composable
 fun BoxScope.BoardSheetOverlay(
@@ -508,17 +508,7 @@ fun BoxScope.BoardSheetOverlay(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val colors = AingTheme.colors
-    Box(
-        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() },
-    )
-    Column(
-        Modifier.align(Alignment.BottomCenter).fillMaxWidth().widthIn(max = 640.dp)
-            .background(colors.background, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-            .padding(bottom = AingDimens.space3)
-            .testTag(testTag),
-    ) {
+    BoardSheetHost(onDismiss, colors.background, testTag) { Column(Modifier.fillMaxWidth().padding(bottom = AingDimens.space3)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onDismiss != null) {
                 Box(
@@ -537,7 +527,7 @@ fun BoxScope.BoardSheetOverlay(
             if (onDismiss != null) Spacer(Modifier.size(AingDimens.minimumTarget))
         }
         Column(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin), verticalArrangement = Arrangement.spacedBy(AingDimens.space4), content = content)
-    }
+    } }
 }
 
 /**
@@ -555,7 +545,7 @@ fun BoxScope.BoardConfirmOverlay(
 ) {
     val colors = AingTheme.colors
     Box(
-        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
+        Modifier.matchParentSize().background(BoardSheetScrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCancel() },
     )
     Column(
@@ -581,17 +571,7 @@ fun BoxScope.BoardConfirmOverlay(
  */
 @Composable
 fun BoxScope.BoardSheetFrame(onDismiss: (() -> Unit)?, testTag: String, content: @Composable () -> Unit) {
-    val colors = AingTheme.colors
-    Box(
-        Modifier.matchParentSize().background(colors.label.copy(alpha = 0.32f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onDismiss?.invoke() },
-    )
-    Box(
-        Modifier.align(Alignment.BottomCenter).fillMaxWidth().widthIn(max = 640.dp)
-            .background(colors.surface, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
-            .testTag(testTag),
-    ) { content() }
+    BoardSheetHost(onDismiss, AingTheme.colors.surface, testTag, content)
 }
 
 /**

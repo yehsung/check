@@ -72,7 +72,13 @@ class SharedTestHarness(
     var answer: (path: String) -> String? = { null },
     val config: DesktopAppConfig = DesktopAppConfig(),
     dark: Boolean = false,
+    /** int-w3: 3차 페이지 묶음(시험 탐침 페이지를 꽂는 자리). */
+    routePages: RoutePages = RoutePages.NONE,
+    /** int-w3: 업데이트 필요 화면 목적지(기본 = 생성 상수 — 시험 빌드에선 비어 null). */
+    updateDestination: String? = com.yehsung.aingcheck.desktop.shell.update.StoreUpdateDestination.windows,
 ) {
+    /** 링크 열기 녹음(업데이트 단추 대조). */
+    val opened = mutableListOf<String>()
     val paths = mutableListOf<String>()
     private val storeJob = SupervisorJob()
     val storeScope: CoroutineScope = CoroutineScope(scope.coroutineContext.minusKey(Job) + storeJob)
@@ -145,6 +151,9 @@ class SharedTestHarness(
             config = config,
             currentBuild = BUILD,
             rankingsFace = { RankingsMyFace("aing", CharacterMood.entries.first()) },
+            openUrl = { opened += it },
+            routePages = routePages,
+            updateDestination = updateDestination,
         ),
     )
 

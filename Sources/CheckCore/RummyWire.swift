@@ -45,6 +45,16 @@ package enum RummyWire {
         package static let all: [String] = [
             lobby, create, invite, join, decline, leave, start, state, draft, play, draw, ranking,
         ]
+
+        // ── v2(설계서 v2 §1.2·§1.3, 마이그레이션 `20261104120000_rummy_v2.sql`) ──
+        /// 하트비트(자리 있는 사람만). → `{status, server_now_ms}`.
+        package static let heartbeat = "rummy_heartbeat"
+        /// 이모티콘 반응. → `ok` · `invalid` · `too_fast` · `not_found`.
+        package static let react = "rummy_react"
+        /// v2 에서 새로 생긴 RPC. `all` 은 v1 마이그레이션 계약 시험이 대는 12개라 아직 넣지 않았다 —
+        /// v2 마이그레이션이 합류하면(통합 갈래) `all` 로 합치고 계약 시험의 마이그레이션 이름을 늘린다.
+        package static let v2Added: [String] = [heartbeat, react]
+        package static let allV2: [String] = all + v2Added
     }
 }
 
@@ -75,6 +85,8 @@ package enum RummyRPCStatus: String, Equatable, Hashable, Sendable, Codable {
     /// `p_expected_seq ≠ seq`. 쓰지 않았고 `state` 가 실려 온다 — 클라는 그 상태로 맞추면 된다.
     case stale
     case malformed
+    /// v2 `rummy_react` 쿨다운(같은 사람 2초).
+    case tooFast = "too_fast"
     /// play 판정 거절(`reason` · `state`). 벌칙 없음.
     case rejected
     case notActive = "not_active"
@@ -174,17 +186,32 @@ package struct RummySeqRequest: Encodable, Equatable, Sendable {
     }
 }
 
-/// rummy_draft / rummy_play 본문. { p_protocol, p_match_id, p_expected_seq, p_table }. `p_table` 은 면 문자열 배열의 배열.
+/// rummy_draft / rummy_play 본문. { p_protocol, p_match_id, p_expected_seq, p_table[, p_layout] }. `p_table` 은 면 문자열 배열의 배열.
+/// v2: `p_layout` = 묶음마다 `[x, y]`(`RummyLayout`). nil 이면 **키를 싣지 않는다**(서버 `default null` — v1 본문과 같은 키 집합).
 package struct RummyTableRequest: Encodable, Equatable, Sendable {
     package var pProtocol = RummyWire.protocolVersion
     package let pMatchId: String
     package let pExpectedSeq: Int
     package let pTable: [[RummyFace]]
+    package let pLayout: RummyLayout?
 
-    package init(matchID: UUID, expectedSeq: Int, table: [[RummyFace]]) {
+    package init(matchID: UUID, expectedSeq: Int, table: [[RummyFace]], layout: RummyLayout? = nil) {
         pMatchId = matchID.uuidString.lowercased()
         pExpectedSeq = expectedSeq
         pTable = table
+        pLayout = layout
+    }
+}
+
+/// v2 rummy_react 본문. { p_protocol, p_match_id, p_key }. `p_key` = `AingSticker.rawValue`.
+package struct RummyReactRequest: Encodable, Equatable, Sendable {
+    package var pProtocol = RummyWire.protocolVersion
+    package let pMatchId: String
+    package let pKey: String
+
+    package init(matchID: UUID, key: String) {
+        pMatchId = matchID.uuidString.lowercased()
+        pKey = key
     }
 }
 
@@ -288,8 +315,19 @@ package struct RummyMatchSeat: Codable, Equatable, Hashable, Sendable, Identifia
 /// 이번 차례 작업 판(공개).
 package struct RummyDraft: Codable, Equatable, Hashable, Sendable {
     package var table: [[RummyFace]]?
+    /// v2: 작업 판 배치(`[[x,y]|null]`, 묶음 수와 길이가 다르면 전부 null 로 읽는다 — `RummyTableLayout.sanitize`).
+    package var layout: RummyLayout?
     package var draftSeq: Int?
     package var atMs: Double?
+}
+
+/// v2 `state.reactions[]` 한 칸(최근 10초, 최신 순, 최대 12). `key` 는 글자 그대로 — `sticker` 가 모르는 키면 nil(버린다).
+package struct RummyReaction: Codable, Equatable, Hashable, Sendable {
+    package var seatNo: Int?
+    package var key: String?
+    package var atMs: Double?
+
+    package var sticker: AingSticker? { key.flatMap(AingSticker.init(rawValue:)) }
 }
 
 /// 마지막 확정 사건. `kind` = 'start' | 'play' | 'draw' | 'pass' | 'timeout_play' | 'timeout_penalty' | 'timeout_draw' |
@@ -320,6 +358,8 @@ package struct RummyMatchState: Codable, Equatable, Sendable, Identifiable {
     package var myRack: [RummyFace]?
     package var myInitialDone: Bool?
     package var table: [[RummyFace]]?
+    /// v2: 확정 판 배치(`[[x,y]|null]|null`). 빈 자리는 `RummyTableLayout.place` 가 모든 기기에서 같게 채운다.
+    package var tableLayout: RummyLayout?
     package var poolCount: Int?
     package var turnSeatNo: Int?
     package var turnStartedMs: Double?
@@ -331,6 +371,8 @@ package struct RummyMatchState: Codable, Equatable, Sendable, Identifiable {
     package var lastEvent: RummyLastEvent?
     package var endReason: RummyEndReason?
     package var finishedAtMs: Double?
+    /// v2: 최근 10초 이모티콘 반응(최신 순, 최대 12).
+    package var reactions: [RummyReaction]?
 }
 
 /// 쓰기·조회 공용 응답(create · invite · join · decline · leave · start · state · draft · play · draw).
@@ -438,21 +480,37 @@ extension SupabaseWorkService {
             accessToken: accessToken, retriesDeadlockOnce: true)
     }
 
-    /// 작업 상태 전송(R-19). 차례인 사람만.
+    /// 작업 상태 전송(R-19). 차례인 사람만. v2: `layout` 을 주면 `p_layout` 으로 싣는다.
     package func rummyDraft(
-        accessToken: String, matchID: UUID, expectedSeq: Int, table: [[RummyFace]]
+        accessToken: String, matchID: UUID, expectedSeq: Int, table: [[RummyFace]], layout: RummyLayout? = nil
     ) async throws -> RummyActionResponse {
         try await duelRPC(
-            RummyWire.RPC.draft, body: RummyTableRequest(matchID: matchID, expectedSeq: expectedSeq, table: table),
+            RummyWire.RPC.draft,
+            body: RummyTableRequest(matchID: matchID, expectedSeq: expectedSeq, table: table, layout: layout),
             accessToken: accessToken, retriesDeadlockOnce: true)
     }
 
-    /// 확정 내기(R-16 판정). 거절이면 `rejected{reason, state}`.
+    /// 확정 내기(R-16 판정). 거절이면 `rejected{reason, state}`. v2: `layout` 을 주면 `p_layout` 으로 싣는다.
     package func rummyPlay(
-        accessToken: String, matchID: UUID, expectedSeq: Int, table: [[RummyFace]]
+        accessToken: String, matchID: UUID, expectedSeq: Int, table: [[RummyFace]], layout: RummyLayout? = nil
     ) async throws -> RummyActionResponse {
         try await duelRPC(
-            RummyWire.RPC.play, body: RummyTableRequest(matchID: matchID, expectedSeq: expectedSeq, table: table),
+            RummyWire.RPC.play,
+            body: RummyTableRequest(matchID: matchID, expectedSeq: expectedSeq, table: table, layout: layout),
+            accessToken: accessToken, retriesDeadlockOnce: true)
+    }
+
+    /// v2 하트비트(`rummy_seats.last_seen_at` 갱신). 자리 없는 사람은 `not_found`.
+    package func rummyHeartbeat(accessToken: String, matchID: UUID) async throws -> RummyActionResponse {
+        try await duelRPC(
+            RummyWire.RPC.heartbeat, body: RummyMatchRequest(matchID: matchID),
+            accessToken: accessToken, retriesDeadlockOnce: true)
+    }
+
+    /// v2 이모티콘 반응. `key` = `AingSticker.rawValue`.
+    package func rummyReact(accessToken: String, matchID: UUID, key: String) async throws -> RummyActionResponse {
+        try await duelRPC(
+            RummyWire.RPC.react, body: RummyReactRequest(matchID: matchID, key: key),
             accessToken: accessToken, retriesDeadlockOnce: true)
     }
 

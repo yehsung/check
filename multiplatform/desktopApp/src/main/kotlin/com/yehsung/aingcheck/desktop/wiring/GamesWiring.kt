@@ -13,7 +13,9 @@ import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.models.AppUserCharacterDirectory
 import com.yehsung.aingcheck.desktop.platform.windows.flyout.PxRect
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutNavigator
 import com.yehsung.aingcheck.desktop.shellapi.FlyoutRoute
@@ -21,11 +23,15 @@ import com.yehsung.aingcheck.desktop.windows.cakegift.CakeGiftWindowHost
 import com.yehsung.aingcheck.desktop.windows.gacha.GachaWindowHost
 import com.yehsung.aingcheck.desktop.windows.games.minigame.ComposeGamesWindows
 import com.yehsung.aingcheck.desktop.windows.kit.DesktopGameWindows
+import com.yehsung.aingcheck.desktop.windows.kit.DuelInviteNotice
 import com.yehsung.aingcheck.desktop.windows.kit.GameWindowKind
 import com.yehsung.aingcheck.desktop.windows.kit.KeyValueWindowBoundsStore
 import com.yehsung.aingcheck.desktop.windows.kit.WindowBoundsStore
 import com.yehsung.aingcheck.feature.desktop.DesktopAppConfig
 import com.yehsung.aingcheck.feature.desktop.DesktopKeyValueStore
+import com.yehsung.aingcheck.feature.desktop.realtime.DesktopRealtimeGame
+import com.yehsung.aingcheck.feature.desktop.realtime.DesktopRealtimeGames
+import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.games.gomoku.BoardGameMe
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -73,6 +79,8 @@ interface GameWindowFactory {
                 others = others,
                 onInvite = deps.onInvite,
                 onTurnWhileHidden = deps.onTurnWhileHidden,
+                onInviteNotice = deps.onInviteNotice,
+                characters = deps.characters,
             )
 
         override fun gacha(deps: GamesDeps, bounds: WindowBoundsStore): GachaDoor {
@@ -117,6 +125,10 @@ data class GamesDeps(
     /** 대결 신청 도착(깃발 duels 가 켜졌을 때만 온다 — GameWindowWiring). 조립: 껍데기 notifier 로 DUEL_INVITE. */
     val onInvite: (GameWindowKind) -> Unit = {},
     val onTurnWhileHidden: (GameWindowKind) -> Unit = {},
+    /** 받은 신청 한 건의 글(이름·판돈). 조립: `shell.handle::notifyDuelInvite`(껍데기 알림 한 문). duels=false 면 오지 않는다. */
+    val onInviteNotice: (DuelInviteNotice) -> Unit = {},
+    /** 착용 캐릭터 표(W-8 3차). 조립: `{ shell.handle.characters.directory }`. 기본 = 빈 표(이니셜). */
+    val characters: () -> AppUserCharacterDirectory = { AppUserCharacterDirectory(CharacterArt.portraitIds) },
     val factory: GameWindowFactory = GameWindowFactory.Compose,
 )
 
@@ -175,5 +187,29 @@ class GamesWiring(private val deps: GamesDeps) {
     companion object {
         /** W4-d: 창 자리 키 접두(KeyValueWindowBoundsStore 기본과 같다 — 조립에서 한 번 더 적어 둔다). */
         const val BOUNDS_PREFIX = "windowBounds."
+    }
+}
+
+/**
+ * 실시간 러너가 부르는 게임 몫(Swift WorkTimerStoreRealtime.swift:185-196 systemDidWake · :233-240 realtimeDidJoin · :259-267 handleSignal —
+ * 오목 → 체스 → 테트리스 순서). 셋 다 **조회뿐**(★ R5). 대결 깃발이 꺼진 빌드는 [DesktopRealtimeGames.NONE] — 게임 조회 0(W-6 #1 · W-3 #7).
+ * 소셜 배선이 게임 배선보다 먼저 지어지므로 스토어만 받는다(AppGraph: `games = DesktopRealtimeGamesOf.stores(config, gomoku, chess, tetris)`).
+ */
+object DesktopRealtimeGamesOf {
+    fun stores(config: DesktopAppConfig, gomoku: GomokuStore, chess: ChessStore, tetris: TetrisDuelStore): DesktopRealtimeGames =
+        of(
+            config,
+            gomoku = game(gomoku::handleSignal, gomoku::realtimeDidJoin, gomoku::systemDidWake),
+            chess = game(chess::handleSignal, chess::realtimeDidJoin, chess::systemDidWake),
+            tetris = game(tetris::handleSignal, tetris::realtimeDidJoin, tetris::systemDidWake),
+        )
+
+    fun of(config: DesktopAppConfig, gomoku: DesktopRealtimeGame, chess: DesktopRealtimeGame, tetris: DesktopRealtimeGame): DesktopRealtimeGames =
+        if (!config.toAppConfig().duelsEnabled) DesktopRealtimeGames.NONE else DesktopRealtimeGames(gomoku, chess, tetris)
+
+    private fun game(signal: () -> Unit, joined: () -> Unit, wake: () -> Unit): DesktopRealtimeGame = object : DesktopRealtimeGame {
+        override fun handleSignal() = signal()
+        override fun realtimeDidJoin() = joined()
+        override fun systemDidWake() = wake()
     }
 }

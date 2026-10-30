@@ -1,10 +1,11 @@
-// 원본: Sources/CheckCore/TetrisDuelStore.swift:426-1602(스토어) @ 1b8260d
+// 원본: Sources/CheckCore/TetrisDuelStore.swift:426-1602(스토어) @ 1b8260d · 한 판 한 기기(머리말 ⑩) @ 75c31cd2
 package com.yehsung.aingcheck.core.stores.tetris
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.yehsung.aingcheck.core.foundation.platform.Collation
+import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
 import com.yehsung.aingcheck.core.foundation.platform.LogLevel
 import com.yehsung.aingcheck.core.foundation.platform.Logger
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
@@ -59,6 +60,12 @@ import kotlin.time.TimeSource
 //     `duel` 은 **관찰 대상이 아니다** — 프레임마다 바뀌는 값이라 관찰하면 그 값을 읽는 모든 화면이 매 걸음 무효화된다.
 //  ⑧ **보고 루프**(설계 §4.1). 1초 하트비트 · 공격 누계 증가와 탑아웃은 곧바로(최소 간격 0.25초) · 한 번에 하나만 나간다.
 //  ⑨ **준비 = 첫 보고**. 창이 화면에 떠 있을 때만 낸다(`isWindowVisible`) — 서버가 30초 뒤 무승부(no_show)로 판돈을 돌려준다(D4).
+//  ⑩ **한 판 한 기기**(0.3.69 · 서버 20261103124000). 초인종은 사람의 **모든 기기**로 간다 — 받은 기기마다 판을 세우면
+//     같은 계정의 입력 없는 기기가 진짜 판을 덮어쓰고 그 판의 탑아웃으로 대결을 닫는다(2026-10-30 '꼭대기 안 찼는데 졌다' 두 판).
+//     그래서 구동기·판 루프·준비/보고·창 띄우기는 **이 기기가 두는 판**에서만 선다(`playsMatch`): 서버 `my_device` 가
+//     'this' 면 둔다 · 'other' 면 안 둔다 · 말이 없으면(옛 서버) 이 기기가 그 판을 **열었는가**(신청을 보냈다 · 수락했다 —
+//     사용자별로 [TetrisDuelStore.defaults] 에 남아 앱을 다시 켜도 산다). 안 두는 기기는 판 상태만 들고 안내 한 줄
+//     (`TetrisDuelNoticeText.otherDevice`)을 낸다. 보고·기권이 `other_device` 로 돌아오면 곧바로 물러난다.
 //
 // ── Kotlin 이식 ──
 //  · Swift `@MainActor` 한 스레드 규약 그대로 — 이 스토어는 [scope](앱은 메인 디스패처, 시험은 시험 디스패처) 한 곳에서만 돈다.
@@ -147,6 +154,18 @@ class TetrisDuelStore(
         const val reportStallSeconds: Double = 3.0
 
         internal const val TAG: String = "tetris-duel"
+
+        /**
+         * '이 기기가 연 판' 기록을 이만큼(초) 지나면 걷는다(머리말 ⑩). 판 하나의 수명은 신청 60초 + 준비 30초 + 상한 480초로 10분이
+         * 안 된다 — 한 시간이면 판 중에 앱을 다시 켜도 넉넉히 남고, 끝난 판의 기록이 쌓이지 않는다.
+         */
+        const val ownedMatchTTLSeconds: Double = 3_600.0
+
+        /** 기록을 이만큼만 둔다(새것부터). 한 사람은 한 판만이라 둘이면 충분하지만 신청·수락이 겹치는 창을 넉넉히 둔다. */
+        const val ownedMatchLimit: Int = 8
+
+        /** 기록 키. **사용자별**이다 — 같은 기기에서 계정을 바꿔도 앞 사람의 판을 두지 않는다. */
+        fun ownedMatchesKey(userID: String): String = "tetris.duel.ownedMatches.${userID.lowercase()}"
 
         /** 같은 신청을 다시 읽었을 때 만료가 문턱 안쪽으로만 다르면 기존 값을 그대로 쓴다(관찰자를 헛되게 깨우지 않게). */
         fun steadyInvite(fresh: TetrisDuelInvite, previous: TetrisDuelInvite?): TetrisDuelInvite {
@@ -268,6 +287,12 @@ class TetrisDuelStore(
     /** 보고가 연달아 실패하는 중(판 화면의 "연결 확인 중"). 다음 성공이 내린다. */
     var connectionTrouble: Boolean by mutableStateOf(false)
 
+    /**
+     * 진행 중인 내 판을 **같은 계정의 다른 기기**가 두고 있다(머리말 ⑩). 이 기기에는 구동기·판 루프·보고가 없다.
+     * 화면은 판 대신 [TetrisDuelNoticeText.otherDevice] 를 그린다. 판이 끝나거나 내려가면 false.
+     */
+    var playingElsewhere: Boolean by mutableStateOf(false)
+
     // 순위(로직은 TetrisDuelStoreGame.kt 의 순위 절).
     /** **순위 적재의 주 스위치. 기본 false.** 공용 스토어라 그리지도 않는 기기가 순위를 당기지 않게 한다. */
     var rankingEnabled: Boolean by mutableStateOf(false)
@@ -388,6 +413,24 @@ class TetrisDuelStore(
 
     /** 상대의 마지막 보고 시각(기기 시계 보정). "상대 연결 확인 중" 표시 재료. */
     var opponentLastSeenAt: SwiftDate? = null
+        internal set
+
+    // MARK: 한 판 한 기기 (관찰 대상 아님 — 머리말 ⑩, 로직은 TetrisDuelStoreGame.kt 의 같은 절)
+
+    /**
+     * '이 기기가 연 판' 기록을 두는 곳(사용자별 키 — [ownedMatchesKey]). **앱 배선이 넣는다**(폰 `PhoneAppModel`).
+     * null(미리보기·시험 기본)이면 기록은 이 프로세스 안([ownedMatchesInMemory])에만 산다 — 시험이 앱 저장소에 키를 흘리지 않게 기본값을 비워 두었다.
+     */
+    var defaults: KeyValueStore? = null
+
+    /** [defaults] 가 없을 때의 기록(사용자 id → [판 id: 기록한 벽시계 epoch 초]). */
+    internal val ownedMatchesInMemory: MutableMap<String, Map<String, Double>> = mutableMapOf()
+
+    /**
+     * 서버가 `other_device` 로 돌려보내 **물러난** 판. 같은 판은 서버가 다시 'this' 라 해도 두지 않는다(같은 세션을 쓰는 두 프로세스가
+     * 서로 자리를 뺏으며 번갈아 쓰지 않게). 리셋이 비운다.
+     */
+    var yieldedMatchIDs: Set<String> = emptySet()
         internal set
 
     // MARK: 내부 장부 (관찰 대상 아님)
@@ -799,11 +842,26 @@ class TetrisDuelStore(
             finishedAt = deviceDate(payload.finishedAtMs) ?: base?.finishedAt,
         )
 
+        // 이 기기가 이 판을 두는가(머리말 ⑩). 서버가 말했으면 '이 기기가 연 판' 기록을 그 말에 맞춘다(재설치 · 다시 로그인).
+        // 끝난 판의 기록은 여기서 걷는다(남겨 둘 까닭이 없다 — 오래된 것은 [ownedMatchTTLSeconds] 가 따로 걷는다).
+        if (isFinished) {
+            dropOwnership(id)
+        } else {
+            when (payload.myDevice) {
+                "this" -> if (id !in yieldedMatchIDs) noteOwnsMatch(id)
+                "other" -> dropOwnership(id)
+                else -> Unit
+            }
+        }
+        val plays = !isFinished && playsMatch(id, payload.myDevice)
+        val wasElsewhere = playingElsewhere
+        val elsewhere = !isFinished && !plays
+
         // 판 구동기.
         if (isFinished) {
             if (duelMatchID == id) duel?.finish() else discardDuel()
             stopGameLoop()
-        } else {
+        } else if (plays) {
             prepareDuel(id, next.seed, payload.me, payload.startAtMs)
             if (duelMatchID == id) {
                 val startMs = payload.startAtMs
@@ -815,7 +873,12 @@ class TetrisDuelStore(
                 duel?.absorbOpponentAttack(opponentAttackTotal)
                 startGameLoop()
             }
+        } else {
+            // 같은 계정의 다른 기기가 두는 판 — 구동기를 만들지 않는다. 판 루프·준비/보고·입력 문이 전부 구동기에 매달려
+            // 있으므로 이 한 줄로 셋이 함께 닫힌다(들고 있던 구동기가 있으면 — 물러난 판 — 버린다).
+            discardDuel()
         }
+        if (playingElsewhere != elsewhere) playingElsewhere = elsewhere
 
         val justFinished = isFinished && base?.isFinished == false
         val previous = match
@@ -831,10 +894,17 @@ class TetrisDuelStore(
         activeMatchID = if (isFinished) null else id
         refreshPhase()
         syncStats()
-        if (!isFinished && (previous?.id != id || previous.isFinished)) {
-            // 새 판이 열렸다 — 로비에서 남긴 안내("신청을 보냈어요")는 판 상태줄을 가린다.
-            setNotice(null)
-            noteMatchStarted(next, windowWasVisible)
+        if (elsewhere) {
+            // 다른 기기가 두는 판 — 창·주의·말풍선을 부르지 않는다(이 기기의 창이 저절로 뜨면 그 창이 준비를 낸다).
+            // 사용자가 창을 열면 이 안내 한 줄을 본다.
+            setNotice(TetrisDuelNoticeText.otherDevice)
+        } else {
+            if (wasElsewhere && notice == TetrisDuelNoticeText.otherDevice) setNotice(null)
+            if (!isFinished && (previous?.id != id || previous.isFinished || wasElsewhere)) {
+                // 새 판이 열렸다 — 로비에서 남긴 안내("신청을 보냈어요")는 판 상태줄을 가린다.
+                setNotice(null)
+                noteMatchStarted(next, windowWasVisible)
+            }
         }
         if (justFinished) {
             // 전적은 로비 응답에만 있다. 끝난 순간 한 번 다시 읽어 결과 뒤 로비가 옛 전적을 보이지 않게 한다.
@@ -870,6 +940,8 @@ class TetrisDuelStore(
                     when (response.status) {
                         TetrisRPCStatus.ok -> {
                             val id = response.matchId?.lowercase() ?: return
+                            // 이 기기가 신청을 보냈다 — 수락되면 이 기기가 둔다(머리말 ⑩ · 옛 서버에서도 가르는 근거).
+                            noteOwnsMatch(id)
                             val peer = users.firstOrNull { it.id == target } ?: TetrisDuelUser(
                                 id = target, displayName = "", avatarURL = null, characterID = null,
                                 isWorking = false, isCapable = true, inMatch = false,
@@ -953,6 +1025,8 @@ class TetrisDuelStore(
                         TetrisRPCStatus.ok -> {
                             incoming = incoming.filter { it.id != id }
                             if (accept) {
+                                // 이 기기가 수락했다 — 이 기기가 둔다. 상태를 옮기기 **전에** 적는다(옛 서버는 my_device 를 안 싣는다).
+                                noteOwnsMatch(id)
                                 // 수락하는 순간 서버가 두 사람의 **다른 테트리스 대기 신청을 전부** 닫는다 — 로컬 카드도 함께 걷는다.
                                 if (incoming.isNotEmpty()) incoming = emptyList()
                                 if (outgoing != null) outgoing = null
@@ -995,6 +1069,8 @@ class TetrisDuelStore(
                     applyRuby(response.rubyBalance)
                     setNotice(TetrisDuelNoticeText.resign(response.status))
                     if (response.status == TetrisRPCStatus.unsupportedClient) noteUpdateRequired()
+                    // 다른 기기가 두는 판이다 — 서버는 정산하지 않았다. 이 판에서 물러난다(머리말 ⑩).
+                    if (response.status == TetrisRPCStatus.otherDevice) yieldMatchToOtherDevice(id)
                     val state = response.state
                     if (state != null) applyState(state, receivedAt) else refreshMatch(id)
                 }
@@ -1166,6 +1242,10 @@ class TetrisDuelStore(
         if (hasLoadedLobby) hasLoadedLobby = false
         if (liveMatches.isNotEmpty()) liveMatches = emptyList()
         if (connectionTrouble) connectionTrouble = false
+        if (playingElsewhere) playingElsewhere = false
+        // 물러난 판 표는 비운다. '이 기기가 연 판' 기록([defaults])은 **사용자별 키**라 그대로 둔다 — 같은 사람이 다시 들어와도
+        // 서버가 my_device 로 가르고, 오래된 것은 [ownedMatchTTLSeconds] 가 걷는다.
+        yieldedMatchIDs = emptySet()
         if (ranking != null) ranking = null
         if (rankingLoadFailed) rankingLoadFailed = false
         if (hasLoadedRanking) hasLoadedRanking = false
@@ -1247,6 +1327,7 @@ class TetrisDuelStore(
 
     /** 그 id 가 판이었으면 판을 내리고, 신청이었으면 신청 카드를 걷는다(안내가 있으면 한 줄 — 보낸 신청만). */
     private fun dropMatchOrInvite(id: String, noticeText: String? = null) {
+        dropOwnership(id)
         if (match?.id == id) clearMatch()
         if (activeMatchID == id) activeMatchID = null
         if (incoming.any { it.id == id }) {
@@ -1276,6 +1357,7 @@ class TetrisDuelStore(
     /** 판을 내린다(판 구동기·판 루프·보고까지). */
     fun clearMatch() {
         if (match != null) match = null
+        if (playingElsewhere) playingElsewhere = false
         // 대국이 내려갔다 — 관전자 수는 내 판의 것이었다.
         if (spectatorCount != 0 && spectating == null) spectatorCount = 0
         discardDuel()

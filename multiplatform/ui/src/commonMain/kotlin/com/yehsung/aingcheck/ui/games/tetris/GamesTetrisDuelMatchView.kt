@@ -66,6 +66,7 @@ import com.yehsung.aingcheck.core.stores.tetris.GamesTetrisDuelChrome
 import com.yehsung.aingcheck.core.stores.tetris.GamesTetrisDuelTone
 import com.yehsung.aingcheck.core.stores.tetris.GamesTetrisDuelTouch
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelMatchState
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelNoticeText
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelOpponentBoard
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisPhoneText
@@ -132,7 +133,7 @@ fun GamesTetrisDuelMatchView(
 ) {
     val tetris = store.tetris
     val match = tetris.match ?: return
-    val chrome = GamesTetrisDuelChrome(match, tetris.phase, tetris.myStats, tetris.notice, tetris.connectionTrouble)
+    val chrome = GamesTetrisDuelChrome(match, tetris.phase, tetris.myStats, tetris.notice, tetris.connectionTrouble, playingElsewhere = tetris.playingElsewhere)
     /** 판 위 한 손가락 — 터치마다 다시 그려지지 않게 상태가 아닌 참조로 든다. */
     val touch = remember { GamesTetrisDuelTouch() }
     var confirmsResign by remember { mutableStateOf(false) }
@@ -402,7 +403,16 @@ private fun BoardOverlay(tetris: TetrisDuelStore, chrome: GamesTetrisDuelChrome,
     val colors = AingTheme.colors
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (chrome.stage) {
-            GamesTetrisDuelChrome.Stage.waiting -> WaitLeaf(tetris) { seconds ->
+            // 같은 계정의 다른 기기가 두는 판(Swift 75c31cd2 `case .waiting where chrome.playingElsewhere`) — 이 폰에는 판이 없다(코어가
+            // 구동기를 안 만든다). 기다리라는 말 대신 사실을 말한다(색은 카드 기본 accent — iOS 와 같은 자리). 기다림 잎보다 **먼저** 고른다.
+            // 기호: iOS 는 `macbook.and.iphone` — 이 워크트리의 Swift 원문(SfSymbolCoverageTest 의 기준)에는 아직 없어 대응표에 있는
+            // `desktopcomputer` 로 둔다(main 병합 때 대응표에 넣고 바꾼다).
+            GamesTetrisDuelChrome.Stage.waiting -> if (chrome.playingElsewhere) {
+                GamesOverlayCard(
+                    TetrisDuelNoticeText.otherDevice, TetrisPhoneText.otherDeviceSubtitle, TetrisPhoneText.otherDeviceAction,
+                    icon = "desktopcomputer", scale = 0.9f,
+                )
+            } else WaitLeaf(tetris) { seconds ->
                 GamesOverlayCard(
                     TetrisPhoneText.waitingTitle, TetrisPhoneText.waitingSubtitle(seconds), TetrisPhoneText.waitingAction,
                     icon = "hourglass", tint = colors.pending, scale = 0.9f,

@@ -40,9 +40,17 @@ class TetrisDuelStoreTest {
                 """},"users":[{"id":"$PEER","display_name":"구름빵","is_working":true,"in_match":false,"capable":true}],"matches":$matches}""",
         )
 
-        fun activeState(id: String = "inv-1", startAtMs: Long? = null, mySeq: Int = 0, opponentSeq: Int = 0, finished: Boolean = false): String =
+        /**
+         * [myDevice] 기본값 'this' = **이 기기가 두는 판**(v0.3.69 서버 20261103124000 의 my_device — Swift `tdState` 와 같은 기본). 이 파일·게임 탭의
+         * 한 기기 시험들은 그 전제로 판을 세운다. null 이면 키를 아예 안 싣는다(옛 서버) — 그때는 '이 기기가 연 판' 기록이 가른다.
+         */
+        fun activeState(
+            id: String = "inv-1", startAtMs: Long? = null, mySeq: Int = 0, opponentSeq: Int = 0, finished: Boolean = false,
+            myDevice: String? = "this",
+        ): String =
             """{"match_id":"$id","status":"${if (finished) "finished" else "active"}","stake":5,"seed":77,"server_now_ms":$NOW_MS""" +
                 (startAtMs?.let { ""","start_at_ms":$it""" } ?: "") +
+                (myDevice?.let { ""","my_device":"$it"""" } ?: "") +
                 ""","me":{"id":"$ME","seq":$mySeq,"ready":false},"opponent":{"id":"$PEER","display_name":"구름빵","seq":$opponentSeq,"ready":true}}"""
 
         /** 끝난 판 상태(승자 칸 · result 글자 · 판돈). [winner] 가 null 이면 승자 칸이 없다(무승부). */

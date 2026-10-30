@@ -251,6 +251,12 @@ object TetrisDuelNoticeText {
     /** 관전 — 볼 수 없는 판(끝난 지 3분이 넘었거나 숨김 격리). 서버는 있다/없다를 가르지 않는다. */
     const val watchGone: String = "지금은 볼 수 없는 판이에요"
 
+    /**
+     * 한 판 한 기기(0.3.69) — 이 판은 같은 계정의 **다른 기기**가 두고 있다(그 기기가 신청·수락했다). 이 기기는 판을 만들지도
+     * 보고하지도 않는다. 진단 어휘(세션·서버)를 쓰지 않는다.
+     */
+    const val otherDevice: String = "다른 기기에서 대결 중이에요"
+
     /** 신청 결과. 근무 조건은 없다(D1) — 클라가 근무를 보고 미리 막는 선게이트를 만들지 마라. */
     fun challenge(status: TetrisRPCStatus, need: Long? = null, have: Long? = null): String = when (status) {
         TetrisRPCStatus.ok -> "신청을 보냈어요"
@@ -289,6 +295,7 @@ object TetrisDuelNoticeText {
     fun resign(status: TetrisRPCStatus): String? = when (status) {
         TetrisRPCStatus.ok -> null
         TetrisRPCStatus.notActive, TetrisRPCStatus.notFound -> finishedMatch
+        TetrisRPCStatus.otherDevice -> otherDevice
         else -> common(status)
     }
 

@@ -13,6 +13,7 @@ import com.yehsung.aingcheck.core.stores.me.MeRoute
 import com.yehsung.aingcheck.core.stores.me.dismissCakeGiftSheet
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStake
+import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.games.ChessLobbyResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuLobbyResponse
@@ -76,6 +77,19 @@ class PhoneAppModelTest {
         assertEquals(42L, app.context.ruby.rubyBalance)
         app.ruby.rubyBalance = 5_000_000_000
         assertEquals(5_000_000_000L, app.gamesContext.sharedRubyBalance, "Int 범위를 넘어도 자르지 않는다(8차 fold — 칸은 Long 하나)")
+    }
+
+    /**
+     * 한 판 한 기기(0.3.69 — Swift V0360TetrisDuelRealtimeTests `theMacOwnerKeepsTetrisOwnershipInItsOwnDefaults` 의 폰 몫 · MobileAppModel 75c31cd2).
+     * 없으면: '이 기기가 연 판' 기록이 프로세스 안에만 살아, 판 중에 앱을 다시 켠 폰이 옛 서버(my_device 없음)에서 자기 판을 못 알아보고
+     * 보고를 멈춘다 — 15초 침묵 패. 스토어 시험은 defaults 를 직접 넣어 초록이다.
+     */
+    @Test
+    fun assemblyKeepsTetrisOwnershipInTheAppPrefs() = runTest {
+        val h = PhoneHarness(this)
+        assertSame(h.prefs, h.app.tetris.defaults, "폰이 테트리스 기록을 앱 저장소에 안 둔다")
+        // ★ 기준선: 배선 없이 만든 스토어는 기록 자리가 비어 있다(위 같음이 우연이 아니다).
+        assertNull(TetrisDuelStore(host = null, scope = backgroundScope, clock = { SwiftDate(0.0) }).defaults)
     }
 
     @Test

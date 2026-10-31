@@ -88,15 +88,15 @@ class MiniGameCanvasSourceContractTest {
         assertTrue("TetrisLayout." in painter && "TetrisPalette." in painter, "배치·색은 core 표 한 벌")
     }
 
+    /** 허브 첫 화면은 오늘 표만 읽는다. 게임 화면의 [역대] 는 폰 경로(isPhone)에서만 열린다 — Windows 는 오늘 판 그대로다(v1 동결 · 동작은 GamesBoardScopeScreenTest). */
     @Test
-    fun rankingsAreTodayOnly() {
-        // Android 첫 판(G §8-18 7): 미니게임 순위는 **오늘만** — 역대 순위(맥 0.3.67 · allTime 판)는 이 판에 없다(허브 · 게임 화면 둘 다).
-        for (file in listOf("minigame/GamesMiniGameScreen.kt", "minigame/hub/GamesHubScreen.kt")) {
-            val text = code(file)
-            for (word in listOf("allTime", "AllTime", "MiniGameBoardScope", "역대")) assertTrue(word !in text, "$file: 역대 순위 흔적 '$word'")
-        }
+    fun allTimeIsPhonePathOnly() {
+        val hubScreen = code("minigame/hub/GamesHubScreen.kt")
+        for (word in listOf("allTime", "AllTime", "MiniGameBoardScope", "역대")) assertTrue(word !in hubScreen, "허브 화면에 역대 순위 흔적 '$word'")
+        val screen = code("minigame/GamesMiniGameScreen.kt")
+        assertTrue("val showsAllTime = isPhone && hub.boardScope == MiniGameBoardScope.allTime" in screen, "역대 판이 폰 경로 게이트 없이 열린다")
         // 기준선: 오늘 순위(hub.boards — 허브의 오늘 표)는 읽는다(빈 파일이면 위 '없음'이 거저 초록이다).
-        assertTrue("hub.boards[kind]" in code("minigame/GamesMiniGameScreen.kt"), "게임 화면이 오늘 순위(hub.boards)를 읽지 않는다")
+        assertTrue("hub.boards[kind]" in screen, "게임 화면이 오늘 순위(hub.boards)를 읽지 않는다")
     }
 
     @Test

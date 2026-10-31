@@ -452,6 +452,7 @@ class MiniGameRoundTokenRaceTest {
         advanceUntilIdle()
         assertEquals(1, h.server.count("minigame_submit_score"))
         assertEquals(GamesMiniGameText.endedInBackground(MiniGameKind.crossy), hub.submitNotice)
+        assertEquals(listOf("crossy"), h.achievementRefreshes, "일일 미션 길건너 줄이 제출을 못 본다")
         assertTrue("기록했어요" in hub.submitNotice!!)
         assertNull(hub.controller?.roundLimitSeconds, "길건너에 벽시계 상한을 줬다(idleLimit 9초가 이미 죽인다)")
     }

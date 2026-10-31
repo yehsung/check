@@ -8,8 +8,17 @@
 // 딥링크는 셸이 AingRoute 로 풀어 [ShellNavigator.open] 으로 연다(MainActivity 는 singleTask — 매니페스트).
 package com.yehsung.aingcheck.android.nav
 
+import androidx.compose.animation.AnimatedContentScope
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.navigation.NavBackStackEntry
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.window.DialogProperties
@@ -104,6 +113,7 @@ import com.yehsung.aingcheck.android.screens.shop.ShopPlaceholder
 fun TabsNavHost(
     navController: NavHostController,
     modifier: Modifier = Modifier,
+    shellBars: PaddingValues = NoShellBars,
     screens: W3aScreenDeps? = null,
     app: AppScreens? = null,
     onTabBarHidden: (Boolean) -> Unit = {},
@@ -112,6 +122,7 @@ fun TabsNavHost(
     val back: () -> Unit = { navController.popBackStack() }
     val toMessagesList: () -> Unit = { navController.popBackStack(Dest.MessagesList, inclusive = false) }
     val openRoute: (AingRoute) -> Unit = { ShellNavigator(navController).open(it) }
+    CompositionLocalProvider(LocalShellBars provides shellBars) {
     NavHost(navController, startDestination = Dest.NowGraph, modifier = modifier) {
         val w3a = screens ?: app?.w3a
         if (w3a == null) nowGraph(open) else nowGraph(w3a, open, back, openRoute)
@@ -133,6 +144,23 @@ fun TabsNavHost(
             }
         }
     }
+    }
+}
+
+private val NoShellBars = PaddingValues(0.dp)
+
+/** 셸(Scaffold)이 내려 준 시스템 막대 · 탭 막대 몫 여백. [shellScreen] 만 읽는다. */
+private val LocalShellBars = compositionLocalOf { NoShellBars }
+
+/**
+ * 탭 목적지 한 칸 — 셸 여백을 **NavHost 가 아니라 화면마다** 입힌다. NavHost 한 벌에 입히면 여백이 꼭대기 목적지 기준으로 즉시 바뀌어,
+ * 뽑기 진입 · 종료 페이드(기본 700ms) 동안 나가는 화면이 상태 바 높이만큼 튄다(ShellBarsTransitionTest). 막대 뒤까지 그리는 목적지([ShellSystemBarRules])만 여백을 안 받는다.
+ */
+private inline fun <reified T : Any> NavGraphBuilder.shellScreen(
+    noinline content: @Composable AnimatedContentScope.(NavBackStackEntry) -> Unit,
+) = composable<T> { entry ->
+    val bars = if (ShellSystemBarRules.drawsBehindSystemBars(entry.destination)) NoShellBars else LocalShellBars.current
+    Box(Modifier.fillMaxSize().padding(bars)) { content(entry) }
 }
 
 /**
@@ -155,22 +183,22 @@ fun SessionNavHost(navController: NavHostController, modifier: Modifier = Modifi
 
 private fun NavGraphBuilder.nowGraph(open: (Any) -> Unit) =
     navigation<Dest.NowGraph>(startDestination = Dest.NowHome) {
-        composable<Dest.NowHome> { NowHomePlaceholder(open) }
+        shellScreen<Dest.NowHome> { NowHomePlaceholder(open) }
         dialog<Dest.TeamGoalSheet> { TeamGoalSheetPlaceholder() }
         dialog<Dest.TeamJoinSheet> { TeamJoinSheetPlaceholder() }
     }
 
 private fun NavGraphBuilder.nowGraph(screens: W3aScreenDeps, open: (Any) -> Unit, back: () -> Unit, openRoute: (AingRoute) -> Unit) =
     navigation<Dest.NowGraph>(startDestination = Dest.NowHome) {
-        composable<Dest.NowHome> { NowHomeEntry(screens.now, screens.nowWork, screens.characterID(), open, openRoute) }
+        shellScreen<Dest.NowHome> { NowHomeEntry(screens.now, screens.nowWork, screens.characterID(), open, openRoute) }
         dialog<Dest.TeamGoalSheet> { TeamGoalSheetEntry(screens.now, back) }
         dialog<Dest.TeamJoinSheet> { TeamJoinSheetEntry(screens.now, back) }
     }
 
 private fun NavGraphBuilder.messagesGraph(screens: W3aScreenDeps, open: (Any) -> Unit, back: () -> Unit, toList: () -> Unit) =
     navigation<Dest.MessagesGraph>(startDestination = Dest.MessagesList) {
-        composable<Dest.MessagesList> { MessagesListEntry(screens.messages, open) }
-        composable<Dest.Conversation> { ConversationEntry(screens.messages, it.toRoute<Dest.Conversation>().peerId, back, toList) }
+        shellScreen<Dest.MessagesList> { MessagesListEntry(screens.messages, open) }
+        shellScreen<Dest.Conversation> { ConversationEntry(screens.messages, it.toRoute<Dest.Conversation>().peerId, back, toList) }
         dialog<Dest.NewConversationSheet> { NewConversationSheetEntry(screens.messages, open, back) }
         dialog<Dest.MegaphoneSheet> { MegaphoneSheetEntry(screens.messages, screens.rubyBalance(), back) }
         dialog<Dest.ReportSheet> { ReportSheetEntry(screens.messages, it.toRoute<Dest.ReportSheet>().subjectId, back, toList) }
@@ -179,8 +207,8 @@ private fun NavGraphBuilder.messagesGraph(screens: W3aScreenDeps, open: (Any) ->
 
 private fun NavGraphBuilder.messagesGraph(open: (Any) -> Unit) =
     navigation<Dest.MessagesGraph>(startDestination = Dest.MessagesList) {
-        composable<Dest.MessagesList> { MessagesListPlaceholder(open) }
-        composable<Dest.Conversation> { ConversationPlaceholder(it.toRoute<Dest.Conversation>().peerId, open) }
+        shellScreen<Dest.MessagesList> { MessagesListPlaceholder(open) }
+        shellScreen<Dest.Conversation> { ConversationPlaceholder(it.toRoute<Dest.Conversation>().peerId, open) }
         dialog<Dest.NewConversationSheet> { NewConversationSheetPlaceholder() }
         dialog<Dest.MegaphoneSheet> { MegaphoneSheetPlaceholder() }
         dialog<Dest.ReportSheet> { ReportSheetPlaceholder(it.toRoute<Dest.ReportSheet>().subjectId) }
@@ -189,39 +217,39 @@ private fun NavGraphBuilder.messagesGraph(open: (Any) -> Unit) =
 
 private fun NavGraphBuilder.rankingsGraph() =
     navigation<Dest.RankingsGraph>(startDestination = Dest.RankingsHome()) {
-        composable<Dest.RankingsHome> { RankingsHomePlaceholder(it.toRoute<Dest.RankingsHome>().board) }
+        shellScreen<Dest.RankingsHome> { RankingsHomePlaceholder(it.toRoute<Dest.RankingsHome>().board) }
     }
 
 private fun NavGraphBuilder.gamesGraph(open: (Any) -> Unit) =
     navigation<Dest.GamesGraph>(startDestination = Dest.GamesHome) {
-        composable<Dest.GamesHome> { GamesHomePlaceholder(open) }
-        composable<Dest.MiniGame> { MiniGamePlaceholder(it.toRoute<Dest.MiniGame>().game) }
-        composable<Dest.Gomoku> { GomokuPlaceholder(it.toRoute<Dest.Gomoku>(), open) }
-        composable<Dest.Chess> { ChessPlaceholder(it.toRoute<Dest.Chess>(), open) }
-        composable<Dest.TetrisDuel> { TetrisDuelPlaceholder(open) }
+        shellScreen<Dest.GamesHome> { GamesHomePlaceholder(open) }
+        shellScreen<Dest.MiniGame> { MiniGamePlaceholder(it.toRoute<Dest.MiniGame>().game) }
+        shellScreen<Dest.Gomoku> { GomokuPlaceholder(it.toRoute<Dest.Gomoku>(), open) }
+        shellScreen<Dest.Chess> { ChessPlaceholder(it.toRoute<Dest.Chess>(), open) }
+        shellScreen<Dest.TetrisDuel> { TetrisDuelPlaceholder(open) }
         dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }
     }
 
 private fun NavGraphBuilder.meGraph(open: (Any) -> Unit) =
     navigation<Dest.MeGraph>(startDestination = Dest.MeHome) {
-        composable<Dest.MeHome> { MeHomePlaceholder(open) }
-        composable<Dest.Shop> { ShopPlaceholder(open) }
+        shellScreen<Dest.MeHome> { MeHomePlaceholder(open) }
+        shellScreen<Dest.Shop> { ShopPlaceholder(open) }
         dialog<Dest.GachaOddsSheet> { GachaOddsSheetPlaceholder() }
-        composable<Dest.GachaMachine> { GachaMachinePlaceholder() }
-        composable<Dest.CharacterPicker> { CharacterPickerPlaceholder() }
-        composable<Dest.Profile> { ProfilePlaceholder() }
-        composable<Dest.Feedback> { FeedbackPlaceholder(it.toRoute<Dest.Feedback>().reportId) }
-        composable<Dest.Settings> { SettingsPlaceholder(open) }
-        composable<Dest.BlockedPeople> { BlockedPeoplePlaceholder() }
-        composable<Dest.AccountDeletion> { AccountDeletionPlaceholder() }
-        composable<Dest.GrassDetail> { GrassDetailPlaceholder(it.toRoute<Dest.GrassDetail>().axis) }
+        shellScreen<Dest.GachaMachine> { GachaMachinePlaceholder() }
+        shellScreen<Dest.CharacterPicker> { CharacterPickerPlaceholder() }
+        shellScreen<Dest.Profile> { ProfilePlaceholder() }
+        shellScreen<Dest.Feedback> { FeedbackPlaceholder(it.toRoute<Dest.Feedback>().reportId) }
+        shellScreen<Dest.Settings> { SettingsPlaceholder(open) }
+        shellScreen<Dest.BlockedPeople> { BlockedPeoplePlaceholder() }
+        shellScreen<Dest.AccountDeletion> { AccountDeletionPlaceholder() }
+        shellScreen<Dest.GrassDetail> { GrassDetailPlaceholder(it.toRoute<Dest.GrassDetail>().axis) }
     }
 
 // ---------- 7차 조립(K11) — 순위(W3-b) · 게임(W4-a · W4-b) · 나(W3-b · W4-c · W5-c) ----------
 
 private fun NavGraphBuilder.rankingsGraph(app: AppScreens) =
     navigation<Dest.RankingsGraph>(startDestination = Dest.RankingsHome()) {
-        composable<Dest.RankingsHome> {
+        shellScreen<Dest.RankingsHome> {
             val p = app.phone
             val snapshot = p.widgets.current
             val me = RankingsScreenRules.myFace(
@@ -245,7 +273,7 @@ private fun NavGraphBuilder.gamesGraph(
     val p = app.phone
     // 대국 화면은 두 겹 쌓지 않는다(W4-a §1 끝 — 알림 · 딥링크 · 허브 카드 모두).
     val openGame: (Any) -> Unit = { d -> if (d is Dest.Gomoku || d is Dest.Chess) nav.navigate(d) { launchSingleTop = true } else open(d) }
-    composable<Dest.GamesHome> {
+    shellScreen<Dest.GamesHome> {
         GamesHubRoute(
             store = p.games,
             facts = remember { GamesHubBoardFacts.of(p.gomoku, p.chess) },
@@ -255,11 +283,11 @@ private fun NavGraphBuilder.gamesGraph(
             onOpenRankings = { navigator.selectTab(AingTab.RANKINGS) },
         )
     }
-    composable<Dest.MiniGame> {
+    shellScreen<Dest.MiniGame> {
         // 길건너 · 모르는 글자 → onBack(§8-18 7 — 화면 없음).
         MiniGameRoute(store = p.games, game = it.toRoute<Dest.MiniGame>().game, myUserID = p.session.userID, onBack = { nav.popBackStack() })
     }
-    composable<Dest.Gomoku> {
+    shellScreen<Dest.Gomoku> {
         GomokuDestination(
             dest = it.toRoute<Dest.Gomoku>(),
             games = p.games,
@@ -276,7 +304,7 @@ private fun NavGraphBuilder.gamesGraph(
             onTabBarHidden = onTabBarHidden,
         )
     }
-    composable<Dest.Chess> {
+    shellScreen<Dest.Chess> {
         ChessDestination(
             dest = it.toRoute<Dest.Chess>(),
             games = p.games,
@@ -286,7 +314,7 @@ private fun NavGraphBuilder.gamesGraph(
             onTabBarHidden = onTabBarHidden,
         )
     }
-    composable<Dest.TetrisDuel> {
+    shellScreen<Dest.TetrisDuel> {
         TetrisDuelRoute(
             store = p.games,
             lifecycle = app.lifecycle,
@@ -302,7 +330,7 @@ private fun NavGraphBuilder.meGraph(app: AppScreens, nav: NavHostController, ope
     navigation<Dest.MeGraph>(startDestination = Dest.MeHome) {
         val p = app.phone
         val back: () -> Unit = { nav.popBackStack() }
-        composable<Dest.MeHome> {
+        shellScreen<Dest.MeHome> {
             MeHomeRouteScreen(
                 store = p.me,
                 presence = MeHomeRules.presence(p.now.myCard(p.environment.clock.now())),
@@ -312,10 +340,10 @@ private fun NavGraphBuilder.meGraph(app: AppScreens, nav: NavHostController, ope
                 cakeGiftRow = { MeCakeGiftReopenRow(p.me) },
             )
         }
-        composable<Dest.Shop> { ShopRoute(p.me, onBack = back, onOpenMachine = { open(Dest.GachaMachine) }) }
+        shellScreen<Dest.Shop> { ShopRoute(p.me, onBack = back, onOpenMachine = { open(Dest.GachaMachine) }) }
         dialog<Dest.GachaOddsSheet>(dialogProperties = DialogProperties(usePlatformDefaultWidth = false)) { GachaOddsRoute(p.me, back) }
-        composable<Dest.GachaMachine> { GachaMachineRoute(p.me, back) }
-        composable<Dest.CharacterPicker> {
+        shellScreen<Dest.GachaMachine> { GachaMachineRoute(p.me, back) }
+        shellScreen<Dest.CharacterPicker> {
             // W3-b 고르기 화면 한 벌에 W4-c 상점 · 뽑기 단추를 넘긴다(겹치는 목적지 하나로). 머리 그림 = W5-c 무대(92 · 발밑 빛 회색).
             CharacterPickerRouteScreen(
                 store = p.me,
@@ -324,9 +352,9 @@ private fun NavGraphBuilder.meGraph(app: AppScreens, nav: NavHostController, ope
                 hero = { spec, m -> AingStage(spec.characterId, null, m, artSize = spec.artSize) },
             )
         }
-        composable<Dest.Profile> { ProfileRouteScreen(p.me, openCharacters = { open(Dest.CharacterPicker) }) }
-        composable<Dest.Feedback> { FeedbackRouteScreen(p.me) }
-        composable<Dest.Settings> {
+        shellScreen<Dest.Profile> { ProfileRouteScreen(p.me, openCharacters = { open(Dest.CharacterPicker) }) }
+        shellScreen<Dest.Feedback> { FeedbackRouteScreen(p.me) }
+        shellScreen<Dest.Settings> {
             SettingsRouteScreen(
                 store = p.me,
                 appearance = app.appearance,
@@ -336,10 +364,10 @@ private fun NavGraphBuilder.meGraph(app: AppScreens, nav: NavHostController, ope
                 openAccountDeletion = { open(Dest.AccountDeletion) },
             )
         }
-        composable<Dest.BlockedPeople> { BlockedPeopleRouteScreen(p.messages) }
-        composable<Dest.AccountDeletion> { AccountDeletionRouteScreen(p.me, app.accountCleanup, onClose = back) }
-        composable<Dest.GrassDetail> { GrassDetailRouteScreen(p.me, it.toRoute<Dest.GrassDetail>().axis) }
-        composable<Dest.Missions> { MissionsRoute(p.me, back) }
+        shellScreen<Dest.BlockedPeople> { BlockedPeopleRouteScreen(p.messages) }
+        shellScreen<Dest.AccountDeletion> { AccountDeletionRouteScreen(p.me, app.accountCleanup, onClose = back) }
+        shellScreen<Dest.GrassDetail> { GrassDetailRouteScreen(p.me, it.toRoute<Dest.GrassDetail>().axis) }
+        shellScreen<Dest.Missions> { MissionsRoute(p.me, back) }
     }
 
 /** 탭 막대와 라우트 열기. 탭마다 자기 백스택을 지킨다(saveState/restoreState). */

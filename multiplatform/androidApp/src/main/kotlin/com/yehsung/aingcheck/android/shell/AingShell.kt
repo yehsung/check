@@ -24,7 +24,6 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LocalScreenArt
 import com.yehsung.aingcheck.ui.shop.LiveCharacterPreview
 import com.yehsung.aingcheck.ui.shop.LocalLiveCharacterPreview
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -43,7 +42,6 @@ import com.yehsung.aingcheck.ui.components.ModalPresence
 import com.yehsung.aingcheck.feature.phone.app.syncMegaphoneBannerDeferral
 import com.yehsung.aingcheck.feature.phone.messages.MegaphoneBannerPhoneRules
 import kotlinx.coroutines.delay
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -53,7 +51,6 @@ import com.yehsung.aingcheck.android.nav.CurrentDest
 import com.yehsung.aingcheck.android.nav.RoutePlans
 import com.yehsung.aingcheck.android.nav.SessionNavHost
 import com.yehsung.aingcheck.android.nav.ShellNavigator
-import com.yehsung.aingcheck.android.nav.ShellSystemBarRules
 import com.yehsung.aingcheck.android.nav.ShellTabBarRules
 import com.yehsung.aingcheck.android.nav.TabsNavHost
 import com.yehsung.aingcheck.android.routing.AingRoute
@@ -238,8 +235,8 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
         },
     ) { padding ->
         // 뽑기 기계처럼 배경을 막대 뒤까지 까는 목적지는 셸 여백을 받지 않는다(ShellSystemBarRules — 내용 inset 은 그 화면이 스스로 단다).
-        val bars = if (ShellSystemBarRules.drawsBehindSystemBars(destination)) PaddingValues(0.dp) else padding
-        TabsNavHost(navController, Modifier.padding(bars), app = app, onTabBarHidden = { screenHidesTabBar = it })
+        // 여백은 화면마다 입는다(NavGraph.shellScreen) — 여기서 꼭대기 목적지로 가르면 전환 동안 나가는 화면이 튄다.
+        TabsNavHost(navController, shellBars = padding, app = app, onTabBarHidden = { screenHidesTabBar = it })
     }
     // 확성기 배너 — 어느 탭이든 위에서 내려온다(iOS TabView .overlay(alignment: .top)). 카드만 손을 받는다.
     MegaphoneBannerOverlay(banner, modifier = Modifier.align(Alignment.TopCenter))

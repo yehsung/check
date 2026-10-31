@@ -15,7 +15,7 @@ object ShellSystemBarRules {
 
     fun drawsBehindSystemBars(route: KClass<*>?): Boolean = route != null && route in edgeToEdge
 
-    /** 셸이 부르는 쪽 — 지금 백스택 꼭대기 목적지. */
+    /** NavGraph.shellScreen 이 부르는 쪽 — **그 화면의** 목적지(꼭대기가 아니다: 전환 동안 나가는 화면은 제 여백을 지킨다). */
     fun drawsBehindSystemBars(destination: NavDestination?): Boolean =
         destination != null && edgeToEdge.any { destination.hasRoute(it) }
 }

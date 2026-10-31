@@ -420,7 +420,7 @@ object MeText {
     const val charactersTitle = "캐릭터"
     const val shopTitle = "상점"
     const val pickerTitle = "캐릭터 고르기"
-    const val pickerCaption = "맥의 오버레이·메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
+    const val pickerCaption = "맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
     const val alreadyOwned = "이미 갖고 있어요"
     const val pickSomething = "살 것을 골라 주세요"
     const val bought = "샀어요!"
@@ -543,7 +543,7 @@ object MeText {
     const val avatarUploading = "올리는 중…"
     const val avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요. 사진이 없으면 착용 캐릭터가 대신 보여요."
     const val characterRoleTitle = "내 화면에는 캐릭터가 나와요"
-    const val characterRoleNote = "지금·나 탭과 맥 메뉴바·오버레이에서 착용 캐릭터가 나를 대신해요."
+    const val characterRoleNote = "지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."
 
     /** 서버 쿨타임(7일). */
     const val displayNameCooldownSeconds: Double = 7.0 * 24 * 3600
@@ -707,7 +707,7 @@ object MeText {
     const val accountSection = "계정"
     const val signOut = "로그아웃"
     const val signOutConfirmTitle = "로그아웃할까요?"
-    const val signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥은 그대로예요."
+    const val signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥·PC 앱은 그대로예요."
     const val signingOut = "로그아웃하는 중…"
 
     // MARK: 계정 삭제
@@ -721,7 +721,7 @@ object MeText {
     const val deleteAccountTitle = "계정을 지울까요?"
     const val deleteAccountLede = "이 계정의 모든 것이 서버에서 지워져요."
     val deleteAccountItems: List<String> = listOf("근무 기록", "메시지", "할 일", "캐릭터와 루비", "순위 기록")
-    const val deleteAccountIrreversible = "되돌릴 수 없어요. 맥 앱도 같이 로그아웃돼요."
+    const val deleteAccountIrreversible = "되돌릴 수 없어요. 맥·PC 앱도 같이 로그아웃돼요."
     const val deleteAccountFeedbackNote = "보낸 제보는 작성자 없이 내용만 남아요."
     const val deleteAccountPasswordPrompt = "비밀번호 확인"
     const val deleteAccountPasswordHelp = "본인 확인을 위해 비밀번호를 다시 입력해 주세요."

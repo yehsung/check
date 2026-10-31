@@ -67,7 +67,7 @@ const val APP_DISPLAY_NAME = "아잉체크"
 
 /** 로그인 화면 글자(Swift 화면 리터럴). */
 object LoginText {
-    const val lede = "맥의 aing-check 와 같은 계정으로 로그인해요"
+    const val lede = "맥·PC의 aing-check 와 같은 계정으로 로그인해요"
     const val email = "이메일"
     const val password = "비밀번호"
     const val signIn = "로그인"

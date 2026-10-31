@@ -160,7 +160,7 @@ internal fun GomokuRankingSection(gomoku: GomokuStore, state: GomokuScreenState)
  * INV-GamesGomokuRanking-77996c18 이식: 승점·전적은 **세로로 쌓고 접히게** 둔다 — 두 조각을 한 가로 줄에 고정 폭으로 두면 큰 글자에서 카드가 오른쪽을
  *   잘라 뒤에 선 **전적**이 사라졌다(금지된 '승점만' 화면). 여기서는 오른쪽 열이 세로 둘이고 글자는 줄바꿈으로 접힌다(잘리지 않는다).
  * INV-GamesGomokuRanking-2bf10d1d 이식: 얼굴은 **그 행의 `entry.user`** 로 그리고 행이 받은 착용값(`characterID`)을 버리지 않는다 — 착용 표가 비어 있는 세션에서
- *   순위표 전원이 이니셜이 되던 꼴. 이 판은 사진 적재 전이라 이니셜 원이고, 착용 초상을 얹는 일은 공용 아바타 갈래(W3)가 이 값으로 한다(보고).
+ *   순위표 전원이 이니셜이 되던 꼴. 사진 → 표의 착용 캐릭터 → 행의 착용값 → 이니셜 순이다(상태 점은 달지 않는다 — 이 표의 근무 칸은 전부 false).
  * INV-GamesGomokuRanking-d5ca3d27 이식: 가로 고정은 **이 조각이 들지 않는다** — 승점·전적 글자는 제 폭을 고집하지 않고, 쓰는 자리(오른쪽 열)가 정한다.
  */
 @Composable
@@ -171,7 +171,7 @@ private fun GomokuRankRow(entry: GomokuRankEntry, isMe: Boolean, isLast: Boolean
         divider = !isLast, dividerInset = AingDimens.cardPadding + 24.dp + 30.dp + AingDimens.space3 * 2, minHeight = 48.dp, highlighted = isMe,
     ) {
         RankBadge(entry.rank)
-        BoardAvatar(entry.user.displayName, entry.user.id, 30.dp)
+        BoardAvatar(entry.user.displayName, entry.user.id, 30.dp, url = entry.user.avatarURL, characterHint = entry.user.characterID)
         BoardPersonName(entry.user.displayName, Modifier.weight(1f), center = entry.user.center, isMe = isMe)
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             // 승점은 **부호로** 말한다(초록·앰버는 근무 중·연결 끊김의 뜻이라 쓰지 않는다).

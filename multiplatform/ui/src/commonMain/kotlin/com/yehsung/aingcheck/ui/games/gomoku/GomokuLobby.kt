@@ -313,9 +313,9 @@ internal fun GomokuLiveMatchRow(gomoku: GomokuStore, live: GomokuLiveMatch, isLa
     BoardRow(divider = !isLast) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                BoardAvatar(live.a.displayName, live.a.id, 30.dp)
+                BoardAvatar(live.a.displayName, live.a.id, 30.dp, url = live.a.avatarURL, characterHint = live.a.characterID)
                 Text("vs", style = BoardText.rowSubtitle(), color = colors.label2)
-                BoardAvatar(live.b.displayName, live.b.id, 30.dp)
+                BoardAvatar(live.b.displayName, live.b.id, 30.dp, url = live.b.avatarURL, characterHint = live.b.characterID)
             }
             Column(Modifier.semantics(mergeDescendants = true) {}) {
                 Text(GomokuScreenText.livePair(live), style = BoardText.rowTitle(), color = colors.label)

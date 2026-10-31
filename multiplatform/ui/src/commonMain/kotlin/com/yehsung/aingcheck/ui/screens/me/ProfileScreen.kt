@@ -51,16 +51,18 @@ import com.yehsung.aingcheck.core.stores.me.saveDisplayName
 import com.yehsung.aingcheck.core.stores.me.saveStatusMessage
 import com.yehsung.aingcheck.core.stores.me.statusMessageDraftLength
 import com.yehsung.aingcheck.core.stores.me.statusMessageMaxLength
+import com.yehsung.aingcheck.core.wire.SwiftURL
+import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.CharacterPortrait
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.session.LocalDesktopWording
+import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButton
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButtonKind
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingCard
 import com.yehsung.aingcheck.ui.screens.settingscommon.CountedTextField
-import com.yehsung.aingcheck.ui.screens.settingscommon.InitialAvatar
 import com.yehsung.aingcheck.ui.screens.settingscommon.InlineNotice
 import com.yehsung.aingcheck.ui.screens.settingscommon.LocalScreenArt
 import com.yehsung.aingcheck.ui.screens.settingscommon.NoticeKind
@@ -90,8 +92,9 @@ object ProfileScreenRules {
     /** 저장된 상태메시지가 있을 때만 [지우기]가 선다. */
     fun showsClear(statusMessage: String?): Boolean = statusMessage != null
 
-    /** 큰 아바타 자리: 사진 URL 이 있으면 사진(적재기 전까지는 이름 첫 글자 원), 없으면 착용 캐릭터(Swift AppUserAvatarFace). */
-    fun showsCharacterFace(hasPhotoURL: Boolean): Boolean = !hasPhotoURL
+    /** 큰 아바타 자리(Swift `AvatarView(url:userID:)`): 올린 사진 → 착용 캐릭터. 사진을 읽는 동안 · 못 읽으면 착용 캐릭터로 떨어진다(이름 첫 글자 원이 아니다). */
+    fun avatar(photoURL: SwiftURL?, equippedCharacterID: String): AppUserAvatar =
+        if (photoURL != null) AppUserAvatar.Photo(photoURL, equippedCharacterID) else AppUserAvatar.Character(equippedCharacterID)
 }
 
 /**
@@ -221,14 +224,14 @@ fun ProfileScreen(
     }
 }
 
-/** 사진이 없으면 착용 캐릭터 얼굴, 있으면(적재기 전까지) 이름 첫 글자 원. */
+/** 사진이 없으면 착용 캐릭터 초상, 있으면 올린 사진(못 읽는 동안은 공용 아바타가 착용 캐릭터를 그린다). */
 @Composable
 private fun ProfileAvatar(store: MeStore, size: Dp) {
-    val name = store.displayName ?: MeScreenText.tabTitle
-    if (ProfileScreenRules.showsCharacterFace(store.avatarURL != null)) {
-        CharacterPortrait(LocalScreenArt.current.portrait(store.equippedCharacterID, null), CharacterMood.Plain, size)
+    val avatar = ProfileScreenRules.avatar(store.avatarURL, store.equippedCharacterID)
+    if (avatar is AppUserAvatar.Character) {
+        CharacterPortrait(LocalScreenArt.current.portrait(avatar.id, null), CharacterMood.Plain, size)
     } else {
-        InitialAvatar(name, size)
+        AvatarFace(avatar, store.displayName ?: MeScreenText.tabTitle, size)
     }
 }
 

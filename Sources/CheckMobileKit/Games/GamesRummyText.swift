@@ -30,8 +30,10 @@ package enum GamesRummyText {
     package static let hostTag = "방장"
     package static let leave = "나가기"
     package static let keepPlaying = "계속하기"
-    /// 자리표시 화면 한 줄. **출시 전 이 글자가 0건이어야 한다**(뒤 레인이 채우면 사라진다 — 저장소 메모 '임시 자리표시가 게이트를 지난다').
+    #if DEBUG
+    /// 자리표시 화면 한 줄. **Debug 에만 있다** — 뒤 레인이 다 채우지 않으면 Release 가 컴파일되지 않는다(저장소 메모 '임시 자리표시가 게이트를 지난다'). 마지막 레인이 이 함수를 지운다.
     package static func placeholder(_ lane: String) -> String { "자리표시 — \(lane)" }
+    #endif
 
     /// 값으로 자리를 맞추는 글자들.
     package static func seconds(_ value: Int) -> String { "\(value)초" }

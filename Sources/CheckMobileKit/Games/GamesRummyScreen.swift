@@ -172,6 +172,8 @@ struct GamesRummyScreen: View {
 
     var body: some View {
         content
+            // 단계 뷰의 폭이 어떻든 화면을 다 채운다 — 이 줄이 없으면 내용이 좁은 단계(방·결과)의 양옆이 까맣게 빈다(실화면에서 봤다).
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(MobileTheme.background.ignoresSafeArea())
             .navigationTitle(GamesRummyText.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -197,6 +199,8 @@ struct GamesRummyScreen: View {
                 inviteQueue.pump(rummy)
                 exitPrompt = nil
             }
+            // 방이 판으로 · 판이 결과로 넘어가면(판 id 는 그대로다) 낡은 확인을 거둔다 — 눌러도 `confirm` 이 막지만 틀린 글자가 떠 있게 두지 않는다.
+            .onChange(of: rummy.phase) { _, _ in exitPrompt = nil }
             .onChange(of: rummy.editor != nil) { _, _ in applyDemo() }
     }
 

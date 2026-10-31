@@ -78,13 +78,17 @@ final class RummyWireHarness {
         await barrier()
     }
 
+    func decodedState(status: String = "active", mySeatState: String = "playing", turnSeat: Int = 1, seq: Int = 3) -> RummyMatchState? {
+        let text = RummyWireJSON.state(nowMs: nowMs, status: status, mySeatState: mySeatState, turnSeat: turnSeat, seq: seq)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try? decoder.decode(RummyMatchState.self, from: Data(text.utf8))
+    }
+
     /// 판 state 를 스토어에 직접 꽂는다.
     @discardableResult
     func apply(status: String = "active", mySeatState: String = "playing", turnSeat: Int = 1) -> Bool {
-        let text = RummyWireJSON.state(nowMs: nowMs, status: status, mySeatState: mySeatState, turnSeat: turnSeat)
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        guard let state = try? decoder.decode(RummyMatchState.self, from: Data(text.utf8)) else {
+        guard let state = decodedState(status: status, mySeatState: mySeatState, turnSeat: turnSeat) else {
             Issue.record("state 픽스처가 와이어와 어긋난다")
             return false
         }
@@ -109,10 +113,10 @@ enum RummyWireJSON {
         #"{"id":"\#(id)","host":{"id":"\#(RummyWireHarness.rival)","display_name":"큐브라이벌"},"stake":5,"is_public":false,"max_seats":4,"expires_at_ms":\#(nowMs + 600_000),"seats":[]}"#
     }
 
-    static func state(nowMs: Int, id: String = RummyWireHarness.matchID, status: String, mySeatState: String, turnSeat: Int) -> String {
+    static func state(nowMs: Int, id: String = RummyWireHarness.matchID, status: String, mySeatState: String, turnSeat: Int, seq: Int = 3) -> String {
         let me = RummyWireHarness.userID, rival = RummyWireHarness.rival
         let rack = status == "active" && mySeatState == "playing" ? #"["A10","A11","A12","B1"]"# : "null"
-        return #"{"id":"\#(id)","status":"\#(status)","host_id":"\#(me)","stake":5,"is_public":false,"max_seats":4,"seat_count":2,"seq":3,"server_now_ms":\#(nowMs),"turn_seat_no":\#(turnSeat),"turn_started_ms":\#(nowMs - 1000),"turn_deadline_ms":\#(nowMs + 59_000),"pool_count":40,"table":[],"table_layout":[],"draft":null,"my_seat_no":0,"my_rack":\#(rack),"my_initial_done":false,"seats":[{"user_id":"\#(me)","display_name":"나","seat_no":0,"state":"\#(mySeatState)","rack_count":4},{"user_id":"\#(rival)","display_name":"큐브라이벌","seat_no":1,"state":"playing","rack_count":6}],"reactions":[]}"#
+        return #"{"id":"\#(id)","status":"\#(status)","host_id":"\#(me)","stake":5,"is_public":false,"max_seats":4,"seat_count":2,"seq":\#(seq),"server_now_ms":\#(nowMs),"turn_seat_no":\#(turnSeat),"turn_started_ms":\#(nowMs - 1000),"turn_deadline_ms":\#(nowMs + 59_000),"pool_count":40,"table":[],"table_layout":[],"draft":null,"my_seat_no":0,"my_rack":\#(rack),"my_initial_done":false,"seats":[{"user_id":"\#(me)","display_name":"나","seat_no":0,"state":"\#(mySeatState)","rack_count":4},{"user_id":"\#(rival)","display_name":"큐브라이벌","seat_no":1,"state":"playing","rack_count":6}],"reactions":[]}"#
     }
 }
 
@@ -241,10 +245,17 @@ enum RummyWireJSON {
         #expect(harness.games.isRummyScreenVisible, "화면은 그대로 있다")
         #expect(harness.count("rummy_leave") == 0, "앱을 내렸다고 기권이 나갔다(서버 90초 규칙에 맡긴다)")
         harness.server.setDefault("rummy_state", json: #"{"status":"ok","state":\#(RummyWireJSON.state(nowMs: harness.nowMs, status: "active", mySeatState: "playing", turnSeat: 1))}"#)
-        let stateBefore = harness.count("rummy_state")
+        // 서버도 이 판을 내 판이라고 말한다(아니면 로비가 "판 없음" 사정을 확인하려 state 를 또 읽어 수가 흐려진다).
+        harness.serveLobby(activeMatchID: RummyWireHarness.matchID)
+        await harness.barrier()  // 판 시작을 처음 본 뒤의 잔액 조회(코어 머리말 ⑯)까지 끝낸 뒤 센다.
+        let stateBefore = harness.count("rummy_state"), visibleLobbyBefore = harness.count("rummy_lobby")
+        harness.clock.advance(10)
         harness.games.appDidBecomeActive()
         #expect(harness.rummy.isWindowVisible)
         #expect(await waits.wait { harness.count("rummy_state") > stateBefore }, "돌아와서 판을 안 읽었다")
+        await harness.barrier()
+        #expect(harness.count("rummy_state") == stateBefore + 1, "복귀 한 번에 판 조회가 \(harness.count("rummy_state") - stateBefore)건이다")
+        #expect(harness.count("rummy_lobby") == visibleLobbyBefore + 1, "복귀 한 번에 로비 조회가 \(harness.count("rummy_lobby") - visibleLobbyBefore)건이다")
         harness.games.rummyScreenDidDisappear()
         let lobbyBefore = harness.count("rummy_lobby")
         harness.rummy.lastLobbyRequestAt = .distantPast
@@ -488,11 +499,129 @@ enum RummyWireJSON {
         await harness.tearDown()
     }
 
-    @Test("판 끝: 미션 진행을 큐브 이름으로 묻는다(서버 `daily_mission_defs` 의 game = rummy)")
-    func finishAsksMissions() throws {
-        let source = try IntegrationContractTests.code("Sources/CheckMobileKit/App/MobileAppModel.swift")
-        #expect(source.contains(#"rummy.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "rummy") }"#))
-        #expect(source.contains("rummy.reset()"))
+    /// 일일 줄이 큐브 하나뿐인 `achievements_status`(서버 `daily_mission_defs` 의 key·game 글자 그대로).
+    private static func missionStatus(rummyDone: Bool) -> String {
+        typealias Daily = MeDailyMissionStoreTests
+        let row = Daily.dailyRow(.init(key: "daily_rummy", game: "rummy", title: "아잉 큐브 한 판 하기", sort: 70), done: rummyDone, claimed: false)
+        let daily = #"{"kst_day":"2026-09-17","reset_at_ms":\#(Daily.resetMs),"missions":[\#(row)],"claimable_count":\#(rummyDone ? 1 : 0),"claimable_ruby":\#(rummyDone ? 5 : 0)}"#
+        return Daily.status(dailyJSON: daily)
+    }
+
+    @Test("판 끝: 코어가 끝을 처음 본 순간 미션을 묻는다(같은 판을 또 봐도 한 번) · 오늘 큐브 줄을 채웠으면 0건 — 게임 이름이 서버 값과 다르면 값이 바뀐다")
+    func finishAsksMissions() async {
+        let harness = RummyWireHarness(label: "rummy-mission")
+        harness.serveLobby()
+        harness.server.setDefault("achievements_status", json: Self.missionStatus(rummyDone: false))
+        await harness.signIn()
+        await harness.model.me.loadAchievements()
+        let before = harness.count("achievements_status")
+        #expect(before >= 1)
+        harness.apply()
+        await harness.barrier()
+        #expect(harness.count("achievements_status") == before, "판 중에 미션을 물었다")
+        harness.apply(status: "finished", mySeatState: "done")
+        #expect(await waits.wait { harness.count("achievements_status") == before + 1 }, "판이 끝났는데 미션을 안 물었다 — [받기]가 안 뜬다")
+        await harness.barrier()
+        _ = harness.rummy.applyState(harness.decodedState(status: "finished", mySeatState: "done", seq: 4)!)
+        await harness.barrier()
+        #expect(harness.count("achievements_status") == before + 1, "같은 판의 끝을 또 세었다")
+
+        // 오늘 이미 채운 줄 — 이름이 `rummy` 라야 그 줄을 찾아 0건이다(모르는 이름이면 묻는다).
+        let done = RummyWireHarness(label: "rummy-mission-done")
+        done.serveLobby()
+        done.server.setDefault("achievements_status", json: Self.missionStatus(rummyDone: true))
+        await done.signIn()
+        await done.model.me.loadAchievements()
+        let doneBefore = done.count("achievements_status")
+        done.apply(status: "finished", mySeatState: "done")
+        await done.barrier()
+        #expect(done.count("achievements_status") == doneBefore, "오늘 채운 줄인데 또 물었다 — 게임 이름이 서버 값이 아니다")
+        await harness.tearDown()
+        await done.tearDown()
+    }
+
+    @Test("루비: 로비 잔액이 호스트 거울(게임 탭·상점)까지 가고 로그아웃이면 비는다")
+    func rubyMirror() async {
+        let harness = RummyWireHarness(label: "rummy-ruby")
+        harness.serveLobby()
+        await harness.signIn()
+        await harness.rummy.refreshLobby()
+        #expect(harness.rummy.rubyBalance == 100)
+        #expect(harness.model.context.gomokuHost.rubyBalance == 100, "큐브 로비 잔액이 공유 거울에 안 간다")
+        await harness.model.session.signOut()
+        await harness.barrier()
+        #expect(harness.rummy.rubyBalance == nil)
+        #expect(harness.model.context.gomokuHost.rubyBalance == nil, "앞 사람 잔액이 남았다")
+        await harness.tearDown()
+    }
+
+    // MARK: - 하트비트 · 계정 교체
+
+    @Test("하트비트: 타이머는 손댄 판에서만 돈다 — 놀던 기기 0건 · 화면을 떠나도 계속 · 로그아웃이면 멈춘다")
+    func heartbeatFollowsTheLedger() async {
+        let harness = RummyWireHarness(label: "rummy-heartbeat")
+        harness.serveLobby()
+        await harness.signIn()
+        harness.rummy.heartbeatSeconds = 0.01
+        harness.rummy.heartbeatEnabled = true
+        harness.apply()
+        try? await Task.sleep(for: .milliseconds(80))
+        await harness.barrier()
+        #expect(harness.rummy.heartbeatMatchID == nil)
+        #expect(harness.count("rummy_heartbeat") == 0, "놀던 기기가 하트비트를 보냈다")
+        harness.rummy.markEngaged(RummyWireHarness.matchUUID)
+        #expect(await waits.wait { harness.count("rummy_heartbeat") >= 1 }, "손댄 판인데 하트비트가 안 나간다 — 90초 뒤 끊김 기권이다")
+        harness.games.rummyScreenDidAppear()
+        harness.games.rummyScreenDidDisappear()
+        let seen = harness.count("rummy_heartbeat")
+        #expect(await waits.wait { harness.count("rummy_heartbeat") > seen }, "화면을 떠났더니 하트비트가 멎었다")
+        await harness.model.session.signOut()
+        await harness.barrier()
+        let stopped = harness.count("rummy_heartbeat")
+        try? await Task.sleep(for: .milliseconds(80))
+        await harness.barrier()
+        #expect(harness.count("rummy_heartbeat") == stopped, "로그아웃했는데 하트비트가 나간다")
+        await harness.tearDown()
+    }
+
+    @Test("계정 교체: 앞 계정의 손댄 판 장부는 다음 계정에 안 넘어간다(같은 판의 상대여도 쓰기 0건) · 같은 사람이 돌아오면 이어진다")
+    func ledgerIsBoundToAccount() async {
+        let me = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(24 * 3600), subject: RummyWireHarness.userID)
+        let rival = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(24 * 3600), subject: RummyWireHarness.rival)
+        let harness = RummyWireHarness(label: "rummy-swap") { request in
+            request.bodyText.contains("rival@")
+                ? BaseStub.authResponse(access: rival, refresh: "r-rival", userID: RummyWireHarness.rival)
+                : BaseStub.authResponse(access: me, refresh: "r-rummy", userID: RummyWireHarness.userID)
+        }
+        harness.serveLobby()
+        await harness.signIn()
+        harness.apply()
+        harness.rummy.markEngaged(RummyWireHarness.matchUUID)
+        #expect(harness.games.holdsRummyMatch)
+        // 토큰 만료 같은 강제 로그아웃 — 이탈 없이 세션만 내려간다.
+        await harness.model.session.signOut()
+        await harness.barrier()
+        #expect(harness.rummy.match == nil)
+
+        await harness.model.session.signIn(email: "rival@aing.invalid", password: "pw")
+        await harness.barrier()
+        harness.apply()
+        #expect(!harness.rummy.isEngagedInCurrentMatch, "앞 계정의 장부가 다음 계정의 판을 쥐었다")
+        #expect(!harness.games.holdsRummyMatch)
+        #expect(GamesRummyExit.decision(harness.rummy) == .close, "다음 계정이 손대지 않은 판을 기권시킨다")
+        await harness.rummy.heartbeatTick(matchID: RummyWireHarness.matchUUID)
+        #expect(harness.count("rummy_heartbeat") == 0, "다음 계정 토큰으로 하트비트가 나갔다")
+        await GamesRummyExit.leaveBeforeSessionEnds(harness.rummy)
+        #expect(harness.count("rummy_leave") == 0, "다음 계정이 앞 계정의 판을 기권시켰다")
+        await harness.model.session.signOut()
+        await harness.barrier()
+
+        // 같은 사람이 돌아왔다 — 쥐던 판의 하트비트·이탈이 이어져야 한다(안 이어지면 그 판이 90초 뒤 끊김 기권이다).
+        await harness.model.session.signIn(email: "rummy@aing.invalid", password: "pw")
+        await harness.barrier()
+        harness.apply()
+        #expect(harness.rummy.isEngagedInCurrentMatch, "같은 사람의 장부가 사라졌다")
+        await harness.tearDown()
     }
 
     // MARK: - 그림 · 문구

@@ -58,14 +58,15 @@ import Testing
         #expect(!view.isFullView)
     }
 
-    @Test("보기: 밀기는 캔버스 밖으로 안 나간다(양끝 클램프 · 손과 같은 쪽으로 움직인다)")
+    @Test("보기: 밀기는 양끝에서 멈춘다(왼쪽은 손잡이 터치 폭 28pt 만큼 더 · 오른쪽은 캔버스 끝 · 손과 같은 쪽으로 움직인다)")
     func panClamps() {
         var view = GamesRummyViewport(viewport: CGSize(width: 393, height: 469))
-        #expect(view.origin.x == 0)
+        #expect(view.origin.x == 0, "처음 보기는 캔버스 왼끝이다")
         view.pan(by: CGSize(width: 100, height: 0))
-        #expect(view.origin.x == 0, "왼쪽 끝을 넘었다")
+        let home = -28 / view.scale
+        #expect(abs(view.origin.x - home) < 0.001, "왼쪽 끝을 넘었다: \(view.origin.x)")
         view.pan(by: CGSize(width: -100, height: 0))
-        #expect(abs(view.origin.x - 100 / view.scale) < 0.001, "손을 왼쪽으로 끌면 판은 오른쪽을 보여 준다")
+        #expect(abs(view.origin.x - (home + 100 / view.scale)) < 0.001, "손을 왼쪽으로 끌면 판은 오른쪽을 보여 준다")
         view.pan(by: CGSize(width: -100_000, height: 0))
         #expect(abs(view.visibleLogical.maxX - 1000) < 0.001, "오른쪽 끝을 넘었다")
         // 높이가 다 보이는 기본 보기는 세로로 안 민다.
@@ -117,14 +118,17 @@ import Testing
         var view = GamesRummyViewport(viewport: CGSize(width: 393, height: 469))
         var moved = view.edgePan(pointerX: 200, deltaTime: 0.1)
         #expect(!moved, "가운데에서 밀렸다")
+        view.pan(by: CGSize(width: 10_000, height: 0))
+        let home = view.origin.x
         moved = view.edgePan(pointerX: 10, deltaTime: 0.1)
         #expect(!moved, "왼쪽 끝인데 움직였다고 한다")
+        #expect(view.origin.x == home)
         moved = view.edgePan(pointerX: 380, deltaTime: 0.1)
         #expect(moved)
-        #expect(abs(view.origin.x - 40) < 0.001)
+        #expect(abs(view.origin.x - (home + 40)) < 0.001)
         moved = view.edgePan(pointerX: 5, deltaTime: 0.05)
         #expect(moved)
-        #expect(abs(view.origin.x - 20) < 0.001)
+        #expect(abs(view.origin.x - (home + 20)) < 0.001)
         // 경계값: 정확히 28 은 가장자리가 아니다.
         moved = view.edgePan(pointerX: 28, deltaTime: 0.1)
         #expect(!moved)
@@ -152,7 +156,7 @@ import Testing
         view.reveal(.right, frames: [])
         #expect(view.origin == before, "밀 것이 없는데 움직였다")
         view.reveal(.left, frames: frames)
-        #expect(view.origin.x == 0, "왼쪽 끝에서 잘려야 한다")
+        #expect(view.origin.x == 10 - GamesRummyViewport.revealMargin, "왼끝 묶음도 여백을 두고 보여야 손잡이가 닿는다")
         // 전체 맞춤이면 화면 밖이 없다.
         view.toggleFullView()
         #expect(view.offscreenCounts(frames) == (left: 0, right: 0))
@@ -239,6 +243,27 @@ import Testing
         #expect(classify(screen(CGPoint(x: 300, y: 400))) == .felt)
         #expect(classify(CGPoint(x: 100, y: 10)) == .none, "머리 줄")
         #expect(classify(CGPoint(x: 100, y: f.layout.actions.midY)) == .none, "동작 줄")
+    }
+
+    @Test("누르기: 캔버스 왼끝(x 0) 묶음의 손잡이는 처음엔 칸 밖이고, 판을 밀면 닿는다")
+    func handleOfALeftEdgeMeldIsReachable() {
+        let layout = GamesRummyMatchLayout(size: CGSize(width: 393, height: 759))
+        let rack = GamesRummyRackGeometry(size: layout.rack.size)
+        let table = RummyTableLayout(counts: [3], points: [RummyPoint(x: 0, y: 50)])
+        var view = GamesRummyViewport(viewport: layout.table.size)
+        func hit(_ point: CGPoint) -> GamesRummyHit {
+            GamesRummyHitTester.classify(point: CGPoint(x: point.x + layout.table.minX, y: point.y + layout.table.minY),
+                                         layout: layout, rack: rack, rackLayout: RummyRackLayout(halfColumns: 22),
+                                         canvas: view.transform, table: table, meldTileIDs: [[0, 1, 2]], editable: true)
+        }
+        let y = view.transform.toScreen(CGPoint(x: 0, y: 70)).y
+        // 기준선: 처음 보기에는 묶음이 칸 왼끝에 붙어 손잡이 자리가 없다.
+        #expect(hit(CGPoint(x: 1, y: y)) == .boardTile(0))
+        view.pan(by: CGSize(width: 100, height: 0))
+        let meldLeft = view.transform.toScreen(CGPoint(x: 0, y: 70)).x
+        #expect(abs(meldLeft - 28) < 0.001, "손잡이 폭만큼 안 밀린다: \(meldLeft)")
+        #expect(hit(CGPoint(x: 14, y: y)) == .meldHandle(0), "왼끝 묶음의 손잡이가 안 닿는다")
+        #expect(hit(CGPoint(x: 30, y: y)) == .boardTile(0))
     }
 
     @Test("누르기: 내 차례가 아니면 판은 전부 펠트다(밀어 보기만) · 받침대는 그대로 잡힌다")

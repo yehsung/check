@@ -267,12 +267,12 @@ package final class GamesStore {
         } else {
             tetris.systemDidWake()
         }
-        // 아잉 큐브: background 에서 창을 내렸으니 되세우고, 놓친 초대·참가·차례를 읽는다. 안 보이면 따라잡기만(받은 초대 칩·탭 배지가 여기 달려 있다).
-        // ★ 차례 시간은 서버에서 흐른다. 돌아온 순간 다음 폴링을 기다리면 옛 판을 그린다.
+        // 아잉 큐브: background 에서 창을 내렸으니 되세운다. 안 보이면 따라잡기만(받은 초대 칩·탭 배지가 여기 달려 있다).
+        // ★ 차례 시간은 서버에서 흐른다. 돌아온 순간 다음 폴링을 기다리면 옛 판을 그린다 — `setWindowVisible(true)` 가 로비와 든 판을 그 자리에서 한 번씩 읽는다.
+        //   거기에 `catchUp()` 을 덧붙이면 복귀할 때마다 같은 조회가 한 벌 더 나간다(둘은 같은 두 조회다).
         let rummy = context.rummy
         if isRummyScreenVisible {
             rummy.setWindowVisible(true)
-            Task { await rummy.catchUp() }
         } else {
             rummy.systemDidWake()
         }

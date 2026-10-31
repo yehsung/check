@@ -161,9 +161,13 @@ package struct GamesRummyViewport: Equatable, Sendable {
         return origin.x != before
     }
 
+    /// 왼쪽 끝에서 더 밀 수 있는 곳(논리 단위, 음수). 묶음 손잡이는 묶음 **왼쪽 바깥**에 있어서 캔버스 왼끝(x 0)에 놓인 묶음은 그만큼 더 밀어야 닿는다
+    /// (맥은 판 여백으로 푼다 — 0.3.70 `zoom` 의 여백 20). 놓을 자리는 캔버스 안으로 잘리니 x 0 묶음은 흔하다. 전체 맞춤은 밀 곳이 없다 — 그 보기에선 꾹 눌러 묶음째 옮긴다.
+    private var minOriginX: CGFloat { -GamesRummyGestureRules.handleTouchWidth / scale }
+
     private mutating func clamp() {
         let visible = CGSize(width: viewport.width / scale, height: viewport.height / scale)
-        origin.x = visible.width >= Self.canvas.width ? 0 : min(max(origin.x, 0), Self.canvas.width - visible.width)
+        origin.x = visible.width >= Self.canvas.width ? 0 : min(max(origin.x, minOriginX), Self.canvas.width - visible.width)
         origin.y = visible.height >= Self.canvas.height ? 0 : min(max(origin.y, 0), Self.canvas.height - visible.height)
     }
 

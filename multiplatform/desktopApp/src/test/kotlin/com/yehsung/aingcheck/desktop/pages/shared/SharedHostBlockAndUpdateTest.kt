@@ -117,7 +117,7 @@ class SharedHostBlockAndUpdateTest {
         runDesktopComposeUiTest(360, 900) {
             setContent { h.host.Content(h.nav, 360.0) }
             settle(this@runTest)
-            assertEquals(1, count("나 화면과 오버레이에서 착용 캐릭터가 나를 대신해요."), "프로필 안내가 Windows 판이 아니다")
+            assertEquals(1, count("내 기록과 오버레이에서 착용 캐릭터가 나를 대신해요."), "프로필 안내가 Windows 판이 아니다")
             assertEquals(0, count("지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."), "프로필에 폰 문구가 남았다")
             h.nav.open(FlyoutRoute.Characters)
             settle(this@runTest)

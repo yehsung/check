@@ -34,6 +34,15 @@ class MacPcWordingTest {
         assertEquals(AILimitSurfaceText.substitutedMainDevice, MeAILimitsText.aiLimitsSubstitutedDevice)
     }
 
+    /** 폰 1.0.16 문구(main 6ed85edf)와 같은 글자 — 사용자 답 "맞추되 vc5·Windows v1 에". */
+    @Test
+    fun phone1016LinesMatch() {
+        assertEquals("맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요.", MeText.pickerCaption)
+        assertEquals("지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요.", MeText.characterRoleNote)
+        assertEquals("이 폰에서만 로그아웃돼요. 맥·PC 앱은 그대로예요.", MeText.signOutConfirmMessage)
+        assertEquals("되돌릴 수 없어요. 맥·PC 앱도 같이 로그아웃돼요.", MeText.deleteAccountIrreversible)
+    }
+
     @Test
     fun middleDotIsU00B7() {
         for (s in listOf(AILimitSurfaceText.noVisibleProviders, inviteSecondLine)) {

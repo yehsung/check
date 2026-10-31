@@ -902,6 +902,9 @@ package enum MeText {
     /// 주소는 저장소 docs/ 를 GitHub Pages 로 켜 만든 것이다(같은 문서가 스토어 제출 폼의 처리방침 URL 이기도 하다).
     package static let privacyPolicy = "개인정보 처리방침"
     package static let privacyPolicyURL = URL(string: "https://yehsung.github.io/check/privacy")!
+    /// 이용약관 — 가입 화면에만 있으면 가입 뒤에는 다시 볼 길이 없다(맥 설정 머리 줄과 같은 문서). 주소는 코어 한 곳이다.
+    package static let termsOfService = "이용약관"
+    package static let termsOfServiceURL = CheckAppLinks.termsOfService
 
     package static let deleteAccount = "계정 삭제"
     package static let deleteAccountTitle = "계정을 지울까요?"

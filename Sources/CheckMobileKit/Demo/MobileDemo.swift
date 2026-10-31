@@ -22,6 +22,8 @@ import Foundation
 /// 도전 미션 · 주간 받기 장면 `me/missions[/claimable|/progress|/claimed|/fresh]` · `me/weekly[/done|/legacy]` 도
 /// `AingRoute` 가 모르는 데모 전용 표기다 — 값(`MobileDemoMissionsRoute`)이 **기존 장면 + 픽스처 바늘**로 풀고 나 탭을 연다
 /// (새 장면 폴더를 만들지 않는 까닭은 그 파일 머리말에 있다).
+/// 우리 팀 전체 명단 장면 `now/team[/empty|/failed|/loading|/noteam|/entry-off]` 도 `AingRoute` 가 모르는 데모 전용 표기다 —
+/// 값(`MobileDemoTeamRosterRoute`)이 기존 장면 + 픽스처 바늘로 풀고 지금 탭 위에 명단 화면을 쌓는다.
 /// `now/teamless` 는 **탭 라우트가 아니라 서버 상태 장면**이다(`update` 와 같은 갈래) — 소속 픽스처가 빈 배열이라 지금 탭이
 /// 무소속 합류 카드로 선다. `AingRoute` 로 열리지 않으므로 라우터는 기본 탭(지금)에 그대로 머문다.
 /// 로그인 아래 화면(w16 — 앱스토어 스크린샷): `signup`(코드 합류) · `signup/create`(팀 만들기) ·
@@ -69,8 +71,10 @@ package enum MobileDemo {
         // 생일 선물 축하 시트 장면(`me/gift…`)도 **라우트를 나 탭으로 바꿔** 푼다(장면 `me` — 기존 장면만 쓴다). 열린 선물은 바늘로 고른다
         // (아래 스텁 응답기 — 까닭은 `MobileDemoCakeGiftRoute` 머리말), 시트에 시킬 일은 `MeDemoHooks.cakeGiftAction()` 이 읽는다.
         let cakeGift = MobileDemoCakeGiftRoute(demoRoute: requested)
-        let route = cakeGift?.openRoute ?? MobileDemoShopSheetRoute(demoRoute: requested)?.openRoute ?? requested
-        let scenario = route.replacingOccurrences(of: "/", with: "-").lowercased()
+        // 우리 팀 명단 장면(`now/team…`)도 **라우트를 지금 탭으로 바꿔** 풀고 장면 · 바늘은 값이 쥔다(`MobileDemoTeamRosterRoute` 머리말).
+        let teamRoster = MobileDemoTeamRosterRoute(demoRoute: requested)
+        let route = teamRoster?.openRoute ?? cakeGift?.openRoute ?? MobileDemoShopSheetRoute(demoRoute: requested)?.openRoute ?? requested
+        let scenario = teamRoster?.scene ?? route.replacingOccurrences(of: "/", with: "-").lowercased()
         let index = MobileDemoFixtures.load()
         // 도전 미션 · 주간 받기 장면(`me/missions…` · `me/weekly…`)은 **기존 장면 + 픽스처 바늘**로 푼다.
         // 새 장면 폴더를 만들지 않는 까닭과 바늘을 본문 꼬리에 붙이는 까닭은 `MobileDemoMissionsRoute` 머리말에 있다.
@@ -79,8 +83,9 @@ package enum MobileDemo {
         let giftLedger = MobileDemoCakeGiftRoute.Ledger()
         MobileStubURLProtocol.register(host: host) { raw in
             // 선물 장면이면 바늘(`demo-gift` · 받은 뒤 `demo-gift-got-…`)을 먼저 붙인다 — 그 뒤는 다른 장면과 같은 길이다.
-            let request = cakeGift.map { $0.rewrite(raw, ledger: giftLedger) } ?? raw
-            let response = index.response(for: missions?.rewrite(request) ?? request, scenario: missions?.scene ?? scenario)
+            let request = teamRoster?.rewrite(raw) ?? cakeGift.map { $0.rewrite(raw, ledger: giftLedger) } ?? raw
+            var response = index.response(for: missions?.rewrite(request) ?? request, scenario: missions?.scene ?? scenario)
+            if let teamRoster { response.delay = teamRoster.responseDelay(for: request) }
             if cakeGift != nil { giftLedger.record(raw, response: response) }
             return response
         }

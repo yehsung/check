@@ -133,15 +133,12 @@ object GamesMiniGameText {
     const val submitTokenDead: String = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
 
     /**
-     * 앱이 background 로 가서 판을 끝냈다(폰 전용). **게임마다 말이 다르다**: 기존 두 게임은 점수를 버리고, 테트리스는 여기까지의 점수를
-     * **확정해 올린다**(`GamesPlayController.endRound()`). 테트리스에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다.
+     * 앱이 background 로 가서 판을 끝냈다(폰 전용). **게임마다 말이 다르다**: 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를
+     * **확정해 올린다**(`GamesPlayController.endRound()`). 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다.
      */
     fun endedInBackground(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "앱을 나가서 이번 판은 기록하지 않았어요"
-        MiniGameKind.tetris -> "앱을 나가서 이번 판을 여기까지 기록했어요"
-        // 길건너 아잉이(v0.3.67): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다 — 폰 background 출구는 이 판에 오지 않는다.
-        // 폰 판이 붙으면 그 판의 `endRound` 의미론(확정인가 버림인가)에 맞춰 다시 적는다.
-        MiniGameKind.crossy -> "앱을 나가서 이번 판은 기록하지 않았어요"
+        MiniGameKind.tetris, MiniGameKind.crossy -> "앱을 나가서 이번 판을 여기까지 기록했어요"
     }
 
     /** 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻). */
@@ -160,15 +157,20 @@ object GamesMiniGameText {
         // INV-GamesText-6e9a61c2 이식: 조작 줄에 **"탭해서 회전"이 반드시 들어가야 한다.** 폰에서 시계 회전은 캔버스 탭이고(버튼은
         // 반시계다) 그 사실을 말하는 자리가 시작 카드뿐이라, 빼면 아무도 시계 회전을 못 찾는다(시험이 글자로 잰다).
         MiniGameKind.tetris -> kind.howToPlay + "\n끌어서 이동 · 탭해서 회전 · 버튼으로 홀드·즉시 내리기"
-        MiniGameKind.crossy -> kind.howToPlay   // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다(맥 MiniGameKind.howToPlay 그대로)
+        // 길건너도 두 줄이다. 조작 줄에 **"쓸어서"와 "탭하면 앞으로"가 둘 다 있어야 한다** — 폰은 조작이 둘로 갈리고 그 사실을 말하는 자리가 시작 카드뿐이라,
+        // 하나만 적으면 쓸기를 모르는 사람은 뒤·좌·우로 갈 길을 영영 못 찾는다. 데스크톱 카드는 [MiniGameKind.howToPlay](규칙 줄)만 쓴다(키보드 조작은 행동 문구가 말한다).
+        MiniGameKind.crossy -> kind.howToPlay + "\n쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸"
     }
 
-    // MARK: 길건너 아잉이(데스크톱 — 맥 CrossyHUD, MiniGameCrossy.swift:131-195)
+    // MARK: 길건너 아잉이(결과 줄은 맥·폰 한 벌, 행동 문구 둘은 데스크톱 — 맥 CrossyHUD, MiniGameCrossy.swift:131-195. 폰 카드는 [startAction]·[againAction])
 
-    /** 시작 카드 행동 문구. 클릭 · 스페이스 · 방향키가 다 시작이다(`CrossyGame.action` · `input`). */
+    /** 데스크톱 시작 카드 행동 문구. 클릭 · 스페이스 · 방향키가 다 시작이다(`CrossyGame.action` · `input`). */
     const val crossyStartAction: String = "클릭 · 스페이스 · 방향키로 시작"
 
-    /** 결과 카드 행동 문구. 다시 하기는 클릭 · 스페이스뿐이다 — 방향키는 결과 화면에서 무시한다(엔진 `input` 주석). */
+    /** 데스크톱 캔버스 보이스오버(폰은 [canvasAccessibility] — 탭·쓸기). */
+    fun crossyDesktopCanvasAccessibility(): String = "${MiniGameKind.crossy.title} 게임 화면 — 방향키로 뛰기"
+
+    /** 데스크톱 결과 카드 행동 문구. 다시 하기는 클릭 · 스페이스뿐이다 — 방향키는 결과 화면에서 무시한다(엔진 `input` 주석). */
     const val crossyRetryAction: String = "클릭 · 스페이스로 다시"
 
     /** 결과 카드 가운데 줄 — 무엇에 끝났는가 + 최고(또는 신기록). 맥 `CrossyHUD.resultSubtitle` 그대로. */
@@ -203,7 +205,8 @@ object GamesMiniGameText {
     fun canvasAccessibility(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "${kind.title} 게임 화면 — 탭해서 조작"
         MiniGameKind.tetris -> "${kind.title} 게임 화면 — 탭해서 회전 · 이동은 액션으로"
-        MiniGameKind.crossy -> "${kind.title} 게임 화면 — 방향키로 뛰기"   // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다
+        // 길건너는 테트리스와 달리 쓸기·탭이 곧 게임이고 겨냥할 작은 과녁이 없다 — 방향 액션을 따로 내지 않고 라벨이 조작 둘을 그대로 말한다.
+        MiniGameKind.crossy -> "${kind.title} 게임 화면 — 탭해서 앞으로 · 쓸어서 그 방향으로"
     }
 
     // MARK: 테트리스 조작(폰에서 처음 쓰는 줄)

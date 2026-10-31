@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.stores.games.StoreHarness
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -356,10 +357,79 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(3, h.server.count("minigame_start_round"), "갈아 끼우지 않는 게임(타이밍 바)의 감시는 아무 일도 안 한다")
     }
 
-    /** Android(G §2-3 W2-e ④): 이 빌드에 보이지 않는 게임(길건너)은 화면을 열지 않는다 — 구동기 0 · 요청 0. */
+    /**
+     * 28분을 넘긴 길건너 판(부르는 자리 — 감시 [GamesMiniGameHub.runRoundTokenKeeper]): 감시가 30초마다 깨어 20분 지난 토큰을 갈아 끼우므로, 판이 끝날 때 든 토큰은 서버 TTL 30분 안이다.
+     * 기준선: 감시가 없으면 같은 판의 토큰은 그대로 t1 이다(나이 29분 — 서버가 token_expired 로 거절할 값).
+     */
+    @Test
+    fun aLongCrossyRoundFinishesWithAFreshTokenThanksToTheKeeper() = runTest {
+        val minutes = 29
+        suspend fun play(keeper: Boolean): Pair<StoreHarness, GamesMiniGameHub> {
+            val (h, hub) = open()
+            hub.openScreen(MiniGameKind.crossy)
+            advanceUntilIdle()
+            val c = hub.controller!!
+            c.tap()
+            advanceUntilIdle()
+            val job = if (keeper) h.storeScope.launch { hub.runRoundTokenKeeper(c) } else null
+            advanceTimeBy(minutes * 60_000L)
+            runCurrent()
+            c.endRound()
+            job?.cancel()
+            advanceUntilIdle()
+            return h to hub
+        }
+        val (kept, _) = play(keeper = true)
+        val tokens = kept.submitTokens()
+        assertEquals(1, tokens.size)
+        assertEquals("t2", tokens.single(), "29분 판의 제출 토큰이 갈아 끼운 것이 아니다")
+        val (bare, _) = play(keeper = false)
+        assertEquals(listOf("t1"), bare.submitTokens(), "기준선: 감시가 없으면 29분 묵은 토큰으로 나간다")
+    }
+
+    /** 감시는 자기 구동기가 끝나거나 화면에서 내려가면 돌아온다 · 갈아 끼우지 않는 게임이면 곧장 돌아온다(잠도 안 잔다). */
+    @Test
+    fun theKeeperStopsWithItsRoundAndSkipsOtherGames() = runTest {
+        val (h, hub) = open()
+        val sleeps = mutableListOf<Double>()
+        hub.sleep = { sleeps += it }
+        hub.openScreen(MiniGameKind.flappy)
+        advanceUntilIdle()
+        hub.runRoundTokenKeeper(hub.controller!!)
+        assertEquals(emptyList(), sleeps, "플래피에 감시가 돈다")
+        hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        val c = hub.controller!!
+        c.tap()
+        c.endRound()
+        advanceUntilIdle()
+        val before = h.server.count("minigame_start_round")
+        hub.runRoundTokenKeeper(c) // 끝난 판 — 한 번 자고 돌아온다(새 토큰 0)
+        assertEquals(listOf(GamesMiniGameHub.tokenKeeperIntervalSeconds), sleeps)
+        assertEquals(before, h.server.count("minigame_start_round"))
+    }
+
+    /** background: 길건너는 그 점수로 확정 제출 · 안내는 '기록했어요'(거짓말 금지). */
+    @Test
+    fun crossyInTheBackgroundSubmitsAndSaysSo() = runTest {
+        val (h, hub) = open()
+        hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        hub.controller!!.tap()
+        advanceUntilIdle()
+        hub.appDidEnterBackground()
+        advanceUntilIdle()
+        assertEquals(1, h.server.count("minigame_submit_score"))
+        assertEquals(GamesMiniGameText.endedInBackground(MiniGameKind.crossy), hub.submitNotice)
+        assertTrue("기록했어요" in hub.submitNotice!!)
+        assertNull(hub.controller?.roundLimitSeconds, "길건너에 벽시계 상한을 줬다(idleLimit 9초가 이미 죽인다)")
+    }
+
+    /** Android(G §2-3 W2-e ④): 이 빌드에 보이지 않는 게임은 화면을 열지 않는다 — 구동기 0 · 요청 0. 지금은 넷 다 보여 표시 목록을 좁혀 잰다(깃발의 뜻은 그대로다). */
     @Test
     fun anInvisibleGameNeverOpens() = runTest {
         val (h, hub) = open()
+        hub.visibleKinds = MiniGameExposure.visible - MiniGameKind.crossy
         hub.openScreen(MiniGameKind.crossy)
         advanceUntilIdle()
         assertNull(hub.controller)
@@ -367,7 +437,7 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(emptyList(), h.gameRpcs())
         hub.refreshSummariesIfStale()
         advanceUntilIdle()
-        assertEquals(MiniGameExposure.visible.size, h.server.count("minigame_board"), "첫 화면 카드도 보이는 게임만 읽는다")
-        assertTrue(MiniGameKind.crossy !in MiniGameExposure.visible)
+        assertEquals(hub.visibleKinds.size, h.server.count("minigame_board"), "첫 화면 카드도 보이는 게임만 읽는다")
+        assertTrue(MiniGameKind.crossy in MiniGameExposure.visible, "기준선: 넓은 목록에는 있다")
     }
 }

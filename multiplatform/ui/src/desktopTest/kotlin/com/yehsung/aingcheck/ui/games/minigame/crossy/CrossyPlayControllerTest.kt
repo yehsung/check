@@ -125,7 +125,7 @@ class CrossyPlayControllerTest {
         assertTrue(c.isPlaying, "정지가 판을 끝냈다")
     }
 
-    /** 출구: abandon = 기록 없이 새 판(시작 전) · endRound = 플래피처럼 버림(닫기 = 기록은 데스크톱 창 quittingKeepsTheScore). */
+    /** 출구: abandon = 기록 없이 새 판(시작 전) · endRound = 그 점수로 확정 한 번(창 닫기·뒤로·background 가 같은 문 — 맥 quittingKeepsTheScore · iOS 와 같은 뜻). */
     @Test
     fun exitsAbandonWithoutReporting() {
         val (c, finished, _) = controller()
@@ -136,8 +136,8 @@ class CrossyPlayControllerTest {
         assertNotEquals(oldSeed, c.crossy.roundSeed, "버린 판과 같은 길이 다시 섰다")
         assertTrue(finished.isEmpty())
         c.tap()
-        assertEquals(GamesPlayController.EndOutcome.Abandoned, c.endRound())
-        assertTrue(finished.isEmpty(), "버림이 점수를 알렸다")
+        assertEquals(GamesPlayController.EndOutcome.Confirmed(c.score), c.endRound())
+        assertEquals(listOf(c.score), finished, "확정이 점수를 알리지 않았다")
         assertEquals(GamesPlayController.EndOutcome.None, c.endRound(), "진행 중이 아니면 끝낼 판이 없다")
     }
 

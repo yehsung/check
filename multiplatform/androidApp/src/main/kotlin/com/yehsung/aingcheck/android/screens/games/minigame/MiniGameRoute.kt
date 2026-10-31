@@ -45,6 +45,7 @@ fun MiniGameRoute(store: GamesStore, game: String, myUserID: String?, onBack: ()
         onBack = onBack,
         windowFocused = rememberWindowFocused(),
         reduceMotion = rememberReduceMotion(),
+        isPhone = true,
     )
 }
 

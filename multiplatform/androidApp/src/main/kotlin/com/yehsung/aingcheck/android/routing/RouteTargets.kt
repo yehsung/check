@@ -66,19 +66,20 @@ object RouteTargets {
      * 딥링크 미니게임 ↔ 엔진 종류.
      * INV-AingRoute-67c8ae7d 이식: **이 열거([AingMiniGame])와 `MiniGameKind.phoneCases` 는 언제나 같이 넓힌다.** 한쪽만 넓히면 게임 탭의
      *   `routeStep` 이 모르는 값을 엉뚱한 게임으로 오배달하거나 링크가 조용히 사라진다. 빠짐없는 when 두 개가 컴파일로 막고,
-     *   `RouteTargetsTest.miniGameLinksAndPhoneCasesWidenTogether` 가 두 집합이 1:1 인지 잰다(길건너는 폰에 아직 없어 양쪽 다 없다 — §8-18 #7).
+     *   `RouteTargetsTest.miniGameLinksAndPhoneCasesWidenTogether` 가 두 집합이 1:1 인지 잰다.
      */
     fun miniGame(game: AingMiniGame): MiniGameKind = when (game) {
         AingMiniGame.TIMING -> MiniGameKind.timingBar
         AingMiniGame.FLAPPY -> MiniGameKind.flappy
         AingMiniGame.TETRIS -> MiniGameKind.tetris
+        AingMiniGame.CROSSY -> MiniGameKind.crossy
     }
 
     fun miniGame(kind: MiniGameKind): AingMiniGame? = when (kind) {
         MiniGameKind.timingBar -> AingMiniGame.TIMING
         MiniGameKind.flappy -> AingMiniGame.FLAPPY
         MiniGameKind.tetris -> AingMiniGame.TETRIS
-        MiniGameKind.crossy -> null
+        MiniGameKind.crossy -> AingMiniGame.CROSSY
     }
 
     fun board(board: RankingsBoard): StoreRankingsBoard = when (board) {

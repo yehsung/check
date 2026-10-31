@@ -90,6 +90,7 @@ object RankingsTags {
  * 순위 탭 화면.
  * @param me 내 행 얼굴(RankingsScreenRules.myFace — 나 탭·지금 탭·위젯 스냅숏이 이미 아는 값. 새 서버 호출 없음).
  * @param onSelectBoard 세그먼트를 바꿨다 — 스토어에 걸고, 껍데기는 저장 상태(프로세스 죽음 복원)에도 적는다.
+ * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 플라이아웃은 지금 그대로): 미니게임 메뉴의 길건너.
  */
 @Composable
 fun RankingsScreen(
@@ -99,6 +100,7 @@ fun RankingsScreen(
     onSelectBoard: (RankingsBoard) -> Unit,
     modifier: Modifier = Modifier,
     scrollable: Boolean = true,
+    isPhone: Boolean = false,
 ) {
     val colors = AingTheme.colors
     val scroll = if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
@@ -122,7 +124,7 @@ fun RankingsScreen(
             when (store.board) {
                 RankingsBoard.league -> RankingsLeagueSection(store, scope)
                 RankingsBoard.tokens -> RankingsTokenSection(store, me, scope)
-                RankingsBoard.minigame -> RankingsMiniGameSection(store, me, scope)
+                RankingsBoard.minigame -> RankingsMiniGameSection(store, me, scope, isPhone)
             }
         }
     }
@@ -420,13 +422,13 @@ internal object RankingsTokenCaption {
 // ---------------------------------------------------------------- 미니게임(오늘 순위만)
 
 @Composable
-private fun RankingsMiniGameSection(store: RankingsStore, me: RankingsMyFace, scope: CoroutineScope) {
+private fun RankingsMiniGameSection(store: RankingsStore, me: RankingsMyFace, scope: CoroutineScope, isPhone: Boolean) {
     val colors = AingTheme.colors
     val state = store.miniGameState
     val entries = store.miniGameBoard
     Column {
         SectionHeader(RankingsText.miniGameRankTitle) {
-            GameMenu(store.miniGameKind) { store.select(it) }
+            GameMenu(store.miniGameKind, RankingsScreenRules.miniGameKinds(isPhone)) { store.select(it) }
         }
         val winner = store.miniGameWinner
         if (winner != null) ChampionRow(winner, Modifier.padding(bottom = 12.dp))
@@ -449,9 +451,9 @@ private fun RankingsMiniGameSection(store: RankingsStore, me: RankingsMyFace, sc
     }
 }
 
-/** 게임 고르기 메뉴 알약(회색 알약 30 · 누름 영역 44). 폰 목록만(길건너 숨김). */
+/** 게임 고르기 메뉴 알약(회색 알약 30 · 누름 영역 44). */
 @Composable
-private fun GameMenu(selected: MiniGameKind, select: (MiniGameKind) -> Unit) {
+private fun GameMenu(selected: MiniGameKind, kinds: List<MiniGameKind>, select: (MiniGameKind) -> Unit) {
     val colors = AingTheme.colors
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -472,7 +474,7 @@ private fun GameMenu(selected: MiniGameKind, select: (MiniGameKind) -> Unit) {
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            RankingsScreenRules.miniGameKinds.forEach { kind ->
+            kinds.forEach { kind ->
                 DropdownMenuItem(text = { Text(kind.title) }, onClick = {
                     expanded = false
                     select(kind)

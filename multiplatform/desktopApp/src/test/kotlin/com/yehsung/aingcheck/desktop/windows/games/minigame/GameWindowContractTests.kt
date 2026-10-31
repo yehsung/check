@@ -143,10 +143,13 @@ class MiniGameFocusPauseTest {
         assertTrue(r.store.miniGames.controller === c, "키 상실이 판을 버렸다")
     }
 
-    /** ③ 닫기 = 판 끝. 기록이 남는 게임(quittingKeepsTheScore)만 제출 1회, 타이밍 바는 0회. */
+    /**
+     * ③ 닫기 = 판 끝. 기록이 남는 게임(quittingKeepsTheScore)만 제출 1회, 타이밍 바는 0회.
+     * 길건너: core endRound 가 확정으로 바뀌어(폰 판) 창 어댑터의 임시 재제출을 타지 않는다 — 이 시험이 제출 1회(두 번 아님)를 잠근다.
+     */
     @Test
     fun userCloseEndsTheRoundAndOnlyScoreKeepingGamesSubmitOnce() {
-        for (kind in listOf(MiniGameKind.tetris, MiniGameKind.timingBar, MiniGameKind.flappy)) {
+        for (kind in listOf(MiniGameKind.tetris, MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.crossy)) {
             var tokens = 0
             val r = Rig { req -> UiFixtures.miniGameRoute(req) { ++tokens } }
             runBlocking { r.harness.signIn() }
@@ -179,19 +182,19 @@ class MiniGameFocusPauseTest {
 
 @OptIn(ExperimentalTestApi::class)
 class ExposureTest {
-    /** W-3 #1 — 길건너는 Windows 1차에서 숨긴다(MiniGameExposure 그대로). 양성 대조: 같은 허브에 테트리스는 있다. */
+    /** 허브는 표시 목록만 그린다 — 목록을 좁히면 길건너 칸이 없다(W-3 #1 의 뜻: 깃발이 좁히면 화면도 좁아진다). 양성 대조: 같은 허브에 테트리스는 있다. */
     @Test
-    fun hubShowsNoCrossy() = runDesktopComposeUiTest(440, 2400) {
+    fun hubShowsNoCrossyWhenTheListExcludesIt() = runDesktopComposeUiTest(440, 2400) {
         val store = GamesStore(UiGamesHarness(TestScope(), AppConfig()) { null }.context)
-        val state = MiniGameWindowState(store.miniGames)
+        store.miniGames.visibleKinds = MiniGameExposure.visible - MiniGameKind.crossy
+        val state = MiniGameWindowState(store.miniGames, visibleKinds = store.miniGames.visibleKinds)
         setContent { MiniGameWindowContent(store, state, NO_FACTS, ART, null, { NOW }, false, true, {}, {}, {}) }
         waitForIdle()
         assertTrue(onAllNodesWithText("테트리스", substring = true).fetchSemanticsNodes().isNotEmpty(), "허브에 테트리스가 없다 — 노드를 못 읽는다")
         assertEquals(0, onAllNodesWithText("길건너", substring = true).fetchSemanticsNodes().size, "허브에 길건너가 있다")
-        assertFalse(MiniGameKind.crossy in MiniGameExposure.visible)
     }
 
-    /** 데스크톱 목록(허브 visibleKinds = desktopVisible): 허브에 길건너 칸이 서고, 창 문으로 열면 길건너 판(구동기)이 선다. 음성 짝은 위 hubShowsNoCrossy(기본 = 폰 노출). */
+    /** 데스크톱 목록(허브 visibleKinds = desktopVisible): 허브에 길건너 칸이 서고, 창 문으로 열면 길건너 판(구동기)이 선다. 음성 짝은 위 hubShowsNoCrossyWhenTheListExcludesIt. */
     @Test
     fun desktopListShowsAndOpensCrossy() = runDesktopComposeUiTest(440, 2400) {
         val store = GamesStore(UiGamesHarness(TestScope(), AppConfig()) { null }.context)
@@ -236,11 +239,11 @@ class ExposureTest {
         assertEquals(MiniGameWindowRoute.Game(MiniGameKind.flappy), state.route)
     }
 
-    /** 창 문으로 길건너를 열어도 허브에 남는다. 음성 짝: 테트리스는 바로 게임 화면으로 간다. */
+    /** 창의 목록 밖 게임을 창 문으로 열면 허브에 남는다(허브가 안 여는 게임으로 가면 빈 판이 선다). 음성 짝: 테트리스는 바로 게임 화면으로 간다. */
     @Test
-    fun openingCrossyThroughTheWindowDoorStaysOnTheHub() {
+    fun openingAKindOutsideTheListThroughTheWindowDoorStaysOnTheHub() {
         val store = GamesStore(UiGamesHarness(TestScope(), AppConfig()) { null }.context)
-        val state = MiniGameWindowState(store.miniGames)
+        val state = MiniGameWindowState(store.miniGames, visibleKinds = MiniGameExposure.visible - MiniGameKind.crossy)
         val host = GameWindowScenes.host(GameWindowScenes.fakeShells(), miniGame = state)
         host.openGames(MiniGameKind.crossy)
         assertEquals(MiniGameWindowRoute.Hub, state.route)

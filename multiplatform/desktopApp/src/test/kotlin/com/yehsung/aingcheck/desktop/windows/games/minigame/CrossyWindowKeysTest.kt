@@ -98,7 +98,7 @@ class CrossyWindowKeysTest {
 
     /**
      * 게이트(맥 :285-295): 뗌은 삼키기만 · 조합키는 흘림 · OS 반복은 삼키기만(한 칸 아님) · 남의 창 키는 흘림 · 얼어 있으면(정지 카드 · 3-2-1)
-     * 뛰기 가지를 타지 않는다(wantsHops 거짓) · 기본 창 목록(폰 노출)이면 길건너 판 화면이 없어 게이트가 닫힌다.
+     * 뛰기 가지를 타지 않는다(wantsHops 거짓) · 창 목록에 길건너가 없으면 판 화면이 없어 게이트가 닫힌다.
      */
     @Test
     fun hopGateFollowsTheMacRules() {
@@ -125,17 +125,18 @@ class CrossyWindowKeysTest {
         val frozen = c.crossy.copy()
         assertFalse(router.route(GameKeyMap.VK_LEFT, true, false, false, true), "얼어 있는데 뛰기 키를 삼켰다")
         assertEquals(frozen, c.crossy, "얼어 있는데 판이 뛰었다")
-        // 기본(폰 노출) 창 목록: 길건너를 열면 허브에 남고 게이트가 닫힌다(조립이 desktop 목록을 건네기 전 — 빈 판 방지).
-        val phone = state(MiniGameExposure.visible)
-        phone.show(MiniGameKind.crossy)
-        assertEquals(MiniGameWindowRoute.Hub, phone.route)
-        assertFalse(ComposeGamesWindows.miniGameKeys({ c }, phone).route(GameKeyMap.VK_UP, true, false, false, true))
+        // 길건너가 없는 창 목록: 길건너를 열면 허브에 남고 게이트가 닫힌다(빈 판 방지).
+        val narrow = state(MiniGameExposure.visible - MiniGameKind.crossy)
+        narrow.show(MiniGameKind.crossy)
+        assertEquals(MiniGameWindowRoute.Hub, narrow.route)
+        assertFalse(ComposeGamesWindows.miniGameKeys({ c }, narrow).route(GameKeyMap.VK_UP, true, false, false, true))
     }
 
-    /** 데스크톱 목록 = 폰 노출 + 길건너(증거 골든이 있을 때만) · 순서는 MiniGameKind 순. 음성 짝: 폰 노출에는 길건너가 없다. */
+    /** 데스크톱 목록은 폰에 길건너가 열리기 전과 같은 넷이다(Windows 동작 변화 0) · 순서는 MiniGameKind 순 · 지금은 폰 노출과 같다. */
     @Test
-    fun desktopExposureAddsOnlyCrossy() {
-        assertEquals(MiniGameExposure.visible + MiniGameKind.crossy, DesktopMiniGameExposure.visible)
-        assertFalse(MiniGameKind.crossy in MiniGameExposure.visible, "폰 노출에 길건너가 들어왔다(Android 동작 변화)")
+    fun desktopExposureKeepsTheSameFour() {
+        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris, MiniGameKind.crossy), DesktopMiniGameExposure.visible)
+        assertEquals(DesktopMiniGameExposure.visible, MiniGameExposure.desktopVisible, "허브 목록과 창 목록이 갈렸다 — 빈 판이 선다")
+        assertEquals(MiniGameExposure.visible, DesktopMiniGameExposure.visible)
     }
 }

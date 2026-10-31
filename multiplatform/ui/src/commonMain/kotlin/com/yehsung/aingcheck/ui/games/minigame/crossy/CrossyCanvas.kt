@@ -324,7 +324,7 @@ internal val CrossyGame.showsTopScore: Boolean
  * 길건너 캔버스(그림 + 점수 + 시작/결과 카드). [game] 은 읽기만 한다. [bestScore] 는 결과 카드의 "최고 N" · 신기록 판정.
  */
 @Composable
-fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: MiniGameArt, modifier: Modifier = Modifier) {
+fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: MiniGameArt, modifier: Modifier = Modifier, touchControls: Boolean = false) {
     val camera = remember { CrossyCameraFollower() }
     val cameraX = camera.follow(game)
     val density = LocalDensity.current.density
@@ -332,6 +332,8 @@ fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: 
         val sprite = if (game.isGameOver && game.death?.cause == CrossyGame.DeathCause.car) art.flappyNegative ?: art.flappySide else art.flappySide
         val scale = (maxWidth.value / CROSSY_REFERENCE_WIDTH).coerceIn(0.6f, 1.6f)
         val centerX = constraints.maxWidth / 2f
+        // 폰 카드는 세 캔버스와 같은 배율 0.82 다(iOS GamesCrossyCanvas) — 조작 줄이 하나 더 있어 원래 배율이면 꼬리가 낱글자로 꺾인다.
+        val cardScale = if (touchControls) scale * 0.82f else scale
         Canvas(Modifier.fillMaxSize()) { drawCrossy(this, game, cameraX, reduceMotion, sprite) }
         Box(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             if (game.showsTopScore) {
@@ -347,8 +349,9 @@ fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: 
             when (game.phase) {
                 CrossyGame.Phase.Ready -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     GamesOverlayCard(
-                        title = MiniGameKind.crossy.title, subtitle = GamesMiniGameText.howToPlay(MiniGameKind.crossy),
-                        action = GamesMiniGameText.crossyStartAction, icon = MiniGameKind.crossy.icon, tint = CrossyPaint.tint, scale = scale,
+                        title = MiniGameKind.crossy.title,
+                        subtitle = if (touchControls) GamesMiniGameText.howToPlay(MiniGameKind.crossy) else MiniGameKind.crossy.howToPlay,
+                        action = if (touchControls) GamesMiniGameText.startAction else GamesMiniGameText.crossyStartAction, icon = MiniGameKind.crossy.icon, tint = CrossyPaint.tint, scale = cardScale,
                     )
                 }
                 CrossyGame.Phase.Result -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -356,7 +359,7 @@ fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: 
                         title = "${game.score}점", titleIsScore = true,
                         subtitle = GamesMiniGameText.crossyResultSubtitle(game.score, bestScore, game.death?.cause),
                         subtitleIsHighlighted = game.score.toLong() > bestScore,
-                        action = GamesMiniGameText.crossyRetryAction, icon = MiniGameKind.crossy.icon, tint = CrossyPaint.tint, scale = scale,
+                        action = if (touchControls) GamesMiniGameText.againAction else GamesMiniGameText.crossyRetryAction, icon = MiniGameKind.crossy.icon, tint = CrossyPaint.tint, scale = cardScale,
                     )
                 }
                 CrossyGame.Phase.Running, is CrossyGame.Phase.Over -> Unit

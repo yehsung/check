@@ -15,19 +15,15 @@ import org.junit.Test
 
 class GamesRoutesTest {
     @Test
-    fun visibleMiniGamesRoundTripAndCrossyHasNoRoute() {
+    fun visibleMiniGamesRoundTripIncludingCrossy() {
         for (kind in MiniGameKind.entries) {
             val raw = GamesRoutes.miniGameRaw(kind)
-            if (kind == MiniGameKind.crossy) {
-                assertNull("길건너는 라우트 글자가 없다", raw)
-                assertNull("길건너는 셸 목적지가 없다", GamesRoutes.destination(GamesDestination.MiniGame(kind)))
-            } else {
-                assertEquals("$kind 왕복", kind, GamesRoutes.miniGameKind(requireNotNull(raw)))
-                assertEquals(Dest.MiniGame(raw), GamesRoutes.destination(GamesDestination.MiniGame(kind)))
-            }
+            assertEquals("$kind 왕복", kind, GamesRoutes.miniGameKind(requireNotNull(raw)))
+            assertEquals(Dest.MiniGame(raw), GamesRoutes.destination(GamesDestination.MiniGame(kind)))
         }
+        assertEquals("crossy", GamesRoutes.miniGameRaw(MiniGameKind.crossy))
         assertEquals("허브가 보이는 종류 = 라우트가 있는 종류", MiniGameExposure.visible.toSet(), MiniGameKind.entries.filter { GamesRoutes.miniGameRaw(it) != null }.toSet())
-        assertNull("모르는 글자", GamesRoutes.miniGameKind("crossy"))
+        assertNull("모르는 글자", GamesRoutes.miniGameKind("chess"))
     }
 
     @Test

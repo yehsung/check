@@ -75,7 +75,7 @@ data class GamesPendingSubmit(val kind: MiniGameKind, val score: Int, val token:
  *   이 가드를 지난다. 시험: `MiniGameRoundTokenRaceTest`.
  *
  * 폰 규칙: 앱이 background 로 가거나 화면을 떠나면 판을 **끝낸다**(`endRound()`). 타이밍 바·플래피는 기록 없이 버리고,
- * **테트리스는 여기까지의 점수로 확정해 제출한다**. 로그아웃([reset])과 화면 경합 정리([openScreen])는 **`abandon()` 그대로**다.
+ * **테트리스·길건너는 여기까지의 점수로 확정해 제출한다**. 로그아웃([reset])과 화면 경합 정리([openScreen])는 **`abandon()` 그대로**다.
  *
  * 제출 인편([pendingSubmit]): 제출이 **네트워크로** 실패하면 (게임, 점수, 토큰)을 들고 있다가 앱이 다시 active 가 될 때
  * 같은 토큰으로 한 번 더 보낸다. 진단: 거절 status 이름까지만 로그에 남긴다 — need_seconds·elapsed_seconds 는 화면에도 로그에도
@@ -92,6 +92,9 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
          * (테트리스 12분 · 길건너 2분). 이 상수는 기존 두 게임의 값(20분)을 가리키는 별명으로 남긴다: 여기를 고쳐도 테트리스는 안 움직인다.
          */
         val tokenRefreshSeconds: Double = MiniGameKind.flappy.roundTokenReuseSeconds
+
+        /** 판 도중 토큰 감시 간격(초 — 맥 `MiniGamePanel.tokenKeeperInterval`). [runRoundTokenKeeper] 가 이만큼 자고 한 번 본다. */
+        const val tokenKeeperIntervalSeconds: Double = 30.0
 
         /** 첫 화면 카드(오늘 최고·순위)를 다시 읽는 간격(초). */
         const val summaryThrottleSeconds: Double = 60.0
@@ -251,8 +254,8 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     private var seedCounter: ULong = 0u
 
     /**
-     * 이 빌드의 허브가 여는 게임(첫 화면 타일 · 오늘 순위 · openScreen). 기본은 폰 노출([MiniGameExposure.visible] — Android 동작 그대로)이고,
-     * 데스크톱 조립만 [MiniGameExposure.desktopVisible](길건너 포함 — W-9 #6)로 바꾼다.
+     * 이 빌드의 허브가 여는 게임(첫 화면 타일 · 오늘 순위 · openScreen). 기본은 폰 노출([MiniGameExposure.visible])이고,
+     * 데스크톱 조립은 [MiniGameExposure.desktopVisible] 을 건넨다(지금은 같은 목록).
      */
     var visibleKinds: List<MiniGameKind> = MiniGameExposure.visible
 
@@ -305,7 +308,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     }
 
     /**
-     * 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스는 여기까지의 점수로 확정 제출).
+     * 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스·길건너는 여기까지의 점수로 확정 제출).
      * 토큰은 들고 있는다(재사용 나이 안에 다시 열면 그대로 쓴다). 안내 한 줄은 세우지 않는다.
      */
     fun closeScreen(kind: MiniGameKind) {
@@ -315,7 +318,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         activeKind = null
     }
 
-    /** 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고, **테트리스는 여기까지의 점수로 확정 제출한다**. */
+    /** 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다**. */
     fun appDidEnterBackground() {
         val controller = controller ?: return
         when (controller.endRound()) {
@@ -466,6 +469,21 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         if (roundToken != null && roundTokenKind == kind && issued != null && now.timeIntervalSince(issued) < limit) return
         log("round token refreshed mid-run game=${kind.rawValue}")
         requestRoundToken(kind)
+    }
+
+    /**
+     * 판 도중 토큰 감시(맥 `MiniGamePanel.armTokenKeeper` · MiniGamePanel.swift:1199). 화면이 판이 도는 동안 띄우고, 판이 끝나거나 화면이 사라지면 거둔다.
+     * [tokenKeeperIntervalSeconds] 마다 [keepRoundTokenFresh] 를 부른다. 갈아 끼우지 않는 게임이면 곧장 돌아온다. 정지 중에도 돈다 — 멈춰 둔 동안에도 서버 TTL 은 흐른다.
+     * 이 감시가 없으면 28분을 넘긴 길건너 판은 `token_expired` 로 점수를 잃는다.
+     */
+    suspend fun runRoundTokenKeeper(running: GamesPlayController) {
+        val kind = running.kind
+        if (kind.roundTokenMidRunRefreshSeconds == null) return
+        while (true) {
+            sleep(tokenKeeperIntervalSeconds)
+            if (controller !== running || !running.isPlaying) return
+            keepRoundTokenFresh(kind)
+        }
     }
 
     private fun requestRoundToken(kind: MiniGameKind) {

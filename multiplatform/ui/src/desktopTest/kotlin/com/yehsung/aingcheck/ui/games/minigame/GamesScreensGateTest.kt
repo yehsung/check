@@ -1,6 +1,6 @@
 // 원본: 없음 — 화면 게이트 시험(G §8-17 1 · §8-18 7). 판정은 core 이고, 이 시험은 **화면이 그 판정대로 그리는가**를 잰다(기억 client-gates-come-in-pairs —
 // 스토어만 막고 화면이 버튼을 세우면 눌러도 아무 일 없는 버튼이 된다 · 화면만 막고 스토어가 열려 있으면 다른 입구로 샌다. 스토어 쪽 짝은 W2-e 시험).
-//  ① 게임 탭에 **길건너 아잉이가 없다**(iOS 1.0.14 바닥 — phoneCases 가 거르고 표시 깃발이 좁힌다): 타일 · 오늘 내 순위 줄 둘 다.
+//  ① 게임 탭에 **길건너 아잉이가 선다**(iOS 1.0.15 와 같은 넷 — 타일 · 오늘 내 순위 줄 둘 다) · 표시 목록을 좁히면 둘 다 사라진다(음성 짝).
 //  ② 1:1 테트리스 판돈 **신청·수락 진입은 duelsEnabled 가 켜진 빌드에서만** 그린다. [거절]은 판돈이 움직이지 않아 늘 있다(§8-18 5).
 // 로비 값은 폰 데모 픽스처(Sources/CheckMobileKit/Demo/Fixtures/games — 복사 0, 저장소 경로에서 읽는다)를 스토어 applyLobby 로 넣는다.
 package com.yehsung.aingcheck.ui.games.minigame
@@ -41,8 +41,8 @@ class GamesScreensGateTest {
     private fun lobby(path: String): TetrisLobbyResponse = SwiftJson.decode(TetrisLobbyResponse.serializer(), RepoFiles.readText(path))
 
     @Test
-    fun theHubHasNoCrossyTileOrRankRow() = runComposeUiTest {
-        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris), hubMiniGames, "게임 탭 미니게임 = iOS 1.0.14 셋")
+    fun theHubShowsCrossyTileAndRankRow() = runComposeUiTest {
+        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris, MiniGameKind.crossy), hubMiniGames, "게임 탭 미니게임 = iOS 와 같은 넷")
         val h = harness(duelsEnabled = false)
         val store = GamesStore(h.context)
         setContent {
@@ -50,13 +50,31 @@ class GamesScreensGateTest {
                 GamesHubScreen(store, GamesHubBoardFactsSnapshot(), MiniGameArt.empty, { SwiftDate(1_789_621_500.0) }, {}, {}, {})
             }
         }
-        onNodeWithTag(GamesHubTags.tile(MiniGameKind.crossy)).assertDoesNotExist()
-        onNodeWithTag(GamesHubTags.rankRow(MiniGameKind.crossy), useUnmergedTree = true).assertDoesNotExist()
         for (kind in hubMiniGames) {
             onNodeWithTag(GamesHubTags.tile(kind)).assertExists()
             onNodeWithTag(GamesHubTags.rankRow(kind), useUnmergedTree = true).assertExists()
         }
         onNodeWithTag(GamesHubTags.TETRIS_DUEL).assertExists()
+        h.close()
+    }
+
+    /** 음성 짝: 표시 목록(깃발)이 좁으면 타일도 순위 줄도 없다 — 위 단언이 늘 참인 게 아니다. */
+    @Test
+    fun theHubDrawsOnlyTheVisibleKinds() = runComposeUiTest {
+        val h = harness(duelsEnabled = false)
+        val store = GamesStore(h.context)
+        store.miniGames.visibleKinds = hubMiniGames - MiniGameKind.crossy
+        setContent {
+            AingTheme(dark = false) {
+                GamesHubScreen(store, GamesHubBoardFactsSnapshot(), MiniGameArt.empty, { SwiftDate(1_789_621_500.0) }, {}, {}, {})
+            }
+        }
+        onNodeWithTag(GamesHubTags.tile(MiniGameKind.crossy)).assertDoesNotExist()
+        onNodeWithTag(GamesHubTags.rankRow(MiniGameKind.crossy), useUnmergedTree = true).assertDoesNotExist()
+        for (kind in store.miniGames.visibleKinds) {
+            onNodeWithTag(GamesHubTags.tile(kind)).assertExists()
+            onNodeWithTag(GamesHubTags.rankRow(kind), useUnmergedTree = true).assertExists()
+        }
         h.close()
     }
 

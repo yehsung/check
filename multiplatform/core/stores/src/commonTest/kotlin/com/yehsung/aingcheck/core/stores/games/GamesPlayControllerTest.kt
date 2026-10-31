@@ -214,13 +214,13 @@ class GamesPlayControllerTest {
     }
 
     /**
-     * 길건너(공용 패치 15 — W-9): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다. 폰 목록·폰 노출에 길건너가 없고(Android 동작 변화 0),
-     * 구동기는 탭 = 시작 + 앞으로 한 칸 · 틱 = 판 시간 · 출구 = 기록 없이 버림이다(데스크톱 판 전체 계약은 ui crossy/CrossyPlayControllerTest).
+     * 길건너: 구동기는 탭 = 시작 + 앞으로 한 칸 · 틱 = 판 시간 · 출구 = 그 점수로 확정이다(폰 쓸기 계약은 GamesCrossyGestureTest,
+     * 데스크톱 방향키 판 계약은 ui crossy/CrossyPlayControllerTest).
      */
     @Test
-    fun crossyIsDrivenOnDesktopAndFilteredOnThePhone() {
-        assertFalse(MiniGameKind.crossy in MiniGameKind.phoneCases, "폰 목록에 길건너가 들어왔다")
-        assertFalse(MiniGameKind.crossy in com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure.visible, "폰 노출에 길건너가 들어왔다")
+    fun crossyIsDrivenAndExitsWithTheScore() {
+        assertTrue(MiniGameKind.crossy in MiniGameKind.phoneCases, "폰 목록에 길건너가 없다")
+        assertTrue(MiniGameKind.crossy in com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure.visible, "폰 노출에 길건너가 없다")
         val c = GamesPlayController(MiniGameKind.crossy, 1u)
         var finished = 0
         c.onFinished = { finished += 1 }
@@ -231,9 +231,9 @@ class GamesPlayControllerTest {
         repeat(16) { t += 1.0 / 64; c.tick(at(t)) } // 엔진 maxStep(1/30) 안의 걸음으로 0.25초
         assertEquals(1, c.score, "앞으로 한 칸 착지가 점수가 아니다")
         c.hop(com.yehsung.aingcheck.core.rules.minigame.crossy.CrossyGame.Direction.left)
-        assertEquals(GamesPlayController.EndOutcome.Abandoned, c.endRound())
+        assertEquals(GamesPlayController.EndOutcome.Confirmed(1), c.endRound())
         assertFalse(c.isPlaying)
-        assertEquals(0, finished, "버림이 점수를 알렸다")
+        assertEquals(1, finished, "확정이 점수를 한 번 알린다")
     }
 
     /** 제스처 판정 표: 위로 끄는 것은 축을 잠그지 않고 · 비스듬한 가로 끌기는 소프트드롭을 같이 만들지 않는다(먼저 넘은 축이 이긴다). */

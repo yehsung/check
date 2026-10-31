@@ -48,5 +48,6 @@ fun RankingsRouteScreen(store: RankingsStore, boardArg: String, me: RankingsMyFa
             store.select(board)
         },
         modifier = modifier,
+        isPhone = true,
     )
 }

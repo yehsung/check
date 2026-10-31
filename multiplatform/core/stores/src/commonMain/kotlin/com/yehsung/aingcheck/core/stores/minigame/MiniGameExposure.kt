@@ -16,13 +16,12 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
  * 돌므로 "깃발이 켜진 빌드 = 그 골든이 초록인 빌드" 다(빨간 골든이면 게이트가 빌드를 막는다). 골든이 하나라도 빠지면 그 게임은
  * 여기서 빠지고 허브·게임 탭이 그 게임을 열지 않는다.
  *
- * 폰 노출 규칙(`MiniGameKind.phoneCases` — 길건너는 폰 1.0.15 때 W4-b 가 정한다, G §8-16)이 먼저다: 증거가 있어도 폰 목록 밖이면
- * 보이지 않는다. 깃발은 그 위에 **좁히기만** 한다.
+ * 폰 노출 규칙(`MiniGameKind.phoneCases`)이 먼저다: 증거가 있어도 폰 목록 밖이면 보이지 않는다. 깃발은 그 위에 **좁히기만** 한다.
  */
 object MiniGameExposure {
     /**
      * 게임마다 대조가 초록이어야 하는 골든(W1-a 소유 — 이름은 `contract/golden/<영역>/<이름>.json`). 엔진 규칙표 · 대본 재생이 핵심이고,
-     * 테트리스는 조각열(bags)·방해 줄 구멍·손으로 짠 판까지 본다. 길건너는 폰에 아직 없지만 증거는 적어 둔다(1.0.15 때 그대로 쓴다).
+     * 테트리스는 조각열(bags)·방해 줄 구멍·손으로 짠 판까지 본다.
      */
     val evidenceGoldens: Map<MiniGameKind, List<String>> = mapOf(
         MiniGameKind.timingBar to listOf("timing-bar/rules", "timing-bar/scripted"),
@@ -41,11 +40,11 @@ object MiniGameExposure {
     fun isVisible(kind: MiniGameKind): Boolean = kind in visible
 
     /**
-     * 데스크톱(Windows)에 보이는 게임 — 폰 노출 + 길건너 아잉이(W-9 #6: 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다).
-     * 증거 규칙은 같다(증거 골든이 비면 빠진다). 순서는 `MiniGameKind.entries`. 폰([visible])은 바뀌지 않는다.
+     * 데스크톱(Windows)에 보이는 게임 — 폰에 길건너가 열린 뒤로 폰 노출과 같은 목록이다(W-9 #6 의 데스크톱 전용 넓힘은 이제 일이 없다).
+     * 증거 규칙은 같다(증거 골든이 비면 빠진다). 순서는 `MiniGameKind.entries`. 조립([GamesMiniGameHub.visibleKinds])은 이 이름을 그대로 읽는다.
      */
     fun desktopVisibleKinds(evidence: Map<MiniGameKind, List<String>> = evidenceGoldens): List<MiniGameKind> =
-        MiniGameKind.entries.filter { (it in MiniGameKind.phoneCases || it == MiniGameKind.crossy) && !evidence[it].isNullOrEmpty() }
+        MiniGameKind.entries.filter { it in MiniGameKind.phoneCases && !evidence[it].isNullOrEmpty() }
 
     /** 데스크톱 조립이 허브([GamesMiniGameHub.visibleKinds])에 건네는 목록. */
     val desktopVisible: List<MiniGameKind> = desktopVisibleKinds()

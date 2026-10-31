@@ -64,7 +64,7 @@ fun MiniGameTileArt(kind: MiniGameKind, art: MiniGameArt, modifier: Modifier = M
                 FlappyAingImage(art.flappySide, 52.dp, Modifier.offset(w * 0.24f, 34.dp))
             }
             MiniGameKind.tetris -> Canvas(Modifier.fillMaxSize()) { drawTetrisTile(this) }
-            // 길건너 아잉이(v0.3.67): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다 — 그림은 ui crossy/ 한 벌(공용 패치 16).
+            // 길건너 아잉이(v0.3.67): 그림은 ui crossy/ 한 벌(공용 패치 16).
             MiniGameKind.crossy -> CrossyTileArt(art, Modifier.fillMaxSize())
         }
     }
@@ -155,7 +155,7 @@ fun GamesGameIconSquare(kind: MiniGameKind, art: MiniGameArt, modifier: Modifier
         MiniGameKind.timingBar -> listOf(gamesHex(0x4B3274), gamesHex(0x8A4F74))
         MiniGameKind.flappy -> listOf(gamesHex(0x1F4A63), gamesHex(0x3C8A6C))
         MiniGameKind.tetris -> listOf(gamesHex(0x24204E), gamesHex(0x3A2A5E))
-        MiniGameKind.crossy -> listOf(gamesHex(0x2E5A2A), gamesHex(0x4F8A3C)) // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다
+        MiniGameKind.crossy -> listOf(gamesHex(0x2E5A2A), gamesHex(0x4F8A3C))
     }
     Box(
         modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).background(Brush.linearGradient(colors)).clearAndSetSemantics { },

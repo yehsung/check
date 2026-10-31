@@ -1,11 +1,17 @@
-// 원본: Tests/CheckMobileKitTests/MessagesSendIdempotencyTests.swift ①②②'③④ @ 1a5eeca6 — 전송 멱등 키(서버 20261101131000)
+// 원본: Tests/CheckMobileKitTests/MessagesSendIdempotencyTests.swift ①~⑨ · 분류 가장자리(반박 보강 56ce31e7) @ 1a5eeca6 — 전송 멱등 키(서버 20261101131000)
 package com.yehsung.aingcheck.core.stores.messages
 
+import com.yehsung.aingcheck.core.rules.text.AingSticker
+import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
@@ -189,5 +195,214 @@ class MessagesSendIdempotencyTest {
         val k8 = sendOnce("같은 말", peerB, okWithoutID)
         assertNotEquals(k3, k8, "10분 지난 기억의 키를 썼다")
         assertTrue(r.store.unconfirmedSends.isEmpty())
+    }
+
+    /** ⑤ 이모티콘: 504→ok 재시도 성공 · 504→504 실패 모두 쓰던 글 그대로 · 빈 입력칸에 토큰을 안 꽂는다. */
+    @Test
+    fun stickerRetryNeverTouchesTheDraft() = runTest {
+        val r = rig()
+        prime(r)
+        r.store.setDraft("쓰던 글", peerA)
+        r.script += listOf(gatewayTimeout, okWithID)
+        assertTrue(r.store.sendSticker(AingSticker.joy, peerA))
+        val bubble = r.store.pendingOutgoing.single().id
+        advanceUntilIdle()
+        assertEquals(listOf<String?>(bubble, bubble), r.wireKeys().takeLast(2), "이모티콘 재시도 전선 키")
+        assertEquals("쓰던 글", r.store.draft(peerA), "이모티콘 재시도가 쓰던 글을 건드렸다")
+        r.script += listOf(gatewayTimeout, gatewayTimeout)
+        assertTrue(r.store.sendSticker(AingSticker.joy, peerA))
+        advanceUntilIdle()
+        assertEquals("쓰던 글", r.store.draft(peerA), "이모티콘 실패가 쓰던 글을 건드렸다")
+        assertEquals(MessagesSendRules.connectionNotice, r.store.sendNotices[peerA])
+        // 빈 입력칸에도 토큰이 안 꽂힌다.
+        r.script += listOf(gatewayTimeout, gatewayTimeout)
+        assertTrue(r.store.sendSticker(AingSticker.joy, peerB))
+        advanceUntilIdle()
+        assertEquals("", r.store.draft(peerB), "이모티콘 실패가 빈 입력칸에 토큰을 꽂았다")
+    }
+
+    /** 앞 계정 값이 다음 계정에 서지 않았는가(⑥ · ⑥' 의 공통 끝 단언). */
+    private fun assertNothingLeaked(r: Rig) {
+        assertTrue(r.store.drafts.isEmpty(), "앞 계정의 글이 남았다: ${r.store.drafts}")
+        assertTrue(r.store.sendNotices.isEmpty(), "앞 계정의 문구가 남았다: ${r.store.sendNotices}")
+        assertEquals(emptyList(), r.store.pendingOutgoing, "앞 계정의 말풍선이 남았다")
+        assertTrue(r.store.unconfirmedSends.isEmpty(), "앞 계정의 전송 기억이 남았다")
+        assertFalse(r.store.serverKnowsSendKey, "로그아웃이 증거 깃발을 안 지웠다 — 다음 계정이 증거 없이 재시도한다")
+        assertFalse(r.store.isSending, "앞 계정의 전송 중 표시가 남았다")
+    }
+
+    /** ⑥ 재시도 잠 동안 로그아웃(세대 변화) — 두 번째 요청이 나가지 않고, 깃발·기억·글·문구·말풍선이 다음 계정에 안 선다. */
+    @Test
+    fun logoutDuringRetryWaitStopsTheSecondRequest() = runTest {
+        val r = rig()
+        prime(r)
+        val gate = CompletableDeferred<Unit>()
+        var arrivals = 0
+        r.store.sleep = { seconds ->
+            if (seconds == r.store.sendRetryDelaySeconds) {
+                arrivals += 1
+                gate.await()
+            }
+        }
+        val before = r.sends()
+        r.script += gatewayTimeout
+        r.send("앞 계정의 글", peerA)
+        advanceUntilIdle()
+        assertEquals(1, arrivals, "504 뒤 재시도 잠에 들지 않았다")
+        assertEquals(1, r.sends() - before)
+        assertTrue(r.store.isSending, "재시도 잠 전에 왕복이 끝나 아래 단언이 공허하다")
+
+        r.h.session.signOut()
+        advanceUntilIdle()
+        r.store.reset()
+        assertFalse(r.store.serverKnowsSendKey, "로그아웃이 증거 깃발을 안 지웠다")
+        // 잠을 풀고, 혹시 나갈 두 번째 요청이 스텁에 닿을 시간을 준다.
+        r.script += gatewayTimeout
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, r.sends() - before, "로그아웃 뒤 재시도가 나갔다")
+        assertNothingLeaked(r)
+    }
+
+    /** ⑥' 재시도 요청(두 번째)이 떠 있는 동안 로그아웃 — 그 늦은 504 가 다음 계정의 입력칸·문구·말풍선·기억·깃발에 안 선다. */
+    @Test
+    fun logoutDuringRetryRoundTripDoesNotLeak() = runTest {
+        val r = rig()
+        prime(r)
+        val gate = CompletableDeferred<Unit>()
+        val before = r.sends()
+        r.script += listOf(gatewayTimeout, Reply.Gate(gate, gatewayTimeout))
+        r.send("앞 계정의 글", peerA)
+        runCurrent()
+        // 재시도 잠(주입 — 곧바로 돌아온다) 뒤 두 번째 요청이 문에 붙잡힐 때까지만 민다. 시간을 밀면 붙잡힌 요청이 HTTP 시한에 걸린다.
+        var turns = 0
+        while (r.sends() - before < 2 && turns < 50) {
+            runCurrent()
+            turns += 1
+        }
+        assertEquals(2, r.sends() - before, "재시도 요청이 떠나지 않았다")
+        assertTrue(r.store.isSending, "재시도 왕복이 로그아웃 전에 끝나 아래 단언이 공허하다")
+
+        r.h.session.signOut()
+        runCurrent()
+        r.store.reset()
+        runCurrent()
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, r.sends() - before)
+        assertNothingLeaked(r)
+    }
+
+    /** ⑦ 답을 못 받은 말이 실은 저장됐고 이력에도 이미 섰을 때 — 같은 키 재전송의 duplicate 응답 뒤 그 말은 한 번만 보이고 자리 말풍선이 안 남는다. */
+    @Test
+    fun duplicateResponseLeavesExactlyOneMessage() = runTest {
+        val r = rig()
+        // 서버는 저장했는데 답이 끊겼다(증거 없음 → 재시도 없이 실패 · 글 되돌림 · 키 기억).
+        r.script += Reply.Offline
+        r.send("저장된 말", peerA)
+        advanceUntilIdle()
+        val k1 = r.wireKeys().last()
+        assertEquals("저장된 말", r.store.draft(peerA))
+        r.server.sent("m1", peerA, 60, body = "저장된 말")
+        // 그 사이 이력이 한 번 돌아 행이 이미 화면에 있다 — 다음 이력엔 "처음 나타난" 행이 없는 가장 까다로운 쪽.
+        r.store.requestActivityRefresh(includeHistory = true)
+        advanceUntilIdle()
+        assertEquals(listOf("m1"), r.store.thread(peerA)?.messages?.map { it.id })
+
+        r.script += Reply.Json("""{"status":"ok","body":"저장된 말","ring":"duplicate","message_id":"m1","created_at":"2026-09-17T04:57:40.000Z","duplicate":true}""")
+        assertTrue(r.store.sendDraft(peerA, isComposing = false))
+        advanceUntilIdle()
+        assertEquals(k1, r.wireKeys().last(), "되돌아온 글의 재전송이 새 키를 만들었다 — 서버가 두 통으로 둔다")
+        assertEquals(emptyList(), r.store.pendingOutgoing, "duplicate 응답 뒤 자리 말풍선이 남았다")
+        assertEquals(listOf("m1"), r.store.thread(peerA)?.messages?.map { it.id })
+        assertEquals(null, r.store.sendNotices[peerA])
+        assertEquals("", r.store.draft(peerA))
+        assertTrue(r.store.unconfirmedSends.isEmpty())
+        assertTrue(r.store.serverKnowsSendKey, "duplicate 응답도 키를 안다는 증거다")
+    }
+
+    /** ⑧ 재시도 잠 동안 같은 대화에 새 말을 보내려 하면 — 글·이모티콘 모두 막히고 새로 친 글은 입력칸에 남으며, 재시도까지 실패해도 옛 글이 덮지 않는다. */
+    @Test
+    fun newInputDuringRetryIsKept() = runTest {
+        val r = rig()
+        prime(r)
+        val gate = CompletableDeferred<Unit>()
+        var arrivals = 0
+        r.store.sleep = { seconds ->
+            if (seconds == r.store.sendRetryDelaySeconds) {
+                arrivals += 1
+                gate.await()
+            }
+        }
+        val before = r.sends()
+        r.script += listOf(gatewayTimeout, gatewayTimeout)
+        r.send("옛 글", peerA)
+        val bubble = r.store.pendingOutgoing.single().id
+        advanceUntilIdle()
+        assertEquals(1, arrivals)
+        r.store.setDraft("새로 친 글", peerA)
+        assertFalse(r.store.canSend(peerA))
+        assertFalse(r.store.sendDraft(peerA, isComposing = false), "재시도 중에 두 번째 전송이 떴다")
+        assertFalse(r.store.sendSticker(AingSticker.joy, peerA), "재시도 중에 이모티콘이 떴다")
+        assertEquals("새로 친 글", r.store.draft(peerA), "막힌 전송이 새로 친 글을 지웠다")
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(2, r.sends() - before)
+        assertEquals("새로 친 글", r.store.draft(peerA), "실패한 옛 글이 새로 친 글을 덮었다")
+        assertEquals(MessagesSendRules.connectionNotice, r.store.sendNotices[peerA])
+        assertEquals(emptyList(), r.store.pendingOutgoing)
+        assertEquals(listOf(bubble), r.store.unconfirmedSends.map { it.key })
+        assertEquals("옛 글", r.store.unconfirmedSends.first().body)
+    }
+
+    /** ⑨ 되돌린 서버(키를 모름) — 증거 뒤라도 message_id 없는 ok 를 보면 깃발을 내리고, 다음 모호한 실패는 재시도하지 않는다. 거절 status 는 깃발을 바꾸지 않는다. */
+    @Test
+    fun okWithoutMessageIDLowersTheFlagAndRejectionDoesNot() = runTest {
+        val r = rig()
+        prime(r)
+        r.script += okWithoutID
+        r.send("되돌린 뒤 첫 말", peerA)
+        advanceUntilIdle()
+        assertFalse(r.store.serverKnowsSendKey, "키를 모르는 판의 ok 뒤에도 깃발이 섰다 — 재시도가 두 통을 만든다")
+        val before = r.sends()
+        r.script += gatewayTimeout
+        r.send("되돌린 뒤 둘째 말", peerA)
+        advanceUntilIdle()
+        assertEquals(1, r.sends() - before, "키를 모르는 판에서 재시도했다")
+        assertTrue(r.slept.isEmpty())
+        // 확정 거절(status)은 증거를 바꾸지 않는다 — 서버 판은 ok 로만 잰다.
+        prime(r)
+        r.script += Reply.Json("""{"status":"target_focused"}""")
+        r.send("거절", peerA)
+        advanceUntilIdle()
+        assertTrue(r.store.serverKnowsSendKey, "거절 status 가 깃발을 내렸다")
+    }
+
+    /** 분류: 답을 못 받은 실패만 모호하다 — 취소·401(토큰 갱신 실패 뒤 원래 오류)·429·4xx·디코드 실패는 확정. 여기서 새면 확정 실패를 되치거나 취소한 왕복을 되살린다. */
+    @Test
+    fun ambiguousFailureClassificationEdges() {
+        for (error in listOf(
+            kotlinx.io.IOException("timeout"),
+            io.ktor.client.plugins.HttpRequestTimeoutException("https://golden.invalid", 1_000L),
+        )) {
+            assertTrue(MessagesSendRules.isAmbiguousFailure(error), "$error 를 확정으로 봤다")
+        }
+        for (status in listOf(500, 502, 503, 504)) {
+            assertTrue(MessagesSendRules.isAmbiguousFailure(SupabaseWorkServiceError.InvalidResponse(status)), "$status 를 확정으로 봤다")
+        }
+        val definite = listOf(
+            CancellationException("cancelled"),
+            SupabaseWorkServiceError.SessionExpired,
+            SupabaseWorkServiceError.RateLimited(null),
+            SupabaseWorkServiceError.InvalidResponse(400),
+            SupabaseWorkServiceError.InvalidResponse(404),
+            SupabaseWorkServiceError.InvalidResponse(409),
+            SupabaseWorkServiceError.InvalidResponse(-1),
+            SupabaseWorkServiceError.SessionAlreadyOpen,
+            SerializationException("200 인데 본문을 못 읽음"),
+        )
+        for (error in definite) {
+            assertFalse(MessagesSendRules.isAmbiguousFailure(error), "$error 를 모호하다고 봐 되친다")
+        }
     }
 }

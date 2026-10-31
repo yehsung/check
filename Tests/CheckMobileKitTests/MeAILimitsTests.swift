@@ -447,6 +447,24 @@ struct MeAILimitsTests {
         // ② `없음` 글자도 맥과 같은 글자다(두 벌로 적으면 한쪽만 고쳐지는 날 화면이 갈린다).
         #expect(mac.contains("\"\(AILimitColumnText.absentValueText)\""), "맥의 `없음` 글자가 갈렸다")
 
+        // ②-b **사선 해치의 세 수**도 맥 소스에 그대로 있다(2026-10-30 승인 · 계약 ③).
+        //
+        // 색을 올려도 단서가 색과 글자뿐이면 틴트·색각 이상·흑백에서 없는 칸과 0% 칸이 같은 모양이다. 그래서
+        // 색이 **아닌** 단서를 하나 더 두는데, 그 그림이 화면마다 다른 간격·굵기면 같은 사실이 세 모양으로
+        // 보인다 — 16진수와 **같은 이유로 같은 자리**에서 되묻는다(맥은 이 모듈을 링크하지 않는다).
+        for (name, needle) in [
+            ("사선 간격", "absentHatchSpacing = \(Int(AILimitColumnPalette.absentHatchSpacing))"),
+            ("사선 굵기", "absentHatchLineWidth = \(Int(AILimitColumnPalette.absentHatchLineWidth))"),
+            ("사선 불투명도", "absentHatchOpacity = \(AILimitColumnPalette.absentHatchOpacity)"),
+        ] {
+            #expect(mac.contains(needle), "\(name)(`\(needle)`)이 맥 소스에 없다 — 세 화면이 다른 해치를 그린다")
+        }
+        // 해치가 색을 **대신하는** 단서이므로 수단은 알파여야 한다(틴트는 색을 통째로 버린다).
+        #expect(AILimitColumnPalette.absentHatchOpacity > 0 && AILimitColumnPalette.absentHatchOpacity < 1,
+                "해치 불투명도가 \(AILimitColumnPalette.absentHatchOpacity) 다 — 1 이면 글자보다 시끄럽고 0 이면 단서가 없다")
+        #expect(AILimitColumnPalette.absentHatchSpacing > AILimitColumnPalette.absentHatchLineWidth,
+                "사선 간격이 굵기보다 좁다 — 트랙이 통째로 칠해져 '꽉 찬 바'로 보인다")
+
         // ③ 대비: 열 머리 글자는 라이트·다크 둘 다 **4.5:1 이상**, 바는 그래픽이라 3:1 이상.
         func rgb(_ hex: UInt32) -> MobileThemePalette.RGB { MobileThemePalette.RGB(hex: hex) }
         let backdrops = (light: rgb(0xFFFFFF), dark: rgb(0x2B2E3D))     // 폰 카드 바탕(`surface`)
@@ -487,11 +505,193 @@ struct MeAILimitsTests {
                 < rgb(AILimitColumnPalette.emptyTrack.dark).contrast(against: widgetBackdrops.dark))
         #expect(rgb(AILimitColumnPalette.absentTrack.light).contrast(against: widgetBackdrops.light)
                 < rgb(AILimitColumnPalette.emptyTrack.light).contrast(against: widgetBackdrops.light))
-        for (ink, backdrop) in [(AILimitColumnPalette.absentText.light, backdrops.light),
-                                (AILimitColumnPalette.absentText.dark, backdrops.dark)] {
+        // ⓓ `없음` 글자의 상한은 **절대값이 아니라 상대값**이다 (2026-10-30 승인 · 계약 ②).
+        //
+        // 이 자리의 옛 단언은 `ratio < 4.5` 로 **읽히는 것을 금지**했고, 그 금지가 다크 2.06:1 을 낳았다 —
+        // 운영 코덱스 사용자 40명 가운데 38명이 주간 창 하나만 오는 요금제라 그들의 5시간 칸은 **영구히** 이
+        // 글자인데, 어떤 글자에도 모자란 값이다. 원래 단언의 **뜻**은 "`없음` 은 값이 아니라 '값이 없다는
+        // 사실'이라 숫자보다 눈에 먼저 들어오면 안 된다"였고, 그 뜻은 금지가 아니라 **상대 비교**로 지킨다:
+        // `4.5 ≤ 없음 대비 < 숫자 글자 대비`. 숫자 글자는 카드가 평온 단계에 쓰는 `MobileThemePalette.label`
+        // 이고(다크는 흰 0.95 — 합성은 `contrast(against:)` 가 한다), 그 값은 손으로 적지 않는다.
+        for (name, ink, number, backdrop) in [
+            ("라이트", AILimitColumnPalette.absentText.light, MobileThemePalette.label.light, backdrops.light),
+            ("다크", AILimitColumnPalette.absentText.dark, MobileThemePalette.label.dark, backdrops.dark),
+        ] as [(String, UInt32, MobileThemePalette.RGB, MobileThemePalette.RGB)] {
             let ratio = rgb(ink).contrast(against: backdrop)
-            #expect(ratio >= 2, "`없음` 글자가 \(ratio):1 로 사라졌다")
-            #expect(ratio < 4.5, "`없음` 글자가 숫자만큼 커졌다 — 값이 아니라 '값이 없다는 사실'이다")
+            let numberRatio = number.contrast(against: backdrop)
+            #expect(ratio >= 4.5,
+                    "`없음` 글자가 \(name) \(ratio):1 로 안 읽힌다 — 38명의 5시간 칸이 영구히 이 글자다")
+            #expect(ratio < numberRatio,
+                    "`없음`(\(name) \(ratio):1)이 숫자(\(numberRatio):1)만큼 눈에 띈다 — 그 칸은 값이 아니라 '값이 없다는 사실'이다")
+        }
+        // ⓔ 새 회색을 **발명하지 않았다**: 승인된 3단 **글자** 토큰(`label3Text` — 주석이 "카드·바탕 위 4.5:1")을
+        //    그 바탕에 합성한 값 **그대로**다. 위계의 '읽히는 가장 조용한 글자'가 정확히 이 자리이고, 한쪽을
+        //    손으로 흔들면 여기서 빨개진다(토큰 표와 갈린 회색이 다시 생기지 않게).
+        #expect(MobileThemePalette.label3Text.light.composited(over: backdrops.light).hex
+                == AILimitColumnPalette.absentText.light,
+                "없는 칸 라이트 글자가 `label3Text` 합성값이 아니다 — 승인 표 밖의 회색이다")
+        #expect(MobileThemePalette.label3Text.dark.composited(over: backdrops.dark).hex
+                == AILimitColumnPalette.absentText.dark,
+                "없는 칸 다크 글자가 `label3Text` 합성값이 아니다 — 승인 표 밖의 회색이다")
+        // ⓕ 위젯 바탕(`#232633`)에서도 읽힌다 — 같은 한 표를 두 바탕이 쓴다(폰 카드가 한 단 밝다).
+        let widgetRatio = rgb(AILimitColumnPalette.absentText.dark).contrast(against: widgetBackdrops.dark)
+        #expect(widgetRatio >= 4.5, "위젯 바탕에서 `없음` 글자가 \(widgetRatio):1 다")
+        #expect(widgetRatio < rgb(AingWidgetPalette.primaryText.dark).contrast(against: widgetBackdrops.dark),
+                "위젯에서 `없음` 이 숫자 글자만큼 눈에 띈다")
+    }
+
+    /// ★ **왜 비었는지를 말하는가 · 색을 버린 표면에서도 비었다는 것이 보이는가** (2026-10-30 승인 · 계약 ③④).
+    ///
+    /// 여기까지의 스위트는 "`없음` 이 뜬다"까지만 지켰다. 그런데 그 칸은 운영 코덱스 사용자 40명 가운데
+    /// 38명에게 **영구한 상태**다(주간 창 하나만 오는 요금제). 화면은 ① 왜인지 말하지 않았고 ② 다크 2.06:1 로
+    /// 안 읽혔고 ③ 색을 버리는 표면(위젯 틴트)·색각 이상·흑백에서 0% 바와 **같은 모양**이었다.
+    /// ①③을 여기서 잰다(②는 `columnPaletteIsOneTableAcrossSurfaces` 의 상대 상한).
+    ///
+    /// ★ 뷰는 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지 않는다. 그래서 **부르는 자리**를 잘라서 잰다 —
+    ///   "상수가 있다"는 "그 칸에 사선이 깔린다"의 증거가 아니다.
+    @Test("없는 칸: 캡션이 요금제 한 줄을 담는다 · 없는 칸만 해치를 받는다(0% 칸은 안 받는다) · 소리는 그대로")
+    func absentCellSaysWhyAndKeepsItsCueWithoutColor() throws {
+        // ① 캡션이 **요금제 한 줄**을 담는다. 옛 한 줄만 있으면 35명 중 30명에게 거짓이다 — 두 창을 당연한
+        //    것처럼 말하면 `없음` 이 "우리가 못 읽었다"로 읽히고, 사용자는 할 일이 없는데 고치러 간다.
+        #expect(MeText.aiLimitsCaption.contains("요금제에 따라 창이 하나만 올 수 있어요"),
+                "캡션이 창이 하나만 올 수 있다는 사실을 말하지 않는다: \(MeText.aiLimitsCaption)")
+        #expect(MeText.aiLimitsCaption.hasPrefix("5시간 창과 주간 창에서 쓴 비율이에요."),
+                "값이 무엇인지 말하던 원래 한 줄이 사라졌다 — 72% 가 '많이 남았다'로 읽힌다")
+        // 진단 어휘는 사용자 문구가 아니다(2026-09-22 결정 · 코어 `AILimits.swift` 규약).
+        for banned in ["primary_window", "plan_type", "secondary", "파서", "분 창", "10080", "300분"] {
+            #expect(!MeText.aiLimitsCaption.contains(banned), "캡션이 진단 어휘를 쓴다(\(banned))")
+        }
+        // ② 보이스오버는 **그대로**다 — 캡션이 이미 읽히므로 칸마다 같은 까닭을 되풀이하지 않는다.
+        let spoken = MeText.aiLimitAbsentAccessibility(window: .fiveHour)
+        #expect(spoken == "\(AILimitWindow.fiveHour.displayName) \(AILimitColumnText.absentValueText)",
+                "없는 칸의 소리가 바뀌었다: \(spoken)")
+        #expect(!spoken.contains("요금제"), "소리에서 이유를 되풀이한다 — 줄마다 같은 문장을 듣게 된다")
+        // ③ 카드가 그 캡션을 **그린다**(글자만 고치고 안 그리면 아무도 못 읽는다).
+        let card = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeAILimitsCard.swift")
+        #expect(card.contains("Text(MeText.aiLimitsCaption)"), "카드가 캡션을 그리지 않는다")
+
+        // ④ **`display == nil` 하나가 세 단서를 다 가른다.** 0% 는 값이 **있는** 칸이다(코덱스 plus 실측) —
+        //    그 칸까지 사선을 깔면 "안 썼다"가 "그 창이 없다"로 바뀐다.
+        let base = MobileClock.demoInstant
+        func fiveHourCell(_ percent: Double?) throws -> AILimitDisplay? {
+            let rows = [AILimitFetchedRow(deviceID: mePureMac, provider: "codex", fiveHourPercent: percent,
+                                          fiveHourResetsAt: nil,
+                                          weeklyPercent: 94, weeklyResetsAt: base.addingTimeInterval(200_000),
+                                          planLabel: percent == nil ? "prolite" : "plus", observedAt: base)]
+            let snapshot = try #require(meOneDeviceBundle(from: rows, now: base).provider(.codex))
+            guard snapshot.window(.fiveHour) != nil else { return nil }
+            let value = AILimitFreshnessRule.display(provider: snapshot, window: .fiveHour, now: base)
+            return value.isVisible ? value : nil
+        }
+        #expect(try fiveHourCell(nil) == nil, "전제: 주간 창만 오는 요금제의 5시간 칸은 빈다(= 사선을 받는다)")
+        let zero = try #require(try fiveHourCell(0))
+        #expect(zero.valueText == "0%", "0% 칸이 값을 잃었다 — 그러면 사선이 그 칸까지 번진다")
+
+        // ⑤ **그리는 자리.** 바는 `isAbsent` 안에서만 해치를 깔고, 두 호출부(격자 · AX 쌓은 모양)가 그 깃발을
+        //    `display == nil` 로 넘긴다. `percent` 로 넘기면 판정 불가(`—`)와 0% 가 함께 사선을 받는다.
+        let bars = card.components(separatedBy: "MeAILimitBar(").count - 1
+        #expect(bars == 2, "폰 카드의 리밋 바가 \(bars)개다 — 격자와 AX 쌓은 모양 둘이어야 한다")
+        #expect(card.components(separatedBy: "isAbsent: display == nil").count - 1 == bars,
+                "바 가운데 '그 창이 없다'를 `display == nil` 로 받지 않는 것이 있다")
+        #expect(!card.contains("isAbsent: percent") && !card.contains("isAbsent: display?.percent"),
+                "없는 칸을 퍼센트로 가른다 — 판정 불가(`—`)와 0% 칸이 함께 사선을 받는다")
+        #expect(card.contains("let isAbsent: Bool\n"),
+                "바의 `isAbsent` 에 기본값이 생겼다 — 새 호출부가 조용히 '값이 있는 칸'으로 떨어진다")
+        // ★ **블록을 잘라서** 잰다 — 파일 어디든 한 번 나오면 된다로 재면 조건 밖에서 그리는 변형이 초록이다.
+        let barBody = try Self.sourceBlock(of: "struct MeAILimitBar: View", in: card)
+        #expect(barBody.contains("Capsule().fill(track)"), "대조: 트랙은 해치와 무관하게 늘 그려진다")
+        #expect(barBody.contains("if isAbsent { absentHatch }"),
+                "해치가 `isAbsent` 밖에서 그려진다 — 값이 있는 칸(0% 포함)까지 사선을 받는다")
+        let bodyOnly = try Self.sourceBlock(of: "var body: some View", in: barBody)
+        #expect(bodyOnly.components(separatedBy: "absentHatch").count - 1 == 1,
+                "바 본문이 해치를 두 자리에서 그린다 — 한쪽은 조건 밖일 수 있다")
+
+        // ⑥ 사선 자체: 공유 수 셋 · 45° · 트랙 캡슐로 클립 · 색은 `없음` 글자와 **같은 잉크**를 흐린 값.
+        let hatchBody = try Self.sourceBlock(of: "private var absentHatch:", in: barBody)
+        #expect(hatchBody.contains("Canvas { context, size in"),
+                "해치를 `Canvas` 로 그리지 않는다 — 위젯 단일 렌더와 같은 코드여야 한다")
+        for needle in ["AILimitColumnPalette.absentHatchSpacing", "AILimitColumnPalette.absentHatchLineWidth",
+                       "MeAILimitColumnColor.absentHatch"] {
+            #expect(hatchBody.contains(needle), "해치가 공유 값(\(needle))을 쓰지 않는다 — 화면마다 다른 그림이 된다")
+        }
+        #expect(hatchBody.contains("clipShape(Capsule())"), "사선이 트랙 캡슐 밖으로 삐져나간다")
+        // 45° 는 숫자(각도)로 적지 않는다 — 옆으로 간 거리 = 위로 간 거리(바 높이)라는 **항등식**이다.
+        #expect(hatchBody.contains("x: x + size.height") && hatchBody.contains("y: size.height"),
+                "사선이 45°(왼쪽 아래 → 오른쪽 위)가 아니다")
+        let inkStart = try #require(card.range(of: "static let absentHatch ="), "해치 색 토큰이 없다")
+        let inkLine = card[inkStart.upperBound...].prefix(140)
+        #expect(inkLine.contains("AILimitColumnPalette.absentText")
+                && inkLine.contains("AILimitColumnPalette.absentHatchOpacity"),
+                "해치 색이 `없음` 글자를 공유 불투명도로 흐린 값이 아니다 — 같은 사실의 단서가 셋째 색이 된다")
+    }
+
+    /// ★★ **합류** — 세 화면이 없는 칸에 대해 **한 가지 사실**을 말하는가 (2026-10-30 승인 계약 합류 점검).
+    ///
+    /// 이 수리는 맥·폰·위젯을 세 레인이 따로 고쳤고 레인마다 자기 화면만 재는 단언을 박았다. 그래서 **화면
+    /// 사이의 사실**은 아무도 안 잰다 — 이 저장소는 "레인마다 초록인데 합치면 기능이 0줄"을 이미 겪었다.
+    /// 여기서 재는 것은 레인 단언이 구조적으로 못 보는 셋이다:
+    ///
+    /// 1. **넷째 화면**: `없음` 칸을 그리는 자리가 셋 말고 더 생기면 그 화면만 새 색도 해치도 못 받는다.
+    ///    (한 레인은 자기 파일만 보므로 새 파일을 영원히 못 본다.)
+    /// 2. **이유가 샜는가**: 이유는 **맥 툴팁과 폰 캡션 두 곳에만** 있어야 한다. 칸마다·화면마다 세우면
+    ///    38명이 줄마다 같은 문장을 읽고, 위젯은 칸이 좁아 넣을 자리도 없다.
+    /// 3. **세 화면이 다 해치를 그리는가**: 한 화면에서 그리는 자리가 사라져도 다른 두 레인 단언은 초록이다.
+    ///
+    /// ★ 승인본 16진수와 해치 **세 수**가 맥·공용 양쪽에 있는지는 `columnPaletteIsOneTableAcrossSurfaces` 가
+    ///   이미 잰다 — 여기서 되풀이하지 않는다.
+    @Test("합류: 없는 칸을 그리는 화면은 셋뿐 · 셋이 다 해치를 그린다 · 이유는 맥 툴팁과 폰 캡션 두 곳에만")
+    func theAbsentCellTellsOneStoryAcrossAllThreeSurfaces() throws {
+        // ① **넷째 화면이 없다.** 없는 칸의 글자·트랙·해치를 쓰는 파일을 `Sources` 전체에서 센다(주석은
+        //    걷힌다 — 다른 파일들이 이 토큰을 **주석으로만** 가리킨다). 넷째가 생기는 날 이름으로 걸린다.
+        let surfaces = try IntegrationContractTests.files(
+            containing: ["absentValueText", "absentTrack", "absentHatch"], under: "Sources")
+        #expect(surfaces == [
+            "Sources/CheckMobileKit/Me/MeAILimitsCard.swift",       // 폰 카드(그리는 자리)
+            "Sources/CheckMobileKit/Me/MeAILimitsText.swift",       // 폰 보이스오버 글자
+            "Sources/CheckMobileShared/AILimitColumnStyle.swift",   // 공용 표(글자·트랙·해치 세 수)
+            "Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift", // 위젯(그리는 자리)
+            "Sources/check/CheckAILimitsRow.swift",                 // 맥(제 표 + 그리는 자리)
+        ], "없는 칸을 그리는 자리가 바뀌었다 — 넷째 화면은 해치도 새 색도 못 받는다: \(surfaces)")
+
+        // ② **세 화면이 다 해치를 그린다.** 한 자리가 사라져도 나머지 두 레인 단언은 초록이다 — 그래서
+        //    세 파일을 한 자리에서 같이 센다. 그리고 어느 화면도 **퍼센트로 가르지 않는다**: 판정 불가(`—`)와
+        //    0% 는 값이 **있는** 칸이고, 거기에 사선이 번지면 이 무늬의 유일한 일이 없어진다.
+        for (surface, path, gate) in [
+            ("폰 카드", "Sources/CheckMobileKit/Me/MeAILimitsCard.swift", "if isAbsent { absentHatch }"),
+            ("위젯", "Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift", "if isAbsent { absentHatch }"),
+            ("맥", "Sources/check/CheckAILimitsRow.swift", "if hatched {"),
+        ] {
+            let code = try IntegrationContractTests.code(path)
+            #expect(code.contains(gate), "\(surface) 가 없는 칸에 해치를 안 그린다(`\(gate)` 가 없다)")
+            #expect(code.contains("Canvas"), "\(surface) 의 해치가 `Canvas` 가 아니다 — 위젯 단일 렌더와 갈린다")
+            for wrong in ["isAbsent: percent", "isAbsent: display?.percent",
+                          "hatched: percent", "hatched: display?.percent"] {
+                #expect(!code.contains(wrong), "\(surface) 가 없는 칸을 퍼센트로 가른다(`\(wrong)`)")
+            }
+        }
+
+        // ③ **이유는 두 곳에만 있다.** '요금제'는 이 수리가 고른 **사용자 어휘**다(진단 어휘 `plan_type` 의
+        //    반대쪽). 주석을 걷은 코드에서 그 말을 쓰는 파일은 맥 툴팁 상수와 폰 캡션 **둘뿐**이어야 한다:
+        //    위젯은 칸이 좁아 이유를 말하지 않고(그 화면의 단서는 해치와 `없음` 이다), 소리는 되풀이하지 않고,
+        //    공용 표는 색과 수만 들고 있다.
+        let reasonSites = try IntegrationContractTests.files(containing: ["요금제"], under: "Sources")
+        #expect(reasonSites == ["Sources/CheckMobileKit/Me/MeAILimitsText.swift",
+                                "Sources/check/CheckAILimitsRow.swift"],
+                "이유를 말하는 자리가 맥 툴팁 · 폰 캡션 둘이 아니다: \(reasonSites)")
+        // 그 둘은 각각 **한 문장씩**이다(칸마다 세우면 38명이 줄마다 같은 말을 읽는다).
+        let macCode = try IntegrationContractTests.code("Sources/check/CheckAILimitsRow.swift")
+        #expect(macCode.components(separatedBy: "요금제").count - 1 == 1,
+                "맥이 이유를 두 자리에서 말한다 — 툴팁 상수 하나여야 한다")
+        #expect(MeText.aiLimitsCaption.components(separatedBy: "요금제").count - 1 == 1,
+                "폰 캡션이 요금제를 두 번 말한다: \(MeText.aiLimitsCaption)")
+
+        // ④ **소리는 두 창 다 `<창> 없음` 그대로다.** 캡션이 이미 읽히므로 칸마다 같은 까닭을 또 들려주지
+        //    않는다(폰 레인은 5시간 창만 쟀다 — 주간 칸도 비는 계정이 있다: 코덱스 크레딧 사용자 실측).
+        for window in AILimitWindow.allCases {
+            let spoken = MeText.aiLimitAbsentAccessibility(window: window)
+            #expect(spoken == "\(window.displayName) \(AILimitColumnText.absentValueText)",
+                    "\(window.displayName) 없는 칸의 소리가 바뀌었다: \(spoken)")
+            #expect(!spoken.contains("요금제"), "소리가 이유를 되풀이한다: \(spoken)")
         }
     }
 
@@ -512,6 +712,29 @@ struct MeAILimitsTests {
     private func measuredWidth(_ text: String, size: CGFloat, weight: NSFont.Weight,
                                monospacedDigits: Bool = false) -> CGFloat {
         Self.width(text, size: size, weight: weight, monospacedDigits: monospacedDigits)
+    }
+
+    /// 선언 머리부터 **중괄호가 닫히는 곳까지**(주석을 걷어낸 소스에서). 글자 수로 자르는 창은 다음 블록으로
+    /// 새어 **남의 줄**을 읽는다 — 파일 끝까지 자르면 더 나쁘다: "이 뷰에 `widgetAccentable` 이 없다"가
+    /// 아래 다른 뷰의 그 호출을 보고 빨개진다(이 수리에서 실제로 밟았다).
+    nonisolated static func sourceBlock(of marker: String, in source: String) throws -> String {
+        let hit = try #require(source.range(of: marker), "대조: '\(marker)' 를 못 찾았다(이름이 바뀌었나)")
+        var depth = 0
+        var started = false
+        var out = ""
+        for character in source[hit.upperBound...] {
+            if character == "{" {
+                depth += 1
+                started = true
+            }
+            if started { out.append(character) }
+            if character == "}" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+        }
+        #expect(started, "대조: '\(marker)' 뒤에 블록이 없다")
+        return out
     }
 
     @Test("토큰 축: 오늘 칸은 잔디의 마지막 날 · 수집을 끄면 둘 다 nil(0 으로 지어내지 않는다)")

@@ -4,7 +4,7 @@
 // /delete-account 화면의 사실 계약(Play answer/13327111 · E§9.6) — 페이지 소스를 읽어(주석은 걷고) 잰다.
 //   ① 앱·개발자 이름이 등록정보 상수(STORE_LISTING)에서 온다 ② 지워지는 것·남는 것·웹에서 지우기·메일함도 못 쓸 때(지원 경로)가 있다
 //   ②-1 고지 문장(지워지는 것·같이 처리되는 것·남는 것·되돌릴 수 없음)이 앱·처리방침과 같은 사실을 싣는다
-//   ②-2 서버 백업 고지는 처리방침(docs/privacy.md)의 확정 줄과 맞물린다
+//   ②-2 서버 백업은 처리방침·페이지 어디에도 싣지 않는다(2026-10-28 사용자 결정)
 //   ③ 설정은 NEXT_PUBLIC_* 두 이름을 글자 그대로 읽는다(빌드 때 박힘) ④ 운영 주소·서비스 롤 키·브라우저 저장소·콘솔 0
 //   ⑤ 랜딩 금지어 0(히어로·FAQ 시험과 같은 목록) ⑥ 흐름 섬 배선(체크박스·삭제 버튼·lib 손잡이 — 행동은 delete-account-client.test 가 잰다).
 import { test } from 'node:test';
@@ -71,21 +71,15 @@ test('②-1 고지 문장 — 지워지는 것(앱 MeText.deleteAccountItems · 
   assert.match(PAGE, /<p className="t-body mt-5">[\s\S]*?지운 계정은 되돌릴 수 없고[\s\S]*?<\/p>/, '머리 문단의 되돌릴 수 없음');
 });
 
-/** docs/privacy.md 의 '**서버 백업**:' 줄이 확정됐나(〈자리표시〉가 아닌 줄이 있나). */
-function privacyBackupConfirmed(): boolean {
+/** 처리방침(docs/privacy.md)에 서버 백업 줄이 있나 — 사용자 결정(2026-10-28)으로 두 곳 모두 백업 이야기를 싣지 않는다. */
+function privacyMentionsBackup(): boolean {
   const policy = readFileSync(new URL('../../docs/privacy.md', import.meta.url), 'utf8');
-  const line = policy.split('\n').find((l) => l.startsWith('**서버 백업**:'));
-  return line !== undefined && !line.includes('〈') && line.replace('**서버 백업**:', '').trim().length > 0;
+  return policy.split('\n').some((l) => l.startsWith('**서버 백업**') || l.includes('〈'));
 }
 
-test('②-2 서버 백업 고지 ↔ 처리방침: 처리방침에 확정 줄이 있을 때만 "적어 두었어요", 없으면 "확인하는 대로 적을게요"', () => {
-  // E§9.6: 백업 보관 기간은 미확인(요금제 확인 뒤 처리방침에 적는다). 처리방침에 없는 것을 있다고 쓰면 Play 공개 페이지가 거짓을 싣는다.
-  const confirmed = privacyBackupConfirmed();
-  const kept = listBlock('KEPT');
-  const saysWritten = kept.includes('개인정보 처리방침에 적어 두었어요');
-  const saysPending = kept.includes('확인하는 대로 개인정보 처리방침에 적을게요');
-  assert.equal(saysWritten, confirmed, `처리방침 확정=${confirmed} · 페이지 "적어 두었어요"=${saysWritten}`);
-  assert.equal(saysPending, !confirmed, `처리방침 확정=${confirmed} · 페이지 "확인하는 대로"=${saysPending}`);
+test('②-2 서버 백업 — 처리방침도 페이지도 백업 문장을 싣지 않는다(자리표시 〈…〉 도 남기지 않는다)', () => {
+  assert.equal(privacyMentionsBackup(), false, '처리방침에 서버 백업 줄·자리표시가 없어야 한다');
+  assert.equal(listBlock('KEPT').includes('백업'), false, '페이지 남는 것에 백업 문장이 없어야 한다');
 });
 
 test('③ 설정은 NEXT_PUBLIC_SUPABASE_URL · NEXT_PUBLIC_SUPABASE_ANON_KEY 를 글자 그대로 읽는다', () => {

@@ -111,6 +111,10 @@ package final class NowStore {
     /// 착용 캐릭터 관찰을 걸었는가(w15 기반 — 위젯 스냅샷 `characterID`). 링크(`context.links.me`)는 init 뒤에 채워지므로 활성화 때 한 번 건다.
     @ObservationIgnored private var observesEquippedCharacter = false
 
+    /// 새 버전 안내를 닫은 빌드. 계정이 아니라 앱 단위 값이라 `reset()`(로그아웃)이 비우지 않는다.
+    package private(set) var dismissedUpdateBuild: Int?
+    package nonisolated static let dismissedUpdateBuildKey = "aingcheck.update.dismissedBuild"
+
     package nonisolated static let refreshIntervalSeconds: Double = 60
     /// 탭을 다시 볼 때 이 초 안에 받았으면 새로고침을 건너뛴다.
     package nonisolated static let tabRefreshFreshSeconds: Double = 30
@@ -143,6 +147,7 @@ package final class NowStore {
         list.onLocalChange = { [weak self] in self?.todoSync.noteLocalChange() }
         list.syncProtectedIDs = { [weak self] in self?.protectedTodoIDs ?? [] }
         teamJoin.onTeamSettled = { [weak self] in self?.adoptSettledTeam() }
+        dismissedUpdateBuild = context.storage.defaults.object(forKey: Self.dismissedUpdateBuildKey) as? Int
         observeTodos()
     }
 
@@ -222,6 +227,24 @@ package final class NowStore {
         NowTodoFileAccess.coordinated(at: localURL) {
             todoSync.switchAccount(userID: nil, fileURL: localURL)
         }
+    }
+
+    // MARK: - 새 버전 안내
+
+    /// `latestBuild` 는 실행 때 한 번 받는 값이다(`MobileSessionStore.launch`). 상한을 넘겨 못 받은 실행에서는 안 보이고 다음 실행이 다시 본다.
+    package var showsUpdateNotice: Bool {
+        NowUpdateNoticeRule.isVisible(
+            latestBuild: context.session.latestBuild,
+            currentBuild: context.appInfo.build,
+            dismissedBuild: dismissedUpdateBuild
+        )
+    }
+
+    /// 지금 보이는 최신 빌드를 닫았다고 적는다.
+    package func dismissUpdateNotice() {
+        guard let latestBuild = context.session.latestBuild else { return }
+        dismissedUpdateBuild = latestBuild
+        context.storage.defaults.set(latestBuild, forKey: Self.dismissedUpdateBuildKey)
     }
 
     /// 탭이 화면에 나타났다(할 일 동기화 · 오래됐으면 새로고침).

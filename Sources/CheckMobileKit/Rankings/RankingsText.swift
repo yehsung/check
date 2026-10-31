@@ -17,12 +17,13 @@ package enum RankingsText {
         }
     }
 
-    /// 큰 제목 아래 한 줄(시안 B 05·06): 판마다 기간과 마감을 말한다.
-    package static func boardSubtitle(_ board: AingRoute.RankingsBoard) -> String {
+    /// 큰 제목 아래 한 줄(시안 B 05·06): 판마다 기간과 마감을 말한다. 미니게임은 보는 표를 따른다 —
+    /// [역대] 표는 오늘 판이 아니고 자정에 마감하지도 않는다.
+    package static func boardSubtitle(_ board: AingRoute.RankingsBoard, miniGameScope: MiniGameBoardScope = .today) -> String {
         switch board {
         case .league: return "이번 주 · 월요일 0시에 새로 시작해요"
         case .tokens: return "이번 달 · 1일에 새로 시작해요"
-        case .minigame: return "오늘 · 자정에 마감해요"
+        case .minigame: return miniGameScope == .allTime ? "역대 · 마감 없이 이어져요" : "오늘 · 자정에 마감해요"
         }
     }
 
@@ -272,10 +273,12 @@ package enum RankingsText {
     }
 
     /// 순위 행 보이스오버 한 줄: "3위, 민트, 서울센터, 953점, 나".
-    package static func miniGameRowAccessibility(rank: Int, entry: MiniGameBoardEntry, isMe: Bool) -> String {
+    /// `dayCaption` 은 [역대] 줄의 날짜("9/13"). 행이 자식을 숨기고 이 한 줄만 읽히므로 여기 안 넣으면 보이스오버에 날짜가 없다.
+    package static func miniGameRowAccessibility(rank: Int, entry: MiniGameBoardEntry, isMe: Bool, dayCaption: String? = nil) -> String {
         var parts = ["\(rank)위", entry.name]
         if let center = entry.center { parts.append("\(center)센터") }
         parts.append(score(entry.bestScore))
+        if let dayCaption { parts.append("\(dayCaption) 기록") }
         if isMe { parts.append(meChip) }
         return parts.joined(separator: ", ")
     }

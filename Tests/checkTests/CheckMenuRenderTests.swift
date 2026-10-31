@@ -625,6 +625,23 @@ func checkMenuViewRendersUpdateBannerSnapshot() throws {
     try? png.write(to: URL(fileURLWithPath: path))
 }
 
+/// 아잉 큐브 판·방 중 [지금 업데이트]를 눌렀을 때 배너의 확인 줄(2판 §6 후속). 버튼 줄 자리를 대신하고 340pt 폭에서
+/// 제목·설명·두 버튼이 잘리지 않는지 육안 확인용(v2f/stills). 기준선(확인 없는 배너)과 달라야 한다.
+@MainActor
+@Test
+func checkMenuViewRendersRummyUpdateConfirmSnapshot() throws {
+    let store = makeSignedInStore()
+    let baseline = try renderPNG(CheckMenuView(store: store, previewUpdateBanner: true))
+    let dir = "/private/tmp/claude-501/-Users-yesung-check/3ea4b359-81d2-4630-ad1f-7675d460adec/scratchpad/v2f/stills"
+    try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+    for (decision, name) in [(RummyUpdateDecision.confirmForfeit, "update-confirm-forfeit"),
+                             (.confirmLeaveRoom, "update-confirm-room")] {
+        let png = try renderPNG(CheckMenuView(store: store, previewUpdateBanner: true, previewRummyUpdatePrompt: decision))
+        #expect(png != baseline, "확인 줄이 배너에 안 그려진다(\(name))")
+        try? png.write(to: URL(fileURLWithPath: "\(dir)/\(name).png"))
+    }
+}
+
 /// 이번 버전 패치노트가 얹힌 배너(제목 → 노트 3줄 → [지금 업데이트]/[명령 복사]). 340pt 폭에서 노트 줄이
 /// 겹치거나 버튼을 밀어내지 않는지 육안 확인용.
 @MainActor

@@ -48,7 +48,8 @@ struct MiniGameWindowLifecycleTests {
         #expect(CheckMiniGameWindowController.windowTitle == "미니게임")
         #expect(CheckMiniGameWindowController.frameAutosaveName == "check.miniGameWindow")
         // v0.2.48: 620×420 → 700×470. 넓힌 것은 크롬뿐이고 캔버스는 344×356 그대로다(아래 레이아웃 표).
-        #expect(CheckMiniGameWindowController.fixedContentSize == NSSize(width: 700, height: 470))
+        // v0.3.69: 700×470 → 888×470. 왼쪽 게임 고르기 사이드바(188)가 붙었다 — 이번에도 캔버스·순위 열은 그대로다.
+        #expect(CheckMiniGameWindowController.fixedContentSize == NSSize(width: 888, height: 470))
 
         let window = CheckMiniGameWindowController.makeWindow()
         defer { window.close() }
@@ -103,6 +104,17 @@ struct MiniGameWindowLifecycleTests {
         controller.close()
         controller.show()
         #expect(window.frame.size == fixed, "다시 연 창이 \(window.frame.size) 다(기대 \(fixed)) — 그 맥만 더 쉬운 캔버스가 된다")
+
+        // v0.3.69 — 옛 700 폭 창을 화면 오른쪽 끝에 붙여 둔 모양. 되돌린 크기(888)가 화면 밖으로 삐져나가지 않고 안으로 밀린다.
+        let screens = NSScreen.screens.map(\.visibleFrame)
+        guard let visible = screens.first(where: { $0.intersects(window.frame) }) ?? screens.first else { return }
+        let oldWidth = window.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 700, height: 470)).width
+        window.setFrame(NSRect(x: visible.maxX - oldWidth, y: visible.minY + 40, width: oldWidth, height: fixed.height), display: false)
+        controller.close()
+        controller.show()
+        #expect(window.frame.size == fixed)
+        #expect(window.frame.maxX <= visible.maxX + 0.5 && window.frame.minX >= visible.minX - 0.5,
+                "넓어진 창이 화면 밖으로 삐져나갔다(창 \(window.frame) · 화면 \(visible))")
     }
 
     // MARK: - 수명(지연 생성 · 멱등 · 닫았다 다시)
@@ -281,6 +293,50 @@ func windowLayoutIsAFixedTwoColumnConstantTable() {
     // 창 상수와 레이아웃 상수는 한 곳에서 온다.
     #expect(CheckMiniGameWindowController.fixedContentSize.width == MiniGameWindowLayout.contentSize.width)
     #expect(CheckMiniGameWindowController.fixedContentSize.height == MiniGameWindowLayout.contentSize.height)
+
+    // v0.3.69 사이드바: 창 = 사이드바 + 게임 구역(옛 창 700×470 그대로). 안쪽(672×442)·두 열 폭은 위에서 이미 그대로임을 쟀다.
+    #expect(MiniGameWindowLayout.gameAreaSize == CGSize(width: 700, height: 470))
+    #expect(MiniGameWindowLayout.contentSize.width == MiniGameWindowLayout.sidebarWidth + MiniGameWindowLayout.gameAreaSize.width)
+    #expect(MiniGameWindowLayout.gameColumnOrigin == CGPoint(x: MiniGameWindowLayout.sidebarWidth + 14, y: 14))
+    // 사이드바 두 묶음(혼자 넷 + 같이 넷)이 안쪽 높이 안에 든다 — 게임이 또 늘면 여기서 먼저 빨개진다(그때 줄 높이·창 높이를 다시 재라).
+    let sidebar = MiniGameWindowLayout.sidebarContentHeight
+    #expect(sidebar == 420, "사이드바 세로 합이 \(sidebar) 다")
+    #expect(sidebar <= inner.height, "사이드바 \(sidebar) 가 안쪽 높이 \(inner.height) 를 넘는다 — 아래 문이 창 밖으로 잘린다")
+    #expect(MiniGameWindowLayout.sidebarDuelGroupRect.maxY <= MiniGameWindowLayout.contentSize.height - MiniGameWindowLayout.contentPadding)
+    // 크게: 옛 칩(26pt 캡슐 · caption2 아이콘)보다 줄과 아이콘이 확실히 크다(사용자 요구 "좀 더 크게").
+    #expect(MiniGameWindowLayout.sidebarRowHeight >= 40 && MiniGameWindowLayout.sidebarIconSize >= 28)
+}
+
+/// v0.3.69 — 창이 188pt 넓어졌다. 옛 700 폭 자리를 화면 오른쪽 끝에 붙여 둔 사람의 창이 화면 밖으로 삐져나가면 안 된다.
+@Test
+func theWiderWindowIsPushedBackOnScreen() {
+    let screen = NSRect(x: 0, y: 25, width: 1440, height: 875)
+    let size = NSSize(width: 888, height: 498)
+    // ① 이미 안에 있으면 그대로(사용자가 둔 자리를 건드리지 않는다).
+    let inside = NSRect(origin: NSPoint(x: 200, y: 100), size: size)
+    #expect(CheckMiniGameWindowController.originKeepingOnScreen(inside, visibleFrames: [screen]) == inside.origin)
+    // ② 옛 700 폭 창을 오른쪽 끝(1440 − 700 = 740)에 붙여 뒀다 → 888 로 자라면 188 이 밖이다 → 왼쪽으로 민다.
+    let grown = NSRect(origin: NSPoint(x: 740, y: 300), size: size)
+    let pushed = CheckMiniGameWindowController.originKeepingOnScreen(grown, visibleFrames: [screen])
+    #expect(pushed == NSPoint(x: 1440 - 888, y: 300), "오른쪽으로 삐져나간 창이 \(pushed) 에 선다")
+    // ③ 위로 삐져나간 창은 아래로(제목 막대가 메뉴바 밑으로 숨지 않게).
+    let high = NSRect(origin: NSPoint(x: 100, y: 800), size: size)
+    let expectedTop: CGFloat = 900 - 498
+    #expect(CheckMiniGameWindowController.originKeepingOnScreen(high, visibleFrames: [screen]).y == expectedTop)
+    // ④ 화면보다 큰 창은 왼쪽·위를 맞춘다(제목 막대가 화면 안에 남아야 옮길 수 있다).
+    let small = NSRect(x: 0, y: 0, width: 800, height: 400)
+    let tooBig = CheckMiniGameWindowController.originKeepingOnScreen(NSRect(origin: NSPoint(x: 300, y: -50), size: size),
+                                                                     visibleFrames: [small])
+    #expect(tooBig == NSPoint(x: 0, y: 400 - 498))
+    // ⑤ 두 화면이면 **더 많이 겹치는** 화면을 기준으로 민다(두 번째 모니터에 둔 창을 첫 화면으로 끌고 오지 않는다).
+    let second = NSRect(x: 1440, y: 0, width: 1920, height: 1055)
+    let onSecond = NSRect(origin: NSPoint(x: 1440 + 1920 - 700, y: 200), size: size)
+    #expect(CheckMiniGameWindowController.originKeepingOnScreen(onSecond, visibleFrames: [screen, second])
+            == NSPoint(x: 1440 + 1920 - 888, y: 200))
+    // ⑥ 어느 화면과도 안 겹치면(모니터를 뗐다) 첫 화면 안으로 데려온다. 화면 목록이 비면 손대지 않는다.
+    let lost = NSRect(origin: NSPoint(x: 5000, y: 3000), size: size)
+    #expect(CheckMiniGameWindowController.originKeepingOnScreen(lost, visibleFrames: [screen]) == NSPoint(x: 1440 - 888, y: 900 - 498))
+    #expect(CheckMiniGameWindowController.originKeepingOnScreen(lost, visibleFrames: []) == lost.origin)
 }
 
 /// 소스 계약: 캔버스를 다시 창 크기에서 **계산**하는 모양으로 되돌아가면, 다음에 창을 넓히는 사람이

@@ -7,7 +7,7 @@ import Foundation
 ///     aingcheck://now
 ///     aingcheck://messages                 aingcheck://message/<peer>
 ///     aingcheck://rankings/league|tokens|minigame
-///     aingcheck://games                    aingcheck://games/timing|flappy
+///     aingcheck://games                    aingcheck://games/timing|flappy|tetris|crossy
 ///     aingcheck://gomoku/lobby             aingcheck://gomoku/invite/<match>    aingcheck://gomoku/match[/<match>]
 ///     aingcheck://me                       aingcheck://me/shop    aingcheck://me/settings
 ///     aingcheck://feedback[/<report>]
@@ -45,6 +45,8 @@ public enum AingRoute: Hashable, Sendable {
         case timing, flappy
         /// v0.3.38(2026-09-23 폰 노출과 같은 커밋).
         case tetris
+        /// 폰 1.0.15(길건너 아잉이 폰 노출과 같은 커밋 — `MiniGameKind.phoneCases` 와 **같이** 넓혔다).
+        case crossy
     }
 
     public static let scheme = "aingcheck"

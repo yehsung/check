@@ -14,6 +14,8 @@ import UniformTypeIdentifiers
 //  · 사용자 화면 — 테스트가 띄운 창은 모든 화면 밖 · 클릭 통과 · 키를 안 가져간다(사용자 지시 2026-10-16).
 //  · 문 — 패널 버튼은 뽑지 않고 창을 연다 · 잠긴 이유 · 뽑기 없는 서버면 창도 없다 · 로그아웃이면 창이 내려간다.
 //  · 돈 길 — 기계의 `pull` 이 스토어 뽑기 하나로 간다: 한 판에 RPC 한 번 · 결과 모름 실패 뒤 같은 요청 id · 실패면 공개 없음.
+//  · 돌아가기(v0.3.69) — 사용자가 닫으면(기계의 [닫기] · 빨간 점) 팝오버로 한 번 돌아간다 · 우리가 내리는 길(close · 로그아웃 ·
+//    뽑기 거둠 · 창 재생성)은 안 돌아간다 · 돌아가는 문은 창을 연 클릭이 남긴 디바운스에 안 삼켜진다.
 // 스텁 서버는 `GomokuStubProtocol`(호스트별 응답) — 실서버에 안 나간다. 창 시험은 `--no-parallel` 로 돌린다.
 
 // MARK: - 도우미
@@ -37,7 +39,26 @@ private final class GWHookCounter {
 private func gwController(_ store: WorkTimerStore) -> CheckGachaWindowController {
     let controller = CheckGachaWindowController()
     controller.configure(store: store, content: { _, _, _ in AnyView(Color.clear) })
+    // 빨간 점 알림을 던지는 시험이 실제 팝오버 문(앱 활성화 · 상태바 버튼)을 누르지 않게.
+    controller.returnToPopover = {}
     return controller
+}
+
+/// 창 콘텐츠가 받는 [닫기](앱에서는 그대로 기계의 `onClose` 가 된다 — `configure(store:)`)를 붙잡고, 팝오버로 돌아간 횟수를 센다.
+/// 돌아가는 문은 갈아 끼운다 — 시험이 앱을 활성화하거나 상태바 버튼을 누르지 않는다.
+@MainActor
+private final class GWCloseProbe {
+    let controller = CheckGachaWindowController()
+    var returns = 0
+    var machineClose: (@MainActor () -> Void)?
+
+    init(_ store: WorkTimerStore) {
+        controller.configure(store: store, content: { [weak self] _, _, close in
+            self?.machineClose = close
+            return AnyView(Color.clear)
+        })
+        controller.returnToPopover = { [weak self] in self?.returns += 1 }
+    }
 }
 
 private func gwHost(_ label: String) -> String { "v0354-gwin-\(label)-\(UUID().uuidString.prefix(8))".lowercased() }
@@ -297,6 +318,157 @@ struct V0354GachaWindowLifecycleTests {
         #expect(MiniGameSpaceKey.yieldsToOtherWindow(gacha, gameWindow: game), "뽑기 창으로 간 스페이스를 미니게임이 삼킨다")
         #expect(!MiniGameSpaceKey.yieldsToOtherWindow(unknown, gameWindow: game), "전제: 모르는 창에는 양보하지 않는다(기준선)")
     }
+}
+
+// MARK: - 사용자가 닫으면 팝오버로 (v0.3.69)
+
+// 0.3.68 제보: "캐릭터 뽑기 하고 결과 확인한 후에 닫기 누르면 이전 화면으로 가지는 게 아니라 앱이 꺼집니다". 창을 열 때 팝오버를 일부러
+// 닫고(`openGachaWindow`) [닫기] 는 창만 내렸다 — LSUIElement 라 화면에 아무것도 안 남아 꺼진 것처럼 보였다.
+@MainActor
+@Suite(.serialized)
+struct V0369GachaReturnToPopoverTests {
+    @Test("기계의 [닫기] 는 창을 내리고 팝오버로 한 번 돌아간다 · 겹친 두 번째 클릭은 안 돌아간다 · 다시 열고 닫으면 또 돌아간다")
+    func machineCloseReturnsToThePopover() throws {
+        let store = V0354GachaMacRenderTests.store()
+        let probe = GWCloseProbe(store)
+        defer { probe.controller.discardWindowForTesting() }
+        probe.controller.show()
+        let window = try #require(probe.controller.currentWindow)
+        let close = try #require(probe.machineClose, "창 콘텐츠가 [닫기] 를 못 받았다")
+        #expect(window.isVisible && probe.returns == 0, "기준선: 열기만 했는데 팝오버로 돌아갔다")
+
+        close()
+        #expect(!probe.controller.isOpen && !window.isVisible, "[닫기] 가 창을 안 내렸다")
+        #expect(probe.returns == 1, "[닫기] 뒤 팝오버로 안 돌아갔다 — 화면에 아무것도 안 남는다(앱이 꺼진 것처럼 보인다)")
+        close()
+        #expect(probe.returns == 1, "닫힌 창의 [닫기] 가 또 돌아갔다 — 디바운스 없는 문이라 방금 연 팝오버가 도로 닫힌다")
+
+        probe.controller.show()
+        close()
+        #expect(probe.returns == 2, "다시 연 창의 [닫기] 가 안 돌아갔다")
+    }
+
+    @Test("빨간 점(performClose = 사용자 닫기 경로)도 팝오버로 한 번 돌아간다 — 뽑기 전엔 [닫기] 가 없어 이 길이 유일한 출구다")
+    func redButtonReturnsToThePopover() throws {
+        let store = V0354GachaMacRenderTests.store()
+        let probe = GWCloseProbe(store)
+        defer { probe.controller.discardWindowForTesting() }
+        probe.controller.show()
+        let window = try #require(probe.controller.currentWindow)
+        #expect(probe.returns == 0)
+
+        window.performClose(nil)                          // 타이틀바 빨간 점 · ⌘W 와 같은 길(windowShouldClose → close → windowWillClose)
+        #expect(!probe.controller.isOpen && !window.isVisible, "빨간 점으로 닫았는데 창이 떠 있다")
+        #expect(probe.returns == 1, "빨간 점으로 닫았는데 팝오버로 안 돌아갔다 — 폰의 X 는 상점으로 돌아간다")
+
+        // 닫혀(내려가) 있는 창에 닫힘 알림이 또 와도 두 번 돌아가지 않는다.
+        NotificationCenter.default.post(name: NSWindow.willCloseNotification, object: window)
+        #expect(probe.returns == 1, "닫힌 창의 닫힘 알림이 또 돌아갔다")
+        // 닫아도 파괴 안 함 — 같은 창으로 다시 연다.
+        probe.controller.show()
+        #expect(probe.controller.isOpen && probe.controller.currentWindow === window)
+    }
+
+    @Test("우리가 내리는 길은 팝오버를 안 띄운다: close() · 로그아웃(resetGachaState) · 서버가 뽑기를 거둠 · 창 재생성 · 시험용 버리기 — 같은 컨트롤러의 [닫기] 는 센다(기준선)")
+    func programmaticClosesDoNotReturn() throws {
+        let store = V0354GachaMacRenderTests.store()
+        let probe = GWCloseProbe(store)
+        defer { probe.controller.discardWindowForTesting() }
+        // 스토어의 문을 이 컨트롤러로 잇는다(앱의 `.live` 와 같은 모양 — 공유 인스턴스 대신).
+        let controller = probe.controller
+        store.gachaWindowHooks = GachaWindowHooks(show: { controller.show() }, close: { controller.close() })
+
+        controller.show()
+        controller.close()
+        #expect(!controller.isOpen && probe.returns == 0, "close() 가 팝오버를 띄웠다")
+
+        store.openGachaWindow()
+        #expect(controller.isOpen, "전제: 스토어의 문이 이 컨트롤러를 연다")
+        store.session = SupabaseSession(accessToken: "access-token", refreshToken: nil, userID: "me")
+        store.signOut(notifyServer: false)
+        #expect(!controller.isOpen, "전제: 로그아웃이 창을 내렸다")
+        #expect(probe.returns == 0, "로그아웃이 팝오버를 띄웠다 — 다음 사람 앞에 팝오버가 저절로 튀어나온다")
+
+        store.gachaInfo = V0354GachaMacRenderTests.info()
+        controller.show()
+        store.applyShopState(ShopStateResponse(rubyBalance: 120, characters: []))
+        #expect(!store.isGachaAvailable && !controller.isOpen, "전제: 뽑기가 사라지면 창이 내려간다")
+        #expect(probe.returns == 0, "서버가 뽑기를 거둔 것이 팝오버를 띄웠다")
+
+        controller.show()
+        let first = try #require(controller.currentWindow)
+        controller.rebuildStuckWindow()                   // 옛 창을 close() 하지만 위임을 먼저 끊는다
+        #expect(controller.isOpen && controller.currentWindow !== first, "전제: 창을 새로 만들어 다시 열었다")
+        #expect(probe.returns == 0, "창 재생성의 옛 창 닫기를 사용자 닫기로 읽었다")
+        controller.discardWindowForTesting()
+        #expect(probe.returns == 0, "시험용 버리기를 사용자 닫기로 읽었다")
+
+        // 기준선(달라야 한다): 같은 컨트롤러 · 새 창에서 사용자가 [닫기] 를 누르면 센다.
+        controller.show()
+        let close = try #require(probe.machineClose, "새 창 콘텐츠가 [닫기] 를 못 받았다")
+        close()
+        #expect(probe.returns == 1, "기준선: 사용자 [닫기] 를 안 셌다 — 위 0 들이 아무것도 안 잰다")
+    }
+
+    @Test("돌아가는 문은 창을 연 클릭이 남긴 디바운스에 안 삼켜진다 — 여는 문(기준선)은 같은 순간 삼킨다 · 앱의 두 창이 그 문을 쓴다")
+    func returnDoorIsNotSwallowedByTheOpeningDismiss() throws {
+        // 창을 연 동작이 팝오버를 닫으며(`dismissMenuPopover`) 래치에 시각을 남긴다 — 0.6초 안의 [닫기](안 보이는 동안 공개가 끝난 판을
+        // 다시 열면 곧바로 서 있다) · 빨간 점을 여는 문은 `.debounced` 로 조용히 삼킨다. 헤드리스엔 상태 아이템이 없어 실제로 누르지는
+        // 않는다 — 판정이 디바운스를 지나 '누를 대상이 없다'(.noStatusItem)까지 갔는가를 잰다.
+        let now = Date()
+        defer { WindowTopAnchor.resetDismissDebounceForTesting() }
+        WindowTopAnchor.markToggleClickForTesting(at: now.addingTimeInterval(-WindowTopAnchor.dismissDebounce / 2))
+        #expect(WindowTopAnchor.presentMenuPopover(now: now) == .debounced,
+                "기준선: 여는 문이 방금 누른 래치를 안 본다 — 아래 '안 삼켜짐'이 아무것도 안 잰다")
+        #expect(WindowTopAnchor.returnToMenuPopover(now: now) == .noStatusItem,
+                "돌아가는 문이 창을 연 클릭의 디바운스에 삼켜졌다 — 빨리 닫으면 팝오버가 안 돌아온다")
+
+        // 앱의 두 창이 기본으로 그 문을 쓴다(주석을 걷고 본다 — 주석 속 이름으로 초록이 되지 않게).
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        for file in ["Sources/check/CheckGachaWindow.swift", "Sources/check/WorkTimerStoreCakeGift.swift"] {
+            let code = gwStrippingComments(try String(contentsOf: root.appendingPathComponent(file), encoding: .utf8))
+            #expect(code.contains("WindowTopAnchor.returnToMenuPopover()"), "\(file) 의 돌아가는 문이 디바운스를 보는 여는 문으로 갔다")
+            #expect(!code.contains("WindowTopAnchor.presentMenuPopover("), "\(file) 가 디바운스를 보는 여는 문을 부른다")
+        }
+    }
+}
+
+/// 줄 주석 · 블록 주석을 걷어낸 소스(계약을 소스로 되묻는 시험이 설명 문단까지 세지 않게 — `CheckWindowAnchorTests` 와 같은 걷기).
+/// (문자열 리터럴 속 `//` · `/*` 는 검사하는 두 파일에 없다.)
+private func gwStrippingComments(_ source: String) -> String {
+    var output = ""
+    var inBlock = false
+    for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+        var rest = Substring(line)
+        var kept = ""
+        while !rest.isEmpty {
+            if inBlock {
+                if let close = rest.range(of: "*/") {
+                    rest = rest[close.upperBound...]
+                    inBlock = false
+                } else {
+                    rest = ""
+                }
+                continue
+            }
+            let lineComment = rest.range(of: "//")
+            if let block = rest.range(of: "/*"), lineComment.map({ block.lowerBound < $0.lowerBound }) ?? true {
+                kept += rest[..<block.lowerBound]
+                rest = rest[block.upperBound...]
+                inBlock = true
+                continue
+            }
+            if let comment = lineComment {
+                kept += rest[..<comment.lowerBound]
+                rest = ""
+                continue
+            }
+            kept += rest
+            rest = ""
+        }
+        output += kept + "\n"
+    }
+    return output
 }
 
 /// 모든 화면 밖 · 알파 0 · 클릭 통과의 맨 창(식별자만 단다).

@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import Testing
 @testable import check
 @testable import CheckCore
@@ -14,6 +16,8 @@ import Testing
 //  ③-b 결론은 서버가(검토 수리): 결과를 모르는 수령 · 다른 기기 수령 뒤에도 창은 그리던 선물로 확인한다(replayed · already_claimed) · 보유를
 //     다시 읽는다 · not_found 는 잠근다 · 수령 전에 떠난 낡은 조회는 카드를 되살리지 않는다 · 상점 보유와 선택지를 맞춘다 · 가입도 첫 조회를 한다.
 //  ④ 로그아웃: 선물 상태가 다음 계정으로 새지 않는다(떠 있던 조회 응답도 버린다).
+//  ⑤ 돌아가기(v0.3.69): 팝오버의 [고르기] 로 연 창은 사용자가 닫으면([닫기] · [지금 입기] · 빨간 점) 팝오버로 한 번 돌아간다 ·
+//     스스로 띄운 창 · 로그아웃은 안 돌아간다.
 
 private let gcGiftID = "6f1c2a7e-1d1f-4b0e-9a55-0c5d7f3b2a10"
 private let gcStrawberry = CharacterCatalog.cakeStrawberryAingID
@@ -26,17 +30,21 @@ private let gcPendingNone = #"{"status":"ok"}"#
 /// 함수가 없는 서버(PostgREST PGRST202 — 앱이 db push 보다 먼저 나간 창).
 private let gcMissingFunction = #"{"code":"PGRST202","details":null,"hint":null,"message":"Could not find the function public.character_gift_pending(p_protocol) in the schema cache"}"#
 
-/// 창 훅 대역 — 띄운 횟수 · 키를 잡았는가 · 닫은 횟수 · 떠 있는가.
+/// 창 훅 대역 — 띄운 횟수 · 키를 잡았는가 · 닫은 횟수 · 떠 있는가 · 팝오버로 돌아간 횟수.
 @MainActor
 private final class GiftWindowSpy {
     var shows: [Bool] = []
     var closes = 0
     var open = false
+    var returns = 0
+    /// 실제 컨트롤러 시험에서 창 콘텐츠가 받은 [닫기].
+    var windowClose: (@MainActor () -> Void)?
 
     var hooks: CakeGiftWindowHooks {
         CakeGiftWindowHooks(show: { [self] activating in shows.append(activating); open = true },
                             close: { [self] in closes += 1; open = false },
-                            isOpen: { [self] in open })
+                            isOpen: { [self] in open },
+                            returnToPopover: { [self] in returns += 1 })
     }
 }
 
@@ -655,5 +663,84 @@ struct V0366CakeMacGiftStoreTests {
         lateStore.session = SupabaseSession(accessToken: "next", refreshToken: nil, userID: "00000000-0000-0000-0000-0000000000d2")
         await lateStore.refreshCakeGift(reason: .signIn)?.value
         #expect(lateStore.cakeGiftOffer == nil && !lateStore.showsCakeGiftCard)
+    }
+
+    // MARK: ⑤ 닫으면 팝오버로 (v0.3.69)
+
+    @Test("[고르기] 로 연 창은 사용자가 닫으면 팝오버로 한 번 돌아간다([닫기] · [지금 입기]) — 스스로 띄운 창(기준선) · 겹친 닫기 · 로그아웃은 안 돌아간다")
+    func userCloseReturnsToThePopoverOnlyWhenOpenedFromIt() async throws {
+        let host = gcHost("return")
+        let server = GiftServer()
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        #expect(spy.shows == [false], "전제: 스스로 띄웠다")
+        // 기준선(달라야 한다): 스스로 띄운 창은 팝오버에서 온 것이 아니다 — 닫아도 팝오버가 튀어나오지 않는다.
+        store.closeCakeGiftWindow()
+        #expect(spy.closes == 1 && spy.returns == 0, "스스로 띄운 창을 닫았는데 팝오버가 튀어나왔다")
+
+        // '다시 열기' 카드의 [고르기] → [닫기]: 한 번 돌아간다. 겹친 두 번째 닫기는 안 돌아간다.
+        store.openCakeGiftWindow()
+        store.closeCakeGiftWindow()
+        #expect(spy.returns == 1, "[고르기] 로 연 창을 닫았는데 팝오버로 안 돌아갔다 — 화면에 아무것도 안 남는다")
+        store.closeCakeGiftWindow()
+        #expect(spy.returns == 1, "닫힌 창을 또 닫았더니 또 돌아갔다 — 디바운스 없는 문이라 방금 연 팝오버가 도로 닫힌다")
+
+        // [고르기] → 받기 → [지금 입기](창을 닫는 사용자 동작)도 한 번.
+        store.openCakeGiftWindow()
+        store.chooseCakeGift(gcStrawberry)
+        await store.claimCakeGift()?.value
+        #expect(store.cakeGiftReceivedID == gcStrawberry, "전제: 받은 뒤 화면")
+        #expect(spy.returns == 1, "받기만 했는데 팝오버로 돌아갔다")
+        store.wearCakeGift()
+        #expect(!spy.open && spy.returns == 2, "[지금 입기] 로 창을 닫았는데 팝오버로 안 돌아갔다(\(spy.returns))")
+        #expect(await V0354CoreStub.waitUntil { GomokuStubProtocol.count(host: host, rpc: "set_character") == 1 })
+
+        // [고르기] 로 연 창이 떠 있는 채 로그아웃: 창은 내려가되 팝오버는 안 띄운다(다음 사람 앞에 저절로 튀어나오지 않게).
+        let outHost = gcHost("return-signout")
+        let outSpy = GiftWindowSpy()
+        let outStore = gcStore(host: outHost, server: GiftServer(), spy: outSpy)
+        await outStore.refreshCakeGift(reason: .launch)?.value
+        outStore.openCakeGiftWindow()
+        #expect(outSpy.open, "전제: [고르기] 가 창을 열었다")
+        outStore.signOut(notifyServer: false)
+        #expect(!outSpy.open && outSpy.returns == 0, "로그아웃이 팝오버를 띄웠다")
+        // 그 뒤의 닫기도(로그아웃이 '팝오버에서 왔다'를 거뒀다) 안 돌아간다.
+        outStore.closeCakeGiftWindow()
+        #expect(outSpy.returns == 0, "로그아웃 뒤 닫기가 앞 사람의 [고르기] 를 따라 돌아갔다")
+    }
+
+    @Test("실제 창(화면 밖): [고르기] 로 연 창의 빨간 점(performClose) · 창의 [닫기] 가 각각 한 번 돌아간다 — 스스로 띄운 창의 빨간 점은 안 돌아간다(기준선)")
+    func realWindowRedButtonAndCloseReturnToThePopover() async throws {
+        let host = gcHost("return-window")
+        let spy = GiftWindowSpy()
+        let store = gcStore(host: host, server: GiftServer(), spy: spy)
+        let controller = CheckCakeGiftWindowController()
+        defer { controller.discardWindowForTesting() }
+        controller.configure(store: store, content: { [weak spy] _, close in
+            spy?.windowClose = close
+            return AnyView(Color.clear)
+        })
+        // 스토어의 문을 이 컨트롤러로 잇는다(앱의 `.live` 와 같은 모양) — 돌아가는 문만 센다(실제 팝오버 문을 누르지 않는다).
+        store.cakeGiftWindowHooks = CakeGiftWindowHooks(show: { controller.show(activating: $0) },
+                                                        close: { controller.close() },
+                                                        isOpen: { controller.isOpen },
+                                                        returnToPopover: { [weak spy] in spy?.returns += 1 })
+        await store.refreshCakeGift(reason: .launch)?.value
+        let window = try #require(controller.currentWindow, "전제: 스스로 띄운 창이 섰다")
+        #expect(controller.isOpen && window.isVisible)
+        window.performClose(nil)                          // 타이틀바 빨간 점과 같은 길(windowWillClose)
+        #expect(!controller.isOpen && spy.returns == 0, "스스로 띄운 창의 빨간 점이 팝오버를 띄웠다")
+        #expect(store.cakeGiftOffer != nil, "전제: 고르지 않고 닫아도 선물은 남는다")
+
+        store.openCakeGiftWindow()
+        #expect(controller.isOpen && controller.currentWindow === window)
+        window.performClose(nil)
+        #expect(!controller.isOpen && spy.returns == 1, "[고르기] 로 연 창을 빨간 점으로 닫았는데 팝오버로 안 돌아갔다")
+
+        store.openCakeGiftWindow()
+        let close = try #require(spy.windowClose, "창 콘텐츠가 [닫기] 를 못 받았다")
+        close()
+        #expect(!controller.isOpen && !window.isVisible && spy.returns == 2, "창의 [닫기] 가 팝오버로 안 돌아갔다(\(spy.returns))")
     }
 }

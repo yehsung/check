@@ -36,6 +36,7 @@
 <a className={glassButtonClass('glass', 's')} href="/licenses">글꼴 라이선스</a>
 ```
 다운로드 버튼은 플랫폼 분기가 든 `@/components/ui/DownloadCTA`(`placement` `size` `tone="fill"|"outline"` `label` `ariaLabel`)를 그대로 써도 된다 — 이미 유리로 입혔다.
+QR 흰 타일: `@/components/ui/QrCode`(`size` · `href` · `src` · `alt` — 기본 = App Store QR 새 탭. 바깥 주소만 새 탭, `/#android` 같은 사이트 경로는 같은 탭 · desk 전용 — brief §12, 2026-10-30).
 
 ## 3. `CommandPill` · `BrewPill` — 명령 알약 + 진짜 복사 (client)
 `import { CommandPill, BrewPill } from '@/components/glass/CommandPill'`
@@ -47,7 +48,8 @@
 <BrewPill size="l" className="w-full" />      {/* 넓은 자리(글자 15.5px) */}
 <CommandPill command={BREW.upgrade} copyAriaLabel="brew 업데이트 명령 복사" />
 ```
-알약 없이 버튼만: `import { CopyButton } from '@/components/glass/CopyButton'` — `text` `ariaLabel`(보이는 '복사' 포함) `label` `done` `variant="chip"|"glass"|"primary"` `icon`.
+알약 없이 버튼만: `import { CopyButton } from '@/components/glass/CopyButton'` — `text` `ariaLabel`(보이는 '복사' 포함) `label` `done` `variant="chip"|"glass"|"primary"` `icon` `dataCta`(측정용 `data-cta`, 2026-10-30).
+설치 선택 창(유리 팝오버 — 다운로드 버튼이 연다)은 프리미티브가 아니라 `@/components/install/InstallChooser`(DownloadCTA 가 hero·outro·nav ≥768 에서 쓴다 — brief §11). 판은 `<Glass level="thick" specular>` + 짙은 틴트, body 포털 · z 메뉴바 창 60 / 히어로·아웃트로 창 49(메뉴바 아래). 자리 계산은 순수 함수 `computePlacement`(`components/install/chooser-logic.ts`).
 iOS 에서 숨기려면 부르는 쪽 className 에 `[html[data-platform=ios]_&]:hidden`.
 
 ## 4. `LocalLight` — 절마다 유리 뒤 국소 빛 (서버·클라)

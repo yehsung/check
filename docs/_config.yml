@@ -13,6 +13,7 @@ exclude:
   - ultra-economy.md
   - work-tick.md
   - plan
+  - ops
   - images
 
 theme: jekyll-theme-minimal

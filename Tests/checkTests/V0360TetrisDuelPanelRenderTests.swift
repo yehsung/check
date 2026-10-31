@@ -521,19 +521,18 @@ struct TetrisDuelPanelRenderTests {
         }
     }
 
-    @Test("미니게임 머리글: 1:1 입구 묶음(오목·체스·테트리스) 스틸")
-    func theMiniGameHeaderEntriesStill() throws {
-        let header = MiniGameGameHeader(selected: .tetris, isPlaying: false, isFrozen: false,
-                                        onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}, onTetrisDuel: {})
-            .frame(width: MiniGameWindowLayout.canvasSize.width, height: MiniGameWindowLayout.headerHeight)
-            .padding(8)
+    @Test("미니게임 사이드바: 같이 하기 문(오목·체스·테트리스·큐브) 스틸 — v0.3.69 전에는 머리글 묶음")
+    func theMiniGameSidebarEntriesStill() throws {
+        let sidebar = MiniGameSidebar(selected: .tetris, isPlaying: false, isFrozen: false, invites: MiniGameDuelInvites(tetris: true),
+                                      onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {})
+            .frame(width: MiniGameWindowLayout.sidebarWidth, height: MiniGameWindowLayout.contentSize.height)
             .background(CheckTheme.background)
-        let bitmap = try trBitmap(header)
-        MiniGameSnapshots.save(bitmap, name: "minigame-header-entries.png", sub: "stills")
+        let bitmap = try trBitmap(sidebar)
+        MiniGameSnapshots.save(bitmap, name: "minigame-sidebar-entries.png", sub: "stills")
         let green = trCount(bitmap, near: trWorking, tolerance: 22,
                             in: CGRect(x: 0, y: 0, width: Double(bitmap.pixelsWide) / 2, height: Double(bitmap.pixelsHigh) / 2))
-        print("[머리글] 초록 \(green)px")
-        #expect(green > 200, "머리글에 1:1 입구 묶음이 안 보인다")
+        print("[사이드바] 초록 \(green)px")
+        #expect(green > 200, "사이드바에 대결 문이 안 보인다")
     }
 }
 

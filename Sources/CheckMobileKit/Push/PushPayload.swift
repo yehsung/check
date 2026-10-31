@@ -10,6 +10,7 @@ import Foundation
 //   work_check     {"aps":{…,"category":"WORK_CHECK","thread-id":"work-check"},"type":"work_check","session_id":uuid}
 //                  (0.3.51 — 폰이 연 근무에 2시간 30분 동안 신호가 없을 때 서버 cron 이 한 번 보낸다. 눌러 열면 근무가 이어진다.)
 // 오목 차례·결과·읽음은 푸시하지 않는다(서버가 만들지 않는다). 모르는 type·id 가 빠진 페이로드는 nil — 조용히 "지금" 탭으로 접지 않는다.
+// 확성기 배너: 메시지 푸시에 최상위 `megaphone_id` 가 붙으면 확성기다 — 옵셔널로 읽고, 앞에 있으면 앱 배너로(`PushCoordinator`).
 // `message_id` 는 서버가 계속 싣지만 앱은 읽지 않는다 — 그것을 쓰던 알림 액션(답장 · 읽음)을 걷어냈다(w10). 있든 없든 · 모양이 틀리든 알림은 산다.
 
 /// 푸시 종류(서버 `push_outbox.kind` · `client_devices.push_prefs` 의 키와 같은 이름).
@@ -99,9 +100,14 @@ package struct PushPayload: Equatable, Sendable {
     }
 
     package let content: Content
+    /// 확성기로 온 메시지면 그 확성기 id(서버 `push_on_message_insert` 가 `megaphone_id` 를 최상위에 싣는다 — 계약 S6).
+    /// **옵셔널 키다** — 새 `PushKind` 를 만들지 않는다(완전 열거 switch·카테고리 시험·서버 `push_prefs` 가 그대로다).
+    /// 옛 폰은 이 키를 모르고 평범한 메시지로 연다. 메시지가 아닌 종류에서는 읽지 않는다.
+    package let megaphoneID: String?
 
-    package init(content: Content) {
+    package init(content: Content, megaphoneID: String? = nil) {
         self.content = content
+        if case .message = content { self.megaphoneID = megaphoneID } else { self.megaphoneID = nil }
     }
 
     package var kind: PushKind {
@@ -142,6 +148,8 @@ package struct PushPayload: Equatable, Sendable {
         guard let rawType = text("type")?.trimmingCharacters(in: .whitespaces).lowercased(),
               let kind = PushKind(rawValue: rawType)
         else { return nil }
+        // 확성기 표식(옵셔널) — 모양이 틀리면 없는 것으로 접는다(알림은 평범한 메시지로 산다).
+        megaphoneID = kind == .message ? text("megaphone_id").flatMap(Self.safeID) : nil
         switch kind {
         case .message:
             guard let peer = text("peer_id").flatMap(Self.safeID) else { return nil }
@@ -169,6 +177,35 @@ package struct PushPayload: Equatable, Sendable {
               trimmed.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") })
         else { return nil }
         return trimmed.lowercased()
+    }
+}
+
+/// 알림에 보이는 글(제목 = 보낸 사람 닉네임 · 본문 = 메시지). 확성기 푸시를 앱 배너로 옮길 때만 쓴다 —
+/// 어댑터가 `UNNotificationContent.title/body` 로 만든다(시험·데모는 `aps.alert` 에서 읽는다).
+package struct PushAlert: Equatable, Sendable {
+    package let title: String?
+    package let body: String?
+
+    package init(title: String?, body: String?) {
+        func clean(_ raw: String?) -> String? {
+            guard let text = raw?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else { return nil }
+            return text
+        }
+        self.title = clean(title)
+        self.body = clean(body)
+    }
+
+    /// APNs 본문의 `aps.alert`(사전 또는 문자열) → 값. 없으면 nil.
+    package init?(userInfo: [AnyHashable: Any]) {
+        guard let aps = userInfo["aps"] as? [AnyHashable: Any] else { return nil }
+        switch aps["alert"] {
+        case let alert as [AnyHashable: Any]:
+            self.init(title: alert["title"] as? String, body: alert["body"] as? String)
+        case let text as String:
+            self.init(title: nil, body: text)
+        default:
+            return nil
+        }
     }
 }
 
@@ -285,6 +322,8 @@ package enum PushText {
     // 권한 설명 시트
     package static let primerTitle = "알림을 켜 둘까요?"
     package static let primerBody = "앱을 닫아 두어도 이런 소식을 바로 알려 드려요."
+    /// ★ '맥'만 적는 것이 맞다: 서버 `push__at_desktop` 은 맥 입력만 푸시를 줄이고, Windows 는 표면 상수가 전부
+    ///   2147483647 이라 줄이지 않는다(`20261101130000`). 그 상수를 내리는 날 이 문장도 같이 고친다.
     package static let primerMacNote = "맥에서 근무 중이고 방금 입력이 있었다면 메시지·오목 신청 알림은 폰에 보내지 않아요."
     package static let primerSettingsNote = "종류별로 끄는 것은 나 탭 설정에서 할 수 있어요."
     package static let primerAllow = "알림 켜기"

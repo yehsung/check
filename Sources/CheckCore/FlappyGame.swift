@@ -50,8 +50,22 @@ package struct FlappyGame: Equatable, Sendable {
         /// 채워지기 전(nil)에는 기준선 그대로다 — 화면 밖에서 미리 튀어 버리면 서프라이즈가 아니라 사고다.
         package var shiftAt: TimeInterval?
 
-        /// 이 기둥이 언젠가 튀는가(테스트·조준 판정용). 그림은 이 값을 보지 않는다 — 색 신호가 없기 때문이다.
+        /// 이 기둥이 언젠가 튀는가(테스트·조준 판정용). 그림은 이 값을 직접 보지 않고 아래 `warningLevel(at:)` 만 본다.
         package var isShifting: Bool { shiftDelay != nil }
+
+        /// 튀는 기둥의 붉은 예고 세기(0…1). **그림(맥·폰)이 읽는 유일한 튐 정보다.**
+        ///
+        /// 2026-10-30 사용자 번복(원문): "플래피 아잉에서 움직이게 될 벽돌은 살짝 붉은 빛 표시하면서 미리 움직일거라고
+        /// 예고하게끔 추가하자." — 2026-09-08 의 "움직이는 기둥 뭔지 알려 주지 말자"를 뒤집었다.
+        /// 고정 기둥은 0. 튀는 기둥은 **튀기를 마칠 때까지 1**(화면에 들어온 순간부터 보인다 — 조준 전에는 화면 밖이다),
+        /// 그 뒤 `warningFade` 동안 선형으로 0 까지. 이징을 쓰지 않는다 — 불투명도를 이징으로 깎으면 앞에서 다 빠진다.
+        package func warningLevel(at time: TimeInterval) -> Double {
+            guard shiftDelay != nil else { return 0 }
+            guard let shiftAt else { return 1 }
+            let settled = shiftAt + FlappyGame.shiftDuration
+            guard time > settled else { return 1 }
+            return max(0, 1 - (time - settled) / FlappyGame.warningFade)
+        }
 
         /// 그 시각의 틈 중심. **충돌·그리기가 같은 이 함수를 쓴다** — 갈라지면 "안 닿았는데 죽었다"가 된다.
         ///
@@ -221,6 +235,8 @@ package struct FlappyGame: Equatable, Sendable {
     package static let shiftDelayRange: ClosedRange<TimeInterval> = 0.45...1.10
     /// 튀는 데 걸리는 시간(초). 순간이동처럼 보이되 프레임 사이가 이어진다.
     package static let shiftDuration: TimeInterval = 0.12
+    /// 튀기를 마친 뒤 붉은 예고가 빠지는 시간(초). 바로 끄면 "깜빡"으로 읽히고, 길면 다음 기둥 예고와 섞인다.
+    package static let warningFade: TimeInterval = 0.35
 
     // MARK: 순수 규칙 — 물리·충돌
 
@@ -374,4 +390,17 @@ package struct FlappyGame: Equatable, Sendable {
         }
         phase = .running
     }
+}
+
+/// 튀는 기둥 예고의 그림 값 — 맥(`MiniGameFlappy`)과 폰(`GamesFlappyCanvas`)이 **이 한 벌**을 쓴다(2026-10-30).
+/// "살짝 붉은 빛"(사용자 원문)이라 본체는 옅게 물들이고, 어두운 무대에서도 보이도록 외곽선을 붉게 덧그린다.
+/// 세기는 `FlappyGame.Pipe.warningLevel(at:)` 이 곱한다 — 여기 값은 세기 1 일 때의 상한이다.
+package enum FlappyShiftWarning {
+    /// 따뜻한 빨강. 노을 하늘(주황) 위에서도 어두운 기둥 본체 위에 얹히므로 갈린다.
+    package static let tint = Color(red: 1.0, green: 0.30, blue: 0.26)
+    /// 본체 덧칠 불투명도 상한. 0.4 를 넘기면 "살짝"이 아니라 빨간 기둥이 된다.
+    package static let fillOpacity: Double = 0.26
+    /// 붉은 외곽선 불투명도 상한. 기본 외곽선(1.5pt) 위에 같은 굵기로 덧그린다.
+    package static let strokeOpacity: Double = 0.90
+    package static let lineWidth: CGFloat = 1.5
 }

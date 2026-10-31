@@ -200,6 +200,48 @@ package enum MessagesSendRules {
         case .flood, .invalid: return MessageNoticeText.invalid
         }
     }
+
+    /// 응답 유실 재시도(한 번)를 걸 만한 URL 실패 — 서버의 답을 못 받아 **말이 저장됐는지 모르는** 것들.
+    /// 연결 전 실패(오프라인·호스트 못 찾음)도 넣는다: 같은 키로 한 번 더 보내는 값이 1.5초 기다림 하나뿐이고,
+    /// 서버가 키로 거르는 판에서만 재시도하므로(스토어 `serverKnowsSendKey`) 두 통이 될 길이 없다.
+    /// 취소(`.cancelled`)는 넣지 않는다 — 누군가 멈추라고 한 왕복을 되살리지 않는다.
+    package static let ambiguousURLErrorCodes: Set<URLError.Code> = [
+        .timedOut, .networkConnectionLost, .cannotConnectToHost, .notConnectedToInternet,
+        .cannotFindHost, .dnsLookupFailed, .badServerResponse,
+    ]
+
+    /// 전송 왕복이 "모호하게" 실패했는가(서버 레인 안정화 2026-10-30 — 10-29 18:54 PGRST003·504·57014).
+    /// 위 URL 실패와 HTTP 5xx(`SupabaseWorkHTTP.serviceError` 가 상태코드 게이트로 `.invalidResponse(5xx)` 에 접는다)다.
+    /// 4xx·429 는 서버가 **답을 준** 것이라 넣지 않는다(429 를 되치면 장애 때 요청만 는다).
+    package static func isAmbiguousFailure(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            return ambiguousURLErrorCodes.contains(urlError.code)
+        }
+        if case SupabaseWorkServiceError.invalidResponse(let code) = error {
+            return (500...599).contains(code)
+        }
+        return false
+    }
+}
+
+/// 서버의 확정 답을 못 받은 전송 하나(스토어 `MessagesRuntime.unconfirmedSends`). 같은 상대·같은 본문을
+/// `MessagesStore.unconfirmedSendReuseSeconds` 안에 다시 보내면 새 키 대신 이 키를 쓴다 — 앞의 것이 실은 저장됐으면
+/// 서버가 `duplicate` 로 걸러 한 통으로 남는다.
+package struct MessagesUnconfirmedSend: Equatable, Sendable {
+    package let peerUserID: String
+    /// 정규화한 본문(자리 말풍선 `body` 와 같은 값 — 서버로 보낸 그 글자).
+    package let body: String
+    /// 전송 멱등 키 = 그때 자리 말풍선의 id(소문자 uuid).
+    package let key: String
+    /// 마지막으로 모호하게 실패한 시각(`context.clock`).
+    package let failedAt: Date
+
+    package init(peerUserID: String, body: String, key: String, failedAt: Date) {
+        self.peerUserID = peerUserID
+        self.body = body
+        self.key = key
+        self.failedAt = failedAt
+    }
 }
 
 // MARK: - 입력칸

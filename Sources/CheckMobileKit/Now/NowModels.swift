@@ -4,14 +4,36 @@ import Foundation
 // 지금 탭의 값·순수 계산·문구(SPEC-ios §3.2). 화면 없이 값으로 검증한다(`NowStoreTests`).
 // 플랫폼 무관 — macOS `swift test` 가 이 파일을 그대로 돈다.
 
+// MARK: - 새 버전 안내
+
+/// 새 버전 안내 한 줄의 표시 규칙. 차단(`minBuild`)과 따로 논다 — 이 줄은 막지 않고 알리기만 한다.
+package enum NowUpdateNoticeRule {
+    /// 서버 최신 빌드가 이 빌드보다 높고, 그 빌드를 아직 닫지 않았을 때만 보인다.
+    /// - 최신 빌드가 nil(`client_release` 를 못 받음)이면 모르는 것이라 안 보인다.
+    /// - 이 빌드가 더 높으면(TestFlight 가 앞선 경우) 안 보인다.
+    /// - 닫은 값과 비교는 같음뿐이다: 더 새 빌드가 나오면 닫은 기록과 달라져 다시 뜬다.
+    package static func isVisible(latestBuild: Int?, currentBuild: Int, dismissedBuild: Int?) -> Bool {
+        guard let latestBuild, latestBuild > currentBuild else { return false }
+        return dismissedBuild != latestBuild
+    }
+}
+
 // MARK: - 문구
 
 /// 지금 탭 문구. 맥과 뜻이 같은 문장은 맥 글자 그대로 옮겼다(할 일 보드 `TodoBoardStrings` · 목표 편집 `updateTeamGoal`).
 package enum NowText {
     package static let title = "지금"
 
+    // 새 버전 안내 한 줄
+    package static let updateNoticeTitle = "새 버전이 나왔어요"
+    package static let updateNoticeAction = "업데이트"
+    /// 닫기(X)의 보이스오버 이름. 눈에 보이는 글자는 없다.
+    package static let updateNoticeDismiss = "새 버전 안내 닫기"
+
     // 내 상태
     package static let workingOnMac = "맥에서 근무 중"
+    /// Windows 가 연 세션(서버 origin `'windows'` · 2026-10-31 사용자 결정 — 기기 종류대로 '맥' / 'PC').
+    package static let workingOnPC = "PC에서 근무 중"
     /// 폰이 연 세션(0.3.51 — `work_phone_start`).
     package static let workingOnPhone = "폰에서 근무 중"
     /// 어디서 열었는지 아직 모른다(생존 신호 응답 전).
@@ -85,7 +107,8 @@ package enum NowText {
     /// 머리·묶음 오른쪽 사람 수("6명").
     package static func peopleCount(_ count: Int) -> String { "\(count)명" }
     /// 지금 근무 중 절 아래 한 줄. 0.3.51 부터 폰도 근무를 시작·종료한다(맨 위 상태 카드의 버튼).
-    package static let workingFooter = "근무는 맥이나 이 탭 맨 위 버튼으로 시작하고 끝내요"
+    /// ★ 2026-10-31: '맥이나' → '맥·PC나'(사용자 결정). Windows 앱으로 근무하는 사람에게 자기 기기가 빠져 있었다.
+    package static let workingFooter = "근무는 맥·PC나 이 탭 맨 위 버튼으로 시작하고 끝내요"
     /// 서버에 폰 근무 함수가 아직 없을 때(404 PGRST202 — 앱이 db push 보다 먼저 나간 창)만 쓰는 옛 문장.
     package static let workingFooterMacOnly = "근무 시작과 종료는 맥 앱에서 해요"
     /// 끊긴 팀원 부제: "연결 끊김 · 마지막 확인 13분 전".
@@ -113,6 +136,7 @@ package enum NowText {
     package static func workStopConfirmMessage(origin: NowWorkOrigin) -> String {
         switch origin {
         case .mac: return "맥에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
+        case .windows: return "PC에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
         case .phone, .unknown: return "지금까지의 시간은 그대로 기록돼요."
         }
     }
@@ -120,6 +144,7 @@ package enum NowText {
     package static let workStopped = "근무를 끝냈어요"
     package static let alreadyWorking = "이미 근무 중이에요"
     package static let alreadyWorkingOnMac = "이미 맥에서 근무 중이에요"
+    package static let alreadyWorkingOnPC = "이미 PC에서 근무 중이에요"
     package static let alreadyStopped = "이미 근무가 끝나 있어요"
     package static let workChanged = "근무 상태가 바뀌었어요. 다시 확인해 주세요"
     package static let startFailed = "근무를 시작하지 못했어요. 잠시 후 다시 시도해 주세요"
@@ -133,6 +158,7 @@ package enum NowText {
         "폰을 잠가도 근무는 이어져요 · \(NowFormat.hoursMinutesText(checkAfterSeconds ?? 9_000)) 동안 앱을 안 열면 확인 알림을 보내요"
     }
     package static let macWorkCaption = "맥에서 연 근무예요 · 여기서 끝낼 수도 있어요"
+    package static let pcWorkCaption = "PC에서 연 근무예요 · 여기서 끝낼 수도 있어요"
     /// 알림이 꺼진 사람이 폰으로 근무 중일 때 — 확인 알림 없이 같은 시각표로 끝난다(서버 결정).
     package static let pushOffWarning = "알림이 꺼져 있어 확인 알림 없이 근무가 끝날 수 있어요"
     /// 서버가 확인 알림 뒤 유예가 지나 소급 마감했다(`work_phone_touch` 의 last.reason = idle). "13:20"(KST).
@@ -149,7 +175,12 @@ package enum NowText {
 package enum NowWorkOrigin: String, Equatable, Sendable {
     case phone
     case mac
-    /// 아직 모른다(생존 신호 응답 전) — "근무 중"으로만 말한다.
+    /// Windows 앱이 연 근무(서버 `phone_work__session_json` 이 `20261101120000` 부터 보낸다).
+    /// ★ 이 값이 생기기 전에는 모르는 origin 을 `.mac` 으로 접었고, 그래서 **PC 에서 근무를 켠 사람의 폰이
+    ///   "맥에서 근무 중"이라고 말했다.** 두 값일 때 안전했던 접기가 셋째 값에서 남의 이름을 적은 자리다.
+    case windows
+    /// 아직 모른다(생존 신호 응답 전) **또는 서버가 우리가 모르는 값을 보냈다** — "근무 중"으로만 말한다.
+    /// 넷째 값(리눅스·웹…)이 와도 이 자리로 떨어져야 한다. 특정 기기 이름으로 접지 마라.
     case unknown
 }
 
@@ -212,6 +243,7 @@ package struct NowMyCard: Equatable, Sendable {
         switch origin {
         case .phone: return NowText.workingOnPhone
         case .mac: return NowText.workingOnMac
+        case .windows: return NowText.workingOnPC
         case .unknown: return NowText.working
         }
     }

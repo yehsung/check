@@ -21,7 +21,7 @@ package enum AingWidgetText {
     package static let signedOut = "앱에서 로그인해 주세요"
     package static let noData = "앱을 열면 채워져요"
     /// 소속 없는 사용자의 "내 오늘"(앱 지금 탭의 "팀에 속해 있지 않아요"와 같은 뜻 — 앱을 열어도 채워지지 않는다).
-    package static let noTeam = "맥 앱에서 팀에 참여하면 보여요"
+    package static let noTeam = "맥·PC 앱에서 팀에 참여하면 보여요"
 
     package static let workingTitle = "지금 근무 중"
     package static let workingEmpty = "지금 근무 중인 사람이 없어요"

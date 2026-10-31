@@ -1,0 +1,129 @@
+{
+  "state": {
+    "consecutive_passes": 0,
+    "draft": null,
+    "end_reason": null,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "grace_ms": 2000,
+    "host_id": "92000000-0000-4000-8000-000000000001",
+    "id": "698517ab-2a09-40dd-abaa-f82b7fb07e9c",
+    "is_public": true,
+    "last_event": {
+      "at_ms": 1793341032775,
+      "count": 6,
+      "kind": "forfeit",
+      "seat_no": 1
+    },
+    "max_seats": 4,
+    "my_initial_done": true,
+    "my_rack": [
+      "D5"
+    ],
+    "my_seat_no": 0,
+    "pool_count": 2,
+    "reactions": [],
+    "seat_count": 3,
+    "seats": [
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "이판01",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": true,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 1,
+        "seat_no": 0,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "92000000-0000-4000-8000-000000000001"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "이판02",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": 1,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 0,
+        "seat_no": 1,
+        "state": "forfeit",
+        "timeout_streak": 1,
+        "user_id": "92000000-0000-4000-8000-000000000002"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "이판03",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": true,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 4,
+        "seat_no": 2,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "92000000-0000-4000-8000-000000000003"
+      }
+    ],
+    "seq": 9,
+    "server_now_ms": 1793341032776,
+    "stake": 3,
+    "status": "active",
+    "table": [
+      [
+        "A10",
+        "B10",
+        "C10"
+      ],
+      [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      [
+        "B11",
+        "C11",
+        "D11"
+      ],
+      [
+        "B2",
+        "B3",
+        "B4"
+      ]
+    ],
+    "table_layout": [
+      [
+        10,
+        20
+      ],
+      [
+        999,
+        640
+      ],
+      [
+        300,
+        300
+      ],
+      [
+        500,
+        60
+      ]
+    ],
+    "turn_deadline_ms": 1793341092775,
+    "turn_seat_no": 2,
+    "turn_started_ms": 1793341032775
+  },
+  "status": "ok"
+}

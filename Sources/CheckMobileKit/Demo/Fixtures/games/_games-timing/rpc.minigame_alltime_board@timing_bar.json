@@ -1,0 +1,10 @@
+[
+  {"user_id": "d0000000-0000-4000-8000-0000000000b3", "display_name": "민트별", "avatar_url": null, "best_score": 976, "best_at": "2026-09-13T01:10:00Z", "day": "2026-09-13", "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b1", "display_name": "구름빵", "avatar_url": null, "best_score": 937, "best_at": "2026-09-09T02:11:00Z", "day": "2026-09-09", "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-000000000001", "display_name": "새벽", "avatar_url": null, "best_score": 898, "best_at": "2026-09-15T03:12:00Z", "day": "2026-09-15", "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b6", "display_name": "달토끼", "avatar_url": null, "best_score": 880, "best_at": "2026-09-11T04:13:00Z", "day": "2026-09-11", "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b2", "display_name": "초코칩", "avatar_url": null, "best_score": 824, "best_at": "2026-09-08T05:14:00Z", "day": "2026-09-08", "center": "busan"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b4", "display_name": "호두과자", "avatar_url": null, "best_score": 751, "best_at": "2026-09-14T06:15:00Z", "day": "2026-09-14", "center": null},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b7", "display_name": "솜사탕", "avatar_url": null, "best_score": 633, "best_at": "2026-09-10T07:10:00Z", "day": "2026-09-10", "center": "busan"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b5", "display_name": "보리차", "avatar_url": null, "best_score": 430, "best_at": "2026-09-12T08:11:00Z", "day": "2026-09-12", "center": "busan"}
+]

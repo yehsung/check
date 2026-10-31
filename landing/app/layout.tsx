@@ -5,6 +5,7 @@ import { AuroraField } from "@/components/glass/AuroraField";
 import { GlassDefs } from "@/components/glass/GlassDefs";
 import { APP_STORE_ID } from "@/data/fixtures";
 import { OG_IMAGE, SITE_NAME, SITE_URL } from "@/lib/site";
+import { DESCRIPTION, ROBOTS_META, TITLE, verificationFromEnv } from "@/lib/seo";
 import "./globals.css";
 
 // 글꼴(docs/v3/brief.md §3): 제목·버튼 = Pretendard 600(첫 화면 H1 — preload) + JetBrains Mono ASCII(brew 알약·터미널). 본문은 시스템 글꼴(0B).
@@ -26,20 +27,23 @@ const jbm = localFont({
   variable: "--font-jbm",
 });
 
-// 문구 정본: docs/v3/brief.md §8 메타.
-const TITLE = "아잉체크: Mac 메뉴바 근무 타이머";
-const DESCRIPTION = "근무 타이머부터 AI 리밋·토큰 확인, 1:1 메시지, 미니게임까지 맥 메뉴바에서 무료로 써요.";
+// 문구 정본: docs/v3/brief.md §8 메타 · §10 SEO — TITLE·DESCRIPTION 은 lib/seo.ts(JSON-LD·llms.txt 와 한 곳).
+// 검색 콘솔 소유 확인(GOOGLE_/NAVER_/BING_SITE_VERIFICATION)은 빌드·ISR 때 환경 변수에서 — 비어 있으면 메타를 내지 않는다(docs/v3/seo.md).
+const verification = verificationFromEnv(process.env);
 
 // OG·트위터 이미지: app/opengraph-image.png(1200×630, 통합 단계에서 재촬영 — DECISIONS D8) + 같은 alt.
 // 파일 규약(opengraph-image.png · .alt.txt)이 config 보다 우선하므로 og:image 는 파일이, twitter:image 는 아래 config 가 낸다.
 // 그림 정의(OG_IMAGE)는 lib/site.ts — /licenses 도 같은 그림을 쓴다.
 
-// 메타(docs/v3/brief.md §8).
+// 메타(docs/v3/brief.md §8 · §10).
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
   title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: "/" },
+  robots: ROBOTS_META,
+  ...(verification ? { verification } : {}),
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,

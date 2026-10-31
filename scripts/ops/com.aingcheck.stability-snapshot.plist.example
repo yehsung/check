@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  운영 안정성 계측 스냅숏을 5분마다 한 줄씩 남기는 LaunchAgent 예시. **설치는 사용자 결정이다.**
+  설치:  mkdir -m 700 -p ~/aing-check-ops   (launchd 가 아래 로그 파일을 열기 전에 폴더가 있어야 한다)
+         cp scripts/ops/com.aingcheck.stability-snapshot.plist.example ~/Library/LaunchAgents/com.aingcheck.stability-snapshot.plist
+         launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.aingcheck.stability-snapshot.plist
+  해제:  launchctl bootout gui/$(id -u)/com.aingcheck.stability-snapshot
+  - 사용자 세션(gui) 에이전트여야 한다: 로그 집계용 관리 API 토큰을 로그인 키체인에서 읽는다.
+  - DB 연결을 쓰지 않는다(Metrics API + 관리 API 로그만). 한 번에 요청 두 개, 몇 초.
+  - 경로는 저장소 체크아웃 위치에 맞춰 고친다. /usr/bin/python3(3.9) 표준 라이브러리만 쓴다.
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.aingcheck.stability-snapshot</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/yesung/check/scripts/ops/stability-snapshot.py</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>LowPriorityIO</key>
+  <true/>
+  <key>Nice</key>
+  <integer>10</integer>
+  <key>StandardOutPath</key>
+  <string>/Users/yesung/aing-check-ops/launchd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/yesung/aing-check-ops/launchd.err.log</string>
+</dict>
+</plist>

@@ -52,8 +52,9 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        let payload = PushPayload(userInfo: notification.request.content.userInfo)
-        let presentation = await presentation(for: payload)
+        let content = notification.request.content
+        let payload = PushPayload(userInfo: content.userInfo)
+        let presentation = await presentation(for: payload, alert: PushAlert(title: content.title, body: content.body))
         Self.logger.notice("willPresent kind=\(payload?.kind.rawValue ?? "unknown", privacy: .public) presentation=\(String(describing: presentation), privacy: .public)")
         switch presentation {
         case .banner: return [.banner, .list, .sound]
@@ -65,12 +66,14 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        let payload = PushPayload(userInfo: response.notification.request.content.userInfo)
+        let content = response.notification.request.content
+        let payload = PushPayload(userInfo: content.userInfo)
+        let alert = PushAlert(title: content.title, body: content.body)
         let action = PushAction(actionIdentifier: response.actionIdentifier)
         // 탭이 아닌 식별자를 탭으로 접었으면(옛 카테고리의 답장 · 읽음 · 거절 등) 표시한다. 식별자 글자는 남기지 않는다.
         let folded = action == .open && response.actionIdentifier != UNNotificationDefaultActionIdentifier
         Self.logger.notice("didReceive kind=\(payload?.kind.rawValue ?? "unknown", privacy: .public) action=\(Self.actionName(action), privacy: .public) folded=\(folded, privacy: .public)")
-        await handle(payload, action: action)
+        await handle(payload, action: action, alert: alert)
     }
 
     nonisolated static func actionName(_ action: PushAction) -> String {
@@ -81,16 +84,16 @@ final class PushNotificationCenterAdapter: NSObject, UNUserNotificationCenterDel
         }
     }
 
-    private func presentation(for payload: PushPayload?) -> PushPresentation {
-        model?.push.presentation(for: payload) ?? .banner
+    private func presentation(for payload: PushPayload?, alert: PushAlert) -> PushPresentation {
+        model?.push.presentation(for: payload, alert: alert) ?? .banner
     }
 
-    private func handle(_ payload: PushPayload?, action: PushAction) async {
+    private func handle(_ payload: PushPayload?, action: PushAction, alert: PushAlert) async {
         guard let model else { return }
         // 알림으로 앱이 켜졌는데 화면(onAppear)보다 응답이 먼저 왔거나, 옛 카테고리 액션(앱을 열지 않는 버튼)으로 뒤에서 켜졌으면
         // 실행 복원이 아직 시작되지 않았다 — 여기서 시작한다(한 번만 돈다).
         model.start()
-        await model.push.handleResponse(payload, action: action)
+        await model.push.handleResponse(payload, action: action, alert: alert)
     }
 
     // MARK: - PushNotificationSystem

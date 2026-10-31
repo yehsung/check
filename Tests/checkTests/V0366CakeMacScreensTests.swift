@@ -290,7 +290,7 @@ struct V0366CakeMacScreensTests {
             TeamMemberStatus(id: "aaaaaaaa-0000-0000-0000-\(String(format: "%012d", i))", name: "멤버\(i)", status: .offWork,
                              updatedAt: nil, currentSessionStartedAt: nil, weeklyDurationSeconds: 3_600)
         }
-        store.cakeGiftWindowHooks = CakeGiftWindowHooks(show: { _ in }, close: {}, isOpen: { false })
+        store.cakeGiftWindowHooks = CakeGiftWindowHooks(show: { _ in }, close: {}, isOpen: { false }, returnToPopover: {})
         return store
     }
 

@@ -111,6 +111,11 @@ struct MobileTabsView: View {
                 .badge(badges.badge(for: .me) ?? 0)
                 .tag(AingTab.me)
         }
+        // 확성기 배너(계약 docs/plan/megaphone-banner-contract.md — 폰 배너): 어느 탭이든 위쪽, 세이프에어리어 아래. 카드만 손을 받는다.
+        // 아래 `.environment` 보다 **먼저** 건다 — 그래야 배너 아바타도 캐릭터 한 표를 이어받는다.
+        .overlay(alignment: .top) {
+            MegaphoneBannerOverlay(model: model)
+        }
         // 사람 아바타(사진 → 착용 캐릭터 → 이니셜)가 찾는 캐릭터 한 표 — 탭 다섯과 그 위에 뜨는 시트가 모두 이어받는다.
         .environment(\.appUserCharacters, model.characters.directory)
         // 탭을 바꿀 때 표를 60초 스로틀로 다시 묻는다(새 폴링 없음 — 기존 갱신 시점에 얹는다).

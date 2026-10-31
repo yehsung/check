@@ -14,7 +14,7 @@ struct RankingsTab: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        RankingsBoardSubtitle(text: RankingsText.boardSubtitle(store.board))
+                        RankingsBoardSubtitle(text: store.boardSubtitle)
                         boardPicker
                             .padding(.top, 14)
                         switch store.board {

@@ -582,11 +582,18 @@ package final class PushCoordinator {
     // MARK: - 포그라운드 표시
 
     /// 앱이 앞에 있을 때 알림이 왔다(`willPresent`). 해당 스토어를 새로고침하고 보일지 정한다. 모르는 알림은 그대로 보인다.
-    package func presentation(for payload: PushPayload?) -> PushPresentation {
+    /// `alert` 는 알림의 제목·본문 — 확성기 푸시를 앱 배너로 옮길 때만 쓴다.
+    package func presentation(for payload: PushPayload?, alert: PushAlert? = nil) -> PushPresentation {
         guard let payload else { return .banner }
         guard context.session.isSignedIn else { return .banner }
         refreshStores(for: payload)
         settleBadgeInForeground()
+        // 확성기(계약 — 폰 푸시): 앱을 보고 있으면 시스템 배너를 **숨기고** 앱 배너로 — 알림의 제목·본문으로 바로 띄운다.
+        // 메시지함은 위 `refreshStores` 가 요약을 맞추고, 배너 스토어의 refresh 가 그 줄을 거를 id 를 받는다.
+        if let megaphoneID = payload.megaphoneID, isAppActive, let banner = context.links.megaphoneBanner {
+            presentMegaphone(banner, megaphoneID: megaphoneID, payload: payload, alert: alert)
+            return .hidden
+        }
         if let peer = payload.messagePeerID, isAppActive,
            let visible = context.router.visibleConversationPeerID, visible.lowercased() == peer {
             return .hidden
@@ -635,10 +642,18 @@ package final class PushCoordinator {
     // MARK: - 응답(탭 · 액션)
 
     /// 사용자가 알림을 누르거나 액션을 골랐다(`didReceive`). 끝날 때까지 기다린 뒤 어댑터가 시스템 완료 콜백을 부른다.
-    package func handleResponse(_ payload: PushPayload?, action: PushAction) async {
+    package func handleResponse(_ payload: PushPayload?, action: PushAction, alert: PushAlert? = nil) async {
         guard let payload, action != .dismiss else { return }
         // 로그인이 풀려 있으면(복원이 로그아웃으로 끝남) 열지 않는다 — 로그인 화면이 선다.
         guard await waitForSessionSettled() else { return }
+
+        // 확성기 푸시를 눌러 들어왔다(냉시동이면 위 복원을 기다린 뒤): **대화로 가지 않고** 그 확성기를 배너로 띄운다
+        // (24시간 안이면 신선도 무시 — 코어 `presentFromPush`). 탭은 그대로 둔다. 요약은 맞춘다.
+        if let megaphoneID = payload.megaphoneID, let banner = context.links.megaphoneBanner {
+            presentMegaphone(banner, megaphoneID: megaphoneID, payload: payload, alert: alert)
+            refreshStores(for: payload)
+            return
+        }
 
         if action == .acceptInvite, case .gomokuInvite(let match) = payload.content {
             // 수락은 앱을 연다(액션 옵션 foreground) — 배지는 활성화가 맡는다.
@@ -649,6 +664,17 @@ package final class PushCoordinator {
         // 버리지 않고 그 화면을 연다. 배지는 앱이 앞으로 올 때 활성화(appDidBecomeActive)의 서버 확인이 맡는다.
         context.router.open(payload.route)
         refreshStores(for: payload)
+    }
+
+    /// 확성기 푸시 → 앱 배너. 본문이 있으면 `presentFromPush` 가 띄우고 스스로 refresh 한다(그래서 여기서 또 부르지 않는다 —
+    /// 겹친 refresh 는 한 번 더 돈다). 본문이 없는 알림(모양이 틀림)이면 띄울 것이 없으니 refresh 만 — inbox 가 신선한 것을 줄 세운다.
+    private func presentMegaphone(_ banner: MegaphoneBannerStore, megaphoneID: String, payload: PushPayload, alert: PushAlert?) {
+        let body = alert?.body ?? ""
+        guard MegaphoneBanner.displayBody(body) != nil else {
+            Task { @MainActor in await banner.refresh() }
+            return
+        }
+        banner.presentFromPush(megaphoneID: megaphoneID, senderName: alert?.title, body: body, senderID: payload.messagePeerID)
     }
 
     /// 실행 복원이 끝날 때까지(상한) 기다린 뒤 로그인 상태인지. 벽시계가 아니라 단조 시계로 잰다(데모 시계는 멈춰 있다).

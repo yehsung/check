@@ -362,8 +362,8 @@ func spacePressedInTheChessWindowIsNeverTakenByTheMiniGame() {
     #expect(MiniGameSpaceKey.yieldsToOtherWindow(gomoku, gameWindow: game))
     // v0.3.45 에 AI 리밋 창이 더해져 넷이었고, v0.3.46 에 그 창이 사라져 셋, v0.3.54 에 캐릭터 뽑기 창이 더해져 넷,
     // v0.3.60 에 1:1 테트리스 창이 더해져 다섯(리밋 카드는 팝오버 안으로 들어왔다 — `CheckAILimitsRow.swift` 머리말),
-    // v0.3.66 에 생일 축하 창이 더해져 **여섯**이다. 팝오버는 이 목록의 것이 아니다(창이 아니다).
-    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 6,
+    // v0.3.66 에 생일 축하 창이 더해져 여섯, v0.3.69 에 아잉 큐브 창이 더해져 **일곱**이다. 팝오버는 이 목록의 것이 아니다(창이 아니다).
+    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 7,
             "독립 창 목록이 \(MiniGameSpaceKey.standaloneWindowIDs) 다 — 창을 더했는데 등록을 안 했거나 그 반대다")
 }
 
@@ -429,8 +429,9 @@ func theAppWiresTheChessWindowAndItsMasterSwitch() throws {
 
     // 미니게임 창 머리글 입구 — 버튼과 배선 **두 조각**을 다 본다(한쪽만 보면 버튼은 있는데 아무 데도 안 이어진다).
     let miniGame = cwStripped(try cwSource("MiniGamePanel.swift"))
-    #expect(miniGame.contains("MiniGameChessEntryButton { onChess() }"),
-            "미니게임 머리글에 체스 입구 버튼이 없다")
+    // v0.3.69 — 입구 버튼은 머리글이 아니라 왼쪽 사이드바에 선다.
+    #expect(miniGame.contains("MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }"),
+            "미니게임 사이드바에 체스 입구 버튼이 없다")
     // v0.3.50: 입구가 스토어의 한 문(`openChessFromMiniGame`)을 지난다 — 체스 창을 띄우고 **미니게임 창은 내린다**.
     // 배선이 세 조각이 됐으므로 문 안쪽까지 본다(가운데까지만 보면 문은 있는데 체스 창을 안 여는 상태가 통과한다).
     #expect(miniGame.contains("onChess: { store.openChessFromMiniGame() }"),

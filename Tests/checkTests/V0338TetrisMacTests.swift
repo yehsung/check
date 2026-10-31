@@ -430,104 +430,61 @@ func theGhostIsFaintButVisible() {
 // MARK: - 헤더 실측 폭
 
 @MainActor
-@Test("헤더 실측: 칩 셋 + [일시정지] / 1:1 입구 묶음(오목·체스·테트리스)이 344pt 안에 든다 · 캡슐 셋이면 넘친다")
+@Test("머리글 실측: 고른 게임 이름 + [일시정지] 가 344pt 안에 든다 · 사이드바 줄은 이름을 줄이지 않고 168pt 안에 선다")
 func theHeaderFitsInThreeHundredFortyFour() throws {
+    // v0.3.69 — 게임 고르기가 왼쪽 사이드바로 옮겨 가며(사용자 요구 2026-10-30) 머리글에는 **지금 하는 게임 이름**과
+    // [일시정지]만 남았다. 예산 싸움(칩 넷 + 문 넷 · 고른 칩만 이름 · 문은 짧은 이름 묶음)은 끝났지만 344pt 상한은 그대로 잰다 —
+    // 넘치면 SwiftUI 가 조용히 눌러 담아 창 안 그림으로는 안 보인다.
     let budget = MiniGameWindowLayout.canvasSize.width
-    for (label, playing, frozen) in [("판이 도는 중(일시정지 버튼)", true, false),
-                                     ("정지·시작 전(1:1 입구 묶음)", false, false),
-                                     ("정지 카드(칩 잠금 해제 + 1:1 입구 묶음)", true, true)] {
-        let header = MiniGameGameHeader(selected: .flappy, isPlaying: playing, isFrozen: frozen,
-                                        onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {},
-                                        onTetrisDuel: {})
-        let width = try tmNaturalWidth(header)
-        print("[헤더] \(label): \(String(format: "%.1f", width))pt / \(budget)pt")
-        #expect(width <= budget, "\(label) 에서 헤더가 \(width)pt 라 344 를 넘는다")
+    for kind in MiniGameKind.macCases {
+        for (label, playing, frozen) in [("판이 도는 중(일시정지 버튼)", true, false), ("시작 전", false, false), ("정지 카드", true, true)] {
+            let width = try tmNaturalWidth(MiniGameGameHeader(selected: kind, isPlaying: playing, isFrozen: frozen, onPause: {}))
+            #expect(width <= budget, "\(kind) · \(label) 에서 머리글이 \(width)pt 라 344 를 넘는다")
+        }
     }
-    // 아이콘 전용이 실제로 폭을 아낀다(이름 셋을 다 달면 넘치는지도 같이 본다).
-    let iconOnly = try tmNaturalWidth(MiniGameGameHeader(selected: .flappy, isPlaying: true, isFrozen: false,
-                                                         onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}))
-    let allTitles = try tmNaturalWidth(tmAllTitlesHeader())
-    print("[헤더] 이름 셋 전부: \(String(format: "%.1f", allTitles))pt (아이콘 전용 \(String(format: "%.1f", iconOnly))pt)")
-    #expect(allTitles > iconOnly + 40, "이름을 다 달아도 폭이 안 늘었다 — showsTitle 이 그림을 안 바꾼다")
+    // ★ 기준선이 갈린다: [일시정지] 가 실제로 머리글에 서는가(판이 도는 중이 시작 전보다 넓다).
+    let idle = try tmNaturalWidth(MiniGameGameHeader(selected: .flappy, isPlaying: false, isFrozen: false, onPause: {}))
+    let busy = try tmNaturalWidth(MiniGameGameHeader(selected: .flappy, isPlaying: true, isFrozen: false, onPause: {}))
+    print("[머리글] 시작 전 \(String(format: "%.1f", idle))pt · 판이 도는 중 \(String(format: "%.1f", busy))pt / \(budget)pt")
+    #expect(busy > idle + 40, "판이 도는 중에도 [일시정지] 가 안 선다(\(busy) vs \(idle))")
 
-    // ★ v0.3.44 — 입구가 **둘**이 되며 예산이 빠듯해졌다(이름 둘 머리글 330.5pt · 여유 13.5pt).
-    // ★ v0.3.60 — 문이 **셋**(오목 · 체스 · 테트리스)이 됐다. 그래서 다시 쟀고 사실 셋을 숫자로 못 박는다:
-    //   ① **옛 배치 그대로(이름 단 캡슐 셋)는 넘친다** — 그래서 배치를 바꿨다는 근거다. 이 단언이 없으면 묶음으로 접은 이유가
-    //      숫자 없이 남고, 다음 사람이 캡슐 셋으로 되돌려도 아무도 모른다(기준선이 갈려야 한다).
-    //   ② 지금 배치(묶음 캡슐 하나 — [1:1 | 오목 | 체스 | 테트리스])는 들어간다 — 위 세 갈래가 이미 잰다(정지·시작 전 = 묶음).
-    //   ③ 묶음은 이름을 셋 다 단 채로 아이콘 전용 캡슐 셋과 맞먹는 폭이다(이름을 지키면서 아낀 폭이 실제로 있다).
-    let titledEntries = try tmNaturalWidth(tmEntriesRow(showsTitle: true))
-    let iconEntries = try tmNaturalWidth(tmEntriesRow(showsTitle: false))
-    let group = try tmNaturalWidth(tmEntriesGroup())
-    let entriesHeader = try tmNaturalWidth(
-        MiniGameGameHeader(selected: .flappy, isPlaying: false, isFrozen: false,
-                           onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {}, onTetrisDuel: {}))
-    // 옛 배치의 머리글 폭 = 지금 머리글에서 묶음을 빼고 캡슐 셋을 넣은 값(칩·Spacer 최소·간격은 그대로다).
-    let oldStyleHeader = entriesHeader - group + titledEntries
-    print("[입구] 이름 캡슐 셋 \(String(format: "%.1f", titledEntries))pt · 아이콘 캡슐 셋 \(String(format: "%.1f", iconEntries))pt"
-          + " · 묶음 \(String(format: "%.1f", group))pt")
-    print("[입구] 묶음 머리글 \(String(format: "%.1f", entriesHeader))pt (여유 \(String(format: "%.1f", budget - entriesHeader))pt)"
-          + " · 캡슐 셋이었다면 \(String(format: "%.1f", oldStyleHeader))pt")
-    #expect(iconEntries < titledEntries - 90, "아이콘 전용 입구가 이름 달린 입구와 폭이 비슷하다 — showsTitle 이 그림을 안 바꾼다")
-    #expect(oldStyleHeader > budget,
-            "이름 단 캡슐 셋이 \(oldStyleHeader)pt 라 들어간다 — 묶음으로 접은 근거가 사라졌다(캡슐로 되돌려도 된다)")
-    #expect(entriesHeader <= budget, "묶음 입구 머리글이 \(entriesHeader)pt 라 344 를 넘는다")
-    #expect(group < titledEntries - 60, "묶음이 캡슐 셋보다 별로 안 좁다(\(group) vs \(titledEntries))")
+    // 사이드바 줄 여덟 개 — 자연 폭(이름을 한 줄로 다 그린 폭)이 줄 폭 안에 든다. 넘치면 `lineLimit(1)` 이 이름 끝을 "…" 로 자른다.
+    let room = MiniGameWindowLayout.sidebarRowWidth
+    var rows: [(String, Double)] = []
+    for kind in MiniGameKind.macCases {
+        rows.append((kind.title, try tmNaturalWidth(
+            MiniGameSidebarRow(title: kind.title, icon: kind.icon, tint: CheckTheme.accent, isSelected: true) {})))
+    }
+    rows.append((MiniGameGomokuEntryButton.title, try tmNaturalWidth(MiniGameGomokuEntryButton {})))
+    rows.append((MiniGameChessEntryButton.title, try tmNaturalWidth(MiniGameChessEntryButton {})))
+    rows.append((MiniGameTetrisDuelEntryButton.title, try tmNaturalWidth(MiniGameTetrisDuelEntryButton(hasInvite: true) {})))
+    rows.append((MiniGameRummyEntryButton.title, try tmNaturalWidth(MiniGameRummyEntryButton {})))
+    for (title, width) in rows {
+        print("[사이드바] \(title): \(String(format: "%.1f", width))pt / \(room)pt")
+        #expect(width <= room, "사이드바 줄 '\(title)' 이 \(width)pt 라 \(room)pt 줄에서 이름이 잘린다")
+    }
+    // 대결 문 줄은 '새 창' 표시만큼 혼자 게임 줄보다 넓다(표시가 실제로 그려진다는 대조군).
+    let soloTetris = try tmNaturalWidth(MiniGameSidebarRow(title: MiniGameTetrisDuelEntryButton.title, icon: MiniGameKind.tetris.icon,
+                                                           tint: CheckTheme.accent) {})
+    let duelTetris = try tmNaturalWidth(MiniGameTetrisDuelEntryButton {})
+    #expect(duelTetris > soloTetris + 8, "대결 문 줄에 '새 창' 표시가 없다(\(duelTetris) vs \(soloTetris))")
 }
 
-/// 헤더 오른쪽의 입구 셋을 **캡슐로** 떼어 잰다(칩·Spacer 를 뺀 순수 입구 폭 — 옛 배치의 대조군).
-@MainActor
-private func tmEntriesRow(showsTitle: Bool) -> some View {
-    HStack(spacing: 6) {
-        MiniGameGomokuEntryButton(showsTitle: showsTitle) {}
-        MiniGameChessEntryButton(showsTitle: showsTitle) {}
-        MiniGameTetrisDuelEntryButton(showsTitle: showsTitle) {}
-    }
-}
-
-/// 지금 배치 — 묶음 캡슐 하나(머리글이 그리는 그것과 같은 부품).
-@MainActor
-private func tmEntriesGroup() -> some View {
-    MiniGameDuelEntryGroup {
-        MiniGameGomokuEntryButton {}
-        MiniGameChessEntryButton {}
-        MiniGameTetrisDuelEntryButton {}
-    }
-}
-
-@Test("아이콘 전용 칩도 VoiceOver 는 이름을 읽는다 — 말풍선은 눈, 라벨은 귀 몫이다")
+@Test("사이드바 줄도 VoiceOver 는 이름을 읽는다 — 그림은 눈, 라벨은 귀 몫이다")
 func iconOnlyChipsStillAnnounceTheirName() throws {
     let panel = tmStripped(try tmPanelSource())
-    let chip = try tmRegion(after: "private struct MiniGameKindChip: View", in: panel)
-    #expect(chip.contains(".accessibilityLabel(title)"),
-            "이름을 뗀 칩이 VoiceOver 에게 아무 말도 안 한다(SF Symbol 의 기본 설명은 게임 이름이 아니다)")
-    #expect(chip.contains(".checkTooltip(title)"), "말풍선이 사라졌다 — 이름을 뗀 칩의 유일한 눈 단서다")
-    #expect(chip.contains("showsTitle ? 10 : 8"), "아이콘 전용 칩이 이름 칩과 같은 여백을 쓴다")
+    // v0.3.69 — 칩이 사이드바 줄(`MiniGameSidebarRow`)이 되며 이름이 늘 보인다. 그래도 보이스오버 이름은 줄마다 단다
+    // (아이콘 타일은 아무 말도 안 하고, 받은 신청 점은 색뿐이라 말로도 붙여야 한다).
+    let row = try tmRegion(after: "struct MiniGameSidebarRow: View", in: panel)
+    #expect(row.contains(".accessibilityLabel(hasInvite ? \"\\(title) — \\(Self.inviteAccessibility)\" : title)"),
+            "사이드바 줄이 VoiceOver 에게 게임 이름(과 받은 신청)을 안 말한다")
+    #expect(row.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"), "고른 줄이 보이스오버에게 '선택됨' 을 안 말한다")
+    #expect(row.contains("Text(title)"), "사이드바 줄이 이름을 안 그린다 — 다시 아이콘 전용 칩이 됐다")
 
     // 캔버스 라벨도 **게임별**이어야 한다 — 하드코딩하면 테트리스에서 틀린 조작을 읽는다.
     #expect(panel.contains("\\(store.miniGameKind.controlHint)로 조작"),
             "캔버스 접근성 라벨이 조작 안내를 하드코딩한다")
     #expect(!panel.contains("클릭 또는 스페이스로 조작"), "옛 하드코딩 라벨이 남아 있다")
-}
-
-/// 비교용: 세 칩에 전부 이름을 단 헤더(예전 모양). 아이콘 전용이 실제로 폭을 아끼는지 재는 대조군이다.
-@MainActor
-private func tmAllTitlesHeader() -> some View {
-    HStack(spacing: 6) {
-        ForEach(MiniGameKind.macCases) { kind in
-            Label(kind.title, systemImage: kind.icon)
-                .font(.caption2.weight(.bold))
-                .padding(.horizontal, 10)
-                .frame(height: 26)
-                .background(Capsule().fill(Color.white.opacity(0.04)))
-        }
-        Spacer(minLength: 4)
-        Label(CheckMiniGameWindowView.pauseTitle, systemImage: "pause.fill")
-            .font(.caption2.weight(.bold))
-            .padding(.horizontal, 10)
-            .frame(height: 26)
-            .background(Capsule().fill(Color.white.opacity(0.16)))
-    }
 }
 
 // MARK: - 순위·푸터 자릿수

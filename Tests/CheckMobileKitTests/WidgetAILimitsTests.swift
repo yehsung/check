@@ -632,5 +632,76 @@ struct WidgetAILimitsTests {
                 "맥 바의 하한 불투명도가 폰·위젯(\(AILimitFloorFill.floorOpacity))과 갈렸다")
     }
 
+    /// ★ **색을 버리는 모드에서 '그 창이 없다'가 살아남는가** (2026-10-30 승인 · 계약 ③).
+    ///
+    /// 위젯이 이 수리의 가장 약한 자리다: `.accented`(틴트·투명)는 색을 **통째로** 버리므로 두 트랙의 색 차와
+    /// `없음` 글자의 회색이 **둘 다 사라지고**, 남는 단서는 글자 모양 하나뿐이다. 그래서 없는 칸 트랙에
+    /// 45° 사선을 깐다 — 수단이 **기하 + 알파**라 그 모드에서도 남는다.
+    ///
+    /// ★ 이 파일은 `#if os(iOS)` 라 맥 스위트가 한 줄도 컴파일하지 않는다. 그래서 **부르는 자리**를 잘라서
+    ///   잰다 — "상수가 있다"는 "그 칸에 사선이 깔린다"의 증거가 아니다.
+    @Test("없는 칸(위젯): 없는 칸만 사선을 받는다(0% 칸은 안 받는다) · 틴트에서도 알파로 남는다")
+    func absentCellKeepsItsCueWhenTheWidgetDropsColor() throws {
+        // ① 값 수준: 0% 는 값이 **있는** 칸이고(코덱스 plus), 주간만 오는 요금제의 5시간 칸은 **빈다**.
+        //    위젯의 `isAbsent` 는 이 둘을 가르는 `display == nil` 하나다.
+        let panel = WidgetSnapshot.AILimitPanel(providers: [
+            .init(provider: "codex", fiveHourPercent: 0, fiveHourResetsAt: nil,
+                  weeklyPercent: 94, weeklyResetsAt: Self.now.addingTimeInterval(200_000), observedAt: Self.now),
+            .init(provider: "antigravity", weeklyPercent: 8,
+                  weeklyResetsAt: Self.now.addingTimeInterval(500_000), observedAt: Self.now),
+        ])
+        guard case .limits(let limits) = AingWidgetLimitsState(snapshot: Self.snapshot(panel), at: Self.now) else {
+            throw TestFailure.notLimits
+        }
+        let zero = try #require(limits.rows.first { $0.provider == .codex })
+        #expect(zero.display(.fiveHour)?.valueText == "0%",
+                "0% 칸이 값을 잃었다 — 그러면 사선이 '안 썼다'는 칸까지 번진다")
+        let absent = try #require(limits.rows.first { $0.provider == .antigravity })
+        #expect(absent.display(.fiveHour) == nil, "전제: 주간 창만 오는 줄의 5시간 칸은 빈다(= 사선을 받는다)")
+
+        // ② 틴트에서 사선이 **트랙보다 진하다**(알파로 남는 구조). 트랙은 흰 `Accented.track` 의 절반이다.
+        #expect(AILimitColumnPalette.absentHatchOpacity > AingWidgetPalette.Accented.track * 0.5,
+                "틴트 트랙(\(AingWidgetPalette.Accented.track * 0.5))이 사선(\(AILimitColumnPalette.absentHatchOpacity))보다 진하다 — 사선이 안 보인다")
+
+        // ③ **그리는 자리.** 칸이 깃발을 `display == nil` 로 넘기고, 바는 그 안에서만 사선을 깐다.
+        // ★ **블록을 잘라서** 잰다. 파일 통째로 재면 두 가지가 샌다: ① `isAbsent: display == nil` 은 숫자 글자
+        //   색에서도 쓰여 수가 안 맞고, ② 사선 블록에 `widgetAccentable` 이 없다는 단언이 **아래 다른 뷰**의
+        //   그 호출을 보고 빨개진다(이 수리에서 실제로 밟았다).
+        let widget = try IntegrationContractTests.code("Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift")
+        #expect(!widget.contains("isAbsent: percent") && !widget.contains("isAbsent: display?.percent"),
+                "없는 칸을 퍼센트로 가른다 — 판정 불가(`—`)와 0% 칸이 함께 사선을 받는다")
+        let cellBlock = try MeAILimitsTests.sourceBlock(of: "private func cell(", in: widget)
+        #expect(cellBlock.contains("AingWidgetLimitBar("), "칸이 막대를 안 그린다")
+        // 칸의 **바와 숫자 글자**가 '그 창이 없다'를 같은 한 가지로 받는다(둘이 갈리면 사선과 글자색이 어긋난다).
+        #expect(cellBlock.components(separatedBy: "isAbsent: display == nil").count - 1 == 2,
+                "칸의 바와 숫자 글자가 '그 창이 없다'를 `display == nil` 하나로 받지 않는다")
+        let barBody = try MeAILimitsTests.sourceBlock(of: "struct AingWidgetLimitBar: View", in: widget)
+        #expect(barBody.contains("if isAbsent { absentHatch }"),
+                "사선이 `isAbsent` 밖에서 그려진다 — 값이 있는 칸(0% 포함)까지 받는다")
+        let bodyOnly = try MeAILimitsTests.sourceBlock(of: "var body: some View", in: barBody)
+        #expect(bodyOnly.components(separatedBy: "absentHatch").count - 1 == 1,
+                "바 본문이 사선을 두 자리에서 그린다 — 한쪽은 조건 밖일 수 있다")
+
+        // ④ 사선 자체: 공유 수 셋 · 45° · 캡슐 클립 · 틴트에서도 잉크가 있다 · `widgetAccentable` 은 안 건다
+        //    (채움과 같은 잉크가 되면 사선이 '찬 바'로 읽힌다).
+        let hatchBody = try MeAILimitsTests.sourceBlock(of: "private var absentHatch:", in: barBody)
+        #expect(hatchBody.contains("Canvas { context, size in"),
+                "사선을 `Canvas` 로 그리지 않는다 — 단일 렌더에서 제 크기를 못 받는다")
+        for needle in ["AILimitColumnPalette.absentHatchSpacing", "AILimitColumnPalette.absentHatchLineWidth",
+                       "AingWidgetLimitColors.absentHatch(mode: renderingMode)"] {
+            #expect(hatchBody.contains(needle), "사선이 공유 값(\(needle))을 쓰지 않는다 — 폰 카드와 다른 그림이 된다")
+        }
+        #expect(hatchBody.contains("clipShape(Capsule())"), "사선이 트랙 캡슐 밖으로 삐져나간다")
+        #expect(hatchBody.contains("x: x + size.height") && hatchBody.contains("y: size.height"),
+                "사선이 45°(왼쪽 아래 → 오른쪽 위)가 아니다")
+        #expect(!hatchBody.contains("widgetAccentable"),
+                "사선이 틴트에서 채움과 같은 잉크가 된다 — '찬 바'로 읽힌다")
+        let inkBody = try MeAILimitsTests.sourceBlock(of: "static func absentHatch(mode:", in: widget)
+        #expect(inkBody.contains("mode == .accented") && inkBody.contains(".white.opacity(AILimitColumnPalette.absentHatchOpacity)"),
+                "틴트에서 사선 잉크가 색이다 — 그 모드는 색을 버리므로 단서가 사라진다")
+        #expect(inkBody.contains("AILimitColumnPalette.absentText"),
+                "원색에서 사선이 `없음` 글자와 다른 잉크다 — 같은 사실의 단서가 셋째 색이 된다")
+    }
+
     enum TestFailure: Error { case notLimits }
 }

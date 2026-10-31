@@ -136,8 +136,8 @@ import Testing
             // 테트리스에는 '무효'가 없다(`interrupt()` 는 **확정**이다) — 버리려면 새 판으로 갈아 끼운다.
             // 그래서 플래피와 같은 모양이고, 여기서 `.ready` 를 보는 것이 곧 "갈아 끼웠다"의 증거다.
             case .tetris: #expect(controller.tetris.phase == .ready)
-            // 길건너 아잉이(v0.3.67)는 폰 목록에 없다 — 여기 오면 `phoneCases` 가 판(폰 화면·조작)보다 먼저 열린 것이다.
-            case .crossy: Issue.record("길건너 아잉이가 phoneCases 에 들어왔다 — 폰 판(구동기 · 화면)부터 붙여라")
+            // 길건너도 같다(폰 1.0.15) — `CrossyGame.interrupt()` 가 확정이라 버리려면 새 판으로 갈아 끼운다.
+            case .crossy: #expect(controller.crossy.phase == .ready)
             }
             gamesDrive(controller, from: start.addingTimeInterval(1), frames: 120)
             #expect(finished.isEmpty, "\(kind): 버린 판을 끝났다고 알렸다 → 제출된다")

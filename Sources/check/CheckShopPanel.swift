@@ -501,10 +501,13 @@ struct CheckShopPanel: View {
 
     // MARK: 소모품 — 확성기 카드 (v0.3.51)
 
+    /// 카드 부제(2026-10-30 — 받는 쪽은 화면 위 배너로 본다). 한 줄 카드라 짧게 둔다.
+    static let megaphoneCardSubtitle = "모두의 화면에 크게 떠요"
+
     /// 📢 확성기 · 루비 N. **한 줄짜리**다(울트라 카드보다 낮다) — 이 줄만큼 크롬이 늘고(`chromeOutsideGrid` 실측) 격자 상한이
     /// 그만큼 줄어드는데, 두 줄 카드면 캐릭터 6장(2행)이 평소 화면에서도 스크롤로 밀린다.
     /// 누르면 작성기를 열고 닫는다(사지 않는다 — 실제 전송은 작성기의 2단 확인 하나뿐이다).
-    /// `compact` 면 뽑기 카드와 한 줄을 나눠 쓰는 반쪽이다 — 부제("모두에게 한마디")를 빼고 높이는 그대로다.
+    /// `compact` 면 뽑기 카드와 한 줄을 나눠 쓰는 반쪽이다 — 부제(`megaphoneCardSubtitle`)를 빼고 높이는 그대로다.
     @ViewBuilder
     private func megaphoneCard(compact: Bool) -> some View {
         let open = store.megaphone.isComposerOpen
@@ -518,7 +521,8 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                 if !compact {
-                    Text("모두에게 한마디")
+                    // 2026-10-30: 받는 쪽은 메시지 대신 화면 위 배너로 본다(계약 C4 — "앱 사용자 모두의 화면 위에 크게 떠요" 결, 한 줄에 맞춰 줄였다).
+                    Text(Self.megaphoneCardSubtitle)
                         .font(.caption2)
                         .foregroundStyle(CheckTheme.secondaryText)
                         .lineLimit(1)

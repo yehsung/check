@@ -480,7 +480,7 @@ func thePromotionSheetCoversTheBoardAndOffersFourPieces() throws {
     }
 }
 
-// MARK: - ⑤ 미니게임 헤더 입구 둘
+// MARK: - ⑤ 미니게임 사이드바 대결 문(v0.3.69 전에는 머리글 입구)
 
 @MainActor
 @Test
@@ -496,46 +496,43 @@ func theMiniGameHeaderShowsBothDuelEntries() throws {
     cpSave(idle, name: "minigame-header-entries")
     #expect(cpYellowPixels(idle) == 0)
 
-    let band = CGRect(x: MiniGameWindowLayout.contentPadding, y: MiniGameWindowLayout.contentPadding,
-                      width: MiniGameWindowLayout.canvasSize.width, height: MiniGameWindowLayout.headerHeight)
+    // v0.3.69 — 대결 문은 머리글이 아니라 **왼쪽 사이드바의 '같이 하기' 묶음**에 선다(사용자 요구 2026-10-30 "게임창 왼쪽편에").
+    let band = MiniGameWindowLayout.sidebarDuelGroupRect
     let green = cpGreenBounds(idle, rect: band)
-    print("[입구] 헤더 초록 \(green.count)px · 상자 \(green.box)")
-    #expect(green.count > 60, "미니게임 헤더에 대결 입구가 안 보인다(초록 \(green.count)px)")
-    // 입구가 **둘**이라 초록 잉크가 두 캡슐에 걸쳐 넓게 퍼진다(하나뿐이면 26pt 캡슐 한 폭 안이다).
-    #expect(green.box.width > 40,
-            "초록 잉크가 \(green.box.width)pt 폭에만 있다 — 입구가 하나뿐이다")
-    #expect(green.box.maxX <= band.maxX, "입구가 게임 열(344pt) 밖으로 넘친다(maxX \(green.box.maxX)pt)")
+    print("[입구] 사이드바 초록 \(green.count)px · 상자 \(green.box)")
+    #expect(green.count > 60, "미니게임 사이드바에 대결 입구가 안 보인다(초록 \(green.count)px)")
+    // 문이 **여럿**이라 초록 잉크가 여러 줄에 걸쳐 세로로 넓게 퍼진다(하나뿐이면 42pt 줄 한 칸 안이다).
+    #expect(green.box.height > 100,
+            "초록 잉크가 \(green.box.height)pt 높이에만 있다 — 문이 하나뿐이다")
+    #expect(green.box.maxX <= MiniGameWindowLayout.sidebarWidth, "입구가 사이드바(\(MiniGameWindowLayout.sidebarWidth)pt) 밖으로 넘친다(maxX \(green.box.maxX)pt)")
 
-    // ★ 기준선이 갈린다: 판이 도는 중에는 입구 자리에 [일시정지](주황)가 서므로 초록이 거의 사라진다.
-    //   이 대비가 없으면 "초록이 있다"가 헤더의 다른 무엇(칩 테두리 등)을 세고 있어도 초록이다.
-    //   머리글 뷰를 단독으로 그린다 — 창 화면의 `isPlaying` 은 잎 뷰의 @State 라 밖에서 못 채운다.
-    let headerBox = CGRect(x: 0, y: 0, width: 400, height: MiniGameWindowLayout.headerHeight)
-    let idleHeader = try cpBitmap(
-        MiniGameGameHeader(selected: .flappy, isPlaying: false, isFrozen: false,
-                           onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {})
-            .background(CheckTheme.background))
-    let busyHeader = try cpBitmap(
-        MiniGameGameHeader(selected: .flappy, isPlaying: true, isFrozen: false,
-                           onSelect: { _ in }, onPause: {}, onGomoku: {}, onChess: {})
-            .background(CheckTheme.background))
-    let idleGreen = cpGreenBounds(idleHeader, rect: headerBox).count
-    let busyGreen = cpGreenBounds(busyHeader, rect: headerBox).count
-    print("[입구] 머리글 초록: 입구 둘 \(idleGreen)px · 판이 도는 중 \(busyGreen)px")
-    #expect(idleGreen > 60, "머리글 단독에서 입구의 초록이 \(idleGreen)px 뿐이다")
+    // ★ 기준선이 갈린다: 판이 도는 중(정지 아님)에는 문이 잠겨 흐려지므로 초록이 거의 사라진다.
+    //   이 대비가 없으면 "초록이 있다"가 사이드바의 다른 무엇을 세고 있어도 초록이다.
+    //   사이드바 뷰를 단독으로 그린다 — 창 화면의 `isPlaying` 은 잎 뷰의 @State 라 밖에서 못 채운다.
+    let sidebarBox = CGRect(x: 0, y: 0, width: MiniGameWindowLayout.sidebarWidth, height: MiniGameWindowLayout.contentSize.height)
+    func sidebar(playing: Bool) throws -> NSBitmapImageRep {
+        try cpBitmap(
+            MiniGameSidebar(selected: .flappy, isPlaying: playing, isFrozen: false, invites: MiniGameDuelInvites(),
+                            onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {})
+                .frame(width: sidebarBox.width, height: sidebarBox.height)
+                .background(CheckTheme.background))
+    }
+    let idleGreen = cpGreenBounds(try sidebar(playing: false), rect: sidebarBox).count
+    let busyGreen = cpGreenBounds(try sidebar(playing: true), rect: sidebarBox).count
+    print("[입구] 사이드바 초록: 문 열림 \(idleGreen)px · 판이 도는 중 \(busyGreen)px")
+    #expect(idleGreen > 60, "사이드바 단독에서 입구의 초록이 \(idleGreen)px 뿐이다")
     #expect(busyGreen * 2 < idleGreen,
             "판이 도는 중에도 같은 양의 초록이 있다(\(busyGreen) vs \(idleGreen)) — 세고 있는 초록이 입구가 아니다")
 
-    // 입구 둘은 **서로 다른 아이콘**을 그린다(같으면 어느 문이 어느 게임인지 모른다).
-    let gomoku = try cpBitmap(MiniGameGomokuEntryButton(showsTitle: false) {})
-    let chess = try cpBitmap(MiniGameChessEntryButton(showsTitle: false) {})
+    // 입구 둘은 **서로 다른 아이콘**을 그린다(같으면 어느 문이 어느 게임인지 모른다). 같은 줄 폭에 세우고 아이콘 타일만 비교한다.
+    let rowWidth = MiniGameWindowLayout.sidebarRowWidth
+    let gomoku = try cpBitmap(MiniGameGomokuEntryButton {}.frame(width: rowWidth))
+    let chess = try cpBitmap(MiniGameChessEntryButton {}.frame(width: rowWidth))
     cpSave(chess, name: "minigame-entry-chess")
-    #expect(abs(gomoku.pixelsWide - chess.pixelsWide) < 20, "두 입구 캡슐의 폭이 크게 다르다")
-    let icon = CGRect(x: 0, y: 0,
-                      width: Double(min(gomoku.pixelsWide, chess.pixelsWide)) / 2,
-                      height: Double(min(gomoku.pixelsHigh, chess.pixelsHigh)) / 2)
+    #expect(gomoku.pixelsWide == chess.pixelsWide, "두 입구 줄의 폭이 다르다")
+    let icon = CGRect(x: 6, y: (MiniGameWindowLayout.sidebarRowHeight - MiniGameWindowLayout.sidebarIconSize) / 2,
+                      width: MiniGameWindowLayout.sidebarIconSize, height: MiniGameWindowLayout.sidebarIconSize)
     #expect(cpMaxChannelDifference(gomoku, chess, rect: icon) > 60, "두 입구가 같은 아이콘을 그린다")
-    #expect(Double(chess.pixelsWide) / 2 <= 40,
-            "아이콘 전용 체스 입구가 \(Double(chess.pixelsWide) / 2)pt 다 — 344pt 예산에서 이름 달린 폭이다")
 
     // ★ 심볼 이름이 이 맥에서 실제로 풀린다. 없으면 `Image(systemName:)` 는 **아무것도 안 그린다**
     //   (두부도 안 뜬다) — 자리만 비어 조용히 고장난다.

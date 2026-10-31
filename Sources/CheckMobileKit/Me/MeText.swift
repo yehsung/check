@@ -498,6 +498,21 @@ package enum MeText {
             ("gomoku", "circle.grid.3x3.fill"),
             ("chess", "checkerboard.rectangle"),
             ("tetris_duel", "rectangle.split.2x1.fill"),
+            // '아잉 큐브'(2~4인 숫자 타일 러미). **내부 식별자는 `rummy` 다** — 화면 이름만 아잉 큐브이고 `aing_cube`
+            // 라는 글자는 코드·서버 어디에도 없다(`aing-cube-decisions`).
+            //
+            // 기호가 `cube.fill` 인 까닭 셋.
+            // ① **맥과 같은 기호여야 한다.** 맥 `DailyMissionCopy.icon(game:)` 이 이 값이고, 게임 이름이 아잉 **큐브**라
+            //    미니게임 머리글 입구 · 초대 배너 · 미션 줄이 한 기호로 이어진다. 같은 줄이 두 기기에서 다른 그림이면
+            //    사용자는 그 둘을 다른 미션으로 읽는다(기호를 고르는 기준은 모양 취향이 아니라 **한 벌인가**다).
+            // ② **실루엣이 앞 일곱과 안 겹친다.** 이 표의 셋(오목 3×3 격자 · 체스 체커보드 · 1:1 테트리스 반 네모)과,
+            //    그 앞에서 `MiniGameKind(rawValue:)` 가 먼저 걸러 코어 아이콘으로 가는 미니게임 넷(메트로놈 · 새 ·
+            //    2×2 격자 · 걷는 사람) — 채워진 정육면체는 그 일곱 중 어느 것과도 다르다.
+            // ③ **실재를 확인했다.** SF Symbols 1(2019 — macOS 10.15 · iOS 13.0)에 들어온 이름이라 이 앱의 바닥
+            //    (macOS 14 · iOS 17)에서 산다. 근거는 CoreGlyphs `name_availability.plist` 의 도입 연도이고,
+            //    시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다 — **없는 이름은 런타임에 경고 없이 빈 칸**
+            //    이 된다(그 함정은 `MiniGameKind.icon` 주석에 있다).
+            ("rummy", "cube.fill"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }
@@ -534,7 +549,7 @@ package enum MeText {
     package static let charactersTitle = "캐릭터"
     package static let shopTitle = "상점"
     package static let pickerTitle = "캐릭터 고르기"
-    package static let pickerCaption = "맥의 오버레이·메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
+    package static let pickerCaption = "맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
     /// 맥 `WorkTimerStore.alreadyOwnedNotice`.
     package static let alreadyOwned = "이미 갖고 있어요"
     /// 맥 `WorkTimerStore.pickSomethingNotice`.
@@ -710,7 +725,7 @@ package enum MeText {
     /// 사진이 없으면 다른 사람 화면의 내 아바타 자리에 착용 캐릭터가 선다(2026-09-20 — 기본 아바타 = 착용 캐릭터).
     package static let avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요. 사진이 없으면 착용 캐릭터가 대신 보여요."
     package static let characterRoleTitle = "내 화면에는 캐릭터가 나와요"
-    package static let characterRoleNote = "지금·나 탭과 맥 메뉴바·오버레이에서 착용 캐릭터가 나를 대신해요."
+    package static let characterRoleNote = "지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."
     /// 서버 쿨타임(7일). 맥 `WorkTimerStore.displayNameCooldownSeconds`.
     package static let displayNameCooldownSeconds: TimeInterval = 7 * 24 * 3600
 
@@ -872,13 +887,13 @@ package enum MeText {
 
     package static func inviteShareMessage(teamName: String?, code: String) -> String {
         let team = teamName.map { "「\($0)」 " } ?? ""
-        return "\(CheckMobileIdentifiers.appDisplayName) \(team)팀 코드: \(code)\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
+        return "\(CheckMobileIdentifiers.appDisplayName) \(team)팀 코드: \(code)\n맥·PC 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
     }
 
     package static let accountSection = "계정"
     package static let signOut = "로그아웃"
     package static let signOutConfirmTitle = "로그아웃할까요?"
-    package static let signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥은 그대로예요."
+    package static let signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥·PC 앱은 그대로예요."
     package static let signingOut = "로그아웃하는 중…"
 
     // MARK: 계정 삭제 (앱스토어 5.1.1(v) — 폰만의 문장. 맥에는 이 화면이 없다)
@@ -895,7 +910,7 @@ package enum MeText {
     /// 지워지는 것(서버 계약 — FK cascade). 순서는 사용자가 아까워할 것부터.
     package static let deleteAccountItems = ["근무 기록", "메시지", "할 일", "캐릭터와 루비", "순위 기록"]
     /// 되돌릴 수 없다는 한 줄. 맥도 같은 계정이라 다음 갱신에서 로그아웃된다.
-    package static let deleteAccountIrreversible = "되돌릴 수 없어요. 맥 앱도 같이 로그아웃돼요."
+    package static let deleteAccountIrreversible = "되돌릴 수 없어요. 맥·PC 앱도 같이 로그아웃돼요."
     /// 제보는 `feedback_reports.user_id` 가 set null 이라 내용만 익명으로 남는다(서버 계약 — 의도된 동작). 숨기지 않고 밝힌다.
     package static let deleteAccountFeedbackNote = "보낸 제보는 작성자 없이 내용만 남아요."
     package static let deleteAccountPasswordPrompt = "비밀번호 확인"

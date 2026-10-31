@@ -128,6 +128,11 @@ package final class MessagesStore {
     /// 읽음 처리 성공 뒤 요약을 다시 받기 전에 기다리는 창(초). 서버가 읽은 사람 채널로 되돌려 보내는 `message_read` 메아리가
     /// 그 안에 오면 그 새로고침이 이 몫을 맡는다(맥 m-fix2 · 부록 B-2). 소켓이 없으면 창이 닫힐 때 한 번 받는다.
     @ObservationIgnored package var postMarkRefreshSeconds: TimeInterval = 1.5
+    /// 전송이 모호하게 실패했을 때(답을 못 받음) **같은 키로 한 번** 다시 보내기 전에 기다리는 초(`performSend`).
+    @ObservationIgnored package var sendRetryDelaySeconds: TimeInterval = 1.5
+    /// 답을 못 받은 전송을 기억하는 창(초). 그 안에 같은 상대·같은 본문을 다시 보내면 같은 키를 쓴다.
+    /// 서버가 메시지를 24시간 두므로(키 중복 판정도 그 행이 있는 동안만 산다) 10분은 그 안쪽이다.
+    @ObservationIgnored package var unconfirmedSendReuseSeconds: TimeInterval = 600
     /// 기다리기(테스트는 즉시 돌아오거나 손으로 푸는 것으로 바꾼다).
     @ObservationIgnored package var sleep: @Sendable (TimeInterval) async -> Void = { seconds in
         try? await Task.sleep(for: .seconds(seconds))
@@ -145,6 +150,8 @@ package final class MessagesStore {
         // 등록은 네트워크가 아니다. 핸들러가 스스로 로그인·active·세대를 확인한다(등록은 reset 뒤에도 살아 있다).
         registrations.append(context.onMessageActivity { [weak self] in self?.realtimeMessageActivity() })
         registrations.append(context.onMessageRead { [weak self] in self?.realtimeMessageRead() })
+        // 보낸 직후 내 화면에 "이렇게 떴어요" 배너 한 번(계약 C2 — 서버 fan-out 에 나는 없으니 중복이 아니다).
+        megaphone.onSent = { [weak self] body, megaphoneID in self?.presentOwnMegaphone(body: body, megaphoneID: megaphoneID) }
     }
 
     // MARK: - 자리 API
@@ -153,6 +160,8 @@ package final class MessagesStore {
         isAppActive = true
         syncRouterVisibility()
         guard isSignedIn else { return }
+        // 확성기 배너 한 번 — 켜 둔 사이 놓친 신선한 확성기 · 메시지함 필터 id · 요약 함수(v1/v2) 판정. 요약이 이 첫 판정을 기다린다.
+        startMegaphoneProbe()
         // 포그라운드 진입: 요약은 언제나, 이력은 메시지 화면이 떠 있으면 곧바로(아니면 낡음으로 적고 화면이 설 때).
         requestActivityRefresh()
         evaluateReadMarking()
@@ -234,9 +243,32 @@ package final class MessagesStore {
 
     /// **차단해 숨긴 상대를 걷어낸 이력.** 묶음·배지·점·개수·말풍선이 전부 이 값을 읽는다 — 거르는 곳이 하나여야
     /// "목록에서는 사라졌는데 배지 숫자는 그대로"가 생기지 않는다. 숨긴 것이 없으면 이력 그대로다(사본을 뜨지 않는다).
+    ///
+    /// **확성기 줄도 여기 한 자리에서 뺀다**(계약 C3): 배너 스토어가 확성기로 판정한 줄(`hides` — inbox 가 말한 id, 필터가 켜졌을 때만)과
+    /// 판정 보류 줄(받은 줄인데 본문이 `📢` 로 시작하고 id 를 아직 모름 — `needsVerification`). 보류 줄은 `verifyMegaphoneRows` 가
+    /// refresh 한 번을 기다린 뒤 풀거나(메시지로) 숨긴다. 대화 목록·열린 대화·안 읽음 점·탭 배지·앱 아이콘 배지가 이 값을 따라온다.
+    /// 배너 스토어가 없거나 서버가 배너를 모르면(`.unavailable`) 지금처럼 메시지로 보인다.
     package var visibleHistory: [MessageHistoryEntry] {
-        guard !hiddenBlockedPeerIDs.isEmpty else { return history }
-        return history.filter { !hiddenBlockedPeerIDs.contains($0.peerUserID) }
+        let megaphone = megaphoneFilter
+        guard !hiddenBlockedPeerIDs.isEmpty || megaphone != nil else { return history }
+        return history.filter { entry in
+            if hiddenBlockedPeerIDs.contains(entry.peerUserID) { return false }
+            guard let megaphone else { return true }
+            return !Self.holdsMegaphoneRow(entry, banner: megaphone)
+        }
+    }
+
+    /// 메시지함 필터로 쓸 배너 스토어. 서버가 배너를 모르는 동안(`.unavailable`)은 nil — 거를 것도 보류할 것도 없다.
+    private var megaphoneFilter: MegaphoneBannerStore? {
+        guard let banner = context.links.megaphoneBanner, banner.capability != .unavailable else { return nil }
+        return banner
+    }
+
+    /// 이 줄을 메시지함에서 붙드는가 — 확성기로 판정됐거나(`hides`), 받은 줄인데 판정 보류(`needsVerification`).
+    /// 보낸 줄은 보류하지 않는다(서버 이력은 보낸 사람 자신의 확성기 줄을 이미 숨긴다 — 내가 📢 로 시작해 보낸 1:1 은 그냥 내 말이다).
+    static func holdsMegaphoneRow(_ entry: MessageHistoryEntry, banner: MegaphoneBannerStore) -> Bool {
+        if banner.hides(messageID: entry.id) { return true }
+        return !entry.isMine && banner.needsVerification(messageID: entry.id, body: entry.body)
     }
 
     /// **차단해 숨긴 상대를 걷어낸 요약.** 이력만 거르면 부족하다 — 요약이 이력보다 새것인 창에서는 배지·점이 요약을 재료로
@@ -523,12 +555,26 @@ package final class MessagesStore {
     ///   두 값이 있는 이유는 맥에서 난 결함이다(v0.3.62): 이모티콘 전송이 입력칸을 공유하면 쓰던 글이 사라지거나
     ///   `[아잉:기쁨]` 으로 덮였다. 가르는 기준은 글자가 아니라 **의도**다 — 보낸 본문과 입력칸 글자를 비교해서
     ///   가르면, 왕복(0.2~1.5초) 중에 한 글자라도 이어 친 평범한 전송이 같이 깨진다.
+    ///
+    /// ── 전송 멱등 키(서버 안정화 2026-10-30 · 서버 20261101131000) ──
+    /// ⓐ **자리 말풍선 id 가 곧 키다**(`clientMessageID: localID`). 두 벌로 만들면 확정할 말풍선과 서버가 거른 행이 갈린다.
+    /// ⓑ 왕복이 모호하게 실패하면(`MessagesSendRules.isAmbiguousFailure` — 답을 못 받음) `sendRetryDelaySeconds` 뒤
+    ///    **같은 키로 한 번만** 다시 보낸다. 단 이 실행에서 서버가 키를 안다는 증거(`serverKnowsSendKey`)를 본 뒤에만 —
+    ///    키를 모르는 옛 서버면 코어가 옛 모양으로 되묻고, 그때 재시도는 **두 통**이 된다. 증거가 없으면 지금처럼 실패로 끝낸다.
+    ///    증거는 마지막 ok 가 정한다 — message_id 없는 ok(되돌린 서버)를 보면 깃발을 내린다.
+    /// ⓒ 답을 못 받고 끝난 전송은 (상대 · 본문 · 키 · 시각)을 기억했다가(`unconfirmedSends`) 창 안에 같은 상대에게 같은 본문을
+    ///    다시 보내면 새 키 대신 그 키를 쓴다. 서버가 확정 답(ok · 거절 status)을 준 전송은 기억하지 않는다 —
+    ///    같은 말을 일부러 두 번 보내는 것은 정상 사용이다.
+    /// ⓓ 확정 경로는 그대로다(`.sent(settledSerial:)` + 이력 재조회가 거둔다). 응답의 `message_id` 로 말풍선을 확정하지
+    ///    않는다 — `reconcile` 이 이미 "나중에 띄운 이력이 반영되면 거둔다"로 duplicate 응답까지 덮으므로, id 대조를 한 벌 더
+    ///    두면 두 규칙이 갈리는 날 말풍선이 남거나 겹친다.
     @discardableResult
     private func performSend(body: String, to peerID: String, restoresDraftOnFailure: Bool) -> Bool {
         let generation = context.generation
-        let localID = UUID().uuidString.lowercased()
+        let now = context.clock.now()
+        let localID = reusableSendKey(peerID: peerID, body: body, now: now) ?? UUID().uuidString.lowercased()
         pendingOutgoing.append(MessagesPendingOutgoing(
-            id: localID, peerUserID: peerID, body: body, createdAt: context.clock.now(), state: .sending
+            id: localID, peerUserID: peerID, body: body, createdAt: now, state: .sending
         ))
         sendNotices[peerID] = nil
         isSending = true
@@ -539,22 +585,49 @@ package final class MessagesStore {
             var succeeded = false
             var cancelled = false
             var refreshesDirectory = false
-            do {
-                let response = try await self.context.withMobileSessionRetry { session in
-                    try await service.sendMessage(accessToken: session.accessToken, to: peerID, body: body)
+            func roundTrip() async -> Result<PokeSendResponse, any Error> {
+                do {
+                    return .success(try await self.context.withMobileSessionRetry { session in
+                        try await service.sendMessage(
+                            accessToken: session.accessToken, to: peerID, body: body, clientMessageID: localID
+                        )
+                    })
+                } catch {
+                    return .failure(error)
                 }
+            }
+            var result = await roundTrip()
+            guard generation == self.context.generation else { return }
+            if case .failure(let error) = result, self.runtime.serverKnowsSendKey,
+               MessagesSendRules.isAmbiguousFailure(error) {
+                // ⓑ 응답 유실 재시도 — 같은 Task · 같은 키 · 한 번. 기다리는 동안 로그아웃했으면 나가지 않는다(세대 가드).
+                await self.sleep(self.sendRetryDelaySeconds)
                 guard generation == self.context.generation else { return }
+                result = await roundTrip()
+                guard generation == self.context.generation else { return }
+            }
+            switch result {
+            case .success(let response):
                 let outcome = MessageSendOutcome(response: response)
                 notice = MessagesSendRules.notice(for: outcome, maxLength: response.maxLength)
                 succeeded = outcome == .ok
                 refreshesDirectory = outcome == .targetNotWorking
-            } catch {
-                guard generation == self.context.generation else { return }
+                // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다(서버 되돌림 · 코어가 옛 모양으로 되물었다).
+                // 한 번 선 깃발을 그대로 두면 되돌린 서버에서 재시도가 두 통을 만든다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
+                if succeeded { self.runtime.serverKnowsSendKey = response.messageId != nil }
+                // 확정 답 — 이 키·이 (상대, 본문)의 기억을 지운다(성공이면 다음 같은 말은 새 말이고, 거절이면 저장된 것이 없다).
+                self.runtime.unconfirmedSends.removeAll {
+                    $0.key == localID || ($0.peerUserID == peerID && $0.body == body)
+                }
+            case .failure(let error):
                 if case .cancelled = AuthErrorRules.classify(error) {
                     cancelled = true
                 } else {
                     notice = MessagesSendRules.connectionNotice
                 }
+                // ⓒ 던져진 실패는 모두 "답을 못 읽었다"로 기억한다(4xx·취소 포함). 저장되지 않았던 것이면 같은 키도 새 키와
+                // 똑같이 한 통이라 잃는 것이 없고, 저장됐던 것이면 서버가 그 키로 거른다 — 넓게 잡는 쪽이 두 통을 막는다.
+                self.rememberUnconfirmedSend(peerID: peerID, body: body, key: localID)
             }
             self.isSending = false
             if succeeded {
@@ -573,6 +646,28 @@ package final class MessagesStore {
             if refreshesDirectory { self.loadDirectory(force: true) }
         }
         return true
+    }
+
+    /// 창 안에 답을 못 받은 같은 (상대, 본문) 전송이 있으면 그 키(ⓒ). 지난 기억은 여기서 걷는다.
+    ///
+    /// 그 키가 떠 있는 자리 말풍선 id 와 겹치면 쓰지 않는다 — 실패 분기가 말풍선을 먼저 거두고(`removeAll { $0.id == localID }`)
+    /// 전송은 한 번에 하나라 정상 경로에선 겹칠 수 없지만, 겹치면 `.sent` 확정이 엉뚱한 말풍선을 집는다.
+    private func reusableSendKey(peerID: String, body: String, now: Date) -> String? {
+        let window = unconfirmedSendReuseSeconds
+        runtime.unconfirmedSends.removeAll { now.timeIntervalSince($0.failedAt) > window }
+        guard let entry = runtime.unconfirmedSends.last(where: { $0.peerUserID == peerID && $0.body == body }),
+              !pendingOutgoing.contains(where: { $0.id == entry.key }) else { return nil }
+        return entry.key
+    }
+
+    /// 답을 못 받고 끝난 전송을 기억한다(같은 키·같은 (상대, 본문)의 옛 기억은 바꿔 끼운다 · 시각은 마지막 실패).
+    private func rememberUnconfirmedSend(peerID: String, body: String, key: String) {
+        runtime.unconfirmedSends.removeAll { $0.key == key || ($0.peerUserID == peerID && $0.body == body) }
+        runtime.unconfirmedSends.append(MessagesUnconfirmedSend(
+            peerUserID: peerID, body: body, key: key, failedAt: context.clock.now()
+        ))
+        // 끝없이 쌓이지 않게(창이 10분이라 실제로는 몇 개를 넘지 않는다) — 오래된 것부터 버린다.
+        if runtime.unconfirmedSends.count > 16 { runtime.unconfirmedSends.removeFirst(runtime.unconfirmedSends.count - 16) }
     }
 
     // MARK: - 사람 찾기
@@ -701,6 +796,8 @@ package final class MessagesStore {
             if historyFailed { historyFailed = false }
             // 새 이력 — 떠 있는 대화에 서버 기준 안 읽은 말이 있으면 올린다(새로 도착한 말 포함).
             evaluateReadMarking()
+            // 📢 로 시작하는데 확성기인지 아직 모르는 받은 줄 — refresh 한 번 뒤 판정(계약 C3 경합).
+            verifyMegaphoneRows()
         } catch {
             guard generation == context.generation else { return }
             if case .cancelled = AuthErrorRules.classify(error) { return }
@@ -789,11 +886,25 @@ package final class MessagesStore {
     package func performLoadSummary() async {
         guard isSignedIn else { return }
         let generation = context.generation
+        let banner = context.links.megaphoneBanner
+        // 배너 필터의 첫 판정(로그인 직후 `.unknown`)이 돌고 있으면 기다린다 — 요약 함수(v1/v2)는 필터와 짝이어야 한다
+        // (필터가 켜졌는데 옛 요약을 쓰면 숨긴 확성기 줄을 세어 배지가 안 꺼진다). 판정이 끝난 뒤의 요약은 기다리지 않는다.
+        if let banner, banner.capability == .unknown, let probe = runtime.megaphoneProbe {
+            await probe.value
+            guard generation == context.generation else { return }
+        }
         let serial = runtime.nextSerial()
         runtime.lastSummaryLaunchSerial = serial
         do {
-            let response = try await context.withMobileSessionRetry { session in
-                try await context.service.fetchMessageUnreadSummary(accessToken: session.accessToken)
+            let response: MessageUnreadSummaryResponse
+            if let banner {
+                // 필터가 켜져 있으면 v2(확성기 줄을 안 센다), 아니면 옛 함수. v2 가 없으면 코어가 필터를 끄고 옛 함수로 다시 부른다.
+                runtime.lastSummaryFunction = banner.unreadSummaryFunction
+                response = try await banner.fetchUnreadSummary()
+            } else {
+                response = try await context.withMobileSessionRetry { session in
+                    try await context.service.fetchMessageUnreadSummary(accessToken: session.accessToken)
+                }
             }
             guard generation == context.generation else { return }
             guard let value = response.summary else { return }
@@ -915,6 +1026,60 @@ package final class MessagesStore {
         }
     }
 
+    // MARK: - 확성기 배너(계약 docs/plan/megaphone-banner-contract.md — 폰)
+
+    /// 배너 스토어가 `megaphone_inbox` 를 한 번 읽는다(앞으로 올 때마다). 돌고 있으면 또 띄우지 않는다 —
+    /// 코어 `refresh` 는 진행 중에 들어온 호출을 **한 번 더** 돌리므로 겹쳐 부르면 inbox 가 두 번 나간다.
+    private func startMegaphoneProbe() {
+        guard let banner = context.links.megaphoneBanner, !runtime.megaphoneProbeRunning else { return }
+        runtime.megaphoneProbeRunning = true
+        let generation = context.generation
+        runtime.megaphoneProbe = Task { @MainActor [weak self] in
+            await banner.refresh()
+            guard let self, generation == self.context.generation else { return }
+            self.runtime.megaphoneProbeRunning = false
+            self.megaphoneFilterDidSettle()
+        }
+    }
+
+    /// 판정 보류 줄(받은 줄 · `📢` 접두 · id 모름)을 refresh 한 번 뒤 판정한다(계약 C3 — 울림·이력이 배너 신호보다 먼저 올 수 있다).
+    /// 첫 판정(probe)이 돌고 있으면 그것을 먼저 기다리고, 그래도 모르는 줄만 `refresh(verifying:)` 에 넘긴다. 그 뒤에도 모르면
+    /// (위조 DM · 연결 실패) 코어가 "확인함"으로 적어 메시지로 보인다 — 접두만 보고 숨기지 않는다.
+    private func verifyMegaphoneRows() {
+        guard let banner = megaphoneFilter else { return }
+        let pending = Set(history.lazy.filter { !$0.isMine && banner.needsVerification(messageID: $0.id, body: $0.body) }.map(\.id))
+        guard !pending.isEmpty, !pending.isSubset(of: runtime.megaphoneVerifying) else { return }
+        runtime.megaphoneVerifying.formUnion(pending)
+        let generation = context.generation
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let probe = self.runtime.megaphoneProbe { await probe.value }
+            guard generation == self.context.generation else { return }
+            let still = Set(self.history.lazy.filter { pending.contains($0.id) && banner.needsVerification(messageID: $0.id, body: $0.body) }.map(\.id))
+            if !still.isEmpty { await banner.refresh(verifying: still) }
+            guard generation == self.context.generation else { return }
+            self.runtime.megaphoneVerifying.subtract(pending)
+            self.megaphoneFilterDidSettle()
+        }
+    }
+
+    /// 배너 판정이 바뀌었을 수 있다 — 요약 함수 짝을 맞추고(옛 함수로 받은 요약 뒤에 필터가 켜졌으면 다시 받는다),
+    /// 보류에서 풀린 줄이 떠 있는 대화에 있으면 읽음을 올린다.
+    package func megaphoneFilterDidSettle() {
+        guard isSignedIn else { return }
+        if let used = runtime.lastSummaryFunction, let banner = context.links.megaphoneBanner, used != banner.unreadSummaryFunction {
+            requestActivityRefresh()
+        }
+        evaluateReadMarking()
+    }
+
+    /// 보낸 직후 내 배너(닉네임·아바타는 나 탭이 아는 것 — 모르면 코어 기본 이름).
+    private func presentOwnMegaphone(body: String, megaphoneID: String?) {
+        guard isSignedIn, let banner = context.links.megaphoneBanner else { return }
+        let me = context.links.me
+        banner.presentOwn(body: body, senderName: me?.displayName ?? "", senderAvatarURL: me?.avatarURL, megaphoneID: megaphoneID)
+    }
+
     // MARK: - 실시간 핸들러
 
     private func realtimeMessageActivity() {
@@ -948,6 +1113,8 @@ package final class MessagesStore {
     package var pendingPostMarkTask: Task<Void, Never>? { runtime.postMarkWindowTask }
     package var isMarkingRead: Bool { !runtime.markInFlight.isEmpty }
     package var isHistoryStale: Bool { runtime.historyStale }
+    package var serverKnowsSendKey: Bool { runtime.serverKnowsSendKey }
+    package var unconfirmedSends: [MessagesUnconfirmedSend] { runtime.unconfirmedSends }
 }
 
 /// 비관찰 장부. 로그아웃이 통째로 새것으로 바꾼다(옛 작업이 새 장부를 만지지 않게 — 세대 가드와 함께).
@@ -970,6 +1137,19 @@ private final class MessagesRuntime {
     var postMarkWindowTask: Task<Void, Never>?
     var postMarkPendingSerial = 0
     var shownConversations: [(token: UUID, peerID: String)] = []
+    /// 이 실행에서 서버가 전송 멱등 키를 안다는 증거를 봤는가 — **마지막** `ok` 응답에 `message_id` 가 실렸으면 참
+    /// (그 뒤 message_id 없는 ok 를 보면 다시 거짓 — 서버를 되돌린 판). 응답 유실 재시도(`performSend` ⓑ)의 문이다.
+    /// 로그아웃이 장부째 바꾸므로 다음 계정은 거짓에서 시작한다.
+    var serverKnowsSendKey = false
+    /// 답을 못 받고 끝난 전송들(`performSend` ⓒ · 오래된 것 → 최신).
+    var unconfirmedSends: [MessagesUnconfirmedSend] = []
+    /// 확성기 배너 첫 판정(앞으로 올 때마다 한 번 — `startMegaphoneProbe`). 요약이 `.unknown` 동안 이것을 기다린다.
+    var megaphoneProbe: Task<Void, Never>?
+    var megaphoneProbeRunning = false
+    /// 판정 보류 줄 중 refresh 를 기다리는 id(같은 줄로 refresh 를 겹쳐 띄우지 않게).
+    var megaphoneVerifying: Set<String> = []
+    /// 마지막 요약을 받은 함수 이름(v1/v2) — 필터가 바뀌면 다시 받을지 가른다.
+    var lastSummaryFunction: String?
 
     nonisolated init() {}
 
@@ -986,6 +1166,8 @@ private final class MessagesRuntime {
     func cancelAll() {
         activityTask?.cancel()
         activityTask = nil
+        megaphoneProbe?.cancel()
+        megaphoneProbe = nil
         postMarkWindowTask?.cancel()
         postMarkWindowTask = nil
     }

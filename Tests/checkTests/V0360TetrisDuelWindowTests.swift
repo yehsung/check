@@ -360,15 +360,17 @@ struct TetrisDuelEntryTests {
     func theHeaderCarriesTheTetrisDoorThroughTheStoreDoor() throws {
         // 없으면: 버튼은 있는데 아무 데도 안 이어지거나(머리글 클로저 기본값 {}), 스토어 문을 건너뛰어 미니게임 창이 남는다.
         let panel = twStripped(try twSource("MiniGamePanel.swift"))
-        #expect(panel.contains("MiniGameTetrisDuelEntryButton { onTetrisDuel() }"), "머리글에 테트리스 입구가 없다")
+        #expect(panel.contains("MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }"), "사이드바에 테트리스 입구가 없다")
         #expect(panel.contains("onTetrisDuel: { store.openTetrisDuelFromMiniGame() }"),
                 "테트리스 입구가 스토어의 문을 안 지난다 — 미니게임 창이 안 닫힌다")
-        // 세 문이 **한 묶음** 안에 있다(묶음 밖에 캡슐로 두면 344pt 를 넘는다 — V0338 헤더 시험).
-        let group = try #require(twBlock(panel, after: "MiniGameDuelEntryGroup {"))
-        #expect(group.contains("MiniGameGomokuEntryButton { onGomoku() }")
-                && group.contains("MiniGameChessEntryButton { onChess() }")
-                && group.contains("MiniGameTetrisDuelEntryButton { onTetrisDuel("),
+        // 대결 문이 **한 묶음**(사이드바 '같이 하기') 안에 있다 — v0.3.69 전에는 머리글의 초록 캡슐 묶음이었다.
+        // 묶음 안에 있어야 잠금 규칙(판이 도는 중엔 문을 잠근다 — `.disabled(!doorsOpen)`)이 문 전부에 한 번에 걸린다.
+        let group = try #require(twBlock(panel, after: "group(Self.duelTitle) {"))
+        #expect(group.contains("MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }")
+                && group.contains("MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }")
+                && group.contains("MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel("),
                 "1:1 입구 셋이 한 묶음 안에 없다: \(group)")
+        #expect(panel.contains("group(Self.duelTitle) {") && panel.contains(".disabled(!doorsOpen)"), "대결 문 묶음에 잠금이 없다")
         #expect(panel.contains("CheckTetrisDuelWindowController.frameAutosaveName"),
                 "전역 스페이스 모니터의 독립 창 목록에 테트리스 창이 없다")
         let miniGameStore = twStripped(try twSource("WorkTimerStoreMiniGame.swift"))
@@ -381,15 +383,17 @@ struct TetrisDuelEntryTests {
     @MainActor
     @Test
     func theGroupedDoorsAreThreeButtonsWithNamesAndTooltips() throws {
-        // 없으면: 묶음이 이름 대신 아이콘만 그리거나(문 셋이 서로 구별 안 됨), 보이스오버가 "1:1 테트리스" 를 못 읽는다.
-        #expect(MiniGameTetrisDuelEntryButton.title == "1:1 테트리스")
-        #expect([MiniGameGomokuEntryButton.segmentTitle, MiniGameChessEntryButton.segmentTitle,
-                  MiniGameTetrisDuelEntryButton.segmentTitle] == ["오목", "체스", "테트리스"])
+        // 없으면: 문이 이름 대신 아이콘만 그리거나(문끼리 구별 안 됨), 보이스오버가 "1:1 테트리스" 를 못 읽는다.
+        // v0.3.69 — 문이 사이드바 줄이 되며 짧은 이름(segmentTitle)이 없어졌다. 줄에는 **전체 이름**이 늘 보인다.
+        #expect([MiniGameGomokuEntryButton.title, MiniGameChessEntryButton.title, MiniGameTetrisDuelEntryButton.title]
+                == ["1:1 오목", "1:1 체스", "1:1 테트리스"])
         let panel = twStripped(try twSource("MiniGamePanel.swift"))
-        let capsule = try #require(twBetween(panel, "private struct MiniGameEntryCapsule: View {", "private var capsule: some View {"))
-        #expect(capsule.contains("Text(segmentTitle)"), "묶음 조각이 짧은 이름을 안 그린다")
-        #expect(capsule.contains(".accessibilityLabel(title)"), "묶음 조각이 보이스오버에게 게임 이름을 안 말한다")
-        #expect(capsule.contains(".checkTooltip(help)"), "묶음 조각에 말풍선이 없다")
+        let row = try #require(twBetween(panel, "struct MiniGameSidebarRow: View {", "private var fill: Color {"))
+        #expect(row.contains("Text(title)"), "사이드바 줄이 이름을 안 그린다")
+        #expect(row.contains(".accessibilityLabel(hasInvite ?"), "사이드바 줄이 보이스오버에게 게임 이름을 안 말한다")
+        #expect(row.contains(".modifier(MiniGameSidebarHelp(text: help))"), "사이드바 줄에 말풍선 문이 없다")
+        let door = try #require(twBetween(panel, "struct MiniGameTetrisDuelEntryButton: View {", "struct MiniGameRummyEntryButton"))
+        #expect(door.contains("help: Self.help"), "테트리스 문이 말풍선 안내를 안 넘긴다")
         #expect(NSImage(systemSymbolName: TetrisDuelEntryIcon.resolved, accessibilityDescription: nil) != nil,
                 "테트리스 대결 아이콘(\(TetrisDuelEntryIcon.resolved))이 이 맥에서 안 풀린다")
         #expect(TetrisDuelEntryIcon.symbol != MiniGameKind.tetris.icon, "대결 아이콘이 솔로 테트리스 칩과 같다")

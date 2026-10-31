@@ -1,0 +1,165 @@
+{
+  "state": {
+    "consecutive_passes": 0,
+    "draft": null,
+    "end_reason": null,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "grace_ms": 2000,
+    "host_id": "92000000-0000-4000-8000-000000000009",
+    "id": "501dbf4b-a755-46c3-9c92-1fc978468bae",
+    "is_public": true,
+    "last_event": {
+      "at_ms": 1793341032800,
+      "count": 3,
+      "kind": "start",
+      "seat_no": 1
+    },
+    "max_seats": 4,
+    "my_initial_done": false,
+    "my_rack": [
+      "C9",
+      "D11",
+      "A10",
+      "A3",
+      "A4",
+      "B1",
+      "A9",
+      "D10",
+      "C11",
+      "C8",
+      "D7",
+      "C12",
+      "B8",
+      "A5"
+    ],
+    "my_seat_no": 2,
+    "pool_count": 64,
+    "reactions": [
+      {
+        "at_ms": 1793341033804,
+        "key": "surprised",
+        "seat_no": 2
+      },
+      {
+        "at_ms": 1793341032803,
+        "key": "heart",
+        "seat_no": 1
+      },
+      {
+        "at_ms": 1793341031304,
+        "key": "heart",
+        "seat_no": 1
+      },
+      {
+        "at_ms": 1793341030804,
+        "key": "sad",
+        "seat_no": 2
+      },
+      {
+        "at_ms": 1793341030304,
+        "key": "angry",
+        "seat_no": 0
+      },
+      {
+        "at_ms": 1793341029804,
+        "key": "sleepy",
+        "seat_no": 1
+      },
+      {
+        "at_ms": 1793341029801,
+        "key": "joy",
+        "seat_no": 1
+      },
+      {
+        "at_ms": 1793341029304,
+        "key": "surprised",
+        "seat_no": 2
+      },
+      {
+        "at_ms": 1793341028804,
+        "key": "joy",
+        "seat_no": 0
+      },
+      {
+        "at_ms": 1793341028304,
+        "key": "heart",
+        "seat_no": 1
+      },
+      {
+        "at_ms": 1793341027804,
+        "key": "sad",
+        "seat_no": 2
+      },
+      {
+        "at_ms": 1793341027304,
+        "key": "angry",
+        "seat_no": 0
+      }
+    ],
+    "seat_count": 3,
+    "seats": [
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "이판09",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 14,
+        "seat_no": 0,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "92000000-0000-4000-8000-000000000009"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "이판11",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 14,
+        "seat_no": 1,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "92000000-0000-4000-8000-000000000011"
+      },
+      {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "이판12",
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "initial_done": false,
+        "is_winner": null,
+        "payout": null,
+        "rack_count": 14,
+        "seat_no": 2,
+        "state": "playing",
+        "timeout_streak": 0,
+        "user_id": "92000000-0000-4000-8000-000000000012"
+      }
+    ],
+    "seq": 1,
+    "server_now_ms": 1793341032804,
+    "stake": 3,
+    "status": "active",
+    "table": [],
+    "table_layout": null,
+    "turn_deadline_ms": 1793341092800,
+    "turn_seat_no": 1,
+    "turn_started_ms": 1793341032800
+  },
+  "status": "ok"
+}

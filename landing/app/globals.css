@@ -360,12 +360,12 @@ body { overflow-x:clip; }            /* hidden·auto 금지 — sticky 조상 �
   .js [data-aing][data-bubble] .aing-bubble { transform-origin:0 100%; transition:opacity var(--t-quick) linear, scale 200ms var(--ease-out); }
 
   .disclosure::after { transition:transform 180ms var(--ease-out); }
-  /* FAQ 높이 전이(::details-content + interpolate-size 지원 브라우저만) */
+  /* FAQ · 안드로이드 문제 해결(Install.tsx) 높이 전이(::details-content + interpolate-size 지원 브라우저만) */
   @supports (interpolate-size: allow-keywords) {
-    details[name="faq"] { interpolate-size:allow-keywords; }
-    details[name="faq"]::details-content { height:0; overflow:clip;
+    details[name="faq"], details[data-android-help] { interpolate-size:allow-keywords; }
+    details[name="faq"]::details-content, details[data-android-help]::details-content { height:0; overflow:clip;
       transition:height var(--t-resize) var(--ease-out), content-visibility var(--t-resize) allow-discrete; }
-    details[name="faq"][open]::details-content { height:auto; }
+    details[name="faq"][open]::details-content, details[data-android-help][open]::details-content { height:auto; }
   }
 }
 

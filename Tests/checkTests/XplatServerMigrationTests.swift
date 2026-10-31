@@ -281,11 +281,19 @@ struct XplatServerChainTests {
             "M4": ["push__enqueue", "push_outbox_claim", "push_outbox_complete", "push__at_desktop", "push_windows_surface_min_build"],
             "M5": ["token_usage_board", "codex_account_group", "token_scan_health", "token_device_fork_safe"],
         ]
+        // 의도된 덮어쓰기(초안 뒤에 일부러 다시 정의한 파일) — 함수 → 그 파일. 늘릴 땐 그 파일이 초안의 뜻을 지키는지 따로 잰다.
+        //  · app_current_notice: 20261106130000 이 0.3.69(build 122) 맥 전용 반복 공지(mac_builds · repeat_minutes)를 더했다
+        //    (2026-10-31 사용자 결정, CPU 핫픽스 업데이트 안내). 'mac' = any (n.platforms) 줄은 그대로다 — 아래에서 잰다.
+        let overrides: [String: String] = ["app_current_notice": "20261106130000_app_notice_mac_build.sql"]
+        if let over = last["app_current_notice"], over.file == overrides["app_current_notice"] {
+            #expect(over.body.contains("'mac' = any (n.platforms)"), "덮어쓴 app_current_notice 가 맥 축 거르기를 잃었다")
+        }
         for m in Xp.order {
             let fns = try #require(expect[m])
             if Xp.has(m) {
                 let file = try Xp.draftName(m)
                 for fn in fns {
+                    if let allowed = overrides[fn], last[fn]?.file == allowed { continue }
                     #expect(last[fn]?.file == file, "\(fn) 의 마지막 정의가 \(last[fn]?.file ?? "없음") 이다(기대 \(file))")
                 }
             } else {

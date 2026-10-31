@@ -987,7 +987,8 @@ struct V0353AppStoreRetireTests {
         }
         // 쓰기(사용자가 ⌘-끌기로 뺐다)는 예전처럼 앱을 끝낸다 — 판단은 상태가, 종료는 다음 틱에.
         let collapsed = v0353Collapsed(raw)
-        #expect(collapsed.contains("set: { inserted in guard appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return } DispatchQueue.main.async { NSApp.terminate(nil) } }"),
+        // v0.3.69: 하나만 실행의 대기 중(아이콘을 빼 둔 동안)에 온 쓰기는 사용자가 뺀 것이 아니라 함께 거른다(SingleInstanceGuardTests).
+        #expect(collapsed.contains("set: { inserted in guard appDelegate.singleInstance.menuBarInserted, appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return } DispatchQueue.main.async { NSApp.terminate(nil) } }"),
                 "아이콘을 빼면 아이콘 없는 앱이 남는다")
         // 앱스토어 판은 `MenuBarExtra {`(아이콘을 늘 넣는 0.3.52 의 생성자) 갈래이고 그 판에서만 컴파일된다. 본문·라벨은 두 판이 함께
         // 쓰는 속성(`menuContent` · `menuLabel`)으로 뺐다 — 그래서 앱스토어 판 소스 모양은 0.3.52 와 다르지만 그리는 것은 같다.

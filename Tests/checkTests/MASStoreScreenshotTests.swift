@@ -783,8 +783,8 @@ struct MASStoreScreenshotTests {
             let size = MiniGameWindowLayout.contentSize
             let canvas = MiniGameWindowLayout.canvasSize
             let canvasOrigin = CGPoint(
-                x: MiniGameWindowLayout.contentPadding,
-                y: MiniGameWindowLayout.contentPadding + MiniGameWindowLayout.headerHeight + MiniGameWindowLayout.headerSpacing
+                x: MiniGameWindowLayout.gameColumnOrigin.x,
+                y: MiniGameWindowLayout.gameColumnOrigin.y + MiniGameWindowLayout.headerHeight + MiniGameWindowLayout.headerSpacing
             )
             let game = FlappyGameView(host: .inert(bestScore: 23), input: MiniGameInput(), initialGame: Self.flappyGame())
                 .frame(width: canvas.width, height: canvas.height)

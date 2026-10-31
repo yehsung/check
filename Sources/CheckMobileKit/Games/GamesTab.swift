@@ -474,8 +474,7 @@ private struct GamesTileArt: View {
             case .timingBar: timing(geo.size)
             case .flappy: flappy(geo.size)
             case .tetris: tetris(geo.size)
-            // 길건너 아잉이(v0.3.67)는 폰 타일 목록(`phoneCases`)에 없어 여기 오지 않는다 — 망라 switch 를 지키는 빈 그림.
-            case .crossy: EmptyView()
+            case .crossy: crossy(geo.size)
             }
         }
         .accessibilityHidden(true)
@@ -589,6 +588,77 @@ private struct GamesTileArt: View {
         (0, 5, .l), (1, 5, .l), (2, 5, .o), (3, 5, .o), (5, 5, .t),
         (0, 6, .l), (1, 6, .z), (2, 6, .o), (3, 6, .o), (4, 6, .s), (5, 6, .t)
     ]
+
+    /// 길건너 타일: 위에서 내려다본 줄 넷(풀밭 · 찻길 · 강 · 풀밭) + 차 둘 + 통나무 하나.
+    ///
+    /// 색은 **판과 같은 수**다(`CrossyPalette.laneHex` · `carColors` — 풀밭 0x8FCA50 · 찻길 0x575D6B · 강 0x52BDF2 ·
+    /// 차 0x3A7BF0/0xF2B632 · 통나무 0x8F5C36). 타일만 다른 색이면 열고 나서 다른 게임처럼 보인다.
+    /// 그 상수를 코드로 읽어 오지 않은 까닭: `CrossyPalette` 는 `@MainActor` 클래스고 이 타일은 비스듬한 3D 가 아니라
+    /// **납작한 띠**라 쓰는 색이 다섯뿐이다 — 타일 셋(타이밍 바 · 플래피 · 테트리스)이 전부 16진 리터럴을 쓰는 관용구를 따랐다.
+    ///
+    /// 3D 로 그리지 않는다: 타일은 30~90pt 정지 그림이고 여기서 SCNView 를 띄우면 탭 목록을 스크롤할 때마다 메탈 층이
+    /// 두 장 선다(판 하나당 그림자 맵 2048²다).
+    private func crossy(_ size: CGSize) -> some View {
+        // 줄 높이는 타일 높이를 넷으로 나눈 값(아래로 풀밭 → 찻길 → 강 → 풀밭).
+        let lane = size.height / 4
+        return ZStack(alignment: .topLeading) {
+            gamesHex(0x8FCA50)
+            Rectangle().fill(gamesHex(0x575D6B)).frame(height: lane).offset(y: lane)
+            Rectangle().fill(gamesHex(0x52BDF2)).frame(height: lane).offset(y: lane * 2)
+            // 찻길 가운데 점선(판의 `roadDashes` 와 같은 뜻 — 간격은 타일 폭에 맞춰 줄였다).
+            ForEach(0..<7, id: \.self) { i in
+                RoundedRectangle(cornerRadius: 1, style: .continuous)
+                    .fill(Color.white.opacity(0.55))
+                    .frame(width: 10, height: 2)
+                    .offset(x: 8 + CGFloat(i) * 26, y: lane * 1.5 - 1)
+            }
+            // 차 둘(서로 반대 방향으로 간다는 뜻으로 양 끝에).
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(gamesHex(0x3A7BF0))
+                .frame(width: 30, height: lane * 0.52)
+                .offset(x: size.width * 0.14, y: lane + lane * 0.24)
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(gamesHex(0xF2B632))
+                .frame(width: 30, height: lane * 0.52)
+                .offset(x: size.width * 0.62, y: lane + lane * 0.24)
+            // 통나무 하나.
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(gamesHex(0x8F5C36))
+                .frame(width: 54, height: lane * 0.56)
+                .offset(x: size.width * 0.34, y: lane * 2 + lane * 0.22)
+            // 아잉이는 아래 풀밭에서 위를 본다(뒷모습 — 앞으로 가는 게임이다).
+            CrossyTileAing(size: 26)
+                .shadow(color: .black.opacity(0.25), radius: 3, y: 3)
+                .offset(x: size.width * 0.46, y: lane * 3 + lane * 0.18)
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+    }
+}
+
+/// 타일 속 아잉이 한 마리 — **뒷모습 둥근 몸 + 귀 둘**. 3D 모델(`aing.scn`)이나 옆모습 PNG(`FlappyAingArt`)를
+/// 쓰지 않는 까닭: 길건너의 아잉이는 **앞으로 가며 뒤를 보여 준다**(사용자 지적 2026-10-27 · 맥 `4a4ea8f`).
+/// 옆모습을 쓰면 타일이 플래피와 같은 그림이 되고, 그건 "다른 게임"이라는 신호를 지운다.
+private struct CrossyTileAing: View {
+    let size: CGFloat
+
+    var body: some View {
+        ZStack {
+            // 몸 — 아잉이 보라(오버레이 대체본과 같은 색 `0xC8B6F2`).
+            RoundedRectangle(cornerRadius: size * 0.34, style: .continuous)
+                .fill(gamesHex(0xC8B6F2))
+                .frame(width: size, height: size)
+            // 귀 둘(위쪽 양옆).
+            HStack(spacing: size * 0.30) {
+                ForEach(0..<2, id: \.self) { _ in
+                    Capsule()
+                        .fill(gamesHex(0xC8B6F2))
+                        .frame(width: size * 0.20, height: size * 0.34)
+                }
+            }
+            .offset(y: -size * 0.52)
+        }
+        .frame(width: size, height: size)
+    }
 }
 
 /// "오늘 내 순위" 행 앞 30pt 둥근 네모(시안 `.b-iconsq`) — 타일과 같은 무대 색 · 흰 기호(플래피는 아잉 옆모습).
@@ -619,7 +689,8 @@ private struct GamesGameIconSquare: View {
                         .offset(y: 2)
                 }
             case .crossy:
-                // 폰에 없음(`phoneCases`) — 기호 하나로 망라 switch 만 지킨다.
+                // 길건너는 기호 하나다(`figure.walk`) — 30pt 배지에서 아잉이 옆모습(플래피)이나 조각(테트리스)처럼
+                // 읽히는 작은 그림이 없다. 타일 그림(`crossy(_:)`)이 큰 자리에서 그 일을 한다.
                 Image(systemName: kind.icon)
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Color.white)
@@ -635,7 +706,7 @@ private struct GamesGameIconSquare: View {
         case .timingBar: return [gamesHex(0x4B3274), gamesHex(0x8A4F74)]
         case .flappy: return [gamesHex(0x1F4A63), gamesHex(0x3C8A6C)]
         case .tetris: return [gamesHex(0x24204E), gamesHex(0x3A2A5E)]
-        case .crossy: return [gamesHex(0x2E5A2A), gamesHex(0x4F8A3C)]   // 폰에 없음(`phoneCases`)
+        case .crossy: return [gamesHex(0x2E5A2A), gamesHex(0x4F8A3C)]   // 풀밭(타일 그림과 같은 두 색)
         }
     }
 }

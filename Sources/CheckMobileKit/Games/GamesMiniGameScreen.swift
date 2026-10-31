@@ -5,14 +5,15 @@ import SwiftUI
 /// 미니게임 화면(SPEC-ios §3.5): 머리 줄(최고 · 오늘 순위 · 안내) · 캔버스(논리 292×302 를 폭에 **등비 확대**) · 오늘 순위.
 ///
 /// - 캔버스 어디든 **누르는 순간** = 행동(맥의 마우스 다운 래치와 같다 — 손을 뗄 때 발화하면 점프 게임엔 그 지연이 곧 낙차다).
-///   ⚠️ **테트리스는 진행 중일 때만 다르다**: 한 번의 끌기가 여러 칸을 만들고 행동도 셋(좌·우·소프트드롭)이라
+///   ⚠️ **끌기 트래커 게임 둘은 진행 중일 때만 다르다**(`MiniGameKind.usesCanvasDragTracker` — 테트리스 · 길건너):
+///   테트리스는 한 번의 끌기가 여러 칸을 만들고 행동도 셋(좌·우·소프트드롭)이고, 길건너는 쓸기 방향이 넷이라
 ///   래치로는 표현이 안 된다 — 그때만 `GamesPlayController` 의 제스처 트래커로 넘긴다. 시작 화면에서는
-///   테트리스도 래치가 판을 켠다(트래커로만 받으면 0.25초를 넘겨 천천히 뗀 사람에게 시작이 안 되고, 그건 '고장'으로 읽힌다).
+///   그 둘도 래치가 판을 켠다(트래커로만 받으면 0.25초를 넘겨 천천히 뗀 사람에게 시작이 안 되고, 그건 '고장'으로 읽힌다).
 /// - 프레임 상한은 화면 최대 주사율(`UIScreen.maximumFramesPerSecond`)을 코어 `MiniGameFrameRate` 에 넣은 값이다.
 /// - 햅틱 네 채널: 판에 먹힌 탭(가볍게) · 하드드롭(단단하게) · 줄소거(묵직하게) · 게임오버·완주(한 번).
 ///   **이동 걸음·소프트드롭 걸음에는 없다** — L1 소프트드롭이 초당 56회, L5 는 213회라 탭틱 엔진이 낼 수 있는 속도가 아니다.
 /// - 앱이 background 로 가거나 화면을 떠나면 판은 끝 — 스토어·허브가 한다(`GamesMiniGameHub.appDidEnterBackground`·
-///   `closeScreen`). 기존 두 게임은 제출하지 않고, **테트리스는 여기까지의 점수로 확정 제출한다.**
+///   `closeScreen`). 기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
 struct GamesMiniGameScreen: View {
     let store: GamesStore
     let kind: MiniGameKind
@@ -23,20 +24,24 @@ struct GamesMiniGameScreen: View {
     /// 데모 스크린샷: 판 도중 장면을 멈춰 둔다(DEBUG · 데모에서만 참이 된다).
     @State private var framesFrozen = false
     /// **다 쓴 접촉**의 시작점 — 이 손가락으로는 더 아무 일도 하지 않는다. 들어오는 길이 둘이다:
-    /// ① 시작 래치가 판을 켠 그 끌기(안 삼키면 **한 번의 탭이 시작과 회전을 둘 다** 한다 — `action()` 이
+    /// ① 시작 래치가 판을 켠 그 끌기(안 삼키면 **한 번의 탭이 시작과 회전/뛰기를 둘 다** 한다 — `action()` 이
     ///    ready → running 으로 바꾼 직후라 이어지는 탭 판정이 그대로 통과한다. 그리고 그 손가락이 한 칸 폭 이상
-    ///    흔들리면 새 판 첫 조각이 **곧장 옆으로 간다** — `onEnded` 만 삼키면 그 이동은 안 막힌다).
+    ///    흔들리면 새 판 첫 조각이 **곧장 옆으로 간다**(길건너는 **한 칸 더 뛴다**) — `onEnded` 만 삼키면 그 이동은 안 막힌다).
     /// ② 그 접촉으로 끌던 도중에 판이 끝난 경우(상한·탑아웃). 표시를 안 하면 같은 손가락의 다음 `onChanged` 가
     ///    시작 래치를 때려 **새 판이 저절로 켜진다.**
     ///
     /// 불리언이 아니라 **시작점**인 이유: `onEnded` 는 늘 오지 않는다(시스템 제스처·전화 수신으로 취소되면 안 온다).
     /// 참인 채로 남으면 그다음 **멀쩡한 탭**의 회전이 대신 삼켜진다. 시작점이면 새 접촉은 값이 달라 안 걸린다.
-    @State private var swallowsTetrisDragEnd: CGPoint?
+    @State private var swallowsCanvasDragEnd: CGPoint?
     /// 지금 트래커로 넘기고 있는(= 진행 중인 판을 조작하는) 접촉의 시작점. 판이 이 손가락 아래에서 끝났는지를
     /// 이 값으로 알아본다 — `isPlaying` 이 거짓인데 이 시작점이면 **방금 끝난 그 접촉**이다.
-    @State private var tetrisPlayContact: CGPoint?
+    @State private var trackedPlayContact: CGPoint?
 
     private var hub: GamesMiniGameHub { store.miniGames }
+
+    /// 캔버스 입력을 **끌기 트래커**로 받는 게임인가. 판정은 코어 한 곳(`MiniGameKind.usesCanvasDragTracker`)에서
+    /// 오고 구동기가 같은 값을 본다 — 화면과 구동기에 손으로 두 번 적으면 한 곳만 넓히는 날 조용히 갈린다.
+    private var usesDragTracker: Bool { kind.usesCanvasDragTracker }
 
     var body: some View {
         // 캔버스는 **폭이 정한다**(좌우 16 여백 안 폭 × 302/292). 아래 순위 스크롤과 높이를 나눠 갖게 두면 비율 맞춤이
@@ -193,16 +198,16 @@ struct GamesMiniGameScreen: View {
             .onChanged { value in
                 guard !framesFrozen else { return }
                 // ① 다 쓴 접촉은 **여기서 끝난다** — 판을 켠 손가락의 이동도, 판이 끝난 손가락의 시작 래치도 막는다.
-                if kind == .tetris, swallowsTetrisDragEnd == value.startLocation { return }
-                // ② 이 접촉이 끌던 판이 방금 끝났다(상한·탑아웃). 같은 손가락이 새 판을 켜면 안 된다 —
-                //    켜지면 트래커에 남은 앞 끌기의 축 잠금·소비량으로 첫 조각이 곧장 튄다.
-                if kind == .tetris, !controller.isPlaying, tetrisPlayContact == value.startLocation {
-                    tetrisPlayContact = nil
-                    swallowsTetrisDragEnd = value.startLocation
+                if usesDragTracker, swallowsCanvasDragEnd == value.startLocation { return }
+                // ② 이 접촉이 끌던 판이 방금 끝났다(상한·탑아웃·차에 치임). 같은 손가락이 새 판을 켜면 안 된다 —
+                //    켜지면 트래커에 남은 앞 끌기의 축 잠금·소비량으로 첫 조각이 곧장 튄다(길건너는 첫 칸이 저절로 간다).
+                if usesDragTracker, !controller.isPlaying, trackedPlayContact == value.startLocation {
+                    trackedPlayContact = nil
+                    swallowsCanvasDragEnd = value.startLocation
                     return
                 }
-                if kind == .tetris, controller.isPlaying {
-                    tetrisPlayContact = value.startLocation
+                if usesDragTracker, controller.isPlaying {
+                    trackedPlayContact = value.startLocation
                     controller.canvasDragChanged(startLocation: value.startLocation,
                                                  translation: value.translation, at: value.time)
                     return
@@ -211,14 +216,14 @@ struct GamesMiniGameScreen: View {
                 pressLatched = true
                 let wasPlaying = controller.isPlaying
                 controller.tap()
-                if kind == .tetris, !wasPlaying, controller.isPlaying { swallowsTetrisDragEnd = value.startLocation }
+                if usesDragTracker, !wasPlaying, controller.isPlaying { swallowsCanvasDragEnd = value.startLocation }
             }
             .onEnded { value in
                 pressLatched = false
-                guard !framesFrozen, kind == .tetris else { return }
-                if tetrisPlayContact == value.startLocation { tetrisPlayContact = nil }
-                guard swallowsTetrisDragEnd != value.startLocation else {
-                    swallowsTetrisDragEnd = nil
+                guard !framesFrozen, usesDragTracker else { return }
+                if trackedPlayContact == value.startLocation { trackedPlayContact = nil }
+                guard swallowsCanvasDragEnd != value.startLocation else {
+                    swallowsCanvasDragEnd = nil
                     return
                 }
                 guard controller.isPlaying else { return }
@@ -236,8 +241,10 @@ struct GamesMiniGameScreen: View {
         case .tetris:
             GamesTetrisCanvas(game: controller.tetris, bestScore: hub.best(for: kind), reduceMotion: reduceMotion)
         case .crossy:
-            // 길건너 아잉이(v0.3.67)는 폰에 아직 없다 — `phoneCases` 가 거르므로 이 화면이 crossy 로 열리지 않는다.
-            EmptyView()
+            // 유일하게 SceneKit(3D)인 캔버스다 — 주사율을 **넘긴다**(SCNView 의 그리기 상한이 판 루프와 같은 약수여야
+            // 저더가 안 생긴다. `MiniGameFrameRate` 머리 주석의 그 실측이다).
+            GamesCrossyCanvas(game: controller.crossy, bestScore: hub.best(for: kind), reduceMotion: reduceMotion,
+                              framesPerSecond: MiniGameFrameRate.targetFPS(forRefreshRate: refreshHz))
         }
     }
 
@@ -256,7 +263,9 @@ struct GamesMiniGameScreen: View {
             if game.phase == .ready { return GamesMiniGameText.startAction }
             return GamesMiniGameText.tetrisValue(score: game.score, level: game.scoreLevel, lines: game.lines)
         case .crossy:
-            return GamesMiniGameText.startAction   // 폰에 없음(위 canvasContent 주석)
+            // 점수는 도달한 줄이다(플래피와 같은 모양 — 결과 카드에서도 그 점수를 말한다).
+            if controller.crossy.phase == .result { return "\(controller.crossy.score)점" }
+            return controller.isPlaying ? "\(controller.crossy.score)점" : GamesMiniGameText.startAction
         }
     }
 
@@ -311,19 +320,28 @@ struct GamesMiniGameScreen: View {
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
     }
 
-    // MARK: 오늘 순위
+    // MARK: 순위 — [오늘 | 역대] (맥 0.3.67 → 폰 1.0.15)
 
+    /// 순위 절. 머리에 **[오늘 | 역대] 전환**이 붙는다(`GamesBoardScopePicker` · 상태는 허브 하나 — `hub.boardScope`).
+    ///
+    /// 두 판이 **같은 행 뷰**를 쓴다(`GamesRankRow` — [역대] 만 점수 앞에 작은 날짜 "9/13" 하나가 붙는다).
+    /// 행 뷰를 두 벌로 두면 열 규격이 언젠가 갈린다 — 맥도 `MiniGameAllTimeEntry.rankRowEntry` 로 같은 선택을 했다.
+    ///
+    /// **[오늘] 에만 있는 것 둘**: 어제 1등 카드 · 상금·정족수 줄(상금은 오늘 판의 것이다 — 맥 `showsChampionCard` ·
+    /// `prizeFooter` 와 같은 조건). [역대] 바닥은 규칙·날짜 두 줄이다.
+    ///
+    /// 정족수 줄이 **머리에서 바닥으로 내려갔다**: 머리 오른쪽 자리는 이제 전환 하나가 쓴다(맥 머리도 인원 칩 + 전환이고
+    /// 정족수는 바닥이다). 좁은 폰 머리에 전환과 정족수를 함께 몰면 제목이 꺾인다.
     @ViewBuilder
     private var rankings: some View {
         let state = hub.boards[kind] ?? GamesMiniGameBoard()
         let myID = store.context.session.session?.userID.lowercased()
-        // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
-        SectionHeader(GamesMiniGameText.rankTitle,
-                      trailing: state.knowsPlayerCount ? .text(GamesMiniGameText.quorumCaption(players: state.entries.count)) : .none,
-                      padded: true)
-            .padding(.top, -18)
+        let showsAllTime = hub.boardScope == .allTime
+        SectionHeaderBar(hub.boardScope.boardTitle, topPadding: 4) {
+            GamesBoardScopePicker(selected: hub.boardScope) { scope in hub.selectBoardScope(scope) }
+        }
         // 어제 1등은 **자기 그룹**(순위 탭과 같은 공용 `ChampionRow`) — '오늘 순위' 첫 행처럼 읽히지 않게 떼어 둔다(시안 B 06).
-        if let winner = state.yesterdayWinner {
+        if !showsAllTime, let winner = state.yesterdayWinner {
             ChampionRow(
                 caption: GamesMiniGameText.yesterdayChampion,
                 name: winner.name,
@@ -334,34 +352,90 @@ struct GamesMiniGameScreen: View {
             .padding(.bottom, 12)
         }
         InsetGroup {
-            if state.entries.isEmpty {
-                GroupRow(divider: .none) {
-                    switch state.placeholder {
-                    case .failed:
-                        LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
-                            Task { await hub.loadBoard(kind, withWinner: true) }
-                        }
-                    case .loading:
-                        LoadingRow(GamesMiniGameText.loadingCaption)
-                    case .empty, .rows:
-                        Text(GamesMiniGameText.emptyBoard)
-                            .font(.subheadline)
-                            .foregroundStyle(MobileTheme.label2)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+            if showsAllTime {
+                allTimeRows(state, myID: myID)
             } else {
-                ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
-                    GamesRankRow(store: store, rank: index + 1, entry: entry, isMe: entry.userID == myID,
-                                 isLast: index == state.entries.count - 1)
+                todayRows(state, myID: myID)
+            }
+        }
+        rankFooter(state, showsAllTime: showsAllTime)
+    }
+
+    @ViewBuilder
+    private func todayRows(_ state: GamesMiniGameBoard, myID: String?) -> some View {
+        if state.entries.isEmpty {
+            GroupRow(divider: .none) {
+                switch state.placeholder {
+                case .failed:
+                    LoadFailureRow(GamesMiniGameText.failedCaption, isRetrying: state.loading) {
+                        Task { await hub.loadBoard(kind, withWinner: true) }
+                    }
+                case .loading:
+                    LoadingRow(GamesMiniGameText.loadingCaption)
+                case .empty, .rows:
+                    Text(GamesMiniGameText.emptyBoard)
+                        .font(.subheadline)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            ForEach(Array(state.entries.enumerated()), id: \.element.userID) { index, entry in
+                GamesRankRow(store: store, rank: index + 1, entry: entry, isMe: entry.userID == myID,
+                             isLast: index == state.entries.count - 1)
+            }
+        }
+    }
+
+    /// [역대] 줄. 빈 자리의 **문구와 [다시 시도] 여부는 허브의 판정 하나**에서 온다(`allTimeEmptyText` ·
+    /// `allTimeShowsRetry`) — 넷째 상태(준비 중)까지 가르는 그 표가 뷰 안 삼항으로 흩어지면 macOS 스위트가 못 잰다.
+    @ViewBuilder
+    private func allTimeRows(_ state: GamesMiniGameBoard, myID: String?) -> some View {
+        if state.allTime.isEmpty {
+            GroupRow(divider: .none) {
+                if state.allTimeShowsRetry {
+                    LoadFailureRow(state.allTimeEmptyText, isRetrying: state.allTimeLoading) {
+                        hub.loadAllTimeBoard(kind)
+                    }
+                } else if !state.allTimeLoaded {
+                    // 아직 못 받았다(받는 중이거나 막 떠났다) — 문구는 위 판정이 "불러오는 중…"으로 준다.
+                    LoadingRow(state.allTimeEmptyText)
+                } else {
+                    // 받았고 비었다, 또는 **준비 중**(서버에 함수가 없는 창) — 둘 다 [다시 시도] 가 없다.
+                    Text(state.allTimeEmptyText)
+                        .font(.subheadline)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            ForEach(Array(state.allTime.enumerated()), id: \.element.userID) { index, entry in
+                GamesRankRow(store: store, rank: index + 1, entry: entry.rankRowEntry, isMe: entry.userID == myID,
+                             isLast: index == state.allTime.count - 1, dateCaption: entry.dayCaption)
+            }
+        }
+    }
+
+    /// 바닥 안내. [오늘] 은 상금 + 정족수, [역대] 는 규칙 + 날짜다(맥 `prizeFooter` · `allTimeFooter` 와 같은 글자).
+    /// 정족수 줄은 **사람 수를 알 때만** — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
+    private func rankFooter(_ state: GamesMiniGameBoard, showsAllTime: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            if showsAllTime {
+                Text(GamesMiniGameText.allTimeRuleCaption)
+                Text(GamesMiniGameText.allTimeDayCaption)
+            } else {
+                Text(GamesMiniGameText.prizeCaption)
+                if state.knowsPlayerCount {
+                    Text(GamesMiniGameText.quorumCaption(players: state.entries.count)).monospacedDigit()
                 }
             }
         }
-        Text(GamesMiniGameText.prizeCaption)
-            .font(MobileTheme.rowSubtitle)
-            .foregroundStyle(MobileTheme.label2)
-            .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-            .padding(.top, MobileTheme.space2)
+        .font(MobileTheme.rowSubtitle)
+        .foregroundStyle(MobileTheme.label2)
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .padding(.top, MobileTheme.space2)
     }
 
     // MARK: 데모
@@ -382,15 +456,21 @@ struct GamesMiniGameScreen: View {
     }
 }
 
-/// 오늘 순위 한 줄 — **순위 탭과 같은 공용 부품**(통합 때 승격: `RankRow`·`RankRowBody`·`RankRowFace`·`PersonName`).
+/// 순위 한 줄 — **순위 탭과 같은 공용 부품**(통합 때 승격: `RankRow`·`RankRowBody`·`RankRowFace`·`PersonName`).
 /// 인셋 그룹 안 48pt: 등수 원 · 얼굴(내 행은 착용 캐릭터 초상) · 이름(+ 센터 · '나') · 점수. 구분선 시작점·큰 글자 접힘·
 /// 내 행 강조가 두 탭에서 같아진다(비평 4 "같은 데이터 다른 부품").
+///
+/// **[오늘] 과 [역대] 가 이 한 벌을 나눠 쓴다**(맥 `MiniGameRankRow` 와 같은 선택 — 행 뷰를 두 벌로 두면 열 규격이
+/// 언젠가 갈린다). 역대 줄은 `MiniGameAllTimeEntry.rankRowEntry` 로 같은 모양이 되고, 다른 것은 날짜 하나뿐이다.
 private struct GamesRankRow: View {
     let store: GamesStore
     let rank: Int
     let entry: MiniGameBoardEntry
     let isMe: Bool
     let isLast: Bool
+    /// [역대] 줄의 작은 날짜("9/13" — 그 점수를 **처음 낸 날**). [오늘] 판은 nil 이다(그 판은 전부 오늘이다).
+    /// 글자는 코어가 만든다(`MiniGameAllTimeEntry.dayCaption` — 연도 없음 · 시계를 읽지 않는다).
+    var dateCaption: String? = nil
 
     private let metrics = RankRowScaledMetrics()
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -423,12 +503,23 @@ private struct GamesRankRow: View {
         PersonName(entry.name, center: CenterLabel.serverValue(forDisplay: entry.center), isMe: isMe, onTint: true)
     }
 
+    /// 점수(+ [역대] 날짜). 날짜는 점수 **앞**이고 한 단 흐리다 — 맥과 같은 자리·같은 무게다.
+    /// 둘을 한 묶음으로 두는 이유: 큰 글자에서 이름 줄과 점수가 위아래로 접힐 때 날짜가 점수에서 떨어지면
+    /// "9/13" 이 이름의 일부처럼 읽힌다.
     private var score: some View {
-        Text(GamesMiniGameText.score(entry.bestScore))
-            .font(MobileTheme.number(.callout, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(MobileTheme.label)
-            .fixedSize()
+        HStack(spacing: 6) {
+            if let dateCaption {
+                Text(dateCaption)
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(MobileTheme.label3Text)
+            }
+            Text(GamesMiniGameText.score(entry.bestScore))
+                .font(MobileTheme.number(.callout, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
+        }
+        .fixedSize()
     }
 }
 

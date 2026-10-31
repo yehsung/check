@@ -21,7 +21,11 @@ extension WorkTimerStore {
     /// 폴링은 "소켓이 조용히 죽은" 극소수 케이스의 안전망일 뿐이라, 그 안전망의 지연 상한을 15→60초로 늦춘다
     /// (근무 8시간 기준 take_pokes 1,920 → 480회). 완전 제거(S4)는 2주 진단 후 별도 결정 — 그때까지
     /// 이 상수와 아래 판정 구조를 지운다거나 합치지 마라.
-    static let pokePollIntervalSecondsWhileSubscribed: Double = 60
+    /// 2026-10-31 서버 안정화: 60→90초(근무 8시간 480 → 320회). **90초가 상한이다** — 신호를 놓친 울트라는 다음 틱에 받는데,
+    /// `ultraDisplayFreshnessSeconds`(120초)를 넘기면 돈 낸 울트라가 일반 찌르기로 강등된다. 더 늘리는 건 사용자 결정이다.
+    nonisolated static let pokePollIntervalSecondsWhileSubscribed: Double = 90
+    /// 폴링 루프 잠의 허용 오차(초). 전달 지연 상한은 주기 + 이 값이다.
+    nonisolated static let pokePollSleepToleranceSeconds: Double = 2
     /// 이 시간(초)보다 오래된 찔림은 수신해도 표시하지 않는다(서버에선 소비됨) — 새벽 찔림이 아침에 뜨는 어색함 방지.
     /// nonisolated 순수 함수 freshReceivedPokes 가 참조하므로 불변 상수를 nonisolated 로 노출한다.
     nonisolated static let pokeDisplayFreshnessSeconds: TimeInterval = 3600
@@ -29,7 +33,7 @@ extension WorkTimerStore {
     static let pokeCooldownSeconds: TimeInterval = 60
     /// 울트라 표시 신선도(초). 일반 찔림의 1시간(pokeDisplayFreshnessSeconds)과 **일부러 다르다** —
     /// 울트라는 화면 전체를 5초간 덮으므로, 맥이 잠들었다 깨어난 뒤 40분 전 울트라가 갑자기 터지면
-    /// 그건 알림이 아니라 습격이다. 정상 전달 지연 상한은 폴링 주기(미구독 15초·구독 중 60초 — 구독 중엔
+    /// 그건 알림이 아니라 습격이다. 정상 전달 지연 상한은 폴링 주기(미구독 15초·구독 중 90초 — 구독 중엔
     /// 소켓이 먼저 울린다)라 120초면 재시도·네트워크 흔들림까지 덮는다.
     nonisolated static let ultraDisplayFreshnessSeconds: TimeInterval = 120
     /// 잔량이 0일 때의 안내. **하루 한도 상수에서 파생하지 않는다** — 그 상수는 이번 릴리스에 서버에서
@@ -379,7 +383,7 @@ extension WorkTimerStore {
                 // 주기는 **매 반복의 앞**에서 다시 읽는다 — 구독/해제 전이는 지금 자는 구간이 끝난 다음 tick 부터
                 // 새 주기를 탄다(Q8). 자는 도중에 깨워 재계산하지 않는다: 그러면 전이가 요동칠 때 tick 이 몰린다.
                 let interval = self?.pokePollIntervalSecondsNow ?? Self.pokePollIntervalSeconds
-                try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(2))
+                try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(Self.pokePollSleepToleranceSeconds))
                 if Task.isCancelled { return }
                 guard let self else { return }
                 await self.localExpiryTick()
@@ -430,6 +434,9 @@ extension WorkTimerStore {
         // 생일 선물(v0.3.66): 앞선 조회(시작 · 로그인 · 상점)로부터 10분이 지났을 때만 다시 묻는다(요청 0~1건 — 근무 게이트 없음:
         // 선물은 근무와 무관하게 오고, 이 폴링이 로그인 중 상시 도는 유일한 박자다).
         refreshCakeGiftIfDue(now: clock())
+        // 확성기 배너의 예비 경로(요청 0~1건 — 근무 게이트 없음). 5분 스로틀과 합친 지연 상한이 배너 신선도(10분) 안에 들어와야 해서
+        // 비근무 때 5분까지 늘어지는 상태 루프가 아니라 이 박자에 건다.
+        refreshMegaphoneBannerIfStale()
         // ★ 리얼타임 킬스위치. **폴링 경로를 지우지 않았다** — 리얼타임이 실제로 구독 중일 때만 쉰다.
         //   판정을 여기 한 줄에만 두는 것이 핵심이다(RealtimeState.isSubscribed 주석):
         //   두 곳에서 갈라 판정하면 "리얼타임은 반쯤 죽었는데 폴링도 안 도는" 완전한 침묵이 만들어진다.
@@ -465,7 +472,7 @@ extension WorkTimerStore {
         Self.pollingKeepsRunningAlongsideRealtime ? false : realtimeRingIsSubscribed
     }
 
-    /// 지금 이 순간의 take_pokes 폴링 주기(초). 구독 중 60초, 그 외(킬스위치 `.idle(.disabled)`·연결 중·
+    /// 지금 이 순간의 take_pokes 폴링 주기(초). 구독 중 90초, 그 외(킬스위치 `.idle(.disabled)`·연결 중·
     /// 재연결·실패·비근무) 15초 — v0.2.38 Q8. 루프가 매 반복 앞에서 읽으므로 전이는 다음 tick 부터 반영된다.
     var pokePollIntervalSecondsNow: Double {
         realtimeRingIsSubscribed ? Self.pokePollIntervalSecondsWhileSubscribed : Self.pokePollIntervalSeconds
@@ -1166,7 +1173,7 @@ extension WorkTimerStore {
     /// 1단 만료 확인. **새 타이머를 만들지 않고** 이미 도는 자리에서 부른다:
     ///  · 티커 `tick()` — 팝오버가 열려 있으면 1초, 근무 중 닫혀 있으면 최대 60초(감속). 단 **비근무 + 팝오버 닫힘이면
     ///    티커 자체가 멈춘다**(stopTimerIfIdle) — 퇴근 뒤 켜 둔 1단은 이 자리만으로는 영영 안 풀린다.
-    ///  · 수신 폴링 `localExpiryTick()` — 로그인 중 상시 15초(리얼타임 구독 중 60초). 위 공백을 이것이 메운다.
+    ///  · 수신 폴링 `localExpiryTick()` — 로그인 중 상시 15초(리얼타임 구독 중 90초). 위 공백을 이것이 메운다.
     ///  · 잠자기에서 깨어날 때 `handleWake` — 켜 두고 덮개를 닫은 다음 날 아침이 가장 흔한 만료 시점이다.
     ///  · 설정 로드 직후 `applyServerFocusMode` — 앱이 꺼져 있던 동안 끝난 1단.
     /// 시각은 전부 `clock()` 이다. 켤 때도 같은 시계로 until 을 적었으므로 맥 시계가 틀어져 있어도 3시간은 3시간이다.

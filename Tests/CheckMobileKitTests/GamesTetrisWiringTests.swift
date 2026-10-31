@@ -921,7 +921,7 @@ import Testing
         // 제스처는 **한 자리**다. 모디파이어 자체를 kind 로 가르면 뷰 정체성이 갈려 SwiftUI 가 제스처를 다시 만든다.
         #expect(screen.components(separatedBy: ".gesture(canvasDrag(").count == 2, "캔버스 제스처가 한 자리가 아니다")
         #expect(screen.contains("controller.canvasDragChanged(") && screen.contains("controller.canvasDragEnded("))
-        #expect(screen.contains("swallowsTetrisDragEnd"), "시작 래치가 켠 판의 end 를 안 삼킨다 — 한 번의 탭이 시작과 회전을 둘 다 한다")
+        #expect(screen.contains("swallowsCanvasDragEnd"), "시작 래치가 켠 판의 end 를 안 삼킨다 — 한 번의 탭이 시작과 회전을 둘 다 한다")
 
         // 햅틱 네 채널 — 이동·소프트드롭 채널은 **없다**.
         for trigger in ["controller.tapSerial", "controller.hardDropSerial", "controller.lineClearSerial", "controller.gameOverSerial"] {
@@ -968,8 +968,9 @@ import Testing
     func theFlipIsOpen() throws {
         // 2026-09-23. 서버 마이그레이션이 실서버에 올라가고 실호출로 확인된 뒤에 열었다
         // (`minigame_start_round('tetris')` → ok). 그 전에 열었으면 전원이 판을 돌리는데 기록이 하나도 안 남는다.
-        #expect(MiniGameKind.phoneCases == [.timingBar, .flappy, .tetris])
-        #expect(AingRoute.MiniGame.allCases.map(\.rawValue) == ["timing", "flappy", "tetris"])
+        // 폰 1.0.15 에서 길건너가 더해졌다 — 그 짝(목록 ↔ 딥링크)은 `V1015CrossyPhoneTests` 가 따로 잰다.
+        #expect(MiniGameKind.phoneCases == [.timingBar, .flappy, .tetris, .crossy])
+        #expect(AingRoute.MiniGame.allCases.map(\.rawValue) == ["timing", "flappy", "tetris", "crossy"])
 
         // ★ 여기가 이 테스트의 핵심이다. 위 둘은 '값이 있다'만 말하고, 오배달은 **값이 있는데 잘못 접힐 때** 난다.
         //   그래서 딥링크 문자열부터 화면 목적지까지 **실제로 통과시켜** 본다 — 한쪽만 넓혔거나 접는 식이

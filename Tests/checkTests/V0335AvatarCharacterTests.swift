@@ -421,7 +421,9 @@ private func avFetches(_ host: String) -> Int {
         // 0.3.44: 체스 창이 다섯 자리를 더했다(로비 상대 줄 · 받은/보낸 신청 · 순위 행 · 지금 대결 중). 줄면 호출부가
         // 사라졌거나 검사가 헛돈다 — **새 창을 더하면 이 숫자도 같이 올린다**(안 올리면 '지우는 것'이 초록으로 가는 길이 된다).
         // 0.3.60: 1:1 테트리스 창이 여섯 자리를 더했다(로비 상대 줄 · 받은 신청 · 순위 행 · 지금 대결 중 둘 · 대결 상대 카드).
-        #expect(avatars.count == 31, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 0.3.69: 아잉 큐브 창이 일곱 자리를 더했다(아래 `rummy` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다).
+        // 2026-10-30: 확성기 배너 카드가 한 자리를 더했다(보낸 사람 얼굴). 31 + 7 + 1.
+        #expect(avatars.count == 39, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -460,6 +462,29 @@ private func avFetches(_ host: String) -> Int {
         #expect(gomoku.filter { $0.text.contains("userID: match.opponent.id") && $0.text.contains("characterHint: match.opponent.characterID") }.count == 1)
         // 순위 행 — 6 만 올리면 순위 행이 착용 캐릭터를 버리고 이니셜만 그려도 초록이라 필터로 되묻는다.
         #expect(gomoku.filter { $0.text.contains("userID: entry.user.id") && $0.text.contains("characterHint: entry.user.characterID") }.count == 1)
+
+        // 아잉 큐브 일곱 자리: 사람 행 · 순위 행 · 탁자 의자 · 초대/공개 방 카드 방장 · 그 카드의 앉은 사람 · 결과 줄 · 판 자리.
+        // 38 만 올리면 한 자리가 남의 id 나 착용값 없이 그려도 초록이라, 자리마다 **그 사람의** id·착용값을 되묻는다.
+        let rummy = avatars.filter { $0.file.hasPrefix("Rummy") }
+        #expect(rummy.count == 7, "\(rummy.map(\.text))")
+        for call in rummy {
+            #expect(call.text.contains("characterHint:"), "아잉 큐브 \(call.text) 가 행의 착용값을 버린다")
+        }
+        let rummyIDs: [(String, String, String)] = [
+            ("RummyPanelLobby.swift", "userID: user.id.uuidString.lowercased()", "characterHint: user.character"),
+            ("RummyPanelLobby.swift", "userID: row.id.uuidString.lowercased()", "characterHint: row.character"),
+            ("RummyPanelLobby.swift", "userID: chair.userID?.uuidString.lowercased()", "characterHint: chair.character"),
+            ("RummyPanelLobby.swift", "userID: room.host?.id.uuidString.lowercased()", "characterHint: room.host?.character"),
+            ("RummyPanelLobby.swift", "userID: seat.userId.uuidString.lowercased()", "characterHint: seat.character"),
+            ("RummyPanelResult.swift", "userID: seat.userId.uuidString.lowercased()", "characterHint: seat.character"),
+        ]
+        for (file, id, hint) in rummyIDs {
+            #expect(rummy.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
+        }
+        // 탁자 의자의 id 는 그 자리 사람의 것이다(나 = 세션 id, 남 = 자리 user_id) — 엉뚱한 칸을 넘기면 남의 캐릭터가 선다.
+        let lobbyCode = try #require(try V0325TooltipTests.strippedSources()["RummyPanelLobby.swift"])
+        #expect(lobbyCode.contains("RummyTableChair(kind: .person, userID: myUserID, name: me.name,"))
+        #expect(lobbyCode.contains("return RummyTableChair(kind: .person, userID: seat.userId, name: seat.displayName ?? \"?\","))
 
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")
@@ -506,8 +531,16 @@ private func avFetches(_ host: String) -> Int {
             let n = V0325TooltipTests.count(".appUserAvatarCharacters(from:", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
-        #expect(roots == ["CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
-                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "TetrisDuelPanel.swift:1"], "\(roots)")
+        #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
+                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
+                "\(roots)")
+        // 아잉 큐브 창(v0.3.69)도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 탁자·결과의 남의 얼굴이 이니셜로 떨어진다).
+        #expect(sources["RummyPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckRummyWindow.swift"]?.contains("RummyPanel(store: rummy, me: me, safety: safety)") == true)
+        #expect(sources["CheckApp.swift"]?.contains("CheckRummyWindowController.shared.configure(store: store.rummy, me:") == true)
+        // 확성기 배너 창(2026-10-30)도 표를 건다 — 빠지면 보낸 사람 얼굴이 이니셜로 떨어진다. 말풍선이 없는 창이라([닫기] 만)
+        // 레이어 짝은 없다(V0325 레이어 목록에서도 빠져 있다).
+        #expect(sources["CheckMegaphoneBannerWindow.swift"]?.contains(".clipped() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckMenuView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["CheckSettingsView.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)
         #expect(sources["MiniGamePanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: store)") == true)

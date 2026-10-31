@@ -1,0 +1,72 @@
+/* components/install/install-chooser.css — 설치 선택 창(docs/v3/brief.md §11). InstallChooser.tsx 가 import 한다.
+ * 이 프로젝트는 next.config 의 turbopack '*.css' 규칙 때문에 *.module.css 도 전역 CSS 가 된다 → 평범한 전역 CSS, 이름은 전부 ic-.
+ * 층(@layer) 밖이라 globals.css 의 .glass(components 층)를 이긴다 — 그래서 투명도 줄이기·backdrop 미지원 폴백 틴트를 여기서 다시 건다
+ * (.menubar 와 같은 방식). 유리 판 자체(채움·림·그림자·광택)는 .glass .glass--thick 몫 — 여기는 자리·안쪽만. 판에 의사 요소를 달지 않는다. */
+
+/* ── 방아쇠(다운로드 버튼)의 아래 꺾쇠 — 고를 것이 있다는 표시. 열리면 뒤집힌다 ── */
+.ic-chev { flex: none; width: .7em; height: .7em; margin-left: -2px; transition: rotate 160ms var(--ease-out); }
+.ic-trigger[aria-expanded="true"] .ic-chev { rotate: 180deg; }
+
+/* ── 창: thick 유리 + 글 대비 보험(짙은 틴트 — 창 뒤로 밝은 렌더가 지나가도 ink-2 ≥ 4.5) ──
+   자리는 JS(place → computePlacement)가 top/left 를 단다. 메뉴바 방아쇠 = fixed, 나머지 = 문서 기준 absolute.
+   z: 히어로·아웃트로 창(absolute) = 메뉴바 바로 아래(--z-nav − 1) — 열어 둔 채 스크롤하면 메뉴바 뒤로 지나간다(메뉴바 링크를 덮지 않는다).
+      메뉴바 창(fixed) = 메뉴바 위 60(메뉴바에 매달려 열린다). 둘 다 절 루트(isolate — z 0 층)·고정 무대 위, 건너뛰기 링크(90) 아래 */
+.ic-pop {
+  position: absolute; top: 0; left: 0; z-index: calc(var(--z-nav, 50) - 1);
+  box-sizing: border-box; width: min(380px, calc(100vw - 32px));
+  padding: 18px 20px 12px;
+  --g-r: 24px;
+  --g-tint: rgb(14 10 30 / .7);
+  color: var(--ink-1); text-align: left;
+  transition: --spec 420ms var(--ease-out), opacity 140ms var(--ease-out), scale 160ms var(--ease-out);
+}
+.ic-pop[data-strategy="fixed"] { position: fixed; z-index: 60; }
+/* 열 때 짧게 떠오른다(감속 모션이면 아래에서 전이를 끈다). 닫을 때는 바로 사라진다 */
+@starting-style { .ic-pop { opacity: 0; scale: .96; } }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) { .ic-pop { --g-tint: rgb(22 17 44 / .94); } }
+@media (prefers-reduced-transparency: reduce) { .ic-pop { --g-tint: rgb(22 17 44 / .96); } }
+@media (prefers-reduced-motion: reduce) { .ic-chev, .ic-pop { transition: none; } }
+
+/* ── 선택 1: Homebrew ── 제목 줄 오른쪽 [복사](명령은 한 줄에 다 들어가야 해서 칩을 제목 줄로 — 설치 절 폰 터미널과 같은 규칙) */
+.ic-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.ic-title { font-family: var(--font-heading); font-weight: 600; font-size: 15.5px; line-height: 1.3; letter-spacing: -.01em; color: var(--ink-1); }
+.ic-copy { --b-h: 32px; margin-right: -4px; }
+.ic-line { margin-top: 6px; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+/* 명령: thin 유리 알약 · 모노 13px · 한 줄(중간 줄바꿈 0 — '$ ' + 37자 = 304px < 안쪽 312px) */
+.ic-cmd { --g-r: 999px; display: flex; align-items: center; height: 40px; margin-top: 12px; padding: 0 14px; }
+.ic-cmd__code { font-family: var(--font-code); font-size: 13px; line-height: 1; white-space: nowrap; color: var(--ink-1); font-variant-ligatures: none; }
+
+.ic-rule { margin: 16px 0 6px; border: 0; border-top: 1px solid rgb(255 255 255 / .09); }
+
+/* ── 선택 2: DMG — 줄 전체가 /api/download 링크(아이콘 칩 + 제목 + 메타). 쉬는 상태에도 옅은 판(채움 .04 + 1px 안쪽 테두리)을 깔아
+   정보 줄이 아니라 누를 수 있는 판으로 읽히게 — 좌우 끝은 위 명령 알약과 같은 선 ── */
+.ic-dmg { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 10px; border-radius: 16px; color: var(--ink-1);
+  background: rgb(255 255 255 / .04); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .08);
+  transition: background-color 120ms linear, box-shadow 120ms linear; }
+.ic-dmg:hover { background: rgb(255 255 255 / .08); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .14); }
+.ic-dmg:focus-visible { outline-offset: 2px; }
+.ic-dmg__icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 999px; color: var(--ink-1);
+  background: linear-gradient(180deg, rgb(255 255 255 / .12), rgb(255 255 255 / .04));
+  box-shadow: inset 0 1px .5px rgb(255 255 255 / .4), inset 0 0 0 1px rgb(255 255 255 / .06); }
+.ic-dmg__text { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
+.ic-meta { font-size: 13px; line-height: 1.4; color: var(--ink-2); white-space: nowrap; }
+
+/* ── 휴대폰 앱 줄(docs/v3/brief.md §12): 이름 왼쪽 · 칩 둘 오른쪽 한 줄(폭 380 안 — 이름 + 칩 둘 ≈ 280px < 안쪽 340px).
+   이름 왼쪽 끝 = 아래 '설치 방법 자세히 보기' 글자 · 칩 오른쪽 끝 = 위 DMG 판 오른쪽 끝. [아이폰] = App Store 새 탭 ·
+   [안드로이드 베타] = 창을 닫고 설치 절 안드로이드 카드(/#android).
+   창이 46px 길어져 1440×900 히어로에서 아래 자리가 3px 모자라 위로 뒤집혔다(실측) → 이 줄 위 8 · 창 아래 패딩 12 · 자세히 보기 위 0 으로
+   8px 줄여 아래로 연다(창 313px). 1024×768 은 아래 자리(298px)가 원래 모자라 위로 연다 — computePlacement 규칙 그대로.
+   낮은 노트북 창(657–713)의 페이지 끝 아웃트로는 위아래 어디에도 다 안 들어가 computePlacement 가 덜 굴리는 쪽으로 열고 페이지를 굴린다 ── */
+.ic-phone { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.ic-phone__title { font-size: 13.5px; line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
+.ic-phone__chips { display: flex; flex: none; align-items: center; gap: 6px; }
+.ic-chip { flex: none; }  /* 높이 36 · 글자 13.5px = .gbtn--chip 그대로 */
+
+/* ── 맨 아래: 설치 방법 자세히 보기(/#install) — 글자는 작게, 누를 자리는 44px. 포커스 링이 [복사]·DMG 판처럼 둥글게(8px) ·
+   좌우 6px 패딩은 음수 바깥 여백으로 상쇄(글자는 위 글과 같은 선) ── */
+.ic-more { display: inline-flex; align-items: center; min-height: 44px; margin: 0 -6px; padding: 0 6px; border-radius: 8px;
+  font-size: 13.5px; color: var(--ink-1);
+  text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; text-decoration-color: rgb(255 255 255 / .35);
+  transition: text-decoration-color 120ms linear; }
+.ic-more:hover { text-decoration-color: var(--focus); }
+@media (prefers-reduced-motion: reduce) { .ic-dmg, .ic-more { transition: none; } }

@@ -3,9 +3,16 @@
  * 글꼴 서브셋(SPEC v2 §2.3 · §9.5, DECISIONS D5) — `npm run subset`
  *
  *   node scripts/subset-fonts.mjs              # 기본: 소스 스캔(app/**, components/**, data/** 의 .ts/.tsx 리터럴·JSX 텍스트)
+ *                                              #       + /delete-account 가 그리는 lib/delete-account*.ts(시험 제외 — 읽기만)
+ *                                              #       + 지금 public/fonts 의 500·600 서브셋 글자(줄지 않는다)
  *   node scripts/subset-fonts.mjs --from-spec  # 스캐폴드용: docs/v2/SPEC.md §3 본문 글자 ∪ 소스 스캔
+ *   node scripts/subset-fonts.mjs --prune      # 지금 서브셋 글자를 이어받지 않는다(소스에서 사라진 글자를 정말 뺄 때만)
  *
  * 500·600 은 같은 글자 집합: 위 글자 + ASCII(U+0020–007E) 전부 + 한글 문장 부호 「」·…‘’“”, 이모지·제어 문자·줄바꿈 제외.
+ * /delete-account(check 개발 세션 소유): 페이지 문장 일부(오류·안내)가 app/ 밖 lib/delete-account*.ts 에 있어 소스 스캔이 못 봤다
+ *   (2026-10-30 — 그때는 손으로 434자 서브셋을 만들었다). 그 파일들은 여기서 **읽기만** 한다(수정 금지 — docs/v3/brief.md §12).
+ * 이어받기: 기본은 지금 서브셋(.txt)의 글자를 그대로 더한다 — 다른 세션이 손으로 넣은 글자나 스캔이 못 보는 자리의 글자가
+ *   다음 서브셋에서 조용히 빠지지 않게(빠지면 그 글자만 시스템 글꼴로 섞여 보인다). 이어받은 글자 중 소스에 없는 것은 찍어 준다.
  * 300 숫자 전용은 같은 수집기를 data/figures.ts 하나에만 돌린 글자 + 0–9 : .
  *   (--from-spec 이면 docs/v2/SPEC.md §6.4 코드 블록 = figures.ts 전문도 더한다 — 스캐폴드 때 figures.ts 가 아직 없을 수 있다.)
  *
@@ -29,7 +36,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { ROOT, FIGURES_FILE, FIGURE_EXTRA, collectSourceGlyphs, visitSourceText, isGlyphCandidate, HANGUL_SYLLABLE } from "./check-glyphs.mjs";
+import { ROOT, FIGURES_FILE, FIGURE_EXTRA, TEST_FILE, collectSourceGlyphs, visitSourceText, isGlyphCandidate, HANGUL_SYLLABLE } from "./check-glyphs.mjs";
 
 const FONT_SRC = "/Users/yesung/aing-check-promo/public/fonts/";
 const OUT = path.join(ROOT, "public/fonts");
@@ -39,6 +46,10 @@ const FONTTOOLS = process.env.FONTTOOLS ?? path.join(path.dirname(PYFTSUBSET), "
 const PYTHON = process.env.PYTHON ?? (fs.existsSync(path.join(path.dirname(PYFTSUBSET), "python3")) ? path.join(path.dirname(PYFTSUBSET), "python3") : "python3");
 const EXTRA_PUNCT = "「」·…‘’“”";
 const FROM_SPEC = process.argv.includes("--from-spec");
+const PRUNE = process.argv.includes("--prune");
+/** 소스 스캔(app·components·data) 밖이지만 화면에 그려지는 글자 — /delete-account 의 lib 모듈(시험 파일 제외). 읽기만 한다. */
+const EXTRA_SOURCE = /^delete-account.*\.ts$/;
+const EXTRA_SOURCE_DIR = path.join(ROOT, "lib");
 
 /** 본문 글꼴 두 벌(같은 글자 집합). */
 const TEXT_FONTS = [
@@ -86,11 +97,38 @@ const dropWhitespace = (set) => {
   return set;
 };
 
+/** lib/delete-account*.ts(시험 제외) — 절대 경로 목록. */
+function extraSourceFiles() {
+  if (!fs.existsSync(EXTRA_SOURCE_DIR)) return [];
+  return fs
+    .readdirSync(EXTRA_SOURCE_DIR)
+    .filter((f) => EXTRA_SOURCE.test(f) && !TEST_FILE.test(f) && !f.endsWith(".d.ts"))
+    .sort()
+    .map((f) => path.join(EXTRA_SOURCE_DIR, f));
+}
+
+/** 지금 public/fonts 의 500·600 서브셋 글자(둘의 합집합 — 보통 같다). 없으면 빈 집합. */
+function publishedTextGlyphs() {
+  const out = new Set();
+  for (const t of TEXT_FONTS) {
+    const txt = path.join(OUT, `${t.out}.txt`);
+    if (!fs.existsSync(txt)) continue;
+    for (const ch of fs.readFileSync(txt, "utf8")) if (ch !== "\n" && ch !== "\r") out.add(ch);
+  }
+  return out;
+}
+
 /** 500·600 글자 집합. */
 function gatherTextGlyphs() {
   const src = collectSourceGlyphs(ROOT);
   const chars = new Set(src.chars);
   let label = `소스 ${src.files.length}개 파일 [${src.method}]`;
+  const extra = extraSourceFiles();
+  if (extra.length) {
+    const r = collectSourceGlyphs(ROOT, { files: extra });
+    for (const ch of r.chars) chars.add(ch);
+    label += ` ∪ ${r.files.join(" · ")}(읽기만)`;
+  }
   if (FROM_SPEC) {
     const text = specSection(fs.readFileSync(SPEC, "utf8"), 3);
     for (const ch of text) if (isGlyphCandidate(ch)) chars.add(ch);
@@ -98,6 +136,16 @@ function gatherTextGlyphs() {
   }
   for (let cp = 0x20; cp <= 0x7e; cp++) chars.add(String.fromCodePoint(cp));
   for (const ch of EXTRA_PUNCT) chars.add(ch);
+  if (!PRUNE) {
+    const kept = [];
+    for (const ch of publishedTextGlyphs()) {
+      if (!isGlyphCandidate(ch) || chars.has(ch)) continue;
+      chars.add(ch);
+      kept.push(ch);
+    }
+    label += " ∪ 지금 서브셋";
+    if (kept.length) console.log(`subset-fonts: 지금 서브셋에서만 이어받은 글자 ${kept.length}개(소스에 없음 — --prune 이면 뺀다): ${sortCp(kept).join("")}`);
+  }
   return { chars: dropWhitespace(chars), label };
 }
 

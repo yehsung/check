@@ -11,7 +11,7 @@ export const FAQ_ITEMS: readonly FaqItem[] = [
   },
   {
     q: "어떤 기기와 OS에서 쓸 수 있나요?",
-    a: "macOS 14 이상 맥이면 Apple Silicon·Intel 모두 돼요. 아이폰은 iOS 18 이상이에요. 근무 시작·종료는 맥에서 하고, 아이폰에선 현황·메시지·할 일·게임을 써요.",
+    a: "macOS 14 이상 맥이면 Apple Silicon·Intel 모두 돼요. 아이폰은 iOS 18 이상이에요. 근무 시작·종료는 맥에서 하고, 아이폰에선 현황·메시지·할 일·게임을 써요. 안드로이드에서도 베타로 쓸 수 있어요.",
   },
   {
     q: "우리 팀에는 어떻게 합류하나요?",

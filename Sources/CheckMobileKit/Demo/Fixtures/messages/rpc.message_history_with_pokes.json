@@ -268,5 +268,20 @@
     "read_by_peer": null,
     "unread": true,
     "kind": "ultra"
+  },
+  {
+    "id": "d0000000-0000-4000-8000-00000000ee01",
+    "from_user": "d0000000-0000-4000-8000-0000000000b8",
+    "to_user": "d0000000-0000-4000-8000-000000000001",
+    "body": "📢 오늘 저녁 7시에 오목 한 판 하실 분! 루비 걸고 붙어요",
+    "created_at": null,
+    "is_mine": false,
+    "peer_user_id": "d0000000-0000-4000-8000-0000000000b8",
+    "peer_display_name": "새봄",
+    "peer_avatar_url": null,
+    "created_epoch": 1789621440,
+    "read_by_peer": null,
+    "unread": true,
+    "kind": "message"
   }
 ]

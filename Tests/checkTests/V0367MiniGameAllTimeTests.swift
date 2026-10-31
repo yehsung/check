@@ -596,7 +596,8 @@ private enum V67RenderError: Error { case failed }
 
 @MainActor
 private enum V67Geometry {
-    static let rankLeft = MiniGameWindowLayout.contentPadding + MiniGameWindowLayout.canvasSize.width + MiniGameWindowLayout.columnSpacing
+    // v0.3.69 — 게임 구역이 왼쪽 사이드바만큼 밀렸다(`gameColumnOrigin.x` = 사이드바 188 + 여백 14).
+    static let rankLeft = MiniGameWindowLayout.gameColumnOrigin.x + MiniGameWindowLayout.canvasSize.width + MiniGameWindowLayout.columnSpacing
     static let rankRight = rankLeft + MiniGameWindowLayout.rankWidth
     static let bodyTop = MiniGameWindowLayout.contentPadding + MiniGameWindowLayout.headerHeight + MiniGameWindowLayout.headerSpacing
     static let footerBottom = MiniGameWindowLayout.contentPadding + MiniGameWindowLayout.innerSize.height - MiniGameWindowLayout.footerBaselineGap
@@ -721,7 +722,7 @@ private func v67IsPrizeOrange(_ r: Int, _ g: Int, _ b: Int) -> Bool { r > 190 &&
 @Suite("v0.3.67 역대 순위 — 미니게임 창(오프스크린 렌더)")
 @MainActor
 struct V0367AllTimePanelTests {
-    @Test("두 판 모두 700×470 을 채우고, 오늘 ↔ 역대 전환이 바꾸는 것은 순위 열뿐이다")
+    @Test("두 판 모두 창(888×470)을 채우고, 오늘 ↔ 역대 전환이 바꾸는 것은 순위 열뿐이다")
     func bothScopesRenderAndOnlyTheRankColumnChanges() throws {
         defer { MiniGameSpaceKey.remove() }
         let store = v67RenderStore()

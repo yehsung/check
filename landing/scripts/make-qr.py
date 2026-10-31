@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""App Store QR code -> public/assets/brand/qr-appstore.svg (PLAN 5.3 row 62).
+"""QR codes -> public/assets/brand/*.svg (PLAN 5.3 row 62 · docs/v3/brief.md section 12).
 
 Reproduce:
     cd /Users/yesung/check/landing && python3 scripts/make-qr.py      # = npm run qr
     (needs python `qrcode` >= 7.4 — checked with qrcode 8.2 on /opt/anaconda3/bin/python3)
 
-Spec:
-    payload  https://apps.apple.com/app/id6812768622   (no region code — the old v3 QR had /kr/)
+Outputs (TARGETS):
+    qr-appstore.svg       https://apps.apple.com/app/id6812768622   (no region code — the old v3 QR had /kr/)
+    qr-android-beta.svg   https://aing-check.vercel.app/#android    (install section Android beta card — opens the
+                          three-step guide on the phone; SITE_URL in lib/site.ts + LINKS.android in data/fixtures.ts)
+
+Spec (both):
     error correction M, quiet zone 4 modules, single <path> (SvgPathImage)
     modules #12131C on a #F2F3F7 tile (full-bleed rect, quiet zone included)
     viewBox is in modules; width/height = modules x 4 px so the <img> has a sane intrinsic size.
@@ -23,13 +27,17 @@ import sys
 import qrcode
 import qrcode.image.svg
 
-URL = "https://apps.apple.com/app/id6812768622"
+# (payload, output file name) — the App Store one first; its bytes must not change.
+TARGETS = [
+    ("https://apps.apple.com/app/id6812768622", "qr-appstore.svg"),
+    ("https://aing-check.vercel.app/#android", "qr-android-beta.svg"),
+]
 MODULE = "#12131C"
 TILE = "#F2F3F7"
 PX_PER_MODULE = 4
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.path.join(ROOT, "public", "assets", "brand", "qr-appstore.svg")
+OUT_DIR = os.path.join(ROOT, "public", "assets", "brand")
 
 
 class TilePathImage(qrcode.image.svg.SvgPathImage):
@@ -43,7 +51,8 @@ class TilePathImage(qrcode.image.svg.SvgPathImage):
     }
 
 
-def main() -> int:
+def make(url: str, name: str) -> int:
+    out = os.path.join(OUT_DIR, name)
     qr = qrcode.QRCode(
         version=None,
         error_correction=qrcode.constants.ERROR_CORRECT_M,
@@ -51,7 +60,7 @@ def main() -> int:
         border=4,
         image_factory=TilePathImage,
     )
-    qr.add_data(URL)
+    qr.add_data(url)
     qr.make(fit=True)
     img = qr.make_image()
     svg = img.to_string(encoding="unicode")
@@ -106,11 +115,19 @@ def main() -> int:
         print(f"make-qr: module mismatch after merge ({len(got ^ want)} cells differ)", file=sys.stderr)
         return 1
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    os.makedirs(OUT_DIR, exist_ok=True)
     data = ('<?xml version="1.0" encoding="UTF-8"?>\n' + svg + "\n").encode("utf-8")
-    with open(OUT, "wb") as f:
+    with open(out, "wb") as f:
         f.write(data)
-    print(f"make-qr: {os.path.relpath(OUT, ROOT)} {len(data)} B, version {qr.version}, {modules}x{modules} modules, {URL}")
+    print(f"make-qr: {os.path.relpath(out, ROOT)} {len(data)} B, version {qr.version}, {modules}x{modules} modules, {url}")
+    return 0
+
+
+def main() -> int:
+    for url, name in TARGETS:
+        code = make(url, name)
+        if code != 0:
+            return code
     return 0
 
 

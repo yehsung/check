@@ -1089,6 +1089,10 @@ extension WorkTimerStore {
         // 남겨 두면 다음 로그인 후 **내가 직접 시작한** 근무가 흡수로 오인돼 자동 마감·하트비트가 통째로 죽고,
         // 소유 ID 쪽은 이미 끝난 세션을 가리킨 채 다음 실행의 재시작 판정에 끼어든다.
         releaseSessionOwnership()
+        // 하트비트 성공·시도 시각도 계정에 묶인 값이다 — 남기면 다음 계정의 과부하 구조 하트비트(holdTickDuringOverload)가
+        // 앞 사람의 시각에 눌려 최대 120초 늦는다. work_tick 게이트(백오프)는 서버 전역 상태라 서비스에 그대로 둔다.
+        lastHeartbeatSucceededAt = .distantPast
+        lastHeartbeatAttemptAt = .distantPast
         pendingItems = []
         longSessionAnchor = nil
         clearLongSessionPrompt()

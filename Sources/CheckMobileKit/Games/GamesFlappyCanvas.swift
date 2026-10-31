@@ -52,11 +52,13 @@ struct GamesFlappyCanvas: View {
             startPoint: CGPoint(x: full.midX, y: full.minY),
             endPoint: CGPoint(x: full.midX, y: full.maxY)
         )
+        // 튀는 기둥은 붉은 예고를 얹는다(2026-10-30 — 맥과 같은 `warningLevel(at:)` · `FlappyShiftWarning`).
         for pipe in game.pipes {
             let halves: [(rect: CGRect, isTop: Bool)] = [
                 (pipe.topRect(at: game.elapsed), true),
                 (pipe.bottomRect(at: game.elapsed, height: FlappyGame.height), false)
             ]
+            let warning = pipe.warningLevel(at: game.elapsed)
             for half in halves where half.rect.height > 0 {
                 let path = Path(t.rect(half.rect))
                 context.fill(path, with: pipeShading)
@@ -70,6 +72,11 @@ struct GamesFlappyCanvas: View {
                                  with: .color(stage.structureEdge.opacity(0.95)))
                 }
                 context.stroke(path, with: .color(stage.structureEdge.opacity(0.92)), lineWidth: 1.5)
+                if warning > 0 {
+                    context.fill(path, with: .color(FlappyShiftWarning.tint.opacity(FlappyShiftWarning.fillOpacity * warning)))
+                    context.stroke(path, with: .color(FlappyShiftWarning.tint.opacity(FlappyShiftWarning.strokeOpacity * warning)),
+                                   lineWidth: FlappyShiftWarning.lineWidth)
+                }
             }
         }
         if !reduceMotion, game.phase == .running, let at = game.lastFlapAt {

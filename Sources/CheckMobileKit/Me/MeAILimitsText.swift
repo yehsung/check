@@ -14,7 +14,19 @@ extension MeText {
 
     package static let aiLimitsTitle = "AI 리밋"
     /// 카드 아래 한 줄(값이 무엇을 뜻하는지). "쓴 비율"을 말해 둬야 72%가 "많이 남았다"로 읽히지 않는다.
-    package static let aiLimitsCaption = "5시간 창과 주간 창에서 쓴 비율이에요."
+    ///
+    /// ★ 두 번째 문장이 2026-10-30 에 붙었다. 그 전 문장("5시간 창과 주간 창에서 쓴 비율이에요.")은 **대다수에게
+    /// 거짓**이었다: 코덱스는 요금제에 따라 창을 하나만 보내고(주간 하나뿐인 요금제가 운영 사용자 35명 중
+    /// 30명이다), 그 사람들의 5시간 칸은 영구히 `없음` 이다. 두 창을 당연한 것처럼 말하면 `없음` 이 "우리 앱이
+    /// 못 읽었다"로 읽힌다 — 실제로는 제공자가 보내지 않는 것이고, 사용자가 할 일은 없다.
+    ///
+    /// ★ 이유는 **칸이 아니라 여기서 한 번만** 말한다: 숫자 칸은 고정폭(`MeAILimitCardBudget.valueWidth` 62pt ·
+    /// 맥은 52pt)이라 `없음` 말고 더 들어갈 자리가 없고, 칸마다 세우면 같은 문장을 줄마다 읽게 된다.
+    /// ★ '요금제'는 사용자 어휘다. `plan_type`·`primary_window`·창 길이·파서 같은 **진단 어휘는 쓰지 않는다**
+    /// (2026-09-22 결정 · 코어 `AILimits.swift` 규약).
+    /// ★ 보이스오버는 이 이유를 **되풀이하지 않는다**(`aiLimitAbsentAccessibility` 는 `5시간 없음` 그대로) —
+    /// 캡션이 이미 읽히므로 칸마다 같은 까닭을 또 들려주면 줄마다 문장이 길어진다.
+    package static let aiLimitsCaption = "5시간 창과 주간 창에서 쓴 비율이에요. 요금제에 따라 창이 하나만 올 수 있어요."
     /// 한 번도 못 받았을 때(불러오는 중). 실패해도 들고 있던 값이 있으면 이 문구를 쓰지 않는다.
     package static let aiLimitsLoading = MeText.loading
     package static let aiLimitsFailed = "AI 리밋을 불러오지 못했어요"

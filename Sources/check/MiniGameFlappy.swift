@@ -35,7 +35,9 @@ import CheckCore
 //     **한 번만** 위나 아래로 `shiftJump`(58pt) 튄다. 왕복하지 않는다 — 서프라이즈는 한 방이어야 무섭다.
 //     0.12초 easeOut 보간이라 눈에는 순간이동처럼 보이지만 프레임 사이가 이어져 충돌이 어긋나지 않는다.
 //   · 클램프: 튄 뒤 중심이 여백(`centerMargin` 36) 밖이면 반대 방향으로 튀고, 양쪽 다 불가능하면 고정 기둥이 된다.
-//   · **색 신호는 없다**(사용자: "움직이는 기둥 뭔지 알려 주지 말자"). 고정 기둥과 픽셀 단위로 같게 그린다.
+//   · **붉은 예고가 있다**(2026-10-30 사용자 번복: "움직이게 될 벽돌은 살짝 붉은 빛 표시하면서 미리 움직일거라고
+//     예고하게끔"). 처음(2026-09-08)엔 "움직이는 기둥 뭔지 알려 주지 말자"라 고정 기둥과 픽셀 단위로 같게 그렸다.
+//     세기는 코어 `Pipe.warningLevel(at:)`, 색·불투명도는 `FlappyShiftWarning` — 그림은 이 둘만 읽는다(폰과 한 벌).
 //   · 틈 폭 보정도 없다 — 고정 기둥과 같은 `gap(forScore:)` 을 쓴다.
 //
 // ── v0.2.51 그림 되돌리기 ─ **여기가 이 파일에서 가장 중요한 주석이다** ───────────────────
@@ -264,9 +266,9 @@ struct FlappyGameView: View {
         //      비용이 사실상 0이다(끊김의 원인이 아니다). 외곽선을 1pt 로 줄이면 밤·오로라에서 어두운 본체가 하늘에
         //      묻힌다(아래 외곽선 주석 — v0.2.50 에 그래서 1.5pt 가 됐다).
         //    ★ 채움 그라디언트는 **캔버스 세로 전체**를 기준으로 잡는다. 기둥 사각형마다 따로 잡으면 같은 y 라도
-        //      기둥 길이에 따라 색이 달라져, 틈이 튄 기둥과 고정 기둥이 다르게 보인다 — 색으로 미리 알려 주지
-        //      않기로 한 결정(사용자, 2026-09-08)이 그 자리에서 깨진다.
-        //    ★ 튀는 기둥 분기는 여기 없다. 그림이 `isShifting`·`shiftAt` 을 읽는 순간 같은 결정이 깨진다.
+        //      기둥 길이에 따라 색이 달라져, 튄 기둥이 **예고가 빠진 뒤에도** 고정 기둥과 다르게 보인다.
+        //    ★ 튀는 기둥의 신호는 붉은 예고 **하나뿐**이다(2026-10-30 사용자 번복 — 파일 머리). 그림은 `isShifting`·`shiftAt`
+        //      을 직접 읽지 않고 `warningLevel(at:)` 만 본다 — 예고가 언제 켜지고 꺼지는지는 코어 한 곳에서 정한다.
         //    ★ 본체는 **어두운 대역**(structureDeep → structureDeepLit)이다. 예전엔 structure → structureEdge
         //      라 한낮 기둥과 캐릭터의 휘도비가 1.01:1 이었고, 겹치는 순간 플레이어가 통째로 사라졌다
         //      (2026-09-10 5개 무대 실측). 캐릭터 림을 뺀 v0.2.51 에서도 무대 5종 전부에서 캐릭터가 기둥보다
@@ -282,6 +284,7 @@ struct FlappyGameView: View {
                 (pipe.topRect(at: game.elapsed), true),
                 (pipe.bottomRect(at: game.elapsed, height: FlappyGame.height), false)
             ]
+            let warning = pipe.warningLevel(at: game.elapsed)
             for half in halves where half.rect.height > 0 {
                 let path = Path(t.rect(half.rect))
                 context.fill(path, with: pipeShading)
@@ -302,6 +305,12 @@ struct FlappyGameView: View {
                 }
                 // 외곽선은 어두워진 본체를 하늘에서 세워 주는 유일한 선이다 — 1pt 로는 밤·오로라에서 묻힌다.
                 context.stroke(path, with: .color(stage.structureEdge.opacity(0.92)), lineWidth: 1.5)
+                // 튀는 기둥 예고 — 본체를 옅게 물들이고 외곽선을 붉게 덧그린다. 도형은 늘지 않는다(같은 path 두 번).
+                if warning > 0 {
+                    context.fill(path, with: .color(FlappyShiftWarning.tint.opacity(FlappyShiftWarning.fillOpacity * warning)))
+                    context.stroke(path, with: .color(FlappyShiftWarning.tint.opacity(FlappyShiftWarning.strokeOpacity * warning)),
+                                   lineWidth: FlappyShiftWarning.lineWidth)
+                }
             }
         }
 

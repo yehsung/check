@@ -13,7 +13,8 @@ import Testing
 //  (c) 의미 동등: 같은 픽스처를 RPC 로 준 스토어와 개별 GET 으로 준 스토어의 최종 상태가 같다(+ 조립 함수 단위 동등)
 //  (d) 404/PGRST202 → 같은 틱에서 폴백 다중 호출 즉시, 이후 틱은 폴백 유지
 //  (e) v=2 → 폴백
-//  (f) 5xx 3회 → 1시간 폴백 → 시계 전진 후 RPC 재시도(성공하면 복귀)
+//  (f) 과부하가 아닌 일시 실패((c) — 그 밖의 500·400) 3회 → 15분 폴백 → 시계 전진 후 RPC 재시도(성공하면 복귀)
+//      과부하·도달 불가((b) — 502·503·504·500+57014·URLError 시간 초과 등)는 WorkTickOverloadTests 가 본다(2026-10-30)
 //  (g) 잠자기 마커 경쟁(V0236SyncTests 시나리오 1)을 RPC 경로에서 같은 결과로
 //  (h) 팝오버 즉시 새로고침 = p_heartbeat=false 1건(15초 신선도 스로틀 뒤), 폴백은 4 GET 그대로
 //  (i) 비근무 away 120초 반영 스로틀 유지 / 근무 중 매 틱 반영, (j) 팀 메타 조각(60초 스로틀·스탬프)
@@ -567,13 +568,14 @@ private struct StoreSnapshot: Equatable, CustomStringConvertible {
         #expect(service.workTickGate.snapshot.disabledReason == "응답 해석 실패")
     }
 
-    // MARK: - (f) 5xx 연속 3회 → 1시간 폴백 → 재시도
+    // MARK: - (f) (c) 일시 실패 연속 3회 → 15분 폴백 → 재시도
 
-    @Test func threeServerErrorsSuspendForAnHourThenRetry() async {
+    @Test func threeTransientErrorsSuspendForFifteenMinutesThenRetry() async {
         let host = "v0238-tick-5xx"
-        // 500 ×3 → (정지) → 재시도 때 200. 4번째 응답은 정지 동안 소비되지 않아야 한다.
+        // (c) ×3 → (정지) → 재시도 때 200. 4번째 응답은 정지 동안 소비되지 않아야 한다.
+        // 503 은 과부하(b)라 여기 세지 않는다 — 과부하 아닌 500(코드 XX000)·400 22023·빈 500 으로 (c) 를 만든다.
         TickScriptedURLProtocol.script(host: host, path: workTickPath, responses: [
-            (503, #"{"message":"paused"}"#), (503, #"{"message":"paused"}"#), (500, ""),
+            (500, #"{"code":"XX000","message":"internal"}"#), (400, #"{"code":"22023","message":"bad"}"#), (500, ""),
             (200, tickJSON(statuses: []))
         ])
         scriptLegacy(host: host, statuses: [])
@@ -581,7 +583,7 @@ private struct StoreSnapshot: Equatable, CustomStringConvertible {
         let (store, service) = makeStore(host: host, suite: "5xx", clock: clock)
         defer { cancelTasks(store) }
         #expect(WorkTickGate.transientFailureLimit == 3)
-        #expect(WorkTickGate.suspensionSeconds == 3_600)
+        #expect(WorkTickGate.suspensionSeconds == 900)
 
         for expected in 1...3 {
             await runTick(store)
@@ -590,17 +592,18 @@ private struct StoreSnapshot: Equatable, CustomStringConvertible {
         }
         let suspended = service.workTickGate.snapshot
         #expect(suspended.consecutiveTransientFailures == 3)
-        #expect(suspended.suspendedUntil == t0.addingTimeInterval(3_600))
-        #expect(store.workTickDiagnosticsLine.hasPrefix("1시간 폴백(HTTP 500)"), "\(store.workTickDiagnosticsLine)")
+        #expect(suspended.suspendedUntil == t0.addingTimeInterval(900))
+        #expect(suspended.consecutiveOverloadFailures == 0, "(c) 는 과부하 백오프를 세우지 않는다")
+        #expect(store.workTickDiagnosticsLine.hasPrefix("15분 폴백(HTTP 500)"), "\(store.workTickDiagnosticsLine)")
 
         // 정지 중: RPC 시도 0, 폴백만.
-        clock.now = t0.addingTimeInterval(1_800)
+        clock.now = t0.addingTimeInterval(600)
         await runTick(store)
-        #expect(tickCount(host: host) == 3, "1시간 정지 중에는 work_tick 을 두드리지 않는다")
+        #expect(tickCount(host: host) == 3, "15분 정지 중에는 work_tick 을 두드리지 않는다")
         #expect(legacyCounts(host: host).statusesGET == 4)
 
-        // 1시간 뒤: 다시 시도하고, 성공하면 장부가 초기화된다(폴백 0건).
-        clock.now = t0.addingTimeInterval(3_601)
+        // 15분 뒤: 다시 시도하고, 성공하면 장부가 초기화된다(폴백 0건).
+        clock.now = t0.addingTimeInterval(901)
         await runTick(store)
         #expect(tickCount(host: host) == 4, "정지가 풀리면 RPC 를 다시 시도한다")
         #expect(legacyCounts(host: host).statusesGET == 4, "성공한 틱은 폴백을 돌지 않는다")

@@ -101,6 +101,22 @@ import Testing
         #expect(!store.centerFailed)
     }
 
+    @Test("데모: 기본 계정은 값 · 기록 없는 계정 장면(`me/`)은 미지정 — 두 상태 다 찍을 수 있다")
+    func demoFixtures() throws {
+        let request = MobileStubRequest(method: "GET", host: MobileDemo.host, path: "/rest/v1/profiles",
+                                        query: "select=center&id=eq.\(RankMeFixture.userID)", headers: [:], bodyText: "")
+        let index = MobileDemoFixtures.load()
+        struct Row: Decodable { let center: String? }
+        func center(scene: String) throws -> CenterSettingsRowState {
+            let entry = try #require(index.entry(for: request, scenario: scene))
+            let row = try #require(try JSONDecoder().decode([Row].self, from: entry.data).first)
+            return .of(loaded: true, center: row.center)
+        }
+        #expect(try center(scene: "me-settings") == .chosen("서울"))
+        #expect(try center(scene: "me-") == .unset)
+        #expect(index.duplicateKeys.isEmpty, "\(index.duplicateKeys)")
+    }
+
     @Test("화면 계약: 팀 절의 팀 이름 다음 · 읽기 전용(쓰기·버튼 없음) · 실패 줄 갈래 · 나 탭 루트는 그대로")
     func viewContract() throws {
         let view = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeSettingsView.swift")

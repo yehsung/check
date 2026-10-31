@@ -239,10 +239,25 @@ import Testing
     }
 
     @Test("문구: 맥 배너와 같은 문장")
-    func copy() {
+    func copy() throws {
         #expect(NowText.retroNoticeTitle == "지난주 근무 기록이 준비됐어요")
         #expect(NowText.retroNoticeAction == "보기")
         #expect(NowText.retroNoticeDismiss == "지난주 근무 기록 안내 닫기")
+        let mac = try IntegrationContractTests.code("Sources/check/CheckMenuView.swift")
+        #expect(mac.contains("title: \"\(NowText.retroNoticeTitle)\""), "맥 배너 문장과 갈렸다")
+    }
+
+    @Test("데모 장면 retro: 줄이 선다 · 서버를 묻지 않는다 · 인자 없으면 그대로")
+    func demoStage() async {
+        #expect(NowDemoStage.stages(arguments: ["app", NowDemoStage.argument, "retro,streak"]) == ["retro", "streak"])
+        let harness = await Self.harness("v1017-retro-demo", sessions: BaseLockedBox(.json(Self.lastWeekSession)))
+        defer { harness.tearDown() }
+        let now = harness.model.now
+        await NowDemoStage.applyNotices(store: now, stages: [])
+        #expect(!now.showsRetroNotice)
+        await NowDemoStage.applyNotices(store: now, stages: ["retro"])
+        #expect(now.showsRetroNotice)
+        #expect(Self.checks(harness) == 0)
     }
 
     @Test("화면 계약: 안내 줄은 한 번에 하나 · 그려질 때 소비 · [보기]·X 가 스토어로 간다 · 나 탭 루트가 스크롤을 꺼낸다")

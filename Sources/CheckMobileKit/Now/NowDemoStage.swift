@@ -1,12 +1,14 @@
 #if DEBUG
+import CheckCore
 import Foundation
 
 /// 데모 스크린샷용 장면(DEBUG 전용 — Release 에서 컴파일되지 않는다). 데모 라우트 `now` 위에 실행 인자로 한 장면을 더 연다:
 ///
-///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now -AingCheckDemoNow goal|undo|edit|old|working(쉼표로 여러 개)
+///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now -AingCheckDemoNow goal|undo|edit|old|working|retro|streak(쉼표로 여러 개)
 ///
 /// - goal: 주간 목표 시트 · undo: 첫 할 일을 지운 뒤 되돌리기 토스트(닫히지 않게 붙잡음) · edit: 둘째 할 일 수정 중 · old: 오래된 항목 펼침
 /// - working: 지금 근무 중 절까지 스크롤
+/// - retro: 지난주 회고 안내 줄(데모는 판정을 끄므로 여기서 세운다) · streak: 타이머 줄의 연속 근무 칩(`now` 장면엔 미션 픽스처가 없고 서버 키도 적용 전이라 값을 넣는다)
 ///
 /// 무소속 합류 카드(라우트 `now/teamless` — 소속 픽스처가 빈 배열이다):
 ///
@@ -67,6 +69,25 @@ enum NowDemoStage {
             if let first = store.todoRows().main.first {
                 store.deleteTodo(first.id)
             }
+        }
+        await applyNotices(store: store, stages: stages)
+    }
+
+    /// 데모 연속 근무일(칩의 폭을 재기에 두 자리가 맞다).
+    static let demoStreakDays = 12
+
+    /// 회고 안내 줄 · 연속 근무 칩. 둘 다 실제 화면이 읽는 값을 세운다 — 칩은 나 탭 미션 값을 진짜 길(`applyAchievementStatus`)로 옮겨 `myStreakDays` 가 그대로 읽는다.
+    static func applyNotices(store: NowStore, stages: Set<String>) async {
+        if stages.contains("retro") {
+            store.showsRetroNotice = true
+        }
+        if stages.contains("streak"), let me = store.context.links.me {
+            // 떠 있는 조회가 픽스처 없음(404)으로 끝나면 값을 지운다 — 끝난 뒤에 넣는다.
+            for _ in 0..<120 {
+                guard me.achievementsState.isLoading else { break }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            me.applyAchievementStatus(AchievementStatus(streakDays: demoStreakDays))
         }
     }
 

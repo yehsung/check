@@ -106,6 +106,26 @@ import Testing
         #expect(harness.me.streakDays == nil, "이 서버엔 기능이 없는데 칩이 남았다")
     }
 
+    @Test("데모 장면 streak: 지금 탭이 읽는 값이 선다 · 떠 있는 조회가 끝난 뒤에 넣어 404 가 지우지 못한다")
+    func demoStage() async {
+        let harness = await RankMeHarness(label: "v1017-streak-demo", responder: MeAchievementClaimTests.quietResponder)
+        defer { harness.tearDown() }
+        let now = harness.model.now
+        await NowDemoStage.applyNotices(store: now, stages: [])
+        #expect(now.myStreakDays == nil)
+
+        let hold = BaseHold.install(host: harness.host) { $0.path == "/rest/v1/rpc/achievements_status" }
+        harness.enqueue("achievements_status", .missingFunction("achievements_status"))
+        harness.me.refreshAchievementsIfStale()
+        #expect(await hold.waitHeld())
+        let stage = Task { await NowDemoStage.applyNotices(store: now, stages: ["streak"]) }
+        #expect(await hold.releaseAndWaitDelivered())
+        await harness.quiesceMe()
+        await stage.value
+        #expect(now.myStreakDays == NowDemoStage.demoStreakDays, "조회가 칩 값을 지웠다")
+        #expect(HeaderStreakCopy.text(NowDemoStage.demoStreakDays) == "연속 12일 근무!")
+    }
+
     @Test("화면 계약: 큰 타이머 줄에 선다(새 줄 · 새 절 없음) · nil 이면 없다 · 시계를 안 읽는다 · 줄 progress 를 안 읽는다")
     func viewContract() throws {
         let tab = try IntegrationContractTests.code("Sources/CheckMobileKit/Now/NowTab.swift")

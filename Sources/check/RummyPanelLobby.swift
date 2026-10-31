@@ -47,74 +47,6 @@ enum RummyLobbyText {
     static func stakeCaption(_ stake: Int) -> String { "판돈 \(stake) · 끝나면 등수대로 · 한 차례 60초" }
 }
 
-// MARK: - 초대 줄(방 없이 [초대] · 한 판 더)
-
-/// 방이 없을 때 누른 [초대] · 결과의 [한 판 더] 가 남긴 '부를 사람' 줄. 방이 서면(내가 방장) 한 사람씩 `invite` 를 보낸다.
-/// 스토어 동작은 한 번에 하나(`isWorking`)라 끝날 때마다(`isWorking` 이 내려갈 때) 다음 사람을 부른다.
-@MainActor
-@Observable
-final class RummyInviteQueue {
-    private(set) var pending: [UUID] = []
-
-    enum Step: Equatable {
-        case wait
-        case invite(UUID)
-        case skip(UUID)
-        case drop
-    }
-
-    /// 다음 할 일 — 순수 판단(시험이 표로 잰다).
-    ///  · 일하는 중이면 기다린다(방 만들기·앞 초대가 떠 있다).
-    ///  · 방이 없으면(만들기가 거절됐다) · 방이 forming 이 아니면 · 내가 방장이 아니면 줄을 버린다.
-    ///  · 이미 자리가 있는 사람(초대 중·참가)은 건너뛴다.
-    static func step(pending: [UUID], isWorking: Bool, roomStatus: RummyMatchStatus?, amHost: Bool,
-                     seated: Set<UUID>) -> Step {
-        guard let first = pending.first else { return .wait }
-        if isWorking { return .wait }
-        guard roomStatus == .forming, amHost else { return .drop }
-        return seated.contains(first) ? .skip(first) : .invite(first)
-    }
-
-    /// 사람 행 [초대]. 내 방이면 바로 초대, 방이 없으면 탁자를 열고 줄에 세운다.
-    func invite(_ userID: UUID, store: RummyStore) {
-        if store.match?.status == .forming {
-            if RummyExitPolicy.amHost(store) { store.invite(userID) }
-            return
-        }
-        guard store.match == nil, !pending.contains(userID) else { return }
-        pending.append(userID)
-        if pending.count == 1 { store.createRoom() }
-        pump(store)
-    }
-
-    /// 결과 [한 판 더] — 탁자를 열고(판돈·공개 여부는 호출자가 이미 맞췄다) 지난 판 사람들을 줄에 세운다.
-    func createAndInvite(_ userIDs: [UUID], store: RummyStore) {
-        pending = userIDs
-        store.createRoom()
-        if !pending.isEmpty { pump(store) }
-    }
-
-    func pump(_ store: RummyStore) {
-        while true {
-            let seated = Set((store.match?.seats ?? []).map(\.userId))
-            switch Self.step(pending: pending, isWorking: store.isWorking, roomStatus: store.match?.status,
-                             amHost: RummyExitPolicy.amHost(store), seated: seated) {
-            case .wait:
-                return
-            case .drop:
-                pending.removeAll()
-                return
-            case .skip(let id):
-                pending.removeAll { $0 == id }
-            case .invite(let id):
-                pending.removeAll { $0 == id }
-                store.invite(id)
-                return
-            }
-        }
-    }
-}
-
 extension View {
     /// 창 루트에 한 번: 스토어 동작이 끝날 때 · 판이 바뀔 때 초대 줄을 민다.
     func rummyInviteQueue(_ queue: RummyInviteQueue, store: RummyStore) -> some View {
@@ -455,61 +387,26 @@ private struct RummyRankList: View {
 
 // MARK: - 탁자(새 탁자 · 내 탁자)
 
-/// 탁자 둘레 의자 한 칸의 값.
-struct RummyTableChair: Equatable {
-    enum Kind: Equatable { case person, empty }
-    var kind: Kind
-    var userID: UUID?
-    var name: String = ""
-    var avatarURL: String?
-    var character: String?
-    var seatNo: Int?
-    var tag: String?
-    var isHost = false
-    var isMe = false
-    var dimmed = false
-
-    static let empty = RummyTableChair(kind: .empty)
-}
-
-enum RummyTableSeating {
-    /// 의자 넷 = [아래(나), 왼, 위, 오른]. 방이면 나를 아래, 앉은 사람을 내 다음 자리부터 시계 방향으로, 그다음 초대 중,
-    /// 나머지는 빈 의자. 방이 없으면 나만 아래에 앉는다.
+/// 의자 배치의 맥 서명(순서는 코어 `RummyTableSeating` 한 곳 · 여기는 맥 글자와 얼굴만). 나 = 세션 id, 남 = 자리 user_id.
+extension RummyTableSeating {
     static func chairs(room: RummyRoom?, me: ChessPlayerFace, myUserID: UUID?) -> [RummyTableChair] {
-        guard let room else {
-            let mine = RummyTableChair(kind: .person, userID: myUserID, name: me.name,
-                                       avatarURL: me.avatarURL?.absoluteString, character: me.characterID,
-                                       tag: RummyLobbyText.me, isMe: true)
-            return [mine, .empty, .empty, .empty]
-        }
-        let seats = room.seats ?? []
-        let hostID = room.host?.id
-        let joined = seats.filter { $0.state == .joined }
-        let mineSeat = joined.first { $0.userId == myUserID }
-        let mySeatNo = mineSeat?.seatNo ?? 0
-        func relative(_ seat: RummyRoomSeat) -> Int { (((seat.seatNo ?? 9) - mySeatNo) % 4 + 4) % 4 }
-        func chair(_ seat: RummyRoomSeat) -> RummyTableChair {
-            let isMe = seat.userId == myUserID
-            let isHost = seat.userId == hostID
+        let mine = RummyTableChair(kind: .person, userID: myUserID, name: me.name,
+                                   avatarURL: me.avatarURL?.absoluteString, character: me.characterID,
+                                   tag: RummyLobbyText.me, isMe: true)
+        return chairs(room: room, myUserID: myUserID, solo: mine) { seat, facts in
             let tag: String
-            if seat.state == .invited {
+            if facts.isInvited {
                 tag = RummyLobbyText.waitingAnswer
-            } else if isMe {
-                tag = isHost ? "\(RummyLobbyText.me) · \(RummyText.hostTag)" : RummyLobbyText.me
+            } else if facts.isMe {
+                tag = facts.isHost ? "\(RummyLobbyText.me) · \(RummyText.hostTag)" : RummyLobbyText.me
             } else {
-                tag = isHost ? RummyText.hostTag : RummyLobbyText.seated
+                tag = facts.isHost ? RummyText.hostTag : RummyLobbyText.seated
             }
             return RummyTableChair(kind: .person, userID: seat.userId, name: seat.displayName ?? "?",
                                    avatarURL: seat.avatarUrl, character: seat.character,
-                                   seatNo: seat.state == .joined ? seat.seatNo : nil, tag: tag, isHost: isHost,
-                                   isMe: isMe, dimmed: seat.state == .invited)
+                                   seatNo: seat.state == .joined ? seat.seatNo : nil, tag: tag, isHost: facts.isHost,
+                                   isMe: facts.isMe, dimmed: facts.isInvited)
         }
-        let bottom = mineSeat.map(chair) ?? .empty
-        let others = joined.filter { $0.userId != myUserID }.sorted { relative($0) < relative($1) }
-            + seats.filter { $0.state == .invited }
-        var around = others.prefix(3).map(chair)
-        while around.count < 3 { around.append(.empty) }
-        return [bottom] + around
     }
 }
 

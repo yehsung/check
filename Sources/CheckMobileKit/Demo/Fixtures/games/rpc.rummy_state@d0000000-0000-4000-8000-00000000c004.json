@@ -1,0 +1,185 @@
+{
+  "__note": "끝난 판(판돈 5 · 4인): 1등 +10 · 2등(나) 0 · 3등 −5 · 4등(기권) −5. payout 은 서버 값이고 화면 ±는 payout − 판돈이다. final_rack 은 판 끝에만 실린다.",
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "state": {
+    "id": "d0000000-0000-4000-8000-00000000c004",
+    "status": "finished",
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "stake": 5,
+    "is_public": false,
+    "max_seats": 4,
+    "seat_count": 4,
+    "seq": 64,
+    "server_now_ms": 1789621500000,
+    "grace_ms": 2000,
+    "expires_at_ms": null,
+    "finished_at_ms": 1789621497000,
+    "end_reason": "rack_empty",
+    "turn_seat_no": null,
+    "turn_started_ms": null,
+    "turn_deadline_ms": null,
+    "consecutive_passes": 0,
+    "pool_count": 11,
+    "table": [
+      [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      [
+        "B4",
+        "B5",
+        "B6",
+        "B7"
+      ],
+      [
+        "C7",
+        "C8",
+        "C9"
+      ],
+      [
+        "D10",
+        "D11",
+        "D12",
+        "D13"
+      ],
+      [
+        "A9",
+        "B9",
+        "C9"
+      ],
+      [
+        "A12",
+        "B12",
+        "D12"
+      ]
+    ],
+    "table_layout": [
+      [
+        20,
+        20
+      ],
+      [
+        200,
+        20
+      ],
+      [
+        420,
+        20
+      ],
+      [
+        600,
+        20
+      ],
+      [
+        820,
+        20
+      ],
+      [
+        20,
+        120
+      ]
+    ],
+    "draft": null,
+    "my_seat_no": 0,
+    "my_rack": null,
+    "my_initial_done": true,
+    "seats": [
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b2",
+        "display_name": "초코칩",
+        "avatar_url": null,
+        "character": "ghost",
+        "seat_no": 2,
+        "state": "done",
+        "rack_count": 0,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": [],
+        "final_rank": 1,
+        "final_score": 44,
+        "forfeit_order": null,
+        "is_winner": true,
+        "payout": 15
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-000000000001",
+        "display_name": "아잉러",
+        "avatar_url": null,
+        "character": "aing",
+        "seat_no": 0,
+        "state": "done",
+        "rack_count": 3,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": [
+          "A4",
+          "B2",
+          "J"
+        ],
+        "final_rank": 2,
+        "final_score": -36,
+        "forfeit_order": null,
+        "is_winner": false,
+        "payout": 5
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b3",
+        "display_name": "민트별",
+        "avatar_url": null,
+        "character": null,
+        "seat_no": 3,
+        "state": "done",
+        "rack_count": 5,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": [
+          "A1",
+          "B6",
+          "C8",
+          "D2",
+          "D4"
+        ],
+        "final_rank": 3,
+        "final_score": -21,
+        "forfeit_order": null,
+        "is_winner": false,
+        "payout": 0
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b1",
+        "display_name": "구름빵",
+        "avatar_url": null,
+        "character": "jellyfish",
+        "seat_no": 1,
+        "state": "forfeit",
+        "rack_count": 8,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": [
+          "A8",
+          "A9",
+          "B1",
+          "C1",
+          "C4",
+          "D3",
+          "D7",
+          "D8"
+        ],
+        "final_rank": 4,
+        "final_score": null,
+        "forfeit_order": 1,
+        "is_winner": false,
+        "payout": 0
+      }
+    ],
+    "reactions": [],
+    "last_event": {
+      "kind": "finish",
+      "seat_no": 2,
+      "count": 1,
+      "at_ms": 1789621497000
+    }
+  }
+}

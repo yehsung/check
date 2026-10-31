@@ -16,6 +16,8 @@ package enum GamesDestination: Hashable, Sendable {
     case chess
     /// 1:1 테트리스(1.0.11) — 로비·준비·판·결과·순위를 **입구 하나**로 연다(체스와 같은 구조).
     case tetrisDuel
+    /// 아잉 큐브(1.0.17) — 로비·방·판·결과·순위를 **입구 하나**로 연다(화면이 `phase` 로 갈아 끼운다).
+    case rummy
 }
 
 /// 지금 **사람과의** 판을 들고 있는 게임 — 한 사람 한 판(B8)의 까닭을 화면이 말할 수 있게 하는 값.
@@ -30,6 +32,8 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     /// 1:1 테트리스(1.0.11). 서버 `chess__busy` 는 셋을 함께 보지만 **오목 쪽 게이트는 여전히 남을 모른다** —
     /// 그래서 클라가 세 방향을 다 막는다.
     case tetris
+    /// 아잉 큐브(1.0.17). 서버 `chess__busy` 가 그 자리(joined·playing)까지 보지만 오목 쪽 게이트는 여전히 모른다 — 네 방향을 클라도 막는다.
+    case rummy
 
     /// 문구 표가 쓰는 짝(`ChessPhoneText.BusyGame`). 두 열거가 따로 있는 까닭: 이쪽은 **스토어 판정**이고
     /// 그쪽은 **문구 표**다(문구 표는 뷰·스토어를 모르는 자리라야 맥 스위트가 값으로 잰다). 옮기는 자리를
@@ -41,6 +45,7 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
         case .gomoku: return .gomoku
         case .chess: return .chess
         case .tetris: return .tetris
+        case .rummy: return .rummy
         }
     }
 }
@@ -80,11 +85,11 @@ package enum GamesRouteStep: Equatable, Sendable {
 ///    판이 막 열림(`presentWindow`) → 테트리스 화면을 연다. **맥이 체스에서 이 문을 안 물려 판돈 걸린 판을 조용히
 ///    시간패했다** — 테트리스는 거기에 15초 침묵(D5)이 더 붙어 수락하고 화면을 못 열면 그대로 진다.
 ///
-/// 탭 배지 = 받은 오목 신청 수(만료 안 된 것 — 체스·테트리스는 안 센다, `badgeCount` 주석). 받은 신청은 인박스가 채운다 —
+/// 탭 배지 = 받은 오목 신청 수 + 받은 아잉 큐브 초대 수(만료 안 된 것 — 체스·테트리스는 안 센다, `badgeCount` 주석). 받은 신청은 인박스가 채운다 —
 /// 계기는 앱 active(60초 스로틀) · 실시간 'gomoku' 신호(기반 배선) · 오목 화면.
 ///
-/// **한 사람 한 판(B8)은 삼각이다** — 세 게임 입구가 한 화면에 있으므로 `chessEntryBlock`·`gomokuEntryBlock`·
-/// `tetrisEntryBlock` 셋을 그려야 한다(까닭은 `GamesBusyGame`).
+/// **한 사람 한 판(B8)은 네 방향이다** — 네 게임 입구가 한 화면에 있으므로 `chessEntryBlock`·`gomokuEntryBlock`·
+/// `tetrisEntryBlock`·`rummyEntryBlock` 넷을 그려야 한다(까닭은 `GamesBusyGame`).
 @MainActor
 @Observable
 package final class GamesStore {
@@ -99,10 +104,20 @@ package final class GamesStore {
     /// 거짓인데 `windowDidShow()` 를 부르면 **보이지도 않는 판의 준비 보고가 나가고**(코어 머리말 ⑨) 사용자는
     /// 못 보는 카운트다운에 끌려 들어가 판돈을 잃는다.
     package private(set) var isTetrisScreenVisible = false
-    /// 오목 · 체스 · 테트리스 화면(로비 · 대국 · 관전) 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)가 이때는 스스로 뜨지 않는다
-    /// (`MeStore.presentCakeGiftIfDue` — 시트가 수 시계 · 15초 침묵이 걸린 판을 덮지 않게).
+    /// 아잉 큐브 화면이 지금 떠 있다(위 셋과 같은 뜻 — 코어 `setWindowVisible` 을 폰 화면 수명으로 옮긴 값).
+    package private(set) var isRummyScreenVisible = false
+    /// 오목 · 체스 · 테트리스 · 아잉 큐브 화면(로비 · 대국 · 관전) 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)와 확성기 배너가 이때는 스스로 뜨지 않는다
+    /// (`MeStore.presentCakeGiftIfDue` · `MobileAppModel.isMegaphoneBannerDeferred` — 수 시계 · 15초 침묵이 걸린 판을 덮지 않게).
+    ///
+    /// 아잉 큐브만 화면과 하나 더 갈린다(맥 `RummyStore.defersMegaphoneBanner` 의 짝):
+    ///  · 이 기기가 손댄 판에서 내 자리가 playing 이면 **다른 탭에 있어도** 참이다 — 언제든 차례가 돌아온다.
+    ///  · 놀던 기기가 남의 기기 판을 읽기만 하는 동안 · 기권 뒤 구경은 거짓이다(놀던 기기는 배너를 못 볼 까닭이 없다 — SPEC-v2 §6).
+    ///  · 로비·방·결과 화면은 다른 대결 화면과 같은 대접이다.
     package var isAnyMatchScreenVisible: Bool {
-        isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible
+        if isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible { return true }
+        let rummy = context.rummy
+        if rummy.defersMegaphoneBanner { return true }
+        return isRummyScreenVisible && rummy.phase != .playing
     }
     /// 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground).
     package private(set) var isAppActive = false
@@ -150,6 +165,14 @@ package final class GamesStore {
     package var demoTetrisRoute: MobileDemoTetrisRoute?
     #endif
 
+    /// 데모 전용: 시작 라우트가 아잉 큐브 장면(`games/rummy/…`)이라 게임 탭이 큐브를 쌓아야 한다. 위 두 깃발과 같은 규약이다.
+    package var pendingDemoRummyScreen = false
+
+    /// 데모 전용: 시작 라우트의 꼬리를 푼 값(열 판 · 로비 탭 · 규칙 시트 — `MobileDemoRummyRoute`). 위 두 값과 같은 규약이다(DEBUG 안).
+    #if DEBUG
+    package var demoRummyRoute: MobileDemoRummyRoute?
+    #endif
+
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
 
@@ -173,6 +196,8 @@ package final class GamesStore {
         // **수락한 판이 화면 없이 그대로 진다.** 코어가 부르는 자리 셋:
         // `openWindow` · 수락 응답(`respond`) · 진행 중 판으로 처음 넘어갈 때(`noteMatchStarted`).
         context.tetris.presentWindow = { [weak self] in self?.presentTetrisScreen() }
+        // 아잉 큐브도 **같은 문**이다. 코어가 부르는 자리 둘: `openWindow` · 판으로 처음 넘어갈 때(`announce`).
+        context.rummy.presentWindow = { [weak self] in self?.presentRummyScreen() }
         // AI 대국: 코어 기본 선택기(창을 몰라 떠나도 계속 생각한다 — 맥 동작) 대신 화면 수명을 아는 폰 선택기. 문을 다는 것뿐이다.
         context.gomoku.aiMoveChooser = aiThinker.chooser
         aiThinker.isStillNeeded = { [weak gomoku = context.gomoku] board, color in
@@ -242,6 +267,15 @@ package final class GamesStore {
         } else {
             tetris.systemDidWake()
         }
+        // 아잉 큐브: background 에서 창을 내렸으니 되세우고, 놓친 초대·참가·차례를 읽는다. 안 보이면 따라잡기만(받은 초대 칩·탭 배지가 여기 달려 있다).
+        // ★ 차례 시간은 서버에서 흐른다. 돌아온 순간 다음 폴링을 기다리면 옛 판을 그린다.
+        let rummy = context.rummy
+        if isRummyScreenVisible {
+            rummy.setWindowVisible(true)
+            Task { await rummy.catchUp() }
+        } else {
+            rummy.systemDidWake()
+        }
     }
 
     package func appDidEnterBackground() {
@@ -273,6 +307,9 @@ package final class GamesStore {
         if isTetrisScreenVisible, context.tetris.isWindowVisible {
             context.tetris.windowOcclusionDidChange(visible: false)
         }
+        // 아잉 큐브: **창만 내린다**(폴링을 멈춘다). 기권이 아니다 — 하트비트는 코어가 창과 무관하게 돌리고, iOS 가 재우면 서버가
+        // 90초 뒤 끊김 기권을 시킨다(사용자 결정: 앱을 내려도 즉시 기권하지 않는다). 결과 화면도 접지 않는다(접는 길은 화면을 떠날 때뿐이다).
+        if isRummyScreenVisible { context.rummy.setWindowVisible(false) }
     }
 
     package func reset() {
@@ -280,14 +317,24 @@ package final class GamesStore {
         isGomokuScreenVisible = false
         isChessScreenVisible = false
         isTetrisScreenVisible = false
+        isRummyScreenVisible = false
         pendingGomokuFocusID = nil
         pendingDemoChessScreen = false
         pendingDemoTetrisScreen = false
+        pendingDemoRummyScreen = false
         #if DEBUG
         demoChessRoute = nil
         demoTetrisRoute = nil
+        demoRummyRoute = nil
         #endif
         syncAIThinker()
+    }
+
+    /// 데모 아잉 큐브 장면 깃발을 **한 번** 꺼낸다(아래 체스·테트리스와 같은 규약).
+    package func consumePendingDemoRummyScreen() -> Bool {
+        guard pendingDemoRummyScreen else { return false }
+        pendingDemoRummyScreen = false
+        return true
     }
 
     /// 데모 체스 장면 깃발을 **한 번** 꺼낸다(꺼내면 비운다 — 뒤의 무관한 진입에 쓰이지 않게).
@@ -311,6 +358,8 @@ package final class GamesStore {
 
     /// 코어 테트리스 대결 스토어 줄임(= `context.tetris`). 같은 규약이다.
     package var tetris: TetrisDuelStore { context.tetris }
+    /// 코어 아잉 큐브 스토어 줄임(= `context.rummy`). 같은 규약이다.
+    package var rummy: RummyStore { context.rummy }
 
     /// 탭 배지: 만료 안 된 받은 오목 신청 수.
     ///
@@ -324,7 +373,13 @@ package final class GamesStore {
     /// 배지에 실으면 60초 TTL 짜리 숫자를 30초 스로틀로 갱신하는 꼴이 되어 없는 신청을 가리키거나 있는 신청을
     /// 놓친다. 알리는 자리는 **둘**이다: 게임 탭 테트리스 카드의 "받은 신청" 칩 · 테트리스 화면 로비 맨 위 신청 카드.
     /// 푸시(`tetris_invite`)는 서버 몫이고 **1.0.11 범위 밖**이다(D8) — 그때 이 자리를 다시 본다.
-    package var badgeCount: Int { context.gomoku.pendingIncomingInvites.count }
+    ///
+    /// **아잉 큐브 초대는 센다**(1.0.17): 위 둘과 달리 초인종을 잇기 때문이다(`.rummySignal` → `handleSignal`). 초대가 오면 그 자리에서 로비를 읽고
+    /// 방은 10분을 산다 — "60초 TTL 짜리 숫자를 30초 스로틀로 갱신하는" 꼴이 아니다. 오목 카드의 한 줄은 `gomokuIncomingCount` 를 읽는다(큐브 초대가 섞이면 안 된다).
+    package var badgeCount: Int { gomokuIncomingCount + context.rummy.incomingInvites.count }
+
+    /// 만료 안 된 받은 오목 신청 수(오목 카드의 재료).
+    package var gomokuIncomingCount: Int { context.gomoku.pendingIncomingInvites.count }
 
     /// 게임 탭이 보여 주는 루비 잔액 — **공유 미러**(`context.gomokuHost.rubyBalance`)를 먼저 읽는다(통합 w4/int).
     /// 미러에는 두 쓰기가 모두 온다: 오목 응답 정산(코어 `applyRuby` 가 코어 값과 미러를 함께 적는다) · 나 탭 상점(`shop_state` · 구매 응답은
@@ -409,22 +464,51 @@ package final class GamesStore {
     /// 서버도 같은 판정을 한다(`chess__busy`), 그래서 이 쪽은 **클라가 사실을 먼저 그리는 것**이다.
     package var chessEntryBlock: GamesBusyGame? {
         if hasLiveGomokuMatch { return .gomoku }
-        return hasLiveTetrisMatch ? .tetris : nil
+        if hasLiveTetrisMatch { return .tetris }
+        return hasLiveRummyMatch ? .rummy : nil
     }
 
     /// 오목 입구를 막는 까닭(없으면 nil). ★ **이 방향은 클라밖에 막는 데가 없다** — 서버의 오목 게이트는
     /// 체스·테트리스를 모른다(`GamesBusyGame` 머리말). 안 막으면 체스 중인 사람이 오목을 수락해 체스를 시간패한다.
     package var gomokuEntryBlock: GamesBusyGame? {
         if hasLiveChessMatch { return .chess }
-        return hasLiveTetrisMatch ? .tetris : nil
+        if hasLiveTetrisMatch { return .tetris }
+        return hasLiveRummyMatch ? .rummy : nil
     }
 
     /// 테트리스 입구를 막는 까닭(없으면 nil). 테트리스는 **판돈이 걸린 실시간 판**이라 막는 쪽이 더 무겁다 —
     /// 오목·체스 판을 두는 중에 테트리스를 수락하면 그 판은 15초 침묵으로 **진다**(서버 D5).
     package var tetrisEntryBlock: GamesBusyGame? {
         if hasLiveGomokuMatch { return .gomoku }
-        return hasLiveChessMatch ? .chess : nil
+        if hasLiveChessMatch { return .chess }
+        return hasLiveRummyMatch ? .rummy : nil
     }
+
+    /// 아잉 큐브 입구를 막는 까닭(없으면 nil) — 네 방향의 마지막 하나. 시작 검사가 세 게임의 진행 판을 보지만(서버), 판돈 걸린 판을 두는 중에
+    /// 방에 앉아 있으면 시작하는 순간 빠지거나 흐르던 판이 시간패한다. 입구에서 막는다.
+    package var rummyEntryBlock: GamesBusyGame? {
+        if hasLiveGomokuMatch { return .gomoku }
+        if hasLiveChessMatch { return .chess }
+        return hasLiveTetrisMatch ? .tetris : nil
+    }
+
+    /// 지금 아잉 큐브 자리가 있는가 — 다른 게임 입구를 막는 값.
+    ///
+    /// ★ **방(forming)도 막는다.** 서버 `chess__busy` 가 rummy joined·playing 을 함께 본다(20261103120000 §50 — 그래서 체스·테트리스는 `busy` 로 거절된다).
+    ///   오목 쪽 게이트만 모르므로 클라가 막지 않으면 방에 앉은 채 오목을 수락한다. 다른 기기가 쥔 판도 같은 사람의 판이라 막는다.
+    /// ★ 들고 있는 판이 있으면 **그 판으로 판단한다**(로비의 `activeMatchID` 는 30초 낡을 수 있다): 끝났거나 내가 기권했으면 자리가 없는 것이다.
+    ///   판을 아직 못 읽었으면 서버가 말한 id 를 믿는다(닫는 쪽으로 틀린다 — 테트리스 `hasLiveTetrisMatch` 와 같은 근거).
+    package var hasLiveRummyMatch: Bool {
+        let rummy = context.rummy
+        if let match = rummy.match, match.id == rummy.activeMatchID || rummy.activeMatchID == nil {
+            guard RummyStore.isUnsettled(match.status) else { return false }
+            return match.status != .active || RummyExitPolicy.mySeat(rummy)?.state != .forfeit
+        }
+        return rummy.activeMatchID != nil
+    }
+
+    /// 이 기기가 지금 쥔 판이 진행 중이고 내 자리가 playing 이다(화면 꺼짐 방지 · 확성기가 같은 말을 묻는다 — 코어 한 곳).
+    package var holdsRummyMatch: Bool { context.rummy.defersMegaphoneBanner }
 
     /// **로봇 체스 판**이 지금 진행 중인가(끝난 판은 아니다).
     ///
@@ -461,6 +545,16 @@ package final class GamesStore {
         //   `activeMatchID` 가 nil 이라 테트리스 판이 흐르는 중에도 오목·체스 카드가 열려 있고, 그 길로 수락하면
         //   테트리스가 15초 침묵으로 판돈째 진다(체스가 바로 위 줄을 둔 것과 **같은 근거**다).
         context.tetris.refreshLobbyIfStale()
+        // 아잉 큐브도 **받은함 RPC 가 없다** — 받은 초대·내 방·진행 판 id·전적이 전부 `rummy_lobby` 로 온다(30초 스로틀). 빠지면 카드의 초대 칩과
+        // 탭 배지가 비고, 앱을 막 켠 사람의 자리를 몰라 다른 게임 카드가 열려 있다(위 테트리스와 같은 근거).
+        syncRummyHiddenPeers()
+        context.rummy.refreshLobbyIfStale()
+    }
+
+    /// 차단 거울: 메시지 탭의 차단 목록을 코어에 넘긴다(로비 사람 · 초대 · 공개 방이 코어에서 걸러진다 — 맥 `WorkTimerStore` 와 같은 길).
+    package func syncRummyHiddenPeers() {
+        let hidden = context.links.messages?.hiddenBlockedPeerIDs ?? []
+        context.rummy.setHiddenPeers(Set(hidden.compactMap { UUID(uuidString: $0) }))
     }
 
     /// 오목 카드의 한 줄 재료: 진행 중인 판이 있는가(서버가 말한 진행 판 id 또는 들고 있는 끝나지 않은 판).
@@ -487,6 +581,16 @@ package final class GamesStore {
         if let match = tetris.match, !match.isFinished { return true }
         return tetris.activeMatchID != nil
     }
+
+    /// 아잉 큐브 카드의 한 줄 재료 — **판이 흐른다**(방은 아니다 — 카드가 방과 판을 다른 말로 부른다).
+    package var hasActiveRummyMatch: Bool {
+        let rummy = context.rummy
+        if let match = rummy.match { return match.status == .active }
+        return rummy.lobby?.me?.activeMatchId != nil
+    }
+
+    /// 아잉 큐브 카드의 한 줄 재료 — 방에 앉아 있다.
+    package var isInRummyRoom: Bool { context.rummy.myRoom != nil && !hasActiveRummyMatch }
 
     // MARK: 오목 화면 수명
 
@@ -693,6 +797,39 @@ package final class GamesStore {
         context.tetris.windowDidClose()
     }
 
+    // MARK: 아잉 큐브 화면 수명
+
+    /// 아잉 큐브 화면이 나타났다: 로비·진행 판을 읽고(`openWindow`) 앱이 active 면 폴링을 켠다(`setWindowVisible`).
+    ///
+    /// `isRummyScreenVisible` 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를 봐야 화면을 또 열지 않는다.
+    /// 하트비트는 이 값과 무관하게 코어가 돈다(`updateHeartbeat` — engaged 판이 room·playing 인 동안).
+    package func rummyScreenDidAppear() {
+        let rummy = context.rummy
+        isRummyScreenVisible = true
+        syncRummyHiddenPeers()
+        #if DEBUG
+        demoRummyRoute?.prepare(rummy)
+        rummy.openWindow(focusMatchID: demoRummyRoute?.focusMatchID)
+        #else
+        rummy.openWindow(focusMatchID: nil)
+        #endif
+        if isAppActive { rummy.setWindowVisible(true) }
+    }
+
+    /// 아잉 큐브 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃).
+    ///
+    /// **기권이 아니다** — 떠나는 길에서 요청은 한 건도 나가지 않는다(이탈은 화면의 [나가기] 확인 뒤에만 — `GamesRummyExit`).
+    /// ★ 끝난 판은 **여기서 접는다**: 폰에서 화면을 떠나는 것은 맥의 '창을 닫았다'다. 안 접으면 다시 들어올 때 로비가 아니라 그 결과가 다시 선다(테트리스 `windowDidClose` 와 같은 까닭).
+    ///   `phase == .finished` 일 때만 부른다(쓰기가 아니라 접기 + 로비 조회 한 번이다). 진행 중인 판은 그대로 남는다.
+    package func rummyScreenDidDisappear() {
+        guard isRummyScreenVisible else { return }
+        isRummyScreenVisible = false
+        let rummy = context.rummy
+        rummy.setWindowVisible(false)
+        if rummy.phase == .finished { rummy.dismissResult() }
+        if rummy.rulesShown { rummy.rulesShown = false }
+    }
+
     /// AI 선택기의 허락 = 오목 화면이 보이고 앱이 active. 거두면 도는 탐색이 곧바로 취소된다.
     private func syncAIThinker() {
         aiThinker.setAllowed(isGomokuScreenVisible && isAppActive)
@@ -736,6 +873,9 @@ package final class GamesStore {
         // ★ 같은 계정의 **다른 기기**가 두는 판(코어 `playingElsewhere` · 0.3.69)은 켜지 않는다 — 이 폰에는 판 루프도
         //   보고도 없어 자동잠금이 닿아도 지는 사람이 없다. 켜 두면 남의 기기 판이 끝날 때까지(최대 8분) 배터리만 탄다.
         if let match = context.tetris.match, !match.isFinished, !context.tetris.playingElsewhere { return true }
+        // 아잉 큐브: 이 기기가 쥔 판에서 내 자리가 playing 이면 **어느 화면에 있든** 켠다(차례 60초 · 시간 초과 3번이면 기권이다).
+        // 같은 계정의 다른 기기가 하는 판(놀던 기기)은 켜지 않는다 — 지는 사람이 없는데 배터리만 탄다(위 테트리스와 같은 근거).
+        if holdsRummyMatch { return true }
         guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished
@@ -880,6 +1020,20 @@ package final class GamesStore {
         router.selectedTab = .games
         router.popToRoot(.games)
         router.push(GamesDestination.tetrisDuel, on: .games)
+    }
+
+    /// 아잉 큐브 판이 막 열렸다(방에서 시작됨 · 앱을 다시 켜니 진행 중인 판) — 큐브 화면을 연다.
+    ///
+    /// ★ **이 기기가 손댄 판에서만 연다.** 같은 계정의 맥이 판을 하는 동안 폰이 로비로 그 판을 읽으면 코어가 `announce` → 이 문을 부른다.
+    ///   막지 않으면 앱을 켠 사람이 보던 탭에서 끌려 나와 남의 기기 판 앞에 선다(폰은 읽기만 하는 판이다 — SPEC-v2 §6). 카드의 "진행 중" 칩이 그 사실을 말한다.
+    /// ★ `!isRummyScreenVisible` 가드가 화면을 두 번 쌓는 것을 막는다(`rummyScreenDidAppear` 가 깃발을 먼저 적는 까닭).
+    private func presentRummyScreen() {
+        guard isAppActive, context.session.isSignedIn, !isRummyScreenVisible,
+              context.rummy.isEngagedInCurrentMatch else { return }
+        let router = context.router
+        router.selectedTab = .games
+        router.popToRoot(.games)
+        router.push(GamesDestination.rummy, on: .games)
     }
 }
 

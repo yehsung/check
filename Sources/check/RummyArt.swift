@@ -12,39 +12,6 @@ import CheckCore
 // 판 화면이 처음 뜰 때 한 번 `game-art/rummy/{rack,table}.png` 를 조건부 요청(ETag · Last-Modified)으로 받아 캐시를 덮는다
 // (200 = 바꿈 · 304 = 그대로 · 404 = 캐시 지우고 번들로 · 그 밖 = 그대로). 시험 중엔 네트워크를 타지 않는다.
 
-/// 그림 두 장.
-enum RummyArtKind: String, CaseIterable, Sendable {
-    case rack
-    case table
-
-    /// 공개 버킷 `game-art` 안의 경로.
-    var remotePath: String { "rummy/\(rawValue).png" }
-    /// 번들 폴백 사본 이름(`.process("Resources")` 는 폴더를 평탄화하므로 앞머리로 가른다).
-    var bundleName: String { "rummy-\(rawValue)" }
-}
-
-/// 받침대 그림의 기준선 — 원본(2400×478, 그림자 없는 판) 높이 H 대비. 설계서 §5 값 그대로.
-enum RummyRackArtMetrics {
-    /// 뒷줄 타일 바닥 · 앞줄 타일 바닥(H 대비).
-    static let backRowBottom: CGFloat = 0.44
-    static let frontRowBottom: CGFloat = 0.76
-    /// 타일 높이(H 대비).
-    static let tileHeight: CGFloat = 0.31
-    /// 원본 가로/세로.
-    static let naturalAspect: CGFloat = 2400.0 / 478.0
-    /// 타일이 놓이는 가로 구간(원본 폭 대비 7%~93%) → 높이 H 일 때 좌우 안쪽 여백(pt).
-    static let tileSpanStart: CGFloat = 0.07
-    /// 3-슬라이스 끝캡(원본 2400 기준 좌우 약 150px).
-    static let capFraction: CGFloat = 150.0 / 2400.0
-
-    /// 타일 높이 `tile` 에 맞는 받침대 높이.
-    static func height(forTileHeight tile: CGFloat) -> CGFloat { (tile / tileHeight).rounded() }
-    /// 높이 H 받침대의 타일 구간 좌우 여백.
-    static func sideInset(height: CGFloat) -> CGFloat { tileSpanStart * naturalAspect * height }
-    /// 높이 H 받침대의 끝캡 폭.
-    static func capWidth(height: CGFloat) -> CGFloat { capFraction * naturalAspect * height }
-}
-
 /// 그림을 무엇으로 그릴까 — 렌더 시험이 그린 폴백을 따로 굽는 주입구. 앱은 늘 `.automatic`.
 enum RummyArtStyle: Equatable, Sendable {
     case automatic

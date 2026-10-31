@@ -109,6 +109,8 @@ package enum MobileArtNames {
     package static func stage(id: String) -> String { "stage-\(id)-neutral" }
     /// 플래피 아잉 옆모습(192px).
     package static let flappyAing = "aing-side"
+    /// 아잉 큐브 받침대 · 펠트(맥 `Sources/check/Resources/rummy-{rack,table}.png` 와 같은 사본 — 운영 Storage 를 못 받을 때의 폴백). `RummyArtKind.bundleName` 이 이 이름이다. 크기·알파가 위 그림들과 달라 `all` 에는 안 넣는다(`GamesRummyWiringTests` 가 잰다).
+    package static let rummyArt: [String] = RummyArtKind.allCases.map(\.bundleName)
     package static let all: [String] = ["ruby", "ruby-48", "ruby-96", flappyAing] + stageIDs.sorted().map(stage(id:))
 
     /// 번들 안 위치(`Resources/Art/<name>.png`). 없으면 nil.
@@ -458,6 +460,8 @@ package enum TabBarPolicy {
         /// 화면 프레임이 아니라 **단조 시계**로 흐른다(설계 D10). 탭을 잘못 눌러 빠져나가면 보이지 않는 채로
         /// 조각이 계속 떨어져 돌아왔을 때 판이 끝나 있고, 그 판에는 루비가 걸려 있다.
         case tetrisMatch
+        /// 아잉 큐브 판(1.0.17) — 같은 몰입 화면이다. 끌기가 화면 아래 받침대에서 시작해 탭 막대와 겹친다.
+        case rummyMatch
         case shop
         case miniGamePlay
         /// 잔디 상세 — 자체 하단 값 막대를 가진다(막대 둘이 쌓이면 엄지 사정권이 좁아진다).

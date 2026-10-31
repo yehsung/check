@@ -649,7 +649,7 @@ enum TetrisWireJSON {
 
         // 막힌 까닭이 **문구 표의 제 이름**으로 옮겨진다(삼항으로 접으면 테트리스가 '오목'으로 읽힌다).
         #expect(GamesBusyGame.tetris.text == .tetris)
-        #expect(GamesBusyGame.allCases.count == 3, "busy 열거가 셋이 아니다 — 차단 방향을 하나 놓친다")
+        #expect(GamesBusyGame.allCases.count == 4, "busy 열거가 넷이 아니다 — 차단 방향을 하나 놓친다(네 방향은 `GamesRummyWiringTests`)")
         await harness.tearDown()
     }
 

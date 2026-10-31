@@ -176,6 +176,15 @@ extension MeStore {
     package func signOut() async {
         guard context.session.isSignedIn, !isSigningOut else { return }
         isSigningOut = true
+        // 아잉 큐브 판·방 중이면 `rummy_leave`(최대 2초)를 먼저 보낸다 — 세션을 먼저 지우면 이탈 요청이 토큰 없이 떠나 판이
+        // '플레이 중'으로 남는다(맥 `signOutLeavingRummy` 와 같다). 놀던 기기는 아무것도 안 보낸다.
+        let generation = context.session.generation
+        await GamesRummyExit.leaveBeforeSessionEnds(context.rummy)
+        // 그 2초 사이 다른 길(치명 만료)이 이미 세션을 내렸으면 두 번 내리지 않는다.
+        guard context.session.generation == generation else {
+            isSigningOut = false
+            return
+        }
         await context.session.signOut()
         // 세션이 세대를 올리며 앱 모델이 reset() 을 불렀다 — 깃발은 거기서 이미 내려갔다.
         isSigningOut = false

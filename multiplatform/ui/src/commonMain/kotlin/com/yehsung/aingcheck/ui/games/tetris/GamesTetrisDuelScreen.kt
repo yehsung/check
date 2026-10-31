@@ -510,7 +510,6 @@ private fun LiveRow(tetris: TetrisDuelStore, live: TetrisDuelLiveMatch, isLast: 
 private fun GamesTetrisStakeSheet(store: GamesStore, target: TetrisDuelUser, onDismiss: () -> Unit) {
     val tetris = store.tetris
     val colors = AingTheme.colors
-    val scope = rememberCoroutineScope()
     var selected by remember(target.id) { mutableStateOf<TetrisDuelStake?>(null) }
     val balance = store.rubyBalance
     // 지금 신청을 **낼 수 있는 판돈**(못 내면 null). 판정은 GamesTetrisDuelStakeSend 한 곳 — 요청이 나가는 마지막 문.
@@ -556,7 +555,9 @@ private fun GamesTetrisStakeSheet(store: GamesStore, target: TetrisDuelUser, onD
             ) {
                 val stake = sendable ?: return@PillButton
                 onDismiss()
-                scope.launch { tetris.challenge(target.id, stake) }
+                // 스토어 범위로 띄운다(Swift `Task {}` · 오목 `gomoku.scope`): onDismiss 가 이 시트를 컴포지션에서 빼므로 시트 범위면 응답 전에 취소된다 —
+                // 판이 안 생기고 알림도 없다(TetrisStakeSendTest).
+                tetris.scope.launch { tetris.challenge(target.id, stake) }
             }
         }
     }

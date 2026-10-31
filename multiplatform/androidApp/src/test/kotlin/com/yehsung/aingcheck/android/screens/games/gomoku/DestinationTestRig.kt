@@ -36,6 +36,7 @@ import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import com.yehsung.aingcheck.ui.games.chess.ChessGamesLink
 import com.yehsung.aingcheck.ui.games.gomoku.GomokuGamesLink
 import io.ktor.client.HttpClient
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.HttpClientEngineBase
 import io.ktor.client.engine.HttpClientEngineConfig
 import io.ktor.client.request.HttpRequestData
@@ -66,8 +67,8 @@ const val DEST_ME: String = "00000000-0000-0000-0000-0000000000a1"
 const val DEST_RIVAL: String = "00000000-0000-0000-0000-0000000000b2"
 const val DEST_MATCH: String = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
 
-/** 오목·체스 스토어 + 게임 탭 스토어 한 벌. [me] 가 null 이면 세션이 없다. */
-class DestinationTestRig(me: String?) {
+/** 오목·체스 스토어 + 게임 탭 스토어 한 벌. [me] 가 null 이면 세션이 없다. [engine] 은 기본이 부르면 터지는 것 — 호출 자체를 재는 시험만 바꾼다. */
+class DestinationTestRig(me: String?, engine: HttpClientEngine = RefusingEngine()) {
     val dispatcher = ParkingDispatcher()
     val scope = CoroutineScope(dispatcher + SupervisorJob())
     private val clock: () -> SwiftDate = { destinationClock }
@@ -75,7 +76,7 @@ class DestinationTestRig(me: String?) {
     val service = SupabaseWorkService(
         projectURL = "https://golden.invalid",
         anonKey = "stub-anon-key",
-        client = HttpClient(RefusingEngine()) { SupabaseWorkService.clientConfig(this) },
+        client = HttpClient(engine) { SupabaseWorkService.clientConfig(this) },
         clock = clock,
         text = RulesWireTextRules,
         newUUIDString = { "ABCDEF12-0000-4000-8000-000000000000" },

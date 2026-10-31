@@ -30,6 +30,12 @@ struct NowTab: View {
                                 .listRowSeparator(.hidden)
                         }
                     }
+                    if store.showsUpdateNotice {
+                        Section {
+                            NowUpdateNoticeRow(store: store)
+                                .cardSegmentRow(.single, padding: EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
+                        }
+                    }
                     if let notice = store.notice {
                         Section {
                             InlineNotice(text: notice, kind: .warning)
@@ -128,6 +134,69 @@ private struct NowNavigationSubtitle: ViewModifier {
             return NowText.collapsedSubtitle(clock: NowFormat.clock(card.todaySeconds), percent: card.percent)
         }
         return NowTab.expandedSubtitle(store: store)
+    }
+}
+
+// MARK: - 새 버전 안내
+
+/// 카드 한 줄: 글자 · [업데이트](틴트 — 채운 버튼은 화면당 하나) · 닫기(X, 누름 영역 44pt).
+/// 세 요소를 합치지 않아 보이스오버가 두 버튼에 따로 닿는다.
+///
+/// 큰 글자(AX)에서는 [업데이트] 를 제목 아래로 내린다 — 한 줄에 두면 고정된 버튼이 폭을 먼저 차지해 제목 칸이 85~98pt 로 줄고,
+/// 글자가 "새 / 버전…" 으로 잘렸다(390pt AX4 · AX5 시뮬레이터 실측).
+private struct NowUpdateNoticeRow: View {
+    let store: NowStore
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
+                    title
+                        .padding(.top, 8)
+                    dismissButton
+                }
+                // 행의 오른쪽 여백이 0 이라(X 가 카드 끝까지 간다) 버튼만 여백을 따로 둔다.
+                updateButton
+                    .padding(.trailing, 16)
+                    .padding(.bottom, 8)
+            }
+        } else {
+            HStack(spacing: 4) {
+                title
+                updateButton.fixedSize()
+                dismissButton
+            }
+        }
+    }
+
+    private var title: some View {
+        Text(NowText.updateNoticeTitle)
+            .font(.subheadline)
+            .foregroundStyle(MobileTheme.label)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var updateButton: some View {
+        AingButton(NowText.updateNoticeAction, kind: .tinted, size: .sm) {
+            openURL(MobileSessionText.appStoreURL)
+        }
+    }
+
+    private var dismissButton: some View {
+        Button {
+            withAnimation(.snappy) { store.dismissUpdateNotice() }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(MobileTheme.label2)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(NowText.updateNoticeDismiss))
     }
 }
 

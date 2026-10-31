@@ -286,7 +286,6 @@ private fun IncomingSection(store: GamesStore, now: () -> SwiftDate) {
 private fun InviteCard(store: GamesStore, invite: TetrisDuelInvite, now: () -> SwiftDate) {
     val tetris = store.tetris
     val colors = AingTheme.colors
-    val scope = rememberCoroutineScope()
     Column {
         Row(
             Modifier.padding(start = AingDimens.cardPadding, end = AingDimens.cardPadding, top = 14.dp, bottom = 10.dp),
@@ -309,12 +308,12 @@ private fun InviteCard(store: GamesStore, invite: TetrisDuelInvite, now: () -> S
             PillButton(
                 TetrisPhoneText.decline, Modifier.weight(1f).testTag(TetrisDuelTags.decline(invite.id)), kind = PillKind.Gray, fillsWidth = true,
                 enabled = !tetris.isBusy,
-            ) { scope.launch { tetris.respond(invite.id, accept = false) } }
+            ) { tetris.scope.launch { tetris.respond(invite.id, accept = false) } }
             if (tetris.duelsEnabled) {
                 PillButton(
                     TetrisPhoneText.accept, Modifier.weight(1f).testTag(TetrisDuelTags.accept(invite.id)), kind = PillKind.Filled, fillsWidth = true,
                     enabled = GamesTetrisDuelAcceptGate.isEnabled(tetris, store.tetrisEntryBlock),
-                ) { scope.launch { tetris.respond(invite.id, accept = true) } }
+                ) { tetris.scope.launch { tetris.respond(invite.id, accept = true) } }
             }
         }
     }
@@ -325,7 +324,6 @@ private fun OutgoingSection(store: GamesStore, now: () -> SwiftDate) {
     val tetris = store.tetris
     val invite = tetris.outgoing ?: return
     val colors = AingTheme.colors
-    val scope = rememberCoroutineScope()
     SectionHeader(TetrisPhoneText.outgoingTitle, padded = true)
     InsetGroup {
         GroupRow(dividerInset = null, minHeight = 56.dp) {
@@ -338,7 +336,7 @@ private fun OutgoingSection(store: GamesStore, now: () -> SwiftDate) {
                 }
             }
             PillButton(TetrisPhoneText.cancel, kind = PillKind.Gray, size = PillSize.Sm, enabled = !tetris.isBusy) {
-                scope.launch { tetris.cancelChallenge() }
+                tetris.scope.launch { tetris.cancelChallenge() }
             }
         }
     }

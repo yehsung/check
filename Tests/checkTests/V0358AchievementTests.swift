@@ -1083,8 +1083,19 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
                 "refreshAchievements 를 부르는 자리가 정의 1 + 지갑 sync · 게임 결과 · 뒤따르는 한 번 · 막힌 일일 받기 가 아니다")
         #expect(count("refreshAchievements(reason: .gameResult)") == 2 && count("refreshAchievements(reason: .missionPanel)") == 1,
                 "게임 결과 박자(문 1 + 뒤따르는 한 번 1) · 막힌 일일 받기(1) 자리가 바뀌었다")
-        #expect(count("refreshAchievementsAfterGameResult(game:") == 5,
-                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 1:1 판 끝남 3 이 아니다")
+        // v0.3.69: 아잉 큐브 판 끝남이 넷째 1:1 자리다(2~4인이지만 같은 문 — 일일 미션 키 `daily_rummy`).
+        #expect(count("refreshAchievementsAfterGameResult(game:") == 6,
+                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 1:1 판 끝남 4(오목·체스·테트리스·아잉 큐브) 가 아니다")
+        #expect(count("rummy.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: \"rummy\") }") == 1,
+                "아잉 큐브 판 끝남 자리가 오목·체스·테트리스와 같은 모양(약한 self · 게임 이름 rummy)이 아니다")
+        // 스토어가 묻는 시점: **끝난 판 state 를 처음 받은 순간 한 번**(판 id 로 막는다) — 결과 접기·의도적 이탈·다시 그리기로
+        // 또 울리지 않는다. 울리는 자리는 코어 한 곳뿐이고 타이머가 없다.
+        let rummyCore = V0317ShopTests.stripped(try String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/CheckCore/RummyStoreGame.swift"), encoding: .utf8))
+        #expect(rummyCore.components(separatedBy: "onMatchFinished?()").count - 1 == 1, "아잉 큐브 판 끝남을 알리는 자리가 하나가 아니다")
+        #expect(rummyCore.contains("if state.status == .finished { if !finishAnnouncedIDs.contains(id) { finishAnnouncedIDs.insert(id) onMatchFinished?() } return }"),
+                "판 끝남 알림이 판 id 당 한 번으로 막혀 있지 않다")
         // 받기를 부르는 자리는 미션 화면의 맥락 하나뿐이다(스토어 어디서도 스스로 받지 않는다 — 자동 지급 금지).
         #expect(count("claimAchievement(key: $0)") == 1 && count("claimWeeklyWork()") == 2,
                 "받기를 부르는 자리가 화면 말고도 있다 — 정의 1 + 호출 1 이어야 한다")

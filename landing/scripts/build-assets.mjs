@@ -9,7 +9,7 @@
  *          + v2 크롭 V2_CROPS(SPEC v2 §9.2 — 조각·패널·근무 라벨·char/aing-rest-poster·메뉴바 아이콘)
  *   char   43–52행 캐릭터 알파 영상 두 벌(VP9 webm / HEVC mov) + 포스터. --seq 로 일부만(그때 --only 기본 = char,data)
  *   ios    53–60행 아이폰 화면·위젯 (+ v3.1 구름빵 대화 두 장)
- *   brand  61–64행 App Store 배지(복사)·QR(scripts/make-qr.py)·아이콘 webp·app/icon.png·app/apple-icon.png
+ *   brand  61–64행 App Store 배지(복사)·QR 둘(scripts/make-qr.py — App Store · 안드로이드 베타)·아이콘 webp·app/icon.png·app/apple-icon.png
  *   v31    v3.1 새 렌더 4장(docs/v3/brief.md §9.1 · §9.5 — AI 리밋 카드 · 체스 판 · 1:1 테트리스 창 · 아이폰 AI 리밋 위젯).
  *          원본은 promo 가 아니라 렌더 에이전트 출력(env V31_MAC · V31_IOS, 기본 = 세션 스크래치). 원본이 없으면 경고만 하고
  *          이미 구운 파일을 그대로 둔다(기본 묶음 아님 — `--only=v31`).
@@ -518,7 +518,7 @@ async function buildBrand() {
   fs.mkdirSync(outAbs("brand"), { recursive: true });
   fs.copyFileSync(badgeSrc, outAbs("brand/appstore-badge-ko-black.svg"));
   if (!fs.readFileSync(badgeSrc).equals(fs.readFileSync(outAbs("brand/appstore-badge-ko-black.svg")))) errors.push("61행 배지 바이트가 원본과 다르다");
-  // 62행 QR: scripts/make-qr.py
+  // 62행 QR: scripts/make-qr.py(App Store · 안드로이드 베타 안내 /#android — docs/v3/brief.md §12)
   const py = process.env.PYTHON ?? "python3";
   const r = spawnSync(py, [path.join(ROOT, "scripts/make-qr.py")], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
   if (r.status !== 0) errors.push(`62행 make-qr.py 실패(exit ${r.status ?? r.error?.message}): ${(r.stderr || "").trim()}`);
@@ -679,7 +679,7 @@ function expectedOutputs() {
   }
   for (const [, rel] of IOS) a(rel);
   for (const [rel] of V31) a(rel);
-  for (const rel of ["brand/appstore-badge-ko-black.svg", "brand/qr-appstore.svg", "brand/icon-64.webp", "brand/icon-256.webp"]) a(rel);
+  for (const rel of ["brand/appstore-badge-ko-black.svg", "brand/qr-appstore.svg", "brand/qr-android-beta.svg", "brand/icon-64.webp", "brand/icon-256.webp"]) a(rel);
   list.push("app/icon.png", "app/apple-icon.png");
   list.push("data/generated/assets.json", "data/generated/sequences.json", "data/generated/bubbles.json", "data/generated/grass.json");
   return list;

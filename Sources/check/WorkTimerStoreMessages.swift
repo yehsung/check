@@ -116,8 +116,9 @@ extension WorkTimerStore {
     /// 서버가 아직 모르는 즉시 삽입분(M4)은 그 뒤에 **도착 순서**로 선다(m4-fix). 스토어가 이력을 세울 때와 **같은 두 표**를 넘긴다 —
     /// 한쪽만 넘기면 `messageHistory`(읽음 경계 판정의 자리 순서)와 화면의 순서가 갈린다.
     var messageThreads: [MessageThread] {
+        // 확성기 줄(2026-10-30)은 뺀 판으로 묶는다(`visibleMessageHistory` — 계약 C3 한 술어). 배너로 본 말이 대화 목록·열린 대화에 또 서지 않는다.
         MessageThreadBuilder.threads(
-            from: messageHistory,
+            from: visibleMessageHistory,
             serverOrder: messageHistoryReadSnapshot?.serverOrder,
             arrivalOrder: messageReadRuntime.localArrivalOrder
         )
@@ -139,8 +140,10 @@ extension WorkTimerStore {
     /// 차단해 걷어낸 상대(`blockHiddenPeerIDs`, v0.3.34)는 뺀다 — 목록에서 사라진 사람의 점이 메뉴바·레일에 남으면 그 점은
     /// 눌러도 갈 곳이 없는 장식이 된다(폰 `MessagesStore` 가 요약·이력을 거르는 것과 같은 판단).
     var unreadMessagePeerIDs: Set<String> {
+        // 이력 쪽은 확성기 줄을 뺀 판으로 센다(2026-10-30). 요약 쪽은 필터가 켜져 있으면 확성기 줄을 안 세는 v2 로 받는다
+        // (`fetchMessageUnreadSummary` → `MegaphoneBannerStore.fetchUnreadSummary`) — 둘이 같은 줄을 뺀다.
         let unread = MessageUnreadRules.unreadPeerIDs(
-            history: messageHistory,
+            history: visibleMessageHistory,
             historySnapshot: messageHistoryReadSnapshot,
             summary: messageUnreadSummary,
             optimistic: messageOptimisticReads,
@@ -402,6 +405,9 @@ extension WorkTimerStore {
                 arrivalOrder: messageReadRuntime.localArrivalOrder
             )
             if messageHistory != sorted { messageHistory = sorted }
+            // 📢 로 시작하는데 아직 판정 못 한 줄(2026-10-30 — 계약 C3 경합)은 배너 목록을 한 번 받아 본 뒤 거른다. 그동안은 붙든다
+            // (`visibleMessageHistory`) — 접두만 보고 숨기지 않고, 확인이 실패하면 메시지로 돌아온다.
+            verifyMegaphoneCandidatesIfNeeded()
             applyMessageHistoryReadCapability(loaded, serial: serial)
             // 찌르기 기록(v0.3.65)도 **같은 응답**으로 바꾼다 — 읽음 판정(아래 evaluate) 앞이어야 방금 온 찌르기가 경계에 든다.
             applyMessagePokeLog(conversation, serial: serial)
@@ -984,15 +990,22 @@ extension WorkTimerStore {
     /// 함수가 없는 서버·실패·세대 변경은 nil 로 **조용히** 접는다 — 못 물어봤다는 사실은 "안 읽은 것이 없다"는 답이 아니다.
     private func fetchMessageUnreadSummary(generation: Int) async -> MessageUnreadSummary? {
         do {
-            let response = try await withSessionRetry { activeSession in
-                try await service.fetchMessageUnreadSummary(accessToken: activeSession.accessToken)
-            }
+            // 함수 이름은 배너 스토어가 고른다(2026-10-30 — 계약 C3): 필터가 켜져 있으면 확성기 줄을 안 세는 v2, 아니면 옛 함수.
+            // v2 가 없는 서버면 그 안에서 옛 함수로 내리고 필터도 끈다 — 줄만 숨기고 옛 요약이 그 줄을 세면 점이 영영 안 꺼진다.
+            let response = try await megaphoneBanner.fetchUnreadSummary()
             guard generation == sessionGeneration else { return nil }
             return response.summary
         } catch {
             // 취소·스키마 부재(옛 서버)·네트워크 — 전부 조용히. 점은 다음 계기(신호·팝오버 열기)에 다시 맞춰진다.
             return nil
         }
+    }
+
+    /// 확성기 필터가 막 켜졌다(2026-10-30 — `requestMegaphoneBannerRefresh`). 들고 있는 요약은 옛 함수로 받은 것이라 확성기 줄도 셌다 —
+    /// v2 로 한 번 다시 받는다(그 줄로 켜진 점이 다음 계기까지 남지 않게). 요약이 아직 없으면 할 일이 없다(다음 조회가 v2 다).
+    func megaphoneFilterDidTurnOn() {
+        guard messageUnreadSummary != nil else { return }
+        requestMessageActivityRefresh()
     }
 
     /// 요약 반영(순수 상태 전이 — 네트워크 없음). **더 나중에 띄운 요약이 이미 있으면 버린다**(늦게 온 옛 응답).
@@ -1183,7 +1196,25 @@ extension WorkTimerStore {
     ///     띄우지 않는다(메신저가 열린 대화의 알림을 안 띄우는 것과 같다). 창 서버가 "안 떠 있다"고 하면 읽음이 안 올라가 말풍선은 그대로 뜬다.
     ///  3. 소비한 메시지 행이 **하나라도** 있으면 도착 새로고침 1회(요약 + 보이면 이력). 말풍선 큐가 비었어도 부른다 — 0.3.29 는 신선도가
     ///     큐를 비우면 갱신까지 건너뛰었다(③).
+    ///
+    /// 확성기 줄(2026-10-30 — 계약 C3)은 이 문 **앞에서** 가른다(`partitionMegaphoneRows`): 배너 목록이 아는 줄은 버리고(대화 · 말풍선 ·
+    /// 팝오버 도착 줄 · 도착 새로고침 어디에도 안 간다), 📢 로 시작하는데 아직 모르는 줄은 배너 목록을 한 번 받아 본 뒤 남은 것만 들인다.
     func receiveConsumedMessages(rows: [TakenPokeRow], now: Date) {
+        let gate = partitionMegaphoneRows(rows)
+        acceptConsumedMessages(rows: gate.ready, now: now)
+        guard !gate.held.isEmpty else { return }
+        let held = gate.held
+        let generation = sessionGeneration
+        let verification = requestMegaphoneBannerRefresh(verifying: Set(held.map(\.id)))
+        Task { @MainActor [weak self] in
+            await verification?.value
+            guard let self, generation == self.sessionGeneration else { return }
+            self.acceptConsumedMessages(rows: held.filter { !self.megaphoneBanner.hides(messageID: $0.id) }, now: now)
+        }
+    }
+
+    /// 확성기 판정을 지난 행을 들인다(위 순서 1~3 그대로).
+    private func acceptConsumedMessages(rows: [TakenPokeRow], now: Date) {
         let consumed = Self.consumedMessageEntries(rows: rows, receiptsKnown: messageReadReceiptsAvailable)
         insertConsumedMessagesIntoVisibleConversation(consumed)
         appendToMessageBubbleQueue(

@@ -138,6 +138,8 @@ extension WorkTimerStore {
     /// 신호(`consumeCurrentMessage`)가 한 번도 안 뜬 다른 사람의 말을 밀어낸다. 걸러 내는 것은 읽는 자리뿐이다.
     var visibleLatestMessage: ReceivedMessage? {
         guard let message = currentMessage else { return nil }
+        // 확성기 줄(2026-10-30)도 같은 자리에서 뺀다 — 배너로 본 말이 "최근 받은 메시지"로 한 번 더 서지 않게(계약 C3 한 술어).
+        if megaphoneBanner.hides(messageID: message.id) { return nil }
         guard let sender = message.fromUserID, blockHiddenPeerIDs.contains(sender) else { return message }
         return nil
     }

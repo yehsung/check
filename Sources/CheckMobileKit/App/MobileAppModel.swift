@@ -30,6 +30,11 @@ public final class MobileAppModel {
     package let rankings: RankingsStore
     package let games: GamesStore
     package let me: MeStore
+    /// 확성기 배너(코어 `MegaphoneBannerStore` — 맥과 한 벌). 메시지함 필터·푸시·실시간·전송 뒤 내 배너가 이 하나를 쓴다.
+    /// 호스트는 오목·체스·확성기 작성과 같은 하나(`gomokuHost`). 로그아웃 사슬(`sessionDidSignOut`)에서 비운다.
+    package let megaphoneBanner: MegaphoneBannerStore
+    /// 시트·풀스크린 커버가 떠 있는가(배너 미룸의 한 갈래 — `isMegaphoneBannerDeferred`). 시험이 바꿔 끼운다.
+    @ObservationIgnored package var megaphoneModalProbe: @MainActor () -> Bool = { MegaphoneBannerModalProbe.isModalPresented() }
     /// 화면 모드(기기 설정). `sessionDidSignOut` 의 reset 사슬에 넣지 않는다 — 로그아웃해도 남는다.
     package let appearance: MobileAppearanceStore
     /// 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). 탭 막대가 환경값으로 흘린다. 로그아웃하면 비운다.
@@ -108,6 +113,9 @@ public final class MobileAppModel {
         // 1:1 테트리스(0.3.60 서버·맥 · 폰은 1.0.11). 호스트는 **오목·체스와 같은 하나**다(루비 미러 한 칸).
         let tetris = TetrisDuelStore(host: host)
         tetris.clock = { clock.now() }
+        // 한 판 한 기기(0.3.69 — 코어 머리말 ⑩): '이 기기가 연 판' 기록을 둘 곳. 빠지면 기록이 프로세스 안에만 살아, 판 중에
+        // 앱을 다시 켠 폰이 옛 서버(my_device 없음)에서 자기 판을 못 알아본다.
+        tetris.defaults = env.storage.defaults
         // 순위의 **주 스위치**. 기본이 꺼짐이라 이 한 줄이 없으면 `tetris_ranking` 이 **한 번도 안 나가고**
         // 순위 탭은 영영 로딩 문구다 — 오목·체스의 바로 위 두 줄과 같은 못이고, 같은 까닭으로 지우지 마라
         // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`
@@ -126,6 +134,10 @@ public final class MobileAppModel {
         // 러너는 **약한 참조**로 들고 있고(수명은 앱 모델이 쥔다) 핸들러가 스스로 세션 가드를 한다.
         realtime.tetris = tetris
         let links = MobileStoreLinks()
+        // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
+        let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
+        // 실시간 'megaphone' 신호를 받을 자리(오목·테트리스 칸과 같은 꼴 — 러너는 약한 참조).
+        realtime.megaphoneBanner = megaphoneBanner
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
         let context = MobileContext(
@@ -158,6 +170,7 @@ public final class MobileAppModel {
         self.links = links
         self.appearance = appearance
         self.characters = characters
+        self.megaphoneBanner = megaphoneBanner
         self.context = context
         self.push = PushCoordinator(context: context)
         self.now = NowStore(context: context)
@@ -172,6 +185,11 @@ public final class MobileAppModel {
         links.rankings = rankings
         links.games = games
         links.me = me
+        links.megaphoneBanner = megaphoneBanner
+        // 배너 미룸(계약 — 폰 배너): 시트·대결 화면·미니게임 판. 바뀌는 순간은 배너 오버레이가 `syncMegaphoneBannerDeferral()` 로 알린다.
+        megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
+        // 필터가 켜지거나 꺼지면 메시지함이 요약 함수 짝을 다시 맞춘다 — refresh 가 실시간·푸시 어느 길로 왔든.
+        megaphoneBanner.onCapabilityChange = { [weak messages] in messages?.megaphoneFilterDidSettle() }
         // 표가 바뀌면 위젯 근무 중 얼굴도 다시 쓴다(지금 탭이 위젯의 유일한 작성자 — 같은 값이면 쓰기 창구가 건너뛴다).
         characters.onDirectoryChange = { [weak now] in now?.writeWidgetSnapshot() }
         // 일일 미션(v0.3.64) — **1:1 판이 끝난 것을 처음 보는 자리**가 여기다(코어 스토어가 `match` 가 끝으로 바뀐 그 자리에서
@@ -302,6 +320,8 @@ public final class MobileAppModel {
         me.reset()
         push.reset()
         characters.reset()
+        // 확성기 배너 줄·필터 id·떠 있는 배너 — 남기면 다음 사람 화면에 앞 사람의 배너가 뜨고 그 id 로 메시지함을 거른다.
+        megaphoneBanner.reset()
     }
 
     private func activateStores() {

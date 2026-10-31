@@ -32,7 +32,7 @@ import Testing
         mega.open()
         _ = await baseWaitUntil { mega.info != nil }
         #expect(harness.model.context.gomokuHost.rubyBalance == 130, "정보 응답의 잔량이 공유 미러에 안 들어갔다")
-        #expect(mega.infoLine(now: harness.model.context.clock.now()) == "지금 보내면 9명에게 가요")
+        #expect(mega.infoLine(now: harness.model.context.clock.now()) == "지금 보내면 9명의 화면에 떠요")
         mega.setDraft("오늘 3시 라운지에서 간식 나눠요")
         mega.requestSend()
         #expect(mega.isConfirming && harness.count("send_megaphone") == 0, "첫 [보내기] 가 요청을 냈다")

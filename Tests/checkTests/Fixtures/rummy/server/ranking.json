@@ -1,0 +1,47 @@
+{
+  "me": {
+    "games": 1,
+    "rank": 1,
+    "wins": 1
+  },
+  "rows": [
+    {
+      "avatar_url": null,
+      "character": null,
+      "display_name": "디시험01",
+      "games": 1,
+      "id": "d0000000-0000-4000-8000-000000000001",
+      "rank": 1,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character": null,
+      "display_name": "디시험02",
+      "games": 1,
+      "id": "d0000000-0000-4000-8000-000000000002",
+      "rank": 2,
+      "wins": 0
+    },
+    {
+      "avatar_url": null,
+      "character": null,
+      "display_name": "디시험04",
+      "games": 1,
+      "id": "d0000000-0000-4000-8000-000000000004",
+      "rank": 2,
+      "wins": 0
+    },
+    {
+      "avatar_url": null,
+      "character": null,
+      "display_name": "디시험08",
+      "games": 1,
+      "id": "d0000000-0000-4000-8000-000000000008",
+      "rank": 2,
+      "wins": 0
+    }
+  ],
+  "server_now_ms": 1793341032225,
+  "status": "ok"
+}

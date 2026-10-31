@@ -170,6 +170,32 @@ import Testing
         }
     }
 
+    // MARK: - ①-b 데모 기기가 그 판을 둔다(한 판 한 기기 — 0.3.69)
+
+    @Test("진행 중 장면 넷의 상태로 코어가 **판을 세운다**(my_device 'this') — 끝난 장면 둘은 기록 없이도 결과가 선다")
+    @MainActor
+    func demoScenesAreMatchesThisDevicePlays() throws {
+        // 없으면: 코어가 '이 기기가 두는 판'에서만 구동기를 세우므로(코어 머리말 ⑩) my_device 가 없는 데모 상태는 판이
+        // 비어 스틸에 '다른 기기에서 대결 중이에요' 만 선다 — 데모 기기는 신청·수락을 한 적이 없다(기록이 없다).
+        for scene in Self.matchScenes {
+            let payload = try Self.state(scene)
+            let store = TetrisDuelStore()                      // 호스트 없음 = 로그인 기록 없음 = '이 기기가 연 판' 기록 없음
+            #expect(store.applyState(payload) == .applied, "\(scene.matchID): 상태를 못 옮겼다")
+            if scene.finished {
+                #expect(store.match?.isFinished == true && !store.playingElsewhere, "\(scene.matchID): 결과가 안 선다")
+            } else {
+                #expect(payload.myDevice == "this", "\(scene.matchID): my_device 가 \(payload.myDevice ?? "없음") 다")
+                #expect(store.duel != nil && !store.playingElsewhere,
+                        "\(scene.matchID): 데모 판에 구동기가 안 섰다 — 스틸이 빈 판(다른 기기 안내)이다")
+            }
+            store.reset()
+        }
+        // 수락 응답(데모 받은 신청 [수락])도 같은 판이다.
+        let accepted = try Self.action(rpc: "tetris_respond", matchID: "demo-tetris-ready", accept: true,
+                                       route: "games/tetris/lobby/invites")
+        #expect(accepted.state?.myDevice == "this", "수락 응답 상태가 이 기기의 판이라고 말하지 않는다")
+    }
+
     // MARK: - ② 판 글자판 200글자
 
     @Test("모든 board 가 정확히 200글자이고 글자가 .IJLOSTZG 뿐이다(서버 CHECK 와 같은 술어) · 디코드가 선다")

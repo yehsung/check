@@ -213,8 +213,9 @@ struct V0350MiniGameDuelEntryTests {
         // 없으면: 스토어의 문은 멀쩡한데 패널이 옛 배선(대결 창만 여는 클로저)을 그대로 불러, 위 시험이 전부
         //        초록인 채로 미니게임 창이 안 닫힌다.
         let panel = mdeStripped(try mdeSource("MiniGamePanel.swift"))
-        #expect(panel.contains("MiniGameGomokuEntryButton { onGomoku() }"), "머리글에 오목 입구 버튼이 없다")
-        #expect(panel.contains("MiniGameChessEntryButton { onChess() }"), "머리글에 체스 입구 버튼이 없다")
+        // v0.3.69 — 입구는 머리글이 아니라 왼쪽 사이드바에 선다(받은 신청 점을 함께 넘긴다).
+        #expect(panel.contains("MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }"), "사이드바에 오목 입구 버튼이 없다")
+        #expect(panel.contains("MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }"), "사이드바에 체스 입구 버튼이 없다")
         #expect(panel.contains("onGomoku: { store.openGomokuFromMiniGame() }"),
                 "오목 입구가 스토어의 문을 안 지난다 — 미니게임 창이 안 닫힌다")
         #expect(panel.contains("onChess: { store.openChessFromMiniGame() }"),

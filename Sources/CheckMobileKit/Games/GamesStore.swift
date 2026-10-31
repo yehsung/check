@@ -733,7 +733,9 @@ package final class GamesStore {
         // ★ `hasLiveTetrisMatch` 가 아니라 들고 있는 판을 본다: 서버가 말한 id(`activeMatchID`)만 알고 판을
         //   아직 못 읽은 상태에서 화면을 8분까지 켜 두면, 테트리스를 보고 있지도 않은 사람의 배터리를 태운다
         //   (체스도 `context.chess.match` 를 본다 — 같은 선례).
-        if let match = context.tetris.match, !match.isFinished { return true }
+        // ★ 같은 계정의 **다른 기기**가 두는 판(코어 `playingElsewhere` · 0.3.69)은 켜지 않는다 — 이 폰에는 판 루프도
+        //   보고도 없어 자동잠금이 닿아도 지는 사람이 없다. 켜 두면 남의 기기 판이 끝날 때까지(최대 8분) 배터리만 탄다.
+        if let match = context.tetris.match, !match.isFinished, !context.tetris.playingElsewhere { return true }
         guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished

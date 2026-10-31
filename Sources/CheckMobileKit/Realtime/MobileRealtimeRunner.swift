@@ -47,6 +47,8 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var gomoku: GomokuStore?
     /// 테트리스 대결 신호를 받을 스토어(앱 모델이 붙인다 — 오목 칸과 같은 꼴·같은 자리).
     @ObservationIgnored package weak var tetris: TetrisDuelStore?
+    /// 확성기 배너 신호(`megaphone`)를 받을 스토어(앱 모델이 붙인다 — 오목·테트리스 칸과 같은 꼴).
+    @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
 
     /// 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 테스트는 크게 두고 `flushCoalescedSignals()` 를 직접 부른다.
     /// 메시지 활동은 이 창의 **앞쪽**(조용하던 창의 첫 신호)을 곧바로 갚고 창 안의 나머지를 창 끝에 한 번 갚는다 —
@@ -185,6 +187,12 @@ package final class MobileRealtimeRunner {
         run(effects, now: instant)
     }
 
+    /// 배너 스토어가 `megaphone_inbox` 를 다시 읽는다(겹친 호출은 코어가 하나로 모은다). 새 항목이 있으면 배너가 뜨고 메시지함 필터 id 가 는다.
+    private func requestMegaphoneRefresh() {
+        guard let banner = megaphoneBanner else { return }
+        Task { @MainActor in await banner.refresh() }
+    }
+
     /// 주기 점검 1회(테스트는 직접 부른다).
     package func tick(at now: Date? = nil) {
         let instant = now ?? clock.now()
@@ -256,6 +264,16 @@ package final class MobileRealtimeRunner {
                 //   공격마다 울린다. `.drain` 으로 새면 그 울림마다 **메시지** 요약·이력 조회가 한 번씩 더 나간다 —
                 //   테트리스와 아무 상관 없는 조회다. 잇는 것과 따로 두는 것은 별개의 요구다.
                 tetris?.handleSignal()
+            case .rummySignal:
+                // 아잉 큐브(맥 0.3.69). 폰 판에서 잇는다 — 지금 폰은 서버 능력 협상으로 막혀 있어(rummy_capable)
+                // 초대·참가가 안 오므로 비워 둔다. ★ `.drain` 으로 떨어뜨리면 안 되는 까닭은 체스 가지와 같다:
+                // 같은 계정의 맥이 판을 하는 동안 작업 판 초인종이 끌기마다 울리고, 새면 그때마다 메시지 조회가 한 번씩 더 나간다.
+                break
+            case .megaphoneSignal:
+                // 확성기 배너 신호(2026-10-30 — 서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보낸다, 계약 S2-3).
+                // 배너 목록만 다시 읽는다. `.drain` 으로 떨어뜨리지 않는 까닭은 위 체스 가지 ③과 같다 — 같은 확성기의
+                // `poke_ring` 이 이미 메시지 활동을 깨웠으므로 메시지 조회가 한 번 더 나갈 뿐이다.
+                requestMegaphoneRefresh()
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

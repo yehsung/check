@@ -45,6 +45,10 @@ package nonisolated enum TetrisRPCStatus: String, Equatable, Hashable, Sendable,
     /// 보고 seq 가 서버 저장값 이하이거나 판이 active 가 아니다. **쓰지 않았고** `state` 는 실려 온다 —
     /// 클라가 할 일은 그 상태를 옮기고 seq 를 따라잡는 것 하나다.
     case stale
+    /// 보고·기권이 **이 판을 연 기기의 것이 아니다**(서버 20261103124000 — 한 판 한 기기). 같은 계정의 다른 기기가 신청·수락한
+    /// 판이거나, 보낸 누계(지운 줄·공격)가 서버 값보다 뒤로 갔다. 서버는 **쓰지도 정산하지도 않았고** `state` 는 실려 온다.
+    /// 클라는 판 루프를 멈추고 그 판에서 물러난다(`yieldMatchToOtherDevice`). 옛 코어(≤ 0.3.68)는 `.unknown` 으로 접는다.
+    case otherDevice = "other_device"
     case unknown
 
     package init(from decoder: any Decoder) throws {
@@ -227,6 +231,9 @@ package struct TetrisStatePayload: Decodable, Equatable, Sendable {
     package var rubyBalance: Int?
     /// 지금 **내 판**을 보고 있는 사람 수(v0.3.64 — 빌더 `tetris__state` 가 싣는다). 옛 서버엔 없다 → nil → 0.
     package var watchers: Int?
+    /// 이 판의 내 자리를 **이 기기가** 두는가(서버 20261103124000 — 부르는 토큰의 로그인 세션을 그 자리를 연 세션과 견준다).
+    /// 'this' | 'other' | nil. nil 은 "모른다" 다(옛 서버 · 기록 없는 판 · 세션 없는 토큰) — 스토어가 '이 기기가 연 판' 기록으로 가른다.
+    package var myDevice: String?
 }
 
 /// 쓰기·조회 공용 응답(challenge · cancel · respond · report · state · resign).

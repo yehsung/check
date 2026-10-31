@@ -383,6 +383,30 @@ import Testing
         #expect(code.contains("exclamationmark.triangle.fill"), "경고에 눈에 걸리는 기호가 없다")
     }
 
+    @Test("다른 기기가 두는 판(0.3.69): 판 화면이 코어 값을 표에 넘기고, 덮개가 기다림 카드보다 먼저 그 사실 카드를 고른다")
+    func theOtherDeviceCardWinsOverTheWaitingCard() throws {
+        // 없으면: 표가 참을 말해도 뷰가 값을 안 넘기거나(기본값 false) `case .waiting:` 가 먼저 걸려 "앱을 켜 둔 채
+        // 기다려 주세요" 카드가 그대로 선다 — 판을 두지 않는 폰이 기다리라는 거짓 안내를 띄운다.
+        let code = try IntegrationContractTests.code(Self.matchPath)
+        #expect(code.contains("playingElsewhere: tetris.playingElsewhere"), "판 화면이 코어 playingElsewhere 를 표에 안 넘긴다")
+        let elsewhere = try #require(code.range(of: "case .waiting where chrome.playingElsewhere:"),
+                                     "덮개에 다른 기기 갈래가 없다")
+        let waiting = try #require(code.range(of: "case .waiting:"))
+        #expect(elsewhere.lowerBound < waiting.lowerBound, "기다림 갈래가 먼저 걸린다 — 다른 기기 카드가 안 선다")
+        let branch = String(code[elsewhere.upperBound..<waiting.lowerBound])
+        #expect(branch.contains("TetrisDuelNoticeText.otherDevice") && branch.contains("TetrisPhoneText.otherDeviceSubtitle")
+                    && branch.contains("TetrisPhoneText.otherDeviceAction"), "다른 기기 카드가 그 사실을 말하지 않는다")
+        #expect(!branch.contains("waitingAction") && !branch.contains("waitingTitle"), "다른 기기 카드가 기다리라고 한다")
+        // 표 쪽: 끝난 판에서는 '다른 기기' 가 아니다(결과 카드가 말한다).
+        let store = playingStore(game: Self.freeGame())
+        store.phase = .ready
+        let closed = GamesTetrisDuelChrome(match: Self.match(finished: true, outcome: .lost, reason: .topout, delta: -5),
+                                           phase: store.phase, myStats: nil, notice: TetrisDuelNoticeText.otherDevice,
+                                           connectionTrouble: false, playingElsewhere: true)
+        #expect(closed.stage == .finished && !closed.playingElsewhere && closed.result != nil)
+        #expect(closed.notice == TetrisDuelNoticeText.otherDevice, "끝난 판의 안내 줄을 표가 지웠다")
+    }
+
     @Test("판을 멈추거나 시계를 되감는 길이 **없다**(D10) · 따라잡기 상한은 코어가 30초로 쥔다")
     func theBoardNeverPausesOrRewinds() throws {
         let code = try IntegrationContractTests.code(Self.matchPath)

@@ -24,6 +24,8 @@ struct CheckMenuView: View {
     var previewUpdateBanner: Bool = false
     // 스냅샷 전용: 배너에 얹을 패치노트 줄을 강제로 주입한다. 앱에서는 updateCheck?.latestNotes(릴리스 노트 파싱본)만 쓴다.
     var previewUpdateNotes: [String] = []
+    /// 스냅샷 전용: 업데이트 배너가 아잉 큐브 판 중 확인을 띄운 장면.
+    var previewRummyUpdatePrompt: RummyUpdateDecision? = nil
     // 스냅샷 전용: 하위 패널의 TextEditor/TextField 를 순수 SwiftUI 로 바꿔 그린다.
     // ImageRenderer 는 AppKit 을 감싼 뷰를 **노란 상자**로 그리므로, 그대로 두면 대화·제보 스냅샷에서
     // 입력칸 자리가 통째로 눈먼 자리가 된다(이 저장소가 그런 자리에서 색 결함을 8일간 놓쳤다). 앱은 항상 false.
@@ -40,6 +42,8 @@ struct CheckMenuView: View {
     var previewChessInvite: ChessInvite? = nil
     /// 스냅샷 전용: 받은 **테트리스** 신청 배너(v0.3.60)를 강제로 그린다. 앱에서는 store.tetris.visibleIncoming 로만 결정.
     var previewTetrisInvite: TetrisDuelInvite? = nil
+    /// 스냅샷 전용: 받은 **아잉 큐브** 초대 배너(v0.3.69)를 강제로 그린다. 앱에서는 store.rummy.incomingInvites 로만 결정.
+    var previewRummyInvite: RummyRoom? = nil
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
@@ -75,6 +79,9 @@ struct CheckMenuView: View {
         /// 받은 **테트리스** 대결 신청(v0.3.60). 체스 신청과 같은 급함(TTL 60초 · 판돈 루비)이라 체스 바로 뒤다 —
         /// 둘이 동시에 오면 먼저 선 쪽이 이기고 테트리스는 다음 팝오버로 밀린다(신청은 서버에 남아 창 로비에서 다시 보인다).
         case tetrisInvite
+        /// 받은 **아잉 큐브** 초대(v0.3.69). 사람(방장)이 기다리는 요청이지만 방 TTL 이 10분이라 60초짜리 1:1 신청보다
+        /// 덜 급하다 — 테트리스 바로 뒤다(밀려도 초대는 서버에 남아 큐브 창 로비에서 다시 보인다).
+        case rummyInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -109,6 +116,8 @@ struct CheckMenuView: View {
     static let chessInviteBannerHeight: CGFloat = 92
     /// 받은 테트리스 신청 배너(v0.3.60). `TetrisDuelInviteBanner` 는 체스 배너와 **같은 모양**이라 높이도 같다.
     static let tetrisInviteBannerHeight: CGFloat = 92
+    /// 받은 아잉 큐브 초대 배너(v0.3.69). `RummyInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
+    static let rummyInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -252,6 +261,42 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 팝오버에 띄울 받은 **아잉 큐브** 초대(없으면 nil). 테트리스와 같은 규약: **스토어가 만료·차단을 걷은 목록만** 읽는다.
+    private var rummyBannerInvite: RummyRoom? {
+        previewRummyInvite ?? store.rummy.incomingInvites.first
+    }
+
+    /// 배너 [참가]: 서버 참가 → 큐브 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 닫기는 이 한 곳에서만).
+    /// 참가 결과(방이 찼다 · 루비가 모자라다 …)는 스토어 문구가 창에서 말한다.
+    private func joinRummyInvite(_ room: RummyRoom) {
+        let rummy = store.rummy
+        rummy.join(room.id)
+        rummy.openWindow(focusMatchID: room.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    private func declineRummyInvite(_ room: RummyRoom) {
+        store.rummy.decline(room.id)
+    }
+
+    private func openRummyInvite(_ room: RummyRoom) {
+        store.rummy.openWindow(focusMatchID: room.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 아잉 큐브 초대 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var rummyInviteBanner: some View {
+        if topBanner == .rummyInvite, let room = rummyBannerInvite {
+            RummyInviteBanner(
+                room: room,
+                onJoin: { joinRummyInvite(room) },
+                onDecline: { declineRummyInvite(room) },
+                onOpen: { openRummyInvite(room) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -272,6 +317,7 @@ struct CheckMenuView: View {
         if store.isSignedIn, gomokuBannerInvite != nil { return .gomokuInvite }
         if store.isSignedIn, chessBannerInvite != nil { return .chessInvite }
         if store.isSignedIn, tetrisBannerInvite != nil { return .tetrisInvite }
+        if store.isSignedIn, rummyBannerInvite != nil { return .rummyInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -291,6 +337,7 @@ struct CheckMenuView: View {
         case .gomokuInvite: return Self.gomokuInviteBannerHeight
         case .chessInvite: return Self.chessInviteBannerHeight
         case .tetrisInvite: return Self.tetrisInviteBannerHeight
+        case .rummyInvite: return Self.rummyInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -472,7 +519,8 @@ struct CheckMenuView: View {
             // 맥 앱스토어 판(v0.3.51)에는 배너 자체가 없다 — 업데이트는 앱스토어가 한다(`UpdateBanner` 정의 주석).
             #if !CHECK_MAS
             if topBanner == .update {
-                UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes)
+                UpdateBanner(versionText: updateBannerVersionText, notes: updateBannerNotes, rummy: store.rummy,
+                             rummyGate: RummyUpdateGate(previewPending: previewRummyUpdatePrompt))
             }
             #endif
             // 같은 슬롯의 서버 공지 카드(v0.3.40). 업데이트 배너와 **같은 자리, 같은 "한 번에 하나" 예산**이라 둘이 함께 서는 일은
@@ -542,6 +590,7 @@ struct CheckMenuView: View {
                     gomokuInviteBanner
                     chessInviteBanner
                     tetrisInviteBanner
+                    rummyInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -570,6 +619,8 @@ struct CheckMenuView: View {
                     chessInviteBanner
                     // 받은 테트리스 신청도 **같은 자리**(v0.3.60 — 체스와 같은 사정).
                     tetrisInviteBanner
+                    // 받은 아잉 큐브 초대도 **같은 자리**(v0.3.69 — 테트리스와 같은 사정).
+                    rummyInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -972,7 +1023,7 @@ struct CheckMenuSideRail: View {
             CheckMenuRailButton(
                 icon: "gamecontroller.fill",
                 label: "미니게임",
-                help: "미니게임 — 타이밍 바 · 플래피 아잉",
+                help: "미니게임 — 혼자 하기 4종 · 같이 하기 4종",
                 isActive: store.isMiniGamePanelVisible
             ) {
                 store.openMiniGameWindow()
@@ -1232,11 +1283,15 @@ struct MenuBarStatusLabel: View {
     /// 받은 **테트리스** 신청이 있다(v0.3.60). 체스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
     var hasTetrisInvite: Bool = false
 
+    /// 받은 **아잉 큐브** 초대가 있다(v0.3.69). 테트리스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
+    var hasRummyInvite: Bool = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
-            openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite
+            openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite,
+            rummyInvite: hasRummyInvite
         )
     }
 
@@ -1367,15 +1422,18 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var chessInvite: Bool = false
     /// 받은 테트리스 신청이 있다(v0.3.60). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var tetrisInvite: Bool = false
+    /// 받은 아잉 큐브 초대가 있다(v0.3.69). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var rummyInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
     static let chessInviteText = "체스 신청"
     static let tetrisInviteText = "테트리스 신청"
+    static let rummyInviteText = RummyInviteText.dotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
-        !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !updateAvailable && !openReports
+        !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !updateAvailable && !openReports
     }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
@@ -1387,6 +1445,8 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if chessInvite { parts.append(Self.chessInviteText) }
         // 테트리스 신청도 같은 급함이라 체스 바로 뒤다.
         if tetrisInvite { parts.append(Self.tetrisInviteText) }
+        // 아잉 큐브 초대는 방 TTL 이 10분이라 1:1 신청들 뒤다.
+        if rummyInvite { parts.append(Self.rummyInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }
@@ -1412,14 +1472,21 @@ private struct UpdateBanner: View {
     let versionText: String
     /// 이번 버전 패치노트(평문 줄, 최대 4). 비어 있으면 노트 줄 없이 예전 모습 그대로 그린다.
     let notes: [String]
+    /// 아잉 큐브 스토어(§6 후속). 이 맥이 쥔 판·방 중이면 [지금 업데이트]가 먼저 묻는다 — 업데이트는 앱을 끄고 새로 켠다.
+    let rummy: RummyStore?
     // runner 는 이 배너가 소유한다(AppDelegate 배선 불요). 테스트는 상태/스폰을 주입한 runner 를 넘겨 검증한다.
     @State private var runner: UpdateRunner
     @State private var copied = false
+    /// 판 중 업데이트 확인(`RummyUpdateGate` — 판단·이탈·다시 묻기는 거기 있다).
+    @State private var rummyGate: RummyUpdateGate
 
-    init(versionText: String, notes: [String] = [], runner: UpdateRunner = UpdateRunner()) {
+    init(versionText: String, notes: [String] = [], runner: UpdateRunner = UpdateRunner(), rummy: RummyStore? = nil,
+         rummyGate: RummyUpdateGate = RummyUpdateGate()) {
         self.versionText = versionText
         self.notes = notes
+        self.rummy = rummy
         _runner = State(initialValue: runner)
+        _rummyGate = State(initialValue: rummyGate)
     }
 
     // 실행 실패/미탐지 시에만 폴백 안내를 띄운다(정상 경로는 군더더기 없이 두 버튼만).
@@ -1510,22 +1577,29 @@ private struct UpdateBanner: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+            if let pending = rummyGate.pending {
+                // 이 맥이 쥔 아잉 큐브 판·방 중 — 버튼 줄 대신 확인(승인 = 이탈 후 기존 업데이트, 취소 = 아무것도 안 함).
+                RummyUpdateConfirmRow(decision: pending, onConfirm: { rummyGate.confirm() },
+                                      onCancel: { rummyGate.cancel() })
+            } else {
             HStack(spacing: 8) {
                 // [지금 업데이트] — 원클릭(accent fill). running 중엔 "업데이트 중…"으로 바뀌고 비활성.
+                // 판 중이면 먼저 묻는다(`RummyUpdateGate.request` — 쥔 판·방이 없거나 놀던 맥이면 곧바로 업데이트).
                 Button {
                     copied = false
-                    runner.runUpgrade()
+                    rummyGate.request(store: rummy) { runner.runUpgrade() }
                 } label: {
-                    Text(runner.status == .running ? "업데이트 중…" : "지금 업데이트")
+                    Text(runner.status == .running ? "업데이트 중…"
+                         : rummyGate.isLeaving ? RummyUpdateText.leaving : "지금 업데이트")
                         .font(.caption2.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(maxWidth: .infinity)
                         .frame(height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(CheckTheme.accent))
-                        .opacity(runner.status == .running ? 0.7 : 1)
+                        .opacity(runner.status == .running || rummyGate.isLeaving ? 0.7 : 1)
                 }
                 .buttonStyle(.plain)
-                .disabled(runner.status == .running)
+                .disabled(runner.status == .running || rummyGate.isLeaving)
 
                 // 폴백 — brew 는 명령 복사(복사 후 "복사됨"으로 토글), 직접 설치는 DMG 주소를 브라우저로 연다.
                 // 직접 설치한 사람에게 brew 명령을 복사해 주면 붙여넣어도 똑같이 실패한다(그게 예전 모습이다).
@@ -1550,6 +1624,7 @@ private struct UpdateBanner: View {
                         )
                 }
                 .buttonStyle(.plain)
+            }
             }
             if let fallbackHint {
                 Text(fallbackHint)
@@ -5583,7 +5658,8 @@ private struct FooterBar: View {
                 store.refreshFromFooterButton()
             }
             IconButton(icon: "rectangle.portrait.and.arrow.right", help: "로그아웃") {
-                store.signOut()
+                // 아잉 큐브 판·방 중이면 나가기(기권)를 먼저 서버에 알린다(최대 2초 — `RummyExitFlow.swift`).
+                store.signOutLeavingRummy()
             }
             // 전원 버튼: **그냥 버튼이다.** v0.2.17 이 '로그인 시 자동 실행' 토글을 숨길 자리를 찾다가 이 자리를
             // Menu 로 바꿨는데, 딸려온 대가가 셋이었다:

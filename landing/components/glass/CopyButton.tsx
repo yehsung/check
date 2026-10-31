@@ -22,6 +22,8 @@ export interface CopyButtonProps {
   icon?: boolean;
   onFail?: () => void;
   className?: string;
+  /** 데이터 표식(측정용 data-cta — 예: 설치 선택 창의 'chooser-brew') */
+  dataCta?: string;
 }
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(' ');
@@ -72,6 +74,7 @@ export function CopyButton({
   icon = variant === 'chip',
   onFail,
   className,
+  dataCta,
 }: CopyButtonProps) {
   // 0 = 평상시, n > 0 = n 번째 복사 직후(다시 누르면 2초가 다시 시작된다)
   const [copiedAt, setCopiedAt] = useState(0);
@@ -105,7 +108,15 @@ export function CopyButton({
 
   const copied = copiedAt > 0;
   return (
-    <button ref={btnRef} type="button" aria-label={ariaLabel} onClick={onClick} data-copied={copied ? '' : undefined} className={cx(VARIANT[variant], className)}>
+    <button
+      ref={btnRef}
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      data-copied={copied ? '' : undefined}
+      data-cta={dataCta}
+      className={cx(VARIANT[variant], className)}
+    >
       {icon && <CopyIcon done={copied} />}
       <span className="grid justify-items-center">
         <span className={cx('col-start-1 row-start-1', copied && 'invisible')}>{label}</span>

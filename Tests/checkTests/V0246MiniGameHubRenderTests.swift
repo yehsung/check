@@ -37,8 +37,9 @@ enum MiniGameSnapshots {
 @MainActor
 private var mgCanvasRect: CGRect {
     CGRect(
-        x: MiniGameWindowLayout.contentPadding,
-        y: MiniGameWindowLayout.contentPadding + MiniGameWindowLayout.headerHeight + MiniGameWindowLayout.headerSpacing,
+        // v0.3.69 — 왼쪽 사이드바만큼 밀렸다(`gameColumnOrigin`).
+        x: MiniGameWindowLayout.gameColumnOrigin.x,
+        y: MiniGameWindowLayout.gameColumnOrigin.y + MiniGameWindowLayout.headerHeight + MiniGameWindowLayout.headerSpacing,
         width: MiniGameWindowLayout.canvasSize.width,
         height: MiniGameWindowLayout.canvasSize.height
     )
@@ -193,7 +194,7 @@ func theTopThreeBadgesAreVisiblyDifferentFromEachOtherAndFromTheRest() throws {
     defer { MiniGameSpaceKey.remove() }
     let bitmap = try mgWindowBitmap(mgPanelStore(rows: 6, includeMe: false, winner: false))
     // 행 y(pt): 본문 윗변에서 (rowHeight + rowSpacing) 간격. 배지는 행 왼쪽 끝(패딩 5 + 반지름 11).
-    let badgeX = MiniGameWindowLayout.contentPadding + MiniGameWindowLayout.canvasSize.width
+    let badgeX = MiniGameWindowLayout.gameColumnOrigin.x + MiniGameWindowLayout.canvasSize.width
         + MiniGameWindowLayout.columnSpacing + 5 + 11
     func badgeColor(rank: Int) -> (Int, Int, Int) {
         let top = mgCanvasRect.minY + CGFloat(rank - 1) * (MiniGameWindowLayout.rowHeight + MiniGameWindowLayout.rowSpacing)

@@ -904,10 +904,15 @@ final class UpdateRunner {
     /// 다음 실행이면 사라진다 — 사용자는 업데이트가 됐다고 믿지만 아무것도 바뀌지 않는다.
     /// DMG 배포에서 가장 흔한 사용 오류가 '끌어놓지 않고 바로 두 번 클릭' 이므로 이 판정이 실제로 자주 걸린다.
     var isRunningFromReadOnlyLocation: Bool {
-        let p = destinationPath
-        return p.hasPrefix("/Volumes/")
-            || p.contains("/AppTranslocation/")
-            || p.hasPrefix("/private/var/folders/")
+        Self.isReadOnlyLocation(destinationPath)
+    }
+
+    /// 그 자리가 DMG 안·App Translocation·임시 폴더인가(순수 판정 — 위 속성의 본체). 하나만 실행 판정(`SingleInstanceGuard`)도
+    /// 이 규칙을 그대로 쓴다: 두 사본이 함께 뜨면 **이 판정이 참인 쪽**을 끝낸다(남겨 두면 업데이트가 막히는 쪽이라서).
+    nonisolated static func isReadOnlyLocation(_ path: String) -> Bool {
+        path.hasPrefix("/Volumes/")
+            || path.contains("/AppTranslocation/")
+            || path.hasPrefix("/private/var/folders/")
     }
 
     /// 원클릭 업데이트. 출처에 따라 갈린다.

@@ -347,14 +347,19 @@ final class WorkTimerStore {
             // v0.3.30 부터 근무 밖에서도 신청이 오므로 팝오버 배너·메뉴바 점의 신선도가 이 한 줄에 기댄다.
             gomoku.refreshInboxIfStale()
             // 체스 받은 신청도 같은 자리에서 본다(v0.3.44). 체스 폴링은 **창이 보일 때만** 돌고 창을 여는 길은
-            // 미니게임 머리글 하나뿐이라, 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
+            // 미니게임 창의 문(v0.3.69 부터 사이드바) 하나뿐이라, 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
             chess.refreshLobbyIfStale()
             // 1:1 테트리스 받은 신청도 같은 자리에서 본다(v0.3.60). 폴링이 창이 보일 때만 도는 것도 체스와 같아서, 창을 안 연
             // 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
             tetris.refreshLobbyIfStale()
+            // 아잉 큐브 받은 초대도 같은 자리에서 본다(v0.3.69) — 폴링이 창이 보일 때만 도는 것도 같아서, 창을 안 연 사람에게는
+            // 이 한 줄과 소켓 신호가 초대를 아는 전부다(공개 방 목록도 이 한 번으로 신선해진다).
+            rummy.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
+            // 확성기 배너의 예비 경로(2026-10-30) — 소켓이 끊겨 'megaphone' 신호를 놓쳐도 여는 순간 60초 스로틀로 한 번 맞춘다.
+            refreshMegaphoneBannerIfStale()
             // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
             // 도착하면 그 응답 자리에서 한 번 더 판정한다).
             evaluateMessageReadMarking()
@@ -688,7 +693,14 @@ final class WorkTimerStore {
     /// **진행 중인 판의 장부**(v0.3.67) — 어느 게임의 판이 돌고 있고 지금 몇 점이며, 이미 기록했는가.
     /// 판을 접는 자리(게임 칩 전환 · 창 닫기 · 로그아웃 · [그만두기])가 잎 뷰의 생사와 무관하게 그 점수를 **바로** 올린다
     /// (`settleMiniGameLiveRound`). 잎 뷰가 늦게 `onFinished` 를 불러도 장부가 두 번 올리지 않는다.
-    @ObservationIgnored var miniGameLiveRound: MiniGameLiveRound?
+    @ObservationIgnored var miniGameLiveRound: MiniGameLiveRound? {
+        didSet {
+            // 판이 열리고 닫히는 순간 확성기 배너의 미룸이 바뀐다(이 장부는 관찰 밖이라 배너 창이 못 본다 — 여기서 알린다).
+            let wasLive = oldValue.map { !$0.settled } ?? false
+            let isLive = miniGameLiveRound.map { !$0.settled } ?? false
+            if wasLive != isLive { megaphoneBannerDeferralMayHaveChanged() }
+        }
+    }
     /// 내 미니게임 순위 공개 여부(profiles.minigame_public 미러). 끄면 순위표에서 빠지고 업로드도 건너뛴다.
     var miniGamePublic = true
     /// 서버값 도착 또는 사용자가 직접 골랐음(tokenUsagePublicLoaded 와 같은 규약 — 폴링 GET 이 선택을 덮지 않게).
@@ -936,6 +948,9 @@ final class WorkTimerStore {
     @ObservationIgnored var cakeGiftChecking = false
     /// 이 실행에서 스스로 띄운 선물 id(실행당 한 번 — 닫으면 다시 안 뜨고 '다시 열기' 카드가 남는다). 로그아웃해도 비우지 않는다(실행 단위다).
     @ObservationIgnored var cakeGiftAutoShownIDs: Set<String> = []
+    /// 지금 떠 있는 축하 창을 메뉴 팝오버의 [고르기] 로 열었는가(v0.3.69). 참이면 사용자가 창을 닫을 때 팝오버로 돌아간다 — 열 때 팝오버를
+    /// 닫았으므로(`openCakeGiftWindow`) 안 돌아가면 화면에 아무것도 안 남는다. 스스로 띄운 창은 거짓(사용자가 팝오버에서 온 것이 아니다).
+    @ObservationIgnored var cakeGiftReturnsToPopover = false
     /// 축하 창을 띄우고 내리는 문(테스트 이음새 — 앱은 `.live`, 곧 `CheckCakeGiftWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
 
@@ -1068,6 +1083,32 @@ final class WorkTimerStore {
     /// `retiredForAppStoreEdition` 을 앞당기지 않는 이유: 그 값은 AI 기록 읽기·업로드(`aiToolDataAllowed`)까지 꺼서
     /// 마무리 경로의 마지막 업로드를 막는다.
     @ObservationIgnored var retiringForAppStoreEdition = false
+    /// 같은 앱의 다른 실행에 양보·교체를 **기다리는 중**이다(v0.3.69 — 하나만 실행 · `SingleInstanceState`). 참이면 깨어남 처리와
+    /// 미니게임 인편이 아무것도 하지 않는다. 기다리는 실행은 배선 전이라 서버로 가는 길이 둘뿐이다 — init 이 단 깨어남 관찰과 앱 활성화
+    /// (활성화는 앱 쪽이 막는다). 둘 다 저장 세션을 쓰므로, 덮개를 여닫는 사이 이 실행이 갱신 토큰을 돌리면 남는 실행이 재사용으로
+    /// 읽혀 로그아웃된다. 물러남 표식을 빌리지 않는다 — 그 값은 '끝까지 아무것도 안 한다'(AI 기록까지 끈다)라 남게 되는 실행에서
+    /// 되돌릴 자리가 없다. 남기로 정해지면 `resumeAfterAnotherInstance()` 가 내린다.
+    @ObservationIgnored var awaitingAnotherInstance = false
+
+    /// 기다리던 실행이 남게 됐다(v0.3.69 — 상대가 마침 끝났다 · 읽기 전용 자리 사본을 끝냈다). 대기 표식을 내리고 저장 세션 · 근무 큐 ·
+    /// 기기 식별자를 **다시 읽는다** — init 은 상대가 끝나기 **전에** 읽었다. 상대는 끝나며 근무를 마무리해(최대 3초) 큐에 퇴근 항목을
+    /// 넣거나(오프라인) 토큰을 돌렸을 수 있다. 다시 읽지 않으면 메모리의 낡은 큐가 다음 변경 때 저장본을 통째로 덮어 그 항목이 사라지고
+    /// (`pendingItems` 는 바뀔 때마다 통째로 저장한다), 낡은 갱신 토큰은 재사용으로 읽혀 로그아웃된다. 처음 실행끼리 겹쳤으면 기기
+    /// 식별자도 디스크에 남은 쪽이 아닐 수 있다. 서버는 치지 않는다 — 시작 처리(세션 활성화)가 곧 이어진다.
+    func resumeAfterAnotherInstance() {
+        awaitingAnotherInstance = false
+        deviceID = Self.resolveDeviceID(defaults: defaults) ?? ""
+        let restoredSession = Self.restoredSession(from: defaults, vault: tokenVault)
+        let wasSignedIn = session != nil
+        session = restoredSession
+        workStateOwnerUserID = restoredSession?.userID
+        pendingItems = Self.restoredPendingWorkQueue(from: defaults)
+        // 사람이 바뀌었으면(상대에서 다른 계정으로 로그인) 손에 든 토큰 행은 남의 숫자다 — init 의 복원 규칙과 같다.
+        if let row = myTokenRow, row.userID != restoredSession?.userID { myTokenRow = nil }
+        if hasAnonKey, wasSignedIn != (restoredSession != nil) {
+            syncMessage = restoredSession == nil ? "로그인 필요" : "동기화됨"
+        }
+    }
     #endif
 
     /// 앱스토어 판의 **AI 도구 기록 읽기 동의**(설정 스위치가 그리는 값 — `AIToolDataConsent.key` 의 화면 사본).
@@ -1266,9 +1307,22 @@ final class WorkTimerStore {
     /// 판(엔진)도 이 스토어가 들고 단조 시계로 흘린다 — 창을 가리거나 최소화해도 판은 멈추지 않는다(설계 D10).
     let tetris: TetrisDuelStore
 
+    /// 아잉 큐브(2~4인) 스토어(v0.3.69). 오목·체스·테트리스와 **같은 호스트 프로토콜**을 요구한다(`RummyStoreHost = GomokuStoreHost`).
+    /// 턴제라 판은 서버 상태 스냅숏 그대로다 — 이 스토어는 차례 중 작업 판(편집기)만 로컬로 든다.
+    let rummy: RummyStore
+
     /// 확성기(📢 v0.3.51) 작성 스토어 — **폰과 같은 코어 스토어**다(`MegaphoneStore`). 이 스토어는 호스트(세션·루비 미러)만
     /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
     let megaphone: MegaphoneStore
+
+    /// 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로 띄우고, **메시지함 필터의 유일한 근거**(`hides(messageID:)`)를 쥔다.
+    /// 폰과 같은 코어 스토어다(`MegaphoneBannerStore`). 소유 규약은 `megaphone` 과 같다(약참조 호스트 · 로그아웃에 reset).
+    /// 맥 배선(필터 자리 · 실시간 · 예비 새로고침 · 본인 배너)은 `WorkTimerStoreMegaphoneBanner.swift`.
+    let megaphoneBanner: MegaphoneBannerStore
+    /// 배너 예비 새로고침(팝오버 열기 · 폴링 틱)의 60초 스로틀 장부. 실시간 신호·판정 보류는 이 스로틀을 지나지 않는다.
+    @ObservationIgnored var megaphoneBannerLastRefreshAt: Date = .distantPast
+    /// 배너 미룸의 마지막 값(바뀐 때만 `deferralChanged()` 를 부른다 — `megaphoneBannerDeferralMayHaveChanged`).
+    @ObservationIgnored var megaphoneBannerLastDeferred = false
 
     /// 미션 보상 연출 싱크. onReactionTrigger 와 **따로 둔 이유**: 그쪽은 `shouldBeVisible` 게이트를 지나므로
     /// 캐릭터를 숨긴 사용자에게는 아무것도 안 뜬다. 보상은 서버가 재화를 이미 올렸고 되돌릴 수 없으므로
@@ -1613,6 +1667,9 @@ final class WorkTimerStore {
             if chess.hiddenPeerIDs != blockHiddenPeerIDs { chess.hiddenPeerIDs = blockHiddenPeerIDs }
             // 테트리스도 같은 관계다(v0.3.60) — 차단한 사람이 로비·받은 신청·배너에 남지 않게.
             if tetris.hiddenPeerIDs != blockHiddenPeerIDs { tetris.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 아잉 큐브도 같은 관계다(v0.3.69) — 차단한 사람이 로비·공개 방·받은 초대·배너에 남지 않게. 스토어는 UUID 로 받는다
+            // (같음 가드는 스토어 안에 있다).
+            rummy.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
         }
     }
     /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
@@ -1933,8 +1990,12 @@ final class WorkTimerStore {
         self.chess = ChessStore()
         // 테트리스도 같다(v0.3.60) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.tetris = TetrisDuelStore()
+        // 아잉 큐브도 같다(v0.3.69) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.rummy = RummyStore()
         // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.megaphone = MegaphoneStore()
+        // 확성기 배너도 같다(2026-10-30). 본 것 기록은 이 앱의 defaults 에 둔다(시험은 격리 스위트).
+        self.megaphoneBanner = MegaphoneBannerStore(defaults: defaults)
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -1993,12 +2054,24 @@ final class WorkTimerStore {
         gomoku.attach(host: self)
         chess.attach(host: self)
         tetris.attach(host: self)
+        rummy.attach(host: self)
+        // v0.3.69: '이 기기가 연 판' 기록(한 판 한 기기 — TetrisDuelStore 머리말 ⑩)을 이 앱의 defaults 에 둔다. 빠지면 기록이
+        // 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 침묵 패를 한다.
+        tetris.defaults = defaults
         // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
         // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
         gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }
         chess.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "chess") }
         tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
+        rummy.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "rummy") }
         megaphone.attach(host: self)
+        megaphoneBanner.attach(host: self)
+        // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).
+        megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
+        // 보낸 사람 본인에게도 보낸 직후 자기 배너를 한 번(서버 fan-out 에는 본인이 없다 — 계약 C2).
+        megaphone.onSent = { [weak self] body, megaphoneID in
+            self?.presentOwnMegaphoneBanner(body: body, megaphoneID: megaphoneID)
+        }
     }
 
     /// 잠자기/깨어남 노티를 구독한다. 클로저는 [weak self]로 스토어 수명을 넘겨 자동 무력화되므로
@@ -2281,6 +2354,8 @@ final class WorkTimerStore {
         #if !CHECK_MAS
         // 물러난 실행(v0.3.53)은 깨어나도 아무것도 하지 않는다 — 재연결·미니게임 인편·집중 모드 만료 PATCH 가 전부 서버를 친다.
         guard !retiredForAppStoreEdition else { return }
+        // 다른 실행에 양보·교체를 기다리는 실행(v0.3.69)도 같다 — 저장 세션으로 서버를 치면 남는 실행과 갱신 토큰을 나눠 돌린다.
+        guard !awaitingAnotherInstance else { return }
         #endif
         // ⚠️ **맨 앞이다.** 아래로는 조기 리턴 가지가 셋(sleepBeganAt nil / 유예 이내 / 흡수 세션)이라
         //    뒤에 붙이면 실제 경로 대부분에서 재연결이 안 돈다 = 뚜껑을 열어도 찌르기가 영영 안 온다.
@@ -3417,6 +3492,8 @@ final class WorkTimerStore {
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
+                // 확성기 배너의 예비 경로(2026-10-30) — 폴링 틱마다 60초 스로틀로(실시간 신호를 놓친 맥이 다음 틱에 따라잡는다).
+                self?.refreshMegaphoneBannerIfStale()
                 // 내 월간 토큰 사용량을 변경 게이트+60초 스로틀로 서버에 올린다(팀원 보드 최신화). 대부분 게이트에서 즉시 반환.
                 // 팝오버가 **열려 있으면** 스캔의 소유자는 뷰 루프(CheckMenuView 의 runRefreshLoop)이므로 여기서는
                 // 업로드만 한다. **닫혀 있으면** 그 뷰 루프가 없어 스캔 자체가 돌지 않는다 — 메뉴바를 안 여는 사람은
@@ -4139,8 +4216,12 @@ extension WorkTimerStore {
         // 테트리스도 같은 이유로 내린다(v0.3.60). 빠뜨리면 다음 사람이 앞 계정의 판·신청을 보고, 앞 계정의 판 루프가
         // 새 세션의 토큰으로 보고를 낸다(세대가 막지만 판 자체가 남는다).
         tetris.reset()
+        // 아잉 큐브도 같은 이유로 내린다(v0.3.69). 빠뜨리면 다음 사람이 앞 계정의 방·판·초대를 본다.
+        rummy.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
+        // 확성기 배너의 큐·필터 id·스로틀도 계정에 묶인다(2026-10-30). 남기면 앞 사람이 받은 확성기 id 로 다음 사람의 줄을 거른다.
+        resetMegaphoneBanner()
         // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
         resetGachaState()
         // 생일 선물(v0.3.66)도 계정에 묶인다 — 앞 사람의 선물 창 · 다시 열기 카드를 다음 사람이 보지 않게.
@@ -4281,7 +4362,9 @@ extension WorkTimerStore {
         gomoku.reset()
         chess.reset()
         tetris.reset()
+        rummy.reset()
         megaphone.reset()
+        resetMegaphoneBanner()
         resetGachaState()
         resetCakeGiftState()
         startedAt = nil

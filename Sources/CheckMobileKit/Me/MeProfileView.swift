@@ -9,6 +9,7 @@ import SwiftUI
 struct MeProfileView: View {
     let store: MeStore
     @State private var pickerItem: PhotosPickerItem?
+    @State private var confirmingAvatarRemoval = false
     @FocusState private var nameFocused: Bool
     @FocusState private var statusFocused: Bool
     /// 기본 글자 크기의 지름 — 큰 글자에서는 `AvatarView` 공용 규칙이 키운다.
@@ -23,7 +24,7 @@ struct MeProfileView: View {
                         AvatarView(name: store.displayName ?? "나", url: store.avatarURL, userID: store.myUserID, size: avatarSize)
                             .overlay {
                                 // 덮개는 아바타 자신의 틀을 따른다(글자 배율로 커진 지름과 같게).
-                                if store.isUploadingAvatar {
+                                if store.isUploadingAvatar || store.isRemovingAvatar {
                                     Circle().fill(Color.black.opacity(0.35))
                                     ProgressView().tint(.white)
                                 }
@@ -38,9 +39,18 @@ struct MeProfileView: View {
                             Label(pickerTitle, systemImage: "photo.on.rectangle")
                         }
                         .buttonStyle(AingButtonStyle(.tinted, size: .md))
-                        .disabled(store.isUploadingAvatar)
+                        .disabled(store.isUploadingAvatar || store.isRemovingAvatar)
+                        // 사진 지우기: 회색(채운 버튼은 [저장] 하나) · 누르면 확인을 받는다(되돌릴 수 없다). 맥 행과 같은 이유로
+                        // 사진 유무로 감추거나 잠그지 않는다(`MeStore.removeAvatar` 주석).
+                        AingButton(
+                            store.isRemovingAvatar ? AvatarRemovalText.inFlight : AvatarRemovalText.action,
+                            kind: .gray, size: .md, isBusy: store.isRemovingAvatar
+                        ) {
+                            confirmingAvatarRemoval = true
+                        }
+                        .disabled(store.isUploadingAvatar || store.isRemovingAvatar)
                         if let notice = store.avatarNotice {
-                            InlineNotice(text: notice, kind: store.isAvatarNoticeError ? .error : .info)
+                            InlineNotice(text: notice, kind: store.isAvatarNoticeError ? .error : (store.isAvatarNoticeWarning ? .warning : .info))
                         }
                     }
                     .frame(maxWidth: .infinity)
@@ -94,6 +104,14 @@ struct MeProfileView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { store.profileDidAppear() }
         .onDisappear { store.profileDidDisappear() }
+        .confirmationDialog(AvatarRemovalText.action, isPresented: $confirmingAvatarRemoval, titleVisibility: .visible) {
+            Button(AvatarRemovalText.confirm, role: .destructive) {
+                Task { await store.removeAvatar() }
+            }
+            Button(AvatarRemovalText.cancel, role: .cancel) {}
+        } message: {
+            Text(AvatarRemovalText.confirmDetail)
+        }
         .onChange(of: pickerItem) { _, item in
             guard let item else { return }
             pickerItem = nil

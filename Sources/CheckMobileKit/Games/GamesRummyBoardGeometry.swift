@@ -29,6 +29,33 @@ package struct GamesRummyMatchLayout: Equatable, Sendable {
 
     package var rackHeight: CGFloat { rackRows <= 2 ? Self.rackTwoRowsHeight : Self.rackThreeRowsHeight }
 
+    // MARK: 동작 줄 — 큰 글자
+
+    /// 글자 배율이 이 값을 넘으면 동작 줄을 두 줄로 나눈다([완료] 한 줄 · 나머지 셋 한 줄). 넘지 않는 동안은 글자가 칸에 맞춰 줄어든다.
+    package static let twoRowActionsAboveTextScale: CGFloat = 1.3
+    /// 버튼 위아래 · 줄 사이 틈.
+    package static let actionGap: CGFloat = 6
+
+    package static func actionRowCount(textScale: CGFloat) -> Int { textScale > twoRowActionsAboveTextScale ? 2 : 1 }
+
+    /// 버튼 한 줄 높이(44pt 아래로 안 내려간다 · 글자를 따라 커지되 판을 다 먹지 않게 64 에서 멈춘다).
+    package static func actionButtonHeight(textScale: CGFloat) -> CGFloat {
+        guard actionRowCount(textScale: textScale) == 2 else { return actionsHeight - actionGap - 2 }
+        return min(64, max(44, 40 * textScale))
+    }
+
+    /// 글자 배율 → 동작 줄 높이(`init(actionHeight:)` 에 그대로 넘긴다).
+    package static func actionHeight(textScale: CGFloat) -> CGFloat {
+        guard actionRowCount(textScale: textScale) == 2 else { return actionsHeight }
+        return actionButtonHeight(textScale: textScale) * 2 + actionGap * 3
+    }
+
+    /// 한 줄 동작 줄의 버튼 폭 넷([완료] · [뽑기|넘기기] · [되돌리기] · [777|789]). 합 + 틈 + 양옆 여백 = 칸 폭이라 어느 폭에서도 안 겹친다.
+    package static func actionWidths(total: CGFloat) -> (submit: CGFloat, draw: CGFloat, undo: CGFloat, sort: CGFloat) {
+        let room = max(0, total - actionGap * 5)
+        return (room * 0.36, room * 0.19, room * 0.21, room * 0.24)
+    }
+
     package var header: CGRect { CGRect(x: 0, y: 0, width: size.width, height: Self.headerHeight) }
     package var opponents: CGRect { CGRect(x: 0, y: header.maxY, width: size.width, height: Self.opponentsHeight) }
     package var actions: CGRect { CGRect(x: 0, y: size.height - actionHeight, width: size.width, height: actionHeight) }
@@ -215,6 +242,8 @@ package struct GamesRummyRackGeometry: Equatable, Sendable, RummyRackDropGeometr
     package static let minSideInset: CGFloat = 8
     package static let verticalPadding: CGFloat = 8
     package static let rowGap: CGFloat = 8
+    /// 줄 사이 틈의 하한(타일이 위아래로 닿지 않게).
+    package static let minRowGap: CGFloat = 2
 
     package let size: CGSize
     package let rowCount: Int
@@ -229,21 +258,26 @@ package struct GamesRummyRackGeometry: Equatable, Sendable, RummyRackDropGeometr
     /// 줄이 3개를 넘으면 타일을 줄인다(받침대 안 스크롤은 쓰지 않는다 — 맥 `tileScale` 과 같은 산식).
     package var tileScale: CGFloat { rowCount <= 3 ? 1 : 3 / CGFloat(rowCount) }
 
+    /// 칸 안에 담긴다: 폭으로 한 번 · 높이로 한 번 자른다(끄는 동안 미리보기가 새 줄을 열면 칸은 그대로라 타일이 줄어 담긴다 — 맥과 같은 선택).
     package var tileSize: CGSize {
         let room = max(1, size.width - Self.minSideInset * 2) / perRow
-        let width = min(Self.baseTile.width * tileScale, room)
-        return CGSize(width: width, height: width * Self.baseTile.height / Self.baseTile.width)
+        let rows = CGFloat(rowCount)
+        let heightRoom = max(1, (size.height - Self.verticalPadding * 2 - Self.minRowGap * (rows - 1)) / rows)
+        let aspect = Self.baseTile.height / Self.baseTile.width
+        let width = min(Self.baseTile.width * tileScale, room, heightRoom / aspect)
+        return CGSize(width: width, height: width * aspect)
     }
 
     package var dropTileWidth: CGFloat { tileSize.width }
     package var sideInset: CGFloat { max(Self.minSideInset, (size.width - tileSize.width * perRow) / 2) }
     package var halfPitch: CGFloat { tileSize.width / CGFloat(RummyRackLayout.tileSpan) }
 
-    /// 줄 위쪽. 칸 높이 안에 고르게(줄 사이 간격은 남는 높이에서 나온다).
+    /// 줄 위쪽. 줄 사이 틈은 남는 높이에서 나오되 `rowGap` 을 안 넘고, 묶음째 칸 세로 가운데에 선다(좁은 기기는 타일이 작아 틈만 벌어졌다 — 320 실화면).
     package func rowTop(_ row: Int) -> CGFloat {
         let rows = CGFloat(rowCount)
-        let gap = rowCount <= 1 ? 0 : max(0, (size.height - Self.verticalPadding * 2 - tileSize.height * rows) / (rows - 1))
-        return Self.verticalPadding + CGFloat(row) * (tileSize.height + gap)
+        let gap = rowCount <= 1 ? 0 : min(Self.rowGap, max(0, (size.height - Self.verticalPadding * 2 - tileSize.height * rows) / (rows - 1)))
+        let top = max(Self.verticalPadding, (size.height - tileSize.height * rows - gap * (rows - 1)) / 2)
+        return top + CGFloat(row) * (tileSize.height + gap)
     }
 
     package func rowCenter(_ row: Int) -> CGFloat { rowTop(row) + tileSize.height / 2 }
@@ -259,6 +293,18 @@ package struct GamesRummyRackGeometry: Equatable, Sendable, RummyRackDropGeometr
         let half = Int(((x - sideInset) / halfPitch).rounded())
         let row = (0..<rowCount).min { abs(rowCenter($0) - y) < abs(rowCenter($1) - y) } ?? 0
         return RummyRackSlot(row: row, halfCol: min(max(half, 0), maxHalf))
+    }
+
+    /// 받침대 타일의 뷰 키 — 면 글자 + 같은 면 순번(id 순). 차례가 바뀌어 편집기가 새 id 를 붙여도 같은 타일이 같은 뷰로 남는다(맥 `motionKeys` 와 같다).
+    package static func motionKeys(_ tiles: [RummyTile]) -> [Int: String] {
+        var seen: [String: Int] = [:]
+        var keys: [Int: String] = [:]
+        for tile in tiles.sorted(by: { $0.id < $1.id }) {
+            let n = seen[tile.face.text, default: 0]
+            seen[tile.face.text] = n + 1
+            keys[tile.id] = "\(tile.face.text)#\(n)"
+        }
+        return keys
     }
 }
 

@@ -1,5 +1,6 @@
 #if DEBUG
 import CheckCore
+import CoreGraphics
 import Foundation
 
 /// 데모 스크린샷 라우트 `games/rummy/…`(아잉 큐브 · 1.0.17)를 **값으로 푼 것**(DEBUG 전용).
@@ -15,6 +16,16 @@ import Foundation
 /// | `games/rummy/match/waiting`    | `_games-rummy-match-waiting`    | …c003         | 사람    | 남의 차례 · 작업 판 · 판 가득 |
 /// | `games/rummy/match/edited`     | `_games-rummy-match-edited`     | …c002         | 사람    | 내 차례 + 받침대에서 3장 낸 판 |
 /// | `games/rummy/match/elsewhere`  | `_games-rummy-match-elsewhere`  | …c002         | 사람    | 이 기기가 손대지 않은 판       |
+/// | `games/rummy/match/full`       | `_games-rummy-match-full`       | …c005         | 사람    | 내 차례 · 판 타일 84장 · 첫 등록 뒤 |
+/// | `games/rummy/match/overview`   | `_games-rummy-match-overview`   | …c005         | 사람    | 빽빽한 판을 [전체 보기]로      |
+/// | `games/rummy/match/many`       | `_games-rummy-match-many`       | …c006         | 사람    | 내 차례 · 받침대 24장(3줄) · 기권 자리 |
+/// | `games/rummy/match/narrow`     | `_games-rummy-match-narrow`     | …c002         | 사람    | 판 화면을 320×548 로 그린다(폭 시험) |
+/// | `games/rummy/match/dragging`   | `_games-rummy-match-dragging`   | …c005         | 사람    | 받침대 타일을 묶음 위에 끼우는 중(캐럿) |
+/// | `games/rummy/match/attach`     | `_games-rummy-match-attach`     | …c006         | 사람    | 받침대 타일을 묶음 끝 곁에 붙이는 중(자석) |
+/// | `games/rummy/match/placing`    | `_games-rummy-match-placing`    | …c002         | 사람    | 받침대 덩어리를 빈 펠트로 끄는 중 |
+/// | `games/rummy/match/refused`    | `_games-rummy-match-refused`    | …c005         | 사람    | 판 타일을 받침대로 끄는 중(R-14) |
+/// | `games/rummy/match/lifted`     | `_games-rummy-match-lifted`     | …c002         | 사람    | 받침대 덩어리를 꾹 눌러 든 순간 |
+/// | `games/rummy/match/handle`     | `_games-rummy-match-handle`     | …c002         | 사람    | 손잡이로 묶음을 옮기는 중      |
 /// | `games/rummy/result`           | (없음 — 바깥 층)                 | …c004         | 사람    | 끝난 판 · 판돈 5 · 4인         |
 ///
 /// 판 장면은 테트리스처럼 **두 길**로 같은 판을 연다: 장면 폴더의 로비 `me.active_match_id`(코어만으로 선다) + `focusMatchID`(`openWindow`). 같은 id 라 겹쳐도 멱등이다.
@@ -34,6 +45,16 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         case matchWaiting = "games/rummy/match/waiting"
         case matchEdited = "games/rummy/match/edited"
         case matchElsewhere = "games/rummy/match/elsewhere"
+        case matchFull = "games/rummy/match/full"
+        case matchOverview = "games/rummy/match/overview"
+        case matchMany = "games/rummy/match/many"
+        case matchNarrow = "games/rummy/match/narrow"
+        case matchDragging = "games/rummy/match/dragging"
+        case matchAttach = "games/rummy/match/attach"
+        case matchPlacing = "games/rummy/match/placing"
+        case matchRefused = "games/rummy/match/refused"
+        case matchLifted = "games/rummy/match/lifted"
+        case matchHandle = "games/rummy/match/handle"
         case result = "games/rummy/result"
 
         package var scenario: String { rawValue.replacingOccurrences(of: "/", with: "-") }
@@ -43,8 +64,11 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             switch self {
             case .lobby, .ranking, .rules: return nil
             case .room: return Self.roomID
-            case .matchMyTurn, .matchEdited, .matchElsewhere: return Self.myTurnID
+            case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchPlacing, .matchLifted, .matchHandle:
+                return Self.myTurnID
             case .matchWaiting: return Self.waitingID
+            case .matchFull, .matchOverview, .matchDragging, .matchRefused: return Self.fullID
+            case .matchMany, .matchAttach: return Self.manyID
             case .result: return Self.resultID
             }
         }
@@ -53,7 +77,9 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         package var engages: Bool {
             switch self {
             case .lobby, .ranking, .rules, .matchElsewhere: return false
-            case .room, .matchMyTurn, .matchWaiting, .matchEdited, .result: return true
+            case .room, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchDragging, .matchAttach,
+                 .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .result:
+                return true
             }
         }
 
@@ -63,7 +89,43 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         package static let myTurnID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c002")!
         package static let waitingID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c003")!
         package static let resultID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c004")!
+        package static let fullID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c005")!
+        package static let manyID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c006")!
     }
+
+    /// 끌기 도중 모습 장면이 밟을 손 궤적(값 — 놓지 않고 렌더만 한다. 끌기 판정 자체는 `GamesRummyMatchInputTests` 가 값으로 잰다).
+    package enum DemoTouch: Hashable, Sendable {
+        /// 받침대 타일을 꾹 눌러 들기만.
+        case lift(face: String)
+        /// 받침대 타일 한 장을 묶음 오른끝 위로.
+        case rackToMeld(face: String, meld: Int)
+        /// 받침대 타일 한 장을 빈 펠트(논리 좌표) 위로.
+        case rackToFelt(face: String, x: CGFloat, y: CGFloat)
+        /// 받침대 덩어리를 꾹 눌러 빈 펠트(논리 좌표) 위로.
+        case chainToFelt(face: String, x: CGFloat, y: CGFloat)
+        /// 판 타일을 받침대 위로(거절).
+        case boardToRack(face: String)
+        /// 손잡이로 묶음을 빈 펠트(논리 좌표) 위로.
+        case handle(set: Int, x: CGFloat, y: CGFloat)
+    }
+
+    package var demoTouch: DemoTouch? {
+        switch scene {
+        case .matchDragging: return .rackToMeld(face: "A9", meld: 0)
+        case .matchAttach: return .rackToFelt(face: "A13", x: 408, y: 68)
+        case .matchPlacing: return .chainToFelt(face: "A11", x: 120, y: 300)
+        case .matchRefused: return .boardToRack(face: "A6")
+        case .matchLifted: return .lift(face: "A11")
+        case .matchHandle: return .handle(set: 0, x: 120, y: 330)
+        default: return nil
+        }
+    }
+
+    /// 처음부터 [전체 보기]로 연다.
+    package var demoFullView: Bool { scene == .matchOverview }
+
+    /// 판 화면을 이 크기로 그린다(폭 320 기기가 시뮬레이터에 없어 그 칸을 눈으로 보는 자리).
+    package var demoSize: CGSize? { scene == .matchNarrow ? CGSize(width: 320, height: 548) : nil }
 
     package enum LobbyTab: String, Hashable, Sendable { case people, ranking }
 

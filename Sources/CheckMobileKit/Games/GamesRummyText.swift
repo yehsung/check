@@ -170,6 +170,18 @@ package enum GamesRummyText {
         }
     }
 
+    /// 내 자리가 기권·끝난 뒤 남의 판을 보는 동안의 상태 줄.
+    package static let spectating = "기권한 판을 보고 있어요"
+    /// 보이스오버 — 끌기 대안(타일 고르기 → 판에 놓기)은 이번 판 범위 밖이다. 라벨만 읽어 준다.
+    package static let leaveHint = "판을 나가요. 판 중이면 기권돼요."
+    package static let sortNumberName = "같은 숫자끼리 정렬"
+    package static let sortColorName = "색별로 이어지게 정렬"
+    package static func boardSummary(melds: Int, tiles: Int) -> String { "판 묶음 \(melds)개, 타일 \(tiles)장" }
+    package static func rackSummary(_ count: Int) -> String { "내 받침대 \(count)장" }
+    package static func seatSummary(name: String, count: Int?, isTurn: Bool, tags: [String]) -> String {
+        ([name, rackCount(count)] + (isTurn ? ["차례"] : []) + tags).joined(separator: ", ")
+    }
+
     // MARK: - 다른 기기 판(레인 B)
 
     /// 같은 계정의 다른 기기가 하는 판을 이 폰이 읽기만 하는 동안의 안내 카드.

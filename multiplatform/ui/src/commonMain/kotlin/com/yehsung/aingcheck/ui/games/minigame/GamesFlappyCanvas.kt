@@ -54,6 +54,17 @@ internal object FlappyFX {
     val scorePopX: Double = FlappyGame.birdX - scorePopBack
 }
 
+/**
+ * 튀는 기둥 예고의 그림 값(Swift `FlappyShiftWarning` — FlappyGame.swift:398 그대로). "살짝 붉은 빛"(사용자 원문)이라 본체는 옅게 물들이고,
+ * 어두운 무대에서도 보이도록 외곽선을 붉게 덧그린다. 세기는 `FlappyGame.Pipe.warningLevel` 이 곱한다 — 여기 값은 세기 1 일 때의 상한이다.
+ */
+internal object FlappyShiftWarning {
+    val tint = Color(red = 1.0f, green = 0.30f, blue = 0.26f)
+    const val fillOpacity: Double = 0.26
+    const val strokeOpacity: Double = 0.90
+    const val lineWidth: Float = 1.5f
+}
+
 /** 점수를 위에 띄우는가(진행·게임오버 유예 중). */
 internal val FlappyGame.showsTopScore: Boolean
     get() = phase == FlappyGame.Phase.Running || phase is FlappyGame.Phase.Over
@@ -134,7 +145,9 @@ private fun drawFlappy(scope: DrawScope, game: FlappyGame, reduceMotion: Boolean
     MiniGameBackdrop.draw(scope, full, stage, scroll = game.scrolled.toFloat(), terrain = true, reduceMotion = reduceMotion, density = density)
     // 기둥 — 세로 그라디언트는 캔버스 전체 기준 · 입구 립 · 립 경계선 · 1.5pt 외곽선.
     val pipeBrush = Brush.verticalGradient(listOf(paint.structureDeep, paint.structureDeepLit), startY = full.top, endY = full.bottom)
+    // 튀는 기둥은 붉은 예고를 얹는다(2026-10-30 — 맥·iOS 와 같은 warningLevel · FlappyShiftWarning).
     for (pipe in game.pipes) {
+        val warning = pipe.warningLevel(game.elapsed)
         val halves = listOf(pipe.topRect(game.elapsed) to true, pipe.bottomRect(game.elapsed, FlappyGame.height) to false)
         for ((rect, isTop) in halves) {
             val h = rect.maxY - rect.minY
@@ -151,6 +164,14 @@ private fun drawFlappy(scope: DrawScope, game: FlappyGame, reduceMotion: Boolean
                 scope.drawRect(paint.structureEdge.copy(alpha = 0.95f), edge.topLeft, edge.size)
             }
             scope.drawRect(paint.structureEdge.copy(alpha = 0.92f), body.topLeft, body.size, style = Stroke(1.5f * density))
+            // 예고는 덧칠이다 — 0 일 때 한 획도 더 긋지 않아야 고정 기둥이 예전과 픽셀 단위로 같다.
+            if (warning > 0) {
+                scope.drawRect(FlappyShiftWarning.tint.copy(alpha = (FlappyShiftWarning.fillOpacity * warning).toFloat()), body.topLeft, body.size)
+                scope.drawRect(
+                    FlappyShiftWarning.tint.copy(alpha = (FlappyShiftWarning.strokeOpacity * warning).toFloat()), body.topLeft, body.size,
+                    style = Stroke(FlappyShiftWarning.lineWidth * density),
+                )
+            }
         }
     }
     val flapAt = game.lastFlapAt

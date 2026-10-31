@@ -28,6 +28,22 @@ class MeAILimitsTest {
             "plan_label":${s(plan)},"observed_at":"$observed"}"""
     }
 
+    /** 없는 칸(4137751e): 캡션이 요금제 한 줄을 담고 진단 어휘를 쓰지 않는다 · 소리는 `<창> 없음` 그대로(캡션이 이미 읽힌다). */
+    @Test
+    fun captionSaysWhyACellCanBeEmptyAndSpeechDoesNotRepeatIt() {
+        val caption = MeAILimitsText.aiLimitsCaption
+        assertEquals("5시간 창과 주간 창에서 쓴 비율이에요. 요금제에 따라 창이 하나만 올 수 있어요.", caption)
+        assertEquals(1, caption.split("요금제").size - 1, "캡션이 요금제를 두 번 말한다")
+        for (banned in listOf("primary_window", "plan_type", "secondary", "파서", "분 창", "10080", "300분")) {
+            assertFalse(banned in caption, "캡션이 진단 어휘를 쓴다($banned)")
+        }
+        for (window in AILimitWindow.entries) {
+            val spoken = MeAILimitsText.aiLimitAbsentAccessibility(window)
+            assertEquals("${window.displayName} 없음", spoken)
+            assertFalse("요금제" in spoken, "소리가 이유를 되풀이한다: $spoken")
+        }
+    }
+
     // ④ AI 리밋은 읽기만 한다
 
     @Test

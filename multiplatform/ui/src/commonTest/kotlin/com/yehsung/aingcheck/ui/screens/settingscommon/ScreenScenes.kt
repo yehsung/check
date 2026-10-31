@@ -212,6 +212,9 @@ object ScreenScenes {
             "two-devices" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0) + rows("mac-b-2222", "사무실 iMac", 1_800.0, 91.0, 44.0).take(1)
             // 음성 기준선: 둘째 맥 5시간 91 → 41(숫자 한 칸 — 위험색이 평온색으로).
             "two-devices-alt" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0) + rows("mac-b-2222", "사무실 iMac", 1_800.0, 41.0, 44.0).take(1)
+            // 없는 칸(5시간 없음 · 해치) vs 0% 칸(음성 기준선 — 같은 줄에 값 0 만 다르다). 트랙·해치·글자가 달라야 한다.
+            "absent" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0).drop(2)
+            "absent-zero" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0).drop(2).map { it.copy(fiveHourPercent = 0.0) }
             "twin-names" -> rows("twin-aaaa-a1b2", "Mac mini", 120.0).take(2) + rows("twin-bbbb-c3d4", "Mac mini", 600.0, 91.0, 44.0).take(1) +
                 rows("nameless-9f8e", null, 900.0, 12.0, 5.0).take(1)
             "twin-long-names" -> {
@@ -267,7 +270,7 @@ fun AILimitsTableScene(kind: String, modifier: Modifier) {
             verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
         ) {
             com.yehsung.aingcheck.ui.screens.me.MeAILimitsTitle(null)
-            MeAILimitsTable(groups, showsDeviceNames = kind != "one-device")
+            MeAILimitsTable(groups, showsDeviceNames = kind != "one-device" && !kind.startsWith("absent"))
             androidx.compose.material3.Text(
                 com.yehsung.aingcheck.core.stores.me.MeAILimitsText.aiLimitsCaption,
                 style = androidx.compose.material3.MaterialTheme.typography.bodySmall,

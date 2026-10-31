@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Me/MeAILimitsText.swift · Sources/CheckMobileShared/AILimitSurfaceRules.swift:80-110(AILimitSurfaceText) · Sources/CheckMobileShared/AILimitColumnStyle.swift:118-120(AILimitColumnText) @ 1b8260d
+// 원본: Sources/CheckMobileKit/Me/MeAILimitsText.swift @ 4137751e(캡션 둘째 문장) · Sources/CheckMobileShared/AILimitSurfaceRules.swift:80-110(AILimitSurfaceText) · Sources/CheckMobileShared/AILimitColumnStyle.swift:118-120(AILimitColumnText) @ 1b8260d
 package com.yehsung.aingcheck.core.stores.me
 
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDisplay
@@ -29,7 +29,13 @@ object AILimitColumnText {
  */
 object MeAILimitsText {
     const val aiLimitsTitle = "AI 리밋"
-    const val aiLimitsCaption = "5시간 창과 주간 창에서 쓴 비율이에요."
+
+    /**
+     * 카드 아래 한 줄(값이 무엇을 뜻하는지). 둘째 문장이 왜 있나(4137751e): 코덱스는 요금제에 따라 창을 하나만 보낸다 — 운영 코덱스 사용자 대다수의 5시간 칸은 영구히 `없음` 이고,
+     * 두 창을 당연한 것처럼 말하면 그 칸이 "앱이 못 읽었다"로 읽힌다. 이유는 칸이 아니라 **여기서 한 번만** 말한다(값 칸은 고정폭이고 칸마다 세우면 줄마다 같은 문장을 읽는다).
+     * '요금제'는 사용자 어휘다 — 진단 어휘(plan_type · primary_window · 창 길이)는 쓰지 않는다. 톡백은 이 이유를 되풀이하지 않는다([aiLimitAbsentAccessibility]).
+     */
+    const val aiLimitsCaption = "5시간 창과 주간 창에서 쓴 비율이에요. 요금제에 따라 창이 하나만 올 수 있어요."
     const val aiLimitsLoading = MeText.loading
     const val aiLimitsFailed = "AI 리밋을 불러오지 못했어요"
 

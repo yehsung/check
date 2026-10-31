@@ -344,3 +344,83 @@ struct V0370RummyBoardRenderTests {
         #expect(ink > 400, "위 띠 오른쪽 칸이 비었다(\(ink))")
     }
 }
+
+// MARK: - 판 확대 세로 가운데(다음 판 — 사용자 10-31 "다음 판에 세로 가운데로")
+
+@Suite("아잉 큐브 판 확대 세로 가운데 — 묶음이 어디 있든 칸 가운데 · 가로·빈 판은 그대로 · 캔버스 밖에 놓아도 안으로")
+struct RummyBoardVerticalCenterTests {
+    private let viewport = RummyMatchLayout.standard.table.size
+
+    private func frames(_ points: [[Int]], tiles: Int = 3) -> [RummyRect] {
+        points.map { RummyTableLayout.frame(at: pp($0[0], $0[1]), tiles: tiles) }
+    }
+
+    @Test("위·가운데·아래 어느 줄에 있어도 묶음 위아래 빈 곳이 같고 잘리지 않는다")
+    func contentIsVerticallyCentered() {
+        // 없으면: 위 줄부터 채우는 판이 칸 위로 붙어 아래가 비는 결함(플레이 감사)이 초록이 된다.
+        for rows in [[[0, 0], [216, 0], [0, 72]], [[400, 280], [620, 280]], [[100, 584], [320, 584]]] {
+            let content = frames(rows)
+            let zoom = RummyCanvasTransform.zoom(viewport: viewport, content: content)
+            let drawn = content.map(zoom.rect).reduce(CGRect.null) { $0.union($1) }
+            #expect(abs(drawn.minY - (viewport.height - drawn.maxY)) < 0.5, "\(rows): 위 \(drawn.minY) · 아래 \(viewport.height - drawn.maxY)")
+            #expect(CGRect(origin: .zero, size: viewport).contains(drawn), "\(rows): 잘렸다 \(drawn)")
+        }
+    }
+
+    @Test("기준선 — 가로는 캔버스 안으로 미는 그대로 · 묶음 없는 판은 왼쪽 위 그대로")
+    func horizontalAndEmptyStay() {
+        // 없으면: 세로만 고친다면서 가로 자리나 시작 판까지 바꾼 결함이 초록이 된다.
+        let zoom = RummyCanvasTransform.zoom(viewport: viewport, content: frames([[0, 0], [216, 0]]))
+        #expect(zoom.logicalOrigin.x == 0)
+        #expect(zoom.logicalOrigin.y < 0, "구간이 캔버스 위로 나가야 가운데다(\(zoom.logicalOrigin.y))")
+        #expect(RummyCanvasTransform.zoom(viewport: viewport, content: []).logicalOrigin == .zero)
+    }
+
+    @Test("캔버스 위 빈 곳에 놓아도 타일은 캔버스 안에 선다 — 미리보기와 놓은 자리가 같다")
+    func dropAboveCanvasLandsInside() throws {
+        // 없으면: 가운데로 옮겨 새로 보이는 캔버스 밖 띠에 놓으면 서버가 못 받는 자리로 가는 결함이 초록이 된다.
+        var editor = pEditor(["A1 A2 A3"], at: [pp(0, 0)], rack: "B9 C2 D13")
+        let tile = pRack(editor, "B9")
+        let target = RummyDropTarget.newMeldAt(pp(600, -120))
+        let preview = try #require(editor.previewDrop([tile], to: target))
+        let moved = editor.move(tile, to: target)
+        #expect(moved)
+        let frame = RummyTableLayout.frame(at: editor.points[1], tiles: 1)
+        #expect(frame.y >= 0 && frame.maxY <= RummyTableLayout.canvasHeight, "놓은 자리 \(frame)")
+        #expect(preview.landing?.frame == frame, "미리보기 \(String(describing: preview.landing)) · 놓은 자리 \(frame)")
+    }
+}
+
+@MainActor
+@Suite("아잉 큐브 판 확대 세로 가운데 — 렌더")
+struct RummyBoardVerticalCenterRenderTests {
+    @Test("위 두 줄뿐인 판 — 판 칸에서 타일 위아래 빈 높이가 같다(전체 보기 기준선은 아래가 훨씬 넓다)")
+    func tilesSitInTheMiddle() throws {
+        // 없으면: 변환 값만 맞고 실제 화면은 위로 붙어 그려지는 결함이 초록이 된다.
+        func gaps(_ bitmap: NSBitmapImageRep) -> (top: Int, bottom: Int) {
+            guard let data = bitmap.bitmapData else { return (-1, -1) }
+            let o = RummyWindowLayout.matchBodyOrigin
+            let r = RummyMatchLayout.standard.table.offsetBy(dx: o.x, dy: o.y)
+            let body = RummyTilePalette.bodyTop
+            let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
+            let y0 = Int(r.minY * 2), y1 = min(bitmap.pixelsHigh, Int(r.maxY * 2))
+            var first: Int?, last: Int?
+            for y in y0..<y1 {
+                for x in Int(r.minX * 2)..<min(bitmap.pixelsWide, Int(r.maxX * 2)) {
+                    let i = y * bpr + x * spp
+                    if abs(Int(data[i]) - body.r) <= 12, abs(Int(data[i + 1]) - body.g) <= 12, abs(Int(data[i + 2]) - body.b) <= 12 {
+                        first = first ?? y
+                        last = y
+                        break
+                    }
+                }
+            }
+            guard let first, let last else { return (-1, -1) }
+            return (first - y0, y1 - 1 - last)
+        }
+        let zoomed = gaps(try rRender(table: rFewTable, layout: rFewLayout, zoom: nil, name: "board-vertical-center"))
+        let fit = gaps(try rRender(table: rFewTable, layout: rFewLayout, zoom: false, name: "board-vertical-center-fit"))
+        #expect(zoomed.top > 0 && abs(zoomed.top - zoomed.bottom) <= 24, "확대 위 \(zoomed.top) · 아래 \(zoomed.bottom)(2배 픽셀)")
+        #expect(fit.top * 2 < fit.bottom, "전체 보기 기준선 위 \(fit.top) · 아래 \(fit.bottom)")
+    }
+}

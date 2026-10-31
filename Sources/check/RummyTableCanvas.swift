@@ -41,15 +41,17 @@ struct RummyCanvasTransform: Equatable {
     }
 
     /// 놓인 묶음을 다 담는 사각형(+ 가로 두 장·세로 한 줄 여백)에 맞춰 확대. 배율은 [전체 맞춤, `maxScale`] 사이.
-    /// 묶음이 없으면 캔버스 왼쪽 위 1/4 를 본다. 보이는 구간은 되도록 캔버스 안으로 민다.
+    /// 묶음이 없으면 캔버스 왼쪽 위 1/4 를 본다. 가로 구간은 되도록 캔버스 안으로 민다.
+    /// 세로는 묶음을 칸 가운데에 둔다(사용자 10-31 "다음 판에 세로 가운데로" — 위 줄부터 채우는 판이 위로 붙어 아래가 비었다).
+    /// 그래서 구간이 캔버스 위·아래로 나갈 수 있다 — 거기 놓아도 편집기 `clampInside` 가 캔버스 안으로 들인다.
     /// 여백 20(0.3.70 — 12 였다): [판 확대]가 기본이 되며 캔버스 왼끝(x 0) 묶음의 손잡이(묶음 왼쪽 13 단위 밖)가 판 테두리에
     /// 잘렸다(렌더 `rummy370-board-default`).
     static func zoom(viewport: CGSize, content: [RummyRect], inset: CGFloat = 20, maxScale: CGFloat = 1) -> RummyCanvasTransform {
         let base = fit(viewport: viewport, inset: inset)
         var region: CGRect
-        if let first = content.first {
-            region = content.dropFirst().reduce(Self.cg(first)) { $0.union(Self.cg($1)) }
-            region = region.insetBy(dx: -CGFloat(RummyTableLayout.tileWidth) * 2, dy: -CGFloat(RummyTableLayout.tileHeight) * 1.3)
+        let bounds = content.first.map { first in content.dropFirst().reduce(Self.cg(first)) { $0.union(Self.cg($1)) } }
+        if let bounds {
+            region = bounds.insetBy(dx: -CGFloat(RummyTableLayout.tileWidth) * 2, dy: -CGFloat(RummyTableLayout.tileHeight) * 1.3)
         } else {
             region = CGRect(x: 0, y: 0, width: canvas.width / 2, height: canvas.height / 2)
         }
@@ -66,7 +68,8 @@ struct RummyCanvasTransform: Equatable {
             return min(max(start, 0), limit - span)
         }
         let origin = CGPoint(x: clampOrigin(region.midX, span: span.width, limit: canvas.width),
-                             y: clampOrigin(region.midY, span: span.height, limit: canvas.height))
+                             y: bounds.map { $0.midY - span.height / 2 }
+                                 ?? clampOrigin(region.midY, span: span.height, limit: canvas.height))
         return RummyCanvasTransform(scale: scale, logicalOrigin: origin, screenOrigin: CGPoint(x: inset, y: inset))
     }
 

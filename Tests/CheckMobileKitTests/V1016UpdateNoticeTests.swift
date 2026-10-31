@@ -290,6 +290,27 @@ import Testing
         #expect(!row.contains(".onTapGesture"))
     }
 
+    /// 16e(390pt) AX4 부터 · 375pt AX3 부터 잘렸다: 한 줄에 두면 고정된 [업데이트] 가 폭을 먼저 차지하고 남은 폭에 제목이 2줄로 갇힌다.
+    @Test("큰 글자 약속: AX 갈래는 세로로 쌓고 · 그 갈래에선 버튼을 고정하지 않고 · 제목 줄 수를 가두지 않는다")
+    func rowLargeTypeContract() throws {
+        let tab = try IntegrationContractTests.code("Sources/CheckMobileKit/Now/NowTab.swift")
+        let row = try Self.rowSource(tab)
+        #expect(!row.contains(".lineLimit("), "제목 줄 수를 가두면 큰 글자에서 '새 버전이 나왔어요' 가 말줄임으로 잘린다")
+        #expect(row.contains(".fixedSize(horizontal: false, vertical: true)"), "제목이 세로로 자라지 못한다")
+
+        let branch = try #require(row.range(of: "if dynamicTypeSize.isAccessibilitySize"), "큰 글자 갈래가 없다")
+        let otherwise = try #require(row.range(of: "} else {", range: branch.upperBound..<row.endIndex))
+        let stacked = row[branch.upperBound..<otherwise.lowerBound]
+        #expect(stacked.contains("VStack"), "큰 글자에서 [업데이트] 가 제목 옆에 남는다")
+        #expect(stacked.contains("updateButton"), "큰 글자 갈래에 [업데이트] 가 없다")
+        #expect(stacked.contains("dismissButton"), "큰 글자 갈래에 닫기가 없다")
+        #expect(!stacked.contains(".fixedSize()"), "큰 글자 갈래에서 버튼 폭을 고정했다")
+
+        // 고정은 작은 글자 갈래의 버튼 한 번뿐이다 — 공용 버튼 프로퍼티에 숨으면 큰 글자 갈래까지 번진다.
+        #expect(row.components(separatedBy: ".fixedSize()").count - 1 == 1, "버튼 고정이 작은 글자 갈래 밖으로 나갔다")
+        #expect(row[otherwise.upperBound...].contains("updateButton.fixedSize()"), "작은 글자 갈래의 버튼이 고정되지 않았다")
+    }
+
     @Test("안내 값은 스토어 규칙 하나로 판정한다 — 뷰가 조건을 다시 적지 않는다")
     func viewDoesNotRestateTheRule() throws {
         let tab = try IntegrationContractTests.code("Sources/CheckMobileKit/Now/NowTab.swift")

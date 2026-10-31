@@ -346,6 +346,8 @@ package final class MobileSessionStore {
                 return .failed(.rejected)
             }
         }
+        // 미니게임 점수 인편은 로컬 정리가 일부러 남기는 값이다(같은 계정이 돌아오면 올린다). 지운 계정은 돌아오지 않는다.
+        GamesMiniGameHub.forgetPendingSubmits(userID: reauth.userID, in: storage.defaults)
         // 서버가 지웠다. 그 사이 세대가 바뀌었으면(예: 실시간 갱신이 치명으로 끝나 이미 로그아웃) 로컬은 이미 비었다 — 다시 비우지 않는다.
         if startGeneration == generation {
             endSession(cleanup: nil)

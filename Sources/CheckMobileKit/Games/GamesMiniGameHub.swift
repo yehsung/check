@@ -305,6 +305,8 @@ package final class GamesMiniGameHub {
         pendingRetryTarget = nil
         publicIsKnown = false
         pendingAwaitsPublicCheck = false
+        // 떠 있는 앞 로그인의 조회는 세대 가드가 버린다 — 이 깃발이 남으면 다음 로그인의 인편이 묻지도 못하고 멈춘다.
+        isCheckingPublicForPending = false
         lastSummaryAt = .distantPast
     }
 
@@ -362,6 +364,9 @@ package final class GamesMiniGameHub {
         }
         guard !hasUsableRoundToken(for: kind) else { return }
         guard roundTokenInFlightKind != kind else { return }
+        // 다른 게임의 인편이 토큰을 기다리며 왕복 중이면 비킨다 — 토큰 칸이 하나라 새 요청은 그 응답을 세대 가드로 버리고,
+        // 그 인편에는 왕복도 타이머도 안 남아 다음 방아쇠까지 굳는다. 선발급은 급하지 않다: 그 인편의 제출 꼬리가 여기를 다시 부르고, 판 시작도 받는다.
+        if let inFlight = roundTokenInFlightKind, pendingSubmits.contains(where: { $0.kind == inFlight && $0.token == nil }) { return }
         requestRoundToken(kind: kind)
     }
 
@@ -567,9 +572,9 @@ package final class GamesMiniGameHub {
         let generation = resetGeneration
         Task { [weak self] in
             await self?.refreshPublic()
-            guard let self else { return }
+            guard let self, generation == self.resetGeneration else { return }
             self.isCheckingPublicForPending = false
-            guard generation == self.resetGeneration, self.publicIsKnown else { return }
+            guard self.publicIsKnown else { return }
             self.retryPendingSubmitIfAny(fromTrigger: false)
         }
         return true
@@ -1014,6 +1019,13 @@ package final class GamesMiniGameHub {
     /// 화면이 닫힌 채 인편이 TTL 로 버려졌다는 표식의 영속 키(계정별). 다음에 화면을 열 때 한 번 말하고 지운다.
     package nonisolated static func lostNoticeKey(userID: String) -> String {
         "aing.minigame.lostnotice.\(userID)"
+    }
+
+    /// 계정이 지워졌다 — 그 계정의 인편·표식을 기기에서 지운다. 로그아웃에는 남기는 값이지만(같은 계정이 돌아오면 올린다) 지운 계정은 돌아오지 않는다.
+    package nonisolated static func forgetPendingSubmits(userID: String, in defaults: UserDefaults) {
+        let owner = userID.lowercased()
+        defaults.removeObject(forKey: pendingKey(userID: owner))
+        defaults.removeObject(forKey: lostNoticeKey(userID: owner))
     }
 
     private var myUserID: String? { context.session.session?.userID.lowercased() }

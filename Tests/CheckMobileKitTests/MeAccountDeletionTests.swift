@@ -91,6 +91,11 @@ struct MeAccountDeletionTests {
         #expect(session.apnsToken != nil, "전제: APNs 토큰이 있다")
         var reloads = 0
         session.reloadWidgetTimelines = { reloads += 1 }
+        // 미니게임 점수 인편: 로그아웃에는 남지만(같은 계정이 돌아오면 올린다) 지운 계정은 돌아오지 않는다.
+        let pendingKey = GamesMiniGameHub.pendingKey(userID: Self.me)
+        let lostNoticeKey = GamesMiniGameHub.lostNoticeKey(userID: Self.me)
+        harness.storage.defaults.set(Data("[]".utf8), forKey: pendingKey)
+        harness.storage.defaults.set(true, forKey: lostNoticeKey)
         MobileStubURLProtocol.clearRequests(host: harness.host)
 
         let deleteHold = BaseHold.rpc("delete_my_account", host: harness.host)
@@ -99,6 +104,7 @@ struct MeAccountDeletionTests {
         #expect(await deleteHold.waitHeld(), "삭제 RPC 가 나가지 않았다")
         // RPC 가 서버에 가 있는 동안: 아직 로그인 상태 · 키체인 그대로 · 깃발 켜짐(재탭 방지).
         #expect(session.isSignedIn && session.userID == Self.me, "서버가 지우기 전에 로컬을 비웠다")
+        #expect(harness.storage.defaults.data(forKey: pendingKey) != nil, "서버가 지우기 전에 점수 인편을 지웠다")
         #expect(harness.storage.defaults.string(forKey: AingSharedKeys.userID) == Self.me)
         #expect(store.isDeletingAccount && session.isDeletingAccount && !store.canDeleteAccount)
         #expect(await store.deleteAccount() == false, "도는 중에 또 눌렀는데 두 번째가 시작됐다")
@@ -107,6 +113,8 @@ struct MeAccountDeletionTests {
 
         expectLocalCleared(harness)
         #expect(reloads == 1, "위젯을 새로 그리게 하지 않았다")
+        #expect(harness.storage.defaults.data(forKey: pendingKey) == nil, "지운 계정의 점수와 토큰이 기기에 남았다")
+        #expect(harness.storage.defaults.object(forKey: lostNoticeKey) == nil, "지운 계정의 표식이 기기에 남았다")
         #expect(!store.isDeletingAccount && store.accountDeletionPassword.isEmpty && store.accountDeletionNotice == nil, "reset 이 안 돌았다")
         #expect(harness.model.gomokuHost.rubyBalance == nil)
 

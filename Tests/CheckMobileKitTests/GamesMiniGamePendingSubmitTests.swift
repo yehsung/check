@@ -358,6 +358,52 @@ struct GamesMiniGamePendingSubmitTests {
         await harness.tearDown()
     }
 
+    @Test("토큰을 기다리는 앞 게임 인편의 왕복을 다음 게임 화면이 무효로 만들지 않는다 — 그 인편이 먼저 올라가고 화면 게임의 토큰은 그 뒤에 받는다")
+    func anotherScreensPrefetchDoesNotOrphanAWaitingPending() async throws {
+        // 토큰 칸이 하나라 새 요청은 앞 요청의 응답을 세대 가드로 버린다. 앞 요청이 인편의 것이면 그 인편에는 왕복도 타이머도 안 남아 다음 방아쇠까지 굳는다.
+        let harness = GamesHarness(label: "pending-orphan")
+        configure(harness)
+        let tokens = gamesServeRoundTokens(harness, prefix: "tok-orphan")
+        try seed(harness, [entry(.flappy, score: 6, token: nil, at: harness.clock.now)])
+        let hold = BaseHold.rpc("minigame_start_round", host: harness.server.host)
+        await harness.signIn()
+        #expect(await hold.waitHeld(), "되살린 인편에 토큰을 안 받아 줬다")
+
+        harness.hub.openScreen(.tetris)
+        #expect(await baseWaitUntil { harness.server.requests("minigame_board").contains { $0.bodyText.contains("tetris") } })
+        await harness.barrier()
+        #expect(tokens.get().isEmpty, "테트리스 선발급이 인편의 왕복을 치웠다: \(tokens.get())")
+
+        #expect(await hold.releaseAndWaitDelivered())
+        #expect(await baseWaitUntil { harness.hub.pendingSubmits.isEmpty }, "인편이 굳었다: \(harness.hub.pendingSubmits)")
+        let sent = submits(harness)
+        #expect(sent.count == 1, "\(sent)")
+        #expect(sent.first?.contains(#""p_game":"flappy""#) == true && sent.first?.contains(#""p_score":6"#) == true, "\(sent)")
+        #expect(await baseWaitUntil { harness.hub.roundTokenKind == .tetris }, "인편이 비워졌는데 화면 게임의 토큰을 안 받았다")
+        #expect(harness.violations.isEmpty, "\(harness.violations)")
+        await harness.tearDown()
+    }
+
+    @Test("앞 로그인의 공개 여부 조회가 떠 있어도 다음 로그인의 되살린 인편은 자기 조회로 나간다")
+    func aPublicCheckFromThePreviousLoginDoesNotHoldTheNextOne() async throws {
+        let harness = GamesHarness(label: "pending-public-relogin")
+        configure(harness)
+        try seed(harness, [entry(score: 8, token: "tok-relogin", at: harness.clock.now)])
+        let hold = BaseHold.install(host: harness.server.host) { $0.path == "/rest/v1/profiles" && $0.query.contains("minigame_public") }
+        await harness.signIn()
+        #expect(await hold.waitHeld(), "되살린 인편이 공개 여부를 안 물었다")
+        #expect(submits(harness).isEmpty, "공개 여부를 듣기 전에 나갔다")
+
+        await harness.model.session.signOut()
+        await harness.model.session.signIn(email: "games@aing.invalid", password: "pw")
+        #expect(await baseWaitUntil { submits(harness).count == 1 }, "앞 로그인의 깃발에 막혀 다음 로그인이 공개 여부를 못 물었다")
+        #expect(submits(harness).first?.contains("tok-relogin") == true)
+        #expect(await hold.releaseAndWaitDelivered())
+        await harness.barrier()
+        #expect(submits(harness).count == 1, "늦게 온 앞 조회가 한 번 더 보냈다: \(submits(harness))")
+        await harness.tearDown()
+    }
+
     // MARK: - 코어 타입
 
     @Test("코어 타입: 영속 형식은 맥 0.3.39 그대로다 · 백오프와 타이머 칸은 저장하지 않는다")

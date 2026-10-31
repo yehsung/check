@@ -547,7 +547,7 @@ object MeText {
     const val characterRoleTitle = "내 화면에는 캐릭터가 나와요"
     const val characterRoleNote = "지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."
     /** Windows 판(ui LocalDesktopWording) — 사용자 답 "Windows 전용 문구 두기". */
-    const val characterRoleNoteDesktop = "나 화면과 오버레이에서 착용 캐릭터가 나를 대신해요."
+    const val characterRoleNoteDesktop = "내 기록과 오버레이에서 착용 캐릭터가 나를 대신해요."
 
     /** 서버 쿨타임(7일). */
     const val displayNameCooldownSeconds: Double = 7.0 * 24 * 3600

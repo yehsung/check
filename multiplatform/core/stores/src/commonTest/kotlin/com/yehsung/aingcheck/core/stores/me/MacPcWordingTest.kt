@@ -47,7 +47,7 @@ class MacPcWordingTest {
     @Test
     fun desktopLinesMatch() {
         assertEquals("오버레이와 울트라 찌르기에 나오는 내 캐릭터예요.", MeText.pickerCaptionDesktop)
-        assertEquals("나 화면과 오버레이에서 착용 캐릭터가 나를 대신해요.", MeText.characterRoleNoteDesktop)
+        assertEquals("내 기록과 오버레이에서 착용 캐릭터가 나를 대신해요.", MeText.characterRoleNoteDesktop)
     }
 
     @Test

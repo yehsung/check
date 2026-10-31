@@ -113,24 +113,24 @@ object GamesMiniGameText {
     const val yesterdayChampion: String = "어제 1등"
     const val noRankToday: String = "오늘 기록 없음"
 
-    /** 제출 실패(토큰 없음·네트워크) — 맥 `recordMiniGameScore` 와 같은 문장. */
-    const val submitFailedConnection: String = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
-
     /** 서버 거절 — 맥 `performSubmitMiniGameScore` 와 같은 문장. status 이름·need_seconds 는 화면에 싣지 않는다. */
     const val submitRefused: String = "점수를 못 올렸어요"
 
     /**
-     * 아직 하한을 못 넘겼다(`too_fast`) — **토큰은 살아 있고 곧 다시 보낸다.**
-     * [submitRefused]("못 올렸어요")와 **일부러 가른다**: 이 응답은 거절이 아니라 아직 이르다는 뜻이다.
+     * 인편이 살아 있다(네트워크 실패 · `too_fast` · 토큰 대기) — **곧 다시 보낸다.**
+     * [submitRefused]("못 올렸어요")와 **일부러 가른다**: 아직 지지 않았다.
      * status 이름·`need_seconds`·`elapsed_seconds` 는 여기에도 싣지 않는다(위조 보조).
      */
     const val submitRetrying: String = "점수를 올리는 중이에요 — 잠깐만요"
 
     /**
      * 토큰이 죽어 **그 판은 영영 못 올리는** 거절(`no_token`·`token_expired`).
-     * [submitFailedConnection] 과 **일부러 문장을 가른다**: "다시 해 주세요"는 복구된다는 뜻인데 토큰이 죽었으면 이번 판은 안 올라간다.
+     * "다시 해 주세요"(복구된다는 뜻)와 **일부러 문장을 가른다**: 토큰이 죽었으면 이번 판은 안 올라간다.
      */
     const val submitTokenDead: String = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
+
+    /** 인편이 30분(서버 토큰 TTL) 안에 서버에 닿지 못해 버려졌다(맥 `MiniGameSubmitCopy.expired`). */
+    const val submitExpired: String = "점수를 못 올렸어요 — 연결을 확인해 주세요"
 
     /**
      * 앱이 background 로 가서 판을 끝냈다(폰 전용). **게임마다 말이 다르다**: 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를

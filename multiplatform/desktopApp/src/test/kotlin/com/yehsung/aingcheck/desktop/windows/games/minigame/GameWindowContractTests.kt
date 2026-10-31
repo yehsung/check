@@ -144,6 +144,37 @@ class MiniGameFocusPauseTest {
     }
 
     /**
+     * 인편(폰 판 — 허브 공용)이 Windows 닫기 경로를 어떻게 바꾸는가를 잠근다: 토큰 없이 닫힌 플래피 판도 버리지 않고 토큰을 받아 **제출 1회**다(창 어댑터의 임시 재제출이 인편에 얹힌다).
+     * 음성 짝: 타이밍 바는 그대로 0회.
+     */
+    @Test
+    fun userCloseWithoutATokenStillUploadsOnceThroughThePending() {
+        for ((kind, expected) in listOf(MiniGameKind.flappy to 1, MiniGameKind.timingBar to 0)) {
+            var starts = 0
+            val r = Rig { req ->
+                if (req.rpcName == "minigame_start_round") {
+                    starts += 1
+                    if (starts == 1) """{"status":"invalid"}""" to 200 else """{"status":"ok","token":"t$starts"}""" to 200
+                } else {
+                    UiFixtures.miniGameRoute(req) { 0 }
+                }
+            }
+            runBlocking { r.harness.signIn() }
+            r.host.openGames(kind)
+            r.store.miniGames.openScreen(kind)
+            r.scope.advanceUntilIdle()
+            assertEquals(null, r.store.miniGames.roundToken, "$kind: 전제 — 선발급이 거절돼 토큰이 없다")
+            val c = requireNotNull(r.store.miniGames.controller)
+            c.tap()
+            r.shell.emit(WindowEvent.UserClosed)
+            r.scope.advanceUntilIdle()
+            assertEquals(expected, r.harness.server.count("minigame_submit_score"), "$kind: 제출 수")
+            assertEquals(emptyList(), r.store.miniGames.pendingSubmits, "$kind: 인편이 남았다")
+            r.harness.close()
+        }
+    }
+
+    /**
      * ③ 닫기 = 판 끝. 기록이 남는 게임(quittingKeepsTheScore)만 제출 1회, 타이밍 바는 0회.
      * 길건너: core endRound 가 확정으로 바뀌어(폰 판) 창 어댑터의 임시 재제출을 타지 않는다 — 이 시험이 제출 1회(두 번 아님)를 잠근다.
      */

@@ -36,7 +36,7 @@ class GamesSourceContractTest {
         val hub = code("minigame/GamesMiniGameHub.kt")
         assertFalse("needSeconds" in hub, "need_seconds 로 지연을 계산하지 않는다")
         assertFalse("elapsedSeconds" in hub, "elapsed_seconds 를 읽지 않는다")
-        assertTrue("tooFastRetryDelaysSeconds" in hub, "대조: 눈먼 지연 표는 있다(정규식이 비지 않았다)")
+        assertTrue("pendingRetryDelaysSeconds" in hub, "대조: 눈먼 지연 표는 있다(정규식이 비지 않았다)")
     }
 
     /** 관전 갈래는 `tetris_state` 를 **절대 부르지 않는다**(참가자 게이트 — 관전자는 not_found 만 받는다)·관전 응답을 applyState 로 넣지 않는다. */

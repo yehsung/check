@@ -1,0 +1,5 @@
+[
+  {"user_id": "d0000000-0000-4000-8000-000000000001", "display_name": "새벽", "avatar_url": null, "best_score": 60, "best_at": "2026-09-13T01:10:00Z", "day": "2026-09-13", "center": "seoul"},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b4", "display_name": "호두", "avatar_url": null, "best_score": 52, "best_at": "2026-09-09T02:11:00Z", "day": "2026-09-09", "center": null},
+  {"user_id": "d0000000-0000-4000-8000-0000000000b5", "display_name": "모카", "avatar_url": null, "best_score": 31, "best_at": "2026-09-15T03:12:00Z", "day": "2026-09-15", "center": "busan"}
+]

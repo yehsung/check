@@ -14,7 +14,7 @@ import SwiftUI
 ///   이 저장소 규약("화면당 채운 버튼은 하나")에서 전환은 주요 동작이 아니다.
 /// · **누름 영역은 44pt.** 보이는 칸이 26 이라 세로 패딩 9 로 벌리고 같은 값의 음수 패딩으로 레이아웃을 되돌린다
 ///   (`RankingsGameMenu` 가 7/30 으로 쓰는 그 수법) — 머리글을 키우지 않으면서 손가락 몫을 준다.
-/// · `.disabled()` 를 쓰지 않는다. 같은 쪽을 다시 눌러도 허브가 아무 일도 안 하고(`selectBoardScope` 의 첫 가드),
+/// · `.disabled()` 를 쓰지 않는다. 같은 쪽을 다시 눌러도 받는 쪽이 아무 일도 안 하고(`selectBoardScope` · `select(miniGameScope:)` 의 첫 가드),
 ///   비활성 요소는 보이스오버 목록에서 사라져 "지금 무엇을 보고 있나"를 들을 수 없게 된다.
 struct GamesBoardScopePicker: View {
     let selected: MiniGameBoardScope

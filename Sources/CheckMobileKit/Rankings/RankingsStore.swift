@@ -18,7 +18,7 @@ package struct RankingsLoadState: Equatable, Sendable {
 }
 
 /// 순위 탭 스토어(SPEC-ios §3.4) — 팀 리그(`team_weekly_leaderboard`) · AI 토큰(`token_usage_board`, 달 넘기기) ·
-/// 미니게임(`minigame_board` + `minigame_yesterday_winner`). 전부 **읽기**다.
+/// 미니게임(`minigame_board` + `minigame_yesterday_winner`, [역대] 는 `minigame_alltime_board`). 전부 **읽기**다.
 ///
 /// 수명(기반 자리 API)
 /// - `init(context:)` 네트워크 없음 · `appDidBecomeActive()` 탭이 보이면 낡은 판을 다시 읽는다 · `appDidEnterBackground()` ·
@@ -67,12 +67,24 @@ package final class RankingsStore {
     package private(set) var miniGameWinner: MiniGameWinner?
     package private(set) var miniGameState = RankingsLoadState()
 
+    // MARK: 미니게임 [오늘 | 역대]
+    /// 미니게임 판이 보여 주는 표. 앱이 떠 있는 동안만 기억한다 — 계정이 아니라 이 실행의 보기 선택이라 `reset()` 이 되돌리지 않는다.
+    /// [게임] 탭의 `GamesMiniGameHub.boardScope` 와는 **별개의 값**이다(화면도 store 도 따로다).
+    package private(set) var miniGameScope: MiniGameBoardScope = .today
+    /// 보고 있는 게임의 역대 표(사람마다 한 줄). 받는 때는 `miniGameScope == .allTime` 일 때뿐이다 — 고를 때 · 그 채로 게임을 바꿀 때 ·
+    /// 당겨서 새로고침 · 탭 재진입(낡았을 때). [오늘] 을 보는 사람에게는 호출이 나가지 않는다.
+    package private(set) var miniGameAllTime: [MiniGameAllTimeEntry] = []
+    package private(set) var miniGameAllTimeState = RankingsLoadState()
+    /// 서버에 함수가 아직 없다. **실패가 아니다** — 문구는 "준비 중"이고 [다시 시도] 가 없다(사용자가 고칠 수 없는 일이다).
+    package private(set) var miniGameAllTimeUnavailable = false
+
     /// 이만큼 지난 판은 탭 표시·active 때 다시 읽는다.
     package nonisolated static let staleSeconds: TimeInterval = 30
 
     @ObservationIgnored private var leagueSerial = 0
     @ObservationIgnored private var tokenSerial = 0
     @ObservationIgnored private var miniGameSerial = 0
+    @ObservationIgnored private var miniGameAllTimeSerial = 0
     /// 사용자가 달을 옮기지 않았으면 true — 앱을 켜 둔 채 달이 바뀌면 새 달로 따라간다(맥 WorkTimerStore.swift:2003 의 결함).
     @ObservationIgnored private var tokenMonthFollowsCurrent = true
     /// 나 탭이 공개 설정 저장 성공을 알린 횟수 — 토큰 판 조회가 떠날 때 찍고, 도착했을 때 달라졌으면 그 응답의 공개 여부는 저장 전 값이다.
@@ -104,6 +116,7 @@ package final class RankingsStore {
         leagueSerial &+= 1
         tokenSerial &+= 1
         miniGameSerial &+= 1
+        miniGameAllTimeSerial &+= 1
         league = []
         leagueState = RankingsLoadState()
         leagueWeekKey = TeamLeagueWeekNavigator.currentKey(context.clock.now())
@@ -118,11 +131,15 @@ package final class RankingsStore {
         miniGameBoard = []
         miniGameWinner = nil
         miniGameState = RankingsLoadState()
+        clearMiniGameAllTime()
         board = .league
         miniGameKind = .timingBar
     }
 
     package var badgeCount: Int { 0 }
+
+    /// 큰 제목 아래 한 줄. 미니게임은 판만으로 못 정한다 — 보고 있는 표(`miniGameScope`)를 함께 본다.
+    package var boardSubtitle: String { RankingsText.boardSubtitle(board, miniGameScope: miniGameScope) }
 
     // MARK: - 화면 사건
 
@@ -162,7 +179,12 @@ package final class RankingsStore {
         switch board {
         case .league: await loadLeague()
         case .tokens: await loadTokens()
-        case .minigame: await loadMiniGame()
+        case .minigame:
+            if miniGameScope == .allTime {
+                await loadMiniGameAllTime()
+            } else {
+                await loadMiniGame()
+            }
         }
     }
 
@@ -185,13 +207,24 @@ package final class RankingsStore {
                     || leagueState.hasFailed || !leagueState.hasLoaded else { return }
             state = leagueState
         case .tokens: state = tokenState
-        case .minigame: state = miniGameState
+        case .minigame: state = miniGameScope == .allTime ? miniGameAllTimeState : miniGameState
         }
         guard !state.isLoading else { return }
         if let loadedAt = state.loadedAt, context.clock.now().timeIntervalSince(loadedAt) < Self.staleSeconds, !state.hasFailed {
             return
         }
-        launch { [weak self] in await self?.refresh() }
+        // 무엇을 받을지는 **여기서 정한다** — Task 안에서 `refresh()` 로 다시 읽으면 같은 틱의 전환을 따라가,
+        // 떠나려던 오늘 조회가 사라지고 역대 조회(또는 다른 판 조회)로 바뀐다.
+        switch board {
+        case .league: launch { [weak self] in await self?.loadLeague() }
+        case .tokens: launch { [weak self] in await self?.loadTokens() }
+        case .minigame:
+            if miniGameScope == .allTime {
+                launchMiniGameAllTime()
+            } else {
+                launch { [weak self] in await self?.loadMiniGame() }
+            }
+        }
     }
 
     // MARK: - 팀 리그
@@ -408,8 +441,25 @@ package final class RankingsStore {
         miniGameBoard = []
         miniGameWinner = nil
         miniGameState = RankingsLoadState()
-        miniGameState.isLoading = true
-        launch { [weak self] in await self?.loadMiniGame() }
+        // 옛 게임의 역대 줄이 새 게임 이름을 달고 남지 않게 어느 보기든 비운다(순번을 올려 떠 있는 응답도 여기서 버린다).
+        miniGameAllTimeSerial &+= 1
+        clearMiniGameAllTime()
+        if miniGameScope == .allTime {
+            // 오늘 표는 안 받는다 — [오늘] 로 돌아갈 때 `hasLoaded` 가 없으니 그때 받는다.
+            launchMiniGameAllTime()
+        } else {
+            miniGameState.isLoading = true
+            launch { [weak self] in await self?.loadMiniGame() }
+        }
+    }
+
+    /// 머리 [오늘 | 역대] 전환. 같은 쪽을 다시 누르면 아무 일도 없고, 받는 판단은 `refreshIfStale` 하나다 — 오가며 눌러도
+    /// 30초 안의 표는 다시 묻지 않고, 실패한 표는 다시 묻는다. 미니게임 판이 아니면 값만 기억한다(그 판을 열 때 받는다).
+    package func select(miniGameScope scope: MiniGameBoardScope) {
+        guard scope != miniGameScope else { return }
+        miniGameScope = scope
+        guard board == .minigame else { return }
+        refreshIfStale()
     }
 
     /// 내 오늘 순위(1부터). 없으면 nil.
@@ -468,6 +518,83 @@ package final class RankingsStore {
         }
         guard generation == context.generation, serial == miniGameSerial, kind == miniGameKind else { return }
         if miniGameWinner != winner { miniGameWinner = winner }
+    }
+
+    // MARK: - 미니게임 역대
+
+    /// [역대] 빈 자리 문구. 판정은 [게임] 탭과 같은 `GamesMiniGameText.allTimeEmpty` 한 벌이다
+    /// (실패 → 준비 중 → 불러오는 중 → 아직 없음).
+    package var miniGameAllTimeEmptyText: String {
+        GamesMiniGameText.allTimeEmpty(
+            failed: miniGameAllTimeState.hasFailed,
+            loaded: miniGameAllTimeState.hasLoaded,
+            unavailable: miniGameAllTimeUnavailable
+        )
+    }
+
+    /// [역대] 빈 자리에 [다시 시도] 를 다는가 — 한 번도 못 받았고 마지막 조회가 실패했을 때만. "준비 중"은 `hasLoaded` 라 여기 안 걸린다.
+    package var miniGameAllTimeShowsRetry: Bool {
+        miniGameAllTimeState.hasFailed && !miniGameAllTimeState.hasLoaded
+    }
+
+    /// `minigame_alltime_board` 를 받아 보고 있는 게임의 역대 표에 반영한다.
+    ///
+    /// 버리는 응답: 계정 세대가 바뀌었다 · 뒤에 떠난 요청이 있다(순번) · 게임이 바뀌었다.
+    /// 실패는 셋으로 가른다.
+    ///  · 함수 없는 서버(PGRST202 · 본문 없는 404) → 준비 중(빈 표 + `miniGameAllTimeUnavailable`).
+    ///  · 그 밖 → 실패. 이미 그린 줄은 그대로 둔다.
+    ///  · 취소 → 아무것도 안 바꾼다. 떠날 때 지운 실패 표시까지 되돌린다 — 안 되돌리면 [다시 시도] 를 누른 조회가 취소됐을 때
+    ///    버튼도 스피너도 없는 "불러오는 중…" 카드로 굳는다.
+    package func loadMiniGameAllTime() async {
+        guard context.session.isSignedIn else { return }
+        miniGameAllTimeSerial &+= 1
+        let serial = miniGameAllTimeSerial
+        let kind = miniGameKind
+        let generation = context.generation
+        let failedBefore = miniGameAllTimeState.hasFailed
+        miniGameAllTimeState.isLoading = true
+        miniGameAllTimeState.hasFailed = false
+        defer { if serial == miniGameAllTimeSerial { miniGameAllTimeState.isLoading = false } }
+        let service = context.service
+        do {
+            let entries = try await context.withMobileSessionRetry { session in
+                try await service.fetchMiniGameAllTimeBoard(accessToken: session.accessToken, kind: kind)
+            }
+            guard generation == context.generation, serial == miniGameAllTimeSerial, kind == miniGameKind else { return }
+            let sorted = entries.sortedForMiniGameAllTimeBoard()
+            if miniGameAllTime != sorted { miniGameAllTime = sorted }
+            miniGameAllTimeUnavailable = false
+            miniGameAllTimeState.hasLoaded = true
+            miniGameAllTimeState.hasFailed = false
+            miniGameAllTimeState.loadedAt = context.clock.now()
+        } catch {
+            guard generation == context.generation, serial == miniGameAllTimeSerial, kind == miniGameKind else { return }
+            if AuthErrorRules.classify(error) == .cancelled {
+                miniGameAllTimeState.hasFailed = failedBefore
+                return
+            }
+            if let serviceError = error as? SupabaseWorkServiceError, BlockReportRules.isMissingFunction(serviceError) {
+                miniGameAllTime = []
+                miniGameAllTimeUnavailable = true
+                miniGameAllTimeState.hasLoaded = true
+                miniGameAllTimeState.loadedAt = context.clock.now()
+            } else {
+                miniGameAllTimeState.hasFailed = true
+            }
+        }
+    }
+
+    /// 조회를 띄운다. "불러오는 중"을 **여기서 먼저** 세운다 — `refreshIfStale` 의 `isLoading` 가드가 같은 틱의 둘째 호출을 막고,
+    /// 첫 그림이 빈 표 문구로 깜빡이지 않는다. 뒤에서 다른 보기로 바뀌어도 이 조회는 끝까지 돌아 깃발을 내린다.
+    private func launchMiniGameAllTime() {
+        miniGameAllTimeState.isLoading = true
+        launch { [weak self] in await self?.loadMiniGameAllTime() }
+    }
+
+    private func clearMiniGameAllTime() {
+        miniGameAllTime = []
+        miniGameAllTimeState = RankingsLoadState()
+        miniGameAllTimeUnavailable = false
     }
 
     // MARK: - 내부

@@ -16,6 +16,16 @@ import Foundation
 /// | `games/rummy/match/edited`     | `_games-rummy-match-edited`     | …c002         | 사람    | 내 차례 + 받침대에서 3장 낸 판 |
 /// | `games/rummy/match/elsewhere`  | `_games-rummy-match-elsewhere`  | …c002         | 사람    | 이 기기가 손대지 않은 판       |
 /// | `games/rummy/result`           | (없음 — 바깥 층)                 | …c004         | 사람    | 끝난 판 · 판돈 5 · 4인         |
+/// | `games/rummy/room/guest`       | `_games-rummy-room-guest`       | …c005         | 사람    | 손님으로 앉은 공개 방 · 2명    |
+/// | `games/rummy/lobby/empty`      | `_games-rummy-lobby-empty`      | nil           | 사람    | 초대·공개 방·사람 없음         |
+/// | `games/rummy/lobby/failed`     | `_games-rummy-lobby-failed`     | nil           | 사람    | 로비 조회 실패                 |
+/// | `games/rummy/lobby/short`      | `_games-rummy-lobby-short`      | nil           | 사람    | 내 루비 2(판돈 전부 모자람)    |
+/// | `games/rummy/lobby/update`     | `_games-rummy-lobby-update`     | nil           | 사람    | 서버가 이 빌드를 거절          |
+/// | `games/rummy/lobby/missing`    | `_games-rummy-lobby-missing`    | nil           | 사람    | 서버에 함수 없음               |
+/// | `games/rummy/lobby/people`     | `_games-rummy-lobby-people`     | nil           | 사람    | 초대·공개 방 없이 사람 8       |
+/// | `games/rummy/lobby/busy`       | `_games-rummy-lobby-busy`       | nil           | 사람    | 바쁜 2 · 업데이트 필요 2(펴짐) |
+/// | `games/rummy/lobby/sheet`      | (없음 — 바깥 층)                 | nil           | 사람    | 판돈 시트를 연다               |
+/// | `games/rummy/ranking/failed`   | `_games-rummy-ranking-failed`   | nil           | 순위    | 순위 조회 실패                 |
 ///
 /// 판 장면은 테트리스처럼 **두 길**로 같은 판을 연다: 장면 폴더의 로비 `me.active_match_id`(코어만으로 선다) + `focusMatchID`(`openWindow`). 같은 id 라 겹쳐도 멱등이다.
 /// 결과는 끝난 판이라 로비가 가리키지 않는다 — `focusMatchID` 한 길이다.
@@ -35,14 +45,26 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         case matchEdited = "games/rummy/match/edited"
         case matchElsewhere = "games/rummy/match/elsewhere"
         case result = "games/rummy/result"
+        case roomGuest = "games/rummy/room/guest"
+        case lobbyEmpty = "games/rummy/lobby/empty"
+        case lobbyFailed = "games/rummy/lobby/failed"
+        case lobbyShort = "games/rummy/lobby/short"
+        case lobbyUpdate = "games/rummy/lobby/update"
+        case lobbyMissing = "games/rummy/lobby/missing"
+        case lobbyPeople = "games/rummy/lobby/people"
+        case lobbyBusy = "games/rummy/lobby/busy"
+        case lobbySheet = "games/rummy/lobby/sheet"
+        case rankingFailed = "games/rummy/ranking/failed"
 
         package var scenario: String { rawValue.replacingOccurrences(of: "/", with: "-") }
 
         /// 이 장면이 세우는 판.
         package var focusMatchID: UUID? {
             switch self {
-            case .lobby, .ranking, .rules: return nil
+            case .lobby, .ranking, .rules, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
+                return nil
             case .room: return Self.roomID
+            case .roomGuest: return Self.guestRoomID
             case .matchMyTurn, .matchEdited, .matchElsewhere: return Self.myTurnID
             case .matchWaiting: return Self.waitingID
             case .result: return Self.resultID
@@ -52,17 +74,19 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         /// 이 기기가 손댄 판인가. 놀던 기기 장면만 아니다 — 데모는 앞 차례의 쓰기가 없어 장부가 비어 있으므로 라우트가 적어 준다.
         package var engages: Bool {
             switch self {
-            case .lobby, .ranking, .rules, .matchElsewhere: return false
-            case .room, .matchMyTurn, .matchWaiting, .matchEdited, .result: return true
+            case .lobby, .ranking, .rules, .matchElsewhere, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
+                return false
+            case .room, .roomGuest, .matchMyTurn, .matchWaiting, .matchEdited, .result: return true
             }
         }
 
-        package var lobbyTab: LobbyTab { self == .ranking ? .ranking : .people }
+        package var lobbyTab: LobbyTab { self == .ranking || self == .rankingFailed ? .ranking : .people }
 
         package static let roomID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c001")!
         package static let myTurnID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c002")!
         package static let waitingID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c003")!
         package static let resultID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c004")!
+        package static let guestRoomID = UUID(uuidString: "d0000000-0000-4000-8000-00000000c005")!
     }
 
     package enum LobbyTab: String, Hashable, Sendable { case people, ranking }

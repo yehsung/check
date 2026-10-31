@@ -123,6 +123,9 @@ import Testing
         "games/rummy/lobby", "games/rummy/ranking", "games/rummy/rules", "games/rummy/room",
         "games/rummy/match/my-turn", "games/rummy/match/waiting", "games/rummy/match/edited",
         "games/rummy/match/elsewhere", "games/rummy/result",
+        "games/rummy/room/guest", "games/rummy/lobby/empty", "games/rummy/lobby/failed", "games/rummy/lobby/short",
+        "games/rummy/lobby/update", "games/rummy/lobby/missing", "games/rummy/lobby/people", "games/rummy/lobby/busy",
+        "games/rummy/lobby/sheet", "games/rummy/ranking/failed",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
         // 상점 뽑기 시트(폰 1.0.10 색 시안): 라우트는 `me/shop` 으로 열리고 장면도 `_me-shop` 이다 —

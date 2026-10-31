@@ -122,7 +122,9 @@ import Testing
         // 아잉 큐브(1.0.17 — 라우트 표는 `MobileDemoRummyRoute` 머리말, 픽스처 계약은 `GamesRummyFixtureContractTests`).
         "games/rummy/lobby", "games/rummy/ranking", "games/rummy/rules", "games/rummy/room",
         "games/rummy/match/my-turn", "games/rummy/match/waiting", "games/rummy/match/edited",
-        "games/rummy/match/elsewhere", "games/rummy/result",
+        "games/rummy/match/elsewhere", "games/rummy/match/full", "games/rummy/match/overview", "games/rummy/match/many",
+        "games/rummy/match/narrow", "games/rummy/match/dragging", "games/rummy/match/attach", "games/rummy/match/placing",
+        "games/rummy/match/refused", "games/rummy/match/lifted", "games/rummy/match/handle", "games/rummy/result",
         "games/rummy/room/guest", "games/rummy/lobby/empty", "games/rummy/lobby/failed", "games/rummy/lobby/short",
         "games/rummy/lobby/update", "games/rummy/lobby/missing", "games/rummy/lobby/people", "games/rummy/lobby/busy",
         "games/rummy/lobby/sheet", "games/rummy/ranking/failed",

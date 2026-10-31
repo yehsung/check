@@ -52,7 +52,7 @@ import Testing
         #expect(R(demoRoute: "games/rummy/match/my-turn")?.destination == .rummy)
         // 기준선: 장면 다섯이 서로 다른 판·다른 스텁 장면을 고른다.
         let ids = R.Scene.allCases.compactMap(\.focusMatchID)
-        #expect(Set(ids).count == 5)
+        #expect(Set(ids).count == 7)
     }
 
     // MARK: - 픽스처 값
@@ -76,7 +76,7 @@ import Testing
     func statesAreSound() throws {
         typealias S = MobileDemoRummyRoute.Scene
         let me = MobileDemo.userID
-        for id in [S.myTurnID, S.waitingID, S.resultID] {
+        for id in [S.myTurnID, S.waitingID, S.resultID, S.fullID, S.manyID] {
             let state = try state(id)
             #expect(state.id == id)
             let mine = try #require(RummyStore.mySeat(in: state, me: me))
@@ -181,6 +181,84 @@ import Testing
             await model.session.signOut()
         }
         #expect(Set(seen.keys).count == 5)
+    }
+
+    @Test("빽빽한 판 · 받침대 3줄: 판 80장 이상 · 첫 등록 뒤 · 받침대 24장은 3줄이다 · 전체 타일이 두 벌을 넘지 않는다")
+    func denseScenes() async throws {
+        typealias S = MobileDemoRummyRoute.Scene
+        let full = try state(S.fullID)
+        let onTable = (full.table ?? []).joined().count
+        #expect(onTable >= 80, "빽빽한 판이 아니다: \(onTable)")
+        #expect(full.myInitialDone == true)
+        let total = onTable + (full.seats ?? []).reduce(0) { $0 + ($1.rackCount ?? 0) } + (full.poolCount ?? 0)
+        #expect(total == 106, "판 + 받침대 + 더미 합이 타일 수가 아니다: \(total)")
+        var counts: [RummyFace: Int] = [:]
+        for face in (full.table ?? []).joined() + (full.myRack ?? []) { counts[face, default: 0] += 1 }
+        for (face, count) in counts { #expect(count <= 2, "\(face.text) 가 \(count)벌") }
+
+        let fullModel = try await launch("games/rummy/match/full")
+        #expect(await baseWaitUntil { fullModel.rummy.editor != nil })
+        #expect(fullModel.rummy.editor?.melds.joined().count == onTable)
+        await fullModel.session.signOut()
+
+        let many = try await launch("games/rummy/match/many")
+        #expect(await baseWaitUntil { many.rummy.editor != nil })
+        #expect(many.rummy.editor?.rack.count == 24)
+        #expect(many.rummy.editor?.rackLayout.rowCount == 3, "받침대 3줄 장면이 3줄이 아니다")
+        await many.session.signOut()
+    }
+
+    @Test("끌기 장면: 궤적이 실제 사건 길로 끌기 도중 상태를 세운다(자석 · 점선 · 거절 · 들어 올림 · 손잡이) · 놓지 않는다")
+    func dragScenes() async throws {
+        func model(_ route: String) async throws -> (app: MobileAppModel, input: GamesRummyMatchModel, before: RummyTurnEditor) {
+            let app = try await launch(route)
+            #expect(await baseWaitUntil { app.rummy.editor != nil }, "\(route)")
+            let editor = try #require(app.rummy.editor)
+            let layout = GamesRummyMatchLayout(size: CGSize(width: 393, height: 759), rackRows: editor.rackLayout.rowCount)
+            let scene = GamesRummyBoardScene.make(match: app.rummy.match, editor: editor, isMyTurn: true, otherDraft: nil)
+            let context = GamesRummyTouchContext(layout: layout, scene: scene, editor: editor, isMyTurn: true, editable: true)
+            let input = GamesRummyMatchModel(tableSize: layout.table.size)
+            input.playDemo(try #require(app.games.demoRummyRoute?.demoTouch), context: context)
+            return (app, input, editor)
+        }
+        let dragging = try await model("games/rummy/match/dragging")
+        guard case .insert(0, _, _, true)? = dragging.input.boardPreview else {
+            Issue.record("끼울 자리 캐럿이 안 선다: \(String(describing: dragging.input.boardPreview))")
+            return
+        }
+        #expect(dragging.app.rummy.editor == dragging.before, "장면이 놓아 버렸다")
+        await dragging.app.session.signOut()
+
+        let attach = try await model("games/rummy/match/attach")
+        guard case .attach(1, .right, _, _, true)? = attach.input.boardPreview else {
+            Issue.record("붙는 자석이 안 선다: \(String(describing: attach.input.boardPreview))")
+            return
+        }
+        await attach.app.session.signOut()
+
+        let placing = try await model("games/rummy/match/placing")
+        #expect(placing.input.drag?.tiles.map(\.face.text) == ["A10", "A11", "A12"])
+        guard case .ghost? = placing.input.boardPreview else {
+            Issue.record("새 묶음 점선이 안 선다")
+            return
+        }
+        await placing.app.session.signOut()
+
+        let refused = try await model("games/rummy/match/refused")
+        #expect(refused.input.hoverRefused && refused.input.drag?.surface == .board)
+        await refused.app.session.signOut()
+
+        let lifted = try await model("games/rummy/match/lifted")
+        #expect(lifted.input.lift?.ids.count == 3 && lifted.input.drag == nil && lifted.input.liftSerial == 1)
+        await lifted.app.session.signOut()
+
+        let handle = try await model("games/rummy/match/handle")
+        #expect(handle.input.movingSet == 0)
+        guard case .ghost? = handle.input.boardPreview else {
+            Issue.record("손잡이 점선이 안 선다")
+            return
+        }
+        await handle.app.session.signOut()
     }
 
     @Test("장면: edited 는 작업 판이 서고(첫 등록 33/30) · 놀던 기기 장면은 쓰기 0건 · 규칙은 시트를 연다 · 순위 탭은 표를 읽는다")

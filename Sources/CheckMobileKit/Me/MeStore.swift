@@ -480,9 +480,15 @@ package final class MeStore {
         missionsTabDidDisappear()
     }
 
-    /// 지금 탭 회고 안내의 [보기]: 루트가 기록 카드까지 내려가게 적어 둔다. 탭이 아직 안 그려졌으면 나타날 때, 이미 있으면 값이 바뀔 때 꺼낸다.
+    /// 지금 탭 회고 안내의 [보기]: 루트가 기록 카드까지 내려가게 적어 둔다. 탭을 고르는 것보다 이 값이 먼저 서므로, 꺼내는 쪽은 **탭이 보인 뒤**다
+    /// (`shouldScrollToRecords` — 탭이 처음 그려질 때는 루트의 `onAppear` 가 꺼낸다).
     package func requestRecordsScroll() {
         pendingRecordsScroll = true
+    }
+
+    /// 지금 내려가도 되는가. 이미 그려 둔 나 탭은 숨은 채로 살아 있어, 적자마자 꺼내면 화면에 없는 스크롤을 밀고 값은 비워져 다시 내려갈 기회가 없다.
+    package var shouldScrollToRecords: Bool {
+        pendingRecordsScroll && isTabVisible
     }
 
     /// 적어 둔 스크롤을 꺼낸다(꺼내면 비운다 — 두 자리에서 불려도 한 번만 내려간다).

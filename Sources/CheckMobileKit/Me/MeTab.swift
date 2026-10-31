@@ -114,8 +114,8 @@ struct MeHomeView: View {
                 MeDemoHooks.scrollIfRequested(proxy)
                 scrollToRecordsIfAsked(proxy)
             }
-            .onChange(of: store.pendingRecordsScroll) { _, pending in
-                if pending { scrollToRecordsIfAsked(proxy) }
+            .onChange(of: store.shouldScrollToRecords) { _, should in
+                if should { scrollToRecordsIfAsked(proxy) }
             }
         }
     }

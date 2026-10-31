@@ -292,6 +292,7 @@ struct MeSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: MobileTheme.space2)
                 }
+                centerRow
                 GroupRow(divider: store.inviteCodeFailed || store.inviteCode != nil ? .inset(MobileTheme.cardPadding) : .none) {
                     Text(MeText.inviteCodeTitle)
                         .font(.subheadline)
@@ -324,6 +325,36 @@ struct MeSettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 소속 센터 행. **읽기 전용이다** — 피커도 버튼도 쓰기도 없다(코어 `CenterSettingsRowState` 주석: 본인은 못 바꾸고 운영자가 고친다).
+    @ViewBuilder
+    private var centerRow: some View {
+        if store.centerFailed {
+            GroupRow {
+                loadFailureRow(MeText.centerLoadFailed)
+            }
+        } else {
+            let state = store.centerRowState
+            GroupRow(minHeight: MobileTheme.rowHeightTwoLine) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(MeText.centerRowTitle)
+                        .font(.body)
+                        .foregroundStyle(MobileTheme.label)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(MeText.centerRowCaption(state))
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: MobileTheme.space2)
+                Text(state.value)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label)
+                    .fixedSize()
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 

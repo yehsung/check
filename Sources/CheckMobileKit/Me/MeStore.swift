@@ -52,6 +52,9 @@ package final class MeStore {
     package internal(set) var avatarURL: URL?
     /// 센터 **서버값**("seoul"). 화면은 `CenterBadge` 가 글자로 접는다.
     package internal(set) var centerServerValue: String?
+    /// 서버가 센터를 말해 줬다. nil 인 `centerServerValue` 가 '미지정'인지 '아직 모름'인지 가르는 유일한 값이다(맥 `myCenterLoaded`).
+    package internal(set) var centerLoaded = false
+    package internal(set) var centerLoadFailed = false
     package internal(set) var headerState = MeLoadState()
 
     // MARK: 기록
@@ -335,6 +338,8 @@ package final class MeStore {
         displayName = nil
         avatarURL = nil
         centerServerValue = nil
+        centerLoaded = false
+        centerLoadFailed = false
         headerState = MeLoadState()
         heatmap = .empty
         retro = nil
@@ -587,7 +592,11 @@ package final class MeStore {
                 try await service.fetchMyCenter(accessToken: session.accessToken, userID: session.userID)
             }
             guard generation == context.generation, isCurrent("header", serial) else { return }
-            if case .success(let value) = center { centerServerValue = value }
+            if case .success(let value) = center {
+                centerServerValue = value
+                centerLoaded = true
+                centerLoadFailed = false
+            }
             headerState.hasLoaded = true
             headerState.loadedAt = context.clock.now()
         } catch {

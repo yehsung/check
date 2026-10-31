@@ -325,7 +325,7 @@ struct NowStatusSection: View {
     @ViewBuilder
     private func content(now: Date) -> some View {
         if let card = store.myCard(now: now) {
-            NowStatusCard(card: card, characterID: store.displayedCharacterID, onEditGoal: onEditGoal)
+            NowStatusCard(card: card, characterID: store.displayedCharacterID, streakDays: store.myStreakDays, onEditGoal: onEditGoal)
         } else if store.teamLoadState == .failed {
             // 시도는 끝났는데 모른다(오프라인 · 5xx) — 도는 요청이 없는데 "불러오는 중"을 남기지 않는다.
             NowUnavailableRow(title: NowText.statusUnavailableTitle, isRetrying: store.isRefreshing) { store.refresh() }
@@ -406,24 +406,51 @@ struct NowUnavailableRow: View {
 struct NowStatusCard: View {
     let card: NowMyCard
     let characterID: String?
+    /// 연속 근무일. nil 이면 칩이 없다(서버가 안 알려 줌).
+    let streakDays: Int?
     let onEditGoal: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             top
-            Text(NowFormat.clock(card.todaySeconds))
-                .scaledFont(size: 48, weight: .semibold)
-                .monospacedDigit()
-                .kerning(-1)
-                .foregroundStyle(MobileTheme.label)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            timerLine
                 .padding(.top, 12)
-                .accessibilityLabel(Text("\(NowText.todayLabel) \(NowFormat.spokenDuration(card.todaySeconds))"))
             meter
                 .padding(.top, 10)
         }
+    }
+
+    /// 큰 타이머 줄. 칩은 그 오른쪽 빈자리에 선다 — 타이머(48pt)보다 낮아 카드 높이를 1pt 도 안 더한다. 큰 글자에서 한 줄에 안 들어가면
+    /// 그때만 아래로 내린다(타이머가 칩 때문에 줄어들지 않는다).
+    @ViewBuilder
+    private var timerLine: some View {
+        if let streakDays {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    timer
+                    Spacer(minLength: 0)
+                    NowStreakChip(days: streakDays)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    timer
+                    NowStreakChip(days: streakDays)
+                }
+            }
+        } else {
+            timer
+        }
+    }
+
+    private var timer: some View {
+        Text(NowFormat.clock(card.todaySeconds))
+            .scaledFont(size: 48, weight: .semibold)
+            .monospacedDigit()
+            .kerning(-1)
+            .foregroundStyle(MobileTheme.label)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .accessibilityLabel(Text("\(NowText.todayLabel) \(NowFormat.spokenDuration(card.todaySeconds))"))
     }
 
     private var mood: CharacterMood {
@@ -533,6 +560,31 @@ struct NowStatusCard: View {
             .monospacedDigit()
             .foregroundStyle(card.isGoalComplete ? MobileTheme.working : MobileTheme.label)
             .fixedSize()
+    }
+}
+
+/// 연속 근무 칩(맥 `HeaderStreakChipLabel` 과 같은 문장 · 같은 기호). 0일도 그린다(사용자 예시가 "연속 0일 근무!"다).
+/// 불꽃만 빨강이다 — 앰버(`pending`)는 같은 카드에서 '연결 끊김'을 말한다.
+private struct NowStreakChip: View {
+    let days: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: HeaderStreakCopy.icon)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(MobileTheme.danger)
+            Text(HeaderStreakCopy.text(days))
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label2)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .frame(minHeight: 22)
+        .background(Capsule().fill(MobileTheme.fill))
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(HeaderStreakCopy.accessibilityLabel(days)))
     }
 }
 

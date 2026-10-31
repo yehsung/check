@@ -148,10 +148,13 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
     /// 일일 미션(v0.3.64 — 최상위 `daily`). **nil = 이 서버엔 일일 미션이 없다**(옛 서버 · 칸이 객체가 아님) — 화면은 일일 6줄만
     /// 감추고 3시간 줄은 남긴다. 기존 칸(`missions` · `claimable_count` · `claimable_ruby`)은 그대로 **누적 미션만** 말한다.
     package var daily: DailyMissionStatus?
+    /// 지금 연속 근무일(최상위 `streak_days` — 폰 칩 전용). **nil = 이 서버는 안 알려 준다**(키 없음 · 모양이 틀림) — 칩을 숨긴다.
+    /// 미션 줄의 `progress` 로 대신하지 마라: 서버가 target 에서 자르고 달성 뒤에는 target 에 고정한다(30일을 넘긴 사람은 2일째여도 30).
+    package var streakDays: Int?
 
     package init(launchAtMs: Int? = nil, missions: [Mission] = [], reportedClaimableCount: Int? = nil,
                  reportedClaimableRuby: Int? = nil, claimedNow: [Claim] = [], rubyBalance: Int? = nil, serverNowMs: Int? = nil,
-                 daily: DailyMissionStatus? = nil) {
+                 daily: DailyMissionStatus? = nil, streakDays: Int? = nil) {
         var seen = Set<String>()
         self.launchAtMs = launchAtMs
         self.missions = missions.filter { seen.insert($0.key).inserted }
@@ -161,11 +164,12 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
         self.rubyBalance = rubyBalance
         self.serverNowMs = serverNowMs
         self.daily = daily
+        self.streakDays = streakDays
     }
 
     /// 키는 서비스 디코더의 `.convertFromSnakeCase` 를 거친 **카멜**이다(`claimed_at_ms` → `claimedAtMs`).
     package enum CodingKeys: String, CodingKey {
-        case launchAtMs, missions, claimableCount, claimableRuby, claimedNow, rubyBalance, serverNowMs, daily
+        case launchAtMs, missions, claimableCount, claimableRuby, claimedNow, rubyBalance, serverNowMs, daily, streakDays
     }
 
     package init(from decoder: Decoder) throws {
@@ -179,7 +183,8 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
             rubyBalance: c.achievementLossyInt(forKey: .rubyBalance),
             serverNowMs: c.achievementLossyInt(forKey: .serverNowMs),
             // 일일 칸 하나가 깨져도 누적 미션은 산다(칸이 객체가 아니면 nil = 일일 없음).
-            daily: c.achievementLossy(DailyMissionStatus.self, forKey: .daily)
+            daily: c.achievementLossy(DailyMissionStatus.self, forKey: .daily),
+            streakDays: c.achievementLossyInt(forKey: .streakDays)
         )
     }
 
@@ -253,6 +258,18 @@ package enum AchievementNoticeText {
     /// 재시도다. 맥 미션 화면이 안내줄을 버린 이유(검토 지적 2026-10-19): 안내줄은 도전 미션 절 **위**에 26pt 로 끼어 줄을 밀고,
     /// 아래쪽 줄을 누른 사람에겐 스크롤 밖이라 안 보였다. 짧게 쓴 이유: 버튼 옆 글자 열이 140pt 남짓이다.
     package static let claimFailedRow = "받지 못했어요 · 다시 눌러 주세요"
+}
+
+// MARK: - 연속 근무 칩 문구(맥 헤더 · 폰 지금 탭)
+
+/// 연속 근무 칩의 문구(순수 — 값으로 검증한다). 숫자는 서버 `streak_days` 그대로다 — 맥은 `ultra_wallet_sync`(폰은 금지 호출), 폰은
+/// `achievements_status`(같은 날짜 규칙). 예전 울트라 화면 "연속 출근" 줄이 "N일 연속"으로 보여 주던 바로 그 값이고 판정은 서버가 한다.
+package enum HeaderStreakCopy {
+    package static let icon = "flame.fill"   // macOS 10.15+ (배포 타깃 14 ✓ — CoreGlyphs name_availability: 2019)
+    /// 화면 글자. 사장님 예시(2026-10-16) "연속 0일 근무!" 그대로 — **0일도 그린다**(사장님 예시가 0일이다).
+    package static func text(_ days: Int) -> String { "연속 \(max(0, days))일 근무!" }
+    /// 보이스오버 문구. 느낌표를 읽지 않게 뺀다.
+    package static func accessibilityLabel(_ days: Int) -> String { "연속 \(max(0, days))일 근무" }
 }
 
 // MARK: - 서비스

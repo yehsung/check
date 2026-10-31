@@ -1835,16 +1835,6 @@ private struct HeaderGoalSection: View {
 
 // MARK: - Header streak chip (v0.3.56)
 
-/// 연속 근무 칩의 문구(순수 — 값으로 검증한다). 숫자는 서버 `ultra_wallet_sync` 의 `streak_days` 그대로다
-/// (예전 울트라 화면 "연속 출근" 줄이 "N일 연속"으로 보여 주던 바로 그 값 — 판정은 서버가 한다).
-enum HeaderStreakCopy {
-    static let icon = "flame.fill"   // macOS 10.15+ (배포 타깃 14 ✓ — CoreGlyphs name_availability: 2019)
-    /// 화면 글자. 사장님 예시(2026-10-16) "연속 0일 근무!" 그대로 — **0일도 그린다**(사장님 예시가 0일이다).
-    static func text(_ days: Int) -> String { "연속 \(max(0, days))일 근무!" }
-    /// 보이스오버 문구. 느낌표를 읽지 않게 뺀다.
-    static func accessibilityLabel(_ days: Int) -> String { "연속 \(max(0, days))일 근무" }
-}
-
 /// 헤더 카드의 연속 근무 칩(v0.3.56). 사장님 지시(2026-10-16): "연속 근무일수는 [헤더 카드] 여기에 뜨게끔 밖으로 빼줘.
 /// 연속 0일 근무! 이런식으로." — 예전엔 울트라 화면의 "연속 출근" 줄(콕찌르기 → 잔량 배지 → 울트라)에서만 보였다.
 ///

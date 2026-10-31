@@ -34,6 +34,7 @@ fun NowHomeEntry(
         characterID = characterID,
         onTalk = { peer -> AingRoute.safeId(peer)?.let { openRoute(AingRoute.Message(it)) } },
         onEditGoal = { open(Dest.TeamGoalSheet) },
+        onOpenTeamRoster = { open(Dest.TeamRoster) },
         modifier = modifier,
     )
 }
@@ -51,4 +52,10 @@ fun TeamJoinSheetEntry(store: NowStore, dismiss: () -> Unit) {
         SheetHeader(NowText.noTeamTitle, dismiss, closeLabel = NowText.close)
         Box(Modifier.padding(horizontal = AingDimens.sideMargin)) { NowTeamJoinSection(store.teamJoin) }
     }
+}
+
+/** 우리 팀 전체 명단(Dest.TeamRoster). */
+@Composable
+fun TeamRosterEntry(store: NowStore, onBack: () -> Unit) {
+    TeamRosterScreen(store, onBack)
 }

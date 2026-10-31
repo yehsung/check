@@ -20,3 +20,6 @@ fun TeamGoalSheetPlaceholder() = PlaceholderScreen("주간 목표 시트", OWNER
 
 @Composable
 fun TeamJoinSheetPlaceholder() = PlaceholderScreen("팀 합류 시트", OWNER)
+
+@Composable
+fun TeamRosterPlaceholder() = PlaceholderScreen("우리 팀 전체 명단", OWNER)

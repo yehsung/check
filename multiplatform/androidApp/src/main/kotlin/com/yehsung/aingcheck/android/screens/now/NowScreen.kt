@@ -42,6 +42,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -125,6 +126,7 @@ object NowTags {
     fun workingRow(id: String): String = "now-working-$id"
     fun talk(id: String): String = "now-talk-$id"
     const val TEAM_JOIN = "now-team-join"
+    const val TEAM_ROSTER_ENTRY = "now-team-roster-entry"
     const val GOAL_SHEET = "now-goal-sheet"
     const val GOAL_SAVE = "now-goal-save"
 }
@@ -141,6 +143,7 @@ fun NowScreen(
     onTalk: (String) -> Unit,
     onEditGoal: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenTeamRoster: () -> Unit = {},
 ) {
     val colors = AingTheme.colors
     LaunchedEffect(store) { store.tabDidAppear() }
@@ -154,7 +157,7 @@ fun NowScreen(
             store.notice?.let { InlineNotice(it, NoticeKind.Warning, Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 4.dp)) }
             StatusSection(store, work, characterID, now, onEditGoal)
             NowTodoSection(store)
-            WorkingSection(store, work != null, now, onTalk)
+            WorkingSection(store, work != null, now, onTalk, onOpenTeamRoster)
         }
         NowUndoToast(store, Modifier.align(Alignment.BottomCenter))
     }
@@ -253,6 +256,9 @@ object NowWorkLines {
         }
     }
 
+    /** [팀 전체 보기]: 소속을 받은 사람에게만. 무소속 · 소속을 아직 모를 때는 갈 곳이 없다. */
+    fun showsTeamRosterEntry(hasMembership: Boolean, hasNoTeam: Boolean): Boolean = hasMembership && !hasNoTeam
+
     /** 상태 카드 초상 기분(근무 중 · 끊김 · 안 함). */
     fun mood(card: NowMyCard): CharacterMood = if (card.isWorking) (if (card.isStale) CharacterMood.Lost else CharacterMood.Working) else CharacterMood.Off
 
@@ -324,7 +330,7 @@ internal fun ProgressBar(fraction: Double, fill: androidx.compose.ui.graphics.Co
 // ---------------------------------------------------------------- 지금 근무 중
 
 @Composable
-private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftDate, onTalk: (String) -> Unit) {
+private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftDate, onTalk: (String) -> Unit, onOpenTeamRoster: () -> Unit) {
     val colors = AingTheme.colors
     val people = store.workingPeople(now)
     val teammates = people.filter { it.isTeammate }
@@ -347,11 +353,29 @@ private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftD
         } else {
             WorkingGroup(if (teammates.isEmpty()) NowText.otherTeams else NowText.ourTeam, people, now, store, onTalk)
         }
+        // 쉬는 팀원을 보러 가는 입구라 우리 팀에 근무 중인 사람이 없어도 선다. 소속이 있을 때만.
+        if (NowWorkLines.showsTeamRosterEntry(store.membership != null, store.hasNoTeam)) TeamRosterEntryRow(onOpenTeamRoster)
         // 폰 근무 문이 이어졌고 서버에 함수가 있을 때만 "이 탭 맨 위 버튼으로" 를 말한다.
         Text(
             if (phoneWorkWired && store.phoneWorkAvailable) NowText.workingFooter else NowText.workingFooterMacOnly,
             style = MaterialTheme.typography.bodySmall, color = colors.label2, modifier = Modifier.padding(horizontal = 4.dp),
         )
+    }
+}
+
+/** [팀 전체 보기] 한 줄 — 누르면 명단 화면을 쌓는다. */
+@Composable
+private fun TeamRosterEntryRow(onOpen: () -> Unit) {
+    val colors = AingTheme.colors
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(AingDimens.groupRadius)).background(colors.surface)
+            .clickable(role = Role.Button, onClick = onOpen).heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 8.dp).testTag(NowTags.TEAM_ROSTER_ENTRY),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        AingIcon(sf("person.2", AppIcon.Group), null, size = 22.dp, tint = colors.label2)
+        Text(NowText.teamRosterEntry, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label, modifier = Modifier.weight(1f))
+        AingIcon(sf("chevron.right", AppIcon.ChevronRight), null, size = 16.dp, tint = colors.label3)
     }
 }
 

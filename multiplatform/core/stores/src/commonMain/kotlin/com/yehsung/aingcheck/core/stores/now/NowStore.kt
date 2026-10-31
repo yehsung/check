@@ -16,6 +16,7 @@ import com.yehsung.aingcheck.core.rules.text.StatusMessage
 import com.yehsung.aingcheck.core.session.SessionText
 import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.session.team.TeamJoinStore
+import com.yehsung.aingcheck.core.stores.messages.NaturalKoNameCollation
 import com.yehsung.aingcheck.core.stores.messages.SwiftStrings
 import com.yehsung.aingcheck.core.stores.now.todo.TodoListStore
 import com.yehsung.aingcheck.core.stores.now.todo.TodoSync
@@ -565,6 +566,24 @@ class NowStore(
             .sortedWith(::nameThenIDOrder)
         val seen = HashSet<String>()
         return (teammates + others).filter { seen.add(it.id) }
+    }
+
+    /**
+     * 우리 팀 전체 명단(나 포함 · 쉬는 사람 포함 — 맥 `TeamPanel.sortedMembers`). 팀 상태를 한 번도 못 받았으면 빈 목록이다 — 화면은 [teamLoadState] 로 가른다.
+     * 팀 상태 표(`work_statuses`)에 행이 없는 사람(한 번도 근무한 적 없는 팀원)은 맥처럼 줄이 없다.
+     */
+    fun teamRoster(now: SwiftDate): List<NowTeamRosterRow> {
+        val fetchedAt = teamFetchedAt ?: return emptyList()
+        return NowTeamRoster.rows(
+            members = teamMembers,
+            directory = directory,
+            myUserID = context.sessionStore.userID,
+            goalSeconds = maxOf(1, goalHours) * 3600L,
+            fetchedAt = fetchedAt,
+            now = now,
+            judgedAt = presenceJudgedAt(now),
+            collation = NaturalKoNameCollation,
+        )
     }
 
     private fun teammateOrder(lhs: NowWorkingPerson, rhs: NowWorkingPerson): Int {

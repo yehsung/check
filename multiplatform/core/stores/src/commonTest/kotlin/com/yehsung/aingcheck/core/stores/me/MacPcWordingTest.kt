@@ -43,6 +43,13 @@ class MacPcWordingTest {
         assertEquals("되돌릴 수 없어요. 맥·PC 앱도 같이 로그아웃돼요.", MeText.deleteAccountIrreversible)
     }
 
+    /** Windows 판 두 줄(사용자 답 "Windows 전용 문구 두기") — 자기 화면에서 맥을 말하지 않는다. */
+    @Test
+    fun desktopLinesMatch() {
+        assertEquals("오버레이와 울트라 찌르기에 나오는 내 캐릭터예요.", MeText.pickerCaptionDesktop)
+        assertEquals("나 화면과 오버레이에서 착용 캐릭터가 나를 대신해요.", MeText.characterRoleNoteDesktop)
+    }
+
     @Test
     fun middleDotIsU00B7() {
         for (s in listOf(AILimitSurfaceText.noVisibleProviders, inviteSecondLine)) {

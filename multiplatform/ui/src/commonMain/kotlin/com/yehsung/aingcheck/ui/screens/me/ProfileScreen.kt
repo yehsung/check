@@ -55,6 +55,7 @@ import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.CharacterPortrait
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
+import com.yehsung.aingcheck.ui.screens.session.LocalDesktopWording
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButton
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButtonKind
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingCard
@@ -249,7 +250,7 @@ private fun CharacterRoleCard(store: MeStore, openCharacters: () -> Unit) {
         CharacterPortrait(LocalScreenArt.current.portrait(store.equippedCharacterID, null), CharacterMood.Plain, 52.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(MeText.characterRoleTitle, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label)
-            Text(MeText.characterRoleNote, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+            Text(if (LocalDesktopWording.current) MeText.characterRoleNoteDesktop else MeText.characterRoleNote, style = MaterialTheme.typography.bodySmall, color = colors.label2)
             Text(MeText.changeCharacter, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = colors.accent, modifier = Modifier.padding(top = 2.dp))
         }
         AingIcon(AppIcon.ChevronRight, contentDescription = null, size = 16.dp, tint = colors.label3)

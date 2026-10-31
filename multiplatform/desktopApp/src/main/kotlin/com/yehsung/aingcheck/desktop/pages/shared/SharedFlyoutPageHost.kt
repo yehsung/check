@@ -10,7 +10,7 @@
 //    닫혀야 숨은 창 뒤에서 읽음이 올라가지 않는다. 수명 고리는 프레임과 무관하게 흐름(follow)으로 돈다(숨은 창은 프레임을 안 그린다).
 // ⚠️ 배너는 여기 겹쳐 쌓지 않는다(shell.md §2 ⑤ — W3-c2). 색은 AingTheme 토큰만(D5 — desktopApp main 색 리터럴 금지).
 // int-w3(W-14 #2·#9): 뿌리에서 차단 문구 판을 맥으로 준다(LocalBlockReportPlatform — 공용 20, 맥 WorkTimerStoreBlocks.swift:126 `.mac`:
-// Windows 엔 '나' 탭이 없어 길 안내가 '설정 → 차단한 사람'). 업데이트 필요 화면의 [업데이트] 목적지는 Store 제품 페이지
+// Windows 엔 '나' 탭이 없어 길 안내가 '설정 → 차단한 사람'). 로그인·프로필·캐릭터의 기기 문구도 Windows 판(LocalDesktopWording). 업데이트 필요 화면의 [업데이트] 목적지는 Store 제품 페이지
 // (SharedPagesDeps.updateDestination = StoreUpdateDestination.windows — 생성 상수 STORE_PRODUCT_ID, 비면 AppLinks = 단추 숨김).
 package com.yehsung.aingcheck.desktop.pages.shared
 
@@ -98,6 +98,7 @@ import com.yehsung.aingcheck.ui.screens.rankings.RankingsBoardRestore
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsMyFace
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsScreen
 import com.yehsung.aingcheck.ui.screens.session.LaunchScreen
+import com.yehsung.aingcheck.ui.screens.session.LocalDesktopWording
 import com.yehsung.aingcheck.ui.screens.session.LoginScreen
 import com.yehsung.aingcheck.ui.screens.session.PasswordResetScreen
 import com.yehsung.aingcheck.ui.screens.session.SessionGraphemes
@@ -211,7 +212,7 @@ class SharedFlyoutPageHost(private val deps: SharedPagesDeps) : FlyoutPageHost {
         val page by pageFlow.collectAsState(SharedPage.Launching)
         val firstRunPending by (deps.firstRun?.pending ?: NO_FIRST_RUN).collectAsState()
         AingTheme(deps.appearance.mode) {
-            CompositionLocalProvider(LocalBlockReportPlatform provides BlockReportPlatform.mac) {
+            CompositionLocalProvider(LocalBlockReportPlatform provides BlockReportPlatform.mac, LocalDesktopWording provides true) {
                 val colors = AingTheme.colors
                 val firstRun = deps.firstRun
                 if (visible && firstRun != null && SharedRouter.showsFirstRun(firstRunPending, page)) {

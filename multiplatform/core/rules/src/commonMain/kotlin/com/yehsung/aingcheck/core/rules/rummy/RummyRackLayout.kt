@@ -26,7 +26,7 @@ data class RummyRackSlot(val row: Int, val halfCol: Int) : Comparable<RummyRackS
     override fun toString(): String = "($row,$halfCol)"
 }
 
-/** 저장용 한 줄 — 면과 자리. 같은 면이 둘이면 저장 순서대로 하나씩 짝짓는다. */
+/** 저장용 한 줄 — 면과 자리. 같은 면이 둘이면 저장 순서대로 하나씩 짝짓는다. 면이 와이어 타입이라 읽기는 SwiftJson 으로 한다. */
 @Serializable
 data class RummyRackEntry(val face: RummyFace, val slot: RummyRackSlot)
 

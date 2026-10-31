@@ -1,7 +1,7 @@
 // 원본: Tests/checkTests/V0370RummyRackTests.swift:52 @ 1a5eeca6
 package com.yehsung.aingcheck.core.rules.rummy
 
-import kotlinx.serialization.json.Json
+import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -44,13 +44,13 @@ private fun r70Invariants(editor: RummyTurnEditor, count: Int): List<String> {
 private fun slot(row: Int, col: Int) = RummyDropTarget.RackSlot(RummyRackSlot(row, col))
 
 class RummyRackTest {
-    /** 저장 모양은 Swift 합성 Codable 과 같다(면은 글자 · 자리는 row/halfCol) — 스토어 단계가 판마다 로컬에 쓴다. */
+    /** 저장 모양은 Swift 합성 Codable 과 같다(면은 글자 · 자리는 row/halfCol) — 스토어 단계가 판마다 로컬에 쓴다. 면이 와이어 타입이라 SwiftJson 으로만 읽는다. */
     @Test
     fun rackEntryStoresLikeSwiftCodable() {
         val entry = RummyRackEntry(RummyGoldenText.face("A7"), RummyRackSlot(1, 4))
-        val text = Json.encodeToString(RummyRackEntry.serializer(), entry)
+        val text = SwiftJson.encode(RummyRackEntry.serializer(), entry)
         assertEquals("""{"face":"A7","slot":{"row":1,"halfCol":4}}""", text)
-        assertEquals(entry, Json.decodeFromString(RummyRackEntry.serializer(), text))
+        assertEquals(entry, SwiftJson.decode(RummyRackEntry.serializer(), text))
     }
 
     @Test

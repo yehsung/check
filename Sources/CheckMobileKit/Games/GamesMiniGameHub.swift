@@ -150,8 +150,7 @@ package final class GamesMiniGameHub {
     /// (맥 `WorkTimerStore.miniGameBoardScope` 와 같다). 앱이 떠 있는 동안만 기억하고 영속하지 않으며,
     /// **로그아웃도 되돌리지 않는다**: 계정이 아니라 이 실행의 보기 선택이다(`reset()` 의 그 자리 주석).
     ///
-    /// 이 전환이 서는 자리는 **[게임] 탭 미니게임 화면 하나**다(사용자 결정 2026-10-30). [순위] 탭 미니게임 판은
-    /// store·RPC·빈 칸 문구가 따로라 손대지 않는다 — 거길 같이 넓히면 반쯤 시험된 화면이 둘 생긴다.
+    /// 이 값은 **[게임] 탭 미니게임 화면**의 것이다. [순위] 탭 미니게임 판은 자기 값을 따로 든다(`RankingsStore.miniGameScope`).
     package private(set) var boardScope: MiniGameBoardScope = .today
     /// 내 순위 공개 여부(profiles.minigame_public). 이번 로그인에서 아직 모르면 공개로 본다(맥과 같다 — 컬럼 없는 서버).
     /// 한 번 안 값은 조회 실패로 바뀌지 않는다(`refreshPublic`).

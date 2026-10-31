@@ -110,8 +110,7 @@ package enum GamesMiniGameText {
     // 머리 제목("오늘 순위" · "역대 순위")은 **코어 한 벌**(`MiniGameBoardScope.boardTitle`)이라 여기 베끼지 않는다 —
     // 맥 `MiniGamePanel.allTimeRankTitle` 도 그 값을 가리킨다.
     //
-    // ⚠️ [순위] 탭(`RankingsText.miniGameRankTitle`)은 **이 전환과 무관하다**(사용자 결정 2026-10-30: 전환은 [게임] 탭에만).
-    //    그쪽 글자를 이 값으로 바꾸지 마라 — store·RPC·빈 칸 문구 행렬이 따로다.
+    // [순위] 탭 미니게임 판도 아래 [역대] 글자를 이 한 벌에서 읽는다(`RankingsStore.miniGameAllTimeEmptyText` · `RankingsMiniGameSection`).
     package static let allTimeRankTitle = MiniGameBoardScope.allTime.boardTitle
     /// [역대] 바닥 두 줄: 무엇이 올라가는가 + 날짜가 무엇인가. **상금 이야기는 없다** — 상금은 오늘 판의 것이다.
     package static let allTimeRuleCaption = "사람마다 가장 높은 점수 하나만 올라가요"

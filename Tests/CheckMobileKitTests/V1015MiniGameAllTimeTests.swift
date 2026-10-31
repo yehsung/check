@@ -17,8 +17,7 @@ import AppKit
 //  · 빈 칸 네 상태가 **서로 다른 말**을 하는가(불러오는 중 ≠ 실패 ≠ 준비 중 ≠ 아직 없음)
 //  · 글자가 맥과 같은가(소스 계약)
 //
-// 전환이 서는 자리는 **[게임] 탭 미니게임 화면 하나**다(사용자 결정 2026-10-30). [순위] 탭은 store·RPC·빈 칸 문구가
-// 따로라 이번 판에서 안 넓혔고, 아래 소스 계약이 그 사실을 못 박는다.
+// [순위] 탭의 같은 전환은 store 가 따로라 `V1016RankingsAllTimeTests` 가 잰다.
 //
 // 뷰(`#if os(iOS)`)는 macOS 스위트가 한 줄도 컴파일하지 않는다 — `ios/scripts/build-sim.sh` 가 유일한 그물이다.
 @MainActor
@@ -324,7 +323,7 @@ import AppKit
 
     // MARK: - 글자(맥과 한 벌) · 자리
 
-    @Test("문구는 맥 네 줄 그대로 · 제목은 코어 한 벌 · 전환은 [게임] 탭 미니게임 화면 하나에만 선다")
+    @Test("문구는 맥 네 줄 그대로 · 제목은 코어 한 벌 · [게임] 탭 화면은 빈 칸 판정을 허브에서 읽고 같은 행 뷰를 쓴다")
     func copyAndPlacementMatchTheMac() throws {
         let mac = try MeTextParityTests.macCode()
         for sentence in [GamesMiniGameText.allTimeRuleCaption, GamesMiniGameText.allTimeDayCaption,
@@ -335,14 +334,8 @@ import AppKit
         #expect(GamesMiniGameText.allTimeRankTitle == MiniGameBoardScope.allTime.boardTitle)
         #expect(MiniGameBoardScope.allTime.boardTitle == "역대 순위" && MiniGameBoardScope.allTime.label == "역대")
 
-        // [순위] 탭(다른 store · 다른 화면)은 이번 판에서 **안 넓혔다**(사용자 결정 2026-10-30).
         #expect(RankingsText.miniGameRankTitle == MiniGameBoardScope.today.boardTitle)
-        let rankingsSection = try IntegrationContractTests.code("Sources/CheckMobileKit/Rankings/RankingsBoardSections.swift")
-        #expect(!rankingsSection.contains("MiniGameBoardScope"), "[순위] 탭에 전환이 섞여 들어갔다")
 
-        // 전환 부품을 세우는 자리는 한 곳이다(둘이 되면 두 화면이 서로 다른 판을 보여 준다).
-        let pickers = try IntegrationContractTests.files(containing: ["GamesBoardScopePicker("], under: "Sources/CheckMobileKit")
-        #expect(pickers == ["Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift"], "전환이 흩어졌다: \(pickers)")
         // 화면은 빈 칸 판정을 **허브에서** 읽는다(뷰 안 삼항은 macOS 스위트가 못 잰다).
         let screen = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift")
         #expect(screen.contains("state.allTimeEmptyText") && screen.contains("state.allTimeShowsRetry"))

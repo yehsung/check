@@ -439,51 +439,111 @@ struct RankingsTokenRow: View {
 
 // MARK: - 미니게임 (시안 B 06)
 
-/// 미니게임: 머리 = "오늘 순위" + 게임 메뉴 알약(세그먼트 두 줄을 한 줄로) · 어제 1등 한 줄 그룹(왕관 원 + 이름·점수 + 초록 획득 칩) ·
-/// 오늘 순위 그룹(행 48) · 상품 문구(숫자마다 실제 보석) + 정족수 줄.
+/// 미니게임: 머리 = 판 제목 + 게임 메뉴 알약(세그먼트 두 줄을 한 줄로) · 그 아래 한 줄 [오늘 | 역대] 전환.
+/// 전환을 머리 줄에 함께 넣지 않는 이유: 제목 + 알약 둘은 좁은 폰에서 꺾인다.
+///
+/// [오늘] = 어제 1등 한 줄 그룹(왕관 원 + 이름·점수 + 초록 획득 칩) · 오늘 순위 그룹(행 48) · 상품 문구(숫자마다 실제 보석) + 정족수 줄.
+/// [역대] = 역대 순위 그룹(같은 행 + 작은 날짜) · 규칙 + 날짜 두 줄. 어제 1등·상금·정족수는 오늘 판의 것이라 없다.
 struct RankingsMiniGameSection: View {
     let store: RankingsStore
     private let metrics = RankingsScaledMetrics()
 
     var body: some View {
-        let state = store.miniGameState
-        let entries = store.miniGameBoard
+        let scope = store.miniGameScope
         VStack(alignment: .leading, spacing: 0) {
-            RankingsSectionHeader(title: RankingsText.miniGameRankTitle) {
+            RankingsSectionHeader(title: scope.boardTitle) {
                 RankingsGameMenu(selected: store.miniGameKind) { store.select(miniGame: $0) }
             }
+            GamesBoardScopePicker(selected: scope) { store.select(miniGameScope: $0) }
+                .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                .padding(.bottom, 12)
 
-            if let winner = store.miniGameWinner {
-                RankingsChampionRow(winner: winner)
-                    .padding(.bottom, 12)
+            switch scope {
+            case .today: today
+            case .allTime: allTime
             }
+        }
+    }
 
-            if entries.isEmpty {
-                RankingsEmptyCard(
-                    text: RankingsText.miniGameEmptyText(hasLoaded: state.hasLoaded, hasFailed: state.hasFailed),
-                    showsRetry: state.hasFailed && !state.hasLoaded && !state.isLoading,
-                    isLoading: state.isLoading && !state.hasLoaded,
-                    retry: { Task { await store.loadMiniGame() } }
-                )
-            } else {
-                let me = (id: store.myCharacterID, mood: store.myCharacterMood)
-                InsetGroup {
-                    ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                        let isMe = store.myUserID != nil && entry.userID == store.myUserID
-                        RankingsMiniGameRow(
-                            rank: index + 1,
-                            entry: entry,
-                            isMe: isMe,
-                            me: isMe ? me : nil,
-                            isLast: index == entries.count - 1,
-                            metrics: metrics
-                        )
-                    }
+    @ViewBuilder
+    private var today: some View {
+        let state = store.miniGameState
+        let entries = store.miniGameBoard
+        if let winner = store.miniGameWinner {
+            RankingsChampionRow(winner: winner)
+                .padding(.bottom, 12)
+        }
+
+        if entries.isEmpty {
+            RankingsEmptyCard(
+                text: RankingsText.miniGameEmptyText(hasLoaded: state.hasLoaded, hasFailed: state.hasFailed),
+                showsRetry: state.hasFailed && !state.hasLoaded && !state.isLoading,
+                isLoading: state.isLoading && !state.hasLoaded,
+                retry: { Task { await store.loadMiniGame() } }
+            )
+        } else {
+            let me = (id: store.myCharacterID, mood: store.myCharacterMood)
+            InsetGroup {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    let isMe = store.myUserID != nil && entry.userID == store.myUserID
+                    RankingsMiniGameRow(
+                        rank: index + 1,
+                        entry: entry,
+                        isMe: isMe,
+                        me: isMe ? me : nil,
+                        isLast: index == entries.count - 1,
+                        metrics: metrics
+                    )
                 }
             }
-
-            prizeFooter(players: store.knowsMiniGamePlayerCount ? store.miniGamePlayers : nil)
         }
+
+        prizeFooter(players: store.knowsMiniGamePlayerCount ? store.miniGamePlayers : nil)
+    }
+
+    /// 문구와 [다시 시도] 여부는 스토어 판정 하나에서 온다(이 뷰는 macOS 스위트가 못 잰다). 실패해도 그린 줄이 있으면 줄을 그대로 둔다.
+    @ViewBuilder
+    private var allTime: some View {
+        let state = store.miniGameAllTimeState
+        let entries = store.miniGameAllTime
+        if entries.isEmpty {
+            RankingsEmptyCard(
+                text: store.miniGameAllTimeEmptyText,
+                showsRetry: store.miniGameAllTimeShowsRetry && !state.isLoading,
+                isLoading: state.isLoading && !state.hasLoaded,
+                retry: { Task { await store.loadMiniGameAllTime() } }
+            )
+        } else {
+            let me = (id: store.myCharacterID, mood: store.myCharacterMood)
+            InsetGroup {
+                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                    let isMe = store.myUserID != nil && entry.userID == store.myUserID
+                    RankingsMiniGameRow(
+                        rank: index + 1,
+                        entry: entry.rankRowEntry,
+                        isMe: isMe,
+                        me: isMe ? me : nil,
+                        isLast: index == entries.count - 1,
+                        metrics: metrics,
+                        dateCaption: entry.dayCaption
+                    )
+                }
+            }
+        }
+        allTimeFooter
+    }
+
+    /// [역대] 바닥 두 줄 — [게임] 탭과 같은 글자.
+    private var allTimeFooter: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(GamesMiniGameText.allTimeRuleCaption)
+            Text(GamesMiniGameText.allTimeDayCaption)
+        }
+        .font(MobileTheme.rowSubtitle)
+        .foregroundStyle(MobileTheme.label2)
+        .fixedSize(horizontal: false, vertical: true)
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .padding(.top, 8)
     }
 
     /// 상품 안내. 정족수 줄은 사람 수를 알 때만(`players` nil = 모른다 — 불러오지 못한 순위를 "아무도 안 했어요"로 말하지 않는다).
@@ -585,6 +645,8 @@ struct RankingsMiniGameRow: View {
     let me: (id: String?, mood: CharacterMood)?
     let isLast: Bool
     let metrics: RankingsScaledMetrics
+    /// [역대] 줄의 작은 날짜("9/13" — 그 점수를 처음 낸 날). [오늘] 은 nil.
+    var dateCaption: String? = nil
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -607,15 +669,25 @@ struct RankingsMiniGameRow: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(RankingsText.miniGameRowAccessibility(rank: rank, entry: entry, isMe: isMe)))
+        .accessibilityLabel(Text(RankingsText.miniGameRowAccessibility(rank: rank, entry: entry, isMe: isMe, dayCaption: dateCaption)))
     }
 
+    /// 점수(+ [역대] 날짜). 날짜는 점수 앞에 한 단 흐리게 — [게임] 탭 `GamesRankRow` 와 같은 자리·같은 무게다.
+    /// 둘을 한 묶음으로 두면 큰 글자에서 이름 줄과 점수가 접혀도 날짜가 이름의 일부처럼 읽히지 않는다.
     private var score: some View {
-        Text(RankingsText.score(entry.bestScore))
-            .font(MobileTheme.number(.callout, weight: .semibold))
-            .monospacedDigit()
-            .foregroundStyle(MobileTheme.label)
-            .fixedSize()
+        HStack(spacing: 6) {
+            if let dateCaption {
+                Text(dateCaption)
+                    .font(.caption2)
+                    .monospacedDigit()
+                    .foregroundStyle(MobileTheme.label3Text)
+            }
+            Text(RankingsText.score(entry.bestScore))
+                .font(MobileTheme.number(.callout, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label)
+        }
+        .fixedSize()
     }
 }
 #endif

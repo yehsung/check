@@ -155,4 +155,24 @@ class MiniGameAllTimeTest {
         assertEquals(777L, hub3.myAllTimeBest(MiniGameKind.flappy), "늦게 닿은 옛 받기는 새 표를 덮지 않는다")
         assertFalse(hub3.allTimeFailed, "옛 받기는 실패도 아니다(버렸을 뿐)")
     }
+
+    /** 허브의 빈 자리 판정: 실패·준비 중·불러오는 중을 한 표로 가른다 · [다시 시도] 는 못 받은 실패에만. */
+    @Test
+    fun theHubEmptyTextAndRetryFollowTheTable() = runTest {
+        val stub = Stub()
+        val (_, hub) = open(stub)
+        hub.openScreen(MiniGameKind.flappy)
+        advanceUntilIdle()
+        assertEquals(com.yehsung.aingcheck.core.stores.games.GamesMiniGameText.loadingCaption, hub.allTimeEmptyText)
+        stub.allTime += Reply.Offline
+        hub.selectBoardScope(MiniGameBoardScope.allTime)
+        advanceUntilIdle()
+        assertTrue(hub.allTimeShowsRetry)
+        assertEquals(com.yehsung.aingcheck.core.stores.games.GamesMiniGameText.allTimeFailedCaption, hub.allTimeEmptyText)
+        stub.allTime += Reply.pgrst202
+        hub.loadAllTimeBoard()
+        advanceUntilIdle()
+        assertFalse(hub.allTimeShowsRetry, "준비 중 옆에 [다시 시도] 를 달았다")
+        assertEquals(com.yehsung.aingcheck.core.stores.games.GamesMiniGameText.allTimeUnavailableCaption, hub.allTimeEmptyText)
+    }
 }

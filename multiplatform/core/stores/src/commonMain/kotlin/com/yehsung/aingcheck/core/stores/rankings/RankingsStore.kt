@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Rankings/RankingsStore.swift @ 1b8260d
+// 원본: Sources/CheckMobileKit/Rankings/RankingsStore.swift @ 1b8260d (미니게임 [오늘 | 역대] 절 — :72-74 · :183 · :458 · :520-600 @ 1a5eeca6)
 package com.yehsung.aingcheck.core.stores.rankings
 
 import androidx.compose.runtime.getValue
@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
 import com.yehsung.aingcheck.core.net.AuthErrorRules
+import com.yehsung.aingcheck.core.net.fetchMiniGameAllTimeBoard
 import com.yehsung.aingcheck.core.net.fetchMiniGameBoard
 import com.yehsung.aingcheck.core.net.fetchMiniGameYesterdayWinner
 import com.yehsung.aingcheck.core.net.fetchTeamLeaderboard
@@ -15,10 +16,15 @@ import com.yehsung.aingcheck.core.net.fetchTokenUsageSettings
 import com.yehsung.aingcheck.core.rules.insights.TeamLeagueWeekNavigator
 import com.yehsung.aingcheck.core.rules.insights.TokenBoardMonthNavigator
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.rules.text.BlockReportRules
 import com.yehsung.aingcheck.core.session.context.SessionContext
+import com.yehsung.aingcheck.core.stores.games.GamesMiniGameText
+import com.yehsung.aingcheck.core.stores.minigame.miniGameServiceErrorFacts
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.models.MiniGameAllTimeEntry
 import com.yehsung.aingcheck.core.wire.models.MiniGameBoardEntry
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.wire.models.MiniGameWinner
 import com.yehsung.aingcheck.core.wire.models.TeamLeaderboardEntry
 import com.yehsung.aingcheck.core.wire.models.TeamLeagueDisplay
@@ -28,6 +34,7 @@ import com.yehsung.aingcheck.core.wire.models.TokenUsageMonthKey
 import com.yehsung.aingcheck.core.wire.models.leagueDisplay
 import com.yehsung.aingcheck.core.wire.models.sortedByAverageDescending
 import com.yehsung.aingcheck.core.wire.models.sortedByTotalDescending
+import com.yehsung.aingcheck.core.wire.models.sortedForMiniGameAllTimeBoard
 import com.yehsung.aingcheck.core.wire.models.sortedForMiniGameBoard
 import com.yehsung.aingcheck.core.wire.models.toTokenBoardEntries
 import kotlinx.coroutines.CoroutineScope
@@ -122,9 +129,29 @@ class RankingsStore(
     var miniGameState: RankingsLoadState by mutableStateOf(RankingsLoadState())
         private set
 
+    // ---------------------------------------------------------------- 미니게임 [오늘 | 역대]
+
+    /**
+     * 미니게임 판이 보여 주는 표. 앱이 떠 있는 동안만 기억한다 — 계정이 아니라 이 실행의 보기 선택이라 [reset] 이 되돌리지 않는다.
+     * [게임] 탭의 `GamesMiniGameHub.boardScope` 와는 **별개의 값**이다(화면도 스토어도 따로다).
+     */
+    var miniGameScope: MiniGameBoardScope by mutableStateOf(MiniGameBoardScope.today)
+        private set
+
+    /** 보고 있는 게임의 역대 표(사람마다 한 줄). 받는 때는 [역대] 일 때뿐이다 — 고를 때 · 그 채로 게임을 바꿀 때 · 당겨서 새로고침 · 탭 재진입(낡았을 때). */
+    var miniGameAllTime: List<MiniGameAllTimeEntry> by mutableStateOf(emptyList())
+        private set
+    var miniGameAllTimeState: RankingsLoadState by mutableStateOf(RankingsLoadState())
+        private set
+
+    /** 서버에 함수가 아직 없다. **실패가 아니다** — 문구는 "준비 중"이고 [다시 시도] 가 없다(사용자가 고칠 수 없는 일이다). */
+    var miniGameAllTimeUnavailable: Boolean by mutableStateOf(false)
+        private set
+
     private var leagueSerial = 0
     private var tokenSerial = 0
     private var miniGameSerial = 0
+    private var miniGameAllTimeSerial = 0
 
     /** 사용자가 달을 옮기지 않았으면 true — 앱을 켜 둔 채 달이 바뀌면 새 달로 따라간다. */
     private var tokenMonthFollowsCurrent = true
@@ -159,6 +186,7 @@ class RankingsStore(
         leagueSerial += 1
         tokenSerial += 1
         miniGameSerial += 1
+        miniGameAllTimeSerial += 1
         league = emptyList()
         leagueState = RankingsLoadState()
         leagueWeekKey = TeamLeagueWeekNavigator.currentKey(nowSeconds())
@@ -173,11 +201,15 @@ class RankingsStore(
         miniGameBoard = emptyList()
         miniGameWinner = null
         miniGameState = RankingsLoadState()
+        clearMiniGameAllTime()
         board = RankingsBoard.league
         miniGameKind = MiniGameKind.timingBar
     }
 
     val badgeCount: Int get() = 0
+
+    /** 큰 제목 아래 한 줄. 미니게임은 판만으로 못 정한다 — 보고 있는 표를 함께 본다. */
+    val boardSubtitle: String get() = RankingsText.boardSubtitle(board, miniGameScope)
 
     // ---------------------------------------------------------------- 화면 사건
 
@@ -212,7 +244,7 @@ class RankingsStore(
         when (board) {
             RankingsBoard.league -> loadLeague()
             RankingsBoard.tokens -> loadTokens()
-            RankingsBoard.minigame -> loadMiniGame()
+            RankingsBoard.minigame -> if (miniGameScope == MiniGameBoardScope.allTime) loadMiniGameAllTime() else loadMiniGame()
         }
     }
 
@@ -229,12 +261,17 @@ class RankingsStore(
                 leagueState
             }
             RankingsBoard.tokens -> tokenState
-            RankingsBoard.minigame -> miniGameState
+            RankingsBoard.minigame -> if (miniGameScope == MiniGameBoardScope.allTime) miniGameAllTimeState else miniGameState
         }
         if (state.isLoading) return
         val loadedAt = state.loadedAt
         if (loadedAt != null && context.clock.now().timeIntervalSince(loadedAt) < staleSeconds && !state.hasFailed) return
-        launch { refresh() }
+        // 무엇을 받을지는 **여기서 정한다** — 작업 안에서 refresh() 로 다시 읽으면 같은 틱의 전환을 따라가, 떠나려던 오늘 조회가 사라지고 역대 조회(또는 다른 판 조회)로 바뀐다.
+        when (board) {
+            RankingsBoard.league -> launch { loadLeague() }
+            RankingsBoard.tokens -> launch { loadTokens() }
+            RankingsBoard.minigame -> if (miniGameScope == MiniGameBoardScope.allTime) launchMiniGameAllTime() else launch { loadMiniGame() }
+        }
     }
 
     // ---------------------------------------------------------------- 팀 리그
@@ -429,8 +466,28 @@ class RankingsStore(
         miniGameSerial += 1
         miniGameBoard = emptyList()
         miniGameWinner = null
-        miniGameState = RankingsLoadState(isLoading = true)
-        launch { loadMiniGame() }
+        // 옛 게임의 역대 줄이 새 게임 이름을 달고 남지 않게 어느 보기든 비운다(순번을 올려 떠 있는 응답도 여기서 버린다).
+        miniGameAllTimeSerial += 1
+        clearMiniGameAllTime()
+        if (miniGameScope == MiniGameBoardScope.allTime) {
+            // 오늘 표는 안 받는다 — [오늘] 로 돌아갈 때 hasLoaded 가 없으니 그때 받는다.
+            miniGameState = RankingsLoadState()
+            launchMiniGameAllTime()
+        } else {
+            miniGameState = RankingsLoadState(isLoading = true)
+            launch { loadMiniGame() }
+        }
+    }
+
+    /**
+     * 머리 [오늘 | 역대] 전환. 같은 쪽을 다시 누르면 아무 일도 없고, 받는 판단은 [refreshIfStale] 하나다 — 오가며 눌러도 30초 안의 표는 다시 묻지 않고,
+     * 실패한 표는 다시 묻는다. 미니게임 판이 아니면 값만 기억한다(그 판을 열 때 받는다).
+     */
+    fun select(scope: MiniGameBoardScope) {
+        if (scope == miniGameScope) return
+        miniGameScope = scope
+        if (board != RankingsBoard.minigame) return
+        refreshIfStale()
     }
 
     /** 내 오늘 순위(1부터). 없으면 null. */
@@ -481,6 +538,68 @@ class RankingsStore(
         } finally {
             if (serial == miniGameSerial) miniGameState = miniGameState.copy(isLoading = false)
         }
+    }
+
+    // ---------------------------------------------------------------- 미니게임 역대
+
+    /** [역대] 빈 자리 문구. 판정은 [게임] 탭과 같은 한 벌이다(실패 → 준비 중 → 불러오는 중 → 아직 없음). */
+    val miniGameAllTimeEmptyText: String
+        get() = GamesMiniGameText.allTimeEmpty(miniGameAllTimeState.hasFailed, miniGameAllTimeState.hasLoaded, miniGameAllTimeUnavailable)
+
+    /** [역대] 빈 자리에 [다시 시도] 를 다는가 — 한 번도 못 받았고 마지막 조회가 실패했을 때만. "준비 중"은 hasLoaded 라 여기 안 걸린다. */
+    val miniGameAllTimeShowsRetry: Boolean get() = miniGameAllTimeState.hasFailed && !miniGameAllTimeState.hasLoaded
+
+    /**
+     * `minigame_alltime_board` 를 받아 보고 있는 게임의 역대 표에 반영한다. 버리는 응답: 계정 세대가 바뀌었다 · 뒤에 떠난 요청이 있다(순번) · 게임이 바뀌었다.
+     * 실패는 셋으로 가른다.
+     *  · 함수 없는 서버(PGRST202 · 본문 없는 404) → 준비 중(빈 표 + [miniGameAllTimeUnavailable]).
+     *  · 그 밖 → 실패. 이미 그린 줄은 그대로 둔다.
+     *  · 취소 → 아무것도 안 바꾼다. 떠날 때 지운 실패 표시까지 되돌린다 — 안 되돌리면 [다시 시도] 를 누른 조회가 취소됐을 때 버튼도 돌이도 없는 카드로 굳는다.
+     */
+    suspend fun loadMiniGameAllTime() {
+        if (!context.sessionStore.isSignedIn) return
+        miniGameAllTimeSerial += 1
+        val serial = miniGameAllTimeSerial
+        val kind = miniGameKind
+        val generation = context.generation
+        val failedBefore = miniGameAllTimeState.hasFailed
+        miniGameAllTimeState = miniGameAllTimeState.copy(isLoading = true, hasFailed = false)
+        val service = context.service
+        try {
+            val entries = context.withSessionRetry { session -> service.fetchMiniGameAllTimeBoard(session.accessToken, kind.rawValue) }
+            if (generation != context.generation || serial != miniGameAllTimeSerial || kind != miniGameKind) return
+            val sorted = entries.sortedForMiniGameAllTimeBoard()
+            if (miniGameAllTime != sorted) miniGameAllTime = sorted
+            miniGameAllTimeUnavailable = false
+            miniGameAllTimeState = miniGameAllTimeState.copy(hasLoaded = true, hasFailed = false, loadedAt = context.clock.now())
+        } catch (error: Throwable) {
+            if (generation != context.generation || serial != miniGameAllTimeSerial || kind != miniGameKind) return
+            if (AuthErrorRules.classify(error) == AuthErrorDisposition.cancelled) {
+                miniGameAllTimeState = miniGameAllTimeState.copy(hasFailed = failedBefore)
+                return
+            }
+            if (BlockReportRules.isMissingFunction(miniGameServiceErrorFacts(error))) {
+                miniGameAllTime = emptyList()
+                miniGameAllTimeUnavailable = true
+                miniGameAllTimeState = miniGameAllTimeState.copy(hasLoaded = true, loadedAt = context.clock.now())
+            } else {
+                miniGameAllTimeState = miniGameAllTimeState.copy(hasFailed = true)
+            }
+        } finally {
+            if (serial == miniGameAllTimeSerial) miniGameAllTimeState = miniGameAllTimeState.copy(isLoading = false)
+        }
+    }
+
+    /** 조회를 띄운다. "불러오는 중"을 **여기서 먼저** 세운다 — [refreshIfStale] 의 isLoading 가드가 같은 틱의 둘째 호출을 막고, 첫 그림이 빈 표 문구로 깜빡이지 않는다. 뒤에서 다른 보기로 바뀌어도 이 조회는 끝까지 돌아 깃발을 내린다. */
+    private fun launchMiniGameAllTime() {
+        miniGameAllTimeState = miniGameAllTimeState.copy(isLoading = true)
+        launch { loadMiniGameAllTime() }
+    }
+
+    private fun clearMiniGameAllTime() {
+        miniGameAllTime = emptyList()
+        miniGameAllTimeState = RankingsLoadState()
+        miniGameAllTimeUnavailable = false
     }
 
     // ---------------------------------------------------------------- 내부

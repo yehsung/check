@@ -1,4 +1,5 @@
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift @ 3bd04bd
+// 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:325-430 @ 1a5eeca6 (순위 [오늘 | 역대] — 폰 경로)
 // 원본: Sources/check/MiniGamePanel.swift:466-604 @ 3bd04bd (정지 카드·카운트다운·5분 상한 — Android ON_PAUSE 몫, G §8-2. 전이 표는 core MiniGamePauseState)
 //
 // 미니게임 화면(SPEC-ios §3.5): 머리 줄(최고 · 오늘 순위 · 안내) · 캔버스(논리 292×302 를 폭에 **등비 확대**) · (테트리스만) 버튼 줄 · 오늘 순위.
@@ -81,8 +82,10 @@ import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameBoard
 import com.yehsung.aingcheck.core.stores.minigame.MiniGamePauseState
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.MiniGameBoardEntry
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.stores.games.MobileLoadKnowledge
 import com.yehsung.aingcheck.ui.games.minigame.kit.ChampionRow
+import com.yehsung.aingcheck.ui.games.minigame.kit.GamesBoardScopePicker
 import com.yehsung.aingcheck.ui.games.minigame.kit.GamesHeaderBar
 import com.yehsung.aingcheck.ui.games.minigame.kit.GroupRow
 import com.yehsung.aingcheck.ui.games.minigame.kit.InlineNotice
@@ -123,7 +126,7 @@ object MiniGameScreenTags {
  * @param pauseToggleSerial 바깥 정지 토글(공용 패치 11 — 데스크톱 창의 ESC). 값이 **바뀔 때마다** 한 번 [MiniGamePauseState.toggled]
  *   (맥 ESC 와 같은 전이 — 판 중이면 정지, 정지면 3-2-1, 카운트다운이면 다시 정지). 기본 0 이고 안 바꾸면 아무 일도 없다.
  * @param onFrozenChanged 판이 얼었는가(정지 카드 · 3-2-1)가 바뀔 때. 껍데기가 얼어 있는 동안 조작 키를 막는 데 쓴다. 기본 {}.
- * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 창은 마우스·키보드 그대로): 길건너 쓸기·탭 조작과 폰 문구.
+ * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 창은 마우스·키보드 그대로): 길건너 쓸기·탭 조작과 폰 문구 · 순위 [오늘 | 역대] 전환.
  */
 @Composable
 fun GamesMiniGameScreen(
@@ -171,7 +174,7 @@ fun GamesMiniGameScreen(
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = AingDimens.space6)) {
                     if (!hub.isPublic) InlineNotice(GamesMiniGameText.privateNotice, Modifier.padding(bottom = AingDimens.space2), NoticeKind.Info)
-                    MiniGameRankings(store, kind, myUserID)
+                    MiniGameRankings(store, kind, myUserID, isPhone)
                 }
             }
         }
@@ -563,26 +566,48 @@ internal fun TetrisControlButton(
     }
 }
 
-// MARK: 오늘 순위
+// MARK: 순위 — [오늘 | 역대]
 
+/**
+ * 순위 절. 폰 경로는 머리에 **[오늘 | 역대] 전환**이 붙는다(상태는 허브 하나 — `hub.boardScope`). 두 판이 같은 행을 쓰고 [역대] 만 점수 앞에 작은 날짜가 붙는다.
+ * **[오늘] 에만 있는 것 둘**: 어제 1등 · 상금·정족수 줄. [역대] 바닥은 규칙·날짜 두 줄이다. 머리 오른쪽 자리는 전환이 쓰므로 폰의 정족수 줄은 바닥으로 내려간다(좁은 폰 머리에 함께 몰면 제목이 꺾인다).
+ * Windows(기본값)는 지금 그대로 오늘 판 + 머리 정족수다.
+ */
 @Composable
-private fun MiniGameRankings(store: GamesStore, kind: MiniGameKind, myUserID: String?) {
+private fun MiniGameRankings(store: GamesStore, kind: MiniGameKind, myUserID: String?, isPhone: Boolean) {
     val hub = store.miniGames
     val colors = AingTheme.colors
     val state = hub.boards[kind] ?: GamesMiniGameBoard()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val showsAllTime = isPhone && hub.boardScope == MiniGameBoardScope.allTime
+    val quorum = if (state.knowsPlayerCount) GamesMiniGameText.quorumCaption(state.entries.size) else null
     // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
     SectionHeader(
-        GamesMiniGameText.rankTitle,
-        trailing = if (state.knowsPlayerCount) SectionTrailing.Label(GamesMiniGameText.quorumCaption(state.entries.size)) else SectionTrailing.None,
+        if (isPhone) hub.boardScope.boardTitle else GamesMiniGameText.rankTitle,
+        trailing = when {
+            isPhone -> SectionTrailing.Custom { GamesBoardScopePicker(hub.boardScope) { hub.selectBoardScope(it) } }
+            quorum != null -> SectionTrailing.Label(quorum)
+            else -> SectionTrailing.None
+        },
         modifier = Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, end = AingDimens.titleMargin - AingDimens.sideMargin, top = 4.dp, bottom = 8.dp),
     )
     // 어제 1등은 **자기 그룹**(순위 탭과 같은 꼴) — '오늘 순위' 첫 행처럼 읽히지 않게 떼어 둔다.
-    state.yesterdayWinner?.let { winner ->
+    if (!showsAllTime) state.yesterdayWinner?.let { winner ->
         ChampionRow(
             GamesMiniGameText.yesterdayChampion, winner.name, winner.center, GamesMiniGameText.score(winner.score),
             if (winner.awarded) GamesMiniGameText.rubyPrizes[0] else null, Modifier.padding(bottom = 12.dp),
         )
+    }
+    if (showsAllTime) {
+        InsetGroup { MiniGameAllTimeRows(store, myUserID) }
+        Column(
+            Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, top = AingDimens.space2),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(GamesMiniGameText.allTimeRuleCaption, style = rowSubtitleStyle(), color = colors.label2)
+            Text(GamesMiniGameText.allTimeDayCaption, style = rowSubtitleStyle(), color = colors.label2)
+        }
+        return
     }
     InsetGroup {
         if (state.entries.isEmpty()) {
@@ -607,11 +632,40 @@ private fun MiniGameRankings(store: GamesStore, kind: MiniGameKind, myUserID: St
         GamesMiniGameText.prizeCaption, style = rowSubtitleStyle(), color = colors.label2,
         modifier = Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, top = AingDimens.space2),
     )
+    if (isPhone && quorum != null) {
+        Text(
+            quorum, style = rowSubtitleStyle().copy(fontFeatureSettings = TNUM), color = colors.label2,
+            modifier = Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, top = 2.dp),
+        )
+    }
 }
 
-/** 오늘 순위 한 줄(순위 탭과 같은 꼴): 등수 원 · 얼굴 · 이름(+ 센터 · '나') · 점수. 내 행 = 파랑 6%. */
+/** [역대] 줄. 빈 자리의 문구와 [다시 시도] 여부는 허브의 판정 하나에서 온다(`allTimeEmptyText` · `allTimeShowsRetry`). */
 @Composable
-private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, isLast: Boolean) {
+private fun MiniGameAllTimeRows(store: GamesStore, myUserID: String?) {
+    val hub = store.miniGames
+    val entries = hub.allTimeBoard
+    if (entries.isEmpty()) {
+        GroupRow(dividerInset = null) {
+            when {
+                hub.allTimeShowsRetry -> LoadFailureRow(hub.allTimeEmptyText, isRetrying = hub.allTimeLoading) { hub.loadAllTimeBoard() }
+                !hub.allTimeLoaded -> LoadingRow(hub.allTimeEmptyText)
+                else -> Text(hub.allTimeEmptyText, style = MaterialTheme.typography.bodyMedium, color = AingTheme.colors.label2)
+            }
+        }
+    } else {
+        entries.forEachIndexed { index, entry ->
+            MiniGameRankRow(index + 1, entry.rankRowEntry, entry.userID == myUserID, index == entries.size - 1, entry.dayCaption)
+        }
+    }
+}
+
+/**
+ * 순위 한 줄(순위 탭과 같은 꼴): 등수 원 · 얼굴 · 이름(+ 센터 · '나') · 점수. 내 행 = 파랑 6%. [오늘]과 [역대]가 이 한 벌을 나눠 쓴다 — 두 벌이면 열 규격이 언젠가 갈린다.
+ * @param dateCaption [역대] 줄의 작은 날짜("9/13" — 그 점수를 처음 낸 날). 점수 **앞**이고 한 단 흐리다. [오늘] 판은 null.
+ */
+@Composable
+private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, isLast: Boolean, dateCaption: String? = null) {
     val colors = AingTheme.colors
     GroupRow(
         dividerInset = if (isLast) null else AingDimens.cardPadding + 24.dp + AingDimens.space3 + 30.dp + AingDimens.space3,
@@ -623,6 +677,7 @@ private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean,
         RankBadge(rank)
         PersonAvatar(entry.name, entry.userID, 30.dp)
         PersonName(entry.name, Modifier.weight(1f), center = entry.center, isMe = isMe)
+        if (dateCaption != null) Text(dateCaption, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = TNUM), color = colors.label3Text, maxLines = 1)
         Text(GamesMiniGameText.score(entry.bestScore), style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = TNUM), color = colors.label)
     }
 }

@@ -46,6 +46,16 @@ class ScreenSnapshotDesktopTest {
         scene(dark, RANKINGS_H) { RankingsScene(pastLeague, meFace, it) },
     )
 
+    private val allTime by lazy { ScreenScenes.rankings(RankingsBoard.minigame, allTime = true) }
+    private val allTimeBumped by lazy { ScreenScenes.rankings(RankingsBoard.minigame, allTime = true, allTimeTopBumped = true) }
+
+    /** 폰 경로의 [역대] 판: 전환 · 역대 제목 · 날짜 · 바닥 두 줄 · 어제 1등·상금 없음. 기준선 = 1위 이름만 다르다. */
+    private fun rankingsAllTime(dark: Boolean) = check(
+        "screens/rankings", "rankings-minigame-alltime-${theme(dark)}", RANKINGS_H,
+        scene(dark, RANKINGS_H) { RankingsScene(allTime, meFace, it, isPhone = true) },
+        scene(dark, RANKINGS_H) { RankingsScene(allTimeBumped, meFace, it, isPhone = true) },
+    )
+
     private fun meHome(dark: Boolean) = check(
         "screens/me", "me-home-${theme(dark)}", ME_H,
         scene(dark, ME_H) { MeHomeScene(me, MeStageMood.working, it) },
@@ -137,6 +147,8 @@ class ScreenSnapshotDesktopTest {
 
     @Test fun rankingsLeagueLight() = rankingsLeague(false)
     @Test fun rankingsLeagueDark() = rankingsLeague(true)
+    @Test fun rankingsAllTimeLight() = rankingsAllTime(false)
+    @Test fun rankingsAllTimeDark() = rankingsAllTime(true)
     @Test fun meHomeLight() = meHome(false)
     @Test fun meHomeDark() = meHome(true)
     @Test fun settingsLight() = settings(false)

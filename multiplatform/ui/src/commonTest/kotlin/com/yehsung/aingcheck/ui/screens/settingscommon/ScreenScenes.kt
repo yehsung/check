@@ -24,6 +24,7 @@ import com.yehsung.aingcheck.core.stores.me.loadStatusMessage
 import com.yehsung.aingcheck.core.stores.messages.loadBlocks
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
 import com.yehsung.aingcheck.ui.components.CharacterExpression
@@ -91,7 +92,13 @@ object NoSettingsActions : SettingsActions {
 @OptIn(ExperimentalCoroutinesApi::class)
 object ScreenScenes {
     /** 순위 장면: 데모 픽스처로 판 하나를 채운 스토어. */
-    fun rankings(board: RankingsBoard, miniGame: MiniGameKind = MiniGameKind.timingBar, oneMinuteMore: Boolean = false): RankingsStore {
+    fun rankings(
+        board: RankingsBoard,
+        miniGame: MiniGameKind = MiniGameKind.timingBar,
+        oneMinuteMore: Boolean = false,
+        allTime: Boolean = false,
+        allTimeTopBumped: Boolean = false,
+    ): RankingsStore {
         lateinit var store: RankingsStore
         runTest {
             val scenario = when (board) {
@@ -104,9 +111,17 @@ object ScreenScenes {
             if (oneMinuteMore) h.override = { r ->
                 if (r.rpcName == "team_weekly_leaderboard") DemoFixture("rankings/rpc.team_weekly_leaderboard.json").read().replace("452100", "452400") else null
             }
+            // 역대 표는 데모 픽스처(iOS 1.0.16 과 같은 파일). 음성 기준선: 1위 이름만 바꾼다(행 하나).
+            if (allTime) h.override = { r ->
+                if (r.rpcName == "minigame_alltime_board") {
+                    val body = DemoFixture("rankings/_rankings-minigame/rpc.minigame_alltime_board.json").read()
+                    if (allTimeTopBumped) body.replace("구름", "구름구름구름") else body
+                } else null
+            }
             h.signIn()
             advanceUntilIdle()
             store = RankingsStore(h.context, h.storeScope, ScreenTestCollation)
+            if (allTime) store.select(MiniGameBoardScope.allTime)
             store.tabDidAppear()
             advanceUntilIdle()
             if (board != RankingsBoard.league) {
@@ -234,9 +249,9 @@ fun ScreenScene(dark: Boolean, art: ScreenArt, modifier: Modifier, content: @Com
 }
 
 @Composable
-fun RankingsScene(store: RankingsStore, me: RankingsMyFace, modifier: Modifier) {
+fun RankingsScene(store: RankingsStore, me: RankingsMyFace, modifier: Modifier, isPhone: Boolean = false) {
     val scope = rememberCoroutineScope()
-    RankingsScreen(store, me, scope, onSelectBoard = {}, modifier = modifier, scrollable = false)
+    RankingsScreen(store, me, scope, onSelectBoard = {}, modifier = modifier, scrollable = false, isPhone = isPhone)
 }
 
 @Composable

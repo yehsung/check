@@ -40,6 +40,15 @@ import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
 
+/** 서비스 오류 → W1-c 판정 재료(함수 없음 = 스키마 없음 또는 HTTP 404). 허브와 순위 탭이 같은 표를 쓴다. */
+internal fun miniGameServiceErrorFacts(e: Throwable): ServiceErrorFacts = when (e) {
+    SupabaseWorkServiceError.DatabaseSchemaMissing -> ServiceErrorFacts.databaseSchemaMissing
+    is SupabaseWorkServiceError.InvalidResponse -> ServiceErrorFacts.invalidResponse(e.statusCode)
+    is SupabaseWorkServiceError.RateLimited -> ServiceErrorFacts.rateLimited
+    is SupabaseWorkServiceError -> ServiceErrorFacts.otherServiceError
+    else -> ServiceErrorFacts.notServiceError
+}
+
 /** 한 게임의 오늘 순위 칸. */
 data class GamesMiniGameBoard(
     val entries: List<MiniGameBoardEntry> = emptyList(),
@@ -251,6 +260,12 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
      */
     var allTimeUnavailable: Boolean by mutableStateOf(false)
         private set
+
+    /** [역대] 빈 자리 문구(실패 → 준비 중 → 불러오는 중 → 아직 없음). 넷째 상태까지 가르는 표가 화면 삼항으로 흩어지면 JVM 시험이 못 잰다. */
+    val allTimeEmptyText: String get() = GamesMiniGameText.allTimeEmpty(allTimeFailed, allTimeLoaded, allTimeUnavailable)
+
+    /** [역대] 빈 자리에 [다시 시도] 를 다는가 — 한 번도 못 받았고 마지막 조회가 실패했을 때만. "준비 중"은 loaded 라 여기 안 걸린다. */
+    val allTimeShowsRetry: Boolean get() = allTimeFailed && !allTimeLoaded
 
     /** 지금 들고 있는 역대 표가 **어느 게임의 최신 응답인가.** null 이면 다음에 [역대] 를 열 때 다시 받는다. 관찰 대상 아님. */
     var allTimeFreshKind: MiniGameKind? = null
@@ -1041,6 +1056,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         allTimeFetchSerial += 1
         val serial = allTimeFetchSerial
         if (!allTimeLoading) allTimeLoading = true
+        val failedBefore = allTimeFailed
         if (allTimeFailed) allTimeFailed = false
         val service = context.service
         try {
@@ -1062,9 +1078,13 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             if (me != null) sorted.firstOrNull { it.userID == me }?.let { raiseLocalBest(kind, it.bestScore) }
         } catch (e: Exception) {
             if (e is CancellationException && !AuthErrorRules.isTransport(e)) throw e
-            if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return
+            if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) {
+                // 떠날 때 지운 실패 표시를 되돌린다 — 안 되돌리면 [다시 시도] 가 취소됐을 때 버튼 없는 "불러오는 중…" 카드로 굳는다.
+                if (failedBefore && sessionGeneration == context.generation && generation == resetGeneration && kind == activeKind) allTimeFailed = true
+                return
+            }
             if (sessionGeneration != context.generation || generation != resetGeneration || kind != activeKind) return
-            if (BlockReportRules.isMissingFunction(errorFacts(e))) {
+            if (BlockReportRules.isMissingFunction(miniGameServiceErrorFacts(e))) {
                 if (allTimeBoard.isNotEmpty()) allTimeBoard = emptyList()
                 allTimeBoardKind = kind
                 if (!allTimeUnavailable) allTimeUnavailable = true
@@ -1090,15 +1110,6 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         allTimeFreshKind = null
         if (invalidate) allTimeInvalidation += 1
         allTimeLoading = boardScope == MiniGameBoardScope.allTime && activeKind != null
-    }
-
-    /** 서비스 오류 → W1-c 판정 재료(함수 없음 = 스키마 없음 또는 HTTP 404). */
-    private fun errorFacts(e: Throwable): ServiceErrorFacts = when (e) {
-        SupabaseWorkServiceError.DatabaseSchemaMissing -> ServiceErrorFacts.databaseSchemaMissing
-        is SupabaseWorkServiceError.InvalidResponse -> ServiceErrorFacts.invalidResponse(e.statusCode)
-        is SupabaseWorkServiceError.RateLimited -> ServiceErrorFacts.rateLimited
-        is SupabaseWorkServiceError -> ServiceErrorFacts.otherServiceError
-        else -> ServiceErrorFacts.notServiceError
     }
 
     // MARK: 로컬 최고

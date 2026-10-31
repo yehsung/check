@@ -95,6 +95,27 @@ object GamesText {
 object GamesMiniGameText {
     const val rankTitle: String = "오늘 순위"
 
+    // MARK: 역대 순위 [오늘 | 역대] — 글자는 맥 네 줄 그대로(MiniGamePanel.swift:642-646 · iOS GamesText.swift:114-121). 머리 제목은 코어 한 벌(MiniGameBoardScope.boardTitle).
+
+    /** [역대] 바닥 두 줄: 무엇이 올라가는가 + 날짜가 무엇인가. **상금 이야기는 없다** — 상금은 오늘 판의 것이다. */
+    const val allTimeRuleCaption: String = "사람마다 가장 높은 점수 하나만 올라가요"
+    const val allTimeDayCaption: String = "날짜는 그 점수를 처음 낸 날이에요"
+    const val allTimeFailedCaption: String = "역대 순위를 불러오지 못했어요"
+
+    /** 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404). **실패가 아니라서** [다시 시도] 를 달지 않는다 — 사용자가 고칠 수 없는 일이고 두드려 봐야 같은 답이다. */
+    const val allTimeUnavailableCaption: String = "역대 순위는 준비 중이에요 — 곧 열려요"
+
+    /**
+     * [역대] 빈 목록 문구. **순서가 곧 뜻이다**: 실패(한 번도 못 받았다) → 준비 중 → 불러오는 중 → 아직 없음.
+     * 준비 중을 먼저 보면 네트워크 실패까지 "곧 열려요"로 덮이고, 불러오는 중을 먼저 보면 이미 받은 빈 표가 영원히 "불러오는 중…"으로 보인다.
+     */
+    fun allTimeEmpty(failed: Boolean, loaded: Boolean, unavailable: Boolean): String = when {
+        failed && !loaded -> allTimeFailedCaption
+        unavailable -> allTimeUnavailableCaption
+        !loaded -> loadingCaption
+        else -> emptyBoard
+    }
+
     /**
      * 자정 상품(루비). 서버 `ruby_prize_amounts()` 와 짝인 상수(맥 `MiniGamePanel.rubyPrizes` · 같은 탭 `RankingsText.rubyPrizes`).
      * 2026-10-22(맥 0.3.64 · 서버 20261023131000) 사용자 결정("일반 미니게임 3종 상금루비 올려야할듯 20 10 5 로 다시 해줘")으로 20·10·5.

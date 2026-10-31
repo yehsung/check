@@ -11,6 +11,7 @@ import com.yehsung.aingcheck.core.rules.insights.TokenBoardMonthNavigator
 import com.yehsung.aingcheck.core.stores.messages.MobileLoadText
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.MiniGameBoardEntry
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.wire.models.TeamLeaderboardEntry
 import com.yehsung.aingcheck.core.wire.models.TeamWeeklyGoal
 import com.yehsung.aingcheck.core.wire.models.TokenBoardEntry
@@ -83,10 +84,11 @@ object RankingsText {
         RankingsBoard.minigame -> "미니게임"
     }
 
-    fun boardSubtitle(board: RankingsBoard): String = when (board) {
+    /** 큰 제목 아래 한 줄: 판마다 기간과 마감을 말한다. 미니게임은 보는 표를 따른다 — [역대] 표는 오늘 판이 아니고 자정에 마감하지도 않는다. */
+    fun boardSubtitle(board: RankingsBoard, miniGameScope: MiniGameBoardScope = MiniGameBoardScope.today): String = when (board) {
         RankingsBoard.league -> "이번 주 · 월요일 0시에 새로 시작해요"
         RankingsBoard.tokens -> "이번 달 · 1일에 새로 시작해요"
-        RankingsBoard.minigame -> "오늘 · 자정에 마감해요"
+        RankingsBoard.minigame -> if (miniGameScope == MiniGameBoardScope.allTime) "역대 · 마감 없이 이어져요" else "오늘 · 자정에 마감해요"
     }
 
     const val loading = "불러오는 중…"
@@ -245,10 +247,11 @@ object RankingsText {
         return miniGameEmpty
     }
 
-    fun miniGameRowAccessibility(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean): String {
+    fun miniGameRowAccessibility(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, dayCaption: String? = null): String {
         val parts = arrayListOf("${rank}위", entry.name)
         entry.center?.let { parts += "${it}센터" }
         parts += score(entry.bestScore)
+        dayCaption?.let { parts += "$it 기록" }
         if (isMe) parts += meChip
         return parts.joinToString(", ")
     }

@@ -9,9 +9,11 @@ import androidx.compose.ui.semantics.SemanticsProperties
 import com.yehsung.aingcheck.android.screens.games.hub.GamesAndroidRig
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.games.GamesMiniGameText
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.ui.games.minigame.GamesMiniGameScreen
 import com.yehsung.aingcheck.ui.games.minigame.MiniGameArt
 import com.yehsung.aingcheck.ui.games.minigame.MiniGameScreenTags
+import com.yehsung.aingcheck.ui.games.minigame.kit.GamesBoardScopeTags
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -46,6 +48,8 @@ class MiniGameRouteCrossyTest {
             assertEquals("보이는 게임이면 돌아가지 않는다", 0, backs)
             compose.onNodeWithTag(MiniGameScreenTags.CANVAS).assert(described(GamesMiniGameText.canvasAccessibility(MiniGameKind.crossy)))
             assertTrue("쓸어서" in GamesMiniGameText.canvasAccessibility(MiniGameKind.crossy))
+            // [오늘 | 역대] 전환도 이 경로에서 켜진다.
+            for (scope in MiniGameBoardScope.entries) compose.onNodeWithTag(GamesBoardScopeTags.segment(scope)).assertExists()
         }
     }
 
@@ -69,6 +73,7 @@ class MiniGameRouteCrossyTest {
             compose.waitForIdle()
             compose.onNodeWithTag(MiniGameScreenTags.CANVAS).assert(described(GamesMiniGameText.crossyDesktopCanvasAccessibility()))
             assertFalse("쓸어서" in GamesMiniGameText.crossyDesktopCanvasAccessibility())
+            for (scope in MiniGameBoardScope.entries) compose.onNodeWithTag(GamesBoardScopeTags.segment(scope)).assertDoesNotExist()
         }
     }
 }

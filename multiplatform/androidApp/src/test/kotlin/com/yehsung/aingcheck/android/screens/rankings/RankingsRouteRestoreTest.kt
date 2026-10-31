@@ -21,6 +21,8 @@ import androidx.navigation.toRoute
 import com.yehsung.aingcheck.android.nav.Dest
 import com.yehsung.aingcheck.android.nav.ShellNavigator
 import com.yehsung.aingcheck.android.routing.AingRoute
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
+import com.yehsung.aingcheck.ui.games.minigame.kit.GamesBoardScopeTags
 import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
 import com.yehsung.aingcheck.core.foundation.identity.ClientPlatform
 import com.yehsung.aingcheck.core.foundation.platform.Collation
@@ -179,5 +181,18 @@ class RankingsRouteRestoreTest {
         compose.waitForIdle()
         assertEquals(RankingsBoard.league, fresh.board)
         compose.onNodeWithTag(RankingsTags.SECTION_PREFIX + "league").assertExists()
+    }
+
+    /** 앱 경로가 폰 몫을 켠다: 미니게임 판에 [오늘 | 역대] 전환이 서고, 누르면 스토어에 닿는다(스토어만 있고 화면에 안 붙는 일을 막는다). */
+    @Test
+    fun thePhoneRouteTurnsOnTheBoardScopePicker() {
+        val store = freshProcessStore()
+        val shell = Shell().apply { this.store = store }
+        setUp(shell)
+        compose.runOnIdle { requireNotNull(shell.navigator).open(AingRoute.Rankings(com.yehsung.aingcheck.android.routing.RankingsBoard.MINIGAME)) }
+        compose.waitForIdle()
+        compose.onNodeWithTag(GamesBoardScopeTags.segment(MiniGameBoardScope.allTime)).performClick()
+        compose.waitForIdle()
+        assertEquals(MiniGameBoardScope.allTime, store.miniGameScope)
     }
 }

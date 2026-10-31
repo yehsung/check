@@ -9,6 +9,7 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.now.NowMyCard
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.stores.rankings.RankingsLoadState
+import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsText
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.ui.components.CharacterMood
@@ -50,6 +51,13 @@ object RankingsScreenRules {
         text = RankingsText.miniGameEmptyText(state.hasLoaded, state.hasFailed),
         showsRetry = state.hasFailed && !state.hasLoaded && !state.isLoading,
         isLoading = state.isLoading && !state.hasLoaded,
+    )
+
+    /** [역대] 빈 자리: 문구·[다시 시도] 판정은 스토어 한 벌(게임 탭과 같은 글자). */
+    fun miniGameAllTimeEmpty(store: RankingsStore): RankingsEmptyCardState = RankingsEmptyCardState(
+        text = store.miniGameAllTimeEmptyText,
+        showsRetry = store.miniGameAllTimeShowsRetry && !store.miniGameAllTimeState.isLoading,
+        isLoading = store.miniGameAllTimeState.isLoading && !store.miniGameAllTimeState.hasLoaded,
     )
 
     /** 목록이 있을 때 위에 거는 경고 한 줄(지난 조회가 실패했다 — 받아 둔 목록은 그대로 보인다). */

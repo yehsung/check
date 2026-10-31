@@ -12,6 +12,8 @@ package enum NowText {
 
     // 내 상태
     package static let workingOnMac = "맥에서 근무 중"
+    /// Windows 가 연 세션(서버 origin `'windows'` · 2026-10-31 사용자 결정 — 기기 종류대로 '맥' / 'PC').
+    package static let workingOnPC = "PC에서 근무 중"
     /// 폰이 연 세션(0.3.51 — `work_phone_start`).
     package static let workingOnPhone = "폰에서 근무 중"
     /// 어디서 열었는지 아직 모른다(생존 신호 응답 전).
@@ -85,7 +87,8 @@ package enum NowText {
     /// 머리·묶음 오른쪽 사람 수("6명").
     package static func peopleCount(_ count: Int) -> String { "\(count)명" }
     /// 지금 근무 중 절 아래 한 줄. 0.3.51 부터 폰도 근무를 시작·종료한다(맨 위 상태 카드의 버튼).
-    package static let workingFooter = "근무는 맥이나 이 탭 맨 위 버튼으로 시작하고 끝내요"
+    /// ★ 2026-10-31: '맥이나' → '맥·PC나'(사용자 결정). Windows 앱으로 근무하는 사람에게 자기 기기가 빠져 있었다.
+    package static let workingFooter = "근무는 맥·PC나 이 탭 맨 위 버튼으로 시작하고 끝내요"
     /// 서버에 폰 근무 함수가 아직 없을 때(404 PGRST202 — 앱이 db push 보다 먼저 나간 창)만 쓰는 옛 문장.
     package static let workingFooterMacOnly = "근무 시작과 종료는 맥 앱에서 해요"
     /// 끊긴 팀원 부제: "연결 끊김 · 마지막 확인 13분 전".
@@ -113,6 +116,7 @@ package enum NowText {
     package static func workStopConfirmMessage(origin: NowWorkOrigin) -> String {
         switch origin {
         case .mac: return "맥에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
+        case .windows: return "PC에서 연 근무도 지금 끝나요. 지금까지의 시간은 그대로 기록돼요."
         case .phone, .unknown: return "지금까지의 시간은 그대로 기록돼요."
         }
     }
@@ -120,6 +124,7 @@ package enum NowText {
     package static let workStopped = "근무를 끝냈어요"
     package static let alreadyWorking = "이미 근무 중이에요"
     package static let alreadyWorkingOnMac = "이미 맥에서 근무 중이에요"
+    package static let alreadyWorkingOnPC = "이미 PC에서 근무 중이에요"
     package static let alreadyStopped = "이미 근무가 끝나 있어요"
     package static let workChanged = "근무 상태가 바뀌었어요. 다시 확인해 주세요"
     package static let startFailed = "근무를 시작하지 못했어요. 잠시 후 다시 시도해 주세요"
@@ -133,6 +138,7 @@ package enum NowText {
         "폰을 잠가도 근무는 이어져요 · \(NowFormat.hoursMinutesText(checkAfterSeconds ?? 9_000)) 동안 앱을 안 열면 확인 알림을 보내요"
     }
     package static let macWorkCaption = "맥에서 연 근무예요 · 여기서 끝낼 수도 있어요"
+    package static let pcWorkCaption = "PC에서 연 근무예요 · 여기서 끝낼 수도 있어요"
     /// 알림이 꺼진 사람이 폰으로 근무 중일 때 — 확인 알림 없이 같은 시각표로 끝난다(서버 결정).
     package static let pushOffWarning = "알림이 꺼져 있어 확인 알림 없이 근무가 끝날 수 있어요"
     /// 서버가 확인 알림 뒤 유예가 지나 소급 마감했다(`work_phone_touch` 의 last.reason = idle). "13:20"(KST).
@@ -149,7 +155,12 @@ package enum NowText {
 package enum NowWorkOrigin: String, Equatable, Sendable {
     case phone
     case mac
-    /// 아직 모른다(생존 신호 응답 전) — "근무 중"으로만 말한다.
+    /// Windows 앱이 연 근무(서버 `phone_work__session_json` 이 `20261101120000` 부터 보낸다).
+    /// ★ 이 값이 생기기 전에는 모르는 origin 을 `.mac` 으로 접었고, 그래서 **PC 에서 근무를 켠 사람의 폰이
+    ///   "맥에서 근무 중"이라고 말했다.** 두 값일 때 안전했던 접기가 셋째 값에서 남의 이름을 적은 자리다.
+    case windows
+    /// 아직 모른다(생존 신호 응답 전) **또는 서버가 우리가 모르는 값을 보냈다** — "근무 중"으로만 말한다.
+    /// 넷째 값(리눅스·웹…)이 와도 이 자리로 떨어져야 한다. 특정 기기 이름으로 접지 마라.
     case unknown
 }
 
@@ -212,6 +223,7 @@ package struct NowMyCard: Equatable, Sendable {
         switch origin {
         case .phone: return NowText.workingOnPhone
         case .mac: return NowText.workingOnMac
+        case .windows: return NowText.workingOnPC
         case .unknown: return NowText.working
         }
     }

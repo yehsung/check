@@ -887,7 +887,7 @@ package enum MeText {
 
     package static func inviteShareMessage(teamName: String?, code: String) -> String {
         let team = teamName.map { "「\($0)」 " } ?? ""
-        return "\(CheckMobileIdentifiers.appDisplayName) \(team)팀 코드: \(code)\n맥 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
+        return "\(CheckMobileIdentifiers.appDisplayName) \(team)팀 코드: \(code)\n맥·PC 앱에서 가입할 때 이 코드를 입력하면 같은 팀이 돼요."
     }
 
     package static let accountSection = "계정"

@@ -430,6 +430,29 @@ package enum AILimitDeviceLabelContract {
     }
 }
 
+/// 데스크톱 기기 신원 → 종류. **서버 `desktop_device_platform(text)` 의 거울**이다
+/// (`20261101120000_desktop_windows_axis.sql` — `device_id like 'win:%'` → windows, 그 밖 → mac).
+///
+/// ## ★ 왜 `device_id` 하나로만 판정하나
+/// `client_devices.platform` 을 조인하는 길도 있었지만 조회가 한 번 늘고, `ai_limits` 쪽에 임베드를 더하면
+/// 기존 조회가 400 으로 죽은 전례가 있다(PostgREST 임베드 모호성). 이미 손에 든 값으로 판정이 끝난다.
+///
+/// ## ★ 대소문자를 **가린다**
+/// 서버는 `'WIN:abc'` 를 **mac** 으로 잰다(그 파일의 적용 프로브가 그 입력을 실제로 센다). `lowercased()` 로
+/// 느슨하게 받으면 폰과 서버의 판정이 갈리고, 그 어긋남은 조용하다 — 양쪽 다 그럴듯한 이름을 그린다.
+/// Windows 클라가 올리는 값은 `'win:' || installation_id`(소문자 uuid)로 **한 곳에서** 나온다(윈도우 세션 확인).
+package enum AILimitDevicePlatform: String, Equatable, Sendable {
+    case mac
+    case windows
+
+    /// 서버 `like 'win:%'` 와 **같은 글자**. 마이그레이션 계약 시험이 두 파일에서 이 값을 읽어 견준다.
+    package static let windowsPrefix = "win:"
+
+    package static func of(deviceID: String) -> AILimitDevicePlatform {
+        deviceID.hasPrefix(windowsPrefix) ? .windows : .mac
+    }
+}
+
 /// 서버 행에서 읽은 관측 하나(제공자별로 흩어져 있다). 접는 재료다.
 package struct AILimitDeviceObservation: Equatable, Sendable {
     package let deviceID: String
@@ -461,6 +484,10 @@ package struct AILimitDevice: Codable, Equatable, Sendable, Identifiable {
 
     /// 이름이 없을 때의 대체 이름. **"이름 모를 맥" 하나로 두지 않는다** — 둘이 나란히 서면 고를 수가 없다.
     package static let unnamedPrefix = "이름 모를 맥"
+    /// Windows 기기의 대체 이름(2026-10-31 사용자 결정 — 기기 종류대로 '맥' / 'PC').
+    /// ★ 이름을 **올린** 기기는 사람이 적은 컴퓨터 이름이 그대로 머리글이라 종류 낱말이 아예 없다 —
+    ///   그래서 종류가 글자로 드러나는 자리는 이 대체 이름 하나뿐이다.
+    package static let unnamedPCPrefix = "이름 모를 PC"
 
     /// 기기 식별자의 꼬리(대문자 4자). 사람이 두 줄을 **가르는 데만** 쓴다 — 식별자 전체를 적으면
     /// 설정 창이 진단 화면이 된다(관례: 사용자 툴팁은 진단이 아니다).
@@ -468,10 +495,14 @@ package struct AILimitDevice: Codable, Equatable, Sendable, Identifiable {
         String(deviceID.uppercased().suffix(4))
     }
 
+    /// 이 기기의 종류. `device_id` 로만 판정한다(서버와 같은 규칙 — `AILimitDevicePlatform`).
+    package var platform: AILimitDevicePlatform { .of(deviceID: deviceID) }
+
     /// 이름이 겹치지 않는다고 가정했을 때의 이름.
     package var baseName: String {
         if let label, !label.isEmpty { return label }
-        return "\(Self.unnamedPrefix) \(Self.shortTail(deviceID))"
+        let prefix = platform == .windows ? Self.unnamedPCPrefix : Self.unnamedPrefix
+        return "\(prefix) \(Self.shortTail(deviceID))"
     }
 }
 

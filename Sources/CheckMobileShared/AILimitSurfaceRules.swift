@@ -80,7 +80,7 @@ public enum AILimitFloorFill {
 public enum AILimitSurfaceText {
     /// 보이는 제공자가 0명일 때의 한 줄. **두 문을 순서대로** 가리킨다(연동 → 보기 설정) —
     /// 둘 중 어느 쪽이 닫혀 있어도 참이고, 어느 쪽이 닫혔는지 몰라도 할 일이 적혀 있다.
-    public static let noVisibleProviders = "맥 앱에서 AI 도구에 로그인하고 리밋 보기를 켜면 보여요"
+    public static let noVisibleProviders = "맥·PC 앱에서 AI 도구에 로그인하고 리밋 보기를 켜면 보여요"
 
     /// 고른 맥 대신 **다른 맥**을 그리고 있을 때의 한 줄(v0.3.47 P1).
     ///
@@ -101,5 +101,5 @@ public enum AILimitSurfaceText {
     /// 이 파일의 `noVisibleProviders` 와 **같은 근거**다(§왜 두 경우를 가려 다르게 말하지 않나): 3일이 지나면
     /// 비워진 행도 유령 문턱을 지나 사라져 **사용자가 아무것도 하지 않았는데 문구가 혼자 바뀐다**.
     /// 그리고 두 경우의 다음 행동이 같은 자리(맥)다.
-    public static let substitutedMainDevice = "고른 맥은 지금 보여 줄 숫자가 없어서 다른 맥을 보여 주고 있어요"
+    public static let substitutedMainDevice = "고른 기기는 지금 보여 줄 숫자가 없어서 다른 기기를 보여 주고 있어요"
 }

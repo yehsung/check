@@ -89,7 +89,11 @@ extension NowStore {
             }
             lastPhoneTouchAt = context.clock.now()
             if alreadyWorking {
-                workNotice = info.origin == NowWorkOrigin.mac.rawValue ? NowText.alreadyWorkingOnMac : NowText.alreadyWorking
+                switch NowWorkOrigin(rawValue: info.origin ?? "") ?? .unknown {
+                case .mac: workNotice = NowText.alreadyWorkingOnMac
+                case .windows: workNotice = NowText.alreadyWorkingOnPC
+                case .phone, .unknown: workNotice = NowText.alreadyWorking
+                }
             } else {
                 workNotice = NowText.workStarted
             }
@@ -259,10 +263,13 @@ extension NowStore {
 
     private static func phoneSession(from info: PhoneWorkSessionInfo, response: PhoneWorkResponse) -> NowPhoneSession? {
         guard let id = info.id?.lowercased(), !id.isEmpty else { return nil }
+        // ★ 모르는 값을 `.mac` 으로 접지 않는다(2026-10-31). 서버는 `20261101120000` 부터 'windows' 를 보내고,
+        //   접어 두면 PC 에서 근무를 켠 사람의 폰이 "맥에서 근무 중"이라고 말한다. 모르면 "근무 중"이 정직하다.
+        //   (옛 서버는 이 칸 자체가 없지만, 그 서버에는 폰 근무 함수도 없어 `workOrigin(of:)` 가 먼저 .mac 으로 답한다.)
         let origin = NowWorkOrigin(rawValue: info.origin ?? "") ?? .unknown
         return NowPhoneSession(
             id: id,
-            origin: origin == .unknown ? .mac : origin,
+            origin: origin,
             checkAt: response.checkAt.flatMap(parseServerDate),
             checkAfterSeconds: response.checkAfterSeconds
         )

@@ -249,6 +249,7 @@ struct NowWorkControlRow: View {
         switch origin {
         case .phone: return [NowText.phoneWorkCaption(checkAfterSeconds: store.phoneSession?.checkAfterSeconds)]
         case .mac: return [NowText.macWorkCaption]
+        case .windows: return [NowText.pcWorkCaption]
         case .unknown: return []
         }
     }

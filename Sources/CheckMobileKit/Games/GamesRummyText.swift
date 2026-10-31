@@ -64,7 +64,6 @@ package enum GamesRummyText {
     package static let rankTab = "순위"
     package static let newTable = "새 탁자"
     package static let myTable = "내 탁자"
-    package static let newTableHint = "[초대]를 누르거나 탁자를 열어요"
     package static let openTable = "탁자 열기"
     package static let readyHeader = "초대 가능"
     package static let busyHeader = "지금은 바빠요"
@@ -104,6 +103,48 @@ package enum GamesRummyText {
         guard inRoom else { return peopleCaptionNoRoom }
         return amHost ? peopleCaptionHost : peopleCaptionGuest
     }
+    package static let joinHeader = "받은 초대 · 공개 탁자"
+    package static let myRuby = "내 루비"
+    package static let unknownNumber = "—"
+    package static let selected = "선택됨"
+    package static let stakeShortfall = "루비가 모자라요"
+    package static let usersLoadFailed = "사람 목록을 불러오지 못했어요"
+    package static let statusOutdated = "업데이트 필요"
+    package static let statusInMatch = "게임 중"
+    package static let statusFocus = "집중"
+    package static let statusWorking = "근무 중"
+    package static let statusIdle = "쉬는 중"
+    package static let roomFullShort = "가득 찼어요"
+    package static let inviteSheetTitle = "새 탁자"
+    package static func people(_ count: Int) -> String { "\(count)명" }
+    package static func places(_ count: Int) -> String { "\(count)곳" }
+    package static func peopleTabWithInvites(_ count: Int) -> String { "\(usersTab) · 초대 \(count)" }
+    package static func inviteSheetPrompt(name: String) -> String { "\(name)님을 부를 탁자를 열어요" }
+    package static func openAndCall(stake: Int) -> String { "판돈 \(stake) 탁자 열고 부르기" }
+    package static func stakeOption(_ stake: Int) -> String { "판돈 \(stake)" }
+    package static func inviteHint(name: String) -> String { "\(name)님을 탁자로 불러요" }
+    /// 고른 판돈이 잔액을 넘었다 — 왜 막혔는지 + 무엇을 하면 풀리는지(폰엔 호버 툴팁이 없다).
+    package static func stakeShort(stake: Int, balance: Int) -> String {
+        "판돈 \(stake)에 루비가 모자라요(내 루비 \(balance)). 판돈을 낮춰 보세요."
+    }
+    /// 참가 행 라벨(접근성) — 초대는 누가 불렀는지, 공개 방은 빈자리.
+    package static func joinableAccessibility(title: String, stake: Int, seats: String) -> String {
+        "\(title), 판돈 \(stake), \(seats)"
+    }
+    package static let rankLoadFailed = "순위를 불러오지 못했어요"
+    package static let rankLoading = "순위를 불러오는 중…"
+    package static let myRankTitle = "내 순위"
+    package static let rankCollapse = "접기"
+    package static let rankEmptyHint = "판을 끝내면 순위에 올라요"
+    package static func rankSeeAll(total: Int) -> String { "전체 보기 (\(total))" }
+    package static func rankWins(_ wins: Int?) -> String { "1등 \(wins ?? 0)" }
+    package static func rankGames(_ games: Int?) -> String { "판 수 \(games ?? 0)" }
+    package static func myRankLine(rank: Int?, games: Int?, wins: Int?) -> String {
+        "\(self.rank(rank)) · \(record(games: games, wins: wins))"
+    }
+    package static func rankRowAccessibility(rank: Int?, name: String, isMe: Bool, games: Int?, wins: Int?) -> String {
+        "\(self.rank(rank)), \(name)\(isMe ? ", \(me)" : ""), \(record(games: games, wins: wins))"
+    }
 
     // MARK: - 방(레인 A)
 
@@ -113,6 +154,24 @@ package enum GamesRummyText {
     package static func startWith(_ players: Int) -> String { "\(players)명으로 시작" }
     package static func pot(stake: Int, players: Int) -> String { "\(stake) × \(players)명 = \(stake * players)" }
     package static func closesIn(_ seconds: Int) -> String { "\(clock(seconds)) 뒤 닫혀요" }
+    package static let emptyChairInvite = "초대"
+    package static let startBlockedShort = "루비가 모자라 시작할 수 없어요"
+    /// 탁자 가운데의 상금(판돈 × 인원).
+    package static func potTotal(stake: Int, players: Int) -> String { "\(stake * players)" }
+    package static func potFormula(stake: Int, players: Int) -> String { "판돈 \(stake) × \(players)명" }
+    /// 등수 분배 — **순수익**이다(2명 +판돈/−판돈 · 3명 +판돈/0/−판돈 · 4명 +판돈×2/0/−판돈/−판돈). 안내 글자 전용이고 실제 분배는 서버 값(`payout`)만 쓴다.
+    /// 탁자 가운데가 좁아(320pt 기기 112pt) 한 줄씩 낸다. 4명의 3·4등은 같은 값이라 한 줄로 합친다.
+    package static func splitLines(players: Int, stake: Int) -> [String] {
+        switch players {
+        case ...2: return ["1등 \(net(stake))", "2등 \(net(-stake))"]
+        case 3: return ["1등 \(net(stake))", "2등 \(net(0))", "3등 \(net(-stake))"]
+        default: return ["1등 \(net(stake * 2))", "2등 \(net(0))", "3·4등 \(net(-stake))"]
+        }
+    }
+    /// 의자 한 칸 라벨(접근성).
+    package static func chairAccessibility(name: String, tag: String?) -> String {
+        tag.map { "\(name), \($0)" } ?? name
+    }
 
     // MARK: - 판(레인 B)
 

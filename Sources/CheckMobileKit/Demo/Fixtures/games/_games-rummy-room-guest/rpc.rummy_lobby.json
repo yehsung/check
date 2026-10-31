@@ -1,0 +1,199 @@
+{
+  "__note": [
+    "방 장면(손님): 구름빵의 공개 방에 앉았다. me.room 과 state 가 같은 방이다.",
+    "닿는 길: games/rummy/room/guest."
+  ],
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "turn_seconds": 60,
+  "room_ttl_seconds": 600,
+  "me": {
+    "ruby_balance": 42,
+    "games": 12,
+    "wins": 5,
+    "room": {
+      "id": "d0000000-0000-4000-8000-00000000c005",
+      "host": {
+        "id": "d0000000-0000-4000-8000-0000000000b1",
+        "display_name": "구름빵",
+        "avatar_url": null,
+        "character": "jellyfish"
+      },
+      "stake": 3,
+      "is_public": true,
+      "max_seats": 4,
+      "expires_at_ms": 1789622040000,
+      "seats": [
+        {
+          "user_id": "d0000000-0000-4000-8000-0000000000b1",
+          "display_name": "구름빵",
+          "avatar_url": null,
+          "character": "jellyfish",
+          "state": "joined",
+          "seat_no": 0
+        },
+        {
+          "user_id": "d0000000-0000-4000-8000-000000000001",
+          "display_name": "아잉러",
+          "avatar_url": null,
+          "character": "aing",
+          "state": "joined",
+          "seat_no": 1
+        }
+      ]
+    },
+    "active_match_id": null
+  },
+  "invites": [],
+  "public_rooms": [
+    {
+      "id": "d0000000-0000-4000-8000-00000000c012",
+      "host": {
+        "id": "d0000000-0000-4000-8000-0000000000b6",
+        "display_name": "달토끼",
+        "avatar_url": null,
+        "character": "fox"
+      },
+      "stake": 3,
+      "is_public": true,
+      "max_seats": 4,
+      "expires_at_ms": 1789622040000,
+      "seats": [
+        {
+          "user_id": "d0000000-0000-4000-8000-0000000000b6",
+          "display_name": "달토끼",
+          "avatar_url": null,
+          "character": "fox",
+          "state": "joined",
+          "seat_no": 0
+        }
+      ]
+    },
+    {
+      "id": "d0000000-0000-4000-8000-00000000c013",
+      "host": {
+        "id": "d0000000-0000-4000-8000-0000000000b3",
+        "display_name": "민트별",
+        "avatar_url": null,
+        "character": null
+      },
+      "stake": 10,
+      "is_public": true,
+      "max_seats": 4,
+      "expires_at_ms": 1789622040000,
+      "seats": [
+        {
+          "user_id": "d0000000-0000-4000-8000-0000000000b3",
+          "display_name": "민트별",
+          "avatar_url": null,
+          "character": null,
+          "state": "joined",
+          "seat_no": 0
+        },
+        {
+          "user_id": "d0000000-0000-4000-8000-0000000000b5",
+          "display_name": "보리차",
+          "avatar_url": null,
+          "character": "squirrel",
+          "state": "joined",
+          "seat_no": 1
+        },
+        {
+          "user_id": "d0000000-0000-4000-8000-0000000000b2",
+          "display_name": "초코칩",
+          "avatar_url": null,
+          "character": "ghost",
+          "state": "joined",
+          "seat_no": 2
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b1",
+      "display_name": "구름빵",
+      "avatar_url": null,
+      "character": "jellyfish",
+      "is_working": true,
+      "in_match": false,
+      "capable": true,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b2",
+      "display_name": "초코칩",
+      "avatar_url": null,
+      "character": "ghost",
+      "is_working": false,
+      "in_match": false,
+      "capable": true,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b3",
+      "display_name": "민트별",
+      "avatar_url": null,
+      "character": null,
+      "is_working": true,
+      "in_match": false,
+      "capable": true,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b4",
+      "display_name": "호두과자",
+      "avatar_url": null,
+      "character": "shiba",
+      "is_working": false,
+      "in_match": true,
+      "capable": true,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b5",
+      "display_name": "보리차",
+      "avatar_url": null,
+      "character": "squirrel",
+      "is_working": false,
+      "in_match": false,
+      "capable": true,
+      "focus_mode": true
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b6",
+      "display_name": "달토끼",
+      "avatar_url": null,
+      "character": "fox",
+      "is_working": false,
+      "in_match": false,
+      "capable": true,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b7",
+      "display_name": "솜사탕",
+      "avatar_url": null,
+      "character": "ghost",
+      "is_working": false,
+      "in_match": false,
+      "capable": false,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b8",
+      "display_name": "모카빵",
+      "avatar_url": null,
+      "character": "robot",
+      "is_working": false,
+      "in_match": false,
+      "capable": false,
+      "focus_mode": false
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "__note": [
+    "바쁜 사람과 업데이트 필요 접기가 첫 화면에 오는 로비: 받은 초대·공개 방·초대 가능한 사람이 없다. 접기는 펴진 채 선다.",
+    "닿는 길: games/rummy/lobby/busy."
+  ],
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "turn_seconds": 60,
+  "room_ttl_seconds": 600,
+  "me": {
+    "ruby_balance": 42,
+    "games": 12,
+    "wins": 5,
+    "room": null,
+    "active_match_id": null
+  },
+  "invites": [],
+  "public_rooms": [],
+  "users": [
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b4",
+      "display_name": "호두과자",
+      "avatar_url": null,
+      "character": "shiba",
+      "is_working": false,
+      "in_match": true,
+      "capable": true,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b5",
+      "display_name": "보리차",
+      "avatar_url": null,
+      "character": "squirrel",
+      "is_working": false,
+      "in_match": false,
+      "capable": true,
+      "focus_mode": true
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b7",
+      "display_name": "솜사탕",
+      "avatar_url": null,
+      "character": "ghost",
+      "is_working": false,
+      "in_match": false,
+      "capable": false,
+      "focus_mode": false
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b8",
+      "display_name": "모카빵",
+      "avatar_url": null,
+      "character": "robot",
+      "is_working": false,
+      "in_match": false,
+      "capable": false,
+      "focus_mode": false
+    }
+  ]
+}

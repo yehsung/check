@@ -311,6 +311,9 @@ private struct GamesRummyTableStage<Center: View>: View {
                 let frame = layout.chair(index)
                 GamesRummyChairView(chair: chair, inviteHint: inviteHint, onInviteTap: onInviteTap)
                     .frame(width: frame.width, height: frame.height)
+                    .anchorPreference(key: GamesRummySeatAnchorKey.self, value: .bounds) { anchor in
+                        chair.seatNo.map { [$0: anchor] } ?? [:]
+                    }
                     .offset(x: frame.minX, y: frame.minY)
             }
         }

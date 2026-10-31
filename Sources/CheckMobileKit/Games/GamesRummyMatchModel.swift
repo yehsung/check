@@ -39,6 +39,8 @@ package final class GamesRummyMatchModel {
     @ObservationIgnored private var holdTask: Task<Void, Never>?
     @ObservationIgnored private var edgeTask: Task<Void, Never>?
     @ObservationIgnored private var flashTask: Task<Void, Never>?
+    /// 방금 손으로 놓은 타일 — 판 변화 모션에서 뺀다(손이 놓은 자리가 곧 제자리다. 맥 `recentDrop` 과 같다).
+    @ObservationIgnored package private(set) var recentDropIDs: Set<Int> = []
 
     package init(tableSize: CGSize = CGSize(width: 393, height: 469)) {
         let view = GamesRummyViewport(viewport: tableSize)
@@ -59,6 +61,7 @@ package final class GamesRummyMatchModel {
         self.context = context
         if machine.isIdle {
             touchToken += 1
+            recentDropIDs = []
             machine.down(start, context)
             if machine.holdsBoard { frozenRows = base.layout.rackRows }
             if case .pressing = machine.phase { startHoldTimer(holdDelay) }
@@ -85,6 +88,14 @@ package final class GamesRummyMatchModel {
     @discardableResult
     package func touchEnded(at location: CGPoint, context base: GamesRummyTouchContext) -> GamesRummyDropAction {
         let action = machine.up(location, withViewport(base))
+        switch action {
+        case .moveTiles(let ids, _):
+            recentDropIDs = Set(ids)
+        case .moveSet(let index, _):
+            recentDropIDs = Set(base.scene.meldTileIDs.indices.contains(index) ? base.scene.meldTileIDs[index] : [])
+        case .none, .refused:
+            break
+        }
         tearDown()
         if action == .refused { flashRefused() }
         return action
@@ -201,13 +212,24 @@ package final class GamesRummyMatchModel {
     }
 
     package func pinchChanged(magnification: CGFloat, anchor: CGPoint, context base: GamesRummyTouchContext) {
+        pinch(magnification: magnification, tableAnchor: base.inTable(anchor))
+    }
+
+    /// 핀치 — 기준점은 판 칸 좌표다(결과의 읽기 전용 판은 판 화면 칸 자리를 안 쓴다).
+    package func pinch(magnification: CGFloat, tableAnchor: CGPoint) {
         if pinchBase == nil {
             guard machine.beginPinch() else { return }
             tearDown()
             pinchBase = viewport.scale
         }
         guard let pinchBase else { return }
-        viewport.zoom(to: pinchBase * magnification, anchor: base.inTable(anchor))
+        viewport.zoom(to: pinchBase * magnification, anchor: tableAnchor)
+    }
+
+    /// 읽기 전용 판(결과의 [최종 판]) 밀기 — 타일을 집지 않으니 손 기계를 안 거친다. 핀치 중에는 안 민다.
+    package func readOnlyPan(by delta: CGSize) {
+        guard pinchBase == nil, delta != .zero else { return }
+        viewport.pan(by: delta)
     }
 
     /// 핀치 끝. `touching` = 아직 손이 닿아 있다(떼면 기계가 쉰다 — 드래그가 시작조차 못 했으면 여기서 푼다).

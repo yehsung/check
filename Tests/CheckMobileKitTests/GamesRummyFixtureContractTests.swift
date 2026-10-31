@@ -39,7 +39,7 @@ import Testing
     @Test("라우트: 표 그대로 풀린다 · 모르는 꼬리는 로비 머리로 · 다른 게임 글자는 nil")
     func parsing() {
         typealias R = MobileDemoRummyRoute
-        #expect(R.Scene.allCases.count == 19)
+        #expect(R.Scene.allCases.count == 35)
         for scene in R.Scene.allCases { #expect(R(demoRoute: scene.rawValue)?.scene == scene, "\(scene)") }
         #expect(R(demoRoute: "games/rummy")?.scene == .lobby)
         #expect(R(demoRoute: "games/rummy/없는꼬리")?.scene == .lobby, "틀린 꼬리가 안 보인다")
@@ -50,7 +50,7 @@ import Testing
         #expect(R(demoRoute: "games/rummy/match/elsewhere")?.scene.engages == false, "놀던 기기 장면이 손댄 판으로 선다")
         #expect(GamesRummyLobbyTab(demo: .ranking) == .ranking && GamesRummyLobbyTab(demo: .people) == .people)
         #expect(R(demoRoute: "games/rummy/match/my-turn")?.destination == .rummy)
-        // 기준선: 장면 다섯이 서로 다른 판·다른 스텁 장면을 고른다.
+        // 기준선: 장면들이 판 일곱을 서로 다르게 고른다.
         let ids = R.Scene.allCases.compactMap(\.focusMatchID)
         #expect(Set(ids).count == 7)
     }

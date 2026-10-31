@@ -348,13 +348,7 @@
         "payout": null
       }
     ],
-    "reactions": [
-      {
-        "seat_no": 3,
-        "key": "sleepy",
-        "at_ms": 1789621499600
-      }
-    ],
+    "reactions": [],
     "last_event": {
       "kind": "forfeit",
       "seat_no": 1,

@@ -30,10 +30,6 @@ package enum GamesRummyText {
     package static let hostTag = "방장"
     package static let leave = "나가기"
     package static let keepPlaying = "계속하기"
-    #if DEBUG
-    /// 자리표시 화면 한 줄. **Debug 에만 있다** — 뒤 레인이 다 채우지 않으면 Release 가 컴파일되지 않는다(저장소 메모 '임시 자리표시가 게이트를 지난다'). 마지막 레인이 이 함수를 지운다.
-    package static func placeholder(_ lane: String) -> String { "자리표시 — \(lane)" }
-    #endif
 
     /// 값으로 자리를 맞추는 글자들.
     package static func seconds(_ value: Int) -> String { "\(value)초" }
@@ -256,6 +252,20 @@ package enum GamesRummyText {
     package static let toLobby = "나가기"
     package static let emptyBoard = "판에 놓인 묶음이 없어요"
     package static let remainingTiles = "남은 타일"
+    package static func remainingCount(_ count: Int) -> String { "\(remainingTiles) \(count)장" }
+    /// 머리 카드의 내 등수. 기권이면 까닭을 앞에 말한다.
+    package static func myResult(rank: Int?, forfeited: Bool) -> String {
+        forfeited ? "\(forfeitTag) · \(self.rank(rank))" : self.rank(rank)
+    }
+    package static func resultRowAccessibility(rank: Int?, name: String, isMe: Bool, forfeited: Bool, score: Int?, net: Int, rackCount: Int) -> String {
+        var parts = [self.rank(rank), name]
+        if isMe { parts.append(me) }
+        if forfeited { parts.append(forfeitTag) }
+        parts.append(self.score(score))
+        parts.append("루비 \(self.net(net))")
+        if rackCount > 0 { parts.append(remainingCount(rackCount)) }
+        return parts.joined(separator: ", ")
+    }
     package static func endReason(_ reason: RummyEndReason?, winner: String?) -> String {
         switch reason {
         case .rackEmpty: return winner.map { "\($0)님이 랙을 비웠어요" } ?? "랙을 비운 사람이 나왔어요"
@@ -267,7 +277,7 @@ package enum GamesRummyText {
 
     // MARK: - 나가기 확인
 
-    package static let forfeitTitle = "나가면 기권돼요"
+    package static let forfeitTitle = "판을 나갈까요?"
     package static let forfeitDetail = "나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요."
     package static let forfeitConfirm = "기권하고 나가기"
     package static let closeRoomTitle = "방이 닫혀요"
@@ -289,7 +299,7 @@ package enum GamesRummyText {
             + "냈어야 해요. 판에 있던 타일은 랙으로 가져올 수 없어요.", []),
         ("조작", "끌면 한 장 · 0.5초 꾹 누른 채 끌면 덩어리(판에선 누른 타일에서 가까운 끝까지) · 묶음 왼쪽 손잡이로 묶음째 "
             + "옮기기 · 묶음 끝 가까이 놓으면 붙기 · 묶음 위에 놓으면 맞는 자리에 끼우기 · 묶음 가운데를 빼면 둘로 나뉘어요.", []),
-        ("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, [전체 보기]로 한눈에 봐요. "
+        ("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, 판 오른쪽 위 버튼으로 한눈에 봐요. "
             + "화면 밖 묶음은 양쪽 가장자리 배지가 알려 줘요.", []),
         ("받침대", "타일 사이에 놓으면 끼워 넣고 오른쪽을 밀어요. 딱 붙여 놓은 맞는 묶음엔 밑줄과 점수가 떠요. "
             + "777·789로 정렬해 두면 새로 뽑은 타일도 그 정렬 자리로 들어가요.", []),
@@ -305,4 +315,5 @@ package enum GamesRummyText {
     // MARK: - 반응(레인 C)
 
     package static let reactionTitle = "반응 보내기"
+    package static func reactionAccessibility(name: String, sticker: String) -> String { "\(name)님의 반응 \(sticker)" }
 }

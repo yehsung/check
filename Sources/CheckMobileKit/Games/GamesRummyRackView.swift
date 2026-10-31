@@ -30,6 +30,12 @@ struct GamesRummyRackPane: View {
     let turnGlow: GamesRummyTurnGlowPhase?
     /// 방금 뽑은 타일(3초 빛남).
     let freshIDs: Set<Int>
+    /// 정렬 시차(타일 id → 지연 · `GamesRummyRackMotion.sortStagger`).
+    var stagger: [Int: TimeInterval] = [:]
+    /// 뽑은 타일이 날아오는 중 · 내려앉았는가(`GamesRummyRackMotion.flight`). 동작 줄이기면 nil 이다.
+    var flight: (ids: Set<Int>, landed: Bool)? = nil
+    /// [뽑기] 칸 가운데(받침대 칸 좌표).
+    var flightOrigin: CGPoint = .zero
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -71,9 +77,10 @@ struct GamesRummyRackPane: View {
         .overlay {
             if let turnGlow, !refused {
                 let pulse = turnGlow == .pulse
+                // 굵기 · 번짐만 줄인다 — 불투명도를 이징으로 깎지 않는다.
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(MobileTheme.accent.opacity(pulse ? 1 : 0.75), lineWidth: pulse ? 4 : 2)
-                    .shadow(color: MobileTheme.accent.opacity(pulse ? 0.95 : 0.5), radius: pulse ? 12 : 5)
+                    .stroke(MobileTheme.accent, lineWidth: pulse ? 4 : 2)
+                    .shadow(color: MobileTheme.accent.opacity(0.7), radius: pulse ? 12 : 5)
                     .padding(1)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: turnGlow)
             }
@@ -98,15 +105,23 @@ struct GamesRummyRackPane: View {
     private func tileView(_ tile: RummyTile, frame: CGRect, hidden: Bool, lifted: Bool) -> some View {
         let size = RummyTileSize(frame.size)
         let fresh = freshIDs.contains(tile.id) && !lifted
+        let inFlight = flight?.ids.contains(tile.id) == true
+        let flying = inFlight && flight?.landed == false
         return GamesRummyTile(face: tile.face, size: frame.size, dimmed: model.draggingIDs.contains(tile.id))
             .overlay(RoundedRectangle(cornerRadius: size.corner + 1, style: .continuous)
                 .stroke(MobileTheme.accent, lineWidth: lifted ? 2 : 0).padding(-1.5))
             .overlay(RoundedRectangle(cornerRadius: size.corner + 1, style: .continuous)
                 .stroke(MobileTheme.pending, lineWidth: fresh ? 2.5 : 0).padding(-2))
-            .opacity(hidden ? 0 : 1)
             .offset(y: lifted ? -5 : 0)
             .shadow(color: .black.opacity(lifted ? 0.45 : 0), radius: 5, y: 4)
-            .position(x: frame.midX, y: frame.midY)
+            .scaleEffect(flying ? 0.55 : 1)
+            .rotationEffect(.degrees(flying ? -10 : 0))
+            .position(flying ? flightOrigin : CGPoint(x: frame.midX, y: frame.midY))
+            // 자리가 바뀔 때만 미끄러진다(정렬 · 끼워 넣기 미리보기 · 뽑기). 아래 불투명도는 이 애니메이션 밖이다 — 감추기는 곧바로.
+            .animation(reduceMotion ? nil : (inFlight ? .spring(response: 0.45, dampingFraction: 0.72)
+                                                       : .spring(response: 0.38, dampingFraction: 0.82).delay(stagger[tile.id] ?? 0)),
+                       value: flying ? flightOrigin : CGPoint(x: frame.midX, y: frame.midY))
+            .opacity(hidden ? 0 : 1)
     }
 }
 

@@ -26,7 +26,13 @@ import Foundation
 /// | `games/rummy/match/refused`    | `_games-rummy-match-refused`    | …c005         | 사람    | 판 타일을 받침대로 끄는 중(R-14) |
 /// | `games/rummy/match/lifted`     | `_games-rummy-match-lifted`     | …c002         | 사람    | 받침대 덩어리를 꾹 눌러 든 순간 |
 /// | `games/rummy/match/handle`     | `_games-rummy-match-handle`     | …c002         | 사람    | 손잡이로 묶음을 옮기는 중      |
+/// | `games/rummy/match/reaction`   | `_games-rummy-match-reaction`   | …c002         | 사람    | 말풍선 셋(상대 둘 · 내 자리)    |
+/// | `games/rummy/match/reaction-picker` | `_games-rummy-match-reaction-picker` | …c002 | 사람    | 이모티콘 시트를 연다           |
+/// | `games/rummy/match/exit`       | `_games-rummy-match-exit`       | …c002         | 사람    | 기권 확인을 연다               |
+/// | `games/rummy/match/motion`     | `_games-rummy-match-motion`     | …c005         | 사람    | 정렬 · 묶음 이동 · 뽑기를 차례로 튼다(녹화용) |
 /// | `games/rummy/result`           | (없음 — 바깥 층)                 | …c004         | 사람    | 끝난 판 · 판돈 5 · 4인         |
+/// | `games/rummy/result/board`     | (없음 — 바깥 층)                 | …c004         | 사람    | 결과의 [최종 판]               |
+/// | `games/rummy/result/won`       | `_games-rummy-result-won`       | …c004         | 사람    | 내가 1등 · 판돈 10 · 2인        |
 /// | `games/rummy/room/guest`       | `_games-rummy-room-guest`       | …c007         | 사람    | 손님으로 앉은 공개 방 · 2명    |
 /// | `games/rummy/lobby/empty`      | `_games-rummy-lobby-empty`      | nil           | 사람    | 초대·공개 방·사람 없음         |
 /// | `games/rummy/lobby/failed`     | `_games-rummy-lobby-failed`     | nil           | 사람    | 로비 조회 실패                 |
@@ -65,7 +71,13 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         case matchRefused = "games/rummy/match/refused"
         case matchLifted = "games/rummy/match/lifted"
         case matchHandle = "games/rummy/match/handle"
+        case matchReaction = "games/rummy/match/reaction"
+        case matchReactionPicker = "games/rummy/match/reaction-picker"
+        case matchExit = "games/rummy/match/exit"
+        case matchMotion = "games/rummy/match/motion"
         case result = "games/rummy/result"
+        case resultBoard = "games/rummy/result/board"
+        case resultWon = "games/rummy/result/won"
         case roomGuest = "games/rummy/room/guest"
         case lobbyEmpty = "games/rummy/lobby/empty"
         case lobbyFailed = "games/rummy/lobby/failed"
@@ -86,12 +98,13 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
                 return nil
             case .room: return Self.roomID
             case .roomGuest: return Self.guestRoomID
-            case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchPlacing, .matchLifted, .matchHandle:
+            case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchPlacing, .matchLifted, .matchHandle,
+                 .matchReaction, .matchReactionPicker, .matchExit:
                 return Self.myTurnID
             case .matchWaiting: return Self.waitingID
-            case .matchFull, .matchOverview, .matchDragging, .matchRefused: return Self.fullID
+            case .matchFull, .matchOverview, .matchDragging, .matchRefused, .matchMotion: return Self.fullID
             case .matchMany, .matchAttach: return Self.manyID
-            case .result: return Self.resultID
+            case .result, .resultBoard, .resultWon: return Self.resultID
             }
         }
 
@@ -101,7 +114,8 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             case .lobby, .ranking, .rules, .matchElsewhere, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
                 return false
             case .room, .roomGuest, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchDragging, .matchAttach,
-                 .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .result:
+                 .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .matchReaction, .matchReactionPicker, .matchExit, .matchMotion,
+                 .result, .resultBoard, .resultWon:
                 return true
             }
         }
@@ -144,6 +158,9 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         default: return nil
         }
     }
+
+    /// `match/motion` 장면이 묶음 하나를 옮겨 놓을 빈자리(논리 좌표).
+    package static let motionDemoSpot = RummyPoint(x: 120, y: 450)
 
     /// 처음부터 [전체 보기]로 연다.
     package var demoFullView: Bool { scene == .matchOverview }

@@ -162,13 +162,7 @@
         "payout": null
       }
     ],
-    "reactions": [
-      {
-        "seat_no": 1,
-        "key": "joy",
-        "at_ms": 1789621499200
-      }
-    ],
+    "reactions": [],
     "last_event": {
       "kind": "play",
       "seat_no": 3,

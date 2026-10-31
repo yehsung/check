@@ -26,12 +26,14 @@ struct GamesRummyBoardLayer: View, Equatable {
     let dimmed: Set<Int>
     let lifted: Set<Int>
     let movingSet: Int?
+    /// 지금 뷰로 떠서 움직이는 칸(`GamesRummyBoardMotion`) — 이 층은 그리지 않는다.
+    var hidden: Set<GamesRummyBoardMotion.Slot> = []
 
     @Environment(\.displayScale) private var displayScale
 
     nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.scale == rhs.scale && lhs.editable == rhs.editable && lhs.movingSet == rhs.movingSet
-            && lhs.dimmed == rhs.dimmed && lhs.lifted == rhs.lifted && lhs.melds == rhs.melds
+            && lhs.dimmed == rhs.dimmed && lhs.lifted == rhs.lifted && lhs.hidden == rhs.hidden && lhs.melds == rhs.melds
     }
 
     var body: some View {
@@ -68,6 +70,7 @@ struct GamesRummyBoardLayer: View, Equatable {
         for (index, meld) in melds.enumerated() {
             let frame = rect(meld.frame)
             for (slot, tile) in meld.tiles.enumerated() {
+                if hidden.contains(GamesRummyBoardMotion.Slot(meld: index, tile: slot)) { continue }
                 let isLifted = tile.id.map(lifted.contains) ?? false
                 let isDimmed = tile.id.map(dimmed.contains) ?? false
                 let origin = CGPoint(x: frame.minX + CGFloat(slot) * tileW + inset / 2,
@@ -217,6 +220,12 @@ struct GamesRummyTablePane: View {
     let size: CGSize
     let editable: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 판 변화 모션 한 번. 판 층은 그 칸을 비우고 위 층이 옛 자리 → 새 자리로 옮긴다.
+    @State private var motion: GamesRummyBoardMotion?
+    @State private var motionLanded = false
+    @State private var motionSerial = 0
+
     var body: some View {
         let viewport = model.viewport
         let transform = viewport.transform
@@ -230,10 +239,13 @@ struct GamesRummyTablePane: View {
             ZStack(alignment: .topLeading) {
                 GamesRummyBoardLayer(melds: scene.melds, scale: model.renderScale, editable: editable,
                                      dimmed: model.draggingIDs, lifted: Set(model.lift?.surface == .board ? model.lift?.ids ?? [] : []),
-                                     movingSet: model.movingSet)
+                                     movingSet: model.movingSet, hidden: motion?.hidden ?? [])
                     .equatable()
                     .scaleEffect(ratio, anchor: .topLeading)
                     .offset(x: origin.x - bleed, y: origin.y - bleed)
+                if let motion {
+                    GamesRummyBoardMotionLayer(motion: motion, landed: motionLanded, transform: transform)
+                }
                 if let preview = model.boardPreview {
                     GamesRummyBoardPreviewLayer(preview: preview, melds: scene.melds, transform: transform, size: size)
                 }
@@ -245,6 +257,49 @@ struct GamesRummyTablePane: View {
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(GamesRummyText.boardSummary(melds: scene.melds.count, tiles: scene.tileCount))
+        .onChange(of: scene.melds) { old, new in startMotion(from: old, to: new) }
+    }
+
+    /// 판이 바뀌었다 — 움직인 타일을 옛 자리에 세웠다가 다음 틈에 새 자리로 보낸다(맥 `slide` 와 같은 스프링). 끝나면 판 층이 다시 그린다. 끄는 중 · 동작 줄이기면 없다.
+    private func startMotion(from old: [RummyBoardMeld], to new: [RummyBoardMeld]) {
+        motionSerial += 1
+        let serial = motionSerial
+        guard !reduceMotion, model.drag == nil,
+              let next = GamesRummyBoardMotion.make(from: old, to: new, excluding: model.recentDropIDs) else {
+            motion = nil
+            return
+        }
+        motionLanded = false
+        motion = next
+        Task { @MainActor in
+            guard motionSerial == serial else { return }
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.84), completionCriteria: .logicallyComplete) {
+                motionLanded = true
+            } completion: {
+                if motionSerial == serial { motion = nil }
+            }
+        }
+    }
+}
+
+/// 움직이는 타일만 잠깐 뷰로 띄운다(많아야 `GamesRummyBoardMotion.maxMoves` 장 · 판 층의 크기 값과 같다).
+private struct GamesRummyBoardMotionLayer: View {
+    let motion: GamesRummyBoardMotion
+    let landed: Bool
+    let transform: RummyCanvasTransform
+
+    var body: some View {
+        let tileW = CGFloat(RummyTableLayout.tileWidth) * transform.scale
+        let tileH = CGFloat(RummyTableLayout.tileHeight) * transform.scale
+        let inset = max(1, tileW * 0.05)
+        ZStack(alignment: .topLeading) {
+            ForEach(motion.moves) { move in
+                let point = transform.toScreen(landed ? move.to : move.from)
+                GamesRummyTile(face: move.face, size: CGSize(width: tileW - inset, height: tileH - inset), highlighted: move.highlighted)
+                    .position(x: point.x + tileW / 2, y: point.y + tileH / 2)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

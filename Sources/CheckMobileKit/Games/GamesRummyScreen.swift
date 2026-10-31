@@ -154,11 +154,12 @@ package enum GamesRummySeating {
 
 #if os(iOS)
 
-/// 아잉 큐브 화면 — 코어 `RummyStore.phase` 로 단계를 갈아 끼운다. 각 단계 뷰의 입력은 여기서 정한다(뒤 레인이 파일 단위로 채운다):
+/// 아잉 큐브 화면 — 코어 `RummyStore.phase` 로 단계를 갈아 끼운다. 각 단계 뷰의 입력은 여기서 정한다:
 ///  · `store` 하나가 전부다(`store.rummy` · `store.context`). 뷰가 스토어를 따로 쥐지 않는다.
 ///  · `inviteQueue` = 방 없이 [초대] · 결과 [한 판 더]의 '부를 사람' 줄(화면이 쥐고 `isWorking`·판 id 변화에 민다).
 ///  · `onExit` = 화면의 [나가기](이탈 판단·확인 시트는 여기 한 곳이다 — 단계 뷰가 `leave`·`leaveForExit` 를 직접 부르지 않는다).
 ///  · 규칙 시트는 `store.rummy.rulesShown` 하나로 연다(`rulesShown = true`).
+///  · 반응: 고르는 시트는 여기가 쥐고(`onReaction`), 말풍선은 단계 뷰가 낸 자리 앵커(`GamesRummySeatAnchorKey`) 위에 여기서 그린다.
 ///  · ⚠️ 데모의 시계는 고정이다(`MobileClock.fixed`). 남은 초는 `TimelineView` 의 날짜가 아니라 `store.rummy.clock()` 으로 물어라 — 날짜를 쓰면 데모 판이 늘 0초로 그려진다.
 struct GamesRummyScreen: View {
     let store: GamesStore
@@ -167,11 +168,15 @@ struct GamesRummyScreen: View {
     @State private var tab: GamesRummyLobbyTab = .people
     /// 떠 있는 나가기 확인(판 중 기권 · 방장 방 닫기).
     @State private var exitPrompt: RummyCloseDecision?
+    @State private var reactionPicking = false
 
     private var rummy: RummyStore { store.rummy }
 
     var body: some View {
         content
+            .overlayPreferenceValue(GamesRummySeatAnchorKey.self) { anchors in
+                GamesRummyReactionLayer(rummy: rummy, anchors: anchors, settled: demoSettlesBubbles)
+            }
             // 단계 뷰의 폭이 어떻든 화면을 다 채운다 — 이 줄이 없으면 내용이 좁은 단계(방·결과)의 양옆이 까맣게 빈다(실화면에서 봤다).
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(MobileTheme.background.ignoresSafeArea())
@@ -179,6 +184,9 @@ struct GamesRummyScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: rulesBinding) {
                 GamesRummyRulesView()
+            }
+            .sheet(isPresented: $reactionPicking) {
+                GamesRummyReactionPicker(rummy: rummy)
             }
             .alert(exitPromptCopy?.title ?? "", isPresented: exitPromptBinding, presenting: exitPromptCopy) { copy in
                 Button(copy.confirm, role: .destructive) { confirmExit() }
@@ -198,9 +206,14 @@ struct GamesRummyScreen: View {
             .onChange(of: rummy.match?.id) { _, _ in
                 inviteQueue.pump(rummy)
                 exitPrompt = nil
+                applyDemo()
             }
             // 방이 판으로 · 판이 결과로 넘어가면(판 id 는 그대로다) 낡은 확인을 거둔다 — 눌러도 `confirm` 이 막지만 틀린 글자가 떠 있게 두지 않는다.
-            .onChange(of: rummy.phase) { _, _ in exitPrompt = nil }
+            .onChange(of: rummy.phase) { _, _ in
+                exitPrompt = nil
+                reactionPicking = false
+                applyDemo()
+            }
             .onChange(of: rummy.editor != nil) { _, _ in applyDemo() }
     }
 
@@ -216,11 +229,19 @@ struct GamesRummyScreen: View {
             case .room:
                 GamesRummyRoomView(store: store, inviteQueue: inviteQueue, onExit: requestExit)
             case .playing:
-                GamesRummyMatchView(store: store, onExit: requestExit)
+                GamesRummyMatchView(store: store, onExit: requestExit, onReaction: { reactionPicking = true })
             case .finished:
-                GamesRummyResultView(store: store, inviteQueue: inviteQueue)
+                GamesRummyResultView(store: store, inviteQueue: inviteQueue, onReaction: { reactionPicking = true })
             }
         }
+    }
+
+    private var demoSettlesBubbles: Bool {
+        #if DEBUG
+        store.demoRummyRoute?.scene == .matchReaction
+        #else
+        false
+        #endif
     }
 
     private var rulesBinding: Binding<Bool> {
@@ -259,6 +280,9 @@ struct GamesRummyScreen: View {
         guard let demo = store.demoRummyRoute else { return }
         tab = GamesRummyLobbyTab(demo: demo.lobbyTab)
         demo.applyEdit(to: rummy)
+        guard rummy.phase == .playing else { return }
+        if demo.scene == .matchReactionPicker { reactionPicking = true }
+        if demo.scene == .matchExit { exitPrompt = GamesRummyExit.decision(rummy) }
         #endif
     }
 }

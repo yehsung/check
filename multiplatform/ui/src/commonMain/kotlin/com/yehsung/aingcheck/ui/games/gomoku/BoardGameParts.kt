@@ -69,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.games.GamesWatcherCount
+import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import com.yehsung.aingcheck.ui.components.CharacterExpression
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.CharacterPortrait
@@ -545,6 +546,8 @@ fun BoxScope.BoardSheetOverlay(
 
 /**
  * 확인 덮개(Swift `AingConfirmSheet`) — 불투명 카드라 뒤 색을 빨아들이지 않는다(iOS 알림창 대비 1.9:1 의 교훈). [확인]은 위험 색, [취소]는 회색.
+ * 판 시트([BoardSheetHost])와 같은 자리 규칙: Android 앱은 따로 뜬 창(막이 상태 바 · 탭 막대까지), 데스크톱 · 판 스냅숏은 화면 안 덮개.
+ * 뒤로 가기 · 카드 바깥 누름은 어느 쪽이든 [onCancel].
  */
 @Composable
 fun BoxScope.BoardConfirmOverlay(
@@ -556,13 +559,41 @@ fun BoxScope.BoardConfirmOverlay(
     onCancel: () -> Unit,
     testTag: String = "board-confirm",
 ) {
-    val colors = AingTheme.colors
+    val card: @Composable (Modifier) -> Unit = { modifier ->
+        BoardConfirmCard(title, message, confirmTitle, cancelTitle, onConfirm, onCancel, testTag, modifier)
+    }
+    if (LocalBoardSheetsInWindow.current) {
+        ModalPresenceMark()
+        BoardConfirmWindow(onCancel) {
+            // 창은 카드 높이만큼이다 — 카드 둘레 여백도 막 누름과 같게 닫는다(창 바깥 누름은 대화상자가 onCancel 로 준다).
+            Box(
+                Modifier.fillMaxWidth().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCancel() },
+                contentAlignment = Alignment.Center,
+            ) { card(Modifier) }
+        }
+        return
+    }
     Box(
         Modifier.matchParentSize().background(BoardSheetScrim)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onCancel() },
     )
+    card(Modifier.align(Alignment.Center))
+}
+
+@Composable
+private fun BoardConfirmCard(
+    title: String,
+    message: String,
+    confirmTitle: String,
+    cancelTitle: String,
+    onConfirm: () -> Unit,
+    onCancel: () -> Unit,
+    testTag: String,
+    modifier: Modifier,
+) {
+    val colors = AingTheme.colors
     Column(
-        Modifier.align(Alignment.Center).padding(AingDimens.space6).widthIn(max = 420.dp).fillMaxWidth()
+        modifier.padding(AingDimens.space6).widthIn(max = 420.dp).fillMaxWidth()
             .background(colors.surface, RoundedCornerShape(28.dp))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
             .padding(AingDimens.space6)

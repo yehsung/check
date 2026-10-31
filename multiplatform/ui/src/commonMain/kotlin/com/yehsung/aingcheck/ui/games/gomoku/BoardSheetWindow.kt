@@ -43,6 +43,13 @@ val LocalBoardSheetsInWindow = staticCompositionLocalOf { BoardSheetsInWindowByD
 
 internal expect val BoardSheetsInWindowByDefault: Boolean
 
+/**
+ * 확인 카드를 띄우는 따로 뜬 창([LocalBoardSheetsInWindow] 가 참일 때만 부른다). 막은 창이 뒤를 [BoardSheetScrim] 빛으로 어둡게 한다 — 상태 바 · 탭 막대까지.
+ * [onDismiss] = 뒤로 가기 · 창 바깥 누름.
+ */
+@Composable
+internal expect fun BoardConfirmWindow(onDismiss: () -> Unit, content: @Composable () -> Unit)
+
 private val SheetShape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
 
 /**

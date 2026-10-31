@@ -249,7 +249,7 @@ private func mbwSettleCapability(_ store: WorkTimerStore) async {
         #expect(summaries() == summary0 + 1)
     }
 
-    @Test("예비 경로: 팝오버를 열면 배너 목록을 받되 60초 안에 다시 열면 안 받는다", .gomokuDefaultsCleanup)
+    @Test("예비 경로: 팝오버를 열면 배너 목록을 받되 5분 안에 다시 열면 안 받는다", .gomokuDefaultsCleanup)
     func menuOpenRefreshIsThrottled() async {
         final class Clock: @unchecked Sendable { var now = MessageReadFixture.now }
         let clock = Clock()
@@ -260,19 +260,76 @@ private func mbwSettleCapability(_ store: WorkTimerStore) async {
         #expect(mbwCount(host, "megaphone_inbox") == 1, "팝오버 열기가 배너 목록을 안 받았다")
         store.setMenuPresented(false)
 
-        clock.now = MessageReadFixture.now.addingTimeInterval(59)
+        clock.now = MessageReadFixture.now.addingTimeInterval(299)
         store.setMenuPresented(true)
         await messageReadWait { messageReadIdle(store) }
         try? await Task.sleep(for: .milliseconds(50))
-        #expect(mbwCount(host, "megaphone_inbox") == 1, "60초 안에 다시 받았다")
+        #expect(mbwCount(host, "megaphone_inbox") == 1, "5분 안에 다시 받았다")
         store.setMenuPresented(false)
 
-        // 기준선: 60초가 지나면 같은 열기가 다시 받는다(스로틀이 결과를 가른다).
-        clock.now = MessageReadFixture.now.addingTimeInterval(61)
+        // 기준선: 5분이 지나면 같은 열기가 다시 받는다(스로틀이 결과를 가른다).
+        clock.now = MessageReadFixture.now.addingTimeInterval(301)
         store.setMenuPresented(true)
         await messageReadWait { mbwCount(host, "megaphone_inbox") >= 2 }
         #expect(mbwCount(host, "megaphone_inbox") == 2)
         store.setMenuPresented(false)
+    }
+
+    @Test("예비 경로: 찌르기 폴링 틱이 비근무에도 5분마다 받는다", .gomokuDefaultsCleanup)
+    func expiryTickRefreshesEvenWhenNotWorking() async {
+        // 없으면: 상태 루프에만 걸어 두면 비근무 맥은 박자가 5분이라, 신호를 놓친 확성기를 10분이 넘어서 받아 어디에도 안 보인다.
+        final class Clock: @unchecked Sendable { var now = MessageReadFixture.now }
+        let clock = Clock()
+        let (store, host) = mbwStore("expiry-tick", mbwServer(inboxAvailable: true))
+        store.clock = { clock.now }
+        #expect(store.startedAt == nil, "비근무 전제가 깨졌다")
+        await store.localExpiryTick()
+        await messageReadWait { mbwCount(host, "megaphone_inbox") >= 1 && messageReadIdle(store) }
+        #expect(mbwCount(host, "megaphone_inbox") == 1, "틱이 배너 목록을 안 받았다")
+
+        clock.now = MessageReadFixture.now.addingTimeInterval(299)
+        await store.localExpiryTick()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(mbwCount(host, "megaphone_inbox") == 1, "5분 안에 다시 받았다")
+
+        clock.now = MessageReadFixture.now.addingTimeInterval(301)
+        await store.localExpiryTick()
+        await messageReadWait { mbwCount(host, "megaphone_inbox") >= 2 }
+        #expect(mbwCount(host, "megaphone_inbox") == 2)
+    }
+
+    @Test("예비 경로: 직전 조회가 실패했으면 60초 뒤에 다시 받는다", .gomokuDefaultsCleanup)
+    func failedRefreshRetriesSooner() async {
+        // 없으면: 실패도 시도 시각을 적으므로 한 번 실패한 뒤 5분을 더 기다려, 신호를 놓친 확성기가 신선도 10분을 넘긴다.
+        final class Clock: @unchecked Sendable { var now = MessageReadFixture.now }
+        let clock = Clock()
+        let (store, host) = mbwStore("retry") { call, _ in
+            call.rpc == "megaphone_inbox" ? MessageReadStubProtocol.Reply(status: 500, body: "{}") : nil
+        }
+        store.clock = { clock.now }
+        store.refreshMegaphoneBannerIfStale()
+        await messageReadWait { store.megaphoneBanner.lastRefreshFailed }
+        #expect(store.megaphoneBanner.lastRefreshFailed)
+        let first = mbwCount(host, "megaphone_inbox")
+
+        clock.now = MessageReadFixture.now.addingTimeInterval(59)
+        store.refreshMegaphoneBannerIfStale()
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(mbwCount(host, "megaphone_inbox") == first, "60초 안에 다시 받았다")
+
+        clock.now = MessageReadFixture.now.addingTimeInterval(61)
+        store.refreshMegaphoneBannerIfStale()
+        await messageReadWait { mbwCount(host, "megaphone_inbox") > first }
+        #expect(mbwCount(host, "megaphone_inbox") > first, "실패 뒤 60초가 지났는데 다시 안 받았다")
+    }
+
+    @Test("예비 경로의 지연 상한은 배너 신선도 10분 안에 있다")
+    func fallbackDelayStaysInsideBannerFreshness() {
+        // 없으면: 스로틀을 10분으로 늘려도 초록이다 — 신선도를 넘긴 확성기는 배너로도 메시지함으로도 안 보인다.
+        let tick = WorkTimerStore.pokePollIntervalSecondsWhileSubscribed + WorkTimerStore.pokePollSleepToleranceSeconds
+        #expect(WorkTimerStore.megaphoneBannerRefreshThrottleSeconds == 300)
+        #expect(WorkTimerStore.megaphoneBannerRetryThrottleSeconds == 60)
+        #expect(WorkTimerStore.megaphoneBannerRefreshThrottleSeconds + tick < MegaphoneBannerRules.freshness)
     }
 
     // MARK: - 로그아웃 · 본인 배너

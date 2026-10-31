@@ -942,6 +942,49 @@ struct V0369RummyStoreTests {
         #expect(store.pollTask == nil)
     }
 
+    @Test("폴링: 구독 중이고 마감이 멀면 15초, 마감·방 닫힘 15초 안쪽이나 미구독은 5초")
+    func pollingSlowsDownOnlyWhileSubscribedAndFarFromDeadline() async throws {
+        // 없으면: 신호가 없는 맥까지 15초로 늦어지거나, 마감 근처에서 시간 초과 결과를 늦게 보는 결함이 초록이 된다.
+        let script = RKScript()
+        let deadlineMs = rkNowMs + 60_000
+        script.stand("rummy_lobby", rkLobby(room: nil))
+        script.stand("rummy_state", rkEnvelope(state: rkState("active", deadlineMs: deadlineMs)))
+        let (store, clock, host, _) = rkMake("calm-poll", script: script)
+        let owner = try #require(store.host as? RKHost)
+        let active = try rkDecode(RummyActionResponse.self, rkEnvelope(state: rkState("active", deadlineMs: deadlineMs)))
+        store.applyState(try #require(active.state))
+
+        #expect(store.matchPollInterval(at: rkWall0) == 5, "미구독은 신호가 없으니 늦추면 안 된다")
+        owner.realtimeState = .subscribed(since: rkWall0, lastHeardAt: rkWall0)
+        #expect(store.matchPollInterval(at: rkWall0) == 15)
+        #expect(store.matchPollInterval(at: rkWall0.addingTimeInterval(44)) == 15)
+        #expect(store.matchPollInterval(at: rkWall0.addingTimeInterval(45)) == 5, "마감이 가까운데 늦췄다")
+
+        store.setWindowVisible(true)
+        await rkWait { rkCount(host, "rummy_state") >= 1 && !store.stateInFlight }
+        let base = rkCount(host, "rummy_state")
+        func tick(_ seconds: TimeInterval) async {
+            clock.wall = rkWall0.addingTimeInterval(seconds)
+            await store.pollTick(at: clock.wall)
+        }
+        await tick(5)
+        await tick(14.9)
+        #expect(rkCount(host, "rummy_state") == base, "구독 중 마감이 먼데 15초 안에 다시 읽었다")
+        await tick(15)
+        #expect(rkCount(host, "rummy_state") == base + 1)
+        store.setWindowVisible(false)
+
+        // 방: 닫힘까지 멀면 15초, 가까우면 5초. 마감을 모르면(둘 다 없음) 지금 값이다.
+        let (roomStore, _, _, _) = rkMake("calm-poll-room", script: script)
+        let roomOwner = try #require(roomStore.host as? RKHost)
+        roomOwner.realtimeState = .subscribed(since: rkWall0, lastHeardAt: rkWall0)
+        #expect(roomStore.matchPollInterval(at: rkWall0) == 5, "판이 없는데 늦췄다")
+        let room = try rkDecode(RummyActionResponse.self, rkEnvelope(state: rkState("forming", seq: 0, expiresMs: rkNowMs + 60_000)))
+        roomStore.applyState(try #require(room.state))
+        #expect(roomStore.matchPollInterval(at: rkWall0) == 15)
+        #expect(roomStore.matchPollInterval(at: rkWall0.addingTimeInterval(45)) == 5)
+    }
+
     @Test("신호: 도는 중 온 초인종 다섯 번은 뒤따르는 한 번으로 합친다")
     func signalsCoalesce() async throws {
         // 없으면: 작업 판 초인종(끌기마다)이 남의 화면에서 state 요청 폭주를 일으키는 결함이 초록이 된다.

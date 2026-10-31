@@ -75,8 +75,13 @@ package final class RummyStore {
 
     /// 로비 목록 재조회 주기(초) — 테트리스와 같다.
     package nonisolated static let lobbyPollSeconds: TimeInterval = 30
-    /// 방(forming)·판(active)에 있을 때 그 state 를 다시 읽는 주기(초). 창이 보일 때만.
+    /// 방(forming)·판(active)에 있을 때 그 state 를 다시 읽는 주기(초) — 미구독이거나 마감이 가깝거나 마감을 모를 때. 창이 보일 때만.
     package nonisolated static let matchPollSeconds: TimeInterval = 5
+    /// 같은 조회 — 실시간 구독 중 + 마감까지 여유가 있을 때(2026-10-31 서버 안정화). 참가·시작·수·작업 판·반응은 전부 초인종이 울리고
+    /// 이 조회는 신호를 놓쳤을 때의 그물이다.
+    package nonisolated static let matchPollSecondsCalm: TimeInterval = 15
+    /// 차례 마감·방 닫힘까지 남은 시간이 이 안으로 들어오면 `matchPollSeconds` 로 돌아간다.
+    package nonisolated static let matchPollNearDeadlineSeconds: TimeInterval = 15
     /// 팝오버를 열 때 로비를 다시 읽는 스로틀(초).
     package nonisolated static let menuLobbyThrottleSeconds: TimeInterval = 30
     /// 로비를 보고 있는 동안 순위표 재조회 주기(초).
@@ -161,6 +166,14 @@ package final class RummyStore {
         guard let match, match.status == .forming, let expires = deviceDate(serverMs: match.expiresAtMs)
         else { return nil }
         return max(0, expires.timeIntervalSince(date))
+    }
+
+    /// 지금 state 안전망 주기. 미구독은 신호가 없으니 언제나 촘촘하고, 구독 중에는 마감이 멀 때만 늦춘다.
+    package func matchPollInterval(at date: Date) -> TimeInterval {
+        guard host?.realtimeState.isSubscribed == true,
+              let remaining = turnRemaining(at: date) ?? roomRemaining(at: date),
+              remaining > Self.matchPollNearDeadlineSeconds else { return Self.matchPollSeconds }
+        return Self.matchPollSecondsCalm
     }
 
     // MARK: 문(맥이 꽂는다)
@@ -463,12 +476,12 @@ package final class RummyStore {
     }
 
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
-    ///  · 방·판에 있으면 5초마다 그 state(참가·시작·작업 판·시간 초과를 한 조회가 다 말한다) · 마감이 지났으면 다시
+    ///  · 방·판에 있으면 구독 중 15초(마감 15초 안쪽은 5초) · 미구독 5초마다 그 state(참가·시작·작업 판·시간 초과를 한 조회가 다 말한다) · 마감이 지났으면 다시
     ///  · 로비·방 화면이면 30초마다 로비(사람 목록·초대) · 순위는 60초(주 스위치)
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let match, Self.isUnsettled(match.status),
-           now.timeIntervalSince(lastStateRequestAt) >= Self.matchPollSeconds {
+           now.timeIntervalSince(lastStateRequestAt) >= matchPollInterval(at: now) {
             await refreshMatch(id: match.id)
         }
         guard isWindowVisible else { return }

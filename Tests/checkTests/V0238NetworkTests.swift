@@ -201,26 +201,29 @@ func reopeningThePopoverKicksTheVisiblePanelExactlyOnce() async {
     #expect(counts.directory == 1)
 }
 
-// MARK: - [Q8] 구독 중 take_pokes 폴링 60초, 그 외 15초
+// MARK: - [Q8] 구독 중 take_pokes 폴링 90초(2026-10-31 — 처음엔 60초), 그 외 15초
 
-/// 주기 판정: 구독 중에만 60초. 킬스위치(전송자 없음 = `.idle(.disabled)`)·연결 중·재연결·실패·비근무는 15초.
+/// 주기 판정: 구독 중에만 90초. 킬스위치(전송자 없음 = `.idle(.disabled)`)·연결 중·재연결·실패·비근무는 15초.
 /// 뮤테이션: pokePollIntervalSecondsNow 의 분기를 지우고 15 를 돌려주면 구독 단언이 빨강.
 @MainActor
 @Test
-func pokePollIntervalIsSixtySecondsOnlyWhileTheRingIsSubscribed() {
+func pokePollIntervalIsNinetySecondsOnlyWhileTheRingIsSubscribed() {
     let (store, _) = makeStore(host: "v0238-poke-interval", suiteName: "check-v0238-network-poke-interval")
     defer { cancelTasks(store) }
     let now = Date()
 
     #expect(WorkTimerStore.pokePollIntervalSeconds == 15)
-    #expect(WorkTimerStore.pokePollIntervalSecondsWhileSubscribed == 60)
+    #expect(WorkTimerStore.pokePollIntervalSecondsWhileSubscribed == 90)
+    // 없으면: 주기를 더 늘려도 초록이다 — 신호를 놓친 울트라가 다음 틱에 와서 일반 찌르기로 강등된다.
+    #expect(WorkTimerStore.pokePollIntervalSecondsWhileSubscribed + WorkTimerStore.pokePollSleepToleranceSeconds
+        < WorkTimerStore.ultraDisplayFreshnessSeconds)
 
     // 킬스위치/전송자 없음 — 출시 기본값. 이 앱은 v0.2.37 과 똑같이 15초다.
     #expect(store.realtimeState == .idle(.disabled))
     #expect(store.pokePollIntervalSecondsNow == 15)
 
     store.realtimeState = .subscribed(since: now, lastHeardAt: now)
-    #expect(store.pokePollIntervalSecondsNow == 60, "구독 중 폴링은 안전망일 뿐이라 60초로 늦춘다(사장님 결정 Q8)")
+    #expect(store.pokePollIntervalSecondsNow == 90, "구독 중 폴링은 안전망일 뿐이라 90초로 늦춘다(사장님 결정 Q8 · 2026-10-31)")
 
     // 미구독의 모든 모양은 15초다 — 소켓이 없거나 흔들리는 동안 폴링이 유일한 전달 경로다.
     store.realtimeState = .connecting(attempt: 1, since: now)
@@ -251,7 +254,7 @@ func pokePollLoopReadsTheIntervalEveryIterationFromTheSingleRingSignal() throws 
     let collapsed = code.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     #expect(
         collapsed.contains(
-            "let interval = self?.pokePollIntervalSecondsNow ?? Self.pokePollIntervalSeconds try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(2))"
+            "let interval = self?.pokePollIntervalSecondsNow ?? Self.pokePollIntervalSeconds try? await Task.sleep(for: .seconds(interval), tolerance: .seconds(Self.pokePollSleepToleranceSeconds))"
         ),
         "폴링 루프가 동적 주기를 읽지 않는다 — 구독 전이가 다음 tick 에 반영되지 않는다"
     )

@@ -149,6 +149,51 @@ func 내_차례라도_마감과_유예가_지나면_보이는_창은_결과를_�
     #expect(GomokuStubProtocol.count(host: host, rpc: "gomoku_state") == 1, "마감+유예가 지났는데 묻지 않았다 — 결과 화면이 안 온다")
 }
 
+@Test
+func 상대_차례_상태_조회_주기는_구독_중이고_마감이_멀_때만_10초다() {
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
+    func interval(_ subscribed: Bool, _ remaining: TimeInterval?) -> TimeInterval {
+        GomokuStore.statePollSeconds(subscribed: subscribed, deadline: remaining.map { now.addingTimeInterval($0) }, now: now)
+    }
+    #expect(interval(true, 30) == 10)
+    #expect(interval(true, 10.1) == 10)
+    #expect(interval(true, 10) == 3, "마감이 가까운데 늦췄다 — 시간 초과 결과를 늦게 본다")
+    #expect(interval(true, -5) == 3)
+    #expect(interval(true, nil) == 3, "마감을 모르는데 늦췄다")
+    #expect(interval(false, 30) == 1.5, "미구독은 신호가 없으니 늦추면 안 된다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 구독_중_상대_차례면_평소_10초_마감_10초_안쪽은_3초마다_묻는다() async {
+    final class Clock: @unchecked Sendable { var now = Date(timeIntervalSince1970: 1_800_000_000) }
+    let clock = Clock()
+    let t0 = clock.now
+    let deadlineMs = (t0.timeIntervalSince1970 + 30) * 1000
+    let moves = [(1, "black", 7, 7)]
+    let (store, gomoku, host) = ggStore("calm-poll") { rpc, _, _ in
+        guard rpc == "gomoku_state" else { return nil }
+        return GomokuStubProtocol.Reply(body: ggJSON(ggState(
+            moves: moves, turn: "white", deadlineMs: deadlineMs, serverNowMs: clock.now.timeIntervalSince1970 * 1000)))
+    }
+    gomoku.clock = { clock.now }
+    gomoku.applyState(ggDecode(ggState(moves: moves, turn: "white", deadlineMs: deadlineMs, serverNowMs: t0.timeIntervalSince1970 * 1000)))
+    store.realtimeState = .subscribed(since: t0, lastHeardAt: t0)
+    gomoku.isWindowVisible = true
+    func states(at offset: TimeInterval) async -> Int {
+        clock.now = t0.addingTimeInterval(offset)
+        await gomoku.pollTick(at: clock.now)
+        return GomokuStubProtocol.count(host: host, rpc: "gomoku_state")
+    }
+    #expect(await states(at: 0) == 1)
+    #expect(await states(at: 9.9) == 1, "마감이 먼데 10초 안에 다시 물었다")
+    #expect(await states(at: 10) == 2)
+    #expect(await states(at: 19.9) == 2)
+    #expect(await states(at: 20) == 3)
+    #expect(await states(at: 22.9) == 3)
+    #expect(await states(at: 23) == 4, "마감 10초 안쪽인데 3초마다 묻지 않는다")
+}
+
 // X2 — 금수 X 메모는 판이 바뀌면 다시 계산한다(상대가 둔 뒤 옛 판의 X 로 클릭을 막으면 안 된다).
 @MainActor
 @Test

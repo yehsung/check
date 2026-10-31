@@ -12,14 +12,17 @@ import Foundation
 //    이력 판(`messageHistory`) 자체는 서버가 답한 그대로 둔다: 배너 목록이 늦게 와도 읽는 자리가 다시 거른다(관찰 값이라 화면이 따라온다).
 // ② **판정 보류.** 📢 로 시작하는데 배너 목록이 아직 모르는 줄은 붙든 채 배너 목록을 한 번 받는다(`refresh(verifying:)`).
 //    받은 뒤에도 모르면(위조 DM · 연결 실패) 메시지로 돌아온다 — 접두는 "확인해 볼 이유"일 뿐 표식이 아니다.
-// ③ **신호와 예비 경로.** 실시간 'megaphone' 신호는 스로틀 없이(`requestMegaphoneBannerRefresh`), 팝오버 열기·폴링 틱은 60초 스로틀로
+// ③ **신호와 예비 경로.** 실시간 'megaphone' 신호는 스로틀 없이(`requestMegaphoneBannerRefresh`), 팝오버 열기·찌르기 폴링 틱은 5분 스로틀로
 //    (`refreshMegaphoneBannerIfStale`). 필터가 막 켜지면 들고 있는 요약(옛 함수 — 확성기 줄도 셌다)을 v2 로 한 번 다시 받는다.
 // ④ 서버가 배너 함수를 모르면(`.unavailable`) 이 파일의 모든 자리가 그대로 통과시킨다 — 지금처럼 메시지로 보인다.
 
 @MainActor
 extension WorkTimerStore {
-    /// 예비 새로고침(팝오버 열기 · 폴링 틱) 스로틀. 실시간 신호가 정본이고 이쪽은 소켓이 끊긴 맥의 그물이다.
-    nonisolated static let megaphoneBannerRefreshThrottleSeconds: TimeInterval = 60
+    /// 예비 새로고침(팝오버 열기 · 찌르기 폴링 틱) 스로틀. 실시간 신호가 정본이고 이쪽은 소켓이 끊긴 맥의 그물이다.
+    /// **10분으로 늘리지 마라**: 새 앱은 확성기를 메시지함에서도 빼므로, 신호를 놓친 채 배너 신선도(10분)를 넘겨 받으면 어디에도 안 보인다.
+    nonisolated static let megaphoneBannerRefreshThrottleSeconds: TimeInterval = 300
+    /// 직전 조회가 실패했을 때의 스로틀. 실패도 시도 시각을 적으므로, 5분을 그대로 두면 한 번 실패로 10분을 넘긴다.
+    nonisolated static let megaphoneBannerRetryThrottleSeconds: TimeInterval = 60
 
     // MARK: 필터(① · ②)
 
@@ -98,10 +101,12 @@ extension WorkTimerStore {
         }
     }
 
-    /// 예비 경로(팝오버 열기 · 폴링 틱) — 마지막 새로고침에서 60초가 지났을 때만.
+    /// 예비 경로(팝오버 열기 · 찌르기 폴링 틱) — 마지막 새로고침에서 5분(직전 조회가 실패했으면 60초)이 지났을 때만.
     func refreshMegaphoneBannerIfStale() {
         guard session != nil else { return }
-        guard clock().timeIntervalSince(megaphoneBannerLastRefreshAt) >= Self.megaphoneBannerRefreshThrottleSeconds else { return }
+        let throttle = megaphoneBanner.lastRefreshFailed
+            ? Self.megaphoneBannerRetryThrottleSeconds : Self.megaphoneBannerRefreshThrottleSeconds
+        guard clock().timeIntervalSince(megaphoneBannerLastRefreshAt) >= throttle else { return }
         requestMegaphoneBannerRefresh()
     }
 

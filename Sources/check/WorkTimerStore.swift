@@ -358,7 +358,7 @@ final class WorkTimerStore {
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
-            // 확성기 배너의 예비 경로(2026-10-30) — 소켓이 끊겨 'megaphone' 신호를 놓쳐도 여는 순간 60초 스로틀로 한 번 맞춘다.
+            // 확성기 배너의 예비 경로(2026-10-30) — 소켓이 끊겨 'megaphone' 신호를 놓쳐도 여는 순간 5분 스로틀로 한 번 맞춘다.
             refreshMegaphoneBannerIfStale()
             // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
             // 도착하면 그 응답 자리에서 한 번 더 판정한다).
@@ -3492,8 +3492,6 @@ final class WorkTimerStore {
                 await self?.refreshLeaderboardIfVisible()
                 await self?.refreshTokenBoardIfVisible()
                 await self?.refreshPokeDirectoryIfVisible()
-                // 확성기 배너의 예비 경로(2026-10-30) — 폴링 틱마다 60초 스로틀로(실시간 신호를 놓친 맥이 다음 틱에 따라잡는다).
-                self?.refreshMegaphoneBannerIfStale()
                 // 내 월간 토큰 사용량을 변경 게이트+60초 스로틀로 서버에 올린다(팀원 보드 최신화). 대부분 게이트에서 즉시 반환.
                 // 팝오버가 **열려 있으면** 스캔의 소유자는 뷰 루프(CheckMenuView 의 runRefreshLoop)이므로 여기서는
                 // 업로드만 한다. **닫혀 있으면** 그 뷰 루프가 없어 스캔 자체가 돌지 않는다 — 메뉴바를 안 여는 사람은

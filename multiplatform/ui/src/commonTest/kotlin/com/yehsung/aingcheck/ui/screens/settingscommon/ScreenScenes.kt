@@ -246,9 +246,9 @@ fun MeHomeScene(store: MeStore, presence: MeStageMood?, modifier: Modifier) {
 }
 
 @Composable
-fun SettingsScene(store: MeStore, mode: AingAppearanceMode, notifications: NotificationSettingsModel, modifier: Modifier) {
+fun SettingsScene(store: MeStore, mode: AingAppearanceMode, notifications: NotificationSettingsModel, modifier: Modifier, androidRows: Boolean = false) {
     val appearance = remember(mode) { AppearanceStore(ScreenMemoryPrefs().apply { putString(AingAppearanceMode.STORAGE_KEY, mode.storedValue) }) }
-    SettingsScreen(store, appearance, NoSettingsActions, modifier, notifications = { NotificationSettingsSection(notifications) }, scrollable = false)
+    SettingsScreen(store, appearance, NoSettingsActions, modifier, notifications = { NotificationSettingsSection(notifications) }, scrollable = false, showsTermsRow = androidRows, showsCenterRow = androidRows)
 }
 
 @Composable
@@ -289,9 +289,9 @@ fun CharacterPickerScene(store: MeStore, modifier: Modifier) {
 }
 
 @Composable
-fun ProfileScene(store: MeStore, modifier: Modifier) {
+fun ProfileScene(store: MeStore, modifier: Modifier, showsAvatarRemoval: Boolean = false) {
     val scope = rememberCoroutineScope()
-    com.yehsung.aingcheck.ui.screens.me.ProfileScreen(store, scope, onPickPhoto = {}, openCharacters = {}, modifier = modifier, scrollable = false)
+    com.yehsung.aingcheck.ui.screens.me.ProfileScreen(store, scope, onPickPhoto = {}, openCharacters = {}, modifier = modifier, scrollable = false, showsAvatarRemoval = showsAvatarRemoval)
 }
 
 @Composable

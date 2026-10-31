@@ -41,5 +41,6 @@ fun ProfileRouteScreen(store: MeStore, openCharacters: () -> Unit, modifier: Mod
         onPickPhoto = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
         openCharacters = openCharacters,
         modifier = modifier,
+        showsAvatarRemoval = true,
     )
 }

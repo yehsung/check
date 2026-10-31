@@ -28,7 +28,17 @@ import com.yehsung.aingcheck.core.stores.messages.blockedAtLine
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.FeedbackText
 import com.yehsung.aingcheck.ui.components.DesktopSnapshots
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertTextEquals
+import com.yehsung.aingcheck.core.stores.me.MeText
+import com.yehsung.aingcheck.ui.screens.settingscommon.AppearanceStore
 import com.yehsung.aingcheck.ui.screens.settingscommon.BlockedPeopleScreen
+import com.yehsung.aingcheck.ui.screens.settingscommon.ScreenMemoryPrefs
+import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsActions
+import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsScreen
+import com.yehsung.aingcheck.ui.screens.settingscommon.SettingsTags
 import com.yehsung.aingcheck.ui.screens.settingscommon.BlockedPeopleTags
 import com.yehsung.aingcheck.ui.screens.settingscommon.DemoFixtures
 import com.yehsung.aingcheck.ui.screens.settingscommon.RepoScreenArt
@@ -163,6 +173,95 @@ class MeSubScreensInteractionDesktopTest {
             testScheduler.advanceUntilIdle()
             waitForIdle()
             assertEquals(1, h.calls("/rest/v1/rpc/set_status_message"))
+        }
+    }
+
+    /** 원본: Tests/checkTests/V0336AvatarRemovalTests.swift:348 · :469 — 2단 확인 · 설명 줄이 곧 결과 줄. 기본값은 꺼짐(Windows 프로필에 안 선다). */
+    @Test
+    fun avatarRemovalIsOffByDefaultAndTakesTwoSteps() = runTest {
+        val h = signedIn { r ->
+            when {
+                r.method == "DELETE" && r.path.startsWith("/storage/v1/object/avatars/") -> "{}"
+                r.method == "PATCH" && r.path == "/rest/v1/profiles" -> ""
+                else -> null
+            }
+        }
+        advanceUntilIdle()
+        val store = h.meStore()
+        fun deletes() = h.requests.count { it.method == "DELETE" }
+        runComposeUiTest {
+            var shows by mutableStateOf(false)
+            show { ProfileScreen(store, h.storeScope, onPickPhoto = {}, openCharacters = {}, showsAvatarRemoval = shows) }
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).assertDoesNotExist()
+            shows = true
+            waitForIdle()
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).performScrollTo().assertIsEnabled()
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE_NOTICE).assertTextEquals("지우면 내 자리에 착용한 캐릭터가 대신 보여요.")
+
+            // 한 번 눌러서는 아무것도 안 나간다 — 같은 자리가 확인으로 바뀐다.
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).performClick()
+            waitForIdle()
+            assertEquals(0, deletes())
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).assertDoesNotExist()
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE_NOTICE).assertTextEquals("지운 사진은 되돌릴 수 없어요. 다시 쓰려면 새로 올려야 해요.")
+
+            // [취소]는 평상으로.
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE_CANCEL).performClick()
+            waitForIdle()
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).assertExists()
+            assertEquals(0, deletes())
+
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).performClick()
+            waitForIdle()
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE_CONFIRM).performClick()
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            assertEquals(1, deletes())
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE_NOTICE).assertTextEquals("기본 캐릭터로 되돌렸어요")
+            onNodeWithTag(ProfileTags.AVATAR_REMOVE).assertExists()
+        }
+    }
+
+    /** 설정의 이용약관 줄 · 소속 센터 줄: 기본값은 꺼짐(Windows). 켜면 서고, 약관 줄은 약관 주소를 연다. */
+    @Test
+    fun settingsTermsAndCenterRowsAreOptIn() = runTest {
+        val h = signedIn { r ->
+            if (r.path == "/rest/v1/profiles" && r.query.any { it.second == "center" }) """[{"center":"seoul"}]""" else null
+        }
+        advanceUntilIdle()
+        val store = h.meStore()
+        val opened = ArrayList<String>()
+        val actions = object : SettingsActions {
+            override fun openBlockedPeople() {}
+            override fun openAccountDeletion() {}
+            override fun confirmSignOut() {}
+            override fun openUrl(url: String) { opened += url }
+            override fun share(text: String) {}
+        }
+        val appearance = AppearanceStore(ScreenMemoryPrefs())
+        runComposeUiTest {
+            var shows by mutableStateOf(false)
+            show { SettingsScreen(store, appearance, actions, showsTermsRow = shows, showsCenterRow = shows) }
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            onNodeWithTag(SettingsTags.TERMS).assertDoesNotExist()
+            onNodeWithTag(SettingsTags.CENTER_ROW).assertDoesNotExist()
+            onNodeWithTag(SettingsTags.PRIVACY_POLICY).performScrollTo().performClick()
+            assertEquals(listOf(MeText.privacyPolicyURL), opened)
+            shows = true
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            // 행이 선 뒤에야 행의 조회(LaunchedEffect)가 떠난다 — 한 번 더 민다.
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            onNodeWithTag(SettingsTags.TERMS).performScrollTo().performClick()
+            assertEquals("https://yehsung.github.io/check/terms", opened.last())
+            onNodeWithTag(SettingsTags.CENTER_ROW).performScrollTo()
+            onNodeWithText("소속 센터").assertExists()
+            onNodeWithText("서울").assertExists()
+            onNodeWithText("이름 옆에 배지로 보여요. 바꾸려면 운영자에게.").assertExists()
         }
     }
 

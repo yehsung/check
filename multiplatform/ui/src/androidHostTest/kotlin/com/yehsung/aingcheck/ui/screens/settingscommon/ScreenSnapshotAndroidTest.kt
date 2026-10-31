@@ -119,6 +119,19 @@ class ScreenSnapshotAndroidTest {
         )
     }
 
+    /** 설정 + 이용약관 줄 · 소속 센터 줄(Android 경로만). 기준선 = 두 줄 없는 Windows 판. */
+    @Test
+    fun settingsAndroidRowsLight() {
+        val height = SETTINGS_H + 130
+        val store = ScreenScenes.me(settings = true)
+        check(
+            "screens/settingscommon", "settings-android-rows-light", height,
+            scene(false, height) { SettingsScene(store, AingAppearanceMode.Dark, notifications, it, androidRows = true) },
+            scene(false, height) { SettingsScene(store, AingAppearanceMode.Dark, notifications, it) },
+            maxBaselineRatio = 1,
+        )
+    }
+
     @Test fun settingsLight() = settings(false)
     @Test fun settingsDark() = settings(true)
 
@@ -197,6 +210,15 @@ class ScreenSnapshotAndroidTest {
         val store = ScreenScenes.me(subScreens = true)
         val typed = ScreenScenes.me(subScreens = true).also { it.displayNameDraft = "새벽이" }
         check("screens/me", "me-profile-light", PROFILE_H, scene(false, PROFILE_H) { ProfileScene(store, it) }, scene(false, PROFILE_H) { ProfileScene(typed, it) })
+    }
+
+    /** 프로필 + 사진 되돌리기 한 장(Android 경로만). 기준선 = 별명 칸에 "새벽이". */
+    @Test
+    fun profileAvatarRemovalLight() {
+        val height = PROFILE_H + 190
+        val store = ScreenScenes.me(subScreens = true)
+        val typed = ScreenScenes.me(subScreens = true).also { it.displayNameDraft = "새벽이" }
+        check("screens/me", "me-profile-avatar-removal-light", height, scene(false, height) { ProfileScene(store, it, showsAvatarRemoval = true) }, scene(false, height) { ProfileScene(typed, it, showsAvatarRemoval = true) })
     }
 
     /** 제보. 그릴 때마다 새 스토어(떠나면 새 답장을 '봤음'으로 적는다). 기준선 = 초안을 쓴 뒤. */

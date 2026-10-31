@@ -119,7 +119,7 @@ fun SettingsRouteScreen(
         }
     }
 
-    SettingsScreen(store, appearance, actions, modifier, notifications = { NotificationSettingsSection(model) })
+    SettingsScreen(store, appearance, actions, modifier, notifications = { NotificationSettingsSection(model) }, showsTermsRow = true, showsCenterRow = true)
 
     if (confirmingSignOut) {
         ModalPresenceMark()

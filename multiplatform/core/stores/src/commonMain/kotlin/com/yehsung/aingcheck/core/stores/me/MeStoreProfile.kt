@@ -3,7 +3,10 @@ package com.yehsung.aingcheck.core.stores.me
 
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
 import com.yehsung.aingcheck.core.net.AuthErrorRules
+import com.yehsung.aingcheck.core.net.AvatarRemovalOutcome
 import com.yehsung.aingcheck.core.net.fetchDisplayNameChangedAt
+import com.yehsung.aingcheck.core.net.fetchMyCenter
+import com.yehsung.aingcheck.core.net.removeAvatar
 import com.yehsung.aingcheck.core.net.setDisplayName
 import com.yehsung.aingcheck.core.net.uploadAvatar
 import com.yehsung.aingcheck.core.wire.SwiftURL
@@ -17,6 +20,7 @@ val MeStore.Companion.displayNameMaxLength: Long get() = DisplayNameChangeOutcom
 /** 편집 화면을 열 때: 지금 이름으로 입력을 채우고, 쿨타임 기준 시각을 다시 읽는다. */
 fun MeStore.profileDidAppear() {
     isProfileVisible = true
+    resetAvatarRemovalRow()
     val name = displayName
     if (displayNameDraft.isEmpty() && name != null) displayNameDraft = name
     refreshDisplayNameLockNotice()
@@ -30,6 +34,7 @@ fun MeStore.profileDidAppear() {
 
 fun MeStore.profileDidDisappear() {
     isProfileVisible = false
+    resetAvatarRemovalRow()
     displayNameDraft = ""
     if (!isUpdatingDisplayName) {
         displayNameNotice = null
@@ -202,5 +207,87 @@ suspend fun MeStore.uploadAvatar(imageData: ByteArray, encodeJpeg: suspend (Byte
         isAvatarNoticeError = false
     } finally {
         if (generation == context.generation) isUploadingAvatar = false
+    }
+}
+
+/**
+ * 사진 되돌리기 행을 처음 상태로 접는다(확인 단계 · 결과 한 줄). 화면을 열 때 · 닫을 때(맥 `resetAvatarRemovalRow`).
+ * 도는 중이면 결과 줄은 남긴다 — 곧 도착할 결과가 설 자리다. 로그아웃은 [MeStore.reset] 이 통째로 비운다.
+ */
+fun MeStore.resetAvatarRemovalRow() {
+    isConfirmingAvatarRemoval = false
+    if (isRemovingAvatar) return
+    avatarRemovalNotice = null
+    avatarRemovalNoticeTone = AvatarRemovalNoticeTone.success
+}
+
+/** [기본 캐릭터로 되돌리기] → 같은 자리가 확인으로 바뀐다. 앞선 결과 줄을 치운다 — 안 치우면 새 확인 위에 옛 "되돌렸어요"가 남는다. */
+fun MeStore.beginAvatarRemoval() {
+    avatarRemovalNotice = null
+    isConfirmingAvatarRemoval = true
+}
+
+/**
+ * 프로필 사진을 지워 기본(착용 캐릭터)으로 되돌린다(맥 `performAvatarRemoval`). 사진이 없던 사람이 눌러도 성공이다(서버 404 = 없다) —
+ * 사진 유무로 잠그면 서버 사진과 화면 사진이 어긋난 사람이 탈출구를 잃는다.
+ * 맥은 성공 뒤 팀 상태를 다시 읽지만 그 반영 경로가 근무 세션 쓰기로 이어져(이 파일 머리말) 폰은 머리 값만 비운다 — 표는 어느 결과든 비었다.
+ * 파일이 남으면 "되돌렸어요"라고 말하지 않는다(공개 버킷의 얼굴은 주소만 알면 보인다). 온전히 지웠을 때만 true.
+ */
+suspend fun MeStore.performAvatarRemoval(): Boolean {
+    if (isRemovingAvatar) return false
+    if (!context.sessionStore.isSignedIn) {
+        avatarRemovalNotice = AvatarRemovalText.signedOutMessage
+        avatarRemovalNoticeTone = AvatarRemovalNoticeTone.failure
+        return false
+    }
+    isRemovingAvatar = true
+    isConfirmingAvatarRemoval = false
+    val generation = context.generation
+    try {
+        val service = context.service
+        val outcome = try {
+            context.withSessionRetry { s -> service.removeAvatar(s.accessToken, s.userID) }
+        } catch (e: Throwable) {
+            if (generation != context.generation) return false
+            if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return false
+            avatarRemovalNotice = AuthErrorRules.message(e, AvatarRemovalText.failureMessage)
+            avatarRemovalNoticeTone = AvatarRemovalNoticeTone.failure
+            return false
+        }
+        if (generation != context.generation) return false
+        // 떠 있던 머리 GET 은 지우기 전 사진 주소다 — 도착해도 되살리지 않게.
+        noteLocalWrite(MeStore.AVATAR_WRITE_KEY)
+        avatarURL = null
+        avatarNotice = null
+        return when (outcome) {
+            AvatarRemovalOutcome.removed -> {
+                avatarRemovalNotice = AvatarRemovalText.successMessage
+                avatarRemovalNoticeTone = AvatarRemovalNoticeTone.success
+                true
+            }
+            AvatarRemovalOutcome.tableClearedFileLeft -> {
+                avatarRemovalNotice = AvatarRemovalText.fileLeftMessage
+                avatarRemovalNoticeTone = AvatarRemovalNoticeTone.warning
+                false
+            }
+        }
+    } finally {
+        if (generation == context.generation) isRemovingAvatar = false
+    }
+}
+
+/**
+ * 설정의 소속 센터 행이 설 때 — 아직 모르면 여기서 묻는다(맥 `loadMyCenterIfNeeded`). 머리 조회의 센터 칸은 따로 실패할 수 있어(이번 세션 내내 "불러오는 중"에 멈추지 않게)
+ * 이 행이 복구 경로다. 이미 알면 왕복이 없다.
+ */
+suspend fun MeStore.loadMyCenterIfNeeded() {
+    if (centerLoaded || !context.sessionStore.isSignedIn) return
+    val generation = context.generation
+    val service = context.service
+    val center = attempt { s -> service.fetchMyCenter(s.accessToken, s.userID) }
+    if (generation != context.generation) return
+    center.onSuccess {
+        centerServerValue = it
+        centerLoaded = true
     }
 }

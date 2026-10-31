@@ -39,7 +39,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.yehsung.aingcheck.android.screens.me.ProfileRouteScreen
+import com.yehsung.aingcheck.android.screens.shop.MissionsRoute
+import com.yehsung.aingcheck.ui.missions.MissionTags
+import com.yehsung.aingcheck.ui.screens.me.ProfileTags
 import org.junit.Assert.assertEquals
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -95,6 +104,34 @@ class SettingsRouteScreenTest {
     private val port = object : PushSettingsPort {
         override val prefs: StateFlow<PushPrefs?> = MutableStateFlow(null)
         override suspend fun save(prefs: PushPrefs): PushPrefs? = null
+    }
+
+    /** Android 경로만 켜는 줄이 정말 켜져 있는가(기본값이 꺼짐이라 route 가 안 넘기면 화면에 없다): 이용약관 · 소속 센터 · 사진 지우기 · 미션 루비 칩. */
+    @Test
+    fun androidRoutesTurnTheirRowsOn() {
+        val prefs = Prefs()
+        var page by mutableStateOf("settings")
+        val store = meStore()
+        compose.setContent {
+            AingTheme(dark = false) {
+                when (page) {
+                    "settings" -> SettingsRouteScreen(store, AppearanceStore(prefs), PushPrefsSaves(port, CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)), prefs, openBlockedPeople = {}, openAccountDeletion = {})
+                    "profile" -> ProfileRouteScreen(store, openCharacters = {})
+                    else -> MissionsRoute(store, onBack = {})
+                }
+            }
+        }
+        compose.onNodeWithTag(SettingsTags.CENTER_ROW).performScrollTo().assertExists()
+        compose.onNodeWithTag(SettingsTags.TERMS).performScrollTo().performClick()
+        compose.waitForIdle()
+        val opened = Shadows.shadowOf(RuntimeEnvironment.getApplication()).nextStartedActivity
+        assertEquals("https://yehsung.github.io/check/terms", opened.dataString)
+        page = "profile"
+        compose.waitForIdle()
+        compose.onNodeWithTag(ProfileTags.AVATAR_REMOVE).performScrollTo().assertExists()
+        page = "missions"
+        compose.waitForIdle()
+        compose.onNodeWithTag(MissionTags.RUBY_BALANCE).assertExists()
     }
 
     @Test

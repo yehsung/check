@@ -222,6 +222,22 @@ object AILimitDeviceLabelContract {
     }
 }
 
+/**
+ * 기기 종류(Swift `AILimitDevicePlatform` @ df73dbcd). `device_id` 하나로만 판정한다 — `client_devices.platform` 을 조인하면 조회가 한 번 늘고 임베드 모호성(400) 전례가 있다.
+ * **대소문자를 가린다**: 서버 `desktop_device_platform` 은 `'WIN:abc'` 를 mac 으로 잰다. 느슨하게 받으면 폰과 서버의 판정이 조용히 갈린다.
+ */
+@Suppress("EnumEntryName")
+enum class AILimitDevicePlatform {
+    mac, windows;
+
+    companion object {
+        /** 서버 `like 'win:%'` 와 **같은 글자**. */
+        const val windowsPrefix: String = "win:"
+
+        fun of(deviceID: String): AILimitDevicePlatform = if (deviceID.startsWith(windowsPrefix)) windows else mac
+    }
+}
+
 /** 서버 행에서 읽은 관측 하나(제공자별로 흩어져 있다). */
 data class AILimitDeviceObservation(val deviceID: String, val label: String?, val observedAt: Double?)
 
@@ -229,11 +245,22 @@ data class AILimitDeviceObservation(val deviceID: String, val label: String?, va
 data class AILimitDevice(val deviceID: String, val label: String?, val lastObservedAt: Double?) {
     val id: String get() = deviceID
 
-    /** 이름이 겹치지 않는다고 가정했을 때의 이름. */
-    val baseName: String get() = if (!label.isNullOrEmpty()) label else "$unnamedPrefix ${shortTail(deviceID)}"
+    /** 이 기기의 종류. `device_id` 로만 판정한다(서버와 같은 규칙). */
+    val platform: AILimitDevicePlatform get() = AILimitDevicePlatform.of(deviceID)
+
+    /** 이름이 겹치지 않는다고 가정했을 때의 이름. 이름을 올린 기기는 사람이 적은 이름 그대로라 종류가 글자로 드러나는 자리는 대체 이름 하나뿐이다. */
+    val baseName: String
+        get() {
+            if (!label.isNullOrEmpty()) return label
+            val prefix = if (platform == AILimitDevicePlatform.windows) unnamedPCPrefix else unnamedPrefix
+            return "$prefix ${shortTail(deviceID)}"
+        }
 
     companion object {
         const val unnamedPrefix = "이름 모를 맥"
+
+        /** Windows 기기의 대체 이름(2026-10-31 사용자 결정 — 기기 종류대로 '맥' / 'PC'). */
+        const val unnamedPCPrefix = "이름 모를 PC"
 
         /** 식별자 꼬리(대문자 4자) — 두 줄을 가르는 데만. */
         fun shortTail(deviceID: String): String = deviceID.uppercase().takeLast(4)

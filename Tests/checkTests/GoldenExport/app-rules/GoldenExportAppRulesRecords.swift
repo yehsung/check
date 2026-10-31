@@ -758,6 +758,20 @@ struct GoldenExportAppRulesRecords {
                            "resolvedLabel": Self.s(AILimitMainDeviceRule.resolve(devices: list, chosen: nil)?.label),
                            "chosenLabel": Self.s(AILimitMainDeviceRule.resolve(devices: list, chosen: list[0].deviceID)?.label)]
                       })])
+        // 기기 종류(V1016PCLabelTests 의 입력): 소문자 `win:` 접두만 PC — 대문자·다른 접두·빈 값은 맥(서버 프로브와 같은 입력).
+        let platformIDs = ["win:0b7e4b1c-1111-2222-3333-44445555a1b2", "WIN:abc", "Win:abc", "A0A0A0A0-0000-0000-0000-000000000000", "", "winner:1", "DEVICE-9F8E"]
+        let mixedRoster = [AILimitDevice(deviceID: "DEVICE-A1B2", label: nil, lastObservedAt: nil), AILimitDevice(deviceID: "win:0000-0000-0000-a1b2", label: nil, lastObservedAt: nil)]
+        cases.append(["id": "device-platforms",
+                      "windowsPrefix": .string(AILimitDevicePlatform.windowsPrefix),
+                      "unnamedPrefix": .string(AILimitDevice.unnamedPrefix),
+                      "unnamedPCPrefix": .string(AILimitDevice.unnamedPCPrefix),
+                      "rows": .array(platformIDs.map { id in
+                          ["deviceID": .string(id),
+                           "platform": .string(AILimitDevicePlatform.of(deviceID: id).rawValue),
+                           "baseName": .string(AILimitDevice(deviceID: id, label: nil, lastObservedAt: nil).baseName),
+                           "namedBaseName": .string(AILimitDevice(deviceID: id, label: "DESKTOP-4F2K", lastObservedAt: nil).baseName)]
+                      }),
+                      "mixedParts": .object(AILimitDeviceRoster.displayNameParts(mixedRoster).mapValues { ["base": .string($0.base), "tail": Self.s($0.tail), "combined": .string($0.combined)] })])
         let fingerprints: [String?] = [nil, "", "  ", "someone@example.com", " someone@example.com\n", "acct-123", "한글 계정"]
         cases.append(["id": "fingerprints", "rows": .array(fingerprints.map { ["raw": Self.s($0), "fingerprint": Self.s(AILimitFingerprint.make($0))] })])
         goldenEmit(GoldenFile(

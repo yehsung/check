@@ -4,6 +4,7 @@ package com.yehsung.aingcheck.core.rules.insights
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDevice
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDeviceLabelContract
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDeviceObservation
+import com.yehsung.aingcheck.core.rules.ailimit.AILimitDevicePlatform
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDeviceRoster
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitDisplay
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitFingerprint
@@ -501,6 +502,24 @@ object RecordsGoldenChecks {
             val r = row.jsonObject
             assertJson(r["normalized"], s(AILimitPlanLabelContract.normalized(strOf(r["label"]))), "plan label ${r["label"]}")
         }
+        // 기기 종류(V1016PCLabelTests 의 입력): 소문자 `win:` 접두만 PC. 골든 행이 없으면 시험이 헛돈다.
+        val platforms = golden.case("device-platforms")
+        assertEquals(platforms.string("windowsPrefix"), AILimitDevicePlatform.windowsPrefix)
+        assertEquals(platforms.string("unnamedPrefix"), AILimitDevice.unnamedPrefix)
+        assertEquals(platforms.string("unnamedPCPrefix"), AILimitDevice.unnamedPCPrefix)
+        val platformRows = platforms.array("rows")
+        assertTrue(platformRows.size >= 7, "device-platforms 행이 적다(${platformRows.size})")
+        assertTrue(platformRows.any { it.jsonObject.string("platform") == "windows" }, "windows 행이 없다")
+        for (row in platformRows) {
+            val r = row.jsonObject
+            val id = r.string("deviceID")
+            assertEquals(r.string("platform"), AILimitDevicePlatform.of(id).name, "platform $id")
+            assertEquals(r.string("baseName"), AILimitDevice(id, null, null).baseName, "baseName $id")
+            assertEquals(r.string("namedBaseName"), AILimitDevice(id, "DESKTOP-4F2K", null).baseName, "named baseName $id")
+        }
+        val mixedRoster = listOf(AILimitDevice("DEVICE-A1B2", null, null), AILimitDevice("win:0000-0000-0000-a1b2", null, null))
+        assertJson(platforms["mixedParts"], JsonObject(AILimitDeviceRoster.displayNameParts(mixedRoster).mapValues { (_, p) ->
+            obj("base" to s(p.base), "tail" to s(p.tail), "combined" to s(p.combined)) }), "mixed parts")
         val devicesCase = golden.case("devices")
         val observations = devicesCase.array("observations").map { e ->
             val o = e.jsonObject

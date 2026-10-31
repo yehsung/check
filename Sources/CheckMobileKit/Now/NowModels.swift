@@ -30,6 +30,12 @@ package enum NowText {
     /// 닫기(X)의 보이스오버 이름. 눈에 보이는 글자는 없다.
     package static let updateNoticeDismiss = "새 버전 안내 닫기"
 
+    // 지난주 회고 안내 한 줄(맥 배너와 같은 문장)
+    package static let retroNoticeTitle = "지난주 근무 기록이 준비됐어요"
+    package static let retroNoticeAction = "보기"
+    /// 닫기(X)의 보이스오버 이름. 눈에 보이는 글자는 없다.
+    package static let retroNoticeDismiss = "지난주 근무 기록 안내 닫기"
+
     // 내 상태
     package static let workingOnMac = "맥에서 근무 중"
     /// Windows 가 연 세션(서버 origin `'windows'` · 2026-10-31 사용자 결정 — 기기 종류대로 '맥' / 'PC').

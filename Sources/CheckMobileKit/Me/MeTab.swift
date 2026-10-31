@@ -110,7 +110,21 @@ struct MeHomeView: View {
                     .accessibilityLabel(Text(MeText.settingsTitle))
                 }
             }
-            .onAppear { MeDemoHooks.scrollIfRequested(proxy) }
+            .onAppear {
+                MeDemoHooks.scrollIfRequested(proxy)
+                scrollToRecordsIfAsked(proxy)
+            }
+            .onChange(of: store.pendingRecordsScroll) { _, pending in
+                if pending { scrollToRecordsIfAsked(proxy) }
+            }
+        }
+    }
+
+    /// 지금 탭 회고 안내의 [보기]로 왔으면 기록 카드까지 내려간다. 탭이 막 그려진 턴에는 아직 자리가 없어 한 턴 뒤에 민다.
+    private func scrollToRecordsIfAsked(_ proxy: ScrollViewProxy) {
+        guard store.takeRecordsScroll() else { return }
+        DispatchQueue.main.async {
+            withAnimation(.snappy) { proxy.scrollTo(MeAnchor.records, anchor: .top) }
         }
     }
 }

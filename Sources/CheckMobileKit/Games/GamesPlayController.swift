@@ -62,6 +62,13 @@ package final class GamesPlayController {
     @ObservationIgnored package var onStarted: (@MainActor () -> Void)?
     /// 유효하게 끝난 판의 점수. 판마다 한 번.
     @ObservationIgnored package var onFinished: (@MainActor (Int) -> Void)?
+    /// 판이 도는 동안 `keepAliveInterval` 마다 한 번(길건너의 판 도중 토큰 감시 — 허브가 건다. 나머지 게임은 nil).
+    /// 맥은 뷰의 Task 로 돌리지만(`CheckMiniGameWindowView` 의 토큰 감시) 폰은 프레임 루프에 얹었다: 판이 돌 때만 돌고,
+    /// 판이 끝나거나 앱을 나가면 저절로 멈추며, 화면 없이 시험할 수 있다. 간격은 **tick 축**으로만 잰다 — 토큰의 나이는 허브가 자기 시계로 잰다.
+    @ObservationIgnored package var onRoundKeepAlive: (@MainActor () -> Void)?
+    /// 감시 간격(초 · 맥 `tokenKeeperInterval` 과 같다).
+    package nonisolated static let keepAliveInterval: TimeInterval = 30
+    @ObservationIgnored private var lastKeepAliveAt: Date?
 
     /// 이 판의 **벽시계 상한**(초 · 폰 테트리스만 — 허브가 `beginRound` 에서 건넨다. 기존 두 게임은 nil).
     /// 상한을 지나면 `tick(at:)` 이 판을 끝낸다(`endRound()`). 사용자 스위치로 주지 않는다.
@@ -168,6 +175,7 @@ package final class GamesPlayController {
         if isPlaying, !wasPlaying {
             reportedFinish = false
             lastTick = nil
+            lastKeepAliveAt = nil
             // 새 판의 상한 기준점은 **이 판의 첫 틱**이 다시 잡는다 — 앞 판의 기준점을 물려받으면 즉사한다.
             roundDeadline = nil
             // ⚠️ **이 줄을 지우지 마라.** 앞 끌기의 축 잠금·소비량이 남은 채 새 판이 켜지면, 다음 `onChanged` 의
@@ -340,7 +348,18 @@ package final class GamesPlayController {
     package func tick(at now: Date) {
         guard isPlaying else {
             lastTick = nil
+            lastKeepAliveAt = nil
             return
+        }
+        if let keepAlive = onRoundKeepAlive {
+            if let last = lastKeepAliveAt {
+                if now.timeIntervalSince(last) >= Self.keepAliveInterval {
+                    lastKeepAliveAt = now
+                    keepAlive()
+                }
+            } else {
+                lastKeepAliveAt = now
+            }
         }
         // 판 상한은 **가드 뒤 · dt 계산 앞**이다: 첫 프레임(기준만 잡는 프레임)에서도 걸려야
         // 앱이 오래 멈춰 있다 돌아온 그 순간에 판이 끝난다.
@@ -408,6 +427,7 @@ package final class GamesPlayController {
         guard isPlaying else { return false }
         reportedFinish = true
         lastTick = nil
+        lastKeepAliveAt = nil
         // 상한은 **길이와 기준점 둘 다** 비운다 — 다음 판의 길이는 허브가 `beginRound` 에서 다시 건네고,
         // 기준점은 그 판의 첫 틱이 다시 잡는다.
         roundLimitSeconds = nil
@@ -457,6 +477,7 @@ package final class GamesPlayController {
         case .tetris:
             reportedFinish = true
             lastTick = nil
+            lastKeepAliveAt = nil
             roundLimitSeconds = nil
             roundDeadline = nil
             resetGesture()
@@ -468,6 +489,7 @@ package final class GamesPlayController {
         case .crossy:
             reportedFinish = true
             lastTick = nil
+            lastKeepAliveAt = nil
             roundLimitSeconds = nil
             roundDeadline = nil
             resetGesture()

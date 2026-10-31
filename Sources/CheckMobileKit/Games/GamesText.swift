@@ -133,11 +133,11 @@ package enum GamesMiniGameText {
         return emptyBoard
     }
 
-    /// 제출 실패(토큰 없음·네트워크) — 맥 `recordMiniGameScore` 와 같은 문장.
+    /// 인편이 30분 안에 서버에 닿지 못해 버려졌다(연결이 안 돌아왔다). 살아 있는 동안은 `submitRetrying` 이다.
     package static let submitFailedConnection = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
     /// 서버 거절 — 맥 `performSubmitMiniGameScore` 와 같은 문장. status 이름·need_seconds 는 화면에 싣지 않는다.
     package static let submitRefused = "점수를 못 올렸어요"
-    /// 아직 하한을 못 넘겼다(`too_fast`) — **토큰은 살아 있고 곧 다시 보낸다.**
+    /// 인편이 살아 있다(네트워크 실패 · `too_fast` · 토큰 대기) — **아직 지지 않았고 곧 다시 보낸다.**
     ///
     /// `submitRefused`("못 올렸어요")와 **일부러 가른다**: 이 응답은 거절이 아니라 아직 이르다는 뜻이고,
     /// 서버가 `used_at` 을 찍기 전에 돌려주므로 그 토큰으로 조금 뒤 다시 보내면 통과한다

@@ -131,37 +131,45 @@ import Testing
         await harness.tearDown()
     }
 
-    @Test("토큰을 못 받았으면(오프라인) 제출하지 않고 말한다 · 판이 끝난 자리에서 다시 받고, 연결이 돌아오면 다음 판은 올라간다")
-    func missingTokenSaysSoAndRefetches() async throws {
+    @Test("토큰을 못 받았으면(오프라인) 점수는 **토큰을 기다리는 인편**이 된다 · 연결이 돌아오면 그 판이 올라간다")
+    func missingTokenWaitsAsAPendingSubmit() async throws {
         let harness = GamesHarness(label: "games-offline")
         configureMiniGame(harness)
         let online = BaseLockedBox(false)
         harness.server.setDefault("minigame_start_round") { _ in
             online.get() ? .json(Self.tokenJSON("tok-later")) : .networkFailure()
         }
+        let delays = BaseLockedBox<[TimeInterval]>([])
+        let gate = BaseGate()
+        harness.hub.sleep = { seconds in
+            delays.mutate { $0.append(seconds) }
+            await gate.wait()
+        }
         await harness.signIn()
         harness.hub.openScreen(.flappy)
         #expect(await baseWaitUntil { harness.server.requests("minigame_start_round").count == 1 && harness.hub.roundTokenInFlightKind == nil })
         #expect(harness.hub.roundToken == nil)
 
-        // 판 시작(쓸 토큰이 없어 한 번 더 받는다 — 역시 실패) → 판 끝(토큰 없음: 제출하지 않고 말하고, 다시 받는다 — 실패).
+        // 판 시작(쓸 토큰이 없어 한 번 더 받는다 — 역시 실패) → 판 끝: 버리지 않고 인편에 적는다.
         let controller = try #require(harness.hub.controller)
         playFlappyToResult(controller, from: harness.clock.now)
-        #expect(harness.hub.submitNotice == GamesMiniGameText.submitFailedConnection)
-        #expect(await baseWaitUntil { harness.server.requests("minigame_start_round").count >= 3 && harness.hub.roundTokenInFlightKind == nil },
-                "판이 끝난 자리에서 토큰을 다시 받지 않았다")
+        let score = controller.flappy.score
+        #expect(harness.hub.submitNotice == GamesMiniGameText.submitRetrying, "살아 있는 점수를 '못 올렸어요'로 말했다")
+        #expect(harness.hub.pendingSubmit?.score == score)
+        #expect(harness.hub.pendingSubmit?.token == nil)
+        #expect(await baseWaitUntil { delays.get() == [2] && harness.hub.roundTokenInFlightKind == nil }, "토큰 요청 실패가 백오프를 안 걸었다: \(delays.get())")
         #expect(harness.server.requests("minigame_submit_score").isEmpty, "토큰 없이 제출했다")
 
-        // 연결이 돌아왔다: 다음 판은 시작할 때 토큰을 받고, 끝나면 그 토큰으로 올라간다.
+        // 연결이 돌아왔다: 사람이 돌아오면 그 인편이 토큰을 받아 **그 점수로** 올라간다.
         online.mutate { $0 = true }
-        playFlappyToResult(controller, from: harness.clock.now.addingTimeInterval(30))
-        #expect(await baseWaitUntil { harness.server.requests("minigame_submit_score").count == 1 || harness.hub.roundToken == "tok-later" })
-        if harness.server.requests("minigame_submit_score").isEmpty {
-            // 시작 요청이 판(동기 구동)보다 늦게 끝났다 — 다음 판에서 쓴다.
-            playFlappyToResult(controller, from: harness.clock.now.addingTimeInterval(60))
-            #expect(await baseWaitUntil { harness.server.requests("minigame_submit_score").count == 1 })
-        }
-        #expect(harness.server.requests("minigame_submit_score").first?.bodyText.contains("tok-later") == true)
+        harness.model.sceneDidEnterBackground()
+        harness.model.sceneDidBecomeActive()
+        #expect(await baseWaitUntil { harness.server.requests("minigame_submit_score").count == 1 })
+        let sent = try #require(harness.server.requests("minigame_submit_score").first)
+        #expect(sent.bodyText.contains("tok-later"))
+        #expect(sent.bodyText.contains(#""p_score":\#(score)"#), "\(sent.bodyText)")
+        #expect(await baseWaitUntil { harness.hub.pendingSubmit == nil })
+        gate.open()
         #expect(harness.violations.isEmpty)
         await harness.tearDown()
     }

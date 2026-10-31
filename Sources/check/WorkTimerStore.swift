@@ -741,7 +741,7 @@ final class WorkTimerStore {
     @ObservationIgnored var miniGamePendingRetryTask: Task<Void, Never>?
     /// 백오프 간격(초). n번째 실패 뒤 n번째 값을 기다리고, 끝을 넘기면 마지막 값을 반복한다(TTL 안에서만).
     /// 테스트가 줄여 잡는다 — 값 자체는 서버가 준 숫자로 계산하지 않는다(그걸 쓰는 순간 위조 보조 도구다).
-    @ObservationIgnored var miniGamePendingRetryDelays: [TimeInterval] = [2, 8, 30]
+    @ObservationIgnored var miniGamePendingRetryDelays: [TimeInterval] = MiniGameSubmitRules.retryDelays
     /// 점수를 못 올렸을 때 사용자에게 보이는 한 줄. **조용히 버리지 않는다** — 삼키면
     /// "잘 놀았는데 순위표에 없다"가 되고 그건 재현도 신고도 안 된다(이 저장소의 규약).
     /// 인편이 살아 있는 동안은 "못 올렸어요"가 아니라 **아직 올리는 중**이라는 문장이다(`MiniGameSubmitCopy.pending`).

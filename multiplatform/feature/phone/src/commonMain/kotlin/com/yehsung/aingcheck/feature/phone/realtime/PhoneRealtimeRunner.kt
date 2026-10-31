@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Realtime/MobileRealtimeRunner.swift @ 3bd04bd
+// 원본: Sources/CheckMobileKit/Realtime/MobileRealtimeRunner.swift @ 3bd04bd · 활동 앞쪽 즉시 + 뒤쪽 합치기 @ c220021e
 package com.yehsung.aingcheck.feature.phone.realtime
 
 import androidx.compose.runtime.getValue
@@ -43,9 +43,9 @@ interface RealtimeSignalReceiver {
 /**
  * 폰의 실시간 **effect 실행층**(SPEC-ios §3.3 · ios-inventory §7 · E§7.2). 링([RealtimeLink])과 소켓([RealtimeTransport] — Ktor+OkHttp
  * WebSocket, supabase-kt 금지 §8-1 #14)은 코어 것을 그대로 쓰고, effect 를 실행하는 층만 여기 있다. 맥(데스크톱 W2-g)과 갈리는 곳은 넷이다:
- *  1. `.catchUp`·`.drain` → **take_pokes 가 아니다**(C§4 #15, G §2-3 W2-f ②). 등록된 [onMessageActivity] 핸들러들을 1초 창에 모아 한 번 부른다
- *     (+ `.catchUp` 은 오목·테트리스 `realtimeDidJoin`). take_pokes 는 원자 소비라 폰이 부르면 맥의 말풍선을 훔친다(R3).
- *  2. `.messageReadSignal` → 등록된 [onMessageRead] 핸들러들(같은 1초 합치기).
+ *  1. `.catchUp`·`.drain` → **take_pokes 가 아니다**(C§4 #15, G §2-3 W2-f ②). 등록된 [onMessageActivity] 핸들러들을 부른다 — 조용하던 창의 첫 신호는 **곧바로**(앞쪽),
+ *     그 1초 창 안에 또 온 신호들은 창 끝에 **한 번**(뒤쪽 합치기)(+ `.catchUp` 은 오목·테트리스 `realtimeDidJoin`). take_pokes 는 원자 소비라 폰이 부르면 맥의 말풍선을 훔친다(R3).
+ *  2. `.messageReadSignal` → 등록된 [onMessageRead] 핸들러들(뒤쪽 1초 합치기만 — 앞쪽 즉시 처리는 없다).
  *  3. `.gomokuSignal` → 오목 `handleSignal()` · `.tetrisSignal` → 테트리스 `handleSignal()`. `.chessSignal` 은 **일부러 빈 가지**다(아래).
  *  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
  * 토큰 갱신은 세션 스토어의 조정자를 지난다([SessionStore.refreshForRealtime]) — 갱신 주체가 둘이 되지 않게.
@@ -78,7 +78,11 @@ class PhoneRealtimeRunner(
     /** 확성기 배너 신호('megaphone')를 받을 자리(조립이 붙인다 — 배너 스토어 refresh). 비어 있으면 아무 일도 안 한다(같은 묶음의 ring 이 메시지를 갚는다). */
     var megaphone: (() -> Unit)? = null
 
-    /** 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 시험은 크게 두고 [flushCoalescedSignals] 를 직접 부른다. */
+    /**
+     * 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 시험은 크게 두고 [flushCoalescedSignals] 를 직접 부른다.
+     * 메시지 활동은 이 창의 **앞쪽**(조용하던 창의 첫 신호)을 곧바로 갚고 창 안의 나머지를 창 끝에 한 번 갚는다 — 창 하나에 최대 두 번.
+     * 읽음 신호는 뒤쪽 한 번뿐이다(stab-1030 §5-2: 읽음·배경까지 즉시 조회로 넓히지 않는다).
+     */
     var coalesceSeconds: Double = 1.0
 
     /** 주기 점검(`.tick`) 간격. 하트비트(25초)보다 촘촘해야 한다(맥과 같은 5초). */
@@ -89,7 +93,18 @@ class PhoneRealtimeRunner(
     private var nextHandlerID = 0L
     private var pendingActivity = false
     private var pendingRead = false
+
+    /** 읽음 신호의 뒤쪽 합치기 타이머(첫 신호 + [coalesceSeconds]). */
     private var coalesceJob: Job? = null
+
+    /**
+     * 메시지 활동의 뒤쪽 합치기 타이머(창 끝 = 마지막 활동 flush + [coalesceSeconds]). 읽음 타이머와 **따로** 둔다 — 둘이 한 타이머를 나누면
+     * 먼저 온 읽음 신호의 창 끝이 활동을 창 중간에 한 번 더 갚아 '창 하나에 최대 두 번'이 흐려진다.
+     */
+    private var activityWindowJob: Job? = null
+
+    /** 메시지 활동 핸들러를 마지막으로 부른 시각(앞쪽·뒤쪽 어느 쪽이든 — 주입 시계 기준). 앞쪽 즉시 처리의 창을 여기서 잰다. */
+    private var lastActivityFlushAt: SwiftDate? = null
     private var retryJob: Job? = null
     private var tokenRefreshJob: Job? = null
     private var tickJob: Job? = null
@@ -114,14 +129,18 @@ class PhoneRealtimeRunner(
 
     // ---------------------------------------------------------------- 핸들러 등록(탭 스토어 · 조립이 부른다)
 
-    /** `.drain`(새 메시지 신호) · `.catchUp`(조인 직후 따라잡기)마다 — 1초 창에 모아 한 번. 메시지 탭: 요약 + 보이는 대화 이력 재조회. **take_pokes 금지.** */
+    /**
+     * `.drain`(새 메시지 신호) · `.catchUp`(조인 직후 따라잡기)마다 — 조용하던 창의 첫 신호는 곧바로, 창 안의 나머지는 창 끝에 한 번.
+     * 핸들러 쪽도 돌고 있는 새로고침에 뒤따르는 한 번으로 합친다(`MessagesStore.requestActivityRefresh`) — 이 창은 그 앞단이다.
+     * 메시지 탭: 요약 + 보이는 대화 이력 재조회. **take_pokes 금지.**
+     */
     fun onMessageActivity(handler: () -> Unit): PhoneRealtimeRegistration {
         val id = nextHandlerID++
         activityHandlers[id] = handler
         return PhoneRealtimeRegistration { activityHandlers.remove(id) }
     }
 
-    /** 읽음 신호(`message_read`)마다 — 1초 창에 모아 한 번. */
+    /** 읽음 신호(`message_read`)마다 — 뒤쪽 1초 창에 모아 한 번. */
     fun onMessageRead(handler: () -> Unit): PhoneRealtimeRegistration {
         val id = nextHandlerID++
         readHandlers[id] = handler
@@ -142,6 +161,8 @@ class PhoneRealtimeRunner(
         // 모아 둔 신호는 버린다 — active 로 돌아오면 조인 따라잡기(`.catchUp`)와 각 스토어의 appDidBecomeActive 가 다시 읽는다.
         coalesceJob?.cancel()
         coalesceJob = null
+        activityWindowJob?.cancel()
+        activityWindowJob = null
         pendingActivity = false
         pendingRead = false
     }
@@ -215,7 +236,7 @@ class PhoneRealtimeRunner(
                 }
                 RealtimeEffect.CatchUp -> {
                     // 조인 직후 따라잡기: 소켓이 내려가 있던 동안의 신호는 재생되지 않는다 — 서버 표를 다시 읽는다(조회만).
-                    requestMessageActivity()
+                    requestMessageActivity(now)
                     gomoku?.realtimeDidJoin()
                     // INV-MobileRealtimeRunner-b94b3ac4 이식: 테트리스도 같은 자리다 — 판 중에 소켓이 끊겼다 붙으면 그 사이의 방해 줄을 **보고 왕복이
                     //   알려 주기 전에** 받는다(조인 직후 로비를 한 번 긁는다 → 그 응답이 가리키는 판까지).
@@ -223,7 +244,7 @@ class PhoneRealtimeRunner(
                 }
                 // INV-MobileRealtimeRunner-8764ac83 이식: take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다
                 //   (PhoneRealtimeRunnerTest 가 진짜 메시지 스토어로 요청을 재서 take_pokes 0 · message_unread_summary 1 을 단언한다).
-                RealtimeEffect.Drain -> requestMessageActivity()
+                RealtimeEffect.Drain -> requestMessageActivity(now)
                 RealtimeEffect.MessageReadSignal -> requestMessageRead()
                 RealtimeEffect.GomokuSignal -> gomoku?.handleSignal()
                 // INV-MobileRealtimeRunner-04360395 이식: **일부러 빈 가지**다. ① 폰 체스는 받은함 RPC 가 없어(로비 `me` 로만 온다) 이 신호를 소비할
@@ -257,9 +278,53 @@ class PhoneRealtimeRunner(
 
     // ---------------------------------------------------------------- 합치기
 
-    private fun requestMessageActivity() {
+    /**
+     * 메시지 활동: **앞쪽 처리 + 뒤쪽 합치기**(stab-1030 §5-2). 예전에는 모든 활동을 1초 뒤에 갚아, 열린 대화에서도 새 말이 **늘 1초 이상 늦게** 섰다. 지금은
+     *  · 앱이 active 이고 최근 [coalesceSeconds] 안에 활동 flush 가 없었으면 → **곧바로** 핸들러를 부른다(앞쪽).
+     *  · 그 창 안에 또 온 신호는 모아 두었다가 **창 끝**(마지막 flush + 창)에 한 번 부른다(뒤쪽 — 예전 합치기).
+     * 그래서 신호가 몰려도 창 하나에 최대 두 번이다. 핸들러가 띄운 새로고침이 아직 돌고 있으면 그쪽이 뒤따르는 한 번으로 또 합친다
+     * (`MessagesStore.requestActivityRefresh`) — 이 창은 그 계약을 건드리지 않는다.
+     * active 가 아니면 앞쪽은 없다 — 예전 그대로 첫 신호 + 창 뒤에 한 번이고, background 진입이 모아 둔 것을 버린다.
+     */
+    private fun requestMessageActivity(now: SwiftDate) {
+        if (isAppActive && activityWindowHasElapsed(now)) {
+            flushPendingActivity(now)
+            return
+        }
         pendingActivity = true
-        scheduleCoalescedFlush()
+        scheduleActivityWindowEnd(now)
+    }
+
+    /** 마지막 활동 flush 뒤로 창이 다 지났는가. 시계가 뒤로 갔으면(음수) 아직 창 안으로 본다 — 앞쪽을 더 열지 않는 쪽. */
+    private fun activityWindowHasElapsed(now: SwiftDate): Boolean {
+        val last = lastActivityFlushAt ?: return true
+        return now.timeIntervalSince(last) >= coalesceSeconds
+    }
+
+    private fun scheduleActivityWindowEnd(now: SwiftDate) {
+        // 끝난 작업이 칸에 남아 있어도 새 창을 막지 않게 isActive 로 본다(즉시 디스패처에서는 대기 0 의 몸통이 대입보다 먼저 끝난다).
+        if (activityWindowJob?.isActive == true) return
+        val window = maxOf(0.0, coalesceSeconds)
+        // 창 끝까지 남은 시간. active 가 아니거나 앞쪽 flush 가 없었으면 예전처럼 첫 신호 + 창 전체다.
+        // [0, 창] 으로 묶는다 — 시계가 뒤로 가도 창보다 오래 붙잡지 않는다.
+        val last = lastActivityFlushAt
+        val delaySeconds = if (isAppActive && last != null) minOf(window, maxOf(0.0, window - now.timeIntervalSince(last))) else window
+        val delayMillis = (delaySeconds * 1000.0).toLong()
+        activityWindowJob = scope.launch {
+            if (delayMillis > 0) delay(delayMillis)
+            activityWindowJob = null
+            if (pendingActivity) flushPendingActivity(clock.now())
+        }
+    }
+
+    /** 메시지 활동 핸들러를 지금 부른다(앞쪽 · 창 끝 · 시험 훅). 모아 둔 것도 이 한 번이 함께 갚는다. */
+    private fun flushPendingActivity(now: SwiftDate) {
+        activityWindowJob?.cancel()
+        activityWindowJob = null
+        pendingActivity = false
+        lastActivityFlushAt = now
+        activityFlushCount += 1
+        for (handler in activityHandlers.values.toList()) handler()
     }
 
     private fun requestMessageRead() {
@@ -267,30 +332,41 @@ class PhoneRealtimeRunner(
         scheduleCoalescedFlush()
     }
 
+    /**
+     * 읽음 신호의 뒤쪽 합치기(첫 신호 + 창). 앞쪽 즉시 처리는 **일부러** 없다 — 읽음 신호는 새 줄을 세우지 않고 말풍선 옆 1 만 지우므로
+     * 1초 늦어도 잃는 것이 적고, 감사(stab-1030 §5-2)가 읽음까지 즉시 조회로 넓히지 말라고 했다.
+     */
     private fun scheduleCoalescedFlush() {
         if (coalesceJob != null) return
         val delayMillis = (coalesceSeconds * 1000.0).toLong()
         coalesceJob = scope.launch {
             if (delayMillis > 0) delay(delayMillis)
             coalesceJob = null
-            flushCoalescedSignals()
+            flushPendingRead()
         }
     }
 
-    /** 모아 둔 신호를 지금 갚는다(창이 끝났을 때 · 시험). */
-    fun flushCoalescedSignals() {
+    private fun flushPendingRead() {
         coalesceJob?.cancel()
         coalesceJob = null
+        if (!pendingRead) return
+        pendingRead = false
+        readFlushCount += 1
+        for (handler in readHandlers.values.toList()) handler()
+    }
+
+    /**
+     * 모아 둔 신호를 지금 갚는다(창이 끝났을 때 · 시험). 모아 둔 것이 없으면 아무것도 부르지 않는다 — 그래서 이 훅은 앞쪽 창을 새로 열지도
+     * 닫지도 않는다(활동 flush 시각은 핸들러를 실제로 부를 때만 바뀐다).
+     */
+    fun flushCoalescedSignals() {
         if (pendingActivity) {
-            pendingActivity = false
-            activityFlushCount += 1
-            for (handler in activityHandlers.values.toList()) handler()
+            flushPendingActivity(clock.now())
+        } else {
+            activityWindowJob?.cancel()
+            activityWindowJob = null
         }
-        if (pendingRead) {
-            pendingRead = false
-            readFlushCount += 1
-            for (handler in readHandlers.values.toList()) handler()
-        }
+        flushPendingRead()
     }
 
     // ---------------------------------------------------------------- 타이머
@@ -357,6 +433,8 @@ class PhoneRealtimeRunner(
         tokenRefreshJob = null
         coalesceJob?.cancel()
         coalesceJob = null
+        activityWindowJob?.cancel()
+        activityWindowJob = null
         pendingActivity = false
         pendingRead = false
     }

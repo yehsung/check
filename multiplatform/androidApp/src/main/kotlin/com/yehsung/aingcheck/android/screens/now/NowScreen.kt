@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.session.signup.SignUpText
 import com.yehsung.aingcheck.core.stores.messages.MobileRelativeTime
 import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
 import com.yehsung.aingcheck.core.stores.now.NowFormat
@@ -65,6 +66,7 @@ import com.yehsung.aingcheck.core.stores.now.NowWorkingPerson
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.CharacterPortrait
+import com.yehsung.aingcheck.ui.screens.session.CreatedTeamCard
 import com.yehsung.aingcheck.ui.screens.session.kit.rememberPortrait
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
@@ -127,6 +129,8 @@ object NowTags {
     fun talk(id: String): String = "now-talk-$id"
     const val TEAM_JOIN = "now-team-join"
     const val TEAM_ROSTER_ENTRY = "now-team-roster-entry"
+    const val CREATED_TEAM_CARD = "now-created-team"
+    const val CREATED_TEAM_CONFIRM = "now-created-team-confirm"
     const val GOAL_SHEET = "now-goal-sheet"
     const val GOAL_SAVE = "now-goal-save"
 }
@@ -155,11 +159,31 @@ fun NowScreen(
                 Text(NowText.expandedSubtitle(NowFormat.longDate(now), store.membership?.teamName), style = MaterialTheme.typography.bodyMedium, color = colors.label2)
             }
             store.notice?.let { InlineNotice(it, NoticeKind.Warning, Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 4.dp)) }
+            store.createdTeamCode?.let { code -> CreatedTeamSection(code, onConfirm = store::dismissCreatedTeamCode) }
             StatusSection(store, work, characterID, now, onEditGoal)
             NowTodoSection(store)
             WorkingSection(store, work != null, now, onTalk, onOpenTeamRoster)
         }
         NowUndoToast(store, Modifier.align(Alignment.BottomCenter))
+    }
+}
+
+// ---------------------------------------------------------------- 팀 만든 직후
+
+/**
+ * 원본: Sources/check/CheckComponents.swift:1413(CreatedTeamCodeCard). 방금 만든 팀의 참여코드 한 장 — 설정까지 찾아가지 않게 지금 탭 맨 위에 세운다(맥은 패널을 통째로 갈지만 폰은 탭 위에 얹는다).
+ * 코드 칸은 가입 화면과 같은 한 벌([CreatedTeamCard] — 큰 글자 · 안내 · 복사). [확인]을 누를 때까지 남는다.
+ */
+@Composable
+private fun CreatedTeamSection(code: String, onConfirm: () -> Unit) {
+    val colors = AingTheme.colors
+    Column(Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 8.dp).testTag(NowTags.CREATED_TEAM_CARD), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AingIcon(sf("party.popper.fill", AppIcon.CelebrationFill), null, size = 22.dp, tint = colors.working)
+            Text(SignUpText.createdTitle, style = MaterialTheme.typography.titleMedium, color = colors.label, modifier = Modifier.semantics { heading() })
+        }
+        CreatedTeamCard(code)
+        AingButton(NowText.createdTeamConfirm, onConfirm, Modifier.testTag(NowTags.CREATED_TEAM_CONFIRM), fillsWidth = true)
     }
 }
 

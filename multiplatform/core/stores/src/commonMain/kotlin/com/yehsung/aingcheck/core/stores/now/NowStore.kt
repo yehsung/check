@@ -109,6 +109,10 @@ class NowStore(
     /** 방금 팀에 들어갔는데(합류·생성) 아직 소속을 못 읽었다 — 그 한 왕복 동안은 무소속 카드도, 실패 줄도 아니고 **스피너**다. */
     var isSettlingTeam: Boolean by mutableStateOf(false)
         private set
+
+    /** 방금 만든 팀의 참여코드(맥 `createdTeamCode` — 공유 안내 카드). [확인]을 누르거나 로그아웃하면 비운다. */
+    var createdTeamCode: String? by mutableStateOf(null)
+        private set
     var teamMembers: List<TeamMemberStatus> by mutableStateOf(emptyList())
         private set
 
@@ -205,6 +209,7 @@ class NowStore(
         // 목록이 바뀔 때마다(사용자 · 동기화 병합 · 다시 읽기) 위젯 스냅숏을 고친다(Swift `observeTodos`).
         todos.onItemsChanged = { writeWidget(deferWhileRefreshing = true) }
         teamJoin.onTeamSettled = { adoptSettledTeam() }
+        teamJoin.onTeamCreated = { code -> createdTeamCode = code }
     }
 
     /**
@@ -221,6 +226,11 @@ class NowStore(
         refresh()
         // 팀 이름·역할은 다른 탭(나 탭 설정 · 머리)도 읽는다 — 로그인 직후와 같은 길로 한 번 채운다.
         scope.launch { context.sessionStore.refreshProfile() }
+    }
+
+    /** 참여코드 카드 [확인](맥 `dismissCreatedTeamCode`). */
+    fun dismissCreatedTeamCode() {
+        createdTeamCode = null
     }
 
     val badgeCount: Int get() = 0
@@ -261,6 +271,7 @@ class NowStore(
         membership = null
         hasNoTeam = false
         isSettlingTeam = false
+        createdTeamCode = null
         teamSettleSerial += 1
         teamJoin.reset()
         teamMembers = emptyList()

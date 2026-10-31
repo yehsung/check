@@ -409,6 +409,31 @@ class NowScreenSnapshotTest {
         }
     }
 
+    /** 팀 만든 직후 코드 카드: 지금 탭 맨 위에 서고 코드 · 복사가 보이며 [확인]으로 사라진다. 스토어 값 없이는 안 선다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun createdTeamCardShowsTheCodeUntilConfirmed() {
+        load()
+        runComposeUiTest {
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}) } }
+            waitForIdle()
+            onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertDoesNotExist()
+            runBlocking(dispatcher) { store.teamJoin.onTeamCreated!!.invoke("X7K2M9Q4") }
+            waitForIdle()
+            onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertIsDisplayed()
+            onNodeWithText("팀이 만들어졌어요").assertIsDisplayed()
+            onNodeWithText("X7K2M9Q4").assertIsDisplayed()
+            onNodeWithText("팀원에게 이 코드를 전달하세요").assertIsDisplayed()
+            onNodeWithText("복사").assertIsDisplayed().performClick()
+            waitForIdle()
+            onNodeWithText("복사됨").assertIsDisplayed()
+            onNodeWithTag(NowTags.CREATED_TEAM_CONFIRM).performClick()
+            waitForIdle()
+            onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertDoesNotExist()
+            assertEquals(null, store.createdTeamCode)
+        }
+    }
+
     @Test fun nowPhoneLight() = check("now-phone-light", 360.dp, 760.dp, dark = false)
 
     @Test fun nowPhoneDark() = check("now-phone-dark", 360.dp, 760.dp, dark = true)

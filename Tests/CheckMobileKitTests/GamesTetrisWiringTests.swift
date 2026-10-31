@@ -368,17 +368,96 @@ import Testing
         #expect(recorder.scores == [5], "한 판을 두 번 제출했다")
     }
 
-    @Test("endRound(): 기존 두 게임은 예전 그대로 **버린다**(알리지 않는다 = 제출도 없다)")
-    func endRoundStillDiscardsTheOtherTwoGames() {
-        for kind in [MiniGameKind.timingBar, .flappy] {
-            let controller = GamesPlayController(kind: kind, seed: 11)
-            let recorder = Recorder()
-            controller.onFinished = { recorder.scores.append($0) }
-            controller.tap()
-            #expect(controller.isPlaying)
-            #expect(controller.endRound() == .abandoned, "\(kind.rawValue) 가 제출 쪽으로 넘어갔다")
-            #expect(recorder.scores.isEmpty, "\(kind.rawValue) 의 버린 판을 알렸다")
+    @Test("endRound(): 타이밍 바는 예전 그대로 **버린다**(알리지 않는다 = 제출도 없다)")
+    func endRoundStillDiscardsTheTimingBar() {
+        let controller = GamesPlayController(kind: .timingBar, seed: 11)
+        let recorder = Recorder()
+        controller.onFinished = { recorder.scores.append($0) }
+        controller.tap()
+        #expect(controller.isPlaying)
+        #expect(controller.endRound() == .abandoned, "타이밍 바가 제출 쪽으로 넘어갔다 — 10라운드를 못 채운 판은 무효다")
+        #expect(recorder.scores.isEmpty, "버린 판을 알렸다")
+    }
+
+    @Test("endRound(): 플래피는 그 점수로 **확정해 알린다** — 판마다 한 번 · 게임오버 유예 중이어도 한 번")
+    func endRoundConfirmsTheFlappyScoreExactlyOnce() {
+        let start = Date(timeIntervalSince1970: 1_800_000_000)
+        let controller = GamesPlayController(kind: .flappy, seed: 11)
+        let recorder = Recorder()
+        controller.onFinished = { recorder.scores.append($0) }
+        #expect(controller.endRound() == .none, "시작 전인데 끝냈다고 한다")
+        controller.tap()
+        controller.tick(at: start)
+        controller.replaceForTesting(flappy: FlappyGame(seed: 11, bird: controller.flappy.bird, pipes: controller.flappy.pipes, score: 4, phase: .running))
+        #expect(controller.isPlaying)
+        #expect(controller.endRound() == .confirmed(4))
+        #expect(recorder.scores == [4], "확정했다면서 알리지 않았다 — `interrupt()` 뒤에는 tick 이 다시 오지 않는다")
+        #expect(controller.flappy.phase == .result)
+        #expect(controller.endRound() == .none)
+        #expect(recorder.scores == [4], "한 판을 두 번 제출했다")
+        gamesDrive(controller, from: start.addingTimeInterval(1), frames: 120)
+        #expect(recorder.scores == [4], "프레임이 한 번 더 알렸다")
+
+        // 죽고 결과 카드까지 가는 유예 중에 나가도 한 번이다.
+        let dying = GamesPlayController(kind: .flappy, seed: 12)
+        let dyingRecorder = Recorder()
+        dying.onFinished = { dyingRecorder.scores.append($0) }
+        dying.tap()
+        dying.tick(at: start)
+        gamesDrive(dying, from: start, frames: 3000) { if case .over = $0.flappy.phase { return true } else { return false } }
+        guard case .over = dying.flappy.phase else {
+            Issue.record("판이 유예까지 안 갔다 — 이 단언의 전제가 깨졌다")
+            return
         }
+        #expect(dying.endRound() == .confirmed(dying.score))
+        #expect(dyingRecorder.scores.count == 1)
+        gamesDrive(dying, from: start.addingTimeInterval(100), frames: 120)
+        #expect(dyingRecorder.scores.count == 1, "유예 뒤 결과 전이가 또 알렸다")
+    }
+
+    @Test("플래피를 접으면 **그 점수가 올라간다** — 앱을 나갈 때도 뒤로가기도 · 로그아웃은 안 올린다")
+    func leavingTheFlappyRoundRecordsIt() async throws {
+        let harness = GamesHarness(label: "flappy-bg")
+        configure(harness)
+        _ = gamesServeRoundTokens(harness, prefix: "tok-fbg")
+        await harness.signIn()
+        harness.hub.openScreen(.flappy)
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fbg-1" })
+        let controller = try #require(harness.hub.controller)
+        controller.tap()
+        controller.replaceForTesting(flappy: FlappyGame(seed: 11, bird: controller.flappy.bird, pipes: controller.flappy.pipes, score: 9, phase: .running))
+
+        harness.model.sceneDidEnterBackground()
+        #expect(!controller.isPlaying)
+        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.flappy))
+        #expect(await waits.wait { harness.server.requests("minigame_submit_score").count == 1 })
+        let submit = try #require(harness.server.requests("minigame_submit_score").first)
+        #expect(submit.bodyText.contains(#""p_game":"flappy""#))
+        #expect(submit.bodyText.contains(#""p_score":9"#))
+        #expect(submit.bodyText.contains(#""p_token":"tok-fbg-1""#))
+        await harness.barrier()
+        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.flappy), "제출 성공이 안내를 지웠다")
+        #expect(harness.hub.best(for: .flappy) >= 9, "결과 카드의 최고가 안 올랐다")
+
+        // 뒤로가기.
+        harness.model.sceneDidBecomeActive()
+        #expect(await waits.wait { harness.hub.roundToken == "tok-fbg-2" })
+        controller.tap()
+        harness.hub.closeScreen(.flappy)
+        #expect(await waits.wait { harness.server.requests("minigame_submit_score").count == 2 }, "뒤로가기로 끝낸 플래피 판이 안 올라갔다")
+        #expect(harness.server.requests("minigame_submit_score").last?.bodyText.contains("tok-fbg-2") == true)
+        await harness.barrier()
+
+        // 대조: 로그아웃 자리는 `abandon()` 그대로다.
+        harness.hub.openScreen(.flappy)
+        #expect(await waits.wait { harness.hub.roundToken != nil })
+        let third = try #require(harness.hub.controller)
+        third.tap()
+        await harness.model.session.signOut()
+        await harness.barrier()
+        #expect(harness.server.requests("minigame_submit_score").count == 2, "로그아웃이 앞 사람의 판을 제출했다")
+        #expect(harness.violations.isEmpty, "\(harness.violations)")
+        await harness.tearDown()
     }
 
     @Test("abandon(): 테트리스도 **버린다** — 로그아웃·화면 경합 정리가 제출 쪽으로 넘어가면 안 된다")

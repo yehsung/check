@@ -106,13 +106,13 @@ import Testing
         await harness.tearDown()
     }
 
-    @Test("판 도중 앱이 background 로 가면 판은 끝나고 제출하지 않는다 — 안내 한 줄")
+    @Test("타이밍 바 판 도중 앱이 background 로 가면 판은 끝나고 제출하지 않는다 — 안내 한 줄")
     func backgroundEndsRoundWithoutSubmitting() async throws {
         let harness = GamesHarness(label: "games-background")
         configureMiniGame(harness)
         harness.server.setDefault("minigame_start_round", json: Self.tokenJSON("tok-bg"))
         await harness.signIn()
-        harness.hub.openScreen(.flappy)
+        harness.hub.openScreen(.timingBar)
         #expect(await baseWaitUntil { harness.hub.roundToken == "tok-bg" })
         let controller = try #require(harness.hub.controller)
         controller.tap()
@@ -122,7 +122,7 @@ import Testing
 
         harness.model.sceneDidEnterBackground()
         #expect(!controller.isPlaying)
-        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.flappy))
+        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.timingBar))
         gamesDrive(controller, from: harness.clock.now.addingTimeInterval(2), frames: 300)
         await harness.barrier()
         #expect(harness.server.requests("minigame_submit_score").isEmpty, "background 로 끝난 판을 제출했다")

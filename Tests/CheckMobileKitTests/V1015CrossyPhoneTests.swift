@@ -280,8 +280,9 @@ import Testing
         #expect(GamesMiniGameText.endedInBackground(.crossy) == GamesMiniGameText.endedInBackground(.tetris))
         #expect(GamesMiniGameText.endedInBackground(.crossy).contains("기록했어요"))
         #expect(!GamesMiniGameText.endedInBackground(.crossy).contains("기록하지 않았어요"))
-        // 대조: 버리는 두 게임은 그대로다.
-        #expect(GamesMiniGameText.endedInBackground(.flappy).contains("기록하지 않았어요"))
+        // 대조: 버리는 게임은 타이밍 바뿐이다(플래피는 폰 1.0.17 부터 확정 쪽).
+        #expect(GamesMiniGameText.endedInBackground(.timingBar).contains("기록하지 않았어요"))
+        #expect(GamesMiniGameText.endedInBackground(.flappy) == GamesMiniGameText.endedInBackground(.crossy))
 
         let howTo = GamesMiniGameText.howToPlay(.crossy)
         #expect(howTo.hasPrefix(MiniGameKind.crossy.howToPlay), "규칙 줄이 코어 한 벌이 아니다")

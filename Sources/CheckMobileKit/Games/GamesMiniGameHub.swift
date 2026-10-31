@@ -67,7 +67,7 @@ package struct GamesMiniGameBoard: Equatable {
 /// 6. `minigame_public == false` 면 토큰도 제출도 없다(설정 문구가 약속한 "올라가지도 않아요").
 ///
 /// 폰 규칙: 앱이 background 로 가거나 화면을 떠나면 판을 **끝낸다**(`endRound()`). 무엇을 하는지는 게임마다 다르다 —
-/// 타이밍 바·플래피는 예전처럼 기록 없이 버리고, **테트리스·길건너는 여기까지의 점수로 확정해 제출한다**(까닭은
+/// 타이밍 바는 기록 없이 버리고, **플래피·테트리스·길건너는 여기까지의 점수로 확정해 제출한다**(까닭은
 /// `GamesPlayController.endRound()` 주석: 폰에서 background 는 비용 0.03~0.05초짜리 무한 일시정지다).
 /// 로그아웃(`reset`)과 화면 경합 정리(`openScreen`)는 **`abandon()` 그대로**다 — 셋의 의도가 다르다.
 ///
@@ -241,7 +241,7 @@ package final class GamesMiniGameHub {
         }
     }
 
-    /// 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스·길건너는 여기까지의 점수로 확정 제출).
+    /// 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 타이밍 바 말고는 여기까지의 점수로 확정 제출).
     /// 토큰은 들고 있는다(재사용 나이 안에 다시 열면 그대로 쓴다).
     ///
     /// 안내 한 줄은 세우지 않는다 — 이 화면은 지금 사라지는 중이고, 다시 열면 `openScreen` 이 어차피 비운다.
@@ -252,8 +252,8 @@ package final class GamesMiniGameHub {
         activeKind = nil
     }
 
-    /// 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고(SPEC-ios §3.5),
-    /// **테트리스·길건너는 여기까지의 점수로 확정 제출한다**(`GamesPlayController.endRound()`).
+    /// 앱이 background 로 간다 — 판은 끝. 타이밍 바는 제출하지 않고,
+    /// **나머지는 여기까지의 점수로 확정 제출한다**(`GamesPlayController.endRound()`).
     package func appDidEnterBackground() {
         guard let controller else { return }
         switch controller.endRound() {

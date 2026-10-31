@@ -23,6 +23,17 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import android.app.Application
+import android.content.Intent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.height
+import androidx.compose.ui.unit.width
+import androidx.test.core.app.ApplicationProvider
 import com.yehsung.aingcheck.core.foundation.identity.ClientIdentity
 import com.yehsung.aingcheck.core.foundation.identity.ClientPlatform
 import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity
@@ -35,10 +46,12 @@ import com.yehsung.aingcheck.core.session.SessionPrefsKeys
 import com.yehsung.aingcheck.core.session.SessionStore
 import com.yehsung.aingcheck.core.session.SessionVaultKeys
 import com.yehsung.aingcheck.core.session.app.AppInfo
+import com.yehsung.aingcheck.core.session.app.AppLinks
 import com.yehsung.aingcheck.core.session.app.SessionClock
 import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
 import com.yehsung.aingcheck.core.stores.now.NowStore
+import com.yehsung.aingcheck.core.stores.now.NowText
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
 import com.yehsung.aingcheck.core.stores.now.NowWorkOrigin
 import com.yehsung.aingcheck.core.stores.now.todo.JvmTodoFileSystem
@@ -78,6 +91,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.Shadows
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
@@ -111,8 +125,15 @@ class NowScreenSnapshotTest {
 
     private data class Fixture(val key: String, val needle: String?, val scenario: String?, val text: String)
 
+    /** client_release 의 최신 빌드를 덮는다(새 버전 안내 장면). null = 데모 픽스처(latest_build 1 = 이 빌드 — 안내 없음). */
+    @Volatile
+    private var latestBuildOverride: Long? = null
+
     /** Swift `MobileDemoFixtures.response`(장면 `now`) — ui 시험 DemoFixtures 와 같은 규칙. */
     private fun respond(method: String, path: String, query: String, body: String): Pair<Int, String> {
+        if (path.endsWith("/rpc/client_release")) {
+            latestBuildOverride?.let { return 200 to """{"status":"ok","platform":"android","min_build":1,"latest_build":$it}""" }
+        }
         val m = method.lowercase()
         val seg = path.split('/').filter { it.isNotEmpty() }
         val key = when {
@@ -274,8 +295,8 @@ class NowScreenSnapshotTest {
     private fun check(name: String, width: Dp, height: Dp, dark: Boolean) {
         load()
         assertTrue("데모 장면: 새벽(나)이 근무 중이고 할 일이 서야 한다", store.myCard(clock.now())?.isWorking == true && store.todoRows().main.isNotEmpty())
-        val scene: @Composable () -> Unit = { Frame(dark) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}) } }
-        val other: @Composable () -> Unit = { Frame(dark) { NowScreen(store, phoneWork, characterID = "fox", onTalk = {}, onEditGoal = {}) } }
+        val scene: @Composable () -> Unit = { Frame(dark) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
+        val other: @Composable () -> Unit = { Frame(dark) { NowScreen(store, phoneWork, characterID = "fox", onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
         val first = render(width, height, scene)
         val second = render(width, height, scene)
         assertEquals("$name: 두 번 그린 장면이 다르다 — 렌더가 굳지 않았다", 0, first.differing(second))
@@ -302,6 +323,107 @@ class NowScreenSnapshotTest {
         assertFalse("$name: 캐릭터만 다른 카드인데 같은 픽셀 — 비교가 내용을 못 본다", negative == 0)
         assertTrue("$name: 기준선 차이 ${negative}px — 한 군데만 달라야 한다", negative in 1 until first.argb.size / 10)
         assertTrue("$name: 굵은 대조가 한 군데 다른 장면을 못 잡는다", first.maxBlockDelta(baseline) > 64)
+    }
+
+    // ---------------------------------------------------------------- 새 버전 안내(원본: Tests/CheckMobileKitTests/V1016UpdateNoticeTests.swift 소스 계약의 뜻 — 여기선 진짜 화면으로 잰다)
+
+    private fun checkNotice(name: String, dark: Boolean) {
+        latestBuildOverride = 2
+        check(name, 360.dp, 760.dp, dark)
+    }
+
+    /** 맨 위 한 줄 · 틴트 단추 · X. 기준선(캐릭터만 다른 장면)은 check 가 잰다. */
+    @Test fun nowUpdateNoticeLight() = checkNotice("now-update-notice-light", dark = false)
+
+    @Test fun nowUpdateNoticeDark() = checkNotice("now-update-notice-dark", dark = true)
+
+    /** 데모 픽스처(latest_build 1 = 이 빌드)는 안내를 띄우지 않는다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun demoFixtureShowsNoNotice() {
+        load()
+        assertFalse("데모 빌드에 안내가 떴다", store.showsUpdateNotice)
+        runComposeUiTest {
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
+            waitForIdle()
+            onNodeWithTag(NowTags.UPDATE_NOTICE).assertDoesNotExist()
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    private fun loadNewer() {
+        latestBuildOverride = 2
+        load()
+        assertTrue("전제: 더 높은 최신 빌드면 안내가 보인다", store.showsUpdateNotice)
+    }
+
+    /** [업데이트] 는 부른 자리의 목적지를 열고 줄은 남는다 · X 는 줄을 내리고 그 빌드를 앱 단위로 적는다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun updateOpensAndDismissHides() {
+        loadNewer()
+        var opened = 0
+        runComposeUiTest {
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = { opened += 1 }) } }
+            waitForIdle()
+            onNodeWithTag(NowTags.UPDATE_NOTICE).assertExists()
+            onNodeWithText(NowText.updateNoticeTitle).assertExists()
+            val noticeTop = onNodeWithTag(NowTags.UPDATE_NOTICE).getBoundsInRoot().top
+            val statusTop = onNodeWithTag(NowTags.STATUS_CARD).getBoundsInRoot().top
+            assertTrue("안내 줄이 상태 카드 뒤로 갔다", noticeTop < statusTop)
+            onNodeWithContentDescription(NowText.updateNoticeDismiss).assertExists()
+            onNodeWithTag(NowTags.UPDATE_OPEN).performClick()
+            waitForIdle()
+            assertEquals(1, opened)
+            onNodeWithTag(NowTags.UPDATE_NOTICE).assertExists()
+            onNodeWithTag(NowTags.UPDATE_DISMISS).performClick()
+            waitForIdle()
+            onNodeWithTag(NowTags.UPDATE_NOTICE).assertDoesNotExist()
+        }
+        assertEquals(2L, store.dismissedUpdateBuild)
+        assertEquals(2L, prefs.getLong(NowStore.dismissedUpdateBuildKey))
+    }
+
+    /** 부른 자리(지금 탭 뿌리 NowHomeEntry): [업데이트] 가 AppLinks 의 Play 주소를 ACTION_VIEW 로 연다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun homeEntryOpensThePlayStoreAddress() {
+        loadNewer()
+        runComposeUiTest {
+            setContent { Frame(false) { NowHomeEntry(store, phoneWork, characterID = null, open = {}, openRoute = {}) } }
+            waitForIdle()
+            onNodeWithTag(NowTags.UPDATE_OPEN).performClick()
+            waitForIdle()
+        }
+        val started = Shadows.shadowOf(ApplicationProvider.getApplicationContext<Application>()).nextStartedActivity
+        assertEquals(Intent.ACTION_VIEW, started.action)
+        assertEquals(AppLinks.playStore, started.dataString)
+    }
+
+    /** 큰 글자: [업데이트] 가 제목 아래로 내려가 제목이 잘리지 않는다 · 작은 글자: 한 줄(대조군 — 같은 재기로 갈려야 한다). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun largeTypeStacksTheButtonUnderTheTitle() {
+        loadNewer()
+        fun layout(fontScale: Float): Pair<Boolean, Boolean> {
+            var result = false to false
+            runComposeUiTest {
+                setContent {
+                    val base = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                        Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) }
+                    }
+                }
+                waitForIdle()
+                val title = onNodeWithText(NowText.updateNoticeTitle).getBoundsInRoot()
+                val button = onNodeWithTag(NowTags.UPDATE_OPEN).getBoundsInRoot()
+                val dismiss = onNodeWithTag(NowTags.UPDATE_DISMISS).getBoundsInRoot()
+                result = (button.top >= title.bottom) to (dismiss.width >= 44.dp && dismiss.height >= 44.dp)
+            }
+            return result
+        }
+        assertEquals("글꼴 배율 1 은 한 줄이다", false to true, layout(1f))
+        assertEquals("큰 글자에서 [업데이트] 가 제목 옆에 남았다 · 닫기 누름 영역은 44dp", true to true, layout(NowUpdateNoticeLayout.STACK_FONT_SCALE))
     }
 
     @Test fun nowPhoneLight() = check("now-phone-light", 360.dp, 760.dp, dark = false)

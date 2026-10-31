@@ -239,6 +239,8 @@ class PhoneHarness(
     appConfig: AppConfig = AppConfig(),
     /** 번들에 초상이 실린 캐릭터(상점 번호 — 케이크 선물은 번호 4 이상에서만 묻는다). */
     drawableCharacters: List<String> = listOf("aing"),
+    /** 앱을 만들기 전에 저장소에 있던 값(앞 실행이 남긴 칸 — 스토어는 만들어질 때 읽는다). */
+    initialPrefs: Map<String, Any> = emptyMap(),
     route: (RecordedRequest) -> Reply? = { null },
 ) {
     /** 시험이 고르는 응답(없으면 로그인 기본 응답). */
@@ -251,7 +253,7 @@ class PhoneHarness(
     private val storeJob = SupervisorJob()
     val storeScope: CoroutineScope = CoroutineScope(scope.coroutineContext.minusKey(Job) + storeJob)
     val vault = InMemoryTokenVault()
-    val prefs = MemoryPrefs()
+    val prefs = MemoryPrefs().also { it.values.putAll(initialPrefs) }
     val todoFiles = MemoryTodoFiles()
     var widgetReloads: Int = 0
         private set

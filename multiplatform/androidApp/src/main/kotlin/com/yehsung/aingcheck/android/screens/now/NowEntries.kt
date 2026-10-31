@@ -3,13 +3,19 @@
 // 지금 탭 진입 함수(조립 K11 이 NavGraph 의 자리표시 줄을 이것으로 바꾼다 — assembly.md). aingcheck://now(위젯 탭)는 탭 자체라 쌓는 화면이 없다.
 package com.yehsung.aingcheck.android.screens.now
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import com.yehsung.aingcheck.android.nav.Dest
 import com.yehsung.aingcheck.android.routing.AingRoute
+import com.yehsung.aingcheck.core.foundation.identity.ClientPlatform
+import com.yehsung.aingcheck.core.session.app.AppLinks
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowText
 import com.yehsung.aingcheck.ui.screens.session.kit.SheetHeader
@@ -28,12 +34,23 @@ fun NowHomeEntry(
     openRoute: (AingRoute) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     NowScreen(
         store = store,
         work = work,
         characterID = characterID,
         onTalk = { peer -> AingRoute.safeId(peer)?.let { openRoute(AingRoute.Message(it)) } },
         onEditGoal = { open(Dest.TeamGoalSheet) },
+        // 업데이트 필요 화면과 같은 목적지(AppLinks — https 라 스토어 앱이 없어도 브라우저가 연다).
+        onOpenUpdate = {
+            AppLinks.updateDestination(ClientPlatform.ANDROID)?.let { url ->
+                try {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: ActivityNotFoundException) {
+                    // 열 앱이 없다 — 줄은 그대로 남는다.
+                }
+            }
+        },
         modifier = modifier,
     )
 }

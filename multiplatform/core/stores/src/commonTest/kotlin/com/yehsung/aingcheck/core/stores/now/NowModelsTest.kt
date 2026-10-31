@@ -19,6 +19,32 @@ class NowModelsTest {
     private val now = SessionClock.demoInstant
     private fun date(iso: String): SwiftDate = SwiftISO8601.parse(iso)!!
 
+    /** 원본: Tests/CheckMobileKitTests/V1016UpdateNoticeTests.swift ruleTable — null·같음·낮음은 안 뜨고, 높으면 뜨고, 닫으면 내리고, 닫은 뒤 더 새 빌드면 다시 뜬다. */
+    @Test
+    fun updateNoticeRuleTable() {
+        data class Row(val latest: Long?, val dismissed: Long?, val visible: Boolean, val name: String)
+        for (row in listOf(
+            Row(null, null, false, "최신 빌드를 모른다"),
+            Row(null, 9, false, "최신 빌드를 모르면 닫은 기록이 있어도 안 뜬다"),
+            Row(5, null, false, "같은 빌드"),
+            Row(4, null, false, "이 빌드가 더 높다(시험판이 앞선 경우)"),
+            Row(6, null, true, "더 높다"),
+            Row(6, 6, false, "그 빌드를 닫았다"),
+            Row(7, 6, true, "닫은 뒤 더 새 빌드가 나왔다"),
+            Row(6, 7, true, "닫은 값과 다르면 뜬다(서버가 값을 내린 경우)"),
+            Row(5, 5, false, "같은 빌드는 닫은 기록과 무관하게 안 뜬다"),
+        )) {
+            assertEquals(row.visible, NowUpdateNoticeRule.isVisible(row.latest, 5, row.dismissed), row.name)
+        }
+    }
+
+    @Test
+    fun updateNoticeTextsAreTheCanonicalLetters() {
+        assertEquals("새 버전이 나왔어요", NowText.updateNoticeTitle)
+        assertEquals("업데이트", NowText.updateNoticeAction)
+        assertEquals("새 버전 안내 닫기", NowText.updateNoticeDismiss)
+    }
+
     @Test
     fun hoursMinutesTextFloorsAndDropsZeroParts() {
         assertEquals("24시간 48분", NowFormat.hoursMinutesText(89_280))

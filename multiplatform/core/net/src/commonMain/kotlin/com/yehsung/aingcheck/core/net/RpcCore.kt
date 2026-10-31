@@ -657,12 +657,25 @@ private fun SupabaseWorkService.shopProtocolUnsupportedNow(): Boolean {
 // ======================================================================== 메시지
 
 /** 보내기 전 검증(빈 글 → invalid, 길면 too_long — 서버에 보내지 않는다). 정규화한 글자를 싣는다. */
-suspend fun SupabaseWorkService.sendMessage(accessToken: String, to: String, body: String): PokeSendResponse =
+suspend fun SupabaseWorkService.sendMessage(accessToken: String, to: String, body: String, clientMessageID: String? = null): PokeSendResponse =
     when (val v = MessageBody.validate(body, text)) {
         MessageBodyValidation.Empty -> PokeSendResponse(status = "invalid")
         is MessageBodyValidation.TooLong -> PokeSendResponse(status = "too_long", maxLength = v.maxLength)
         is MessageBodyValidation.Ok -> {
-            val data = send("/rest/v1/rpc/send_message", "POST", emptyList(), encode(SendMessageRequest.serializer(), SendMessageRequest(to, v.text)), accessToken, null)
+            suspend fun post(key: String?): ByteArray =
+                send("/rest/v1/rpc/send_message", "POST", emptyList(), encode(SendMessageRequest.serializer(), SendMessageRequest(to, v.text, key)), accessToken, null)
+            val data = if (clientMessageID != null) {
+                try {
+                    post(clientMessageID)
+                } catch (e: SupabaseWorkServiceError) {
+                    // 3인자 서명이 없는 서버(배포 창·되돌림) — **한 번만** 옛 모양으로 되묻는다. 404 는 함수를 못 찾아
+                    // 아무것도 실행되지 않았다는 뜻이라 재호출이 두 번째 말을 만들지 않는다(fetchShopState 와 같은 근거).
+                    if (!isMissingDeviceFunction(e)) throw e
+                    post(null)
+                }
+            } else {
+                post(null)
+            }
             decode(PokeSendResponse.serializer(), data)
         }
     }

@@ -2,6 +2,7 @@
 package com.yehsung.aingcheck.core.stores.messages
 
 import com.yehsung.aingcheck.core.foundation.platform.Collation
+import com.yehsung.aingcheck.core.net.AuthErrorRules
 import com.yehsung.aingcheck.core.rules.format.roundedHalfAwayFromZero
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
 import com.yehsung.aingcheck.core.rules.text.Graphemes
@@ -16,6 +17,7 @@ import com.yehsung.aingcheck.core.rules.text.MessageUnreadSummarySnapshot
 import com.yehsung.aingcheck.core.rules.text.StatusMessage
 import com.yehsung.aingcheck.core.rules.text.TextScalars
 import com.yehsung.aingcheck.core.wire.CenterLabel
+import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.models.MessagePokeLogEntry
@@ -180,6 +182,13 @@ object MessagesSendRules {
     /** 네트워크·서버 장애·함수 없음. 맥 `WorkTimerStore.sendMessage` 의 catch 문장과 **같은 글자**다. */
     const val connectionNotice = "연결이 불안정해요. 잠시 후 다시 시도해 주세요"
 
+    /**
+     * 전송 왕복이 "모호하게" 실패했는가 — 서버의 답을 못 받아 **말이 저장됐는지 모르는** 것들. 전송 실패(Swift URLError 의 Kotlin 꼴 =
+     * [AuthErrorRules.isTransport] — 취소는 그 안에 없다)와 HTTP 5xx 다. 4xx·429 는 서버가 **답을 준** 것이라 넣지 않는다(429 를 되치면 장애 때 요청만 는다).
+     */
+    fun isAmbiguousFailure(error: Throwable): Boolean =
+        (error is SupabaseWorkServiceError.InvalidResponse && error.statusCode in 500..599) || AuthErrorRules.isTransport(error)
+
     /** 서버 status → 입력칸 위 한 줄. 성공은 null. `flood` 는 조용한 일반 안내로 접는다(카운트다운 금지). */
     fun notice(outcome: MessageSendOutcome, maxLength: Long?): String? = when (outcome) {
         MessageSendOutcome.Ok -> null
@@ -192,6 +201,20 @@ object MessagesSendRules {
         MessageSendOutcome.Flood, MessageSendOutcome.Invalid -> MessageNoticeText.invalid
     }
 }
+
+/**
+ * 서버의 확정 답을 못 받은 전송 하나. 같은 상대·같은 본문을 창 안에 다시 보내면 새 키 대신 이 키를 쓴다 — 앞의 것이 실은 저장됐으면 서버가
+ * `duplicate` 로 걸러 한 통으로 남는다.
+ */
+data class MessagesUnconfirmedSend(
+    val peerUserID: String,
+    /** 정규화한 본문(자리 말풍선 `body` 와 같은 값). */
+    val body: String,
+    /** 전송 멱등 키 = 그때 자리 말풍선의 id. */
+    val key: String,
+    /** 마지막으로 모호하게 실패한 시각. */
+    val failedAt: SwiftDate,
+)
 
 // ---------------------------------------------------------------- 입력칸
 

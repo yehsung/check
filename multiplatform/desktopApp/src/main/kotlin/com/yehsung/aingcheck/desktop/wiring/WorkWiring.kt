@@ -603,12 +603,17 @@ class WorkWiring(private val deps: WorkDeps) {
         }
     }
 
-    /** Swift WorkTickGate.isOverload — 502·503·504·520~524 · 408·429. */
+    /** Swift WorkTickGate.isOverload — 502·503·504·520~524 · 408·429 · 500 은 PostgREST 코드가 과부하 계열일 때만. */
     private fun isOverload(e: WorkTickFailure): Boolean = when (e) {
-        is WorkTickFailure.ServerError -> e.status in 502..504 || e.status in 520..524
+        is WorkTickFailure.ServerError -> e.status in 502..504 || e.status in 520..524 || (e.status == 500 && e.code?.let(::isOverloadCode) == true)
         is WorkTickFailure.Rejected -> e.status == 408 || e.status == 429
         else -> false
     }
+
+    /** Swift WorkTickGate.isOverloadCode — 57014 · PGRST000~003 · 53xxx · 08xxx · 57P0x. */
+    private fun isOverloadCode(code: String): Boolean =
+        code == "57014" || code in setOf("PGRST000", "PGRST001", "PGRST002", "PGRST003") ||
+            (code.length == 5 && (code.startsWith("53") || code.startsWith("08") || code.startsWith("57P0")))
 
     private fun olderThan(at: SwiftDate?, now: SwiftDate): Boolean =
         at == null || now.timeIntervalSince(at) > OVERLOAD_HEARTBEAT_MAX_GAP_SECONDS

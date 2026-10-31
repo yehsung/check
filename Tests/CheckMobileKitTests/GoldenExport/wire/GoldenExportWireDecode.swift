@@ -99,6 +99,9 @@ enum WireDecodeRegistry {
             "[BlockedUserRow]": list(BlockedUserRow.self),
             "MessageConversationReadMarkResponse": one(MessageConversationReadMarkResponse.self),
             "SupabaseErrorResponse": one(SupabaseErrorResponse.self),
+            "RummyLobby": one(RummyLobby.self),
+            "RummyActionResponse": one(RummyActionResponse.self),
+            "RummyRanking": one(RummyRanking.self),
         ]
     }()
 
@@ -157,6 +160,12 @@ enum WireDecodeRegistry {
             }
         case "todo-rpc":
             return rpc == "todo_sync" ? "TodoSyncResponse" : nil
+        case "rummy/server":
+            // 아잉 큐브 서버 실출력 픽스처(cb0c96c1 — 파일 이름 앞 낱말 = RPC). 판 상태·쓰기 응답은 전부 같은 봉투다(RummyWire.swift §3.4).
+            if name.hasPrefix("gomoku_") { return "GomokuActionResponse" }
+            if name.hasPrefix("lobby_") { return "RummyLobby" }
+            if name == "ranking" { return "RummyRanking" }
+            return "RummyActionResponse"
         default:
             return nil
         }
@@ -197,6 +206,7 @@ enum WireDecodeRegistry {
         "rpc.tetris_state": "TetrisActionResponse",
         "rpc.minigame_board": "[MiniGameBoardRow]",
         "rpc.minigame_yesterday_winner": "[MiniGameWinnerRow]",
+        "rpc.minigame_alltime_board": "[MiniGameAllTimeBoardRow]",
         "rpc.minigame_start_round": "MiniGameStartRoundResponse",
         "rpc.minigame_submit_score": "MiniGameSubmitScoreResponse",
         "rest.ai_limits.get": "[AILimitServerRow]",
@@ -222,6 +232,7 @@ enum WireDecodeRegistry {
         "rpc.message_history_with_reads": "[MessageHistoryReadsRow]",
         "rpc.mark_messages_read": "MessageReadMarkResponse",
         "rpc.message_unread_summary": "MessageUnreadSummaryResponse",
+        "rpc.message_unread_summary_v2": "MessageUnreadSummaryResponse",
         "rpc.todo_sync": "TodoSyncResponse",
         "rpc.work_phone_touch": "PhoneWorkResponse",
         "rpc.work_phone_start": "PhoneWorkResponse",
@@ -254,6 +265,7 @@ enum WireDecodeRegistry {
         "rpc.weekly_work_claim": "W1-c WeeklyWorkStatus(weekly)",
         "rpc.megaphone_info": "W1-c MegaphoneInfoResponse(text)",
         "rpc.send_megaphone": "W1-c MegaphoneSendResponse(text)",
+        "rpc.megaphone_inbox": "W1-c MegaphoneInboxItem(text — wire/requests fetchMegaphoneInbox#data 가 앱 함수로 잰다)",
     ]
 
     /// 서비스가 응답을 디코드하지 않는 경로.
@@ -371,7 +383,16 @@ struct GoldenExportWireDecode {
              extra: ["notDecoded": .array(WireDecodeRegistry.fixtureNotDecoded.sorted().map(GoldenJSON.string))])
     }
 
-    /// 데모 픽스처(Sources/CheckMobileKit/Demo/Fixtures — 182개). 영역 하나 = 골든 하나(크기 예산).
+    /// 아잉 큐브 서버 실출력 픽스처(50장). 화면은 이 판에 없지만 와이어 타입은 Kotlin 에 있다(wire/requests 의 rummy* 와 같은 타입).
+    @Test func rummyFixtures() throws {
+        goldenEmit(GoldenFile(
+            golden: "wire/decode-fixtures-rummy", equivalence: .bit,
+            swiftSources: ["Sources/CheckCore/RummyWire.swift", "Sources/CheckCore/RummyRules.swift", "Sources/CheckCore/RummyTableLayout.swift", "Sources/CheckCore/SupabaseWorkModels.swift"],
+            spec: Self.spec, cases: try WireDecodeRegistry.cases(try fixtureFiles(["rummy/server"]))
+        ))
+    }
+
+    /// 데모 픽스처(Sources/CheckMobileKit/Demo/Fixtures — 193개). 영역 하나 = 골든 하나(크기 예산).
     func demo(_ area: String) throws -> (cases: [GoldenJSON], other: [GoldenJSON], none: [GoldenJSON]) {
         var files: [(id: String, type: String)] = []
         var other: [GoldenJSON] = []
@@ -469,8 +490,8 @@ struct GoldenExportWireDecode {
                 #expect(known, "분류 안 된 데모 픽스처 \(rel)")
             }
         }
-        #expect(total == 182, "데모 픽스처 수가 바뀌었다(\(total)) — 배정표(182)와 골든을 다시 본다")
-        let fixtures = try fixtureFiles(["chess-rpc", "chess-rpc-clock10", "gomoku-rpc", "message-rpc", "todo-rpc"])
-        #expect(fixtures.count == 224, "시험 픽스처 수가 바뀌었다(\(fixtures.count))")
+        #expect(total == 193, "데모 픽스처 수가 바뀌었다(\(total)) — 배정표(193)와 골든을 다시 본다")
+        let fixtures = try fixtureFiles(["chess-rpc", "chess-rpc-clock10", "gomoku-rpc", "message-rpc", "todo-rpc", "rummy/server"])
+        #expect(fixtures.count == 276, "시험 픽스처 수가 바뀌었다(\(fixtures.count))")
     }
 }

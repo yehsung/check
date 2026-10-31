@@ -32,6 +32,20 @@ import com.yehsung.aingcheck.core.wire.games.GomokuStateRequest
 import com.yehsung.aingcheck.core.wire.games.GomokuStateResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuWatchRequest
 import com.yehsung.aingcheck.core.wire.games.GomokuWatchResponse
+import com.yehsung.aingcheck.core.wire.SwiftUUID
+import com.yehsung.aingcheck.core.wire.games.RummyActionResponse
+import com.yehsung.aingcheck.core.wire.games.RummyCreateRequest
+import com.yehsung.aingcheck.core.wire.games.RummyFace
+import com.yehsung.aingcheck.core.wire.games.RummyInviteRequest
+import com.yehsung.aingcheck.core.wire.games.RummyLayout
+import com.yehsung.aingcheck.core.wire.games.RummyLobby
+import com.yehsung.aingcheck.core.wire.games.RummyMatchRequest
+import com.yehsung.aingcheck.core.wire.games.RummyProtocolRequest
+import com.yehsung.aingcheck.core.wire.games.RummyRanking
+import com.yehsung.aingcheck.core.wire.games.RummyReactRequest
+import com.yehsung.aingcheck.core.wire.games.RummySeqRequest
+import com.yehsung.aingcheck.core.wire.games.RummyTableRequest
+import com.yehsung.aingcheck.core.wire.games.RummyWire
 import com.yehsung.aingcheck.core.wire.games.TetrisActionResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisChallengeRequest
 import com.yehsung.aingcheck.core.wire.games.TetrisLobbyResponse
@@ -175,3 +189,52 @@ suspend fun SupabaseWorkService.tetrisWatchLive(accessToken: String, matchID: St
 
 suspend fun SupabaseWorkService.tetrisWatch(accessToken: String, matchID: String): TetrisWatchResponse =
     duelRPC("tetris_watch", encode(TetrisMatchRequest.serializer(), TetrisMatchRequest(pMatchId = matchID)), accessToken, TetrisWatchResponse.serializer())
+
+// ======================================================================== 아잉 큐브(원본: RummyWire.swift `extension SupabaseWorkService` @ 1a5eeca6)
+// 교착 재시도는 **쓰기 전부 + 상태 조회**에 켠다(`rummy_state` 는 시간 판정을 돌리고 지갑 잠금을 쥔다). 로비·순위는 끈다.
+
+suspend fun SupabaseWorkService.rummyLobby(accessToken: String): RummyLobby =
+    duelRPC(RummyWire.RPC.lobby, encode(RummyProtocolRequest.serializer(), RummyProtocolRequest()), accessToken, RummyLobby.serializer())
+
+suspend fun SupabaseWorkService.rummyCreate(accessToken: String, stake: Long, isPublic: Boolean): RummyActionResponse =
+    duelRPC(RummyWire.RPC.create, encode(RummyCreateRequest.serializer(), RummyCreateRequest(pStake = stake, pPublic = isPublic)), accessToken, RummyActionResponse.serializer(), true)
+
+suspend fun SupabaseWorkService.rummyInvite(accessToken: String, matchID: SwiftUUID, userID: SwiftUUID): RummyActionResponse =
+    duelRPC(RummyWire.RPC.invite, encode(RummyInviteRequest.serializer(), RummyInviteRequest(pMatchId = matchID, pUser = userID)), accessToken, RummyActionResponse.serializer(), true)
+
+private suspend fun SupabaseWorkService.rummyMatchRPC(name: String, accessToken: String, matchID: SwiftUUID): RummyActionResponse =
+    duelRPC(name, encode(RummyMatchRequest.serializer(), RummyMatchRequest(pMatchId = matchID)), accessToken, RummyActionResponse.serializer(), true)
+
+suspend fun SupabaseWorkService.rummyJoin(accessToken: String, matchID: SwiftUUID): RummyActionResponse = rummyMatchRPC(RummyWire.RPC.join, accessToken, matchID)
+
+suspend fun SupabaseWorkService.rummyDecline(accessToken: String, matchID: SwiftUUID): RummyActionResponse = rummyMatchRPC(RummyWire.RPC.decline, accessToken, matchID)
+
+/** forming 이면 방 나가기(방장이면 방 닫기), active 면 기권. */
+suspend fun SupabaseWorkService.rummyLeave(accessToken: String, matchID: SwiftUUID): RummyActionResponse = rummyMatchRPC(RummyWire.RPC.leave, accessToken, matchID)
+
+suspend fun SupabaseWorkService.rummyStart(accessToken: String, matchID: SwiftUUID): RummyActionResponse = rummyMatchRPC(RummyWire.RPC.start, accessToken, matchID)
+
+/** 상태(자리 있는 사람 전용). 읽기처럼 보이지만 서버가 시간 판정을 돌려 판을 바꿀 수 있다. */
+suspend fun SupabaseWorkService.rummyState(accessToken: String, matchID: SwiftUUID): RummyActionResponse = rummyMatchRPC(RummyWire.RPC.state, accessToken, matchID)
+
+/** 작업 상태 전송(R-19). 차례인 사람만. [layout] 을 주면 `p_layout` 으로 싣는다. */
+suspend fun SupabaseWorkService.rummyDraft(accessToken: String, matchID: SwiftUUID, expectedSeq: Long, table: List<List<RummyFace>>, layout: RummyLayout? = null): RummyActionResponse =
+    duelRPC(RummyWire.RPC.draft, encode(RummyTableRequest.serializer(), RummyTableRequest(pMatchId = matchID, pExpectedSeq = expectedSeq, pTable = table, pLayout = layout)), accessToken, RummyActionResponse.serializer(), true)
+
+/** 확정 내기(R-16 판정). 거절이면 `rejected{reason, state}`. [layout] 을 주면 `p_layout` 으로 싣는다. */
+suspend fun SupabaseWorkService.rummyPlay(accessToken: String, matchID: SwiftUUID, expectedSeq: Long, table: List<List<RummyFace>>, layout: RummyLayout? = null): RummyActionResponse =
+    duelRPC(RummyWire.RPC.play, encode(RummyTableRequest.serializer(), RummyTableRequest(pMatchId = matchID, pExpectedSeq = expectedSeq, pTable = table, pLayout = layout)), accessToken, RummyActionResponse.serializer(), true)
+
+/** 하트비트. 자리 없는 사람은 `not_found`. */
+suspend fun SupabaseWorkService.rummyHeartbeat(accessToken: String, matchID: SwiftUUID): RummyActionResponse = rummyMatchRPC(RummyWire.RPC.heartbeat, accessToken, matchID)
+
+/** 이모티콘 반응. [key] = 이모티콘 키. */
+suspend fun SupabaseWorkService.rummyReact(accessToken: String, matchID: SwiftUUID, key: String): RummyActionResponse =
+    duelRPC(RummyWire.RPC.react, encode(RummyReactRequest.serializer(), RummyReactRequest(pMatchId = matchID, pKey = key)), accessToken, RummyActionResponse.serializer(), true)
+
+/** 뽑기(더미가 비었으면 패스). */
+suspend fun SupabaseWorkService.rummyDraw(accessToken: String, matchID: SwiftUUID, expectedSeq: Long): RummyActionResponse =
+    duelRPC(RummyWire.RPC.draw, encode(RummySeqRequest.serializer(), RummySeqRequest(pMatchId = matchID, pExpectedSeq = expectedSeq)), accessToken, RummyActionResponse.serializer(), true)
+
+suspend fun SupabaseWorkService.rummyRanking(accessToken: String): RummyRanking =
+    duelRPC(RummyWire.RPC.ranking, encode(RummyProtocolRequest.serializer(), RummyProtocolRequest()), accessToken, RummyRanking.serializer())

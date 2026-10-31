@@ -7,6 +7,7 @@ package com.yehsung.aingcheck.ui.screens.messages
 
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
+import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.messages.NaturalKoNameCollation
 import com.yehsung.aingcheck.ui.components.AndroidSnapshots
@@ -33,6 +34,14 @@ class MessagesScreensSnapshotTest {
     private val harness = ScreenHarness("messages", AndroidSnapshots.repoRoot).also { it.signIn() }
     private val art = ScreenArt.bundledOnly()
     private val store = harness.onStore { MessagesStore(harness.context, harness.scope, NaturalKoNameCollation, newLocalID = { "local-1" }) }
+
+    // 앱과 같이 배너 스토어를 꽂는다 — 데모 이력의 새봄 줄(main cec08cb1)은 megaphone_inbox 가 말한 확성기 줄이라 메시지함에 안 선다. 띄우는 타이머는 얼린다.
+    private val banner = harness.onStore {
+        MegaphoneBannerStore(harness.session, harness.scope, null, clock = { harness.clock.now() }, schedule = { _, _ -> }).also { b ->
+            store.megaphoneBanner = b
+            b.onCapabilityChange = { store.megaphoneFilterDidSettle() }
+        }
+    }
     private val characters = harness.onStore { AppUserCharacterStore(harness.context, harness.scope, CharacterArt.portraitIds) }
     private val otherCharacters = harness.onStore { AppUserCharacterStore(harness.context, harness.scope, CharacterArt.portraitIds) }
 

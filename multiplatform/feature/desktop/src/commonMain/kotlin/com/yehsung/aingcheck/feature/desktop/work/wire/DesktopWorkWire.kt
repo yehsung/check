@@ -207,14 +207,15 @@ data class WorkTickResponse(
 /**
  * Swift `WorkTickFailure` — ⑨ 401 은 이것이 아니라 `SupabaseWorkServiceError.SessionExpired`.
  * 404·PGRST202(functionMissing) · 403·42501(forbidden) · v≠1(contractMismatch) · 디코드 실패(undecodable) → 이 실행 동안 끈다.
- * 5xx(serverError) · 그 밖(rejected) → 일시 실패(3연속이면 1시간, [com.yehsung.aingcheck.feature.desktop.work.service.WorkTickGate]).
+ * 5xx(serverError) · 그 밖(rejected) → 일시 실패(3연속이면 15분, [com.yehsung.aingcheck.feature.desktop.work.service.WorkTickGate]).
  */
 sealed class WorkTickFailure(message: String) : Exception(message) {
     data class FunctionMissing(val code: String?) : WorkTickFailure("functionMissing($code)")
     data class Forbidden(val code: String?) : WorkTickFailure("forbidden($code)")
     data class ContractMismatch(val version: Long?) : WorkTickFailure("contractMismatch($version)")
     data object Undecodable : WorkTickFailure("undecodable")
-    data class ServerError(val status: Int) : WorkTickFailure("serverError($status)")
+    /** [code] = PostgREST 본문의 SQLSTATE/PGRST 코드(없으면 null) — 500 + 57014·PGRST003 같은 과부하 코드를 그 밖의 500 과 가른다. */
+    data class ServerError(val status: Int, val code: String? = null) : WorkTickFailure("serverError($status)")
     data class Rejected(val status: Int, val code: String?) : WorkTickFailure("rejected($status,$code)")
 
     /** 이 실행 동안 끄는 갈래인가(⑨). */

@@ -37,7 +37,7 @@
       "pokeCooldownSeconds": 60,
       "pokeDisplayFreshnessSeconds": 3600,
       "pokePollIntervalSeconds": 15,
-      "pokePollIntervalSecondsWhileSubscribed": 60,
+      "pokePollIntervalSecondsWhileSubscribed": 90,
       "pollingKeepsRunningAlongsideRealtime": true,
       "targetFocusedNotice": "지금 집중 중이에요. 나중에 찔러 주세요",
       "targetOnPhoneNotice": "폰으로 근무 중이에요. 맥으로 돌아오면 찔러 주세요",

@@ -223,7 +223,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         megaphoneBanner.onCapabilityChange = { messages.megaphoneFilterDidSettle() }
         realtime.megaphone = { scope.launch { megaphoneBanner.refresh() } }
         messages.megaphone.onSent = { body, megaphoneID ->
-            megaphoneBanner.presentOwn(body, me.displayName.orEmpty(), me.avatarURL?.absoluteString, megaphoneID)
+            megaphoneBanner.presentOwn(body, me.displayName.orEmpty(), me.avatarURL, megaphoneID)
         }
         // 딥링크 대상 해석 한 문 — 푸시 조정자(알림 탭 · [수락] 뒤 열기)가 라우터를 바로 부르지 않고 이 규칙을 지난다(W2-f 검증 7차 지적).
         links.routeResolver = { target -> openRoute(target) }

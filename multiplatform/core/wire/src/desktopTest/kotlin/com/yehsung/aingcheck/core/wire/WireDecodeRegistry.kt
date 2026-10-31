@@ -14,6 +14,9 @@ import com.yehsung.aingcheck.core.wire.games.GomokuLobbyResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuRankingResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuStateResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuWatchResponse
+import com.yehsung.aingcheck.core.wire.games.RummyActionResponse
+import com.yehsung.aingcheck.core.wire.games.RummyLobby
+import com.yehsung.aingcheck.core.wire.games.RummyRanking
 import com.yehsung.aingcheck.core.wire.games.TetrisActionResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisLobbyResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisRankingResponse
@@ -41,6 +44,9 @@ object WireDecodeRegistry {
         "GomokuLeaveResponse" to GomokuLeaveResponse.serializer(),
         "GomokuRankingResponse" to GomokuRankingResponse.serializer(),
         "GomokuWatchResponse" to GomokuWatchResponse.serializer(),
+        "RummyLobby" to RummyLobby.serializer(),
+        "RummyActionResponse" to RummyActionResponse.serializer(),
+        "RummyRanking" to RummyRanking.serializer(),
         "TetrisActionResponse" to TetrisActionResponse.serializer(),
         "TetrisLobbyResponse" to TetrisLobbyResponse.serializer(),
         "TetrisRankingResponse" to TetrisRankingResponse.serializer(),

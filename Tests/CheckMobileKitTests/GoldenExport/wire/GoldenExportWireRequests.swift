@@ -324,6 +324,52 @@ struct GoldenExportWireRequests {
             WireCall(id: "tetrisRanking") { s, t in try await s.tetrisRanking(accessToken: t) },
             WireCall(id: "tetrisWatchLive") { s, t in try await s.tetrisWatchLive(accessToken: t, matchID: m) },
             WireCall(id: "tetrisWatch") { s, t in try await s.tetrisWatch(accessToken: t, matchID: m) },
+            // ---- 아잉 큐브(요청 + 서버 실출력 응답 대표 — 전체 디코드는 wire/decode-fixtures-rummy) ----
+            WireCall(id: "rummyLobby") { s, t in try await s.rummyLobby(accessToken: t) },
+            WireCall(id: "rummyLobby#data", responses: [Self.rummyFixture("lobby_with_room_invites_public.json")]) { s, t in try await s.rummyLobby(accessToken: t) },
+            WireCall(id: "rummyLobby#deadlock", responses: [WireRequestRecorder.deadlock]) { s, t in try await s.rummyLobby(accessToken: t) },
+            WireCall(id: "rummyCreate") { s, t in try await s.rummyCreate(accessToken: t, stake: 5, isPublic: true) },
+            WireCall(id: "rummyCreate#data", responses: [Self.rummyFixture("create_ok.json")]) { s, t in try await s.rummyCreate(accessToken: t, stake: 5, isPublic: false) },
+            WireCall(id: "rummyInvite") { s, t in try await s.rummyInvite(accessToken: t, matchID: Self.uuidUpper(m), userID: Self.uuidUpper(p)) },
+            WireCall(id: "rummyJoin") { s, t in try await s.rummyJoin(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyDecline") { s, t in try await s.rummyDecline(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyLeave") { s, t in try await s.rummyLeave(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyStart") { s, t in try await s.rummyStart(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyState") { s, t in try await s.rummyState(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyState#data", responses: [Self.rummyFixture("state_with_layout.json")]) { s, t in try await s.rummyState(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyState#finished", responses: [Self.rummyFixture("state_finished.json")]) { s, t in try await s.rummyState(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyDraft") { s, t in try await s.rummyDraft(accessToken: t, matchID: Self.uuidUpper(m), expectedSeq: 7, table: Self.rummyTable) },
+            WireCall(id: "rummyDraft(layout)") { s, t in try await s.rummyDraft(accessToken: t, matchID: Self.uuidUpper(m), expectedSeq: 7, table: Self.rummyTable, layout: Self.rummyLayout) },
+            WireCall(id: "rummyPlay") { s, t in try await s.rummyPlay(accessToken: t, matchID: Self.uuidUpper(m), expectedSeq: 8, table: Self.rummyTable) },
+            WireCall(id: "rummyPlay(layout)") { s, t in try await s.rummyPlay(accessToken: t, matchID: Self.uuidUpper(m), expectedSeq: 8, table: Self.rummyTable, layout: Self.rummyLayout) },
+            WireCall(id: "rummyPlay#deadlock", responses: [WireRequestRecorder.deadlock, Self.rummyFixture("play_rejected.json")]) { s, t in
+                try await s.rummyPlay(accessToken: t, matchID: Self.uuidUpper(m), expectedSeq: 8, table: Self.rummyTable)
+            },
+            WireCall(id: "rummyHeartbeat") { s, t in try await s.rummyHeartbeat(accessToken: t, matchID: Self.uuidUpper(m)) },
+            WireCall(id: "rummyReact") { s, t in try await s.rummyReact(accessToken: t, matchID: Self.uuidUpper(m), key: "joy") },
+            WireCall(id: "rummyDraw") { s, t in try await s.rummyDraw(accessToken: t, matchID: Self.uuidUpper(m), expectedSeq: 9) },
+            WireCall(id: "rummyRanking") { s, t in try await s.rummyRanking(accessToken: t) },
+            WireCall(id: "rummyRanking#data", responses: [Self.rummyFixture("ranking.json")]) { s, t in try await s.rummyRanking(accessToken: t) },
+            // ---- 확성기 배너(줄 해석 = 앱 함수 fetchMegaphoneInbox) ----
+            WireCall(id: "fetchMegaphoneInbox") { s, t in try await s.fetchMegaphoneInbox(accessToken: t) },
+            WireCall(id: "fetchMegaphoneInbox#data", responses: [.json(Self.megaphoneInboxRows)]) { s, t in try await s.fetchMegaphoneInbox(accessToken: t, hours: 6) },
+            WireCall(id: "fetchMegaphoneInbox#missing", responses: [WireRequestRecorder.pgrst202]) { s, t in try await s.fetchMegaphoneInbox(accessToken: t) },
+            // ---- 안 읽음 요약 v2(이름으로 고른 함수) · 전송 멱등 키(20261101131000) ----
+            WireCall(id: "fetchMessageUnreadSummary(v2)", responses: [Self.fixture("messages/rpc.message_unread_summary_v2.json")]) { s, t in
+                try await s.fetchMessageUnreadSummary(accessToken: t, function: "message_unread_summary_v2")
+            },
+            WireCall(id: "sendMessage(key)", responses: [.json(#"{"status":"ok","message_id":"m-1","created_at":"2026-11-01T00:00:00.000001+00:00","ring":"sent","body":"안녕\n세상"}"#)]) { s, t in
+                try await s.sendMessage(accessToken: t, to: p, body: "  안녕\n세상 ", clientMessageID: "ee000000-0000-4000-8000-0000000000e5")
+            },
+            WireCall(id: "sendMessage(key)#duplicate", responses: [.json(#"{"status":"ok","message_id":"m-1","created_at":"2026-11-01T00:00:00Z","duplicate":true,"ring":"duplicate"}"#)]) { s, t in
+                try await s.sendMessage(accessToken: t, to: p, body: "안녕", clientMessageID: "ee000000-0000-4000-8000-0000000000e5")
+            },
+            WireCall(id: "sendMessage(key)#missing", responses: [WireRequestRecorder.pgrst202, .json(#"{"status":"ok","ring":"sent"}"#)]) { s, t in
+                try await s.sendMessage(accessToken: t, to: p, body: "안녕", clientMessageID: "ee000000-0000-4000-8000-0000000000e5")
+            },
+            WireCall(id: "sendMessage(key)#missingTwice", responses: [WireRequestRecorder.pgrst202, WireRequestRecorder.pgrst202]) { s, t in
+                try await s.sendMessage(accessToken: t, to: p, body: "안녕", clientMessageID: "ee000000-0000-4000-8000-0000000000e5")
+            },
             // ---- 결과 대조(서비스 후처리 — 검증 지적: G5 가 요청만 보고 결과를 버렸다). 대본에 실제 모양의 응답을 싣는다 ----
             WireCall(id: "signIn#data", responses: [.json(#"{"access_token":"acc-1","refresh_token":"ref-1","user":{"id":"U-1"}}"#)]) { s, _ in
                 try await s.signIn(email: "a@b.invalid", password: "pw-123456")
@@ -532,6 +578,28 @@ struct GoldenExportWireRequests {
     }
 
     /// 데모 픽스처(앱 화면이 그리는 응답 원문 — `Sources/CheckMobileKit/Demo/Fixtures/<rel>`)를 응답 대본으로.
+    /// 아잉 큐브 서버 실출력 픽스처(Tests/checkTests/Fixtures/rummy/server).
+    static func rummyFixture(_ rel: String) -> MobileStubResponse {
+        let url = WireRepo.url("Tests/checkTests/Fixtures/rummy/server/" + rel)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { fatalError("픽스처 \(rel) 를 못 읽었다") }
+        return .json(text)
+    }
+
+    /// 표준 uuid 글자 → UUID. 요청 본문이 소문자로 접히는지 재려고 대문자에서 만든다.
+    static func uuidUpper(_ text: String) -> UUID {
+        guard let uuid = UUID(uuidString: text.uppercased()) else { fatalError("uuid 아님: \(text)") }
+        return uuid
+    }
+
+    static let rummyTable: [[RummyFace]] = [
+        [.joker, RummyFace(color: 0, number: 7), RummyFace(color: 1, number: 7)],
+        [RummyFace(color: 3, number: 11), RummyFace(color: 3, number: 12), RummyFace(color: 3, number: 13)],
+    ]
+    static let rummyLayout = RummyLayout([RummyPoint(x: 0, y: 640), nil])
+
+    /// megaphone_inbox 줄: 정상 · 밀리초 epoch · from_user · 이름·사진 빈 값 · 접두 뗀 본문 · 깨진 줄 · 본문 없음 · 시각 없음 · ISO 시각.
+    static let megaphoneInboxRows = #"[{"message_id":"m1","megaphone_id":"g1","sender_id":"s1","sender_display_name":" 새봄 ","sender_avatar_url":"https://golden.invalid/a%20b.jpg","body":"오늘 7시","created_epoch":1789621440},{"message_id":"m2","megaphone_id":"g2","from_user":"s2","sender_display_name":"","sender_avatar_url":"","body":"📢  밀리초","created_epoch":1789621440123.0},{"megaphone_id":"g3","body":"메시지 id 없음","created_epoch":1789621440},{"message_id":"m4","megaphone_id":"g4","body":" \n ","created_epoch":1789621440},{"message_id":"m5","megaphone_id":"g5","body":"시각 없음"},{"message_id":"m6","megaphone_id":"g6","sender_id":"","body":"ISO 시각","created_at":"2026-09-17T05:00:00Z"},"broken",{"message_id":"m7","megaphone_id":"g7","body":7,"created_epoch":1789621440},{"message_id":"","megaphone_id":"g8","body":"빈 id","created_epoch":1789621440}]"#
+
     static func fixture(_ rel: String) -> MobileStubResponse {
         let url = WireRepo.url("Sources/CheckMobileKit/Demo/Fixtures/" + rel)
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { fatalError("픽스처 \(rel) 를 못 읽었다") }
@@ -628,6 +696,8 @@ struct GoldenExportWireRequests {
         "dailyMissionClaim(nil)": "W1-c(AchievementStatus)", "weeklyWorkStatus": "W1-c(WeeklyWorkStatus)",
         "weeklyWorkClaim": "W1-c(WeeklyWorkClaim)", "weeklyWorkClaim(args)": "W1-c(WeeklyWorkClaim)",
         "sendMegaphone": "W1-c(MegaphoneSendOutcome)", "megaphoneInfo": "W1-c(MegaphoneInfo)",
+        "fetchMegaphoneInbox": "W1-c(MegaphoneBanner)", "fetchMegaphoneInbox#data": "W1-c(MegaphoneBanner)",
+        "fetchMegaphoneInbox#missing": "W1-c(MegaphoneBanner)",
         "fetchMyAILimits": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
         "fetchMyAILimits#data": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
         // 6차 c-fold: 실제 응답이 든 결과 case(Kotlin = core/stores service 의 앱 함수).
@@ -758,6 +828,8 @@ struct GoldenExportWireRequests {
                 "Sources/CheckMobileKit/Session/MobileDeviceService.swift", "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
                 "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift", "Sources/CheckMobileKit/Me/MeProfileService.swift",
                 "Sources/CheckMobileKit/Me/MeAILimitsService.swift", "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
+                "Sources/CheckCore/MegaphoneBanner.swift", "Sources/CheckCore/RummyWire.swift", "Sources/CheckCore/RummyRules.swift",
+                "Sources/CheckCore/RummyTableLayout.swift",
             ],
             spec: [
                 "values": .object([

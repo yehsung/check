@@ -17,6 +17,8 @@ enum class TopBanner(val swiftCase: String) {
     CHESS_INVITE("chessInvite"),
     /** 받은 테트리스 신청 — 체스 바로 뒤. */
     TETRIS_INVITE("tetrisInvite"),
+    /** 받은 아잉 큐브 초대 — 테트리스 바로 뒤(맥 v0.3.69). 데스크톱은 아직 큐브 스토어가 없어 후보([BannerCandidates.rummyInvite])를 켜는 곳이 없다. */
+    RUMMY_INVITE("rummyInvite"),
     /** 지난주 회고(주 1회). */
     RETRO("retro"),
     /** 내 제보에 답장. */
@@ -46,6 +48,8 @@ data class BannerCandidates(
     val gomoku: DuelInviteBanner? = null,
     val chess: DuelInviteBanner? = null,
     val tetris: DuelInviteBanner? = null,
+    /** 받은 아잉 큐브 초대가 있는가. 큐브를 잇기 전까지 조립이 켜지 않는다(줄 순서만 맥과 맞춘다). */
+    val rummyInvite: Boolean = false,
     val retroDue: Boolean = false,
     val feedbackReplyUnseen: Boolean = false,
     val cakeGiftOpen: Boolean = false,
@@ -65,6 +69,7 @@ object BannerQueue {
         if (c.isSignedIn && c.duelsEnabled && c.gomoku != null) return TopBanner.GOMOKU_INVITE
         if (c.isSignedIn && c.duelsEnabled && c.chess != null) return TopBanner.CHESS_INVITE
         if (c.isSignedIn && c.duelsEnabled && c.tetris != null) return TopBanner.TETRIS_INVITE
+        if (c.isSignedIn && c.duelsEnabled && c.rummyInvite) return TopBanner.RUMMY_INVITE
         if (c.isSignedIn && c.retroDue) return TopBanner.RETRO
         if (c.isSignedIn && c.feedbackReplyUnseen) return TopBanner.FEEDBACK_REPLY
         if (c.isSignedIn && c.cakeGiftOpen) return TopBanner.CAKE_GIFT
@@ -86,7 +91,7 @@ object BannerQueue {
 
     fun slotOf(banner: TopBanner): Slot = when (banner) {
         TopBanner.LONG_SESSION -> Slot.HEADER_SIBLING
-        TopBanner.GOMOKU_INVITE, TopBanner.CHESS_INVITE, TopBanner.TETRIS_INVITE -> Slot.BELOW_HEADER
+        TopBanner.GOMOKU_INVITE, TopBanner.CHESS_INVITE, TopBanner.TETRIS_INVITE, TopBanner.RUMMY_INVITE -> Slot.BELOW_HEADER
         TopBanner.RETRO, TopBanner.FEEDBACK_REPLY, TopBanner.CAKE_GIFT, TopBanner.UPDATE, TopBanner.APP_NOTICE -> Slot.ABOVE_HEADER
     }
 }

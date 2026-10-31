@@ -21,13 +21,13 @@ import androidx.compose.runtime.setValue
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
 import com.yehsung.aingcheck.core.net.fetchMessageUnreadSummary
-import com.yehsung.aingcheck.core.net.megaphoneInboxRaw
+import com.yehsung.aingcheck.core.stores.service.fetchMegaphoneInbox
 import com.yehsung.aingcheck.core.rules.text.BlockReportRules
 import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
 import com.yehsung.aingcheck.core.rules.text.MegaphoneBannerRules
-import com.yehsung.aingcheck.core.rules.text.MegaphoneInboxItem
 import com.yehsung.aingcheck.core.session.context.SessionHost
 import com.yehsung.aingcheck.core.wire.SwiftDate
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import com.yehsung.aingcheck.core.wire.models.MessageUnreadSummaryResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -238,8 +238,7 @@ class MegaphoneBannerStore(
         val generation = resetGeneration
         val service = host.service
         try {
-            val raw = host.withSessionRetry { session -> service.megaphoneInboxRaw(session.accessToken, MegaphoneBannerRules.inboxHours) }
-            val banners = MegaphoneInboxItem.banners(raw)
+            val banners = host.withSessionRetry { session -> service.fetchMegaphoneInbox(session.accessToken) }
             if (host.sessionGeneration != sessionGeneration || generation != resetGeneration) return
             if (lastRefreshFailed) lastRefreshFailed = false
             applyInbox(banners)
@@ -301,7 +300,7 @@ class MegaphoneBannerStore(
      * 보낸 직후 내 화면에 "이렇게 떴어요" 배너를 한 번 띄운다(서버 fan-out 에 나는 없으니 중복이 아니다). 줄 맨 앞에 선다.
      * [megaphoneID] 를 주면(전송 응답의 id) 본 것으로 기록한다.
      */
-    fun presentOwn(body: String, senderName: String, senderAvatarURL: String? = null, megaphoneID: String? = null) {
+    fun presentOwn(body: String, senderName: String, senderAvatarURL: SwiftURL? = null, megaphoneID: String? = null) {
         val text = MegaphoneBanner.displayBody(body) ?: return
         val now = clock()
         val id = megaphoneID?.ifEmpty { null } ?: (LOCAL_ID_PREFIX + Uuid.random().toString().lowercase())

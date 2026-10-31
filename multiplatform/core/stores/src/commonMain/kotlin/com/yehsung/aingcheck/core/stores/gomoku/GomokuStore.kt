@@ -120,10 +120,24 @@ class GomokuStore(
     host: GomokuStoreHost? = null,
 ) {
     companion object {
-        /** 상대 차례의 대국 상태 안전망 조회 주기(초) — 실시간 구독 중. */
+        /** 상대 차례의 대국 상태 안전망 조회 주기(초) — 실시간 구독 중 + 마감이 가깝거나 마감을 모를 때. */
         const val statePollSecondsWhileSubscribed: Double = 3.0
         /** 같은 조회 — 미구독(킬스위치·재연결 중). 신호가 없으니 더 촘촘하다. */
         const val statePollSecondsUnsubscribed: Double = 1.5
+        /**
+         * 같은 조회 — 실시간 구독 중 + 마감까지 여유가 있을 때(원본 GomokuStore.swift @ 1a5eeca6 · 2026-10-31 서버 안정화). 수는 초인종으로 바로 오고 이 조회는
+         * 신호를 놓쳤을 때의 그물이다. 15초로 늘리지 않은 까닭: 한 수가 30초라 신호를 놓치면 이 주기만큼 내 차례 시간이 줄어든다.
+         */
+        const val statePollSecondsCalm: Double = 10.0
+        /** 남은 시간이 이 안으로 들어오면 [statePollSecondsWhileSubscribed] 로 돌아간다 — 시간 초과 결과를 지금처럼 빨리 본다. */
+        const val statePollNearDeadlineSeconds: Double = 10.0
+
+        /** 지금 상대 차례 상태를 물을 주기. 미구독은 신호가 없으니 언제나 촘촘하고, 구독 중에는 마감이 멀 때만 늦춘다. */
+        fun statePollSeconds(subscribed: Boolean, deadline: SwiftDate?, now: SwiftDate): Double {
+            if (!subscribed) return statePollSecondsUnsubscribed
+            if (deadline == null || deadline.timeIntervalSince(now) <= statePollNearDeadlineSeconds) return statePollSecondsWhileSubscribed
+            return statePollSecondsCalm
+        }
         /** 내 대기 신청이 있을 때 받은 쪽의 응답을 보는 주기(초). */
         const val outgoingInboxPollSeconds: Double = 5.0
         /** 결과 화면의 끝난 판 **끝인사** 안전망 조회 주기(초) — 구독 중. 주 경로는 초인종(`syncOnce`)이다. */
@@ -1415,7 +1429,7 @@ class GomokuStore(
 
     /**
      * 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
-     *  · 진행 중 판이 상대 차례면(또는 표시 마감 + 유예가 지났으면) 구독 중 3초 / 미구독 1.5초마다 상태.
+     *  · 진행 중 판이 상대 차례면(또는 표시 마감 + 유예가 지났으면) 구독 중 10초(마감 10초 안쪽은 3초) / 미구독 1.5초마다 상태.
      *  · 결과 화면의 끝난 판이면 끝난 뒤 130초 동안 구독 중 10초 / 미구독 5초마다 상태(상대의 끝인사).
      *  · 내 대기 신청이 있으면 5초마다 인박스. · 로비를 보고 있으면 30초마다 목록.
      */
@@ -1428,7 +1442,7 @@ class GomokuStore(
             val overdue = current.deadline?.let { now.timeIntervalSince(it) > turnGraceSeconds } ?: false
             if (waiting || overdue) {
                 val subscribed = host?.realtimeState?.isSubscribed ?: false
-                val interval = if (subscribed) statePollSecondsWhileSubscribed else statePollSecondsUnsubscribed
+                val interval = statePollSeconds(subscribed, current.deadline, now)
                 if (now.timeIntervalSince(lastStateRequestAt) >= interval) refreshMatch(current.id)
             }
         } else if (farewellID != null) {

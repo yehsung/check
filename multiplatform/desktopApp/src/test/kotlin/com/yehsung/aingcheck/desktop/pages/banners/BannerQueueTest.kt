@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class BannerQueueTest {
     /** 맥 270-284 의 줄 순서를 손으로 옮긴 표(구현을 읽어 만들지 않았다). */
     private val macOrder = listOf(
-        TopBanner.LONG_SESSION, TopBanner.GOMOKU_INVITE, TopBanner.CHESS_INVITE, TopBanner.TETRIS_INVITE, TopBanner.RETRO,
+        TopBanner.LONG_SESSION, TopBanner.GOMOKU_INVITE, TopBanner.CHESS_INVITE, TopBanner.TETRIS_INVITE, TopBanner.RUMMY_INVITE, TopBanner.RETRO,
         TopBanner.FEEDBACK_REPLY, TopBanner.CAKE_GIFT, TopBanner.UPDATE, TopBanner.APP_NOTICE,
     )
 
@@ -28,6 +28,7 @@ class BannerQueueTest {
         gomoku = invite.takeIf { TopBanner.GOMOKU_INVITE in present },
         chess = invite.takeIf { TopBanner.CHESS_INVITE in present },
         tetris = invite.takeIf { TopBanner.TETRIS_INVITE in present },
+        rummyInvite = TopBanner.RUMMY_INVITE in present,
         retroDue = TopBanner.RETRO in present,
         feedbackReplyUnseen = TopBanner.FEEDBACK_REPLY in present,
         cakeGiftOpen = TopBanner.CAKE_GIFT in present,
@@ -56,6 +57,7 @@ class BannerQueueTest {
                 TopBanner.GOMOKU_INVITE -> c.gomoku != null
                 TopBanner.CHESS_INVITE -> c.chess != null
                 TopBanner.TETRIS_INVITE -> c.tetris != null
+                TopBanner.RUMMY_INVITE -> c.rummyInvite
                 TopBanner.RETRO -> c.retroDue
                 TopBanner.FEEDBACK_REPLY -> c.feedbackReplyUnseen
                 TopBanner.CAKE_GIFT -> c.cakeGiftOpen

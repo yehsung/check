@@ -7,6 +7,21 @@ package com.yehsung.aingcheck.ui.icons
 
 object SfSymbols {
     val toAppIcon: Map<String, AppIcon> = mapOf(
+        // 아잉 큐브(맥 판 화면 · 일일 미션 — main 0.3.69~0.3.71)가 더한 기호. 새 벡터 없이 가까운 기존 그림으로 잇는다(판 화면을 옮길 때 다시 본다).
+        "arrow.down.app" to AppIcon.InstallDesktopFill,
+        "arrow.down.right.and.arrow.up.left" to AppIcon.Remove,
+        "arrow.left" to AppIcon.ChevronLeft,
+        "arrow.up.forward.app" to AppIcon.NorthEast,
+        "cube.fill" to AppIcon.ExtensionFill,
+        "square.stack.3d.up.fill" to AppIcon.ExtensionFill,
+        "door.left.hand.closed" to AppIcon.Logout,
+        "door.left.hand.open" to AppIcon.Logout,
+        "forward.fill" to AppIcon.ArrowRightFill,
+        "hand.draw.fill" to AppIcon.TouchAppFill,
+        "list.number" to AppIcon.Checklist,
+        "plus.magnifyingglass" to AppIcon.Add,
+        "plus.rectangle.on.rectangle" to AppIcon.FilterNone,
+        "square.grid.3x2" to AppIcon.GridOn,
         "arrow.clockwise" to AppIcon.Refresh,
         "arrow.down.app.fill" to AppIcon.InstallDesktopFill,
         "arrow.down.circle" to AppIcon.ArrowCircleDown,

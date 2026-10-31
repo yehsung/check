@@ -393,6 +393,8 @@ object MeText {
             "gomoku" to "circle.grid.3x3.fill",
             "chess" to "checkerboard.rectangle",
             "tetris_duel" to "rectangle.split.2x1.fill",
+            // 아잉 큐브(내부 식별자 rummy — 원본 MeText.swift @ ab6e49ac · 071afacc). 맥과 한 벌인 기호다.
+            "rummy" to "cube.fill",
         )
         return table.firstOrNull { it.first == game }?.second ?: missionFallbackIcon
     }

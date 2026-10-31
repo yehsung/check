@@ -1,5 +1,5 @@
 {
-  "exportTests": 111,
+  "exportTests": 112,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -1111,7 +1111,7 @@
       ]
     },
     {
-      "cases": 66,
+      "cases": 73,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-demo-games",
@@ -1163,7 +1163,7 @@
       ]
     },
     {
-      "cases": 52,
+      "cases": 55,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-demo-other",
@@ -1241,7 +1241,7 @@
       ]
     },
     {
-      "cases": 35,
+      "cases": 37,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-fixtures-message-todo",
@@ -1264,6 +1264,20 @@
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift",
         "Sources/CheckMobileKit/Me/MeProfileService.swift",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift"
+      ]
+    },
+    {
+      "cases": 50,
+      "equivalence": "bit",
+      "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
+      "golden": "wire/decode-fixtures-rummy",
+      "path": "contract/golden/wire/decode-fixtures-rummy.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyWire.swift",
+        "Sources/CheckCore/RummyRules.swift",
+        "Sources/CheckCore/RummyTableLayout.swift",
+        "Sources/CheckCore/SupabaseWorkModels.swift"
       ]
     },
     {
@@ -1304,7 +1318,7 @@
       ]
     },
     {
-      "cases": 232,
+      "cases": 263,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift",
       "golden": "wire/requests",
@@ -1338,7 +1352,11 @@
         "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
         "Sources/CheckMobileKit/Me/MeProfileService.swift",
         "Sources/CheckMobileKit/Me/MeAILimitsService.swift",
-        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"
+        "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
+        "Sources/CheckCore/MegaphoneBanner.swift",
+        "Sources/CheckCore/RummyWire.swift",
+        "Sources/CheckCore/RummyRules.swift",
+        "Sources/CheckCore/RummyTableLayout.swift"
       ]
     },
     {

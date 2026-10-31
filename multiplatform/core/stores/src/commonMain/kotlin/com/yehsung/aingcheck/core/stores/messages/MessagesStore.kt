@@ -39,6 +39,7 @@ import com.yehsung.aingcheck.core.wire.models.MessagePokeLogKind
 import com.yehsung.aingcheck.core.wire.models.MessageSendOutcome
 import com.yehsung.aingcheck.core.wire.models.PokeDirectoryEntry
 import com.yehsung.aingcheck.core.wire.models.PokeKind
+import com.yehsung.aingcheck.core.wire.models.PokeSendResponse
 import com.yehsung.aingcheck.core.wire.models.TakenPokeRow
 import com.yehsung.aingcheck.core.wire.models.sortedForPokeDisplay
 import com.yehsung.aingcheck.core.wire.models.toPokeDirectoryEntries
@@ -235,10 +236,22 @@ class MessagesStore(
     /** 읽음 처리 성공 뒤 요약을 다시 받기 전에 기다리는 창(초) — 그 안에 `message_read` 메아리가 오면 그 새로고침이 이 몫을 맡는다. */
     var postMarkRefreshSeconds: Double = 1.5
 
+    /** 전송이 모호하게 실패했을 때(답을 못 받음) **같은 키로 한 번** 다시 보내기 전에 기다리는 초([performSend]). */
+    var sendRetryDelaySeconds: Double = 1.5
+
+    /** 답을 못 받은 전송을 기억하는 창(초). 그 안에 같은 상대·같은 본문을 다시 보내면 같은 키를 쓴다. */
+    var unconfirmedSendReuseSeconds: Double = 600.0
+
     /** 기다리기(가상 시간 위에서 도는 `delay`). */
     var sleep: suspend (Double) -> Unit = { seconds -> delay((seconds * 1000).toLong()) }
 
     private var runtime = MessagesRuntime()
+
+    /** 이 실행에서 서버가 전송 키를 안다는 증거를 봤는가(시험·진단용). */
+    val serverKnowsSendKey: Boolean get() = runtime.serverKnowsSendKey
+
+    /** 서버의 확정 답을 못 받은 전송들(시험·진단용). */
+    val unconfirmedSends: List<MessagesUnconfirmedSend> get() = runtime.unconfirmedSends.toList()
 
     // ---------------------------------------------------------------- 자리 API
 
@@ -597,12 +610,18 @@ class MessagesStore(
     /**
      * 본문 하나를 보낸다 — 자리 말풍선 · 재시도 · 세대 가드 · 실패 문구 · 성공 뒤 이력 재조회의 **공통 몸통**. 입구는 둘뿐이다.
      * `restoresDraftOnFailure`: 초안 전송 true · 이모티콘 false(가르는 기준은 글자가 아니라 **의도**다).
+     *
+     * 전송 멱등 키(원본 CheckMobileKit/Messages/MessagesStore.swift performSend @ 1a5eeca6 · 서버 20261101131000):
+     *  ⓐ 자리 말풍선 id 가 곧 키다. ⓑ 왕복이 모호하게 실패하면([MessagesSendRules.isAmbiguousFailure]) [sendRetryDelaySeconds] 뒤 **같은 키로 한 번만**
+     *  다시 보낸다 — 이 실행에서 서버가 키를 안다는 증거(`serverKnowsSendKey`)를 본 뒤에만(증거는 마지막 ok 가 정한다). ⓒ 답을 못 받고 끝난 전송은 기억했다가
+     *  창 안에 같은 상대에게 같은 본문을 다시 보내면 그 키를 쓴다. 서버가 확정 답을 준 전송은 기억하지 않는다. ⓓ 말풍선 확정은 그대로 이력 재조회가 거둔다.
      */
     private fun performSend(body: String, peerID: String, restoresDraftOnFailure: Boolean): Boolean {
         val generation = context.generation
-        val localID = newLocalID()
+        val now = context.clock.now()
+        val localID = reusableSendKey(peerID, body, now) ?: newLocalID()
         pendingOutgoing = pendingOutgoing +
-            MessagesPendingOutgoing(localID, peerID, body, context.clock.now(), MessagesPendingOutgoing.State.sending)
+            MessagesPendingOutgoing(localID, peerID, body, now, MessagesPendingOutgoing.State.sending)
         sendNotices = sendNotices - peerID
         isSending = true
         val service = context.service
@@ -611,17 +630,38 @@ class MessagesStore(
             var succeeded = false
             var cancelled = false
             var refreshesDirectory = false
-            try {
-                val response = context.withSessionRetry { session -> service.sendMessage(session.accessToken, peerID, body) }
-                if (generation != context.generation) return@launch
-                val outcome = MessageSendOutcome.of(response)
-                notice = MessagesSendRules.notice(outcome, response.maxLength)
-                succeeded = outcome == MessageSendOutcome.Ok
-                refreshesDirectory = outcome == MessageSendOutcome.TargetNotWorking
+            suspend fun roundTrip(): Result<PokeSendResponse> = try {
+                Result.success(context.withSessionRetry { session -> service.sendMessage(session.accessToken, peerID, body, localID) })
             } catch (error: Throwable) {
-                if (generation != context.generation) return@launch
-                if (AuthErrorRules.classify(error) == AuthErrorDisposition.cancelled) cancelled = true else notice = MessagesSendRules.connectionNotice
+                Result.failure(error)
             }
+            var result = roundTrip()
+            if (generation != context.generation) return@launch
+            val firstFailure = result.exceptionOrNull()
+            if (firstFailure != null && runtime.serverKnowsSendKey && MessagesSendRules.isAmbiguousFailure(firstFailure)) {
+                // ⓑ 응답 유실 재시도 — 같은 코루틴 · 같은 키 · 한 번. 기다리는 동안 로그아웃했으면 나가지 않는다(세대 가드).
+                sleep(sendRetryDelaySeconds)
+                if (generation != context.generation) return@launch
+                result = roundTrip()
+                if (generation != context.generation) return@launch
+            }
+            result.fold(
+                onSuccess = { response ->
+                    val outcome = MessageSendOutcome.of(response)
+                    notice = MessagesSendRules.notice(outcome, response.maxLength)
+                    succeeded = outcome == MessageSendOutcome.Ok
+                    refreshesDirectory = outcome == MessageSendOutcome.TargetNotWorking
+                    // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
+                    if (succeeded) runtime.serverKnowsSendKey = response.messageId != null
+                    // 확정 답 — 이 키·이 (상대, 본문)의 기억을 지운다.
+                    runtime.unconfirmedSends.removeAll { it.key == localID || (it.peerUserID == peerID && it.body == body) }
+                },
+                onFailure = { error ->
+                    if (AuthErrorRules.classify(error) == AuthErrorDisposition.cancelled) cancelled = true else notice = MessagesSendRules.connectionNotice
+                    // ⓒ 던져진 실패는 모두 "답을 못 읽었다"로 기억한다(4xx·취소 포함) — 넓게 잡는 쪽이 두 통을 막는다.
+                    rememberUnconfirmedSend(peerID, body, localID)
+                },
+            )
             isSending = false
             if (succeeded) {
                 val index = pendingOutgoing.indexOfFirst { it.id == localID }
@@ -644,6 +684,22 @@ class MessagesStore(
     }
 
     // ---------------------------------------------------------------- 사람 찾기
+
+    /** 창 안에 답을 못 받은 같은 (상대, 본문) 전송이 있으면 그 키(ⓒ). 지난 기억은 여기서 걷는다. 떠 있는 자리 말풍선 id 와 겹치면 쓰지 않는다. */
+    private fun reusableSendKey(peerID: String, body: String, now: SwiftDate): String? {
+        val window = unconfirmedSendReuseSeconds
+        runtime.unconfirmedSends.removeAll { now.timeIntervalSince(it.failedAt) > window }
+        val entry = runtime.unconfirmedSends.lastOrNull { it.peerUserID == peerID && it.body == body } ?: return null
+        return if (pendingOutgoing.any { it.id == entry.key }) null else entry.key
+    }
+
+    /** 답을 못 받고 끝난 전송을 기억한다(같은 키·같은 (상대, 본문)의 옛 기억은 바꿔 끼운다 · 시각은 마지막 실패). */
+    private fun rememberUnconfirmedSend(peerID: String, body: String, key: String) {
+        runtime.unconfirmedSends.removeAll { it.key == key || (it.peerUserID == peerID && it.body == body) }
+        runtime.unconfirmedSends += MessagesUnconfirmedSend(peerID, body, key, context.clock.now())
+        // 끝없이 쌓이지 않게 — 오래된 것부터 버린다.
+        while (runtime.unconfirmedSends.size > 16) runtime.unconfirmedSends.removeAt(0)
+    }
 
     /** `app_user_directory`(읽기). 새 대화 시트가 설 때 · 이름을 모르는 대화가 설 때. */
     fun loadDirectory(force: Boolean = false) {
@@ -1255,6 +1311,12 @@ private class MessagesRuntime {
     var postMarkWindowTask: Job? = null
     var postMarkPendingSerial = 0
     val shownConversations: MutableList<Pair<String, String>> = ArrayList()
+
+    /** 이 실행에서 서버가 전송 키를 안다는 증거를 봤는가(마지막 ok 의 `message_id`). */
+    var serverKnowsSendKey = false
+
+    /** 서버의 확정 답을 못 받은 전송들. */
+    val unconfirmedSends: MutableList<MessagesUnconfirmedSend> = ArrayList()
 
     var historyStale: Boolean
         get() = historyStaleSerial != null

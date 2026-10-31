@@ -165,7 +165,7 @@ private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore) {
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PersonAvatar(name = banner.senderName, userID = banner.senderID, url = banner.senderAvatarURL, size = 32.dp)
+                PersonAvatar(name = banner.senderName, userID = banner.senderID, url = banner.senderAvatarURL?.absoluteString, size = 32.dp)
                 Spacer(Modifier.width(10.dp))
                 Text(
                     banner.senderName,

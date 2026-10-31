@@ -28,6 +28,7 @@ class WireDecodeGoldenTest {
             when (v) {
                 is SwiftDate -> GoldenDump.date(v.timeIntervalSince1970)
                 is SwiftURL -> JsonObject(mapOf("\$url" to JsonPrimitive(v.absoluteString)))
+                is SwiftUUID -> JsonObject(mapOf("\$uuid" to JsonPrimitive(v.lowercased)))
                 is ClientReleaseResponse -> swiftShape(v)
                 else -> null
             }
@@ -105,6 +106,7 @@ class WireDecodeGoldenTest {
     @Test fun chessFixtures() = assertGolden(Golden.load("wire/decode-fixtures-chess"))
     @Test fun gomokuFixtures() = assertGolden(Golden.load("wire/decode-fixtures-gomoku"))
     @Test fun messageTodoFixtures() = assertGolden(Golden.load("wire/decode-fixtures-message-todo"))
+    @Test fun rummyFixtures() = assertGolden(Golden.load("wire/decode-fixtures-rummy"))
     @Test fun demoGames() = assertGolden(Golden.load("wire/decode-demo-games"))
     @Test fun demoMe() = assertGolden(Golden.load("wire/decode-demo-me"))
     @Test fun demoOther() = assertGolden(Golden.load("wire/decode-demo-other"))
@@ -115,13 +117,13 @@ class WireDecodeGoldenTest {
     fun goldensCarryCasesAndVariants() {
         val names = listOf(
             Golden.load("wire/decode-fixtures-chess"), Golden.load("wire/decode-fixtures-gomoku"),
-            Golden.load("wire/decode-fixtures-message-todo"), Golden.load("wire/decode-demo-games"),
+            Golden.load("wire/decode-fixtures-message-todo"), Golden.load("wire/decode-fixtures-rummy"), Golden.load("wire/decode-demo-games"),
             Golden.load("wire/decode-demo-me"), Golden.load("wire/decode-demo-other"), Golden.load("wire/decode-synthetic"),
         )
         val cases = names.sumOf { it.cases.size }
         val variants = names.sumOf { g -> g.cases.sumOf { it.array("variants").size } }
         println("AINGCHECK-G6 total cases=$cases variants=$variants")
-        // 시험 픽스처 224 + 데모(case 로 들어간 것) 160 + 합성 22 — Swift 쪽 everyFixtureIsClassified 가 모수를 잠근다.
+        // 시험 픽스처 276(아잉 큐브 서버 실출력 50 포함) + 데모(case 로 들어간 것) 170 + 합성 22 — Swift 쪽 everyFixtureIsClassified 가 모수를 잠근다.
         assertTrue(cases >= 400, "G6 case 가 너무 적다($cases)")
         assertTrue(variants >= 5000, "G6 변형이 너무 적다($variants)")
     }

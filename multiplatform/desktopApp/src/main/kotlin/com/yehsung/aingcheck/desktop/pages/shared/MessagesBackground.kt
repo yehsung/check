@@ -47,7 +47,7 @@ class MessagesBackgroundRefresh(
     }
 
     companion object {
-        /** 맥 messageMenuRefreshThrottleSeconds · pokePollIntervalSecondsWhileSubscribed 와 같은 눈금(60초). */
+        /** 맥 messageMenuRefreshThrottleSeconds 와 같은 눈금(60초 — 맥의 찌르기 폴링은 1a5eeca6 에서 90초로 늘었지만 이 요약 주기는 그 눈금을 따르지 않는다). */
         const val INTERVAL_SECONDS: Long = 60
     }
 }

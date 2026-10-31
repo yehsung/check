@@ -126,6 +126,14 @@ data class PokeSendResponse(
     val ultraBalance: Long? = null,
     val ring: String? = null,
     val maxLength: Long? = null,
+    /** send_message `ok` 에 서버가 실어 주는 저장된 행의 id(20261101131000 부터). null = 키 없는 옛 서버·찌르기 응답. */
+    val messageId: String? = null,
+    /** 그 행의 서버 `created_at`(글자 그대로). null = 옛 서버. */
+    val createdAt: String? = null,
+    /** 같은 `p_client_message_id` 가 이미 저장돼 있어 새로 넣지 않고 그 행을 돌려줬다. null 은 false 와 같다 — 진단용. */
+    val duplicate: Boolean? = null,
+    /** 서버가 저장한 본문(서버 정규화 뒤). null = 이 키를 안 싣는 응답(찌르기·로컬 즉답). */
+    val body: String? = null,
 ) {
     val ultraRemainingForDisplay: Long? get() = ultraRemaining?.let { maxOf(0L, it) }
     val ultraBalanceForDisplay: Long? get() = (ultraBalance ?: ultraRemaining)?.let { maxOf(0L, it) }
@@ -142,6 +150,11 @@ data class PokeSendResponse(
                 ring = c.stringIfPresent("ring"),
                 // INV-SupabaseWorkModels-0f970b7f 이식: 이 줄을 빼고 키만 더하면 값은 영원히 null 이다.
                 maxLength = c.longIfPresent("max_length"),
+                // 같은 함정이 네 번 더 — send_message 의 서버 행 확정 키(main b291da45 무렵 · 20261101131000).
+                messageId = c.stringIfPresent("message_id"),
+                createdAt = c.stringIfPresent("created_at"),
+                duplicate = c.boolIfPresent("duplicate"),
+                body = c.stringIfPresent("body"),
             )
         }
     }
@@ -191,6 +204,8 @@ data class TakenPokeRow(
 data class SendMessageRequest(
     @SerialName("p_to") val pTo: String,
     @SerialName("p_body") val pBody: String,
+    /** 전송 멱등 키. **null 이면 키 자체가 빠진다** — 이 인자를 모르는 서버(20261101131000 적용 전)에 옛 두 키 모양 그대로 나간다. */
+    @SerialName("p_client_message_id") val pClientMessageId: String? = null,
 )
 
 // INV-SupabaseWorkModels-7b2172c0 이식: cooldown · target_outdated 갈래는 없다(죽은 가지 — 되살리면 화면에 카운트다운이 돌아온다).

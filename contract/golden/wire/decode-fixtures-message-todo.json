@@ -2189,36 +2189,55 @@
     },
     {
       "dump": {
+        "body": "키 있는 첫 글\n둘째 줄",
+        "createdAt": "2026-10-29T20:32:31.710801+00:00",
+        "duplicate": true,
         "maxLength": null,
+        "messageId": "3ac6c025-1757-4d47-bee6-4f4f1d7f364f",
         "resetAfterSeconds": null,
         "retryAfterSeconds": null,
-        "ring": "sent",
+        "ring": "duplicate",
         "status": "ok",
         "ultraBalance": null,
         "ultraRemaining": null
       },
-      "id": "Tests/checkTests/Fixtures/message-rpc/send_message__ok_not_working.json",
+      "id": "Tests/checkTests/Fixtures/message-rpc/send_message__duplicate.json",
       "type": "PokeSendResponse",
       "variants": [
         {
           "op": "remove",
           "path": "$.body",
-          "result": []
+          "result": [
+            [
+              "$.body",
+              null
+            ]
+          ]
         },
         {
           "op": "null",
           "path": "$.body",
-          "result": []
+          "result": [
+            [
+              "$.body",
+              null
+            ]
+          ]
         },
         {
           "op": "num",
           "path": "$.body",
-          "result": []
+          "result": "error"
         },
         {
           "op": "enum",
           "path": "$.body",
-          "result": []
+          "result": [
+            [
+              "$.body",
+              "zz_unknown_value"
+            ]
+          ]
         },
         {
           "op": "remove",
@@ -2279,8 +2298,144 @@
               "zz_unknown_value"
             ]
           ]
+        },
+        {
+          "op": "remove",
+          "path": "$.duplicate",
+          "result": [
+            [
+              "$.duplicate",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.duplicate",
+          "result": [
+            [
+              "$.duplicate",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$.duplicate",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.duplicate",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.created_at",
+          "result": [
+            [
+              "$.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.created_at",
+          "result": [
+            [
+              "$.createdAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.created_at",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.created_at",
+          "result": [
+            [
+              "$.createdAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$.message_id",
+          "result": [
+            [
+              "$.messageId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.message_id",
+          "result": [
+            [
+              "$.messageId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.message_id",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.message_id",
+          "result": [
+            [
+              "$.messageId",
+              "zz_unknown_value"
+            ]
+          ]
         }
       ]
+    },
+    {
+      "dump": {
+        "body": "키 있는 첫 글\n둘째 줄",
+        "createdAt": "2026-10-29T20:32:31.710801+00:00",
+        "duplicate": null,
+        "maxLength": null,
+        "messageId": "3ac6c025-1757-4d47-bee6-4f4f1d7f364f",
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": "sent",
+        "status": "ok",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/send_message__ok_keyed.json",
+      "type": "PokeSendResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "body": "근무 안 해도 보내져요",
+        "createdAt": null,
+        "duplicate": null,
+        "maxLength": null,
+        "messageId": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": "sent",
+        "status": "ok",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      },
+      "id": "Tests/checkTests/Fixtures/message-rpc/send_message__ok_not_working.json",
+      "type": "PokeSendResponse",
+      "variants": []
     },
     {
       "dump": [

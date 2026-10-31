@@ -169,7 +169,7 @@ class PokeBeatOrderTest {
 class PokeIntervalTest {
     @Test
     fun intervalAndPauseDeriveFromOneSignal() {
-        assertEquals(60.0, DesktopPokeRules.pollIntervalSeconds(ringIsSubscribed = true))
+        assertEquals(90.0, DesktopPokeRules.pollIntervalSeconds(ringIsSubscribed = true))
         assertEquals(15.0, DesktopPokeRules.pollIntervalSeconds(ringIsSubscribed = false))
         assertFalse(DesktopPokeRules.pollingIsPausedByRealtime(ringIsSubscribed = true), "★P11 폴링은 링과 함께 돈다 — 억제는 언제나 거짓")
         assertFalse(DesktopPokeRules.pollingIsPausedByRealtime(ringIsSubscribed = false))
@@ -196,8 +196,8 @@ class PokeIntervalTest {
         subscription.subscribed = true // 이미 15초 잠에 들어갔다 → 그 잠은 15초 그대로
         advanceTimeBy(15_000)
         assertEquals(2, drainer.drains, "구독 전이 직전에 시작한 잠은 15초")
-        advanceTimeBy(59_000)
-        assertEquals(2, drainer.drains, "다음 반복부터 60초")
+        advanceTimeBy(89_000)
+        assertEquals(2, drainer.drains, "다음 반복부터 90초")
         subscription.subscribed = false // 자는 도중 깨워 재계산하지 않는다
         advanceTimeBy(1_000)
         assertEquals(3, drainer.drains)

@@ -50,6 +50,7 @@ class MeTextRulesTest {
         assertEquals(MeText.claimedMark, claimed.claimedMark)
         assertEquals("보조", claimed.caption, "버튼이 없는 줄은 실패를 말하지 않는다")
         assertEquals(MeText.missionFallbackIcon, MeText.dailyMissionIcon("새게임"))
+        assertEquals("cube.fill", MeText.dailyMissionIcon("rummy"))
     }
 
     @Test

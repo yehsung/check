@@ -326,7 +326,7 @@ suspend fun SupabaseWorkService.workTick(accessToken: String, request: WorkTickR
         r.statusCode == 401 -> throw SupabaseWorkServiceError.SessionExpired
         r.statusCode == 404 -> throw WorkTickFailure.FunctionMissing(code)
         r.statusCode == 403 -> throw WorkTickFailure.Forbidden(code)
-        r.statusCode >= 500 -> throw WorkTickFailure.ServerError(r.statusCode)
+        r.statusCode >= 500 -> throw WorkTickFailure.ServerError(r.statusCode, code)
         code == "PGRST202" -> throw WorkTickFailure.FunctionMissing(code)
         code == "42501" -> throw WorkTickFailure.Forbidden(code)
         else -> throw WorkTickFailure.Rejected(r.statusCode, code)

@@ -1375,7 +1375,11 @@
     },
     {
       "dump": {
+        "body": null,
+        "createdAt": null,
+        "duplicate": null,
         "maxLength": null,
+        "messageId": null,
         "resetAfterSeconds": null,
         "retryAfterSeconds": null,
         "ring": null,
@@ -2183,6 +2187,23 @@
             "toUser": "d0000000-0000-4000-8000-000000000001",
             "unread": true
           }
+        },
+        {
+          "row": {
+            "body": "📢 오늘 저녁 7시에 오목 한 판 하실 분! 루비 걸고 붙어요",
+            "createdAt": null,
+            "createdEpoch": 1789621440,
+            "fromUser": "d0000000-0000-4000-8000-0000000000b8",
+            "id": "d0000000-0000-4000-8000-00000000ee01",
+            "isMine": false,
+            "kind": "message",
+            "peerAvatarUrl": null,
+            "peerDisplayName": "새봄",
+            "peerUserId": "d0000000-0000-4000-8000-0000000000b8",
+            "readByPeer": null,
+            "toUser": "d0000000-0000-4000-8000-000000000001",
+            "unread": true
+          }
         }
       ],
       "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/rpc.message_history_with_pokes.json",
@@ -2877,6 +2898,20 @@
           "readByPeer": null,
           "toUser": "d0000000-0000-4000-8000-000000000001",
           "unread": true
+        },
+        {
+          "body": "📢 오늘 저녁 7시에 오목 한 판 하실 분! 루비 걸고 붙어요",
+          "createdAt": null,
+          "createdEpoch": 1789621440,
+          "fromUser": "d0000000-0000-4000-8000-0000000000b8",
+          "id": "d0000000-0000-4000-8000-00000000ee01",
+          "isMine": false,
+          "peerAvatarUrl": null,
+          "peerDisplayName": "새봄",
+          "peerUserId": "d0000000-0000-4000-8000-0000000000b8",
+          "readByPeer": null,
+          "toUser": "d0000000-0000-4000-8000-000000000001",
+          "unread": true
         }
       ],
       "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/rpc.message_history_with_reads.json",
@@ -3547,7 +3582,36 @@
     },
     {
       "dump": {
+        "peers": [
+          {
+            "count": 2,
+            "lastEpochMs": {
+              "$f64": "427a0adbb04f0000"
+            },
+            "peerUserId": "d0000000-0000-4000-8000-0000000000b2"
+          },
+          {
+            "count": 1,
+            "lastEpochMs": {
+              "$f64": "427a0ad907280000"
+            },
+            "peerUserId": "d0000000-0000-4000-8000-0000000000b4"
+          }
+        ],
+        "status": "ok",
+        "total": 3
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/rpc.message_unread_summary_v2.json",
+      "type": "MessageUnreadSummaryResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "body": "보냈어요",
+        "createdAt": null,
+        "duplicate": null,
         "maxLength": null,
+        "messageId": null,
         "resetAfterSeconds": null,
         "retryAfterSeconds": null,
         "ring": "sent",
@@ -3561,22 +3625,37 @@
         {
           "op": "remove",
           "path": "$.body",
-          "result": []
+          "result": [
+            [
+              "$.body",
+              null
+            ]
+          ]
         },
         {
           "op": "null",
           "path": "$.body",
-          "result": []
+          "result": [
+            [
+              "$.body",
+              null
+            ]
+          ]
         },
         {
           "op": "num",
           "path": "$.body",
-          "result": []
+          "result": "error"
         },
         {
           "op": "enum",
           "path": "$.body",
-          "result": []
+          "result": [
+            [
+              "$.body",
+              "zz_unknown_value"
+            ]
+          ]
         },
         {
           "op": "remove",
@@ -6134,6 +6213,437 @@
           "result": "error"
         }
       ]
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 982,
+          "center": "busan",
+          "day": "2026-09-13",
+          "displayName": "구름",
+          "userId": "d0000000-0000-4000-8000-0000000000b3"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 974,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "라떼",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 965,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 931,
+          "center": null,
+          "day": "2026-09-11",
+          "displayName": "호두",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 911,
+          "center": "busan",
+          "day": "2026-09-08",
+          "displayName": "모카",
+          "userId": "d0000000-0000-4000-8000-0000000000b5"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 728,
+          "center": "seoul",
+          "day": "2026-09-14",
+          "displayName": "단비",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/rankings/_rankings-minigame/rpc.minigame_alltime_board.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ],
+            [
+              "$[0].bestScore",
+              null
+            ],
+            [
+              "$[0].center",
+              null
+            ],
+            [
+              "$[0].day",
+              null
+            ],
+            [
+              "$[0].displayName",
+              null
+            ],
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ],
+            [
+              "$[0].bestScore",
+              null
+            ],
+            [
+              "$[0].center",
+              null
+            ],
+            [
+              "$[0].day",
+              null
+            ],
+            [
+              "$[0].displayName",
+              null
+            ],
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].avatar_url",
+          "result": [
+            [
+              "$[0].avatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$[0].best_score",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 60,
+          "center": "seoul",
+          "day": "2026-09-13",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 52,
+          "center": null,
+          "day": "2026-09-09",
+          "displayName": "호두",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 31,
+          "center": "busan",
+          "day": "2026-09-15",
+          "displayName": "모카",
+          "userId": "d0000000-0000-4000-8000-0000000000b5"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/rankings/_rankings-minigame/rpc.minigame_alltime_board@flappy.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
     },
     {
       "dump": [
@@ -8736,6 +9246,10 @@
       "Sources/CheckMobileKit/Demo/Fixtures/session/auth.user.put.json"
     ],
     "otherLanes": [
+      [
+        "Sources/CheckMobileKit/Demo/Fixtures/messages/rpc.megaphone_inbox.json",
+        "W1-c MegaphoneInboxItem(text — wire/requests fetchMegaphoneInbox#data 가 앱 함수로 잰다)"
+      ],
       [
         "Sources/CheckMobileKit/Demo/Fixtures/messages/rpc.megaphone_info.json",
         "W1-c MegaphoneInfoResponse(text)"

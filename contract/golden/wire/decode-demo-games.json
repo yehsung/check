@@ -2808,6 +2808,403 @@
       "dump": [
         {
           "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 68,
+          "center": "seoul",
+          "day": "2026-09-13",
+          "displayName": "달토끼",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 47,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 40,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "구름빵",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 30,
+          "center": null,
+          "day": "2026-09-11",
+          "displayName": "호두과자",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 24,
+          "center": "busan",
+          "day": "2026-09-08",
+          "displayName": "초코칩",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 16,
+          "center": "busan",
+          "day": "2026-09-14",
+          "displayName": "솜사탕",
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games-flappy/rpc.minigame_alltime_board@flappy.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ],
+            [
+              "$[0].bestScore",
+              null
+            ],
+            [
+              "$[0].center",
+              null
+            ],
+            [
+              "$[0].day",
+              null
+            ],
+            [
+              "$[0].displayName",
+              null
+            ],
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ],
+            [
+              "$[0].bestScore",
+              null
+            ],
+            [
+              "$[0].center",
+              null
+            ],
+            [
+              "$[0].day",
+              null
+            ],
+            [
+              "$[0].displayName",
+              null
+            ],
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].user_id",
+          "result": [
+            [
+              "$[0].userId",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].display_name",
+          "result": [
+            [
+              "$[0].displayName",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].avatar_url",
+          "result": [
+            [
+              "$[0].avatarUrl",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].avatar_url",
+          "result": []
+        },
+        {
+          "op": "remove",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "float0",
+          "path": "$[0].best_score",
+          "result": []
+        },
+        {
+          "op": "float5",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "big",
+          "path": "$[0].best_score",
+          "result": [
+            [
+              "$[0].bestScore",
+              4294967296
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].best_at",
+          "result": [
+            [
+              "$[0].bestAt",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].day",
+          "result": [
+            [
+              "$[0].day",
+              "zz_unknown_value"
+            ]
+          ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
           "bestAt": "2026-09-17T02:22:00Z",
           "bestScore": 41,
           "center": "seoul",
@@ -9658,6 +10055,85 @@
       "dump": [
         {
           "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 976,
+          "center": "seoul",
+          "day": "2026-09-13",
+          "displayName": "민트별",
+          "userId": "d0000000-0000-4000-8000-0000000000b3"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 937,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "구름빵",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 898,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 880,
+          "center": "seoul",
+          "day": "2026-09-11",
+          "displayName": "달토끼",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 824,
+          "center": "busan",
+          "day": "2026-09-08",
+          "displayName": "초코칩",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 751,
+          "center": null,
+          "day": "2026-09-14",
+          "displayName": "호두과자",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-10T07:10:00Z",
+          "bestScore": 633,
+          "center": "busan",
+          "day": "2026-09-10",
+          "displayName": "솜사탕",
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-12T08:11:00Z",
+          "bestScore": 430,
+          "center": "busan",
+          "day": "2026-09-12",
+          "displayName": "보리차",
+          "userId": "d0000000-0000-4000-8000-0000000000b5"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games-timing/rpc.minigame_alltime_board@timing_bar.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
           "bestAt": "2026-09-17T01:12:00Z",
           "bestScore": 962,
           "center": "seoul",
@@ -11421,6 +11897,329 @@
           ]
         }
       ]
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 91,
+          "center": "busan",
+          "day": "2026-09-13",
+          "displayName": "초코칩",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 65,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 58,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "달토끼",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 47,
+          "center": null,
+          "day": "2026-09-11",
+          "displayName": "호두과자",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 37,
+          "center": "seoul",
+          "day": "2026-09-08",
+          "displayName": "구름빵",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 30,
+          "center": "busan",
+          "day": "2026-09-14",
+          "displayName": "솜사탕",
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games/rpc.minigame_alltime_board@crossy.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 68,
+          "center": "seoul",
+          "day": "2026-09-13",
+          "displayName": "달토끼",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 47,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 40,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "구름빵",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 30,
+          "center": null,
+          "day": "2026-09-11",
+          "displayName": "호두과자",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 24,
+          "center": "busan",
+          "day": "2026-09-08",
+          "displayName": "초코칩",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 16,
+          "center": "busan",
+          "day": "2026-09-14",
+          "displayName": "솜사탕",
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games/rpc.minigame_alltime_board@flappy.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 50500,
+          "center": "busan",
+          "day": "2026-09-13",
+          "displayName": "초코칩",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 35450,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 29300,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "달토끼",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 19280,
+          "center": null,
+          "day": "2026-09-11",
+          "displayName": "호두과자",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 12240,
+          "center": "seoul",
+          "day": "2026-09-08",
+          "displayName": "구름빵",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 7720,
+          "center": "busan",
+          "day": "2026-09-14",
+          "displayName": "솜사탕",
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games/rpc.minigame_alltime_board@tetris.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-13T01:10:00Z",
+          "bestScore": 976,
+          "center": "seoul",
+          "day": "2026-09-13",
+          "displayName": "민트별",
+          "userId": "d0000000-0000-4000-8000-0000000000b3"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-09T02:11:00Z",
+          "bestScore": 937,
+          "center": "seoul",
+          "day": "2026-09-09",
+          "displayName": "구름빵",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-15T03:12:00Z",
+          "bestScore": 898,
+          "center": "seoul",
+          "day": "2026-09-15",
+          "displayName": "새벽",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-11T04:13:00Z",
+          "bestScore": 880,
+          "center": "seoul",
+          "day": "2026-09-11",
+          "displayName": "달토끼",
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-08T05:14:00Z",
+          "bestScore": 824,
+          "center": "busan",
+          "day": "2026-09-08",
+          "displayName": "초코칩",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-14T06:15:00Z",
+          "bestScore": 751,
+          "center": null,
+          "day": "2026-09-14",
+          "displayName": "호두과자",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-10T07:10:00Z",
+          "bestScore": 633,
+          "center": "busan",
+          "day": "2026-09-10",
+          "displayName": "솜사탕",
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-12T08:11:00Z",
+          "bestScore": 430,
+          "center": "busan",
+          "day": "2026-09-12",
+          "displayName": "보리차",
+          "userId": "d0000000-0000-4000-8000-0000000000b5"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games/rpc.minigame_alltime_board@timing_bar.json",
+      "type": "[MiniGameAllTimeBoardRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-17T03:11:00Z",
+          "bestScore": 64,
+          "center": "busan",
+          "displayName": "초코칩",
+          "plays": 6,
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-17T05:02:00Z",
+          "bestScore": 41,
+          "center": "seoul",
+          "displayName": "새벽",
+          "plays": 4,
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-17T01:47:00Z",
+          "bestScore": 37,
+          "center": "seoul",
+          "displayName": "달토끼",
+          "plays": 9,
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-17T04:20:00Z",
+          "bestScore": 29,
+          "center": null,
+          "displayName": "호두과자",
+          "plays": 3,
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-17T02:05:00Z",
+          "bestScore": 22,
+          "center": "seoul",
+          "displayName": "구름빵",
+          "plays": 5,
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "bestAt": "2026-09-17T00:54:00Z",
+          "bestScore": 18,
+          "center": "busan",
+          "displayName": "솜사탕",
+          "plays": 2,
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/games/_games/rpc.minigame_board@crossy.json",
+      "type": "[MiniGameBoardRow]",
+      "variants": []
     },
     {
       "dump": [

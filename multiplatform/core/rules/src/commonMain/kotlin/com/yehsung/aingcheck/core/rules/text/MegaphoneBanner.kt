@@ -9,10 +9,12 @@
 //   그래서 이 파일의 어떤 판정도 본문 접두만 보고 숨기거나 띄우지 않는다(접두는 "확인해 볼 이유"일 뿐 — 스토어의 needsVerification).
 package com.yehsung.aingcheck.core.rules.text
 
+import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
 import com.yehsung.aingcheck.core.rules.format.SwiftKeyed
 import com.yehsung.aingcheck.core.rules.format.swiftKeyed
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftISO8601
+import com.yehsung.aingcheck.core.wire.SwiftURL
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 
@@ -25,7 +27,7 @@ data class MegaphoneBanner(
     /** 보낸 사람(답장 상대). 푸시로만 알고 아직 못 맞췄으면 null. */
     val senderID: String?,
     val senderName: String,
-    val senderAvatarURL: String?,
+    val senderAvatarURL: SwiftURL?,
     /** 접두(`📢 `)를 뗀 본문. */
     val body: String,
     val createdAt: SwiftDate,
@@ -123,7 +125,7 @@ data class MegaphoneInboxItem(
             megaphoneID = megaphoneId,
             senderID = senderId?.ifEmpty { null },
             senderName = name.ifEmpty { MegaphoneBanner.fallbackSenderName },
-            senderAvatarURL = senderAvatarUrl?.ifEmpty { null },
+            senderAvatarURL = senderAvatarUrl?.ifEmpty { null }?.let(SwiftURL::parse),
             body = text,
             createdAt = created,
         )
@@ -147,7 +149,7 @@ data class MegaphoneInboxItem(
 
         /** 응답 배열 → 배너. 줄 하나가 깨져도(필수 id 없음) 나머지는 살린다. 배열이 아니면 던진다(해석 실패 = 연결 실패와 같은 취급). */
         fun banners(raw: JsonElement, parseDate: (String) -> SwiftDate? = SwiftISO8601::parse): List<MegaphoneBanner> {
-            val rows = raw as? JsonArray ?: throw IllegalArgumentException("megaphone_inbox 응답이 배열이 아니다")
+            val rows = raw as? JsonArray ?: throw SwiftDecodingError("typeMismatch", "megaphone_inbox 응답이 배열이 아니다")
             return rows.mapNotNull { row -> runCatching { decode(row) }.getOrNull()?.banner(parseDate) }
         }
     }

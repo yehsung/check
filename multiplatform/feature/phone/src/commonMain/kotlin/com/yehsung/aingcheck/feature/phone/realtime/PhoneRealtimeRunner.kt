@@ -234,6 +234,8 @@ class PhoneRealtimeRunner(
                 // INV-MobileRealtimeRunner-d94b411a 이식: 테트리스 초인종은 판 중 공격마다 울린다 — **`.drain` 으로 떨어뜨리면** 그 울림마다 메시지
                 //   요약·이력 조회가 한 번씩 더 나간다. 잇는 것(방해 줄이 늦지 않게 — 맥과 같은 구조)과 따로 두는 것은 별개의 요구다.
                 RealtimeEffect.TetrisSignal -> tetris?.handleSignal()
+                // 아잉 큐브(RealtimeEffect.rummySignal @ 1a5eeca6): 폰은 판을 잇기 전까지 **일부러 빈 가지**다 — `.drain` 으로 떨어뜨리면 끌기마다 메시지 조회가 나간다.
+                RealtimeEffect.RummySignal -> Unit
                 // 확성기 배너(Swift MobileRealtimeRunner .megaphoneSignal @ 8b40bd44): 배너 목록 재조회 — **take_pokes 도 메시지 조회도 아니다**
                 //   (확성기 줄의 소비·요약은 같은 묶음의 ring → .drain 이 맡는다). `.drain` 으로 떨어뜨리면 배너가 안 뜬다.
                 RealtimeEffect.MegaphoneSignal -> megaphone?.invoke()

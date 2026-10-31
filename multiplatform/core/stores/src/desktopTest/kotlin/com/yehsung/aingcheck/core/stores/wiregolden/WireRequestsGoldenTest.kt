@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
 import com.yehsung.aingcheck.core.stores.service.achievementClaim
 import com.yehsung.aingcheck.core.stores.service.achievementsStatus
 import com.yehsung.aingcheck.core.stores.service.dailyMissionClaim
+import com.yehsung.aingcheck.core.stores.service.fetchMegaphoneInbox
 import com.yehsung.aingcheck.core.stores.service.fetchMyAILimits
 import com.yehsung.aingcheck.core.stores.service.megaphoneInfo
 import com.yehsung.aingcheck.core.stores.service.sendMegaphone
@@ -19,6 +20,10 @@ import com.yehsung.aingcheck.core.stores.service.weeklyWorkStatus
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftURL
+import com.yehsung.aingcheck.core.wire.SwiftUUID
+import com.yehsung.aingcheck.core.wire.games.RummyFace
+import com.yehsung.aingcheck.core.wire.games.RummyLayout
+import com.yehsung.aingcheck.core.wire.games.RummyPoint
 import com.yehsung.aingcheck.core.wire.models.CharacterSyncFetchError
 import com.yehsung.aingcheck.core.wire.models.ClientReleaseResponse
 import com.yehsung.aingcheck.testkit.dump.GoldenDump
@@ -67,6 +72,8 @@ import kotlin.test.fail
 
 
 
+private const val SEND_KEY = "ee000000-0000-4000-8000-0000000000e5"
+
 /** Swift `GoldenExportWireRequests.megaphoneBodies` 와 같은 본문(빈 · 상한+1 은 요청 없이 즉답, 나머지는 정규화한 글자로 RPC). */
 private val MEGAPHONE_BODIES = listOf(
     " \n\u200B ", "가".repeat(199), "가".repeat(198), "  오늘 3시\r\n라운지에서  간식 나눠요\u0007 ", "다들", "다들",
@@ -79,6 +86,14 @@ class WireRequestsGoldenTest {
     private val rid = "dd000000-0000-4000-8000-0000000000d4"
     private val now = SwiftDate(1_789_621_500.0)
     private val t = ACCESS
+    // Swift `uuidUpper` 와 같다 — 요청 본문이 소문자로 접히는지 재려고 대문자에서 만든다.
+    private val mu = SwiftUUID.parse(m.uppercase())!!
+    private val pu = SwiftUUID.parse(p.uppercase())!!
+    private val rummyTable = listOf(
+        listOf(RummyFace.joker, RummyFace(0, 7), RummyFace(1, 7)),
+        listOf(RummyFace(3, 11), RummyFace(3, 12), RummyFace(3, 13)),
+    )
+    private val rummyLayout = RummyLayout(listOf(RummyPoint(0, 640), null))
 
     /**
      * 결과 타입이 rules·stores 에 있는 case(골든 spec.resultOtherLanes — 받는 갈래 이름이 적혀 있다). Swift 서비스 함수 하나 =
@@ -118,6 +133,10 @@ class WireRequestsGoldenTest {
         "megaphoneInfo" to { s -> s.megaphoneInfo(t) },
         "megaphoneInfo#data" to { s -> listOf(s.megaphoneInfo(t), s.megaphoneInfo(t)) },
         "megaphoneInfo#badType" to { s -> s.megaphoneInfo(t) },
+        // 확성기 배너(Swift fetchMegaphoneInbox → [MegaphoneBanner] — 줄 해석은 rules MegaphoneInboxItem).
+        "fetchMegaphoneInbox" to { s -> s.fetchMegaphoneInbox(t) },
+        "fetchMegaphoneInbox#data" to { s -> s.fetchMegaphoneInbox(t, 6) },
+        "fetchMegaphoneInbox#missing" to { s -> s.fetchMegaphoneInbox(t) },
         // 내 AI 리밋(Swift fetchMyAILimits → [AILimitFetchedRow] — 행 거르기 · 라벨 정규화 AILimitDeviceLabelContract · AILimitPlanLabelContract).
         "fetchMyAILimits" to { s -> s.fetchMyAILimits(t, u) },
         "fetchMyAILimits#data" to { s -> s.fetchMyAILimits(t, u) },
@@ -350,6 +369,36 @@ class WireRequestsGoldenTest {
         "fetchAppUserCharacters#serverError" to { s -> s.fetchAppUserCharacters(t) },
         "fetchCharacterGiftPending#missing" to { s -> s.fetchCharacterGiftPending(t, 4) },
         "startPhoneWork#data" to { s -> s.startPhoneWork(t) },
+        // ---- 아잉 큐브 ----
+        "rummyLobby" to { s -> s.rummyLobby(t) },
+        "rummyLobby#data" to { s -> s.rummyLobby(t) },
+        "rummyLobby#deadlock" to { s -> s.rummyLobby(t) },
+        "rummyCreate" to { s -> s.rummyCreate(t, 5, true) },
+        "rummyCreate#data" to { s -> s.rummyCreate(t, 5, false) },
+        "rummyInvite" to { s -> s.rummyInvite(t, mu, pu) },
+        "rummyJoin" to { s -> s.rummyJoin(t, mu) },
+        "rummyDecline" to { s -> s.rummyDecline(t, mu) },
+        "rummyLeave" to { s -> s.rummyLeave(t, mu) },
+        "rummyStart" to { s -> s.rummyStart(t, mu) },
+        "rummyState" to { s -> s.rummyState(t, mu) },
+        "rummyState#data" to { s -> s.rummyState(t, mu) },
+        "rummyState#finished" to { s -> s.rummyState(t, mu) },
+        "rummyDraft" to { s -> s.rummyDraft(t, mu, 7, rummyTable) },
+        "rummyDraft(layout)" to { s -> s.rummyDraft(t, mu, 7, rummyTable, rummyLayout) },
+        "rummyPlay" to { s -> s.rummyPlay(t, mu, 8, rummyTable) },
+        "rummyPlay(layout)" to { s -> s.rummyPlay(t, mu, 8, rummyTable, rummyLayout) },
+        "rummyPlay#deadlock" to { s -> s.rummyPlay(t, mu, 8, rummyTable) },
+        "rummyHeartbeat" to { s -> s.rummyHeartbeat(t, mu) },
+        "rummyReact" to { s -> s.rummyReact(t, mu, "joy") },
+        "rummyDraw" to { s -> s.rummyDraw(t, mu, 9) },
+        "rummyRanking" to { s -> s.rummyRanking(t) },
+        "rummyRanking#data" to { s -> s.rummyRanking(t) },
+        // ---- 안 읽음 요약 v2 · 전송 멱등 키 ----
+        "fetchMessageUnreadSummary(v2)" to { s -> s.fetchMessageUnreadSummary(t, "message_unread_summary_v2") },
+        "sendMessage(key)" to { s -> s.sendMessage(t, p, "  안녕\n세상 ", SEND_KEY) },
+        "sendMessage(key)#duplicate" to { s -> s.sendMessage(t, p, "안녕", SEND_KEY) },
+        "sendMessage(key)#missing" to { s -> s.sendMessage(t, p, "안녕", SEND_KEY) },
+        "sendMessage(key)#missingTwice" to { s -> s.sendMessage(t, p, "안녕", SEND_KEY) },
         // ---- 상점 번호 깃발(C§4 #9) ----
         "fetchShopState(protocol)#html404" to { s -> listOf(s.fetchShopState(t, 4), s.fetchShopState(t, 4)) },
         "fetchShopState(protocol)#recheck" to { s ->
@@ -372,6 +421,7 @@ class WireRequestsGoldenTest {
         when (v) {
             is SwiftDate -> GoldenDump.date(v.timeIntervalSince1970)
             is SwiftURL -> JsonObject(mapOf("\$url" to JsonPrimitive(v.absoluteString)))
+            is SwiftUUID -> JsonObject(mapOf("\$uuid" to JsonPrimitive(v.lowercased)))
             // Swift 에 없는 Kotlin 칸 셋(latest_version·download_url·updated_at — 모델 주석)만 빼고 Swift 덤프와 맞춘다(fetchClientRelease).
             is ClientReleaseResponse -> JsonObject(
                 (GoldenDump().dump(v) as JsonObject) -

@@ -23,7 +23,12 @@ class TrayDotReasonsTest {
         val end = code.indexOf("#if", start + 1)
         check(start >= 0 && end > start) { "맥 소스에서 MenuBarDotReasons 선언을 못 찾았다" }
         val body = code.substring(start, end)
-        val texts = Regex("""static\s+let\s+(\w+)\s*=\s*"([^"]+)"""").findAll(body).associate { it.groupValues[1] to it.groupValues[2] }
+        val rummyBanner = File(repo, "Sources/check/RummyInviteBanner.swift").readText()
+        val rummyText = Regex("""static\s+let\s+dotReason\s*=\s*"([^"]+)"""").find(rummyBanner)?.groupValues?.get(1)
+            ?: error("맥 RummyInviteText.dotReason 을 못 찾았다")
+        check(Regex("""static\s+let\s+rummyInviteText\s*=\s*RummyInviteText\.dotReason""").containsMatchIn(body)) { "맥 rummyInviteText 가 다른 곳을 가리킨다" }
+        val texts = Regex("""static\s+let\s+(\w+)\s*=\s*"([^"]+)"""").findAll(body).associate { it.groupValues[1] to it.groupValues[2] } +
+            ("rummyInviteText" to rummyText)
         val updateText = Regex("""static\s+let\s+updateDotAccessibilityDescription\s*=\s*"([^"]+)"""").find(code)?.groupValues?.get(1)
             ?: error("맥 updateDotAccessibilityDescription 을 못 찾았다")
         val desc = body.substring(body.indexOf("var accessibilityDescription"))
@@ -46,6 +51,7 @@ class TrayDotReasonsTest {
         "gomokuInvite" -> TrayDotReasons(gomokuInvite = true)
         "chessInvite" -> TrayDotReasons(chessInvite = true)
         "tetrisInvite" -> TrayDotReasons(tetrisInvite = true)
+        "rummyInvite" -> TrayDotReasons(rummyInvite = true)
         "openReports" -> TrayDotReasons(openReports = true)
         "updateAvailable" -> TrayDotReasons(updateAvailable = true)
         else -> error("맥에 새 사유가 생겼다: $flag — Kotlin TrayDotReasons 에도 옮겨라")
@@ -54,9 +60,9 @@ class TrayDotReasonsTest {
     @Test
     fun star2TextsAndOrderMatchTheMacSource() {
         val mac = macDots()
-        assertEquals(6, mac.order.size, "맥 사유는 여섯이다: ${mac.order}")
+        assertEquals(7, mac.order.size, "맥 사유는 일곱이다: ${mac.order}")
         assertEquals(mac.separator, TrayDotReasons.SEPARATOR)
-        val all = TrayDotReasons(true, true, true, true, true, true)
+        val all = TrayDotReasons(true, true, true, true, true, true, true)
         assertEquals(mac.order.joinToString(mac.separator) { it.second }, all.accessibilityDescription)
         for ((flag, text) in mac.order) assertEquals(text, only(flag).accessibilityDescription, flag)
     }

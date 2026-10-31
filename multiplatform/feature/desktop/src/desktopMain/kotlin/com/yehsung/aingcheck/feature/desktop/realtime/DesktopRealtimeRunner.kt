@@ -251,6 +251,8 @@ class DesktopRealtimeRunner(
                 RealtimeEffect.GomokuSignal -> games.gomoku?.handleSignal()
                 RealtimeEffect.ChessSignal -> games.chess?.handleSignal()
                 RealtimeEffect.TetrisSignal -> games.tetris?.handleSignal()
+                // 아잉 큐브는 아직 데스크톱 스토어가 없다 — 일부러 빈 가지(`Drain` 으로 떨어뜨리면 끌기마다 메시지 조회가 나간다).
+                RealtimeEffect.RummySignal -> Unit
                 // 확성기 배너(2026-10-30)는 아직 데스크톱 화면이 없다(데스크톱 세션 몫) — 같은 묶음의 `ring` 이 메시지를 갚는다.
                 RealtimeEffect.MegaphoneSignal -> Unit
                 is RealtimeEffect.PushAccessToken -> transport?.pushAccessToken(effect.token)

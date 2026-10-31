@@ -7,12 +7,12 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * work_tick 사용 가능 판정(⑨): 404·PGRST202·403·42501·v≠1·디코드 실패 → 이 실행 동안 끈다([disable]).
- * 5xx 등 일시 실패 3연속 → 1시간 끈다. 성공하면 연속 수를 0 으로.
+ * 5xx 등 일시 실패 3연속 → 15분 끈다(옛 1시간 — 서버가 1분 만에 회복해도 1시간 동안 요청 여러 건짜리 경로에 묶였다, main 2026-10-30 안정화). 성공하면 연속 수를 0 으로.
  */
 class WorkTickGate {
     companion object {
         const val transientFailureLimit = 3
-        const val suspensionSeconds: Double = 60.0 * 60.0
+        const val suspensionSeconds: Double = 15.0 * 60.0
     }
 
     data class Snapshot(

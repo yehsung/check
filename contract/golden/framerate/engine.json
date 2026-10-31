@@ -4,7 +4,7 @@
       "allCases": "timing_bar flappy tetris crossy",
       "id": "kinds",
       "macCases": "timing_bar flappy tetris crossy",
-      "phoneCases": "timing_bar flappy tetris",
+      "phoneCases": "timing_bar flappy tetris crossy",
       "sharedControlHint": "클릭 또는 스페이스",
       "table": [
         {
@@ -48,7 +48,7 @@
           "howToPlay": "한 칸씩 뛰어 앞으로 · 차 · 강 · 기차를 피해",
           "icon": "figure.walk",
           "id": "crossy",
-          "isPhoneSupported": false,
+          "isPhoneSupported": true,
           "maxScore": 5000,
           "rawValue": "crossy",
           "roundTokenMidRunRefreshSecondsBits": "4092c00000000000",

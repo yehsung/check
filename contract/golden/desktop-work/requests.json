@@ -2193,7 +2193,10 @@
         "throws": {
           "$dump": {
             "$case": "serverError",
-            "$value": 503
+            "$value": {
+              "code": null,
+              "status": 503
+            }
           },
           "$type": "WorkTickFailure"
         }

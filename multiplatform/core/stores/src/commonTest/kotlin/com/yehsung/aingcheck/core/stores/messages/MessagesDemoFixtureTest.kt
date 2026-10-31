@@ -54,6 +54,10 @@ class MessagesDemoFixtureTest {
         val h = StoreHarness(this) { demoReply(it, scenario) }
         h.signIn(demoUser)
         val store = MessagesStore(h.context, h.storeScope, NaturalKoNameCollation, newLocalID = { "local-1" })
+        // 앱과 같이 배너 스토어를 꽂는다 — 데모 이력의 새봄 줄(main cec08cb1)은 megaphone_inbox 가 말한 확성기 줄이라 메시지함에 안 선다.
+        val banner = MegaphoneBannerStore(TestMegaphoneHost(h.session), h.storeScope, null, clock = { h.now() }, schedule = { _, _ -> })
+        store.megaphoneBanner = banner
+        banner.onCapabilityChange = { store.megaphoneFilterDidSettle() }
         store.appDidBecomeActive()
         advanceUntilIdle()
         return h to store
@@ -66,7 +70,9 @@ class MessagesDemoFixtureTest {
         store.listDidAppear()
         advanceUntilIdle()
         assertTrue(store.readReceiptsAvailable)
-        assertEquals(listOf("소라", "한결", "민재", "도윤"), store.threads.map { it.peerName }, "메시지 묶음은 최근순")
+        assertEquals(listOf("소라", "한결", "민재", "도윤"), store.threads.map { it.peerName }, "메시지 묶음은 최근순(확성기 줄 새봄은 메시지함에 없다)")
+        assertTrue(h.storeRequests.any { it.rpcName == "megaphone_inbox" }, "배너 필터 판정을 안 했다")
+        assertTrue(h.storeRequests.any { it.rpcName == "message_unread_summary_v2" }, "필터가 켜졌는데 옛 요약을 불렀다")
         assertEquals(setOf(sora, doyun), store.unreadPeerIDs)
         assertEquals(3, store.badgeCount)
         assertTrue(h.storeRequests.none { it.rpcName == "mark_messages_read" || it.rpcName == "mark_conversation_read" }, "목록만 보고 읽음을 올렸다")

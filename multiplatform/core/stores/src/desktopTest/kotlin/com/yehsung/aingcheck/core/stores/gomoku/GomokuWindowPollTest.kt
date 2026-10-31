@@ -106,6 +106,50 @@ class GomokuWindowPollTest {
 
     // MARK: 안전망 폴링 주기
 
+    /** 원본 V0327GomokuGuardTests.swift `상대_차례_상태_조회_주기는_구독_중이고_마감이_멀_때만_10초다` @ 1a5eeca6. */
+    @Test
+    fun statePollIsCalmOnlyWhenSubscribedAndDeadlineIsFar() {
+        val now = contractClock
+        fun interval(subscribed: Boolean, remaining: Double?) =
+            GomokuStore.statePollSeconds(subscribed, remaining?.let { now.addingTimeInterval(it) }, now)
+        assertEquals(10.0, interval(true, 30.0))
+        assertEquals(10.0, interval(true, 10.1))
+        assertEquals(3.0, interval(true, 10.0), "마감이 가까운데 늦췄다 — 시간 초과 결과를 늦게 본다")
+        assertEquals(3.0, interval(true, -5.0))
+        assertEquals(3.0, interval(true, null), "마감을 모르는데 늦췄다")
+        assertEquals(1.5, interval(false, 30.0), "미구독은 신호가 없으니 늦추면 안 된다")
+    }
+
+    /** 원본 V0327GomokuGuardTests.swift `구독_중_상대_차례면_평소_10초_마감_10초_안쪽은_3초마다_묻는다` @ 1a5eeca6. */
+    @Test
+    fun subscribedOpponentTurnPollsEveryTenSecondsAndThreeNearDeadline() = runTest {
+        var now = contractClock
+        val t0 = now
+        val deadlineMs = (t0.timeIntervalSince1970 + 30) * 1000
+        val moves = listOf(handMove(1, "black", 7, 7))
+        val (store, host, server) = rig {
+            respondWith("gomoku_state") { _, _ ->
+                handReply(handState(turn = "white", moveCount = 1, moves = moves, deadlineMs = deadlineMs, serverNowMs = now.timeIntervalSince1970 * 1000))
+            }
+        }
+        store.clock = { now }
+        store.applyState(handPayload(handState(turn = "white", moveCount = 1, moves = moves, deadlineMs = deadlineMs, serverNowMs = t0.timeIntervalSince1970 * 1000)))
+        host.realtimeState = RealtimeState.Subscribed(t0, t0)
+        store.isWindowVisible = true
+        suspend fun states(offset: Double): Int {
+            now = t0.addingTimeInterval(offset)
+            store.pollTick(now)
+            return server.count("gomoku_state")
+        }
+        assertEquals(1, states(0.0))
+        assertEquals(1, states(9.9), "마감이 먼데 10초 안에 다시 물었다")
+        assertEquals(2, states(10.0))
+        assertEquals(2, states(19.9))
+        assertEquals(3, states(20.0))
+        assertEquals(3, states(22.9))
+        assertEquals(4, states(23.0), "마감 10초 안쪽인데 3초마다 묻지 않는다")
+    }
+
     @Test
     fun opponentTurnPollingIsThreeSecondsSubscribedAndOneAndAHalfUnsubscribed() = runTest {
         var now = contractClock

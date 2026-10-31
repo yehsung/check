@@ -74,7 +74,7 @@ fun dumpTickFailure(e: WorkTickFailure): JsonElement {
         is WorkTickFailure.Forbidden -> case("forbidden", s(e.code))
         is WorkTickFailure.ContractMismatch -> case("contractMismatch", e.version?.let(::JsonPrimitive) ?: JsonNull)
         WorkTickFailure.Undecodable -> JsonPrimitive("undecodable")
-        is WorkTickFailure.ServerError -> case("serverError", JsonPrimitive(e.status))
+        is WorkTickFailure.ServerError -> case("serverError", JsonObject(mapOf("status" to JsonPrimitive(e.status), "code" to s(e.code))))
         is WorkTickFailure.Rejected -> case("rejected", JsonObject(mapOf("status" to JsonPrimitive(e.status), "code" to s(e.code))))
     }
 }

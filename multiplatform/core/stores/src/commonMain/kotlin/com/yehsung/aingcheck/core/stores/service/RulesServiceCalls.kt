@@ -10,13 +10,17 @@ import com.yehsung.aingcheck.core.net.achievementClaimRaw
 import com.yehsung.aingcheck.core.net.achievementsStatusRaw
 import com.yehsung.aingcheck.core.net.dailyMissionClaimRaw
 import com.yehsung.aingcheck.core.net.fetchMyAILimitRows
+import com.yehsung.aingcheck.core.net.megaphoneInboxRaw
 import com.yehsung.aingcheck.core.net.megaphoneInfoRaw
 import com.yehsung.aingcheck.core.net.sendMegaphoneRaw
 import com.yehsung.aingcheck.core.net.setStatusMessage
 import com.yehsung.aingcheck.core.net.weeklyWorkClaimRaw
 import com.yehsung.aingcheck.core.net.weeklyWorkStatusRaw
 import com.yehsung.aingcheck.core.rules.achievements.AchievementStatus
+import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
+import com.yehsung.aingcheck.core.rules.text.MegaphoneBannerRules
 import com.yehsung.aingcheck.core.rules.text.MegaphoneBody
+import com.yehsung.aingcheck.core.rules.text.MegaphoneInboxItem
 import com.yehsung.aingcheck.core.rules.text.MegaphoneInfoResponse
 import com.yehsung.aingcheck.core.rules.text.MegaphoneSendResponse
 import com.yehsung.aingcheck.core.rules.text.MessageBodyValidation
@@ -89,3 +93,10 @@ suspend fun SupabaseWorkService.megaphoneInfo(accessToken: String): MegaphoneInf
  */
 suspend fun SupabaseWorkService.fetchMyAILimits(accessToken: String, userID: String): List<AILimitFetchedRow> =
     AILimitFetchedRow.fromRows(fetchMyAILimitRows(accessToken, userID))
+
+/**
+ * Swift `fetchMegaphoneInbox(accessToken:hours:)` — 내게 온 확성기(최근 [hours] 시간)를 배너 도메인으로. 줄 하나가 깨져도 나머지는 살린다.
+ * 함수가 없는 서버(PGRST202 · 404)는 던진다 — 스토어가 "필터 끔"으로 접는다.
+ */
+suspend fun SupabaseWorkService.fetchMegaphoneInbox(accessToken: String, hours: Int = MegaphoneBannerRules.inboxHours): List<MegaphoneBanner> =
+    MegaphoneInboxItem.banners(megaphoneInboxRaw(accessToken, hours))

@@ -1926,7 +1926,11 @@
       "responses": [],
       "result": {
         "ok": {
+          "body": null,
+          "createdAt": null,
+          "duplicate": null,
           "maxLength": null,
+          "messageId": null,
           "resetAfterSeconds": null,
           "retryAfterSeconds": null,
           "ring": null,
@@ -1944,7 +1948,11 @@
       "responses": [],
       "result": {
         "ok": {
+          "body": null,
+          "createdAt": null,
+          "duplicate": null,
           "maxLength": 200,
+          "messageId": null,
           "resetAfterSeconds": null,
           "retryAfterSeconds": null,
           "ring": null,
@@ -4552,6 +4560,2240 @@
       "unordered": false
     },
     {
+      "id": "rummyLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyLobby#data",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_lobby",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n  \"invites\": [\n    {\n      \"expires_at_ms\": 1793341632145,\n      \"host\": {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험01\",\n        \"id\": \"d0000000-0000-4000-8000-000000000001\"\n      },\n      \"id\": \"2a0b2f9f-3150-48bb-b727-267da36924f7\",\n      \"is_public\": true,\n      \"max_seats\": 4,\n      \"seats\": [\n        {\n          \"avatar_url\": null,\n          \"character\": null,\n          \"display_name\": \"디시험01\",\n          \"seat_no\": 0,\n          \"state\": \"joined\",\n          \"user_id\": \"d0000000-0000-4000-8000-000000000001\"\n        },\n        {\n          \"avatar_url\": null,\n          \"character\": null,\n          \"display_name\": \"디시험02\",\n          \"seat_no\": null,\n          \"state\": \"invited\",\n          \"user_id\": \"d0000000-0000-4000-8000-000000000002\"\n        },\n        {\n          \"avatar_url\": null,\n          \"character\": null,\n          \"display_name\": \"디시험03\",\n          \"seat_no\": null,\n          \"state\": \"invited\",\n          \"user_id\": \"d0000000-0000-4000-8000-000000000003\"\n        },\n        {\n          \"avatar_url\": null,\n          \"character\": null,\n          \"display_name\": \"디시험06\",\n          \"seat_no\": null,\n          \"state\": \"invited\",\n          \"user_id\": \"d0000000-0000-4000-8000-000000000006\"\n        }\n      ],\n      \"stake\": 5\n    }\n  ],\n  \"me\": {\n    \"active_match_id\": null,\n    \"games\": 0,\n    \"room\": {\n      \"expires_at_ms\": 1793341632154,\n      \"host\": {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험06\",\n        \"id\": \"d0000000-0000-4000-8000-000000000006\"\n      },\n      \"id\": \"fbab5cb5-0aed-4d70-92a6-cd8756b2e5ee\",\n      \"is_public\": false,\n      \"max_seats\": 4,\n      \"seats\": [\n        {\n          \"avatar_url\": null,\n          \"character\": null,\n          \"display_name\": \"디시험06\",\n          \"seat_no\": 0,\n          \"state\": \"joined\",\n          \"user_id\": \"d0000000-0000-4000-8000-000000000006\"\n        }\n      ],\n      \"stake\": 3\n    },\n    \"ruby_balance\": 100,\n    \"wins\": 0\n  },\n  \"public_rooms\": [\n    {\n      \"expires_at_ms\": 1793341632153,\n      \"host\": {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험05\",\n        \"id\": \"d0000000-0000-4000-8000-000000000005\"\n      },\n      \"id\": \"685a52f6-9bce-4694-b727-f01f9bfe06cb\",\n      \"is_public\": true,\n      \"max_seats\": 4,\n      \"seats\": [\n        {\n          \"avatar_url\": null,\n          \"character\": null,\n          \"display_name\": \"디시험05\",\n          \"seat_no\": 0,\n          \"state\": \"joined\",\n          \"user_id\": \"d0000000-0000-4000-8000-000000000005\"\n        }\n      ],\n      \"stake\": 10\n    }\n  ],\n  \"room_ttl_seconds\": 600,\n  \"server_now_ms\": 1793341032155,\n  \"stakes\": [\n    3,\n    5,\n    10\n  ],\n  \"status\": \"ok\",\n  \"turn_seconds\": 60,\n  \"users\": [\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험01\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000001\",\n      \"in_match\": true,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험02\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000002\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험03\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000003\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험04\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000004\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험05\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000005\",\n      \"in_match\": true,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험08\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000008\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험09\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000009\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험10\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000010\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험11\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000011\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": true,\n      \"character\": null,\n      \"display_name\": \"디시험12\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000012\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": false,\n      \"character\": null,\n      \"display_name\": \"abto.app\",\n      \"focus_mode\": false,\n      \"id\": \"267a3495-643c-40cc-b1a7-14967166eae1\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": false,\n      \"character\": null,\n      \"display_name\": \"거부목록사용자\",\n      \"focus_mode\": false,\n      \"id\": \"f46dc1d0-4dff-416e-81f0-91d4fb413def\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": false,\n      \"character\": null,\n      \"display_name\": \"디시험07\",\n      \"focus_mode\": false,\n      \"id\": \"d0000000-0000-4000-8000-000000000007\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": false,\n      \"character\": null,\n      \"display_name\": \"씨앗다섯\",\n      \"focus_mode\": false,\n      \"id\": \"785b5732-75fe-4a71-931a-2e3f06e63505\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": false,\n      \"character\": null,\n      \"display_name\": \"코덱스토큰도둑예은\",\n      \"focus_mode\": false,\n      \"id\": \"3e240c02-8972-478e-a674-014f498a641b\",\n      \"in_match\": false,\n      \"is_working\": false\n    },\n    {\n      \"avatar_url\": null,\n      \"capable\": false,\n      \"character\": null,\n      \"display_name\": \"코덱스토큰도둑지유\",\n      \"focus_mode\": false,\n      \"id\": \"544e3837-f01c-4560-b82f-4d44c269f044\",\n      \"in_match\": false,\n      \"is_working\": false\n    }\n  ]\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "invites": [
+            {
+              "expiresAtMs": {
+                "$f64": "427a18b7dae91000"
+              },
+              "host": {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험01",
+                "id": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000001"
+                }
+              },
+              "id": {
+                "$uuid": "2a0b2f9f-3150-48bb-b727-267da36924f7"
+              },
+              "isPublic": true,
+              "maxSeats": 4,
+              "seats": [
+                {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "디시험01",
+                  "seatNo": 0,
+                  "state": "joined",
+                  "userId": {
+                    "$uuid": "d0000000-0000-4000-8000-000000000001"
+                  }
+                },
+                {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "디시험02",
+                  "seatNo": null,
+                  "state": "invited",
+                  "userId": {
+                    "$uuid": "d0000000-0000-4000-8000-000000000002"
+                  }
+                },
+                {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "디시험03",
+                  "seatNo": null,
+                  "state": "invited",
+                  "userId": {
+                    "$uuid": "d0000000-0000-4000-8000-000000000003"
+                  }
+                },
+                {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "디시험06",
+                  "seatNo": null,
+                  "state": "invited",
+                  "userId": {
+                    "$uuid": "d0000000-0000-4000-8000-000000000006"
+                  }
+                }
+              ],
+              "stake": 5
+            }
+          ],
+          "me": {
+            "activeMatchId": null,
+            "games": 0,
+            "room": {
+              "expiresAtMs": {
+                "$f64": "427a18b7dae9a000"
+              },
+              "host": {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험06",
+                "id": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000006"
+                }
+              },
+              "id": {
+                "$uuid": "fbab5cb5-0aed-4d70-92a6-cd8756b2e5ee"
+              },
+              "isPublic": false,
+              "maxSeats": 4,
+              "seats": [
+                {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "디시험06",
+                  "seatNo": 0,
+                  "state": "joined",
+                  "userId": {
+                    "$uuid": "d0000000-0000-4000-8000-000000000006"
+                  }
+                }
+              ],
+              "stake": 3
+            },
+            "rubyBalance": 100,
+            "wins": 0
+          },
+          "publicRooms": [
+            {
+              "expiresAtMs": {
+                "$f64": "427a18b7dae99000"
+              },
+              "host": {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험05",
+                "id": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000005"
+                }
+              },
+              "id": {
+                "$uuid": "685a52f6-9bce-4694-b727-f01f9bfe06cb"
+              },
+              "isPublic": true,
+              "maxSeats": 4,
+              "seats": [
+                {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "디시험05",
+                  "seatNo": 0,
+                  "state": "joined",
+                  "userId": {
+                    "$uuid": "d0000000-0000-4000-8000-000000000005"
+                  }
+                }
+              ],
+              "stake": 10
+            }
+          ],
+          "roomTtlSeconds": 600,
+          "serverNowMs": {
+            "$f64": "427a18b7486db000"
+          },
+          "stakes": [
+            3,
+            5,
+            10
+          ],
+          "status": "ok",
+          "turnSeconds": 60,
+          "users": [
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험01",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000001"
+              },
+              "inMatch": true,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험02",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000002"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험03",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000003"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험04",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000004"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험05",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000005"
+              },
+              "inMatch": true,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험08",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000008"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험09",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000009"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험10",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000010"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험11",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000011"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "character": null,
+              "displayName": "디시험12",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000012"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "character": null,
+              "displayName": "abto.app",
+              "focusMode": false,
+              "id": {
+                "$uuid": "267a3495-643c-40cc-b1a7-14967166eae1"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "character": null,
+              "displayName": "거부목록사용자",
+              "focusMode": false,
+              "id": {
+                "$uuid": "f46dc1d0-4dff-416e-81f0-91d4fb413def"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "character": null,
+              "displayName": "디시험07",
+              "focusMode": false,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000007"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "character": null,
+              "displayName": "씨앗다섯",
+              "focusMode": false,
+              "id": {
+                "$uuid": "785b5732-75fe-4a71-931a-2e3f06e63505"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "character": null,
+              "displayName": "코덱스토큰도둑예은",
+              "focusMode": false,
+              "id": {
+                "$uuid": "3e240c02-8972-478e-a674-014f498a641b"
+              },
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "character": null,
+              "displayName": "코덱스토큰도둑지유",
+              "focusMode": false,
+              "id": {
+                "$uuid": "544e3837-f01c-4560-b82f-4d44c269f044"
+              },
+              "inMatch": false,
+              "isWorking": false
+            }
+          ]
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyLobby#deadlock",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_lobby",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"40P01\",\"message\":\"deadlock detected\"}",
+          "status": 400
+        }
+      ],
+      "result": {
+        "throws": {
+          "$case": "authMessage",
+          "$value": "deadlock detected"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyCreate",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1,
+            "p_public": true,
+            "p_stake": 5
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_create",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyCreate#data",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1,
+            "p_public": false,
+            "p_stake": 5
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_create",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n  \"match_id\": \"2a0b2f9f-3150-48bb-b727-267da36924f7\",\n  \"state\": {\n    \"consecutive_passes\": 0,\n    \"draft\": null,\n    \"end_reason\": null,\n    \"expires_at_ms\": 1793341632145,\n    \"finished_at_ms\": null,\n    \"grace_ms\": 2000,\n    \"host_id\": \"d0000000-0000-4000-8000-000000000001\",\n    \"id\": \"2a0b2f9f-3150-48bb-b727-267da36924f7\",\n    \"is_public\": true,\n    \"last_event\": null,\n    \"max_seats\": 4,\n    \"my_initial_done\": false,\n    \"my_rack\": null,\n    \"my_seat_no\": 0,\n    \"pool_count\": 0,\n    \"reactions\": [],\n    \"seat_count\": null,\n    \"seats\": [\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험01\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 0,\n        \"seat_no\": 0,\n        \"state\": \"joined\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000001\"\n      }\n    ],\n    \"seq\": 0,\n    \"server_now_ms\": 1793341032146,\n    \"stake\": 5,\n    \"status\": \"forming\",\n    \"table\": [],\n    \"table_layout\": null,\n    \"turn_deadline_ms\": null,\n    \"turn_seat_no\": null,\n    \"turn_started_ms\": null\n  },\n  \"status\": \"ok\"\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "draftSeq": null,
+          "dropped": null,
+          "have": null,
+          "matchId": {
+            "$uuid": "2a0b2f9f-3150-48bb-b727-267da36924f7"
+          },
+          "need": null,
+          "reason": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "side": null,
+          "stakes": null,
+          "state": {
+            "consecutivePasses": 0,
+            "draft": null,
+            "endReason": null,
+            "expiresAtMs": {
+              "$f64": "427a18b7dae91000"
+            },
+            "finishedAtMs": null,
+            "graceMs": {
+              "$f64": "409f400000000000"
+            },
+            "hostId": {
+              "$uuid": "d0000000-0000-4000-8000-000000000001"
+            },
+            "id": {
+              "$uuid": "2a0b2f9f-3150-48bb-b727-267da36924f7"
+            },
+            "isPublic": true,
+            "lastEvent": null,
+            "maxSeats": 4,
+            "myInitialDone": false,
+            "myRack": null,
+            "mySeatNo": 0,
+            "poolCount": 0,
+            "reactions": [],
+            "seatCount": null,
+            "seats": [
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험01",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 0,
+                "seatNo": 0,
+                "state": "joined",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000001"
+                }
+              }
+            ],
+            "seq": 0,
+            "serverNowMs": {
+              "$f64": "427a18b7486d2000"
+            },
+            "stake": 5,
+            "status": "forming",
+            "table": [],
+            "tableLayout": null,
+            "turnDeadlineMs": null,
+            "turnSeatNo": null,
+            "turnStartedMs": null
+          },
+          "status": "ok"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyInvite",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_user": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_invite",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyJoin",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_join",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyDecline",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_decline",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyLeave",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_leave",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyStart",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_start",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyState#data",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n  \"state\": {\n    \"consecutive_passes\": 0,\n    \"draft\": null,\n    \"end_reason\": null,\n    \"expires_at_ms\": null,\n    \"finished_at_ms\": null,\n    \"grace_ms\": 2000,\n    \"host_id\": \"92000000-0000-4000-8000-000000000001\",\n    \"id\": \"698517ab-2a09-40dd-abaa-f82b7fb07e9c\",\n    \"is_public\": true,\n    \"last_event\": {\n      \"at_ms\": 1793341032754,\n      \"count\": 6,\n      \"kind\": \"play\",\n      \"seat_no\": 0\n    },\n    \"max_seats\": 4,\n    \"my_initial_done\": false,\n    \"my_rack\": [\n      \"B5\",\n      \"B6\",\n      \"B7\",\n      \"C1\"\n    ],\n    \"my_seat_no\": 1,\n    \"pool_count\": 8,\n    \"reactions\": [],\n    \"seat_count\": 3,\n    \"seats\": [\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"이판01\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": true,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 1,\n        \"seat_no\": 0,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"92000000-0000-4000-8000-000000000001\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"이판02\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 4,\n        \"seat_no\": 1,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"92000000-0000-4000-8000-000000000002\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"이판03\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 6,\n        \"seat_no\": 2,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"92000000-0000-4000-8000-000000000003\"\n      }\n    ],\n    \"seq\": 2,\n    \"server_now_ms\": 1793341032755,\n    \"stake\": 3,\n    \"status\": \"active\",\n    \"table\": [\n      [\n        \"A10\",\n        \"B10\",\n        \"C10\"\n      ],\n      [\n        \"A1\",\n        \"A2\",\n        \"A3\"\n      ]\n    ],\n    \"table_layout\": [\n      [\n        10,\n        20\n      ],\n      [\n        999,\n        640\n      ]\n    ],\n    \"turn_deadline_ms\": 1793341092754,\n    \"turn_seat_no\": 1,\n    \"turn_started_ms\": 1793341032754\n  },\n  \"status\": \"ok\"\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "draftSeq": null,
+          "dropped": null,
+          "have": null,
+          "matchId": null,
+          "need": null,
+          "reason": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "side": null,
+          "stakes": null,
+          "state": {
+            "consecutivePasses": 0,
+            "draft": null,
+            "endReason": null,
+            "expiresAtMs": null,
+            "finishedAtMs": null,
+            "graceMs": {
+              "$f64": "409f400000000000"
+            },
+            "hostId": {
+              "$uuid": "92000000-0000-4000-8000-000000000001"
+            },
+            "id": {
+              "$uuid": "698517ab-2a09-40dd-abaa-f82b7fb07e9c"
+            },
+            "isPublic": true,
+            "lastEvent": {
+              "atMs": {
+                "$f64": "427a18b748932000"
+              },
+              "count": 6,
+              "kind": "play",
+              "seatNo": 0
+            },
+            "maxSeats": 4,
+            "myInitialDone": false,
+            "myRack": [
+              {
+                "color": 1,
+                "number": 5
+              },
+              {
+                "color": 1,
+                "number": 6
+              },
+              {
+                "color": 1,
+                "number": 7
+              },
+              {
+                "color": 2,
+                "number": 1
+              }
+            ],
+            "mySeatNo": 1,
+            "poolCount": 8,
+            "reactions": [],
+            "seatCount": 3,
+            "seats": [
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "이판01",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": true,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 1,
+                "seatNo": 0,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "92000000-0000-4000-8000-000000000001"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "이판02",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 4,
+                "seatNo": 1,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "92000000-0000-4000-8000-000000000002"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "이판03",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 6,
+                "seatNo": 2,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "92000000-0000-4000-8000-000000000003"
+                }
+              }
+            ],
+            "seq": 2,
+            "serverNowMs": {
+              "$f64": "427a18b748933000"
+            },
+            "stake": 3,
+            "status": "active",
+            "table": [
+              [
+                {
+                  "color": 0,
+                  "number": 10
+                },
+                {
+                  "color": 1,
+                  "number": 10
+                },
+                {
+                  "color": 2,
+                  "number": 10
+                }
+              ],
+              [
+                {
+                  "color": 0,
+                  "number": 1
+                },
+                {
+                  "color": 0,
+                  "number": 2
+                },
+                {
+                  "color": 0,
+                  "number": 3
+                }
+              ]
+            ],
+            "tableLayout": {
+              "points": [
+                {
+                  "x": 10,
+                  "y": 20
+                },
+                {
+                  "x": 999,
+                  "y": 640
+                }
+              ]
+            },
+            "turnDeadlineMs": {
+              "$f64": "427a18b757392000"
+            },
+            "turnSeatNo": 1,
+            "turnStartedMs": {
+              "$f64": "427a18b748932000"
+            }
+          },
+          "status": "ok"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyState#finished",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n  \"state\": {\n    \"consecutive_passes\": 0,\n    \"draft\": null,\n    \"end_reason\": \"rack_empty\",\n    \"expires_at_ms\": null,\n    \"finished_at_ms\": 1793341032214,\n    \"grace_ms\": 2000,\n    \"host_id\": \"d0000000-0000-4000-8000-000000000001\",\n    \"id\": \"2a0b2f9f-3150-48bb-b727-267da36924f7\",\n    \"is_public\": true,\n    \"last_event\": {\n      \"at_ms\": 1793341032217,\n      \"count\": 1,\n      \"kind\": \"finish\",\n      \"seat_no\": 0\n    },\n    \"max_seats\": 4,\n    \"my_initial_done\": true,\n    \"my_rack\": null,\n    \"my_seat_no\": 0,\n    \"pool_count\": 11,\n    \"reactions\": [],\n    \"seat_count\": 4,\n    \"seats\": [\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험01\",\n        \"final_rack\": [],\n        \"final_rank\": 1,\n        \"final_score\": 35,\n        \"forfeit_order\": null,\n        \"initial_done\": true,\n        \"is_winner\": true,\n        \"payout\": 15,\n        \"rack_count\": 0,\n        \"seat_no\": 0,\n        \"state\": \"done\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000001\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험02\",\n        \"final_rack\": [\n          \"C1\",\n          \"C2\",\n          \"C5\",\n          \"D7\",\n          \"D8\",\n          \"B11\",\n          \"C4\"\n        ],\n        \"final_rank\": 4,\n        \"final_score\": null,\n        \"forfeit_order\": 1,\n        \"initial_done\": false,\n        \"is_winner\": false,\n        \"payout\": 0,\n        \"rack_count\": 0,\n        \"seat_no\": 1,\n        \"state\": \"forfeit\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000002\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험08\",\n        \"final_rack\": [\n          \"A1\",\n          \"A2\",\n          \"B5\",\n          \"B6\",\n          \"C12\",\n          \"D1\",\n          \"C6\",\n          \"C7\"\n        ],\n        \"final_rank\": 3,\n        \"final_score\": null,\n        \"forfeit_order\": 2,\n        \"initial_done\": false,\n        \"is_winner\": false,\n        \"payout\": 0,\n        \"rack_count\": 0,\n        \"seat_no\": 2,\n        \"state\": \"forfeit\",\n        \"timeout_streak\": 3,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000008\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험04\",\n        \"final_rack\": [\n          \"A5\",\n          \"B9\",\n          \"C3\",\n          \"C8\",\n          \"C10\"\n        ],\n        \"final_rank\": 2,\n        \"final_score\": -35,\n        \"forfeit_order\": null,\n        \"initial_done\": true,\n        \"is_winner\": false,\n        \"payout\": 5,\n        \"rack_count\": 5,\n        \"seat_no\": 3,\n        \"state\": \"done\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000004\"\n      }\n    ],\n    \"seq\": 14,\n    \"server_now_ms\": 1793341032219,\n    \"stake\": 5,\n    \"status\": \"finished\",\n    \"table\": [\n      [\n        \"A10\",\n        \"A11\",\n        \"A12\"\n      ],\n      [\n        \"D9\",\n        \"D10\",\n        \"D11\",\n        \"D12\",\n        \"D13\"\n      ],\n      [\n        \"B1\",\n        \"B2\",\n        \"B3\"\n      ],\n      [\n        \"A9\",\n        \"B9\",\n        \"C9\"\n      ]\n    ],\n    \"table_layout\": null,\n    \"turn_deadline_ms\": null,\n    \"turn_seat_no\": null,\n    \"turn_started_ms\": null\n  },\n  \"status\": \"ok\"\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "draftSeq": null,
+          "dropped": null,
+          "have": null,
+          "matchId": null,
+          "need": null,
+          "reason": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "side": null,
+          "stakes": null,
+          "state": {
+            "consecutivePasses": 0,
+            "draft": null,
+            "endReason": "rackEmpty",
+            "expiresAtMs": null,
+            "finishedAtMs": {
+              "$f64": "427a18b748716000"
+            },
+            "graceMs": {
+              "$f64": "409f400000000000"
+            },
+            "hostId": {
+              "$uuid": "d0000000-0000-4000-8000-000000000001"
+            },
+            "id": {
+              "$uuid": "2a0b2f9f-3150-48bb-b727-267da36924f7"
+            },
+            "isPublic": true,
+            "lastEvent": {
+              "atMs": {
+                "$f64": "427a18b748719000"
+              },
+              "count": 1,
+              "kind": "finish",
+              "seatNo": 0
+            },
+            "maxSeats": 4,
+            "myInitialDone": true,
+            "myRack": null,
+            "mySeatNo": 0,
+            "poolCount": 11,
+            "reactions": [],
+            "seatCount": 4,
+            "seats": [
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험01",
+                "finalRack": [],
+                "finalRank": 1,
+                "finalScore": 35,
+                "forfeitOrder": null,
+                "initialDone": true,
+                "isWinner": true,
+                "payout": 15,
+                "rackCount": 0,
+                "seatNo": 0,
+                "state": "done",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000001"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험02",
+                "finalRack": [
+                  {
+                    "color": 2,
+                    "number": 1
+                  },
+                  {
+                    "color": 2,
+                    "number": 2
+                  },
+                  {
+                    "color": 2,
+                    "number": 5
+                  },
+                  {
+                    "color": 3,
+                    "number": 7
+                  },
+                  {
+                    "color": 3,
+                    "number": 8
+                  },
+                  {
+                    "color": 1,
+                    "number": 11
+                  },
+                  {
+                    "color": 2,
+                    "number": 4
+                  }
+                ],
+                "finalRank": 4,
+                "finalScore": null,
+                "forfeitOrder": 1,
+                "initialDone": false,
+                "isWinner": false,
+                "payout": 0,
+                "rackCount": 0,
+                "seatNo": 1,
+                "state": "forfeit",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000002"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험08",
+                "finalRack": [
+                  {
+                    "color": 0,
+                    "number": 1
+                  },
+                  {
+                    "color": 0,
+                    "number": 2
+                  },
+                  {
+                    "color": 1,
+                    "number": 5
+                  },
+                  {
+                    "color": 1,
+                    "number": 6
+                  },
+                  {
+                    "color": 2,
+                    "number": 12
+                  },
+                  {
+                    "color": 3,
+                    "number": 1
+                  },
+                  {
+                    "color": 2,
+                    "number": 6
+                  },
+                  {
+                    "color": 2,
+                    "number": 7
+                  }
+                ],
+                "finalRank": 3,
+                "finalScore": null,
+                "forfeitOrder": 2,
+                "initialDone": false,
+                "isWinner": false,
+                "payout": 0,
+                "rackCount": 0,
+                "seatNo": 2,
+                "state": "forfeit",
+                "timeoutStreak": 3,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000008"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험04",
+                "finalRack": [
+                  {
+                    "color": 0,
+                    "number": 5
+                  },
+                  {
+                    "color": 1,
+                    "number": 9
+                  },
+                  {
+                    "color": 2,
+                    "number": 3
+                  },
+                  {
+                    "color": 2,
+                    "number": 8
+                  },
+                  {
+                    "color": 2,
+                    "number": 10
+                  }
+                ],
+                "finalRank": 2,
+                "finalScore": -35,
+                "forfeitOrder": null,
+                "initialDone": true,
+                "isWinner": false,
+                "payout": 5,
+                "rackCount": 5,
+                "seatNo": 3,
+                "state": "done",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000004"
+                }
+              }
+            ],
+            "seq": 14,
+            "serverNowMs": {
+              "$f64": "427a18b74871b000"
+            },
+            "stake": 5,
+            "status": "finished",
+            "table": [
+              [
+                {
+                  "color": 0,
+                  "number": 10
+                },
+                {
+                  "color": 0,
+                  "number": 11
+                },
+                {
+                  "color": 0,
+                  "number": 12
+                }
+              ],
+              [
+                {
+                  "color": 3,
+                  "number": 9
+                },
+                {
+                  "color": 3,
+                  "number": 10
+                },
+                {
+                  "color": 3,
+                  "number": 11
+                },
+                {
+                  "color": 3,
+                  "number": 12
+                },
+                {
+                  "color": 3,
+                  "number": 13
+                }
+              ],
+              [
+                {
+                  "color": 1,
+                  "number": 1
+                },
+                {
+                  "color": 1,
+                  "number": 2
+                },
+                {
+                  "color": 1,
+                  "number": 3
+                }
+              ],
+              [
+                {
+                  "color": 0,
+                  "number": 9
+                },
+                {
+                  "color": 1,
+                  "number": 9
+                },
+                {
+                  "color": 2,
+                  "number": 9
+                }
+              ]
+            ],
+            "tableLayout": null,
+            "turnDeadlineMs": null,
+            "turnSeatNo": null,
+            "turnStartedMs": null
+          },
+          "status": "ok"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyDraft",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 7,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_table": [
+              [
+                "J",
+                "A7",
+                "B7"
+              ],
+              [
+                "D11",
+                "D12",
+                "D13"
+              ]
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_draft",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyDraft(layout)",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 7,
+            "p_layout": [
+              [
+                0,
+                640
+              ],
+              null
+            ],
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_table": [
+              [
+                "J",
+                "A7",
+                "B7"
+              ],
+              [
+                "D11",
+                "D12",
+                "D13"
+              ]
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_draft",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyPlay",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 8,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_table": [
+              [
+                "J",
+                "A7",
+                "B7"
+              ],
+              [
+                "D11",
+                "D12",
+                "D13"
+              ]
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_play",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyPlay(layout)",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 8,
+            "p_layout": [
+              [
+                0,
+                640
+              ],
+              null
+            ],
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_table": [
+              [
+                "J",
+                "A7",
+                "B7"
+              ],
+              [
+                "D11",
+                "D12",
+                "D13"
+              ]
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_play",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyPlay#deadlock",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 8,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_table": [
+              [
+                "J",
+                "A7",
+                "B7"
+              ],
+              [
+                "D11",
+                "D12",
+                "D13"
+              ]
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_play",
+          "query": []
+        },
+        {
+          "body": {
+            "p_expected_seq": 8,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_table": [
+              [
+                "J",
+                "A7",
+                "B7"
+              ],
+              [
+                "D11",
+                "D12",
+                "D13"
+              ]
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_play",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"40P01\",\"message\":\"deadlock detected\"}",
+          "status": 400
+        },
+        {
+          "body": "{\n  \"reason\": \"invalid_meld\",\n  \"state\": {\n    \"consecutive_passes\": 0,\n    \"draft\": {\n      \"at_ms\": 1793341032173,\n      \"draft_seq\": 1,\n      \"layout\": null,\n      \"table\": [\n        [\n          \"A10\",\n          \"A11\",\n          \"A12\"\n        ]\n      ]\n    },\n    \"end_reason\": null,\n    \"expires_at_ms\": null,\n    \"finished_at_ms\": null,\n    \"grace_ms\": 2000,\n    \"host_id\": \"d0000000-0000-4000-8000-000000000001\",\n    \"id\": \"2a0b2f9f-3150-48bb-b727-267da36924f7\",\n    \"is_public\": true,\n    \"last_event\": {\n      \"at_ms\": 1793341032169,\n      \"count\": 4,\n      \"kind\": \"start\",\n      \"seat_no\": 3\n    },\n    \"max_seats\": 4,\n    \"my_initial_done\": false,\n    \"my_rack\": [\n      \"A10\",\n      \"A11\",\n      \"A12\",\n      \"B1\",\n      \"B2\",\n      \"C9\",\n      \"D10\"\n    ],\n    \"my_seat_no\": 0,\n    \"pool_count\": 20,\n    \"reactions\": [],\n    \"seat_count\": 4,\n    \"seats\": [\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험01\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 7,\n        \"seat_no\": 0,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000001\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험02\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 6,\n        \"seat_no\": 1,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000002\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험08\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 6,\n        \"seat_no\": 2,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000008\"\n      },\n      {\n        \"avatar_url\": null,\n        \"character\": null,\n        \"display_name\": \"디시험04\",\n        \"final_rack\": null,\n        \"final_rank\": null,\n        \"final_score\": null,\n        \"forfeit_order\": null,\n        \"initial_done\": false,\n        \"is_winner\": null,\n        \"payout\": null,\n        \"rack_count\": 6,\n        \"seat_no\": 3,\n        \"state\": \"playing\",\n        \"timeout_streak\": 0,\n        \"user_id\": \"d0000000-0000-4000-8000-000000000004\"\n      }\n    ],\n    \"seq\": 1,\n    \"server_now_ms\": 1793341032177,\n    \"stake\": 5,\n    \"status\": \"active\",\n    \"table\": [],\n    \"table_layout\": null,\n    \"turn_deadline_ms\": 1793341092171,\n    \"turn_seat_no\": 0,\n    \"turn_started_ms\": 1793341032171\n  },\n  \"status\": \"rejected\"\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "draftSeq": null,
+          "dropped": null,
+          "have": null,
+          "matchId": null,
+          "need": null,
+          "reason": "invalidMeld",
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "side": null,
+          "stakes": null,
+          "state": {
+            "consecutivePasses": 0,
+            "draft": {
+              "atMs": {
+                "$f64": "427a18b7486ed000"
+              },
+              "draftSeq": 1,
+              "layout": null,
+              "table": [
+                [
+                  {
+                    "color": 0,
+                    "number": 10
+                  },
+                  {
+                    "color": 0,
+                    "number": 11
+                  },
+                  {
+                    "color": 0,
+                    "number": 12
+                  }
+                ]
+              ]
+            },
+            "endReason": null,
+            "expiresAtMs": null,
+            "finishedAtMs": null,
+            "graceMs": {
+              "$f64": "409f400000000000"
+            },
+            "hostId": {
+              "$uuid": "d0000000-0000-4000-8000-000000000001"
+            },
+            "id": {
+              "$uuid": "2a0b2f9f-3150-48bb-b727-267da36924f7"
+            },
+            "isPublic": true,
+            "lastEvent": {
+              "atMs": {
+                "$f64": "427a18b7486e9000"
+              },
+              "count": 4,
+              "kind": "start",
+              "seatNo": 3
+            },
+            "maxSeats": 4,
+            "myInitialDone": false,
+            "myRack": [
+              {
+                "color": 0,
+                "number": 10
+              },
+              {
+                "color": 0,
+                "number": 11
+              },
+              {
+                "color": 0,
+                "number": 12
+              },
+              {
+                "color": 1,
+                "number": 1
+              },
+              {
+                "color": 1,
+                "number": 2
+              },
+              {
+                "color": 2,
+                "number": 9
+              },
+              {
+                "color": 3,
+                "number": 10
+              }
+            ],
+            "mySeatNo": 0,
+            "poolCount": 20,
+            "reactions": [],
+            "seatCount": 4,
+            "seats": [
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험01",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 7,
+                "seatNo": 0,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000001"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험02",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 6,
+                "seatNo": 1,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000002"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험08",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 6,
+                "seatNo": 2,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000008"
+                }
+              },
+              {
+                "avatarUrl": null,
+                "character": null,
+                "displayName": "디시험04",
+                "finalRack": null,
+                "finalRank": null,
+                "finalScore": null,
+                "forfeitOrder": null,
+                "initialDone": false,
+                "isWinner": null,
+                "payout": null,
+                "rackCount": 6,
+                "seatNo": 3,
+                "state": "playing",
+                "timeoutStreak": 0,
+                "userId": {
+                  "$uuid": "d0000000-0000-4000-8000-000000000004"
+                }
+              }
+            ],
+            "seq": 1,
+            "serverNowMs": {
+              "$f64": "427a18b7486f1000"
+            },
+            "stake": 5,
+            "status": "active",
+            "table": [],
+            "tableLayout": null,
+            "turnDeadlineMs": {
+              "$f64": "427a18b75714b000"
+            },
+            "turnSeatNo": 0,
+            "turnStartedMs": {
+              "$f64": "427a18b7486eb000"
+            }
+          },
+          "status": "rejected"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyHeartbeat",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_heartbeat",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyReact",
+      "requests": [
+        {
+          "body": {
+            "p_key": "joy",
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_react",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyDraw",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 9,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_draw",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "rummyRanking#data",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/rummy_ranking",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n  \"me\": {\n    \"games\": 1,\n    \"rank\": 1,\n    \"wins\": 1\n  },\n  \"rows\": [\n    {\n      \"avatar_url\": null,\n      \"character\": null,\n      \"display_name\": \"디시험01\",\n      \"games\": 1,\n      \"id\": \"d0000000-0000-4000-8000-000000000001\",\n      \"rank\": 1,\n      \"wins\": 1\n    },\n    {\n      \"avatar_url\": null,\n      \"character\": null,\n      \"display_name\": \"디시험02\",\n      \"games\": 1,\n      \"id\": \"d0000000-0000-4000-8000-000000000002\",\n      \"rank\": 2,\n      \"wins\": 0\n    },\n    {\n      \"avatar_url\": null,\n      \"character\": null,\n      \"display_name\": \"디시험04\",\n      \"games\": 1,\n      \"id\": \"d0000000-0000-4000-8000-000000000004\",\n      \"rank\": 2,\n      \"wins\": 0\n    },\n    {\n      \"avatar_url\": null,\n      \"character\": null,\n      \"display_name\": \"디시험08\",\n      \"games\": 1,\n      \"id\": \"d0000000-0000-4000-8000-000000000008\",\n      \"rank\": 2,\n      \"wins\": 0\n    }\n  ],\n  \"server_now_ms\": 1793341032225,\n  \"status\": \"ok\"\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "me": {
+            "games": 1,
+            "rank": 1,
+            "wins": 1
+          },
+          "rows": [
+            {
+              "avatarUrl": null,
+              "character": null,
+              "displayName": "디시험01",
+              "games": 1,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000001"
+              },
+              "rank": 1,
+              "wins": 1
+            },
+            {
+              "avatarUrl": null,
+              "character": null,
+              "displayName": "디시험02",
+              "games": 1,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000002"
+              },
+              "rank": 2,
+              "wins": 0
+            },
+            {
+              "avatarUrl": null,
+              "character": null,
+              "displayName": "디시험04",
+              "games": 1,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000004"
+              },
+              "rank": 2,
+              "wins": 0
+            },
+            {
+              "avatarUrl": null,
+              "character": null,
+              "displayName": "디시험08",
+              "games": 1,
+              "id": {
+                "$uuid": "d0000000-0000-4000-8000-000000000008"
+              },
+              "rank": 2,
+              "wins": 0
+            }
+          ],
+          "serverNowMs": {
+            "$f64": "427a18b748721000"
+          },
+          "status": "ok"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMegaphoneInbox",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 24
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/megaphone_inbox",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMegaphoneInbox#data",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 6
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/megaphone_inbox",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"message_id\":\"m1\",\"megaphone_id\":\"g1\",\"sender_id\":\"s1\",\"sender_display_name\":\" 새봄 \",\"sender_avatar_url\":\"https://golden.invalid/a%20b.jpg\",\"body\":\"오늘 7시\",\"created_epoch\":1789621440},{\"message_id\":\"m2\",\"megaphone_id\":\"g2\",\"from_user\":\"s2\",\"sender_display_name\":\"\",\"sender_avatar_url\":\"\",\"body\":\"📢  밀리초\",\"created_epoch\":1789621440123.0},{\"megaphone_id\":\"g3\",\"body\":\"메시지 id 없음\",\"created_epoch\":1789621440},{\"message_id\":\"m4\",\"megaphone_id\":\"g4\",\"body\":\" \\n \",\"created_epoch\":1789621440},{\"message_id\":\"m5\",\"megaphone_id\":\"g5\",\"body\":\"시각 없음\"},{\"message_id\":\"m6\",\"megaphone_id\":\"g6\",\"sender_id\":\"\",\"body\":\"ISO 시각\",\"created_at\":\"2026-09-17T05:00:00Z\"},\"broken\",{\"message_id\":\"m7\",\"megaphone_id\":\"g7\",\"body\":7,\"created_epoch\":1789621440},{\"message_id\":\"\",\"megaphone_id\":\"g8\",\"body\":\"빈 id\",\"created_epoch\":1789621440}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": [
+          {
+            "body": "오늘 7시",
+            "createdAt": {
+              "$date": "41daaadd30000000"
+            },
+            "isOwn": false,
+            "megaphoneID": "g1",
+            "messageID": "m1",
+            "senderAvatarURL": {
+              "$url": "https://golden.invalid/a%20b.jpg"
+            },
+            "senderID": "s1",
+            "senderName": "새봄"
+          },
+          {
+            "body": "밀리초",
+            "createdAt": {
+              "$date": "41daaadd3007df3b"
+            },
+            "isOwn": false,
+            "megaphoneID": "g2",
+            "messageID": "m2",
+            "senderAvatarURL": null,
+            "senderID": "s2",
+            "senderName": "사용자"
+          },
+          {
+            "body": "ISO 시각",
+            "createdAt": {
+              "$date": "41daaadcf4000000"
+            },
+            "isOwn": false,
+            "megaphoneID": "g6",
+            "messageID": "m6",
+            "senderAvatarURL": null,
+            "senderID": null,
+            "senderName": "사용자"
+          }
+        ]
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMegaphoneInbox#missing",
+      "requests": [
+        {
+          "body": {
+            "p_hours": 24
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/megaphone_inbox",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        }
+      ],
+      "result": {
+        "throws": "databaseSchemaMissing"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMessageUnreadSummary(v2)",
+      "requests": [
+        {
+          "body": {},
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/message_unread_summary_v2",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n  \"status\": \"ok\",\n  \"total\": 3,\n  \"peers\": [\n    {\n      \"peer_user_id\": \"d0000000-0000-4000-8000-0000000000b2\",\n      \"count\": 2,\n      \"last_epoch_ms\": 1789621110000\n    },\n    {\n      \"peer_user_id\": \"d0000000-0000-4000-8000-0000000000b4\",\n      \"count\": 1,\n      \"last_epoch_ms\": 1789618320000\n    }\n  ]\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "peers": [
+            {
+              "count": 2,
+              "lastEpochMs": {
+                "$f64": "427a0adbb04f0000"
+              },
+              "peerUserId": "d0000000-0000-4000-8000-0000000000b2"
+            },
+            {
+              "count": 1,
+              "lastEpochMs": {
+                "$f64": "427a0ad907280000"
+              },
+              "peerUserId": "d0000000-0000-4000-8000-0000000000b4"
+            }
+          ],
+          "status": "ok",
+          "total": 3
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage(key)",
+      "requests": [
+        {
+          "body": {
+            "p_body": "안녕\n세상",
+            "p_client_message_id": "ee000000-0000-4000-8000-0000000000e5",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"ok\",\"message_id\":\"m-1\",\"created_at\":\"2026-11-01T00:00:00.000001+00:00\",\"ring\":\"sent\",\"body\":\"안녕\\n세상\"}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "body": "안녕\n세상",
+          "createdAt": "2026-11-01T00:00:00.000001+00:00",
+          "duplicate": null,
+          "maxLength": null,
+          "messageId": "m-1",
+          "resetAfterSeconds": null,
+          "retryAfterSeconds": null,
+          "ring": "sent",
+          "status": "ok",
+          "ultraBalance": null,
+          "ultraRemaining": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage(key)#duplicate",
+      "requests": [
+        {
+          "body": {
+            "p_body": "안녕",
+            "p_client_message_id": "ee000000-0000-4000-8000-0000000000e5",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"status\":\"ok\",\"message_id\":\"m-1\",\"created_at\":\"2026-11-01T00:00:00Z\",\"duplicate\":true,\"ring\":\"duplicate\"}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "body": null,
+          "createdAt": "2026-11-01T00:00:00Z",
+          "duplicate": true,
+          "maxLength": null,
+          "messageId": "m-1",
+          "resetAfterSeconds": null,
+          "retryAfterSeconds": null,
+          "ring": "duplicate",
+          "status": "ok",
+          "ultraBalance": null,
+          "ultraRemaining": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage(key)#missing",
+      "requests": [
+        {
+          "body": {
+            "p_body": "안녕",
+            "p_client_message_id": "ee000000-0000-4000-8000-0000000000e5",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        },
+        {
+          "body": {
+            "p_body": "안녕",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "{\"status\":\"ok\",\"ring\":\"sent\"}",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "body": null,
+          "createdAt": null,
+          "duplicate": null,
+          "maxLength": null,
+          "messageId": null,
+          "resetAfterSeconds": null,
+          "retryAfterSeconds": null,
+          "ring": "sent",
+          "status": "ok",
+          "ultraBalance": null,
+          "ultraRemaining": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "sendMessage(key)#missingTwice",
+      "requests": [
+        {
+          "body": {
+            "p_body": "안녕",
+            "p_client_message_id": "ee000000-0000-4000-8000-0000000000e5",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        },
+        {
+          "body": {
+            "p_body": "안녕",
+            "p_to": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/send_message",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        },
+        {
+          "body": "{\"code\":\"PGRST202\",\"message\":\"Could not find the function public.x in the schema cache\"}",
+          "status": 404
+        }
+      ],
+      "result": {
+        "throws": "databaseSchemaMissing"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
       "id": "signIn#data",
       "requests": [
         {
@@ -6553,7 +8795,11 @@
       ],
       "result": {
         "ok": {
+          "body": null,
+          "createdAt": null,
+          "duplicate": null,
           "maxLength": null,
+          "messageId": null,
           "resetAfterSeconds": null,
           "retryAfterSeconds": 5,
           "ring": null,
@@ -9884,7 +12130,7 @@
       ],
       "responses": [
         {
-          "body": "{\n  \"status\": \"ok\",\n  \"enabled\": true,\n  \"price\": 50,\n  \"cooldown_seconds\": 600,\n  \"cooldown_remaining_seconds\": 0,\n  \"recipients\": 12,\n  \"max_length\": 198\n}\n",
+          "body": "{\n  \"status\": \"ok\",\n  \"enabled\": true,\n  \"price\": 50,\n  \"cooldown_seconds\": 600,\n  \"cooldown_remaining_seconds\": 0,\n  \"recipients\": 12,\n  \"max_length\": 198,\n  \"global_cooldown_seconds\": 300,\n  \"global_cooldown_remaining_seconds\": 0,\n  \"cooldown_scope\": null\n}\n",
           "status": 200
         },
         {
@@ -9899,8 +12145,8 @@
             "cooldownScope": null,
             "cooldownSeconds": 600,
             "enabled": true,
-            "globalCooldownRemainingSeconds": null,
-            "globalCooldownSeconds": null,
+            "globalCooldownRemainingSeconds": 0,
+            "globalCooldownSeconds": 300,
             "maxLength": 198,
             "price": 50,
             "recipients": 12,
@@ -10280,6 +12526,9 @@
       "dailyMissionClaim": "W1-c(AchievementStatus)",
       "dailyMissionClaim#data": "W1-c(AchievementStatus)",
       "dailyMissionClaim(nil)": "W1-c(AchievementStatus)",
+      "fetchMegaphoneInbox": "W1-c(MegaphoneBanner)",
+      "fetchMegaphoneInbox#data": "W1-c(MegaphoneBanner)",
+      "fetchMegaphoneInbox#missing": "W1-c(MegaphoneBanner)",
       "fetchMyAILimits": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
       "fetchMyAILimits#data": "W2-c(MeAILimitsService — 라벨 정규화 AILimitDeviceLabelContract=W1-c · AILimitPlanLabelContract=I)",
       "fetchMyAILimits#filters": "W2-c(MeAILimitsService — 행 거르기 한 자리 AILimitFetchedRow)",
@@ -10342,6 +12591,10 @@
     "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift",
     "Sources/CheckMobileKit/Me/MeProfileService.swift",
     "Sources/CheckMobileKit/Me/MeAILimitsService.swift",
-    "Sources/CheckCore/SupabaseWorkServiceAILimits.swift"
+    "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
+    "Sources/CheckCore/MegaphoneBanner.swift",
+    "Sources/CheckCore/RummyWire.swift",
+    "Sources/CheckCore/RummyRules.swift",
+    "Sources/CheckCore/RummyTableLayout.swift"
   ]
 }

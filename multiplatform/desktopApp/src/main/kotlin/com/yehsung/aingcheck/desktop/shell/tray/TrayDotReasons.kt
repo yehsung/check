@@ -16,11 +16,13 @@ data class TrayDotReasons(
     val gomokuInvite: Boolean = false,
     val chessInvite: Boolean = false,
     val tetrisInvite: Boolean = false,
+    /** 받은 아잉 큐브 초대(맥 v0.3.69). 데스크톱은 아직 큐브 스토어가 없어 [of] 가 켜지 않는다 — 글·순서만 맥과 맞춘다. */
+    val rummyInvite: Boolean = false,
     val openReports: Boolean = false,
     val updateAvailable: Boolean = false,
 ) {
     val isEmpty: Boolean
-        get() = !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !updateAvailable && !openReports
+        get() = !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !updateAvailable && !openReports
 
     /** 켜진 사유들의 글(순서 고정, ★2). 하나도 없으면 null — 점이 없으니 설명할 것도 없다. */
     val accessibilityDescription: String?
@@ -30,6 +32,7 @@ data class TrayDotReasons(
             if (gomokuInvite) parts += GOMOKU_INVITE_TEXT
             if (chessInvite) parts += CHESS_INVITE_TEXT
             if (tetrisInvite) parts += TETRIS_INVITE_TEXT
+            if (rummyInvite) parts += RUMMY_INVITE_TEXT
             if (openReports) parts += OPEN_REPORTS_TEXT
             if (updateAvailable) parts += UPDATE_AVAILABLE_TEXT
             return if (parts.isEmpty()) null else parts.joinToString(SEPARATOR)
@@ -40,6 +43,7 @@ data class TrayDotReasons(
         const val GOMOKU_INVITE_TEXT = "오목 신청"
         const val CHESS_INVITE_TEXT = "체스 신청"
         const val TETRIS_INVITE_TEXT = "테트리스 신청"
+        const val RUMMY_INVITE_TEXT = "아잉 큐브 초대"
         const val OPEN_REPORTS_TEXT = "처리할 신고"
         const val UPDATE_AVAILABLE_TEXT = "업데이트 있음"
         const val SEPARATOR = " · "

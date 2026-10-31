@@ -16,7 +16,7 @@ object DesktopPokeRules {
     /** 링 **미구독** 폴링 주기(초). */
     const val POLL_INTERVAL_SECONDS: Double = 15.0
     /** 링 **구독 중** 폴링 주기(초) — 안전망 지연 상한(v0.2.38 Q8). 지우거나 합치지 않는다. */
-    const val POLL_INTERVAL_SECONDS_WHILE_SUBSCRIBED: Double = 60.0
+    const val POLL_INTERVAL_SECONDS_WHILE_SUBSCRIBED: Double = 90.0
     /** 찔림 표시 신선도(초) · '최근 표시 메시지' 보관 창. */
     const val POKE_DISPLAY_FRESHNESS_SECONDS: Double = 3600.0
     /** 같은 대상 쿨타임(초) — 서버가 강제하고 클라는 카운트다운만 미러링한다. */
@@ -52,7 +52,7 @@ object DesktopPokeRules {
     fun pollingIsPausedByRealtime(ringIsSubscribed: Boolean): Boolean =
         if (POLLING_KEEPS_RUNNING_ALONGSIDE_REALTIME) false else ringIsSubscribed
 
-    /** 이 순간의 폴링 주기(초) — 구독 60 · 그 밖 15. 루프가 매 반복 **앞**에서 읽는다. */
+    /** 이 순간의 폴링 주기(초) — 구독 90 · 그 밖 15. 루프가 매 반복 **앞**에서 읽는다. */
     fun pollIntervalSeconds(ringIsSubscribed: Boolean): Double =
         if (ringIsSubscribed) POLL_INTERVAL_SECONDS_WHILE_SUBSCRIBED else POLL_INTERVAL_SECONDS
 

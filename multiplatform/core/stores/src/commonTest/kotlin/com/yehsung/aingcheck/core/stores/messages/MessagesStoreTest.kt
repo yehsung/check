@@ -420,7 +420,7 @@ class MessagesStoreTest {
         assertEquals(listOf("안녕하세요"), store.pendingOutgoing.map { it.body })
         server.sent("s1", peerA, 600, body = "안녕하세요")
         advanceUntilIdle()
-        assertEquals(""""p_to":"peer-a","p_body":"안녕하세요"""", bodies(h, "send_message").single().removePrefix("{").removeSuffix("}"))
+        assertEquals(""""p_to":"peer-a","p_body":"안녕하세요","p_client_message_id":"local-1"""", bodies(h, "send_message").single().removePrefix("{").removeSuffix("}"))
         assertEquals(emptyList(), store.pendingOutgoing, "진짜 행이 서면 자리 말풍선은 사라진다")
         // 거절: 글은 입력칸으로 · 문구는 코어 문장 · 자리 말풍선은 거둔다.
         server.sendReply = Reply.Json("""{"status":"target_focused"}""")
@@ -437,7 +437,7 @@ class MessagesStoreTest {
         advanceUntilIdle()
         assertEquals("쓰던 글", store.draft(peerA))
         assertEquals("연결이 불안정해요. 잠시 후 다시 시도해 주세요", store.sendNotices[peerA])
-        assertEquals(""""p_to":"peer-a","p_body":"[아잉:기쁨]"""", bodies(h, "send_message").last().removePrefix("{").removeSuffix("}"))
+        assertEquals(""""p_to":"peer-a","p_body":"[아잉:기쁨]","p_client_message_id":"local-1"""", bodies(h, "send_message").last().removePrefix("{").removeSuffix("}"))
         h.assertClean()
     }
 

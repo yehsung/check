@@ -95,7 +95,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 /** 「미션」 화면(조립이 목적지를 더한다 — iOS MeDestination.missions, 딥링크 없음). */
 @Composable
 fun MissionsRoute(store: MeStore, onBack: () -> Unit) {
-    MeMissionsScreen(store, onBack = onBack, reduceMotion = rememberReduceMotion())
+    MeMissionsScreen(store, onBack = onBack, reduceMotion = rememberReduceMotion(), showsRubyBalance = true)
 }
 
 /** 캐릭터 고르기(Dest.CharacterPicker). 머리 그림은 살아 있는 미리보기 자리(LocalLiveCharacterPreview — W5-c). */

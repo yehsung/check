@@ -11,7 +11,17 @@
 // 당겨서 새로 고치기는 **이 화면의 것만** 다시 읽는다(store.refreshMissions — 루트 새로고침이 아니다).
 package com.yehsung.aingcheck.ui.missions
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,6 +31,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,6 +64,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.MeText
@@ -60,11 +72,15 @@ import com.yehsung.aingcheck.core.stores.me.missionClaimableCount
 import com.yehsung.aingcheck.core.stores.me.missionsPageIsEmpty
 import com.yehsung.aingcheck.core.stores.me.refreshMissions
 import com.yehsung.aingcheck.core.stores.me.showsMissionsRow
+import com.yehsung.aingcheck.ui.components.RubyIcon
+import com.yehsung.aingcheck.ui.components.RubyPriceRule
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
+import com.yehsung.aingcheck.ui.screens.settingscommon.LocalScreenArt
 import com.yehsung.aingcheck.ui.shop.BackButton
 import com.yehsung.aingcheck.ui.shop.MeType
 import com.yehsung.aingcheck.ui.theme.AingDimens
+import com.yehsung.aingcheck.ui.theme.AingMotion
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import com.yehsung.aingcheck.ui.weekly.MeWeeklyWorkCard
 import kotlinx.coroutines.launch
@@ -113,7 +129,7 @@ fun MeMissionsRow(store: MeStore, onOpen: () -> Unit, modifier: Modifier = Modif
 /** 「미션」 화면. [reduceMotion] 은 호스트(Android 애니메이션 배율 0)가 넘긴다. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MeMissionsScreen(store: MeStore, onBack: (() -> Unit)?, modifier: Modifier = Modifier, reduceMotion: Boolean = false) {
+fun MeMissionsScreen(store: MeStore, onBack: (() -> Unit)?, modifier: Modifier = Modifier, reduceMotion: Boolean = false, showsRubyBalance: Boolean = false) {
     val c = AingTheme.colors
     val scope = rememberCoroutineScope()
     var refreshing by remember { mutableStateOf(false) }
@@ -125,6 +141,7 @@ fun MeMissionsScreen(store: MeStore, onBack: (() -> Unit)?, modifier: Modifier =
             TopAppBar(
                 title = { Text(MeText.missionsPageTitle, style = MeType.headline, color = c.label) },
                 navigationIcon = { if (onBack != null) BackButton(onBack) },
+                actions = { if (showsRubyBalance) MissionRubyBalance(store.rubyBalance, reduceMotion, Modifier.padding(end = AingDimens.sideMargin)) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = c.background),
             )
         },
@@ -141,6 +158,49 @@ fun MeMissionsScreen(store: MeStore, onBack: (() -> Unit)?, modifier: Modifier =
         ) { MeMissionsContent(store, reduceMotion = reduceMotion) }
     }
 }
+
+/**
+ * 제목 줄 오른쪽 루비 잔량 — **받으면 숫자가 넘어가는 자리**다(맥 `MissionRubyBalance` · `.numericText` · 0.5초). 올라가면 아래에서, 내려가면 위에서 들어온다.
+ * 상점 칩과 같은 "모름" 규약(0 으로 지어내지 않는다). [reduceMotion] 이면 바로 바꾼다. Windows 는 기능 동결이라 인자로 받아 Android 경로만 켠다.
+ */
+@Composable
+internal fun MissionRubyBalance(balance: Long?, reduceMotion: Boolean, modifier: Modifier = Modifier) {
+    val c = AingTheme.colors
+    val shape = CircleShape
+    Row(
+        modifier
+            .height(MISSION_RUBY_HEIGHT)
+            .background(c.accentTint, shape)
+            .border(1.dp, c.accentLine, shape)
+            .padding(horizontal = 9.dp)
+            .testTag(MissionTags.RUBY_BALANCE)
+            .clearAndSetSemantics { contentDescription = RubyPriceRule.balanceAccessibility(balance) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        RubyIcon(LocalScreenArt.current.ruby(15f), 15.dp)
+        AnimatedContent(
+            targetState = balance,
+            transitionSpec = {
+                if (reduceMotion) {
+                    EnterTransition.None togetherWith ExitTransition.None
+                } else {
+                    val rising = (targetState ?: 0L) >= (initialState ?: 0L)
+                    val move = AingMotion.move<IntOffset>(BALANCE_TICK_MILLIS)
+                    (slideInVertically(move) { if (rising) it else -it } + fadeIn(AingMotion.fade(BALANCE_TICK_MILLIS))) togetherWith
+                        (slideOutVertically(move) { if (rising) -it else it } + fadeOut(AingMotion.fade(BALANCE_TICK_MILLIS)))
+                } using SizeTransform(clip = true)
+            },
+            contentAlignment = Alignment.Center,
+            label = "mission-ruby-balance",
+        ) { value ->
+            Text(RubyPriceRule.balanceText(value), style = MeType.subheadline.copy(fontWeight = FontWeight.Bold), color = c.label, maxLines = 1)
+        }
+    }
+}
+
+private val MISSION_RUBY_HEIGHT = 28.dp
+private const val BALANCE_TICK_MILLIS = 500
 
 /**
  * 받기 성공 햅틱 — 「미션」 화면 한 곳(missionClaimBurstSerial 이 오를 때 한 번). 옛 서버의 주간 자동 지급(weeklyGrantSerial — '+N 받음' 칩)도

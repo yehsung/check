@@ -10,6 +10,12 @@ package com.yehsung.aingcheck.ui.missions
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.assertContentDescriptionEquals
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -64,6 +70,58 @@ class MissionsScreenDesktopTest {
         }
         // 기준선: 같은 연출의 끝 무렵(0.95 — 흐려지는 꼬리 안). 알약 하나만 다르다.
         W4cDesktopSnapshots.check("missions", "claim-burst-light", 160, 80, burst(0.5f), burst(0.95f), maxChangedFraction = 0.5)
+    }
+
+    /** 원본: Sources/check/CheckAchievementRows.swift:454(MissionRubyBalance) — 받는 순간 숫자가 넘어간다. 넘어가는 동안 옛 숫자 · 새 숫자가 함께 있고, 끝나면 새 숫자만. */
+    @Test
+    fun rubyBalanceTicksWhenItGoesUp() = runDesktopComposeUiTest(W, H) {
+        var balance by mutableStateOf<Long?>(100)
+        setContent { W4cDesktopSnapshots.frame(false, W, H) { MissionRubyBalance(balance, reduceMotion = false) }() }
+        waitForIdle()
+        onNodeWithText("100", useUnmergedTree = true).assertExists()
+        mainClock.autoAdvance = false
+        balance = 120
+        mainClock.advanceTimeBy(250)
+        onNodeWithText("100", useUnmergedTree = true).assertExists()
+        onNodeWithText("120", useUnmergedTree = true).assertExists()
+        mainClock.advanceTimeBy(600)
+        onNodeWithText("100", useUnmergedTree = true).assertDoesNotExist()
+        onNodeWithText("120", useUnmergedTree = true).assertExists()
+    }
+
+    /** 제목 줄 칩 한 장(밝음). 기준선 = 숫자 한 칸. */
+    @Test
+    fun rubyBalanceChipSnapshot() {
+        fun chip(balance: Long) = W4cDesktopSnapshots.frame(false, 120, 44) { MissionRubyBalance(balance, reduceMotion = true) }
+        W4cDesktopSnapshots.check("missions", "mission-ruby-balance-light", 120, 44, chip(120), chip(125), maxChangedFraction = 0.5)
+    }
+
+    /** 동작 줄이기: 넘기지 않고 바로 바꾼다. 모르면 0 으로 지어내지 않는다. */
+    @Test
+    fun rubyBalanceJumpsWhenReducedAndSaysUnknown() = runDesktopComposeUiTest(W, H) {
+        var balance by mutableStateOf<Long?>(null)
+        setContent { W4cDesktopSnapshots.frame(false, W, H) { MissionRubyBalance(balance, reduceMotion = true) }() }
+        waitForIdle()
+        onNodeWithText("–", useUnmergedTree = true).assertExists()
+        mainClock.autoAdvance = false
+        balance = 120
+        mainClock.advanceTimeByFrame()
+        mainClock.advanceTimeByFrame()
+        onNodeWithText("–", useUnmergedTree = true).assertDoesNotExist()
+        onNodeWithText("120", useUnmergedTree = true).assertExists()
+    }
+
+    /** 칩은 인자로 켠다 — 기본값은 Windows 미션 판(W4f 스냅숏)을 건드리지 않는다. */
+    @Test
+    fun rubyBalanceChipIsOptIn() = runDesktopComposeUiTest(W, H) {
+        val s = store()
+        var shows by mutableStateOf(false)
+        setContent { W4cDesktopSnapshots.frame(false, W, H) { MeMissionsScreen(s, onBack = null, showsRubyBalance = shows) }() }
+        waitForIdle()
+        onAllNodesWithTag(MissionTags.RUBY_BALANCE).assertCountEquals(0)
+        shows = true
+        waitForIdle()
+        onNodeWithTag(MissionTags.RUBY_BALANCE).assertContentDescriptionEquals("루비 ${s.rubyBalance}개")
     }
 
     @Test

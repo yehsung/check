@@ -4,11 +4,31 @@ import Foundation
 // 지금 탭의 값·순수 계산·문구(SPEC-ios §3.2). 화면 없이 값으로 검증한다(`NowStoreTests`).
 // 플랫폼 무관 — macOS `swift test` 가 이 파일을 그대로 돈다.
 
+// MARK: - 새 버전 안내
+
+/// 새 버전 안내 한 줄의 표시 규칙. 차단(`minBuild`)과 따로 논다 — 이 줄은 막지 않고 알리기만 한다.
+package enum NowUpdateNoticeRule {
+    /// 서버 최신 빌드가 이 빌드보다 높고, 그 빌드를 아직 닫지 않았을 때만 보인다.
+    /// - 최신 빌드가 nil(`client_release` 를 못 받음)이면 모르는 것이라 안 보인다.
+    /// - 이 빌드가 더 높으면(TestFlight 가 앞선 경우) 안 보인다.
+    /// - 닫은 값과 비교는 같음뿐이다: 더 새 빌드가 나오면 닫은 기록과 달라져 다시 뜬다.
+    package static func isVisible(latestBuild: Int?, currentBuild: Int, dismissedBuild: Int?) -> Bool {
+        guard let latestBuild, latestBuild > currentBuild else { return false }
+        return dismissedBuild != latestBuild
+    }
+}
+
 // MARK: - 문구
 
 /// 지금 탭 문구. 맥과 뜻이 같은 문장은 맥 글자 그대로 옮겼다(할 일 보드 `TodoBoardStrings` · 목표 편집 `updateTeamGoal`).
 package enum NowText {
     package static let title = "지금"
+
+    // 새 버전 안내 한 줄
+    package static let updateNoticeTitle = "새 버전이 나왔어요"
+    package static let updateNoticeAction = "업데이트"
+    /// 닫기(X)의 보이스오버 이름. 눈에 보이는 글자는 없다.
+    package static let updateNoticeDismiss = "새 버전 안내 닫기"
 
     // 내 상태
     package static let workingOnMac = "맥에서 근무 중"

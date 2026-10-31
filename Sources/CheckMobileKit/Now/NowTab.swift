@@ -30,6 +30,12 @@ struct NowTab: View {
                                 .listRowSeparator(.hidden)
                         }
                     }
+                    if store.showsUpdateNotice {
+                        Section {
+                            NowUpdateNoticeRow(store: store)
+                                .cardSegmentRow(.single, padding: EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
+                        }
+                    }
                     if let notice = store.notice {
                         Section {
                             InlineNotice(text: notice, kind: .warning)
@@ -128,6 +134,40 @@ private struct NowNavigationSubtitle: ViewModifier {
             return NowText.collapsedSubtitle(clock: NowFormat.clock(card.todaySeconds), percent: card.percent)
         }
         return NowTab.expandedSubtitle(store: store)
+    }
+}
+
+// MARK: - 새 버전 안내
+
+/// 카드 한 줄: 글자 · [업데이트](틴트 — 채운 버튼은 화면당 하나) · 닫기(X, 누름 영역 44pt).
+/// 세 요소를 합치지 않아 보이스오버가 두 버튼에 따로 닿는다.
+private struct NowUpdateNoticeRow: View {
+    let store: NowStore
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Text(NowText.updateNoticeTitle)
+                .font(.subheadline)
+                .foregroundStyle(MobileTheme.label)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            AingButton(NowText.updateNoticeAction, kind: .tinted, size: .sm) {
+                openURL(MobileSessionText.appStoreURL)
+            }
+            .fixedSize()
+            Button {
+                withAnimation(.snappy) { store.dismissUpdateNotice() }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label2)
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(NowText.updateNoticeDismiss))
+        }
     }
 }
 

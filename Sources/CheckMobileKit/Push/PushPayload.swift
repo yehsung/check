@@ -322,6 +322,8 @@ package enum PushText {
     // 권한 설명 시트
     package static let primerTitle = "알림을 켜 둘까요?"
     package static let primerBody = "앱을 닫아 두어도 이런 소식을 바로 알려 드려요."
+    /// ★ '맥'만 적는 것이 맞다: 서버 `push__at_desktop` 은 맥 입력만 푸시를 줄이고, Windows 는 표면 상수가 전부
+    ///   2147483647 이라 줄이지 않는다(`20261101130000`). 그 상수를 내리는 날 이 문장도 같이 고친다.
     package static let primerMacNote = "맥에서 근무 중이고 방금 입력이 있었다면 메시지·오목 신청 알림은 폰에 보내지 않아요."
     package static let primerSettingsNote = "종류별로 끄는 것은 나 탭 설정에서 할 수 있어요."
     package static let primerAllow = "알림 켜기"

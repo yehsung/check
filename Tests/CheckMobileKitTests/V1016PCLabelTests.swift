@@ -99,6 +99,17 @@ import Testing
         #expect(NowText.workingFooterMacOnly == "근무 시작과 종료는 맥 앱에서 해요")
     }
 
+    @Test("다른 기기를 말하는 문구도 '맥·PC' 다 — 메뉴바와 알림 줄이기는 맥에만 있어 '맥'으로 남긴다")
+    func otherDeviceLines() throws {
+        #expect(MeText.signOutConfirmMessage == "이 폰에서만 로그아웃돼요. 맥·PC 앱은 그대로예요.")
+        #expect(MeText.deleteAccountIrreversible == "되돌릴 수 없어요. 맥·PC 앱도 같이 로그아웃돼요.")
+        #expect(MeText.pickerCaption == "맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요.")
+        #expect(MeText.characterRoleNote == "지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요.")
+        #expect(PushText.primerMacNote.hasPrefix("맥에서 근무 중이고"))
+        #expect(try IntegrationContractTests.code("Sources/CheckMobileKit/Session/MobileSessionViews.swift")
+            .contains("맥·PC의 aing-check 와 같은 계정으로 로그인해요"))
+    }
+
     // MARK: ④ 근무 출처 — 동작으로 잰다
 
     static let touchWindows = #"""

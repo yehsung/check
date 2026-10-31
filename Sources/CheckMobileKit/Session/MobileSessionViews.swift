@@ -59,7 +59,7 @@ struct MobileLoginView: View {
                 MobileBrandHeader(
                     mood: .working,
                     title: CheckMobileIdentifiers.appDisplayName,
-                    message: "맥의 aing-check 와 같은 계정으로 로그인해요"
+                    message: "맥·PC의 aing-check 와 같은 계정으로 로그인해요"
                 )
 
                 InsetGroup {

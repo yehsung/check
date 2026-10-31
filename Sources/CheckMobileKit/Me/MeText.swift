@@ -549,7 +549,7 @@ package enum MeText {
     package static let charactersTitle = "캐릭터"
     package static let shopTitle = "상점"
     package static let pickerTitle = "캐릭터 고르기"
-    package static let pickerCaption = "맥의 오버레이·메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
+    package static let pickerCaption = "맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
     /// 맥 `WorkTimerStore.alreadyOwnedNotice`.
     package static let alreadyOwned = "이미 갖고 있어요"
     /// 맥 `WorkTimerStore.pickSomethingNotice`.
@@ -725,7 +725,7 @@ package enum MeText {
     /// 사진이 없으면 다른 사람 화면의 내 아바타 자리에 착용 캐릭터가 선다(2026-09-20 — 기본 아바타 = 착용 캐릭터).
     package static let avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요. 사진이 없으면 착용 캐릭터가 대신 보여요."
     package static let characterRoleTitle = "내 화면에는 캐릭터가 나와요"
-    package static let characterRoleNote = "지금·나 탭과 맥 메뉴바·오버레이에서 착용 캐릭터가 나를 대신해요."
+    package static let characterRoleNote = "지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."
     /// 서버 쿨타임(7일). 맥 `WorkTimerStore.displayNameCooldownSeconds`.
     package static let displayNameCooldownSeconds: TimeInterval = 7 * 24 * 3600
 
@@ -893,7 +893,7 @@ package enum MeText {
     package static let accountSection = "계정"
     package static let signOut = "로그아웃"
     package static let signOutConfirmTitle = "로그아웃할까요?"
-    package static let signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥은 그대로예요."
+    package static let signOutConfirmMessage = "이 폰에서만 로그아웃돼요. 맥·PC 앱은 그대로예요."
     package static let signingOut = "로그아웃하는 중…"
 
     // MARK: 계정 삭제 (앱스토어 5.1.1(v) — 폰만의 문장. 맥에는 이 화면이 없다)
@@ -910,7 +910,7 @@ package enum MeText {
     /// 지워지는 것(서버 계약 — FK cascade). 순서는 사용자가 아까워할 것부터.
     package static let deleteAccountItems = ["근무 기록", "메시지", "할 일", "캐릭터와 루비", "순위 기록"]
     /// 되돌릴 수 없다는 한 줄. 맥도 같은 계정이라 다음 갱신에서 로그아웃된다.
-    package static let deleteAccountIrreversible = "되돌릴 수 없어요. 맥 앱도 같이 로그아웃돼요."
+    package static let deleteAccountIrreversible = "되돌릴 수 없어요. 맥·PC 앱도 같이 로그아웃돼요."
     /// 제보는 `feedback_reports.user_id` 가 set null 이라 내용만 익명으로 남는다(서버 계약 — 의도된 동작). 숨기지 않고 밝힌다.
     package static let deleteAccountFeedbackNote = "보낸 제보는 작성자 없이 내용만 남아요."
     package static let deleteAccountPasswordPrompt = "비밀번호 확인"

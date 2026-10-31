@@ -172,7 +172,7 @@ class StageStoreContractTest {
         compose.waitUntil(30_000) { compose.mainClock.advanceTimeByFrame(); handle.bakedIds != null }
         repeat(30) { compose.mainClock.advanceTimeByFrame() }
         compose.waitForIdle()
-        assertEquals(StageMode.Live(CharacterCatalog.builtInAingID, folded = false), handle.mode)
+        assertEquals(StageMode.Live(CharacterCatalog.builtInAingID), handle.mode)
         assertNull(handle.store)
         compose.onNodeWithTag(STAGE_LIVE_TAG).assertDoesNotExist()
         compose.onNodeWithTag(STAGE_TAG).assertExists()

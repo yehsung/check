@@ -91,7 +91,7 @@ class StageHandle {
 /**
  * 살아 있는 아잉이 무대(결정 #2 — 나 탭 무대 · 캐릭터 고르기 · 뽑기 결과 공개 뒤). ui `CharacterStage(art, mood, artSize)` 와 **같은 자리 ·
  * 같은 크기**(그림 + 6 × 그림 + 12, 발밑 빛 그대로)라 무대를 그리던 화면이 칸(slot) 하나로 바꿔 끼운다(assembly.md).
- *  - 구운 아잉이(아잉 · 황금 · 무지개, 케이크 둘은 아잉으로 접힘)는 부유 · 살랑 · 깜빡임으로 살아 있고, 몸을 두드리면 hit.
+ *  - 구운 아잉이(아잉 · 황금 · 무지개 — 케이크 둘은 굽지 않아 스프라이트처럼 초상으로 선다)는 부유 · 살랑 · 깜빡임으로 살아 있고, 몸을 두드리면 hit.
  *  - 스프라이트 6종 · 모르는 id 와 자산을 아직(또는 끝내) 못 읽은 동안은 iOS 와 같은 초상 무대다.
  *  - [revealKey] 가 새 값이 될 때마다 한 번 공개 반응(한 바퀴 — [StagePolicy.REVEAL_REACTION] · S 스핀 칸을 먼저 데운다). 같은 값은 화면을 다시 열어도 다시 하지 않는다.
  *  - 화면에서 사라지면(ON_PAUSE) 장면 시계를 멈추고 그리기를 쉰다(맥 렌더 정지와 같은 규칙).
@@ -134,7 +134,7 @@ fun AingStage(
         CharacterStage(art = art, mood = mood, artSize = artSize)
         val lib = library
         if (ready != null && lib != null) {
-            StageLive(lib, ready, characterId, (mode as StageMode.Live).folded, artSize, revealKey, onTap, clock, handle)
+            StageLive(lib, ready, characterId, artSize, revealKey, onTap, clock, handle)
         }
     }
 }
@@ -153,7 +153,6 @@ private fun StageLive(
     library: BakeLibrary,
     store: StageStore,
     characterId: String,
-    folded: Boolean,
     artSize: Dp,
     revealKey: Any?,
     onTap: ((TapOutcome) -> Unit)?,
@@ -237,7 +236,7 @@ private fun StageLive(
     }
 
     val name = MeCharacterCards.displayName(characterId)
-    val description = if (folded) "$name 미리보기(아잉 모습) — 두드리면 반응해요" else "$name 미리보기 — 두드리면 반응해요"
+    val description = "$name 미리보기 — 두드리면 반응해요"
     Canvas(
         Modifier
             .size(artSize + 6.dp, artSize + 12.dp)

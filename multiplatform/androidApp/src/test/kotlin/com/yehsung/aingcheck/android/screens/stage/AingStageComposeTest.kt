@@ -99,6 +99,11 @@ class AingStageComposeTest {
         return px.count { (it ushr 24) == 0xFF }
     }
 
+    private fun stagePixels(): IntArray {
+        val bmp = compose.onNodeWithTag(STAGE_TAG).captureToImage().asAndroidBitmap()
+        return IntArray(bmp.width * bmp.height).also { bmp.getPixels(it, 0, bmp.width, 0, 0, bmp.width, bmp.height) }
+    }
+
     private fun meanAbsDiff(a: Bitmap, b: Bitmap): Double {
         val pa = IntArray(a.width * a.height).also { a.getPixels(it, 0, a.width, 0, 0, a.width, a.height) }
         val pb = IntArray(b.width * b.height).also { b.getPixels(it, 0, b.width, 0, 0, b.width, b.height) }
@@ -122,7 +127,7 @@ class AingStageComposeTest {
             }
         }
         awaitLive(handle)
-        assertEquals(StageMode.Live(CharacterCatalog.builtInAingID, folded = false), handle.mode)
+        assertEquals(StageMode.Live(CharacterCatalog.builtInAingID), handle.mode)
         frames(200)
         val node = compose.onNodeWithTag(STAGE_LIVE_TAG)
         val idle = node.captureToImage().asAndroidBitmap()
@@ -178,7 +183,7 @@ class AingStageComposeTest {
     }
 
     @Test
-    fun 스프라이트는_초상_케이크는_아잉으로_접혀_산다() {
+    fun 스프라이트도_케이크도_초상으로_선다() {
         compose.mainClock.autoAdvance = false
         var id by mutableStateOf("fox")
         val handle = StageHandle()
@@ -190,13 +195,18 @@ class AingStageComposeTest {
         assertEquals(StageMode.Portrait, handle.mode)
         compose.onNodeWithTag(STAGE_LIVE_TAG).assertDoesNotExist()
         compose.onNodeWithTag(STAGE_TAG).assertExists()
+        // 케이크: 일반 아잉이로 접지 않는다 — iOS 처럼 그 케이크 초상이 선다. 기준선: 일반 아잉이 초상(같은 칸)과 픽셀이 달라야 한다.
         id = CharacterCatalog.cakeStrawberryAingID
-        awaitLive(handle)
-        assertEquals(StageMode.Live(CharacterCatalog.builtInAingID, folded = true), handle.mode)
-        assertEquals(CharacterCatalog.builtInAingID, handle.director!!.player.currentCharacterId)
-        val desc = compose.onNodeWithTag(STAGE_LIVE_TAG).fetchSemanticsNode().config[SemanticsProperties.ContentDescription].joinToString()
-        assertTrue("(아잉 모습)" in desc, desc)
-        save(compose.onNodeWithTag(STAGE_TAG).captureToImage().asAndroidBitmap(), "cake-strawberry-folded.png")
+        frames(100)
+        assertEquals(StageMode.Portrait, handle.mode)
+        compose.onNodeWithTag(STAGE_LIVE_TAG).assertDoesNotExist()
+        compose.waitUntil(60_000) { compose.mainClock.advanceTimeByFrame(); stagePixels().toSet().size > 16 }
+        val strawberry = stagePixels()
+        save(compose.onNodeWithTag(STAGE_TAG).captureToImage().asAndroidBitmap(), "cake-strawberry-portrait.png")
+        id = CharacterCatalog.cakeChocoAingID
+        frames(100)
+        compose.waitUntil(60_000) { compose.mainClock.advanceTimeByFrame(); !stagePixels().contentEquals(strawberry) }
+        assertEquals(StageMode.Portrait, handle.mode)
     }
 
     @Test

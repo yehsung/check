@@ -74,6 +74,7 @@ import com.yehsung.aingcheck.ui.components.RubyPrice
 import com.yehsung.aingcheck.ui.components.RubyPriceRule
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
+import com.yehsung.aingcheck.ui.screens.session.LocalDesktopWording
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButton
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButtonKind
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingCard
@@ -263,7 +264,7 @@ private fun PickerHero(store: MeStore, hero: MeStageContent) {
                         MeWearKind.Loading -> colors.label2
                     },
                 )
-                Text(MeText.pickerCaption, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+                Text(if (LocalDesktopWording.current) MeText.pickerCaptionDesktop else MeText.pickerCaption, style = MaterialTheme.typography.bodySmall, color = colors.label2)
             }
         }
     }

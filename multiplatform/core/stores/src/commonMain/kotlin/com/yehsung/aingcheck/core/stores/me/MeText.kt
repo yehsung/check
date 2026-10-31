@@ -421,6 +421,8 @@ object MeText {
     const val shopTitle = "상점"
     const val pickerTitle = "캐릭터 고르기"
     const val pickerCaption = "맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."
+    /** Windows 판(ui LocalDesktopWording) — 사용자 답 "Windows 전용 문구 두기". */
+    const val pickerCaptionDesktop = "오버레이와 울트라 찌르기에 나오는 내 캐릭터예요."
     const val alreadyOwned = "이미 갖고 있어요"
     const val pickSomething = "살 것을 골라 주세요"
     const val bought = "샀어요!"
@@ -544,6 +546,8 @@ object MeText {
     const val avatarRoleNote = "사진과 별명은 메시지·순위에서 다른 사람에게 보여요. 사진이 없으면 착용 캐릭터가 대신 보여요."
     const val characterRoleTitle = "내 화면에는 캐릭터가 나와요"
     const val characterRoleNote = "지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."
+    /** Windows 판(ui LocalDesktopWording) — 사용자 답 "Windows 전용 문구 두기". */
+    const val characterRoleNoteDesktop = "나 화면과 오버레이에서 착용 캐릭터가 나를 대신해요."
 
     /** 서버 쿨타임(7일). */
     const val displayNameCooldownSeconds: Double = 7.0 * 24 * 3600

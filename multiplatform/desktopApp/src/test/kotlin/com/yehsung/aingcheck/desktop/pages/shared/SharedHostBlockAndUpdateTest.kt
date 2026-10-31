@@ -95,6 +95,38 @@ class SharedHostBlockAndUpdateTest {
     }
 
     @Test
+    fun `로그인 머리말 — 호스트 안은 Windows 판 · 맥·PC 문구 0`() = runTest {
+        val h = SharedTestHarness(this)
+        h.session.launch()
+        advanceUntilIdle()
+        h.nav.open(FlyoutRoute.Home)
+        runDesktopComposeUiTest(360, 900) {
+            setContent { h.host.Content(h.nav, 360.0) }
+            settle(this@runTest)
+            assertEquals(1, count("아잉체크 계정으로 로그인해요"), "로그인 머리말이 Windows 판이 아니다")
+            assertEquals(0, count("맥·PC의 aing-check 와 같은 계정으로 로그인해요"), "호스트 안 로그인에 폰 문구가 남았다")
+        }
+    }
+
+    @Test
+    fun `프로필·캐릭터 고르기 안내 — 호스트 안은 Windows 판 · 맥 메뉴바 문구 0`() = runTest {
+        val h = SharedTestHarness(this, answer = withTeamAndBlocks)
+        h.signIn()
+        advanceUntilIdle()
+        h.nav.open(FlyoutRoute.Profile)
+        runDesktopComposeUiTest(360, 900) {
+            setContent { h.host.Content(h.nav, 360.0) }
+            settle(this@runTest)
+            assertEquals(1, count("나 화면과 오버레이에서 착용 캐릭터가 나를 대신해요."), "프로필 안내가 Windows 판이 아니다")
+            assertEquals(0, count("지금·나 탭, 맥 메뉴바와 맥·PC 오버레이에서 착용 캐릭터가 나를 대신해요."), "프로필에 폰 문구가 남았다")
+            h.nav.open(FlyoutRoute.Characters)
+            settle(this@runTest)
+            assertEquals(1, count("오버레이와 울트라 찌르기에 나오는 내 캐릭터예요."), "캐릭터 안내가 Windows 판이 아니다")
+            assertEquals(0, count("맥·PC 오버레이, 맥 메뉴바와 울트라 찌르기에 나오는 내 캐릭터예요."), "캐릭터 고르기에 폰 문구가 남았다")
+        }
+    }
+
+    @Test
     fun `업데이트 필요 — 목적지가 있으면 호스트가 Store 단추를 그리고 누르면 그 주소를 연다`() = runTest {
         val h = SharedTestHarness(this, answer = needsUpdate, updateDestination = STORE_URL)
         h.session.launch()

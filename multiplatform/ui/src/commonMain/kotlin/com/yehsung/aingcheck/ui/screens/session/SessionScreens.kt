@@ -68,6 +68,8 @@ const val APP_DISPLAY_NAME = "아잉체크"
 /** 로그인 화면 글자(Swift 화면 리터럴). */
 object LoginText {
     const val lede = "맥·PC의 aing-check 와 같은 계정으로 로그인해요"
+    /** Windows 판([LocalDesktopWording]) — 사용자 답 "Windows 전용 문구 두기". */
+    const val ledeDesktop = "아잉체크 계정으로 로그인해요"
     const val email = "이메일"
     const val password = "비밀번호"
     const val signIn = "로그인"
@@ -184,7 +186,7 @@ fun LoginScreen(
                 kind = AingButtonKind.Plain, size = AingButtonSize.Sm)
         },
     ) {
-        BrandHeader(CharacterMood.Working, APP_DISPLAY_NAME, LoginText.lede)
+        BrandHeader(CharacterMood.Working, APP_DISPLAY_NAME, if (LocalDesktopWording.current) LoginText.ledeDesktop else LoginText.lede)
         InsetGroup(Modifier.padding(top = AingDimens.space6)) {
             FieldRow("envelope", AppIcon.Mail, divider = true) {
                 AingTextInput(email, LoginText.email, Modifier.weight(1f),

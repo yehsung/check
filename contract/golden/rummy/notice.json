@@ -1,0 +1,959 @@
+{
+  "cases": [
+    {
+      "id": "status-ok",
+      "kind_": "status",
+      "status": "ok",
+      "texts": {
+        "create": "잠시 후 다시 시도해 주세요",
+        "decline": "잠시 후 다시 시도해 주세요",
+        "draft": "잠시 후 다시 시도해 주세요",
+        "draw": "잠시 후 다시 시도해 주세요",
+        "invite": "잠시 후 다시 시도해 주세요",
+        "join": "잠시 후 다시 시도해 주세요",
+        "leave": "잠시 후 다시 시도해 주세요",
+        "lobby": "잠시 후 다시 시도해 주세요",
+        "play": "잠시 후 다시 시도해 주세요",
+        "ranking": "잠시 후 다시 시도해 주세요",
+        "start": "잠시 후 다시 시도해 주세요",
+        "state": "잠시 후 다시 시도해 주세요"
+      }
+    },
+    {
+      "id": "status-unauthorized",
+      "kind_": "status",
+      "status": "unauthorized",
+      "texts": {
+        "create": "다시 로그인해 주세요",
+        "decline": "다시 로그인해 주세요",
+        "draft": "다시 로그인해 주세요",
+        "draw": "다시 로그인해 주세요",
+        "invite": "다시 로그인해 주세요",
+        "join": "다시 로그인해 주세요",
+        "leave": "다시 로그인해 주세요",
+        "lobby": "다시 로그인해 주세요",
+        "play": "다시 로그인해 주세요",
+        "ranking": "다시 로그인해 주세요",
+        "start": "다시 로그인해 주세요",
+        "state": "다시 로그인해 주세요"
+      }
+    },
+    {
+      "id": "status-unsupported_client",
+      "kind_": "status",
+      "status": "unsupported_client",
+      "texts": {
+        "create": "앱을 업데이트해 주세요",
+        "decline": "앱을 업데이트해 주세요",
+        "draft": "앱을 업데이트해 주세요",
+        "draw": "앱을 업데이트해 주세요",
+        "invite": "앱을 업데이트해 주세요",
+        "join": "앱을 업데이트해 주세요",
+        "leave": "앱을 업데이트해 주세요",
+        "lobby": "앱을 업데이트해 주세요",
+        "play": "앱을 업데이트해 주세요",
+        "ranking": "앱을 업데이트해 주세요",
+        "start": "앱을 업데이트해 주세요",
+        "state": "앱을 업데이트해 주세요"
+      }
+    },
+    {
+      "id": "status-invalid",
+      "kind_": "status",
+      "status": "invalid",
+      "texts": {
+        "create": "고를 수 없는 판돈이에요",
+        "decline": "잠시 후 다시 시도해 주세요",
+        "draft": "잠시 후 다시 시도해 주세요",
+        "draw": "잠시 후 다시 시도해 주세요",
+        "invite": "초대할 수 없는 사람이에요",
+        "join": "참가할 수 없는 방이에요",
+        "leave": "잠시 후 다시 시도해 주세요",
+        "lobby": "잠시 후 다시 시도해 주세요",
+        "play": "잠시 후 다시 시도해 주세요",
+        "ranking": "잠시 후 다시 시도해 주세요",
+        "start": "잠시 후 다시 시도해 주세요",
+        "state": "잠시 후 다시 시도해 주세요"
+      }
+    },
+    {
+      "id": "status-busy",
+      "kind_": "status",
+      "status": "busy",
+      "texts": {
+        "create": "이미 다른 게임 중이에요",
+        "decline": "이미 다른 게임 중이에요",
+        "draft": "이미 다른 게임 중이에요",
+        "draw": "이미 다른 게임 중이에요",
+        "invite": "이미 다른 게임 중이에요",
+        "join": "이미 다른 게임 중이에요",
+        "leave": "이미 다른 게임 중이에요",
+        "lobby": "이미 다른 게임 중이에요",
+        "play": "이미 다른 게임 중이에요",
+        "ranking": "이미 다른 게임 중이에요",
+        "start": "이미 다른 게임 중이에요",
+        "state": "이미 다른 게임 중이에요"
+      }
+    },
+    {
+      "id": "status-already_in_room",
+      "kind_": "status",
+      "status": "already_in_room",
+      "texts": {
+        "create": "이미 들어가 있는 방이 있어요",
+        "decline": "이미 들어가 있는 방이 있어요",
+        "draft": "이미 들어가 있는 방이 있어요",
+        "draw": "이미 들어가 있는 방이 있어요",
+        "invite": "이미 들어가 있는 방이 있어요",
+        "join": "이미 들어가 있는 방이 있어요",
+        "leave": "이미 들어가 있는 방이 있어요",
+        "lobby": "이미 들어가 있는 방이 있어요",
+        "play": "이미 들어가 있는 방이 있어요",
+        "ranking": "이미 들어가 있는 방이 있어요",
+        "start": "이미 들어가 있는 방이 있어요",
+        "state": "이미 들어가 있는 방이 있어요"
+      }
+    },
+    {
+      "id": "status-insufficient",
+      "kind_": "status",
+      "status": "insufficient",
+      "texts": {
+        "create": "루비가 모자라요",
+        "decline": "루비가 모자라요",
+        "draft": "루비가 모자라요",
+        "draw": "루비가 모자라요",
+        "invite": "루비가 모자라요",
+        "join": "루비가 모자라요",
+        "leave": "루비가 모자라요",
+        "lobby": "루비가 모자라요",
+        "play": "루비가 모자라요",
+        "ranking": "루비가 모자라요",
+        "start": "루비가 모자라요",
+        "state": "루비가 모자라요"
+      }
+    },
+    {
+      "id": "status-not_host",
+      "kind_": "status",
+      "status": "not_host",
+      "texts": {
+        "create": "방장만 할 수 있어요",
+        "decline": "방장만 할 수 있어요",
+        "draft": "방장만 할 수 있어요",
+        "draw": "방장만 할 수 있어요",
+        "invite": "방장만 할 수 있어요",
+        "join": "방장만 할 수 있어요",
+        "leave": "방장만 할 수 있어요",
+        "lobby": "방장만 할 수 있어요",
+        "play": "방장만 할 수 있어요",
+        "ranking": "방장만 할 수 있어요",
+        "start": "방장만 할 수 있어요",
+        "state": "방장만 할 수 있어요"
+      }
+    },
+    {
+      "id": "status-blackout",
+      "kind_": "status",
+      "status": "blackout",
+      "texts": {
+        "create": "지금은 조용한 기간이라 초대할 수 없어요",
+        "decline": "지금은 조용한 기간이라 초대할 수 없어요",
+        "draft": "지금은 조용한 기간이라 초대할 수 없어요",
+        "draw": "지금은 조용한 기간이라 초대할 수 없어요",
+        "invite": "지금은 조용한 기간이라 초대할 수 없어요",
+        "join": "지금은 조용한 기간이라 초대할 수 없어요",
+        "leave": "지금은 조용한 기간이라 초대할 수 없어요",
+        "lobby": "지금은 조용한 기간이라 초대할 수 없어요",
+        "play": "지금은 조용한 기간이라 초대할 수 없어요",
+        "ranking": "지금은 조용한 기간이라 초대할 수 없어요",
+        "start": "지금은 조용한 기간이라 초대할 수 없어요",
+        "state": "지금은 조용한 기간이라 초대할 수 없어요"
+      }
+    },
+    {
+      "id": "status-target_focused",
+      "kind_": "status",
+      "status": "target_focused",
+      "texts": {
+        "create": "상대가 집중 모드예요",
+        "decline": "상대가 집중 모드예요",
+        "draft": "상대가 집중 모드예요",
+        "draw": "상대가 집중 모드예요",
+        "invite": "상대가 집중 모드예요",
+        "join": "상대가 집중 모드예요",
+        "leave": "상대가 집중 모드예요",
+        "lobby": "상대가 집중 모드예요",
+        "play": "상대가 집중 모드예요",
+        "ranking": "상대가 집중 모드예요",
+        "start": "상대가 집중 모드예요",
+        "state": "상대가 집중 모드예요"
+      }
+    },
+    {
+      "id": "status-target_outdated",
+      "kind_": "status",
+      "status": "target_outdated",
+      "texts": {
+        "create": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "decline": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "draft": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "draw": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "invite": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "join": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "leave": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "lobby": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "play": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "ranking": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "start": "상대 앱이 아잉 큐브를 아직 몰라요",
+        "state": "상대 앱이 아잉 큐브를 아직 몰라요"
+      }
+    },
+    {
+      "id": "status-target_busy",
+      "kind_": "status",
+      "status": "target_busy",
+      "texts": {
+        "create": "상대가 다른 게임 중이에요",
+        "decline": "상대가 다른 게임 중이에요",
+        "draft": "상대가 다른 게임 중이에요",
+        "draw": "상대가 다른 게임 중이에요",
+        "invite": "상대가 다른 게임 중이에요",
+        "join": "상대가 다른 게임 중이에요",
+        "leave": "상대가 다른 게임 중이에요",
+        "lobby": "상대가 다른 게임 중이에요",
+        "play": "상대가 다른 게임 중이에요",
+        "ranking": "상대가 다른 게임 중이에요",
+        "start": "상대가 다른 게임 중이에요",
+        "state": "상대가 다른 게임 중이에요"
+      }
+    },
+    {
+      "id": "status-room_full",
+      "kind_": "status",
+      "status": "room_full",
+      "texts": {
+        "create": "방이 가득 찼어요",
+        "decline": "방이 가득 찼어요",
+        "draft": "방이 가득 찼어요",
+        "draw": "방이 가득 찼어요",
+        "invite": "방이 가득 찼어요",
+        "join": "방이 가득 찼어요",
+        "leave": "방이 가득 찼어요",
+        "lobby": "방이 가득 찼어요",
+        "play": "방이 가득 찼어요",
+        "ranking": "방이 가득 찼어요",
+        "start": "방이 가득 찼어요",
+        "state": "방이 가득 찼어요"
+      }
+    },
+    {
+      "id": "status-too_many_invites",
+      "kind_": "status",
+      "status": "too_many_invites",
+      "texts": {
+        "create": "한 번에 6명까지 초대할 수 있어요",
+        "decline": "한 번에 6명까지 초대할 수 있어요",
+        "draft": "한 번에 6명까지 초대할 수 있어요",
+        "draw": "한 번에 6명까지 초대할 수 있어요",
+        "invite": "한 번에 6명까지 초대할 수 있어요",
+        "join": "한 번에 6명까지 초대할 수 있어요",
+        "leave": "한 번에 6명까지 초대할 수 있어요",
+        "lobby": "한 번에 6명까지 초대할 수 있어요",
+        "play": "한 번에 6명까지 초대할 수 있어요",
+        "ranking": "한 번에 6명까지 초대할 수 있어요",
+        "start": "한 번에 6명까지 초대할 수 있어요",
+        "state": "한 번에 6명까지 초대할 수 있어요"
+      }
+    },
+    {
+      "id": "status-already_invited",
+      "kind_": "status",
+      "status": "already_invited",
+      "texts": {
+        "create": "이미 초대한 사람이에요",
+        "decline": "이미 초대한 사람이에요",
+        "draft": "이미 초대한 사람이에요",
+        "draw": "이미 초대한 사람이에요",
+        "invite": "이미 초대한 사람이에요",
+        "join": "이미 초대한 사람이에요",
+        "leave": "이미 초대한 사람이에요",
+        "lobby": "이미 초대한 사람이에요",
+        "play": "이미 초대한 사람이에요",
+        "ranking": "이미 초대한 사람이에요",
+        "start": "이미 초대한 사람이에요",
+        "state": "이미 초대한 사람이에요"
+      }
+    },
+    {
+      "id": "status-room_closed",
+      "kind_": "status",
+      "status": "room_closed",
+      "texts": {
+        "create": "방이 닫혔어요",
+        "decline": "방이 닫혔어요",
+        "draft": "방이 닫혔어요",
+        "draw": "방이 닫혔어요",
+        "invite": "방이 닫혔어요",
+        "join": "방이 닫혔어요",
+        "leave": "방이 닫혔어요",
+        "lobby": "방이 닫혔어요",
+        "play": "방이 닫혔어요",
+        "ranking": "방이 닫혔어요",
+        "start": "방이 닫혔어요",
+        "state": "방이 닫혔어요"
+      }
+    },
+    {
+      "id": "status-not_invited",
+      "kind_": "status",
+      "status": "not_invited",
+      "texts": {
+        "create": "초대받지 않은 방이에요",
+        "decline": "초대받지 않은 방이에요",
+        "draft": "초대받지 않은 방이에요",
+        "draw": "초대받지 않은 방이에요",
+        "invite": "초대받지 않은 방이에요",
+        "join": "초대받지 않은 방이에요",
+        "leave": "초대받지 않은 방이에요",
+        "lobby": "초대받지 않은 방이에요",
+        "play": "초대받지 않은 방이에요",
+        "ranking": "초대받지 않은 방이에요",
+        "start": "초대받지 않은 방이에요",
+        "state": "초대받지 않은 방이에요"
+      }
+    },
+    {
+      "id": "status-not_enough_players",
+      "kind_": "status",
+      "status": "not_enough_players",
+      "texts": {
+        "create": "2명 이상 모여야 시작할 수 있어요",
+        "decline": "2명 이상 모여야 시작할 수 있어요",
+        "draft": "2명 이상 모여야 시작할 수 있어요",
+        "draw": "2명 이상 모여야 시작할 수 있어요",
+        "invite": "2명 이상 모여야 시작할 수 있어요",
+        "join": "2명 이상 모여야 시작할 수 있어요",
+        "leave": "2명 이상 모여야 시작할 수 있어요",
+        "lobby": "2명 이상 모여야 시작할 수 있어요",
+        "play": "2명 이상 모여야 시작할 수 있어요",
+        "ranking": "2명 이상 모여야 시작할 수 있어요",
+        "start": "2명 이상 모여야 시작할 수 있어요",
+        "state": "2명 이상 모여야 시작할 수 있어요"
+      }
+    },
+    {
+      "id": "status-seats_dropped",
+      "kind_": "status",
+      "status": "seats_dropped",
+      "texts": {
+        "create": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "decline": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "draft": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "draw": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "invite": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "join": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "leave": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "lobby": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "play": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "ranking": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "start": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요",
+        "state": "루비가 모자라거나 다른 게임 중인 사람이 빠졌어요"
+      }
+    },
+    {
+      "id": "status-not_found",
+      "kind_": "status",
+      "status": "not_found",
+      "texts": {
+        "create": "방이 닫혔어요",
+        "decline": "방이 닫혔어요",
+        "draft": "방이 닫혔어요",
+        "draw": "이미 끝난 판이에요",
+        "invite": "방이 닫혔어요",
+        "join": "방이 닫혔어요",
+        "leave": "방이 닫혔어요",
+        "lobby": "방이 닫혔어요",
+        "play": "이미 끝난 판이에요",
+        "ranking": "방이 닫혔어요",
+        "start": "방이 닫혔어요",
+        "state": "방이 닫혔어요"
+      }
+    },
+    {
+      "id": "status-not_your_turn",
+      "kind_": "status",
+      "status": "not_your_turn",
+      "texts": {
+        "create": "차례가 이미 넘어갔어요",
+        "decline": "차례가 이미 넘어갔어요",
+        "draft": "차례가 이미 넘어갔어요",
+        "draw": "차례가 이미 넘어갔어요",
+        "invite": "차례가 이미 넘어갔어요",
+        "join": "차례가 이미 넘어갔어요",
+        "leave": "차례가 이미 넘어갔어요",
+        "lobby": "차례가 이미 넘어갔어요",
+        "play": "차례가 이미 넘어갔어요",
+        "ranking": "차례가 이미 넘어갔어요",
+        "start": "차례가 이미 넘어갔어요",
+        "state": "차례가 이미 넘어갔어요"
+      }
+    },
+    {
+      "id": "status-stale",
+      "kind_": "status",
+      "status": "stale",
+      "texts": {
+        "create": "잠시 후 다시 시도해 주세요",
+        "decline": "잠시 후 다시 시도해 주세요",
+        "draft": "차례가 이미 넘어갔어요",
+        "draw": "차례가 이미 넘어갔어요",
+        "invite": "잠시 후 다시 시도해 주세요",
+        "join": "잠시 후 다시 시도해 주세요",
+        "leave": "잠시 후 다시 시도해 주세요",
+        "lobby": "잠시 후 다시 시도해 주세요",
+        "play": "차례가 이미 넘어갔어요",
+        "ranking": "잠시 후 다시 시도해 주세요",
+        "start": "잠시 후 다시 시도해 주세요",
+        "state": "잠시 후 다시 시도해 주세요"
+      }
+    },
+    {
+      "id": "status-malformed",
+      "kind_": "status",
+      "status": "malformed",
+      "texts": {
+        "create": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "decline": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "draft": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "draw": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "invite": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "join": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "leave": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "lobby": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "play": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "ranking": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "start": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요.",
+        "state": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요."
+      }
+    },
+    {
+      "id": "status-too_fast",
+      "kind_": "status",
+      "status": "too_fast",
+      "texts": {
+        "create": "조금 천천히 보내 주세요",
+        "decline": "조금 천천히 보내 주세요",
+        "draft": "조금 천천히 보내 주세요",
+        "draw": "조금 천천히 보내 주세요",
+        "invite": "조금 천천히 보내 주세요",
+        "join": "조금 천천히 보내 주세요",
+        "leave": "조금 천천히 보내 주세요",
+        "lobby": "조금 천천히 보내 주세요",
+        "play": "조금 천천히 보내 주세요",
+        "ranking": "조금 천천히 보내 주세요",
+        "start": "조금 천천히 보내 주세요",
+        "state": "조금 천천히 보내 주세요"
+      }
+    },
+    {
+      "id": "status-rejected",
+      "kind_": "status",
+      "status": "rejected",
+      "texts": {
+        "create": "잠시 후 다시 시도해 주세요",
+        "decline": "잠시 후 다시 시도해 주세요",
+        "draft": "잠시 후 다시 시도해 주세요",
+        "draw": "잠시 후 다시 시도해 주세요",
+        "invite": "잠시 후 다시 시도해 주세요",
+        "join": "잠시 후 다시 시도해 주세요",
+        "leave": "잠시 후 다시 시도해 주세요",
+        "lobby": "잠시 후 다시 시도해 주세요",
+        "play": "잠시 후 다시 시도해 주세요",
+        "ranking": "잠시 후 다시 시도해 주세요",
+        "start": "잠시 후 다시 시도해 주세요",
+        "state": "잠시 후 다시 시도해 주세요"
+      }
+    },
+    {
+      "id": "status-not_active",
+      "kind_": "status",
+      "status": "not_active",
+      "texts": {
+        "create": "이미 끝난 판이에요",
+        "decline": "이미 끝난 판이에요",
+        "draft": "이미 끝난 판이에요",
+        "draw": "이미 끝난 판이에요",
+        "invite": "이미 끝난 판이에요",
+        "join": "이미 끝난 판이에요",
+        "leave": "이미 끝난 판이에요",
+        "lobby": "이미 끝난 판이에요",
+        "play": "이미 끝난 판이에요",
+        "ranking": "이미 끝난 판이에요",
+        "start": "이미 끝난 판이에요",
+        "state": "이미 끝난 판이에요"
+      }
+    },
+    {
+      "id": "status-unknown",
+      "kind_": "status",
+      "status": "unknown",
+      "texts": {
+        "create": "잠시 후 다시 시도해 주세요",
+        "decline": "잠시 후 다시 시도해 주세요",
+        "draft": "잠시 후 다시 시도해 주세요",
+        "draw": "잠시 후 다시 시도해 주세요",
+        "invite": "잠시 후 다시 시도해 주세요",
+        "join": "잠시 후 다시 시도해 주세요",
+        "leave": "잠시 후 다시 시도해 주세요",
+        "lobby": "잠시 후 다시 시도해 주세요",
+        "play": "잠시 후 다시 시도해 주세요",
+        "ranking": "잠시 후 다시 시도해 주세요",
+        "start": "잠시 후 다시 시도해 주세요",
+        "state": "잠시 후 다시 시도해 주세요"
+      }
+    },
+    {
+      "id": "reason-ok-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "ok",
+      "text": null
+    },
+    {
+      "id": "reason-ok-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "ok",
+      "text": null
+    },
+    {
+      "id": "reason-ok-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "ok",
+      "text": null
+    },
+    {
+      "id": "reason-ok-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "ok",
+      "text": null
+    },
+    {
+      "id": "reason-malformed-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "malformed",
+      "text": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요."
+    },
+    {
+      "id": "reason-malformed-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "malformed",
+      "text": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요."
+    },
+    {
+      "id": "reason-malformed-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "malformed",
+      "text": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요."
+    },
+    {
+      "id": "reason-malformed-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "malformed",
+      "text": "타일 모양이 이상해요. 되돌리고 다시 놓아 주세요."
+    },
+    {
+      "id": "reason-joker_not_reused-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "joker_not_reused",
+      "text": "가져온 조커는 이번 차례에 판에 써야 해요."
+    },
+    {
+      "id": "reason-joker_not_reused-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "joker_not_reused",
+      "text": "가져온 조커는 이번 차례에 판에 써야 해요."
+    },
+    {
+      "id": "reason-joker_not_reused-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "joker_not_reused",
+      "text": "가져온 조커는 이번 차례에 판에 써야 해요."
+    },
+    {
+      "id": "reason-joker_not_reused-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "joker_not_reused",
+      "text": "가져온 조커는 이번 차례에 판에 써야 해요."
+    },
+    {
+      "id": "reason-table_tile_removed-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "table_tile_removed",
+      "text": "판에 있던 타일은 내 랙으로 가져올 수 없어요."
+    },
+    {
+      "id": "reason-table_tile_removed-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "table_tile_removed",
+      "text": "판에 있던 타일은 내 랙으로 가져올 수 없어요."
+    },
+    {
+      "id": "reason-table_tile_removed-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "table_tile_removed",
+      "text": "판에 있던 타일은 내 랙으로 가져올 수 없어요."
+    },
+    {
+      "id": "reason-table_tile_removed-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "table_tile_removed",
+      "text": "판에 있던 타일은 내 랙으로 가져올 수 없어요."
+    },
+    {
+      "id": "reason-tile_not_owned-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "tile_not_owned",
+      "text": "내 랙에 없는 타일이에요."
+    },
+    {
+      "id": "reason-tile_not_owned-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "tile_not_owned",
+      "text": "내 랙에 없는 타일이에요."
+    },
+    {
+      "id": "reason-tile_not_owned-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "tile_not_owned",
+      "text": "내 랙에 없는 타일이에요."
+    },
+    {
+      "id": "reason-tile_not_owned-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "tile_not_owned",
+      "text": "내 랙에 없는 타일이에요."
+    },
+    {
+      "id": "reason-no_tile_played-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "no_tile_played",
+      "text": "내 타일을 1개 이상 내야 해요."
+    },
+    {
+      "id": "reason-no_tile_played-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "no_tile_played",
+      "text": "내 타일을 1개 이상 내야 해요."
+    },
+    {
+      "id": "reason-no_tile_played-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "no_tile_played",
+      "text": "내 타일을 1개 이상 내야 해요."
+    },
+    {
+      "id": "reason-no_tile_played-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "no_tile_played",
+      "text": "내 타일을 1개 이상 내야 해요."
+    },
+    {
+      "id": "reason-invalid_meld-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "invalid_meld",
+      "text": "맞지 않는 묶음이 있어요."
+    },
+    {
+      "id": "reason-invalid_meld-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "invalid_meld",
+      "text": "맞지 않는 묶음이 있어요."
+    },
+    {
+      "id": "reason-invalid_meld-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "invalid_meld",
+      "text": "맞지 않는 묶음이 있어요."
+    },
+    {
+      "id": "reason-invalid_meld-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "invalid_meld",
+      "text": "맞지 않는 묶음이 있어요."
+    },
+    {
+      "id": "reason-initial_table_touched-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "initial_table_touched",
+      "text": "첫 등록 차례에는 판에 있던 묶음을 건드릴 수 없어요."
+    },
+    {
+      "id": "reason-initial_table_touched-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "initial_table_touched",
+      "text": "첫 등록 차례에는 판에 있던 묶음을 건드릴 수 없어요."
+    },
+    {
+      "id": "reason-initial_table_touched-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "initial_table_touched",
+      "text": "첫 등록 차례에는 판에 있던 묶음을 건드릴 수 없어요."
+    },
+    {
+      "id": "reason-initial_table_touched-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "initial_table_touched",
+      "text": "첫 등록 차례에는 판에 있던 묶음을 건드릴 수 없어요."
+    },
+    {
+      "id": "reason-initial_under_30-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "initial_under_30",
+      "text": "첫 등록은 30점 이상이어야 해요."
+    },
+    {
+      "id": "reason-initial_under_30-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "initial_under_30",
+      "text": "첫 등록은 30점 이상이어야 해요(지금 0점)."
+    },
+    {
+      "id": "reason-initial_under_30-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "initial_under_30",
+      "text": "첫 등록은 30점 이상이어야 해요(지금 18점)."
+    },
+    {
+      "id": "reason-initial_under_30-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "initial_under_30",
+      "text": "첫 등록은 30점 이상이어야 해요(지금 29점)."
+    },
+    {
+      "id": "reason-unknown-nil",
+      "kind_": "reason",
+      "points": null,
+      "reason": "unknown",
+      "text": null
+    },
+    {
+      "id": "reason-unknown-0",
+      "kind_": "reason",
+      "points": 0,
+      "reason": "unknown",
+      "text": null
+    },
+    {
+      "id": "reason-unknown-18",
+      "kind_": "reason",
+      "points": 18,
+      "reason": "unknown",
+      "text": null
+    },
+    {
+      "id": "reason-unknown-29",
+      "kind_": "reason",
+      "points": 29,
+      "reason": "unknown",
+      "text": null
+    },
+    {
+      "hasHost": true,
+      "hostName": "영식",
+      "id": "invite-named",
+      "kind_": "invitation",
+      "stake": 5,
+      "text": "영식님이 아잉 큐브에 초대했어요 · 판돈 5"
+    },
+    {
+      "hasHost": true,
+      "hostName": null,
+      "id": "invite-noname",
+      "kind_": "invitation",
+      "stake": 3,
+      "text": "친구님이 아잉 큐브에 초대했어요 · 판돈 3"
+    },
+    {
+      "hasHost": true,
+      "hostName": "",
+      "id": "invite-empty",
+      "kind_": "invitation",
+      "stake": 10,
+      "text": "친구님이 아잉 큐브에 초대했어요 · 판돈 10"
+    },
+    {
+      "hasHost": false,
+      "hostName": null,
+      "id": "invite-nohost",
+      "kind_": "invitation",
+      "stake": 5,
+      "text": "친구님이 아잉 큐브에 초대했어요 · 판돈 5"
+    },
+    {
+      "hasHost": true,
+      "hostName": "민수",
+      "id": "invite-nostake",
+      "kind_": "invitation",
+      "stake": null,
+      "text": "민수님이 아잉 큐브에 초대했어요"
+    },
+    {
+      "hasHost": false,
+      "hostName": null,
+      "id": "invite-nostake-nohost",
+      "kind_": "invitation",
+      "stake": null,
+      "text": "친구님이 아잉 큐브에 초대했어요"
+    },
+    {
+      "id": "progress-0",
+      "kind_": "progress",
+      "points": 0,
+      "text": "첫 등록 0/30점"
+    },
+    {
+      "id": "progress-18",
+      "kind_": "progress",
+      "points": 18,
+      "text": "첫 등록 18/30점"
+    },
+    {
+      "id": "progress-30",
+      "kind_": "progress",
+      "points": 30,
+      "text": "첫 등록 30/30점"
+    },
+    {
+      "id": "progress-45",
+      "kind_": "progress",
+      "points": 45,
+      "text": "첫 등록 45/30점"
+    },
+    {
+      "id": "const-tryAgain",
+      "kind_": "constant",
+      "name": "tryAgain",
+      "text": "잠시 후 다시 시도해 주세요"
+    },
+    {
+      "id": "const-checkConnection",
+      "kind_": "constant",
+      "name": "checkConnection",
+      "text": "연결을 확인하고 다시 시도해 주세요"
+    },
+    {
+      "id": "const-updateRequired",
+      "kind_": "constant",
+      "name": "updateRequired",
+      "text": "앱을 업데이트해 주세요"
+    },
+    {
+      "id": "const-signInAgain",
+      "kind_": "constant",
+      "name": "signInAgain",
+      "text": "다시 로그인해 주세요"
+    },
+    {
+      "id": "const-unavailable",
+      "kind_": "constant",
+      "name": "unavailable",
+      "text": "아잉 큐브는 곧 열려요"
+    },
+    {
+      "id": "const-invited",
+      "kind_": "constant",
+      "name": "invited",
+      "text": "초대를 보냈어요"
+    },
+    {
+      "id": "const-roomClosed",
+      "kind_": "constant",
+      "name": "roomClosed",
+      "text": "방이 닫혔어요"
+    },
+    {
+      "id": "const-droppedFromRoom",
+      "kind_": "constant",
+      "name": "droppedFromRoom",
+      "text": "루비가 모자라거나 다른 게임 중이라 방에서 빠졌어요"
+    },
+    {
+      "id": "const-turnPassed",
+      "kind_": "constant",
+      "name": "turnPassed",
+      "text": "차례가 이미 넘어갔어요"
+    },
+    {
+      "id": "const-tableChanged",
+      "kind_": "constant",
+      "name": "tableChanged",
+      "text": "판이 바뀌었어요. 확인하고 다시 눌러 주세요"
+    },
+    {
+      "id": "const-finishedMatch",
+      "kind_": "constant",
+      "name": "finishedMatch",
+      "text": "이미 끝난 판이에요"
+    },
+    {
+      "id": "const-myTurnAttention",
+      "kind_": "constant",
+      "name": "myTurnAttention",
+      "text": "아잉 큐브 — 내 차례예요"
+    },
+    {
+      "id": "const-matchStartedAttention",
+      "kind_": "constant",
+      "name": "matchStartedAttention",
+      "text": "아잉 큐브가 시작됐어요"
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyNotice.swift",
+  "golden": "rummy/notice",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "kind_": "status(RummyRPCStatus 원시값 → texts: Action 원시값 12개 → 글자) · reason(RummyTurnReason × initialPoints → 글자 또는 null) · invitation · progress · constant.",
+    "scope": "표 밖에서 문구를 만들지 않는다(설계서 §4.3). 화면 고정 글자는 이 표가 아니다."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/RummyNoticeText.swift"
+  ]
+}

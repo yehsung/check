@@ -1,0 +1,5384 @@
+{
+  "cases": [
+    {
+      "analysis": "1:run:12",
+      "chainable": true,
+      "compareKey": "A3 A4 A5",
+      "displayOrder": "A3 A4 A5",
+      "id": "M001",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:6",
+      "chainable": true,
+      "compareKey": "B1 B2 B3",
+      "displayOrder": "B1 B2 B3",
+      "id": "M002",
+      "kind_": "meld",
+      "tiles": [
+        "B1",
+        "B2",
+        "B3"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:36",
+      "chainable": true,
+      "compareKey": "C11 C12 C13",
+      "displayOrder": "C11 C12 C13",
+      "id": "M003",
+      "kind_": "meld",
+      "tiles": [
+        "C11",
+        "C12",
+        "C13"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:91",
+      "chainable": true,
+      "compareKey": "D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13",
+      "displayOrder": "D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13",
+      "id": "M004",
+      "kind_": "meld",
+      "tiles": [
+        "D1",
+        "D2",
+        "D3",
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "D8",
+        "D9",
+        "D10",
+        "D11",
+        "D12",
+        "D13"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 J",
+      "displayOrder": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 J",
+      "id": "M005",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A12 A13",
+      "displayOrder": "A12 A13 A1",
+      "id": "M006",
+      "kind_": "meld",
+      "tiles": [
+        "A12",
+        "A13",
+        "A1"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A2 A13",
+      "displayOrder": "A13 A1 A2",
+      "id": "M007",
+      "kind_": "meld",
+      "tiles": [
+        "A13",
+        "A1",
+        "A2"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "A3 A4",
+      "displayOrder": "A3 A4",
+      "id": "M008",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "A4"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "A7",
+      "displayOrder": "A7",
+      "id": "M009",
+      "kind_": "meld",
+      "tiles": [
+        "A7"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "id": "M010",
+      "kind_": "meld",
+      "tiles": [],
+      "valid": false
+    },
+    {
+      "analysis": "1:group:21",
+      "chainable": true,
+      "compareKey": "A7 B7 C7",
+      "displayOrder": "A7 B7 C7",
+      "id": "M011",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "C7"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:28",
+      "chainable": true,
+      "compareKey": "A7 B7 C7 D7",
+      "displayOrder": "A7 B7 C7 D7",
+      "id": "M012",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "C7",
+        "D7"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 A7 B7 C7 D7",
+      "displayOrder": "A7 B7 C7 D7 A7",
+      "id": "M013",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "C7",
+        "D7",
+        "A7"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 A7 B7",
+      "displayOrder": "A7 A7 B7",
+      "id": "M014",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "A7",
+        "B7"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 A7 A7",
+      "displayOrder": "A7 A7 A7",
+      "id": "M015",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "A7",
+        "A7"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "A7 B7",
+      "displayOrder": "A7 B7",
+      "id": "M016",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 B4 C5",
+      "displayOrder": "A3 B4 C5",
+      "id": "M017",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "B4",
+        "C5"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 A5 A6",
+      "displayOrder": "A3 A5 A6",
+      "id": "M018",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "A5",
+        "A6"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 A4 A4 A5",
+      "displayOrder": "A3 A4 A4 A5",
+      "id": "M019",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "A4",
+        "A4",
+        "A5"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 A4 B5",
+      "displayOrder": "A3 A4 B5",
+      "id": "M020",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "A4",
+        "B5"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A5 B5 C6",
+      "displayOrder": "A5 B5 C6",
+      "id": "M021",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "B5",
+        "C6"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "1:group:3",
+      "chainable": true,
+      "compareKey": "A1 B1 C1",
+      "displayOrder": "A1 B1 C1",
+      "id": "M022",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "B1",
+        "C1"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:52",
+      "chainable": true,
+      "compareKey": "A13 B13 C13 D13",
+      "displayOrder": "A13 B13 C13 D13",
+      "id": "M023",
+      "kind_": "meld",
+      "tiles": [
+        "A13",
+        "B13",
+        "C13",
+        "D13"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "A5 A6 J",
+      "displayOrder": "A5 A6 J",
+      "id": "M024",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "A6",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "A5 A6 J",
+      "displayOrder": "A5 A6 J",
+      "id": "M025",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "A5",
+        "A6"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "A5 A7 J",
+      "displayOrder": "A5 J A7",
+      "id": "M026",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "J",
+        "A7"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:9",
+      "chainable": true,
+      "compareKey": "A2 A3 J",
+      "displayOrder": "A2 A3 J",
+      "id": "M027",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "A2",
+        "A3"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:6",
+      "chainable": true,
+      "compareKey": "A1 A2 J",
+      "displayOrder": "A1 A2 J",
+      "id": "M028",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A2",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:36",
+      "chainable": false,
+      "compareKey": "A12 A13 J",
+      "displayOrder": "J A12 A13",
+      "id": "M029",
+      "kind_": "meld",
+      "tiles": [
+        "A12",
+        "A13",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:36",
+      "chainable": false,
+      "compareKey": "A12 A13 J",
+      "displayOrder": "J A12 A13",
+      "id": "M030",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "A13",
+        "A12"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:21",
+      "chainable": true,
+      "compareKey": "A7 B7 J",
+      "displayOrder": "A7 B7 J",
+      "id": "M031",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:28",
+      "chainable": true,
+      "compareKey": "A7 B7 C7 J",
+      "displayOrder": "A7 B7 C7 J",
+      "id": "M032",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "C7",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 B7 C7 D7 J",
+      "displayOrder": "A7 B7 C7 D7 J",
+      "id": "M033",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "C7",
+        "D7",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 A7 J",
+      "displayOrder": "A7 A7 J",
+      "id": "M034",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "A7",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "A5 J J",
+      "displayOrder": "A5 J J",
+      "id": "M035",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:6",
+      "chainable": true,
+      "compareKey": "A1 J J",
+      "displayOrder": "A1 J J",
+      "id": "M036",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:36",
+      "chainable": true,
+      "compareKey": "A11 J J",
+      "displayOrder": "A11 J J",
+      "id": "M037",
+      "kind_": "meld",
+      "tiles": [
+        "A11",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:36",
+      "chainable": true,
+      "compareKey": "A12 J J",
+      "displayOrder": "A12 J J",
+      "id": "M038",
+      "kind_": "meld",
+      "tiles": [
+        "A12",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:39",
+      "chainable": true,
+      "compareKey": "A13 J J",
+      "displayOrder": "A13 J J",
+      "id": "M039",
+      "kind_": "meld",
+      "tiles": [
+        "A13",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": true,
+      "compareKey": "A9 J J",
+      "displayOrder": "A9 J J",
+      "id": "M040",
+      "kind_": "meld",
+      "tiles": [
+        "A9",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:20",
+      "chainable": true,
+      "compareKey": "A5 B5 J J",
+      "displayOrder": "A5 B5 J J",
+      "id": "M041",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "B5",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:26",
+      "chainable": true,
+      "compareKey": "A5 A7 J J",
+      "displayOrder": "A5 J A7 J",
+      "id": "M042",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "J",
+        "A7",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "A3 A6 J J",
+      "displayOrder": "A3 J J A6",
+      "id": "M043",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "J",
+        "J",
+        "A6"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A5 A9 J J",
+      "displayOrder": "A5 J J A9",
+      "id": "M044",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "J",
+        "J",
+        "A9"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "J J J",
+      "displayOrder": "J J J",
+      "id": "M045",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "J",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "J J",
+      "displayOrder": "J J",
+      "id": "M046",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "A3 A4 J J",
+      "displayOrder": "A3 A4 J J",
+      "id": "M047",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "J",
+        "A3",
+        "A4"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:46",
+      "chainable": false,
+      "compareKey": "A12 A13 J J",
+      "displayOrder": "J J A12 A13",
+      "id": "M048",
+      "kind_": "meld",
+      "tiles": [
+        "A12",
+        "A13",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:91",
+      "chainable": true,
+      "compareKey": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 J",
+      "displayOrder": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 J",
+      "id": "M049",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:91",
+      "chainable": false,
+      "compareKey": "A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 J",
+      "displayOrder": "J A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13",
+      "id": "M050",
+      "kind_": "meld",
+      "tiles": [
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:91",
+      "chainable": false,
+      "compareKey": "A1 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13 J",
+      "displayOrder": "A1 J A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 A13",
+      "id": "M051",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:91",
+      "chainable": true,
+      "compareKey": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 J J",
+      "displayOrder": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 J J",
+      "id": "M052",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 J J",
+      "displayOrder": "A1 A2 A3 A4 A5 A6 A7 A8 A9 A10 A11 A12 J J",
+      "id": "M053",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9",
+        "A10",
+        "A11",
+        "A12",
+        "J",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A13 J",
+      "displayOrder": "A13 J A1",
+      "id": "M054",
+      "kind_": "meld",
+      "tiles": [
+        "A13",
+        "J",
+        "A1"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A12 A13 J",
+      "displayOrder": "A12 A13 J A1",
+      "id": "M055",
+      "kind_": "meld",
+      "tiles": [
+        "A12",
+        "A13",
+        "J",
+        "A1"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 B7 C8 J",
+      "displayOrder": "A7 B7 J C8",
+      "id": "M056",
+      "kind_": "meld",
+      "tiles": [
+        "A7",
+        "B7",
+        "J",
+        "C8"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A5 B6 J",
+      "displayOrder": "A5 B6 J",
+      "id": "M057",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "B6",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "1:run:35",
+      "chainable": true,
+      "compareKey": "A5 A6 A7 A8 A9",
+      "displayOrder": "A5 A6 A7 A8 A9",
+      "id": "M058",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "A6",
+        "A7",
+        "A8",
+        "A9"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:46",
+      "chainable": true,
+      "compareKey": "D10 D11 D12 D13",
+      "displayOrder": "D10 D11 D12 D13",
+      "id": "M059",
+      "kind_": "meld",
+      "tiles": [
+        "D10",
+        "D11",
+        "D12",
+        "D13"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:16",
+      "chainable": true,
+      "compareKey": "A4 B4 C4 D4",
+      "displayOrder": "A4 B4 C4 D4",
+      "id": "M060",
+      "kind_": "meld",
+      "tiles": [
+        "B4",
+        "C4",
+        "D4",
+        "A4"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A5 A6 A7 B8",
+      "displayOrder": "A5 A6 A7 B8",
+      "id": "M061",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "A6",
+        "A7",
+        "B8"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "1:run:55",
+      "chainable": false,
+      "compareKey": "A10 A11 A12 A13 J",
+      "displayOrder": "J A10 A11 A12 A13",
+      "id": "M062",
+      "kind_": "meld",
+      "tiles": [
+        "A10",
+        "A11",
+        "A12",
+        "A13",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:6",
+      "chainable": true,
+      "compareKey": "A1 A3 J",
+      "displayOrder": "A1 J A3",
+      "id": "M063",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "J",
+        "A3"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:9",
+      "chainable": false,
+      "compareKey": "A2 A4 J",
+      "displayOrder": "A2 J A4",
+      "id": "M064",
+      "kind_": "meld",
+      "tiles": [
+        "A2",
+        "A4",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A13 J",
+      "displayOrder": "A1 A13 J",
+      "id": "M065",
+      "kind_": "meld",
+      "tiles": [
+        "A1",
+        "A13",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A5 B5 C5 D5 J J",
+      "displayOrder": "A5 B5 C5 D5 J J",
+      "id": "M066",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "B5",
+        "C5",
+        "D5",
+        "J",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "1:group:27",
+      "chainable": true,
+      "compareKey": "B9 C9 J",
+      "displayOrder": "B9 C9 J",
+      "id": "M067",
+      "kind_": "meld",
+      "tiles": [
+        "B9",
+        "C9",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": true,
+      "compareKey": "B9 B10 J",
+      "displayOrder": "B9 B10 J",
+      "id": "M068",
+      "kind_": "meld",
+      "tiles": [
+        "B9",
+        "B10",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:21",
+      "chainable": true,
+      "compareKey": "A7 B7 J",
+      "displayOrder": "A7 B7 J",
+      "id": "M069",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "A7",
+        "B7"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:group:52",
+      "chainable": true,
+      "compareKey": "A13 B13 C13 J",
+      "displayOrder": "A13 B13 C13 J",
+      "id": "M070",
+      "kind_": "meld",
+      "tiles": [
+        "J",
+        "A13",
+        "B13",
+        "C13"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "1:run:40",
+      "chainable": true,
+      "compareKey": "A6 A7 A8 J J",
+      "displayOrder": "A6 A7 A8 J J",
+      "id": "M071",
+      "kind_": "meld",
+      "tiles": [
+        "A6",
+        "A7",
+        "A8",
+        "J",
+        "J"
+      ],
+      "valid": true
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 A4 A5 A5 A6 A7",
+      "displayOrder": "A3 A4 A5 A5 A6 A7",
+      "id": "M072",
+      "kind_": "meld",
+      "tiles": [
+        "A3",
+        "A4",
+        "A5",
+        "A5",
+        "A6",
+        "A7"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A9 A10 B9 C9 D9",
+      "displayOrder": "A9 B9 C9 D9 A10",
+      "id": "M073",
+      "kind_": "meld",
+      "tiles": [
+        "A9",
+        "B9",
+        "C9",
+        "D9",
+        "A10"
+      ],
+      "valid": false
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "A5 J J J",
+      "displayOrder": "A5 J J J",
+      "id": "M074",
+      "kind_": "meld",
+      "tiles": [
+        "A5",
+        "J",
+        "J",
+        "J"
+      ],
+      "valid": false
+    },
+    {
+      "id": "T001",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "B10",
+        "C10",
+        "D10",
+        "A9"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T002",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A2",
+        "A3",
+        "A4",
+        "A5",
+        "B5",
+        "C5",
+        "D5",
+        "D9"
+      ],
+      "reason": "initial_under_30",
+      "tableAfter": [
+        [
+          "A2",
+          "A3",
+          "A4",
+          "A5"
+        ],
+        [
+          "B5",
+          "C5",
+          "D5"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T003",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "D4",
+        "D5",
+        "D6",
+        "D7",
+        "A3",
+        "B3",
+        "C3",
+        "B12"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "D4",
+          "D5",
+          "D6",
+          "D7"
+        ],
+        [
+          "A3",
+          "B3",
+          "C3"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T004",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A10",
+        "B10",
+        "J",
+        "C2"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A10",
+          "B10",
+          "J"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T005",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "C9",
+        "C10",
+        "J",
+        "A1"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "J",
+          "C9",
+          "C10"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T006",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "J",
+        "A1",
+        "A2",
+        "B13"
+      ],
+      "reason": "initial_under_30",
+      "tableAfter": [
+        [
+          "J",
+          "A1",
+          "A2"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T007",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "J",
+        "J",
+        "D13",
+        "A1"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "J",
+          "J",
+          "D13"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T008",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A9",
+        "J",
+        "J",
+        "B1"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A9",
+          "J",
+          "J"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T009",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A8",
+        "J",
+        "J",
+        "B1"
+      ],
+      "reason": "initial_under_30",
+      "tableAfter": [
+        [
+          "A8",
+          "J",
+          "J"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T010",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1",
+        "A2",
+        "A3",
+        "B8",
+        "C8",
+        "D8"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "B8",
+          "C8",
+          "D8"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T011",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4",
+        "B10",
+        "C10",
+        "D10"
+      ],
+      "reason": "initial_table_touched",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T012",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A12",
+        "A13",
+        "B1"
+      ],
+      "reason": "initial_table_touched",
+      "tableAfter": [
+        [
+          "B11",
+          "C11",
+          "D11"
+        ],
+        [
+          "A11",
+          "A12",
+          "A13"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A11",
+          "B11",
+          "C11",
+          "D11"
+        ]
+      ]
+    },
+    {
+      "id": "T013",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7",
+        "B9",
+        "C9",
+        "D9"
+      ],
+      "reason": "initial_table_touched",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B9",
+          "C9",
+          "D9",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T014",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7",
+        "B10",
+        "C10",
+        "D10"
+      ],
+      "reason": "joker_not_reused",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T015",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A10",
+        "B10",
+        "C10",
+        "D1",
+        "D2"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A10",
+          "B10",
+          "C10"
+        ],
+        [
+          "D1",
+          "D2"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T016",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A10",
+        "B10"
+      ],
+      "reason": "tile_not_owned",
+      "tableAfter": [
+        [
+          "A10",
+          "B10",
+          "C10"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T017",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "B10",
+        "C10",
+        "D10"
+      ],
+      "reason": "no_tile_played",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T018",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A11",
+        "B11",
+        "C11",
+        "D2"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "C11",
+          "A11",
+          "B11"
+        ],
+        [
+          "D5",
+          "B5",
+          "C5"
+        ],
+        [
+          "A3",
+          "A1",
+          "A2"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "B5",
+          "C5",
+          "D5"
+        ]
+      ]
+    },
+    {
+      "id": "T019",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1",
+        "A2",
+        "A3",
+        "B9",
+        "C9",
+        "D9"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "A3",
+          "A2",
+          "A1"
+        ],
+        [
+          "B9",
+          "C9",
+          "D9"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T020",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4",
+        "B5",
+        "C5",
+        "D5"
+      ],
+      "reason": "initial_table_touched",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ],
+        [
+          "B5",
+          "C5",
+          "D5"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T021",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A10",
+        "A11",
+        "A12",
+        "B1",
+        "C1",
+        "D1"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A10",
+          "A11",
+          "A12"
+        ],
+        [
+          "B1",
+          "C1",
+          "D1"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T022",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A12",
+        "A13",
+        "A1",
+        "B10",
+        "C10",
+        "D10"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A12",
+          "A13",
+          "A1"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ]
+      ],
+      "tableBefore": []
+    },
+    {
+      "id": "T023",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "B10",
+        "C10",
+        "D10"
+      ],
+      "reason": "initial_table_touched",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "A4",
+          "A5",
+          "A6"
+        ]
+      ]
+    },
+    {
+      "id": "T024",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4",
+        "B9"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T025",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A5",
+        "B9"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A5"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T026",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B9"
+      ],
+      "reason": "no_tile_played",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "A4",
+          "A5",
+          "A6"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6"
+        ]
+      ]
+    },
+    {
+      "id": "T027",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B9",
+        "C9"
+      ],
+      "reason": "no_tile_played",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T028",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B5",
+        "A1"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "B3",
+          "B4",
+          "B5"
+        ],
+        [
+          "B5",
+          "B6",
+          "B7"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "B3",
+          "B4",
+          "B5",
+          "B6",
+          "B7"
+        ]
+      ]
+    },
+    {
+      "id": "T029",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "D9",
+        "D10"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A8",
+          "B8",
+          "C8"
+        ],
+        [
+          "D8",
+          "D9",
+          "D10"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A8",
+          "B8",
+          "C8",
+          "D8"
+        ]
+      ]
+    },
+    {
+      "id": "T030",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      "reason": "table_tile_removed",
+      "tableAfter": [
+        [
+          "A8",
+          "B8",
+          "C8"
+        ],
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A8",
+          "B8",
+          "C8",
+          "D8"
+        ]
+      ]
+    },
+    {
+      "id": "T031",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7",
+        "B9",
+        "C9"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B9",
+          "C9",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T032",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B9",
+        "C9"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "D7",
+          "C7",
+          "B7"
+        ],
+        [
+          "B9",
+          "C9",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ],
+        [
+          "D7",
+          "C7",
+          "B7",
+          "A7"
+        ]
+      ]
+    },
+    {
+      "id": "T033",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7"
+      ],
+      "reason": "joker_not_reused",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T034",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T035",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B3",
+          "B4",
+          "B5",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ],
+        [
+          "B3",
+          "B4",
+          "B5"
+        ]
+      ]
+    },
+    {
+      "id": "T036",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "C9",
+        "D1",
+        "D2"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A9",
+          "B9",
+          "C9"
+        ],
+        [
+          "D1",
+          "D2",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A9",
+          "B9",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T037",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A9",
+        "D1",
+        "D2"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A9",
+          "B9",
+          "A9"
+        ],
+        [
+          "D1",
+          "D2",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A9",
+          "B9",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T038",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "C8",
+        "D1",
+        "D2"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A9",
+          "B9",
+          "C8"
+        ],
+        [
+          "D1",
+          "D2",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A9",
+          "B9",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T039",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "C9",
+        "D9",
+        "A1",
+        "A2"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A9",
+          "B9",
+          "C9",
+          "D9"
+        ],
+        [
+          "A1",
+          "A2",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A9",
+          "B9",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T040",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B1",
+        "B2"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A4",
+          "A5",
+          "A6"
+        ],
+        [
+          "B1",
+          "B2",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A4",
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T041",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A3"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A3",
+          "A4",
+          "A5",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A4",
+          "A5",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T042",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T043",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1"
+      ],
+      "reason": "tile_not_owned",
+      "tableAfter": [
+        [
+          "B10",
+          "B11",
+          "B12",
+          "B13"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "B10",
+          "B11",
+          "B12"
+        ]
+      ]
+    },
+    {
+      "id": "T044",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4",
+        "B4",
+        "C4"
+      ],
+      "reason": "tile_not_owned",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ],
+        [
+          "A4",
+          "B4",
+          "C4"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T045",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "D3",
+        "D4",
+        "D5"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A3",
+          "B3",
+          "C3",
+          "D3"
+        ],
+        [
+          "A4",
+          "B4",
+          "C4",
+          "D4"
+        ],
+        [
+          "A5",
+          "B5",
+          "C5",
+          "D5"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A3",
+          "A4",
+          "A5"
+        ],
+        [
+          "B3",
+          "B4",
+          "B5"
+        ],
+        [
+          "C3",
+          "C4",
+          "C5"
+        ]
+      ]
+    },
+    {
+      "id": "T046",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A10"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A7",
+          "A8",
+          "A9",
+          "A10"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A7",
+          "A8",
+          "A9"
+        ]
+      ]
+    },
+    {
+      "id": "T047",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1",
+        "B5"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A11",
+          "A12",
+          "A13",
+          "A1"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A11",
+          "A12",
+          "A13"
+        ]
+      ]
+    },
+    {
+      "id": "T048",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "J",
+        "B1"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6",
+          "A7",
+          "A8",
+          "A9",
+          "A10",
+          "A11",
+          "A12",
+          "A13",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6",
+          "A7",
+          "A8",
+          "A9",
+          "A10",
+          "A11",
+          "A12",
+          "A13"
+        ]
+      ]
+    },
+    {
+      "id": "T049",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7",
+        "B1"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A7",
+          "B7",
+          "C7",
+          "D7",
+          "A7"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A7",
+          "B7",
+          "C7",
+          "D7"
+        ]
+      ]
+    },
+    {
+      "id": "T050",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4",
+        "A7"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "C7",
+          "A7",
+          "D7",
+          "B7"
+        ],
+        [
+          "A4",
+          "A3",
+          "A2",
+          "A1"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "B7",
+          "C7",
+          "D7"
+        ]
+      ]
+    },
+    {
+      "id": "T051",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "C8",
+          "C9",
+          "C10"
+        ],
+        [
+          "C11",
+          "C12",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ],
+        [
+          "C8",
+          "C9",
+          "C10",
+          "C11",
+          "C12"
+        ]
+      ]
+    },
+    {
+      "id": "T052",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A6",
+        "B11",
+        "C1",
+        "C2"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B9",
+          "B10",
+          "B11"
+        ],
+        [
+          "C1",
+          "C2",
+          "J",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "J",
+          "A7"
+        ],
+        [
+          "B9",
+          "B10",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T053",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4"
+      ],
+      "reason": "malformed",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A14"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T054",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4"
+      ],
+      "reason": "malformed",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ],
+        []
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T055",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "E4"
+      ],
+      "reason": "malformed",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "E4"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "T056",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1",
+        "A2"
+      ],
+      "reason": "table_tile_removed",
+      "tableAfter": [
+        [
+          "A8",
+          "B8",
+          "C8"
+        ],
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A8",
+          "B8",
+          "C8",
+          "D8"
+        ]
+      ]
+    },
+    {
+      "id": "T057",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7",
+        "B5"
+      ],
+      "reason": "joker_not_reused",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B2",
+          "B3",
+          "B4",
+          "B5"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ],
+        [
+          "B2",
+          "B3",
+          "B4"
+        ]
+      ]
+    },
+    {
+      "id": "T058",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A3"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A3",
+          "A5",
+          "A6",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T059",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B7"
+      ],
+      "reason": "ok",
+      "tableAfter": [
+        [
+          "A7",
+          "B7",
+          "J",
+          "J"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A7",
+          "J",
+          "J"
+        ]
+      ]
+    },
+    {
+      "id": "T060",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1"
+      ],
+      "reason": "malformed",
+      "tableAfter": [
+        [
+          "A8",
+          "B8",
+          "C8"
+        ],
+        []
+      ],
+      "tableBefore": [
+        [
+          "A8",
+          "B8",
+          "C8",
+          "D8"
+        ]
+      ]
+    },
+    {
+      "id": "T061",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A1"
+      ],
+      "reason": "table_tile_removed",
+      "tableAfter": [
+        [
+          "A8",
+          "B8",
+          "C8"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A8",
+          "B8",
+          "C8",
+          "D8"
+        ]
+      ]
+    },
+    {
+      "id": "T062",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "A7"
+      ],
+      "reason": "joker_not_reused",
+      "tableAfter": [
+        [
+          "A5",
+          "A6",
+          "A7"
+        ],
+        [
+          "B1",
+          "B2",
+          "B3"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A5",
+          "A6",
+          "J"
+        ],
+        [
+          "B1",
+          "B2",
+          "B3",
+          "B4"
+        ]
+      ]
+    },
+    {
+      "id": "T063",
+      "initialDone": true,
+      "kind_": "turn",
+      "rackBefore": [
+        "B9"
+      ],
+      "reason": "no_tile_played",
+      "tableAfter": [
+        [
+          "A1",
+          "A2"
+        ],
+        [
+          "A3",
+          "A4",
+          "A5",
+          "A6"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4",
+          "A5",
+          "A6"
+        ]
+      ]
+    },
+    {
+      "id": "T064",
+      "initialDone": false,
+      "kind_": "turn",
+      "rackBefore": [
+        "A4",
+        "B10",
+        "C10",
+        "D10",
+        "D1"
+      ],
+      "reason": "invalid_meld",
+      "tableAfter": [
+        [
+          "A1",
+          "A2",
+          "A3",
+          "A4"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ],
+        [
+          "D1"
+        ]
+      ],
+      "tableBefore": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ]
+      ]
+    },
+    {
+      "id": "S001",
+      "kind_": "score",
+      "payoutScores": "48,-35,-13",
+      "rackValues": "0,35,13",
+      "racks": "|A5 J|C13",
+      "scores": "48,-35,-13",
+      "winners": "0"
+    },
+    {
+      "id": "S002",
+      "kind_": "score",
+      "payoutScores": "1,-1",
+      "rackValues": "0,1",
+      "racks": "|A1",
+      "scores": "1,-1",
+      "winners": "0"
+    },
+    {
+      "id": "S003",
+      "kind_": "score",
+      "payoutScores": "-4,-6,35,-25",
+      "rackValues": "4,6,0,25",
+      "racks": "B4|A1 B2 C3||D13 D12",
+      "scores": "-4,-6,35,-25",
+      "winners": "2"
+    },
+    {
+      "id": "S004",
+      "kind_": "score",
+      "payoutScores": "66,-61,-2,-3",
+      "rackValues": "0,61,2,3",
+      "racks": "|J J A1|A2|B3",
+      "scores": "66,-61,-2,-3",
+      "winners": "0"
+    },
+    {
+      "id": "S005",
+      "kind_": "score",
+      "payoutScores": "30,-5,-10,-15",
+      "rackValues": "5,10,15,20",
+      "racks": "A5|B10|C7 C8|D9 D11",
+      "scores": "30,-5,-10,-15",
+      "winners": "0"
+    },
+    {
+      "id": "S006",
+      "kind_": "score",
+      "payoutScores": "-29,-38,67",
+      "rackValues": "30,39,1",
+      "racks": "J|A13 B13 C13|A1",
+      "scores": "-29,-38,67",
+      "winners": "2"
+    },
+    {
+      "id": "S007",
+      "kind_": "score",
+      "payoutScores": "1,1,-2",
+      "rackValues": "10,10,12",
+      "racks": "A10|A4 B6|C12",
+      "scores": "1,1,-2",
+      "winners": "0"
+    },
+    {
+      "id": "S008",
+      "kind_": "score",
+      "payoutScores": "8,8,-16",
+      "rackValues": "10,10,26",
+      "racks": "A10|B10|C13 D13",
+      "scores": "8,8,-16",
+      "winners": "0,1"
+    },
+    {
+      "id": "S009",
+      "kind_": "score",
+      "payoutScores": "0,0,-1",
+      "rackValues": "10,10,11",
+      "racks": "A10|B10|C11",
+      "scores": "1,0,-1",
+      "winners": "0,1"
+    },
+    {
+      "id": "S010",
+      "kind_": "score",
+      "payoutScores": "0,0,0",
+      "rackValues": "5,5,5",
+      "racks": "A5|B5|C5",
+      "scores": "0,0,0",
+      "winners": "0,1,2"
+    },
+    {
+      "id": "S011",
+      "kind_": "score",
+      "payoutScores": "7,-3,-4",
+      "rackValues": "0,3,4",
+      "racks": "|A3|B4",
+      "scores": "7,-3,-4",
+      "winners": "0"
+    },
+    {
+      "id": "S012",
+      "kind_": "score",
+      "payoutScores": "-4,4",
+      "rackValues": "31,27",
+      "racks": "J A1|B2 B3 B4 B5 B6 B7",
+      "scores": "-4,4",
+      "winners": "1"
+    },
+    {
+      "id": "S013",
+      "kind_": "score",
+      "payoutScores": "108,-108",
+      "rackValues": "0,108",
+      "racks": "|A1 A2 A13 B13 C9 D9 B5 C5 D6 A7 B8 C11 D12 A4 B1 C2",
+      "scores": "108,-108",
+      "winners": "0"
+    },
+    {
+      "id": "S014",
+      "kind_": "score",
+      "payoutScores": "8,8,8,-24",
+      "rackValues": "6,6,6,30",
+      "racks": "A3 B3|C6|D6|J",
+      "scores": "8,8,8,-24",
+      "winners": "1,2"
+    },
+    {
+      "id": "S015",
+      "kind_": "score",
+      "payoutScores": "-47,15,15,15",
+      "rackValues": "60,13,13,13",
+      "racks": "J J|A13|B12 C1|D13",
+      "scores": "-47,16,15,16",
+      "winners": "1,3"
+    },
+    {
+      "id": "S016",
+      "kind_": "score",
+      "payoutScores": "11,11,-12,-10",
+      "rackValues": "8,8,20,18",
+      "racks": "A1 A2 A5|B8|C10 D10|A3 B4 C5 D6",
+      "scores": "11,11,-12,-10",
+      "winners": "1"
+    },
+    {
+      "id": "P01",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,20,0,0,- a,-20,3,1,-",
+      "stake": 5
+    },
+    {
+      "id": "P02",
+      "kind_": "payouts",
+      "payouts": "15,5,0,0",
+      "ranks": "1,2,3,4",
+      "seatCount": 4,
+      "seats": "a,30,0,0,- a,-5,2,1,- a,-10,3,2,- a,-15,4,3,-",
+      "stake": 5
+    },
+    {
+      "id": "P03",
+      "kind_": "payouts",
+      "payouts": "9,2,1,0",
+      "ranks": "1,2,2,4",
+      "seatCount": 4,
+      "seats": "a,22,0,0,- a,-5,2,1,- a,-5,3,2,- a,-12,4,3,-",
+      "stake": 3
+    },
+    {
+      "id": "P04",
+      "kind_": "payouts",
+      "payouts": "20,20,0,0",
+      "ranks": "1,1,4,3",
+      "seatCount": 4,
+      "seats": "a,11,3,0,- a,11,1,1,- a,-12,5,2,- a,-10,4,3,-",
+      "stake": 10
+    },
+    {
+      "id": "P05",
+      "kind_": "payouts",
+      "payouts": "10,5,0",
+      "ranks": "1,2,3",
+      "seatCount": 3,
+      "seats": "a,7,0,0,- a,-7,2,1,- x,0,0,2,1",
+      "stake": 5
+    },
+    {
+      "id": "P06",
+      "kind_": "payouts",
+      "payouts": "20,0,0,0",
+      "ranks": "1,4,3,2",
+      "seatCount": 4,
+      "seats": "a,0,6,0,- x,0,0,1,1 x,0,0,2,2 x,0,0,3,3",
+      "stake": 5
+    },
+    {
+      "id": "P07",
+      "kind_": "payouts",
+      "payouts": "3,9,0,0",
+      "ranks": "2,1,3,4",
+      "seatCount": 4,
+      "seats": "a,-10,3,0,- a,25,0,1,- a,-15,4,2,- x,0,0,3,1",
+      "stake": 3
+    },
+    {
+      "id": "P08",
+      "kind_": "payouts",
+      "payouts": "10,10,10",
+      "ranks": "1,1,1",
+      "seatCount": 3,
+      "seats": "a,0,2,0,- a,0,1,1,- a,0,1,2,-",
+      "stake": 10
+    },
+    {
+      "id": "P09",
+      "kind_": "payouts",
+      "payouts": "2,15,1,2",
+      "ranks": "2,1,2,2",
+      "seatCount": 4,
+      "seats": "a,-3,1,0,- a,9,0,1,- a,-3,2,2,- a,-3,1,3,-",
+      "stake": 5
+    },
+    {
+      "id": "P10",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,0,5,0,- x,0,0,1,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-0",
+      "kind_": "payouts",
+      "payouts": "10,30,0,0",
+      "ranks": "2,1,1,2",
+      "seatCount": 4,
+      "seats": "a,-6,1,0,- a,9,3,1,- x,0,0,2,4 x,0,0,3,3",
+      "stake": 10
+    },
+    {
+      "id": "pay-1",
+      "kind_": "payouts",
+      "payouts": "3,0,9,0",
+      "ranks": "2,3,1,2",
+      "seatCount": 4,
+      "seats": "a,6,2,0,- a,3,1,1,- a,12,0,2,- x,0,0,3,3",
+      "stake": 3
+    },
+    {
+      "id": "pay-2",
+      "kind_": "payouts",
+      "payouts": "2,0",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,-6,1,0,- x,0,0,1,2",
+      "stake": 1
+    },
+    {
+      "id": "pay-3",
+      "kind_": "payouts",
+      "payouts": "15,0,5,0",
+      "ranks": "1,3,2,3",
+      "seatCount": 4,
+      "seats": "a,-3,3,0,- a,-12,3,1,- a,-9,3,2,- a,-12,2,3,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-4",
+      "kind_": "payouts",
+      "payouts": "1,2,0",
+      "ranks": "2,1,2",
+      "seatCount": 3,
+      "seats": "a,-6,0,0,- a,0,3,1,- x,0,0,2,2",
+      "stake": 1
+    },
+    {
+      "id": "pay-5",
+      "kind_": "payouts",
+      "payouts": "1,2,0",
+      "ranks": "2,1,2",
+      "seatCount": 3,
+      "seats": "a,6,1,0,- a,12,3,1,- x,0,0,2,2",
+      "stake": 1
+    },
+    {
+      "id": "pay-6",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,3,3,0,- x,0,0,1,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-7",
+      "kind_": "payouts",
+      "payouts": "0,10,30,0",
+      "ranks": "3,2,1,2",
+      "seatCount": 4,
+      "seats": "a,-9,2,0,- a,0,1,1,- a,9,2,2,- x,0,0,3,3",
+      "stake": 10
+    },
+    {
+      "id": "pay-8",
+      "kind_": "payouts",
+      "payouts": "2,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,9,0,0,- a,6,3,1,-",
+      "stake": 1
+    },
+    {
+      "id": "pay-9",
+      "kind_": "payouts",
+      "payouts": "0,6",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-6,1,0,- a,12,3,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-10",
+      "kind_": "payouts",
+      "payouts": "0,10",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-6,1,0,- a,12,2,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-11",
+      "kind_": "payouts",
+      "payouts": "0,0,9,3",
+      "ranks": "3,4,1,2",
+      "seatCount": 4,
+      "seats": "a,-3,2,0,- a,-6,1,1,- a,3,3,2,- a,0,0,3,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-12",
+      "kind_": "payouts",
+      "payouts": "20,0,0,0",
+      "ranks": "1,4,2,1",
+      "seatCount": 4,
+      "seats": "a,0,1,0,- x,0,0,1,1 x,0,0,2,3 x,0,0,3,4",
+      "stake": 5
+    },
+    {
+      "id": "pay-13",
+      "kind_": "payouts",
+      "payouts": "0,10",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-3,2,0,- a,9,0,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-14",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,3,2,0,- a,-6,0,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-15",
+      "kind_": "payouts",
+      "payouts": "0,2,1",
+      "ranks": "2,1,2",
+      "seatCount": 3,
+      "seats": "a,-9,2,0,- a,12,0,1,- a,-9,1,2,-",
+      "stake": 1
+    },
+    {
+      "id": "pay-16",
+      "kind_": "payouts",
+      "payouts": "6,3,0",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,0,0,0,- a,-6,0,1,- x,0,0,2,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-17",
+      "kind_": "payouts",
+      "payouts": "1,2,0",
+      "ranks": "2,1,3",
+      "seatCount": 3,
+      "seats": "a,0,0,0,- a,6,0,1,- x,0,0,2,1",
+      "stake": 1
+    },
+    {
+      "id": "pay-18",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,-3,1,0,- x,0,0,1,1",
+      "stake": 5
+    },
+    {
+      "id": "pay-19",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,6,3,0,- x,0,0,1,1",
+      "stake": 5
+    },
+    {
+      "id": "pay-20",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,9,3,0,- a,0,0,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-21",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,9,2,0,- x,0,0,1,2",
+      "stake": 5
+    },
+    {
+      "id": "pay-22",
+      "kind_": "payouts",
+      "payouts": "40,0,0,0",
+      "ranks": "1,2,3,4",
+      "seatCount": 4,
+      "seats": "a,3,2,0,- x,0,0,1,3 x,0,0,2,2 x,0,0,3,1",
+      "stake": 10
+    },
+    {
+      "id": "pay-23",
+      "kind_": "payouts",
+      "payouts": "0,2",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-12,0,0,- a,-6,1,1,-",
+      "stake": 1
+    },
+    {
+      "id": "pay-24",
+      "kind_": "payouts",
+      "payouts": "30,0,0",
+      "ranks": "1,3,1",
+      "seatCount": 3,
+      "seats": "a,-9,3,0,- x,0,0,1,1 x,0,0,2,3",
+      "stake": 10
+    },
+    {
+      "id": "pay-25",
+      "kind_": "payouts",
+      "payouts": "0,20",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-9,3,0,- a,9,3,1,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-26",
+      "kind_": "payouts",
+      "payouts": "15,0,0",
+      "ranks": "1,2,3",
+      "seatCount": 3,
+      "seats": "a,6,1,0,- x,0,0,1,2 x,0,0,2,1",
+      "stake": 5
+    },
+    {
+      "id": "pay-27",
+      "kind_": "payouts",
+      "payouts": "10,0,20",
+      "ranks": "2,3,1",
+      "seatCount": 3,
+      "seats": "a,-3,0,0,- a,-12,3,1,- a,9,2,2,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-28",
+      "kind_": "payouts",
+      "payouts": "3,0,0",
+      "ranks": "1,1,2",
+      "seatCount": 3,
+      "seats": "a,0,1,0,- x,0,0,1,3 x,0,0,2,2",
+      "stake": 1
+    },
+    {
+      "id": "pay-29",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,6,3,0,- x,0,0,1,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-30",
+      "kind_": "payouts",
+      "payouts": "1,3,0,0",
+      "ranks": "2,1,1,4",
+      "seatCount": 4,
+      "seats": "a,6,3,0,- a,12,2,1,- x,0,0,2,4 x,0,0,3,1",
+      "stake": 1
+    },
+    {
+      "id": "pay-31",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,9,0,0,- x,0,0,1,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-32",
+      "kind_": "payouts",
+      "payouts": "0,5,0,15",
+      "ranks": "3,2,4,1",
+      "seatCount": 4,
+      "seats": "a,-3,0,0,- a,3,3,1,- a,-12,3,2,- a,6,1,3,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-33",
+      "kind_": "payouts",
+      "payouts": "15,5,0,0",
+      "ranks": "1,2,3,1",
+      "seatCount": 4,
+      "seats": "a,6,0,0,- a,3,1,1,- a,-12,1,2,- x,0,0,3,4",
+      "stake": 5
+    },
+    {
+      "id": "pay-34",
+      "kind_": "payouts",
+      "payouts": "2,2,0,0",
+      "ranks": "1,1,3,2",
+      "seatCount": 4,
+      "seats": "a,6,1,0,- a,6,2,1,- x,0,0,2,2 x,0,0,3,3",
+      "stake": 1
+    },
+    {
+      "id": "pay-35",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,9,0,0,- a,-6,3,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-36",
+      "kind_": "payouts",
+      "payouts": "12,0,0,0",
+      "ranks": "1,2,4,3",
+      "seatCount": 4,
+      "seats": "a,9,1,0,- x,0,0,1,3 x,0,0,2,1 x,0,0,3,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-37",
+      "kind_": "payouts",
+      "payouts": "0,6",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-6,1,0,- a,12,1,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-38",
+      "kind_": "payouts",
+      "payouts": "10,10,0,0",
+      "ranks": "1,1,2,1",
+      "seatCount": 4,
+      "seats": "a,-12,3,0,- a,-12,1,1,- x,0,0,2,3 x,0,0,3,4",
+      "stake": 5
+    },
+    {
+      "id": "pay-39",
+      "kind_": "payouts",
+      "payouts": "12,0,0,0",
+      "ranks": "1,1,2,4",
+      "seatCount": 4,
+      "seats": "a,6,0,0,- x,0,0,1,4 x,0,0,2,3 x,0,0,3,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-40",
+      "kind_": "payouts",
+      "payouts": "10,5,0",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,9,3,0,- a,-9,0,1,- x,0,0,2,2",
+      "stake": 5
+    },
+    {
+      "id": "pay-41",
+      "kind_": "payouts",
+      "payouts": "9,3,0,0",
+      "ranks": "1,2,3,4",
+      "seatCount": 4,
+      "seats": "a,9,2,0,- a,0,3,1,- a,-3,0,2,- a,-6,0,3,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-42",
+      "kind_": "payouts",
+      "payouts": "6,3,0",
+      "ranks": "1,2,3",
+      "seatCount": 3,
+      "seats": "a,0,2,0,- a,-12,2,1,- x,0,0,2,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-43",
+      "kind_": "payouts",
+      "payouts": "15,0,0",
+      "ranks": "1,1,3",
+      "seatCount": 3,
+      "seats": "a,9,2,0,- x,0,0,1,3 x,0,0,2,1",
+      "stake": 5
+    },
+    {
+      "id": "pay-44",
+      "kind_": "payouts",
+      "payouts": "0,10",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,0,0,0,- a,6,0,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-45",
+      "kind_": "payouts",
+      "payouts": "4,0,0,0",
+      "ranks": "1,2,4,1",
+      "seatCount": 4,
+      "seats": "a,-9,2,0,- x,0,0,1,3 x,0,0,2,1 x,0,0,3,4",
+      "stake": 1
+    },
+    {
+      "id": "pay-46",
+      "kind_": "payouts",
+      "payouts": "20,10,0",
+      "ranks": "1,2,3",
+      "seatCount": 3,
+      "seats": "a,6,2,0,- a,-6,3,1,- x,0,0,2,1",
+      "stake": 10
+    },
+    {
+      "id": "pay-47",
+      "kind_": "payouts",
+      "payouts": "20,10,0",
+      "ranks": "1,2,3",
+      "seatCount": 3,
+      "seats": "a,6,3,0,- a,3,1,1,- a,0,2,2,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-48",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,12,1,0,- a,-12,2,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-49",
+      "kind_": "payouts",
+      "payouts": "1,3,0,0",
+      "ranks": "2,1,2,1",
+      "seatCount": 4,
+      "seats": "a,-3,3,0,- a,6,1,1,- x,0,0,2,3 x,0,0,3,4",
+      "stake": 1
+    },
+    {
+      "id": "pay-50",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,-6,2,0,- a,-12,3,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-51",
+      "kind_": "payouts",
+      "payouts": "3,0,0",
+      "ranks": "1,2,1",
+      "seatCount": 3,
+      "seats": "a,-3,0,0,- x,0,0,1,2 x,0,0,2,3",
+      "stake": 1
+    },
+    {
+      "id": "pay-52",
+      "kind_": "payouts",
+      "payouts": "0,10,30,0",
+      "ranks": "3,2,1,3",
+      "seatCount": 4,
+      "seats": "a,-9,2,0,- a,0,1,1,- a,6,1,2,- x,0,0,3,2",
+      "stake": 10
+    },
+    {
+      "id": "pay-53",
+      "kind_": "payouts",
+      "payouts": "4,0,0,0",
+      "ranks": "1,2,1,4",
+      "seatCount": 4,
+      "seats": "a,-3,2,0,- x,0,0,1,3 x,0,0,2,4 x,0,0,3,1",
+      "stake": 1
+    },
+    {
+      "id": "pay-54",
+      "kind_": "payouts",
+      "payouts": "10,0,30,0",
+      "ranks": "2,3,1,4",
+      "seatCount": 4,
+      "seats": "a,0,3,0,- a,-3,1,1,- a,12,3,2,- a,-9,2,3,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-55",
+      "kind_": "payouts",
+      "payouts": "15,0,0",
+      "ranks": "1,3,1",
+      "seatCount": 3,
+      "seats": "a,-6,3,0,- x,0,0,1,1 x,0,0,2,3",
+      "stake": 5
+    },
+    {
+      "id": "pay-56",
+      "kind_": "payouts",
+      "payouts": "15,0,0",
+      "ranks": "1,1,2",
+      "seatCount": 3,
+      "seats": "a,12,1,0,- x,0,0,1,3 x,0,0,2,2",
+      "stake": 5
+    },
+    {
+      "id": "pay-57",
+      "kind_": "payouts",
+      "payouts": "20,5,5",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,6,1,0,- a,-6,2,1,- a,-6,1,2,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-58",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,12,3,0,- x,0,0,1,1",
+      "stake": 5
+    },
+    {
+      "id": "pay-59",
+      "kind_": "payouts",
+      "payouts": "0,10,0,10",
+      "ranks": "3,1,4,1",
+      "seatCount": 4,
+      "seats": "a,-6,0,0,- a,12,0,1,- a,-12,1,2,- a,12,2,3,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-60",
+      "kind_": "payouts",
+      "payouts": "3,0,0",
+      "ranks": "1,3,2",
+      "seatCount": 3,
+      "seats": "a,6,1,0,- x,0,0,1,1 x,0,0,2,2",
+      "stake": 1
+    },
+    {
+      "id": "pay-61",
+      "kind_": "payouts",
+      "payouts": "3,6,0",
+      "ranks": "2,1,3",
+      "seatCount": 3,
+      "seats": "a,-6,1,0,- a,3,2,1,- x,0,0,2,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-62",
+      "kind_": "payouts",
+      "payouts": "0,15,5,0",
+      "ranks": "3,1,2,1",
+      "seatCount": 4,
+      "seats": "a,0,3,0,- a,6,1,1,- a,3,1,2,- x,0,0,3,4",
+      "stake": 5
+    },
+    {
+      "id": "pay-63",
+      "kind_": "payouts",
+      "payouts": "20,0,0,0",
+      "ranks": "1,1,4,3",
+      "seatCount": 4,
+      "seats": "a,-3,0,0,- x,0,0,1,4 x,0,0,2,1 x,0,0,3,2",
+      "stake": 5
+    },
+    {
+      "id": "pay-64",
+      "kind_": "payouts",
+      "payouts": "15,0,5,0",
+      "ranks": "1,3,2,2",
+      "seatCount": 4,
+      "seats": "a,6,1,0,- a,0,2,1,- a,3,3,2,- x,0,0,3,3",
+      "stake": 5
+    },
+    {
+      "id": "pay-65",
+      "kind_": "payouts",
+      "payouts": "5,5",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,6,1,0,- a,6,2,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-66",
+      "kind_": "payouts",
+      "payouts": "20,0",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,-6,3,0,- x,0,0,1,2",
+      "stake": 10
+    },
+    {
+      "id": "pay-67",
+      "kind_": "payouts",
+      "payouts": "10,5,0",
+      "ranks": "1,2,3",
+      "seatCount": 3,
+      "seats": "a,6,1,0,- a,-6,1,1,- a,-9,1,2,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-68",
+      "kind_": "payouts",
+      "payouts": "9,0,0",
+      "ranks": "1,2,1",
+      "seatCount": 3,
+      "seats": "a,-3,0,0,- x,0,0,1,2 x,0,0,2,3",
+      "stake": 3
+    },
+    {
+      "id": "pay-69",
+      "kind_": "payouts",
+      "payouts": "6,3,0",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,0,2,0,- a,-12,1,1,- x,0,0,2,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-70",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,12,1,0,- x,0,0,1,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-71",
+      "kind_": "payouts",
+      "payouts": "9,3,0,0",
+      "ranks": "1,2,4,3",
+      "seatCount": 4,
+      "seats": "a,6,1,0,- a,-12,3,1,- x,0,0,2,1 x,0,0,3,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-72",
+      "kind_": "payouts",
+      "payouts": "6,2,1",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,0,2,0,- a,-9,0,1,- a,-9,0,2,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-73",
+      "kind_": "payouts",
+      "payouts": "2,1,0",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,0,1,0,- a,-3,3,1,- x,0,0,2,2",
+      "stake": 1
+    },
+    {
+      "id": "pay-74",
+      "kind_": "payouts",
+      "payouts": "0,20",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-12,1,0,- a,6,2,1,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-75",
+      "kind_": "payouts",
+      "payouts": "30,10,0,0",
+      "ranks": "1,2,3,2",
+      "seatCount": 4,
+      "seats": "a,12,2,0,- a,3,3,1,- x,0,0,2,2 x,0,0,3,3",
+      "stake": 10
+    },
+    {
+      "id": "pay-76",
+      "kind_": "payouts",
+      "payouts": "0,8,7",
+      "ranks": "3,1,1",
+      "seatCount": 3,
+      "seats": "a,0,1,0,- a,3,1,1,- a,3,1,2,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-77",
+      "kind_": "payouts",
+      "payouts": "5,10,0",
+      "ranks": "2,1,1",
+      "seatCount": 3,
+      "seats": "a,-12,0,0,- a,-9,2,1,- x,0,0,2,3",
+      "stake": 5
+    },
+    {
+      "id": "pay-78",
+      "kind_": "payouts",
+      "payouts": "5,20,5",
+      "ranks": "2,1,2",
+      "seatCount": 3,
+      "seats": "a,-6,2,0,- a,3,0,1,- a,-6,0,2,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-79",
+      "kind_": "payouts",
+      "payouts": "3,6,0",
+      "ranks": "2,1,1",
+      "seatCount": 3,
+      "seats": "a,-3,2,0,- a,9,1,1,- x,0,0,2,3",
+      "stake": 3
+    },
+    {
+      "id": "pay-80",
+      "kind_": "payouts",
+      "payouts": "9,2,1,0",
+      "ranks": "1,2,2,3",
+      "seatCount": 4,
+      "seats": "a,3,3,0,- a,-9,0,1,- a,-9,2,2,- x,0,0,3,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-81",
+      "kind_": "payouts",
+      "payouts": "1,0,2",
+      "ranks": "2,2,1",
+      "seatCount": 3,
+      "seats": "a,-3,0,0,- a,-3,1,1,- a,9,0,2,-",
+      "stake": 1
+    },
+    {
+      "id": "pay-82",
+      "kind_": "payouts",
+      "payouts": "15,0,0,5",
+      "ranks": "1,3,3,2",
+      "seatCount": 4,
+      "seats": "a,6,2,0,- a,-12,0,1,- a,-12,0,2,- a,-9,2,3,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-83",
+      "kind_": "payouts",
+      "payouts": "6,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,12,1,0,- a,-12,0,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-84",
+      "kind_": "payouts",
+      "payouts": "10,5,0",
+      "ranks": "1,2,2",
+      "seatCount": 3,
+      "seats": "a,9,0,0,- a,-3,2,1,- x,0,0,2,2",
+      "stake": 5
+    },
+    {
+      "id": "pay-85",
+      "kind_": "payouts",
+      "payouts": "2,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,-6,2,0,- a,-12,0,1,-",
+      "stake": 1
+    },
+    {
+      "id": "pay-86",
+      "kind_": "payouts",
+      "payouts": "12,0,0,0",
+      "ranks": "1,3,1,2",
+      "seatCount": 4,
+      "seats": "a,12,2,0,- x,0,0,1,2 x,0,0,2,4 x,0,0,3,3",
+      "stake": 3
+    },
+    {
+      "id": "pay-87",
+      "kind_": "payouts",
+      "payouts": "12,0,0,0",
+      "ranks": "1,2,4,3",
+      "seatCount": 4,
+      "seats": "a,6,1,0,- x,0,0,1,3 x,0,0,2,1 x,0,0,3,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-88",
+      "kind_": "payouts",
+      "payouts": "10,30,0,0",
+      "ranks": "2,1,1,2",
+      "seatCount": 4,
+      "seats": "a,0,2,0,- a,12,1,1,- x,0,0,2,4 x,0,0,3,3",
+      "stake": 10
+    },
+    {
+      "id": "pay-89",
+      "kind_": "payouts",
+      "payouts": "0,30,10,0",
+      "ranks": "3,1,2,2",
+      "seatCount": 4,
+      "seats": "a,-9,2,0,- a,9,1,1,- a,6,3,2,- x,0,0,3,3",
+      "stake": 10
+    },
+    {
+      "id": "pay-90",
+      "kind_": "payouts",
+      "payouts": "0,0,30,10",
+      "ranks": "4,3,1,2",
+      "seatCount": 4,
+      "seats": "a,-9,3,0,- a,0,3,1,- a,6,3,2,- a,3,1,3,-",
+      "stake": 10
+    },
+    {
+      "id": "pay-91",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,-3,1,0,- x,0,0,1,1",
+      "stake": 5
+    },
+    {
+      "id": "pay-92",
+      "kind_": "payouts",
+      "payouts": "30,0,0",
+      "ranks": "1,1,2",
+      "seatCount": 3,
+      "seats": "a,12,2,0,- x,0,0,1,3 x,0,0,2,2",
+      "stake": 10
+    },
+    {
+      "id": "pay-93",
+      "kind_": "payouts",
+      "payouts": "0,10",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,-3,3,0,- a,0,0,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-94",
+      "kind_": "payouts",
+      "payouts": "2,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,9,0,0,- x,0,0,1,1",
+      "stake": 1
+    },
+    {
+      "id": "pay-95",
+      "kind_": "payouts",
+      "payouts": "5,4,0",
+      "ranks": "1,1,2",
+      "seatCount": 3,
+      "seats": "a,0,0,0,- a,0,0,1,- x,0,0,2,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-96",
+      "kind_": "payouts",
+      "payouts": "3,6,0",
+      "ranks": "2,1,3",
+      "seatCount": 3,
+      "seats": "a,-9,1,0,- a,12,3,1,- x,0,0,2,1",
+      "stake": 3
+    },
+    {
+      "id": "pay-97",
+      "kind_": "payouts",
+      "payouts": "9,3,0,0",
+      "ranks": "1,2,1,3",
+      "seatCount": 4,
+      "seats": "a,-3,1,0,- a,-9,3,1,- x,0,0,2,4 x,0,0,3,2",
+      "stake": 3
+    },
+    {
+      "id": "pay-98",
+      "kind_": "payouts",
+      "payouts": "0,10",
+      "ranks": "2,1",
+      "seatCount": 2,
+      "seats": "a,0,2,0,- a,3,2,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-99",
+      "kind_": "payouts",
+      "payouts": "3,3",
+      "ranks": "1,1",
+      "seatCount": 2,
+      "seats": "a,-12,1,0,- a,-12,2,1,-",
+      "stake": 3
+    },
+    {
+      "id": "pay-edge-seat1",
+      "kind_": "payouts",
+      "payouts": "0",
+      "ranks": "1",
+      "seatCount": 1,
+      "seats": "a,3,1,0,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-edge-seat5",
+      "kind_": "payouts",
+      "payouts": "0,0",
+      "ranks": "1,2",
+      "seatCount": 5,
+      "seats": "a,3,1,0,- a,1,1,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-edge-allforfeit",
+      "kind_": "payouts",
+      "payouts": "0,0,0",
+      "ranks": "3,2,1",
+      "seatCount": 3,
+      "seats": "x,0,0,0,1 x,0,0,1,2 x,0,0,2,3",
+      "stake": 5
+    },
+    {
+      "id": "pay-edge-noorder",
+      "kind_": "payouts",
+      "payouts": "10,0",
+      "ranks": "1,2",
+      "seatCount": 2,
+      "seats": "a,1,0,0,- x,0,0,1,-",
+      "stake": 5
+    },
+    {
+      "id": "pay-edge-empty",
+      "kind_": "payouts",
+      "payouts": "",
+      "ranks": "",
+      "seatCount": 2,
+      "seats": "",
+      "stake": 5
+    },
+    {
+      "id": "pay-edge-many",
+      "kind_": "payouts",
+      "payouts": "10,0,0,0",
+      "ranks": "1,2,3,4",
+      "seatCount": 2,
+      "seats": "a,3,1,0,- a,2,1,1,- a,1,1,2,- a,0,1,3,-",
+      "stake": 5
+    },
+    {
+      "id": "P11-0",
+      "kind_": "score",
+      "payoutScores": "3,3,-3,-4",
+      "rackValues": "2,2,5,6",
+      "racks": "A2|B2|C5|D6",
+      "scores": "4,3,-3,-4",
+      "winners": "0,1"
+    },
+    {
+      "id": "P11-1",
+      "kind_": "score",
+      "payoutScores": "2,2,-5",
+      "rackValues": "2,2,7",
+      "racks": "A1 B1|C2|D7",
+      "scores": "2,3,-5",
+      "winners": "1"
+    },
+    {
+      "id": "P11-2",
+      "kind_": "score",
+      "payoutScores": "-2,5,-3",
+      "rackValues": "2,0,3",
+      "racks": "A2||B3",
+      "scores": "-2,5,-3",
+      "winners": "1"
+    },
+    {
+      "id": "P11-3",
+      "kind_": "score",
+      "payoutScores": "0",
+      "rackValues": "4",
+      "racks": "A2 B2",
+      "scores": "0",
+      "winners": "0"
+    },
+    {
+      "id": "P11-4",
+      "kind_": "score",
+      "payoutScores": "",
+      "rackValues": "",
+      "racks": "",
+      "scores": "",
+      "winners": ""
+    },
+    {
+      "id": "prize-0",
+      "kind_": "prize",
+      "prizes": "",
+      "seatCount": 0
+    },
+    {
+      "id": "prize-1",
+      "kind_": "prize",
+      "prizes": "",
+      "seatCount": 1
+    },
+    {
+      "id": "prize-2",
+      "kind_": "prize",
+      "prizes": "2,0",
+      "seatCount": 2
+    },
+    {
+      "id": "prize-3",
+      "kind_": "prize",
+      "prizes": "2,1,0",
+      "seatCount": 3
+    },
+    {
+      "id": "prize-4",
+      "kind_": "prize",
+      "prizes": "3,1,0,0",
+      "seatCount": 4
+    },
+    {
+      "id": "prize-5",
+      "kind_": "prize",
+      "prizes": "",
+      "seatCount": 5
+    },
+    {
+      "analysis": "1:run:63",
+      "chainable": true,
+      "compareKey": "C6 C7 C8 C9 C10 C11 C12",
+      "displayOrder": "C6 C7 C8 C9 C10 C11 C12",
+      "faces": "C6 C7 C8 C9 C10 C11 C12",
+      "id": "meld-r0",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A4 C1 C2 D3 D5",
+      "displayOrder": "C1 D5 D3 A4 C2",
+      "faces": "C1 D5 D3 A4 C2",
+      "id": "meld-r1",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:35",
+      "chainable": true,
+      "compareKey": "C5 C7 C8 C9 J",
+      "displayOrder": "C5 J C7 C8 C9",
+      "faces": "C5 J C7 C8 C9",
+      "id": "meld-r2",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:44",
+      "chainable": true,
+      "compareKey": "A11 B11 C11 D11",
+      "displayOrder": "A11 B11 C11 D11",
+      "faces": "A11 D11 C11 B11",
+      "id": "meld-r3",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:36",
+      "chainable": true,
+      "compareKey": "B12 C12 D12",
+      "displayOrder": "B12 C12 D12",
+      "faces": "C12 D12 B12",
+      "id": "meld-r4",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A5 A10 C1 D12",
+      "displayOrder": "C1 D12 A5 A10",
+      "faces": "C1 D12 A5 A10",
+      "id": "meld-r5",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A6 B4 C8 C11 D2 D3",
+      "displayOrder": "D2 A6 B4 C11 C8 D3",
+      "faces": "D2 A6 B4 C11 C8 D3",
+      "id": "meld-r6",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "B6",
+      "displayOrder": "B6",
+      "faces": "B6",
+      "id": "meld-r7",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:49",
+      "chainable": true,
+      "compareKey": "A4 A6 A7 A8 A9 A10 J",
+      "displayOrder": "A4 J A6 A7 A8 A9 A10",
+      "faces": "A4 J A6 A7 A8 A9 A10",
+      "id": "meld-r8",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:18",
+      "chainable": true,
+      "compareKey": "B5 B6 B7",
+      "displayOrder": "B5 B6 B7",
+      "faces": "B5 B6 B7",
+      "id": "meld-r9",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": true,
+      "compareKey": "B9 B10 B11",
+      "displayOrder": "B9 B10 B11",
+      "faces": "B9 B10 B11",
+      "id": "meld-r10",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:48",
+      "chainable": true,
+      "compareKey": "A12 B12 C12 D12",
+      "displayOrder": "A12 B12 C12 D12",
+      "faces": "B12 A12 D12 C12",
+      "id": "meld-r11",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:38",
+      "chainable": true,
+      "compareKey": "C8 C9 C10 C11",
+      "displayOrder": "C8 C9 C10 C11",
+      "faces": "C8 C9 C10 C11",
+      "id": "meld-r12",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A6 A11 C6",
+      "displayOrder": "C6 A6 A11",
+      "faces": "C6 A6 A11",
+      "id": "meld-r13",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "D13",
+      "displayOrder": "D13",
+      "faces": "D13",
+      "id": "meld-r14",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "D5",
+      "displayOrder": "D5",
+      "faces": "D5",
+      "id": "meld-r15",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A6 B9 C13 D11",
+      "displayOrder": "A6 B9 D11 C13",
+      "faces": "A6 B9 D11 C13",
+      "id": "meld-r16",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": true,
+      "compareKey": "D9 D10 D11",
+      "displayOrder": "D9 D10 D11",
+      "faces": "D9 D10 D11",
+      "id": "meld-r17",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": false,
+      "compareKey": "D9 D10 D11",
+      "displayOrder": "D9 D10 D11",
+      "faces": "D10 D9 D11",
+      "id": "meld-r18",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A2 A3 B10 D5 D11 D13",
+      "displayOrder": "B10 D13 A2 D11 D5 A3",
+      "faces": "B10 D13 A2 D11 D5 A3",
+      "id": "meld-r19",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A2 B12 C4 D1",
+      "displayOrder": "A2 D1 C4 B12",
+      "faces": "A2 D1 C4 B12",
+      "id": "meld-r20",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "B11",
+      "displayOrder": "B11",
+      "faces": "B11",
+      "id": "meld-r21",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:49",
+      "chainable": false,
+      "compareKey": "C4 C5 C7 C8 C9 C10 J",
+      "displayOrder": "C4 C5 J C7 C8 C9 C10",
+      "faces": "J C10 C8 C9 C7 C5 C4",
+      "id": "meld-r22",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "D7",
+      "displayOrder": "D7",
+      "faces": "D7",
+      "id": "meld-r23",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:36",
+      "chainable": true,
+      "compareKey": "A12 B12 D12",
+      "displayOrder": "A12 B12 D12",
+      "faces": "A12 D12 B12",
+      "id": "meld-r24",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A8 B7 B7 C3 J",
+      "displayOrder": "A8 C3 B7 B7 J",
+      "faces": "A8 C3 B7 B7 J",
+      "id": "meld-r25",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:34",
+      "chainable": true,
+      "compareKey": "B7 B8 B10 J",
+      "displayOrder": "B7 B8 J B10",
+      "faces": "B7 B8 J B10",
+      "id": "meld-r26",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:39",
+      "chainable": true,
+      "compareKey": "B13 C13 D13",
+      "displayOrder": "B13 C13 D13",
+      "faces": "D13 B13 C13",
+      "id": "meld-r27",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:21",
+      "chainable": true,
+      "compareKey": "B1 B2 B3 B4 B5 B6",
+      "displayOrder": "B1 B2 B3 B4 B5 B6",
+      "faces": "B1 B2 B3 B4 B5 B6",
+      "id": "meld-r28",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A4 A12 C9 D12 J",
+      "displayOrder": "D12 A4 J C9 A12",
+      "faces": "D12 A4 J C9 A12",
+      "id": "meld-r29",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:6",
+      "chainable": true,
+      "compareKey": "A2 B2 C2",
+      "displayOrder": "A2 B2 C2",
+      "faces": "B2 A2 C2",
+      "id": "meld-r30",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A9 A12 C2 C6 J",
+      "displayOrder": "A9 C2 C6 J A12",
+      "faces": "A9 C2 C6 J A12",
+      "id": "meld-r31",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:4",
+      "chainable": true,
+      "compareKey": "A1 B1 C1 D1",
+      "displayOrder": "A1 B1 C1 D1",
+      "faces": "D1 C1 A1 B1",
+      "id": "meld-r32",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": true,
+      "compareKey": "D6 D7 D8 D9",
+      "displayOrder": "D6 D7 D8 D9",
+      "faces": "D6 D7 D8 D9",
+      "id": "meld-r33",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A2 A13 B1 D2",
+      "displayOrder": "A13 D2 B1 A2",
+      "faces": "A13 D2 B1 A2",
+      "id": "meld-r34",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:33",
+      "chainable": true,
+      "compareKey": "A11 B11 D11",
+      "displayOrder": "A11 B11 D11",
+      "faces": "A11 D11 B11",
+      "id": "meld-r35",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "faces": "",
+      "id": "meld-r36",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:12",
+      "chainable": true,
+      "compareKey": "A3 B3 C3 D3",
+      "displayOrder": "A3 B3 C3 D3",
+      "faces": "A3 C3 B3 D3",
+      "id": "meld-r37",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "J",
+      "displayOrder": "J",
+      "faces": "J",
+      "id": "meld-r38",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": false,
+      "compareKey": "D9 D10 D11",
+      "displayOrder": "D9 D10 D11",
+      "faces": "D9 D11 D10",
+      "id": "meld-r39",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:36",
+      "chainable": true,
+      "compareKey": "A11 A12 A13",
+      "displayOrder": "A11 A12 A13",
+      "faces": "A11 A12 A13",
+      "id": "meld-r40",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:3",
+      "chainable": true,
+      "compareKey": "A1 C1 D1",
+      "displayOrder": "A1 C1 D1",
+      "faces": "A1 D1 C1",
+      "id": "meld-r41",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:40",
+      "chainable": true,
+      "compareKey": "A10 B10 C10 D10",
+      "displayOrder": "A10 B10 C10 D10",
+      "faces": "C10 B10 A10 D10",
+      "id": "meld-r42",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:42",
+      "chainable": true,
+      "compareKey": "C3 C4 C5 C6 C7 C8 C9",
+      "displayOrder": "C3 C4 C5 C6 C7 C8 C9",
+      "faces": "C3 C4 C5 C6 C7 C8 C9",
+      "id": "meld-r43",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A10 B2",
+      "displayOrder": "A10 B2",
+      "faces": "A10 B2",
+      "id": "meld-r44",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A9 B1 B10 B10 C1",
+      "displayOrder": "C1 B10 B1 A9 B10",
+      "faces": "C1 B10 B1 A9 B10",
+      "id": "meld-r45",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:49",
+      "chainable": true,
+      "compareKey": "A4 A5 A6 A7 A8 A9 A10",
+      "displayOrder": "A4 A5 A6 A7 A8 A9 A10",
+      "faces": "A4 A5 A6 A7 A8 A9 A10",
+      "id": "meld-r46",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "B2 B4 D7 D11 D13",
+      "displayOrder": "D7 D11 B2 D13 B4",
+      "faces": "D7 D11 B2 D13 B4",
+      "id": "meld-r47",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A12 C11 D1 D11",
+      "displayOrder": "D11 D1 C11 A12",
+      "faces": "D11 D1 C11 A12",
+      "id": "meld-r48",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "D3 D11",
+      "displayOrder": "D3 D11",
+      "faces": "D3 D11",
+      "id": "meld-r49",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 A4 B9 C5 D11",
+      "displayOrder": "A3 A4 B9 C5 D11",
+      "faces": "A3 A4 B9 C5 D11",
+      "id": "meld-r50",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "B9",
+      "displayOrder": "B9",
+      "faces": "B9",
+      "id": "meld-r51",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:63",
+      "chainable": false,
+      "compareKey": "A6 A7 A8 A9 A10 A11 A12",
+      "displayOrder": "A6 A7 A8 A9 A10 A11 A12",
+      "faces": "A9 A10 A6 A8 A11 A12 A7",
+      "id": "meld-r52",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:52",
+      "chainable": true,
+      "compareKey": "A13 B13 C13 D13",
+      "displayOrder": "A13 B13 C13 D13",
+      "faces": "D13 A13 C13 B13",
+      "id": "meld-r53",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:15",
+      "chainable": true,
+      "compareKey": "A1 A2 A3 A4 A5",
+      "displayOrder": "A1 A2 A3 A4 A5",
+      "faces": "A1 A2 A3 A4 A5",
+      "id": "meld-r54",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A6 A7 A13 B8 C8 D9",
+      "displayOrder": "A13 A7 C8 A6 D9 B8",
+      "faces": "A13 A7 C8 A6 D9 B8",
+      "id": "meld-r55",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "A3",
+      "displayOrder": "A3",
+      "faces": "A3",
+      "id": "meld-r56",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:20",
+      "chainable": true,
+      "compareKey": "A5 B5 C5 D5",
+      "displayOrder": "A5 B5 C5 D5",
+      "faces": "B5 A5 C5 D5",
+      "id": "meld-r57",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:8",
+      "chainable": true,
+      "compareKey": "A2 B2 C2 D2",
+      "displayOrder": "A2 B2 C2 D2",
+      "faces": "C2 B2 D2 A2",
+      "id": "meld-r58",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": false,
+      "compareKey": "D4 D5 D7 D8 J",
+      "displayOrder": "D4 D5 J D7 D8",
+      "faces": "D5 J D7 D8 D4",
+      "id": "meld-r59",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "B8 C9 D6 D8",
+      "displayOrder": "C9 D6 B8 D8",
+      "faces": "C9 D6 B8 D8",
+      "id": "meld-r60",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:34",
+      "chainable": true,
+      "compareKey": "C7 C8 C9 C10",
+      "displayOrder": "C7 C8 C9 C10",
+      "faces": "C7 C8 C9 C10",
+      "id": "meld-r61",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A3 A11",
+      "displayOrder": "A11 A3",
+      "faces": "A11 A3",
+      "id": "meld-r62",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A7 B8 B13 D11 J",
+      "displayOrder": "A1 B8 J D11 A7 B13",
+      "faces": "A1 B8 J D11 A7 B13",
+      "id": "meld-r63",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "J",
+      "displayOrder": "J",
+      "faces": "J",
+      "id": "meld-r64",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A4 C3 D4",
+      "displayOrder": "C3 D4 A4",
+      "faces": "C3 D4 A4",
+      "id": "meld-r65",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:28",
+      "chainable": true,
+      "compareKey": "B1 B2 B3 B4 B5 B6 B7",
+      "displayOrder": "B1 B2 B3 B4 B5 B6 B7",
+      "faces": "B1 B2 B3 B4 B5 B6 B7",
+      "id": "meld-r66",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A7 B3 B13",
+      "displayOrder": "B13 A7 B3",
+      "faces": "B13 A7 B3",
+      "id": "meld-r67",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "faces": "",
+      "id": "meld-r68",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "faces": "",
+      "id": "meld-r69",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "faces": "",
+      "id": "meld-r70",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "B6 C3 C9",
+      "displayOrder": "C9 C3 B6",
+      "faces": "C9 C3 B6",
+      "id": "meld-r71",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:6",
+      "chainable": true,
+      "compareKey": "B1 J J",
+      "displayOrder": "B1 J J",
+      "faces": "B1 J J",
+      "id": "meld-r72",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A1 A11 B1 B8 B12 D11",
+      "displayOrder": "B8 A11 A1 D11 B12 B1",
+      "faces": "B8 A11 A1 D11 B12 B1",
+      "id": "meld-r73",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A4 D3",
+      "displayOrder": "D3 A4",
+      "faces": "D3 A4",
+      "id": "meld-r74",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "B7 C2 C8 D3",
+      "displayOrder": "C2 D3 B7 C8",
+      "faces": "C2 D3 B7 C8",
+      "id": "meld-r75",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:63",
+      "chainable": false,
+      "compareKey": "B6 B7 B8 B9 B10 B11 B12",
+      "displayOrder": "B6 B7 B8 B9 B10 B11 B12",
+      "faces": "B8 B11 B12 B9 B7 B10 B6",
+      "id": "meld-r76",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:50",
+      "chainable": true,
+      "compareKey": "B8 B9 B10 B11 J",
+      "displayOrder": "B8 B9 B10 B11 J",
+      "faces": "B8 B9 B10 B11 J",
+      "id": "meld-r77",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:24",
+      "chainable": true,
+      "compareKey": "A6 B6 C6 D6",
+      "displayOrder": "A6 B6 C6 D6",
+      "faces": "C6 B6 D6 A6",
+      "id": "meld-r78",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A12 B1 B3 C2 D11",
+      "displayOrder": "B1 D11 B3 C2 A12",
+      "faces": "B1 D11 B3 C2 A12",
+      "id": "meld-r79",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "B10 B11",
+      "displayOrder": "B11 B10",
+      "faces": "B11 B10",
+      "id": "meld-r80",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:14",
+      "chainable": false,
+      "compareKey": "C2 C3 C4 C5",
+      "displayOrder": "C2 C3 C4 C5",
+      "faces": "C3 C4 C2 C5",
+      "id": "meld-r81",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A9 D11 D13",
+      "displayOrder": "D13 D11 A9",
+      "faces": "D13 D11 A9",
+      "id": "meld-r82",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:33",
+      "chainable": false,
+      "compareKey": "A10 A11 J",
+      "displayOrder": "A10 A11 J",
+      "faces": "J A11 A10",
+      "id": "meld-r83",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:44",
+      "chainable": true,
+      "compareKey": "A11 B11 C11 D11",
+      "displayOrder": "A11 B11 C11 D11",
+      "faces": "C11 A11 B11 D11",
+      "id": "meld-r84",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": true,
+      "compareKey": "B11",
+      "displayOrder": "B11",
+      "faces": "B11",
+      "id": "meld-r85",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "B12 D3 D6",
+      "displayOrder": "B12 D6 D3",
+      "faces": "B12 D6 D3",
+      "id": "meld-r86",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:36",
+      "chainable": true,
+      "compareKey": "A11 A12 A13",
+      "displayOrder": "A11 A12 A13",
+      "faces": "A11 A12 A13",
+      "id": "meld-r87",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:3",
+      "chainable": true,
+      "compareKey": "B1 C1 D1",
+      "displayOrder": "B1 C1 D1",
+      "faces": "D1 C1 B1",
+      "id": "meld-r88",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "faces": "",
+      "id": "meld-r89",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:group:28",
+      "chainable": true,
+      "compareKey": "A7 B7 C7 D7",
+      "displayOrder": "A7 B7 C7 D7",
+      "faces": "B7 A7 C7 D7",
+      "id": "meld-r90",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:33",
+      "chainable": true,
+      "compareKey": "D10 D11 D12",
+      "displayOrder": "D10 D11 D12",
+      "faces": "D10 D11 D12",
+      "id": "meld-r91",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A12 C3 C10 D2 D9 J",
+      "displayOrder": "C10 D2 A12 D9 C3 J",
+      "faces": "C10 D2 A12 D9 C3 J",
+      "id": "meld-r92",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:34",
+      "chainable": true,
+      "compareKey": "D7 D8 D9 D10",
+      "displayOrder": "D7 D8 D9 D10",
+      "faces": "D7 D8 D9 D10",
+      "id": "meld-r93",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "C10 D4 J J",
+      "displayOrder": "C10 J D4 J",
+      "faces": "C10 J D4 J",
+      "id": "meld-r94",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "A11 B3 B9 C2 C9 D11",
+      "displayOrder": "B9 C2 C9 A11 D11 B3",
+      "faces": "B9 C2 C9 A11 D11 B3",
+      "id": "meld-r95",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "0:-:-",
+      "chainable": false,
+      "compareKey": "",
+      "displayOrder": "",
+      "faces": "",
+      "id": "meld-r96",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:33",
+      "chainable": true,
+      "compareKey": "D3 D4 D5 D6 D7 D8",
+      "displayOrder": "D3 D4 D5 D6 D7 D8",
+      "faces": "D3 D4 D5 D6 D7 D8",
+      "id": "meld-r97",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:30",
+      "chainable": true,
+      "compareKey": "C6 C7 C8 C9",
+      "displayOrder": "C6 C7 C8 C9",
+      "faces": "C6 C7 C8 C9",
+      "id": "meld-r98",
+      "kind_": "meld"
+    },
+    {
+      "analysis": "1:run:39",
+      "chainable": false,
+      "compareKey": "A4 A6 A7 A8 A9 J",
+      "displayOrder": "A4 J A6 A7 A8 A9",
+      "faces": "A6 J A8 A4 A9 A7",
+      "id": "meld-r99",
+      "kind_": "meld"
+    },
+    {
+      "accepted": true,
+      "id": "face-0",
+      "kind_": "face",
+      "rackValue": 1,
+      "text": "A1"
+    },
+    {
+      "accepted": true,
+      "id": "face-1",
+      "kind_": "face",
+      "rackValue": 13,
+      "text": "A13"
+    },
+    {
+      "accepted": true,
+      "id": "face-2",
+      "kind_": "face",
+      "rackValue": 9,
+      "text": "D9"
+    },
+    {
+      "accepted": true,
+      "id": "face-3",
+      "kind_": "face",
+      "rackValue": 30,
+      "text": "J"
+    },
+    {
+      "accepted": false,
+      "id": "face-4",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A0"
+    },
+    {
+      "accepted": false,
+      "id": "face-5",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A14"
+    },
+    {
+      "accepted": false,
+      "id": "face-6",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "E1"
+    },
+    {
+      "accepted": false,
+      "id": "face-7",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "a1"
+    },
+    {
+      "accepted": false,
+      "id": "face-8",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "J1"
+    },
+    {
+      "accepted": false,
+      "id": "face-9",
+      "kind_": "face",
+      "rackValue": null,
+      "text": ""
+    },
+    {
+      "accepted": false,
+      "id": "face-10",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A"
+    },
+    {
+      "accepted": false,
+      "id": "face-11",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A01"
+    },
+    {
+      "accepted": false,
+      "id": "face-12",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A-1"
+    },
+    {
+      "accepted": false,
+      "id": "face-13",
+      "kind_": "face",
+      "rackValue": null,
+      "text": " A1"
+    },
+    {
+      "accepted": false,
+      "id": "face-14",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A1 "
+    },
+    {
+      "accepted": false,
+      "id": "face-15",
+      "kind_": "face",
+      "rackValue": null,
+      "text": "A１"
+    },
+    {
+      "accepted": true,
+      "id": "face-16",
+      "kind_": "face",
+      "rackValue": 10,
+      "text": "B10"
+    },
+    {
+      "accepted": true,
+      "id": "face-17",
+      "kind_": "face",
+      "rackValue": 7,
+      "text": "C7"
+    },
+    {
+      "after": "D7 B7 C7|A3 A1 A2",
+      "before": "A1 A2 A3|B7 C7 D7",
+      "id": "same-order",
+      "kind_": "tables",
+      "newPoints": 0,
+      "same": true
+    },
+    {
+      "after": "A1 A2 A3|B7 C7 D7|A1 A2 A3",
+      "before": "A1 A2 A3|B7 C7 D7",
+      "id": "same-dup",
+      "kind_": "tables",
+      "newPoints": 6,
+      "same": false
+    },
+    {
+      "after": "A1 A2 A3|B1 B2 B3",
+      "before": "A1 A2 A3|A1 A2 A3",
+      "id": "same-count",
+      "kind_": "tables",
+      "newPoints": 6,
+      "same": false
+    },
+    {
+      "after": "A1 A2 A3 B7 C7 D7",
+      "before": "A1 A2 A3|B7 C7 D7",
+      "id": "same-merge",
+      "kind_": "tables",
+      "newPoints": 0,
+      "same": false
+    },
+    {
+      "after": "A1 A2 A3",
+      "before": "A1 A2 A3",
+      "id": "new-none",
+      "kind_": "tables",
+      "newPoints": 0,
+      "same": true
+    },
+    {
+      "after": "A1 A2 A3|B5 C5 D5",
+      "before": "A1 A2 A3",
+      "id": "new-group",
+      "kind_": "tables",
+      "newPoints": 15,
+      "same": false
+    },
+    {
+      "after": "A1 A2 A3|B12 J J",
+      "before": "A1 A2 A3",
+      "id": "new-joker",
+      "kind_": "tables",
+      "newPoints": 36,
+      "same": false
+    },
+    {
+      "after": "A1 A2 A3|B5 C5",
+      "before": "A1 A2 A3",
+      "id": "new-invalid",
+      "kind_": "tables",
+      "newPoints": 0,
+      "same": false
+    },
+    {
+      "after": "C10 C11 C12|A1 A2 A3",
+      "before": "",
+      "id": "new-two",
+      "kind_": "tables",
+      "newPoints": 39,
+      "same": false
+    }
+  ],
+  "equivalence": "bit",
+  "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyRules.swift",
+  "golden": "rummy/rules",
+  "platformSensitive": false,
+  "schema": 1,
+  "spec": {
+    "corpus": "Tests/checkTests/Fixtures/rummy/cases.json 154건(meld 74 · turn 64 · score 16)을 Swift 로 대조한 뒤 싣는다. R-01 밖 면이 든 meld 는 analysis null(만들 수 없다 = 무효). tableAfter 에 R-01 밖 면이 있으면 판정은 malformed, 랙·이전 판의 이상한 면은 입력에서 뺀다.",
+    "kind_": "칸 kind_ 가 이 case 의 종류다 — meld · turn · score · payouts · prize · face · tables.",
+    "payouts": "seats 는 공백 구분, 한 칸 = 'a|x,score,tiles,seat,forfeitOrder|-'. P01~P10 은 설계서 §2.1 손 표와 대조했다.",
+    "text": "analysis 'valid(0/1):kind|-:points|-' · 정수 목록 '1,2' · 묶음 목록 'A1 A2|B1'(racks 의 빈 칸은 빈 랙, 글자 전체가 비면 자리 없음) · 무작위 묶음은 tiles 대신 faces 글자."
+  },
+  "swiftSources": [
+    "Sources/CheckCore/RummyRules.swift",
+    "Sources/CheckCore/RummyRackLayout.swift",
+    "Tests/checkTests/Fixtures/rummy/cases.json"
+  ]
+}

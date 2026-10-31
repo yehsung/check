@@ -92,6 +92,10 @@
 #   - 3차 갈래 여섯: W3-c2·c3·c4(그대로) · W3-d 를 wiring/os + platform/windows/{store,network,session} 로 바꿨다(옛 wiring/{work,…} 는 안 쓰였다) ·
 #     새 W4-g(길건너 — 공용 패치 15·16 의 기존 파일 넷 포함, check 개발 승인) · 새 W5-b4(오버레이 실물 조립 + 할 일 보드 외양, overlay/**).
 #
+# 안드로이드 기능 맞춤(xplat/c-pcube, 2026-11-01)에서 정리한 것:
+#   - 아잉 큐브 코어 규칙 자리를 W1-r 로 적었다: core/rules …/rummy · 안내 문구 core/stores …/rummy/RummyNoticeText · GoldenExport/rummy · 골든 폴더 rummy.
+#     조정자 갈래(xplat/c-*)로 돌았고 뒤따르는 스토어·화면도 조정자 갈래라 처음부터 닫아 둔다(후속은 조정자 경유).
+#
 # 문법(이 파일이 쓰는 YAML 부분집합 — 도구가 직접 읽는다):
 #   매핑(키: 값 / 키: 아래 들여쓰기), 블록 목록("- 값"), 흐름 목록([a, b]), 따옴표 문자열, # 주석.
 # 경로 글롭: 저장소 뿌리 기준. "**" = 0개 이상 경로 마디, "*" = 한 마디 안, "{a,b}" = 고르기.
@@ -102,7 +106,7 @@
 version: 1
 
 # 닫힌 갈래: 그 이름으로 오는 변경은 경로와 상관없이 빨강이다(후속 수정은 조정자 경유).
-closed: [W0-a, W0-c, W0-d, W1-e, W1-f, W1-g, W0-b, W1-a, W1-b, W1-c, W1-d, W2-i, W0-f, W5-a, W2-a, W2-b, W2-c, W2-d, W2-e, W2-f, W3-a, W3-b, W4-a, W4-b, W4-c, W5-c, W6-a, W6-c, W1-f2, W2-g1, W2-g2, W2-g3, W2-g4, W2-g5, W2-g6, W2-h1, W2-h2, W2-h3, W3-c0, W3-c1, W3-c5, W4-d, W4-e, W4-f, W5-b1, W5-b2, W5-b3, W6-b1, W6-b2]
+closed: [W0-a, W0-c, W0-d, W1-e, W1-f, W1-g, W0-b, W1-a, W1-b, W1-c, W1-d, W2-i, W0-f, W5-a, W2-a, W2-b, W2-c, W2-d, W2-e, W2-f, W3-a, W3-b, W4-a, W4-b, W4-c, W5-c, W6-a, W6-c, W1-f2, W2-g1, W2-g2, W2-g3, W2-g4, W2-g5, W2-g6, W2-h1, W2-h2, W2-h3, W3-c0, W3-c1, W3-c5, W4-d, W4-e, W4-f, W5-b1, W5-b2, W5-b3, W6-b1, W6-b2, W1-r]
 
 # 모듈 → Kotlin 패키지 폴더(A§2-2: 뿌리 com.yehsung.aingcheck, 모듈과 1:1. 앱은 android·desktop).
 package_root:
@@ -309,6 +313,16 @@ lanes:
       - "contract/golden/{wire,errors,jwt,realtime}/**"
       - "contract/golden/{_manifest,_digests}.json"   # 골든 목록·지문(생성물 — 위 reserved 참고)
     golden: [wire, errors, jwt, realtime]
+
+  W1-r:
+    wave: W1
+    title: 아잉 큐브 규칙 코어(규칙·판 배치·판 편집·편집기·받침대·안내 문구)와 골든 rummy
+    owns:
+      - "multiplatform/core/rules/src/*/kotlin/{pkg:core/rules}/rummy/**"
+      - "multiplatform/core/stores/src/*/kotlin/{pkg:core/stores}/rummy/**"
+      - "Tests/{checkTests,CheckMobileKitTests}/GoldenExport/rummy/**"
+      - "contract/golden/rummy/**"
+    golden: [rummy]
 
   W1-e:
     wave: W1

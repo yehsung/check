@@ -592,6 +592,74 @@
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287"
       }
     },
+    "rummy/notice": {
+      "file": "4d4c2dcdbd86a75cc6ad9280e54bb326e2ca1422ebf1e183f4267794cd8d6cab",
+      "generator": {
+        "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyNotice.swift": "44479237c4c80a7e8eca7fa8527c72dbef3423bdbf71b3c919565dddcabff072"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RummyNoticeText.swift": "1ae56a7991edb2bc85549af94fb275df08af456aaa43faf66e356ff946e1d27a"
+      }
+    },
+    "rummy/rack-layout": {
+      "file": "3bdc56f8f85de1f3a58e927074f38f1be9547df4a68ab3ff8113393d689f0f4f",
+      "generator": {
+        "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyRackLayout.swift": "8672c4f43a6ae3d905aac7db75c5524b0cf21bc6aeb632b7d220c74dbf0584a0"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RummyRackLayout.swift": "821e1c3fae699ab8efc04c32af4e599a913751e16b990d8c75b2b0c6e0dc329d",
+        "Sources/CheckCore/RummyRackMelds.swift": "f461e0dedc485d2ecec4fb5e4ab60f9abac6b097ed7edb869636f82756a368a2",
+        "Sources/CheckCore/RummyRules.swift": "665c1e95cd324bf14fa69f64862fc0b93b771b23b51dccb45ead6ce135c9bee6",
+        "Sources/CheckCore/RummyTurnEditor.swift": "8bffcb46bb3ccc0173271d969695fefba775d5caf3c348eafa77f8a4355c8787"
+      }
+    },
+    "rummy/rules": {
+      "file": "1e4980d324dacd8381b4efa0b45d522ff4ac914102f38b4bc9afbfa21cb3abd4",
+      "generator": {
+        "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyRules.swift": "14bf27d8e0a0bf238f407e6b92af3d9ccb454086470d71c01adac255d36cff32"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RummyRackLayout.swift": "821e1c3fae699ab8efc04c32af4e599a913751e16b990d8c75b2b0c6e0dc329d",
+        "Sources/CheckCore/RummyRules.swift": "665c1e95cd324bf14fa69f64862fc0b93b771b23b51dccb45ead6ce135c9bee6",
+        "Tests/checkTests/Fixtures/rummy/cases.json": "9b806778649506cd1edcb89255f415e2dc59bd5425883f1c9c9898dce5a885d9"
+      }
+    },
+    "rummy/table-edit": {
+      "file": "f6543d58bc4cd162cfb779487c91d870842849d03a1b05d0f97de89e361dd8d1",
+      "generator": {
+        "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyTableEdit.swift": "943b1295411442ba4d742e014af9b911f47581d674ed7976c0a61cc4de966d57"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RummyRackLayout.swift": "821e1c3fae699ab8efc04c32af4e599a913751e16b990d8c75b2b0c6e0dc329d",
+        "Sources/CheckCore/RummyRules.swift": "665c1e95cd324bf14fa69f64862fc0b93b771b23b51dccb45ead6ce135c9bee6",
+        "Sources/CheckCore/RummyTableEdit.swift": "ebc6bcc923bd8fb9dc50974638444b6b5910646c907f950a6f117ad0c9478840",
+        "Sources/CheckCore/RummyTableLayout.swift": "a76178c5283ddb0db7ebf98864ea4875877e2768dfeddcd5380236ffae3b98c6"
+      }
+    },
+    "rummy/table-layout": {
+      "file": "b06aa609fab9da6dba0ef85ed2d1f34cfbdd7145db4907e5cab5c63e69addd3c",
+      "generator": {
+        "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyTableLayout.swift": "7ea25affb614e13c2e696834a13dca8871310fca8579882cddf67429848f1f5b"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RummyRules.swift": "665c1e95cd324bf14fa69f64862fc0b93b771b23b51dccb45ead6ce135c9bee6",
+        "Sources/CheckCore/RummyTableLayout.swift": "a76178c5283ddb0db7ebf98864ea4875877e2768dfeddcd5380236ffae3b98c6"
+      }
+    },
+    "rummy/turn-editor": {
+      "file": "d5c202be5889948a082a36e640d0ed78e71d9b4b72b73b5b0e514b7f6bea832a",
+      "generator": {
+        "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyTurnEditor.swift": "e820c9ba393809822c6e6c72f4092f7b61ddea5f8d3077c31876048ee4be00ba"
+      },
+      "swiftSources": {
+        "Sources/CheckCore/RummyRackLayout.swift": "821e1c3fae699ab8efc04c32af4e599a913751e16b990d8c75b2b0c6e0dc329d",
+        "Sources/CheckCore/RummyRackMelds.swift": "f461e0dedc485d2ecec4fb5e4ab60f9abac6b097ed7edb869636f82756a368a2",
+        "Sources/CheckCore/RummyRules.swift": "665c1e95cd324bf14fa69f64862fc0b93b771b23b51dccb45ead6ce135c9bee6",
+        "Sources/CheckCore/RummyTableEdit.swift": "ebc6bcc923bd8fb9dc50974638444b6b5910646c907f950a6f117ad0c9478840",
+        "Sources/CheckCore/RummyTableLayout.swift": "a76178c5283ddb0db7ebf98864ea4875877e2768dfeddcd5380236ffae3b98c6",
+        "Sources/CheckCore/RummyTurnEditor.swift": "8bffcb46bb3ccc0173271d969695fefba775d5caf3c348eafa77f8a4355c8787"
+      }
+    },
     "session/scenarios": {
       "file": "f7d6c2dc924e20c746d388462c32edc55932ff66e9e8443aad8b81a6b898dd26",
       "generator": {

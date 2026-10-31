@@ -1,5 +1,5 @@
 {
-  "exportTests": 112,
+  "exportTests": 118,
   "generatedBy": "scripts/golden-export.sh 가 영수증으로 조립한다 — 손으로 고치지 않는다",
   "goldens": [
     {
@@ -702,6 +702,86 @@
       "swiftSources": [
         "Sources/CheckCore/MiniGameEngine.swift",
         "Sources/CheckCore/GomokuAIEngine.swift"
+      ]
+    },
+    {
+      "cases": 90,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyNotice.swift",
+      "golden": "rummy/notice",
+      "path": "contract/golden/rummy/notice.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyNoticeText.swift"
+      ]
+    },
+    {
+      "cases": 242,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyRackLayout.swift",
+      "golden": "rummy/rack-layout",
+      "path": "contract/golden/rummy/rack-layout.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyRackLayout.swift",
+        "Sources/CheckCore/RummyRackMelds.swift",
+        "Sources/CheckCore/RummyTurnEditor.swift",
+        "Sources/CheckCore/RummyRules.swift"
+      ]
+    },
+    {
+      "cases": 408,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyRules.swift",
+      "golden": "rummy/rules",
+      "path": "contract/golden/rummy/rules.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyRules.swift",
+        "Sources/CheckCore/RummyRackLayout.swift",
+        "Tests/checkTests/Fixtures/rummy/cases.json"
+      ]
+    },
+    {
+      "cases": 765,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyTableEdit.swift",
+      "golden": "rummy/table-edit",
+      "path": "contract/golden/rummy/table-edit.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyTableEdit.swift",
+        "Sources/CheckCore/RummyTableLayout.swift",
+        "Sources/CheckCore/RummyRackLayout.swift",
+        "Sources/CheckCore/RummyRules.swift"
+      ]
+    },
+    {
+      "cases": 240,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyTableLayout.swift",
+      "golden": "rummy/table-layout",
+      "path": "contract/golden/rummy/table-layout.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyTableLayout.swift",
+        "Sources/CheckCore/RummyRules.swift"
+      ]
+    },
+    {
+      "cases": 164,
+      "equivalence": "bit",
+      "generator": "Tests/checkTests/GoldenExport/rummy/GoldenExportRummyTurnEditor.swift",
+      "golden": "rummy/turn-editor",
+      "path": "contract/golden/rummy/turn-editor.json",
+      "platformSensitive": false,
+      "swiftSources": [
+        "Sources/CheckCore/RummyTurnEditor.swift",
+        "Sources/CheckCore/RummyTableEdit.swift",
+        "Sources/CheckCore/RummyTableLayout.swift",
+        "Sources/CheckCore/RummyRackLayout.swift",
+        "Sources/CheckCore/RummyRackMelds.swift",
+        "Sources/CheckCore/RummyRules.swift"
       ]
     },
     {

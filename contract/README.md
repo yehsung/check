@@ -20,6 +20,7 @@
 | `renju` · `chess` · `duel-fee` | W1-b | `duel`(테트리스 대결 재개 — `tetris` 와 따로) · `pause` | W2-e |
 | `gacha` · `insights` · `weekly` · `todo` · `text` · `sort` · `dates` · `stickers` | W1-c | `desktop-work` | W2-g |
 | | | `token-usage` | W2-h |
+| `rummy`(아잉 큐브 규칙·판 배치·판 편집·편집기·받침대·안내 문구) | W1-r | | |
 
 - 0.3.62 범위: 아잉이 이모티콘 토큰 `"[아잉:<이름>]"` 판정 표는 `stickers`(W1-c — `MessageBody.sanitized` 뒤 **통째 일치**일 때만 그림),
   미니게임 자동 일시정지 `PauseState` 전이 표는 `pause`(W2-e). 두 표 모두 이 문서의 형식(K1) 그대로다.

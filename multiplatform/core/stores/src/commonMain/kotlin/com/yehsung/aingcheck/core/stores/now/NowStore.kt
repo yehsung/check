@@ -97,6 +97,9 @@ class NowStore(
     var phoneWork: NowPhoneWorkLink? = null
     var widgetSink: NowWidgetSink? = null
 
+    /** 메시지 탭이 차단해 숨긴 상대(Swift `context.links.messages?.hiddenBlockedPeerIDs`). 조립이 잇는다 — 명단은 이 사람의 상태메시지만 감춘다. */
+    var hiddenPeerIDs: () -> Set<String> = { emptySet() }
+
     // ---------------------------------------------------------------- 새 버전 안내(원본: Sources/CheckMobileKit/Now/NowStore.swift:115-116,232-248 @ 1a5eeca6)
 
     /** 닫은 최신 빌드. **앱 단위**다 — 계정이 바뀌어도 그 빌드는 또 안 알린다([reset] 이 비우지 않고 `SessionPrefsKeys.userScopedKeys` 에도 없다). */
@@ -596,20 +599,25 @@ class NowStore(
         return (teammates + others).filter { seen.add(it.id) }
     }
 
+    /** 지금 탭의 [전체 보기]를 세울까. 명단을 받았을 때만 — 모르는 채로 들어가면 빈 화면이 먼저 보인다(원본: NowTeamRoster.swift:162 @ 23b91326). */
+    val showsTeamRosterEntry: Boolean get() = membership != null && hasLoadedTeam
+
     /**
-     * 우리 팀 전체 명단(나 포함 · 쉬는 사람 포함 — 맥 `TeamPanel.sortedMembers`). 팀 상태를 한 번도 못 받았으면 빈 목록이다 — 화면은 [teamLoadState] 로 가른다.
+     * 우리 팀 전체 명단(팀 상태를 한 번이라도 받았을 때만 — 화면은 [hasNoTeam] · [teamLoadState] 로 먼저 가른다). 서버를 부르지 않는다.
      * 팀 상태 표(`work_statuses`)에 행이 없는 사람(한 번도 근무한 적 없는 팀원)은 맥처럼 줄이 없다.
      */
-    fun teamRoster(now: SwiftDate): List<NowTeamRosterRow> {
-        val fetchedAt = teamFetchedAt ?: return emptyList()
-        return NowTeamRoster.rows(
+    fun teamRoster(now: SwiftDate): NowTeamRoster? {
+        val fetchedAt = teamFetchedAt ?: return null
+        if (membership == null) return null
+        return NowTeamRosterRules.build(
             members = teamMembers,
             directory = directory,
-            myUserID = context.sessionStore.userID,
-            goalSeconds = maxOf(1, goalHours) * 3600L,
+            hiddenPeerIDs = hiddenPeerIDs(),
+            me = context.sessionStore.userID,
+            goalHours = goalHours,
             fetchedAt = fetchedAt,
             now = now,
-            judgedAt = presenceJudgedAt(now),
+            presenceAt = presenceJudgedAt(now),
             collation = NaturalKoNameCollation,
         )
     }

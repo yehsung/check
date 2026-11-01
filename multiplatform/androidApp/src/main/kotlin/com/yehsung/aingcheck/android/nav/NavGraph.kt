@@ -127,7 +127,9 @@ fun TabsNavHost(
     CompositionLocalProvider(LocalShellBars provides shellBars) {
     NavHost(navController, startDestination = Dest.NowGraph, modifier = modifier) {
         val w3a = screens ?: app?.w3a
-        if (w3a == null) nowGraph(open) else nowGraph(w3a, open, back, openRoute)
+        // [전체 보기]: 빠르게 두 번 눌러도 명단은 한 장만 쌓인다 — 두 장이면 뒤로를 두 번 눌러야 한다(Swift `NowStore.openTeamRoster`).
+        val openFromNow: (Any) -> Unit = { d -> if (d is Dest.TeamRoster) navController.navigate(d) { launchSingleTop = true } else open(d) }
+        if (w3a == null) nowGraph(open) else nowGraph(w3a, openFromNow, back, openRoute)
         if (w3a == null) messagesGraph(open) else messagesGraph(w3a, open, back, toMessagesList)
         if (app == null) {
             rankingsGraph()

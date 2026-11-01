@@ -247,6 +247,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         links.routeResolver = { target -> openRoute(target) }
         now.phoneWork = work
         now.widgetSink = widgetSink
+        // 방금 차단한 사람의 상태메시지가 옛 사람 목록으로 명단에 남지 않게(Swift `NowStore.teamRoster` 의 links.messages).
+        now.hiddenPeerIDs = { messages.hiddenBlockedPeerIDs }
         messages.nowStore = now
         messages.router = router
         // 차단은 메시지·찌르기·게임을 **함께** 막는 관계다 — 차단한 사람이 큐브 로비·공개 방·받은 초대에 남지 않게(맥 WorkTimerStore `rummy.setHiddenPeers`). 스토어는 UUID 로 받는다.

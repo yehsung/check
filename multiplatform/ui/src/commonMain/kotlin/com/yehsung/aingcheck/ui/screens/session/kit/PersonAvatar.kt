@@ -9,6 +9,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -169,7 +171,10 @@ fun InitialFace(name: String, size: Dp, colorSeed: String = name) {
     }
 }
 
-/** 이름 + 이름 뒤 센터 배지("서울"). 이름이 넘치면 꼬리 줄임. */
+/**
+ * 이름 + 이름 뒤 센터 배지("서울") · '나' 칩([isMe]). 이름이 넘치면 꼬리 줄임.
+ * [stacked] 는 큰 글자 줄 — 배지가 이름 아랫줄로 내려가고 이름은 꺾인다(Swift `PersonName.stacked`).
+ */
 @Composable
 fun PersonName(
     name: String,
@@ -177,10 +182,38 @@ fun PersonName(
     modifier: Modifier = Modifier,
     style: TextStyle = MaterialTheme.typography.titleSmall,
     color: Color = AingTheme.colors.label,
+    isMe: Boolean = false,
+    stacked: Boolean = false,
 ) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(name, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-        CenterLabel.display(center)?.let { CenterChip(it) }
+    val centerText = CenterLabel.display(center)
+    if (stacked) {
+        Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(name, style = style, color = color)
+            if (centerText != null || isMe) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    centerText?.let { CenterChip(it) }
+                    if (isMe) MeChip()
+                }
+            }
+        }
+    } else {
+        Row(modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(name, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+            centerText?.let { CenterChip(it) }
+            if (isMe) MeChip()
+        }
+    }
+}
+
+/** '나' 칩(Swift `MeChip` — 파랑 틴트 · 높이 18). */
+@Composable
+fun MeChip() {
+    val colors = AingTheme.colors
+    Box(
+        Modifier.heightIn(min = 18.dp).background(colors.accentTint, CircleShape).padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("나", style = MaterialTheme.typography.labelSmall, color = colors.accent, maxLines = 1)
     }
 }
 

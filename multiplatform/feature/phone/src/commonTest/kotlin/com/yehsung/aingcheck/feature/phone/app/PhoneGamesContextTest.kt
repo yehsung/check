@@ -83,6 +83,16 @@ class PhoneGamesContextTest {
         assertEquals(listOf("u-1"), app.games.chessLobbyUsers(chessLink).map { it.id }, "체스 로비에서도")
     }
 
+    /** 부르는 자리: 조립이 잇지 않으면 스토어 시험은 초록인데 진짜 앱에서 방금 차단한 사람의 상태메시지가 명단에 남는다. */
+    @Test
+    fun nowRosterSeesTheMessagesBlockSet() = runTest {
+        val h = rig()
+        assertEquals(emptySet(), h.app.now.hiddenPeerIDs())
+        h.app.messages.blockPeer("u-2")
+        advanceUntilIdle()
+        assertEquals(setOf("u-2"), h.app.now.hiddenPeerIDs(), "지금 탭 명단도 메시지 탭의 차단 집합을 그대로 본다")
+    }
+
     @Test
     fun aiThinkerOnlyThinksWhileGomokuScreenIsVisibleAndAppActive() = runTest {
         val h = rig()

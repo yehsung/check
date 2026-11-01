@@ -94,13 +94,28 @@ object NowText {
     const val otherTeams = "다른 팀"
     const val workingEmpty = "지금 근무 중인 사람이 없어요"
     fun peopleCount(count: Int): String = "${count}명"
-    /** 지금 탭 → 우리 팀 전체 명단 입구 줄. */
-    const val teamRosterEntry = "팀 전체 보기"
-    /** 명단 화면 제목(팀 이름을 아직 모를 때). */
-    const val teamRosterTitle = "우리 팀"
-    const val teamRosterEmpty = "아직 근무 기록이 있는 팀원이 없어요"
-    const val teamRosterUnavailable = "팀원을 불러오지 못했어요"
-    const val goalMet = "주간 목표 달성"
+    // 우리 팀 전체 명단(원본: Sources/CheckMobileKit/Now/NowTeamRoster.swift:24 @ 23b91326).
+    const val teamRosterSeeAll = "전체 보기"
+    /** 우리 팀 묶음이 없는 자리(우리 팀에 근무 중인 사람이 없다)의 절 머리 링크 — "우리 팀" 줄이 없어 무엇의 전체인지 글자로 말한다. */
+    const val teamRosterSeeAllInHeader = "우리 팀 전체 보기"
+    const val teamRosterWorking = "근무 중"
+    const val teamRosterResting = "쉬는 중"
+    /** 서버가 이름을 안 줬을 때(코어 `assembleTeamStatuses` 의 폴백과 같은 글자). */
+    const val teamMemberFallbackName = "팀원"
+    const val teamRosterEmpty = "아직 명단에 보일 팀원이 없어요"
+    const val teamRosterUnavailable = "팀 명단을 불러오지 못했어요"
+    const val teamRosterNoTeamBody = "지금 탭에서 팀 코드로 합류하거나 새 팀을 만들 수 있어요"
+    /** "아잉 데모팀 · 1인당 주 40시간". */
+    fun teamRosterSummary(teamName: String?, goalHours: Int): String {
+        val goal = "1인당 주 ${goalHours}시간"
+        return if (teamName.isNullOrEmpty()) goal else "$teamName · $goal"
+    }
+    /** 줄 오른쪽 "주 24시간 48분"(맥 `primaryDetail` 의 "주 N시간"과 같은 말). */
+    fun teamRosterWeek(seconds: Int): String = "주 ${NowFormat.hoursMinutesText(seconds)}"
+    const val teamRosterJustStarted = "방금 시작했어요"
+    /** 근무 중인 줄 부제 "지금 3시간 20분째". 1분이 안 됐으면 "0분째"라 하지 않는다. */
+    fun teamRosterElapsed(seconds: Int): String =
+        if (seconds < 60) teamRosterJustStarted else "지금 ${NowFormat.hoursMinutesText(seconds)}째"
     /** 팀 만든 직후 참여코드 카드의 닫기(맥 `CreatedTeamCodeCard` — 제목 · 안내 · 복사는 가입 화면 글자 `SignUpText`). */
     const val createdTeamConfirm = "확인"
     const val workingFooter = "근무는 맥·PC나 이 탭 맨 위 버튼으로 시작하고 끝내요"

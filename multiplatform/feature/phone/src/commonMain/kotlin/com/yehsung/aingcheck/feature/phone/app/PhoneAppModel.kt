@@ -307,7 +307,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
     }
 
     fun sceneDidBecomeActive() {
-        // 아래 가드는 background 에서 돌아온 것만 통과한다 — 미니게임 정지 상한은 ON_PAUSE 에서 돌아온 것도 잰다(Swift MobileAppModel.swift:239-240 @ de5c153b).
+        // 아래 가드는 background 에서 돌아온 것만 통과한다 — 미니게임 정지 상한은 ON_PAUSE 에서 돌아온 것도 잰다(Swift MobileAppModel.swift:240-241 @ de5c153b).
         games.sceneDidComeForward()
         if (isSceneActive) return
         isSceneActive = true

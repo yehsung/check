@@ -1066,6 +1066,18 @@ class MiniGamePhonePauseTest {
         assertNull(games.miniGames.pendingSubmit, "token_used 는 성공이다")
     }
 
+    /** 판이 끝나 점수가 인편에 오르는 문이 임시 항목을 직접 지운다 — 어느 출구로 왔든 다음 실행에 같은 판이 또 올라가지 않는다(지금 출구들은 앞에서도 지운다 — 뮤테이션 실측). */
+    @Test
+    fun recordingAScoreAlwaysClearsTheDraft() = runTest {
+        val (r, c) = started(MiniGameKind.tetris)
+        r.hub.appDidEnterBackground()
+        assertNotNull(r.draftText())
+        r.hub.recordScore(MiniGameKind.tetris, c.score)
+        assertNull(r.draftText(), "진짜 인편과 임시 항목이 둘 다 있다")
+        advanceUntilIdle()
+        assertEquals(1, r.submits().size)
+    }
+
     /** 이 실행에서 적은 임시 항목은 인편으로 올리지 않는다 — 살아 있는 판의 것이다. */
     @Test
     fun aLiveDraftIsNotAdopted() = runTest {

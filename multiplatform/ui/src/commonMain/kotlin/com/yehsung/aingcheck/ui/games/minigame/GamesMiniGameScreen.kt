@@ -1,7 +1,7 @@
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift @ 3bd04bd
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:325-430 @ 1a5eeca6 (순위 [오늘 | 역대] — 폰 경로)
 // 원본: Sources/check/MiniGamePanel.swift:466-604 @ 3bd04bd (정지 카드·카운트다운·5분 상한 — Windows 창 몫, G §8-2. 전이 표는 core MiniGamePauseState)
-// 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:57-64·86-115·216-231 @ de5c153b (폰 [일시정지] · 스크림 · 버튼 줄 잠금)
+// 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:60-64·103-113·216-231 @ de5c153b (폰 [일시정지] · 스크림 · 버튼 줄 잠금)
 //
 // 미니게임 화면(SPEC-ios §3.5): 머리 줄(최고 · 오늘 순위 · 안내) · 캔버스(논리 292×302 를 폭에 **등비 확대**) · (테트리스만) 버튼 줄 · 오늘 순위.
 //  · 캔버스 어디든 **누르는 순간** = 행동(손을 뗄 때 발화하면 점프 게임엔 그 지연이 곧 낙차다).

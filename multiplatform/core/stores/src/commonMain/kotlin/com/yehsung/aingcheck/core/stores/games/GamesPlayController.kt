@@ -1,5 +1,5 @@
 // 원본: Sources/CheckMobileKit/Games/GamesPlayController.swift @ 1b8260d
-// 원본: Sources/CheckMobileKit/Games/GamesPlayController.swift:50-51·357-365·514-525 @ de5c153b (일시정지 — pauseState · 얼어 있으면 입력·프레임이 판에 안 닿는다)
+// 원본: Sources/CheckMobileKit/Games/GamesPlayController.swift:51·130·362-366·518-526 @ de5c153b (일시정지 — pauseState · 얼어 있으면 입력·프레임이 판에 안 닿는다)
 package com.yehsung.aingcheck.core.stores.games
 
 import androidx.compose.runtime.getValue

@@ -79,7 +79,7 @@ internal class GamesAndroidRig(appConfig: AppConfig = AppConfig()) : AutoCloseab
         override fun write(value: String, key: String) { values[key] = value }
         override fun delete(key: String) { values.remove(key) }
     }
-    private val prefs = object : KeyValueStore {
+    val prefs = object : KeyValueStore {
         val values = HashMap<String, Any>()
         override fun getString(key: String): String? = values[key] as? String
         override fun putString(key: String, value: String) { values[key] = value }
@@ -167,7 +167,8 @@ internal class GamesAndroidRig(appConfig: AppConfig = AppConfig()) : AutoCloseab
         override val sharedRubyBalance: Long? = null
     }
 
-    val store = GamesStore(context)
+    /** 조립(PhoneAppModel)과 같은 스위치 — 안드로이드 경로의 허브는 폰 일시정지 규칙으로 돈다. */
+    val store = GamesStore(context).also { it.miniGames.phonePauseRules = true }
 
     /** 메인 루퍼와 스냅숏 적용 알림을 [condition] 이 참이 될 때까지 돌린다(상한 [timeoutMillis]). */
     fun pumpUntil(timeoutMillis: Long = 10_000, condition: () -> Boolean): Boolean {

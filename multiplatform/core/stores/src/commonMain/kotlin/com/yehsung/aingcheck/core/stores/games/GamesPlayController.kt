@@ -1,4 +1,5 @@
 // 원본: Sources/CheckMobileKit/Games/GamesPlayController.swift @ 1b8260d
+// 원본: Sources/CheckMobileKit/Games/GamesPlayController.swift:50-51·357-365·514-525 @ de5c153b (일시정지 — pauseState · 얼어 있으면 입력·프레임이 판에 안 닿는다)
 package com.yehsung.aingcheck.core.stores.games
 
 import androidx.compose.runtime.getValue
@@ -12,6 +13,7 @@ import com.yehsung.aingcheck.core.rules.minigame.TimingBarGame
 import com.yehsung.aingcheck.core.rules.minigame.crossy.CrossyGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisLayout
+import com.yehsung.aingcheck.core.stores.minigame.MiniGamePauseState
 import com.yehsung.aingcheck.core.wire.SwiftDate
 
 /**
@@ -29,8 +31,10 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
  *   테트리스는 `Result` 전이(탑아웃 유예 뒤 · `interrupt()` 포함).
  * - 폰 전용 출구가 **둘**이다. 뜻이 다르므로 함수도 둘이다:
  *   · [abandon] — 판을 **기록 없이 버린다**(로그아웃 · 화면 경합 정리). 알리지 않으므로 제출도 없다.
- *   · [endRound] — 판을 **끝낸다**(뒤로가기 · 앱이 background 로 감). 타이밍 바·플래피는 버리는 것과 같고,
- *     **테트리스·길건너는 그 자리에서 점수를 확정해 알린다**(폰에서 background 는 비용이 0.05초뿐인 무한 일시정지라 살려 두면 순위표가 흔들린다).
+ *   · [endRound] — 판을 **끝낸다**([그만두기] · 뒤로가기 · 5분 상한). 타이밍 바·플래피는 버리는 것과 같고,
+ *     **테트리스·길건너는 그 자리에서 점수를 확정해 알린다.**
+ * - 안드로이드 폰에서 앱이 내려가는 것은 출구가 아니다 — 판을 **얼린다**([pauseState] · 허브 `phonePauseRules`). 얼어 있는 동안 입력과 프레임이 전부 먼저 막힌다.
+ *   Windows 창은 정지를 자기 화면 상태로 들고 있어 [pauseState] 가 늘 None 이다(이 가드들이 할 일이 없다).
  *
  * 폰 테트리스·길건너 입력(끌기·탭)의 **판정도 여기 있다**([canvasDragChanged]·[canvasDragEnded]) — JVM 시험이 손가락 좌표부터 조각 위치까지
  * 화면 없이 구동한다.
@@ -60,6 +64,10 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     var tetris: TetrisGame by mutableStateOf(TetrisGame(seed))
         private set
     var crossy: CrossyGame by mutableStateOf(CrossyGame(seed))
+        private set
+
+    /** 일시정지 상태(전이 규칙은 [MiniGamePauseState], 언제 바꾸는지는 허브). 얼어 있으면 입력도 프레임도 판에 닿지 않는다. */
+    var pauseState: MiniGamePauseState by mutableStateOf(MiniGamePauseState.None)
         private set
 
     /** 탭이 판에 먹혔을 때마다 +1(가벼운 햅틱의 방아쇠). **판이 실제로 바뀌었을 때만** 올린다 — 소진된 홀드·못 도는 회전은 조용해야 한다. */
@@ -122,6 +130,9 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
             MiniGameKind.crossy -> crossy.isPlaying
         }
 
+    /** 판이 얼어 있는가(정지 카드 · 3-2-1 둘 다 참이다). */
+    val isFrozen: Boolean get() = pauseState.isFrozen
+
     /** 지금(또는 마지막) 판의 점수. */
     val score: Int
         get() = when (kind) {
@@ -141,6 +152,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * 시작 전·결과 카드에서만 `action()`(= 새 판)이다.
      */
     fun tap() {
+        if (isFrozen) return
         val wasPlaying = isPlaying
         when (kind) {
             MiniGameKind.timingBar -> {
@@ -190,7 +202,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * 시작 전이면 판을 열고 그 방향으로 뛴다. 결과 화면·죽음 연출의 방향은 엔진이 버린다. 길건너가 아니면 아무 일 없다.
      */
     fun hop(direction: CrossyGame.Direction) {
-        if (kind != MiniGameKind.crossy) return
+        if (kind != MiniGameKind.crossy || isFrozen) return
         val wasPlaying = isPlaying
         val next = crossy.copy()
         next.input(direction)
@@ -206,7 +218,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * 점수가 조용히 사라진다. 뛰는 중 입력은 엔진이 한 칸 줄 세우고 그 뒤는 버린다(그건 규칙이다 — 여기서 미리 거르지 않는다).
      */
     private fun hopWhilePlaying(direction: CrossyGame.Direction) {
-        if (kind != MiniGameKind.crossy || !crossy.isPlaying) return
+        if (kind != MiniGameKind.crossy || !crossy.isPlaying || isFrozen) return
         val next = crossy.copy()
         next.input(direction)
         if (next != crossy) {
@@ -231,7 +243,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
 
     /** 회전. 캔버스 탭이 시계, 버튼이 반시계다(설계 G — 버튼도 시계면 자리 하나를 버리고 반시계가 폰에서 사라진다). */
     fun rotate(clockwise: Boolean) {
-        if (kind != MiniGameKind.tetris) return
+        if (kind != MiniGameKind.tetris || isFrozen) return
         val next = tetris.copy()
         val before = next.active
         next.rotate(clockwise)
@@ -244,7 +256,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * 갈아탄 조각이 스폰 자리에서 막히면 **그 자리에서 판이 끝난다** — 그 전이는 프레임 루프 **밖**이라 여기서 직접 센다.
      */
     fun hold() {
-        if (kind != MiniGameKind.tetris) return
+        if (kind != MiniGameKind.tetris || isFrozen) return
         val next = tetris.copy()
         val before = next.holdUsed
         val beforePiece = next.active
@@ -260,7 +272,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * 하드드롭은 락딜레이를 안 기다리고 **그 자리에서** 굳혀 줄을 지운다 — 프레임 루프 밖이라 여기서 소거 햅틱을 센다.
      */
     fun hardDrop() {
-        if (kind != MiniGameKind.tetris || tetris.phase != TetrisGame.Phase.Running) return
+        if (kind != MiniGameKind.tetris || tetris.phase != TetrisGame.Phase.Running || isFrozen) return
         val next = tetris.copy()
         val mark = tetrisHapticMark(next)
         next.action()
@@ -314,7 +326,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
 
     private inline fun feedHeld(held: Boolean, apply: (TetrisGame) -> Unit) {
         if (kind != MiniGameKind.tetris) return
-        if (held && !(tetris.isPlaying && !tetris.isGameOver)) return
+        if (held && (isFrozen || !(tetris.isPlaying && !tetris.isGameOver))) return
         val next = tetris.copy()
         apply(next)
         tetris = next
@@ -324,7 +336,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     fun softDropOneCell() = feed(TetrisGestureStep.softDrop)
 
     private fun feed(step: TetrisGestureStep) {
-        if (kind != MiniGameKind.tetris || tetris.phase != TetrisGame.Phase.Running) return
+        if (kind != MiniGameKind.tetris || tetris.phase != TetrisGame.Phase.Running || isFrozen) return
         val next = tetris.copy()
         when (step) {
             TetrisGestureStep.moveLeft -> {
@@ -352,7 +364,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * 길건너 쓸기는 **떼기를 기다리지 않는다** — 문턱을 넘는 그 순간 방향 하나가 엔진에 들어간다.
      */
     fun canvasDragChanged(startLocation: MiniGamePoint, translation: MiniGameSize, time: SwiftDate) {
-        if (!kind.usesCanvasDragTracker) return
+        if (!kind.usesCanvasDragTracker || isFrozen) return
         if (gestureStartLocation != startLocation) {
             gestureStartLocation = startLocation
             gestureStartedAt = time
@@ -369,7 +381,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      * `tap()` 으로 받는다 — 이 길은 진행 중에만 온다). @return 이 끌기가 탭이었는가(그 동작을 시도했는가).
      */
     fun canvasDragEnded(translation: MiniGameSize, time: SwiftDate): Boolean {
-        if (!kind.usesCanvasDragTracker) return false
+        if (!kind.usesCanvasDragTracker || isFrozen) return false
         val elapsed = gestureStartedAt?.let { maxOf(0.0, time.timeIntervalSince(it)) } ?: 0.0
         gestureStartLocation = null
         gestureStartedAt = null
@@ -396,8 +408,15 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
             lastTick = null
             return
         }
+        // 얼어 있으면 판에 시간이 안 흐른다. 기준점을 비워 **풀린 뒤 첫 프레임은 기준만 잡는다** — 멈춘 시간을 dt 로 물려받지 않는다.
+        if (isFrozen) {
+            lastTick = null
+            return
+        }
         // 판 상한은 **가드 뒤 · dt 계산 앞**이다: 첫 프레임(기준만 잡는 프레임)에서도 걸려야 앱이 오래 멈춰 있다 돌아온 그 순간에 판이 끝난다.
         // 기준점도 **여기서** 잡는다 — 그래야 마감과 그걸 재는 `now` 가 같은 축에 있다([roundLimitSeconds] 주석).
+        // ⚠️ **정지 시간을 빼지 않는다.** 이 상한은 게임 시간이 아니라 토큰 예산이고(12 + 15 + 1 = 28 < 서버 TTL 30분), 서버는 정지를 모른다.
+        //    빼 주면 고의로 늘인 판 + 정지 5분이 33분이 되어 판이 통째로 거절된다. 정직한 판은 최장 8.7분 + 정지 5분 = 13.7분이라 안 걸린다.
         val limit = roundLimitSeconds
         if (kind == MiniGameKind.tetris && limit != null) {
             val deadline = roundDeadline ?: now.addingTimeInterval(limit)
@@ -474,6 +493,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
      */
     fun abandon(): Boolean {
         if (!isPlaying) return false
+        pauseState = MiniGamePauseState.None
         reportedFinish = true
         lastTick = null
         // 상한은 **길이와 기준점 둘 다** 비운다 — 다음 판의 길이는 허브가 `beginRound` 에서 다시 건네고, 기준점은 그 판의 첫 틱이 잡는다.
@@ -506,14 +526,15 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     }
 
     /**
-     * 판을 **끝낸다**(화면을 떠남 · 앱이 background 로 감). 기존 두 게임은 [abandon] 과 같고, **테트리스·길건너는 그 자리에서 점수를 확정해 알린다.**
+     * 판을 **끝낸다**([그만두기] · 화면을 떠남 · 5분 상한). 타이밍 바·플래피는 [abandon] 과 같고, **테트리스·길건너는 그 자리에서 점수를 확정해 알린다.**
      *
-     * INV-GamesPlayController-615974ae 이식: 왜 이 둘이 다른가: 폰에서 background 는 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는 `maxStep`(1/20)으로 잘리므로
-     * 몇 분을 나가 있어도 판이 잃는 것은 0.05초뿐이다. 그래서 나가는 순간 **여기까지의 점수로 확정**한다.
+     * 플래피는 맥과 다르다: 맥은 접어도 그 점수가 남지만 폰은 **버린다**(2026-11-01 사용자 답 "지금처럼 버림").
+     * **안드로이드 폰에서 앱이 내려가는 것은 여기로 오지 않는다** — 판을 얼리고 돌아와서 이어 한다(허브 `appDidEnterBackground`). Windows 창은 정지 상한이 여기로 온다.
      * INV-GamesPlayController-e5a30ec5 이식: `interrupt()` 뒤에는 **tick 이 다시 오지 않는다** — 여기서 직접 [onFinished] 를 부르지 않으면 **점수가 조용히 사라진다.**
      */
     fun endRound(): EndOutcome {
         if (!isPlaying) return EndOutcome.None
+        pauseState = MiniGamePauseState.None
         return when (kind) {
             MiniGameKind.timingBar, MiniGameKind.flappy -> if (abandon()) EndOutcome.Abandoned else EndOutcome.None
             MiniGameKind.tetris -> {
@@ -544,6 +565,21 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
                 EndOutcome.Confirmed(score)
             }
         }
+    }
+
+    // MARK: 일시정지
+
+    /**
+     * 허브가 정한 상태를 판에 옮긴다. 얼리는 순간 눌린 키와 끌기를 놓는다 — 안 놓으면 "← 를 누른 채 정지 → 손을 뗌 → 재개"에서
+     * 엔진이 아직 ← 를 눌린 것으로 알고 판이 왼쪽으로 붙는다(맥 `applyPause` 의 출구 ⑦과 같다).
+     */
+    fun applyPauseState(next: MiniGamePauseState) {
+        if (next == pauseState) return
+        pauseState = next
+        lastTick = null
+        if (!next.isFrozen) return
+        resetGesture()
+        releaseAllKeys()
     }
 
     /** 시험·데모 전용: 임의 상태에서 시작한다(Swift `#if DEBUG replaceForTesting`). */

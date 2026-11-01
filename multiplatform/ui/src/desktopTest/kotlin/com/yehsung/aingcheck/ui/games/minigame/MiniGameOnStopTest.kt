@@ -1,9 +1,8 @@
-// 원본: 없음 — W4-b 완료 기준 ③(G §2-3) "ON_STOP 점수 확정"의 화면 쪽 몫. E§5.1: iOS .background ↔ Android ON_STOP → GamesStore.appDidEnterBackground
-// (Android 배선은 androidApp screens/games/hub GamesLifecycleBridge — 그 배선 시험은 androidApp 쪽 GamesLifecycleBridgeTest).
+// 원본: 없음 — **허브 기본 경로**(`phonePauseRules` 꺼짐 — Windows 창의 정지 상한이 쓰는 출구 `appDidEnterBackground`)가 그대로인지 잰다. 안드로이드 ON_STOP 은 이제 판을 얼린다 —
+// 그 시험은 core MiniGamePhonePauseTest · androidApp GamesLifecycleBridgeTest.
 //
-// UI 루프(GamesMiniGameCanvasHost — 프레임 루프 · 손가락)로 판을 실제로 켜고 굴린 뒤 앱이 뒤로 가면:
-//  · 테트리스 — **여기까지의 점수로 확정 제출**한다(폰에서 background 는 비용 0 의 무한 일시정지라 살려 두면 순위표가 흔들린다). 결과 화면 · 안내 줄
-//    "여기까지 기록했어요" · 프레임 루프가 멎는다(렌더해도 점수가 안 바뀐다).
+// UI 루프(GamesMiniGameCanvasHost — 프레임 루프 · 손가락)로 판을 실제로 켜고 굴린 뒤 이 출구를 지나면:
+//  · 테트리스 — **여기까지의 점수로 확정 제출**한다. 결과 화면 · 안내 줄 "여기까지 기록했어요" · 프레임 루프가 멎는다(렌더해도 점수가 안 바뀐다).
 //  · 타이밍 바 · 플래피 — **기록 없이** 끝낸다(제출 0) · 안내 줄 "기록하지 않았어요".
 // 기준선(기억 comparison-baseline-must-differ): 같은 판에서 앱이 앞으로 오는 것(appDidBecomeActive)은 판을 끝내지 않는다.
 package com.yehsung.aingcheck.ui.games.minigame

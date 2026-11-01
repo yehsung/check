@@ -228,6 +228,19 @@ class GamesStore(val context: GamesContext) {
         syncIdleTimer()
     }
 
+    /**
+     * 장면이 앞에서 물러난다(Android ON_PAUSE — iOS `.inactive`: 앱 전환 · 다중 창 · 잠금 직전). 도는 미니게임을 얼린다. 연결·폴링은 건드리지 않는다: 곧 돌아오는 일이 대부분이다.
+     * 원본: Sources/CheckMobileKit/Games/GamesStore.swift:247-251 @ de5c153b.
+     */
+    fun sceneWillResignActive() {
+        miniGames.appWillResignActive()
+    }
+
+    /** 장면이 앞으로 왔다(ON_RESUME · 프로세스 ON_START). 얼어 있던 판의 상한을 재고 토큰을 챙긴다 — 자동으로 풀지는 않는다. */
+    fun sceneDidComeForward() {
+        miniGames.sceneDidComeForward()
+    }
+
     fun appDidEnterBackground() {
         isAppActive = false
         // AI 탐색은 background 에서 돌지 않는다(돌아오면 처음부터 다시 생각한다).
@@ -610,11 +623,12 @@ class GamesStore(val context: GamesContext) {
     val wantsIdleTimerDisabled: Boolean
         get() {
             if (!isAppActive || !context.sessionStore.isSignedIn) return false
-            // 미니게임: 끝나지 않은 판이 있으면 켠다(폰은 background 가 곧 판 폐기·무제출이라 자동잠금이 곧 판 폐기다).
+            // 미니게임: 끝나지 않은 판이 **돌고 있으면** 켠다(자동잠금은 판을 얼리고, 조각을 세워 두고 생각하는 무입력 구간이 있는 게임은 그 자리에서 판이 끊긴다).
+            // ★ **정지 중에는 끈다**(폰 일시정지 — iOS de5c153b). 정지 카드를 띄운 채 폰을 내려놓으면 화면이 켜진 채로 남는다. 그 판은 이미 얼어 있어 자동잠금으로 더 잃을 것이 없다(상한은 벽시계라 잠겨 있어도 센다).
             // INV-GamesStore-78b92b69 이식: **타이밍 바만 뺀다.** 그 판은 **스스로 끝나지 않는다** — 탭을 받을 때까지 진행 중에 머문다.
             //   여기에 타이밍 바를 넣으면 화면이 **영원히** 켜져 있다(자동잠금이 유일한 상한이었다). 새 게임을 더할 때 이 성질을 확인할 것.
             val controller = miniGames.controller
-            if (controller != null && controller.isPlaying && controller.kind != MiniGameKind.timingBar) return true
+            if (controller != null && controller.isPlaying && !controller.isFrozen && controller.kind != MiniGameKind.timingBar) return true
             // 체스: 1:1 판은 어느 화면에 있든 켜고, 로봇 판은 체스 화면이 보일 때만 켠다.
             if (context.chess.hasUnfinishedMatch) {
                 if (context.chess.isAIMatch) {

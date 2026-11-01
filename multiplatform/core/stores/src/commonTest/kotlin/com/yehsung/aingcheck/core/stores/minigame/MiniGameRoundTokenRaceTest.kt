@@ -440,7 +440,7 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(before, h.server.count("minigame_start_round"))
     }
 
-    /** background: 길건너는 그 점수로 확정 제출 · 안내는 '기록했어요'(거짓말 금지). */
+    /** 허브 기본 경로(Windows 창의 상한 출구): 길건너는 그 점수로 확정 제출 · 안내는 '기록했어요'(거짓말 금지). 안드로이드 ON_STOP 은 MiniGamePhonePauseTest. */
     @Test
     fun crossyInTheBackgroundSubmitsAndSaysSo() = runTest {
         val (h, hub) = open()

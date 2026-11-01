@@ -218,6 +218,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         rankings = RankingsStore(context, scope, env.collation)
         gamesContext = PhoneGamesContext(context, PhoneGomokuLink(gomoku), PhoneChessLink(chess))
         games = GamesStore(gamesContext)
+        // 폰 미니게임 일시정지의 주 스위치(iOS 폰 1.0.16 de5c153b). 기본이 꺼짐(Windows 창)이라 이 줄이 없으면 앱을 내리는 순간 판이 끝나고 [이어하기] 가 올 판이 없다 —
+        // "기본값이니 지워도 되겠지"로 지우지 마라(PhoneAppModelTest 가 잰다).
+        games.miniGames.phonePauseRules = true
         me = MeStore(context, scope, env.drawableCharacters)
         work = PhoneWorkController(now, ruby, weeklyWorkDidChange = { me.weeklyWorkDidChange() }, reloadWidgets = env.reloadWidgetTimelines)
         widgetSink = NowWidgetSnapshotSink(
@@ -304,6 +307,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
     }
 
     fun sceneDidBecomeActive() {
+        // 아래 가드는 background 에서 돌아온 것만 통과한다 — 미니게임 정지 상한은 ON_PAUSE 에서 돌아온 것도 잰다(Swift MobileAppModel.swift:239-240 @ de5c153b).
+        games.sceneDidComeForward()
         if (isSceneActive) return
         isSceneActive = true
         session.appDidBecomeActive()

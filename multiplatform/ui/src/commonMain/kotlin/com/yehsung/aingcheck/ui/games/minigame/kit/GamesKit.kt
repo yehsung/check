@@ -434,7 +434,7 @@ fun EmptyState(icon: AppIcon?, title: String, modifier: Modifier = Modifier) {
 
 /** 시트·화면 머리(가운데 제목 + 부제 · 왼쪽 닫기/뒤로). */
 @Composable
-fun GamesHeaderBar(title: String, modifier: Modifier = Modifier, subtitle: String? = null, onBack: (() -> Unit)? = null, backIcon: AppIcon = AppIcon.ChevronLeft, trailing: (@Composable () -> Unit)? = null) {
+fun GamesHeaderBar(title: String, modifier: Modifier = Modifier, subtitle: String? = null, onBack: (() -> Unit)? = null, backIcon: AppIcon = AppIcon.ChevronLeft, trailingWidth: Dp? = AingDimens.minimumTarget * 1.2f, trailing: (@Composable () -> Unit)? = null) {
     val colors = AingTheme.colors
     Box(modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 4.dp)) {
         if (onBack != null) {
@@ -448,7 +448,8 @@ fun GamesHeaderBar(title: String, modifier: Modifier = Modifier, subtitle: Strin
             Text(title, style = MaterialTheme.typography.titleMedium, color = colors.label, maxLines = 1, modifier = Modifier.semantics { heading() })
             if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal), color = colors.label2, maxLines = 1)
         }
-        if (trailing != null) Box(Modifier.align(Alignment.CenterEnd).width(AingDimens.minimumTarget * 1.2f), contentAlignment = Alignment.CenterEnd) { trailing() }
+        // 폭을 안 주면(null) 내용만큼이다 — 글자가 붙은 단추가 자리 폭에 잘리지 않게.
+        if (trailing != null) Box(Modifier.align(Alignment.CenterEnd).then(if (trailingWidth != null) Modifier.width(trailingWidth) else Modifier), contentAlignment = Alignment.CenterEnd) { trailing() }
     }
 }
 

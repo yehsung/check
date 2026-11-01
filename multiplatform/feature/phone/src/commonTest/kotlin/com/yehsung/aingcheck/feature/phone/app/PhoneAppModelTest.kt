@@ -4,10 +4,15 @@
 // 6차 int-h 미결 [착수 W2-f] ①: links 의 테트리스 자리 · badges = messages+games+missions · appBadgeTotal = messages+games.
 package com.yehsung.aingcheck.feature.phone.app
 
-import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.app.AppConfig
+import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesRouteRequest
+import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
+import com.yehsung.aingcheck.core.stores.minigame.MiniGamePauseState
+import com.yehsung.aingcheck.testkit.mock.RecordedRequest
+import kotlinx.coroutines.awaitCancellation
 import com.yehsung.aingcheck.core.stores.me.MeDestination
 import com.yehsung.aingcheck.core.stores.me.MeRoute
 import com.yehsung.aingcheck.core.stores.me.dismissCakeGiftSheet
@@ -33,7 +38,9 @@ import com.yehsung.aingcheck.testkit.golden.Golden
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -162,6 +169,88 @@ class PhoneAppModelTest {
         h.app.chess.onMatchFinished!!.invoke()
         advanceUntilIdle()
         assertEquals(loaded + 1, h.count("achievements_status"), "체스 줄은 아직 — 한 번 묻는다")
+    }
+
+    /** 폰 일시정지(iOS de5c153b) 스텁: 토큰 t1 · 제출 ok · 순위 빈 표 · 공개. */
+    private fun miniGameRoute(r: RecordedRequest): Reply? = when {
+        r.rpcName == "minigame_start_round" -> Reply.Json("""{"status":"ok","token":"t1"}""")
+        r.rpcName == "minigame_submit_score" -> Reply.Json("""{"status":"ok","best_score":3,"plays":1,"improved":true}""")
+        r.rpcName == "minigame_board" || r.rpcName == "minigame_yesterday_winner" -> Reply.Json("[]")
+        r.path == "/rest/v1/profiles" && r.method == "GET" -> Reply.Json("""[{"minigame_public":true}]""")
+        else -> null
+    }
+
+    /** active 동안은 할 일 주기 동기화가 돌아 가상 시간이 끝나지 않는다(advanceUntilIdle 금지) — 조금만 민다. */
+    private fun TestScope.settleActive() {
+        advanceTimeBy(1_000)
+        runCurrent()
+    }
+
+    private fun TestScope.runningTetris(h: PhoneHarness): GamesPlayController {
+        h.signIn()
+        h.app.sceneDidBecomeActive()
+        h.app.games.miniGames.pauseSleep = { awaitCancellation() }
+        h.app.games.miniGames.openScreen(MiniGameKind.tetris)
+        settleActive()
+        val c = assertNotNull(h.app.games.miniGames.controller)
+        c.tap()
+        repeat(3) { c.softDropOneCell() }
+        assertEquals("t1", h.app.games.miniGames.roundToken)
+        return c
+    }
+
+    /** 조립이 폰 일시정지 스위치를 켠다. 앱을 내리면 판이 **언다**(제출 0 · 임시 항목) · 돌아와도 안 풀린다 · 5분을 넘겼으면 돌아오는 그 순간 그 점수로 끝난다. */
+    @Test
+    fun theAssemblyFreezesMiniGamesInTheBackground() = runTest {
+        val h = PhoneHarness(this) { r -> miniGameRoute(r) }
+        assertTrue(h.app.games.miniGames.phonePauseRules, "이 줄이 없으면 앱을 내리는 순간 판이 끝난다")
+        val c = runningTetris(h)
+        val draftKey = GamesMiniGameHub.pauseDraftKey(PhoneHarness.ME.lowercase())
+
+        h.app.sceneDidEnterBackground()
+        assertEquals(MiniGamePauseState.Paused, c.pauseState)
+        assertTrue(c.isPlaying, "앱을 내렸는데 판이 끝났다")
+        assertNotNull(h.prefs.getString(draftKey), "OS 가 앱을 죽이면 점수가 사라진다")
+        settleActive()
+        assertEquals(0, h.count("minigame_submit_score"), "언 판의 토큰이 나갔다")
+
+        h.app.sceneDidBecomeActive()
+        assertEquals(MiniGamePauseState.Paused, c.pauseState, "복귀가 판을 저절로 풀었다")
+        h.app.sceneDidEnterBackground()
+        h.clockShift += MiniGamePauseState.PAUSE_LIMIT_SECONDS.toDouble()
+        h.app.sceneDidBecomeActive()
+        assertFalse(c.isPlaying, "5분을 넘겼는데 안 끝났다")
+        assertNull(h.prefs.getString(draftKey), "진짜 인편이 섰는데 임시 항목이 남았다 — 다음 실행에 또 올라간다")
+        settleActive()
+        assertEquals(1, h.count("minigame_submit_score"))
+    }
+
+    /** ON_PAUSE 에서 돌아온 복귀(프로세스는 안 내려갔다 — `isSceneActive` 가드에 걸린다)도 상한을 잰다. */
+    @Test
+    fun comingBackWithoutLeavingTheForegroundStillChecksTheCap() = runTest {
+        val h = PhoneHarness(this) { r -> miniGameRoute(r) }
+        val c = runningTetris(h)
+        h.app.games.sceneWillResignActive()
+        assertEquals(MiniGamePauseState.Paused, c.pauseState)
+        h.clockShift += MiniGamePauseState.PAUSE_LIMIT_SECONDS.toDouble()
+        assertTrue(h.app.isSceneActive, "전제: 프로세스는 앞에 있다")
+        h.app.sceneDidBecomeActive()
+        assertFalse(c.isPlaying, "가드 뒤에 있으면 이 복귀가 상한을 못 잰다")
+    }
+
+    /** 로그아웃은 `abandon` 그대로 — 얼린 판의 임시 항목을 지우고 제출하지 않는다. */
+    @Test
+    fun signOutDropsTheFrozenRound() = runTest {
+        val h = PhoneHarness(this) { r -> miniGameRoute(r) }
+        val c = runningTetris(h)
+        val draftKey = GamesMiniGameHub.pauseDraftKey(PhoneHarness.ME.lowercase())
+        h.app.sceneDidEnterBackground()
+        assertNotNull(h.prefs.getString(draftKey))
+        h.app.session.signOut()
+        settleActive()
+        assertFalse(c.isPlaying)
+        assertNull(h.prefs.getString(draftKey), "같은 계정이 돌아오면 버린 판이 올라간다")
+        assertEquals(0, h.count("minigame_submit_score"), "남의 계정으로 넘어가는 자리에서 제출했다")
     }
 
     @Test

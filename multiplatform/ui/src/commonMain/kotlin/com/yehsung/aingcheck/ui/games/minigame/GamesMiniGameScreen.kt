@@ -1,16 +1,18 @@
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift @ 3bd04bd
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:325-430 @ 1a5eeca6 (순위 [오늘 | 역대] — 폰 경로)
-// 원본: Sources/check/MiniGamePanel.swift:466-604 @ 3bd04bd (정지 카드·카운트다운·5분 상한 — Android ON_PAUSE 몫, G §8-2. 전이 표는 core MiniGamePauseState)
+// 원본: Sources/check/MiniGamePanel.swift:466-604 @ 3bd04bd (정지 카드·카운트다운·5분 상한 — Windows 창 몫, G §8-2. 전이 표는 core MiniGamePauseState)
+// 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:57-64·86-115·216-231 @ de5c153b (폰 [일시정지] · 스크림 · 버튼 줄 잠금)
 //
 // 미니게임 화면(SPEC-ios §3.5): 머리 줄(최고 · 오늘 순위 · 안내) · 캔버스(논리 292×302 를 폭에 **등비 확대**) · (테트리스만) 버튼 줄 · 오늘 순위.
 //  · 캔버스 어디든 **누르는 순간** = 행동(손을 뗄 때 발화하면 점프 게임엔 그 지연이 곧 낙차다).
 //  · 프레임 상한은 화면 주사율을 core `MiniGameFrameRate` 에 넣은 값이다([MiniGameFrameLoop]).
 //  · 햅틱 네 채널: 판에 먹힌 탭(가볍게) · 하드드롭(단단하게) · 줄소거(묵직하게) · 게임오버·완주(한 번). 이동·소프트드롭 걸음에는 없다
 //    (L1 소프트드롭이 초당 56회, L5 는 213회 — 진동기가 낼 수 있는 속도가 아니다).
-//  · 앱이 background 로 가거나 화면을 떠나면 판은 끝 — 스토어·허브가 한다(`GamesMiniGameHub.appDidEnterBackground`·`closeScreen`).
-//    기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
+//  · 화면을 떠나면 판은 끝이다(`GamesMiniGameHub.closeScreen`). 타이밍 바·플래피는 버리고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
+//  · 폰(isPhone): 앱을 내리면 판은 **얼고**(`GamesMiniGameHub.appWillResignActive`·`appDidEnterBackground`) 돌아와도 저절로 안 풀린다 — 스크림 + 카드 + 3-2-1. 상태·시계는 허브에 있고
+//    화면은 `controller.pauseState` 만 읽는다.
 //  · 판이 도는 동안 토큰 감시(`GamesMiniGameHub.runRoundTokenKeeper` — 맥 MiniGamePanel.swift:1199)를 띄운다. 28분을 넘긴 길건너 판이 토큰 만료로 점수를 잃지 않게 한다.
-//  · Android 만의 몫(G §8-2): 앱이 산 채로 **초점을 잃으면**(멀티 창 ON_PAUSE) 판을 얼린다 — 전이는 맥과 한 벌(core MiniGamePauseState).
+//  · Windows 창(기본값)의 몫(G §8-2): 창이 **초점을 잃으면** 판을 얼린다 — 전이는 맥과 한 벌(core MiniGamePauseState), 상태는 이 화면의 것이다.
 //    얼린 동안 캔버스를 가린다(판을 들여다보며 다음 기둥을 외우는 것이 순위표 앞에서 이득이면 안 된다). 누적 5분이면 그 판을 끝낸다.
 package com.yehsung.aingcheck.ui.games.minigame
 
@@ -38,6 +40,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,6 +58,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -63,6 +67,7 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameCanvas
@@ -97,6 +102,7 @@ import com.yehsung.aingcheck.ui.games.minigame.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.games.minigame.kit.PersonName
 import com.yehsung.aingcheck.ui.games.minigame.kit.PillButton
 import com.yehsung.aingcheck.ui.games.minigame.kit.PillKind
+import com.yehsung.aingcheck.ui.games.minigame.kit.PillSize
 import com.yehsung.aingcheck.ui.games.minigame.kit.RankBadge
 import com.yehsung.aingcheck.ui.games.minigame.kit.SectionHeader
 import com.yehsung.aingcheck.ui.games.minigame.kit.SectionTrailing
@@ -115,18 +121,21 @@ object MiniGameScreenTags {
     const val HOLD: String = "minigame.tetris.hold"
     const val ROTATE: String = "minigame.tetris.rotate"
     const val HARD_DROP: String = "minigame.tetris.hardDrop"
+    const val PAUSE: String = "minigame.pause"
+    const val RESUME: String = "minigame.pause.resume"
+    const val QUIT: String = "minigame.pause.quit"
 }
 
 /**
  * 미니게임 화면 하나. 열림·닫힘은 허브가 쥔다([GamesStore.miniGames] `openScreen`·`closeScreen` — 이 화면이 나타나고 사라질 때 한 번씩).
  *
  * @param refreshHz 이 화면이 선 디스플레이의 주사율(Android 셸이 `Display.refreshRate` 를 읽어 넘긴다 — 바뀌면 루프가 새 간격으로 다시 선다).
- * @param windowFocused 앱이 산 채로 초점을 가졌는가(Android ON_PAUSE·ON_RESUME). 거짓이 되면 진행 중인 판을 얼린다(G §8-2).
+ * @param windowFocused Windows 창이 초점을 가졌는가. 거짓이 되면 진행 중인 판을 얼린다(G §8-2). 폰은 안 쓴다(Android 껍데기가 Activity 수명으로 허브를 바로 부른다).
  * @param myUserID 순위 '나' 행 고르기(폰 세션 — Swift `context.session.session?.userID.lowercased()`).
  * @param pauseToggleSerial 바깥 정지 토글(공용 패치 11 — 데스크톱 창의 ESC). 값이 **바뀔 때마다** 한 번 [MiniGamePauseState.toggled]
  *   (맥 ESC 와 같은 전이 — 판 중이면 정지, 정지면 3-2-1, 카운트다운이면 다시 정지). 기본 0 이고 안 바꾸면 아무 일도 없다.
  * @param onFrozenChanged 판이 얼었는가(정지 카드 · 3-2-1)가 바뀔 때. 껍데기가 얼어 있는 동안 조작 키를 막는 데 쓴다. 기본 {}.
- * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 창은 마우스·키보드 그대로): 길건너 쓸기·탭 조작과 폰 문구 · 순위 [오늘 | 역대] 전환.
+ * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 창은 마우스·키보드 그대로): 길건너 쓸기·탭 조작과 폰 문구 · 순위 [오늘 | 역대] 전환 · 머리의 [일시정지] 와 폰 정지 화면(그만두기·벽시계 상한).
  */
 @Composable
 fun GamesMiniGameScreen(
@@ -150,7 +159,22 @@ fun GamesMiniGameScreen(
     }
     val colors = AingTheme.colors
     Column(modifier.fillMaxSize().background(colors.background)) {
-        GamesHeaderBar(kind.title, onBack = onBack)
+        val headerController = hub.controller
+        // [일시정지]: 판이 도는 중과 3-2-1 동안 보인다(3-2-1 중에 누르면 취소하고 다시 멈춘다 — 맥과 같다).
+        // 카드가 떠 있으면 뺀다 — 거기는 카드의 [이어하기] 가 있고, 같은 뜻의 단추가 둘이면 어느 쪽인지 고민하게 된다.
+        val showsPause = isPhone && headerController != null && headerController.kind == kind && headerController.isPlaying && !headerController.pauseState.showsCard
+        GamesHeaderBar(
+            kind.title, onBack = onBack, trailingWidth = null,
+            trailing = if (showsPause) {
+                {
+                    // 제목은 가운데라 게임 넷의 이름과 안 닿는다. 큰 글자에서 닿지 않게 글자 배율만 자른다(iOS 툴바도 자른다).
+                    val density = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(density.density, minOf(density.fontScale, PAUSE_BUTTON_MAX_FONT_SCALE))) {
+                        PillButton(GamesMiniGameText.pauseTitle, Modifier.testTag(MiniGameScreenTags.PAUSE), kind = PillKind.Plain, size = PillSize.Sm, icon = AppIcon.PauseFill) { hub.togglePause() }
+                    }
+                }
+            } else null,
+        )
         BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = AingDimens.sideMargin)) {
             // 캔버스는 **폭이 정한다**(좌우 16 여백 안 폭 × 302/292). 아래 순위 스크롤과 높이를 나눠 갖게 두면 비율 맞춤이 캔버스를 좁혀
             // 양옆에 빈 띠가 생긴다(데모 스크린샷 실측).
@@ -159,13 +183,11 @@ fun GamesMiniGameScreen(
                 MiniGameHeader(store, kind)
                 val controller = hub.controller
                 if (controller != null && controller.kind == kind) {
-                    MiniGamePlaySurface(
-                        store, controller, refreshHz, art, windowFocused, reduceMotion,
-                        Modifier.width(width).aspectRatio((MiniGameCanvas.logicalWidth / MiniGameCanvas.logicalHeight).toFloat()),
-                        pauseToggleSerial, onFrozenChanged, isPhone,
-                    )
+                    val surface = Modifier.width(width).aspectRatio((MiniGameCanvas.logicalWidth / MiniGameCanvas.logicalHeight).toFloat())
+                    if (isPhone) MiniGamePhonePlaySurface(store, controller, refreshHz, art, reduceMotion, surface)
+                    else MiniGamePlaySurface(store, controller, refreshHz, art, windowFocused, reduceMotion, surface, pauseToggleSerial, onFrozenChanged, isPhone)
                     // 테트리스만 버튼 줄이 붙는다 — 끌기로 표현할 수 없는 셋(홀드 · 반시계 회전 · 즉시 내리기)이다.
-                    if (kind == MiniGameKind.tetris) TetrisControls(controller, width)
+                    if (kind == MiniGameKind.tetris) TetrisControls(controller, width, frozen = controller.isFrozen)
                 } else {
                     Box(
                         Modifier.width(width).aspectRatio((MiniGameCanvas.logicalWidth / MiniGameCanvas.logicalHeight).toFloat())
@@ -221,10 +243,34 @@ private fun MiniGameHeader(store: GamesStore, kind: MiniGameKind) {
 // MARK: 판(UI 루프) + 정지
 
 /**
- * 캔버스 + 정지(Android 초점 상실). 정지는 이 화면의 상태다(맥 `CheckMiniGameWindowView.PauseState` 와 같은 주인 — 게임은 얼었는가만 읽는다).
+ * 폰 판(캔버스 + 정지 화면). 정지의 주인은 허브다(앱을 내리면 화면이 안 그려져도 얼어야 한다) — 여기는 `controller.pauseState` 를 그리기만 한다.
+ * 토큰 감시는 정지 중에도 돈다(멈춰 둔 동안에도 서버 TTL 은 흐른다 — 앱이 background 면 허브가 쉬고 복귀가 챙긴다).
+ */
+@Composable
+private fun MiniGamePhonePlaySurface(
+    store: GamesStore,
+    controller: GamesPlayController,
+    refreshHz: Int,
+    art: MiniGameArt,
+    reduceMotion: Boolean,
+    modifier: Modifier,
+) {
+    val hub = store.miniGames
+    val playing = controller.isPlaying
+    LaunchedEffect(controller, playing) { if (playing) hub.runRoundTokenKeeper(controller) }
+    val frozen = controller.isFrozen
+    Box(modifier) {
+        GamesMiniGameCanvasHost(controller, hub.best(controller.kind), refreshHz, art, Modifier.fillMaxSize(), reduceMotion, frozen = frozen, isPhone = true)
+        // 캔버스 제스처 **밖**이다 — 스크림 위 탭이 판으로 새지 않는다(얼어 있으면 캔버스 제스처는 아예 안 받는다).
+        if (frozen) GamesMiniGamePauseOverlay(controller.kind, controller.pauseState, onResume = hub::togglePause, onQuit = hub::quitPausedRound)
+    }
+}
+
+/**
+ * Windows 창의 캔버스 + 정지(창 초점 상실 · ESC). 정지는 이 화면의 상태다(맥 `CheckMiniGameWindowView.PauseState` 와 같은 주인 — 게임은 얼었는가만 읽는다).
  * 전이는 core [MiniGamePauseState] 한 벌: 초점 상실 → `resigningKey`(언제나 얼린다 · 이미 정지면 그대로) · [이어하기] → `toggled`(3-2-1) ·
- * 1초마다 `steppedDown`. **누적** 정지가 [MiniGamePauseState.PAUSE_LIMIT_SECONDS] 를 넘으면 그 판을 끝낸다(허브 `appDidEnterBackground` 와 같은
- * 출구 — 테트리스는 확정 제출, 나머지는 기록 없이). 상한은 순위 공정성의 보루라 사용자 스위치가 아니다.
+ * 1초마다 `steppedDown`. **누적** 정지가 [MiniGamePauseState.PAUSE_LIMIT_SECONDS] 를 넘으면 그 판을 끝낸다(허브 `appDidEnterBackground` 의 기본 경로 —
+ * 테트리스는 확정 제출, 나머지는 기록 없이). 상한은 순위 공정성의 보루라 사용자 스위치가 아니다.
  */
 @Composable
 private fun MiniGamePlaySurface(
@@ -287,7 +333,10 @@ private fun MiniGamePlaySurface(
     }
 }
 
-/** 정지 가림막: 캔버스를 통째로 가린다(판을 들여다보는 이득이 없게) · 정지 카드([이어하기]) 또는 3-2-1. */
+/** 폰 머리 [일시정지] 글자 배율 상한. */
+private const val PAUSE_BUTTON_MAX_FONT_SCALE: Float = 1.3f
+
+/** Windows 창의 정지 가림막: 캔버스를 통째로 가린다(판을 들여다보는 이득이 없게) · 정지 카드([이어하기]) 또는 3-2-1. 폰은 [GamesMiniGamePauseOverlay]. */
 @Composable
 private fun MiniGamePauseOverlay(pause: MiniGamePauseState, onResume: () -> Unit) {
     Box(
@@ -342,7 +391,8 @@ fun GamesMiniGameCanvasHost(
             .border(1.dp, AingTheme.colors.separator, shape)
             .testTag(MiniGameScreenTags.CANVAS)
             .canvasGesture(controller, density, frozen, isPhone)
-            .canvasSemantics(controller, isPhone),
+            // 폰: 정지 중 TalkBack 도 판을 못 읽는다(점수·조작이 스크림 뒤에 남으면 가린 것이 아니다).
+            .then(if (isPhone && frozen) Modifier.clearAndSetSemantics { } else Modifier.canvasSemantics(controller, isPhone)),
     ) {
         // 한 칸 문턱은 **화면 셀 폭**이다(논리 13 × 배율) — 폭이 정해질 때마다 건넨다.
         val widthDp = maxWidth.value.toDouble()
@@ -479,8 +529,23 @@ private fun SerialHaptic(serial: Int, fire: () -> Unit) {
  * **확인 대화상자를 넣지 마라**(즉시 내리기에도): L15 부터 20G 라 조각이 스폰과 같은 틱에 접지하고 락딜레이가 0.16초다 — 확인창 한 번이 그 예산 전부다.
  */
 @Composable
-private fun TetrisControls(controller: GamesPlayController, width: Dp) {
+private fun TetrisControls(controller: GamesPlayController, width: Dp, frozen: Boolean) {
     val usable = (width - AingDimens.space2 - AingDimens.space4).coerceAtLeast(0.dp)
+    // 정지 중 버튼 줄은 죽어 있다(구동기가 입력을 막지만, 눌러도 조용한 버튼이 멀쩡해 보이면 안 된다). 누름은 위 막이 받는다 — 터치-다운 버튼이 눌린 색을 내지 않게.
+    Box(Modifier.width(width).then(if (frozen) Modifier.alpha(0.35f).clearAndSetSemantics { } else Modifier)) {
+        TetrisControlRow(controller, width, usable)
+        if (frozen) {
+            Box(
+                Modifier.matchParentSize().pointerInput(Unit) {
+                    awaitEachGesture { awaitFirstDown(requireUnconsumed = false).consume() }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun TetrisControlRow(controller: GamesPlayController, width: Dp, usable: Dp) {
     Row(Modifier.width(width)) {
         TetrisControlButton(
             GamesMiniGameText.tetrisHold, AppIcon.FilterNone, usable * 0.26f, isSpent = controller.tetris.holdUsed,

@@ -153,9 +153,31 @@ object GamesMiniGameText {
     /** 인편이 30분(서버 토큰 TTL) 안에 서버에 닿지 못해 버려졌다(맥 `MiniGameSubmitCopy.expired`). */
     const val submitExpired: String = "점수를 못 올렸어요 — 연결을 확인해 주세요"
 
+    // MARK: 일시정지(맥과 같은 문장 — `CheckMiniGameWindowView.pauseTitle` · `resumeAction` · `quitAction` · Swift GamesText.swift:153-173 @ de5c153b)
+
+    const val pauseTitle: String = "일시정지"
+    const val resumeAction: String = "이어하기"
+    const val quitAction: String = "그만두기"
+
+    /** 3-2-1 밑 한 줄(맥 정지 화면과 같은 문장). */
+    const val resumeCountdownCaption: String = "곧 다시 시작해요"
+
     /**
-     * 앱이 background 로 가서 판을 끝냈다(폰 전용). **게임마다 말이 다르다**: 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를
-     * **확정해 올린다**(`GamesPlayController.endRound()`). 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다.
+     * 폰 정지 카드 부제 — **게임마다 접는 결과가 다르다**(`GamesMiniGamePausePolicy`). 같은 문구를 쓰면 한쪽이 거짓말이 된다.
+     * 플래피만 맥과 다른 문장이다: 폰 플래피는 접으면 **버린다**(2026-11-01 사용자 답 "지금처럼 버림").
+     */
+    fun pauseSubtitle(kind: MiniGameKind): String = when (kind) {
+        MiniGameKind.timingBar, MiniGameKind.flappy -> "지금 그만두면 이번 판 점수는 기록되지 않아요"
+        MiniGameKind.tetris -> "지금 그만두면 지금까지 쌓은 점수가 기록돼요"
+        MiniGameKind.crossy -> "지금 그만두면 지금까지 간 줄 수가 점수로 기록돼요"
+    }
+
+    /** 5분 상한으로 판이 끝났다(테트리스·길건너). 그 점수가 토큰을 들고 인편에 올랐을 때만 세운다 — 토큰을 기다리거나 토큰이 죽은 판에 이 말을 쓰면 안 올라간 점수를 올렸다고 하는 거짓말이 된다. */
+    const val pauseCapEnded: String = "5분 넘게 멈춰서 여기까지 기록했어요"
+
+    /**
+     * Windows 창의 정지 상한이 판을 끝냈다(허브 기본 경로의 `appDidEnterBackground` — 안드로이드 폰은 내려가도 판이 안 끝나 이 문장을 쓰지 않는다). **게임마다 말이 다르다**:
+     * 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`). 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다.
      */
     fun endedInBackground(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "앱을 나가서 이번 판은 기록하지 않았어요"

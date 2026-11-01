@@ -1,18 +1,15 @@
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:76-83 @ 3bd04bd (onAppear: 주사율 읽기 · openScreen / onDisappear: closeScreen)
 //
 // 미니게임 화면의 Android 껍데기(§8-4 — 본문은 ui/games/minigame GamesMiniGameScreen). 셸이 Dest.MiniGame(game) 자리에 둔다(assembly.md).
-// 이 껍데기가 Android 에서만 아는 넷을 모아 넘긴다: ① 디스플레이 주사율 ② **초점**(Activity ON_PAUSE·ON_RESUME — 멀티 창에서 앱이 산 채로 초점을
-// 잃으면 판을 얼린다, G §8-2) ③ 시스템 '동작 줄이기'(애니메이터 배율 0) ④ 미니게임 그림.
+// 이 껍데기가 Android 에서만 아는 넷을 모아 넘긴다: ① 디스플레이 주사율 ② **장면 수명**(Activity ON_PAUSE·ON_RESUME — iOS .inactive·.active 축. 판을 그 자리에서 얼리고 돌아오면
+// 상한을 잰다, iOS MobileRootView.swift:73-75 @ de5c153b) ③ 시스템 '동작 줄이기'(애니메이터 배율 0) ④ 미니게임 그림.
 package com.yehsung.aingcheck.android.screens.games.minigame
 
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.Lifecycle
@@ -35,6 +32,7 @@ fun MiniGameRoute(store: GamesStore, game: String, myUserID: String?, onBack: ()
         LaunchedEffect(game) { onBack() }
         return
     }
+    MiniGameSceneLifecycle(store)
     GamesMiniGameScreen(
         store = store,
         kind = kind,
@@ -43,29 +41,29 @@ fun MiniGameRoute(store: GamesStore, game: String, myUserID: String?, onBack: ()
         myUserID = myUserID,
         modifier = modifier,
         onBack = onBack,
-        windowFocused = rememberWindowFocused(),
         reduceMotion = rememberReduceMotion(),
         isPhone = true,
     )
 }
 
-/** Activity 가 ON_RESUME 상태인가(멀티 창에서 다른 앱이 초점을 가져가면 ON_PAUSE). iOS .inactive 와 같은 축 — 판을 끝내지 않고 얼리기만 한다. */
+/**
+ * ON_PAUSE(iOS .inactive — 앱 전환 · 잠금 · 다중 창) → 판을 **그 자리에서** 얼리고 임시 항목을 적는다 · ON_RESUME → 상한을 재고 토큰을 챙긴다(풀지는 않는다).
+ * 관찰자가 스토어를 바로 부른다 — 값으로 넘겨 다음 합성을 기다리면 멈춘 Activity 에는 그 프레임이 안 오고, 프로세스 ON_STOP 은 700ms 늦어 그 사이 앱을 쓸어 올려 죽이면 점수가 사라진다.
+ */
 @Composable
-fun rememberWindowFocused(): Boolean {
+private fun MiniGameSceneLifecycle(store: GamesStore) {
     val owner = LocalLifecycleOwner.current
-    var focused by remember(owner) { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
-    DisposableEffect(owner) {
+    DisposableEffect(owner, store) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_RESUME -> focused = true
-                Lifecycle.Event.ON_PAUSE -> focused = false
+                Lifecycle.Event.ON_PAUSE -> store.sceneWillResignActive()
+                Lifecycle.Event.ON_RESUME -> store.sceneDidComeForward()
                 else -> Unit
             }
         }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    return focused
 }
 
 /** 시스템 '동작 줄이기'(애니메이터 배율 0 = 애니메이션 끔). 흔들림·튀어 오름 같은 장식만 끈다 — 규칙·속도는 그대로다. */

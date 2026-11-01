@@ -9,6 +9,7 @@ package com.yehsung.aingcheck.ui.games.minigame
 
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.minigame.FlappyGame
@@ -23,6 +24,7 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.games.TetrisActionResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisLobbyResponse
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
+import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
 import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.testkit.fixtures.RepoFiles
 import com.yehsung.aingcheck.ui.components.DesktopSnapshots
@@ -34,6 +36,7 @@ import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubScreen
 import com.yehsung.aingcheck.ui.games.tetris.GamesTetrisDuelMatchView
 import com.yehsung.aingcheck.ui.games.tetris.GamesTetrisDuelScreen
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import java.io.File
@@ -141,6 +144,32 @@ class GamesSnapshotDesktopTest {
         }
     }
 
+    /** 폰 일시정지 장면용 스토어 — 판을 켜서 허브로 얼린다(3-2-1 은 첫 숫자에 세운다 — 시계도 코루틴도 안 돈다). 화면이 사라지면 판이 끝나므로 그릴 때마다 새로 만든다. */
+    private fun phonePauseStore(kind: MiniGameKind, freeze: (GamesMiniGameHub) -> Unit): GamesStore {
+        val scope = TestScope()
+        val h = UiGamesHarness(scope, AppConfig()) { r -> UiFixtures.miniGameRoute(r) { 1 } }
+        runBlocking { h.signIn() }
+        val store = GamesStore(h.context)
+        store.miniGames.phonePauseRules = true
+        store.miniGames.pauseSleep = { awaitCancellation() }
+        store.miniGames.openScreen(kind)
+        scope.testScheduler.advanceUntilIdle()
+        requireNotNull(store.miniGames.controller).tap()
+        freeze(store.miniGames)
+        scope.testScheduler.runCurrent()
+        return store
+    }
+
+    private fun phonePauseScene(kind: MiniGameKind, dark: Boolean, isPhone: Boolean = true, freeze: (GamesMiniGameHub) -> Unit): @Composable () -> Unit = {
+        val store = remember { phonePauseStore(kind, freeze) }
+        AingTheme(dark = dark) {
+            GamesMiniGameScreen(store, kind, 60, art, null, Modifier.size(PHONE_W.dp, PHONE_H.dp), reduceMotion = true, isPhone = isPhone)
+        }
+    }
+
+    private val pausedCard: (GamesMiniGameHub) -> Unit = { it.togglePause() }
+    private val countdown: (GamesMiniGameHub) -> Unit = { it.togglePause(); it.togglePause() }
+
     private fun canvas(dark: Boolean, heightDp: Int, body: @Composable (Modifier) -> Unit): @Composable () -> Unit =
         { AingTheme(dark = dark) { body(Modifier.size(PHONE_W.dp, heightDp.dp)) } }
 
@@ -149,6 +178,24 @@ class GamesSnapshotDesktopTest {
 
     @Test fun allTimeLight() = check("games/minigame", "flappy-alltime-light", PHONE_H, allTimeScene(false), allTimeScene(false, topBumped = true))
     @Test fun allTimeDark() = check("games/minigame", "flappy-alltime-dark", PHONE_H, allTimeScene(true), allTimeScene(true, topBumped = true))
+
+    // 폰 일시정지(iOS de5c153b): 카드(라이트에서도 어두운 판 · [그만두기] 가 읽힌다) · 버튼 줄 흐림 · 3-2-1 · 판이 돌 때 머리의 [일시정지].
+    @Test fun phonePausedFlappyLight() = check(
+        "games/minigame", "phone-paused-flappy-light", PHONE_H,
+        phonePauseScene(MiniGameKind.flappy, dark = false, freeze = pausedCard), phonePauseScene(MiniGameKind.timingBar, dark = false, freeze = pausedCard),
+    )
+    @Test fun phonePausedTetrisDark() = check(
+        "games/minigame", "phone-paused-tetris-dark", PHONE_H,
+        phonePauseScene(MiniGameKind.tetris, dark = true, freeze = pausedCard), phonePauseScene(MiniGameKind.tetris, dark = true, freeze = countdown),
+    )
+    @Test fun phoneCountdownCrossyDark() = check(
+        "games/minigame", "phone-countdown-crossy-dark", PHONE_H,
+        phonePauseScene(MiniGameKind.crossy, dark = true, freeze = countdown), phonePauseScene(MiniGameKind.crossy, dark = true, freeze = pausedCard),
+    )
+    @Test fun phonePlayingTimingLight() = check(
+        "games/minigame", "phone-playing-timing-light", PHONE_H,
+        phonePauseScene(MiniGameKind.timingBar, dark = false) { }, phonePauseScene(MiniGameKind.timingBar, dark = false, isPhone = false) { },
+    )
 
     @Test fun timingBarCanvas() = check(
         "games/minigame", "timing-bar-light", CANVAS_H,

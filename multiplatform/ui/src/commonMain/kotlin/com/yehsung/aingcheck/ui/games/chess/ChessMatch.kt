@@ -127,7 +127,7 @@ private fun ChessMatchBoard(chess: ChessStore, match: ChessMatchState, chrome: C
     val position: ChessPosition = match.position ?: return
     @Suppress("UNUSED_VARIABLE") val version = state.flightVersion
     if (!chess.isWindowVisible || chess.isWindowOccluded) state.matchFlight.clear()
-    val flight = state.matchFlight.observe(match.id, match.plyCount, position, match.lastMove, chess.isWindowVisible, chess.isWindowOccluded, chess.clock())
+    val flight = state.matchFlight.observe(match.id, match.plyCount, position, match.lastMove, chess.isWindowVisible, chess.isWindowOccluded, chess.clock(), landed = state.isDroppedMove(match.id, match.plyCount, match.lastMove))
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
         ChessBoard(
             position = position, flight = flight, whiteAtBottom = chrome.whiteAtBottom,
@@ -138,9 +138,30 @@ private fun ChessMatchBoard(chess: ChessStore, match: ChessMatchState, chrome: C
             onFlightFinished = { generation -> state.matchFlight.expire(generation); state.flightVersion += 1 },
             accessibility = ChessPhoneText.boardAccessibility(match.plyCount, match.turn, match.isInCheck),
             testTag = ChessScreenTags.board,
+            drag = if (state.boardDragEnabled) chessBoardDragPort(chess, match, state) else null,
         )
     }
 }
+
+/** 끌기의 전제(Swift `ChessPlayBoard.DragPremise`). 하나라도 바뀌면 끌던 말을 거둔다 — 상대 기권·시간패(내 차례) · 판 교체 · 수가 나아감 · 왕복 시작 · 창 닫힘. */
+private data class ChessDragPremise(val matchID: String, val ply: Int, val isMyTurn: Boolean, val isBusy: Boolean, val isWindowVisible: Boolean)
+
+/** 판의 끌기 문을 스토어에 잇는다(대국 · 로봇 판 공용). 판단은 스토어에 있고 여기는 옮기기만 한다. */
+internal fun chessBoardDragPort(chess: ChessStore, match: ChessMatchState, state: ChessScreenState): ChessBoardDragPort = ChessBoardDragPort(
+    grab = chess::grab,
+    isSelectionTarget = { square -> chess.selection?.targets?.contains(square) == true },
+    begin = chess::beginDrag,
+    drop = { from, on ->
+        // 동기 구간을 **이 자리에서** 끝낸다 — 놓은 말이 같은 틱에 도착 칸에 서야 번쩍임이 없다. 서버 왕복만 뒤로 넘긴다.
+        val move = chess.placeDrop(from, on)
+        chess.pendingDrop?.let { state.droppedMove = it }
+        if (move != null) chess.scope.launch { chess.finishDrop(move) }
+    },
+    cancel = chess::cancelDrag,
+    origin = chess.dragOrigin,
+    pending = chess.pendingDrop?.takeIf { it.matchID == match.id },
+    premise = ChessDragPremise(match.id, match.plyCount, match.isMyTurn, chess.isBusy, chess.isWindowVisible),
+)
 
 @Composable
 private fun FootLine(line: ChessMatchLine, bold: Boolean = false) {

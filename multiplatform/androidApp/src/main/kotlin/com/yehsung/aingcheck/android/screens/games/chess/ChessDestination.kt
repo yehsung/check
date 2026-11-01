@@ -75,5 +75,5 @@ fun ChessDestination(
         if (action is ChessEntry.Action.Watch) chess.startWatching(action.matchID)
     }
     BackHandler(enabled = ChessBackPlan.step(state, chess) != BoardBackStep.Leave) { state.handleBack(chess) }
-    ChessScreen(games, chess, me, onLeave, modifier, roster = roster, state = state, onTabBarHidden = onTabBarHidden)
+    ChessScreen(games, chess, me, onLeave, modifier, roster = roster, state = state, onTabBarHidden = onTabBarHidden, boardDragEnabled = true)
 }

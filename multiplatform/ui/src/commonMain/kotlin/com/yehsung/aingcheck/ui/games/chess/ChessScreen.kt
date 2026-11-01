@@ -53,8 +53,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.chess.ChessMove
 import com.yehsung.aingcheck.core.stores.chess.ChessInvite
 import com.yehsung.aingcheck.core.stores.chess.ChessMatchOutcome
+import com.yehsung.aingcheck.core.stores.chess.ChessPendingDrop
 import com.yehsung.aingcheck.core.stores.chess.ChessPhase
 import com.yehsung.aingcheck.core.stores.chess.ChessPhoneText
 import com.yehsung.aingcheck.core.stores.chess.ChessStore
@@ -141,6 +143,18 @@ class ChessScreenState {
     val watchFlight: ChessFlightTracker = ChessFlightTracker()
     /** 애니메이션 다시 그리기 펌프(주인은 상태가 아니다 — 거둘 때 이 칸을 올린다). */
     var flightVersion: Int by mutableStateOf(0)
+
+    /** 판에서 말을 끌어 둘 수 있는가(탭은 언제나 된다). 부르는 쪽([ChessScreen] 의 인자)이 켠다 — Windows 는 끈 채다. */
+    var boardDragEnabled: Boolean = false
+
+    /** 마지막으로 끌어 놓은 수. 그 수가 판에 닿으면 말은 이미 도착 칸에 있으므로 미끄러지지 않는다(Swift `takePendingDrop` 의 화면 몫 — 애니메이션 주인이 화면에 있어서 여기서 잰다). */
+    var droppedMove: ChessPendingDrop? = null
+
+    /** 방금 나아간 수가 **끌어 놓은 그 수**인가 — 같은 판 · 놓을 때의 수 번호에서 정확히 한 수 · 출발 칸 · 도착 칸. 하나라도 다르면 평소대로 미끄러진다(내가 놓은 직후 온 상대 수가 안 미끄러지면 안 된다). */
+    fun isDroppedMove(matchID: String?, ply: Int, move: ChessMove?): Boolean {
+        val dropped = droppedMove ?: return false
+        return dropped.matchID == matchID && dropped.ply + 1 == ply && move?.from == dropped.from && move.to == dropped.to
+    }
 
     /**
      * 두 판의 날던 수를 거둔다(INV-ChessStore-635cb077 · 221d2393 — 창 숨김 · 가림 순간).
@@ -231,7 +245,10 @@ fun ChessScreen(
     roster: GamesLobbyRoster<ChessUser> = remember(chess) { ChessLobbyRoster(chess) },
     state: ChessScreenState = rememberChessScreenState(),
     onTabBarHidden: (Boolean) -> Unit = {},
+    /** 판에서 말을 끌어 두기(안드로이드 조립이 켠다). 기본은 탭만이다. */
+    boardDragEnabled: Boolean = false,
 ) {
+    state.boardDragEnabled = boardDragEnabled
     val colors = AingTheme.colors
     DisposableEffect(games) {
         // 같은 목적지가 겹쳐 쌓여도 마지막 하나가 내려갈 때만 창을 내린다(오목과 같은 셈 — BoardScreenPresence).

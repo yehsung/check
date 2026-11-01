@@ -294,7 +294,7 @@ private fun RobotMatch(chess: ChessStore, chrome: ChessRobotChrome, state: Chess
             chrome.board?.let { board ->
                 val match = chess.match
                 @Suppress("UNUSED_VARIABLE") val version = state.flightVersion
-                val flight = if (match != null) state.matchFlight.observe(match.id, match.plyCount, match.position, match.lastMove, chess.isWindowVisible, chess.isWindowOccluded, chess.clock()) else null
+                val flight = if (match != null) state.matchFlight.observe(match.id, match.plyCount, match.position, match.lastMove, chess.isWindowVisible, chess.isWindowOccluded, chess.clock(), landed = state.isDroppedMove(match.id, match.plyCount, match.lastMove)) else null
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     ChessBoard(
                         position = board.position, flight = flight, whiteAtBottom = board.whiteAtBottom, selection = board.selection, legalTargets = board.legalTargets,
@@ -303,6 +303,7 @@ private fun RobotMatch(chess: ChessStore, chrome: ChessRobotChrome, state: Chess
                         onFlightFinished = { generation -> state.matchFlight.expire(generation); state.flightVersion += 1 },
                         accessibility = ChessPhoneText.boardAccessibility(chrome.plyCount, chrome.turn, chrome.isInCheck),
                         testTag = "chess-robot-board",
+                        drag = if (state.boardDragEnabled && match != null) chessBoardDragPort(chess, match, state) else null,
                     )
                 }
             }

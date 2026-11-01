@@ -82,11 +82,13 @@ package enum GamesChessDragGate {
 
 /// 터치 한 번(누름 → 움직임 → 뗌)의 상태 기계. 순수 값 — 코어 `ChessBoardPointer` 를 품고 그 앞에 스크롤 문을 세운다.
 ///
-/// 맥과 갈리는 곳 둘:
+/// 맥과 갈리는 곳 셋:
 ///  · **문턱을 넘어도 집지 않는 손이 있다.** 맥의 마우스에는 스크롤이 없어 해석기가 곧바로 끌기로 간다.
 ///  · **슬롭(`tapSlop`) 안에서 뗀 손은 칸 경계를 넘었어도 누른 칸의 탭이다.** 맥은 문턱 이상 움직여 다른 칸에서 떼면
 ///    버리는데, 손가락은 4pt 를 예사로 흔들리므로 그대로 옮기면 칸 가장자리 도착 탭이 문구도 없이 사라진다.
 ///    슬롭을 넘은 손은 이미 스크롤에 넘어갔다.
+///  · ★ **집힌 손도 슬롭을 한 번도 안 넘었으면 탭이다.** 해석기대로 놓기로 옮기면 폰 칸 위쪽 끝을 누른 손이 5pt
+///    떨려 옆 칸에서 뗄 때 그 칸으로 **수가 나간다**(루비가 걸린 판이고 무르기가 없다). 맥의 마우스에는 없던 사고다.
 package struct GamesChessBoardTouch: Equatable, Sendable {
     package enum Stage: Equatable, Sendable {
         case idle
@@ -110,6 +112,8 @@ package struct GamesChessBoardTouch: Equatable, Sendable {
     private var grab: ChessBoardPointer.Grab = .none
     private var targets: [CGSize] = []
     private var leftSlop = false
+    /// 누를 때 이미 고른 말이었는가. 떨린 재탭이 고르기를 풀 수 있게 기억한다(집는 순간 그 말은 어차피 고른 말이다).
+    private var wasSelected = false
 
     package init() {}
 
@@ -117,9 +121,12 @@ package struct GamesChessBoardTouch: Equatable, Sendable {
     package var draggingFrom: ChessSquare? { stage == .dragging ? pointer.draggingFrom : nil }
     /// 이 손을 스크롤에 넘겨야 하는가. 참이 된 뒤로 이 손은 탭도 끌기도 아니다.
     package var handsOffToScroll: Bool { stage == .yielded && leftSlop }
+    /// 끄는 손이 슬롭을 넘었는가 — 이 뒤로는 탭으로 돌아가지 않는다. 말은 이때부터 손 위로 뜬다.
+    package var isCommittedDrag: Bool { stage == .dragging && leftSlop }
 
     package mutating func press(at point: CGPoint, square: ChessSquare?, grab: ChessBoardPointer.Grab,
-                                isSelectionTarget: Bool, targets: [CGSize]) -> [ChessBoardPointer.Action] {
+                                isSelectionTarget: Bool, isSelected: Bool = false,
+                                targets: [CGSize]) -> [ChessBoardPointer.Action] {
         let abandoned = pointer.press(at: point, square: square, grab: grab, isSelectionTarget: isSelectionTarget)
         origin = point
         pressedSquare = square
@@ -127,6 +134,7 @@ package struct GamesChessBoardTouch: Equatable, Sendable {
         self.grab = isSelectionTarget ? .none : grab
         self.targets = targets
         leftSlop = false
+        wasSelected = isSelected
         stage = square == nil ? .yielded : .undecided
         return abandoned
     }
@@ -137,6 +145,7 @@ package struct GamesChessBoardTouch: Equatable, Sendable {
             guard crossedThreshold(point) else { return [] }
             return decide(at: point)
         case .dragging:
+            noteSlop(point)
             return pointer.move(to: point)
         case .yielded:
             noteSlop(point)
@@ -149,22 +158,23 @@ package struct GamesChessBoardTouch: Equatable, Sendable {
     /// 뗐다. `square` 는 **손가락 밑** 칸이고 판 밖이면 nil 이다.
     package mutating func release(at point: CGPoint, square: ChessSquare?) -> [ChessBoardPointer.Action] {
         defer { self = GamesChessBoardTouch() }
-        // 움직임 없이 뗌만 멀리서 온 손(빠르게 튕긴 손)도 문을 지난다 — 판결은 **뗀 자리**로도 잰다.
-        if stage == .undecided, crossedThreshold(point) {
+        noteSlop(point)
+        let pressedTap: [ChessBoardPointer.Action] = pressedSquare.map { [.tap($0)] } ?? []
+        switch stage {
+        case .undecided:
+            guard leftSlop else { return pressedTap }
+            // 움직임 없이 뗌만 멀리서 온 손(빠르게 튕긴 손)도 문을 지난다 — 판결은 **뗀 자리**로도 잰다.
             if GamesChessDragGate.verdict(grab: grab, motion: motion(to: point), targets: targets) == .pickUp {
                 return pointer.release(at: point, square: square)
             }
-            stage = .yielded
-        }
-        switch stage {
-        case .undecided:
-            return pressedSquare.map { [.tap($0)] } ?? []
+            return []
         case .dragging:
-            return pointer.release(at: point, square: square)
+            if leftSlop { return pointer.release(at: point, square: square) }
+            // 집혔지만 슬롭을 한 번도 안 넘었다 — 놓기가 아니라 떨린 탭이다(위 ★). 뗀 칸은 보지 않는다.
+            // 처음 누른 말이면 집을 때 이미 골랐으니 탭을 또 내지 않는다(내면 도로 해제된다).
+            return [.cancel] + (wasSelected ? pressedTap : [])
         case .yielded:
-            noteSlop(point)
-            guard !leftSlop, let pressedSquare else { return [] }
-            return [.tap(pressedSquare)]
+            return leftSlop ? [] : pressedTap
         case .idle, .spent:
             return []
         }
@@ -199,6 +209,7 @@ package struct GamesChessBoardTouch: Equatable, Sendable {
     private mutating func decide(at point: CGPoint) -> [ChessBoardPointer.Action] {
         if GamesChessDragGate.verdict(grab: grab, motion: motion(to: point), targets: targets) == .pickUp {
             stage = .dragging
+            noteSlop(point)
             return pointer.move(to: point)
         }
         _ = pointer.cancel()
@@ -349,6 +360,9 @@ package final class GamesChessBoardDragController {
     }
 
     package private(set) var draggingFrom: ChessSquare?
+    /// 손 위로 뜬 말의 출발 칸. 슬롭을 넘은 끌기만 뜬다 — 떨린 탭(4~10pt)마다 말이 60pt 튀어 오르면 안 된다.
+    /// 판이 그리는 것은 이 값이고, 그 전까지 말은 제자리에 있다(고르기와 도착 점은 이미 떠 있다).
+    package private(set) var floatingFrom: ChessSquare?
     /// 손가락 자리(판 좌표). 끄는 중이 아니면 nil.
     package private(set) var handPoint: CGPoint?
     /// 손가락 밑 칸. 칸을 넘을 때만 바뀌므로 판은 이 값을 읽어도 칸마다 한 번만 다시 그린다.
@@ -372,7 +386,9 @@ package final class GamesChessBoardDragController {
                                                        geometry: port.geometry)
         }
         let isTarget = square.map { store?.selection?.targets.contains($0) == true } ?? false
-        perform(touch.press(at: point, square: square, grab: grab, isSelectionTarget: isTarget, targets: vectors),
+        let isSelected = square != nil && store?.selection?.from == square
+        perform(touch.press(at: point, square: square, grab: grab, isSelectionTarget: isTarget,
+                            isSelected: isSelected, targets: vectors),
                 port: port)
     }
 
@@ -426,6 +442,7 @@ package final class GamesChessBoardDragController {
                 if handPoint != point { handPoint = point }
                 let square = port.geometry.square(at: point)
                 if handSquare != square { handSquare = square }
+                if floatingFrom == nil, touch.isCommittedDrag { floatingFrom = draggingFrom }
             case .drop(let from, let target):
                 clearHand()
                 // ★ 동기 구간을 **이 자리에서** 끝낸다 — 놓은 말이 같은 틱에 도착 칸에 서야 번쩍임이 없다.
@@ -442,6 +459,7 @@ package final class GamesChessBoardDragController {
 
     private func clearHand() {
         if draggingFrom != nil { draggingFrom = nil }
+        if floatingFrom != nil { floatingFrom = nil }
         if handPoint != nil { handPoint = nil }
         if handSquare != nil { handSquare = nil }
     }

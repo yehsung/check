@@ -178,6 +178,9 @@ package struct GamesChessBoardCanvas: View {
             if square == flight?.landed { continue }
             // 손에 든 말의 출발 칸은 비운다(선택 덮개는 남는다 — 어디서 집었는지 보인다).
             if square == lifted?.from { continue }
+            // 놓은 말 밑의 말도 비운다 — 잡는 수로 놓으면 답을 기다리는 동안·승격을 고르는 동안 두 말이 겹쳐 보인다.
+            // 거절되면 꼬리표가 지워지며 그 말은 스스로 돌아온다.
+            if case .square(let placed)? = lifted?.place, placed == square { continue }
             draw(piece, in: g.rect(of: square), cell: g.cell, into: &context)
         }
 
@@ -297,18 +300,21 @@ package struct GamesChessBoard: View {
     private var isInteractive: Bool { onTapSquare != nil }
 
     package var body: some View {
+        // ★ 끌기 값은 **body 바로 밑에서** 읽는다. `GeometryReader`·`TimelineView` 클로저 안에서의 읽기가 관찰되는지는
+        //   SwiftUI 구현에 달렸고, 손가락 밑 칸만 바뀌는 순간은 데모 캡처로 구별되지 않는다(장면은 값이 한 틱에 함께 바뀐다).
+        let lift = dragStore == nil ? nil : GamesChessBoardLift.resolve(
+            pending: dragStore?.pendingDrop, draggingFrom: drag.floatingFrom,
+            latch: dragStore?.dragOrigin, position: position)
+        let handSquare = dragStore == nil ? nil : drag.handSquare
         GeometryReader { proxy in
             let geometry = ChessPhoneBoardGeometry(side: GamesChessBoardMetrics.side(fitting: proxy.size),
                                                    orientation: whiteAtBottom ? .white : .black)
-            let lift = dragStore == nil ? nil : GamesChessBoardLift.resolve(
-                pending: dragStore?.pendingDrop, draggingFrom: drag.draggingFrom,
-                latch: dragStore?.dragOrigin, position: position)
             // ★ `paused: flight == nil` 이 **배터리 계약**이다(`GamesChessFlightLoop.isPaused`) —
             //   애니메이션이 없으면 한 틱도 돌지 않는다. 판은 대국 화면에 늘 떠 있어서, 이게 false 로 굳으면
             //   아무도 수를 안 두는 동안에도 120Hz 로 64칸 + 32말을 다시 그린다.
             TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(forRefreshRate: refreshHz),
                                     paused: GamesChessFlightLoop.isPaused(flight: flight))) { context in
-                board(geometry, frame: flight?.frame(now: context.date), lift: lift)
+                board(geometry, frame: flight?.frame(now: context.date), lift: lift, handSquare: handSquare)
             }
             // ★ 입력은 TimelineView **밖**이다(맥 `ChessPlayBoard` 와 같은 까닭) — 안에 두면 말이 미끄러지는 틱마다
             //   입력 층이 다시 만들어져 끌던 손을 떨군다.
@@ -322,7 +328,12 @@ package struct GamesChessBoard: View {
             .frame(width: proxy.size.width, height: proxy.size.height)
             #if DEBUG
             .task(id: dragPreview) {
-                guard let dragPreview, dragStore != nil else { return }
+                guard let dragPreview, let dragStore else { return }
+                // 창이 서기 전에 집으면 곧이어 오는 `windowDidShow` 가 전제(`isWindowVisible`)를 바꿔 장면을 거둔다.
+                // 그 거두기는 맞다 — 손가락은 창이 선 뒤에야 판에 닿으므로 장면도 같은 순서로 집는다.
+                while !dragStore.isWindowVisible, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
                 dragPreview.play(on: drag, port: dragPort(geometry))
             }
             #endif
@@ -360,7 +371,7 @@ package struct GamesChessBoard: View {
     }
 
     private func board(_ geometry: ChessPhoneBoardGeometry, frame: ChessFlightFrame?,
-                       lift: GamesChessBoardLift?) -> some View {
+                       lift: GamesChessBoardLift?, handSquare: ChessSquare?) -> some View {
         GamesChessBoardCanvas(
             position: position,
             geometry: geometry,
@@ -374,7 +385,7 @@ package struct GamesChessBoard: View {
             checkSquare: checkSquare,
             flight: frame,
             lifted: lift,
-            dropTarget: GamesChessBoardLift.dropTarget(lift: lift, handSquare: drag.handSquare,
+            dropTarget: GamesChessBoardLift.dropTarget(lift: lift, handSquare: handSquare,
                                                        targets: legalTargets)
         )
         .accessibilityElement(children: .ignore)

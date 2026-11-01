@@ -261,6 +261,122 @@ struct GamesChessDragTests {
         #expect(rig.taps == [sq("e4")])
     }
 
+    // MARK: ③-2 집힌 뒤의 손떨림
+
+    @Test("★ 잘못된 수 금지 — 폰 칸 위쪽 끝을 누른 손이 5pt 떨려 옆 칸에서 떼도 수가 안 나간다(탭이다)")
+    func aWobbleAcrossTheBorderSendsNoMove() {
+        let rig = Rig(store(matchState(legalMoves: openingMoves)))
+        let box = rig.geometry.rect(of: sq("e2"))
+        let start = CGPoint(x: box.midX, y: box.minY + 1)
+        let end = CGPoint(x: start.x, y: start.y - 5)
+        #expect(rig.geometry.square(at: end) == sq("e3"), "전제: 뗀 곳은 갈 수 있는 옆 칸이다")
+        rig.controller.press(at: start, port: rig.port)
+        rig.controller.move(to: end, port: rig.port)
+        #expect(rig.controller.draggingFrom == sq("e2"), "전제: 문턱을 넘어 집혔다")
+        rig.controller.release(at: end, port: rig.port)
+        #expect(rig.store.pendingDrop == nil, "탭하다 흔들린 손이 수를 보냈다")
+        #expect(rig.store.dragOrigin == nil, "걸쇠가 남았다")
+        #expect(rig.controller.draggingFrom == nil && rig.controller.handPoint == nil)
+        #expect(rig.store.selection?.from == sq("e2"), "첫 탭이면 말이 골라져 있어야 한다")
+        #expect(rig.taps.isEmpty, "고르기는 집을 때 이미 끝났다 — 탭을 또 내면 도로 해제된다")
+    }
+
+    @Test("손떨림으로 못 가는 옆 칸에서 떼도 거절 문구가 안 뜬다 — 탭이지 놓기가 아니다")
+    func aWobbleOntoAnIllegalSquareIsNotRefused() {
+        let rig = Rig(store(matchState(legalMoves: openingMoves)))
+        let box = rig.geometry.rect(of: sq("e2"))
+        let start = CGPoint(x: box.maxX - 1, y: box.midY)
+        let end = CGPoint(x: start.x + 5, y: start.y)
+        #expect(rig.geometry.square(at: end) == sq("f2"), "전제: 뗀 곳은 옆 칸이다")
+        rig.controller.press(at: start, port: rig.port)
+        rig.controller.move(to: end, port: rig.port)
+        rig.controller.release(at: end, port: rig.port)
+        #expect(rig.store.notice == nil, "탭하다 흔들린 손이 거절 문구를 받았다")
+        #expect(rig.store.pendingDrop == nil)
+    }
+
+    @Test("★ 탭 2단 — 고른 말을 다시 누른 손이 5pt 떨려도 해제된다")
+    func aWobblyRetapStillDeselects() async {
+        let chess = ChessStore()
+        chess.startAIMatch(humanColor: .white)
+        let controller = GamesChessBoardDragController()
+        let port = GamesChessBoardDragController.Port(
+            store: chess, geometry: board(), onTap: { square in Task { await chess.tap(square) } })
+        let start = board().center(of: sq("e2"))
+        let end = CGPoint(x: start.x + 1, y: start.y - 5)
+        controller.press(at: start, port: port)
+        controller.release(at: start, port: port)
+        #expect(await baseWaitUntil { chess.selection?.from == sq("e2") }, "전제: 첫 탭이 말을 골랐다")
+        controller.press(at: start, port: port)
+        controller.move(to: end, port: port)
+        controller.release(at: end, port: port)
+        #expect(await baseWaitUntil { chess.selection == nil }, "떨린 재탭이 고르기를 못 풀었다")
+        #expect(chess.dragOrigin == nil)
+        #expect(chess.match?.plyCount == 0, "재탭이 수를 뒀다")
+        chess.reset()
+    }
+
+    @Test("★ 멀리 갔다 돌아온 끌기는 탭이 아니다 — 출발 칸에 놓으면 고르기가 남는다")
+    func aRealDragBackHomeKeepsTheSelection() {
+        let rig = Rig(store(matchState(legalMoves: openingMoves)))
+        rig.press("e2")
+        rig.release("e2")
+        rig.store.selection = ChessSelection(from: sq("e2"), targets: [sq("e3"), sq("e4")])
+        rig.pickUp("e2", over: "e4")
+        rig.move("e2")
+        rig.release("e2")
+        #expect(rig.taps == [sq("e2")], "끌어 돌아온 손이 탭까지 냈다 — 고르기가 풀린다")
+        #expect(rig.store.selection?.from == sq("e2"))
+    }
+
+    @Test("★ 말은 슬롭을 넘어야 뜬다 — 떨린 탭에 튀어 오르지 않고, 진짜 끌기는 슬롭부터 놓칠 때까지 떠 있다")
+    func thePieceFloatsOnlyPastTheSlop() {
+        let rig = Rig(store(matchState(legalMoves: openingMoves)))
+        let start = rig.center("e2")
+        rig.press("e2")
+        rig.move(CGPoint(x: start.x, y: start.y - 5))
+        #expect(rig.controller.draggingFrom == sq("e2"), "전제: 문턱을 넘어 집혔다")
+        #expect(rig.store.selection?.from == sq("e2"), "전제: 도착 점은 이미 떠 있다")
+        #expect(rig.controller.floatingFrom == nil, "떨린 탭에 말이 떴다")
+        #expect(GamesChessBoardLift.resolve(pending: nil, draggingFrom: rig.controller.floatingFrom,
+                                            latch: rig.store.dragOrigin, position: rig.store.match?.position) == nil,
+                "슬롭 안에서 출발 칸이 비었다")
+        rig.move(CGPoint(x: start.x, y: start.y - 10))
+        #expect(rig.controller.floatingFrom == sq("e2"), "슬롭을 넘었는데 말이 안 떴다")
+        #expect(GamesChessBoardLift.resolve(pending: nil, draggingFrom: rig.controller.floatingFrom,
+                                            latch: rig.store.dragOrigin, position: rig.store.match?.position)?
+            .place == .hand)
+        // 슬롭 안으로 돌아와도 내리지 않는다 — 깜빡인다.
+        rig.move(CGPoint(x: start.x, y: start.y - 2))
+        #expect(rig.controller.floatingFrom == sq("e2"))
+        rig.controller.abandon(store: rig.store)
+        #expect(rig.controller.floatingFrom == nil, "거둔 말이 떠 있다")
+    }
+
+    @Test("★ 튕긴 손 — 움직임 없이 뗌만 온 손도 문을 지난다: 슬롭 밖이면 끌기, 슬롭 안이면 탭, 뒤로 튕기면 아무 일 없음")
+    func aFlickPassesTheGateOnRelease() {
+        let far = Rig(store(matchState(legalMoves: openingMoves)))
+        far.press("e2")
+        far.release("e4")
+        #expect(far.store.pendingDrop?.to == sq("e4"), "멀리 튕긴 끌기가 안 놓였다")
+        #expect(far.taps.isEmpty)
+
+        let near = Rig(store(matchState(legalMoves: openingMoves)))
+        let box = near.geometry.rect(of: sq("e2"))
+        let start = CGPoint(x: box.midX, y: box.minY + 1)
+        near.controller.press(at: start, port: near.port)
+        near.controller.release(at: CGPoint(x: start.x, y: start.y - 5), port: near.port)
+        #expect(near.store.pendingDrop == nil, "슬롭 안에서 튕긴 손이 수를 보냈다")
+        #expect(near.taps == [sq("e2")], "슬롭 안 뗌은 누른 칸의 탭이다")
+
+        let back = Rig(store(matchState(legalMoves: openingMoves)))
+        back.press("e2")
+        back.release(CGPoint(x: back.center("e2").x, y: back.center("e2").y + 30))
+        #expect(back.store.pendingDrop == nil && back.store.dragOrigin == nil, "뒤로 튕긴 손이 말을 집었다")
+        #expect(back.store.notice == nil)
+        #expect(back.taps.isEmpty, "스크롤로 간 손이 탭을 냈다")
+    }
+
     // MARK: ④ 스크롤 양보
 
     @Test("★ 스크롤 양보 — 빈 칸·상대 말에서 시작한 손은 어느 방향이든 슬롭에서 스크롤로 넘어간다",
@@ -483,6 +599,7 @@ struct GamesChessDragTests {
     @Test("★ 거두기 — 전제가 바뀌면 끌던 말을 내려놓고, 그 뒤 손을 떼도 수가 안 나간다", arguments: Change.allCases)
     func aChangedPremiseRevokes(change: Change) {
         let rig = Rig(store(matchState(legalMoves: openingMoves)))
+        if change == .hidden { rig.store.isWindowVisible = true }
         rig.pickUp("e2", over: "e4")
         #expect(rig.controller.draggingFrom == sq("e2"), "전제: 끄는 중이다")
         switch change {
@@ -495,7 +612,7 @@ struct GamesChessDragTests {
         case .busy:
             rig.store.isBusy = true
         case .hidden:
-            rig.store.isWindowVisible = true
+            rig.store.isWindowVisible = false
         case .matchGone:
             rig.store.match = nil
         }
@@ -640,8 +757,10 @@ struct GamesChessDragTests {
         #expect(!canvas.contains("SpatialTapGesture"), "옛 탭 제스처가 남았다 — 끌기와 같은 누름에 둘이 답한다")
         let layer = try #require(Self.between(canvas, from: "private func inputLayer(", to: "private func board("))
         #expect(layer.contains("if isInteractive"), "관전 판에도 입력 층이 선다")
-        let body = try #require(Self.between(canvas, from: "package var body: some View {\n        GeometryReader",
-                                             to: "private func dragPort("))
+        let body = try #require(Self.between(canvas, from: "let handSquare = dragStore", to: "private func dragPort("))
+        let head = try #require(Self.between(canvas, from: "let lift = dragStore", to: "GeometryReader { proxy"))
+        #expect(head.contains("drag.floatingFrom") && head.contains("drag.handSquare"),
+                "끌기 값을 클로저 안에서 읽으면 칸이 바뀌어도 판이 안 그려질 수 있다")
         let timeline = try #require(body.range(of: "TimelineView(.animation"))
         let input = try #require(body.range(of: ".overlay { inputLayer(geometry) }"))
         let closing = try #require(body.range(of: "board(geometry, frame:"))
@@ -677,6 +796,7 @@ struct GamesChessDragTests {
         #expect(rig.store.dragOrigin == sq("e2"))
         #expect(rig.controller.handPoint == rig.center("e4"))
         #expect(rig.controller.handSquare == sq("e4"))
+        #expect(rig.controller.floatingFrom == sq("e2"), "장면이 띄우는 말을 못 세운다 — 캡처가 빈손이 된다")
     }
 }
 
@@ -716,6 +836,21 @@ struct GamesChessDragRenderTests {
         let placed = try Self.bitmap(lifted: GamesChessBoardLift(piece: Self.pawn, from: sq("e2"), place: .square(sq("e4"))))
         #expect(Render.pieceInk(placed, rect: e2) == 0, "놓은 말이 출발 칸에도 있다")
         #expect(Render.pieceInk(placed, rect: e4) > 50, "놓은 말이 도착 칸에 없다")
+    }
+
+    @Test("★ 잡는 수로 놓으면 놓은 말만 보인다 — 잡힌 말이 그 밑에 겹치지 않는다")
+    func aPlacedPieceHidesTheCapturedOne() throws {
+        let g = Render.geometry()
+        let e7 = Render.squareProbe(sq("e7"), g)
+        let queen = ChessPiece(.white, .queen)
+        let lift = GamesChessBoardLift(piece: queen, from: sq("d1"), place: .square(sq("e7")))
+        func bake(_ fen: String) throws -> NSBitmapImageRep {
+            try Render.bake(GamesChessBoardCanvas(position: ChessPosition(fen: fen), geometry: g, lifted: lift).fixedSize())
+        }
+        let overPiece = try bake(standardFEN)
+        let overEmpty = try bake("rnbqkbnr/pppp1ppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+        #expect(Render.pieceInk(overPiece, rect: e7) > 50, "놓은 말이 안 그려졌다")
+        #expect(Render.maxChannelDifference(overPiece, overEmpty, rect: e7) < 8, "잡힌 말이 놓은 말 밑에 비친다")
     }
 
     @Test("★ 손 밑 도착 칸 덮개 — 그림이 달라지지만 말로 세이지 않는다(중간 톤 규칙)")

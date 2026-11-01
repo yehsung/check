@@ -9,6 +9,8 @@ import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
 import com.yehsung.aingcheck.core.foundation.platform.SingleInstanceGuard
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
+import com.yehsung.aingcheck.core.net.realtime.IdleReason
+import com.yehsung.aingcheck.core.net.realtime.RealtimeState
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.SessionPrefsKeys
 import com.yehsung.aingcheck.core.session.SessionStore
@@ -16,6 +18,8 @@ import com.yehsung.aingcheck.core.session.SessionVaultKeys
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.session.app.SessionClock
+import com.yehsung.aingcheck.core.stores.gomoku.GomokuStoreHost
+import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.tetris.StoreNaturalCollation
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStoreHost
@@ -199,6 +203,25 @@ class TestTetrisHost(private val store: SessionStore, override val appConfig: Ap
     override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = store.withSessionRetry(operation)
 }
 
+/**
+ * 아잉 큐브 호스트(시험용 — 조립의 `SessionGomokuHost` 와 같은 꼴). [overrideUser] 를 주면 **그 사람으로** 세션을 본다(계정이 바뀐 맥 재현 — 토큰은 그대로).
+ */
+class TestRummyHost(private val store: SessionStore, override val appConfig: AppConfig, private val clockNow: () -> SwiftDate) : GomokuStoreHost {
+    var overrideUser: String? = null
+    override val session: SupabaseSession?
+        get() {
+            val base = store.session ?: return null
+            val user = overrideUser ?: return base
+            return SupabaseSession(base.accessToken, null, user)
+        }
+    override val sessionGeneration: Int get() = store.sessionGeneration
+    override val service: SupabaseWorkService get() = store.service
+    override var realtimeState: RealtimeState = RealtimeState.Idle(IdleReason.disabled)
+    override var rubyBalance: Long? = null
+    override fun now(): SwiftDate = clockNow()
+    override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = store.withSessionRetry(operation)
+}
+
 /** 오목·체스 문의 가짜(W2-d 스토어 자리). 부른 문을 순서대로 적는다. */
 open class FakeBoardGameLink(val name: String) : GamesBoardGameLink {
     val calls = mutableListOf<String>()
@@ -276,6 +299,9 @@ class StoreHarness(
     var hiddenBlocked: Set<String> = emptySet()
     var sharedRuby: Long? = null
 
+    /** 아잉 큐브 자리. 기본은 비어 있다 — 큐브를 안 재는 시험의 요청 열에 `rummy_lobby` 가 끼지 않게(옵트인). */
+    var rummyStore: RummyStore? = null
+
     val context: GamesContext = object : GamesContext {
         override val sessionStore: SessionStore get() = this@StoreHarness.sessionStore
         override val appConfig: AppConfig = appConfig
@@ -283,6 +309,7 @@ class StoreHarness(
         override val collation: Collation = StoreNaturalCollation
         override fun refreshAchievementsAfterGameResult(game: String) { achievementRefreshes += game }
         override val tetris: TetrisDuelStore get() = this@StoreHarness.tetris
+        override val rummy: RummyStore? get() = rummyStore
         override val gomoku: GamesGomokuLink get() = this@StoreHarness.gomoku
         override val chess: GamesBoardGameLink get() = this@StoreHarness.chess
         override val router: GamesRouter get() = this@StoreHarness.router

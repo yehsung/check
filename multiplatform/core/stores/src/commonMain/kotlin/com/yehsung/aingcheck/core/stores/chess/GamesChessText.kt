@@ -135,7 +135,7 @@ object ChessPhoneText {
      * 정해지지 않아 틀린 안내를 했다. 그래서 문구 함수가 **두는 판(playing)과 막힌 입구(blocked)를 둘 다** 받는다.
      */
     enum class BusyGame(val rawValue: String) {
-        gomoku("gomoku"), chess("chess"), tetris("tetris");
+        gomoku("gomoku"), chess("chess"), tetris("tetris"), rummy("rummy");
 
         /** 게임 이름("오목" · "체스" · "1:1 테트리스"). */
         val gameName: String
@@ -143,6 +143,7 @@ object ChessPhoneText {
                 gomoku -> "오목"
                 chess -> "체스"
                 tetris -> "1:1 테트리스"
+                rummy -> "아잉 큐브"
             }
 
         /** 진행 중인 판을 가리키는 말. 셋 다 받침으로 끝나므로 뒤에 "이" 를 붙인다. */
@@ -151,6 +152,7 @@ object ChessPhoneText {
                 gomoku -> "오목 판"
                 chess -> "체스 판"
                 tetris -> "테트리스 대결"
+                rummy -> "아잉 큐브 판"
             }
     }
 
@@ -158,6 +160,7 @@ object ChessPhoneText {
     fun busyTitle(playing: BusyGame): String = when (playing) {
         BusyGame.gomoku, BusyGame.chess -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
         BusyGame.tetris -> "${playing.gameName} 대결 중이에요"
+        BusyGame.rummy -> "${playing.gameName} 하는 중이에요"
     }
 
     /**

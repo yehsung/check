@@ -172,9 +172,18 @@ class MessagesStore(
 
     // ---------------------------------------------------------------- 차단 · 신고(동작은 MessagesBlockStore.kt)
 
+    private val hiddenBlockedState = mutableStateOf<Set<String>>(emptySet())
+
     /** 차단해서 **화면에서 걷어낸** 상대(낙관적). 실패하면 빼며 대화가 그대로 되돌아온다. */
-    var hiddenBlockedPeerIDs: Set<String> by mutableStateOf(emptySet())
-        internal set
+    var hiddenBlockedPeerIDs: Set<String>
+        get() = hiddenBlockedState.value
+        internal set(value) {
+            hiddenBlockedState.value = value
+            onHiddenBlockedPeersChange?.invoke(value)
+        }
+
+    /** 차단 집합이 바뀔 때마다(아잉 큐브 차단 거울 — 맥 `WorkTimerStore` 가 `rummy.setHiddenPeers` 를 부르는 자리). 조립이 잇는다. */
+    var onHiddenBlockedPeersChange: ((Set<String>) -> Unit)? = null
     var blockedPeople: List<BlockedUser> by mutableStateOf(emptyList())
         internal set
     var blocksLoaded: Boolean by mutableStateOf(false)

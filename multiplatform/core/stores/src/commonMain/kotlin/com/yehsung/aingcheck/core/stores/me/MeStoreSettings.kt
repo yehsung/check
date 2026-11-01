@@ -160,6 +160,13 @@ fun MeStore.setMiniGamePublic(isPublic: Boolean) {
 suspend fun MeStore.signOut() {
     if (!context.sessionStore.isSignedIn || isSigningOut) return
     isSigningOut = true
+    val generation = context.sessionStore.sessionGeneration
+    context.meLinks.leaveLiveMatchBeforeSessionEnd(deletingAccount = false)
+    // 그 2초 사이 다른 길(강제 로그아웃)이 이미 세션을 바꿨으면 두 번 내리지 않는다.
+    if (context.sessionStore.sessionGeneration != generation) {
+        isSigningOut = false
+        return
+    }
     context.sessionStore.signOut()
     // 세션이 세대를 올리며 앱 모델이 reset() 을 불렀다 — 깃발은 거기서 이미 내려갔다.
     isSigningOut = false
@@ -181,7 +188,10 @@ suspend fun MeStore.deleteAccount(): Boolean {
     }
     isDeletingAccount = true
     accountDeletionNotice = null
-    return when (val outcome = context.sessionStore.deleteAccount(password)) {
+    val outcome = context.sessionStore.deleteAccount(password) {
+        context.meLinks.leaveLiveMatchBeforeSessionEnd(deletingAccount = true)
+    }
+    return when (outcome) {
         AccountDeletionOutcome.Deleted -> true
         is AccountDeletionOutcome.Failed -> {
             isDeletingAccount = false

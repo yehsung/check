@@ -39,9 +39,12 @@ object MegaphoneBannerPhoneRules {
     /** 미끄러져 들어오고 나가는 거리(위로, 음수). 이동만 이징하고 불투명도는 건드리지 않는다. */
     fun slideOutOffset(cardHeight: Float): Float = -(maxOf(cardHeight, 0f) + topClearance)
 
-    /** 배너를 미뤄야 하는가: 시트·대화상자(오버레이가 그 밑에 깔려 안 보인다) · 오목·체스·테트리스 화면 · 미니게임 판 진행 중. */
-    fun isDeferred(modalPresented: Boolean, matchScreenVisible: Boolean, miniGameRoundPlaying: Boolean): Boolean =
-        modalPresented || matchScreenVisible || miniGameRoundPlaying
+    /**
+     * 배너를 미뤄야 하는가: 시트·대화상자(오버레이가 그 밑에 깔려 안 보인다) · 오목·체스·테트리스·큐브 화면 · 미니게임 판 진행 중 · 아잉 큐브 손댄 판에서 내 자리 playing
+     * (맥 `MegaphoneBannerDeferral` 의 `rummyLive` — 끌기 중인 타일 위를 덮지 않게. 놀던 기기 · 기권 뒤 구경은 코어가 거짓을 낸다).
+     */
+    fun isDeferred(modalPresented: Boolean, matchScreenVisible: Boolean, miniGameRoundPlaying: Boolean, rummyLive: Boolean = false): Boolean =
+        modalPresented || matchScreenVisible || miniGameRoundPlaying || rummyLive
 
     /** 스토어에 deferralChanged() 를 알려야 하는가 — 미루는데 떠 있거나(줄로 되돌린다), 풀렸는데 기다리는 것이 있다(띄운다). */
     fun needsDeferralSync(isDeferred: Boolean, hasCurrent: Boolean, hasQueue: Boolean): Boolean =

@@ -31,7 +31,7 @@ class PhoneGamesContextTest {
         val h = PhoneHarness(this, appConfig = appConfig) { r ->
             when (r.rpcName) {
                 "block_user" -> Reply.Json("""{"status":"ok"}""")
-                "gomoku_inbox", "gomoku_lobby", "gomoku_state", "chess_lobby", "chess_state", "tetris_lobby", "tetris_state" -> Reply.Offline
+                "gomoku_inbox", "gomoku_lobby", "gomoku_state", "chess_lobby", "chess_state", "tetris_lobby", "tetris_state", "rummy_lobby" -> Reply.Offline
                 else -> null
             }
         }

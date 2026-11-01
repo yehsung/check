@@ -33,7 +33,7 @@ class PhoneRealtimeRunnerTest {
         "message_history_with_pokes", "message_history_with_reads", "message_history" -> Reply.missingFunction
         "app_user_directory" -> Reply.Json("[]")
         "message_blocks", "my_blocked_users", "blocked_users" -> Reply.Json("[]")
-        "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby" -> Reply.missingFunction
+        "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby", "rummy_lobby" -> Reply.missingFunction
         else -> null
     }
 
@@ -119,7 +119,7 @@ class PhoneRealtimeRunnerTest {
         assertEquals(emptyList(), h.rpcNames(), "체스 초인종은 일부러 빈 가지다 — 아무 조회도 내지 않는다")
         transport.emit(RealtimeTransportEvent.Broadcast(RealtimeLinkConstants.rummyBroadcastEvent))
         advanceUntilIdle()
-        assertEquals(emptyList(), h.rpcNames(), "아잉 큐브 초인종도 판을 잇기 전까지 빈 가지다 — 메시지 조회로 새지 않는다")
+        assertEquals(emptyList(), h.rpcNames(), "잠긴 빌드(기본)의 아잉 큐브 초인종은 조회를 내지 않고 메시지 조회로도 새지 않는다 — 켠 빌드는 PhoneRummyWiringTest 가 잰다")
         transport.emit(RealtimeTransportEvent.Broadcast(RealtimeLinkConstants.tetrisBroadcastEvent))
         transport.emit(RealtimeTransportEvent.Broadcast(RealtimeLinkConstants.gomokuBroadcastEvent))
         advanceUntilIdle()

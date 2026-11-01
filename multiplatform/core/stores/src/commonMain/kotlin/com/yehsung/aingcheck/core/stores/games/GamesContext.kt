@@ -2,6 +2,7 @@
 package com.yehsung.aingcheck.core.stores.games
 
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameContext
+import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 
 /**
@@ -89,6 +90,12 @@ interface GamesRouter {
  */
 interface GamesContext : GamesMiniGameContext {
     val tetris: TetrisDuelStore
+
+    /**
+     * 아잉 큐브 스토어(폰 조립이 넣는다). **기본이 null 인 까닭**: 이 문맥을 구현하는 곳에 Windows 조립(desktopApp `AppGraph` — v1 기능 동결)과 시험 조립이
+     * 여럿 있다 — 필수로 두면 큐브를 쓰지 않는 그 자리가 전부 깨진다. null 이면 게임 탭은 큐브가 없는 것처럼 돈다(입구 막기·배지·화면 꺼짐 모두 건너뛴다).
+     */
+    val rummy: RummyStore? get() = null
     val gomoku: GamesGomokuLink
     val chess: GamesBoardGameLink
     val router: GamesRouter

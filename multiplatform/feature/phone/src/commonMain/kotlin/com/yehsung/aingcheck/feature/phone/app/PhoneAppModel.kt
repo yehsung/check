@@ -34,7 +34,10 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.core.stores.rummy.RummyStore
+import com.yehsung.aingcheck.core.stores.rummy.setHiddenPeers
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
+import com.yehsung.aingcheck.core.wire.SwiftUUID
 import com.yehsung.aingcheck.feature.phone.push.PhonePushCoordinator
 import com.yehsung.aingcheck.feature.phone.realtime.PhoneRealtimeRunner
 import com.yehsung.aingcheck.feature.phone.realtime.RealtimeSignalReceiver
@@ -112,6 +115,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
     val gomoku: GomokuStore
     val chess: ChessStore
     val tetris: TetrisDuelStore
+
+    /** 아잉 큐브(2~4인). 화면은 다음 단계 — 지금은 초대 배지 · 한 사람 한 판 · 확성기 미룸 · 실시간까지 잇는다. */
+    val rummy: RummyStore
     val characters: AppUserCharacterStore
     val push: PhonePushCoordinator
     val now: NowStore
@@ -174,6 +180,12 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 테트리스 순위 · 관전의 주 스위치(순위와 관전은 **따로** — 코어 규약).
         tetris.rankingEnabled = true
         tetris.spectatorFeaturesEnabled = true
+        // 아잉 큐브 — 호스트는 오목과 같은 하나(같은 루비 칸 · 같은 깃발 문). 맥 `wireRummy` 의 저장소 둘과 순위 주 스위치: 이 줄들이 없으면 앱을 다시 켠 폰이 쥐던 판의
+        // 하트비트를 잃어(90초 끊김 기권) 받침대 자리도 처음으로 돌아가고, 순위 요청은 한 번도 안 나간다.
+        rummy = RummyStore(scope, gomokuHost)
+        rummy.rackDefaults = env.prefs
+        rummy.engagedDefaults = env.prefs
+        rummy.rankingEnabled = true
         realtime.gomoku = object : RealtimeSignalReceiver {
             override fun handleSignal() = gomoku.handleSignal()
             override fun realtimeDidJoin() = gomoku.realtimeDidJoin()
@@ -184,10 +196,16 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
             override fun handleSignal() = tetris.handleSignal()
             override fun realtimeDidJoin() = tetris.realtimeDidJoin()
         }
+        // 실시간 'rummy' 초인종을 받을 자리. 이 줄이 없으면 방 참가·시작·차례가 안전망 폴링까지 늦고 화면 밖에서는 초대 배지가 안 선다.
+        realtime.rummy = object : RealtimeSignalReceiver {
+            override fun handleSignal() = rummy.handleSignal()
+            override fun realtimeDidJoin() = rummy.realtimeDidJoin()
+        }
         characters = AppUserCharacterStore(context, scope, env.knownCharacterIDs)
         context.gomoku = gomoku
         context.chess = chess
         context.tetris = tetris
+        context.rummy = rummy
         context.characters = characters
 
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
@@ -231,6 +249,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         now.widgetSink = widgetSink
         messages.nowStore = now
         messages.router = router
+        // 차단은 메시지·찌르기·게임을 **함께** 막는 관계다 — 차단한 사람이 큐브 로비·공개 방·받은 초대에 남지 않게(맥 WorkTimerStore `rummy.setHiddenPeers`). 스토어는 UUID 로 받는다.
+        messages.onHiddenBlockedPeersChange = { ids -> rummy.setHiddenPeers(ids.mapNotNull { SwiftUUID.parse(it) }.toSet()) }
         // 메시지 탭이 실시간 신호를 받는 자리(Swift 는 MessagesStore.init 이 등록했다 — Kotlin 은 조립이 잇는다). `.drain` 은 take_pokes 가 아니라
         // 이 조회다(C§4 #15).
         realtime.onMessageActivity { messages.realtimeMessageActivity() }
@@ -241,6 +261,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         gomoku.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_GOMOKU) }
         chess.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_CHESS) }
         tetris.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_TETRIS_DUEL) }
+        rummy.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_RUMMY) }
 
         session.onSignedIn = { sessionDidSignIn() }
         session.onSignedOut = { sessionDidSignOut() }
@@ -370,6 +391,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         chess.reset()
         // 테트리스도 같은 사슬이다 — 판 구동기와 1초 보고가 살아 있으면 로그아웃한 사람의 판에 새 계정의 토큰으로 보고가 나간다.
         tetris.reset()
+        // 아잉 큐브도 같은 사슬이다 — 빠뜨리면 다음 사람이 앞 계정의 방·판·랙·초대를 보고, 앞 판의 하트비트가 새 토큰으로 나간다.
+        rummy.reset()
         ruby.rubyBalance = null
         router.reset()
         widgets.forgetCurrent()
@@ -399,5 +422,6 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         const val GAME_GOMOKU: String = "gomoku"
         const val GAME_CHESS: String = "chess"
         const val GAME_TETRIS_DUEL: String = "tetris_duel"
+        const val GAME_RUMMY: String = "rummy"
     }
 }

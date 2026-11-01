@@ -67,7 +67,7 @@ class MegaphoneBannerPhoneTest {
                 )
                 "app_user_directory" -> Reply.Json("[]")
                 "message_blocks", "my_blocked_users", "blocked_users" -> Reply.Json("[]")
-                "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby" -> Reply.missingFunction
+                "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby", "rummy_lobby" -> Reply.missingFunction
                 "work_phone_touch" -> Reply.Json("""{"status":"not_working"}""")
                 else -> null
             }

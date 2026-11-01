@@ -374,4 +374,30 @@ class SessionSignOutDeleteTest {
 
         assertEquals(AccountDeletionOutcome.Failed(AccountDeletionFailure.PasswordRequired), notReady.store.deleteAccount(""))
     }
+
+    /** 쥔 판에서 나가는 자리(`afterReauth`): 재인증이 **지난 뒤**, 사진·RPC 앞. 비밀번호가 틀렸으면 부르지 않는다 — 틀린 비밀번호로 판돈부터 잃으면 안 된다. */
+    @Test
+    fun deleteAccountRunsAfterReauthHookOnlyOnceReauthPassed() = runTest {
+        val wrong = signedIn { r ->
+            if (r.path == "/auth/v1/token") Reply.Json("""{"error":"invalid_grant","error_description":"Invalid login credentials"}""", 400) else null
+        }
+        var wrongCalls = 0
+        assertEquals(AccountDeletionOutcome.Failed(AccountDeletionFailure.WrongPassword), wrong.store.deleteAccount("bad") { wrongCalls += 1 })
+        assertEquals(0, wrongCalls)
+
+        val h = signedIn { r ->
+            when {
+                r.path == "/auth/v1/token" && r.queryValue("grant_type") == "password" -> auth("reauth-access", "reauth-refresh")
+                r.method == "DELETE" && r.path.startsWith("/storage/v1/object/avatars/") -> SessionFixtures.emptyObject
+                r.path.startsWith("/rest/v1/profiles") -> Reply.Json("[]")
+                r.rpcName == "delete_my_account" -> Reply.Json("null")
+                else -> null
+            }
+        }
+        val before = h.server.requests.size
+        var requestsAtHook = -1
+        val outcome = h.store.deleteAccount("pw") { requestsAtHook = h.server.requests.size - before }
+        assertEquals(AccountDeletionOutcome.Deleted, outcome)
+        assertEquals(1, requestsAtHook, "재인증 한 건 뒤 · 사진·RPC 앞에 불러야 한다")
+    }
 }

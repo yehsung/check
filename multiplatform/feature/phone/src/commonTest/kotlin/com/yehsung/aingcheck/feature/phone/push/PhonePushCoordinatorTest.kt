@@ -52,7 +52,7 @@ class PhonePushCoordinatorTest {
             route(r) ?: when (r.rpcName) {
                 "message_unread_summary" -> Reply.Json("""{"status":"ok","total":0,"peers":[]}""")
                 "message_history_with_pokes", "message_history_with_reads", "message_history" -> Reply.missingFunction
-                "gomoku_inbox", "gomoku_lobby", "chess_lobby", "tetris_lobby" -> Reply.missingFunction
+                "gomoku_inbox", "gomoku_lobby", "chess_lobby", "tetris_lobby", "rummy_lobby" -> Reply.missingFunction
                 "work_phone_touch" -> Reply.Json("""{"status":"not_working"}""")
                 else -> null
             }
@@ -355,7 +355,7 @@ class PhonePushCoordinatorTest {
     private fun TestScope.gameRig(appConfig: AppConfig = AppConfig(duelsEnabled = true)): PhoneHarness {
         val h = PhoneHarness(this, appConfig = appConfig) { r ->
             val name = r.rpcName ?: return@PhoneHarness null
-            if (name.startsWith("chess_") || name.startsWith("gomoku_") || name.startsWith("tetris_")) Reply.Offline else null
+            if (name.startsWith("chess_") || name.startsWith("gomoku_") || name.startsWith("tetris_") || name.startsWith("rummy_")) Reply.Offline else null
         }
         h.signIn()
         return h

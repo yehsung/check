@@ -22,6 +22,7 @@ import com.yehsung.aingcheck.core.stores.gomoku.aiMoveChooser
 import com.yehsung.aingcheck.core.stores.gomoku.isAIMatch
 import com.yehsung.aingcheck.core.stores.gomoku.isAIThinking
 import com.yehsung.aingcheck.core.stores.gomoku.stopWatching
+import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import kotlinx.coroutines.CoroutineScope
 
@@ -35,6 +36,7 @@ class PhoneGamesContext(private val phone: PhoneContext, override val gomoku: Ph
     override val scope: CoroutineScope get() = phone.scope
     override val collation: Collation get() = phone.collation
     override val tetris: TetrisDuelStore get() = phone.tetris
+    override val rummy: RummyStore? get() = phone.rummy
     override val router: GamesRouter get() = phone.router
 
     /** 메시지 탭이 차단해 숨긴 상대(Swift `context.links.messages?.hiddenBlockedPeerIDs`). 메시지 스토어가 없으면 빈 집합. */

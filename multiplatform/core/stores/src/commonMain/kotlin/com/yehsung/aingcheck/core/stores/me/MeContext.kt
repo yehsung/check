@@ -82,6 +82,12 @@ interface MeLinks {
     /** 설정 화면을 떠날 때 푸시 저장 안내를 걷는다(Swift `context.links.push?.prefsNotice = nil`, W2-f). */
     fun clearPushPrefsNotice() {}
 
+    /**
+     * 로그아웃·계정 삭제 **앞에** 이 기기가 쥔 방·판에서 나간다(아잉 큐브 `leaveForExit` — 최대 2초. Swift `signOutLeavingRummy`). 세션을 먼저 지우면 이탈 요청이
+     * 토큰 없이 떠나 판이 '플레이 중'으로 남는다. 고리가 없으면 아무 일도 안 한다.
+     */
+    suspend fun leaveLiveMatchBeforeSessionEnd(deletingAccount: Boolean) {}
+
     /** 나 탭 경로를 루트로(Swift `context.router.popToRoot(.me)`, W2-f). */
     fun popMeToRoot() {}
 

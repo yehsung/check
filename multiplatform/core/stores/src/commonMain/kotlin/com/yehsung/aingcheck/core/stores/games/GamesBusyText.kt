@@ -19,18 +19,22 @@ object GamesBusyText {
         GamesBusyGame.gomoku -> "오목 판"
         GamesBusyGame.chess -> "체스 판"
         GamesBusyGame.tetris -> "테트리스 대결"
+        GamesBusyGame.rummy -> "아잉 큐브 판"
     }
 
     /** 다른 판을 두는 중이라 입구가 막혔다 — "오목을 두는 중이에요" · "체스를 두는 중이에요" · "1:1 테트리스 대결 중이에요". */
     fun busyTitle(playing: GamesBusyGame): String = when (playing) {
         GamesBusyGame.gomoku, GamesBusyGame.chess -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
         GamesBusyGame.tetris -> "${playing.gameName} 대결 중이에요"
+        GamesBusyGame.rummy -> "${playing.gameName} 하는 중이에요"
     }
 
     /** 그 아래 한 줄 — 언제 풀리는지 말한다(막힌 이유만 말하면 사용자가 기다릴 끝을 모른다). [blocked] 가 **막힌 입구**다. */
     fun busyHint(playing: GamesBusyGame, blocked: GamesBusyGame): String {
         val name = blocked.gameName
-        return "${matchNoun(playing)}이 끝나면 $name${objectParticle(name)} 신청할 수 있어요"
+        // 아잉 큐브는 신청이 아니라 방에 앉는다.
+        val verb = if (blocked == GamesBusyGame.rummy) "할" else "신청할"
+        return "${matchNoun(playing)}이 끝나면 $name${objectParticle(name)} $verb 수 있어요"
     }
 
     /** 1:1 입구(도전·수락)를 막는 사유 한 줄. 두는 판이 없으면 null 이다. */

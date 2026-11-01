@@ -390,8 +390,9 @@ class SessionStore(
      *  3. `delete_my_account` — 재인증으로 받은 **새 토큰**으로 부른다.
      *  4. 성공하면 로그아웃과 같은 로컬 정리(장부 없이). 실패하면 로그인 상태를 **그대로** 두고 이유를 돌려준다(404 = 서버 준비 전 포함).
      * 재인증이 만든 두 번째 서버 세션은 RPC 가 실패했을 때 `logout?scope=local` 로 닫는다(성공했으면 cascade 로 이미 없다).
+     * @param afterReauth 재인증이 **지난 뒤**, 지우기 전에 한 번(쥔 판에서 나가기 — 비밀번호가 틀렸는데 판돈부터 잃으면 안 된다). 아직 세션은 그대로다.
      */
-    suspend fun deleteAccount(password: String): AccountDeletionOutcome {
+    suspend fun deleteAccount(password: String, afterReauth: suspend () -> Unit = {}): AccountDeletionOutcome {
         if (!isSignedIn) return AccountDeletionOutcome.Failed(AccountDeletionFailure.NotSignedIn)
         if (_isDeletingAccount.value) return AccountDeletionOutcome.Failed(AccountDeletionFailure.AlreadyRunning)
         if (password.isEmpty()) return AccountDeletionOutcome.Failed(AccountDeletionFailure.PasswordRequired)
@@ -417,6 +418,12 @@ class SessionStore(
             }
             if (startGeneration != generation) {
                 // 그 사이 로그아웃·치명 만료 — 재인증 세션만 닫고 물러난다(계정은 그대로다).
+                service.signOut(reauth.accessToken)
+                return AccountDeletionOutcome.Failed(AccountDeletionFailure.NotSignedIn)
+            }
+
+            afterReauth()
+            if (startGeneration != generation) {
                 service.signOut(reauth.accessToken)
                 return AccountDeletionOutcome.Failed(AccountDeletionFailure.NotSignedIn)
             }

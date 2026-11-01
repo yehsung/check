@@ -248,7 +248,7 @@ class PhoneAppModelTest {
     fun signOutChainResetsChessAndTetrisToo() = runTest {
         val h = PhoneHarness(this, appConfig = AppConfig(duelsEnabled = true)) { r ->
             val name = r.rpcName ?: return@PhoneHarness null
-            if (name.startsWith("chess_") || name.startsWith("tetris_")) Reply.Offline else null
+            if (name.startsWith("chess_") || name.startsWith("tetris_") || name.startsWith("rummy_")) Reply.Offline else null
         }
         h.signIn()
         val app = h.app
@@ -277,7 +277,7 @@ class PhoneAppModelTest {
             val h = PhoneHarness(this, appConfig = appConfig) { r ->
                 when (r.rpcName) {
                     "tetris_challenge" -> Reply.Json("""{"status":"busy"}""")
-                    "tetris_lobby", "tetris_state" -> Reply.Offline
+                    "tetris_lobby", "tetris_state", "rummy_lobby" -> Reply.Offline
                     else -> null
                 }
             }

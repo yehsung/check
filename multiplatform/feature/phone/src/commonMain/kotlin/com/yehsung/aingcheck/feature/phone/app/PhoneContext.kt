@@ -25,6 +25,10 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameContext
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.core.stores.rummy.RummyExitReason
+import com.yehsung.aingcheck.core.stores.rummy.RummyStore
+import com.yehsung.aingcheck.core.stores.rummy.leaveForExit
+import com.yehsung.aingcheck.core.stores.rummy.needsExitLeave
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStoreHost
 import com.yehsung.aingcheck.core.wire.SupabaseSession
@@ -111,6 +115,12 @@ class PhoneContext(
     /** 코어 1:1 테트리스 스토어(루비 칸을 같이 쓴다). */
     lateinit var tetris: TetrisDuelStore
 
+    /** 코어 아잉 큐브 스토어(호스트는 오목과 **같은** 하나 — `RummyStoreHost` 는 `GomokuStoreHost` 의 별명). */
+    lateinit var rummy: RummyStore
+
+    /** 아잉 큐브가 이어졌는가(조립 전 · 시험 문맥에서는 거짓). */
+    val hasRummy: Boolean get() = ::rummy.isInitialized
+
     /** 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). */
     lateinit var characters: AppUserCharacterStore
 
@@ -159,6 +169,14 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
 
     override fun clearPushPrefsNotice() {
         context.links.push?.prefsNotice = null
+    }
+
+    /** 로그아웃·계정 삭제 앞의 의도적 이탈(최대 2초 — 코어 상한). 이 기기가 손대지 않은 판·이미 기권한 구경은 보낼 것이 없다(`needsExitLeave`). */
+    override suspend fun leaveLiveMatchBeforeSessionEnd(deletingAccount: Boolean) {
+        if (!context.hasRummy) return
+        val rummy = context.rummy
+        if (!rummy.needsExitLeave) return
+        rummy.leaveForExit(if (deletingAccount) RummyExitReason.accountDeletion else RummyExitReason.signOut)
     }
 
     override fun popMeToRoot() {

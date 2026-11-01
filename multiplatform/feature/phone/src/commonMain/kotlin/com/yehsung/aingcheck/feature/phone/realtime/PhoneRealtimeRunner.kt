@@ -75,6 +75,9 @@ class PhoneRealtimeRunner(
     /** 테트리스 대결 신호를 받을 스토어(조립이 붙인다 — 오목 칸과 같은 꼴·같은 자리). */
     var tetris: RealtimeSignalReceiver? = null
 
+    /** 아잉 큐브 신호를 받을 스토어(조립이 붙인다 — 같은 꼴·같은 자리). */
+    var rummy: RealtimeSignalReceiver? = null
+
     /** 확성기 배너 신호('megaphone')를 받을 자리(조립이 붙인다 — 배너 스토어 refresh). 비어 있으면 아무 일도 안 한다(같은 묶음의 ring 이 메시지를 갚는다). */
     var megaphone: (() -> Unit)? = null
 
@@ -241,6 +244,8 @@ class PhoneRealtimeRunner(
                     // INV-MobileRealtimeRunner-b94b3ac4 이식: 테트리스도 같은 자리다 — 판 중에 소켓이 끊겼다 붙으면 그 사이의 방해 줄을 **보고 왕복이
                     //   알려 주기 전에** 받는다(조인 직후 로비를 한 번 긁는다 → 그 응답이 가리키는 판까지).
                     tetris?.realtimeDidJoin()
+                    // 아잉 큐브도 같다 — 소켓이 끊긴 사이 온 초대와 넘어간 차례를 이 한 번이 따라잡는다.
+                    rummy?.realtimeDidJoin()
                 }
                 // INV-MobileRealtimeRunner-8764ac83 이식: take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다
                 //   (PhoneRealtimeRunnerTest 가 진짜 메시지 스토어로 요청을 재서 take_pokes 0 · message_unread_summary 1 을 단언한다).
@@ -255,8 +260,8 @@ class PhoneRealtimeRunner(
                 // INV-MobileRealtimeRunner-d94b411a 이식: 테트리스 초인종은 판 중 공격마다 울린다 — **`.drain` 으로 떨어뜨리면** 그 울림마다 메시지
                 //   요약·이력 조회가 한 번씩 더 나간다. 잇는 것(방해 줄이 늦지 않게 — 맥과 같은 구조)과 따로 두는 것은 별개의 요구다.
                 RealtimeEffect.TetrisSignal -> tetris?.handleSignal()
-                // 아잉 큐브(RealtimeEffect.rummySignal @ 1a5eeca6): 폰은 판을 잇기 전까지 **일부러 빈 가지**다 — `.drain` 으로 떨어뜨리면 끌기마다 메시지 조회가 나간다.
-                RealtimeEffect.RummySignal -> Unit
+                // 아잉 큐브(RealtimeEffect.rummySignal @ 1a5eeca6): 스토어의 합쳐지는 재조회로 간다 — `.drain` 으로 떨어뜨리면 끌기마다 메시지 조회가 나간다.
+                RealtimeEffect.RummySignal -> rummy?.handleSignal()
                 // 확성기 배너(Swift MobileRealtimeRunner .megaphoneSignal @ 8b40bd44): 배너 목록 재조회 — **take_pokes 도 메시지 조회도 아니다**
                 //   (확성기 줄의 소비·요약은 같은 묶음의 ring → .drain 이 맡는다). `.drain` 으로 떨어뜨리면 배너가 안 뜬다.
                 RealtimeEffect.MegaphoneSignal -> megaphone?.invoke()

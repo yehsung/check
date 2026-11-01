@@ -61,7 +61,7 @@ struct GamesRummyNavButtons: View {
     let onRules: () -> Void
 
     var body: some View {
-        HStack(spacing: 2) {
+        HStack(spacing: GamesRummyMatchLayout.navGap) {
             GamesRummyColumnButton(systemImage: "chevron.left", label: GamesRummyText.leave, hint: GamesRummyText.leaveHint, action: onExit)
             GamesRummyColumnButton(systemImage: "book", label: GamesRummyText.rulesButton, action: onRules)
         }
@@ -138,7 +138,7 @@ struct GamesRummySeatColumn: View {
     }
 
     private func card(_ seat: RummyMatchSeat, rect: CGRect) -> some View {
-        GamesRummySeatCard(rummy: rummy, match: match, seat: seat)
+        GamesRummySeatCard(rummy: rummy, match: match, seat: seat, compact: layout.isSeatCardCompact)
             .anchorPreference(key: GamesRummySeatAnchorKey.self, value: .bounds) { anchor in
                 seat.seatNo.map { [$0: anchor] } ?? [:]
             }
@@ -150,7 +150,10 @@ private struct GamesRummySeatCard: View {
     let rummy: RummyStore
     let match: RummyMatchState
     let seat: RummyMatchSeat
+    /// 낮은 칸(`GamesRummyMatchLayout.isSeatCardCompact`) — 얼굴을 줄여 태그 줄까지 카드 안에 담는다.
+    let compact: Bool
 
+    private var ringDiameter: CGFloat { compact ? 26 : 34 }
     private var isTurn: Bool { GamesRummySeats.isTurn(seat, in: match) }
     private var tags: [GamesRummySeatTag] { GamesRummySeats.tags(seat) }
 
@@ -160,13 +163,13 @@ private struct GamesRummySeatCard: View {
             HStack(spacing: 4) {
                 ZStack {
                     if isTurn {
-                        GamesRummyTurnRing(rummy: rummy, total: GamesRummySeats.turnTotal(match), diameter: 34)
+                        GamesRummyTurnRing(rummy: rummy, total: GamesRummySeats.turnTotal(match), diameter: ringDiameter)
                     }
                     PersonAvatar(name: seat.displayName ?? "?", colorSeed: seat.userId.uuidString.lowercased(),
                                  url: seat.avatarUrl.flatMap(URL.init(string:)), userID: seat.userId.uuidString.lowercased(),
-                                 size: 27, scalesWithText: false, characterHint: seat.character)
+                                 size: ringDiameter - 7, scalesWithText: false, characterHint: seat.character)
                 }
-                .frame(width: 34, height: 34)
+                .frame(width: ringDiameter, height: ringDiameter)
                 VStack(alignment: .leading, spacing: 1) {
                     HStack(spacing: 2) {
                         GamesRummyTileBack(size: CGSize(width: 8, height: 11))
@@ -430,12 +433,12 @@ struct GamesRummyActionColumn: View {
     private var sort: some View {
         let selected = rummy.rackSortMode
         let enabled = editor != nil
-        return HStack(spacing: 2) {
+        // 안쪽 여백 없이 칸을 반씩 쓴다(`sortButton`) — 터치 자리가 44pt 아래로 안 내려가게. 켜진 표시만 안으로 들인다.
+        return HStack(spacing: 0) {
             segment(.number, title: GamesRummyText.sortNumber, name: GamesRummyText.sortNumberName, on: selected == .number, enabled: enabled)
-            Rectangle().fill(MobileTheme.separator).frame(width: 0.8).padding(.vertical, 8)
+            Rectangle().fill(MobileTheme.separator).frame(width: GamesRummyMatchLayout.sortDividerWidth).padding(.vertical, 8)
             segment(.color, title: GamesRummyText.sortColor, name: GamesRummyText.sortColorName, on: selected == .color, enabled: enabled)
         }
-        .padding(2)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.surface))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(MobileTheme.separator, lineWidth: 0.8))
@@ -453,7 +456,7 @@ struct GamesRummyActionColumn: View {
                 .minimumScaleFactor(0.6)
                 .foregroundStyle(on ? MobileTheme.onAccentFill : MobileTheme.label)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? MobileTheme.accentFill : Color.clear))
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? MobileTheme.accentFill : Color.clear).padding(2))
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

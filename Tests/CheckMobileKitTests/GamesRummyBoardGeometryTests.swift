@@ -6,8 +6,8 @@ import Testing
 
 // 폰 아잉 큐브 판 화면의 순수 값(`GamesRummyBoardGeometry.swift`). 폰 뷰는 맥 스위트가 못 보므로 칸 · 보기 · 받침대 · 누르기를 값으로 잰다.
 @Suite struct GamesRummyBoardGeometryTests {
-    /// 가로 세이프 영역 안 크기: 작은 기기 · iPhone 15 · 852×393 · 큰 기기.
-    static let screens = [CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 852, height: 393), CGSize(width: 932, height: 430)]
+    /// 가로 세이프 영역 안 크기: 시스템 '화면 확대' 둘(iPhone 15 확대의 세이프 값은 어림) · 작은 기기 · iPhone 15 · 852×393 · 큰 기기.
+    static let screens = [CGSize(width: 568, height: 320), CGSize(width: 605, height: 303), CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 852, height: 393), CGSize(width: 932, height: 430)]
     /// iPhone 15 판 칸.
     static let table = CGSize(width: 548, height: 244)
 
@@ -30,24 +30,24 @@ import Testing
                         #expect(overlap.isNull || overlap.height <= 0.5 || overlap.width <= 0.5, "\(size) \(rows)줄: 칸이 겹친다 \(cell) \(other)")
                     }
                 }
-                #expect(layout.table.height > 200, "\(size) \(rows)줄: 판이 너무 작다 \(layout.table.height)")
+                #expect(layout.table.height > 190, "\(size) \(rows)줄: 판이 너무 작다 \(layout.table.height)")
             }
         }
     }
 
-    @Test("칸: 받침대 높이는 줄 수로 안 변한다(판이 안 흔들린다) · 왼쪽 86 · 오른쪽 100 · 판 폭은 가운데 전부 · iPhone 15 설계값")
+    @Test("칸: 받침대 높이는 줄 수로 안 변한다(판이 안 흔들린다) · 왼쪽 90 · 오른쪽 100 · 판 폭은 가운데 전부 · iPhone 15 설계값")
     func rackHeightIsFixed() {
         let size = CGSize(width: 734, height: 372)
         let two = GamesRummyMatchLayout(size: size, rackRows: 2)
         let five = GamesRummyMatchLayout(size: size, rackRows: 5)
         #expect(two.rack == five.rack && two.table == five.table)
-        #expect(two.table.minX == 86 && two.table.width == 548 && two.rightColumn.minX == 634 && two.rightColumn.width == 100)
+        #expect(two.table.minX == 90 && two.table.width == 544 && two.rightColumn.minX == 634 && two.rightColumn.width == 100)
         #expect(two.rack.width == two.table.width && two.rack.maxY == 372)
-        #expect(abs(two.rack.height - 109.8) < 0.2)
-        #expect(abs(two.table.height - 244.2) < 0.2)
+        #expect(abs(two.rack.height - 109.1) < 0.2)
+        #expect(abs(two.table.height - 244.9) < 0.2)
     }
 
-    @Test("오른쪽 열: 네 크기에서 버튼 넷이 44pt 아래로 안 내려가고 [완료]가 가장 크다 · 왼쪽 열: 내 자리 카드는 맨 아래 · 상대 3장과 안 겹친다")
+    @Test("오른쪽 열: 여섯 크기에서 버튼 넷이 44pt 아래로 안 내려가고 [완료]가 가장 크다 · 왼쪽 열: 내 자리 카드는 맨 아래 · 상대 3장과 안 겹친다")
     func columns() {
         for size in Self.screens {
             let layout = GamesRummyMatchLayout(size: size)
@@ -56,9 +56,25 @@ import Testing
             #expect(layout.submit.height > layout.draw.height && layout.draw.height > layout.undo.height && layout.undo.height > layout.sort.height)
             #expect(layout.sort.maxY <= size.height - GamesRummyMatchLayout.columnPadding + 0.001)
             #expect(layout.opponentCard(2).maxY <= layout.mySeatCard.minY)
-            #expect(layout.opponentCard(0).height >= 60, "\(size): 카드 글자 세 줄이 안 든다 \(layout.opponentCard(0).height)")
+            #expect(layout.opponentCard(0).height >= 59, "\(size): 카드 글자 세 줄이 안 든다 \(layout.opponentCard(0).height)")
+            #expect(layout.isSeatCardCompact == (layout.opponentCard(0).height < GamesRummyMatchLayout.seatCardFullContentHeight), "\(size): 낮은 칸인데 얼굴이 그대로다")
             #expect(layout.leftColumn.contains(layout.mySeatCard) && layout.mySeatCard.maxY > size.height - 10)
         }
+    }
+
+    @Test("버튼 하나의 터치 자리: [나가기] · [규칙] · [777] · [789] 가 여섯 크기에서 44×44 이상이고 칸 합이 칸을 안 넘는다")
+    func buttonTouchTargets() {
+        for size in Self.screens {
+            let layout = GamesRummyMatchLayout(size: size)
+            #expect(layout.navButton.width >= 44 && layout.navButton.height >= 44, "\(size): \(layout.navButton)")
+            #expect(layout.sortButton.width >= 44 && layout.sortButton.height >= 44, "\(size): \(layout.sortButton)")
+            #expect(layout.navButton.width * 2 + GamesRummyMatchLayout.navGap <= layout.nav.width + 0.001)
+            #expect(layout.sortButton.width * 2 + GamesRummyMatchLayout.sortDividerWidth <= layout.sort.width + 0.001)
+            #expect(GamesRummyMatchLayout.navButtonDiameter <= layout.navButton.width, "그림이 터치 자리보다 크다")
+        }
+        // 넷 다 44pt 가 안 되는 높이에서는 열을 넘지 않는 쪽이 먼저다.
+        let tight = GamesRummyMatchLayout(size: CGSize(width: 500, height: 260))
+        #expect(tight.sort.maxY <= 260 - GamesRummyMatchLayout.columnPadding + 0.001)
     }
 
     // MARK: - 보기
@@ -224,7 +240,7 @@ import Testing
     func rackTileSizes() {
         let rect = GamesRummyMatchLayout(size: CGSize(width: 734, height: 372)).rack
         let base = GamesRummyRackGeometry(size: rect.size)
-        #expect(abs(base.tileSize.width - 540.0 / 16) < 0.001)
+        #expect(abs(base.tileSize.width - 536.0 / 16) < 0.001)
         #expect(abs(base.tileSize.height / base.tileSize.width - 1.39) < 0.001)
         let three = GamesRummyRackGeometry(size: rect.size, rowCount: 3)
         #expect(abs(three.tileScale - 2.0 / 3) < 0.001)
@@ -235,7 +251,9 @@ import Testing
         for size in Self.screens {
             let layout = GamesRummyMatchLayout(size: size)
             #expect(layout.rack.height <= size.height * GamesRummyMatchLayout.rackMaxHeightShare + 0.001)
-            #expect(GamesRummyRackGeometry(size: layout.rack.size).tileSize.width >= 29, "\(size): 받침대 타일이 너무 작다")
+            // 시스템 '화면 확대'(높이 354 아래)는 칸이 그만큼 좁다 — 맥과 같은 한 줄 16장을 지키는 값이다.
+            let smallest: CGFloat = size.height >= 354 ? 29 : 22
+            #expect(GamesRummyRackGeometry(size: layout.rack.size).tileSize.width >= smallest, "\(size): 받침대 타일이 너무 작다")
         }
     }
 

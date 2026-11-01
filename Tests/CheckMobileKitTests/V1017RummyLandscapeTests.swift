@@ -5,12 +5,12 @@ import Testing
 @testable import CheckMobileKit
 
 // 판 화면만 가로(설계서 §10). 가장 나쁜 고장은 **잠금이 가로에 남아 앱 전체가 가로로 굳는 것**이다 — 빠져나가는 길마다 방향 값을 잰다.
-// 끌기는 합성 입력이 금지이니 네 크기에서 "손 궤적 → 놓을 자리 → 편집기 결과" 를 값으로 밟는다.
+// 끌기는 합성 입력이 금지이니 다섯 크기에서 "손 궤적 → 놓을 자리 → 편집기 결과" 를 값으로 밟는다.
 @MainActor
 @Suite(.serialized) struct V1017RummyLandscapeTests {
     private let waits = GamesWaitBudget()
 
-    static let screens = [CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 852, height: 393), CGSize(width: 932, height: 430)]
+    static let screens = [CGSize(width: 568, height: 320), CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 852, height: 393), CGSize(width: 932, height: 430)]
 
     // MARK: - 방향 규칙
 
@@ -61,7 +61,7 @@ import Testing
         await harness.tearDown()
     }
 
-    @Test("판이 끝나 결과로: 세로 · [최종 판]을 펴면 가로 · 접으면 세로 · 로비로 나가면 세로 · 다음 판 결과는 물려받지 않는다")
+    @Test("판이 끝나 결과로: 세로 · [최종 판]을 펴면 가로 · 접으면 세로 · 로비로 나가면 세로")
     func resultAndFinalBoard() async {
         let harness = await playing("rummy-orient-result")
         let games = harness.games
@@ -79,17 +79,29 @@ import Testing
         #expect(harness.rummy.phase != .finished)
         #expect(games.rummyInterfaceOrientation == .portrait, "결과를 닫았는데 가로에 남았다")
         #expect(!games.isRummyFinalBoardShown)
-
-        // 다른 판이 끝나도 앞 판의 [최종 판] 표시가 살아나지 않는다.
         games.setRummyFinalBoardShown(true)
         #expect(!games.isRummyFinalBoardShown, "결과가 아닌데 최종 판이다")
-        let other = RummyWireJSON.state(nowMs: harness.nowMs, id: "a0000000-0000-4000-8000-0000000000f2", status: "finished", mySeatState: "done", turnSeat: 1)
+        await harness.tearDown()
+    }
+
+    @Test("[최종 판]을 편 채 다른 판의 결과가 서면 표시를 물려받지 않는다(저절로 가로가 안 된다)")
+    func finalBoardNotInherited() async throws {
+        let harness = await playing("rummy-orient-next-result")
+        let games = harness.games
+        harness.apply(status: "finished", mySeatState: "done")
+        games.setRummyFinalBoardShown(true)
+        #expect(games.rummyInterfaceOrientation == .landscape, "기준선: 앞 판의 [최종 판]이 가로가 아니다")
+
+        let next = "a0000000-0000-4000-8000-0000000000f2"
+        let text = RummyWireJSON.state(nowMs: harness.nowMs, id: next, status: "finished", mySeatState: "done", turnSeat: 1)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        if let state = try? decoder.decode(RummyMatchState.self, from: Data(other.utf8)) { _ = harness.rummy.applyState(state) }
-        if harness.rummy.phase == .finished {
-            #expect(games.rummyInterfaceOrientation == .portrait, "다음 판 결과가 저절로 가로가 됐다")
-        }
+        let state = try decoder.decode(RummyMatchState.self, from: Data(text.utf8))
+        #expect(harness.rummy.applyState(state) == .applied)
+        #expect(harness.rummy.match?.id == UUID(uuidString: next), "기준선: 다음 판이 안 섰다")
+        #expect(harness.rummy.phase == .finished, "기준선: 다음 판이 결과가 아니다")
+        #expect(!games.isRummyFinalBoardShown, "다음 판 결과가 표시를 물려받았다")
+        #expect(games.rummyInterfaceOrientation == .portrait, "다음 판 결과가 저절로 가로가 됐다")
         await harness.tearDown()
     }
 
@@ -149,6 +161,43 @@ import Testing
         await harness.tearDown()
     }
 
+    // MARK: - 판 위에 스스로 뜨는 시트
+
+    @Test("알림 설명 시트: 판이 가로로 서 있으면 미룬다 · 세로로 돌아오면 다시 판정한다")
+    func primerWaitsForPortrait() async {
+        let harness = RummyWireHarness(label: "rummy-orient-primer")
+        harness.serveLobby()
+        await harness.signIn()
+        let push = harness.model.push
+        #expect(push.shouldPresentPrimer(status: .notDetermined), "기준선: 판 밖에서는 띄울 때다")
+        harness.games.rummyScreenDidAppear()
+        await harness.barrier()
+        harness.apply()
+        #expect(harness.games.rummyInterfaceOrientation == .landscape)
+        #expect(!push.shouldPresentPrimer(status: .notDetermined), "가로 판 위에 설명 시트가 뜬다")
+        harness.apply(status: "finished", mySeatState: "done")
+        #expect(push.shouldPresentPrimer(status: .notDetermined), "결과(세로)인데 안 띄운다")
+        harness.games.setRummyFinalBoardShown(true)
+        #expect(!push.shouldPresentPrimer(status: .notDetermined), "[최종 판](가로) 위에 설명 시트가 뜬다")
+        harness.games.rummyScreenDidDisappear()
+        #expect(push.shouldPresentPrimer(status: .notDetermined))
+        await harness.tearDown()
+    }
+
+    @Test("생일 선물 시트: 놀던 기기의 가로 판 위에 안 뜬다(확성기는 뜬다) · 판을 떠나면 다음 기회에 뜬다")
+    func giftWaitsForPortrait() async throws {
+        let harness = await playing("rummy-orient-gift")
+        #expect(!harness.rummy.isEngagedInCurrentMatch)
+        #expect(!harness.games.isAnyMatchScreenVisible, "기준선: 놀던 기기는 확성기를 안 미룬다")
+        #expect(harness.model.me.isGameScreenUp, "놀던 기기의 가로 판 위에 선물 시트가 뜬다")
+        harness.games.rummyScreenDidDisappear()
+        #expect(!harness.model.me.isGameScreenUp)
+        await harness.tearDown()
+
+        let root = try IntegrationContractTests.code("Sources/CheckMobileKit/App/MobileRootView.swift")
+        #expect(root.contains("model.games.rummyInterfaceOrientation != .landscape"), "시트 바인딩이 가로 판을 안 피한다")
+    }
+
     // MARK: - 소스 — 시스템 쪽 배선은 시뮬레이터 빌드만 본다
 
     @Test("소스 계약: 방향 합이 plist · project.yml 에 있고 · 델리게이트는 패키지 값만 돌려주고 · 잠금은 값을 쥐지 않고 · 드라이버는 루트에 있다")
@@ -172,6 +221,32 @@ import Testing
         #expect(orientation.contains("setNeedsUpdateOfSupportedInterfaceOrientations"))
         let root = try IntegrationContractTests.code("Sources/CheckMobileKit/App/MobileRootView.swift")
         #expect(root.contains("GamesRummyOrientationDriver(games: model.games)"), "알리는 자리가 없으면 돌지 않는다")
+    }
+
+    @Test("돌기를 기다리는 동안 전환을 다시 청한다(앱 복귀까지 기다리면 차례 시간이 흐른다) · 나갈 길이 늘 있다")
+    func rotatingViewRetries() throws {
+        #expect(GamesRummyOrientationRule.retryInterval > 0 && GamesRummyOrientationRule.retryInterval <= 2)
+        let match = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesRummyMatch.swift")
+        let view = try #require(match.components(separatedBy: "struct GamesRummyRotatingView").last)
+        #expect(view.contains("GamesRummyOrientationRule.retryInterval"))
+        #expect(view.contains("GamesRummyOrientationLock.apply(games.rummyInterfaceOrientation)"), "값을 고정하면 나가는 중에도 가로를 청한다")
+        #expect(view.contains("accessibilityLabel: GamesRummyText.leave"))
+        #expect(view.contains(".onDisappear { retryTask?.cancel() }"), "돌고 나서도 계속 청한다")
+    }
+
+    @Test("반응: 판의 작은 판과 결과의 시트는 값이 따로다 — 하나로 쓰면 작은 판을 연 채 판이 끝날 때 시트가 떴다 내려간다")
+    func reactionStatesAreSeparate() throws {
+        let screen = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesRummyScreen.swift")
+        #expect(screen.contains("GamesRummyMatchView(store: store, onExit: requestExit, onReaction: { reactionPanelOpen = true })"))
+        #expect(screen.contains("GamesRummyResultView(store: store, inviteQueue: inviteQueue, onReaction: { reactionSheetOpen = true })"))
+        #expect(screen.contains(".sheet(isPresented: $reactionSheetOpen)"))
+    }
+
+    @Test("규칙 문구: [전체 보기] 자리를 지금 배치대로 말한다")
+    func rulesSayWhereFullViewIs() throws {
+        let view = try #require(GamesRummyText.rules.first { $0.title == "판 보기" })
+        #expect(view.detail.contains("오른쪽 열 위쪽 버튼"))
+        #expect(!view.detail.contains("판 오른쪽 아래"))
     }
 
     // MARK: - 크기 변경
@@ -228,6 +303,106 @@ import Testing
         model.cancelTouch()
     }
 
+    @Test("왼쪽 가로 ↔ 오른쪽 가로(크기가 같다): 처음 재는 것과 같은 쪽은 변화가 아니다 · 뒤집히면 끌기 · 밀기 · 핀치를 거두고 손 뗄 때까지 무시한다")
+    func landscapeFlip() {
+        let size = CGSize(width: 734, height: 372)
+        let context = GamesRummyMatchInputTests.context(size: size)
+        let model = GamesRummyMatchModel(tableSize: context.layout.table.size)
+        let start = GamesRummyMatchInputTests.rackPoint("C2", context)
+        let moved = CGPoint(x: start.x, y: start.y - 100)
+
+        model.touchChanged(start: start, location: start, context: context, holdDelay: 3_600)
+        model.touchChanged(start: start, location: moved, context: context)
+        model.landscapeSideChanged(.left)
+        #expect(model.drag != nil, "처음 재는 방향에 끌기가 거둬졌다")
+        model.landscapeSideChanged(.left)
+        #expect(model.drag != nil, "같은 쪽인데 거둬졌다")
+
+        model.landscapeSideChanged(.right)
+        #expect(model.drag == nil && model.draggingIDs.isEmpty && model.frozenRows == nil, "뒤집혔는데 타일을 쥐고 있다")
+        #expect(!model.machine.isIdle, "쉬는 상태면 다음 사건이 처음 누른 자리를 다시 집는다")
+        model.touchChanged(start: start, location: CGPoint(x: moved.x + 30, y: moved.y), context: context)
+        #expect(model.drag == nil, "손을 안 뗐는데 다시 집혔다")
+        #expect(model.touchEnded(at: moved, context: context) == .none, "거둔 끌기가 놓였다")
+        model.touchChanged(start: start, location: start, context: context, holdDelay: 3_600)
+        model.touchChanged(start: start, location: moved, context: context)
+        #expect(model.drag != nil, "다음 손이 안 먹는다")
+        model.cancelTouch()
+
+        model.pinch(magnification: 1.3, tableAnchor: .zero)
+        #expect(model.renderScale != model.viewport.scale)
+        model.landscapeSideChanged(.left)
+        #expect(model.renderScale == model.viewport.scale, "핀치가 열린 채 남았다")
+        model.cancelTouch()
+    }
+
+    @Test("자동 밀기(다섯 크기): 받침대 → 판 길목에서는 안 민다 · 안쪽에 한 번 들어온 뒤에는 민다 · 판 아래로 나갔다 오면 다시 꺼진다 · 판에서 출발한 끌기는 처음부터 민다")
+    func edgeArming() {
+        for size in Self.screens {
+            let base = editor()
+            let c = context(base, size)
+            let table = c.layout.table
+            let model = GamesRummyMatchModel(tableSize: table.size)
+            model.tableSizeChanged(table.size)
+            let start = rackPoint("D9", c)
+            let finger: (CGFloat, CGFloat) -> CGPoint = { c.layout.finger(forPointer: CGPoint(x: $0, y: $1)) }
+            #expect(model.viewport.origin == .zero)
+            #expect(GamesRummyViewport(viewport: table.size).visibleLogical.height < 640, "\(size) 기준선: 밀 수 있는 보기가 아니다")
+
+            // 손이 초당 200pt 로 받침대 → 판 윗줄까지. 틱마다 잰다.
+            model.touchChanged(start: start, location: start, context: c, holdDelay: 3_600)
+            let aim = finger(table.midX, table.minY + 40)
+            let steps = max(1, Int(hypot(aim.x - start.x, aim.y - start.y) / 3.2))
+            var sawZone = false
+            for step in 1...steps {
+                let t = CGFloat(step) / CGFloat(steps)
+                let at = CGPoint(x: start.x + (aim.x - start.x) * t, y: start.y + (aim.y - start.y) * t)
+                model.touchChanged(start: start, location: at, context: c)
+                if let pointer = model.drag?.pointer, table.contains(pointer), pointer.y > table.maxY - GamesRummyViewport.edgeZone { sawZone = true }
+                model.edgeTick(deltaTime: 0.016)
+                #expect(model.viewport.origin == .zero, "\(size) \(step)/\(steps): 지나가는 길에 판이 밀렸다 \(model.viewport.origin)")
+            }
+            #expect(sawZone, "\(size) 기준선: 궤적이 아래쪽 구역을 안 지났다")
+
+            // 안쪽에 들어왔으니 켜졌다 — 아래쪽 구역으로 돌아가면 민다.
+            model.touchChanged(start: start, location: finger(table.midX, table.maxY - 10), context: c)
+            model.edgeTick(deltaTime: 0.1)
+            let pushed = model.viewport.origin.y
+            #expect(pushed > 0, "\(size): 안쪽에 들어온 뒤인데 안 민다")
+
+            // 판 아래(받침대)로 나갔다 올라오면 다시 꺼진다.
+            model.touchChanged(start: start, location: finger(table.midX, c.layout.rack.midY), context: c)
+            model.edgeTick(deltaTime: 0.1)
+            model.touchChanged(start: start, location: finger(table.midX, table.maxY - 10), context: c)
+            for _ in 0..<30 { model.edgeTick(deltaTime: 0.016) }
+            #expect(model.viewport.origin.y == pushed, "\(size): 받침대에 다녀온 길목에서 밀렸다")
+            model.touchChanged(start: start, location: finger(table.midX, table.midY), context: c)
+            model.touchChanged(start: start, location: finger(table.midX, table.maxY - 10), context: c)
+            model.edgeTick(deltaTime: 0.1)
+            #expect(model.viewport.origin.y > pushed, "\(size): 다시 들어온 뒤인데 안 민다")
+            model.cancelTouch()
+
+            // 받침대 왼끝 타일을 곧장 위로 — 왼쪽 구역도 켜지지 않는다.
+            let side = GamesRummyMatchModel(tableSize: table.size)
+            side.tableSizeChanged(table.size)
+            side.touchChanged(start: start, location: start, context: c, holdDelay: 3_600)
+            side.touchChanged(start: start, location: finger(table.minX + 10, table.midY), context: c)
+            for _ in 0..<30 { side.edgeTick(deltaTime: 0.016) }
+            #expect(side.viewport.origin == .zero, "\(size): 왼끝으로 올라가는 길에 판이 밀렸다")
+            side.cancelTouch()
+
+            // 판에서 출발한 끌기는 곧바로 민다.
+            let board = GamesRummyMatchModel(tableSize: table.size)
+            board.tableSizeChanged(table.size)
+            let tile = screen(CGPoint(x: 100 + 80 + 20, y: 78), c)
+            board.touchChanged(start: tile, location: tile, context: c, holdDelay: 3_600)
+            board.touchChanged(start: tile, location: finger(table.midX, table.maxY - 10), context: c)
+            board.edgeTick(deltaTime: 0.1)
+            #expect(board.viewport.origin.y > 0, "\(size): 판에서 출발한 끌기가 안 민다")
+            board.cancelTouch()
+        }
+    }
+
     @Test("칸은 세로 크기로 불려도 음수가 안 된다(전환 중 한 프레임 · 안전 그림 조건)")
     func portraitFrameIsSafe() {
         #expect(!GamesRummyMatchLayout.isLandscape(CGSize(width: 393, height: 759)))
@@ -243,7 +418,7 @@ import Testing
         }
     }
 
-    // MARK: - 끌기 궤적 — 네 크기
+    // MARK: - 끌기 궤적 — 다섯 크기
 
     private func context(_ editor: RummyTurnEditor, _ size: CGSize, viewport: GamesRummyViewport? = nil) -> GamesRummyTouchContext {
         let layout = GamesRummyMatchLayout(size: size, rackRows: editor.rackLayout.rowCount)
@@ -264,7 +439,7 @@ import Testing
         GamesRummyMatchInputTests.trace(start, to: context.layout.finger(forPointer: pointer), context, hold: hold)
     }
 
-    @Test("궤적(네 크기): 받침대 → 묶음 · 받침대 → 빈 펠트 · 판 → 판 · 판 → 받침대 거절 · 내가 낸 타일 → 받침대 · 손잡이 묶음 이동 · 덩어리째")
+    @Test("궤적(다섯 크기): 받침대 → 묶음 · 받침대 → 빈 펠트 · 판 → 판 · 판 → 받침대 거절 · 내가 낸 타일 → 받침대 · 손잡이 묶음 이동 · 덩어리째")
     func trajectories() {
         for size in Self.screens {
             let base = editor()
@@ -304,7 +479,7 @@ import Testing
         }
     }
 
-    @Test("궤적(네 크기): 세로로 밀린 판에서 놓기 · 받침대 위아래 줄 옮기기(아랫줄까지 화면 안의 손으로) · 좌표 왕복")
+    @Test("궤적(다섯 크기): 세로로 밀린 판에서 놓기 · 받침대 위아래 줄 옮기기(아랫줄까지 화면 안의 손으로) · 좌표 왕복")
     func scrolledAndRack() {
         for size in Self.screens {
             let base = GamesRummyMatchInputTests.editor(farMeldX: 650, farMeldY: 560)

@@ -3,7 +3,7 @@ import CheckCore
 import SwiftUI
 
 /// 아잉 큐브 판(설계서 §10 — **가로 화면**). 왼쪽 열(뒤로 · 규칙 · 자리 카드) | 가운데(판 · 상태 줄 · 받침대) | 오른쪽 열(판돈 · 더미 · 반응 · 전체 보기 · 동작 버튼)이고, 칸 자리는 `GamesRummyMatchLayout` 한 곳에서 나온다.
-/// 입력: `store` · `onExit`([나가기] — 기권 확인·놀던 기기는 화면 한 곳이 가른다) · `onReaction`([반응] — 시트는 화면이 쥔다).
+/// 입력: `store` · `onExit`([나가기] — 기권 확인·놀던 기기는 화면 한 곳이 가른다) · `onReaction`([반응] — 작은 판은 화면이 쥔다, `GamesRummyReactionPanel`).
 /// 말풍선은 화면 루트가 그린다(`GamesRummyReactionLayer`) — 이 뷰는 자리 앵커(`GamesRummySeatAnchorKey`)만 낸다.
 /// 다른 기기 판: `store.rummy.isEngagedInCurrentMatch == false` 면 `GamesRummyText.elsewhereTitle` 안내 카드 + 읽기만(입력은 막지 않는다 — 맥과 같다).
 /// 탭 막대는 공용 수단으로만 숨긴다(`.hidesTabBar(for: .rummyMatch)`). 뒤로 단추가 판 안에 있어 내비 막대도 숨기고, 숨기면 시스템 뒤로 쓸기도 함께 꺼진다.
@@ -50,7 +50,7 @@ struct GamesRummyMatchView: View {
                 if GamesRummyMatchLayout.isLandscape(size) {
                     content(match: match, size: size)
                 } else {
-                    GamesRummyRotatingView(onExit: onExit)
+                    GamesRummyRotatingView(games: store, onExit: onExit)
                 }
             }
         }
@@ -68,12 +68,25 @@ struct GamesRummyMatchView: View {
             model.boardChanged(editor: rummy.editor, turnKey: rummy.match.map { RummyEditorKey($0) })
         }
         .onChange(of: touching) { _, now in if !now { model.touchVanished() } }
+        // 왼쪽 가로 ↔ 오른쪽 가로는 크기가 같아 위 `onGeometryChange` 가 안 깨어난다.
+        .onReceive(NotificationCenter.default.publisher(for: UIDevice.orientationDidChangeNotification)) { _ in noteDeviceSide() }
         .onAppear {
             flightDoneSerial = rummy.lastDraw?.serial // 돌아왔을 때 옛 뽑기를 다시 날리지 않는다.
             cueTurnIfNeeded()
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            noteDeviceSide()
         }
+        .onDisappear { UIDevice.current.endGeneratingDeviceOrientationNotifications() }
         .onChange(of: myTurnCueKey) { _, _ in cueTurnIfNeeded() }
         .onChange(of: rummy.lastDraw?.serial) { _, serial in noteDraw(serial) }
+    }
+
+    private func noteDeviceSide() {
+        switch UIDevice.current.orientation {
+        case .landscapeLeft: model.landscapeSideChanged(.left)
+        case .landscapeRight: model.landscapeSideChanged(.right)
+        default: break
+        }
     }
 
     private var demoSize: CGSize? {
@@ -268,9 +281,12 @@ struct GamesRummyMatchView: View {
     #endif
 }
 
-/// 방향 전환 중 · 전환이 안 되는 동안의 그림. 차례 시간은 흐르니 [나가기]는 늘 닿아야 한다.
+/// 방향 전환 중 · 전환이 안 되는 동안의 그림. 차례 시간은 흐르니 [나가기]는 늘 닿아야 하고, 이 그림이 떠 있는 동안 전환을 다시 청한다(값은 스토어가 답한다 — 나가는 중이면 세로다).
 private struct GamesRummyRotatingView: View {
+    let games: GamesStore
     let onExit: () -> Void
+
+    @State private var retryTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: MobileTheme.space2) {
@@ -284,6 +300,17 @@ private struct GamesRummyRotatingView: View {
             GlassCircleButton(systemImage: "chevron.left", accessibilityLabel: GamesRummyText.leave, action: onExit)
                 .padding(MobileTheme.space2)
         }
+        .onAppear {
+            retryTask?.cancel()
+            retryTask = Task { @MainActor in
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(GamesRummyOrientationRule.retryInterval))
+                    guard !Task.isCancelled else { return }
+                    GamesRummyOrientationLock.apply(games.rummyInterfaceOrientation)
+                }
+            }
+        }
+        .onDisappear { retryTask?.cancel() }
     }
 }
 #endif

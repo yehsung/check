@@ -13,6 +13,7 @@ import UIKit
 // 화면이 사라졌거나(`isRummyScreenVisible`) · 판이 끝났거나 · 세션이 끝났으면(`reset`) 그 순간 답이 세로다. 시스템이 묻는 답(`MobileAppModel.supportedInterfaceOrientations`)도 같은 값이고,
 // 값을 시스템에 알리는 자리(`GamesRummyOrientationDriver`)는 앱 루트 한 곳이라 큐브 화면이 사라져도 살아 있다.
 // 앱을 내려도 방향은 안 바뀐다(앱을 내리는 것은 화면을 떠나는 것이 아니다) — 돌아오면 드라이버가 한 번 더 알린다.
+// 판 화면이 돌기를 기다리는 동안(`GamesRummyRotatingView`)은 `retryInterval` 마다 다시 청한다 — 차례 시간이 흐르는데 앱 복귀까지 기다리면 시간 초과로 기권될 수 있다.
 
 package enum GamesRummyInterfaceOrientation: Equatable, Sendable {
     case portrait, landscape
@@ -20,6 +21,9 @@ package enum GamesRummyInterfaceOrientation: Equatable, Sendable {
 
 /// 언제 가로인가. 맥 스위트가 표로 재는 자리다.
 package enum GamesRummyOrientationRule {
+    /// 판 화면이 돌기를 기다리는 동안 전환을 다시 청하는 간격(초).
+    package static let retryInterval: TimeInterval = 1.5
+
     /// 판이 도는 판 화면 + 결과의 [최종 판]. 로비 · 방 · 등수 화면은 세로.
     package static func wants(phase: RummyStore.Phase, isScreenVisible: Bool, finalBoardShown: Bool) -> Bool {
         guard isScreenVisible else { return false }
@@ -45,7 +49,7 @@ enum GamesRummyOrientationLock {
         orientation == .landscape ? .landscape : .portrait
     }
 
-    /// 시스템에 지금 방향을 알린다: 물어볼 값이 바뀌었으니 다시 물으라고 하고(`setNeeds…`) · 그 방향으로 돌려 달라고 청한다. 실패는 로그만 남긴다.
+    /// 시스템에 지금 방향을 알린다: 물어볼 값이 바뀌었으니 다시 물으라고 하고(`setNeeds…`) · 그 방향으로 돌려 달라고 청한다. 실패 콜백은 로그만 남긴다 — 다시 청하는 쪽은 돌기를 기다리는 뷰다.
     @MainActor
     static func apply(_ orientation: GamesRummyInterfaceOrientation) {
         let mask = mask(orientation)

@@ -123,7 +123,7 @@ import Testing
         "games/rummy/lobby", "games/rummy/ranking", "games/rummy/rules", "games/rummy/room",
         "games/rummy/match/my-turn", "games/rummy/match/waiting", "games/rummy/match/edited",
         "games/rummy/match/elsewhere", "games/rummy/match/full", "games/rummy/match/overview", "games/rummy/match/many",
-        "games/rummy/match/narrow", "games/rummy/match/dragging", "games/rummy/match/attach", "games/rummy/match/placing",
+        "games/rummy/match/narrow", "games/rummy/match/tiny", "games/rummy/match/dragging", "games/rummy/match/attach", "games/rummy/match/placing",
         "games/rummy/match/refused", "games/rummy/match/lifted", "games/rummy/match/handle", "games/rummy/match/reaction",
         "games/rummy/match/reaction-picker", "games/rummy/match/exit", "games/rummy/match/motion", "games/rummy/match/rules", "games/rummy/match/leave",
         "games/rummy/match/signout", "games/rummy/result",

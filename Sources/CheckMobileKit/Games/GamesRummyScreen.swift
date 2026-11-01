@@ -171,7 +171,7 @@ package enum GamesRummySeating {
 ///  · `inviteQueue` = 방 없이 [초대] · 결과 [한 판 더]의 '부를 사람' 줄(화면이 쥐고 `isWorking`·판 id 변화에 민다).
 ///  · `onExit` = 화면의 [나가기](이탈 판단·확인 시트는 여기 한 곳이다 — 단계 뷰가 `leave`·`leaveForExit` 를 직접 부르지 않는다).
 ///  · 규칙 시트는 `store.rummy.rulesShown` 하나로 연다(`rulesShown = true`).
-///  · 반응: 고르는 시트는 여기가 쥐고(`onReaction`), 말풍선은 단계 뷰가 낸 자리 앵커(`GamesRummySeatAnchorKey`) 위에 여기서 그린다.
+///  · 반응: 고르는 자리는 여기가 쥐고(`onReaction` — 판 화면은 작은 판 · 결과는 시트), 말풍선은 단계 뷰가 낸 자리 앵커(`GamesRummySeatAnchorKey`) 위에 여기서 그린다.
 ///  · ⚠️ 데모의 시계는 고정이다(`MobileClock.fixed`). 남은 초는 `TimelineView` 의 날짜가 아니라 `store.rummy.clock()` 으로 물어라 — 날짜를 쓰면 데모 판이 늘 0초로 그려진다.
 struct GamesRummyScreen: View {
     let store: GamesStore
@@ -180,7 +180,9 @@ struct GamesRummyScreen: View {
     @State private var tab: GamesRummyLobbyTab = .people
     /// 떠 있는 나가기 확인(판 중 기권 · 방장 방 닫기).
     @State private var exitPrompt: RummyCloseDecision?
-    @State private var reactionPicking = false
+    /// 판 화면의 반응 작은 판 · 결과의 고르기 시트. 값을 나눈 까닭: 하나로 쓰면 작은 판을 연 채 판이 끝나는 순간 시트가 떴다 내려간다(값을 끄는 `onChange` 는 본문 뒤에 돈다).
+    @State private var reactionPanelOpen = false
+    @State private var reactionSheetOpen = false
     #if DEBUG
     @State private var demoLeaving = false
     #endif
@@ -200,12 +202,12 @@ struct GamesRummyScreen: View {
             .sheet(isPresented: rulesBinding) {
                 GamesRummyRulesView()
             }
-            .sheet(isPresented: reactionSheetBinding) {
+            .sheet(isPresented: $reactionSheetOpen) {
                 GamesRummyReactionPicker(rummy: rummy)
             }
             .overlay {
-                if reactionPicking, rummy.phase == .playing {
-                    GamesRummyReactionPanel(rummy: rummy, onClose: { reactionPicking = false })
+                if reactionPanelOpen, rummy.phase == .playing {
+                    GamesRummyReactionPanel(rummy: rummy, onClose: { reactionPanelOpen = false })
                 }
             }
             .alert(exitPromptCopy?.title ?? "", isPresented: exitPromptBinding, presenting: exitPromptCopy) { copy in
@@ -231,7 +233,8 @@ struct GamesRummyScreen: View {
             // 방이 판으로 · 판이 결과로 넘어가면(판 id 는 그대로다) 낡은 확인을 거둔다 — 눌러도 `confirm` 이 막지만 틀린 글자가 떠 있게 두지 않는다.
             .onChange(of: rummy.phase) { _, _ in
                 exitPrompt = nil
-                reactionPicking = false
+                reactionPanelOpen = false
+                reactionSheetOpen = false
                 applyDemo()
             }
             .onChange(of: rummy.editor != nil) { _, _ in applyDemo() }
@@ -249,9 +252,9 @@ struct GamesRummyScreen: View {
             case .room:
                 GamesRummyRoomView(store: store, inviteQueue: inviteQueue, onExit: requestExit)
             case .playing:
-                GamesRummyMatchView(store: store, onExit: requestExit, onReaction: { reactionPicking = true })
+                GamesRummyMatchView(store: store, onExit: requestExit, onReaction: { reactionPanelOpen = true })
             case .finished:
-                GamesRummyResultView(store: store, inviteQueue: inviteQueue, onReaction: { reactionPicking = true })
+                GamesRummyResultView(store: store, inviteQueue: inviteQueue, onReaction: { reactionSheetOpen = true })
             }
         }
     }
@@ -266,11 +269,6 @@ struct GamesRummyScreen: View {
 
     private var rulesBinding: Binding<Bool> {
         Binding(get: { rummy.rulesShown }, set: { rummy.rulesShown = $0 })
-    }
-
-    /// 시트는 세로 화면(결과)에서만. 판 화면은 `GamesRummyReactionPanel` 이다.
-    private var reactionSheetBinding: Binding<Bool> {
-        Binding(get: { reactionPicking && rummy.phase != .playing }, set: { reactionPicking = $0 })
     }
 
     private var exitPromptBinding: Binding<Bool> {
@@ -306,7 +304,7 @@ struct GamesRummyScreen: View {
         tab = GamesRummyLobbyTab(demo: demo.lobbyTab)
         demo.applyEdit(to: rummy)
         guard rummy.phase == .playing else { return }
-        if demo.scene == .matchReactionPicker { reactionPicking = true }
+        if demo.scene == .matchReactionPicker { reactionPanelOpen = true }
         if demo.scene == .matchExit { exitPrompt = GamesRummyExit.decision(rummy) }
         // 방향이 실제로 세로로 돌아오는지 보는 장면(합성 입력 없이 빠져나가는 길을 그대로 밟는다).
         if demo.scene == .matchLeave || demo.scene == .matchSignOut, !demoLeaving {

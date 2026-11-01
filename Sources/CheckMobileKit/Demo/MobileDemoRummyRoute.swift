@@ -20,6 +20,7 @@ import Foundation
 /// | `games/rummy/match/overview`   | `_games-rummy-match-overview`   | …c005         | 사람    | 빽빽한 판을 [전체 보기]로      |
 /// | `games/rummy/match/many`       | `_games-rummy-match-many`       | …c006         | 사람    | 내 차례 · 받침대 33장(3줄) · 아래 밖 묶음 · 기권 자리 |
 /// | `games/rummy/match/narrow`     | `_games-rummy-match-narrow`     | …c002         | 사람    | 판 화면을 667×354 로 그린다(작은 기기) |
+/// | `games/rummy/match/tiny`       | `_games-rummy-match-tiny`       | …c002         | 사람    | 판 화면을 568×320 으로 그린다(시스템 '화면 확대') |
 /// | `games/rummy/match/dragging`   | `_games-rummy-match-dragging`   | …c005         | 사람    | 받침대 타일을 묶음 위에 끼우는 중(캐럿) |
 /// | `games/rummy/match/attach`     | `_games-rummy-match-attach`     | …c006         | 사람    | 받침대 타일을 묶음 끝 곁에 붙이는 중(자석) |
 /// | `games/rummy/match/placing`    | `_games-rummy-match-placing`    | …c002         | 사람    | 받침대 덩어리를 빈 펠트로 끄는 중 |
@@ -27,7 +28,7 @@ import Foundation
 /// | `games/rummy/match/lifted`     | `_games-rummy-match-lifted`     | …c002         | 사람    | 받침대 덩어리를 꾹 눌러 든 순간 |
 /// | `games/rummy/match/handle`     | `_games-rummy-match-handle`     | …c002         | 사람    | 손잡이로 묶음을 옮기는 중      |
 /// | `games/rummy/match/reaction`   | `_games-rummy-match-reaction`   | …c002         | 사람    | 말풍선 셋(상대 둘 · 내 자리)    |
-/// | `games/rummy/match/reaction-picker` | `_games-rummy-match-reaction-picker` | …c002 | 사람    | 이모티콘 시트를 연다           |
+/// | `games/rummy/match/reaction-picker` | `_games-rummy-match-reaction-picker` | …c002 | 사람    | 반응 작은 판을 연다            |
 /// | `games/rummy/match/exit`       | `_games-rummy-match-exit`       | …c002         | 사람    | 기권 확인을 연다               |
 /// | `games/rummy/match/motion`     | `_games-rummy-match-motion`     | …c005         | 사람    | 정렬 · 묶음 이동 · 뽑기를 차례로 튼다(녹화용) |
 /// | `games/rummy/match/rules`      | `_games-rummy-match-rules`      | …c002         | 사람    | 판 위에 규칙 시트를 연다(가로) |
@@ -68,6 +69,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         case matchOverview = "games/rummy/match/overview"
         case matchMany = "games/rummy/match/many"
         case matchNarrow = "games/rummy/match/narrow"
+        case matchTiny = "games/rummy/match/tiny"
         case matchDragging = "games/rummy/match/dragging"
         case matchAttach = "games/rummy/match/attach"
         case matchPlacing = "games/rummy/match/placing"
@@ -104,7 +106,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
                 return nil
             case .room: return Self.roomID
             case .roomGuest: return Self.guestRoomID
-            case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchPlacing, .matchLifted, .matchHandle,
+            case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchTiny, .matchPlacing, .matchLifted, .matchHandle,
                  .matchReaction, .matchReactionPicker, .matchExit, .matchRules, .matchLeave, .matchSignOut:
                 return Self.myTurnID
             case .matchWaiting: return Self.waitingID
@@ -119,7 +121,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             switch self {
             case .lobby, .ranking, .rules, .matchElsewhere, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
                 return false
-            case .room, .roomGuest, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchDragging, .matchAttach,
+            case .room, .roomGuest, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchTiny, .matchDragging, .matchAttach,
                  .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .matchReaction, .matchReactionPicker, .matchExit, .matchMotion, .matchRules, .matchLeave, .matchSignOut,
                  .result, .resultBoard, .resultWon:
                 return true
@@ -172,7 +174,13 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
     package var demoFullView: Bool { scene == .matchOverview }
 
     /// 판 화면을 이 크기로 그린다(가장 작은 가로 칸 — 그 기기를 안 띄워도 눈으로 보는 자리).
-    package var demoSize: CGSize? { scene == .matchNarrow ? CGSize(width: 667, height: 354) : nil }
+    package var demoSize: CGSize? {
+        switch scene {
+        case .matchNarrow: return CGSize(width: 667, height: 354)
+        case .matchTiny: return CGSize(width: 568, height: 320)
+        default: return nil
+        }
+    }
 
     package enum LobbyTab: String, Hashable, Sendable { case people, ranking }
 

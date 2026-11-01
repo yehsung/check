@@ -517,7 +517,7 @@ package struct GamesRummyStatusLine: Equatable, Sendable {
     /// 내 시간 초과 연속 횟수(내 자리가 playing 일 때만). 상태 글자와 따로 위험 색으로 늘 보인다 — 다음 초과면 기권인데 글자 서열에 밀려 안 보이면 안 된다.
     package var warning: String? = nil
 
-    /// `engaged` = 이 기기가 손댄 판(앱을 내리면 기권될 수 있는 기기). 남의 차례 줄은 판 아래 띠가 이미 '누구 차례'를 말하므로, 이 기기엔 90초 규칙을 말한다(체스·테트리스 판의 상시 안내와 같은 자리).
+    /// `engaged` = 이 기기가 손댄 판(앱을 내리면 기권될 수 있는 기기). 남의 차례 줄은 상태 줄 꼬리(`GamesRummyStatusTail`)가 이미 '누구 차례'를 말하므로, 이 기기엔 90초 규칙을 말한다(체스·테트리스 판의 상시 안내와 같은 자리).
     package static func make(notice: String?, isMyTurn: Bool, editor: RummyTurnEditor?, turnName: String?,
                              mySeatState: RummySeatState?, myTimeoutStreak: Int? = nil, engaged: Bool = false) -> GamesRummyStatusLine {
         var line = base(notice: notice, isMyTurn: isMyTurn, editor: editor, turnName: turnName, mySeatState: mySeatState, engaged: engaged)

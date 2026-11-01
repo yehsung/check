@@ -155,7 +155,8 @@ struct MobileTabsView: View {
             get: {
                 guard let sheet = model.me.cakeGiftSheet else { return nil }
                 if model.me.cakeGiftSheetOnScreen { return sheet }
-                guard !model.push.isPrimerPresented, !model.games.isAnyMatchScreenVisible else { return nil }
+                guard !model.push.isPrimerPresented, !model.games.isAnyMatchScreenVisible,
+                      model.games.rummyInterfaceOrientation != .landscape else { return nil }
                 #if DEBUG
                 // 데모 `me/gift/dismissed`: 띄우지 않는다 — 위 거두기가 닫은 것으로 쳐 나 탭 '다시 열기' 줄이 선다(스크린샷).
                 if MeDemoHooks.cakeGiftAction() == "dismissed" { return nil }

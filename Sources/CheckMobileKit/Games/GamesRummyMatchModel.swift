@@ -11,7 +11,7 @@ import Observation
 ///
 /// 판 변환을 굳힌다: 누르는 동안·끄는 동안 칸 크기 변화를 미루고(`pendingTableSize`) 받침대 줄 수를 묶는다(`frozenRows`). 손 아래 판이 움직이면 안 된다(맥 교훈). 가장자리 자동 밀기만 예외다 — 사람이 민 것이다.
 /// 놓은 뒤에도 같다: 차례 안에서는 줄 수가 줄지 않는다(`rackRows`) — 셋째 줄 마지막 타일을 놓는 순간 받침대 타일이 통째로 커지면 다음 타일을 잡을 자리가 어긋난다.
-/// 기기가 돌면(판 화면 크기가 바뀌면) 든 것을 거둔다(`screenSizeChanged`) — 쥔 자리가 새 칸에서 다른 것이 된다.
+/// 기기가 돌면 든 것을 거둔다 — 쥔 자리가 새 칸에서 다른 것이 된다. 판 화면 크기가 바뀌면 `screenSizeChanged`, 왼쪽 가로 ↔ 오른쪽 가로(크기가 같다)는 `landscapeSideChanged` 다.
 @MainActor
 @Observable
 package final class GamesRummyMatchModel {
@@ -49,8 +49,14 @@ package final class GamesRummyMatchModel {
     @ObservationIgnored private var heldRows: (turnKey: String?, rows: Int)?
     /// 마지막으로 본 판 화면 크기.
     @ObservationIgnored private var screenSize: CGSize?
+    /// 마지막으로 본 기기 가로 방향.
+    @ObservationIgnored private var landscapeSide: LandscapeSide?
+    /// 이번 끌기에서 가장자리 자동 밀기가 켜졌는가(`edgeTick`).
+    @ObservationIgnored private var edgeArmed = false
 
-    package init(tableSize: CGSize = CGSize(width: 548, height: 248)) {
+    package enum LandscapeSide: Sendable { case left, right }
+
+    package init(tableSize: CGSize = CGSize(width: 544, height: 245)) {
         let view = GamesRummyViewport(viewport: tableSize)
         viewport = view
         renderScale = view.scale
@@ -86,6 +92,7 @@ package final class GamesRummyMatchModel {
             let drag = machine.drag
             draggingIDs = Set(drag?.ids ?? [])
             if case .set(let index)? = drag?.kind { movingSet = index }
+            edgeArmed = base.layout.table.contains(start)
             startEdgeLoop()
             refresh(context)
         case .dragMoved:
@@ -144,6 +151,18 @@ package final class GamesRummyMatchModel {
     package func screenSizeChanged(_ size: CGSize) {
         defer { screenSize = size }
         guard let screenSize, screenSize != size else { return }
+        abandonHold()
+    }
+
+    /// 기기가 왼쪽 가로 ↔ 오른쪽 가로로 뒤집혔다. 크기가 같아 `screenSizeChanged` 가 안 깨어나니 따로 받는다 — 손 자리가 뒤집힌 좌표로 튀어 엉뚱한 자리에 놓이면 안 된다.
+    /// 처음 재는 것은 변화가 아니다. 눕히거나 세운 값(세로 · 위아래 면)은 화면이 안 돌므로 부르는 쪽이 넘기지 않는다.
+    package func landscapeSideChanged(_ side: LandscapeSide) {
+        defer { landscapeSide = side }
+        guard let landscapeSide, landscapeSide != side else { return }
+        abandonHold()
+    }
+
+    private func abandonHold() {
         if !machine.isIdle {
             machine.abandon()
             tearDown()
@@ -197,6 +216,7 @@ package final class GamesRummyMatchModel {
     private func refresh(_ base: GamesRummyTouchContext) {
         guard let moved = machine.drag else { return }
         drag = moved
+        noteEdgeArming(moved, base.layout)
         let context = withViewport(base)
         let next = GamesRummyDropPlanner.target(moved, context)
         guard next != target else { return }
@@ -240,9 +260,22 @@ package final class GamesRummyMatchModel {
     }
 
     /// 끄는 중 기준점이 판 가장자리 28pt 안이면 민다(동작 줄이기여도 켠다 — 꾸밈이 아니라 끌기 기능이다). 보기가 바뀌었으니 놓을 자리를 다시 묻는다.
+    /// 받침대에서 판으로 올라오는 길목이 곧 아래쪽 구역이다 — 지나가기만 해도 손 아래 판이 밀리면 안 되므로 `edgeArmed` 가 켜진 뒤에만 민다.
     package func edgeTick(deltaTime: TimeInterval) {
         guard let context, let moved = machine.drag, context.layout.table.contains(moved.pointer) else { return }
+        noteEdgeArming(moved, context.layout)
+        guard edgeArmed else { return }
         if viewport.edgePan(pointer: context.inTable(moved.pointer), deltaTime: deltaTime) { refresh(context) }
+    }
+
+    /// 판에서 출발한 끌기는 처음부터 켜져 있다. 판 밖에서 출발했거나 판 아래(상태 줄 · 받침대)로 나갔다 오면, 기준점이 구역 안쪽 판에 한 번 들어온 뒤에 켜진다.
+    private func noteEdgeArming(_ moved: GamesRummyDrag, _ layout: GamesRummyMatchLayout) {
+        let zone = GamesRummyViewport.edgeZone
+        if moved.pointer.y >= layout.table.maxY {
+            edgeArmed = false
+        } else if layout.table.insetBy(dx: zone, dy: zone).contains(moved.pointer) {
+            edgeArmed = true
+        }
     }
 
     // MARK: 보기

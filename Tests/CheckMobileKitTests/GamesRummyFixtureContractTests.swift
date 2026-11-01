@@ -39,7 +39,7 @@ import Testing
     @Test("라우트: 표 그대로 풀린다 · 모르는 꼬리는 로비 머리로 · 다른 게임 글자는 nil")
     func parsing() {
         typealias R = MobileDemoRummyRoute
-        #expect(R.Scene.allCases.count == 38)
+        #expect(R.Scene.allCases.count == 39)
         for scene in R.Scene.allCases { #expect(R(demoRoute: scene.rawValue)?.scene == scene, "\(scene)") }
         #expect(R(demoRoute: "games/rummy")?.scene == .lobby)
         #expect(R(demoRoute: "games/rummy/없는꼬리")?.scene == .lobby, "틀린 꼬리가 안 보인다")

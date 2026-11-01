@@ -428,6 +428,8 @@ import Testing
         let table = context.layout.table
         let start = Self.rackPoint("D9", context)
         model.touchChanged(start: start, location: start, context: context)
+        // 받침대에서 온 끌기는 판 안쪽에 한 번 들어온 뒤에 민다(`V1017RummyLandscapeTests.edgeArming`).
+        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: table.midX, y: table.midY)), context: context)
         model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: table.midX, y: table.maxY - 10)), context: context)
         let first = model.target
         let y = model.viewport.origin.y

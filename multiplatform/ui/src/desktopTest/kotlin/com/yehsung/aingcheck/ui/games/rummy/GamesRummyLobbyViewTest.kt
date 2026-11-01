@@ -19,6 +19,7 @@ import com.yehsung.aingcheck.core.net.realtime.IdleReason
 import com.yehsung.aingcheck.core.net.realtime.RealtimeState
 import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
+import com.yehsung.aingcheck.core.rules.rummy.RummyTableSeatingText
 import com.yehsung.aingcheck.core.session.SessionStore
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesBusyGame

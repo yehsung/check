@@ -1,4 +1,5 @@
 // 원본: Sources/CheckCore/Achievements.swift @ 1b8260d (서비스 래퍼 `extension SupabaseWorkService` 는 net(W1-d) 몫)
+// 원본: Sources/CheckCore/Achievements.swift:152 @ 1ca907fa (streakDays) · :267 (HeaderStreakCopy)
 package com.yehsung.aingcheck.core.rules.achievements
 
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
@@ -35,6 +36,11 @@ data class AchievementStatus(
     val serverNowMs: Long? = null,
     /** 일일 미션(v0.3.64 — 최상위 `daily`). **null = 이 서버엔 일일 미션이 없다**(옛 서버 · 칸이 객체가 아님). */
     val daily: DailyMissionStatus? = null,
+    /**
+     * 지금 연속 근무일(최상위 `streak_days` — 폰 칩 전용). **null = 이 서버는 안 알려 준다**(키 없음 · 모양이 틀림) — 칩을 숨긴다.
+     * 미션 줄의 `progress` 로 대신하지 마라: 서버가 target 에서 자르고 달성 뒤에는 target 에 고정한다(30일을 넘긴 사람은 2일째여도 30).
+     */
+    val streakDays: Long? = null,
 ) {
     /** 줄 하나가 그리는 상태 — 미달성 → [받기] → 받음, 이 순서로만. */
     enum class RowState { inProgress, claimable, claimed }
@@ -168,11 +174,11 @@ data class AchievementStatus(
         fun of(
             launchAtMs: Long? = null, missions: List<Mission> = emptyList(), reportedClaimableCount: Long? = null,
             reportedClaimableRuby: Long? = null, claimedNow: List<Claim> = emptyList(), rubyBalance: Long? = null,
-            serverNowMs: Long? = null, daily: DailyMissionStatus? = null,
+            serverNowMs: Long? = null, daily: DailyMissionStatus? = null, streakDays: Long? = null,
         ): AchievementStatus {
             val seen = HashSet<String>()
             return AchievementStatus(launchAtMs, missions.filter { seen.add(it.key) }, reportedClaimableCount, reportedClaimableRuby,
-                claimedNow, rubyBalance, serverNowMs, daily)
+                claimedNow, rubyBalance, serverNowMs, daily, streakDays)
         }
 
         /** 관대한 디코드(서비스 디코더 — 키는 convertFromSnakeCase). 최상위가 객체가 아니면 [SwiftDecodingError]. */
@@ -188,6 +194,7 @@ data class AchievementStatus(
                 serverNowMs = AchievementLossy.int(c, "serverNowMs"),
                 // 일일 칸 하나가 깨져도 누적 미션은 산다(객체가 아니면 null = 일일 없음).
                 daily = c.element("daily")?.takeIf { it !is JsonNull }?.let { DailyMissionStatus.decodeOrNull(it) },
+                streakDays = AchievementLossy.int(c, "streakDays"),
             )
         }
 
@@ -266,6 +273,20 @@ object AchievementNoticeText {
     const val claimFailed = "받지 못했어요. 잠시 후 다시 시도해 주세요"
     /** 실패한 **그 줄** 안의 문장(버튼 옆 보조 문장 자리 — 버튼이 남으니 다시 누르는 것이 재시도다). */
     const val claimFailedRow = "받지 못했어요 · 다시 눌러 주세요"
+}
+
+/**
+ * 연속 근무 칩의 문구(순수 — 값으로 검증한다). 숫자는 서버 `streak_days` 그대로다 — 폰은 `achievements_status`(맥은 `ultra_wallet_sync`, 폰은
+ * 금지 호출 · 같은 날짜 규칙). 판정은 서버가 한다.
+ */
+object HeaderStreakCopy {
+    const val icon: String = "flame.fill"
+
+    /** 화면 글자. **0일도 그린다**(사장님 예시가 "연속 0일 근무!"다). */
+    fun text(days: Long): String = "연속 ${maxOf(0L, days)}일 근무!"
+
+    /** 톡백 문구. 느낌표를 읽지 않게 뺀다. */
+    fun accessibilityLabel(days: Long): String = "연속 ${maxOf(0L, days)}일 근무"
 }
 
 /** `achievement_claim(p_key)` · `daily_mission_claim(p_key)` 본문 — **키를 언제나 싣는다**(null = 받을 것 전부). */

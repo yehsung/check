@@ -10,9 +10,12 @@
 package com.yehsung.aingcheck.ui.games.minigame.kit
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +40,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -324,7 +328,10 @@ enum class PillKind { Filled, Tinted, Gray, Destructive, Plain }
 /** 단추 크기(iOS AingButton.size — sm 34 · md 44 · lg 52). */
 enum class PillSize(val height: Dp, val horizontal: Dp) { Sm(34.dp, 14.dp), Md(44.dp, 18.dp), Lg(52.dp, 20.dp) }
 
-/** 알약 단추(iOS `AingButton`). 비활성은 흐리게만(0.45) — 누름 영역은 그대로 44 이상(투명 여백). */
+/**
+ * 알약 단추(iOS `AingButton`). 비활성은 흐리게만(0.45) — 누름 영역은 그대로 44 이상(투명 여백).
+ * 눌림 표시는 누름 영역(직사각형)이 아니라 **알약 안**에 그린다 — 누름은 바깥 상자가 받고 표시만 안쪽 알약으로 옮긴다.
+ */
 @Composable
 fun PillButton(
     title: String,
@@ -344,16 +351,18 @@ fun PillButton(
         PillKind.Destructive -> colors.dangerTint to colors.danger
         PillKind.Plain -> Color.Transparent to colors.accent
     }
+    val interaction = remember { MutableInteractionSource() }
     Box(
         modifier
             .heightIn(min = AingDimens.minimumTarget)
             .then(if (fillsWidth) Modifier.fillMaxWidth() else Modifier)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = title },
         contentAlignment = Alignment.Center,
     ) {
         Row(
             Modifier.then(if (fillsWidth) Modifier.fillMaxWidth() else Modifier).height(size.height).clip(CircleShape).background(background)
+                .indication(interaction, LocalIndication.current)
                 .padding(horizontal = size.horizontal).alpha(if (enabled) 1f else 0.45f),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),

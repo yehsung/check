@@ -18,8 +18,8 @@ class GamesRummyTextTest {
     private val everyLine: List<String> = RummyPhoneText.ruleList.flatMap { listOf(it.title, it.detail) } +
         listOf(RummyCloseDecision.confirmForfeit, RummyCloseDecision.confirmCloseRoom).mapNotNull { RummyPhoneText.exit(it) }.flatMap { listOf(it.title, it.detail, it.confirm) } +
         listOf(
-            RummyPhoneText.title, RummyPhoneText.subtitle, RummyPhoneText.cardSubtitle, RummyPhoneText.cardOpenHint, RummyPhoneText.myTurn,
-            RummyPhoneText.otherDevice, RummyPhoneText.otherDeviceDetail, RummyPhoneText.rotating, RummyPhoneText.backgroundWarning, RummyPhoneText.createHint, RummyPhoneText.newTableHint, RummyPhoneText.joinEmpty,
+            RummyPhoneText.title, RummyPhoneText.cardSubtitle, RummyPhoneText.cardOpenHint, RummyPhoneText.myTurn,
+            RummyPhoneText.otherDevice, RummyPhoneText.otherDeviceDetail, RummyPhoneText.rotating, RummyPhoneText.backgroundWarning, RummyPhoneText.createHint, RummyPhoneText.joinEmpty,
         )
 
     @Test
@@ -42,10 +42,6 @@ class GamesRummyTextTest {
     fun splitRuleMatchesTheUserDecision() {
         val rule = RummyPhoneText.ruleList.first { it.title == "등수 분배" }.detail
         assertTrue("2명 +N·−N" in rule && "3명 +N·0·−N" in rule && "4명 +2N·0·−N·−N" in rule, rule)
-        assertEquals("1등 10 · 2등 5", RummyPhoneText.split(3, 5))
-        assertEquals("1등 15 · 2등 5", RummyPhoneText.split(4, 5))
-        assertEquals("", RummyPhoneText.split(5, 5))
-        assertEquals("", RummyPhoneText.split(2, null))
     }
 
     @Test
@@ -70,7 +66,6 @@ class GamesRummyTextTest {
         assertEquals("—", RummyPhoneText.rank(null))
         assertEquals("2등", RummyPhoneText.rank(2))
         assertEquals("2위", RummyPhoneText.ladderRank(2))
-        assertEquals("5 × 3명 = 15", RummyPhoneText.pot(5, 3))
         assertEquals("랙 묶음 합 12 / 30", RummyPhoneText.plan(0, 12))
         assertEquals("랙 묶음 10 + 판 8 = 18 / 30", RummyPhoneText.plan(8, 10))
     }

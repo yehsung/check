@@ -1,5 +1,6 @@
 // 원본: Sources/CheckMobileKit/Now/NowTab.swift @ 3bd04bd (NowTab · NowStatusSection · NowWorkControlRow · NowStatusCard · NowWorkingSection · NowWorkingRow)
 // 원본: Sources/CheckMobileKit/Components/InsetGroup.swift @ 3bd04bd (ProgressBar — 막대)
+// 원본: Sources/CheckMobileKit/Now/NowTab.swift:426 @ 1ca907fa (timerLine) · :568 (NowStreakChip — 연속 근무 칩)
 // 원본: Sources/CheckMobileKit/Now/NowTab.swift @ 23b91326 (NowSectionHeader · NowTeamRosterLink · NowWorkingSection · NowWorkingGroup — [전체 보기] 입구)
 //
 // 지금 탭(SPEC-ios §3.2 · 재디자인 B 01·02): 큰 제목 + 부제(날짜 · 팀) · 내 상태 카드(착용 캐릭터 초상 · 큰 타이머 · 이번 주 막대) ·
@@ -46,6 +47,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -58,6 +60,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.achievements.HeaderStreakCopy
 import com.yehsung.aingcheck.core.session.signup.SignUpText
 import com.yehsung.aingcheck.core.stores.messages.MobileRelativeTime
 import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
@@ -123,6 +126,7 @@ object NowTags {
     const val SCREEN = "now-screen"
     const val STATUS_CARD = "now-status-card"
     const val TIMER = "now-timer"
+    const val STREAK_CHIP = "now-streak-chip"
     const val WORK_START = "now-work-start"
     const val WORK_STOP = "now-work-stop"
     const val EDIT_GOAL = "now-edit-goal"
@@ -273,7 +277,7 @@ private fun StatusSection(store: NowStore, work: NowWorkActions?, characterID: S
                 Box(Modifier.padding(16.dp)) {
                     val card = store.myCard(now)
                     when {
-                        card != null -> StatusCard(card, characterID, onEditGoal)
+                        card != null -> StatusCard(card, characterID, store.myStreakDays, onEditGoal)
                         store.teamLoadState == NowLoadState.failed ->
                             LoadFailureRow(NowText.statusUnavailableTitle, store.isRefreshing, retry = { store.refresh() })
                         else -> LoadingRow()
@@ -355,9 +359,9 @@ object NowWorkLines {
     }
 }
 
-/** 상태 카드(시안 `.b-hero`): [초상 · 상태 글자 · 부제 · 목표 연필] / 큰 타이머 / 이번 주 줄 + 막대. */
+/** 상태 카드(시안 `.b-hero`): [초상 · 상태 글자 · 부제 · 목표 연필] / 큰 타이머(옆에 연속 근무 칩) / 이번 주 줄 + 막대. [streakDays] 가 null 이면 칩이 없다(서버가 안 알려 줌). */
 @Composable
-private fun StatusCard(card: NowMyCard, characterID: String?, onEditGoal: () -> Unit) {
+private fun StatusCard(card: NowMyCard, characterID: String?, streakDays: Long?, onEditGoal: () -> Unit) {
     val colors = AingTheme.colors
     val mood = NowWorkLines.mood(card)
     val art = rememberPortrait(characterID ?: DEFAULT_CHARACTER, mood.expression)
@@ -383,14 +387,16 @@ private fun StatusCard(card: NowMyCard, characterID: String?, onEditGoal: () -> 
                 }
             }
         }
-        Text(
-            NowFormat.clock(card.todaySeconds),
-            style = MaterialTheme.typography.displayLarge,
-            color = colors.label,
-            maxLines = 1,
-            modifier = Modifier.padding(top = 12.dp).testTag(NowTags.TIMER)
-                .clearAndSetSemantics { contentDescription = "${NowText.todayLabel} ${NowFormat.spokenDuration(card.todaySeconds)}" },
-        )
+        NowTimerLine(streakDays, Modifier.padding(top = 12.dp)) {
+            Text(
+                NowFormat.clock(card.todaySeconds),
+                style = MaterialTheme.typography.displayLarge,
+                color = colors.label,
+                maxLines = 1,
+                modifier = Modifier.testTag(NowTags.TIMER)
+                    .clearAndSetSemantics { contentDescription = "${NowText.todayLabel} ${NowFormat.spokenDuration(card.todaySeconds)}" },
+            )
+        }
         Column(Modifier.padding(top = 10.dp).clearAndSetSemantics { contentDescription = card.weekLine }, verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text("${NowText.weekPrefix} ${NowFormat.hoursMinutesText(card.weekSeconds)} ${NowText.goalSuffix(card.goalHours)}",
@@ -400,6 +406,70 @@ private fun StatusCard(card: NowMyCard, characterID: String?, onEditGoal: () -> 
             }
             ProgressBar(card.progress, if (card.isGoalComplete) colors.working else colors.accentFill)
         }
+    }
+}
+
+/**
+ * 큰 타이머 줄(Swift `timerLine`). 칩은 그 오른쪽 빈자리에 선다 — 타이머(48)보다 낮아 카드 높이를 1dp 도 안 더한다. 큰 글자에서 한 줄에 안 들어가면
+ * 그때만 아래로 내린다(타이머가 칩 때문에 줄어들지 않는다). 칩이 없으면 타이머 혼자다.
+ */
+@Composable
+private fun NowTimerLine(streakDays: Long?, modifier: Modifier = Modifier, timer: @Composable () -> Unit) {
+    if (streakDays == null) {
+        Box(modifier) { timer() }
+        return
+    }
+    Layout(content = { timer(); NowStreakChip(streakDays) }, modifier = modifier) { measurables, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val timerPlaceable = measurables[0].measure(loose)
+        val chipPlaceable = measurables[1].measure(loose)
+        val rowWidth = timerPlaceable.width + NowTimerLineLayout.ROW_SPACING.roundToPx() + chipPlaceable.width
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else rowWidth
+        if (rowWidth <= width) {
+            val height = maxOf(timerPlaceable.height, chipPlaceable.height)
+            layout(width, height) {
+                timerPlaceable.place(0, (height - timerPlaceable.height) / 2)
+                chipPlaceable.place(width - chipPlaceable.width, (height - chipPlaceable.height) / 2)
+            }
+        } else {
+            val chipTop = timerPlaceable.height + NowTimerLineLayout.STACK_SPACING.roundToPx()
+            layout(width, chipTop + chipPlaceable.height) {
+                timerPlaceable.place(0, 0)
+                chipPlaceable.place(0, chipTop)
+            }
+        }
+    }
+}
+
+/** 타이머 줄 간격(Swift `HStack(spacing: 8)` · `VStack(spacing: 6)`). */
+private object NowTimerLineLayout {
+    val ROW_SPACING: Dp = 8.dp
+    val STACK_SPACING: Dp = 6.dp
+}
+
+/**
+ * 연속 근무 칩(iOS `NowStreakChip`과 같은 문장 · 같은 기호). 0일도 그린다. 불꽃만 빨강이다 — 앰버(`pending`)는 같은 카드에서 '연결 끊김'을 말한다.
+ * 톡백은 칩 전체를 한 문장으로 읽는다(느낌표 없이). 누르는 자리가 아니다.
+ */
+@Composable
+private fun NowStreakChip(days: Long) {
+    val colors = AingTheme.colors
+    Row(
+        Modifier.testTag(NowTags.STREAK_CHIP)
+            .clearAndSetSemantics { contentDescription = HeaderStreakCopy.accessibilityLabel(days) }
+            .heightIn(min = 22.dp)
+            .background(colors.fill, CircleShape)
+            .padding(horizontal = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+    ) {
+        AingIcon(sf(HeaderStreakCopy.icon, AppIcon.LocalFireDepartmentFill), null, size = 13.dp, tint = colors.danger)
+        Text(
+            HeaderStreakCopy.text(days),
+            style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = "tnum"),
+            color = colors.label2,
+            maxLines = 1,
+        )
     }
 }
 

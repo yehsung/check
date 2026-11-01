@@ -295,6 +295,56 @@ class GamesRummyLandscapeTest {
         model.touchVanished()
     }
 
+    /**
+     * 실제 화면의 순서: 조립이 새 차례 재료를 넣고([sync] — 받침대 id 가 전부 밀렸다) 그 뒤에 판 변화 효과가 돈다. 재료 칸과 견주면 turnKey 는 늘 같고, 숫자 id 는 새 편집기에 거의 늘 있어 안 거둔다.
+     * 손을 뗐을 때 그려 놓은 면과 다른 타일이 나간다. 재료를 넣는 그 자리에서 거두므로 효과 전에 손을 떼도 안 놓인다.
+     */
+    @Test
+    fun turnChangeAbandonsThroughTheComposedOrder() {
+        val context = held()
+        val (model, start) = dragging(context)
+        val next = held().copy(turnKey = nextTurn)
+        model.sync(next)
+        assertNull(model.drag, "새 차례 재료가 들어왔는데 앞 차례 손이 살아 있다")
+        assertEquals(GamesRummyTouchMachine.Phase.Ignoring, model.machine.phase)
+        assertEquals(GamesRummyDropAction.None, model.touchUp(start, next), "앞 차례 id 로 다른 타일이 놓였다")
+
+        // 누르고만 있던 타일(Pressing)도 같다 — 이어서 끌면 다른 타일이 집힌다.
+        val pressing = GamesRummyMatchModel(tableSize(context))
+        val at = fx.rackPoint("C2", context)
+        pressing.touchDown(at, context)
+        assertIs<GamesRummyTouchMachine.Phase.Pressing>(pressing.machine.phase)
+        pressing.sync(next)
+        pressing.touchMoved(RummyCanvasPoint(at.x, at.y - 100), next)
+        assertNull(pressing.drag, "차례가 바뀐 뒤 다른 타일이 집혔다")
+    }
+
+    /** 쥘 때 찍은 값과 견준다: 조립이 같은 차례 재료를 먼저 덮어도 답이 같다. 차례가 같고 쥔 타일이 그대로면 둔다(남의 기권). 재료 칸의 편집기와 견주면 '쥔 묶음 내용 비교'가 새 편집기끼리 대어 늘 참이 된다. */
+    @Test
+    fun boardChangedComparesWithTheHoldNotTheLatestContext() {
+        val context = held()
+        val (model, _) = dragging(context)
+        model.sync(held())
+        model.boardChanged(fx.editor(), thisTurn)
+        assertNotNull(model.drag, "같은 차례에 seq 만 올랐는데 거둬졌다")
+        // 재료를 먼저 덮지 않아도 차례가 다르면 거둔다.
+        model.boardChanged(fx.editor(), nextTurn)
+        assertNull(model.drag)
+
+        // 손잡이: 쥔 묶음 번호가 다른 묶음을 가리키게 됐다(같은 차례). 조립이 재료를 덮은 뒤에도 알아본다.
+        val editor = fx.editor()
+        val base = held(editor)
+        val handle = GamesRummyMatchModel(tableSize(base))
+        val edge = fx.screen(100.0, 80.0, base)
+        handle.touchDown(RummyCanvasPoint(edge.x - 10, edge.y), base)
+        assertIs<GamesRummyTouchMachine.Phase.Handle>(handle.machine.phase)
+        val swapped = RummyTurnEditor(listOf(fx.faces("B4", "B5", "B6", "B7"), fx.faces("A1", "A2", "A3")), fx.faces("A4", "C1", "C2", "C3", "D9"), initialDone = true, tableLayout = RummyLayout(listOf(RummyPoint(800, 50), RummyPoint(100, 50))))
+        handle.sync(base.copy(editor = swapped))
+        assertIs<GamesRummyTouchMachine.Phase.Handle>(handle.machine.phase, "같은 차례 재료는 효과가 판단한다")
+        handle.boardChanged(swapped, thisTurn)
+        assertEquals(GamesRummyTouchMachine.Phase.Ignoring, handle.machine.phase, "번호만 같은 다른 묶음을 옮기게 된다")
+    }
+
     @Test
     fun panSurvivesBoardChange() {
         val context = held()

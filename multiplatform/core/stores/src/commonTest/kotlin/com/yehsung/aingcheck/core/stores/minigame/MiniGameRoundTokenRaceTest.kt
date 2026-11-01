@@ -5,6 +5,7 @@ package com.yehsung.aingcheck.core.stores.minigame
 
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.games.GamesMiniGameText
+import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.Reply
 import com.yehsung.aingcheck.core.stores.games.StoreHarness
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
@@ -56,10 +57,11 @@ class MiniGameRoundTokenRaceTest {
         }
     }
 
-    private suspend fun TestScope.open(stub: Minigame = Minigame()): Pair<StoreHarness, GamesMiniGameHub> {
+    private suspend fun TestScope.open(stub: Minigame = Minigame(), phone: Boolean = false): Pair<StoreHarness, GamesMiniGameHub> {
         val h = StoreHarness(this, route = stub::route)
         h.signIn()
         val hub = GamesMiniGameHub(h.context)
+        hub.phonePauseRules = phone
         return h to hub
     }
 
@@ -325,6 +327,115 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(listOf("t1", "t2", "t1"), h.submitTokens())
         assertEquals(emptyList(), hub.pendingSubmits)
         assertEquals(35L, hub.best(MiniGameKind.flappy), "앞 판의 확정 최고도 반영한다")
+    }
+
+    // MARK: 토큰 칸은 하나다(iOS 537a8b50 — 폰 규칙)
+
+    /** 길건너가 too_fast 로 되보내는 동안 플래피를 열어 판을 시작한다. 뒤에 길건너 제출이 ok 를 받는 자리까지 민다. */
+    private suspend fun TestScope.crossyLandsDuringFlappy(phone: Boolean): Triple<StoreHarness, GamesMiniGameHub, GamesPlayController> {
+        val stub = Minigame()
+        stub.submits += Minigame.status("too_fast")
+        val (h, hub) = open(stub, phone)
+        hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        assertEquals("t1", hub.roundToken)
+        hub.recordScore(MiniGameKind.crossy, 5)
+        runCurrent()
+        assertEquals(listOf("crossy"), hub.pendingSubmits.map { it.kind.rawValue }, "전제: 되보내기를 기다린다")
+        hub.closeScreen(MiniGameKind.crossy)
+        hub.openScreen(MiniGameKind.flappy)
+        runCurrent()
+        assertEquals(MiniGameKind.flappy, hub.roundTokenKind, "전제: 다른 게임의 인편은 이 게임 토큰을 막지 않는다")
+        assertEquals("t2", hub.roundToken)
+        val controller = assertNotNull(hub.controller)
+        controller.tap()
+        assertTrue(controller.isPlaying, "전제: 플래피 판이 돈다")
+        advanceTimeBy(2_100)
+        runCurrent()
+        assertEquals(emptyList(), hub.pendingSubmits, "전제: 길건너가 올라갔다")
+        return Triple(h, hub, controller)
+    }
+
+    /** 경로 A: 앞 게임 제출의 꼬리는 지금 화면의 게임 토큰을 받는다. 없으면: 도는 플래피의 토큰이 지워져 판이 끝난 뒤 새 토큰으로 too_fast 를 받고 빨간 글씨가 이어진다. */
+    @Test
+    fun anotherGamesSubmitTailKeepsTheRunningRoundsToken() = runTest {
+        val (h, hub, _) = crossyLandsDuringFlappy(phone = true)
+        assertEquals(MiniGameKind.flappy, hub.roundTokenKind, "길건너 꼬리가 칸을 가져갔다")
+        assertEquals("t2", hub.roundToken, "도는 판의 토큰이 지워졌다")
+        assertEquals(2, h.server.count("minigame_start_round"), "꼬리가 토큰을 또 청했다")
+        hub.recordScore(MiniGameKind.flappy, 3)
+        advanceUntilIdle()
+        assertEquals(listOf("t1", "t1", "t2"), h.submitTokens(), "플래피 점수가 제 토큰으로 곧장 올라간다")
+    }
+
+    /** Windows(맥 규칙): 이 수정은 폰 규칙 안이다 — 꼬리는 전처럼 제출한 게임의 토큰을 받는다. */
+    @Test
+    fun windowsKeepsTheOldTail() = runTest {
+        val (h, hub, _) = crossyLandsDuringFlappy(phone = false)
+        assertEquals(MiniGameKind.crossy, hub.roundTokenKind, "Windows 경로 동작이 바뀌었다")
+        assertEquals(3, h.server.count("minigame_start_round"))
+    }
+
+    /** 경로 B: 다른 게임의 토큰 대기 인편이 왕복 중이면 선발급이 비킨다. 없으면: 그 응답이 세대 가드로 버려져 인편에 왕복도 타이머도 안 남고 다음 방아쇠까지 굳는다. */
+    @Test
+    fun prefetchSkipsAnotherGamesTokenWait() = runTest {
+        val stub = Minigame()
+        val gate = CompletableDeferred<Unit>()
+        stub.startGate = gate
+        val (h, hub) = open(stub, phone = true)
+        hub.openScreen(MiniGameKind.tetris)
+        runCurrent()
+        assertEquals(MiniGameKind.tetris, hub.roundTokenInFlightKind, "전제: 토큰이 왕복 중이다")
+        hub.recordScore(MiniGameKind.tetris, 100)
+        runCurrent()
+        assertEquals(listOf(null), hub.pendingSubmits.map { it.token }, "전제: 토큰을 기다리는 인편이다")
+        hub.closeScreen(MiniGameKind.tetris)
+        hub.openScreen(MiniGameKind.flappy)
+        runCurrent()
+        assertEquals(MiniGameKind.tetris, hub.roundTokenInFlightKind, "플래피 선발급이 테트리스 왕복을 밀어냈다")
+        assertEquals(1, h.server.count("minigame_start_round"))
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("t1"), h.submitTokens(), "테트리스 인편이 제 토큰을 못 받았다")
+        assertEquals(emptyList(), hub.pendingSubmits)
+        assertEquals(MiniGameKind.flappy, hub.roundTokenKind, "인편 꼬리가 지금 화면의 토큰을 받아 준다")
+        assertEquals("t2", hub.roundToken)
+    }
+
+    /** 경로 C: 다른 게임 판이 도는 동안 미는 쪽(백오프 타이머 · 앱 복귀)은 토큰을 청하지 않는다. 그 판이 끝나면 민다. */
+    @Test
+    fun pushingATokenWaitDoesNotTakeTheRunningRoundsToken() = runTest {
+        val stub = Minigame()
+        // 화면을 열 때와 인편이 받을 때 둘 다 망 실패 — 인편은 토큰을 기다리며 백오프에 들어간다.
+        stub.startReply = { n -> if (n <= 2) Reply.Offline else Reply.Json("""{"status":"ok","token":"t$n"}""") }
+        val (h, hub) = open(stub, phone = true)
+        hub.openScreen(MiniGameKind.tetris)
+        runCurrent()
+        assertNull(hub.roundToken, "전제: 토큰을 못 받았다")
+        hub.recordScore(MiniGameKind.tetris, 100)
+        runCurrent()
+        assertEquals(listOf(null), hub.pendingSubmits.map { it.token }, "전제: 토큰을 기다리는 인편이다")
+        hub.closeScreen(MiniGameKind.tetris)
+        hub.openScreen(MiniGameKind.flappy)
+        advanceTimeBy(100)
+        runCurrent()
+        assertEquals(MiniGameKind.flappy, hub.roundTokenKind, "전제: 플래피 토큰을 쥐었다")
+        val flappyToken = hub.roundToken
+        val controller = assertNotNull(hub.controller)
+        controller.tap()
+        val requests = h.server.count("minigame_start_round")
+        advanceTimeBy(120_000)
+        runCurrent()
+        hub.retryPendingSubmitIfAny()
+        runCurrent()
+        assertEquals(flappyToken, hub.roundToken, "테트리스 인편을 미느라 도는 판의 토큰을 지웠다")
+        assertEquals(requests, h.server.count("minigame_start_round"))
+        assertEquals(listOf("tetris"), hub.pendingSubmits.map { it.kind.rawValue }, "인편은 버리지 않는다")
+        controller.abandon()
+        hub.recordScore(MiniGameKind.flappy, 3)
+        advanceUntilIdle()
+        assertEquals(emptyList(), hub.pendingSubmits, "판이 끝난 뒤에는 밀어야 한다")
+        assertEquals(2, h.submitTokens().size)
     }
 
     /** 순위 공개를 끈 사람: 토큰도 제출도 없다(설정 문구 "올라가지도 않아요") — 로컬 최고만 오른다. 공개 여부 조회 실패는 아는 값을 지킨다. */

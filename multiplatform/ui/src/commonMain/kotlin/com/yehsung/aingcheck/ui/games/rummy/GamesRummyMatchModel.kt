@@ -88,6 +88,10 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(544.0, 2
     val locksActions: Boolean get() = frozenRows != null
 
     private var heldRows: Pair<String?, Int>? = null
+
+    /** 쥘 때의 차례 · 편집기. [currentContext] 는 조립마다 새 값으로 덮이니([sync]) 그 칸과 견주면 차례가 바뀌어도 늘 같다 — iOS 는 재료를 손이 움직일 때만 갈아서 그 값이 곧 쥘 때 값이다. */
+    private var heldTurnKey: RummyEditorKey? = null
+    private var heldEditor: RummyTurnEditor? = null
     private var screenSize: RummyCanvasSize? = null
     private var pendingTableSize: RummyCanvasSize? = null
     private var pinchBase: Double? = null
@@ -104,9 +108,16 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(544.0, 2
     /** 조립 단계가 재료를 만들 때 — 보기를 구독하지 않고 읽는다(구독하면 밀 때마다 화면 전체가 다시 돈다). 사건 때는 모델이 지금 보기로 채운다. */
     fun viewportUntracked(): GamesRummyViewport = Snapshot.withoutReadObservation { viewport }
 
-    /** 화면이 조립을 마칠 때마다 — 재료를 넣고 칸 크기를 맞춘다. */
+    /**
+     * 화면이 조립을 마칠 때마다 — 재료를 넣고 칸 크기를 맞춘다. 재료의 차례가 쥘 때와 달라졌으면 **이 자리에서** 거둔다: 새 차례는 id 를 다시 매겨, 손을 먼저 떼면 앞 차례 번호로 다른 타일이 놓인다.
+     * [boardChanged] 는 효과라 이보다 늦게 돈다.
+     */
     fun sync(context: GamesRummyTouchContext) {
         currentContext = context
+        if (machine.holdsBoard && context.turnKey != heldTurnKey) {
+            machine.abandon()
+            tearDown()
+        }
         tableSizeChanged(RummyCanvasSize(context.layout.table.width, context.layout.table.height))
     }
 
@@ -149,6 +160,8 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(544.0, 2
         touchStart = point
         recentDropIDs = emptySet()
         recentDropOrigins = emptyMap()
+        heldTurnKey = base.turnKey
+        heldEditor = base.editor
         machine.down(point, base.with(viewport))
         if (machine.holdsBoard) frozenRows = base.layout.rackRows
     }
@@ -204,8 +217,10 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(544.0, 2
      */
     fun boardChanged(editor: RummyTurnEditor?, turnKey: RummyEditorKey?) {
         if (!machine.holdsBoard) return
-        val held = currentContext
-        if (turnKey == held?.turnKey && machine.holdSurvives(editor, held?.editor)) return
+        if (turnKey == heldTurnKey && machine.holdSurvives(editor, heldEditor)) {
+            heldEditor = editor
+            return
+        }
         machine.abandon()
         tearDown()
     }

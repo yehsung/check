@@ -8,9 +8,13 @@ package com.yehsung.aingcheck.feature.phone.app
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
 import com.yehsung.aingcheck.core.stores.messages.blockPeer
+import com.yehsung.aingcheck.core.stores.rummy.applyState
+import com.yehsung.aingcheck.core.stores.rummy.markEngaged
+import com.yehsung.aingcheck.core.wire.SwiftUUID
 import com.yehsung.aingcheck.core.wire.games.ChessLobbyResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuInboxResponse
 import com.yehsung.aingcheck.core.wire.games.GomokuLobbyResponse
+import com.yehsung.aingcheck.core.wire.games.RummyMatchState
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import com.yehsung.aingcheck.feature.phone.PhoneHarness
 import com.yehsung.aingcheck.feature.phone.Reply
@@ -47,6 +51,16 @@ class PhoneGamesContextTest {
         val app = h.app
         app.games.appDidBecomeActive()
         advanceUntilIdle()
+        // 큐브 문은 이 기기가 손댄 판에서만 연다(놀던 기기는 끌려가지 않는다 — GamesRummyWiringTest).
+        val rummyMatch = "7e7e0000-0000-4000-8000-000000000068"
+        app.rummy.heartbeatEnabled = false
+        app.rummy.markEngaged(SwiftUUID.parse(rummyMatch)!!)
+        app.rummy.applyState(
+            SwiftJson.decode(
+                RummyMatchState.serializer(),
+                """{"id":"$rummyMatch","status":"active","host_id":"${PhoneHarness.ME}","stake":5,"seq":1,"seats":[{"seat_no":0,"user_id":"${PhoneHarness.ME}","state":"playing"}],"my_seat_no":0,"my_rack":["A1"],"table":[],"turn_seat_no":0,"grace_ms":2000}""",
+            ),
+        )
         app.router.drainRequests()
         // 코어가 '판이 막 시작됐다'고 부르는 문 넷 — 게임 탭 스토어가 W2-e 문으로 달고, 폰 라우터가 셸 요청으로 바꾼다.
         app.gomoku.presentWindow!!.invoke()

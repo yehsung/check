@@ -94,9 +94,13 @@ class MergedManifestTest {
         val main = component("activity", "com.yehsung.aingcheck.android.shell.MainActivity")
         // E-U16: 딥링크 → 프로세스 죽음 → 런처 아이콘에서 인스턴스가 하나 더 쌓이지 않게.
         assertEquals("singleTask", main.a("launchMode"))
-        // 아잉 큐브 판 화면만 가로: 돌 때 Activity 를 다시 만들면 화면 수명이 끊겨(rummyScreenDidDisappear) 방향 답이 세로로 뒤집히고 결과가 접힌다.
+        // 구성 변경으로 Activity 를 다시 만들면 화면 수명이 끊긴다: 방향 답이 세로로 뒤집히고 · 끝난 판의 결과가 접히고 · 미니게임 판이 끝나고 · 화면 꺼짐 방지가 죽은 창에 남는다.
         val changes = main.a("configChanges").orEmpty().split("|").toSet()
         assertTrue("방향 · 크기 구성 변경을 직접 받아야 한다: $changes", changes.containsAll(setOf("orientation", "screenSize", "smallestScreenSize", "screenLayout")))
+        assertTrue(
+            "다크 모드 · 글꼴 · 화면 크기 · 언어 · 키보드 변경도 직접 받아야 한다: $changes",
+            changes.containsAll(setOf("uiMode", "density", "fontScale", "fontWeightAdjustment", "locale", "layoutDirection", "keyboard", "keyboardHidden", "navigation")),
+        )
         // 방향의 주인은 RummyOrientationDriver 하나다 — 매니페스트가 묶으면 런타임 값과 어긋난다.
         assertEquals(null, main.a("screenOrientation"))
         assertEquals("true", main.a("exported"))

@@ -473,17 +473,47 @@ class GamesRummyMatchInteractionTest {
         x.h.close()
     }
 
-    /** 세로 크기로 불린 한 프레임: 칸을 세우지 않고 안내 + [나가기]만 그린다(크래시 · 깨진 칸 없음). 돌아오면 판이 선다. */
+    /** 세로 크기로 불린 동안(도는 중): 칸을 세우지 않고 안내 + [나가기]만 그린다(크래시 · 깨진 칸 없음). 돌아오면 판이 선다. */
     @Test
     fun aPortraitFrameDrawsTheSafePicture() = runDesktopComposeUiTest(393, 759) {
+        mainClock.autoAdvance = false
         val x = rig()
         var back = 0
         show(x, onBack = { back += 1 })
+        mainClock.advanceTimeByFrame()
         onNodeWithTag(GamesRummyMatchTags.ROTATING).assertExists()
         onNodeWithTag(GamesRummyMatchTags.INPUT).assertDoesNotExist()
         onNodeWithTag(GamesRummyMatchTags.BACK).performClick()
         assertEquals(1, back, "돌아가는 동안 [나가기]가 안 닿는다")
         x.h.close()
+    }
+
+    /**
+     * 시스템이 방향을 안 들어주는 창(분할 화면의 좁은 칸): 기다려도 세로면 작은 칸에라도 판을 그린다. 스피너에 갇히면 차례 시간이 흘러 세 번째에 기권이다.
+     * 동작 버튼이 닿고 판 입력 층이 선다.
+     */
+    @Test
+    fun aWindowThatNeverRotatesStillGetsTheBoard() {
+        for ((width, height) in listOf(336 to 800, 411 to 800, 393 to 759)) {
+            runDesktopComposeUiTest(width, height) {
+                mainClock.autoAdvance = false
+                val x = rig(state(table = """[["A1","A2","A3"]]""", turnSeat = 0))
+                show(x)
+                mainClock.advanceTimeBy(GamesRummyMatchLayout.rotationWaitMillis - 100)
+                onNodeWithTag(GamesRummyMatchTags.ROTATING).assertExists()
+                onNodeWithTag(GamesRummyMatchTags.INPUT).assertDoesNotExist()
+                mainClock.advanceTimeBy(200)
+                waitForIdle()
+                onNodeWithTag(GamesRummyMatchTags.ROTATING).assertDoesNotExist()
+                onNodeWithTag(GamesRummyMatchTags.INPUT).assertExists()
+                onNodeWithTag(GamesRummyMatchTags.BOARD).assertExists()
+                onNodeWithTag(GamesRummyMatchTags.RACK).assertExists()
+                onNodeWithTag(GamesRummyMatchTags.BACK).assertExists()
+                val draw = onNodeWithTag(GamesRummyMatchTags.DRAW).fetchSemanticsNode().boundsInRoot
+                assertTrue(draw.width > 0 && draw.height >= 24 && draw.right <= width + 0.5f && draw.bottom <= height + 0.5f, "${width}x$height: [뽑기]가 화면 밖 $draw")
+                x.h.close()
+            }
+        }
     }
 
     /** 끄는 동안 동작 버튼이 잠긴다 — 다른 손가락의 [되돌리기] 가 쥔 묶음 번호를 낡게 만들면 안 된다. */

@@ -84,7 +84,7 @@ class GamesRummyBackState {
         when (val decision = rummy.closeDecision) {
             RummyCloseDecision.close -> leave()
             RummyCloseDecision.leaveRoom -> {
-                store.leaveRummyRoomFromScreen()
+                store.leaveRummyRoomFromScreen(personIsLeaving = true)
                 leave()
             }
             RummyCloseDecision.confirmForfeit, RummyCloseDecision.confirmCloseRoom -> asking = decision
@@ -104,7 +104,7 @@ class GamesRummyBackState {
             }
             RummyCloseDecision.leaveRoom -> {
                 asking = null
-                store.leaveRummyRoomFromScreen()
+                store.leaveRummyRoomFromScreen(personIsLeaving = true)
                 leave()
                 return
             }

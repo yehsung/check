@@ -130,7 +130,7 @@ object MiniGameScreenTags {
  * 미니게임 화면 하나. 열림·닫힘은 허브가 쥔다([GamesStore.miniGames] `openScreen`·`closeScreen` — 이 화면이 나타나고 사라질 때 한 번씩).
  *
  * @param refreshHz 이 화면이 선 디스플레이의 주사율(Android 셸이 `Display.refreshRate` 를 읽어 넘긴다 — 바뀌면 루프가 새 간격으로 다시 선다).
- * @param windowFocused Windows 창이 초점을 가졌는가. 거짓이 되면 진행 중인 판을 얼린다(G §8-2). 폰은 안 쓴다(Android 껍데기가 Activity 수명으로 허브를 바로 부른다).
+ * @param windowFocused Windows 창이 초점을 가졌는가. 거짓이 되면 진행 중인 판을 얼린다(G §8-2). 폰은 안 쓴다(Android 껍데기 MiniGameRoute 가 Activity 수명과 창 초점으로 스토어를 바로 부른다).
  * @param myUserID 순위 '나' 행 고르기(폰 세션 — Swift `context.session.session?.userID.lowercased()`).
  * @param pauseToggleSerial 바깥 정지 토글(공용 패치 11 — 데스크톱 창의 ESC). 값이 **바뀔 때마다** 한 번 [MiniGamePauseState.toggled]
  *   (맥 ESC 와 같은 전이 — 판 중이면 정지, 정지면 3-2-1, 카운트다운이면 다시 정지). 기본 0 이고 안 바꾸면 아무 일도 없다.

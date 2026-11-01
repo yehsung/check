@@ -205,14 +205,20 @@ class GamesRummyResultViewTest {
     /** 전환 중 세로 크기로 불려도 안전한 그림이다 — 돌아가는 동안 [등수]로 빠질 수 있다. */
     @Test
     fun finalBoardDrawsTheSafePictureOnAPortraitFrame() = runDesktopComposeUiTest(393, 759) {
+        mainClock.autoAdvance = false
         val x = rig()
         x.rummy.applyState(finished())
         var ranks = 0
         setContent { AingTheme(dark = false) { GamesRummyFinalBoard(x.rummy.match!!, true, { ranks += 1 }, {}, Modifier.fillMaxSize()) } }
+        mainClock.advanceTimeByFrame()
         onNodeWithTag(GamesRummyMatchTags.ROTATING).assertExists()
         onNodeWithTag(GamesRummyResultTags.BOARD_INPUT).assertDoesNotExist()
         onNodeWithTag(GamesRummyMatchTags.BACK).performClick()
         assertEquals(1, ranks)
+        // 시스템이 안 돌려 주는 창: 판 화면과 같이 기다린 뒤 작은 칸에 그린다.
+        mainClock.advanceTimeBy(GamesRummyMatchLayout.rotationWaitMillis + 100)
+        waitForIdle()
+        onNodeWithTag(GamesRummyResultTags.BOARD_INPUT).assertExists()
         x.h.close()
     }
 

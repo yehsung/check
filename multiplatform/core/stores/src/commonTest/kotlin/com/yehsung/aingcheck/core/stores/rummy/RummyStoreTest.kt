@@ -1138,15 +1138,17 @@ class RummyStoreTest {
         assertEquals(MATCH, store.heartbeatMatchID)
         assertNotNull(store.heartbeatJob)
         assertTrue(store.isHoldingMatch)
-        advanceTimeBy(10_001)
         runCurrent()
-        assertEquals(1, r.count("rummy_heartbeat"))
+        assertEquals(1, r.count("rummy_heartbeat"), "판을 들면 바로 한 번")
         val call = r.bodies("rummy_heartbeat").single()
         assertEquals(setOf("p_protocol", "p_match_id"), call.keys)
         assertEquals(MATCH_TEXT, call.getValue("p_match_id").jsonPrimitive.content)
-        advanceTimeBy(10_000)
+        advanceTimeBy(10_001)
         runCurrent()
         assertEquals(2, r.count("rummy_heartbeat"))
+        advanceTimeBy(10_000)
+        runCurrent()
+        assertEquals(3, r.count("rummy_heartbeat"))
         store.applyState(decodeState(stateJson("finished", seq = 9)))
         assertEquals(RummyPhase.finished, store.phase)
         assertNull(store.heartbeatMatchID)
@@ -1155,7 +1157,55 @@ class RummyStoreTest {
         assertFalse(store.isEngaged(MATCH), "끝난 판은 장부에서 지운다")
         advanceTimeBy(30_000)
         runCurrent()
-        assertEquals(2, r.count("rummy_heartbeat"))
+        assertEquals(3, r.count("rummy_heartbeat"))
+    }
+
+    /**
+     * 콜드 스타트: 뒤에 있는 동안 프로세스가 죽고 다시 켰다. 앱 복귀 시점엔 판이 없어 '바로 한 번'이 건너뛰어지고, 판을 읽은 뒤 루프가 주기(10초)부터 시작하면 그 사이 90초 끊김 기권에 걸린다.
+     * 앱 복귀가 판보다 먼저 온다(GamesStore.appDidBecomeActive → catchUp → applyState).
+     */
+    @Test
+    fun coldStartBeatsAtOnceWhenTheMatchIsRead() = runTest {
+        val r = rig()
+        val store = r.store
+        store.heartbeatEnabled = true
+        r.script.stand("rummy_heartbeat", envelope())
+        store.markEngaged(MATCH)
+        store.appDidBecomeActive()
+        runCurrent()
+        assertEquals(0, r.count("rummy_heartbeat"), "전제: 복귀 시점엔 판이 없다")
+        store.applyState(decodeState(stateJson()))
+        assertEquals(0, r.count("rummy_heartbeat"), "applyState 안에서 보내면 그 안으로 다시 들어온다")
+        runCurrent()
+        assertEquals(1, r.count("rummy_heartbeat"), "판을 읽고 주기를 기다렸다")
+        store.applyState(decodeState(stateJson(seq = 9)))
+        runCurrent()
+        assertEquals(1, r.count("rummy_heartbeat"), "같은 판을 다시 읽어도 또 보내지 않는다")
+        advanceTimeBy(9_000)
+        runCurrent()
+        assertEquals(1, r.count("rummy_heartbeat"))
+        advanceTimeBy(1_001)
+        runCurrent()
+        assertEquals(2, r.count("rummy_heartbeat"), "주기는 그대로 돈다")
+    }
+
+    /** 방은 판이 아니다: 루프를 세우며 보내지 않고 앱 복귀만 한 번 보낸다(화면 복귀는 roomHeartbeatHeld 가 보낸다 — PhoneRummyTabExitTest). 두 번 나가지 않는다. */
+    @Test
+    fun roomBeatsOnceOnReturnAndNotOnRead() = runTest {
+        val r = rig()
+        val store = r.store
+        store.heartbeatEnabled = true
+        r.script.stand("rummy_heartbeat", envelope())
+        store.markEngaged(MATCH)
+        store.applyState(decodeState(stateJson("forming")))
+        assertEquals(RummyPhase.room, store.phase)
+        assertEquals(MATCH, store.heartbeatMatchID)
+        runCurrent()
+        assertEquals(0, r.count("rummy_heartbeat"), "방을 읽었다고 바로 보내면 방 규칙이 바뀐다")
+        store.appDidEnterBackground()
+        store.appDidBecomeActive()
+        runCurrent()
+        assertEquals(1, r.count("rummy_heartbeat"), "방도 돌아오면 바로 한 번 · 두 번 나가지 않는다")
     }
 
     @Test

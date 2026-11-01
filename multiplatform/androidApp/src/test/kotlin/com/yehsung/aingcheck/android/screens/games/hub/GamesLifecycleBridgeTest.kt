@@ -31,6 +31,7 @@ import org.junit.runner.RunWith
 import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [36])
@@ -173,6 +174,39 @@ class GamesLifecycleBridgeTest {
             rig.settle()
             assertFalse("타이밍 바 판은 화면 켜짐을 켜지 않는다", w.keepScreenOn)
         }
+    }
+
+    /** Activity 를 다시 만든 뒤(프로세스는 산다 — 프로세스 복원 말고도 남는 재생성): 도는 판의 플래그가 새 창에 걸린다. 없으면: 플래그가 죽은 창에 남아 판 중에 화면이 꺼진다. */
+    @Test
+    fun aRecreatedActivityGetsTheFlagOnItsNewWindow() {
+        val w = wired()
+        w.rig.use { rig ->
+            w.start()
+            rig.store.miniGames.openScreen(MiniGameKind.tetris)
+            rig.settle()
+            requireNotNull(rig.store.miniGames.controller).tap()
+            assertTrue("전제: 판이 돌면 화면 켜짐", rig.pumpUntil { w.keepScreenOn })
+
+            val next = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
+            val release = GamesKeepScreenOn.install(rig.store, next.window)
+            assertTrue("다시 만든 창에 플래그가 안 걸렸다", (next.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) != 0)
+
+            rig.store.sceneWillResignActive()
+            assertTrue("언 판은 새 창의 화면 켜짐을 푼다", rig.pumpUntil { (next.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) == 0 })
+            assertTrue("옛 창은 더 안 불린다", w.keepScreenOn)
+            release()
+            assertEquals("푼 뒤에는 쥐지 않는다", null, rig.store.appliedIdleTimerDisabled)
+        }
+    }
+
+    /** 조립이 Activity 끝에서 싱크를 푼다 — 옛 창을 앱 수명 스토어가 붙들지 않게. */
+    @Test
+    fun mainActivityReleasesItsSinkOnDestroy() {
+        val source = listOf("src/main/kotlin/com/yehsung/aingcheck/android/shell/MainActivity.kt", "androidApp/src/main/kotlin/com/yehsung/aingcheck/android/shell/MainActivity.kt")
+            .map(::File).first { it.exists() }.readText()
+            .lines().filterNot { it.trimStart().startsWith("//") }.joinToString("\n")
+        assertTrue("onCreate 가 이 창으로 달고 푸는 일을 쥔다", source.contains("releaseKeepScreenOn = GamesKeepScreenOn.install(screens.phone.games, window)"))
+        assertTrue("onDestroy 가 푼다", source.substringAfter("override fun onDestroy()").substringBefore("override fun onNewIntent").contains("releaseKeepScreenOn?.invoke()"))
     }
 
     @Test

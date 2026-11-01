@@ -222,6 +222,46 @@ class GamesStoreTest {
         assertEquals(1, h.router.presented.size, "보이는 화면은 또 쌓지 않는다")
     }
 
+    /** Activity 를 다시 만들었다: 스토어는 앱 수명이라 살아 있고 창만 새것이다. 새 싱크가 지금 값을 곧바로 받고 옛 싱크는 더 안 불린다. 없으면: 플래그가 죽은 창에 걸려 판 중에 화면이 꺼진다. */
+    @Test
+    fun aNewSinkTakesOverTheIdleTimer() = runTest {
+        val (h, games) = games()
+        fun flush() {
+            Snapshot.sendApplyNotifications()
+            runCurrent()
+        }
+        val first = mutableListOf<Boolean>()
+        val firstSink: (Boolean) -> Unit = { first += it }
+        games.installIdleTimerSink(firstSink)
+        games.appDidBecomeActive()
+        h.applyTetris(TetrisDuelStoreTest.activeState())
+        flush()
+        assertEquals(true, first.last(), "전제: 판이 돌면 켠다")
+        val firstCalls = first.size
+
+        val second = mutableListOf<Boolean>()
+        val secondSink: (Boolean) -> Unit = { second += it }
+        games.installIdleTimerSink(secondSink)
+        assertEquals(listOf(true), second, "판 도중 다시 만든 새 창에 값이 안 넘어갔다")
+        games.uninstallIdleTimerSink(firstSink)
+        games.appDidEnterBackground()
+        flush()
+        assertEquals(listOf(true, false), second, "옛 Activity 의 해제가 새 싱크를 풀었다")
+        assertEquals(firstCalls, first.size, "죽은 창을 또 불렀다")
+
+        games.uninstallIdleTimerSink(secondSink)
+        games.appDidBecomeActive()
+        flush()
+        assertEquals(listOf(true, false), second, "푼 싱크를 또 불렀다")
+        assertEquals(null, games.appliedIdleTimerDisabled)
+        val third = mutableListOf<Boolean>()
+        games.installIdleTimerSink { third += it }
+        assertEquals(listOf(true), third, "푼 뒤 새로 단 싱크가 지금 값을 못 받았다")
+        h.tetris.reset()
+        flush()
+        assertEquals(listOf(true, false), third, "감시가 하나도 안 남았다")
+    }
+
     /** 화면 꺼짐 방지: 테트리스 판·끝나지 않은 미니게임(타이밍 바 빼고)·1:1 체스는 켠다 · background 면 푼다 · 같은 값은 다시 안 넘긴다. */
     @Test
     fun theIdleTimerFollowsWhatIsRunning() = runTest {

@@ -4,6 +4,12 @@
 package com.yehsung.aingcheck.android.screens.games.minigame
 
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.WindowInfo
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
@@ -50,11 +56,18 @@ class MiniGameRoutePauseTest {
         }
     }
 
-    private fun open(rig: GamesAndroidRig, scene: Scene, game: String) {
+    /** 창 초점만 시험이 쥔다. 나머지는 실제 값 그대로다. */
+    private class TestWindow(private val real: WindowInfo) : WindowInfo by real {
+        var focused: Boolean by mutableStateOf(true)
+        override val isWindowFocused: Boolean get() = focused
+    }
+
+    private fun open(rig: GamesAndroidRig, scene: Scene, game: String, window: TestWindow? = null) {
         rig.signIn()
         rig.store.miniGames.pauseSleep = { awaitCancellation() }
         compose.setContent {
-            CompositionLocalProvider(LocalLifecycleOwner provides scene) {
+            val info = window ?: LocalWindowInfo.current
+            CompositionLocalProvider(LocalLifecycleOwner provides scene, LocalWindowInfo provides info) {
                 AingTheme(dark = false) { MiniGameRoute(rig.store, game, null, onBack = {}) }
             }
         }
@@ -98,6 +111,44 @@ class MiniGameRoutePauseTest {
             assertTrue("제출이 나간다", rig.pumpUntil { rig.bodies("minigame_submit_score").isNotEmpty() })
             assertNull("임시 항목이 남으면 다음 실행에 또 올라간다", rig.prefs.getString(GamesMiniGameHub.pauseDraftKey(GamesAndroidRig.USER)))
         }
+    }
+
+    /**
+     * 알림 창 · 전원 메뉴 · 시스템 대화상자: Activity 는 RESUMED 로 남고 창 초점만 거둔다. 얼리지 않으면 판이 사람 없이 흘러 새가 떨어지고 길건너는 입력 공백으로 죽는다.
+     * 초점이 돌아와도 저절로 안 풀린다 — [이어하기] 가 푼다(iOS .inactive · .active). 처음 값은 변화가 아니다.
+     */
+    @Test
+    fun losingWindowFocusFreezesAndGettingItBackDoesNotThaw() {
+        GamesAndroidRig().use { rig ->
+            val scene = Scene()
+            val window = TestWindow(object : WindowInfo { override val isWindowFocused: Boolean = true })
+            window.focused = false
+            open(rig, scene, "tetris", window)
+            val hub = rig.store.miniGames
+            val c = requireNotNull(hub.controller)
+            focus(rig, window, true)
+            c.tap()
+            repeat(5) { c.softDropOneCell() }
+            frame(rig)
+            assertEquals("초점을 얻은 것은 얼릴 일이 아니다", MiniGamePauseState.None, c.pauseState)
+
+            focus(rig, window, false)
+            assertEquals("알림 창을 내렸는데 판이 그대로 돈다", MiniGamePauseState.Paused, c.pauseState)
+            assertEquals("수명은 그대로다(전제)", Lifecycle.State.RESUMED, scene.registry.currentState)
+            assertNotNull("앱을 쓸어 올려 죽여도 남게", rig.prefs.getString(GamesMiniGameHub.pauseDraftKey(GamesAndroidRig.USER)))
+
+            focus(rig, window, true)
+            assertEquals("복귀가 판을 저절로 풀었다", MiniGamePauseState.Paused, c.pauseState)
+            assertTrue(c.isPlaying)
+            compose.onNodeWithTag(MiniGameScreenTags.RESUME).assertExists()
+        }
+    }
+
+    private fun focus(rig: GamesAndroidRig, window: TestWindow, focused: Boolean) {
+        window.focused = focused
+        Snapshot.sendApplyNotifications()
+        frame(rig)
+        frame(rig)
     }
 
     /** 라우트의 뒤로(화면이 사라짐) = [그만두기]: 플래피는 기록 없이 끝난다(사용자 답 "지금처럼 버림"). */

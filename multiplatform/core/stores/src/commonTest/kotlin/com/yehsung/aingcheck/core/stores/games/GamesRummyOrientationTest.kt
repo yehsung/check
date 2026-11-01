@@ -116,11 +116,12 @@ class GamesRummyOrientationTest {
         assertEquals(portrait, x.value)
     }
 
-    /** 끌려 들어옴: 다른 화면에 있던 사람에게 판이 시작되면 presentWindow → 화면이 뜬다. 뜨기 전에는 판이 있어도 세로다. */
+    /** 끌려 들어옴: 다른 화면에 있던 사람에게 이 기기가 손댄 판이 시작되면 presentWindow → 화면이 뜬다. 뜨기 전에는 판이 있어도 세로다. */
     @Test
     fun pulledIntoAMatch() = runTest {
         val x = playing()
         x.games.rummyScreenDidDisappear()
+        x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
         x.rummy.applyState(state(seq = 2))
         assertEquals(portrait, x.value, "화면이 안 떴는데 먼저 돌았다")
         x.h.router.presented.clear()
@@ -129,6 +130,19 @@ class GamesRummyOrientationTest {
         assertEquals(listOf<GamesDestination>(GamesDestination.Rummy), x.h.router.presented)
         x.games.rummyScreenDidAppear()
         assertEquals(landscape, x.value)
+    }
+
+    /** 놀던 기기: 다른 기기 판을 읽어도 화면이 안 뜨니 돌지 않는다. */
+    @Test
+    fun anIdleDeviceStaysPortrait() = runTest {
+        val x = playing()
+        x.games.rummyScreenDidDisappear()
+        x.rummy.applyState(state(id = OTHER))
+        x.h.router.presented.clear()
+        x.games.appDidBecomeActive()
+        x.rummy.presentWindow!!.invoke()
+        assertEquals(emptyList(), x.h.router.presented, "놀던 기기가 판 화면으로 끌려갔다")
+        assertEquals(portrait, x.value)
     }
 
     @Test

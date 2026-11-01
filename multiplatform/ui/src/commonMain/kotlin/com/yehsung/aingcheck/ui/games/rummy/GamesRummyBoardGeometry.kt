@@ -211,8 +211,14 @@ data class GamesRummyMatchLayout(
         /** 세 열이 앉는 폭. 큰 화면은 시스템이 방향 요청을 무시하기도 해서(Android 16 · 멀티 윈도) 세로로 서도 칸을 세운다 — 판을 영영 못 보면 시간 초과로 기권된다. */
         const val minPortraitBoardWidth: Double = 600.0
 
-        /** 이 크기에 판을 그려도 되는가. 아니면 안내만 그린다. */
+        /** 이 크기에 곧바로 판을 그려도 되는가. 아니면 돌기를 기다린다([rotationWaitMillis]). */
         fun canStand(size: RummyCanvasSize): Boolean = isLandscape(size) || size.width >= minPortraitBoardWidth
+
+        /**
+         * 세로 프레임에서 돌기를 기다리는 시간. 넘으면 시스템이 방향을 안 들어주는 창이다(분할 화면의 좁은 칸 — Android 11 이하 폰 · Android 16 큰 화면) — 작은 칸에라도 판을 그린다. 차례 시간은 흐르고 세 번이면 기권이다.
+         * 어느 창이 그런지는 기기마다 달라 창 모양으로 미리 가르지 않고 기다림으로 가른다. 평소 회전은 이보다 빨리 끝난다.
+         */
+        const val rotationWaitMillis: Long = 2_000
     }
 }
 

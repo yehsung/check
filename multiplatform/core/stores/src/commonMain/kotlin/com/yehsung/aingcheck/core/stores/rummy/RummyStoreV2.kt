@@ -28,6 +28,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.yield
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -116,12 +117,19 @@ internal fun RummyStore.updateHeartbeat() {
     setHoldingMatch(holding && seatState != RummySeatState.forfeit && seatState != RummySeatState.done)
     val wanted = if (heartbeatEnabled && holding && !isAppInBackground && !(roomHeartbeatHeld && phase == RummyPhase.room)) current?.id else null
     if (wanted == heartbeatMatchID) return
+    // 판 하트비트가 쉬다가 다시 선다(앱을 다시 켜 판을 읽었다 · 뒤에서 돌아왔다). 주기(10초)를 기다리면 그 사이 90초 끊김 기권에 걸린다. 방은 roomHeartbeatHeld 와 앱 복귀가 따로 보낸다.
+    val beatsAtOnce = heartbeatMatchID == null && phase == RummyPhase.playing
     heartbeatJob?.cancel()
     heartbeatJob = null
     heartbeatMatchID = wanted
     val matchID = wanted ?: return
     val generation = resetGeneration
     heartbeatJob = scope.launch {
+        if (beatsAtOnce) {
+            // Main.immediate 에서는 launch 가 여기까지 동기로 돈다 — applyState 안으로 다시 들어가지 않게 한 번 비킨다.
+            yield()
+            if (generation == resetGeneration && heartbeatMatchID == matchID) heartbeatTick(matchID)
+        }
         while (true) {
             delay(delayMillis(heartbeatSeconds))
             if (generation != resetGeneration || heartbeatMatchID != matchID) return@launch
@@ -161,12 +169,15 @@ fun RummyStore.appDidEnterBackground() {
     updateHeartbeat()
 }
 
-/** 앱이 앞으로 왔다. 다음 10초를 기다리지 않고 **바로 한 번** 보낸다(뒤에 있던 공백을 90초 판정 전에 메운다 — 맥 didWake 와 같은 뜻). */
+/**
+ * 앱이 앞으로 왔다. 다음 10초를 기다리지 않고 **바로 한 번** 보낸다(뒤에 있던 공백을 90초 판정 전에 메운다 — 맥 didWake 와 같은 뜻).
+ * 판은 [updateHeartbeat] 가 루프를 세우며 보낸다(앱을 다시 켜 판을 읽은 길과 한 곳). 여기서는 방만 보낸다.
+ */
 fun RummyStore.appDidBecomeActive() {
     isAppInBackground = false
     updateHeartbeat()
     val matchID = heartbeatMatchID ?: return
-    scope.launch { heartbeatTick(matchID) }
+    if (phase == RummyPhase.room) scope.launch { heartbeatTick(matchID) }
 }
 
 // MARK: - 의도적 이탈(머리말 ⑫)

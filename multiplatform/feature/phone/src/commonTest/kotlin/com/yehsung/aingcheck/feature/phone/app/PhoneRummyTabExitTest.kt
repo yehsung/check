@@ -159,6 +159,106 @@ class PhoneRummyTabExitTest {
         assertEquals(1, r.leaves)
     }
 
+    // MARK: - 나가는 전환(화면은 기본 700ms 동안 합성에 남아 '보임'이 참이다 — 시험 밖 Compose 는 사라짐을 늦게 부른다)
+
+    /** 평소 경우: 응답이 전환보다 빠르다. 사라짐 앞에 온 응답이 안내를 '봤음'으로 적으면 돌아온 사람이 설명 없는 로비를 본다. */
+    @Test
+    fun tabNoticeSurvivesAFastAnswerDuringTheExitTransition() = runTest {
+        val r = seated(Seat.guest)
+        r.router.departing { r.app.tabDidChange(PhoneTab.messages) }
+        settle(500)
+        assertEquals(1, r.leaves, "전제: 전환이 끝나기 전에 응답이 왔다")
+        assertTrue(r.games.isRummyScreenVisible, "전제: 화면이 아직 합성에 있다")
+        r.games.rummyScreenDidDisappear()
+        assertEquals(RummyPhoneText.tabLeftNotice, r.games.rummyLeftByTabNotice, "안내가 보이기도 전에 지워졌다")
+        r.comeBack()
+        assertEquals(RummyPhoneText.tabLeftNotice, r.games.rummyLeftByTabNotice)
+        r.tap(PhoneTab.me)
+        assertNull(r.games.rummyLeftByTabNotice, "본 안내는 다음에 떠날 때 지운다")
+    }
+
+    /** 비행기 모드 · 서버의 빠른 오류: 실패가 전환보다 빠르다. '보고 있다'로 쳐서 되보내기를 끊으면 망이 돌아와도 자리가 90초 남고, 그사이 시작되면 모르는 사이 판돈이 걷힌다. */
+    @Test
+    fun retriesSurviveAFastFailureDuringTheExitTransition() = runTest {
+        val r = seated(Seat.guest, retries = listOf(3.0, 10.0))
+        r.leave = DOWN
+        r.router.departing { r.app.tabDidChange(PhoneTab.messages) }
+        settle(500)
+        assertEquals(1, r.leaves, "전제: 전환이 끝나기 전에 실패했다")
+        assertTrue(r.games.isRummyScreenVisible, "전제: 화면이 아직 합성에 있다")
+        r.games.rummyScreenDidDisappear()
+        r.leave = OK
+        settle(3_000)
+        assertEquals(2, r.leaves, "되보내기가 끊겼다")
+        assertEquals(RummyPhase.lobby, r.rummy.phase)
+        assertEquals(RummyPhoneText.tabLeftNotice, r.games.rummyLeftByTabNotice)
+    }
+
+    /** 뒤로로 나간 손님도 같다(부르는 쪽이 곧바로 화면을 내린다 — GamesRummyBackState.handleBack). */
+    @Test
+    fun backRetriesSurviveAFastFailureDuringTheExitTransition() = runTest {
+        val r = seated(Seat.guest, retries = listOf(3.0))
+        r.leave = DOWN
+        r.games.leaveRummyRoomFromScreen(personIsLeaving = true)
+        settle(500)
+        assertEquals(1, r.leaves)
+        r.games.rummyScreenDidDisappear()
+        r.leave = OK
+        settle(3_000)
+        assertEquals(2, r.leaves, "뒤로 나간 손님의 되보내기가 끊겼다")
+    }
+
+    /** 방장: [방 닫고 나가기] 뒤 응답 전에 다른 탭을 눌렀고, 응답이 전환 안에 왔다. onLeft 가 돌면 이미 옮겨 간 탭의 맨 위 화면을 뺀다. */
+    @Test
+    fun hostMovedDuringTheExitTransitionIsNotPopped() = runTest {
+        val r = seated(Seat.host)
+        val gate = CompletableDeferred<Unit>()
+        r.leave = Reply.Gate(gate, OK)
+        var left = 0
+        r.games.leaveRummyRoomFromScreen(onLeft = { left += 1 })
+        runCurrent()
+        r.router.departing { r.app.tabDidChange(PhoneTab.messages) }
+        assertEquals(PhoneTab.messages, r.router.selectedTab)
+        gate.complete(Unit)
+        settle(500)
+        assertTrue(r.games.isRummyScreenVisible, "전제: 화면이 아직 합성에 있다")
+        assertEquals(0, left, "옮겨 간 탭의 화면을 뺐다")
+    }
+
+    /** 기준선: 사람이 안 떠났으면 화면이 보이는 동안 전과 같다 — 되보내지 않고 사람에게 맡긴다 · onLeft 가 돈다. 떠났다가 돌아오면 깃발이 내려 다시 맡긴다. */
+    @Test
+    fun aPersonStillOnTheScreenStaysInCharge() = runTest {
+        val r = seated(Seat.guest, retries = listOf(3.0))
+        r.leave = DOWN
+        r.games.leaveRummyRoomFromScreen()
+        settle(10_000)
+        assertEquals(1, r.leaves, "방을 보고 있는 사람을 되보냈다")
+
+        val host = seated(Seat.host)
+        var left = 0
+        host.games.leaveRummyRoomFromScreen(onLeft = { left += 1 })
+        settle(500)
+        assertEquals(1, left)
+
+        val back = seated(Seat.guest, retries = listOf(3.0))
+        back.leave = DOWN
+        back.router.departing { back.app.tabDidChange(PhoneTab.messages) }
+        settle(500)
+        back.games.rummyScreenDidDisappear()
+        back.comeBack()
+        settle(10_000)
+        assertEquals(1, back.leaves, "돌아와 방을 보는 사람을 내보냈다")
+
+        // 전환이 끝나기 전에 돌아왔다(옛 화면의 사라짐보다 새 화면의 나타남이 먼저 온다).
+        val quick = seated(Seat.guest, retries = listOf(3.0))
+        quick.leave = DOWN
+        quick.router.departing { quick.app.tabDidChange(PhoneTab.messages) }
+        settle(500)
+        quick.comeBack()
+        settle(10_000)
+        assertEquals(1, quick.leaves, "전환 중에 돌아온 사람을 내보냈다")
+    }
+
     /** 뒤로 경쟁과 같은 뿌리: 나가는 중에 탭을 또 옮기고 푸시가 와도 rummy_leave 는 1건. */
     @Test
     fun guestSendsOnceWhileMovingAround() = runTest {

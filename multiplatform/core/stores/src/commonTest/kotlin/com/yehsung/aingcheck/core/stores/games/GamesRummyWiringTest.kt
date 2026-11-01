@@ -240,12 +240,13 @@ class GamesRummyWiringTest {
         assertEquals(GamesRummyCard.Line.idle, GamesRummyCard.line(locked.games), "잠긴 빌드는 수락할 수 없는 초대로 칩을 세우지 않는다")
     }
 
-    /** 판이 처음 서면 화면을 연다. 없으면: 방장이 시작한 판이 화면 없이 흘러 시간 초과 3회로 기권(꼴찌)된다. 보이는 화면은 또 쌓지 않는다. */
+    /** 이 기기가 손댄 판이 처음 서면 화면을 연다. 없으면: 방장이 시작한 판이 화면 없이 흘러 시간 초과 3회로 기권(꼴찌)된다. 보이는 화면은 또 쌓지 않는다. */
     @Test
     fun matchStartOpensTheScreenOnce() = runTest {
         val x = rig()
         assertEquals(emptyList(), x.h.router.presented)
         x.games.appDidBecomeActive()
+        x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
         x.rummy.applyState(state())
         assertEquals(listOf<GamesDestination>(GamesDestination.Rummy), x.h.router.presented)
         x.h.router.presented.clear()
@@ -253,6 +254,25 @@ class GamesRummyWiringTest {
         x.h.router.presented.clear()
         x.rummy.presentWindow!!.invoke()
         assertEquals(emptyList(), x.h.router.presented, "보이는 화면은 또 쌓지 않는다")
+    }
+
+    /**
+     * 놀던 기기: 다른 기기로 하는 판을 읽기만 했다(초인종 · 앱을 다시 켬). 끌려가면 보던 탭에서 빠져나와 게임 탭 쌓임이 걷히고 가로로 돌며, 건드리는 순간 맥의 차례를 끝낸다(iOS 37f223ee).
+     * 그 판은 사람이 게임 탭 카드로 들어간다 — 그때 화면이 뜨는 길은 그대로다. 같은 문이 손댄 판에서는 연다.
+     */
+    @Test
+    fun anIdleDeviceIsNotPulledIntoAnotherDevicesMatch() = runTest {
+        val x = rig()
+        x.games.appDidBecomeActive()
+        x.rummy.applyState(state())
+        assertEquals(com.yehsung.aingcheck.core.rules.rummy.RummyPhase.playing, x.rummy.phase, "전제: 판을 읽었다")
+        assertEquals(emptyList(), x.h.router.presented, "놀던 기기가 끌려갔다")
+        x.rummy.presentWindow!!.invoke()
+        assertEquals(emptyList(), x.h.router.presented, "문을 직접 불러도 안 연다")
+        assertEquals(com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation.portrait, x.games.rummyInterfaceOrientation, "놀던 기기가 가로로 돌았다")
+        x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
+        x.rummy.presentWindow!!.invoke()
+        assertEquals(listOf<GamesDestination>(GamesDestination.Rummy), x.h.router.presented, "손댄 판에서는 연다(기준선)")
     }
 
     @Test

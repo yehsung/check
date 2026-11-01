@@ -11,8 +11,10 @@
     fullBackupContent 가 Android 12+ 기기 이전까지 끈다고는 기대지 않는다(실측하지 않았다).
   - 평문 통신 0(usesCleartextTraffic=false — debug 도 같다. localhost 예외를 두지 않는다).
   - MainActivity launchMode=singleTask(E-U16: 딥링크 → 프로세스 죽음 → 런처 아이콘 뒤 Activity 1개).
-  - MainActivity configChanges(방향 · 크기): 아잉 큐브 판 화면만 가로라 돌 때 Activity 를 다시 만들지 않는다. 다시 만들면 화면 수명이 끊겨(rummyScreenDidDisappear) 방향 답이 세로로 뒤집히고 결과가 접힌다.
-    화면이 전부 Compose 라 구성 변경을 직접 받아도 그대로 다시 잰다(방향 값 소유자는 RummyOrientationDriver).
+  - MainActivity configChanges(Compose 앱 관례 전부): 구성 변경으로 Activity 를 다시 만들지 않는다. 다시 만들면 화면 수명이 끊겨(rummyScreenDidDisappear · closeScreen) 방향 답이 세로로 뒤집히고, 끝난 판의 결과가 접히고,
+    미니게임 판이 끝나고, 화면 꺼짐 방지가 죽은 창에 남는다. 회전뿐 아니라 다크 모드 · 글꼴 크기 · 화면 크기(density) · 언어 · 키보드 연결도 같다.
+    화면이 전부 Compose 라 직접 받아도 그대로 다시 잰다: 색은 isSystemInDarkTheme(LocalConfiguration) → AingTheme, 시스템 막대는 MainActivity 의 LaunchedEffect(dark), 글자는 LocalDensity(시험 ActivityConfigChangeTest).
+    창 바탕은 XML 테마(라이트 고정 · 다크 값 없음)라 원래 구성을 안 따르고, 그 위를 Compose Surface 가 덮는다. 방향 값 소유자는 RummyOrientationDriver.
   - Firebase 자동 초기화 0: FirebaseInitProvider 를 지우고, 메시징 자동 토큰도 끈다(release 조립 지점만 손으로 초기화 — E§6.6).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -44,7 +46,7 @@
         <activity
             android:name=".shell.MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|uiMode|density|fontScale|fontWeightAdjustment|locale|layoutDirection|keyboard|keyboardHidden|navigation|touchscreen|mcc|mnc|colorMode"
             android:launchMode="singleTask"
             android:theme="@android:style/Theme.Material.Light.NoActionBar"
             android:windowSoftInputMode="adjustResize">

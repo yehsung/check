@@ -133,12 +133,25 @@ fun GamesRummyMatchView(
         LaunchedEffect(side) { if (side != null) model.landscapeSideChanged(side) }
         // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거두고 손을 뗄 때까지 무시한다 — 낡은 id 로 놓지 않게. 같은 차례에 seq 만 오른 것(남의 기권)은 안 거둔다.
         LaunchedEffect(match.seq) { model.boardChanged(rummy.editor, rummy.match?.let(RummyEditorKey::of)) }
-        if (GamesRummyMatchLayout.canStand(size)) {
+        if (rememberGamesRummyBoardStands(size)) {
             GamesRummyMatchContent(rummy, match, size, reduceMotion, onRules, onBack, onReaction, now, model)
         } else {
             GamesRummyRotatingView(onBack)
         }
     }
+}
+
+/** 이 프레임에 판을 그릴까. 세로 프레임은 돌기를 기다리되([GamesRummyMatchLayout.rotationWaitMillis]) 시스템이 안 들어주면 그대로 그린다 — 스피너에 갇혀 시간 초과로 기권되면 안 된다. */
+@Composable
+internal fun rememberGamesRummyBoardStands(size: RummyCanvasSize): Boolean {
+    val fits = GamesRummyMatchLayout.canStand(size)
+    var waited by remember(fits) { mutableStateOf(false) }
+    LaunchedEffect(fits) {
+        if (fits) return@LaunchedEffect
+        delay(GamesRummyMatchLayout.rotationWaitMillis)
+        waited = true
+    }
+    return fits || waited
 }
 
 @Composable

@@ -614,6 +614,9 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         }
         if (hasUsableRoundToken(kind)) return
         if (roundTokenInFlightKind == kind) return
+        // 폰(iOS 537a8b50): 다른 게임의 인편이 토큰을 기다리며 왕복 중이면 비킨다 — 토큰 칸이 하나라 새 요청은 그 응답을 세대 가드로 버리고, 그 인편에는 왕복도 타이머도 안 남아 다음 방아쇠까지 굳는다.
+        // 선발급은 급하지 않다: 그 인편의 제출 꼬리가 다시 부르고, 판 시작도 받는다. Windows 는 맥 규칙 그대로 둔다.
+        if (phonePauseRules && roundTokenInFlightKind?.let { inFlight -> pendingSubmits.any { it.kind == inFlight && it.token == null } } == true) return
         requestRoundToken(kind)
     }
 
@@ -750,7 +753,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
                 submitNotice = GamesMiniGameText.submitTokenDead
                 exitNoticeIsSticky = false
                 retryPendingSubmitIfAny(fromTrigger = false)
-                if (!hasPendingSubmit(kind)) prefetchRoundToken(kind)
+                prefetchAfterSubmit(kind)
                 return
             }
             // 한 토큰에 한 점수 — 여기서 비워 두면 같은 토큰이 두 번 나가지 않는다. 인편이 그 토큰의 유일한 주인이 된다.
@@ -815,6 +818,8 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             val head = entries.first()
             if (head.heldUntilTrigger || head.isBackingOff(now)) continue
             if (roundTokenInFlightKind == kind) continue
+            // 폰(iOS): 토큰 칸은 하나다 — 다른 게임 판이 도는 중에 받으면 그 판의 토큰을 치운다. 그 판이 끝나면(recordScore) 다시 민다. Windows 는 맥 규칙 그대로 둔다.
+            if (phonePauseRules && controller?.let { it.isPlaying && it.kind != kind } == true) continue
             requestRoundToken(kind)
         }
         schedulePendingRetry()
@@ -917,7 +922,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             }
             // 다음 인편(토큰을 기다리는 것)에 토큰을 받아 주고, 이 게임의 인편이 다 비었으면 다음 판 토큰을 미리 받아 둔다(방금 쓴 토큰은 죽었다). 이 꼬리는 방아쇠가 아니다.
             retryPendingSubmitIfAny(fromTrigger = false)
-            if (!hasPendingSubmit(kind)) prefetchRoundToken(kind)
+            prefetchAfterSubmit(kind)
             if (!recorded) return
             // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로). 선발급 **뒤**, 순위 재조회 **앞**.
             context.refreshAchievementsAfterGameResult(kind.rawValue)
@@ -940,10 +945,20 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             submitNotice = GamesMiniGameText.submitRetrying
             exitNoticeIsSticky = false
             // 인편이 살아 있으면 새 토큰은 안 받는다. 인편이 방금 TTL 로 버려졌을 때만 다음 판의 토큰을 미리 받는다.
-            if (!hasPendingSubmit(kind)) prefetchRoundToken(kind)
+            prefetchAfterSubmit(kind)
         } finally {
             release()
         }
+    }
+
+    /**
+     * 제출 꼬리의 선발급: [kind] 의 인편이 다 비었으면 다음 판의 토큰을 미리 받는다(방금 쓴 토큰은 죽었다). 인편이 남아 있으면 받지 않는다 — 그게 불변식이다.
+     * 폰(iOS `pushPendingAndPrefetch`): 받는 토큰은 **지금 화면의 게임** 것이다 — 다른 게임 토큰을 받으면 하나뿐인 칸을 그 게임이 차지해 도는 판의 토큰이 지워진다. 왕복이 떠 있으면 비킨다: 새 요청은 그 응답을 버린다. Windows 는 맥 규칙 그대로 둔다.
+     */
+    private fun prefetchAfterSubmit(kind: MiniGameKind) {
+        if (phonePauseRules && roundTokenInFlightKind != null) return
+        val next = if (phonePauseRules) activeKind ?: kind else kind
+        if (!hasPendingSubmit(next)) prefetchRoundToken(next)
     }
 
     /** 화면을 닫아 둔 사이에 인편이 TTL 로 죽었다면 한 줄로 말하고 표식을 지운다(한 번만 말한다). */

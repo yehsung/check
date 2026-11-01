@@ -310,7 +310,7 @@ private const val RACK_TILE_GAP: Int = 3
 
 /**
  * 끝난 판(가로) — 판 화면과 같은 칸을 읽기 전용으로 쓴다(보기 값 · 밀기 · 핀치 · [전체 보기] · 화면 밖 배지가 같다). 손은 판을 밀고 키울 뿐 타일을 집지 않는다.
- * 왼쪽은 판 전부, 오른쪽 열은 판 화면과 같은 폭이다. 전환 중 세로 크기로 불리면 판을 세우지 않고 안내만 그린다.
+ * 왼쪽은 판 전부, 오른쪽 열은 판 화면과 같은 폭이다. 전환 중 세로 크기로 불리면 판을 세우지 않고 안내만 그린다(시스템이 안 돌려 주면 판 화면과 같이 작은 칸에 그린다).
  */
 @Composable
 internal fun GamesRummyFinalBoard(match: RummyMatchState, reduceMotion: Boolean, onRanks: () -> Unit, onLobby: () -> Unit, modifier: Modifier = Modifier, model: GamesRummyMatchModel = remember(match.id) { GamesRummyMatchModel() }) {
@@ -318,7 +318,7 @@ internal fun GamesRummyFinalBoard(match: RummyMatchState, reduceMotion: Boolean,
     BoxWithConstraints(modifier) {
         val whole = RummyCanvasSize(maxWidth.value.toDouble(), maxHeight.value.toDouble())
         SideEffect { model.screenSizeChanged(whole) }
-        if (!GamesRummyMatchLayout.canStand(whole)) {
+        if (!rememberGamesRummyBoardStands(whole)) {
             GamesRummyRotatingView(onRanks)
             return@BoxWithConstraints
         }

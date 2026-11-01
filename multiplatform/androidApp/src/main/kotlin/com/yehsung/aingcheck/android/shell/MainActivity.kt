@@ -49,6 +49,9 @@ import kotlinx.coroutines.flow.receiveAsFlow
 class MainActivity : ComponentActivity() {
     /** 열 라우트. 버퍼가 있어 화면이 그려지기 전에 온 요청도 잃지 않는다. */
     private val requests = Channel<RouteRequest>(Channel.BUFFERED)
+
+    /** 이 창에 단 화면 꺼짐 방지 싱크를 푸는 일(스토어는 앱 수명이라 Activity 가 끝나면 풀어야 한다). */
+    private var releaseKeepScreenOn: (() -> Unit)? = null
     private val container get() = (application as AingApplication).container
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -60,7 +63,7 @@ class MainActivity : ComponentActivity() {
         // 조립 셸(K11): 화면 켜짐(대국 · 1:1 판 — W4-b §3)과 알림 권한 창(W2-f §3)을 이 Activity 에 단다. 자리표시 셸(셸 시험)은 null.
         val screens = c.shellScreens
         if (screens != null) {
-            GamesKeepScreenOn.install(screens.phone.games, window)
+            releaseKeepScreenOn = GamesKeepScreenOn.install(screens.phone.games, window)
             // 아잉 큐브 판 화면만 가로 — 답은 스토어 계산값, 옮기는 자리는 여기 하나다(RummyOrientationDriver).
             RummyOrientationDriver.install(screens.phone.games, lifecycleScope, ::applyRummyOrientation)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) c.pushSystem.permissionRequester = permissionRequester
@@ -105,7 +108,7 @@ class MainActivity : ComponentActivity() {
         requestedOrientation = RummyOrientationDriver.activityOrientation(orientation, resources.configuration.smallestScreenWidthDp)
     }
 
-    /** 돌아도 다시 만들어지지 않는다(매니페스트 configChanges). 접었다 펴면 폰 ↔ 큰 화면이 바뀌니 값을 다시 옮긴다. 같은 값이면 시스템이 아무 일도 안 한다. */
+    /** 구성이 바뀌어도 다시 만들어지지 않는다(매니페스트 configChanges — 화면은 Compose 가 다시 잰다). 접었다 펴면 폰 ↔ 큰 화면이 바뀌니 값을 다시 옮긴다. 같은 값이면 시스템이 아무 일도 안 한다. */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         container.shellScreens?.let { applyRummyOrientation(it.phone.games.rummyInterfaceOrientation) }
@@ -133,6 +136,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        releaseKeepScreenOn?.invoke()
+        releaseKeepScreenOn = null
         if (container.pushSystem.permissionRequester === permissionRequester) container.pushSystem.permissionRequester = null
         pendingPermission?.takeIf { it.isActive }?.resume(false)
         pendingPermission = null

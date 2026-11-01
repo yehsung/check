@@ -30,7 +30,7 @@ import SwiftUI
 //     코어 `commit(from:to:)` 가 하고(`ChessStore.promotion`), 화면은 그 칸이 서 있는지만 본다.
 //  ⑥ **수 번호가 줄어든 응답**은 `applyState` 가 이미 버린다 — 화면이 따로 막지 않는다(두 벌이면 한 벌은 죽은 가드다).
 //  ⑦ **`expected_ply` 를 같은 값으로 두 번 보내면 두 번째는 `stale` 이고 가산은 한 번만** 붙는다. 그래서 이
-//     화면에는 **착수 재시도 버튼이 없다**(`store.send(` 를 부르는 자리도 없다 — 입구는 탭과 승격 고르기뿐).
+//     화면에는 **착수 재시도 버튼이 없다**(`store.send(` 를 부르는 자리도 없다 — 입구는 탭·끌기와 승격 고르기뿐).
 //  ⑧ **낙관적 표시가 없다.** 판은 `match.position`(서버가 확인한 국면)만 그린다. 내 수는 응답이 와야
 //     미끄러진다(0.1~0.3초). ★ 사용자 결정이 필요한 자리다 — 넣으면 서버가 확인하지 않은 판을 보여 준다.
 //  ⑨ 계정 삭제가 진행 중 판을 `abandoned` 로 닫고 **서버가 상대에게 환불한다** — 화면은 경고하지 않고 사유만 말한다.
@@ -455,7 +455,8 @@ struct GamesChessMatchView: View {
                             legalTargets: store.selection?.targets ?? [],
                             lastMove: match.lastMove.map { (from: $0.from, to: $0.to) },
                             checkSquare: chrome.checkSquare,
-                            onTapSquare: { square in Task { await store.tap(square) } })
+                            onTapSquare: { square in Task { await store.tap(square) } },
+                            dragStore: store)
                 .frame(width: side, height: side)
                 .shadow(color: colorScheme == .dark ? .black.opacity(0.35)
                                                     : Color(red: 80 / 255, green: 50 / 255, blue: 10 / 255).opacity(0.18),

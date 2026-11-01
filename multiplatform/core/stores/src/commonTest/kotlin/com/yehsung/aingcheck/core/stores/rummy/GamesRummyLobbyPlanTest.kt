@@ -1,6 +1,7 @@
 // 원본: Tests/checkTests/V0369RummyV2LobbyTests.swift · V0369RummyPanelRenderTests.swift 의 뜻(사람 정렬 · 한 목록 · 줄 오른쪽 · 시작 조건) — 픽셀 대신 값으로 잰다 @ 1a5eeca6
 package com.yehsung.aingcheck.core.stores.rummy
 
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
 import com.yehsung.aingcheck.core.stores.games.GamesBusyGame
 import com.yehsung.aingcheck.core.wire.SwiftUUID
 import com.yehsung.aingcheck.core.wire.games.RummyLobby
@@ -16,6 +17,7 @@ import com.yehsung.aingcheck.core.wire.games.RummySeatState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private fun id(n: Int): SwiftUUID = SwiftUUID.parse("7e7e0000-0000-4000-8000-${n.toString().padStart(12, '0')}")!!
@@ -24,6 +26,8 @@ private fun user(n: Int, capable: Boolean? = true, inMatch: Boolean? = false, fo
     RummyLobbyUser(id = id(n), displayName = "사람$n", capable = capable, inMatch = inMatch, focusMode = focus, isWorking = working)
 
 private fun seat(n: Int, state: RummySeatState, no: Long? = null) = RummyRoomSeat(userId = id(n), displayName = "사람$n", state = state, seatNo = no)
+
+private fun RummyCanvasRect.intersects(other: RummyCanvasRect): Boolean = x < other.maxX && other.x < maxX && y < other.maxY && other.y < maxY
 
 private fun room(n: Int, stake: Long = 5, max: Long = 4, seats: List<RummyRoomSeat> = listOf(seat(100 + n, RummySeatState.joined, 0))) =
     RummyRoom(id = id(n), host = RummyPeer(id(100 + n), "방장$n"), stake = stake, maxSeats = max, seats = seats)
@@ -78,13 +82,25 @@ class GamesRummyLobbyPlanTest {
         assertEquals(listOf(id(1), id(2)), GamesRummyLobbyPlan.joinables(lobby, null, duelsLocked = true).map { it.id })
     }
 
+    /** 받은 초대가 [사람] 탭 안에 있어도 순위를 보는 동안 묻히지 않는다 — 탭 글자가 말한다. */
     @Test
-    fun joinTitleNamesWhatIsInTheList() {
-        val invite = RummyJoinable(room(1), isInvite = true)
-        val open = RummyJoinable(room(2), isInvite = false)
-        assertEquals(RummyPhoneText.invitesTitle, GamesRummyLobbyPlan.joinTitle(listOf(invite)))
-        assertEquals(RummyPhoneText.publicRoomsTitle, GamesRummyLobbyPlan.joinTitle(listOf(open)))
-        assertEquals(RummyLobbyPhoneText.joinTitleMixed, GamesRummyLobbyPlan.joinTitle(listOf(invite, open)))
+    fun peopleTabSaysHowManyInvitesWait() {
+        assertEquals("사람 · 초대 2", GamesRummyLobbyPlan.tabTitle(GamesRummyLobbyTab.people, 2))
+        assertEquals(GamesRummyLobbyTab.people.title, GamesRummyLobbyPlan.tabTitle(GamesRummyLobbyTab.people, 0))
+        assertEquals(GamesRummyLobbyTab.ranking.title, GamesRummyLobbyPlan.tabTitle(GamesRummyLobbyTab.ranking, 2))
+    }
+
+    /** 줄이 글자로 말하는 까닭은 가득 참 · 모자람뿐이다(다른 게임은 로비 위 안내가, 내 방·비행 중은 말할 것이 없다). */
+    @Test
+    fun joinBlockTextSaysOnlyWhatTheRowCanFix() {
+        val free = RummyJoinable(room(1, stake = 5), isInvite = false)
+        val full = RummyJoinable(room(1, seats = (0 until 4).map { seat(it + 1, RummySeatState.joined, it.toLong()) }), isInvite = false)
+        assertNull(GamesRummyLobbyPlan.joinBlockText(free, null, entry()))
+        assertEquals(RummyLobbyPhoneText.roomFullShort, GamesRummyLobbyPlan.joinBlockText(full, null, entry()))
+        assertEquals(RummyPhoneText.insufficient, GamesRummyLobbyPlan.joinBlockText(free, null, entry(balance = 4)))
+        assertNull(GamesRummyLobbyPlan.joinBlockText(free, room(9), entry(balance = 4)))
+        assertNull(GamesRummyLobbyPlan.joinBlockText(free, null, entry(balance = 4, working = true)))
+        assertNull(GamesRummyLobbyPlan.joinBlockText(free, null, entry(balance = 4, block = GamesBusyGame.tetris)))
     }
 
     @Test
@@ -113,8 +129,8 @@ class GamesRummyLobbyPlanTest {
 
     // MARK: 사람 줄 오른쪽
 
-    private fun action(u: RummyLobbyUser, room: RummyRoom? = null, amHost: Boolean = false, calling: List<SwiftUUID> = emptyList(), e: GamesRummyEntry = entry(), stake: Long = 5) =
-        GamesRummyLobbyPlan.personAction(u, room, amHost, calling, e, stake)
+    private fun action(u: RummyLobbyUser, room: RummyRoom? = null, amHost: Boolean = false, calling: List<SwiftUUID> = emptyList(), e: GamesRummyEntry = entry()) =
+        GamesRummyLobbyPlan.personAction(u, room, amHost, calling, e)
 
     @Test
     fun withoutARoomInviteOpensATableUnlessTheServerWouldRefuse() {
@@ -124,8 +140,8 @@ class GamesRummyLobbyPlanTest {
         assertEquals(GamesRummyPersonAction.Invite(false), action(user(1, focus = true)))
         assertEquals(GamesRummyPersonAction.Invite(false), action(user(1), e = entry(working = true)))
         assertEquals(GamesRummyPersonAction.Invite(false), action(user(1), e = entry(block = GamesBusyGame.tetris)))
-        // 고른 판돈을 낼 수 없으면 탁자가 안 열린다.
-        assertEquals(GamesRummyPersonAction.Invite(false), action(user(1), e = entry(balance = 4)))
+        // 잔액은 안 본다 — 판돈은 시트에서 고르고, 모자라면 시트가 말한다.
+        assertEquals(GamesRummyPersonAction.Invite(true), action(user(1), e = entry(balance = 0)))
         assertEquals(GamesRummyPersonAction.Hidden, action(user(1, capable = false)))
         assertEquals(GamesRummyPersonAction.Hidden, action(user(1), e = entry(availability = RummyAvailability.serverMissing)))
     }
@@ -196,6 +212,8 @@ class GamesRummyLobbyPlanTest {
         assertFalse(GamesRummyRoomPlan.canStart(roomOf(2), amHost = false, entry()), "손님")
         assertFalse(GamesRummyRoomPlan.canStart(roomOf(2), amHost = true, entry(working = true)))
         assertFalse(GamesRummyRoomPlan.canStart(roomOf(2), amHost = true, entry(locked = true)), "판돈이 움직이는 순간 — 잠긴 빌드")
+        assertFalse(GamesRummyRoomPlan.canStart(roomOf(2, stake = 5), amHost = true, entry(balance = 4)), "내 판돈 모자람 — 서버가 어차피 거절한다")
+        assertTrue(GamesRummyRoomPlan.canStart(roomOf(2, stake = 5), amHost = true, entry(balance = null)), "잔액을 모르면 막지 않는다")
         assertFalse(GamesRummyRoomPlan.canStart(null, amHost = true, entry()))
     }
 
@@ -206,14 +224,24 @@ class GamesRummyLobbyPlanTest {
     }
 
     @Test
-    fun potIsStakeTimesSeatedAndSplitFollowsTheUserTable() {
-        assertEquals("5 × 3명 = 15", GamesRummyRoomPlan.potLine(roomOf(3)))
-        // 혼자 앉아도 0명이 아니다. 초대 중은 세지 않는다.
-        assertEquals("10 × 1명 = 10", GamesRummyRoomPlan.potLine(roomOf(1, invited = 2, stake = 10)))
-        assertEquals("1등 10", GamesRummyRoomPlan.splitLine(roomOf(1)), "혼자면 2명 기준으로 미리 보여 준다")
-        assertEquals("1등 10", GamesRummyRoomPlan.splitLine(roomOf(2)))
-        assertEquals("1등 10 · 2등 5", GamesRummyRoomPlan.splitLine(roomOf(3)))
-        assertEquals("1등 15 · 2등 5", GamesRummyRoomPlan.splitLine(roomOf(4)))
+    fun potCountsTwoAtLeastAndSplitIsNetLikeTheUserTable() {
+        assertEquals(15L, GamesRummyRoomPlan.potTotal(roomOf(3)))
+        // 혼자 앉아 있어도 2명 기준을 보인다(맥과 같다). 초대 중은 세지 않는다.
+        assertEquals(20L, GamesRummyRoomPlan.potTotal(roomOf(1, invited = 2, stake = 10)))
+        assertEquals("판돈 10 × 2명", GamesRummyRoomPlan.potFormula(roomOf(1, invited = 2, stake = 10)))
+        val two = listOf("1등 +5", "2등 −5")
+        assertEquals(two, GamesRummyRoomPlan.splitLines(roomOf(1)), "혼자면 2명 기준으로 미리 보여 준다")
+        assertEquals(two, GamesRummyRoomPlan.splitLines(roomOf(2)))
+        assertEquals(listOf("1등 +5", "2등 0", "3등 −5"), GamesRummyRoomPlan.splitLines(roomOf(3)))
+        assertEquals(listOf("1등 +10", "2등 0", "3·4등 −5"), GamesRummyRoomPlan.splitLines(roomOf(4)))
+    }
+
+    @Test
+    fun hintSaysWhyWeWait() {
+        assertEquals(RummyLobbyPhoneText.startBlockedShort, GamesRummyRoomPlan.hint(true, roomOf(2, stake = 5), entry(balance = 4)))
+        assertEquals(RummyPhoneText.startHintGuest, GamesRummyRoomPlan.hint(false, roomOf(2), entry()))
+        assertEquals(RummyPhoneText.startHintHost, GamesRummyRoomPlan.hint(true, roomOf(1), entry()))
+        assertNull(GamesRummyRoomPlan.hint(true, roomOf(2), entry()), "시작할 수 있으면 말할 것이 없다")
     }
 
     @Test
@@ -221,21 +249,28 @@ class GamesRummyLobbyPlanTest {
         assertEquals(600, GamesRummyRoomPlan.countdownSeconds(599.2))
         assertEquals(0, GamesRummyRoomPlan.countdownSeconds(-3.0))
         assertEquals("10:00 뒤 닫혀요", RummyPhoneText.closesIn(GamesRummyRoomPlan.countdownSeconds(599.2)))
-        assertTrue(GamesRummyRoomPlan.isUrgent(59))
-        assertFalse(GamesRummyRoomPlan.isUrgent(60))
+        // 맥 `seconds <= urgentBelow`(60) · iOS 와 같다.
+        assertTrue(GamesRummyRoomPlan.isUrgent(60))
+        assertFalse(GamesRummyRoomPlan.isUrgent(61))
     }
 
     @Test
     fun tableStageFitsEveryPhoneWidth() {
-        // 카드 안쪽 폭: 320·393·430 기기에서 좌우 여백을 뺀 값. 없으면: 작은 폰에서 펠트가 상금 글자보다 좁아진다.
-        for (stage in listOf(256f, 329f, 366f)) {
-            val chair = GamesRummyTableStage.chairWidth(stage)
-            val felt = GamesRummyTableStage.feltWidth(stage)
-            assertTrue(chair >= 72f, "의자 $chair @ $stage")
-            assertTrue(felt >= 100f, "펠트 $felt @ $stage")
-            assertEquals(stage, chair * 2 + felt + GamesRummyTableStage.GAP * 2, 0.01f)
+        // 화면 폭 320·393·430 에서 좌우 여백 16 을 뺀 값. 없으면: 작은 폰에서 칸이 겹치거나 탁자 가운데 글자가 의자에 닿는다.
+        for (stage in listOf(288.0, 361.0, 398.0)) {
+            val layout = GamesRummyRoomStageLayout(stage)
+            val chairs = (0..3).map(layout::chair)
+            for (i in chairs.indices) for (j in chairs.indices) {
+                if (i < j) assertFalse(chairs[i].intersects(chairs[j]), "의자 $i·$j @ $stage")
+            }
+            for (chair in chairs) {
+                assertFalse(chair.intersects(layout.center), "의자가 가운데 글자에 닿는다 @ $stage")
+                assertTrue(chair.x >= 0 && chair.maxX <= stage && chair.y >= 0 && chair.maxY <= layout.height, "의자가 탁자 칸 밖이다 @ $stage")
+            }
+            assertTrue(layout.center.width >= 100.0, "가운데 폭 ${layout.center.width} @ $stage")
+            // 의자는 네 변에 걸터앉는다 — 탁자 안쪽과 겹쳐야 한다.
+            for (chair in chairs) assertTrue(chair.intersects(layout.table))
         }
-        assertEquals(setOf(0, 1, 2, 3), setOf(GamesRummyTableStage.BOTTOM, GamesRummyTableStage.LEFT, GamesRummyTableStage.TOP, GamesRummyTableStage.RIGHT))
     }
 
     // MARK: 순위
@@ -265,7 +300,7 @@ class GamesRummyLobbyPlanTest {
     @Test
     fun newWordsStayOffMacVocabulary() {
         val lines = GamesRummyPersonStatus.entries.map { it.text } + GamesRummyLobbyTab.entries.map { it.title } + listOf(
-            RummyLobbyPhoneText.joinTitleMixed, RummyLobbyPhoneText.myRubyTitle, RummyLobbyPhoneText.rankingLoading, RummyLobbyPhoneText.rankingFailed,
+            RummyLobbyPhoneText.joinHeader, RummyLobbyPhoneText.inviteSheetTitle, RummyLobbyPhoneText.inviteSheetPrompt("가은"), RummyLobbyPhoneText.openAndCall(3), RummyLobbyPhoneText.stakeShort(5, 4), RummyLobbyPhoneText.myRubyTitle, RummyLobbyPhoneText.rankingLoading, RummyLobbyPhoneText.rankingFailed,
             RummyPhoneText.peopleCaptionNoRoom, RummyPhoneText.peopleCaptionHost, RummyPhoneText.peopleCaptionGuest, RummyPhoneText.startHintHost, RummyPhoneText.startHintGuest,
         )
         val banned = listOf("창", "마우스", "클릭", "호버", "⌥", "트랙패드", "커서", "메뉴바", "루미")

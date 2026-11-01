@@ -80,13 +80,14 @@ object RummyPhoneText {
     const val newTableHint: String = "[초대]를 누르거나 탁자를 열어요"
     const val openTable: String = "탁자 열기"
     const val readyHeader: String = "초대 가능"
+    const val peopleHeader: String = "사람"
     const val busyHeader: String = "지금은 바빠요"
     const val calling: String = "부르는 중"
     const val waitingAnswer: String = "답 기다리는 중"
     const val seated: String = "앉음"
     const val me: String = "나"
     const val take: String = "앉기"
-    const val joinEmpty: String = "받은 초대나 열린 공개 탁자가 생기면 여기에 떠요"
+    const val joinEmpty: String = "받은 초대나 열린 공개 탁자가 생기면 이 화면 맨 위에 떠요"
     const val outdatedHint: String = "새 버전이면 같이 할 수 있어요"
 
     fun outdatedFold(count: Int, expanded: Boolean): String =
@@ -236,6 +237,11 @@ object RummyPhoneText {
 
     fun rank(rank: Long?): String = rank?.let { "${it}등" } ?: "—"
 
+    /** 머리 카드의 내 등수. 기권이면 까닭을 앞에 말한다. */
+    fun myResult(rank: Long?, forfeited: Boolean): String = if (forfeited) "$forfeit · ${rank(rank)}" else rank(rank)
+
+    fun remainingCount(count: Int): String = "$remainingTiles ${count}장"
+
     fun score(score: Long?): String = when {
         score == null -> "점수 —"
         score > 0 -> "점수 +$score"
@@ -260,8 +266,9 @@ object RummyPhoneText {
         return shares.withIndex().filter { it.value > 0 }.joinToString(" · ") { "${it.index + 1}등 ${it.value * value}" }
     }
 
-    fun endReason(reason: RummyEndReason?, winner: String?): String = when (reason) {
-        RummyEndReason.rackEmpty -> winner?.let { "${it}님이 랙을 비웠어요" } ?: "랙을 비운 사람이 나왔어요"
+    /** [winnerIsMe] = 내가 이겼다 — 내 이름을 남처럼 부르지 않는다. */
+    fun endReason(reason: RummyEndReason?, winner: String?, winnerIsMe: Boolean = false): String = when (reason) {
+        RummyEndReason.rackEmpty -> if (winnerIsMe) "랙을 비웠어요" else winner?.let { "${it}님이 랙을 비웠어요" } ?: "랙을 비운 사람이 나왔어요"
         RummyEndReason.blocked -> "더미가 비고 모두 넘겨서 끝났어요"
         RummyEndReason.lastStanding -> winner?.let { "${it}님 혼자 남아 끝났어요" } ?: "혼자 남아 끝났어요"
         RummyEndReason.unknown, null -> "판이 끝났어요"

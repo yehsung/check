@@ -149,11 +149,11 @@ fun GamesRummyScreen(
                 rummy.phase == RummyPhase.lobby ->
                     GamesRummyLobbyView(store, rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.LOBBY))
                 rummy.phase == RummyPhase.room ->
-                    GamesRummyRoomView(rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.ROOM))
+                    GamesRummyRoomView(rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, balance = store.rubyBalance ?: rummy.rubyBalance, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.ROOM))
                 rummy.phase == RummyPhase.playing ->
                     GamesRummyMatchView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.MATCH))
                 else ->
-                    GamesRummyResultView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.RESULT))
+                    GamesRummyResultView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.RESULT))
             }
             // 말풍선은 방·판·결과 위에 함께 뜬다(앵커는 자리를 그리는 뷰가 단다).
             if (rummy.phase != RummyPhase.lobby) GamesRummyReactionLayer(rummy, reduceMotion, now, Modifier.fillMaxSize())

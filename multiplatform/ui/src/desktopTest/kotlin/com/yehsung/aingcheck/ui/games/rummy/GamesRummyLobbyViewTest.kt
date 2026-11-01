@@ -6,7 +6,9 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -186,7 +188,7 @@ class GamesRummyLobbyViewTest {
         x.lobby(lobbyJson(invites = listOf(roomJson(INVITE_ROOM)), publicRooms = listOf(roomJson(PUBLIC_ROOM), roomJson(INVITE_ROOM))))
         lobbyView(x)
         waitForIdle()
-        onNodeWithText(RummyLobbyPhoneText.joinTitleMixed).assertExists()
+        onNodeWithText(RummyLobbyPhoneText.joinHeader).assertExists()
         assertTrue(top(GamesRummyLobbyTags.join(uuid(INVITE_ROOM))) < top(GamesRummyLobbyTags.join(uuid(PUBLIC_ROOM))))
         // 공개 방에는 [거절]이 없다. 같은 방이 공개 목록에 있어도 한 번만 선다.
         onNodeWithTag(GamesRummyLobbyTags.decline(uuid(INVITE_ROOM))).assertIsEnabled()
@@ -225,18 +227,25 @@ class GamesRummyLobbyViewTest {
         onNodeWithTag(GamesRummyLobbyTags.OPEN_TABLE).assertIsEnabled()
         onNodeWithTag(GamesRummyLobbyTags.invite(uuid(READY))).assertIsEnabled()
         onNodeWithTag(GamesRummyLobbyTags.stake(3)).assertIsEnabled()
-        onNodeWithTag(GamesRummyLobbyTags.stake(5)).assertIsNotEnabled()
-        onNodeWithTag(GamesRummyLobbyTags.stake(10)).assertIsNotEnabled()
         // 초대는 판돈이 5 라 못 앉는다. [거절]은 된다.
         onNodeWithTag(GamesRummyLobbyTags.join(uuid(INVITE_ROOM))).assertIsNotEnabled()
         onNodeWithTag(GamesRummyLobbyTags.decline(uuid(INVITE_ROOM))).assertIsEnabled()
         assertEquals(1, onAllNodesWithText(RummyPhoneText.insufficient).fetchSemanticsNodes().size, "초대 카드 한 곳만")
-        // 잔액이 줄어 고른 판돈을 못 내게 되면 입구가 닫히고 까닭이 선다.
+        // 모자란 판돈도 **고를 수는 있다** — 카드가 까닭과 푸는 길을 말하고 탁자만 안 열린다. 막으면 잔액이 줄어 이미 모자란 값에서 빠져나올 말이 없다.
+        onNodeWithTag(GamesRummyLobbyTags.stake(5)).assertIsEnabled().performClick()
+        waitForIdle()
+        onNodeWithText(RummyLobbyPhoneText.stakeShort(5, 4)).assertExists()
+        onNodeWithTag(GamesRummyLobbyTags.OPEN_TABLE).assertIsNotEnabled()
+        onNodeWithTag(GamesRummyLobbyTags.stake(3)).performClick()
+        waitForIdle()
+        onNodeWithText(RummyLobbyPhoneText.stakeShort(5, 4)).assertDoesNotExist()
+        onNodeWithTag(GamesRummyLobbyTags.OPEN_TABLE).assertIsEnabled()
+        // 잔액이 줄어 고른 판돈을 못 내게 되면 입구가 닫히고 까닭이 선다. [초대]는 산다 — 판돈은 시트에서 고른다.
         x.lobby(lobbyJson(ruby = 1, invites = listOf(roomJson(INVITE_ROOM))))
         waitForIdle()
         onNodeWithTag(GamesRummyLobbyTags.OPEN_TABLE).assertIsNotEnabled()
-        onNodeWithTag(GamesRummyLobbyTags.invite(uuid(READY))).assertIsNotEnabled()
-        assertEquals(2, onAllNodesWithText(RummyPhoneText.insufficient).fetchSemanticsNodes().size, "초대 카드 + 새 탁자")
+        onNodeWithTag(GamesRummyLobbyTags.invite(uuid(READY))).assertIsEnabled()
+        onNodeWithText(RummyLobbyPhoneText.stakeShort(3, 1)).assertExists()
         x.h.close()
     }
 
@@ -310,19 +319,29 @@ class GamesRummyLobbyViewTest {
         x.h.close()
     }
 
-    /** 방 없이 [초대]: 고른 판돈·공개 여부로 탁자를 **먼저** 열고, 그 응답 뒤에 그 사람을 부른다. 거꾸로면 서버가 방 없는 초대를 거절한다. */
+    /** 방 없이 [초대]: 판돈 시트를 먼저 연다 — 시트에서 고른 판돈·공개 여부로 탁자를 **먼저** 열고, 그 응답 뒤에 그 사람을 부른다. 거꾸로면 서버가 방 없는 초대를 거절한다. */
     @Test
-    fun inviteWithoutARoomOpensTheTableThenCalls() = runDesktopComposeUiTest(390, 2000) {
+    fun inviteWithoutARoomOpensTheSheetThenTheTableThenCalls() = runDesktopComposeUiTest(390, 2000) {
         val x = rig(signIn = true)
         x.replies["rummy_create"] = """{"status":"ok","match_id":"$MY_ROOM","state":${formingJson(seats = listOf(seat(0, USER, "나", "joined")))},"server_now_ms":$NOW_MS}"""
         x.replies["rummy_invite"] = """{"status":"ok","state":${formingJson(seats = listOf(seat(0, USER, "나", "joined"), seat(null, READY, "가은", "invited")))},"server_now_ms":$NOW_MS}"""
         x.lobby(lobbyJson())
         lobbyView(x)
         waitForIdle()
-        onNodeWithTag(GamesRummyLobbyTags.stake(5)).performClick()
-        onNodeWithTag(GamesRummyLobbyTags.PUBLIC).performClick()
         onNodeWithTag(GamesRummyLobbyTags.invite(uuid(READY))).performClick()
         waitForIdle()
+        // 시트만 떴다 — 아직 아무것도 안 나갔다.
+        onNodeWithTag(GamesRummyLobbyTags.INVITE_SHEET).assertExists()
+        x.settle()
+        assertEquals(emptyList(), x.rummyCalls().filter { it != "rummy_lobby" }, "시트를 열기만 했는데 탁자가 열렸다")
+        onNodeWithText(RummyLobbyPhoneText.inviteSheetPrompt("가은"), useUnmergedTree = true).assertExists()
+        // 뒤의 새 탁자 카드와 시트가 같은 값을 고친다 — 시트 것(나중에 놓인 쪽)을 누른다.
+        onAllNodesWithTag(GamesRummyLobbyTags.stake(5)).onLast().performClick()
+        onAllNodesWithTag(GamesRummyLobbyTags.PUBLIC).onLast().performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyLobbyTags.OPEN_AND_CALL).assertExists().performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyLobbyTags.INVITE_SHEET).assertDoesNotExist()
         // 응답이 오기 전: 누른 것이 받아졌다는 표시.
         onNodeWithText(RummyPhoneText.calling).assertExists()
         x.settle()
@@ -333,6 +352,24 @@ class GamesRummyLobbyViewTest {
         assertTrue("\"p_public\":true" in create, create)
         assertTrue(READY in x.h.server.bodies("rummy_invite").single())
         assertTrue(x.rummy.callingPeerIDs.isEmpty(), "줄이 비어야 한다")
+        x.h.close()
+    }
+
+    /** ★ 탭이 위다 — 절 아래에 두면 받은 초대 · 새 탁자에 밀려 [순위]가 첫 화면에서 안 보인다. [순위] 탭에는 순위만 선다. */
+    @Test
+    fun tabsStandAboveTheEntriesAndRankingHidesThem() = runDesktopComposeUiTest(390, 2000) {
+        val x = rig()
+        x.lobby(lobbyJson(invites = listOf(roomJson(INVITE_ROOM))))
+        lobbyView(x)
+        waitForIdle()
+        val tabs = GamesRummyLobbyTags.tab(GamesRummyLobbyTab.ranking)
+        assertTrue(top(tabs) < top(GamesRummyLobbyTags.join(uuid(INVITE_ROOM))))
+        assertTrue(top(tabs) < top(GamesRummyLobbyTags.OPEN_TABLE))
+        onNodeWithText(RummyLobbyPhoneText.peopleTabWithInvites(1), useUnmergedTree = true).assertExists()
+        onNodeWithTag(tabs).performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyLobbyTags.join(uuid(INVITE_ROOM))).assertDoesNotExist()
+        onNodeWithTag(GamesRummyLobbyTags.OPEN_TABLE).assertDoesNotExist()
         x.h.close()
     }
 
@@ -365,9 +402,10 @@ class GamesRummyLobbyViewTest {
         assertTrue(top(GamesRummyRoomTags.chair(2)) < top(GamesRummyRoomTags.chair(0)))
         onNodeWithText("나 · 방장", useUnmergedTree = true).assertExists()
         onNodeWithText(RummyPhoneText.waitingAnswer, useUnmergedTree = true).assertExists()
-        // 판돈 × 앉은 인원(초대 중은 세지 않는다).
-        onNodeWithText(RummyPhoneText.pot(5, 2), useUnmergedTree = true).assertExists()
-        onNodeWithText("1등 10", useUnmergedTree = true).assertExists()
+        // 판돈 × 앉은 인원(초대 중은 세지 않는다) · 분배는 순수익.
+        onNodeWithText("10", useUnmergedTree = true).assertExists()
+        onNodeWithText("판돈 5 × 2명", useUnmergedTree = true).assertExists()
+        onNodeWithText("1등 +5", useUnmergedTree = true).assertExists()
         onNodeWithText(RummyPhoneText.closesIn(600), useUnmergedTree = true).assertExists()
         // 빈 의자는 방장에게 초대 자리다.
         onNodeWithText(RummyPhoneText.invite, useUnmergedTree = true).assertExists()

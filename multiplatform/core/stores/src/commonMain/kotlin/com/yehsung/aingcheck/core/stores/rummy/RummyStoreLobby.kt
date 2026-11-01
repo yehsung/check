@@ -49,12 +49,18 @@ suspend fun RummyStore.refreshLobby() {
                         noteServerMissing()
                     } else {
                         logNotice("lobby request failed")
+                        if (!lobbyLoadFailed) lobbyLoadFailed = true
                     }
             }
         } while (lobbyAgain && generation == resetGeneration)
     } finally {
         if (generation == resetGeneration) lobbyInFlight = false
     }
+}
+
+/** 화면이 다시 읽어 달라고 했다([다시 시도]). */
+fun RummyStore.reloadLobby() {
+    scope.launch { refreshLobby() }
 }
 
 /** 로비 응답을 옮긴다. [revision] 은 그 요청을 낼 때의 `matchRevision` 이다(null = 지금 것). */
@@ -64,12 +70,13 @@ suspend fun RummyStore.applyLobby(response: RummyLobby, revision: Int? = null) {
         when (response.status) {
             RummyRPCStatus.unsupportedClient -> noteUpdateRequired()
             RummyRPCStatus.unauthorized -> setNotice(RummyNoticeText.signInAgain)
-            else -> Unit
+            else -> if (!lobbyLoadFailed) lobbyLoadFailed = true
         }
         return
     }
     noteServerNow(response.serverNowMs)
     if (availability != RummyAvailability.available) availability = RummyAvailability.available
+    if (lobbyLoadFailed) lobbyLoadFailed = false
     rawLobby = response
     publishLobby()
     applyRuby(response.me?.rubyBalance)

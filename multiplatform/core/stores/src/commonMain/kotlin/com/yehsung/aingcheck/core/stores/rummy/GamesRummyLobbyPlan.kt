@@ -4,6 +4,7 @@
 // 버튼을 끄는 판단은 "서버가 어차피 거절할 것"만 본다(구버전 · 게임 중 · 집중 · 가득 참 · 루비 부족). 나머지 거절은 서버 문구(`notice`)가 말한다.
 package com.yehsung.aingcheck.core.stores.rummy
 
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
 import com.yehsung.aingcheck.core.stores.games.GamesBusyGame
 import com.yehsung.aingcheck.core.wire.SwiftUUID
 import com.yehsung.aingcheck.core.wire.games.RummyLobby
@@ -56,18 +57,33 @@ sealed interface GamesRummyPersonAction {
 
 /** 로비 문구 표에 없는 글자(맥 `RummyPersonRow.status`·`RummyRankList`, 폰 관례). */
 object RummyLobbyPhoneText {
+    const val startBlockedShort: String = "루비가 모자라 시작할 수 없어요"
     const val statusOutdated: String = "업데이트 필요"
     const val statusInMatch: String = "게임 중"
     const val statusFocus: String = "집중"
     const val statusWorking: String = "근무 중"
     const val statusResting: String = "쉬는 중"
-    const val joinTitleMixed: String = "받은 초대 · 공개 방"
+    const val joinHeader: String = "받은 초대 · 공개 탁자"
+    const val roomFullShort: String = "가득 찼어요"
+    const val inviteSheetTitle: String = "새 탁자"
     const val myRubyTitle: String = "내 루비"
     const val unknownNumber: String = "—"
     const val rankingLoading: String = "순위를 불러오는 중…"
     const val rankingFailed: String = "순위를 불러오지 못했어요"
+    const val usersLoadFailed: String = "사람 목록을 불러오지 못했어요"
 
-    fun sectionCount(title: String, count: Int): String = "$title $count"
+    fun people(count: Int): String = "${count}명"
+
+    fun places(count: Int): String = "${count}곳"
+
+    fun peopleTabWithInvites(count: Int): String = "${GamesRummyLobbyTab.people.title} · 초대 $count"
+
+    fun inviteSheetPrompt(name: String): String = "${name}님을 부를 탁자를 열어요"
+
+    fun openAndCall(stake: Long): String = "판돈 $stake 탁자 열고 부르기"
+
+    /** 고른 판돈이 잔액을 넘었다 — 왜 막혔는지 + 무엇을 하면 풀리는지. */
+    fun stakeShort(stake: Long, balance: Long): String = "판돈 ${stake}에 루비가 모자라요(내 루비 $balance). 판돈을 낮춰 보세요."
 
     fun myRank(me: RummyRankingMe): String = "내 순위 ${RummyPhoneText.rank(me.rank)} · ${RummyPhoneText.record(me.games, me.wins)}"
 
@@ -134,17 +150,6 @@ object GamesRummyLobbyPlan {
         return invites.map { RummyJoinable(it, isInvite = true) } + rooms.map { RummyJoinable(it, isInvite = false) }
     }
 
-    /** 목록 머리. 어느 쪽만 있으면 그 이름, 둘 다면 함께. */
-    fun joinTitle(items: List<RummyJoinable>): String {
-        val hasInvite = items.any { it.isInvite }
-        val hasRoom = items.any { !it.isInvite }
-        return when {
-            hasInvite && hasRoom -> RummyLobbyPhoneText.joinTitleMixed
-            hasInvite -> RummyPhoneText.invitesTitle
-            else -> RummyPhoneText.publicRoomsTitle
-        }
-    }
-
     fun joinedSeats(room: RummyRoom?): List<RummyRoomSeat> = (room?.seats ?: emptyList()).filter { it.state == RummySeatState.joined }
 
     fun maxSeats(room: RummyRoom): Int = (room.maxSeats ?: 4L).toInt()
@@ -162,17 +167,29 @@ object GamesRummyLobbyPlan {
     fun canJoin(item: RummyJoinable, myRoom: RummyRoom?, entry: GamesRummyEntry): Boolean =
         myRoom == null && entry.isOpen && !entry.isWorking && !isFull(item.room) && entry.affordable(item.room.stake)
 
+    /** [참가]·[앉기]가 막힌 까닭 중 줄에 글자로 말할 것. 다른 게임 · 잠금은 로비 위 안내가, 내 방 · 비행 중은 말할 것이 없다. */
+    fun joinBlockText(item: RummyJoinable, myRoom: RummyRoom?, entry: GamesRummyEntry): String? = when {
+        myRoom != null || !entry.isOpen || entry.isWorking -> null
+        isFull(item.room) -> RummyLobbyPhoneText.roomFullShort
+        !entry.affordable(item.room.stake) -> RummyPhoneText.insufficient
+        else -> null
+    }
+
+    /** 탭 글자. 받은 초대는 [사람] 탭 안에 있어서, 순위를 보는 동안 온 초대가 묻히지 않게 탭 글자가 말한다. */
+    fun tabTitle(tab: GamesRummyLobbyTab, inviteCount: Int): String =
+        if (tab == GamesRummyLobbyTab.people && inviteCount > 0) RummyLobbyPhoneText.peopleTabWithInvites(inviteCount) else tab.title
+
     /**
-     * 사람 줄 오른쪽. 방이 없으면 [초대](= 탁자 열고 부르기), 내 방(방장)이면 [초대]·'초대함'·'참가함', 남의 방이면 없음.
-     * 잠긴 빌드는 초대 진입을 세우지 않는다. [stake] 는 방 없이 부를 때 열 탁자의 판돈이다.
+     * 사람 줄 오른쪽. 방이 없으면 [초대](= 판돈 시트 → 탁자 열고 부르기), 내 방(방장)이면 [초대]·'초대함'·'참가함', 남의 방이면 없음.
+     * 잠긴 빌드는 초대 진입을 세우지 않는다. 잔액은 안 본다 — 판돈은 시트에서 고른다(모자라면 시트가 말한다).
      */
-    fun personAction(user: RummyLobbyUser, room: RummyRoom?, amHost: Boolean, calling: List<SwiftUUID>, entry: GamesRummyEntry, stake: Long): GamesRummyPersonAction {
+    fun personAction(user: RummyLobbyUser, room: RummyRoom?, amHost: Boolean, calling: List<SwiftUUID>, entry: GamesRummyEntry): GamesRummyPersonAction {
         if (user.id in calling) return GamesRummyPersonAction.Tag(RummyPhoneText.calling)
         if (entry.duelsLocked) return GamesRummyPersonAction.Hidden
         val free = user.capable != false && user.inMatch != true && user.focusMode != true && !entry.isWorking && entry.block == null
         if (room == null) {
             if (entry.availability != RummyAvailability.available || user.capable == false) return GamesRummyPersonAction.Hidden
-            return GamesRummyPersonAction.Invite(free && entry.affordable(stake))
+            return GamesRummyPersonAction.Invite(free)
         }
         if (!amHost) return GamesRummyPersonAction.Hidden
         when (room.seats?.firstOrNull { it.userId == user.id }?.state) {
@@ -192,45 +209,77 @@ object GamesRummyLobbyPlan {
 }
 
 object GamesRummyRoomPlan {
-    /** [시작] 은 방장 · 2명 이상 · 도는 요청 없음 · 입구 열림(판돈이 움직이는 순간이다). */
+    /** [시작] 은 방장 · 2명 이상 · 도는 요청 없음 · 입구 열림 · 내 판돈 있음(판돈이 움직이는 순간이다 — 서버가 어차피 거절할 것만 막는다). */
     fun canStart(room: RummyRoom?, amHost: Boolean, entry: GamesRummyEntry): Boolean =
-        amHost && GamesRummyLobbyPlan.joinedSeats(room).size >= 2 && entry.isOpen && !entry.isWorking
+        amHost && GamesRummyLobbyPlan.joinedSeats(room).size >= 2 && entry.isOpen && !entry.isWorking && entry.affordable(room?.stake)
 
     fun startTitle(room: RummyRoom?): String {
         val joined = GamesRummyLobbyPlan.joinedSeats(room).size
         return if (joined >= 2) RummyPhoneText.startWith(joined) else RummyPhoneText.start
     }
 
-    /** 판돈 × 인원 = 상금. 비어 보여도 1명(방장)은 앉아 있다. */
-    fun potLine(room: RummyRoom?): String = RummyPhoneText.pot(room?.stake ?: 0L, maxOf(GamesRummyLobbyPlan.joinedSeats(room).size, 1))
+    /** 상금·분배 표시의 인원 — 혼자 앉아 있어도 2명 기준을 보인다(맥과 같다). */
+    fun players(room: RummyRoom?): Int = maxOf(GamesRummyLobbyPlan.joinedSeats(room).size, 2)
 
-    /** 등수 분배 안내. 혼자 앉아 있으면 2명 기준으로 미리 보여 준다. */
-    fun splitLine(room: RummyRoom?): String =
-        RummyPhoneText.split(maxOf(GamesRummyLobbyPlan.joinedSeats(room).size, 2).toLong(), room?.stake ?: 0L)
+    /** 탁자 가운데의 상금(판돈 × 인원). */
+    fun potTotal(room: RummyRoom?): Long = (room?.stake ?: 0L) * players(room)
 
-    fun hint(amHost: Boolean): String = if (amHost) RummyPhoneText.startHintHost else RummyPhoneText.startHintGuest
+    fun potFormula(room: RummyRoom?): String = "${RummyPhoneText.stake(room?.stake)} × ${players(room)}명"
+
+    /** 등수 분배 — **순수익**이다(2명 +N/−N · 3명 +N/0/−N · 4명 +2N/0/−N/−N). 안내 글자 전용이고 실제 분배는 서버 값(`payout`)만 쓴다. 4명의 3·4등은 같은 값이라 한 줄로 합친다. */
+    fun splitLines(room: RummyRoom?): List<String> {
+        val stake = room?.stake ?: 0L
+        return when (players(room)) {
+            2 -> listOf("1등 ${RummyPhoneText.net(stake)}", "2등 ${RummyPhoneText.net(-stake)}")
+            3 -> listOf("1등 ${RummyPhoneText.net(stake)}", "2등 ${RummyPhoneText.net(0)}", "3등 ${RummyPhoneText.net(-stake)}")
+            else -> listOf("1등 ${RummyPhoneText.net(stake * 2)}", "2등 ${RummyPhoneText.net(0)}", "3·4등 ${RummyPhoneText.net(-stake)}")
+        }
+    }
+
+    /** 서버 말이 없을 때 방 아래 안내 한 줄: 내 판돈 → 기다리는 까닭 순서. 시작할 수 있으면 없다. */
+    fun hint(amHost: Boolean, room: RummyRoom?, entry: GamesRummyEntry): String? = when {
+        !entry.affordable(room?.stake) -> RummyLobbyPhoneText.startBlockedShort
+        !amHost -> RummyPhoneText.startHintGuest
+        GamesRummyLobbyPlan.joinedSeats(room).size >= 2 -> null
+        else -> RummyPhoneText.startHintHost
+    }
 
     /** 남은 초를 올림해 정수로(맥 `left.rounded(.up)`). */
     fun countdownSeconds(remaining: Double): Int = maxOf(0, ceil(remaining).toInt())
 
-    /** 곧 닫힌다(맥 `urgentBelow: 60`). */
-    fun isUrgent(seconds: Int): Boolean = seconds < 60
+    /** 곧 닫힌다(맥 `urgentBelow: 60` — `seconds <= urgentBelow`). */
+    fun isUrgent(seconds: Int): Boolean = seconds <= 60
 }
 
-/** 둘러앉은 탁자의 폭 계산(dp). 의자 넷 = [아래(나), 왼, 위, 오른] — `RummyTableSeating.chairs` 순서. */
-object GamesRummyTableStage {
-    const val BOTTOM: Int = 0
-    const val LEFT: Int = 1
-    const val TOP: Int = 2
-    const val RIGHT: Int = 3
-    const val GAP: Float = 4f
-    private const val MIN_CHAIR: Float = 72f
-    private const val MAX_CHAIR: Float = 100f
+/**
+ * 방 탁자의 칸(값, dp). 폭만 받는다 — 높이는 고정이고 스크롤이 받는다. 의자는 탁자 네 변에 절반씩 걸터앉고 저마다 카드 바탕이 있다(절반은 펠트 · 절반은 화면 바탕 위라 바탕 없는 글자는 어느 테마든 한쪽이 안 읽힌다).
+ * 의자 순서는 코어 `RummyTableSeating`(`[아래(나), 왼, 위, 오른]`) 그대로다.
+ */
+class GamesRummyRoomStageLayout(val width: Double) {
+    val height: Double get() = CHAIR_HEIGHT * 2 + CENTER_HEIGHT + GAP * 2
 
-    fun chairWidth(stageWidth: Float): Float = (stageWidth * 0.27f).coerceIn(MIN_CHAIR, MAX_CHAIR)
+    val table: RummyCanvasRect get() = RummyCanvasRect(CHAIR_WIDTH / 2, CHAIR_HEIGHT / 2, width - CHAIR_WIDTH, height - CHAIR_HEIGHT)
 
-    /** 왼·오른 의자 사이 펠트 폭. */
-    fun feltWidth(stageWidth: Float): Float = stageWidth - (chairWidth(stageWidth) + GAP) * 2
+    /** 탁자 가운데 글자 칸 — 왼·오른 의자에 안 닿는 폭. */
+    val center: RummyCanvasRect get() = RummyCanvasRect(CHAIR_WIDTH + GAP, CHAIR_HEIGHT + GAP, width - (CHAIR_WIDTH + GAP) * 2, CENTER_HEIGHT)
+
+    fun chair(index: Int): RummyCanvasRect {
+        val midX = (width - CHAIR_WIDTH) / 2
+        val midY = (height - CHAIR_HEIGHT) / 2
+        return when (index) {
+            0 -> RummyCanvasRect(midX, height - CHAIR_HEIGHT, CHAIR_WIDTH, CHAIR_HEIGHT)
+            1 -> RummyCanvasRect(0.0, midY, CHAIR_WIDTH, CHAIR_HEIGHT)
+            2 -> RummyCanvasRect(midX, 0.0, CHAIR_WIDTH, CHAIR_HEIGHT)
+            else -> RummyCanvasRect(width - CHAIR_WIDTH, midY, CHAIR_WIDTH, CHAIR_HEIGHT)
+        }
+    }
+
+    companion object {
+        const val CHAIR_WIDTH: Double = 88.0
+        const val CHAIR_HEIGHT: Double = 98.0
+        const val GAP: Double = 6.0
+        const val CENTER_HEIGHT: Double = 118.0
+    }
 }
 
 object GamesRummyRankingPlan {

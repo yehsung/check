@@ -10,6 +10,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -94,7 +95,9 @@ class GamesRummyResultViewTest {
         onNodeWithText(RummyPhoneText.forfeit).assertExists()
         // 받은 몫(10·5·0)이 아니라 순수익이다.
         onNodeWithContentDescription("루비 +5").assertExists()
-        onNodeWithContentDescription("루비 0").assertExists()
+        // 내 몫은 머리 카드와 내 줄 두 곳에 선다.
+        assertEquals(2, onAllNodesWithContentDescription("루비 0").fetchSemanticsNodes().size)
+        assertEquals(2, onAllNodesWithText(RummyPhoneText.myResult(2, forfeited = false)).fetchSemanticsNodes().size, "머리 카드 + 내 줄")
         onNodeWithContentDescription("루비 −5").assertExists()
         // 남은 타일 — 내 랙의 조커와 기권한 사람의 랙이 보인다.
         onNodeWithContentDescription("조커").assertExists()

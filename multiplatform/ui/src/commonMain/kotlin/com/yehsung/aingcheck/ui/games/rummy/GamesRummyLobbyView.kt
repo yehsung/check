@@ -67,6 +67,7 @@ import com.yehsung.aingcheck.core.stores.rummy.RummyJoinable
 import com.yehsung.aingcheck.core.stores.rummy.RummyLobbyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
+import com.yehsung.aingcheck.core.stores.rummy.reloadLobby
 import com.yehsung.aingcheck.core.stores.rummy.createRoom
 import com.yehsung.aingcheck.core.stores.rummy.decline
 import com.yehsung.aingcheck.core.stores.rummy.join
@@ -80,8 +81,10 @@ import com.yehsung.aingcheck.ui.components.rememberRubyArt
 import com.yehsung.aingcheck.ui.games.minigame.kit.AingChip
 import com.yehsung.aingcheck.ui.games.minigame.kit.GamesHeaderBar
 import com.yehsung.aingcheck.ui.games.minigame.kit.GroupRow
+import com.yehsung.aingcheck.ui.games.minigame.kit.GamesSheet
 import com.yehsung.aingcheck.ui.games.minigame.kit.InlineNotice
 import com.yehsung.aingcheck.ui.games.minigame.kit.InsetGroup
+import com.yehsung.aingcheck.ui.games.minigame.kit.LoadFailureRow
 import com.yehsung.aingcheck.ui.games.minigame.kit.LoadingRow
 import com.yehsung.aingcheck.ui.games.minigame.kit.NoticeKind
 import com.yehsung.aingcheck.ui.games.minigame.kit.PersonAvatar
@@ -90,6 +93,7 @@ import com.yehsung.aingcheck.ui.games.minigame.kit.PillButton
 import com.yehsung.aingcheck.ui.games.minigame.kit.PillKind
 import com.yehsung.aingcheck.ui.games.minigame.kit.PillSize
 import com.yehsung.aingcheck.ui.games.minigame.kit.SectionHeader
+import com.yehsung.aingcheck.ui.games.minigame.kit.SectionTrailing
 import com.yehsung.aingcheck.ui.games.minigame.kit.TNUM
 import com.yehsung.aingcheck.ui.games.minigame.kit.rowSubtitleStyle
 import com.yehsung.aingcheck.ui.games.minigame.kit.rowTitleStyle
@@ -101,6 +105,8 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 /** 로비 꼬리표(시험·계측). */
 object GamesRummyLobbyTags {
     const val OPEN_TABLE: String = "rummy.lobby.openTable"
+    const val INVITE_SHEET: String = "rummy.lobby.inviteSheet"
+    const val OPEN_AND_CALL: String = "rummy.lobby.openAndCall"
     const val PUBLIC: String = "rummy.lobby.public"
     const val OUTDATED_FOLD: String = "rummy.lobby.outdatedFold"
     const val RULES: String = "rummy.lobby.rules"
@@ -126,6 +132,8 @@ fun GamesRummyLobbyView(
     modifier: Modifier = Modifier,
 ) {
     var tab by remember { mutableStateOf(GamesRummyLobbyTab.people) }
+    // 방 없이 누른 [초대]의 판돈 시트 대상.
+    var inviteTarget by remember { mutableStateOf<RummyLobbyUser?>(null) }
     val block = store.rummyEntryBlock
     val balance = store.rubyBalance ?: rummy.rubyBalance
     val entry = GamesRummyEntry(rummy.availability, rummy.duelsLocked, block, rummy.isWorking, balance)
@@ -141,12 +149,10 @@ fun GamesRummyLobbyView(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = AingDimens.sideMargin)
                 .padding(top = AingDimens.space2, bottom = AingDimens.space6),
         ) {
-            JoinSection(rummy, joinables, myRoom, entry)
+            // ★ 탭이 **위**다. 큐브 로비는 받은 초대 · 공개 방 · 새 탁자가 더 있어서 절 아래에 두면 [순위]가 첫 화면에서 안 보인다(iOS 실화면).
             Summary(rummy, balance)
             GamesRummyLobbyPlan.storeNotice(rummy.notice, warnings)?.let { InlineNotice(it, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Info) }
             warnings.forEach { InlineNotice(it, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Warning) }
-            // 잠긴 빌드는 탁자를 열 수 없다(요청 0건은 스토어도 같은 깃발로 막는다). 방이 잡힌 틈(로비 응답이 먼저 왔다)에도 세우지 않는다.
-            if (!rummy.duelsLocked && myRoom == null) NewTableCard(rummy, myUserID, me, entry)
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = AingDimens.rowSpacing)) {
                 GamesRummyLobbyTab.entries.forEachIndexed { index, value ->
                     SegmentedButton(
@@ -155,22 +161,32 @@ fun GamesRummyLobbyView(
                         shape = SegmentedButtonDefaults.itemShape(index, GamesRummyLobbyTab.entries.size),
                         modifier = Modifier.testTag(GamesRummyLobbyTags.tab(value)),
                         icon = {},
-                    ) { Text(value.title, style = MaterialTheme.typography.labelLarge) }
+                    ) { Text(GamesRummyLobbyPlan.tabTitle(value, rummy.lobby?.invites?.size ?: 0), style = MaterialTheme.typography.labelLarge, maxLines = 1) }
                 }
             }
             when (tab) {
-                GamesRummyLobbyTab.people -> GamesRummyPeopleSection(rummy, myRoom, RummyExitPolicy.amHost(rummy.match), entry, Modifier.padding(top = AingDimens.rowSpacing))
+                GamesRummyLobbyTab.people -> {
+                    JoinSection(rummy, joinables, myRoom, entry)
+                    // 잠긴 빌드는 탁자를 열 수 없다(요청 0건은 스토어도 같은 깃발로 막는다). 방이 잡힌 틈(로비 응답이 먼저 왔다)에도 세우지 않는다.
+                    if (!rummy.duelsLocked && myRoom == null) NewTableCard(rummy, joinables.isEmpty(), entry)
+                    GamesRummyPeopleSection(rummy, myRoom, RummyExitPolicy.amHost(rummy.match), entry, Modifier.padding(top = AingDimens.space3)) { user ->
+                        // 방이 없으면 판돈을 고르는 시트를 먼저 연다(설계서 §5). 방이 있으면 줄이 곧바로 부른다.
+                        if (myRoom == null) inviteTarget = user else rummy.inviteQueued(user.id)
+                    }
+                }
                 GamesRummyLobbyTab.ranking -> GamesRummyRankingSection(rummy, myUserID)
             }
         }
     }
+    val target = inviteTarget
+    if (target != null && myRoom == null) InviteSheet(rummy, target, entry, onDismiss = { inviteTarget = null })
 }
 
 /** 머리 줄 오른쪽 규칙 단추(로비·방 공용). */
 @Composable
 internal fun GamesRummyRulesButton(onRules: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier.heightIn(min = AingDimens.minimumTarget).clickable(role = Role.Button, onClick = onRules)
+        modifier.size(AingDimens.minimumTarget).clickable(role = Role.Button, onClick = onRules)
             .semantics { contentDescription = RummyPhoneText.rulesTitle },
         contentAlignment = Alignment.Center,
     ) { AingIcon(AppIcon.MenuBook, contentDescription = null, size = 22.dp, tint = AingTheme.colors.accent) }
@@ -178,70 +194,79 @@ internal fun GamesRummyRulesButton(onRules: () -> Unit, modifier: Modifier = Mod
 
 // MARK: 받은 초대 + 공개 방
 
+/** [사람] 탭 맨 위 — 받은 초대가 이 화면에서 가장 급한 사실이다(폰엔 맥의 전역 배너가 없다). 없으면 새 탁자 아래 한 줄이 말한다. */
 @Composable
 private fun JoinSection(rummy: RummyStore, joinables: List<RummyJoinable>, myRoom: RummyRoom?, entry: GamesRummyEntry) {
-    val colors = AingTheme.colors
-    if (joinables.isEmpty()) {
-        // 잠긴 빌드는 앉을 수 없으니 "생기면 여기에 떠요" 도 말하지 않는다.
-        if (rummy.duelsLocked) return
-        Text(
-            RummyPhoneText.joinEmpty, style = rowSubtitleStyle(), color = colors.label2,
-            modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin).padding(top = AingDimens.space2),
-        )
-        return
-    }
-    SectionHeader(GamesRummyLobbyPlan.joinTitle(joinables), padded = true)
+    if (joinables.isEmpty()) return
+    SectionHeader(RummyLobbyPhoneText.joinHeader, trailing = SectionTrailing.Label(RummyLobbyPhoneText.places(joinables.size)), padded = true)
     InsetGroup {
         joinables.forEachIndexed { index, item -> JoinRow(rummy, item, myRoom, entry, isLast = index == joinables.size - 1) }
     }
 }
 
-/** 카드 한 장: 방장 얼굴 · "OO님이 불렀어요"/"OO님의 공개 탁자" · 판돈 · 자리 · 앉은 사람 · [거절][참가] 또는 [앉기]. */
+/**
+ * 한 줄: 방장 얼굴 · "OO님이 불렀어요"/"OO님의 공개 탁자" · 판돈 · 자리 · 앉은 사람.
+ * 초대는 버튼 둘을 아래 줄에(판돈이 걸린 수락·거절이라 크게), 공개 방은 사람 줄처럼 한 줄에 [앉기](세 칸이 다 큰 버튼이면 첫 화면이 이 절로 찬다). 큰 글자에서는 쌓는다.
+ */
 @Composable
 private fun JoinRow(rummy: RummyStore, item: RummyJoinable, myRoom: RummyRoom?, entry: GamesRummyEntry, isLast: Boolean) {
-    val colors = AingTheme.colors
     val room = item.room
     val hostName = room.host?.displayName ?: "?"
-    val shortOfRuby = !entry.affordable(room.stake)
     val canJoin = GamesRummyLobbyPlan.canJoin(item, myRoom, entry)
+    val stacked = LocalDensity.current.fontScale >= 1.3f
+    val joinButton: @Composable (Modifier, PillKind, PillSize, Boolean) -> Unit = { modifier, kind, size, fills ->
+        // 잠긴 빌드는 [거절]만 남긴다.
+        if (!entry.duelsLocked) {
+            PillButton(
+                if (item.isInvite) RummyPhoneText.join else RummyPhoneText.take,
+                modifier.testTag(GamesRummyLobbyTags.join(room.id)), kind = kind, size = size, fillsWidth = fills,
+                enabled = canJoin,
+            ) { rummy.join(room.id) }
+        }
+    }
     GroupRow(dividerInset = if (isLast) null else AingDimens.cardPadding, isHighlighted = item.isInvite) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
                 PersonAvatar(hostName, room.host?.id?.lowercased ?: hostName, 36.dp, url = room.host?.avatarUrl, characterHint = room.host?.character)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(
-                        if (item.isInvite) RummyPhoneText.called(hostName) else RummyPhoneText.publicTable(hostName),
-                        style = rowTitleStyle(), color = colors.label, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        AingChip(RummyPhoneText.stake(room.stake), tint = colors.pending)
-                        AingChip(GamesRummyLobbyPlan.joinSeatChip(item), tint = if (item.isInvite) colors.label2 else colors.working)
-                        JoinedFaces(room)
-                    }
+                JoinInfo(item, GamesRummyLobbyPlan.joinBlockText(item, myRoom, entry), entry, hostName, Modifier.weight(1f))
+                if (!stacked) {
+                    JoinedFaces(room)
+                    if (!item.isInvite) joinButton(Modifier, PillKind.Tinted, PillSize.Sm, false)
                 }
             }
-            if (shortOfRuby && !entry.duelsLocked) Text(RummyPhoneText.insufficient, style = rowSubtitleStyle(), color = colors.danger)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (item.isInvite) {
+            if (item.isInvite) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     // [거절] 은 판돈이 움직이지 않아 깃발·다른 게임과 무관하다.
                     PillButton(
-                        RummyPhoneText.decline, Modifier.weight(1f).testTag(GamesRummyLobbyTags.decline(room.id)), kind = PillKind.Gray, size = PillSize.Sm, fillsWidth = true,
+                        RummyPhoneText.decline, Modifier.weight(1f).testTag(GamesRummyLobbyTags.decline(room.id)), kind = PillKind.Gray, fillsWidth = true,
                         enabled = !entry.isWorking,
                     ) { rummy.decline(room.id) }
+                    joinButton(Modifier.weight(1f), PillKind.Filled, PillSize.Md, true)
                 }
-                if (!entry.duelsLocked) {
-                    PillButton(
-                        if (item.isInvite) RummyPhoneText.join else RummyPhoneText.take,
-                        Modifier.weight(1f).testTag(GamesRummyLobbyTags.join(room.id)), kind = PillKind.Tinted, size = PillSize.Sm, fillsWidth = true,
-                        enabled = canJoin,
-                    ) { rummy.join(room.id) }
-                }
+            } else if (stacked) {
+                joinButton(Modifier, PillKind.Tinted, PillSize.Md, true)
             }
         }
     }
 }
 
-/** 앉은 사람 얼굴(겹쳐 놓는다). */
+@Composable
+private fun JoinInfo(item: RummyJoinable, blockText: String?, entry: GamesRummyEntry, hostName: String, modifier: Modifier) {
+    val colors = AingTheme.colors
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            if (item.isInvite) RummyPhoneText.called(hostName) else RummyPhoneText.publicTable(hostName),
+            style = rowTitleStyle(), color = colors.label, maxLines = 2, overflow = TextOverflow.Ellipsis,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            RubyPrice(item.room.stake ?: 0L, isShort = false, art = rememberRubyArt(14f), gemSize = 14.dp, fontSize = 13f)
+            Text("· ${GamesRummyLobbyPlan.joinSeatChip(item)}", style = rowSubtitleStyle().copy(fontFeatureSettings = TNUM), color = colors.label2, maxLines = 1)
+        }
+        if (blockText != null && !entry.duelsLocked) Text(blockText, style = rowSubtitleStyle(), color = colors.danger)
+    }
+}
+
+/** 앉은 사람 얼굴(겹쳐 놓는다). 꾸밈이다 — 인원은 줄 글자가 말한다. */
 @Composable
 private fun JoinedFaces(room: RummyRoom) {
     Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
@@ -279,57 +304,75 @@ private fun Summary(rummy: RummyStore, balance: Long?) {
 // MARK: 새 탁자
 
 @Composable
-private fun NewTableCard(rummy: RummyStore, myUserID: String?, me: RummySeatFace, entry: GamesRummyEntry) {
+private fun NewTableCard(rummy: RummyStore, joinIsEmpty: Boolean, entry: GamesRummyEntry) {
     val colors = AingTheme.colors
-    val stakes = rummy.lobby?.stakes ?: GamesRummyLobbyPlan.defaultStakes
     val selected = rummy.selectedStake
-    InsetGroup(Modifier.padding(top = AingDimens.rowSpacing)) {
+    SectionHeader(RummyPhoneText.newTable, padded = true)
+    InsetGroup {
         Column(Modifier.padding(AingDimens.cardPadding), verticalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-                PersonAvatar(me.name, myUserID ?: me.name, 36.dp, url = me.avatarUrl, characterHint = me.characterId)
-                Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(RummyPhoneText.newTable, style = rowTitleStyle(), color = colors.label)
-                    Text(RummyPhoneText.newTableHint, style = rowSubtitleStyle(), color = colors.label2)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                stakes.forEach { stake ->
-                    StakeChip(stake, stake == selected, entry.affordable(stake), !entry.isWorking, Modifier.weight(1f)) { rummy.selectedStake = stake }
-                }
-            }
-            Text(RummyPhoneText.stakeCaption(selected), style = rowSubtitleStyle().copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = TNUM), color = colors.label2)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-                Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                    Text(RummyPhoneText.publicLabel, style = rowTitleStyle(), color = colors.label)
-                    Text(if (rummy.createPublic) RummyPhoneText.publicOn else RummyPhoneText.publicOff, style = rowSubtitleStyle(), color = colors.label2)
-                }
-                Switch(
-                    checked = rummy.createPublic,
-                    onCheckedChange = { rummy.createPublic = it },
-                    modifier = Modifier.testTag(GamesRummyLobbyTags.PUBLIC),
-                    enabled = !entry.isWorking,
-                )
-            }
-            Text(RummyPhoneText.createHint, style = rowSubtitleStyle(), color = colors.label2)
-            // 못 여는 까닭을 단추 위에 세운다(단추만 흐리면 왜인지 모른다). 잔액을 모르면 막지 않는다.
-            if (!entry.affordable(selected)) Text(RummyPhoneText.insufficient, style = rowSubtitleStyle(), color = colors.danger)
+            GamesRummyTableOptions(rummy, entry, tileFill = colors.fill)
+            StakeShortLine(selected, entry)
             PillButton(
                 RummyPhoneText.openTable, Modifier.testTag(GamesRummyLobbyTags.OPEN_TABLE), kind = PillKind.Filled, icon = AppIcon.Add, fillsWidth = true,
                 enabled = entry.canOpenTable(selected),
             ) { rummy.createRoom() }
         }
     }
+    // 아직 모르거나 못 받았는데 "없어요" 쪽으로 말하지 않는다.
+    if (joinIsEmpty && rummy.lobby != null && !rummy.lobbyLoadFailed) {
+        Text(
+            RummyPhoneText.joinEmpty, style = rowSubtitleStyle(), color = colors.label2,
+            modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin).padding(top = AingDimens.space2),
+        )
+    }
 }
 
-/** 판돈 칸 하나 — 고르기만 한다. 모자라면 흐린 가격 + 비활성. */
+/** 고른 판돈이 잔액을 넘으면 왜 막혔는지 · 어떻게 풀리는지 말한다(단추만 흐리면 왜인지 모른다). 잔액을 모르면 막지 않는다. */
 @Composable
-private fun StakeChip(stake: Long, isSelected: Boolean, affordable: Boolean, notBusy: Boolean, modifier: Modifier, onClick: () -> Unit) {
+private fun StakeShortLine(stake: Long, entry: GamesRummyEntry) {
+    val balance = entry.balance
+    if (balance != null && !entry.affordable(stake)) {
+        Text(RummyLobbyPhoneText.stakeShort(stake, balance), style = rowSubtitleStyle(), color = AingTheme.colors.danger)
+    }
+}
+
+/** 판돈 칸 셋 + 공개 여부 — 로비 새 탁자 카드와 [초대] 시트가 **같은 값**(`selectedStake` · `createPublic`)을 고친다. 값이 코어에 있는 까닭: [한 판 더]도, 방 없이 [초대]도 그 값으로 방을 만든다. */
+@Composable
+private fun GamesRummyTableOptions(rummy: RummyStore, entry: GamesRummyEntry, tileFill: Color) {
     val colors = AingTheme.colors
-    val shape = RoundedCornerShape(AingDimens.tileRadius)
+    val stakes = rummy.lobby?.stakes?.takeIf { it.isNotEmpty() } ?: GamesRummyLobbyPlan.defaultStakes
+    val selected = rummy.selectedStake
+    Column(verticalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            stakes.forEach { stake ->
+                StakeChip(stake, stake == selected, entry.affordable(stake), !entry.isWorking, tileFill, Modifier.weight(1f)) { rummy.selectedStake = stake }
+            }
+        }
+        Text(RummyPhoneText.stakeCaption(selected), style = rowSubtitleStyle().copy(fontFeatureSettings = TNUM), color = colors.label2)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(RummyPhoneText.publicLabel, style = rowTitleStyle(), color = colors.label)
+                Text(if (rummy.createPublic) RummyPhoneText.publicOn else RummyPhoneText.publicOff, style = rowSubtitleStyle(), color = colors.label2)
+            }
+            Switch(
+                checked = rummy.createPublic,
+                onCheckedChange = { rummy.createPublic = it },
+                modifier = Modifier.testTag(GamesRummyLobbyTags.PUBLIC),
+                enabled = !entry.isWorking,
+            )
+        }
+    }
+}
+
+/** 판돈 칸 하나. **모자란 판돈도 고를 수는 있다**(왜 안 되는지 카드가 말한다) — 막으면 고른 값이 이미 모자란 창에서 빠져나올 말이 없다. */
+@Composable
+private fun StakeChip(stake: Long, isSelected: Boolean, affordable: Boolean, notBusy: Boolean, fill: Color, modifier: Modifier, onClick: () -> Unit) {
+    val colors = AingTheme.colors
+    val shape = RoundedCornerShape(AingDimens.innerRadius)
     Box(
-        modifier.heightIn(min = AingDimens.minimumTarget + 4.dp).clip(shape).background(if (isSelected) colors.accentTint else colors.fill, shape)
+        modifier.heightIn(min = 48.dp).clip(shape).background(if (isSelected) colors.accentTint else fill, shape)
             .then(if (isSelected) Modifier.border(2.dp, colors.accent, shape) else Modifier)
-            .clickable(enabled = affordable && notBusy, role = Role.Button, onClick = onClick)
+            .clickable(enabled = notBusy, role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = RummyPhoneText.stake(stake)
                 stateDescription = if (affordable) "" else RummyPhoneText.insufficient
@@ -338,73 +381,113 @@ private fun StakeChip(stake: Long, isSelected: Boolean, affordable: Boolean, not
             .testTag(GamesRummyLobbyTags.stake(stake)),
         contentAlignment = Alignment.Center,
     ) {
-        RubyPrice(stake, isShort = !affordable, art = rememberRubyArt(17f), gemSize = 17.dp, fontSize = 17f)
+        RubyPrice(stake, isShort = !affordable, art = rememberRubyArt(18f), gemSize = 18.dp, fontSize = 17f)
+    }
+}
+
+/** 방 없이 누른 [초대]의 판돈 시트(폰 체스·테트리스 시트와 같은 모양). 판돈은 **시작할 때** 걷는다 — 여기서 빠지지 않는다. 처음부터 판돈이 골라져 있다: 로비 새 탁자 카드에 늘 보이는 코어의 한 값이다. */
+@Composable
+private fun InviteSheet(rummy: RummyStore, target: RummyLobbyUser, entry: GamesRummyEntry, onDismiss: () -> Unit) {
+    val colors = AingTheme.colors
+    val name = target.displayName ?: "?"
+    val stake = rummy.selectedStake
+    GamesSheet(onDismiss = onDismiss) {
+        Column(Modifier.fillMaxWidth().testTag(GamesRummyLobbyTags.INVITE_SHEET)) {
+            GamesHeaderBar(RummyLobbyPhoneText.inviteSheetTitle, subtitle = RummyLobbyPhoneText.inviteSheetPrompt(name), onBack = onDismiss, backIcon = AppIcon.Close)
+            Column(
+                Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = AingDimens.sideMargin).padding(top = AingDimens.space2, bottom = AingDimens.space4),
+                verticalArrangement = Arrangement.spacedBy(AingDimens.space4),
+            ) {
+                InsetGroup {
+                    GroupRow(dividerInset = null, minHeight = 64.dp) {
+                        PersonAvatar(name, target.id.lowercased, 44.dp, working = target.isWorking == true, url = target.avatarUrl, characterHint = target.character)
+                        Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            PersonName(name)
+                            Text(RummyPhoneText.createHint, style = rowSubtitleStyle(), color = colors.label2)
+                        }
+                    }
+                }
+                Column(Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin), verticalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
+                    GamesRummyTableOptions(rummy, entry, tileFill = colors.surface)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(RummyLobbyPhoneText.myRubyTitle, style = rowSubtitleStyle(), color = colors.label2)
+                        val balance = entry.balance
+                        if (balance != null) {
+                            RubyPrice(balance, isShort = false, art = rememberRubyArt(14f), gemSize = 14.dp, fontSize = 13f)
+                        } else {
+                            Text(RummyLobbyPhoneText.unknownNumber, style = rowSubtitleStyle(), color = colors.label2)
+                        }
+                    }
+                    StakeShortLine(stake, entry)
+                }
+            }
+            PillButton(
+                RummyLobbyPhoneText.openAndCall(stake),
+                Modifier.padding(horizontal = AingDimens.sideMargin).padding(bottom = AingDimens.space3).testTag(GamesRummyLobbyTags.OPEN_AND_CALL),
+                kind = PillKind.Filled, size = PillSize.Lg, fillsWidth = true,
+                enabled = entry.canOpenTable(stake) && rummy.match == null,
+            ) {
+                onDismiss()
+                rummy.inviteQueued(target.id)
+            }
+        }
     }
 }
 
 // MARK: 사람 (로비 · 방 공용)
 
-/** 사람 탭: 초대 가능 → 바쁜 사람(흐리게) → '업데이트가 필요한 사람 N명' 접기. 서버 순서를 지킨다. 방 화면도 초대 줄로 같은 절을 쓴다. */
+/** 사람 절: 초대 가능 → 바쁜 사람(흐리게) → '업데이트가 필요한 사람 N명' 접기. 서버 순서를 지킨다. 로비 [사람] 탭과 방(방장)이 함께 쓴다. [onInvite] 는 부르는 쪽이 정한다(방 없는 로비는 시트, 방은 곧바로). */
 @Composable
-internal fun GamesRummyPeopleSection(rummy: RummyStore, room: RummyRoom?, amHost: Boolean, entry: GamesRummyEntry, modifier: Modifier = Modifier) {
+internal fun GamesRummyPeopleSection(rummy: RummyStore, room: RummyRoom?, amHost: Boolean, entry: GamesRummyEntry, modifier: Modifier = Modifier, onInvite: (RummyLobbyUser) -> Unit) {
     val colors = AingTheme.colors
     val lobby = rummy.lobby
     val users = lobby?.users ?: emptyList()
     val people = GamesRummyLobbyPlan.people(users)
     var expanded by remember { mutableStateOf(false) }
     val calling = rummy.callingPeerIDs
-    val stake = rummy.selectedStake
     val rows: @Composable (List<RummyLobbyUser>, Boolean) -> Unit = { list, dimmed ->
-        InsetGroup {
-            list.forEachIndexed { index, user ->
-                PersonRow(
-                    user, GamesRummyLobbyPlan.personAction(user, room, amHost, calling, entry, stake),
-                    onInvite = { rummy.inviteQueued(user.id) }, dimmed = dimmed, isLast = index == list.size - 1,
-                )
-            }
+        list.forEachIndexed { index, user ->
+            PersonRow(
+                user, GamesRummyLobbyPlan.personAction(user, room, amHost, calling, entry),
+                onInvite = { onInvite(user) }, dimmed = dimmed, isLast = index == list.size - 1,
+            )
         }
     }
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
+    Column(modifier) {
         Text(
             RummyPhoneText.peopleCaption(inRoom = room != null, amHost = amHost), style = rowSubtitleStyle(), color = colors.label2,
             modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin),
         )
         if (users.isEmpty()) {
-            InsetGroup {
+            InsetGroup(Modifier.padding(top = AingDimens.space2)) {
                 GroupRow(dividerInset = null) {
-                    if (lobby == null) {
-                        LoadingRow(RummyPhoneText.loadingUsers)
-                    } else {
-                        Text(RummyPhoneText.emptyUsers, style = MaterialTheme.typography.bodyMedium, color = colors.label2)
+                    when {
+                        lobby != null -> Text(RummyPhoneText.emptyUsers, style = MaterialTheme.typography.bodyMedium, color = colors.label2)
+                        // 영영 도는 표시로 숨기지 않는다.
+                        rummy.lobbyLoadFailed -> LoadFailureRow(RummyLobbyPhoneText.usersLoadFailed, Modifier.weight(1f)) { rummy.reloadLobby() }
+                        else -> LoadingRow(RummyPhoneText.loadingUsers)
                     }
                 }
             }
         } else {
             if (people.ready.isNotEmpty()) {
-                PeopleHeader(RummyLobbyPhoneText.sectionCount(RummyPhoneText.readyHeader, people.ready.size), colors.working)
-                rows(people.ready, false)
+                SectionHeader(
+                    if (room == null) RummyPhoneText.readyHeader else RummyPhoneText.peopleHeader,
+                    trailing = SectionTrailing.Label(RummyLobbyPhoneText.people(people.ready.size)), padded = true,
+                )
+                InsetGroup { rows(people.ready, false) }
             }
             if (people.busy.isNotEmpty()) {
-                PeopleHeader(RummyLobbyPhoneText.sectionCount(RummyPhoneText.busyHeader, people.busy.size), colors.label2)
-                rows(people.busy, true)
+                SectionHeader(RummyPhoneText.busyHeader, trailing = SectionTrailing.Label(RummyLobbyPhoneText.people(people.busy.size)), padded = true)
+                InsetGroup { rows(people.busy, true) }
             }
             if (people.outdated.isNotEmpty()) {
-                OutdatedFold(people.outdated.size, expanded) { expanded = !expanded }
-                if (expanded) rows(people.outdated, true)
+                InsetGroup(Modifier.padding(top = AingDimens.space4)) {
+                    OutdatedFold(people.outdated.size, expanded) { expanded = !expanded }
+                    if (expanded) rows(people.outdated, true)
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun PeopleHeader(title: String, tint: Color) {
-    Row(
-        Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin).padding(top = AingDimens.space2),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Box(Modifier.size(6.dp).background(tint, CircleShape))
-        Text(title, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM), color = tint)
     }
 }
 
@@ -412,18 +495,16 @@ private fun PeopleHeader(title: String, tint: Color) {
 @Composable
 private fun OutdatedFold(count: Int, expanded: Boolean, onToggle: () -> Unit) {
     val colors = AingTheme.colors
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = AingDimens.minimumTarget).clip(RoundedCornerShape(AingDimens.innerRadius)).background(colors.pendingTint)
-            .clickable(role = Role.Button, onClick = onToggle).padding(horizontal = 12.dp, vertical = 8.dp).testTag(GamesRummyLobbyTags.OUTDATED_FOLD),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    GroupRow(
+        Modifier.clickable(role = Role.Button, onClick = onToggle).testTag(GamesRummyLobbyTags.OUTDATED_FOLD),
+        dividerInset = if (expanded) AingDimens.cardPadding else null,
     ) {
-        AingIcon(AppIcon.ArrowCircleUp, contentDescription = null, size = 16.dp, tint = colors.pending)
+        AingIcon(AppIcon.ArrowCircleUp, contentDescription = null, size = 20.dp, tint = colors.pending)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(RummyPhoneText.outdatedFold(count, expanded), style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold), color = colors.pending)
-            Text(RummyPhoneText.outdatedHint, style = MaterialTheme.typography.labelSmall, color = colors.label2)
+            Text(RummyPhoneText.outdatedFold(count, expanded), style = rowTitleStyle(), color = colors.label)
+            Text(RummyPhoneText.outdatedHint, style = rowSubtitleStyle(), color = colors.label2)
         }
-        AingIcon(if (expanded) AppIcon.ExpandLess else AppIcon.ExpandMore, contentDescription = null, size = 18.dp, tint = colors.pending)
+        AingIcon(if (expanded) AppIcon.ExpandLess else AppIcon.ExpandMore, contentDescription = null, size = 18.dp, tint = colors.label3Text)
     }
 }
 
@@ -440,7 +521,7 @@ private fun PersonRow(user: RummyLobbyUser, action: GamesRummyPersonAction, onIn
     val info: @Composable (Modifier) -> Unit = { m ->
         Column(m.semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             PersonName(name)
-            Text(status.text, style = rowSubtitleStyle(), color = statusTint(status), maxLines = 1)
+            Text(status.text, style = rowSubtitleStyle(), color = if (status == GamesRummyPersonStatus.outdated) colors.pending else colors.label2, maxLines = 1)
         }
     }
     val trailing: @Composable () -> Unit = {
@@ -471,17 +552,5 @@ private fun PersonRow(user: RummyLobbyUser, action: GamesRummyPersonAction, onIn
             info(Modifier.weight(1f))
             trailing()
         }
-    }
-}
-
-@Composable
-private fun statusTint(status: GamesRummyPersonStatus): Color {
-    val colors = AingTheme.colors
-    return when (status) {
-        GamesRummyPersonStatus.outdated -> colors.pending
-        GamesRummyPersonStatus.inMatch -> colors.accent
-        GamesRummyPersonStatus.focus -> colors.aiToken
-        GamesRummyPersonStatus.working -> colors.working
-        GamesRummyPersonStatus.resting -> colors.label2
     }
 }

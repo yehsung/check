@@ -204,6 +204,10 @@ class RummyStore(
     var lobby: RummyLobby? by mutableStateOf(null)
         internal set
 
+    /** 마지막 로비 조회가 실패했다 — 사람 목록이 "불러오는 중"에 영영 머물지 않게 화면이 다시 시도 줄을 세운다. 들고 있는 줄은 지우지 않는다. */
+    var lobbyLoadFailed: Boolean by mutableStateOf(false)
+        internal set
+
     /** 내가 앉은 방/판의 최신 state. */
     var match: RummyMatchState? by mutableStateOf(null)
         internal set
@@ -751,6 +755,7 @@ class RummyStore(
         if (phase != RummyPhase.lobby) phase = RummyPhase.lobby
         if (availability != RummyAvailability.available) availability = RummyAvailability.available
         if (lobby != null) lobby = null
+        if (lobbyLoadFailed) lobbyLoadFailed = false
         if (match != null) match = null
         if (editor != null) editor = null
         if (notice != null) notice = null

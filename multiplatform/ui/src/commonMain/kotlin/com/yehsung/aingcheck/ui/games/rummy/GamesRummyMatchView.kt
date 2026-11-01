@@ -1,17 +1,97 @@
-// 원본: Sources/check/RummyPanelMatch.swift:247 (RummyMatchView) · Sources/check/RummyTableCanvas.swift:192 (RummyTableCanvasView) · Sources/check/RummyRackView.swift:90 (RummyRackView) @ 1a5eeca6 · 폰 배치는 ios-1017 설계서 §4
-// 자리표시 — 다음 갈래가 이 파일을 통째로 채운다(서명은 껍데기 GamesRummyScreen 이 부른다).
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMatch.swift:1 @ ios-1017-cube 614d98bd · 맥 Sources/check/RummyPanelMatch.swift:247 (RummyMatchView) · Sources/check/RummyTableCanvas.swift:192 · Sources/check/RummyRackView.swift:90 @ 1a5eeca6 · 폰 배치는 ios-1017 설계서 §4
+//
+// 아잉 큐브 판 — 위에서 아래로 머리 줄 → 상대 줄 → 판 → 상태 줄 → 받침대 → 동작 줄. 칸 자리는 GamesRummyMatchLayout 한 곳에서 나온다. 입력: [onBack] 은 [나가기](껍데기가 기권 확인을 띄운다).
+// 말풍선은 껍데기 층(GamesRummyReactionLayer)이 그린다 — 이 뷰는 자리 앵커만 단다. 내 자리는 받침대 칸이다. 탭 막대 숨김은 셸 몫(TabBarPolicy.rummyMatch) · 시스템 뒤로는 껍데기의 뒤로 판단이 받는다.
+// 다른 기기 판(isEngagedInCurrentMatch 거짓)은 안내 카드만 얹는다 — 입력은 막지 않는다(맥과 같다).
+//
+// ── 입력 ──
+// **화면 전체에 pointerInput 하나**([rummyTouchInput])다. 그림 층(판 · 받침대)은 손을 안 받고, 그 위에 빈 층 하나, 다시 그 위에 버튼들(머리 줄 · 동작 줄 · 판 위 조작)이 있어 버튼은 입력 층보다 먼저 눌린다.
+// 시작 자리를 GamesRummyHitTester 로 가르고 나머지는 GamesRummyTouchMachine(순수)이 정한다. 그려지는 자리와 재는 자리가 같은 값에서 나온다.
+//
+// ── 성능 ──
+// 이 본문은 손이 움직여도 다시 돌지 않는다 — 보기 · 손가락 자리를 조립 단계에서 읽지 않는다(층 · 그리기 단계만, 판 위 조작은 파생값만). 시간은 잎의 고리, 잠깐 떴다 사라지는 표시는 열쇠가 안 바뀌는 효과다(맥 0.3.69 재생성 고리 금지).
+//
+// VoiceOver 몫: 끌기 대안(타일 고르기 → 판에 놓기)은 이번 범위 밖이다(설계서 §4). 라벨(면 · 장수 · 차례 · 남은 초)과 [완료 · 뽑기 · 되돌리기 · 나가기] 버튼 동작은 있다.
 package com.yehsung.aingcheck.ui.games.rummy
 
-import androidx.compose.foundation.layout.Column
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
+import com.yehsung.aingcheck.core.rules.rummy.RummyRackLayout
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
-import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
+import com.yehsung.aingcheck.core.rules.rummy.rackMelds
+import com.yehsung.aingcheck.core.stores.rummy.RummyEditorKey
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
+import com.yehsung.aingcheck.core.stores.rummy.isEngagedInCurrentMatch
 import com.yehsung.aingcheck.core.wire.SwiftDate
-import com.yehsung.aingcheck.ui.games.minigame.kit.GamesHeaderBar
+import com.yehsung.aingcheck.core.wire.games.RummyMatchStatus
+import com.yehsung.aingcheck.ui.theme.AingMotion
+import com.yehsung.aingcheck.ui.theme.AingTheme
+import kotlinx.coroutines.delay
 
-/** 판 — 머리 줄 · 상대 줄 · 판 · 상태 줄 · 받침대 · 동작 줄. [onBack] 은 [나가기](껍데기가 기권 확인을 띄운다). */
+/** 판 화면 꼬리표(시험 · 계측). */
+object GamesRummyMatchTags {
+    const val INPUT: String = "rummy.match.input"
+    const val BOARD: String = "rummy.match.board"
+    const val BOARD_LAYER: String = "rummy.match.boardLayer"
+    const val RACK: String = "rummy.match.rack"
+    const val RACK_REFUSED: String = "rummy.match.rackRefused"
+    const val STATUS: String = "rummy.match.status"
+    const val BACK: String = "rummy.match.back"
+    const val RULES: String = "rummy.match.rules"
+    const val SUBMIT: String = "rummy.match.submit"
+    const val DRAW: String = "rummy.match.draw"
+    const val UNDO: String = "rummy.match.undo"
+    const val SORT_NUMBER: String = "rummy.match.sortNumber"
+    const val SORT_COLOR: String = "rummy.match.sortColor"
+    const val ZOOM: String = "rummy.match.zoom"
+    const val OFFSCREEN_LEFT: String = "rummy.match.offscreenLeft"
+    const val OFFSCREEN_RIGHT: String = "rummy.match.offscreenRight"
+    const val ELSEWHERE: String = "rummy.match.elsewhere"
+    const val TURN_BADGE: String = "rummy.match.turnBadge"
+
+    fun rackTile(face: String): String = "rummy.match.rackTile.$face"
+}
+
+/** 칸 사각형 그대로 놓는다(판 화면 좌표 · dp). */
+internal fun Modifier.atRect(rect: RummyCanvasRect): Modifier = offset(rect.x.dp, rect.y.dp).size(rect.width.dp, rect.height.dp)
+
+/** 판 — 머리 줄 · 상대 줄 · 판 · 상태 줄 · 받침대 · 동작 줄. [onBack] 은 [나가기](껍데기가 기권 확인을 띄운다). [model] 은 시험이 넣어 재는 자리다. */
 @Composable
 fun GamesRummyMatchView(
     rummy: RummyStore,
@@ -22,6 +102,237 @@ fun GamesRummyMatchView(
     onBack: () -> Unit,
     now: () -> SwiftDate,
     modifier: Modifier = Modifier,
+    model: GamesRummyMatchModel = remember { GamesRummyMatchModel() },
 ) {
-    Column(modifier) { GamesHeaderBar(RummyPhoneText.title, onBack = onBack) }
+    val match = rummy.match ?: return
+    val editor = rummy.editor
+    val isMyTurn = rummy.isMyTurn && editor != null
+    val otherDraft = rummy.otherDraft
+    val isWorking = rummy.isWorking
+    val scene = remember(match, editor, isMyTurn, otherDraft) { GamesRummyBoardScene.make(match, editor, isMyTurn, otherDraft) }
+    val density = LocalDensity.current
+    val textScale = minOf(density.fontScale.toDouble(), GamesRummyMatchLayout.maxActionTextScale)
+    // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거둔다 — 낡은 id 로 놓지 않게.
+    LaunchedEffect(match.seq) { model.cancelTouch() }
+    // 장부(engagedMatchIDs)는 관찰 값이 아니다 — 판 · 작업이 바뀔 때 다시 본다. 첫 쓰기는 작업 전송 디바운스(0.25초) 뒤라 한 번 더 본다. 효과 안에서 열쇠를 안 쓴다.
+    var engaged by remember(match.id) { mutableStateOf(rummy.isEngagedInCurrentMatch) }
+    LaunchedEffect(match, editor) {
+        engaged = rummy.isEngagedInCurrentMatch
+        if (!engaged) {
+            delay(400)
+            engaged = rummy.isEngagedInCurrentMatch
+        }
+    }
+    BoxWithConstraints(modifier.background(AingTheme.colors.background).clipToBounds()) {
+        val rows = model.frozenRows ?: editor?.rackLayout?.rowCount ?: RummyRackLayout.baseRows
+        val layout = GamesRummyMatchLayout(
+            RummyCanvasSize(maxWidth.value.toDouble(), maxHeight.value.toDouble()),
+            rows,
+            GamesRummyMatchLayout.actionHeight(textScale),
+        )
+        val context = GamesRummyTouchContext(layout, model.viewportUntracked(), scene, editor, isMyTurn, isMyTurn && !isWorking)
+        SideEffect { model.sync(context) }
+        val anchors = LocalGamesRummyReactionAnchors.current
+        val cue = rememberGamesRummyTurnCue(if (isMyTurn && match.status == RummyMatchStatus.active) RummyEditorKey.of(match).text else null, reduceMotion)
+        val fresh = rememberGamesRummyFreshDraw(rummy)
+        val mine = GamesRummySeats.mine(match)
+        val line = GamesRummyStatusLine.make(rummy.notice, isMyTurn, editor, GamesRummySeats.turnSeat(match)?.displayName, mine?.state)
+        val plan = gamesRummyPlanLine(editor, isMyTurn)
+        Box(Modifier.fillMaxSize()) {
+            // 그림 층 — 손을 안 받는다.
+            GamesRummyTablePane(model, scene, context.editable, Modifier.atRect(layout.table).testTag(GamesRummyMatchTags.BOARD))
+            Box(Modifier.atRect(layout.table)) {
+                GamesRummyTableStrip(match, isMyTurn, otherDraft != null, Modifier.align(Alignment.BottomStart).fillMaxWidth())
+                // 묶음은 위부터 깔린다 — 안내가 타일을 가리지 않게 아래쪽(직전 사건 줄 위)에.
+                if (!engaged && editor != null) GamesRummyElsewhereCard(Modifier.align(Alignment.BottomCenter).padding(bottom = 38.dp))
+                AnimatedVisibility(
+                    cue.badgeShown && isMyTurn,
+                    modifier = Modifier.align(Alignment.Center),
+                    enter = fadeIn(AingMotion.fade(AingMotion.SHORT_MS)) + scaleIn(AingMotion.move(AingMotion.MEDIUM_MS), initialScale = 0.85f),
+                    exit = fadeOut(AingMotion.fade(AingMotion.MEDIUM_MS)),
+                ) { GamesRummyTurnBadge() }
+            }
+            GamesRummyStatusRow(line, plan?.first, plan?.second == true, Modifier.atRect(layout.status))
+            GamesRummyRackPane(
+                model = model,
+                tiles = editor?.rack ?: emptyList(),
+                layout = context.rackLayout,
+                geometry = layout.rackGeometry,
+                regionWidth = layout.rack.width,
+                regionHeight = layout.rack.height,
+                rackMelds = editor?.rackMelds ?: emptyList(),
+                turnGlow = if (isMyTurn) cue.glow else null,
+                freshIDs = fresh,
+                reduceMotion = reduceMotion,
+                modifier = Modifier.atRect(layout.rack).rummyReactionAnchor(anchors, match.mySeatNo).testTag(GamesRummyMatchTags.RACK),
+            )
+            // 입력 층 — 화면 전체. 위 줄들은 포인터 수식어가 없어 그대로 지나오고, 아래 버튼 층이 이 층보다 먼저 눌린다.
+            Box(Modifier.matchParentSize().testTag(GamesRummyMatchTags.INPUT).rummyTouchInput(model, rummy))
+            // 버튼 층.
+            GamesRummyMatchHeader(rummy, match, onBack, onRules, now, Modifier.atRect(layout.header))
+            GamesRummyOpponentRow(rummy, match, now, Modifier.atRect(layout.opponents))
+            GamesRummyTableControls(model, scene.layout.frames, reduceMotion, Modifier.atRect(layout.table), badgeLift = if (engaged) 36 else 104)
+            GamesRummyActionRow(rummy, match, editor, isMyTurn, layout.size.width, textScale, now, Modifier.atRect(layout.actions))
+            // 손에 든 타일 — 맨 위.
+            GamesRummyFloatingBlock(model, Modifier.fillMaxSize())
+        }
+        GamesRummyEdgePanner(model)
+        GamesRummyInputCues(model)
+    }
+}
+
+/**
+ * 입력 층 — 화면 전체에 하나. 8 넘게 움직이면 한 장 · 8 안에서 0.5초면 묶음째 · 두 손가락은 핀치만(핀치 중 한 손가락 끌기 금지) · 끄는 중 두 번째 손가락은 무시.
+ * 시스템이 거둔 손(소비된 채 떨어진 up)은 놓기가 아니다 — 끌던 타일이 엉뚱한 자리에 놓이면 안 된다.
+ */
+private fun Modifier.rummyTouchInput(model: GamesRummyMatchModel, rummy: RummyStore): Modifier =
+    pointerInput(model, rummy) {
+        fun point(at: Offset): RummyCanvasPoint = RummyCanvasPoint(at.x.toDouble() / density, at.y.toDouble() / density)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            val opened = model.currentContext ?: return@awaitEachGesture
+            model.touchDown(point(down.position), opened)
+            down.consume()
+            val holdAt = down.uptimeMillis + GamesRummyGestureRules.liftDelayMillis
+            var lastUptime = down.uptimeMillis
+            var holdTried = false
+            var finished = false
+            var pinching = false
+            var pinchRefused = false
+            var magnification = 1.0
+            var anchor = RummyCanvasPoint(0.0, 0.0)
+            try {
+                while (true) {
+                    val event = if (model.machine.isAwaitingHold && !holdTried) {
+                        withTimeoutOrNull((holdAt - lastUptime).coerceAtLeast(1L)) { awaitPointerEvent() }
+                    } else {
+                        awaitPointerEvent()
+                    }
+                    val context = model.currentContext ?: opened
+                    if (event == null) {
+                        holdTried = true
+                        model.holdElapsed(context)
+                        continue
+                    }
+                    lastUptime = event.changes.firstOrNull()?.uptimeMillis ?: lastUptime
+                    val pressed = event.changes.count { it.pressed }
+                    if (pressed >= 2 && !pinching && !pinchRefused) {
+                        if (model.beginPinch()) {
+                            pinching = true
+                            magnification = 1.0
+                            anchor = context.inTable(point(event.calculateCentroid(useCurrent = true)))
+                        } else {
+                            pinchRefused = true
+                        }
+                    }
+                    if (pinching && pressed < 2) {
+                        model.pinchEnded()
+                        pinching = false
+                    }
+                    if (pinching) {
+                        magnification *= event.calculateZoom().toDouble()
+                        model.pinch(magnification, anchor)
+                        event.changes.forEach { it.consume() }
+                        continue
+                    }
+                    val change = event.changes.firstOrNull { it.id == down.id }
+                    if (change == null) {
+                        model.touchVanished()
+                        finished = true
+                        break
+                    }
+                    if (!change.pressed) {
+                        if (change.isConsumed) {
+                            model.touchVanished()
+                        } else {
+                            GamesRummyMatchModel.apply(model.touchUp(point(change.position), context), rummy)
+                            change.consume()
+                        }
+                        finished = true
+                        break
+                    }
+                    if (change.positionChanged()) model.touchMoved(point(change.position), context)
+                    event.changes.forEach { it.consume() }
+                }
+            } finally {
+                // 뗌 없이 끝났다(입력 층이 죽었다) — 끌던 타일을 공중에 남기지 않는다.
+                if (!finished) model.touchVanished()
+            }
+        }
+    }
+
+/** 자동 밀기 — [GamesRummyMatchModel.edgeDirection] 이 0 이 아닌 동안만 프레임이 돈다. 끝에 닿거나 손이 비키면 멎는다. 끌기 기능이라 동작 줄이기여도 켠다. */
+@Composable
+private fun GamesRummyEdgePanner(model: GamesRummyMatchModel) {
+    val edging = model.edgeDirection != 0
+    LaunchedEffect(model, edging) {
+        if (!edging) return@LaunchedEffect
+        var last = -1L
+        while (true) {
+            val frame = withFrameNanos { it }
+            if (last >= 0) model.edgeTick((frame - last) / 1_000_000_000.0)
+            last = frame
+        }
+    }
+}
+
+/** 묶음째 집음 · 거절 햅틱과 거절 표시 0.6초. 값이 바뀔 때만 돈다 — 효과 안에서 열쇠(일련번호)를 쓰지 않는다. */
+@Composable
+private fun GamesRummyInputCues(model: GamesRummyMatchModel) {
+    val haptics = LocalHapticFeedback.current
+    val liftSerial = model.liftSerial
+    val refuseSerial = model.refuseSerial
+    LaunchedEffect(liftSerial) { if (liftSerial > 0) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+    LaunchedEffect(refuseSerial) {
+        if (refuseSerial > 0) {
+            haptics.performHapticFeedback(HapticFeedbackType.Reject)
+            delay(GAMES_RUMMY_REFUSED_FLASH_MILLIS)
+            model.clearRefusedFlash()
+        }
+    }
+}
+
+private const val GAMES_RUMMY_REFUSED_FLASH_MILLIS: Long = 600L
+
+/** 내 차례 표시 값. */
+private class GamesRummyTurnCue(val glow: GamesRummyTurnGlowPhase, val badgeShown: Boolean)
+
+/**
+ * 내 차례가 새로 왔으면 받침대 테두리를 한 번 크게 빛내고(0.8초 뒤 은은하게) 판 가운데 '내 차례' 배지를 1.3초 띄운다 · 햅틱 한 번. 동작 줄이기면 펄스 · 배지 없이 은은한 테두리만.
+ * 소리 · 알림 없음(사용자 결정). 차례 정체성([key])이 열쇠라 같은 차례에 다시 안 울린다.
+ */
+@Composable
+private fun rememberGamesRummyTurnCue(key: String?, reduceMotion: Boolean): GamesRummyTurnCue {
+    val haptics = LocalHapticFeedback.current
+    var glow by remember { mutableStateOf(GamesRummyTurnGlowPhase.steady) }
+    var badge by remember { mutableStateOf(false) }
+    LaunchedEffect(key) {
+        badge = false
+        glow = GamesRummyTurnGlowPhase.steady
+        if (key == null) return@LaunchedEffect
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (reduceMotion) return@LaunchedEffect
+        glow = GamesRummyTurnGlowPhase.pulse
+        badge = true
+        delay(800)
+        glow = GamesRummyTurnGlowPhase.steady
+        delay(500)
+        badge = false
+    }
+    return GamesRummyTurnCue(glow, badge)
+}
+
+/** 방금 뽑은 타일(3초 빛남). 돌아왔을 때 옛 뽑기를 다시 빛내지 않는다. */
+@Composable
+private fun rememberGamesRummyFreshDraw(rummy: RummyStore): Set<Int> {
+    val event = rummy.lastDraw
+    val seen = remember { event?.serial }
+    var fresh by remember { mutableStateOf(emptySet<Int>()) }
+    LaunchedEffect(event?.serial) {
+        if (event == null || event.serial == seen) return@LaunchedEffect
+        fresh = event.tiles.map { it.tileID }.toSet()
+        delay(3_000)
+        fresh = emptySet()
+    }
+    return fresh
 }

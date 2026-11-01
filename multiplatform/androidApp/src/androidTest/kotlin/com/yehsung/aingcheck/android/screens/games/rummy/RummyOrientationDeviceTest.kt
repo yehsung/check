@@ -90,9 +90,13 @@ class RummyOrientationDeviceTest {
         return light
     }
 
-    /** 글자색이 그 값이다 — 회전의 뒤처리(뷰 나무 · 다음 프레임)가 끝난 뒤에도 그대로인지 잠시 더 본다. */
+    /** 글자색이 그 값이 된다(모드를 고른 뒤 칠은 다음 Compose 프레임이다) — 회전의 뒤처리(뷰 나무 · 다음 프레임)가 끝난 뒤에도 그대로인지 잠시 더 본다. */
     private fun ActivityScenario<MainActivity>.assertStatusIcons(light: Boolean, label: String) {
         instrumentation.waitForIdleSync()
+        repeat(ROTATION_WAIT_STEPS) {
+            if (lightStatusIcons() == light) return@repeat
+            Thread.sleep(ROTATION_WAIT_STEP_MS)
+        }
         repeat(ICON_SAMPLE_STEPS) {
             assertEquals("$label: 상태 막대 글자색(isAppearanceLightStatusBars)", light, lightStatusIcons())
             Thread.sleep(ROTATION_WAIT_STEP_MS)

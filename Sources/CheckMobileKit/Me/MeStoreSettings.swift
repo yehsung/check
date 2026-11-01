@@ -33,6 +33,7 @@ extension MeStore {
         tokenUsagePublicLoadFailed = false
         miniGamePublicLoadFailed = false
         inviteCodeLoadFailed = false
+        centerLoadFailed = false
         defer { if isCurrent("settings", serial) { isLoadingSettings = false } }
 
         let tokenStamp = privacyReadStamp("token")
@@ -80,6 +81,31 @@ extension MeStore {
             if AuthErrorRules.classify(error) == .cancelled { return }
             inviteCodeLoadFailed = true
         }
+
+        // 소속 센터 행. 나 탭 머리가 이미 받았으면 묻지 않는다(머리를 건너뛰고 설정만 열리는 길 · 머리의 센터 조회가 실패한 사람을 위한 자리다).
+        guard !centerLoaded else { return }
+        let center = await attempt { session in
+            try await service.fetchMyCenter(accessToken: session.accessToken, userID: session.userID)
+        }
+        guard generation == context.generation, isCurrent("settings", serial) else { return }
+        switch center {
+        case .success(let value):
+            centerServerValue = value
+            centerLoaded = true
+        case .failure(let error):
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            centerLoadFailed = true
+        }
+    }
+
+    /// 소속 센터 행의 상태(코어 판정 — 맥과 한 벌). **모르는 것을 '미지정'으로 그리지 않는다.**
+    package var centerRowState: CenterSettingsRowState {
+        .of(loaded: centerLoaded, center: centerServerValue)
+    }
+
+    /// 센터를 아직 못 읽었고 마지막 조회가 실패했다(행 대신 실패 줄 · [다시 시도]).
+    package var centerFailed: Bool {
+        centerLoadFailed && !centerLoaded
     }
 
     /// 공개 설정을 **아직 한 번도** 못 읽었고 마지막 조회가 실패했다(스위치가 죽어 있는 이유를 말한다).

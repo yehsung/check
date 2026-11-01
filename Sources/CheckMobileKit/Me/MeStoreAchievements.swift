@@ -129,6 +129,12 @@ extension MeStore {
         dailyMissionClaimableCount + achievementClaimableCount + (weeklyWorkAvailable ? (weeklyWork?.pendingCount ?? 0) : 0)
     }
 
+    /// 지금 연속 근무일(지금 탭 칩). nil 이면 칩을 숨긴다 — 이 서버가 안 알려 주거나(키 없음 · 출시 순서 자유) 아직 모른다. 값은 지어내지 않는다.
+    package var streakDays: Int? {
+        guard achievementsAvailable, context.session.isSignedIn else { return nil }
+        return achievements?.streakDays
+    }
+
     /// 루트에 [미션] 줄을 세우는가 — 주간·도전 미션 **둘 중 하나라도** 그릴 것이 있을 때. 둘 다 없는 서버(옛 서버 ·
     /// 로그인 전)엔 줄이 없다: 1.0.12 까지 카드 둘이 통째로 빠지던 것과 **같은 규약**이라 빈 줄만 남지 않는다.
     package var showsMissionsRow: Bool {

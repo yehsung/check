@@ -166,6 +166,13 @@ struct MeMissionsView: View {
         .sensoryFeedback(.success, trigger: store.missionClaimBurstSerial)
         .background(MobileTheme.background.ignoresSafeArea())
         .navigationTitle(MeText.missionsPageTitle)
+        // 받으면 숫자가 오르는 자리(맥 미션 화면 제목 행 `MissionRubyBalance`). 상점 오른쪽 위와 **같은 공용 부품**이고 값도 같은
+        // 미러다 — 받기 응답이 옮기는 곳이 이 값이라 따로 묻지 않는다. 미션 화면 안이라 누를 곳은 없다.
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                RubyBalanceChip(store.rubyBalance, style: .toolbar)
+            }
+        }
     }
 }
 #endif

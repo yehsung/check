@@ -1000,7 +1000,7 @@ struct V0323WorkShortcutTests {
         #expect(settings.contains("get: { store.workShortcutEnabled }, set: { store.setWorkShortcutEnabled($0) }"))
 
         let rowStart = try #require(settings.range(of: "enum WorkShortcutRecorderNotice: Equatable {"))
-        let rowEnd = try #require(settings.range(of: "enum CenterSettingsRowState: Equatable {"))
+        let rowEnd = try #require(settings.range(of: "private struct CenterSettingsRow: View {"))
         let rowCode = settings[rowStart.lowerBound..<rowEnd.lowerBound]
         for banned in ["TextField", "SecureField", "Picker", "Menu"] {
             #expect(!rowCode.contains(banned), "기록 행에 \(banned) 가 있다 — ImageRenderer 가 노란 상자로 그려 스냅샷이 눈이 먼다")

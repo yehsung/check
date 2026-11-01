@@ -24,6 +24,6 @@ package enum CheckAppLinks {
     /// 저장소 `docs/privacy.md` 를 GitHub Pages 로 켠 주소이고, 폰의 나 → 설정·가입 화면(`MeText.privacyPolicyURL` ·
     /// `MobileSignUpText.privacyURL`)과 **같은 주소**다.
     package static let privacyPolicy = URL(string: "https://yehsung.github.io/check/privacy")!
-    /// 이용약관(v0.3.51 — 맥). 가입 화면의 동의 한 줄과 설정 머리 줄이 쓴다(폰 `MobileSignUpText.termsURL` 과 같은 주소).
+    /// 이용약관(v0.3.51 — 맥). 가입 화면의 동의 한 줄과 설정 머리 줄이 쓴다. 폰의 가입 화면(`MobileSignUpText.termsURL`)과 나 → 설정(`MeText.termsOfServiceURL`)도 이 값이다.
     package static let termsOfService = URL(string: "https://yehsung.github.io/check/terms")!
 }

@@ -884,6 +884,15 @@ package enum MeText {
     package static let inviteCodeTitle = "팀 코드"
     package static let inviteCodeShare = "팀 코드 공유"
     package static let inviteCodeMissing = "팀 코드를 아직 못 읽었어요"
+    package static let centerRowTitle = "소속 센터"
+    package static let centerLoadFailed = "소속 센터를 아직 못 읽었어요"
+
+    /// 소속 센터 행의 값 아래 한 줄. 바꾸는 길은 없다(읽기 전용 — 운영자가 고친다). 폰의 배지는 아바타 모서리가 아니라 이름 줄에 서므로
+    /// `.chosen` 은 맥 문장("아바타 모서리에…")을 쓰지 않는다. 나머지는 코어 문장 그대로다.
+    package static func centerRowCaption(_ state: CenterSettingsRowState) -> String {
+        if case .chosen = state { return "이름 줄에 배지로 보여요. 바꾸려면 운영자에게." }
+        return state.caption
+    }
 
     package static func inviteShareMessage(teamName: String?, code: String) -> String {
         let team = teamName.map { "「\($0)」 " } ?? ""
@@ -902,6 +911,9 @@ package enum MeText {
     /// 주소는 저장소 docs/ 를 GitHub Pages 로 켜 만든 것이다(같은 문서가 스토어 제출 폼의 처리방침 URL 이기도 하다).
     package static let privacyPolicy = "개인정보 처리방침"
     package static let privacyPolicyURL = URL(string: "https://yehsung.github.io/check/privacy")!
+    /// 이용약관 — 가입 화면에만 있으면 가입 뒤에는 다시 볼 길이 없다(맥 설정 머리 줄과 같은 문서). 주소는 코어 한 곳이다.
+    package static let termsOfService = "이용약관"
+    package static let termsOfServiceURL = CheckAppLinks.termsOfService
 
     package static let deleteAccount = "계정 삭제"
     package static let deleteAccountTitle = "계정을 지울까요?"

@@ -115,12 +115,6 @@ package final class NowStore {
     package private(set) var dismissedUpdateBuild: Int?
     package nonisolated static let dismissedUpdateBuildKey = "aingcheck.update.dismissedBuild"
 
-    /// 지난주 회고 안내 줄을 세우는가(규약은 `NowStoreRetroNotice.swift`).
-    package internal(set) var showsRetroNotice = false
-    @ObservationIgnored var isCheckingRetroNotice = false
-    /// 판정 조회 순번 — 로그아웃으로 버린 조회의 답이 다음 계정에 줄을 세우지 못하게 한다.
-    @ObservationIgnored var retroNoticeCheckSerial = 0
-
     package nonisolated static let refreshIntervalSeconds: Double = 60
     /// 탭을 다시 볼 때 이 초 안에 받았으면 새로고침을 건너뛴다.
     package nonisolated static let tabRefreshFreshSeconds: Double = 30
@@ -188,13 +182,10 @@ package final class NowStore {
         // 앱이 앞으로 왔다 = 폰 근무의 생존 신호(서버가 확인 알림 대기를 풀고 근무를 잇는다). 근무 중이 아니어도 보낸다 —
         // 응답이 "자리비움으로 끝났어요" 안내와 지금 근무의 출처(폰 · 맥)를 알려 준다.
         touchPhoneWorkIfNeeded(minimumInterval: Self.phoneTouchOnActiveSeconds)
-        checkRetroNoticeIfDue()
     }
 
     package func appDidEnterBackground() {
         isActive = false
-        // 줄은 앱을 떠나면 내려간다(맥: 팝오버가 닫힐 때). 그려졌으면 이미 소비했고, 안 그려졌으면 다음에 앞에 올 때 다시 판정한다.
-        showsRetroNotice = false
         refreshTimer?.cancel()
         refreshTimer = nil
         // 되돌리기 창은 닫는다(삭제는 이미 파일에 있다) — 돌아왔을 때 몇 시간 지난 토스트가 남지 않게.
@@ -208,9 +199,6 @@ package final class NowStore {
 
     package func reset() {
         isActive = false
-        showsRetroNotice = false
-        isCheckingRetroNotice = false
-        retroNoticeCheckSerial &+= 1
         refreshTimer?.cancel()
         refreshTimer = nil
         refreshRerun = false

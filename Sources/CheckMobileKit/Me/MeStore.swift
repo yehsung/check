@@ -60,8 +60,6 @@ package final class MeStore {
     // MARK: 기록
     package internal(set) var heatmap: WorkRhythmHeatmap = .empty
     package internal(set) var retro: WeeklyRetro?
-    /// 루트가 기록 카드까지 내려가야 한다(`requestRecordsScroll`).
-    package private(set) var pendingRecordsScroll = false
     package internal(set) var dailyGrid: WorkDailyGrid = .empty
     package internal(set) var tokenGrid: TokenDailyGrid = .empty
     /// 토큰 수집을 켠 사람만 토큰 잔디를 본다(맥 `tokenUsageCollect` 게이트).
@@ -330,7 +328,6 @@ package final class MeStore {
     package func appDidEnterBackground() {}
 
     package func reset() {
-        pendingRecordsScroll = false
         for task in inflight { task.cancel() }
         inflight.removeAll()
         for key in serials.keys { serials[key, default: 0] &+= 1 }
@@ -469,8 +466,6 @@ package final class MeStore {
     package func tabDidAppear() {
         isTabVisible = true
         if weeklyGrantNotice != nil { weeklyGrantNoticeSeen = true }
-        // 회고 카드가 이 탭에 있다 — 지금 탭의 안내 줄은 할 일을 다했다(맥: 개인 기록 패널을 보고 있으면 배너를 안 띄운다).
-        context.links.now?.recordsDidBecomeVisible()
         refreshRootIfStale()
     }
 
@@ -478,18 +473,6 @@ package final class MeStore {
         isTabVisible = false
         weeklyTabDidDisappear()
         missionsTabDidDisappear()
-    }
-
-    /// 지금 탭 회고 안내의 [보기]: 루트가 기록 카드까지 내려가게 적어 둔다. 탭이 아직 안 그려졌으면 나타날 때, 이미 있으면 값이 바뀔 때 꺼낸다.
-    package func requestRecordsScroll() {
-        pendingRecordsScroll = true
-    }
-
-    /// 적어 둔 스크롤을 꺼낸다(꺼내면 비운다 — 두 자리에서 불려도 한 번만 내려간다).
-    package func takeRecordsScroll() -> Bool {
-        guard pendingRecordsScroll else { return false }
-        pendingRecordsScroll = false
-        return true
     }
 
     /// 딥링크(`aingcheck://me` · `me/shop` · `me/settings` · `feedback[/<id>]`). 라우터가 이미 경로를 비웠다 — 하위 화면을 한 칸 쌓는다.

@@ -30,14 +30,7 @@ struct NowTab: View {
                                 .listRowSeparator(.hidden)
                         }
                     }
-                    // 안내 줄은 한 번에 하나(맥 `TopBanner` 와 같은 규칙 · 같은 순서). 회고 줄은 앱을 떠나면 내려가므로 새 버전 줄을 오래 가리지 않는다.
-                    if store.showsRetroNotice {
-                        Section {
-                            NowRetroNoticeRow(store: store)
-                                .cardSegmentRow(.single, padding: EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
-                                .onAppear { store.markRetroNoticeDisplayed() }
-                        }
-                    } else if store.showsUpdateNotice {
+                    if store.showsUpdateNotice {
                         Section {
                             NowUpdateNoticeRow(store: store)
                                 .cardSegmentRow(.single, padding: EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
@@ -141,63 +134,6 @@ private struct NowNavigationSubtitle: ViewModifier {
             return NowText.collapsedSubtitle(clock: NowFormat.clock(card.todaySeconds), percent: card.percent)
         }
         return NowTab.expandedSubtitle(store: store)
-    }
-}
-
-// MARK: - 지난주 회고 안내
-
-/// 카드 한 줄: 글자 · [보기](틴트) · 닫기(X, 누름 영역 44pt). 새 버전 안내 줄(`NowUpdateNoticeRow`)과 같은 모양이고 큰 글자 처방도 같다.
-private struct NowRetroNoticeRow: View {
-    let store: NowStore
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        if dynamicTypeSize.isAccessibilitySize {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .top, spacing: 4) {
-                    title
-                        .padding(.top, 8)
-                    dismissButton
-                }
-                openButton
-                    .padding(.trailing, 16)
-                    .padding(.bottom, 8)
-            }
-        } else {
-            HStack(spacing: 4) {
-                title
-                openButton.fixedSize()
-                dismissButton
-            }
-        }
-    }
-
-    private var title: some View {
-        Text(NowText.retroNoticeTitle)
-            .font(.subheadline)
-            .foregroundStyle(MobileTheme.label)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var openButton: some View {
-        AingButton(NowText.retroNoticeAction, kind: .tinted, size: .sm) {
-            store.openRetroNotice()
-        }
-    }
-
-    private var dismissButton: some View {
-        Button {
-            withAnimation(.snappy) { store.dismissRetroNotice() }
-        } label: {
-            Image(systemName: "xmark")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(MobileTheme.label2)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(NowText.retroNoticeDismiss))
     }
 }
 

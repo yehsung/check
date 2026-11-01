@@ -104,11 +104,20 @@ object RummyPhoneText {
 
     // MARK: - 방
 
-    const val myRoomTitle: String = "내 방"
     const val start: String = "시작"
     const val emptySeat: String = "빈자리"
     const val startHintHost: String = "2명 이상 모이면 시작할 수 있어요"
     const val startHintGuest: String = "방장이 시작하기를 기다리고 있어요"
+
+    // MARK: 방에서 탭으로 떠나기
+
+    const val tabExitHintGuest: String = "다른 탭으로 가면 방에서 나가요"
+    const val tabExitHintHost: String = "다른 탭으로 가면 방을 닫을지 먼저 물어봐요"
+    const val tabLeftNotice: String = "탭을 옮겨서 방에서 나왔어요"
+
+    /** 방 화면에서만 말한다([com.yehsung.aingcheck.core.stores.games.GamesStore.isRummyLeaveUnconfirmed]). 코어 notice 에 넣지 마라: 그 줄은 판 화면도 읽어, 그새 시작되면 [나가기](= 기권)를 권하게 된다. */
+    const val leaveUnconfirmedNotice: String = "방에서 나오지 못했어요. 아직 자리가 남아 있어요. 연결을 확인하고 [나가기]를 눌러 주세요."
+    const val leaveUnconfirmedDetail: String = "나오지 못했어요 · 아직 자리가 있어요"
 
     fun startWith(players: Int): String = "${players}명으로 시작"
 
@@ -209,7 +218,6 @@ object RummyPhoneText {
 
     // MARK: - 결과
 
-    const val resultTitle: String = "결과"
     const val playAgain: String = "한 판 더"
     const val finalBoard: String = "최종 판"
     const val ranks: String = "등수"
@@ -222,6 +230,7 @@ object RummyPhoneText {
     fun ladderRank(rank: Long?): String = rank?.let { "${it}위" } ?: "—"
 
     /** 머리 카드의 내 등수. 기권이면 까닭을 앞에 말한다. */
+    const val resultTitle: String = "결과"
     fun myResult(rank: Long?, forfeited: Boolean): String = if (forfeited) "$forfeit · ${rank(rank)}" else rank(rank)
 
     fun remainingCount(count: Int): String = "$remainingTiles ${count}장"
@@ -274,8 +283,7 @@ object RummyPhoneText {
             "끌면 한 장 · 0.5초 꾹 누른 채 끌면 덩어리(판에선 누른 타일에서 가까운 끝까지) · 묶음 왼쪽 손잡이로 묶음째 옮기기 · " +
                 "묶음 끝 가까이 놓으면 붙기 · 묶음 위에 놓으면 맞는 자리에 끼우기 · 묶음 가운데를 빼면 둘로 나뉘어요.",
         ),
-        // iOS 글자는 '판 오른쪽 아래 버튼'이다 — 가로판에서 그 버튼은 오른쪽 열로 옮겼으니 여기는 있는 자리대로 적는다.
-        Rule("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, 오른쪽 열 버튼으로 한눈에 봐요. 화면 밖 묶음은 가장자리 배지가 알려 줘요."),
+        Rule("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, 오른쪽 열 위쪽 버튼으로 한눈에 봐요. 화면 밖 묶음은 가장자리 배지가 알려 줘요."),
         Rule("받침대", "타일 사이에 놓으면 끼워 넣고 오른쪽을 밀어요. 딱 붙여 놓은 맞는 묶음엔 밑줄과 점수가 떠요. 777·789로 정렬해 두면 새로 뽑은 타일도 그 정렬 자리로 들어가요."),
         Rule("시간 60초", "시간이 지나면 놓던 판이 맞으면 그대로 확정돼요. 틀렸거나 아무것도 안 놓았으면 되돌리고 1장 뽑아요. 시간 초과가 3번 이어지면 기권이에요."),
         Rule("기권", "뒤로 단추로 판을 나가거나 시간 초과가 3번 이어지면 기권이고 꼴찌예요. 남은 사람끼리 계속해요. 앱을 잠깐 내려도 바로 기권은 아니에요 — 90초 안에 돌아오면 이어서 해요."),

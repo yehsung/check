@@ -76,6 +76,7 @@ import com.yehsung.aingcheck.core.stores.rummy.GamesRummyLobbyPlan
 import com.yehsung.aingcheck.core.stores.rummy.GamesRummyRoomPlan
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
+import com.yehsung.aingcheck.core.stores.rummy.closeDecision
 import com.yehsung.aingcheck.core.stores.rummy.myRoom
 import com.yehsung.aingcheck.core.stores.rummy.startGame
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -105,6 +106,7 @@ object GamesRummyRoomTags {
     const val COUNTDOWN: String = "rummy.room.countdown"
     const val START: String = "rummy.room.start"
     const val LEAVE: String = "rummy.room.leave"
+    const val TAB_EXIT_HINT: String = "rummy.room.tabExitHint"
 
     /** 의자 넷 — 순서는 `RummyTableSeating.chairs`([아래, 왼, 위, 오른]). */
     fun chair(index: Int): String = "rummy.room.chair.$index"
@@ -127,6 +129,7 @@ fun GamesRummyRoomView(
     modifier: Modifier = Modifier,
     block: GamesBusyGame? = null,
     balance: Long? = rummy.rubyBalance,
+    leaveUnconfirmed: Boolean = false,
 ) {
     val colors = AingTheme.colors
     val room = rummy.myRoom
@@ -137,14 +140,14 @@ fun GamesRummyRoomView(
     val scope = rememberCoroutineScope()
     val people = remember { BringIntoViewRequester() }
     Column(modifier) {
-        GamesHeaderBar(RummyPhoneText.myRoomTitle, onBack = onBack) { GamesRummyRulesButton(onRules) }
+        GamesHeaderBar(RummyPhoneText.title, onBack = onBack) { GamesRummyRulesButton(onRules) }
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = AingDimens.sideMargin)
                 .padding(top = AingDimens.space2, bottom = AingDimens.space6),
         ) {
             RoomHeader(rummy, room, now)
             RoomStage(chairs, room, inviteHint = amHost, Modifier.padding(top = AingDimens.space3)) { scope.launch { people.bringIntoView() } }
-            RoomHint(rummy, room, amHost, entry, warnings)
+            RoomHint(rummy, room, amHost, entry, warnings, leaveUnconfirmed)
             Column(Modifier.padding(top = AingDimens.rowSpacing), verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
                 if (amHost) {
                     PillButton(
@@ -156,6 +159,12 @@ fun GamesRummyRoomView(
                     RummyPhoneText.leave, Modifier.testTag(GamesRummyRoomTags.LEAVE), kind = PillKind.Gray, icon = AppIcon.Logout, fillsWidth = true,
                     enabled = !rummy.isWorking, onClick = onBack,
                 )
+                GamesRummyRoomPlan.tabExitHint(rummy.closeDecision)?.let { hint ->
+                    Text(
+                        hint, style = MaterialTheme.typography.bodySmall, color = AingTheme.colors.label2, textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().testTag(GamesRummyRoomTags.TAB_EXIT_HINT),
+                    )
+                }
             }
             // 초대는 방장 몫이다. 손님에게 누를 수 없는 사람 목록을 세우지 않는다.
             if (amHost && !rummy.duelsLocked) {
@@ -186,10 +195,11 @@ private fun RoomHeader(rummy: RummyStore, room: RummyRoom?, now: () -> SwiftDate
 
 /** 서버 말 → 다른 게임 · 잠금 → 기다리는 까닭. '초대를 보냈어요' 만 좋은 소식이다 — 나머지 서버 말은 전부 거절·실패다. */
 @Composable
-private fun RoomHint(rummy: RummyStore, room: RummyRoom?, amHost: Boolean, entry: GamesRummyEntry, warnings: List<String>) {
+private fun RoomHint(rummy: RummyStore, room: RummyRoom?, amHost: Boolean, entry: GamesRummyEntry, warnings: List<String>, leaveUnconfirmed: Boolean) {
     val notice = GamesRummyLobbyPlan.storeNotice(rummy.notice, warnings)
     val top = Modifier.padding(top = AingDimens.rowSpacing)
     when {
+        leaveUnconfirmed -> InlineNotice(RummyPhoneText.leaveUnconfirmedNotice, top, NoticeKind.Warning)
         notice != null -> InlineNotice(notice, top, if (notice == RummyNoticeText.invited) NoticeKind.Info else NoticeKind.Warning)
         warnings.isNotEmpty() -> warnings.forEach { InlineNotice(it, top, NoticeKind.Warning) }
         else -> GamesRummyRoomPlan.hint(amHost, room, entry)?.let {

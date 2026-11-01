@@ -55,6 +55,18 @@ enum class RummyExitReason(val rawValue: String) {
     accountDeletion("account_deletion"),
 }
 
+/** [departRoom] 의 결과. */
+enum class RummyRoomDeparture {
+    /** 나갔다(서버가 확인했거나 이미 자리가 없다). */
+    left,
+
+    /** 그새 판이 시작돼 나가지 않고 그 판을 들었다(`rummy_leave` 0건). */
+    startedMatch,
+
+    /** 서버 확인을 못 받았다(또는 방을 못 읽어 안 보냈다) — 자리가 남아 있다고 보고 방을 쥐고 있다. */
+    notConfirmed,
+}
+
 /** 내 랙에 새로 들어온 타일 한 장(편집기 로컬 id · 면 · 받침대 자리). */
 data class RummyDrawnTile(val tileID: Int, val face: RummyFace, val slot: RummyRackSlot)
 
@@ -102,7 +114,7 @@ internal fun RummyStore.updateHeartbeat() {
     // 기권(forfeit)·끝(done)한 뒤 남의 판을 지켜보는 동안은 쥐지 않는다. 하트비트는 그대로 둔다(서버가 joined·playing 자리만 갱신한다).
     val seatState = current?.let { mySeat(it) }?.state
     setHoldingMatch(holding && seatState != RummySeatState.forfeit && seatState != RummySeatState.done)
-    val wanted = if (heartbeatEnabled && holding && !isAppInBackground) current?.id else null
+    val wanted = if (heartbeatEnabled && holding && !isAppInBackground && !(roomHeartbeatHeld && phase == RummyPhase.room)) current?.id else null
     if (wanted == heartbeatMatchID) return
     heartbeatJob?.cancel()
     heartbeatJob = null
@@ -196,26 +208,29 @@ suspend fun RummyStore.leaveForExit(reason: RummyExitReason): Boolean {
 /**
  * 방 손님의 **묻지 않는** 이탈. 들고 있는 것은 방(forming)이어도 그새 방장이 시작했으면(시작 신호가 이 기기에 닿기 전) `rummy_leave` 는 **판 기권**이다 —
  * 묻지도 않고 판돈을 잃게 된다. 그래서 먼저 그 방 state 를 한 번 읽는다(상한 2초). 판이 시작돼 내 자리가 playing 이면 나가지 않고 그 state 를 든다.
- * 아직 방이거나 못 읽었으면 나간다. 반환: 나갔으면 [leaveForExit] 의 답, 시작된 판을 들고 남았으면 false.
+ * 읽는 사이 폴링 · 초인종이 먼저 판을 들고 왔으면 읽기가 실패했어도 나가지 않는다 — 쥔 값이 판이면 `rummy_leave` 는 기권이다.
+ * [leavesWhenUnread] = 못 읽어도 나간다(로그아웃 · 앱 업데이트처럼 다시 시도할 사람이 없는 길). 폰 방 나가기는 다시 시도할 수 있어 false 로 부른다([departRoom]).
+ * 반환: 나갔으면 [leaveForExit] 의 답, 시작된 판을 들고 남았거나 못 읽어 안 보냈으면 false.
  */
-suspend fun RummyStore.leaveRoomForExit(reason: RummyExitReason): Boolean {
+suspend fun RummyStore.leaveRoomForExit(reason: RummyExitReason, leavesWhenUnread: Boolean = true): Boolean {
     val current = match
     if (current == null || current.status != RummyMatchStatus.forming || host?.session == null || !isEngaged(current.id)) {
         return leaveForExit(reason)
     }
     val roomID = current.id
     val ticket = issueTicket()
-    val answer = CompletableDeferred<RummyMatchState?>()
+    // 서버가 답했는가(거절 포함) · 그 state. 못 닿은 것과 `not_found` 를 가른다 — 후자는 나갈 자리가 이미 없다.
+    val answer = CompletableDeferred<Pair<Boolean, RummyMatchState?>>()
     scope.launch {
         val result = perform("leaveRoomForExit") { service, token -> service.rummyState(token, roomID) }
-        if (result is DuelCall.Success && result.value.status == RummyRPCStatus.ok) {
+        if (result is DuelCall.Success) {
             noteServerNow(result.value.serverNowMs)
-            answer.complete(result.value.state)
+            answer.complete(true to if (result.value.status == RummyRPCStatus.ok) result.value.state else null)
         } else {
-            answer.complete(null)
+            answer.complete(false to null)
         }
     }
-    val fetched = withTimeoutOrNull(delayMillis(RummyStore.exitLeaveLimitSeconds)) { answer.await() }
+    val (answered, fetched) = withTimeoutOrNull(delayMillis(RummyStore.exitLeaveLimitSeconds)) { answer.await() } ?: (false to null)
     if (fetched != null && fetched.id == roomID && fetched.status == RummyMatchStatus.active && match?.id == roomID &&
         mySeat(fetched)?.state == RummySeatState.playing
     ) {
@@ -223,7 +238,41 @@ suspend fun RummyStore.leaveRoomForExit(reason: RummyExitReason): Boolean {
         applyState(fetched, ticket)
         return false
     }
+    val heldNow = match
+    if (heldNow != null && heldNow.id == roomID && heldNow.status == RummyMatchStatus.active && mySeat(heldNow)?.state == RummySeatState.playing) {
+        logNotice("exit leave skipped: match arrived while reading")
+        return false
+    }
+    if (!answered && !leavesWhenUnread) return false
     return leaveForExit(reason)
+}
+
+/**
+ * 폰 방 나가기(GamesStore — Swift `departRoom` @ ios-1017-cube dba0c647): [leaveRoomForExit] 와 같되 **서버가 나감을 확인하지 않으면 쥔 방을 되돌린다.**
+ * 맥은 창이 닫혀 사람이 더 볼 것이 없지만, 폰은 게임 탭으로 돌아온 사람이 카드를 본다 — [leaveForExit] 처럼 접어 버리면 서버엔 자리가 남았는데 화면은 '나왔다'고 말한다(그 사이 방장이 시작하면 모르는 사이 판돈이 걷힌다).
+ * 부르는 쪽이 다시 시도한다(폰은 화면 밖 방의 하트비트를 쉬어 그 사이 서버가 이 자리를 뺄 수 있다 — [RummyStore.roomHeartbeatHeld]).
+ * **못 읽으면 보내지 않는다**(notConfirmed): 읽기가 안 닿은 사이 시작됐을 수 있고, 그때 `rummy_leave` 는 묻지 않은 기권이다.
+ */
+suspend fun RummyStore.departRoom(reason: RummyExitReason): RummyRoomDeparture {
+    val held = match ?: return RummyRoomDeparture.left
+    // 문을 지나 여기 오는 사이에도 판이 시작될 수 있다 — leaveRoomForExit 는 방이 아니면 곧바로 rummy_leave 를 보낸다.
+    if (held.status != RummyMatchStatus.forming) return if (held.status == RummyMatchStatus.active) RummyRoomDeparture.startedMatch else RummyRoomDeparture.left
+    val generation = resetGeneration
+    if (leaveRoomForExit(reason, leavesWhenUnread = false)) return RummyRoomDeparture.left
+    // 그 2초 사이 로그아웃했으면 되돌릴 사람이 없다.
+    if (generation != resetGeneration || host?.session == null) return RummyRoomDeparture.left
+    val now = match
+    if (now != null) {
+        if (now.id != held.id) return RummyRoomDeparture.left
+        return if (now.status == RummyMatchStatus.forming) RummyRoomDeparture.notConfirmed else RummyRoomDeparture.startedMatch
+    }
+    dismissedMatchIDs = dismissedMatchIDs - held.id
+    matchRevision += 1
+    activeMatchID = held.id
+    // clearMatch 가 손댄 판 장부에서 걷었다 — 다시 적어야 다시 나갈 때 놀던 기기로 읽히지 않는다.
+    markEngaged(held.id)
+    applyState(held)
+    return RummyRoomDeparture.notConfirmed
 }
 
 // MARK: - 뒤로 가기(폰 — 맥 창 닫기 판단을 그대로)
@@ -269,6 +318,11 @@ fun RummyStore.confirmBack(asked: RummyCloseDecision): RummyCloseDecision? {
  */
 private suspend fun RummyStore.leaveThenSettle(leave: suspend () -> Unit) {
     leave()
+    settleAfterLeaving()
+}
+
+/** 나간 뒤 한 번 — 위 [leaveThenSettle] 의 뒤쪽. 탭 이탈([departRoom])도 이 길이다. */
+internal suspend fun RummyStore.settleAfterLeaving() {
     if (match != null) return
     setNotice(null)
     refreshLobby()

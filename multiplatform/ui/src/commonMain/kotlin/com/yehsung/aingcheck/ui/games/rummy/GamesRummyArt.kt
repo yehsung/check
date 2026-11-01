@@ -193,11 +193,10 @@ private fun DrawScope.drawFeltFallback() {
     drawRect(Brush.radialGradient(listOf(feltGlow.copy(alpha = 0.55f), Color.Transparent), center, 420f * density))
 }
 
-/** 판 바닥 — 펠트 + 가장자리 어둡게 + 옅은 아잉이 + 분홍-보라 테두리. 크기는 부르는 쪽이 정한다. */
+/** 판 바닥 — 펠트 + 가장자리 어둡게 + 분홍-보라 테두리(iOS GamesRummyTableSurface — 맥의 옅은 아잉이는 폰에 없다). 크기는 부르는 쪽이 정한다. */
 @Composable
 fun GamesRummyTableSurface(modifier: Modifier = Modifier, cornerRadius: Dp = 18.dp) {
     val shape = RoundedCornerShape(cornerRadius)
-    val face = LocalGamesRummyArt.current?.joker
     Box(
         modifier.clip(shape).border(1.5.dp, Brush.linearGradient(listOf(rimPink.copy(alpha = 0.55f), rimViolet.copy(alpha = 0.35f))), shape),
         contentAlignment = Alignment.Center,
@@ -205,19 +204,16 @@ fun GamesRummyTableSurface(modifier: Modifier = Modifier, cornerRadius: Dp = 18.
         GamesRummyFeltPaint(Modifier.fillMaxSize())
         // 가장자리를 눌러 가운데에 눈이 가게.
         Canvas(Modifier.fillMaxSize().clearAndSetSemantics { }) {
-            val radius = 620f * density
+            val radius = 420f * density
             drawRect(
                 Brush.radialGradient(
                     0f to Color.Transparent,
-                    (120f / 620f) to Color.Transparent,
+                    (80f / 420f) to Color.Transparent,
                     1f to Color.Black.copy(alpha = 0.38f),
                     center = center,
                     radius = radius,
                 ),
             )
-        }
-        if (face != null) {
-            Image(face, contentDescription = null, modifier = Modifier.size(120.dp).alpha(0.05f), filterQuality = FilterQuality.High)
         }
     }
 }

@@ -38,7 +38,6 @@ import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.closeDecision
 import com.yehsung.aingcheck.core.stores.rummy.confirmBack
-import com.yehsung.aingcheck.core.stores.rummy.requestBack
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.ui.games.minigame.kit.EmptyState
 import com.yehsung.aingcheck.ui.games.minigame.kit.GamesHeaderBar
@@ -59,7 +58,7 @@ object GamesRummyTags {
 }
 
 /**
- * 뒤로 가기 판단 — 시스템 뒤로와 화면 [나가기]가 **같은 한 곳**을 지난다(스토어 `requestBack`·`confirmBack`). Android 조립의 `BackHandler` 가 [handleBack] 을 부른다.
+ * 뒤로 가기 판단 — 시스템 뒤로와 화면 [나가기]가 **같은 한 곳**을 지난다(스토어 `closeDecision` · 방은 `leaveRummyRoomFromScreen` · 판은 `confirmBack`). Android 조립의 `BackHandler` 가 [handleBack] 을 부른다.
  * 표: 놀던 기기·로비·결과 = 그냥 나감 · 손님 방 = 묻지 않고 나감(스토어가 나가기를 띄운다) · 판 중 = 기권 확인 · 방장 방 = 방 닫힘 확인.
  */
 @Stable
@@ -71,8 +70,9 @@ class GamesRummyBackState {
     /** 판 화면의 [반응] 고르개가 떠 있다. 뒤로 한 번은 이것부터 닫는다 — 기권 확인으로 넘어가면 안 된다. */
     var reactionPicking: Boolean by mutableStateOf(false)
 
-    /** 뒤로 한 번. 고르개 · 확인이 떠 있으면 그것을 닫는다(계속하기). */
-    fun handleBack(rummy: RummyStore, leave: () -> Unit) {
+    /** 뒤로 한 번. 고르개 · 확인이 떠 있으면 그것을 닫는다(계속하기). 손님은 묻지 않고 곧바로 화면을 내리고 뒤에서 나간다 — 못 닿으면 스토어가 되보내고 게임 탭 카드가 말한다. */
+    fun handleBack(store: GamesStore, leave: () -> Unit) {
+        val rummy = store.context.rummy ?: return
         if (reactionPicking) {
             reactionPicking = false
             return
@@ -81,15 +81,35 @@ class GamesRummyBackState {
             asking = null
             return
         }
-        when (val decision = rummy.requestBack()) {
-            RummyCloseDecision.close, RummyCloseDecision.leaveRoom -> leave()
+        when (val decision = rummy.closeDecision) {
+            RummyCloseDecision.close -> leave()
+            RummyCloseDecision.leaveRoom -> {
+                store.leaveRummyRoomFromScreen()
+                leave()
+            }
             RummyCloseDecision.confirmForfeit, RummyCloseDecision.confirmCloseRoom -> asking = decision
         }
     }
 
     /** 확인을 골랐다. 묻던 사이 판단이 바뀌었으면 스토어가 지금 판단으로 다시 묻게 한다("루비는 그대로예요"를 읽고 누른 버튼이 기권이 되면 안 된다). */
-    fun confirm(rummy: RummyStore, leave: () -> Unit) {
+    fun confirm(store: GamesStore, leave: () -> Unit) {
         val asked = asking ?: return
+        val rummy = store.context.rummy ?: return
+        // 방 나가기는 스토어 문 한 곳이다 — 못 읽으면 안 보내고, 못 닿으면 방에 남아 사실을 말한다. 방장은 닫힌 뒤에야 화면을 내린다(iOS dba0c647).
+        when (rummy.closeDecision) {
+            RummyCloseDecision.confirmCloseRoom -> if (asked == RummyCloseDecision.confirmCloseRoom) {
+                asking = null
+                store.leaveRummyRoomFromScreen(onLeft = leave)
+                return
+            }
+            RummyCloseDecision.leaveRoom -> {
+                asking = null
+                store.leaveRummyRoomFromScreen()
+                leave()
+                return
+            }
+            RummyCloseDecision.close, RummyCloseDecision.confirmForfeit -> Unit
+        }
         val again = rummy.confirmBack(asked)
         asking = again
         if (again == null) leave()
@@ -144,11 +164,17 @@ fun GamesRummyScreen(
     }
     val rummy = store.context.rummy ?: return
     val now: () -> SwiftDate = { rummy.clock() }
-    val goBack: () -> Unit = { back.handleBack(rummy, onLeave) }
+    // 탭 이탈이 나가는 중이면 뒤로를 받지 않는다 — 같은 방에 나가기가 두 번 나가지 않게(iOS requestExit).
+    val goBack: () -> Unit = { if (!store.isRummyDepartureRunning) back.handleBack(store, onLeave) }
     val showRules: () -> Unit = { rummy.rulesShown = true }
     LaunchedEffect(rummy.phase, rummy.match?.status) {
         back.sync(rummy)
         if (rummy.phase != RummyPhase.playing) back.reactionPicking = false
+    }
+    // 방이 판으로 · 판이 결과로 넘어가면 낡은 탭 이탈 확인을 거둔다 — 뒤늦은 수락이 할 일은 없고 틀린 글자가 떠 있게 두지 않는다.
+    LaunchedEffect(rummy.phase, rummy.match?.id) {
+        store.cancelRummyDeparture()
+        if (rummy.phase != RummyPhase.lobby) store.forgetRummyLeftByTabNotice()
     }
     val anchors = remember { GamesRummyReactionAnchors() }
     // 가로일 때 카메라 구멍을 피한다 — 셸 여백(시스템 막대 몫)에는 컷아웃이 안 든다.
@@ -168,7 +194,7 @@ fun GamesRummyScreen(
                 rummy.phase == RummyPhase.lobby ->
                     GamesRummyLobbyView(store, rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.LOBBY))
                 rummy.phase == RummyPhase.room ->
-                    GamesRummyRoomView(rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, balance = store.rubyBalance ?: rummy.rubyBalance, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.ROOM))
+                    GamesRummyRoomView(rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, balance = store.rubyBalance ?: rummy.rubyBalance, leaveUnconfirmed = store.isRummyLeaveUnconfirmed, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.ROOM))
                 rummy.phase == RummyPhase.playing ->
                     GamesRummyMatchView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.MATCH), onReaction = { back.reactionPicking = true })
                 else ->
@@ -179,8 +205,16 @@ fun GamesRummyScreen(
             if (back.reactionPicking && rummy.phase == RummyPhase.playing) GamesRummyReactionPanel(rummy, now, onClose = { back.reactionPicking = false })
         }
         if (rummy.rulesShown) GamesRummyRulesSheet(onDismiss = { rummy.rulesShown = false })
-        back.asking?.let { decision ->
-            GamesRummyExitDialog(decision, onKeep = { back.keep() }, onConfirm = { back.confirm(rummy, onLeave) })
+        // 화면의 [나가기] · 시스템 뒤로가 세운 확인, 없으면 탭 이탈이 세운 확인(GamesStore.rummyDeparturePrompt).
+        (back.asking ?: store.rummyDeparturePrompt)?.let { decision ->
+            GamesRummyExitDialog(
+                decision,
+                onKeep = {
+                    back.keep()
+                    store.cancelRummyDeparture()
+                },
+                onConfirm = { if (back.asking != null) back.confirm(store, onLeave) else store.confirmRummyDeparture() },
+            )
         }
     }
 }

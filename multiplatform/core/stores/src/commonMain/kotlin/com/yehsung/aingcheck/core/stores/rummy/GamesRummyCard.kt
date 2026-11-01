@@ -53,7 +53,9 @@ object GamesRummyCard {
         val recordLine = if (me?.games != null) RummyPhoneText.recordTitle + " " + RummyPhoneText.record(me.games, me.wins) else null
         return when (line(store)) {
             Line.blocked -> GamesBusyText.entryBlockHint(store.rummyEntryBlock, GamesBusyGame.rummy)
-            Line.activeMatch, Line.inRoom, Line.incoming, Line.record -> recordLine
+            // 나가지 못한 자리는 칩만으로 모자란다 — 칩은 앉아 있는 사람에게도 같은 말이다.
+            Line.inRoom -> if (store.isRummyLeaveUnconfirmed) RummyPhoneText.leaveUnconfirmedDetail else recordLine
+            Line.activeMatch, Line.incoming, Line.record -> recordLine
             Line.idle -> RummyPhoneText.idleLine
         }
     }

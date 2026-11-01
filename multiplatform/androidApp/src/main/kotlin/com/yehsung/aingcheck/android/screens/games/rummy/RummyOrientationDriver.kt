@@ -7,9 +7,11 @@
 package com.yehsung.aingcheck.android.screens.games.rummy
 
 import android.content.pm.ActivityInfo
+import android.view.Surface
 import androidx.compose.runtime.snapshotFlow
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
+import com.yehsung.aingcheck.ui.games.rummy.GamesRummyLandscapeSide
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -24,6 +26,13 @@ object RummyOrientationDriver {
         GamesRummyInterfaceOrientation.landscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         GamesRummyInterfaceOrientation.portrait ->
             if (smallestWidthDp >= LARGE_SCREEN_MIN_WIDTH_DP) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    }
+
+    /** 화면 회전 값 → 가로 방향(세로 · 모름은 null — 그때는 화면이 돌지 않으니 쥔 것을 거둘 일이 아니다). */
+    fun landscapeSide(rotation: Int?): GamesRummyLandscapeSide? = when (rotation) {
+        Surface.ROTATION_90 -> GamesRummyLandscapeSide.left
+        Surface.ROTATION_270 -> GamesRummyLandscapeSide.right
+        else -> null
     }
 
     /** 값이 바뀔 때마다 [apply] 로 옮긴다(지금 값을 곧바로 한 번). [scope] = Activity 수명. */

@@ -56,6 +56,8 @@ import com.yehsung.aingcheck.ui.screens.messages.MessagesReportSheet
 import com.yehsung.aingcheck.ui.screens.messages.MessagesReportTarget
 import com.yehsung.aingcheck.ui.screens.rankings.RankingsScreenRules
 import com.yehsung.aingcheck.ui.shop.MeCakeGiftReopenRow
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -400,6 +402,22 @@ class ShellNavigator(val nav: NavHostController) {
             restoreState = true
         }
     }
+
+    /**
+     * 탭 막대 한 번. 다른 탭이면 떠나는 문([door] — 폰 라우터 `departing`)을 지나 옮긴다. **고른 탭 다시 누르기는 묻지 않는다** — 이 앱은 탭 뿌리로 안 가고 그 화면에 머문다(iOS 는 뿌리로 가니 경로 쪽에서 묻는다).
+     * [after] = 옮긴 뒤 할 일. 방장이 멈춰 묻는 동안은 안 돌고, 수락하면 나간 뒤 돈다.
+     */
+    fun tapTab(tab: AingTab, door: (() -> Unit) -> Unit, after: () -> Unit) {
+        val go = {
+            selectTab(tab)
+            after()
+        }
+        if (isCurrentTab(tab)) go() else door(go)
+    }
+
+    /** 지금 목적지가 이 탭 그래프 안인가. */
+    fun isCurrentTab(tab: AingTab): Boolean =
+        nav.currentDestination?.hierarchy?.any { it.hasRoute(RoutePlans.graphOf(tab)::class) } == true
 
     /** 라우트 열기(딥링크·알림·위젯): 그 탭을 뿌리부터 다시 세우고 자식 목적지를 쌓는다. */
     fun open(route: AingRoute) {

@@ -161,7 +161,7 @@ class GamesRummyScreenTest {
         assertTrue(panel.right <= (852 - GamesRummyMatchLayout.rightColumnWidth).toFloat() * density.density, "고르개가 오른쪽 열을 가린다 $panel")
         assertTrue(panel.bottom <= 393f * density.density, "고르개가 화면 밖 $panel")
         var left = 0
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         waitForIdle()
         onNodeWithTag(GamesRummyReactionTags.PICKER).assertDoesNotExist()
         assertNull(back.asking, "고르개를 닫는 뒤로가 기권 확인을 띄웠다")
@@ -172,7 +172,7 @@ class GamesRummyScreenTest {
         waitForIdle()
         onNodeWithTag(GamesRummyReactionTags.PICKER).assertDoesNotExist()
         // 고르개가 닫힌 뒤의 뒤로는 기권 확인이다(가로에서 대화상자가 뜬다).
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         waitForIdle()
         assertEquals(RummyCloseDecision.confirmForfeit, back.asking)
         onNodeWithTag(GamesRummyTags.EXIT_KEEP).performClick()
@@ -197,7 +197,7 @@ class GamesRummyScreenTest {
         assertTrue(rules.width > 0 && rules.left >= 0f && rules.right <= 667f * density.density, "규칙 시트가 화면 밖 $rules")
         x.rummy.rulesShown = false
         waitForIdle()
-        back.handleBack(x.rummy) {}
+        back.handleBack(x.games) {}
         waitForIdle()
         val confirm = onNodeWithTag(GamesRummyTags.EXIT_CONFIRM).fetchSemanticsNode().boundsInRoot
         assertTrue(confirm.bottom <= 375f * density.density && confirm.right <= 667f * density.density, "기권 확인이 화면 밖 $confirm")
@@ -212,16 +212,16 @@ class GamesRummyScreenTest {
         val back = GamesRummyBackState()
         var left = 0
         // ★ 기준선: 손댄 적 없는 판(놀던 기기)은 바로 나간다.
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         assertEquals(1, left)
         assertNull(back.asking)
         // 손댄 판은 묻고, 떠나지 않는다.
         x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         assertEquals(RummyCloseDecision.confirmForfeit, back.asking)
         assertEquals(1, left)
         // 한 번 더 누르면 확인을 닫는다(계속하기) — 시스템 뒤로로 기권이 나가면 안 된다.
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         assertNull(back.asking)
         assertEquals(1, left)
         x.h.close()
@@ -234,7 +234,7 @@ class GamesRummyScreenTest {
         x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
         val back = GamesRummyBackState()
         var left = 0
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         // 묻는 사이 판이 끝났다 — 질문이 남으면 "기권" 버튼이 끝난 판 위에 선다.
         x.rummy.applyState(state("finished", "done").copy(seq = 2))
         back.sync(x.rummy)
@@ -251,7 +251,7 @@ class GamesRummyScreenTest {
         x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
         val back = GamesRummyBackState()
         setContent { AingTheme(dark = false) { GamesRummyScreen(x.games, USER, ME, back = back) } }
-        back.handleBack(x.rummy) { }
+        back.handleBack(x.games) { }
         waitForIdle()
         val copy = assertNotNull(RummyPhoneText.exit(RummyCloseDecision.confirmForfeit))
         onNodeWithText(copy.detail).assertExists()

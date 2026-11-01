@@ -357,23 +357,26 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
      * - 순위: 판을 고른다. 그 밖(지금 · 메시지)은 그대로 연다.
      */
     fun openRoute(target: PhoneRouteTarget) {
-        when (target) {
-            is PhoneRouteTarget.Games -> when (val step = games.routeStep(target.request)) {
-                null -> return
-                GamesRouteStep.PopToRoot -> router.open(PhoneRouteTarget.Games(GamesRouteRequest.Games))
-                is GamesRouteStep.Push -> router.open(target)
+        // 떠나는 문을 **먼저** 지난다 — 나 · 순위 갈래는 router.open 뒤에 쌓기를 더 하니, 방장이 멈춰 묻는 동안 그 뒤 일이 먼저 나가면 안 된다. 수락하면 이 대상을 그때의 규칙으로 다시 푼다.
+        router.departing {
+            when (target) {
+                is PhoneRouteTarget.Games -> when (val step = games.routeStep(target.request)) {
+                    null -> Unit
+                    GamesRouteStep.PopToRoot -> router.open(PhoneRouteTarget.Games(GamesRouteRequest.Games))
+                    is GamesRouteStep.Push -> router.open(target)
+                }
+                PhoneRouteTarget.ChessLobby, is PhoneRouteTarget.ChessInvite, is PhoneRouteTarget.ChessMatch ->
+                    if (games.chessEntryBlock != null) router.open(PhoneRouteTarget.Games(GamesRouteRequest.Games)) else router.open(target)
+                is PhoneRouteTarget.Me -> {
+                    router.open(PhoneRouteTarget.Me(MeRoute.Me))
+                    if (target.route != MeRoute.Me) me.open(target.route)
+                }
+                is PhoneRouteTarget.Rankings -> {
+                    router.open(target)
+                    rankings.open(target.board)
+                }
+                PhoneRouteTarget.Now, PhoneRouteTarget.Messages, is PhoneRouteTarget.Message -> router.open(target)
             }
-            PhoneRouteTarget.ChessLobby, is PhoneRouteTarget.ChessInvite, is PhoneRouteTarget.ChessMatch ->
-                if (games.chessEntryBlock != null) router.open(PhoneRouteTarget.Games(GamesRouteRequest.Games)) else router.open(target)
-            is PhoneRouteTarget.Me -> {
-                router.open(PhoneRouteTarget.Me(MeRoute.Me))
-                if (target.route != MeRoute.Me) me.open(target.route)
-            }
-            is PhoneRouteTarget.Rankings -> {
-                router.open(target)
-                rankings.open(target.board)
-            }
-            PhoneRouteTarget.Now, PhoneRouteTarget.Messages, is PhoneRouteTarget.Message -> router.open(target)
         }
     }
 

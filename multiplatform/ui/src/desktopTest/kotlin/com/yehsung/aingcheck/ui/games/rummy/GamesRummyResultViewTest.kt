@@ -291,13 +291,17 @@ class GamesRummyResultViewTest {
         val back = GamesRummyBackState()
         var left = 0
         setContent { AingTheme(dark = false) { GamesRummyScreen(x.games, USER, ME, back = back, onLeave = { left += 1 }) } }
-        back.handleBack(x.rummy) { left += 1 }
+        back.handleBack(x.games) { left += 1 }
         waitForIdle()
         assertEquals(RummyCloseDecision.confirmCloseRoom, back.asking)
         val copy = assertNotNull(RummyPhoneText.exit(RummyCloseDecision.confirmCloseRoom))
         onNodeWithText(copy.detail).assertExists()
         assertEquals(0, left)
         onNodeWithTag(GamesRummyTags.EXIT_CONFIRM).performClick()
+        // 방장은 닫힌 뒤에야 화면을 내린다(iOS dba0c647 — 못 닿으면 방에 남는다).
+        waitForIdle()
+        assertEquals(0, left, "닫히기 전에 화면을 내렸다")
+        x.h.testScope.testScheduler.advanceUntilIdle()
         waitForIdle()
         assertEquals(1, left)
         assertNull(back.asking)

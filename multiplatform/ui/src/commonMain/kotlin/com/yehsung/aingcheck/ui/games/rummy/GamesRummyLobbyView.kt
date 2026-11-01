@@ -151,7 +151,13 @@ fun GamesRummyLobbyView(
         ) {
             // ★ 탭이 **위**다. 큐브 로비는 받은 초대 · 공개 방 · 새 탁자가 더 있어서 절 아래에 두면 [순위]가 첫 화면에서 안 보인다(iOS 실화면).
             Summary(rummy, balance)
-            GamesRummyLobbyPlan.storeNotice(rummy.notice, warnings)?.let { InlineNotice(it, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Info) }
+            val storeNotice = GamesRummyLobbyPlan.storeNotice(rummy.notice, warnings)
+            if (storeNotice != null) {
+                InlineNotice(storeNotice, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Warning)
+            } else {
+                // 스스로 나온 사실을 말하는 줄이라 경고가 아니다.
+                store.rummyLeftByTabNotice?.let { InlineNotice(it, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Info) }
+            }
             warnings.forEach { InlineNotice(it, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Warning) }
             SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = AingDimens.rowSpacing)) {
                 GamesRummyLobbyTab.entries.forEachIndexed { index, value ->

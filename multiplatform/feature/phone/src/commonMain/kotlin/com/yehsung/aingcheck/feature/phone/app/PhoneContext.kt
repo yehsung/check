@@ -25,6 +25,7 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameContext
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
 import com.yehsung.aingcheck.core.stores.rummy.RummyExitReason
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.leaveForExit
@@ -156,7 +157,11 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
     }
 
     override val isAnyMatchScreenVisible: Boolean
-        get() = context.links.games?.isAnyMatchScreenVisible ?: false
+        get() {
+            val games = context.links.games ?: return false
+            // 큐브 판이 가로로 서 있는 동안도 넣는다 — 세로용 시트가 가로 판을 덮으면 안 된다.
+            return games.isAnyMatchScreenVisible || games.rummyInterfaceOrientation == GamesRummyInterfaceOrientation.landscape
+        }
 
     /** 위젯 리밋 패널 — 쓰는 주체는 지금 탭 하나라 그 자리로 넘긴다(Swift `context.links.now?.noteAILimitPanel`). */
     override fun noteAILimitPanel(panel: MeAILimitWidgetPanel) {

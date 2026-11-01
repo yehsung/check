@@ -436,6 +436,8 @@ class GamesRummyMatchInputTest {
         val table = context.layout.table
         val start = fx.rackPoint("D9", context)
         model.touchDown(start, context)
+        // 받침대에서 출발한 끌기는 판 안쪽에 한 번 들어온 뒤에만 민다(iOS d5c9eeff · GamesRummyLandscapeTest.edgePanArmsOnlyInsideTheBoard).
+        model.touchMoved(fx.finger(RummyCanvasPoint(table.midX, table.midY)), context)
         model.touchMoved(fx.finger(RummyCanvasPoint(table.midX, table.maxY - 10)), context)
         val first = model.target
         val y = model.viewport.origin.y

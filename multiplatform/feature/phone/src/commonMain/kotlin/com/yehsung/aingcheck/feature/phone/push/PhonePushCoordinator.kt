@@ -13,6 +13,7 @@ import com.yehsung.aingcheck.core.session.DeviceRegistrationReason
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.rules.text.MegaphoneBanner
 import com.yehsung.aingcheck.core.stores.games.GamesRouteRequest
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
 import com.yehsung.aingcheck.core.stores.me.didReceiveFeedbackReplyPush
 import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.wire.models.PushPrefs
@@ -396,6 +397,8 @@ class PhonePushCoordinator(
     /** 설명 시트를 띄울 때인가: 로그인 · 앱이 앞 · 권한 미결정 · 시트 없음 · "나중에"에서 7일 지남 · 데모 아님. */
     fun shouldPresentPrimer(status: PhonePushAuthorization): Boolean {
         if (!session.isSignedIn || !isAppActive || isPrimerPresented) return false
+        // 큐브 판이 가로로 서 있으면 미룬다(세로용 시트가 가로 판과 차례 시계를 덮는다 — 다음에 앞으로 올 때 다시 판정한다).
+        if (context.links.games?.rummyInterfaceOrientation == GamesRummyInterfaceOrientation.landscape) return false
         if (isDemo || status != PhonePushAuthorization.notDetermined) return false
         val dismissed = context.keyValueStore.getString(PRIMER_DISMISSED_AT_KEY)?.toDoubleOrNull()
         if (dismissed != null) {

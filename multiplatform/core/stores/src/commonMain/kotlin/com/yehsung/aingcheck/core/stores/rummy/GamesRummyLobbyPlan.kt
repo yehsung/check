@@ -5,6 +5,7 @@
 package com.yehsung.aingcheck.core.stores.rummy
 
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
+import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
 import com.yehsung.aingcheck.core.stores.games.GamesBusyGame
 import com.yehsung.aingcheck.core.wire.SwiftUUID
 import com.yehsung.aingcheck.core.wire.games.RummyLobby
@@ -209,6 +210,13 @@ object GamesRummyLobbyPlan {
 }
 
 object GamesRummyRoomPlan {
+    /** [나가기] 아래 한 줄 — 탭 막대가 방을 떠나는 길이라는 것을 미리 말한다. 놀던 기기는 탭을 옮겨도 아무 일이 없어 말하지 않는다. */
+    fun tabExitHint(decision: RummyCloseDecision): String? = when (decision) {
+        RummyCloseDecision.leaveRoom -> RummyPhoneText.tabExitHintGuest
+        RummyCloseDecision.confirmCloseRoom -> RummyPhoneText.tabExitHintHost
+        RummyCloseDecision.close, RummyCloseDecision.confirmForfeit -> null
+    }
+
     /** [시작] 은 방장 · 2명 이상 · 도는 요청 없음 · 입구 열림 · 내 판돈 있음(판돈이 움직이는 순간이다 — 서버가 어차피 거절할 것만 막는다). */
     fun canStart(room: RummyRoom?, amHost: Boolean, entry: GamesRummyEntry): Boolean =
         amHost && GamesRummyLobbyPlan.joinedSeats(room).size >= 2 && entry.isOpen && !entry.isWorking && entry.affordable(room?.stake)

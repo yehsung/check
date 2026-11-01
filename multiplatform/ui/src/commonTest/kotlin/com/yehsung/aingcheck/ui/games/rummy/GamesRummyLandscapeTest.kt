@@ -22,6 +22,7 @@ import com.yehsung.aingcheck.core.wire.games.RummyPoint
 import com.yehsung.aingcheck.core.wire.games.RummySeatState
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import kotlin.test.Test
+import kotlin.math.hypot
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -32,7 +33,7 @@ import kotlin.test.assertTrue
 
 class GamesRummyLandscapeTest {
     private val fx = GamesRummyFixture
-    private val sizes = listOf(RummyCanvasSize(667.0, 354.0), RummyCanvasSize(734.0, 372.0), RummyCanvasSize(852.0, 393.0), RummyCanvasSize(932.0, 430.0), RummyCanvasSize(667.0, 375.0), RummyCanvasSize(640.0, 312.0))
+    private val sizes = listOf(RummyCanvasSize(568.0, 320.0), RummyCanvasSize(667.0, 354.0), RummyCanvasSize(734.0, 372.0), RummyCanvasSize(852.0, 393.0), RummyCanvasSize(932.0, 430.0), RummyCanvasSize(667.0, 375.0), RummyCanvasSize(640.0, 312.0))
 
     private fun context(editor: RummyTurnEditor, size: RummyCanvasSize, viewport: GamesRummyViewport? = null): GamesRummyTouchContext =
         fx.context(editor, viewport = viewport, size = size)
@@ -96,6 +97,112 @@ class GamesRummyLandscapeTest {
         model.screenSizeChanged(RummyCanvasSize(800.0, 372.0))
         assertEquals(model.viewport.scale, model.renderScale, "핀치가 열린 채 남았다")
         model.touchVanished()
+    }
+
+    /** 왼쪽 가로 ↔ 오른쪽 가로(크기가 같다): 처음 재는 것과 같은 쪽은 변화가 아니다 · 뒤집히면 끌기 · 핀치를 거두고 손 뗄 때까지 무시한다. */
+    @Test
+    fun landscapeFlipAbandonsTheHold() {
+        val size = RummyCanvasSize(734.0, 372.0)
+        val context = fx.context(size = size)
+        val model = GamesRummyMatchModel(tableSize(context))
+        val start = fx.rackPoint("C2", context)
+        val moved = RummyCanvasPoint(start.x, start.y - 100)
+
+        model.touchDown(start, context)
+        model.touchMoved(moved, context)
+        model.landscapeSideChanged(GamesRummyLandscapeSide.left)
+        assertNotNull(model.drag, "처음 재는 방향에 끌기가 거둬졌다")
+        model.landscapeSideChanged(GamesRummyLandscapeSide.left)
+        assertNotNull(model.drag, "같은 쪽인데 거둬졌다")
+
+        model.landscapeSideChanged(GamesRummyLandscapeSide.right)
+        assertNull(model.drag, "뒤집혔는데 타일을 쥐고 있다")
+        assertTrue(model.draggingIDs.isEmpty())
+        assertNull(model.frozenRows)
+        assertFalse(model.machine.isIdle, "쉬는 상태면 다음 사건이 처음 누른 자리를 다시 집는다")
+        model.touchMoved(RummyCanvasPoint(moved.x + 30, moved.y), context)
+        assertNull(model.drag, "손을 안 뗐는데 다시 집혔다")
+        assertEquals(GamesRummyDropAction.None, model.touchUp(moved, context), "거둔 끌기가 놓였다")
+        model.touchDown(start, context)
+        model.touchMoved(moved, context)
+        assertNotNull(model.drag, "다음 손이 안 먹는다")
+        model.touchVanished()
+
+        assertTrue(model.beginPinch())
+        model.pinch(1.3, RummyCanvasPoint(0.0, 0.0))
+        assertNotEquals(model.viewport.scale, model.renderScale)
+        model.landscapeSideChanged(GamesRummyLandscapeSide.left)
+        assertEquals(model.viewport.scale, model.renderScale, "핀치가 열린 채 남았다")
+        model.touchVanished()
+    }
+
+    /** 자동 밀기: 받침대 → 판 길목에서는 안 민다 · 안쪽에 한 번 들어온 뒤에는 민다 · 판 아래로 나갔다 오면 다시 꺼진다 · 판에서 출발한 끌기는 처음부터 민다. */
+    @Test
+    fun edgePanArmsOnlyInsideTheBoard() {
+        for (size in sizes) {
+            val base = fx.editor()
+            val c = context(base, size)
+            val table = c.layout.table
+            val model = GamesRummyMatchModel(tableSize(c))
+            model.sync(c)
+            val start = fx.rackPoint("D9", c)
+            fun finger(x: Double, y: Double) = c.layout.finger(RummyCanvasPoint(x, y))
+            assertEquals(0.0, model.viewport.origin.y)
+            assertTrue(GamesRummyViewport.of(tableSize(c)).visibleLogical.height < 640, "$size 기준선: 밀 수 있는 보기가 아니다")
+
+            // 손이 초당 200 으로 받침대 → 판 윗줄까지. 틱마다 잰다.
+            model.touchDown(start, c)
+            val aim = finger(table.midX, table.y + 40)
+            val steps = maxOf(1, (hypot(aim.x - start.x, aim.y - start.y) / 3.2).toInt())
+            var sawZone = false
+            for (step in 1..steps) {
+                val t = step.toDouble() / steps
+                model.touchMoved(RummyCanvasPoint(start.x + (aim.x - start.x) * t, start.y + (aim.y - start.y) * t), c)
+                model.drag?.pointer?.let { if (table.contains(it) && it.y > table.maxY - GamesRummyViewport.edgeZone) sawZone = true }
+                model.edgeTick(0.016)
+                assertEquals(0.0, model.viewport.origin.y, "$size $step/$steps: 지나가는 길에 판이 밀렸다")
+            }
+            assertTrue(sawZone, "$size 기준선: 궤적이 아래쪽 구역을 안 지났다")
+
+            // 안쪽에 들어왔으니 켜졌다 — 아래쪽 구역으로 돌아가면 민다.
+            model.touchMoved(finger(table.midX, table.maxY - 10), c)
+            assertTrue(model.isEdgePanning, "$size: 프레임 고리가 안 돈다")
+            model.edgeTick(0.1)
+            val pushed = model.viewport.origin.y
+            assertTrue(pushed > 0, "$size: 안쪽에 들어온 뒤인데 안 민다")
+
+            // 판 아래(받침대)로 나갔다 올라오면 다시 꺼진다.
+            model.touchMoved(finger(table.midX, c.layout.rack.midY), c)
+            model.edgeTick(0.1)
+            model.touchMoved(finger(table.midX, table.maxY - 10), c)
+            assertFalse(model.isEdgePanning, "$size: 꺼졌는데 프레임이 돈다")
+            repeat(30) { model.edgeTick(0.016) }
+            assertEquals(pushed, model.viewport.origin.y, "$size: 받침대에 다녀온 길목에서 밀렸다")
+            model.touchMoved(finger(table.midX, table.midY), c)
+            model.touchMoved(finger(table.midX, table.maxY - 10), c)
+            model.edgeTick(0.1)
+            assertTrue(model.viewport.origin.y > pushed, "$size: 다시 들어온 뒤인데 안 민다")
+            model.touchVanished()
+
+            // 받침대 타일을 곧장 왼끝으로 — 왼쪽 구역도 켜지지 않는다.
+            val side = GamesRummyMatchModel(tableSize(c))
+            side.sync(c)
+            side.touchDown(start, c)
+            side.touchMoved(finger(table.x + 10, table.midY), c)
+            repeat(30) { side.edgeTick(0.016) }
+            assertEquals(0.0, side.viewport.origin.x, "$size: 왼끝으로 올라가는 길에 판이 밀렸다")
+            side.touchVanished()
+
+            // 판에서 출발한 끌기는 곧바로 민다.
+            val board = GamesRummyMatchModel(tableSize(c))
+            board.sync(c)
+            val tile = fx.screen(100.0 + 80 + 20, 78.0, c)
+            board.touchDown(tile, c)
+            board.touchMoved(finger(table.midX, table.maxY - 10), c)
+            board.edgeTick(0.1)
+            assertTrue(board.viewport.origin.y > 0, "$size: 판에서 출발한 끌기가 안 민다")
+            board.touchVanished()
+        }
     }
 
     // MARK: 끌기 궤적 — 크기마다

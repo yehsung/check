@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyBoardGeometry.swift:1 · Sources/CheckMobileKit/Games/GamesRummyMatchInput.swift:1 @ ios-1017-cube 61d75d8c · 맥 동작은 Sources/check/RummyPanelMatch.swift:490-720 @ 1a5eeca6 · 설계서 §10
+// 원본: Sources/CheckMobileKit/Games/GamesRummyBoardGeometry.swift:1 · Sources/CheckMobileKit/Games/GamesRummyMatchInput.swift:1 @ ios-1017-cube d5c9eeff · 맥 동작은 Sources/check/RummyPanelMatch.swift:490-720 @ 1a5eeca6 · 설계서 §10
 //
 // 폰 아잉 큐브 판 화면의 **순수 값** — Compose 를 모른다. 그리는 자리 · 누르는 자리 · 놓는 자리가 전부 이 값에서 나온다(맥과 같은 원칙 · 배치는 폰 가로 화면용).
 // 좌표는 판 화면 왼쪽 위 원점의 dp 다(값은 Double — 코어 RummyCanvasPoint·RummyCanvasRect). 화면이 px 를 dp 로 바꿔 넘긴다.
@@ -75,7 +75,13 @@ data class GamesRummyMatchLayout(
     // 왼쪽 열
 
     val leftColumn: RummyCanvasRect = RummyCanvasRect(0.0, 0.0, leftColumnWidth, size.height)
-    val nav: RummyCanvasRect = RummyCanvasRect(columnPadding, 0.0, leftColumnWidth - columnPadding * 2, navHeight)
+
+    /** [나가기] · [규칙] 줄. 터치 자리가 모자라지 않게 열 안쪽 여백 없이 열 폭을 다 쓴다. */
+    val nav: RummyCanvasRect = RummyCanvasRect(0.0, 0.0, leftColumnWidth, navHeight)
+
+    /** [나가기] · [규칙] 버튼 하나의 터치 자리. */
+    val navButton: RummyCanvasSize = RummyCanvasSize((nav.width - navGap) / 2, nav.height)
+    private val seatCardWidth: Double = leftColumnWidth - columnPadding * 2
 
     private val seatCardHeight: Double = run {
         val slots = (maxOpponentCards + 1).toDouble()
@@ -83,14 +89,17 @@ data class GamesRummyMatchLayout(
         maxOf(0.0, minOf(seatCardMaxHeight, room / slots))
     }
 
+    /** 자리 카드가 글자 세 줄 + 온 얼굴을 못 담는 낮은 칸이다. */
+    val isSeatCardCompact: Boolean = seatCardHeight < seatCardFullContentHeight
+
     /** 상대 카드 [index] 번째(내 다음 차례부터 위에서 아래로). */
     fun opponentCard(index: Int): RummyCanvasRect {
         val top = nav.maxY + seatCardGap + maxOf(0, index).toDouble() * (seatCardHeight + seatCardGap)
-        return RummyCanvasRect(columnPadding, top, nav.width, seatCardHeight)
+        return RummyCanvasRect(columnPadding, top, seatCardWidth, seatCardHeight)
     }
 
     /** 내 자리 카드 — 왼쪽 열 맨 아래(몇 명이 앉든 같은 자리). */
-    val mySeatCard: RummyCanvasRect = RummyCanvasRect(columnPadding, size.height - columnPadding - seatCardHeight, nav.width, seatCardHeight)
+    val mySeatCard: RummyCanvasRect = RummyCanvasRect(columnPadding, size.height - columnPadding - seatCardHeight, seatCardWidth, seatCardHeight)
 
     // 오른쪽 열
 
@@ -101,11 +110,20 @@ data class GamesRummyMatchLayout(
     private val actionsTop: Double = tools.maxY + actionGap
     private val actionRoom: Double = maxOf(0.0, size.height - columnPadding - actionsTop - actionGap * 3)
 
+    /** 비율대로면 44 아래로 내려가는 낮은 칸(시스템 '화면 확대')은 모두 44 를 먼저 주고 남는 높이를 비율로 나눈다. 넷 다 44 가 안 되는 높이에서는 비율대로다. */
+    private fun actionHeight(share: Double): Double {
+        val spare = actionRoom - minActionHeight * 4
+        return if (actionRoom * sortShare >= minActionHeight || spare < 0) actionRoom * share else minActionHeight + spare * share
+    }
+
     /** 버튼 넷 칸(위에서 아래로). 어떤 높이에서도 합이 열을 안 넘는다. */
-    val submit: RummyCanvasRect = RummyCanvasRect(info.x, actionsTop, info.width, actionRoom * submitShare)
-    val draw: RummyCanvasRect = RummyCanvasRect(info.x, submit.maxY + actionGap, info.width, actionRoom * drawShare)
-    val undo: RummyCanvasRect = RummyCanvasRect(info.x, draw.maxY + actionGap, info.width, actionRoom * undoShare)
-    val sort: RummyCanvasRect = RummyCanvasRect(info.x, undo.maxY + actionGap, info.width, actionRoom * sortShare)
+    val submit: RummyCanvasRect = RummyCanvasRect(info.x, actionsTop, info.width, actionHeight(submitShare))
+    val draw: RummyCanvasRect = RummyCanvasRect(info.x, submit.maxY + actionGap, info.width, actionHeight(drawShare))
+    val undo: RummyCanvasRect = RummyCanvasRect(info.x, draw.maxY + actionGap, info.width, actionHeight(undoShare))
+    val sort: RummyCanvasRect = RummyCanvasRect(info.x, undo.maxY + actionGap, info.width, actionHeight(sortShare))
+
+    /** [777] · [789] 버튼 하나의 터치 자리(안쪽 여백 없이 칸을 반씩 쓴다). */
+    val sortButton: RummyCanvasSize = RummyCanvasSize((sort.width - sortDividerWidth) / 2, sort.height)
 
     /** 받침대 기하(받침대 칸 왼쪽 위 원점). */
     val rackGeometry: GamesRummyRackGeometry get() = GamesRummyRackGeometry(RummyCanvasSize(rack.width, rack.height), rackRows)
@@ -134,7 +152,8 @@ data class GamesRummyMatchLayout(
     }
 
     companion object {
-        const val leftColumnWidth: Double = 86.0
+        /** 왼쪽 열 — [나가기] · [규칙]이 각 44 로 든다([navButton]). */
+        const val leftColumnWidth: Double = 90.0
         const val rightColumnWidth: Double = 100.0
         const val statusHeight: Double = 18.0
 
@@ -156,12 +175,21 @@ data class GamesRummyMatchLayout(
         /** 오른쪽 열 [반응] · [전체 보기] 줄 높이. */
         const val toolsHeight: Double = 44.0
 
-        /** 왼쪽 열 원형 버튼 지름(열 폭 86 에 둘이 들어간다. 줄 높이 44 가 터치 높이다). */
+        /** 왼쪽 열 원형 버튼 지름(그림). 터치 자리는 [navButton] 이다. */
         const val navButtonDiameter: Double = 38.0
+
+        /** [나가기] · [규칙] 사이 틈. */
+        const val navGap: Double = 2.0
+
+        /** [777] · [789] 사이 구분선 폭. */
+        const val sortDividerWidth: Double = 0.8
 
         /** 상대 카드 최대 수(4인 판). 내 자리까지 네 칸을 늘 같은 높이로 나눈다 — 인원에 따라 카드가 안 늘어난다. */
         const val maxOpponentCards: Int = 3
         const val seatCardMaxHeight: Double = 76.0
+
+        /** 카드 글자 세 줄 + 얼굴의 높이. 칸이 이보다 낮으면(시스템 '화면 확대') 얼굴을 줄여 태그 줄이 카드 밖으로 안 나가게 한다([isSeatCardCompact]). */
+        const val seatCardFullContentHeight: Double = 66.0
         const val seatCardGap: Double = 4.0
 
         /** 동작 버튼 넷이 남는 높이를 나누는 비율. */
@@ -173,6 +201,9 @@ data class GamesRummyMatchLayout(
         /** 다른 기기 안내 카드의 판 아래 여백 · 어림 높이(배지를 그 위로 올린다). */
         const val elsewhereCardBottom: Double = 6.0
         const val elsewhereCardHeight: Double = 60.0
+
+        /** 동작 버튼 최소 높이(터치). */
+        const val minActionHeight: Double = 44.0
 
         /** 가로로 선 크기인가. 방향 전환 중에는 세로 크기로 한 프레임 불릴 수 있다 — 그때 칸을 세우지 않는다. */
         fun isLandscape(size: RummyCanvasSize): Boolean = size.width > size.height

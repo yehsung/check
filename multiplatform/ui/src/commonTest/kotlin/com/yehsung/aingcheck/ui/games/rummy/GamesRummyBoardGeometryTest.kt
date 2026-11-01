@@ -22,14 +22,14 @@ import kotlin.test.assertTrue
 
 class GamesRummyBoardGeometryTest {
     /** 시스템 막대 안 크기: 설계서 세 크기(667×375 · 852×393 · 932×430) · iOS 세이프(667×354 · 734×372). */
-    private val screens = listOf(RummyCanvasSize(667.0, 375.0), RummyCanvasSize(852.0, 393.0), RummyCanvasSize(932.0, 430.0), RummyCanvasSize(667.0, 354.0), RummyCanvasSize(734.0, 372.0))
+    private val screens = listOf(RummyCanvasSize(568.0, 320.0), RummyCanvasSize(605.0, 303.0), RummyCanvasSize(667.0, 375.0), RummyCanvasSize(852.0, 393.0), RummyCanvasSize(932.0, 430.0), RummyCanvasSize(667.0, 354.0), RummyCanvasSize(734.0, 372.0))
 
     /** 안드로이드 높이 낮은 폰: 폭 360dp 폰 가로에서 상태 막대 · 내비 막대를 뺀 값. */
     private val lowAndroid = RummyCanvasSize(640.0, 312.0)
     private val base = RummyCanvasSize(734.0, 372.0)
 
     /** 734×372 의 판 칸. */
-    private val tableSize = RummyCanvasSize(548.0, 244.0)
+    private val tableSize = RummyCanvasSize(544.0, 245.0)
 
     private fun RummyCanvasRect.inside(outer: RummyCanvasRect, slack: Double = 0.001): Boolean =
         x >= outer.x - slack && y >= outer.y - slack && maxX <= outer.maxX + slack && maxY <= outer.maxY + slack
@@ -57,7 +57,7 @@ class GamesRummyBoardGeometryTest {
                         assertTrue(overlap.height <= 0.5 || overlap.width <= 0.5, "$size ${rows}줄: 칸이 겹친다 $cell $other")
                     }
                 }
-                assertTrue(layout.table.height >= 200, "$size ${rows}줄: 판이 너무 작다 ${layout.table.height}")
+                assertTrue(layout.table.height > 190, "$size ${rows}줄: 판이 너무 작다 ${layout.table.height}")
             }
         }
     }
@@ -68,14 +68,14 @@ class GamesRummyBoardGeometryTest {
         val five = GamesRummyMatchLayout(base, 5)
         assertEquals(two.rack, five.rack)
         assertEquals(two.table, five.table)
-        assertEquals(86.0, two.table.x)
-        assertEquals(548.0, two.table.width)
+        assertEquals(90.0, two.table.x)
+        assertEquals(544.0, two.table.width)
         assertEquals(634.0, two.rightColumn.x)
         assertEquals(100.0, two.rightColumn.width)
         assertEquals(two.table.width, two.rack.width)
         assertEquals(372.0, two.rack.maxY)
-        assertEquals(109.8, two.rack.height, 0.2)
-        assertEquals(244.2, two.table.height, 0.2)
+        assertEquals(109.1, two.rack.height, 0.2)
+        assertEquals(244.9, two.table.height, 0.2)
     }
 
     @Test
@@ -86,12 +86,29 @@ class GamesRummyBoardGeometryTest {
             assertTrue(layout.submit.height > layout.draw.height && layout.draw.height > layout.undo.height && layout.undo.height > layout.sort.height)
             assertTrue(layout.sort.maxY <= size.height - GamesRummyMatchLayout.columnPadding + 0.001)
             assertTrue(layout.opponentCard(2).maxY <= layout.mySeatCard.y)
-            assertTrue(layout.opponentCard(0).height >= 60, "$size: 카드 글자 세 줄이 안 든다 ${layout.opponentCard(0).height}")
+            assertTrue(layout.opponentCard(0).height >= 59, "$size: 카드 글자 세 줄이 안 든다 ${layout.opponentCard(0).height}")
+            assertEquals(layout.opponentCard(0).height < GamesRummyMatchLayout.seatCardFullContentHeight, layout.isSeatCardCompact, "$size: 낮은 칸인데 얼굴이 그대로다")
             assertTrue(layout.mySeatCard.inside(layout.leftColumn) && layout.mySeatCard.maxY > size.height - 10)
         }
         // 높이 낮은 안드로이드도 칸은 안 겹친다(버튼만 조금 낮다 — 판단 기록의 숫자).
         val low = GamesRummyMatchLayout(lowAndroid)
         assertTrue(low.sort.height >= 38 && low.opponentCard(0).height >= 60, "$low")
+    }
+
+    /** 버튼 하나의 터치 자리: [나가기] · [규칙] · [777] · [789] 가 어느 크기에서도 44×44 이상이고 칸 합이 칸을 안 넘는다. */
+    @Test
+    fun buttonTouchTargets() {
+        for (size in screens) {
+            val layout = GamesRummyMatchLayout(size)
+            assertTrue(layout.navButton.width >= 44 && layout.navButton.height >= 44, "$size: ${layout.navButton}")
+            assertTrue(layout.sortButton.width >= 44 && layout.sortButton.height >= 44, "$size: ${layout.sortButton}")
+            assertTrue(layout.navButton.width * 2 + GamesRummyMatchLayout.navGap <= layout.nav.width + 0.001)
+            assertTrue(layout.sortButton.width * 2 + GamesRummyMatchLayout.sortDividerWidth <= layout.sort.width + 0.001)
+            assertTrue(GamesRummyMatchLayout.navButtonDiameter <= layout.navButton.width, "그림이 터치 자리보다 크다")
+        }
+        // 넷 다 44 가 안 되는 높이에서는 열을 넘지 않는 쪽이 먼저다.
+        val tight = GamesRummyMatchLayout(RummyCanvasSize(500.0, 260.0))
+        assertTrue(tight.sort.maxY <= 260 - GamesRummyMatchLayout.columnPadding + 0.001)
     }
 
     @Test
@@ -117,12 +134,12 @@ class GamesRummyBoardGeometryTest {
     @Test
     fun defaultViewMatchesTheDesign() {
         val view = GamesRummyViewport.of(tableSize)
-        assertEquals(0.548, view.scale, 0.001)
-        assertEquals(21.9, view.tileSize.width, 0.1)
-        assertEquals(30.7, view.tileSize.height, 0.1)
+        assertEquals(0.544, view.scale, 0.001)
+        assertEquals(21.8, view.tileSize.width, 0.1)
+        assertEquals(30.5, view.tileSize.height, 0.1)
         assertEquals(1000.0, view.visibleLogical.width, 0.01)
-        assertEquals(445.0, view.visibleLogical.height, 1.0)
-        assertEquals(244.0 / 640.0, GamesRummyViewport.fitScale(tableSize), 0.001)
+        assertEquals(450.0, view.visibleLogical.height, 1.0)
+        assertEquals(245.0 / 640.0, GamesRummyViewport.fitScale(tableSize), 0.001)
         assertEquals(1.0, GamesRummyViewport.maxScale, 0.0)
         assertFalse(view.isFullView)
     }
@@ -196,7 +213,7 @@ class GamesRummyBoardGeometryTest {
 
         val turning = GamesRummyViewport.of(tableSize).resized(RummyCanvasSize(293.0, 700.0)).resized(tableSize)
         assertFalse(turning.isFullView, "세로 칸을 거치니 전체 보기가 됐다")
-        assertEquals(0.548, turning.scale, 0.001)
+        assertEquals(0.544, turning.scale, 0.001)
         val full = GamesRummyViewport.of(tableSize).toggledFullView().resized(RummyCanvasSize(667.0, 300.0))
         assertTrue(full.isFullView, "사람이 고른 전체 보기가 풀렸다")
     }
@@ -217,7 +234,7 @@ class GamesRummyBoardGeometryTest {
         assertEquals(home + 20, view.origin.x, 0.001)
         // 경계값: 정확히 28 은 가장자리가 아니다.
         assertEquals(view, view.edgePanned(RummyCanvasPoint(28.0, 100.0), 0.1))
-        assertEquals(view, view.edgePanned(RummyCanvasPoint(548.0 - 28, 100.0), 0.1))
+        assertEquals(view, view.edgePanned(RummyCanvasPoint(544.0 - 28, 100.0), 0.1))
         assertFalse(view.edgeMoves(RummyCanvasPoint(28.0, 100.0)))
         // 세로: 아래 가장자리에서 민다.
         val y = view.origin.y
@@ -297,7 +314,7 @@ class GamesRummyBoardGeometryTest {
         val rect = GamesRummyMatchLayout(base).rack
         val size = RummyCanvasSize(rect.width, rect.height)
         val two = GamesRummyRackGeometry(size)
-        assertEquals(540.0 / 16, two.tileSize.width, 0.001)
+        assertEquals(536.0 / 16, two.tileSize.width, 0.001)
         assertEquals(1.39, two.tileSize.height / two.tileSize.width, 0.001)
         val three = GamesRummyRackGeometry(size, 3)
         assertEquals(2.0 / 3, three.tileScale, 0.001)
@@ -308,7 +325,8 @@ class GamesRummyBoardGeometryTest {
         for (each in screens) {
             val layout = GamesRummyMatchLayout(each)
             assertTrue(layout.rack.height <= each.height * GamesRummyMatchLayout.rackMaxHeightShare + 0.001)
-            assertTrue(layout.rackGeometry.tileSize.width >= 29, "$each: 받침대 타일이 너무 작다")
+            // 시스템 '화면 확대'(높이 354 아래)는 칸이 그만큼 좁다 — 맥과 같은 한 줄 16장을 지키는 값이다.
+            assertTrue(layout.rackGeometry.tileSize.width >= (if (each.height >= 354) 29.0 else 22.0), "$each: 받침대 타일이 너무 작다")
         }
     }
 

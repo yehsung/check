@@ -82,6 +82,12 @@ interface GamesLobbyRoster<U> {
 interface GamesRouter {
     /** 게임 탭을 고르고 · 쌓인 화면을 비우고 · [destination] 을 쌓는다. */
     fun present(destination: GamesDestination)
+
+    /**
+     * 떠나는 문을 단다(폰 라우터만 — Windows 조립 · 시험 가짜는 큐브가 없어 기본값 그대로다). 라우터가 화면을 옮기기 전에 이 답을 묻는다:
+     * true = 지금 간다 · false = 확인을 띄웠다, 수락하면 받은 resume 이 원래 가려던 곳으로 간다.
+     */
+    fun installDepartureGuard(guard: (resume: () -> Unit) -> Boolean) {}
 }
 
 /**

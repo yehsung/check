@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchChrome.swift:1 @ ios-1017-cube 61d75d8c · 맥 Sources/check/RummyPanelMatch.swift:842-1172 (버튼 · 자리 카드 · 판돈 · 더미) · Sources/check/RummyRackCues.swift:132,153 (배지 · [완료] 안 초) @ 1a5eeca6 · 설계서 §10
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchChrome.swift:1 @ ios-1017-cube d5c9eeff · 맥 Sources/check/RummyPanelMatch.swift:842-1172 (버튼 · 자리 카드 · 판돈 · 더미) · Sources/check/RummyRackCues.swift:132,153 (배지 · [완료] 안 초) @ 1a5eeca6 · 설계서 §10
 //
 // 판 화면의 판 · 받침대 바깥 — 왼쪽 열(뒤로 · 규칙 · 자리 카드) · 오른쪽 열(판돈 · 더미 · 반응 · 전체 보기 · 동작 버튼) · 상태 줄 · 안내. 맥 위 띠 · 자리 카드 · 버튼을 가로 화면 양옆 열로 옮겼다.
 // 칸 자리는 전부 GamesRummyMatchLayout 한 값이다. 높이가 낮아 큰 글자에서 스크롤 없이 들어가야 한다 — 글자 배율을 칸마다 자른다([GamesRummyCappedText]).
@@ -114,7 +114,7 @@ private fun countdownTint(remaining: Double): Color? = when (GamesRummyCountdown
 
 // MARK: - 열 위쪽
 
-/** 열 안의 원형 버튼. 터치 자리는 칸 전체다(지름 38 · 칸 높이 44). */
+/** 열 안의 원형 버튼. 터치 자리는 칸 전체다(그림 지름 38 · 터치 자리 44×44 — [GamesRummyMatchLayout.navButton]). */
 @Composable
 private fun RowScope.ColumnButton(icon: AppIcon, label: String, tag: String, onClick: () -> Unit) {
     val colors = AingTheme.colors
@@ -139,7 +139,7 @@ private fun RowScope.ColumnButton(icon: AppIcon, label: String, tag: String, onC
 /** 왼쪽 열 위 — [나가기] · [규칙]. 판 안 칸이라 시스템 막대의 뒤로가 안 보인다. */
 @Composable
 internal fun GamesRummyNavButtons(onExit: () -> Unit, onRules: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(GamesRummyMatchLayout.navGap.dp)) {
         ColumnButton(AppIcon.ChevronLeft, GamesRummyMatchText.leaveDescription, GamesRummyMatchTags.BACK, onExit)
         ColumnButton(AppIcon.MenuBook, RummyPhoneText.rules, GamesRummyMatchTags.RULES, onRules)
     }
@@ -223,17 +223,19 @@ internal fun GamesRummySeatColumn(rummy: RummyStore, match: RummyMatchState, lay
     val anchors = LocalGamesRummyReactionAnchors.current
     GamesRummyCappedText(1f) {
         GamesRummySeats.opponents(match).take(GamesRummyMatchLayout.maxOpponentCards).forEachIndexed { index, seat ->
-            GamesRummySeatCard(rummy, match, seat, now, Modifier.atRect(layout.opponentCard(index)).rummyReactionAnchor(anchors, seat.seatNo).testTag(GamesRummyMatchTags.seat(seat.seatNo)))
+            GamesRummySeatCard(rummy, match, seat, layout.isSeatCardCompact, now, Modifier.atRect(layout.opponentCard(index)).rummyReactionAnchor(anchors, seat.seatNo).testTag(GamesRummyMatchTags.seat(seat.seatNo)))
         }
         GamesRummySeats.mine(match)?.let { seat ->
-            GamesRummySeatCard(rummy, match, seat, now, Modifier.atRect(layout.mySeatCard).rummyReactionAnchor(anchors, seat.seatNo).testTag(GamesRummyMatchTags.MY_SEAT))
+            GamesRummySeatCard(rummy, match, seat, layout.isSeatCardCompact, now, Modifier.atRect(layout.mySeatCard).rummyReactionAnchor(anchors, seat.seatNo).testTag(GamesRummyMatchTags.MY_SEAT))
         }
     }
 }
 
+/** [compact] = 낮은 칸([GamesRummyMatchLayout.isSeatCardCompact]) — 얼굴을 줄여 태그 줄까지 카드 안에 담는다. */
 @Composable
-private fun GamesRummySeatCard(rummy: RummyStore, match: RummyMatchState, seat: RummyMatchSeat, now: () -> SwiftDate, modifier: Modifier) {
+private fun GamesRummySeatCard(rummy: RummyStore, match: RummyMatchState, seat: RummyMatchSeat, compact: Boolean, now: () -> SwiftDate, modifier: Modifier) {
     val colors = AingTheme.colors
+    val ringDiameter = if (compact) 26.dp else 34.dp
     val isTurn = GamesRummySeats.isTurn(seat, match)
     val tags = GamesRummySeats.tags(seat)
     val name = seat.displayName ?: "?"
@@ -249,9 +251,9 @@ private fun GamesRummySeatCard(rummy: RummyStore, match: RummyMatchState, seat: 
             .padding(start = 4.dp, end = 4.dp, top = 3.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
-                if (isTurn) GamesRummyTurnRing(rummy, GamesRummySeats.turnTotal(match), now, Modifier.size(32.dp))
-                BoardAvatar(name, seat.userId.lowercased, 26.dp, url = seat.avatarUrl, characterHint = seat.character)
+            Box(Modifier.size(ringDiameter), contentAlignment = Alignment.Center) {
+                if (isTurn) GamesRummyTurnRing(rummy, GamesRummySeats.turnTotal(match), now, Modifier.size(ringDiameter))
+                BoardAvatar(name, seat.userId.lowercased, ringDiameter - 7.dp, url = seat.avatarUrl, characterHint = seat.character)
             }
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -520,12 +522,11 @@ private fun SortButtons(rummy: RummyStore, enabled: Boolean, locked: Boolean, on
             .alpha(if (enabled) 1f else 0.45f)
             .clip(shape)
             .background(colors.surface, shape)
-            .border(0.8.dp, colors.separator, shape)
-            .padding(2.dp),
+            .border(0.8.dp, colors.separator, shape),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         SortSegment(onSort, RummyRackSort.number, RummyPhoneText.sortNumber, GamesRummyMatchText.sortNumberName, selected == RummyRackSort.number, enabled && !locked, GamesRummyMatchTags.SORT_NUMBER)
-        Box(Modifier.width(0.8.dp).fillMaxHeight().padding(vertical = 8.dp).background(colors.separator))
+        Box(Modifier.width(GamesRummyMatchLayout.sortDividerWidth.dp).fillMaxHeight().padding(vertical = 8.dp).background(colors.separator))
         SortSegment(onSort, RummyRackSort.color, RummyPhoneText.sortColor, GamesRummyMatchText.sortColorName, selected == RummyRackSort.color, enabled && !locked, GamesRummyMatchTags.SORT_COLOR)
     }
 }
@@ -538,11 +539,13 @@ private fun RowScope.SortSegment(onSort: (RummyRackSort) -> Unit, mode: RummyRac
         Modifier
             .weight(1f)
             .fillMaxHeight()
-            .clip(shape)
-            .background(if (on) colors.accentFill else Color.Transparent, shape)
+            // 안쪽 여백 없이 칸을 반씩 쓴다([GamesRummyMatchLayout.sortButton]) — 터치 자리가 44 아래로 안 내려가게. 켜진 표시만 안으로 들인다.
             .clickable(enabled = enabled, role = Role.Button) { onSort(mode) }
             .semantics { contentDescription = name }
-            .testTag(tag),
+            .testTag(tag)
+            .padding(2.dp)
+            .clip(shape)
+            .background(if (on) colors.accentFill else Color.Transparent, shape),
         contentAlignment = Alignment.Center,
     ) {
         Text(

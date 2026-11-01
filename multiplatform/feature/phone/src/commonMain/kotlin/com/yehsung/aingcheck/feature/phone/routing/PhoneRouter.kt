@@ -48,6 +48,9 @@ class PhoneRouter : GamesRouter, MessagesRouterLink {
 
     private val pending = ArrayList<PhoneNavRequest>()
 
+    /** 떠나도 되는지 묻는 문(GamesStore 가 단다 — 지금 묻는 쪽은 아잉 큐브 방 하나다). true = 지금 간다 · false = 확인을 띄웠다, 수락하면 받은 resume 이 원래 가려던 곳으로 간다. */
+    private var departureGuard: ((resume: () -> Unit) -> Boolean)? = null
+
     /** 마지막으로 연 대상(진단·시험). */
     var lastOpenedTarget: PhoneRouteTarget? = null
         private set
@@ -58,8 +61,24 @@ class PhoneRouter : GamesRouter, MessagesRouterLink {
     /** 아직 셸이 꺼내 가지 않은 요청(시험·진단 — 꺼내지 않는다). */
     val pendingRequests: List<PhoneNavRequest> get() = pending.toList()
 
+    override fun installDepartureGuard(guard: (resume: () -> Unit) -> Boolean) {
+        departureGuard = guard
+    }
+
+    /**
+     * **사람이 지금 화면을 떠나는 길의 한 문**(Swift `MobileRouter.departureGuard` @ ios-1017-cube f71f157f). 탭 막대는 셸이 이 문으로 옮기고([go] 가 탭을 옮긴다),
+     * 딥링크 · 알림 · 위젯은 [open] · 앱 모델 `openRoute` 가, 다른 대결 화면 열기는 [present] 가 지난다. 화면 수명 신호로 가르지 않는 까닭: 그 신호는 목적지가 다시 세워질 때도 온다.
+     * [pushMe] · [popToRoot] · [reset] 은 묻지 않는다: 부르는 쪽이 이미 판단을 지났다(`openRoute` 뒤의 `me.open` · 나 탭 안 · 로그아웃).
+     */
+    fun departing(go: () -> Unit) {
+        if (departureAllowed(go)) go()
+    }
+
+    private fun departureAllowed(resume: () -> Unit): Boolean = departureGuard?.invoke(resume) ?: true
+
     /** 대상을 연다: 탭을 고르고, 셸이 그 탭 경로를 비운 뒤 대상을 쌓도록 요청한다. */
     fun open(target: PhoneRouteTarget) {
+        if (!departureAllowed { open(target) }) return
         selectedTab = target.tab
         lastOpenedTarget = target
         enqueue(PhoneNavRequest.Open(target))
@@ -67,6 +86,7 @@ class PhoneRouter : GamesRouter, MessagesRouterLink {
 
     /** W2-e: 게임 탭을 고르고 · 쌓인 화면을 비우고 · 목적지를 쌓는다. */
     override fun present(destination: GamesDestination) {
+        if (!departureAllowed { present(destination) }) return
         selectedTab = PhoneTab.games
         enqueue(PhoneNavRequest.PresentGames(destination))
     }

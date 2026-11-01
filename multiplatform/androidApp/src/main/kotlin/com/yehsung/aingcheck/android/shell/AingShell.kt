@@ -233,8 +233,8 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
                     badge = { tab -> phone.badges.badge(RouteTargets.tab(tab)) ?: 0 },
                     meFace = rememberMeTabFace(app),
                     onSelect = { tab ->
-                        navigator.selectTab(tab)
-                        phone.tabDidChange(RouteTargets.tab(tab))
+                        // 탭 막대도 떠나는 문을 지난다(아잉 큐브 방 — 손님은 뒤에서 나가고 방장은 묻는다). 고른 탭 다시 누르기는 그 화면에 머물러 떠나는 길이 아니다(ShellDepartureTest).
+                        navigator.tapTab(tab, phone.router::departing) { phone.tabDidChange(RouteTargets.tab(tab)) }
                     },
                 )
             }

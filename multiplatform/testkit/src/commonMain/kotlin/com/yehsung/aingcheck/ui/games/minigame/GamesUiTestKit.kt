@@ -210,6 +210,9 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
     /** 아잉 큐브 스토어(기본 null — 게임 탭은 큐브가 없는 것처럼 돈다). GamesStore 를 만들기 전에 넣는다. */
     var rummy: RummyStore? = null
 
+    /** 게임 탭 스토어가 단 떠나는 문(시험이 탭 막대 대신 밟는다). */
+    var departureGuard: ((resume: () -> Unit) -> Boolean)? = null
+
     val context: GamesContext = object : GamesContext {
         override val sessionStore: SessionStore get() = this@UiGamesHarness.sessionStore
         override val appConfig: AppConfig = appConfig
@@ -222,6 +225,7 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
         override val chess: GamesBoardGameLink get() = this@UiGamesHarness.chess
         override val router: GamesRouter = object : GamesRouter {
             override fun present(destination: GamesDestination) { presented += destination }
+            override fun installDepartureGuard(guard: (resume: () -> Unit) -> Boolean) { departureGuard = guard }
         }
         override val hiddenBlockedPeerIDs: Set<String> = emptySet()
         override val sharedRubyBalance: Long? = null

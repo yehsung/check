@@ -119,7 +119,7 @@ fun GamesRummyResultView(
         return
     }
     Column(modifier) {
-        GamesHeaderBar(RummyPhoneText.resultTitle, onBack = onBack) { GamesRummyRulesButton(onRules, Modifier.testTag(GamesRummyResultTags.RULES)) }
+        GamesHeaderBar(RummyPhoneText.title, onBack = onBack) { GamesRummyRulesButton(onRules, Modifier.testTag(GamesRummyResultTags.RULES)) }
         if (match != null) ResultBody(rummy, match, me, now, block, onShowBoard, Modifier.weight(1f))
     }
 }

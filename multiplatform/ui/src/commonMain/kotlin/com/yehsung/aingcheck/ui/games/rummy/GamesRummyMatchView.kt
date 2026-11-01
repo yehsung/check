@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyMatch.swift:1 @ ios-1017-cube 61d75d8c · 맥 Sources/check/RummyPanelMatch.swift:247 (RummyMatchView) · Sources/check/RummyTableCanvas.swift:192 · Sources/check/RummyRackView.swift:90 @ 1a5eeca6 · 폰 배치는 ios-1017 설계서 §10
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMatch.swift:1 @ ios-1017-cube d5c9eeff · 맥 Sources/check/RummyPanelMatch.swift:247 (RummyMatchView) · Sources/check/RummyTableCanvas.swift:192 · Sources/check/RummyRackView.swift:90 @ 1a5eeca6 · 폰 배치는 ios-1017 설계서 §10
 //
 // 아잉 큐브 판(**가로 화면**) — 왼쪽 열(뒤로 · 규칙 · 자리 카드) | 가운데(판 · 상태 줄 · 받침대) | 오른쪽 열(판돈 · 더미 · 반응 · 전체 보기 · 동작 버튼). 칸 자리는 GamesRummyMatchLayout 한 곳에서 나온다. 입력: [onBack] 은 [나가기](껍데기가 기권 확인을 띄운다).
 // 말풍선은 껍데기 층(GamesRummyReactionLayer)이 그린다 — 이 뷰는 자리 앵커만 단다(왼쪽 열 카드). 탭 막대 숨김은 셸 몫(TabBarPolicy.rummyMatch) · 시스템 뒤로는 껍데기의 뒤로 판단이 받는다.
@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -105,6 +106,9 @@ object GamesRummyMatchTags {
 /** 칸 사각형 그대로 놓는다(판 화면 좌표 · dp). */
 internal fun Modifier.atRect(rect: RummyCanvasRect): Modifier = offset(rect.x.dp, rect.y.dp).size(rect.width.dp, rect.height.dp)
 
+/** 기기 가로 방향(Android 조립이 화면 회전 값을 넣는다). 시험 · 데스크톱 렌더는 null — 뒤집힘이 없다. */
+val LocalGamesRummyLandscapeSide = compositionLocalOf<GamesRummyLandscapeSide?> { null }
+
 /** 판(가로). [onBack] 은 [나가기](껍데기가 기권 확인을 띄운다) · [onReaction] 은 [반응](고르개는 껍데기가 쥔다). [model] 은 시험이 넣어 재는 자리다. */
 @Composable
 fun GamesRummyMatchView(
@@ -124,6 +128,9 @@ fun GamesRummyMatchView(
         val size = RummyCanvasSize(maxWidth.value.toDouble(), maxHeight.value.toDouble())
         // 기기가 돌면 쥔 것을 거둔다(손 자리가 새 칸에서 다른 것을 가리킨다). 칸은 값이라 어느 크기로 불려도 안 깨진다.
         SideEffect { model.screenSizeChanged(size) }
+        // 왼쪽 가로 ↔ 오른쪽 가로는 크기가 같아 위 값이 안 깨어난다.
+        val side = LocalGamesRummyLandscapeSide.current
+        LaunchedEffect(side) { if (side != null) model.landscapeSideChanged(side) }
         // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거두고 손을 뗄 때까지 무시한다 — 낡은 id 로 놓지 않게. 같은 차례에 seq 만 오른 것(남의 기권)은 안 거둔다.
         LaunchedEffect(match.seq) { model.boardChanged(rummy.editor, rummy.match?.let(RummyEditorKey::of)) }
         if (GamesRummyMatchLayout.canStand(size)) {

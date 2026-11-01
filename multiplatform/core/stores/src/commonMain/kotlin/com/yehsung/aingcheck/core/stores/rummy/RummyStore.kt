@@ -343,6 +343,20 @@ class RummyStore(
     /** 하트비트 주 스위치(시험은 끄고 `heartbeatTick` 을 직접 밟는다). */
     var heartbeatEnabled: Boolean = true
 
+    /**
+     * 방([RummyPhase.room])의 하트비트를 쉰다 — 폰이 쓴다(GamesStore · 맥 · Windows 는 안 쓴다, iOS dba0c647): 방 화면이 안 보이는 동안 자리가 살아 있으면 모르는 사이 시작돼 판돈이 걷힌다.
+     * 쉬면 서버가 시작 검사에서 90초 넘게 안 보인 자리를 `dropped` 로 뺀다. **판(playing)은 그대로 돈다** — 끊기면 90초 규칙으로 기권이다.
+     */
+    var roomHeartbeatHeld: Boolean = false
+        set(value) {
+            if (field == value) return
+            field = value
+            updateHeartbeat()
+            // 다시 보기 시작했다 — 주기(10초)를 기다리면 그 사이 시작 검사에서 빠질 수 있다.
+            val beating = heartbeatMatchID
+            if (!value && phase == RummyPhase.room && beating != null) scope.launch { heartbeatTick(beating) }
+        }
+
     /** 하트비트 주기(초). */
     var heartbeatSeconds: Double = heartbeatDefaultSeconds
 

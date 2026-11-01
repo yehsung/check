@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchModel.swift:1 @ ios-1017-cube 61d75d8c · 설계서 §10
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchModel.swift:1 @ ios-1017-cube d5c9eeff · 설계서 §10
 //
 // 판 화면의 손 상태 한 곳. 화면 전체 입력 층 하나가 사건을 여기로 넘기고, 잎은 **자기가 쓰는 값만** 읽는다 — 그래서 손이 움직여도 판이 다시 그려지지 않는다:
 //   · 손가락 자리([drag])는 떠 있는 타일 그리기만 읽는다(사건마다 바뀐다).
@@ -6,7 +6,7 @@
 //   · 판 층의 입력([draggingIDs] · [lift] · [movingSet] · [renderScale])은 끌기가 시작 · 끝날 때만 바뀐다.
 // 판 변환을 굳힌다: 누르는 동안 · 끄는 동안 칸 크기 변화를 미루고 받침대 줄 수를 묶는다([frozenRows]). 손 아래 판이 움직이면 안 된다(맥 교훈). 가장자리 자동 밀기만 예외다 — 사람이 민 것이다.
 // 놓은 뒤에도 같다: 차례 안에서는 줄 수가 줄지 않는다([rackRows]) — 셋째 줄 마지막 타일을 놓는 순간 받침대 타일이 통째로 커지면 다음 타일을 잡을 자리가 어긋난다.
-// 기기가 돌면(판 화면 크기가 바뀌면) 든 것을 거둔다([screenSizeChanged]) — 쥔 자리가 새 칸에서 다른 것이 된다.
+// 기기가 돌면 든 것을 거둔다 — 쥔 자리가 새 칸에서 다른 것이 된다. 판 화면 크기가 바뀌면 [screenSizeChanged], 왼쪽 가로 ↔ 오른쪽 가로(크기가 같다)는 [landscapeSideChanged] 다.
 // 시간은 밖에서 민다: 0.5초는 입력 층의 시간 제한, 자동 밀기는 [isEdgePanning] 이 참인 동안만 도는 프레임 잎이 [edgeTick] 을 부른다. 이 값들은 그 효과의 열쇠를 스스로 바꾸지 않는다(맥 0.3.69 재생성 고리 금지).
 package com.yehsung.aingcheck.ui.games.rummy
 
@@ -26,8 +26,11 @@ import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.moveSet
 import com.yehsung.aingcheck.core.stores.rummy.moveTiles
 
+/** 기기 가로 방향 — 왼쪽 ↔ 오른쪽은 화면 크기가 같아 크기 변화로 안 잡힌다. */
+enum class GamesRummyLandscapeSide { left, right }
+
 @Stable
-class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 248.0)) {
+class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(544.0, 245.0)) {
     var viewport: GamesRummyViewport by mutableStateOf(GamesRummyViewport.of(tableSize))
         private set
 
@@ -89,6 +92,15 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
     private var pendingTableSize: RummyCanvasSize? = null
     private var pinchBase: Double? = null
 
+    /** 마지막으로 본 기기 가로 방향. */
+    private var landscapeSide: GamesRummyLandscapeSide? = null
+
+    /** 이번 손이 처음 닿은 자리(판 안에서 출발했는지 본다). */
+    private var touchStart: RummyCanvasPoint? = null
+
+    /** 이번 끌기에서 가장자리 자동 밀기가 켜졌는가([edgeTick]). */
+    private var edgeArmed: Boolean = false
+
     /** 조립 단계가 재료를 만들 때 — 보기를 구독하지 않고 읽는다(구독하면 밀 때마다 화면 전체가 다시 돈다). 사건 때는 모델이 지금 보기로 채운다. */
     fun viewportUntracked(): GamesRummyViewport = Snapshot.withoutReadObservation { viewport }
 
@@ -111,6 +123,18 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
         val before = screenSize
         screenSize = size
         if (before == null || before == size) return
+        abandonHold()
+    }
+
+    /** 기기가 왼쪽 가로 ↔ 오른쪽 가로로 뒤집혔다. 크기가 같아 [screenSizeChanged] 가 안 깨어나니 따로 받는다 — 손 자리가 뒤집힌 좌표로 튀어 엉뚱한 자리에 놓이면 안 된다. 처음 재는 것은 변화가 아니다. */
+    fun landscapeSideChanged(side: GamesRummyLandscapeSide) {
+        val before = landscapeSide
+        landscapeSide = side
+        if (before == null || before == side) return
+        abandonHold()
+    }
+
+    private fun abandonHold() {
         if (!machine.isIdle) {
             machine.abandon()
             tearDown()
@@ -122,6 +146,7 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
 
     fun touchDown(point: RummyCanvasPoint, base: GamesRummyTouchContext) {
         currentContext = base
+        touchStart = point
         recentDropIDs = emptySet()
         recentDropOrigins = emptyMap()
         machine.down(point, base.with(viewport))
@@ -140,6 +165,7 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
                 draggingIDs = moved?.ids?.toSet() ?: emptySet()
                 val kind = moved?.kind
                 if (kind is GamesRummyDrag.Kind.WholeMeld) movingSet = kind.set
+                edgeArmed = touchStart?.let(base.layout.table::contains) == true
                 refresh(context)
             }
             GamesRummyTouchMachine.Effect.DragMoved -> refresh(context)
@@ -218,7 +244,8 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
     private fun refresh(context: GamesRummyTouchContext) {
         val moved = machine.drag ?: return
         drag = moved
-        isEdgePanning = context.layout.table.contains(moved.pointer) && viewport.edgeMoves(context.inTable(moved.pointer))
+        noteEdgeArming(moved, context.layout)
+        isEdgePanning = edgeArmed && context.layout.table.contains(moved.pointer) && viewport.edgeMoves(context.inTable(moved.pointer))
         val next = GamesRummyDropPlanner.target(moved, context)
         if (next == target) return
         target = next
@@ -236,11 +263,19 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
         liftSerial += 1
     }
 
-    /** 끄는 중 기준점이 판 가장자리 28 안이면 민다. 보기가 바뀌었으니 놓을 자리를 다시 묻는다. */
+    /**
+     * 끄는 중 기준점이 판 가장자리 28 안이면 민다. 보기가 바뀌었으니 놓을 자리를 다시 묻는다.
+     * 받침대에서 판으로 올라오는 길목이 곧 아래쪽 구역이다 — 지나가기만 해도 손 아래 판이 밀리면 안 되므로 [edgeArmed] 가 켜진 뒤에만 민다.
+     */
     fun edgeTick(deltaSeconds: Double) {
         val base = currentContext ?: return
         val moved = machine.drag ?: return
         if (!base.layout.table.contains(moved.pointer)) return
+        noteEdgeArming(moved, base.layout)
+        if (!edgeArmed) {
+            isEdgePanning = false
+            return
+        }
         val next = viewport.edgePanned(base.inTable(moved.pointer), deltaSeconds)
         if (next == viewport) {
             isEdgePanning = false
@@ -248,6 +283,18 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 2
         }
         viewport = next
         refresh(base.with(next))
+    }
+
+    /** 판에서 출발한 끌기는 처음부터 켜져 있다. 판 밖에서 출발했거나 판 아래(상태 줄 · 받침대)로 나갔다 오면, 기준점이 구역 안쪽 판에 한 번 들어온 뒤에 켜진다. */
+    private fun noteEdgeArming(moved: GamesRummyDrag, layout: GamesRummyMatchLayout) {
+        val table = layout.table
+        val zone = GamesRummyViewport.edgeZone
+        val at = moved.pointer
+        if (at.y >= table.maxY) {
+            edgeArmed = false
+        } else if (at.x > table.x + zone && at.x < table.maxX - zone && at.y > table.y + zone && at.y < table.maxY - zone) {
+            edgeArmed = true
+        }
     }
 
     // MARK: 보기

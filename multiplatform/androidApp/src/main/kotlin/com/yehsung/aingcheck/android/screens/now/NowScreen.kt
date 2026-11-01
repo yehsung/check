@@ -1,5 +1,6 @@
 // 원본: Sources/CheckMobileKit/Now/NowTab.swift @ 3bd04bd (NowTab · NowStatusSection · NowWorkControlRow · NowStatusCard · NowWorkingSection · NowWorkingRow)
 // 원본: Sources/CheckMobileKit/Components/InsetGroup.swift @ 3bd04bd (ProgressBar — 막대)
+// 원본: Sources/CheckMobileKit/Now/NowTab.swift @ 23b91326 (NowSectionHeader · NowTeamRosterLink · NowWorkingSection · NowWorkingGroup — [전체 보기] 입구)
 //
 // 지금 탭(SPEC-ios §3.2 · 재디자인 B 01·02): 큰 제목 + 부제(날짜 · 팀) · 내 상태 카드(착용 캐릭터 초상 · 큰 타이머 · 이번 주 막대) ·
 // [근무 시작/종료] · 오늘 할 일 · 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기). 무소속이면 팀 합류 카드가 그 자리에 선다.
@@ -14,6 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -43,7 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -341,9 +344,6 @@ object NowWorkLines {
         }
     }
 
-    /** [팀 전체 보기]: 소속을 받은 사람에게만. 무소속 · 소속을 아직 모를 때는 갈 곳이 없다. */
-    fun showsTeamRosterEntry(hasMembership: Boolean, hasNoTeam: Boolean): Boolean = hasMembership && !hasNoTeam
-
     /** 상태 카드 초상 기분(근무 중 · 끊김 · 안 함). */
     fun mood(card: NowMyCard): CharacterMood = if (card.isWorking) (if (card.isStale) CharacterMood.Lost else CharacterMood.Working) else CharacterMood.Off
 
@@ -408,7 +408,8 @@ private fun StatusCard(card: NowMyCard, characterID: String?, onEditGoal: () -> 
 internal fun ProgressBar(fraction: Double, fill: androidx.compose.ui.graphics.Color, height: Dp = 6.dp) {
     val clamped = fraction.coerceIn(0.0, 1.0).toFloat()
     Box(Modifier.fillMaxWidth().height(height).background(AingTheme.colors.fill, CircleShape)) {
-        if (clamped > 0f) Box(Modifier.fillMaxHeight().fillMaxWidth(clamped).background(fill, CircleShape))
+        // 조금이라도 찼으면 점 하나는 보인다(iOS `max(height, 폭 * fraction)`).
+        if (clamped > 0f) Box(Modifier.widthIn(min = height).fillMaxHeight().fillMaxWidth(clamped).background(fill, CircleShape))
     }
 }
 
@@ -421,7 +422,14 @@ private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftD
     val teammates = people.filter { it.isTeammate }
     val others = people.filter { !it.isTeammate }
     val state = store.workingLoadState
-    SectionHeader(NowText.workingTitle(null), if (state == NowLoadState.loaded) NowText.peopleCount(people.size) else null)
+    // [전체 보기]는 "우리 팀" 줄에 있다. 근무 중인 팀원이 없으면 그 줄이 없으므로 절 머리로 옮긴다 — 줄을 하나 더 세우면 첫 화면이 길어지고,
+    // 머리의 사람 수는 "다른 팀" 줄(또는 "근무 중인 사람이 없어요")이 이미 말하고 있어 잃는 것이 없다.
+    val showRoster: (() -> Unit)? = if (store.showsTeamRosterEntry) onOpenTeamRoster else null
+    NowSectionHeader(
+        title = NowText.workingTitle(null),
+        trailing = if (state == NowLoadState.loaded) NowText.peopleCount(people.size) else null,
+        onShowTeamRoster = if (teammates.isEmpty()) showRoster else null,
+    )
     Column(Modifier.padding(horizontal = AingDimens.sideMargin), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (state != NowLoadState.loaded || people.isEmpty()) {
             Card {
@@ -433,13 +441,15 @@ private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftD
                 }
             }
         } else if (teammates.isNotEmpty() && others.isNotEmpty()) {
-            WorkingGroup(NowText.ourTeam, teammates, now, store, onTalk)
+            WorkingGroup(NowText.ourTeam, teammates, now, store, onTalk, onShowRoster = showRoster)
             WorkingGroup(NowText.otherTeams, others, now, store, onTalk)
         } else {
-            WorkingGroup(if (teammates.isEmpty()) NowText.otherTeams else NowText.ourTeam, people, now, store, onTalk)
+            // 다른 팀 묶음에는 [전체 보기]를 붙이지 않는다 — 우리 팀 명단으로 가는 입구다.
+            WorkingGroup(
+                if (teammates.isEmpty()) NowText.otherTeams else NowText.ourTeam, people, now, store, onTalk,
+                onShowRoster = if (teammates.isEmpty()) null else showRoster,
+            )
         }
-        // 쉬는 팀원을 보러 가는 입구라 우리 팀에 근무 중인 사람이 없어도 선다. 소속이 있을 때만.
-        if (NowWorkLines.showsTeamRosterEntry(store.membership != null, store.hasNoTeam)) TeamRosterEntryRow(onOpenTeamRoster)
         // 폰 근무 문이 이어졌고 서버에 함수가 있을 때만 "이 탭 맨 위 버튼으로" 를 말한다.
         Text(
             if (phoneWorkWired && store.phoneWorkAvailable) NowText.workingFooter else NowText.workingFooterMacOnly,
@@ -448,30 +458,77 @@ private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftD
     }
 }
 
-/** [팀 전체 보기] 한 줄 — 누르면 명단 화면을 쌓는다. */
+/** 절 머리. [onShowTeamRoster] 가 있으면 오른쪽 글자 대신 [우리 팀 전체 보기] 링크를 둔다. 큰 글자에서 한 줄에 안 들어가면 링크가 아래 줄로 내려간다(제목이 꺾이지 않게). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TeamRosterEntryRow(onOpen: () -> Unit) {
-    val colors = AingTheme.colors
-    Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(AingDimens.groupRadius)).background(colors.surface)
-            .clickable(role = Role.Button, onClick = onOpen).heightIn(min = 48.dp).padding(horizontal = 16.dp, vertical = 8.dp).testTag(NowTags.TEAM_ROSTER_ENTRY),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        AingIcon(sf("person.2", AppIcon.Group), null, size = 22.dp, tint = colors.label2)
-        Text(NowText.teamRosterEntry, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label, modifier = Modifier.weight(1f))
-        AingIcon(sf("chevron.right", AppIcon.ChevronRight), null, size = 16.dp, tint = colors.label3)
+private fun NowSectionHeader(title: String, trailing: String?, onShowTeamRoster: (() -> Unit)?) {
+    if (onShowTeamRoster == null) {
+        SectionHeader(title, trailing)
+    } else {
+        FlowRow(
+            Modifier.fillMaxWidth().padding(start = AingDimens.titleMargin, end = AingDimens.titleMargin, top = 16.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            itemVerticalAlignment = Alignment.Bottom,
+        ) {
+            Text(title, style = MaterialTheme.typography.titleLarge, color = AingTheme.colors.label, maxLines = 1, modifier = Modifier.semantics { heading() })
+            NowTeamRosterLink(NowText.teamRosterSeeAllInHeader, onShowTeamRoster)
+        }
     }
 }
 
+/**
+ * [전체 보기] 링크. 누르는 칸은 44 이지만 **자리는 글자 높이만큼만 차지한다** — 지금 탭 첫 화면 길이를 늘리지 않는 것이 이 링크의 조건이다(iOS 음수 여백 -14).
+ * 큰 글자에서는 겹침을 풀어 준다 — 글자가 44 를 넘으면 위아래 줄과 겹친다. 톡백은 어느 자리에서든 "우리 팀 전체 보기"로 읽는다.
+ */
 @Composable
-private fun WorkingGroup(label: String, people: List<NowWorkingPerson>, now: SwiftDate, store: NowStore, onTalk: (String) -> Unit) {
+private fun NowTeamRosterLink(title: String, onClick: () -> Unit) {
     val colors = AingTheme.colors
+    val overlap = if (LocalDensity.current.fontScale >= TeamRosterLayout.STACK_FONT_SCALE) 0.dp else 14.dp
+    Row(
+        Modifier
+            .testTag(NowTags.TEAM_ROSTER_ENTRY)
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                val inset = overlap.roundToPx()
+                layout(placeable.width, (placeable.height - inset * 2).coerceAtLeast(0)) { placeable.place(0, -inset) }
+            }
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = NowText.teamRosterSeeAllInHeader }
+            .heightIn(min = 44.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(title, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = colors.accent, maxLines = 1)
+        AingIcon(sf("chevron.right", AppIcon.ChevronRight), null, size = 12.dp, tint = colors.accent)
+    }
+}
+
+/** [onShowRoster] 는 우리 팀 묶음만. 그때 사람 수는 이름 옆으로 오고 오른쪽 끝이 [전체 보기]다(큰 글자에서 한 줄에 안 들어가면 링크가 아래 줄로). */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WorkingGroup(label: String, people: List<NowWorkingPerson>, now: SwiftDate, store: NowStore, onTalk: (String) -> Unit, onShowRoster: (() -> Unit)? = null) {
+    val colors = AingTheme.colors
+    val headerStyle = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
     Column(Modifier.fillMaxWidth().background(colors.surface, RoundedCornerShape(AingDimens.groupRadius))) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
-            Text(label, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = colors.label2,
-                modifier = Modifier.weight(1f).semantics { heading() })
-            Text(NowText.peopleCount(people.size), style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = colors.label2)
+        if (onShowRoster != null) {
+            FlowRow(
+                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                itemVerticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(label, style = headerStyle, color = colors.label2, modifier = Modifier.semantics { heading() })
+                    Text(NowText.peopleCount(people.size), style = headerStyle, color = colors.label2)
+                }
+                NowTeamRosterLink(NowText.teamRosterSeeAll, onShowRoster)
+            }
+        } else {
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp)) {
+                Text(label, style = headerStyle, color = colors.label2, modifier = Modifier.weight(1f).semantics { heading() })
+                Text(NowText.peopleCount(people.size), style = headerStyle, color = colors.label2)
+            }
         }
         people.forEachIndexed { index, person ->
             WorkingRow(person, now) { onTalk(person.id) }

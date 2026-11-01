@@ -229,6 +229,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         links.routeResolver = { target -> openRoute(target) }
         now.phoneWork = work
         now.widgetSink = widgetSink
+        // 방금 차단한 사람의 상태메시지가 옛 사람 목록으로 명단에 남지 않게(Swift `NowStore.teamRoster` 의 links.messages).
+        now.hiddenPeerIDs = { messages.hiddenBlockedPeerIDs }
         messages.nowStore = now
         messages.router = router
         // 메시지 탭이 실시간 신호를 받는 자리(Swift 는 MessagesStore.init 이 등록했다 — Kotlin 은 조립이 잇는다). `.drain` 은 take_pokes 가 아니라

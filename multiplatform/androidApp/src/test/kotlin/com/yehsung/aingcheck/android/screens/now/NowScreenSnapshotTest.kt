@@ -13,11 +13,18 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.filterToOne
@@ -136,8 +143,17 @@ class NowScreenSnapshotTest {
     @Volatile
     private var frozen = false
 
-    /** 명단 장면: 데모 팀원 하나를 쉬는 사람으로 바꾼다(데모 픽스처는 전원 근무 중이라 '근무종료' 칩 · 쉬는 줄이 안 서는 까닭). */
+    /** 명단 장면: 데모 팀원 하나를 쉬는 사람으로 바꾼다(근무 쪽에 있던 팀원이 쉬는 묶음으로 옮겨 가는 것을 잰다). */
     private var offWorkMate: String? = null
+
+    /** 입구 장면: 팀 전원을 쉬는 사람으로(iOS 데모 `now/team/entry-off`). */
+    private var allOffWork = false
+
+    /** 명단 상태 장면: 팀 상태 응답을 통째로 바꾼다(iOS 데모 `now/team/empty` · `failed`). */
+    private var statusOverride: Pair<Int, String>? = null
+
+    /** 무소속 장면(iOS 데모 `now/team/noteam`). */
+    private var teamless = false
 
     private val fixtures = File(repoRoot, "Sources/CheckMobileKit/Demo/Fixtures").walkTopDown().filter { it.isFile && it.name.endsWith(".json") }.map { f ->
         val rel = f.relativeTo(File(repoRoot, "Sources/CheckMobileKit/Demo/Fixtures")).invariantSeparatorsPath
@@ -165,6 +181,8 @@ class NowScreenSnapshotTest {
             seg.size >= 3 && seg[0] == "auth" -> (listOf("auth") + seg.drop(2) + m).joinToString(".")
             else -> "unknown.$m"
         }
+        if (key == "rest.work_statuses.get") statusOverride?.let { return it }
+        if (key == "rest.memberships.get" && teamless) return 200 to "[]"
         val hay = "$body&$query"
         val hit = fixtures.filter { it.key == key && (it.scenario == null || it.scenario == "now") && (it.needle == null || hay.contains(it.needle)) }
             .sortedWith(compareByDescending<Fixture> { if (it.scenario != null) 1 else 0 }.thenByDescending { it.needle?.length ?: -1 }).firstOrNull()
@@ -172,10 +190,10 @@ class NowScreenSnapshotTest {
         val parsed = runCatching { Json.parseToJsonElement(hit.text) }.getOrNull()
         if (parsed is JsonObject && parsed["__status"] != null) return (parsed["__status"]!!.jsonPrimitive.intOrNull ?: 500) to (parsed["__body"]?.toString() ?: "{}")
         val mate = offWorkMate
-        if (key == "rest.work_statuses.get" && mate != null) {
+        if (key == "rest.work_statuses.get" && (mate != null || allOffWork)) {
             val rows = requireNotNull(parsed as? JsonArray).map { row ->
                 val o = row.jsonObject
-                if (o["user_id"]?.jsonPrimitive?.content == mate) JsonObject(o + ("status" to JsonPrimitive("off_work"))) else row
+                if (allOffWork || o["user_id"]?.jsonPrimitive?.content == mate) JsonObject(o + ("status" to JsonPrimitive("off_work"))) else row
             }
             return 200 to JsonArray(rows).toString()
         }
@@ -362,8 +380,8 @@ class NowScreenSnapshotTest {
     private fun checkRoster(name: String, dark: Boolean) {
         offWorkMate = ROSTER_OFF_MATE
         load()
-        val rows = store.teamRoster(clock.now())
-        assertEquals("쉬는 사람도 명단에 선다", com.yehsung.aingcheck.core.wire.models.MemberPresence.OffWork, rows.first { it.id == ROSTER_OFF_MATE }.presence)
+        val roster = requireNotNull(store.teamRoster(clock.now()))
+        assertTrue("쉬는 사람도 명단에 선다", roster.resting.any { it.id == ROSTER_OFF_MATE })
         assertFalse("지금 근무 중 절은 쉬는 사람을 뺀다", store.workingPeople(clock.now()).any { it.id == ROSTER_OFF_MATE })
         val scene: @Composable () -> Unit = { Frame(dark) { TeamRosterScreen(store, onBack = {}) } }
         val noFaces: @Composable () -> Unit = {
@@ -401,7 +419,7 @@ class NowScreenSnapshotTest {
 
     @Test fun teamRosterPhoneDark() = checkRoster("team-roster-phone-dark", dark = true)
 
-    /** 부르는 자리: 지금 탭 [팀 전체 보기] → NavGraph 목적지 → 명단 줄 · 뒤로. 스토어만 있고 화면에 안 붙는 일을 막는다. */
+    /** 부르는 자리: 지금 탭 [전체 보기] → NavGraph 목적지 → 명단 줄 · 뒤로. 스토어만 있고 화면에 안 붙는 일을 막는다. 빠르게 두 번 눌러도 한 장만 쌓여 뒤로 한 번에 돌아온다. */
     @OptIn(ExperimentalTestApi::class)
     @Test
     fun teamRosterOpensFromNowTabThroughNavGraph() {
@@ -415,18 +433,115 @@ class NowScreenSnapshotTest {
             waitForIdle()
             onAllNodes(hasScrollAction()).filterToOne(hasAnyDescendant(hasTestTag(NowTags.TEAM_ROSTER_ENTRY))).performScrollToNode(hasTestTag(NowTags.TEAM_ROSTER_ENTRY))
             onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).assertIsDisplayed()
-            onNodeWithText(com.yehsung.aingcheck.core.stores.now.NowText.teamRosterEntry, useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithText(NowText.teamRosterSeeAll, useUnmergedTree = true).assertIsDisplayed()
             onNodeWithTag(TeamRosterTags.SCREEN).assertDoesNotExist()
-            onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).performClick()
+            onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).performTouchInput {
+                click()
+                advanceEventTime(50)
+                click()
+            }
             waitForIdle()
             onNodeWithTag(TeamRosterTags.SCREEN).assertExists()
-            onNodeWithTag(TeamRosterTags.row(ROSTER_OFF_MATE)).assertExists()
-            onNodeWithTag(TeamRosterTags.goal(ROSTER_OFF_MATE), useUnmergedTree = true).assertExists()
+            // 줄은 톡백에 한 덩이다 — 글자 노드가 없어 문장으로 잰다(막대 · 글자 모양은 골든이 본다).
+            onNodeWithTag(TeamRosterTags.row(ROSTER_OFF_MATE)).assert(hasContentDescription("쉬는 중", substring = true))
             assertEquals(true, nav.currentDestination?.hasRoute(Dest.TeamRoster::class))
             onNodeWithTag(TeamRosterTags.BACK).performClick()
             waitForIdle()
             onNodeWithTag(TeamRosterTags.SCREEN).assertDoesNotExist()
             assertEquals(true, nav.currentDestination?.hasRoute(Dest.NowHome::class))
+        }
+    }
+
+    /** 우리 팀에 근무 중인 사람이 없으면 입구가 절 머리로 옮겨 "우리 팀 전체 보기"라고 말한다. "다른 팀" 줄에는 붙지 않는다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun teamRosterEntryMovesToSectionHeaderWhenNoTeammateWorks() {
+        allOffWork = true
+        load()
+        assertTrue("장면: 근무 중인 팀원이 없다", store.workingPeople(clock.now()).none { it.isTeammate })
+        var opened = 0
+        runComposeUiTest {
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}, onOpenTeamRoster = { opened += 1 }) } }
+            waitForIdle()
+            onAllNodes(hasScrollAction()).filterToOne(hasAnyDescendant(hasTestTag(NowTags.TEAM_ROSTER_ENTRY))).performScrollToNode(hasTestTag(NowTags.TEAM_ROSTER_ENTRY))
+            onNodeWithText("우리 팀 전체 보기", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithText("전체 보기", useUnmergedTree = true).assertDoesNotExist()
+            onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).performClick()
+            waitForIdle()
+            assertEquals(1, opened)
+        }
+    }
+
+    /** 입구는 명단을 받았을 때만 — 무소속이면 지금 탭에 입구가 없고, 명단 화면은 무소속 안내를 말한다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun teamRosterNoTeamState() {
+        teamless = true
+        load()
+        assertTrue("장면: 무소속", store.hasNoTeam)
+        runComposeUiTest {
+            var showsRoster by mutableStateOf(false)
+            setContent {
+                Frame(false) {
+                    if (showsRoster) TeamRosterScreen(store, onBack = {})
+                    else NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {})
+                }
+            }
+            waitForIdle()
+            onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).assertDoesNotExist()
+            showsRoster = true
+            waitForIdle()
+            onNodeWithText("팀에 속해 있지 않아요").assertIsDisplayed()
+            onNodeWithText("지금 탭에서 팀 코드로 합류하거나 새 팀을 만들 수 있어요").assertIsDisplayed()
+        }
+    }
+
+    /** 팀원이 한 명도 없는 응답: 요약은 서고 빈 줄이 그 아래. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun teamRosterEmptyState() {
+        statusOverride = 200 to "[]"
+        load()
+        runComposeUiTest {
+            setContent { Frame(false) { TeamRosterScreen(store, onBack = {}) } }
+            waitForIdle()
+            onNodeWithText("아잉 데모팀 · 1인당 주 40시간").assertIsDisplayed()
+            onNodeWithText("아직 명단에 보일 팀원이 없어요").assertIsDisplayed()
+            onNodeWithText("근무 중").assertDoesNotExist()
+            onNodeWithText("쉬는 중").assertDoesNotExist()
+        }
+    }
+
+    /** 팀 상태를 한 번도 못 받았다: 빈 명단이라 말하지 않고 실패 줄과 [다시 시도] · 지금 탭에 입구가 없다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun teamRosterFailedState() {
+        statusOverride = 503 to """{"message":"upstream"}"""
+        load()
+        assertEquals(false, store.showsTeamRosterEntry)
+        runComposeUiTest {
+            setContent { Frame(false) { TeamRosterScreen(store, onBack = {}) } }
+            waitForIdle()
+            onNodeWithText("팀 명단을 불러오지 못했어요").assertIsDisplayed()
+            onNodeWithText("다시 시도").assertIsDisplayed()
+            onNodeWithText("아직 명단에 보일 팀원이 없어요").assertDoesNotExist()
+        }
+    }
+
+    /** 절 머리 · 사람 수 · 내 줄이 "나"를 말한다. 차단은 조립 시험(feature/phone)과 스토어 시험이 잰다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun teamRosterGroupsAndSpokenRows() {
+        offWorkMate = ROSTER_OFF_MATE
+        load()
+        val roster = requireNotNull(store.teamRoster(clock.now()))
+        runComposeUiTest {
+            setContent { Frame(false) { TeamRosterScreen(store, onBack = {}) } }
+            waitForIdle()
+            onNodeWithText("근무 중").assertIsDisplayed()
+            onNodeWithText("${roster.working.size}명").assertExists()
+            val mine = roster.working.first { it.isMe }
+            onNodeWithTag(TeamRosterTags.row(mine.id)).assert(hasContentDescription("${mine.name}, 나, 근무 중", substring = true))
         }
     }
 
@@ -436,7 +551,7 @@ class NowScreenSnapshotTest {
     fun createdTeamCardShowsTheCodeUntilConfirmed() {
         load()
         runComposeUiTest {
-            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}) } }
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
             waitForIdle()
             onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertDoesNotExist()
             runBlocking(dispatcher) { store.teamJoin.onTeamCreated!!.invoke("X7K2M9Q4") }

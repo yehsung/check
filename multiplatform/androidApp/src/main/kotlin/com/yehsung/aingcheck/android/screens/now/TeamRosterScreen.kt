@@ -1,11 +1,11 @@
-// 원본: Sources/check/CheckMenuView.swift:2069(TeamPanel — 머리 · 줄) · Sources/check/CheckComponents.swift:75(PresenceChip) · :210(TeamMemberRow — 얼굴 · 상세 · ✓ · 목표 막대)
+// 원본: Sources/CheckMobileKit/Now/NowTeamRosterScreen.swift:11 @ 23b91326 (NowTeamRosterScreen) · :102 (NowTeamRosterRowView)
 //
-// 우리 팀 전체 명단: 쉬는 팀원까지 줄마다 얼굴 · 상태 · '주 N시간' · 목표 막대. 값과 정렬은 core 쪽 [NowTeamRoster] 다 — 이 화면은 그리기만 한다.
-// 맥 줄의 내 사진 바꾸기(마우스 올림 카메라)는 옮기지 않았다 — 폰은 나 탭 프로필이 그 자리다.
+// 우리 팀 전체 명단(지금 탭 [전체 보기] → push). 값과 정렬은 core 쪽 [NowTeamRosterRules] 다 — 이 화면은 그리기만 한다. 정본은 iOS 다(양쪽 폰이 같아야 한다).
+// 값은 지금 탭이 받아 둔 것을 읽는다. 이 화면 때문에 도는 주기 조회는 없다 — 1분마다 다시 그리는 것은 폰이 세는 시간뿐이고, 서버는 기존 60초 주기와 당겨서 새로고침만 부른다.
+// 읽기 전용이다 — 맥 팀 카드처럼 말 거는 입구가 없다(차단한 사람의 얼굴을 눌러 대화가 열리는 길도 그래서 없다).
 package com.yehsung.aingcheck.android.screens.now
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,136 +16,242 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.stores.messages.MobileRelativeTime
+import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
 import com.yehsung.aingcheck.core.stores.now.NowLoadState
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTeamRoster
 import com.yehsung.aingcheck.core.stores.now.NowTeamRosterRow
 import com.yehsung.aingcheck.core.stores.now.NowText
-import com.yehsung.aingcheck.core.wire.models.MemberPresence
+import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
+import com.yehsung.aingcheck.ui.screens.session.kit.EmptyStateView
+import com.yehsung.aingcheck.ui.screens.session.kit.InlineNotice
 import com.yehsung.aingcheck.ui.screens.session.kit.LoadFailureRow
 import com.yehsung.aingcheck.ui.screens.session.kit.LoadingRow
+import com.yehsung.aingcheck.ui.screens.session.kit.NoticeKind
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonName
 import com.yehsung.aingcheck.ui.screens.session.kit.READABLE_WIDTH
+import com.yehsung.aingcheck.ui.screens.session.kit.SectionHeader
 import com.yehsung.aingcheck.ui.screens.session.kit.rememberNow
 import com.yehsung.aingcheck.ui.screens.session.kit.sf
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import kotlinx.coroutines.launch
 
 object TeamRosterTags {
     const val SCREEN = "team-roster-screen"
     const val BACK = "team-roster-back"
     fun row(id: String): String = "team-roster-row-$id"
-    fun goal(id: String): String = "team-roster-goal-$id"
 }
 
+object TeamRosterLayout {
+    /** 이 글꼴 배율부터 줄을 쌓는다(iOS `isAccessibilitySize` 자리 — 다른 화면의 쌓는 기준과 같은 값). */
+    const val STACK_FONT_SCALE = 1.3f
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TeamRosterScreen(store: NowStore, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
-    LaunchedEffect(store) { store.tabDidAppear() }
-    val now = rememberNow(store.context.clock, everySeconds = 1)
-    val rows = store.teamRoster(now)
-    Box(modifier.fillMaxSize().background(colors.background).testTag(TeamRosterTags.SCREEN), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = READABLE_WIDTH).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = AingDimens.space8)) {
-            Row(Modifier.fillMaxWidth().padding(end = AingDimens.titleMargin, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack, modifier = Modifier.testTag(TeamRosterTags.BACK).semantics { contentDescription = "뒤로" }) {
-                    AingIcon(sf("chevron.left", AppIcon.ChevronLeft), null, size = 28.dp, tint = colors.accent)
+    val now = rememberNow(store.context.clock, everySeconds = 60)
+    val scope = rememberCoroutineScope()
+    var refreshing by remember { mutableStateOf(false) }
+    Column(modifier.fillMaxSize().background(colors.background).testTag(TeamRosterTags.SCREEN)) {
+        TeamRosterTopBar(onBack)
+        PullToRefreshBox(
+            isRefreshing = refreshing,
+            onRefresh = {
+                scope.launch {
+                    refreshing = true
+                    try { store.refreshNow() } finally { refreshing = false }
                 }
-                Text(store.membership?.teamName ?: NowText.teamRosterTitle, style = MaterialTheme.typography.titleLarge, color = colors.label, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).semantics { heading() })
-                if (rows.isNotEmpty()) {
-                    Text(NowTeamRoster.workingCountLabel(NowTeamRoster.workingCount(rows)), style = MaterialTheme.typography.bodyMedium, color = colors.label2)
-                }
-            }
-            Column(Modifier.padding(horizontal = AingDimens.sideMargin).fillMaxWidth().background(colors.surface, RoundedCornerShape(AingDimens.groupRadius))) {
-                if (rows.isEmpty()) {
-                    Box(Modifier.padding(16.dp)) {
-                        when (store.teamLoadState) {
-                            NowLoadState.loading -> LoadingRow()
-                            NowLoadState.failed -> LoadFailureRow(NowText.teamRosterUnavailable, store.isRefreshing, retry = { store.refresh() })
-                            NowLoadState.loaded -> Text(NowText.teamRosterEmpty, style = MaterialTheme.typography.bodyMedium, color = colors.label2)
-                        }
-                    }
-                } else {
-                    rows.forEachIndexed { index, row ->
-                        TeamRosterRow(row)
-                        if (index < rows.size - 1) HorizontalDivider(Modifier.padding(start = 64.dp), thickness = AingDimens.hairline, color = colors.separator)
-                    }
+            },
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                // 내용이 짧아도(빈 화면 · 실패) 화면 전체에서 당겨지게 스크롤 칸이 높이를 다 쓴다.
+                Column(Modifier.widthIn(max = READABLE_WIDTH).fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = AingDimens.space8)) {
+                    TeamRosterBody(store, now)
                 }
             }
         }
     }
 }
 
-/** 한 줄: 얼굴 · 이름(+센터) · 상태메시지 · '주 N시간'(+✓) · 끊김 줄 · 상태 칩 / 글자 칸 밑에 목표 막대 + %. */
+/** 머리: 뒤로 · 가운데 "우리 팀"(팀 이름은 아래 요약 줄이 말한다). */
 @Composable
-private fun TeamRosterRow(row: NowTeamRosterRow) {
+private fun TeamRosterTopBar(onBack: () -> Unit) {
     val colors = AingTheme.colors
-    Column(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp, vertical = 10.dp).semantics(mergeDescendants = true) {}.testTag(TeamRosterTags.row(row.id)), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PersonAvatar(row.name, row.id, row.avatarURL?.absoluteString, 36.dp)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                PersonName(row.name, row.center)
-                row.statusMessage?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.semantics { contentDescription = "상태메시지 $it" })
-                }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(row.primaryDetail, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false))
-                    if (row.meetsWeeklyGoal) AingIcon(sf("checkmark", AppIcon.Check), NowText.goalMet, size = 12.dp, tint = colors.working)
-                }
-                row.secondaryDetail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.pending, maxLines = 1) }
-            }
-            PresenceChip(row.presence)
+    Box(Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 4.dp)) {
+        IconButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterStart).testTag(TeamRosterTags.BACK).semantics { contentDescription = "뒤로" }) {
+            AingIcon(sf("chevron.left", AppIcon.ChevronLeft), null, size = 26.dp, tint = colors.label)
         }
-        // 막대는 얼굴이 아니라 글자 칸 시작점부터 — "이 사람의 진행률"임을 자리로 말한다(맥 textColumnInset).
-        Row(Modifier.padding(start = 48.dp).testTag(TeamRosterTags.goal(row.id)), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(Modifier.weight(1f)) { ProgressBar(row.goalFraction, if (row.goalFraction >= 1.0) colors.working else colors.accentFill, height = 4.dp) }
-            // 칸 폭을 잡아 줄마다 막대 끝이 같은 자리에 선다(세 자리 100% 까지).
-            Text("${row.goalPercent}%", style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.widthIn(min = 36.dp))
+        Text(
+            NowText.ourTeam,
+            style = MaterialTheme.typography.titleMedium,
+            color = colors.label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.align(Alignment.Center).padding(horizontal = 52.dp).semantics { heading() },
+        )
+    }
+}
+
+@Composable
+private fun TeamRosterBody(store: NowStore, now: SwiftDate) {
+    if (store.hasNoTeam) {
+        EmptyStateView(sf("person.2", AppIcon.Group), NowText.noTeamTitle, NowText.teamRosterNoTeamBody, modifier = Modifier.padding(horizontal = AingDimens.sideMargin))
+    } else {
+        when (store.teamLoadState) {
+            NowLoadState.loading -> TeamRosterCard(Modifier.padding(top = 8.dp)) { LoadingRow() }
+            NowLoadState.failed -> TeamRosterCard(Modifier.padding(top = 8.dp)) {
+                LoadFailureRow(NowText.teamRosterUnavailable, store.isRefreshing, retry = { store.refresh() })
+            }
+            NowLoadState.loaded -> TeamRosterLoaded(store, now)
         }
     }
 }
 
-/** 맥 `PresenceChip`: 근무 = 초록 채움 · 끊김 = 앰버 채움 · 종료 = 테두리만. */
 @Composable
-private fun PresenceChip(presence: MemberPresence) {
+private fun TeamRosterLoaded(store: NowStore, now: SwiftDate) {
     val colors = AingTheme.colors
-    val fill: Color? = when (presence) {
-        MemberPresence.ActiveWorking -> colors.working
-        is MemberPresence.StaleWorking -> colors.pending
-        MemberPresence.OffWork -> null
-    }
-    val shape = CircleShape
-    val base = if (fill != null) Modifier.background(fill, shape) else Modifier.border(1.dp, colors.separator, shape)
+    // 받아 둔 명단 위로 새로고침이 실패했다 — 값은 두고, 낡았을 수 있다는 것만 말한다(지금 탭과 같은 띠).
+    store.notice?.let { InlineNotice(it, NoticeKind.Warning, Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 4.dp)) }
     Text(
-        NowTeamRoster.presenceLabel(presence),
-        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-        color = if (fill != null) colors.onAccentFill else colors.label2,
-        maxLines = 1,
-        modifier = base.padding(horizontal = 9.dp, vertical = 4.dp),
+        NowText.teamRosterSummary(store.membership?.teamName, store.goalHours),
+        style = MaterialTheme.typography.bodyMedium,
+        color = colors.label2,
+        modifier = Modifier.padding(start = AingDimens.titleMargin, end = AingDimens.titleMargin, top = 12.dp, bottom = 8.dp),
     )
+    val roster = store.teamRoster(now) ?: NowTeamRoster(emptyList(), emptyList())
+    if (roster.isEmpty) {
+        TeamRosterCard(Modifier.padding(top = 24.dp)) {
+            Text(NowText.teamRosterEmpty, style = MaterialTheme.typography.bodyMedium, color = colors.label2)
+        }
+    } else {
+        TeamRosterGroup(NowText.teamRosterWorking, roster.working, now)
+        TeamRosterGroup(NowText.teamRosterResting, roster.resting, now)
+    }
+}
+
+/** 한 칸짜리 카드(불러오는 중 · 실패 · 빈 명단). */
+@Composable
+private fun TeamRosterCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    Box(
+        modifier.padding(horizontal = AingDimens.sideMargin).fillMaxWidth()
+            .background(AingTheme.colors.surface, RoundedCornerShape(AingDimens.groupRadius)).padding(horizontal = 16.dp, vertical = 10.dp),
+    ) { content() }
+}
+
+/** 한 묶음(절 머리 "근무 중 · 4명" + 카드 한 장). 비었으면 머리도 없다. */
+@Composable
+private fun TeamRosterGroup(title: String, rows: List<NowTeamRosterRow>, now: SwiftDate) {
+    if (rows.isEmpty()) return
+    val colors = AingTheme.colors
+    SectionHeader(title, NowText.peopleCount(rows.size))
+    Column(Modifier.padding(horizontal = AingDimens.sideMargin).fillMaxWidth().background(colors.surface, RoundedCornerShape(AingDimens.groupRadius))) {
+        rows.forEachIndexed { index, row ->
+            key(row.id) {
+                TeamRosterRow(row, now)
+                if (index < rows.size - 1) HorizontalDivider(Modifier.padding(start = 64.dp), thickness = AingDimens.hairline, color = colors.separator)
+            }
+        }
+    }
+}
+
+/**
+ * 명단 한 줄: 얼굴(근무 초록 · 끊김 앰버 · 쉬면 점 없음) · 이름 뒤 센터 · '나' · 오른쪽 주간 누적 / 상태메시지 · 경과(또는 끊김) / 목표 막대.
+ * 큰 글자에서는 얼굴 옆 좁은 칸에 두면 "주 13시간 10분"이 줄을 민다 — 첫 줄은 얼굴 · 이름, 나머지는 아랫줄에 카드 폭 전부를 쓴다.
+ * 톡백은 줄을 한 덩이로 [NowTeamRosterRow.spokenSummary] 만 읽는다(testTag 는 지워지지 않게 clearAndSetSemantics 왼쪽에 둔다).
+ */
+@Composable
+private fun TeamRosterRow(row: NowTeamRosterRow, now: SwiftDate) {
+    val stacked = LocalDensity.current.fontScale >= TeamRosterLayout.STACK_FONT_SCALE
+    val presence = when {
+        !row.isWorking -> PresenceStatus.off
+        row.isStale -> PresenceStatus.pending
+        else -> PresenceStatus.working
+    }
+    val rowModifier = Modifier.fillMaxWidth()
+        .testTag(TeamRosterTags.row(row.id))
+        .clearAndSetSemantics { contentDescription = row.spokenSummary(now) }
+        .padding(horizontal = 16.dp, vertical = 10.dp)
+    if (stacked) {
+        Column(rowModifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                PersonAvatar(row.name, row.id, row.avatarURL?.absoluteString, 36.dp, status = presence)
+                PersonName(row.name, row.center, Modifier.weight(1f), isMe = row.isMe, stacked = true)
+            }
+            TeamRosterWeekText(row, wraps = true)
+            TeamRosterDetails(row, now, statusLines = 3)
+        }
+    } else {
+        Row(rowModifier, verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            PersonAvatar(row.name, row.id, row.avatarURL?.absoluteString, 36.dp, status = presence)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PersonName(row.name, row.center, Modifier.weight(1f), isMe = row.isMe)
+                    TeamRosterWeekText(row, wraps = false)
+                }
+                TeamRosterDetails(row, now, statusLines = 1)
+            }
+        }
+    }
+}
+
+/** 오른쪽 "주 8시간 5분". 목표를 넘기면 초록. 보통 크기는 이름 옆에서 줄지 않고, 큰 글자는 제 줄이 있으니 꺾인다. */
+@Composable
+private fun TeamRosterWeekText(row: NowTeamRosterRow, wraps: Boolean) {
+    val colors = AingTheme.colors
+    Text(
+        NowText.teamRosterWeek(row.weekSeconds),
+        style = MaterialTheme.typography.bodyMedium.copy(fontFeatureSettings = "tnum"),
+        color = if (row.isGoalMet) colors.working else colors.label,
+        maxLines = if (wraps) Int.MAX_VALUE else 1,
+        softWrap = wraps,
+    )
+}
+
+/** 상태메시지 · 경과(또는 끊김) · 목표 막대. 시작 시각을 모르면 경과 줄이 없다(0 으로 지어내지 않는다). */
+@Composable
+private fun TeamRosterDetails(row: NowTeamRosterRow, now: SwiftDate, statusLines: Int) {
+    val colors = AingTheme.colors
+    row.statusMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = statusLines, overflow = TextOverflow.Ellipsis) }
+    val elapsed = row.elapsedSeconds
+    if (row.isStale) {
+        Text(NowText.staleLastSeen(row.lastSeenAt?.let { MobileRelativeTime.text(it, now) }), style = MaterialTheme.typography.bodySmall, color = colors.pending)
+    } else if (elapsed != null) {
+        Text(NowText.teamRosterElapsed(elapsed), style = MaterialTheme.typography.bodySmall.copy(fontFeatureSettings = "tnum"), color = colors.label2)
+    }
+    Box(Modifier.fillMaxWidth().padding(top = 2.dp)) {
+        ProgressBar(row.goalProgress, if (row.isGoalMet) colors.workingDot else colors.accent, height = 4.dp)
+    }
 }

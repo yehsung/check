@@ -20,64 +20,8 @@ import CheckCore
 // 프로그램이 내리는 닫기(`CheckRummyWindowController.close()` — 로그아웃 정리·계정 전환)는 `windowShouldClose` 를 거치지 않아
 // 여기 확인이 뜨지 않는다(그 길은 이미 위 표의 로그아웃 줄을 지났다).
 
-/// 창 닫기 판단.
-enum RummyCloseDecision: Equatable {
-    /// 그냥 닫는다(이탈할 판·방이 없다).
-    case close
-    /// 손님이 방에서 닫는다 — 묻지 않고 나간다.
-    case leaveRoom
-    /// 판 중 — "닫으면 기권돼요" 확인.
-    case confirmForfeit
-    /// 방장이 방에서 닫는다 — "방이 닫혀요" 확인.
-    case confirmCloseRoom
-}
-
-enum RummyExitPolicy {
-    /// 창 닫기(사람이 누른 닫기만). 순수 판단 — 시험이 표로 잰다. `engaged` = 이 기기가 그 판에 손댔다(§6).
-    static func closeDecision(phase: RummyStore.Phase, mySeatState: RummySeatState?, amHost: Bool,
-                              engaged: Bool = true) -> RummyCloseDecision {
-        guard engaged else { return .close }
-        switch phase {
-        case .playing: return mySeatState == .playing ? .confirmForfeit : .close
-        case .room: return amHost ? .confirmCloseRoom : .leaveRoom
-        case .lobby, .finished: return .close
-        }
-    }
-
-    /// 앱 종료·로그아웃 앞에 `rummy_leave` 를 보낼 판·방이 있는가. 이미 기권한 관전자는 보낼 것이 없다.
-    static func needsExitLeave(phase: RummyStore.Phase, mySeatState: RummySeatState?, engaged: Bool = true) -> Bool {
-        guard engaged else { return false }
-        switch phase {
-        case .room: return true
-        case .playing: return mySeatState == .playing
-        case .lobby, .finished: return false
-        }
-    }
-
-    @MainActor
-    static func mySeat(_ store: RummyStore) -> RummyMatchSeat? {
-        guard let match = store.match, let mine = match.mySeatNo else { return nil }
-        return match.seats?.first { $0.seatNo == mine }
-    }
-
-    /// 방장인가 — 판 state 의 방장 id 와 내 자리의 사람 id(화면 `RummyScene.amHost` 와 같은 갈래).
-    @MainActor
-    static func amHost(_ store: RummyStore) -> Bool {
-        guard let hostID = store.match?.hostId, let seat = mySeat(store) else { return false }
-        return seat.userId == hostID
-    }
-
-    @MainActor
-    static func closeDecision(for store: RummyStore) -> RummyCloseDecision {
-        closeDecision(phase: store.phase, mySeatState: mySeat(store)?.state, amHost: amHost(store),
-                      engaged: store.isEngagedInCurrentMatch)
-    }
-
-    @MainActor
-    static func needsExitLeave(_ store: RummyStore) -> Bool {
-        needsExitLeave(phase: store.phase, mySeatState: mySeat(store)?.state, engaged: store.isEngagedInCurrentMatch)
-    }
-
+/// 맥에만 있는 이탈 문 둘(앱 업데이트 · 앱 종료). 창 닫기·로그아웃 판단은 코어 `RummyExitPolicy` 한 곳이다(폰도 쓴다).
+extension RummyExitPolicy {
     /// 앱 업데이트([지금 업데이트]) 판단. 순수 판단 — 시험이 표로 잰다.
     static func updateDecision(phase: RummyStore.Phase, mySeatState: RummySeatState?, engaged: Bool) -> RummyUpdateDecision {
         guard engaged else { return .proceed }

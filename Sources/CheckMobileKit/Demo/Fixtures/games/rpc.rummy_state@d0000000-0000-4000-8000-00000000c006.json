@@ -1,0 +1,180 @@
+{
+  "__note": "받침대 넘침(내 차례 · 첫 등록 뒤): 받침대 33장이라 3줄이고 칸은 그대로 · 타일이 준다. 판 묶음 하나는 기본 보기의 아래 밖(▼ 배지). 3번 자리 기권 · 1번 자리 시간 초과 2번.",
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "state": {
+    "id": "d0000000-0000-4000-8000-00000000c006",
+    "status": "active",
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "stake": 5,
+    "is_public": false,
+    "max_seats": 4,
+    "seat_count": 4,
+    "seq": 47,
+    "server_now_ms": 1789621500000,
+    "grace_ms": 2000,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "end_reason": null,
+    "turn_seat_no": 0,
+    "turn_started_ms": 1789621482000,
+    "turn_deadline_ms": 1789621542000,
+    "consecutive_passes": 0,
+    "pool_count": 11,
+    "table": [
+      [
+        "B5",
+        "B6",
+        "B7"
+      ],
+      [
+        "A10",
+        "A11",
+        "A12"
+      ],
+      [
+        "C10",
+        "D10",
+        "B10"
+      ],
+      [
+        "D11",
+        "D12",
+        "D13"
+      ]
+    ],
+    "table_layout": [
+      [
+        40,
+        40
+      ],
+      [
+        260,
+        40
+      ],
+      [
+        40,
+        130
+      ],
+      [
+        260,
+        520
+      ]
+    ],
+    "draft": null,
+    "my_seat_no": 0,
+    "my_rack": [
+      "A1",
+      "A3",
+      "A5",
+      "A6",
+      "A9",
+      "A13",
+      "B2",
+      "B3",
+      "B4",
+      "B8",
+      "B11",
+      "B12",
+      "C1",
+      "C2",
+      "C6",
+      "C8",
+      "C9",
+      "C11",
+      "D2",
+      "D5",
+      "D7",
+      "D8",
+      "D9",
+      "J",
+      "B1",
+      "B5",
+      "B6",
+      "B7",
+      "B9",
+      "B10",
+      "B13",
+      "C3",
+      "C4"
+    ],
+    "my_initial_done": true,
+    "seats": [
+      {
+        "user_id": "d0000000-0000-4000-8000-000000000001",
+        "display_name": "아잉러",
+        "avatar_url": null,
+        "character": "aing",
+        "seat_no": 0,
+        "state": "playing",
+        "rack_count": 33,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b1",
+        "display_name": "구름빵",
+        "avatar_url": null,
+        "character": "jellyfish",
+        "seat_no": 1,
+        "state": "playing",
+        "rack_count": 9,
+        "initial_done": true,
+        "timeout_streak": 2,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b2",
+        "display_name": "초코칩",
+        "avatar_url": null,
+        "character": "ghost",
+        "seat_no": 2,
+        "state": "playing",
+        "rack_count": 6,
+        "initial_done": true,
+        "timeout_streak": 1,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b3",
+        "display_name": "민트별",
+        "avatar_url": null,
+        "character": null,
+        "seat_no": 3,
+        "state": "forfeit",
+        "rack_count": 13,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": 1,
+        "is_winner": null,
+        "payout": null
+      }
+    ],
+    "reactions": [],
+    "last_event": {
+      "kind": "play",
+      "seat_no": 3,
+      "count": 3,
+      "at_ms": 1789621498000
+    }
+  }
+}

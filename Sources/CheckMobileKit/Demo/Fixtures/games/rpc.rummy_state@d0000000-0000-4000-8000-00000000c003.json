@@ -1,0 +1,359 @@
+{
+  "__note": "남의 차례(판돈 10). draft 가 남의 작업 판이다(내 화면은 draft.table 을 그린다).",
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "state": {
+    "id": "d0000000-0000-4000-8000-00000000c003",
+    "status": "active",
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "stake": 10,
+    "is_public": false,
+    "max_seats": 4,
+    "seat_count": 4,
+    "seq": 31,
+    "server_now_ms": 1789621500000,
+    "grace_ms": 2000,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "end_reason": null,
+    "turn_seat_no": 2,
+    "turn_started_ms": 1789621467000,
+    "turn_deadline_ms": 1789621527000,
+    "consecutive_passes": 0,
+    "pool_count": 19,
+    "table": [
+      [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      [
+        "B4",
+        "B5",
+        "B6",
+        "B7"
+      ],
+      [
+        "C7",
+        "C8",
+        "C9"
+      ],
+      [
+        "D10",
+        "D11",
+        "D12",
+        "D13"
+      ],
+      [
+        "A9",
+        "B9",
+        "C9"
+      ],
+      [
+        "A12",
+        "B12",
+        "D12"
+      ],
+      [
+        "C1",
+        "C2",
+        "C3",
+        "C4"
+      ],
+      [
+        "D5",
+        "D6",
+        "J"
+      ],
+      [
+        "B10",
+        "C10",
+        "D10"
+      ],
+      [
+        "A5",
+        "B5",
+        "C5",
+        "D5"
+      ],
+      [
+        "B11",
+        "B12",
+        "B13"
+      ],
+      [
+        "A7",
+        "C7",
+        "D7"
+      ]
+    ],
+    "table_layout": [
+      [
+        20,
+        20
+      ],
+      [
+        200,
+        20
+      ],
+      [
+        420,
+        20
+      ],
+      [
+        600,
+        20
+      ],
+      [
+        820,
+        20
+      ],
+      [
+        20,
+        120
+      ],
+      [
+        200,
+        120
+      ],
+      [
+        420,
+        120
+      ],
+      [
+        600,
+        120
+      ],
+      [
+        820,
+        120
+      ],
+      [
+        20,
+        220
+      ],
+      [
+        200,
+        220
+      ]
+    ],
+    "draft": {
+      "table": [
+        [
+          "A1",
+          "A2",
+          "A3"
+        ],
+        [
+          "B4",
+          "B5",
+          "B6",
+          "B7"
+        ],
+        [
+          "C7",
+          "C8",
+          "C9"
+        ],
+        [
+          "D10",
+          "D11",
+          "D12",
+          "D13"
+        ],
+        [
+          "A9",
+          "B9",
+          "C9"
+        ],
+        [
+          "A12",
+          "B12",
+          "D12"
+        ],
+        [
+          "C1",
+          "C2",
+          "C3",
+          "C4"
+        ],
+        [
+          "D5",
+          "D6",
+          "J"
+        ],
+        [
+          "B10",
+          "C10",
+          "D10"
+        ],
+        [
+          "A5",
+          "B5",
+          "C5",
+          "D5"
+        ],
+        [
+          "B11",
+          "B12",
+          "B13"
+        ],
+        [
+          "A7",
+          "C7",
+          "D7"
+        ],
+        [
+          "C11",
+          "C12",
+          "C13"
+        ]
+      ],
+      "layout": [
+        [
+          20,
+          20
+        ],
+        [
+          200,
+          20
+        ],
+        [
+          420,
+          20
+        ],
+        [
+          600,
+          20
+        ],
+        [
+          820,
+          20
+        ],
+        [
+          20,
+          120
+        ],
+        [
+          200,
+          120
+        ],
+        [
+          420,
+          120
+        ],
+        [
+          600,
+          120
+        ],
+        [
+          820,
+          120
+        ],
+        [
+          20,
+          220
+        ],
+        [
+          200,
+          220
+        ],
+        [
+          420,
+          220
+        ]
+      ],
+      "draft_seq": 3
+    },
+    "my_seat_no": 0,
+    "my_rack": [
+      "A4",
+      "A6",
+      "B2",
+      "B3",
+      "C6",
+      "D1",
+      "D2",
+      "D9",
+      "J"
+    ],
+    "my_initial_done": true,
+    "seats": [
+      {
+        "user_id": "d0000000-0000-4000-8000-000000000001",
+        "display_name": "아잉러",
+        "avatar_url": null,
+        "character": "aing",
+        "seat_no": 0,
+        "state": "playing",
+        "rack_count": 9,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b1",
+        "display_name": "구름빵",
+        "avatar_url": null,
+        "character": "jellyfish",
+        "seat_no": 1,
+        "state": "forfeit",
+        "rack_count": 8,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": 1,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b2",
+        "display_name": "초코칩",
+        "avatar_url": null,
+        "character": "ghost",
+        "seat_no": 2,
+        "state": "playing",
+        "rack_count": 4,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b3",
+        "display_name": "민트별",
+        "avatar_url": null,
+        "character": null,
+        "seat_no": 3,
+        "state": "playing",
+        "rack_count": 6,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      }
+    ],
+    "reactions": [],
+    "last_event": {
+      "kind": "forfeit",
+      "seat_no": 1,
+      "count": null,
+      "at_ms": 1789621491000
+    }
+  }
+}

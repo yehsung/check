@@ -171,7 +171,8 @@ struct GamesChessTextTests {
 
     @Test("막힌 입구는 세 방향 모두 말한다 — 두는 판과 **막힌 입구**를 둘 다 이름으로")
     func oneMatchPerPersonIsSaidInEveryDirection() {
-        #expect(ChessPhoneText.BusyGame.allCases.count == 3, "게임이 셋이다(오목·체스·테트리스) — 늘면 문구를 더해라")
+        #expect(ChessPhoneText.BusyGame.allCases.count == 4, "게임이 넷이다(오목·체스·테트리스·아잉 큐브) — 늘면 문구를 더해라")
+        #expect(ChessPhoneText.busyTitle(.rummy) == "아잉 큐브를 하는 중이에요")
         #expect(ChessPhoneText.busyTitle(.gomoku) == "오목을 두는 중이에요")
         #expect(ChessPhoneText.busyTitle(.chess) == "체스를 두는 중이에요")
         // 테트리스는 '둔다'고 하지 않는다 — 같은 틀에 끼우면 "1:1 테트리스를 두는 중" 이 된다.
@@ -204,8 +205,8 @@ struct GamesChessTextTests {
                 hints.insert(hint)
             }
         }
-        // 여섯 쌍이 **여섯 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
-        #expect(hints.count == 6, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
+        // 열두 쌍(게임 넷)이 **열두 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
+        #expect(hints.count == 12, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
         #expect(ChessPhoneText.entryBlock(playing: nil) == nil)
         #expect(ChessPhoneText.entryBlockHint(playing: nil, blocked: .chess) == nil)
     }

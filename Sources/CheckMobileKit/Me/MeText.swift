@@ -488,6 +488,12 @@ package enum MeText {
     /// 맥 `DailyMissionCopy.resetNote` 와 한 글자도 다르지 않다.
     package static let dailyMissionsResetNote = "자정에 초기화 · 안 받으면 사라져요"
 
+    /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 아잉 큐브 줄만 비운다 — 서버가 큐브 없는 옛 폰을 위해 '맥에서 할 수 있어요'를 싣는데,
+    /// 이 판의 폰은 큐브를 할 수 있어 거짓이다(서버 글자를 바꾸면 옛 폰에서 거짓이 된다).
+    package static func dailyMissionCaption(game: String, detail: String) -> String {
+        game == "rummy" ? "" : detail
+    }
+
     /// 일일 줄 아이콘(SF Symbol) — **게임 이름으로 고른다**(키가 아니다: 누적 미션의 `gomoku1` 과 일일 `daily_gomoku` 가
     /// 같은 기호를 쓰게). 미니게임 셋은 코어 `MiniGameKind.icon`(게임 화면 · 순위표가 쓰는 그 기호)이고, 1:1 셋은 맥 입구
     /// 기호와 같다(오목 3×3 격자 · 체스 체커보드 · 1:1 테트리스 반으로 나뉜 네모). 모르는 게임은 별 —

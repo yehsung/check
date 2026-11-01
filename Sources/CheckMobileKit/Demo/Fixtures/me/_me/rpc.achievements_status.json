@@ -290,6 +290,19 @@
         "claimed": false,
         "claimed_at_ms": null,
         "sort": 60
+      },
+      {
+        "key": "daily_rummy",
+        "game": "rummy",
+        "title": "아잉 큐브 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 70
       }
     ],
     "claimable_count": 2,

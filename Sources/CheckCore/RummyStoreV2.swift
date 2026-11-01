@@ -12,6 +12,16 @@ package enum RummyExitReason: String, Sendable {
     case appUpdate = "app_update"
 }
 
+/// `RummyStore.departRoom` 의 결과.
+package enum RummyRoomDeparture: Equatable, Sendable {
+    /// 나갔다(서버가 확인했거나 이미 자리가 없다).
+    case left
+    /// 그새 판이 시작돼 나가지 않고 그 판을 들었다(`rummy_leave` 0건).
+    case startedMatch
+    /// 서버 확인을 못 받았다(또는 방을 못 읽어 안 보냈다) — 자리가 남아 있다고 보고 방을 쥐고 있다.
+    case notConfirmed
+}
+
 /// 내 랙에 새로 들어온 타일 한 장(편집기 로컬 id · 면 · 받침대 자리).
 package struct RummyDrawnTile: Equatable, Hashable, Sendable {
     package let tileID: Int
@@ -89,7 +99,7 @@ extension RummyStore {
         // (쥐면 판이 끝날 때까지 배터리만 먹는다). 하트비트는 그대로 둔다(서버가 joined·playing 자리만 갱신한다).
         let seatState = match.flatMap { mySeat(in: $0) }?.state
         setHoldingMatch(holding && seatState != .forfeit && seatState != .done)
-        let wanted: UUID? = heartbeatEnabled && holding ? match?.id : nil
+        let wanted: UUID? = heartbeatEnabled && holding && !(roomHeartbeatHeld && phase == .room) ? match?.id : nil
         guard wanted != heartbeatMatchID else { return }
         heartbeatTask?.cancel()
         heartbeatTask = nil
@@ -169,28 +179,31 @@ extension RummyStore {
     /// 시작했으면(시작 신호가 이 기기에 닿기 전) `rummy_leave` 는 **판 기권**이다 — 묻지도 않고 판돈을 잃게 된다.
     /// 그래서 먼저 그 방 state 를 한 번 읽는다(상한 `exitLeaveLimitSeconds`). 판이 시작돼 내 자리가 playing 이면 나가지 않고
     /// 그 state 를 든다(판 시작 알림이 창을 다시 띄우고, 거기서 닫으면 기권 확인이 뜬다). 아직 방이거나 못 읽었으면 나간다.
-    /// 반환: 나갔으면 `leaveForExit` 의 답, 시작된 판을 들고 남았으면 false.
+    /// 읽는 사이 폴링·초인종이 먼저 판을 들고 왔으면 읽기가 실패했어도 나가지 않는다 — 쥔 값이 판이면 `rummy_leave` 는 기권이다.
+    /// `leavesWhenUnread` = 못 읽어도 나간다(맥 — 창이 닫혀 다시 시도할 사람이 없다). 폰은 다시 시도할 수 있어 false 로 부른다(`departRoom`).
+    /// 반환: 나갔으면 `leaveForExit` 의 답, 시작된 판을 들고 남았거나 못 읽어 안 보냈으면 false.
     @discardableResult
-    package func leaveRoomForExit(reason: RummyExitReason) async -> Bool {
+    package func leaveRoomForExit(reason: RummyExitReason, leavesWhenUnread: Bool = true) async -> Bool {
         guard let current = match, current.status == .forming, host?.session != nil, isEngaged(current.id) else {
             return await leaveForExit(reason: reason)
         }
         let roomID = current.id
         let ticket = issueTicket()
         let limit = Self.exitLeaveLimitSeconds
-        let fetched = await withCheckedContinuation { (continuation: CheckedContinuation<RummyMatchState?, Never>) in
+        // 서버가 답했는가(거절 포함) · 그 state. 못 닿은 것과 `not_found` 를 가른다 — 후자는 나갈 자리가 이미 없다.
+        let (answered, fetched) = await withCheckedContinuation { (continuation: CheckedContinuation<(Bool, RummyMatchState?), Never>) in
             let gate = RummyExitGate(continuation)
             Task { @MainActor [weak self] in
                 guard let self,
                       let result = await self.perform({ try await $0.rummyState(accessToken: $1, matchID: roomID) }),
-                      case .success(let response) = result, response.status == .ok
-                else { gate.resume(nil); return }
+                      case .success(let response) = result
+                else { gate.resume((false, nil)); return }
                 self.noteServerNow(response.serverNowMs)
-                gate.resume(response.state)
+                gate.resume((true, response.status == .ok ? response.state : nil))
             }
             Task { @MainActor in
                 try? await Task.sleep(for: .seconds(limit))
-                gate.resume(nil)
+                gate.resume((false, nil))
             }
         }
         if let state = fetched, state.id == roomID, state.status == .active, match?.id == roomID,
@@ -199,7 +212,38 @@ extension RummyStore {
             applyState(state, ticket: ticket)
             return false
         }
+        if let held = match, held.id == roomID, held.status == .active, mySeat(in: held)?.state == .playing {
+            Self.logger.notice("exit leave skipped: match arrived while reading")
+            return false
+        }
+        if !answered, !leavesWhenUnread { return false }
         return await leaveForExit(reason: reason)
+    }
+
+    /// 폰 탭 이탈(`GamesStore`): `leaveRoomForExit` 와 같되 **서버가 나감을 확인하지 않으면 쥔 방을 되돌린다.**
+    /// 맥은 창이 닫혀 사람이 더 볼 것이 없지만, 폰은 게임 탭으로 돌아온 사람이 카드를 본다 — `leaveForExit` 처럼 접어 버리면
+    /// 서버엔 자리가 남았는데 화면은 '나왔다'고 말한다(그 사이 방장이 시작하면 모르는 사이 판돈이 걷힌다). 맥은 이 문을 안 쓴다.
+    /// 부르는 쪽이 다시 시도한다(폰은 화면 밖 방의 하트비트를 쉬어 그 사이 서버가 이 자리를 뺄 수 있다 — `roomHeartbeatHeld`).
+    /// **못 읽으면 보내지 않는다**(`.notConfirmed`): 읽기가 안 닿은 사이 시작됐을 수 있고, 그때 `rummy_leave` 는 묻지 않은 기권이다.
+    package func departRoom(reason: RummyExitReason) async -> RummyRoomDeparture {
+        guard let held = match else { return .left }
+        // 문을 지나 여기 오는 사이에도 판이 시작될 수 있다 — `leaveRoomForExit` 는 방이 아니면 곧바로 `rummy_leave` 를 보낸다.
+        guard held.status == .forming else { return held.status == .active ? .startedMatch : .left }
+        let generation = resetGeneration
+        if await leaveRoomForExit(reason: reason, leavesWhenUnread: false) { return .left }
+        // 그 2초 사이 로그아웃했으면 되돌릴 사람이 없다.
+        guard generation == resetGeneration, host?.session != nil else { return .left }
+        if let now = match {
+            guard now.id == held.id else { return .left }
+            return now.status == .forming ? .notConfirmed : .startedMatch
+        }
+        dismissedMatchIDs.remove(held.id)
+        matchRevision &+= 1
+        activeMatchID = held.id
+        // `clearMatch` 가 손댄 판 장부에서 걷었다 — 다시 적어야 다시 나갈 때 놀던 기기로 읽히지 않는다.
+        markEngaged(held.id)
+        applyState(held)
+        return .notConfirmed
     }
 
     // MARK: - 이모티콘 반응(머리말 ⑬)

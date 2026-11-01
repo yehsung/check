@@ -372,9 +372,11 @@ package final class PushCoordinator {
         }
     }
 
-    /// 설명 시트를 띄울 때인가: 로그인 · 앱이 앞 · 권한 미결정 · 시트 없음 · "나중에"에서 7일 지남 · 데모 아님.
+    /// 설명 시트를 띄울 때인가: 로그인 · 앱이 앞 · 권한 미결정 · 시트 없음 · "나중에"에서 7일 지남 · 데모 아님 · 큐브 판이 가로로 서 있지 않음
+    /// (세로용 시트가 가로 판과 차례 시계를 덮는다 — 다음에 앞으로 올 때 다시 판정한다).
     package func shouldPresentPrimer(status: PushAuthorizationStatus) -> Bool {
         guard context.session.isSignedIn, isAppActive, !isPrimerPresented else { return false }
+        guard context.links.games?.rummyInterfaceOrientation != .landscape else { return false }
         #if DEBUG
         if demoForcesPrimer { return true }
         #endif

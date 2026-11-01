@@ -31,6 +31,7 @@ extension RummyStore {
                     noteServerMissing()
                 } else {
                     Self.logger.notice("lobby request failed")
+                    if !lobbyLoadFailed { lobbyLoadFailed = true }
                 }
             }
         } while lobbyAgain && generation == resetGeneration
@@ -43,12 +44,13 @@ extension RummyStore {
             switch response.status {
             case .unsupportedClient: noteUpdateRequired()
             case .unauthorized: setNotice(RummyNoticeText.signInAgain)
-            default: break
+            default: if !lobbyLoadFailed { lobbyLoadFailed = true }
             }
             return
         }
         noteServerNow(response.serverNowMs)
         if availability != .available { availability = .available }
+        if lobbyLoadFailed { lobbyLoadFailed = false }
         rawLobby = response
         publishLobby()
         applyRuby(response.me?.rubyBalance)
@@ -367,12 +369,20 @@ extension RummyStore {
         case .success(let response):
             noteServerNow(response.serverNowMs)
             switch response.status {
-            case .ok: if ranking != response { ranking = response }
+            case .ok:
+                if rankingLoadFailed { rankingLoadFailed = false }
+                if ranking != response { ranking = response }
             case .unsupportedClient: noteUpdateRequired()
-            default: Self.logger.notice("ranking refused status=\(response.status.rawValue, privacy: .public)")
+            default:
+                Self.logger.notice("ranking refused status=\(response.status.rawValue, privacy: .public)")
+                if !rankingLoadFailed { rankingLoadFailed = true }
             }
         case .failure(let error):
-            if isSchemaMissing(error) { noteServerMissing() }
+            if isSchemaMissing(error) {
+                noteServerMissing()
+            } else if !rankingLoadFailed {
+                rankingLoadFailed = true
+            }
         }
     }
 

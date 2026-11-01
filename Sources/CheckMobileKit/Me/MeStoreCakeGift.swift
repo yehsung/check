@@ -132,8 +132,10 @@ extension MeStore {
 
     /// 오목 · 체스 · 테트리스 화면(로비 · 대국 · 관전)이 떠 있다 — 축하 시트가 스스로 뜨지 않는 때. 로비도 넣는 까닭: 받은 신청을
     /// 수락하면 그 자리에서 판이 서므로, 로비 위에 뜬 시트가 곧 대국을 덮는다.
+    /// 큐브 판이 가로로 서 있는 동안도 넣는다 — 놀던 기기의 판은 `isAnyMatchScreenVisible` 이 거짓이지만(확성기는 뜬다) 세로용 시트가 가로 판을 덮으면 안 된다.
     var isGameScreenUp: Bool {
-        context.links.games?.isAnyMatchScreenVisible ?? false
+        guard let games = context.links.games else { return false }
+        return games.isAnyMatchScreenVisible || games.rummyInterfaceOrientation == .landscape
     }
 
     /// 선물의 선택지를 **지금 아는 보유**와 맞춰 거른다 — 이미 가진 케이크를 고르는 길이 없게. 남는 게 없으면 nil(받을 것이 없다).

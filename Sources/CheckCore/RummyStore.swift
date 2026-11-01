@@ -146,6 +146,10 @@ package final class RummyStore {
     /// 요청 비행 중(버튼 잠금). 작업 상태 전송·폴링은 세우지 않는다 — 사용자가 누른 동작만.
     package internal(set) var isWorking: Bool = false
     package internal(set) var ranking: RummyRanking?
+    /// 마지막 로비 조회가 실패했다(1.0.17 폰 — 맥은 읽지 않는다). 받은 적 있는지는 `lobby != nil` 이 말한다: 둘을 합쳐 '빈 목록'과 '못 받음'을 가른다.
+    package internal(set) var lobbyLoadFailed = false
+    /// 마지막 순위 조회가 실패했다(같은 뜻 · `ranking != nil`). 안내줄로 새지 않는다 — 순위 탭 안에서만 말한다.
+    package internal(set) var rankingLoadFailed = false
     package var selectedStake: Int = 3
     package var createPublic: Bool = false
     package var rulesShown: Bool = false
@@ -204,6 +208,18 @@ package final class RummyStore {
 
     /// 하트비트 주 스위치(시험은 끄고 `heartbeatTick(matchID:)` 를 직접 밟는다).
     @ObservationIgnored package var heartbeatEnabled = true
+    /// 방(`room`)의 하트비트를 쉰다 — 폰이 쓴다(맥은 안 쓴다): 방 화면이 안 보이는 동안 자리가 살아 있으면 모르는 사이 시작돼 판돈이 걷힌다.
+    /// 쉬면 서버가 시작 검사에서 90초 넘게 안 보인 자리를 `dropped` 로 뺀다. **판(`playing`)은 그대로 돈다** — 끊기면 90초 규칙으로 기권이다.
+    @ObservationIgnored package var roomHeartbeatHeld = false {
+        didSet {
+            guard oldValue != roomHeartbeatHeld else { return }
+            updateHeartbeat()
+            // 다시 보기 시작했다 — 주기(10초)를 기다리면 그 사이 시작 검사에서 빠질 수 있다.
+            if !roomHeartbeatHeld, phase == .room, let matchID = heartbeatMatchID {
+                Task { @MainActor [weak self] in await self?.heartbeatTick(matchID: matchID) }
+            }
+        }
+    }
     /// 하트비트 주기(초).
     @ObservationIgnored package var heartbeatSeconds: TimeInterval = RummyStore.heartbeatDefaultSeconds
     /// 받침대 자리 저장소. **nil 이면 저장하지 않는다**(기본 — 시험이 Preferences 를 더럽히지 않게). 맥 배선이 `.standard` 를 꽂는다.
@@ -546,6 +562,8 @@ package final class RummyStore {
         if rubyBalance != nil { rubyBalance = nil }
         if isWorking { isWorking = false }
         if ranking != nil { ranking = nil }
+        if lobbyLoadFailed { lobbyLoadFailed = false }
+        if rankingLoadFailed { rankingLoadFailed = false }
         if selectedStake != 3 { selectedStake = 3 }
         if createPublic { createPublic = false }
         if rulesShown { rulesShown = false }

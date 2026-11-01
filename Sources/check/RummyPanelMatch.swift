@@ -93,78 +93,21 @@ struct RummyMatchLayout: Equatable {
     }
 }
 
-/// 상대 자리 배치 — 나 다음 사람부터 왼쪽 → 위 → 오른쪽(둘이면 위, 셋이면 왼·오른). 순수.
-struct RummySeatArrangement: Equatable {
-    var left: Int?
-    var top: Int?
-    var right: Int?
-
-    /// `seatNos` = 판의 자리 번호들, `mine` = 내 자리.
-    static func arrange(seatNos: [Int], mine: Int?) -> RummySeatArrangement {
-        let sorted = seatNos.sorted()
-        guard let mine, let at = sorted.firstIndex(of: mine) else {
-            let others = sorted
-            return place(others)
-        }
-        let others = Array(sorted[(at + 1)...] + sorted[..<at])
-        return place(others)
-    }
-
-    private static func place(_ others: [Int]) -> RummySeatArrangement {
-        switch others.count {
-        case 0: return RummySeatArrangement()
-        case 1: return RummySeatArrangement(top: others[0])
-        case 2: return RummySeatArrangement(left: others[0], right: others[1])
-        default: return RummySeatArrangement(left: others[0], top: others[1], right: others[2])
-        }
-    }
-}
-
-/// 놓을 자리 판정(순수). 재료는 칸 자리·변환·배치와 "내 차례인가" 뿐이다 — 놓아도 되는가는 편집기·서버가 정한다.
-enum RummyDropResolver {
-    /// 판 묶음 누르기 여유(논리 단위) — 묶음 사이 틈(16)의 반 남짓.
-    static let meldSlack = CGSize(width: 10, height: 10)
-
+/// 놓을 자리 판정의 맥 서명(칸 자리를 `RummyMatchLayout` 에서 꺼내 코어 `RummyDropResolver` 로 넘기는 얇은 포장). 산식은 코어 한 곳이다.
+extension RummyDropResolver {
     /// 타일 묶음(`count` 장, 손에 `grabIndex` 번째)을 `pointer`(판 화면 좌표)에 놓으면.
     /// `skipMeld` = 묶음 하나를 통째로 끄는 중이면 그 묶음(자기 위에 놓기 = 위치 이동으로 본다).
     static func target(pointer: CGPoint, grabIndex: Int, count: Int, layout: RummyMatchLayout,
                        canvas: RummyCanvasTransform, table: RummyTableLayout, rack: RummyRackGeometry,
                        isMyTurn: Bool, skipMeld: Int? = nil) -> RummyDropTarget? {
-        if layout.rack.contains(pointer) {
-            let local = CGPoint(x: pointer.x - layout.rack.minX, y: pointer.y - layout.rack.minY)
-            let left = local.x - (CGFloat(grabIndex) + 0.5) * rack.tileSize.width
-            return .rackSlot(rack.slot(tileLeft: left, centerY: local.y, tiles: count))
-        }
-        guard isMyTurn, layout.table.contains(pointer) else { return nil }
-        let logical = canvas.toLogical(CGPoint(x: pointer.x - layout.table.minX, y: pointer.y - layout.table.minY))
-        for (index, frame) in table.frames.enumerated() where index != skipMeld {
-            let zone = CGRect(x: CGFloat(frame.x), y: CGFloat(frame.y), width: CGFloat(frame.width),
-                              height: CGFloat(frame.height)).insetBy(dx: -meldSlack.width, dy: -meldSlack.height)
-            guard zone.contains(logical) else { continue }
-            var at = 0
-            for tile in 0..<table.counts[index] {
-                if let f = table.tileFrame(set: index, tile: tile), CGFloat(f.x) + CGFloat(f.width) / 2 < logical.x { at += 1 }
-            }
-            return .meld(index, index: at)
-        }
-        let w = CGFloat(RummyTableLayout.tileWidth), h = CGFloat(RummyTableLayout.tileHeight)
-        return .newMeldAt(clampedTopLeft(CGPoint(x: logical.x - (CGFloat(grabIndex) + 0.5) * w, y: logical.y - h / 2),
-                                         tiles: count))
+        target(pointer: pointer, grabIndex: grabIndex, count: count, rackRect: layout.rack, tableRect: layout.table,
+               canvas: canvas, table: table, rack: rack, isMyTurn: isMyTurn, skipMeld: skipMeld)
     }
 
     /// 손잡이로 묶음을 끌어 `pointer` 에 놓으면 — 판 위면 새 왼쪽 위(잡은 자리 오프셋 `grab` 을 뺀다), 밖이면 nil.
     static func setTarget(pointer: CGPoint, grab: CGPoint, tiles: Int, layout: RummyMatchLayout,
                           canvas: RummyCanvasTransform) -> RummyPoint? {
-        guard layout.table.contains(pointer) else { return nil }
-        let logical = canvas.toLogical(CGPoint(x: pointer.x - layout.table.minX, y: pointer.y - layout.table.minY))
-        return clampedTopLeft(CGPoint(x: logical.x - grab.x, y: logical.y - grab.y), tiles: tiles)
-    }
-
-    static func clampedTopLeft(_ p: CGPoint, tiles: Int) -> RummyPoint {
-        let maxX = RummyTableLayout.canvasWidth - RummyTableLayout.width(tiles: tiles)
-        let maxY = RummyTableLayout.canvasHeight - RummyTableLayout.tileHeight
-        return RummyPoint(x: min(max(Int(p.x.rounded()), 0), max(0, maxX)),
-                          y: min(max(Int(p.y.rounded()), 0), max(0, maxY)))
+        setTarget(pointer: pointer, grab: grab, tiles: tiles, tableRect: layout.table, canvas: canvas)
     }
 }
 

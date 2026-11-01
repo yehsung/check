@@ -1,0 +1,7 @@
+{
+  "__note": "순위 조회 실패(5xx). 닿는 길: games/rummy/ranking/failed.",
+  "__status": 500,
+  "__body": {
+    "message": "demo failure"
+  }
+}

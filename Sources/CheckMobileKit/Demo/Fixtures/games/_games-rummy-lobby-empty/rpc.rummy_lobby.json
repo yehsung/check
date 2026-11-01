@@ -1,0 +1,25 @@
+{
+  "__note": [
+    "빈 로비: 받은 초대·공개 방·사람이 모두 없다.",
+    "닿는 길: games/rummy/lobby/empty."
+  ],
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "turn_seconds": 60,
+  "room_ttl_seconds": 600,
+  "me": {
+    "ruby_balance": 42,
+    "games": 0,
+    "wins": 0,
+    "room": null,
+    "active_match_id": null
+  },
+  "invites": [],
+  "public_rooms": [],
+  "users": []
+}

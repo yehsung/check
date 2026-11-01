@@ -43,7 +43,7 @@ final class MegaphoneTimerLog {
     func overlayPlacement() throws {
         let root = Self.squashed(try IntegrationContractTests.code(Self.rootPath))
         let mount = ".overlay(alignment:.top){MegaphoneBannerOverlay(model:model)}"
-        let tabView = try Self.offset(of: "TabView(selection:$router.selectedTab)", in: root)
+        let tabView = try Self.offset(of: "TabView(selection:$router.tabBarSelection)", in: root)
         let overlay = try Self.offset(of: mount, in: root)
         let characters = try Self.offset(of: ".environment(\\.appUserCharacters,model.characters.directory)", in: root)
         #expect(tabView < overlay, "배너가 탭 막대 밖(앞)에 붙었다")

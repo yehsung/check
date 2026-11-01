@@ -39,9 +39,7 @@ struct RummyResultView: View {
 
     /// [한 판 더] 가 부를 사람 — 나 말고, 기권하지 않은 사람(자리 순).
     static func rematchInvitees(_ match: RummyMatchState) -> [UUID] {
-        (match.seats ?? []).filter { $0.seatNo != match.mySeatNo && $0.state != .forfeit }
-            .sorted { ($0.seatNo ?? 9) < ($1.seatNo ?? 9) }
-            .map(\.userId)
+        match.rematchInvitees
     }
 
     var body: some View {

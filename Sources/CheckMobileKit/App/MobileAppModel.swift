@@ -22,6 +22,7 @@ public final class MobileAppModel {
     package let gomoku: GomokuStore
     package let chess: ChessStore
     package let tetris: TetrisDuelStore
+    package let rummy: RummyStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -133,6 +134,20 @@ public final class MobileAppModel {
         // 왕복(1초)까지 방해 줄을 모르고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.
         // 러너는 **약한 참조**로 들고 있고(수명은 앱 모델이 쥔다) 핸들러가 스스로 세션 가드를 한다.
         realtime.tetris = tetris
+        // 아잉 큐브(맥 0.3.69 · 폰 1.0.17). 호스트는 **오목·체스·테트리스와 같은 하나**다(루비 미러 한 칸).
+        let rummy = RummyStore()
+        rummy.attach(host: host)
+        rummy.clock = { clock.now() }
+        // 받침대 자리 · '이 기기가 손댄 판' 장부를 둘 곳. 빠지면 앱을 다시 켠 폰이 자기 판을 **놀던 기기**로 읽어 하트비트가 멎고,
+        // 90초 뒤 서버가 끊김 기권을 시킨다(코어 머리말 ⑮) — 판돈이 걸려 있다.
+        rummy.rackDefaults = env.storage.defaults
+        rummy.engagedDefaults = env.storage.defaults
+        // 순위의 **주 스위치**. 기본이 꺼짐이라 이 한 줄이 없으면 `rummy_ranking` 이 **한 번도 안 나가고** 순위 탭은 영영 로딩 문구다 —
+        // 바로 위 오목·체스·테트리스와 같은 못이고, 같은 까닭으로 지우지 마라(뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다).
+        // 못: `Tests/CheckMobileKitTests/GamesRummyWiringTests.swift`(켠 효과를 요청 건수로 잰다).
+        rummy.rankingEnabled = true
+        // 실시간 'rummy' 초인종을 받을 자리(위 테트리스 칸과 같은 꼴 · 약한 참조).
+        realtime.rummy = rummy
         let links = MobileStoreLinks()
         // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
         let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
@@ -150,6 +165,7 @@ public final class MobileAppModel {
             gomoku: gomoku,
             chess: chess,
             tetris: tetris,
+            rummy: rummy,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -167,6 +183,7 @@ public final class MobileAppModel {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
+        self.rummy = rummy
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -201,6 +218,7 @@ public final class MobileAppModel {
         gomoku.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "gomoku") }
         chess.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "chess") }
         tetris.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
+        rummy.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "rummy") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -317,6 +335,9 @@ public final class MobileAppModel {
         // 사람의 판에 **새 계정의 토큰으로** 보고가 계속 나간다. `reset()` 이 그 둘(`discardDuel`·세대)을 끊는다.
         // `reset()` 은 배선 값(`rankingEnabled`·`clock`·`presentWindow`)을 건드리지 않는다(위 주 스위치 주석).
         tetris.reset()
+        // 아잉 큐브도 같은 사슬이다. 안 넣으면 다음 사람의 로비에 앞 사람의 방·판·받침대·초대가 남는다.
+        // 쥐던 판의 장부(`engagedMatchIDs`)는 코어가 계정에 묶어 남긴다 — 같은 사람이 다시 들어오면 하트비트가 이어진다.
+        rummy.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()
@@ -380,6 +401,14 @@ public final class MobileAppModel {
         if let tetris = MobileDemoTetrisRoute(demoRoute: raw) {
             games.pendingDemoTetrisScreen = true
             games.demoTetrisRoute = tetris
+            router.open(.games)
+            return
+        }
+        // 아잉 큐브 장면(`games/rummy/…`)도 **`AingRoute` 에 가지가 없다** — 테트리스와 같은 꼴로 게임 탭만 열고 탭이 쌓는다.
+        // 푸는 자리는 `MobileDemoRummyRoute(demoRoute:)` 하나다(여기서 판정을 다시 적지 않는다).
+        if let rummy = MobileDemoRummyRoute(demoRoute: raw) {
+            games.pendingDemoRummyScreen = true
+            games.demoRummyRoute = rummy
             router.open(.games)
             return
         }

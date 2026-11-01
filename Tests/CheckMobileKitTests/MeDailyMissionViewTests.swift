@@ -111,6 +111,23 @@ struct MeDailyMissionViewTests {
                 "줄 0개인데 절이 선다")
     }
 
+    @Test("아잉 큐브 줄: 서버 글자 '맥에서 할 수 있어요'를 안 그린다 · 실패 문장은 그대로 · 다른 게임 글자는 그대로 · 빈 줄을 안 세운다")
+    func rummyRowHidesTheMacOnlyDetail() throws {
+        let row = #"{"key":"daily_rummy","game":"rummy","title":"아잉 큐브 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":\#(1),"achieved":true,"claimed":false,"claimed_at_ms":null,"sort":70}"#
+        let waiting = #"{"key":"daily_rummy","game":"rummy","title":"아잉 큐브 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":0,"achieved":false,"claimed":false,"claimed_at_ms":null,"sort":70}"#
+        let other = #"{"key":"daily_future","game":"future","title":"새 게임","detail":"서버 글자","reward":5,"target":1,"progress":0,"achieved":false,"claimed":false,"claimed_at_ms":null,"sort":80}"#
+
+        let claimable = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [row, other]))), "daily_rummy")
+        #expect(claimable.caption.isEmpty, "폰에서 할 수 있는데 맥에서 하라고 한다")
+        #expect(!claimable.showsCaptionLine, "그릴 것이 없는 줄이 빈 줄로 선다")
+        let failed = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [row]))), "daily_rummy", failed: true)
+        #expect(failed.caption == MeText.claimFailed && failed.showsCaptionLine, "받기 실패를 삼켰다")
+        let progressing = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [waiting]))), "daily_rummy")
+        #expect(progressing.caption.isEmpty && progressing.progress == "0/1" && progressing.showsCaptionLine, "진행 숫자가 사라졌다")
+        let future = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [other]))), "daily_future")
+        #expect(future.caption == "서버 글자", "다른 게임의 서버 글자가 사라졌다")
+    }
+
     @Test("줄 셋의 그림: 진행 중(칩 +5 · '0/1') · [받기] 캡슐(칩 없음) · '✓ 받음'(진행 숫자 없음)")
     func rowContentDrawsTheThreeStates() throws {
         let section = try Self.section(Self.response(daily: Self.dailyJSON(met: ["daily_timing_bar"], claimed: ["daily_flappy"])))
@@ -347,8 +364,10 @@ struct MeDailyMissionViewTests {
             #expect(daily["reset_at_ms"] as? Int == Self.resetMs,
                     "\(path): reset_at_ms 가 다음 KST 자정이 아니다 — 데모가 날을 넘긴 것으로 보여 [받기] 가 사라진다")
 
+            // 기본 장면(`_me`)에만 아잉 큐브 줄이 하나 더 있다 — 서버 글자 '맥에서 할 수 있어요'를 숨기는지 그림으로 보려고. 정의표 여섯 줄은 그 앞에 그대로다.
+            let extra = path == "me/_me/rpc.achievements_status.json" ? 1 : 0
             let rows = MeAchievementsFixtureContractTests.rows(daily, "missions")
-            #expect(rows.count == Self.defs.count, "\(path): 일일 줄이 \(rows.count)개다(서버는 6개)")
+            #expect(rows.count == Self.defs.count + extra, "\(path): 일일 줄이 \(rows.count)개다(서버는 6개)")
             for (row, def) in zip(rows, Self.defs) {
                 #expect(MeAchievementsFixtureContractTests.keys(row) == rowKeys,
                         "\(path) \(def.key): 줄 칸 이름 — \(MeAchievementsFixtureContractTests.keys(row).symmetricDifference(rowKeys))")
@@ -357,7 +376,11 @@ struct MeDailyMissionViewTests {
             // 값: 정의표 그대로 · 달성/받음이 규칙과 맞는가 · 받은 시각이 **오늘 안**인가.
             let status = try MeAchievementsFixtureContractTests.status(path)
             let section = MeDailyMissionSection.make(daily: status.daily, serverNowMs: status.serverNowMs)
-            #expect(section.rows.count == Self.defs.count, "\(path): 디코드 뒤 줄이 버려졌다")
+            #expect(section.rows.count == Self.defs.count + extra, "\(path): 디코드 뒤 줄이 버려졌다")
+            if extra == 1 {
+                let rummy = try Self.content(section, "daily_rummy")
+                #expect(rummy.caption.isEmpty, "데모 큐브 줄에 '맥에서' 글자가 떴다")
+            }
             for (mission, def) in zip(section.rows, Self.defs) {
                 #expect(mission.key == def.key && mission.game == def.game, "\(path): 순서 · 게임 — \(mission.key)")
                 #expect(mission.row.title == def.title, "\(path) \(def.key): 제목")

@@ -255,19 +255,6 @@ class GamesRummyWiringTest {
         assertEquals(emptyList(), x.h.router.presented, "보이는 화면은 또 쌓지 않는다")
     }
 
-    /** 폰 배선이 넣은 받침대 폭이 편집기까지 닿는다. 없으면: 폭 값을 넣어도 12장째가 맥 폭 자리(화면 밖)에 놓인다. */
-    @Test
-    fun rackWidthReachesTheEditor() = runTest {
-        val x = rig()
-        assertEquals(32, x.rummy.rackHalfColumns, "기본은 맥 폭")
-        x.rummy.rackHalfColumns = 22
-        val rack = (1..12).map { RummyFace(0, it.toLong()) }
-        x.rummy.applyState(state().copy(myRack = rack))
-        val editor = x.rummy.editor!!
-        assertEquals(22, editor.rackHalfColumns)
-        assertEquals(RummyRackSlot(1, 0), editor.rackLayout.slot(editor.rack[11].id))
-    }
-
     @Test
     fun busyTextSpeaksTheFourthGame() {
         assertEquals("아잉 큐브 하는 중이에요", GamesBusyText.entryBlock(GamesBusyGame.rummy))

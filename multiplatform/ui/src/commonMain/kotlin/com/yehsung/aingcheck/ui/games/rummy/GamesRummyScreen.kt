@@ -1,16 +1,22 @@
-// 원본: Sources/check/RummyPanel.swift:269 (RummyPanel — 단계 고르기 · 덮개) · Sources/check/RummyExitFlow.swift (이탈 표) · Sources/check/CheckRummyWindow.swift (창 수명 — 폰은 화면 수명) @ 1a5eeca6 · 폰 배치는 ios-1017 설계서 §3
+// 원본: Sources/check/RummyPanel.swift:269 (RummyPanel — 단계 고르기 · 덮개) · Sources/check/RummyExitFlow.swift (이탈 표) · Sources/check/CheckRummyWindow.swift (창 수명 — 폰은 화면 수명) @ 1a5eeca6 · Sources/CheckMobileKit/Games/GamesRummyScreen.swift @ ios-1017-cube 61d75d8c · 폰 배치는 ios-1017 설계서 §3 · §10
 //
 // 폰 아잉 큐브 **화면 하나** — 로비 · 방 · 판 · 결과를 한 화면이 갈아 끼운다(테트리스 화면과 같은 구조). 이 파일은 껍데기다: 단계 고르기 · 수명 · 뒤로 가기 · 규칙 시트 · 나가기 확인 ·
 // 그림 공급만 쥔다. 뷰는 파일마다 따로 있다.
 // 수명은 **직접 코어를 부르지 않는다** — 나타남 → GamesStore.rummyScreenDidAppear(), 사라짐 → …DidDisappear() 뿐이다(폴링 문·끝난 판 접기의 주인은 스토어). 앱 앞/뒤도 게임 탭 스토어가 나른다.
 // 화면 꺼짐 방지는 화면이 쓰지 않는다(주인은 GamesStore.wantsIdleTimerDisabled — 코어 `isHoldingMatch`).
+// 판만 가로다. 방향도 이 화면이 정하지 않는다 — GamesStore.rummyInterfaceOrientation 이 상태에서 계산하고, 이 화면의 수명(DisposableEffect)이 그 재료다.
 package com.yehsung.aingcheck.ui.games.rummy
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -26,6 +32,7 @@ import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
 import com.yehsung.aingcheck.core.rules.rummy.RummyPhase
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
 import com.yehsung.aingcheck.core.stores.games.GamesStore
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
 import com.yehsung.aingcheck.core.stores.rummy.RummyAvailability
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
@@ -61,8 +68,15 @@ class GamesRummyBackState {
     var asking: RummyCloseDecision? by mutableStateOf(null)
         private set
 
-    /** 뒤로 한 번. 확인이 떠 있으면 그것을 닫는다(계속하기). */
+    /** 판 화면의 [반응] 고르개가 떠 있다. 뒤로 한 번은 이것부터 닫는다 — 기권 확인으로 넘어가면 안 된다. */
+    var reactionPicking: Boolean by mutableStateOf(false)
+
+    /** 뒤로 한 번. 고르개 · 확인이 떠 있으면 그것을 닫는다(계속하기). */
     fun handleBack(rummy: RummyStore, leave: () -> Unit) {
+        if (reactionPicking) {
+            reactionPicking = false
+            return
+        }
         if (asking != null) {
             asking = null
             return
@@ -132,10 +146,15 @@ fun GamesRummyScreen(
     val now: () -> SwiftDate = { rummy.clock() }
     val goBack: () -> Unit = { back.handleBack(rummy, onLeave) }
     val showRules: () -> Unit = { rummy.rulesShown = true }
-    LaunchedEffect(rummy.phase, rummy.match?.status) { back.sync(rummy) }
+    LaunchedEffect(rummy.phase, rummy.match?.status) {
+        back.sync(rummy)
+        if (rummy.phase != RummyPhase.playing) back.reactionPicking = false
+    }
     val anchors = remember { GamesRummyReactionAnchors() }
+    // 가로일 때 카메라 구멍을 피한다 — 셸 여백(시스템 막대 몫)에는 컷아웃이 안 든다.
+    val cutout = if (store.rummyInterfaceOrientation == GamesRummyInterfaceOrientation.landscape) Modifier.windowInsetsPadding(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)) else Modifier
     CompositionLocalProvider(LocalGamesRummyArt provides art, LocalGamesRummyReactionAnchors provides anchors) {
-        Box(modifier.fillMaxSize().background(AingTheme.colors.background)) {
+        Box(modifier.fillMaxSize().background(AingTheme.colors.background).then(cutout)) {
             val unavailable = RummyPhoneText.unavailable(rummy.availability)
             when {
                 unavailable != null -> Column(Modifier.fillMaxSize().testTag(GamesRummyTags.UNAVAILABLE)) {
@@ -151,12 +170,13 @@ fun GamesRummyScreen(
                 rummy.phase == RummyPhase.room ->
                     GamesRummyRoomView(rummy, myUserID, me, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, balance = store.rubyBalance ?: rummy.rubyBalance, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.ROOM))
                 rummy.phase == RummyPhase.playing ->
-                    GamesRummyMatchView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.MATCH))
+                    GamesRummyMatchView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.MATCH), onReaction = { back.reactionPicking = true })
                 else ->
-                    GamesRummyResultView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.RESULT))
+                    GamesRummyResultView(rummy, myUserID, me, reduceMotion, onRules = showRules, onBack = goBack, now = now, block = store.rummyEntryBlock, modifier = Modifier.fillMaxSize().testTag(GamesRummyTags.RESULT), showsBoard = store.isRummyFinalBoardShown, onShowBoard = store::setRummyFinalBoardShown)
             }
             // 말풍선은 방·판·결과 위에 함께 뜬다(앵커는 자리를 그리는 뷰가 단다).
             if (rummy.phase != RummyPhase.lobby) GamesRummyReactionLayer(rummy, reduceMotion, now, Modifier.fillMaxSize())
+            if (back.reactionPicking && rummy.phase == RummyPhase.playing) GamesRummyReactionPanel(rummy, now, onClose = { back.reactionPicking = false })
         }
         if (rummy.rulesShown) GamesRummyRulesSheet(onDismiss = { rummy.rulesShown = false })
         back.asking?.let { decision ->

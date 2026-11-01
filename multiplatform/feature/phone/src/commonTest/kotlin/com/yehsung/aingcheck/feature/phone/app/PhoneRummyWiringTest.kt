@@ -4,6 +4,7 @@ package com.yehsung.aingcheck.feature.phone.app
 import com.yehsung.aingcheck.core.net.realtime.RealtimeLinkConstants
 import com.yehsung.aingcheck.core.net.realtime.RealtimeTransportEvent
 import com.yehsung.aingcheck.core.session.app.AppConfig
+import com.yehsung.aingcheck.core.stores.me.deleteAccount
 import com.yehsung.aingcheck.core.stores.me.signOut
 import com.yehsung.aingcheck.core.stores.messages.blockPeer
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
@@ -52,6 +53,7 @@ class PhoneRummyWiringTest {
         "app_user_directory", "message_blocks", "my_blocked_users", "blocked_users" -> Reply.Json("[]")
         "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby" -> Reply.missingFunction
         "work_phone_touch" -> Reply.Json("""{"status":"not_working"}""")
+        "delete_my_account" -> Reply.Json("null")
         else -> null
     }
 
@@ -178,6 +180,30 @@ class PhoneRummyWiringTest {
         assertNull(app.rummy.match, "다음 사람이 앞 계정의 판을 본다")
         assertNull(app.rummy.editor)
         assertEquals(1, app.rummy.resetGeneration, "로그아웃 사슬이 큐브를 안 비웠다")
+    }
+
+    /**
+     * 계정 삭제 앞에는 나가지 않는다 — 서버 `delete_my_account` 가 같은 트랜잭션에서 기권 · 방 정리를 한다. `rummy_leave` 를 먼저 보내면 삭제가 실패해도 기권이 안 되돌아간다.
+     * 기준선: 같은 판의 로그아웃은 위 시험에서 나간다.
+     */
+    @Test
+    fun accountDeletionSendsNoLeave() = runTest {
+        val h = rig()
+        val app = h.app
+        h.tokenReply = Reply.Json("""{"access_token":"${h.jwt(PhoneHarness.ME, "reauth")}","refresh_token":"r1","user":{"id":"${PhoneHarness.ME}"}}""")
+        app.rummy.holdEngagedMatch()
+        app.me.accountDeletionPassword = "pw"
+        val job = launch { app.me.deleteAccount() }
+        advanceUntilIdle()
+        job.join()
+        assertTrue(h.appRequests.any { it.rpcName == "delete_my_account" }, "기준선: 삭제까지 안 갔다: ${h.appRequests.map { it.rpcName ?: it.path }}")
+        assertEquals(0, h.count("rummy_leave"), "계정 삭제 앞에 판을 나갔다")
+    }
+
+    /** 일일 미션 큐브 줄의 '맥에서' 글자를 지우는 깃발이 폰 조립에서 켜진다 — 없으면: 큐브가 있는 폰에 '맥에서 할 수 있어요'가 뜬다. */
+    @Test
+    fun rummyIsPlayableOnThePhone() = runTest {
+        assertTrue(rig().app.me.context.meLinks.rummyPlayable)
     }
 
     /** 놀던 기기의 로그아웃은 아무것도 안 보낸다 — 다른 기기의 판이 기권되지 않게. */

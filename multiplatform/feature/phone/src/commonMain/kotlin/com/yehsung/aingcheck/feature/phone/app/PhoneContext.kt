@@ -171,13 +171,15 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
         context.links.push?.prefsNotice = null
     }
 
-    /** 로그아웃·계정 삭제 앞의 의도적 이탈(최대 2초 — 코어 상한). 이 기기가 손대지 않은 판·이미 기권한 구경은 보낼 것이 없다(`needsExitLeave`). */
-    override suspend fun leaveLiveMatchBeforeSessionEnd(deletingAccount: Boolean) {
+    /** 로그아웃 앞의 의도적 이탈(최대 2초 — 코어 상한). 이 기기가 손대지 않은 판·이미 기권한 구경은 보낼 것이 없다(`needsExitLeave`). */
+    override suspend fun leaveLiveMatchBeforeSignOut() {
         if (!context.hasRummy) return
         val rummy = context.rummy
         if (!rummy.needsExitLeave) return
-        rummy.leaveForExit(if (deletingAccount) RummyExitReason.accountDeletion else RummyExitReason.signOut)
+        rummy.leaveForExit(RummyExitReason.signOut)
     }
+
+    override val rummyPlayable: Boolean get() = context.hasRummy
 
     override fun popMeToRoot() {
         context.router.popToRoot(PhoneTab.me)

@@ -188,11 +188,11 @@ class RummyInviteQueue {
 
 // MARK: - 탁자 의자
 
-/** 탁자 의자 글자(맥 `RummyLobbyText` · `RummyText` 가운데 의자가 쓰는 넷 — 정본 글자 그대로). */
+/** 탁자 의자 글자(폰 — 의자 카드와 사람 행이 같은 낱말을 쓴다. iOS GamesRummyText.waitingAnswer · seated @ c9f6976f). */
 object RummyTableSeatingText {
     const val me: String = "나"
-    const val waitingAnswer: String = "답 기다리는 중"
-    const val seated: String = "앉음"
+    const val waitingAnswer: String = "초대함"
+    const val seated: String = "참가함"
     const val hostTag: String = "방장"
 }
 

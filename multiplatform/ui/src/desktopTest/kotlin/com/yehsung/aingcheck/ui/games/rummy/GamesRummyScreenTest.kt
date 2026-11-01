@@ -10,13 +10,16 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.runComposeUiTest
 import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
+import com.yehsung.aingcheck.core.rules.rummy.RummyPhase
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
 import com.yehsung.aingcheck.core.rules.rummy.RummyTileSize
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesStore
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.applyState
@@ -106,6 +109,98 @@ class GamesRummyScreenTest {
         waitForIdle()
         assertFalse(x.games.isRummyScreenVisible)
         assertFalse(x.rummy.isWindowVisible)
+        x.h.close()
+    }
+
+    /** ★ 잠금이 가로에 남지 않는다: 판 화면이 떠 있으면 가로 · 화면이 합성에서 빠지면(뒤로 · 탭 전환 · 딥링크 · 셸 교체) 그 순간 세로. 없으면: 앱 전체가 가로로 굳는다. */
+    @Test
+    fun orientationFollowsTheComposedScreen() = runDesktopComposeUiTest(852, 393) {
+        val x = rig()
+        var shown by mutableStateOf(true)
+        setContent { AingTheme(dark = false) { if (shown) GamesRummyScreen(x.games, USER, ME) } }
+        waitForIdle()
+        assertEquals(GamesRummyInterfaceOrientation.portrait, x.games.rummyInterfaceOrientation, "로비가 가로다")
+        x.rummy.applyState(state("active", "playing"))
+        waitForIdle()
+        onNodeWithTag(GamesRummyTags.MATCH).assertExists()
+        assertEquals(GamesRummyInterfaceOrientation.landscape, x.games.rummyInterfaceOrientation)
+        shown = false
+        waitForIdle()
+        assertEquals(GamesRummyInterfaceOrientation.portrait, x.games.rummyInterfaceOrientation, "화면이 사라졌는데 가로에 남았다")
+        assertEquals(RummyPhase.playing, x.rummy.phase, "기준선: 판은 그대로다")
+        shown = true
+        waitForIdle()
+        assertEquals(GamesRummyInterfaceOrientation.landscape, x.games.rummyInterfaceOrientation, "돌아왔는데 가로가 아니다")
+        x.rummy.applyState(state("finished", "done").copy(seq = 2))
+        waitForIdle()
+        assertEquals(GamesRummyInterfaceOrientation.portrait, x.games.rummyInterfaceOrientation, "결과가 가로에 남았다")
+        onNodeWithTag(GamesRummyResultTags.BOARD_TOGGLE).performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyResultTags.FINAL_BOARD).assertExists()
+        assertEquals(GamesRummyInterfaceOrientation.landscape, x.games.rummyInterfaceOrientation, "[최종 판]이 가로가 아니다")
+        onNodeWithTag(GamesRummyResultTags.BOARD_RANKS).performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyResultTags.FINAL_BOARD).assertDoesNotExist()
+        assertEquals(GamesRummyInterfaceOrientation.portrait, x.games.rummyInterfaceOrientation)
+        x.h.close()
+    }
+
+    /** 판 중 [반응] = 작은 판(시트는 가로 폰에서 화면을 다 덮어 남은 초를 가린다) · 바깥을 누르거나 뒤로 한 번이면 닫힌다 · 뒤로가 기권 확인으로 넘어가지 않는다. */
+    @Test
+    fun reactionPanelFloatsAndBackClosesItFirst() = runDesktopComposeUiTest(852, 393) {
+        val x = rig()
+        x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
+        x.rummy.applyState(state("active", "playing"))
+        val back = GamesRummyBackState()
+        setContent { AingTheme(dark = false) { GamesRummyScreen(x.games, USER, ME, back = back) } }
+        waitForIdle()
+        onNodeWithTag(GamesRummyReactionTags.PICKER).assertDoesNotExist()
+        onNodeWithTag(GamesRummyReactionTags.BUTTON).performClick()
+        waitForIdle()
+        val panel = onNodeWithTag(GamesRummyReactionTags.PICKER).fetchSemanticsNode().boundsInRoot
+        assertTrue(panel.right <= (852 - GamesRummyMatchLayout.rightColumnWidth).toFloat() * density.density, "고르개가 오른쪽 열을 가린다 $panel")
+        assertTrue(panel.bottom <= 393f * density.density, "고르개가 화면 밖 $panel")
+        var left = 0
+        back.handleBack(x.rummy) { left += 1 }
+        waitForIdle()
+        onNodeWithTag(GamesRummyReactionTags.PICKER).assertDoesNotExist()
+        assertNull(back.asking, "고르개를 닫는 뒤로가 기권 확인을 띄웠다")
+        assertEquals(0, left)
+        onNodeWithTag(GamesRummyReactionTags.BUTTON).performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyReactionTags.PANEL_BACKDROP).performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyReactionTags.PICKER).assertDoesNotExist()
+        // 고르개가 닫힌 뒤의 뒤로는 기권 확인이다(가로에서 대화상자가 뜬다).
+        back.handleBack(x.rummy) { left += 1 }
+        waitForIdle()
+        assertEquals(RummyCloseDecision.confirmForfeit, back.asking)
+        onNodeWithTag(GamesRummyTags.EXIT_KEEP).performClick()
+        waitForIdle()
+        assertNull(back.asking)
+        assertEquals(0, left)
+        x.h.close()
+    }
+
+    /** 판 중 규칙 시트 · 기권 확인이 가로 크기에서 화면 안에 선다. */
+    @Test
+    fun rulesAndExitFitInLandscape() = runDesktopComposeUiTest(667, 375) {
+        val x = rig()
+        x.rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
+        x.rummy.applyState(state("active", "playing"))
+        val back = GamesRummyBackState()
+        setContent { AingTheme(dark = false) { GamesRummyScreen(x.games, USER, ME, back = back) } }
+        waitForIdle()
+        onNodeWithTag(GamesRummyMatchTags.RULES).performClick()
+        waitForIdle()
+        val rules = onNodeWithTag(GamesRummyTags.RULES).fetchSemanticsNode().boundsInRoot
+        assertTrue(rules.width > 0 && rules.left >= 0f && rules.right <= 667f * density.density, "규칙 시트가 화면 밖 $rules")
+        x.rummy.rulesShown = false
+        waitForIdle()
+        back.handleBack(x.rummy) {}
+        waitForIdle()
+        val confirm = onNodeWithTag(GamesRummyTags.EXIT_CONFIRM).fetchSemanticsNode().boundsInRoot
+        assertTrue(confirm.bottom <= 375f * density.density && confirm.right <= 667f * density.density, "기권 확인이 화면 밖 $confirm")
         x.h.close()
     }
 
@@ -213,7 +308,7 @@ class GamesRummyScreenTest {
         setContent {
             AingTheme(dark = false) {
                 androidx.compose.foundation.layout.Row {
-                    GamesRummyTile(RummyFace.of("B7")!!, RummyTileSize.phoneRack)
+                    GamesRummyTile(RummyFace.of("B7")!!, RummyTileSize.rack)
                     GamesRummyTile(RummyFace.joker, RummyTileSize.table)
                     GamesRummyTile(RummyFace.of("D13")!!, RummyTileSize.canvas(0.5), highlighted = true, dimmed = true)
                     GamesRummyTileBack()

@@ -232,7 +232,7 @@ suspend fun RummyStore.leaveRoomForExit(reason: RummyExitReason): Boolean {
 val RummyStore.closeDecision: RummyCloseDecision
     get() = RummyExitPolicy.closeDecision(phase, RummyExitPolicy.mySeat(match)?.state, RummyExitPolicy.amHost(match), isEngagedInCurrentMatch)
 
-/** 로그아웃·계정 삭제 앞에 `rummy_leave` 를 보낼 판·방이 있는가. 이미 기권한 관전자는 보낼 것이 없다. */
+/** 로그아웃 앞에 `rummy_leave` 를 보낼 판·방이 있는가. 이미 기권한 관전자는 보낼 것이 없다. */
 val RummyStore.needsExitLeave: Boolean
     get() = RummyExitPolicy.needsExitLeave(phase, RummyExitPolicy.mySeat(match)?.state, isEngagedInCurrentMatch)
 
@@ -242,7 +242,7 @@ val RummyStore.needsExitLeave: Boolean
  */
 fun RummyStore.requestBack(): RummyCloseDecision {
     val decision = closeDecision
-    if (decision == RummyCloseDecision.leaveRoom) scope.launch { leaveRoomForExit(RummyExitReason.back) }
+    if (decision == RummyCloseDecision.leaveRoom) scope.launch { leaveThenSettle { leaveRoomForExit(RummyExitReason.back) } }
     return decision
 }
 
@@ -254,13 +254,24 @@ fun RummyStore.requestBack(): RummyCloseDecision {
 fun RummyStore.confirmBack(asked: RummyCloseDecision): RummyCloseDecision? {
     val now = closeDecision
     when {
-        now == asked && asked == RummyCloseDecision.confirmCloseRoom -> scope.launch { leaveRoomForExit(RummyExitReason.back) }
-        now == asked -> scope.launch { leaveForExit(RummyExitReason.back) }
+        now == asked && asked == RummyCloseDecision.confirmCloseRoom -> scope.launch { leaveThenSettle { leaveRoomForExit(RummyExitReason.back) } }
+        now == asked -> scope.launch { leaveThenSettle { leaveForExit(RummyExitReason.back) } }
         now == RummyCloseDecision.close -> Unit
-        now == RummyCloseDecision.leaveRoom -> scope.launch { leaveRoomForExit(RummyExitReason.back) }
+        now == RummyCloseDecision.leaveRoom -> scope.launch { leaveThenSettle { leaveRoomForExit(RummyExitReason.back) } }
         else -> return now
     }
     return null
+}
+
+/**
+ * 뒤로 나간 뒤 안내줄을 지우고 로비를 다시 읽는다(코어 `dismissResult` 처럼 — Swift `GamesRummyExit.settleAfterLeaving` @ c9f6976f). 안 읽으면 낡은 `activeMatchId` 로 게임 탭 카드가 최대 30초
+ * '판 진행 중'이고, 닫힌 방이 공개 목록에 남는다. 시작된 판을 들고 남았으면(`leaveRoomForExit`) 아무것도 안 한다. 로그아웃 길은 부르지 않는다 — 세션이 곧 끝난다.
+ */
+private suspend fun RummyStore.leaveThenSettle(leave: suspend () -> Unit) {
+    leave()
+    if (match != null) return
+    setNotice(null)
+    refreshLobby()
 }
 
 // MARK: - 이모티콘 반응(머리말 ⑬)

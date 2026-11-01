@@ -11,7 +11,9 @@ package com.yehsung.aingcheck.ui.games.rummy
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -61,9 +64,11 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
 import com.yehsung.aingcheck.core.rules.text.AingSticker
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
@@ -86,6 +91,7 @@ import kotlin.math.ceil
 
 /** 시험 · 계측 꼬리표. */
 object GamesRummyReactionTags {
+    const val PANEL_BACKDROP: String = "rummy.reaction.panelBackdrop"
     const val BUTTON: String = "rummy.reaction.button"
     const val PICKER: String = "rummy.reaction.picker"
 
@@ -118,7 +124,8 @@ object GamesRummyReactionPlan {
     /** 보낸 뒤 시계가 잠깐 뒤로 간 말풍선까지 받는 폭. */
     private const val futureSlack: Double = -0.5
 
-    enum class Side { above, below }
+    /** 판 화면(가로)은 왼쪽 열 카드의 **오른쪽**으로 — 위아래로 띄우면 옆 카드를 가린다. 결과 화면(세로)은 줄의 위 · 아래다. */
+    enum class Side { above, below, trailing }
 
     /** 지금 보일 말풍선 — 자리마다 가장 최근 것 하나, 받은 지 2.5초 안. 자리 순. */
     fun visible(feed: List<RummyReactionEvent>, now: SwiftDate): List<RummyReactionEvent> {
@@ -156,17 +163,22 @@ object GamesRummyReactionPlan {
         return maxOf(0.0, left / fadeOut)
     }
 
-    /** 자리 위에 설 자리가 없으면(화면 위 끝의 상대 줄) 아래로. */
-    fun side(rect: RummyCanvasRect): Side = if (rect.y < bubbleHeight + 8) Side.below else Side.above
+    /** 가로 화면 = 카드 오른쪽. 세로 화면은 자리 위에 설 자리가 없으면 아래로. */
+    fun side(rect: RummyCanvasRect, bounds: RummyCanvasSize): Side = when {
+        GamesRummyMatchLayout.isLandscape(bounds) -> Side.trailing
+        rect.y < bubbleHeight + 8 -> Side.below
+        else -> Side.above
+    }
 
-    /** 말풍선 중심. 꼬리 끝이 자리에서 3 떨어지고, 양옆은 화면 안으로 들인다. */
-    fun center(rect: RummyCanvasRect, side: Side, width: Double): RummyCanvasPoint {
+    /** 말풍선 중심. 꼬리 끝이 자리에서 3 떨어지고, 흐르는 축은 화면 안으로 들인다. */
+    fun center(rect: RummyCanvasRect, side: Side, bounds: RummyCanvasSize): RummyCanvasPoint {
         val half = bubbleHeight / 2
         val inset = half + 2
-        val x = minOf(maxOf(rect.midX, inset), maxOf(inset, width - inset))
+        val x = minOf(maxOf(rect.midX, inset), maxOf(inset, bounds.width - inset))
         return when (side) {
             Side.above -> RummyCanvasPoint(x, rect.y - 3 - half)
             Side.below -> RummyCanvasPoint(x, rect.maxY + 3 + half)
+            Side.trailing -> RummyCanvasPoint(rect.maxX + 3 + half, minOf(maxOf(rect.midY, inset), maxOf(inset, bounds.height - inset)))
         }
     }
 }
@@ -231,12 +243,12 @@ internal fun GamesRummyReactionOverlay(
     }
     val visible by remember(feed) { derivedStateOf(structuralEqualityPolicy()) { GamesRummyReactionPlan.visible(feed, frameNow) } }
     var origin by remember { mutableStateOf(Offset.Zero) }
-    var layerWidth by remember { mutableStateOf(0) }
+    var layerSize by remember { mutableStateOf(IntSize.Zero) }
     val density = LocalDensity.current.density
     Box(
         modifier.onGloballyPositioned { coordinates ->
             origin = coordinates.positionInRoot()
-            layerWidth = coordinates.size.width
+            layerSize = coordinates.size
         },
     ) {
         // 고리 안에 continue 를 두지 않는다 — 바퀴마다 자리 그룹이 씌워져 key 가 뜻을 잃는다(GamesRummyRackPane).
@@ -249,7 +261,7 @@ internal fun GamesRummyReactionOverlay(
                 (rect.height / density).toDouble(),
             )
             key(event.id) {
-                GamesRummyReactionBubble(event, seatName(event.seatNo), local, (layerWidth / density).toDouble(), art, reduceMotion) { frameNow }
+                GamesRummyReactionBubble(event, seatName(event.seatNo), local, RummyCanvasSize((layerSize.width / density).toDouble(), (layerSize.height / density).toDouble()), art, reduceMotion) { frameNow }
             }
         }
     }
@@ -261,15 +273,14 @@ private fun GamesRummyReactionBubble(
     event: RummyReactionEvent,
     name: String,
     rect: RummyCanvasRect,
-    width: Double,
+    bounds: RummyCanvasSize,
     art: StickerArtState,
     reduceMotion: Boolean,
     frame: () -> SwiftDate,
 ) {
-    val side = GamesRummyReactionPlan.side(rect)
-    val center = GamesRummyReactionPlan.center(rect, side, width)
+    val side = GamesRummyReactionPlan.side(rect, bounds)
+    val center = GamesRummyReactionPlan.center(rect, side, bounds)
     val full = GamesRummyReactionPlan.bubbleHeight
-    val above = side == GamesRummyReactionPlan.Side.above
     val description = RummyReactionPhoneText.accessibility(name, event.sticker.label)
     val shape = RoundedCornerShape(16.dp)
     Box(
@@ -285,7 +296,11 @@ private fun GamesRummyReactionBubble(
                     scaleY = scale
                 }
                 // 튀어나오는 기준점 = 꼬리 끝(자리 쪽).
-                transformOrigin = TransformOrigin(0.5f, if (above) 1f else 0f)
+                transformOrigin = when (side) {
+                    GamesRummyReactionPlan.Side.above -> TransformOrigin(0.5f, 1f)
+                    GamesRummyReactionPlan.Side.below -> TransformOrigin(0.5f, 0f)
+                    GamesRummyReactionPlan.Side.trailing -> TransformOrigin(0f, 0.5f)
+                }
             }
             // 꼬리표가 먼저다 — clearAndSetSemantics 뒤에 달면 그 안쪽으로 치여 지워진다.
             .testTag(GamesRummyReactionTags.bubble(event.seatNo))
@@ -297,14 +312,22 @@ private fun GamesRummyReactionBubble(
             val half = 7f * density
             val middle = size.width / 2
             val path = Path().apply {
-                if (above) {
-                    moveTo(middle - half, size.height - tail - density)
-                    lineTo(middle + half, size.height - tail - density)
-                    lineTo(middle, size.height)
-                } else {
-                    moveTo(middle - half, tail + density)
-                    lineTo(middle + half, tail + density)
-                    lineTo(middle, 0f)
+                when (side) {
+                    GamesRummyReactionPlan.Side.above -> {
+                        moveTo(middle - half, size.height - tail - density)
+                        lineTo(middle + half, size.height - tail - density)
+                        lineTo(middle, size.height)
+                    }
+                    GamesRummyReactionPlan.Side.below -> {
+                        moveTo(middle - half, tail + density)
+                        lineTo(middle + half, tail + density)
+                        lineTo(middle, 0f)
+                    }
+                    GamesRummyReactionPlan.Side.trailing -> {
+                        moveTo(tail + density, size.height / 2 - half)
+                        lineTo(tail + density, size.height / 2 + half)
+                        lineTo(0f, size.height / 2)
+                    }
                 }
                 close()
             }
@@ -338,7 +361,7 @@ private fun GamesRummyStickerArt(sticker: AingSticker, art: StickerArtState, ink
     }
 }
 
-/** 머리 줄 [반응] 단추 + 여섯 이모티콘 시트. 판이 없으면 꺼진다. */
+/** 결과 머리 카드 [반응] 단추 + 여섯 이모티콘 시트(판 화면은 GamesRummyReactionPanel). 판이 없으면 꺼진다. */
 @Composable
 fun GamesRummyReactionButton(rummy: RummyStore, now: () -> SwiftDate, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
@@ -363,10 +386,10 @@ fun GamesRummyReactionButton(rummy: RummyStore, now: () -> SwiftDate, modifier: 
 
 /**
  * 이모티콘 여섯(3×2 · `AingSticker.entries` 순서가 고르는 순서). 고르면 보내고 닫는다. 쿨다운 2초 동안은 칸이 흐려진다 — 눌러도 안 간다는 것을 보인다(코어도 막는다).
- * 시계는 이 시트가 떠 있는 동안만 돈다 — 열쇠가 안 바뀌는 효과 하나다.
+ * 시계는 이 격자가 떠 있는 동안만 돈다 — 열쇠가 안 바뀌는 효과 하나다.
  */
 @Composable
-internal fun GamesRummyReactionPicker(rummy: RummyStore, now: () -> SwiftDate, onPicked: () -> Unit, modifier: Modifier = Modifier) {
+private fun GamesRummyReactionGrid(rummy: RummyStore, now: () -> SwiftDate, onPicked: () -> Unit, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
     val art = rememberStickerArt()
     val clock by rememberUpdatedState(now)
@@ -377,15 +400,7 @@ internal fun GamesRummyReactionPicker(rummy: RummyStore, now: () -> SwiftDate, o
             delay(GAMES_RUMMY_PICKER_TICK_MILLIS)
         }
     }
-    Column(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = AingDimens.sideMargin)
-            .padding(top = AingDimens.space5, bottom = AingDimens.space6)
-            .testTag(GamesRummyReactionTags.PICKER),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(AingDimens.space3),
-    ) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
         Text(RummyReactionPhoneText.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold), color = colors.label)
         for (row in AingSticker.entries.chunked(3)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
@@ -410,5 +425,50 @@ internal fun GamesRummyReactionPicker(rummy: RummyStore, now: () -> SwiftDate, o
     }
 }
 
+/** 결과 화면(세로)의 보내기 시트 내용. */
+@Composable
+internal fun GamesRummyReactionPicker(rummy: RummyStore, now: () -> SwiftDate, onPicked: () -> Unit, modifier: Modifier = Modifier) {
+    GamesRummyReactionGrid(
+        rummy,
+        now,
+        onPicked,
+        modifier
+            .fillMaxWidth()
+            .padding(horizontal = AingDimens.sideMargin)
+            .padding(top = AingDimens.space5, bottom = AingDimens.space6)
+            .testTag(GamesRummyReactionTags.PICKER),
+    )
+}
+
+/** 판 화면(가로)의 보내기 판 — 시트는 가로 폰에서 화면을 다 덮어 판과 남은 초를 가린다. [반응] 옆에 작게 띄우고, 바깥을 누르면 닫힌다. */
+@Composable
+internal fun GamesRummyReactionPanel(rummy: RummyStore, now: () -> SwiftDate, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    val shape = RoundedCornerShape(18.dp)
+    Box(modifier.fillMaxSize()) {
+        Box(
+            Modifier.matchParentSize()
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onClose)
+                .semantics { contentDescription = RummyPhoneText.close }
+                .testTag(GamesRummyReactionTags.PANEL_BACKDROP),
+        )
+        GamesRummyReactionGrid(
+            rummy,
+            now,
+            onClose,
+            Modifier
+                .align(Alignment.TopEnd)
+                .padding(top = GamesRummyMatchLayout.columnPadding.dp, end = (GamesRummyMatchLayout.rightColumnWidth + GamesRummyMatchLayout.columnPadding).dp)
+                .width(GAMES_RUMMY_PANEL_WIDTH.dp)
+                .shadow(12.dp, shape)
+                .background(colors.surface, shape)
+                .border(0.8.dp, colors.separator, shape)
+                .padding(14.dp)
+                .testTag(GamesRummyReactionTags.PICKER),
+        )
+    }
+}
+
+private const val GAMES_RUMMY_PANEL_WIDTH: Int = 252
 private const val GAMES_RUMMY_PICKER_TICK_MILLIS: Long = 250L
 private const val GAMES_RUMMY_PICKER_CELL_HEIGHT: Int = 64

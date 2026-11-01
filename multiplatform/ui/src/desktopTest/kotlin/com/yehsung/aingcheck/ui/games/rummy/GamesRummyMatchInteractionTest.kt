@@ -1,6 +1,6 @@
 // 원본: Tests/checkTests/V0369RummyPanelRenderTests.swift · V0370RummyBoardFeelTests.swift 의 뜻 — 픽셀 대신 상호작용으로 잰다(끌어 놓으면 스토어 편집기가 바뀐다 · 빈 펠트는 보기만 바꾼다 · 핀치 중 한 손가락 금지).
 //
-// 판단은 값 시험(GamesRummyBoardGeometryTest · GamesRummyMatchInputTest)이 잰다. 여기는 **화면이 그 문에 닿는가**를 잰다: 입력 층 하나 · 버튼이 먼저 눌림 · 0.5초 · 두 손가락.
+// 판단은 값 시험(GamesRummyBoardGeometryTest · GamesRummyMatchInputTest · GamesRummyLandscapeTest)이 잰다. 여기는 **화면이 그 문에 닿는가**를 잰다: 입력 층 하나 · 버튼이 먼저 눌림 · 0.5초 · 두 손가락.
 // 호스트 없는 스토어 — 네트워크 0. 내 자리는 my_seat_no 로 안다(코어 규약). 스냅숏 png 는 없다(값 · 상호작용만).
 package com.yehsung.aingcheck.ui.games.rummy
 
@@ -21,7 +21,6 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.Density
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
-import com.yehsung.aingcheck.core.rules.rummy.RummyRackGeometry
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackSlot
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackSort
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
@@ -72,7 +71,7 @@ class GamesRummyMatchInteractionTest {
             return RummyCanvasPoint(local.x + context.layout.table.x, local.y + context.layout.table.y)
         }
 
-        fun finger(pointer: RummyCanvasPoint) = RummyCanvasPoint(pointer.x, pointer.y + GamesRummyGestureRules.fingerLift)
+        fun finger(pointer: RummyCanvasPoint) = context.layout.finger(pointer)
     }
 
     private fun state(
@@ -95,7 +94,6 @@ class GamesRummyMatchInteractionTest {
             it.pollStepSeconds = Double.POSITIVE_INFINITY
             it.heartbeatEnabled = false
             it.deadlineWakeEnabled = false
-            it.rackHalfColumns = RummyRackGeometry.phoneHalfColumns
         }
         rummy.applyState(initial)
         if (engaged) rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
@@ -131,7 +129,7 @@ class GamesRummyMatchInteractionTest {
     // MARK: 끌어 놓기
 
     @Test
-    fun droppingARackTileChangesTheStoreEditor() = runDesktopComposeUiTest(393, 759) {
+    fun droppingARackTileChangesTheStoreEditor() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val a4 = x.tileID("A4")
@@ -144,7 +142,7 @@ class GamesRummyMatchInteractionTest {
     }
 
     @Test
-    fun droppingOnFeltMakesANewMeldInThatPlace() = runDesktopComposeUiTest(393, 759) {
+    fun droppingOnFeltMakesANewMeldInThatPlace() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         drag(x.rackPoint("D9"), x.finger(x.screen(300.0, 300.0)))
@@ -156,7 +154,7 @@ class GamesRummyMatchInteractionTest {
 
     /** 8 안에서 0.5초 버티면 묶음째 — 끌면 덩어리가 통째로 간다. 기준선: 안 버티면 한 장이다. */
     @Test
-    fun holdingHalfASecondLiftsTheChain() = runDesktopComposeUiTest(393, 759) {
+    fun holdingHalfASecondLiftsTheChain() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val start = x.rackPoint("C2")
@@ -178,7 +176,7 @@ class GamesRummyMatchInteractionTest {
     }
 
     @Test
-    fun aQuickDragTakesOneTile() = runDesktopComposeUiTest(393, 759) {
+    fun aQuickDragTakesOneTile() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         drag(x.rackPoint("C2"), x.finger(x.screen(300.0, 300.0)))
@@ -189,7 +187,7 @@ class GamesRummyMatchInteractionTest {
 
     /** 판 출신을 받침대에 놓으면 빨간 표시 후 제자리(R-14). */
     @Test
-    fun boardTileOnTheRackIsRefusedAndStays() = runDesktopComposeUiTest(393, 759) {
+    fun boardTileOnTheRackIsRefusedAndStays() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val before = assertNotNull(x.rummy.editor).copy()
@@ -207,14 +205,14 @@ class GamesRummyMatchInteractionTest {
 
     /** 내 차례가 아니면 받침대 재배치만 — 판에 놓아도 아무 일도 없고 판 타일은 펠트다. */
     @Test
-    fun notMyTurnOnlyRearrangesTheRack() = runDesktopComposeUiTest(393, 759) {
+    fun notMyTurnOnlyRearrangesTheRack() = runDesktopComposeUiTest(734, 372) {
         val x = rig(state(turnSeat = 1))
         show(x)
         val before = assertNotNull(x.rummy.editor).copy()
         drag(x.rackPoint("D9"), x.finger(x.screen(300.0, 300.0)))
         assertEquals(before, x.rummy.editor, "남의 차례에 판으로 나갔다")
         val rackRow2 = x.context.rack.frame(RummyRackSlot(1, 12))
-        drag(x.rackPoint("D9"), x.finger(RummyCanvasPoint(rackRow2.midX, x.context.layout.rack.y + rackRow2.midY)))
+        drag(x.rackPoint("D9"), x.finger(RummyCanvasPoint(x.context.layout.rack.x + rackRow2.midX, x.context.layout.rack.y + rackRow2.midY)))
         assertEquals(1, assertNotNull(x.rummy.editor).rackLayout.slot(x.tileID("D9"))?.row, "받침대 안 재배치가 안 됐다")
         x.h.close()
     }
@@ -222,23 +220,23 @@ class GamesRummyMatchInteractionTest {
     // MARK: 판 밀기 · 핀치
 
     @Test
-    fun draggingFeltMovesOnlyTheOffset() = runDesktopComposeUiTest(393, 759) {
+    fun draggingFeltMovesOnlyTheOffset() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val editor = assertNotNull(x.rummy.editor).copy()
         val scale = x.model.viewport.scale
         val origin = x.model.viewport.origin
         val start = x.screen(300.0, 300.0)
-        drag(start, RummyCanvasPoint(start.x - 80, start.y))
+        drag(start, RummyCanvasPoint(start.x, start.y - 80))
         assertEquals(editor, x.rummy.editor, "판을 밀었는데 편집기가 바뀌었다")
         assertEquals(scale, x.model.viewport.scale, "배율이 저절로 바뀌었다")
-        assertEquals(origin.x + 80 / scale, x.model.viewport.origin.x, 0.5, "손을 따라 안 밀렸다")
+        assertEquals(origin.y + 80 / scale, x.model.viewport.origin.y, 0.5, "손을 따라 안 밀렸다")
         x.h.close()
     }
 
     /** 두 손가락은 핀치만 — 편집기를 안 건드리고 배율만 바뀐다 · 떼면 또렷하게 다시 그린다 · 다음 손은 새로 분류된다. */
     @Test
-    fun twoFingersOnlyPinch() = runDesktopComposeUiTest(393, 759) {
+    fun twoFingersOnlyPinch() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val editor = assertNotNull(x.rummy.editor).copy()
@@ -268,7 +266,7 @@ class GamesRummyMatchInteractionTest {
 
     /** 핀치 중 한 손가락 끌기 금지: 타일을 누르던 손가락이 핀치가 되면 그 손가락을 끌어도 타일이 안 움직인다. */
     @Test
-    fun oneFingerCannotDragDuringAPinch() = runDesktopComposeUiTest(393, 759) {
+    fun oneFingerCannotDragDuringAPinch() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val editor = assertNotNull(x.rummy.editor).copy()
@@ -295,7 +293,7 @@ class GamesRummyMatchInteractionTest {
 
     /** 끄는 중 두 번째 손가락은 무시 — 끌기가 이어지고 배율은 그대로다. */
     @Test
-    fun secondFingerDuringADragIsIgnored() = runDesktopComposeUiTest(393, 759) {
+    fun secondFingerDuringADragIsIgnored() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val scale = x.model.viewport.scale
@@ -322,7 +320,7 @@ class GamesRummyMatchInteractionTest {
     // MARK: 버튼이 입력 층보다 먼저
 
     @Test
-    fun buttonsAreAboveTheInputLayer() = runDesktopComposeUiTest(393, 759) {
+    fun buttonsAreAboveTheInputLayer() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         var back = 0
         var rules = 0
@@ -341,7 +339,7 @@ class GamesRummyMatchInteractionTest {
 
     /** [되돌리기]는 놓은 뒤에만 켜지고, 누르면 처음 판으로 돌아간다. */
     @Test
-    fun undoComesAliveAfterAMove() = runDesktopComposeUiTest(393, 759) {
+    fun undoComesAliveAfterAMove() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val start = assertNotNull(x.rummy.editor).copy()
@@ -357,7 +355,7 @@ class GamesRummyMatchInteractionTest {
     }
 
     @Test
-    fun zoomToggleSwitchesFullViewAndBack() = runDesktopComposeUiTest(393, 759) {
+    fun zoomToggleSwitchesFullViewAndBack() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         val base = x.model.viewport.scale
@@ -372,22 +370,25 @@ class GamesRummyMatchInteractionTest {
         x.h.close()
     }
 
-    /** 화면 밖 묶음 배지: 그쪽 수를 말하고, 누르면 그쪽으로 민다 · 다 보이면 사라진다. 판 변화로 배율이 안 바뀐다. */
+    /** 화면 밖 묶음 배지: 그쪽 수를 말하고, 누르면 그쪽으로 민다 · 다 보이면 사라진다. 판 변화로 배율이 안 바뀐다. 기본 보기(폭 맞춤)에서는 위아래가 쓰인다. */
     @Test
-    fun offscreenBadgeRevealsTheMeld() = runDesktopComposeUiTest(393, 759) {
-        val x = rig()
+    fun offscreenBadgeRevealsTheMeld() = runDesktopComposeUiTest(734, 372) {
+        val x = rig(state(layout = "[[100,50],[300,560]]"))
         show(x)
         val scale = x.model.viewport.scale
-        onNodeWithContentDescription(RummyPhoneText.offscreenRight(1)).assertExists()
+        onNodeWithContentDescription(RummyPhoneText.offscreenDown(1)).assertExists()
+        onNodeWithTag(GamesRummyMatchTags.OFFSCREEN_UP).assertDoesNotExist()
         onNodeWithTag(GamesRummyMatchTags.OFFSCREEN_LEFT).assertDoesNotExist()
-        onNodeWithTag(GamesRummyMatchTags.OFFSCREEN_RIGHT).performClick()
-        waitForIdle()
         onNodeWithTag(GamesRummyMatchTags.OFFSCREEN_RIGHT).assertDoesNotExist()
-        onNodeWithContentDescription(RummyPhoneText.offscreenLeft(1)).assertExists()
+        onNodeWithTag(GamesRummyMatchTags.OFFSCREEN_DOWN).performClick()
+        waitForIdle()
+        onNodeWithTag(GamesRummyMatchTags.OFFSCREEN_DOWN).assertDoesNotExist()
         assertEquals(scale, x.model.viewport.scale, "미는데 배율이 바뀌었다")
         // 놓아도 배율은 그대로다(맥 교훈).
-        drag(x.rackPoint("D9"), x.finger(x.screen(800.0, 300.0)))
+        drag(x.rackPoint("D9"), x.finger(x.screen(800.0, 500.0)))
         assertEquals(scale, x.model.viewport.scale, "판 변화로 배율이 저절로 바뀌었다")
+        // 위로 가려진 묶음은 위쪽 배지다.
+        onNodeWithContentDescription(RummyPhoneText.offscreenUp(1)).assertExists()
         x.h.close()
     }
 
@@ -395,7 +396,7 @@ class GamesRummyMatchInteractionTest {
 
     /** 놀던 기기: 안내 카드만 얹고 입력은 안 막는다. 손댄 기기엔 카드가 없다. */
     @Test
-    fun otherDeviceCardDoesNotBlockInput() = runDesktopComposeUiTest(393, 759) {
+    fun otherDeviceCardDoesNotBlockInput() = runDesktopComposeUiTest(734, 372) {
         val x = rig(engaged = false)
         show(x)
         onNodeWithText(RummyPhoneText.otherDevice).assertExists()
@@ -405,7 +406,7 @@ class GamesRummyMatchInteractionTest {
     }
 
     @Test
-    fun engagedDeviceSeesNoCard() = runDesktopComposeUiTest(393, 759) {
+    fun engagedDeviceSeesNoCard() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x)
         onNodeWithTag(GamesRummyMatchTags.ELSEWHERE).assertDoesNotExist()
@@ -413,12 +414,13 @@ class GamesRummyMatchInteractionTest {
     }
 
     @Test
-    fun seatsAndStatusSpeakTheStore() = runDesktopComposeUiTest(393, 759) {
+    fun seatsAndStatusSpeakTheStore() = runDesktopComposeUiTest(734, 372) {
         val x = rig(state(turnSeat = 1))
         show(x)
         onNodeWithContentDescription(GamesRummyMatchText.seatSummary("비", 9, true, emptyList())).assertExists()
         onNodeWithTag(GamesRummyMatchTags.STATUS).assertExists()
-        // 상태 줄과 판 아래 줄이 같은 글자를 쓴다(맥과 같다).
+        // 손댄 기기는 상태 글자가 90초 규칙을 말하고 '누구 차례'는 꼬리가 말한다.
+        onNodeWithText(RummyPhoneText.backgroundWarning, useUnmergedTree = true).assertExists()
         assertTrue(onAllNodesWithText(RummyPhoneText.turnOf("비"), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
         onNodeWithText(RummyPhoneText.pool(50), useUnmergedTree = true).assertExists()
         // 받침대는 면 이름으로 읽힌다.
@@ -426,35 +428,90 @@ class GamesRummyMatchInteractionTest {
         x.h.close()
     }
 
-    // MARK: 폭 · 큰 글자
+    // MARK: 크기 · 큰 글자
 
-    /** 좁은 폭 · 큰 글자에서 동작 줄 버튼이 화면 안이고 서로 안 겹친다. */
-    private fun DesktopComposeUiTest.assertActionsFit(width: Double, height: Double) {
-        val tags = listOf(GamesRummyMatchTags.SUBMIT, GamesRummyMatchTags.DRAW, GamesRummyMatchTags.UNDO, GamesRummyMatchTags.SORT_NUMBER, GamesRummyMatchTags.SORT_COLOR)
-        val rects = tags.map { onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
+    /** 칸마다 실제 그린 자리가 화면 안이고 서로 안 겹치며, 글자가 칸 안에 든다. */
+    private fun DesktopComposeUiTest.assertColumnsFit(width: Double, height: Double) {
+        val tags = listOf(
+            GamesRummyMatchTags.BACK, GamesRummyMatchTags.RULES, GamesRummyMatchTags.INFO, GamesRummyMatchTags.ZOOM,
+            GamesRummyMatchTags.SUBMIT, GamesRummyMatchTags.DRAW, GamesRummyMatchTags.UNDO, GamesRummyMatchTags.SORT_NUMBER, GamesRummyMatchTags.SORT_COLOR,
+            GamesRummyMatchTags.MY_SEAT, GamesRummyMatchTags.seat(1),
+        )
+        val rects = tags.map { onNodeWithTag(it, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot }
         for ((index, rect) in rects.withIndex()) {
-            assertTrue(rect.left >= -0.5f && rect.right <= width + 0.5 && rect.bottom <= height + 0.5, "${tags[index]} 화면 밖 $rect")
+            assertTrue(rect.left >= -0.5f && rect.right <= width + 0.5 && rect.top >= -0.5f && rect.bottom <= height + 0.5, "${tags[index]} 화면 밖 $rect")
             assertTrue(rect.height >= 20f, "${tags[index]} 납작하다 $rect")
             for (other in rects.drop(index + 1)) assertFalse(rect.overlaps(other), "${tags[index]} 겹침 $rect $other")
         }
     }
 
     @Test
-    fun narrowPhoneKeepsTheActionsOnScreen() = runDesktopComposeUiTest(320, 548) {
+    fun smallPhoneKeepsTheColumnsOnScreen() = runDesktopComposeUiTest(667, 354) {
         val x = rig()
         show(x)
-        assertActionsFit(320.0, 548.0)
+        assertColumnsFit(667.0, 354.0)
         x.h.close()
     }
 
     @Test
-    fun bigTextSplitsActionsAndKeepsThemOnScreen() = runDesktopComposeUiTest(393, 759) {
+    fun lowAndroidPhoneKeepsTheColumnsOnScreen() = runDesktopComposeUiTest(640, 312) {
+        val x = rig()
+        show(x)
+        assertColumnsFit(640.0, 312.0)
+        x.h.close()
+    }
+
+    /** 큰 글자에서 스크롤 없이 칸 안이다 — 칸은 값이고 글자 배율을 칸마다 자른다. 버튼 글자가 버튼 밖으로 안 넘친다. */
+    @Test
+    fun bigTextStaysInsideTheCells() = runDesktopComposeUiTest(667, 354) {
         val x = rig()
         show(x, fontScale = 2f)
-        assertActionsFit(393.0, 759.0)
-        val submit = onNodeWithTag(GamesRummyMatchTags.SUBMIT).fetchSemanticsNode().boundsInRoot
-        val draw = onNodeWithTag(GamesRummyMatchTags.DRAW).fetchSemanticsNode().boundsInRoot
-        assertTrue(draw.top >= submit.bottom, "큰 글자인데 한 줄이다")
+        assertColumnsFit(667.0, 354.0)
+        val button = onNodeWithTag(GamesRummyMatchTags.UNDO).fetchSemanticsNode().boundsInRoot
+        val label = onNodeWithText(RummyPhoneText.undo, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertTrue(label.left >= button.left - 0.5f && label.right <= button.right + 0.5f && label.bottom <= button.bottom + 0.5f, "글자가 버튼 밖 $label / $button")
+        x.h.close()
+    }
+
+    /** 세로 크기로 불린 한 프레임: 칸을 세우지 않고 안내 + [나가기]만 그린다(크래시 · 깨진 칸 없음). 돌아오면 판이 선다. */
+    @Test
+    fun aPortraitFrameDrawsTheSafePicture() = runDesktopComposeUiTest(393, 759) {
+        val x = rig()
+        var back = 0
+        show(x, onBack = { back += 1 })
+        onNodeWithTag(GamesRummyMatchTags.ROTATING).assertExists()
+        onNodeWithTag(GamesRummyMatchTags.INPUT).assertDoesNotExist()
+        onNodeWithTag(GamesRummyMatchTags.BACK).performClick()
+        assertEquals(1, back, "돌아가는 동안 [나가기]가 안 닿는다")
+        x.h.close()
+    }
+
+    /** 끄는 동안 동작 버튼이 잠긴다 — 다른 손가락의 [되돌리기] 가 쥔 묶음 번호를 낡게 만들면 안 된다. */
+    @Test
+    fun actionsLockWhileATileIsHeld() = runDesktopComposeUiTest(734, 372) {
+        val x = rig()
+        show(x)
+        val a4 = x.tileID("A4")
+        drag(x.rackPoint("A4"), x.finger(x.screen(100.0 + 120 - 6, 78.0)))
+        assertEquals(4, assertNotNull(x.rummy.editor).melds[0].size)
+        val start = x.rackPoint("C1")
+        val undo = x.context.layout.undo
+        onNodeWithTag(GamesRummyMatchTags.INPUT).performTouchInput { down(0, Offset((start.x * density).toFloat(), (start.y * density).toFloat())) }
+        waitForIdle()
+        assertTrue(x.model.locksActions)
+        onNodeWithTag(GamesRummyMatchTags.INPUT).performTouchInput {
+            down(1, Offset((undo.midX * density).toFloat(), ((undo.y + undo.height / 2) * density).toFloat()))
+            up(1)
+        }
+        waitForIdle()
+        assertEquals(4, assertNotNull(x.rummy.editor).melds[0].size, "쥔 동안 [되돌리기]가 먹었다")
+        onNodeWithTag(GamesRummyMatchTags.INPUT).performTouchInput { up(0) }
+        waitForIdle()
+        assertFalse(x.model.locksActions)
+        onNodeWithTag(GamesRummyMatchTags.UNDO).performClick()
+        waitForIdle()
+        assertEquals(3, assertNotNull(x.rummy.editor).melds[0].size, "손을 뗐는데 [되돌리기]가 죽었다")
+        assertTrue(assertNotNull(x.rummy.editor).rack.any { it.id == a4 })
         x.h.close()
     }
 
@@ -462,7 +519,7 @@ class GamesRummyMatchInteractionTest {
 
     /** 판 타일 100장 — 그리는 데 터지지 않고, 밀어도 판 층 배율이 그대로다(층만 옮긴다). */
     @Test
-    fun aHundredTilesPanWithoutRedrawInputs() = runDesktopComposeUiTest(393, 759) {
+    fun aHundredTilesPanWithoutRedrawInputs() = runDesktopComposeUiTest(734, 372) {
         val sets = (0 until 26).map { index ->
             val color = "ABCD"[index % 4]
             val start = index % 9 + 1
@@ -473,22 +530,24 @@ class GamesRummyMatchInteractionTest {
         show(x)
         assertEquals(104, x.context.scene.tileCount)
         val render = x.model.renderScale
-        val start = x.screen(300.0, 600.0)
-        drag(start, RummyCanvasPoint(start.x - 100, start.y))
-        assertTrue(x.model.viewport.origin.x > 0)
+        val start = x.screen(500.0, 420.0)
+        drag(start, RummyCanvasPoint(start.x, start.y - 100))
+        assertTrue(x.model.viewport.origin.y > 0)
         assertEquals(render, x.model.renderScale, "밀었는데 판 층을 다시 그린다")
         x.h.close()
     }
 
-    /** 칸 크기 값이 받침대 줄 수를 따른다 — 넘치면 판이 줄어든다(재료 값). */
+    /** 받침대가 3줄이어도 칸은 그대로다(타일이 2/줄로 준다) — 판 칸이 안 흔들린다. */
     @Test
-    fun threeRowRackShrinksTheBoard() = runDesktopComposeUiTest(393, 759) {
-        val rack = ((1..13).map { "\"A$it\"" } + (1..10).map { "\"B$it\"" }).joinToString(",", "[", "]")
+    fun threeRowRackKeepsTheBoardSize() = runDesktopComposeUiTest(734, 372) {
+        val rack = ((1..13).map { "\"A$it\"" } + (1..13).map { "\"B$it\"" } + (1..8).map { "\"C$it\"" }).joinToString(",", "[", "]")
         val x = rig(state(rack = rack))
         show(x)
-        assertEquals(3, x.context.layout.rackRows, "23장인데 3줄이 아니다")
-        val size = RummyCanvasSize(x.context.layout.table.width, x.context.layout.table.height)
-        assertEquals(size, x.model.viewport.viewport, "보기가 칸 크기를 안 따른다")
+        assertEquals(3, x.context.layout.rackRows, "34장인데 3줄이 아니다")
+        val two = GamesRummyMatchLayout(RummyCanvasSize(734.0, 372.0), 2)
+        assertEquals(two.table, x.context.layout.table, "줄이 늘었다고 판이 줄었다")
+        assertEquals(two.rack, x.context.layout.rack)
+        assertEquals(RummyCanvasSize(two.table.width, two.table.height), x.model.viewport.viewport, "보기가 칸 크기를 안 따른다")
         x.h.close()
     }
 }

@@ -42,7 +42,6 @@ import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.rummy.RummyArtKind
 import com.yehsung.aingcheck.core.rules.rummy.RummyArtOutcome
 import com.yehsung.aingcheck.core.rules.rummy.RummyArtRules
-import com.yehsung.aingcheck.core.rules.rummy.RummyRackGeometry
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackLayout
 import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.components.CharacterExpression
@@ -226,11 +225,11 @@ fun GamesRummyTableSurface(modifier: Modifier = Modifier, cornerRadius: Dp = 18.
 // MARK: - 받침대
 
 /**
- * 받침대 — 그림(3-슬라이스, 세로로 안 늘림) 또는 그린 폴백. 크기는 부르는 쪽이 정한다(폰은 [RummyRackGeometry.phone] 의 폭 · height).
+ * 받침대 — 그림(3-슬라이스, 세로로 안 늘림) 또는 그린 폴백. 크기는 부르는 쪽이 정한다(폰은 [GamesRummyRackGeometry] 의 폭 · 높이).
  * 그림의 선반은 두 단이다 — 줄이 셋 이상 열리면 그림 대신 줄 수만큼 선반을 그린다.
  */
 @Composable
-fun GamesRummyRackStand(geometry: RummyRackGeometry, modifier: Modifier = Modifier) {
+fun GamesRummyRackStand(geometry: GamesRummyRackGeometry, modifier: Modifier = Modifier) {
     val art = LocalGamesRummyArt.current?.rack
     Canvas(modifier.clearAndSetSemantics { }) {
         val capPixels = if (art != null && geometry.rowCount <= RummyRackLayout.baseRows) RummyArtRules.rackCapPixels(art.width, art.height) else null
@@ -254,7 +253,7 @@ private fun DrawScope.drawRackSlices(art: ImageBitmap, capPixels: Int) {
 }
 
 /** 그림이 없을 때의 받침대 — 짙은 남색 유광 · 줄마다 선반 · 분홍 테두리(그림과 같은 색). */
-private fun DrawScope.drawRackFallback(geometry: RummyRackGeometry) {
+private fun DrawScope.drawRackFallback(geometry: GamesRummyRackGeometry) {
     val corner = CornerRadius(14f * density)
     drawRoundRect(Brush.verticalGradient(listOf(Color(0.20f, 0.22f, 0.52f), Color(0.10f, 0.11f, 0.32f))), cornerRadius = corner)
     // 유광 — 위쪽 빛.
@@ -266,7 +265,7 @@ private fun DrawScope.drawRackFallback(geometry: RummyRackGeometry) {
     val shelfHeight = 5f * density
     val inset = 6f * density
     for (row in 0 until geometry.rowCount) {
-        val y = (geometry.rowBottom(row).toFloat() * density).coerceAtMost(size.height - shelfHeight)
+        val y = (((geometry.rowTop(row) + geometry.tileSize.height).toFloat()) * density).coerceAtMost(size.height - shelfHeight)
         val topLeft = Offset(inset, y)
         val shelf = Size(size.width - inset * 2, shelfHeight)
         val round = CornerRadius(shelfHeight / 2)

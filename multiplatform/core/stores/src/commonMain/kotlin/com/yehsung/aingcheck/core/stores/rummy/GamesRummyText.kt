@@ -83,8 +83,9 @@ object RummyPhoneText {
     const val peopleHeader: String = "사람"
     const val busyHeader: String = "지금은 바빠요"
     const val calling: String = "부르는 중"
-    const val waitingAnswer: String = "답 기다리는 중"
-    const val seated: String = "앉음"
+    /** 의자 카드와 사람 행이 같은 낱말을 쓴다([invited] · [joined]). */
+    const val waitingAnswer: String = invited
+    const val seated: String = joined
     const val me: String = "나"
     const val take: String = "앉기"
     const val joinEmpty: String = "받은 초대나 열린 공개 탁자가 생기면 이 화면 맨 위에 떠요"
@@ -147,16 +148,20 @@ object RummyPhoneText {
     const val pass: String = "넘기기"
     const val submit: String = "완료"
     const val beforeInitial: String = "등록 전"
-    const val myTurn: String = "내 차례예요 — 타일을 끌어 판에 놓으세요"
+    const val myTurn: String = "내 차례예요 — 타일을 끌어 판에 놓아요"
     const val myTurnBadge: String = "내 차례"
     const val remainingTiles: String = "남은 타일"
     const val poolLabel: String = "더미에 남은 타일"
-    const val zoomIn: String = "판 확대"
+    const val zoomIn: String = "크게 보기"
     const val zoomOut: String = "전체 보기"
     const val rules: String = "규칙"
     const val reactionButton: String = "반응"
+    const val rotating: String = "화면을 가로로 돌리고 있어요"
     const val otherDevice: String = "다른 기기에서 하는 판이에요"
-    const val otherDeviceDetail: String = "이 폰에서 타일을 옮기면 이 폰이 판을 이어 받아요."
+    const val otherDeviceDetail: String = "여기서 판에 타일을 놓거나 반응을 보내면 이 폰에서 이어서 하게 돼요."
+
+    /** 남의 차례 동안의 상태 줄(이 기기가 손댄 판). 서버 90초 끊김 규칙을 바꾸지 않고 알리기만 한다 — 4명이면 내 차례가 최대 3분 뒤라 그 사이 앱을 내리기 쉽다. */
+    const val backgroundWarning: String = "앱을 90초 넘게 내리면 기권돼요"
     const val readOnlyBoard: String = "최종 판"
 
     fun rackCount(count: Long?): String = "${count ?: 0}장"
@@ -182,6 +187,10 @@ object RummyPhoneText {
     fun offscreenLeft(count: Int): String = "왼쪽에 안 보이는 묶음 ${count}개, 눌러서 밀어요"
 
     fun offscreenRight(count: Int): String = "오른쪽에 안 보이는 묶음 ${count}개, 눌러서 밀어요"
+
+    fun offscreenUp(count: Int): String = "위쪽에 안 보이는 묶음 ${count}개, 눌러서 밀어요"
+
+    fun offscreenDown(count: Int): String = "아래쪽에 안 보이는 묶음 ${count}개, 눌러서 밀어요"
 
     /**
      * 내 차례 상태 줄(알림 notice 가 없을 때). 첫 등록 전에는 진행 점수(판 묶음을 건드렸으면 그 이유),
@@ -230,23 +239,22 @@ object RummyPhoneText {
 
     const val resultTitle: String = "결과"
     const val playAgain: String = "한 판 더"
-    const val finalBoard: String = "최종 판 보기"
+    const val finalBoard: String = "최종 판"
     const val ranks: String = "등수"
     const val emptyBoard: String = "판에 놓인 묶음이 없어요"
     const val toLobby: String = "나가기"
 
     fun rank(rank: Long?): String = rank?.let { "${it}등" } ?: "—"
 
+    /** 순위표의 자리 — 'N위'. 판 등수 'N등'([rank])과 가른다: 한 줄에 '2등 · 1등 5' 로 붙으면 두 뜻이 섞인다(폰의 다른 순위도 '위'다). */
+    fun ladderRank(rank: Long?): String = rank?.let { "${it}위" } ?: "—"
+
     /** 머리 카드의 내 등수. 기권이면 까닭을 앞에 말한다. */
     fun myResult(rank: Long?, forfeited: Boolean): String = if (forfeited) "$forfeit · ${rank(rank)}" else rank(rank)
 
     fun remainingCount(count: Int): String = "$remainingTiles ${count}장"
 
-    fun score(score: Long?): String = when {
-        score == null -> "점수 —"
-        score > 0 -> "점수 +$score"
-        else -> "점수 $score"
-    }
+    fun score(score: Long?): String = if (score == null) "점수 —" else "점수 ${net(score)}"
 
     fun net(value: Long): String = when {
         value > 0 -> "+$value"
@@ -270,7 +278,7 @@ object RummyPhoneText {
     fun endReason(reason: RummyEndReason?, winner: String?, winnerIsMe: Boolean = false): String = when (reason) {
         RummyEndReason.rackEmpty -> if (winnerIsMe) "랙을 비웠어요" else winner?.let { "${it}님이 랙을 비웠어요" } ?: "랙을 비운 사람이 나왔어요"
         RummyEndReason.blocked -> "더미가 비고 모두 넘겨서 끝났어요"
-        RummyEndReason.lastStanding -> winner?.let { "${it}님 혼자 남아 끝났어요" } ?: "혼자 남아 끝났어요"
+        RummyEndReason.lastStanding -> if (winnerIsMe) "혼자 남아 끝났어요" else winner?.let { "${it}님 혼자 남아 끝났어요" } ?: "혼자 남아 끝났어요"
         RummyEndReason.unknown, null -> "판이 끝났어요"
     }
 
@@ -283,7 +291,7 @@ object RummyPhoneText {
 
     /** 스토어 판단 → 확인 글자. 묻지 않는 판단(그냥 닫기 · 손님 나가기)은 null. */
     fun exit(decision: RummyCloseDecision): ExitCopy? = when (decision) {
-        RummyCloseDecision.confirmForfeit -> ExitCopy("나갈까요?", "나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요.", "기권하고 나가기")
+        RummyCloseDecision.confirmForfeit -> ExitCopy("판을 나갈까요?", "나가면 기권돼 꼴찌가 되고 판돈을 잃어요.", "기권하고 나가기")
         RummyCloseDecision.confirmCloseRoom -> ExitCopy("방을 닫을까요?", "방장이 나가면 방이 닫히고 모두 로비로 돌아가요. 루비는 그대로예요.", "방 닫기")
         RummyCloseDecision.close, RummyCloseDecision.leaveRoom -> null
     }
@@ -303,14 +311,15 @@ object RummyPhoneText {
         Rule("판 조작", "첫 등록 뒤엔 판의 묶음을 나누고 합치고 옮겨도 돼요. 끝날 때 모든 묶음이 맞고 내 타일을 1장 이상 냈어야 해요. 판에 있던 타일은 랙으로 가져올 수 없어요."),
         Rule(
             "조작",
-            "끌면 한 장이에요. 0.5초 길게 눌렀다 끌면 덩어리째 집어요(판에선 누른 타일에서 가까운 끝까지, 가운데를 누르면 묶음 전체). " +
-                "묶음 왼쪽 손잡이를 끌면 묶음째 옮겨요. 묶음 끝 가까이 놓으면 붙고, 묶음 위에 놓으면 맞는 자리에 끼워져요. 묶음 가운데를 빼면 둘로 나뉘어요.",
+            "끌면 한 장 · 0.5초 꾹 누른 채 끌면 덩어리(판에선 누른 타일에서 가까운 끝까지) · 묶음 왼쪽 손잡이로 묶음째 옮기기 · " +
+                "묶음 끝 가까이 놓으면 붙기 · 묶음 위에 놓으면 맞는 자리에 끼우기 · 묶음 가운데를 빼면 둘로 나뉘어요.",
         ),
-        Rule("판 보기", "빈 펠트를 끌면 판을 옆으로 밀어요. 두 손가락으로 벌리거나 오므리면 크기가 바뀌고, [전체 보기]로 한눈에 봐요. 가장자리 숫자는 그쪽에 안 보이는 묶음 수예요."),
+        // iOS 글자는 '판 오른쪽 아래 버튼'이다 — 가로판에서 그 버튼은 오른쪽 열로 옮겼으니 여기는 있는 자리대로 적는다.
+        Rule("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, 오른쪽 열 버튼으로 한눈에 봐요. 화면 밖 묶음은 가장자리 배지가 알려 줘요."),
         Rule("받침대", "타일 사이에 놓으면 끼워 넣고 오른쪽을 밀어요. 딱 붙여 놓은 맞는 묶음엔 밑줄과 점수가 떠요. 777·789로 정렬해 두면 새로 뽑은 타일도 그 정렬 자리로 들어가요."),
         Rule("시간 60초", "시간이 지나면 놓던 판이 맞으면 그대로 확정돼요. 틀렸거나 아무것도 안 놓았으면 되돌리고 1장 뽑아요. 시간 초과가 3번 이어지면 기권이에요."),
+        Rule("기권", "뒤로 단추로 판을 나가거나 시간 초과가 3번 이어지면 기권이고 꼴찌예요. 남은 사람끼리 계속해요. 앱을 잠깐 내려도 바로 기권은 아니에요 — 90초 안에 돌아오면 이어서 해요."),
         Rule("끝과 점수", "누군가 랙을 비우면 끝나요(더미가 비고 모두 넘겨도 끝). 남은 타일 합만큼 잃고(아잉이 30점), 이긴 사람이 그만큼 얻어요.", listOf("D12", "J")),
-        Rule("등수 분배", "판돈이 N이면 2명 +N·−N · 3명 +N·0·−N · 4명 +2N·0·−N·−N. 기권은 꼴찌예요. 새로 생기는 루비는 없어요."),
-        Rule("나가면", "판 중에 나가면 바로 기권이에요. 앱을 내리는 것만으로는 기권이 아니지만 90초 안에 돌아오지 않으면 기권돼요. 남은 사람끼리 계속해요."),
+        Rule("등수 분배", "판돈 N 기준 2명 +N·−N · 3명 +N·0·−N · 4명 +2N·0·−N·−N. 기권은 꼴찌예요. 새로 생기는 루비는 없어요."),
     )
 }

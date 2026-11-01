@@ -104,9 +104,6 @@ class RummyTurnEditor private constructor(
     /** v2: 받침대 자리(타일 id → 줄 · 반 칸). 랙 자리의 정본. 읽어 간 값은 사본이다. */
     val rackLayout: RummyRackLayout get() = layout.copy()
 
-    /** 받침대 한 줄의 반 칸 수(맥 32 · 폰 22). */
-    val rackHalfColumns: Int get() = layout.halfColumns
-
     private data class Departure(val tile: RummyTile, val slot: RummyRackSlot)
 
     /** 값 복제(Swift 대입과 같다). */
@@ -374,7 +371,7 @@ class RummyTurnEditor private constructor(
                     val order = readingBefore.filter { it !in moving }.toMutableList()
                     val before = readingBefore.take(maxOf(slot, 0)).count { it in moving }
                     order.addAll(clamp(slot - before, order.size), tileIDs)
-                    layout = RummyRackLayout.packed(order, layout.halfColumns)
+                    layout = RummyRackLayout.packed(order)
                 } else {
                     layout.set(tileIDs, layout.endSlot(tileIDs.size))
                 }
@@ -512,7 +509,7 @@ class RummyTurnEditor private constructor(
      */
     fun sortRack(mode: RummyRackSort) {
         val units = RummyRackLayout.sortUnits(rack, mode)
-        layout = RummyRackLayout.grouped(units.map { unit -> unit.map { it.id } }, halfColumns = layout.halfColumns)
+        layout = RummyRackLayout.grouped(units.map { unit -> unit.map { it.id } })
         val lookup = rack.associateBy { it.id }
         rack = layout.readingOrder.mapNotNull { lookup[it] }
     }
@@ -587,7 +584,6 @@ class RummyTurnEditor private constructor(
          * @param tableLayout v2 확정 판 배치(`state.table_layout`). 빈 자리는 결정적 자동 배치로 채운다.
          * @param rackEntries v2 앞 차례(또는 저장된) 받침대 자리(면 + 자리). 주면 [rackOrder] 보다 앞선다 — 면으로 짝지어 그 자리에 놓고,
          *   짝 없는 면(새로 받은 타일)은 받은 순서로 마지막 빈자리에.
-         * @param rackHalfColumns 받침대 한 줄의 반 칸 수(맥 32 · 폰 22). 저장된 자리가 이 폭 밖이면 가장 가까운 빈자리로 간다.
          */
         operator fun invoke(
             table: List<List<RummyFace>>,
@@ -596,7 +592,6 @@ class RummyTurnEditor private constructor(
             rackOrder: List<RummyFace>? = null,
             tableLayout: RummyLayout? = null,
             rackEntries: List<RummyRackEntry>? = null,
-            rackHalfColumns: Int = RummyRackLayout.halfColumnsPerRow,
         ): RummyTurnEditor {
             var nextID = 0
             val builtMelds = ArrayList<List<RummyTile>>(table.size)
@@ -611,9 +606,9 @@ class RummyTurnEditor private constructor(
                 builtMelds.add(tiles)
             }
             // 받침대: 면 → 자리를 먼저 정하고, 화면 순서로 id 를 붙인다(로컬 id 규약: 랙은 화면 순).
-            val placed = arrangeSlots(rack, rackOrder, rackEntries, rackHalfColumns)
+            val placed = arrangeSlots(rack, rackOrder, rackEntries)
             val builtRack = ArrayList<RummyTile>(placed.size)
-            val layout = RummyRackLayout(rackHalfColumns)
+            val layout = RummyRackLayout()
             for ((face, slot) in placed) {
                 val tile = RummyTile(nextID, face)
                 builtRack.add(tile)
@@ -656,14 +651,13 @@ class RummyTurnEditor private constructor(
             rack: List<RummyFace>,
             order: List<RummyFace>?,
             entries: List<RummyRackEntry>?,
-            halfColumns: Int,
         ): List<Pair<RummyFace, RummyRackSlot>> {
             if (entries.isNullOrEmpty()) {
                 val faces = arrange(rack, order)
-                val layout = RummyRackLayout.packed(faces.indices.toList(), halfColumns)
+                val layout = RummyRackLayout.packed(faces.indices.toList())
                 return faces.indices.map { faces[it] to layout.slot(it)!! }
             }
-            val layout = RummyRackLayout(halfColumns)
+            val layout = RummyRackLayout()
             val used = BooleanArray(rack.size)
             for (entry in entries) {
                 val index = rack.indices.firstOrNull { !used[it] && rack[it] == entry.face } ?: continue

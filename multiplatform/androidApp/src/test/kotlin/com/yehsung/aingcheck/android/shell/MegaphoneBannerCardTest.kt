@@ -7,6 +7,8 @@ package com.yehsung.aingcheck.android.shell
 
 import android.view.accessibility.AccessibilityManager
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.yehsung.aingcheck.core.rules.text.MegaphoneBannerRules
 import androidx.compose.ui.test.hasClickAction
@@ -58,6 +60,19 @@ class MegaphoneBannerCardTest {
     }
 
     // 2026-10-31 모바일 세션 지적: 5초 안에 본문(최대 198자)을 다 못 듣고, "누르고 있으면 멈춤"은 화면 읽기 조작이 아니다.
+    /** 놀던 기기의 판 화면(가로)에도 배너가 뜬다 — 카드가 화면 안이고 낮은 높이를 다 덮지 않는다. */
+    @Config(qualifiers = "w852dp-h393dp")
+    @Test
+    fun cardFitsALandscapeScreen() {
+        val store = MegaphoneBannerStore(null, CoroutineScope(Dispatchers.Unconfined), null, clock = { SwiftDate(1_800_000_000.0) }, schedule = { _, _ -> })
+        compose.setContent { MegaphoneBannerOverlay(store) }
+        store.presentFromPush("mp-1", senderName = "보낸사람", body = "다들 화이팅", senderID = "00000000-0000-4000-8000-0000000000aa")
+        compose.waitForIdle()
+        val card = compose.onNodeWithTag(MegaphoneBannerTags.CARD).getBoundsInRoot()
+        assertTrue("화면 밖 $card", card.left >= 0.dp && card.right <= 852.dp && card.top >= 0.dp)
+        assertTrue("판을 다 덮는다 $card", card.bottom <= 393.dp / 2)
+    }
+
     @Test
     fun talkBackHoldsAutoDismissAndTurningItOffCountsAgain() {
         val manager = ApplicationProvider.getApplicationContext<android.content.Context>().getSystemService(AccessibilityManager::class.java)

@@ -239,7 +239,7 @@ internal fun RummyStore.reconcileEditor(state: RummyMatchState) {
     val entries = previous?.restoredRackEntries ?: loadRackEntries(state.id)
     val fresh = RummyTurnEditor(
         table = table, rack = rack, initialDone = state.myInitialDone ?: false, rackOrder = order,
-        tableLayout = state.tableLayout, rackEntries = entries, rackHalfColumns = rackHalfColumns,
+        tableLayout = state.tableLayout, rackEntries = entries,
     )
     var drawn = if (previous != null) RummyStore.drawnTiles(previous, fresh, entries ?: emptyList()) else emptyList()
     val mode = rackSortMode
@@ -317,10 +317,8 @@ fun RummyStore.moveTile(tileID: Int, target: RummyDropTarget) = moveTiles(listOf
 fun RummyStore.moveTiles(tileIDs: List<Int>, target: RummyDropTarget) {
     val working = editor?.copy() ?: return
     val myTurn = isMyTurn
-    if (!myTurn) {
-        if (!RummyStore.isRackTarget(target)) return
-        if (!tileIDs.all { id -> working.rack.any { it.id == id } }) return
-    }
+    val rackOnly = RummyStore.isRackTarget(target) && tileIDs.all { id -> working.rack.any { it.id == id } }
+    if (!myTurn && !rackOnly) return
     if (!working.moveBlock(tileIDs, target)) return
     if (editor != working) editor = working
     // 받침대를 손으로 정리했다 — 정렬이 풀린다(판으로 내는 것은 정렬을 안 깬다: 못 내면 그 자리로 돌아온다).
@@ -328,6 +326,8 @@ fun RummyStore.moveTiles(tileIDs: List<Int>, target: RummyDropTarget) {
     saveRack()
     if (!myTurn) return
     setNotice(null)
+    // 놀던 기기의 받침대 안 정리는 서버 판과 무관하다. 보내면 다른 기기가 만들던 작업 판을 이 기기의 시작 판으로 덮고(시간 초과 판정이 그 판으로 간다), 이 기기가 engaged 가 된다.
+    if (rackOnly) match?.let { if (!isEngaged(it.id)) return }
     scheduleDraft()
 }
 

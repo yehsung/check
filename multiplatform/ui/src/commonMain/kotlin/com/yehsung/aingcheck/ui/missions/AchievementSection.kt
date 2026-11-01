@@ -178,6 +178,7 @@ internal fun MissionRow(
     burst: Pair<Int, Long>?,
     reduceMotion: Boolean,
     frozenBurstProgress: Float?,
+    hidesEmptyCaption: Boolean = false,
 ) {
     val c = AingTheme.colors
     val tint = if (isClaimed) c.working else c.accent
@@ -205,7 +206,8 @@ internal fun MissionRow(
                     }
                 }
                 MeProgressBar(fraction, done = isClaimed, thin = true)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
+                // 보조 문장이 비고 오른쪽 값도 없는 줄(받을 수 있는 큐브 줄)은 빈 줄을 세우지 않는다(`MeDailyMissionRowContent.showsCaptionLine` — 폰만, 큐브 없는 조립의 배치는 그대로다).
+                if (!hidesEmptyCaption || caption.isNotEmpty() || claimedMark != null || progress != null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
                     Text(caption, style = MeType.caption, color = if (showsFailure) c.pending else c.label3Text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                     if (claimedMark != null) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {

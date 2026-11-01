@@ -270,13 +270,6 @@ class PhoneAppModelTest {
         assertFalse(app.games.hasLiveChessMatch || app.games.hasLiveTetrisMatch, "다음 계정의 입구가 앞 사람 판에 막힌다")
     }
 
-    /** 폰 받침대 폭 배선. 없으면: 편집기가 맥 폭 32 로 자리를 잡아 12장째부터 폰 화면 밖에 놓인다. 맥 기본값(32)과 다른 것을 잰다. */
-    @Test
-    fun rummyRackUsesThePhoneWidth() = runTest {
-        val h = PhoneHarness(this) { null }
-        assertEquals(22, h.app.rummy.rackHalfColumns)
-    }
-
     /** §8-17 #1: 테트리스 대결의 판돈 깃발이 폰 조립(PhoneTetrisHost)을 거쳐 스토어에 닿는다 — 꺼진 빌드는 신청 RPC 0, 켠 빌드(기준선)는 1. */
     @Test
     fun tetrisDuelFlagReachesTheStoreThroughTheAssembly() = runTest {

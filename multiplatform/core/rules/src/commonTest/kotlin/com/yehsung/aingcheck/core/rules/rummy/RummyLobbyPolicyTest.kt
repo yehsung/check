@@ -185,10 +185,10 @@ class RummyLobbyPolicyTest {
         assertEquals("나", chairs[0].tag)
         assertTrue(chairs[2].isHost)
         assertEquals("방장", chairs[2].tag)
-        assertEquals("앉음", chairs[1].tag)
+        assertEquals("참가함", chairs[1].tag)
         assertTrue(chairs[3].dimmed)
         assertNull(chairs[3].seatNo, "초대 중 자리에 반응 앵커가 붙는다")
-        assertEquals("답 기다리는 중", chairs[3].tag)
+        assertEquals("초대함", chairs[3].tag)
         // 내가 방장이면 두 꼬리표.
         val mine = RummyTableSeating.chairs(room.copy(host = RummyPeer(id = uMe)), me, uMe)
         assertEquals("나 · 방장", mine[0].tag)

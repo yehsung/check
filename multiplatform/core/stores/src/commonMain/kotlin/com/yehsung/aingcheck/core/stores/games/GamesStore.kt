@@ -8,6 +8,10 @@ import androidx.compose.runtime.snapshotFlow
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
 import com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure
+import com.yehsung.aingcheck.core.rules.rummy.RummyPhase
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyOrientationRule
+import com.yehsung.aingcheck.core.stores.rummy.RummyAvailability
 import com.yehsung.aingcheck.core.stores.rummy.appDidBecomeActive as rummyAppDidBecomeActive
 import com.yehsung.aingcheck.core.stores.rummy.appDidEnterBackground as rummyAppDidEnterBackground
 import com.yehsung.aingcheck.core.stores.rummy.holdsLiveSeat
@@ -16,6 +20,7 @@ import com.yehsung.aingcheck.core.stores.rummy.pendingIncomingInviteCount
 import com.yehsung.aingcheck.core.stores.rummy.windowDidClose as rummyWindowDidClose
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelUser
+import com.yehsung.aingcheck.core.wire.SwiftUUID
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -142,6 +147,32 @@ class GamesStore(val context: GamesContext) {
     var isRummyScreenVisible: Boolean by mutableStateOf(false)
         private set
 
+    /** 결과에서 [최종 판]을 펴 둔 판. 판 id 를 쥐는 까닭: 다음 판의 결과가 이 표시를 물려받아 저절로 가로가 되면 안 된다. */
+    private var rummyFinalBoardMatchID: SwiftUUID? by mutableStateOf(null)
+
+    /** 지금 판 결과에서 [최종 판]을 보는 중인가. */
+    val isRummyFinalBoardShown: Boolean
+        get() {
+            val id = rummyFinalBoardMatchID ?: return false
+            val rummy = context.rummy ?: return false
+            return rummy.phase == RummyPhase.finished && rummy.match?.id == id
+        }
+
+    fun setRummyFinalBoardShown(shown: Boolean) {
+        rummyFinalBoardMatchID = if (shown) context.rummy?.match?.id else null
+    }
+
+    /** 화면 방향 — 앱에서 단 하나의 답(GamesRummyOrientation.kt 머리말). 저장하지 않고 지금 상태에서 계산한다. 이 기기가 큐브를 못 하는 안내가 서 있으면 판을 그리지 않으니 세로다. */
+    val rummyInterfaceOrientation: GamesRummyInterfaceOrientation
+        get() {
+            val rummy = context.rummy ?: return GamesRummyInterfaceOrientation.portrait
+            return GamesRummyOrientationRule.orientation(
+                phase = rummy.phase,
+                isScreenVisible = isRummyScreenVisible && rummy.availability == RummyAvailability.available,
+                finalBoardShown = isRummyFinalBoardShown,
+            )
+        }
+
     /** 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground). */
     var isAppActive: Boolean by mutableStateOf(false)
         private set
@@ -258,6 +289,7 @@ class GamesStore(val context: GamesContext) {
         isChessScreenVisible = false
         isTetrisScreenVisible = false
         isRummyScreenVisible = false
+        rummyFinalBoardMatchID = null
         pendingGomokuFocusID = null
         syncAIThinker()
         syncIdleTimer()
@@ -593,6 +625,7 @@ class GamesStore(val context: GamesContext) {
     fun rummyScreenDidDisappear() {
         if (!isRummyScreenVisible) return
         isRummyScreenVisible = false
+        rummyFinalBoardMatchID = null
         val rummy = context.rummy ?: return
         rummy.setWindowVisible(false)
         rummy.rummyWindowDidClose()

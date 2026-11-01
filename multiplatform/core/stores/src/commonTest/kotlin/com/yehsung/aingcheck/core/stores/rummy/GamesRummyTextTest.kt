@@ -19,7 +19,7 @@ class GamesRummyTextTest {
         listOf(RummyCloseDecision.confirmForfeit, RummyCloseDecision.confirmCloseRoom).mapNotNull { RummyPhoneText.exit(it) }.flatMap { listOf(it.title, it.detail, it.confirm) } +
         listOf(
             RummyPhoneText.title, RummyPhoneText.subtitle, RummyPhoneText.cardSubtitle, RummyPhoneText.cardOpenHint, RummyPhoneText.myTurn,
-            RummyPhoneText.otherDevice, RummyPhoneText.otherDeviceDetail, RummyPhoneText.createHint, RummyPhoneText.newTableHint, RummyPhoneText.joinEmpty,
+            RummyPhoneText.otherDevice, RummyPhoneText.otherDeviceDetail, RummyPhoneText.rotating, RummyPhoneText.backgroundWarning, RummyPhoneText.createHint, RummyPhoneText.newTableHint, RummyPhoneText.joinEmpty,
         )
 
     @Test
@@ -53,7 +53,7 @@ class GamesRummyTextTest {
         assertNull(RummyPhoneText.exit(RummyCloseDecision.close))
         assertNull(RummyPhoneText.exit(RummyCloseDecision.leaveRoom))
         val forfeit = assertNotNull(RummyPhoneText.exit(RummyCloseDecision.confirmForfeit))
-        assertEquals("나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요.", forfeit.detail)
+        assertEquals("나가면 기권돼 꼴찌가 되고 판돈을 잃어요.", forfeit.detail)
         assertNotNull(RummyPhoneText.exit(RummyCloseDecision.confirmCloseRoom))
     }
 
@@ -66,9 +66,10 @@ class GamesRummyTextTest {
         assertEquals("0", RummyPhoneText.net(0))
         assertEquals("점수 —", RummyPhoneText.score(null))
         assertEquals("점수 +4", RummyPhoneText.score(4))
-        assertEquals("점수 -4", RummyPhoneText.score(-4))
+        assertEquals("점수 −4", RummyPhoneText.score(-4))
         assertEquals("—", RummyPhoneText.rank(null))
         assertEquals("2등", RummyPhoneText.rank(2))
+        assertEquals("2위", RummyPhoneText.ladderRank(2))
         assertEquals("5 × 3명 = 15", RummyPhoneText.pot(5, 3))
         assertEquals("랙 묶음 합 12 / 30", RummyPhoneText.plan(0, 12))
         assertEquals("랙 묶음 10 + 판 8 = 18 / 30", RummyPhoneText.plan(8, 10))
@@ -85,6 +86,10 @@ class GamesRummyTextTest {
     fun endReasonAndLastEvent() {
         assertEquals("비님이 랙을 비웠어요", RummyPhoneText.endReason(RummyEndReason.rackEmpty, "비"))
         assertEquals("랙을 비운 사람이 나왔어요", RummyPhoneText.endReason(RummyEndReason.rackEmpty, null))
+        // 내가 이겼으면 내 이름을 남처럼 부르지 않는다.
+        assertEquals("랙을 비웠어요", RummyPhoneText.endReason(RummyEndReason.rackEmpty, "나", winnerIsMe = true))
+        assertEquals("비님 혼자 남아 끝났어요", RummyPhoneText.endReason(RummyEndReason.lastStanding, "비"))
+        assertEquals("혼자 남아 끝났어요", RummyPhoneText.endReason(RummyEndReason.lastStanding, "나", winnerIsMe = true))
         assertEquals("판이 끝났어요", RummyPhoneText.endReason(null, null))
         assertNull(RummyPhoneText.lastEvent(null, "비"))
         assertNull(RummyPhoneText.lastEvent(RummyLastEvent(kind = "play"), null))

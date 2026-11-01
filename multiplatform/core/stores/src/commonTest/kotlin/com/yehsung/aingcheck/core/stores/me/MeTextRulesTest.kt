@@ -12,6 +12,7 @@ import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -51,6 +52,24 @@ class MeTextRulesTest {
         assertEquals("보조", claimed.caption, "버튼이 없는 줄은 실패를 말하지 않는다")
         assertEquals(MeText.missionFallbackIcon, MeText.dailyMissionIcon("새게임"))
         assertEquals("cube.fill", MeText.dailyMissionIcon("rummy"))
+    }
+
+    /** 서버가 큐브 없는 옛 폰을 위해 싣는 '맥에서 할 수 있어요'는 큐브가 있는 이 폰에선 거짓이다 — 큐브 줄만 비운다. 빈 줄은 안 세운다. */
+    @Test
+    fun rummyDailyRowHidesTheServerCaption() {
+        assertEquals("", MeText.dailyMissionCaption("rummy", "맥에서 할 수 있어요"))
+        assertEquals("보조", MeText.dailyMissionCaption("tetris", "보조"))
+        // 큐브가 없는 조립(desktopApp)은 서버 글자 그대로다 — 윈도우에서 '맥에서'는 거짓이 아니다.
+        assertEquals("보조", MeDailyMissionRowContent.make(DailyMissionStatus.Mission("rummy", mission("daily_rummy", true, false, progress = 1))).caption)
+        val claimable = MeDailyMissionRowContent.make(DailyMissionStatus.Mission("rummy", mission("daily_rummy", true, false, progress = 1)), rummyPlayable = true)
+        assertEquals("", claimable.caption)
+        assertFalse(claimable.showsCaptionLine, "받을 수 있는 큐브 줄에 빈 줄이 선다")
+        val progress = MeDailyMissionRowContent.make(DailyMissionStatus.Mission("rummy", mission("daily_rummy", false, false)), rummyPlayable = true)
+        assertEquals("", progress.caption)
+        assertTrue(progress.showsCaptionLine, "진행 숫자가 있는 줄인데 사라졌다")
+        val failed = MeDailyMissionRowContent.make(DailyMissionStatus.Mission("rummy", mission("daily_rummy", true, false, progress = 1)), failed = true, rummyPlayable = true)
+        assertEquals(MeText.claimFailed, failed.caption, "실패 문장은 큐브 줄에도 나온다")
+        assertTrue(failed.showsCaptionLine)
     }
 
     @Test

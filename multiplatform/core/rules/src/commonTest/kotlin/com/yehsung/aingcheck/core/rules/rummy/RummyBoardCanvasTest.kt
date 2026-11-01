@@ -1,6 +1,7 @@
 // 원본: Tests/checkTests/V0369RummyV2MatchTests.swift:196 (canvasTransform · rackSlots · dropResolver) · Tests/checkTests/V0370RummyBoardFeelTests.swift(1cbaa4d1 RummyBoardVerticalCenterTests) @ 1a5eeca6
 package com.yehsung.aingcheck.core.rules.rummy
 
+import com.yehsung.aingcheck.core.wire.games.RummyFace
 import com.yehsung.aingcheck.core.wire.games.RummyLayout
 import kotlin.math.abs
 import kotlin.test.Test
@@ -137,5 +138,31 @@ class RummyBoardCanvasTest {
         assertEquals(ep(307, 472), RummyDropResolver.setTarget(empty, RummyCanvasPoint(-7.0, 28.0), 3, regions, canvas))
         assertEquals(ep(880, 584), RummyDropResolver.clampedTopLeft(RummyCanvasPoint(990.0, 700.0), 3))
         assertNull(RummyDropResolver.setTarget(RummyCanvasPoint(1.0, 1.0), RummyCanvasPoint(0.0, 0.0), 3, regions, canvas))
+    }
+
+    @Test
+    fun motionKeysSurviveNewIDs() {
+        val a7 = RummyGoldenText.face("A7")
+        val keys = RummyRackGeometry.motionKeys(listOf(RummyTile(9, a7), RummyTile(4, a7), RummyTile(5, RummyFace.joker)))
+        assertEquals(mapOf(4 to "A7#0", 9 to "A7#1", 5 to "J#0"), keys)
+    }
+
+    /** 놓기 판정은 받침대 기하를 인터페이스로 받는다 — 폰은 그림 기준선 없이 칸 폭으로 잰 기하를 넘긴다. 판정기가 그 값을 안 보면 폰 받침대 위 놓기가 어긋난다. */
+    @Test
+    fun dropResolverAsksTheGeometryItIsGiven() {
+        val asked = ArrayList<Triple<Double, Double, Int>>()
+        val fake = object : RummyRackDropGeometry {
+            override val dropTileWidth: Double = 20.0
+
+            override fun slot(tileLeft: Double, centerY: Double, tiles: Int): RummyRackSlot {
+                asked.add(Triple(tileLeft, centerY, tiles))
+                return RummyRackSlot(1, 7)
+            }
+        }
+        val canvas = RummyCanvasTransform.fit(viewport)
+        val pointer = RummyCanvasPoint(regions.rack.x + 100, regions.rack.y + 30)
+        val target = RummyDropResolver.target(pointer, 1, 3, regions, canvas, RummyTableLayout(mvTable, RummyLayout(mvLayout)), fake, isMyTurn = false)
+        assertEquals(RummyDropTarget.RackSlot(RummyRackSlot(1, 7)), target)
+        assertEquals(listOf(Triple(100.0 - 1.5 * 20, 30.0, 3)), asked, "받침대 칸 좌표 · 잡은 번호 · 장수가 그대로 안 갔다")
     }
 }

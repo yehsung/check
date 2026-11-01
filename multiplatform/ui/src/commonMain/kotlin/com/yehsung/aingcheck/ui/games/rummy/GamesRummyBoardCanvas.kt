@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyTableCanvas.swift:1 @ ios-1017-cube 614d98bd · 맥 Sources/check/RummyTableCanvas.swift:192 (RummyTableCanvasView — 미리보기 · 손잡이 그림) @ 1a5eeca6 · 설계서 §4
+// 원본: Sources/CheckMobileKit/Games/GamesRummyTableCanvas.swift:1 @ ios-1017-cube 61d75d8c · 맥 Sources/check/RummyTableCanvas.swift:192 (RummyTableCanvasView — 미리보기 · 손잡이 그림) @ 1a5eeca6 · 설계서 §10
 //
 // 폰 아잉 큐브 판 칸(입력은 없다 — 손은 화면 전체 입력 층 하나가 받는다).
 //
@@ -276,7 +276,7 @@ private fun rememberGamesRummyBoardMotion(model: GamesRummyMatchModel, melds: Li
     val motion = remember(melds) {
         val old = tracker.melds
         tracker.melds = melds
-        if (reduceMotion || model.machine.drag != null) null else GamesRummyBoardMotion.make(old, melds, model.recentDropIDs)
+        if (reduceMotion || model.machine.drag != null) null else GamesRummyBoardMotion.make(old, melds, model.recentDropIDs, model.recentDropOrigins)
     }
     val run = remember(motion) { motion?.let { GamesRummyBoardMotionRun(it, Animatable(0f)) } }
     var finished by remember { mutableStateOf<GamesRummyBoardMotionRun?>(null) }
@@ -414,14 +414,18 @@ private fun DrawScope.drawBoard(
         }
     }
     if (!editable) return
-    // 손잡이(내 차례).
-    val width = maxOf(8.0, 10 * scale)
+    // 손잡이(내 차례). 그리는 자리와 재는 자리가 GamesRummyGestureRules.handleBar 한 값이다.
     melds.forEachIndexed { index, meld ->
         val alpha = if (movingSet == index) 0.35f else 1f
         val frameHeight = meld.frame.height.toDouble() * scale
-        val barLeft = ((meld.frame.x.toDouble() * scale + bleed - maxOf(9.0, 13 * scale)) * px).toFloat()
-        val barTop = ((meld.frame.y.toDouble() * scale + bleed + frameHeight * 0.07) * px).toFloat()
-        val bar = Size((width * px).toFloat(), (frameHeight * 0.86 * px).toFloat())
+        val handle = GamesRummyGestureRules.handleBar(
+            RummyCanvasRect(meld.frame.x.toDouble() * scale + bleed, meld.frame.y.toDouble() * scale + bleed, meld.frame.width.toDouble() * scale, frameHeight),
+            scale,
+        )
+        val width = handle.width
+        val barLeft = (handle.x * px).toFloat()
+        val barTop = (handle.y * px).toFloat()
+        val bar = Size((handle.width * px).toFloat(), (handle.height * px).toFloat())
         val capsule = CornerRadius(bar.width / 2)
         drawRoundRect(Color(0.55f, 0.45f, 1.0f), Offset(barLeft, barTop), bar, capsule, alpha = 0.55f * alpha)
         drawRoundRect(Color.White, Offset(barLeft, barTop), bar, capsule, style = Stroke(0.8f * density), alpha = 0.25f * alpha)
@@ -564,13 +568,13 @@ private fun DrawScope.drawCheckBadge(transform: RummyCanvasTransform, landing: R
 // MARK: - 판 위 조작
 
 /**
- * [전체 보기] 토글 · 화면 밖 묶음 배지. 입력 층 **위**에 있어 제스처보다 먼저 눌린다. 끄는 동안은 숨는다(자동 밀기 · 미리보기를 가리지 않게).
- * 보기를 파생값으로만 읽는다 — 밀 때마다 다시 조립하지 않고, 값(배지 수 · 전체 보기 여부)이 바뀔 때만 돈다.
+ * 화면 밖 묶음 배지. 입력 층 **위**에 있어 제스처보다 먼저 눌린다(그래서 그 자리 타일은 못 집는다). 끄는 동안은 숨는다(자동 밀기 · 미리보기를 가리지 않게).
+ * 보기를 파생값으로만 읽는다 — 밀 때마다 다시 조립하지 않고, 값(배지 수)이 바뀔 때만 돈다. [전체 보기]는 오른쪽 열이다(판 위에 두면 타일을 가린다). [badgeLift] = 판 아래쪽에서 비워 둘 높이(다른 기기 안내).
  */
 @Composable
-internal fun GamesRummyTableControls(model: GamesRummyMatchModel, frames: List<RummyRect>, reduceMotion: Boolean, modifier: Modifier = Modifier, badgeLift: Int = 36) {
+internal fun GamesRummyTableControls(model: GamesRummyMatchModel, frames: List<RummyRect>, reduceMotion: Boolean, modifier: Modifier = Modifier, badgeLift: Double = 0.0) {
     val counts by remember(model, frames) { derivedStateOf { model.viewport.offscreenCounts(frames) } }
-    val isFull by remember(model) { derivedStateOf { model.viewport.isFullView } }
+    val vertical by remember(model, frames) { derivedStateOf { model.viewport.offscreenVerticalCounts(frames) } }
     val dragging by remember(model) { derivedStateOf { model.draggingIDs.isNotEmpty() } }
     val scope = rememberCoroutineScope()
     fun reveal(side: GamesRummySide) {
@@ -588,27 +592,18 @@ internal fun GamesRummyTableControls(model: GamesRummyMatchModel, frames: List<R
     }
     Box(modifier) {
         if (dragging) return@Box
-        // 기호만 — 글자까지 넣으니 판 오른쪽 위 묶음의 숫자를 석 장씩 가렸다(iOS 실화면).
-        Box(
-            Modifier.align(Alignment.TopEnd).padding(4.dp).size(44.dp)
-                .clickable(role = Role.Button) { model.toggleFullView() }
-                .semantics { contentDescription = if (isFull) RummyPhoneText.zoomIn else RummyPhoneText.zoomOut }
-                .testTag(GamesRummyMatchTags.ZOOM),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(
-                Modifier.size(30.dp).background(Color.Black.copy(alpha = 0.62f), CircleShape).border(0.8.dp, Color.White.copy(alpha = 0.25f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                AingIcon(if (isFull) AppIcon.Add else AppIcon.Remove, contentDescription = null, size = 18.dp, tint = Color.White)
-            }
-        }
-        // 배지는 판 아래쪽 — 묶음은 위부터 깔리니 숫자를 덜 가린다(직전 사건 줄보다는 위).
+        // 좌우는 판 아래쪽 — 묶음은 위부터 깔리니 숫자를 덜 가린다.
         if (counts.left > 0) {
             OffscreenBadge(GamesRummySide.left, counts.left, { reveal(GamesRummySide.left) }, Modifier.align(Alignment.BottomStart).padding(bottom = badgeLift.dp))
         }
         if (counts.right > 0) {
             OffscreenBadge(GamesRummySide.right, counts.right, { reveal(GamesRummySide.right) }, Modifier.align(Alignment.BottomEnd).padding(bottom = badgeLift.dp))
+        }
+        if (vertical.up > 0) {
+            OffscreenBadge(GamesRummySide.up, vertical.up, { reveal(GamesRummySide.up) }, Modifier.align(Alignment.TopCenter))
+        }
+        if (vertical.down > 0) {
+            OffscreenBadge(GamesRummySide.down, vertical.down, { reveal(GamesRummySide.down) }, Modifier.align(Alignment.BottomCenter).padding(bottom = badgeLift.dp))
         }
     }
 }
@@ -616,13 +611,24 @@ internal fun GamesRummyTableControls(model: GamesRummyMatchModel, frames: List<R
 @Composable
 private fun OffscreenBadge(side: GamesRummySide, count: Int, onClick: () -> Unit, modifier: Modifier) {
     val colors = AingTheme.colors
-    val label = if (side == GamesRummySide.left) RummyPhoneText.offscreenLeft(count) else RummyPhoneText.offscreenRight(count)
+    val label = when (side) {
+        GamesRummySide.left -> RummyPhoneText.offscreenLeft(count)
+        GamesRummySide.right -> RummyPhoneText.offscreenRight(count)
+        GamesRummySide.up -> RummyPhoneText.offscreenUp(count)
+        GamesRummySide.down -> RummyPhoneText.offscreenDown(count)
+    }
+    val tag = when (side) {
+        GamesRummySide.left -> GamesRummyMatchTags.OFFSCREEN_LEFT
+        GamesRummySide.right -> GamesRummyMatchTags.OFFSCREEN_RIGHT
+        GamesRummySide.up -> GamesRummyMatchTags.OFFSCREEN_UP
+        GamesRummySide.down -> GamesRummyMatchTags.OFFSCREEN_DOWN
+    }
     Box(
         modifier
             .heightIn(min = 44.dp)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label }
-            .testTag(if (side == GamesRummySide.left) GamesRummyMatchTags.OFFSCREEN_LEFT else GamesRummyMatchTags.OFFSCREEN_RIGHT)
+            .testTag(tag)
             .padding(horizontal = 5.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -631,9 +637,17 @@ private fun OffscreenBadge(side: GamesRummySide, count: Int, onClick: () -> Unit
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            if (side == GamesRummySide.left) AingIcon(AppIcon.ArrowLeftFill, contentDescription = null, size = 14.dp, tint = colors.onAccentFill)
+            when (side) {
+                GamesRummySide.left -> AingIcon(AppIcon.ArrowLeftFill, contentDescription = null, size = 14.dp, tint = colors.onAccentFill)
+                GamesRummySide.up -> AingIcon(AppIcon.ExpandLess, contentDescription = null, size = 14.dp, tint = colors.onAccentFill)
+                GamesRummySide.right, GamesRummySide.down -> Unit
+            }
             Text(count.toString(), style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = TNUM), color = colors.onAccentFill, maxLines = 1)
-            if (side == GamesRummySide.right) AingIcon(AppIcon.ArrowRightFill, contentDescription = null, size = 14.dp, tint = colors.onAccentFill)
+            when (side) {
+                GamesRummySide.right -> AingIcon(AppIcon.ArrowRightFill, contentDescription = null, size = 14.dp, tint = colors.onAccentFill)
+                GamesRummySide.down -> AingIcon(AppIcon.ExpandMore, contentDescription = null, size = 14.dp, tint = colors.onAccentFill)
+                GamesRummySide.left, GamesRummySide.up -> Unit
+            }
         }
     }
 }

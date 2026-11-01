@@ -349,11 +349,6 @@ class RummyStore(
     /** 받침대 자리 저장소. **null 이면 저장하지 않는다**(기본 — 시험이 앱 저장소를 더럽히지 않게). 앱 배선이 넣는다. */
     var rackDefaults: KeyValueStore? = null
 
-    /**
-     * 받침대 한 줄의 반 칸 수(배선 값 — [reset] 이 건드리지 않는다). 맥은 기본 32(16장), 폰 배선이 22(11장)를 넣는다. 다음에 세우는 편집기부터 이 폭을 쓰고
-     * 정렬 줄바꿈·nearestFree·isFree·저장 복원이 모두 따른다.
-     */
-    var rackHalfColumns: Int = RummyRackLayout.halfColumnsPerRow
     var heartbeatJob: Job? = null
         internal set
     var heartbeatMatchID: SwiftUUID? = null

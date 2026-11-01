@@ -1,8 +1,8 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyRackView.swift:1 @ ios-1017-cube 614d98bd · 맥 Sources/check/RummyRackView.swift:90 (RummyRackView) · Sources/check/RummyRackCues.swift:59,117 (밑줄 띠 · 빛) @ 1a5eeca6 · 설계서 §4 ⑤
+// 원본: Sources/CheckMobileKit/Games/GamesRummyRackView.swift:1 @ ios-1017-cube 61d75d8c · 맥 Sources/check/RummyRackView.swift:90 (RummyRackView) · Sources/check/RummyRackCues.swift:59,117 (밑줄 띠 · 빛) @ 1a5eeca6 · 설계서 §4 ⑤
 //
-// 폰 아잉 큐브 받침대(입력은 없다 — 손은 화면 전체 입력 층 하나가 받는다). 자리는 코어 RummyRackGeometry.phone 한 벌에서 나온다.
+// 폰 아잉 큐브 받침대(입력은 없다 — 손은 화면 전체 입력 층 하나가 받는다). 자리는 GamesRummyRackGeometry 한 벌에서 나온다.
 // **받침대 그림(rummy-rack)을 판 화면에 깔지 않는다**(iOS 실화면 결정): 그림의 선반은 높이의 0.44 · 0.76 에 박혀 있어 두 선반 사이가 0.32H 인데, 타일 47 을 그 사이에 세우려면
-// 받침대가 155 가 돼야 한다(세로 화면 칸은 118). 깔면 그림 선반이 앞줄 타일 중간을 지나간다 — 그래서 그림 없이 남색 유광 + 분홍 테두리 몸체(GamesRummyRackStand 의 그린 폴백)에 줄마다 선반을 그린다.
+// 받침대가 155 가 돼야 한다(가로 화면 칸은 약 110). 깔면 그림 선반이 앞줄 타일 중간을 지나간다 — 그래서 그림 없이 남색 유광 + 분홍 테두리 몸체(GamesRummyRackStand 의 그린 폴백)에 줄마다 선반을 그린다.
 // 받침대 타일은 많아야 30장 남짓이라 GamesRummyTile 노드를 그대로 쓴다(판과 다르다 — GamesRummyBoardCanvas 머리말). 면 이름이 그대로 접근성 글자가 된다.
 // 모션(설계서 §7): 자리가 바뀌면 미끄러지고(정렬은 25ms 시차) 뽑은 타일은 [뽑기] 자리에서 날아온다. 값은 층 단계에서만 읽어 타일이 움직여도 다시 조립하지 않는다. 동작 줄이기면 바로 제자리다.
 package com.yehsung.aingcheck.ui.games.rummy
@@ -81,9 +81,7 @@ internal fun GamesRummyRackPane(
     model: GamesRummyMatchModel,
     tiles: List<RummyTile>,
     layout: RummyRackLayout,
-    geometry: RummyRackGeometry,
-    regionWidth: Double,
-    regionHeight: Double,
+    geometry: GamesRummyRackGeometry,
     rackMelds: List<RummyRackMeld>,
     turnGlow: GamesRummyTurnGlowPhase?,
     freshIDs: Set<Int>,
@@ -96,7 +94,7 @@ internal fun GamesRummyRackPane(
     val colors = AingTheme.colors
     val preview = model.rackPreview
     val shown = preview?.layout ?: layout
-    val draw = preview?.let { GamesRummyRackDraw.fitted(regionWidth, regionHeight, it.layout.rowCount) } ?: geometry
+    val draw = preview?.let { GamesRummyRackGeometry(geometry.size, it.layout.rowCount) } ?: geometry
     val refused = model.hoverRefused || model.refusedFlash
     val lift = model.lift
     val lifted = if (lift?.surface == GamesRummySurface.rack) lift.ids.toSet() else emptySet()

@@ -1188,6 +1188,61 @@ class RummyStoreTest {
         assertEquals(0, r.count("rummy_leave") + r.count("rummy_heartbeat"))
     }
 
+    /** 놀던 기기가 내 차례에 받침대만 정리하면 작업 판을 안 보낸다 — 보내면 다른 기기가 만들던 작업 판을 덮고 이 기기가 engaged 가 된다. 판에 놓으면 보낸다. */
+    @Test
+    fun idleDeviceRackMoveSendsNoDraft() = runTest {
+        val r = rig()
+        val store = r.store
+        r.script.stand("rummy_draft", envelope())
+        store.applyState(decodeState(stateJson()))
+        assertTrue(store.isMyTurn)
+        assertFalse(store.isEngaged(MATCH))
+        val tile = store.editor!!.rack[0].id
+        store.moveTiles(listOf(tile), RummyDropTarget.RackSlot(RummyRackSlot(1, 30)))
+        assertEquals(RummyRackSlot(1, 30), store.editor!!.rackLayout.slot(tile), "받침대 안 이동이 안 됐다")
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertEquals(0, r.count("rummy_draft"), "놀던 기기가 받침대 정리로 작업 판을 보냈다")
+        assertFalse(store.isEngaged(MATCH), "받침대 정리로 이 기기가 판을 가져갔다")
+        // 기준선: 판에 놓으면 보낸다 · 그 뒤 이 기기가 쥔다.
+        store.moveTiles(listOf(store.editor!!.rack[1].id), RummyDropTarget.NewMeldAt(RummyPoint(100, 100)))
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertEquals(1, r.count("rummy_draft"), "판에 놓았는데 작업 판이 안 갔다")
+        assertTrue(store.isEngaged(MATCH))
+
+        // 쥔 기기의 받침대 정리는 전과 같다(작업 판을 띄운다 · 판이 그대로면 코어가 거른다) — 놀던 기기 문이 쥔 기기를 안 막는다.
+        val held = rig()
+        held.script.stand("rummy_draft", envelope())
+        held.store.markEngaged(MATCH)
+        held.store.applyState(decodeState(stateJson()))
+        held.store.moveTiles(listOf(held.store.editor!!.rack[0].id), RummyDropTarget.RackSlot(RummyRackSlot(1, 30)))
+        advanceTimeBy(2_000)
+        runCurrent()
+        assertEquals(1, held.count("rummy_draft"), "쥔 기기의 정리가 안 갔다")
+    }
+
+    /** 뒤로 나간 뒤 안내줄을 지우고 로비를 다시 읽는다 — 안 읽으면 낡은 active_match_id 로 게임 탭 카드가 최대 30초 '판 진행 중'이다. 시작된 판을 들고 남았으면 안 읽는다. */
+    @Test
+    fun leavingBackSettlesTheLobby() = runTest {
+        val r = rig()
+        val store = r.store
+        r.script.stand("rummy_leave", envelope())
+        r.script.stand("rummy_lobby", """{"status":"ok","server_now_ms":$NOW_MS,"stakes":[3,5,10],"me":{"ruby_balance":10},"invites":[],"public_rooms":[],"users":[]}""")
+        store.markEngaged(MATCH)
+        store.applyState(decodeState(stateJson()))
+        store.setNotice("서버 말")
+        runCurrent() // 판을 받으며 시작한 조회를 먼저 끝낸다 — 아래는 나간 뒤의 조회만 센다.
+        val lobbies = r.count("rummy_lobby")
+        assertEquals(RummyCloseDecision.confirmForfeit, store.requestBack())
+        assertNull(store.confirmBack(RummyCloseDecision.confirmForfeit))
+        runCurrent()
+        assertEquals(1, r.count("rummy_leave"))
+        assertNull(store.match)
+        assertNull(store.notice, "나갔는데 안내줄이 남았다")
+        assertEquals(lobbies + 1, r.count("rummy_lobby"), "나간 뒤 로비를 안 읽었다")
+    }
+
     @Test
     fun everyWriteMarksEngagedAndRefusedJoinIsForgotten() = runTest {
         // 없으면: 이 기기에서 손댄 판인데 하트비트가 안 돌아 90초 끊김 기권되는 결함이 초록이 된다.

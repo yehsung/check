@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyMotion.swift:1 @ ios-1017-cube 614d98bd · 맥 Sources/check/RummyPanelMatch.swift:306,835 (뽑기 · 정렬 시차) · Sources/check/RummyTableCanvas.swift:193 (판 변화 스프링) @ 1a5eeca6 · 설계서 §7
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMotion.swift:1 @ ios-1017-cube 61d75d8c · 맥 Sources/check/RummyPanelMatch.swift:306,835 (뽑기 · 정렬 시차) · Sources/check/RummyTableCanvas.swift:193 (판 변화 스프링) @ 1a5eeca6 · 설계서 §7
 //
 // 폰 아잉 큐브 모션의 **순수 값**. 그리기는 GamesRummyRackPane(뽑기 · 정렬) · GamesRummyBoardCanvas(판 변화)이고, 모두 **동작 줄이기면 끈다**.
 //   · 뽑기: [뽑기] 자리 → 받침대 빈자리 · 스프링 0.45초([drawOrigin]).
@@ -78,19 +78,9 @@ object GamesRummyRackMotion {
     fun flightDegrees(progress: Float): Float = flightStartDegrees * (1f - progress)
 }
 
-/** [뽑기] 칸의 가운데 — 받침대 칸 좌표로(뽑은 타일이 여기서 출발한다). 동작 줄 배치(GamesRummyActionRow)와 같은 값에서 나온다. */
-fun GamesRummyMatchLayout.drawOrigin(textScale: Double): RummyCanvasPoint {
-    val gap = GamesRummyMatchLayout.actionGap
-    val point = if (GamesRummyMatchLayout.actionRowCount(textScale) == 1) {
-        val widths = GamesRummyMatchLayout.actionWidths(size.width)
-        RummyCanvasPoint(gap + widths.submit + gap + widths.draw / 2, actions.midY)
-    } else {
-        val height = GamesRummyMatchLayout.actionButtonHeight(textScale)
-        val third = maxOf(0.0, size.width - gap * 4) / 3
-        RummyCanvasPoint(gap + third / 2, actions.midY + (gap + height) / 2)
-    }
-    return RummyCanvasPoint(point.x - rack.x, point.y - rack.y)
-}
+/** [뽑기] 칸의 가운데 — 받침대 칸 좌표로(뽑은 타일이 여기서 출발한다). */
+val GamesRummyMatchLayout.drawOrigin: RummyCanvasPoint
+    get() = RummyCanvasPoint(draw.midX - rack.x, draw.midY - rack.y)
 
 /** 판 변화 한 번 — 옛 자리에서 새 자리로 움직일 타일들. */
 data class GamesRummyBoardMotion(val moves: List<Move>) {
@@ -123,18 +113,26 @@ data class GamesRummyBoardMotion(val moves: List<Move>) {
 
         /**
          * 짝짓는 순서: ① 같은 id · 같은 면(편집 중) ② 면이 같고 자리가 같은 것(가만히 있었다 — 같은 면 둘이 엇갈려 날지 않게) ③ 남은 같은 면을 읽는 순서대로.
-         * 새로 생긴 타일(받침대에서 낸 것 · 남이 낸 것)은 옛 자리가 없어 그 자리에 바로 선다. [excluding] = 방금 손으로 놓은 타일(손이 놓은 자리가 곧 제자리다 — 옛 자리에서 날아오면 안 된다).
+         * 새로 생긴 타일(받침대에서 낸 것 · 남이 낸 것)은 옛 자리가 없어 그 자리에 바로 선다. [excluding] = 방금 손으로 놓은 타일(옛 자리에서 날아오면 안 된다).
+         * [landing] = 그 타일을 손이 놓은 자리(논리 좌표). 자동 붙기 · 끼우기로 들어갈 자리가 손 놓은 자리와 다르면 거기서 미끄러진다(맥 land) — 값이 없는 타일은 그 자리에 바로 선다.
          * 움직일 것이 없거나 [maxMoves] 를 넘으면 null.
          */
-        fun make(old: List<RummyBoardMeld>, new: List<RummyBoardMeld>, excluding: Set<Int> = emptySet()): GamesRummyBoardMotion? {
+        fun make(old: List<RummyBoardMeld>, new: List<RummyBoardMeld>, excluding: Set<Int> = emptySet(), landing: Map<Int, RummyCanvasPoint> = emptyMap()): GamesRummyBoardMotion? {
             if (old.isEmpty() || old == new) return null
             fun kept(entry: Placed): Boolean = entry.tile.id?.let { it !in excluding } ?: true
             val olds = placed(old).filter(::kept)
-            val news = placed(new).filter(::kept)
+            val allNews = placed(new)
+            val news = allNews.filter(::kept)
             val moves = ArrayList<Move>()
             fun move(from: Placed, to: Placed) {
                 if (from.origin == to.origin) return
                 moves.add(Move(to.slot, to.tile.face, to.tile.highlighted, from.origin, to.origin))
+            }
+            for (entry in allNews) {
+                val id = entry.tile.id ?: continue
+                val from = landing[id] ?: continue
+                if (id !in excluding || from == entry.origin) continue
+                moves.add(Move(entry.slot, entry.tile.face, entry.tile.highlighted, from, entry.origin))
             }
 
             val oldByID = HashMap<Int, Int>()

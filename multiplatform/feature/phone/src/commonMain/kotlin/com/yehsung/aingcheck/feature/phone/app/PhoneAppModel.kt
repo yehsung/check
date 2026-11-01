@@ -34,7 +34,6 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
-import com.yehsung.aingcheck.core.rules.rummy.RummyRackGeometry
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.setHiddenPeers
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
@@ -187,8 +186,6 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         rummy.rackDefaults = env.prefs
         rummy.engagedDefaults = env.prefs
         rummy.rankingEnabled = true
-        // 폰 받침대는 한 줄 11장(반 칸 22)이다. 이 줄이 없으면 맥 폭 32 로 자리를 잡아 12장째부터 화면 밖에 놓인다. 맥 판을 이어 받으면 폭 밖 자리는 가장 가까운 빈자리로 간다.
-        rummy.rackHalfColumns = RummyRackGeometry.phoneHalfColumns
         realtime.gomoku = object : RealtimeSignalReceiver {
             override fun handleSignal() = gomoku.handleSignal()
             override fun realtimeDidJoin() = gomoku.realtimeDidJoin()

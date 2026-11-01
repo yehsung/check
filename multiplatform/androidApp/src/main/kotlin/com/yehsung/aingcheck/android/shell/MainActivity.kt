@@ -12,12 +12,15 @@
 package com.yehsung.aingcheck.android.shell
 
 import android.content.Intent
+import android.content.res.Configuration
 import android.Manifest
 import android.annotation.SuppressLint
 import android.os.Build
 import androidx.activity.result.contract.ActivityResultContracts
 import com.yehsung.aingcheck.android.routing.RouteTargets
+import androidx.lifecycle.lifecycleScope
 import com.yehsung.aingcheck.android.screens.games.hub.GamesKeepScreenOn
+import com.yehsung.aingcheck.android.screens.games.rummy.RummyOrientationDriver
 import com.yehsung.aingcheck.feature.phone.push.PhonePushAction
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.launch
@@ -38,6 +41,7 @@ import com.yehsung.aingcheck.android.app.AingApplication
 import com.yehsung.aingcheck.android.routing.RouteIntents
 import com.yehsung.aingcheck.android.routing.RouteRequest
 import com.yehsung.aingcheck.core.foundation.platform.LogLevel
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -57,6 +61,8 @@ class MainActivity : ComponentActivity() {
         val screens = c.shellScreens
         if (screens != null) {
             GamesKeepScreenOn.install(screens.phone.games, window)
+            // 아잉 큐브 판 화면만 가로 — 답은 스토어 계산값, 옮기는 자리는 여기 하나다(RummyOrientationDriver).
+            RummyOrientationDriver.install(screens.phone.games, lifecycleScope, ::applyRummyOrientation)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) c.pushSystem.permissionRequester = permissionRequester
         }
         setContent {
@@ -93,6 +99,16 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun applyRummyOrientation(orientation: GamesRummyInterfaceOrientation) {
+        requestedOrientation = RummyOrientationDriver.activityOrientation(orientation, resources.configuration.smallestScreenWidthDp)
+    }
+
+    /** 돌아도 다시 만들어지지 않는다(매니페스트 configChanges). 접었다 펴면 폰 ↔ 큰 화면이 바뀌니 값을 다시 옮긴다. 같은 값이면 시스템이 아무 일도 안 한다. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        container.shellScreens?.let { applyRummyOrientation(it.phone.games.rummyInterfaceOrientation) }
     }
 
     private companion object {

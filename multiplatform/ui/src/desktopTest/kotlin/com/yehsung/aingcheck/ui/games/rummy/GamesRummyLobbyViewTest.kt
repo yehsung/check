@@ -401,7 +401,8 @@ class GamesRummyLobbyViewTest {
         // 나는 아래. 위 의자가 아래 의자보다 위에 있다.
         assertTrue(top(GamesRummyRoomTags.chair(2)) < top(GamesRummyRoomTags.chair(0)))
         onNodeWithText("나 · 방장", useUnmergedTree = true).assertExists()
-        onNodeWithText(RummyPhoneText.waitingAnswer, useUnmergedTree = true).assertExists()
+        assertEquals(RummyPhoneText.invited, RummyPhoneText.waitingAnswer, "같은 상태를 의자 카드와 사람 행이 다른 낱말로 부른다")
+        assertTrue(onAllNodesWithText(RummyPhoneText.waitingAnswer, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
         // 판돈 × 앉은 인원(초대 중은 세지 않는다) · 분배는 순수익.
         onNodeWithText("10", useUnmergedTree = true).assertExists()
         onNodeWithText("판돈 5 × 2명", useUnmergedTree = true).assertExists()
@@ -467,8 +468,9 @@ class GamesRummyLobbyViewTest {
         roomView(x)
         waitForIdle()
         onNodeWithText(RummyPhoneText.peopleCaptionHost).assertExists()
-        onNodeWithText(RummyPhoneText.joined, useUnmergedTree = true).assertExists()
-        onNodeWithText(RummyPhoneText.invited, useUnmergedTree = true).assertExists()
+        // 의자 카드와 사람 행이 같은 낱말을 쓴다 — 앉은 사람 · 부른 사람이 양쪽에 다 있다.
+        assertEquals(2, onAllNodesWithText(RummyPhoneText.joined, useUnmergedTree = true).fetchSemanticsNodes().size)
+        assertEquals(2, onAllNodesWithText(RummyPhoneText.invited, useUnmergedTree = true).fetchSemanticsNodes().size)
         onNodeWithTag(GamesRummyLobbyTags.invite(uuid(READY))).assertDoesNotExist()
         onNodeWithTag(GamesRummyLobbyTags.invite(uuid(BUSY))).assertIsNotEnabled()
         x.h.close()
@@ -530,7 +532,7 @@ class GamesRummyLobbyViewTest {
         waitForIdle()
         assertEquals(1, x.count("rummy_ranking"))
         onNodeWithText(RummyPhoneText.rankHeader).assertExists()
-        onNodeWithText("내 순위 2등 · 판 수 4 · 1등 1").assertExists()
+        onNodeWithText("내 순위 2위 · 판 수 4 · 1등 1").assertExists()
         onNodeWithContentDescription(RummyLobbyPhoneText.rankRowAccessibility(1, "방장", 9, 5, isMe = false)).assertExists()
         onNodeWithContentDescription(RummyLobbyPhoneText.rankRowAccessibility(2, "나", 4, 1, isMe = true)).assertExists()
         // 사람 탭이 사라졌다.

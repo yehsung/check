@@ -14,7 +14,6 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.DpRect
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
-import com.yehsung.aingcheck.core.rules.rummy.RummyRackGeometry
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
@@ -75,7 +74,6 @@ class GamesRummyMotionInteractionTest {
             it.pollStepSeconds = Double.POSITIVE_INFINITY
             it.heartbeatEnabled = false
             it.deadlineWakeEnabled = false
-            it.rackHalfColumns = RummyRackGeometry.phoneHalfColumns
         }
         rummy.applyState(state())
         rummy.markEngaged(SwiftUUID.parse(MATCH)!!)
@@ -111,7 +109,7 @@ class GamesRummyMotionInteractionTest {
     // MARK: 정렬
 
     @Test
-    fun sortingSlidesThenSettles() = runDesktopComposeUiTest(393, 759) {
+    fun sortingSlidesThenSettles() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x, reduceMotion = false)
         val before = rackFaces.associateWith { x.slotFrame(it) }
@@ -132,7 +130,7 @@ class GamesRummyMotionInteractionTest {
     }
 
     @Test
-    fun sortingWithReducedMotionIsAtOnce() = runDesktopComposeUiTest(393, 759) {
+    fun sortingWithReducedMotionIsAtOnce() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x, reduceMotion = true)
         onNodeWithTag(GamesRummyMatchTags.SORT_NUMBER).performClick()
@@ -144,7 +142,7 @@ class GamesRummyMotionInteractionTest {
     // MARK: 뽑기
 
     @Test
-    fun aDrawnTileFliesInFromTheDrawButton() = runDesktopComposeUiTest(393, 759) {
+    fun aDrawnTileFliesInFromTheDrawButton() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x, reduceMotion = false)
         mainClock.autoAdvance = false
@@ -155,15 +153,15 @@ class GamesRummyMotionInteractionTest {
         assertEquals(1, x.rummy.lastDraw?.serial, "뽑기 사건이 안 났다 — 시험 판이 틀렸다")
         val layout = x.context.layout
         val at = tileBounds("B2")
-        val centerY = (at.top.value + at.bottom.value) / 2.0
-        assertTrue(centerY > layout.rack.maxY, "받침대 아래 [뽑기] 자리에서 출발하지 않았다: $centerY / ${layout.rack}")
+        val centerX = (at.left.value + at.right.value) / 2.0
+        assertTrue(centerX > layout.rack.maxX, "받침대 오른쪽 [뽑기] 자리에서 출발하지 않았다: $centerX / ${layout.rack}")
         mainClock.advanceTimeBy(2_000)
         assertSeated(x, "B2")
         x.h.close()
     }
 
     @Test
-    fun aDrawWithReducedMotionLandsAtOnce() = runDesktopComposeUiTest(393, 759) {
+    fun aDrawWithReducedMotionLandsAtOnce() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x, reduceMotion = true)
         val drawn = """["D9","C3","A4","C1","C2","B2"]"""
@@ -177,7 +175,7 @@ class GamesRummyMotionInteractionTest {
     // MARK: 판 변화
 
     @Test
-    fun aMovedMeldShowsTheMotionLayerThenClearsIt() = runDesktopComposeUiTest(393, 759) {
+    fun aMovedMeldShowsTheMotionLayerThenClearsIt() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x, reduceMotion = false)
         onNodeWithTag(GamesRummyMatchTags.BOARD_MOTION).assertDoesNotExist()
@@ -192,7 +190,7 @@ class GamesRummyMotionInteractionTest {
     }
 
     @Test
-    fun aMovedMeldWithReducedMotionHasNoMotionLayer() = runDesktopComposeUiTest(393, 759) {
+    fun aMovedMeldWithReducedMotionHasNoMotionLayer() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         show(x, reduceMotion = true)
         runOnIdle { x.rummy.applyState(state(seq = 2, turnSeat = 1, layout = "[[100,50],[400,200]]")) }
@@ -203,9 +201,9 @@ class GamesRummyMotionInteractionTest {
 
     // MARK: 말풍선 자리
 
-    /** 판 화면이 단 앵커를 층이 읽는다 — 상대 반응은 상대 줄 아래에 선다. 없으면: 앵커를 안 달아 말풍선이 조용히 사라진다. */
+    /** 판 화면이 단 앵커를 층이 읽는다 — 상대 반응은 왼쪽 열 그 카드의 오른쪽에 선다. 없으면: 앵커를 안 달아 말풍선이 조용히 사라진다. */
     @Test
-    fun anOpponentReactionStandsBelowTheOpponentRow() = runDesktopComposeUiTest(393, 759) {
+    fun anOpponentReactionStandsRightOfItsCard() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         val anchors = GamesRummyReactionAnchors()
         setContent {
@@ -226,7 +224,9 @@ class GamesRummyMotionInteractionTest {
         runOnIdle { x.rummy.applyState(state(seq = 2, reactions = reactions)) }
         waitForIdle()
         val bounds = onNodeWithTag(GamesRummyReactionTags.bubble(1)).getBoundsInRoot()
-        assertTrue(bounds.top.value >= x.context.layout.opponents.y + 30, "말풍선이 상대 줄을 가린다: $bounds")
+        val card = x.context.layout.opponentCard(0)
+        assertTrue(bounds.left.value >= card.maxX, "말풍선이 카드를 가린다: $bounds")
+        assertTrue(bounds.top.value <= card.midY && bounds.bottom.value >= card.midY, "말풍선이 그 카드 옆이 아니다: $bounds / $card")
         x.h.close()
     }
 }

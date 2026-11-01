@@ -83,10 +83,13 @@ interface MeLinks {
     fun clearPushPrefsNotice() {}
 
     /**
-     * 로그아웃·계정 삭제 **앞에** 이 기기가 쥔 방·판에서 나간다(아잉 큐브 `leaveForExit` — 최대 2초. Swift `signOutLeavingRummy`). 세션을 먼저 지우면 이탈 요청이
-     * 토큰 없이 떠나 판이 '플레이 중'으로 남는다. 고리가 없으면 아무 일도 안 한다.
+     * 로그아웃 **앞에** 이 기기가 쥔 방·판에서 나간다(아잉 큐브 `leaveForExit` — 최대 2초. Swift `signOutLeavingRummy`). 세션을 먼저 지우면 이탈 요청이
+     * 토큰 없이 떠나 판이 '플레이 중'으로 남는다. 고리가 없으면 아무 일도 안 한다. 계정 삭제 앞에는 부르지 않는다 — 서버 `delete_my_account` 가 같은 트랜잭션에서 기권시킨다.
      */
-    suspend fun leaveLiveMatchBeforeSessionEnd(deletingAccount: Boolean) {}
+    suspend fun leaveLiveMatchBeforeSignOut() {}
+
+    /** 이 조립에서 아잉 큐브를 할 수 있는가(폰 — 일일 미션 큐브 줄의 서버 글자 '맥에서 할 수 있어요'가 거짓이 된다). 큐브가 없는 조립은 서버 글자 그대로다. */
+    val rummyPlayable: Boolean get() = false
 
     /** 나 탭 경로를 루트로(Swift `context.router.popToRoot(.me)`, W2-f). */
     fun popMeToRoot() {}

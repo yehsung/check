@@ -288,7 +288,7 @@ class GamesRummyLobbyPlanTest {
 
     @Test
     fun rankingLinesAndMyRow() {
-        assertEquals("내 순위 3등 · 판 수 7 · 1등 2", RummyLobbyPhoneText.myRank(RummyRankingMe(games = 7, wins = 2, rank = 3)))
+        assertEquals("내 순위 3위 · 판 수 7 · 1등 2", RummyLobbyPhoneText.myRank(RummyRankingMe(games = 7, wins = 2, rank = 3)))
         assertEquals("내 순위 — · 판 수 0 · 1등 0", RummyLobbyPhoneText.myRank(RummyRankingMe()))
         assertTrue(GamesRummyRankingPlan.isMe(id(1), id(1).lowercased.uppercase()))
         assertFalse(GamesRummyRankingPlan.isMe(id(1), id(2).lowercased))

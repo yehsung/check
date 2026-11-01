@@ -1,4 +1,4 @@
-// 원본: Tests/CheckMobileKitTests/GamesRummyMatchInputTests.swift:1 @ ios-1017-cube 614d98bd · 맥 Tests/checkTests/V0369RummyPanelRenderTests.swift · V0370RummyBoardFeelTests.swift 의 뜻
+// 원본: Tests/CheckMobileKitTests/GamesRummyMatchInputTests.swift:1 @ ios-1017-cube 61d75d8c · 맥 Tests/checkTests/V0369RummyPanelRenderTests.swift · V0370RummyBoardFeelTests.swift 의 뜻
 //
 // 판 화면의 **끌기 판정**. "손 궤적 → 분류 → 놓을 자리 → 편집기 결과" 를 값으로 잰다. 궤적은 실제 화면과 같은 재료(GamesRummyTouchContext · GamesRummyMatchModel)로 밟고,
 // 결과는 진짜 편집기(RummyTurnEditor)에 놓아 본다. 시간은 밖에서 민다(holdElapsed).
@@ -9,7 +9,6 @@ import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
 import com.yehsung.aingcheck.core.rules.rummy.RummyDropResolver
 import com.yehsung.aingcheck.core.rules.rummy.RummyDropTarget
-import com.yehsung.aingcheck.core.rules.rummy.RummyRackGeometry
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackSlot
 import com.yehsung.aingcheck.core.rules.rummy.RummyTurnEditor
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
@@ -31,16 +30,15 @@ import kotlin.test.assertTrue
 
 /** 판 두 묶음(A1~A3 왼쪽 · B4~B7 오른쪽 화면 밖) + 받침대 A4 · C1 C2 C3 · D9 — 입력 시험 · 화면 시험 공용. */
 internal object GamesRummyFixture {
-    val screenSize = RummyCanvasSize(393.0, 759.0)
+    val screenSize = RummyCanvasSize(734.0, 372.0)
 
     fun faces(vararg texts: String): List<RummyFace> = texts.map { RummyFace.of(it)!! }
 
-    fun editor(initialDone: Boolean = true, farMeldX: Long = 800): RummyTurnEditor = RummyTurnEditor(
+    fun editor(initialDone: Boolean = true, farMeldX: Long = 800, farMeldY: Long = 50): RummyTurnEditor = RummyTurnEditor(
         table = listOf(faces("A1", "A2", "A3"), faces("B4", "B5", "B6", "B7")),
         rack = faces("A4", "C1", "C2", "C3", "D9"),
         initialDone = initialDone,
-        tableLayout = RummyLayout(listOf(RummyPoint(100, 50), RummyPoint(farMeldX, 50))),
-        rackHalfColumns = RummyRackGeometry.phoneHalfColumns,
+        tableLayout = RummyLayout(listOf(RummyPoint(100, 50), RummyPoint(farMeldX, farMeldY))),
     )
 
     fun context(
@@ -72,8 +70,8 @@ internal object GamesRummyFixture {
         return RummyCanvasPoint(local.x + context.layout.table.x, local.y + context.layout.table.y)
     }
 
-    /** 손 위 48 점이 [pointer] 에 오는 손 자리. */
-    fun finger(pointer: RummyCanvasPoint): RummyCanvasPoint = RummyCanvasPoint(pointer.x, pointer.y + GamesRummyGestureRules.fingerLift)
+    /** 손 위 점이 [pointer] 에 오는 손 자리(판 위에서는 48). */
+    fun finger(pointer: RummyCanvasPoint): RummyCanvasPoint = GamesRummyMatchLayout(screenSize).finger(pointer)
 
     /** 궤적 한 번: 누르고 → 목적지로 가서 → 뗀다. */
     fun trace(start: RummyCanvasPoint, end: RummyCanvasPoint, context: GamesRummyTouchContext, hold: Boolean = false): GamesRummyDropAction {
@@ -180,16 +178,17 @@ class GamesRummyMatchInputTest {
 
     @Test
     fun boardToBoardOnAScrolledTable() {
-        val editor = fx.editor(farMeldX = 650)
+        val editor = fx.editor(farMeldX = 650, farMeldY = 480)
         val base = fx.context(editor)
-        val context = fx.context(editor, viewport = base.viewport.panned(-130.0, 0.0))
-        // 밀어 두지 않았다면 오른쪽 묶음(x 650)은 화면 밖이다.
-        assertTrue(fx.screen(660.0, 78.0, base).x > 393)
+        val context = fx.context(editor, viewport = base.viewport.panned(0.0, -40.0))
+        // 밀어 두지 않았다면 아래 묶음(y 480)은 칸 밖이다.
+        val table = context.layout.table
+        assertTrue(fx.screen(660.0, 508.0, base).y > table.maxY)
         val a3 = fx.id("A3", editor)
         val start = fx.screen(100.0 + 80 + 20, 78.0, context)
         assertEquals(GamesRummyHit.BoardTile(a3), context.hit(start))
-        val pointer = fx.screen(660.0, 78.0, context)
-        assertTrue(pointer.x > 0 && pointer.x < 393, "기준선: 목적지가 화면 안이어야 시험이 뜻이 있다")
+        val pointer = fx.screen(660.0, 508.0, context)
+        assertTrue(pointer.y > table.y && pointer.y < table.maxY, "기준선: 목적지가 칸 안이어야 시험이 뜻이 있다")
         val action = fx.trace(start, fx.finger(pointer), context)
         assertEquals(GamesRummyDropAction.MoveTiles(listOf(a3), RummyDropTarget.Meld(1, 0)), action)
         assertTrue(fx.apply(action, editor))
@@ -199,20 +198,20 @@ class GamesRummyMatchInputTest {
 
     @Test
     fun autoPanReachesTheFarMeld() {
-        val editor = fx.editor()
+        val editor = fx.editor(farMeldX = 650, farMeldY = 560)
         val context = fx.context(editor)
         val model = GamesRummyMatchModel(tableSize(context))
         val a3 = fx.id("A3", editor)
         val start = fx.screen(100.0 + 80 + 20, 78.0, context)
-        val y = fx.screen(0.0, 78.0, context).y
+        val table = context.layout.table
         model.touchDown(start, context)
-        model.touchMoved(fx.finger(RummyCanvasPoint(385.0, y)), context)
-        assertEquals(1, model.edgeDirection, "가장자리인데 프레임이 안 돈다")
+        model.touchMoved(fx.finger(RummyCanvasPoint(table.midX, table.maxY - 10)), context)
+        assertTrue(model.isEdgePanning, "가장자리인데 프레임이 안 돈다")
         repeat(200) { model.edgeTick(0.016) }
-        assertEquals(1000.0, model.viewport.visibleLogical.maxX, 0.01, "자동 밀기가 끝까지 안 갔다")
-        assertEquals(0, model.edgeDirection, "끝에 닿았는데 프레임이 돈다")
+        assertEquals(640.0, model.viewport.visibleLogical.maxY, 0.01, "자동 밀기가 끝까지 안 갔다")
+        assertFalse(model.isEdgePanning, "끝에 닿았는데 프레임이 돈다")
         val view = context.with(model.viewport)
-        val over = fx.finger(fx.screen(800.0 + 160 - 6, 78.0, view))
+        val over = fx.finger(fx.screen(650.0 + 160 - 6, 588.0, view))
         model.touchMoved(over, context)
         val action = model.touchUp(over, context)
         assertEquals(GamesRummyDropAction.MoveTiles(listOf(a3), RummyDropTarget.Meld(1, 4)), action)
@@ -316,7 +315,7 @@ class GamesRummyMatchInputTest {
     fun drawnFramesAreWhereTheHitLands() {
         val editor = fx.editor()
         val base = fx.context(editor).viewport
-        val panned = base.panned(-420.0, 0.0)
+        val panned = base.panned(0.0, -120.0)
         val zoomed = base.zoomed(0.95, RummyCanvasPoint(200.0, 100.0)).panned(-40.0, 30.0)
         val full = base.toggledFullView()
         for (view in listOf(base, panned, zoomed, full)) {
@@ -336,7 +335,7 @@ class GamesRummyMatchInputTest {
             }
         }
         // 기준선: 밀린 보기는 처음 보기와 다른 자리에 그린다.
-        assertNotEquals(base.transform.toScreen(RummyCanvasPoint(800.0, 50.0)), panned.transform.toScreen(RummyCanvasPoint(800.0, 50.0)))
+        assertNotEquals(base.transform.toScreen(RummyCanvasPoint(800.0, 200.0)), panned.transform.toScreen(RummyCanvasPoint(800.0, 200.0)))
     }
 
     @Test
@@ -434,25 +433,25 @@ class GamesRummyMatchInputTest {
     fun edgeAutoPanOnlyInTheZone() {
         val context = fx.context()
         val model = GamesRummyMatchModel(tableSize(context))
+        val table = context.layout.table
         val start = fx.rackPoint("D9", context)
         model.touchDown(start, context)
-        val pointer = RummyCanvasPoint(380.0, context.layout.table.midY)
-        model.touchMoved(fx.finger(pointer), context)
+        model.touchMoved(fx.finger(RummyCanvasPoint(table.midX, table.maxY - 10)), context)
         val first = model.target
-        val x = model.viewport.origin.x
+        val y = model.viewport.origin.y
         model.edgeTick(0.1)
-        assertEquals(x + 40, model.viewport.origin.x, 0.001)
+        assertEquals(y + 40, model.viewport.origin.y, 0.001)
         assertNotEquals(first, model.target, "밀렸는데 놓을 자리가 그대로다")
-        model.touchMoved(fx.finger(RummyCanvasPoint(200.0, context.layout.table.midY)), context)
-        assertEquals(0, model.edgeDirection)
-        val still = model.viewport.origin.x
+        model.touchMoved(fx.finger(RummyCanvasPoint(table.midX, table.midY)), context)
+        assertFalse(model.isEdgePanning)
+        val still = model.viewport.origin.y
         model.edgeTick(0.1)
-        assertEquals(still, model.viewport.origin.x, 0.0, "가운데인데 밀렸다")
-        model.touchMoved(fx.finger(RummyCanvasPoint(380.0, context.layout.rack.midY)), context)
-        assertEquals(0, model.edgeDirection, "받침대 위인데 자동 밀기가 돈다")
+        assertEquals(still, model.viewport.origin.y, 0.0, "가운데인데 밀렸다")
+        model.touchMoved(fx.finger(RummyCanvasPoint(table.midX, context.layout.rack.midY)), context)
+        assertFalse(model.isEdgePanning, "받침대 위인데 자동 밀기가 돈다")
         model.edgeTick(0.1)
-        assertEquals(still, model.viewport.origin.x, 0.0, "받침대 위인데 판이 밀렸다")
-        model.cancelTouch()
+        assertEquals(still, model.viewport.origin.y, 0.0, "받침대 위인데 판이 밀렸다")
+        model.touchVanished()
     }
 
     @Test
@@ -463,15 +462,15 @@ class GamesRummyMatchInputTest {
         val start = fx.rackPoint("C2", context)
         model.touchDown(start, context)
         assertEquals(2, model.frozenRows)
-        model.tableSizeChanged(RummyCanvasSize(393.0, 422.0))
+        model.tableSizeChanged(RummyCanvasSize(500.0, 244.0))
         assertEquals(scale, model.viewport.scale, "누르는 동안 판이 움직였다")
         val up = RummyCanvasPoint(start.x, start.y - 100)
         model.touchMoved(up, context)
-        model.tableSizeChanged(RummyCanvasSize(393.0, 400.0))
+        model.tableSizeChanged(RummyCanvasSize(481.0, 244.0))
         assertEquals(scale, model.viewport.scale, "끄는 동안 판이 움직였다")
         model.touchUp(up, context)
         assertNull(model.frozenRows)
-        assertEquals(400.0 / 640.0, model.viewport.scale, 0.001, "뗀 뒤에 안 맞췄다")
+        assertEquals(0.481, model.viewport.scale, 0.001, "뗀 뒤에 안 맞췄다")
         assertEquals(model.viewport.scale, model.renderScale)
         // 빈 펠트 밀기는 굳히지 않는다.
         val felt = fx.screen(300.0, 300.0, context.with(model.viewport))
@@ -489,8 +488,8 @@ class GamesRummyMatchInputTest {
         model.touchDown(start, context)
         model.touchMoved(up, context)
         assertNotNull(model.drag)
-        // 판이 바뀌었다 — 손가락은 아직 닿아 있다. 뗄 때까지 무시한다.
-        model.cancelTouch()
+        // 차례가 바뀌었다 — 손가락은 아직 닿아 있다. 뗄 때까지 무시한다.
+        model.boardChanged(null, null)
         assertNull(model.drag)
         assertTrue(model.draggingIDs.isEmpty())
         model.touchMoved(RummyCanvasPoint(start.x, start.y - 200), context)
@@ -505,7 +504,7 @@ class GamesRummyMatchInputTest {
         assertNull(model.drag)
         model.touchDown(start, context)
         assertFalse(model.machine.isIdle, "낡은 거둠이 새 손을 죽였다")
-        model.cancelTouch()
+        model.touchVanished()
     }
 
     // MARK: 성능의 값
@@ -532,7 +531,7 @@ class GamesRummyMatchInputTest {
         val before = model.drag
         model.touchMoved(RummyCanvasPoint(150.0, start.y - 190), context)
         assertNotEquals(before, model.drag, "기준선: 떠 있는 타일은 움직인다")
-        model.cancelTouch()
+        model.touchVanished()
     }
 
     @Test
@@ -546,7 +545,7 @@ class GamesRummyMatchInputTest {
         val preview = assertNotNull(model.boardPreview)
         repeat(20) { step -> model.touchMoved(RummyCanvasPoint(over.x + step % 2, over.y), context) }
         assertSame(preview, model.boardPreview, "손이 떨릴 때마다 미리보기를 다시 묻는다")
-        model.cancelTouch()
+        model.touchVanished()
     }
 
     @Test
@@ -684,7 +683,6 @@ class GamesRummyMatchInputTest {
             table = emptyList(),
             rack = fx.faces("D10", "D11", "D12", "C1", "C2", "C3"),
             initialDone = false,
-            rackHalfColumns = RummyRackGeometry.phoneHalfColumns,
         )
         // 빈칸 없이 놓였으니 딱 붙은 여섯 장 한 덩어리는 맞는 묶음이 아니다 — 뒤 셋을 다음 줄로 떼어 놓는다.
         assertTrue(editor.moveBlock(editor.rack.takeLast(3).map { it.id }, RummyDropTarget.RackSlot(RummyRackSlot(1, 0))))

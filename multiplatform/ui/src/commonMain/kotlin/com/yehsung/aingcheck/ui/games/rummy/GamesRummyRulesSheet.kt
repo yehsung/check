@@ -22,19 +22,18 @@ import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.rummy.RummyTileSize
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.wire.games.RummyFace
-import com.yehsung.aingcheck.ui.games.minigame.kit.GamesHeaderBar
 import com.yehsung.aingcheck.ui.games.minigame.kit.GamesSheet
 import com.yehsung.aingcheck.ui.games.minigame.kit.rowSubtitleStyle
 import com.yehsung.aingcheck.ui.games.minigame.kit.rowTitleStyle
-import com.yehsung.aingcheck.ui.icons.AppIcon
+import com.yehsung.aingcheck.ui.screens.session.kit.SheetHeader
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 
-/** 규칙 시트 — 그룹·런·첫 등록·조커·판 조작·조작·판 보기·받침대·시간·끝과 점수·등수 분배·나가면. */
+/** 규칙 시트 — 그룹·런·첫 등록·조커·판 조작·조작·판 보기·받침대·시간·기권·끝과 점수·등수 분배. */
 @Composable
 fun GamesRummyRulesSheet(onDismiss: () -> Unit) {
     GamesSheet(onDismiss) {
-        GamesHeaderBar(RummyPhoneText.rulesTitle, onBack = onDismiss, backIcon = AppIcon.Close)
+        SheetHeader(RummyPhoneText.rulesTitle, onClose = onDismiss, closeLabel = RummyPhoneText.close)
         Column(
             Modifier.verticalScroll(rememberScrollState()).padding(horizontal = AingDimens.sideMargin, vertical = AingDimens.space3).testTag(GamesRummyTags.RULES),
             verticalArrangement = Arrangement.spacedBy(AingDimens.space2),

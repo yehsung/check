@@ -85,10 +85,10 @@ object RummyLobbyPhoneText {
     /** 고른 판돈이 잔액을 넘었다 — 왜 막혔는지 + 무엇을 하면 풀리는지. */
     fun stakeShort(stake: Long, balance: Long): String = "판돈 ${stake}에 루비가 모자라요(내 루비 $balance). 판돈을 낮춰 보세요."
 
-    fun myRank(me: RummyRankingMe): String = "내 순위 ${RummyPhoneText.rank(me.rank)} · ${RummyPhoneText.record(me.games, me.wins)}"
+    fun myRank(me: RummyRankingMe): String = "내 순위 ${RummyPhoneText.ladderRank(me.rank)} · ${RummyPhoneText.record(me.games, me.wins)}"
 
     fun rankRowAccessibility(rank: Long?, name: String, games: Long?, wins: Long?, isMe: Boolean): String =
-        (if (isMe) "나, " else "") + "${RummyPhoneText.rank(rank)}, $name, ${RummyPhoneText.record(games, wins)}"
+        (if (isMe) "나, " else "") + "${RummyPhoneText.ladderRank(rank)}, $name, ${RummyPhoneText.record(games, wins)}"
 }
 
 /**

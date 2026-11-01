@@ -1,6 +1,14 @@
 // 원본: Tests/checkTests/V0369RummyPanelRenderTests.swift · V0370RummyIntegrationRenderTests.swift 의 뜻(결과 · 최종 판 · 규칙 · 나가기 확인) — 픽셀 대신 값·상호작용으로 잰다.
 package com.yehsung.aingcheck.ui.games.rummy
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.runDesktopComposeUiTest
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
+import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -128,55 +136,84 @@ class GamesRummyResultViewTest {
         x.h.close()
     }
 
+    /** 펼침 값은 밖(GamesStore)이 쥔다 — 등수 줄 ↔ 최종 판을 갈아 끼우고, [등수]로 돌아온다. */
     @Test
-    fun boardToggleSwapsRowsForTheFinalBoard() = runComposeUiTest {
+    fun boardToggleSwapsRowsForTheFinalBoard() = runDesktopComposeUiTest(734, 372) {
         val x = rig()
         x.rummy.applyState(finished())
+        var showsBoard by mutableStateOf(false)
         setContent {
-            AingTheme(dark = false) { GamesRummyResultView(x.rummy, USER, ME, reduceMotion = false, onRules = {}, onBack = {}, now = now, modifier = Modifier.fillMaxSize()) }
+            AingTheme(dark = false) {
+                GamesRummyResultView(x.rummy, USER, ME, reduceMotion = false, onRules = {}, onBack = {}, now = now, modifier = Modifier.fillMaxSize(), showsBoard = showsBoard, onShowBoard = { showsBoard = it })
+            }
         }
-        // ★ 기준선: 판 타일은 아직 없다.
-        onNodeWithContentDescription("파랑 7").assertDoesNotExist()
+        onNodeWithTag(GamesRummyResultTags.FINAL_BOARD).assertDoesNotExist()
         onNodeWithTag(GamesRummyResultTags.BOARD_TOGGLE).performClick()
         waitForIdle()
+        assertTrue(showsBoard)
         onNodeWithTag(GamesRummyResultTags.FINAL_BOARD).assertExists()
-        onNodeWithContentDescription("파랑 7").assertExists()
         onNodeWithTag(GamesRummyResultTags.row(1)).assertDoesNotExist()
-        onNodeWithText(RummyPhoneText.ranks).assertExists()
-        onNodeWithTag(GamesRummyResultTags.BOARD_TOGGLE).performClick()
+        onNodeWithTag(GamesRummyResultTags.BOARD_RANKS).performClick()
         waitForIdle()
+        assertFalse(showsBoard)
         onNodeWithTag(GamesRummyResultTags.FINAL_BOARD).assertDoesNotExist()
         onNodeWithTag(GamesRummyResultTags.row(1)).assertExists()
         x.h.close()
     }
 
     @Test
-    fun finalBoardSaysSoWhenEmpty() = runComposeUiTest {
-        setContent { AingTheme(dark = false) { Box(Modifier.size(393.dp, 500.dp)) { GamesRummyFinalBoard(emptyList(), null, Modifier.fillMaxSize()) } } }
+    fun finalBoardSaysSoWhenEmpty() = runDesktopComposeUiTest(734, 372) {
+        val x = rig()
+        x.rummy.applyState(finished(table = "[]", layout = "[]"))
+        setContent { AingTheme(dark = false) { GamesRummyFinalBoard(x.rummy.match!!, true, {}, {}, Modifier.fillMaxSize()) } }
         onNodeWithText(RummyPhoneText.emptyBoard).assertExists()
+        x.h.close()
     }
 
-    /** 전체 보기로 타일이 작아지고 놓인 자리 비율은 같다 — 배율이 바뀌어도 서버 배치 그대로다. */
+    /** 최종 판은 판 화면과 같은 보기다 — 폭 맞춤으로 시작해 세로로 밀고 · [전체 보기]로 높이 맞춤 · 배치는 서버 값 그대로 · 타일을 집지 않는다. */
     @Test
-    fun finalBoardZoomKeepsTheServerLayout() = runComposeUiTest {
-        val sets = listOf(listOf(RummyFace.of("B7")!!, RummyFace.of("C7")!!, RummyFace.of("D7")!!))
-        setContent {
-            AingTheme(dark = false) {
-                Box(Modifier.size(393.dp, 500.dp)) { GamesRummyFinalBoard(sets, RummyLayout(listOf(RummyPoint(80, 40))), Modifier.fillMaxSize()) }
-            }
+    fun finalBoardUsesTheSameViewAsTheMatch() = runDesktopComposeUiTest(734, 372) {
+        val x = rig()
+        x.rummy.applyState(finished())
+        val model = GamesRummyMatchModel()
+        val match = x.rummy.match!!
+        setContent { AingTheme(dark = false) { GamesRummyFinalBoard(match, true, {}, {}, Modifier.fillMaxSize(), model) } }
+        waitForIdle()
+        val table = RummyCanvasSize(634.0, 372.0)
+        assertEquals(table, model.viewport.viewport, "판 칸이 오른쪽 열 100 을 뺀 값이 아니다")
+        assertEquals(GamesRummyViewport.defaultScale(table), model.viewport.scale, 0.0001, "기본이 폭 맞춤이 아니다")
+        assertEquals(0.634, model.viewport.scale, 0.001)
+        val logical = model.viewport.transform.toScreen(RummyCanvasPoint(80.0, 40.0))
+        assertEquals(80 * 0.634, logical.x, 0.1, "서버 배치가 아니다")
+        onNodeWithContentDescription(RummyPhoneText.zoomOut).assertExists()
+        onNodeWithTag(GamesRummyResultTags.BOARD_INPUT).performTouchInput {
+            down(Offset(300f * density, 300f * density))
+            moveBy(Offset(0f, -60f * density))
+            up()
         }
-        val before = onNodeWithContentDescription("파랑 7").getUnclippedBoundsInRoot()
-        val beforeNext = onNodeWithContentDescription("검정 7").getUnclippedBoundsInRoot()
-        onNodeWithText(RummyPhoneText.zoomOut).assertExists()
+        waitForIdle()
+        assertTrue(model.viewport.origin.y > 0, "세로로 안 밀린다")
+        assertNull(model.drag, "읽기 전용 판에서 타일을 집었다")
         onNodeWithTag(GamesRummyResultTags.BOARD_ZOOM).performClick()
         waitForIdle()
-        val after = onNodeWithContentDescription("파랑 7").getUnclippedBoundsInRoot()
-        val afterNext = onNodeWithContentDescription("검정 7").getUnclippedBoundsInRoot()
-        assertTrue(after.width < before.width, "${after.width} ${before.width}")
-        // 타일끼리 틈 없이 이어진다(묶음 칸 폭 = 타일 폭) — 배율이 타일과 자리에 똑같이 걸렸다는 뜻.
-        assertTrue(kotlin.math.abs((beforeNext.left - before.left).value - before.width.value) < 1.5f)
-        assertTrue(kotlin.math.abs((afterNext.left - after.left).value - after.width.value) < 1.5f)
-        onNodeWithText(RummyPhoneText.zoomIn).assertExists()
+        assertTrue(model.viewport.isFullView, "[전체 보기]가 높이 맞춤이 아니다")
+        assertEquals(372.0 / 640.0, model.viewport.scale, 0.001)
+        onNodeWithContentDescription(RummyPhoneText.zoomIn).assertExists()
+        x.h.close()
+    }
+
+    /** 전환 중 세로 크기로 불려도 안전한 그림이다 — 돌아가는 동안 [등수]로 빠질 수 있다. */
+    @Test
+    fun finalBoardDrawsTheSafePictureOnAPortraitFrame() = runDesktopComposeUiTest(393, 759) {
+        val x = rig()
+        x.rummy.applyState(finished())
+        var ranks = 0
+        setContent { AingTheme(dark = false) { GamesRummyFinalBoard(x.rummy.match!!, true, { ranks += 1 }, {}, Modifier.fillMaxSize()) } }
+        onNodeWithTag(GamesRummyMatchTags.ROTATING).assertExists()
+        onNodeWithTag(GamesRummyResultTags.BOARD_INPUT).assertDoesNotExist()
+        onNodeWithTag(GamesRummyMatchTags.BACK).performClick()
+        assertEquals(1, ranks)
+        x.h.close()
     }
 
     @Test
@@ -276,7 +313,7 @@ class GamesRummyResultViewTest {
         setContent {
             AingTheme(dark = false) { GamesRummyExitDialog(RummyCloseDecision.confirmForfeit, onKeep = { kept += 1 }, onConfirm = { confirmed += 1 }) }
         }
-        onNodeWithText("나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요.").assertExists()
+        onNodeWithText("나가면 기권돼 꼴찌가 되고 판돈을 잃어요.").assertExists()
         onNodeWithTag(GamesRummyTags.EXIT_CONFIRM).performClick()
         waitForIdle()
         assertEquals(1, confirmed)

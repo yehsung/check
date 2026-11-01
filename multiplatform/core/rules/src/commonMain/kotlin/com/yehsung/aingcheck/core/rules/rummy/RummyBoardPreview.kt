@@ -13,7 +13,7 @@ import com.yehsung.aingcheck.core.wire.games.RummyFace
 
 /** 상대 자리 배치 — 나 다음 사람부터 왼쪽 → 위 → 오른쪽(둘이면 위, 셋이면 왼·오른). 순수. */
 data class RummySeatArrangement(val left: Long? = null, val top: Long? = null, val right: Long? = null) {
-    /** 폰 상대 줄의 가로 순서(내 다음 차례부터 — 왼·위·오른이 곧 그 순서다). */
+    /** 폰 상대 카드 순서(내 다음 차례부터 — 왼·위·오른이 곧 그 순서다). */
     val ordered: List<Long> get() = listOfNotNull(left, top, right)
 
     companion object {
@@ -216,9 +216,6 @@ data class RummyTileSize(val size: RummyCanvasSize) {
 
         /** 맥 받침대. */
         val rack = RummyTileSize(RummyRackGeometry.standardTile)
-
-        /** 폰 받침대 기준(칸이 좁으면 [RummyRackGeometry.phone] 의 tileSize 를 쓴다). */
-        val phoneRack = RummyTileSize(RummyRackGeometry.phoneTile)
 
         /** 판 캔버스 타일(논리 40×56) × 배율. */
         fun canvas(scale: Double): RummyTileSize =

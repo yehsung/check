@@ -1,6 +1,5 @@
 // 원본: Sources/check/RummyTableCanvas.swift:11 (RummyCanvasTransform — zoom 은 1cbaa4d1 의 세로 가운데 값) · Sources/check/RummyPanelMatch.swift:124 (RummyDropResolver) ·
 //       Sources/check/RummyRackView.swift:12,70 (RummyRackGeometry · motionKeys) · Sources/check/RummyArt.swift:27 (RummyRackArtMetrics) @ 1a5eeca6
-//       폰 받침대(RummyRackPlate · RummyRackGeometry.phone)는 원본 없음 — ios-1017 설계서 §4 ⑤의 Kotlin 몫.
 package com.yehsung.aingcheck.core.rules.rummy
 
 import com.yehsung.aingcheck.core.rules.format.roundedHalfAwayFromZero
@@ -155,45 +154,31 @@ object RummyRackArtMetrics {
     fun capWidth(height: Double): Double = capFraction * naturalAspect * height
 }
 
-/**
- * 그림 기준선을 쓰지 않는 받침대 — 폰은 칸 폭에 11장을 맞추느라 맥 그림 산식(높이 = 타일 / 0.31, 옆 여백 = 0.35H)이 화면을 넘는다.
- * 값이 있으면 [RummyRackGeometry] 가 줄 자리를 이 값으로 잰다.
- */
-data class RummyRackPlate(
-    /** 왼쪽 여백(첫 타일 왼쪽 끝). */
-    val side: Double,
-    /** 첫 줄 위 여백. */
-    val top: Double,
-    /** 줄 사이. */
-    val rowGap: Double,
-    /** 타일을 줄이지 않고 보이는 줄 수. 넘치면 맥 tileScale 과 같은 꼴로 줄인다(fullRows / 줄 수). */
-    val fullRows: Int,
-)
+/** 놓기 판정이 받침대에 묻는 두 가지 — 폰은 그림 기준선 없이 칸 폭으로 잰 기하를 넘긴다(ui GamesRummyRackGeometry · 맥 산식은 [RummyRackGeometry]). */
+interface RummyRackDropGeometry {
+    /** 놓는 타일 폭. */
+    val dropTileWidth: Double
 
-/** 받침대 기하(받침대 칸 왼쪽 위 원점). 순수 값. 타일 크기는 맥 값(36×50)이 기본이고 폰은 [phone] 을 쓴다. */
+    /** 놓을 자리: 맨 왼쪽 타일의 왼쪽 끝 x · 손의 y → 가장 가까운 반 칸과 줄(받침대 안으로 자른다). */
+    fun slot(tileLeft: Double, centerY: Double, tiles: Int): RummyRackSlot
+}
+
+/** 받침대 기하(받침대 칸 왼쪽 위 원점). 순수 값. */
 data class RummyRackGeometry(
     val tile: RummyCanvasSize = standardTile,
     val height: Double = standHeight(tile),
     val requestedRowCount: Int = RummyRackLayout.baseRows,
-    /** 한 줄의 반 칸 수 — 편집기 [RummyRackLayout.halfColumns] 와 같은 값이어야 한다. */
-    val halfColumns: Int = RummyRackLayout.halfColumnsPerRow,
-    /** 폰 받침대. null 이면 맥 그림 기준선. */
-    val plate: RummyRackPlate? = null,
-) {
+) : RummyRackDropGeometry {
     val rowCount: Int = maxOf(RummyRackLayout.baseRows, requestedRowCount)
 
     /** 줄이 넘치면 타일을 줄인다(2줄 = 1). */
-    val tileScale: Double
-        get() {
-            val full = plate?.fullRows ?: 2
-            return if (rowCount <= full) 1.0 else full.toDouble() / rowCount.toDouble()
-        }
+    val tileScale: Double get() = if (rowCount <= 2) 1.0 else 2.0 / rowCount.toDouble()
     val tileSize: RummyCanvasSize get() = RummyCanvasSize(tile.width * tileScale, tile.height * tileScale)
-    val sideInset: Double get() = plate?.side ?: RummyRackArtMetrics.sideInset(height)
+    val sideInset: Double get() = RummyRackArtMetrics.sideInset(height)
     val halfPitch: Double get() = tileSize.width / RummyRackLayout.tileSpan.toDouble()
+    override val dropTileWidth: Double get() = tileSize.width
 
     fun rowBottom(row: Int): Double {
-        plate?.let { return it.top + (row + 1).toDouble() * tileSize.height + row.toDouble() * it.rowGap }
         if (rowCount <= 2) return (if (row <= 0) RummyRackArtMetrics.backRowBottom else RummyRackArtMetrics.frontRowBottom) * height
         val top = (RummyRackArtMetrics.backRowBottom - RummyRackArtMetrics.tileHeight) * height
         val bottom = RummyRackArtMetrics.frontRowBottom * height
@@ -209,9 +194,8 @@ data class RummyRackGeometry(
         tileSize.height,
     )
 
-    /** 놓을 자리: 맨 왼쪽 타일의 왼쪽 끝 x · 손의 y → 가장 가까운 반 칸과 줄(받침대 안으로 자른다). */
-    fun slot(tileLeft: Double, centerY: Double, tiles: Int): RummyRackSlot {
-        val maxHalf = maxOf(0, halfColumns - RummyRackLayout.tileSpan * maxOf(1, tiles))
+    override fun slot(tileLeft: Double, centerY: Double, tiles: Int): RummyRackSlot {
+        val maxHalf = maxOf(0, RummyRackLayout.halfColumnsPerRow - RummyRackLayout.tileSpan * maxOf(1, tiles))
         val half = roundedHalfAwayFromZero((tileLeft - sideInset) / halfPitch).toInt()
         val row = (0 until rowCount).minByOrNull { abs(rowCenter(it) - centerY) } ?: 0
         return RummyRackSlot(row, minOf(maxOf(half, 0), maxHalf))
@@ -223,32 +207,6 @@ data class RummyRackGeometry(
 
         /** 받침대 높이 = 타일 높이 / 0.31(세로로 늘이지 않는다). */
         fun standHeight(tile: RummyCanvasSize): Double = RummyRackArtMetrics.height(tile.height)
-
-        /** 폰 한 줄의 반 칸 수(11장). 앱 배선(`RummyStore.rackHalfColumns`)과 화면이 이 한 값을 본다. */
-        const val phoneHalfColumns: Int = 22
-
-        /** 폰 타일 기준 크기(설계서 §4 ⑤). 칸이 좁으면 비율대로 줄인다. */
-        val phoneTile = RummyCanvasSize(34.0, 47.0)
-
-        private const val phoneSide: Double = 8.0
-        private const val phoneTop: Double = 8.0
-        private const val phoneFullRows: Int = 3
-
-        /**
-         * 폰 받침대 — 칸 폭 [regionWidth] 에 11장을 맞춘다. 2줄 약 118 · 3줄 약 165(타일 34×47 때), 3줄을 넘기면 타일을 줄인다(받침대 안 세로 스크롤은 쓰지 않는다).
-         * 줄 수는 호출자가 `editor.rackLayout.rowCount` 로 넘긴다. 높이는 [RummyRackGeometry.height].
-         */
-        fun phone(regionWidth: Double, rows: Int = RummyRackLayout.baseRows): RummyRackGeometry {
-            val resolved = maxOf(RummyRackLayout.baseRows, rows)
-            val columns = phoneHalfColumns / RummyRackLayout.tileSpan
-            val width = minOf(phoneTile.width, maxOf(1.0, regionWidth - phoneSide * 2) / columns)
-            val tile = RummyCanvasSize(width, width * phoneTile.height / phoneTile.width)
-            val scale = if (resolved <= phoneFullRows) 1.0 else phoneFullRows.toDouble() / resolved.toDouble()
-            val gap = if (resolved <= 2) 8.0 else 4.0
-            val height = phoneTop * 2 + tile.height * scale * resolved + gap * (resolved - 1)
-            val side = (regionWidth - tile.width * scale * columns) / 2
-            return RummyRackGeometry(tile, height, resolved, phoneHalfColumns, RummyRackPlate(side, phoneTop, gap, phoneFullRows))
-        }
 
         /**
          * 받침대 타일의 모션 키 — 면 글자 + 같은 면 순번(id 순). 차례가 바뀌어 편집기가 새 id 를 붙여도 같은 타일이 같은 뷰로 남아
@@ -287,14 +245,14 @@ object RummyDropResolver {
         layout: RummyMatchRegions,
         canvas: RummyCanvasTransform,
         table: RummyTableLayout,
-        rack: RummyRackGeometry,
+        rack: RummyRackDropGeometry,
         isMyTurn: Boolean,
         skipMeld: Int? = null,
     ): RummyDropTarget? {
         if (layout.rack.contains(pointer)) {
             val localX = pointer.x - layout.rack.x
             val localY = pointer.y - layout.rack.y
-            val left = localX - (grabIndex.toDouble() + 0.5) * rack.tileSize.width
+            val left = localX - (grabIndex.toDouble() + 0.5) * rack.dropTileWidth
             return RummyDropTarget.RackSlot(rack.slot(left, localY, count))
         }
         if (!isMyTurn || !layout.table.contains(pointer)) return null

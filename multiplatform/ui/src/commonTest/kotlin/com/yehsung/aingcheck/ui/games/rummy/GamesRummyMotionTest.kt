@@ -6,7 +6,6 @@ import com.yehsung.aingcheck.core.rules.rummy.RummyBoardTile
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
-import com.yehsung.aingcheck.core.rules.rummy.RummyRackGeometry
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackSlot
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackSort
 import com.yehsung.aingcheck.core.rules.rummy.RummyTableLayout
@@ -70,19 +69,30 @@ class GamesRummyMotionTest {
         assertTrue(GamesRummyReactionPlan.scale(0.15) > 1.0, "살짝 넘쳤다 돌아와야 한다")
     }
 
+    /** 판 화면(가로) = 카드 오른쪽 · 결과(세로) = 줄 위 · 아래. 어느 쪽이든 화면 안이다. */
     @Test
-    fun bubbleStandsBelowTheOpponentRowAboveTheRackAndInsideTheScreen() {
+    fun bubbleStandsBesideTheCardInLandscapeAndAboveOrBelowInPortrait() {
         val height = GamesRummyReactionPlan.bubbleHeight
+        for (bounds in listOf(RummyCanvasSize(667.0, 354.0), RummyCanvasSize(734.0, 372.0), RummyCanvasSize(932.0, 430.0))) {
+            val layout = GamesRummyMatchLayout(bounds)
+            for (card in listOf(layout.opponentCard(0), layout.opponentCard(2), layout.mySeatCard)) {
+                assertEquals(GamesRummyReactionPlan.Side.trailing, GamesRummyReactionPlan.side(card, bounds))
+                val center = GamesRummyReactionPlan.center(card, GamesRummyReactionPlan.Side.trailing, bounds)
+                assertEquals(card.maxX + 3 + height / 2, center.x, 0.001, "꼬리 끝이 카드에서 3 떨어지지 않았다")
+                assertTrue(center.y - height / 2 >= 0 && center.y + height / 2 <= bounds.height, "$bounds: 화면 밖 $center")
+            }
+        }
         for (width in listOf(320.0, 393.0, 430.0)) {
-            val opponent = RummyCanvasRect(0.0, 48.0, 100.0, 48.0)
-            assertEquals(GamesRummyReactionPlan.Side.below, GamesRummyReactionPlan.side(opponent))
-            val below = GamesRummyReactionPlan.center(opponent, GamesRummyReactionPlan.Side.below, width)
-            assertTrue(below.x - height / 2 >= 0 && below.y - height / 2 > opponent.maxY)
-            val rack = RummyCanvasRect(0.0, 500.0, width, 118.0)
-            assertEquals(GamesRummyReactionPlan.Side.above, GamesRummyReactionPlan.side(rack))
-            val mine = GamesRummyReactionPlan.center(rack, GamesRummyReactionPlan.Side.above, width)
-            assertTrue(mine.y + height / 2 < rack.y && abs(mine.x - width / 2) < 0.5)
-            val right = GamesRummyReactionPlan.center(RummyCanvasRect(width - 40, 200.0, 40.0, 40.0), GamesRummyReactionPlan.Side.above, width)
+            val bounds = RummyCanvasSize(width, 759.0)
+            val top = RummyCanvasRect(0.0, 48.0, 100.0, 48.0)
+            assertEquals(GamesRummyReactionPlan.Side.below, GamesRummyReactionPlan.side(top, bounds))
+            val below = GamesRummyReactionPlan.center(top, GamesRummyReactionPlan.Side.below, bounds)
+            assertTrue(below.x - height / 2 >= 0 && below.y - height / 2 > top.maxY)
+            val row = RummyCanvasRect(0.0, 500.0, width, 118.0)
+            assertEquals(GamesRummyReactionPlan.Side.above, GamesRummyReactionPlan.side(row, bounds))
+            val mine = GamesRummyReactionPlan.center(row, GamesRummyReactionPlan.Side.above, bounds)
+            assertTrue(mine.y + height / 2 < row.y && abs(mine.x - width / 2) < 0.5)
+            val right = GamesRummyReactionPlan.center(RummyCanvasRect(width - 40, 200.0, 40.0, 40.0), GamesRummyReactionPlan.Side.above, bounds)
             assertTrue(right.x + height / 2 <= width)
         }
     }
@@ -91,7 +101,7 @@ class GamesRummyMotionTest {
 
     @Test
     fun sortStaggerFollowsTheSortedReadingOrder() {
-        val editor = RummyTurnEditor(table = emptyList(), rack = faces("D3", "A1", "C2", "B9", "A2"), initialDone = true, rackHalfColumns = RummyRackGeometry.phoneHalfColumns)
+        val editor = RummyTurnEditor(table = emptyList(), rack = faces("D3", "A1", "C2", "B9", "A2"), initialDone = true)
         val before = editor.rackLayout
         val stagger = GamesRummyRackMotion.sortStagger(editor, RummyRackSort.number)
         val sorted = editor.copy()
@@ -114,20 +124,13 @@ class GamesRummyMotionTest {
     }
 
     @Test
-    fun theFlightStartsInsideTheDrawButtonAtEveryWidthAndTextScale() {
-        for (width in listOf(320.0, 393.0, 430.0)) {
-            val size = RummyCanvasSize(width, 759.0)
-            for (scale in listOf(1.0, 1.6)) {
-                val layout = GamesRummyMatchLayout(size, actionHeight = GamesRummyMatchLayout.actionHeight(scale))
-                val origin = layout.drawOrigin(scale)
-                val screen = RummyCanvasPoint(origin.x + layout.rack.x, origin.y + layout.rack.y)
-                assertTrue(layout.actions.contains(screen), "$width $scale: $screen")
-                assertTrue(origin.y > layout.rack.height, "받침대 아래에서 출발해야 한다")
-            }
-            val widths = GamesRummyMatchLayout.actionWidths(width)
-            val gap = GamesRummyMatchLayout.actionGap
-            val x = GamesRummyMatchLayout(size).drawOrigin(1.0).x
-            assertTrue(x > gap + widths.submit + gap && x < gap + widths.submit + gap + widths.draw, "[완료] · [되돌리기] 쪽에서 출발한다")
+    fun theFlightStartsInsideTheDrawButtonAtEverySize() {
+        for (size in listOf(RummyCanvasSize(667.0, 375.0), RummyCanvasSize(852.0, 393.0), RummyCanvasSize(932.0, 430.0))) {
+            val layout = GamesRummyMatchLayout(size)
+            val origin = layout.drawOrigin
+            val screen = RummyCanvasPoint(origin.x + layout.rack.x, origin.y + layout.rack.y)
+            assertTrue(layout.draw.contains(screen), "$size: $screen")
+            assertTrue(origin.x > layout.rack.width, "받침대 오른쪽 [뽑기]에서 출발해야 한다")
         }
     }
 

@@ -161,7 +161,7 @@ suspend fun MeStore.signOut() {
     if (!context.sessionStore.isSignedIn || isSigningOut) return
     isSigningOut = true
     val generation = context.sessionStore.sessionGeneration
-    context.meLinks.leaveLiveMatchBeforeSessionEnd(deletingAccount = false)
+    context.meLinks.leaveLiveMatchBeforeSignOut()
     // 그 2초 사이 다른 길(강제 로그아웃)이 이미 세션을 바꿨으면 두 번 내리지 않는다.
     if (context.sessionStore.sessionGeneration != generation) {
         isSigningOut = false
@@ -188,9 +188,8 @@ suspend fun MeStore.deleteAccount(): Boolean {
     }
     isDeletingAccount = true
     accountDeletionNotice = null
-    val outcome = context.sessionStore.deleteAccount(password) {
-        context.meLinks.leaveLiveMatchBeforeSessionEnd(deletingAccount = true)
-    }
+    // 아잉 큐브 판·방은 여기서 나가지 않는다 — 서버 `delete_my_account` 가 같은 트랜잭션에서 기권·방 정리를 한다(`rummy_leave` 를 먼저 보내면 삭제가 실패해도 기권이 안 되돌아간다).
+    val outcome = context.sessionStore.deleteAccount(password)
     return when (outcome) {
         AccountDeletionOutcome.Deleted -> true
         is AccountDeletionOutcome.Failed -> {

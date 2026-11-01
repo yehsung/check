@@ -1,8 +1,8 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchChrome.swift:1 @ ios-1017-cube 614d98bd · 맥 Sources/check/RummyPanelMatch.swift:842-1172 (버튼 · 자리 카드 · 판돈 · 더미) · Sources/check/RummyRackCues.swift:132,153 (배지 · [완료] 안 초) @ 1a5eeca6 · 설계서 §4
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchChrome.swift:1 @ ios-1017-cube 61d75d8c · 맥 Sources/check/RummyPanelMatch.swift:842-1172 (버튼 · 자리 카드 · 판돈 · 더미) · Sources/check/RummyRackCues.swift:132,153 (배지 · [완료] 안 초) @ 1a5eeca6 · 설계서 §10
 //
-// 판 화면의 판 · 받침대 바깥 줄들 — 머리 줄 · 상대 줄 · 상태 줄 · 동작 줄 · 판 위 안내. 맥 위 띠 · 자리 카드 · 버튼을 세로로 옮겼다.
+// 판 화면의 판 · 받침대 바깥 — 왼쪽 열(뒤로 · 규칙 · 자리 카드) · 오른쪽 열(판돈 · 더미 · 반응 · 전체 보기 · 동작 버튼) · 상태 줄 · 안내. 맥 위 띠 · 자리 카드 · 버튼을 가로 화면 양옆 열로 옮겼다.
+// 칸 자리는 전부 GamesRummyMatchLayout 한 값이다. 높이가 낮아 큰 글자에서 스크롤 없이 들어가야 한다 — 글자 배율을 칸마다 자른다([GamesRummyCappedText]).
 // 초 단위 값은 **잎**(링 · 초 글자)만 읽는다 — 화면이 매초 다시 조립되지 않게. 잎의 고리는 열쇠가 안 바뀌는 효과 하나다(재생성 고리 금지).
-// 글자는 칸 높이가 정해져 있어 글자 배율을 칸마다 자른다(큰 글자에서 잘리지 않게) — [GamesRummyCappedText].
 package com.yehsung.aingcheck.ui.games.rummy
 
 import androidx.compose.foundation.Canvas
@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -23,12 +24,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,7 +73,6 @@ import com.yehsung.aingcheck.ui.games.gomoku.BoardAvatar
 import com.yehsung.aingcheck.ui.games.minigame.kit.TNUM
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
-import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.delay
 import kotlin.math.ceil
@@ -110,62 +112,121 @@ private fun countdownTint(remaining: Double): Color? = when (GamesRummyCountdown
     GamesRummyCountdownTone.danger -> AingTheme.colors.danger
 }
 
-// MARK: - 머리 줄
+// MARK: - 열 위쪽
 
-/** [나가기] · 판돈 · 더미 수 · [반응] · [규칙]. 44 칸 안에 든다. */
+/** 열 안의 원형 버튼. 터치 자리는 칸 전체다(지름 38 · 칸 높이 44). */
 @Composable
-internal fun GamesRummyMatchHeader(rummy: RummyStore, match: RummyMatchState, onExit: () -> Unit, onRules: () -> Unit, now: () -> SwiftDate, modifier: Modifier = Modifier) {
+private fun RowScope.ColumnButton(icon: AppIcon, label: String, tag: String, onClick: () -> Unit) {
     val colors = AingTheme.colors
-    GamesRummyCappedText(1.3f) {
-        Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            HeaderIcon(AppIcon.ChevronLeft, GamesRummyMatchText.leaveDescription, GamesRummyMatchTags.BACK, onExit)
-            RubyIcon(rememberRubyArt(17f), size = 17.dp)
-            Text(
-                RummyPhoneText.matchPot(match.stake, match.seatCount),
-                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM),
-                color = colors.label,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Spacer(Modifier.weight(1f))
-            GamesRummyTileBack(RummyCanvasSize(11.0, 15.0))
-            Text(
-                RummyPhoneText.pool(match.poolCount),
-                style = MaterialTheme.typography.labelMedium.copy(fontFeatureSettings = TNUM),
-                color = colors.label,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.semantics { contentDescription = "${RummyPhoneText.poolLabel} ${match.poolCount ?: 0}" },
-            )
-            GamesRummyReactionButton(rummy, now)
-            HeaderIcon(AppIcon.Help, RummyPhoneText.rules, GamesRummyMatchTags.RULES, onRules)
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label }
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            Modifier.size(GamesRummyMatchLayout.navButtonDiameter.dp).background(colors.surface, CircleShape).border(0.8.dp, colors.separator, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            AingIcon(icon, contentDescription = null, size = 20.dp, tint = colors.label)
         }
     }
 }
 
+/** 왼쪽 열 위 — [나가기] · [규칙]. 판 안 칸이라 시스템 막대의 뒤로가 안 보인다. */
 @Composable
-private fun HeaderIcon(icon: AppIcon, label: String, tag: String, onClick: () -> Unit) {
-    Box(
-        Modifier.size(AingDimens.minimumTarget).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = label }.testTag(tag),
-        contentAlignment = Alignment.Center,
-    ) {
-        AingIcon(icon, contentDescription = null, size = 22.dp, tint = AingTheme.colors.label)
+internal fun GamesRummyNavButtons(onExit: () -> Unit, onRules: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        ColumnButton(AppIcon.ChevronLeft, GamesRummyMatchText.leaveDescription, GamesRummyMatchTags.BACK, onExit)
+        ColumnButton(AppIcon.MenuBook, RummyPhoneText.rules, GamesRummyMatchTags.RULES, onRules)
     }
 }
 
-// MARK: - 상대 줄
-
-/** 상대를 내 다음 차례부터 가로로. **남의 패는 장수만** 보인다. */
+/** 오른쪽 열 위 — 판돈 · 더미. */
 @Composable
-internal fun GamesRummyOpponentRow(rummy: RummyStore, match: RummyMatchState, now: () -> SwiftDate, modifier: Modifier = Modifier) {
-    val anchors = LocalGamesRummyReactionAnchors.current
+internal fun GamesRummyMatchInfo(match: RummyMatchState, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
     GamesRummyCappedText(1.15f) {
-        Row(modifier.padding(horizontal = 8.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (seat in GamesRummySeats.opponents(match)) {
-                GamesRummySeatCard(rummy, match, seat, now, Modifier.weight(1f).fillMaxHeight().rummyReactionAnchor(anchors, seat.seatNo))
+        Column(modifier.testTag(GamesRummyMatchTags.INFO), verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                RubyIcon(rememberRubyArt(14f), size = 14.dp)
+                Text(
+                    RummyPhoneText.matchPot(match.stake, match.seatCount),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM),
+                    color = colors.label,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                GamesRummyTileBack(RummyCanvasSize(10.0, 14.0))
+                Text(
+                    RummyPhoneText.pool(match.poolCount),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontFeatureSettings = TNUM),
+                    color = colors.label,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.semantics { contentDescription = "${RummyPhoneText.poolLabel} ${match.poolCount ?: 0}" },
+                )
+            }
+        }
+    }
+}
+
+/** 오른쪽 열 — [반응] · [전체 보기]. */
+@Composable
+internal fun GamesRummyToolRow(model: GamesRummyMatchModel, onReaction: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceEvenly) {
+        Box(
+            Modifier.size(44.dp).clickable(role = Role.Button, onClick = onReaction)
+                .semantics { contentDescription = RummyPhoneText.reactionButton }
+                .testTag(GamesRummyReactionTags.BUTTON),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(GamesRummyMatchLayout.navButtonDiameter.dp).background(colors.surface, CircleShape).border(0.8.dp, colors.separator, CircleShape), contentAlignment = Alignment.Center) {
+                AingIcon(AppIcon.Mood, contentDescription = null, size = 20.dp, tint = colors.label)
+            }
+        }
+        GamesRummyZoomButton(model)
+    }
+}
+
+/** [전체 보기] 토글 — 오른쪽 열(판 위에 두면 타일을 가린다). 보기를 파생값으로만 읽는다 — 밀 때마다 다시 조립하지 않는다. */
+@Composable
+internal fun GamesRummyZoomButton(model: GamesRummyMatchModel, modifier: Modifier = Modifier, tag: String = GamesRummyMatchTags.ZOOM) {
+    val colors = AingTheme.colors
+    val isFull by remember(model) { derivedStateOf { model.viewport.isFullView } }
+    Box(
+        modifier.size(44.dp).clickable(role = Role.Button) { model.toggleFullView() }
+            .semantics { contentDescription = if (isFull) RummyPhoneText.zoomIn else RummyPhoneText.zoomOut }
+            .testTag(tag),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(GamesRummyMatchLayout.navButtonDiameter.dp).background(colors.surface, CircleShape).border(0.8.dp, colors.separator, CircleShape), contentAlignment = Alignment.Center) {
+            // 있는 기호 중 뜻이 맞는 것: 판이 다 보이면 늘려 보기(모서리로 뻗는 화살표), 아니면 한눈에(격자).
+            AingIcon(if (isFull) AppIcon.NorthEast else AppIcon.GridViewFill, contentDescription = null, size = 20.dp, tint = colors.label)
+        }
+    }
+}
+
+// MARK: - 자리 카드
+
+/** 왼쪽 열 — 상대를 내 다음 차례부터 위에서 아래로 · 내 자리는 맨 아래. **남의 패는 장수만** 보인다. 칸 자리는 값이고 인원과 무관하다(말풍선 닻도 카드다). */
+@Composable
+internal fun GamesRummySeatColumn(rummy: RummyStore, match: RummyMatchState, layout: GamesRummyMatchLayout, now: () -> SwiftDate) {
+    val anchors = LocalGamesRummyReactionAnchors.current
+    GamesRummyCappedText(1f) {
+        GamesRummySeats.opponents(match).take(GamesRummyMatchLayout.maxOpponentCards).forEachIndexed { index, seat ->
+            GamesRummySeatCard(rummy, match, seat, now, Modifier.atRect(layout.opponentCard(index)).rummyReactionAnchor(anchors, seat.seatNo).testTag(GamesRummyMatchTags.seat(seat.seatNo)))
+        }
+        GamesRummySeats.mine(match)?.let { seat ->
+            GamesRummySeatCard(rummy, match, seat, now, Modifier.atRect(layout.mySeatCard).rummyReactionAnchor(anchors, seat.seatNo).testTag(GamesRummyMatchTags.MY_SEAT))
         }
     }
 }
@@ -178,54 +239,51 @@ private fun GamesRummySeatCard(rummy: RummyStore, match: RummyMatchState, seat: 
     val name = seat.displayName ?: "?"
     val shape = RoundedCornerShape(12.dp)
     val summary = GamesRummyMatchText.seatSummary(name, seat.rackCount, isTurn, tags.map { it.text })
-    Row(
+    Column(
         modifier
             .alpha(if (GamesRummySeats.isGone(seat)) 0.5f else 1f)
             .clip(shape)
             .background(if (isTurn) colors.accentTint else colors.surface, shape)
             .border(if (isTurn) 1.5.dp else 0.8.dp, if (isTurn) colors.accent else colors.separator, shape)
             .clearAndSetSemantics { contentDescription = summary }
-            .padding(horizontal = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(start = 4.dp, end = 4.dp, top = 3.dp),
     ) {
-        Box(Modifier.size(38.dp), contentAlignment = Alignment.Center) {
-            if (isTurn) GamesRummyTurnRing(rummy, GamesRummySeats.turnTotal(match), now, Modifier.size(35.dp))
-            BoardAvatar(name, seat.userId.lowercased, 30.dp, url = seat.avatarUrl, characterHint = seat.character)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Box(Modifier.size(32.dp), contentAlignment = Alignment.Center) {
+                if (isTurn) GamesRummyTurnRing(rummy, GamesRummySeats.turnTotal(match), now, Modifier.size(32.dp))
+                BoardAvatar(name, seat.userId.lowercased, 26.dp, url = seat.avatarUrl, characterHint = seat.character)
+            }
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    GamesRummyTileBack(RummyCanvasSize(8.0, 11.0))
+                    Text(
+                        RummyPhoneText.rackCount(seat.rackCount),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
+                        color = colors.label,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                }
+                if (isTurn) GamesRummySeatSeconds(rummy, now)
+            }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.Center) {
+        Text(
+            name,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+            color = colors.label,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+        tags.firstOrNull()?.let { tag ->
             Text(
-                name,
+                tag.text,
                 style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = colors.label,
+                color = if (tag == GamesRummySeatTag.BeforeInitial) colors.pending else colors.danger,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                GamesRummyTileBack(RummyCanvasSize(8.0, 11.0))
-                Text(
-                    RummyPhoneText.rackCount(seat.rackCount),
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
-                    color = colors.label,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-            // 셋째 줄: 차례면 남은 초, 아니면 표시(폭 320 에서 카드 글자 칸이 좁아 한 줄에 다 못 싣는다).
-            val tag = tags.firstOrNull()
-            if (isTurn) {
-                GamesRummySeatSeconds(rummy, now)
-            } else if (tag != null) {
-                Text(
-                    tag.text,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = if (tag == GamesRummySeatTag.BeforeInitial) colors.pending else colors.danger,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
         }
     }
 }
@@ -271,9 +329,9 @@ private fun GamesRummySeatSeconds(rummy: RummyStore, now: () -> SwiftDate) {
 
 // MARK: - 상태 줄
 
-/** 코어 문구 한 줄 + 첫 등록 전 받침대 합. [plan] 이 null 이면 안 보인다. */
+/** 코어 문구 한 줄(왼쪽) · 직전 사건 · 남의 차례 · 내 시간 초과 · 첫 등록 전 받침대 합(오른쪽). 자리가 모자라면 직전 사건부터 줄어든다(지금 할 일이 먼저다). */
 @Composable
-internal fun GamesRummyStatusRow(line: GamesRummyStatusLine, plan: String?, planReached: Boolean, modifier: Modifier = Modifier) {
+internal fun GamesRummyStatusRow(line: GamesRummyStatusLine, plan: String?, planReached: Boolean, tail: GamesRummyStatusTail, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
     val tint = when (line.tone) {
         GamesRummyStatusLine.Tone.notice -> colors.pending
@@ -281,29 +339,59 @@ internal fun GamesRummyStatusRow(line: GamesRummyStatusLine, plan: String?, plan
         GamesRummyStatusLine.Tone.plain -> colors.label
         GamesRummyStatusLine.Tone.quiet -> colors.label2
     }
-    GamesRummyCappedText(1.15f) {
-        Row(modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    val hasTail = tail.lastEvent != null || tail.turn != null || line.warning != null || plan != null
+    GamesRummyCappedText(1f) {
+        Row(modifier.padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 line.text,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
                 color = tint,
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).testTag(GamesRummyMatchTags.STATUS),
+                modifier = (if (hasTail) Modifier.weight(GAMES_RUMMY_STATUS_SHARE, fill = false) else Modifier.weight(1f)).testTag(GamesRummyMatchTags.STATUS),
             )
-            if (plan != null) {
-                Text(
-                    plan,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
-                    color = if (planReached) colors.working else colors.label2,
-                    maxLines = 1,
-                    softWrap = false,
-                )
+            if (hasTail) {
+                Row(
+                    Modifier.weight(1f - GAMES_RUMMY_STATUS_SHARE, fill = false).padding(start = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+                ) {
+                    tail.lastEvent?.let { last ->
+                        Text(
+                            last,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = colors.label2,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false).testTag(GamesRummyMatchTags.LAST_EVENT),
+                        )
+                    }
+                    tail.turn?.let { turn ->
+                        AingIcon(if (tail.isPlacing) AppIcon.TouchAppFill else AppIcon.HourglassEmpty, contentDescription = null, size = 12.dp, tint = colors.accent)
+                        Text(turn, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = colors.accent, maxLines = 1, softWrap = false)
+                    }
+                    line.warning?.let { warning ->
+                        Text(warning, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM), color = colors.danger, maxLines = 1, softWrap = false, modifier = Modifier.testTag(GamesRummyMatchTags.WARNING))
+                    }
+                    if (plan != null) {
+                        Text(
+                            plan,
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
+                            color = if (planReached) colors.working else colors.label2,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
             }
         }
     }
 }
+
+/** 꼬리가 있을 때 상태 글자가 차지할 수 있는 몫 — 지금 할 일이 먼저다. */
+private const val GAMES_RUMMY_STATUS_SHARE: Float = 0.58f
 
 /** 첫 등록 전 합 글자 — 판 쪽은 내 차례에만 센다(남의 차례 판은 내 것이 아니다). 랙 묶음이 없으면 null. */
 internal fun gamesRummyPlanLine(editor: RummyTurnEditor?, isMyTurn: Boolean): Pair<String, Boolean>? {
@@ -313,59 +401,54 @@ internal fun gamesRummyPlanLine(editor: RummyTurnEditor?, isMyTurn: Boolean): Pa
     return RummyPhoneText.plan(table, planned.rack) to (table + planned.rack >= 30)
 }
 
-// MARK: - 동작 줄
+// MARK: - 동작 버튼
 
-/** [완료(남은 초)] 가장 크게 · [뽑기|넘기기] · [되돌리기] · [777|789]. 큰 글자면 두 줄로 나눈다(GamesRummyMatchLayout.actionRowCount). [onSort] = 정렬(시차를 정하는 판 화면을 지난다). */
+/** 오른쪽 열 아래 — [완료(남은 초)] 가장 크게 · [뽑기|넘기기] · [되돌리기] · [777|789]. 칸은 값으로 정해져 있다. [locked] = 손이 판을 쥐고 있다 — 눌러도 안 간다. [onSort] = 정렬(시차를 정하는 판 화면을 지난다). */
 @Composable
-internal fun GamesRummyActionRow(rummy: RummyStore, match: RummyMatchState, editor: RummyTurnEditor?, isMyTurn: Boolean, width: Double, textScale: Double, now: () -> SwiftDate, onSort: (RummyRackSort) -> Unit, modifier: Modifier = Modifier) {
+internal fun GamesRummyActionColumn(rummy: RummyStore, match: RummyMatchState, editor: RummyTurnEditor?, isMyTurn: Boolean, layout: GamesRummyMatchLayout, locked: Boolean, now: () -> SwiftDate, onSort: (RummyRackSort) -> Unit) {
     val canEdit = isMyTurn && !rummy.isWorking
     val poolEmpty = (match.poolCount ?: 0L) == 0L
-    val gap = GamesRummyMatchLayout.actionGap.dp
-    val height = GamesRummyMatchLayout.actionButtonHeight(textScale).dp
     val submitEnabled = canEdit && editor?.canSubmit == true
     val undoEnabled = canEdit && (editor?.isChanged == true || editor?.isLayoutChanged == true)
-    GamesRummyCappedText(GamesRummyMatchLayout.maxActionTextScale.toFloat()) {
-        if (GamesRummyMatchLayout.actionRowCount(textScale) == 1) {
-            val widths = GamesRummyMatchLayout.actionWidths(width)
-            Row(modifier.padding(horizontal = gap), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(gap)) {
-                SubmitButton(rummy, isMyTurn, submitEnabled, now, Modifier.width(widths.submit.dp).height(height))
-                DrawButton(rummy, poolEmpty, canEdit, Modifier.width(widths.draw.dp).height(height))
-                UndoButton(rummy, undoEnabled, Modifier.width(widths.undo.dp).height(height))
-                SortButtons(rummy, editor != null, onSort, Modifier.width(widths.sort.dp).height(height))
-            }
-        } else {
-            Column(modifier.padding(horizontal = gap), verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically)) {
-                SubmitButton(rummy, isMyTurn, submitEnabled, now, Modifier.fillMaxWidth().height(height))
-                Row(Modifier.fillMaxWidth().height(height), horizontalArrangement = Arrangement.spacedBy(gap)) {
-                    DrawButton(rummy, poolEmpty, canEdit, Modifier.weight(1f).fillMaxHeight())
-                    UndoButton(rummy, undoEnabled, Modifier.weight(1f).fillMaxHeight())
-                    SortButtons(rummy, editor != null, onSort, Modifier.weight(1f).fillMaxHeight())
-                }
-            }
+    GamesRummyCappedText(1.15f) {
+        SubmitButton(rummy, isMyTurn, submitEnabled, locked, layout.submit.height, now, Modifier.atRect(layout.submit))
+        DrawButton(rummy, poolEmpty, canEdit, locked, Modifier.atRect(layout.draw))
+        UndoButton(rummy, undoEnabled, locked, Modifier.atRect(layout.undo))
+        SortButtons(rummy, editor != null, locked, onSort, Modifier.atRect(layout.sort))
+    }
+}
+
+/** 꺼져도 남은 초는 또렷해야 한다 — 전체를 흐리게 하지 않고 색만 바꾼다(꺼진 동안에도 시간은 간다). 칸이 낮으면 글자와 초를 한 줄로 놓는다. */
+@Composable
+private fun SubmitButton(rummy: RummyStore, isMyTurn: Boolean, enabled: Boolean, locked: Boolean, height: Double, now: () -> SwiftDate, modifier: Modifier) {
+    val colors = AingTheme.colors
+    val shape = RoundedCornerShape(12.dp)
+    val ink = if (enabled) colors.onAccentFill else colors.label3Text
+    val body = modifier
+        .clip(shape)
+        .background(if (enabled) colors.accentFill else colors.fill, shape)
+        .clickable(enabled = enabled && !locked, role = Role.Button) { rummy.submitTurn() }
+        .testTag(GamesRummyMatchTags.SUBMIT)
+    val title: @Composable () -> Unit = {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            AingIcon(AppIcon.Check, contentDescription = null, size = 15.dp, tint = ink)
+            Text(RummyPhoneText.submit, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black), color = ink, maxLines = 1, softWrap = false)
+        }
+    }
+    if (height < GAMES_RUMMY_SUBMIT_STACK_HEIGHT) {
+        Row(body, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)) {
+            title()
+            if (isMyTurn) GamesRummySubmitSeconds(rummy, enabled, now)
+        }
+    } else {
+        Column(body, horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp, Alignment.CenterVertically)) {
+            title()
+            if (isMyTurn) GamesRummySubmitSeconds(rummy, enabled, now)
         }
     }
 }
 
-/** 꺼져도 남은 초는 또렷해야 한다 — 전체를 흐리게 하지 않고 색만 바꾼다(꺼진 동안에도 시간은 간다). */
-@Composable
-private fun SubmitButton(rummy: RummyStore, isMyTurn: Boolean, enabled: Boolean, now: () -> SwiftDate, modifier: Modifier) {
-    val colors = AingTheme.colors
-    val shape = RoundedCornerShape(12.dp)
-    val ink = if (enabled) colors.onAccentFill else colors.label3Text
-    Row(
-        modifier
-            .clip(shape)
-            .background(if (enabled) colors.accentFill else colors.fill, shape)
-            .clickable(enabled = enabled, role = Role.Button) { rummy.submitTurn() }
-            .testTag(GamesRummyMatchTags.SUBMIT),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp, Alignment.CenterHorizontally),
-    ) {
-        AingIcon(AppIcon.Check, contentDescription = null, size = 15.dp, tint = ink)
-        Text(RummyPhoneText.submit, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Black), color = ink, maxLines = 1, softWrap = false)
-        if (isMyTurn) GamesRummySubmitSeconds(rummy, enabled, now)
-    }
-}
+private const val GAMES_RUMMY_SUBMIT_STACK_HEIGHT: Double = 54.0
 
 /** [완료] 안 남은 초(10초 이하 주황 · 5초 이하 빨강). */
 @Composable
@@ -376,13 +459,13 @@ private fun GamesRummySubmitSeconds(rummy: RummyStore, enabled: Boolean, now: ()
     Box(
         Modifier
             .background(countdownTint(left) ?: Color.Black.copy(alpha = if (enabled) 0.28f else 0.5f), CircleShape)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
+            .padding(horizontal = 6.dp, vertical = 1.dp)
             .semantics { contentDescription = GamesRummyMatchText.remaining(seconds) },
         contentAlignment = Alignment.Center,
     ) {
         Text(
             RummyPhoneText.seconds(seconds),
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
             color = Color.White,
             maxLines = 1,
             softWrap = false,
@@ -391,23 +474,24 @@ private fun GamesRummySubmitSeconds(rummy: RummyStore, enabled: Boolean, now: ()
 }
 
 @Composable
-private fun DrawButton(rummy: RummyStore, poolEmpty: Boolean, enabled: Boolean, modifier: Modifier) {
+private fun DrawButton(rummy: RummyStore, poolEmpty: Boolean, enabled: Boolean, locked: Boolean, modifier: Modifier) {
     SecondaryButton(
         if (poolEmpty) RummyPhoneText.pass else RummyPhoneText.draw,
         if (poolEmpty) AppIcon.ArrowRightFill else AppIcon.FilterNone,
         enabled,
+        locked,
         GamesRummyMatchTags.DRAW,
         modifier,
     ) { rummy.drawTile() }
 }
 
 @Composable
-private fun UndoButton(rummy: RummyStore, enabled: Boolean, modifier: Modifier) {
-    SecondaryButton(RummyPhoneText.undo, AppIcon.Undo, enabled, GamesRummyMatchTags.UNDO, modifier) { rummy.resetTurn() }
+private fun UndoButton(rummy: RummyStore, enabled: Boolean, locked: Boolean, modifier: Modifier) {
+    SecondaryButton(RummyPhoneText.undo, AppIcon.Undo, enabled, locked, GamesRummyMatchTags.UNDO, modifier) { rummy.resetTurn() }
 }
 
 @Composable
-private fun SecondaryButton(title: String, icon: AppIcon, enabled: Boolean, tag: String, modifier: Modifier, onClick: () -> Unit) {
+private fun SecondaryButton(title: String, icon: AppIcon, enabled: Boolean, locked: Boolean, tag: String, modifier: Modifier, onClick: () -> Unit) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(12.dp)
     val ink = if (enabled) colors.label else colors.label3Text
@@ -416,7 +500,7 @@ private fun SecondaryButton(title: String, icon: AppIcon, enabled: Boolean, tag:
             .clip(shape)
             .background(colors.surface, shape)
             .border(0.8.dp, colors.separator, shape)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled && !locked, role = Role.Button, onClick = onClick)
             .testTag(tag),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
@@ -427,7 +511,7 @@ private fun SecondaryButton(title: String, icon: AppIcon, enabled: Boolean, tag:
 }
 
 @Composable
-private fun SortButtons(rummy: RummyStore, enabled: Boolean, onSort: (RummyRackSort) -> Unit, modifier: Modifier) {
+private fun SortButtons(rummy: RummyStore, enabled: Boolean, locked: Boolean, onSort: (RummyRackSort) -> Unit, modifier: Modifier) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(12.dp)
     val selected = rummy.rackSortMode
@@ -440,9 +524,9 @@ private fun SortButtons(rummy: RummyStore, enabled: Boolean, onSort: (RummyRackS
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SortSegment(onSort, RummyRackSort.number, RummyPhoneText.sortNumber, GamesRummyMatchText.sortNumberName, selected == RummyRackSort.number, enabled, GamesRummyMatchTags.SORT_NUMBER)
+        SortSegment(onSort, RummyRackSort.number, RummyPhoneText.sortNumber, GamesRummyMatchText.sortNumberName, selected == RummyRackSort.number, enabled && !locked, GamesRummyMatchTags.SORT_NUMBER)
         Box(Modifier.width(0.8.dp).fillMaxHeight().padding(vertical = 8.dp).background(colors.separator))
-        SortSegment(onSort, RummyRackSort.color, RummyPhoneText.sortColor, GamesRummyMatchText.sortColorName, selected == RummyRackSort.color, enabled, GamesRummyMatchTags.SORT_COLOR)
+        SortSegment(onSort, RummyRackSort.color, RummyPhoneText.sortColor, GamesRummyMatchText.sortColorName, selected == RummyRackSort.color, enabled && !locked, GamesRummyMatchTags.SORT_COLOR)
     }
 }
 
@@ -463,7 +547,7 @@ private fun RowScope.SortSegment(onSort: (RummyRackSort) -> Unit, mode: RummyRac
     ) {
         Text(
             title,
-            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontFeatureSettings = TNUM),
             color = if (on) colors.onAccentFill else colors.label,
             maxLines = 1,
             softWrap = false,
@@ -492,68 +576,43 @@ internal fun GamesRummyTurnBadge(modifier: Modifier = Modifier) {
     }
 }
 
-/** 판 아래쪽 한 줄 — 직전 사건 · 남의 차례(작업 중이면 '놓는 중'). 손을 안 받는다. */
-@Composable
-internal fun GamesRummyTableStrip(match: RummyMatchState, isMyTurn: Boolean, hasOtherDraft: Boolean, modifier: Modifier = Modifier) {
-    val colors = AingTheme.colors
-    val turn = GamesRummySeats.turnSeat(match)
-    val event = match.lastEvent
-    val last = RummyPhoneText.lastEvent(event, match.seats?.firstOrNull { it.seatNo == event?.seatNo }?.displayName)
-    GamesRummyCappedText(1.15f) {
-        Row(modifier.padding(8.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (last != null) {
-                Text(
-                    last,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.92f),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false).background(Color.Black.copy(alpha = 0.5f), CircleShape).padding(horizontal = 9.dp, vertical = 4.dp),
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            val name = turn?.displayName
-            if (!isMyTurn && name != null) {
-                Row(
-                    Modifier.background(colors.accentFill, CircleShape).padding(horizontal = 9.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    AingIcon(if (hasOtherDraft) AppIcon.TouchAppFill else AppIcon.HourglassEmpty, contentDescription = null, size = 13.dp, tint = colors.onAccentFill)
-                    Text(
-                        if (hasOtherDraft) RummyPhoneText.placing(name) else RummyPhoneText.turnOf(name),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = colors.onAccentFill,
-                        maxLines = 1,
-                        softWrap = false,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** 다른 기기 판 안내 — 읽기만 하는 동안. **입력은 막지 않는다**(맥과 같다 — 여기서 타일을 옮기면 이 폰에서 이어 한다). */
+/** 다른 기기 판 안내 — 읽기만 하는 동안. **입력은 막지 않는다**(맥과 같다 — 여기서 타일을 옮기면 이 폰에서 이어 한다). 같은 층의 다른 줄과 같은 글자 상한 — 없으면 큰 글자에서 카드가 판을 다 가린다. */
 @Composable
 internal fun GamesRummyElsewhereCard(modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(12.dp)
-    Column(
-        modifier
-            .padding(horizontal = 10.dp)
-            .fillMaxWidth()
-            .background(colors.surface, shape)
-            .border(0.8.dp, colors.separator, shape)
-            .padding(horizontal = 12.dp, vertical = 9.dp)
-            .semantics(mergeDescendants = true) { }
-            .testTag(GamesRummyMatchTags.ELSEWHERE),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            AingIcon(AppIcon.Smartphone, contentDescription = null, size = 15.dp, tint = colors.label)
-            Text(RummyPhoneText.otherDevice, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = colors.label)
+    GamesRummyCappedText(1.15f) {
+        Column(
+            modifier
+                .padding(horizontal = 10.dp)
+                .fillMaxWidth()
+                .background(colors.surface, shape)
+                .border(0.8.dp, colors.separator, shape)
+                .padding(horizontal = 12.dp, vertical = 9.dp)
+                .semantics(mergeDescendants = true) { }
+                .testTag(GamesRummyMatchTags.ELSEWHERE),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                AingIcon(AppIcon.Smartphone, contentDescription = null, size = 15.dp, tint = colors.label)
+                Text(RummyPhoneText.otherDevice, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold), color = colors.label)
+            }
+            Text(RummyPhoneText.otherDeviceDetail, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal), color = colors.label2)
         }
-        Text(RummyPhoneText.otherDeviceDetail, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal), color = colors.label2)
+    }
+}
+
+/** 방향 전환 중 · 전환이 안 되는 동안의 그림. 차례 시간은 흐르니 [나가기]는 늘 닿아야 한다. */
+@Composable
+internal fun GamesRummyRotatingView(onExit: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    Box(modifier.fillMaxSize().testTag(GamesRummyMatchTags.ROTATING)) {
+        Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.5.dp, color = colors.accent)
+            Text(RummyPhoneText.rotating, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+        }
+        Row(Modifier.align(Alignment.TopStart).padding(4.dp).size(44.dp)) {
+            ColumnButton(AppIcon.ChevronLeft, GamesRummyMatchText.leaveDescription, GamesRummyMatchTags.BACK, onExit)
+        }
     }
 }

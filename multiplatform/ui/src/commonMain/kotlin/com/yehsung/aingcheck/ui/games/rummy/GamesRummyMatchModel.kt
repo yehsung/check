@@ -1,11 +1,13 @@
-// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchModel.swift:1 @ ios-1017-cube 614d98bd · 설계서 §4
+// 원본: Sources/CheckMobileKit/Games/GamesRummyMatchModel.swift:1 @ ios-1017-cube 61d75d8c · 설계서 §10
 //
 // 판 화면의 손 상태 한 곳. 화면 전체 입력 층 하나가 사건을 여기로 넘기고, 잎은 **자기가 쓰는 값만** 읽는다 — 그래서 손이 움직여도 판이 다시 그려지지 않는다:
 //   · 손가락 자리([drag])는 떠 있는 타일 그리기만 읽는다(사건마다 바뀐다).
 //   · 놓을 자리에서 나온 값([target] · [boardPreview] · [rackPreview] · [hoverRefused])은 **자리가 바뀔 때만** 쓴다(타일 하나를 끄는 동안 대부분 그대로다).
 //   · 판 층의 입력([draggingIDs] · [lift] · [movingSet] · [renderScale])은 끌기가 시작 · 끝날 때만 바뀐다.
 // 판 변환을 굳힌다: 누르는 동안 · 끄는 동안 칸 크기 변화를 미루고 받침대 줄 수를 묶는다([frozenRows]). 손 아래 판이 움직이면 안 된다(맥 교훈). 가장자리 자동 밀기만 예외다 — 사람이 민 것이다.
-// 시간은 밖에서 민다: 0.5초는 입력 층의 시간 제한, 자동 밀기는 [edgeDirection] 이 0 이 아닌 동안만 도는 프레임 잎이 [edgeTick] 을 부른다. 이 값들은 그 효과의 열쇠를 스스로 바꾸지 않는다(맥 0.3.69 재생성 고리 금지).
+// 놓은 뒤에도 같다: 차례 안에서는 줄 수가 줄지 않는다([rackRows]) — 셋째 줄 마지막 타일을 놓는 순간 받침대 타일이 통째로 커지면 다음 타일을 잡을 자리가 어긋난다.
+// 기기가 돌면(판 화면 크기가 바뀌면) 든 것을 거둔다([screenSizeChanged]) — 쥔 자리가 새 칸에서 다른 것이 된다.
+// 시간은 밖에서 민다: 0.5초는 입력 층의 시간 제한, 자동 밀기는 [isEdgePanning] 이 참인 동안만 도는 프레임 잎이 [edgeTick] 을 부른다. 이 값들은 그 효과의 열쇠를 스스로 바꾸지 않는다(맥 0.3.69 재생성 고리 금지).
 package com.yehsung.aingcheck.ui.games.rummy
 
 import androidx.compose.runtime.Stable
@@ -18,12 +20,14 @@ import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
 import com.yehsung.aingcheck.core.rules.rummy.RummyDropTarget
 import com.yehsung.aingcheck.core.rules.rummy.RummyRect
+import com.yehsung.aingcheck.core.rules.rummy.RummyTurnEditor
+import com.yehsung.aingcheck.core.stores.rummy.RummyEditorKey
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.moveSet
 import com.yehsung.aingcheck.core.stores.rummy.moveTiles
 
 @Stable
-class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 469.0)) {
+class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(548.0, 248.0)) {
     var viewport: GamesRummyViewport by mutableStateOf(GamesRummyViewport.of(tableSize))
         private set
 
@@ -59,8 +63,8 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
     var refuseSerial: Int by mutableStateOf(0)
         private set
 
-    /** 자동 밀기 방향(−1 · 0 · +1). 0 이 아닌 동안만 프레임이 돈다 — 끝에 닿으면 0 이 되어 멎는다. */
-    var edgeDirection: Int by mutableStateOf(0)
+    /** 자동 밀기 중. 참인 동안만 프레임이 돈다 — 끝에 닿으면 거짓이 되어 멎는다. */
+    var isEdgePanning: Boolean by mutableStateOf(false)
         private set
 
     val machine: GamesRummyTouchMachine = GamesRummyTouchMachine()
@@ -73,9 +77,17 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
     var recentDropIDs: Set<Int> = emptySet()
         private set
 
+    /** 그 타일을 손이 놓은 자리(논리 좌표) — 들어갈 자리가 다르면 여기서 미끄러진다(맥 land). */
+    var recentDropOrigins: Map<Int, RummyCanvasPoint> = emptyMap()
+        private set
+
+    /** 손이 판을 쥐고 있다 — 동작 버튼을 끈다. 다른 손가락의 [되돌리기] · [777|789] 는 seq 를 안 올려서, 그대로 두면 쥔 묶음 번호가 낡은 채 다른 묶음이 옮겨진다. */
+    val locksActions: Boolean get() = frozenRows != null
+
+    private var heldRows: Pair<String?, Int>? = null
+    private var screenSize: RummyCanvasSize? = null
     private var pendingTableSize: RummyCanvasSize? = null
     private var pinchBase: Double? = null
-    private var touching = false
 
     /** 조립 단계가 재료를 만들 때 — 보기를 구독하지 않고 읽는다(구독하면 밀 때마다 화면 전체가 다시 돈다). 사건 때는 모델이 지금 보기로 채운다. */
     fun viewportUntracked(): GamesRummyViewport = Snapshot.withoutReadObservation { viewport }
@@ -86,12 +98,32 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
         tableSizeChanged(RummyCanvasSize(context.layout.table.width, context.layout.table.height))
     }
 
+    /** 받침대 줄 수. 손이 닿은 동안은 [frozenRows], 그 밖에는 **차례 안에서 줄지 않는다** — 줄이 줄면 타일이 통째로 커져 다음 타일을 잡을 자리가 어긋난다. 판 칸은 줄 수와 무관하다. 차례가 바뀌면 그때 맞춘다. 상태가 아니라 다시 조립을 부르지 않는다. */
+    fun rackRows(editorRows: Int, turnKey: String?): Int {
+        frozenRows?.let { return it }
+        val rows = heldRows?.let { if (it.first == turnKey) maxOf(it.second, editorRows) else editorRows } ?: editorRows
+        heldRows = turnKey to rows
+        return rows
+    }
+
+    /** 판 화면 크기가 바뀌었다(기기가 돌았다 · 인셋이 바뀌었다). 쥔 것 · 밀기 · 핀치를 거두고 손을 뗄 때까지 무시한다 — 손 자리가 새 칸에서 다른 것을 가리킨다. 처음 재는 것은 변화가 아니다. */
+    fun screenSizeChanged(size: RummyCanvasSize) {
+        val before = screenSize
+        screenSize = size
+        if (before == null || before == size) return
+        if (!machine.isIdle) {
+            machine.abandon()
+            tearDown()
+        }
+        endPinch()
+    }
+
     // MARK: 손
 
     fun touchDown(point: RummyCanvasPoint, base: GamesRummyTouchContext) {
         currentContext = base
-        touching = true
         recentDropIDs = emptySet()
+        recentDropOrigins = emptyMap()
         machine.down(point, base.with(viewport))
         if (machine.holdsBoard) frozenRows = base.layout.rackRows
     }
@@ -116,11 +148,18 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
 
     /** 손을 뗐다. 결과는 화면이 [apply] 로 스토어에 옮긴다. */
     fun touchUp(point: RummyCanvasPoint, base: GamesRummyTouchContext): GamesRummyDropAction {
-        val action = machine.up(point, base.with(viewport))
-        touching = false
+        val context = base.with(viewport)
+        val released = machine.drag?.moved(point, base.layout)
+        val action = machine.up(point, context)
         when (action) {
-            is GamesRummyDropAction.MoveTiles -> recentDropIDs = action.ids.toSet()
-            is GamesRummyDropAction.MoveSet -> recentDropIDs = base.scene.meldTileIDs.getOrNull(action.set)?.toSet() ?: emptySet()
+            is GamesRummyDropAction.MoveTiles -> {
+                recentDropIDs = action.ids.toSet()
+                recentDropOrigins = released?.let { dropOrigins(it, context) } ?: emptyMap()
+            }
+            is GamesRummyDropAction.MoveSet -> {
+                recentDropIDs = base.scene.meldTileIDs.getOrNull(action.set)?.toSet() ?: emptySet()
+                recentDropOrigins = released?.let { dropOrigins(it, context) } ?: emptyMap()
+            }
             GamesRummyDropAction.None, GamesRummyDropAction.Refused -> Unit
         }
         tearDown()
@@ -131,19 +170,31 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
         return action
     }
 
-    /** 판이 바뀌었다(낡은 id 로 놓지 않게) — 아무것도 안 놓고 접는다. 손가락이 아직 닿아 있으면 뗄 때까지 무시한다. */
-    fun cancelTouch() {
-        if (touching) machine.ignoreUntilUp() else machine.cancel()
+    /**
+     * 판이 바뀌었다(seq 상승). **손은 아직 닿아 있을 수 있다.**
+     * · 판 밀기는 그대로 둔다(타일을 쥔 게 아니다).
+     * · 같은 차례이고 쥔 타일이 편집기에 그대로면 둔다 — 남이 기권해 seq 만 오른 경우다. 꾹 눌러 집은 묶음이 풀리면 안 된다.
+     * · 차례가 바뀌었거나 쥔 id · 묶음이 사라졌으면 낡았다(새 차례는 id 를 다시 매긴다) — 거두고 손을 뗄 때까지 무시한다.
+     */
+    fun boardChanged(editor: RummyTurnEditor?, turnKey: RummyEditorKey?) {
+        if (!machine.holdsBoard) return
+        val held = currentContext
+        if (turnKey == held?.turnKey && machine.holdSurvives(editor, held?.editor)) return
+        machine.abandon()
         tearDown()
     }
 
-    /** 시스템이 손을 거뒀다 · 입력 층이 죽었다 — 끌던 타일을 공중에 남기지 않는다. */
+    /** 시스템이 손을 거뒀다 · 입력 층이 죽었다 — 끌던 타일을 공중에 남기지 않는다. 함께 사라진 핀치도 푼다. */
     fun touchVanished() {
-        touching = false
-        pinchBase = null
         machine.cancel()
         tearDown()
-        if (renderScale != viewport.scale) renderScale = viewport.scale
+        endPinch()
+    }
+
+    /** 손을 놓은 자리(타일 왼쪽 위, 논리 좌표). 떠 있는 타일과 같은 기준점에서 나온다. 받침대 위에서 놓았으면 값은 있어도 판에 그 타일이 없어 쓰이지 않는다. */
+    private fun dropOrigins(drag: GamesRummyDrag, context: GamesRummyTouchContext): Map<Int, RummyCanvasPoint> {
+        val frames = GamesRummyFloatingLayout.frames(drag, context.viewport.tileSize, context.viewport.scale, liftScale = 1.0)
+        return drag.ids.zip(frames).associate { (id, frame) -> id to context.viewport.transform.toLogical(context.inTable(RummyCanvasPoint(frame.x, frame.y))) }
     }
 
     private fun tearDown() {
@@ -156,7 +207,7 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
         rackPreview = null
         hoverRefused = false
         frozenRows = null
-        edgeDirection = 0
+        isEdgePanning = false
         pendingTableSize?.let {
             pendingTableSize = null
             tableSizeChanged(it)
@@ -167,7 +218,7 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
     private fun refresh(context: GamesRummyTouchContext) {
         val moved = machine.drag ?: return
         drag = moved
-        edgeDirection = if (context.layout.table.contains(moved.pointer)) viewport.edgeDirection(context.inTable(moved.pointer).x) else 0
+        isEdgePanning = context.layout.table.contains(moved.pointer) && viewport.edgeMoves(context.inTable(moved.pointer))
         val next = GamesRummyDropPlanner.target(moved, context)
         if (next == target) return
         target = next
@@ -190,9 +241,9 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
         val base = currentContext ?: return
         val moved = machine.drag ?: return
         if (!base.layout.table.contains(moved.pointer)) return
-        val next = viewport.edgePanned(base.inTable(moved.pointer).x, deltaSeconds)
+        val next = viewport.edgePanned(base.inTable(moved.pointer), deltaSeconds)
         if (next == viewport) {
-            edgeDirection = 0
+            isEdgePanning = false
             return
         }
         viewport = next
@@ -245,8 +296,25 @@ class GamesRummyMatchModel(tableSize: RummyCanvasSize = RummyCanvasSize(393.0, 4
     /** 핀치 끝 — 그 배율로 또렷하게 다시 그린다. 손을 뗄 때까지 기계는 무시를 잇는다. */
     fun pinchEnded() {
         if (pinchBase == null) return
+        endPinch()
+    }
+
+    /** 열린 핀치를 닫고 흐린 배율을 또렷하게 맞춘다. 안 닫으면 다음 핀치가 낡은 기준에서 튀고 읽기 전용 밀기가 죽는다. */
+    private fun endPinch() {
         pinchBase = null
         if (renderScale != viewport.scale) renderScale = viewport.scale
+    }
+
+    /** 읽기 전용 판(결과의 [최종 판]) 밀기 — 타일을 집지 않으니 손 기계를 안 거친다. 핀치 중에는 안 민다. */
+    fun readOnlyPan(dx: Double, dy: Double) {
+        if (pinchBase != null || (dx == 0.0 && dy == 0.0)) return
+        viewport = viewport.panned(dx, dy)
+    }
+
+    /** 읽기 전용 판의 핀치 — 손 기계 없이 연다(거기는 쥔 타일이 없다). 기준점은 판 칸 좌표다. */
+    fun readOnlyPinch(magnification: Double, tableAnchor: RummyCanvasPoint) {
+        if (pinchBase == null) pinchBase = viewport.scale
+        viewport = viewport.zoomed((pinchBase ?: viewport.scale) * magnification, tableAnchor)
     }
 
     fun clearRefusedFlash() {

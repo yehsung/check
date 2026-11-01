@@ -57,16 +57,19 @@ data class MeDailyMissionRowContent(
     /** 진행 숫자("0/1"). 받을 수 있거나 받은 줄에서는 null. */
     val progress: String?,
     val claimedMark: String?,
-    /** 보조 문장 — 서버 글자, 받기가 실패했으면 그 줄 안의 실패 문장. */
+    /** 보조 문장 — 서버 글자, 받기가 실패했으면 그 줄 안의 실패 문장. 빈 글자면 안 그린다([MeText.dailyMissionCaption]). */
     val caption: String,
     val showsFailure: Boolean,
     val fraction: Double,
     val isClaimed: Boolean,
     val accessibilityLabel: String,
 ) {
+    /** 막대 아래 줄에 그릴 것이 있는가. 보조 문장이 비고 오른쪽 값도 없는 줄(받을 수 있는 큐브 줄)은 빈 줄을 세우지 않는다. */
+    val showsCaptionLine: Boolean get() = caption.isNotEmpty() || progress != null || claimedMark != null
+
     companion object {
-        /** [failed] = 이 줄의 마지막 받기가 실패했는가. **[받기] 가 선 줄에서만** 실패를 말한다. */
-        fun make(mission: DailyMissionStatus.Mission, failed: Boolean = false): MeDailyMissionRowContent {
+        /** [failed] = 이 줄의 마지막 받기가 실패했는가. **[받기] 가 선 줄에서만** 실패를 말한다. [rummyPlayable] = 이 앱에서 큐브를 할 수 있다([MeLinks.rummyPlayable]). */
+        fun make(mission: DailyMissionStatus.Mission, failed: Boolean = false, rummyPlayable: Boolean = false): MeDailyMissionRowContent {
             val row = mission.row
             val state = row.state
             val showsFailure = state == AchievementStatus.RowState.claimable && failed
@@ -77,7 +80,7 @@ data class MeDailyMissionRowContent(
                 claimAmount = if (state == AchievementStatus.RowState.claimable) row.reward else null,
                 progress = if (state == AchievementStatus.RowState.inProgress) MeText.missionProgress(row) else null,
                 claimedMark = if (state == AchievementStatus.RowState.claimed) MeText.claimedMark else null,
-                caption = if (showsFailure) MeText.claimFailed else row.detail,
+                caption = if (showsFailure) MeText.claimFailed else if (rummyPlayable) MeText.dailyMissionCaption(mission.game, row.detail) else row.detail,
                 showsFailure = showsFailure,
                 fraction = row.fraction,
                 isClaimed = state == AchievementStatus.RowState.claimed,

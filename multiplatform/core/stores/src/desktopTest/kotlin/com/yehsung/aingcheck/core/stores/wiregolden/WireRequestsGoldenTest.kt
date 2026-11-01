@@ -79,6 +79,21 @@ private val MEGAPHONE_BODIES = listOf(
     " \n\u200B ", "가".repeat(199), "가".repeat(198), "  오늘 3시\r\n라운지에서  간식 나눠요\u0007 ", "다들", "다들",
 )
 
+/**
+ * Kotlin 이 이 가지의 Swift 보다 앞선 칸 — `AchievementStatus.streakDays`(iOS 1ca907fa · ios-next-bits, 이 가지에 아직 없다). 골든은 이 가지의 Swift 로 만들어 그 칸이 없다.
+ * **골든에 키가 없고 Kotlin 값이 null 일 때만** 뺀다 — 값이 있으면 그대로 빨강이고, iOS 가 들어와 골든에 키가 생기면 이 거름은 저절로 아무 일도 안 한다.
+ */
+private val AHEAD_OF_SWIFT_KEYS = setOf("streakDays")
+
+private fun withoutAheadOfSwiftKeys(got: JsonElement, want: JsonElement?): JsonElement = when (got) {
+    is JsonObject -> JsonObject(
+        got.filterNot { (k, v) -> k in AHEAD_OF_SWIFT_KEYS && v is JsonNull && (want as? JsonObject)?.containsKey(k) != true }
+            .mapValues { (k, v) -> withoutAheadOfSwiftKeys(v, (want as? JsonObject)?.get(k)) },
+    )
+    is JsonArray -> JsonArray(got.mapIndexed { i, v -> withoutAheadOfSwiftKeys(v, (want as? JsonArray)?.getOrNull(i)) })
+    else -> got
+}
+
 class WireRequestsGoldenTest {
     private val u = "aa000000-0000-4000-8000-0000000000a1"
     private val p = "bb000000-0000-4000-8000-0000000000b2"
@@ -527,7 +542,7 @@ class WireRequestsGoldenTest {
                 comparedResults++
                 if (id in otherLaneResults) comparedOtherLane++
                 val wantResult = GoldenCanonical.text(wantResultElement)
-                val gotResult = GoldenCanonical.text(recorded.result)
+                val gotResult = GoldenCanonical.text(withoutAheadOfSwiftKeys(recorded.result, wantResultElement))
                 if (wantResult != gotResult) problems += golden.failure(id, "결과가 다르다\n  Swift : $wantResult\n  Kotlin: $gotResult")
             }
         }

@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Me/MeStoreAchievements.swift @ 1b8260d
+// 원본: Sources/CheckMobileKit/Me/MeStoreAchievements.swift @ 1b8260d · :132 (streakDays) @ 1ca907fa
 package com.yehsung.aingcheck.core.stores.me
 
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
@@ -89,6 +89,10 @@ val MeStore.achievementClaimableRuby: Long
 /** 지금 받을 수 있는 것 전부의 수 = 일일(날을 넘긴 줄 제외) + 누적 + 이번 주 근무 단계(어느 주든). 배지 · 머리 문구가 같은 수를 말한다. */
 val MeStore.missionClaimableCount: Int
     get() = dailyMissionClaimableCount + achievementClaimableCount + (if (weeklyWorkAvailable) weeklyWork?.pendingCount ?: 0 else 0)
+
+/** 지금 연속 근무일(지금 탭 칩). null 이면 칩을 숨긴다 — 이 서버가 안 알려 주거나(키 없음 · 출시 순서 자유) 아직 모른다. 값은 지어내지 않는다. */
+val MeStore.streakDays: Long?
+    get() = if (!achievementsAvailable || !context.sessionStore.isSignedIn) null else achievements?.streakDays
 
 /** 루트에 [미션] 줄을 세우는가 — 주간·도전 미션 둘 중 하나라도 그릴 것이 있을 때. */
 val MeStore.showsMissionsRow: Boolean get() = showsWeeklyWork || achievementSection != MeAchievementSection.Hidden

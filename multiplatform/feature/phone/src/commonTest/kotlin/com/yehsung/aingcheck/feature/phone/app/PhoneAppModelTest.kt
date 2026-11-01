@@ -126,6 +126,37 @@ class PhoneAppModelTest {
         assertEquals(3, h.app.badges.appBadgeTotal)
     }
 
+    /**
+     * 지금 탭 연속 근무 칩의 부르는 자리(Swift V1017StreakChipTests.wiring @ 1ca907fa). 없으면: 스토어 시험은 초록인데 조립 줄이 빠져 칩이 영영 안 선다.
+     * 나 탭을 열지 않아도 앞에 올 때 값이 지금 탭까지 오고 · 칩 때문에 조회가 늘지 않고 · 로그아웃하면 내려간다.
+     */
+    @Test
+    fun streakChipReadsTheMeStoreFetchThroughTheAssembly() = runTest {
+        val fixture = achievementsFixture { JsonObject(it + ("streak_days" to JsonPrimitive(4))) }
+        val h = PhoneHarness(this) { r -> if (r.rpcName == "achievements_status") Reply.Json(fixture) else null }
+        h.signIn()
+        assertNull(h.app.now.myStreakDays, "받기 전에 값을 그렸다")
+        h.app.me.appDidBecomeActive()
+        advanceUntilIdle()
+        assertFalse(h.app.me.isTabVisible)
+        assertEquals(4L, h.app.now.myStreakDays, "나 탭을 안 열면 칩이 안 선다")
+        assertEquals(1, h.count("achievements_status"), "칩 때문에 조회가 늘었다")
+        h.app.me.reset()
+        assertNull(h.app.now.myStreakDays, "앞 계정의 연속 일수가 남았다")
+    }
+
+    @Test
+    fun streakChipStaysHiddenOnAServerWithoutTheKey() = runTest {
+        val fixture = achievementsFixture()
+        assertTrue("streak_days" !in Json.parseToJsonElement(fixture).jsonObject, "대조: 옛 서버 응답이어야 한다")
+        val h = PhoneHarness(this) { r -> if (r.rpcName == "achievements_status") Reply.Json(fixture) else null }
+        h.signIn()
+        h.app.me.appDidBecomeActive()
+        advanceUntilIdle()
+        assertTrue(h.app.me.achievements != null, "대조: 미션은 읽었다")
+        assertNull(h.app.now.myStreakDays, "키가 없는데 값을 지어냈다")
+    }
+
     /** 데모 계정의 achievements_status(Swift 픽스처 — 골든 missions/achievements 가 그대로 실어 온다). 오늘: 오목 ✓ · 체스 · 1:1 테트리스 ✗. */
     private fun achievementsFixture(mutate: (JsonObject) -> JsonObject = { it }): String {
         val text = Golden.load("missions/achievements").case("fixture-_me/rpc.achievements_status.json")["json"]!!.jsonPrimitive.content

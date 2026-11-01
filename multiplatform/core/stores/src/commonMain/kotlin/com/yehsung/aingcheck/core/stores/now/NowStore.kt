@@ -100,6 +100,12 @@ class NowStore(
     /** 메시지 탭이 차단해 숨긴 상대(Swift `context.links.messages?.hiddenBlockedPeerIDs`). 조립이 잇는다 — 명단은 이 사람의 상태메시지만 감춘다. */
     var hiddenPeerIDs: () -> Set<String> = { emptySet() }
 
+    /** 나 탭 미션 조회가 아는 연속 근무일(Swift `context.links.me?.streakDays` @ 1ca907fa). 조립이 잇는다 — 안 이은 조립은 칩이 없다. */
+    var streakDaysSource: () -> Long? = { null }
+
+    /** 상태 카드의 연속 근무 칩(읽기만 — 새 서버 호출 없음). 나 탭 미션 조회가 앞에 올 때마다 탭과 무관하게 받아 둔 값이다. */
+    val myStreakDays: Long? get() = streakDaysSource()
+
     // ---------------------------------------------------------------- 새 버전 안내(원본: Sources/CheckMobileKit/Now/NowStore.swift:115-116,232-248 @ 1a5eeca6)
 
     /** 닫은 최신 빌드. **앱 단위**다 — 계정이 바뀌어도 그 빌드는 또 안 알린다([reset] 이 비우지 않고 `SessionPrefsKeys.userScopedKeys` 에도 없다). */

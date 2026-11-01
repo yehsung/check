@@ -20,7 +20,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.hasContentDescription
@@ -55,6 +57,7 @@ import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
 import com.yehsung.aingcheck.core.foundation.platform.SingleInstanceGuard
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
+import com.yehsung.aingcheck.core.rules.achievements.HeaderStreakCopy
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.SessionPrefsKeys
@@ -341,8 +344,9 @@ class NowScreenSnapshotTest {
         }
     }
 
-    private fun check(name: String, width: Dp, height: Dp, dark: Boolean) {
+    private fun check(name: String, width: Dp, height: Dp, dark: Boolean, streakDays: Long? = null) {
         load()
+        store.streakDaysSource = { streakDays }
         assertTrue("데모 장면: 새벽(나)이 근무 중이고 할 일이 서야 한다", store.myCard(clock.now())?.isWorking == true && store.todoRows().main.isNotEmpty())
         val scene: @Composable () -> Unit = { Frame(dark) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
         val other: @Composable () -> Unit = { Frame(dark) { NowScreen(store, phoneWork, characterID = "fox", onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
@@ -674,6 +678,97 @@ class NowScreenSnapshotTest {
     @Test fun nowPhoneLight() = check("now-phone-light", 360.dp, 760.dp, dark = false)
 
     @Test fun nowPhoneDark() = check("now-phone-dark", 360.dp, 760.dp, dark = true)
+
+    // 연속 근무 칩(Swift V1017StreakChipTests · 데모 장면 streak 의 12일 @ 43ee564a). 칩이 없는 위 장면은 그림이 그대로여야 한다(칩 없는 서버).
+    @Test fun nowStreakPhoneLight() = check("now-streak-phone-light", 360.dp, 760.dp, dark = false, streakDays = 12)
+
+    @Test fun nowStreakPhoneDark() = check("now-streak-phone-dark", 360.dp, 760.dp, dark = true, streakDays = 12)
+
+    /** 칩이 있는 카드와 없는 카드(같은 폭 · 글꼴 배율 [fontScale])의 재기. 값 null 이면 칩을 찾지 않는다. */
+    private class StreakBounds(
+        val cardHeight: Dp,
+        val timerTop: Dp, val timerBottom: Dp, val timerRight: Dp, val timerWidth: Dp,
+        val chip: androidx.compose.ui.unit.DpRect?,
+    )
+
+    @OptIn(ExperimentalTestApi::class)
+    private fun streakBounds(days: Long?, width: Dp, fontScale: Float = 1f): StreakBounds {
+        store.streakDaysSource = { days }
+        var out: StreakBounds? = null
+        runComposeUiTest {
+            setContent {
+                val base = LocalDensity.current
+                CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale)) {
+                    Box(Modifier.size(width, 1400.dp)) {
+                        Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) }
+                    }
+                }
+            }
+            waitForIdle()
+            val timer = onNodeWithTag(NowTags.TIMER).getBoundsInRoot()
+            out = StreakBounds(
+                onNodeWithTag(NowTags.STATUS_CARD).getBoundsInRoot().height,
+                timer.top, timer.bottom, timer.right, timer.width,
+                if (days != null) onNodeWithTag(NowTags.STREAK_CHIP).getBoundsInRoot() else null,
+            )
+            if (days == null) onNodeWithTag(NowTags.STREAK_CHIP).assertDoesNotExist()
+        }
+        return requireNotNull(out)
+    }
+
+    /** Swift `viewContract`: 새 줄 · 새 절 없이 타이머 오른쪽 빈자리에 선다 — 카드 높이 그대로, 타이머 크기 그대로, 칩이 카드 안. */
+    @Test
+    fun streakChipSitsBesideTheTimerWithoutGrowingTheCard() {
+        load()
+        val without = streakBounds(null, 360.dp)
+        val with = streakBounds(12, 360.dp)
+        val chip = requireNotNull(with.chip)
+        assertEquals("칩이 카드 높이를 늘렸다", without.cardHeight, with.cardHeight)
+        assertEquals("칩이 타이머를 줄였다", without.timerWidth, with.timerWidth)
+        assertTrue("칩이 타이머 오른쪽 빈자리에 없다", chip.left >= with.timerRight + 8.dp)
+        assertTrue("칩이 타이머 줄 높이 안에 없다", chip.top >= with.timerTop && chip.bottom <= with.timerBottom)
+        assertTrue("칩 높이 22dp 이상", chip.bottom - chip.top >= 22.dp)
+        assertTrue("칩이 카드 안쪽 여백 밖으로 나갔다", chip.right <= 360.dp - 16.dp)
+    }
+
+    /** Swift `ViewThatFits` 둘째 갈래: 큰 글자로 한 줄에 안 들어가면 그때만 아래로 — 타이머는 칩 때문에 줄어들지 않는다. 대조군은 위 시험(같은 칩, 작은 글자는 한 줄). */
+    @Test
+    fun streakChipDropsBelowTheTimerOnlyWhenItDoesNotFit() {
+        load()
+        val without = streakBounds(null, 360.dp, fontScale = 1.6f)
+        val with = streakBounds(12, 360.dp, fontScale = 1.6f)
+        val chip = requireNotNull(with.chip)
+        assertEquals("칩이 타이머를 줄였다", without.timerWidth, with.timerWidth)
+        assertTrue("한 줄에 안 들어가는데 타이머 옆에 남았다", chip.top >= with.timerBottom)
+        assertTrue("내려간 칩은 왼쪽 정렬이다", chip.left <= 360.dp - chip.right)
+        assertTrue("내려갔을 때만 카드가 는다", with.cardHeight > without.cardHeight)
+    }
+
+    /** 값이 나중에 와도 칩이 선다(나 탭 조회가 지금 탭보다 늦다) · 값이 사라지면 내려간다 · 톡백은 한 문장, 느낌표 없이. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun streakChipFollowsTheStoreAndReadsAsOneSentence() {
+        load()
+        var days by mutableStateOf<Long?>(null)
+        store.streakDaysSource = { days }
+        runComposeUiTest {
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}, onOpenUpdate = {}) } }
+            waitForIdle()
+            onNodeWithTag(NowTags.STREAK_CHIP).assertDoesNotExist()
+            days = 0
+            waitForIdle()
+            onNodeWithTag(NowTags.STREAK_CHIP).assertIsDisplayed()
+            onNodeWithTag(NowTags.STREAK_CHIP).assert(hasContentDescription(HeaderStreakCopy.accessibilityLabel(0)))
+            days = 3
+            waitForIdle()
+            onNodeWithContentDescription("연속 3일 근무").assertIsDisplayed()
+            onNodeWithText("연속 3일 근무!", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithTag(NowTags.STREAK_CHIP).assert(SemanticsMatcher.keyNotDefined(SemanticsActions.OnClick))
+            days = null
+            waitForIdle()
+            onNodeWithTag(NowTags.STREAK_CHIP).assertDoesNotExist()
+        }
+    }
 
     @Test @Config(qualifiers = "w600dp-h960dp-xhdpi")
     fun nowTabletLight() = check("now-sw600dp-light", 600.dp, 900.dp, dark = false)

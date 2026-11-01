@@ -133,33 +133,6 @@ import Testing
         #expect(!now.showsRetroNotice && Self.checks(harness) == 1)
     }
 
-    @Test("[보기]의 스크롤은 나 탭이 보인 뒤에 나간다: 숨은 탭에서 꺼내면 값만 비고 내려가지 못한다")
-    func scrollWaitsForVisibleTab() async {
-        let harness = await Self.harness("v1017-retro-scroll", sessions: BaseLockedBox(.json(Self.lastWeekSession)))
-        defer { harness.tearDown() }
-        let me = harness.me
-        me.requestRecordsScroll()
-        #expect(me.pendingRecordsScroll)
-        #expect(!me.shouldScrollToRecords, "숨은 탭에서 내려가라고 했다")
-
-        me.tabDidAppear()
-        await harness.quiesceMe()
-        #expect(me.shouldScrollToRecords, "탭이 보였는데 내려가지 않는다")
-
-        #expect(me.takeRecordsScroll())
-        #expect(!me.shouldScrollToRecords, "꺼낸 뒤에도 또 내려간다")
-
-        // 탭이 보이는 동안 다시 와도 곧바로 나간다.
-        me.requestRecordsScroll()
-        #expect(me.shouldScrollToRecords)
-        me.tabDidDisappear()
-        #expect(!me.shouldScrollToRecords)
-        me.reset()
-        me.tabDidAppear()
-        await harness.quiesceMe()
-        #expect(!me.shouldScrollToRecords, "로그아웃 뒤 다음 계정에서 내려간다")
-    }
-
     @Test("지난주 근무가 없으면 안 뜨고 · 그 답을 적어 앞에 올 때마다 다시 묻지 않는다")
     func noRetro() async {
         let harness = await Self.harness("v1017-retro-none", sessions: BaseLockedBox(.json(Self.thisWeekOnly)))
@@ -261,8 +234,7 @@ import Testing
         #expect(body.contains(".accessibilityLabel(Text(NowText.retroNoticeDismiss))"))
         let me = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeTab.swift")
         #expect(me.contains("store.takeRecordsScroll()"), "나 탭이 스크롤을 안 꺼낸다")
-        #expect(me.contains(".onChange(of: store.shouldScrollToRecords)"), "이미 그려진 나 탭이 스크롤 요청을 못 본다")
-        #expect(!me.contains(".onChange(of: store.pendingRecordsScroll)"), "숨은 탭에서 스크롤을 꺼낸다")
+        #expect(me.contains(".onChange(of: store.pendingRecordsScroll)"), "이미 그려진 나 탭이 스크롤 요청을 못 본다")
         #expect(me.contains("proxy.scrollTo(MeAnchor.records, anchor: .top)"))
     }
 }

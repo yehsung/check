@@ -90,9 +90,11 @@ package struct GamesRummyBoardMotion: Equatable, Sendable {
     }
 
     /// 짝짓는 순서: ① 같은 id · 같은 면(편집 중) ② 면이 같고 자리가 같은 것(가만히 있었다 — 같은 면 둘이 엇갈려 날지 않게) ③ 남은 같은 면을 읽는 순서대로.
-    /// 새로 생긴 타일(받침대에서 낸 것 · 남이 낸 것)은 옛 자리가 없어 그 자리에 바로 선다. `excluding` = 방금 손으로 놓은 타일(손이 놓은 자리가 곧 제자리다 — 옛 자리에서 날아오면 안 된다).
+    /// 새로 생긴 타일(받침대에서 낸 것 · 남이 낸 것)은 옛 자리가 없어 그 자리에 바로 선다. `excluding` = 방금 손으로 놓은 타일(옛 자리에서 날아오면 안 된다).
+    /// `landing` = 그 타일을 손이 놓은 자리(논리 좌표). 자동 붙기·끼우기로 들어갈 자리가 손 놓은 자리와 다르면 거기서 미끄러진다(맥 `land`) — 값이 없는 타일은 그 자리에 바로 선다.
     /// 움직일 것이 없거나 `maxMoves` 를 넘으면 nil.
-    package static func make(from old: [RummyBoardMeld], to new: [RummyBoardMeld], excluding: Set<Int> = []) -> GamesRummyBoardMotion? {
+    package static func make(from old: [RummyBoardMeld], to new: [RummyBoardMeld], excluding: Set<Int> = [],
+                             landing: [Int: CGPoint] = [:]) -> GamesRummyBoardMotion? {
         guard !old.isEmpty, old != new else { return nil }
         var olds = placed(old)
         var news = placed(new)
@@ -102,6 +104,10 @@ package struct GamesRummyBoardMotion: Equatable, Sendable {
             moves.append(Move(slot: to.slot, face: to.tile.face, highlighted: to.tile.highlighted, from: from.origin, to: to.origin))
         }
 
+        for entry in news {
+            guard let id = entry.tile.id, excluding.contains(id), let from = landing[id], from != entry.origin else { continue }
+            moves.append(Move(slot: entry.slot, face: entry.tile.face, highlighted: entry.tile.highlighted, from: from, to: entry.origin))
+        }
         news.removeAll { $0.tile.id.map(excluding.contains) ?? false }
         olds.removeAll { $0.tile.id.map(excluding.contains) ?? false }
 

@@ -84,7 +84,7 @@ package struct MeDailyMissionRowContent: Equatable, Sendable {
     package let progress: String?
     /// 받은 줄의 "받음" 글자(체크 기호는 뷰). 아니면 nil.
     package let claimedMark: String?
-    /// 보조 문장 — 서버 글자, 받기가 실패했으면 그 줄 안의 실패 문장이다(토스트 · 알림창 · 안내줄을 쓰지 않는다).
+    /// 보조 문장 — 서버 글자, 받기가 실패했으면 그 줄 안의 실패 문장이다(토스트 · 알림창 · 안내줄을 쓰지 않는다). 빈 글자면 안 그린다(`MeText.dailyMissionCaption`).
     package let caption: String
     /// 보조 문장이 실패 문장인가(색이 갈린다).
     package let showsFailure: Bool
@@ -94,6 +94,9 @@ package struct MeDailyMissionRowContent: Equatable, Sendable {
     package let isClaimed: Bool
     /// 줄 전체 보이스오버(누적 줄과 같은 말투).
     package let accessibilityLabel: String
+
+    /// 막대 아래 줄에 그릴 것이 있는가. 보조 문장이 비고 오른쪽 값도 없는 줄(받을 수 있는 큐브 줄)은 빈 줄을 세우지 않는다.
+    package var showsCaptionLine: Bool { !caption.isEmpty || progress != nil || claimedMark != nil }
 
     /// `failed` = 이 줄의 마지막 받기가 실패했는가(스토어가 센다). **[받기] 가 선 줄에서만** 실패를 말한다 —
     /// 그 사이 다른 기기에서 받았으면 실패는 더 뜻이 없고, 버튼이 없으면 다시 누를 수도 없다.
@@ -108,7 +111,7 @@ package struct MeDailyMissionRowContent: Equatable, Sendable {
             claimAmount: state == .claimable ? row.reward : nil,
             progress: state == .inProgress ? MeText.missionProgress(row) : nil,
             claimedMark: state == .claimed ? MeText.claimedMark : nil,
-            caption: showsFailure ? MeText.claimFailed : row.detail,
+            caption: showsFailure ? MeText.claimFailed : MeText.dailyMissionCaption(game: mission.game, detail: row.detail),
             showsFailure: showsFailure,
             fraction: row.fraction,
             isClaimed: state == .claimed,
@@ -191,7 +194,7 @@ struct MeDailyMissionRow: View {
                 titleLine(content, tint: tint)
                 ProgressBar(content.fraction, style: content.isClaimed ? .done : .accent, thin: true)
                     .accessibilityHidden(true)
-                captionLine(content)
+                if content.showsCaptionLine { captionLine(content) }
             }
             if let amount = content.claimAmount {
                 MeClaimButton(amount: amount, inFlight: store.isClaimingDailyMission(mission.key)) {
@@ -246,11 +249,13 @@ struct MeDailyMissionRow: View {
     @ViewBuilder
     private func captionLine(_ content: MeDailyMissionRowContent) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: MobileTheme.space2) {
-            Text(content.caption)
-                .font(.caption)
-                .foregroundStyle(content.showsFailure ? MobileTheme.pending : MobileTheme.label3Text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
+            if !content.caption.isEmpty {
+                Text(content.caption)
+                    .font(.caption)
+                    .foregroundStyle(content.showsFailure ? MobileTheme.pending : MobileTheme.label3Text)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
             Spacer(minLength: MobileTheme.space1)
             if let mark = content.claimedMark {
                 HStack(spacing: 2) {

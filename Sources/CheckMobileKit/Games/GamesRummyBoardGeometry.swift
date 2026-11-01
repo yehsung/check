@@ -80,6 +80,8 @@ package struct GamesRummyViewport: Equatable, Sendable {
     package static let revealMargin: CGFloat = 24
     /// 타일 폭 상한(pt).
     package static let maxTileWidth: CGFloat = 40
+    /// 기본 보기의 타일 폭 하한(pt). 칸이 낮아도(큰 글자 · 작은 기기 · 받침대 3줄) 기본 보기는 맞춤보다 커서 [전체 보기] 토글이 늘 무언가를 바꾼다. 그만큼 세로는 민다.
+    package static let minDefaultTileWidth: CGFloat = 24
 
     package private(set) var viewport: CGSize
     package private(set) var scale: CGFloat
@@ -106,9 +108,10 @@ package struct GamesRummyViewport: Equatable, Sendable {
     /// 타일 폭 40pt(논리 타일 폭 40 × 배율 1).
     package static var maxScale: CGFloat { maxTileWidth / CGFloat(RummyTableLayout.tileWidth) }
 
-    /// 기본 보기 배율(높이를 맞춘다).
+    /// 기본 보기 배율(높이를 맞춘다 · 타일 폭 하한 아래로 안 내려간다).
     package static func defaultScale(_ viewport: CGSize) -> CGFloat {
-        min(maxScale, max(fitScale(viewport), viewport.height / canvas.height))
+        let floor = minDefaultTileWidth / CGFloat(RummyTableLayout.tileWidth)
+        return min(maxScale, max(fitScale(viewport), viewport.height / canvas.height, floor))
     }
 
     package var fitScale: CGFloat { Self.fitScale(viewport) }
@@ -173,19 +176,23 @@ package struct GamesRummyViewport: Equatable, Sendable {
         clamp()
     }
 
-    /// 끌기 중 가장자리 자동 밀기 한 걸음. `pointerX` = 칸 좌표. 움직였으면 true.
-    package mutating func edgePan(pointerX: CGFloat, deltaTime: TimeInterval) -> Bool {
+    /// 끌기 중 가장자리 자동 밀기 한 걸음. `pointer` = 칸 좌표. 가로 · 세로를 따로 민다(세로는 캔버스가 칸보다 클 때만 움직인다 — 확대한 보기 · 낮은 칸). 움직였으면 true.
+    package mutating func edgePan(pointer: CGPoint, deltaTime: TimeInterval) -> Bool {
         let step = Self.edgePanSpeed * CGFloat(deltaTime)
-        let before = origin.x
-        if pointerX < Self.edgeZone {
+        let before = origin
+        if pointer.x < Self.edgeZone {
             origin.x -= step
-        } else if pointerX > viewport.width - Self.edgeZone {
+        } else if pointer.x > viewport.width - Self.edgeZone {
             origin.x += step
-        } else {
-            return false
         }
+        if pointer.y < Self.edgeZone {
+            origin.y -= step
+        } else if pointer.y > viewport.height - Self.edgeZone {
+            origin.y += step
+        }
+        guard origin != before else { return false }
         clamp()
-        return origin.x != before
+        return origin != before
     }
 
     /// 왼쪽 끝에서 더 밀 수 있는 곳(논리 단위, 음수). 묶음 손잡이는 묶음 **왼쪽 바깥**에 있어서 캔버스 왼끝(x 0)에 놓인 묶음은 그만큼 더 밀어야 닿는다
@@ -214,7 +221,21 @@ package struct GamesRummyViewport: Equatable, Sendable {
         return (left, right)
     }
 
-    package enum Side: Sendable { case left, right }
+    /// 위·아래로 가려진 묶음 수(확대한 보기 · 낮은 칸). 가로로 이미 화면 밖인 묶음은 좌우 배지가 센다 — 두 번 세지 않는다.
+    package func offscreenVerticalCounts(_ frames: [RummyRect]) -> (up: Int, down: Int) {
+        let visible = visibleLogical
+        var up = 0, down = 0
+        for frame in frames where CGFloat(frame.maxX) > visible.minX && CGFloat(frame.x) < visible.maxX {
+            if CGFloat(frame.maxY) <= visible.minY {
+                up += 1
+            } else if CGFloat(frame.y) >= visible.maxY {
+                down += 1
+            }
+        }
+        return (up, down)
+    }
+
+    package enum Side: Sendable { case left, right, up, down }
 
     /// 배지를 눌렀다 — 그 쪽에서 가장 가까운 화면 밖 묶음이 여백을 두고 보이도록 민다. 밀 것이 없으면 그대로.
     package mutating func reveal(_ side: Side, frames: [RummyRect]) {
@@ -226,9 +247,24 @@ package struct GamesRummyViewport: Equatable, Sendable {
         case .right:
             guard let nearest = frames.filter({ CGFloat($0.x) >= visible.maxX }).min(by: { $0.x < $1.x }) else { return }
             origin.x = CGFloat(nearest.maxX) + Self.revealMargin - visible.width
+        case .up:
+            guard let nearest = frames.filter({ CGFloat($0.maxY) <= visible.minY }).max(by: { $0.maxY < $1.maxY }) else { return }
+            origin.y = CGFloat(nearest.y) - Self.revealMargin
+        case .down:
+            guard let nearest = frames.filter({ CGFloat($0.y) >= visible.maxY }).min(by: { $0.y < $1.y }) else { return }
+            origin.y = CGFloat(nearest.maxY) + Self.revealMargin - visible.height
         }
         clamp()
     }
+}
+
+/// 판 위 조작의 세로 자리(판 칸 아래에서 잰 값). 뷰 밖이라 값으로 잰다.
+package enum GamesRummyTableControlsLayout {
+    /// 배지 한 칸 높이.
+    package static let badgeHeight: CGFloat = 44
+
+    /// [전체 보기] 토글의 아래 여백 — 오른쪽 배지 자리 바로 위. 배지가 있든 없든 같은 값이라 토글이 안 움직인다.
+    package static func zoomBottom(badgeLift: CGFloat) -> CGFloat { badgeLift + badgeHeight }
 }
 
 /// 받침대 기하(받침대 칸 왼쪽 위 원점) — 한 줄 11장 · 반 칸 격자. 그리는 자리(`frame`)와 놓는 자리(`slot`)가 한 산식이다.
@@ -334,6 +370,21 @@ package enum GamesRummyGestureRules {
 
     /// 손의 자리 → 그린 자리 · 놓을 자리 계산의 기준점.
     package static func liftedPoint(finger: CGPoint) -> CGPoint { CGPoint(x: finger.x, y: finger.y - fingerLift) }
+
+    /// 그려진 손잡이 막대(묶음 사각형 `shown` 왼쪽 바깥). 그리는 자리(`GamesRummyBoardLayer`)와 재는 자리(`handleGrabRect`)가 이 값 하나를 쓴다.
+    package static func handleBar(shown: CGRect, scale: CGFloat) -> CGRect {
+        CGRect(x: shown.minX - max(9, 13 * scale), y: shown.midY - shown.height * 0.43,
+               width: max(8, 10 * scale), height: shown.height * 0.86)
+    }
+
+    /// 타일보다 **먼저** 잡히는 손잡이 자리: 그려진 막대 둘레. 붙은 묶음은 틈이 좁아(기본 보기 약 12pt · 전체 보기 약 6pt, 스냅이면 0) 타일을 먼저 재면 막대를 눌러도 앞 묶음 끝 타일이 뽑힌다.
+    /// 앞 타일을 다 먹지 않게 둘레는 타일 폭의 ¼(최대 8pt)이고, 자기 첫 타일 쪽으로는 안 넘어간다.
+    package static func handleGrabRect(shown: CGRect, scale: CGFloat) -> CGRect {
+        let bar = handleBar(shown: shown, scale: scale)
+        let margin = min(8, CGFloat(RummyTableLayout.tileWidth) * scale * 0.25)
+        let left = bar.minX - margin
+        return CGRect(x: left, y: shown.minY, width: max(0, min(bar.maxX + margin, shown.minX) - left), height: shown.height)
+    }
 }
 
 package enum GamesRummyHitTester {
@@ -350,7 +401,11 @@ package enum GamesRummyHitTester {
         guard layout.table.contains(point) else { return .none }
         guard editable else { return .felt }
         let local = CGPoint(x: point.x - layout.table.minX, y: point.y - layout.table.minY)
-        // 타일이 손잡이보다 먼저다(옆 묶음의 손잡이 터치 폭이 앞 묶음 타일 위로 겹칠 수 있다).
+        // ① 그려진 손잡이 막대 둘레 — 타일보다 먼저(붙은 묶음에서도 막대를 누르면 막대가 잡힌다).
+        for (set, frame) in table.frames.enumerated() {
+            if GamesRummyGestureRules.handleGrabRect(shown: canvas.rect(frame), scale: canvas.scale).contains(local) { return .meldHandle(set) }
+        }
+        // ② 타일 — 나머지 터치 폭(③)보다 먼저다(옆 묶음의 손잡이 터치 폭이 앞 묶음 타일 위로 겹칠 수 있다).
         for set in table.frames.indices {
             for tile in 0..<table.counts[set] {
                 guard let frame = table.tileFrame(set: set, tile: tile),
@@ -358,6 +413,7 @@ package enum GamesRummyHitTester {
                 if canvas.rect(frame).contains(local) { return .boardTile(meldTileIDs[set][tile]) }
             }
         }
+        // ③ 막대 왼쪽 나머지 터치 폭(묶음과 세로로 겹칠 때만) — 왼쪽이 빈 펠트인 묶음은 여기로 잡기 쉽다.
         for (set, frame) in table.frames.enumerated() {
             let shown = canvas.rect(frame)
             let handle = CGRect(x: shown.minX - GamesRummyGestureRules.handleTouchWidth, y: shown.minY,

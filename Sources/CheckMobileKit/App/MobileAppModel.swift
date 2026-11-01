@@ -150,11 +150,6 @@ public final class MobileAppModel {
         rummy.rackHalfColumns = GamesRummyRackGeometry.halfColumns
         // 실시간 'rummy' 초인종을 받을 자리(위 테트리스 칸과 같은 꼴 · 약한 참조).
         realtime.rummy = rummy
-        // 계정 삭제 앞의 이탈(비밀번호 재인증이 **통과한 뒤**에만 — 비밀번호를 틀렸는데 판이 기권되면 안 된다). 놀던 기기는 아무것도 안 보낸다.
-        session.beforeAccountDeletion = { [weak rummy] in
-            guard let rummy else { return }
-            await GamesRummyExit.leaveBeforeSessionEnds(rummy)
-        }
         let links = MobileStoreLinks()
         // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
         let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })

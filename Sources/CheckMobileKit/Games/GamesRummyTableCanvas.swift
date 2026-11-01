@@ -81,13 +81,12 @@ struct GamesRummyBoardLayer: View, Equatable {
         }
         // 손잡이(내 차례).
         guard editable else { return }
-        let width = max(8, 10 * scale)
         for (index, meld) in melds.enumerated() {
             var layer = context
             layer.opacity = movingSet == index ? 0.35 : 1
             let frame = rect(meld.frame)
-            let bar = CGRect(x: frame.minX - max(9, 13 * scale), y: frame.midY - frame.height * 0.43,
-                             width: width, height: frame.height * 0.86)
+            let bar = GamesRummyGestureRules.handleBar(shown: frame, scale: scale)
+            let width = bar.width
             let capsule = Path(roundedRect: bar, cornerRadius: width / 2, style: .continuous)
             layer.fill(capsule, with: .color(Color(red: 0.55, green: 0.45, blue: 1.0).opacity(0.55)))
             layer.stroke(capsule, with: .color(Color.white.opacity(0.25)), lineWidth: 0.8)
@@ -265,7 +264,7 @@ struct GamesRummyTablePane: View {
         motionSerial += 1
         let serial = motionSerial
         guard !reduceMotion, model.drag == nil,
-              let next = GamesRummyBoardMotion.make(from: old, to: new, excluding: model.recentDropIDs) else {
+              let next = GamesRummyBoardMotion.make(from: old, to: new, excluding: model.recentDropIDs, landing: model.recentDropOrigins) else {
             motion = nil
             return
         }
@@ -445,7 +444,9 @@ private struct GamesRummyMagnetTips: Shape {
 
 // MARK: - 판 위 조작
 
-/// [전체 보기] 토글 · 화면 밖 묶음 배지. 입력 층 **위**에 있어 제스처보다 먼저 눌린다. 끄는 동안은 숨는다(자동 밀기·미리보기를 가리지 않게).
+/// [전체 보기] 토글 · 화면 밖 묶음 배지. 입력 층 **위**에 있어 제스처보다 먼저 눌린다(그래서 그 자리 타일은 못 집는다). 끄는 동안은 숨는다(자동 밀기·미리보기를 가리지 않게).
+/// 토글은 판 오른쪽 **아래**, 오른쪽 배지 자리 위다 — 오른쪽 위에 두면 첫 화면부터 윗줄 묶음의 숫자를 가렸다(묶음은 위부터 깔린다).
+/// 칸 자리는 `GamesRummyTableControlsLayout` 값 하나에서 나온다(배지가 뜨고 사라져도 토글이 안 움직인다).
 struct GamesRummyTableControls: View {
     let model: GamesRummyMatchModel
     let scene: GamesRummyBoardScene
@@ -458,10 +459,11 @@ struct GamesRummyTableControls: View {
         let viewport = model.viewport
         let frames = scene.layout.frames
         let counts = viewport.offscreenCounts(frames)
+        let vertical = viewport.offscreenVerticalCounts(frames)
         let dragging = !model.draggingIDs.isEmpty
         ZStack {
             if !dragging {
-                // 기호만 — 글자까지 넣으니 판 오른쪽 위 묶음의 숫자를 석 장씩 가렸다(기본 보기는 세로로 안 밀려 비켜 볼 수도 없다).
+                // 기호만 — 글자까지 넣으면 타일을 더 가린다.
                 Button {
                     model.toggleFullView()
                 } label: {
@@ -476,7 +478,8 @@ struct GamesRummyTableControls: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(viewport.isFullView ? GamesRummyText.zoomDefault : GamesRummyText.zoomFull)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                .padding(.bottom, GamesRummyTableControlsLayout.zoomBottom(badgeLift: badgeLift))
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
 
                 // 배지는 판 아래쪽 — 묶음은 위부터 깔리니 숫자를 덜 가린다(직전 사건 줄보다는 위).
                 if counts.left > 0 {
@@ -488,6 +491,15 @@ struct GamesRummyTableControls: View {
                     badge(.right, count: counts.right, frames: frames)
                         .padding(.bottom, badgeLift)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                }
+                if vertical.up > 0 {
+                    badge(.up, count: vertical.up, frames: frames)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                }
+                if vertical.down > 0 {
+                    badge(.down, count: vertical.down, frames: frames)
+                        .padding(.bottom, badgeLift)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
             }
         }
@@ -502,9 +514,17 @@ struct GamesRummyTableControls: View {
             }
         } label: {
             HStack(spacing: 2) {
-                if side == .left { Image(systemName: "arrowtriangle.left.fill").font(.system(size: 8, weight: .black)) }
+                switch side {
+                case .left: arrow("arrowtriangle.left.fill")
+                case .up: arrow("arrowtriangle.up.fill")
+                case .right, .down: EmptyView()
+                }
                 Text(verbatim: "\(count)").font(.caption.weight(.heavy)).monospacedDigit()
-                if side == .right { Image(systemName: "arrowtriangle.right.fill").font(.system(size: 8, weight: .black)) }
+                switch side {
+                case .right: arrow("arrowtriangle.right.fill")
+                case .down: arrow("arrowtriangle.down.fill")
+                case .left, .up: EmptyView()
+                }
             }
             .foregroundStyle(MobileTheme.onAccentFill)
             .padding(.horizontal, 7)
@@ -516,7 +536,11 @@ struct GamesRummyTableControls: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(side == .left ? GamesRummyText.offscreenLeft(count) : GamesRummyText.offscreenRight(count))
+        .accessibilityLabel(GamesRummyText.offscreen(side, count: count))
+    }
+
+    private func arrow(_ name: String) -> some View {
+        Image(systemName: name).font(.system(size: 8, weight: .black))
     }
 }
 #endif

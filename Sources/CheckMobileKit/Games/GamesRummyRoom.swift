@@ -133,7 +133,14 @@ struct GamesRummyRoomView: View {
                 .padding(.bottom, MobileTheme.space6)
             }
             .refreshable { await rummy.refreshLobby() }
+            // 시스템 뒤로는 자리를 안 놓는다 — 나왔다고 믿는 사이 방장이 시작하면 판돈이 걷히고, 폰을 잠갔으면 90초 뒤 끊김 기권이다. 뒤로도 [나가기]와 같은 판단을 탄다(맥: 손님이 창을 닫으면 방 나가기).
+            // 앉은 채 둘러보는 길은 탭 막대다.
+            .navigationBarBackButtonHidden(true)
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(action: onExit) { Image(systemName: "chevron.left") }
+                        .accessibilityLabel(GamesRummyText.leave)
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { rummy.rulesShown = true } label: { Image(systemName: "book") }
                         .accessibilityLabel(GamesRummyText.rulesButton)

@@ -56,8 +56,10 @@ struct GamesRummyMatchView: View {
         .sensoryFeedback(.impact(weight: .medium), trigger: turnCueSerial)
         .sensoryFeedback(.impact(weight: .light), trigger: model.liftSerial)
         .sensoryFeedback(.warning, trigger: model.refuseSerial)
-        // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거둔다 — 낡은 id 로 놓지 않게.
-        .onChange(of: rummy.match?.seq) { _, _ in model.cancelTouch() }
+        // 판이 바뀌면(내 차례 끝 · 남의 확정) 끄는 중이던 타일을 거두고 손을 뗄 때까지 무시한다 — 낡은 id 로 놓지 않게. 같은 차례에 seq 만 오른 것(남의 기권)은 안 거둔다.
+        .onChange(of: rummy.match?.seq) { _, _ in
+            model.boardChanged(editor: rummy.editor, turnKey: rummy.match.map { RummyEditorKey($0) })
+        }
         .onChange(of: touching) { _, now in if !now { model.touchVanished() } }
         .onAppear {
             flightDoneSerial = rummy.lastDraw?.serial // 돌아왔을 때 옛 뽑기를 다시 날리지 않는다.
@@ -81,14 +83,15 @@ struct GamesRummyMatchView: View {
         let editor = rummy.editor
         let isMyTurn = rummy.isMyTurn && editor != nil
         let scene = GamesRummyBoardScene.make(match: match, editor: editor, isMyTurn: isMyTurn, otherDraft: rummy.otherDraft)
-        let rows = model.frozenRows ?? editor?.rackLayout.rowCount ?? RummyRackLayout.baseRows
+        let rows = model.rackRows(editorRows: editor?.rackLayout.rowCount ?? RummyRackLayout.baseRows, turnKey: RummyEditorKey(match).text)
         let layout = GamesRummyMatchLayout(size: size, rackRows: rows,
                                            actionHeight: GamesRummyMatchLayout.actionHeight(textScale: textScale))
         let context = GamesRummyTouchContext(layout: layout, scene: scene, editor: editor, isMyTurn: isMyTurn,
-                                             editable: isMyTurn && !rummy.isWorking)
+                                             editable: isMyTurn && !rummy.isWorking, turnKey: RummyEditorKey(match))
         let mine = GamesRummySeats.mine(match)
         let line = GamesRummyStatusLine.make(notice: rummy.notice, isMyTurn: isMyTurn, editor: editor,
-                                             turnName: GamesRummySeats.turnSeat(match)?.displayName, mySeatState: mine?.state)
+                                             turnName: GamesRummySeats.turnSeat(match)?.displayName, mySeatState: mine?.state,
+                                             myTimeoutStreak: mine?.timeoutStreak, engaged: rummy.isEngagedInCurrentMatch)
         return ZStack(alignment: .topLeading) {
             // 그림 층 — 손을 안 받는다.
             GamesRummyTablePane(model: model, scene: scene, size: layout.table.size, editable: context.editable)
@@ -111,7 +114,7 @@ struct GamesRummyMatchView: View {
             GamesRummyStatusRow(line: line, plan: editor?.initialPlanPoints.map { (table: isMyTurn ? $0.table : 0, rack: $0.rack) })
                 .place(layout.status)
             GamesRummyRackPane(model: model, tiles: editor?.rack ?? [], layout: context.rackLayout, geometry: context.rack,
-                               rackMelds: editor?.rackMelds ?? [], turnGlow: isMyTurn ? turnGlowPhase : nil,
+                               rackMelds: editor?.rackMelds ?? [], turnGlow: isMyTurn && rummy.isEngagedInCurrentMatch ? turnGlowPhase : nil,
                                freshIDs: freshDraw?.ids ?? [], stagger: sortStagger,
                                flight: GamesRummyRackMotion.flight(lastDraw: rummy.lastDraw, landedSerial: flightLandedSerial,
                                                                    doneSerial: flightDoneSerial, reduceMotion: reduceMotion),
@@ -134,6 +137,7 @@ struct GamesRummyMatchView: View {
             GamesRummyActionRow(rummy: rummy, match: match, editor: editor, isMyTurn: isMyTurn, width: size.width,
                                 textScale: textScale, onSort: sort)
                 .frame(width: layout.actions.width, height: layout.actions.height)
+                .allowsHitTesting(!model.locksActions)
                 .place(layout.actions)
             // 손에 든 타일 — 맨 위.
             GamesRummyFloatingBlock(model: model, context: context)
@@ -180,9 +184,14 @@ struct GamesRummyMatchView: View {
     }
 
     /// 내 차례가 새로 왔으면 받침대 테두리를 한 번 크게 빛내고(0.8초 뒤 은은하게) 판 가운데 '내 차례' 배지를 1.3초 띄운다 · 햅틱 한 번. 동작 줄이기면 펄스·배지 없이 은은한 테두리만.
+    /// 놀던 기기에는 안 낸다(다른 기기에서 하는 판 — 차례마다 이 폰이 울리면 안 된다). 키는 적어 둔다: 그 차례 중에 손대어 이어 받는 순간 배지가 뒤늦게 뜨지 않게.
     private func cueTurnIfNeeded() {
         guard let key = myTurnCueKey, key != turnCueKey else { return }
         turnCueKey = key
+        guard rummy.isEngagedInCurrentMatch else {
+            turnGlowPhase = .steady
+            return
+        }
         turnCueSerial += 1
         guard !reduceMotion else {
             turnGlowPhase = .steady

@@ -84,7 +84,7 @@ import Testing
         #expect(GamesRummyText.remainingCount(3) == "남은 타일 3장")
         #expect(GamesRummyText.resultRowAccessibility(rank: 1, name: "나나", isMe: true, forfeited: false, score: 44, net: 10, rackCount: 0)
             == "1등, 나나, 나, 점수 +44, 루비 +10")
-        #expect(GamesRummyText.forfeitDetail == "나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요.")
+        #expect(GamesRummyText.forfeitDetail == "나가면 기권돼 꼴찌가 되고 판돈을 잃어요.")
         #expect(GamesRummyText.forfeitTitle != GamesRummyText.forfeitDetail)
         let view = try #require(GamesRummyText.rules.first { $0.title == "판 보기" })
         #expect(!view.detail.contains("[전체 보기]"), "확대 토글은 글자 없는 기호다")

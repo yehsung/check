@@ -98,7 +98,7 @@
         "timeout_streak": 0,
         "final_rack": [],
         "final_rank": 1,
-        "final_score": 30,
+        "final_score": 112,
         "forfeit_order": null,
         "is_winner": true,
         "payout": 20
@@ -134,7 +134,7 @@
           "J"
         ],
         "final_rank": 2,
-        "final_score": -30,
+        "final_score": -112,
         "forfeit_order": null,
         "is_winner": false,
         "payout": 0

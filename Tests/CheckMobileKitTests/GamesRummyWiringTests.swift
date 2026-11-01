@@ -78,8 +78,8 @@ final class RummyWireHarness {
         await barrier()
     }
 
-    func decodedState(status: String = "active", mySeatState: String = "playing", turnSeat: Int = 1, seq: Int = 3) -> RummyMatchState? {
-        let text = RummyWireJSON.state(nowMs: nowMs, status: status, mySeatState: mySeatState, turnSeat: turnSeat, seq: seq)
+    func decodedState(status: String = "active", mySeatState: String = "playing", turnSeat: Int = 1, seq: Int = 3, draft: String = "null") -> RummyMatchState? {
+        let text = RummyWireJSON.state(nowMs: nowMs, status: status, mySeatState: mySeatState, turnSeat: turnSeat, seq: seq, draft: draft)
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         return try? decoder.decode(RummyMatchState.self, from: Data(text.utf8))
@@ -113,10 +113,10 @@ enum RummyWireJSON {
         #"{"id":"\#(id)","host":{"id":"\#(RummyWireHarness.rival)","display_name":"큐브라이벌"},"stake":5,"is_public":false,"max_seats":4,"expires_at_ms":\#(nowMs + 600_000),"seats":[]}"#
     }
 
-    static func state(nowMs: Int, id: String = RummyWireHarness.matchID, status: String, mySeatState: String, turnSeat: Int, seq: Int = 3) -> String {
+    static func state(nowMs: Int, id: String = RummyWireHarness.matchID, status: String, mySeatState: String, turnSeat: Int, seq: Int = 3, draft: String = "null") -> String {
         let me = RummyWireHarness.userID, rival = RummyWireHarness.rival
         let rack = status == "active" && mySeatState == "playing" ? #"["A10","A11","A12","B1"]"# : "null"
-        return #"{"id":"\#(id)","status":"\#(status)","host_id":"\#(me)","stake":5,"is_public":false,"max_seats":4,"seat_count":2,"seq":\#(seq),"server_now_ms":\#(nowMs),"turn_seat_no":\#(turnSeat),"turn_started_ms":\#(nowMs - 1000),"turn_deadline_ms":\#(nowMs + 59_000),"pool_count":40,"table":[],"table_layout":[],"draft":null,"my_seat_no":0,"my_rack":\#(rack),"my_initial_done":false,"seats":[{"user_id":"\#(me)","display_name":"나","seat_no":0,"state":"\#(mySeatState)","rack_count":4},{"user_id":"\#(rival)","display_name":"큐브라이벌","seat_no":1,"state":"playing","rack_count":6}],"reactions":[]}"#
+        return #"{"id":"\#(id)","status":"\#(status)","host_id":"\#(me)","stake":5,"is_public":false,"max_seats":4,"seat_count":2,"seq":\#(seq),"server_now_ms":\#(nowMs),"turn_seat_no":\#(turnSeat),"turn_started_ms":\#(nowMs - 1000),"turn_deadline_ms":\#(nowMs + 59_000),"pool_count":40,"table":[],"table_layout":[],"draft":\#(draft),"my_seat_no":0,"my_rack":\#(rack),"my_initial_done":false,"seats":[{"user_id":"\#(me)","display_name":"나","seat_no":0,"state":"\#(mySeatState)","rack_count":4},{"user_id":"\#(rival)","display_name":"큐브라이벌","seat_no":1,"state":"playing","rack_count":6}],"reactions":[]}"#
     }
 }
 
@@ -314,8 +314,8 @@ enum RummyWireJSON {
         await idle.tearDown()
     }
 
-    @Test("계정 삭제: 비밀번호가 틀리면 기권 0건 · 맞으면 삭제 RPC **앞**에 나간다")
-    func accountDeletionLeavesAfterReauth() async {
+    @Test("계정 삭제: 앞에 `rummy_leave` 를 안 보낸다(서버 삭제가 같은 트랜잭션에서 기권한다) · 삭제가 실패하면 판이 그대로다")
+    func accountDeletionLeavesTheForfeitToTheServer() async {
         let fresh = BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(24 * 3600), subject: RummyWireHarness.userID)
         let harness = RummyWireHarness(label: "rummy-delete") { request in
             if request.bodyText.contains("wrong") {
@@ -324,7 +324,10 @@ enum RummyWireJSON {
             return BaseStub.authResponse(access: fresh, refresh: "r-rummy", userID: RummyWireHarness.userID)
         }
         harness.serveLobby()
-        harness.server.setDefault("delete_my_account") { _ in MobileStubResponse(status: 204, body: Data()) }
+        nonisolated(unsafe) var deleteFails = true
+        harness.server.setDefault("delete_my_account") { _ in
+            deleteFails ? MobileStubResponse(status: 500, body: Data()) : MobileStubResponse(status: 204, body: Data())
+        }
         await harness.signIn()
         harness.apply()
         harness.rummy.markEngaged(RummyWireHarness.matchUUID)
@@ -332,12 +335,16 @@ enum RummyWireJSON {
         #expect(wrong == .failed(.wrongPassword))
         #expect(harness.count("rummy_leave") == 0, "비밀번호를 틀렸는데 판이 기권됐다")
         #expect(harness.rummy.phase == .playing)
+        // 재인증은 통과했는데 서버 삭제가 실패했다 — 계정이 남으니 판도 남아야 한다.
+        let failed = await harness.model.session.deleteAccount(password: "right")
+        #expect(failed != .deleted)
+        #expect(harness.count("delete_my_account") >= 1, "기준선: 삭제를 안 불렀으면 이 시험은 아무것도 안 잰다")
+        #expect(harness.count("rummy_leave") == 0, "삭제가 실패했는데 판은 기권됐다 — 판돈을 돌려받을 길이 없다")
+        #expect(harness.rummy.phase == .playing)
+        deleteFails = false
         let right = await harness.model.session.deleteAccount(password: "right")
         #expect(right == .deleted)
-        let paths = harness.server.requests.map { $0.rpcName ?? $0.path }
-        let leave = paths.firstIndex(of: "rummy_leave"), delete = paths.firstIndex(of: "delete_my_account")
-        #expect(leave != nil && delete != nil)
-        if let leave, let delete { #expect(leave < delete) }
+        #expect(harness.count("rummy_leave") == 0, "서버가 원자적으로 하는 일을 먼저 저질렀다")
         await harness.tearDown()
     }
 
@@ -350,12 +357,93 @@ enum RummyWireJSON {
         #expect(GamesRummyExit.decision(harness.rummy) == .close, "놀던 기기인데 기권을 묻는다")
         harness.rummy.markEngaged(RummyWireHarness.matchUUID)
         #expect(GamesRummyExit.decision(harness.rummy) == .confirmForfeit)
-        #expect(GamesRummyExit.prompt(.confirmForfeit)?.detail == "나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요.")
+        #expect(GamesRummyExit.prompt(.confirmForfeit)?.detail == "나가면 기권돼 꼴찌가 되고 판돈을 잃어요.")
         #expect(GamesRummyExit.prompt(.close) == nil)
         // 확인이 떠 있는 동안 판이 끝났다.
         harness.apply(status: "finished", mySeatState: "done")
         #expect(await GamesRummyExit.confirm(asked: .confirmForfeit, rummy: harness.rummy) == false)
         #expect(harness.count("rummy_leave") == 0, "끝난 판에 기권을 보냈다")
+        await harness.tearDown()
+    }
+
+    @Test("나간 뒤: 안내줄을 지우고 로비를 한 번 다시 읽는다(같은 화면이 로비로 남는다) · 시작된 판을 들고 남았으면 안 나간다")
+    func leavingSettlesTheLobby() async throws {
+        let forfeit = RummyWireHarness(label: "rummy-settle")
+        forfeit.serveLobby()
+        await forfeit.signIn()
+        forfeit.apply()
+        forfeit.rummy.markEngaged(RummyWireHarness.matchUUID)
+        forfeit.rummy.setNotice("판이 바뀌었어요")
+        await forfeit.barrier()
+        var before = forfeit.count("rummy_lobby")
+        #expect(await GamesRummyExit.confirm(asked: .confirmForfeit, rummy: forfeit.rummy))
+        #expect(forfeit.count("rummy_leave") == 1)
+        #expect(forfeit.rummy.match == nil && forfeit.rummy.notice == nil, "낡은 안내줄이 로비에 남았다")
+        #expect(forfeit.count("rummy_lobby") == before + 1, "낡은 activeMatchId 로 '판 진행 중' 칩이 남는다")
+        await forfeit.tearDown()
+
+        let guest = RummyWireHarness(label: "rummy-settle-room")
+        guest.serveLobby()
+        let forming = RummyWireJSON.state(nowMs: guest.nowMs, status: "forming", mySeatState: "joined", turnSeat: 0)
+        guest.server.setDefault("rummy_state", json: #"{"status":"ok","state":\#(forming)}"#)
+        await guest.signIn()
+        guest.apply(status: "forming", mySeatState: "joined")
+        guest.rummy.markEngaged(RummyWireHarness.matchUUID)
+        await guest.barrier()
+        before = guest.count("rummy_lobby")
+        await GamesRummyExit.leaveRoom(guest.rummy)
+        #expect(guest.count("rummy_leave") == 1)
+        #expect(guest.rummy.match == nil)
+        #expect(guest.count("rummy_lobby") == before + 1, "닫힌 방이 공개 목록에 남는다")
+        await guest.tearDown()
+
+        let started = RummyWireHarness(label: "rummy-settle-started")
+        started.serveLobby()
+        let active = RummyWireJSON.state(nowMs: started.nowMs, status: "active", mySeatState: "playing", turnSeat: 1)
+        started.server.setDefault("rummy_state", json: #"{"status":"ok","state":\#(active)}"#)
+        await started.signIn()
+        started.apply(status: "forming", mySeatState: "joined")
+        started.rummy.markEngaged(RummyWireHarness.matchUUID)
+        await started.barrier()
+        await GamesRummyExit.leaveRoom(started.rummy)
+        #expect(started.count("rummy_leave") == 0, "묻지도 않고 시작된 판을 기권시켰다")
+        #expect(started.rummy.match != nil)
+        await started.tearDown()
+    }
+
+    @Test("놀던 기기: 받침대 안 정리는 서버로 안 나가고 engaged 도 안 선다 · 판에 놓으면 이어 받는다 · 손댄 기기는 디바운스가 그대로 걸린다(맥 동작 불변)")
+    func idleRackMoveStaysLocal() async throws {
+        let harness = RummyWireHarness(label: "rummy-idle-rack")
+        harness.serveLobby()
+        harness.server.setDefault("rummy_draft", json: #"{"status":"ok","draft_seq":3}"#)
+        await harness.signIn()
+        // 다른 기기가 만들던 작업 판 — 이 기기의 시작 판(빈 판)과 달라서, 보내면 덮인다.
+        let draft = #"{"table":[["B1","B2","B3"]],"layout":[[100,100]],"draft_seq":2,"at_ms":\#(harness.nowMs)}"#
+        let state = try #require(harness.decodedState(turnSeat: 0, draft: draft))
+        #expect(harness.rummy.applyState(state) == .applied)
+        #expect(harness.rummy.isMyTurn && !harness.rummy.isEngagedInCurrentMatch)
+        harness.rummy.draftDebounceSeconds = 0.02
+        let rack = try #require(harness.rummy.editor?.rack.map(\.id))
+
+        harness.rummy.moveTiles([rack[0]], to: .rackSlot(RummyRackSlot(row: 1, halfCol: 4)))
+        #expect(harness.rummy.editor?.rackLayout.slot(of: rack[0]) == RummyRackSlot(row: 1, halfCol: 4), "받침대가 안 옮겨졌다")
+        #expect(harness.rummy.draftDebounceTask == nil, "놀던 기기의 받침대 정리가 전송을 걸었다")
+        try await Task.sleep(for: .milliseconds(100))
+        await harness.barrier()
+        #expect(harness.count("rummy_draft") == 0, "다른 기기의 작업 판을 시작 판으로 덮었다")
+        #expect(!harness.rummy.isEngagedInCurrentMatch, "받침대만 정리했는데 이 기기가 판을 쥐었다")
+
+        // 판에 놓으면 이어 받는다. 그 디바운스 안의 받침대 정리가 걸린 전송을 지우면 안 된다.
+        harness.rummy.moveTiles([rack[0]], to: .newMeld)
+        harness.rummy.moveTiles([rack[1]], to: .rackSlot(RummyRackSlot(row: 1, halfCol: 8)))
+        #expect(await waits.wait { harness.count("rummy_draft") == 1 }, "판에 놓았는데 안 나갔다")
+        #expect(harness.rummy.isEngagedInCurrentMatch)
+
+        // 손댄 기기의 받침대 정리는 예전 그대로 디바운스를 건다.
+        await harness.barrier()
+        harness.rummy.draftDebounceSeconds = 3_600
+        harness.rummy.moveTiles([rack[1]], to: .rackSlot(RummyRackSlot(row: 1, halfCol: 12)))
+        #expect(harness.rummy.draftDebounceTask != nil, "손댄 기기의 동작이 바뀌었다")
         await harness.tearDown()
     }
 
@@ -686,7 +774,7 @@ enum RummyWireJSON {
                              ])
         let chairs = GamesRummySeating.chairs(room: room, myUserID: me, myName: "나나", myAvatarURL: nil, myCharacter: nil)
         #expect(chairs.map(\.name) == ["나나", "둘째", "셋째", ""])
-        #expect(chairs[0].tag == "나 · 방장" && chairs[1].tag == "앉음" && chairs[2].tag == "답 기다리는 중")
+        #expect(chairs[0].tag == "나 · 방장" && chairs[1].tag == "참가함" && chairs[2].tag == "초대함")
         #expect(chairs[2].dimmed && chairs[2].seatNo == nil && chairs[1].userID == rival)
     }
 }

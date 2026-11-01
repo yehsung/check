@@ -58,9 +58,6 @@ package final class MobileSessionStore {
     package private(set) var profile: MobileProfile?
     /// 로그아웃·치명 만료마다 +1. 늦게 도착한 응답을 버리는 기준.
     package private(set) var generation = 0
-    /// 계정 삭제 재인증이 **통과한 뒤**, 서버 삭제 **앞**에 한 번(앱 모델이 건다 — 아잉 큐브 이탈).
-    /// 재인증 앞에 두면 비밀번호를 틀린 사람의 판이 기권된다.
-    @ObservationIgnored package var beforeAccountDeletion: (@MainActor () async -> Void)?
     /// 로그인 화면 한 줄(실패 원인 · "다시 로그인 필요").
     package var notice: String?
     package private(set) var isSigningIn = false
@@ -332,12 +329,7 @@ package final class MobileSessionStore {
             return .failed(.notSignedIn)
         }
 
-        // 재인증이 통과했다 — 이제 돌아설 일이 드물다. 게임이 세션을 지우기 전에 할 일(아잉 큐브 판·방 이탈, 최대 2초)을 여기서 한다.
-        await beforeAccountDeletion?()
-        guard startGeneration == generation else {
-            await service.signOut(accessToken: reauth.accessToken)
-            return .failed(.notSignedIn)
-        }
+        // 아잉 큐브 판·방은 여기서 나가지 않는다 — 서버 `delete_my_account` 가 같은 트랜잭션에서 기권·방 정리를 한다(`rummy_leave` 를 먼저 보내면 삭제가 실패해도 기권이 안 되돌아간다).
 
         // 사진 먼저(실측 2026-09-18): 서버 함수는 Storage 표에 직접 못 써서 avatars/<uid>.jpg 를 남긴다. 실패는 무시한다 —
         // 사진 한 장 때문에 계정 삭제가 막히면 애플이 요구하는 '앱 안에서 계정 삭제'가 통째로 깨진다.

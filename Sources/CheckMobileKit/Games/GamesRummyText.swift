@@ -8,7 +8,7 @@ import Foundation
 /// 이 표는 화면에 붙는 글자(제목·탭·버튼·라벨·빈 상태·규칙)만 쥔다.
 ///
 /// ── 맥과 갈리는 곳 ──
-/// ① 입력 낱말: 맥의 끌기·⌥·마우스·창 낱말이 없다(손가락으로 끌기 · 꾹 누르기 · 벌리기). `GamesRummyTextTests` 가 글자로 잰다.
+/// ① 입력 낱말: 맥의 끌기·⌥·마우스·창 낱말이 없다(손가락으로 끌기 · 꾹 누르기 · 벌리기). `GamesRummyWiringTests` 가 글자로 잰다.
 /// ② 떠나는 일: 맥은 "창을 닫으면 기권", 폰은 "[나가기]를 누르면 기권"이다. 앱을 내리는 것은 기권이 아니다(서버 90초 끊김 규칙 — 사용자 결정 기본값).
 /// ③ 시간 초과는 **되돌리고 1장**이다(`rummy-mobile-handoff.md` 의 3장은 낡았다).
 /// ④ 등수 분배는 순수익으로 말한다(2명 +판돈/−판돈 · 3명 +판돈/0/−판돈 · 4명 +판돈×2/0/−판돈/−판돈). 실제 분배는 서버 값(`payout`)만 쓴다.
@@ -42,7 +42,7 @@ package enum GamesRummyText {
     package static func net(_ value: Int) -> String { value > 0 ? "+\(value)" : (value < 0 ? "−\(-value)" : "0") }
     package static func score(_ score: Int?) -> String {
         guard let score else { return "점수 —" }
-        return score > 0 ? "점수 +\(score)" : "점수 \(score)"
+        return "점수 \(net(score))"
     }
 
     // MARK: - 게임 탭 카드
@@ -62,6 +62,8 @@ package enum GamesRummyText {
     package static let myTable = "내 탁자"
     package static let openTable = "탁자 열기"
     package static let readyHeader = "초대 가능"
+    /// 방 안에서는 이 절에 이미 앉은 사람·초대한 사람도 든다 — '초대 가능 N명' 이 사실이 아니다.
+    package static let peopleHeader = "사람"
     package static let busyHeader = "지금은 바빠요"
     package static let invite = "초대"
     package static let invited = "초대함"
@@ -69,11 +71,12 @@ package enum GamesRummyText {
     package static let join = "참가"
     package static let decline = "거절"
     package static let calling = "부르는 중"
-    package static let waitingAnswer = "답 기다리는 중"
-    package static let seated = "앉음"
+    /// 의자 카드와 사람 행이 같은 낱말을 쓴다(`invited` · `joined`).
+    package static let waitingAnswer = invited
+    package static let seated = joined
     package static let take = "앉기"
     package static let emptySeat = "빈자리"
-    package static let joinEmpty = "받은 초대나 열린 공개 탁자가 생기면 여기에 떠요"
+    package static let joinEmpty = "받은 초대나 열린 공개 탁자가 생기면 이 화면 맨 위에 떠요"
     package static let emptyUsers = "함께할 사람이 아직 없어요"
     package static let loadingUsers = "사람 목록을 불러오는 중…"
     package static let stakeLabel = "판돈"
@@ -135,11 +138,13 @@ package enum GamesRummyText {
     package static func rankSeeAll(total: Int) -> String { "전체 보기 (\(total))" }
     package static func rankWins(_ wins: Int?) -> String { "1등 \(wins ?? 0)" }
     package static func rankGames(_ games: Int?) -> String { "판 수 \(games ?? 0)" }
+    /// 순위표의 자리 — 'N위'. 판 등수 'N등'(`rank`)과 가른다: 한 줄에 '2등 · 1등 5' 로 붙으면 두 뜻이 섞인다(폰의 다른 순위도 '위'다).
+    package static func ladderRank(_ rank: Int?) -> String { rank.map { "\($0)위" } ?? unknownNumber }
     package static func myRankLine(rank: Int?, games: Int?, wins: Int?) -> String {
-        "\(self.rank(rank)) · \(record(games: games, wins: wins))"
+        "\(ladderRank(rank)) · \(record(games: games, wins: wins))"
     }
     package static func rankRowAccessibility(rank: Int?, name: String, isMe: Bool, games: Int?, wins: Int?) -> String {
-        "\(self.rank(rank)), \(name)\(isMe ? ", \(me)" : ""), \(record(games: games, wins: wins))"
+        "\(ladderRank(rank)), \(name)\(isMe ? ", \(me)" : ""), \(record(games: games, wins: wins))"
     }
 
     // MARK: - 방(레인 A)
@@ -178,6 +183,8 @@ package enum GamesRummyText {
     package static let sortNumber = "777"
     package static let sortColor = "789"
     package static let react = "반응"
+    /// 반응 단추 기호. `face.smiling` 은 다크에서 채운 흰 원으로 보여 옆 기호와 무게가 어긋난다.
+    package static let reactionSymbol = "smiley"
     package static let zoomFull = "전체 보기"
     package static let zoomDefault = "크게 보기"
     package static let myTurnBadge = "내 차례"
@@ -193,6 +200,14 @@ package enum GamesRummyText {
     /// 화면 밖 묶음 배지(◀ 2 · 2 ▶)의 보이스오버 글자.
     package static func offscreenLeft(_ count: Int) -> String { "왼쪽 화면 밖 묶음 \(count)개" }
     package static func offscreenRight(_ count: Int) -> String { "오른쪽 화면 밖 묶음 \(count)개" }
+    package static func offscreen(_ side: GamesRummyViewport.Side, count: Int) -> String {
+        switch side {
+        case .left: return offscreenLeft(count)
+        case .right: return offscreenRight(count)
+        case .up: return "위쪽 화면 밖 묶음 \(count)개"
+        case .down: return "아래쪽 화면 밖 묶음 \(count)개"
+        }
+    }
     /// 첫 등록 전 받침대 계획 한 줄(맥 `RummyCueText.plan`).
     package static func plan(table: Int, rack: Int) -> String {
         table > 0 ? "랙 묶음 \(rack) + 판 \(table) = \(table + rack) / 30" : "랙 묶음 합 \(rack) / 30"
@@ -225,6 +240,8 @@ package enum GamesRummyText {
         }
     }
 
+    /// 남의 차례 동안의 상태 줄(이 기기가 손댄 판). 서버 90초 끊김 규칙을 바꾸지 않고 알리기만 한다 — 4명이면 내 차례가 최대 3분 뒤라 그 사이 앱을 내리기 쉽다.
+    package static let backgroundWarning = "앱을 90초 넘게 내리면 기권돼요"
     /// 내 자리가 기권·끝난 뒤 남의 판을 보는 동안의 상태 줄.
     package static let spectating = "기권한 판을 보고 있어요"
     /// 보이스오버 — 끌기 대안(타일 고르기 → 판에 놓기)은 이번 판 범위 밖이다. 라벨만 읽어 준다.
@@ -241,7 +258,7 @@ package enum GamesRummyText {
 
     /// 같은 계정의 다른 기기가 하는 판을 이 폰이 읽기만 하는 동안의 안내 카드.
     package static let elsewhereTitle = "다른 기기에서 하는 판이에요"
-    package static let elsewhereDetail = "여기서 타일을 옮기면 이 폰에서 이어서 하게 돼요."
+    package static let elsewhereDetail = "여기서 판에 타일을 놓거나 반응을 보내면 이 폰에서 이어서 하게 돼요."
 
     // MARK: - 결과(레인 C)
 
@@ -266,11 +283,16 @@ package enum GamesRummyText {
         if rackCount > 0 { parts.append(remainingCount(rackCount)) }
         return parts.joined(separator: ", ")
     }
-    package static func endReason(_ reason: RummyEndReason?, winner: String?) -> String {
+    /// `winnerIsMe` = 내가 이겼다 — 내 이름을 남처럼 부르지 않는다.
+    package static func endReason(_ reason: RummyEndReason?, winner: String?, winnerIsMe: Bool = false) -> String {
         switch reason {
-        case .rackEmpty: return winner.map { "\($0)님이 랙을 비웠어요" } ?? "랙을 비운 사람이 나왔어요"
+        case .rackEmpty:
+            if winnerIsMe { return "랙을 비웠어요" }
+            return winner.map { "\($0)님이 랙을 비웠어요" } ?? "랙을 비운 사람이 나왔어요"
         case .blocked: return "더미가 비고 모두 넘겨서 끝났어요"
-        case .lastStanding: return winner.map { "\($0)님 혼자 남아 끝났어요" } ?? "혼자 남아 끝났어요"
+        case .lastStanding:
+            if winnerIsMe { return "혼자 남아 끝났어요" }
+            return winner.map { "\($0)님 혼자 남아 끝났어요" } ?? "혼자 남아 끝났어요"
         case .unknown, nil: return "판이 끝났어요"
         }
     }
@@ -278,7 +300,7 @@ package enum GamesRummyText {
     // MARK: - 나가기 확인
 
     package static let forfeitTitle = "판을 나갈까요?"
-    package static let forfeitDetail = "나가면 기권돼요. 판돈은 판 끝에 등수대로 정산돼요."
+    package static let forfeitDetail = "나가면 기권돼 꼴찌가 되고 판돈을 잃어요."
     package static let forfeitConfirm = "기권하고 나가기"
     package static let closeRoomTitle = "방이 닫혀요"
     package static let closeRoomDetail = "방장이 나가면 방이 닫히고 모두 로비로 돌아가요. 루비는 그대로예요."
@@ -299,13 +321,13 @@ package enum GamesRummyText {
             + "냈어야 해요. 판에 있던 타일은 랙으로 가져올 수 없어요.", []),
         ("조작", "끌면 한 장 · 0.5초 꾹 누른 채 끌면 덩어리(판에선 누른 타일에서 가까운 끝까지) · 묶음 왼쪽 손잡이로 묶음째 "
             + "옮기기 · 묶음 끝 가까이 놓으면 붙기 · 묶음 위에 놓으면 맞는 자리에 끼우기 · 묶음 가운데를 빼면 둘로 나뉘어요.", []),
-        ("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, 판 오른쪽 위 버튼으로 한눈에 봐요. "
-            + "화면 밖 묶음은 양쪽 가장자리 배지가 알려 줘요.", []),
+        ("판 보기", "빈 펠트를 끌면 판이 밀려요. 두 손가락으로 벌리면 크게 보고, 판 오른쪽 아래 버튼으로 한눈에 봐요. "
+            + "화면 밖 묶음은 가장자리 배지가 알려 줘요.", []),
         ("받침대", "타일 사이에 놓으면 끼워 넣고 오른쪽을 밀어요. 딱 붙여 놓은 맞는 묶음엔 밑줄과 점수가 떠요. "
             + "777·789로 정렬해 두면 새로 뽑은 타일도 그 정렬 자리로 들어가요.", []),
         ("시간 60초", "시간이 지나면 놓던 판이 맞으면 그대로 확정돼요. 틀렸거나 아무것도 안 놓았으면 되돌리고 1장 뽑아요. "
             + "시간 초과가 3번 이어지면 기권이에요.", []),
-        ("기권", "[나가기]를 고르거나 시간 초과가 3번 이어지면 기권이고 꼴찌예요. 남은 사람끼리 계속해요. "
+        ("기권", "뒤로 단추로 판을 나가거나 시간 초과가 3번 이어지면 기권이고 꼴찌예요. 남은 사람끼리 계속해요. "
             + "앱을 잠깐 내려도 바로 기권은 아니에요 — 90초 안에 돌아오면 이어서 해요.", []),
         ("끝과 점수", "누군가 랙을 비우면 끝나요(더미가 비고 모두 넘겨도 끝). 남은 타일 합만큼 잃고(아잉이 30점), "
             + "이긴 사람이 그만큼 얻어요.", ["D12", "J"]),

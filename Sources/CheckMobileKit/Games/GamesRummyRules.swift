@@ -9,38 +9,41 @@ struct GamesRummyRulesView: View {
     private static let tile = CGSize(width: 30, height: 41)
 
     var body: some View {
-        NavigationStack {
-            List(GamesRummyText.rules, id: \.title) { rule in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(rule.title)
-                        .font(.headline)
-                        .foregroundStyle(MobileTheme.accent)
-                    Text(rule.detail)
-                        .font(.subheadline)
-                        .foregroundStyle(MobileTheme.label2)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if !rule.example.isEmpty {
-                        HStack(spacing: 3) {
-                            ForEach(Array(rule.example.enumerated()), id: \.offset) { _, text in
-                                if let face = RummyFace(text: text) {
-                                    GamesRummyTile(face: face, size: Self.tile)
+        VStack(spacing: 0) {
+            SheetHeader(GamesRummyText.rulesTitle, onClose: { dismiss() })
+            ScrollView {
+                InsetGroup {
+                    ForEach(Array(GamesRummyText.rules.enumerated()), id: \.offset) { index, rule in
+                        GroupRow(divider: index == GamesRummyText.rules.count - 1 ? .none : .inset(MobileTheme.cardPadding)) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(rule.title)
+                                    .font(MobileTheme.rowTitle)
+                                    .foregroundStyle(MobileTheme.accent)
+                                Text(rule.detail)
+                                    .font(MobileTheme.rowSubtitle)
+                                    .foregroundStyle(MobileTheme.label2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if !rule.example.isEmpty {
+                                    HStack(spacing: 3) {
+                                        ForEach(Array(rule.example.enumerated()), id: \.offset) { _, text in
+                                            if let face = RummyFace(text: text) {
+                                                GamesRummyTile(face: face, size: Self.tile)
+                                            }
+                                        }
+                                    }
+                                    .padding(.top, 2)
+                                    .accessibilityElement(children: .combine)
                                 }
                             }
+                            Spacer(minLength: 0)
                         }
-                        .padding(.top, 2)
-                        .accessibilityElement(children: .combine)
                     }
                 }
-                .padding(.vertical, 2)
-            }
-            .navigationTitle(GamesRummyText.rulesTitle)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(GamesRummyText.close) { dismiss() }
-                }
+                .padding(.horizontal, MobileTheme.sideMargin)
+                .padding(.bottom, MobileTheme.space6)
             }
         }
+        .background(MobileTheme.background.ignoresSafeArea())
     }
 }
 #endif

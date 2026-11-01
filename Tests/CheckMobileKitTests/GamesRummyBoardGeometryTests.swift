@@ -116,23 +116,23 @@ import Testing
     @Test("보기: 가장자리 28pt 안에서만 초당 400 단위로 밀고, 끝에 닿으면 멈춘다")
     func edgePan() {
         var view = GamesRummyViewport(viewport: CGSize(width: 393, height: 469))
-        var moved = view.edgePan(pointerX: 200, deltaTime: 0.1)
+        var moved = view.edgePan(pointer: CGPoint(x: 200, y: 200), deltaTime: 0.1)
         #expect(!moved, "가운데에서 밀렸다")
         view.pan(by: CGSize(width: 10_000, height: 0))
         let home = view.origin.x
-        moved = view.edgePan(pointerX: 10, deltaTime: 0.1)
+        moved = view.edgePan(pointer: CGPoint(x: 10, y: 200), deltaTime: 0.1)
         #expect(!moved, "왼쪽 끝인데 움직였다고 한다")
         #expect(view.origin.x == home)
-        moved = view.edgePan(pointerX: 380, deltaTime: 0.1)
+        moved = view.edgePan(pointer: CGPoint(x: 380, y: 200), deltaTime: 0.1)
         #expect(moved)
         #expect(abs(view.origin.x - (home + 40)) < 0.001)
-        moved = view.edgePan(pointerX: 5, deltaTime: 0.05)
+        moved = view.edgePan(pointer: CGPoint(x: 5, y: 200), deltaTime: 0.05)
         #expect(moved)
         #expect(abs(view.origin.x - (home + 20)) < 0.001)
         // 경계값: 정확히 28 은 가장자리가 아니다.
-        moved = view.edgePan(pointerX: 28, deltaTime: 0.1)
+        moved = view.edgePan(pointer: CGPoint(x: 28, y: 200), deltaTime: 0.1)
         #expect(!moved)
-        moved = view.edgePan(pointerX: 393 - 28, deltaTime: 0.1)
+        moved = view.edgePan(pointer: CGPoint(x: 393 - 28, y: 200), deltaTime: 0.1)
         #expect(!moved)
     }
 

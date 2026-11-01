@@ -95,7 +95,8 @@ package enum GamesRummyUnavailable {
 /// 의도적 이탈(맥 `RummyExitFlow` 의 폰 짝). 판단은 코어 `RummyExitPolicy` 한 곳이고, **이 기기가 손대지 않은 판이면 아무것도 안 보낸다**(SPEC-v2 §6).
 @MainActor
 package enum GamesRummyExit {
-    /// 로그아웃 · 계정 삭제 앞(세션을 지우기 전 — 뒤면 이탈 요청이 토큰 없이 떠난다). 최대 2초(코어 상한).
+    /// 로그아웃 앞(세션을 지우기 전 — 뒤면 이탈 요청이 토큰 없이 떠난다). 최대 2초(코어 상한).
+    /// 계정 삭제 앞에는 **부르지 않는다**: 서버 `delete_my_account` 가 같은 트랜잭션에서 판을 기권 처리한다. 먼저 나가면 삭제가 실패해도 기권은 안 되돌아간다.
     package static func leaveBeforeSessionEnds(_ rummy: RummyStore) async {
         guard RummyExitPolicy.needsExitLeave(rummy) else { return }
         _ = await rummy.leaveForExit(reason: .signOut)
@@ -111,12 +112,22 @@ package enum GamesRummyExit {
     package static func confirm(asked: RummyCloseDecision, rummy: RummyStore) async -> Bool {
         guard decision(rummy) == asked else { return false }
         _ = await rummy.leaveForExit(reason: .windowClosed)
+        await settleAfterLeaving(rummy)
         return true
     }
 
     /// 묻지 않는 나가기(손님이 방에서). 그새 시작된 판이면 코어가 나가지 않고 그 판을 든다(`leaveRoomForExit`).
     package static func leaveRoom(_ rummy: RummyStore) async {
         _ = await rummy.leaveRoomForExit(reason: .windowClosed)
+        await settleAfterLeaving(rummy)
+    }
+
+    /// 나간 뒤 같은 화면이 로비로 남는다(맥은 창이 닫혀 안 드러난다). 코어 `leave()`·`dismissResult()` 처럼 안내줄을 지우고 로비를 다시 읽는다 —
+    /// 안 읽으면 낡은 `activeMatchId` 로 게임 탭 카드가 최대 30초 '판 진행 중'이고, 닫힌 방이 공개 목록에 남는다. 시작된 판을 들고 남았으면(`leaveRoomForExit`) 아무것도 안 한다.
+    private static func settleAfterLeaving(_ rummy: RummyStore) async {
+        guard rummy.match == nil else { return }
+        rummy.setNotice(nil)
+        await rummy.refreshLobby()
     }
 
     /// 확인 시트 글자(제목 · 설명 · 버튼).

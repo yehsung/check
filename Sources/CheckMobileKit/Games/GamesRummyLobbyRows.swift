@@ -241,7 +241,8 @@ struct GamesRummyPeopleSection: View {
     private var lists: some View {
         let people = people
         if !people.ready.isEmpty {
-            SectionHeader(GamesRummyText.readyHeader, trailing: .text(GamesRummyText.people(people.ready.count)), padded: true)
+            SectionHeader(room == nil ? GamesRummyText.readyHeader : GamesRummyText.peopleHeader,
+                          trailing: .text(GamesRummyText.people(people.ready.count)), padded: true)
             InsetGroup { rows(people.ready, dimmed: false) }
         }
         if !people.busy.isEmpty {

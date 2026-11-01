@@ -24,14 +24,9 @@ struct GamesRummyMatchHeader: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            Button(action: onExit) {
-                Image(systemName: "chevron.left")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(GamesRummyText.leave)
-            .accessibilityHint(GamesRummyText.leaveHint)
+            // 판 안 줄이라 시스템 뒤로를 못 쓴다 — 로비·방·결과 · 체스·테트리스와 같은 유리 원형으로 맞춘다.
+            GlassCircleButton(systemImage: "chevron.left", accessibilityLabel: GamesRummyText.leave, action: onExit)
+                .accessibilityHint(GamesRummyText.leaveHint)
             HStack(spacing: 5) {
                 RubyIcon(size: 17, scalesWithText: false)
                 Text(GamesRummyText.potLine(stake: match.stake, seats: match.seatCount))
@@ -52,21 +47,9 @@ struct GamesRummyMatchHeader: View {
             }
             .accessibilityElement(children: .combine)
             if let onReaction {
-                Button(action: onReaction) {
-                    Image(systemName: "face.smiling")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel(GamesRummyText.react)
+                GlassCircleButton(systemImage: GamesRummyText.reactionSymbol, accessibilityLabel: GamesRummyText.react, action: onReaction)
             }
-            Button(action: onRules) {
-                Image(systemName: "questionmark.circle")
-                    .font(.body.weight(.semibold))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Rectangle())
-            }
-            .accessibilityLabel(GamesRummyText.rulesButton)
+            GlassCircleButton(systemImage: "book", accessibilityLabel: GamesRummyText.rulesButton, action: onRules)
         }
         .foregroundStyle(MobileTheme.label)
         .buttonStyle(.plain)
@@ -253,6 +236,14 @@ struct GamesRummyStatusRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.65)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if let warning = line.warning {
+                Text(warning)
+                    .font(.system(size: 10.5, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize()
+                    .foregroundStyle(MobileTheme.danger)
+            }
             if let plan {
                 let reached = plan.table + plan.rack >= 30
                 Text(GamesRummyText.plan(table: plan.table, rack: plan.rack))
@@ -480,6 +471,8 @@ struct GamesRummyElsewhereCard: View {
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(MobileTheme.separator, lineWidth: 0.8))
         .padding(.horizontal, 10)
         .allowsHitTesting(false)
+        // 같은 층의 다른 줄과 같은 상한 — 없으면 큰 글자에서 카드가 판을 다 가린다.
+        .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityElement(children: .combine)
     }
 }

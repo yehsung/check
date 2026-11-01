@@ -26,6 +26,10 @@ package enum GamesRummyResultPlan {
         rows(match).first { $0.isWinner == true }?.displayName
     }
 
+    package static func winnerIsMe(_ match: RummyMatchState) -> Bool {
+        rows(match).first { $0.isWinner == true }.map { $0.seatNo != nil && $0.seatNo == match.mySeatNo } ?? false
+    }
+
     /// 루비 순수익 = 받은 몫 − 판돈.
     package static func net(_ seat: RummyMatchSeat, stake: Int?) -> Int {
         (seat.payout ?? 0) - (stake ?? 0)
@@ -96,7 +100,8 @@ struct GamesRummyResultView: View {
         let title = Text(mine.map { GamesRummyText.myResult(rank: $0.finalRank, forfeited: $0.state == .forfeit) } ?? GamesRummyText.resultTitle)
             .font(MobileTheme.title(.title3))
             .foregroundStyle(MobileTheme.label)
-        let reason = Text(GamesRummyText.endReason(match.endReason, winner: GamesRummyResultPlan.winnerName(match)))
+        let reason = Text(GamesRummyText.endReason(match.endReason, winner: GamesRummyResultPlan.winnerName(match),
+                                                   winnerIsMe: GamesRummyResultPlan.winnerIsMe(match)))
             .font(.footnote)
             .foregroundStyle(MobileTheme.label2)
             .fixedSize(horizontal: false, vertical: true)
@@ -139,7 +144,7 @@ struct GamesRummyResultView: View {
     private var reactionButton: some View {
         if let onReaction {
             Button(action: onReaction) {
-                Image(systemName: "face.smiling")
+                Image(systemName: GamesRummyText.reactionSymbol)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(MobileTheme.label)
                     .frame(minWidth: 44, minHeight: 44)
@@ -337,7 +342,10 @@ private struct GamesRummyFinalBoard: View {
     let match: RummyMatchState
 
     @State private var model = GamesRummyMatchModel()
-    @State private var lastPan: CGSize = .zero
+    /// 앞 사건의 끈 거리. `@GestureState` 라 제스처가 **취소돼도** 비워진다 — `@State` 는 `onEnded` 가 안 오면(시트 · 앱 내림) 낡은 값이 남아 다음 밀기 첫 사건에 판이 반대로 튀었다.
+    @GestureState private var lastPan: CGSize = .zero
+    /// 핀치 수명 표시. 취소된 `MagnifyGesture` 는 `onEnded` 를 안 부른다 — 꺼지면 모델의 핀치를 닫는다(안 닫으면 다음 핀치가 끝날 때까지 밀기가 죽는다).
+    @GestureState private var pinching = false
 
     var body: some View {
         let scene = GamesRummyBoardScene.make(match: match, editor: nil, isMyTurn: false, otherDraft: nil)
@@ -355,6 +363,7 @@ private struct GamesRummyFinalBoard: View {
                     .gesture(pan)
                     .simultaneousGesture(
                         MagnifyGesture()
+                            .updating($pinching) { _, state, _ in state = true }
                             .onChanged { value in
                                 model.pinch(magnification: value.magnification,
                                             tableAnchor: CGPoint(x: value.startAnchor.x * size.width, y: value.startAnchor.y * size.height))
@@ -367,17 +376,17 @@ private struct GamesRummyFinalBoard: View {
             .frame(width: size.width, height: size.height)
             .onAppear { model.tableSizeChanged(size) }
             .onChange(of: size) { _, new in model.tableSizeChanged(new) }
+            .onChange(of: pinching) { _, now in if !now { model.pinchEnded(touching: false) } }
         }
     }
 
     private var pan: some Gesture {
         DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                model.readOnlyPan(by: CGSize(width: value.translation.width - lastPan.width,
-                                             height: value.translation.height - lastPan.height))
-                lastPan = value.translation
+            .updating($lastPan) { value, last, _ in
+                model.readOnlyPan(by: CGSize(width: value.translation.width - last.width,
+                                             height: value.translation.height - last.height))
+                last = value.translation
             }
-            .onEnded { _ in lastPan = .zero }
     }
 }
 #endif

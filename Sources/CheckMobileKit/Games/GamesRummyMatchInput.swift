@@ -127,9 +127,11 @@ package struct GamesRummyTouchContext: Equatable, Sendable {
     package var isMyTurn: Bool
     /// 판 타일을 만질 수 있다(내 차례 · 요청 비행 중 아님).
     package var editable: Bool
+    /// 이 값을 만든 차례. 손을 쥔 사이 차례가 바뀌었는지 가른다(`GamesRummyMatchModel.boardChanged`).
+    package var turnKey: RummyEditorKey?
 
     package init(layout: GamesRummyMatchLayout, viewport: GamesRummyViewport? = nil, scene: GamesRummyBoardScene,
-                 editor: RummyTurnEditor?, isMyTurn: Bool, editable: Bool) {
+                 editor: RummyTurnEditor?, isMyTurn: Bool, editable: Bool, turnKey: RummyEditorKey? = nil) {
         self.layout = layout
         rack = GamesRummyRackGeometry(size: layout.rack.size, rowCount: layout.rackRows)
         self.viewport = viewport ?? GamesRummyViewport(viewport: layout.table.size)
@@ -137,6 +139,7 @@ package struct GamesRummyTouchContext: Equatable, Sendable {
         self.editor = editor
         self.isMyTurn = isMyTurn
         self.editable = editable
+        self.turnKey = turnKey
     }
 
     package var rackLayout: RummyRackLayout { editor?.rackLayout ?? RummyRackLayout(halfColumns: GamesRummyRackGeometry.halfColumns) }
@@ -278,6 +281,35 @@ package struct GamesRummyTouchMachine: Equatable, Sendable {
 
     package mutating func cancel() {
         phase = .idle
+    }
+
+    /// 쥔 것이 이 편집기에 그대로 있는가(같은 차례 안에서 판이 바뀌었을 때 묻는다). `was` = 쥘 때의 편집기 — 손잡이는 묶음 번호만 들고 있어 그 번호의 내용을 견준다.
+    package func holdSurvives(in editor: RummyTurnEditor?, was old: RummyTurnEditor?) -> Bool {
+        guard let editor else { return false }
+        let alive: (Int) -> Bool = { id in
+            editor.rack.contains { $0.id == id } || editor.melds.contains { $0.contains { $0.id == id } }
+        }
+        func sameMeld(_ index: Int, _ ids: [Int]?) -> Bool {
+            guard let ids, editor.melds.indices.contains(index) else { return false }
+            return editor.melds[index].map(\.id) == ids
+        }
+        switch phase {
+        case .idle, .panning, .ignoring:
+            return true
+        case .pressing(let id, _, _, let picked):
+            return (picked ?? [id]).allSatisfy(alive)
+        case .handle(let set, _):
+            return sameMeld(set, old.flatMap { $0.melds.indices.contains(set) ? $0.melds[set].map(\.id) : nil })
+        case .dragging(let drag):
+            if case .set(let index) = drag.kind { return sameMeld(index, drag.ids) }
+            return drag.ids.allSatisfy(alive)
+        }
+    }
+
+    /// 손에 든 것을 거둔다 — **손은 아직 닿아 있다**. 쉬는 상태로 두면 다음 `onChanged` 가 처음 누른 자리(`startLocation`)를 새 판에서 다시 분류해 도약이나 엉뚱한 타일 집기가 난다.
+    /// 손을 뗄 때까지 무시한다(`up` · 수명 표시가 쉬는 상태로 되돌린다).
+    package mutating func abandon() {
+        phase = .ignoring
     }
 
     /// 핀치가 시작됐다. 끌던 타일이 있으면 핀치를 안 받는다(거짓). 아니면 누르기·밀기를 거두고 손을 뗄 때까지 무시한다 — 핀치 중 한 손가락 끌기 금지.
@@ -474,14 +506,25 @@ package struct GamesRummyStatusLine: Equatable, Sendable {
 
     package let text: String
     package let tone: Tone
+    /// 내 시간 초과 연속 횟수(내 자리가 playing 일 때만). 상태 글자와 따로 위험 색으로 늘 보인다 — 다음 초과면 기권인데 글자 서열에 밀려 안 보이면 안 된다.
+    package var warning: String? = nil
 
+    /// `engaged` = 이 기기가 손댄 판(앱을 내리면 기권될 수 있는 기기). 남의 차례 줄은 판 아래 띠가 이미 '누구 차례'를 말하므로, 이 기기엔 90초 규칙을 말한다(체스·테트리스 판의 상시 안내와 같은 자리).
     package static func make(notice: String?, isMyTurn: Bool, editor: RummyTurnEditor?, turnName: String?,
-                             mySeatState: RummySeatState?) -> GamesRummyStatusLine {
+                             mySeatState: RummySeatState?, myTimeoutStreak: Int? = nil, engaged: Bool = false) -> GamesRummyStatusLine {
+        var line = base(notice: notice, isMyTurn: isMyTurn, editor: editor, turnName: turnName, mySeatState: mySeatState, engaged: engaged)
+        if mySeatState == .playing, let streak = myTimeoutStreak, streak > 0 { line.warning = GamesRummyText.timeouts(streak) }
+        return line
+    }
+
+    private static func base(notice: String?, isMyTurn: Bool, editor: RummyTurnEditor?, turnName: String?,
+                             mySeatState: RummySeatState?, engaged: Bool) -> GamesRummyStatusLine {
         if let notice { return GamesRummyStatusLine(text: notice, tone: .notice) }
         if isMyTurn, let editor {
             return GamesRummyStatusLine(text: GamesRummyText.myTurnStatus(editor), tone: editor.canSubmit ? .ready : .plain)
         }
         if mySeatState == .forfeit { return GamesRummyStatusLine(text: GamesRummyText.spectating, tone: .quiet) }
+        if engaged, mySeatState == .playing { return GamesRummyStatusLine(text: GamesRummyText.backgroundWarning, tone: .quiet) }
         if let turnName { return GamesRummyStatusLine(text: GamesRummyText.turnOf(turnName), tone: .quiet) }
         return GamesRummyStatusLine(text: "", tone: .quiet)
     }

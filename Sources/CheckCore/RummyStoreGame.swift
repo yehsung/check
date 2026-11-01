@@ -277,10 +277,8 @@ extension RummyStore {
     package func moveTiles(_ tileIDs: [Int], to target: RummyDropTarget) {
         guard var working = editor else { return }
         let myTurn = isMyTurn
-        if !myTurn {
-            guard Self.isRackTarget(target),
-                  tileIDs.allSatisfy({ id in working.rack.contains { $0.id == id } }) else { return }
-        }
+        let rackOnly = Self.isRackTarget(target) && tileIDs.allSatisfy { id in working.rack.contains { $0.id == id } }
+        if !myTurn, !rackOnly { return }
         guard working.moveBlock(tileIDs, to: target) else { return }
         if editor != working { editor = working }
         // 받침대를 손으로 정리했다 — 정렬이 풀린다(판으로 내는 것은 정렬을 안 깬다: 못 내면 그 자리로 돌아온다).
@@ -288,6 +286,8 @@ extension RummyStore {
         saveRack()
         guard myTurn else { return }
         setNotice(nil)
+        // 놀던 기기의 받침대 안 정리는 서버 판과 무관하다. 보내면 다른 기기가 만들던 작업 판을 이 기기의 시작 판으로 덮고(시간 초과 판정이 그 판으로 간다), 이 기기가 engaged 가 된다.
+        if rackOnly, let current = match, !isEngaged(current.id) { return }
         scheduleDraft()
     }
 

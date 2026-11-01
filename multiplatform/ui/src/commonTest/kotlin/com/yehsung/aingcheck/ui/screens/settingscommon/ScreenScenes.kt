@@ -230,6 +230,7 @@ object ScreenScenes {
             // 없는 칸(5시간 없음 · 해치) vs 0% 칸(음성 기준선 — 같은 줄에 값 0 만 다르다). 트랙·해치·글자가 달라야 한다.
             "absent" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0).drop(2)
             "absent-zero" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0).drop(2).map { it.copy(fiveHourPercent = 0.0) }
+            "absent-filled" -> rows("mac-a-1111", "예성의 MacBook Pro", 120.0).drop(2).map { it.copy(fiveHourPercent = 95.0) }
             "twin-names" -> rows("twin-aaaa-a1b2", "Mac mini", 120.0).take(2) + rows("twin-bbbb-c3d4", "Mac mini", 600.0, 91.0, 44.0).take(1) +
                 rows("nameless-9f8e", null, 900.0, 12.0, 5.0).take(1)
             "twin-long-names" -> {

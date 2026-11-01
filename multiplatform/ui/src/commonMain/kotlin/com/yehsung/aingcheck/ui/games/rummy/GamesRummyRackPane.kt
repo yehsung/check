@@ -124,10 +124,10 @@ internal fun GamesRummyRackPane(
                 }
             }
         }
-        for (tile in tiles) {
-            val slot = shown.slot(tile.id) ?: continue
-            // 미리보기 동안 끌려 나간 타일은 놓일 자리에 점선이 대신 선다.
-            if (preview != null && tile.id in dragging) continue
+        // 고르기는 고리 밖에서 한다 — 고리 안 continue 는 컴파일러가 바퀴마다 자리 그룹을 씌워, 순서가 바뀌면(정렬) key 가 있어도 상태가 끊겨 타일이 순간 이동한다.
+        // 미리보기 동안 끌려 나간 타일은 놓일 자리에 점선이 대신 선다.
+        val seated = tiles.filter { tile -> preview == null || tile.id !in dragging }.mapNotNull { tile -> shown.slot(tile.id)?.let { tile to it } }
+        for ((tile, slot) in seated) {
             key(keys[tile.id] ?: tile.id.toString()) {
                 val frame = draw.frame(slot)
                 val metrics = RummyTileSize(RummyCanvasSize(frame.width, frame.height))

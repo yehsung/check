@@ -113,7 +113,8 @@ internal class GamesRummyTilePainter(
     private val bevel = (metrics.bevel * density.density).toFloat()
     private val bodyHeight = (height - bevel).coerceAtLeast(1f)
     private val corner = CornerRadius((metrics.corner * density.density).toFloat())
-    private val hairline = 0.8f * density.density
+    private val pxPerDp = density.density
+    private val hairline = 0.8f * pxPerDp
     private val bodyBrush = Brush.verticalGradient(listOf(rummyColor(RummyTilePalette.bodyTop), rummyColor(RummyTilePalette.bodyBottom)), endY = bodyHeight)
     private val numbers = HashMap<Long, TextLayoutResult>()
 
@@ -137,8 +138,8 @@ internal class GamesRummyTilePainter(
             val color = face.color
             val value = face.number
             if (color != null && value != null) paintNumber(this, value, color, alpha) else paintJoker(this, joker, alpha)
-            if (highlighted) ring(this, rummyColor(RummyTilePalette.highlight), maxOf(1.5f * density.density, width * 0.06f), alpha)
-            if (lifted != null) ring(this, lifted, 2f * density.density, alpha)
+            if (highlighted) ring(this, rummyColor(RummyTilePalette.highlight), maxOf(1.5f * pxPerDp, width * 0.06f), alpha)
+            if (lifted != null) ring(this, lifted, 2f * pxPerDp, alpha)
         }
     }
 

@@ -109,7 +109,7 @@ class GamesRummyMotionTest {
         assertNull(GamesRummyRackMotion.flight(event, null, reduceMotion = true), "동작 줄이기에 난다")
         assertNull(GamesRummyRackMotion.flight(null, null, reduceMotion = false))
         assertEquals(1f, GamesRummyRackMotion.flightScale(1f))
-        assertEquals(0f, GamesRummyRackMotion.flightDegrees(1f), "내려앉았는데 기울어 있다")
+        assertEquals(0f, GamesRummyRackMotion.flightDegrees(1f), 0.0001f, "내려앉았는데 기울어 있다") // 시작 각이 음수라 -0.0 이 나온다(같은 0도).
         assertTrue(GamesRummyRackMotion.flightScale(0f) < 1f && GamesRummyRackMotion.flightDegrees(0f) != 0f)
     }
 

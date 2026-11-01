@@ -49,16 +49,6 @@ private const val PEER = "7e7e0000-0000-4000-8000-0000000000b2"
 private const val NOW_SECONDS = 1_800_000_000.0
 private const val NOW_MS = 1_800_000_000_000L
 
-private class UiRummyHost(private val store: SessionStore, override val appConfig: AppConfig, private val clockNow: () -> SwiftDate) : GomokuStoreHost {
-    override val session: SupabaseSession? get() = store.session
-    override val sessionGeneration: Int get() = store.sessionGeneration
-    override val service: SupabaseWorkService get() = store.service
-    override val realtimeState: RealtimeState = RealtimeState.Idle(IdleReason.disabled)
-    override var rubyBalance: Long? = null
-    override fun now(): SwiftDate = clockNow()
-    override suspend fun <T> withSessionRetry(operation: suspend (SupabaseSession) -> T): T = store.withSessionRetry(operation)
-}
-
 @OptIn(ExperimentalTestApi::class)
 class GamesRummyReactionsTest {
     private class Rig(val scope: TestScope, val h: UiGamesHarness, val rummy: RummyStore) {

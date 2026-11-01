@@ -21,6 +21,7 @@ import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -199,8 +200,9 @@ class PhoneRummyWiringTest {
         h.markRequests()
         h.app.sceneDidBecomeActive()
         h.app.games.hubDidAppear()
+        // active 동안은 할 일 주기 동기화가 돌아 가상 시간이 끝나지 않는다 — 조금만 민다.
+        advanceTimeBy(1_000)
         runCurrent()
-        advanceUntilIdle()
         assertEquals(0, h.rpcNames().count { it.startsWith("rummy_") })
     }
 }

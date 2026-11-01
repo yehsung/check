@@ -108,12 +108,21 @@ class ScreenSnapshotAndroidTest {
         maxBaselineRatio = 2,
     )
 
-    /** 그 창이 없는 칸(더 조용한 트랙 · 45° 해치 · 읽히는 `없음` · 캡션 둘째 문장 — 4137751e). 기준선 = 같은 줄의 5시간 0%(값이 있는 칸은 해치를 안 받는다). */
-    private fun aiLimitsAbsent(dark: Boolean) = check(
-        "screens/me", "me-ailimits-absent-${theme(dark)}", AI_ABSENT_H,
-        scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent", it) },
-        scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent-zero", it) },
-    )
+    /**
+     * 그 창이 없는 칸(더 조용한 트랙 · 45° 해치 · 읽히는 `없음` · 캡션 둘째 문장 — 4137751e). 기준선 = 같은 줄의 5시간 95%(굵은 대조도 잡는 차이).
+     * 5시간 0% 와의 차이(값이 있는 칸은 해치를 안 받는다)는 해치 한 칸뿐이라 굵은 대조의 문턱 아래다 — 그래서 픽셀 대조로 따로 잰다.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    private fun aiLimitsAbsent(dark: Boolean) {
+        val absent = scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent", it) }
+        check(
+            "screens/me", "me-ailimits-absent-${theme(dark)}", AI_ABSENT_H,
+            absent,
+            scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent-filled", it) },
+        )
+        val zero = SnapshotCompare.diff(render(absent), render(scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent-zero", it) }))
+        assertFalse("없는 칸이 값 0% 칸과 같은 픽셀이다 — 해치가 안 그려진다", zero.identical)
+    }
 
     @Test fun aiLimitsAbsentLight() = aiLimitsAbsent(false)
     @Test fun aiLimitsAbsentDark() = aiLimitsAbsent(true)

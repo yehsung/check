@@ -11,7 +11,8 @@ import com.yehsung.aingcheck.feature.phone.Reply
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -45,8 +46,14 @@ class PhoneRummyRankingWiringTest {
         h.app.rummy.heartbeatEnabled = false
         h.app.rummy.pollStepSeconds = Double.POSITIVE_INFINITY
         h.app.sceneDidBecomeActive()
-        advanceUntilIdle()
+        settle()
         return h
+    }
+
+    /** active 동안은 할 일 주기 동기화가 돌아 가상 시간이 끝나지 않는다(advanceUntilIdle 금지) — 순위 주기(60초)보다 훨씬 짧게 조금만 민다. */
+    private fun TestScope.settle() {
+        advanceTimeBy(1_000)
+        runCurrent()
     }
 
     /** 조립 그대로: 큐브 화면이 뜨면 순위를 한 번 읽는다. 이 줄이 빨강이면 PhoneAppModel 의 `rummy.rankingEnabled = true` 가 빠졌다. */
@@ -55,7 +62,7 @@ class PhoneRummyRankingWiringTest {
         val h = rig()
         h.markRequests()
         h.app.games.rummyScreenDidAppear()
-        advanceUntilIdle()
+        settle()
         assertEquals(1, h.count("rummy_ranking"), "순위 스위치가 꺼져 있다 — 순위 탭이 영영 빈다")
         assertEquals(1, assertNotNull(h.app.rummy.ranking).rows?.size)
         h.app.games.rummyScreenDidDisappear()
@@ -67,7 +74,7 @@ class PhoneRummyRankingWiringTest {
         val h = rig()
         h.markRequests()
         h.app.rummy.refreshRanking()
-        advanceUntilIdle()
+        settle()
         assertEquals(1, h.count("rummy_ranking"))
     }
 
@@ -79,7 +86,7 @@ class PhoneRummyRankingWiringTest {
         h.markRequests()
         h.app.games.rummyScreenDidAppear()
         h.app.rummy.refreshRanking()
-        advanceUntilIdle()
+        settle()
         assertEquals(0, h.count("rummy_ranking"))
         assertNull(h.app.rummy.ranking)
         h.app.games.rummyScreenDidDisappear()

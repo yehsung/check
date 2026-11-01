@@ -85,7 +85,7 @@ private fun formingJson(mySeat: Int = 0, host: String = USER, seats: List<String
 private fun decodeState(text: String): RummyMatchState = SwiftJson.decode(RummyMatchState.serializer(), text)
 
 /** 코어 StoresTestKit `TestRummyHost` 와 같은 꼴(시험 소스셋은 모듈 사이에서 나눌 수 없다). */
-private class UiRummyHost(private val store: SessionStore, override val appConfig: AppConfig, private val clockNow: () -> SwiftDate) : GomokuStoreHost {
+internal class UiRummyHost(private val store: SessionStore, override val appConfig: AppConfig, private val clockNow: () -> SwiftDate) : GomokuStoreHost {
     override val session: SupabaseSession? get() = store.session
     override val sessionGeneration: Int get() = store.sessionGeneration
     override val service: SupabaseWorkService get() = store.service

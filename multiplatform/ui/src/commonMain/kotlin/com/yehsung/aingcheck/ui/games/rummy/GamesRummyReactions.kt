@@ -239,9 +239,9 @@ internal fun GamesRummyReactionOverlay(
             layerWidth = coordinates.size.width
         },
     ) {
-        for (event in visible) {
-            val rect = anchors.rects[event.seatNo] ?: continue
-            if (rect.isEmpty) continue
+        // 고리 안에 continue 를 두지 않는다 — 바퀴마다 자리 그룹이 씌워져 key 가 뜻을 잃는다(GamesRummyRackPane).
+        for (event in visible.filter { anchors.rects[it.seatNo]?.isEmpty == false }) {
+            val rect = anchors.rects.getValue(event.seatNo)
             val local = RummyCanvasRect(
                 ((rect.left - origin.x) / density).toDouble(),
                 ((rect.top - origin.y) / density).toDouble(),
@@ -287,8 +287,9 @@ private fun GamesRummyReactionBubble(
                 // 튀어나오는 기준점 = 꼬리 끝(자리 쪽).
                 transformOrigin = TransformOrigin(0.5f, if (above) 1f else 0f)
             }
-            .clearAndSetSemantics { contentDescription = description }
-            .testTag(GamesRummyReactionTags.bubble(event.seatNo)),
+            // 꼬리표가 먼저다 — clearAndSetSemantics 뒤에 달면 그 안쪽으로 치여 지워진다.
+            .testTag(GamesRummyReactionTags.bubble(event.seatNo))
+            .clearAndSetSemantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.fillMaxSize()) {

@@ -3,6 +3,7 @@
 //       Sources/check/RummyTileView.swift:16,50 (RummyTilePalette · RummyTileSize) @ 1a5eeca6
 package com.yehsung.aingcheck.core.rules.rummy
 
+import com.yehsung.aingcheck.core.rules.format.roundedHalfAwayFromZero
 import com.yehsung.aingcheck.core.wire.games.RummyFace
 
 // 아잉 큐브 판 화면의 순수 값 — 맥 화면 파일(SwiftUI)에 있던 표들. 그리기 값과 판정만 옮겼고 플랫폼 타입(Color · NSImage · CGRect)은 값 타입으로 바꿨다.
@@ -277,7 +278,7 @@ object RummyArtRules {
     /** 3-슬라이스 끝캡 폭(px). 그림이 너무 좁아 못 나누면 null. */
     fun rackCapPixels(width: Int, height: Int): Int? {
         if (height <= 0) return null
-        val cap = kotlin.math.round(RummyRackArtMetrics.capFraction * width).toInt()
+        val cap = roundedHalfAwayFromZero(RummyRackArtMetrics.capFraction * width).toInt()
         return if (width > cap * 2 + 2) cap else null
     }
 }

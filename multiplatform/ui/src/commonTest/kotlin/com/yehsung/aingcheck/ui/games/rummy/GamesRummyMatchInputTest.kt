@@ -166,10 +166,13 @@ class GamesRummyMatchInputTest {
         assertTrue(fx.apply(action, editor))
         assertEquals(listOf("C1", "C2", "C3"), editor.melds.last().map { it.face.text })
 
+        // 위에서 C1~C3 을 판에 냈다 — 받침대가 그대로인 새 판에서 잰다(옛 자리엔 이제 타일이 없어 손이 무시되고, 그러면 아래 단언은 늘 참이다).
+        val freshContext = fx.context(fx.editor())
+        val freshStart = fx.rackPoint("C2", freshContext)
         val moved = GamesRummyTouchMachine()
-        moved.down(start, context)
-        moved.move(RummyCanvasPoint(start.x + 20, start.y), context)
-        assertNull(moved.holdElapsed(context), "이미 한 장을 끌기 시작했는데 묶음이 된다")
+        moved.down(freshStart, freshContext)
+        moved.move(RummyCanvasPoint(freshStart.x + 20, freshStart.y), freshContext)
+        assertNull(moved.holdElapsed(freshContext), "이미 한 장을 끌기 시작했는데 묶음이 된다")
         assertEquals(1, moved.drag?.ids?.size)
     }
 

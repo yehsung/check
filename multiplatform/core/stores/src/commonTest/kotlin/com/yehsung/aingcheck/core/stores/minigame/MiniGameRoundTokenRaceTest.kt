@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.stores.games.StoreHarness
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -354,6 +355,54 @@ class MiniGameRoundTokenRaceTest {
         hub.keepRoundTokenFresh(MiniGameKind.timingBar)
         advanceUntilIdle()
         assertEquals(3, h.server.count("minigame_start_round"), "갈아 끼우지 않는 게임(타이밍 바)의 감시는 아무 일도 안 한다")
+    }
+
+    /**
+     * 28분을 넘긴 길건너 판(부르는 자리 — 감시 [GamesMiniGameHub.runRoundTokenKeeper]): 감시가 30초마다 깨어 20분 지난 토큰을 갈아 끼우므로, 판 끝에 든 토큰은 서버 TTL 30분 안이다.
+     * 기준선: 감시가 없으면 토큰은 그대로 t1 이다(나이 29분).
+     */
+    @Test
+    fun aLongCrossyRoundHoldsAFreshTokenThanksToTheKeeper() = runTest {
+        suspend fun play(keeper: Boolean): String? {
+            val (h, hub) = open()
+            hub.visibleKinds = MiniGameExposure.desktopVisible
+            hub.openScreen(MiniGameKind.crossy)
+            advanceUntilIdle()
+            val c = hub.controller!!
+            c.tap()
+            advanceUntilIdle()
+            val job = if (keeper) h.storeScope.launch { hub.runRoundTokenKeeper(c) } else null
+            advanceTimeBy(29 * 60_000L)
+            runCurrent()
+            job?.cancel()
+            advanceUntilIdle()
+            return hub.roundToken
+        }
+        assertEquals("t2", play(keeper = true), "29분 판의 토큰을 갈아 끼우지 않았다")
+        assertEquals("t1", play(keeper = false), "기준선: 감시가 없으면 29분 묵은 토큰이다")
+    }
+
+    /** 감시는 자기 구동기가 끝나면 돌아온다 · 갈아 끼우지 않는 게임이면 곧장 돌아온다(잠도 안 잔다). */
+    @Test
+    fun theKeeperStopsWithItsRoundAndSkipsOtherGames() = runTest {
+        val (h, hub) = open()
+        hub.visibleKinds = MiniGameExposure.desktopVisible
+        val sleeps = mutableListOf<Double>()
+        hub.sleep = { sleeps += it }
+        hub.openScreen(MiniGameKind.flappy)
+        advanceUntilIdle()
+        hub.runRoundTokenKeeper(hub.controller!!)
+        assertEquals(emptyList(), sleeps, "플래피에 감시가 돈다")
+        hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        val c = hub.controller!!
+        c.tap()
+        c.endRound()
+        advanceUntilIdle()
+        val before = h.server.count("minigame_start_round")
+        hub.runRoundTokenKeeper(c) // 끝난 판 — 한 번 자고 돌아온다(새 토큰 0)
+        assertEquals(listOf(GamesMiniGameHub.tokenKeeperIntervalSeconds), sleeps)
+        assertEquals(before, h.server.count("minigame_start_round"))
     }
 
     /** Android(G §2-3 W2-e ④): 이 빌드에 보이지 않는 게임(길건너)은 화면을 열지 않는다 — 구동기 0 · 요청 0. */

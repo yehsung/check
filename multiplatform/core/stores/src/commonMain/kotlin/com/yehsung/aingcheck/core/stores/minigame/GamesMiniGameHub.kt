@@ -93,6 +93,9 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
          */
         val tokenRefreshSeconds: Double = MiniGameKind.flappy.roundTokenReuseSeconds
 
+        /** 판 도중 토큰 감시 간격(초 — 맥 `MiniGamePanel.tokenKeeperInterval`). [runRoundTokenKeeper] 가 이만큼 자고 한 번 본다. */
+        const val tokenKeeperIntervalSeconds: Double = 30.0
+
         /** 첫 화면 카드(오늘 최고·순위)를 다시 읽는 간격(초). */
         const val summaryThrottleSeconds: Double = 60.0
 
@@ -466,6 +469,21 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         if (roundToken != null && roundTokenKind == kind && issued != null && now.timeIntervalSince(issued) < limit) return
         log("round token refreshed mid-run game=${kind.rawValue}")
         requestRoundToken(kind)
+    }
+
+    /**
+     * 판 도중 토큰 감시(맥 `MiniGamePanel.armTokenKeeper` · MiniGamePanel.swift:1199). 화면이 판이 도는 동안 띄우고, 판이 끝나거나 화면이 사라지면 거둔다.
+     * [tokenKeeperIntervalSeconds] 마다 [keepRoundTokenFresh] 를 부른다. 갈아 끼우지 않는 게임이면 곧장 돌아온다. 정지 중에도 돈다 — 멈춰 둔 동안에도 서버 TTL 은 흐른다.
+     * 이 감시가 없으면 28분을 넘긴 길건너 판은 `token_expired` 로 점수를 잃는다.
+     */
+    suspend fun runRoundTokenKeeper(running: GamesPlayController) {
+        val kind = running.kind
+        if (kind.roundTokenMidRunRefreshSeconds == null) return
+        while (true) {
+            sleep(tokenKeeperIntervalSeconds)
+            if (controller !== running || !running.isPlaying) return
+            keepRoundTokenFresh(kind)
+        }
     }
 
     private fun requestRoundToken(kind: MiniGameKind) {

@@ -235,6 +235,8 @@ private fun MiniGamePlaySurface(
     var pause by remember(controller) { mutableStateOf<MiniGamePauseState>(MiniGamePauseState.None) }
     var pausedSeconds by remember(controller) { mutableStateOf(0) }
     val playing = controller.isPlaying
+    // 판 도중 토큰 감시 — 판이 도는 동안만 띄우고, 끝나거나 화면이 사라지면 거둔다(갈아 끼우지 않는 게임이면 곧장 돌아온다).
+    LaunchedEffect(controller, playing) { if (playing) store.miniGames.runRoundTokenKeeper(controller) }
     // 새 판(또는 판이 끝남)에서 누적을 비운다 — 누적은 **판마다** 잰다.
     LaunchedEffect(controller, playing) { if (!playing) { pausedSeconds = 0; pause = MiniGamePauseState.None } }
     LaunchedEffect(windowFocused) {

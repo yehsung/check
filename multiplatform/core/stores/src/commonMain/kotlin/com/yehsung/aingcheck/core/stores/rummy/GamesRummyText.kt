@@ -4,7 +4,6 @@ package com.yehsung.aingcheck.core.stores.rummy
 
 import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
 import com.yehsung.aingcheck.core.rules.rummy.RummyTurnEditor
-import com.yehsung.aingcheck.core.rules.rummy.initialPlanPoints
 import com.yehsung.aingcheck.core.wire.games.RummyEndReason
 import com.yehsung.aingcheck.core.wire.games.RummyLastEvent
 import com.yehsung.aingcheck.core.wire.games.RummyTurnReason
@@ -22,8 +21,6 @@ object RummyPhoneText {
     // MARK: - 공용
 
     const val title: String = "아잉 큐브"
-    const val subtitle: String = "2~4명이 숫자 타일로 묶음을 만들어 랙을 먼저 비우는 게임"
-    const val close: String = "닫기"
     const val leave: String = "나가기"
     const val forfeit: String = "기권"
     const val updateRequired: String = RummyNoticeText.updateRequired
@@ -53,8 +50,6 @@ object RummyPhoneText {
 
     const val usersTab: String = "사람"
     const val rankTab: String = "순위"
-    const val publicRoomsTitle: String = "공개 방"
-    const val noPublicRooms: String = "지금 열린 공개 방이 없어요"
     const val peopleCaptionNoRoom: String = "[초대]를 누르면 탁자가 열리고 바로 불러요"
     const val peopleCaptionHost: String = "초대할 사람을 골라요"
     const val peopleCaptionGuest: String = "방장만 초대할 수 있어요"
@@ -65,26 +60,17 @@ object RummyPhoneText {
     const val invite: String = "초대"
     const val invited: String = "초대함"
     const val joined: String = "참가함"
-    const val createTitle: String = "방 만들기"
-    const val createButton: String = "방 만들기"
-    const val stakeLabel: String = "판돈"
     const val publicLabel: String = "공개 방"
     const val publicOn: String = "누구나 참가"
     const val publicOff: String = "초대한 사람만"
     const val createHint: String = "판돈은 시작할 때 모두에게서 걷고, 등수대로 나눠 가져요."
-    const val invitesTitle: String = "받은 초대"
-    const val noInvites: String = "받은 초대가 없어요"
     const val insufficient: String = "루비가 모자라요"
     const val newTable: String = "새 탁자"
-    const val myTable: String = "내 탁자"
-    const val newTableHint: String = "[초대]를 누르거나 탁자를 열어요"
     const val openTable: String = "탁자 열기"
     const val readyHeader: String = "초대 가능"
     const val peopleHeader: String = "사람"
     const val busyHeader: String = "지금은 바빠요"
     const val calling: String = "부르는 중"
-    const val waitingAnswer: String = "답 기다리는 중"
-    const val seated: String = "앉음"
     const val me: String = "나"
     const val take: String = "앉기"
     const val joinEmpty: String = "받은 초대나 열린 공개 탁자가 생기면 이 화면 맨 위에 떠요"
@@ -98,10 +84,6 @@ object RummyPhoneText {
     fun publicTable(name: String): String = "${name}님의 공개 탁자"
 
     fun freeSeats(count: Int): String = "빈자리 $count"
-
-    fun roomOf(name: String): String = "${name}님의 방"
-
-    fun inviteFrom(name: String): String = "${name}님이 초대했어요"
 
     fun seats(joined: Int, max: Int): String = "$joined/${max}명"
 
@@ -121,13 +103,8 @@ object RummyPhoneText {
     const val myRoomTitle: String = "내 방"
     const val start: String = "시작"
     const val emptySeat: String = "빈자리"
-    const val hostTag: String = "방장"
-    const val invitedTag: String = "초대 중"
-    const val joinedTag: String = "참가"
     const val startHintHost: String = "2명 이상 모이면 시작할 수 있어요"
     const val startHintGuest: String = "방장이 시작하기를 기다리고 있어요"
-
-    fun pot(stake: Long, players: Int): String = "$stake × ${players}명 = ${stake * players}"
 
     fun startWith(players: Int): String = "${players}명으로 시작"
 
@@ -157,7 +134,6 @@ object RummyPhoneText {
     const val reactionButton: String = "반응"
     const val otherDevice: String = "다른 기기에서 하는 판이에요"
     const val otherDeviceDetail: String = "이 폰에서 타일을 옮기면 이 폰이 판을 이어 받아요."
-    const val readOnlyBoard: String = "최종 판"
 
     fun rackCount(count: Long?): String = "${count ?: 0}장"
 
@@ -200,14 +176,6 @@ object RummyPhoneText {
     /** 받침대 첫 등록 합 한 줄(맥 RummyCueText.plan). 판에 놓은 묶음이 있으면 합을 함께 적는다. */
     fun plan(table: Int, rack: Int): String =
         if (table > 0) "랙 묶음 $rack + 판 $table = ${table + rack} / 30" else "랙 묶음 합 $rack / 30"
-
-    /** 첫 등록 합 표시(첫 등록 뒤 · 랙 묶음이 없으면 null). */
-    fun planLine(editor: RummyTurnEditor): String? {
-        val planned = editor.initialPlanPoints ?: return null
-        return if (planned.rack > 0) plan(planned.table, planned.rack) else null
-    }
-
-    fun meldPoints(points: Int): String = "$points"
 
     /** 직전 행동 한 줄. 모르는 종류·이름 없음은 null. */
     fun lastEvent(event: RummyLastEvent?, name: String?): String? {
@@ -252,18 +220,6 @@ object RummyPhoneText {
         value > 0 -> "+$value"
         value < 0 -> "−${-value}"
         else -> "0"
-    }
-
-    /**
-     * 시작 전 안내 표(받는 몫 — 2인 [2,0] · 3인 [2,1,0] · 4인 [3,1,0,0] × 판돈). 안내 글자 전용이다 — 실제 분배는 서버 `rummy_payouts` 가 정하고
-     * 결과 화면은 서버 값(`payout`)만 쓴다.
-     */
-    val splitTable: Map<Long, List<Long>> = mapOf(2L to listOf(2L, 0L), 3L to listOf(2L, 1L, 0L), 4L to listOf(3L, 1L, 0L, 0L))
-
-    fun split(seatCount: Long?, stake: Long?): String {
-        val shares = seatCount?.let { splitTable[it] } ?: return ""
-        val value = stake ?: return ""
-        return shares.withIndex().filter { it.value > 0 }.joinToString(" · ") { "${it.index + 1}등 ${it.value * value}" }
     }
 
     /** [winnerIsMe] = 내가 이겼다 — 내 이름을 남처럼 부르지 않는다. */

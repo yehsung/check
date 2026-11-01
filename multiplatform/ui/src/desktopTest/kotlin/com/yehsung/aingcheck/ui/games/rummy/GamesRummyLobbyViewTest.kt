@@ -19,6 +19,7 @@ import com.yehsung.aingcheck.core.net.realtime.IdleReason
 import com.yehsung.aingcheck.core.net.realtime.RealtimeState
 import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
+import com.yehsung.aingcheck.core.rules.rummy.RummyTableSeatingText
 import com.yehsung.aingcheck.core.session.SessionStore
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.games.GamesBusyGame
@@ -401,7 +402,7 @@ class GamesRummyLobbyViewTest {
         // 나는 아래. 위 의자가 아래 의자보다 위에 있다.
         assertTrue(top(GamesRummyRoomTags.chair(2)) < top(GamesRummyRoomTags.chair(0)))
         onNodeWithText("나 · 방장", useUnmergedTree = true).assertExists()
-        onNodeWithText(RummyPhoneText.waitingAnswer, useUnmergedTree = true).assertExists()
+        onNodeWithText(RummyTableSeatingText.waitingAnswer, useUnmergedTree = true).assertExists()
         // 판돈 × 앉은 인원(초대 중은 세지 않는다) · 분배는 순수익.
         onNodeWithText("10", useUnmergedTree = true).assertExists()
         onNodeWithText("판돈 5 × 2명", useUnmergedTree = true).assertExists()

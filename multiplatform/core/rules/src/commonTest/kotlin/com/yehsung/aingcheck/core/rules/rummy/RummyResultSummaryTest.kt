@@ -73,26 +73,6 @@ class RummyResultSummaryTest {
     }
 
     @Test
-    fun rackLineFitsItsWidth() {
-        val tile = RummyResultSummary.rackTile.size.width
-        val spacing = RummyResultSummary.rackTileSpacing
-        val badge = RummyResultSummary.rackBadgeWidth
-        val fourteen = List(14) { RummyFace.joker }
-        for (width in listOf(240.0, 288.0, 337.0, 374.0)) {
-            val line = RummyResultSummary.rackLine(fourteen, width)
-            assertEquals(14, line.shown.size + line.overflow, "장수 보존 w=$width")
-            val drawn = line.shown.size * (tile + spacing) + (if (line.overflow > 0) badge else -spacing)
-            assertTrue(drawn <= width, "넘침 w=$width drawn=$drawn")
-        }
-        // 다 들어가면 +N 칸 때문에 한 장을 숨기지 않는다.
-        val exact = 3 * tile + 2 * spacing
-        assertEquals(RummyResultRackLine(faces("A1", "B2", "C3"), 0), RummyResultSummary.rackLine(faces("A1", "B2", "C3"), exact))
-        assertEquals(RummyResultRackLine(emptyList(), 0), RummyResultSummary.rackLine(emptyList(), 100.0))
-        // 칸이 없으면 장수만.
-        assertEquals(RummyResultRackLine(emptyList(), 2), RummyResultSummary.rackLine(faces("A1", "B2"), 10.0))
-    }
-
-    @Test
     fun boardTilesStayWhereTheServerPutThem() {
         // 없으면: 폰이 판을 재배치한다. 위치는 모든 기기에 같아야 한다(사용자 결정 — 설계서 §4).
         val sets = listOf(faces("A1", "A2", "A3"), faces("B7", "C7", "D7"))

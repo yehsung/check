@@ -324,8 +324,11 @@ struct GamesRummyLobbyView: View {
     @ViewBuilder
     private var notice: some View {
         if let text = rummy.notice {
+            InlineNotice(text: text, kind: .warning)
+                .padding(.top, MobileTheme.rowSpacing)
+        } else if let text = store.rummyLeftByTabNotice {
             // 스스로 나온 사실을 말하는 줄이라 경고가 아니다.
-            InlineNotice(text: text, kind: text == GamesRummyText.tabLeftNotice ? .info : .warning)
+            InlineNotice(text: text, kind: .info)
                 .padding(.top, MobileTheme.rowSpacing)
         }
     }

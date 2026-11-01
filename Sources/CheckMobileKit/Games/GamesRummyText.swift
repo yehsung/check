@@ -312,6 +312,7 @@ package enum GamesRummyText {
     package static let tabExitHintGuest = "다른 탭으로 가면 방에서 나가요"
     package static let tabExitHintHost = "다른 탭으로 가면 방을 닫을지 먼저 물어봐요"
     package static let tabLeftNotice = "탭을 옮겨서 방에서 나왔어요"
+    /// 방 화면에서만 말한다(`isRummyLeaveUnconfirmed`). 코어 `notice` 에 넣지 마라: 그 줄은 판 화면도 읽어, 그새 시작되면 [나가기](= 기권)를 권하게 된다.
     package static let leaveUnconfirmedNotice = "방에서 나오지 못했어요. 아직 자리가 남아 있어요. 연결을 확인하고 [나가기]를 눌러 주세요."
     package static let leaveUnconfirmedDetail = "나오지 못했어요 · 아직 자리가 있어요"
 

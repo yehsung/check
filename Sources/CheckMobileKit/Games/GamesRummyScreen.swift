@@ -112,35 +112,18 @@ package enum GamesRummyExit {
     }
 
     /// 확인 시트의 [나가기]. **낡은 판단으로 이탈하지 않는다** — 고르는 순간 다시 판단한다(확인이 떠 있는 동안 판이 끝났거나 시작됐으면 기권시키지 않는다). 나갔으면 true.
+    /// 방을 나가는 길은 여기가 아니라 `GamesStore`(`leaveRummyRoomFromScreen` · 탭 이탈)다 — 못 닿은 자리를 숨기지 않으려고 `departRoom` 을 탄다.
     @discardableResult
     package static func confirm(asked: RummyCloseDecision, rummy: RummyStore) async -> Bool {
         guard decision(rummy) == asked else { return false }
-        if asked == .confirmCloseRoom {
-            // 방 닫기는 "루비는 그대로예요" 를 읽고 고른 버튼이다 — 다른 기기에서 그새 시작한 판이면 기권이 되지 않게 먼저 읽는다(맥 `confirmClose` 와 같다).
-            _ = await rummy.leaveRoomForExit(reason: .windowClosed)
-        } else {
-            _ = await rummy.leaveForExit(reason: .windowClosed)
-        }
+        _ = await rummy.leaveForExit(reason: .windowClosed)
         await settleAfterLeaving(rummy)
         return true
     }
 
-    /// 묻지 않는 나가기(손님이 방에서). 그새 시작된 판이면 코어가 나가지 않고 그 판을 든다(`leaveRoomForExit`).
-    package static func leaveRoom(_ rummy: RummyStore) async {
-        _ = await rummy.leaveRoomForExit(reason: .windowClosed)
-        await settleAfterLeaving(rummy)
-    }
-
-    /// 방 화면을 떠나는 길(탭 막대 · 푸시 · 딥링크 · 탭 재선택)의 나가기. 그새 시작된 판이면 나가지 않고 그 판을 든다. 서버 확인을 못 받으면 방이 되돌아온다(`departRoom`).
-    package static func departRoom(_ rummy: RummyStore) async -> RummyRoomDeparture {
-        let outcome = await rummy.departRoom(reason: .windowClosed)
-        if outcome == .left { await settleAfterLeaving(rummy) }
-        return outcome
-    }
-
     /// 나간 뒤 같은 화면이 로비로 남는다(맥은 창이 닫혀 안 드러난다). 코어 `leave()`·`dismissResult()` 처럼 안내줄을 지우고 로비를 다시 읽는다 —
     /// 안 읽으면 낡은 `activeMatchId` 로 게임 탭 카드가 최대 30초 '판 진행 중'이고, 닫힌 방이 공개 목록에 남는다. 시작된 판을 들고 남았으면(`leaveRoomForExit`) 아무것도 안 한다.
-    private static func settleAfterLeaving(_ rummy: RummyStore) async {
+    package static func settleAfterLeaving(_ rummy: RummyStore) async {
         guard rummy.match == nil else { return }
         rummy.setNotice(nil)
         await rummy.refreshLobby()
@@ -250,9 +233,10 @@ struct GamesRummyScreen: View {
                 applyDemo()
             }
             // 방이 판으로 · 판이 결과로 넘어가면(판 id 는 그대로다) 낡은 확인을 거둔다 — 눌러도 `confirm` 이 막지만 틀린 글자가 떠 있게 두지 않는다.
-            .onChange(of: rummy.phase) { _, _ in
+            .onChange(of: rummy.phase) { _, phase in
                 exitPrompt = nil
                 store.cancelRummyDeparture()
+                if phase != .lobby { store.forgetRummyLeftByTabNotice() }
                 reactionPanelOpen = false
                 reactionSheetOpen = false
                 applyDemo()
@@ -308,7 +292,7 @@ struct GamesRummyScreen: View {
         case .close:
             store.context.router.popToRoot(.games)
         case .leaveRoom:
-            Task { await GamesRummyExit.leaveRoom(rummy) }
+            store.leaveRummyRoomFromScreen()
         case let asked:
             exitPrompt = asked
         }
@@ -318,6 +302,8 @@ struct GamesRummyScreen: View {
         exitPrompt = nil
         if store.rummyDeparturePrompt != nil {
             store.confirmRummyDeparture()
+        } else if asked == .confirmCloseRoom {
+            store.leaveRummyRoomFromScreen()
         } else {
             Task { await GamesRummyExit.confirm(asked: asked, rummy: rummy) }
         }

@@ -208,6 +208,18 @@ package final class RummyStore {
 
     /// 하트비트 주 스위치(시험은 끄고 `heartbeatTick(matchID:)` 를 직접 밟는다).
     @ObservationIgnored package var heartbeatEnabled = true
+    /// 방(`room`)의 하트비트를 쉰다 — 폰이 쓴다(맥은 안 쓴다): 방 화면이 안 보이는 동안 자리가 살아 있으면 모르는 사이 시작돼 판돈이 걷힌다.
+    /// 쉬면 서버가 시작 검사에서 90초 넘게 안 보인 자리를 `dropped` 로 뺀다. **판(`playing`)은 그대로 돈다** — 끊기면 90초 규칙으로 기권이다.
+    @ObservationIgnored package var roomHeartbeatHeld = false {
+        didSet {
+            guard oldValue != roomHeartbeatHeld else { return }
+            updateHeartbeat()
+            // 다시 보기 시작했다 — 주기(10초)를 기다리면 그 사이 시작 검사에서 빠질 수 있다.
+            if !roomHeartbeatHeld, phase == .room, let matchID = heartbeatMatchID {
+                Task { @MainActor [weak self] in await self?.heartbeatTick(matchID: matchID) }
+            }
+        }
+    }
     /// 하트비트 주기(초).
     @ObservationIgnored package var heartbeatSeconds: TimeInterval = RummyStore.heartbeatDefaultSeconds
     /// 받침대 자리 저장소. **nil 이면 저장하지 않는다**(기본 — 시험이 Preferences 를 더럽히지 않게). 맥 배선이 `.standard` 를 꽂는다.

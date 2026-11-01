@@ -387,7 +387,8 @@ enum RummyWireJSON {
         guest.rummy.markEngaged(RummyWireHarness.matchUUID)
         await guest.barrier()
         before = guest.count("rummy_lobby")
-        await GamesRummyExit.leaveRoom(guest.rummy)
+        guest.games.leaveRummyRoomFromScreen()
+        await guest.games.rummyDepartureTask?.value
         #expect(guest.count("rummy_leave") == 1)
         #expect(guest.rummy.match == nil)
         #expect(guest.count("rummy_lobby") == before + 1, "닫힌 방이 공개 목록에 남는다")
@@ -401,7 +402,8 @@ enum RummyWireJSON {
         started.apply(status: "forming", mySeatState: "joined")
         started.rummy.markEngaged(RummyWireHarness.matchUUID)
         await started.barrier()
-        await GamesRummyExit.leaveRoom(started.rummy)
+        started.games.leaveRummyRoomFromScreen()
+        await started.games.rummyDepartureTask?.value
         #expect(started.count("rummy_leave") == 0, "묻지도 않고 시작된 판을 기권시켰다")
         #expect(started.rummy.match != nil)
         await started.tearDown()

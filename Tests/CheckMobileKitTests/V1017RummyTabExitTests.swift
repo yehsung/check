@@ -75,9 +75,10 @@ import Testing
         tap(.games, harness)
         harness.games.rummyScreenDidAppear()
         #expect(router.path(for: .games).count == 1, "돌아오면 큐브 화면(로비)이어야 한다")
-        #expect(harness.rummy.notice == GamesRummyText.tabLeftNotice)
+        #expect(harness.games.rummyLeftByTabNotice == GamesRummyText.tabLeftNotice)
+        #expect(harness.rummy.notice == nil, "코어 안내줄에 들어가면 방·판 화면까지 따라간다")
         tap(.me, harness)
-        #expect(harness.rummy.notice == nil, "안내 줄이 다음 방문까지 남는다")
+        #expect(harness.games.rummyLeftByTabNotice == nil, "안내 줄이 다음 방문까지 남는다")
         #expect(harness.count("rummy_leave") == 1)
         await harness.tearDown()
     }
@@ -157,7 +158,7 @@ import Testing
         #expect(harness.count("rummy_leave") == 1)
         #expect(harness.model.router.selectedTab == .games, "방이 안 닫혔는데 탭을 옮겼다 — 남들이 빈 방에서 기다린다")
         #expect(harness.rummy.phase == .room)
-        #expect(harness.rummy.notice == GamesRummyText.leaveUnconfirmedNotice)
+        #expect(harness.games.isRummyLeaveUnconfirmed)
         harness.server.setDefault("rummy_leave", json: #"{"status":"ok"}"#)
         tap(.me, harness)
         harness.games.confirmRummyDeparture()
@@ -433,7 +434,7 @@ import Testing
         #expect(GamesRummyCard.line(harness.games) == .room)
         #expect(GamesRummyCard.chip(harness.games) == GamesRummyText.roomChip)
         #expect(GamesRummyCard.detail(harness.games) == GamesRummyText.leaveUnconfirmedDetail)
-        #expect(harness.rummy.notice == GamesRummyText.leaveUnconfirmedNotice)
+        #expect(harness.games.isRummyLeaveUnconfirmed)
         await harness.rummy.refreshLobby()
         await harness.barrier()
         #expect(harness.rummy.phase == .room, "늦게 온 로비가 되돌린 방을 다시 접었다")
@@ -446,7 +447,7 @@ import Testing
         #expect(harness.count("rummy_leave") == 2)
         #expect(harness.rummy.phase == .lobby)
         #expect(!harness.games.isRummyLeaveUnconfirmed)
-        #expect(harness.rummy.notice == GamesRummyText.tabLeftNotice)
+        #expect(harness.games.rummyLeftByTabNotice == GamesRummyText.tabLeftNotice)
         await harness.tearDown()
     }
 
@@ -460,7 +461,7 @@ import Testing
         await settled(harness)
         #expect(harness.count("rummy_leave") == 2, "되보내지 않았거나 닿은 뒤에도 또 보냈다")
         #expect(harness.rummy.phase == .lobby)
-        #expect(harness.rummy.notice == GamesRummyText.tabLeftNotice)
+        #expect(harness.games.rummyLeftByTabNotice == GamesRummyText.tabLeftNotice)
         #expect(GamesRummyCard.line(harness.games) != .room)
         await harness.tearDown()
     }
@@ -497,7 +498,8 @@ import Testing
         try? await Task.sleep(for: .milliseconds(100))
         await signedOut.barrier()
         #expect(signedOut.count("rummy_leave") == sent, "로그아웃했는데 나가기가 또 나갔다")
-        #expect(signedOut.rummy.notice == nil)
+        #expect(signedOut.games.rummyLeftByTabNotice == nil)
+        #expect(!signedOut.games.isRummyLeaveUnconfirmed)
         #expect(signedOut.games.rummyDeparturePrompt == nil)
 
         await bounded.tearDown()
@@ -514,6 +516,335 @@ import Testing
         await harness.barrier()
         #expect(harness.games.rummyDeparturePrompt == nil)
         #expect(harness.model.router.selectedTab == .now)
+        await harness.tearDown()
+    }
+
+    // MARK: - 검토 지적: 시작된 판을 기권시키는 길
+
+    private let downJSON = #"{"message":"down"}"#
+
+    /// 응답이 늦는 실패 — 그 사이 다른 일이 끼어드는 경합을 값으로 재현한다.
+    private func slowFailure(seconds: Double = 0.3) -> GamesStubServer.Responder {
+        { _ in
+            Thread.sleep(forTimeInterval: seconds)
+            return .json(#"{"message":"down"}"#, status: 500)
+        }
+    }
+
+    @Test("못 읽으면 안 보낸다: state 가 안 닿으면 rummy_leave 0건 · 방 그대로 · 자리 있음을 말한다(그 사이 시작됐으면 묻지 않은 기권이다)")
+    func unreadRoomSendsNothing() async {
+        let harness = await seated("tab-unread", as: .guest)
+        harness.server.setDefault("rummy_state", json: downJSON, status: 500)
+        tap(.messages, harness)
+        await settled(harness)
+        #expect(harness.count("rummy_leave") == 0, "방인지 판인지 모른 채 나가기를 보냈다")
+        #expect(harness.model.router.selectedTab == .messages)
+        #expect(harness.rummy.phase == .room)
+        #expect(harness.games.isRummyLeaveUnconfirmed)
+        #expect(GamesRummyCard.detail(harness.games) == GamesRummyText.leaveUnconfirmedDetail)
+        await harness.tearDown()
+    }
+
+    @Test("못 읽어 미룬 나가기: 망이 돌아오면 되보내기가 읽고 나서 나간다 — 1건")
+    func unreadThenRetryLeaves() async {
+        let harness = await seated("tab-unread-retry", as: .guest)
+        harness.games.rummyLeaveRetrySeconds = [0.01]
+        harness.server.enqueue("rummy_state") { _ in .json(#"{"message":"down"}"#, status: 500) }
+        tap(.messages, harness)
+        await settled(harness)
+        #expect(harness.count("rummy_leave") == 1)
+        #expect(harness.rummy.phase == .lobby)
+        #expect(!harness.games.isRummyLeaveUnconfirmed)
+        await harness.tearDown()
+    }
+
+    @Test("되보내는 사이 판이 시작됐다: 읽어서 알면 나가지 않고 판을 든다 — 0건")
+    func retryFindsStartedMatch() async {
+        let harness = await seated("tab-retry-started", as: .guest)
+        harness.games.rummyLeaveRetrySeconds = [0.01]
+        harness.server.enqueue("rummy_state") { _ in .json(#"{"message":"down"}"#, status: 500) }
+        serveState(harness, status: "active", mySeatState: "playing", seat: .guest)
+        tap(.messages, harness)
+        await settled(harness)
+        #expect(harness.count("rummy_leave") == 0, "되보내기가 시작된 판을 기권시켰다")
+        #expect(harness.rummy.phase == .playing)
+        #expect(!harness.games.isRummyLeaveUnconfirmed)
+        await harness.tearDown()
+    }
+
+    @Test("문을 지나 코어에 닿는 사이 판이 됐다: departRoom 은 rummy_leave 를 안 보낸다")
+    func heldMatchIsNotLeft() async {
+        let harness = await seated("tab-held-active", as: .guest)
+        harness.apply()
+        #expect(await harness.rummy.departRoom(reason: .windowClosed) == .startedMatch)
+        #expect(harness.count("rummy_leave") == 0)
+        #expect(harness.rummy.phase == .playing)
+        await harness.tearDown()
+    }
+
+    @Test("읽는 사이 폴링이 판을 들고 왔고 읽기는 실패했다: 폰·맥 길 모두 rummy_leave 0건")
+    func matchArrivesWhileReading() async {
+        let phone = await seated("tab-read-race", as: .guest)
+        let before = phone.count("rummy_state")
+        phone.server.enqueue("rummy_state", slowFailure())
+        let departing = Task { await phone.rummy.departRoom(reason: .windowClosed) }
+        #expect(await waits.wait { phone.count("rummy_state") == before + 1 })
+        phone.apply()
+        #expect(await departing.value == .startedMatch)
+        #expect(phone.count("rummy_leave") == 0, "읽기 실패 뒤 쥔 판에 나가기를 보내 기권됐다")
+
+        let mac = await seated("tab-read-race-mac", as: .guest)
+        let macBefore = mac.count("rummy_state")
+        mac.server.enqueue("rummy_state", slowFailure())
+        let closing = Task { await mac.rummy.leaveRoomForExit(reason: .windowClosed) }
+        #expect(await waits.wait { mac.count("rummy_state") == macBefore + 1 })
+        mac.apply()
+        #expect(await closing.value == false)
+        #expect(mac.count("rummy_leave") == 0)
+        await phone.tearDown()
+        await mac.tearDown()
+    }
+
+    @Test("맥 길은 그대로: 창이 닫히면 못 읽어도 나간다(다시 시도할 사람이 없다)")
+    func macPathStillLeavesWhenUnread() async {
+        let harness = await seated("tab-mac-unread", as: .guest)
+        harness.server.setDefault("rummy_state", json: downJSON, status: 500)
+        #expect(await harness.rummy.leaveRoomForExit(reason: .windowClosed))
+        #expect(harness.count("rummy_leave") == 1)
+        await harness.tearDown()
+    }
+
+    // MARK: - 검토 지적: 화면 밖 자리가 살아 있는 길
+
+    private func beatingHarness(_ label: String, as seat: Seat) async -> RummyWireHarness {
+        let harness = await seated(label, as: seat)
+        harness.rummy.heartbeatSeconds = 3_600
+        harness.rummy.heartbeatEnabled = true
+        harness.rummy.updateHeartbeat()
+        return harness
+    }
+
+    @Test("방 하트비트는 방 화면이 설 때만: 내려가면 멈추고(서버가 시작 때 뺀다) · 돌아오면 곧바로 한 번 · 앱을 내린 것으로는 안 멈춘다")
+    func roomHeartbeatFollowsScreen() async {
+        let harness = await beatingHarness("tab-beat", as: .guest)
+        let id = RummyWireHarness.matchUUID
+        #expect(harness.rummy.heartbeatMatchID == id)
+        harness.games.appDidEnterBackground()
+        #expect(harness.rummy.heartbeatMatchID == id, "앱 내림은 이탈이 아니다 — 깨어난 뒤 자리를 잃는다")
+        harness.games.rummyScreenDidDisappear()
+        #expect(harness.rummy.heartbeatMatchID == nil, "화면 밖 자리가 살아 있어 모르는 사이 판돈이 걷힌다")
+        let beats = harness.count("rummy_heartbeat")
+        harness.games.rummyScreenDidAppear()
+        #expect(harness.rummy.heartbeatMatchID == id)
+        #expect(await waits.wait { harness.count("rummy_heartbeat") == beats + 1 }, "돌아온 뒤 10초 사이 시작되면 빠진다")
+        await harness.tearDown()
+    }
+
+    @Test("판 하트비트는 화면과 무관하다: 화면 밖에서 판이 되면 돌고 · 판 중 탭을 옮겨도 돈다(90초 규칙)")
+    func matchHeartbeatIgnoresScreen() async {
+        let harness = await beatingHarness("tab-beat-match", as: .guest)
+        let id = RummyWireHarness.matchUUID
+        harness.games.rummyScreenDidDisappear()
+        #expect(harness.rummy.heartbeatMatchID == nil)
+        harness.apply()
+        #expect(harness.rummy.phase == .playing)
+        #expect(harness.rummy.heartbeatMatchID == id, "시작된 판의 하트비트가 안 돌아 끊김 기권된다")
+        await harness.tearDown()
+    }
+
+    @Test("어느 문도 안 지나고 화면 밖에 앉았다(앱을 다시 켬): 하트비트 없음 — 기본값이 쉼이다")
+    func relaunchedSeatHasNoHeartbeat() async {
+        let harness = RummyWireHarness(label: "tab-beat-relaunch")
+        harness.serveLobby()
+        await harness.signIn()
+        harness.rummy.heartbeatSeconds = 3_600
+        harness.rummy.heartbeatEnabled = true
+        harness.rummy.markEngaged(RummyWireHarness.matchUUID)
+        harness.apply(status: "forming", mySeatState: "joined")
+        #expect(harness.rummy.phase == .room)
+        #expect(harness.rummy.heartbeatMatchID == nil)
+        await harness.tearDown()
+    }
+
+    @Test("나가기 실패로 되돌린 방도 화면 밖이면 하트비트가 안 돈다 · 되보내기 합은 끊김 기준 90초를 넘는다")
+    func restoredRoomStaysSilent() async {
+        let fresh = RummyWireHarness(label: "tab-beat-budget")
+        #expect(fresh.games.rummyLeaveRetrySeconds.reduce(0, +) > 90, "되보내기가 끝난 뒤 서버가 빼 주기 전까지 빈틈이 남는다")
+        await fresh.tearDown()
+
+        let harness = await beatingHarness("tab-beat-fail", as: .guest)
+        harness.server.setDefault("rummy_leave", json: downJSON, status: 500)
+        tap(.messages, harness)
+        await settled(harness)
+        #expect(harness.rummy.phase == .room)
+        #expect(harness.rummy.heartbeatMatchID == nil)
+        await harness.tearDown()
+    }
+
+    // MARK: - 검토 지적: 낡은 말
+
+    @Test("나오지 못했다는 말은 그 방에서만: 판이 시작되거나 방이 사라지면 저절로 없다 — 판 화면이 [나가기](기권)를 권하지 않는다")
+    func unconfirmedLineDoesNotOutliveRoom() async {
+        let started = await seated("tab-line-started", as: .guest)
+        started.server.setDefault("rummy_leave", json: downJSON, status: 500)
+        tap(.messages, started)
+        await settled(started)
+        #expect(started.games.isRummyLeaveUnconfirmed)
+        tap(.games, started)
+        started.games.rummyScreenDidAppear()
+        started.apply()
+        #expect(started.rummy.phase == .playing)
+        #expect(!started.games.isRummyLeaveUnconfirmed)
+        #expect(started.rummy.notice == nil, "판 화면 상태 줄이 차례 안내 대신 이 말을 띄운다")
+
+        let closed = await seated("tab-line-closed", as: .guest)
+        closed.server.setDefault("rummy_leave", json: downJSON, status: 500)
+        tap(.messages, closed)
+        await settled(closed)
+        closed.rummy.clearMatch()
+        #expect(!closed.games.isRummyLeaveUnconfirmed)
+        #expect(GamesRummyCard.line(closed.games) != .room)
+        await started.tearDown()
+        await closed.tearDown()
+    }
+
+    // MARK: - 검토 지적: 화면의 [나가기]도 자리를 숨기지 않는다
+
+    @Test("화면 [나가기](손님): 못 닿으면 방에 남아 말한다 · 닿으면 로비 · 탭 안내는 안 뜬다 · 두 번 눌러도 1건")
+    func screenButtonDoesNotHideSeat() async {
+        let harness = await seated("tab-button", as: .guest)
+        harness.server.setDefault("rummy_leave", json: downJSON, status: 500)
+        harness.games.leaveRummyRoomFromScreen()
+        harness.games.leaveRummyRoomFromScreen()
+        await settled(harness)
+        #expect(harness.count("rummy_leave") == 1)
+        #expect(harness.rummy.phase == .room, "서버엔 자리가 남았는데 로비를 보였다")
+        #expect(harness.games.isRummyLeaveUnconfirmed)
+        harness.server.setDefault("rummy_leave", json: #"{"status":"ok"}"#)
+        harness.games.leaveRummyRoomFromScreen()
+        await settled(harness)
+        #expect(harness.count("rummy_leave") == 2)
+        #expect(harness.rummy.phase == .lobby)
+        #expect(harness.games.rummyLeftByTabNotice == nil, "스스로 누른 나가기에 탭 얘기를 했다")
+        await harness.tearDown()
+    }
+
+    @Test("화면 [방 닫고 나가기](방장): 못 닿으면 방에 남는다 · 그새 판이면 0건")
+    func screenHostConfirm() async {
+        let failed = await seated("tab-button-host", as: .host)
+        failed.server.setDefault("rummy_leave", json: downJSON, status: 500)
+        failed.games.leaveRummyRoomFromScreen()
+        await settled(failed)
+        #expect(failed.rummy.phase == .room)
+        #expect(failed.games.isRummyLeaveUnconfirmed)
+
+        let started = await seated("tab-button-started", as: .host)
+        serveState(started, status: "active", mySeatState: "playing", seat: .host)
+        started.apply()
+        started.games.leaveRummyRoomFromScreen()
+        await settled(started)
+        #expect(started.count("rummy_leave") == 0, "지난 확인으로 시작된 판을 기권시켰다")
+        #expect(started.rummy.phase == .playing)
+        await failed.tearDown()
+        await started.tearDown()
+    }
+
+    // MARK: - 검토 지적: 수락 뒤
+
+    @Test("방장 수락 후 응답을 기다리는 사이 다른 탭으로 갔다: 끌고 가지 않는다 · 1건")
+    func hostMovesWhileLeaving() async {
+        let harness = await seated("tab-host-moved", as: .host)
+        let router = harness.model.router
+        harness.server.enqueue("rummy_leave") { _ in
+            Thread.sleep(forTimeInterval: 0.2)
+            return .json(#"{"status":"ok"}"#)
+        }
+        tap(.me, harness)
+        harness.games.confirmRummyDeparture()
+        #expect(await waits.wait { harness.count("rummy_leave") == 1 })
+        tap(.messages, harness)
+        #expect(router.selectedTab == .messages)
+        await settled(harness)
+        #expect(router.selectedTab == .messages, "사람이 고른 탭에서 수락 때 탭으로 끌고 갔다")
+        #expect(harness.count("rummy_leave") == 1)
+        #expect(harness.rummy.phase == .lobby)
+        await harness.tearDown()
+    }
+
+    @Test("방장 수락 후 다른 탭으로 갔고 나가기가 실패했다: 혼자 다시 보낸다(화면 밖에 방이 열린 채 남지 않는다)")
+    func hostMovedThenRetries() async {
+        let harness = await seated("tab-host-moved-fail", as: .host)
+        harness.games.rummyLeaveRetrySeconds = [0.01]
+        harness.server.enqueue("rummy_leave", slowFailure(seconds: 0.2))
+        tap(.me, harness)
+        harness.games.confirmRummyDeparture()
+        #expect(await waits.wait { harness.count("rummy_leave") == 1 })
+        tap(.messages, harness)
+        await settled(harness)
+        #expect(harness.count("rummy_leave") == 2)
+        #expect(harness.rummy.phase == .lobby)
+        #expect(harness.model.router.selectedTab == .messages)
+        await harness.tearDown()
+    }
+
+    @Test("방장 수락: 나간 뒤 로비 조회를 기다리지 않고 간다 — 늦은 조회에 빈 로비로 묶이지 않는다")
+    func hostResumeDoesNotWaitForLobby() async {
+        let harness = await seated("tab-host-lobby", as: .host)
+        let router = harness.model.router
+        let lobby = RummyWireJSON.lobby(nowMs: harness.nowMs)
+        harness.server.setDefault("rummy_lobby") { _ in
+            Thread.sleep(forTimeInterval: 0.2)
+            return .json(lobby)
+        }
+        let before = harness.count("rummy_lobby")
+        tap(.me, harness)
+        harness.games.confirmRummyDeparture()
+        #expect(await waits.wait { harness.count("rummy_lobby") > before })
+        #expect(router.selectedTab == .me, "로비 응답을 기다리느라 탭이 안 옮겨 갔다")
+        await settled(harness)
+        await harness.tearDown()
+    }
+
+    // MARK: - 검토 지적: 탭이 굳는 길
+
+    @Test("안 뜬 확인에 탭을 또 눌렀다: 값을 내렸다 올려 다시 띄운다(같은 값이면 SwiftUI 가 모른 채 탭만 막힌다) · 0건 · 그 틈에 취소하면 안 되살아난다")
+    func repeatedAskRefires() async {
+        let harness = await seated("tab-refire", as: .host)
+        let router = harness.model.router
+        let serial = router.tabRefusalSerial
+        tap(.now, harness)
+        tap(.me, harness)
+        #expect(harness.games.rummyDeparturePrompt == nil)
+        #expect(await waits.wait { harness.games.rummyDeparturePrompt == .confirmCloseRoom }, "확인이 다시 안 떠 탭이 굳는다")
+        #expect(router.tabRefusalSerial == serial + 2)
+        #expect(harness.count("rummy_leave") == 0)
+        // 가려던 곳은 마지막에 누른 탭이다.
+        harness.games.confirmRummyDeparture()
+        await settled(harness)
+        #expect(router.selectedTab == .me)
+
+        let cancelled = await seated("tab-refire-no", as: .host)
+        tap(.now, cancelled)
+        tap(.me, cancelled)
+        cancelled.games.cancelRummyDeparture()
+        try? await Task.sleep(for: .milliseconds(200))
+        #expect(cancelled.games.rummyDeparturePrompt == nil, "취소한 확인이 되살아났다")
+        await harness.tearDown()
+        await cancelled.tearDown()
+    }
+
+    @Test("방장 탭 재선택으로 화면이 내려간 사이 판이 시작됐다: 되세운 화면에 '방이 닫혀요'가 안 뜬다 · 0건")
+    func stalePromptDropsOnReappear() async {
+        let harness = await seated("tab-reappear", as: .host)
+        let router = harness.model.router
+        router.pathBinding(for: .games).wrappedValue = NavigationPath()
+        harness.games.rummyScreenDidDisappear()
+        #expect(harness.games.rummyDeparturePrompt == .confirmCloseRoom)
+        #expect(await waits.wait { router.path(for: .games).count == 1 })
+        harness.apply()
+        harness.games.rummyScreenDidAppear()
+        #expect(harness.games.rummyDeparturePrompt == nil)
+        #expect(harness.count("rummy_leave") == 0)
         await harness.tearDown()
     }
 

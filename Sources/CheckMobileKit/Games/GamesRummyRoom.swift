@@ -252,7 +252,10 @@ struct GamesRummyRoomView: View {
 
     @ViewBuilder
     private var hint: some View {
-        if let notice = rummy.notice {
+        if store.isRummyLeaveUnconfirmed {
+            InlineNotice(text: GamesRummyText.leaveUnconfirmedNotice, kind: .warning)
+                .padding(.top, MobileTheme.rowSpacing)
+        } else if let notice = rummy.notice {
             // '초대를 보냈어요' 만 좋은 소식이다 — 나머지는 전부 거절·실패 말이다.
             InlineNotice(text: notice, kind: notice == RummyNoticeText.invited ? .info : .warning)
                 .padding(.top, MobileTheme.rowSpacing)

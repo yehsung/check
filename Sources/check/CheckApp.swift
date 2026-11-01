@@ -556,8 +556,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { _ in
             MainActor.assumeIsolated {
-                guard let matchID = rummy.heartbeatMatchID else { return }
-                Task { @MainActor in await rummy.heartbeatTick(matchID: matchID) }
+                rummy.heartbeatNow()
             }
         }
     }

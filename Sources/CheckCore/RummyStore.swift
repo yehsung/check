@@ -40,6 +40,7 @@ import OSLog
 //  ⑪ **배치도 작업 상태다.** 편집기가 판 배치(`points`)를 들고, 작업 상태 전송·[완료]가 `p_layout` 으로 싣는다.
 //     같은 판·같은 배치면 다시 보내지 않는다(`lastSentDraft` + `lastSentLayout`).
 //  ⑫ **하트비트**는 phase 가 room·playing 인 동안 10초마다(창과 무관). 서버는 90초 안 보이면 끊김 기권시킨다.
+//     판을 든 순간 한 번 보내고 주기로 들어간다. 앱이 앞으로 오거나 맥이 깨어나면 `heartbeatNow` 로 곧바로 한 번.
 //     의도적 이탈(창 닫기·앱 종료·로그아웃)은 `leaveForExit` — 최대 2초 기다리고, 못 닿아도 이 기기에선 접는다.
 //  ⑬ **반응**은 꾸밈이라 내 말풍선을 바로 띄우고(같은 반응이 state 로 돌아오면 한 번 삼킨다), 남의 것은 state 의
 //     `reactions` 에서 처음 보는 것만 낸다. **뽑기**는 다음 편집기의 랙에서 새로 생긴 면을 찾아 `onTileDrawn` 으로 알린다.
@@ -213,11 +214,8 @@ package final class RummyStore {
     @ObservationIgnored package var roomHeartbeatHeld = false {
         didSet {
             guard oldValue != roomHeartbeatHeld else { return }
+            // 다시 보기 시작하면 이 호출이 세운 루프의 첫 걸음이 곧바로 나간다 — 주기(10초)를 기다리면 그 사이 시작 검사에서 빠질 수 있다.
             updateHeartbeat()
-            // 다시 보기 시작했다 — 주기(10초)를 기다리면 그 사이 시작 검사에서 빠질 수 있다.
-            if !roomHeartbeatHeld, phase == .room, let matchID = heartbeatMatchID {
-                Task { @MainActor [weak self] in await self?.heartbeatTick(matchID: matchID) }
-            }
         }
     }
     /// 하트비트 주기(초).

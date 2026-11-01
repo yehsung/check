@@ -175,12 +175,12 @@ import Testing
 
     // MARK: - 상태 줄
 
-    @Test("상태 줄: 내 시간 초과 N/3 은 어떤 글자가 떠 있어도 보인다 · 남의 차례엔 손댄 기기에만 90초 안내")
+    @Test("상태 줄: 내 시간 초과 N/3 은 어떤 글자가 떠 있어도 보인다 · 남의 차례엔 손댄 기기에만 1분 안내")
     func statusLineWarnings() {
         let editor = Input.editor()
         let waiting = GamesRummyStatusLine.make(notice: nil, isMyTurn: false, editor: nil, turnName: "구름", mySeatState: .playing,
                                                 myTimeoutStreak: 2, engaged: true)
-        #expect(waiting.text == "앱을 90초 넘게 내리면 기권돼요")
+        #expect(waiting.text == "앱을 1분 넘게 내리면 기권될 수 있어요")
         #expect(waiting.warning == "시간 초과 2/3")
         let idle = GamesRummyStatusLine.make(notice: nil, isMyTurn: false, editor: nil, turnName: "구름", mySeatState: .playing,
                                              myTimeoutStreak: 0, engaged: false)

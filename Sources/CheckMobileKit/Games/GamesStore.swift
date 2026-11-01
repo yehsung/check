@@ -317,6 +317,8 @@ package final class GamesStore {
         } else {
             rummy.systemDidWake()
         }
+        // 두 갈래 모두: 위 둘은 읽기뿐이라 서버의 접속 증거가 안 된다. 다음 주기를 기다리면 그 사이 90초를 넘겨 기권될 수 있다.
+        rummy.heartbeatNow()
     }
 
     /// 장면이 앞에서 물러난다(`.inactive` — 전화 수신 · 제어 센터 · 앱 전환기). 도는 미니게임을 얼린다.

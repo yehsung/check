@@ -376,7 +376,8 @@ struct V0369RummyV2LobbyTests {
                 "근무 중 종료가 아잉 큐브 이탈을 기다리지 않는다")
         #expect(app.contains("rummy.rackDefaults = .standard"), "받침대 자리가 앱을 다시 켜면 사라진다")
         #expect(app.contains("forName: NSWorkspace.didWakeNotification"))
-        #expect(app.contains("guard let matchID = rummy.heartbeatMatchID else { return } Task { @MainActor in await rummy.heartbeatTick(matchID: matchID) }"))
+        #expect(app.contains("forName: NSWorkspace.didWakeNotification, object: nil, queue: .main ) { _ in MainActor.assumeIsolated { rummy.heartbeatNow() } }"),
+                "맥이 깨어나도 다음 주기까지 하트비트가 안 나간다")
 
         let menu = V0317ShopTests.stripped(try V0317ShopTests.source("CheckMenuView.swift"))
         #expect(menu.contains("IconButton(icon: \"rectangle.portrait.and.arrow.right\", help: \"로그아웃\") { store.signOutLeavingRummy() }"),

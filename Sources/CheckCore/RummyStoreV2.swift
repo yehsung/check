@@ -92,6 +92,7 @@ extension RummyStore {
 
     /// phase 가 room·playing 이고 **이 기기가 손댄 판**(머리말 ⑮)이면 그 판의 하트비트를 돌리고, 아니면 멈춘다.
     /// 같은 조건으로 App Nap 활동(`isHoldingMatch`)도 쥐고 놓는다. `refreshPhase` 와 engaged 장부가 늘 부른다.
+    /// 판을 든 순간 한 번 보내고 그다음부터 주기다 — 서버의 접속 증거는 쓰기와 하트비트뿐이라(state 읽기는 아니다), 앱을 새로 켠 직후 첫 전송이 주기만큼 늦으면 그 사이 90초를 넘겨 기권될 수 있다.
     func updateHeartbeat() {
         let holding = host?.session != nil && (phase == .room || phase == .playing)
             && match.map { isEngaged($0.id) } == true
@@ -105,16 +106,33 @@ extension RummyStore {
         heartbeatTask = nil
         heartbeatMatchID = wanted
         guard let matchID = wanted else { return }
+        startHeartbeatLoop(matchID: matchID)
+    }
+
+    /// 앱이 앞으로 왔다·맥이 깨어났다 — 주기를 기다리지 않고 지금 한 번 보낸다. 돌고 있는 판에만 간다: 놀던 기기·쉬는 방(`roomHeartbeatHeld`)은 `heartbeatMatchID` 가 nil 이라 0건이다.
+    /// 도는 루프를 새로 세운다(그 첫 걸음이 이 한 번이다). 루프는 늘 하나고, 주기도 여기서 다시 잰다.
+    package func heartbeatNow() {
+        guard let matchID = heartbeatMatchID else { return }
+        heartbeatTask?.cancel()
+        startHeartbeatLoop(matchID: matchID)
+    }
+
+    private func startHeartbeatLoop(matchID: UUID) {
         let generation = resetGeneration
         heartbeatTask = Task { @MainActor [weak self] in
-            while true {
+            // 기다리는 동안엔 self 를 쥐지 않는다(`heartbeatStep` 이 끝나면 놓는다).
+            while await self?.heartbeatStep(matchID: matchID, generation: generation) == true {
                 let wait = self?.heartbeatSeconds ?? RummyStore.heartbeatDefaultSeconds
                 try? await Task.sleep(for: .seconds(wait))
-                guard let self, !Task.isCancelled, generation == self.resetGeneration,
-                      self.heartbeatMatchID == matchID else { return }
-                await self.heartbeatTick(matchID: matchID)
             }
         }
+    }
+
+    /// 루프의 한 걸음. 이 루프가 아직 유효하면 한 번 보내고 true, 아니면 false(루프를 끝낸다).
+    private func heartbeatStep(matchID: UUID, generation: Int) async -> Bool {
+        guard !Task.isCancelled, generation == resetGeneration, heartbeatMatchID == matchID else { return false }
+        await heartbeatTick(matchID: matchID)
+        return true
     }
 
     /// 하트비트 한 번. 자리가 없어졌으면(`not_found`) 따라잡기 조회를 건다. 이 기기가 손대지 않은 판엔 보내지 않는다(⑮).

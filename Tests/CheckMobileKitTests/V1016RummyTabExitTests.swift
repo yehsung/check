@@ -637,6 +637,8 @@ import Testing
         harness.games.rummyScreenDidAppear()
         #expect(harness.rummy.heartbeatMatchID == id)
         #expect(await waits.wait { harness.count("rummy_heartbeat") == beats + 1 }, "돌아온 뒤 10초 사이 시작되면 빠진다")
+        await harness.barrier()
+        #expect(harness.count("rummy_heartbeat") == beats + 1, "화면이 돌아온 한 번에 하트비트가 겹쳐 나갔다")
         await harness.tearDown()
     }
 

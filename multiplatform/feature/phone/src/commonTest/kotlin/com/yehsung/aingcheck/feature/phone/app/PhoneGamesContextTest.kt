@@ -48,15 +48,17 @@ class PhoneGamesContextTest {
         app.games.appDidBecomeActive()
         advanceUntilIdle()
         app.router.drainRequests()
-        // 코어가 '판이 막 시작됐다'고 부르는 문 셋 — 게임 탭 스토어가 W2-e 문으로 달고, 폰 라우터가 셸 요청으로 바꾼다.
+        // 코어가 '판이 막 시작됐다'고 부르는 문 넷 — 게임 탭 스토어가 W2-e 문으로 달고, 폰 라우터가 셸 요청으로 바꾼다.
         app.gomoku.presentWindow!!.invoke()
         app.chess.presentWindow!!.invoke()
         app.tetris.presentWindow!!.invoke()
+        app.rummy.presentWindow!!.invoke()
         assertEquals(
             listOf(
                 PhoneNavRequest.PresentGames(GamesDestination.Gomoku),
                 PhoneNavRequest.PresentGames(GamesDestination.Chess),
                 PhoneNavRequest.PresentGames(GamesDestination.TetrisDuel),
+                PhoneNavRequest.PresentGames(GamesDestination.Rummy),
             ),
             app.router.drainRequests(),
         )

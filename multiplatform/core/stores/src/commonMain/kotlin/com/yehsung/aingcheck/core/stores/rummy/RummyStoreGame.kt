@@ -239,7 +239,7 @@ internal fun RummyStore.reconcileEditor(state: RummyMatchState) {
     val entries = previous?.restoredRackEntries ?: loadRackEntries(state.id)
     val fresh = RummyTurnEditor(
         table = table, rack = rack, initialDone = state.myInitialDone ?: false, rackOrder = order,
-        tableLayout = state.tableLayout, rackEntries = entries,
+        tableLayout = state.tableLayout, rackEntries = entries, rackHalfColumns = rackHalfColumns,
     )
     var drawn = if (previous != null) RummyStore.drawnTiles(previous, fresh, entries ?: emptyList()) else emptyList()
     val mode = rackSortMode

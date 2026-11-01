@@ -19,6 +19,7 @@ import com.yehsung.aingcheck.core.session.app.SessionClock
 import com.yehsung.aingcheck.core.stores.games.GamesBoardGameLink
 import com.yehsung.aingcheck.core.stores.games.GamesContext
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
+import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.games.GamesGomokuLink
 import com.yehsung.aingcheck.core.stores.games.GamesRouter
 import com.yehsung.aingcheck.core.stores.tetris.StoreNaturalCollation
@@ -206,6 +207,9 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
     val chess = UiFakeBoardGameLink()
     val presented = mutableListOf<GamesDestination>()
 
+    /** 아잉 큐브 스토어(기본 null — 게임 탭은 큐브가 없는 것처럼 돈다). GamesStore 를 만들기 전에 넣는다. */
+    var rummy: RummyStore? = null
+
     val context: GamesContext = object : GamesContext {
         override val sessionStore: SessionStore get() = this@UiGamesHarness.sessionStore
         override val appConfig: AppConfig = appConfig
@@ -213,6 +217,7 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
         override val collation: Collation = StoreNaturalCollation
         override fun refreshAchievementsAfterGameResult(game: String) = Unit
         override val tetris: TetrisDuelStore get() = this@UiGamesHarness.tetris
+        override val rummy: RummyStore? get() = this@UiGamesHarness.rummy
         override val gomoku: GamesGomokuLink get() = this@UiGamesHarness.gomoku
         override val chess: GamesBoardGameLink get() = this@UiGamesHarness.chess
         override val router: GamesRouter = object : GamesRouter {

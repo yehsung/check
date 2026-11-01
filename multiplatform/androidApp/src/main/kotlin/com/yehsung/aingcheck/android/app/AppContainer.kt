@@ -29,6 +29,7 @@ import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.session.app.SessionClock
 import com.yehsung.aingcheck.core.stores.messages.NaturalKoNameCollation
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
+import com.yehsung.aingcheck.android.screens.games.rummy.AndroidRummyArtSource
 import com.yehsung.aingcheck.core.stores.now.todo.JvmTodoFileSystem
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.feature.phone.app.PhoneAppModel
@@ -216,11 +217,15 @@ class AppContainer(
             accountCleanup = DefaultAndroidAccountCleanup(app, pushTokenDeleter = { pushSystem.unregisterForRemoteNotifications() }),
             screenArt = ScreenArt(AvatarPhotoLoader { url -> photoLoader.load(url) }),
             primerVisible = pushSystem.isPrimerVisible,
+            rummyArtSource = AndroidRummyArtSource({ rummyArtHttp }, ProdConfig.SUPABASE_URL, File(app.cacheDir, AndroidRummyArtSource.CACHE_DIR)),
         )
     }
 
     /** 원격 프로필 사진 읽개(앱의 단일 HTTP 엔진 — 구조 시험 R3c: ui 는 HTTP 를 만들지 않는다). 실패는 null → 캐릭터 · 이니셜. */
     private val photoLoader by lazy { AvatarPhotoHttp(HttpEngineFactory.ktorClient()) }
+
+    /** 아잉 큐브 그림 받기(앱의 단일 HTTP 엔진). 큐브 화면을 처음 열 때 만든다. */
+    private val rummyArtHttp by lazy { HttpEngineFactory.ktorClient() }
 
     private var placeholderShell = false
 

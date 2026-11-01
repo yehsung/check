@@ -18,6 +18,7 @@ fun GamesHomePlaceholder(open: (Any) -> Unit) = PlaceholderScreen(
             PlaceholderLink("오목") { open(Dest.Gomoku(GameSection.LOBBY.raw)) },
             PlaceholderLink("체스") { open(Dest.Chess(GameSection.LOBBY.raw)) },
             PlaceholderLink("테트리스 1:1") { open(Dest.TetrisDuel) },
+            PlaceholderLink("아잉 큐브") { open(Dest.Rummy) },
         ),
 )
 
@@ -42,6 +43,9 @@ fun TetrisDuelPlaceholder(open: (Any) -> Unit) = PlaceholderScreen(
     "테트리스 1:1", "W4-b 테트리스",
     links = listOf(PlaceholderLink("판돈") { open(Dest.StakeSheet("tetris")) }),
 )
+
+@Composable
+fun RummyPlaceholder() = PlaceholderScreen("아잉 큐브", "ios-1017 큐브")
 
 @Composable
 fun StakeSheetPlaceholder(game: String) = PlaceholderScreen("판돈 고르기", "W4-a·b", detail = "game=$game · 판돈 목록은 서버값")

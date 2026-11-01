@@ -11,7 +11,7 @@ class TabBarPolicyTest {
     fun everyListedScreenHidesTheTabBarIncludingTetrisMatch() {
         for (screen in TabBarPolicy.Screen.entries) assertTrue(TabBarPolicy.hidesTabBar(screen), "$screen 이 탭 막대를 안 숨긴다")
         assertEquals(
-            listOf("conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "shop", "miniGamePlay", "grassDetail"),
+            listOf("conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "shop", "miniGamePlay", "grassDetail"),
             TabBarPolicy.Screen.entries.map { it.rawValue },
         )
     }

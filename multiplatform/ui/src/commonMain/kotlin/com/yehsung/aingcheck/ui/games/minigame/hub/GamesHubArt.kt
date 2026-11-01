@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.rules.rummy.RummyTilePalette
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisPalette
 import com.yehsung.aingcheck.ui.games.minigame.FlappyAingImage
@@ -196,6 +197,34 @@ private fun DrawScope.drawStone(center: Offset, radius: Float, black: Boolean) {
     } else {
         drawCircle(Brush.radialGradient(listOf(Color.White, Color(0.80f, 0.80f, 0.80f)), highlight, radius * 1.6f), radius, center)
         drawCircle(Color.Black.copy(alpha = 0.2f), radius, center, style = Stroke(0.8f * density))
+    }
+}
+
+/** 아잉 큐브 썸네일 — 남보라 펠트 위 타일 넷(실제 4색 · 색 표식). 판 그림과 같은 값이다(core RummyTilePalette). */
+@Composable
+fun GamesRummyTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Thumbnail(side, modifier) {
+    drawRect(Brush.verticalGradient(listOf(gamesHex(0x332B61), gamesHex(0x211C45))))
+    val tileWidth = size.width * 0.34f
+    val tileHeight = size.height * 0.40f
+    val gap = size.width * 0.05f
+    val left = (size.width - tileWidth * 2 - gap) / 2
+    val top = (size.height - tileHeight * 2 - gap) / 2
+    val corner = CornerRadius(tileWidth * 0.18f)
+    RummyTilePalette.inks.forEachIndexed { index, ink ->
+        val x = left + (index % 2) * (tileWidth + gap)
+        val y = top + (index / 2) * (tileHeight + gap)
+        drawRoundRect(gamesHex(RummyTilePalette.bevel.toLong()), Offset(x, y), Size(tileWidth, tileHeight), corner)
+        drawRoundRect(gamesHex(RummyTilePalette.bodyTop.toLong()), Offset(x, y), Size(tileWidth, tileHeight * 0.88f), corner)
+        val mark = tileWidth * 0.46f
+        val markLeft = x + (tileWidth - mark) / 2
+        val markTop = y + (tileHeight * 0.88f - mark) / 2
+        val color = gamesHex(ink.toLong())
+        when (index) {
+            0 -> drawCircle(color, mark / 2, Offset(markLeft + mark / 2, markTop + mark / 2))
+            1 -> drawPath(Path().apply { moveTo(markLeft + mark / 2, markTop); lineTo(markLeft + mark, markTop + mark); lineTo(markLeft, markTop + mark); close() }, color)
+            2 -> drawRect(color, Offset(markLeft, markTop), Size(mark, mark))
+            else -> drawPath(Path().apply { moveTo(markLeft + mark / 2, markTop); lineTo(markLeft + mark, markTop + mark / 2); lineTo(markLeft + mark / 2, markTop + mark); lineTo(markLeft, markTop + mark / 2); close() }, color)
+        }
     }
 }
 

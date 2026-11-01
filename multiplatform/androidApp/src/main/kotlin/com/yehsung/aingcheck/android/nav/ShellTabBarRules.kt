@@ -19,6 +19,8 @@ object ShellTabBarRules {
         val tetrisMatch: Boolean = false,
         /** 오목·체스 화면이 '판(대국·결과·로봇 화면)'이라고 알렸다(GomokuTabBarPolicy · ChessTabBarPolicy → onTabBarHidden). 로비·관전은 거짓. */
         val boardScreenHides: Boolean = false,
+        /** 아잉 큐브 판·결과(`RummyPhase.playing`·`finished`). 로비·방에서는 보인다. */
+        val rummyMatch: Boolean = false,
     )
 
     /** 표 한 줄: 목적지 · iOS 화면(없으면 Android 만의 줄) · 판 상태에 따른 숨김. */
@@ -30,6 +32,8 @@ object ShellTabBarRules {
         Row(Dest.Chess::class, TabBarPolicy.Screen.chessMatch) { it.boardScreenHides },
         // 판 시간이 단조 시계로 흐른다 — 탭을 잘못 눌러 나가면 안 보이는 채로 조각이 계속 떨어진다(판돈이 걸린 판).
         Row(Dest.TetrisDuel::class, TabBarPolicy.Screen.tetrisMatch) { it.tetrisMatch },
+        // 차례 시간이 서버에서 흐른다 — 탭을 잘못 눌러 나가면 안 보이는 채로 시간 초과가 쌓여 3회째 기권이다.
+        Row(Dest.Rummy::class, TabBarPolicy.Screen.rummyMatch) { it.rummyMatch },
         Row(Dest.Shop::class, TabBarPolicy.Screen.shop) { true },
         Row(Dest.MiniGame::class, TabBarPolicy.Screen.miniGamePlay) { true },
         Row(Dest.GrassDetail::class, TabBarPolicy.Screen.grassDetail) { true },

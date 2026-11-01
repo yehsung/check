@@ -31,5 +31,6 @@ class GamesRoutesTest {
         assertEquals(Dest.Gomoku(GameSection.LOBBY.raw), GamesRoutes.destination(GamesDestination.Gomoku))
         assertEquals(Dest.Chess(GameSection.LOBBY.raw), GamesRoutes.destination(GamesDestination.Chess))
         assertEquals(Dest.TetrisDuel, GamesRoutes.destination(GamesDestination.TetrisDuel))
+        assertEquals(Dest.Rummy, GamesRoutes.destination(GamesDestination.Rummy))
     }
 }

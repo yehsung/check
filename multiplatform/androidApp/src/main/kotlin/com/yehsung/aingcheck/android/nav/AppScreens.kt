@@ -29,6 +29,8 @@ import com.yehsung.aingcheck.feature.phone.push.PhonePushText
 import com.yehsung.aingcheck.feature.phone.routing.PhoneNavRequest
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.games.gomoku.BoardGameMe
+import com.yehsung.aingcheck.ui.games.rummy.GamesRummyArt
+import com.yehsung.aingcheck.ui.games.rummy.GamesRummyArtSource
 import com.yehsung.aingcheck.ui.screens.session.kit.ScreenArt
 import com.yehsung.aingcheck.ui.screens.settingscommon.AppearanceStore
 import com.yehsung.aingcheck.ui.screens.settingscommon.NotificationPrimerContent
@@ -51,7 +53,12 @@ class AppScreens(
     val screenArt: ScreenArt,
     /** 알림 권한 설명 시트를 띄울 때(W2-f AndroidPushSystem.isPrimerVisible). */
     val primerVisible: StateFlow<Boolean> = MutableStateFlow(false),
+    /** 아잉 큐브 그림 받기·디스크(AndroidRummyArtSource). null 이면 번들 그림만(계측 시험 — 망을 타지 않는다). */
+    rummyArtSource: GamesRummyArtSource? = null,
 ) {
+    /** 아잉 큐브 그림 저장소(앱에 하나 — 받기는 실행에 한 번). */
+    val rummyArt: GamesRummyArt = GamesRummyArt(rummyArtSource)
+
     /** W3-a 화면(세션 · 지금 · 메시지). 착용 캐릭터 · 루비는 나 탭 스토어(같은 루비 칸)에서 읽는다. */
     val w3a: W3aScreenDeps = W3aScreenDeps(
         session = phone.session,
@@ -161,6 +168,7 @@ object NavRequests {
                     GamesDestination.Gomoku -> GomokuRoute.lobby()
                     GamesDestination.Chess -> ChessRoute.lobby()
                     GamesDestination.TetrisDuel -> Dest.TetrisDuel
+                    GamesDestination.Rummy -> Dest.Rummy
                     is GamesDestination.MiniGame -> RouteTargets.miniGame(d.kind)?.let { Dest.MiniGame(it.raw) }
                 }
                 dest?.let { nav.navigate(it) { launchSingleTop = true } }

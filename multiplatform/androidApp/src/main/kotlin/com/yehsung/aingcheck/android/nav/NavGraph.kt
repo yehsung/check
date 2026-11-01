@@ -27,6 +27,7 @@ import com.yehsung.aingcheck.android.screens.games.chess.ChessDestination
 import com.yehsung.aingcheck.android.screens.games.gomoku.GomokuDestination
 import com.yehsung.aingcheck.android.screens.games.hub.GamesHubRoute
 import com.yehsung.aingcheck.android.screens.games.minigame.MiniGameRoute
+import com.yehsung.aingcheck.android.screens.games.rummy.RummyRoute
 import com.yehsung.aingcheck.android.screens.games.tetris.TetrisDuelRoute
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerRouteScreen
 import com.yehsung.aingcheck.android.screens.me.FeedbackRouteScreen
@@ -44,7 +45,9 @@ import com.yehsung.aingcheck.android.screens.shop.GachaOddsRoute
 import com.yehsung.aingcheck.android.screens.shop.MissionsRoute
 import com.yehsung.aingcheck.android.screens.shop.ShopRoute
 import com.yehsung.aingcheck.android.screens.stage.AingStage
+import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
 import com.yehsung.aingcheck.core.stores.messages.blockPeer
+import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.ui.games.gomoku.BoardGameSafety
 import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubBoardFacts
 import com.yehsung.aingcheck.ui.screens.me.MeHomeRules
@@ -82,6 +85,7 @@ import com.yehsung.aingcheck.android.screens.games.ChessPlaceholder
 import com.yehsung.aingcheck.android.screens.games.GamesHomePlaceholder
 import com.yehsung.aingcheck.android.screens.games.GomokuPlaceholder
 import com.yehsung.aingcheck.android.screens.games.MiniGamePlaceholder
+import com.yehsung.aingcheck.android.screens.games.RummyPlaceholder
 import com.yehsung.aingcheck.android.screens.games.StakeSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.games.TetrisDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerPlaceholder
@@ -233,6 +237,7 @@ private fun NavGraphBuilder.gamesGraph(open: (Any) -> Unit) =
         shellScreen<Dest.Gomoku> { GomokuPlaceholder(it.toRoute<Dest.Gomoku>(), open) }
         shellScreen<Dest.Chess> { ChessPlaceholder(it.toRoute<Dest.Chess>(), open) }
         shellScreen<Dest.TetrisDuel> { TetrisDuelPlaceholder(open) }
+        shellScreen<Dest.Rummy> { RummyPlaceholder() }
         dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }
     }
 
@@ -327,6 +332,15 @@ private fun NavGraphBuilder.gamesGraph(
             myUserID = p.session.userID,
             meName = p.me.displayName,
             onBack = { nav.popBackStack() },
+        )
+    }
+    shellScreen<Dest.Rummy> {
+        RummyRoute(
+            store = p.games,
+            art = app.rummyArt,
+            myUserID = p.session.userID,
+            me = RummySeatFace(name = p.me.displayName ?: RummyPhoneText.me, avatarUrl = p.me.avatarURL?.toString(), characterId = p.me.equippedServerID),
+            onLeave = { nav.popBackStack() },
         )
     }
     dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }

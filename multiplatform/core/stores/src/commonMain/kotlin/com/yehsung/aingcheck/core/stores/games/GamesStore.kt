@@ -34,6 +34,9 @@ sealed interface GamesDestination {
 
     /** 1:1 테트리스(1.0.11) — 로비·준비·판·결과·순위를 **입구 하나**로 연다(체스와 같은 구조). */
     data object TetrisDuel : GamesDestination
+
+    /** 아잉 큐브(2~4인) — 로비·방·판·결과·순위를 **입구 하나**로 연다(테트리스와 같은 구조). */
+    data object Rummy : GamesDestination
 }
 
 /**
@@ -169,6 +172,8 @@ class GamesStore(val context: GamesContext) {
         context.chess.presentWindow = { presentChessScreen() }
         // 테트리스도 **같은 문**이다. 안 물리면 수락·시작이 화면을 못 연다 — 테트리스는 15초 침묵(D5)이 붙어 **수락한 판이 화면 없이 그대로 진다.**
         context.tetris.presentWindow = { presentTetrisScreen() }
+        // 아잉 큐브도 **같은 문**이다. 안 물리면 방장이 시작한 판이 화면 없이 흘러 시간 초과가 쌓이고 3회째 기권(꼴찌)이 된다. 스토어가 없는 조립(데스크톱)은 건너뛴다.
+        context.rummy?.presentWindow = { presentRummyScreen() }
     }
 
     // MARK: 자리 API
@@ -567,12 +572,12 @@ class GamesStore(val context: GamesContext) {
         context.tetris.windowDidClose()
     }
 
-    // MARK: 아잉 큐브 화면 수명 (테트리스에서 수리한 모양 그대로 — 화면은 다음 단계가 부른다)
+    // MARK: 아잉 큐브 화면 수명 (테트리스에서 수리한 모양 그대로 — GamesRummyScreen 이 부른다)
 
     /**
      * 아잉 큐브 화면이 나타났다: 로비·방·판을 읽고(`openWindow`) 앱이 active 면 창을 세운다(`setWindowVisible` — 폴링의 주 스위치).
      * [isRummyScreenVisible] 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를 봐야 화면을 또 열지 않는다.
-     * `presentWindow` 는 아직 비어 있다 — `GamesDestination` 에 큐브 칸이 생기는 화면 단계가 잇는다.
+     * 이 문은 [presentRummyScreen] 이다.
      */
     fun rummyScreenDidAppear() {
         val rummy = context.rummy ?: return
@@ -736,6 +741,12 @@ class GamesStore(val context: GamesContext) {
     private fun presentTetrisScreen() {
         if (!isAppActive || !context.sessionStore.isSignedIn || isTetrisScreenVisible) return
         context.router.present(GamesDestination.TetrisDuel)
+    }
+
+    /** 아잉 큐브 판이 막 열렸다 — 큐브 화면을 연다. `!isRummyScreenVisible` 가드가 화면을 두 번 쌓는 것을 막는다([rummyScreenDidAppear] 가 깃발을 먼저 적는 까닭). */
+    private fun presentRummyScreen() {
+        if (!isAppActive || !context.sessionStore.isSignedIn || isRummyScreenVisible) return
+        context.router.present(GamesDestination.Rummy)
     }
 }
 

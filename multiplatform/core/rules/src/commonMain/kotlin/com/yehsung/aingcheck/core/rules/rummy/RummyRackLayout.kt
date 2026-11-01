@@ -7,7 +7,8 @@ import kotlin.math.abs
 
 // 아잉 큐브 2판 — 내 받침대(랙) 자유 배치 모델(설계서 v2 §2.3). 골든 `rummy/rack-layout`.
 //
-// 받침대는 줄 2개(넘치면 3번째 줄부터 더 연다)이고, 한 줄은 **반 칸 단위** halfColumnsPerRow(32 = 타일 16장)다.
+// 받침대는 줄 2개(넘치면 3번째 줄부터 더 연다)이고, 한 줄은 **반 칸 단위** [RummyRackLayout.halfColumns](기본 halfColumnsPerRow 32 = 타일 16장)다.
+// 줄 폭은 인스턴스 값이다 — 폰은 22(한 줄 11장, RummyRackGeometry.phoneHalfColumns)를 쓴다. 저장 항목은 기기별 로컬이라 맥 판을 폰에서 이어 받으면 폭 밖 자리는 nearestFree 로 간다.
 // 타일 한 장은 반 칸 2개를 차지한다(`halfCol ..< halfCol + 2`). 같은 줄에서 두 타일이 반 칸이라도 겹치면 안 되고, 빈칸은 된다.
 // 화면 순서([RummyRackLayout.readingOrder])는 줄 → 반 칸 순이다. 편집기의 rack 목록은 늘 이 순서다.
 //
@@ -30,18 +31,22 @@ data class RummyRackSlot(val row: Int, val halfCol: Int) : Comparable<RummyRackS
 @Serializable
 data class RummyRackEntry(val face: RummyFace, val slot: RummyRackSlot)
 
-class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
-    constructor() : this(emptyMap())
+class RummyRackLayout private constructor(
+    slots: Map<Int, RummyRackSlot>,
+    /** 한 줄의 반 칸 수. 복제·정렬·저장 복원이 모두 이 값을 잇는다. */
+    val halfColumns: Int,
+) {
+    constructor(halfColumns: Int = halfColumnsPerRow) : this(emptyMap(), halfColumns)
 
     /** 타일 로컬 id → 자리. */
     var slots: Map<Int, RummyRackSlot> = slots
         private set
 
-    fun copy(): RummyRackLayout = RummyRackLayout(slots)
+    fun copy(): RummyRackLayout = RummyRackLayout(slots, halfColumns)
 
-    override fun equals(other: Any?): Boolean = other is RummyRackLayout && slots == other.slots
+    override fun equals(other: Any?): Boolean = other is RummyRackLayout && slots == other.slots && halfColumns == other.halfColumns
 
-    override fun hashCode(): Int = slots.hashCode()
+    override fun hashCode(): Int = 31 * slots.hashCode() + halfColumns
 
     override fun toString(): String = "RummyRackLayout($slots)"
 
@@ -61,7 +66,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
     /** [tiles] 장을 [slot] 부터 나란히 놓을 수 있는가(줄 안 · 겹침 없음). [excluding] 은 장애물에서 뺀다(옮기는 타일들). */
     fun isFree(slot: RummyRackSlot, tiles: Int = 1, excluding: Set<Int> = emptySet()): Boolean {
         val span = tiles * tileSpan
-        if (slot.row < 0 || slot.halfCol < 0 || slot.halfCol + span > halfColumnsPerRow) return false
+        if (slot.row < 0 || slot.halfCol < 0 || slot.halfCol + span > halfColumns) return false
         for ((id, other) in slots) {
             if (other.row != slot.row || id in excluding) continue
             if (other.halfCol < slot.halfCol + span && other.halfCol + tileSpan > slot.halfCol) return false
@@ -75,7 +80,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
      */
     fun nearestFree(slot: RummyRackSlot, tiles: Int = 1, excluding: Set<Int> = emptySet()): RummyRackSlot {
         val span = tiles * tileSpan
-        val maxStart = maxOf(0, halfColumnsPerRow - span)
+        val maxStart = maxOf(0, halfColumns - span)
         val wantRow = maxOf(0, slot.row)
         val wantCol = minOf(maxOf(0, slot.halfCol), maxStart)
         var best: RummyRackSlot? = null
@@ -125,8 +130,8 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
     }
 
     private fun firstFree(row: Int, span: Int, excluding: Set<Int>): RummyRackSlot? {
-        if (span > halfColumnsPerRow) return null
-        for (col in 0..(halfColumnsPerRow - span)) {
+        if (span > halfColumns) return null
+        for (col in 0..(halfColumns - span)) {
             val slot = RummyRackSlot(row, col)
             if (isFree(slot, span / tileSpan, excluding)) return slot
         }
@@ -164,7 +169,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
         slots = slots - tileIDs.toSet()
         val span = tileIDs.size * tileSpan
         val row = maxOf(0, wanted.row)
-        val start0 = minOf(maxOf(0, wanted.halfCol), maxOf(0, halfColumnsPerRow - span))
+        val start0 = minOf(maxOf(0, wanted.halfCol), maxOf(0, halfColumns - span))
         val first = RummyRackSlot(row, start0)
         if (isFree(first, tileIDs.size)) {
             set(tileIDs, first)
@@ -227,7 +232,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
      * 아니면 넘친 타일부터)를 다음 줄 맨 앞에 끼우고 그 줄 타일을 민다(첫 타일과는 반 칸 — 다른 덩어리). 줄마다 한 장 이상 남으니 끝난다.
      */
     private fun settle(placed: List<Item>, row: Int) {
-        val over = placed.indexOfFirst { it.col + tileSpan > halfColumnsPerRow }
+        val over = placed.indexOfFirst { it.col + tileSpan > halfColumns }
         if (over < 0) {
             val next = slots.toMutableMap()
             for (item in placed) next[item.id] = RummyRackSlot(row, item.col)
@@ -240,7 +245,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
         var tail = over
         while (tail + 1 < placed.size && touches(tail + 1)) tail += 1
         val chunkSpan = placed[tail].col + tileSpan - placed[head].col
-        val cut = if (head > 0 && chunkSpan <= halfColumnsPerRow) head else maxOf(over, 1)
+        val cut = if (head > 0 && chunkSpan <= halfColumns) head else maxOf(over, 1)
         val next = slots.toMutableMap()
         for (item in placed.subList(0, minOf(cut, placed.size))) next[item.id] = RummyRackSlot(row, item.col)
         slots = next
@@ -269,7 +274,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
     }
 
     companion object {
-        /** 한 줄의 반 칸 수(타일 16장). */
+        /** 한 줄의 반 칸 수 기본값(타일 16장, 맥). */
         const val halfColumnsPerRow: Int = 32
 
         /** 늘 보이는 줄 수. 넘치면 줄이 더 열린다. */
@@ -279,22 +284,23 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
         const val tileSpan: Int = 2
 
         /** 빈칸 없이 순서대로(줄이 차면 다음 줄). 옛 선형 자리 API(`Rack(index)`)와 처음 받은 랙이 쓴다. */
-        fun packed(tileIDs: List<Int>): RummyRackLayout = grouped(tileIDs.map { listOf(it) }, gap = 0)
+        fun packed(tileIDs: List<Int>, halfColumns: Int = halfColumnsPerRow): RummyRackLayout =
+            grouped(tileIDs.map { listOf(it) }, gap = 0, halfColumns = halfColumns)
 
         /** 단위(조합)마다 이어 놓고 단위 사이 [gap] 반 칸. 단위가 줄 끝에 안 들어가면 통째로 다음 줄(단위가 한 줄보다 길면 쪼갠다). */
-        fun grouped(units: List<List<Int>>, gap: Int = 1): RummyRackLayout {
+        fun grouped(units: List<List<Int>>, gap: Int = 1, halfColumns: Int = halfColumnsPerRow): RummyRackLayout {
             val out = HashMap<Int, RummyRackSlot>()
             var row = 0
             var col = 0
             for (unit in units) {
                 if (unit.isEmpty()) continue
                 val span = unit.size * tileSpan
-                if (col > 0 && col + span > halfColumnsPerRow && span <= halfColumnsPerRow) {
+                if (col > 0 && col + span > halfColumns && span <= halfColumns) {
                     row += 1
                     col = 0
                 }
                 for (id in unit) {
-                    if (col + tileSpan > halfColumnsPerRow) {
+                    if (col + tileSpan > halfColumns) {
                         row += 1
                         col = 0
                     }
@@ -303,7 +309,7 @@ class RummyRackLayout private constructor(slots: Map<Int, RummyRackSlot>) {
                 }
                 col += gap
             }
-            return RummyRackLayout(out)
+            return RummyRackLayout(out, halfColumns)
         }
 
         /**

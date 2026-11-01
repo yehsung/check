@@ -47,6 +47,7 @@ kotlin {
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-*-neutral}.png → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-*.png(0.3.62 아잉이 이모티콘, G §8-2) → files/stickers/…
 //   Sources/CheckCore/Resources/GachaMachine/gacha_*.png(0.3.54 캡슐 뽑기 기계 다섯 장, W4-c) → files/gacha/…
+//   Sources/check/Resources/rummy-{rack,table}.png(0.3.69 아잉 큐브 받침대·펠트 폴백 사본, 합쳐 1.05MB) → files/art/…
 // 아틀라스(atlas.png)는 싣지 않는다(살아 있는 캐릭터는 구운 자산 — W0-d·W5).
 val repoDir = rootDir.parentFile
 val aingFamily = listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco")
@@ -74,6 +75,11 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
     from(repoDir.resolve("Sources/CheckCore/Resources/Stickers")) {
         include("sticker-*.png")
         into("files/stickers")
+    }
+    // 아잉 큐브 받침대·펠트 번들 사본(GamesRummyArt.bundlePath). 운영 그림은 Storage 에서 받아 캐시가 덮는다. 빠지면 Compose 폴백을 그린다.
+    from(repoDir.resolve("Sources/check/Resources")) {
+        include("rummy-rack.png", "rummy-table.png")
+        into("files/art")
     }
     // 0.3.54 캡슐 뽑기 기계 그림 다섯 장(W4-c 패치 0001 — 맥 뽑기 창 · 폰 덮개와 같은 그림 `.bundled`). 빠지면 기계가 벡터로 그린다.
     from(repoDir.resolve("Sources/CheckCore/Resources/GachaMachine")) {

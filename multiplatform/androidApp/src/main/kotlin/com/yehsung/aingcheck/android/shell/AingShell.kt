@@ -18,6 +18,7 @@ import com.yehsung.aingcheck.android.screens.stage.StageClock
 import com.yehsung.aingcheck.android.screens.stage.StageHandle
 import com.yehsung.aingcheck.android.widget.rankingsMood
 import com.yehsung.aingcheck.ui.screens.session.kit.rememberPortrait
+import com.yehsung.aingcheck.core.rules.rummy.RummyPhase
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalAppUserCharacters
 import com.yehsung.aingcheck.ui.screens.session.kit.LocalScreenArt
@@ -201,7 +202,12 @@ private fun SignedInTabs(onVisibleRoute: (AingRoute?) -> Unit, app: AppScreens) 
     }
     // 탭 막대 숨김 표는 한 자리(ShellTabBarRules — iOS TabBarPolicy 화면 전부 + 뽑기 기계). 오목·체스 판은 화면이 알리고(W4-a),
     // 그 알림은 위에 대화상자가 떠도 살아 있게 표 밖에서도 한 번 더 본다.
-    val play = ShellTabBarRules.Play(tetrisMatch = phone.games.tetris.match != null, boardScreenHides = screenHidesTabBar)
+    val rummyPhase = phone.rummy.phase
+    val play = ShellTabBarRules.Play(
+        tetrisMatch = phone.games.tetris.match != null,
+        boardScreenHides = screenHidesTabBar,
+        rummyMatch = rummyPhase == RummyPhase.playing || rummyPhase == RummyPhase.finished,
+    )
     val hideTabBar = screenHidesTabBar || ShellTabBarRules.hidesTabBar(destination, play)
     // 확성기 배너 미룸(iOS MegaphoneBannerModalProbe): 대화상자 목적지(시트 · 알림 권한 설명)나 화면 안에서 직접 띄운 시트·대화상자
     // (ModalBottomSheet · AlertDialog — 액티비티 위 별도 창, LocalModalPresence 로 센다)가 떠 있으면 배너가 그 밑에 깔린다 — 미룬다.

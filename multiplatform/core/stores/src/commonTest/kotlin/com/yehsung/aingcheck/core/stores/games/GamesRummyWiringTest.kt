@@ -1,7 +1,10 @@
 // 원본: 없음 — 게임 탭 스토어의 아잉 큐브 배선(폰 몫: 네 방향 입구 · 배지 · 화면 수명 · 화면 꺼짐). 맥은 메뉴·창이 따로 잇는다(Tests/checkTests/V0369RummyWiringTests.swift 는 소스 계약).
 package com.yehsung.aingcheck.core.stores.games
 
+import com.yehsung.aingcheck.core.rules.rummy.RummyRackSlot
 import com.yehsung.aingcheck.core.session.app.AppConfig
+import com.yehsung.aingcheck.core.stores.rummy.GamesRummyCard
+import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.applyLobby
 import com.yehsung.aingcheck.core.stores.rummy.applyState
@@ -9,6 +12,7 @@ import com.yehsung.aingcheck.core.stores.rummy.markEngaged
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStoreTest
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.SwiftUUID
+import com.yehsung.aingcheck.core.wire.games.RummyFace
 import com.yehsung.aingcheck.core.wire.games.RummyLobby
 import com.yehsung.aingcheck.core.wire.games.RummyMatchState
 import com.yehsung.aingcheck.core.wire.games.TetrisStatePayload
@@ -199,6 +203,69 @@ class GamesRummyWiringTest {
         assertTrue(x.games.wantsIdleTimerDisabled)
         x.rummy.applyState(state(mine = "forfeit").copy(seq = 2))
         assertFalse(x.games.wantsIdleTimerDisabled, "구경 중인데 켜 둔다")
+    }
+
+    /** 게임 탭 카드 서열: 차단 > 내 판 · 방 > 받은 초대 > 전적 > 기본 한 줄. 없으면: 판돈 걸린 판이 흐르는데 카드가 초대 수를 말하거나, 막힌 카드가 왜 막혔는지 말하지 않는다. */
+    @Test
+    fun hubCardSpeaksOneThingInOrder() = runTest {
+        val idle = rig()
+        assertEquals(GamesRummyCard.Line.idle, GamesRummyCard.line(idle.games))
+        assertNull(GamesRummyCard.chip(idle.games))
+        assertEquals(RummyPhoneText.idleLine, GamesRummyCard.detail(idle.games))
+
+        val invited = rig()
+        invited.rummy.applyLobby(lobby(invites = 2))
+        assertEquals("받은 초대 2건", GamesRummyCard.chip(invited.games))
+
+        val room = rig()
+        room.rummy.applyLobby(lobby(invites = 2))
+        room.rummy.applyState(state("forming"))
+        assertEquals(GamesRummyCard.Line.inRoom, GamesRummyCard.line(room.games))
+        assertEquals(RummyPhoneText.inRoomChip, GamesRummyCard.chip(room.games))
+
+        val playing = rig()
+        playing.rummy.applyLobby(lobby(invites = 2))
+        playing.rummy.applyState(state())
+        assertEquals(GamesRummyCard.Line.activeMatch, GamesRummyCard.line(playing.games))
+
+        val blocked = rig()
+        blocked.h.gomoku.holdMatch()
+        blocked.rummy.applyLobby(lobby(invites = 2))
+        assertEquals(GamesRummyCard.Line.blocked, GamesRummyCard.line(blocked.games))
+        assertEquals(GamesBusyText.entryBlock(GamesBusyGame.gomoku), GamesRummyCard.chip(blocked.games))
+        assertEquals(GamesBusyText.entryBlockHint(GamesBusyGame.gomoku, GamesBusyGame.rummy), GamesRummyCard.detail(blocked.games))
+
+        val locked = rig(enabled = false)
+        locked.rummy.applyLobby(lobby(invites = 2))
+        assertEquals(GamesRummyCard.Line.idle, GamesRummyCard.line(locked.games), "잠긴 빌드는 수락할 수 없는 초대로 칩을 세우지 않는다")
+    }
+
+    /** 판이 처음 서면 화면을 연다. 없으면: 방장이 시작한 판이 화면 없이 흘러 시간 초과 3회로 기권(꼴찌)된다. 보이는 화면은 또 쌓지 않는다. */
+    @Test
+    fun matchStartOpensTheScreenOnce() = runTest {
+        val x = rig()
+        assertEquals(emptyList(), x.h.router.presented)
+        x.games.appDidBecomeActive()
+        x.rummy.applyState(state())
+        assertEquals(listOf<GamesDestination>(GamesDestination.Rummy), x.h.router.presented)
+        x.h.router.presented.clear()
+        x.games.rummyScreenDidAppear()
+        x.h.router.presented.clear()
+        x.rummy.presentWindow!!.invoke()
+        assertEquals(emptyList(), x.h.router.presented, "보이는 화면은 또 쌓지 않는다")
+    }
+
+    /** 폰 배선이 넣은 받침대 폭이 편집기까지 닿는다. 없으면: 폭 값을 넣어도 12장째가 맥 폭 자리(화면 밖)에 놓인다. */
+    @Test
+    fun rackWidthReachesTheEditor() = runTest {
+        val x = rig()
+        assertEquals(32, x.rummy.rackHalfColumns, "기본은 맥 폭")
+        x.rummy.rackHalfColumns = 22
+        val rack = (1..12).map { RummyFace(0, it.toLong()) }
+        x.rummy.applyState(state().copy(myRack = rack))
+        val editor = x.rummy.editor!!
+        assertEquals(22, editor.rackHalfColumns)
+        assertEquals(RummyRackSlot(1, 0), editor.rackLayout.slot(editor.rack[11].id))
     }
 
     @Test

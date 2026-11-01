@@ -30,6 +30,7 @@ object GamesRoutes {
         GamesDestination.Gomoku -> Dest.Gomoku(GameSection.LOBBY.raw)
         GamesDestination.Chess -> Dest.Chess(GameSection.LOBBY.raw)
         GamesDestination.TetrisDuel -> Dest.TetrisDuel
+        GamesDestination.Rummy -> Dest.Rummy
     }
 
     /**

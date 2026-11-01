@@ -16,6 +16,9 @@ object TabBarPolicy {
 
         /** 1:1 테트리스 판·결과(1.0.11) — 판 시간이 **단조 시계**로 흐르고 루비가 걸려 있다(빠져나가면 보이지 않는 채로 조각이 떨어진다). */
         tetrisMatch("tetrisMatch"),
+
+        /** 아잉 큐브 판·결과 — 차례 시간이 서버에서 흐르고 3회 연속 시간 초과면 기권이다(탭을 잘못 눌러 나가면 안 보이는 채로 시간이 간다). */
+        rummyMatch("rummyMatch"),
         shop("shop"),
         miniGamePlay("miniGamePlay"),
 

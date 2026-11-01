@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// 폰 제출 인편(맥 v0.3.39 → 폰 1.0.17). 맥 쪽 짝은 `Tests/checkTests/V0339MiniGamePendingSubmitTests.swift`.
+// 폰 제출 인편(맥 v0.3.39 → 폰 1.0.16). 맥 쪽 짝은 `Tests/checkTests/V0339MiniGamePendingSubmitTests.swift`.
 //
 // ⚠️ 스텁은 호출마다 다른 토큰을 줘야 한다(`gamesServeRoundTokens`) — 같은 문자열이면 갈아 끼워져도 바뀐 것이 없어 영원히 초록이다.
 // ⚠️ 하네스 시계는 안 흐른다. 시간이 필요한 단언은 `clock.advance` 와 `hub.sleep` 으로만 한다.

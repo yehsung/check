@@ -17,7 +17,7 @@ import CheckCore
 // 가드 없이 서로의 진행 중 요청을 무효화해, 짧은 판을 연달아 하면 토큰이 영영 안 왔다.
 //
 // 이름은 폰 `GamesMiniGameHub` 에서 왔고(`roundTokenInFlightKind` · `isSubmitting` · `terminalSubmitStatuses` / `deadTokenStatuses`),
-// 인편의 모양·status 분류·백오프·다음에 할 일 판정은 폰 1.0.17 부터 **코어 한 벌**이다(`MiniGamePendingSubmit` · `MiniGameSubmitRules`).
+// 인편의 모양·status 분류·백오프·다음에 할 일 판정은 폰 1.0.16 부터 **코어 한 벌**이다(`MiniGamePendingSubmit` · `MiniGameSubmitRules`).
 //  · **인편은 칸 하나가 아니라 대기열이다**(`miniGamePendingSubmits`). 앞 인편이 끝나기 전에는 그 게임의 새 토큰을 받지 않으므로
 //    아래 불변식이 무조건 선다. 토큰을 실은 인편은 게임당 하나뿐이다(서버가 미사용 토큰을 한 행만 두므로 둘일 수 없다) —
 //    나머지는 **토큰을 기다리는 인편**(`token == nil`)이다.

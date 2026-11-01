@@ -150,17 +150,28 @@ package enum GamesMiniGameText {
     /// 이번 판은 어떤 재시도로도 안 올라간다. 그걸 "다시 해 주세요"로 그리면 사용자는 없는 복구를 기다린다.
     package static let submitTokenDead = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
 
-    /// 앱이 background 로 가서 판을 끝냈다(폰 전용 — SPEC-ios §3.5). **게임마다 말이 다르다**:
-    /// 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`).
-    /// 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다 — 점수는 이미 나갔다.
-    package static func endedInBackground(_ kind: MiniGameKind) -> String {
+    // MARK: 일시정지(맥과 같은 문장 — `CheckMiniGameWindowView.pauseTitle` · `resumeAction` · `quitAction`)
+
+    package static let pauseTitle = "일시정지"
+    package static let resumeAction = "이어하기"
+    package static let quitAction = "그만두기"
+    /// 3-2-1 밑 한 줄(맥 정지 화면과 같은 문장).
+    package static let resumeCountdownCaption = "곧 다시 시작해요"
+
+    /// 정지 카드 부제 — **게임마다 접는 결과가 다르다**(`GamesMiniGamePausePolicy`). 같은 문구를 쓰면 한쪽이 거짓말이 된다.
+    /// 플래피만 맥과 다른 문장이다: 폰 플래피는 접으면 **버린다**(2026-11-01 사용자 답 "지금처럼 버림").
+    package static func pauseSubtitle(_ kind: MiniGameKind) -> String {
         switch kind {
-        case .timingBar, .flappy: return "앱을 나가서 이번 판은 기록하지 않았어요"
-        // 길건너도 확정 쪽이다(폰 1.0.15 D4 — 차·기차가 움직이는 게임이라 background 를 무한 일시정지로 두면
-        // 마음대로 멈출 수 있는 게임이 된다). 그래서 테트리스와 **같은 문장**이다.
-        case .tetris, .crossy: return "앱을 나가서 이번 판을 여기까지 기록했어요"
+        case .timingBar, .flappy: return "지금 그만두면 이번 판 점수는 기록되지 않아요"
+        case .tetris: return "지금 그만두면 지금까지 쌓은 점수가 기록돼요"
+        case .crossy: return "지금 그만두면 지금까지 간 줄 수가 점수로 기록돼요"
         }
     }
+
+    /// 5분 상한으로 판이 끝났다(테트리스·길건너). 그 점수가 토큰을 들고 인편에 올랐을 때만 세운다 —
+    /// 토큰을 기다리거나 토큰이 죽은 판에 이 말을 쓰면 안 올라간 점수를 올렸다고 하는 거짓말이 된다.
+    package static let pauseCapEnded = "5분 넘게 멈춰서 여기까지 기록했어요"
+
     /// 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻).
     package static let privateNotice = "미니게임 순위 공개가 꺼져 있어 점수가 올라가지 않아요"
 

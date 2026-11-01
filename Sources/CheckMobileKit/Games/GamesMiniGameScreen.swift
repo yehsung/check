@@ -12,8 +12,8 @@ import SwiftUI
 /// - 프레임 상한은 화면 최대 주사율(`UIScreen.maximumFramesPerSecond`)을 코어 `MiniGameFrameRate` 에 넣은 값이다.
 /// - 햅틱 네 채널: 판에 먹힌 탭(가볍게) · 하드드롭(단단하게) · 줄소거(묵직하게) · 게임오버·완주(한 번).
 ///   **이동 걸음·소프트드롭 걸음에는 없다** — L1 소프트드롭이 초당 56회, L5 는 213회라 탭틱 엔진이 낼 수 있는 속도가 아니다.
-/// - 앱이 background 로 가거나 화면을 떠나면 판은 끝 — 스토어·허브가 한다(`GamesMiniGameHub.appDidEnterBackground`·
-///   `closeScreen`). 기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
+/// - 앱을 내리면 판은 **얼고**(`GamesMiniGameHub.appWillResignActive`·`appDidEnterBackground`) 돌아와도 저절로 안 풀린다 — 스크림 + 카드 +
+///   3-2-1(폰 1.0.16). 화면을 떠나면 판은 끝이다(`closeScreen`). 타이밍 바·플래피는 버리고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
 struct GamesMiniGameScreen: View {
     let store: GamesStore
     let kind: MiniGameKind
@@ -36,6 +36,9 @@ struct GamesMiniGameScreen: View {
     /// 지금 트래커로 넘기고 있는(= 진행 중인 판을 조작하는) 접촉의 시작점. 판이 이 손가락 아래에서 끝났는지를
     /// 이 값으로 알아본다 — `isPlaying` 이 거짓인데 이 시작점이면 **방금 끝난 그 접촉**이다.
     @State private var trackedPlayContact: CGPoint?
+    /// 손가락이 닿아 있는 접촉의 시작점(모든 게임). 판이 얼 때 그 접촉을 **다 쓴 접촉**으로 돌린다 — 안 그러면 손가락을 댄 채 3-2-1 이
+    /// 끝난 뒤 그 끌기의 누적 이동이 새 걸음으로 먹거나(테트리스) 점프가 저절로 나간다(플래피).
+    @State private var currentContact: CGPoint?
 
     private var hub: GamesMiniGameHub { store.miniGames }
 
@@ -56,6 +59,10 @@ struct GamesMiniGameScreen: View {
                 // 테트리스만 버튼 줄이 붙는다 — 끌기로 표현할 수 없는 셋(홀드 · 반시계 회전 · 즉시 내리기)이다.
                 if kind == .tetris, let controller = hub.controller, controller.kind == kind {
                     tetrisControls(controller, width: width)
+                        // 정지 중 버튼 줄은 죽어 있다(구동기가 입력을 막지만, 눌러도 조용한 버튼이 멀쩡해 보이면 안 된다).
+                        .opacity(controller.isFrozen ? 0.35 : 1)
+                        .allowsHitTesting(!controller.isFrozen)
+                        .accessibilityHidden(controller.isFrozen)
                 }
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -79,12 +86,30 @@ struct GamesMiniGameScreen: View {
         .navigationTitle(kind.title)
         .navigationBarTitleDisplayMode(.inline)
         .hidesTabBar(for: .miniGamePlay)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { pauseButton }
+        }
         .onAppear {
             refreshHz = GamesDisplay.maximumFramesPerSecond
             hub.openScreen(kind)
             applyDemoSeed()
         }
         .onDisappear { hub.closeScreen(kind) }
+    }
+
+    // MARK: 일시정지
+
+    /// [일시정지]. 판이 도는 중과 3-2-1 동안 보인다(3-2-1 중에 누르면 취소하고 다시 멈춘다 — 맥과 같다).
+    /// 카드가 떠 있으면 뺀다 — 거기는 카드의 [이어하기] 가 있고, 같은 뜻의 버튼이 둘이면 어느 쪽인지 고민하게 된다.
+    @ViewBuilder
+    private var pauseButton: some View {
+        if let controller = hub.controller, controller.kind == kind, controller.isPlaying, !controller.pauseState.showsCard {
+            Button { hub.togglePause() } label: {
+                Label(GamesMiniGameText.pauseTitle, systemImage: "pause.fill")
+                    .labelStyle(.titleAndIcon)
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
     }
 
     // MARK: 머리 줄
@@ -153,7 +178,7 @@ struct GamesMiniGameScreen: View {
     private func canvas(width: CGFloat) -> some View {
         if let controller = hub.controller, controller.kind == kind {
             TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(forRefreshRate: refreshHz),
-                                    paused: !controller.isPlaying || framesFrozen)) { context in
+                                    paused: !controller.isPlaying || framesFrozen || controller.isFrozen)) { context in
                 canvasContent(controller)
                     .onChange(of: context.date) { _, now in
                         guard !framesFrozen else { return }
@@ -174,6 +199,8 @@ struct GamesMiniGameScreen: View {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(GamesMiniGameText.canvasAccessibility(kind))
             .accessibilityValue(accessibilityValue(controller))
+            // 정지 중 보이스오버도 판을 못 읽는다(점수·조작이 스크림 뒤에 남으면 가린 것이 아니다).
+            .accessibilityHidden(controller.isFrozen)
             // 테트리스에는 **직접 조작 트레잇을 걸지 않는다**: 셀이 15~18pt 인 판에서 눈 없이 겨냥하라는 뜻이라
             // 실질 조작이 불가능하다. 두 게임(판 어디든 탭)에는 그대로 둔다.
             .accessibilityAddTraits(kind == .tetris ? [] : [.allowsDirectInteraction])
@@ -186,6 +213,21 @@ struct GamesMiniGameScreen: View {
             .onChange(of: width, initial: true) { _, resolved in
                 controller.updateCellWidth(TetrisLayout.cell * resolved / TetrisLayout.logicalSize.width)
             }
+            // 판이 어는 순간 닿아 있던 접촉을 다 쓴 것으로 돌린다(`currentContact`). `onEnded` 는 전화 수신이면 안 온다 — 래치도 여기서 푼다.
+            .onChange(of: controller.isFrozen) { _, frozen in
+                guard frozen else { return }
+                pressLatched = false
+                swallowsCanvasDragEnd = currentContact
+                trackedPlayContact = nil
+            }
+            // ⚠️ `.gesture` **밖**이다 — 스크림 위 탭이 캔버스 제스처로 새지 않는다. 모양도 캔버스와 같게 자른다.
+            .overlay {
+                if controller.isFrozen {
+                    GamesMiniGamePauseOverlay(kind: kind, state: controller.pauseState,
+                                              onResume: { hub.togglePause() }, onQuit: { hub.quitPausedRound() })
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                }
+            }
         } else {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(CheckTheme.panel)
@@ -196,9 +238,10 @@ struct GamesMiniGameScreen: View {
     private func canvasDrag(_ controller: GamesPlayController) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
-                guard !framesFrozen else { return }
+                guard !framesFrozen, !controller.isFrozen else { return }
+                if currentContact != value.startLocation { currentContact = value.startLocation }
                 // ① 다 쓴 접촉은 **여기서 끝난다** — 판을 켠 손가락의 이동도, 판이 끝난 손가락의 시작 래치도 막는다.
-                if usesDragTracker, swallowsCanvasDragEnd == value.startLocation { return }
+                if swallowsCanvasDragEnd == value.startLocation { return }
                 // ② 이 접촉이 끌던 판이 방금 끝났다(상한·탑아웃·차에 치임). 같은 손가락이 새 판을 켜면 안 된다 —
                 //    켜지면 트래커에 남은 앞 끌기의 축 잠금·소비량으로 첫 조각이 곧장 튄다(길건너는 첫 칸이 저절로 간다).
                 if usesDragTracker, !controller.isPlaying, trackedPlayContact == value.startLocation {
@@ -220,6 +263,9 @@ struct GamesMiniGameScreen: View {
             }
             .onEnded { value in
                 pressLatched = false
+                currentContact = nil
+                // 끌기 트래커가 없는 게임의 다 쓴 접촉(판이 얼 때 닿아 있던 손가락)은 여기서 닫는다 — 아래 가드가 돌려보낸다.
+                if !usesDragTracker, swallowsCanvasDragEnd == value.startLocation { swallowsCanvasDragEnd = nil }
                 guard !framesFrozen, usesDragTracker else { return }
                 if trackedPlayContact == value.startLocation { trackedPlayContact = nil }
                 guard swallowsCanvasDragEnd != value.startLocation else {
@@ -449,6 +495,10 @@ struct GamesMiniGameScreen: View {
             framesFrozen = true
         case .result, .bottom:
             controller.replaceForTesting(timing: GamesDemoSeed.timingBar(finished: true), flappy: GamesDemoSeed.flappy(finished: true))
+        case .paused, .countdown:
+            controller.replaceForTesting(timing: GamesDemoSeed.timingBar(finished: false), flappy: GamesDemoSeed.flappy(finished: false),
+                                         tetris: GamesDemoSeed.tetrisRunning(), crossy: GamesDemoSeed.crossyRunning())
+            hub.demoFreeze(seed == .paused ? .paused : .resuming(MiniGamePauseState.countdownStart))
         default:
             break
         }

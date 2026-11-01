@@ -237,12 +237,19 @@ public final class MobileAppModel {
     }
 
     public func sceneDidBecomeActive() {
+        // `.inactive` 에서 돌아온 것도 여기로 온다(아래 가드는 background 에서 돌아온 것만 통과한다) — 미니게임 정지 상한은 둘 다 잰다.
+        games.sceneDidComeForward()
         guard !isSceneActive else { return }
         isSceneActive = true
         session.appDidBecomeActive()
         realtime.appDidBecomeActive()
         guard session.isSignedIn else { return }
         activateStores()
+    }
+
+    /// `.inactive`(전화 수신 · 제어 센터 · 앱 전환기). 연결을 끊지는 않는다 — 미니게임 판만 얼린다.
+    public func sceneWillResignActive() {
+        games.sceneWillResignActive()
     }
 
     public func sceneDidEnterBackground() {

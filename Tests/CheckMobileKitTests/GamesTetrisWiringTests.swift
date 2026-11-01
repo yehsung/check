@@ -5,7 +5,7 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-/// v0.3.38 폰 테트리스 **배선** — 손가락 → 구동기 → 엔진, 그리고 판이 끝나는 자리(뒤로가기·background·판 상한)와
+/// v0.3.38 폰 테트리스 **배선** — 손가락 → 구동기 → 엔진, 그리고 판이 끝나는 자리(뒤로가기·[그만두기]·정지 상한·판 상한)와
 /// 제출 인편. 화면(`#if os(iOS)`)은 macOS 에서 컴파일되지 않으므로 **모양은 소스 계약으로** 잰다.
 ///
 /// 이 파일이 지키려는 것은 이 저장소가 실제로 데인 자리들이다:
@@ -395,8 +395,8 @@ import Testing
 
     // MARK: - 허브: 출구 · 인편 · 상한
 
-    @Test("앱을 나가면 테트리스 판은 **여기까지 기록**된다 · 그 안내를 비동기 제출 성공이 지우지 않는다")
-    func leavingTheAppRecordsTheTetrisRound() async throws {
+    @Test("앱을 나가면 테트리스 판은 얼고, 5분을 넘겨 돌아오면 **여기까지 기록**된다 · 그 안내를 비동기 제출 성공이 지우지 않는다")
+    func leavingTheAppPastTheLimitRecordsTheTetrisRound() async throws {
         let harness = GamesHarness(label: "tetris-bg")
         configure(harness)
         _ = gamesServeRoundTokens(harness, prefix: "tok-bg")
@@ -408,8 +408,14 @@ import Testing
         for _ in 0..<7 { controller.softDropOneCell() }
 
         harness.model.sceneDidEnterBackground()
+        #expect(controller.isPlaying, "background 가 판을 끝냈다 — 이제는 얼어야 한다")
+        #expect(controller.pauseState == .paused)
+        #expect(harness.server.requests("minigame_submit_score").isEmpty, "언 판의 토큰이 나갔다")
+
+        harness.clock.advance(6 * 60)
+        harness.model.sceneDidBecomeActive()
         #expect(!controller.isPlaying)
-        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.tetris))
+        #expect(harness.hub.submitNotice == GamesMiniGameText.pauseCapEnded)
         #expect(await waits.wait { harness.server.requests("minigame_submit_score").count == 1 })
         let submit = try #require(harness.server.requests("minigame_submit_score").first)
         #expect(submit.bodyText.contains(#""p_game":"tetris""#))
@@ -417,7 +423,7 @@ import Testing
         #expect(submit.bodyText.contains(#""p_token":"tok-bg-1""#))
         await harness.barrier()
         // ★ 여기가 함정이었다: 성공 갈래가 `submitNotice = nil` 이라 출구 안내를 지웠다.
-        #expect(harness.hub.submitNotice == GamesMiniGameText.endedInBackground(.tetris),
+        #expect(harness.hub.submitNotice == GamesMiniGameText.pauseCapEnded,
                 "제출 성공이 '여기까지 기록했어요'를 지웠다 — 사용자에겐 판이 조용히 사라진 것으로 보인다")
         #expect(harness.hub.pendingSubmit == nil)
         #expect(harness.violations.isEmpty, "\(harness.violations)")
@@ -489,6 +495,7 @@ import Testing
         for _ in 0..<6 { controller.softDropOneCell() }
 
         harness.model.sceneDidEnterBackground()
+        harness.hub.quitPausedRound()
         #expect(await waits.wait { harness.server.requests("minigame_submit_score").count == 1 })
         await harness.barrier()
         #expect(harness.hub.pendingSubmit?.token == "tok-net-1", "네트워크 실패에 점수가 그냥 사라졌다")
@@ -601,7 +608,7 @@ import Testing
     // 떼어 재는 방법은 허브의 두 사실에 기댄다:
     //  · `openScreen` 은 **이미 열려 있으면 조기 반환**한다(`activeKind == kind, controller != nil`) —
     //    그래서 화면을 연 채로 판을 끝내면 그쪽 방아쇠는 두 번 다시 안 돈다.
-    //  · `appDidEnterBackground` 는 판만 끝내고 **화면은 닫지 않는다**(`closeScreen` 과 다르다).
+    //  · [그만두기](`quitPausedRound`)는 판만 끝내고 **화면은 닫지 않는다**(`closeScreen` 과 다르다).
     // 두 사실 중 하나라도 바뀌면 아래 둘은 '떼어 재는' 힘을 잃는다 — 그때는 이 주석부터 고쳐라.
 
     @Test("인편 방아쇠 ①: 화면을 여는 것만으로 밀려난다 — 탭이 없어도(beginRound 가 못 도와준다)")
@@ -654,8 +661,9 @@ import Testing
         let controller = try #require(harness.hub.controller)
         controller.tap()
         controller.softDropOneCell()
-        // 앱이 background 로 간다 — 판은 확정되지만 **화면은 그대로 열려 있다**(activeKind·controller 유지).
+        // 앱이 background 로 간다 → 돌아와 [그만두기] — 판은 확정되지만 **화면은 그대로 열려 있다**(activeKind·controller 유지).
         harness.hub.appDidEnterBackground()
+        harness.hub.quitPausedRound()
         #expect(await waits.wait { harness.hub.pendingSubmit?.token == "tok-fb-1" })
         await harness.barrier()
         #expect(tokens.get() == ["tok-fb-1"], "인편이 살아 있는데 새 토큰이 나갔다")
@@ -955,11 +963,13 @@ import Testing
         #expect(!screen.contains("scaleEffect"), "버튼 눌림에 스케일 애니메이션을 썼다")
     }
 
-    @Test("출구는 셋이 다르다: 뒤로가기·background 만 endRound(), 로그아웃·경합 정리는 abandon() 그대로")
+    @Test("출구는 셋이 다르다: [그만두기]·뒤로가기·상한은 endRound() 한 자리, 로그아웃·경합 정리는 abandon() 그대로, background 는 얼리기만")
     func theThreeExitsStayApart() throws {
         let hub = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesMiniGameHub.swift")
-        #expect(hub.components(separatedBy: "controller?.endRound()").count == 2, "endRound 호출부가 둘이 아니다(closeScreen)")
-        #expect(hub.contains("switch controller.endRound()"), "appDidEnterBackground 가 endRound 를 안 쓴다")
+        #expect(hub.components(separatedBy: "controller.endRound()").count == 2, "endRound 호출부가 한 자리(endFrozenRound)가 아니다")
+        let background = try #require(hub.components(separatedBy: "package func appDidEnterBackground()").last)
+        let backgroundBody = try #require(background.components(separatedBy: "package func").first)
+        #expect(!backgroundBody.contains("endRound") && !backgroundBody.contains("endFrozenRound"), "background 가 판을 끝낸다 — 얼기만 해야 한다")
         // `abandon()` 은 **둘**이다: openScreen(경합 정리) · reset(로그아웃). 여기에 테트리스 제출이 섞이면
         // 로그아웃이 남의 계정에 점수를 올린다.
         #expect(hub.components(separatedBy: "controller?.abandon()").count == 3,

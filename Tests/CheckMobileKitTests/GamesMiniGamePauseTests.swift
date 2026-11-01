@@ -136,11 +136,12 @@ struct GamesMiniGamePauseTests {
         var now = gamesDrive(controller, from: Self.start, frames: 6)
         controller.setPauseState(.paused)
         let frozen = (controller.timing, controller.flappy, controller.tetris, controller.crossy)
-        now = now.addingTimeInterval(120)
-        controller.tick(at: now)
+        // 언 뒤 프레임이 **둘 이상** 온다 — 하나면 기준만 잡고 끝나서 가드가 없어도 판이 안 움직인다(뮤테이션 실측).
+        now = gamesDrive(controller, from: now.addingTimeInterval(120), frames: 30)
         controller.setPauseState(.resuming(1))
-        now = now.addingTimeInterval(1)
-        controller.tick(at: now)
+        now = gamesDrive(controller, from: now.addingTimeInterval(1), frames: 30)
+        #expect(controller.timing == frozen.0 && controller.flappy == frozen.1, "\(kind): 얼어 있는 판이 움직였다")
+        #expect(controller.tetris == frozen.2 && controller.crossy == frozen.3, "\(kind): 얼어 있는 판이 움직였다")
         controller.setPauseState(.none)
 
         now = now.addingTimeInterval(120)

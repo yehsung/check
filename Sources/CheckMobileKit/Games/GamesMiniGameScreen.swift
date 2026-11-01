@@ -13,7 +13,7 @@ import SwiftUI
 /// - 햅틱 네 채널: 판에 먹힌 탭(가볍게) · 하드드롭(단단하게) · 줄소거(묵직하게) · 게임오버·완주(한 번).
 ///   **이동 걸음·소프트드롭 걸음에는 없다** — L1 소프트드롭이 초당 56회, L5 는 213회라 탭틱 엔진이 낼 수 있는 속도가 아니다.
 /// - 앱이 background 로 가거나 화면을 떠나면 판은 끝 — 스토어·허브가 한다(`GamesMiniGameHub.appDidEnterBackground`·
-///   `closeScreen`). 타이밍 바는 제출하지 않고, **나머지는 여기까지의 점수로 확정 제출한다.**
+///   `closeScreen`). 기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
 struct GamesMiniGameScreen: View {
     let store: GamesStore
     let kind: MiniGameKind

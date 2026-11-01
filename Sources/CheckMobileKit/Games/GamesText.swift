@@ -151,14 +151,14 @@ package enum GamesMiniGameText {
     package static let submitTokenDead = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
 
     /// 앱이 background 로 가서 판을 끝냈다(폰 전용 — SPEC-ios §3.5). **게임마다 말이 다르다**:
-    /// 타이밍 바는 점수를 버리고, 나머지는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`).
-    /// 그쪽에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다 — 점수는 이미 나갔다.
+    /// 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를 **확정해 올린다**(`GamesPlayController.endRound()`).
+    /// 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다 — 점수는 이미 나갔다.
     package static func endedInBackground(_ kind: MiniGameKind) -> String {
         switch kind {
-        case .timingBar: return "앱을 나가서 이번 판은 기록하지 않았어요"
+        case .timingBar, .flappy: return "앱을 나가서 이번 판은 기록하지 않았어요"
         // 길건너도 확정 쪽이다(폰 1.0.15 D4 — 차·기차가 움직이는 게임이라 background 를 무한 일시정지로 두면
-        // 마음대로 멈출 수 있는 게임이 된다). 플래피도 폰 1.0.17 부터 같다. 그래서 테트리스와 **같은 문장**이다.
-        case .flappy, .tetris, .crossy: return "앱을 나가서 이번 판을 여기까지 기록했어요"
+        // 마음대로 멈출 수 있는 게임이 된다). 그래서 테트리스와 **같은 문장**이다.
+        case .tetris, .crossy: return "앱을 나가서 이번 판을 여기까지 기록했어요"
         }
     }
     /// 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻).

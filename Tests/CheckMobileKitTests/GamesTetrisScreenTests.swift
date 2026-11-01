@@ -413,15 +413,15 @@ import Testing
         await harness.tearDown()
     }
 
-    @Test("문구는 **실제로 일어난 일**을 말한다 — 타이밍 바만 '기록하지 않았어요', 죽은 토큰은 복구를 약속하지 않는다")
+    @Test("문구는 **실제로 일어난 일**을 말한다 — 테트리스만 '여기까지 기록', 죽은 토큰은 복구를 약속하지 않는다")
     func theTextsSayWhatActuallyHappened() {
         // 테트리스에 "기록하지 않았어요"를 쓰면 거짓말이다 — 점수는 이미 나갔다.
         #expect(GamesMiniGameText.endedInBackground(.tetris) == "앱을 나가서 이번 판을 여기까지 기록했어요")
-        #expect(GamesMiniGameText.endedInBackground(.flappy) == GamesMiniGameText.endedInBackground(.tetris),
-                "플래피도 점수가 나간다 — '기록하지 않았어요'는 거짓말이다")
-        #expect(GamesMiniGameText.endedInBackground(.timingBar).contains("기록하지 않았어요"),
-                "타이밍 바 문구가 바뀌었다 — 그 판은 지금도 무효다")
-        #expect(GamesMiniGameText.endedInBackground(.timingBar) != GamesMiniGameText.endedInBackground(.tetris))
+        for kind in [MiniGameKind.timingBar, .flappy] {
+            #expect(GamesMiniGameText.endedInBackground(kind).contains("기록하지 않았어요"),
+                    "\(kind.rawValue) 문구가 바뀌었다 — 이 둘은 지금도 점수를 버린다")
+            #expect(GamesMiniGameText.endedInBackground(kind) != GamesMiniGameText.endedInBackground(.tetris))
+        }
         // "다시 해 주세요"는 복구된다는 뜻인데 토큰이 죽었으면 그 판은 영영 못 올라간다.
         #expect(GamesMiniGameText.submitTokenDead != GamesMiniGameText.submitFailedConnection)
         #expect(GamesMiniGameText.submitFailedConnection.contains("다시 해 주세요"))

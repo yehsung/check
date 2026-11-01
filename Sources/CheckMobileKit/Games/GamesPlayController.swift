@@ -18,8 +18,8 @@ import Observation
 ///   테트리스는 `.result` 전이(탑아웃 유예 뒤 · `interrupt()` 포함 — 맥 잎 뷰의 `onChange(of: game.phase)` 와 같은 자리).
 /// - 폰 전용 출구가 **둘**이다. 뜻이 다르므로 함수도 둘이다:
 ///   · `abandon()` — 판을 **기록 없이 버린다**(로그아웃 · 화면 경합 정리). 알리지 않으므로 제출도 없다.
-///   · `endRound()` — 판을 **끝낸다**(뒤로가기 · 앱이 background 로 감). 타이밍 바는 버리는 것과 같고,
-///     **플래피·테트리스·길건너는 그 자리에서 점수를 확정해 알린다**(까닭은 `endRound()` 주석 — 폰에서 background 는 비용이
+///   · `endRound()` — 판을 **끝낸다**(뒤로가기 · 앱이 background 로 감). 타이밍 바·플래피는 버리는 것과 같고,
+///     **테트리스·길건너는 그 자리에서 점수를 확정해 알린다**(까닭은 `endRound()` 주석 — 폰에서 background 는 비용이
 ///     0.03~0.05초뿐인 무한 일시정지라 살려 두면 순위표가 통째로 흔들린다).
 ///
 /// 폰 테트리스·길건너 입력(끌기·쓸기·탭)의 **판정도 여기 있다**(`canvasDragChanged`·`canvasDragEnded`).
@@ -36,9 +36,9 @@ package final class GamesPlayController {
     package enum EndOutcome: Equatable, Sendable {
         /// 끝낼 판이 없었다(진행 중이 아니다 — 결과 카드는 그대로 둔다).
         case none
-        /// 기록 없이 끝냈다(타이밍 바 — 10라운드를 못 채운 판은 무효다). 알리지 않았으므로 제출도 없다.
+        /// 기록 없이 끝냈다(타이밍 바·플래피). 알리지 않았으므로 제출도 없다.
         case abandoned
-        /// 그 점수로 **확정**했다(플래피 · 테트리스 · 길건너). `onFinished` 는 이 함수 안에서 이미 불렸다.
+        /// 그 점수로 **확정**했다(테트리스 · 길건너). `onFinished` 는 이 함수 안에서 이미 불렸다.
         case confirmed(Int)
     }
 
@@ -452,12 +452,10 @@ package final class GamesPlayController {
         return true
     }
 
-    /// 판을 **끝낸다**(화면을 떠남 · 앱이 background 로 감). 타이밍 바는 `abandon()` 과 같고,
-    /// **플래피·테트리스·길건너는 그 자리에서 점수를 확정해 알린다.** 맥과 같은 갈래다(`PauseState.quittingKeepsTheScore`).
+    /// 판을 **끝낸다**(화면을 떠남 · 앱이 background 로 감). 기존 두 게임은 `abandon()` 과 같고,
+    /// **테트리스·길건너는 그 자리에서 점수를 확정해 알린다.**
     ///
-    /// 플래피(폰 1.0.17): 전화로 끊긴 판이 맥에서는 남고 폰에서는 사라졌다. 코어 `interrupt()` 가 그 점수로 결과를 확정한다.
-    ///
-    /// ⚠️ 왜 타이밍 바만 다른가: 10라운드를 못 채운 판은 총점이 없다(맥도 무효). 나머지가 확정인 까닭은 — 폰에서 background 는 지금 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는
+    /// ⚠️ 왜 그 둘만 다른가: 폰에서 background 는 지금 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는
     /// `maxStep`(테트리스 1/20 · 길건너 1/30)으로 잘리므로 몇 분을 나가 있어도 판이 잃는 것은 0.05초(L1 에서
     /// 0.141칸 — 한 칸도 안 내려간다) · 0.033초뿐이다. 맥은 스크림 + 3-2-1 + 5분 상한으로 그 구멍을 막았지만 폰에는
     /// 스크림조차 없고 앱 전환기 스냅숏에 판이 그대로 남는다. 그래서 나가는 순간 **여기까지의 점수로 확정**한다.
@@ -474,19 +472,8 @@ package final class GamesPlayController {
     package func endRound() -> EndOutcome {
         guard isPlaying else { return .none }
         switch kind {
-        case .timingBar:
+        case .timingBar, .flappy:
             return abandon() ? .abandoned : .none
-        case .flappy:
-            reportedFinish = true
-            lastTick = nil
-            lastKeepAliveAt = nil
-            roundLimitSeconds = nil
-            roundDeadline = nil
-            resetGesture()
-            flappy.interrupt()
-            let score = flappy.score
-            onFinished?(score)
-            return .confirmed(score)
         case .tetris:
             reportedFinish = true
             lastTick = nil

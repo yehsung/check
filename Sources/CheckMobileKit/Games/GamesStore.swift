@@ -707,7 +707,7 @@ package final class GamesStore {
         guard isAppActive, context.session.isSignedIn else { return false }
         // 미니게임: 끝나지 않은 판이 있으면 켠다. **지금까지 미니게임은 아예 보호받지 않았다** — 플래피는 한 판이
         // 30초 남짓이라 자동잠금(최소 30초)에 닿을 일이 없어 드러나지 않았을 뿐이다. 폰은 background 가 곧
-        // **판의 끝**(`GamesMiniGameHub.appDidEnterBackground`)이라 자동잠금이 곧 판을 끊고, 조각을 세워 두고
+        // **판 폐기·무제출**(`GamesMiniGameHub.appDidEnterBackground`)이라 자동잠금이 곧 판 폐기이고, 조각을 세워 두고
         // 생각하는 무입력 구간이 있는 게임(테트리스)이 들어오면 그 구멍이 바로 열린다.
         //
         // ★ **타이밍 바만 뺀다.** 그 판은 **스스로 끝나지 않는다** — `phase` 가 탭을 받을 때까지 `.running` 에 머문다

@@ -289,16 +289,18 @@ import Testing
                 "대조: 발화 시점 갈래가 사라졌다(이 검사가 헛돈다)")
     }
 
-    @Test("`.inactive` 는 아무것도 안 한다 — 알림 센터를 내린 것으로 8분 판이 끝나면 안 된다")
+    @Test("`.inactive` 는 판을 **얼리기만** 한다 — 알림 센터를 내린 것으로 8분 판이 끝나면 안 된다 · 연결도 안 끊는다")
     func pullingDownNotificationCentreDoesNotEndTheRound() throws {
         let root = try IntegrationContractTests.code("Sources/CheckMobileKit/App/MobileRootView.swift")
         let inactive = try #require(root.components(separatedBy: "case .inactive:").last)
         let head = String(inactive.prefix(200))
-        #expect(head.contains("break"), "inactive 가 무언가를 한다")
-        #expect(!head.contains("sceneDidEnterBackground"), "알림 센터를 내리면 판이 끝난다")
+        #expect(head.contains("model.sceneWillResignActive()"), "inactive 가 판을 안 얼린다 — 앱 전환기 스냅숏에 판이 찍힌다")
+        #expect(!head.contains("sceneDidEnterBackground"), "알림 센터를 내리면 앱이 나간 것이 된다")
+        let model = try IntegrationContractTests.code("Sources/CheckMobileKit/App/MobileAppModel.swift")
+        let resign = try #require(model.components(separatedBy: "func sceneWillResignActive()").last)
+        let body = try #require(resign.components(separatedBy: "public func").first)
+        #expect(!body.contains("realtime") && !body.contains("now."), "inactive 가 연결·폴링을 건드린다")
     }
-
-    // MARK: - 게임별로 갈린 값(실제로 돌릴 수 있는 로직)
 
     @Test("토큰 재사용 나이: 테트리스는 12분에 죽고 플래피는 그 나이에 아직 살아 있다")
     func theTokenReuseAgeIsPerGame() async throws {
@@ -413,14 +415,13 @@ import Testing
         await harness.tearDown()
     }
 
-    @Test("문구는 **실제로 일어난 일**을 말한다 — 테트리스만 '여기까지 기록', 죽은 토큰은 복구를 약속하지 않는다")
+    @Test("문구는 **실제로 일어난 일**을 말한다 — 접는 결과가 게임마다 다르고, 죽은 토큰은 복구를 약속하지 않는다")
     func theTextsSayWhatActuallyHappened() {
-        // 테트리스에 "기록하지 않았어요"를 쓰면 거짓말이다 — 점수는 이미 나갔다.
-        #expect(GamesMiniGameText.endedInBackground(.tetris) == "앱을 나가서 이번 판을 여기까지 기록했어요")
+        // 정지 카드: 테트리스에 "기록되지 않아요"를 쓰면 거짓말이고, 버리는 두 게임에 "기록돼요"를 쓰면 거짓말이다.
+        #expect(GamesMiniGameText.pauseSubtitle(.tetris) == "지금 그만두면 지금까지 쌓은 점수가 기록돼요")
         for kind in [MiniGameKind.timingBar, .flappy] {
-            #expect(GamesMiniGameText.endedInBackground(kind).contains("기록하지 않았어요"),
-                    "\(kind.rawValue) 문구가 바뀌었다 — 이 둘은 지금도 점수를 버린다")
-            #expect(GamesMiniGameText.endedInBackground(kind) != GamesMiniGameText.endedInBackground(.tetris))
+            #expect(GamesMiniGameText.pauseSubtitle(kind).contains("기록되지 않아요"),
+                    "\(kind.rawValue) 문구가 바뀌었다 — 이 둘은 접으면 점수를 버린다")
         }
         // "다시 해 주세요"는 복구된다는 뜻인데 토큰이 죽었으면 그 판은 영영 못 올라간다.
         #expect(GamesMiniGameText.submitTokenDead != GamesMiniGameText.submitFailedConnection)
@@ -431,7 +432,7 @@ import Testing
         #expect(!GamesMiniGameText.canvasAccessibility(.flappy).contains("회전"))
         // ⚠️ status 이름·need_seconds·elapsed_seconds 는 화면에 한 글자도 안 나간다(서버가 "위조 보조 도구"라고 경고해 뒀다).
         let shown = [GamesMiniGameText.submitTokenDead, GamesMiniGameText.submitRefused,
-                     GamesMiniGameText.submitFailedConnection, GamesMiniGameText.endedInBackground(.tetris),
+                     GamesMiniGameText.submitFailedConnection, GamesMiniGameText.pauseCapEnded, GamesMiniGameText.pauseSubtitle(.tetris),
                      GamesMiniGameText.howToPlay(.tetris), GamesMiniGameText.canvasAccessibility(.tetris)]
         for text in shown {
             for leak in ["token_", "too_fast", "need_seconds", "elapsed_seconds", "invalid"] {

@@ -71,7 +71,7 @@ import Testing
         #expect(controller.crossy.score >= 1, "0.5초를 돌렸는데 한 칸도 안 갔다")
     }
 
-    @Test("endRound(): 테트리스처럼 **점수를 확정**한다 — background·뒤로가기에서 그 점수가 그대로 나간다")
+    @Test("endRound(): 테트리스처럼 **점수를 확정**한다 — [그만두기]·뒤로가기·상한에서 그 점수가 그대로 나간다")
     func endRoundConfirmsTheScore() {
         let controller = GamesPlayController(kind: .crossy, seed: 12)
         var finished: [Int] = []
@@ -274,14 +274,13 @@ import Testing
 
     // MARK: - E 문구 · 폰 캔버스 소스 계약
 
-    @Test("문구: background 는 '기록했어요'(확정) · 시작 카드가 쓸기와 탭을 **둘 다** 말한다 · 미션 아이콘은 figure.walk")
+    @Test("문구: 정지 카드가 '기록돼요'(확정) · 시작 카드가 쓸기와 탭을 **둘 다** 말한다 · 미션 아이콘은 figure.walk")
     func thePhoneCopyTellsTheTruth() {
-        // 길건너는 확정 쪽이라 "기록하지 않았어요"는 **거짓말**이다 — 점수는 이미 나갔다.
-        #expect(GamesMiniGameText.endedInBackground(.crossy) == GamesMiniGameText.endedInBackground(.tetris))
-        #expect(GamesMiniGameText.endedInBackground(.crossy).contains("기록했어요"))
-        #expect(!GamesMiniGameText.endedInBackground(.crossy).contains("기록하지 않았어요"))
-        // 대조: 버리는 두 게임은 그대로다.
-        #expect(GamesMiniGameText.endedInBackground(.flappy).contains("기록하지 않았어요"))
+        // 길건너는 접으면 확정이라 "기록되지 않아요"는 **거짓말**이다.
+        #expect(GamesMiniGameText.pauseSubtitle(.crossy) == "지금 그만두면 지금까지 간 줄 수가 점수로 기록돼요")
+        // 대조: 버리는 두 게임은 맥의 문구와 다르게 "기록되지 않아요"다(플래피는 사용자 답 "지금처럼 버림").
+        #expect(GamesMiniGameText.pauseSubtitle(.flappy).contains("기록되지 않아요"))
+        #expect(GamesMiniGameText.pauseSubtitle(.timingBar).contains("기록되지 않아요"))
 
         let howTo = GamesMiniGameText.howToPlay(.crossy)
         #expect(howTo.hasPrefix(MiniGameKind.crossy.howToPlay), "규칙 줄이 코어 한 벌이 아니다")

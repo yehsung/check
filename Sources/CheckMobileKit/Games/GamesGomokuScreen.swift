@@ -117,7 +117,7 @@ struct GamesGomokuScreen: View {
                 for _ in 0..<60 where gomoku.phase != .result { try? await Task.sleep(for: .milliseconds(50)) }
                 try? await Task.sleep(for: .milliseconds(2500))
                 gomoku.backToLobby()
-            case .playing, .result, .bottom, .visited:
+            case .playing, .result, .bottom, .visited, .paused, .countdown:
                 break
             }
         }

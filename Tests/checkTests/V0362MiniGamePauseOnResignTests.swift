@@ -570,8 +570,10 @@ func thePauseLimitCommentDoesNotClaimItSurvivesAppQuit() throws {
     #expect(watchdog.contains("Task { @MainActor in") && watchdog.contains("Task.sleep(for: .seconds(1))"),
             "전제가 바뀌었다: 상한이 더는 1초씩 자는 Task 가 아니다")
 
-    for anchor in ["private func armPauseWatchdog()", "static let pauseLimitSeconds = 5 * 60"] {
-        let doc = try mgprDocComment(above: anchor, inRaw: raw)
+    // 상한 값과 그 머리말은 폰 1.0.16 에 코어로 옮겼다(`MiniGamePauseState`).
+    let core = try mgprRawSource("MiniGamePauseState.swift")
+    for (anchor, source) in [("private func armPauseWatchdog()", raw), ("static let pauseLimitSeconds = 5 * 60", core)] {
+        let doc = try mgprDocComment(above: anchor, inRaw: source)
         #expect(!doc.contains("앱을 끄면 점수가 통째로 사라지고"),
                 "\(anchor) 가 아직 '앱을 끄면 점수가 사라지는 것' 을 상한의 근거로 든다 — 상한은 그걸 못 막는다")
         #expect(!doc.contains("앱을 그냥 끄면 점수가 사라진다"),

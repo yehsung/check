@@ -16,16 +16,15 @@ import CheckCore
 // **이미 기록됐다**는 뜻이라 거짓 경보). 그리고 ①의 뿌리는 토큰 요청 경합이었다 — 창 열기·판 시작·제출 뒤 셋이 "왕복 중"
 // 가드 없이 서로의 진행 중 요청을 무효화해, 짧은 판을 연달아 하면 토큰이 영영 안 왔다.
 //
-// 이름·구조·주석 논리는 폰 `GamesMiniGameHub` 의 것을 그대로 옮겼다(`roundTokenInFlightKind` · `pendingSubmit` ·
-// `isSubmitting` · `terminalSubmitStatuses` / `deadTokenStatuses`). 폰과 다른 점은 셋뿐이고 전부 이유가 있다.
-//  · **인편이 칸 하나가 아니라 대기열이다**(`miniGamePendingSubmits`). 폰은 밀려나는 앞 판을 "한 번 더 보내고 버리는"데,
-//    그 순서는 새 판의 `start_round` 가 밀려난 인편의 토큰을 죽이는 순서라 아래 불변식을 구조적으로 어긴다. 대기열이면
-//    앞 인편이 끝나기 전에는 그 게임의 새 토큰을 받지 않으므로 불변식이 무조건 선다. 토큰을 실은 인편은 게임당 하나뿐이다
-//    (서버가 미사용 토큰을 한 행만 두므로 둘일 수 없다) — 나머지는 **토큰을 기다리는 인편**(`token == nil`)이다.
+// 이름은 폰 `GamesMiniGameHub` 에서 왔고(`roundTokenInFlightKind` · `isSubmitting` · `terminalSubmitStatuses` / `deadTokenStatuses`),
+// 인편의 모양·status 분류·백오프·다음에 할 일 판정은 폰 1.0.16 부터 **코어 한 벌**이다(`MiniGamePendingSubmit` · `MiniGameSubmitRules`).
+//  · **인편은 칸 하나가 아니라 대기열이다**(`miniGamePendingSubmits`). 앞 인편이 끝나기 전에는 그 게임의 새 토큰을 받지 않으므로
+//    아래 불변식이 무조건 선다. 토큰을 실은 인편은 게임당 하나뿐이다(서버가 미사용 토큰을 한 행만 두므로 둘일 수 없다) —
+//    나머지는 **토큰을 기다리는 인편**(`token == nil`)이다.
 //  · **`defaults` 에 계정별로 영속한다.** 맥 사용자는 앱을 자주 끄고 켠다 — 종료가 점수를 삼키면 안 된다. 30분(서버 TTL)을
 //    넘긴 인편은 읽을 때 버린다(토큰이 죽었다).
 //  · **`too_fast` 는 terminal 이 아니라 재시도 대상이다.** 서버는 `too_fast` 를 토큰을 소모하기 **전에** 돌려주고 경과는
-//    단조증가라 나중 재시도가 통과한다. 폰은 terminal 로 두고 있는데 그게 틀렸다(폰은 다른 세션 몫 — 여기서 건드리지 않는다).
+//    단조증가라 나중 재시도가 통과한다.
 //
 // ★ 불변식(이 절에서 제일 중요하다): **그 게임의 인편이 살아 있는 동안 그 게임의 `start_round` 는 나가지 않는다.**
 //   서버 `minigame_start_round` 는 `on conflict (user_id, game) where used_at is null do update set id = gen_random_uuid()`
@@ -34,47 +33,6 @@ import CheckCore
 //
 // 인편을 미는 방아쇠는 다섯이다: 깨어남(`handleWake`) · 앱 재활성화(`AppDelegate.applicationDidBecomeActive`) · 창 열기 ·
 // 그 게임의 선발급/판 시작 직전 · 실패 뒤 백오프(2초 → 8초 → 30초 반복, TTL 안에서만).
-
-/// 아직 서버가 받았다고 확인해 주지 않은 끝난 판 한 건 — **제출 인편**(폰 `pendingSubmit` 튜플의 맥판, 영속하므로 타입이다).
-struct MiniGamePendingSubmit: Codable, Equatable, Identifiable {
-    let id: UUID
-    let kind: MiniGameKind
-    let score: Int
-    /// 이 판의 토큰. nil 이면 **토큰을 기다리는 인편**이다 — 판이 끝난 순간 토큰이 없었다(왕복이 늦었거나 못 받았다).
-    /// 왕복 중이던 응답이나 새 요청이 채운다(`adoptMiniGameTokenIntoWaitingPending`).
-    var token: String?
-    /// 그 토큰을 받은 시각(서버 `started_at` 의 로컬 거울). 수명 판정에 쓴다.
-    var tokenIssuedAt: Date?
-    /// 판이 끝난 시각. 토큰이 없는 인편의 수명은 여기서 센다.
-    let recordedAt: Date
-    /// 지금까지 실패한 횟수(백오프 단계). 영속한다 — 재시작이 백오프를 0 으로 되돌리지 않게.
-    var attempts: Int
-    /// 이 시각 전에는 다시 보내지 않는다(백오프). 영속하지 않는다 — 재시작은 그 자체가 재시도 방아쇠다.
-    var nextRetryAt: Date? = nil
-    /// 모르는 status 를 받았다 — **방아쇠**(깨어남·재활성화·창 열기·판 시작·판 끝)가 올 때까지 붙든다. 타이머도 제출 꼬리의
-    /// 밀기도 이 인편을 건드리지 않는다(이해 못 한 거절을 두드리지 않는다). 영속하지 않는다 — 재시작은 방아쇠다.
-    var heldUntilTrigger: Bool = false
-    /// `no_token` 을 받아 **토큰을 기다리는 인편으로 한 번 되돌렸다.** 영속한다 — 재시작이 이 기회를 새로 주면 안 된다.
-    ///
-    /// 왜 한 번인가: `no_token` 은 우리가 든 토큰을 서버가 모른다는 뜻이고, 그 원인은 그 사이 `start_round` 가 그 행의 id 를
-    /// 갈아 끼운 것이다(2026-09-27 실측: 제출과 `start_round` 가 같은 초에 날아가 `start_round` 가 먼저 닿은 여섯 판).
-    /// 불변식이 그 경합을 막지만, 뚫렸을 때 점수를 버리지 않고 **새 토큰을 받아 다시** 올린다 — 서버의 시간 하한은
-    /// 그대로 선다(새 토큰의 started_at 부터 다시 재므로 하한만큼 기다려야 통과한다 · 플래피 13점이면 11.63초).
-    /// 두 번은 주지 않는다: 계속 `no_token` 이면 원인이 경합이 아니므로 두드려도 같은 답이고, 무한 왕복이 된다.
-    var recoveredFromDeadTokenOnce: Bool = false
-
-    enum CodingKeys: String, CodingKey {
-        case id, kind, score, token, tokenIssuedAt, recordedAt, attempts, recoveredFromDeadTokenOnce
-    }
-
-    /// 이 인편이 죽는 시각. 토큰이 있으면 토큰 발급 시각, 없으면 판이 끝난 시각 — **둘 중 이른 쪽** + TTL. 토큰은 발급
-    /// 시각부터 서버 TTL 만큼만 살고, 토큰 없는 인편도 30분이 지나면 다른 날 순위표에 올라갈 수 있어 같은 수명을 준다.
-    func deadline(ttl: TimeInterval) -> Date {
-        min(recordedAt, tokenIssuedAt ?? recordedAt).addingTimeInterval(ttl)
-    }
-
-    func isExpired(at now: Date, ttl: TimeInterval) -> Bool { now >= deadline(ttl: ttl) }
-}
 
 /// 진행 중인 판 한 장의 장부(v0.3.67). 허브가 판 시작 · 점수 변화 · 판 끝을 적고, 판을 접는 자리가 읽는다.
 struct MiniGameLiveRound: Equatable {
@@ -115,29 +73,15 @@ extension WorkTimerStore {
     static let miniGameTokenRefreshSeconds: TimeInterval = MiniGameKind.flappy.roundTokenReuseSeconds
 
     /// 인편의 수명(초) = 서버 토큰 TTL(`minigame_round_ttl()` 30분). 넘긴 인편은 토큰이 죽었으므로 읽을 때 버린다.
-    nonisolated static let miniGamePendingSubmitTTL: TimeInterval = 30 * 60
+    nonisolated static let miniGamePendingSubmitTTL: TimeInterval = MiniGameSubmitRules.pendingTTL
 
-    /// 서버가 **명시적으로 거절**한 status. 이걸 받으면 그 토큰으로는 영영 못 올리므로 제출 인편을 지운다.
-    /// (`token_used` 는 여기 없다 — 그건 **성공**이다. `too_fast` 도 없다 — **재시도 대상**이다. 아래 `performSubmitMiniGameScore` 주석.)
+    /// 서버 status 분류 — 판정은 코어 `MiniGameSubmitRules` 한 벌이다(폰과 같아야 한다). 까닭은 그쪽 주석.
     ///
-    /// ⚠️ `unauthorized`·`no_profile` 도 여기다. 둘은 **토큰이 아니라 호출자 쪽 거절**이라
-    /// `minigame_submit_score` 가 uid·프로필 검사에서 곧장 돌아오고 30분 TTL 판정까지 가지도 않는다 —
-    /// 즉 스스로 `token_expired` 로 바뀌지 않는다. 지우지 않으면 인편이 남아 **앱을 켤 때마다 영원히**
-    /// 같은 토큰을 다시 보낸다(그 사이 선발급은 인편 가드에 막혀 그 게임의 새 토큰도 못 받는다).
-    /// 다만 `miniGameDeadTokenStatuses` 에는 넣지 않는다 — 문구는 "점수를 못 올렸어요"(`refused`)로 남긴다.
-    ///
-    /// ★ 이 집합은 `performSubmitMiniGameScore` 에서 **재시도 집합보다 먼저** 본다. 순서를 뒤집으면 여기에 `too_fast` 를
+    /// ★ 거절 집합은 `performSubmitMiniGameScore` 에서 **재시도 집합보다 먼저** 본다. 순서를 뒤집으면 여기에 `too_fast` 를
     ///   되돌려 놓아도 동작이 안 바뀌어 등재가 죽은 글자가 된다(폰에서 실측한 함정). 두 집합은 서로소여야 한다 — 테스트가 센다.
-    nonisolated static let miniGameTerminalSubmitStatuses: Set<String> =
-        ["invalid", "no_token", "token_expired", "unauthorized", "no_profile"]
-    /// 시간이 흐르면 **같은 토큰으로 통과하는** 거절. `too_fast` 는 토큰을 소모하기 전에 돌아오고(토큰이 살아 있다) 서버가
-    /// 재는 경과는 자라기만 한다 — 그래서 인편을 남기고 **백오프 타이머**를 건다. 얼마나 기다릴지는 서버가 준 숫자로 계산하지
-    /// 않는다(고정 간격뿐이다 — 그 숫자를 쓰는 순간 위조 보조 도구다).
-    /// 모르는 status 는 여기 없다: 남기되 타이머 없이 방아쇠(깨어남·재활성화·창 열기·판 시작)에서만 다시 보낸다 —
-    /// 이해 못 한 거절을 두드리지는 않되 점수를 버리지도 않는다(TTL 이 끝을 낸다).
-    nonisolated static let miniGameRetryableSubmitStatuses: Set<String> = ["too_fast"]
-    /// 토큰이 죽어 **그 판은 영영 못 올리는** 거절. 문구가 "못 올렸어요"(이유 없음)와 갈린다. terminal 의 부분집합이어야 한다.
-    nonisolated static let miniGameDeadTokenStatuses: Set<String> = ["no_token", "token_expired"]
+    nonisolated static let miniGameTerminalSubmitStatuses: Set<String> = MiniGameSubmitRules.terminalStatuses
+    nonisolated static let miniGameRetryableSubmitStatuses: Set<String> = MiniGameSubmitRules.retryableStatuses
+    nonisolated static let miniGameDeadTokenStatuses: Set<String> = MiniGameSubmitRules.deadTokenStatuses
 
     /// 로컬 최고기록 키. **계정별**이다 — 같은 맥을 다른 계정이 쓰면 남의 최고를 물려받지 않게(로그아웃 리셋 대상이 아닌 이유).
     static func miniGameBestKey(userID: String?, kind: MiniGameKind) -> String {
@@ -590,7 +534,7 @@ extension WorkTimerStore {
         let now = Date()
         for kind in MiniGameKind.allCases {
             guard !miniGameSubmittingKinds.contains(kind) else { continue }
-            var entries = miniGamePendingSubmits.filter { $0.kind == kind }
+            let entries = miniGamePendingSubmits.filter { $0.kind == kind }
             guard !entries.isEmpty else { continue }
             // 보험: 들고 있던 토큰이 이 게임 것인데 인편이 토큰을 기다린다면 넘겨준다(정상 흐름에선 recordMiniGameScore 가 이미 실었다).
             if !entries.contains(where: { $0.token != nil }), hasUsableMiniGameToken(for: kind), let held = miniGameRoundToken {
@@ -598,22 +542,17 @@ extension WorkTimerStore {
                 miniGameRoundTokenKind = nil
                 miniGameRoundTokenAt = nil
                 _ = adoptMiniGameTokenIntoWaitingPending(kind: kind, token: held)
-                entries = miniGamePendingSubmits.filter { $0.kind == kind }
             }
-            if let ready = entries.first(where: { $0.token != nil }) {
-                // 토큰을 실은 인편은 게임당 하나뿐이다(서버가 미사용 토큰을 한 행만 두므로 둘일 수 없다). 붙들렸거나 백오프
-                // 중이면 이 게임은 통째로 건너뛴다 — 그 인편의 토큰이 살아 있으니 새 토큰도 청하지 않는다(불변식).
-                if ready.heldUntilTrigger { continue }
-                if let at = ready.nextRetryAt, at > now { continue }
+            switch miniGamePendingSubmits.nextStep(for: kind, at: now) {
+            case .submit(let ready):
                 Task { @MainActor in await performSubmitMiniGameScore(entry: ready) }
+            case .requestToken:
+                // 전부 토큰을 기다리는 인편이다 — 맨 앞 것에 토큰을 받아 준다(응답은 performBeginMiniGameRound 가 인편에 넘긴다).
+                guard miniGameRoundTokenInFlightKind != kind else { continue }
+                requestMiniGameRoundToken(kind: kind)
+            case .wait:
                 continue
             }
-            // 전부 토큰을 기다리는 인편이다 — 맨 앞 것에 토큰을 받아 준다(응답은 performBeginMiniGameRound 가 인편에 넘긴다).
-            guard let head = entries.first else { continue }
-            if head.heldUntilTrigger { continue }
-            if let at = head.nextRetryAt, at > now { continue }
-            guard miniGameRoundTokenInFlightKind != kind else { continue }
-            requestMiniGameRoundToken(kind: kind)
         }
         scheduleMiniGamePendingRetry()
     }
@@ -754,12 +693,7 @@ extension WorkTimerStore {
     /// 백오프는 0 으로 되돌린다 — 새 토큰을 받는 일은 앞의 실패와 다른 일이다. 표식을 세워 두 번은 오지 않는다.
     func demoteMiniGamePendingToTokenWait(id: UUID) {
         guard let index = miniGamePendingSubmits.firstIndex(where: { $0.id == id }) else { return }
-        miniGamePendingSubmits[index].token = nil
-        miniGamePendingSubmits[index].tokenIssuedAt = nil
-        miniGamePendingSubmits[index].attempts = 0
-        miniGamePendingSubmits[index].nextRetryAt = nil
-        miniGamePendingSubmits[index].heldUntilTrigger = false
-        miniGamePendingSubmits[index].recoveredFromDeadTokenOnce = true
+        miniGamePendingSubmits[index].demoteToTokenWait()
         persistMiniGamePendingSubmits()
         Self.miniGameLogger.notice(
             "pending submit recovered from dead token game=\(self.miniGamePendingSubmits[index].kind.rawValue, privacy: .public)")
@@ -768,9 +702,7 @@ extension WorkTimerStore {
     /// 토큰을 기다리는 이 게임의 맨 앞 인편에 토큰을 넘긴다. 넘겼으면 true(호출자가 인편을 민다).
     func adoptMiniGameTokenIntoWaitingPending(kind: MiniGameKind, token: String) -> Bool {
         guard let index = miniGamePendingSubmits.firstIndex(where: { $0.kind == kind && $0.token == nil }) else { return false }
-        miniGamePendingSubmits[index].token = token
-        miniGamePendingSubmits[index].tokenIssuedAt = Date()
-        miniGamePendingSubmits[index].nextRetryAt = nil
+        miniGamePendingSubmits[index].adopt(token: token, at: Date())
         persistMiniGamePendingSubmits()
         return true
     }
@@ -778,11 +710,7 @@ extension WorkTimerStore {
     /// 실패한 인편의 백오프를 한 단계 올리고 타이머를 다시 잡는다(n번째 실패 → `miniGamePendingRetryDelays[n-1]`, 끝은 반복).
     func deferMiniGamePendingRetry(id: UUID) {
         guard let index = miniGamePendingSubmits.firstIndex(where: { $0.id == id }) else { return }
-        miniGamePendingSubmits[index].attempts += 1
-        let delays = miniGamePendingRetryDelays
-        let step = min(max(miniGamePendingSubmits[index].attempts - 1, 0), max(delays.count - 1, 0))
-        let delay = delays.isEmpty ? 30 : delays[step]
-        miniGamePendingSubmits[index].nextRetryAt = Date().addingTimeInterval(delay)
+        miniGamePendingSubmits[index].noteFailure(delays: miniGamePendingRetryDelays, at: Date())
         persistMiniGamePendingSubmits()
         scheduleMiniGamePendingRetry()
     }
@@ -798,14 +726,7 @@ extension WorkTimerStore {
         miniGamePendingRetryTask?.cancel()
         miniGamePendingRetryTask = nil
         let now = Date()
-        let ttl = Self.miniGamePendingSubmitTTL
-        // TTL 을 넘겨서 돌아오는 재시도는 잡지 않는다(그때는 어차피 읽으면서 버린다).
-        guard let next = miniGamePendingSubmits
-            .compactMap({ entry -> Date? in
-                guard let at = entry.nextRetryAt, at > now, at < entry.deadline(ttl: ttl) else { return nil }
-                return at
-            })
-            .min() else { return }
+        guard let next = miniGamePendingSubmits.nextRetryDate(after: now, ttl: Self.miniGamePendingSubmitTTL) else { return }
         let delay = next.timeIntervalSince(now)
         miniGamePendingRetryTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(delay))

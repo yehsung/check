@@ -71,7 +71,8 @@ public struct MobileRootView: View {
             model.sceneDidEnterBackground()
         case .inactive:
             // inactive(알림 센터 내리기 · 앱 전환 중)는 연결을 끊지 않는다 — 곧 active 로 돌아오는 일이 대부분이다.
-            break
+            // 미니게임 판만 얼린다: 앱 전환기 스냅숏에 판이 찍히기 전에 가려야 한다.
+            model.sceneWillResignActive()
         @unknown default:
             break
         }

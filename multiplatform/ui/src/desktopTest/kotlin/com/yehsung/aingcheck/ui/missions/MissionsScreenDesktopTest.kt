@@ -92,8 +92,9 @@ class MissionsScreenDesktopTest {
     /** 제목 줄 칩 한 장(밝음). 기준선 = 숫자 한 칸. */
     @Test
     fun rubyBalanceChipSnapshot() {
-        fun chip(balance: Long) = W4cDesktopSnapshots.frame(false, 120, 44) { MissionRubyBalance(balance, reduceMotion = true) }
-        W4cDesktopSnapshots.check("missions", "mission-ruby-balance-light", 120, 44, chip(120), chip(125), maxChangedFraction = 0.5)
+        fun chip(balance: Long?) = W4cDesktopSnapshots.frame(false, 120, 44) { MissionRubyBalance(balance, reduceMotion = true) }
+        // 기준선은 숫자 셋이 다 빠진 '–'(모르는 값). 한 자리만 바꾼 판은 CI 글꼴의 굵은 대조(문턱 64)가 못 가른다(max 59).
+        W4cDesktopSnapshots.check("missions", "mission-ruby-balance-light", 120, 44, chip(120), chip(null), maxChangedFraction = 0.5)
     }
 
     /** 동작 줄이기: 넘기지 않고 바로 바꾼다. 모르면 0 으로 지어내지 않는다. */

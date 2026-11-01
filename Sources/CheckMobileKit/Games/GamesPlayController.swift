@@ -378,6 +378,7 @@ package final class GamesPlayController {
         // 기준점도 **여기서** 잡는다 — 그래야 마감과 그걸 재는 `now` 가 같은 축에 있다(`roundLimitSeconds` 주석).
         // ⚠️ **정지 시간을 빼지 않는다.** 이 상한은 게임 시간이 아니라 토큰 예산이고(12 + 15 + 1 = 28 < 서버 TTL 30분), 서버는 정지를 모른다.
         //    빼 주면 고의로 늘인 판 + 정지 5분이 33분이 되어 판이 통째로 거절된다. 정직한 판은 최장 8.7분 + 정지 5분 = 13.7분이라 안 걸린다.
+        //    얼어 있는 동안은 이 줄에 닿지 않으므로, 고의로 늘인 판이 마감을 걸쳐 얼면 최악 12 + 15 + 5 = 32분까지 간다 — 그 판은 `recordScore` 가 `submitTokenDead` 로 사실대로 끝낸다.
         if kind == .tetris, let limit = roundLimitSeconds {
             let deadline = roundDeadline ?? now.addingTimeInterval(limit)
             roundDeadline = deadline

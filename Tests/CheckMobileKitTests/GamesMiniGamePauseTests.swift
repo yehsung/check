@@ -892,6 +892,260 @@ struct GamesMiniGamePauseTests {
         await harness.tearDown()
     }
 
+    // MARK: - 버리는 게임: 점수가 있는 판으로 잰다
+    //
+    // 위 표 시험의 플래피·타이밍 바는 시작 직후라 점수가 0 이다 — "버렸다"와 "0점이라 남은 것이 없다"가 구별되지 않는다.
+    // 여기서는 **점수가 실제로 있는 판**을 어느 길로 접어도 서버에도 로컬 최고에도 아무것도 안 남는지 잰다(사용자 답 "지금처럼 버림").
+
+    private func seedScoredRound(_ controller: GamesPlayController, _ kind: MiniGameKind) {
+        controller.replaceForTesting(timing: kind == .timingBar ? GamesDemoSeed.timingBar(finished: false) : nil,
+                                     flappy: kind == .flappy ? GamesDemoSeed.flappy(finished: false) : nil)
+    }
+
+    @Test("버리는 게임: 점수가 있어도 어느 길로 접든 서버 · 인편 · 임시 항목 · 로컬 최고에 아무것도 안 남는다",
+          arguments: [MiniGameKind.flappy, .timingBar], ["quit", "back-after-return", "back-unfrozen", "switch", "quit-after-10min"])
+    func aDiscardedRoundLeavesNothing(kind: MiniGameKind, exit: String) async throws {
+        let harness = GamesHarness(label: "pause-discard-\(kind.rawValue)-\(exit)")
+        let controller = try await startRound(harness, kind)
+        seedScoredRound(controller, kind)
+        #expect(controller.score > 0, "전제: 점수가 있는 판이다")
+        #expect(controller.isPlaying, "전제: 판이 돈다")
+        switch exit {
+        case "quit":
+            harness.hub.togglePause()
+            harness.hub.quitPausedRound()
+        case "back-after-return":
+            harness.model.sceneDidEnterBackground()
+            harness.model.sceneDidBecomeActive()
+            harness.hub.closeScreen(kind)
+        case "back-unfrozen":
+            harness.hub.closeScreen(kind)
+        case "switch":
+            harness.hub.togglePause()
+            harness.hub.openScreen(.crossy)
+            harness.hub.closeScreen(kind)
+        default:
+            harness.model.sceneDidEnterBackground()
+            harness.clock.advance(10 * 60)
+            harness.model.sceneDidBecomeActive()
+            #expect(controller.isFrozen, "상한이 없는 게임이 멈춰 뒀다고 끝났다")
+            harness.hub.quitPausedRound()
+        }
+        await harness.barrier()
+        #expect(!controller.isPlaying)
+        #expect(submits(harness).isEmpty, "\(kind)/\(exit): 버린 판이 나갔다")
+        #expect(harness.hub.best(for: kind) == 0, "\(kind)/\(exit): 버린 판이 로컬 최고를 올렸다")
+        #expect(harness.hub.pendingSubmit == nil)
+        #expect(harness.storage.defaults.data(forKey: GamesMiniGameHub.pendingKey(userID: GamesHarness.userID)) == nil)
+        #expect(draftData(harness) == nil)
+        await harness.tearDown()
+    }
+
+    @Test("버리는 게임도 **끝까지 한 판**은 남는다 — 얼렸다 풀어도 그 판의 점수가 한 번 올라간다", arguments: [MiniGameKind.flappy, .timingBar])
+    func aFinishedRoundIsStillRecordedAfterAPause(kind: MiniGameKind) async throws {
+        let harness = GamesHarness(label: "pause-finish-\(kind.rawValue)")
+        let controller = try await startRound(harness, kind)
+        seedScoredRound(controller, kind)
+        let before = controller.score
+        harness.model.sceneDidEnterBackground()
+        harness.model.sceneDidBecomeActive()
+        harness.hub.togglePause()
+        while harness.hub.advanceResumeCountdown() {}
+        #expect(controller.score == before, "얼렸다 푸는 동안 점수가 바뀌었다")
+        var now = harness.clock.now
+        for _ in 0..<200 where controller.isPlaying {
+            if kind == .timingBar { controller.tap() }
+            now = gamesDrive(controller, from: now, frames: 60)
+        }
+        #expect(!controller.isPlaying, "전제: 판이 끝났다")
+        let final = controller.score
+        #expect(final >= before)
+        #expect(await baseWaitUntil { submits(harness).count == 1 }, "\(kind): 다 한 판이 안 올라갔다")
+        await harness.barrier()
+        #expect(submits(harness).count == 1)
+        #expect(submits(harness)[0].contains(#""p_score":\#(final)"#))
+        #expect(harness.hub.best(for: kind) >= final)
+        await harness.tearDown()
+    }
+
+    // MARK: - 임시 항목과 인편이 겹치지 않는다
+
+    @Test("이중 제출 0: 임시 항목이 있는 채 접었는데 망이 끊겨 인편에 남아도 다음 실행에 **같은 토큰으로 한 번만** 나간다")
+    func aPendingLeftByANetworkFailureIsNotDoubledByTheDraft() async throws {
+        let first = GamesHarness(label: "pause-pending-draft-1")
+        let controller = try await startRound(first, .tetris)
+        first.server.setDefault("minigame_submit_score") { _ in .networkFailure() }
+        let gate = BaseGate()
+        first.hub.sleep = { _ in await gate.wait() }
+        let score = controller.score
+        first.model.sceneDidEnterBackground()
+        #expect(draftData(first) != nil, "전제: 임시 항목이 있다")
+        first.model.sceneDidBecomeActive()
+        first.hub.quitPausedRound()
+        #expect(await baseWaitUntil { submits(first).count == 1 })
+        await first.barrier()
+        let pendingKey = GamesMiniGameHub.pendingKey(userID: GamesHarness.userID)
+        let pending = try #require(first.storage.defaults.data(forKey: pendingKey), "접은 판이 인편에 없다")
+        #expect(draftData(first) == nil, "인편과 임시 항목이 둘 다 있다")
+        gate.open()
+        await first.tearDown()
+
+        let second = GamesHarness(label: "pause-pending-draft-2")
+        configure(second)
+        gamesServeRoundTokens(second, prefix: "tok-second")
+        second.storage.defaults.set(pending, forKey: pendingKey)
+        await second.signIn()
+        #expect(await baseWaitUntil { submits(second).count == 1 })
+        await second.barrier()
+        #expect(submits(second).count == 1, "같은 판이 두 번 나갔다")
+        #expect(submits(second)[0].contains(#""p_token":"tok-1""#))
+        #expect(submits(second)[0].contains(#""p_score":\#(score)"#))
+        await second.tearDown()
+    }
+
+    @Test("판이 안 도는 화면은 앱을 내려도 얼지 않고 아무것도 적지 않는다(시작 전 · 결과)", arguments: MiniGameKind.phoneCases)
+    func nothingFreezesWhenNoRoundIsRunning(kind: MiniGameKind) async throws {
+        let harness = GamesHarness(label: "pause-idle-\(kind.rawValue)")
+        configure(harness)
+        gamesServeRoundTokens(harness, prefix: "tok")
+        parkPause(harness)
+        await harness.signIn()
+        harness.hub.openScreen(kind)
+        let controller = try #require(harness.hub.controller)
+        // 시작 전.
+        harness.model.sceneWillResignActive()
+        harness.model.sceneDidEnterBackground()
+        #expect(controller.pauseState == .none, "시작 전 화면이 얼었다 — 탭이 안 먹는다")
+        #expect(draftData(harness) == nil)
+        harness.model.sceneDidBecomeActive()
+        // 끝난 판.
+        controller.tap()
+        controller.endRound()
+        #expect(!controller.isPlaying)
+        harness.model.sceneDidEnterBackground()
+        #expect(controller.pauseState == .none, "결과 카드가 얼었다")
+        #expect(draftData(harness) == nil, "끝난 판을 임시 항목으로 적었다 — 다음 실행에 또 올라간다")
+        harness.model.sceneDidBecomeActive()
+        await harness.tearDown()
+    }
+
+    // MARK: - 검토에서 뮤테이션이 살아남은 자리
+
+    @Test("임시 항목: 손으로 멈춰 둔 판을 내려도 적는다 — 이미 정지라 전이가 없어도 iOS 는 그 앱을 죽인다")
+    func aManuallyPausedRoundIsDraftedOnTheWayDown() async throws {
+        let harness = GamesHarness(label: "pause-manual-draft")
+        let controller = try await startRound(harness, .tetris)
+        let score = controller.score
+        harness.hub.togglePause()
+        #expect(draftData(harness) == nil, "앱이 안 내려갔는데 적었다")
+        harness.model.sceneWillResignActive()
+        let written = try #require(try draft(harness), "손으로 멈춘 판이 임시 항목에 없다 — 내려가서 죽으면 점수가 사라진다")
+        #expect(written.score == score)
+        #expect(written.token == "tok-1")
+        await harness.tearDown()
+    }
+
+    @Test("상한: 같은 게임 화면을 다시 열어도(화면 표시) 넘긴 판이면 끝난다")
+    func theCapIsCheckedWhenTheScreenAppearsAgain() async throws {
+        let harness = GamesHarness(label: "pause-reappear")
+        let controller = try await startRound(harness, .tetris)
+        harness.hub.togglePause()
+        harness.clock.advance(Self.limit - 1)
+        harness.hub.openScreen(.tetris)
+        #expect(controller.isPlaying, "넘기 전에 끝냈다")
+        harness.clock.advance(1)
+        harness.hub.openScreen(.tetris)
+        #expect(!controller.isPlaying, "넘긴 판이 화면에 그대로 얼어 있다")
+        #expect(await baseWaitUntil { submits(harness).count == 1 })
+        await harness.tearDown()
+    }
+
+    @Test("새 판은 시계가 0 이다 — 앞 판이 **제 힘으로 끝나도** 앞 판의 정지가 안 넘어온다")
+    func aNaturallyFinishedRoundDoesNotLeakItsPauseClock() async throws {
+        let harness = GamesHarness(label: "pause-fresh-natural")
+        let controller = try await startRound(harness, .crossy)
+        harness.hub.togglePause()
+        harness.clock.advance(4 * 60)
+        harness.hub.togglePause()
+        while harness.hub.advanceResumeCountdown() {}
+        #expect(harness.hub.pausedSecondsUsed == 4 * 60, "전제: 앞 판에 4분이 쌓였다")
+        gamesDrive(controller, from: harness.clock.now, frames: 60 * 20) { !$0.isPlaying }
+        #expect(controller.crossy.phase == .result, "전제: 앞 판이 스스로 끝났다")
+        controller.tap()
+        #expect(controller.isPlaying, "전제: 새 판")
+        harness.hub.togglePause()
+        harness.clock.advance(4 * 60)
+        harness.hub.pauseWatchTick()
+        #expect(controller.isPlaying, "앞 판의 4분이 새 판 상한에 들어가 8분으로 끝났다")
+        #expect(harness.hub.pausedSecondsUsed == 4 * 60)
+        await harness.tearDown()
+    }
+
+    @Test("상한: 3-2-1 동안에는 안 끊는다 — 넘기 전에 [이어하기] 를 누른 사람의 판이다")
+    func theCapDoesNotCutACountdownShort() async throws {
+        let harness = GamesHarness(label: "pause-cap-countdown")
+        let controller = try await startRound(harness, .tetris)
+        harness.hub.togglePause()
+        harness.clock.advance(Self.limit - 1)
+        harness.hub.togglePause()
+        #expect(controller.pauseState == .resuming(3), "전제: 넘기 전에 눌렀다")
+        harness.clock.advance(3)
+        harness.hub.pauseWatchTick()
+        #expect(controller.isPlaying, "3-2-1 도중에 판을 끊었다")
+        while harness.hub.advanceResumeCountdown() {}
+        #expect(controller.pauseState == .none, "이어 할 수 있어야 한다")
+        // 그 3초는 다음 정지에 세어 넣는다 — 다시 멈추는 순간 끝난다.
+        harness.hub.togglePause()
+        #expect(!controller.isPlaying)
+        await harness.tearDown()
+    }
+
+    @Test("3-2-1: 취소하고 다시 눌러도 카운트다운은 하나뿐이다 — 앞 Task 가 살아 있으면 숫자가 두 배로 빨리 내려간다")
+    func cancellingACountdownStopsItsTask() async throws {
+        let harness = GamesHarness(label: "pause-countdown-once")
+        let controller = try await startRound(harness, .flappy)   // 플래피는 감시 Task 가 없어 잠든 것이 3-2-1 뿐이다.
+        let sleepers = BaseLockedBox<[CheckedContinuation<Void, Never>]>([])
+        harness.hub.pauseSleep = { _ in
+            await withCheckedContinuation { continuation in sleepers.mutate { $0.append(continuation) } }
+        }
+        func wakeAll() {
+            var woken: [CheckedContinuation<Void, Never>] = []
+            sleepers.mutate { woken = $0; $0 = [] }
+            woken.forEach { $0.resume() }
+        }
+        harness.hub.togglePause()   // 카드
+        harness.hub.togglePause()   // 3
+        #expect(await baseWaitUntil { sleepers.get().count == 1 }, "전제: 첫 카운트다운이 잠들었다")
+        harness.hub.togglePause()   // 취소 → 카드
+        harness.hub.togglePause()   // 다시 3
+        #expect(await baseWaitUntil { sleepers.get().count == 2 }, "전제: 새 카운트다운이 잠들었다")
+        #expect(controller.pauseState == .resuming(3))
+        wakeAll()
+        #expect(await baseWaitUntil { controller.pauseState != .resuming(3) })
+        await baseYield(turns: 40)
+        #expect(controller.pauseState == .resuming(2), "1초에 두 걸음 내려갔다 — 취소한 카운트다운이 아직 돈다")
+        harness.hub.quitPausedRound()
+        wakeAll()
+        await baseYield(turns: 20)
+        wakeAll()
+        await harness.tearDown()
+    }
+
+    @Test("벽시계를 되돌려도 이미 쌓인 정지가 안 줄어든다(되돌린 만큼 빼지 않는다)")
+    func rollingTheClockBackDoesNotShrinkTheBank() async throws {
+        let harness = GamesHarness(label: "pause-rollback")
+        let controller = try await startRound(harness, .tetris)
+        harness.hub.togglePause()
+        harness.clock.advance(4 * 60)
+        harness.hub.togglePause()
+        while harness.hub.advanceResumeCountdown() {}
+        harness.hub.togglePause()
+        harness.clock.advance(-3600)
+        #expect(harness.hub.pausedSecondsUsed == 4 * 60, "시계를 한 시간 되돌려 상한을 벌었다")
+        #expect(controller.isPlaying)
+        await harness.tearDown()
+    }
+
     // MARK: - 문구 · 화면 계약
 
     @Test("문구: 게임마다 접는 결과대로 말한다 · 맥과 같은 낱말 · 서버 진단이 안 샌다")

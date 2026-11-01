@@ -38,6 +38,8 @@ import Foundation
 /// | `games/rummy/result/board`     | (없음 — 바깥 층)                 | …c004         | 사람    | 결과의 [최종 판]               |
 /// | `games/rummy/result/won`       | `_games-rummy-result-won`       | …c004         | 사람    | 내가 1등 · 판돈 10 · 2인        |
 /// | `games/rummy/room/guest`       | `_games-rummy-room-guest`       | …c007         | 사람    | 손님으로 앉은 공개 방 · 2명    |
+/// | `games/rummy/room/tab-exit`    | `_games-rummy-room-tab-exit`    | …c001         | 사람    | 4초 뒤 탭 이탈 → 방장 확인     |
+/// | `games/rummy/room/guest/tab-exit` | `_games-rummy-room-guest-tab-exit` | …c007   | 사람    | 4초 뒤 탭 이탈 → 돌아와 로비 안내 |
 /// | `games/rummy/lobby/empty`      | `_games-rummy-lobby-empty`      | nil           | 사람    | 초대·공개 방·사람 없음         |
 /// | `games/rummy/lobby/failed`     | `_games-rummy-lobby-failed`     | nil           | 사람    | 로비 조회 실패                 |
 /// | `games/rummy/lobby/short`      | `_games-rummy-lobby-short`      | nil           | 사람    | 내 루비 2(판돈 전부 모자람)    |
@@ -87,6 +89,8 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         case resultBoard = "games/rummy/result/board"
         case resultWon = "games/rummy/result/won"
         case roomGuest = "games/rummy/room/guest"
+        case roomTabExit = "games/rummy/room/tab-exit"
+        case roomGuestTabExit = "games/rummy/room/guest/tab-exit"
         case lobbyEmpty = "games/rummy/lobby/empty"
         case lobbyFailed = "games/rummy/lobby/failed"
         case lobbyShort = "games/rummy/lobby/short"
@@ -104,8 +108,8 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             switch self {
             case .lobby, .ranking, .rules, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
                 return nil
-            case .room: return Self.roomID
-            case .roomGuest: return Self.guestRoomID
+            case .room, .roomTabExit: return Self.roomID
+            case .roomGuest, .roomGuestTabExit: return Self.guestRoomID
             case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchTiny, .matchPlacing, .matchLifted, .matchHandle,
                  .matchReaction, .matchReactionPicker, .matchExit, .matchRules, .matchLeave, .matchSignOut:
                 return Self.myTurnID
@@ -121,7 +125,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             switch self {
             case .lobby, .ranking, .rules, .matchElsewhere, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
                 return false
-            case .room, .roomGuest, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchTiny, .matchDragging, .matchAttach,
+            case .room, .roomGuest, .roomTabExit, .roomGuestTabExit, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchTiny, .matchDragging, .matchAttach,
                  .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .matchReaction, .matchReactionPicker, .matchExit, .matchMotion, .matchRules, .matchLeave, .matchSignOut,
                  .result, .resultBoard, .resultWon:
                 return true

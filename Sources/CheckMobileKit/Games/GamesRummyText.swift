@@ -307,6 +307,14 @@ package enum GamesRummyText {
     package static let closeRoomDetail = "방장이 나가면 방이 닫히고 모두 로비로 돌아가요. 루비는 그대로예요."
     package static let closeRoomConfirm = "방 닫고 나가기"
 
+    // MARK: - 방에서 탭으로 떠나기
+
+    package static let tabExitHintGuest = "다른 탭으로 가면 방에서 나가요"
+    package static let tabExitHintHost = "다른 탭으로 가면 방을 닫을지 먼저 물어봐요"
+    package static let tabLeftNotice = "탭을 옮겨서 방에서 나왔어요"
+    package static let leaveUnconfirmedNotice = "방에서 나오지 못했어요. 아직 자리가 남아 있어요. 연결을 확인하고 [나가기]를 눌러 주세요."
+    package static let leaveUnconfirmedDetail = "나오지 못했어요 · 아직 자리가 있어요"
+
     // MARK: - 규칙(레인 C)
 
     package static let rulesTitle = "아잉 큐브 규칙"

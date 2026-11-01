@@ -92,7 +92,9 @@ struct MobileTabsView: View {
     var body: some View {
         @Bindable var router = model.router
         let badges = model.badges
-        TabView(selection: $router.selectedTab) {
+        // 문이 탭을 막으면(큐브 방의 방장 — `MobileRouter.departureGuard`) 이 본문을 다시 돌려 막대를 원래 탭으로 되돌린다.
+        let _ = router.tabRefusalSerial
+        TabView(selection: $router.tabBarSelection) {
             NowTab(store: model.now)
                 .tabItem { Label(AingTab.now.title, systemImage: AingTab.now.systemImage) }
                 .tag(AingTab.now)

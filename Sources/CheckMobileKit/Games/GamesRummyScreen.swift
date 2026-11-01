@@ -70,7 +70,10 @@ package enum GamesRummyCard {
         switch line(store) {
         case .blocked:
             return ChessPhoneText.entryBlockHint(playing: store.rummyEntryBlock?.text, blocked: .rummy)
-        case .activeMatch, .room, .incoming, .record:
+        case .room:
+            // 나가지 못한 자리는 칩만으로 모자란다 — 칩은 앉아 있는 사람에게도 같은 말이다.
+            return store.isRummyLeaveUnconfirmed ? GamesRummyText.leaveUnconfirmedDetail : recordLine
+        case .activeMatch, .incoming, .record:
             return recordLine
         case .idle:
             return GamesRummyText.idleLine
@@ -112,7 +115,12 @@ package enum GamesRummyExit {
     @discardableResult
     package static func confirm(asked: RummyCloseDecision, rummy: RummyStore) async -> Bool {
         guard decision(rummy) == asked else { return false }
-        _ = await rummy.leaveForExit(reason: .windowClosed)
+        if asked == .confirmCloseRoom {
+            // 방 닫기는 "루비는 그대로예요" 를 읽고 고른 버튼이다 — 다른 기기에서 그새 시작한 판이면 기권이 되지 않게 먼저 읽는다(맥 `confirmClose` 와 같다).
+            _ = await rummy.leaveRoomForExit(reason: .windowClosed)
+        } else {
+            _ = await rummy.leaveForExit(reason: .windowClosed)
+        }
         await settleAfterLeaving(rummy)
         return true
     }
@@ -121,6 +129,13 @@ package enum GamesRummyExit {
     package static func leaveRoom(_ rummy: RummyStore) async {
         _ = await rummy.leaveRoomForExit(reason: .windowClosed)
         await settleAfterLeaving(rummy)
+    }
+
+    /// 방 화면을 떠나는 길(탭 막대 · 푸시 · 딥링크 · 탭 재선택)의 나가기. 그새 시작된 판이면 나가지 않고 그 판을 든다. 서버 확인을 못 받으면 방이 되돌아온다(`departRoom`).
+    package static func departRoom(_ rummy: RummyStore) async -> RummyRoomDeparture {
+        let outcome = await rummy.departRoom(reason: .windowClosed)
+        if outcome == .left { await settleAfterLeaving(rummy) }
+        return outcome
     }
 
     /// 나간 뒤 같은 화면이 로비로 남는다(맥은 창이 닫혀 안 드러난다). 코어 `leave()`·`dismissResult()` 처럼 안내줄을 지우고 로비를 다시 읽는다 —
@@ -180,6 +195,8 @@ struct GamesRummyScreen: View {
     @State private var tab: GamesRummyLobbyTab = .people
     /// 떠 있는 나가기 확인(판 중 기권 · 방장 방 닫기).
     @State private var exitPrompt: RummyCloseDecision?
+    /// 규칙 시트가 떠 있다 — 그 위에는 확인을 못 띄운다(SwiftUI 가 조용히 안 띄운다). 탭 이탈의 확인은 시트가 다 내려간 뒤에 뜬다.
+    @State private var rulesSheetUp = false
     /// 판 화면의 반응 작은 판 · 결과의 고르기 시트. 값을 나눈 까닭: 하나로 쓰면 작은 판을 연 채 판이 끝나는 순간 시트가 떴다 내려간다(값을 끄는 `onChange` 는 본문 뒤에 돈다).
     @State private var reactionPanelOpen = false
     @State private var reactionSheetOpen = false
@@ -199,8 +216,9 @@ struct GamesRummyScreen: View {
             .background(MobileTheme.background.ignoresSafeArea())
             .navigationTitle(GamesRummyText.title)
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: rulesBinding) {
+            .sheet(isPresented: rulesBinding, onDismiss: { rulesSheetUp = false }) {
                 GamesRummyRulesView()
+                    .onAppear { rulesSheetUp = true }
             }
             .sheet(isPresented: $reactionSheetOpen) {
                 GamesRummyReactionPicker(rummy: rummy)
@@ -210,11 +228,11 @@ struct GamesRummyScreen: View {
                     GamesRummyReactionPanel(rummy: rummy, onClose: { reactionPanelOpen = false })
                 }
             }
-            .alert(exitPromptCopy?.title ?? "", isPresented: exitPromptBinding, presenting: exitPromptCopy) { copy in
-                Button(copy.confirm, role: .destructive) { confirmExit() }
-                Button(GamesRummyText.keepPlaying, role: .cancel) { exitPrompt = nil }
-            } message: { copy in
-                Text(copy.detail)
+            .alert(shownPrompt.flatMap(GamesRummyExit.prompt)?.title ?? "", isPresented: exitPromptBinding, presenting: shownPrompt) { asked in
+                Button(GamesRummyExit.prompt(asked)?.confirm ?? GamesRummyText.leave, role: .destructive) { confirmExit(asked) }
+                Button(GamesRummyText.keepPlaying, role: .cancel) { cancelExit() }
+            } message: { asked in
+                Text(GamesRummyExit.prompt(asked)?.detail ?? "")
             }
             .onAppear {
                 store.rummyScreenDidAppear()
@@ -228,11 +246,13 @@ struct GamesRummyScreen: View {
             .onChange(of: rummy.match?.id) { _, _ in
                 inviteQueue.pump(rummy)
                 exitPrompt = nil
+                store.cancelRummyDeparture()
                 applyDemo()
             }
             // 방이 판으로 · 판이 결과로 넘어가면(판 id 는 그대로다) 낡은 확인을 거둔다 — 눌러도 `confirm` 이 막지만 틀린 글자가 떠 있게 두지 않는다.
             .onChange(of: rummy.phase) { _, _ in
                 exitPrompt = nil
+                store.cancelRummyDeparture()
                 reactionPanelOpen = false
                 reactionSheetOpen = false
                 applyDemo()
@@ -271,16 +291,19 @@ struct GamesRummyScreen: View {
         Binding(get: { rummy.rulesShown }, set: { rummy.rulesShown = $0 })
     }
 
-    private var exitPromptBinding: Binding<Bool> {
-        Binding(get: { exitPrompt != nil }, set: { if !$0 { exitPrompt = nil } })
+    /// 지금 띄울 확인 — 화면의 [나가기]가 세운 것, 없으면 탭 이탈이 세운 것(`GamesStore.rummyDeparturePrompt`).
+    private var shownPrompt: RummyCloseDecision? {
+        exitPrompt ?? (rulesSheetUp ? nil : store.rummyDeparturePrompt)
     }
 
-    private var exitPromptCopy: (title: String, detail: String, confirm: String)? {
-        exitPrompt.flatMap(GamesRummyExit.prompt)
+    /// 스토어 쪽 확인은 버튼이 거둔다 — 알림이 닫으며 부르는 이 setter 가 먼저 돌면 가려던 곳을 잃는다.
+    private var exitPromptBinding: Binding<Bool> {
+        Binding(get: { shownPrompt != nil }, set: { if !$0 { exitPrompt = nil } })
     }
 
     /// 화면의 [나가기]. 놀던 기기는 그냥 닫는다(아무것도 안 보낸다 — SPEC-v2 §6).
     private func requestExit() {
+        guard !store.isRummyDepartureRunning else { return }
         switch GamesRummyExit.decision(rummy) {
         case .close:
             store.context.router.popToRoot(.games)
@@ -291,10 +314,18 @@ struct GamesRummyScreen: View {
         }
     }
 
-    private func confirmExit() {
-        guard let asked = exitPrompt else { return }
+    private func confirmExit(_ asked: RummyCloseDecision) {
         exitPrompt = nil
-        Task { await GamesRummyExit.confirm(asked: asked, rummy: rummy) }
+        if store.rummyDeparturePrompt != nil {
+            store.confirmRummyDeparture()
+        } else {
+            Task { await GamesRummyExit.confirm(asked: asked, rummy: rummy) }
+        }
+    }
+
+    private func cancelExit() {
+        exitPrompt = nil
+        store.cancelRummyDeparture()
     }
 
     /// 데모 스크린샷 전용: 라우트 꼬리의 로비 탭 · 작업 판. Release 에서는 한 줄도 돌지 않는다(`demoRummyRoute` 가 DEBUG 전용).
@@ -303,6 +334,18 @@ struct GamesRummyScreen: View {
         guard let demo = store.demoRummyRoute else { return }
         tab = GamesRummyLobbyTab(demo: demo.lobbyTab)
         demo.applyEdit(to: rummy)
+        // 방에서 탭 막대를 누른 것과 같은 문을 밟는다(합성 입력 없이). 방장은 확인에서 멈추고, 손님은 나간 뒤 게임 탭으로 돌아와 로비의 안내 줄을 보인다.
+        if demo.scene == .roomTabExit || demo.scene == .roomGuestTabExit, rummy.phase == .room, !demoLeaving {
+            demoLeaving = true
+            let router = store.context.router
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(4))
+                router.selectTab(.now)
+                guard demo.scene == .roomGuestTabExit else { return }
+                try? await Task.sleep(for: .seconds(2))
+                router.selectTab(.games)
+            }
+        }
         guard rummy.phase == .playing else { return }
         if demo.scene == .matchReactionPicker { reactionPanelOpen = true }
         if demo.scene == .matchExit { exitPrompt = GamesRummyExit.decision(rummy) }

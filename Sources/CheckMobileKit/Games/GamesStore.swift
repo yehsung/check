@@ -106,6 +106,20 @@ package final class GamesStore {
     package private(set) var isTetrisScreenVisible = false
     /// 아잉 큐브 화면이 지금 떠 있다(위 셋과 같은 뜻 — 코어 `setWindowVisible` 을 폰 화면 수명으로 옮긴 값).
     package private(set) var isRummyScreenVisible = false
+    /// 방장이 방을 떠나려 한다 — 화면이 띄울 "방이 닫혀요" 확인(`rummyDepartureAllowed`).
+    package private(set) var rummyDeparturePrompt: RummyCloseDecision?
+    /// 수락하면 원래 가려던 곳으로 가는 일.
+    @ObservationIgnored private var rummyDepartureResume: (@MainActor () -> Void)?
+    /// 마지막 탭 이탈(되보내기를 기다리는 동안 포함). 새 이탈이 앞의 기다림을 끊고, 시험이 끝을 기다린다.
+    @ObservationIgnored package private(set) var rummyDepartureTask: Task<Void, Never>?
+    /// `rummy_leave` 가 지금 나가는 중이다 — 여럿이 눌러도 하나만 나간다.
+    @ObservationIgnored package private(set) var isRummyDepartureRunning = false
+    /// 나가기를 서버가 확인하지 않은 방. 자리가 남아 있으니 카드가 그 사실을 말한다.
+    package private(set) var rummyUnconfirmedLeaveRoomID: UUID?
+    /// 손님 나가기가 안 닿았을 때 다시 보내기까지(초). 되돌린 방은 하트비트가 다시 돌아 자리가 살아 있다 — 그대로 두면 망이 돌아온 뒤 모르는 사이 판돈이 걷힌다.
+    @ObservationIgnored package var rummyLeaveRetrySeconds: [Double] = [3, 10, 30]
+    /// '탭을 옮겨서 나왔어요'를 화면이 한 번 보였다 — 다음에 떠날 때 지운다. 아직 안 보인 줄을 먼저 지우면 돌아온 사람이 못 본다.
+    @ObservationIgnored private var rummyTabLeftNoticeSeen = false
     /// 결과에서 [최종 판]을 펴 둔 판. 판 id 를 쥐는 까닭: 다음 판의 결과가 이 표시를 물려받아 저절로 가로가 되면 안 된다.
     private var rummyFinalBoardMatchID: UUID?
     /// 오목 · 체스 · 테트리스 · 아잉 큐브 화면(로비 · 대국 · 관전) 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)와 확성기 배너가 이때는 스스로 뜨지 않는다
@@ -219,6 +233,8 @@ package final class GamesStore {
         context.tetris.presentWindow = { [weak self] in self?.presentTetrisScreen() }
         // 아잉 큐브도 **같은 문**이다. 코어가 부르는 자리 둘: `openWindow` · 판으로 처음 넘어갈 때(`announce`).
         context.rummy.presentWindow = { [weak self] in self?.presentRummyScreen() }
+        // 방 화면을 떠나는 길은 이 문 하나를 지난다(탭 막대 · 푸시 · 딥링크 · 위젯 · 탭 재선택).
+        context.router.departureGuard = { [weak self] resume in self?.rummyDepartureAllowed(resume: resume) ?? true }
         // AI 대국: 코어 기본 선택기(창을 몰라 떠나도 계속 생각한다 — 맥 동작) 대신 화면 수명을 아는 폰 선택기. 문을 다는 것뿐이다.
         context.gomoku.aiMoveChooser = aiThinker.chooser
         aiThinker.isStillNeeded = { [weak gomoku = context.gomoku] board, color in
@@ -340,6 +356,13 @@ package final class GamesStore {
         isTetrisScreenVisible = false
         isRummyScreenVisible = false
         rummyFinalBoardMatchID = nil
+        rummyDeparturePrompt = nil
+        rummyDepartureResume = nil
+        rummyDepartureTask?.cancel()
+        rummyDepartureTask = nil
+        isRummyDepartureRunning = false
+        rummyUnconfirmedLeaveRoomID = nil
+        rummyTabLeftNoticeSeen = false
         pendingGomokuFocusID = nil
         pendingDemoChessScreen = false
         pendingDemoTetrisScreen = false
@@ -828,6 +851,7 @@ package final class GamesStore {
     package func rummyScreenDidAppear() {
         let rummy = context.rummy
         isRummyScreenVisible = true
+        if rummy.notice == GamesRummyText.tabLeftNotice { rummyTabLeftNoticeSeen = true }
         syncRummyHiddenPeers()
         #if DEBUG
         demoRummyRoute?.prepare(rummy)
@@ -840,7 +864,7 @@ package final class GamesStore {
 
     /// 아잉 큐브 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃).
     ///
-    /// **기권이 아니다** — 떠나는 길에서 요청은 한 건도 나가지 않는다(이탈은 화면의 [나가기] 확인 뒤에만 — `GamesRummyExit`).
+    /// **기권이 아니다** — 이 신호로는 요청이 한 건도 나가지 않는다. 방을 떠나는 판단은 사람의 행동을 보는 문(`rummyDepartureAllowed`)이 먼저 했다: 이 신호는 목적지가 다시 세워질 때도 온다.
     /// ★ 끝난 판은 **여기서 접는다**: 폰에서 화면을 떠나는 것은 맥의 '창을 닫았다'다. 안 접으면 다시 들어올 때 로비가 아니라 그 결과가 다시 선다(테트리스 `windowDidClose` 와 같은 까닭).
     ///   `phase == .finished` 일 때만 부른다(쓰기가 아니라 접기 + 로비 조회 한 번이다). 진행 중인 판은 그대로 남는다.
     package func rummyScreenDidDisappear() {
@@ -851,6 +875,109 @@ package final class GamesStore {
         rummy.setWindowVisible(false)
         if rummy.phase == .finished { rummy.dismissResult() }
         if rummy.rulesShown { rummy.rulesShown = false }
+        if rummyTabLeftNoticeSeen, rummy.notice == GamesRummyText.tabLeftNotice { rummy.setNotice(nil) }
+        rummyTabLeftNoticeSeen = false
+    }
+
+    // MARK: 아잉 큐브 방을 떠나는 문
+
+    /// 사용자 답(운영판 '폰 아잉 큐브: 방에서 탭으로 나가도 자리를 남길까요?'): **"맥처럼 방을 나가기"** — 모르는 사이 판돈이 걷히지 않게.
+    ///
+    /// | 지금(`RummyCloseDecision`)        | 이 문                                     | 맥의 같은 자리       |
+    /// |---------------------------------|-----------------------------------------|---------------------|
+    /// | `.leaveRoom`(손님)               | 곧바로 간다 + 뒤에서 나간다                 | 창이 닫히고 방 나가기 |
+    /// | `.confirmCloseRoom`(방장)        | 멈추고 묻는다 — 수락하면 나간 뒤 간다          | "방이 닫혀요" 확인   |
+    /// | `.confirmForfeit`(판 중)          | 그냥 간다 — 90초 규칙 그대로, 기권 아님        | (창 닫기와 다른 일)   |
+    /// | `.close`(로비·결과·놀던 기기)       | 그냥 간다 — 아무것도 안 보낸다               | 그냥 닫힘           |
+    ///
+    /// 앱을 내리는 것(`appDidEnterBackground`)과 로그아웃은 이 문을 지나지 않는다. 화면이 안 보이면 떠나는 것이 아니다.
+    private func rummyDepartureAllowed(resume: @escaping @MainActor () -> Void) -> Bool {
+        guard isRummyScreenVisible, !isRummyDepartureRunning else { return true }
+        let rummy = context.rummy
+        switch GamesRummyExit.decision(rummy) {
+        case .close, .confirmForfeit:
+            return true
+        case .leaveRoom:
+            rummyDepartureTask?.cancel()
+            isRummyDepartureRunning = true
+            rummyDepartureTask = Task { @MainActor [weak self] in await self?.runGuestDeparture() }
+            return true
+        case .confirmCloseRoom:
+            rummyDepartureResume = resume
+            rummyDeparturePrompt = .confirmCloseRoom
+            if rummy.rulesShown { rummy.rulesShown = false }
+            return false
+        }
+    }
+
+    /// 손님: 탭은 이미 옮겼다. 서버가 확인할 때까지 몇 번 더 보낸다 — 돌아와 방을 다시 보고 있으면 그 사람에게 맡긴다(안내 줄이 서 있다).
+    private func runGuestDeparture() async {
+        let rummy = context.rummy
+        let generation = context.generation
+        var outcome = await sendRummyDeparture()
+        for delay in rummyLeaveRetrySeconds where outcome == .notConfirmed {
+            let roomID = rummy.match?.id
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, generation == context.generation, !isRummyScreenVisible,
+                  rummy.phase == .room, rummy.match?.id == roomID else { return }
+            isRummyDepartureRunning = true
+            outcome = await sendRummyDeparture()
+        }
+    }
+
+    /// 한 번 보내고 결과를 사람에게 남긴다(안내 줄 · 카드). 부르는 쪽이 `isRummyDepartureRunning` 을 세운다.
+    private func sendRummyDeparture() async -> RummyRoomDeparture {
+        let rummy = context.rummy
+        let generation = context.generation
+        let outcome = await GamesRummyExit.departRoom(rummy)
+        // 그새 로그아웃했으면 다음 사람에게 남길 말이 없다.
+        guard generation == context.generation else { return outcome }
+        isRummyDepartureRunning = false
+        switch outcome {
+        case .left:
+            rummyUnconfirmedLeaveRoomID = nil
+            rummy.setNotice(GamesRummyText.tabLeftNotice)
+        case .notConfirmed:
+            rummyUnconfirmedLeaveRoomID = rummy.match?.id
+            rummy.setNotice(GamesRummyText.leaveUnconfirmedNotice)
+        case .startedMatch:
+            rummyUnconfirmedLeaveRoomID = nil
+        }
+        return outcome
+    }
+
+    /// 방장의 [방 닫고 나가기]. **지금 판단으로 간다**(묻는 사이 판이 시작됐으면 나가지도 옮기지도 않는다 · 방이 없어졌으면 보낼 것 없이 간다).
+    /// 서버가 확인하지 않으면 옮기지 않는다 — 방이 안 닫혔는데 다른 탭으로 가면 다른 사람들이 빈 방에서 기다린다. 방 화면의 안내 줄이 말하고, 다시 누를 수 있다.
+    package func confirmRummyDeparture() {
+        guard rummyDeparturePrompt != nil, !isRummyDepartureRunning else { return }
+        let resume = rummyDepartureResume
+        rummyDeparturePrompt = nil
+        rummyDepartureResume = nil
+        switch GamesRummyExit.decision(context.rummy) {
+        case .close:
+            resume?()
+        case .confirmForfeit:
+            break
+        case .leaveRoom, .confirmCloseRoom:
+            rummyDepartureTask?.cancel()
+            isRummyDepartureRunning = true
+            rummyDepartureTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                if await self.sendRummyDeparture() == .left { resume?() }
+            }
+        }
+    }
+
+    /// 방장의 [계속하기] — 아무것도 안 보내고 방에 남는다. 판이 시작돼 거둘 때도 부른다.
+    package func cancelRummyDeparture() {
+        rummyDeparturePrompt = nil
+        rummyDepartureResume = nil
+    }
+
+    /// 나가기를 서버가 확인하지 않은 그 방에 아직 앉아 있다.
+    package var isRummyLeaveUnconfirmed: Bool {
+        guard let id = rummyUnconfirmedLeaveRoomID else { return false }
+        return context.rummy.phase == .room && context.rummy.match?.id == id
     }
 
     /// AI 선택기의 허락 = 오목 화면이 보이고 앱이 active. 거두면 도는 탐색이 곧바로 취소된다.

@@ -37,6 +37,15 @@ package enum GamesRummyRoomPlan {
         return joined >= 2 ? nil : GamesRummyText.startHintHost
     }
 
+    /// [나가기] 아래 한 줄 — 탭 막대가 방을 떠나는 길이라는 것을 미리 말한다. 놀던 기기는 탭을 옮겨도 아무 일이 없어 말하지 않는다.
+    package static func tabExitHint(_ decision: RummyCloseDecision) -> String? {
+        switch decision {
+        case .leaveRoom: return GamesRummyText.tabExitHintGuest
+        case .confirmCloseRoom: return GamesRummyText.tabExitHintHost
+        case .close, .confirmForfeit: return nil
+        }
+    }
+
     /// 닫히기까지 남은 초(올림). 방이 아니면 nil.
     package static func remainingSeconds(_ remaining: TimeInterval?) -> Int? {
         remaining.map { max(0, Int($0.rounded(.up))) }
@@ -134,7 +143,7 @@ struct GamesRummyRoomView: View {
             }
             .refreshable { await rummy.refreshLobby() }
             // 시스템 뒤로는 자리를 안 놓는다 — 나왔다고 믿는 사이 방장이 시작하면 판돈이 걷히고, 폰을 잠갔으면 90초 뒤 끊김 기권이다. 뒤로도 [나가기]와 같은 판단을 탄다(맥: 손님이 창을 닫으면 방 나가기).
-            // 앉은 채 둘러보는 길은 탭 막대다.
+            // 탭 막대도 같다(사용자 답 "맥처럼 방을 나가기" — `GamesStore.rummyDepartureAllowed`). 앉은 채 둘러보는 길은 없다.
             .navigationBarBackButtonHidden(true)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -273,6 +282,14 @@ struct GamesRummyRoomView: View {
             AingButton(GamesRummyText.leave, systemImage: "rectangle.portrait.and.arrow.right", kind: .gray, size: .md,
                        fillsWidth: true, action: onExit)
                 .disabled(rummy.isWorking)
+            if let text = GamesRummyRoomPlan.tabExitHint(GamesRummyExit.decision(rummy)) {
+                Text(text)
+                    .font(.caption)
+                    .foregroundStyle(MobileTheme.label2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+            }
         }
         .padding(.top, MobileTheme.rowSpacing)
     }

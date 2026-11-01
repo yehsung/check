@@ -324,7 +324,8 @@ struct GamesRummyLobbyView: View {
     @ViewBuilder
     private var notice: some View {
         if let text = rummy.notice {
-            InlineNotice(text: text, kind: .warning)
+            // 스스로 나온 사실을 말하는 줄이라 경고가 아니다.
+            InlineNotice(text: text, kind: text == GamesRummyText.tabLeftNotice ? .info : .warning)
                 .padding(.top, MobileTheme.rowSpacing)
         }
     }

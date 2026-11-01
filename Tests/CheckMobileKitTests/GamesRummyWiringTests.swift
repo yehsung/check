@@ -113,10 +113,10 @@ enum RummyWireJSON {
         #"{"id":"\#(id)","host":{"id":"\#(RummyWireHarness.rival)","display_name":"큐브라이벌"},"stake":5,"is_public":false,"max_seats":4,"expires_at_ms":\#(nowMs + 600_000),"seats":[]}"#
     }
 
-    static func state(nowMs: Int, id: String = RummyWireHarness.matchID, status: String, mySeatState: String, turnSeat: Int, seq: Int = 3, draft: String = "null") -> String {
+    static func state(nowMs: Int, id: String = RummyWireHarness.matchID, status: String, mySeatState: String, turnSeat: Int, seq: Int = 3, draft: String = "null", hostID: String = RummyWireHarness.userID) -> String {
         let me = RummyWireHarness.userID, rival = RummyWireHarness.rival
         let rack = status == "active" && mySeatState == "playing" ? #"["A10","A11","A12","B1"]"# : "null"
-        return #"{"id":"\#(id)","status":"\#(status)","host_id":"\#(me)","stake":5,"is_public":false,"max_seats":4,"seat_count":2,"seq":\#(seq),"server_now_ms":\#(nowMs),"turn_seat_no":\#(turnSeat),"turn_started_ms":\#(nowMs - 1000),"turn_deadline_ms":\#(nowMs + 59_000),"pool_count":40,"table":[],"table_layout":[],"draft":\#(draft),"my_seat_no":0,"my_rack":\#(rack),"my_initial_done":false,"seats":[{"user_id":"\#(me)","display_name":"나","seat_no":0,"state":"\#(mySeatState)","rack_count":4},{"user_id":"\#(rival)","display_name":"큐브라이벌","seat_no":1,"state":"playing","rack_count":6}],"reactions":[]}"#
+        return #"{"id":"\#(id)","status":"\#(status)","host_id":"\#(hostID)","stake":5,"is_public":false,"max_seats":4,"seat_count":2,"seq":\#(seq),"server_now_ms":\#(nowMs),"turn_seat_no":\#(turnSeat),"turn_started_ms":\#(nowMs - 1000),"turn_deadline_ms":\#(nowMs + 59_000),"pool_count":40,"table":[],"table_layout":[],"draft":\#(draft),"my_seat_no":0,"my_rack":\#(rack),"my_initial_done":false,"seats":[{"user_id":"\#(me)","display_name":"나","seat_no":0,"state":"\#(mySeatState)","rack_count":4},{"user_id":"\#(rival)","display_name":"큐브라이벌","seat_no":1,"state":"playing","rack_count":6}],"reactions":[]}"#
     }
 }
 

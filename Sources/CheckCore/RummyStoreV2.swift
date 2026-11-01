@@ -12,6 +12,16 @@ package enum RummyExitReason: String, Sendable {
     case appUpdate = "app_update"
 }
 
+/// `RummyStore.departRoom` 의 결과.
+package enum RummyRoomDeparture: Equatable, Sendable {
+    /// 나갔다(서버가 확인했거나 이미 자리가 없다).
+    case left
+    /// 그새 판이 시작돼 나가지 않고 그 판을 들었다(`rummy_leave` 0건).
+    case startedMatch
+    /// 서버 확인을 못 받았다 — 자리가 남아 있다고 보고 방을 되돌렸다.
+    case notConfirmed
+}
+
 /// 내 랙에 새로 들어온 타일 한 장(편집기 로컬 id · 면 · 받침대 자리).
 package struct RummyDrawnTile: Equatable, Hashable, Sendable {
     package let tileID: Int
@@ -200,6 +210,26 @@ extension RummyStore {
             return false
         }
         return await leaveForExit(reason: reason)
+    }
+
+    /// 폰 탭 이탈(`GamesStore`): `leaveRoomForExit` 와 같되 **서버가 나감을 확인하지 않으면 쥔 방을 되돌린다.**
+    /// 맥은 창이 닫혀 사람이 더 볼 것이 없지만, 폰은 게임 탭으로 돌아온 사람이 카드를 본다 — `leaveForExit` 처럼 접어 버리면
+    /// 서버엔 자리가 남았는데 화면은 '나왔다'고 말한다(그 사이 방장이 시작하면 모르는 사이 판돈이 걷힌다). 맥은 이 문을 안 쓴다.
+    /// 되돌리면 하트비트도 다시 돈다 — 그래서 부르는 쪽이 다시 시도한다.
+    package func departRoom(reason: RummyExitReason) async -> RummyRoomDeparture {
+        let held = match
+        if await leaveRoomForExit(reason: reason) { return .left }
+        guard let held else { return .left }
+        if match?.id == held.id { return .startedMatch }
+        // 그 2초 사이 로그아웃했으면 되돌릴 사람이 없다.
+        guard host?.session != nil else { return .left }
+        dismissedMatchIDs.remove(held.id)
+        matchRevision &+= 1
+        activeMatchID = held.id
+        // `clearMatch` 가 손댄 판 장부에서 걷었다 — 다시 적어야 다시 나갈 때 놀던 기기로 읽히지 않는다.
+        markEngaged(held.id)
+        applyState(held)
+        return .notConfirmed
     }
 
     // MARK: - 이모티콘 반응(머리말 ⑬)

@@ -128,7 +128,7 @@ import Testing
         "games/rummy/match/reaction-picker", "games/rummy/match/exit", "games/rummy/match/motion", "games/rummy/match/rules", "games/rummy/match/leave",
         "games/rummy/match/signout", "games/rummy/result",
         "games/rummy/result/board", "games/rummy/result/won",
-        "games/rummy/room/guest", "games/rummy/lobby/empty", "games/rummy/lobby/failed", "games/rummy/lobby/short",
+        "games/rummy/room/guest", "games/rummy/room/tab-exit", "games/rummy/room/guest/tab-exit", "games/rummy/lobby/empty", "games/rummy/lobby/failed", "games/rummy/lobby/short",
         "games/rummy/lobby/update", "games/rummy/lobby/missing", "games/rummy/lobby/people", "games/rummy/lobby/busy",
         "games/rummy/lobby/sheet", "games/rummy/ranking/failed",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.

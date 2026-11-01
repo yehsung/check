@@ -21,6 +21,7 @@ object RummyPhoneText {
     // MARK: - 공용
 
     const val title: String = "아잉 큐브"
+    const val close: String = "닫기"
     const val leave: String = "나가기"
     const val forfeit: String = "기권"
     const val updateRequired: String = RummyNoticeText.updateRequired

@@ -73,11 +73,11 @@ private let amClaudeUsageJSON = """
 """
 
 /// 키체인 `security -w` 출력의 실측 모양. **토큰 자리는 자리표시자**이고 `expiresAt` 은 epoch **밀리초**다.
-private func amClaudeCredentialsJSON(expiresAtMilliseconds: Double, plan: String = "max") -> String {
+private func amClaudeCredentialsJSON(expiresAtMilliseconds: Double, plan: String = "max", tier: String = "default") -> String {
     """
     {"claudeAiOauth":{"accessToken":"PLACEHOLDER-NOT-A-TOKEN","refreshToken":"PLACEHOLDER-NOT-A-TOKEN",
     "expiresAt":\(Int(expiresAtMilliseconds)),"scopes":["user:inference"],"subscriptionType":"\(plan)",
-    "rateLimitTier":"default"}}
+    "rateLimitTier":"\(tier)"}}
     """
 }
 
@@ -319,6 +319,28 @@ struct AILimitsMacReaderTests {
         #expect(credentials.planLabel == "max")
         // ★ 액세스 토큰은 값으로 들고 있지만 **에러·분류에는 담길 자리가 없다**(AILimitReadError 에 메시지 필드가 없다).
         #expect(credentials.accessToken.isEmpty == false)
+    }
+
+    /// 200달러 플랜은 울트라다. `subscriptionType` 이 100달러와 같은 "max" 라 등급 칸으로만 가른다.
+    @Test(arguments: [
+        ("max", "default_claude_max_20x", "ultra"),
+        ("max", "default_claude_max_5x", "max"),
+        ("max", "default", "max"),
+        ("pro", "default_claude_max_20x", "pro"),
+        ("ultra", "default", "ultra")
+    ])
+    func claudePlanNameFollowsTheTier(plan: String, tier: String, expected: String) throws {
+        let credentials = try AILimitClaudeReader.parseCredentials(
+            Data(amClaudeCredentialsJSON(expiresAtMilliseconds: 9_999_999_999_999, plan: plan, tier: tier).utf8)
+        ).get()
+        #expect(credentials.planLabel == expected)
+    }
+
+    /// 등급 칸이 없는 자격 증명을 울트라로 올려 적지 않는다.
+    @Test
+    func claudePlanNameStaysMaxWithoutTier() {
+        #expect(AILimitClaudeReader.planLabel(subscriptionType: "max", rateLimitTier: nil) == "max")
+        #expect(AILimitClaudeReader.planLabel(subscriptionType: nil, rateLimitTier: "default_claude_max_20x") == nil)
     }
 
     /// 토큰이 비면 '미로그인'이다(항목은 있다) → 숨긴다.

@@ -31,6 +31,8 @@
 
 → JSON: `claudeAiOauth.{accessToken, refreshToken, expiresAt, scopes, subscriptionType, rateLimitTier}`.
 `expiresAt` 은 **epoch 밀리초**, 수명 약 12시간.
+200달러 플랜(울트라)도 `subscriptionType` 은 100달러(맥스)와 같은 `max` 다. `rateLimitTier` 가 `default_claude_max_20x` 면
+플랜 라벨을 `ultra` 로 적는다(`AILimitClaudeReader.planLabel`, 2026-11-01 실측).
 
 - ★★ **Swift `SecItemCopyMatching` 를 쓰면 안 된다.** 이 키체인 항목은 우리 앱이 만든 것이 아니라
   ACL 허용 대화상자(SecurityAgent)가 떠서 **반환하지 않는다**(실측: 15초 타임아웃까지 대기, rc=124).
@@ -256,7 +258,7 @@ Claude(`utilization`)·Codex(`used_percent`) 와 **부호가 반대다.** 한 �
 | 사용률 퍼센트(0…100) | 계정 지문(그 식별자의 SHA-256 앞 16자) |
 | 리셋 시각 | 크레딧 잔액 |
 | 관측(읽은) 시각 | 자격증명 파일 경로·키체인 항목 이름 |
-| 플랜 라벨(`max`·`plus` 원문, 32자까지) | 대화 내용·프롬프트·파일 목록 |
+| 플랜 라벨(`max`·`plus` 원문, Claude 200달러는 `ultra`, 32자까지) | 대화 내용·프롬프트·파일 목록 |
 | 기기 이름(시스템 설정의 컴퓨터 이름, 64자까지) | 기기 모델명·일련번호·MAC 주소·Mac 사용자 계정 이름 |
 
 - 공개 범위는 **본인만(RLS)**. **순위판·보드 RPC 에 절대 섞지 마라** — 한 번 섞이면 거두는 쪽이

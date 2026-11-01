@@ -474,7 +474,7 @@ package struct AILimitClaudeReader: Sendable {
         package let accessToken: String
         /// `expiresAt`(epoch **밀리초**)을 절대 시각으로 바꾼 값. 없으면 nil(= 모른다, 호출해 본다).
         package let expiresAt: Date?
-        /// `subscriptionType`("max"/"pro"). 플랜 라벨이다 — 사람을 가리키지 않는다.
+        /// 화면에 적는 플랜 이름("pro"/"max"/"ultra" — `planLabel(subscriptionType:rateLimitTier:)`). 사람을 가리키지 않는다.
         package let planLabel: String?
 
         package init(accessToken: String, expiresAt: Date?, planLabel: String?) {
@@ -482,6 +482,16 @@ package struct AILimitClaudeReader: Sendable {
             self.expiresAt = expiresAt
             self.planLabel = planLabel
         }
+    }
+
+    /// 자격 증명의 두 칸에서 플랜 이름을 고른다. 200달러 플랜의 이름이 맥스에서 울트라로 바뀌었는데(프로 20달러 · 맥스 100달러 ·
+    /// 울트라 200달러, 2026-11-01 사용자 확인) `subscriptionType` 은 100달러와 같은 "max" 로 남아 있고 `rateLimitTier` 만 갈린다
+    /// (2026-11-01 실측: 이 맥의 키체인과 Claude Code 2.1.316 이 같은 값으로 가른다). 등급을 모르면 맥스로 둔다 — 100달러 사용자를 울트라로 적지 않는다.
+    /// 제공자가 나중에 "ultra" 를 직접 주면 그대로 지나간다.
+    package static func planLabel(subscriptionType: String?, rateLimitTier: String?) -> String? {
+        let plan = AILimitPlanLabelContract.normalized(subscriptionType)
+        guard plan == "max", rateLimitTier == "default_claude_max_20x" else { return plan }
+        return "ultra"
     }
 
     /// `security -w` 의 stdout(JSON)을 파싱한다. 순수 — 테스트가 실측 바이트로 못 박는다.
@@ -494,7 +504,10 @@ package struct AILimitClaudeReader: Sendable {
         guard !token.isEmpty else { return .failure(AILimitReadError(.notLoggedIn)) }
         // epoch **밀리초**다(실측: 수명 약 12시간). 초로 읽으면 1970년이 되어 언제나 만료다.
         let expires = (oauth["expiresAt"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
-        let plan = (oauth["subscriptionType"] as? String).flatMap(AILimitPlanLabelContract.normalized)
+        let plan = planLabel(
+            subscriptionType: oauth["subscriptionType"] as? String,
+            rateLimitTier: oauth["rateLimitTier"] as? String
+        )
         return .success(Credentials(accessToken: token, expiresAt: expires, planLabel: plan))
     }
 

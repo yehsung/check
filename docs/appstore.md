@@ -16,7 +16,7 @@
 | 표시 이름 | `아잉체크` | `ios/project.yml:71, 167`, `ios/App/Info.plist`·`ios/Widgets/Info.plist`(CFBundleDisplayName), `Sources/CheckMobileShared/CheckMobileIdentifiers.swift`(`appDisplayName` — 앱 안 문구가 읽는 한 벌) |
 | 버전 · 빌드 | `1.0.16` · `28` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
 | 팀 ID | `MQ2KQK37WD` | `ios/project.yml:23` |
-| 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향만 | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
+| 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향(**아잉 큐브 판 화면만 가로** — 1.0.16 부터 Info.plist 가 가로 둘을 선언하고 그 화면만 돌린다, `GamesRummyOrientationRule`) | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
 | 백그라운드 모드 | `remote-notification` 하나 | `ios/project.yml:78-79` |
 | 암호화 신고 | `ITSAppUsesNonExemptEncryption: false`(HTTPS 표준 암호화만) | `ios/project.yml:80` |
 | URL 스킴 | `aingcheck://`(푸시·위젯 딥링크) | `ios/project.yml:84-87`, `Sources/CheckMobileShared/AingRoute.swift:1-14` |
@@ -33,11 +33,11 @@
 
 | 탭 | 화면에 있는 것 | 서버에 **쓰는** 것 | 근거 |
 | --- | --- | --- | --- |
-| 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료**(1.0.7 — `work_phone_start/stop/touch`, 서버 시계) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
+| 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), **우리 팀 전체 명단(1.0.16 — 「우리 팀 전체 보기」 → 쉬는 사람까지 전원 · 근무 중 먼저 · 새 요청 0)**, 연속 근무 칩(1.0.16 — 서버 `achievements_status.streak_days` 가 있을 때만 그린다 · **그 서버 칸은 아직 안 올라갔다**), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료**(1.0.7 — `work_phone_start/stop/touch`, 서버 시계) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번), 입력칸 왼쪽 이모티콘 버튼 → **아잉이 이모티콘 여섯 종**(1.0.12 — 앱 번들에 든 그림 여섯 장. 본문이 `[아잉:기쁨]` 같은 토큰과 **통째로 같을 때만** 그림으로 그린다) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인). **이모티콘도 같은 `send_message` 로 글자만 간다**(1.0.12 — 새 RPC·새 칸·새 열거값 0) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift`, `Sources/CheckCore/AingSticker.swift`, `Messages/MessagesComposerView.swift` |
-| 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘) 세 판 | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
-| 게임 | 미니게임 넷(타이밍 바·플래피 아잉·테트리스 혼자, **길건너 아잉이(1.0.15 — 맥 0.3.67 의 게임에 폰 화면·조작을 붙였다. 쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸 · 혼자 하는 게임이고 판돈이 없다)**), 미니게임 순위 머리의 **[오늘]·[역대] 전환(1.0.15 — 칩 두 개다. 역대 순위는 사람마다 가장 높은 점수 하나만 올라간다. 「순위」 탭은 그대로 오늘 하나다)**, 1:1 오목(로비·신청·대국·채팅), 1:1 체스(1.0.6), **1:1 테트리스(1.0.11 — 로비·신청·준비·판·결과·순위. 둘이 같은 시드로 각자 판을 돌리고 지운 줄 수만큼 상대 바닥에 방해 줄이 올라간다. 먼저 꼭대기까지 쌓이는 쪽이 진다)**, 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출(길건너도 **같은 두 RPC** — 1.0.15 에 새 쓰기 0), 오목 신청·수락·착수·기권·채팅·음소거, 체스 신청·수락·착수·기권, 테트리스 신청·수락·판 보고·기권(`tetris_challenge` · `tetris_respond` · `tetris_report` · `tetris_resign`). 역대 순위는 **읽기만**(`minigame_alltime_board`) | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290`, `Sources/CheckCore/TetrisWire.swift`, `Sources/CheckMobileKit/Games/GamesTetrisDuelText.swift`; 1.0.15 — `Sources/CheckCore/MiniGameEngine.swift:166`(`phoneCases` 넷), `Sources/CheckCore/CrossyGame.swift`·`CrossyScene.swift`, `Sources/CheckMobileKit/Games/GamesCrossyCanvas.swift`·`GamesCrossyGesture.swift`, `Sources/CheckCore/SupabaseWorkModels.swift:3179`(`MiniGameBoardScope`), `Sources/CheckCore/SupabaseWorkService.swift:844, 869`, `Sources/CheckMobileKit/Games/GamesMiniGameBoardScope.swift` |
-| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → **[미션] 줄(1.0.13 — 누르면 별도 「미션」 화면이 열리고 그 안에 일일 미션(1.0.13 — 오늘 할 6가지 · 각 5루비 · 자정 KST 초기화) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 누적 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다 · 1.0.9~1.0.12 의 이름은 「도전 미션」, 1.0.13 부터 맥 0.3.64 와 같은 「누적 미션」)이 **맥 미션 화면과 같은 순서로** 있다. 1.0.12 까지는 주간·누적이 이 루트에 펼쳐져 있었고 일일은 없었다 — 1.0.13 은 **화면 재배치 + 일일 미션 추가**다)** → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환 / 1.0.10 — 무지개 아잉이 2% 추가 · 황금 아잉이 5 → 3%, 둘 다 루비로 못 사고 조각 20개로 교환 / 1.0.14 — 생일 선물 전용 케이크 아잉이 둘(딸기·초코): 루비·뽑기·조각으로 못 얻고 모두에게 '생일 선물 전용' 잠긴 칸으로 보인다. 운영자가 생일인 사람에게 선물을 넣으면 앱을 열 때 「생일 축하해요!」 시트가 떠 둘 중 하나를 골라 받고, 닫으면 나 탭 무대 아래 「생일 선물이 도착했어요 [고르기]」 줄이 받을 때까지 남는다) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔, 일일·누적 미션 받기(`daily_mission_claim` · `achievement_claim`) | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeMissionsView.swift`(1.0.13 — [미션] 줄 + 미션 화면), `Me/MeDailyMissionViews.swift`(1.0.13 — 일일 미션 절), `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
+| 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘·역대) 세 판 — **미니게임 판의 [오늘]·[역대] 전환은 1.0.16** | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
+| 게임 | 미니게임 넷(타이밍 바·플래피 아잉·테트리스 혼자, **길건너 아잉이(1.0.15 — 맥 0.3.67 의 게임에 폰 화면·조작을 붙였다. 쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸 · 혼자 하는 게임이고 판돈이 없다)**), 미니게임 순위 머리의 **[오늘]·[역대] 전환(1.0.15 — 칩 두 개다. 역대 순위는 사람마다 가장 높은 점수 하나만 올라간다. 「순위」 탭에는 1.0.16 에 같은 전환이 붙었다)**, **미니게임 일시정지(1.0.16 — 앱을 내리면 판이 얼고 불투명한 화면으로 가린다 · [이어하기] 3-2-1 · [그만두기]. 테트리스·길건너는 여기까지 점수를 남기고 5분이 넘으면 끝난다, 플래피·타이밍 바는 버린다)**, 1:1 오목(로비·신청·대국·채팅), 1:1 체스(1.0.6 · 1.0.16 말 끌어 두기 — 탭 2단도 그대로다), **1:1 테트리스(1.0.11 — 로비·신청·준비·판·결과·순위. 둘이 같은 시드로 각자 판을 돌리고 지운 줄 수만큼 상대 바닥에 방해 줄이 올라간다. 먼저 꼭대기까지 쌓이는 쪽이 진다)**, **아잉 큐브(1.0.16 — 2~4명 숫자 타일. 로비·규칙·전적·순위·공개 방·초대·판·결과. 한 차례 60초. 판 화면만 가로. 맥과 같은 서버)**, 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출(길건너도 **같은 두 RPC** — 1.0.15 에 새 쓰기 0), 오목 신청·수락·착수·기권·채팅·음소거, 체스 신청·수락·착수·기권, 테트리스 신청·수락·판 보고·기권(`tetris_challenge` · `tetris_respond` · `tetris_report` · `tetris_resign`), 아잉 큐브 방·초대·시작·놓기·뽑기·반응·나가기(`rummy_create` · `rummy_join` · `rummy_invite` · `rummy_decline` · `rummy_start` · `rummy_draft` · `rummy_play` · `rummy_draw` · `rummy_react` · `rummy_leave` · `rummy_heartbeat` — 1.0.16). 역대 순위는 **읽기만**(`minigame_alltime_board`) | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290`, `Sources/CheckCore/TetrisWire.swift`, `Sources/CheckMobileKit/Games/GamesTetrisDuelText.swift`; 1.0.15 — `Sources/CheckCore/MiniGameEngine.swift:166`(`phoneCases` 넷), `Sources/CheckCore/CrossyGame.swift`·`CrossyScene.swift`, `Sources/CheckMobileKit/Games/GamesCrossyCanvas.swift`·`GamesCrossyGesture.swift`, `Sources/CheckCore/SupabaseWorkModels.swift:3179`(`MiniGameBoardScope`), `Sources/CheckCore/SupabaseWorkService.swift:844, 869`, `Sources/CheckMobileKit/Games/GamesMiniGameBoardScope.swift`; 1.0.16 — `Sources/CheckCore/RummyStore.swift`, `Sources/CheckMobileKit/Games/GamesRummyText.swift`·`GamesRummyLobby.swift`·`GamesRummyMatch.swift`, `Sources/CheckCore/MiniGamePauseState.swift`, `Games/GamesMiniGamePause.swift`, `Games/GamesChessBoardDrag.swift` |
+| 나 | 무대(착용 캐릭터·이름·팀·센터·루비) → **[미션] 줄(1.0.13 — 누르면 별도 「미션」 화면이 열리고 그 안에 일일 미션(1.0.13 — 오늘 할 6가지 · 각 5루비 · 자정 KST 초기화) → 이번 주 근무(1.0.8 — 20/40/60시간 단계) → 누적 미션(1.0.9 — 미션 13개, 달성하면 줄에 [받기] 버튼이 생기고 눌러야 루비가 들어온다 · 1.0.9~1.0.12 의 이름은 「도전 미션」, 1.0.13 부터 맥 0.3.64 와 같은 「누적 미션」)이 **맥 미션 화면과 같은 순서로** 있다. 1.0.12 까지는 주간·누적이 이 루트에 펼쳐져 있었고 일일은 없었다 — 1.0.13 은 **화면 재배치 + 일일 미션 추가**다)** → 기록(지난주 회고·12주 근무/AI 토큰 잔디·근무 리듬) → 프로필(사진·별명·상태메시지 · **1.0.16 — 사진을 지우고 기본 캐릭터로 되돌리기**) · 제보 · 설정(공개 설정·알림·화면 모드·팀 코드·**소속 센터 행(1.0.16 — 읽기 전용)**·**이용약관 줄(1.0.16)**·로그아웃·버전) · 상점(1.0.8 — 맨 위 캐릭터 뽑기 카드: [뽑기] · 확률 보기 · 조각 교환 / 1.0.10 — 무지개 아잉이 2% 추가 · 황금 아잉이 5 → 3%, 둘 다 루비로 못 사고 조각 20개로 교환 / 1.0.14 — 생일 선물 전용 케이크 아잉이 둘(딸기·초코): 루비·뽑기·조각으로 못 얻고 모두에게 '생일 선물 전용' 잠긴 칸으로 보인다. 운영자가 생일인 사람에게 선물을 넣으면 앱을 열 때 「생일 축하해요!」 시트가 떠 둘 중 하나를 골라 받고, 닫으면 나 탭 무대 아래 「생일 선물이 도착했어요 [고르기]」 줄이 받을 때까지 남는다) · 캐릭터 고르기 | 사진 업로드, 별명, 상태메시지(`set_status_message`, 40자), 착용 캐릭터, 캐릭터 구매, 캐릭터 뽑기·조각 교환(1.0.8 — `gacha_pull` · `gacha_exchange`, 루비로만), 제보, 공개 스위치 둘, 알림 종류별 켬/끔, 일일·누적 미션 받기(`daily_mission_claim` · `achievement_claim`) | `Me/MeTab.swift:6-8`, `Me/MeStore.swift:17-24`, `Me/MeMissionsView.swift`(1.0.13 — [미션] 줄 + 미션 화면), `Me/MeDailyMissionViews.swift`(1.0.13 — 일일 미션 절), `Me/MeSettingsView.swift:7`, `Me/MeProfileView.swift:6`, `Me/MeStoreGacha.swift`, `Me/MeGachaViews.swift`, `Sources/CheckCore/Gacha.swift` |
 | (홈 위젯) | 지금 근무 중 · 내 오늘 · 할 일 — 세 종류. 앱이 쓴 스냅샷 파일만 그린다 | 할 일 체크 인텐트의 `todo_sync` 한 번뿐 | `Sources/CheckWidgetsKit/AingWidgetModel.swift:11-16`, `Sources/CheckMobileShared/WidgetSnapshot.swift:6`, `Sources/CheckWidgetsKit/WidgetTodoToggle.swift:11` |
 | (푸시) | 새 메시지 · 오목 신청(수락 버튼) · 제보 답장 세 종류, 앱 배지 = 안 읽은 메시지 + 받은 오목 신청 | 기기 등록(`register_device`), 알림 종류별 설정(`set_push_prefs`) | `Push/PushPayload.swift:6-10`, `Push/PushCoordinator.swift:14-27`, `Session/MobileDeviceService.swift:116-164` |
 
@@ -79,55 +79,54 @@
 
 ### 1.4 설명 (4000자)
 
-★ **정본은 이 문서가 아니라 ASC 다.** 이 절은 2026-10-23 에 ASC 에서 **읽어 온 실제 문구**를 1.0.13 기준으로
-맞춘 것이다(1604자). 출시 전 초안(약 1,300자)이 여덟 버전 동안 안 따라와 「미니게임 두 가지」·「근무 시작은 맥만」
-같은 **틀린 문장을 품고 있었다** — 그 초안은 버렸다. 다음에도 **ASC 를 읽어 와서 고쳐라**(문서를 보고 쓰면 또 어긋난다).
+★ **정본은 이 문서가 아니라 ASC 다.** 이 절은 **1.0.16 제출 초안**이다(1716자 · 3997바이트) — 1.0.15 제출 때 ASC 에 넣고 되읽어 일치를 확인한 글에서 출발했다.
+ASC 를 다시 읽어 대조하지는 않았다. **제출 때 ASC 값과 대조해라**(문서를 보고 쓰면 또 어긋난다 — 출시 전 초안이 여덟 버전 동안 안 따라와 「미니게임 두 가지」·「근무 시작은 맥만」 같은 틀린 문장을 품은 적이 있다).
 
-★ **1.0.15 는 이 절에 아직 안 들어왔다** — 「■ 게임」은 지금도 「세 가지 미니게임」이고 길건너 아잉이가 빠진다.
-제출 때 **ASC 를 다시 읽어 와서** 고칠 자리다(이 절을 보고 쓰지 마라 — 바로 위 ★ 의 기록이 그 자리다). §0.1 · §5.2 · §5.3 은 1.0.15 기준이다.
+1.0.15 에서 고친 곳:
+1. **「■ 순위」** — `미니게임(오늘)` → `미니게임(오늘·역대)`. 1.0.16 에 [순위] 탭 미니게임 판에도 전환이 붙었다(§5.3 1.0.15 의 되돌림 까닭이 풀렸다).
+2. **「■ 게임」** — 아잉 큐브 · 일시정지 · 체스 말 끌기.
+3. **「■ 지금」** — 우리 팀 전체 명단.
+4. **4,000 자리를 마련하려고 줄인 곳** — 이모티콘 여섯 이름 · 케이크 아잉이 뒷문장 · 맥마다 따로 보여 주는 AI 리밋 · 서버 시계 · 가입 문장.
 
-1.0.13 에 고친 세 곳:
-1. **1:1 대결 셋** — 「오목과 체스 두 가지」였다. 1.0.11 테트리스 대결이 두 버전째 빠져 있었다.
-2. **아잉이 이모티콘** — 1.0.12 기능이 메시지 절에 없었다. "앱이 주는" 을 분명히 적는다(1.2 UGC 가 아니다).
-3. **미션 자리** — 「나」 절이 "여기서 보고" 라고 했는데 1.0.13 부터 [미션] 화면이다.
+★ **연속 근무 칩과 새 버전 안내는 적지 않았다.** 둘 다 서버 값(`streak_days` · `latest_build`)이 올라가야 화면에 뜬다.
 
 > 아잉체크는 작은 팀을 위한 근무 타이머의 아이폰 앱입니다.
 > 맥 메뉴바 앱이나 아이폰에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 보고 팀원과 이야기할 수 있습니다.
 >
 > ■ 지금
 > 지금 탭에서 근무를 켜고 끌 수 있습니다. 폰을 잠가도 근무는 이어지고, 오래 앱을 열지 않으면 알림으로 아직 일하는지 물어봅니다.
-> 내 오늘 근무 시간과 이번 주 목표 달성률, 우리 팀에서 지금 누가 일하고 있는지, 오늘 할 일을 한 화면에서 봅니다. 할 일은 계정에 저장되어 맥과 아이폰, 홈 화면 위젯에서 같은 목록을 씁니다.
+> 내 오늘 근무 시간과 이번 주 목표 달성률, 우리 팀에서 지금 누가 일하고 있는지, 오늘 할 일을 한 화면에서 보고, 우리 팀 전체 명단도 봅니다. 할 일은 계정에 저장되어 맥과 아이폰, 홈 화면 위젯에서 같은 목록을 씁니다.
 >
 > ■ 메시지
-> 같은 앱을 쓰는 사람과 1:1 메시지를 주고받습니다(한 번에 200자). 메시지는 24시간이 지나면 서버에서 자동으로 지워집니다. 새 메시지는 알림으로 받습니다. 프로필에 한 줄 상태메시지를 달 수 있고, 루비로 확성기를 보내면 앱을 쓰는 모두에게 한 번에 인사할 수 있습니다. 앱이 주는 아잉이 이모티콘 여섯 종(기쁨·하트·슬픔·화남·졸림·놀람)을 글자 대신 큰 그림으로 보낼 수 있습니다.
+> 같은 앱을 쓰는 사람과 1:1 메시지를 주고받습니다(한 번에 200자). 메시지는 24시간이 지나면 서버에서 자동으로 지워집니다. 새 메시지는 알림으로 받습니다. 프로필에 한 줄 상태메시지를 달 수 있고, 루비로 확성기를 보내면 앱을 쓰는 모두에게 한 번에 인사할 수 있습니다. 앱이 주는 아잉이 이모티콘 여섯 종을 글자 대신 큰 그림으로 보낼 수 있습니다.
 >
 > ■ 순위
-> 팀 리그(이번 주 1인당 평균 근무시간), AI 도구 토큰 사용량(이번 달), 미니게임(오늘) 세 가지 순위판이 있습니다. 내 사용량과 기록을 순위판에 공개할지는 설정에서 직접 고릅니다.
+> 팀 리그(이번 주 1인당 평균 근무시간), AI 도구 토큰 사용량(이번 달), 미니게임(오늘·역대) 세 가지 순위판이 있습니다. 내 사용량과 기록을 순위판에 공개할지는 설정에서 직접 고릅니다.
 >
 > ■ 게임
-> 타이밍 바, 플래피 아잉, 테트리스 세 가지 미니게임의 오늘 순위에 도전하세요. 매일 자정 상위 세 명에게 루비를 드립니다.
-> 1:1 대결은 오목·체스·테트리스 세 가지입니다. 오목(렌주룰, 한 수 30초)은 대국 중 짧은 대화를 나눌 수 있고, 체스(10분, 한 수 3초 가산)는 승점 순위표와 다른 사람 대국 관전이 있습니다. 테트리스 대결은 둘이 같은 블록 순서로 각자 판을 돌리고, 줄을 지우면 그만큼 상대 바닥에 방해 줄이 올라갑니다. 상대가 없을 때는 체스를 로봇과 둘 수 있습니다.
+> 타이밍 바, 플래피 아잉, 테트리스, 길건너 아잉이 네 가지 미니게임에 도전하세요. 게임마다 오늘 순위와 역대 최고 순위를 볼 수 있고, 매일 자정 오늘 순위 상위 세 명에게 루비를 드립니다. 판 도중 앱을 내리면 멈췄다가 돌아와 이어 합니다.
+> 1:1 대결은 오목·체스·테트리스 세 가지입니다. 오목(렌주룰, 한 수 30초)은 대국 중 짧은 대화를 나눌 수 있고, 체스(10분, 한 수 3초 가산)는 승점 순위표와 다른 사람 대국 관전이 있습니다. 테트리스 대결은 둘이 같은 블록 순서로 각자 판을 돌리고, 지운 줄만큼 상대 바닥에 방해 줄이 올라갑니다. 체스 말은 끌어서 둘 수 있고, 상대가 없을 때는 로봇과 둘 수 있습니다.
+> 아잉 큐브는 2~4명이 숫자 타일로 묶음을 만들어 먼저 비우는 게임입니다. 초대나 공개 방으로 모이고, 판 화면만 가로로 봅니다.
 >
 > ■ 나
-> 내 캐릭터와 지난주 회고, 최근 12주 근무 잔디, 요일·시간대별 근무 리듬을 봅니다. 이번 주 근무 목표와 「도전 미션」은 [미션] 화면에서 보고, 달성한 줄의 [받기]를 눌러 루비를 받습니다. 근무하며 모은 루비로 상점에서 캐릭터를 사거나 뽑고(뽑기 확률은 앱 안에 공개합니다), 겹친 캐릭터의 조각으로 원하는 캐릭터를 바꿔 착용할 수 있습니다. 루비는 앱 안 포인트이며 현금으로 사거나 바꿀 수 없습니다. 맥에서 쓰는 AI 도구의 사용량이 얼마나 남았는지도 여기서 봅니다. 맥이 여러 대면 맥마다 따로 보여 줍니다.
+> 내 캐릭터와 지난주 회고, 최근 12주 근무 잔디, 요일·시간대별 근무 리듬을 봅니다. 일일 미션·이번 주 근무 목표·누적 미션은 [미션] 화면에서 보고, 달성한 줄의 [받기]를 눌러 루비를 받습니다. 근무하며 모은 루비로 상점에서 캐릭터를 사거나 뽑고(뽑기 확률은 앱 안에 공개합니다), 겹친 캐릭터의 조각으로 원하는 캐릭터로 바꿀 수 있습니다. 케이크 아잉이(딸기·초코)는 생일 선물로만 받습니다. 루비는 앱 안 포인트이며 현금으로 사거나 바꿀 수 없습니다. 맥에서 쓰는 AI 도구의 사용량이 얼마나 남았는지도 여기서 봅니다.
 >
 > ■ 위젯
 > 지금 근무 중인 사람, 내 오늘 근무, 오늘 할 일, AI 리밋 네 가지 위젯을 홈 화면에 둘 수 있습니다. 할 일은 위젯에서 바로 체크됩니다. AI 리밋 위젯은 맥 앱에서 고른 맥 한 대를 보여 줍니다.
 >
 > ■ 알아 두세요
-> · 근무는 맥 앱과 아이폰 지금 탭 어디서든 켜고 끌 수 있습니다. 근무 시간을 재는 일은 서버 시계로 합니다.
-> · 아이폰에서 가입할 수 있습니다. 팀 코드가 있으면 그 팀으로 들어가고, 없으면 새 팀을 만들어 혼자 시작할 수 있습니다.
+> · 근무는 맥 앱과 아이폰 지금 탭 어디서든 켜고 끌 수 있습니다.
+> · 아이폰에서 가입할 수 있고, 팀 코드가 없으면 새 팀을 만들어 혼자 시작할 수 있습니다.
 > · 계정과 기록은 앱 안(나 → 설정 → 계정 삭제)에서 직접 지울 수 있습니다.
 > · 광고·분석·추적 도구를 쓰지 않고, 앱 안 결제가 없습니다. 카메라·마이크·위치·연락처 권한을 요청하지 않습니다.
 
-근거: 위 문구는 **ASC 에서 읽어 온 것**이므로 문장별 근거 표를 다시 달지 않는다. 고친 세 문장의 근거는
-1:1 테트리스 `20261021120000_tetris_duel.sql` · 이모티콘 `Sources/CheckCore/AingSticker.swift` ·
-[미션] 화면 `Sources/CheckMobileKit/Me/MeMissionsView.swift` 다.
+근거: 문구가 맞는지는 §0.1 의 파일을 본다.
 
 ### 1.5 키워드 (100자)
 
 ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,메시지,오목,체스,미니게임,순위,위젯,할일`
 **1.0.13 에 `테트리스` 를 더한다**(37자): `근무,팀,타이머,메시지,오목,체스,테트리스,미니게임,순위,위젯,할일`
+**1.0.16 초안**(40자 · 98바이트): `근무,팀,타이머,메시지,오목,체스,테트리스,미니게임,순위,위젯,할일,큐브` — 1.0.15 의 `길건너` 를 `큐브` 로 바꿨다(100바이트 안에 둘 다 안 들어간다).
 
 - 앱 이름은 키워드에 넣지 않는다(이름은 이미 검색된다). 쉼표 뒤 공백 없이.
 - 출시 전 초안에 있던 `소마,SW마에스트로` 는 실제로 올라가 있지 않다 — 테스트플라이트 시절 문안이었다.
@@ -169,7 +168,7 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
 | 사용자 콘텐츠 → **사진 또는 비디오** | 프로필 사진(선택). 시스템 사진 선택 화면에서 고른 한 장 → 256px JPEG → **공개 버킷**(주소를 아는 사람은 로그인 없이 열람 가능) | `Me/MeProfileView.swift:6, 36`(`PhotosPicker` — 사진 전체 권한 없음), `Me/MeStoreProfile.swift:144-162`, `SupabaseWorkService.swift:294-311`(storage upsert + `profiles.avatar_url`), `privacy.md:25, 64` |
 | 사용자 콘텐츠 → **이메일 또는 문자 메시지** | 1:1 메시지 본문(200자)·읽음 위치, 오목 대국 채팅(100자). 메시지는 서버가 24시간 뒤 삭제, 대국 채팅은 둘 다 나가면 삭제 | `SupabaseWorkService.swift:726-745`(`send_message`), `SupabaseWorkModels.swift:2094`(200), `SupabaseWorkServiceMessageReads.swift:59-76`(`mark_messages_read`), `Messages/MessagesStore.swift:19-20`, `SupabaseWorkService.swift:1255-1264`(`gomoku_chat_send`), `SupabaseWorkModels.swift:3565-3567`(100), `:1266-1275`(나가면 삭제), `privacy.md:17-18` |
 | 사용자 콘텐츠 → **고객 지원** | 버그·요청 제보 본문(1~1000자)·종류. 앱 버전·iOS 버전 문자열이 자동으로 붙는다(화면에 미리 밝힌다). 본인과 운영자만 본다 | `SupabaseWorkService.swift:1041-1058`(`submit_feedback` 네 인자), `Me/MeStoreFeedback.swift:5, 18-33`, `Me/MeText.swift:350`, `privacy.md:21` |
-| 사용자 콘텐츠 → **게임플레이 콘텐츠** | 미니게임 판 시작·점수, 오목 신청·착수·기권·결과, 루비 장부(획득·사용), 캐릭터 구매·착용 | `Games/GamesMiniGameHub.swift:220, 263`, `SupabaseWorkService.swift:524-560`, `:667-708`(`set_character`·`shop_state`·`buy_character`), `:1255-1290`(오목 RPC), `Games/GamesStore.swift:20-30`, `privacy.md:20, 22-24` |
+| 사용자 콘텐츠 → **게임플레이 콘텐츠** | 미니게임 판 시작·점수, 오목 신청·착수·기권·결과, 아잉 큐브 방·판·반응·전적(1.0.16), 루비 장부(획득·사용), 캐릭터 구매·착용 | `Games/GamesMiniGameHub.swift:220, 263`, `SupabaseWorkService.swift:524-560`, `:667-708`(`set_character`·`shop_state`·`buy_character`), `:1255-1290`(오목 RPC), `Games/GamesStore.swift:20-30`, `privacy.md:20, 22-24` |
 | 사용자 콘텐츠 → **기타 사용자 콘텐츠** | 오늘 할 일(제목·만든/고친/끝낸 시각 — 본인만 조회), 팀 주간 목표(팀원 누구나 편집). **작업 B 뒤**: 팀 이름·팀 코드(팀 만들기·합류) | `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22`, `SupabaseWorkServiceTodoSync.swift:15-17`, `SupabaseWorkService.swift:372-380`(`set_team_weekly_goal`), `privacy.md:19`; 작업 B: `SupabaseWorkServiceMacOnly.swift:453, 469`(`join_team`·`create_team` — 옮겨질 본문) |
 | 진단 → **기타 진단 데이터** (판단 필요) | 앱 빌드·버전과 iOS 버전 **문자열** — 기기 등록(최소 빌드 판정·APNs 환경)과 제보에 붙는다. 크래시·성능 수집은 없다 | `MobileDeviceService.swift:67-68`, `MobileAppInfo.swift:5-12, 44`, `Me/MeStoreFeedback.swift:24-25`, `Me/MeText.swift:350`. **확인 필요**: 애플 정의상 '앱 기능' 목적 버전 문자열을 진단으로 신고할지 — 보수적으로 신고 권장 |
 | (애플 항목 없음) 설정값 | 알림 종류별 켬/끔, 순위 공개 스위치 둘, 착용 캐릭터, 화면 모드(**로컬만**) | `MobileDeviceService.swift:154-164`(`set_push_prefs`), `Me/MeStoreSettings.swift:117, 145`, `SupabaseWorkService.swift:615-625, 853-863`, `Me/MeText.swift:434-436`(화면 모드는 기기 설정) — 라벨에 별도 항목 없음, "기타 데이터" 로 묶을지 **확인 필요** |
@@ -231,7 +230,7 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
 | 욕설·공포·약물·성적 내용·폭력 | 없음 | **답은 1.0.15 에도 그대로다.** 근거를 이 판에 맞게 다시 적는다: 미니게임 넷(타이밍 바 · 플래피 아잉 · 테트리스 · 길건너 아잉이)과 1:1 셋(오목 · 체스 · 테트리스). 길건너 아잉이는 차·기차에 치이거나 물에 빠지면 판이 끝나고, 플래피 아잉은 기둥에 부딪히면 끝난다 — 둘 다 **실패 상태**이고 묘사가 없다(피·타격 연출·싸움 0, 캐릭터가 멈추고 결과 카드가 뜬다). 애플의 '만화 폭력'은 폭력 **행위의 묘사**를 묻는 항목이라 실패로 판이 끝나는 것은 여기 들어가지 않는다 — **플래피의 충돌을 1.0.x 내내 같은 답으로 내 왔고 여덟 판이 통과했다**(그 선례가 이 답의 근거다). 1:1 셋도 판을 겨루는 것이고 상대를 치는 묘사가 없다. 규칙 한 줄: `Games/GamesText.swift` |
 | 의료·웰니스 | 없음 | — |
 | 도박(실제) | 아니오 | 애플 정의 "Betting or wagering using real money or in-game currency that **may be exchanged for real money**" → 18+. 결제 없음, 루비는 현금 구매·환금 불가(`privacy.md:103`, `README.md` "현금으로는 못 삽니다") — 환금 불가라는 사실이 피하게 해 주는 것은 **이 항목**이지 아래 모의 도박이 아니다 |
-| **모의 도박(Simulated Gambling)** | **예 · 드묾(Infrequent) → 13+** | 애플 정의(원문): "Betting or wagering **without** using real money or in-game currency that can be exchanged for real money" — 환금 불가 재화로 거는 것이 정의 그 자체다. 오목은 수락 순간 두 사람이 루비 판돈 3/5/10 을 내고 이긴 쪽이 두 사람 몫 6/10/20 을 수수료 없이 전부 받는다(2026-10-22 서버 `20261023132000_duel_fee_off.sql` 이 `duel_fee` 를 0 으로 · 그 전 1.0.8~1.0.12 동안은 수수료 10%(반올림 — 1/1/2)를 뺀 5/9/18 · 무승부·판 가득이면 각자 돌려받음 · 체스·1:1 테트리스도 같다 — `Sources/CheckCore/DuelFee.swift`): 로비 응답 `Demo/Fixtures/games/rpc.gomoku_lobby.json:4-8`(stakes), 서버 `supabase/migrations/20260916120000_gomoku_duel.sql:133`(`stake check (3,5,10)`)·`:1057`(수락 시 차감)·`:640`(승자 `+2*stake`)·`:654`(환불), `GamesText.swift:248` "건 루비는 돌려받아요". 등급: 드묾 13+ · 잦음 18+. 오목은 게임 탭 안 카드 하나이고 앱의 주된 활동(근무 현황)이 아니므로 **드묾**으로 답한다. 심사 노트(§5.2)에 "가상 포인트, 실물 가치 없음, 한 판 3~10 루비" 명시 |
+| **모의 도박(Simulated Gambling)** | **예 · 드묾(Infrequent) → 13+** | 애플 정의(원문): "Betting or wagering **without** using real money or in-game currency that can be exchanged for real money" — 환금 불가 재화로 거는 것이 정의 그 자체다. 오목은 수락 순간 두 사람이 루비 판돈 3/5/10 을 내고 이긴 쪽이 두 사람 몫 6/10/20 을 수수료 없이 전부 받는다(2026-10-22 서버 `20261023132000_duel_fee_off.sql` 이 `duel_fee` 를 0 으로 · 그 전 1.0.8~1.0.12 동안은 수수료 10%(반올림 — 1/1/2)를 뺀 5/9/18 · 무승부·판 가득이면 각자 돌려받음 · 체스·1:1 테트리스도 같다 — `Sources/CheckCore/DuelFee.swift`): 로비 응답 `Demo/Fixtures/games/rpc.gomoku_lobby.json:4-8`(stakes), 서버 `supabase/migrations/20260916120000_gomoku_duel.sql:133`(`stake check (3,5,10)`)·`:1057`(수락 시 차감)·`:640`(승자 `+2*stake`)·`:654`(환불), `GamesText.swift:248` "건 루비는 돌려받아요". 등급: 드묾 13+ · 잦음 18+. 오목은 게임 탭 안 카드 하나이고 앱의 주된 활동(근무 현황)이 아니므로 **드묾**으로 답한다. 심사 노트(§5.2)에 "가상 포인트, 실물 가치 없음, 한 판 3~10 루비" 명시. **아잉 큐브(1.0.16)도 같은 쪽이다**: 방장이 3/5/10 을 고르고 등수대로 오간다(2명 +N·−N · 3명 +N·0·−N · 4명 +2N·0·−N·−N, 새로 생기는 루비 없음 — `GamesRummyText.rules`). 등급 답은 그대로 둔다 |
 | **경연(Contests)** | **예 · 잦음(Frequent) → 13+** | 애플 정의(원문): "Events that allow users to compete with one another for rankings, rewards, or the achievement of personal goals. May include: skill-based competitions, trivia quizzes, or sport or fitness contests" — 실물 상품·상금 조건이 **없다**. 미니게임은 매일 자정(KST) 그날 1·2·3등에게 루비 20·10·5 를 준다(2026-10-22 부터 · 2026-10-14~10-21 은 10·5·3, 그 전 20·10·5 — `GamesText.swift:90, 93`, 참여 5명부터 지급 `:92, 161-164`, `privacy.md:27`). 매일 여는 순위·보상 행사라 **잦음**. 등급: 드묾 4+ · 잦음 13+ |
 | **루트 상자** | **예** — 근무로 모은 앱 안 포인트(루비)로만 뽑기, 현금 결제 없음, 확률 앱 안 공개(1.0.8 부터) | 인앱 결제 0건 · 루비는 현금 구매·환금 불가(`privacy.md:103`). 한 번 50 루비로 캐릭터 7종 중 하나가 나오고, 이미 가진 캐릭터면 조각 1개(조각으로 원하는 캐릭터와 교환 — 운에 기대지 않는 길이 있다). **확률은 앱 안에 공개한다**: 나 탭 → 상점 → 캐릭터 뽑기 카드 → [확률 보기] 표(캐릭터 · 상점가 · 확률, 서버 `shop_state.gacha.odds` 를 순서 그대로 · 합이 100% 가 아니면 뽑기 카드 자체가 안 선다 — `Sources/CheckCore/Gacha.swift` `GachaInfo.isUsable`). 맥 앱도 같은 표(맥 상점 뽑기 패널). 기존 6종은 정가 구매도 그대로(`Me/MeStoreCharacters.swift` `confirmPurchase`). 연령 등급 영향은 아키텍트가 제출 때 확인(§3 모의 도박과 별개 항목) |
 
@@ -353,9 +352,18 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
 > - **Controls.** Swipe up, down, left or right to hop one square in that direction; a short tap hops one square forward. One touch is one square — dragging does not move several. The start card on screen states both lines. A round ends when the character is hit by a vehicle or a train, falls in the water, is carried off on a floating log, is pushed off the bottom of the screen, or stands still for 9 seconds.
 > - **It is played alone and nothing is put up to play it.** Unlike the three head-to-head games in this tab (1:1 오목 / 체스 / 테트리스), this game has no opponent, no entry cost and no prize pool between two players. The score goes on that game's ranking for the day, and at midnight KST the top three of the day receive 20, 10 and 5 in-app rubies — **the same prizes as the three existing mini games, unchanged** (a minimum of 5 participants, also unchanged). Rubies are earned only by working and by playing; **they cannot be bought with money or cashed out, and there are no in-app purchases.**
 > - **A daily-mission row that already existed now works on iPhone.** "나" (Me) tab → [미션] (Missions) → 「일일 미션」 has listed "길건너 아잉이 한 판 하기" (play one round of 길건너 아잉이) since 1.0.13, but until 1.0.14 that row could only be completed in the Mac app. No new mission row and no new reward amount.
-> - **[오늘 | 역대] switch on the mini-game ranking.** Games tab → 미니게임 → the ranking header now carries two chips, 오늘 (Today) and 역대 (All-time). 역대 순위 (the all-time ranking) lists **one row per person — that person's single highest score ever**, with the date on which that score was first set. It is read-only, and it is fetched only when the 역대 chip is picked. A user who has turned record sharing off ("나" → 설정 (Settings) → the record-sharing switch, which the user chooses) is listed only to themselves. **The 「순위」 (Rankings) tab is unchanged — it still shows today only**, and the store description says the same thing about that tab.
+> - **[오늘 | 역대] switch on the mini-game ranking.** Games tab → 미니게임 → the ranking header now carries two chips, 오늘 (Today) and 역대 (All-time). 역대 순위 (the all-time ranking) lists **one row per person — that person's single highest score ever**, with the date on which that score was first set. It is read-only, and it is fetched only when the 역대 chip is picked. A user who has turned record sharing off ("나" → 설정 (Settings) → the record-sharing switch, which the user chooses) is listed only to themselves. The 「순위」 (Rankings) tab did not get this switch in 1.0.15 — **1.0.16 adds the same switch there.**
 > - **Three smaller changes, no new screen.** (1) The AI-limit card and its home-screen widget now draw an "unknown" cell legibly — a distinct text colour plus a 45° hatch — and the caption now says that a plan may report only one window. It is the same data the Mac app uploads; nothing new is collected. (2) Sending a 1:1 message is more reliable on a slow network: a send whose reply never arrived is retried once under the same key, and the server keeps a single row for that key, so the same message cannot arrive twice; a new message in an open conversation now appears at once instead of after a fixed one-second wait. **No visible change.** (3) One daily-mission row got an icon. None of the three adds a screen, a permission, a notification type or a collected field.
 > - **Age rating.** No new currency, no new game that anything is put up for, no new collected data and no new permission — **the age-rating answers in this submission are therefore the same as the previous version's.**
+>
+> **New in 1.0.16 — 아잉 큐브 (Aing Cube), a tile game for 2–4 players, plus a mini-game pause**
+> Every player needs a device: a round starts at 2 players, so **playing a round needs two devices and two demo accounts.** One device still shows the lobby, the rules, your own record, the ranking and opening a table.
+> - **How a reviewer plays a round.** Games tab → 「아잉 큐브」. Device A: turn on 공개 방 (public table) and tap 탁자 열기 (open table). Device B, signed in as the second demo account: the table appears at the top of the lobby under 받은 초대 · 공개 탁자 — join it. Device A: tap 2명으로 시작 (start). Tiles are dragged from the rack onto the board and each turn lasts 60 seconds. This path works whether or not person-to-person invitations are open for this build; the server checks that only when an invitation is sent.
+> - **In-app points.** The host picks a table of 3, 5 or 10 rubies. Players gain or lose that amount by final rank: 2 players +N/−N, 3 players +N/0/−N, 4 players +2N/0/−N/−N. No rubies are created. These are the same rubies as 1:1 Gomoku and 1:1 Chess, which both completed review. **They cannot be bought with money or cashed out, and there are no in-app purchases.**
+> - **Landscape on one screen only.** The board screen rotates to landscape for the width of the table and returns to portrait when the round ends. Every other screen stays portrait, which is why the app now declares landscape orientations.
+> - **Mini-game pause.** Leaving the app during a round freezes it, and the board is hidden until the player returns. A 일시정지 card offers 이어하기 (resume, after a 3-2-1 count) or 그만두기 (quit). Tetris and 길건너 아잉이 keep the score so far and end after 5 paused minutes; 타이밍 바 and 플래피 아잉 discard the round on quit.
+> - **Smaller changes, no new permission.** A [오늘 | 역대] switch on the 「순위」 tab's mini-game board; 「우리 팀 전체 보기」 (full team list) on the 지금 tab; dragging a chess piece to move it; resetting a profile photo to the default character; center and terms-of-service rows in Settings.
+> - **Age rating.** No new currency and no new collected field beyond this game's own records — **the age-rating answers in this submission are the same as the previous version's.**
 >
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.
@@ -417,8 +425,8 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
   조작은 **쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸**이고 시작 카드가 그 두 줄을 말한다(`GamesMiniGameText.howToPlay(.crossy)`).
   **혼자 하는 게임이고 판돈이 없다** — 1:1 셋(오목·체스·테트리스)과 다른 쪽이다. 상품은 미니게임 셋과 **같은 값**(자정 KST 1·2·3등 루비 20·10·5 · 5명부터 지급 — `GamesMiniGameText.rubyPrizes`·`prizeQuorum`)이라 §3 의 답과 등급(13+)이 **바뀌지 않는다.**
   ② 미니게임 순위 머리에 **[오늘 | 역대] 전환**(코어 `MiniGameBoardScope` · 서버 `minigame_alltime_board(p_game)` **읽기 전용** · 인자에 DEFAULT 가 없어 키를 빼면 PGRST202). 역대 바닥 한 줄은 맥 글자 그대로 "사람마다 가장 높은 점수 하나만 올라가요"(`GamesMiniGameText.allTimeRuleCaption`)다.
-  ★ **전환은 「게임」 탭에만 붙는다**(사용자 결정 2026-10-30). 폰은 미니게임 순위가 두 곳인데(「게임」 탭 `GamesMiniGameScreen` · 「순위」 탭 `RankingsMiniGameSection` — store·RPC·빈 칸 문구 행렬이 따로다) 「순위」 탭은 `RankingsText.miniGameRankTitle` 그대로 "오늘 순위" 하나다.
-    그래서 스토어 설명문의 「■ 순위」 줄은 1.0.14 그대로 `미니게임(오늘)` 이다 — 한때 `미니게임(오늘·역대)` 로 고쳤다가 **되돌렸다.** 그대로 냈으면 심사원이 「순위」 탭에서 역대를 찾다가 못 찾는 **2.3.1 "설명과 다른 앱"** 자리였다. 고친 곳은 「■ 게임」 한 줄뿐이다.
+  ★ **1.0.15 때 전환은 「게임」 탭에만 붙었다**(사용자 결정 2026-10-30 · **1.0.16 에 「순위」 탭에도 붙었다**). 폰은 미니게임 순위가 두 곳인데(「게임」 탭 `GamesMiniGameScreen` · 「순위」 탭 `RankingsMiniGameSection` — store·RPC·빈 칸 문구 행렬이 따로다) 「순위」 탭은 그때 `RankingsText.miniGameRankTitle` 그대로 "오늘 순위" 하나였다.
+    그래서 1.0.15 설명문의 「■ 순위」 줄은 `미니게임(오늘)` 이었다 — 그대로 `오늘·역대` 로 냈으면 심사원이 그 탭에서 역대를 못 찾는 **2.3.1 "설명과 다른 앱"** 자리였다. **1.0.16 은 앱이 맞춰졌으므로 줄을 `미니게임(오늘·역대)` 로 고쳤다**(§1.4).
   ③ AI 리밋 '없음' 칸을 읽히게 고쳤다(맥 0.3.68 과 같이 들어왔다 · 정본 `docs/plan/ai-limit-absent-cell-contract.md`) — 글자 색 + 45° 사선 해치, 캡션에 "요금제에 따라 창이 하나만 올 수 있어요."(`MeText.aiLimitsCaption`). 위젯도 같다. **새 수집 항목·새 권한 0.**
   ④ 메시지 전송 신뢰성 — 응답을 못 받은 전송을 **같은 키**(`send_message` 의 `p_client_message_id`)로 한 번만 다시 보내고 서버가 같은 키를 한 통으로 접는다(서버 `20261101131000` · 운영 반영은 '서버 안정화' 레인이 확인했다 — 설계서 전제). 열린 대화의 새 메시지는 고정 1초 대기를 없애 바로 뜬다. **화면 동작 변화 없음** → 심사원이 따로 볼 것이 없다.
   ⑤ 일일 미션 '아잉 큐브' 줄 아이콘 한 줄(`cube.fill`). **내부 식별자는 `rummy` 다** — 화면 이름만 아잉 큐브이고 `aing_cube` 는 코드에 없다(`MeText.swift:501, 515`). 화면 동작 변화 없음.
@@ -426,6 +434,13 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
   ★ **운영 쓰기가 필요 없다.** ①의 서버 함수·②의 RPC 가 둘 다 이미 운영에 있고, 숨김 데모 계정도 한 판 하면 그날 순위에 자기 점수가 서고 역대 순위에는 본인 최고 한 줄이 선다(1.0.9 의 `phone_login` 주입 같은 일이 이 판엔 없다).
   ★ **길건너 데모 픽스처가 없다**(`Sources/CheckMobileKit/Demo/` 에 `crossy` 0건 — 2026-10-30 훑기). 스크린샷 라우트 `games/crossy` 는 게임 화면을 열지만 **점수·순위가 든 장면은 실제로 한 판 해야** 나온다. 데모 인자로 그 장면을 세우는 길은 이 판에 없다 — 필요하면 다음 판 거리다.
   ★ **§3 「욕설·공포·약물·성적 내용·폭력」 근거 칸이 낡았다**: 아직 "미니게임 둘(타이밍 바·플래피 아잉)과 오목" 이라 1.0.11 테트리스도 1.0.15 길건너도 모른다(길건너는 차·기차에 부딪히면 판이 끝난다). **답은 바꾸지 않는다**(사용자 결정 — 앞 판과 같은 설문)지만 근거 글자는 다음 사람이 손볼 거리다.
+- 1.0.16 은 **맥에 있던 것을 폰에 붙이는 판**이다 — 큰 것은 아잉 큐브 · 미니게임 일시정지 · 우리 팀 전체 명단 · 체스 끌어 두기 · [순위] 탭 역대다. **새 푸시 종류 0 · 새 권한 0.** 서버 초안 둘(`rummy_ios_min_build` 상수 · `streak_days`)은 저장소 밖에 있고 아직 안 올렸다.
+  ① **아잉 큐브** — 맥과 같은 서버다. 판은 2명부터라 **심사원이 한 판 하려면 두 기기·두 계정**이 필요하다(1.0.13~1.0.15 의 「한 계정·한 기기로 다 본다」가 이 판엔 거짓이다). 둘째 계정의 로그인 정보는 1.0.11 결정대로 **ASC 심사 메모 칸에만** 넣는다 — 이 문서·저장소·로그에는 적지 않는다.
+  ★ **`rummy_ios_min_build` 가 닫혀 있으면 폰끼리 초대가 막힌다**: `rummy_capable` 은 초대 때만 본다. 방 만들기·공개 방 참가에는 검사가 없어 공개 방으로는 판을 할 수 있다. 그래서 §5.2 는 공개 방 길을 적었다. 설명문의 「초대나 공개 방」이 참이 되려면 출시 때 상수를 내려야 한다(운영 쓰기 — 사용자 승인).
+  ★ 연령 설문: 판 값이 3·5·10 으로 앞의 1:1 셋과 같고 등수대로 오간다. **§3 의 답과 등급(13+)은 바뀌지 않는다.** 앱 글자 `판돈` 은 체스·오목에서 심사를 지났다. 스토어 글과 심사 메모에는 그 낱말을 쓰지 않는다.
+  ② **가로** — Info.plist 가 가로 둘을 선언한다. 판 화면만 돈다(`GamesRummyOrientationRule`).
+  ③ **일시정지** — 전이는 코어 `MiniGamePauseState`, 게임별 표는 `GamesMiniGamePausePolicy`.
+  ④ **출시 때 서버 값이 있어야 뜨는 것 둘** — 연속 근무 칩(`streak_days`) · 새 버전 안내(`client_release('ios').latest_build`). 스토어 글에 적지 않았다.
 - 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---

@@ -338,7 +338,7 @@ struct AppStoreDocContractTests {
         // ③ 역대 순위 글자는 코어 한 벌이다(맥·폰이 같은 말을 한다).
         #expect(MiniGameBoardScope.allTime.boardTitle == "역대 순위", "전제: 역대 순위 제목")
         #expect(RankingsText.miniGameRankTitle == MiniGameBoardScope.today.boardTitle,
-                "전제: 「순위」 탭은 오늘 하나다 — 전환은 「게임」 탭에만 붙는다(사용자 결정 2026-10-30)")
+                "전제: 「순위」 탭의 오늘 판 제목 — 전환은 1.0.15 에 「게임」 탭에, 1.0.16 에 「순위」 탭에도 붙었다")
         // ④ 가만히 있으면 끝난다 — 심사원이 한 판을 끝내는 길 하나다.
         #expect(CrossyGame.idleLimit == 9, "전제: 멈춰 있으면 끝나는 초")
 
@@ -389,12 +389,10 @@ struct AppStoreDocContractTests {
         #expect(games[2].contains("minigame_alltime_board") && games[2].contains("읽기만"),
                 "쓰기 칸이 역대 순위가 읽기 전용임을 말하지 않는다: \(games[2])")
 
-        // 「순위」 탭 줄은 **건드리지 않았다** — 거긴 오늘 하나다(전환을 두 곳에 적으면 2.3.1 "설명과 다른 앱" 자리).
+        // 「순위」 탭 줄은 1.0.16 에 역대가 붙었다 — 앱이 맞춰졌으므로 줄도 맞춘다(안 맞으면 2.3.1 "설명과 다른 앱" 자리).
         let rankings = try Self.row(in: scope, containing: "| 순위 |")
-        #expect(rankings[1].contains("미니게임(\(MiniGameBoardScope.today.label))"),
-                "순위 줄이 '미니게임(오늘)' 을 말하지 않는다: \(rankings[1])")
-        #expect(!rankings[1].contains(MiniGameBoardScope.allTime.label),
-                "순위 탭엔 역대가 없다 — 줄에 적으면 심사원이 그 탭에서 찾다가 못 찾는다: \(rankings[1])")
+        #expect(rankings[1].contains("미니게임(\(MiniGameBoardScope.today.label)·\(MiniGameBoardScope.allTime.label))"),
+                "순위 줄이 '미니게임(오늘·역대)' 를 말하지 않는다: \(rankings[1])")
 
         // ── ② §5.2 심사원용 영어 메모 — 1.0.15 블록.
         let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
@@ -429,8 +427,8 @@ struct AppStoreDocContractTests {
                 "§5.2 1.0.15 블록이 역대 순위를 앱 제목('\(MiniGameBoardScope.allTime.boardTitle)')으로 부르지 않는다")
         #expect(newIn1015.contains("one row per person"), "역대가 사람마다 한 줄이라는 규칙이 없다")
         #expect(newIn1015.contains("read-only"), "역대가 읽기 전용이라는 사실이 없다")
-        #expect(newIn1015.contains("unchanged — it still shows today only"),
-                "메모가 「순위」 탭은 그대로라고 말하지 않는다 — 심사원이 거기서 역대를 찾는다")
+        #expect(newIn1015.contains("1.0.16 adds the same switch there"),
+                "메모가 「순위」 탭의 전환이 1.0.16 에 붙었다고 말하지 않는다 — 다음 메모로 승계되는 문장이다")
         // 연령 설문 답이 **앞 판과 같다**는 결론.
         #expect(newIn1015.contains("age-rating answers in this submission are")
                 && newIn1015.contains("the same as the previous version's"),
@@ -482,5 +480,66 @@ struct AppStoreDocContractTests {
         for word in ["도박", "베팅", "gambl", "bet "] {
             #expect(!summary1015.contains(word), "§5.3 1.0.15 요약에 금지 낱말 '\(word)' 가 있다")
         }
+    }
+
+    // MARK: 1.0.16 — 아잉 큐브 · 일시정지 · 역대 [순위] 탭
+
+    /// 1.0.15 블록 시험과 같은 수법이다: 먼저 코드에서 읽어 맞춘다. 심사원이 큐브를 **어떻게 해 보는가**가 이 판의 핵심이다 —
+    /// 판이 2명부터라 "한 기기로 다 본다"가 처음으로 거짓이 됐다(2.3.1(a) "accessible for review").
+    @Test("1.0.16: §1.4 설명문이 앱 사실과 맞고 금지 낱말이 없다 · §5.2 가 공개 방 길과 두 기기를 앱 글자로 적는다 · §5.3 이 게이트 경고와 자격증명 자리를 적는다")
+    func cubeAndPauseAreDocumented() throws {
+        #expect(GamesRummyText.title == "아잉 큐브", "전제: 앱 글자")
+        #expect(GamesRummyText.startWith(2) == "2명으로 시작", "전제: 메모가 부르는 시작 단추")
+        #expect(GamesRummyText.publicLabel == "공개 방", "전제: 메모가 부르는 스위치")
+        #expect(GamesRummyText.openTable == "탁자 열기", "전제: 메모가 부르는 단추")
+        #expect(GamesRummyText.joinHeader == "받은 초대 · 공개 탁자", "전제: 메모가 부르는 절")
+        #expect(GamesMiniGameText.pauseTitle == "일시정지" && GamesMiniGameText.resumeAction == "이어하기"
+                && GamesMiniGameText.quitAction == "그만두기", "전제: 정지 카드 글자")
+        #expect(GamesMiniGamePausePolicy.quittingKeepsTheScore(.tetris) && GamesMiniGamePausePolicy.quittingKeepsTheScore(.crossy)
+                && !GamesMiniGamePausePolicy.quittingKeepsTheScore(.flappy) && !GamesMiniGamePausePolicy.quittingKeepsTheScore(.timingBar),
+                "전제: 그만두면 점수가 남는 게임 — 메모의 두 묶음과 함께 맞춰라")
+        #expect(MiniGamePauseState.countdownStart == 3, "전제: 3-2-1")
+
+        let doc = try Self.document("docs/appstore.md")
+
+        // ── ① §1.4 설명문: 인용 칸만 잘라 잰다. ASC 한도는 넉넉히 4,000 바이트로 재서 글자 수 착각을 막는다.
+        let copy = try Self.section(of: doc, heading: "### 1.4 설명")
+        let quoted = copy.split(separator: "\n").filter { $0.hasPrefix(">") }
+            .map { $0.dropFirst().trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+        #expect(quoted.utf8.count <= 4_000, "설명문이 4,000 바이트를 넘는다: \(quoted.utf8.count)")
+        #expect(quoted.contains("미니게임(오늘·역대)"), "「■ 순위」 줄이 앱과 다르다")
+        #expect(quoted.contains(GamesRummyText.title), "「■ 게임」 에 아잉 큐브가 없다")
+        for word in ["판돈", "베팅", "도박", "내기", "러미", "Supabase"] {
+            #expect(!quoted.contains(word), "스토어 설명문에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ── ② §5.2 심사원용 영어 메모.
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.16"), "§5.2 에 New in 1.0.16 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let block = String(rest[..<(rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex)])
+        for appText in [GamesRummyText.title, GamesRummyText.publicLabel, GamesRummyText.openTable, GamesRummyText.joinHeader,
+                        GamesRummyText.startWith(2), GamesMiniGameText.pauseTitle, GamesMiniGameText.resumeAction, GamesMiniGameText.quitAction] {
+            #expect(block.contains(appText), "§5.2 1.0.16 블록에 앱 글자 '\(appText)' 가 없다")
+        }
+        #expect(block.contains("two devices and two demo accounts"), "메모가 판에 두 기기가 필요하다는 사실을 안 적는다")
+        #expect(block.contains("3, 5 or 10 rubies") && block.contains("cannot be bought with money or cashed out")
+                && block.contains("no in-app purchases"), "메모가 루비 사실을 안 적는다")
+        #expect(block.contains("the same as the previous version's"), "메모가 연령 설문이 그대로라는 결론을 안 적는다")
+        #expect(!block.contains("@") && !block.lowercased().contains("password"), "1.0.16 블록에 계정 정보 꼴 글자가 있다")
+        for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize", "Supabase", "supabase", "Apple Pay", "판돈"] {
+            #expect(!block.contains(word), "§5.2 1.0.16 블록에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ── ③ §5.3 한국어 요약.
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let summaryStart = try #require(korean.range(of: "- 1.0.16 은"), "§5.3 에 1.0.16 요약 줄이 없다")
+        let summaryRest = korean[summaryStart.lowerBound...]
+        let summary = String(summaryRest[..<(summaryRest.range(of: "\n- 1.0.7")?.lowerBound ?? summaryRest.endIndex)])
+        for conclusion in ["rummy_ios_min_build", "rummy_capable", "ASC 심사 메모 칸에만", "바뀌지 않는다", "두 기기·두 계정", "streak_days", "latest_build"] {
+            #expect(summary.contains(conclusion), "§5.3 1.0.16 요약에 '\(conclusion)' 결론이 없다")
+        }
+        #expect(!summary.contains("@") && !summary.lowercased().contains("password") && !summary.contains("비밀번호"),
+                "§5.3 1.0.16 요약에 계정 정보 꼴 글자가 있다")
     }
 }

@@ -933,6 +933,115 @@ class MiniGamePhonePauseTest {
         assertTrue(games.miniGames.best(MiniGameKind.tetris) >= score.toLong())
     }
 
+    /**
+     * 공개 여부를 묻기 전에 되살린 인편이 나가면 재시작 사이 공개를 끈 사람의 점수가 올라간다(iOS publicIsKnown). 인편 · 임시 항목 모두 먼저 묻는다. 끈 사람은 0건.
+     */
+    @Test
+    fun restoredPendingWaitsForThePublicAnswer() = runTest {
+        val now = StoreFixtures.clock(this).now().timeIntervalSince1970
+        // 공개를 끈 사람: 안 나간다.
+        val off = Stub().also { it.public = false }
+        val offPrefs = MemoryPrefs()
+        offPrefs.putString(GamesMiniGameHub.pauseDraftKey(owner), """{"id":0,"kind":"crossy","score":4,"token":"t9","tokenIssuedAt":$now,"recordedAt":$now}""")
+        val hidden = rig(off, offPrefs)
+        hidden.hub.retryPendingSubmitIfAny()
+        advanceUntilIdle()
+        assertEquals(1, hidden.h.server.requests.count { it.path == "/rest/v1/profiles" }, "공개 여부를 안 물었다")
+        assertEquals(emptyList(), hidden.submits(), "공개를 끈 사람의 점수가 올라갔다")
+        assertFalse(hidden.hub.isPublic)
+
+        // 공개인 사람: 물은 뒤에 나간다 · 묻는 동안은 안 나간다.
+        val gate = CompletableDeferred<Unit>()
+        val on = Stub()
+        val prefs = MemoryPrefs()
+        prefs.putString(GamesMiniGameHub.pauseDraftKey(owner), """{"id":0,"kind":"crossy","score":4,"token":"t9","tokenIssuedAt":$now,"recordedAt":$now}""")
+        val h = StoreHarness(this, prefs = prefs) { r ->
+            if (r.path == "/rest/v1/profiles" && r.method == "GET") Reply.Gate(gate, Reply.Json("""[{"minigame_public":true}]""")) else on.route(r)
+        }
+        h.signIn()
+        val hub = GamesMiniGameHub(h.context)
+        hub.phonePauseRules = true
+        hub.retryPendingSubmitIfAny()
+        hub.retryPendingSubmitIfAny()
+        runCurrent()
+        assertEquals(0, h.server.count("minigame_submit_score"), "대답 전에 나갔다")
+        assertEquals(1, h.server.requests.count { it.path == "/rest/v1/profiles" }, "밀 때마다 또 물었다")
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(1, h.server.count("minigame_submit_score"), "대답 뒤에도 안 나갔다")
+
+        // 못 들으면 멈춘다 · 다음 방아쇠가 다시 묻는다.
+        val flaky = Stub()
+        var down = true
+        val flakyPrefs = MemoryPrefs()
+        flakyPrefs.putString(GamesMiniGameHub.pauseDraftKey(owner), """{"id":0,"kind":"crossy","score":4,"token":"t9","tokenIssuedAt":$now,"recordedAt":$now}""")
+        val f = StoreHarness(this, prefs = flakyPrefs) { r ->
+            if (r.path == "/rest/v1/profiles" && r.method == "GET" && down) Reply.Offline else flaky.route(r)
+        }
+        f.signIn()
+        val fh = GamesMiniGameHub(f.context)
+        fh.phonePauseRules = true
+        fh.retryPendingSubmitIfAny()
+        advanceUntilIdle()
+        assertEquals(0, f.server.count("minigame_submit_score"), "못 들었는데 나갔다(모름 = 공개)")
+        down = false
+        fh.retryPendingSubmitIfAny()
+        advanceUntilIdle()
+        assertEquals(1, f.server.count("minigame_submit_score"), "다음 방아쇠가 안 물었다")
+
+        // Windows 경로는 그대로다: 묻지 않고 나간다.
+        val w = Stub()
+        val wPrefs = MemoryPrefs()
+        wPrefs.putString(GamesMiniGameHub.pauseDraftKey(owner), """{"id":0,"kind":"crossy","score":4,"token":"t9","tokenIssuedAt":$now,"recordedAt":$now}""")
+        val wh = StoreHarness(this, prefs = wPrefs, route = w::route)
+        wh.signIn()
+        val wHub = GamesMiniGameHub(wh.context)
+        wHub.retryPendingSubmitIfAny()
+        advanceUntilIdle()
+        assertEquals(1, wh.server.count("minigame_submit_score"))
+        assertEquals(0, wh.server.requests.count { it.path == "/rest/v1/profiles" }, "Windows 경로가 달라졌다")
+    }
+
+    /** 이번 실행에 적은 인편은 묻지 않는다 — 판을 연 화면이 이미 물었다. */
+    @Test
+    fun aLiveRecordIsNotHeldForThePublicAnswer() = runTest {
+        val r = rig()
+        r.hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        val asked = r.h.server.requests.count { it.path == "/rest/v1/profiles" }
+        r.hub.recordScore(MiniGameKind.crossy, 3)
+        advanceUntilIdle()
+        assertEquals(1, r.submits().size)
+        assertEquals(asked, r.h.server.requests.count { it.path == "/rest/v1/profiles" })
+    }
+
+    /** 시계(30초 감시)가 모르는 status 로 붙든 인편을 풀면 안 된다 — 두드리기가 된다(iOS 는 fromTrigger=false). Windows 는 맥 규칙 그대로 풀린다. */
+    @Test
+    fun theTokenKeeperDoesNotReleaseAHeldPending() = runTest {
+        for (phone in listOf(true, false)) {
+            val stub = Stub()
+            stub.submits += Stub.status("weird_new_status")
+            val h = StoreHarness(this, route = stub::route)
+            h.signIn()
+            val hub = GamesMiniGameHub(h.context)
+            hub.phonePauseRules = phone
+            hub.openScreen(MiniGameKind.crossy)
+            advanceUntilIdle()
+            hub.recordScore(MiniGameKind.crossy, 3)
+            advanceUntilIdle()
+            assertEquals(1, h.server.count("minigame_submit_score"), "전제: 모르는 status 를 받고 붙들었다")
+            assertTrue(hub.pendingSubmits.single().heldUntilTrigger, "전제: 붙들렸다")
+            hub.keepRoundTokenFresh(MiniGameKind.crossy)
+            advanceUntilIdle()
+            assertEquals(if (phone) 1 else 2, h.server.count("minigame_submit_score"), "phone=$phone: 시계가 붙든 인편을 풀었다")
+            // 사람의 방아쇠(앞으로 옴 · 화면 열기)는 푼다.
+            hub.retryPendingSubmitIfAny()
+            advanceUntilIdle()
+            assertEquals(2, h.server.count("minigame_submit_score"), "phone=$phone")
+            h.storeScope.cancel()
+        }
+    }
+
     /** 토큰이 없던 판은 기존 인편 규칙대로 토큰을 받아 올린다. */
     @Test
     fun anOrphanedDraftWithoutATokenWaitsForOne() = runTest {

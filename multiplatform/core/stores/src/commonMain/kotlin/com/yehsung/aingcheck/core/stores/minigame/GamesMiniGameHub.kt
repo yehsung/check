@@ -265,6 +265,14 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     var isPublic: Boolean by mutableStateOf(true)
         private set
 
+    /**
+     * 이번 로그인에서 공개 여부를 서버에게 **들었다.** 디스크에서 되살린 인편(재시작 뒤 인편 · 임시 항목)은 이걸 안 뒤에만 나간다 — [isPublic] 의 기본값은 "모름 = 공개"라
+     * 재시작 직후에 그대로 믿으면 그 사이 공개를 끈 사람의 점수가 나간다([refreshPublic] 주석의 games-verify PROBE-1 과 같은 구멍). 폰 규칙에서만 켠다 — Windows 경로는 그대로다. 원본: iOS ios-next-score GamesMiniGameHub `publicIsKnown`.
+     */
+    private var publicIsKnown: Boolean = false
+    private var pendingAwaitsPublicCheck: Boolean = false
+    private var isCheckingPublicForPending: Boolean = false
+
     /** 제출 실패·판 끝남 안내 한 줄. */
     var submitNotice: String? by mutableStateOf(null)
         private set
@@ -518,6 +526,10 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         activeKind = null
         boards = emptyMap()
         isPublic = true
+        publicIsKnown = false
+        pendingAwaitsPublicCheck = false
+        // 떠 있는 앞 로그인의 조회는 세대 가드가 버린다 — 이 깃발이 남으면 다음 로그인의 인편이 묻지도 못하고 멈춘다.
+        isCheckingPublicForPending = false
         submitNotice = null
         exitNoticeIsSticky = false
         localBest = emptyMap()
@@ -637,7 +649,8 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         val limit = kind.roundTokenMidRunRefreshSeconds ?: return
         if (!isSignedIn || !isPublic) return
         if (hasPendingSubmit(kind)) {
-            retryPendingSubmitIfAny()
+            // 폰: 사람의 행동이 아니라 시계(30초 감시)가 부른 자리다 — 모르는 status 로 붙든 인편을 풀지 않는다(iOS 와 같다). Windows 는 맥 규칙 그대로 방아쇠로 친다.
+            retryPendingSubmitIfAny(fromTrigger = !phonePauseRules)
             return
         }
         if (roundTokenInFlightKind == kind) return
@@ -777,6 +790,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             schedulePendingRetry()
             return
         }
+        if (holdsPendingForPublicCheck()) return
         val now = context.clock.now()
         for (kind in MiniGameKind.entries) {
             if (kind in submittingKinds) continue
@@ -807,6 +821,25 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     }
 
     private fun GamesPendingSubmit.isBackingOff(now: SwiftDate): Boolean = nextRetryAt?.let { it > now } == true
+
+    /** 디스크에서 되살린 인편이 있는데 이번 로그인의 공개 여부를 아직 못 들었으면 먼저 묻고 **이번 밀기를 멈춘다**. 못 들으면 다음 방아쇠가 다시 묻는다. */
+    private fun holdsPendingForPublicCheck(): Boolean {
+        if (!pendingAwaitsPublicCheck) return false
+        if (publicIsKnown) {
+            pendingAwaitsPublicCheck = false
+            return false
+        }
+        if (isCheckingPublicForPending) return true
+        isCheckingPublicForPending = true
+        val generation = resetGeneration
+        context.scope.launch {
+            refreshPublic()
+            if (generation != resetGeneration) return@launch
+            isCheckingPublicForPending = false
+            if (publicIsKnown) retryPendingSubmitIfAny(fromTrigger = false)
+        }
+        return true
+    }
 
     /**
      * 인편 하나를 보낸다. 지우는 것은 성공과 terminal 거절뿐이고 네트워크 실패·`too_fast`·모르는 status 는 남긴다.
@@ -1024,7 +1057,10 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         nextPendingID = (pendingSubmits.maxOfOrNull { it.id } ?: 0L) + 1
         adoptOrphanedPauseDraft(owner)
         dropExpiredPendingSubmits()
-        if (pendingSubmits.isNotEmpty()) log("pending submits restored count=${pendingSubmits.size}")
+        if (pendingSubmits.isNotEmpty()) {
+            if (phonePauseRules) pendingAwaitsPublicCheck = true
+            log("pending submits restored count=${pendingSubmits.size}")
+        }
     }
 
     /** 영속본을 메모리와 맞춘다. 비었으면 키를 지운다. 주인이 없으면(로그아웃 상태) 쓰지 않는다. */
@@ -1279,6 +1315,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             }
         }
         if (sessionGeneration != context.generation || generation != resetGeneration) return
+        publicIsKnown = true
         if (isPublic != resolved) isPublic = resolved
         if (!resolved) {
             // 꺼져 있으면 들고 있는 토큰은 쓸 일이 없다.

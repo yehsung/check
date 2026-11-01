@@ -16,17 +16,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 val LocalAingColors = staticCompositionLocalOf { AingColors.Dark }
 
 /** 모양: M3 다섯 단을 iOS 치수(12 · 16 · 22)에 맞춘다. 시트·대화상자는 extraLarge(28) 를 M3 그대로 둔다. */
 val AingShapes = Shapes(
-    extraSmall = RoundedCornerShape(8),
+    extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(AingDimens.innerRadius),
     medium = RoundedCornerShape(AingDimens.tileRadius),
     large = RoundedCornerShape(AingDimens.groupRadius),
-    extraLarge = RoundedCornerShape(28),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 object AingTheme {

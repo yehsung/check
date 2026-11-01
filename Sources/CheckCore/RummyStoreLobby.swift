@@ -65,7 +65,9 @@ extension RummyStore {
         }
         // 내 방·판.
         let mine = response.me?.activeMatchId ?? response.me?.room?.id
-        activeMatchID = mine
+        // 이 기기가 접은 판은 늦은 로비가 되살리지 못한다(나가기 전에 나간 조회 · 서버에 아직 안 닿은 기권). 안 그러면 판은 없는데 id 만 살아
+        // 다른 게임 입구가 다음 로비까지 '큐브 하는 중'으로 막힌다(`hasLiveRummyMatch`). 서버에 정말 남은 자리는 서버 `busy` 와 90초 끊김 기권이 맡는다.
+        activeMatchID = mine.flatMap { dismissedMatchIDs.contains($0) ? nil : $0 }
         if let mine {
             guard !dismissedMatchIDs.contains(mine) else { return }
             // 같은 id 면 신호·폴링·따라잡기가 이미 그 판을 읽는다 — 단, 모르는 status 로 든 판은 여기서도 다시 읽는다.

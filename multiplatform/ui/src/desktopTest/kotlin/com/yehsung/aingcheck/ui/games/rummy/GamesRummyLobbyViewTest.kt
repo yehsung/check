@@ -1,10 +1,20 @@
 // 원본: Tests/checkTests/V0370RummyPanelRenderTests.swift · V0369RummyPanelRenderTests.swift 의 뜻(사람 정렬 · 접기 · 한 목록 · 입구 막기 · 탁자 · 시작 · 나가기) — 픽셀 대신 값·상호작용으로 잰다 @ 1a5eeca6 · ios-1017 설계서 §5
 package com.yehsung.aingcheck.ui.games.rummy
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertHasClickAction
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.centerRight
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -13,6 +23,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
 import com.yehsung.aingcheck.core.net.realtime.IdleReason
@@ -33,6 +44,7 @@ import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.applyLobby
 import com.yehsung.aingcheck.core.stores.rummy.applyState
+import com.yehsung.aingcheck.core.stores.rummy.createRoom
 import com.yehsung.aingcheck.core.stores.rummy.markEngaged
 import com.yehsung.aingcheck.core.wire.SupabaseSession
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -317,6 +329,50 @@ class GamesRummyLobbyViewTest {
         waitForIdle()
         assertTrue(x.rummy.createPublic)
         onNodeWithText(RummyPhoneText.publicOn, useUnmergedTree = true).assertExists()
+        x.h.close()
+    }
+
+    /** ★ 운영 시험 결함: '공개 방' 글자를 눌러도 안 켜졌다. 줄 어디를 눌러도 한 번만 뒤집히고(글자 · 설명 · 스위치 자리) 읽는 쪽엔 스위치 하나로 읽힌다. */
+    @Test
+    fun thePublicRowTogglesFromAnywhereAndReadsAsOneSwitch() = runDesktopComposeUiTest(390, 2000) {
+        val x = rig()
+        x.lobby(lobbyJson())
+        lobbyView(x)
+        waitForIdle()
+        val row = onNodeWithTag(GamesRummyLobbyTags.PUBLIC)
+        row.assert(SemanticsMatcher.expectValue(SemanticsProperties.Role, Role.Switch)).assertIsOff()
+        // 글자가 스위치 한 덩이로 읽힌다(따로 읽는 칸이 없다).
+        onNodeWithText(RummyPhoneText.publicLabel, substring = true).assertHasClickAction()
+
+        onNodeWithText(RummyPhoneText.publicLabel, useUnmergedTree = true).performClick()
+        waitForIdle()
+        assertTrue(x.rummy.createPublic, "'공개 방' 글자를 눌렀는데 안 켜졌다")
+        row.assertIsOn()
+
+        onNodeWithText(RummyPhoneText.publicOn, useUnmergedTree = true).performClick()
+        waitForIdle()
+        assertFalse(x.rummy.createPublic, "설명 줄을 눌렀는데 안 꺼졌다")
+
+        row.performTouchInput { click(centerRight - Offset(20f, 0f)) }
+        waitForIdle()
+        assertTrue(x.rummy.createPublic, "스위치 자리를 눌렀는데 안 뒤집혔다 — 두 번 뒤집히면 그대로다")
+        x.h.close()
+    }
+
+    /** 동작이 도는 동안엔 줄 전체가 잠긴다(글자로 돌아가는 길이 없다). */
+    @Test
+    fun thePublicRowIsLockedWhileWorking() = runDesktopComposeUiTest(390, 2000) {
+        val x = rig(signIn = true)
+        x.lobby(lobbyJson())
+        lobbyView(x)
+        waitForIdle()
+        x.rummy.createRoom()
+        waitForIdle()
+        assertTrue(x.rummy.isWorking)
+        onNodeWithTag(GamesRummyLobbyTags.PUBLIC).assertIsNotEnabled()
+        onNodeWithText(RummyPhoneText.publicLabel, useUnmergedTree = true).performClick()
+        waitForIdle()
+        assertFalse(x.rummy.createPublic, "도는 중에 글자로 뒤집혔다")
         x.h.close()
     }
 

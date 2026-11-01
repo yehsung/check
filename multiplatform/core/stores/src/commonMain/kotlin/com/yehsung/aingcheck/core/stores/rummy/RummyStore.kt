@@ -485,8 +485,11 @@ class RummyStore(
     var hiddenPeerIDs: Set<SwiftUUID> = emptySet()
         internal set
 
-    /** 서버가 말한 내 방·판 id(로비 `me.active_match_id` ?: `me.room.id`). */
-    var activeMatchID: SwiftUUID? = null
+    /**
+     * 서버가 말한 내 방·판 id(로비 `me.active_match_id` ?: `me.room.id`).
+     * **관찰 대상이다** — 다른 게임 입구가 이 값으로 막힌다(`GamesStore.hasLiveRummyMatch`). 관찰 밖이면 판을 쥐지 않은 채 이 값만 풀릴 때 1:1 카드가 다음 재구성까지 막혀 보인다(그 카드들은 [lobby] 를 안 읽는다).
+     */
+    var activeMatchID: SwiftUUID? by mutableStateOf(null)
         internal set
 
     /** 이 기기가 방·판을 새로 세우거나 떠날 때마다 오른다. 그보다 **먼저** 나간 로비 응답이 "방 없음" 을 말해도 믿지 않는다. */

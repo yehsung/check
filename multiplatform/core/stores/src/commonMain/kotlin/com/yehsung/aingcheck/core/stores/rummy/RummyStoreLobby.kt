@@ -91,6 +91,9 @@ suspend fun RummyStore.applyLobby(response: RummyLobby, revision: Int? = null) {
     }
     // 내 방·판.
     val mine = response.me?.activeMatchId ?: response.me?.room?.id
+    // 이 요청을 낸 뒤 이 기기가 방·판을 세우거나 떠났다 — 옛 답의 '없음' · '접은 그 판'은 지금 사실이 아니다. 믿으면 끝난 판의 id 가 되살아나 다음 로비까지 다른 게임 입구가 막힌다.
+    // 다른 판을 말하면 그 판은 정말 있을 수 있어 그대로 읽는다(닫는 쪽으로 틀린다).
+    if (revision != null && revision != matchRevision && (mine == null || mine in dismissedMatchIDs)) return
     activeMatchID = mine
     if (mine != null) {
         if (mine in dismissedMatchIDs) return
@@ -101,7 +104,7 @@ suspend fun RummyStore.applyLobby(response: RummyLobby, revision: Int? = null) {
         }
     } else {
         val current = match
-        if (current != null && RummyStore.isUnsettled(current.status) && (revision ?: matchRevision) == matchRevision) {
+        if (current != null && RummyStore.isUnsettled(current.status)) {
             // 서버는 내 방·판이 없다고 한다 — 그 판을 직접 읽어 사정(닫힘·끝남·기권)을 안다. 지우지 않는다.
             refreshMatch(current.id)
         }
@@ -409,6 +412,8 @@ fun RummyStore.windowDidClose() {
 private fun RummyStore.foldMatch(): Boolean {
     val current = match ?: return false
     dismissedMatchIDs = dismissedMatchIDs + current.id
+    // 접기 전에 나간 로비는 옛 답이다(applyLobby) — 끝나기 전에 읽힌 그 답이 이 판의 id 를 되살리지 않게.
+    matchRevision += 1
     if (activeMatchID == current.id) activeMatchID = null
     clearMatch()
     setNotice(null)

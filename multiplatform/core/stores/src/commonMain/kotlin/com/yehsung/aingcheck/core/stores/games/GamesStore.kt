@@ -472,15 +472,14 @@ class GamesStore(val context: GamesContext) {
 
     /**
      * 사람과의 **아잉 큐브** 방·판이 지금 있는가. 서버 `chess__busy` 와 같은 술어다 — 모으는 방에 앉았거나(joined) 판 중(playing).
-     * 서버가 말한 내 방·판 id 는 들고 있는 것이 없어도 참이다(테트리스와 같은 까닭 — 닫는 쪽으로 틀리는 것이 맞다). 단 **그 id 의 판이 이미 끝났으면** 아니다
-     * (결과 화면은 판이 아니다 — 로비 재조회가 실패하면 id 가 남아 입구가 닫힌 채로 굳는다).
+     * 서버가 말한 내 방·판 id 는 들고 있는 것이 없어도 참이다(테트리스와 같은 까닭 — 닫는 쪽으로 틀리는 것이 맞다). 단 **그 판을 들고 있으면 그 판으로 판단한다**(로비 id 는 낡을 수 있다 —
+     * 끝난 판 · 내가 기권한 자리는 구경이다. 로비 재조회가 실패하면 id 가 남아 입구가 닫힌 채로 굳는다. iOS `hasLiveRummyMatch` 와 같다).
      */
     val hasLiveRummyMatch: Boolean
         get() {
             val rummy = context.rummy ?: return false
             val active = rummy.activeMatchID
-            val held = rummy.match
-            if (active != null && !(held != null && held.id == active && !RummyStore.isUnsettled(held.status))) return true
+            if (active != null && rummy.match?.id != active) return true
             return rummy.holdsLiveSeat
         }
 

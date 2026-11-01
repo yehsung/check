@@ -186,6 +186,7 @@ fun RummyStore.appDidBecomeActive() {
  * 뒤로 가기 · 로그아웃 · 계정 삭제. 방(forming)이면 방 나가기(방장이면 방 닫기), 판(active)이면 **즉시 기권**(`rummy_leave`).
  * 서버 답을 최대 [RummyStore.exitLeaveLimitSeconds](2초) 기다린다. 답과 무관하게 이 기기에선 판을 접는다(하트비트도 멈춘다) —
  * 서버에 못 닿았으면 90초 끊김 기권이 마무리한다. 반환: 서버가 나감을 확인했는가(끝난 판·판 없음은 true).
+ * **확인하지 않은 동안은 서버 id 를 남긴다** — 서버엔 자리가 있어 다른 게임 입구는 계속 막혀야 한다(오목은 클라밖에 막는 데가 없다). 다음 로비 또는 늦은 확인이 푼다.
  * [RummyStore.isWorking] 과 무관하게 돈다. **이 기기가 손대지 않은 판이면 아무것도 보내지 않고 true**(머리말 ⑮).
  */
 suspend fun RummyStore.leaveForExit(reason: RummyExitReason): Boolean {
@@ -198,12 +199,19 @@ suspend fun RummyStore.leaveForExit(reason: RummyExitReason): Boolean {
     val matchID = current.id
     logNotice("exit leave reason=${reason.rawValue}")
     val answer = CompletableDeferred<Boolean>()
+    val generation = resetGeneration
     scope.launch {
         val result = perform("leaveForExit") { service, token -> service.rummyLeave(token, matchID) }
         if (result is DuelCall.Success) {
             noteServerNow(result.value.serverNowMs)
             // not_found = 이미 자리가 없다(나간 것과 같다).
-            answer.complete(result.value.status == RummyRPCStatus.ok || result.value.status == RummyRPCStatus.notFound)
+            val left = result.value.status == RummyRPCStatus.ok || result.value.status == RummyRPCStatus.notFound
+            answer.complete(left)
+            // 2초 상한 뒤에 온 확인 — 이미 접었으니 아래 줄이 못 듣는다. 그 사이 로비가 다시 적은 id 를 여기서 푼다.
+            if (left && generation == resetGeneration && match?.id != matchID && activeMatchID == matchID) {
+                matchRevision += 1
+                activeMatchID = null
+            }
         } else {
             answer.complete(false)
         }
@@ -211,7 +219,7 @@ suspend fun RummyStore.leaveForExit(reason: RummyExitReason): Boolean {
     val confirmed = withTimeoutOrNull(delayMillis(RummyStore.exitLeaveLimitSeconds)) { answer.await() } ?: false
     dismissedMatchIDs = dismissedMatchIDs + matchID
     matchRevision += 1
-    if (activeMatchID == matchID) activeMatchID = null
+    if (!confirmed) activeMatchID = matchID else if (activeMatchID == matchID) activeMatchID = null
     if (match?.id == matchID) clearMatch()
     return confirmed
 }

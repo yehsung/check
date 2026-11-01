@@ -1,5 +1,5 @@
 // 다크 모드 · 글꼴 크기 · 화면 크기 · 언어 변경이 Activity 를 다시 만들지 않는다(매니페스트 configChanges) — 다시 만들면 화면 수명이 끊겨 끝난 판의 결과가 접히고 미니게임 판이 끝난다.
-// 다시 안 만들면 화면이 스스로 따라와야 한다: Compose 는 뷰의 구성 변경으로 LocalConfiguration · LocalDensity 를 갈고, 색은 isSystemInDarkTheme → AingTheme, 시스템 막대는 MainActivity 의 LaunchedEffect(dark) 가 잇는다.
+// 다시 안 만들면 화면이 스스로 따라와야 한다: Compose 는 뷰의 구성 변경으로 LocalConfiguration · LocalDensity 를 갈고, 색은 isSystemInDarkTheme → AingTheme, 시스템 막대는 MainActivity 의 barStyle 이 잇는다(SystemBarIconsConfigChangeTest).
 package com.yehsung.aingcheck.android.shell
 
 import android.content.res.Configuration

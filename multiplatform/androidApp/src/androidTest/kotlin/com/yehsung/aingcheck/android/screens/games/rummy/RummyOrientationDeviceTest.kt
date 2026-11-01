@@ -2,11 +2,12 @@
 //
 // 진짜 앱(MainActivity)에서 판 진입 → 가로 → 이탈 → 세로 복귀를 잰다. 시험 프로세스는 세션을 시작하지 않으니 망은 0 이다(AssemblyDeviceTest ①). 판 값은 앱 스토어에 직접 넣는다.
 // 재는 것: ① 앱이 Activity 에 실제로 요청하고(requestedOrientation) 화면이 실제로 돈다(Configuration.orientation) ② 돌아도 Activity 가 다시 안 만들어진다(매니페스트 configChanges — 다시 만들어지면 화면 수명이 끊겨 답이 뒤집힌다)
-// ③ 판 끝 · 화면 사라짐 · 세션 끝 어느 길로 나가도 세로로 돌아온다. 에뮬레이터: am instrument · connectedAndroidTest 어느 쪽이든 돈다.
+// ③ 판 끝 · 화면 사라짐 · 세션 끝 어느 길로 나가도 세로로 돌아온다 ④ 돌아도 상태 막대 글자색이 화면 모드를 따른다(운영 시험 결함 — OS 쪽으로 굳었다). 에뮬레이터: am instrument · connectedAndroidTest 어느 쪽이든 돈다.
 package com.yehsung.aingcheck.android.screens.games.rummy
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import androidx.core.view.WindowCompat
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +20,8 @@ import com.yehsung.aingcheck.core.stores.rummy.applyState
 import com.yehsung.aingcheck.core.stores.rummy.dismissResult
 import com.yehsung.aingcheck.core.wire.games.RummyMatchState
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
+import com.yehsung.aingcheck.ui.screens.settingscommon.AppearanceStore
+import com.yehsung.aingcheck.ui.theme.AingAppearanceMode
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
@@ -32,6 +35,7 @@ class RummyOrientationDeviceTest {
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
     private lateinit var games: GamesStore
     private lateinit var rummy: RummyStore
+    private lateinit var appearance: AppearanceStore
 
     private fun state(status: String, mine: String): RummyMatchState = SwiftJson.decode(
         RummyMatchState.serializer(),
@@ -42,7 +46,9 @@ class RummyOrientationDeviceTest {
 
     @Before
     fun setUp() {
-        val screens = requireNotNull(ApplicationProvider.getApplicationContext<AingApplication>().container.shellScreens) { "조립 셸이 없다" }
+        val container = ApplicationProvider.getApplicationContext<AingApplication>().container
+        appearance = container.appearance
+        val screens = requireNotNull(container.shellScreens) { "조립 셸이 없다" }
         games = screens.phone.games
         rummy = screens.phone.rummy
     }
@@ -77,6 +83,52 @@ class RummyOrientationDeviceTest {
 
     private fun ActivityScenario<MainActivity>.awaitLandscape(label: String) =
         awaitOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE, Configuration.ORIENTATION_LANDSCAPE, label)
+
+    private fun ActivityScenario<MainActivity>.lightStatusIcons(): Boolean {
+        var light = false
+        onActivity { light = WindowCompat.getInsetsController(it.window, it.window.decorView).isAppearanceLightStatusBars }
+        return light
+    }
+
+    /** 글자색이 그 값이다 — 회전의 뒤처리(뷰 나무 · 다음 프레임)가 끝난 뒤에도 그대로인지 잠시 더 본다. */
+    private fun ActivityScenario<MainActivity>.assertStatusIcons(light: Boolean, label: String) {
+        instrumentation.waitForIdleSync()
+        repeat(ICON_SAMPLE_STEPS) {
+            assertEquals("$label: 상태 막대 글자색(isAppearanceLightStatusBars)", light, lightStatusIcons())
+            Thread.sleep(ROTATION_WAIT_STEP_MS)
+        }
+    }
+
+    /** 다크 앱으로 큐브 판에 들어가 돌면 상태 막대 글자가 어두운색으로 굳었다(OS 쪽). 양쪽 모드 다, 회전 전 · 가로 · 세로 복귀에서 화면 모드를 따른다. OS 다크 설정이 어느 쪽이든 한쪽 모드는 OS 와 어긋나 결함을 잰다. */
+    @Test
+    fun statusBarIconsFollowTheAppModeAcrossRotation() {
+        val original = appearance.mode
+        try {
+            ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                scenario.awaitPortrait("앱이 세로로 안 떴다")
+                for (mode in listOf(AingAppearanceMode.Dark, AingAppearanceMode.Light)) {
+                    val light = mode == AingAppearanceMode.Light
+                    instrumentation.runOnMainSync { appearance.select(mode) }
+                    scenario.assertStatusIcons(light, "$mode 회전 전")
+
+                    instrumentation.runOnMainSync {
+                        games.rummyScreenDidAppear()
+                        rummy.applyState(state("active", "playing"))
+                    }
+                    scenario.awaitLandscape("$mode 판 화면이 안 돌았다")
+                    scenario.assertStatusIcons(light, "$mode 가로")
+
+                    instrumentation.runOnMainSync { games.rummyScreenDidDisappear() }
+                    scenario.awaitPortrait("$mode 화면이 사라졌는데 가로에 남았다")
+                    scenario.assertStatusIcons(light, "$mode 세로 복귀")
+
+                    instrumentation.runOnMainSync { rummy.reset() }
+                }
+            }
+        } finally {
+            instrumentation.runOnMainSync { appearance.select(original) }
+        }
+    }
 
     @Test
     fun enterRotatesAndLeavingComesBackWithoutRecreating() {
@@ -126,5 +178,6 @@ class RummyOrientationDeviceTest {
     private companion object {
         const val ROTATION_WAIT_STEP_MS: Long = 50
         const val ROTATION_WAIT_STEPS: Int = 200
+        const val ICON_SAMPLE_STEPS: Int = 10
     }
 }

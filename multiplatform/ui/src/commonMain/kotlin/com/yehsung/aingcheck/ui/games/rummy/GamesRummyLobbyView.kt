@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -33,6 +34,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -355,15 +357,21 @@ private fun GamesRummyTableOptions(rummy: RummyStore, entry: GamesRummyEntry, ti
             }
         }
         Text(RummyPhoneText.stakeCaption(selected), style = rowSubtitleStyle().copy(fontFeatureSettings = TNUM), color = colors.label2)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-            Column(Modifier.weight(1f).semantics(mergeDescendants = true) { }, verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        // 줄 전체가 스위치 하나다(iOS Toggle 은 글자도 눌린다). 스위치는 값만 그린다 — onCheckedChange 를 null 로 주면 머티리얼이 48 칸을 안 잡아 그 자리만 잡아 준다(줄 높이 그대로).
+        Row(
+            Modifier.toggleable(value = rummy.createPublic, enabled = !entry.isWorking, role = Role.Switch, onValueChange = { rummy.createPublic = it })
+                .testTag(GamesRummyLobbyTags.PUBLIC),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(AingDimens.space3),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(RummyPhoneText.publicLabel, style = rowTitleStyle(), color = colors.label)
                 Text(if (rummy.createPublic) RummyPhoneText.publicOn else RummyPhoneText.publicOff, style = rowSubtitleStyle(), color = colors.label2)
             }
             Switch(
                 checked = rummy.createPublic,
-                onCheckedChange = { rummy.createPublic = it },
-                modifier = Modifier.testTag(GamesRummyLobbyTags.PUBLIC),
+                onCheckedChange = null,
+                modifier = Modifier.minimumInteractiveComponentSize(),
                 enabled = !entry.isWorking,
             )
         }

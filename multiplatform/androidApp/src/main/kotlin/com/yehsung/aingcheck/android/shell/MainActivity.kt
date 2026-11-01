@@ -9,6 +9,9 @@
 //     화면만 연다(판돈이 걸린 respond 가 두 번 실리지 않게, G §8-13). 처리한 Intent 는 setIntent 로 라우트·수락 extra 를 지운다.
 //   - 확성기 알림 탭(증표가 맞은 표식)은 라우터로 보내지 않고 푸시 조정자의 handleResponse(open)로 — 대화가 아니라 그 확성기 배너(Swift
 //     PushCoordinator.handleResponse @ a6791165). 자리표시 셸(조립 화면 없음)이면 그 대화를 연다.
+// 시스템 막대 글자색: androidx.activity 1.13 enableEdgeToEdge 는 **창의 첫 호출이 준 설정**을 숨은 View(EdgeToEdge$enableEdgeToEdge$1$2)에 물려 구성 변경마다 다시 돌리고, 둘째 호출부터는 그 View 를 갈지 않는다.
+//   그래서 첫 호출이 기본값(OS 다크를 따른다)이면 configChanges 로 직접 받는 회전 · 다크 전환 때마다 글자가 OS 쪽으로 굳는다(앱 다크 · OS 라이트 = 검은 바탕에 검은 글자).
+//   Activity.onConfigurationChanged 는 뷰 나무로 내려가기 **전**에 불려 거기서 고쳐도 덮인다. 답은 첫 호출부터 [barStyle] 하나를 쓰는 것이다 — 값을 잡지 않고 돌 때마다 묻는다.
 package com.yehsung.aingcheck.android.shell
 
 import android.content.Intent
@@ -26,6 +29,7 @@ import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
+import android.content.res.Resources
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,6 +38,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.Surface
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,7 +51,7 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.receiveAsFlow
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), SystemBarIconHost {
     /** 열 라우트. 버퍼가 있어 화면이 그려지기 전에 온 요청도 잃지 않는다. */
     private val requests = Channel<RouteRequest>(Channel.BUFFERED)
 
@@ -54,8 +59,41 @@ class MainActivity : ComponentActivity() {
     private var releaseKeepScreenOn: (() -> Unit)? = null
     private val container get() = (application as AingApplication).container
 
+    /** 흰 글자를 쥔 화면 수([holdLightSystemBarIcons]). */
+    private var lightIconHolds = 0
+
+    /**
+     * 막대 글자색의 한 곳 — 파일 머리말. 돌 때마다 지금 값을 묻는다(화면 모드 · OS 다크 · 흰 글자를 쥔 화면). 막대 칠은 투명이라 auto 여도 칠이 달라지지 않는다.
+     * 판정은 Compose 쪽 AingTheme 과 같다(AingAppearanceMode.isDark · isSystemInDarkTheme = uiMode).
+     */
+    private val barStyle: SystemBarStyle = SystemBarStyle.auto(TRANSPARENT_SCRIM, TRANSPARENT_SCRIM) { resources -> barsAreDark(resources) }
+
+    private fun barsAreDark(resources: Resources): Boolean {
+        val systemDark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        return lightIconHolds > 0 || container.appearance.mode.isDark(systemDark)
+    }
+
+    private fun applySystemBars() {
+        enableEdgeToEdge(statusBarStyle = barStyle, navigationBarStyle = barStyle)
+        // auto 는 내비 막대 강제 대비를 켠다. 끈다 — 숨은 View 가 다시 켜므로 구성 변경 뒤에도 끈다(setContent 의 LaunchedEffect).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) window.isNavigationBarContrastEnforced = false
+    }
+
+    override fun holdLightSystemBarIcons(): () -> Unit {
+        lightIconHolds += 1
+        applySystemBars()
+        var released = false
+        return {
+            if (!released) {
+                released = true
+                lightIconHolds -= 1
+                applySystemBars()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge()
+        applySystemBars()
         super.onCreate(savedInstanceState)
         logIntent("onCreate", intent, restored = savedInstanceState != null)
         if (savedInstanceState == null) route(intent)
@@ -73,14 +111,13 @@ class MainActivity : ComponentActivity() {
             // 흐름 하나를 붙잡아 둔다 — 다시 그릴 때마다 새로 만들면 수집이 끊겼다 다시 붙으며 받은 요청을 흘릴 수 있다.
             val requestFlow = remember { requests.receiveAsFlow() }
             // 아잉체크 테마(M3 뼈대 + iOS 파랑 주요색, G §8-15). 인자 없는 MaterialTheme 은 M3 기준 보라(#6750A4)로 칠한다(DesignRules D4).
-            // 화면 모드(W3-b 조정자 패치 0002): 저장값(기본 다크 — iOS 와 같은 키)을 따른다. 상태 막대 글자색도 같은 판정으로 맞춘다 —
+            // 화면 모드(W3-b 조정자 패치 0002): 저장값(기본 다크 — iOS 와 같은 키)을 따른다. 상태 막대 글자색도 같은 판정으로 맞춘다([barStyle]) —
             // enableEdgeToEdge 기본값은 OS 설정을 따라 앱이 다크로 고정된 낮에 검은 글자가 검은 바탕에 앉는다.
+            // 모드를 고르면 구성 변경이 없으니 여기서 다시 칠하고, 구성 변경 뒤엔 숨은 View 가 켠 내비 강제 대비를 여기서 다시 끈다(그 View 다음 프레임이다).
             val mode = c.appearance.mode
             val dark = mode.isDark(isSystemInDarkTheme())
-            LaunchedEffect(dark) {
-                val bars = if (dark) SystemBarStyle.dark(TRANSPARENT_SCRIM) else SystemBarStyle.light(TRANSPARENT_SCRIM, TRANSPARENT_SCRIM)
-                enableEdgeToEdge(statusBarStyle = bars, navigationBarStyle = bars)
-            }
+            val configuration = LocalConfiguration.current
+            LaunchedEffect(dark, configuration) { applySystemBars() }
             AingTheme(mode = mode) {
                 Surface {
                     AingShell(

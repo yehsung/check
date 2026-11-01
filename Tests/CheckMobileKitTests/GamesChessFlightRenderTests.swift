@@ -649,7 +649,7 @@ struct GamesChessFlightRenderTests {
     }
 
     /// 끌어 놓아 **이미 도착해 있는** 말(`landed`)은 밀려나는 잡힌 말보다 **위**에 그려진다.
-    /// 폰은 아직 끌어서 두지 않으므로 `landed` 는 늘 nil 이지만, 프레임이 그 칸을 실어 보내는 한 받아야 한다.
+    /// 폰 1.0.16 부터 끌어 두므로 `landed` 가 실제로 선다.
     @Test("landed 칸의 말은 밀려나는 잡힌 말 위에 그려진다")
     func theLandedPieceIsDrawnAboveTheCapturedOne() throws {
         let g = Self.geometry()

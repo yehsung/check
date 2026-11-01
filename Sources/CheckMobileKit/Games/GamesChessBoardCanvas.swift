@@ -19,7 +19,7 @@ import SwiftUI
 // 덮개 색을 극단으로 바꾸거나 날고 있는 말을 흐리게 그리면 **빈 칸이 말로 세어져** 단언이 조용히 쓸모없어진다.
 // 판은 **물건**이라 라이트·다크와 무관하게 같은 색이다(오목 나무판과 같은 규약).
 
-/// 입력을 받지 않는 **순수 그림**. 탭은 감싸는 `GamesChessBoard` 가 받는다.
+/// 입력을 받지 않는 **순수 그림**. 탭·끌기는 감싸는 `GamesChessBoard` 가 받는다.
 ///
 /// 플랫폼 분기가 **없다** — 폰 화면이 쓰는 바로 이 뷰를 맥 스위트가 `ImageRenderer` 로 구워 잉크를 센다
 /// (`CheckMobileKit` 의 절반이 `#if os(iOS)` 라 그 안에 두면 그림을 재는 길이 통째로 사라진다).
@@ -36,6 +36,10 @@ package struct GamesChessBoardCanvas: View {
     var showsCoordinates = true
     /// 지금 미끄러지는 중인 **한 장**. 기본 nil = 멈춘 국면 = **이 값이 생기기 전과 같은 그림**이다.
     var flight: ChessFlightFrame?
+    /// 제자리를 떠나 있는 말(폰 1.0.16 끌어 두기). 기본 nil = 이 값이 생기기 전과 같은 그림이다.
+    var lifted: GamesChessBoardLift?
+    /// 손가락 밑이 갈 수 있는 칸. 손이 칸을 가리므로 칸 덮개에 **칸보다 큰 원**을 더한다.
+    var dropTarget: ChessSquare?
 
     // 칸 — 둘 다 중간 톤(최대 ≤ 204 · 최소 ≥ 71)이다.
     package static let lightSquare = Color(red: 0.80, green: 0.72, blue: 0.60)
@@ -54,6 +58,11 @@ package struct GamesChessBoardCanvas: View {
     package static let targetOpacity: Double = 0.60
     package static let checkTint = CheckTheme.danger
     package static let checkOpacity: Double = 0.45
+    /// 맥 `dropTargetOpacity` 와 같은 값 — 도착 점(0.60)이 얹혀도 중간 톤에 머문다(위 ★).
+    package static let dropTargetOpacity: Double = 0.28
+    package static let dropHaloOpacity: Double = 0.18
+    /// 원의 반지름(칸 대비). 손가락이 칸을 덮어도 그 둘레가 보이는 크기다.
+    package static let dropHaloRadius: CGFloat = 1.1
 
     package init(position: ChessPosition?,
                  geometry: ChessPhoneBoardGeometry,
@@ -62,7 +71,9 @@ package struct GamesChessBoardCanvas: View {
                  targets: Set<ChessSquare> = [],
                  checkSquare: ChessSquare? = nil,
                  showsCoordinates: Bool = true,
-                 flight: ChessFlightFrame? = nil) {
+                 flight: ChessFlightFrame? = nil,
+                 lifted: GamesChessBoardLift? = nil,
+                 dropTarget: ChessSquare? = nil) {
         self.position = position
         self.geometry = geometry
         self.lastMove = lastMove
@@ -71,6 +82,8 @@ package struct GamesChessBoardCanvas: View {
         self.checkSquare = checkSquare
         self.showsCoordinates = showsCoordinates
         self.flight = flight
+        self.lifted = lifted
+        self.dropTarget = dropTarget
     }
 
     package var body: some View {
@@ -102,6 +115,13 @@ package struct GamesChessBoardCanvas: View {
         if let checkSquare {
             context.fill(Path(g.rect(of: checkSquare)),
                          with: .color(Self.checkTint.opacity(Self.checkOpacity)))
+        }
+        if let dropTarget {
+            let box = g.rect(of: dropTarget)
+            context.fill(Path(box), with: .color(Self.targetTint.opacity(Self.dropTargetOpacity)))
+            let r = g.cell * Self.dropHaloRadius
+            context.fill(Path(ellipseIn: CGRect(x: box.midX - r, y: box.midY - r, width: r * 2, height: r * 2)),
+                         with: .color(Self.targetTint.opacity(Self.dropHaloOpacity)))
         }
 
         // ③ 좌표(가장자리 칸 **안쪽** — 테두리를 두지 않는다)
@@ -156,6 +176,11 @@ package struct GamesChessBoardCanvas: View {
             if flight?.hidden.contains(square) == true { continue }
             // 끌어 놓아 이미 도착해 있는 말은 여기서 건너뛰고 **맨 위**에 그린다(⑤d).
             if square == flight?.landed { continue }
+            // 손에 든 말의 출발 칸은 비운다(선택 덮개는 남는다 — 어디서 집었는지 보인다).
+            if square == lifted?.from { continue }
+            // 놓은 말 밑의 말도 비운다 — 잡는 수로 놓으면 답을 기다리는 동안·승격을 고르는 동안 두 말이 겹쳐 보인다.
+            // 거절되면 꼬리표가 지워지며 그 말은 스스로 돌아온다.
+            if case .square(let placed)? = lifted?.place, placed == square { continue }
             draw(piece, in: g.rect(of: square), cell: g.cell, into: &context)
         }
 
@@ -185,10 +210,14 @@ package struct GamesChessBoardCanvas: View {
         }
 
         // ⑤d 끌어 놓아 **이미 도착해 있는** 말 — 잡힌 말(⑤b)과 캐슬링의 룩(⑤c)보다 위.
-        // 폰은 아직 끌어서 두지 않으므로(탭 2단) `landed` 는 늘 nil 이지만, 프레임이 그 칸을 실어 보내는 한
-        // 여기서 받아야 한다 — 안 받으면 폰에 끌기가 들어오는 날 밀려나는 잡힌 말이 잡은 말 **위에** 얹힌다.
-        if let landed = flight?.landed, let piece = position[landed] {
+        // 폰 1.0.16 부터 끌어 두므로 이 값이 실제로 선다. 안 받으면 밀려나는 잡힌 말이 잡은 말 **위에** 얹힌다.
+        if let landed = flight?.landed, landed != lifted?.from, let piece = position[landed] {
             draw(piece, in: g.rect(of: landed), cell: g.cell, into: &context)
+        }
+
+        // ⑥ 놓고 답을 기다리는 말 — **맨 위**. 끄는 중인 말은 여기 없다(`GamesChessHeldPiece` — 판 밖으로 넘쳐야 한다).
+        if let lifted, case .square(let square) = lifted.place {
+            draw(lifted.piece, in: g.rect(of: square), cell: g.cell, into: &context)
         }
     }
 
@@ -200,6 +229,12 @@ package struct GamesChessBoardCanvas: View {
     ///   호출 순서에 따라 빨개진다.
     private func draw(_ piece: ChessPiece, in box: CGRect, cell: CGFloat,
                       into context: inout GraphicsContext) {
+        Self.draw(piece, in: box, cell: cell, into: &context)
+    }
+
+    /// 손에 든 말(`GamesChessHeldPiece`)도 이 한 벌로 그린다 — 판 위 말과 색·선이 갈리면 집는 순간 말이 바뀌어 보인다.
+    static func draw(_ piece: ChessPiece, in box: CGRect, cell: CGFloat,
+                     into context: inout GraphicsContext) {
         let path = ChessPieceArt.path(for: piece.kind, in: box)
         context.fill(path, with: .color(piece.color == .white ? Self.whitePiece : Self.blackPiece))
         context.stroke(path,
@@ -208,12 +243,13 @@ package struct GamesChessBoardCanvas: View {
     }
 }
 
-// MARK: - 프레임 루프 + 탭
+// MARK: - 프레임 루프 + 입력
 
-/// 대국·관전 화면이 쓰는 판. 공간에 맞춰 크기를 정하고, 애니메이션을 프레임으로 풀고, 탭을 칸으로 바꾼다.
+/// 대국·관전 화면이 쓰는 판. 공간에 맞춰 크기를 정하고, 애니메이션을 프레임으로 풀고, 터치를 칸으로 바꾼다.
 ///
 /// ★ `onTapSquare` 가 **nil 이면 관전 판**이다(§6 ⑨): 탭·선택·도착 점이 전부 없어야 한다. 관전자는 "내 차례·
 ///   내 색" 이 없으므로 그 둘에 매인 그림을 **여기서 끊는다** — 부르는 쪽이 매번 빈 값을 넘기기를 믿지 않는다.
+/// ★ `dragStore` 가 **있는 판만 끌린다**(폰 1.0.16). 기본값이 nil 이라 관전 판은 인자를 안 넘기는 것으로 끌기가 없다.
 /// ★ `whiteAtBottom` 하나가 뒤집기를 쥔다(§6 ①). 내 색이 아래여야 판이 읽히고, 관전자는 백이 아래가 관례다.
 package struct GamesChessBoard: View {
     private let position: ChessPosition
@@ -227,6 +263,14 @@ package struct GamesChessBoard: View {
     /// 안 받아서 넷 중 어느 화면도 체크를 못 그렸다). 값은 `GamesChessCheckMark.square(...)` 에서 온다.
     private let checkSquare: ChessSquare?
     private let onTapSquare: ((ChessSquare) -> Void)?
+    /// 끌어 두기의 판단을 쥔 스토어. nil 이면 끌기가 없는 판이다.
+    private let dragStore: ChessStore?
+
+    /// 터치 → 스토어 어댑터(화면에서 태어나 화면에서 죽는다).
+    @State private var drag = GamesChessBoardDragController()
+    #if DEBUG
+    @Environment(\.gamesChessDragPreview) private var dragPreview
+    #endif
 
     /// 이 판이 선 화면의 주사율(Hz). 기본값(60)으로 시작해 나타날 때 실제 값을 읽는다 — ProMotion 120 ·
     /// 일반 60(`GamesDisplay.maximumFramesPerSecond`, 미니게임 화면과 같은 문법).
@@ -239,7 +283,8 @@ package struct GamesChessBoard: View {
                  legalTargets: Set<ChessSquare>,
                  lastMove: (from: ChessSquare, to: ChessSquare)?,
                  checkSquare: ChessSquare?,
-                 onTapSquare: ((ChessSquare) -> Void)?) {
+                 onTapSquare: ((ChessSquare) -> Void)?,
+                 dragStore: ChessStore? = nil) {
         self.position = position
         self.flight = flight
         self.whiteAtBottom = whiteAtBottom
@@ -248,12 +293,19 @@ package struct GamesChessBoard: View {
         self.lastMove = lastMove
         self.checkSquare = checkSquare
         self.onTapSquare = onTapSquare
+        self.dragStore = dragStore
     }
 
     /// 입력이 있는 판인가. 없으면 관전이다.
     private var isInteractive: Bool { onTapSquare != nil }
 
     package var body: some View {
+        // ★ 끌기 값은 **body 바로 밑에서** 읽는다. `GeometryReader`·`TimelineView` 클로저 안에서의 읽기가 관찰되는지는
+        //   SwiftUI 구현에 달렸고, 손가락 밑 칸만 바뀌는 순간은 데모 캡처로 구별되지 않는다(장면은 값이 한 틱에 함께 바뀐다).
+        let lift = dragStore == nil ? nil : GamesChessBoardLift.resolve(
+            pending: dragStore?.pendingDrop, draggingFrom: drag.floatingFrom,
+            latch: dragStore?.dragOrigin, position: position)
+        let handSquare = dragStore == nil ? nil : drag.handSquare
         GeometryReader { proxy in
             let geometry = ChessPhoneBoardGeometry(side: GamesChessBoardMetrics.side(fitting: proxy.size),
                                                    orientation: whiteAtBottom ? .white : .black)
@@ -262,9 +314,29 @@ package struct GamesChessBoard: View {
             //   아무도 수를 안 두는 동안에도 120Hz 로 64칸 + 32말을 다시 그린다.
             TimelineView(.animation(minimumInterval: MiniGameFrameRate.minimumInterval(forRefreshRate: refreshHz),
                                     paused: GamesChessFlightLoop.isPaused(flight: flight))) { context in
-                board(geometry, frame: flight?.frame(now: context.date))
+                board(geometry, frame: flight?.frame(now: context.date), lift: lift, handSquare: handSquare)
+            }
+            // ★ 입력은 TimelineView **밖**이다(맥 `ChessPlayBoard` 와 같은 까닭) — 안에 두면 말이 미끄러지는 틱마다
+            //   입력 층이 다시 만들어져 끌던 손을 떨군다.
+            .overlay { inputLayer(geometry) }
+            // 든 말은 입력 층 **위**에 그리지만 터치를 안 받는다. 판 위로 넘치는 것이 일부러다(`GamesChessDragHand`).
+            .overlay {
+                if case .hand? = lift?.place, let lift {
+                    GamesChessHandLayer(controller: drag, piece: lift.piece, geometry: geometry)
+                }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
+            #if DEBUG
+            .task(id: dragPreview) {
+                guard let dragPreview, let dragStore else { return }
+                // 창이 서기 전에 집으면 곧이어 오는 `windowDidShow` 가 전제(`isWindowVisible`)를 바꿔 장면을 거둔다.
+                // 그 거두기는 맞다 — 손가락은 창이 선 뒤에야 판에 닿으므로 장면도 같은 순서로 집는다.
+                while !dragStore.isWindowVisible, !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(100))
+                }
+                dragPreview.play(on: drag, port: dragPort(geometry))
+            }
+            #endif
         }
         .aspectRatio(1, contentMode: .fit)
         .onAppear {
@@ -272,9 +344,34 @@ package struct GamesChessBoard: View {
             refreshHz = GamesDisplay.maximumFramesPerSecond
             #endif
         }
+        // 끄는 중에 판이 바뀌었다 — 끌기를 **즉시** 거두고 말을 제자리에. 그 뒤 손을 떼도 수가 나가지 않는다
+        // (터치가 그 손을 소진시킨다. 스토어 `placeDrop` 도 걸쇠가 내려가 있어 따로 막는다 — 이중 안전).
+        .onChange(of: dragStore.flatMap(GamesChessDragPremise.init(store:))) { _, _ in
+            drag.premiseDidChange(store: dragStore)
+        }
+        .onChange(of: dragStore?.dragOrigin) { _, _ in
+            drag.latchDidChange(store: dragStore)
+        }
     }
 
-    private func board(_ geometry: ChessPhoneBoardGeometry, frame: ChessFlightFrame?) -> some View {
+    private func dragPort(_ geometry: ChessPhoneBoardGeometry) -> GamesChessBoardDragController.Port {
+        GamesChessBoardDragController.Port(store: dragStore, geometry: geometry,
+                                           onTap: { square in onTapSquare?(square) })
+    }
+
+    /// 입력 층. **입력이 없는 판(관전)에는 층이 아예 없다.** 맥 스위트에서는 그림만 잰다(터치 면은 UIKit 이다).
+    @ViewBuilder
+    private func inputLayer(_ geometry: ChessPhoneBoardGeometry) -> some View {
+        #if os(iOS)
+        if isInteractive {
+            GamesChessBoardTouchSurface(controller: drag, port: dragPort(geometry))
+                .frame(width: geometry.side, height: geometry.side)
+        }
+        #endif
+    }
+
+    private func board(_ geometry: ChessPhoneBoardGeometry, frame: ChessFlightFrame?,
+                       lift: GamesChessBoardLift?, handSquare: ChessSquare?) -> some View {
         GamesChessBoardCanvas(
             position: position,
             geometry: geometry,
@@ -286,15 +383,11 @@ package struct GamesChessBoard: View {
             //   사실이다 — 맥 관전도 같은 덮개를 그린다). 여기에 `isInteractive` 를 끼우면 관전자는 왕이
             //   어디서 맞고 있는지 못 본다.
             checkSquare: checkSquare,
-            flight: frame
+            flight: frame,
+            lifted: lift,
+            dropTarget: GamesChessBoardLift.dropTarget(lift: lift, handSquare: handSquare,
+                                                       targets: legalTargets)
         )
-        .contentShape(Rectangle())
-        .gesture(SpatialTapGesture().onEnded { value in
-            // 판 밖(격자 바깥)은 조용하다 — 거절이 아니라 빈 곳을 누른 것이다. 둘 수 있는가의 판정은
-            // 받는 쪽(스토어)에 있다: 뷰가 미리 걸러 조용히 삼키면 "눌렀는데 아무 반응이 없다" 가 된다.
-            guard let square = geometry.square(at: value.location) else { return }
-            onTapSquare?(square)
-        }, isEnabled: isInteractive)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Self.boardAccessibility(position: position, whiteAtBottom: whiteAtBottom))
     }

@@ -82,6 +82,9 @@ struct GamesChessScreen: View {
             // 늦게 온 응답이 단계만 올려 놓고 판을 못 세운 틈이고, 오목도 같은 대체 갈래를 둔다.
             if chess.match != nil {
                 GamesChessMatchView(store: chess, me: GamesMeIdentity.current(store.context))
+                    #if DEBUG
+                    .environment(\.gamesChessDragPreview, store.demoChessRoute?.drag)
+                    #endif
             } else {
                 lobby
             }

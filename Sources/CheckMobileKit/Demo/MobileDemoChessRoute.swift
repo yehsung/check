@@ -1,4 +1,6 @@
 #if DEBUG
+import CheckCore
+
 /// 데모 스크린샷 라우트 `games/chess/…` 한 건을 **값으로 푼 것**(DEBUG 전용).
 ///
 /// ── 왜 `Demo/` 안이고 파일 통째가 `#if DEBUG` 인가 ──
@@ -30,6 +32,7 @@
 /// | `games/chess/lobby/invites`     | nil               | nil             | top     |
 /// | `games/chess/match`             | nil (장면이 세운다) | nil             | top     |
 /// | `games/chess/match/<id>`        | `<id>`            | nil             | top     |
+/// | `games/chess/match/<id>/drag/…` | `<id>`            | nil             | top     |
 /// | `games/chess/ranking[/unlisted]`| nil               | nil             | bottom  |
 /// | `games/chess/watch/<id>`        | nil               | `<id>`          | bottom  |
 ///
@@ -54,16 +57,27 @@ package struct MobileDemoChessRoute: Hashable, Sendable {
     package var watchMatchID: String?
     /// 로비 스크롤 시작 자리.
     package var section: Section
+    /// 판이 선 뒤 세울 끌기 장면(`match/<id>/drag/<출발>/<손가락>[/drop]` — 폰 1.0.16). 손가락이 없는 스크린샷이
+    /// 끌기 도중을 찍는 유일한 길이다.
+    package var drag: GamesChessDragPreview?
 
-    package init(focusMatchID: String? = nil, watchMatchID: String? = nil, section: Section = .top) {
+    package init(focusMatchID: String? = nil, watchMatchID: String? = nil, section: Section = .top,
+                 drag: GamesChessDragPreview? = nil) {
         self.focusMatchID = focusMatchID
         self.watchMatchID = watchMatchID
         self.section = section
+        self.drag = drag
     }
 
     /// `games/chess` 뒤의 토막들로 세운다. 모르는 꼬리는 **로비 머리**로 접는다(라우트를 조용히 버리지 않는다).
     package init(tail: [String]) {
         switch (tail.first, tail.count) {
+        case ("match", 5...) where tail[2] == "drag":
+            let drops = tail.count > 5 && tail[5] == "drop"
+            let scene = ChessSquare(tail[3]).flatMap { from in
+                ChessSquare(tail[4]).map { GamesChessDragPreview(from: from, finger: $0, drops: drops) }
+            }
+            self.init(focusMatchID: tail[1].lowercased(), drag: scene)
         case ("match", 2):
             self.init(focusMatchID: tail[1].lowercased())
         case ("watch", 2):

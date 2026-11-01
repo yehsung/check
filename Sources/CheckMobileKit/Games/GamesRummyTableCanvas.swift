@@ -442,17 +442,36 @@ private struct GamesRummyMagnetTips: Shape {
     }
 }
 
-// MARK: - 판 위 조작
+// MARK: - 전체 보기 · 화면 밖 배지
 
-/// [전체 보기] 토글 · 화면 밖 묶음 배지. 입력 층 **위**에 있어 제스처보다 먼저 눌린다(그래서 그 자리 타일은 못 집는다). 끄는 동안은 숨는다(자동 밀기·미리보기를 가리지 않게).
-/// 토글은 판 오른쪽 **아래**, 오른쪽 배지 자리 위다 — 오른쪽 위에 두면 첫 화면부터 윗줄 묶음의 숫자를 가렸다(묶음은 위부터 깔린다).
-/// 칸 자리는 `GamesRummyTableControlsLayout` 값 하나에서 나온다(배지가 뜨고 사라져도 토글이 안 움직인다).
+/// [전체 보기] 토글 — 오른쪽 열(판 위에 두면 타일을 가린다).
+struct GamesRummyZoomButton: View {
+    let model: GamesRummyMatchModel
+
+    var body: some View {
+        let full = model.viewport.isFullView
+        Button {
+            model.toggleFullView()
+        } label: {
+            Image(systemName: full ? "plus.magnifyingglass" : "arrow.down.right.and.arrow.up.left")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(MobileTheme.label)
+                .frame(width: AingButtonMetrics.minimumTarget, height: AingButtonMetrics.minimumTarget)
+                .background(GlassBackground(shape: Circle()))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(full ? GamesRummyText.zoomDefault : GamesRummyText.zoomFull)
+    }
+}
+
+/// 화면 밖 묶음 배지. 입력 층 **위**에 있어 제스처보다 먼저 눌린다(그래서 그 자리 타일은 못 집는다). 끄는 동안은 숨는다(자동 밀기·미리보기를 가리지 않게).
 struct GamesRummyTableControls: View {
     let model: GamesRummyMatchModel
     let scene: GamesRummyBoardScene
     let size: CGSize
-    /// 판 아래쪽에서 비워 둘 높이(직전 사건 줄 · 다른 기기 안내).
-    var badgeLift: CGFloat = 36
+    /// 판 아래쪽에서 비워 둘 높이(다른 기기 안내).
+    var badgeLift: CGFloat = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -463,25 +482,7 @@ struct GamesRummyTableControls: View {
         let dragging = !model.draggingIDs.isEmpty
         ZStack {
             if !dragging {
-                // 기호만 — 글자까지 넣으면 타일을 더 가린다.
-                Button {
-                    model.toggleFullView()
-                } label: {
-                    Image(systemName: viewport.isFullView ? "plus.magnifyingglass" : "arrow.down.right.and.arrow.up.left")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 30, height: 30)
-                        .background(Circle().fill(Color.black.opacity(0.62)))
-                        .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.8))
-                        .padding(4)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(viewport.isFullView ? GamesRummyText.zoomDefault : GamesRummyText.zoomFull)
-                .padding(.bottom, GamesRummyTableControlsLayout.zoomBottom(badgeLift: badgeLift))
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-
-                // 배지는 판 아래쪽 — 묶음은 위부터 깔리니 숫자를 덜 가린다(직전 사건 줄보다는 위).
+                // 좌우는 판 아래쪽 — 묶음은 위부터 깔리니 숫자를 덜 가린다.
                 if counts.left > 0 {
                     badge(.left, count: counts.left, frames: frames)
                         .padding(.bottom, badgeLift)

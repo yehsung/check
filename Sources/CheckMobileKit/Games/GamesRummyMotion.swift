@@ -27,20 +27,8 @@ package enum GamesRummyRackMotion {
 }
 
 extension GamesRummyMatchLayout {
-    /// [뽑기] 칸의 가운데 — 받침대 칸 좌표로(뽑은 타일이 여기서 출발한다). 동작 줄 배치(`GamesRummyActionRow`)와 같은 값에서 나온다.
-    package func drawOrigin(textScale: CGFloat) -> CGPoint {
-        let gap = Self.actionGap
-        let point: CGPoint
-        if Self.actionRowCount(textScale: textScale) == 1 {
-            let widths = Self.actionWidths(total: size.width)
-            point = CGPoint(x: gap + widths.submit + gap + widths.draw / 2, y: actions.midY)
-        } else {
-            let height = Self.actionButtonHeight(textScale: textScale)
-            let third = max(0, size.width - gap * 4) / 3
-            point = CGPoint(x: gap + third / 2, y: actions.midY + (gap + height) / 2)
-        }
-        return CGPoint(x: point.x - rack.minX, y: point.y - rack.minY)
-    }
+    /// [뽑기] 칸의 가운데 — 받침대 칸 좌표로(뽑은 타일이 여기서 출발한다).
+    package var drawOrigin: CGPoint { CGPoint(x: draw.midX - rack.minX, y: draw.midY - rack.minY) }
 }
 
 /// 판 변화 한 번 — 옛 자리에서 새 자리로 움직일 타일들.

@@ -1,5 +1,5 @@
 {
-  "__note": "받침대 넘침(내 차례 · 첫 등록 뒤): 받침대 24장이라 3줄이고 판이 그만큼 줄어든다. 3번 자리 기권 · 1번 자리 시간 초과 2번.",
+  "__note": "받침대 넘침(내 차례 · 첫 등록 뒤): 받침대 33장이라 3줄이고 칸은 그대로 · 타일이 준다. 판 묶음 하나는 기본 보기의 아래 밖(▼ 배지). 3번 자리 기권 · 1번 자리 시간 초과 2번.",
   "status": "ok",
   "server_now_ms": 1789621500000,
   "state": {
@@ -20,7 +20,7 @@
     "turn_started_ms": 1789621482000,
     "turn_deadline_ms": 1789621542000,
     "consecutive_passes": 0,
-    "pool_count": 20,
+    "pool_count": 11,
     "table": [
       [
         "B5",
@@ -58,7 +58,7 @@
       ],
       [
         260,
-        130
+        520
       ]
     ],
     "draft": null,
@@ -87,7 +87,16 @@
       "D7",
       "D8",
       "D9",
-      "J"
+      "J",
+      "B1",
+      "B5",
+      "B6",
+      "B7",
+      "B9",
+      "B10",
+      "B13",
+      "C3",
+      "C4"
     ],
     "my_initial_done": true,
     "seats": [
@@ -98,7 +107,7 @@
         "character": "aing",
         "seat_no": 0,
         "state": "playing",
-        "rack_count": 24,
+        "rack_count": 33,
         "initial_done": true,
         "timeout_streak": 0,
         "final_rack": null,

@@ -128,19 +128,29 @@ import Testing
         #expect(GamesRummyReactionPlan.scale(age: 0.22) == 1)
     }
 
-    @Test("말풍선 자리: 위 끝 상대 줄은 아래로 · 받침대는 위로 · 폭 320 에서도 화면 안")
+    @Test("말풍선 자리: 판 화면(가로)은 왼쪽 열 카드 오른쪽 · 화면 안 · 결과 화면(세로)은 위 끝 줄이면 아래로 · 그 밖은 위로")
     func reactionPlacement() {
         let height = GamesRummyReactionPlan.bubbleHeight
+        for size in [CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 932, height: 430)] {
+            let layout = GamesRummyMatchLayout(size: size)
+            for card in [layout.opponentCard(0), layout.opponentCard(1), layout.opponentCard(2), layout.mySeatCard] {
+                #expect(GamesRummyReactionPlan.side(for: card, bounds: size) == .trailing)
+                let center = GamesRummyReactionPlan.center(for: card, side: .trailing, bounds: size)
+                #expect(center.x - height / 2 > card.maxX, "카드를 가린다")
+                #expect(center.y - height / 2 >= 0 && center.y + height / 2 <= size.height, "\(size): 화면 밖 \(center)")
+                #expect(center.x + height / 2 < layout.rightColumn.minX, "오른쪽 열까지 간다")
+            }
+        }
         for width: CGFloat in [320, 393, 430] {
             let bounds = CGSize(width: width, height: 700)
-            let opponent = CGRect(x: 0, y: 48, width: 100, height: 48)
-            #expect(GamesRummyReactionPlan.side(for: opponent) == .below)
-            let center = GamesRummyReactionPlan.center(for: opponent, side: .below, bounds: bounds)
-            #expect(center.x - height / 2 >= 0 && center.y - height / 2 > opponent.maxY)
-            let rack = CGRect(x: 0, y: 500, width: width, height: 118)
-            #expect(GamesRummyReactionPlan.side(for: rack) == .above)
-            let mine = GamesRummyReactionPlan.center(for: rack, side: .above, bounds: bounds)
-            #expect(mine.y + height / 2 < rack.minY && abs(mine.x - width / 2) < 0.5)
+            let top = CGRect(x: 0, y: 48, width: 100, height: 48)
+            #expect(GamesRummyReactionPlan.side(for: top, bounds: bounds) == .below)
+            let center = GamesRummyReactionPlan.center(for: top, side: .below, bounds: bounds)
+            #expect(center.x - height / 2 >= 0 && center.y - height / 2 > top.maxY)
+            let row = CGRect(x: 0, y: 500, width: width, height: 118)
+            #expect(GamesRummyReactionPlan.side(for: row, bounds: bounds) == .above)
+            let mine = GamesRummyReactionPlan.center(for: row, side: .above, bounds: bounds)
+            #expect(mine.y + height / 2 < row.minY && abs(mine.x - width / 2) < 0.5)
             let right = GamesRummyReactionPlan.center(for: CGRect(x: width - 40, y: 200, width: 40, height: 40), side: .above, bounds: bounds)
             #expect(right.x + height / 2 <= width)
         }
@@ -174,7 +184,7 @@ import Testing
 
     @Test("정렬 시차: 읽는 순서대로 25ms 씩 · 모든 타일이 있다")
     func sortStagger() {
-        let editor = RummyTurnEditor(table: [], rack: faces("D3", "A1", "C2", "B9", "A2"), initialDone: true, rackHalfColumns: 22)
+        let editor = RummyTurnEditor(table: [], rack: faces("D3", "A1", "C2", "B9", "A2"), initialDone: true)
         let stagger = GamesRummyRackMotion.sortStagger(editor, mode: .number)
         var sorted = editor
         sorted.sortRack(.number)
@@ -196,21 +206,15 @@ import Testing
         #expect(GamesRummyRackMotion.flight(lastDraw: nil, landedSerial: nil, doneSerial: nil, reduceMotion: false) == nil)
     }
 
-    @Test("뽑기 출발점: [뽑기] 칸 안 · 어느 폭 · 큰 글자에서도 동작 줄 안(받침대 칸 좌표)")
+    @Test("뽑기 출발점: 오른쪽 열 [뽑기] 칸 가운데(받침대 칸 좌표) · 네 크기")
     func drawOrigin() {
-        for width: CGFloat in [320, 393, 430] {
-            let size = CGSize(width: width, height: 759)
-            for scale: CGFloat in [1, 1.6] {
-                let layout = GamesRummyMatchLayout(size: size, actionHeight: GamesRummyMatchLayout.actionHeight(textScale: scale))
-                let origin = layout.drawOrigin(textScale: scale)
-                let screen = CGPoint(x: origin.x + layout.rack.minX, y: origin.y + layout.rack.minY)
-                #expect(layout.actions.contains(screen), "\(width) \(scale): \(screen)")
-                #expect(origin.y > layout.rack.height, "받침대 아래에서 출발해야 한다")
-            }
-            let widths = GamesRummyMatchLayout.actionWidths(total: width)
-            let gap = GamesRummyMatchLayout.actionGap
-            let x = GamesRummyMatchLayout(size: size).drawOrigin(textScale: 1).x
-            #expect(x > gap + widths.submit + gap && x < gap + widths.submit + gap + widths.draw, "[완료] · [되돌리기] 쪽에서 출발한다")
+        for size in [CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 852, height: 393), CGSize(width: 932, height: 430)] {
+            let layout = GamesRummyMatchLayout(size: size)
+            let origin = layout.drawOrigin
+            let screen = CGPoint(x: origin.x + layout.rack.minX, y: origin.y + layout.rack.minY)
+            #expect(layout.draw.contains(screen), "\(size): \(screen)")
+            #expect(screen == CGPoint(x: layout.draw.midX, y: layout.draw.midY))
+            #expect(origin.x > layout.rack.width, "받침대 오른쪽에서 출발해야 한다")
         }
     }
 
@@ -269,9 +273,9 @@ import Testing
     func recentDrop() {
         let model = GamesRummyMatchModel()
         #expect(model.recentDropIDs.isEmpty)
-        let editor = RummyTurnEditor(table: [faces("A1", "A2", "A3")], rack: faces("A4", "B1"), initialDone: true, rackHalfColumns: 22)
+        let editor = RummyTurnEditor(table: [faces("A1", "A2", "A3")], rack: faces("A4", "B1"), initialDone: true)
         let scene = GamesRummyBoardScene.make(match: nil, editor: editor, isMyTurn: true, otherDraft: nil)
-        let layout = GamesRummyMatchLayout(size: CGSize(width: 393, height: 759))
+        let layout = GamesRummyMatchLayout(size: CGSize(width: 734, height: 372))
         let context = GamesRummyTouchContext(layout: layout, scene: scene, editor: editor, isMyTurn: true, editable: true)
         let rackID = editor.rack[0].id
         let slot = editor.rackLayout.slot(of: rackID)!

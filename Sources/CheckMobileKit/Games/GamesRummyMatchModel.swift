@@ -10,7 +10,8 @@ import Observation
 /// `@Observable` 은 값이 같아도 쓰면 알리므로 전부 값이 다를 때만 쓴다.
 ///
 /// 판 변환을 굳힌다: 누르는 동안·끄는 동안 칸 크기 변화를 미루고(`pendingTableSize`) 받침대 줄 수를 묶는다(`frozenRows`). 손 아래 판이 움직이면 안 된다(맥 교훈). 가장자리 자동 밀기만 예외다 — 사람이 민 것이다.
-/// 놓은 뒤에도 같다: 차례 안에서는 줄 수가 줄지 않는다(`rackRows`) — 셋째 줄 마지막 타일을 놓는 순간 칸이 늘어 배율이 바뀌면 방금 놓은 타일째 판이 움직인다.
+/// 놓은 뒤에도 같다: 차례 안에서는 줄 수가 줄지 않는다(`rackRows`) — 셋째 줄 마지막 타일을 놓는 순간 받침대 타일이 통째로 커지면 다음 타일을 잡을 자리가 어긋난다.
+/// 기기가 돌면(판 화면 크기가 바뀌면) 든 것을 거둔다(`screenSizeChanged`) — 쥔 자리가 새 칸에서 다른 것이 된다.
 @MainActor
 @Observable
 package final class GamesRummyMatchModel {
@@ -46,8 +47,10 @@ package final class GamesRummyMatchModel {
     @ObservationIgnored package private(set) var recentDropOrigins: [Int: CGPoint] = [:]
     /// 이번 차례에 판 칸을 정한 받침대 줄 수.
     @ObservationIgnored private var heldRows: (turnKey: String?, rows: Int)?
+    /// 마지막으로 본 판 화면 크기.
+    @ObservationIgnored private var screenSize: CGSize?
 
-    package init(tableSize: CGSize = CGSize(width: 393, height: 469)) {
+    package init(tableSize: CGSize = CGSize(width: 548, height: 248)) {
         let view = GamesRummyViewport(viewport: tableSize)
         viewport = view
         renderScale = view.scale
@@ -95,7 +98,7 @@ package final class GamesRummyMatchModel {
     package func touchEnded(at location: CGPoint, context base: GamesRummyTouchContext) -> GamesRummyDropAction {
         let context = withViewport(base)
         var released = machine.drag
-        released?.finger = location
+        released?.move(to: location, in: base.layout)
         let action = machine.up(location, context)
         switch action {
         case .moveTiles(let ids, _):
@@ -136,7 +139,19 @@ package final class GamesRummyMatchModel {
         tearDown()
     }
 
-    /// 판 칸을 정할 받침대 줄 수. 손이 닿은 동안은 `frozenRows`, 그 밖에는 **차례 안에서 줄지 않는다** — 줄이 줄면 칸이 늘어 기본 배율이 저절로 바뀐다(판 위 타일이 최대 약 40pt 움직인다). 차례가 바뀌면 그때 맞춘다.
+    /// 판 화면 크기가 바뀌었다(기기가 돌았다 · 세이프 영역이 바뀌었다). 쥔 것 · 밀기 · 핀치를 거두고 손을 뗄 때까지 무시한다 — 손 자리가 새 칸에서 다른 것을 가리킨다.
+    /// 처음 재는 것은 변화가 아니다.
+    package func screenSizeChanged(_ size: CGSize) {
+        defer { screenSize = size }
+        guard let screenSize, screenSize != size else { return }
+        if !machine.isIdle {
+            machine.abandon()
+            tearDown()
+        }
+        endPinch()
+    }
+
+    /// 받침대 줄 수. 손이 닿은 동안은 `frozenRows`, 그 밖에는 **차례 안에서 줄지 않는다** — 줄이 줄면 타일이 통째로 커져 다음 타일을 잡을 자리가 어긋난다. 판 칸은 줄 수와 무관하다. 차례가 바뀌면 그때 맞춘다.
     /// 본문이 부른다. 관찰 밖 값이라 다시 그리기를 부르지 않는다.
     package func rackRows(editorRows: Int, turnKey: String?) -> Int {
         if let frozenRows { return frozenRows }
@@ -145,7 +160,7 @@ package final class GamesRummyMatchModel {
         return rows
     }
 
-    /// 손이 판을 쥐고 있다 — 동작 줄을 끈다. 다른 손가락의 [되돌리기]·[777|789] 는 seq 를 안 올려서, 그대로 두면 쥔 묶음 번호가 낡은 채 다른 묶음이 옮겨진다.
+    /// 손이 판을 쥐고 있다 — 동작 버튼을 끈다. 다른 손가락의 [되돌리기]·[777|789] 는 seq 를 안 올려서, 그대로 두면 쥔 묶음 번호가 낡은 채 다른 묶음이 옮겨진다.
     package var locksActions: Bool { frozenRows != nil }
 
     /// 제스처 수명 표시가 꺼졌다. `onEnded` 가 같은 틈에 먼저 돌 수 있어 조금 뒤 같은 손일 때만 거둔다(끝나지 않은 손이 타일을 쥔 채 · 핀치가 열린 채 남지 않게).
@@ -329,8 +344,8 @@ extension GamesRummyMatchModel {
             let local = context.viewport.transform.toScreen(logical)
             return CGPoint(x: local.x + context.layout.table.minX, y: local.y + context.layout.table.minY)
         }
-        /// 손 위 48pt 점이 `pointer` 에 오는 손 자리.
-        func finger(under pointer: CGPoint) -> CGPoint { CGPoint(x: pointer.x, y: pointer.y + GamesRummyGestureRules.fingerLift) }
+        /// 손 위 점이 `pointer` 에 오는 손 자리.
+        func finger(under pointer: CGPoint) -> CGPoint { context.layout.finger(forPointer: pointer) }
         func press(_ start: CGPoint) { touchChanged(start: start, location: start, context: base, holdDelay: 3_600) }
         func travel(_ start: CGPoint, to location: CGPoint) { touchChanged(start: start, location: location, context: base) }
         switch touch {

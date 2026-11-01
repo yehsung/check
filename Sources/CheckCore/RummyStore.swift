@@ -212,8 +212,6 @@ package final class RummyStore {
     @ObservationIgnored package var heartbeatSeconds: TimeInterval = RummyStore.heartbeatDefaultSeconds
     /// 받침대 자리 저장소. **nil 이면 저장하지 않는다**(기본 — 시험이 Preferences 를 더럽히지 않게). 맥 배선이 `.standard` 를 꽂는다.
     @ObservationIgnored package var rackDefaults: UserDefaults?
-    /// 받침대 한 줄의 반 칸 수(배선 값 — `reset` 이 건드리지 않는다). 맥 기본 32(16장) · 폰 22(11장). 편집기를 세울 때 흘린다.
-    @ObservationIgnored package var rackHalfColumns = RummyRackLayout.halfColumnsPerRow
     @ObservationIgnored package internal(set) var heartbeatTask: Task<Void, Never>?
     @ObservationIgnored package internal(set) var heartbeatMatchID: UUID?
     /// 서버가 들고 있다고 믿는 작업 판 배치(`lastSentDraft` 의 짝).

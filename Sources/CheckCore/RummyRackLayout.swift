@@ -2,7 +2,7 @@ import Foundation
 
 // 아잉 큐브 2판 — 내 받침대(랙) 자유 배치 모델(설계서 v2 §2.3). 맥·폰 공용 순수 값.
 //
-// 받침대는 줄 2개(넘치면 3번째 줄부터 더 연다)이고, 한 줄은 **반 칸 단위** `halfColumns`(맥 기본 32 = 타일 16장 · 폰 22 = 11장)다.
+// 받침대는 줄 2개(넘치면 3번째 줄부터 더 연다)이고, 한 줄은 **반 칸 단위** `halfColumnsPerRow`(32 = 타일 16장)다.
 // 타일 한 장은 반 칸 2개를 차지한다(`halfCol ..< halfCol + 2`). 같은 줄에서 두 타일이 반 칸이라도 겹치면 안 되고, 빈칸은 된다.
 // 화면 순서(`readingOrder`)는 줄 → 반 칸 순이다. 편집기의 `rack` 배열은 늘 이 순서다.
 //
@@ -38,7 +38,7 @@ package struct RummyRackEntry: Hashable, Sendable, Codable {
 }
 
 package struct RummyRackLayout: Equatable, Sendable {
-    /// 맥의 한 줄 반 칸 수(타일 16장). 인스턴스 값 `halfColumns` 의 기본이다.
+    /// 한 줄의 반 칸 수(타일 16장).
     package static let halfColumnsPerRow = 32
     /// 늘 보이는 줄 수. 넘치면 줄이 더 열린다.
     package static let baseRows = 2
@@ -47,12 +47,9 @@ package struct RummyRackLayout: Equatable, Sendable {
 
     /// 타일 로컬 id → 자리.
     package private(set) var slots: [Int: RummyRackSlot]
-    /// 이 받침대의 한 줄 반 칸 수(폰 22 — 기기 폭의 일이라 저장 항목엔 없다. 폭 밖 저장 자리는 `nearestFree` 가 다시 앉힌다).
-    package let halfColumns: Int
 
-    package init(halfColumns: Int = RummyRackLayout.halfColumnsPerRow) {
+    package init() {
         slots = [:]
-        self.halfColumns = max(Self.tileSpan, halfColumns)
     }
 
     /// 화면에 그릴 줄 수(최소 2).
@@ -75,7 +72,7 @@ package struct RummyRackLayout: Equatable, Sendable {
     /// `tiles` 장을 `slot` 부터 나란히 놓을 수 있는가(줄 안 · 겹침 없음). `excluding` 은 장애물에서 뺀다(옮기는 타일들).
     package func isFree(_ slot: RummyRackSlot, tiles: Int = 1, excluding: Set<Int> = []) -> Bool {
         let span = tiles * Self.tileSpan
-        guard slot.row >= 0, slot.halfCol >= 0, slot.halfCol + span <= halfColumns else { return false }
+        guard slot.row >= 0, slot.halfCol >= 0, slot.halfCol + span <= Self.halfColumnsPerRow else { return false }
         for (id, other) in slots where other.row == slot.row && !excluding.contains(id) {
             if other.halfCol < slot.halfCol + span && other.halfCol + Self.tileSpan > slot.halfCol { return false }
         }
@@ -86,7 +83,7 @@ package struct RummyRackLayout: Equatable, Sendable {
     /// 기존 줄이 다 막혔으면 새 줄(맨 아래)의 첫 자리. 늘 답이 있다.
     package func nearestFree(to slot: RummyRackSlot, tiles: Int = 1, excluding: Set<Int> = []) -> RummyRackSlot {
         let span = tiles * Self.tileSpan
-        let maxStart = max(0, halfColumns - span)
+        let maxStart = max(0, Self.halfColumnsPerRow - span)
         let wantRow = max(0, slot.row)
         let wantCol = min(max(0, slot.halfCol), maxStart)
         var best: (key: (Int, Int, Int), slot: RummyRackSlot)?
@@ -123,8 +120,8 @@ package struct RummyRackLayout: Equatable, Sendable {
     }
 
     private func firstFree(row: Int, span: Int, excluding: Set<Int>) -> RummyRackSlot? {
-        guard span <= halfColumns else { return nil }
-        for col in 0...(halfColumns - span) {
+        guard span <= Self.halfColumnsPerRow else { return nil }
+        for col in 0...(Self.halfColumnsPerRow - span) {
             let slot = RummyRackSlot(row: row, halfCol: col)
             if isFree(slot, tiles: span / Self.tileSpan, excluding: excluding) { return slot }
         }
@@ -158,7 +155,7 @@ package struct RummyRackLayout: Equatable, Sendable {
         for id in tileIDs { slots[id] = nil }
         let span = tileIDs.count * Self.tileSpan
         let row = max(0, wanted.row)
-        let start0 = min(max(0, wanted.halfCol), max(0, halfColumns - span))
+        let start0 = min(max(0, wanted.halfCol), max(0, Self.halfColumnsPerRow - span))
         let first = RummyRackSlot(row: row, halfCol: start0)
         if isFree(first, tiles: tileIDs.count) {
             set(tileIDs, at: first)
@@ -217,7 +214,7 @@ package struct RummyRackLayout: Equatable, Sendable {
     /// 한 줄 몫(왼쪽부터 · 겹침 없음)을 `row` 에 앉힌다. 줄 끝을 넘으면 넘친 덩어리(한 줄보다 짧고 줄의 첫 덩어리가 아니면 통째로,
     /// 아니면 넘친 타일부터)를 다음 줄 맨 앞에 끼우고 그 줄 타일을 민다(첫 타일과는 반 칸 — 다른 덩어리). 줄마다 한 장 이상 남으니 끝난다.
     private mutating func settle(_ placed: [(id: Int, col: Int)], row: Int) {
-        guard let over = placed.firstIndex(where: { $0.col + Self.tileSpan > halfColumns }) else {
+        guard let over = placed.firstIndex(where: { $0.col + Self.tileSpan > Self.halfColumnsPerRow }) else {
             for item in placed { slots[item.id] = RummyRackSlot(row: row, halfCol: item.col) }
             return
         }
@@ -227,7 +224,7 @@ package struct RummyRackLayout: Equatable, Sendable {
         var tail = over
         while tail + 1 < placed.count, touches(tail + 1) { tail += 1 }
         let chunkSpan = placed[tail].col + Self.tileSpan - placed[head].col
-        let cut = head > 0 && chunkSpan <= halfColumns ? head : max(over, 1)
+        let cut = head > 0 && chunkSpan <= Self.halfColumnsPerRow ? head : max(over, 1)
         for item in placed[..<min(cut, placed.count)] { slots[item.id] = RummyRackSlot(row: row, halfCol: item.col) }
         guard cut < placed.count else { return }
         var flowing: [(id: Int, col: Int)] = []
@@ -251,24 +248,22 @@ package struct RummyRackLayout: Equatable, Sendable {
     }
 
     /// 빈칸 없이 순서대로(줄이 차면 다음 줄). 옛 선형 자리 API(`.rack(index:)`)와 처음 받은 랙이 쓴다.
-    package static func packed(_ tileIDs: [Int], halfColumns: Int = RummyRackLayout.halfColumnsPerRow) -> RummyRackLayout {
-        grouped(tileIDs.map { [$0] }, gap: 0, halfColumns: halfColumns)
+    package static func packed(_ tileIDs: [Int]) -> RummyRackLayout {
+        grouped(tileIDs.map { [$0] }, gap: 0)
     }
 
     /// 단위(조합)마다 이어 놓고 단위 사이 `gap` 반 칸. 단위가 줄 끝에 안 들어가면 통째로 다음 줄(단위가 한 줄보다 길면 쪼갠다).
-    package static func grouped(_ units: [[Int]], gap: Int = 1,
-                                halfColumns: Int = RummyRackLayout.halfColumnsPerRow) -> RummyRackLayout {
-        var layout = RummyRackLayout(halfColumns: halfColumns)
-        let width = layout.halfColumns
+    package static func grouped(_ units: [[Int]], gap: Int = 1) -> RummyRackLayout {
+        var layout = RummyRackLayout()
         var row = 0, col = 0
         for unit in units where !unit.isEmpty {
             let span = unit.count * tileSpan
-            if col > 0, col + span > width, span <= width {
+            if col > 0, col + span > halfColumnsPerRow, span <= halfColumnsPerRow {
                 row += 1
                 col = 0
             }
             for id in unit {
-                if col + tileSpan > width {
+                if col + tileSpan > halfColumnsPerRow {
                     row += 1
                     col = 0
                 }

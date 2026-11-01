@@ -18,8 +18,8 @@ import Foundation
 /// | `games/rummy/match/elsewhere`  | `_games-rummy-match-elsewhere`  | …c002         | 사람    | 이 기기가 손대지 않은 판       |
 /// | `games/rummy/match/full`       | `_games-rummy-match-full`       | …c005         | 사람    | 내 차례 · 판 타일 84장 · 첫 등록 뒤 |
 /// | `games/rummy/match/overview`   | `_games-rummy-match-overview`   | …c005         | 사람    | 빽빽한 판을 [전체 보기]로      |
-/// | `games/rummy/match/many`       | `_games-rummy-match-many`       | …c006         | 사람    | 내 차례 · 받침대 24장(3줄) · 기권 자리 |
-/// | `games/rummy/match/narrow`     | `_games-rummy-match-narrow`     | …c002         | 사람    | 판 화면을 320×548 로 그린다(폭 시험) |
+/// | `games/rummy/match/many`       | `_games-rummy-match-many`       | …c006         | 사람    | 내 차례 · 받침대 33장(3줄) · 아래 밖 묶음 · 기권 자리 |
+/// | `games/rummy/match/narrow`     | `_games-rummy-match-narrow`     | …c002         | 사람    | 판 화면을 667×354 로 그린다(작은 기기) |
 /// | `games/rummy/match/dragging`   | `_games-rummy-match-dragging`   | …c005         | 사람    | 받침대 타일을 묶음 위에 끼우는 중(캐럿) |
 /// | `games/rummy/match/attach`     | `_games-rummy-match-attach`     | …c006         | 사람    | 받침대 타일을 묶음 끝 곁에 붙이는 중(자석) |
 /// | `games/rummy/match/placing`    | `_games-rummy-match-placing`    | …c002         | 사람    | 받침대 덩어리를 빈 펠트로 끄는 중 |
@@ -30,6 +30,9 @@ import Foundation
 /// | `games/rummy/match/reaction-picker` | `_games-rummy-match-reaction-picker` | …c002 | 사람    | 이모티콘 시트를 연다           |
 /// | `games/rummy/match/exit`       | `_games-rummy-match-exit`       | …c002         | 사람    | 기권 확인을 연다               |
 /// | `games/rummy/match/motion`     | `_games-rummy-match-motion`     | …c005         | 사람    | 정렬 · 묶음 이동 · 뽑기를 차례로 튼다(녹화용) |
+/// | `games/rummy/match/rules`      | `_games-rummy-match-rules`      | …c002         | 사람    | 판 위에 규칙 시트를 연다(가로) |
+/// | `games/rummy/match/leave`      | `_games-rummy-match-leave`      | …c002         | 사람    | 판(가로)을 열고 5초 뒤 게임 첫 화면으로(세로로 돌아오나) |
+/// | `games/rummy/match/signout`    | `_games-rummy-match-signout`    | …c002         | 사람    | 판(가로)을 열고 5초 뒤 로그아웃(세로로 돌아오나) |
 /// | `games/rummy/result`           | (없음 — 바깥 층)                 | …c004         | 사람    | 끝난 판 · 판돈 5 · 4인         |
 /// | `games/rummy/result/board`     | (없음 — 바깥 층)                 | …c004         | 사람    | 결과의 [최종 판]               |
 /// | `games/rummy/result/won`       | `_games-rummy-result-won`       | …c004         | 사람    | 내가 1등 · 판돈 10 · 2인        |
@@ -75,6 +78,9 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         case matchReactionPicker = "games/rummy/match/reaction-picker"
         case matchExit = "games/rummy/match/exit"
         case matchMotion = "games/rummy/match/motion"
+        case matchRules = "games/rummy/match/rules"
+        case matchLeave = "games/rummy/match/leave"
+        case matchSignOut = "games/rummy/match/signout"
         case result = "games/rummy/result"
         case resultBoard = "games/rummy/result/board"
         case resultWon = "games/rummy/result/won"
@@ -99,7 +105,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             case .room: return Self.roomID
             case .roomGuest: return Self.guestRoomID
             case .matchMyTurn, .matchEdited, .matchElsewhere, .matchNarrow, .matchPlacing, .matchLifted, .matchHandle,
-                 .matchReaction, .matchReactionPicker, .matchExit:
+                 .matchReaction, .matchReactionPicker, .matchExit, .matchRules, .matchLeave, .matchSignOut:
                 return Self.myTurnID
             case .matchWaiting: return Self.waitingID
             case .matchFull, .matchOverview, .matchDragging, .matchRefused, .matchMotion: return Self.fullID
@@ -114,7 +120,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
             case .lobby, .ranking, .rules, .matchElsewhere, .lobbyEmpty, .lobbyFailed, .lobbyShort, .lobbyUpdate, .lobbyMissing, .lobbyPeople, .lobbyBusy, .lobbySheet, .rankingFailed:
                 return false
             case .room, .roomGuest, .matchMyTurn, .matchWaiting, .matchEdited, .matchFull, .matchOverview, .matchMany, .matchNarrow, .matchDragging, .matchAttach,
-                 .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .matchReaction, .matchReactionPicker, .matchExit, .matchMotion,
+                 .matchPlacing, .matchRefused, .matchLifted, .matchHandle, .matchReaction, .matchReactionPicker, .matchExit, .matchMotion, .matchRules, .matchLeave, .matchSignOut,
                  .result, .resultBoard, .resultWon:
                 return true
             }
@@ -160,13 +166,13 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
     }
 
     /// `match/motion` 장면이 묶음 하나를 옮겨 놓을 빈자리(논리 좌표).
-    package static let motionDemoSpot = RummyPoint(x: 120, y: 450)
+    package static let motionDemoSpot = RummyPoint(x: 120, y: 380)
 
     /// 처음부터 [전체 보기]로 연다.
     package var demoFullView: Bool { scene == .matchOverview }
 
-    /// 판 화면을 이 크기로 그린다(폭 320 기기가 시뮬레이터에 없어 그 칸을 눈으로 보는 자리).
-    package var demoSize: CGSize? { scene == .matchNarrow ? CGSize(width: 320, height: 548) : nil }
+    /// 판 화면을 이 크기로 그린다(가장 작은 가로 칸 — 그 기기를 안 띄워도 눈으로 보는 자리).
+    package var demoSize: CGSize? { scene == .matchNarrow ? CGSize(width: 667, height: 354) : nil }
 
     package enum LobbyTab: String, Hashable, Sendable { case people, ranking }
 
@@ -194,7 +200,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
     @MainActor
     package func prepare(_ store: RummyStore) {
         if scene.engages, let id = focusMatchID { store.markEngaged(id) }
-        if scene == .rules { store.rulesShown = true }
+        if scene == .rules || scene == .matchRules { store.rulesShown = true }
     }
 
     /// `match/edited` 장면: 받침대의 A10 A11 A12 를 판 왼쪽 아래 빈자리에 낸 작업 판을 세운다(편집기가 선 뒤 한 번 · 다시 불러도 멱등).
@@ -205,7 +211,7 @@ package struct MobileDemoRummyRoute: Hashable, Sendable {
         let wanted = ["A10", "A11", "A12"]
         let ids = wanted.compactMap { text in editor.rack.first { $0.face.text == text }?.id }
         guard ids.count == wanted.count else { return }
-        store.moveTiles(ids, to: .newMeldAt(RummyPoint(x: 40, y: 420)))
+        store.moveTiles(ids, to: .newMeldAt(RummyPoint(x: 40, y: 330)))
     }
 }
 #endif

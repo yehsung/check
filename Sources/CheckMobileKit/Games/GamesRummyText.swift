@@ -185,6 +185,7 @@ package enum GamesRummyText {
     package static let react = "반응"
     /// 반응 단추 기호. `face.smiling` 은 다크에서 채운 흰 원으로 보여 옆 기호와 무게가 어긋난다.
     package static let reactionSymbol = "smiley"
+    package static let rotating = "화면을 가로로 돌리고 있어요"
     package static let zoomFull = "전체 보기"
     package static let zoomDefault = "크게 보기"
     package static let myTurnBadge = "내 차례"

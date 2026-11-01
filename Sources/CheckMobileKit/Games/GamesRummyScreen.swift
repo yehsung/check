@@ -5,7 +5,8 @@ import SwiftUI
 #endif
 
 // 폰 아잉 큐브 **화면 하나** — 로비 · 방 · 판 · 결과를 코어 `phase` 로 갈아 끼운다(체스·테트리스와 같은 구조). 각 단계의 그림은 파일 단위로 나뉜다:
-//   `GamesRummyLobby.swift`(로비·순위) · `GamesRummyRoom.swift`(방) · `GamesRummyMatch.swift`(판) · `GamesRummyResult.swift`(결과) · `GamesRummyRules.swift`(규칙 시트).
+//   `GamesRummyLobby.swift`(로비·순위) · `GamesRummyRoom.swift`(방) · `GamesRummyMatch.swift`(판 — 가로) · `GamesRummyResult.swift`(결과) · `GamesRummyRules.swift`(규칙 시트).
+// 판만 가로다. 방향은 이 화면이 정하지 않는다 — `GamesStore.rummyInterfaceOrientation` 이 상태에서 계산한다(`GamesRummyOrientation.swift`).
 //
 // ── 이 파일이 두 겹인 까닭 ──
 // 아래 **판정**(`GamesRummyCard` · `GamesRummyExit` · `GamesRummyUnavailable` · `GamesRummySeating`)은 `#if os(iOS)` 밖이다 — 폰 뷰는 맥 스위트가 한 줄도 못 본다.
@@ -180,6 +181,9 @@ struct GamesRummyScreen: View {
     /// 떠 있는 나가기 확인(판 중 기권 · 방장 방 닫기).
     @State private var exitPrompt: RummyCloseDecision?
     @State private var reactionPicking = false
+    #if DEBUG
+    @State private var demoLeaving = false
+    #endif
 
     private var rummy: RummyStore { store.rummy }
 
@@ -196,8 +200,13 @@ struct GamesRummyScreen: View {
             .sheet(isPresented: rulesBinding) {
                 GamesRummyRulesView()
             }
-            .sheet(isPresented: $reactionPicking) {
+            .sheet(isPresented: reactionSheetBinding) {
                 GamesRummyReactionPicker(rummy: rummy)
+            }
+            .overlay {
+                if reactionPicking, rummy.phase == .playing {
+                    GamesRummyReactionPanel(rummy: rummy, onClose: { reactionPicking = false })
+                }
             }
             .alert(exitPromptCopy?.title ?? "", isPresented: exitPromptBinding, presenting: exitPromptCopy) { copy in
                 Button(copy.confirm, role: .destructive) { confirmExit() }
@@ -259,6 +268,11 @@ struct GamesRummyScreen: View {
         Binding(get: { rummy.rulesShown }, set: { rummy.rulesShown = $0 })
     }
 
+    /// 시트는 세로 화면(결과)에서만. 판 화면은 `GamesRummyReactionPanel` 이다.
+    private var reactionSheetBinding: Binding<Bool> {
+        Binding(get: { reactionPicking && rummy.phase != .playing }, set: { reactionPicking = $0 })
+    }
+
     private var exitPromptBinding: Binding<Bool> {
         Binding(get: { exitPrompt != nil }, set: { if !$0 { exitPrompt = nil } })
     }
@@ -294,6 +308,18 @@ struct GamesRummyScreen: View {
         guard rummy.phase == .playing else { return }
         if demo.scene == .matchReactionPicker { reactionPicking = true }
         if demo.scene == .matchExit { exitPrompt = GamesRummyExit.decision(rummy) }
+        // 방향이 실제로 세로로 돌아오는지 보는 장면(합성 입력 없이 빠져나가는 길을 그대로 밟는다).
+        if demo.scene == .matchLeave || demo.scene == .matchSignOut, !demoLeaving {
+            demoLeaving = true
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(5))
+                if demo.scene == .matchLeave {
+                    store.context.router.popToRoot(.games)
+                } else {
+                    await store.context.session.signOut()
+                }
+            }
+        }
         #endif
     }
 }

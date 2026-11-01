@@ -74,6 +74,8 @@ targets:
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         # D9 푸시 받기 자리 — 원격 알림으로 깨어나는 백그라운드 모드
         UIBackgroundModes:
           - remote-notification

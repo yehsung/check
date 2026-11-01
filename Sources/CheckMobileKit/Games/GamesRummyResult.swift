@@ -4,7 +4,7 @@ import Foundation
 import SwiftUI
 #endif
 
-// 폰 아잉 큐브 결과(설계서 §6, 맥 `RummyResultView` 견본 — 배치는 세로용으로 다시 짰다).
+// 폰 아잉 큐브 결과(설계서 §6, 맥 `RummyResultView` 견본 — 배치는 세로용으로 다시 짰다. [최종 판]만 가로다 — §10.1).
 // 아래 `GamesRummyResultPlan` 은 `#if os(iOS)` 밖이다 — 폰 뷰는 맥 스위트가 못 보므로 등수 순서 · 순수익 · [한 판 더] 재료를 값으로 잰다.
 // 끝난 판의 분배는 **서버 값(`payout`)만** 쓴다. 안내 글자(`GamesRummyText.splitLines`)로 계산하지 않는다.
 
@@ -53,43 +53,48 @@ package enum GamesRummyResultPlan {
 #if os(iOS)
 
 /// 아잉 큐브 결과. [나가기] = `dismissResult` · [한 판 더] = 같은 판돈·공개 여부로 새 탁자 + 지난 판 사람들 부르기.
-/// [최종 판]은 이 화면 안에서 갈아 끼운다 — 자식 화면을 push 하면 `onDisappear` 가 돌아 결과가 접힌다(`rummyScreenDidDisappear`).
+/// [최종 판]은 이 화면 안에서 갈아 끼운다 — 자식 화면을 push 하면 `onDisappear` 가 돌아 결과가 접힌다(`rummyScreenDidDisappear`). 펼친 동안만 가로라 값은 스토어가 쥔다(`isRummyFinalBoardShown`).
 struct GamesRummyResultView: View {
     let store: GamesStore
     let inviteQueue: RummyInviteQueue
     var onReaction: (() -> Void)? = nil
 
-    @State private var showsBoard = false
     @Environment(\.dynamicTypeSize) private var typeSize
 
     private var rummy: RummyStore { store.rummy }
+    private var showsBoard: Bool { store.isRummyFinalBoardShown }
 
     var body: some View {
-        if let match = rummy.match {
-            VStack(spacing: 0) {
+        Group {
+            if let match = rummy.match {
                 if showsBoard {
-                    GamesRummyFinalBoard(match: match)
-                        .padding(.horizontal, MobileTheme.sideMargin)
-                        .padding(.vertical, MobileTheme.space2)
+                    GamesRummyFinalBoard(match: match, onRanks: { store.setRummyFinalBoardShown(false) },
+                                         onLobby: { rummy.dismissResult() })
                 } else {
-                    ScrollView {
-                        VStack(spacing: MobileTheme.space2) {
-                            headline(match)
-                            ForEach(GamesRummyResultPlan.rows(match)) { seat in
-                                GamesRummyResultRow(seat: seat, stake: match.stake, isMe: seat.seatNo == match.mySeatNo)
-                                    .anchorPreference(key: GamesRummySeatAnchorKey.self, value: .bounds) { anchor in
-                                        seat.seatNo.map { [$0: anchor] } ?? [:]
-                                    }
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            VStack(spacing: MobileTheme.space2) {
+                                headline(match)
+                                ForEach(GamesRummyResultPlan.rows(match)) { seat in
+                                    GamesRummyResultRow(seat: seat, stake: match.stake, isMe: seat.seatNo == match.mySeatNo)
+                                        .anchorPreference(key: GamesRummySeatAnchorKey.self, value: .bounds) { anchor in
+                                            seat.seatNo.map { [$0: anchor] } ?? [:]
+                                        }
+                                }
                             }
+                            .padding(.horizontal, MobileTheme.sideMargin)
+                            .padding(.vertical, MobileTheme.space2)
                         }
-                        .padding(.horizontal, MobileTheme.sideMargin)
-                        .padding(.vertical, MobileTheme.space2)
+                        actions(match)
                     }
                 }
-                actions(match)
             }
-            .onAppear(perform: applyDemo)
         }
+        .onAppear(perform: applyDemo)
+        // [최종 판]은 가로 전체를 쓴다. 등수 화면은 그대로다.
+        .toolbar(showsBoard && TabBarPolicy.hidesTabBar(on: .rummyMatch) ? .hidden : .automatic, for: .tabBar)
+        .toolbar(showsBoard ? .hidden : .automatic, for: .navigationBar)
+        .navigationBarBackButtonHidden(showsBoard)
     }
 
     // MARK: 머리 카드 — 내 등수 · 내 루비
@@ -172,10 +177,10 @@ struct GamesRummyResultView: View {
             }
             .disabled(!GamesRummyResultPlan.canPlayAgain(isWorking: rummy.isWorking, blockedBy: block))
             HStack(spacing: MobileTheme.space1) {
-                AingButton(showsBoard ? GamesRummyText.ranks : GamesRummyText.finalBoard,
-                           systemImage: typeSize.isAccessibilitySize ? nil : (showsBoard ? "list.number" : "square.grid.3x2"),
+                AingButton(GamesRummyText.finalBoard,
+                           systemImage: typeSize.isAccessibilitySize ? nil : "square.grid.3x2",
                            kind: .gray, size: .md, fillsWidth: true) {
-                    showsBoard.toggle()
+                    store.setRummyFinalBoardShown(true)
                 }
                 AingButton(GamesRummyText.toLobby, kind: .gray, size: .md, fillsWidth: true) {
                     rummy.dismissResult()
@@ -200,7 +205,7 @@ struct GamesRummyResultView: View {
     /// 데모 스크린샷 전용: `games/rummy/result/board` 면 최종 판을 펴고 연다. Release 에서는 한 줄도 돌지 않는다.
     private func applyDemo() {
         #if DEBUG
-        if store.demoRummyRoute?.scene == .resultBoard { showsBoard = true }
+        if store.demoRummyRoute?.scene == .resultBoard { store.setRummyFinalBoardShown(true) }
         #endif
     }
 }
@@ -337,9 +342,12 @@ private struct GamesRummyResultRow: View {
 
 // MARK: - 최종 판
 
-/// 끝난 판 — 판 화면과 같은 칸을 읽기 전용으로 쓴다(보기 값 · 밀기 · 핀치 · [전체 보기] · 화면 밖 배지가 같다). 손은 판을 밀고 키울 뿐 타일을 집지 않는다.
+/// 끝난 판(가로) — 판 화면과 같은 칸을 읽기 전용으로 쓴다(보기 값 · 밀기 · 핀치 · [전체 보기] · 화면 밖 배지가 같다). 손은 판을 밀고 키울 뿐 타일을 집지 않는다.
+/// 왼쪽은 판 전부, 오른쪽 열은 판 화면과 같은 폭이다.
 private struct GamesRummyFinalBoard: View {
     let match: RummyMatchState
+    let onRanks: () -> Void
+    let onLobby: () -> Void
 
     @State private var model = GamesRummyMatchModel()
     /// 앞 사건의 끈 거리. `@GestureState` 라 제스처가 **취소돼도** 비워진다 — `@State` 는 `onEnded` 가 안 오면(시트 · 앱 내림) 낡은 값이 남아 다음 밀기 첫 사건에 판이 반대로 튀었다.
@@ -348,8 +356,23 @@ private struct GamesRummyFinalBoard: View {
     @GestureState private var pinching = false
 
     var body: some View {
+        HStack(spacing: 0) {
+            board
+            VStack(spacing: GamesRummyMatchLayout.actionGap) {
+                GamesRummyZoomButton(model: model)
+                Spacer(minLength: 0)
+                AingButton(GamesRummyText.ranks, kind: .gray, size: .md, fillsWidth: true, action: onRanks)
+                AingButton(GamesRummyText.toLobby, kind: .gray, size: .md, fillsWidth: true, action: onLobby)
+            }
+            .padding(GamesRummyMatchLayout.columnPadding)
+            .frame(width: GamesRummyMatchLayout.rightColumnWidth)
+            .dynamicTypeSize(...DynamicTypeSize.xLarge)
+        }
+    }
+
+    private var board: some View {
         let scene = GamesRummyBoardScene.make(match: match, editor: nil, isMyTurn: false, otherDraft: nil)
-        GeometryReader { proxy in
+        return GeometryReader { proxy in
             let size = proxy.size
             ZStack {
                 GamesRummyTablePane(model: model, scene: scene, size: size, editable: false)
@@ -371,7 +394,7 @@ private struct GamesRummyFinalBoard: View {
                             .onEnded { _ in model.pinchEnded(touching: false) }
                     )
                     .accessibilityHidden(true)
-                GamesRummyTableControls(model: model, scene: scene, size: size, badgeLift: 8)
+                GamesRummyTableControls(model: model, scene: scene, size: size)
             }
             .frame(width: size.width, height: size.height)
             .onAppear { model.tableSizeChanged(size) }

@@ -106,6 +106,8 @@ package final class GamesStore {
     package private(set) var isTetrisScreenVisible = false
     /// 아잉 큐브 화면이 지금 떠 있다(위 셋과 같은 뜻 — 코어 `setWindowVisible` 을 폰 화면 수명으로 옮긴 값).
     package private(set) var isRummyScreenVisible = false
+    /// 결과에서 [최종 판]을 펴 둔 판. 판 id 를 쥐는 까닭: 다음 판의 결과가 이 표시를 물려받아 저절로 가로가 되면 안 된다.
+    private var rummyFinalBoardMatchID: UUID?
     /// 오목 · 체스 · 테트리스 · 아잉 큐브 화면(로비 · 대국 · 관전) 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)와 확성기 배너가 이때는 스스로 뜨지 않는다
     /// (`MeStore.presentCakeGiftIfDue` · `MobileAppModel.isMegaphoneBannerDeferred` — 수 시계 · 15초 침묵이 걸린 판을 덮지 않게).
     ///
@@ -119,6 +121,25 @@ package final class GamesStore {
         if rummy.defersMegaphoneBanner { return true }
         return isRummyScreenVisible && rummy.phase != .playing
     }
+    /// 지금 판 결과에서 [최종 판]을 보는 중인가.
+    package var isRummyFinalBoardShown: Bool {
+        guard let id = rummyFinalBoardMatchID else { return false }
+        let rummy = context.rummy
+        return rummy.phase == .finished && rummy.match?.id == id
+    }
+
+    package func setRummyFinalBoardShown(_ shown: Bool) {
+        rummyFinalBoardMatchID = shown ? context.rummy.match?.id : nil
+    }
+
+    /// 화면 방향 — 앱에서 단 하나의 답(`GamesRummyOrientation.swift` 머리말). 저장하지 않고 지금 상태에서 계산한다. 이 기기가 큐브를 못 하는 안내가 서 있으면 판을 그리지 않으니 세로다.
+    package var rummyInterfaceOrientation: GamesRummyInterfaceOrientation {
+        let rummy = context.rummy
+        return GamesRummyOrientationRule.orientation(phase: rummy.phase,
+                                                     isScreenVisible: isRummyScreenVisible && rummy.availability == .available,
+                                                     finalBoardShown: isRummyFinalBoardShown)
+    }
+
     /// 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground).
     package private(set) var isAppActive = false
     /// 오목 화면을 열 때 보여 줄 신청·판 id(딥링크 `gomoku/invite/<id>` · `gomoku/match/<id>`). 화면이 한 번 꺼내 쓴다.
@@ -318,6 +339,7 @@ package final class GamesStore {
         isChessScreenVisible = false
         isTetrisScreenVisible = false
         isRummyScreenVisible = false
+        rummyFinalBoardMatchID = nil
         pendingGomokuFocusID = nil
         pendingDemoChessScreen = false
         pendingDemoTetrisScreen = false
@@ -824,6 +846,7 @@ package final class GamesStore {
     package func rummyScreenDidDisappear() {
         guard isRummyScreenVisible else { return }
         isRummyScreenVisible = false
+        rummyFinalBoardMatchID = nil
         let rummy = context.rummy
         rummy.setWindowVisible(false)
         if rummy.phase == .finished { rummy.dismissResult() }

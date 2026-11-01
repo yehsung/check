@@ -9,17 +9,17 @@ import Testing
 // 궤적은 실제 화면과 같은 재료(`GamesRummyTouchContext` · `GamesRummyMatchModel`)로 밟고, 결과는 진짜 편집기(`RummyTurnEditor`)에 놓아 본다.
 @MainActor
 @Suite struct GamesRummyMatchInputTests {
-    static let size = CGSize(width: 393, height: 759)
+    /// iPhone 15 가로 세이프 영역 안.
+    static let size = CGSize(width: 734, height: 372)
 
     static func faces(_ texts: String...) -> [RummyFace] { texts.compactMap(RummyFace.init(text:)) }
 
-    /// 판 두 묶음(A1~A3 왼쪽 · B4~B7 오른쪽 화면 밖) + 받침대 A4 · C1 C2 C3 · D9.
-    static func editor(initialDone: Bool = true, farMeldX: Int = 800) -> RummyTurnEditor {
+    /// 판 두 묶음(A1~A3 왼쪽 위 · B4~B7 오른쪽 — `farMeldY` 를 키우면 기본 보기의 세로 밖) + 받침대 A4 · C1 C2 C3 · D9.
+    static func editor(initialDone: Bool = true, farMeldX: Int = 800, farMeldY: Int = 50) -> RummyTurnEditor {
         RummyTurnEditor(table: [faces("A1", "A2", "A3"), faces("B4", "B5", "B6", "B7")],
                         rack: faces("A4", "C1", "C2", "C3", "D9"),
                         initialDone: initialDone,
-                        tableLayout: [RummyPoint(x: 100, y: 50), RummyPoint(x: farMeldX, y: 50)],
-                        rackHalfColumns: GamesRummyRackGeometry.halfColumns)
+                        tableLayout: [RummyPoint(x: 100, y: 50), RummyPoint(x: farMeldX, y: farMeldY)])
     }
 
     static func context(_ editor: RummyTurnEditor? = GamesRummyMatchInputTests.editor(), isMyTurn: Bool = true,
@@ -48,8 +48,8 @@ import Testing
         return CGPoint(x: local.x + context.layout.table.minX, y: local.y + context.layout.table.minY)
     }
 
-    /// 손 위 48pt 점이 `pointer` 에 오는 손 자리.
-    static func finger(under pointer: CGPoint) -> CGPoint { CGPoint(x: pointer.x, y: pointer.y + 48) }
+    /// 손 위 점이 `pointer` 에 오는 손 자리(판 위에서는 48pt).
+    static func finger(under pointer: CGPoint) -> CGPoint { GamesRummyMatchLayout(size: size).finger(forPointer: pointer) }
 
     /// 궤적 한 번: 누르고 → 목적지로 가서 → 뗀다.
     static func trace(_ start: CGPoint, to end: CGPoint, _ context: GamesRummyTouchContext, hold: Bool = false) -> GamesRummyDropAction {
@@ -154,19 +154,20 @@ import Testing
 
     // MARK: - 판 → 판 · 판 → 받침대
 
-    @Test("판 → 판: 밀어 둔 판에서 타일을 다른 묶음으로 옮긴다 · 좌표가 밀린 만큼 맞는다")
+    @Test("판 → 판: 세로로 밀어 둔 판에서 타일을 다른 묶음으로 옮긴다 · 좌표가 밀린 만큼 맞는다")
     func boardToBoardOnScrolledTable() {
-        var editor = Self.editor(farMeldX: 650)
+        var editor = Self.editor(farMeldX: 650, farMeldY: 480)
         var view = GamesRummyViewport(viewport: GamesRummyMatchLayout(size: Self.size).table.size)
-        view.pan(by: CGSize(width: -130, height: 0))
+        view.pan(by: CGSize(width: 0, height: -40))
         let context = Self.context(editor, viewport: view)
-        // 밀어 두지 않았다면 오른쪽 묶음(x 650)은 화면 밖이다.
-        #expect(Self.screen(CGPoint(x: 660, y: 78), Self.context(editor)).x > 393)
+        // 밀어 두지 않았다면 아래 묶음(y 480)은 칸 밖이다.
+        let table = context.layout.table
+        #expect(Self.screen(CGPoint(x: 660, y: 508), Self.context(editor)).y > table.maxY)
         let a3 = Self.id("A3", in: editor)
         let start = Self.screen(CGPoint(x: 100 + 80 + 20, y: 78), context)
         #expect(context.hit(start) == .boardTile(a3))
-        let pointer = Self.screen(CGPoint(x: 660, y: 78), context)
-        #expect(pointer.x > 0 && pointer.x < 393, "기준선: 목적지가 화면 안이어야 시험이 뜻이 있다")
+        let pointer = Self.screen(CGPoint(x: 660, y: 508), context)
+        #expect(pointer.y > table.minY && pointer.y < table.maxY, "기준선: 목적지가 칸 안이어야 시험이 뜻이 있다")
         let action = Self.trace(start, to: Self.finger(under: pointer), context)
         #expect(action == .moveTiles([a3], .meld(1, index: 0)))
         let applied = Self.apply(action, to: &editor)
@@ -174,22 +175,21 @@ import Testing
         #expect(editor.melds[0].count == 2 && editor.melds[1].contains { $0.id == a3 })
     }
 
-    @Test("판 → 판: 화면 밖 묶음까지 가장자리 자동 밀기로 간다 — 민 뒤 놓을 자리가 진짜 그 묶음이다")
+    @Test("판 → 판: 세로 밖 묶음까지 가장자리 자동 밀기로 간다 — 민 뒤 놓을 자리가 진짜 그 묶음이다")
     func boardToFarMeldWithAutoPan() {
-        var editor = Self.editor()
+        var editor = Self.editor(farMeldY: 560)
         let context = Self.context(editor)
         let model = GamesRummyMatchModel(tableSize: context.layout.table.size)
         let a3 = Self.id("A3", in: editor)
         let start = Self.screen(CGPoint(x: 100 + 80 + 20, y: 78), context)
-        let y = Self.screen(CGPoint(x: 0, y: 78), context).y
         model.touchChanged(start: start, location: start, context: context)
-        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: 385, y: y)), context: context)
+        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: context.layout.table.midX, y: context.layout.table.maxY - 10)), context: context)
         // 끝까지 민다.
         for _ in 0..<200 { model.edgeTick(deltaTime: 0.016) }
-        #expect(abs(model.viewport.visibleLogical.maxX - 1000) < 0.01, "자동 밀기가 끝까지 안 갔다")
+        #expect(abs(model.viewport.visibleLogical.maxY - 640) < 0.01, "자동 밀기가 끝까지 안 갔다")
         // 그 자리에서 묶음 위로 손을 옮겨 놓는다.
         let view = context.with(viewport: model.viewport)
-        let over = Self.finger(under: Self.screen(CGPoint(x: 800 + 160 - 6, y: 78), view))
+        let over = Self.finger(under: Self.screen(CGPoint(x: 800 + 160 - 6, y: 588), view))
         model.touchChanged(start: start, location: over, context: context)
         let action = model.touchEnded(at: over, context: context)
         #expect(action == .moveTiles([a3], .meld(1, index: 4)))
@@ -297,10 +297,10 @@ import Testing
 
     @Test("좌표 왕복: 밀고 · 키우고 · 전체 보기 어디서나 그린 타일 자리를 누르면 그 타일이다")
     func hitMatchesDrawnFrames() {
-        let editor = Self.editor()
+        let editor = Self.editor(farMeldY: 300)
         let base = GamesRummyMatchLayout(size: Self.size).table.size
         var panned = GamesRummyViewport(viewport: base)
-        panned.pan(by: CGSize(width: -420, height: 0))
+        panned.pan(by: CGSize(width: 0, height: -20))
         var zoomed = GamesRummyViewport(viewport: base)
         zoomed.zoom(to: 0.95, anchor: CGPoint(x: 200, y: 100))
         zoomed.pan(by: CGSize(width: -40, height: 30))
@@ -425,22 +425,22 @@ import Testing
     func edgeAutoPan() {
         let context = Self.context()
         let model = GamesRummyMatchModel(tableSize: context.layout.table.size)
+        let table = context.layout.table
         let start = Self.rackPoint("D9", context)
         model.touchChanged(start: start, location: start, context: context)
-        let pointer = CGPoint(x: 380, y: context.layout.table.midY)
-        model.touchChanged(start: start, location: Self.finger(under: pointer), context: context)
+        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: table.midX, y: table.maxY - 10)), context: context)
         let first = model.target
-        let x = model.viewport.origin.x
+        let y = model.viewport.origin.y
         model.edgeTick(deltaTime: 0.1)
-        #expect(abs(model.viewport.origin.x - (x + 40)) < 0.001)
+        #expect(abs(model.viewport.origin.y - (y + 40)) < 0.001)
         #expect(model.target != first, "밀렸는데 놓을 자리가 그대로다")
-        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: 200, y: context.layout.table.midY)), context: context)
-        let still = model.viewport.origin.x
+        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: table.midX, y: table.midY)), context: context)
+        let still = model.viewport.origin.y
         model.edgeTick(deltaTime: 0.1)
-        #expect(model.viewport.origin.x == still, "가운데인데 밀렸다")
-        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: 380, y: context.layout.rack.midY)), context: context)
+        #expect(model.viewport.origin.y == still, "가운데인데 밀렸다")
+        model.touchChanged(start: start, location: Self.finger(under: CGPoint(x: table.midX, y: context.layout.rack.midY)), context: context)
         model.edgeTick(deltaTime: 0.1)
-        #expect(model.viewport.origin.x == still, "받침대 위인데 판이 밀렸다")
+        #expect(model.viewport.origin.y == still, "받침대 위인데 판이 밀렸다")
         model.cancelTouch()
     }
 
@@ -452,14 +452,14 @@ import Testing
         let start = Self.rackPoint("C2", context)
         model.touchChanged(start: start, location: start, context: context)
         #expect(model.frozenRows == 2)
-        model.tableSizeChanged(CGSize(width: 393, height: 422))
+        model.tableSizeChanged(CGSize(width: 500, height: 240))
         #expect(model.viewport.scale == scale, "누르는 동안 판이 움직였다")
         model.touchChanged(start: start, location: CGPoint(x: start.x, y: start.y - 100), context: context)
-        model.tableSizeChanged(CGSize(width: 393, height: 400))
+        model.tableSizeChanged(CGSize(width: 480, height: 230))
         #expect(model.viewport.scale == scale, "끄는 동안 판이 움직였다")
         model.touchEnded(at: CGPoint(x: start.x, y: start.y - 100), context: context)
         #expect(model.frozenRows == nil)
-        #expect(abs(model.viewport.scale - 400.0 / 640.0) < 0.001, "뗀 뒤에 안 맞췄다")
+        #expect(abs(model.viewport.scale - 0.48) < 0.001, "뗀 뒤에 안 맞췄다")
         #expect(model.renderScale == model.viewport.scale)
         // 빈 펠트 밀기는 굳히지 않는다.
         let felt = Self.screen(CGPoint(x: 300, y: 300), context.with(viewport: model.viewport))
@@ -571,10 +571,10 @@ import Testing
             _ = model.renderScale
             _ = model.drag
         }, during: {
-            model.touchChanged(start: felt, location: CGPoint(x: felt.x - 40, y: felt.y), context: context)
+            model.touchChanged(start: felt, location: CGPoint(x: felt.x, y: felt.y - 40), context: context)
         })
         #expect(!fired)
-        #expect(model.viewport.origin.x > 0, "밀리지 않았다")
+        #expect(model.viewport.origin.y > 0, "밀리지 않았다")
         model.touchEnded(at: felt, context: context)
     }
 
@@ -634,50 +634,22 @@ import Testing
 
     // MARK: - 칸 · 글자
 
-    @Test("동작 줄: 세 폭에서 버튼 넷 + 틈 + 여백이 칸을 안 넘고 44pt 아래로 안 작아진다 · [완료]가 가장 크다 · 큰 글자는 두 줄 · 그래도 판이 남는다")
-    func actionRow() {
-        for width: CGFloat in [320, 393, 430] {
-            let w = GamesRummyMatchLayout.actionWidths(total: width)
-            #expect(abs(w.submit + w.draw + w.undo + w.sort + GamesRummyMatchLayout.actionGap * 5 - width) < 0.001)
-            #expect(w.submit > w.sort && w.sort > w.undo && w.undo > w.draw)
-            #expect(w.draw >= 44, "\(width): [뽑기] 터치 폭 \(w.draw)")
-        }
-        #expect(GamesRummyMatchLayout.actionRowCount(textScale: 1) == 1)
-        #expect(GamesRummyMatchLayout.actionRowCount(textScale: 1.3) == 1)
-        #expect(GamesRummyMatchLayout.actionRowCount(textScale: 1.31) == 2)
-        #expect(GamesRummyMatchLayout.actionHeight(textScale: 1) == 52)
-        for scale: CGFloat in [1, 1.2, 1.31, 1.8, 2.5, 3.5] {
-            let height = GamesRummyMatchLayout.actionHeight(textScale: scale)
-            let button = GamesRummyMatchLayout.actionButtonHeight(textScale: scale)
-            let rows = CGFloat(GamesRummyMatchLayout.actionRowCount(textScale: scale))
-            #expect(button >= 44 && button * rows + GamesRummyMatchLayout.actionGap * (rows - 1) <= height, "\(scale)")
-            for size in [CGSize(width: 320, height: 548), CGSize(width: 393, height: 759), CGSize(width: 430, height: 830)] {
-                for rackRows in [2, 3] {
-                    let layout = GamesRummyMatchLayout(size: size, rackRows: rackRows, actionHeight: height)
-                    #expect(layout.table.height > 100, "\(size) 글자 \(scale) 줄 \(rackRows): 판 \(layout.table.height)")
-                    #expect(layout.actions.maxY <= size.height && layout.rack.maxY <= layout.actions.minY)
-                }
-            }
-        }
-    }
-
-    @Test("받침대: 끄는 동안 미리보기가 새 줄을 열어도 칸 안에 담긴다(2줄 칸에 3줄 · 3줄 칸에 4줄)")
+    @Test("받침대: 끄는 동안 미리보기가 새 줄을 열어도 칸 안에 담긴다(2줄 칸에 3 · 4줄 — 타일이 맥 산식 2/줄로 준다)")
     func previewRowsFitTheCell() {
-        for (height, rows) in [(CGFloat(118), 3), (CGFloat(165), 4)] {
-            let rack = GamesRummyRackGeometry(size: CGSize(width: 393, height: height), rowCount: rows)
+        let height = GamesRummyMatchLayout(size: Self.size).rack.height
+        let width = GamesRummyMatchLayout(size: Self.size).rack.width
+        let two = GamesRummyRackGeometry(size: CGSize(width: width, height: height))
+        for rows in [3, 4, 6] {
+            let rack = GamesRummyRackGeometry(size: CGSize(width: width, height: height), rowCount: rows)
             let frame = rack.frame(RummyRackSlot(row: rows - 1, halfCol: 0))
             #expect(frame.maxY <= height, "\(rows)줄이 칸 밖 \(frame)")
-            #expect(rack.tileSize.height < 47)
+            #expect(rack.tileSize.width <= two.tileSize.width * 2 / CGFloat(rows) + 0.001, "\(rows)줄 타일이 안 줄었다")
             // 줄이 안 겹친다.
             #expect(rack.rowTop(1) >= rack.rowTop(0) + rack.tileSize.height)
         }
-        #expect(GamesRummyRackGeometry(size: CGSize(width: 393, height: 118), rowCount: 2).tileSize == CGSize(width: 34, height: 47))
-        #expect(GamesRummyRackGeometry(size: CGSize(width: 393, height: 165), rowCount: 3).tileSize == CGSize(width: 34, height: 47))
-        // 좁은 기기: 타일이 작아도 줄 틈은 벌어지지 않고 칸 가운데에 모인다. 기준 폭은 위아래 여백 8 그대로다.
-        let narrow = GamesRummyRackGeometry(size: CGSize(width: 320, height: 118))
-        #expect(narrow.rowTop(1) - narrow.rowTop(0) - narrow.tileSize.height == GamesRummyRackGeometry.rowGap)
-        #expect(abs(narrow.rowTop(0) - (118 - narrow.frame(RummyRackSlot(row: 1, halfCol: 0)).maxY)) < 0.001)
-        #expect(GamesRummyRackGeometry(size: CGSize(width: 393, height: 118)).rowTop(0) == 8)
+        // 2줄은 위아래 여백이 같고 줄 틈이 설계값이다.
+        #expect(abs(two.rowTop(1) - two.rowTop(0) - two.tileSize.height - GamesRummyRackGeometry.rowGap) < 0.001)
+        #expect(abs(two.rowTop(0) - (height - two.frame(RummyRackSlot(row: 1, halfCol: 0)).maxY)) < 0.001)
     }
 
     @Test("상태 줄 서열: 서버 문구 > 내 차례 판정 > 기권 > 남의 차례 · 첫 내림 N/30 · 무효 이유 · 완료 가능")
@@ -705,7 +677,7 @@ import Testing
         #expect(GamesRummyStatusLine.make(notice: nil, isMyTurn: false, editor: done, turnName: "구름", mySeatState: .playing).text == GamesRummyText.turnOf("구름"))
     }
 
-    @Test("자리: 상대 줄은 내 다음 차례부터 · 기권·빠짐·시간 초과·등록 전 표시 · 남의 패는 장수만")
+    @Test("자리: 상대 카드는 내 다음 차례부터 · 기권·빠짐·시간 초과·등록 전 표시 · 남의 패는 장수만")
     func seats() throws {
         func seat(_ number: Int, _ state: RummySeatState, streak: Int = 0, initial: Bool = true) -> RummyMatchSeat {
             var seat = try! JSONDecoder().decode(RummyMatchSeat.self, from: Data("{\"userId\":\"\(UUID().uuidString)\"}".utf8))

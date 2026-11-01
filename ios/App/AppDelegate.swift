@@ -21,6 +21,11 @@ final class AingCheckAppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
+    /// 앱은 세로다. 아잉 큐브 판 화면만 가로로 돈다 — 답은 패키지 한 곳에서 나온다(Info.plist 는 '될 수 있는 방향의 합'일 뿐이다).
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        model.supportedInterfaceOrientations
+    }
+
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
         model.didRegisterForRemoteNotifications(deviceToken: deviceToken)
     }

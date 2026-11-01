@@ -146,8 +146,6 @@ public final class MobileAppModel {
         // 바로 위 오목·체스·테트리스와 같은 못이고, 같은 까닭으로 지우지 마라(뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다).
         // 못: `Tests/CheckMobileKitTests/GamesRummyWiringTests.swift`(켠 효과를 요청 건수로 잰다).
         rummy.rankingEnabled = true
-        // 폰 받침대는 한 줄 11장(반 칸 22). 저장 항목은 기기별 로컬이라 맥과 부딪히지 않는다(폭 밖 자리는 다시 앉는다).
-        rummy.rackHalfColumns = GamesRummyRackGeometry.halfColumns
         // 실시간 'rummy' 초인종을 받을 자리(위 테트리스 칸과 같은 꼴 · 약한 참조).
         realtime.rummy = rummy
         let links = MobileStoreLinks()

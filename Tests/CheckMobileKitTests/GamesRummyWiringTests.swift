@@ -162,13 +162,12 @@ enum RummyWireJSON {
 
     // MARK: - 앱 모델 배선 값
 
-    @Test("주 스위치: 화면이 뜨면 순위가 나간다(요청 건수) · 스위치를 끈 기준선은 0건 · 받침대는 폰 폭")
-    func rankingSwitchAndRackWidth() async {
+    @Test("주 스위치: 화면이 뜨면 순위가 나간다(요청 건수) · 스위치를 끈 기준선은 0건")
+    func rankingSwitch() async {
         let harness = RummyWireHarness(label: "rummy-ranking")
         harness.serveLobby()
         await harness.signIn()
         #expect(harness.rummy.rankingEnabled)
-        #expect(harness.rummy.rackHalfColumns == 22)
         harness.games.rummyScreenDidAppear()
         #expect(await waits.wait { harness.count("rummy_ranking") == 1 }, "순위 탭이 영영 로딩 문구다 — rankingEnabled 배선이 빠졌다")
         harness.games.rummyScreenDidDisappear()
@@ -182,9 +181,6 @@ enum RummyWireJSON {
         #expect(off.count("rummy_ranking") == 0)
         off.games.rummyScreenDidDisappear()
 
-        // 폰 받침대 폭이 편집기까지 흐른다(맥 기본 32 면 한 줄 16장이 화면 밖으로 나간다).
-        harness.apply()
-        #expect(harness.rummy.editor?.rackLayout.halfColumns == 22)
         await harness.tearDown()
         await off.tearDown()
     }
@@ -583,7 +579,7 @@ enum RummyWireJSON {
         await harness.barrier()
         #expect(harness.rummy.match == nil && harness.rummy.lobby == nil && harness.rummy.editor == nil)
         #expect(harness.games.badgeCount == 0)
-        #expect(harness.rummy.rankingEnabled && harness.rummy.rackHalfColumns == 22, "reset 이 배선 값을 건드렸다")
+        #expect(harness.rummy.rankingEnabled, "reset 이 배선 값을 건드렸다")
         await harness.tearDown()
     }
 

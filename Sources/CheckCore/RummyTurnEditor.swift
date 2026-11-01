@@ -99,11 +99,9 @@ package struct RummyTurnEditor: Equatable, Sendable {
     ///   - tableLayout: v2 확정 판 배치(`state.table_layout`). 빈 자리는 결정적 자동 배치로 채운다.
     ///   - rackEntries: v2 앞 차례(또는 저장된) 받침대 자리(면 + 자리). 주면 `rackOrder` 보다 앞선다 — 면으로 짝지어 그 자리에 놓고,
     ///     짝 없는 면(새로 받은 타일)은 받은 순서로 마지막 빈자리에.
-    ///   - rackHalfColumns: 받침대 한 줄의 반 칸 수(맥 기본 32 · 폰 22). 저장된 자리가 이 폭 밖이면 가장 가까운 빈자리로 다시 앉는다.
     package init(
         table: [[RummyFace]], rack: [RummyFace], initialDone: Bool, rackOrder: [RummyFace]? = nil,
-        tableLayout: RummyLayout? = nil, rackEntries: [RummyRackEntry]? = nil,
-        rackHalfColumns: Int = RummyRackLayout.halfColumnsPerRow
+        tableLayout: RummyLayout? = nil, rackEntries: [RummyRackEntry]? = nil
     ) {
         var nextID = 0
         var builtMelds: [[RummyTile]] = []
@@ -118,9 +116,9 @@ package struct RummyTurnEditor: Equatable, Sendable {
             builtMelds.append(tiles)
         }
         // 받침대: 면 → 자리를 먼저 정하고, 화면 순서로 id 를 붙인다(로컬 id 규약: 랙은 화면 순).
-        let placed = Self.arrangeSlots(rack, order: rackOrder, entries: rackEntries, halfColumns: rackHalfColumns)
+        let placed = Self.arrangeSlots(rack, order: rackOrder, entries: rackEntries)
         var builtRack: [RummyTile] = []
-        var layout = RummyRackLayout(halfColumns: rackHalfColumns)
+        var layout = RummyRackLayout()
         for (face, slot) in placed {
             let tile = RummyTile(id: nextID, face: face)
             builtRack.append(tile)
@@ -158,14 +156,14 @@ package struct RummyTurnEditor: Equatable, Sendable {
     /// 받침대 첫 배치(면 · 자리, 화면 순서). 저장된 자리가 있으면 면으로 짝지어 그 자리(겹치면 가장 가까운 빈자리),
     /// 남는 면은 받은 순서로 마지막 빈자리. 없으면 `rackOrder` 순으로 빈칸 없이.
     private static func arrangeSlots(
-        _ rack: [RummyFace], order: [RummyFace]?, entries: [RummyRackEntry]?, halfColumns: Int
+        _ rack: [RummyFace], order: [RummyFace]?, entries: [RummyRackEntry]?
     ) -> [(RummyFace, RummyRackSlot)] {
         guard let entries, !entries.isEmpty else {
             let faces = arrange(rack, by: order)
-            let layout = RummyRackLayout.packed(Array(faces.indices), halfColumns: halfColumns)
+            let layout = RummyRackLayout.packed(Array(faces.indices))
             return faces.indices.map { (faces[$0], layout.slot(of: $0)!) }
         }
-        var layout = RummyRackLayout(halfColumns: halfColumns)
+        var layout = RummyRackLayout()
         var used = Array(repeating: false, count: rack.count)
         for entry in entries {
             guard let index = rack.indices.first(where: { !used[$0] && rack[$0] == entry.face }) else { continue }
@@ -405,7 +403,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
             var order = readingBefore.filter { !moving.contains($0) }
             let before = readingBefore.prefix(max(slot, 0)).filter { moving.contains($0) }.count
             order.insert(contentsOf: tileIDs, at: Self.clamp(slot - before, upTo: order.count))
-            rackLayout = .packed(order, halfColumns: rackLayout.halfColumns)
+            rackLayout = .packed(order)
         case .rack(nil):
             rackLayout.set(tileIDs, at: rackLayout.endSlot(tiles: tileIDs.count))
         case .rackSlot(let wanted):
@@ -605,7 +603,7 @@ package struct RummyTurnEditor: Equatable, Sendable {
     /// v2: 조합 단위(777 = 같은 숫자, 789 = 같은 색 연속)로 끊어 **단위 사이 반 칸**을 띄워 받침대에 다시 놓는다.
     package mutating func sortRack(_ mode: RummyRackSort) {
         let units = RummyRackLayout.sortUnits(rack, by: mode)
-        rackLayout = .grouped(units.map { $0.map(\.id) }, halfColumns: rackLayout.halfColumns)
+        rackLayout = .grouped(units.map { $0.map(\.id) })
         let lookup = Dictionary(uniqueKeysWithValues: rack.map { ($0.id, $0) })
         rack = rackLayout.readingOrder.compactMap { lookup[$0] }
     }

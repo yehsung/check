@@ -23,7 +23,8 @@ package enum GamesRummyReactionPlan {
     package static var bubbleHeight: CGFloat { bubbleSide + tail * 2 }
     private static let framesPerSecond: Double = 30
 
-    package enum Side: Equatable, Sendable { case above, below }
+    /// 판 화면(가로)은 왼쪽 열 카드의 **오른쪽**으로 — 위아래로 띄우면 옆 카드를 가린다. 결과 화면(세로)은 줄의 위 · 아래다.
+    package enum Side: Equatable, Sendable { case above, below, trailing }
 
     /// 지금 보일 말풍선 — 자리마다 가장 최근 것 하나, 받은 지 2.5초 안.
     package static func visible(_ feed: [RummyReactionEvent], at now: Date) -> [RummyReactionEvent] {
@@ -61,12 +62,13 @@ package enum GamesRummyReactionPlan {
         return max(0, left / fadeOut)
     }
 
-    /// 자리 위에 설 자리가 없으면(화면 위 끝의 상대 줄) 아래로.
-    package static func side(for rect: CGRect) -> Side {
-        rect.minY < bubbleHeight + 8 ? .below : .above
+    /// 가로 화면 = 카드 오른쪽. 세로 화면은 자리 위에 설 자리가 없으면 아래로.
+    package static func side(for rect: CGRect, bounds: CGSize) -> Side {
+        if GamesRummyMatchLayout.isLandscape(bounds) { return .trailing }
+        return rect.minY < bubbleHeight + 8 ? .below : .above
     }
 
-    /// 말풍선 중심. 꼬리 끝이 자리에서 3pt 떨어지고, 양옆은 화면 안으로 들인다.
+    /// 말풍선 중심. 꼬리 끝이 자리에서 3pt 떨어지고, 흐르는 축은 화면 안으로 들인다.
     package static func center(for rect: CGRect, side: Side, bounds: CGSize) -> CGPoint {
         let half = bubbleHeight / 2
         let inset = half + 2
@@ -74,6 +76,8 @@ package enum GamesRummyReactionPlan {
         switch side {
         case .above: return CGPoint(x: x, y: rect.minY - 3 - half)
         case .below: return CGPoint(x: x, y: rect.maxY + 3 + half)
+        case .trailing:
+            return CGPoint(x: rect.maxX + 3 + half, y: min(max(rect.midY, inset), max(inset, bounds.height - inset)))
         }
     }
 }
@@ -111,11 +115,19 @@ struct GamesRummyReactionLayer: View {
         .allowsHitTesting(false)
     }
 
+    private func anchor(_ side: GamesRummyReactionPlan.Side) -> UnitPoint {
+        switch side {
+        case .above: return .bottom
+        case .below: return .top
+        case .trailing: return .leading
+        }
+    }
+
     private func bubble(_ event: RummyReactionEvent, rect: CGRect, bounds: CGSize, age: TimeInterval) -> some View {
-        let side = GamesRummyReactionPlan.side(for: rect)
+        let side = GamesRummyReactionPlan.side(for: rect, bounds: bounds)
         let name = rummy.match?.seats?.first { $0.seatNo == event.seatNo }?.displayName ?? "?"
         return GamesRummyReactionBubble(sticker: event.sticker, side: side)
-            .scaleEffect(reduceMotion || settled ? 1 : GamesRummyReactionPlan.scale(age: age), anchor: side == .above ? .bottom : .top)
+            .scaleEffect(reduceMotion || settled ? 1 : GamesRummyReactionPlan.scale(age: age), anchor: anchor(side))
             .opacity(GamesRummyReactionPlan.opacity(age: age))
             .position(GamesRummyReactionPlan.center(for: rect, side: side, bounds: bounds))
             .accessibilityElement(children: .ignore)
@@ -135,8 +147,8 @@ private struct GamesRummyReactionBubble: View {
             GamesRummyBubbleTail()
                 .fill(Color.white)
                 .frame(width: 14, height: tail)
-                .rotationEffect(.degrees(side == .above ? 0 : 180))
-                .offset(y: (side == .above ? 1 : -1) * (body / 2 + tail / 2 - 1))
+                .rotationEffect(.degrees(tailAngle))
+                .offset(tailOffset(reach: body / 2 + tail / 2 - 1))
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.white)
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
@@ -146,6 +158,22 @@ private struct GamesRummyReactionBubble: View {
                 .frame(width: body, height: body)
         }
         .frame(width: GamesRummyReactionPlan.bubbleHeight, height: GamesRummyReactionPlan.bubbleHeight)
+    }
+
+    private var tailAngle: Double {
+        switch side {
+        case .above: return 0
+        case .below: return 180
+        case .trailing: return 90
+        }
+    }
+
+    private func tailOffset(reach: CGFloat) -> CGSize {
+        switch side {
+        case .above: return CGSize(width: 0, height: reach)
+        case .below: return CGSize(width: 0, height: -reach)
+        case .trailing: return CGSize(width: -reach, height: 0)
+        }
     }
 }
 
@@ -178,13 +206,15 @@ private struct GamesRummyStickerArt: View {
 
 // MARK: - 보내기 시트
 
-/// 이모티콘 여섯(3×2). 고르면 보내고 닫는다. 쿨다운 2초 동안은 칸이 흐려진다 — 눌러도 안 간다는 것을 보인다(코어도 막는다).
-struct GamesRummyReactionPicker: View {
+/// 이모티콘 여섯(3×2). 쿨다운 2초 동안은 칸이 흐려진다 — 눌러도 안 간다는 것을 보인다(코어도 막는다).
+private struct GamesRummyReactionGrid: View {
     let rummy: RummyStore
-
-    @Environment(\.dismiss) private var dismiss
+    let onSent: () -> Void
 
     private static let cell: CGFloat = 64
+    private static let columnGap: CGFloat = 16
+    /// 격자 폭(셋 + 틈) — 떠 있는 판은 이 폭으로 선다.
+    static var width: CGFloat { cell * 3 + columnGap * 2 }
 
     var body: some View {
         VStack(spacing: 12) {
@@ -193,10 +223,10 @@ struct GamesRummyReactionPicker: View {
                 .foregroundStyle(MobileTheme.label)
             TimelineView(.periodic(from: .now, by: 0.25)) { _ in
                 let ready = rummy.canReact(at: rummy.clock())
-                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.cell), spacing: 16), count: 3), spacing: 12) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(Self.cell), spacing: Self.columnGap), count: 3), spacing: 12) {
                     ForEach(AingSticker.allCases, id: \.self) { sticker in
                         Button {
-                            if rummy.sendReaction(sticker) { dismiss() }
+                            if rummy.sendReaction(sticker) { onSent() }
                         } label: {
                             GamesRummyStickerArt(sticker: sticker)
                                 .padding(6)
@@ -212,13 +242,49 @@ struct GamesRummyReactionPicker: View {
                 }
             }
         }
-        .padding(.horizontal, MobileTheme.sideMargin)
-        .padding(.top, 22)
-        .padding(.bottom, 12)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-        .presentationDetents([.height(224)])
-        .presentationDragIndicator(.visible)
+    }
+}
+
+/// 결과 화면(세로)의 보내기 시트.
+struct GamesRummyReactionPicker: View {
+    let rummy: RummyStore
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        GamesRummyReactionGrid(rummy: rummy, onSent: { dismiss() })
+            .padding(.horizontal, MobileTheme.sideMargin)
+            .padding(.top, 22)
+            .padding(.bottom, 12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .presentationDetents([.height(224)])
+            .presentationDragIndicator(.visible)
+    }
+}
+
+/// 판 화면(가로)의 보내기 판 — 시트는 가로 폰에서 화면을 다 덮어 판과 남은 초를 가린다. [반응] 옆에 작게 띄우고, 바깥을 누르면 닫힌다.
+struct GamesRummyReactionPanel: View {
+    let rummy: RummyStore
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onClose)
+                .accessibilityLabel(SheetChromeText.close)
+                .accessibilityAddTraits(.isButton)
+            GamesRummyReactionGrid(rummy: rummy, onSent: onClose)
+                .frame(width: GamesRummyReactionGrid.width)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MobileTheme.surface))
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(MobileTheme.separator, lineWidth: 0.8))
+                .shadow(color: .black.opacity(0.3), radius: 12, y: 4)
+                .padding(.top, GamesRummyMatchLayout.columnPadding)
+                .padding(.trailing, GamesRummyMatchLayout.rightColumnWidth + GamesRummyMatchLayout.columnPadding)
+        }
     }
 }
 #endif

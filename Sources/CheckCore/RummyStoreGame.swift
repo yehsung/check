@@ -202,7 +202,7 @@ extension RummyStore {
         let entries = previous?.restoredRackEntries ?? loadRackEntries(matchID: state.id)
         var fresh = RummyTurnEditor(
             table: table, rack: rack, initialDone: state.myInitialDone ?? false, rackOrder: order,
-            tableLayout: state.tableLayout, rackEntries: entries, rackHalfColumns: rackHalfColumns)
+            tableLayout: state.tableLayout, rackEntries: entries)
         var drawn = previous.map { Self.drawnTiles(previous: $0, fresh: fresh, entries: entries ?? []) } ?? []
         if previous == nil {
             if rackSortMode != nil { rackSortMode = nil }

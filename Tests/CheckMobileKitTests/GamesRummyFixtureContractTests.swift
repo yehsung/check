@@ -39,7 +39,7 @@ import Testing
     @Test("라우트: 표 그대로 풀린다 · 모르는 꼬리는 로비 머리로 · 다른 게임 글자는 nil")
     func parsing() {
         typealias R = MobileDemoRummyRoute
-        #expect(R.Scene.allCases.count == 35)
+        #expect(R.Scene.allCases.count == 38)
         for scene in R.Scene.allCases { #expect(R(demoRoute: scene.rawValue)?.scene == scene, "\(scene)") }
         #expect(R(demoRoute: "games/rummy")?.scene == .lobby)
         #expect(R(demoRoute: "games/rummy/없는꼬리")?.scene == .lobby, "틀린 꼬리가 안 보인다")
@@ -97,10 +97,13 @@ import Testing
         let myTurn = try state(S.myTurnID)
         #expect(RummyStore.isMyTurn(myTurn, me: me) && myTurn.myInitialDone == false)
         #expect(myTurn.myRack?.count == 15)
-        // 기본 보기에서 오른쪽 화면 밖 묶음이 있어야 배지를 본다.
-        let view = GamesRummyViewport(viewport: CGSize(width: 393, height: 469))
+        // 기본 보기(폭 맞춤)는 좌우로 안 넘친다. 키우면 오른쪽 배지가 선다.
+        let table = GamesRummyMatchLayout(size: CGSize(width: 734, height: 372)).table.size
+        var view = GamesRummyViewport(viewport: table)
         let frames = RummyTableLayout(sets: myTurn.table ?? [], layout: myTurn.tableLayout).frames
-        #expect(view.offscreenCounts(frames).right == 2, "my-turn 장면의 화면 밖 배지가 안 선다")
+        #expect(view.offscreenCounts(frames).right == 0, "폭 맞춤인데 옆이 잘린다")
+        view.zoom(to: 1, anchor: .zero)
+        #expect(view.offscreenCounts(frames).right > 0, "my-turn 장면을 키워도 화면 밖 배지가 안 선다")
         let waiting = try state(S.waitingID)
         #expect(!RummyStore.isMyTurn(waiting, me: me))
         #expect(waiting.draft?.table?.count == 13, "남의 작업 판이 없다")
@@ -166,7 +169,7 @@ import Testing
             case "games/rummy/match/my-turn":
                 #expect(model.rummy.isMyTurn)
                 #expect(model.rummy.editor?.rack.count == 15)
-                #expect(model.rummy.editor?.rackLayout.halfColumns == 22)
+                #expect(model.rummy.editor?.rackLayout.rowCount == 2)
                 #expect(model.rummy.isEngagedInCurrentMatch)
                 #expect(model.rummy.turnRemaining(at: model.rummy.clock()) == 42, "데모 시계로 남은 초가 고정이 아니다")
             case "games/rummy/match/waiting":
@@ -183,7 +186,7 @@ import Testing
         #expect(Set(seen.keys).count == 5)
     }
 
-    @Test("빽빽한 판 · 받침대 3줄: 판 80장 이상 · 첫 등록 뒤 · 받침대 24장은 3줄이다 · 전체 타일이 두 벌을 넘지 않는다")
+    @Test("빽빽한 판 · 받침대 3줄: 판 80장 이상 · 첫 등록 뒤 · 받침대 33장은 3줄이다 · 전체 타일이 두 벌을 넘지 않는다")
     func denseScenes() async throws {
         typealias S = MobileDemoRummyRoute.Scene
         let full = try state(S.fullID)
@@ -203,7 +206,7 @@ import Testing
 
         let many = try await launch("games/rummy/match/many")
         #expect(await baseWaitUntil { many.rummy.editor != nil })
-        #expect(many.rummy.editor?.rack.count == 24)
+        #expect(many.rummy.editor?.rack.count == 33)
         #expect(many.rummy.editor?.rackLayout.rowCount == 3, "받침대 3줄 장면이 3줄이 아니다")
         await many.session.signOut()
     }
@@ -214,7 +217,7 @@ import Testing
             let app = try await launch(route)
             #expect(await baseWaitUntil { app.rummy.editor != nil }, "\(route)")
             let editor = try #require(app.rummy.editor)
-            let layout = GamesRummyMatchLayout(size: CGSize(width: 393, height: 759), rackRows: editor.rackLayout.rowCount)
+            let layout = GamesRummyMatchLayout(size: CGSize(width: 734, height: 372), rackRows: editor.rackLayout.rowCount)
             let scene = GamesRummyBoardScene.make(match: app.rummy.match, editor: editor, isMyTurn: true, otherDraft: nil)
             let context = GamesRummyTouchContext(layout: layout, scene: scene, editor: editor, isMyTurn: true, editable: true)
             let input = GamesRummyMatchModel(tableSize: layout.table.size)

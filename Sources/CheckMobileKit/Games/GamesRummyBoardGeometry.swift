@@ -2,74 +2,144 @@ import CheckCore
 import CoreGraphics
 import Foundation
 
-// 폰 아잉 큐브 판 화면의 **순수 값**(설계서 §4). `#if os(iOS)` 밖이다 — 폰 뷰는 맥 스위트가 못 보므로 칸 자리 · 보기 · 받침대 · 누르기 판정을 값으로 재는 자리가 여기다.
-// 그리는 자리·누르는 자리·놓는 자리가 전부 이 값에서 나온다(맥 `RummyMatchLayout`·`RummyRackGeometry` 와 같은 원칙 · 배치는 세로용으로 다시 짰다).
+// 폰 아잉 큐브 판 화면의 **순수 값**(설계서 §10 — 판 화면만 가로). `#if os(iOS)` 밖이다 — 폰 뷰는 맥 스위트가 못 보므로 칸 자리 · 보기 · 받침대 · 누르기 판정을 값으로 재는 자리가 여기다.
+// 그리는 자리·누르는 자리·놓는 자리가 전부 이 값에서 나온다(맥 `RummyMatchLayout`·`RummyRackGeometry` 와 같은 원칙 · 배치는 폰 가로 화면용으로 다시 짰다).
 // 좌표는 전부 판 화면 좌표(세이프 영역 안 왼쪽 위 원점 · `coordinateSpace: .named`)다.
 
-/// 판 화면 칸 자리 — 위에서 아래로 머리 줄 · 상대 줄 · 판(남는 높이 전부) · 상태 줄 · 받침대 · 동작 줄.
+/// 판 화면 칸 자리(가로 화면 · 세이프 영역 안 좌표, 설계서 §10.2) — 왼쪽 열(뒤로 · 규칙 · 자리 카드) | 가운데(판 · 상태 줄 · 받침대) | 오른쪽 열(판돈 · 더미 · 반응 · 전체 보기 · 동작 버튼).
+/// **받침대 높이는 줄 수로 안 변한다** — 판 칸이 안 흔들린다(줄이 늘면 타일이 준다). 안드로이드가 아래 상수 이름을 비율로 옮겨 쓴다.
 package struct GamesRummyMatchLayout: Equatable, Sendable {
-    package static let headerHeight: CGFloat = 44
-    package static let opponentsHeight: CGFloat = 56
-    package static let statusHeight: CGFloat = 20
-    /// 받침대 2줄 · 3줄(넘치면 판이 줄어든다). 4줄부터는 타일이 줄어들고 높이는 3줄 그대로다.
-    package static let rackTwoRowsHeight: CGFloat = 118
-    package static let rackThreeRowsHeight: CGFloat = 165
-    /// 동작 줄 기본 높이(큰 글자에서는 `actionHeight` 로 키운다 — 잘리지 않게).
-    package static let actionsHeight: CGFloat = 52
+    package static let leftColumnWidth: CGFloat = 86
+    package static let rightColumnWidth: CGFloat = 100
+    package static let statusHeight: CGFloat = 18
+    /// 받침대 높이 상한(화면 높이 비율) — 판 칸이 먼저 살아야 한다.
+    package static let rackMaxHeightShare: CGFloat = 0.4
+    /// 열 안쪽 여백.
+    package static let columnPadding: CGFloat = 4
+    /// 오른쪽 열 칸 사이 틈.
+    package static let actionGap: CGFloat = 6
+    /// 왼쪽 열 [뒤로] · [규칙] 줄 높이.
+    package static let navHeight: CGFloat = 44
+    /// 오른쪽 열 판돈 · 더미 높이.
+    package static let infoHeight: CGFloat = 40
+    /// 오른쪽 열 [반응] · [전체 보기] 줄 높이.
+    package static let toolsHeight: CGFloat = 44
+    /// 왼쪽 열 원형 버튼 지름(열 폭 86 에 둘이 들어간다. 줄 높이 44 가 터치 높이다).
+    package static let navButtonDiameter: CGFloat = 38
+    /// 상대 카드 최대 수(4인 판). 내 자리까지 네 칸을 늘 같은 높이로 나눈다 — 인원에 따라 카드가 안 늘어난다.
+    package static let maxOpponentCards = 3
+    package static let seatCardMaxHeight: CGFloat = 76
+    package static let seatCardGap: CGFloat = 4
+    /// 동작 버튼 넷이 남는 높이를 나누는 비율([완료] · [뽑기|넘기기] · [되돌리기] · [777|789]).
+    package static let actionShares: (submit: CGFloat, draw: CGFloat, undo: CGFloat, sort: CGFloat) = (0.34, 0.24, 0.22, 0.20)
+    /// 다른 기기 안내 카드의 판 아래 여백 · 어림 높이(배지를 그 위로 올린다).
+    package static let elsewhereCardBottom: CGFloat = 6
+    package static let elsewhereCardHeight: CGFloat = 60
+    /// 동작 버튼 최소 높이(터치).
+    package static let minActionHeight: CGFloat = 44
 
     package let size: CGSize
     package let rackRows: Int
-    package let actionHeight: CGFloat
 
-    package init(size: CGSize, rackRows: Int = RummyRackLayout.baseRows, actionHeight: CGFloat = GamesRummyMatchLayout.actionsHeight) {
+    package init(size: CGSize, rackRows: Int = RummyRackLayout.baseRows) {
         self.size = size
         self.rackRows = max(RummyRackLayout.baseRows, rackRows)
-        self.actionHeight = max(Self.actionsHeight, actionHeight)
     }
 
-    package var rackHeight: CGFloat { rackRows <= 2 ? Self.rackTwoRowsHeight : Self.rackThreeRowsHeight }
+    /// 가로로 선 크기인가. 방향 전환 중에는 세로 크기로 한 프레임 불릴 수 있다 — 그때 칸을 세우지 않는다(`GamesRummyMatch.swift`).
+    package static func isLandscape(_ size: CGSize) -> Bool { size.width > size.height }
 
-    // MARK: 동작 줄 — 큰 글자
+    // MARK: 가운데
 
-    /// 글자 배율이 이 값을 넘으면 동작 줄을 두 줄로 나눈다([완료] 한 줄 · 나머지 셋 한 줄). 넘지 않는 동안은 글자가 칸에 맞춰 줄어든다.
-    package static let twoRowActionsAboveTextScale: CGFloat = 1.3
-    /// 버튼 위아래 · 줄 사이 틈.
-    package static let actionGap: CGFloat = 6
-
-    package static func actionRowCount(textScale: CGFloat) -> Int { textScale > twoRowActionsAboveTextScale ? 2 : 1 }
-
-    /// 버튼 한 줄 높이(44pt 아래로 안 내려간다 · 글자를 따라 커지되 판을 다 먹지 않게 64 에서 멈춘다).
-    package static func actionButtonHeight(textScale: CGFloat) -> CGFloat {
-        guard actionRowCount(textScale: textScale) == 2 else { return actionsHeight - actionGap - 2 }
-        return min(64, max(44, 40 * textScale))
+    private var centerWidth: CGFloat { max(0, size.width - Self.leftColumnWidth - Self.rightColumnWidth) }
+    package var rackHeight: CGFloat {
+        GamesRummyRackGeometry.height(forWidth: centerWidth, maxHeight: size.height * Self.rackMaxHeightShare)
     }
-
-    /// 글자 배율 → 동작 줄 높이(`init(actionHeight:)` 에 그대로 넘긴다).
-    package static func actionHeight(textScale: CGFloat) -> CGFloat {
-        guard actionRowCount(textScale: textScale) == 2 else { return actionsHeight }
-        return actionButtonHeight(textScale: textScale) * 2 + actionGap * 3
+    package var rack: CGRect {
+        CGRect(x: Self.leftColumnWidth, y: size.height - rackHeight, width: centerWidth, height: rackHeight)
     }
-
-    /// 한 줄 동작 줄의 버튼 폭 넷([완료] · [뽑기|넘기기] · [되돌리기] · [777|789]). 합 + 틈 + 양옆 여백 = 칸 폭이라 어느 폭에서도 안 겹친다.
-    package static func actionWidths(total: CGFloat) -> (submit: CGFloat, draw: CGFloat, undo: CGFloat, sort: CGFloat) {
-        let room = max(0, total - actionGap * 5)
-        return (room * 0.36, room * 0.19, room * 0.21, room * 0.24)
+    package var status: CGRect {
+        CGRect(x: Self.leftColumnWidth, y: rack.minY - Self.statusHeight, width: centerWidth, height: Self.statusHeight)
     }
-
-    package var header: CGRect { CGRect(x: 0, y: 0, width: size.width, height: Self.headerHeight) }
-    package var opponents: CGRect { CGRect(x: 0, y: header.maxY, width: size.width, height: Self.opponentsHeight) }
-    package var actions: CGRect { CGRect(x: 0, y: size.height - actionHeight, width: size.width, height: actionHeight) }
-    package var rack: CGRect { CGRect(x: 0, y: actions.minY - rackHeight, width: size.width, height: rackHeight) }
-    package var status: CGRect { CGRect(x: 0, y: rack.minY - Self.statusHeight, width: size.width, height: Self.statusHeight) }
-    /// 판 — 남는 높이 전부(작은 기기에서 음수가 되지 않는다).
+    /// 판 — 가운데의 남는 높이 전부.
     package var table: CGRect {
-        CGRect(x: 0, y: opponents.maxY, width: size.width, height: max(0, status.minY - opponents.maxY))
+        CGRect(x: Self.leftColumnWidth, y: 0, width: centerWidth, height: max(0, status.minY))
+    }
+
+    // MARK: 왼쪽 열
+
+    package var leftColumn: CGRect { CGRect(x: 0, y: 0, width: Self.leftColumnWidth, height: size.height) }
+    package var nav: CGRect {
+        CGRect(x: Self.columnPadding, y: 0, width: Self.leftColumnWidth - Self.columnPadding * 2, height: Self.navHeight)
+    }
+
+    private var seatCardHeight: CGFloat {
+        let slots = CGFloat(Self.maxOpponentCards + 1)
+        let room = size.height - nav.maxY - Self.columnPadding - Self.seatCardGap * slots
+        return max(0, min(Self.seatCardMaxHeight, room / slots))
+    }
+
+    /// 상대 카드 `index` 번째(내 다음 차례부터 위에서 아래로).
+    package func opponentCard(_ index: Int) -> CGRect {
+        let top = nav.maxY + Self.seatCardGap + CGFloat(max(0, index)) * (seatCardHeight + Self.seatCardGap)
+        return CGRect(x: Self.columnPadding, y: top, width: nav.width, height: seatCardHeight)
+    }
+
+    /// 내 자리 카드 — 왼쪽 열 맨 아래(몇 명이 앉든 같은 자리).
+    package var mySeatCard: CGRect {
+        CGRect(x: Self.columnPadding, y: size.height - Self.columnPadding - seatCardHeight, width: nav.width, height: seatCardHeight)
+    }
+
+    // MARK: 오른쪽 열
+
+    package var rightColumn: CGRect {
+        CGRect(x: size.width - Self.rightColumnWidth, y: 0, width: Self.rightColumnWidth, height: size.height)
+    }
+    private var rightCellX: CGFloat { rightColumn.minX + Self.columnPadding }
+    private var rightCellWidth: CGFloat { Self.rightColumnWidth - Self.columnPadding * 2 }
+    package var info: CGRect { CGRect(x: rightCellX, y: Self.columnPadding, width: rightCellWidth, height: Self.infoHeight) }
+    package var tools: CGRect { CGRect(x: rightCellX, y: info.maxY + Self.actionGap, width: rightCellWidth, height: Self.toolsHeight) }
+
+    /// 버튼 넷 칸(위에서 아래로). 어떤 높이에서도 합이 열을 안 넘는다.
+    private var actionRects: (submit: CGRect, draw: CGRect, undo: CGRect, sort: CGRect) {
+        let top = tools.maxY + Self.actionGap
+        let room = max(0, size.height - Self.columnPadding - top - Self.actionGap * 3)
+        func cell(_ y: CGFloat, _ share: CGFloat) -> CGRect { CGRect(x: rightCellX, y: y, width: rightCellWidth, height: room * share) }
+        let submit = cell(top, Self.actionShares.submit)
+        let draw = cell(submit.maxY + Self.actionGap, Self.actionShares.draw)
+        let undo = cell(draw.maxY + Self.actionGap, Self.actionShares.undo)
+        let sort = cell(undo.maxY + Self.actionGap, Self.actionShares.sort)
+        return (submit, draw, undo, sort)
+    }
+    package var submit: CGRect { actionRects.submit }
+    package var draw: CGRect { actionRects.draw }
+    package var undo: CGRect { actionRects.undo }
+    package var sort: CGRect { actionRects.sort }
+
+    // MARK: 들어 올림 — 받침대가 화면 맨 아래다
+
+    /// 손 자리 → 들어 올릴 거리. 판 위에서는 늘 48pt. 받침대 안에서는 아래로 갈수록 준다:
+    /// 가로 화면은 받침대 아래에 아무것도 없어서, 48pt 그대로면 아랫줄에 놓을 손 자리가 화면 끝 몇 pt 뿐이다(세로판은 동작 줄이 그 자리를 벌어 줬다).
+    /// 손 y 가 커질수록 기준점 y 도 늘 커진다(뒤집히지 않는다).
+    package func fingerLift(atY y: CGFloat) -> CGFloat {
+        let full = GamesRummyGestureRules.fingerLift, low = GamesRummyGestureRules.fingerLiftAtBottom
+        guard y > rack.minY, rack.height > 0 else { return full }
+        return full + (low - full) * min(1, (y - rack.minY) / rack.height)
+    }
+
+    /// 기준점이 `pointer` 에 오는 손 자리(`fingerLift` 의 역). 궤적을 세우는 데모 · 시험이 쓴다.
+    package func finger(forPointer pointer: CGPoint) -> CGPoint {
+        let full = GamesRummyGestureRules.fingerLift, low = GamesRummyGestureRules.fingerLiftAtBottom
+        guard pointer.y + full > rack.minY, rack.height > 0 else { return CGPoint(x: pointer.x, y: pointer.y + full) }
+        let progress = (pointer.y + full - rack.minY) / (rack.height + full - low)
+        guard progress < 1 else { return CGPoint(x: pointer.x, y: pointer.y + low) }
+        return CGPoint(x: pointer.x, y: rack.minY + progress * rack.height)
     }
 }
 
 /// 판 보기(배율 · 오프셋). **배율은 판 변화로 저절로 바뀌지 않는다**(맥 교훈 — 놓을 때마다 판이 움직이면 안 된다). 사람이 움직일 때만 바뀐다.
 ///
-/// 기본 보기는 **캔버스 높이를 칸에 맞춘 배율**이다(칸 높이 ≈ 470 → 배율 ≈ 0.73 → 타일 ≈ 29×41pt, 가로 약 530 논리 단위가 보인다). 가로 1000 은 민다.
+/// 기본 보기는 **폭 맞춤**이다(캔버스 1000 이 칸 폭에 꼭 찬다 — iPhone 15 ≈ 0.55, 타일 ≈ 22×31pt, 세로 약 445/640 단위가 보인다). 나머지 세로는 민다. [전체 보기] = 높이까지 맞춘 배율(약 0.39).
 /// 위치는 모든 기기에 같다(서버 `table_layout`) — 폰이 재배치하면 안 된다. 상한 = 타일 폭 40pt(배율 1) · 하한 = 전체 맞춤.
 package struct GamesRummyViewport: Equatable, Sendable {
     /// 끌기 중 손이 이 안에 머물면 그 쪽으로 민다.
@@ -80,8 +150,6 @@ package struct GamesRummyViewport: Equatable, Sendable {
     package static let revealMargin: CGFloat = 24
     /// 타일 폭 상한(pt).
     package static let maxTileWidth: CGFloat = 40
-    /// 기본 보기의 타일 폭 하한(pt). 칸이 낮아도(큰 글자 · 작은 기기 · 받침대 3줄) 기본 보기는 맞춤보다 커서 [전체 보기] 토글이 늘 무언가를 바꾼다. 그만큼 세로는 민다.
-    package static let minDefaultTileWidth: CGFloat = 24
 
     package private(set) var viewport: CGSize
     package private(set) var scale: CGFloat
@@ -108,10 +176,9 @@ package struct GamesRummyViewport: Equatable, Sendable {
     /// 타일 폭 40pt(논리 타일 폭 40 × 배율 1).
     package static var maxScale: CGFloat { maxTileWidth / CGFloat(RummyTableLayout.tileWidth) }
 
-    /// 기본 보기 배율(높이를 맞춘다 · 타일 폭 하한 아래로 안 내려간다).
+    /// 기본 보기 배율(폭 맞춤).
     package static func defaultScale(_ viewport: CGSize) -> CGFloat {
-        let floor = minDefaultTileWidth / CGFloat(RummyTableLayout.tileWidth)
-        return min(maxScale, max(fitScale(viewport), viewport.height / canvas.height, floor))
+        min(maxScale, max(fitScale(viewport), viewport.width / canvas.width))
     }
 
     package var fitScale: CGFloat { Self.fitScale(viewport) }
@@ -161,22 +228,23 @@ package struct GamesRummyViewport: Equatable, Sendable {
         clamp()
     }
 
-    /// 칸 크기가 바뀌었다(받침대 3줄 · 큰 글자). 기본·맞춤 보기였으면 새 칸의 기본·맞춤으로, 사람이 고른 배율이면 그대로(범위 안으로만).
+    /// 칸 크기가 바뀌었다(기기 방향 · 세이프 영역). 기본·맞춤 보기였으면 새 칸의 기본·맞춤으로, 사람이 고른 배율이면 그대로(범위 안으로만).
     package mutating func resize(to viewport: CGSize) {
         guard viewport != self.viewport else { return }
-        let wasFull = isFullView, wasDefault = abs(scale - defaultScale) < 0.0005
+        // 기본을 먼저 묻는다: 전환 중 세로 칸에서는 기본 = 맞춤이라, 맞춤을 먼저 물으면 기본 보기가 돌아온 뒤 전체 보기가 된다.
+        let wasDefault = abs(scale - defaultScale) < 0.0005, wasFull = isFullView
         self.viewport = viewport
-        if wasFull {
-            scale = fitScale
-        } else if wasDefault {
+        if wasDefault {
             scale = defaultScale
+        } else if wasFull {
+            scale = fitScale
         } else {
             scale = min(Self.maxScale, max(fitScale, scale))
         }
         clamp()
     }
 
-    /// 끌기 중 가장자리 자동 밀기 한 걸음. `pointer` = 칸 좌표. 가로 · 세로를 따로 민다(세로는 캔버스가 칸보다 클 때만 움직인다 — 확대한 보기 · 낮은 칸). 움직였으면 true.
+    /// 끌기 중 가장자리 자동 밀기 한 걸음. `pointer` = 칸 좌표. 가로 · 세로를 따로 민다(기본 보기는 세로로 · 키우면 가로로도 움직인다). 움직였으면 true.
     package mutating func edgePan(pointer: CGPoint, deltaTime: TimeInterval) -> Bool {
         let step = Self.edgePanSpeed * CGFloat(deltaTime)
         let before = origin
@@ -196,18 +264,20 @@ package struct GamesRummyViewport: Equatable, Sendable {
     }
 
     /// 왼쪽 끝에서 더 밀 수 있는 곳(논리 단위, 음수). 묶음 손잡이는 묶음 **왼쪽 바깥**에 있어서 캔버스 왼끝(x 0)에 놓인 묶음은 그만큼 더 밀어야 닿는다
-    /// (맥은 판 여백으로 푼다 — 0.3.70 `zoom` 의 여백 20). 놓을 자리는 캔버스 안으로 잘리니 x 0 묶음은 흔하다. 전체 맞춤은 밀 곳이 없다 — 그 보기에선 꾹 눌러 묶음째 옮긴다.
+    /// (맥은 판 여백으로 푼다 — 0.3.70 `zoom` 의 여백 20). 놓을 자리는 캔버스 안으로 잘리니 x 0 묶음은 흔하다. 기본 보기(폭 맞춤)도 이만큼은 민다.
+    /// 전체 맞춤은 칸 폭이 남아 캔버스 양옆에 이미 그 자리가 있다.
     private var minOriginX: CGFloat { -GamesRummyGestureRules.handleTouchWidth / scale }
 
     private mutating func clamp() {
         let visible = CGSize(width: viewport.width / scale, height: viewport.height / scale)
-        origin.x = visible.width >= Self.canvas.width ? 0 : min(max(origin.x, minOriginX), Self.canvas.width - visible.width)
+        // 폭 맞춤은 부동소수 오차로 양쪽을 오간다 — 0.5 단위 넘게 남을 때만 '칸이 더 넓다'로 친다.
+        origin.x = visible.width > Self.canvas.width + 0.5 ? 0 : min(max(origin.x, minOriginX), max(0, Self.canvas.width - visible.width))
         origin.y = visible.height >= Self.canvas.height ? 0 : min(max(origin.y, 0), Self.canvas.height - visible.height)
     }
 
     // MARK: 화면 밖 묶음
 
-    /// 왼·오른쪽 화면 밖 묶음 수(남이 새로 낸 묶음을 못 보고 지나가지 않게 하는 배지의 값). 일부라도 보이면 세지 않는다.
+    /// 왼·오른쪽 화면 밖 묶음 수(남이 새로 낸 묶음을 못 보고 지나가지 않게 하는 배지의 값 — 기본 보기에서는 위·아래가 주로 쓰인다). 일부라도 보이면 세지 않는다.
     package func offscreenCounts(_ frames: [RummyRect]) -> (left: Int, right: Int) {
         let visible = visibleLogical
         var left = 0, right = 0
@@ -221,7 +291,7 @@ package struct GamesRummyViewport: Equatable, Sendable {
         return (left, right)
     }
 
-    /// 위·아래로 가려진 묶음 수(확대한 보기 · 낮은 칸). 가로로 이미 화면 밖인 묶음은 좌우 배지가 센다 — 두 번 세지 않는다.
+    /// 위·아래로 가려진 묶음 수(기본 보기는 칸이 캔버스보다 낮아 늘 쓰인다). 가로로 이미 화면 밖인 묶음은 좌우 배지가 센다 — 두 번 세지 않는다.
     package func offscreenVerticalCounts(_ frames: [RummyRect]) -> (up: Int, down: Int) {
         let visible = visibleLogical
         var up = 0, down = 0
@@ -258,26 +328,18 @@ package struct GamesRummyViewport: Equatable, Sendable {
     }
 }
 
-/// 판 위 조작의 세로 자리(판 칸 아래에서 잰 값). 뷰 밖이라 값으로 잰다.
-package enum GamesRummyTableControlsLayout {
-    /// 배지 한 칸 높이.
-    package static let badgeHeight: CGFloat = 44
-
-    /// [전체 보기] 토글의 아래 여백 — 오른쪽 배지 자리 바로 위. 배지가 있든 없든 같은 값이라 토글이 안 움직인다.
-    package static func zoomBottom(badgeLift: CGFloat) -> CGFloat { badgeLift + badgeHeight }
-}
-
-/// 받침대 기하(받침대 칸 왼쪽 위 원점) — 한 줄 11장 · 반 칸 격자. 그리는 자리(`frame`)와 놓는 자리(`slot`)가 한 산식이다.
-/// 그림 기준선을 쓰는 맥 `RummyRackGeometry` 와 달리 폭이 다른 기기에 맞춰 값으로 잰다.
+/// 받침대 기하(받침대 칸 왼쪽 위 원점) — **한 줄 16장**(맥과 같은 반 칸 32) · 반 칸 격자. 그리는 자리(`frame`)와 놓는 자리(`slot`)가 한 산식이다.
+/// 칸 높이는 줄 수로 안 변한다. 3줄부터는 맥 `tileScale` 산식(2/줄)으로 타일이 줄어 담긴다. 그림 기준선을 쓰는 맥 `RummyRackGeometry` 와 달리 폭이 다른 기기에 맞춰 값으로 잰다.
 package struct GamesRummyRackGeometry: Equatable, Sendable, RummyRackDropGeometry {
-    /// 폰 받침대 한 줄의 반 칸 수(11장).
-    package static let halfColumns = 22
-    /// 타일 기준 크기(pt) — 폭이 모자란 기기는 비율대로 줄인다.
-    package static let baseTile = CGSize(width: 34, height: 47)
+    /// 받침대 한 줄의 반 칸 수(맥 값 그대로 — 코어 `RummyRackLayout` 하나).
+    package static let halfColumns = RummyRackLayout.halfColumnsPerRow
+    /// 타일 높이 / 폭. iPhone 15 가운데 칸(548) → 약 33.8×47pt.
+    package static let tileAspect: CGFloat = 1.39
     /// 받침대 좌우 최소 여백.
-    package static let minSideInset: CGFloat = 8
-    package static let verticalPadding: CGFloat = 8
-    package static let rowGap: CGFloat = 8
+    package static let minSideInset: CGFloat = 4
+    /// 위아래 여백 — 아랫줄 선반이 테두리 빛에 묻히지 않을 만큼.
+    package static let verticalPadding: CGFloat = 6
+    package static let rowGap: CGFloat = 4
     /// 줄 사이 틈의 하한(타일이 위아래로 닿지 않게).
     package static let minRowGap: CGFloat = 2
 
@@ -289,26 +351,33 @@ package struct GamesRummyRackGeometry: Equatable, Sendable, RummyRackDropGeometr
         self.rowCount = max(RummyRackLayout.baseRows, rowCount)
     }
 
-    private var perRow: CGFloat { CGFloat(Self.halfColumns / RummyRackLayout.tileSpan) }
+    private static var perRow: CGFloat { CGFloat(halfColumns / RummyRackLayout.tileSpan) }
+    private var perRow: CGFloat { Self.perRow }
 
-    /// 줄이 3개를 넘으면 타일을 줄인다(받침대 안 스크롤은 쓰지 않는다 — 맥 `tileScale` 과 같은 산식).
-    package var tileScale: CGFloat { rowCount <= 3 ? 1 : 3 / CGFloat(rowCount) }
+    private static func baseTileWidth(forWidth width: CGFloat) -> CGFloat { max(1, width - minSideInset * 2) / perRow }
 
-    /// 칸 안에 담긴다: 폭으로 한 번 · 높이로 한 번 자른다(끄는 동안 미리보기가 새 줄을 열면 칸은 그대로라 타일이 줄어 담긴다 — 맥과 같은 선택).
+    /// 칸 높이 — 2줄이 꼭 들어가는 값. 넓은 기기라도 `maxHeight` 를 안 넘는다(그때는 타일이 그만큼 작다).
+    package static func height(forWidth width: CGFloat, maxHeight: CGFloat) -> CGFloat {
+        let rows = CGFloat(RummyRackLayout.baseRows)
+        return min(maxHeight, baseTileWidth(forWidth: width) * tileAspect * rows + rowGap * (rows - 1) + verticalPadding * 2)
+    }
+
+    /// 줄이 넘치면 타일을 줄인다(받침대 안 스크롤은 쓰지 않는다 — 맥 `tileScale` 과 같은 산식).
+    package var tileScale: CGFloat { rowCount <= RummyRackLayout.baseRows ? 1 : CGFloat(RummyRackLayout.baseRows) / CGFloat(rowCount) }
+
+    /// 칸 안에 담긴다: 폭으로 한 번 · 높이로 한 번 자른다.
     package var tileSize: CGSize {
-        let room = max(1, size.width - Self.minSideInset * 2) / perRow
         let rows = CGFloat(rowCount)
         let heightRoom = max(1, (size.height - Self.verticalPadding * 2 - Self.minRowGap * (rows - 1)) / rows)
-        let aspect = Self.baseTile.height / Self.baseTile.width
-        let width = min(Self.baseTile.width * tileScale, room, heightRoom / aspect)
-        return CGSize(width: width, height: width * aspect)
+        let width = min(Self.baseTileWidth(forWidth: size.width) * tileScale, heightRoom / Self.tileAspect)
+        return CGSize(width: width, height: width * Self.tileAspect)
     }
 
     package var dropTileWidth: CGFloat { tileSize.width }
     package var sideInset: CGFloat { max(Self.minSideInset, (size.width - tileSize.width * perRow) / 2) }
     package var halfPitch: CGFloat { tileSize.width / CGFloat(RummyRackLayout.tileSpan) }
 
-    /// 줄 위쪽. 줄 사이 틈은 남는 높이에서 나오되 `rowGap` 을 안 넘고, 묶음째 칸 세로 가운데에 선다(좁은 기기는 타일이 작아 틈만 벌어졌다 — 320 실화면).
+    /// 줄 위쪽. 줄 사이 틈은 남는 높이에서 나오되 `rowGap` 을 안 넘고, 묶음째 칸 세로 가운데에 선다(줄이 넘쳐 타일이 줄어도 틈만 벌어지지 않게).
     package func rowTop(_ row: Int) -> CGFloat {
         let rows = CGFloat(rowCount)
         let gap = rowCount <= 1 ? 0 : min(Self.rowGap, max(0, (size.height - Self.verticalPadding * 2 - tileSize.height * rows) / (rows - 1)))
@@ -364,12 +433,14 @@ package enum GamesRummyGestureRules {
     package static let liftDelay: TimeInterval = 0.5
     /// 집힌 타일은 손 위로 이만큼 — 손가락에 가리지 않게.
     package static let fingerLift: CGFloat = 48
+    /// 손이 받침대 아래 끝에 닿았을 때의 들어 올림(`GamesRummyMatchLayout.fingerLift` — 받침대가 화면 맨 아래라 아랫줄에 놓을 손 자리를 벌어 준다).
+    package static let fingerLiftAtBottom: CGFloat = 18
     package static let liftScale: CGFloat = 1.25
     /// 묶음 손잡이 터치 폭(타일 왼쪽 바깥).
     package static let handleTouchWidth: CGFloat = 28
 
     /// 손의 자리 → 그린 자리 · 놓을 자리 계산의 기준점.
-    package static func liftedPoint(finger: CGPoint) -> CGPoint { CGPoint(x: finger.x, y: finger.y - fingerLift) }
+    package static func liftedPoint(finger: CGPoint, lift: CGFloat = fingerLift) -> CGPoint { CGPoint(x: finger.x, y: finger.y - lift) }
 
     /// 그려진 손잡이 막대(묶음 사각형 `shown` 왼쪽 바깥). 그리는 자리(`GamesRummyBoardLayer`)와 재는 자리(`handleGrabRect`)가 이 값 하나를 쓴다.
     package static func handleBar(shown: CGRect, scale: CGFloat) -> CGRect {

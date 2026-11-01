@@ -9,7 +9,7 @@ import Foundation
 // 판 타일 100장 이상에서 무겁고 판 밀기와 충돌한다.
 //   · `GamesRummyTouchMachine` — 손 하나의 일생(누름 → 8pt 넘게 움직이면 한 장 · 8pt 안에서 0.5초면 묶음째 · 손잡이 · 빈 펠트 밀기).
 //   · `GamesRummyDropPlanner` — 놓을 자리 · 미리보기 · 놓은 결과. 맥 `RummyMatchView.resolve`·`boardPreview`·`tileEnded` 와 **같은 갈래**다. 판정은 코어 `RummyDropResolver`·편집기가 한다.
-//   · `GamesRummyFloatingLayout` — 집힌 타일의 자리. **그린 자리와 재는 자리가 같다**: 손 위 48pt 점(`GamesRummyDrag.pointer`)이 놓기 기준이고 그림도 그 점에 선다.
+//   · `GamesRummyFloatingLayout` — 집힌 타일의 자리. **그린 자리와 재는 자리가 같다**: 손 위 점(`GamesRummyDrag.pointer` — 판 위에서 48pt)이 놓기 기준이고 그림도 그 점에 선다.
 
 // MARK: - 판에 그릴 값
 
@@ -86,10 +86,18 @@ package struct GamesRummyDrag: Equatable, Sendable {
     /// 손잡이 끌기: 잡은 자리 − 묶음 왼쪽 위(논리).
     package var grab: CGPoint = .zero
     package var surface: Surface
+    /// 손 자리에서 나온 들어 올림(`GamesRummyMatchLayout.fingerLift`).
+    package var lift: CGFloat = GamesRummyGestureRules.fingerLift
 
     package var ids: [Int] { tiles.map(\.id) }
-    /// 그린 자리 = 재는 자리. 손 위 48pt.
-    package var pointer: CGPoint { GamesRummyGestureRules.liftedPoint(finger: finger) }
+    /// 그린 자리 = 재는 자리. 판 위에서 손 위 48pt.
+    package var pointer: CGPoint { GamesRummyGestureRules.liftedPoint(finger: finger, lift: lift) }
+
+    /// 손이 옮겨 갔다.
+    package mutating func move(to point: CGPoint, in layout: GamesRummyMatchLayout) {
+        finger = point
+        lift = layout.fingerLift(atY: point.y)
+    }
 }
 
 /// 꾹 눌러 들어 올린 것(아직 안 끎).
@@ -142,7 +150,7 @@ package struct GamesRummyTouchContext: Equatable, Sendable {
         self.turnKey = turnKey
     }
 
-    package var rackLayout: RummyRackLayout { editor?.rackLayout ?? RummyRackLayout(halfColumns: GamesRummyRackGeometry.halfColumns) }
+    package var rackLayout: RummyRackLayout { editor?.rackLayout ?? RummyRackLayout() }
 
     package func hit(_ point: CGPoint) -> GamesRummyHit {
         GamesRummyHitTester.classify(point: point, layout: layout, rack: rack, rackLayout: rackLayout,
@@ -241,7 +249,7 @@ package struct GamesRummyTouchMachine: Equatable, Sendable {
                 return .none
             }
             phase = .dragging(GamesRummyDrag(kind: .tiles, tiles: tiles, grabIndex: ids.firstIndex(of: id) ?? 0,
-                                             finger: point, surface: surface))
+                                             finger: point, surface: surface, lift: context.layout.fingerLift(atY: point.y)))
             return .dragBegan
         case .handle(let set, let start):
             guard Self.distance(point, start) > GamesRummyGestureRules.dragThreshold else { return .none }
@@ -253,10 +261,10 @@ package struct GamesRummyTouchMachine: Equatable, Sendable {
             let logical = context.viewport.transform.toLogical(context.inTable(start))
             phase = .dragging(GamesRummyDrag(kind: .set(set), tiles: editor.melds[set], grabIndex: 0, finger: point,
                                              grab: CGPoint(x: logical.x - CGFloat(frame.x), y: logical.y - CGFloat(frame.y)),
-                                             surface: .board))
+                                             surface: .board, lift: context.layout.fingerLift(atY: point.y)))
             return .dragBegan
         case .dragging(var drag):
-            drag.finger = point
+            drag.move(to: point, in: context.layout)
             phase = .dragging(drag)
             return .dragMoved
         }
@@ -275,7 +283,7 @@ package struct GamesRummyTouchMachine: Equatable, Sendable {
     package mutating func up(_ point: CGPoint, _ context: GamesRummyTouchContext) -> GamesRummyDropAction {
         defer { phase = .idle }
         guard case .dragging(var drag) = phase else { return .none }
-        drag.finger = point
+        drag.move(to: point, in: context.layout)
         return GamesRummyDropPlanner.action(drag, target: GamesRummyDropPlanner.target(drag, context), editor: context.editor)
     }
 
@@ -456,7 +464,7 @@ package enum GamesRummySeatTag: Equatable, Sendable {
 }
 
 package enum GamesRummySeats {
-    /// 상대 줄 — 내 다음 차례부터. 자리 번호 없는 사람(초대만 받은 사람)은 판에 없다.
+    /// 상대 카드 — 내 다음 차례부터. 자리 번호 없는 사람(초대만 받은 사람)은 판에 없다.
     package static func opponents(_ match: RummyMatchState) -> [RummyMatchSeat] {
         let seats = (match.seats ?? []).filter { $0.seatNo != nil }
         let order = RummySeatArrangement.arrange(seatNos: seats.compactMap(\.seatNo), mine: match.mySeatNo).turnOrder
@@ -527,5 +535,25 @@ package struct GamesRummyStatusLine: Equatable, Sendable {
         if engaged, mySeatState == .playing { return GamesRummyStatusLine(text: GamesRummyText.backgroundWarning, tone: .quiet) }
         if let turnName { return GamesRummyStatusLine(text: GamesRummyText.turnOf(turnName), tone: .quiet) }
         return GamesRummyStatusLine(text: "", tone: .quiet)
+    }
+}
+
+/// 상태 줄 오른쪽 작은 글자 — 직전 사건 · 남의 차례(작업 중이면 '놓는 중'). 판 위에 띄우면 낮은 칸에서 타일을 가린다.
+package struct GamesRummyStatusTail: Equatable, Sendable {
+    package let lastEvent: String?
+    /// 상태 글자가 이미 같은 말이면 비운다.
+    package let turn: String?
+    package let isPlacing: Bool
+
+    package static func make(match: RummyMatchState, isMyTurn: Bool, hasOtherDraft: Bool, line: GamesRummyStatusLine) -> GamesRummyStatusTail {
+        let last = match.lastEvent.flatMap { event in
+            GamesRummyText.lastEvent(event, name: match.seats?.first { $0.seatNo == event.seatNo }?.displayName)
+        }
+        var turn: String?
+        if !isMyTurn, let name = GamesRummySeats.turnSeat(match)?.displayName {
+            let text = hasOtherDraft ? GamesRummyText.placing(name) : GamesRummyText.turnOf(name)
+            if text != line.text { turn = text }
+        }
+        return GamesRummyStatusTail(lastEvent: last, turn: turn, isPlacing: hasOtherDraft)
     }
 }

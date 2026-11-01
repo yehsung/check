@@ -3,7 +3,6 @@
 // 차단은 되돌릴 수 있어야 한다(심사 지침 1.2). 목록·해제는 **메시지 스토어**가 쥔다(MessagesStore + MessagesBlockStore — 차단은 메시지 관계라
 // 두 스토어가 나눠 가지면 한쪽이 낡는다). 이 화면은 그 값을 그리고 [차단 해제]만 부른다. 해제도 확인을 지난다 — 손가락이 스쳐 풀리면
 // 사용자는 그 사실을 영영 모른다. 서버가 차단 RPC 를 모르면 "고장"이 아니라 "아직"이라고 말한다(스토어 blocksServerNotReady).
-// 아바타 사진은 그리지 않는다(이미지 적재기가 아직 없다 — 이름 첫 글자 원, 보고).
 package com.yehsung.aingcheck.ui.screens.settingscommon
 
 import androidx.compose.foundation.background
@@ -38,6 +37,7 @@ import com.yehsung.aingcheck.core.stores.me.MeText
 import com.yehsung.aingcheck.core.wire.models.BlockedUser
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.messages.LocalBlockReportPlatform
+import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import com.yehsung.aingcheck.ui.components.ModalPresenceMark
@@ -141,7 +141,7 @@ private fun BlockedRow(messages: MessagesStore, person: BlockedUser, isLast: Boo
         divider = if (isLast) RowDivider.None else RowDivider.Inset(BlockedPeopleRules.DIVIDER_LEADING.dp),
         minHeight = AingDimens.rowHeightTwoLine,
     ) {
-        InitialAvatar(person.name, BlockedPeopleRules.AVATAR.dp, colorSeed = person.userID)
+        PersonAvatar(person.name, person.userID, person.avatarURL?.absoluteString, BlockedPeopleRules.AVATAR.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(person.name, style = MaterialTheme.typography.bodyLarge, color = colors.label)
             person.blockedAt?.let { at ->

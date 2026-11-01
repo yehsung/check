@@ -278,11 +278,12 @@ fun AingChip(text: String, modifier: Modifier = Modifier, tint: Color = AingThem
 /**
  * 사람 아바타(+ 근무 중 점) — Swift `PersonAvatar(name:colorSeed:status:url:userID:size:)`: 사진 → 착용 캐릭터 → 이니셜 원.
  * 착용 캐릭터는 조립이 흘린 표([LocalAppUserCharacters])를 [colorSeed](= 사용자 id — 모든 호출부가 user.id 를 넘긴다)로 찾는다. 모르면 이니셜.
+ * [characterHint] 는 행이 실은 착용값 — 표가 아직 안 찬 세션에서 순위표 전원이 이니셜이 되지 않게(판정은 와이어 `AppUserCharacterDirectory.avatar`).
  */
 @Composable
-fun PersonAvatar(name: String, colorSeed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null) {
+fun PersonAvatar(name: String, colorSeed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null, characterHint: String? = null) {
     val colors = AingTheme.colors
-    val avatar = LocalAppUserCharacters.current.avatar(colorSeed, url?.let { SwiftURL.parse(it) })
+    val avatar = LocalAppUserCharacters.current.avatar(colorSeed, url?.let { SwiftURL.parse(it) }, characterHint)
     Box(modifier.size(size).clearAndSetSemantics { }) {
         if (avatar is AppUserAvatar.Initials) {
             val (ink, tint) = colors.avatar(colorSeed)

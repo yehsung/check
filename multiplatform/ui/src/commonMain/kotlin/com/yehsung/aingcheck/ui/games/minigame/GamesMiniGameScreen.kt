@@ -675,7 +675,7 @@ private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean,
         modifier = Modifier.semantics(mergeDescendants = true) { },
     ) {
         RankBadge(rank)
-        PersonAvatar(entry.name, entry.userID, 30.dp)
+        PersonAvatar(entry.name, entry.userID, 30.dp, url = entry.avatarURL?.absoluteString)
         PersonName(entry.name, Modifier.weight(1f), center = entry.center, isMe = isMe)
         if (dateCaption != null) Text(dateCaption, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = TNUM), color = colors.label3Text, maxLines = 1)
         Text(GamesMiniGameText.score(entry.bestScore), style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = TNUM), color = colors.label)

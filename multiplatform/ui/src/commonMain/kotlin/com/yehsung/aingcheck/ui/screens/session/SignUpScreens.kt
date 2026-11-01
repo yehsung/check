@@ -216,7 +216,7 @@ private fun TermsNotice() {
 
 /** 팀 생성 완료 카드(참여코드 + 복사). */
 @Composable
-private fun CreatedTeamCard(code: String, modifier: Modifier) {
+fun CreatedTeamCard(code: String, modifier: Modifier = Modifier) {
     val colors = AingTheme.colors
     val clipboard = LocalClipboardManager.current
     var copied by remember(code) { mutableStateOf(false) }

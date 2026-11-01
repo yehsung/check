@@ -35,6 +35,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.StatusMessageText
+import com.yehsung.aingcheck.core.stores.me.AvatarRemovalNoticeTone
+import com.yehsung.aingcheck.core.stores.me.AvatarRemovalText
+import com.yehsung.aingcheck.core.stores.me.beginAvatarRemoval
+import com.yehsung.aingcheck.core.stores.me.performAvatarRemoval
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.MeText
 import com.yehsung.aingcheck.core.stores.me.canClearStatusMessage
@@ -51,16 +55,18 @@ import com.yehsung.aingcheck.core.stores.me.saveDisplayName
 import com.yehsung.aingcheck.core.stores.me.saveStatusMessage
 import com.yehsung.aingcheck.core.stores.me.statusMessageDraftLength
 import com.yehsung.aingcheck.core.stores.me.statusMessageMaxLength
+import com.yehsung.aingcheck.core.wire.SwiftURL
+import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
 import com.yehsung.aingcheck.ui.components.CharacterMood
 import com.yehsung.aingcheck.ui.components.CharacterPortrait
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.session.LocalDesktopWording
+import com.yehsung.aingcheck.ui.screens.session.kit.AvatarFace
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButton
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingButtonKind
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingCard
 import com.yehsung.aingcheck.ui.screens.settingscommon.CountedTextField
-import com.yehsung.aingcheck.ui.screens.settingscommon.InitialAvatar
 import com.yehsung.aingcheck.ui.screens.settingscommon.InlineNotice
 import com.yehsung.aingcheck.ui.screens.settingscommon.LocalScreenArt
 import com.yehsung.aingcheck.ui.screens.settingscommon.NoticeKind
@@ -77,6 +83,10 @@ object ProfileTags {
     const val STATUS_SAVE = "profile-status-save"
     const val STATUS_CLEAR = "profile-status-clear"
     const val CHARACTER_ROW = "profile-character-row"
+    const val AVATAR_REMOVE = "profile-avatar-remove"
+    const val AVATAR_REMOVE_CONFIRM = "profile-avatar-remove-confirm"
+    const val AVATAR_REMOVE_CANCEL = "profile-avatar-remove-cancel"
+    const val AVATAR_REMOVE_NOTICE = "profile-avatar-remove-notice"
 }
 
 /** 프로필 화면 판정(순수 — 스토어 값을 화면 모양으로만 옮긴다). */
@@ -90,13 +100,15 @@ object ProfileScreenRules {
     /** 저장된 상태메시지가 있을 때만 [지우기]가 선다. */
     fun showsClear(statusMessage: String?): Boolean = statusMessage != null
 
-    /** 큰 아바타 자리: 사진 URL 이 있으면 사진(적재기 전까지는 이름 첫 글자 원), 없으면 착용 캐릭터(Swift AppUserAvatarFace). */
-    fun showsCharacterFace(hasPhotoURL: Boolean): Boolean = !hasPhotoURL
+    /** 큰 아바타 자리(Swift `AvatarView(url:userID:)`): 올린 사진 → 착용 캐릭터. 사진을 읽는 동안 · 못 읽으면 착용 캐릭터로 떨어진다(이름 첫 글자 원이 아니다). */
+    fun avatar(photoURL: SwiftURL?, equippedCharacterID: String): AppUserAvatar =
+        if (photoURL != null) AppUserAvatar.Photo(photoURL, equippedCharacterID) else AppUserAvatar.Character(equippedCharacterID)
 }
 
 /**
  * @param onPickPhoto 사진 고르기(플랫폼 선택기 → 스토어 uploadAvatar). 올리는 중에는 부르지 않는다.
  * @param openCharacters 착용 캐릭터 줄 → 캐릭터 고르기.
+ * @param showsAvatarRemoval [기본 캐릭터로 되돌리기] 행(맥 `AvatarRemovalSettingsRow`). Android 경로만 켠다 — Windows 는 사진을 올리는 자리도 없고(onPickPhoto 빈 값) 기능 동결이다.
  */
 @Composable
 fun ProfileScreen(
@@ -106,6 +118,7 @@ fun ProfileScreen(
     openCharacters: () -> Unit,
     modifier: Modifier = Modifier,
     scrollable: Boolean = true,
+    showsAvatarRemoval: Boolean = false,
 ) {
     val colors = AingTheme.colors
     val focus = LocalFocusManager.current
@@ -143,13 +156,15 @@ fun ProfileScreen(
                     ProfileScreenRules.pickerTitle(store.isUploadingAvatar),
                     AingButtonKind.Tinted,
                     onClick = onPickPhoto,
-                    enabled = !store.isUploadingAvatar,
+                    enabled = !store.isUploadingAvatar && !store.isRemovingAvatar,
                     icon = AppIcon.PhotoLibrary,
                     modifier = Modifier.testTag(ProfileTags.PICK_PHOTO),
                 )
                 store.avatarNotice?.let { InlineNotice(it, ProfileScreenRules.noticeKind(store.isAvatarNoticeError)) }
             }
         }
+
+        if (showsAvatarRemoval) AvatarRemovalCard(store, scope)
 
         AingCard {
             Text(MeText.displayNameLabel, style = MaterialTheme.typography.titleSmall, color = colors.label)
@@ -221,14 +236,62 @@ fun ProfileScreen(
     }
 }
 
-/** 사진이 없으면 착용 캐릭터 얼굴, 있으면(적재기 전까지) 이름 첫 글자 원. */
+/** 사진이 없으면 착용 캐릭터 초상, 있으면 올린 사진(못 읽는 동안은 공용 아바타가 착용 캐릭터를 그린다). */
 @Composable
 private fun ProfileAvatar(store: MeStore, size: Dp) {
-    val name = store.displayName ?: MeScreenText.tabTitle
-    if (ProfileScreenRules.showsCharacterFace(store.avatarURL != null)) {
-        CharacterPortrait(LocalScreenArt.current.portrait(store.equippedCharacterID, null), CharacterMood.Plain, size)
+    val avatar = ProfileScreenRules.avatar(store.avatarURL, store.equippedCharacterID)
+    if (avatar is AppUserAvatar.Character) {
+        CharacterPortrait(LocalScreenArt.current.portrait(avatar.id, null), CharacterMood.Plain, size)
     } else {
-        InitialAvatar(name, size)
+        AvatarFace(avatar, store.displayName ?: MeScreenText.tabTitle, size)
+    }
+}
+
+/**
+ * 사진을 지워 착용 캐릭터로 되돌리는 한 장(맥 `AvatarRemovalSettingsRow` — 2단 확인 · 설명 줄이 곧 결과 줄). 평소 [기본 캐릭터로 되돌리기] → 같은 자리가 [취소]+[되돌리기].
+ * 사진 유무로 감추거나 잠그지 않는다 — 서버 사진과 화면 사진이 어긋난 사람이 탈출구를 잃는다. 폭이 좁아 맥의 옆 칸 단추를 설명 아래 줄로 내렸다.
+ */
+@Composable
+private fun AvatarRemovalCard(store: MeStore, scope: CoroutineScope) {
+    val colors = AingTheme.colors
+    val signedIn = store.context.sessionStore.isSignedIn
+    val notice = AvatarRemovalText.notice(store.avatarRemovalNotice, signedIn, store.isConfirmingAvatarRemoval)
+    val noticeColor = when {
+        store.avatarRemovalNotice == null -> colors.label2
+        store.avatarRemovalNoticeTone == AvatarRemovalNoticeTone.success -> colors.working
+        store.avatarRemovalNoticeTone == AvatarRemovalNoticeTone.warning -> colors.pending
+        else -> colors.danger
+    }
+    AingCard {
+        Text(AvatarRemovalText.title, style = MaterialTheme.typography.titleSmall, color = colors.label)
+        Text(notice, style = MaterialTheme.typography.bodySmall, color = noticeColor, modifier = Modifier.testTag(ProfileTags.AVATAR_REMOVE_NOTICE))
+        if (store.isConfirmingAvatarRemoval) {
+            Row(horizontalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
+                AingButton(
+                    AvatarRemovalText.cancel,
+                    AingButtonKind.Gray,
+                    onClick = { store.isConfirmingAvatarRemoval = false },
+                    modifier = Modifier.weight(1f).testTag(ProfileTags.AVATAR_REMOVE_CANCEL),
+                )
+                // 되돌릴 수 없는 동작이라 빨강(차단 확인과 같은 규약).
+                AingButton(
+                    AvatarRemovalText.confirm,
+                    AingButtonKind.Danger,
+                    onClick = { scope.launch { store.performAvatarRemoval() } },
+                    enabled = !store.isRemovingAvatar,
+                    modifier = Modifier.weight(1f).testTag(ProfileTags.AVATAR_REMOVE_CONFIRM),
+                )
+            }
+        } else {
+            AingButton(
+                if (store.isRemovingAvatar) AvatarRemovalText.inFlight else AvatarRemovalText.action,
+                AingButtonKind.Gray,
+                onClick = store::beginAvatarRemoval,
+                enabled = !store.isRemovingAvatar && !store.isUploadingAvatar && signedIn,
+                fillsWidth = true,
+                modifier = Modifier.testTag(ProfileTags.AVATAR_REMOVE),
+            )
+        }
     }
 }
 

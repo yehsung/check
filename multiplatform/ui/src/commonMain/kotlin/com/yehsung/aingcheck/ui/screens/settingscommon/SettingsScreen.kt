@@ -20,18 +20,22 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
+import com.yehsung.aingcheck.core.stores.me.CenterSettingsRowState
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.MeText
 import com.yehsung.aingcheck.core.stores.me.inviteCodeFailed
+import com.yehsung.aingcheck.core.stores.me.loadMyCenterIfNeeded
 import com.yehsung.aingcheck.core.stores.me.privacyLoadFailed
 import com.yehsung.aingcheck.core.stores.me.retrySettings
 import com.yehsung.aingcheck.core.stores.me.setMiniGamePublic
@@ -63,6 +67,8 @@ object SettingsTags {
     const val SIGN_OUT = "settings-sign-out"
     const val VERSION = "settings-version"
     const val PRIVACY_POLICY = "settings-privacy-policy"
+    const val TERMS = "settings-terms"
+    const val CENTER_ROW = "settings-center"
     fun appearance(raw: String) = "settings-appearance:$raw"
 }
 
@@ -90,6 +96,9 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
     notifications: (@Composable () -> Unit)? = null,
     scrollable: Boolean = true,
+    /** 이용약관 줄 · 소속 센터 줄(맥 SettingsLegalLinks · CenterSettingsRow). Android 경로만 켠다 — Windows 는 기능 동결이다. */
+    showsTermsRow: Boolean = false,
+    showsCenterRow: Boolean = false,
 ) {
     val colors = AingTheme.colors
     val scroll = if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
@@ -102,10 +111,15 @@ fun SettingsScreen(
         if (notifications != null) notifications()
         AppearanceSection(appearance)
         TeamSection(store, actions)
-        AccountSection(store, actions)
+        AccountSection(store, actions, showsCenterRow)
         InsetGroup {
-            GroupRow(divider = RowDivider.None, onClick = { actions.openUrl(MeText.privacyPolicyURL) }, modifier = Modifier.testTag(SettingsTags.PRIVACY_POLICY)) {
+            GroupRow(divider = if (showsTermsRow) RowDivider.Card else RowDivider.None, onClick = { actions.openUrl(MeText.privacyPolicyURL) }, modifier = Modifier.testTag(SettingsTags.PRIVACY_POLICY)) {
                 ChevronRowContent(MeText.privacyPolicy, trailingIcon = AppIcon.NorthEast)
+            }
+            if (showsTermsRow) {
+                GroupRow(divider = RowDivider.None, onClick = { actions.openUrl(MeText.termsOfServiceURL) }, modifier = Modifier.testTag(SettingsTags.TERMS)) {
+                    ChevronRowContent(MeText.termsOfService, trailingIcon = AppIcon.NorthEast)
+                }
             }
         }
         Text(
@@ -210,9 +224,31 @@ private fun TeamSection(store: MeStore, actions: SettingsActions) {
     }
 }
 
+/** 소속 센터(읽기 전용 — 피커도 버튼도 없다, 맥 `CenterSettingsRow`). 값은 줄이지 않고 설명이 접힌다. 아직 모르면 이 줄이 묻는다(복구 경로). */
+@Composable
+private fun CenterRow(store: MeStore) {
+    val colors = AingTheme.colors
+    LaunchedEffect(store) { store.loadMyCenterIfNeeded() }
+    val state = CenterSettingsRowState.of(store.centerLoaded, store.centerServerValue)
+    GroupRow(minHeight = AingDimens.rowHeightTwoLine, modifier = Modifier.testTag(SettingsTags.CENTER_ROW)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(CenterSettingsRowState.title, style = MaterialTheme.typography.bodyLarge, color = colors.label)
+            Text(state.caption, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+        }
+        Spacer(Modifier.width(AingDimens.space2))
+        Text(
+            state.value,
+            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = colors.label,
+            maxLines = 1,
+            modifier = Modifier.semantics { contentDescription = "${CenterSettingsRowState.title} ${state.value}" },
+        )
+    }
+}
+
 /** 계정: 이메일 · [로그아웃](확인 대화상자) · 계정 삭제 행(글자만 빨강 — 로그아웃보다 한 단 낮은 무게, 시트만 연다). */
 @Composable
-private fun AccountSection(store: MeStore, actions: SettingsActions) {
+private fun AccountSection(store: MeStore, actions: SettingsActions, showsCenterRow: Boolean) {
     val colors = AingTheme.colors
     val session = store.context.sessionStore
     Column(verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
@@ -221,6 +257,7 @@ private fun AccountSection(store: MeStore, actions: SettingsActions) {
             SettingsRules.email(session.profile?.email, session.storedEmail)?.let { email ->
                 GroupRow { Text(email, style = MaterialTheme.typography.bodyMedium, color = colors.label2) }
             }
+            if (showsCenterRow) CenterRow(store)
             GroupRow {
                 FilledTonalButton(
                     onClick = actions::confirmSignOut,

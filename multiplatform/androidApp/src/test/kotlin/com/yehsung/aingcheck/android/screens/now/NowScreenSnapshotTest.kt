@@ -19,7 +19,15 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.filterToOne
+import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -37,11 +45,17 @@ import com.yehsung.aingcheck.core.session.SessionVaultKeys
 import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.session.app.SessionClock
 import com.yehsung.aingcheck.core.session.context.SessionContext
+import com.yehsung.aingcheck.core.stores.messages.MessagesStore
+import com.yehsung.aingcheck.core.stores.messages.NaturalKoNameCollation
 import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
 import com.yehsung.aingcheck.core.stores.now.NowWorkOrigin
 import com.yehsung.aingcheck.core.stores.now.todo.JvmTodoFileSystem
+import com.yehsung.aingcheck.android.nav.Dest
+import com.yehsung.aingcheck.android.nav.TabsNavHost
+import com.yehsung.aingcheck.android.screens.session.W3aScreenDeps
+import com.yehsung.aingcheck.core.wire.models.AppUserCharacterDirectory
 import com.yehsung.aingcheck.testkit.vault.InMemoryTokenVault
 import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.components.CharacterExpression
@@ -67,9 +81,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.rememberNavController
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -102,6 +122,9 @@ class NowScreenSnapshotTest {
     @Volatile
     private var frozen = false
 
+    /** 명단 장면: 데모 팀원 하나를 쉬는 사람으로 바꾼다(데모 픽스처는 전원 근무 중이라 '근무종료' 칩 · 쉬는 줄이 안 서는 까닭). */
+    private var offWorkMate: String? = null
+
     private val fixtures = File(repoRoot, "Sources/CheckMobileKit/Demo/Fixtures").walkTopDown().filter { it.isFile && it.name.endsWith(".json") }.map { f ->
         val rel = f.relativeTo(File(repoRoot, "Sources/CheckMobileKit/Demo/Fixtures")).invariantSeparatorsPath
         val scenario = rel.split('/').dropLast(1).lastOrNull { it.startsWith("_") }?.drop(1)
@@ -127,6 +150,14 @@ class NowScreenSnapshotTest {
             ?: return 404 to """{"code":"PGRST202","message":"Could not find the function public.$key"}"""
         val parsed = runCatching { Json.parseToJsonElement(hit.text) }.getOrNull()
         if (parsed is JsonObject && parsed["__status"] != null) return (parsed["__status"]!!.jsonPrimitive.intOrNull ?: 500) to (parsed["__body"]?.toString() ?: "{}")
+        val mate = offWorkMate
+        if (key == "rest.work_statuses.get" && mate != null) {
+            val rows = requireNotNull(parsed as? JsonArray).map { row ->
+                val o = row.jsonObject
+                if (o["user_id"]?.jsonPrimitive?.content == mate) JsonObject(o + ("status" to JsonPrimitive("off_work"))) else row
+            }
+            return 200 to JsonArray(rows).toString()
+        }
         return 200 to hit.text
     }
 
@@ -304,6 +335,105 @@ class NowScreenSnapshotTest {
         assertTrue("$name: 굵은 대조가 한 군데 다른 장면을 못 잡는다", first.maxBlockDelta(baseline) > 64)
     }
 
+    /**
+     * 명단 골든(밝음 · 어두움): 쉬는 사람 줄까지 그려져야 한다. 음성 기준선은 착용 캐릭터 표를 뺀 판 — 얼굴을 안 보는 비교면 같은 픽셀이 된다.
+     */
+    private fun checkRoster(name: String, dark: Boolean) {
+        offWorkMate = ROSTER_OFF_MATE
+        load()
+        val rows = store.teamRoster(clock.now())
+        assertEquals("쉬는 사람도 명단에 선다", com.yehsung.aingcheck.core.wire.models.MemberPresence.OffWork, rows.first { it.id == ROSTER_OFF_MATE }.presence)
+        assertFalse("지금 근무 중 절은 쉬는 사람을 뺀다", store.workingPeople(clock.now()).any { it.id == ROSTER_OFF_MATE })
+        val scene: @Composable () -> Unit = { Frame(dark) { TeamRosterScreen(store, onBack = {}) } }
+        val noFaces: @Composable () -> Unit = {
+            AingTheme(dark = dark) {
+                CompositionLocalProvider(LocalScreenTicking provides false, LocalScreenArt provides art, LocalAppUserCharacters provides AppUserCharacterDirectory(CharacterArt.portraitIds)) {
+                    TeamRosterScreen(store, onBack = {})
+                }
+            }
+        }
+        val first = render(360.dp, 760.dp, scene)
+        assertEquals("$name: 두 번 그린 장면이 다르다", 0, first.differing(render(360.dp, 760.dp, scene)))
+        System.getenv("AINGCHECK_EVIDENCE_DIR")?.let { runCatching { first.writePng(File(it, "android-$name.png")) } }
+        val golden = File(mpRoot, "androidApp/src/test/kotlin/com/yehsung/aingcheck/android/screens/now/golden/$name.png")
+        if (System.getenv("AINGCHECK_SNAPSHOT_RECORD") == "1") {
+            first.writePng(golden)
+            fail("$name: 골든을 기록했다(${golden.path}) — 기록 실행은 실패로 끝난다")
+        }
+        assertTrue("$name: 골든이 없다(${golden.path})", golden.isFile)
+        val expected = IntArrayImage.readPng(golden)
+        val exact = System.getProperty("os.name")?.startsWith("Mac") == true && System.getProperty("os.arch") == "aarch64"
+        val diff = expected.differing(first)
+        val block = expected.maxBlockDelta(first)
+        println("AINGCHECK-SNAPSHOT android now/$name mode=${if (exact) "exact" else "coarse"} ${first.width}x${first.height} diff=$diff block=$block")
+        if (if (exact) diff != 0 else (diff < 0 || block > 64)) {
+            first.writePng(File(mpRoot, "androidApp/build/aingcheck-snapshots/$name-actual.png"))
+            fail("$name: 골든과 다르다(diff=$diff block=$block)")
+        }
+        val baseline = render(360.dp, 760.dp, noFaces)
+        val negative = first.differing(baseline)
+        println("AINGCHECK-SNAPSHOT-NEGATIVE android now/$name diff=$negative block=${first.maxBlockDelta(baseline)}")
+        assertTrue("$name: 얼굴을 뺀 판과 같은 픽셀 — 비교가 얼굴을 못 본다", negative > 0)
+    }
+
+    @Test fun teamRosterPhoneLight() = checkRoster("team-roster-phone-light", dark = false)
+
+    @Test fun teamRosterPhoneDark() = checkRoster("team-roster-phone-dark", dark = true)
+
+    /** 부르는 자리: 지금 탭 [팀 전체 보기] → NavGraph 목적지 → 명단 줄 · 뒤로. 스토어만 있고 화면에 안 붙는 일을 막는다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun teamRosterOpensFromNowTabThroughNavGraph() {
+        offWorkMate = ROSTER_OFF_MATE
+        load()
+        val messages = MessagesStore(context, scope, NaturalKoNameCollation)
+        val deps = W3aScreenDeps(session, messages, store, phoneWork, characterID = { null }, rubyBalance = { null }, currentBuild = 1)
+        runComposeUiTest {
+            lateinit var nav: NavHostController
+            setContent { Frame(false) { nav = rememberNavController(); TabsNavHost(nav, screens = deps) } }
+            waitForIdle()
+            onAllNodes(hasScrollAction()).filterToOne(hasAnyDescendant(hasTestTag(NowTags.TEAM_ROSTER_ENTRY))).performScrollToNode(hasTestTag(NowTags.TEAM_ROSTER_ENTRY))
+            onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).assertIsDisplayed()
+            onNodeWithText(com.yehsung.aingcheck.core.stores.now.NowText.teamRosterEntry, useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithTag(TeamRosterTags.SCREEN).assertDoesNotExist()
+            onNodeWithTag(NowTags.TEAM_ROSTER_ENTRY).performClick()
+            waitForIdle()
+            onNodeWithTag(TeamRosterTags.SCREEN).assertExists()
+            onNodeWithTag(TeamRosterTags.row(ROSTER_OFF_MATE)).assertExists()
+            onNodeWithTag(TeamRosterTags.goal(ROSTER_OFF_MATE), useUnmergedTree = true).assertExists()
+            assertEquals(true, nav.currentDestination?.hasRoute(Dest.TeamRoster::class))
+            onNodeWithTag(TeamRosterTags.BACK).performClick()
+            waitForIdle()
+            onNodeWithTag(TeamRosterTags.SCREEN).assertDoesNotExist()
+            assertEquals(true, nav.currentDestination?.hasRoute(Dest.NowHome::class))
+        }
+    }
+
+    /** 팀 만든 직후 코드 카드: 지금 탭 맨 위에 서고 코드 · 복사가 보이며 [확인]으로 사라진다. 스토어 값 없이는 안 선다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun createdTeamCardShowsTheCodeUntilConfirmed() {
+        load()
+        runComposeUiTest {
+            setContent { Frame(false) { NowScreen(store, phoneWork, characterID = null, onTalk = {}, onEditGoal = {}) } }
+            waitForIdle()
+            onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertDoesNotExist()
+            runBlocking(dispatcher) { store.teamJoin.onTeamCreated!!.invoke("X7K2M9Q4") }
+            waitForIdle()
+            onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertIsDisplayed()
+            onNodeWithText("팀이 만들어졌어요").assertIsDisplayed()
+            onNodeWithText("X7K2M9Q4").assertIsDisplayed()
+            onNodeWithText("팀원에게 이 코드를 전달하세요").assertIsDisplayed()
+            onNodeWithText("복사").assertIsDisplayed().performClick()
+            waitForIdle()
+            onNodeWithText("복사됨").assertIsDisplayed()
+            onNodeWithTag(NowTags.CREATED_TEAM_CONFIRM).performClick()
+            waitForIdle()
+            onNodeWithTag(NowTags.CREATED_TEAM_CARD).assertDoesNotExist()
+            assertEquals(null, store.createdTeamCode)
+        }
+    }
+
     @Test fun nowPhoneLight() = check("now-phone-light", 360.dp, 760.dp, dark = false)
 
     @Test fun nowPhoneDark() = check("now-phone-dark", 360.dp, 760.dp, dark = true)
@@ -313,5 +443,6 @@ class NowScreenSnapshotTest {
 
     private companion object {
         const val TAG = "aingcheck-now"
+        const val ROSTER_OFF_MATE = "d0000000-0000-4000-8000-000000000103"
     }
 }

@@ -72,6 +72,7 @@ import com.yehsung.aingcheck.android.screens.messages.ReportSheetEntry
 import com.yehsung.aingcheck.android.screens.now.NowHomeEntry
 import com.yehsung.aingcheck.android.screens.now.TeamGoalSheetEntry
 import com.yehsung.aingcheck.android.screens.now.TeamJoinSheetEntry
+import com.yehsung.aingcheck.android.screens.now.TeamRosterEntry
 import com.yehsung.aingcheck.android.screens.session.PasswordResetEntry
 import com.yehsung.aingcheck.android.screens.session.SignUpEntry
 import com.yehsung.aingcheck.android.screens.session.SignedOutEntry
@@ -97,6 +98,7 @@ import com.yehsung.aingcheck.android.screens.messages.ReportSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.now.NowHomePlaceholder
 import com.yehsung.aingcheck.android.screens.now.TeamGoalSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.now.TeamJoinSheetPlaceholder
+import com.yehsung.aingcheck.android.screens.now.TeamRosterPlaceholder
 import com.yehsung.aingcheck.android.screens.rankings.RankingsHomePlaceholder
 import com.yehsung.aingcheck.android.screens.session.LoginPlaceholder
 import com.yehsung.aingcheck.android.screens.session.PasswordResetPlaceholder
@@ -186,6 +188,7 @@ private fun NavGraphBuilder.nowGraph(open: (Any) -> Unit) =
         shellScreen<Dest.NowHome> { NowHomePlaceholder(open) }
         dialog<Dest.TeamGoalSheet> { TeamGoalSheetPlaceholder() }
         dialog<Dest.TeamJoinSheet> { TeamJoinSheetPlaceholder() }
+        shellScreen<Dest.TeamRoster> { TeamRosterPlaceholder() }
     }
 
 private fun NavGraphBuilder.nowGraph(screens: W3aScreenDeps, open: (Any) -> Unit, back: () -> Unit, openRoute: (AingRoute) -> Unit) =
@@ -193,6 +196,7 @@ private fun NavGraphBuilder.nowGraph(screens: W3aScreenDeps, open: (Any) -> Unit
         shellScreen<Dest.NowHome> { NowHomeEntry(screens.now, screens.nowWork, screens.characterID(), open, openRoute) }
         dialog<Dest.TeamGoalSheet> { TeamGoalSheetEntry(screens.now, back) }
         dialog<Dest.TeamJoinSheet> { TeamJoinSheetEntry(screens.now, back) }
+        shellScreen<Dest.TeamRoster> { TeamRosterEntry(screens.now, back) }
     }
 
 private fun NavGraphBuilder.messagesGraph(screens: W3aScreenDeps, open: (Any) -> Unit, back: () -> Unit, toList: () -> Unit) =

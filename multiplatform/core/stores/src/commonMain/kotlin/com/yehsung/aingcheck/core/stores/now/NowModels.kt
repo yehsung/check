@@ -75,6 +75,15 @@ object NowText {
     const val otherTeams = "다른 팀"
     const val workingEmpty = "지금 근무 중인 사람이 없어요"
     fun peopleCount(count: Int): String = "${count}명"
+    /** 지금 탭 → 우리 팀 전체 명단 입구 줄. */
+    const val teamRosterEntry = "팀 전체 보기"
+    /** 명단 화면 제목(팀 이름을 아직 모를 때). */
+    const val teamRosterTitle = "우리 팀"
+    const val teamRosterEmpty = "아직 근무 기록이 있는 팀원이 없어요"
+    const val teamRosterUnavailable = "팀원을 불러오지 못했어요"
+    const val goalMet = "주간 목표 달성"
+    /** 팀 만든 직후 참여코드 카드의 닫기(맥 `CreatedTeamCodeCard` — 제목 · 안내 · 복사는 가입 화면 글자 `SignUpText`). */
+    const val createdTeamConfirm = "확인"
     const val workingFooter = "근무는 맥·PC나 이 탭 맨 위 버튼으로 시작하고 끝내요"
     const val workingFooterMacOnly = "근무 시작과 종료는 맥 앱에서 해요"
     fun staleLastSeen(relative: String?): String = if (relative == null) connectionLost else "$connectionLost · 마지막 확인 $relative"

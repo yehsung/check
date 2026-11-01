@@ -14,6 +14,8 @@ import com.yehsung.aingcheck.core.wire.models.FeedbackText
 import com.yehsung.aingcheck.core.rules.character.CharacterManifest
 import com.yehsung.aingcheck.ui.screens.settingscommon.NoticeKind
 import com.yehsung.aingcheck.ui.theme.AingColors
+import com.yehsung.aingcheck.core.wire.SwiftURL
+import com.yehsung.aingcheck.core.wire.models.AppUserAvatar
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -104,8 +106,11 @@ class MeSubScreenRulesTest {
         assertEquals("사진 바꾸기", ProfileScreenRules.pickerTitle(uploading = false))
         assertTrue(ProfileScreenRules.showsClear("오후엔 리뷰"))
         assertTrue(!ProfileScreenRules.showsClear(null), "저장된 상태가 없으면 [지우기]가 없다")
-        assertTrue(ProfileScreenRules.showsCharacterFace(hasPhotoURL = false), "사진이 없으면 착용 캐릭터")
-        assertTrue(!ProfileScreenRules.showsCharacterFace(hasPhotoURL = true))
+        assertEquals(AppUserAvatar.Character("fox"), ProfileScreenRules.avatar(null, "fox"), "사진이 없으면 착용 캐릭터")
+        val url = SwiftURL.parse("https://example.com/me.jpg")!!
+        val photo = ProfileScreenRules.avatar(url, "fox")
+        assertEquals(AppUserAvatar.Photo(url, "fox"), photo, "올린 사진을 그린다")
+        assertEquals(AppUserAvatar.Character("fox"), photo.afterPhotoFailure, "사진을 못 읽으면 이름 첫 글자 원이 아니라 착용 캐릭터")
         assertEquals(NoticeKind.Error, ProfileScreenRules.noticeKind(true))
         assertEquals(NoticeKind.Info, ProfileScreenRules.noticeKind(false))
     }

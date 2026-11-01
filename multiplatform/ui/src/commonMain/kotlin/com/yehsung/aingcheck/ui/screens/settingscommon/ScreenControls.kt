@@ -58,7 +58,7 @@ fun AingCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() 
 }
 
 /** 버튼 종류(뜻이 다르면 모양도 다르다 — 채운 버튼은 화면당 하나). */
-enum class AingButtonKind { Filled, Tinted, Gray, Plain }
+enum class AingButtonKind { Filled, Tinted, Gray, Plain, Danger }
 
 /**
  * Swift `AingButton`. [busy] 면 글자 대신 도는 표시를 세우고 누름을 막는다(두 번 눌러 두 번 보내지 않게).
@@ -82,6 +82,7 @@ fun AingButton(
         AingButtonKind.Tinted -> colors.accentTint to colors.accent
         AingButtonKind.Gray -> colors.fill to colors.label
         AingButtonKind.Plain -> androidx.compose.ui.graphics.Color.Transparent to colors.accent
+        AingButtonKind.Danger -> colors.danger to colors.onAccentFill
     }
     Button(
         onClick = { if (!busy) onClick() },

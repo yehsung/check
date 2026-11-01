@@ -34,6 +34,9 @@ class TeamJoinStore(private val context: SessionContext) {
     /** 팀이 정해졌다 — 지금 탭이 받아 소속을 다시 읽는다. */
     var onTeamSettled: (() -> Unit)? = null
 
+    /** 새 팀을 만들었다 — `create_team` 이 돌려준 참여코드(맥 `createdTeamCode`). [onTeamSettled] 보다 먼저 부른다. */
+    var onTeamCreated: ((String) -> Unit)? = null
+
     /** 제출 왕복 세대(늦은 응답 버리기). 계정 세대와 따로 센다 — 같은 계정 안에서도 겹칠 수 있다. */
     private var submitGeneration = 0
 
@@ -105,9 +108,14 @@ class TeamJoinStore(private val context: SessionContext) {
         if (generation != submitGeneration || appGeneration != context.generation || userID != context.sessionStore.userID) return
         _isSubmitting.value = false
         when (outcome) {
-            is TeamJoinForm.Outcome.Settled -> when (outcome.settled) {
-                is TeamJoinForm.Settled.Joined, is TeamJoinForm.Settled.Created -> {
+            is TeamJoinForm.Outcome.Settled -> when (val settled = outcome.settled) {
+                is TeamJoinForm.Settled.Joined -> {
                     _notice.value = null
+                    onTeamSettled?.invoke()
+                }
+                is TeamJoinForm.Settled.Created -> {
+                    _notice.value = null
+                    onTeamCreated?.invoke(settled.inviteCode)
                     onTeamSettled?.invoke()
                 }
                 // 코드 칸 아래 줄은 폼이 이미 '다른 센터 팀이에요' 로 바꿔 놓았다 — 카드는 그대로 두고 다시 치게 한다.

@@ -141,6 +141,47 @@ class NowStoreTest {
         h.assertClean()
     }
 
+    /**
+     * 원본: Tests/checkTests/WorkTimerStoreTests.swift:144(signUpCreateModeSetsCreatedTeamCode) · :182(dismiss) · :1173(로그아웃).
+     * 무소속 카드에서 새 팀을 만들면 create_team 이 돌려준 코드가 카드 값으로 선다 · [확인]이면 사라진다 · 합류(코드로 들어감)는 카드가 없다 · 로그아웃이면 비운다.
+     */
+    @Test
+    fun creatingATeamKeepsItsCodeUntilConfirmedAndJoiningDoesNot() = runTest {
+        var created = false
+        val (_, store) = make { r ->
+            when {
+                r.rpcName == "create_team" -> {
+                    created = true
+                    Reply.Json("""[{"team_id":"team-1","name":"새 팀","invite_code":"X7K2M9Q4","weekly_goal_hours":40}]""")
+                }
+                r.path == "/rest/v1/memberships" -> if (created) Reply.Json(StoreHarness.MEMBERSHIP) else Reply.Json("[]")
+                else -> teamRoutes(r)
+            }
+        }
+        store.appDidBecomeActive()
+        advanceUntilIdle()
+        assertTrue(store.hasNoTeam)
+        assertNull(store.createdTeamCode)
+        store.teamJoin.toggleCreateTeamMode()
+        store.teamJoin.form.createTeamName.value = "새 팀"
+        store.teamJoin.submit()
+        advanceUntilIdle()
+        assertTrue(created)
+        assertEquals("X7K2M9Q4", store.createdTeamCode)
+        assertFalse(store.hasNoTeam, "카드와 함께 소속도 다시 읽었다")
+        assertEquals("team-1", store.membership?.teamID)
+        store.dismissCreatedTeamCode()
+        assertNull(store.createdTeamCode)
+        // 합류 문(onTeamSettled 만)은 카드를 세우지 않는다.
+        store.teamJoin.onTeamSettled!!.invoke()
+        advanceUntilIdle()
+        assertNull(store.createdTeamCode)
+        store.teamJoin.onTeamCreated!!.invoke("AAAA1111")
+        assertEquals("AAAA1111", store.createdTeamCode)
+        store.reset()
+        assertNull(store.createdTeamCode, "앞 사람 코드를 다음 사람에게 남기지 않는다")
+    }
+
     @Test
     fun offlineRefreshShowsFailureInsteadOfEndlessSpinner() = runTest {
         val (h, store) = make { r -> if (r.path == "/rest/v1/memberships" && r.query.isNotEmpty()) Reply.Offline else teamRoutes(r) }

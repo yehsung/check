@@ -383,9 +383,9 @@ private fun HubLiveMatchRow(live: GomokuLiveMatch, now: () -> SwiftDate, isLast:
     }
     val faces: @Composable () -> Unit = {
         Row(Modifier.clearAndSetSemantics { }, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PersonAvatar(live.a.displayName, live.a.id, 30.dp)
+            PersonAvatar(live.a.displayName, live.a.id, 30.dp, url = live.a.avatarURL, characterHint = live.a.characterID)
             Text("vs", style = MaterialTheme.typography.bodySmall, color = colors.label2)
-            PersonAvatar(live.b.displayName, live.b.id, 30.dp)
+            PersonAvatar(live.b.displayName, live.b.id, 30.dp, url = live.b.avatarURL, characterHint = live.b.characterID)
         }
     }
     GroupRow(dividerInset = if (isLast) null else AingDimens.cardPadding) {

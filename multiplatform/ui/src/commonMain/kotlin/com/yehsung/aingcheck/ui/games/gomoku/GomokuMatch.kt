@@ -302,7 +302,7 @@ internal fun GomokuResultView(games: GamesStore, gomoku: GomokuStore, match: Gom
                             Text(GomokuPhoneText.outcomeTitle(match.outcome), style = BoardText.title2(), color = colors.label)
                             Text(GomokuScreenText.endReason(chrome, match.endReason, match.outcome), style = BoardText.subheadline(), color = colors.label2)
                             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                                if (chrome.isAI) GomokuAIPortrait(20.dp) else BoardAvatar(match.opponent.displayName, match.opponent.id, 20.dp)
+                                if (chrome.isAI) GomokuAIPortrait(20.dp) else BoardAvatar(match.opponent.displayName, match.opponent.id, 20.dp, url = match.opponent.avatarURL, characterHint = match.opponent.characterID)
                                 Text(GomokuScreenText.opponentLine(chrome, match.opponent.displayName), style = BoardText.caption(), color = colors.label2)
                             }
                         }

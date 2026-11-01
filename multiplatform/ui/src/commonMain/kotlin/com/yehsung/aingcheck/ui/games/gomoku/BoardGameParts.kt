@@ -346,11 +346,12 @@ fun BoardButton(
  * 사람 아바타(Swift `PersonAvatar(name:colorSeed:status:url:userID:size:)` — 로비 GamesGomokuScreen.swift:398·443·528): 사진 → 착용 캐릭터 →
  * 이니셜 원 + 근무 중 점. 착용 캐릭터는 조립이 흘린 표([LocalAppUserCharacters])를 [seed](= 사용자 id — 모든 호출부가 user.id 를 넘긴다)로 찾는다.
  * 표가 이 사람을 모를 때만 이니셜(8c 04: 메시지 화면에선 캐릭터인 사람이 로비에선 이니셜로 보였다).
+ * [characterHint] 는 행이 실은 착용값 — 표가 아직 안 찬 세션에서 순위표 전원이 이니셜이 되지 않게(판정은 와이어 `AppUserCharacterDirectory.avatar`).
  */
 @Composable
-fun BoardAvatar(name: String, seed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null) {
+fun BoardAvatar(name: String, seed: String, size: Dp, modifier: Modifier = Modifier, working: Boolean = false, url: String? = null, characterHint: String? = null) {
     val colors = AingTheme.colors
-    val avatar = LocalAppUserCharacters.current.avatar(seed, url?.let { SwiftURL.parse(it) })
+    val avatar = LocalAppUserCharacters.current.avatar(seed, url?.let { SwiftURL.parse(it) }, characterHint)
     Box(modifier.size(size).semantics(mergeDescendants = true) { contentDescription = name }) {
         if (avatar is AppUserAvatar.Initials) {
             val (ink, tint) = colors.avatar(seed)

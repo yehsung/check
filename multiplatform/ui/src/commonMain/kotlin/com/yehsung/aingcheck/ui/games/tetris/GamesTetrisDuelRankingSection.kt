@@ -179,7 +179,7 @@ private fun RankRow(entry: TetrisDuelRankEntry, isMe: Boolean, isLast: Boolean) 
         modifier = Modifier.clearAndSetSemantics { contentDescription = TetrisPhoneText.rankRowAccessibility(entry, isMe) },
     ) {
         RankBadge(entry.rank)
-        PersonAvatar(entry.user.displayName, entry.user.id, 30.dp)
+        PersonAvatar(entry.user.displayName, entry.user.id, 30.dp, url = entry.user.avatarURL, characterHint = entry.user.characterID)
         val points: @Composable () -> Unit = {
             // 승점은 **부호를 보이게**("+4" · "−2" · "0") — 색으로 말하지 않는다(초록·앰버는 근무·연결 끊김의 뜻이라 갈린다).
             Text(TetrisPhoneText.points(entry.points), style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM), color = colors.label)

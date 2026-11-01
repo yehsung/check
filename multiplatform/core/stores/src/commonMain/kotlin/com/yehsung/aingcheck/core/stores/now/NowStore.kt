@@ -16,6 +16,7 @@ import com.yehsung.aingcheck.core.rules.text.StatusMessage
 import com.yehsung.aingcheck.core.session.SessionText
 import com.yehsung.aingcheck.core.session.context.SessionContext
 import com.yehsung.aingcheck.core.session.team.TeamJoinStore
+import com.yehsung.aingcheck.core.stores.messages.NaturalKoNameCollation
 import com.yehsung.aingcheck.core.stores.messages.SwiftStrings
 import com.yehsung.aingcheck.core.stores.now.todo.TodoListStore
 import com.yehsung.aingcheck.core.stores.now.todo.TodoSync
@@ -107,6 +108,10 @@ class NowStore(
 
     /** 방금 팀에 들어갔는데(합류·생성) 아직 소속을 못 읽었다 — 그 한 왕복 동안은 무소속 카드도, 실패 줄도 아니고 **스피너**다. */
     var isSettlingTeam: Boolean by mutableStateOf(false)
+        private set
+
+    /** 방금 만든 팀의 참여코드(맥 `createdTeamCode` — 공유 안내 카드). [확인]을 누르거나 로그아웃하면 비운다. */
+    var createdTeamCode: String? by mutableStateOf(null)
         private set
     var teamMembers: List<TeamMemberStatus> by mutableStateOf(emptyList())
         private set
@@ -204,6 +209,7 @@ class NowStore(
         // 목록이 바뀔 때마다(사용자 · 동기화 병합 · 다시 읽기) 위젯 스냅숏을 고친다(Swift `observeTodos`).
         todos.onItemsChanged = { writeWidget(deferWhileRefreshing = true) }
         teamJoin.onTeamSettled = { adoptSettledTeam() }
+        teamJoin.onTeamCreated = { code -> createdTeamCode = code }
     }
 
     /**
@@ -220,6 +226,11 @@ class NowStore(
         refresh()
         // 팀 이름·역할은 다른 탭(나 탭 설정 · 머리)도 읽는다 — 로그인 직후와 같은 길로 한 번 채운다.
         scope.launch { context.sessionStore.refreshProfile() }
+    }
+
+    /** 참여코드 카드 [확인](맥 `dismissCreatedTeamCode`). */
+    fun dismissCreatedTeamCode() {
+        createdTeamCode = null
     }
 
     val badgeCount: Int get() = 0
@@ -260,6 +271,7 @@ class NowStore(
         membership = null
         hasNoTeam = false
         isSettlingTeam = false
+        createdTeamCode = null
         teamSettleSerial += 1
         teamJoin.reset()
         teamMembers = emptyList()
@@ -565,6 +577,24 @@ class NowStore(
             .sortedWith(::nameThenIDOrder)
         val seen = HashSet<String>()
         return (teammates + others).filter { seen.add(it.id) }
+    }
+
+    /**
+     * 우리 팀 전체 명단(나 포함 · 쉬는 사람 포함 — 맥 `TeamPanel.sortedMembers`). 팀 상태를 한 번도 못 받았으면 빈 목록이다 — 화면은 [teamLoadState] 로 가른다.
+     * 팀 상태 표(`work_statuses`)에 행이 없는 사람(한 번도 근무한 적 없는 팀원)은 맥처럼 줄이 없다.
+     */
+    fun teamRoster(now: SwiftDate): List<NowTeamRosterRow> {
+        val fetchedAt = teamFetchedAt ?: return emptyList()
+        return NowTeamRoster.rows(
+            members = teamMembers,
+            directory = directory,
+            myUserID = context.sessionStore.userID,
+            goalSeconds = maxOf(1, goalHours) * 3600L,
+            fetchedAt = fetchedAt,
+            now = now,
+            judgedAt = presenceJudgedAt(now),
+            collation = NaturalKoNameCollation,
+        )
     }
 
     private fun teammateOrder(lhs: NowWorkingPerson, rhs: NowWorkingPerson): Int {

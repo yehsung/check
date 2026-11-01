@@ -82,6 +82,10 @@ class MeStore(
     /** 센터 **서버값**("seoul"). 화면은 센터 배지가 글자로 접는다. */
     var centerServerValue by mutableStateOf<String?>(null)
         internal set
+
+    /** 센터 서버값을 한 번이라도 받았다 — 못 받은 것을 "미지정"으로 단정하지 않게(맥 `myCenterLoaded`). */
+    var centerLoaded by mutableStateOf(false)
+        internal set
     val headerState = MeLoadState()
 
     // MARK: 기록
@@ -325,6 +329,15 @@ class MeStore(
     var isAvatarNoticeError by mutableStateOf(false)
         internal set
 
+    // MARK: 사진 되돌리기(맥 v0.3.36 — 확인 단계도 화면이 아니라 스토어가 쥔다: 다음에 열 때 빨간 [되돌리기]가 무장돼 있지 않게 접어야 한다)
+    var isRemovingAvatar by mutableStateOf(false)
+        internal set
+    var isConfirmingAvatarRemoval by mutableStateOf(false)
+    var avatarRemovalNotice by mutableStateOf<String?>(null)
+        internal set
+    var avatarRemovalNoticeTone by mutableStateOf(AvatarRemovalNoticeTone.success)
+        internal set
+
     // MARK: 상태메시지 (v0.3.51 — MeStoreStatusMessage)
     var statusMessage by mutableStateOf<String?>(null)
         internal set
@@ -430,6 +443,7 @@ class MeStore(
         displayName = null
         avatarURL = null
         centerServerValue = null
+        centerLoaded = false
         headerState.reset()
         heatmap = WorkRhythmHeatmap.empty
         retro = null
@@ -507,6 +521,10 @@ class MeStore(
         isUploadingAvatar = false
         avatarNotice = null
         isAvatarNoticeError = false
+        isRemovingAvatar = false
+        isConfirmingAvatarRemoval = false
+        avatarRemovalNotice = null
+        avatarRemovalNoticeTone = AvatarRemovalNoticeTone.success
         // 상태메시지도 계정에 묶인다 — 남기면 다음 계정 편집 화면에 앞 사람의 문장이 '내 값'으로 선다.
         statusMessage = null
         statusMessageLoaded = false
@@ -652,7 +670,10 @@ class MeStore(
             // 센터는 독립 실패 — 못 읽으면 지난 값을 둔다(모르는 것을 "미지정"으로 단정하지 않는다).
             val center = attempt { s -> service.fetchMyCenter(s.accessToken, s.userID) }
             if (generation != context.generation || !isCurrent("header", serial)) return
-            center.onSuccess { centerServerValue = it }
+            center.onSuccess {
+                centerServerValue = it
+                centerLoaded = true
+            }
             headerState.hasLoaded = true
             headerState.loadedAt = context.clock.now()
         } finally {

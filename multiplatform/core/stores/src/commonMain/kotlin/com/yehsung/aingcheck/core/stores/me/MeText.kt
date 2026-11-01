@@ -723,6 +723,9 @@ object MeText {
     /** 주소는 세션 층 [AppLinks] 한 곳(INV-MobileSessionStore-f754b3e3)에서 온다 — 여기 글자로 다시 적지 않는다. */
     val privacyPolicyURL: String get() = AppLinks.privacyPolicy
 
+    const val termsOfService = "이용약관"
+    val termsOfServiceURL: String get() = AppLinks.termsOfService
+
     const val deleteAccount = "계정 삭제"
     const val deleteAccountTitle = "계정을 지울까요?"
     const val deleteAccountLede = "이 계정의 모든 것이 서버에서 지워져요."

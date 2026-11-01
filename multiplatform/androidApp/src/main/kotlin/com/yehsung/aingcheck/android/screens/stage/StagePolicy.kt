@@ -1,18 +1,14 @@
-// 원본: 없음 (iOS 는 초상만 — 결정 #2 '살아 있는 아잉이 미리보기 하나'(G §5-3 · §8-12) · F §8 B · §8-17 #7 케이크 접기 · §8-19 #6② 공개 한 바퀴. Swift 짝이 없는 Android 전용 규칙)
+// 원본: 없음 (iOS 는 초상만 — 결정 #2 '살아 있는 아잉이 미리보기 하나'(G §5-3 · §8-12) · F §8 B · §8-19 #6② 공개 한 바퀴. Swift 짝이 없는 Android 전용 규칙)
+// 케이크 둘은 iOS 처럼 정지 초상이다(Sources/CheckMobileKit/Me/MeTab.swift:190 · MeCakeGiftViews.swift:148). 예전엔 굽지 않아 아잉으로 접혔는데(§8-17 #7) 받은 캐릭터가 일반 아잉이로 보였다.
 package com.yehsung.aingcheck.android.screens.stage
-
-import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
 
 /** 무대가 이 캐릭터를 어떻게 그리나. */
 sealed interface StageMode {
-    /**
-     * 구운 아잉이를 살려 그린다. [drawnId] = 실제로 그릴 마감(서버 id). 케이크 둘은 굽지 않아 **아잉으로 접힌다**([folded] — G §8-17 #7,
-     * 오버레이·미리보기 공통 결정). 접힌 사실은 접근성 글에만 남기고 그림은 아잉 그대로다.
-     */
-    data class Live(val drawnId: String, val folded: Boolean) : StageMode
+    /** 구운 아잉이를 살려 그린다. [drawnId] = 실제로 그릴 마감(서버 id). */
+    data class Live(val drawnId: String) : StageMode
 
     /**
-     * 초상(iOS 와 같은 무대 그림). 스프라이트 6종(여우 · 시바 …)과 이 빌드가 모르는 id. Android 기본 묶음에는 스프라이트 아틀라스가 없다
+     * 초상(iOS 와 같은 무대 그림). 스프라이트 6종(여우 · 시바 …) · 굽지 않는 케이크 둘 · 이 빌드가 모르는 id. Android 기본 묶음에는 스프라이트 아틀라스가 없다
      * (6장 6.3MB — 묶음 예산 4.5MB 밖, ui Sync 도 아틀라스를 싣지 않는다). 모르는 id 를 아잉으로 접는 맥 규칙은 오버레이(남의 캐릭터)
      * 몫이고, 나 탭 무대에서 내가 입은 캐릭터를 다른 캐릭터로 바꿔 보이면 안 된다.
      */
@@ -50,11 +46,7 @@ object StagePolicy {
      */
     fun mode(characterId: String?, bakedIds: Set<String>): StageMode {
         val id = characterId?.trim().orEmpty()
-        if (id in bakedIds) return StageMode.Live(id, folded = false)
-        if (CharacterCatalog.isCakeAing(id) && CharacterCatalog.builtInAingID in bakedIds) {
-            return StageMode.Live(CharacterCatalog.builtInAingID, folded = true)
-        }
-        return StageMode.Portrait
+        return if (id in bakedIds) StageMode.Live(id) else StageMode.Portrait
     }
 }
 

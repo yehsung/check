@@ -50,7 +50,7 @@ class ShellTabBarRulesTest {
     fun listScreensKeepTheTabBarEvenDuringPlay() {
         val lists = listOf(
             Dest.NowHome::class, Dest.MessagesList::class, Dest.RankingsHome::class, Dest.GamesHome::class,
-            Dest.MeHome::class, Dest.Settings::class, Dest.Missions::class, Dest.Profile::class,
+            Dest.MeHome::class, Dest.Settings::class, Dest.Missions::class, Dest.Profile::class, Dest.TeamRoster::class,
         )
         for (route in lists) assertFalse("$route: 목록 화면에서 탭 막대가 숨었다", ShellTabBarRules.hidesTabBar(route, inPlay))
         assertFalse("목적지를 모르면 숨기지 않는다", ShellTabBarRules.hidesTabBar(null as kotlin.reflect.KClass<*>?, inPlay))

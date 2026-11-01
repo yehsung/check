@@ -71,6 +71,7 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.settingscommon.AingChipLabel
 import com.yehsung.aingcheck.ui.screens.settingscommon.CenterBadge
 import com.yehsung.aingcheck.ui.screens.settingscommon.GroupRow
+import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.screens.settingscommon.InitialAvatar
 import com.yehsung.aingcheck.ui.screens.settingscommon.InlineNotice
 import com.yehsung.aingcheck.ui.screens.settingscommon.InsetGroup
@@ -184,14 +185,14 @@ internal fun RankBadge(rank: Int) {
     }
 }
 
-/** 행 얼굴: 나 = 착용 캐릭터 초상(표정 = 상태), 그 밖 = 이니셜 원(사진은 이 판에서 읽지 않는다 — 네트워크 그림 0). */
+/** 행 얼굴(Swift `RankingsFace`): 나 = 착용 캐릭터 초상(표정 = 상태), 그 밖 = 사진 → 착용 캐릭터 → 이니셜(공용 아바타 판정). */
 @Composable
-private fun RowFace(name: String, colorSeed: String, size: Dp, me: RankingsMyFace?) {
+private fun RowFace(name: String, userID: String, url: String?, size: Dp, me: RankingsMyFace?) {
     if (me != null) {
         val art = LocalScreenArt.current.portrait(me.characterId ?: DEFAULT_CHARACTER, me.mood)
         CharacterPortrait(art, me.mood, size, ringGap = AingTheme.colors.accentTint)
     } else {
-        InitialAvatar(name, size, colorSeed = colorSeed)
+        PersonAvatar(name, userID, url, size)
     }
 }
 
@@ -388,7 +389,7 @@ private fun TokenRow(
     RankRow(
         rank, isMine = isMe, isLast = isLast, faceBase = 36.dp,
         description = RankingsText.tokenRowAccessibility(rank, entry, isMe, RankingsChip.PrivateUsage in chips, todayKey),
-        face = { RowFace(entry.name, entry.name, 36.dp, me) },
+        face = { RowFace(entry.name, entry.userID, entry.avatarURL?.absoluteString, 36.dp, me) },
         content = {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -553,7 +554,7 @@ private fun MiniGameRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, me:
     RankRow(
         rank, isMine = isMe, isLast = isLast, faceBase = 30.dp, minHeight = 48.dp,
         description = RankingsText.miniGameRowAccessibility(rank, entry, isMe, dateCaption),
-        face = { RowFace(entry.name, entry.name, 30.dp, me) },
+        face = { RowFace(entry.name, entry.userID, entry.avatarURL?.absoluteString, 30.dp, me) },
         content = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NameLine(entry.name, entry.center, if (isMe) listOf(RankingsChip.Me) else emptyList(), Modifier.weight(1f))

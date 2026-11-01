@@ -165,7 +165,7 @@ internal fun ChessRankingSection(chess: ChessStore, state: ChessScreenState) {
  * 순위 한 줄 — 순위 원 · 얼굴 · 이름(+센터) · 오른쪽 승점과 승·패·무.
  * INV-GamesChessRanking-ff383cb1 이식: **일곱 칸을 다 그린다**(순위 · 아바타 · 이름 · 승점 · 승 · 패 · 무). 승점만 띄우는 것은 사용자가 금지했다.
  * INV-GamesChessRanking-f5ba88f8 이식: 얼굴은 그 행의 `entry.user` 로 — 행이 받은 착용값(`characterID`)을 버리지 않는다(착용 표가 빈 세션에서 전원이 이니셜이 되던
- *   꼴). 이 판은 사진·착용 초상 적재 전이라 이니셜 원이고, 공용 아바타 갈래(W3)가 이 값으로 초상을 얹는다(보고).
+ *   꼴). 사진 → 표의 착용 캐릭터 → 행의 착용값 → 이니셜 순이다(상태 점은 달지 않는다 — 이 표의 근무 칸은 전부 false).
  * INV-GamesChessRanking-1b8add38 이식: 가로 고정은 승점·전적 조각이 들지 않는다 — **쓰는 자리에서** 정한다(오른쪽 열이 세로 둘이라 글자가 접힐 수 있다).
  */
 @Composable
@@ -176,7 +176,7 @@ private fun ChessRankRow(entry: ChessRankEntry, isMe: Boolean, isLast: Boolean) 
         divider = !isLast, dividerInset = AingDimens.cardPadding + 24.dp + 30.dp + AingDimens.space3 * 2, minHeight = 48.dp, highlighted = isMe,
     ) {
         RankBadge(entry.rank)
-        BoardAvatar(entry.user.displayName, entry.user.id, 30.dp)
+        BoardAvatar(entry.user.displayName, entry.user.id, 30.dp, url = entry.user.avatarURL, characterHint = entry.user.characterID)
         BoardPersonName(entry.user.displayName, Modifier.weight(1f), center = entry.user.center, isMe = isMe)
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(ChessPhoneText.points(entry.points), style = BoardText.digits(BoardText.rowTitle()).copy(fontWeight = FontWeight.Bold), color = colors.label)

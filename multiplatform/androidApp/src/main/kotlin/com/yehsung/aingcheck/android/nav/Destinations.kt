@@ -20,6 +20,8 @@ object Dest {
     @Serializable data object NowHome
     @Serializable data object TeamGoalSheet
     @Serializable data object TeamJoinSheet
+    /** 우리 팀 전체 명단(지금 탭 [팀 전체 보기] — 맥 TeamPanel). */
+    @Serializable data object TeamRoster
 
     // ---- 탭: 메시지 ----
     @Serializable data object MessagesGraph

@@ -60,6 +60,7 @@ import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 
 object MissionTags {
+    const val RUBY_BALANCE = "missions-ruby-balance"
     const val ACHIEVEMENTS = "missions.achievements"
     const val DAILY = "missions.daily"
     const val WEEKLY = "missions.weekly"

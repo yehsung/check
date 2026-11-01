@@ -15,6 +15,8 @@ import Foundation
 ///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now/teamless -AingCheckDemoNow teamjoin|teamcreate
 ///
 /// - teamjoin: 팀 코드를 채우고 미리보기("팀 아잉 데모팀 · 6명 · 주 40시간")까지 · teamcreate: 팀 만들기 칸(이름 · 주간 목표)
+///
+/// 우리 팀 전체 명단은 라우트 `now/team…` 이 연다(`MobileDemoTeamRosterRoute` — 깃발 없이 라우트만으로).
 @MainActor
 enum NowDemoStage {
     static let argument = "-AingCheckDemoNow"
@@ -52,8 +54,29 @@ enum NowDemoStage {
         return false
     }
 
-    /// 탭 화면 단 장면(시트 · 토스트 · 무소속 합류 카드).
+    /// 데모 라우트 `now/team…` 이 명단 화면을 쌓았는가(탭으로 돌아올 때마다 다시 쌓지 않게).
+    private static var didOpenTeamRoster = false
+
+    /// 명단 화면을 쌓는다. 앱 모델이 라우트를 연 **뒤**여야 한다 — `router.open` 이 쌓인 경로를 비운다.
+    private static func openTeamRosterIfRouted(store: NowStore) async {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard store.context.isDemo, !didOpenTeamRoster,
+              let index = arguments.firstIndex(of: "-AingCheckDemoRoute"), arguments.indices.contains(index + 1),
+              MobileDemoTeamRosterRoute(demoRoute: arguments[index + 1])?.opensRoster == true
+        else { return }
+        didOpenTeamRoster = true
+        for _ in 0..<120 {
+            if store.context.router.lastOpenedRoute != nil {
+                store.openTeamRoster()
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    /// 탭 화면 단 장면(시트 · 토스트 · 무소속 합류 카드 · 명단 화면).
     static func apply(store: NowStore, openGoalSheet: () -> Void) async {
+        await openTeamRosterIfRouted(store: store)
         let stages = stages()
         guard store.context.isDemo, !stages.isEmpty else { return }
         if stages.contains("teamjoin") || stages.contains("teamcreate") {

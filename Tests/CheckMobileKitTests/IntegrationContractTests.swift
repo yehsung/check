@@ -119,7 +119,7 @@ import Testing
         "games/tetris/lobby", "games/tetris/lobby/invites", "games/tetris/ranking",
         "games/tetris/match/ready", "games/tetris/match/countdown", "games/tetris/match/playing",
         "games/tetris/match/speedup", "games/tetris/match/won", "games/tetris/match/lost",
-        // 아잉 큐브(1.0.17 — 라우트 표는 `MobileDemoRummyRoute` 머리말, 픽스처 계약은 `GamesRummyFixtureContractTests`).
+        // 아잉 큐브(1.0.16 — 라우트 표는 `MobileDemoRummyRoute` 머리말, 픽스처 계약은 `GamesRummyFixtureContractTests`).
         "games/rummy/lobby", "games/rummy/ranking", "games/rummy/rules", "games/rummy/room",
         "games/rummy/match/my-turn", "games/rummy/match/waiting", "games/rummy/match/edited",
         "games/rummy/match/elsewhere", "games/rummy/match/full", "games/rummy/match/overview", "games/rummy/match/many",

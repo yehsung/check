@@ -3,11 +3,11 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// MARK: - 설정의 이용약관 링크 — 폰 1.0.17
+// MARK: - 설정의 이용약관 링크 — 폰 1.0.16
 //
 // 가입 화면에만 있어 가입 뒤에는 약관을 다시 볼 길이 없었다. 주소는 `CheckAppLinks` 한 곳이다.
 @MainActor
-@Suite struct V1017TermsLinkTests {
+@Suite struct V1016TermsLinkTests {
     @Test("주소는 코어 한 곳 · 값은 그대로")
     func address() {
         #expect(CheckAppLinks.termsOfService.absoluteString == "https://yehsung.github.io/check/terms")

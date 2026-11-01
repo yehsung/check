@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-// 아잉 큐브 판의 순수 값 — 맥·폰 공용(0.3.71 맥 `RummyTableCanvas`·`RummyPanelMatch` 에서 폰 1.0.17 을 위해 옮겼다. 동작은 그대로다).
+// 아잉 큐브 판의 순수 값 — 맥·폰 공용(0.3.71 맥 `RummyTableCanvas`·`RummyPanelMatch` 에서 폰 1.0.16 을 위해 옮겼다. 동작은 그대로다).
 // 판은 논리 캔버스 1000×640(타일 40×56, `RummyTableLayout`)이고, 위치는 모두에게 같다(서버 `table_layout`).
 // 그리는 자리·누르는 자리·놓는 자리가 한 변환(`RummyCanvasTransform`)에서 나온다.
 

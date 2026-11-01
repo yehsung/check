@@ -1,7 +1,7 @@
 import CheckCore
 import Foundation
 
-/// 폰 아잉 큐브(1.0.17) 문구 표 — 맥 `RummyText`·`RummyLobbyText`·`RummyMatchText`·`RummyResultText`·`RummyCueText`·`RummyExitText` 를 **터치 기준으로 다시 쓴 것**.
+/// 폰 아잉 큐브(1.0.16) 문구 표 — 맥 `RummyText`·`RummyLobbyText`·`RummyMatchText`·`RummyResultText`·`RummyCueText`·`RummyExitText` 를 **터치 기준으로 다시 쓴 것**.
 ///
 /// ── 어디까지가 이 표의 몫인가 ──
 /// **서버 응답·판정 이유 문구는 코어가 쥔다**(`RummyNoticeText`, 스토어 `notice`). 맥과 폰이 같은 응답을 같은 말로 옮겨야 하므로 다시 쓰지 마라.

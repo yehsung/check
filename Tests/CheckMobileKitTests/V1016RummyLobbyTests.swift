@@ -4,9 +4,9 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// 폰 아잉 큐브 **로비·방·순위**(1.0.17 · 설계서 §5)의 판정. 폰 뷰는 맥 스위트가 한 줄도 못 보므로 재는 것은 뷰가 받아 그리는 값과 **나간 요청 건수**다.
+// 폰 아잉 큐브 **로비·방·순위**(1.0.16 · 설계서 §5)의 판정. 폰 뷰는 맥 스위트가 한 줄도 못 보므로 재는 것은 뷰가 받아 그리는 값과 **나간 요청 건수**다.
 @MainActor
-@Suite(.serialized) struct V1017RummyLobbyTests {
+@Suite(.serialized) struct V1016RummyLobbyTests {
     private let waits = GamesWaitBudget()
 
     private static let decoder: JSONDecoder = {
@@ -293,7 +293,7 @@ import Testing
 
     @Test("순위 조회 건수: 사람 탭 0건 · 순위 탭 값 없으면 1건 · 값 있으면 0건(주기에 맡긴다) · 방 단계 0건")
     func rankingRequests() async {
-        let harness = RummyWireHarness(label: "v1017-rank-tab")
+        let harness = RummyWireHarness(label: "v1016-rank-tab")
         harness.serveLobby()
         await harness.signIn()
         #expect(harness.count("rummy_ranking") == 0)
@@ -311,7 +311,7 @@ import Testing
 
     @Test("조회 실패 깃발: 로비·순위 5xx 면 서고 다음 성공에 내려간다 · 안내줄로 안 샌다 · 리셋이 지운다")
     func loadFailureFlags() async {
-        let harness = RummyWireHarness(label: "v1017-load-failed")
+        let harness = RummyWireHarness(label: "v1016-load-failed")
         harness.serveLobby()
         harness.server.setDefault("rummy_lobby", json: #"{"message":"boom"}"#, status: 500)
         harness.server.setDefault("rummy_ranking", json: #"{"message":"boom"}"#, status: 500)
@@ -340,7 +340,7 @@ import Testing
 
     @Test("거절 응답: 업데이트 필요는 availability 로 가고 실패 깃발을 안 세운다 · 그 밖의 거절은 실패 깃발")
     func refusedLobby() async {
-        let harness = RummyWireHarness(label: "v1017-load-refused")
+        let harness = RummyWireHarness(label: "v1016-load-refused")
         harness.serveLobby()
         harness.server.setDefault("rummy_lobby", json: #"{"status":"unsupported_client"}"#)
         await harness.signIn()
@@ -356,7 +356,7 @@ import Testing
 
     @Test("서버에 함수가 없다(PGRST202): 실패 깃발이 아니라 availability · 데모 장면 본문이 실제 판정을 지난다")
     func missingServer() async {
-        let harness = RummyWireHarness(label: "v1017-load-missing")
+        let harness = RummyWireHarness(label: "v1016-load-missing")
         harness.serveLobby()
         let fixture = MobileDemoFixtures.load().response(
             for: MobileStubRequest(method: "POST", host: MobileDemo.host, path: "/rest/v1/rpc/rummy_lobby", query: "", headers: [:], bodyText: "{}"),
@@ -374,7 +374,7 @@ import Testing
 
     @Test("방 없이 [초대]: 고른 판돈·공개 여부로 방을 만들고 그 사람을 부른다(요청 본문)")
     func inviteWithoutRoomCreatesThenInvites() async throws {
-        let harness = RummyWireHarness(label: "v1017-invite-queue")
+        let harness = RummyWireHarness(label: "v1016-invite-queue")
         harness.serveLobby()
         let nowMs = harness.nowMs
         let state = #"{"status":"ok","server_now_ms":\#(nowMs),"match_id":"\#(RummyWireHarness.matchID)","state":\#(RummyWireJSON.state(nowMs: nowMs, status: "forming", mySeatState: "joined", turnSeat: 0))}"#
@@ -400,7 +400,7 @@ import Testing
 
     @Test("방 만들기가 거절되면(모자람) 줄을 버리고 초대 0건 · 안내줄이 말한다")
     func refusedCreateDropsQueue() async {
-        let harness = RummyWireHarness(label: "v1017-invite-refused")
+        let harness = RummyWireHarness(label: "v1016-invite-refused")
         harness.serveLobby()
         harness.server.setDefault("rummy_create", json: #"{"status":"insufficient","need":10,"have":2,"ruby_balance":2}"#)
         await harness.signIn()

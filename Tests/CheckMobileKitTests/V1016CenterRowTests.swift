@@ -4,11 +4,11 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// MARK: - 소속 센터 행(읽기 전용) — 폰 1.0.17
+// MARK: - 소속 센터 행(읽기 전용) — 폰 1.0.16
 //
 // 미지정이면 배지가 안 그려져 그 사람이 해결 방법을 알 길이 없었다. 상태 판정은 코어 `CenterSettingsRowState`(맥과 한 벌)이고 바꾸는 길은 없다.
 @MainActor
-@Suite(.serialized) struct V1017CenterRowTests {
+@Suite(.serialized) struct V1016CenterRowTests {
     private nonisolated static func isCenterGET(_ request: MobileStubRequest) -> Bool {
         request.path == "/rest/v1/profiles" && request.method == "GET" && request.queryValue("select") == "center"
     }
@@ -46,7 +46,7 @@ import Testing
     @Test("설정을 열면 읽는다: 미지정 · 값 · 머리가 이미 읽었으면 다시 묻지 않는다")
     func settingsLoads() async throws {
         let center = BaseLockedBox(MobileStubResponse.json(#"[{"center":null}]"#))
-        let harness = await Self.harness("v1017-center-unset", center: center)
+        let harness = await Self.harness("v1016-center-unset", center: center)
         defer { harness.tearDown() }
         let store = harness.me
         #expect(store.centerRowState == .loading, "읽기 전에 미지정이라고 단정했다")
@@ -66,7 +66,7 @@ import Testing
     @Test("머리가 읽은 값을 그대로 쓴다")
     func headerAnswerIsEnough() async {
         let center = BaseLockedBox(MobileStubResponse.json(#"[{"center":"seoul"}]"#))
-        let harness = await Self.harness("v1017-center-header", center: center)
+        let harness = await Self.harness("v1016-center-header", center: center)
         defer { harness.tearDown() }
         let store = harness.me
         await store.loadHeader()
@@ -79,7 +79,7 @@ import Testing
     @Test("못 읽으면 '미지정'이라 하지 않는다: 실패 줄 · 다시 시도로 회복 · 로그아웃이 비운다")
     func failureIsNotUnset() async {
         let center = BaseLockedBox(MobileStubResponse.networkFailure())
-        let harness = await Self.harness("v1017-center-fail", center: center)
+        let harness = await Self.harness("v1016-center-fail", center: center)
         defer { harness.tearDown() }
         let store = harness.me
 

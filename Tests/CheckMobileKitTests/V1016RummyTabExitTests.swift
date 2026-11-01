@@ -8,7 +8,7 @@ import Testing
 // 사용자 답(운영판 '폰 아잉 큐브: 방에서 탭으로 나가도 자리를 남길까요?'): "맥처럼 방을 나가기".
 // 재는 것은 요청 건수와 탭·경로·단계 값이다. `selectTab`·`open`·경로 바인딩은 탭 막대·푸시·딥링크·재선택이 실제로 부르는 문이고, 탭이 옮겨 가면 SwiftUI 가 부르는 `onDisappear` 는 시험이 대신 부른다.
 @MainActor
-@Suite(.serialized) struct V1017RummyTabExitTests {
+@Suite(.serialized) struct V1016RummyTabExitTests {
     private let waits = GamesWaitBudget()
 
     private enum Seat { case host, guest }

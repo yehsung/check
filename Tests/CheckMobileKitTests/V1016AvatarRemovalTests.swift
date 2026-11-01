@@ -4,12 +4,12 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// MARK: - 프로필 사진 지우기(기본 캐릭터로 되돌리기) — 폰 1.0.17
+// MARK: - 프로필 사진 지우기(기본 캐릭터로 되돌리기) — 폰 1.0.16
 //
 // 폰에서 올린 사진을 폰에서 못 지웠다. 코어 `removeAvatar`(맥 0.3.36 과 같은 경로)를 부르고, 문구도 코어 `AvatarRemovalText` 한 벌이다.
 // 스토어는 `#if os(iOS)` 밖이라 진짜 경로를 스텁 서버로 돈다. 뷰는 소스 계약으로만 잰다.
 @MainActor
-@Suite(.serialized) struct V1017AvatarRemovalTests {
+@Suite(.serialized) struct V1016AvatarRemovalTests {
     private nonisolated static let me = RankMeFixture.userID
     private nonisolated static let filePath = "/storage/v1/object/avatars/\(me).jpg"
     private nonisolated static let oldPhoto = "https://example.invalid/old.jpg"
@@ -33,7 +33,7 @@ import Testing
 
     @Test("지우기: 파일 DELETE 뒤 avatar_url 을 null 로 PATCH · 기본 캐릭터로 돌아가고 성공을 말한다")
     func removes() async throws {
-        let harness = await Self.harness("v1017-avatar-ok")
+        let harness = await Self.harness("v1016-avatar-ok")
         defer { harness.tearDown() }
         let store = harness.me
         await store.loadHeader()
@@ -58,7 +58,7 @@ import Testing
 
     @Test("사진이 없던 사람: 스토리지 404 도 성공이다(되돌리기가 영영 실패하지 않는다)")
     func noPhotoIsStillSuccess() async {
-        let harness = await Self.harness("v1017-avatar-none", file: .json(#"{"error":"not_found"}"#, status: 404))
+        let harness = await Self.harness("v1016-avatar-none", file: .json(#"{"error":"not_found"}"#, status: 404))
         defer { harness.tearDown() }
         await harness.me.removeAvatar()
         #expect(harness.me.avatarNotice == "기본 캐릭터로 되돌렸어요")
@@ -67,7 +67,7 @@ import Testing
 
     @Test("파일만 남음: 표는 비었으니 사진 자리는 비고 · 성공이라고 말하지 않고 경고로 다시 시도를 말한다 · 다시 누를 수 있다")
     func fileLeftIsAWarning() async {
-        let harness = await Self.harness("v1017-avatar-left", file: .json(#"{"error":"forbidden"}"#, status: 403))
+        let harness = await Self.harness("v1016-avatar-left", file: .json(#"{"error":"forbidden"}"#, status: 403))
         defer { harness.tearDown() }
         let store = harness.me
         await store.loadHeader()
@@ -84,7 +84,7 @@ import Testing
 
     @Test("표를 못 비움: 사진은 그대로고 실패를 말한다(지웠다고 거짓말하지 않는다)")
     func patchFailureKeepsPhoto() async {
-        let harness = await Self.harness("v1017-avatar-fail", patch: .json(#"{"message":"boom"}"#, status: 500))
+        let harness = await Self.harness("v1016-avatar-fail", patch: .json(#"{"message":"boom"}"#, status: 500))
         defer { harness.tearDown() }
         let store = harness.me
         await store.loadHeader()
@@ -97,7 +97,7 @@ import Testing
 
     @Test("지우기 전에 떠난 머리 GET 이 늦게 와도 지운 사진을 되살리지 않는다")
     func lateHeaderDoesNotResurrect() async throws {
-        let harness = await Self.harness("v1017-avatar-late")
+        let harness = await Self.harness("v1016-avatar-late")
         defer { harness.tearDown() }
         let store = harness.me
         let hold = BaseHold.install(host: harness.host, Self.isHeaderGET)
@@ -112,7 +112,7 @@ import Testing
 
     @Test("연타는 요청 한 번 · 지우는 동안 올리기는 나가지 않는다")
     func oneAtATime() async throws {
-        let harness = await Self.harness("v1017-avatar-once")
+        let harness = await Self.harness("v1016-avatar-once")
         defer { harness.tearDown() }
         let store = harness.me
         let hold = BaseHold.install(host: harness.host) { $0.path == Self.filePath && $0.method == "DELETE" }
@@ -130,7 +130,7 @@ import Testing
 
     @Test("로그아웃(세대 교체) 뒤에는 앞 계정의 안내·깃발이 남지 않는다")
     func resetClears() async {
-        let harness = await Self.harness("v1017-avatar-reset", file: .json(#"{"error":"forbidden"}"#, status: 403))
+        let harness = await Self.harness("v1016-avatar-reset", file: .json(#"{"error":"forbidden"}"#, status: 403))
         defer { harness.tearDown() }
         let store = harness.me
         await store.removeAvatar()

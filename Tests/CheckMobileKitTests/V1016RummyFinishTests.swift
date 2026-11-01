@@ -7,7 +7,7 @@ import Testing
 
 // 폰 아잉 큐브 검토 지적을 고친 자리의 못(방향과 무관한 것). 합성 입력이 금지라 손 궤적을 실제 화면과 같은 재료로 밟고 결과 값을 잰다.
 @MainActor
-@Suite struct V1017RummyFinishTests {
+@Suite struct V1016RummyFinishTests {
     private typealias Input = GamesRummyMatchInputTests
 
     private static let matchID = UUID(uuidString: "d0000000-0000-4000-8000-0000000000aa")!

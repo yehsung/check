@@ -7,7 +7,7 @@ import Testing
 // 판 화면만 가로(설계서 §10). 가장 나쁜 고장은 **잠금이 가로에 남아 앱 전체가 가로로 굳는 것**이다 — 빠져나가는 길마다 방향 값을 잰다.
 // 끌기는 합성 입력이 금지이니 다섯 크기에서 "손 궤적 → 놓을 자리 → 편집기 결과" 를 값으로 밟는다.
 @MainActor
-@Suite(.serialized) struct V1017RummyLandscapeTests {
+@Suite(.serialized) struct V1016RummyLandscapeTests {
     private let waits = GamesWaitBudget()
 
     static let screens = [CGSize(width: 568, height: 320), CGSize(width: 667, height: 354), CGSize(width: 734, height: 372), CGSize(width: 852, height: 393), CGSize(width: 932, height: 430)]

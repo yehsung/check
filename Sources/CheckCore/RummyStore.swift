@@ -146,7 +146,7 @@ package final class RummyStore {
     /// 요청 비행 중(버튼 잠금). 작업 상태 전송·폴링은 세우지 않는다 — 사용자가 누른 동작만.
     package internal(set) var isWorking: Bool = false
     package internal(set) var ranking: RummyRanking?
-    /// 마지막 로비 조회가 실패했다(1.0.17 폰 — 맥은 읽지 않는다). 받은 적 있는지는 `lobby != nil` 이 말한다: 둘을 합쳐 '빈 목록'과 '못 받음'을 가른다.
+    /// 마지막 로비 조회가 실패했다(1.0.16 폰 — 맥은 읽지 않는다). 받은 적 있는지는 `lobby != nil` 이 말한다: 둘을 합쳐 '빈 목록'과 '못 받음'을 가른다.
     package internal(set) var lobbyLoadFailed = false
     /// 마지막 순위 조회가 실패했다(같은 뜻 · `ranking != nil`). 안내줄로 새지 않는다 — 순위 탭 안에서만 말한다.
     package internal(set) var rankingLoadFailed = false

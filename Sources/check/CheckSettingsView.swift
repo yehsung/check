@@ -725,7 +725,7 @@ struct StatusMessageSettingsRow: View {
 
 // MARK: - 프로필 사진 삭제 행 (v0.3.36)
 
-// 문구 한 벌(`AvatarRemovalText`)은 코어에 있다(폰 프로필 화면도 같은 문장을 쓴다 — 폰 1.0.17).
+// 문구 한 벌(`AvatarRemovalText`)은 코어에 있다(폰 프로필 화면도 같은 문장을 쓴다 — 폰 1.0.16).
 
 /// 사진 되돌리기 결과 한 줄의 색 갈래. Bool 이 아닌 이유는 `WorkTimerStore.avatarRemovalNoticeTone` 주석에 있다.
 enum AvatarRemovalNoticeTone {
@@ -1105,7 +1105,7 @@ struct WorkShortcutRecorderRow: View {
 
 // MARK: - 소속 센터 행 (v0.3.13) — 읽기 전용
 
-// 행이 그릴 세 가지 상태(`CenterSettingsRowState`)는 코어 `CenterLabel.swift` 에 있다(폰 나 → 설정도 같은 판정을 쓴다 — 폰 1.0.17).
+// 행이 그릴 세 가지 상태(`CenterSettingsRowState`)는 코어 `CenterLabel.swift` 에 있다(폰 나 → 설정도 같은 판정을 쓴다 — 폰 1.0.16).
 
 /// 소속 센터 행. **읽기 전용이다** — 피커도 버튼도 PATCH 도 없다(위 열거형 주석에 근거).
 /// 토글 행과 같은 좌우 구조(제목·설명 열 + 우측 값)라 '내 정보' 카드 안에서 층이 맞는다.

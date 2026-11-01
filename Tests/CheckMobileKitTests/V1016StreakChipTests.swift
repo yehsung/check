@@ -4,12 +4,12 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// MARK: - 연속 근무 칩 '연속 N일 근무!' — 폰 1.0.17
+// MARK: - 연속 근무 칩 '연속 N일 근무!' — 폰 1.0.16
 //
 // 값은 `achievements_status` 응답의 새 최상위 키 `streak_days`(서버 초안 — 저장소 밖, 적용 전). 키가 있을 때만 칩을 그려서 서버와 폰의 출시 순서가 자유롭다.
 // 미션 줄의 `progress` 로 대신하면 안 된다: target 에서 잘리고 달성 뒤 target 에 고정이라 30일을 넘긴 사람은 2일째여도 30 이다.
 @MainActor
-@Suite(.serialized) struct V1017StreakChipTests {
+@Suite(.serialized) struct V1016StreakChipTests {
     private nonisolated static func withStreak(_ value: String, achieved: Set<String> = [], claimed: Set<String> = []) -> String {
         let body = MeAchievementClaimTests.status(achieved: achieved, claimed: claimed)
         return String(body.dropLast()) + #","streak_days":\#(value)}"#
@@ -59,7 +59,7 @@ import Testing
 
     @Test("배선: 나 탭 미션 조회 값이 탭과 무관하게 지금 탭까지 온다 · 받기 응답도 갱신 · 추가 호출 없음 · 금지 호출 0")
     func wiring() async {
-        let harness = await RankMeHarness(label: "v1017-streak", responder: MeAchievementClaimTests.quietResponder)
+        let harness = await RankMeHarness(label: "v1016-streak", responder: MeAchievementClaimTests.quietResponder)
         defer { harness.tearDown() }
         let now = harness.model.now
         #expect(now.myStreakDays == nil, "받기 전에 값을 그렸다")
@@ -80,7 +80,7 @@ import Testing
 
     @Test("키가 없는 서버(초안 적용 전): 칩이 없고 미션은 그대로다")
     func oldServerHides() async {
-        let harness = await RankMeHarness(label: "v1017-streak-old", responder: MeAchievementClaimTests.quietResponder)
+        let harness = await RankMeHarness(label: "v1016-streak-old", responder: MeAchievementClaimTests.quietResponder)
         defer { harness.tearDown() }
         harness.enqueue("achievements_status", .json(MeAchievementClaimTests.status(claimed: ["streak14", "streak30"])))
         await harness.me.loadAchievements()
@@ -91,7 +91,7 @@ import Testing
 
     @Test("함수 없는 서버 · 로그아웃: 칩이 내려간다")
     func goneServerAndResetHide() async {
-        let harness = await RankMeHarness(label: "v1017-streak-gone", responder: MeAchievementClaimTests.quietResponder)
+        let harness = await RankMeHarness(label: "v1016-streak-gone", responder: MeAchievementClaimTests.quietResponder)
         defer { harness.tearDown() }
         harness.enqueue("achievements_status", .json(Self.withStreak("4")))
         await harness.me.loadAchievements()
@@ -109,7 +109,7 @@ import Testing
     @Test("데모 장면 streak: 지금 탭이 읽는 값이 선다 · 떠 있는 조회가 끝난 뒤에 넣어 404 가 지우지 못한다")
     func demoStage() async {
         #expect(NowDemoStage.stages(arguments: ["app", NowDemoStage.argument, "streak"]) == ["streak"])
-        let harness = await RankMeHarness(label: "v1017-streak-demo", responder: MeAchievementClaimTests.quietResponder)
+        let harness = await RankMeHarness(label: "v1016-streak-demo", responder: MeAchievementClaimTests.quietResponder)
         defer { harness.tearDown() }
         let now = harness.model.now
         await NowDemoStage.applyStreak(store: now, stages: [])

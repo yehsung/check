@@ -7,7 +7,7 @@ import Testing
 
 // 폰 아잉 큐브 결과 · 반응 · 모션의 값(설계서 §6·§7). 폰 뷰는 맥 스위트가 못 보고 합성 입력도 금지라, 뷰가 부르는 값을 여기서 잰다. 그림은 데모 라우트 캡처로 본다.
 @MainActor
-@Suite struct V1017RummyResultTests {
+@Suite struct V1016RummyResultTests {
     private static let index = MobileDemoFixtures.load()
     private static let decoder: JSONDecoder = {
         let decoder = JSONDecoder()

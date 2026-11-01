@@ -134,7 +134,7 @@ public final class MobileAppModel {
         // 왕복(1초)까지 방해 줄을 모르고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.
         // 러너는 **약한 참조**로 들고 있고(수명은 앱 모델이 쥔다) 핸들러가 스스로 세션 가드를 한다.
         realtime.tetris = tetris
-        // 아잉 큐브(맥 0.3.69 · 폰 1.0.17). 호스트는 **오목·체스·테트리스와 같은 하나**다(루비 미러 한 칸).
+        // 아잉 큐브(맥 0.3.69 · 폰 1.0.16). 호스트는 **오목·체스·테트리스와 같은 하나**다(루비 미러 한 칸).
         let rummy = RummyStore()
         rummy.attach(host: host)
         rummy.clock = { clock.now() }

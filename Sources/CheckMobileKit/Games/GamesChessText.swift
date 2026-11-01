@@ -830,7 +830,7 @@ package struct ChessPhoneRuleLine: Identifiable, Equatable, Sendable {
                       + "\(ChessPhoneText.stakeNotHeldYet(ttlSeconds: inviteTtlSeconds))."),
             ChessPhoneRuleLine(
                 title: "한 사람 한 판",
-                // ★ 게임이 넷이다(1.0.11 1:1 테트리스 · 1.0.17 아잉 큐브). 넷을 다 말해야 한다: 이름이 빠진 게임은
+                // ★ 게임이 넷이다(1.0.11 1:1 테트리스 · 1.0.16 아잉 큐브). 넷을 다 말해야 한다: 이름이 빠진 게임은
                 //   사용자가 "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
                 detail: "체스·오목·1:1 테트리스·아잉 큐브는 한 번에 한 판만 할 수 있어요. "
                       + "한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.")

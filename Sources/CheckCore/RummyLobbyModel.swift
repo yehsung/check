@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// 아잉 큐브 로비·방·이탈의 순수 조각 — 맥·폰 공용(0.3.71 맥 `RummyPanelLobby`·`RummyPanelResult`·`RummyExitFlow` 에서 폰 1.0.17 을 위해 옮겼다.
+// 아잉 큐브 로비·방·이탈의 순수 조각 — 맥·폰 공용(0.3.71 맥 `RummyPanelLobby`·`RummyPanelResult`·`RummyExitFlow` 에서 폰 1.0.16 을 위해 옮겼다.
 // 동작은 그대로다). 글자는 플랫폼 몫이다(맥 `RummyLobbyText` · 폰 `GamesRummyText`) — 여기는 순서와 판단만 둔다.
 
 // MARK: - 초대 줄(방 없이 [초대] · 한 판 더)

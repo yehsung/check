@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import SwiftUI
 
-// 아잉 큐브 타일·그림의 순수 값 — 맥·폰 공용(0.3.71 맥 `RummyTileView`·`RummyArt` 에서 폰 1.0.17 을 위해 옮겼다. 값은 그대로다).
+// 아잉 큐브 타일·그림의 순수 값 — 맥·폰 공용(0.3.71 맥 `RummyTileView`·`RummyArt` 에서 폰 1.0.16 을 위해 옮겼다. 값은 그대로다).
 // 그림 자체(타일 뷰 · 받침대 · 펠트)는 플랫폼 몫이다 — 맥 `RummyTileView`·`RummyArt`(AppKit), 폰 `GamesRummyTile`·`GamesRummyArt`(UIKit).
 
 /// 타일 팔레트 — 순수 상수(시험이 같은 값을 되묻는다).

@@ -4,14 +4,14 @@ import Foundation
 import Testing
 @testable import CheckMobileKit
 
-// MARK: - 미션 화면 제목 줄 루비 잔량 — 폰 1.0.17
+// MARK: - 미션 화면 제목 줄 루비 잔량 — 폰 1.0.16
 //
 // [받기]를 눌러도 그 화면에서 잔량이 오르는 것이 안 보였다. 뷰는 소스 계약으로, 칩이 읽는 값은 진짜 받기 경로로 잰다.
 @MainActor
-@Suite(.serialized) struct V1017MissionRubyChipTests {
+@Suite(.serialized) struct V1016MissionRubyChipTests {
     @Test("칩이 읽는 값: 받기 응답을 받으면 그 자리에서 오른다")
     func claimMovesTheValueTheChipReads() async {
-        let harness = await RankMeHarness(label: "v1017-mission-ruby", responder: MeAchievementClaimTests.quietResponder)
+        let harness = await RankMeHarness(label: "v1016-mission-ruby", responder: MeAchievementClaimTests.quietResponder)
         defer { harness.tearDown() }
         let store = harness.me
         harness.enqueue("achievements_status", .json(MeAchievementClaimTests.status(achieved: ["poke10"], ruby: 1_000)))

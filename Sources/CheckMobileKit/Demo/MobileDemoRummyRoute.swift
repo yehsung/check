@@ -3,7 +3,7 @@ import CheckCore
 import CoreGraphics
 import Foundation
 
-/// 데모 스크린샷 라우트 `games/rummy/…`(아잉 큐브 · 1.0.17)를 **값으로 푼 것**(DEBUG 전용).
+/// 데모 스크린샷 라우트 `games/rummy/…`(아잉 큐브 · 1.0.16)를 **값으로 푼 것**(DEBUG 전용).
 /// 왜 `Demo/` 안이고 파일 통째가 `#if DEBUG` 인가 · 왜 `#if os(iOS)` 를 더하면 안 되는가는 `MobileDemoTetrisRoute` 머리말과 같다(출시 게이트 · 맥 스위트가 값으로 재는 자리).
 ///
 /// | 라우트                         | 장면 폴더                       | 열 판(바늘)   | 로비 탭 | 그 밖                         |

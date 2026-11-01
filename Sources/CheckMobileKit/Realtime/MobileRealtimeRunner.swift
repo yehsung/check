@@ -27,7 +27,7 @@ package final class MobileRealtimeRegistration {
 ///     (+ `.catchUp` 은 오목·테트리스 `realtimeDidJoin`). take_pokes 는 원자 소비라 폰이 부르면 맥의 말풍선을 훔친다(R3) —
 ///     그리고 iOS 에서는 서비스에 그 메서드가 **컴파일되지 않는다**(`SupabaseWorkServiceMacOnly.swift`).
 ///  2. `.messageReadSignal` → 등록된 `onMessageRead` 핸들러들(뒤쪽 1초 합치기만 — 앞쪽 즉시 처리는 없다).
-///  3. `.gomokuSignal` → `GomokuStore.handleSignal()` · `.tetrisSignal` → `TetrisDuelStore.handleSignal()`(1.0.11). · `.rummySignal` → `RummyStore.handleSignal()`(1.0.17).
+///  3. `.gomokuSignal` → `GomokuStore.handleSignal()` · `.tetrisSignal` → `TetrisDuelStore.handleSignal()`(1.0.11). · `.rummySignal` → `RummyStore.handleSignal()`(1.0.16).
 ///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
@@ -269,7 +269,7 @@ package final class MobileRealtimeRunner {
                 //   테트리스와 아무 상관 없는 조회다. 잇는 것과 따로 두는 것은 별개의 요구다.
                 tetris?.handleSignal()
             case .rummySignal:
-                // 아잉 큐브(맥 0.3.69 · 폰 1.0.17). 초대·참가·시작·차례·작업 판·정산이 전부 이 초인종으로 온다.
+                // 아잉 큐브(맥 0.3.69 · 폰 1.0.16). 초대·참가·시작·차례·작업 판·정산이 전부 이 초인종으로 온다.
                 // `handleSignal()` 은 **직렬화된 재조회 한 번**이다(도는 중이면 뒤따르는 한 번으로 합친다) — 그래서 끌기마다 울려도 겹치지 않는다.
                 // ★ `.drain` 으로 떨어뜨리면 안 되는 까닭은 체스 가지와 같다: 작업 판 초인종이 끌기마다 울리고, 새면 그때마다 메시지 조회가 한 번씩 더 나간다.
                 rummy?.handleSignal()

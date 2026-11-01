@@ -16,7 +16,7 @@ package enum GamesDestination: Hashable, Sendable {
     case chess
     /// 1:1 테트리스(1.0.11) — 로비·준비·판·결과·순위를 **입구 하나**로 연다(체스와 같은 구조).
     case tetrisDuel
-    /// 아잉 큐브(1.0.17) — 로비·방·판·결과·순위를 **입구 하나**로 연다(화면이 `phase` 로 갈아 끼운다).
+    /// 아잉 큐브(1.0.16) — 로비·방·판·결과·순위를 **입구 하나**로 연다(화면이 `phase` 로 갈아 끼운다).
     case rummy
 }
 
@@ -32,7 +32,7 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     /// 1:1 테트리스(1.0.11). 서버 `chess__busy` 는 셋을 함께 보지만 **오목 쪽 게이트는 여전히 남을 모른다** —
     /// 그래서 클라가 세 방향을 다 막는다.
     case tetris
-    /// 아잉 큐브(1.0.17). 서버 `chess__busy` 가 그 자리(joined·playing)까지 보지만 오목 쪽 게이트는 여전히 모른다 — 네 방향을 클라도 막는다.
+    /// 아잉 큐브(1.0.16). 서버 `chess__busy` 가 그 자리(joined·playing)까지 보지만 오목 쪽 게이트는 여전히 모른다 — 네 방향을 클라도 막는다.
     case rummy
 
     /// 문구 표가 쓰는 짝(`ChessPhoneText.BusyGame`). 두 열거가 따로 있는 까닭: 이쪽은 **스토어 판정**이고
@@ -436,7 +436,7 @@ package final class GamesStore {
     /// 놓친다. 알리는 자리는 **둘**이다: 게임 탭 테트리스 카드의 "받은 신청" 칩 · 테트리스 화면 로비 맨 위 신청 카드.
     /// 푸시(`tetris_invite`)는 서버 몫이고 **1.0.11 범위 밖**이다(D8) — 그때 이 자리를 다시 본다.
     ///
-    /// **아잉 큐브 초대는 센다**(1.0.17): 위 둘과 달리 초인종을 잇기 때문이다(`.rummySignal` → `handleSignal`). 초대가 오면 그 자리에서 로비를 읽고
+    /// **아잉 큐브 초대는 센다**(1.0.16): 위 둘과 달리 초인종을 잇기 때문이다(`.rummySignal` → `handleSignal`). 초대가 오면 그 자리에서 로비를 읽고
     /// 방은 10분을 산다 — "60초 TTL 짜리 숫자를 30초 스로틀로 갱신하는" 꼴이 아니다. 오목 카드의 한 줄은 `gomokuIncomingCount` 를 읽는다(큐브 초대가 섞이면 안 된다).
     package var badgeCount: Int { gomokuIncomingCount + context.rummy.incomingInvites.count }
 

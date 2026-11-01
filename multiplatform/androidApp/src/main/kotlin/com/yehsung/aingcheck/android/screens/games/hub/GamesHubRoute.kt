@@ -33,14 +33,14 @@ object GamesRoutes {
     }
 
     /**
-     * 미니게임 종류 → 라우트 글자(AingMiniGame.raw). 길건너 아잉이는 **null**(폰 1.0.14 바닥 — 화면도 라우트 글자도 없다, G §8-18 7).
+     * 미니게임 종류 → 라우트 글자(AingMiniGame.raw).
      * 빠짐없는 when — 종류를 더하면 여기서 멈춘다(모르는 값을 플래피로 오배달하지 않게).
      */
     fun miniGameRaw(kind: MiniGameKind): String? = when (kind) {
         MiniGameKind.timingBar -> AingMiniGame.TIMING.raw
         MiniGameKind.flappy -> AingMiniGame.FLAPPY.raw
         MiniGameKind.tetris -> AingMiniGame.TETRIS.raw
-        MiniGameKind.crossy -> null
+        MiniGameKind.crossy -> AingMiniGame.CROSSY.raw
     }
 
     /** 라우트 글자 → 미니게임 종류(모르면 null). AingMiniGame 를 빠짐없이 가른다. */
@@ -48,6 +48,7 @@ object GamesRoutes {
         AingMiniGame.TIMING -> MiniGameKind.timingBar
         AingMiniGame.FLAPPY -> MiniGameKind.flappy
         AingMiniGame.TETRIS -> MiniGameKind.tetris
+        AingMiniGame.CROSSY -> MiniGameKind.crossy
         null -> null
     }
 }

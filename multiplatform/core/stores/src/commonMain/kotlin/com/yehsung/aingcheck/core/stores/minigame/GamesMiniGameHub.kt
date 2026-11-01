@@ -1,4 +1,5 @@
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameHub.swift @ 1b8260d
+// 원본: Sources/check/WorkTimerStoreMiniGame.swift:39-85·528-880 @ 1a5eeca6 (제출 인편 — 재시작 보존 · 토큰 대기 · no_token 되살림 · [2,8,30] 백오프)
 // (역대 순위 [오늘|역대] · 판 도중 토큰 갈아 끼우기(길건너)는 맥 Sources/check/WorkTimerStoreMiniGame.swift:308-331·920-1000 @ 1b8260d —
 //  폰 1.0.14 허브에는 아직 없다. G §8-16·6차 지시 "길건너·역대 순위·[오늘|역대] 상태도 스토어에" 로 허브에 더했다.)
 package com.yehsung.aingcheck.core.stores.minigame
@@ -31,9 +32,22 @@ import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.wire.models.MiniGameWinner
 import com.yehsung.aingcheck.core.wire.models.sortedForMiniGameAllTimeBoard
 import com.yehsung.aingcheck.core.wire.models.sortedForMiniGameBoard
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlin.coroutines.cancellation.CancellationException
+
+/** 서비스 오류 → W1-c 판정 재료(함수 없음 = 스키마 없음 또는 HTTP 404). 허브와 순위 탭이 같은 표를 쓴다. */
+internal fun miniGameServiceErrorFacts(e: Throwable): ServiceErrorFacts = when (e) {
+    SupabaseWorkServiceError.DatabaseSchemaMissing -> ServiceErrorFacts.databaseSchemaMissing
+    is SupabaseWorkServiceError.InvalidResponse -> ServiceErrorFacts.invalidResponse(e.statusCode)
+    is SupabaseWorkServiceError.RateLimited -> ServiceErrorFacts.rateLimited
+    is SupabaseWorkServiceError -> ServiceErrorFacts.otherServiceError
+    else -> ServiceErrorFacts.notServiceError
+}
 
 /** 한 게임의 오늘 순위 칸. */
 data class GamesMiniGameBoard(
@@ -55,8 +69,44 @@ data class GamesMiniGameBoard(
     val placeholder: MobileLoadKnowledge.Placeholder get() = MobileLoadKnowledge.placeholder(entries.isNotEmpty(), loaded, failed)
 }
 
-/** 아직 서버가 받았다고 확인해 주지 않은 제출 한 건(Swift 튜플 `(kind, score, token)`). */
-data class GamesPendingSubmit(val kind: MiniGameKind, val score: Int, val token: String)
+/**
+ * 아직 서버가 받았다고 확인해 주지 않은 끝난 판 한 건 — **제출 인편**(맥 `MiniGamePendingSubmit`, 영속하므로 타입이다).
+ *
+ * [token] 이 null 이면 **토큰을 기다리는 인편**이다 — 판이 끝난 순간 토큰이 없었다(왕복이 늦었거나 못 받았다). 왕복 중이던 응답이나 새 요청이 채운다.
+ * [attempts] 는 실패 횟수(백오프 단계)이고 영속한다 — 재시작이 백오프를 0 으로 되돌리지 않게. [nextRetryAt]·[heldUntilTrigger] 는 영속하지 않는다 — 재시작은 그 자체가 방아쇠다.
+ * [recoveredFromDeadTokenOnce]: `no_token` 을 받아 토큰을 기다리는 인편으로 한 번 되돌렸다. 영속한다 — 재시작이 이 기회를 새로 주면 안 된다. 두 번은 주지 않는다:
+ * 계속 `no_token` 이면 원인이 경합이 아니므로 두드려도 같은 답이고 무한 왕복이 된다(서버 시간 하한은 새 토큰의 started_at 부터 다시 재므로 그대로 선다).
+ */
+data class GamesPendingSubmit(
+    val id: Long,
+    val kind: MiniGameKind,
+    val score: Int,
+    val token: String?,
+    val tokenIssuedAt: SwiftDate?,
+    val recordedAt: SwiftDate,
+    val attempts: Int = 0,
+    val recoveredFromDeadTokenOnce: Boolean = false,
+    val nextRetryAt: SwiftDate? = null,
+    val heldUntilTrigger: Boolean = false,
+) {
+    /** 이 인편이 죽는 시각 — 토큰 발급 시각과 판이 끝난 시각 중 이른 쪽 + TTL. 토큰 없는 인편도 30분이 지나면 다른 날 순위표에 올라갈 수 있어 같은 수명이다. */
+    fun deadline(ttlSeconds: Double): SwiftDate = minOf(recordedAt, tokenIssuedAt ?: recordedAt).addingTimeInterval(ttlSeconds)
+
+    fun isExpired(now: SwiftDate, ttlSeconds: Double): Boolean = now >= deadline(ttlSeconds)
+}
+
+/** 인편의 영속 꼴(시각은 1970 기준 초). 기다림 표식 둘은 싣지 않는다. */
+@Serializable
+private data class GamesPendingSubmitRow(
+    val id: Long,
+    val kind: String,
+    val score: Int,
+    val token: String? = null,
+    val tokenIssuedAt: Double? = null,
+    val recordedAt: Double,
+    val attempts: Int = 0,
+    val recoveredFromDeadTokenOnce: Boolean = false,
+)
 
 /**
  * 미니게임 허브(SPEC-ios §3.5) — 오늘 순위 · 로컬 최고 · 라운드 토큰 · 점수 제출 · 공개 여부. 맥 `WorkTimerStoreMiniGame` 의
@@ -75,11 +125,13 @@ data class GamesPendingSubmit(val kind: MiniGameKind, val score: Int, val token:
  *   이 가드를 지난다. 시험: `MiniGameRoundTokenRaceTest`.
  *
  * 폰 규칙: 앱이 background 로 가거나 화면을 떠나면 판을 **끝낸다**(`endRound()`). 타이밍 바·플래피는 기록 없이 버리고,
- * **테트리스는 여기까지의 점수로 확정해 제출한다**. 로그아웃([reset])과 화면 경합 정리([openScreen])는 **`abandon()` 그대로**다.
+ * **테트리스·길건너는 여기까지의 점수로 확정해 제출한다**. 로그아웃([reset])과 화면 경합 정리([openScreen])는 **`abandon()` 그대로**다.
  *
- * 제출 인편([pendingSubmit]): 제출이 **네트워크로** 실패하면 (게임, 점수, 토큰)을 들고 있다가 앱이 다시 active 가 될 때
- * 같은 토큰으로 한 번 더 보낸다. 진단: 거절 status 이름까지만 로그에 남긴다 — need_seconds·elapsed_seconds 는 화면에도 로그에도
- * 쓰지 않는다(위조 보조 도구).
+ * 제출 인편([pendingSubmits] — 맥 `miniGamePendingSubmits`): 판이 끝나면 제출을 시도하기 **전에** 적는다. 지우는 것은 `ok`·`token_used`·terminal 거절·TTL 뿐이고
+ * 네트워크 실패·`too_fast`·모르는 status 는 남긴다. 칸 하나가 아니라 **대기열**이다(토큰을 실은 인편은 게임당 하나뿐 — 나머지는 토큰을 기다린다) ·
+ * [KeyValueStore][com.yehsung.aingcheck.core.foundation.platform.KeyValueStore] 에 **계정별**로 영속한다(남의 점수를 내 이름으로 올리지 않는다 · 앱이 죽어도 점수가 남는다) ·
+ * 30분(서버 TTL)을 넘긴 인편은 읽을 때 버린다. 미는 방아쇠: 앱 복귀 · 화면 열기 · 그 게임의 선발급/판 시작 직전 · 실패 뒤 백오프(2초 → 8초 → 30초 반복).
+ * 진단: 거절 status 이름까지만 로그에 남긴다 — need_seconds·elapsed_seconds 는 화면에도 로그에도 쓰지 않는다(위조 보조 도구).
  *
  * Android 몫(G §2-3 W2-e ④): 허브는 [MiniGameExposure.visible] 밖의 게임을 열지 않고 순위도 당기지 않는다(골든이 초록인 게임만).
  */
@@ -92,6 +144,9 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
          * (테트리스 12분 · 길건너 2분). 이 상수는 기존 두 게임의 값(20분)을 가리키는 별명으로 남긴다: 여기를 고쳐도 테트리스는 안 움직인다.
          */
         val tokenRefreshSeconds: Double = MiniGameKind.flappy.roundTokenReuseSeconds
+
+        /** 판 도중 토큰 감시 간격(초 — 맥 `MiniGamePanel.tokenKeeperInterval`). [runRoundTokenKeeper] 가 이만큼 자고 한 번 본다. */
+        const val tokenKeeperIntervalSeconds: Double = 30.0
 
         /** 첫 화면 카드(오늘 최고·순위)를 다시 읽는 간격(초). */
         const val summaryThrottleSeconds: Double = 60.0
@@ -124,14 +179,16 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         val retryableSubmitStatuses: Set<String> = setOf("too_fast")
 
         /**
-         * `too_fast` 재시도 지연(초). **눈먼 값이고 횟수가 묶여 있다.**
+         * 실패 뒤 백오프 간격(초 — 맥 `miniGamePendingRetryDelays`). n번째 실패 뒤 n번째 값을 기다리고, 끝을 넘기면 마지막 값을 반복한다([pendingSubmitTtlSeconds] 안에서만).
          *
          * INV-GamesMiniGameHub-1b3e0aef 이식: 서버가 같이 주는 `need_seconds`·`elapsed_seconds` 로 지연을 **계산하지 않는다** — 클라가
          * 그 숫자로 재시도 타이밍을 계산하면 그게 곧 위조 보조 도구다(응답 칸은 읽지도 않는다 — 구조 시험이 이 파일에 그 이름이 없음을 잰다).
-         * INV-GamesMiniGameHub-2e37b9a7 이식: 무한 백오프로 두지 않는다. 그러면 "하한이 지나갈 때까지 기다려 주는 기계"가 되어 즉시
-         * 위조한 점수도 결국 올려 준다. 정직한 판에 필요한 것은 0.2초뿐이므로 두 번으로 남는다 — 그 뒤엔 사실대로 "못 올렸어요".
+         * `too_fast` 도 이 표를 탄다(맥과 같다 — iOS 의 '두 번 뒤 포기'를 따르지 않는다: 판 도중 토큰을 갈아 끼운 직후 끝난 길건너 판은 하한까지 몇 분이 걸려 두 번으로는 못 넘는다).
          */
-        val tooFastRetryDelaysSeconds: List<Double> = listOf(1.5, 4.0)
+        val pendingRetryDelaysSeconds: List<Double> = listOf(2.0, 8.0, 30.0)
+
+        /** 인편의 수명(초) = 서버 토큰 TTL(`minigame_round_ttl()` 30분). 넘긴 인편은 토큰이 죽었으므로 읽을 때 버린다. */
+        const val pendingSubmitTtlSeconds: Double = 30.0 * 60
 
         /** 토큰이 죽어 **그 판은 영영 못 올리는** 거절. 문구가 "다시 해 주세요"(복구된다는 뜻)와 갈린다. */
         val deadTokenStatuses: Set<String> = setOf("no_token", "token_expired")
@@ -140,13 +197,18 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
 
         /** 로컬 최고 키 — **계정별**(같은 폰을 다른 계정이 쓰면 남의 최고를 물려받지 않는다). */
         fun bestKey(userID: String?, kind: MiniGameKind): String = "aing.minigame.best.${userID ?: "local"}.${kind.rawValue}"
+
+        /** 제출 인편의 영속 키. **계정별**이다(남의 점수를 내 이름으로 올리지 않는다). */
+        fun pendingKey(userID: String): String = "aing.minigame.pending.$userID"
+
+        /** 화면을 닫아 둔 사이에 인편이 TTL 로 죽었다는 표식(다음에 화면을 열 때 한 번 말한다). 계정별. */
+        fun lostNoticeKey(userID: String): String = "aing.minigame.lostnotice.$userID"
+
+        private val pendingJson = Json { ignoreUnknownKeys = true }
     }
 
     /** 기다리기(시험은 가상 시간이라 그대로 둔다 — Swift `sleep` 주입 자리). */
     var sleep: suspend (Double) -> Unit = { seconds -> delay(delayMillis(seconds)) }
-
-    /** `too_fast` 를 이 토큰으로 몇 번 되보냈나. 토큰과 짝지어 둔다 — 새 판이 인편을 갈아 끼우면 같이 리셋된다. */
-    private var tooFastRetries: Pair<String, Int>? = null
 
     /** 지금 열려 있는 게임 화면(없으면 null). */
     var activeKind: MiniGameKind? by mutableStateOf(null)
@@ -199,6 +261,12 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     var allTimeUnavailable: Boolean by mutableStateOf(false)
         private set
 
+    /** [역대] 빈 자리 문구(실패 → 준비 중 → 불러오는 중 → 아직 없음). 넷째 상태까지 가르는 표가 화면 삼항으로 흩어지면 JVM 시험이 못 잰다. */
+    val allTimeEmptyText: String get() = GamesMiniGameText.allTimeEmpty(allTimeFailed, allTimeLoaded, allTimeUnavailable)
+
+    /** [역대] 빈 자리에 [다시 시도] 를 다는가 — 한 번도 못 받았고 마지막 조회가 실패했을 때만. "준비 중"은 loaded 라 여기 안 걸린다. */
+    val allTimeShowsRetry: Boolean get() = allTimeFailed && !allTimeLoaded
+
     /** 지금 들고 있는 역대 표가 **어느 게임의 최신 응답인가.** null 이면 다음에 [역대] 를 열 때 다시 받는다. 관찰 대상 아님. */
     var allTimeFreshKind: MiniGameKind? = null
         private set
@@ -232,15 +300,27 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         private set
 
     /**
-     * 아직 서버가 받았다고 확인해 주지 않은 제출 한 건. **네트워크로 실패하면 남고**, 성공·명시적 거절이면 지운다.
-     * 앱이 다시 active 가 될 때 [retryPendingSubmitIfAny] 가 **같은 토큰으로** 한 번 더 보낸다.
+     * 제출 인편 대기열(지금 계정 것 — 받은 순서). 읽고 쓰는 문은 아래 인편 절 하나다(영속과 어긋나지 않게). 화면은 이 값을 그리지 않는다.
+     * ★ 불변식(머리 주석): 이 목록에 그 게임이 있는 동안 그 게임의 `start_round` 는 나가지 않는다 — 토큰을 기다리는 맨 앞 인편에 받아 줄 때만 빼고.
      */
-    var pendingSubmit: GamesPendingSubmit? = null
+    var pendingSubmits: List<GamesPendingSubmit> = emptyList()
         private set
 
-    /** 지금 제출 왕복이 떠 있다(인편 재시도가 같은 토큰을 두 번 보내지 않게). */
-    var isSubmitting: Boolean = false
-        private set
+    /** 맨 앞 인편(없으면 null). 시험·진단용. */
+    val pendingSubmit: GamesPendingSubmit? get() = pendingSubmits.firstOrNull()
+
+    /** 메모리의 인편이 **어느 계정 것인가**(null = 아직 안 읽었거나 로그아웃). 계정이 바뀌면 그 계정의 키에서 다시 읽는다. */
+    private var pendingOwner: String? = null
+    private var nextPendingID: Long = 1
+
+    /** 지금 제출 왕복이 떠 있는 게임들(같은 토큰을 두 번 동시에 보내지 않게). */
+    private val submittingKinds = HashSet<MiniGameKind>()
+
+    /** 지금 제출 왕복이 떠 있다. */
+    val isSubmitting: Boolean get() = submittingKinds.isNotEmpty()
+
+    /** 백오프 타이머 한 개 — 가장 먼저 돌아오는 인편에 맞춘다. */
+    private var pendingRetryJob: Job? = null
 
     /** 출구에서 세운 안내("앱을 나가서 …")를 **비동기 제출 성공이 지우지 않게** 붙든다. */
     private var exitNoticeIsSticky = false
@@ -251,8 +331,8 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     private var seedCounter: ULong = 0u
 
     /**
-     * 이 빌드의 허브가 여는 게임(첫 화면 타일 · 오늘 순위 · openScreen). 기본은 폰 노출([MiniGameExposure.visible] — Android 동작 그대로)이고,
-     * 데스크톱 조립만 [MiniGameExposure.desktopVisible](길건너 포함 — W-9 #6)로 바꾼다.
+     * 이 빌드의 허브가 여는 게임(첫 화면 타일 · 오늘 순위 · openScreen). 기본은 폰 노출([MiniGameExposure.visible])이고,
+     * 데스크톱 조립은 [MiniGameExposure.desktopVisible] 을 건넨다(지금은 같은 목록).
      */
     var visibleKinds: List<MiniGameKind> = MiniGameExposure.visible
 
@@ -278,6 +358,8 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         activeKind = kind
         submitNotice = null
         exitNoticeIsSticky = false
+        // 화면을 닫아 둔 사이에 죽은 점수가 있으면 **여기서 한 번 말하고 표식을 지운다**(아래 밀기가 문구를 덮기 전에).
+        showLostNoticeIfAny()
         seedCounter += 1u
         val millis = (context.clock.now().timeIntervalSince1970 * 1000).toLong().toULong()
         val seed = millis + seedCounter * 0x9E37_79B9_7F4A_7C15uL
@@ -305,7 +387,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     }
 
     /**
-     * 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스는 여기까지의 점수로 확정 제출).
+     * 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스·길건너는 여기까지의 점수로 확정 제출).
      * 토큰은 들고 있는다(재사용 나이 안에 다시 열면 그대로 쓴다). 안내 한 줄은 세우지 않는다.
      */
     fun closeScreen(kind: MiniGameKind) {
@@ -315,7 +397,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         activeKind = null
     }
 
-    /** 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고, **테트리스는 여기까지의 점수로 확정 제출한다**. */
+    /** 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다**. */
     fun appDidEnterBackground() {
         val controller = controller ?: return
         when (controller.endRound()) {
@@ -326,11 +408,12 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             }
             is GamesPlayController.EndOutcome.Confirmed -> {
                 // 이 줄에 닿기 전에 `endRound()` 안에서 `recordScore` 가 이미 돌았다.
-                //  · 제출이 떠 있으면(인편이 있으면) "여기까지 기록했어요" 가 참이다 — 비동기 성공이 못 지우게 붙든다.
-                //  · 못 띄웠으면(토큰이 없어 `recordScore` 가 그 사실을 말한 경우) 그 말을 **덮지 않는다**.
-                if (pendingSubmit == null && isPublic && isSignedIn) return
+                //  · 인편에 적혔으면 "여기까지 기록했어요" 가 참이다 — 비동기 성공이 못 지우게 붙든다(거절은 지운다).
+                //  · 공개를 끈 사람·로그아웃은 인편이 없다 — 안내만 세운다.
+                val pending = hasPendingSubmit(controller.kind)
+                if (!pending && isPublic && isSignedIn) return
                 submitNotice = GamesMiniGameText.endedInBackground(controller.kind)
-                exitNoticeIsSticky = pendingSubmit != null
+                exitNoticeIsSticky = pending
             }
         }
     }
@@ -351,8 +434,13 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         roundTokenKind = null
         roundTokenAt = null
         roundTokenInFlightKind = null
-        pendingSubmit = null
-        tooFastRetries = null
+        // 인편은 **메모리에서만** 비운다. 영속본은 그 계정의 키에 그대로 남는다 — 같은 사람이 30분 안에 돌아오면 이어서 올린다(남의 계정으로는 키가 달라 안 나간다).
+        // 백오프 타이머도 거둔다(다음 사람의 세션으로 밀면 안 된다).
+        pendingSubmits = emptyList()
+        pendingOwner = null
+        submittingKinds.clear()
+        pendingRetryJob?.cancel()
+        pendingRetryJob = null
         lastSummaryAt = null
         // 역대 순위도 남의 행이라 계정에 묶인다. 보기 선택([boardScope])은 앱 실행의 것이라 그대로 둔다(맥과 같다).
         clearAllTime(invalidate = true)
@@ -411,18 +499,18 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
 
     /**
      * 토큰을 미리 받는다(화면 열기 · 제출 뒤). 쓸 만한 토큰이 있으면 다시 받지 않는다.
-     * @param force 왕복 중인 요청이 있어도 새로 받는다 — 판이 **이미 끝났는데** 토큰이 없던 자리. 새 요청이 나가면 앞 요청의 응답은
-     *   세대 가드가 버린다.
      */
-    fun prefetchRoundToken(kind: MiniGameKind, force: Boolean = false) {
+    fun prefetchRoundToken(kind: MiniGameKind) {
         if (!isPublic || !isSignedIn) return
-        // INV-GamesMiniGameHub-22dafde9 이식: 그 게임의 **인편이 살아 있으면 받지 않는다**(force 여도). 서버는 (사용자, 게임)당
-        //   미사용 토큰을 한 행만 두고 새 요청이 오면 갈아 끼운다 — 제출이 네트워크로 실패한 직후 여기서 새 토큰을 받으면 복귀 재시도는
-        //   `no_token`(terminal)을 받고 인편이 버려진다. 막힌 채로 굳지 않는다: 인편은 복귀·새 판이 밀어내고, 비워지는 순간
-        //   `performSubmit` 의 꼬리가 여기를 다시 불러 새 토큰을 받는다.
-        if (pendingSubmit?.kind == kind) return
+        // INV-GamesMiniGameHub-22dafde9 이식: 그 게임의 **인편이 살아 있으면 받지 않고 인편부터 민다.** 서버는 (사용자, 게임)당
+        //   미사용 토큰을 한 행만 두고 새 요청이 오면 갈아 끼운다 — 제출이 네트워크로 실패한 직후 여기서 새 토큰을 받으면 재시도는
+        //   `no_token` 을 받는다. 막힌 채로 굳지 않는다: 인편이 비워지는 순간 `performSubmit` 의 꼬리가 여기를 다시 불러 새 토큰을 받는다.
+        if (hasPendingSubmit(kind)) {
+            retryPendingSubmitIfAny()
+            return
+        }
         if (hasUsableRoundToken(kind)) return
-        if (!force && roundTokenInFlightKind == kind) return
+        if (roundTokenInFlightKind == kind) return
         requestRoundToken(kind)
     }
 
@@ -436,10 +524,9 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         if (!isPublic || !isSignedIn) return
         submitNotice = null
         if (hasUsableRoundToken(kind)) return
-        // INV-GamesMiniGameHub-71a14b0b 이식: 이 게임의 인편이 살아 있으면 토큰을 받는 대신 **인편부터 밀어낸다**. 여기가 인편을 푸는
-        //   두 방아쇠 가운데 하나다(다른 하나는 복귀 `retryPendingSubmitIfAny()`). 이번 판이 토큰 없이 시작될 수는 있다 — 그건 앞 판을
-        //   확실히 버리는 것보다 싸고, `recordScore` 가 "못 올렸어요"로 사실대로 말한다.
-        if (pendingSubmit?.kind == kind) {
+        // INV-GamesMiniGameHub-71a14b0b 이식: 이 게임의 인편이 살아 있으면 토큰을 받는 대신 **인편부터 밀어낸다**. 이번 판이 토큰 없이 시작될 수는 있다 —
+        //   그러면 이 판의 점수는 토큰을 기다리는 인편이 되어 앞 인편이 비워진 뒤 토큰을 받는다. 앞 판을 확실히 버리는 것보다 싸다.
+        if (hasPendingSubmit(kind)) {
             retryPendingSubmitIfAny()
             return
         }
@@ -457,7 +544,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
     fun keepRoundTokenFresh(kind: MiniGameKind, now: SwiftDate = context.clock.now()) {
         val limit = kind.roundTokenMidRunRefreshSeconds ?: return
         if (!isSignedIn || !isPublic) return
-        if (pendingSubmit?.kind == kind) {
+        if (hasPendingSubmit(kind)) {
             retryPendingSubmitIfAny()
             return
         }
@@ -466,6 +553,21 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         if (roundToken != null && roundTokenKind == kind && issued != null && now.timeIntervalSince(issued) < limit) return
         log("round token refreshed mid-run game=${kind.rawValue}")
         requestRoundToken(kind)
+    }
+
+    /**
+     * 판 도중 토큰 감시(맥 `MiniGamePanel.armTokenKeeper` · MiniGamePanel.swift:1199). 화면이 판이 도는 동안 띄우고, 판이 끝나거나 화면이 사라지면 거둔다.
+     * [tokenKeeperIntervalSeconds] 마다 [keepRoundTokenFresh] 를 부른다. 갈아 끼우지 않는 게임이면 곧장 돌아온다. 정지 중에도 돈다 — 멈춰 둔 동안에도 서버 TTL 은 흐른다.
+     * 이 감시가 없으면 28분을 넘긴 길건너 판은 `token_expired` 로 점수를 잃는다.
+     */
+    suspend fun runRoundTokenKeeper(running: GamesPlayController) {
+        val kind = running.kind
+        if (kind.roundTokenMidRunRefreshSeconds == null) return
+        while (true) {
+            sleep(tokenKeeperIntervalSeconds)
+            if (controller !== running || !running.isPlaying) return
+            keepRoundTokenFresh(kind)
+        }
     }
 
     private fun requestRoundToken(kind: MiniGameKind) {
@@ -492,6 +594,13 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
                 val token = response.token
                 if (response.status != "ok" || token == null) {
                     log("round token refused status=${response.status} game=${kind.rawValue}")
+                    deferPendingTokenWait(kind)
+                    return
+                }
+                // 토큰을 기다리는 인편이 있으면 **그 인편이 먼저 받는다**(살아 있는 판보다 앞). 이 요청은 그 판이 시작될 때 나간 것이라 서버의 started_at 이 그 판보다 앞이다 —
+                // 판이 끝난 뒤에 나간 요청이었다면 서버가 too_fast 를 줄 수 있는데, 경과는 자라기만 하니 백오프 재시도가 통과시킨다.
+                if (adoptTokenIntoWaitingPending(kind, token)) {
+                    retryPendingSubmitIfAny(fromTrigger = false)
                     return
                 }
                 roundToken = token
@@ -501,173 +610,326 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
                 if (e is CancellationException && !AuthErrorRules.isTransport(e)) throw e
                 if (requested != roundGeneration) return
                 log("round token request failed game=${kind.rawValue}")
+                // 토큰이 없는 채로 둔다. 토큰을 기다리는 인편이 있으면 백오프 뒤 다시 받는다.
+                deferPendingTokenWait(kind)
             }
         } finally {
             if (requested == roundGeneration) roundTokenInFlightKind = null
         }
     }
 
-    /** 유효하게 끝난 판(엔진 onFinished). 범위 밖은 버리고, 로컬 최고를 올리고, 공개면 토큰과 함께 올린다. */
+    /**
+     * 유효하게 끝난 판(엔진 onFinished). 범위 밖은 버리고, 로컬 최고를 올리고, 공개면 **인편에 적고** 올린다 — 제출을 시도하기 전에 적는다.
+     * 토큰이 없어도 버리지 않는다(맥 2026-09-27 진단의 1번 갈래) — 토큰을 기다리는 인편으로 적는다. 왕복 중인 요청이 있으면 그 응답이 이 인편에 오고, 없으면 미는 쪽이 하나 띄운다.
+     */
     fun recordScore(kind: MiniGameKind, score: Int) {
         if (score < 0 || score > kind.maxScore) return
         raiseLocalBest(kind, score.toLong())
         if (!isPublic || !isSignedIn) return
-        val token = roundToken
-        if (token == null || roundTokenKind != kind) {
-            log("submit skipped — no token game=${kind.rawValue}")
-            submitNotice = GamesMiniGameText.submitFailedConnection
-            prefetchRoundToken(kind, force = true)
+        loadPendingIfNeeded()
+        val now = context.clock.now()
+        var token: String? = null
+        var issuedAt: SwiftDate? = null
+        val held = roundToken
+        if (held != null && roundTokenKind == kind) {
+            // 한 토큰에 한 점수 — 여기서 비워 두면 같은 토큰이 두 번 나가지 않는다. 인편이 그 토큰의 유일한 주인이 된다.
+            token = held
+            issuedAt = roundTokenAt ?: now
+            roundToken = null
+            roundTokenKind = null
+            roundTokenAt = null
+        } else {
+            log("submit waiting for token game=${kind.rawValue}")
+            submitNotice = GamesMiniGameText.submitRetrying
+            exitNoticeIsSticky = false
+        }
+        pendingSubmits = pendingSubmits + GamesPendingSubmit(nextPendingID++, kind, score, token, issuedAt, now)
+        persistPendingSubmits()
+        retryPendingSubmitIfAny()
+    }
+
+    // MARK: 제출 인편
+
+    /** 이 게임의 인편이 하나라도 있는가(토큰 유무 무관). */
+    fun hasPendingSubmit(kind: MiniGameKind): Boolean {
+        loadPendingIfNeeded()
+        return pendingSubmits.any { it.kind == kind }
+    }
+
+    /**
+     * 인편을 민다. 게임마다: 토큰을 실은 인편이 있으면 그것을 보낸다(백오프 중이면 기다린다). 전부 토큰을 기다리는 인편이면 맨 앞 것에 토큰을 받아 준다 — 왕복이 없을 때만 띄운다.
+     * 같은 게임의 제출이 떠 있으면 건너뛴다. 인편이 없으면 비용이 없다.
+     * @param fromTrigger 바깥 방아쇠(기본)면 모르는 status 로 붙든 인편을 푼다. 제출·토큰 응답의 **꼬리**와 타이머는 false — 방아쇠로 치면 모르는 status 응답이 곧 다음 제출을 부르는 고리가 된다.
+     */
+    fun retryPendingSubmitIfAny(fromTrigger: Boolean = true) {
+        loadPendingIfNeeded()
+        dropExpiredPendingSubmits()
+        if (fromTrigger && pendingSubmits.any { it.heldUntilTrigger }) pendingSubmits = pendingSubmits.map { it.copy(heldUntilTrigger = false) }
+        if (!isPublic || !isSignedIn || pendingSubmits.isEmpty()) {
+            schedulePendingRetry()
             return
         }
-        // 한 토큰에 한 점수 — 여기서 비워 두면 같은 토큰이 두 번 나가지 않는다. 대신 **인편**에 적는다.
-        roundToken = null
-        roundTokenKind = null
-        roundTokenAt = null
-        // INV-GamesMiniGameHub-c7357ade 이식: 인편 칸은 하나뿐이다. 밀려나는 앞 판을 **조용히 버리지 않는다** — 예전에는 그대로 덮어써서
-        //   앞 판 점수가 재시도 한 번 없이 사라졌다(사용자에게는 판이 통째로 증발한 것으로 보인다).
-        val superseded = pendingSubmit
-        if (superseded != null && superseded.token != token) sendSupersededPending(superseded)
-        pendingSubmit = GamesPendingSubmit(kind, score, token)
-        context.scope.launch { performSubmit(kind, score, token) }
-    }
-
-    /**
-     * 인편 칸에서 밀려나는 제출을 **마지막으로 한 번** 보낸다(버리기 전에). 네트워크 실패는 "응답만 유실됐다"일 수도 있다 — 그러면
-     * 점수는 이미 올라가 있고 서버가 `token_used` 로 답한다. [performSubmit] 을 재활용하지 않는 까닭: 그쪽은 [submitNotice] 를 쓴다 —
-     * 밀려난 앞 판의 거절 문구가 지금 막 끝난 판의 자리를 덮으면 엉뚱한 판에 대한 말을 읽는다. 화면에 한 글자도 안 쓴다.
-     */
-    private fun sendSupersededPending(superseded: GamesPendingSubmit) {
-        log("pending submit superseded — sending once more game=${superseded.kind.rawValue}")
-        val sessionGeneration = context.generation
-        val generation = resetGeneration
-        val service = context.service
-        context.scope.launch {
-            try {
-                val response = context.withSessionRetry { session ->
-                    service.submitMiniGameScore(session.accessToken, superseded.kind.rawValue, superseded.score.toLong(), superseded.token)
-                }
-                if (sessionGeneration != context.generation || generation != resetGeneration) return@launch
-                // `token_used` 는 여기서도 성공이다(응답만 유실된 첫 제출).
-                if (response.status != "ok" && response.status != "token_used") {
-                    log("superseded submit refused status=${response.status} game=${superseded.kind.rawValue}")
-                    return@launch
-                }
-                response.bestScore?.let { raiseLocalBest(superseded.kind, it) }
-                loadBoard(superseded.kind, withWinner = false)
-            } catch (e: Exception) {
-                if (e is CancellationException && !AuthErrorRules.isTransport(e)) throw e
-                log("superseded submit failed (network) game=${superseded.kind.rawValue}")
+        val now = context.clock.now()
+        for (kind in MiniGameKind.entries) {
+            if (kind in submittingKinds) continue
+            var entries = pendingSubmits.filter { it.kind == kind }
+            if (entries.isEmpty()) continue
+            // 보험: 들고 있던 토큰이 이 게임 것인데 인편이 토큰을 기다린다면 넘겨준다(정상 흐름에선 recordScore 가 이미 실었다).
+            val held = roundToken
+            if (entries.none { it.token != null } && hasUsableRoundToken(kind) && held != null) {
+                roundToken = null
+                roundTokenKind = null
+                roundTokenAt = null
+                adoptTokenIntoWaitingPending(kind, held)
+                entries = pendingSubmits.filter { it.kind == kind }
             }
+            val ready = entries.firstOrNull { it.token != null }
+            if (ready != null) {
+                // 토큰을 실은 인편은 게임당 하나뿐이다. 붙들렸거나 백오프 중이면 이 게임은 통째로 건너뛴다 — 그 인편의 토큰이 살아 있으니 새 토큰도 청하지 않는다(불변식).
+                if (ready.heldUntilTrigger || ready.isBackingOff(now)) continue
+                context.scope.launch { performSubmit(ready) }
+                continue
+            }
+            val head = entries.first()
+            if (head.heldUntilTrigger || head.isBackingOff(now)) continue
+            if (roundTokenInFlightKind == kind) continue
+            requestRoundToken(kind)
         }
+        schedulePendingRetry()
     }
 
+    private fun GamesPendingSubmit.isBackingOff(now: SwiftDate): Boolean = nextRetryAt?.let { it > now } == true
+
     /**
-     * 앱이 다시 active 가 됐다 — 서버가 받았다고 확인해 주지 않은 제출이 있으면 **같은 토큰으로** 한 번 더.
+     * 인편 하나를 보낸다. 지우는 것은 성공과 terminal 거절뿐이고 네트워크 실패·`too_fast`·모르는 status 는 남긴다.
      * 같은 토큰이라 두 번 올라가지 않는다(서버가 `token_used` 로 돌려주고, 그건 아래에서 성공으로 접는다).
      */
-    fun retryPendingSubmitIfAny() {
-        val pending = pendingSubmit ?: return
-        if (isSubmitting) return
-        if (!isPublic || !isSignedIn) return
-        context.scope.launch { performSubmit(pending.kind, pending.score, pending.token) }
-    }
-
-    suspend fun performSubmit(kind: MiniGameKind, score: Int, token: String) {
+    suspend fun performSubmit(entry: GamesPendingSubmit) {
         if (!isSignedIn) return
-        isSubmitting = true
-        try {
-            val sessionGeneration = context.generation
-            val generation = resetGeneration
-            val service = context.service
-            try {
-                val response = context.withSessionRetry { session ->
-                    service.submitMiniGameScore(session.accessToken, kind.rawValue, score.toLong(), token)
-                }
-                if (sessionGeneration != context.generation || generation != resetGeneration) return
-                // INV-GamesMiniGameHub-14bb03d9 이식: `token_used` 는 **성공이다.** 서버는 제출이 성공한 순간 그 토큰에 used_at 을 찍고,
-                //   이미 쓴 토큰에는 `token_used` 를 돌려준다. 즉 이 응답은 **응답만 유실된 첫 제출의 재시도**뿐이고 점수는 이미 올라가 있다.
-                if (response.status == "ok" || response.status == "token_used") {
-                    response.bestScore?.let { raiseLocalBest(kind, it) }
-                    clearPendingSubmit(token)
-                    // 출구에서 세운 안내("앱을 나가서 …")는 제출과 무관한 사실이라 지우지 않는다.
-                    if (!exitNoticeIsSticky) submitNotice = null
-                    // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로). 순위 재조회보다 **앞**에 둔다.
-                    context.refreshAchievementsAfterGameResult(kind.rawValue)
-                    // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다 — 맥 v0.3.67).
-                    if (allTimeFreshKind == kind) allTimeFreshKind = null
-                    allTimeInvalidation += 1
-                    // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다).
-                    loadBoard(kind, withWinner = false)
-                    // 역대 — [역대] 를 보는 중일 때만, 오늘 순위 **뒤에** 받는다.
-                    if (boardScope == MiniGameBoardScope.allTime && activeKind == kind) performLoadAllTimeBoard()
-                } else if (response.status in retryableSubmitStatuses) {
-                    // 아직 하한을 못 넘겼다 — 토큰이 살아 있으니 **인편을 남기고** 눈먼 지연 뒤 같은 토큰으로 다시 보낸다.
-                    // INV-GamesMiniGameHub-e849bf8a 이식: 여기서 `prefetchRoundToken` 으로 내려가지 않는다. 새 토큰 요청은 서버가
-                    //   (사용자, 게임) 행을 갈아 끼워 **지금 되보낼 토큰을 죽인다**. 인편 가드가 한 번 더 막지만 이 갈래의 생명줄이라
-                    //   여기서도 명시적으로 비켜 간다.
-                    log("submit too early — will retry status=${response.status} game=${kind.rawValue}")
-                    scheduleTooFastRetry(kind, score, token)
-                    return
-                } else {
-                    log("submit refused status=${response.status} game=${kind.rawValue}")
-                    // 토큰이 죽은 거절은 **그 판이 영영 못 올라간다** — "다시 해 주세요"(복구된다는 뜻)와 문장을 가른다.
-                    submitNotice = if (response.status in deadTokenStatuses) GamesMiniGameText.submitTokenDead else GamesMiniGameText.submitRefused
-                    exitNoticeIsSticky = false
-                    if (response.status in terminalSubmitStatuses) clearPendingSubmit(token)
-                }
-                prefetchRoundToken(kind)
-            } catch (e: Exception) {
-                if (e is CancellationException && !AuthErrorRules.isTransport(e)) throw e
-                if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return
-                if (sessionGeneration != context.generation || generation != resetGeneration) return
-                log("submit failed (network) game=${kind.rawValue}")
-                // 네트워크 실패는 인편을 **남긴다** — 복귀 때 같은 토큰으로 한 번 더 보낸다.
-                submitNotice = GamesMiniGameText.submitFailedConnection
-                exitNoticeIsSticky = false
-                prefetchRoundToken(kind)
-            }
-        } finally {
-            isSubmitting = false
-        }
-    }
-
-    /**
-     * `too_fast` 를 받은 판을 눈먼 지연 뒤 **같은 토큰으로** 다시 보낸다. 횟수를 다 쓰면 그때 비로소 포기한다.
-     * 기다리는 동안은 `submitRetrying`("올리는 중"), 포기할 때만 `submitRefused`.
-     */
-    private fun scheduleTooFastRetry(kind: MiniGameKind, score: Int, token: String) {
-        val previous = tooFastRetries
-        val attempt = if (previous?.first == token) previous.second else 0
-        exitNoticeIsSticky = false
-        if (attempt >= tooFastRetryDelaysSeconds.size) {
-            // 묶은 횟수를 다 썼다 — 여기서부터는 사실대로 말하고 인편을 놓아 준다(안 놓으면 선발급이 계속 막힌다).
-            log("submit too early — giving up game=${kind.rawValue}")
-            submitNotice = GamesMiniGameText.submitRefused
-            clearPendingSubmit(token)
-            prefetchRoundToken(kind)
-            return
-        }
-        tooFastRetries = token to attempt + 1
-        submitNotice = GamesMiniGameText.submitRetrying
-        val waitSeconds = tooFastRetryDelaysSeconds[attempt]
+        val token = entry.token ?: return
+        val kind = entry.kind
+        if (kind in submittingKinds) return
+        // ★ 다른 계정 인편을 제출하지 않는다: 지금 세션의 주인과 인편 목록의 주인이 같고 목록에 그 인편이 그대로 있을 때만 — 아래 첫 왕복까지 멈춤점이 없다.
+        val owner = myUserID
+        if (owner == null || pendingOwner != owner || pendingSubmits.none { it.id == entry.id && it.token == token }) return
+        submittingKinds += kind
         val sessionGeneration = context.generation
         val generation = resetGeneration
-        val wait = sleep
-        context.scope.launch {
-            wait(waitSeconds)
-            if (sessionGeneration != context.generation || generation != resetGeneration) return@launch
-            // 그 사이 새 판이 인편을 갈아 끼웠거나(그 판의 주인은 새 판이다) 다른 길로 비워졌으면 여기서 멈춘다.
-            if (pendingSubmit?.token != token) return@launch
-            performSubmit(kind, score, token)
+        // 한 번만 내린다 — 꼬리가 띄운 다음 제출의 깃발을 뒤늦은 finally 가 내리면 같은 토큰이 두 번 동시에 나간다. 계정이 바뀌었으면 건드리지 않는다.
+        var holding = true
+        fun release() {
+            if (holding && generation == resetGeneration) submittingKinds -= kind
+            holding = false
+        }
+        try {
+            val service = context.service
+            val response = context.withSessionRetry { session ->
+                service.submitMiniGameScore(session.accessToken, kind.rawValue, entry.score.toLong(), token)
+            }
+            // 세대가 밀렸으면 이 응답으로 상태를 건드리지 않는다. 인편은 **남는다** — 영속본이 같은 계정의 다음 로그인을 기다린다(키가 계정별이라 남의 계정으로는 안 나간다).
+            if (sessionGeneration != context.generation || generation != resetGeneration) {
+                release()
+                retryPendingSubmitIfAny()
+                return
+            }
+            // 꼬리에서 다음 인편을 밀어야 하므로 깃발은 **여기서** 내린다.
+            release()
+            var recorded = false
+            // INV-GamesMiniGameHub-14bb03d9 이식: `token_used` 는 **성공이다.** 서버는 제출이 성공한 순간 그 토큰에 used_at 을 찍고,
+            //   이미 쓴 토큰에는 `token_used` 를 돌려준다. 즉 이 응답은 **응답만 유실된 첫 제출의 재시도**뿐이고 점수는 이미 올라가 있다.
+            if (response.status == "ok" || response.status == "token_used") {
+                recorded = true
+                response.bestScore?.let { raiseLocalBest(kind, it) }
+                removePendingSubmit(entry.id)
+                // 출구에서 세운 안내("앱을 나가서 …")는 제출과 무관한 사실이라 지우지 않는다.
+                if (!hasPendingSubmit(kind) && !exitNoticeIsSticky) submitNotice = null
+                // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다 — 맥 v0.3.67).
+                if (allTimeFreshKind == kind) allTimeFreshKind = null
+                allTimeInvalidation += 1
+            } else if (response.status in terminalSubmitStatuses) {
+                log("submit refused status=${response.status} game=${kind.rawValue}")
+                // `no_token` 은 **한 번은 되살린다.** 그 판은 진짜로 있었고 점수도 진짜다 — 죽은 것은 토큰뿐이다(토큰을 기다리는 인편으로 되돌리면 새 토큰을 받아 다시 올라간다).
+                if (response.status == "no_token" && !entry.recoveredFromDeadTokenOnce) {
+                    demotePendingToTokenWait(entry.id)
+                    submitNotice = GamesMiniGameText.submitRetrying
+                    exitNoticeIsSticky = false
+                    retryPendingSubmitIfAny()
+                    return
+                }
+                removePendingSubmit(entry.id)
+                // 토큰이 죽은 거절은 **그 판이 영영 못 올라간다** — "다시 해 주세요"(복구된다는 뜻)와 문장을 가른다.
+                submitNotice = if (response.status in deadTokenStatuses) GamesMiniGameText.submitTokenDead else GamesMiniGameText.submitRefused
+                exitNoticeIsSticky = false
+            } else if (response.status in retryableSubmitStatuses) {
+                // `too_fast`: 토큰은 살아 있고(서버가 소모하기 전에 돌려준다) 경과는 자라기만 한다 — 같은 토큰으로 조금 뒤에 다시 보내면 통과한다.
+                // INV-GamesMiniGameHub-e849bf8a 이식: 새 토큰 요청은 **지금 되보낼 토큰을 죽인다** — 인편이 남아 있어 꼬리의 선발급이 비켜 간다.
+                log("submit too early — will retry status=${response.status} game=${kind.rawValue}")
+                deferPendingRetry(entry.id)
+                submitNotice = GamesMiniGameText.submitRetrying
+                exitNoticeIsSticky = false
+            } else {
+                // 모르는 status(신버전 서버). 이해 못 한 거절을 두드리지는 않되 점수를 버리지도 않는다 — 타이머 없이 남기고 방아쇠에서만 다시 보낸다. TTL 이 끝을 낸다.
+                log("submit refused (unknown status) status=${response.status} game=${kind.rawValue}")
+                pendingSubmits = pendingSubmits.map { if (it.id == entry.id) it.copy(heldUntilTrigger = true) else it }
+                submitNotice = GamesMiniGameText.submitRetrying
+                exitNoticeIsSticky = false
+            }
+            // 다음 인편(토큰을 기다리는 것)에 토큰을 받아 주고, 이 게임의 인편이 다 비었으면 다음 판 토큰을 미리 받아 둔다(방금 쓴 토큰은 죽었다). 이 꼬리는 방아쇠가 아니다.
+            retryPendingSubmitIfAny(fromTrigger = false)
+            if (!hasPendingSubmit(kind)) prefetchRoundToken(kind)
+            if (!recorded) return
+            // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로). 선발급 **뒤**, 순위 재조회 **앞**.
+            context.refreshAchievementsAfterGameResult(kind.rawValue)
+            // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다). 다음 판 토큰 뒤에 — 앞에 두면 그만큼 토큰이 늦는다.
+            loadBoard(kind, withWinner = false)
+            // 역대 — [역대] 를 보는 중일 때만, 오늘 순위 **뒤에** 받는다.
+            if (boardScope == MiniGameBoardScope.allTime && activeKind == kind) performLoadAllTimeBoard()
+        } catch (e: Exception) {
+            if (e is CancellationException && !AuthErrorRules.isTransport(e)) throw e
+            if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return
+            if (sessionGeneration != context.generation || generation != resetGeneration) {
+                release()
+                retryPendingSubmitIfAny()
+                return
+            }
+            release()
+            log("submit failed (network) game=${kind.rawValue}")
+            // 네트워크 실패는 인편을 **남긴다** — 백오프 뒤, 그리고 다음 방아쇠에 같은 토큰으로 한 번 더 보낸다.
+            deferPendingRetry(entry.id)
+            submitNotice = GamesMiniGameText.submitRetrying
+            exitNoticeIsSticky = false
+            // 인편이 살아 있으면 새 토큰은 안 받는다. 인편이 방금 TTL 로 버려졌을 때만 다음 판의 토큰을 미리 받는다.
+            if (!hasPendingSubmit(kind)) prefetchRoundToken(kind)
+        } finally {
+            release()
         }
     }
 
-    /** 이 토큰의 인편만 지운다(그 사이 새 판이 인편을 갈아 끼웠으면 건드리지 않는다). */
-    private fun clearPendingSubmit(token: String) {
-        if (pendingSubmit?.token != token) return
-        pendingSubmit = null
-        // 재시도 횟수는 인편과 한 벌이다 — 남겨 두면 다음 판이 이 토큰의 횟수를 물려받을 수 있다.
-        if (tooFastRetries?.first == token) tooFastRetries = null
+    /** 화면을 닫아 둔 사이에 인편이 TTL 로 죽었다면 한 줄로 말하고 표식을 지운다(한 번만 말한다). */
+    private fun showLostNoticeIfAny() {
+        loadPendingIfNeeded()
+        val owner = pendingOwner ?: return
+        if (context.keyValueStore.getBoolean(lostNoticeKey(owner)) != true) return
+        context.keyValueStore.remove(lostNoticeKey(owner))
+        submitNotice = GamesMiniGameText.submitExpired
+    }
+
+    /** 죽은 토큰(`no_token`)을 받은 인편을 **토큰을 기다리는 인편으로 되돌린다.** 백오프는 0 으로 — 새 토큰을 받는 일은 앞의 실패와 다른 일이다. 표식을 세워 두 번은 오지 않는다. */
+    private fun demotePendingToTokenWait(id: Long) {
+        pendingSubmits = pendingSubmits.map {
+            if (it.id == id) it.copy(token = null, tokenIssuedAt = null, attempts = 0, nextRetryAt = null, heldUntilTrigger = false, recoveredFromDeadTokenOnce = true) else it
+        }
+        persistPendingSubmits()
+        log("pending submit recovered from dead token")
+    }
+
+    /** 토큰을 기다리는 이 게임의 맨 앞 인편에 토큰을 넘긴다. 넘겼으면 true(호출자가 인편을 민다). */
+    private fun adoptTokenIntoWaitingPending(kind: MiniGameKind, token: String): Boolean {
+        loadPendingIfNeeded()
+        val head = pendingSubmits.firstOrNull { it.kind == kind && it.token == null } ?: return false
+        val now = context.clock.now()
+        pendingSubmits = pendingSubmits.map { if (it.id == head.id) it.copy(token = token, tokenIssuedAt = now, nextRetryAt = null) else it }
+        persistPendingSubmits()
+        return true
+    }
+
+    /** 실패한 인편의 백오프를 한 단계 올리고 타이머를 다시 잡는다(n번째 실패 → [pendingRetryDelaysSeconds] 의 n번째, 끝은 반복). */
+    private fun deferPendingRetry(id: Long) {
+        val now = context.clock.now()
+        pendingSubmits = pendingSubmits.map {
+            if (it.id != id) return@map it
+            val attempts = it.attempts + 1
+            val delays = pendingRetryDelaysSeconds
+            it.copy(attempts = attempts, nextRetryAt = now.addingTimeInterval(delays[minOf(attempts - 1, delays.size - 1)]))
+        }
+        persistPendingSubmits()
+        schedulePendingRetry()
+    }
+
+    /** 토큰 요청이 실패했는데 그 게임에 토큰을 기다리는 인편이 있으면 — 그 인편의 백오프를 올린다(다음 요청은 타이머가 띄운다). */
+    private fun deferPendingTokenWait(kind: MiniGameKind) {
+        val head = pendingSubmits.firstOrNull { it.kind == kind && it.token == null } ?: return
+        deferPendingRetry(head.id)
+    }
+
+    /** 백오프 타이머 한 개 — 가장 먼저 돌아오는 인편의 시각에 맞춘다. TTL 을 넘겨서 돌아오는 재시도는 잡지 않는다. 기다릴 것이 없으면 거둔다. */
+    private fun schedulePendingRetry() {
+        pendingRetryJob?.cancel()
+        pendingRetryJob = null
+        val now = context.clock.now()
+        val next = pendingSubmits.mapNotNull { entry ->
+            entry.nextRetryAt?.takeIf { it > now && it < entry.deadline(pendingSubmitTtlSeconds) }
+        }.minOrNull() ?: return
+        val generation = resetGeneration
+        val wait = sleep
+        pendingRetryJob = context.scope.launch {
+            wait(next.timeIntervalSince(now))
+            if (generation != resetGeneration) return@launch
+            pendingRetryJob = null
+            retryPendingSubmitIfAny(fromTrigger = false)
+        }
+    }
+
+    private fun removePendingSubmit(id: Long) {
+        if (pendingSubmits.none { it.id == id }) return
+        pendingSubmits = pendingSubmits.filterNot { it.id == id }
+        persistPendingSubmits()
+    }
+
+    /** TTL 을 넘긴 인편을 버린다(토큰이 죽었다). 화면이 열려 있으면 그 사실을 말하고, 닫혀 있으면 표식을 남겨 다음에 화면을 열 때 말한다 — 사용자가 그 판이 사라진 것을 영영 모르면 안 된다. */
+    private fun dropExpiredPendingSubmits() {
+        val now = context.clock.now()
+        val expired = pendingSubmits.filter { it.isExpired(now, pendingSubmitTtlSeconds) }
+        if (expired.isEmpty()) return
+        for (entry in expired) log("pending submit expired game=${entry.kind.rawValue}")
+        val gone = expired.map { it.id }.toSet()
+        pendingSubmits = pendingSubmits.filterNot { it.id in gone }
+        persistPendingSubmits()
+        if (activeKind != null) {
+            submitNotice = GamesMiniGameText.submitExpired
+            exitNoticeIsSticky = false
+        } else {
+            pendingOwner?.let { context.keyValueStore.putBoolean(lostNoticeKey(it), true) }
+        }
+    }
+
+    /** 메모리의 인편이 지금 계정 것이 아니면(처음 · 계정 전환 · 재로그인) 그 계정의 키에서 읽는다. TTL 을 넘긴 것은 여기서 버린다. 깨진 저장값은 없는 것으로 친다. */
+    private fun loadPendingIfNeeded() {
+        val owner = myUserID
+        if (pendingOwner == owner) return
+        pendingOwner = owner
+        submittingKinds.clear()
+        pendingRetryJob?.cancel()
+        pendingRetryJob = null
+        if (owner == null) {
+            pendingSubmits = emptyList()
+            return
+        }
+        val stored = context.keyValueStore.getString(pendingKey(owner))
+        val rows = stored?.let { runCatching { pendingJson.decodeFromString(ListSerializer(GamesPendingSubmitRow.serializer()), it) }.getOrNull() }.orEmpty()
+        pendingSubmits = rows.mapNotNull { row ->
+            val kind = MiniGameKind.fromRawValue(row.kind) ?: return@mapNotNull null
+            GamesPendingSubmit(
+                row.id, kind, row.score, row.token, row.tokenIssuedAt?.let { SwiftDate(it) }, SwiftDate(row.recordedAt), row.attempts, row.recoveredFromDeadTokenOnce,
+            )
+        }
+        nextPendingID = (pendingSubmits.maxOfOrNull { it.id } ?: 0L) + 1
+        dropExpiredPendingSubmits()
+        if (pendingSubmits.isNotEmpty()) log("pending submits restored count=${pendingSubmits.size}")
+    }
+
+    /** 영속본을 메모리와 맞춘다. 비었으면 키를 지운다. 주인이 없으면(로그아웃 상태) 쓰지 않는다. */
+    private fun persistPendingSubmits() {
+        val owner = pendingOwner ?: return
+        val key = pendingKey(owner)
+        if (pendingSubmits.isEmpty()) {
+            context.keyValueStore.remove(key)
+            return
+        }
+        val rows = pendingSubmits.map {
+            GamesPendingSubmitRow(it.id, it.kind.rawValue, it.score, it.token, it.tokenIssuedAt?.timeIntervalSince1970, it.recordedAt.timeIntervalSince1970, it.attempts, it.recoveredFromDeadTokenOnce)
+        }
+        context.keyValueStore.putString(key, pendingJson.encodeToString(ListSerializer(GamesPendingSubmitRow.serializer()), rows))
     }
 
     // MARK: 조회
@@ -794,6 +1056,7 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         allTimeFetchSerial += 1
         val serial = allTimeFetchSerial
         if (!allTimeLoading) allTimeLoading = true
+        val failedBefore = allTimeFailed
         if (allTimeFailed) allTimeFailed = false
         val service = context.service
         try {
@@ -815,9 +1078,13 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
             if (me != null) sorted.firstOrNull { it.userID == me }?.let { raiseLocalBest(kind, it.bestScore) }
         } catch (e: Exception) {
             if (e is CancellationException && !AuthErrorRules.isTransport(e)) throw e
-            if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return
+            if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) {
+                // 떠날 때 지운 실패 표시를 되돌린다 — 안 되돌리면 [다시 시도] 가 취소됐을 때 버튼 없는 "불러오는 중…" 카드로 굳는다.
+                if (failedBefore && sessionGeneration == context.generation && generation == resetGeneration && kind == activeKind) allTimeFailed = true
+                return
+            }
             if (sessionGeneration != context.generation || generation != resetGeneration || kind != activeKind) return
-            if (BlockReportRules.isMissingFunction(errorFacts(e))) {
+            if (BlockReportRules.isMissingFunction(miniGameServiceErrorFacts(e))) {
                 if (allTimeBoard.isNotEmpty()) allTimeBoard = emptyList()
                 allTimeBoardKind = kind
                 if (!allTimeUnavailable) allTimeUnavailable = true
@@ -843,15 +1110,6 @@ class GamesMiniGameHub(val context: GamesMiniGameContext, var logger: Logger? = 
         allTimeFreshKind = null
         if (invalidate) allTimeInvalidation += 1
         allTimeLoading = boardScope == MiniGameBoardScope.allTime && activeKind != null
-    }
-
-    /** 서비스 오류 → W1-c 판정 재료(함수 없음 = 스키마 없음 또는 HTTP 404). */
-    private fun errorFacts(e: Throwable): ServiceErrorFacts = when (e) {
-        SupabaseWorkServiceError.DatabaseSchemaMissing -> ServiceErrorFacts.databaseSchemaMissing
-        is SupabaseWorkServiceError.InvalidResponse -> ServiceErrorFacts.invalidResponse(e.statusCode)
-        is SupabaseWorkServiceError.RateLimited -> ServiceErrorFacts.rateLimited
-        is SupabaseWorkServiceError -> ServiceErrorFacts.otherServiceError
-        else -> ServiceErrorFacts.notServiceError
     }
 
     // MARK: 로컬 최고

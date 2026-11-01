@@ -18,7 +18,7 @@ enum class MiniGameKind(val rawValue: String) {
     /** v0.3.38. **맨 뒤에 더한다** — [entries] 순서가 곧 화면 순서라 사이에 끼우면 기존 두 게임의 자리가 밀린다. */
     tetris("tetris"),
 
-    /** v0.3.67 "길건너 아잉이". 테트리스와 같은 이유로 맨 뒤다. 폰에는 아직 없다([phoneCases] 가 거른다). */
+    /** v0.3.67 "길건너 아잉이". 테트리스와 같은 이유로 맨 뒤다. */
     crossy("crossy"),
     ;
 
@@ -97,6 +97,19 @@ enum class MiniGameKind(val rawValue: String) {
     /** 폰에서 보이는 게임인가 — [phoneCases] 의 한 줄 판정. */
     val isPhoneSupported: Boolean get() = this in phoneCases
 
+    /**
+     * 폰 캔버스에서 **끌기 트래커**로 입력을 받는가(= 누르는 순간의 '한 번의 행동' 래치로는 표현이 안 되는 게임 — Swift `usesCanvasDragTracker`).
+     * 뜻은 다르지만 화면이 거는 배선은 같은 모양이다(진행 중이면 `canvasDragChanged`/`canvasDragEnded`, 시작 전이면 래치가 `tap()` 으로 판을 켠다):
+     *  · 테트리스 — 한 번의 끌기가 여러 칸을 만들고 행동도 셋이다(좌·우·소프트드롭).
+     *  · 길건너 — 쓸기 방향 넷이 있고, 떼기를 기다리면 늦다(한 칸이 0.12초인 연타 게임이다).
+     * 이 판정을 화면·구동기 두 곳에 손으로 적지 않는다 — 한 곳만 넓히는 날 조용히 갈린다.
+     */
+    val usesCanvasDragTracker: Boolean
+        get() = when (this) {
+            timingBar, flappy -> false
+            tetris, crossy -> true
+        }
+
     companion object {
         /**
          * 타이밍 바·플래피가 공유하는 조작 안내.
@@ -110,19 +123,14 @@ enum class MiniGameKind(val rawValue: String) {
         val macCases: List<MiniGameKind> = entries.toList()
 
         /**
-         * **안드로이드 폰**에서 보이는 게임.
+         * **폰**에서 보이는 게임(iOS·안드로이드 한 벌 — 골든 framerate/engine 이 이 값을 잰다).
          *
          * INV-MiniGameEngine-e50f8752 이식: 플립은 한 줄이 아니다. 여기에 종류를 더하기 전에 ① 서버 마이그레이션이 실서버에 있고
-         * ② 딥링크(`AingRoute.MiniGame`)를 같이 넓히고 ③ 폰 화면·조작이 붙어 있어야 한다. 길건너(v0.3.67)는 안드로이드에서 아직 빠진다
-         * (iOS 는 폰 1.0.15 에 열었다 — [iosPhoneCases]. 안드로이드 ③ 폰 화면·조작을 옮기는 판에 이 목록을 [iosPhoneCases] 로 맞춘다). 모르는 값을 접지 않으려고 [entries] 는 그대로 둔다(저장값 복원·서버 응답 매핑은 전부를 안다).
+         * ② 딥링크(`AingRoute.MiniGame`)를 같이 넓히고 ③ 폰 화면·조작이 붙어 있어야 한다. 길건너는 ① 맥 0.3.67·iOS 1.0.15 가 이미 그 서버로 올리고 있고
+         * ② `AingMiniGame.CROSSY` ③ `GamesCrossyGesture` · 구동기 `usesCanvasDragTracker` 갈래 · 2.5D `CrossyCanvas` 로 이 판에 같이 냈다.
+         * 모르는 값을 접지 않으려고 [entries] 는 그대로 둔다(저장값 복원·서버 응답 매핑은 전부를 안다).
          */
-        val phoneCases: List<MiniGameKind> = listOf(timingBar, flappy, tetris)
-
-        /**
-         * Swift `MiniGameKind.phoneCases`(iOS 폰이 여는 게임 — main 14d56c0d 에서 길건너를 열었다). 골든 framerate/engine 이 이 값을 잰다.
-         * 안드로이드 노출은 [phoneCases] 가 정한다 — 둘의 차이(길건너)는 `MiniGameEngineGoldenTest` 가 잠근 **알려진 격차**다.
-         */
-        val iosPhoneCases: List<MiniGameKind> = listOf(timingBar, flappy, tetris, crossy)
+        val phoneCases: List<MiniGameKind> = listOf(timingBar, flappy, tetris, crossy)
 
         /** 서버·저장값 rawValue → 종류. 모르면 null(조용히 기본값으로 접지 않는다). */
         fun fromRawValue(raw: String): MiniGameKind? = entries.firstOrNull { it.rawValue == raw }

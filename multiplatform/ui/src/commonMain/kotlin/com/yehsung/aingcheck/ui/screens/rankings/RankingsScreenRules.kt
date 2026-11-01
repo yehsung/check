@@ -2,14 +2,14 @@
 // 원본: Sources/CheckMobileKit/Rankings/RankingsBoardSections.swift @ 3bd04bd (빈 카드 · 다시 시도 · 칩 · 메달 · 상품 줄 판정)
 //
 // 순위 탭의 **화면 판정**(순수 — JVM 시험이 닿는다). Composable 은 이 답을 그리기만 한다.
-// **오늘 순위만**(G §8-18 #7): 미니게임 판은 [오늘|역대] 전환이 없다 — 폰 1.0.15 몫(역대 순위)은 이 판에 들어오지 않는다.
-// 미니게임 종류는 폰 목록(MiniGameKind.phoneCases)만 — 길건너 아잉이는 숨김(§8-18 #7).
+// 미니게임 메뉴: 폰은 폰 목록(MiniGameKind.phoneCases — 길건너 포함), Windows 플라이아웃은 지금 그대로 셋(v1 동결).
 package com.yehsung.aingcheck.ui.screens.rankings
 
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.stores.now.NowMyCard
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
 import com.yehsung.aingcheck.core.stores.rankings.RankingsLoadState
+import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsText
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.ui.components.CharacterMood
@@ -30,8 +30,9 @@ object RankingsScreenRules {
     /** 세그먼트 순서(팀 리그 · AI 토큰 · 미니게임) — 열거 순서 그대로. */
     val boards: List<RankingsBoard> = RankingsBoard.entries
 
-    /** 미니게임 메뉴에 보일 종류 — 폰 목록만(길건너 숨김, §8-18 #7). */
-    val miniGameKinds: List<MiniGameKind> = MiniGameKind.phoneCases
+    /** 미니게임 메뉴에 보일 종류. 폰은 폰 목록 그대로, Windows 플라이아웃(기본값)은 길건너를 더하지 않는다(Windows v1 동결 — 안드로이드 경로만 켠다). */
+    fun miniGameKinds(isPhone: Boolean = false): List<MiniGameKind> =
+        if (isPhone) MiniGameKind.phoneCases else MiniGameKind.phoneCases - MiniGameKind.crossy
 
     fun leagueEmpty(state: RankingsLoadState, unfilteredCount: Int, isPastWeek: Boolean, leagueIsEmpty: Boolean): RankingsEmptyCardState =
         RankingsEmptyCardState(
@@ -50,6 +51,13 @@ object RankingsScreenRules {
         text = RankingsText.miniGameEmptyText(state.hasLoaded, state.hasFailed),
         showsRetry = state.hasFailed && !state.hasLoaded && !state.isLoading,
         isLoading = state.isLoading && !state.hasLoaded,
+    )
+
+    /** [역대] 빈 자리: 문구·[다시 시도] 판정은 스토어 한 벌(게임 탭과 같은 글자). */
+    fun miniGameAllTimeEmpty(store: RankingsStore): RankingsEmptyCardState = RankingsEmptyCardState(
+        text = store.miniGameAllTimeEmptyText,
+        showsRetry = store.miniGameAllTimeShowsRetry && !store.miniGameAllTimeState.isLoading,
+        isLoading = store.miniGameAllTimeState.isLoading && !store.miniGameAllTimeState.hasLoaded,
     )
 
     /** 목록이 있을 때 위에 거는 경고 한 줄(지난 조회가 실패했다 — 받아 둔 목록은 그대로 보인다). */

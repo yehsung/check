@@ -125,6 +125,9 @@ sealed interface SectionTrailing {
     data object None : SectionTrailing
     data class Label(val text: String) : SectionTrailing
     data class Action(val label: String, val onClick: () -> Unit) : SectionTrailing
+
+    /** 그 밖의 부속(순위 머리의 [오늘 | 역대] 전환). */
+    class Custom(val content: @Composable () -> Unit) : SectionTrailing
 }
 
 /** 섹션 머리(제목 + 오른쪽 글자/동작). [padded] 면 위 22 · 아래 8 · 좌우 (제목 여백 − 옆 여백). */
@@ -150,6 +153,7 @@ fun SectionHeader(title: String, modifier: Modifier = Modifier, trailing: Sectio
                 Modifier.heightIn(min = AingDimens.minimumTarget).clickable(role = Role.Button, onClick = trailing.onClick),
                 contentAlignment = Alignment.Center,
             ) { Text(trailing.label, style = MaterialTheme.typography.bodyMedium, color = colors.accent) }
+            is SectionTrailing.Custom -> trailing.content()
         }
     }
 }

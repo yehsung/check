@@ -30,15 +30,15 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
  * - 폰 전용 출구가 **둘**이다. 뜻이 다르므로 함수도 둘이다:
  *   · [abandon] — 판을 **기록 없이 버린다**(로그아웃 · 화면 경합 정리). 알리지 않으므로 제출도 없다.
  *   · [endRound] — 판을 **끝낸다**(뒤로가기 · 앱이 background 로 감). 타이밍 바·플래피는 버리는 것과 같고,
- *     **테트리스만 그 자리에서 점수를 확정해 알린다**(폰에서 background 는 비용이 0.05초뿐인 무한 일시정지라 살려 두면 순위표가 흔들린다).
+ *     **테트리스·길건너는 그 자리에서 점수를 확정해 알린다**(폰에서 background 는 비용이 0.05초뿐인 무한 일시정지라 살려 두면 순위표가 흔들린다).
  *
- * 폰 테트리스 입력(끌기·탭)의 **판정도 여기 있다**([canvasDragChanged]·[canvasDragEnded]) — JVM 시험이 손가락 좌표부터 조각 위치까지
+ * 폰 테트리스·길건너 입력(끌기·탭)의 **판정도 여기 있다**([canvasDragChanged]·[canvasDragEnded]) — JVM 시험이 손가락 좌표부터 조각 위치까지
  * 화면 없이 구동한다.
  *
- * 길건너 아잉이(v0.3.67): **데스크톱은 구동, 폰은 phoneCases·라우트가 거른다**(공용 패치 15 — W-9). 규칙은 코어 `CrossyGame` 하나이고
- * 이 구동기는 맥 `CrossyGameView`(MiniGameCrossy.swift:43-110)의 틀만 옮겼다 — 탭·스페이스 = `action()`(앞으로 한 칸 · 시작/다시),
- * 방향 = [hop](`input(direction)` — 결과 화면의 방향은 엔진이 버린다), 틱 = `step(dt)`, `Result` 전이 = 확정 한 번.
- * 출구([endRound])는 플래피와 같은 버림이다 — 닫기 = 기록은 데스크톱 창 쪽(quittingKeepsTheScore)이 맡는다.
+ * 길건너 아잉이(v0.3.67): 규칙은 코어 `CrossyGame` 하나이고 이 구동기는 맥 `CrossyGameView`(MiniGameCrossy.swift:43-110)와
+ * iOS `GamesPlayController` 의 길건너 갈래를 옮겼다 — 탭·스페이스 = `action()`(앞으로 한 칸 · 시작/다시), 쓸기 = 트래커가 낸 방향 한 칸,
+ * 데스크톱 방향키 = [hop](`input(direction)` — 결과 화면의 방향은 엔진이 버린다), 틱 = `step(dt)`, `Result` 전이 = 확정 한 번.
+ * 출구([endRound])는 테트리스와 같은 **확정**이다(iOS 1.0.15 D4 — 차·기차가 움직이는 게임이라 background 를 무한 일시정지로 두면 마음대로 멈출 수 있다).
  */
 class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     /** [endRound] 가 무엇을 했는가. 허브가 이 값으로 안내 문구를 고른다. */
@@ -49,7 +49,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
         /** 기록 없이 끝냈다(타이밍 바·플래피). 알리지 않았으므로 제출도 없다. */
         data object Abandoned : EndOutcome
 
-        /** 그 점수로 **확정**했다(테트리스). [onFinished] 는 이 함수 안에서 이미 불렸다. */
+        /** 그 점수로 **확정**했다(테트리스 · 길건너). [onFinished] 는 이 함수 안에서 이미 불렸다. */
         data class Confirmed(val score: Int) : EndOutcome
     }
 
@@ -100,9 +100,12 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     private var reportedFinish = false
     private var seedSource: ULong = seed
 
-    // MARK: 테트리스 제스처(폰 전용 · 화면 없이 구동된다)
+    // MARK: 끌기 제스처(폰 전용 · 화면 없이 구동된다)
 
     private val gesture = TetrisGestureTracker(TetrisGestureThresholds(cellWidth = TetrisLayout.cell))
+
+    /** 길건너 쓸기 트래커. 테트리스 트래커(누적 소비량)를 못 쓰는 까닭은 [CrossyGestureTracker] 머리 주석 — 한 접촉 = 한 칸이고 떼기를 기다리지 않는다. */
+    private val crossyGesture = CrossyGestureTracker()
 
     /** 지금 따라가는 접촉의 시작점·첫 프레임 시각. 시작점이 바뀌면 새 접촉이다(끌기 끝은 늘 오지 않는다). */
     private var gestureStartLocation: MiniGamePoint? = null
@@ -182,7 +185,7 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     }
 
     /**
-     * 길건너 뛰기 한 번(데스크톱 방향키 ↑↓←→·WASD — 맥 `input.hops(since:)` → `input(direction)`, MiniGameCrossy.swift:59-61).
+     * 길건너 뛰기 한 번(데스크톱 방향키 ↑↓←→·WASD — 맥 `input.hops(since:)` → `input(direction)`, MiniGameCrossy.swift:59-61). 폰 쓸기는 이 문이 아니다([hopWhilePlaying]).
      * 누른 순서 그대로 엔진에 넣는다 — 뛰는 중 둘째는 엔진이 한 칸 줄 세우고 셋째부터 버린다(그것은 규칙이다 — 여기서 미리 거르지 않는다).
      * 시작 전이면 판을 열고 그 방향으로 뛴다. 결과 화면·죽음 연출의 방향은 엔진이 버린다. 길건너가 아니면 아무 일 없다.
      */
@@ -196,6 +199,20 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
             tapSerial += 1
         }
         noteStarted(wasPlaying)
+    }
+
+    /**
+     * 폰 쓸기 한 칸(Swift `hopCrossy`). **진행 중일 때만** — 판을 켜는 것은 화면의 시작 래치(`tap()`)뿐이다. 쓸기가 판을 켜면 라운드 토큰 뒷정리를 못 지나
+     * 점수가 조용히 사라진다. 뛰는 중 입력은 엔진이 한 칸 줄 세우고 그 뒤는 버린다(그건 규칙이다 — 여기서 미리 거르지 않는다).
+     */
+    private fun hopWhilePlaying(direction: CrossyGame.Direction) {
+        if (kind != MiniGameKind.crossy || !crossy.isPlaying) return
+        val next = crossy.copy()
+        next.input(direction)
+        if (next != crossy) {
+            crossy = next
+            tapSerial += 1
+        }
     }
 
     /** 판이 방금 켜졌으면(진행 아님 → 진행) 새 판 준비를 하고 [onStarted] 를 한 번 부른다. 탭·뛰기가 같은 한 벌을 쓴다. */
@@ -323,37 +340,50 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
         tetris = next
     }
 
-    // MARK: 테트리스 제스처
+    // MARK: 끌기 제스처
 
     /** 화면 배율이 정해졌다(또는 바뀌었다) — 한 칸 문턱은 **화면 셀 폭**이다(논리 13 × 배율). */
     fun updateCellWidth(width: Double) {
         gesture.updateCellWidth(width)
     }
 
-    /** 끌기 변화 — 시작점부터의 누적 이동을 그대로 넘기면 새로 생긴 걸음이 엔진에 먹는다. 시각은 **탭 판정용**이다. */
+    /**
+     * 끌기 변화 — 시작점부터의 누적 이동을 그대로 넘기면 새로 생긴 걸음이 엔진에 먹는다. 시각은 **탭 판정용**이다.
+     * 길건너 쓸기는 **떼기를 기다리지 않는다** — 문턱을 넘는 그 순간 방향 하나가 엔진에 들어간다.
+     */
     fun canvasDragChanged(startLocation: MiniGamePoint, translation: MiniGameSize, time: SwiftDate) {
-        if (kind != MiniGameKind.tetris) return
+        if (!kind.usesCanvasDragTracker) return
         if (gestureStartLocation != startLocation) {
             gestureStartLocation = startLocation
             gestureStartedAt = time
         }
-        for (step in gesture.drag(startLocation, translation)) feed(step)
+        when (kind) {
+            MiniGameKind.tetris -> for (step in gesture.drag(startLocation, translation)) feed(step)
+            MiniGameKind.crossy -> crossyGesture.drag(startLocation, translation)?.let { hopWhilePlaying(it) }
+            MiniGameKind.timingBar, MiniGameKind.flappy -> Unit
+        }
     }
 
-    /** 끌기 끝 — 탭(8pt 미만 · 0.25초 안)이면 **시계 회전**이다. @return 이 끌기가 탭이었는가(회전을 시도했는가). */
+    /**
+     * 끌기 끝 — 탭(8pt 미만 · 0.25초 안)이면 **테트리스는 시계 회전, 길건너는 앞으로 한 칸**이다(길건너의 '시작 전·결과면 새 판'은 화면의 시작 래치가
+     * `tap()` 으로 받는다 — 이 길은 진행 중에만 온다). @return 이 끌기가 탭이었는가(그 동작을 시도했는가).
+     */
     fun canvasDragEnded(translation: MiniGameSize, time: SwiftDate): Boolean {
-        if (kind != MiniGameKind.tetris) return false
+        if (!kind.usesCanvasDragTracker) return false
         val elapsed = gestureStartedAt?.let { maxOf(0.0, time.timeIntervalSince(it)) } ?: 0.0
         gestureStartLocation = null
         gestureStartedAt = null
-        if (!gesture.end(translation, elapsed)) return false
-        rotate(clockwise = true)
-        return true
+        return when (kind) {
+            MiniGameKind.tetris -> gesture.end(translation, elapsed).also { if (it) rotate(clockwise = true) }
+            MiniGameKind.crossy -> crossyGesture.end(translation, elapsed).also { if (it) tap() }
+            MiniGameKind.timingBar, MiniGameKind.flappy -> false
+        }
     }
 
     /** 새 판·출구에서 트래커를 비운다. 안 비우면 앞 끌기의 축 잠금·소비량이 다음 판으로 샌다. */
     private fun resetGesture() {
         gesture.end(MiniGameSize(0.0, 0.0), 0.0)
+        crossyGesture.end(MiniGameSize(0.0, 0.0), 0.0)
         gestureStartLocation = null
         gestureStartedAt = null
     }
@@ -476,16 +506,16 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
     }
 
     /**
-     * 판을 **끝낸다**(화면을 떠남 · 앱이 background 로 감). 기존 두 게임은 [abandon] 과 같고, **테트리스는 그 자리에서 점수를 확정해 알린다.**
+     * 판을 **끝낸다**(화면을 떠남 · 앱이 background 로 감). 기존 두 게임은 [abandon] 과 같고, **테트리스·길건너는 그 자리에서 점수를 확정해 알린다.**
      *
-     * INV-GamesPlayController-615974ae 이식: 왜 테트리스만 다른가: 폰에서 background 는 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는 `maxStep`(1/20)으로 잘리므로
+     * INV-GamesPlayController-615974ae 이식: 왜 이 둘이 다른가: 폰에서 background 는 **비용 0 의 무한 일시정지**다. 복귀 첫 프레임의 dt 는 `maxStep`(1/20)으로 잘리므로
      * 몇 분을 나가 있어도 판이 잃는 것은 0.05초뿐이다. 그래서 나가는 순간 **여기까지의 점수로 확정**한다.
      * INV-GamesPlayController-e5a30ec5 이식: `interrupt()` 뒤에는 **tick 이 다시 오지 않는다** — 여기서 직접 [onFinished] 를 부르지 않으면 **점수가 조용히 사라진다.**
      */
     fun endRound(): EndOutcome {
         if (!isPlaying) return EndOutcome.None
         return when (kind) {
-            MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.crossy -> if (abandon()) EndOutcome.Abandoned else EndOutcome.None
+            MiniGameKind.timingBar, MiniGameKind.flappy -> if (abandon()) EndOutcome.Abandoned else EndOutcome.None
             MiniGameKind.tetris -> {
                 reportedFinish = true
                 lastTick = null
@@ -496,6 +526,19 @@ class GamesPlayController(val kind: MiniGameKind, seed: ULong) {
                 next.interrupt()
                 next.releaseAllKeys()
                 tetris = next
+                val score = next.score
+                onFinished?.invoke(score)
+                EndOutcome.Confirmed(score)
+            }
+            MiniGameKind.crossy -> {
+                reportedFinish = true
+                lastTick = null
+                roundLimitSeconds = null
+                roundDeadline = null
+                resetGesture()
+                val next = crossy.copy()
+                next.interrupt()
+                crossy = next
                 val score = next.score
                 onFinished?.invoke(score)
                 EndOutcome.Confirmed(score)

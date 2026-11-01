@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.minigame.FlappyGame
+import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.rules.minigame.TimingBarGame
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGame
 import com.yehsung.aingcheck.core.session.app.AppConfig
@@ -22,6 +23,7 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.games.TetrisActionResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisLobbyResponse
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.testkit.fixtures.RepoFiles
 import com.yehsung.aingcheck.ui.components.DesktopSnapshots
 import com.yehsung.aingcheck.ui.components.PixelImage
@@ -117,11 +119,36 @@ class GamesSnapshotDesktopTest {
         }
     }
 
+    /** 폰 경로의 플래피 화면 [역대] 판(데모 픽스처 — 내 행 강조 · 날짜 · 바닥 두 줄). [topBumped] 는 음성 기준선(1위 이름만 다르다). */
+    private fun allTimeScene(dark: Boolean, topBumped: Boolean = false): @Composable () -> Unit {
+        val fixture = RepoFiles.readText("$FIXTURES/_games/rpc.minigame_alltime_board@flappy.json")
+        val body = if (topBumped) fixture.replaceFirst("달토끼", "달토끼달토끼달토끼") else fixture
+        val scope = TestScope()
+        val h = UiGamesHarness(scope, AppConfig()) { r ->
+            if (r.rpcName == "minigame_alltime_board") body to 200 else UiFixtures.miniGameRoute(r) { 1 }
+        }
+        runBlocking { h.signIn() }
+        val store = GamesStore(h.context)
+        store.miniGames.openScreen(MiniGameKind.flappy)
+        store.miniGames.selectBoardScope(MiniGameBoardScope.allTime)
+        scope.testScheduler.advanceUntilIdle()
+        check(store.miniGames.allTimeBoard.isNotEmpty()) { "픽스처로 역대 표가 서지 않았다" }
+        val me = store.miniGames.allTimeBoard[1].userID
+        return {
+            AingTheme(dark = dark) {
+                GamesMiniGameScreen(store, MiniGameKind.flappy, 60, art, me, Modifier.size(PHONE_W.dp, PHONE_H.dp), reduceMotion = true, isPhone = true)
+            }
+        }
+    }
+
     private fun canvas(dark: Boolean, heightDp: Int, body: @Composable (Modifier) -> Unit): @Composable () -> Unit =
         { AingTheme(dark = dark) { body(Modifier.size(PHONE_W.dp, heightDp.dp)) } }
 
     @Test fun hubLight() = check("games/minigame", "hub-light", PHONE_H, hubScene(false), hubScene(false, chessIncoming = true))
     @Test fun hubDark() = check("games/minigame", "hub-dark", PHONE_H, hubScene(true), hubScene(true, chessIncoming = true))
+
+    @Test fun allTimeLight() = check("games/minigame", "flappy-alltime-light", PHONE_H, allTimeScene(false), allTimeScene(false, topBumped = true))
+    @Test fun allTimeDark() = check("games/minigame", "flappy-alltime-dark", PHONE_H, allTimeScene(true), allTimeScene(true, topBumped = true))
 
     @Test fun timingBarCanvas() = check(
         "games/minigame", "timing-bar-light", CANVAS_H,

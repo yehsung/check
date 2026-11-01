@@ -32,7 +32,7 @@ class RouteTargetsTest {
         }
         for (tab in AingTab.entries) assertEquals(tab, RouteTargets.tab(RouteTargets.tab(tab)))
         assertNull("게임 탭 밖 요청은 셸 라우트가 없다", RouteTargets.route(PhoneRouteTarget.Games(GamesRouteRequest.Other)))
-        assertNull("이 빌드에 링크가 없는 미니게임(길건너)", RouteTargets.route(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.crossy))))
+        assertEquals("길건너 링크", AingRoute.MiniGame(AingMiniGame.CROSSY), RouteTargets.route(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.crossy))))
         assertNull("모양이 틀린 id 는 라우트가 되지 않는다", RouteTargets.route(PhoneRouteTarget.Message("../x")))
         assertEquals(PhoneTab.entries.size, AingTab.entries.size)
     }
@@ -45,6 +45,10 @@ class RouteTargetsTest {
         for (kind in MiniGameKind.entries) {
             assertEquals("$kind", kind in MiniGameKind.phoneCases, RouteTargets.miniGame(kind) != null)
         }
+        // 길건너 딥링크도 같이 넓혔다 — 파싱 · URL 왕복 · 오배달 없음.
+        val crossy = AingRoute.parse("aingcheck://games/crossy")
+        assertEquals(AingRoute.MiniGame(AingMiniGame.CROSSY), crossy)
+        assertEquals(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.crossy)), RouteTargets.target(crossy!!))
         // 솔로 테트리스 링크(`games/tetris`)는 엔진의 솔로 테트리스다 — 1:1 대결로 가로채지 않는다(INV-MobileAppModel-14155396).
         assertEquals(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.tetris)), RouteTargets.target(AingRoute.parse("aingcheck://games/tetris")!!))
     }

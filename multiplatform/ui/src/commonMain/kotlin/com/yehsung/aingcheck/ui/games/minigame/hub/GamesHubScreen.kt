@@ -3,7 +3,7 @@
 //
 // 게임 탭 첫 화면(SPEC-ios §3.5 · w15 시안 B 07): 큰 제목 + 상품 부제 · 오른쪽 위 루비 유리 알약(→ 상점) · 미니게임 타일(2열 격자) ·
 // 1:1 오목·체스·테트리스 카드 · 오늘 내 순위 · 지금 대결 중(오목 — 로비를 이미 알 때만, 새 조회를 더하지 않는다).
-// **길건너 아잉이는 없다**(G §8-18 7 — iOS 1.0.14 바닥: phoneCases 가 거르고, 그 위에서 미니게임 표시 깃발 MiniGameExposure 가 좁힌다).
+// 미니게임 칸은 phoneCases(iOS 와 같은 넷 — 길건너 포함)를 미니게임 표시 깃발 MiniGameExposure 가 좁힌 목록이다.
 // 경로(쌓기·딥링크)는 셸(K11 조립)이 쥔다 — 이 화면은 [onOpen] 으로 목적지를 넘기기만 한다. 대국 중 화면 꺼짐 방지는 화면이 쓰지 않는다
 // (주인은 스토어 하나 — GamesStore.installIdleTimerSink, Android 싱크는 screens/games/hub GamesKeepScreenOn).
 package com.yehsung.aingcheck.ui.games.minigame.hub
@@ -125,7 +125,7 @@ object GamesHubTags {
     const val TETRIS_DUEL: String = "games.hub.tetrisDuel"
 }
 
-/** 이 빌드 게임 탭에 서는 미니게임(폰 노출 규칙 ∩ 표시 깃발 — 길건너는 없다). 타일·오늘 내 순위·새로고침이 **같은 한 목록**을 본다. */
+/** 이 빌드 게임 탭에 서는 미니게임(폰 노출 규칙 ∩ 표시 깃발). 타일·오늘 내 순위·새로고침이 **같은 한 목록**을 본다. */
 val hubMiniGames: List<MiniGameKind> get() = MiniGameExposure.visible
 
 @Composable
@@ -170,7 +170,7 @@ fun GamesHubScreen(
 private fun MiniGameTiles(store: GamesStore, art: MiniGameArt, onOpen: (GamesDestination) -> Unit, modifier: Modifier) {
     val fontScale = LocalDensity.current.fontScale
     val kinds = store.miniGames.visibleKinds
-    // 큰 글자: 한 열(반 폭 타일에서는 "오늘 최고 874점 · 3위"가 낱글자로 꺾인다). 보통은 2열 격자 — 셋째 타일은 다음 줄 왼쪽.
+    // 큰 글자: 한 열(반 폭 타일에서는 "오늘 최고 874점 · 3위"가 낱글자로 꺾인다). 보통은 2열 격자.
     val columns = if (fontScale >= 1.3f) 1 else 2
     Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         kinds.chunked(columns).forEach { row ->

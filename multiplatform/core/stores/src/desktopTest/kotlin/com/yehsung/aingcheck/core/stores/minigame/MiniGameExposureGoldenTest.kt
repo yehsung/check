@@ -69,8 +69,8 @@ class MiniGameExposureGoldenTest {
         val consumed = consumedNames()
         val problems = problems(MiniGameExposure.evidenceGoldens, listed, consumed)
         assertEquals(emptyList(), problems, problems.joinToString("\n"))
-        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris), MiniGameExposure.visible,
-            "이 빌드에 보이는 게임 — 폰 노출 규칙 ∩ 증거(길건너는 폰 1.0.15 때 W4-b 가 연다)")
+        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris, MiniGameKind.crossy), MiniGameExposure.visible,
+            "이 빌드에 보이는 게임 — 폰 노출 규칙 ∩ 증거")
     }
 
     /**
@@ -108,7 +108,7 @@ class MiniGameExposureGoldenTest {
         val listed = manifestNames()
         val consumed = consumedNames()
         val withoutTetris = MiniGameExposure.evidenceGoldens - MiniGameKind.tetris
-        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy), MiniGameExposure.visibleKinds(withoutTetris),
+        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.crossy), MiniGameExposure.visibleKinds(withoutTetris),
             "증거가 없는 게임은 보이지 않는다")
         val ghost = MiniGameExposure.evidenceGoldens + (MiniGameKind.flappy to listOf("flappy/rules", "flappy/ghost"))
         val found = problems(ghost, listed, consumed)

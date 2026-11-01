@@ -273,7 +273,14 @@ class RankingsLeagueWeekTest {
     @Test
     fun doorsFallToCurrentWeek() = runTest {
         val now = thursday
-        val (h, store) = make(now, ::leagueOnly)
+        // 보드 전환(②)이 같은 틱에 토큰→리그를 고른다 — 띄운 조회는 떠날 때의 판을 지키므로(iOS launchedFetchKeepsItsBoard) 토큰 조회도 나간다.
+        val (h, store) = make(now) { h, r ->
+            leagueOnly(h, r) ?: when {
+                r.rpcName == "token_usage_board" -> Reply.Json("[]")
+                r.path == "/rest/v1/profiles" -> Reply.Json("[]")
+                else -> null
+            }
+        }
         val current = weekKey(0, now)
         suspend fun goPast() {
             store.stepLeagueWeek(-1)

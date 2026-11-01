@@ -1,4 +1,5 @@
 // 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift @ 3bd04bd
+// 원본: Sources/CheckMobileKit/Games/GamesMiniGameScreen.swift:325-430 @ 1a5eeca6 (순위 [오늘 | 역대] — 폰 경로)
 // 원본: Sources/check/MiniGamePanel.swift:466-604 @ 3bd04bd (정지 카드·카운트다운·5분 상한 — Android ON_PAUSE 몫, G §8-2. 전이 표는 core MiniGamePauseState)
 //
 // 미니게임 화면(SPEC-ios §3.5): 머리 줄(최고 · 오늘 순위 · 안내) · 캔버스(논리 292×302 를 폭에 **등비 확대**) · (테트리스만) 버튼 줄 · 오늘 순위.
@@ -7,7 +8,8 @@
 //  · 햅틱 네 채널: 판에 먹힌 탭(가볍게) · 하드드롭(단단하게) · 줄소거(묵직하게) · 게임오버·완주(한 번). 이동·소프트드롭 걸음에는 없다
 //    (L1 소프트드롭이 초당 56회, L5 는 213회 — 진동기가 낼 수 있는 속도가 아니다).
 //  · 앱이 background 로 가거나 화면을 떠나면 판은 끝 — 스토어·허브가 한다(`GamesMiniGameHub.appDidEnterBackground`·`closeScreen`).
-//    기존 두 게임은 제출하지 않고, **테트리스는 여기까지의 점수로 확정 제출한다.**
+//    기존 두 게임은 제출하지 않고, **테트리스·길건너는 여기까지의 점수로 확정 제출한다.**
+//  · 판이 도는 동안 토큰 감시(`GamesMiniGameHub.runRoundTokenKeeper` — 맥 MiniGamePanel.swift:1199)를 띄운다. 28분을 넘긴 길건너 판이 토큰 만료로 점수를 잃지 않게 한다.
 //  · Android 만의 몫(G §8-2): 앱이 산 채로 **초점을 잃으면**(멀티 창 ON_PAUSE) 판을 얼린다 — 전이는 맥과 한 벌(core MiniGamePauseState).
 //    얼린 동안 캔버스를 가린다(판을 들여다보며 다음 기둥을 외우는 것이 순위표 앞에서 이득이면 안 된다). 누적 5분이면 그 판을 끝낸다.
 package com.yehsung.aingcheck.ui.games.minigame
@@ -80,8 +82,10 @@ import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameBoard
 import com.yehsung.aingcheck.core.stores.minigame.MiniGamePauseState
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.models.MiniGameBoardEntry
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.stores.games.MobileLoadKnowledge
 import com.yehsung.aingcheck.ui.games.minigame.kit.ChampionRow
+import com.yehsung.aingcheck.ui.games.minigame.kit.GamesBoardScopePicker
 import com.yehsung.aingcheck.ui.games.minigame.kit.GamesHeaderBar
 import com.yehsung.aingcheck.ui.games.minigame.kit.GroupRow
 import com.yehsung.aingcheck.ui.games.minigame.kit.InlineNotice
@@ -122,6 +126,7 @@ object MiniGameScreenTags {
  * @param pauseToggleSerial 바깥 정지 토글(공용 패치 11 — 데스크톱 창의 ESC). 값이 **바뀔 때마다** 한 번 [MiniGamePauseState.toggled]
  *   (맥 ESC 와 같은 전이 — 판 중이면 정지, 정지면 3-2-1, 카운트다운이면 다시 정지). 기본 0 이고 안 바꾸면 아무 일도 없다.
  * @param onFrozenChanged 판이 얼었는가(정지 카드 · 3-2-1)가 바뀔 때. 껍데기가 얼어 있는 동안 조작 키를 막는 데 쓴다. 기본 {}.
+ * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 창은 마우스·키보드 그대로): 길건너 쓸기·탭 조작과 폰 문구 · 순위 [오늘 | 역대] 전환.
  */
 @Composable
 fun GamesMiniGameScreen(
@@ -136,6 +141,7 @@ fun GamesMiniGameScreen(
     reduceMotion: Boolean = false,
     pauseToggleSerial: Int = 0,
     onFrozenChanged: (Boolean) -> Unit = {},
+    isPhone: Boolean = false,
 ) {
     val hub = store.miniGames
     DisposableEffect(kind) {
@@ -156,7 +162,7 @@ fun GamesMiniGameScreen(
                     MiniGamePlaySurface(
                         store, controller, refreshHz, art, windowFocused, reduceMotion,
                         Modifier.width(width).aspectRatio((MiniGameCanvas.logicalWidth / MiniGameCanvas.logicalHeight).toFloat()),
-                        pauseToggleSerial, onFrozenChanged,
+                        pauseToggleSerial, onFrozenChanged, isPhone,
                     )
                     // 테트리스만 버튼 줄이 붙는다 — 끌기로 표현할 수 없는 셋(홀드 · 반시계 회전 · 즉시 내리기)이다.
                     if (kind == MiniGameKind.tetris) TetrisControls(controller, width)
@@ -168,7 +174,7 @@ fun GamesMiniGameScreen(
                 }
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(bottom = AingDimens.space6)) {
                     if (!hub.isPublic) InlineNotice(GamesMiniGameText.privateNotice, Modifier.padding(bottom = AingDimens.space2), NoticeKind.Info)
-                    MiniGameRankings(store, kind, myUserID)
+                    MiniGameRankings(store, kind, myUserID, isPhone)
                 }
             }
         }
@@ -231,10 +237,13 @@ private fun MiniGamePlaySurface(
     modifier: Modifier,
     pauseToggleSerial: Int = 0,
     onFrozenChanged: (Boolean) -> Unit = {},
+    isPhone: Boolean = false,
 ) {
     var pause by remember(controller) { mutableStateOf<MiniGamePauseState>(MiniGamePauseState.None) }
     var pausedSeconds by remember(controller) { mutableStateOf(0) }
     val playing = controller.isPlaying
+    // 판 도중 토큰 감시 — 판이 도는 동안만 띄우고, 끝나거나 화면이 사라지면 거둔다(갈아 끼우지 않는 게임이면 곧장 돌아온다).
+    LaunchedEffect(controller, playing) { if (playing) store.miniGames.runRoundTokenKeeper(controller) }
     // 새 판(또는 판이 끝남)에서 누적을 비운다 — 누적은 **판마다** 잰다.
     LaunchedEffect(controller, playing) { if (!playing) { pausedSeconds = 0; pause = MiniGamePauseState.None } }
     LaunchedEffect(windowFocused) {
@@ -273,7 +282,7 @@ private fun MiniGamePlaySurface(
         }
     }
     Box(modifier) {
-        GamesMiniGameCanvasHost(controller, store.miniGames.best(controller.kind), refreshHz, art, Modifier.fillMaxSize(), reduceMotion, frozen = pause.isFrozen)
+        GamesMiniGameCanvasHost(controller, store.miniGames.best(controller.kind), refreshHz, art, Modifier.fillMaxSize(), reduceMotion, frozen = pause.isFrozen, isPhone = isPhone)
         if (pause.isFrozen) MiniGamePauseOverlay(pause, onResume = { pause = pause.toggled(controller.isPlaying) })
     }
 }
@@ -301,9 +310,9 @@ private fun MiniGamePauseOverlay(pause: MiniGamePauseState, onResume: () -> Unit
 /**
  * **UI 루프** — 프레임 루프 · 손가락 · 그림 · 햅틱 · 보이스오버. 미니게임 화면이 쓰는 것과 같은 것이고 시험(대본 재생)이 이것을 통째로 몬다.
  *
- * INV-GamesMiniGameScreen-99a8a013 이식: **테트리스는 진행 중일 때만 다르다** — 한 번의 끌기가 여러 칸을 만들고 행동도 셋(좌·우·소프트드롭)이라
- *   래치로는 표현이 안 된다. 그때만 구동기의 제스처 트래커로 넘긴다. 시작 화면에서는 테트리스도 래치가 판을 켠다(트래커로만 받으면 0.25초를
- *   넘겨 천천히 뗀 사람에게 시작이 안 되고, 그건 '고장'으로 읽힌다). 갈래는 아래 [canvasGesture] 의 `isPlaying` 이다.
+ * INV-GamesMiniGameScreen-99a8a013 이식: **끌기 트래커 게임은 진행 중일 때만 다르다**([usesCanvasTracker] — 테트리스 · 폰 길건너): 테트리스는 한 번의 끌기가 여러 칸을
+ *   만들고 행동도 셋(좌·우·소프트드롭)이고, 길건너는 쓸기 방향이 넷이라 래치로는 표현이 안 된다. 그때만 구동기의 제스처 트래커로 넘긴다. 시작 화면에서는 그 둘도 래치가
+ *   판을 켠다(트래커로만 받으면 0.25초를 넘겨 천천히 뗀 사람에게 시작이 안 되고, 그건 '고장'으로 읽힌다). 갈래는 아래 [canvasGesture] 의 `isPlaying` 이다.
  * INV-GamesMiniGameScreen-48c66a1e 이식: 손가락 입력(`pointerInput`)은 **이 자리 하나**에 걸고, 게임 종류·진행 여부 갈래는 **핸들러 안**에 둔다 —
  *   종류로 수정자 자체를 갈라 붙이면 노드 정체성이 갈려 진행 중인 접촉이 끊긴다(Compose 는 키가 바뀌면 포인터 입력 코루틴을 다시 띄운다 —
  *   그래서 키는 구동기 하나다).
@@ -317,6 +326,7 @@ fun GamesMiniGameCanvasHost(
     modifier: Modifier = Modifier,
     reduceMotion: Boolean = false,
     frozen: Boolean = false,
+    isPhone: Boolean = false,
 ) {
     val density = LocalDensity.current.density
     val kind = controller.kind
@@ -331,8 +341,8 @@ fun GamesMiniGameCanvasHost(
             .background(GamesCanvasColors.panel)
             .border(1.dp, AingTheme.colors.separator, shape)
             .testTag(MiniGameScreenTags.CANVAS)
-            .canvasGesture(controller, density, frozen)
-            .canvasSemantics(controller),
+            .canvasGesture(controller, density, frozen, isPhone)
+            .canvasSemantics(controller, isPhone),
     ) {
         // 한 칸 문턱은 **화면 셀 폭**이다(논리 13 × 배율) — 폭이 정해질 때마다 건넨다.
         val widthDp = maxWidth.value.toDouble()
@@ -341,22 +351,28 @@ fun GamesMiniGameCanvasHost(
             MiniGameKind.timingBar -> GamesTimingBarCanvas(controller.timing, bestScore, reduceMotion, Modifier.fillMaxSize())
             MiniGameKind.flappy -> GamesFlappyCanvas(controller.flappy, bestScore, reduceMotion, art, Modifier.fillMaxSize())
             MiniGameKind.tetris -> GamesTetrisCanvas(controller.tetris, bestScore, reduceMotion, Modifier.fillMaxSize())
-            // 길건너 아잉이(v0.3.67): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다(G §8-18 7 · 공용 패치 16). 그림은 ui crossy/ 한 벌,
-            // 마스코트는 플래피와 같은 그림 경로(art), 클릭 = 탭 = 앞으로 한 칸(맥 마우스 다운 — MiniGameCrossy.swift:209-211).
-            MiniGameKind.crossy -> CrossyCanvas(controller.crossy, bestScore, reduceMotion, art, Modifier.fillMaxSize())
+            // 길건너 아잉이(v0.3.67): 그림은 ui crossy/ 한 벌(맥·iOS 의 3D 대신 Windows 와 같은 2.5D), 마스코트는 플래피와 같은 그림 경로(art).
+            MiniGameKind.crossy -> CrossyCanvas(controller.crossy, bestScore, reduceMotion, art, Modifier.fillMaxSize(), touchControls = isPhone)
         }
     }
 }
 
 /**
- * 캔버스 위 한 번의 접촉. 갈래는 **'진행 중인가'** 이지 종류가 아니다 — 시작 화면에서는 테트리스도 래치가 판을 켠다.
+ * 이 화면이 캔버스 입력을 끌기 트래커로 받는가. 판정은 코어 한 곳(`MiniGameKind.usesCanvasDragTracker`)에서 오고, 길건너만 폰 경로에서 켠다 —
+ * 데스크톱 창의 클릭은 맥 마우스 다운처럼 **누르는 순간** 앞으로 한 칸이다(MiniGameCrossy.swift:209-211. 뗄 때 뛰면 늦고, 조작은 방향키가 맡는다).
+ */
+internal fun usesCanvasTracker(kind: MiniGameKind, isPhone: Boolean): Boolean =
+    kind.usesCanvasDragTracker && (isPhone || kind != MiniGameKind.crossy)
+
+/**
+ * 캔버스 위 한 번의 접촉. 갈래는 **'진행 중인가'** 이지 종류가 아니다 — 시작 화면에서는 트래커 게임도 래치가 판을 켠다.
  *
  * 다 쓴 접촉 표시([swallowed])는 불리언이 아니라 **접촉 id** 다 — 끝(up)이 늘 오지 않는다(시스템 제스처·전화 수신으로 취소). 참인 채 남으면
  * 그다음 멀쩡한 탭의 회전이 대신 삼켜진다. 들어오는 길은 둘: ① 시작 래치가 판을 켠 그 접촉(안 삼키면 한 번의 탭이 시작과 회전을 둘 다 하고,
  * 그 손가락이 한 칸 폭 이상 흔들리면 새 판 첫 조각이 곧장 옆으로 간다) ② 그 접촉으로 끌던 도중에 판이 끝난 경우(같은 손가락이 새 판을 켜면
- * 트래커에 남은 앞 끌기의 축 잠금으로 첫 조각이 튄다).
+ * 트래커에 남은 앞 끌기의 축 잠금으로 첫 조각이 튄다. 길건너는 한 칸 더 뛴다).
  */
-private fun Modifier.canvasGesture(controller: GamesPlayController, density: Float, frozen: Boolean): Modifier = pointerInput(controller, frozen) {
+private fun Modifier.canvasGesture(controller: GamesPlayController, density: Float, frozen: Boolean, isPhone: Boolean): Modifier = pointerInput(controller, frozen, isPhone) {
     if (frozen) return@pointerInput
     fun toPoints(px: Float): Double = px / density.toDouble()
     awaitEachGesture {
@@ -364,17 +380,17 @@ private fun Modifier.canvasGesture(controller: GamesPlayController, density: Flo
         val start = MiniGamePoint(toPoints(down.position.x), toPoints(down.position.y))
         val startMillis = down.uptimeMillis
         fun date(millis: Long): SwiftDate = SwiftDate.fromReferenceDate(millis / 1000.0)
-        val isTetris = controller.kind == MiniGameKind.tetris
+        val usesTracker = usesCanvasTracker(controller.kind, isPhone)
         var swallowed = false
         var playContact = false
         // 첫 변화(= 누름) — 래치 또는 트래커.
-        if (isTetris && controller.isPlaying) {
+        if (usesTracker && controller.isPlaying) {
             playContact = true
             controller.canvasDragChanged(start, MiniGameSize(0.0, 0.0), date(startMillis))
         } else {
             val wasPlaying = controller.isPlaying
             controller.tap()
-            if (isTetris && !wasPlaying && controller.isPlaying) swallowed = true
+            if (usesTracker && !wasPlaying && controller.isPlaying) swallowed = true
         }
         down.consume()
         var lastTranslation = MiniGameSize(0.0, 0.0)
@@ -386,7 +402,7 @@ private fun Modifier.canvasGesture(controller: GamesPlayController, density: Flo
             lastMillis = change.uptimeMillis
             if (!change.pressed) break
             change.consume()
-            if (!isTetris || swallowed) continue
+            if (!usesTracker || swallowed) continue
             if (!controller.isPlaying) {
                 // 이 접촉이 끌던 판이 방금 끝났다(상한·탑아웃) — 같은 손가락이 새 판을 켜면 안 된다.
                 if (playContact) swallowed = true
@@ -395,8 +411,8 @@ private fun Modifier.canvasGesture(controller: GamesPlayController, density: Flo
             playContact = true
             controller.canvasDragChanged(start, lastTranslation, date(lastMillis))
         }
-        // 끝(뗌) — 테트리스만: 다 쓴 접촉이 아니고 판이 진행 중이면 탭 판정(시계 회전).
-        if (isTetris && !swallowed && controller.isPlaying) controller.canvasDragEnded(lastTranslation, date(lastMillis))
+        // 끝(뗌) — 트래커 게임만: 다 쓴 접촉이 아니고 판이 진행 중이면 탭 판정(테트리스 시계 회전 · 길건너 앞으로 한 칸).
+        if (usesTracker && !swallowed && controller.isPlaying) controller.canvasDragEnded(lastTranslation, date(lastMillis))
     }
 }
 
@@ -404,9 +420,9 @@ private fun Modifier.canvasGesture(controller: GamesPlayController, density: Flo
  * 보이스오버(TalkBack). 기본 동작: 진행 중이면 시계 회전, 시작 전·결과면 새 판(구동기가 가른다).
  * 테트리스에는 **직접 조작을 걸지 않는다**(셀이 15~18 인 판에서 눈 없이 겨냥하라는 뜻이라 실질 조작이 불가능하다) — 버튼이 없는 조작만 액션으로 낸다.
  */
-private fun Modifier.canvasSemantics(controller: GamesPlayController): Modifier = semantics {
-    contentDescription = GamesMiniGameText.canvasAccessibility(controller.kind)
-    stateDescription = accessibilityValue(controller)
+private fun Modifier.canvasSemantics(controller: GamesPlayController, isPhone: Boolean): Modifier = semantics {
+    contentDescription = if (controller.kind == MiniGameKind.crossy && !isPhone) GamesMiniGameText.crossyDesktopCanvasAccessibility() else GamesMiniGameText.canvasAccessibility(controller.kind)
+    stateDescription = accessibilityValue(controller, isPhone)
     role = Role.Button
     onClick { controller.tap(); true }
     if (controller.kind == MiniGameKind.tetris && controller.isPlaying) {
@@ -419,7 +435,7 @@ private fun Modifier.canvasSemantics(controller: GamesPlayController): Modifier 
 }
 
 /** 보이스오버 값. 테트리스는 **느린 값만**(점수·레벨·줄) — 조각 자리를 넣으면 읽는 동안 값이 계속 바뀐다. */
-internal fun accessibilityValue(controller: GamesPlayController): String = when (controller.kind) {
+internal fun accessibilityValue(controller: GamesPlayController, isPhone: Boolean = false): String = when (controller.kind) {
     MiniGameKind.timingBar -> {
         val phase = controller.timing.phase
         if (phase is TimingBarGame.Phase.Finished) "총점 ${phase.total}"
@@ -433,9 +449,10 @@ internal fun accessibilityValue(controller: GamesPlayController): String = when 
         if (game.phase == TetrisGame.Phase.Ready) GamesMiniGameText.startAction
         else GamesMiniGameText.tetrisValue(game.score, game.scoreLevel, game.lines)
     }
-    // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다. 값은 느린 것만(점수) — 자리를 넣으면 읽는 동안 값이 계속 바뀐다.
+    // 값은 느린 것만(점수) — 자리를 넣으면 읽는 동안 값이 계속 바뀐다.
     MiniGameKind.crossy ->
-        if (controller.crossy.phase == CrossyGame.Phase.Result || controller.isPlaying) "${controller.crossy.score}점" else GamesMiniGameText.crossyStartAction
+        if (controller.crossy.phase == CrossyGame.Phase.Result || controller.isPlaying) "${controller.crossy.score}점"
+        else if (isPhone) GamesMiniGameText.startAction else GamesMiniGameText.crossyStartAction
 }
 
 /** 햅틱 네 채널(serial 이 오를 때만 — 처음 값은 기준이다). */
@@ -549,26 +566,48 @@ internal fun TetrisControlButton(
     }
 }
 
-// MARK: 오늘 순위
+// MARK: 순위 — [오늘 | 역대]
 
+/**
+ * 순위 절. 폰 경로는 머리에 **[오늘 | 역대] 전환**이 붙는다(상태는 허브 하나 — `hub.boardScope`). 두 판이 같은 행을 쓰고 [역대] 만 점수 앞에 작은 날짜가 붙는다.
+ * **[오늘] 에만 있는 것 둘**: 어제 1등 · 상금·정족수 줄. [역대] 바닥은 규칙·날짜 두 줄이다. 머리 오른쪽 자리는 전환이 쓰므로 폰의 정족수 줄은 바닥으로 내려간다(좁은 폰 머리에 함께 몰면 제목이 꺾인다).
+ * Windows(기본값)는 지금 그대로 오늘 판 + 머리 정족수다.
+ */
 @Composable
-private fun MiniGameRankings(store: GamesStore, kind: MiniGameKind, myUserID: String?) {
+private fun MiniGameRankings(store: GamesStore, kind: MiniGameKind, myUserID: String?, isPhone: Boolean) {
     val hub = store.miniGames
     val colors = AingTheme.colors
     val state = hub.boards[kind] ?: GamesMiniGameBoard()
     val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val showsAllTime = isPhone && hub.boardScope == MiniGameBoardScope.allTime
+    val quorum = if (state.knowsPlayerCount) GamesMiniGameText.quorumCaption(state.entries.size) else null
     // 정족수 줄은 사람 수를 알 때만 — 불러오지 못했거나 불러오는 중이면 "아무도 안 했어요"라고 말하지 않는다.
     SectionHeader(
-        GamesMiniGameText.rankTitle,
-        trailing = if (state.knowsPlayerCount) SectionTrailing.Label(GamesMiniGameText.quorumCaption(state.entries.size)) else SectionTrailing.None,
+        if (isPhone) hub.boardScope.boardTitle else GamesMiniGameText.rankTitle,
+        trailing = when {
+            isPhone -> SectionTrailing.Custom { GamesBoardScopePicker(hub.boardScope) { hub.selectBoardScope(it) } }
+            quorum != null -> SectionTrailing.Label(quorum)
+            else -> SectionTrailing.None
+        },
         modifier = Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, end = AingDimens.titleMargin - AingDimens.sideMargin, top = 4.dp, bottom = 8.dp),
     )
     // 어제 1등은 **자기 그룹**(순위 탭과 같은 꼴) — '오늘 순위' 첫 행처럼 읽히지 않게 떼어 둔다.
-    state.yesterdayWinner?.let { winner ->
+    if (!showsAllTime) state.yesterdayWinner?.let { winner ->
         ChampionRow(
             GamesMiniGameText.yesterdayChampion, winner.name, winner.center, GamesMiniGameText.score(winner.score),
             if (winner.awarded) GamesMiniGameText.rubyPrizes[0] else null, Modifier.padding(bottom = 12.dp),
         )
+    }
+    if (showsAllTime) {
+        InsetGroup { MiniGameAllTimeRows(store, myUserID) }
+        Column(
+            Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, top = AingDimens.space2),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(GamesMiniGameText.allTimeRuleCaption, style = rowSubtitleStyle(), color = colors.label2)
+            Text(GamesMiniGameText.allTimeDayCaption, style = rowSubtitleStyle(), color = colors.label2)
+        }
+        return
     }
     InsetGroup {
         if (state.entries.isEmpty()) {
@@ -593,11 +632,40 @@ private fun MiniGameRankings(store: GamesStore, kind: MiniGameKind, myUserID: St
         GamesMiniGameText.prizeCaption, style = rowSubtitleStyle(), color = colors.label2,
         modifier = Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, top = AingDimens.space2),
     )
+    if (isPhone && quorum != null) {
+        Text(
+            quorum, style = rowSubtitleStyle().copy(fontFeatureSettings = TNUM), color = colors.label2,
+            modifier = Modifier.padding(start = AingDimens.titleMargin - AingDimens.sideMargin, top = 2.dp),
+        )
+    }
 }
 
-/** 오늘 순위 한 줄(순위 탭과 같은 꼴): 등수 원 · 얼굴 · 이름(+ 센터 · '나') · 점수. 내 행 = 파랑 6%. */
+/** [역대] 줄. 빈 자리의 문구와 [다시 시도] 여부는 허브의 판정 하나에서 온다(`allTimeEmptyText` · `allTimeShowsRetry`). */
 @Composable
-private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, isLast: Boolean) {
+private fun MiniGameAllTimeRows(store: GamesStore, myUserID: String?) {
+    val hub = store.miniGames
+    val entries = hub.allTimeBoard
+    if (entries.isEmpty()) {
+        GroupRow(dividerInset = null) {
+            when {
+                hub.allTimeShowsRetry -> LoadFailureRow(hub.allTimeEmptyText, isRetrying = hub.allTimeLoading) { hub.loadAllTimeBoard() }
+                !hub.allTimeLoaded -> LoadingRow(hub.allTimeEmptyText)
+                else -> Text(hub.allTimeEmptyText, style = MaterialTheme.typography.bodyMedium, color = AingTheme.colors.label2)
+            }
+        }
+    } else {
+        entries.forEachIndexed { index, entry ->
+            MiniGameRankRow(index + 1, entry.rankRowEntry, entry.userID == myUserID, index == entries.size - 1, entry.dayCaption)
+        }
+    }
+}
+
+/**
+ * 순위 한 줄(순위 탭과 같은 꼴): 등수 원 · 얼굴 · 이름(+ 센터 · '나') · 점수. 내 행 = 파랑 6%. [오늘]과 [역대]가 이 한 벌을 나눠 쓴다 — 두 벌이면 열 규격이 언젠가 갈린다.
+ * @param dateCaption [역대] 줄의 작은 날짜("9/13" — 그 점수를 처음 낸 날). 점수 **앞**이고 한 단 흐리다. [오늘] 판은 null.
+ */
+@Composable
+private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, isLast: Boolean, dateCaption: String? = null) {
     val colors = AingTheme.colors
     GroupRow(
         dividerInset = if (isLast) null else AingDimens.cardPadding + 24.dp + AingDimens.space3 + 30.dp + AingDimens.space3,
@@ -609,6 +677,7 @@ private fun MiniGameRankRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean,
         RankBadge(rank)
         PersonAvatar(entry.name, entry.userID, 30.dp)
         PersonName(entry.name, Modifier.weight(1f), center = entry.center, isMe = isMe)
+        if (dateCaption != null) Text(dateCaption, style = MaterialTheme.typography.labelSmall.copy(fontFeatureSettings = TNUM), color = colors.label3Text, maxLines = 1)
         Text(GamesMiniGameText.score(entry.bestScore), style = MaterialTheme.typography.titleSmall.copy(fontFeatureSettings = TNUM), color = colors.label)
     }
 }

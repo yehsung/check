@@ -39,12 +39,12 @@ class CrossySnapshotDesktopTest {
     }
 
     /** 캔버스 자리(게임 화면의 캔버스 상자와 같은 둥근 모서리 · 패널 · 테두리 — 테마가 테두리에 산다). */
-    private fun scene(game: CrossyGame, best: Long, dark: Boolean, art: MiniGameArt = this.art): @Composable () -> Unit = {
+    private fun scene(game: CrossyGame, best: Long, dark: Boolean, art: MiniGameArt = this.art, touchControls: Boolean = false): @Composable () -> Unit = {
         AingTheme(dark = dark) {
             val shape = RoundedCornerShape(14.dp)
             Box(Modifier.fillMaxSize().background(AingTheme.colors.background)) {
                 Box(Modifier.fillMaxSize().clip(shape).background(GamesCanvasColors.panel).border(1.dp, AingTheme.colors.separator, shape)) {
-                    CrossyCanvas(game, best, reduceMotion = true, art = art, modifier = Modifier.fillMaxSize())
+                    CrossyCanvas(game, best, reduceMotion = true, art = art, modifier = Modifier.fillMaxSize(), touchControls = touchControls)
                 }
             }
         }
@@ -83,6 +83,11 @@ class CrossySnapshotDesktopTest {
     @Test fun rail() = CrossyScenes.rail().let { checkAll("rail", it, it, otherArt = MiniGameArt.empty) }
 
     @Test fun end() = CrossyScenes.end().let { checkAll("end", it, it, otherBest = 31L) }
+
+    /** 폰 카드: 조작 줄이 쓸기·탭이고 행동 문구가 "화면을 탭해서…"다. 기준선 = 같은 판의 Windows 카드(폰 경로가 정말 글자·배율을 바꾼다 — 카드 전체가 달라 '한 군데' 검사는 없다). */
+    @Test fun phoneStartCardLight() = check("crossy-phone-start-100-light", 1f, scene(CrossyScenes.start(), BEST, false, touchControls = true), scene(CrossyScenes.start(), BEST, false), oneSpot = false)
+    @Test fun phoneStartCardDark() = check("crossy-phone-start-100-dark", 1f, scene(CrossyScenes.start(), BEST, true, touchControls = true), scene(CrossyScenes.start(), BEST, true), oneSpot = false)
+    @Test fun phoneEndCardLight() = check("crossy-phone-end-100-light", 1f, scene(CrossyScenes.end(), BEST, false, touchControls = true), scene(CrossyScenes.end(), BEST, false), oneSpot = false)
 
     /** 장면이 정말 그 장면인가(장면 운전수가 조용히 다른 판을 내면 스냅숏이 엉뚱한 것을 굳힌다). */
     @Test

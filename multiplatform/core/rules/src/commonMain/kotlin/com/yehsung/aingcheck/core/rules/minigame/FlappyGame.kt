@@ -40,6 +40,19 @@ class FlappyGame private constructor(
         val isShifting: Boolean get() = shiftDelay != null
 
         /**
+         * 튀는 기둥의 붉은 예고 세기(0…1). **그림이 읽는 유일한 튐 정보다**(2026-10-30 사용자 번복 — 맥·iOS 와 한 벌).
+         * 고정 기둥은 0. 튀는 기둥은 **튀기를 마칠 때까지 1**(화면에 들어온 순간부터 보인다 — 조준 전에는 화면 밖이다),
+         * 그 뒤 [warningFade] 동안 선형으로 0 까지. 이징을 쓰지 않는다 — 불투명도를 이징으로 깎으면 앞에서 다 빠진다.
+         */
+        fun warningLevel(at: Double): Double {
+            if (shiftDelay == null) return 0.0
+            val start = shiftAt ?: return 1.0
+            val settled = start + shiftDuration
+            if (at <= settled) return 1.0
+            return swiftMax(0.0, 1 - (at - settled) / warningFade)
+        }
+
+        /**
          * 그 시각의 틈 중심. **충돌·그리기가 같은 이 함수를 쓴다.** 튀기 전에는 기준선, shiftAt 부터 0.12초 동안 easeOut 으로
          * shiftOffset 만큼 옮겨 간 뒤 머문다. easeOut 의 세제곱은 pow 대신 곱셈이다(이산 등급 — 클래스 머리 주석).
          */
@@ -287,6 +300,9 @@ class FlappyGame private constructor(
         const val shiftDelayMin: Double = 0.45
         const val shiftDelayMax: Double = 1.10
         const val shiftDuration: Double = 0.12
+
+        /** 튀기를 마친 뒤 붉은 예고가 빠지는 시간(초). 바로 끄면 "깜빡"으로 읽히고, 길면 다음 기둥 예고와 섞인다. */
+        const val warningFade: Double = 0.35
 
         /** 틈 높이: 132 에서 점수당 3 줄고 96 에서 멈춘다. */
         fun gap(forScore: Int): Double = swiftMax(96.0, 132.0 - (3 * maxOf(0, forScore)).toDouble())

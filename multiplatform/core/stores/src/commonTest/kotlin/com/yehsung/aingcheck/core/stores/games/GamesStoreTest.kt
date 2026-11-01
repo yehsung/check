@@ -134,8 +134,8 @@ class GamesStoreTest {
         assertTrue(h.gomoku.calls.none { it.startsWith("openWindow") })
         assertEquals(GamesRouteStep.Push(GamesDestination.MiniGame(MiniGameKind.tetris)),
             games.routeStep(GamesRouteRequest.MiniGame(MiniGameKind.tetris)), "솔로 테트리스 링크는 그대로 열린다")
-        assertEquals(GamesRouteStep.PopToRoot, games.routeStep(GamesRouteRequest.MiniGame(MiniGameKind.crossy)),
-            "이 빌드에 보이지 않는 게임(길건너)은 쌓지 않는다")
+        assertEquals(GamesRouteStep.Push(GamesDestination.MiniGame(MiniGameKind.crossy)), games.routeStep(GamesRouteRequest.MiniGame(MiniGameKind.crossy)),
+            "길건너 링크는 다른 게임으로 접히지 않고 그 화면으로 간다(오배달 금지)")
         assertNull(games.routeStep(GamesRouteRequest.Other))
     }
 

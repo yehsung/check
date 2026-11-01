@@ -39,7 +39,7 @@ object Dest {
     // ---- 탭: 게임 ----
     @Serializable data object GamesGraph
     @Serializable data object GamesHome
-    /** AingMiniGame.raw(timing·flappy·tetris). */
+    /** AingMiniGame.raw(timing·flappy·tetris·crossy). */
     @Serializable data class MiniGame(val game: String)
     /** 오목 한 화면(로비·신청·대국·관전·순위·AI 를 화면 안 탭으로). [section] = GameSection.raw. */
     @Serializable data class Gomoku(val section: String, val matchId: String? = null)

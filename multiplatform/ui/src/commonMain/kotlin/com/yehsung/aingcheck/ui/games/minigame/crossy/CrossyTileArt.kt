@@ -1,7 +1,6 @@
 // 원본: Sources/check/MiniGameCrossyScene.swift @ 1b8260d (CrossyPalette 땅·차 색 :592·:683-690) — 허브 타일 그림(데스크톱 허브 칸 · 공용 패치 16)
 //
 // 미니게임 허브 타일의 길건너 그림: 풀밭 · 찻길(차 한 대) · 강(통나무) 세 띠 위에 아잉 옆모습. 색은 판 그림([CrossyPaint])과 한 벌이다.
-// 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다 — 폰 허브 목록에는 이 칸이 오지 않는다.
 package com.yehsung.aingcheck.ui.games.minigame.crossy
 
 import androidx.compose.foundation.Canvas

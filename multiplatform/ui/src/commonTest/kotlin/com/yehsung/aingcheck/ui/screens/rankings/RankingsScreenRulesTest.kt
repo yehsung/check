@@ -69,11 +69,12 @@ class RankingsScreenRulesTest {
         assertNull(RankingsScreenRules.centerServerValue(null))
     }
 
-    /** §8-18 #7: 폰 첫 판 = iOS 1.0.14 바닥 — 길건너 아잉이는 메뉴에 없다. */
+    /** 메뉴: 폰은 phoneCases(길건너 포함) · Windows 플라이아웃(기본값)은 지금 그대로 셋(v1 동결). */
     @Test
-    fun miniGameMenuIsPhoneCasesOnlyWithoutCrossy() {
-        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris), RankingsScreenRules.miniGameKinds)
-        assertFalse(MiniGameKind.crossy in RankingsScreenRules.miniGameKinds)
+    fun miniGameMenuFollowsThePhoneCasesOnThePhoneOnly() {
+        assertEquals(MiniGameKind.phoneCases, RankingsScreenRules.miniGameKinds(isPhone = true))
+        assertEquals(listOf(MiniGameKind.timingBar, MiniGameKind.flappy, MiniGameKind.tetris), RankingsScreenRules.miniGameKinds())
+        assertFalse(MiniGameKind.crossy in RankingsScreenRules.miniGameKinds())
     }
 
     @Test

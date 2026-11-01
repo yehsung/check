@@ -95,6 +95,27 @@ object GamesText {
 object GamesMiniGameText {
     const val rankTitle: String = "오늘 순위"
 
+    // MARK: 역대 순위 [오늘 | 역대] — 글자는 맥 네 줄 그대로(MiniGamePanel.swift:642-646 · iOS GamesText.swift:114-121). 머리 제목은 코어 한 벌(MiniGameBoardScope.boardTitle).
+
+    /** [역대] 바닥 두 줄: 무엇이 올라가는가 + 날짜가 무엇인가. **상금 이야기는 없다** — 상금은 오늘 판의 것이다. */
+    const val allTimeRuleCaption: String = "사람마다 가장 높은 점수 하나만 올라가요"
+    const val allTimeDayCaption: String = "날짜는 그 점수를 처음 낸 날이에요"
+    const val allTimeFailedCaption: String = "역대 순위를 불러오지 못했어요"
+
+    /** 서버에 함수가 아직 없다(PGRST202 · 본문 없는 404). **실패가 아니라서** [다시 시도] 를 달지 않는다 — 사용자가 고칠 수 없는 일이고 두드려 봐야 같은 답이다. */
+    const val allTimeUnavailableCaption: String = "역대 순위는 준비 중이에요 — 곧 열려요"
+
+    /**
+     * [역대] 빈 목록 문구. **순서가 곧 뜻이다**: 실패(한 번도 못 받았다) → 준비 중 → 불러오는 중 → 아직 없음.
+     * 준비 중을 먼저 보면 네트워크 실패까지 "곧 열려요"로 덮이고, 불러오는 중을 먼저 보면 이미 받은 빈 표가 영원히 "불러오는 중…"으로 보인다.
+     */
+    fun allTimeEmpty(failed: Boolean, loaded: Boolean, unavailable: Boolean): String = when {
+        failed && !loaded -> allTimeFailedCaption
+        unavailable -> allTimeUnavailableCaption
+        !loaded -> loadingCaption
+        else -> emptyBoard
+    }
+
     /**
      * 자정 상품(루비). 서버 `ruby_prize_amounts()` 와 짝인 상수(맥 `MiniGamePanel.rubyPrizes` · 같은 탭 `RankingsText.rubyPrizes`).
      * 2026-10-22(맥 0.3.64 · 서버 20261023131000) 사용자 결정("일반 미니게임 3종 상금루비 올려야할듯 20 10 5 로 다시 해줘")으로 20·10·5.
@@ -113,35 +134,32 @@ object GamesMiniGameText {
     const val yesterdayChampion: String = "어제 1등"
     const val noRankToday: String = "오늘 기록 없음"
 
-    /** 제출 실패(토큰 없음·네트워크) — 맥 `recordMiniGameScore` 와 같은 문장. */
-    const val submitFailedConnection: String = "점수를 못 올렸어요 — 연결을 확인하고 다시 해 주세요"
-
     /** 서버 거절 — 맥 `performSubmitMiniGameScore` 와 같은 문장. status 이름·need_seconds 는 화면에 싣지 않는다. */
     const val submitRefused: String = "점수를 못 올렸어요"
 
     /**
-     * 아직 하한을 못 넘겼다(`too_fast`) — **토큰은 살아 있고 곧 다시 보낸다.**
-     * [submitRefused]("못 올렸어요")와 **일부러 가른다**: 이 응답은 거절이 아니라 아직 이르다는 뜻이다.
+     * 인편이 살아 있다(네트워크 실패 · `too_fast` · 토큰 대기) — **곧 다시 보낸다.**
+     * [submitRefused]("못 올렸어요")와 **일부러 가른다**: 아직 지지 않았다.
      * status 이름·`need_seconds`·`elapsed_seconds` 는 여기에도 싣지 않는다(위조 보조).
      */
     const val submitRetrying: String = "점수를 올리는 중이에요 — 잠깐만요"
 
     /**
      * 토큰이 죽어 **그 판은 영영 못 올리는** 거절(`no_token`·`token_expired`).
-     * [submitFailedConnection] 과 **일부러 문장을 가른다**: "다시 해 주세요"는 복구된다는 뜻인데 토큰이 죽었으면 이번 판은 안 올라간다.
+     * "다시 해 주세요"(복구된다는 뜻)와 **일부러 문장을 가른다**: 토큰이 죽었으면 이번 판은 안 올라간다.
      */
     const val submitTokenDead: String = "이번 판은 순위에 못 올렸어요 — 다음 판부터 다시 올라가요"
 
+    /** 인편이 30분(서버 토큰 TTL) 안에 서버에 닿지 못해 버려졌다(맥 `MiniGameSubmitCopy.expired`). */
+    const val submitExpired: String = "점수를 못 올렸어요 — 연결을 확인해 주세요"
+
     /**
-     * 앱이 background 로 가서 판을 끝냈다(폰 전용). **게임마다 말이 다르다**: 기존 두 게임은 점수를 버리고, 테트리스는 여기까지의 점수를
-     * **확정해 올린다**(`GamesPlayController.endRound()`). 테트리스에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다.
+     * 앱이 background 로 가서 판을 끝냈다(폰 전용). **게임마다 말이 다르다**: 기존 두 게임은 점수를 버리고, 테트리스·길건너는 여기까지의 점수를
+     * **확정해 올린다**(`GamesPlayController.endRound()`). 그 둘에 "기록하지 않았어요"를 쓰면 그건 **거짓말**이다.
      */
     fun endedInBackground(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "앱을 나가서 이번 판은 기록하지 않았어요"
-        MiniGameKind.tetris -> "앱을 나가서 이번 판을 여기까지 기록했어요"
-        // 길건너 아잉이(v0.3.67): 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다 — 폰 background 출구는 이 판에 오지 않는다.
-        // 폰 판이 붙으면 그 판의 `endRound` 의미론(확정인가 버림인가)에 맞춰 다시 적는다.
-        MiniGameKind.crossy -> "앱을 나가서 이번 판은 기록하지 않았어요"
+        MiniGameKind.tetris, MiniGameKind.crossy -> "앱을 나가서 이번 판을 여기까지 기록했어요"
     }
 
     /** 공개를 끈 사람(맥 설정 문구 "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요." 와 같은 뜻). */
@@ -160,15 +178,20 @@ object GamesMiniGameText {
         // INV-GamesText-6e9a61c2 이식: 조작 줄에 **"탭해서 회전"이 반드시 들어가야 한다.** 폰에서 시계 회전은 캔버스 탭이고(버튼은
         // 반시계다) 그 사실을 말하는 자리가 시작 카드뿐이라, 빼면 아무도 시계 회전을 못 찾는다(시험이 글자로 잰다).
         MiniGameKind.tetris -> kind.howToPlay + "\n끌어서 이동 · 탭해서 회전 · 버튼으로 홀드·즉시 내리기"
-        MiniGameKind.crossy -> kind.howToPlay   // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다(맥 MiniGameKind.howToPlay 그대로)
+        // 길건너도 두 줄이다. 조작 줄에 **"쓸어서"와 "탭하면 앞으로"가 둘 다 있어야 한다** — 폰은 조작이 둘로 갈리고 그 사실을 말하는 자리가 시작 카드뿐이라,
+        // 하나만 적으면 쓸기를 모르는 사람은 뒤·좌·우로 갈 길을 영영 못 찾는다. 데스크톱 카드는 [MiniGameKind.howToPlay](규칙 줄)만 쓴다(키보드 조작은 행동 문구가 말한다).
+        MiniGameKind.crossy -> kind.howToPlay + "\n쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸"
     }
 
-    // MARK: 길건너 아잉이(데스크톱 — 맥 CrossyHUD, MiniGameCrossy.swift:131-195)
+    // MARK: 길건너 아잉이(결과 줄은 맥·폰 한 벌, 행동 문구 둘은 데스크톱 — 맥 CrossyHUD, MiniGameCrossy.swift:131-195. 폰 카드는 [startAction]·[againAction])
 
-    /** 시작 카드 행동 문구. 클릭 · 스페이스 · 방향키가 다 시작이다(`CrossyGame.action` · `input`). */
+    /** 데스크톱 시작 카드 행동 문구. 클릭 · 스페이스 · 방향키가 다 시작이다(`CrossyGame.action` · `input`). */
     const val crossyStartAction: String = "클릭 · 스페이스 · 방향키로 시작"
 
-    /** 결과 카드 행동 문구. 다시 하기는 클릭 · 스페이스뿐이다 — 방향키는 결과 화면에서 무시한다(엔진 `input` 주석). */
+    /** 데스크톱 캔버스 보이스오버(폰은 [canvasAccessibility] — 탭·쓸기). */
+    fun crossyDesktopCanvasAccessibility(): String = "${MiniGameKind.crossy.title} 게임 화면 — 방향키로 뛰기"
+
+    /** 데스크톱 결과 카드 행동 문구. 다시 하기는 클릭 · 스페이스뿐이다 — 방향키는 결과 화면에서 무시한다(엔진 `input` 주석). */
     const val crossyRetryAction: String = "클릭 · 스페이스로 다시"
 
     /** 결과 카드 가운데 줄 — 무엇에 끝났는가 + 최고(또는 신기록). 맥 `CrossyHUD.resultSubtitle` 그대로. */
@@ -203,7 +226,8 @@ object GamesMiniGameText {
     fun canvasAccessibility(kind: MiniGameKind): String = when (kind) {
         MiniGameKind.timingBar, MiniGameKind.flappy -> "${kind.title} 게임 화면 — 탭해서 조작"
         MiniGameKind.tetris -> "${kind.title} 게임 화면 — 탭해서 회전 · 이동은 액션으로"
-        MiniGameKind.crossy -> "${kind.title} 게임 화면 — 방향키로 뛰기"   // 데스크톱은 구동, 폰은 phoneCases·라우트가 거른다
+        // 길건너는 테트리스와 달리 쓸기·탭이 곧 게임이고 겨냥할 작은 과녁이 없다 — 방향 액션을 따로 내지 않고 라벨이 조작 둘을 그대로 말한다.
+        MiniGameKind.crossy -> "${kind.title} 게임 화면 — 탭해서 앞으로 · 쓸어서 그 방향으로"
     }
 
     // MARK: 테트리스 조작(폰에서 처음 쓰는 줄)

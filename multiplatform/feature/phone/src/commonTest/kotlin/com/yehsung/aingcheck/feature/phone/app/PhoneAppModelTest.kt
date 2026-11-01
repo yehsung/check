@@ -218,9 +218,9 @@ class PhoneAppModelTest {
         //   조용히 사라진다. 대상 해석은 미니게임 요청을 그대로 게임 탭 규칙(routeStep)에 넘긴다.
         app.openRoute(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.tetris)))
         assertEquals(listOf<PhoneNavRequest>(PhoneNavRequest.Open(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.tetris)))), app.router.drainRequests())
-        // 이 빌드에 보이지 않는 미니게임(길건너 — §8-18 #7)은 화면을 쌓지 않고 게임 탭 첫 화면에.
+        // 길건너 링크도 다른 게임으로 접히지 않고 그 화면을 쌓는다(오배달 금지 — iOS theDeepLinkIsWidenedTogether).
         app.openRoute(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.crossy)))
-        assertEquals(listOf<PhoneNavRequest>(PhoneNavRequest.Open(PhoneRouteTarget.Games(GamesRouteRequest.Games))), app.router.drainRequests())
+        assertEquals(listOf<PhoneNavRequest>(PhoneNavRequest.Open(PhoneRouteTarget.Games(GamesRouteRequest.MiniGame(MiniGameKind.crossy)))), app.router.drainRequests())
         // 제보 링크: 나 탭을 뿌리로 열고 제보 화면을 쌓으며 그 제보에 초점.
         app.openRoute(PhoneRouteTarget.Me(MeRoute.Feedback("r-1")))
         assertEquals(

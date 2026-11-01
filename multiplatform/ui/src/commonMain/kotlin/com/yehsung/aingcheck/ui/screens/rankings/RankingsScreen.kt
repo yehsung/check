@@ -1,9 +1,10 @@
+// 원본: Sources/CheckMobileKit/Rankings/RankingsBoardSections.swift:452-463·506-547 @ 1a5eeca6 ([오늘 | 역대] — 폰 경로)
 // 원본: Sources/CheckMobileKit/Rankings/RankingsTab.swift @ 3bd04bd (큰 제목 + 판 부제 + 세그먼트 셋)
 // 원본: Sources/CheckMobileKit/Rankings/RankingsBoardSections.swift @ 3bd04bd (팀 리그 · AI 토큰 · 미니게임 판, 행, 기간 넘기기, 게임 메뉴, 어제 1등, 상품 줄)
 // 원본: Sources/CheckMobileKit/Components/RankBoardParts.swift @ 3bd04bd (행 문법 · ChampionRow) · MobileRankComponents.swift(RankBadge · 메달)
 //
 // 순위 탭(SPEC-ios §3.4 · 시안 B 05·06). 하위 화면은 없다. 딥링크 `aingcheck://rankings/<board>` 는 세그먼트를 고른다(RankingsBoardRestore).
-// **오늘 순위만** — 미니게임 판에 [오늘|역대] 전환이 없다(G §8-18 #7). 미니게임 종류는 폰 목록만(길건너 숨김).
+// 미니게임 판의 [오늘|역대] 전환과 메뉴의 길건너는 폰 경로(isPhone)에서만 — Windows 플라이아웃은 오늘 순위 · 셋 그대로다(v1 동결).
 // 판정은 스토어(RankingsStore · RankingsText)와 RankingsScreenRules 에 있다. 이 파일은 그리기만 한다.
 package com.yehsung.aingcheck.ui.screens.rankings
 
@@ -57,10 +58,13 @@ import com.yehsung.aingcheck.core.stores.rankings.RankingsText
 import com.yehsung.aingcheck.core.stores.rankings.isPastWeek
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.core.wire.models.MiniGameBoardEntry
+import com.yehsung.aingcheck.core.wire.models.MiniGameBoardScope
 import com.yehsung.aingcheck.core.wire.models.MiniGameWinner
 import com.yehsung.aingcheck.core.wire.models.TeamLeaderboardEntry
 import com.yehsung.aingcheck.core.wire.models.TokenBoardEntry
+import com.yehsung.aingcheck.core.stores.games.GamesMiniGameText
 import com.yehsung.aingcheck.ui.components.CharacterPortrait
+import com.yehsung.aingcheck.ui.games.minigame.kit.GamesBoardScopePicker
 import com.yehsung.aingcheck.ui.components.RubyIcon
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
@@ -90,6 +94,7 @@ object RankingsTags {
  * 순위 탭 화면.
  * @param me 내 행 얼굴(RankingsScreenRules.myFace — 나 탭·지금 탭·위젯 스냅숏이 이미 아는 값. 새 서버 호출 없음).
  * @param onSelectBoard 세그먼트를 바꿨다 — 스토어에 걸고, 껍데기는 저장 상태(프로세스 죽음 복원)에도 적는다.
+ * @param isPhone 안드로이드 폰 경로가 켠다(기본 꺼짐 — Windows 플라이아웃은 지금 그대로): 미니게임 메뉴의 길건너 · [오늘 | 역대] 전환.
  */
 @Composable
 fun RankingsScreen(
@@ -99,13 +104,14 @@ fun RankingsScreen(
     onSelectBoard: (RankingsBoard) -> Unit,
     modifier: Modifier = Modifier,
     scrollable: Boolean = true,
+    isPhone: Boolean = false,
 ) {
     val colors = AingTheme.colors
     val scroll = if (scrollable) Modifier.verticalScroll(rememberScrollState()) else Modifier
     Column(
         modifier.background(colors.background).then(scroll).padding(horizontal = AingDimens.sideMargin).padding(bottom = AingDimens.space6),
     ) {
-        LargeTitle(RankingsScreenText.tabTitle, RankingsText.boardSubtitle(store.board))
+        LargeTitle(RankingsScreenText.tabTitle, store.boardSubtitle)
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = 14.dp)) {
             val boards = RankingsScreenRules.boards
             boards.forEachIndexed { index, board ->
@@ -122,7 +128,7 @@ fun RankingsScreen(
             when (store.board) {
                 RankingsBoard.league -> RankingsLeagueSection(store, scope)
                 RankingsBoard.tokens -> RankingsTokenSection(store, me, scope)
-                RankingsBoard.minigame -> RankingsMiniGameSection(store, me, scope)
+                RankingsBoard.minigame -> RankingsMiniGameSection(store, me, scope, isPhone)
             }
         }
     }
@@ -417,16 +423,22 @@ internal object RankingsTokenCaption {
     fun toolUsageLabel(entry: TokenBoardEntry): String? = com.yehsung.aingcheck.core.stores.rankings.TokenBoardText.toolUsageLabel(entry)
 }
 
-// ---------------------------------------------------------------- 미니게임(오늘 순위만)
+// ---------------------------------------------------------------- 미니게임 — [오늘] 어제 1등 · 오늘 순위 · 상금 + 정족수 / [역대] 역대 순위(같은 행 + 작은 날짜) · 규칙 + 날짜 두 줄
 
 @Composable
-private fun RankingsMiniGameSection(store: RankingsStore, me: RankingsMyFace, scope: CoroutineScope) {
+private fun RankingsMiniGameSection(store: RankingsStore, me: RankingsMyFace, scope: CoroutineScope, isPhone: Boolean) {
     val colors = AingTheme.colors
     val state = store.miniGameState
     val entries = store.miniGameBoard
+    val showsAllTime = isPhone && store.miniGameScope == MiniGameBoardScope.allTime
     Column {
-        SectionHeader(RankingsText.miniGameRankTitle) {
-            GameMenu(store.miniGameKind) { store.select(it) }
+        SectionHeader(if (isPhone) store.miniGameScope.boardTitle else RankingsText.miniGameRankTitle) {
+            GameMenu(store.miniGameKind, RankingsScreenRules.miniGameKinds(isPhone)) { store.select(it) }
+        }
+        if (isPhone) GamesBoardScopePicker(store.miniGameScope, Modifier.padding(start = 4.dp, bottom = 12.dp)) { store.select(it) }
+        if (showsAllTime) {
+            RankingsMiniGameAllTime(store, me, scope)
+            return@Column
         }
         val winner = store.miniGameWinner
         if (winner != null) ChampionRow(winner, Modifier.padding(bottom = 12.dp))
@@ -449,9 +461,30 @@ private fun RankingsMiniGameSection(store: RankingsStore, me: RankingsMyFace, sc
     }
 }
 
-/** 게임 고르기 메뉴 알약(회색 알약 30 · 누름 영역 44). 폰 목록만(길건너 숨김). */
+/** [역대] 표: 어제 1등·상금·정족수는 오늘 판의 것이라 없다. 실패해도 그린 줄이 있으면 줄을 그대로 둔다. */
 @Composable
-private fun GameMenu(selected: MiniGameKind, select: (MiniGameKind) -> Unit) {
+private fun RankingsMiniGameAllTime(store: RankingsStore, me: RankingsMyFace, scope: CoroutineScope) {
+    val colors = AingTheme.colors
+    val entries = store.miniGameAllTime
+    if (entries.isEmpty()) {
+        EmptyCard(RankingsScreenRules.miniGameAllTimeEmpty(store)) { scope.launch { store.loadMiniGameAllTime() } }
+    } else {
+        InsetGroup {
+            entries.forEachIndexed { index, entry ->
+                val isMe = RankingsScreenRules.isMe(entry.userID, store.myUserID)
+                MiniGameRow(index + 1, entry.rankRowEntry, isMe, if (isMe) me else null, index == entries.lastIndex, entry.dayCaption)
+            }
+        }
+    }
+    Column(Modifier.padding(horizontal = 4.dp).padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(GamesMiniGameText.allTimeRuleCaption, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+        Text(GamesMiniGameText.allTimeDayCaption, style = MaterialTheme.typography.bodySmall, color = colors.label2)
+    }
+}
+
+/** 게임 고르기 메뉴 알약(회색 알약 30 · 누름 영역 44). */
+@Composable
+private fun GameMenu(selected: MiniGameKind, kinds: List<MiniGameKind>, select: (MiniGameKind) -> Unit) {
     val colors = AingTheme.colors
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -472,7 +505,7 @@ private fun GameMenu(selected: MiniGameKind, select: (MiniGameKind) -> Unit) {
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            RankingsScreenRules.miniGameKinds.forEach { kind ->
+            kinds.forEach { kind ->
                 DropdownMenuItem(text = { Text(kind.title) }, onClick = {
                     expanded = false
                     select(kind)
@@ -515,16 +548,21 @@ private fun ChampionRow(winner: MiniGameWinner, modifier: Modifier = Modifier) {
 private val RankingsScreenText.awardedSuffix: String get() = "받음"
 
 @Composable
-private fun MiniGameRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, me: RankingsMyFace?, isLast: Boolean) {
+private fun MiniGameRow(rank: Int, entry: MiniGameBoardEntry, isMe: Boolean, me: RankingsMyFace?, isLast: Boolean, dateCaption: String? = null) {
     val colors = AingTheme.colors
     RankRow(
         rank, isMine = isMe, isLast = isLast, faceBase = 30.dp, minHeight = 48.dp,
-        description = RankingsText.miniGameRowAccessibility(rank, entry, isMe),
+        description = RankingsText.miniGameRowAccessibility(rank, entry, isMe, dateCaption),
         face = { RowFace(entry.name, entry.name, 30.dp, me) },
         content = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 NameLine(entry.name, entry.center, if (isMe) listOf(RankingsChip.Me) else emptyList(), Modifier.weight(1f))
                 Spacer(Modifier.width(4.dp))
+                // 날짜는 점수 앞에 한 단 흐리게 — [게임] 탭과 같은 자리·같은 무게다.
+                if (dateCaption != null) {
+                    Text(dateCaption, style = MaterialTheme.typography.labelSmall, color = colors.label3Text, maxLines = 1)
+                    Spacer(Modifier.width(6.dp))
+                }
                 Text(RankingsText.score(entry.bestScore), style = MaterialTheme.typography.labelLarge, color = colors.label, maxLines = 1)
             }
         },

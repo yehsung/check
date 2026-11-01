@@ -53,9 +53,7 @@ class MiniGameEngineGoldenTest {
         val kinds = golden.case("kinds")
         f.check("kinds", MiniGameKind.entries.joinToString(" ") { it.rawValue } == kinds.string("allCases")) { "allCases 순서" }
         f.check("kinds", MiniGameKind.macCases.joinToString(" ") { it.rawValue } == kinds.string("macCases")) { "macCases" }
-        f.check("kinds", MiniGameKind.iosPhoneCases.joinToString(" ") { it.rawValue } == kinds.string("phoneCases")) { "phoneCases(iOS)" }
-        // 안드로이드 폰 노출과 iOS 의 알려진 격차는 길건너 하나다 — 안드로이드 길건너 화면이 붙는 판에 이 줄과 함께 phoneCases 를 넓힌다.
-        f.check("kinds", MiniGameKind.phoneCases == MiniGameKind.iosPhoneCases - MiniGameKind.crossy) { "안드로이드 폰 노출 격차가 길건너 밖으로 넓어졌다" }
+        f.check("kinds", MiniGameKind.phoneCases.joinToString(" ") { it.rawValue } == kinds.string("phoneCases")) { "phoneCases" }
         f.check("kinds", MiniGameKind.controlHint == kinds.string("sharedControlHint")) { "공용 조작 안내" }
         val table = kinds.array("table").map { it as JsonObject }
         f.check("kinds", table.size == MiniGameKind.entries.size) { "종류 수" }
@@ -73,7 +71,7 @@ class MiniGameEngineGoldenTest {
                 else kind.roundTokenMidRunRefreshSeconds?.toRawBits() == Golden.bits(mid.stringValue()).toRawBits())
             check("howToPlay", kind.howToPlay == row.string("howToPlay"))
             check("controlHint", kind.controlHint == row.string("controlHint"))
-            check("isPhoneSupported", (kind in MiniGameKind.iosPhoneCases) == boolOf(row["isPhoneSupported"]))
+            check("isPhoneSupported", kind.isPhoneSupported == boolOf(row["isPhoneSupported"]))
             check("fromRawValue", MiniGameKind.fromRawValue(kind.rawValue) == kind)
         }
         // INV-MiniGameEngine-6af97b9b: 테트리스 종류 상한 = 엔진 상한(글자 하나까지). 골든이 둘을 Swift 값으로 묶고 여기서 Kotlin 둘을 묶는다.

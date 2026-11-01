@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.stores.games.StoreHarness
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -89,7 +90,7 @@ class MiniGameRoundTokenRaceTest {
 
         // 제출이 떠 있는 동안: 새 판 시작 · 강제 선발급 · (갈아 끼우는 게임이면) 판 도중 감시 — 셋 다 start_round 를 내지 않는다.
         hub.beginRound(MiniGameKind.flappy)
-        hub.prefetchRoundToken(MiniGameKind.flappy, force = true)
+        hub.prefetchRoundToken(MiniGameKind.flappy)
         hub.keepRoundTokenFresh(MiniGameKind.flappy)
         advanceTimeBy(5_000)   // 요청 상한(15초)보다 짧게 — 그 사이 다른 일이 나가는지만 본다
         runCurrent()
@@ -121,7 +122,7 @@ class MiniGameRoundTokenRaceTest {
         assertEquals("t2", hub.roundToken)
     }
 
-    /** 네트워크로 실패한 제출은 **남는다** — 그 사이 선발급은 막히고, 앱이 다시 켜지면 **같은 토큰으로** 한 번 더 보낸다. */
+    /** 네트워크로 실패한 제출은 **남는다** — 그 사이 선발급은 막히고, 백오프 뒤 **같은 토큰으로** 한 번 더 보낸다. 앱 복귀 방아쇠도 백오프가 지나면 같은 길이다. */
     @Test
     fun aNetworkFailureKeepsThePendingSubmitAndBlocksTheNextTokenUntilItIsRetried() = runTest {
         val stub = Minigame()
@@ -130,22 +131,25 @@ class MiniGameRoundTokenRaceTest {
         hub.openScreen(MiniGameKind.tetris)
         advanceUntilIdle()
         hub.recordScore(MiniGameKind.tetris, 4200)
-        advanceUntilIdle()
-        assertEquals(GamesMiniGameText.submitFailedConnection, hub.submitNotice)
+        runCurrent()
+        assertEquals(GamesMiniGameText.submitRetrying, hub.submitNotice, "인편이 살아 있는 동안은 '못 올렸어요'가 아니다")
         assertEquals("t1", hub.pendingSubmit?.token, "인편이 남는다")
         assertEquals(listOf("minigame_start_round", "minigame_submit_score"), h.minigameRpcs(),
             "실패 꼬리의 선발급도 인편 가드에 막힌다(받으면 인편의 토큰이 죽는다)")
 
-        hub.retryPendingSubmitIfAny()   // 앱이 다시 active
+        hub.retryPendingSubmitIfAny()   // 앱이 다시 active — 백오프 2초 안이라 아직 안 나간다
+        runCurrent()
+        assertEquals(listOf("t1"), h.submitTokens())
         advanceUntilIdle()
         assertEquals(listOf("t1", "t1"), h.submitTokens(), "같은 토큰으로 한 번 더")
         assertNull(hub.pendingSubmit)
+        assertNull(hub.submitNotice)
         assertEquals(listOf("minigame_start_round", "minigame_submit_score", "minigame_submit_score", "minigame_start_round"), h.minigameRpcs())
         assertEquals(listOf("tetris"), h.achievementRefreshes, "판이 서버에 남은 직후 일일 미션 한 번")
         h.assertClean()
     }
 
-    /** `too_fast` 는 거절이 아니다 — 인편을 남기고 눈먼 지연(1.5 · 4초) 뒤 **같은 토큰으로** 되보낸다. 그 사이 start_round 0건. */
+    /** `too_fast` 는 거절이 아니다 — 인편을 남기고 눈먼 지연(2초) 뒤 **같은 토큰으로** 되보낸다. 그 사이 start_round 0건. */
     @Test
     fun tooFastIsRetriedWithTheSameTokenAfterBlindDelays() = runTest {
         val stub = Minigame()
@@ -157,9 +161,9 @@ class MiniGameRoundTokenRaceTest {
         hub.recordScore(MiniGameKind.timingBar, 7)
         runCurrent()
         assertEquals(GamesMiniGameText.submitRetrying, hub.submitNotice, "기다리는 동안은 '올리는 중'")
-        advanceTimeBy(1_400)
+        advanceTimeBy(1_900)
         runCurrent()
-        assertEquals(1, h.server.count("minigame_submit_score"), "1.5초 전에는 안 보낸다")
+        assertEquals(1, h.server.count("minigame_submit_score"), "2초 전에는 안 보낸다")
         advanceTimeBy(200)
         advanceUntilIdle()
         assertEquals(listOf("t1", "t1"), h.submitTokens())
@@ -168,28 +172,36 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(listOf("minigame_start_round", "minigame_submit_score", "minigame_submit_score", "minigame_start_round"), h.minigameRpcs())
     }
 
-    /** 되보내기는 **횟수가 묶여 있다**(두 번) — 다 쓰면 사실대로 "못 올렸어요" 를 말하고 인편을 놓아 준다(그때 비로소 다음 토큰). */
+    /**
+     * 되보내기 간격은 2 · 8 · 30 · 30… 이다(눈먼 고정 표 — 서버 숫자로 계산하지 않는다). 그 동안 start_round 0건.
+     * 판 도중 토큰을 갈아 끼운 직후 끝난 길건너 판은 하한까지 몇 분이 걸리므로 맥처럼 TTL 까지 기다린다. **상한은 TTL 이다**: 30분이 지나면 놓아 주고 사실대로 말한다.
+     */
     @Test
-    fun tooFastGivesUpAfterTwoRetriesAndThenReleasesThePending() = runTest {
+    fun tooFastBacksOffOnTheFixedTableUntilTheTtl() = runTest {
         val stub = Minigame()
-        repeat(3) { stub.submits += Minigame.status("too_fast") }
-        val (h, hub) = open(stub)
+        val at = mutableListOf<Long>()
+        repeat(200) { stub.submits += Minigame.status("too_fast") }
+        val (h, hub) = StoreHarness(this) { r ->
+            if (r.rpcName == "minigame_submit_score") at += testScheduler.currentTime
+            stub.route(r)
+        }.let { it.signIn(); it to GamesMiniGameHub(it.context) }
         hub.openScreen(MiniGameKind.timingBar)
         advanceUntilIdle()
+        val t0 = testScheduler.currentTime
         hub.recordScore(MiniGameKind.timingBar, 7)
-        advanceTimeBy(1_500)
+        advanceTimeBy(31 * 60_000L)
         runCurrent()
-        assertEquals(2, h.server.count("minigame_submit_score"))
+        val gaps = at.zipWithNext { a, b -> (b - a) / 1000 }
+        assertEquals(listOf(2L, 8L, 30L, 30L), gaps.take(4), "간격이 고정 표가 아니다: $gaps")
+        assertTrue(gaps.all { it <= 30 }, "30초보다 벌어졌다: $gaps")
+        assertTrue(at.last() - t0 < GamesMiniGameHub.pendingSubmitTtlSeconds.toLong() * 1000, "TTL 을 넘겨 보냈다")
         assertEquals(1, h.server.count("minigame_start_round"), "되보내는 동안 start_round 0건")
-        advanceTimeBy(4_000)
-        advanceUntilIdle()
-        assertEquals(listOf("t1", "t1", "t1"), h.submitTokens())
-        assertEquals(GamesMiniGameText.submitRefused, hub.submitNotice)
-        assertNull(hub.pendingSubmit)
-        assertEquals(2, h.server.count("minigame_start_round"), "포기한 뒤에 다음 토큰")
-        advanceTimeBy(600_000)
-        advanceUntilIdle()
-        assertEquals(3, h.server.count("minigame_submit_score"), "세 번째 too_fast 뒤로는 더 보내지 않는다(무한 백오프 금지)")
+        val sent = h.server.count("minigame_submit_score")
+        hub.retryPendingSubmitIfAny() // 다음 방아쇠가 죽은 인편을 치운다
+        runCurrent()
+        assertNull(hub.pendingSubmit, "TTL 을 넘긴 인편이 남았다")
+        assertEquals(GamesMiniGameText.submitExpired, hub.submitNotice, "사라진 판을 말하지 않았다")
+        assertEquals(sent, h.server.count("minigame_submit_score"), "죽은 토큰을 또 보냈다")
     }
 
     /** `token_used` 는 **성공이다**(응답만 유실된 첫 제출의 재시도) — "못 올렸어요" 로 그리지 않는다. */
@@ -220,16 +232,37 @@ class MiniGameRoundTokenRaceTest {
         runCurrent()
         assertNull(hub.roundToken, "첫 왕복이 아직 안 끝났다")
         assertEquals(MiniGameKind.flappy, hub.roundTokenInFlightKind)
-        // 판이 이미 끝났는데 토큰이 없다 — 강제로 새로 받는다(첫 왕복은 이번 판에 늦었다).
-        hub.recordScore(MiniGameKind.flappy, 3)
+        // 다른 게임 화면으로 넘어가며 새 토큰을 청했다 — 앞 요청의 세대가 밀린다.
+        hub.prefetchRoundToken(MiniGameKind.tetris)
         runCurrent()
-        assertEquals(GamesMiniGameText.submitFailedConnection, hub.submitNotice)
         assertEquals("t2", hub.roundToken)
         slow.complete(Unit)
         runCurrent()
         assertEquals(2, h.server.count("minigame_start_round"))
         assertEquals("t2", hub.roundToken, "늦게 온 t1 은 버린다")
-        assertEquals(0, h.server.count("minigame_submit_score"), "토큰 없이 끝난 판은 제출하지 않는다")
+        assertEquals(MiniGameKind.tetris, hub.roundTokenKind)
+    }
+
+    /** 왕복 중에 끝난 판(즉사)은 **또 청하지 않고** 그 응답을 기다렸다 올라간다 — 또 청하면 앞 요청이 벌어 둔 여유를 버린다. 토큰은 살아 있는 판 칸이 아니라 인편이 받는다. */
+    @Test
+    fun aRoundThatEndsWhileTheTokenIsInFlightTakesThatToken() = runTest {
+        val stub = Minigame()
+        val slow = CompletableDeferred<Unit>()
+        stub.startGate = slow
+        val (h, hub) = open(stub)
+        hub.openScreen(MiniGameKind.flappy)
+        runCurrent()
+        hub.recordScore(MiniGameKind.flappy, 3)
+        runCurrent()
+        assertEquals(GamesMiniGameText.submitRetrying, hub.submitNotice)
+        assertEquals(1, h.server.count("minigame_start_round"), "왕복 중인데 또 청했다")
+        assertEquals(0, h.server.count("minigame_submit_score"))
+        assertNull(hub.pendingSubmit?.token, "토큰을 기다리는 인편이다")
+        slow.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("t1"), h.submitTokens(), "도착한 토큰이 인편으로 가지 않았다")
+        assertNull(hub.pendingSubmit)
+        assertEquals("t2", hub.roundToken, "인편이 비워진 뒤에야 다음 판 토큰")
     }
 
     /** 되보낼 status 와 영영 못 올릴 status 는 **겹칠 수 없다** — 겹치면 앞선 갈래가 뒤를 조용히 삼킨다(Swift 짝 시험 그대로). */
@@ -239,16 +272,15 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(emptySet(), GamesMiniGameHub.retryableSubmitStatuses intersect GamesMiniGameHub.deadTokenStatuses)
         assertTrue(GamesMiniGameHub.terminalSubmitStatuses.containsAll(GamesMiniGameHub.deadTokenStatuses), "죽은 토큰 거절은 인편도 지운다")
         assertTrue("token_used" !in GamesMiniGameHub.terminalSubmitStatuses, "token_used 는 성공이다")
-        assertEquals(listOf(1.5, 4.0), GamesMiniGameHub.tooFastRetryDelaysSeconds, "눈먼 지연 두 번")
+        assertEquals(listOf(2.0, 8.0, 30.0), GamesMiniGameHub.pendingRetryDelaysSeconds, "눈먼 고정 표")
     }
 
-    /** 호출자 쪽 거절(`unauthorized`·`no_profile`)도 인편을 지운다(안 지우면 앱을 켤 때마다 영원히 다시 보낸다) · 토큰이 죽은 거절은 문장을 가른다. */
+    /** 호출자 쪽 거절(`unauthorized`·`no_profile`)도 인편을 지운다(안 지우면 앱을 켤 때마다 영원히 다시 보낸다) · 토큰이 죽은 거절은 문장을 가른다. `no_token` 은 한 번 되살린다 — MiniGamePendingSubmitTest. */
     @Test
     fun terminalRefusalsReleaseThePendingAndDeadTokensSayWhatHappened() = runTest {
         for ((status, notice) in listOf(
             "unauthorized" to GamesMiniGameText.submitRefused,
             "no_profile" to GamesMiniGameText.submitRefused,
-            "no_token" to GamesMiniGameText.submitTokenDead,
             "token_expired" to GamesMiniGameText.submitTokenDead,
         )) {
             val stub = Minigame()
@@ -268,32 +300,31 @@ class MiniGameRoundTokenRaceTest {
     }
 
     /**
-     * 인편 칸에서 **밀려나는** 앞 판을 조용히 버리지 않는다 — 다른 게임의 판이 인편을 갈아 끼우면 앞 판을 마지막으로 한 번 더 보낸다
-     * (응답만 유실된 첫 제출이면 `token_used` 로 성공). 그 판의 거절 문구는 화면에 쓰지 않는다(지금 판의 자리다).
+     * 인편은 대기열이다 — 다른 게임의 판이 끝나도 앞 판이 **밀려나지 않는다**(예전 칸 하나는 앞 판을 한 번 더 보내고 버렸다). 다른 게임의 인편은 이 게임 토큰을 막지 않고,
+     * 앞 판은 제 백오프로 올라간다. 응답만 유실된 첫 제출이면 `token_used` 로 성공이다.
      */
     @Test
-    fun aSupersededPendingIsSentOnceMoreBeforeItIsDropped() = runTest {
+    fun anotherGamesRoundDoesNotPushThePendingOut() = runTest {
         val stub = Minigame()
-        stub.submits += Reply.Offline                                            // 플래피 첫 제출 — 망 실패
-        stub.submits += Reply.Offline                                            // 테트리스 화면을 열며 민 인편 — 또 실패
-        stub.submits += Reply.Json("""{"status":"token_used","best_score":35}""") // 밀려난 플래피 — 이미 올라가 있었다
+        stub.submits += Reply.Offline                                             // 플래피 첫 제출 — 망 실패
         stub.submits += Minigame.ok(best = 900)                                   // 테트리스
+        stub.submits += Reply.Json("""{"status":"token_used","best_score":35}""") // 플래피 재시도 — 이미 올라가 있었다
         val (h, hub) = open(stub)
         hub.openScreen(MiniGameKind.flappy)
         advanceUntilIdle()
         hub.recordScore(MiniGameKind.flappy, 30)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals("flappy", hub.pendingSubmit?.kind?.rawValue)
-        hub.openScreen(MiniGameKind.tetris)
-        advanceUntilIdle()
-        assertEquals("flappy", hub.pendingSubmit?.kind?.rawValue, "화면을 열며 민 인편이 또 실패했다")
+        hub.prefetchRoundToken(MiniGameKind.tetris)
+        runCurrent()
         assertEquals("t2", hub.roundToken, "다른 게임의 인편은 이 게임 토큰을 막지 않는다")
         hub.recordScore(MiniGameKind.tetris, 900)
+        runCurrent()
+        assertEquals(listOf("flappy"), hub.pendingSubmits.map { it.kind.rawValue }, "테트리스는 끝났고 플래피는 그대로 기다린다")
         advanceUntilIdle()
-        assertEquals(listOf("t1", "t1", "t1", "t2"), h.submitTokens(), "밀려나는 플래피를 마지막으로 한 번 더 보낸다")
-        assertNull(hub.pendingSubmit)
-        assertEquals(35L, hub.best(MiniGameKind.flappy), "밀려난 판의 확정 최고도 반영한다")
-        assertNull(hub.submitNotice, "밀려난 판의 결과는 지금 판의 안내를 덮지 않는다")
+        assertEquals(listOf("t1", "t2", "t1"), h.submitTokens())
+        assertEquals(emptyList(), hub.pendingSubmits)
+        assertEquals(35L, hub.best(MiniGameKind.flappy), "앞 판의 확정 최고도 반영한다")
     }
 
     /** 순위 공개를 끈 사람: 토큰도 제출도 없다(설정 문구 "올라가지도 않아요") — 로컬 최고만 오른다. 공개 여부 조회 실패는 아는 값을 지킨다. */
@@ -341,14 +372,15 @@ class MiniGameRoundTokenRaceTest {
         advanceUntilIdle()
         assertEquals("t2", hub.roundToken, "20분이 지나면 갈아 끼운다")
         hub.recordScore(MiniGameKind.crossy, 40)
-        advanceUntilIdle()
+        runCurrent()
         assertEquals("t2", hub.pendingSubmit?.token, "망 실패로 인편이 남았다")
-        advanceTimeBy(25 * 60_000L)
-        hub.keepRoundTokenFresh(MiniGameKind.crossy)
+        hub.keepRoundTokenFresh(MiniGameKind.crossy) // 인편이 살아 있으면 갈아 끼우지 않는다(백오프 안이라 지금은 아무것도 안 나간다)
+        runCurrent()
+        assertEquals(listOf("minigame_start_round", "minigame_start_round", "minigame_submit_score"), h.minigameRpcs())
         advanceUntilIdle()
         assertEquals(
             listOf("minigame_start_round", "minigame_start_round", "minigame_submit_score", "minigame_submit_score", "minigame_start_round"),
-            h.minigameRpcs(), "인편이 살아 있으면 갈아 끼우지 않고 인편부터 민다 — 새 토큰은 인편이 비워진 뒤 꼬리에서만",
+            h.minigameRpcs(), "인편부터 민다 — 새 토큰은 인편이 비워진 뒤 꼬리에서만",
         )
         assertEquals(listOf("t2", "t2"), h.submitTokens())
         hub.keepRoundTokenFresh(MiniGameKind.timingBar)
@@ -356,10 +388,80 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(3, h.server.count("minigame_start_round"), "갈아 끼우지 않는 게임(타이밍 바)의 감시는 아무 일도 안 한다")
     }
 
-    /** Android(G §2-3 W2-e ④): 이 빌드에 보이지 않는 게임(길건너)은 화면을 열지 않는다 — 구동기 0 · 요청 0. */
+    /**
+     * 28분을 넘긴 길건너 판(부르는 자리 — 감시 [GamesMiniGameHub.runRoundTokenKeeper]): 감시가 30초마다 깨어 20분 지난 토큰을 갈아 끼우므로, 판이 끝날 때 든 토큰은 서버 TTL 30분 안이다.
+     * 기준선: 감시가 없으면 같은 판의 토큰은 그대로 t1 이다(나이 29분 — 서버가 token_expired 로 거절할 값).
+     */
+    @Test
+    fun aLongCrossyRoundFinishesWithAFreshTokenThanksToTheKeeper() = runTest {
+        val minutes = 29
+        suspend fun play(keeper: Boolean): Pair<StoreHarness, GamesMiniGameHub> {
+            val (h, hub) = open()
+            hub.openScreen(MiniGameKind.crossy)
+            advanceUntilIdle()
+            val c = hub.controller!!
+            c.tap()
+            advanceUntilIdle()
+            val job = if (keeper) h.storeScope.launch { hub.runRoundTokenKeeper(c) } else null
+            advanceTimeBy(minutes * 60_000L)
+            runCurrent()
+            c.endRound()
+            job?.cancel()
+            advanceUntilIdle()
+            return h to hub
+        }
+        val (kept, _) = play(keeper = true)
+        val tokens = kept.submitTokens()
+        assertEquals(1, tokens.size)
+        assertEquals("t2", tokens.single(), "29분 판의 제출 토큰이 갈아 끼운 것이 아니다")
+        val (bare, _) = play(keeper = false)
+        assertEquals(listOf("t1"), bare.submitTokens(), "기준선: 감시가 없으면 29분 묵은 토큰으로 나간다")
+    }
+
+    /** 감시는 자기 구동기가 끝나거나 화면에서 내려가면 돌아온다 · 갈아 끼우지 않는 게임이면 곧장 돌아온다(잠도 안 잔다). */
+    @Test
+    fun theKeeperStopsWithItsRoundAndSkipsOtherGames() = runTest {
+        val (h, hub) = open()
+        val sleeps = mutableListOf<Double>()
+        hub.sleep = { sleeps += it }
+        hub.openScreen(MiniGameKind.flappy)
+        advanceUntilIdle()
+        hub.runRoundTokenKeeper(hub.controller!!)
+        assertEquals(emptyList(), sleeps, "플래피에 감시가 돈다")
+        hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        val c = hub.controller!!
+        c.tap()
+        c.endRound()
+        advanceUntilIdle()
+        val before = h.server.count("minigame_start_round")
+        hub.runRoundTokenKeeper(c) // 끝난 판 — 한 번 자고 돌아온다(새 토큰 0)
+        assertEquals(listOf(GamesMiniGameHub.tokenKeeperIntervalSeconds), sleeps)
+        assertEquals(before, h.server.count("minigame_start_round"))
+    }
+
+    /** background: 길건너는 그 점수로 확정 제출 · 안내는 '기록했어요'(거짓말 금지). */
+    @Test
+    fun crossyInTheBackgroundSubmitsAndSaysSo() = runTest {
+        val (h, hub) = open()
+        hub.openScreen(MiniGameKind.crossy)
+        advanceUntilIdle()
+        hub.controller!!.tap()
+        advanceUntilIdle()
+        hub.appDidEnterBackground()
+        advanceUntilIdle()
+        assertEquals(1, h.server.count("minigame_submit_score"))
+        assertEquals(GamesMiniGameText.endedInBackground(MiniGameKind.crossy), hub.submitNotice)
+        assertEquals(listOf("crossy"), h.achievementRefreshes, "일일 미션 길건너 줄이 제출을 못 본다")
+        assertTrue("기록했어요" in hub.submitNotice!!)
+        assertNull(hub.controller?.roundLimitSeconds, "길건너에 벽시계 상한을 줬다(idleLimit 9초가 이미 죽인다)")
+    }
+
+    /** Android(G §2-3 W2-e ④): 이 빌드에 보이지 않는 게임은 화면을 열지 않는다 — 구동기 0 · 요청 0. 지금은 넷 다 보여 표시 목록을 좁혀 잰다(깃발의 뜻은 그대로다). */
     @Test
     fun anInvisibleGameNeverOpens() = runTest {
         val (h, hub) = open()
+        hub.visibleKinds = MiniGameExposure.visible - MiniGameKind.crossy
         hub.openScreen(MiniGameKind.crossy)
         advanceUntilIdle()
         assertNull(hub.controller)
@@ -367,7 +469,7 @@ class MiniGameRoundTokenRaceTest {
         assertEquals(emptyList(), h.gameRpcs())
         hub.refreshSummariesIfStale()
         advanceUntilIdle()
-        assertEquals(MiniGameExposure.visible.size, h.server.count("minigame_board"), "첫 화면 카드도 보이는 게임만 읽는다")
-        assertTrue(MiniGameKind.crossy !in MiniGameExposure.visible)
+        assertEquals(hub.visibleKinds.size, h.server.count("minigame_board"), "첫 화면 카드도 보이는 게임만 읽는다")
+        assertTrue(MiniGameKind.crossy in MiniGameExposure.visible, "기준선: 넓은 목록에는 있다")
     }
 }

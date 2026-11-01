@@ -226,7 +226,8 @@ enum class RankingsBoard(val raw: String) {
 enum class AingMiniGame(val raw: String) {
     TIMING("timing"),
     FLAPPY("flappy"),
-    TETRIS("tetris");
+    TETRIS("tetris"),
+    CROSSY("crossy");
 
     companion object {
         fun fromRaw(raw: String): AingMiniGame? = entries.firstOrNull { it.raw == raw.lowercase() }

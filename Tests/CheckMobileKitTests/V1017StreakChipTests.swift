@@ -108,17 +108,18 @@ import Testing
 
     @Test("데모 장면 streak: 지금 탭이 읽는 값이 선다 · 떠 있는 조회가 끝난 뒤에 넣어 404 가 지우지 못한다")
     func demoStage() async {
+        #expect(NowDemoStage.stages(arguments: ["app", NowDemoStage.argument, "streak"]) == ["streak"])
         let harness = await RankMeHarness(label: "v1017-streak-demo", responder: MeAchievementClaimTests.quietResponder)
         defer { harness.tearDown() }
         let now = harness.model.now
-        await NowDemoStage.applyNotices(store: now, stages: [])
+        await NowDemoStage.applyStreak(store: now, stages: [])
         #expect(now.myStreakDays == nil)
 
         let hold = BaseHold.install(host: harness.host) { $0.path == "/rest/v1/rpc/achievements_status" }
         harness.enqueue("achievements_status", .missingFunction("achievements_status"))
         harness.me.refreshAchievementsIfStale()
         #expect(await hold.waitHeld())
-        let stage = Task { await NowDemoStage.applyNotices(store: now, stages: ["streak"]) }
+        let stage = Task { await NowDemoStage.applyStreak(store: now, stages: ["streak"]) }
         #expect(await hold.releaseAndWaitDelivered())
         await harness.quiesceMe()
         await stage.value

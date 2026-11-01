@@ -493,7 +493,7 @@ class GamesRummyLandscapeTest {
     fun statusLineWarnings() {
         val editor = fx.editor()
         val waiting = GamesRummyStatusLine.make(null, false, null, "구름", RummySeatState.playing, 2, engaged = true)
-        assertEquals("앱을 90초 넘게 내리면 기권돼요", waiting.text)
+        assertEquals("앱을 1분 넘게 내리면 기권될 수 있어요", waiting.text)
         assertEquals("시간 초과 2/3", waiting.warning)
         val idle = GamesRummyStatusLine.make(null, false, null, "구름", RummySeatState.playing, 0, engaged = false)
         assertEquals(RummyPhoneText.turnOf("구름"), idle.text, "놀던 기기에 기권 안내가 떴다")

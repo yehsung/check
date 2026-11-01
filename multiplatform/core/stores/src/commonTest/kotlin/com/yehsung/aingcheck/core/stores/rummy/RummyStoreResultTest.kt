@@ -169,7 +169,7 @@ class RummyStoreResultTest {
         assertTrue("시간 초과가 3번 이어지면 기권" in lines.getValue("시간 60초"))
         assertTrue("기권은 꼴찌" in lines.getValue("등수 분배"))
         assertTrue("판을 나가거나 시간 초과가 3번" in lines.getValue("기권"))
-        assertTrue("90초 안에 돌아오면" in lines.getValue("기권"))
+        assertTrue("1분 안에 돌아오면" in lines.getValue("기권"))
         assertTrue("0.5초 꾹 누른 채" in lines.getValue("조작"))
     }
 }

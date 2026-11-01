@@ -46,6 +46,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
 import org.junit.Test
 import java.io.File
 
@@ -146,12 +147,16 @@ class AccountDeletionAndroidPathTest {
         }
     }
 
+    /** 미니게임 점수 인편·임시 항목·표식 칸(지운 계정의 것이 기기에 남으면 안 된다 — Swift MobileSessionStore.swift:350 @ ios-next-score). */
+    private val miniGameKeys = listOf(GamesMiniGameHub.pendingKey(me), GamesMiniGameHub.pauseDraftKey(me), GamesMiniGameHub.lostNoticeKey(me))
+
     @Test
     fun successOrderIsReauthAvatarRpcLocalThenAndroid() = runTest {
         val h = Harness(this)
         h.signIn()
         advanceUntilIdle()
         h.events.clear()
+        for (key in miniGameKeys) h.prefs.putString(key, "x")
         h.store.accountDeletionPassword = rightPassword
         val deleted = AccountDeletionFlow(h.store, h.cleanup).run()
         advanceUntilIdle()
@@ -174,6 +179,7 @@ class AccountDeletionAndroidPathTest {
         assertNull("사용자 칸이 남았다(위젯이 지운 계정 파일을 고른다)", h.prefs.getString(SessionPrefsKeys.userID))
         assertNull("지운 계정 이메일이 로그인 칸에 남는다", h.session.storedEmail)
         assertFalse("지운 계정의 토큰이 정리 장부에 남았다", h.session.hasPendingSignOutCleanup)
+        for (key in miniGameKeys) assertNull("지운 계정의 점수가 기기에 남았다: $key", h.prefs.getString(key))
     }
 
     @Test
@@ -182,6 +188,7 @@ class AccountDeletionAndroidPathTest {
         h.signIn()
         advanceUntilIdle()
         h.events.clear()
+        for (key in miniGameKeys) h.prefs.putString(key, "x")
         h.store.accountDeletionPassword = "wrong"
         assertFalse(AccountDeletionFlow(h.store, h.cleanup).run())
         advanceUntilIdle()
@@ -190,6 +197,7 @@ class AccountDeletionAndroidPathTest {
         assertEquals(me, h.prefs.getString(SessionPrefsKeys.userID))
         assertEquals("비밀번호가 맞지 않아요", h.store.accountDeletionNotice)
         assertEquals("실패했는데 입력을 지웠다", "wrong", h.store.accountDeletionPassword)
+        for (key in miniGameKeys) assertEquals("삭제가 실패했는데 점수를 지웠다: $key", "x", h.prefs.getString(key))
     }
 
     @Test

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
@@ -17,6 +18,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.rules.tetris.TetrisGame
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.stores.chess.ChessRecord
@@ -34,6 +36,8 @@ import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubBoardFactsSnapshot
 import com.yehsung.aingcheck.ui.games.minigame.hub.GamesHubScreen
 import com.yehsung.aingcheck.ui.games.tetris.GamesTetrisDuelMatchView
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -92,6 +96,30 @@ class GamesSnapshotAndroidTest {
             }
         }
     }
+
+    /** 폰 일시정지(iOS de5c153b): 판을 켜서 허브로 얼린 스토어 — 화면이 사라지면 판이 끝나므로 그릴 때마다 새로 만든다. */
+    private fun phonePausedScene(countdown: Boolean): @Composable () -> Unit = {
+        val store = remember {
+            val scope = TestScope()
+            val h = UiGamesHarness(scope, AppConfig()) { r -> UiFixtures.miniGameRoute(r) { 1 } }
+            runBlocking { h.signIn() }
+            GamesStore(h.context).also { s ->
+                s.miniGames.phonePauseRules = true
+                s.miniGames.pauseSleep = { awaitCancellation() }
+                s.miniGames.openScreen(MiniGameKind.tetris)
+                scope.testScheduler.advanceUntilIdle()
+                requireNotNull(s.miniGames.controller).tap()
+                s.miniGames.togglePause()
+                if (countdown) s.miniGames.togglePause()
+                scope.testScheduler.runCurrent()
+            }
+        }
+        AingTheme(dark = false) {
+            GamesMiniGameScreen(store, MiniGameKind.tetris, 60, art, null, Modifier.size(PHONE_W.dp, PHONE_H.dp), reduceMotion = true, isPhone = true)
+        }
+    }
+
+    @Test fun phonePausedTetrisLight() = check("games/minigame", "phone-paused-tetris-light", phonePausedScene(countdown = false), phonePausedScene(countdown = true))
 
     @Test fun hubLight() = check("games/minigame", "hub-light", hubScene(), hubScene(chessIncoming = true))
 

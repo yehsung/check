@@ -11,8 +11,8 @@ import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
  * 왜 화면(허브)이 정지의 주인인가: 정지 중에는 판을 못 들여다보게 캔버스를 통째로 가려야 하는데(순위표가 걸린 게임에서 멈춰 놓고 다음 기둥을
  * 외우는 것이 이득이면 안 된다), 그 스크림을 게임마다 그리면 두 벌이 된다. 게임은 [isFrozen] 한 값만 읽는다.
  *
- * Android 몫(W4-b 가 배선한다): 폰은 background 가 곧 `endRound()`(테트리스 확정 · 나머지 버림 — `GamesPlayController`)라 이 표를 쓰는 곳은
- * **창이 키를 잃는** 자리(데스크톱 플라이아웃 · Android 멀티 창 ON_PAUSE 처럼 앱이 살아 있는 채로 초점을 잃는 경우)다. 전이는 맥과 한 벌이다.
+ * 쓰는 곳 둘, 전이는 한 벌: ① Windows 창 — 화면(`GamesMiniGameScreen`)의 상태 ② 안드로이드 폰 — 구동기(`GamesPlayController.pauseState`)와 허브(iOS 폰 1.0.16 과 같은 자리 ·
+ * 앱을 내리면 자동 정지 · 벽시계 상한 · 임시 항목). 어느 게임에 상한을 거는지는 폰이 맥과 달라서([quittingKeepsTheScore] 는 맥 표다) 폰 표는 `GamesMiniGamePausePolicy` 에 있다.
  * 맥의 ESC 판정(`escaped(eventWindow:gameWindow:isPlaying:)`)은 NSWindow 객체 대조라 옮기지 않는다 — 그 규칙 한 벌인 [toggled] 를 쓴다.
  */
 sealed interface MiniGamePauseState {

@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.net.updateMiniGamePublic
 import com.yehsung.aingcheck.core.net.updateTokenUsagePublic
 import com.yehsung.aingcheck.core.session.AccountDeletionFailure
 import com.yehsung.aingcheck.core.session.AccountDeletionOutcome
+import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
 
 // 설정: 공개 설정 2개(profiles 자기 행 PATCH — token_usage_public · minigame_public) · 알림(푸시 코디네이터 — W2-f) · 팀 코드 ·
 // 로그아웃(세션) · 계정 삭제(세션) · 버전. 공개 토글은 맥과 같은 **낙관 반영 → 실패 시 원복**이다. 공개 설정 GET 에 딸려 오는 focus_mode 는
@@ -189,9 +190,14 @@ suspend fun MeStore.deleteAccount(): Boolean {
     isDeletingAccount = true
     accountDeletionNotice = null
     // 아잉 큐브 판·방은 여기서 나가지 않는다 — 서버 `delete_my_account` 가 같은 트랜잭션에서 기권·방 정리를 한다(`rummy_leave` 를 먼저 보내면 삭제가 실패해도 기권이 안 되돌아간다).
+    // 세션이 비기 전에 쥔다 — 지운 계정의 점수 인편·임시 항목을 기기에 남기지 않는다(Swift MobileSessionStore.swift:350 @ ios-next-score).
+    val deletingUserID = context.sessionStore.session?.userID
     val outcome = context.sessionStore.deleteAccount(password)
     return when (outcome) {
-        AccountDeletionOutcome.Deleted -> true
+        AccountDeletionOutcome.Deleted -> {
+            deletingUserID?.let { GamesMiniGameHub.forgetPendingSubmits(it, context.sessionStore.prefs) }
+            true
+        }
         is AccountDeletionOutcome.Failed -> {
             isDeletingAccount = false
             accountDeletionNotice = MeText.deleteAccountFailure(outcome.reason)

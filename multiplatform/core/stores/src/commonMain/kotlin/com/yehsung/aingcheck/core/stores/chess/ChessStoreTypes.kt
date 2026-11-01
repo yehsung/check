@@ -286,8 +286,7 @@ data class ChessPendingDrop(
 )
 
 /**
- * 누른 칸에서 끌기가 될 수 있는가(Swift `ChessBoardPointer.Grab`). 포인터 해석기 자체(`ChessBoardPointer`)는 화면 갈래(W4-a) 몫이고 —
- * C§3.2 "ChessDrag 옮기지 않음, 순수 계산은 앱 갈래가 필요하면 가져간다" — 스토어 문 `grab(at:)` 이 돌려주는 이 셋만 여기 둔다.
+ * 누른 칸에서 끌기가 될 수 있는가(Swift `ChessBoardPointer.Grab`). 포인터 해석기 자체는 [ChessBoardPointer] 다 — 스토어 문 `grab(at:)` 이 돌려주는 이 셋을 해석기가 받는다.
  */
 enum class ChessDragGrab {
     /** 지금 끌 수 있는 내 말. */

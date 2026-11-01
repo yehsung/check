@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- AI 리밋 위젯: 그 창이 없는 칸의 45° 사선(왼쪽 아래 → 오른쪽 위). 원본: Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift absentHatch @ 4137751e.
+     간격 4 · 굵기 1 · 불투명도 0.45 — 폰 카드(MeAILimitColumnColor)와 같은 세 수이고 AingWidgetRenderTest 가 이 글자에서 되묻는다.
+     색은 틴트가 준다(불투명한 `없음` 글자 색). 캡슐 클립: 삐져나간 사선은 칸 경계를 흐린다. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="6dp"
+    android:viewportWidth="22"
+    android:viewportHeight="6">
+    <clip-path android:pathData="M3,0H19A3,3 0 0 1 19,6H3A3,3 0 0 1 3,0Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="1"
+        android:strokeAlpha="0.45"
+        android:pathData="M-6,6L0,0M-2,6L4,0M2,6L8,0M6,6L12,0M10,6L16,0M14,6L20,0M18,6L24,0" />
+</vector>

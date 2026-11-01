@@ -97,6 +97,23 @@ class NowStore(
     var phoneWork: NowPhoneWorkLink? = null
     var widgetSink: NowWidgetSink? = null
 
+    // ---------------------------------------------------------------- 새 버전 안내(원본: Sources/CheckMobileKit/Now/NowStore.swift:115-116,232-248 @ 1a5eeca6)
+
+    /** 닫은 최신 빌드. **앱 단위**다 — 계정이 바뀌어도 그 빌드는 또 안 알린다([reset] 이 비우지 않고 `SessionPrefsKeys.userScopedKeys` 에도 없다). */
+    var dismissedUpdateBuild: Long? by mutableStateOf(context.keyValueStore.getLong(dismissedUpdateBuildKey))
+        private set
+
+    /** 최신 빌드는 실행 때 한 번 받는 값이다(`SessionStore.launch`). 상한을 넘겨 못 받은 실행에서는 안 보이고 다음 실행이 다시 본다. */
+    val showsUpdateNotice: Boolean
+        get() = NowUpdateNoticeRule.isVisible(context.sessionStore.latestBuild, context.appInfo.build, dismissedUpdateBuild)
+
+    /** 지금 보이는 최신 빌드를 닫았다고 적는다. 최신 빌드를 모르면 아무것도 적지 않는다. */
+    fun dismissUpdateNotice() {
+        val latest = context.sessionStore.latestBuild ?: return
+        dismissedUpdateBuild = latest
+        context.keyValueStore.putLong(dismissedUpdateBuildKey, latest)
+    }
+
     // ---------------------------------------------------------------- 팀 · 사람
 
     var membership: NowMembership? by mutableStateOf(null)
@@ -750,6 +767,9 @@ class NowStore(
     }
 
     companion object {
+        /** 닫은 최신 빌드 칸(Swift `dismissedUpdateBuildKey` 와 같은 글자). */
+        const val dismissedUpdateBuildKey: String = "aingcheck.update.dismissedBuild"
+
         const val refreshIntervalSeconds: Double = 60.0
 
         /** 탭을 다시 볼 때 이 초 안에 받았으면 새로고침을 건너뛴다. */

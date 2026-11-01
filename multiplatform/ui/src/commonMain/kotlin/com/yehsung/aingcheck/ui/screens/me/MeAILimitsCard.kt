@@ -1,5 +1,5 @@
 // 원본: Sources/CheckMobileKit/Me/MeAILimitsCard.swift @ 3bd04bd (나 탭 「AI 리밋」 카드 · 표 · 제공자 줄 · 바 · 열 색)
-// 원본: Sources/CheckMobileShared/AILimitColumnStyle.swift @ 3bd04bd (AILimitColumnPalette 값 · AILimitUsageStage · AILimitBarFill)
+// 원본: Sources/CheckMobileShared/AILimitColumnStyle.swift @ 3bd04bd (AILimitColumnPalette 값 · AILimitUsageStage · AILimitBarFill) · 없는 칸 글자·해치 @ 4137751e
 // 원본: Sources/CheckMobileShared/AILimitSurfaceRules.swift:51-78 @ 3bd04bd (AILimitFloorFill)
 //
 // 승인된 문법(2026-10-07 — 맥 팝오버·위젯 미디움과 같은 문법): ① 한 제공자 = 한 줄, 5시간·주간이 그 줄 안에 나란히 ② 열 머리는 카드 맨 위에
@@ -31,8 +31,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -301,7 +306,9 @@ private fun MeAILimitNameColumn(row: AILimitDisplayRow, modifier: Modifier) {
 }
 
 /**
- * 한 칸 = 바 + 숫자. 세 모양: ① 값이 있다 ② 창은 있는데 판정 불가(`—`) ③ **그 창이 없다**(더 어두운 트랙 + `없음`).
+ * 한 칸 = 바 + 숫자. 세 모양: ① 값이 있다 ② 창은 있는데 판정 불가(`—`) ③ **그 창이 없다**(더 조용한 트랙 + 사선 해치 + `없음`).
+ * ③의 판정은 `display == null` **하나**다(트랙·해치·글자가 같은 한 가지를 본다). `percent == null` 로 가르면 ②가 함께 해치를 받고, `percent == 0` 으로 가르면 **0% 칸이** 받는다 —
+ *   0% 는 "안 썼다"는 값이고 "그 창이 없다"와 다른 말이다.
  * INV-MeAILimitsCard-a1328eef 이식: 5시간 창이 **없는** 제공자는 그 칸을 `없음` 으로 비운다 — `—` 를 쓰지 않는다. 그 글자는 코어 규칙이
  *   '판정 불가(= 못 읽었다)'로 못 박았다(AILimitFreshnessRule.unknownValueText). 둘은 다른 사실이다.
  */
@@ -315,6 +322,7 @@ private fun MeAILimitCell(row: AILimitDisplayRow, window: AILimitWindow, modifie
             floorOnly = display?.floorOnly ?: false,
             tint = MeAILimitColumnColor.bar(window, colors),
             track = if (display == null) MeAILimitColumnColor.absentTrack(colors) else MeAILimitColumnColor.emptyTrack(colors),
+            isAbsent = display == null,
             modifier = Modifier.weight(1f),
         )
         MeAILimitValueText(display, Modifier.width(MeAILimitCardBudget.valueWidth.dp))
@@ -362,6 +370,7 @@ private fun MeAILimitRowStacked(row: AILimitDisplayRow) {
                     floorOnly = display?.floorOnly ?: false,
                     tint = MeAILimitColumnColor.bar(window, colors),
                     track = if (display == null) MeAILimitColumnColor.absentTrack(colors) else MeAILimitColumnColor.emptyTrack(colors),
+                    isAbsent = display == null,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -373,12 +382,24 @@ private fun MeAILimitRowStacked(row: AILimitDisplayRow) {
  * 리밋 진행바(트랙 + 채움). [percent] null 이면 **트랙만** — 0% 로 그리면 "하나도 안 썼다"는 거짓이다.
  * INV-MeAILimitsCard-0d95dced 이식: 하한("27% 이상")은 채움을 **흐리게** 그린다 — 수단은 색이 아니라 **불투명도**다(AILimitFloorFill — 위젯 틴트·
  *   투명 모드는 색을 버리고 알파만 남긴다. 세 화면이 같은 수를 쓴다).
+ * 창이 **없는** 칸은 트랙에 **45° 사선 해치**를 받는다(4137751e 승인) — 트랙 색만으로 가르면 색각 이상·흑백 스크린샷에서 0% 바와 같은 모양이다.
+ * [isAbsent] 에 **기본값을 주지 않는다** — 새 호출부가 조용히 "값이 있는 칸"으로 떨어지면 해치가 사라진 것을 아무 그물도 못 잡는다.
+ * 값이 **있는** 칸(0% 포함)에는 그리지 않는다.
  */
 @Composable
-fun MeAILimitBar(percent: Double?, floorOnly: Boolean, tint: Color, track: Color, modifier: Modifier = Modifier) {
+fun MeAILimitBar(percent: Double?, floorOnly: Boolean, tint: Color, track: Color, isAbsent: Boolean, modifier: Modifier = Modifier) {
+    val hatch = MeAILimitColumnColor.absentHatch(AingTheme.colors)
     Canvas(modifier.height(MeAILimitCardBudget.barHeight.dp)) {
         val radius = CornerRadius(size.height / 2f)
         drawRoundRect(track, cornerRadius = radius)
+        if (isAbsent) {
+            // 트랙 캡슐 안쪽으로 클립 — 삐져나간 사선은 칸 경계를 흐려 두 열의 자리 단서를 깎는다.
+            clipPath(Path().apply { addRoundRect(RoundRect(Rect(Offset.Zero, size), radius)) }) {
+                for (x in MeAILimitColumnColor.absentHatchStarts(size.width, size.height, MeAILimitColumnColor.absentHatchSpacing.dp.toPx())) {
+                    drawLine(hatch, Offset(x, size.height), Offset(x + size.height, 0f), strokeWidth = MeAILimitColumnColor.absentHatchLineWidth.dp.toPx())
+                }
+            }
+        }
         if (percent != null) {
             val fill = AILimitBarFill.width(size.width.toDouble(), percent).toFloat()
             if (fill > 0f) drawRoundRect(tint.copy(alpha = AILimitFloorFill.opacity(floorOnly).toFloat()), size = Size(fill, size.height), cornerRadius = radius)
@@ -424,9 +445,11 @@ object MeAILimitColumnColor {
     //   보이지만 채움으로 읽히지 않고 같은 칸의 `없음` 글자가 사실을 말한다. 세 화면이 한 표를 쓰는 편이 바탕마다 값을 가르는 것보다 안전하다.
     private val absentTrack = Pair(0xFFF1F2F5, 0xFF22262C)
 
-    // INV-AILimitColumnStyle-27be8c98 이식: `없음` 글자는 줄에서 **가장 조용하다**(대비 2.1:1 수준 — 승인된 선택). 값이 아니라 '값이 없다는 사실'이라 숫자보다 먼저
-    //   눈에 들어오면 안 되고, 사실은 더 어두운 트랙 · 채움 없음이 같이 말한다. 글자를 올리려면 승인본을 먼저 고친다.
-    private val absentText = Pair(0xFF9BA1AC, 0xFF595E67)
+    // INV-AILimitColumnStyle-27be8c98 이식(4137751e 사용자 결정으로 값을 올렸다): 옛 값(#9BA1AC · #595E67)은 흰 카드 2.60:1 · 폰 카드 다크 2.06:1 로 어떤 글자에도 모자랐고,
+    //   운영 코덱스 사용자 대다수의 5시간 칸이 영구히 이 글자다. 새 회색이 아니라 승인된 3단 글자 토큰(label3Text)을 각 바탕에 합성한 값 그대로다(흰 카드 4.85 · 폰 카드 다크 4.70 ·
+    //   위젯 5.26:1). 그래도 숫자보다는 조용하다 — '값이 없다는 사실'은 숫자보다 먼저 눈에 들어오면 안 되고, 그 뜻은 상대 상한(4.5 ≤ 대비 < 숫자 대비)으로 지킨다.
+    //   사실은 글자 하나로만 말하지 않는다 — 더 조용한 트랙 · 채움 없음 · 사선 해치가 같이 말한다.
+    private val absentText = Pair(0xFF717176, 0xFF9798A4)
 
     // INV-AILimitColumnStyle-1694c631 이식: 창이 **셋**이 되는 날 새 창이 조용히 5시간 열(파랑)로 떨어지지 않게 빠짐없는 when 이다(else 없음 —
     //   AILimitWindow 를 넓히면 여기가 컴파일로 막힌다).
@@ -442,6 +465,30 @@ object MeAILimitColumnColor {
     fun emptyTrack(colors: AingColors): Color = emptyTrack.pick(colors)
     fun absentTrack(colors: AingColors): Color = absentTrack.pick(colors)
     fun absentText(colors: AingColors): Color = absentText.pick(colors)
+
+    /** 없는 칸 트랙의 사선 색 = [absentText] 를 공유 불투명도로 흐린 값. **새 색을 만들지 않는다** — 해치는 같은 사실(`없음`)의 두 번째 단서라 그 글자와 같은 잉크다. */
+    fun absentHatch(colors: AingColors): Color = absentText(colors).copy(alpha = absentHatchOpacity.toFloat())
+
+    /** 사선 간격(dp) — 바 높이가 6dp 라 이보다 넓으면 좁은 칸에 선이 한 줄도 안 들어간다. */
+    const val absentHatchSpacing: Double = 4.0
+
+    /** 사선 굵기(dp). */
+    const val absentHatchLineWidth: Double = 1.0
+
+    /** 사선 색의 불투명도. 색이 아니라 **알파**다(하한 채움 [AILimitFloorFill] 과 같은 수단). */
+    const val absentHatchOpacity: Double = 0.45
+
+    /** 사선(왼쪽 아래 → 오른쪽 위, 45°)의 아래쪽 시작 x 들. 왼쪽 밖(`-height`)에서 시작해야 캡슐 왼쪽 끝도 선을 받는다. */
+    fun absentHatchStarts(width: Float, height: Float, spacing: Float): List<Float> {
+        if (spacing <= 0f) return emptyList()
+        val starts = ArrayList<Float>()
+        var x = -height
+        while (x < width) {
+            starts += x
+            x += spacing
+        }
+        return starts
+    }
 
     /**
      * 사용량 단계 색 — 경계는 [AILimitUsageStage], 반올림은 **코어 규칙**(글자가 `90%` 라고 적으면 색도 거기서 갈린다).

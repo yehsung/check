@@ -184,6 +184,10 @@ object AingWidgetFormat {
 // MARK: - 칸 배치 수
 
 object AingWidgetLayout {
+    /** 없는 칸 사선 트랙(dp) — 자원 widget_ailimit_absent_hatch 의 크기와 같다. 값 칸 62 안에 `없음` 글자와 함께 든다. */
+    const val LIMIT_HATCH_WIDTH = 22
+    const val LIMIT_HATCH_HEIGHT = 6
+
     /** 지금 근무 중 S 얼굴 더미 · 이름 줄. */
     const val WORKING_SMALL_FACES = 3
     /** 지금 근무 중 M 사람 칸(2열 × 3행, 열 먼저). */

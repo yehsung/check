@@ -21,7 +21,7 @@ import com.yehsung.aingcheck.core.wire.models.AILimitServerRow
 data class AILimitFetchedRow(
     /** 이 행을 올린 맥. 기본값 없음 — 이 축이 비면 기기별 묶기가 조용히 한 묶음으로 접힌다. */
     val deviceID: String,
-    /** 그 맥의 컴퓨터 이름(없으면 null → 묶음 머리는 `이름 모를 맥 ABCD`). */
+    /** 그 기기의 컴퓨터 이름(없으면 null → 묶음 머리는 `이름 모를 맥 ABCD` · `이름 모를 PC ABCD`). */
     val deviceLabel: String?,
     val provider: String,
     val fiveHourPercent: Double?,

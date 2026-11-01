@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -43,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -72,6 +74,7 @@ import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.session.kit.AingButton
 import com.yehsung.aingcheck.ui.screens.session.kit.AingButtonKind
+import com.yehsung.aingcheck.ui.screens.session.kit.AingButtonSize
 import com.yehsung.aingcheck.ui.screens.session.kit.InlineNotice
 import com.yehsung.aingcheck.ui.screens.session.kit.LoadFailureRow
 import com.yehsung.aingcheck.ui.screens.session.kit.LoadingRow
@@ -133,11 +136,15 @@ object NowTags {
     const val CREATED_TEAM_CONFIRM = "now-created-team-confirm"
     const val GOAL_SHEET = "now-goal-sheet"
     const val GOAL_SAVE = "now-goal-save"
+    const val UPDATE_NOTICE = "now-update-notice"
+    const val UPDATE_OPEN = "now-update-open"
+    const val UPDATE_DISMISS = "now-update-dismiss"
 }
 
 /**
  * 지금 탭 화면. [work] 는 폰 근무 문(없으면 버튼 줄 없음). [characterID] 는 내 착용 캐릭터(나 탭이 아는 값 — 모르면 아잉).
  * [onTalk] 는 다른 팀 사람에게 말 걸기(메시지 탭 대화 열기 — 조립이 AingRoute.Message 로 연다). [onEditGoal] 은 주간 목표 시트를 연다.
+ * [onOpenUpdate] 는 새 버전 안내의 [업데이트] — Play 상세(조립이 AppLinks 의 주소로 연다).
  */
 @Composable
 fun NowScreen(
@@ -146,17 +153,23 @@ fun NowScreen(
     characterID: String?,
     onTalk: (String) -> Unit,
     onEditGoal: () -> Unit,
+    onOpenUpdate: () -> Unit,
     modifier: Modifier = Modifier,
     onOpenTeamRoster: () -> Unit = {},
 ) {
     val colors = AingTheme.colors
     LaunchedEffect(store) { store.tabDidAppear() }
+    // 최신 빌드는 실행 때 한 번 오는 Flow 값이라 구독해 둔다 — 그 한 번에 이 줄이 다시 판정된다.
+    val latestBuild by store.context.sessionStore.latestBuildFlow.collectAsState()
     val now = rememberNow(store.context.clock, everySeconds = 1)
     Box(modifier.fillMaxSize().background(colors.background).testTag(NowTags.SCREEN), contentAlignment = Alignment.TopCenter) {
         Column(Modifier.widthIn(max = READABLE_WIDTH).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = AingDimens.space8)) {
             Column(Modifier.padding(start = AingDimens.titleMargin, end = AingDimens.titleMargin, top = 8.dp, bottom = 4.dp)) {
                 Text(NowText.title, style = MaterialTheme.typography.headlineLarge, color = colors.label, modifier = Modifier.semantics { heading() })
                 Text(NowText.expandedSubtitle(NowFormat.longDate(now), store.membership?.teamName), style = MaterialTheme.typography.bodyMedium, color = colors.label2)
+            }
+            if (latestBuild != null && store.showsUpdateNotice) {
+                NowUpdateNoticeRow(onOpenUpdate, store::dismissUpdateNotice, Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 4.dp))
             }
             store.notice?.let { InlineNotice(it, NoticeKind.Warning, Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 4.dp)) }
             store.createdTeamCode?.let { code -> CreatedTeamSection(code, onConfirm = store::dismissCreatedTeamCode) }
@@ -184,6 +197,55 @@ private fun CreatedTeamSection(code: String, onConfirm: () -> Unit) {
         }
         CreatedTeamCard(code)
         AingButton(NowText.createdTeamConfirm, onConfirm, Modifier.testTag(NowTags.CREATED_TEAM_CONFIRM), fillsWidth = true)
+    }
+}
+
+// ---------------------------------------------------------------- 새 버전 안내
+
+/** 새 버전 안내 줄의 배치 규칙. 이 글꼴 배율부터 [업데이트] 를 제목 아래로 내린다(iOS `isAccessibilitySize` ≈ 시스템 글자 크기 최대 단계 이상 — 나 탭 `MeAILimitRowLayout` 과 같은 값). */
+object NowUpdateNoticeLayout {
+    const val STACK_FONT_SCALE: Float = 1.5f
+}
+
+/**
+ * 카드 한 줄(원본: Sources/CheckMobileKit/Now/NowTab.swift:147 NowUpdateNoticeRow @ 1a5eeca6): 글자 · [업데이트](틴트 — 채운 단추는 화면당 하나) · 닫기(X, 누름 영역 44dp).
+ * 세 요소를 합치지 않아 톡백이 두 단추에 따로 닿는다. 큰 글자에서는 [업데이트] 를 제목 아래로 내린다 — 한 줄에 두면 단추가 폭을 먼저 차지해 제목이 "새 / 버전…" 으로 잘린다.
+ */
+@Composable
+private fun NowUpdateNoticeRow(onOpen: () -> Unit, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    val stacked = LocalDensity.current.fontScale >= NowUpdateNoticeLayout.STACK_FONT_SCALE
+    val card = modifier.fillMaxWidth().background(colors.surface, RoundedCornerShape(AingDimens.groupRadius)).testTag(NowTags.UPDATE_NOTICE)
+    val title: @Composable (Modifier) -> Unit = { m ->
+        Text(NowText.updateNoticeTitle, style = MaterialTheme.typography.bodyMedium, color = colors.label, modifier = m)
+    }
+    val update: @Composable () -> Unit = {
+        AingButton(NowText.updateNoticeAction, onOpen, Modifier.testTag(NowTags.UPDATE_OPEN), kind = AingButtonKind.Tinted, size = AingButtonSize.Sm)
+    }
+    val dismiss: @Composable () -> Unit = {
+        Box(
+            Modifier.size(44.dp).clickable(role = Role.Button, onClick = onDismiss)
+                .semantics { contentDescription = NowText.updateNoticeDismiss }.testTag(NowTags.UPDATE_DISMISS),
+            contentAlignment = Alignment.Center,
+        ) {
+            AingIcon(sf("xmark", AppIcon.Close), null, size = 16.dp, tint = colors.label2)
+        }
+    }
+    if (stacked) {
+        // 행의 오른쪽 여백이 0 이라(X 가 카드 끝까지 간다) 단추만 여백을 따로 둔다.
+        Column(card.padding(start = 16.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Top) {
+                title(Modifier.weight(1f).padding(top = 8.dp))
+                dismiss()
+            }
+            Box(Modifier.padding(end = 16.dp)) { update() }
+        }
+    } else {
+        Row(card.padding(start = 16.dp, top = 4.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+            title(Modifier.weight(1f))
+            update()
+            dismiss()
+        }
     }
 }
 
@@ -274,9 +336,8 @@ object NowWorkLines {
         return when (origin) {
             NowWorkOrigin.phone -> listOf(NowText.phoneWorkCaption(checkAfterSeconds))
             NowWorkOrigin.mac -> listOf(NowText.macWorkCaption)
-            // int-j(W2-f 패치 0003 의 windows 갈래): iOS 에는 짝이 없고 문구도 정하지 않았다 — 상태 글자('PC에서 근무 중')만 보이고
-            //   안내 줄은 비운다(맥 문구로 접지 않는다). Windows 앱은 보류(§8-16)라 지금 서버가 이 값을 싣는 일은 없다.
-            NowWorkOrigin.windows, NowWorkOrigin.unknown -> emptyList()
+            NowWorkOrigin.windows -> listOf(NowText.pcWorkCaption)
+            NowWorkOrigin.unknown -> emptyList()
         }
     }
 

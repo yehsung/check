@@ -18,7 +18,8 @@ class NowWorkLinesTest {
         assertEquals(listOf(NowText.phoneWorkCaption(5400)), NowWorkLines.lines(false, true, NowWorkOrigin.phone, 5400))
         assertEquals(listOf(NowText.macWorkCaption), NowWorkLines.lines(false, true, NowWorkOrigin.mac, null))
         assertEquals(emptyList<String>(), NowWorkLines.lines(false, true, NowWorkOrigin.unknown, null))
-        assertEquals("Windows 가 연 근무를 맥 안내로 접었다(int-j)", emptyList<String>(), NowWorkLines.lines(false, true, NowWorkOrigin.windows, null))
+        assertEquals("Windows 가 연 근무는 PC 안내 줄이다(맥 안내로 접지 않는다)", listOf(NowText.pcWorkCaption), NowWorkLines.lines(false, true, NowWorkOrigin.windows, null))
+        assertEquals("PC에서 연 근무예요 · 여기서 끝낼 수도 있어요", NowText.pcWorkCaption)
     }
 
     @Test

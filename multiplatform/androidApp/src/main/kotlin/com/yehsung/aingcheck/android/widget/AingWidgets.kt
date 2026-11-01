@@ -1,5 +1,5 @@
 // 원본: Sources/CheckWidgetsKit/Widgets/AingWidgets.swift @ 3bd04bd (위젯 셋 — 지금 근무 중 S·M · 내 오늘 S · 오늘 할 일 M·L, ToggleTodoIntent)
-// 원본: Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift @ 3bd04bd (AI 리밋 M)
+// 원본: Sources/CheckWidgetsKit/Widgets/AingLimitsWidget.swift @ 3bd04bd (AI 리밋 M) · 없는 칸 글자·해치 @ 4137751e
 // 원본: ios/Widgets/AingCheckWidgetsBundle.swift @ 3bd04bd (위젯 묶음 — 넷을 나열)
 //
 // Glance 위젯 4종(E§7.1). 그리는 값은 [AingWidgetRuntime.faces](조립이 W2-f 스냅숏으로 꽂는다)뿐이고, 네트워크는 할 일 체크의 `todo_sync` 한 번뿐이다
@@ -13,8 +13,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.glance.ColorFilter
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 import androidx.glance.LocalContext
 import androidx.glance.LocalSize
 import androidx.glance.action.ActionParameters
@@ -52,10 +55,12 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextDecoration
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
+import com.yehsung.aingcheck.android.R
 import com.yehsung.aingcheck.android.routing.RouteIntents
 import com.yehsung.aingcheck.android.routing.RouteRequest
 import com.yehsung.aingcheck.core.rules.ailimit.AILimitFreshnessRule
 import com.yehsung.aingcheck.ui.screens.me.AILimitUsageStage
+import com.yehsung.aingcheck.ui.screens.me.MeAILimitColumnColor
 import com.yehsung.aingcheck.ui.theme.AingColors
 
 /**
@@ -189,6 +194,10 @@ internal object WidgetInk {
     val offWorkDot = pair { it.offWorkDot }
     val aiToken = pair { it.aiToken }
     val danger = pair { it.danger }
+
+    /** 그 창이 없는 칸 — 폰 카드와 **같은 한 표**(`MeAILimitColumnColor`)다. */
+    val limitAbsentText = pair { MeAILimitColumnColor.absentText(it) }
+    val limitAbsentTrack = pair { MeAILimitColumnColor.absentTrack(it) }
 
     fun tone(tone: WidgetTone): ColorProvider = when (tone) {
         WidgetTone.Working -> working
@@ -484,9 +493,9 @@ private fun AILimitsContent(face: AILimitsFace) {
             face.rows.take(AingWidgetLayout.LIMIT_ROWS_MEDIUM).forEach { row ->
                 Row(GlanceModifier.fillMaxWidth().height(28.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(row.providerName, style = style(13, FontWeight.Medium), maxLines = 1, modifier = GlanceModifier.defaultWeight())
-                    LimitValue(row.fiveHourText, row.fiveHourPercent)
+                    LimitValue(row.fiveHourText, row.fiveHourPercent, row.fiveHourAbsent)
                     Spacer(GlanceModifier.width(10.dp))
-                    LimitValue(row.weeklyText, row.weeklyPercent)
+                    LimitValue(row.weeklyText, row.weeklyPercent, row.weeklyAbsent)
                 }
             }
             Spacer(GlanceModifier.defaultWeight())
@@ -517,16 +526,48 @@ object LimitsHeaderLine {
     }
 }
 
-/** 값 칸(글자 — 사용량 단계는 글자 색이 말한다: 70 이상 주의 · 90 이상 위험, 모르는 값은 평온). */
+/**
+ * 값 칸(글자 — 사용량 단계는 글자 색이 말한다: 70 이상 주의 · 90 이상 위험, 모르는 값은 평온).
+ * 그 창이 **없는** 칸만 글자 앞에 사선 해치 트랙을 둔다([absent] — `display == null`. 0% · 판정 불가는 값이 있거나 창이 있는 칸이라 안 받는다).
+ * 이 위젯의 값 칸에는 바가 없어(글자만) 해치가 바를 대신해 색이 아닌 단서가 된다.
+ */
 @Composable
-private fun LimitValue(text: String, percent: Double?) {
+private fun LimitValue(text: String, percent: Double?, absent: Boolean) {
     // 경계·반올림은 폰 카드와 한 벌(ui AILimitUsageStage · 코어 wholePercent) — 글자가 `90%` 라고 적으면 색도 거기서 갈린다.
-    val color = if (percent == null) WidgetInk.tertiary else when (AILimitUsageStage.stage(AILimitFreshnessRule.wholePercent(percent))) {
-        AILimitUsageStage.calm -> WidgetInk.primary
-        AILimitUsageStage.warn -> WidgetInk.pending
-        AILimitUsageStage.danger -> WidgetInk.danger
+    val color = when {
+        absent -> WidgetInk.limitAbsentText
+        percent == null -> WidgetInk.tertiary
+        else -> when (AILimitUsageStage.stage(AILimitFreshnessRule.wholePercent(percent))) {
+            AILimitUsageStage.calm -> WidgetInk.primary
+            AILimitUsageStage.warn -> WidgetInk.pending
+            AILimitUsageStage.danger -> WidgetInk.danger
+        }
     }
     Box(GlanceModifier.width(62.dp), contentAlignment = Alignment.CenterEnd) {
-        Text(text, style = style(12, FontWeight.Bold, color), maxLines = 1)
+        if (absent) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                LimitAbsentHatch()
+                Spacer(GlanceModifier.width(4.dp))
+                Text(text, style = style(12, FontWeight.Bold, color), maxLines = 1)
+            }
+        } else {
+            Text(text, style = style(12, FontWeight.Bold, color), maxLines = 1)
+        }
+    }
+}
+
+/**
+ * 없는 칸의 트랙 + 45° 사선(폰 카드 `MeAILimitBar` 와 같은 세 수 — 4 · 1 · 0.45). 위젯은 RemoteViews 라 Canvas 가 없어 벡터 자원이다. 사선의 불투명도는 자원 안에 있고
+ * 틴트는 불투명한 `없음` 글자 색이다(ImageView 색 필터는 SRC_ATOP — 자원의 알파가 그대로 남는다). 수는 시험(AingWidgetRenderTest)이 자원 글자에서 되묻는다.
+ */
+@Composable
+private fun LimitAbsentHatch() {
+    Box(GlanceModifier.size(AingWidgetLayout.LIMIT_HATCH_WIDTH.dp, AingWidgetLayout.LIMIT_HATCH_HEIGHT.dp).cornerRadius((AingWidgetLayout.LIMIT_HATCH_HEIGHT / 2).dp).background(WidgetInk.limitAbsentTrack)) {
+        Image(
+            provider = ImageProvider(R.drawable.widget_ailimit_absent_hatch),
+            contentDescription = null,
+            modifier = GlanceModifier.fillMaxSize(),
+            colorFilter = ColorFilter.tint(WidgetInk.limitAbsentText),
+        )
     }
 }

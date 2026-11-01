@@ -136,7 +136,7 @@
       ]
     },
     {
-      "cases": 13,
+      "cases": 14,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift",
       "golden": "dates/ailimit",

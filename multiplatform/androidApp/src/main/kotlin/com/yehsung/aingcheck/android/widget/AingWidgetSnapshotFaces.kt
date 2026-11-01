@@ -86,9 +86,11 @@ class AingWidgetSnapshotFaces(private val read: () -> AingWidgetInput?) : AingWi
                             fiveHourText = AingWidgetLimitFormat.valueText(five),
                             fiveHourPercent = five?.percent,
                             fiveHourFloorOnly = five?.floorOnly ?: false,
+                            fiveHourAbsent = five == null,
                             weeklyText = AingWidgetLimitFormat.valueText(week),
                             weeklyPercent = week?.percent,
                             weeklyFloorOnly = week?.floorOnly ?: false,
+                            weeklyAbsent = week == null,
                         )
                     },
                     deviceName = header?.name,

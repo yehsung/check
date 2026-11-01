@@ -76,15 +76,20 @@ sealed interface TodosFace {
     ) : TodosFace
 }
 
-/** 리밋 한 줄(제공자 하나 · 두 창 나란히). [fiveHourPercent] null = 그 창이 없다(글자 `없음`) 또는 판정 불가(글자 `—`) — 글자는 [fiveHourText] 가 말한다. */
+/**
+ * 리밋 한 줄(제공자 하나 · 두 창 나란히). [fiveHourPercent] null = 그 창이 없다(글자 `없음`) 또는 판정 불가(글자 `—`) — 글자는 [fiveHourText] 가 말한다.
+ * [fiveHourAbsent] · [weeklyAbsent] = **그 창이 없다**(`display == null` — 사선 해치 · 없음 색). 판정 불가와 다른 사실이라 퍼센트로 가르지 않는다. **기본값을 주지 않는다**(4137751e).
+ */
 data class LimitRowFace(
     val providerName: String,
     val fiveHourText: String,
     val fiveHourPercent: Double?,
     val fiveHourFloorOnly: Boolean,
+    val fiveHourAbsent: Boolean,
     val weeklyText: String,
     val weeklyPercent: Double?,
     val weeklyFloorOnly: Boolean,
+    val weeklyAbsent: Boolean,
 )
 
 sealed interface AILimitsFace {

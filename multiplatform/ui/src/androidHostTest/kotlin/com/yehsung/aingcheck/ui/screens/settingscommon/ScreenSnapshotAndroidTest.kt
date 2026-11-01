@@ -108,6 +108,16 @@ class ScreenSnapshotAndroidTest {
         maxBaselineRatio = 2,
     )
 
+    /** 그 창이 없는 칸(더 조용한 트랙 · 45° 해치 · 읽히는 `없음` · 캡션 둘째 문장 — 4137751e). 기준선 = 같은 줄의 5시간 0%(값이 있는 칸은 해치를 안 받는다). */
+    private fun aiLimitsAbsent(dark: Boolean) = check(
+        "screens/me", "me-ailimits-absent-${theme(dark)}", AI_ABSENT_H,
+        scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent", it) },
+        scene(dark, AI_ABSENT_H) { AILimitsTableScene("absent-zero", it) },
+    )
+
+    @Test fun aiLimitsAbsentLight() = aiLimitsAbsent(false)
+    @Test fun aiLimitsAbsentDark() = aiLimitsAbsent(true)
+
     // ---------------------------------------------------------------- 설정 · 계정 삭제
 
     private fun settings(dark: Boolean) {
@@ -306,6 +316,7 @@ class ScreenSnapshotAndroidTest {
         const val ME_H = 1400
         const val SETTINGS_H = 1640
         const val DELETION_H = 580
+        const val AI_ABSENT_H = 200
         const val AI_H = 330
         const val GRASS_H = 860
         const val PICKER_H = 980

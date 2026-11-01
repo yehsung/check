@@ -21777,6 +21777,68 @@
       ]
     },
     {
+      "id": "device-platforms",
+      "mixedParts": {
+        "DEVICE-A1B2": {
+          "base": "이름 모를 맥 A1B2",
+          "combined": "이름 모를 맥 A1B2",
+          "tail": null
+        },
+        "win:0000-0000-0000-a1b2": {
+          "base": "이름 모를 PC A1B2",
+          "combined": "이름 모를 PC A1B2",
+          "tail": null
+        }
+      },
+      "rows": [
+        {
+          "baseName": "이름 모를 PC A1B2",
+          "deviceID": "win:0b7e4b1c-1111-2222-3333-44445555a1b2",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "windows"
+        },
+        {
+          "baseName": "이름 모를 맥 :ABC",
+          "deviceID": "WIN:abc",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "mac"
+        },
+        {
+          "baseName": "이름 모를 맥 :ABC",
+          "deviceID": "Win:abc",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "mac"
+        },
+        {
+          "baseName": "이름 모를 맥 0000",
+          "deviceID": "A0A0A0A0-0000-0000-0000-000000000000",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "mac"
+        },
+        {
+          "baseName": "이름 모를 맥 ",
+          "deviceID": "",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "mac"
+        },
+        {
+          "baseName": "이름 모를 맥 ER:1",
+          "deviceID": "winner:1",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "mac"
+        },
+        {
+          "baseName": "이름 모를 맥 9F8E",
+          "deviceID": "DEVICE-9F8E",
+          "namedBaseName": "DESKTOP-4F2K",
+          "platform": "mac"
+        }
+      ],
+      "unnamedPCPrefix": "이름 모를 PC",
+      "unnamedPrefix": "이름 모를 맥",
+      "windowsPrefix": "win:"
+    },
+    {
       "id": "fingerprints",
       "rows": [
         {

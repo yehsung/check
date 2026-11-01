@@ -10,13 +10,16 @@ import android.graphics.Canvas
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.compose.ui.unit.DpSize
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.compose
 import androidx.test.core.app.ApplicationProvider
+import com.yehsung.aingcheck.ui.screens.me.MeAILimitColumnColor
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,9 +58,9 @@ class AingWidgetRenderTest {
         )
         override fun aiLimits(nowMillis: Long) = AILimitsFace.Limits(
             rows = listOf(
-                LimitRowFace("Claude", "27%", 27.0, false, "60%", 60.0, false),
-                LimitRowFace("Codex", "0%", 0.0, false, "94%", 94.0, false),
-                LimitRowFace("안티그래비티", "없음", null, false, "8%", 8.0, false),
+                LimitRowFace("Claude", "27%", 27.0, false, false, "60%", 60.0, false, false),
+                LimitRowFace("Codex", "0%", 0.0, false, false, "94%", 94.0, false, false),
+                LimitRowFace("안티그래비티", "없음", null, false, true, "8%", 8.0, false, false),
             ),
             deviceName = null, tokenToday = "2,595만", tokenRecent = "24.1억", ago = "2분 전",
         )
@@ -180,6 +183,87 @@ class AingWidgetRenderTest {
         AingWidgetRuntime.faces = AingWidgetSnapshotFaces { null }
         val signedOut = texts(render(WorkingNowWidget(), AingWidgetSizes.medium, "snapshot-working-now-signed-out"))
         assertFalse("로그아웃인데 스냅숏 값을 그렸다: $signedOut", signedOut.any { it == "민트" || it == "6명" })
+    }
+
+    private fun allViews(view: View): List<View> = listOf(view) + ((view as? ViewGroup)?.let { g -> (0 until g.childCount).flatMap { allViews(g.getChildAt(it)) } } ?: emptyList())
+
+    /** 사선 ImageView = 트랙 높이(6dp)의 그림 — Glance 가 바탕에 쓰는 ImageView 는 칸을 채운다. */
+    private fun hatchViews(views: List<View>): List<ImageView> {
+        val height = (AingWidgetLayout.LIMIT_HATCH_HEIGHT * context.resources.displayMetrics.density).toInt()
+        return views.filterIsInstance<ImageView>().filter { it.height in 1..height }
+    }
+
+    private fun limitsFace(vararg rows: LimitRowFace) = object : AingWidgetFaceSource by sample {
+        override fun aiLimits(nowMillis: Long) = AILimitsFace.Limits(rows = rows.toList(), deviceName = null, tokenToday = null, tokenRecent = null, ago = "2분 전")
+    }
+
+    /**
+     * 원본: Tests/CheckMobileKitTests/WidgetAILimitsTests.swift(absentCellKeepsItsCueWhenTheWidgetDropsColor) @ 4137751e — 없는 칸만 사선을 받는다(0% · 판정 불가는 안 받는다) ·
+     * `없음` 글자는 없는 칸 색이다. 기준선(다른 입력): 같은 자리가 0% 면 사선 0 · `—` 면 사선 0(값·창이 있는 칸).
+     */
+    @Test
+    fun onlyTheAbsentCellGetsTheHatch() {
+        AingWidgetRuntime.faces = limitsFace(
+            LimitRowFace("안티그래비티", "없음", null, false, true, "8%", 8.0, false, false),
+            LimitRowFace("코덱스", "없음", null, false, true, "없음", null, false, true),
+        )
+        val absent = allViews(render(AILimitsWidget(), AingWidgetSizes.medium, "ai-limits-absent"))
+        val hatches = hatchViews(absent)
+        assertEquals("없는 칸 셋에 사선 셋이 서야 한다", 3, hatches.size)
+        assertTrue("사선에 틴트가 없다", hatches.all { it.colorFilter != null || it.imageTintList != null })
+        val labels = absent.filterIsInstance<TextView>().filter { it.text.toString() == "없음" }
+        assertEquals(3, labels.size)
+        assertTrue("`없음` 글자가 없는 칸 색이 아니다", labels.all { it.currentTextColor == 0xFF717176.toInt() })
+        // 사선이 실제로 칠해졌다(트랙만 있는 그림과 달라야 한다) — 자원이 비어도 ImageView 는 선다.
+        val hatch = hatches.first()
+        val bitmap = Bitmap.createBitmap(hatch.width, hatch.height, Bitmap.Config.ARGB_8888)
+        hatch.draw(Canvas(bitmap))
+        val painted = (0 until bitmap.width).sumOf { x -> (0 until bitmap.height).count { y -> (bitmap.getPixel(x, y) ushr 24) != 0 } }
+        assertTrue("사선이 칠해지지 않았다", painted > 0)
+
+        AingWidgetRuntime.faces = limitsFace(
+            LimitRowFace("Codex", "0%", 0.0, false, false, "94%", 94.0, false, false),
+            LimitRowFace("Claude", "—", null, false, false, "60%", 60.0, false, false),
+        )
+        val zero = allViews(render(AILimitsWidget(), AingWidgetSizes.medium, "ai-limits-zero"))
+        assertEquals("0% · 판정 불가 칸이 사선을 받았다", 0, hatchViews(zero).size)
+    }
+
+    /** 스냅숏 → 얼굴: 깃발은 `display == null` 하나다 — 0% 는 값이 있는 칸이고 주간만 오는 줄의 5시간은 빈 칸이다. */
+    @Test
+    fun snapshotFacesCarryAbsenceByDisplayNull() {
+        val now = com.yehsung.aingcheck.core.wire.SwiftDate(1_789_621_500.0)
+        fun at(seconds: Double) = com.yehsung.aingcheck.core.wire.SwiftDate(now.timeIntervalSince1970 + seconds)
+        val panel = com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetPanel(
+            providers = listOf(
+                com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetRow("codex", 0.0, null, 94.0, at(200_000.0), at(-60.0)),
+                com.yehsung.aingcheck.core.stores.me.MeAILimitWidgetRow("antigravity", null, null, 8.0, at(500_000.0), at(-60.0)),
+            ),
+            deviceName = null, deviceNameTail = null, todayTokens = null, recentTokens = null,
+        )
+        val input = AingWidgetInput(generatedAt = now, aiLimits = panel)
+        val face = AingWidgetSnapshotFaces { input }.aiLimits((now.timeIntervalSince1970 * 1000).toLong()) as AILimitsFace.Limits
+        val codex = face.rows.single { it.fiveHourText == "0%" }
+        assertFalse("0% 칸이 없는 칸으로 접혔다", codex.fiveHourAbsent)
+        val antigravity = face.rows.single { it.fiveHourText == "없음" }
+        assertTrue("주간만 오는 줄의 5시간 칸이 없는 칸이 아니다", antigravity.fiveHourAbsent)
+        assertFalse(antigravity.weeklyAbsent)
+    }
+
+    /** 사선 자원의 수가 폰 카드와 같은 세 수다(자원 글자에서 되묻는다 — 두 벌이 갈리면 세 화면이 다른 해치를 그린다). */
+    @Test
+    fun hatchResourceMatchesTheSharedNumbers() {
+        val mp = File(requireNotNull(System.getProperty("aingcheck.mpRoot")))
+        val xml = File(mp, "androidApp/src/main/res/drawable/widget_ailimit_absent_hatch.xml").readText().substringAfter("-->")
+        assertTrue(xml, "android:width=\"${AingWidgetLayout.LIMIT_HATCH_WIDTH}dp\"" in xml && "android:height=\"${AingWidgetLayout.LIMIT_HATCH_HEIGHT}dp\"" in xml)
+        assertTrue(xml, "android:strokeWidth=\"${MeAILimitColumnColor.absentHatchLineWidth.toInt()}\"" in xml)
+        assertTrue(xml, "android:strokeAlpha=\"${MeAILimitColumnColor.absentHatchOpacity}\"" in xml)
+        assertTrue("사선이 트랙 캡슐 밖으로 삐져나간다", "<clip-path" in xml)
+        val height = AingWidgetLayout.LIMIT_HATCH_HEIGHT
+        val segments = Regex("""M(-?\d+),${height}L(-?\d+),0""").findAll(xml).map { it.groupValues[1].toInt() to it.groupValues[2].toInt() }.toList()
+        val starts = MeAILimitColumnColor.absentHatchStarts(AingWidgetLayout.LIMIT_HATCH_WIDTH.toFloat(), height.toFloat(), MeAILimitColumnColor.absentHatchSpacing.toFloat()).map { it.toInt() }
+        assertEquals("사선 시작점이 폰 카드 산식과 갈렸다", starts, segments.map { it.first })
+        assertTrue("사선이 45° 가 아니다", segments.all { (from, to) -> to - from == height })
     }
 
     /** 사람 칸 배치(열 먼저 · 6칸 상한)와 할 일 줄 소리. */

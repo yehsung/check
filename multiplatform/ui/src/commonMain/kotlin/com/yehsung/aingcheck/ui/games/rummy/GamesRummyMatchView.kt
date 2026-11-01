@@ -10,6 +10,7 @@
 //
 // ── 성능 ──
 // 이 본문은 손이 움직여도 다시 돌지 않는다 — 보기 · 손가락 자리를 조립 단계에서 읽지 않는다(층 · 그리기 단계만, 판 위 조작은 파생값만). 시간은 잎의 고리, 잠깐 떴다 사라지는 표시는 열쇠가 안 바뀌는 효과다(맥 0.3.69 재생성 고리 금지).
+// 모션(설계서 §7 · 값은 GamesRummyMotion): 뽑기 비행 · 정렬 시차는 받침대가, 판 변화는 판 칸이 그린다. 이 뷰는 사건을 넘긴다. 동작 줄이기면 모두 꺼진다.
 //
 // VoiceOver 몫: 끌기 대안(타일 고르기 → 판에 놓기)은 이번 범위 밖이다(설계서 §4). 라벨(면 · 장수 · 차례 · 남은 초)과 [완료 · 뽑기 · 되돌리기 · 나가기] 버튼 동작은 있다.
 package com.yehsung.aingcheck.ui.games.rummy
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,11 +55,13 @@ import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasPoint
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasRect
 import com.yehsung.aingcheck.core.rules.rummy.RummyCanvasSize
 import com.yehsung.aingcheck.core.rules.rummy.RummyRackLayout
+import com.yehsung.aingcheck.core.rules.rummy.RummyRackSort
 import com.yehsung.aingcheck.core.rules.rummy.RummySeatFace
 import com.yehsung.aingcheck.core.rules.rummy.rackMelds
 import com.yehsung.aingcheck.core.stores.rummy.RummyEditorKey
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.isEngagedInCurrentMatch
+import com.yehsung.aingcheck.core.stores.rummy.sortRack
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.games.RummyMatchStatus
 import com.yehsung.aingcheck.ui.theme.AingMotion
@@ -69,6 +73,7 @@ object GamesRummyMatchTags {
     const val INPUT: String = "rummy.match.input"
     const val BOARD: String = "rummy.match.board"
     const val BOARD_LAYER: String = "rummy.match.boardLayer"
+    const val BOARD_MOTION: String = "rummy.match.boardMotion"
     const val RACK: String = "rummy.match.rack"
     const val RACK_REFUSED: String = "rummy.match.rackRefused"
     const val STATUS: String = "rummy.match.status"
@@ -135,12 +140,14 @@ fun GamesRummyMatchView(
         val anchors = LocalGamesRummyReactionAnchors.current
         val cue = rememberGamesRummyTurnCue(if (isMyTurn && match.status == RummyMatchStatus.active) RummyEditorKey.of(match).text else null, reduceMotion)
         val fresh = rememberGamesRummyFreshDraw(rummy)
+        val flight = rememberGamesRummyDrawFlight(rummy, reduceMotion)
+        val sorting = rememberGamesRummySortMotion(rummy, reduceMotion)
         val mine = GamesRummySeats.mine(match)
         val line = GamesRummyStatusLine.make(rummy.notice, isMyTurn, editor, GamesRummySeats.turnSeat(match)?.displayName, mine?.state)
         val plan = gamesRummyPlanLine(editor, isMyTurn)
         Box(Modifier.fillMaxSize()) {
             // 그림 층 — 손을 안 받는다.
-            GamesRummyTablePane(model, scene, context.editable, Modifier.atRect(layout.table).testTag(GamesRummyMatchTags.BOARD))
+            GamesRummyTablePane(model, scene, context.editable, Modifier.atRect(layout.table).testTag(GamesRummyMatchTags.BOARD), reduceMotion = reduceMotion)
             Box(Modifier.atRect(layout.table)) {
                 GamesRummyTableStrip(match, isMyTurn, otherDraft != null, Modifier.align(Alignment.BottomStart).fillMaxWidth())
                 // 묶음은 위부터 깔린다 — 안내가 타일을 가리지 않게 아래쪽(직전 사건 줄 위)에.
@@ -165,6 +172,9 @@ fun GamesRummyMatchView(
                 freshIDs = fresh,
                 reduceMotion = reduceMotion,
                 modifier = Modifier.atRect(layout.rack).rummyReactionAnchor(anchors, match.mySeatNo).testTag(GamesRummyMatchTags.RACK),
+                flight = flight,
+                flightOrigin = layout.drawOrigin(textScale),
+                stagger = sorting.stagger,
             )
             // 입력 층 — 화면 전체. 위 줄들은 포인터 수식어가 없어 그대로 지나오고, 아래 버튼 층이 이 층보다 먼저 눌린다.
             Box(Modifier.matchParentSize().testTag(GamesRummyMatchTags.INPUT).rummyTouchInput(model, rummy))
@@ -172,7 +182,7 @@ fun GamesRummyMatchView(
             GamesRummyMatchHeader(rummy, match, onBack, onRules, now, Modifier.atRect(layout.header))
             GamesRummyOpponentRow(rummy, match, now, Modifier.atRect(layout.opponents))
             GamesRummyTableControls(model, scene.layout.frames, reduceMotion, Modifier.atRect(layout.table), badgeLift = if (engaged) 36 else 104)
-            GamesRummyActionRow(rummy, match, editor, isMyTurn, layout.size.width, textScale, now, Modifier.atRect(layout.actions))
+            GamesRummyActionRow(rummy, match, editor, isMyTurn, layout.size.width, textScale, now, sorting::sort, Modifier.atRect(layout.actions))
             // 손에 든 타일 — 맨 위.
             GamesRummyFloatingBlock(model, Modifier.fillMaxSize())
         }
@@ -320,6 +330,47 @@ private fun rememberGamesRummyTurnCue(key: String?, reduceMotion: Boolean): Game
         badge = false
     }
     return GamesRummyTurnCue(glow, badge)
+}
+
+/** 날아오는 뽑기. 사건이 오면 정해진 시간 뒤 닫는다 — 효과는 사건 번호에만 묶이고 그 번호를 쓰지 않는다. 돌아왔을 때 옛 뽑기를 다시 날리지 않는다. */
+@Composable
+private fun rememberGamesRummyDrawFlight(rummy: RummyStore, reduceMotion: Boolean): GamesRummyRackFlight? {
+    val event = rummy.lastDraw
+    val serial = event?.serial
+    var done by remember { mutableStateOf(serial) }
+    LaunchedEffect(serial) {
+        if (serial == null || serial == done) return@LaunchedEffect
+        delay(GamesRummyRackMotion.flightMillis)
+        done = serial
+    }
+    return GamesRummyRackMotion.flight(event, done, reduceMotion)
+}
+
+/** 정렬 시차 — 정렬 직전에 정하고 잠깐 뒤 비운다(안 비우면 끼워 넣기 미리보기까지 늦는다). */
+@Stable
+private class GamesRummySortMotion(private val rummy: RummyStore) {
+    var stagger: Map<Int, Long> by mutableStateOf(emptyMap())
+    var serial: Int by mutableStateOf(0)
+    var reduceMotion: Boolean = false
+
+    fun sort(mode: RummyRackSort) {
+        val editor = rummy.editor
+        stagger = if (!reduceMotion && editor != null) GamesRummyRackMotion.sortStagger(editor, mode) else emptyMap()
+        serial += 1
+        rummy.sortRack(mode)
+    }
+}
+
+@Composable
+private fun rememberGamesRummySortMotion(rummy: RummyStore, reduceMotion: Boolean): GamesRummySortMotion {
+    val motion = remember(rummy) { GamesRummySortMotion(rummy) }
+    motion.reduceMotion = reduceMotion
+    LaunchedEffect(motion, motion.serial) {
+        if (motion.serial == 0) return@LaunchedEffect
+        delay(GamesRummyRackMotion.staggerClearMillis)
+        motion.stagger = emptyMap()
+    }
+    return motion
 }
 
 /** 방금 뽑은 타일(3초 빛남). 돌아왔을 때 옛 뽑기를 다시 빛내지 않는다. */

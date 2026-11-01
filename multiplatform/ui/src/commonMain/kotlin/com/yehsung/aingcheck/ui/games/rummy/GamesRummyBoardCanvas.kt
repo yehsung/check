@@ -8,9 +8,12 @@
 //   ② **밀기는 다시 그리지 않는다.** 층을 캔버스 전체 크기(+ 손잡이 자리)로 한 번 그려 두고 graphicsLayer 로 옮긴다 — 보기는 그리기 단계 밖(층 단계)에서만 읽는다.
 //   ③ **핀치도 프레임마다 다시 그리지 않는다.** 그린 배율(renderScale)은 두고 층을 키운 뒤, 손을 떼면 그 배율로 또렷하게 다시 그린다.
 //   ④ **끌기 중에는 안 다시 그린다.** 손가락 자리는 떠 있는 타일 층만 읽고, 판 층 입력은 끌기가 시작 · 끝날 때만 바뀐다. 자석 · 캐럿 · 점선은 이 층 위의 따로 된 층이다.
+//   ⑤ **판 변화 모션**(설계서 §7)은 움직이는 칸만 판 층에서 비우고 위 층 Canvas 에 그린다 — 옮기는 동안 판 층은 안 다시 그린다. 동작 줄이기 · 끄는 중엔 없다.
 // 타일 모양 치수는 GamesRummyTile 과 같은 RummyTileSize 에서 나온다(몸체 · 표식 그리기 산식은 GamesRummyTile.kt 와 같은 값 — 그쪽 그리기 함수가 private 이라 여기 한 벌 있다).
 package com.yehsung.aingcheck.ui.games.rummy
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.animate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -30,11 +33,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -236,25 +242,83 @@ internal object GamesRummyBoardLayer {
 
 /** 판 칸 — 펠트 · 판 층(옮기기만) · 미리보기 층. 칸 크기는 부르는 쪽이 정하고 [GamesRummyMatchModel.viewport] 를 그린다. */
 @Composable
-internal fun GamesRummyTablePane(model: GamesRummyMatchModel, scene: GamesRummyBoardScene, editable: Boolean, modifier: Modifier = Modifier) {
+internal fun GamesRummyTablePane(model: GamesRummyMatchModel, scene: GamesRummyBoardScene, editable: Boolean, modifier: Modifier = Modifier, reduceMotion: Boolean = false) {
     val summary = GamesRummyMatchText.boardSummary(scene.melds.size, scene.tileCount)
+    val motion = rememberGamesRummyBoardMotion(model, scene.melds, reduceMotion)
     Box(
         modifier
             .clip(RoundedCornerShape(14.dp))
             .semantics { contentDescription = summary },
     ) {
         GamesRummyTableSurface(Modifier.fillMaxSize(), cornerRadius = 14.dp)
-        GamesRummyBoardCanvas(model, scene, editable)
+        GamesRummyBoardCanvas(model, scene, editable, motion?.motion?.hidden ?: emptySet())
+        if (motion != null) GamesRummyBoardMotionCanvas(model, motion, Modifier.fillMaxSize().testTag(GamesRummyMatchTags.BOARD_MOTION))
         GamesRummyPreviewCanvas(model, scene, Modifier.fillMaxSize())
+    }
+}
+
+/** 판 변화 한 번을 그리는 값 — 진행도는 그리기 단계에서만 읽는다. */
+@Stable
+private class GamesRummyBoardMotionRun(val motion: GamesRummyBoardMotion, val progress: Animatable<Float, AnimationVector1D>)
+
+/** 앞 판을 기억해 두는 자리. 그리는 값이 아니라 상태가 아니다. */
+private class GamesRummyBoardMotionTracker(var melds: List<RummyBoardMeld>)
+
+/**
+ * 판이 바뀌었다 — 움직인 타일을 옛 자리에 세웠다가 새 자리로 보낸다(맥 slide 와 같은 스프링). 끝나면 판 층이 다시 그린다. 끄는 중 · 동작 줄이기면 없다.
+ * **조립 중에** 옛 판 → 새 판을 잰다 — 효과까지 미루면 새 자리를 한 프레임 보였다가 옛 자리로 돌아간다. 손가락 · 놓은 기록은 관찰 값이 아니라 끄는 동안 이 자리가 다시 돌지 않는다.
+ * 효과의 열쇠는 이 모션 값이고 효과는 끝났다는 표시만 쓴다(재생성 고리 없음).
+ */
+@Composable
+private fun rememberGamesRummyBoardMotion(model: GamesRummyMatchModel, melds: List<RummyBoardMeld>, reduceMotion: Boolean): GamesRummyBoardMotionRun? {
+    val tracker = remember { GamesRummyBoardMotionTracker(melds) }
+    val motion = remember(melds) {
+        val old = tracker.melds
+        tracker.melds = melds
+        if (reduceMotion || model.machine.drag != null) null else GamesRummyBoardMotion.make(old, melds, model.recentDropIDs)
+    }
+    val run = remember(motion) { motion?.let { GamesRummyBoardMotionRun(it, Animatable(0f)) } }
+    var finished by remember { mutableStateOf<GamesRummyBoardMotionRun?>(null) }
+    LaunchedEffect(run) {
+        if (run == null) return@LaunchedEffect
+        run.progress.animateTo(1f, GamesRummySpring.board())
+        finished = run
+    }
+    return run.takeIf { it !== finished }
+}
+
+/** 움직이는 타일만 — 많아야 GamesRummyBoardMotion.maxMoves 장. 판 층과 같은 붓 · 같은 크기 값. */
+@Composable
+private fun GamesRummyBoardMotionCanvas(model: GamesRummyMatchModel, run: GamesRummyBoardMotionRun, modifier: Modifier) {
+    val painters = rememberGamesRummyTilePainters()
+    val joker = LocalGamesRummyArt.current?.joker
+    Canvas(modifier.clearAndSetSemantics { }) {
+        val transform = model.viewport.transform
+        val tileW = RummyTableLayout.tileWidth.toDouble() * transform.scale
+        val tileH = RummyTableLayout.tileHeight.toDouble() * transform.scale
+        val inset = maxOf(1.0, tileW * 0.05)
+        val painter = painters.of(RummyCanvasSize(tileW - inset, tileH - inset))
+        val progress = run.progress.value.toDouble()
+        for (move in run.motion.moves) {
+            val at = transform.toScreen(move.at(progress))
+            painter.paint(
+                this,
+                move.face,
+                ((at.x + inset / 2) * density).toFloat(),
+                ((at.y + inset / 2) * density).toFloat(),
+                joker,
+                highlighted = move.highlighted,
+            )
+        }
     }
 }
 
 /**
  * 묶음 · 타일 · 손잡이 Canvas 한 장. 그리는 동안 [GamesRummyMatchModel.renderScale] · 끌기 값만 읽고 보기는 층 단계에서만 읽는다(밀기 · 핀치에 다시 안 그린다).
- * [editable] 이면 손잡이를 그린다 — 읽기 전용 판(결과 최종 판 · 남의 차례)은 그리지 않는다.
+ * [editable] 이면 손잡이를 그린다 — 읽기 전용 판(결과 최종 판 · 남의 차례)은 그리지 않는다. [hidden] = 판 변화 모션이 위 층에 대신 그리는 칸.
  */
 @Composable
-internal fun GamesRummyBoardCanvas(model: GamesRummyMatchModel, scene: GamesRummyBoardScene, editable: Boolean) {
+internal fun GamesRummyBoardCanvas(model: GamesRummyMatchModel, scene: GamesRummyBoardScene, editable: Boolean, hidden: Set<GamesRummyBoardMotion.Slot> = emptySet()) {
     val painters = rememberGamesRummyTilePainters()
     val joker = LocalGamesRummyArt.current?.joker
     val renderScale = model.renderScale
@@ -278,7 +342,7 @@ internal fun GamesRummyBoardCanvas(model: GamesRummyMatchModel, scene: GamesRumm
             }
             .testTag(GamesRummyMatchTags.BOARD_LAYER),
     ) {
-        drawBoard(scene.melds, renderScale, editable, painters, joker, model.draggingIDs, model.lift, model.movingSet, accent)
+        drawBoard(scene.melds, renderScale, editable, painters, joker, model.draggingIDs, model.lift, model.movingSet, accent, hidden)
     }
 }
 
@@ -292,6 +356,7 @@ private fun DrawScope.drawBoard(
     lift: GamesRummyLift?,
     movingSet: Int?,
     accent: Color,
+    hidden: Set<GamesRummyBoardMotion.Slot>,
 ) {
     val px = density.toDouble()
     val bleed = GamesRummyBoardLayer.bleed
@@ -333,16 +398,18 @@ private fun DrawScope.drawBoard(
                 id != null && id in dimmed -> 0.28f
                 else -> 1f
             }
-            painter.paint(
-                this,
-                tile.face,
-                left + ((slot * tileW + inset / 2) * px).toFloat(),
-                top + ((inset / 2 - if (isLifted) 4.0 else 0.0) * px).toFloat(),
-                joker,
-                highlighted = tile.highlighted,
-                lifted = if (isLifted) accent else null,
-                alpha = alpha,
-            )
+            if (hidden.isEmpty() || GamesRummyBoardMotion.Slot(index, slot) !in hidden) {
+                painter.paint(
+                    this,
+                    tile.face,
+                    left + ((slot * tileW + inset / 2) * px).toFloat(),
+                    top + ((inset / 2 - if (isLifted) 4.0 else 0.0) * px).toFloat(),
+                    joker,
+                    highlighted = tile.highlighted,
+                    lifted = if (isLifted) accent else null,
+                    alpha = alpha,
+                )
+            }
         }
     }
     if (!editable) return

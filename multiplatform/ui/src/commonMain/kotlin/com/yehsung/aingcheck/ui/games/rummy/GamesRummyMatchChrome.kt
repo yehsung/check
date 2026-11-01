@@ -60,7 +60,6 @@ import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.drawTile
 import com.yehsung.aingcheck.core.stores.rummy.resetTurn
-import com.yehsung.aingcheck.core.stores.rummy.sortRack
 import com.yehsung.aingcheck.core.stores.rummy.submitTurn
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.games.RummyMatchSeat
@@ -316,9 +315,9 @@ internal fun gamesRummyPlanLine(editor: RummyTurnEditor?, isMyTurn: Boolean): Pa
 
 // MARK: - 동작 줄
 
-/** [완료(남은 초)] 가장 크게 · [뽑기|넘기기] · [되돌리기] · [777|789]. 큰 글자면 두 줄로 나눈다(GamesRummyMatchLayout.actionRowCount). */
+/** [완료(남은 초)] 가장 크게 · [뽑기|넘기기] · [되돌리기] · [777|789]. 큰 글자면 두 줄로 나눈다(GamesRummyMatchLayout.actionRowCount). [onSort] = 정렬(시차를 정하는 판 화면을 지난다). */
 @Composable
-internal fun GamesRummyActionRow(rummy: RummyStore, match: RummyMatchState, editor: RummyTurnEditor?, isMyTurn: Boolean, width: Double, textScale: Double, now: () -> SwiftDate, modifier: Modifier = Modifier) {
+internal fun GamesRummyActionRow(rummy: RummyStore, match: RummyMatchState, editor: RummyTurnEditor?, isMyTurn: Boolean, width: Double, textScale: Double, now: () -> SwiftDate, onSort: (RummyRackSort) -> Unit, modifier: Modifier = Modifier) {
     val canEdit = isMyTurn && !rummy.isWorking
     val poolEmpty = (match.poolCount ?: 0L) == 0L
     val gap = GamesRummyMatchLayout.actionGap.dp
@@ -332,7 +331,7 @@ internal fun GamesRummyActionRow(rummy: RummyStore, match: RummyMatchState, edit
                 SubmitButton(rummy, isMyTurn, submitEnabled, now, Modifier.width(widths.submit.dp).height(height))
                 DrawButton(rummy, poolEmpty, canEdit, Modifier.width(widths.draw.dp).height(height))
                 UndoButton(rummy, undoEnabled, Modifier.width(widths.undo.dp).height(height))
-                SortButtons(rummy, editor != null, Modifier.width(widths.sort.dp).height(height))
+                SortButtons(rummy, editor != null, onSort, Modifier.width(widths.sort.dp).height(height))
             }
         } else {
             Column(modifier.padding(horizontal = gap), verticalArrangement = Arrangement.spacedBy(gap, Alignment.CenterVertically)) {
@@ -340,7 +339,7 @@ internal fun GamesRummyActionRow(rummy: RummyStore, match: RummyMatchState, edit
                 Row(Modifier.fillMaxWidth().height(height), horizontalArrangement = Arrangement.spacedBy(gap)) {
                     DrawButton(rummy, poolEmpty, canEdit, Modifier.weight(1f).fillMaxHeight())
                     UndoButton(rummy, undoEnabled, Modifier.weight(1f).fillMaxHeight())
-                    SortButtons(rummy, editor != null, Modifier.weight(1f).fillMaxHeight())
+                    SortButtons(rummy, editor != null, onSort, Modifier.weight(1f).fillMaxHeight())
                 }
             }
         }
@@ -428,7 +427,7 @@ private fun SecondaryButton(title: String, icon: AppIcon, enabled: Boolean, tag:
 }
 
 @Composable
-private fun SortButtons(rummy: RummyStore, enabled: Boolean, modifier: Modifier) {
+private fun SortButtons(rummy: RummyStore, enabled: Boolean, onSort: (RummyRackSort) -> Unit, modifier: Modifier) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(12.dp)
     val selected = rummy.rackSortMode
@@ -441,14 +440,14 @@ private fun SortButtons(rummy: RummyStore, enabled: Boolean, modifier: Modifier)
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        SortSegment(rummy, RummyRackSort.number, RummyPhoneText.sortNumber, GamesRummyMatchText.sortNumberName, selected == RummyRackSort.number, enabled, GamesRummyMatchTags.SORT_NUMBER)
+        SortSegment(onSort, RummyRackSort.number, RummyPhoneText.sortNumber, GamesRummyMatchText.sortNumberName, selected == RummyRackSort.number, enabled, GamesRummyMatchTags.SORT_NUMBER)
         Box(Modifier.width(0.8.dp).fillMaxHeight().padding(vertical = 8.dp).background(colors.separator))
-        SortSegment(rummy, RummyRackSort.color, RummyPhoneText.sortColor, GamesRummyMatchText.sortColorName, selected == RummyRackSort.color, enabled, GamesRummyMatchTags.SORT_COLOR)
+        SortSegment(onSort, RummyRackSort.color, RummyPhoneText.sortColor, GamesRummyMatchText.sortColorName, selected == RummyRackSort.color, enabled, GamesRummyMatchTags.SORT_COLOR)
     }
 }
 
 @Composable
-private fun RowScope.SortSegment(rummy: RummyStore, mode: RummyRackSort, title: String, name: String, on: Boolean, enabled: Boolean, tag: String) {
+private fun RowScope.SortSegment(onSort: (RummyRackSort) -> Unit, mode: RummyRackSort, title: String, name: String, on: Boolean, enabled: Boolean, tag: String) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(10.dp)
     Box(
@@ -457,7 +456,7 @@ private fun RowScope.SortSegment(rummy: RummyStore, mode: RummyRackSort, title: 
             .fillMaxHeight()
             .clip(shape)
             .background(if (on) colors.accentFill else Color.Transparent, shape)
-            .clickable(enabled = enabled, role = Role.Button) { rummy.sortRack(mode) }
+            .clickable(enabled = enabled, role = Role.Button) { onSort(mode) }
             .semantics { contentDescription = name }
             .testTag(tag),
         contentAlignment = Alignment.Center,

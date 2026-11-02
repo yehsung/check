@@ -817,6 +817,10 @@ package final class ChessStore {
     @ObservationIgnored private var lobbyInFlight = false
     /// 마지막으로 "내 차례가 왔다" 를 본 (판 id#ply). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
     @ObservationIgnored private var attentionKey: String?
+    /// **이 기기가 연 판** 장부(한 계정 여러 기기 — `GameDeviceLedger` 머리말 · 오목과 같은 규칙). 창 띄우기 · 주의 · 말풍선은
+    /// 이 장부에 오른 판에서만 한다(`noteMatchProgress`). 기록을 둘 곳은 **앱 배선이 넣는다**(맥 `WorkTimerStore` · 폰 `MobileAppModel`).
+    /// 기한 6시간: 10분 + 수당 3초 판은 한 시간을 넘기기 어렵다 — 판 중에 앱을 다시 켜도 넉넉히 남는다.
+    @ObservationIgnored package var deviceLedger = GameDeviceLedger(game: "chess", ttlSeconds: 6 * 3_600)
     @ObservationIgnored package private(set) var shownResultIDs: Set<String> = []
     /// 서버가 말한 내 진행 중 대국 id.
     @ObservationIgnored package private(set) var activeMatchID: String?
@@ -1247,7 +1251,11 @@ package final class ChessStore {
         let nextPhase: ChessPhase = isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
         activeMatchID = isFinished ? nil : id
-        if isFinished { shownResultIDs.insert(id) }
+        if isFinished {
+            shownResultIDs.insert(id)
+            // 끝난 판의 기록은 여기서 걷는다(끝을 못 본 기록은 장부의 기한이 걷는다).
+            dropOwnership(id)
+        }
         if !isFinished {
             // 새 판이 열렸다 — 로비에서 남긴 안내("신청을 보냈어요")는 대국 상태줄을 가린다.
             if previous?.id != id || previous?.isFinished == true { setNotice(nil) }
@@ -1470,6 +1478,8 @@ package final class ChessStore {
         guard host?.session != nil else { refuseTap(.signedOut, at: move.to); return }
         let id = current.id
         let expected = current.plyCount
+        // 이 기기에서 수를 뒀다 — 사람이 이 기기로 옮겨 와 두는 중이다. 그 뒤로 내 차례 말풍선이 여기서도 뜬다.
+        noteOwnsMatch(id)
         isBusy = true
         setNotice(nil)
         let generation = resetGeneration
@@ -1678,6 +1688,8 @@ package final class ChessStore {
                 let expiresAt = deviceDate(serverMs: response.inviteExpiresMs)
                     ?? clock().addingTimeInterval(inviteTTLSeconds)
                 outgoingRevision &+= 1
+                // 이 기기가 신청했다 — 수락 초인종이 같은 계정의 모든 기기에 가도 창은 여기서만 뜬다(`noteMatchProgress`).
+                noteOwnsMatch(id)
                 outgoing = ChessInvite(id: id, peer: peer, stake: stake, expiresAt: expiresAt)
                 lastOutgoingRequestAt = clock()
                 scheduleInviteExpiry()
@@ -1749,6 +1761,8 @@ package final class ChessStore {
                 // 수락하는 순간 서버가 두 참가자의 **다른 대기 신청을 전부 거둔다** — 로컬 카드를 그대로 두면
                 // 다음 로비에서 '상대가 신청을 받지 않았어요' 가 뜬다.
                 if outgoing != nil { outgoing = nil }
+                // 이 기기가 수락했다 — 상태를 옮기기 **전에** 적는다(그 applyState 가 창을 띄울지 이 장부로 정한다).
+                noteOwnsMatch(id)
                 if let state = response.state {
                     applyState(state)
                 } else {
@@ -2233,7 +2247,10 @@ package final class ChessStore {
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가
     ///    수락한 순간을 모르면 10분 시계를 흘린다.
     ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, ply) 에는 한 번뿐이다.
+    ///  · **이 기기가 연 판에서만**(2026-11-03 — `GameDeviceLedger` 머리말 · 오목과 같은 규칙). 연 기기가 아니면 판 상태만 들고 있다 —
+    ///    사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`send`) 그 기기도 연 기기가 된다.
     private func noteMatchProgress(previous: ChessMatchState?, next: ChessMatchState, windowWasVisible: Bool) {
+        guard ownsMatch(next.id) else { return }
         let started = previous == nil || previous?.isFinished == true || previous?.id != next.id
         if started {
             presentWindow?()
@@ -2251,6 +2268,23 @@ package final class ChessStore {
     }
 
     /// `server_now_ms` 로 기기 시계 어긋남을 잰다. 처음 잰 값은 그대로 받고, 그 뒤로는 문턱(250ms) 넘게 벗어날 때만 간다.
+    // MARK: - 한 계정 여러 기기(이 기기가 연 판 — `GameDeviceLedger`)
+
+    /// 이 기기가 이 판을 열었는가(신청 ok · 수락 ok · 수를 뒀다). 로그인 전이면 언제나 아니다.
+    package func ownsMatch(_ matchID: String) -> Bool {
+        deviceLedger.owns(matchID, userID: host?.session?.userID, now: clock())
+    }
+
+    /// 이 기기가 이 판을 열었다. 이미 있으면 그대로 둔다.
+    func noteOwnsMatch(_ matchID: String) {
+        deviceLedger.note(matchID, userID: host?.session?.userID, now: clock())
+    }
+
+    /// 이 판의 기록을 지운다(끝났다).
+    func dropOwnership(_ matchID: String) {
+        deviceLedger.drop(matchID, userID: host?.session?.userID, now: clock())
+    }
+
     package func noteServerNow(_ milliseconds: Double?) {
         guard let milliseconds, milliseconds > 0 else { return }
         let measured = milliseconds / 1000 - clock().timeIntervalSince1970

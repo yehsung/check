@@ -885,6 +885,8 @@ struct V0369RummyStoreTests {
         func state(_ object: [String: Any]) throws -> RummyMatchState {
             try #require(try rkDecode(RummyActionResponse.self, rkEnvelope(state: object)).state)
         }
+        // 이 기기가 손댄 판이다(방을 세웠다 · 앉았다 · 시작했다 — 머리말 ⑮). 알림은 그런 판에서만 한다(아래 다음 시험이 반대쪽).
+        store.markEngaged(rkMatch)
         // 차례가 넘어갈 때마다 서버는 turn_started_ms 를 새로 찍는다(차례 정체성 = 판 · 차례 자리 · 차례 시작 시각).
         store.isWindowVisible = true
         store.applyState(try state(rkState(seq: 1, turnSeat: 1)))
@@ -900,6 +902,30 @@ struct V0369RummyStoreTests {
         #expect(tally.attentions == [RummyNoticeText.myTurnAttention])
         #expect(tally.attentionRequests == 1)
         #expect(tally.presents == 1)
+    }
+
+    @Test("알림: 같은 계정의 놀던 기기(손대지 않은 판)는 판 시작·내 차례에 창·주의·말풍선을 부르지 않는다(2026-11-03)")
+    func idleDeviceStaysQuietOnStartAndTurns() throws {
+        // 없으면: 맥북에서 앉은 방의 판이 시작되면 같은 계정의 맥미니도 큐브 창을 띄우고, 그 창은 사람이 가서 닫기 전까지 남는다
+        // ("오목이나 미니게임 화면이 맥미니에도 동시에 열리는데 맥미니 꺼는 안 꺼져요").
+        let (store, _, _, tally) = rkMake("idle-device", script: RKScript())
+        func state(_ object: [String: Any]) throws -> RummyMatchState {
+            try #require(try rkDecode(RummyActionResponse.self, rkEnvelope(state: object)).state)
+        }
+        #expect(!store.isEngaged(rkMatch), "전제: 이 기기는 그 판에 손대지 않았다")
+        store.applyState(try state(rkState(seq: 1, turnSeat: 0)))
+        #expect(store.match?.id == rkMatch && store.phase == .playing, "놀던 기기도 판은 안다 — 창을 직접 열면 보여야 한다")
+        store.applyState(try state(rkState(seq: 2, turnSeat: 1, nowMs: rkNowMs + 1_000)))
+        store.applyState(try state(rkState(seq: 3, turnSeat: 0, nowMs: rkNowMs + 2_000)))
+        #expect(tally.presents == 0, "놀던 기기가 창을 \(tally.presents)번 띄웠다")
+        #expect(tally.attentionRequests == 0 && tally.attentions.isEmpty, "놀던 기기가 주의·말풍선을 냈다: \(tally.attentions)")
+
+        // ★ 기준선: 같은 판에 이 기기가 손대면(사람이 이 기기에서 낸다) 다음 내 차례 말풍선은 뜬다.
+        store.markEngaged(rkMatch)
+        store.applyState(try state(rkState(seq: 4, turnSeat: 1, nowMs: rkNowMs + 3_000)))
+        store.applyState(try state(rkState(seq: 5, turnSeat: 0, nowMs: rkNowMs + 4_000)))
+        #expect(tally.attentions == [RummyNoticeText.myTurnAttention], "손댄 뒤에도 말풍선이 안 뜬다 — 위 0 이 판정 덕인지 가리지 못한다")
+        #expect(tally.presents == 0, "판 시작은 지나갔다 — 창을 다시 띄우면 안 된다")
     }
 
     // MARK: 폴링 · 신호 · 마감

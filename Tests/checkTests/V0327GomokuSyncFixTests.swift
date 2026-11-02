@@ -126,6 +126,8 @@ func 신청자는_창이_안_보여도_상대가_수락해_판이_시작되면_�
     }
     let tally = sfWire(gomoku)
     gomoku.outgoing = GomokuInvite(id: sfMatchA, peer: sfPeer, stake: 5, expiresAt: Date().addingTimeInterval(50))
+    // 이 기기가 신청했다(challenge ok 가 적는 '이 기기가 연 판' 기록 — 2026-11-03). 같은 계정의 다른 기기 쪽은 `GameWindowOneDeviceTests`.
+    gomoku.noteOwnsMatch(sfMatchA)
     #expect(gomoku.isWindowVisible == false)
 
     gomoku.handleSignal()   // 서버 gomoku_respond 가 신청자에게 보내는 ring
@@ -147,9 +149,12 @@ func 신청자는_창이_안_보여도_상대가_수락해_판이_시작되면_�
 }
 
 @MainActor
-@Test
+@Test(.gomokuDefaultsCleanup)
 func 창이_안_보일_때_상대가_두면_내_차례_말풍선을_같은_기록_수에_한_번만_연다() {
-    let gomoku = GomokuStore()
+    // 로그인한 기기에서 **이 기기가 연 판**이다(2026-11-03 — 창 · 말풍선은 그런 판에서만. 같은 계정의 다른 기기 쪽은
+    // `GameWindowOneDeviceTests`). 응답기는 비워 둔다 — 이 시험은 applyState 만 부른다.
+    let (_, gomoku, _) = sfMakeStore("turn-once") { _, _, _ in nil }
+    gomoku.noteOwnsMatch(sfMatchA)
     let tally = sfWire(gomoku)
     let b1: [(Int, Int, Character)] = [(7, 7, "b")]
     gomoku.applyState(sfDecode(GomokuStatePayload.self, sfState(moveCount: 1, stones: b1, turn: "white")))

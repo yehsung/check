@@ -228,6 +228,8 @@ struct V0336AvatarArtSourceTests {
                 == Set(CheckMascotAssets.catalog.allIDs.filter {
                     (!CharacterCatalog.isGoldAing($0) || goldPortraits) && (!CharacterCatalog.isRainbowAing($0) || rainbowPortraits)
                         && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
+                        // v0.3.74: 이슬(내장)도 같은 규칙 — 소스 트리에 이슬 초상이 있을 때만 센다.
+                        && (!CharacterCatalog.isIsulAing($0) || V0374IsulCoreTests.macIsulPortraitsInSourceTree)
                 }))
     }
 }
@@ -290,7 +292,7 @@ struct V0336FaceScaleTests {
             widths.append((id, try #require(Self.earWidthPt(id), "\(id) 를 못 쟀다")))
         }
         // v0.3.66: 케이크 둘은 소스 트리에 초상이 있을 때만 센다(V0335 · knownIDs 와 같은 기준선).
-        let cakes = CharacterCatalog.giftOnlyBuiltInIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree).count
+        let cakes = CharacterCatalog.birthdayGiftBuiltInIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree).count
         #expect(widths.count == 9 + cakes, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())

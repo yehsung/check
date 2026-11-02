@@ -186,7 +186,10 @@ struct MeCharacterCardTests {
         #expect(MeCharacterCards.displayName(for: "aing_cake_strawberry") == "딸기 케이크 아잉이")
         #expect(MeCharacterCards.displayName(for: "aing_cake_choco") == "초코 케이크 아잉이")
         // 순서: 내장 다섯이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
-        #expect(Array(MeCharacterCards.knownIDs.prefix(5)) == CharacterCatalog.builtIns.map(\.id))
+        // 이슬 아잉이(맥 0.3.74 먼저 — 코어 내장 여섯째)는 폰 카드가 아직 없다(다음 폰 판): 폰 목록에 없고, 착용값은 아잉으로 접힌다.
+        #expect(Array(MeCharacterCards.knownIDs.prefix(5)) == CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.isulAingID })
+        #expect(!MeCharacterCards.knownIDs.contains(CharacterCatalog.isulAingID))
+        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.isulAingID) == MeCharacterCards.aingID)
     }
 
     // MARK: 다시 굽기

@@ -48,8 +48,18 @@ package nonisolated enum ShopWire {
     /// 기존 규칙), 선물 조회는 gift 를 싣지 않고 수령은 `needs_update` 로 거절한다(아무것도 안 움직인다).
     package static let cakeProtocol = 4
 
-    /// 이 번호를 요구하는 캐릭터 — **둘 다**다(`CharacterCatalog.giftOnlyBuiltInIDs` 와 같은 값 · 같은 순서).
-    package static let cakeCharacterIDs = CharacterCatalog.giftOnlyBuiltInIDs
+    /// 이 번호를 요구하는 캐릭터 — **케이크 둘**이다(`CharacterCatalog.birthdayGiftBuiltInIDs` 와 같은 값 · 같은 순서).
+    /// ★ (v0.3.74) 선물 전용 **전부**(`giftOnlyBuiltInIDs` — 이슬까지)가 아니다. 이슬을 여기 섞으면 이슬 초상이 없는 빌드(폰)가
+    ///   4 대신 3 을 말해 케이크 선물까지 잃는다(설계서 §2). 그래서 케이크 둘로 고정한다.
+    package static let cakeCharacterIDs = CharacterCatalog.birthdayGiftBuiltInIDs
+
+    /// 이슬 아잉이(v0.3.74 '술 한잔' 선물 전용)가 든 명단과 술 선물(`character_gift_pending` 의 `kind = 'drink'` · 그 수령)을 받을 수 있는 번호.
+    /// 서버 `character_prices.min_protocol = 5` 인 행이 이슬이고, 5 미만인 클라에게는 그 행이 **아예 안 보이며**(가진 사람은 예외 — 기존 규칙),
+    /// 선물 조회는 생일 종류만 싣고(4 — 0.3.66~0.3.73 맥 · 폰 1.0.14~ 의 행동 그대로), 술 선물 수령은 `needs_update` 로 거절한다.
+    package static let isulProtocol = 5
+
+    /// 이 번호를 요구하는 캐릭터 — 이슬 하나(`CharacterCatalog.drinkGiftBuiltInIDs` 와 같은 값).
+    package static let isulCharacterIDs = CharacterCatalog.drinkGiftBuiltInIDs
 
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
@@ -67,18 +77,27 @@ package nonisolated enum ShopWire {
     ///   4(v0.3.66)도 같다: robot · aing_gold · aing_rainbow · **두 케이크**를 전부 그릴 수 있을 때만. 케이크가 하나만 있으면 3 에 머문다 —
     ///   4 를 말하면 서버가 두 케이크를 다 선물 선택지로 내려 주므로, 그림 없는 쪽을 고른 사용자는 아잉 그림의 '케이크 아잉이'를 받는다.
     ///   케이크 둘이 다 있어도 무지개가 없으면 4 는커녕 3 도 못 보낸다(번호를 건너뛰어 말할 수 없다 — 보수적인 쪽으로 틀린다).
+    ///   5(v0.3.74)도 같다: 여기까지 전부 **와** 이슬을 그릴 수 있을 때만. 이슬만 있고 케이크가 하나라도 빠지면 3 에 머문다 —
+    ///   5 를 말하면 서버가 케이크 선물도 이슬 선물도 내려 주므로, 그림 없는 캐릭터를 받게 된다.
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
         let drawable = Set(drawableCharacterIDs)
         guard drawable.contains(robotCharacterID) else { return legacyProtocol }
         guard drawable.contains(goldCharacterID) else { return robotProtocol }
         guard drawable.contains(rainbowCharacterID) else { return goldProtocol }
-        return cakeCharacterIDs.allSatisfy(drawable.contains) ? cakeProtocol : rainbowProtocol
+        guard cakeCharacterIDs.allSatisfy(drawable.contains) else { return rainbowProtocol }
+        return isulCharacterIDs.allSatisfy(drawable.contains) ? isulProtocol : cakeProtocol
     }
 
     /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의
     /// `p_protocol >= 4` 와 같은 문턱). 판정의 권위는 서버다 — 이건 헛왕복을 줄이는 문이다.
     package static func supportsCakeGift(protocolVersion: Int) -> Bool {
         protocolVersion >= cakeProtocol
+    }
+
+    /// 이 번호로 술 한잔 선물(이슬 아잉이)을 받을 수 있는가(서버 `claim_character_gift` 의 술 선물 문턱 `p_protocol >= 5` 와 같다).
+    /// 조회 자체의 문은 여전히 `supportsCakeGift`(4)다 — 4 인 빌드는 생일 선물만 받는다.
+    package static func supportsDrinkGift(protocolVersion: Int) -> Bool {
+        protocolVersion >= isulProtocol
     }
 
     /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).

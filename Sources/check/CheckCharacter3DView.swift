@@ -138,6 +138,8 @@ enum CheckCharacter3DScene {
         // 케이크(v0.3.66): 무지개와 같은 디퓨즈 합성 + 몸 셰이더 + 장식 노드(`check.cakeDecor`) + 프레이밍 내림(`CakeAingFinish.framingDrop`).
         case .cakeStrawberry: CakeAingFinish.apply(.strawberry, to: character)
         case .cakeChoco: CakeAingFinish.apply(.choco, to: character)
+        // 이슬(v0.3.74): 지금은 평범 갈래(아잉 그대로) — 몸 셰이더 · 라벨 · 병뚜껑 장식은 IsulAingFinish 갈래가 채운다.
+        case .isul: break
         }
     }
 

@@ -245,6 +245,7 @@ func theMiniGameWindowOpensTheRummyWindow() throws {
     #expect(!panel.contains("var onRummy: () -> Void = {}"), "큐브 문에 빈 기본값이 남았다")
 
     let miniGame = try rwMac("WorkTimerStoreMiniGame.swift")
-    #expect(miniGame.contains("func openRummyFromMiniGame() { rummy.openWindow(focusMatchID: nil) closeMiniGamePanel() }"),
+    // 2026-11-03 ⑧: 문 머리에서 '미니게임 창에서 들어왔다' 표지를 적는다(큐브 창을 닫으면 미니게임 창이 다시 선다 — MiniGameDuelReturnTests).
+    #expect(miniGame.contains("func openRummyFromMiniGame() { noteMiniGameDuelReturn(.rummy) rummy.openWindow(focusMatchID: nil) closeMiniGamePanel() }"),
             "큐브 창을 먼저 띄우고 미니게임 창을 내려야 한다")
 }

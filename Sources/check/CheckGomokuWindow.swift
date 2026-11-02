@@ -168,6 +168,9 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
 
     /// 표시 의도(헤드리스 검증 지점). `isVisible` 은 이 저장소에서 거짓말한 적이 있어 '의도'와 '사실'을 나눈다.
     private(set) var isOpen = false
+    /// 창이 닫혔다 — `true` 면 사람이 닫았다(빨간 점 · ⌘W), `false` 면 프로그램 닫기(로그아웃 · 계정 전환). 앱 배선(`CheckApp`)이
+    /// 스토어의 `duelWindowDidClose` 로 잇는다 — 미니게임 창에서 들어온 창이면 사람이 닫은 순간 미니게임 창이 다시 선다(2026-11-03 ⑧).
+    var onClosed: (@MainActor (_ byUser: Bool) -> Void)?
     /// 창을 이미 만들었는가(`window` 를 읽으면 그 순간 만들어지므로 이 문으로만 묻는다).
     var hasWindow: Bool { windowStorage != nil }
     /// 지금 쥐고 있는 창(읽기 전용 — 만들지 않는다).
@@ -296,6 +299,7 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         // 프로그램 닫기(로그아웃·계정 전환)도 닫기다 — `orderOut` 은 `windowWillClose` 를 안 보낸다.
         notifyClosed()
         dismissSafetySheet()
+        onClosed?(false)
     }
 
     /// 사용자가 빨간 점을 눌렀다. 의도를 맞추고 '안 보임'과 **'닫혔다'**를 알린다 — 기권이 아니다.
@@ -307,6 +311,7 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         notifyVisibility(false)
         notifyClosed()
         dismissSafetySheet()
+        onClosed?(true)
     }
 
     /// 스토어에 **닫혔다**고 알린다 — `notifyVisibility(false)` 와 갈라 둔다.

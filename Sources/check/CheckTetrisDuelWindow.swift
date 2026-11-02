@@ -152,6 +152,9 @@ final class CheckTetrisDuelWindowController: NSObject, NSWindowDelegate {
     private var windowStorage: NSWindow?
 
     private(set) var isOpen = false
+    /// 창이 닫혔다 — `true` 면 사람이 닫았다(빨간 점 · ⌘W), `false` 면 프로그램 닫기(로그아웃 · 계정 전환). 앱 배선(`CheckApp`)이
+    /// 스토어의 `duelWindowDidClose` 로 잇는다 — 미니게임 창에서 들어온 창이면 사람이 닫은 순간 미니게임 창이 다시 선다(2026-11-03 ⑧).
+    var onClosed: (@MainActor (_ byUser: Bool) -> Void)?
     var hasWindow: Bool { windowStorage != nil }
     var currentWindow: NSWindow? { windowStorage }
     var isWindowOnScreen: Bool { isOpen && (windowStorage?.isVisible ?? false) }
@@ -262,6 +265,7 @@ final class CheckTetrisDuelWindowController: NSObject, NSWindowDelegate {
         isOpen = false
         notifyVisibility(false)
         notifyClosed()
+        onClosed?(false)
     }
 
     /// 빨간 점. '안 보임'과 **'닫혔다'**를 알린다 — 기권이 아니다.
@@ -272,6 +276,7 @@ final class CheckTetrisDuelWindowController: NSObject, NSWindowDelegate {
         isOpen = false
         notifyVisibility(false)
         notifyClosed()
+        onClosed?(true)
     }
 
     /// 스토어에 **닫혔다**고 알린다 — `notifyVisibility(false)` 와 갈라 둔다(체스 창의 ★ 그대로: 최소화는 닫기가 아니다).

@@ -128,6 +128,12 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
     private var windowStorage: NSWindow?
 
     private(set) var isOpen = false
+    /// 창이 닫혔다 — `true` 면 사람이 닫았다(빨간 점 · ⌘W 가 `windowShouldClose` 를 지났다 · 패널 안 확인 뒤 닫기), `false` 면
+    /// 프로그램 닫기(로그아웃 · 계정 전환 — `CheckApp.closeRummyWindow` 의 `window.close()` 는 `windowShouldClose` 를 안 지난다).
+    /// 앱 배선이 스토어의 `duelWindowDidClose` 로 잇는다 — 미니게임 창에서 들어온 창이면 사람이 닫은 순간 미니게임 창이 다시 선다(2026-11-03 ⑧).
+    var onClosed: (@MainActor (_ byUser: Bool) -> Void)?
+    /// 사람이 누른 닫기가 `windowShouldClose` 를 지나 지금 닫히는 중이다 — 뒤따르는 `windowWillClose` 가 '사람이 닫았다'로 읽는다.
+    private var closingByUser = false
     var hasWindow: Bool { windowStorage != nil }
     var currentWindow: NSWindow? { windowStorage }
     var isWindowOnScreen: Bool { isOpen && (windowStorage?.isVisible ?? false) }
@@ -244,7 +250,9 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
     /// 사람이 누른 닫기(빨간 점 · ⌘W)만 온다 — `close()`(orderOut)는 여기를 거치지 않는다.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender === windowStorage, let store = wiring?.store else { return true }
-        return requestClose(store: store)
+        let closes = requestClose(store: store)
+        if closes { closingByUser = true }
+        return closes
     }
 
     /// 닫기 판단을 실행한다(헤드리스 검증 문). true = 지금 닫는다, false = 패널 안 확인을 띄웠다.
@@ -272,14 +280,14 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
         lastCloseDecision = now
         switch now {
         case asked where asked == .confirmCloseRoom:
-            close()
+            closeByUser()
             Task { @MainActor in _ = await store.leaveRoomForExit(reason: .windowClosed) }
         case asked:
             closeAndLeave(store: store)
         case .close:
-            close()
+            closeByUser()
         case .leaveRoom:
-            close()
+            closeByUser()
             Task { @MainActor in _ = await store.leaveRoomForExit(reason: .windowClosed) }
         case .confirmForfeit, .confirmCloseRoom:
             exitPrompt.ask(now) { [weak self] in self?.confirmClose(asked: now, store: store) }
@@ -288,8 +296,14 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
 
     /// 확인을 골랐다 — 창을 바로 내리고 이탈은 뒤에서(최대 2초, 못 닿아도 이 기기에선 판을 접는다).
     private func closeAndLeave(store: RummyStore) {
-        close()
+        closeByUser()
         Task { @MainActor in _ = await store.leaveForExit(reason: .windowClosed) }
+    }
+
+    /// 패널 안 확인을 고른 뒤의 닫기 — 사람이 닫은 것이다(`orderOut` 이라 `windowWillClose` 가 안 온다).
+    private func closeByUser() {
+        close()
+        onClosed?(true)
     }
 
     /// 창이 닫혔다(사람이 닫았거나 확인 뒤). '안 보임'을 알린다 — 이탈은 위 `requestClose` 가 이미 정했다.
@@ -300,6 +314,9 @@ final class CheckRummyWindowController: NSObject, NSWindowDelegate {
         stuckWindowWatchdog = nil
         isOpen = false
         notifyVisibility(false)
+        let byUser = closingByUser
+        closingByUser = false
+        onClosed?(byUser)
     }
 
     func windowDidMiniaturize(_ notification: Notification) {

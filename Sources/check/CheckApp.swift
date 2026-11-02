@@ -403,6 +403,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gomoku.presentWindow = { CheckGomokuWindowController.shared.show() }
         // 로그아웃·계정 전환의 reset() 이 부르는 닫기 문. 아래 계정 감시자와 겹쳐도 close() 는 멱등이다 — 둘 중 하나만 살아도 창이 남지 않게.
         gomoku.dismissWindow = { CheckGomokuWindowController.shared.close() }
+        // 사람이 오목 창을 닫았다 — 미니게임 창에서 들어온 창이면 미니게임 창이 다시 선다(2026-11-03 대표 요청 ⑧ · `duelWindowDidClose`).
+        CheckGomokuWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.gomoku, byUser: byUser)
+        }
         gomoku.onInviteArrived = { [weak self] invite in
             self?.overlayController?.enqueueGomokuInvite(invite)
         }
@@ -456,6 +460,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         chess.spectatorFeaturesEnabled = true
         chess.presentWindow = { CheckChessWindowController.shared.show() }
         chess.dismissWindow = { CheckChessWindowController.shared.close() }
+        CheckChessWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.chess, byUser: byUser)
+        }
         chess.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
@@ -492,6 +499,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tetris.spectatorFeaturesEnabled = true
         tetris.presentWindow = { CheckTetrisDuelWindowController.shared.show() }
         tetris.dismissWindow = { CheckTetrisDuelWindowController.shared.close() }
+        CheckTetrisDuelWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.tetris, byUser: byUser)
+        }
         tetris.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
@@ -525,6 +535,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rummy.rankingEnabled = true
         rummy.presentWindow = { CheckRummyWindowController.shared.show() }
         rummy.dismissWindow = { Self.closeRummyWindow() }
+        CheckRummyWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.rummy, byUser: byUser)
+        }
         rummy.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }

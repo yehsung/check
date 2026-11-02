@@ -150,14 +150,9 @@ final class ChatBubbleTextView: NSTextView {
     /// 끌어 놓기 · 서비스 메뉴가 묻는 판 종류. **서식 없는 글자 하나**다 — NSTextView 기본은 RTF 를 앞세워 흰 글자째 싣는다(검토 P2).
     override var writablePasteboardTypes: [NSPasteboard.PasteboardType] { [.string] }
 
-    /// 끌어 놓기 · 서비스 메뉴의 쓰기. ⌘C 와 **같은 글자**(`selectedText` — 링크는 실제 주소째)를 서식 없이 쓴다.
-    override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
-        guard types.contains(.string), let selectedText else { return false }
-        pboard.declareTypes([.string], owner: nil)
-        return pboard.setString(selectedText, forType: .string)
-    }
-
-    /// 한 종류씩 묻는 쓰기(끌기의 늦은 공급). 글자 말고는 쓰지 않는다.
+    /// 끌어 놓기 · 서비스 메뉴의 쓰기 — ⌘C 와 **같은 글자**(`selectedText` — 링크는 실제 주소째)를 서식 없이 쓴다. 글자 말고는 쓰지 않는다.
+    /// 여러 종류를 한 번에 쓰는 `writeSelection(to:types:)` 도 NSTextView 기본 구현이 종류마다 이 함수를 부른다(2026-11-03 실측 — 그 함수를
+    /// 따로 재정의해 super 로 되돌린 변이가 초록이었다). 시험(ChatBubbleSelectionTests)이 그 길로 실제 주소째 글자가 나오는지 잰다.
     override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
         guard type == .string, let selectedText else { return false }
         return pboard.setString(selectedText, forType: .string)

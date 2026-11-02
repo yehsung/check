@@ -147,16 +147,17 @@ enum MessagePanelLayout {
     /// 전체 글자 수만 세서 "짧은 줄 여러 개"를 한 줄로 셌다.
     ///
     /// ★ **꾸밈 없는 한 줄 본문은 예전 산식과 같은 값이다**(⌈글자 수 / 15⌉ 줄 × 15pt + 10). 이 함수가 바꾸는 것은
-    ///   줄바꿈·제목·글머리가 있는 본문뿐이다. 틀려도 잘리지 않는 이유는 위 `conversationContentHeight` 주석 그대로다
+    ///   줄바꿈·제목·링크 꼬리표가 있는 본문뿐이다. 틀려도 잘리지 않는 이유는 위 `conversationContentHeight` 주석 그대로다
     ///   (틀 높이만 정하고 안쪽은 언제나 스크롤이다 · 말풍선 자체는 `fixedSize(vertical:)` 로 줄 수만큼 자란다).
     static func textBubbleHeight(_ text: String) -> CGFloat {
         var total: CGFloat = 10   // 말풍선 세로 padding 5×2
         for line in ChatMarkdown.parse(text) {
             let scale = Double(ChatMarkdownText.fontSize(for: line.kind) / ChatMarkdownText.baseSize)
             let perRow = max(1, Int((Double(charactersPerBubbleLine) / scale).rounded(.down)))
-            // 글머리 •·인용 막대는 해석 글자에 없다(그리는 쪽이 붙인다) — 두 칸으로 센다.
-            let marker = line.kind == .bullet || line.kind == .quote ? 2 : 0
-            let rows = max(1, Int((Double(line.text.count + marker) / Double(perRow)).rounded(.up)))
+            // 링크 호스트 꼬리표(`[글](주소)` → `글 (호스트)`)는 해석 글자에 없고 그리는 쪽이 붙인다 — 같이 센다.
+            // 그리는 쪽이 붙이는 글자는 이것뿐이다(글머리 •·인용 막대는 2026-11-03 대표 결정 "제목·굵게·링크만"으로 걷혔다).
+            let added = ChatMarkdownText.addedCharacters(line)
+            let rows = max(1, Int((Double(line.text.count + added) / Double(perRow)).rounded(.up)))
             total += CGFloat(Double(rows) * 15 * scale)
         }
         return total
@@ -954,8 +955,9 @@ private struct MessageBubbleRow: View {
     /// **글자 하나도** 바꾸지 않는다. 우클릭 [복사]는 날것 그대로다(붙여넣어 다시 보내면 그림이 된다 —
     /// 마크다운도 같다: 기호째 복사되므로 붙여넣어 보내면 같은 꾸밈으로 다시 그려진다).
     ///
-    /// **마크다운**(대표 요청 2026-11-03 ③④): 이모티콘 폴백을 지난 글자를 `ChatMarkdownText` 가 꾸민다 —
-    /// `## 제목` 은 크게, `**굵게**`·`*기울임*`·`~~취소~~`·`` `코드` ``, 글머리·인용·``` 코드 블록, 그리고 http·https 링크.
+    /// **마크다운**(대표 요청 2026-11-03 ③④ · 범위는 대표 결정 "제목·굵게·링크만"): 이모티콘 폴백을 지난 글자를
+    /// `ChatMarkdownText` 가 꾸민다 — `## 제목` 은 크게, `**굵게**`, 그리고 http·https 링크. 그 밖의 문법
+    /// (`*기울임*`·`~~취소~~`·`` `코드` ``·글머리·인용·``` 울타리)은 친 글자 그대로 보인다.
     /// 링크는 누르면 기본 브라우저가 연다(같은 팝오버의 `SignUpTermsNotice` 선례). 여는 문 앞에 스킴 검사를 한 번 더
     /// 세운다(`ChatMarkdownText.openAction`). 링크 색은 바탕을 따른다(내 말풍선은 흰 글자 + 밑줄).
     private var textBubble: some View {

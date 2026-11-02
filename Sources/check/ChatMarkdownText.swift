@@ -133,12 +133,17 @@ enum ChatMarkdownText {
         let palette = AppKitPalette(isMine: isMine)
         let paragraph = paragraphStyle
         let result = NSMutableAttributedString()
-        for piece in pieces(body) {
+        let pieces = pieces(body)
+        let copyLinks = copyLinks(pieces)
+        for (index, piece) in pieces.enumerated() {
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: nsFont(size: piece.size, isBold: piece.isBold),
                 .foregroundColor: palette.text,
                 .paragraphStyle: paragraph,
             ]
+            // 복사 표시(그림에는 안 보인다) — 고른 글자를 담을 때 링크의 실제 주소를 되찾는 자리(`ChatBubbleTextView.copyText`).
+            if let url = copyLinks[index] { attributes[copyLinkKey] = url }
+            if piece.kind == .disclosure { attributes[disclosureKey] = true }
             switch piece.kind {
             case .span:
                 if let link = piece.link {
@@ -152,6 +157,37 @@ enum ChatMarkdownText {
                 attributes[.foregroundColor] = palette.disclosure
             }
             result.append(NSAttributedString(string: piece.text, attributes: attributes))
+        }
+        return result
+    }
+
+    /// 고른 글자를 복사할 때 **실제 주소를 덧붙일 링크**의 표시(값: 그 주소). 글이 주소와 다른 링크의 글 조각과 그 뒤 꼬리표에 붙는다.
+    static let copyLinkKey = NSAttributedString.Key("check.chatBubble.copyLink")
+    /// 호스트 꼬리표 " (호스트)" 조각의 표시 — 복사할 때 이 글자 대신 실제 주소를 담는다.
+    static let disclosureKey = NSAttributedString.Key("check.chatBubble.disclosure")
+
+    /// 조각 위치 → 복사에 담을 실제 주소. 같은 주소로 이어진 링크 조각들이 한 링크이고(`ChatMarkdown.linkDisclosures` 와 같은 묶음),
+    /// 그 글이 주소 자체가 아니면(`[자료](https://a.example/doc)` · `[a.example](https://a.example/doc)`) 글 조각들과 바로 뒤 꼬리표에 표시한다.
+    /// 맨 주소 · `[https://a.com/](https://a.com)` 처럼 글이 곧 주소인 링크는 표시하지 않는다(보이는 글자가 이미 주소다).
+    static func copyLinks(_ pieces: [Piece]) -> [Int: URL] {
+        var result: [Int: URL] = [:]
+        var index = 0
+        while index < pieces.count {
+            guard pieces[index].kind == .span, let url = pieces[index].link else {
+                index += 1
+                continue
+            }
+            var end = index
+            var label = ""
+            while end < pieces.count, pieces[end].kind == .span, pieces[end].link == url {
+                label += pieces[end].text
+                end += 1
+            }
+            if ChatMarkdown.comparableAddress(label) != ChatMarkdown.comparableAddress(url.absoluteString) {
+                for spot in index..<end { result[spot] = url }
+                if end < pieces.count, pieces[end].kind == .disclosure { result[end] = url }
+            }
+            index = end
         }
         return result
     }

@@ -416,6 +416,58 @@ struct ChatMarkdownParserTests {
         }
     }
 
+    /// 사용자 정보(`…@`)가 든 주소는 **링크가 아니다**(2026-11-03 검토 P2). `https://naver.com:443@evil.com` 은 naver.com 으로 읽히는데
+    /// evil.com 을 연다 — 맨 주소는 "글 = 주소"라 호스트 꼬리표도 안 붙어 속임수가 그대로 통했다. 친 글자 그대로 남는다(`[글](주소)` 도).
+    /// 기준선: 경로 · 질의 · 조각의 `@` 는 사용자 정보가 아니다 — 링크다(결과가 다르다).
+    @Test func 사용자_정보가_든_주소는_링크가_아니다() {
+        for body in [
+            "https://naver.com:443@evil.com", "https://www.google.com:search@evil.com/login", "https://@evil.com",
+            "http://a:b@c.com/x", "봐 https://naver.com@evil.com 여기", "**https://naver.com@evil.com**",
+            "[naver.com](https://naver.com:443@evil.com)", "[여기](https://user@evil.com)",
+        ] {
+            let spans = ChatMarkdown.parse(body).flatMap(\.spans)
+            #expect(spans.allSatisfy { $0.link == nil }, "\"\(body)\" 가 링크가 됐다: \(spans.compactMap(\.link))")
+            if !body.hasPrefix("**") { #expect(cmVisible(body) == body, "\"\(body)\" 의 글자가 바뀌었다: \(cmVisible(body))") }
+        }
+        // 여는 문의 두 번째 검사도 막는다(붙여넣은 서식 등 해석 밖의 길).
+        for raw in ["https://naver.com:443@evil.com", "https://@evil.com", "https://:p@evil.com", "https://u:@evil.com"] {
+            #expect(!ChatMarkdown.isOpenable(URL(string: raw)!), "\(raw) 를 열 수 있다고 한다")
+        }
+        // 기준선.
+        let table: [(String, [CMRun])] = [
+            ("https://a.com/x@y", [("https://a.com/x@y", false, "https://a.com/x@y")]),
+            ("https://a.com/?to=a@b.com", [("https://a.com/?to=a@b.com", false, "https://a.com/?to=a@b.com")]),
+            ("[안내](https://a.com/u/a@b)", [("안내", false, "https://a.com/u/a@b")]),
+            ("https://evil.com", [("https://evil.com", false, "https://evil.com")]),
+        ]
+        for (body, expected) in table {
+            let runs = cmInline(body)
+            #expect(cmSame(runs, expected), "\"\(body)\" → \(cmDescribe(runs)) · 기대 \(cmDescribe(expected))")
+        }
+    }
+
+    /// 여는 `**` 가 링크 **앞**에 있어도 닫는 짝을 주소 안에서 찾지 않는다(2026-11-03 검토 nit — 머리 주석 "링크가 굵게보다 먼저").
+    /// 첫 판은 `**a [글](https://x.com/**) b**` 의 닫는 짝을 주소 안의 `**` 로 잡아 링크가 `https://x.com/` 으로 바뀌고 `) b**` 가 남았다.
+    /// 기준선: 링크가 없는 같은 모양은 첫 `**` 에서 닫힌다 · 링크 뒤의 `**` 는 그대로 닫는 짝이다.
+    @Test func 굵게의_닫는_짝은_링크_안에서_찾지_않는다() {
+        let table: [(String, [CMRun])] = [
+            ("**a [글](https://x.com/**) b**", [("a ", true, nil), ("글", true, "https://x.com/**"), (" b", true, nil)]),
+            ("**[글](https://x.com/**)**", [("글", true, "https://x.com/**")]),
+            ("**굵게 https://a.com/**x** 끝**", [("굵게 ", true, nil), ("https://a.com/**x", true, "https://a.com/**x"), (" 끝**", false, nil)]),
+            // 열 수 없는 링크 모양도 통째로 한 덩어리(원문 글자)다 — 그 안의 `**` 로 닫지 않는다.
+            ("**a [글](javascript:x**) b**", [("a [글](javascript:x**) b", true, nil)]),
+            // 기준선.
+            ("**a [글 b** c", [("a [글 b", true, nil), (" c", false, nil)]),
+            ("**[글](https://x.com)** 끝", [("글", true, "https://x.com"), (" 끝", false, nil)]),
+            ("**https://a.com**", [("https://a.com", true, "https://a.com")]),
+            ("**a https://x.com/** b", [("a ", true, nil), ("https://x.com/", true, "https://x.com/"), (" b", false, nil)]),
+        ]
+        for (body, expected) in table {
+            let runs = cmInline(body)
+            #expect(cmSame(runs, expected), "\"\(body)\" → \(cmDescribe(runs)) · 기대 \(cmDescribe(expected))")
+        }
+    }
+
     /// 망가진 문법은 **원문 글자 그대로**다 — 닫히지 않은 `**`, 앞뒤에 공백이 붙은 `**`, 반쪽 링크.
     @Test(arguments: [
         "**열고 안 닫음",
@@ -804,6 +856,11 @@ struct ChatMarkdownBubbleTests {
         let textView = try cmSource("ChatBubbleTextView.swift")
         let follow = try #require(cmRegion(textView, from: "func followLink(_ link: Any) -> Bool {", to: "\n    }"))
         #expect(follow.contains("ChatMarkdown.isOpenable(url)"), "앱 갈래 링크 문 앞의 스킴 검사가 없다")
+        // 누름은 갈래 함수(`routeMouseDown`)를 지난다 — ⌃클릭 메뉴 · 누름 뒤 포커스 정리는 ChatBubbleSelectionTests 가 그 함수를 불러 잰다.
+        // 진짜 `mouseDown` 은 누름 추적(앱 이벤트 대기열)을 돌아 시험이 못 부르므로, 그 배선만 여기서 본다.
+        let mouseDown = try #require(cmRegion(textView, from: "override func mouseDown(with event: NSEvent) {", to: "\n    }"))
+        #expect(mouseDown.trimmingCharacters(in: .whitespacesAndNewlines) == "routeMouseDown(event) { super.mouseDown(with: $0) }",
+                "누름이 갈래 함수를 안 지난다 — ⌃클릭이 누름 추적으로 가면 입력칸 포커스를 뺏고 낱말을 고른다: \(mouseDown)")
 
         // 틀 높이 추정도 말풍선과 같은 글자(이모티콘 폴백 → 마크다운)로 센다.
         let estimate = try #require(cmRegion(view, from: "static func conversationContentHeight(", to: "\n    }"))

@@ -114,11 +114,17 @@ package enum ChatMarkdown {
         return url
     }
 
-    /// 열어도 되는 주소인가 — 스킴이 http·https 이고 호스트가 있다. 말풍선이 링크를 **누를 때 한 번 더** 묻는 자리다
-    /// (해석이 이미 걸렀어도 여는 문에서 다시 본다 — 두 겹이어야 한쪽이 풀린 날에도 `javascript:` 가 안 열린다).
+    /// 열어도 되는 주소인가 — 스킴이 http·https 이고 호스트가 있고 **사용자 정보(`…@`)가 없다**. 말풍선이 링크를 **누를 때 한 번 더**
+    /// 묻는 자리다(해석이 이미 걸렀어도 여는 문에서 다시 본다 — 두 겹이어야 한쪽이 풀린 날에도 `javascript:` 가 안 열린다).
+    ///
+    /// ★ 사용자 정보가 든 주소는 받지 않는다(2026-11-03 검토 P2): `https://naver.com:443@evil.com` 은 naver.com 으로 읽히지만 실제로는
+    ///   evil.com 을 연다. 맨 주소는 "글 = 주소"라 호스트 꼬리표(`disclosedHost`)도 안 붙어 속임수가 그대로 통한다. 채팅에서 주소에
+    ///   아이디·비밀번호를 실어 보낼 일은 없으므로 링크로 만들지 않고 **친 글자 그대로** 둔다(`[글](주소)` 도 같다 — 원문 기호째 보인다).
+    ///   `user` 는 비어 있어도(`https://@evil.com`) nil 이 아니다 — 빈 사용자 정보도 막힌다.
     package static func isOpenable(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return false }
         guard let host = url.host(percentEncoded: false), !host.isEmpty else { return false }
+        guard url.user(percentEncoded: true) == nil, url.password(percentEncoded: true) == nil else { return false }
         return true
     }
 
@@ -132,7 +138,7 @@ package enum ChatMarkdown {
     }
 
     /// 주소 비교용 모양: 소문자 · 앞뒤 공백 없음 · `http(s)://` 없음 · 끝 `/` 없음.
-    static func comparableAddress(_ text: String) -> String {
+    package static func comparableAddress(_ text: String) -> String {
         var value = text.trimmingCharacters(in: .whitespaces).lowercased()
         for scheme in ["https://", "http://"] where value.hasPrefix(scheme) {
             value.removeFirst(scheme.count)
@@ -194,6 +200,8 @@ package enum ChatMarkdown {
 /// 한 줄 안의 꾸밈. 글자 배열 위를 왼쪽부터 한 번 훑고, 여는 기호를 만나면 **같은 줄 안에서** 닫는 짝을 찾는다.
 /// 짝이 없으면 그 기호는 글자다(규약 ①). 우선순위: 링크 → 맨 주소 → 굵게.
 /// 링크가 굵게보다 먼저인 이유: 주소 안의 `*` 를 굵게 짝으로 쓰지 않는다(`[글](https://a.com/**x**)` 의 주소는 통째로 주소다).
+/// 여는 `**` 가 링크 **앞**에 있어도 같다 — 닫는 짝을 찾을 때 링크 모양 · 맨 주소는 통째로 건너뛴다(`boldClose` · 2026-11-03 검토 nit:
+/// 예전엔 `**a [글](https://x.com/**) b**` 의 닫는 짝을 주소 안에서 찾아 주소가 `https://x.com/` 으로 바뀌었다).
 struct ChatInlineParser {
     let chars: [Character]
 
@@ -240,7 +248,7 @@ struct ChatInlineParser {
                 continue
             }
 
-            if char == "*", let close = boldClose(openAt: index, end: end) {
+            if char == "*", let close = boldClose(openAt: index, end: end, allowsLinks: allowsLinks) {
                 flush()
                 out += spans(index + 2..<close, isBold: true, link: link, allowsLinks: allowsLinks)
                 index = close + 2
@@ -351,18 +359,38 @@ struct ChatInlineParser {
     /// · `*` 가 셋 이상 이어진 닫는 묶음은 마지막 둘이 짝이다: `***둘 다***` 는 굵은 `*둘 다*` 다(홑 `*` 는 글자다).
     /// · 안쪽은 한 글자 이상이다(`****` 는 글자 그대로).
     /// 홑 `*` 는 여기 오지 않는다 — `*^^*` · `2*3*4` · 가림표 `시*발` 은 짝을 찾을 일이 없다.
-    func boldClose(openAt index: Int, end: Int) -> Int? {
+    /// · 닫는 짝은 **링크 밖에서만** 찾는다: 사이에 든 링크 모양(`[글](주소)` — 열 수 없는 것도 통째로 원문 한 덩어리다) · 맨 주소는
+    ///   건너뛴다(`linkSkip`). 안쪽을 다시 해석할 때(`spans`) 같은 자리에서 같은 링크가 잡힌다 — 판정이 같은 함수라서.
+    func boldClose(openAt index: Int, end: Int, allowsLinks: Bool = true) -> Int? {
         let first = index + 2
         guard first < end, chars[index + 1] == "*", !chars[first].isWhitespace else { return nil }
-        var cursor = first + 1
+        var cursor = first
         while cursor < end {
-            guard chars[cursor] == "*" else {
+            if allowsLinks, let next = linkSkip(at: cursor, end: end) {
+                cursor = next
+                continue
+            }
+            // 여는 `**` 바로 뒤 글자(`first`)는 닫는 묶음의 시작이 아니다(`****` 는 글자 · `***둘 다***` 의 셋째 `*` 는 안쪽 글자).
+            guard cursor > first, chars[cursor] == "*" else {
                 cursor += 1
                 continue
             }
             let run = runLength(at: cursor, end: end)
             if run >= 2, !chars[cursor - 1].isWhitespace { return cursor + run - 2 }
             cursor += run
+        }
+        return nil
+    }
+
+    /// `index` 에서 링크가 시작하면(`spans` 가 링크 → 맨 주소 순으로 잡는 그 판정) 그 링크가 끝난 자리. 아니면 nil.
+    /// 링크 모양은 열 수 있든 없든 건너뛴다 — `spans` 가 둘 다 통째로 한 덩어리로 다룬다(링크이거나, 원문 글자이거나).
+    /// 맨 주소는 링크가 될 때만 건너뛴다 — 링크가 못 되면 `spans` 에서도 평범한 글자다.
+    func linkSkip(at index: Int, end: Int) -> Int? {
+        let char = chars[index]
+        if char == "[", let shape = linkShape(at: index, end: end) { return shape.next }
+        if char == "h" || char == "H", let urlEnd = bareURLEnd(at: index, end: end),
+           ChatMarkdown.openableLink(String(chars[index..<urlEnd])) != nil {
+            return urlEnd
         }
         return nil
     }

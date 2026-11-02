@@ -18,7 +18,12 @@ import CheckCore
 //  · 우클릭 메뉴 — 받은 말풍선: [복사] · [이 메시지 신고하기], 내 말풍선: [복사]. [신고]는 받은 `onReport` 를 그대로 부른다
 //    (어느 말풍선에 서는지는 `MessageBubbleReportRule` 한 곳 — 대화 뷰가 거른 것만 들어온다).
 //  · [복사] — 고른 글자가 있으면 **고른 글자**, 없으면 말풍선 **원문**(`rawBody` — 마크다운 기호·이모티콘 토큰 그대로).
+//    고른 글자에 `[글](주소)` 링크가 걸치면 호스트 꼬리표 대신 **실제 주소**를 담는다(`copyText` — 2026-11-03 검토 P2).
 //    붙여넣기판에는 **서식 없는 글자만** 쓴다: 서식째 쓰면 내 말풍선의 흰 글자가 흰 문서에 붙어 안 보인다.
+//    ⌘C · [복사]뿐 아니라 끌어 놓기 · 서비스 메뉴(`writeSelection`)도 같다(검토 P2 — 그 길은 NSTextView 기본이 RTF 를 싣는다).
+//  · **말풍선 전체가 이 뷰다** — 여백(좌우 8 · 위아래 5)은 SwiftUI padding 이 아니라 글자 뷰 안쪽 여백(`textContainerInset`)이다.
+//    여백이 바깥 SwiftUI 몫이면 짧은 말풍선의 대부분(여백 띠)에서 우클릭 메뉴([신고])가 안 뜨고 끌기도 시작되지 않는다(2026-11-03 검토 P1 —
+//    예전 `.contextMenu` 는 말풍선 전체에 붙어 있었다). 바탕(둥근 판)만 SwiftUI 가 그린다.
 //  · ⌘C 는 고른 글자를 복사한다(⌘A 는 이 말풍선 전체를 고른다). 첫 응답자일 때만 받는다 — 입력칸의 ⌘C 를 가로채지 않는다.
 //  · 링크는 한 번 눌러 기본 브라우저로 연다. **여는 자리에서 `ChatMarkdown.isOpenable` 을 다시 본다**(`followLink`).
 //    대리자는 언제나 "처리했다"를 돌려준다 — false 면 NSTextView 가 검사 없이 NSWorkspace 로 열어 버린다.
@@ -63,7 +68,7 @@ final class ChatBubbleTextView: NSTextView {
         storage.addLayoutManager(layout)
         let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         container.widthTracksTextView = true
-        // 말풍선의 글자 자리는 SwiftUI 쪽 padding(8, 5)이 정한다 — 글자 뷰 안쪽 여백은 0 이어야 `Text` 와 같은 자리에 앉는다.
+        // 줄 조각 안쪽 여백은 0 — 글자 자리는 `textContainerInset`(말풍선 여백) 하나가 정한다. 그래야 `Text` + padding 과 같은 자리에 앉는다.
         container.lineFragmentPadding = 0
         layout.addTextContainer(container)
 
@@ -72,7 +77,8 @@ final class ChatBubbleTextView: NSTextView {
         view.isSelectable = true
         // 바탕(둥근 판)은 SwiftUI 가 그린다. 글자 뷰가 바탕을 그리면 판 위에 흰 상자가 뚫린다.
         view.drawsBackground = false
-        view.textContainerInset = .zero
+        // 말풍선 여백을 글자 뷰 **안에** 둔다(파일 머리 주석 — 여백을 눌러도 이 뷰가 받는다). 스냅샷 갈래의 SwiftUI padding 과 같은 값이다.
+        view.textContainerInset = ChatBubbleTextLayout.inset
         // 크기는 SwiftUI 가 정한다(`ChatBubbleText.sizeThatFits`). 글자 뷰가 스스로 자라면 그 틀과 어긋난다.
         view.isVerticallyResizable = false
         view.isHorizontallyResizable = false
@@ -94,13 +100,42 @@ final class ChatBubbleTextView: NSTextView {
 
     // MARK: 복사
 
-    /// 고른 글자(여러 구간이면 줄바꿈으로 잇는다). 아무것도 안 골랐으면 nil.
+    /// 고른 자리의 복사 글자(여러 구간이면 줄바꿈으로 잇는다 — 링크는 실제 주소째, `copyText`). 아무것도 안 골랐으면 nil.
     var selectedText: String? {
-        let text = string as NSString
+        guard let storage = textStorage else { return nil }
         let parts = selectedRanges.map(\.rangeValue)
-            .filter { $0.length > 0 && NSMaxRange($0) <= text.length }
-            .map { text.substring(with: $0) }
+            .filter { $0.length > 0 && NSMaxRange($0) <= storage.length }
+            .map { Self.copyText(storage, range: $0) }
         return parts.isEmpty ? nil : parts.joined(separator: "\n")
+    }
+
+    /// 그린 글자의 한 구간 → 복사할 글자. 보이는 글자 그대로이되 **`[글](주소)` 링크만 다르다**(2026-11-03 검토 P2):
+    /// 보이는 것은 `글 (호스트)` 인데 그대로 담으면 실제 주소는 빠지고 보낸 사람이 치지 않은 꼬리표가 들어간다. 그래서
+    /// 글이 주소와 다른 링크(`ChatMarkdownText.copyLinkKey` 가 붙은 조각)는 고른 글 뒤에 ` (실제 주소)` 를 한 번 담고, 꼬리표 글자는
+    /// 그 자리로 갈음한다. 꼬리표만 골라도 주소를 담는다. 맨 주소(글 = 주소)는 보이는 그대로다.
+    static func copyText(_ text: NSAttributedString, range: NSRange) -> String {
+        let source = text.string as NSString
+        var out = ""
+        var pending: URL?
+        func flush() {
+            guard let url = pending else { return }
+            out += (out.isEmpty ? "" : " ") + "(\(url.absoluteString))"
+            pending = nil
+        }
+        text.enumerateAttributes(in: range) { attributes, run, _ in
+            let url = attributes[ChatMarkdownText.copyLinkKey] as? URL
+            if attributes[ChatMarkdownText.disclosureKey] != nil {
+                // 꼬리표 " (호스트)" — 글자 대신 실제 주소. 고른 것이 꼬리표에서 시작했으면 그 주소를 여기서 집는다.
+                if pending == nil { pending = url }
+                flush()
+                return
+            }
+            if pending != url { flush() }
+            out += source.substring(with: run)
+            if let url { pending = url }
+        }
+        flush()
+        return out
     }
 
     /// [복사]가 담을 글자 — 고른 글자가 있으면 그것, 없으면 원문.
@@ -110,6 +145,22 @@ final class ChatBubbleTextView: NSTextView {
     override func copy(_ sender: Any?) {
         guard let selectedText else { return }
         CheckPasteboard.copy(selectedText, to: pasteboard)
+    }
+
+    /// 끌어 놓기 · 서비스 메뉴가 묻는 판 종류. **서식 없는 글자 하나**다 — NSTextView 기본은 RTF 를 앞세워 흰 글자째 싣는다(검토 P2).
+    override var writablePasteboardTypes: [NSPasteboard.PasteboardType] { [.string] }
+
+    /// 끌어 놓기 · 서비스 메뉴의 쓰기. ⌘C 와 **같은 글자**(`selectedText` — 링크는 실제 주소째)를 서식 없이 쓴다.
+    override func writeSelection(to pboard: NSPasteboard, types: [NSPasteboard.PasteboardType]) -> Bool {
+        guard types.contains(.string), let selectedText else { return false }
+        pboard.declareTypes([.string], owner: nil)
+        return pboard.setString(selectedText, forType: .string)
+    }
+
+    /// 한 종류씩 묻는 쓰기(끌기의 늦은 공급). 글자 말고는 쓰지 않는다.
+    override func writeSelection(to pboard: NSPasteboard, type: NSPasteboard.PasteboardType) -> Bool {
+        guard type == .string, let selectedText else { return false }
+        return pboard.setString(selectedText, forType: .string)
     }
 
     /// ⌘C · ⌘A 를 **첫 응답자일 때만** 직접 받는다. 이유는 입력칸의 같은 처리기(`CheckEditorTextView.performKeyEquivalent`)와 같다:
@@ -128,6 +179,18 @@ final class ChatBubbleTextView: NSTextView {
         default: return super.performKeyEquivalent(with: event)
         }
         return true
+    }
+
+    // MARK: 적중 판정
+
+    /// 말풍선 틀 안이면 **어디든 이 뷰다**(여백 띠 포함 — 파일 머리 주석).
+    ///
+    /// ★ 2026-11-03 헤드리스 실측: NSTextView 의 기본 적중 판정은 **글자 상자 오른쪽 끝 너머**(오른쪽 여백 8pt)를 자기 것이 아니라고 답한다
+    ///   (왼쪽 · 위 · 아래 여백은 받는다). 그대로 두면 오른쪽 여백의 우클릭이 바깥 호스팅 뷰로 떨어져 [신고] 메뉴가 안 뜬다.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let hit = super.hitTest(point) { return hit }
+        guard !isHidden, let superview else { return nil }
+        return NSMouseInRect(point, frame, superview.isFlipped) ? self : nil
     }
 
     // MARK: 우클릭 메뉴
@@ -170,14 +233,20 @@ final class ChatBubbleTextView: NSTextView {
     }
 
     /// ⌃클릭도 우클릭이다. 그 밖의 누름은 NSTextView 그대로(끌어 고르기 · 두 번 눌러 낱말 · 링크) — 추적은 손을 뗄 때까지
-    /// super 안에서 돈다. 끝난 뒤 포커스를 정리한다(`settleFocusAfterClick`).
+    /// super 안에서 돈다. 끝난 뒤 포커스를 정리한다(`settleFocusAfterClick`). 갈래는 `routeMouseDown` 한 곳이다.
     override func mouseDown(with event: NSEvent) {
+        routeMouseDown(event) { super.mouseDown(with: $0) }
+    }
+
+    /// 누름의 갈래 — ⌃클릭은 메뉴만, 나머지는 `track`(앱은 NSTextView 의 누름 추적) 뒤 포커스 정리.
+    /// 시험은 `track` 을 기록기로 갈아 끼워 이 갈래를 **부르는 자리째** 잰다(진짜 추적은 앱 이벤트 대기열을 돌아 시험을 멈춘다).
+    func routeMouseDown(_ event: NSEvent, track: (NSEvent) -> Void) {
         if Self.isContextClick(event) {
             presentMenu(bubbleMenu(), event, self)
             return
         }
         let previous = window?.firstResponder
-        super.mouseDown(with: event)
+        track(event)
         settleFocusAfterClick(previous: previous)
     }
 
@@ -285,8 +354,20 @@ final class ChatBubbleLineMetrics: NSObject, NSLayoutManagerDelegate, Sendable {
 
 // MARK: - 높이 재기
 
-/// 말풍선 본문의 크기를 잰다 — 글자 뷰와 **같은 TextKit 1 배치**(여백 0 · 같은 줄 높이 대리자)로. `ChatBubbleText.sizeThatFits` 가 부른다.
+/// 말풍선 본문의 크기를 잰다 — 글자 뷰와 **같은 TextKit 1 배치**(줄 조각 여백 0 · 같은 줄 높이 대리자)로. `ChatBubbleText.sizeThatFits` 가 부른다.
 enum ChatBubbleTextLayout {
+    /// 말풍선 여백(좌우 8 · 위아래 5pt). 앱 갈래는 글자 뷰 안쪽 여백(`textContainerInset`)으로, 스냅샷 갈래는 SwiftUI padding 으로 같은 값을 쓴다.
+    /// 틀 높이 추정(`MessagePanelLayout.textBubbleHeight` 의 10)도 이 위아래 5×2 다.
+    static let inset = NSSize(width: 8, height: 5)
+
+    /// 말풍선 한 장(여백 포함)의 크기 — SwiftUI 가 제안한 말풍선 폭에서 여백을 뺀 폭에 글자를 배치하고 여백을 더한다
+    /// (스냅샷 갈래의 `.padding` 이 하는 셈과 같다).
+    static func bubbleSize(_ text: NSAttributedString, proposedWidth: CGFloat?) -> CGSize {
+        let textWidth = proposedWidth.map { $0.isFinite ? $0 - 2 * inset.width : $0 }
+        let fit = fittingSize(text, width: containerWidth(for: textWidth))
+        return CGSize(width: fit.width + 2 * inset.width, height: fit.height + 2 * inset.height)
+    }
+
     /// "폭 제한 없음"을 뜻하는 글자 상자 폭. 무한대(`.infinity`)를 그대로 주면 TextKit 이 배치를 못 한다.
     static let unboundedWidth: CGFloat = 10_000_000
 
@@ -316,7 +397,7 @@ enum ChatBubbleTextLayout {
 
 // MARK: - SwiftUI 래퍼
 
-/// 말풍선 본문(앱 갈래). 바탕·여백은 바깥(`MessageBubbleRow.textBubble`)이 그린다 — 이 뷰는 글자만 그린다.
+/// 말풍선 본문(앱 갈래). 바탕(둥근 판)은 바깥(`MessageBubbleRow.textBubble`)이 그리고, **여백은 이 뷰 안**이다(파일 머리 주석 — 여백 띠의 우클릭 · 끌기).
 ///
 /// 렌더 시험·스냅샷 갈래(`rendersPlainText`)는 이 뷰 대신 같은 조각 목록의 SwiftUI `Text` 를 그린다 — `ImageRenderer` 는 NSView 를 못 그린다.
 struct ChatBubbleText: NSViewRepresentable {
@@ -362,13 +443,13 @@ struct ChatBubbleText: NSViewRepresentable {
         view.show(shown, isMine: isMine)
     }
 
-    /// 높이는 **제안된 폭에서 실제로 배치해** 잰다(줄 수 · 제목 크기에 따라 자라고, 폭이 좁으면 접힌다).
+    /// 높이는 **제안된 폭에서 실제로 배치해** 잰다(줄 수 · 제목 크기에 따라 자라고, 폭이 좁으면 접힌다). 여백까지 더한 말풍선 한 장 크기다.
     /// 폭은 글자가 차지한 만큼만 돌려준다 — 짧은 말은 말풍선이 글자를 따라 줄어든다(`Text` 와 같은 감각).
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: ChatBubbleTextView, context: Context) -> CGSize? {
-        let width = ChatBubbleTextLayout.containerWidth(for: proposal.width)
-        if let cached = context.coordinator.measured[width] { return cached }
-        let size = ChatBubbleTextLayout.fittingSize(nsView.attributedString(), width: width)
-        context.coordinator.measured[width] = size
+        let key = proposal.width ?? -1
+        if let cached = context.coordinator.measured[key] { return cached }
+        let size = ChatBubbleTextLayout.bubbleSize(nsView.attributedString(), proposedWidth: proposal.width)
+        context.coordinator.measured[key] = size
         return size
     }
 }

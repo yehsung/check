@@ -52,7 +52,8 @@ private final class CBRecorder {
     var reported: [String] = []
 }
 
-/// 말풍선 글자 뷰 하나(창 없이). `width` 에서 잰 크기로 틀을 세운다. 브라우저·메뉴 문은 **진짜를 못 쓰게** 막아 둔다.
+/// 말풍선 글자 뷰 하나(창 없이). 글자 폭 `width` 에서 잰 말풍선 크기(여백 포함 — `ChatBubbleTextLayout.bubbleSize`)로 틀을 세운다.
+/// 브라우저·메뉴 문은 **진짜를 못 쓰게** 막아 둔다.
 @MainActor
 private func cbBubble(_ shown: String, raw: String? = nil, isMine: Bool = false, width: CGFloat = 190) -> ChatBubbleTextView {
     let view = ChatBubbleTextView.make()
@@ -60,9 +61,17 @@ private func cbBubble(_ shown: String, raw: String? = nil, isMine: Bool = false,
     view.rawBody = raw ?? shown
     view.openLink = { url in Issue.record("시험이 진짜 브라우저 문을 열려 했다: \(url)") }
     view.presentMenu = { _, _, _ in Issue.record("시험이 진짜 메뉴를 띄우려 했다") }
-    let size = ChatBubbleTextLayout.fittingSize(view.attributedString(), width: width)
+    let size = ChatBubbleTextLayout.bubbleSize(view.attributedString(), proposedWidth: width + 2 * ChatBubbleTextLayout.inset.width)
     view.frame = NSRect(origin: NSPoint(x: 10, y: 20), size: size)
     return view
+}
+
+/// 말풍선 글자 뷰 안에서 **글자가 실제로 앉은 사각형**(뷰 좌표). 여백 띠는 이 사각형 바깥 · 틀 안쪽이다.
+@MainActor
+private func cbGlyphRect(_ view: ChatBubbleTextView) throws -> NSRect {
+    let layout = try #require(view.layoutManager), container = try #require(view.textContainer)
+    layout.ensureLayout(for: container)
+    return layout.usedRect(for: container).offsetBy(dx: view.textContainerOrigin.x, dy: view.textContainerOrigin.y)
 }
 
 /// 화면에 올리지 않는 창 + 입력칸(편집 가능한 글자 뷰) + 말풍선.
@@ -351,20 +360,42 @@ struct ChatBubbleSelectionTests {
         #expect(bubble.menu(for: cbMouse(.rightMouseDown, at: word, in: bubble)) != nil)
         #expect(bubble.selectedText == nil, "메뉴를 묻는 문이 낱말을 골랐다")
 
-        // ⌃클릭도 우클릭이다(맥의 우클릭 대용). 누름 추적을 돌리지 않으려고 판정만 잰다(머리 주석의 ★) — `mouseDown` 은 이 판정이 참이면
-        // super(누름 추적)를 부르기 전에 같은 메뉴 문으로 간다.
-        #expect(ChatBubbleTextView.isContextClick(cbMouse(.leftMouseDown, at: word, in: bubble, flags: .control)))
-        #expect(!ChatBubbleTextView.isContextClick(cbMouse(.leftMouseDown, at: word, in: bubble)))
-        #expect(!ChatBubbleTextView.isContextClick(cbMouse(.leftMouseDown, at: word, in: bubble, flags: .command)))
+        // ⌃클릭도 우클릭이다(맥의 우클릭 대용). 누름의 갈래(`routeMouseDown` — `mouseDown` 이 부르는 그 함수)를 **부르는 자리째** 잰다:
+        // 진짜 누름 추적(super)은 앱 이벤트 대기열을 돌아 시험을 멈추므로(머리 주석의 ★) 추적 자리에 기록기를 꽂는다.
+        var tracked = 0
+        bubble.routeMouseDown(cbMouse(.leftMouseDown, at: word, in: bubble, flags: .control)) { _ in tracked += 1 }
+        #expect(recorder.menus.count == 2 && recorder.menus.last == [ChatBubbleMenuText.copy, BlockReportText.reportMessageAction],
+                "⌃클릭이 메뉴를 안 띄웠다: \(recorder.menus)")
+        #expect(tracked == 0, "⌃클릭이 누름 추적(super)으로 갔다 — 입력칸 포커스를 뺏고 낱말을 고른다")
+        #expect(stage.window.firstResponder === stage.composer && bubble.selectedText == nil)
+        // 기준선: ⌃ 없는 누름은 추적으로 가고 메뉴는 안 뜬다(⌘ 누름도). 추적이 말풍선에 포커스를 줘도(키 창의 모습) 끌지 않았으면 입력칸에 돌려준다.
+        for flags: NSEvent.ModifierFlags in [[], .command] {
+            bubble.routeMouseDown(cbMouse(.leftMouseDown, at: word, in: bubble, flags: flags)) { _ in
+                tracked += 1
+                stage.window.makeFirstResponder(bubble)
+            }
+            #expect(stage.window.firstResponder === stage.composer, "끌지 않은 누름 뒤 입력칸 포커스를 안 돌려준다(flags \(flags))")
+        }
+        #expect(tracked == 2 && recorder.menus.count == 2, "⌃ 없는 누름이 추적으로 안 가거나 메뉴를 띄웠다")
+        // 추적이 글자를 골랐으면(끌어 고르기) 말풍선이 포커스를 쥔다.
+        bubble.routeMouseDown(cbMouse(.leftMouseDown, at: word, in: bubble)) { _ in
+            stage.window.makeFirstResponder(bubble)
+            bubble.setSelectedRange((bubble.string as NSString).range(of: "안녕하세요"))
+        }
+        #expect(stage.window.firstResponder === bubble && bubble.selectedText == "안녕하세요")
+        stage.focusComposer()
 
-        // 기준선: 같은 글자 · 같은 배치(TextKit 1)의 평범한 NSTextView.
+        // 기준선: 같은 글자 · 같은 배치(TextKit 1 · 같은 여백)의 평범한 NSTextView.
         let storage = NSTextStorage(attributedString: bubble.attributedString())
         let layout = NSLayoutManager()
         storage.addLayoutManager(layout)
-        let container = NSTextContainer(size: NSSize(width: bubble.frame.width, height: CGFloat.greatestFiniteMagnitude))
+        let container = NSTextContainer(size: NSSize(
+            width: bubble.frame.width - 2 * bubble.textContainerInset.width, height: CGFloat.greatestFiniteMagnitude
+        ))
         container.lineFragmentPadding = 0
         layout.addTextContainer(container)
         let plain = NSTextView(frame: bubble.frame, textContainer: container)
+        plain.textContainerInset = bubble.textContainerInset
         plain.isEditable = false
         stage.window.contentView?.addSubview(plain)
         plain.setSelectedRange(NSRange(location: 0, length: 0))
@@ -399,9 +430,21 @@ struct ChatBubbleSelectionTests {
             #expect(board.string(forType: .string) == selected)
             let rich: Set<NSPasteboard.PasteboardType> = [.rtf, .rtfd, .html]
             #expect(Set(board.types ?? []).isDisjoint(with: rich), "복사가 서식째 들어갔다(흰 글자가 흰 문서에 붙는다): \(board.types ?? [])")
-            // 기준선: NSTextView 기본 쓰기는 서식(RTF)을 같이 싣는다 — 위 단언이 재는 차이다.
+            // 끌어 놓기 · 서비스 메뉴의 쓰기(`writeSelection` — ⌘C 와 다른 길)도 서식 없는 같은 글자다(검토 P2: 그 길로 흰 글자 RTF 가 나갔다).
             board.clearContents()
+            #expect(bubble.writablePasteboardTypes == [.string], "끌어 놓기가 서식 종류를 싣는다: \(bubble.writablePasteboardTypes)")
             #expect(bubble.writeSelection(to: board, types: bubble.writablePasteboardTypes))
+            #expect(board.string(forType: .string) == selected, "끌어 놓기 글자가 ⌘C 와 다르다")
+            #expect(Set(board.types ?? []).isDisjoint(with: rich), "끌어 놓기가 서식째 들어갔다: \(board.types ?? [])")
+            board.clearContents()
+            #expect(!bubble.writeSelection(to: board, type: .rtf), "한 종류씩 묻는 쓰기가 RTF 를 쓴다")
+            #expect(bubble.writeSelection(to: board, type: .string) && board.string(forType: .string) == selected)
+            // 기준선: 같은 글자 · 같은 선택의 평범한 NSTextView 기본 쓰기는 서식(RTF)을 같이 싣는다 — 위 단언들이 재는 차이다.
+            let plain = NSTextView(frame: bubble.frame)
+            plain.textStorage?.setAttributedString(bubble.attributedString())
+            plain.setSelectedRange(range)
+            board.clearContents()
+            #expect(plain.writeSelection(to: board, types: plain.writablePasteboardTypes))
             #expect(!Set(board.types ?? []).isDisjoint(with: rich), "기준선이 서식을 안 실었다 — 위 단언이 재는 것이 없다")
             // ⌘C — 한글 자판(ignoring 'ㅊ')에서도.
             board.clearContents()
@@ -423,6 +466,124 @@ struct ChatBubbleSelectionTests {
             board.clearContents()
             #expect(!bubble.performKeyEquivalent(with: cbKey("c", ignoring: "c", in: bubble)), "포커스 없는 말풍선이 ⌘C 를 가로챘다")
             #expect(board.string(forType: .string) == nil)
+        }
+    }
+
+    /// 고른 글자에 `[글](주소)` 링크가 걸치면 **실제 주소**를 담는다(2026-11-03 검토 P2). 보이는 것은 `글 (호스트)` 이고, 그대로 담으면
+    /// 주소는 사라지고 보낸 사람이 치지 않은 꼬리표가 들어간다. ⌘C · [복사] · 끌어 놓기가 같은 글자다.
+    /// 기준선: 보이는 글자(`string` 의 같은 구간)는 꼬리표 그대로다 — 결과가 다르다. 맨 주소 · 굵게는 보이는 그대로다.
+    @Test func 고른_링크는_실제_주소째_복사한다() throws {
+        let raw = "**굵게** [자료](https://a.example/doc) 끝"
+        let bubble = cbBubble(raw, width: 260)
+        let stage = CBStage(bubble)
+        try #require(bubble.string == "굵게 자료 (a.example) 끝")
+        func select(_ part: String) throws {
+            let range = (bubble.string as NSString).range(of: part)
+            try #require(range.location != NSNotFound, "\(part) 가 말풍선에 없다")
+            bubble.setSelectedRange(range)
+        }
+        let cases: [(String, String)] = [
+            ("굵게 자료 (a.example) 끝", "굵게 자료 (https://a.example/doc) 끝"),   // 통째로
+            ("자료", "자료 (https://a.example/doc)"),                               // 글만
+            ("자", "자 (https://a.example/doc)"),                                   // 글 일부
+            ("(a.example)", "(https://a.example/doc)"),                             // 꼬리표만
+            ("굵게 자", "굵게 자 (https://a.example/doc)"),
+            ("굵게", "굵게"),                                                        // 링크 밖
+            (" 끝", " 끝"),
+        ]
+        stage.window.makeFirstResponder(bubble)
+        for (part, expected) in cases {
+            try select(part)
+            #expect(bubble.selectedText == expected, "\(part.debugDescription) 를 고른 복사: \(bubble.selectedText ?? "nil")")
+        }
+        // 세 길이 같은 글자.
+        try select("굵게 자료 (a.example) 끝")
+        try cbWithBoard { board in
+            bubble.pasteboard = board
+            #expect(bubble.performKeyEquivalent(with: cbKey("c", ignoring: "c", in: bubble)))
+            #expect(board.string(forType: .string) == "굵게 자료 (https://a.example/doc) 끝", "⌘C")
+            bubble.bubbleMenu().performActionForItem(at: 0)
+            #expect(board.string(forType: .string) == "굵게 자료 (https://a.example/doc) 끝", "[복사]")
+            board.clearContents()
+            _ = bubble.writeSelection(to: board, types: bubble.writablePasteboardTypes)
+            #expect(board.string(forType: .string) == "굵게 자료 (https://a.example/doc) 끝", "끌어 놓기")
+        }
+        // 기준선: 보이는 글자 그대로라면 꼬리표가 들어가고 주소가 빠진다.
+        #expect((bubble.string as NSString).substring(with: bubble.selectedRange()) == "굵게 자료 (a.example) 끝")
+
+        // 글이 호스트와 같아 꼬리표가 없는 링크도 주소가 다르면 주소를 담는다. 글이 곧 주소면(맨 주소 · 같은 주소) 보이는 그대로다.
+        for (body, expected) in [
+            ("[a.example](https://a.example/doc) 봐", "a.example (https://a.example/doc) 봐"),
+            ("https://a.example/doc 봐", "https://a.example/doc 봐"),
+            ("[https://a.example/](https://a.example) 봐", "https://a.example/ 봐"),
+            ("[가](https://a.example)와 [나](https://b.example)", "가 (https://a.example)와 나 (https://b.example)"),
+            ("**[굵은 링크](https://a.example/x)**", "굵은 링크 (https://a.example/x)"),
+            ("줄 하나\n[둘](https://b.example/y)", "줄 하나\n둘 (https://b.example/y)"),
+        ] {
+            let other = cbBubble(body, width: 260)
+            other.setSelectedRange(NSRange(location: 0, length: (other.string as NSString).length))
+            #expect(other.selectedText == expected, "\(body.debugDescription) 전체 복사: \(other.selectedText ?? "nil")")
+        }
+    }
+
+    /// ★ **여백 띠도 말풍선이다**(2026-11-03 검토 P1). 받은 말풍선의 여백(좌우 8 · 위아래 5)을 우클릭해도 [복사] · [이 메시지 신고하기]가 뜨고,
+    /// 거기서 끌어도 고르기가 시작된다 — 호스팅한 진짜 대화에서 글자 사각형 바깥 · 말풍선 안쪽 자리의 적중 판정이 글자 뷰이고, 그 뷰의
+    /// 우클릭이 신고 메뉴를 띄운다. 첫 판은 여백이 SwiftUI padding 이라 그 자리가 호스팅 뷰에 떨어져 메뉴가 없었다(짧은 말풍선은 면적의 절반 넘게).
+    /// 기준선: 여백 밖(글자에서 12pt — 여백 8 너머)은 말풍선이 아니다 — 이 적중 판정이 자리를 가려낸다.
+    @Test func 말풍선_여백을_우클릭해도_신고가_뜨고_끌기가_닿는다() throws {
+        for body in ["ㅇㅋ", "안녕하세요 반갑습니다"] {
+            let entries = [
+                cbEntry("r1", body, isMine: false, minutesAgo: 3),
+                cbEntry("m1", body, isMine: true, minutesAgo: 2),
+            ]
+            let recorder = CBRecorder()
+            let stage = CBHost(
+                MessageConversationView(
+                    items: MessageThreadBuilder.timeline(entries, now: cbNow), peerUserID: cbPeer, lastMessageID: "m1",
+                    clipsInsteadOfScrolling: true, onReport: { recorder.reported.append($0.id) }
+                ),
+                width: MessagePanelLayout.contentWidth, height: 200
+            )
+            let bubbles = stage.bubbles()
+            try #require(bubbles.count == 2, "\(bubbles.count)")
+            func hit(_ bubble: ChatBubbleTextView, _ point: NSPoint) -> NSView? {
+                let inHost = bubble.convert(point, to: stage.host)
+                return stage.host.hitTest(stage.host.superview?.convert(inHost, from: stage.host) ?? inHost)
+            }
+            for bubble in bubbles {
+                let isMine = bubble === bubbles.last
+                bubble.presentMenu = { menu, _, _ in recorder.menus.append(cbTitles(menu)) }
+                let glyphs = try cbGlyphRect(bubble)
+                let spots: [(String, NSPoint)] = [
+                    ("왼쪽 여백", NSPoint(x: glyphs.minX - 4, y: glyphs.midY)),
+                    ("오른쪽 여백", NSPoint(x: glyphs.maxX + 4, y: glyphs.midY)),
+                    ("위 여백", NSPoint(x: glyphs.midX, y: glyphs.minY - 3)),
+                    ("아래 여백", NSPoint(x: glyphs.midX, y: glyphs.maxY + 3)),
+                    ("글자 가운데", NSPoint(x: glyphs.midX, y: glyphs.midY)),
+                ]
+                let expected = isMine ? [ChatBubbleMenuText.copy] : [ChatBubbleMenuText.copy, BlockReportText.reportMessageAction]
+                for (name, point) in spots {
+                    let what = "\(body) \(isMine ? "내" : "받은") 말풍선 \(name)"
+                    guard let target = hit(bubble, point) as? ChatBubbleTextView else {
+                        Issue.record("\(what) 을 누르면 말풍선이 아니라 \(String(describing: hit(bubble, point))) 가 받는다 — 메뉴 · 끌기가 없다")
+                        continue
+                    }
+                    #expect(target === bubble, "\(what) 이 다른 말풍선에 떨어졌다")
+                    recorder.menus = []
+                    target.rightMouseDown(with: cbMouse(.rightMouseDown, at: point, in: target))
+                    #expect(recorder.menus == [expected], "\(what) 우클릭 메뉴: \(recorder.menus)")
+                }
+                // 기준선: 여백 너머(받은 말풍선은 오른쪽 · 내 말풍선은 왼쪽 — 반대쪽은 아바타·시각 자리다).
+                let outside = isMine ? NSPoint(x: glyphs.minX - 12, y: glyphs.midY) : NSPoint(x: glyphs.maxX + 12, y: glyphs.midY)
+                #expect(!(hit(bubble, outside) is ChatBubbleTextView), "\(body) 여백 너머까지 말풍선이다 — 위 적중 판정이 자리를 못 가른다")
+            }
+            // 받은 말풍선의 여백 우클릭 → [신고] → 그 메시지.
+            let received = try #require(bubbles.first)
+            let glyphs = try cbGlyphRect(received)
+            let menu = try #require(received.menu(for: cbMouse(.rightMouseDown, at: NSPoint(x: glyphs.minX - 4, y: glyphs.midY), in: received)))
+            menu.performActionForItem(at: 1)
+            #expect(recorder.reported == ["r1"], "여백 우클릭 [신고]가 그 메시지로 안 불렸다: \(recorder.reported)")
+            withExtendedLifetime(stage) {}
         }
     }
 
@@ -657,16 +818,25 @@ struct ChatBubbleSelectionTests {
         #expect(ChatBubbleTextLayout.fittingSize(text, width: 0) == oneLine, "기준선이 바뀌었다 — TextKit 이 폭 0 을 다르게 읽는다")
         #expect(size("가나 다라", 0).height > oneLine.height, "가장 좁은 폭에서도 한 줄로 펼친다 — 말풍선이 안 접힌다")
 
-        // 말풍선 뷰 자신의 배치가 잰 크기 안에 다 들어간다(잘리는 글자가 없다).
+        // 말풍선 뷰 자신의 배치가 잰 크기 안에 다 들어간다(잘리는 글자가 없다 — 여백 안쪽에).
+        let inset = ChatBubbleTextLayout.inset
+        #expect(inset == NSSize(width: 8, height: 5), "말풍선 여백이 바뀌었다 — 틀 높이 추정(위아래 10)과 스냅샷 갈래 padding 이 같은 값이어야 한다")
         for body in ["가\n나\n다", "## 회의 안건이 길어서 두 줄로 넘어가는 제목입니다", long] {
             let bubble = cbBubble(body)
+            #expect(bubble.textContainerInset == inset, "글자 뷰 여백이 말풍선 여백이 아니다")
             let layout = try #require(bubble.layoutManager), container = try #require(bubble.textContainer)
             layout.ensureLayout(for: container)
-            let used = layout.usedRect(for: container)
-            #expect(used.height <= bubble.frame.height + 0.5 && used.width <= bubble.frame.width + 0.5,
-                    "말풍선 틀(\(bubble.frame.size))보다 글자(\(used.size))가 크다 — \(body.debugDescription)")
+            let used = try cbGlyphRect(bubble)
+            #expect(used.minX >= inset.width - 0.5 && used.minY >= inset.height - 0.5
+                    && used.maxY <= bubble.frame.height - inset.height + 0.5 && used.maxX <= bubble.frame.width - inset.width + 0.5,
+                    "말풍선 틀(\(bubble.frame.size))의 여백 안에 글자(\(used))가 안 들어간다 — \(body.debugDescription)")
             #expect(layout.glyphRange(for: container).length == layout.numberOfGlyphs, "배치 안 된 글자가 있다")
         }
+        // 말풍선 크기 = 여백을 뺀 폭에 배치한 글자 + 여백(스냅샷 갈래의 padding 셈).
+        let longText = ChatMarkdownText.nsAttributed(long, isMine: false)
+        let fit = ChatBubbleTextLayout.fittingSize(longText, width: 190 - 2 * inset.width)
+        #expect(ChatBubbleTextLayout.bubbleSize(longText, proposedWidth: 190)
+                == CGSize(width: fit.width + 2 * inset.width, height: fit.height + 2 * inset.height))
     }
 
     /// ★ **앱 갈래 말풍선은 스냅샷 갈래와 같은 자리·같은 크기다**(AppKit 이 그린 픽셀). 렌더 시험들은 스냅샷 갈래(SwiftUI `Text`)를 그리므로,

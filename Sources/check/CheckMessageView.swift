@@ -153,7 +153,7 @@ enum MessagePanelLayout {
     ///   줄바꿈·제목·링크 꼬리표가 있는 본문뿐이다. 틀려도 잘리지 않는 이유는 위 `conversationContentHeight` 주석 그대로다
     ///   (틀 높이만 정하고 안쪽은 언제나 스크롤이다 · 말풍선 자체는 `fixedSize(vertical:)` 로 줄 수만큼 자란다).
     static func textBubbleHeight(_ text: String) -> CGFloat {
-        var total: CGFloat = 10   // 말풍선 세로 padding 5×2
+        var total: CGFloat = 10   // 말풍선 위아래 여백 5×2(`ChatBubbleTextLayout.inset`)
         for line in ChatMarkdown.parse(text) {
             let scale = Double(ChatMarkdownText.fontSize(for: line.kind) / ChatMarkdownText.baseSize)
             let perRow = max(1, Int((Double(charactersPerBubbleLine) / scale).rounded(.down)))
@@ -975,7 +975,9 @@ private struct MessageBubbleRow: View {
     ///
     /// 두 갈래는 **같은 조각 목록**(`ChatMarkdownText.pieces`)을 그린다 — 글자·크기·굵기·링크·색이 같고, 폭·여백·바탕은 이 자리 하나가 준다.
     ///   · 앱: `ChatBubbleText` — 고를 수 있는 AppKit 글자 뷰(끌어 고르기 · ⌘C · 우클릭 메뉴 · 링크 한 번 누름).
-    ///   · 렌더 시험·스냅샷(`rendersPlainText`): SwiftUI `Text` — `ImageRenderer` 는 NSView 를 못 그린다.
+    ///     **여백(8 · 5)까지 글자 뷰다**(`ChatBubbleTextLayout.inset`) — 여백 띠를 우클릭해도 [신고]가 뜨고 거기서 끌어도 고르기가 시작된다
+    ///     (2026-11-03 검토 P1: 여백이 SwiftUI padding 이던 첫 판은 짧은 말풍선 면적의 절반 넘게 메뉴가 안 떴다).
+    ///   · 렌더 시험·스냅샷(`rendersPlainText`): SwiftUI `Text` + 같은 값의 padding — `ImageRenderer` 는 NSView 를 못 그린다.
     private var textBubble: some View {
         Group {
             if rendersPlainText {
@@ -986,6 +988,8 @@ private struct MessageBubbleRow: View {
                     .environment(\.openURL, OpenURLAction(handler: ChatMarkdownText.openAction))
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, ChatBubbleTextLayout.inset.width)
+                    .padding(.vertical, ChatBubbleTextLayout.inset.height)
             } else {
                 ChatBubbleText(
                     shown: AingStickerText.preview(for: entry.body),
@@ -996,8 +1000,6 @@ private struct MessageBubbleRow: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: MessagePanelLayout.corner, style: .continuous)
                 .fill(entry.isMine ? CheckTheme.accent.opacity(0.85) : Color.white.opacity(0.10))

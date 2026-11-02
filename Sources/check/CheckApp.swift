@@ -486,10 +486,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   ⑦ `spectatorFeaturesEnabled`(v0.3.65) — **관전의 주 스위치**. 오목·체스와 같은 까닭으로 스토어 기본이 꺼짐이고,
     ///      이 한 줄이 없으면 로비 줄에 [관전] 칩이 아예 안 서고 `tetris_watch` 요청도 **한 번도** 안 나간다
     ///      (`rankingEnabled` 와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다).
+    ///   ⑧ `framesEnabled` — **판 표시 프레임의 주 스위치**(명세 docs/plan/tetris-broadcast/SPEC.md). 스토어 기본이 꺼짐이라 이 한 줄이
+    ///      없으면 `tetris_report` 가 언제나 `p_protocol` 1 이고 판 전용 소켓을 한 번도 안 연다(보고는 지금처럼 1초). 켜도 출시를 가르는
+    ///      것은 서버 스위치(`tetris_frames_enabled()`)다 — 서버가 두 자리 모두 켰다고 말한 판에서만 소켓이 열린다.
     private func wireTetrisDuel() {
         let tetris = store.tetris
         tetris.rankingEnabled = true
         tetris.spectatorFeaturesEnabled = true
+        tetris.framesEnabled = true
         tetris.presentWindow = { CheckTetrisDuelWindowController.shared.show() }
         tetris.dismissWindow = { CheckTetrisDuelWindowController.shared.close() }
         tetris.requestAttention = {

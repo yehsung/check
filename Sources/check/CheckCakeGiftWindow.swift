@@ -15,6 +15,12 @@ import CheckCore
 // 고유 자동저장 이름(= 창 식별자, `MiniGameSpaceKey.standaloneWindowIDs` 에 등록 — 확인 단추가 키보드로도 눌린다) · 고착 감시자 + 재생성 상한.
 // **테스트 실행에서는 사용자 화면에 아무것도 안 뜬다**: 알파 0(`CheckPanelVisibility`) + 모든 화면 밖(x = -30000) + 클릭 통과 + 키를 가져가지 않는다.
 // 외관은 앱 전체와 같은 다크(`CheckTheme`)다.
+//
+// ── '술 한잔' 선물(v0.3.74 — 이슬 아잉이) ──
+// 같은 창이 선물 종류로 가른다(`CharacterGiftOffer.kind`). 술 선물은 선택지가 이슬 하나라 **고르기가 없다** — ①' 초대장 화면:
+// 제목 · 초대장 카드(운영자 한 줄 `note` 가 있으면 그것을 크게, 본문은 그 아래 작게 — 없으면 본문이 초대장의 큰 글) · 이슬 초상 하나 ·
+// [받을게요]. 받은 뒤 화면(②)과 닫기 · 팝오버 복귀는 생일과 한 길이다. 글자는 전부 종류의 문구 묶음(`CharacterGiftCopy` —
+// `CakeGiftText` · `DrinkGiftText`)에서 온다. 창 제목도 띄울 때 그 종류의 제목으로 바꾼다.
 
 /// 축하 창의 고정 크기와 초상 크기.
 enum CakeGiftWindowLayout {
@@ -23,6 +29,8 @@ enum CakeGiftWindowLayout {
     static let choiceArtSide: CGFloat = 150
     /// 받은 뒤 화면의 초상 한 변(pt).
     static let receivedArtSide: CGFloat = 190
+    /// 술 한잔 초대장 화면의 초상 한 변(pt) — 초대장 카드가 위에 서므로 고르기 초상보다 조금 작다(창 높이 430 안).
+    static let inviteArtSide: CGFloat = 128
 }
 
 // MARK: - 창 콘텐츠
@@ -38,6 +46,8 @@ struct CheckCakeGiftWindowView: View {
             CheckTheme.background
             if let received = store.cakeGiftReceivedID {
                 receivedScreen(received)
+            } else if store.cakeGiftPresented?.kind == .drink {
+                inviteScreen
             } else {
                 choosingScreen
             }
@@ -74,36 +84,106 @@ struct CheckCakeGiftWindowView: View {
             }
             .padding(.top, 4)
             Spacer(minLength: 0)
-            // 실패 한 줄 — 자리는 늘 비워 둔다(문구가 와도 단추가 안 밀린다).
-            Text(store.cakeGiftNotice ?? " ")
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(CheckTheme.danger)
-                .lineLimit(2)
-                .multilineTextAlignment(.center)
-                .frame(height: 30)
-            Button {
-                store.claimCakeGift()
-            } label: {
-                Text(store.cakeGiftClaiming ? "…" : CakeGiftText.confirmButton)
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                    .frame(width: 200, height: 36)
-                    .background {
-                        if store.canConfirmCakeGift {
-                            Capsule().fill(CheckTheme.gaugeGradient)
-                        } else {
-                            Capsule().fill(CheckTheme.trackFill)
-                                .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
-                        }
+            noticeLine
+            confirmButton(CakeGiftText.confirmButton)
+                .padding(.bottom, 22)
+        }
+        .padding(.horizontal, 24)
+    }
+
+    /// 실패 한 줄 — 자리는 늘 비워 둔다(문구가 와도 단추가 안 밀린다). 고르기 · 초대장 화면이 같이 쓴다.
+    private var noticeLine: some View {
+        Text(store.cakeGiftNotice ?? " ")
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .foregroundStyle(CheckTheme.danger)
+            .lineLimit(2)
+            .multilineTextAlignment(.center)
+            .frame(height: 30)
+    }
+
+    /// 확인 단추(받기 — 수령 RPC 는 `claimCakeGift` 하나뿐이다). 글자는 그 선물 종류의 것(생일 "이걸로 받을게요" · 술 한잔 "받을게요").
+    private func confirmButton(_ title: String) -> some View {
+        Button {
+            store.claimCakeGift()
+        } label: {
+            Text(store.cakeGiftClaiming ? "…" : title)
+                .font(.system(size: 14, weight: .bold, design: .rounded))
+                .foregroundStyle(.white)
+                .frame(width: 200, height: 36)
+                .background {
+                    if store.canConfirmCakeGift {
+                        Capsule().fill(CheckTheme.gaugeGradient)
+                    } else {
+                        Capsule().fill(CheckTheme.trackFill)
+                            .overlay(Capsule().strokeBorder(CheckTheme.border, lineWidth: 1))
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(!store.canConfirmCakeGift)
+        .opacity(store.canConfirmCakeGift ? 1 : 0.6)
+        .keyboardShortcut(.defaultAction)
+        .accessibilityLabel(title)
+    }
+
+    // MARK: ①' 술 한잔 초대장 (v0.3.74 — 고르기 없음)
+
+    /// 술 한잔 선물 — 선택지가 이슬 하나라 고르지 않는다(스토어가 미리 골라 둔다 — `presentCakeGiftWindow`). "술 한잔 하자고 초대 보내는 느낌":
+    /// 운영자 한 줄(`note`)이 있으면 초대장 카드의 큰 글이고 본문은 그 아래 작게, 없으면 본문(가제)이 큰 글이다.
+    private var inviteScreen: some View {
+        let copy = store.cakeGiftWindowCopy
+        let id = store.cakeGiftPresented?.options.first ?? CharacterCatalog.isulAingID
+        let name = catalog.manifest(id: id)?.displayName ?? id
+        let note = store.cakeGiftPresented?.note
+        return VStack(spacing: 10) {
+            Text(copy.title)
+                .font(.system(size: 22, weight: .heavy, design: .rounded))
+                .foregroundStyle(CheckTheme.primaryText)
+                .padding(.top, 20)
+            VStack(spacing: 6) {
+                if let note {
+                    Text(note)
+                        .font(.system(size: 19, weight: .heavy, design: .rounded))
+                        .foregroundStyle(CheckTheme.primaryText)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .minimumScaleFactor(0.75)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(copy.body)
+                    .font(.system(size: note == nil ? 15 : 12, weight: note == nil ? .bold : .medium, design: .rounded))
+                    .foregroundStyle(note == nil ? CheckTheme.primaryText : CheckTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(CheckTheme.gaugeGradient.opacity(0.14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(CheckTheme.accent.opacity(0.75), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                     }
             }
-            .buttonStyle(.plain)
-            .focusEffectDisabled()
-            .disabled(!store.canConfirmCakeGift)
-            .opacity(store.canConfirmCakeGift ? 1 : 0.6)
-            .keyboardShortcut(.defaultAction)
-            .accessibilityLabel(CakeGiftText.confirmButton)
-            .padding(.bottom, 22)
+            .accessibilityElement(children: .combine)
+            VStack(spacing: 4) {
+                Self.portrait(id)
+                    .frame(width: CakeGiftWindowLayout.inviteArtSide, height: CakeGiftWindowLayout.inviteArtSide)
+                Text(name)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
+            noticeLine
+            confirmButton(copy.confirmButton)
+                .padding(.bottom, 22)
         }
         .padding(.horizontal, 24)
     }
@@ -155,11 +235,13 @@ struct CheckCakeGiftWindowView: View {
 
     private func receivedScreen(_ id: String) -> some View {
         let name = catalog.manifest(id: id)?.displayName ?? id
+        // 글자는 그 선물 종류의 묶음(받은 뒤 단추 · 한 줄은 두 종류가 같은 글자다).
+        let copy = store.cakeGiftWindowCopy
         return VStack(spacing: 14) {
             Spacer(minLength: 0)
             Self.portrait(id)
                 .frame(width: CakeGiftWindowLayout.receivedArtSide, height: CakeGiftWindowLayout.receivedArtSide)
-            Text(CakeGiftText.received(name: name))
+            Text(copy.received(name: name))
                 .font(.system(size: 20, weight: .heavy, design: .rounded))
                 .foregroundStyle(CheckTheme.primaryText)
                 .multilineTextAlignment(.center)
@@ -169,7 +251,7 @@ struct CheckCakeGiftWindowView: View {
                 Button {
                     store.wearCakeGift()
                 } label: {
-                    Text(CakeGiftText.wearNowButton)
+                    Text(copy.wearNowButton)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(.white)
                         .frame(width: 140, height: 36)
@@ -178,9 +260,9 @@ struct CheckCakeGiftWindowView: View {
                 .buttonStyle(.plain)
                 .focusEffectDisabled()
                 .keyboardShortcut(.defaultAction)
-                .accessibilityLabel(CakeGiftText.wearNowButton)
+                .accessibilityLabel(copy.wearNowButton)
                 Button(action: onClose) {
-                    Text(CakeGiftText.closeButton)
+                    Text(copy.closeButton)
                         .font(.system(size: 14, weight: .bold, design: .rounded))
                         .foregroundStyle(CheckTheme.primaryText)
                         .frame(width: 110, height: 36)
@@ -190,7 +272,7 @@ struct CheckCakeGiftWindowView: View {
                 .buttonStyle(.plain)
                 .focusEffectDisabled()
                 .keyboardShortcut(.cancelAction)
-                .accessibilityLabel(CakeGiftText.closeButton)
+                .accessibilityLabel(copy.closeButton)
             }
             Spacer(minLength: 0)
         }
@@ -242,8 +324,13 @@ final class CheckCakeGiftNSWindow: NSWindow {
 final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     static let shared = CheckCakeGiftWindowController()
 
-    /// 창 제목(CGWindowList 로 밖에서 창을 셀 때의 표식).
+    /// 창 제목(CGWindowList 로 밖에서 창을 셀 때의 표식). 생일 선물의 제목이다 — 술 한잔 선물은 띄울 때 `title(for:)` 로 바꾼다.
     static let windowTitle = CakeGiftText.title
+
+    /// 선물 종류 → 창 제목(그 종류의 문구 묶음). 종류를 모르면 `windowTitle`.
+    static func title(for kind: CharacterGiftKind?) -> String {
+        kind?.copy.title ?? windowTitle
+    }
 
     /// 창 위치를 기억하는 키 = 창 식별자. 다른 창과 겹치면 안 된다(`MiniGameSpaceKey.standaloneWindowIDs` 가 이 문자열로 이 창을 알아본다).
     static let frameAutosaveName = "check.cakeGift.window"
@@ -340,6 +427,8 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     /// (`CakeGiftWindowHooks.show` 주석 — 대결 창 · 다른 앱에서 치던 키를 가로채지 않는다). 거짓이면 창은 맨 앞에 서되 키는 그대로다.
     func show(activating: Bool = true) {
         guard let window else { return }
+        // 창 제목은 그리는 선물의 종류(생일 "생일 축하해요! 🎂" · 술 한잔 "술 한잔 하자! 🍶" — v0.3.74). 선물이 없으면 생일 제목 그대로.
+        window.title = Self.title(for: wiring?.store.cakeGiftPresented?.kind)
         if window.isMiniaturized { window.deminiaturize(nil) }
         let fixedFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: Self.fixedContentSize)).size
         if window.frame.size != fixedFrame { window.setContentSize(Self.fixedContentSize) }

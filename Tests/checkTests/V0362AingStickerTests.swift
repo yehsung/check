@@ -255,7 +255,9 @@ private func asConversationView(body: String) -> MessageConversationView {
         items: MessageThreadBuilder.timeline(entries, now: asNow),
         peerUserID: asPeer,
         lastMessageID: entries.last?.id,
-        clipsInsteadOfScrolling: true
+        clipsInsteadOfScrolling: true,
+        // `ImageRenderer` 는 NSView 를 못 그린다 — 글자 말풍선은 SwiftUI `Text` 갈래로 그린다(2026-11-03 ④ 뒤 앱은 AppKit 글자 뷰).
+        rendersPlainText: true
     )
 }
 
@@ -795,11 +797,16 @@ struct V0362AingStickerTests {
         let view = try asSource("CheckMessageView.swift")
         let bubble = try #require(asRegion(view, from: "private var textBubble: some View {", to: "\n    }"))
         #expect(bubble.contains("Text(ChatMarkdownText.attributed(AingStickerText.preview(for: entry.body),"),
-                "폴백 말풍선이 날것 토큰을 띄운다")
+                "폴백 말풍선이 날것 토큰을 띄운다(스냅샷 갈래)")
+        #expect(bubble.contains("shown: AingStickerText.preview(for: entry.body)"),
+                "폴백 말풍선이 날것 토큰을 띄운다(앱 갈래 — 고를 수 있는 글자 뷰, 2026-11-03 ④)")
         #expect(String(ChatMarkdownText.attributed(AingStickerText.preview(for: "[아잉:기쁨]"), isMine: false).characters)
                 == "아잉이 기쁨", "폴백 글자가 마크다운을 지나며 바뀌었다")
-        // 우클릭 [복사]는 **날것 그대로**다(붙여넣어 다시 보내면 그림이 된다).
-        #expect(view.contains("CheckPasteboard.copy(entry.body)"), "복사가 날것이 아니라 보기용 글자를 담는다")
+        #expect(ChatMarkdownText.nsAttributed(AingStickerText.preview(for: "[아잉:기쁨]"), isMine: false).string
+                == "아잉이 기쁨", "앱 갈래 폴백 글자가 마크다운을 지나며 바뀌었다")
+        // 우클릭 [복사]는 **날것 그대로**다(붙여넣어 다시 보내면 그림이 된다) — 그림 메뉴도, 글자 뷰의 고른 것 없는 [복사]도.
+        #expect(view.contains("CheckPasteboard.copy(entry.body)"), "그림 복사가 날것이 아니라 보기용 글자를 담는다")
+        #expect(bubble.contains("raw: entry.body"), "글자 말풍선 복사가 날것이 아니라 보기용 글자를 담는다")
     }
 
     /// **신고 시트의 인용 상자.** 사용자는 그림을 우클릭해 신고하는데, "무엇을 신고하는지 눈으로 확인하는

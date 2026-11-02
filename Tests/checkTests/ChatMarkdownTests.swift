@@ -113,9 +113,43 @@ private func cmBitmap(_ view: some View) throws -> NSBitmapImageRep {
     return bitmap
 }
 
+/// 말풍선을 그리는 두 갈래(2026-11-03 ④ 뒤). 픽셀 시험은 **둘 다** 돈다 — 한 갈래만 재면 다른 갈래의 회귀가 초록으로 지나간다.
+///  · `snapshot` — 스냅샷·렌더 시험이 그리는 SwiftUI `Text` 갈래(`rendersPlainText`), `ImageRenderer` 로 굽는다.
+///  · `app` — 앱이 그리는 AppKit 글자 뷰 갈래(`ChatBubbleText`). `ImageRenderer` 는 NSView 를 못 그리므로 화면에 올리지 않는 창의
+///    호스팅 뷰를 AppKit 이 직접 그린 픽셀로 받는다.
+enum CMPath: String, CaseIterable, Sendable {
+    case snapshot, app
+}
+
+/// AppKit 이 그린 픽셀(2x) — 화면에 올리지 않는 창에 붙인 호스팅 뷰.
+@MainActor
+private func cmAppKitBitmap(_ view: some View, width: CGFloat, height: CGFloat) throws -> NSBitmapImageRep {
+    let host = NSHostingView(rootView: AnyView(view))
+    host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+    let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    host.layoutSubtreeIfNeeded()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+    host.layoutSubtreeIfNeeded()
+    let rep = try #require(NSBitmapImageRep(
+        bitmapDataPlanes: nil, pixelsWide: Int(width * 2), pixelsHigh: Int(height * 2),
+        bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+        colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+    ))
+    rep.size = NSSize(width: width, height: height)
+    let context = try #require(NSGraphicsContext(bitmapImageRep: rep))
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = context
+    host.displayIgnoringOpacity(host.bounds, in: context)
+    NSGraphicsContext.restoreGraphicsState()
+    withExtendedLifetime(window) {}
+    return rep
+}
+
 /// 말풍선 하나짜리 대화 한 판(진짜 `MessageConversationView` — 말풍선 행이 해석을 지나는지까지 함께 잰다).
 @MainActor
-private func cmConversation(body: String, isMine: Bool = false, height: CGFloat = 160) throws -> NSBitmapImageRep {
+private func cmConversation(body: String, isMine: Bool = false, height: CGFloat = 160, path: CMPath = .snapshot) throws -> NSBitmapImageRep {
     let entries = [MessageHistoryEntry(
         id: "md1", peerUserID: cmPeer, peerName: "민수", peerAvatarURL: nil, body: body,
         createdAt: cmNow.addingTimeInterval(-60), isMine: isMine, readByPeer: nil, isUnread: nil
@@ -124,20 +158,25 @@ private func cmConversation(body: String, isMine: Bool = false, height: CGFloat 
         items: MessageThreadBuilder.timeline(entries, now: cmNow),
         peerUserID: cmPeer,
         lastMessageID: entries.last?.id,
-        clipsInsteadOfScrolling: true
+        clipsInsteadOfScrolling: true,
+        rendersPlainText: path == .snapshot
     )
     .frame(width: MessagePanelLayout.contentWidth, height: height)
     .background(CheckTheme.background)
-    return try cmBitmap(view)
+    switch path {
+    case .snapshot: return try cmBitmap(view)
+    case .app: return try cmAppKitBitmap(view, width: MessagePanelLayout.contentWidth, height: height)
+    }
 }
 
 @MainActor
-private func cmBlank(matching bitmap: NSBitmapImageRep) throws -> NSBitmapImageRep {
-    try cmBitmap(
-        Color.clear
-            .frame(width: CGFloat(bitmap.pixelsWide) / 2, height: CGFloat(bitmap.pixelsHigh) / 2)
-            .background(CheckTheme.background)
-    )
+private func cmBlank(matching bitmap: NSBitmapImageRep, path: CMPath = .snapshot) throws -> NSBitmapImageRep {
+    let width = CGFloat(bitmap.pixelsWide) / 2, height = CGFloat(bitmap.pixelsHigh) / 2
+    let blank = Color.clear.frame(width: width, height: height).background(CheckTheme.background)
+    switch path {
+    case .snapshot: return try cmBitmap(blank)
+    case .app: return try cmAppKitBitmap(blank, width: width, height: height)
+    }
 }
 
 /// 바탕과 다른 픽셀의 경계(픽셀 — scale 2). 잉크가 없으면 nil. `bottomRows` 를 주면 그림 **아래쪽 그만큼의 줄만** 본다 —
@@ -675,11 +714,12 @@ struct ChatMarkdownBubbleTests {
     }
 
     /// ★ **`##` 가 실제로 더 크게 그려진다**(픽셀 높이). 진짜 대화 뷰를 그려 말풍선 행이 해석을 지나는지까지 잰다.
-    /// 대조군은 같은 글자의 평문이다 — 해석을 안 지나면 `## ` 는 본문 크기 글자로 그려져 높이가 같다.
-    @Test func 제목은_말풍선에서_실제로_더_높게_그려진다() throws {
+    /// 대조군은 같은 글자의 평문이다 — 해석을 안 지나면 `## ` 는 본문 크기 글자로 그려져 높이가 같다. 두 갈래(스냅샷 · 앱) 모두.
+    @Test(arguments: CMPath.allCases)
+    func 제목은_말풍선에서_실제로_더_높게_그려진다(path: CMPath) throws {
         func inkHeight(_ body: String) throws -> Int {
-            let bitmap = try cmConversation(body: body)
-            let ink = try #require(cmInk(bitmap, against: try cmBlank(matching: bitmap)), "\"\(body)\" 가 아무것도 안 그렸다")
+            let bitmap = try cmConversation(body: body, path: path)
+            let ink = try #require(cmInk(bitmap, against: try cmBlank(matching: bitmap, path: path)), "\"\(body)\" 가 아무것도 안 그렸다")
             return ink.maxY - ink.minY
         }
         let plain = try inkHeight("큰 제목")
@@ -694,10 +734,11 @@ struct ChatMarkdownBubbleTests {
     /// 해석을 안 지나면 별표 넷(≈ 20pt)만큼 넓어진다.
     ///
     /// 재는 자리는 그림 **아래 30pt**(말풍선 한 줄 행)뿐이다 — 그 위 날짜 구분선은 폭 전체를 긋는 선이라 오른쪽 끝을 가린다.
-    @Test func 굵게_기호는_말풍선에서_사라진다() throws {
+    @Test(arguments: CMPath.allCases)
+    func 굵게_기호는_말풍선에서_사라진다(path: CMPath) throws {
         func inkRight(_ body: String) throws -> Int {
-            let bitmap = try cmConversation(body: body)
-            return try #require(cmInk(bitmap, against: try cmBlank(matching: bitmap), bottomRows: 60)).maxX
+            let bitmap = try cmConversation(body: body, path: path)
+            return try #require(cmInk(bitmap, against: try cmBlank(matching: bitmap, path: path), bottomRows: 60)).maxX
         }
         let plain = try inkRight("굵게 보기")
         let bold = try inkRight("**굵게** 보기")
@@ -709,8 +750,9 @@ struct ChatMarkdownBubbleTests {
 
     /// ★ **잘림 없는 틀**: 틀 높이 추정(`conversationContentHeight`)이 실제로 그려진 말풍선보다 작지 않다.
     /// 작으면 스냅샷(클립 갈래)에서 위가 잘리고, 앱에서는 짧은 대화인데도 스크롤이 붙는다.
-    /// 예전 산식(전체 글자 수 / 15)은 줄바꿈·제목을 몰라서 아래 본문들을 한두 줄로 셌다.
-    @Test func 틀_높이_추정은_그려진_말풍선보다_작지_않다() throws {
+    /// 예전 산식(전체 글자 수 / 15)은 줄바꿈·제목을 몰라서 아래 본문들을 한두 줄로 셌다. 두 갈래(스냅샷 · 앱) 모두.
+    @Test(arguments: CMPath.allCases)
+    func 틀_높이_추정은_그려진_말풍선보다_작지_않다(path: CMPath) throws {
         let bodies = [
             "# 큰 제목\n## 중간 제목\n### 작은 제목\n- 하나\n- 둘",
             "## 회의 안건이 길어서 두 줄로 넘어가는 제목입니다",
@@ -724,27 +766,44 @@ struct ChatMarkdownBubbleTests {
                 createdAt: cmNow.addingTimeInterval(-60), isMine: false, readByPeer: nil, isUnread: nil
             )
             let estimate = MessagePanelLayout.conversationContentHeight(MessageThreadBuilder.timeline([entry], now: cmNow))
-            let bitmap = try cmConversation(body: body, height: 420)
-            let ink = try #require(cmInk(bitmap, against: try cmBlank(matching: bitmap)), "\(body.debugDescription) 가 안 그려졌다")
+            let bitmap = try cmConversation(body: body, height: 420, path: path)
+            let ink = try #require(cmInk(bitmap, against: try cmBlank(matching: bitmap, path: path)), "\(body.debugDescription) 가 안 그려졌다")
             let drawn = CGFloat(ink.maxY - ink.minY) / 2
-            #expect(estimate >= drawn, "추정 \(estimate)pt < 그려진 \(drawn)pt — \(body.debugDescription)")
+            #expect(estimate >= drawn, "추정 \(estimate)pt < 그려진 \(drawn)pt — \(body.debugDescription) (\(path))")
         }
     }
 
-    /// 소스 계약 — 말풍선이 **이모티콘 폴백을 먼저** 거친 뒤 마크다운을 그리고, 링크 문에 스킴 검사를 세운다.
-    /// 받은 말풍선의 우클릭 [복사]·[신고]와 내 말풍선의 글자 선택은 그대로다.
+    /// 소스 계약 — 말풍선이 **이모티콘 폴백을 먼저** 거친 뒤 마크다운을 그리고(두 갈래 모두), 링크 문에 스킴 검사를 세운다.
+    /// 우클릭 [복사]·[신고]와 끌어 고르기는 앱 갈래 글자 뷰가 맡는다 — 그 동작은 ChatBubbleSelectionTests 가 진짜 이벤트로 잰다.
+    /// 여기서는 **배선**만 본다: 앱 갈래는 원문(`raw: entry.body`)과 신고 문을 글자 뷰에 넘기고, SwiftUI 선택(`textSelection`)은 어디에도 없다
+    /// (그것이 우클릭을 시스템 메뉴로 가져가 신고를 지운 v0.3.34 의 원인이다).
     @Test func 말풍선은_이모티콘_폴백_뒤에_마크다운을_그린다() throws {
         let view = try cmSource("CheckMessageView.swift")
         let bubble = try #require(cmRegion(view, from: "private var textBubble: some View {", to: "\n    }"))
+        // 스냅샷 갈래.
         #expect(bubble.contains("Text(ChatMarkdownText.attributed(AingStickerText.preview(for: entry.body), isMine: entry.isMine))"))
         #expect(bubble.contains(".environment(\\.openURL, OpenURLAction(handler: ChatMarkdownText.openAction))"),
-                "링크 문 앞의 스킴 검사가 없다")
+                "스냅샷 갈래 링크 문 앞의 스킴 검사가 없다")
         #expect(bubble.contains(".tint(ChatMarkdownText.linkColor(isMine: entry.isMine))"))
-        #expect(view.contains("CheckPasteboard.copy(entry.body)"), "우클릭 복사가 원문이 아니다")
+        // 앱 갈래 — 보이는 글자는 폴백을 지난 본문, 고른 것 없는 [복사]는 원문, 신고 문은 행이 받은 그대로.
+        let app = try #require(cmRegion(bubble, from: "ChatBubbleText(", to: ".fixedSize"), "앱 갈래가 글자 뷰를 안 세운다")
+        #expect(app.contains("shown: AingStickerText.preview(for: entry.body)"), "앱 갈래가 폴백을 안 지난다")
+        #expect(app.contains("raw: entry.body"), "앱 갈래 [복사]가 원문이 아니다")
+        #expect(app.contains("onReport: onReport"), "앱 갈래가 신고 문을 안 넘긴다")
+        // 두 갈래를 가르는 스위치는 스냅샷 전용이고, 패널은 입력칸과 같은 스위치를 넘긴다.
+        #expect(bubble.contains("if rendersPlainText {"))
+        #expect(view.contains("rendersPlainText: rendersPlainTextEditor"), "패널이 스냅샷 스위치를 대화에 안 넘긴다")
 
         let row = try #require(cmRegion(view, from: "private struct MessageBubbleRow: View {", to: "// MARK: - 입력줄"))
+        // 그림 말풍선의 SwiftUI 메뉴 하나만 남는다(글자 말풍선 메뉴는 글자 뷰가 짓는다).
         #expect(row.components(separatedBy: ".contextMenu {").count - 1 == 1)
-        #expect(row.components(separatedBy: ".textSelection(.enabled)").count - 1 == 1, "글자 선택 자리가 바뀌었다")
+        #expect(!row.contains(".textSelection("), "SwiftUI 글자 선택이 돌아왔다 — 우클릭이 시스템 메뉴로 가서 [신고]가 사라진다")
+        #expect(view.contains("CheckPasteboard.copy(entry.body)"), "그림 말풍선 우클릭 복사가 원문이 아니다")
+
+        // 앱 갈래 링크 문의 스킴 검사.
+        let textView = try cmSource("ChatBubbleTextView.swift")
+        let follow = try #require(cmRegion(textView, from: "func followLink(_ link: Any) -> Bool {", to: "\n    }"))
+        #expect(follow.contains("ChatMarkdown.isOpenable(url)"), "앱 갈래 링크 문 앞의 스킴 검사가 없다")
 
         // 틀 높이 추정도 말풍선과 같은 글자(이모티콘 폴백 → 마크다운)로 센다.
         let estimate = try #require(cmRegion(view, from: "static func conversationContentHeight(", to: "\n    }"))

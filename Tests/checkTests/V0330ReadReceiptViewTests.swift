@@ -73,7 +73,9 @@ private func m2rConversation(_ entries: [MessageHistoryEntry], receipts: Bool) t
         peerUserID: m2rPeer,
         lastMessageID: entries.last?.id,
         readReceiptsAvailable: receipts,
-        clipsInsteadOfScrolling: true
+        clipsInsteadOfScrolling: true,
+        // `ImageRenderer` 는 NSView 를 못 그린다 — 말풍선 본문을 SwiftUI `Text` 갈래로 그린다(2026-11-03 ④ 뒤 앱은 AppKit 글자 뷰).
+        rendersPlainText: true
     )
     .frame(width: MessagePanelLayout.contentWidth, height: 96)
     .background(CheckTheme.background)

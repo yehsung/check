@@ -17,7 +17,8 @@ import Testing
 // ── 빠른 것과 깊은 것을 가른 기준 ──
 // 기본 게이트는 **속도**로 가른다(--no-parallel 실측 100ms 미만). 시작 판은 depth 1~7(합쳐 65,004 잎)과 잎 다섯 전부를 기본에 두고,
 // depth 8~10 은 `REVERSI_PERFT_DEEP=1` 에서만 돈다 — 규칙을 고칠 때 한 번 돌리는 그물이다.
-// 실측(2026-11-03, 디버그 빌드 · --no-parallel): 아래 R1 보고(FLIP/reports/R1.md)에 적었다.
+// 실측(2026-11-03, 디버그 빌드 · --no-parallel): 기본 depth 7 0.014초(기본 perft 시험 전체 약 0.03초) ·
+// DEEP depth 8 0.093초 · depth 9 0.642초 · depth 10 4.786초. depth 8 이 100ms 문턱에 붙어 있어 DEEP 에 둔다.
 
 // MARK: - 픽스처
 

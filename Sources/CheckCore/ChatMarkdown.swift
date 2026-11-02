@@ -23,8 +23,9 @@ import Foundation
 //  ② **한 번의 줄바꿈은 줄바꿈이다.** 표준 마크다운은 홑 줄바꿈을 공백으로 접지만, ⇧↩ 로 친 줄이 사라지면
 //     그건 "내 말이 화면에서 달라지는" 버그다. 원문 한 줄 = 해석한 한 줄(빠지는 것은 ``` 울타리 줄뿐).
 //  ③ **링크는 http·https 만.** `javascript:` · `file:` · 사용자 정의 스킴은 글자로만 남는다. 남이 보낸 글이다.
-//  ④ **채팅 손버릇을 깨지 않는다.** `-_-` · `>_<` · `ㅎㅎ~~고마워~~` · `snake_case` · `#해시태그` 는 그대로 글자다
-//     (줄 머리 기호는 뒤에 공백을 요구하고, `_` · `~~` 는 단어 안에서 켜지지 않는다).
+//  ④ **채팅 손버릇을 깨지 않는다.** `-_-` · `>_<` · `*^^*` · `^_^ … ^_^` · `ㅎㅎ~~고마워~~` · `snake_case` · `2*3*4` ·
+//     `#해시태그` 는 그대로 글자다(줄 머리 기호는 뒤에 공백을 요구하고, 홑 `*` · `_` · `~~` 는 단어 안에서 켜지지 않고,
+//     홑 `*` · `_` 는 안쪽이 글자·숫자일 때만 짝이다 — `ChatInlineParser.closer`).
 
 /// 한 줄의 종류. **원문 한 줄 = 하나다**(``` 울타리 줄만 빠진다 — 규약 ②).
 package enum ChatMarkdownLineKind: Equatable, Sendable {
@@ -426,14 +427,21 @@ struct ChatInlineParser {
     /// 닫는 짝의 자리. 여는 기호 바로 뒤가 공백이면 여는 기호가 아니고(`* 항목` · `2 * 3`),
     /// 닫는 기호 바로 앞이 공백이면 닫는 기호가 아니다. 내용은 한 글자 이상이다.
     ///
-    /// `_` · `~~` 는 **단어 안에서 안 켜진다**(규약 ④): 여는 기호 앞 · 닫는 기호 뒤가 글자(한글 포함)·숫자면 기호가 아니다.
-    /// `*` 는 단어 안에서도 켜진다 — 조사가 붙는 한국어에서 `이건**중요**해` 가 굵게 되어야 하고, 채팅에서 `*` 를
-    /// 꾸밈 말고 쓰는 일은 드물다(`~` 는 정반대라 막는다).
+    /// **단어 안에서 안 켜진다**(규약 ④): 홑 `*` · `_` · `__` · `~~` 는 여는 기호 앞 · 닫는 기호 뒤가 글자(한글 포함)·숫자면
+    /// 기호가 아니다(`snake_case` · `ㅎㅎ~~고마워~~` · `2*3*4` · 가림표 `시*발 … 시*발`).
+    /// `**` 만 단어 안에서도 켜진다 — 조사가 붙는 한국어에서 `이건**중요**해` 가 굵게 되어야 한다.
+    ///
+    /// **안쪽이 글자여야 켜진다**: 홑 `*` 와 `_` · `__` 는 여는 기호 바로 뒤 · 닫는 기호 바로 앞이 글자·숫자일 때만 짝이다.
+    /// 이모티콘(`*^^*` · `^_^` · `-_-` · `>_<` · `*.*` · `^__^`)의 기호는 안쪽이 문장부호라 글자로 남는다 — 공백 검사만으로는
+    /// 한 메시지에 두 번 나온 `^_^ … ^_^` 가 기울임 짝이 되어 기호가 사라졌다(한글은 기울임이 안 보여 그냥 지워진 것으로 보인다).
+    /// `**` · `~~` 는 이 검사를 하지 않는다 — `**"인용"**` · `**(중요)**` 처럼 문장부호를 감싸는 굵게가 흔하다.
     func closer(_ mark: Character, width: Int, openAt index: Int, end: Int) -> Int? {
         let first = index + width
         guard first < end, !chars[first].isWhitespace else { return nil }
         if width == 1, chars[first] == mark { return nil }
-        let wordBound = mark != "*"
+        let wordBound = !(mark == "*" && width == 2)
+        let wordInside = mark == "_" || (mark == "*" && width == 1)
+        if wordInside, !Self.isWordCharacter(chars[first]) { return nil }
         if wordBound, index > 0, Self.isWordCharacter(chars[index - 1]) { return nil }
 
         var cursor = first + 1
@@ -453,7 +461,7 @@ struct ChatInlineParser {
             let run = runLength(at: cursor, end: end)
             // 홑 기호의 짝을 찾을 때 `**` 묶음은 건너뛴다(`*a **b** c*` 의 바깥 짝은 맨 끝 `*` 다).
             if width == 1, run >= 2 { cursor += run; continue }
-            if run >= width, !chars[cursor - 1].isWhitespace {
+            if run >= width, !chars[cursor - 1].isWhitespace, !wordInside || Self.isWordCharacter(chars[cursor - 1]) {
                 // `***` 는 마지막 둘(또는 하나)이 짝이다 — `***굵은 기울임***` 의 안쪽에 `*…*` 가 남는다.
                 let close = cursor + run - width
                 if wordBound, close + width < chars.count, Self.isWordCharacter(chars[close + width]) {

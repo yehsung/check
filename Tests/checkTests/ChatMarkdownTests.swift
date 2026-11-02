@@ -238,7 +238,7 @@ struct ChatMarkdownParserTests {
             ("앞 **굵게** 뒤", [("앞 ", [], nil), ("굵게", .bold, nil), (" 뒤", [], nil)]),
             ("***둘 다***", [("둘 다", [.bold, .italic], nil)]),
             ("*a **b** c*", [("a ", .italic, nil), ("b", [.italic, .bold], nil), (" c", .italic, nil)]),
-            // 조사가 붙는 한국어 — `*` 는 단어 안에서도 켜진다.
+            // 조사가 붙는 한국어 — `**` 는 단어 안에서도 켜진다(홑 `*` 는 안 켜진다 — 아래 `2*3*4` · 가림표).
             ("이건**중요**해", [("이건", [], nil), ("중요", .bold, nil), ("해", [], nil)]),
             ("``a`b``", [("a`b", .code, nil)]),
             ("```let x```", [("let x", .code, nil)]),
@@ -338,7 +338,9 @@ struct ChatMarkdownParserTests {
         #expect(cmVisible("```\n```") == "```\n```")
     }
 
-    /// 단어 안의 `_` · `~~` 는 꾸밈이 아니다(snake_case · `ㅎㅎ~~고마워~~`). 줄 머리 기호는 뒤에 공백이 있어야 한다(`-_-` · `>_<`).
+    /// 단어 안의 `_` · `~~` · 홑 `*` 는 꾸밈이 아니다(snake_case · `ㅎㅎ~~고마워~~` · `2*3*4` · 가림표).
+    /// 줄 머리 기호는 뒤에 공백이 있어야 한다(`-_-` · `>_<`).
+    /// 이모티콘은 **한 메시지에 두 번** 넣는다 — 한 번만 넣으면 짝이 없어 고치기 전에도 초록이었다(`^_^ … ^_^` 가 기울임 짝이 됐다).
     @Test(arguments: [
         "snake_case_name",
         "foo_bar_",
@@ -351,6 +353,19 @@ struct ChatMarkdownParserTests {
         "#해시태그",
         "+1 동의",
         "1.5배",
+        "고마워요 *^^*",
+        "*^^* 고마워요 *^^*",
+        "^_^ 좋아 ^_^",
+        "-_- 아 진짜 -_-",
+        ">_< 헐 >_<",
+        "^__^ 좋아 ^__^",
+        "*_* 와 *_*",
+        "*.* 와 *.*",
+        "*^_^* 굿 *^_^*",
+        "(*´▽`*)",
+        "2*3*4",
+        "x*2 와 y*3",
+        "시*발 진짜 시*발",
     ])
     func 채팅_손버릇은_글자_그대로다(body: String) {
         let lines = ChatMarkdown.parse(body)
@@ -360,10 +375,35 @@ struct ChatMarkdownParserTests {
     }
 
     /// 대조군: 단어 **경계**의 `_` 와 `~~` 는 켜진다(위 시험이 "아예 안 켜서 초록"이 아니다).
+    /// 안쪽이 글자면 한 메시지에 짝이 두 벌 있어도 둘 다 켜진다 — 이모티콘 시험의 "두 번 넣기"와 같은 모양이다.
     @Test func 단어_경계의_밑줄과_물결은_켜진다() {
         #expect(cmSame(cmInline("이건 _기울임_ 이다"), [("이건 ", [], nil), ("기울임", .italic, nil), (" 이다", [], nil)]))
         #expect(cmSame(cmInline("(_괄호 안_)"), [("(", [], nil), ("괄호 안", .italic, nil), (")", [], nil)]))
         #expect(cmSame(cmInline("이건 ~~취소~~ 됐어"), [("이건 ", [], nil), ("취소", .strikethrough, nil), (" 됐어", [], nil)]))
+        #expect(cmSame(cmInline("*진짜* 좋아 *진짜*"), [("진짜", .italic, nil), (" 좋아 ", [], nil), ("진짜", .italic, nil)]))
+        #expect(cmSame(cmInline("_a1_ 와 __b2__"), [("a1", .italic, nil), (" 와 ", [], nil), ("b2", .bold, nil)]))
+    }
+
+    /// ★ **이모티콘 무작위 1천 개(시드 고정).** 채팅 이모티콘 · 곱셈 · 가림표를 띄어 섞은 본문은 **글자 하나 안 바뀐다**.
+    /// 위 표는 사람이 고른 조합뿐이다 — 여기서는 서로 다른 이모티콘이 한 메시지에서 짝이 되는 조합(`^_^ … -_-`)까지 훑는다.
+    /// (글자 보존 무작위 시험은 `*` · `_` 를 기호로 빼고 세서 이 결함을 못 본다.)
+    @Test func 이모티콘을_섞은_무작위_본문은_글자_그대로다() {
+        let tokens = [
+            "^_^", "^^", "-_-", "-_-;;", ">_<", "*^^*", "*^_^*", "*.*", "*_*", "^__^", "ㅠ_ㅠ", "T_T",
+            "2*3", "3*4=12", "시*발", "좋아", "고마워", "ㅋㅋ", "진짜", "ㅎㅎ~~", "snake_case", "!", "?",
+        ]
+        var random = CMRandom(state: 0x5EED_0F_E3)
+        var paired = 0
+        for _ in 0..<1_000 {
+            let count = Int.random(in: 1...10, using: &random)
+            let body = (0..<count).map { _ in tokens.randomElement(using: &random)! }.joined(separator: " ")
+            if body.filter({ $0 == "*" || $0 == "_" }).count >= 4 { paired += 1 }
+            let lines = ChatMarkdown.parse(body)
+            #expect(cmVisible(body) == body, "\(body.debugDescription) → \(cmVisible(body).debugDescription)")
+            #expect(lines.flatMap(\.spans).allSatisfy { $0.style.isEmpty }, "\(body.debugDescription) 에 꾸밈이 생겼다")
+        }
+        // 짝이 될 만한 기호가 넷 이상인 본문을 실제로 많이 지났다(공허한 초록이 아니다).
+        #expect(paired > 300, "기호 넷 이상인 본문이 \(paired)개뿐이다")
     }
 
     /// 코드 안의 기호는 꾸밈이 아니다 — 조각이든 블록이든.
@@ -503,7 +543,8 @@ struct ChatMarkdownPreviewTests {
         #expect(banner.contains("Text(ChatMarkdown.plainPreview(banner.body))"), "확성기 배너가 기호를 안 벗긴다")
         #expect(!banner.contains("Text(banner.body)"))
 
-        let overlay = try cmSource("CheckOverlayWindow.swift")
+        // 쪼갠 파일(맥 화면 + 코어 CheckPanelVisibility)이라 두 조각을 이어 읽는다 — CheckCoreSourceLayoutTests 의 반쪽 읽기 금지.
+        let overlay = cmStripComments(try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayWindow.swift"))
         let spoken = try #require(cmRegion(overlay, from: "static func messageBubbleText(", to: "\n    }"))
         #expect(spoken.contains("ChatMarkdown.plainPreview(body)"), "캐릭터 말풍선이 기호를 안 벗긴다(변환은 이 함수 안이어야 한다)")
     }

@@ -34,7 +34,7 @@ package nonisolated enum ReversiAI {
         limits: ReversiAISearchLimits = .standard,
         isCancelled: @Sendable () -> Bool = { false }
     ) -> Int? {
-        // R2 가 엔진으로 바꾼다 — 지금은 계약 표면만 세운 임시 몸통(합법 수 가운데 idx 가 가장 작은 것).
-        ReversiRules.legalMoves(board, color: toMove).first
+        // 탐색 본체는 ReversiAIEngine.swift(반복 심화 negamax + 알파베타 · 종반 완전 탐색 · 최선 동점끼리만 무작위).
+        decide(board: board, toMove: toMove, limits: limits, isCancelled: isCancelled)?.move
     }
 }

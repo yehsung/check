@@ -178,6 +178,20 @@ extension WorkTimerStore {
         return pokeDirectory.first { $0.userID == id }?.statusMessage
     }
 
+    /// 대화 상대가 집중 중인가(2026-11-03 — 대화 머리의 '집중 중' 표시). 상태메시지와 **같은 한 곳**(명부)에서 온다 — 명부는 대화 화면에
+    /// 있는 동안에도 30초마다 다시 받는다(`refreshPokeDirectoryIfVisible`). 명부가 모르면 false(모름 = 막지 않는다).
+    var selectedMessagePeerIsFocused: Bool {
+        guard let id = selectedMessagePeerID else { return false }
+        return isPeerFocused(id)
+    }
+
+    /// 지금 고른 상대에게 **집중 모드 때문에** 못 보내는 사유(nil = 집중은 막지 않는다 · 2026-11-03 대표 요청 5·6).
+    /// `canSendMessageNow` · `canSendStickerNow` · `sendMessage` 본체 · [보내기]/이모티콘 툴팁 · 입력칸 위 안내줄이 전부 이것 하나를 본다 —
+    /// 규칙은 `focusSendBlock(to:)`(찌르기와 같은 함수)이다.
+    var messageFocusBlock: FocusSendBlock? {
+        focusSendBlock(to: selectedMessagePeerID)
+    }
+
     /// 같은 세 곳에서 오는 아바타(없으면 nil — 그때는 이니셜 원이 그려진다).
     var selectedMessagePeerAvatarURL: URL? {
         guard let id = selectedMessagePeerID else { return nil }
@@ -192,11 +206,11 @@ extension WorkTimerStore {
 
     /// 지금 [보내기]를 누를 수 있는가.
     ///
-    /// **쿨타임은 여기 없다**(위 머리 주석 ①). 판정은 셋뿐이다: 왕복 중이 아니고 · 상대를 골랐고 ·
+    /// **쿨타임은 여기 없다**(위 머리 주석 ①). 판정은 넷이다: 왕복 중이 아니고 · 상대를 골랐고 · 집중이 막지 않고(2026-11-03) ·
     /// 본문이 서버 경계 안이다. 근무중 여부는 **여기서 보지 않는다** — v0.3.30 부터 서버도 보지 않는다
     /// (옛 서버가 `not_working` 으로 답하면 전송 시 안내가 말한다).
     var canSendMessageNow: Bool {
-        guard !isSendingMessage, selectedMessagePeerID != nil else { return false }
+        guard !isSendingMessage, selectedMessagePeerID != nil, messageFocusBlock == nil else { return false }
         if case .ok = MessageBody.validate(messageDraft) { return true }
         return false
     }
@@ -535,11 +549,11 @@ extension WorkTimerStore {
     /// 지금 아잉이 이모티콘을 보낼 수 있는가(v0.3.62).
     ///
     /// `canSendMessageNow` 를 쓰지 않는 이유는 **그 판정이 입력칸 글을 보기 때문**이다(빈 칸이면 false).
-    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과한다 — 그래서 남는 조건은 둘뿐이고,
-    /// 그 둘은 `canSendMessageNow` 의 앞 두 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다).
-    /// 근무 여부·집중 모드는 여기서도 보지 않는다(v0.3.30 — 서버가 그 조건을 지웠다. `sendMessage` 주석).
+    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과한다 — 그래서 남는 조건은 셋이고,
+    /// 그 셋은 `canSendMessageNow` 의 guard 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다).
+    /// 근무 여부는 여기서도 보지 않는다(v0.3.30 — 서버가 그 조건을 지웠다). 집중은 본다(2026-11-03 — `messageFocusBlock`, 글과 같은 규칙).
     var canSendStickerNow: Bool {
-        guard !isSendingMessage, selectedMessagePeerID != nil else { return false }
+        guard !isSendingMessage, selectedMessagePeerID != nil, messageFocusBlock == nil else { return false }
         return true
     }
 
@@ -563,7 +577,12 @@ extension WorkTimerStore {
     @discardableResult
     func sendSticker(_ sticker: AingSticker) -> Bool {
         guard canSendStickerNow, let peer = selectedMessagePeerID else {
-            if selectedMessagePeerID != nil { messageNotice = AingStickerText.sendingNowNotice }
+            // 집중이 막았으면 그 사유를 말한다 — "보내는 중이에요"로 접으면 다시 누르면 될 것처럼 읽힌다(2026-11-03).
+            if let block = messageFocusBlock {
+                messageNotice = block.messageText
+            } else if selectedMessagePeerID != nil {
+                messageNotice = AingStickerText.sendingNowNotice
+            }
             return false
         }
         // 신고 결과 한 줄은 입력칸 위 같은 자리를 쓴다 — 방금 보낸 이모티콘의 결과가 그 자리를 이어받는다.
@@ -577,10 +596,16 @@ extension WorkTimerStore {
     /// **쿨타임 미러가 없다**(v0.2.49). 옛 구현은 성공할 때마다 60초 미러를 세우고 버튼을 잠갔는데,
     /// 서버가 그 규칙을 폐지했으므로 미러를 남기면 **아무도 갱신하지 않는 잠금**이 화면에 남는다.
     ///
-    /// **집중 모드·근무 여부는 여기서 거르지 않는다.** 서버가 판정한다(target_focused, 옛 서버는 not_working 도).
+    /// **근무 여부는 여기서 거르지 않는다.** 서버가 판정한다(옛 서버는 not_working).
     /// 클라가 자기 미러로 한 번 더 판정하면 두 판정이 언젠가 갈리고, 그때 화면은 서버가 허락한 전송을 막거나
     /// 막을 전송을 허락한다 — 사용자가 원인을 알 수 없는 종류의 버그다. v0.2.49~v0.3.29 에는 "내가 근무중이 아닌 것만은"
     /// 선게이트로 막았는데, v0.3.30 에 서버가 그 규칙을 지워 **바로 그 버그가 되었으므로** 걷었다.
+    ///
+    /// **집중 모드는 2026-11-03 부터 여기서도 거른다**(대표 요청 5·6 — `messageFocusBlock` 한 규칙). 위 경고와 갈리는 이유:
+    ///   · 내 집중(요청 6)은 **서버에 없는 규칙**이다 — 서버는 보낸이의 집중을 보지 않는다. 그래서 막는 자리는 클라뿐이다.
+    ///   · 상대 집중(요청 5)은 서버와 **같은 규칙**(target_focused)의 예고다. 명부가 모르면(옛 서버 · 아직 못 받음) 막지 않고 서버가 판정하므로,
+    ///     갈릴 수 있는 쪽은 "명부가 30초 낡아 방금 집중을 끈 사람에게 잠깐 못 보낸다" 하나다 — 안내 문장이 "나중에"를 말하는 까닭이다.
+    ///   이모티콘·Enter·[보내기]가 전부 이 함수로 오므로 본체 가드는 여기 한 줄이고, 화면 잠금(`canSendMessageNow` · `canSendStickerNow`)이 같은 규칙을 본다.
     ///
     /// 빈 본문·200자 초과도 여기서 판정하지 않는다. `service.sendMessage` 가 MessageBody 로 사전 판정해
     /// **네트워크를 타지 않고** 서버와 같은 status 를 즉답하므로, 아래 switch 하나가 로컬 거절과 서버 거절을
@@ -604,6 +629,11 @@ extension WorkTimerStore {
         // 왕복이 이미 떠 있으면 두 번째를 만들지 않는다. 문구도 건드리지 않는다 — 방금 누른 것의 결과가
         // 곧 도착하는데 여기서 다른 말을 쓰면 그 결과가 한 프레임 만에 덮인다.
         guard !isSendingMessage else { return }
+        // 집중 선게이트(2026-11-03 — 위 주석). 왕복 가드 **뒤**다: 떠 있는 왕복의 결과 문구를 이 줄이 덮지 않게.
+        if let block = focusSendBlock(to: userID) {
+            messageNotice = block.messageText
+            return
+        }
         isSendingMessage = true
         let generation = sessionGeneration
         // 전송 멱등 키(2026-10-30 안정화) — **이 한 번의 전송 의도**의 이름이다. 서버의 답을 못 받은 같은 말을 같은 사람에게
@@ -660,6 +690,9 @@ extension WorkTimerStore {
                 loadPokeDirectory()
             case .targetFocused:
                 messageNotice = Self.messageTargetFocusedNotice
+                // 명부가 그 사람을 집중 아님으로 알고 있었다(알았으면 위 선게이트가 막았다) — 대화 중에 상대가 켠 경우다.
+                // 다시 받아 머리의 '집중 중' 표시와 [보내기] 잠금이 따라오게 한다(target_not_working 과 같은 처리). 문구는 그대로다.
+                loadPokeDirectory()
             case .tooLong:
                 // 서버가 숫자를 알려 줬으면 그 숫자를 말한다(클라 상수와 갈리는 날 진실은 거절한 쪽에 있다).
                 messageNotice = Self.messageTooLongNotice(maxLength: response.maxLength)

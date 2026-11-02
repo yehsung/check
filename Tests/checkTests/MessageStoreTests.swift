@@ -196,14 +196,17 @@ import Testing
         #expect(sendRequestCount(host: host) == 1)
     }
 
-    /// ⑤ target_focused — **클라는 집중 모드를 판정하지 않는다**. 요청은 실제로 나가고, 서버 판정 하나로
-    /// 문구가 나온다. 클라가 자기 미러로 미리 걸렀다면 요청이 0건일 텐데, 그게 두 판정이 갈리는 시작점이다
-    /// (내 미러가 낡으면 서버가 허락한 전송을 화면이 막는다).
+    /// ⑤ target_focused — **클라가 모르는 집중은 서버가 판정한다**. 2026-11-03(대표 요청 5·6)부터 클라도 집중을 미리 거른다 —
+    /// 단 **아는 것만**이다: 내 집중(`focusMode`)과 명부가 집중이라 말한 상대(`PokeDirectoryEntry.isFocused`). 이 시험은 둘 다 모르는
+    /// 상태(내 집중 꺼짐 · 명부 비어 있음 = 옛 서버·아직 못 받음)라 요청이 실제로 나가고, 서버 판정 하나로 문구가 나온다.
+    /// 여기서 0건이면 클라가 서버에 없는 금지를 **발명한** 것이다(모름을 집중으로 읽음). 아는 집중을 미리 거르는 쪽은 FocusSendGateTests 가 잰다.
     /// 쿨타임도 태우지 않는다 — 서버가 행을 안 남긴다.
     @Test func sendMessageTargetFocusedIsDecidedByServerOnly() async {
         let host = "msg-send-focused"
         let store = makeStore(host: host)
         store.focusMode = false
+        // 전제: 클라는 상대의 집중을 **모른다**(명부가 비어 있다) — 아는 상태로 바뀌면 이 시험은 다른 것을 잰다.
+        #expect(store.pokeDirectory.isEmpty && store.focusSendBlock(to: "target") == nil)
 
         await send(store)
 

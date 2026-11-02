@@ -347,6 +347,11 @@ struct CheckMessageView: View {
                         .accessibilityLabel("상태메시지: \(status)")
                 }
             }
+            // 상대가 집중 중이면 이름 옆 칩 하나(2026-11-03 · 대표 요청 5). 콕찌르기 행의 '집중' 칩과 같은 색이다.
+            // **머리 높이를 늘리지 않는다**: caption2 한 줄(≈14pt)이 [뒤로](27pt) 높이 안이다. 폭은 이름이 양보한다(이름은 줄임표로 잘린다).
+            if hasPeer, store.selectedMessagePeerIsFocused {
+                MessagePeerFocusChip()
+            }
             Spacer(minLength: 6)
             // 아직 못 받았을 때만 뜬다. **본문 자리가 아니라 머리 오른쪽**이다 — 본문 자리에 동기화 문구를
             // 쓰지 않는다는 규약이고, 이미 대화가 보이는 상태에서 갱신이 돌 때도 화면이 안 흔들린다.
@@ -403,6 +408,8 @@ struct CheckMessageView: View {
                         // 왕복 0.2~1.5초) 버튼만 흐려지고 칸 여섯 개는 그대로라, 누른 이모티콘이 아무
                         // 안내 없이 삼켜졌다(두 겹 게이트의 뷰 쪽 짝 — 한쪽만 걸면 조용히 아무 일도 안 난다).
                         canSend: store.canSendStickerNow,
+                        // 못 보내는 사유가 집중이면 칸 툴팁이 그 문장을 말한다(2026-11-03) — "보내는 중이에요"로 접으면 다시 누르면 될 것처럼 읽힌다.
+                        blockedHelp: store.messageFocusBlock?.messageText ?? AingStickerText.sendingNowNotice,
                         onPick: { sticker in
                             // 고른 그 순간 **그 자리에서 전송**된다(사용자 결정 — 글과 섞지 않는다).
                             // 문은 스토어 하나다: `sendSticker` 가 `sendMessage(to:body:)` 로 들어간다.
@@ -938,6 +945,28 @@ private struct MessageBubbleRow: View {
     }
 }
 
+/// 대화 머리의 '집중 중' 칩(2026-11-03 · 대표 요청 5 — 보내기 전에 알린다). 콕찌르기 행의 '집중' 칩(`PokeDirectoryRowView.focusChipText`)과
+/// **같은 색**(aiToken)이다. 글자가 "집중 중"인 이유: 행 칩은 근무중·자리비움과 나란히 서는 **상태 이름**이고, 여기는 이름 옆에 홀로 서는 문장이라
+/// "집중" 두 글자만 두면 이름의 일부로 읽힌다. 사유 전문은 입력칸 위 줄과 [보내기] 툴팁이 말한다(`FocusSendBlock.messageText`).
+struct MessagePeerFocusChip: View {
+    static let text = "집중 중"
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle()
+                .fill(CheckTheme.aiToken)
+                .frame(width: 6, height: 6)
+            Text(Self.text)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(CheckTheme.aiToken)
+        }
+        .fixedSize()
+        .checkTooltip(WorkTimerStore.messageTargetFocusedNotice)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(WorkTimerStore.messageTargetFocusedNotice)
+    }
+}
+
 // MARK: - 입력줄
 
 /// 여러 줄 입력 + 글자 수(N/200, **코드포인트**) + [보내기], 그리고 **사라지는 규칙 한 줄**.
@@ -1072,13 +1101,22 @@ struct MessageComposerView: View {
         if stickerGridShown.wrappedValue { return AingStickerText.closeGridLabel }
         if store.isSendingMessage { return "보내는 중이에요" }
         if store.selectedMessagePeerID == nil { return "콕 찌르기에서 대화 상대를 골라 주세요" }
+        // 집중(2026-11-03) — [보내기]의 `sendHelp` 와 같은 자리·같은 문장이다.
+        if let block = store.messageFocusBlock { return block.messageText }
         return AingStickerText.buttonLabel
     }
 
-    /// 입력칸 위 한 줄: 신고·차단 결과(이 자리 몫)가 먼저, 없으면 전송 결과. 전송하면 신고 결과는 내려간다(`sendDraftMessage`).
+    /// 입력칸 위 한 줄: 신고·차단 결과(이 자리 몫)가 먼저, 그다음 집중 사유(2026-11-03), 없으면 전송 결과. 전송하면 신고 결과는 내려간다(`sendDraftMessage`).
+    ///
+    /// ★ **집중 사유는 상태라서 늘 뜬다**(대표 요청 5 "미리 알 수 있게"). [보내기]가 흐린데 이유가 툴팁에만 있으면 마우스를 올리기 전엔 모른다.
+    ///   전송 결과보다 앞인 이유: 결과는 지난 일이고 사유는 지금 일이다 — "보냈어요"가 떠 있는 채로 상대가 집중을 켜면 다음 말이 왜 안 가는지가 먼저다.
+    ///   같은 자리를 쓰므로 패널 높이는 그대로다(작성기 102pt 고정 크롬이 이 한 줄을 이미 센다 — `MessagePanelLayout.conversationHeight`).
     private var noticeLine: (text: String, isPositive: Bool)? {
         if let notice = store.blockReportNotice(on: .message) {
             return (notice.text, !notice.isError)
+        }
+        if let block = store.messageFocusBlock {
+            return (block.messageText, false)
         }
         guard let notice = store.messageNotice, !notice.isEmpty else { return nil }
         return (notice, notice == WorkTimerStore.messageSentNotice)
@@ -1105,13 +1143,16 @@ struct MessageComposerView: View {
     }
 
     /// 왜 못 보내는지 — 보낼 수 있으면 **보내는 법**(↩ · 줄바꿈은 ⇧↩)을 말한다. **쿨타임 문구는 여기 없다**
-    /// (v0.2.49 — 메시지에 쿨타임이 없다). 남은 사유는 셋뿐이고, 셋 다 사용자가 지금 고칠 수 있는 것이다.
+    /// (v0.2.49 — 메시지에 쿨타임이 없다). 남은 사유는 넷이다: 왕복 중 · 상대 없음 · 집중(2026-11-03) · 본문.
     ///
     /// `private` 이 아닌 이유(2026-09-11 검증 지적): 테스트가 [보내기] 버튼에 **실제로 붙는 이 값**을 되묻는다.
     /// 상수(`MessageDraftEditor.sendHelp`)만 재면 이 계산이 옛 "⌘↩" 문구를 돌려줘도 초록이었다.
     var sendHelp: String {
         if store.isSendingMessage { return "보내는 중이에요" }
         if store.selectedMessagePeerID == nil { return "콕 찌르기에서 대화 상대를 골라 주세요" }
+        // 집중(2026-11-03 · 대표 요청 5·6) — 내 집중이면 "집중 모드에서는…", 상대 집중이면 서버 거절과 같은 "지금 집중 중이에요…".
+        // 본문 검사보다 앞이다: 글을 고쳐도 안 풀리는 사유를 "보낼 말을 입력해 주세요"로 가리면 사용자는 글만 고친다.
+        if let block = store.messageFocusBlock { return block.messageText }
         switch MessageBody.validate(store.messageDraft) {
         case .ok: return MessageDraftEditor.sendHelp
         case .empty: return "보낼 말을 입력해 주세요"
@@ -1281,6 +1322,8 @@ struct AingStickerGridView: View {
     /// 지금 이모티콘을 보낼 수 있는가(`store.canSendStickerNow`). **칸이 이것을 본다** —
     /// 입력칸 옆 버튼과 같은 판정·같은 흐림이어야 "눌렀는데 아무 일도 안 난다"가 없다.
     var canSend: Bool = true
+    /// 못 보낼 때 칸 툴팁이 말할 사유. 기본은 왕복 중 문장(이 칸이 처음 생길 때의 유일한 사유였다) — 집중이면 대화 패널이 그 문장을 넘긴다.
+    var blockedHelp: String = AingStickerText.sendingNowNotice
     let onPick: (AingSticker) -> Void
     let onClose: () -> Void
 
@@ -1312,7 +1355,7 @@ struct AingStickerGridView: View {
             //   유동 열이 "남는 폭을 나눠 갖는" 기본 동작을 하면 칸이 정사각이 아니게 된다.
             LazyVGrid(columns: columns, spacing: AingStickerGridLayout.spacing) {
                 ForEach(AingSticker.allCases, id: \.self) { sticker in
-                    AingStickerGridCell(sticker: sticker, side: cell, canSend: canSend) { onPick(sticker) }
+                    AingStickerGridCell(sticker: sticker, side: cell, canSend: canSend, blockedHelp: blockedHelp) { onPick(sticker) }
                 }
             }
             Spacer(minLength: 0)
@@ -1356,6 +1399,7 @@ private struct AingStickerGridCell: View {
     let side: CGFloat
     /// 보낼 수 있는가. 못 보낼 때는 **[보내기]와 같은 모양으로** 흐려지고 눌리지 않는다.
     var canSend: Bool = true
+    var blockedHelp: String = AingStickerText.sendingNowNotice
     let action: () -> Void
 
     var body: some View {
@@ -1385,6 +1429,6 @@ private struct AingStickerGridCell: View {
         .disabled(!canSend)
         .opacity(canSend ? 1 : 0.35)
         .accessibilityLabel(AingStickerText.accessibilityLabel(sticker))
-        .checkTooltip(canSend ? AingStickerText.accessibilityLabel(sticker) : AingStickerText.sendingNowNotice)
+        .checkTooltip(canSend ? AingStickerText.accessibilityLabel(sticker) : blockedHelp)
     }
 }

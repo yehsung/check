@@ -3341,11 +3341,14 @@ enum PokeFocusNotice {
     /// 버튼은 "1단/2단" 이름만 그리므로 차이의 설명은 이 줄이 맡는다. 남은 시간은 넣지 않는다 — 292pt 한 줄에
     /// "(2시간 59분 남음)"까지 붙이면 실측 286.6pt 라 글꼴 차이 한 번에 두 줄로 넘어가 패널 높이가 흔들린다(툴팁이 말한다).
     /// 1단 길이는 상수에서 파생한다 — 문구에 "3시간"을 베껴 두지 않는다.
+    ///
+    /// ★ 2026-11-03(대표 요청 6): 받기만 막던 것이 **보내기도** 막는다(찌르기·울트라·메시지·이모티콘). 그래서 "받지 않아요"가 아니라
+    ///   "주고받지 않아요"다 — 옛 문장으로 두면 켠 사람이 [보내기]가 왜 잠겼는지 모른다. 실측 10pt 249pt(2단) — 한 줄(≤272) 안이다.
     static func text(for stage: FocusStage) -> String? {
         switch stage {
         case .off: nil
-        case .timed: "집중 모드 1단 — \(FocusModeButtonText.timedDurationText) 동안 콕찌르기를 받지 않아요"
-        case .always: "집중 모드 2단 — 해제 전까지 콕찌르기를 받지 않아요"
+        case .timed: "집중 모드 1단 — \(FocusModeButtonText.timedDurationText) 동안 찌르기·메시지를 주고받지 않아요"
+        case .always: "집중 모드 2단 — 해제 전까지 찌르기·메시지를 주고받지 않아요"
         }
     }
 }
@@ -3603,7 +3606,7 @@ enum PokeRowUnreadMark: Equatable, Sendable {
 
 /// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
-/// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/대상 자리비움=흐린 비활성).
+/// 상태 칩(집중/근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/집중/대상 자리비움=흐린 비활성).
 /// 자리비움 대상은 찌를 수 없다(서버 강제, 클라 선게이트). store 값을 값+클로저로만 받아 렌더 테스트 친화적으로 유지한다.
 ///
 /// **초 단위 시계는 이 패널 body 가 읽지 않는다.** 쿨타임 잔여·수신 시각·연결 경고는 읽기 클로저로 받아 MenuClockLeaf
@@ -3838,6 +3841,8 @@ private struct PokePanel: View {
                         // 목록 전체가 초당 재평가로 돌아간다(v0.2.37 까지의 결함 지점).
                         cooldownRemaining: { cooldownRemaining(entry.userID) },
                         canPoke: isMyselfWorking,
+                        // 내가 집중 중이면 누구도 못 찌른다(2026-11-03 · 요청 6). 스토어 sendPoke 의 같은 가드와 짝이다.
+                        isMyselfFocused: isFocusMode,
                         ultraBalance: ultraBalance,
                         ultraUnlimited: ultraUnlimited,
                         center: entry.center,
@@ -3879,15 +3884,18 @@ private struct PokePanel: View {
 /// 목록 행수 예산에 안 잡힌 높이만큼 자라 비근무 사용자의 팝오버만 700pt 상한에 다가간다(V0330 테스트가 한 줄임을 잰다).
 enum MessageAnytimeNotice {
     /// 비근무 사용자의 콕찌르기 안내줄. 찌르기만 막혔고 메시지는 된다는 두 사실을 함께 말한다.
+    /// ★ **내가 집중 중이면 이 줄은 뜨지 않는다**(2026-11-03) — 그때는 메시지도 막히므로 "언제든"이 거짓이 된다. 안내줄 순서에서
+    ///   집중 안내가 이 줄보다 앞인 이유가 그것이다(`PokePanelNoticeLine.line`).
     static let pokeOffWork = "콕 찌르기는 근무 중에만 · 메시지는 언제든 보낼 수 있어요"
 }
 
-/// 콕찌르기 패널의 안내줄(연결 끊김 / 메시지 결과 / 찌르기 결과 / 비근무 / 집중 모드 중 하나, 없으면 아무것도 안 그린다).
+/// 콕찌르기 패널의 안내줄(연결 끊김 / 메시지 결과 / 찌르기 결과 / 집중 모드 / 비근무 중 하나, 없으면 아무것도 안 그린다).
 ///
 /// 왜 잎인가: 연결 끊김 판정(isPokeDisconnected)이 시계를 읽는다(재연결 유예 경과 여부). 그 판정을 패널 body 에 두면
 /// 패널이 매초 무효화된다 — PokeEntryIconButton/FooterSyncStatus 가 같은 이유로 잎이다. 줄이 **뜨는지 자체**도
 /// 그 판정에 달려 있으므로 `if let` 까지 이 안에 있다(없으면 빈 뷰라 VStack 간격을 먹지 않는다).
-private struct PokePanelNoticeLine: View {
+/// (`line` 순서를 시험이 값으로 되묻도록 private 이 아니다 — 앱에서 이 줄을 세우는 곳은 여전히 PokePanel 하나다.)
+struct PokePanelNoticeLine: View {
     let isPokeDisconnected: () -> Bool
     let messageNotice: String?
     let notice: String?
@@ -3916,9 +3924,10 @@ private struct PokePanelNoticeLine: View {
         }
     }
 
-    // 안내줄 내용/톤(순수). notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 그다음 집중 모드 상태,
-    // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
-    // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
+    // 안내줄 내용/톤(순수). notice 가 있으면 그것을(주황), 없고 집중 모드면 집중 안내(회색), 그다음 비근무 안내(회색),
+    // 셋 다 아니면 nil(생략 — 상단 앵커 유지).
+    // ★ 2026-11-03 에 **집중이 비근무보다 앞으로** 왔다(대표 요청 6). 예전엔 집중이 '내 수신 설정(정보)'이라 찌르기 차단 사유인 비근무가
+    //   앞이었는데, 이제 집중은 찌르기·메시지를 **둘 다** 막는 더 큰 사유다. 비근무 안내는 "메시지는 언제든"을 말하므로 집중 중에 뜨면 거짓이다.
     static func line(
         disconnected: Bool,
         messageNotice: String?,
@@ -3942,21 +3951,21 @@ private struct PokePanelNoticeLine: View {
         if let notice, !notice.isEmpty {
             return (notice, true)
         }
+        if let focusText = PokeFocusNotice.text(for: focusStage) {
+            return (focusText, false)
+        }
         if !isMyselfWorking {
             // 찌르기 **전용** 차단 사유다(v0.3.30). 이 화면은 이제 근무 밖 사용자가 메시지를 보내러 들어오는 문이기도 해서,
             // "근무 중일 때만 …"만 떠 있으면 행의 말풍선 버튼까지 막힌 것처럼 읽힌다 — 메시지는 된다는 사실을 같은 줄에 붙인다.
             return (MessageAnytimeNotice.pokeOffWork, false)
         }
-        if let focusText = PokeFocusNotice.text(for: focusStage) {
-            return (focusText, false)
-        }
         return nil
     }
 }
 
-/// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(근무중/자리비움) + 우측 찌르기 버튼.
+/// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(집중/근무중/자리비움) + 우측 찌르기 버튼.
 /// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 손가락 아이콘: 가능(accent 원형·눌림 탄성),
-/// 쿨타임 중/내가 비근무/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
+/// 쿨타임 중/내가 비근무/집중(내 것·상대 것)/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
 // (렌더 테스트가 이 행 하나만 떼어 그릴 수 있도록 internal 로 둔다 — TokenBoardRowView 와 같은 근거.
 //  앱에서 이 행을 세우는 곳은 여전히 PokePanel 하나다.)
 struct PokeDirectoryRowView: View {
@@ -3966,6 +3975,9 @@ struct PokeDirectoryRowView: View {
     let cooldownRemaining: () -> Int
     // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
     let canPoke: Bool
+    // 내가 집중 모드인가(2026-11-03 · 대표 요청 6 — 나는 못 받으니 남에게도 못 보낸다). true 면 찌르기 버튼이 흐려진다(울트라도 같은 버튼이다).
+    // 기본값 false 라 이 값을 안 넘기는 자리(렌더 시험 호출부)는 지금과 같다. 앱에서 넘기는 곳은 PokePanel 하나다.
+    var isMyselfFocused: Bool = false
     // 내 울트라 잔량 — **툴팁 문구 분기 전용**이다. nil = 아직 모름(허용으로 읽는다).
     // 찌르기 자체의 활성 여부와도, 울트라 발사 여부와도 무관하다: 3초 홀드는 잔량과 **무관하게**
     // 무조건 발사되고 판정은 서버가 한다. 잔량 0 툴팁이 떠 있어도 누르면 요청은 나간다 —
@@ -4060,10 +4072,29 @@ struct PokeDirectoryRowView: View {
         )
     }
 
-    // 상태 칩: 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움"(caption2).
+    /// 집중 칩 글자(2026-11-03). 큐브 로비의 칩(`RummyPanelLobby` — "집중" · aiToken)과 **같은 낱말·같은 색 계열**이다 — 같은 사정을 두 화면이
+    /// 다른 말로 부르면 사용자는 다른 일로 읽는다. 폭은 점 6 + 간격 4 + 글자(실측 17.3pt) ≈ 27pt 로 "근무중"(≈36)·"자리비움"(≈35)보다
+    /// 좁다 — 이름 몫 81.05pt 를 1pt 도 깎지 않는다(FocusSendGateTests이 실측으로 되묻는다).
+    static let focusChipText = "집중"
+
+    // 상태 칩: 집중이면 보라 점+"집중"(2026-11-03 · 대표 요청 5), 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움"(caption2).
+    // ★ 집중이 **맨 앞**이다 — 자리비움보다도. 서버 send_message 는 상대 근무를 보지 않고 집중만 보므로, 자리를 비운 집중인 사람도
+    //   메시지는 막힌다. 그 사실을 미리 말하는 자리가 이 칩 하나다(찌르기는 어느 쪽이든 막힌다).
     @ViewBuilder
     private var statusChip: some View {
-        if entry.isWorking {
+        if entry.isFocused {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(CheckTheme.aiToken)
+                    .frame(width: 6, height: 6)
+                Text(Self.focusChipText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.aiToken)
+            }
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(entry.name)님은 집중 중이에요")
+        } else if entry.isWorking {
             HStack(spacing: 4) {
                 Circle()
                     .fill(CheckTheme.working)
@@ -4092,22 +4123,33 @@ struct PokeDirectoryRowView: View {
         }
     }
 
+    /// 찌르기 버튼을 흐리게 그리는 사유(쿨타임 제외 — 그건 초를 읽는 잎의 몫이다). nil 이면 누를 수 있다. **순수 함수**라 시험이 값으로 잰다.
+    ///
+    /// 순서: 내 비근무 → 집중(내 집중 → 상대 집중 — `FocusSendBlock.of`) → 상대 자리비움.
+    ///  · 내 사정이 상대 사정보다 앞이다 — 내가 풀어야 할 것이 있으면 상대 사정은 아직 의미가 없다. 스토어 sendPoke 의 가드 순서
+    ///    (근무 → 집중)와 같다(memory client-gates-come-in-pairs — 화면과 스토어가 같은 사유를 말한다).
+    ///  · 상대 집중이 상대 자리비움보다 앞이다 — 칩이 '집중'을 그리는 사람에게 "자리비움 상태에는…"이라 말하면 두 표시가 엇갈린다.
+    /// 집중 문장은 스토어 상수에서 온다(`FocusSendBlock.pokeText` — 서버 거절 문구와 같은 문장).
+    static func pokeBlockedReason(canPoke: Bool, isMyselfFocused: Bool, entry: PokeDirectoryEntry) -> String? {
+        if !canPoke { return "내가 근무 중일 때만 콕 찌를 수 있어요" }
+        if let focus = FocusSendBlock.of(myFocus: isMyselfFocused, peerFocused: entry.isFocused) { return focus.pokeText }
+        if !entry.isWorking { return "자리비움 상태에는 찌를 수 없어요" }
+        return nil
+    }
+
     @ViewBuilder
     private func pokeButton(remainingCooldown: Int) -> some View {
         if remainingCooldown > 0 {
             // 쿨타임 중 — 숫자 없이 흐린 비활성. 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
             pokeIconLabel(active: false)
                 .checkTooltip("잠시 후 다시 찌를 수 있어요")
-        } else if !canPoke {
-            // 내가 비근무 — 찌를 수 없다(서버 강제). 쿨타임과 같은 흐린 비활성 아이콘으로 표시.
+        } else if let reason = Self.pokeBlockedReason(canPoke: canPoke, isMyselfFocused: isMyselfFocused, entry: entry) {
+            // 내 비근무 · 집중(내 것 · 상대 것) · 대상 자리비움 — 찌를 수 없다. 쿨타임과 같은 흐린 비활성 아이콘으로 표시하고 사유는 툴팁이 말한다.
+            // 울트라도 여기서 같이 막힌다(같은 버튼을 3초 누르는 것이라 제스처 대상 자체가 없다).
             pokeIconLabel(active: false)
-                .checkTooltip("내가 근무 중일 때만 콕 찌를 수 있어요")
-        } else if !entry.isWorking {
-            // 대상이 자리비움 — 찌를 수 없다(서버 강제). 쿨타임/내 비근무와 같은 흐린 비활성 아이콘으로 표시.
-            pokeIconLabel(active: false)
-                .checkTooltip("자리비움 상태에는 찌를 수 없어요")
+                .checkTooltip(reason)
         } else {
-            // 가능 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 쿨타임 중·내가 비근무·대상 자리비움일 때는
+            // 가능 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 쿨타임 중·내가 비근무·집중·대상 자리비움일 때는
             // 위 분기에서 Button 이 아니라 흐린 라벨(pokeIconLabel)로 그려지므로 **제스처 대상 자체가 없다** —
             // 그 상태의 꾹 누르기는 아무 일도 일어나지 않고 help 툴팁이 이유를 말한다(숨은 규칙을 만들지 않는다).
             PokeChargeButton(
@@ -4128,8 +4170,10 @@ struct PokeDirectoryRowView: View {
     //   ① 최소 빌드 게이트는 폐기됐다(모든 버전이 받는다 — `target_outdated` 는 서버가 더 이상 내지 않는다).
     //   ② 이 버튼은 **아무것도 보내지 않는다.** 창을 여는 일에 근무 여부를 물을 이유가 없고,
     //      자리비움인 사람과 나눈 **지난 대화를 읽는 것**은 오히려 그때 가장 하고 싶은 일이다.
-    //   ③ 못 보내는 사정(상대 집중 · 옛 서버라면 내 비근무·상대 자리비움)은 **보낼 때** 서버가 판정해 창 안에서 말한다.
-    //      화면이 미리 잠그면 그 문장을 말할 자리가 사라진다.
+    //   ③ 못 보내는 사정은 **대화 화면 안에서** 말한다. 집중(2026-11-03 · 대표 요청 5·6 — 내 집중 · 상대 집중)은 대화 화면이 열린 채
+    //      [보내기]·Enter·이모티콘만 잠그고 그 사유를 입력칸 위 줄과 [보내기] 툴팁에 미리 적는다. 옛 서버라면 내 비근무·상대 자리비움은
+    //      보낼 때 서버가 판정한다. 이 버튼을 잠그면 그 문장을 말할 자리도, 집중인 사람과 나눈 **지난 대화를 읽을 문**도 같이 사라진다
+    //      (말풍선 버튼까지 잠글지는 대표 결재 대기 — 지금은 추천안대로 살려 둔다. 행의 '집중' 칩이 미리 알린다).
     //   ④ v0.3.30 부터는 근무 밖에서도 **보내진다**(서버가 send_message 의 근무 조건을 지웠다). 여기에 `canPoke`(내 근무)나
     //      `entry.isWorking`(상대 근무)를 얹으면 서버·스토어를 다 풀어도 비근무 사용자는 대화에 들어가지도 못한다 —
     //      찌르기 버튼의 근무 조건은 서버 규칙이 그대로라 남지만, 이 버튼에는 옮겨 오지 마라.

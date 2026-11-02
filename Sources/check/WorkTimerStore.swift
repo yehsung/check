@@ -300,7 +300,8 @@ final class WorkTimerStore {
             syncLeagueWeekToCurrent()
             if isLeaderboardVisible { loadLeaderboard() }
             if isTokenBoardVisible { loadTokenBoard() }
-            if isPokePanelVisible { loadPokeDirectory() }
+            // 대화 화면도 명부를 읽는다(머리의 상태·집중 표시 · [보내기] 잠금 — 2026-11-03). 두 화면은 상호 배타라 여는 순간 한 건이다.
+            if isPokePanelVisible || isMessagePanelVisible { loadPokeDirectory() }
             if isMiniGamePanelVisible { loadMiniGameBoard() }
             // 지갑 화면(미션 · 울트라)도 같은 규약이다(v0.3.56 검토 수리). 미션 화면은 레일 칸이 되면서 팝오버를 닫았다 열어도
             // 그대로 떠 있는 화면이 됐는데, 주기 sync 는 **근무 중에만** 돈다(`syncUltraWalletIfDue` 의 startedAt 게이트) —

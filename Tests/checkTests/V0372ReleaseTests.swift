@@ -11,10 +11,6 @@ import Testing
 @Test("버전 0.3.72 / 125 · CHANGELOG 0.3.72 가 맨 위(확성기 1분 · 울트라 · 4줄 이하 · 배너 폭 안)")
 func v0372VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.72</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>125</string>"))
 
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.72\n") })
@@ -31,6 +27,5 @@ func v0372VersionAndChangelog() throws {
     }
     #expect(items.contains { $0.contains("확성기") && $0.contains("1분") }, "확성기 1분 줄이 없다(main 73fee13a)")
     #expect(items.contains { $0.contains("울트라") }, "울트라 줄이 없다(main 4046c76e)")
-    #expect(changelog.range(of: "## 0.3.72")!.lowerBound < changelog.range(of: "## 0.3.71")!.lowerBound,
-            "0.3.72 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
+    // 버전 고정과 맨 위 섹션 단언은 0.3.73 으로 옮겼다(V0373ReleaseTests).
 }

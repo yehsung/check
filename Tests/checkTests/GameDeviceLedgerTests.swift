@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+@testable import check
 @testable import CheckCore
 
 // `GameDeviceLedger` 단위 시험 — 사용자별 키 · 기한 · 상한 · 지우기. 판정이 섞이면 놀던 기기가 창을 열거나(남는 기록)
@@ -30,11 +31,10 @@ struct GameDeviceLedgerTests {
         #expect(!ledger.owns("m", userID: "u", now: t0.addingTimeInterval(101)), "기한이 지난 기록이 살아 있다")
     }
 
-    @Test("상한을 넘으면 오래된 것부터 버린다 · drop 은 그 판만 지운다 · defaults 에 쓰고 비면 키를 지운다")
+    @Test("상한을 넘으면 오래된 것부터 버린다 · drop 은 그 판만 지운다 · defaults 에 쓰고 비면 키를 지운다", .gomokuDefaultsCleanup)
+    @MainActor
     func limitDropAndDefaults() throws {
-        let suite = "ledger-test-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = GomokuTestDefaults.make("ledger")
         var ledger = GameDeviceLedger(game: "gomoku", ttlSeconds: 3_600, limit: 2)
         ledger.defaults = defaults
         ledger.note("a", userID: "u", now: t0)

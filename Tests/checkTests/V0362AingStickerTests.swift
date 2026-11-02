@@ -713,12 +713,18 @@ struct V0362AingStickerTests {
     }
 
     /// 글자만 들어가는 자리(메뉴바 수신 표시 한 줄)가 **날것을 안 보여 준다**.
+    ///
+    /// 마크다운(2026-11-03 ③) 뒤로 이 줄은 `ChatMarkdown.plainPreview` 를 그린다 — 그 함수가 이모티콘 규칙
+    /// (`AingStickerText.preview`)을 **먼저** 거치는지를 값으로 함께 잰다(소스 글자만 보면 그 순서가 안 보인다).
     @Test func 수신_표시_한_줄은_아잉이_이름으로_보여_준다() throws {
         let menu = try asSource("CheckMenuView.swift")
         let strip = try #require(asRegion(menu, from: "struct PokeMessageReceiptStrip: View {", to: "\n}\n"))
-        #expect(strip.contains("Text(AingStickerText.preview(for: message.body))"),
-                "수신 표시 줄이 본문을 날것으로 띄운다 — [아잉:기쁨] 이 그대로 보인다")
+        #expect(strip.contains("Text(ChatMarkdown.plainPreview(message.body))"),
+                "수신 표시 줄이 이모티콘·마크다운 미리보기 함수를 안 지난다 — [아잉:기쁨] 이 그대로 보인다")
         #expect(!strip.contains("Text(message.body)"))
+        for sticker in AingSticker.allCases {
+            #expect(ChatMarkdown.plainPreview(sticker.token) == "아잉이 \(sticker.label)", "미리보기가 이모티콘 규칙을 안 거친다")
+        }
     }
 
     // MARK: 스토어 — 결과로 잰다
@@ -782,11 +788,16 @@ struct V0362AingStickerTests {
 
     /// **그림을 못 읽는 배포본의 글자 폴백**도 이름으로 읽힌다. 같은 저장소가 날것을 "깨진 메시지로
     /// 읽힌다"고 적어 둔 그 글자다 — 폴백의 목적(상대가 뭘 보냈는지 알게)은 이름이 더 잘 달성한다.
+    ///
+    /// 마크다운(2026-11-03 ③) 뒤로 말풍선은 `ChatMarkdownText.attributed` 를 그리지만, 그 입력은 **여전히 폴백을 지난 글자**다
+    /// (`AingStickerText.preview(for: entry.body)` → 마크다운 — 순서가 뒤집히면 토큰이 링크 모양 검사부터 받는다).
     @Test func 글자_말풍선_폴백도_아잉이_이름으로_읽힌다() throws {
         let view = try asSource("CheckMessageView.swift")
         let bubble = try #require(asRegion(view, from: "private var textBubble: some View {", to: "\n    }"))
-        #expect(bubble.contains("Text(AingStickerText.preview(for: entry.body))"),
+        #expect(bubble.contains("Text(ChatMarkdownText.attributed(AingStickerText.preview(for: entry.body),"),
                 "폴백 말풍선이 날것 토큰을 띄운다")
+        #expect(String(ChatMarkdownText.attributed(AingStickerText.preview(for: "[아잉:기쁨]"), isMine: false).characters)
+                == "아잉이 기쁨", "폴백 글자가 마크다운을 지나며 바뀌었다")
         // 우클릭 [복사]는 **날것 그대로**다(붙여넣어 다시 보내면 그림이 된다).
         #expect(view.contains("CheckPasteboard.copy(entry.body)"), "복사가 날것이 아니라 보기용 글자를 담는다")
     }

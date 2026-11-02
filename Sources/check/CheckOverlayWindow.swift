@@ -1172,8 +1172,12 @@ final class CheckOverlayController {
     ///   변환을 **호출부가 아니라 여기**에 두는 이유: 호출부에 두면 다음에 생기는 호출부가 빠뜨린다
     ///   (0.3.62 가 정확히 그렇게 갈렸다 — 팝오버 한 줄만 고쳐지고 캐릭터는 날것이었다).
     ///   평범한 본문은 `preview` 가 글자 하나도 바꾸지 않으므로 갈래 판정(폭·줄 수·CJK)은 그대로다.
+    ///
+    /// ★ 마크다운 기호도 여기서 벗긴다(대표 요청 2026-11-03 ③ — `**굵게**` 가 캐릭터 말풍선에 별표째 뜨지 않게).
+    ///   `ChatMarkdown.plainPreview` 가 이모티콘 규칙을 **먼저** 거치고 기호를 벗긴다. 기호 없는 한 줄 본문은
+    ///   글자 하나도 안 바뀐다(앞뒤 공백만 걷는다) — 폭 판정이 재는 글자도 화면에 그려지는 그 글자다.
     nonisolated static func messageBubbleText(name: String, body: String) -> String {
-        OverlayMessageBubble.form(name: name, body: AingStickerText.preview(for: body)).text
+        OverlayMessageBubble.form(name: name, body: ChatMarkdown.plainPreview(body)).text
     }
 
     /// 글자수 기준 자르기 + 말줄임(순수 함수). 세는 단위가 `Character`(확장 자소 클러스터)라 이모지 가족·국기·

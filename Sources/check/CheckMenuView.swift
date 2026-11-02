@@ -3428,7 +3428,9 @@ struct PokeMessageReceiptStrip: View {
             // ★ 아잉이 이모티콘(v0.3.62)은 여기서 **"아잉이 기쁨"으로 읽힌다**. 이 줄은 34pt 짜리 글자 자리라
             //   그림을 그릴 수 없는데, 날것(`[아잉:기쁨]`)을 그대로 띄우면 사용자는 그것을 '깨진 메시지'로 읽는다.
             //   평범한 본문은 `AingStickerText.preview` 가 **손대지 않고** 그대로 돌려준다.
-            Text(AingStickerText.preview(for: message.body))
+            // ★ 마크다운(대표 요청 2026-11-03 ③)은 여기서 **기호를 벗긴 한 줄**이다(`## 제목` → `제목`, `[글](주소)` → `글`).
+            //   `ChatMarkdown.plainPreview` 가 이모티콘 규칙(`AingStickerText.preview`)을 먼저 거친다 — 위 갈래는 그대로다.
+            Text(ChatMarkdown.plainPreview(message.body))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(CheckTheme.accent)
                 .lineLimit(1)

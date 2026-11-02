@@ -186,7 +186,8 @@ struct MegaphoneBannerView: View {
                     }
                     Spacer(minLength: 0)
                 }
-                Text(banner.body)
+                // 마크다운 기호는 벗긴다(대표 요청 2026-11-03 ③). 배너는 누르는 자리가 아니라 링크는 글자로만 보인다.
+                Text(ChatMarkdown.plainPreview(banner.body))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(MegaphoneBannerLayout.bodyLineLimit)

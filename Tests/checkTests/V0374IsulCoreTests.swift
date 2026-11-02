@@ -8,7 +8,7 @@ import Testing
 /// 지키는 것:
 ///  ① 카탈로그: `aing_isul` · "이슬 아잉이" · 내장 여섯째(케이크 뒤) · 선물 전용 판정 · 생일/술 목록이 갈린다.
 ///  ② ★ 케이크 뜻 자리는 케이크 둘 그대로다 — `ShopWire.cakeCharacterIDs` · 생일 선물 선택지 · 상점 케이크 순서에 이슬이 섞이지 않는다.
-///  ③ 능력 번호 누적: 케이크까지 → 4 · 이슬까지 → 5 · 이슬만 있고 케이크가 빠지면 3. 맥 번들은 이슬 그림이 아직 없다 → 4 그대로.
+///  ③ 능력 번호 누적: 케이크까지 → 4 · 이슬까지 → 5 · 이슬만 있고 케이크가 빠지면 3. 맥 번들은 이슬 그림(초상 · 라벨)이 실리면 5(3D 갈래 — v0.3.74).
 ///  ④ 선물 전선: `kind` 없음 → 생일 · 술 선물엔 이슬만 · 생일 선물에 이슬이 섞이면 버림 · 술 선물에 케이크만 → 선물 없음 ·
 ///     모르는 종류 → 선물 없음 · 번호 4 인 빌드엔 술 선물을 띄우지 않는다.
 ///  ⑤ 술 선물 문구는 설계서 §5 표의 가제 글자 그대로이고 비어 있지 않다.
@@ -128,15 +128,23 @@ struct V0374IsulCoreTests {
         #expect(CharacterGiftKind.drink.isSupported(protocolVersion: 6))
     }
 
-    @Test("맥 번들: 이슬 그림이 아직 없다 → 그릴 수 없음 · 능력 번호 4 그대로(IsulAingFinish 갈래 전)")
+    /// 맥 소스 트리에 이슬 그림이 다 있는가(초상 두 장 + 라벨 폴백 — 3D 마감 `IsulAingFinish` 의 번들 재료). 밝기 맵은 무지개 몫이다.
+    static var macIsulArtInSourceTree: Bool {
+        macIsulPortraitsInSourceTree && V0354CoreArtBaseline.macResourceExists("\(isul)-label")
+    }
+
+    @Test("맥 번들: 이슬 그림(초상 · 라벨)이 소스 트리에 있으면 그릴 수 있음 → 능력 번호 5, 없으면 4 그대로(누적 규칙)")
     @MainActor
-    func macProtocolStaysFour() {
+    func macProtocolFollowsTheIsulArt() {
+        let art = Self.macIsulArtInSourceTree
+        let expected = art ? ShopWire.isulProtocol : ShopWire.cakeProtocol
         let drawable = CheckMascotAssets.drawableCharacterIDs()
-        #expect(!drawable.contains(Self.isul), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.cakeProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == 4)
+        #expect(drawable.contains(Self.isul) == art, "\(drawable)")
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == expected)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == expected)
         let store = V0317ShopTests.plainStore()
-        #expect(store.shopProtocolVersion == 4 && store.supportsCakeGift)
+        #expect(store.shopProtocolVersion == expected && store.supportsCakeGift)
+        #expect(ShopWire.supportsDrinkGift(protocolVersion: store.shopProtocolVersion) == art)
     }
 
     // MARK: - ④ 선물 전선

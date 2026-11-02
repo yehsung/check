@@ -921,9 +921,10 @@ final class WorkTimerStore {
     /// 뽑기 창을 띄우고 내리는 문(테스트 이음새 — 앱은 언제나 `.live`, 곧 `CheckGachaWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var gachaWindowHooks = GachaWindowHooks.live
 
-    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66) — 상태. 동작은 WorkTimerStoreCakeGift.swift
+    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66) · 술 한잔 선물 — 이슬 아잉이 (v0.3.74) — 상태. 동작은 WorkTimerStoreCakeGift.swift
+    // 이름은 생일 선물 때의 것이다. 담는 것은 선물 전용 캐릭터 선물 **한 장**(종류 = `CharacterGiftOffer.kind` — 생일 · 술 한잔)이다.
 
-    /// 서버가 말한 **열린** 생일 선물(`character_gift_pending`). nil = 없음(또는 아직 모름). 메뉴 팝오버의 '다시 열기' 카드가 이 값으로 선다 —
+    /// 서버가 말한 **열린** 선물(`character_gift_pending` — 생일 또는 술 한잔, 한 번에 하나). nil = 없음(또는 아직 모름). 메뉴 팝오버의 '다시 열기' 카드가 이 값으로 선다 —
     /// 받거나(`settlesGift`) 서버가 없다고 하면 내려간다.
     var cakeGiftOffer: CharacterGiftOffer?
     /// 축하 창이 지금 그리는 선물(창을 연 순간의 사본). 창이 떠 있는 동안 조회가 `cakeGiftOffer` 를 바꿔도 고르던 화면이 흔들리지 않게 나눈다.
@@ -953,6 +954,11 @@ final class WorkTimerStore {
     @ObservationIgnored var cakeGiftReturnsToPopover = false
     /// 축하 창을 띄우고 내리는 문(테스트 이음새 — 앱은 `.live`, 곧 `CheckCakeGiftWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
+    /// 조회가 떠 있는 동안 선물이 결론 났다 — 그 조회가 끝나면 다음 선물을 한 번 더 묻는다(v0.3.74 `followUpCakeGiftIfNeeded`). 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftFollowUpQueued = false
+    /// 상점이 안 가진 사람에게 이슬 아잉이(술 한잔 선물 전용)의 잠긴 칸을 세우는가(v0.3.74). 정본은 상수 하나
+    /// (`WorkTimerStore.drinkGiftLockedCellPolicy`)이고, 이 칸은 시험이 두 값을 다 재려고 갈아 끼우는 이음새다. 격자가 읽는다.
+    var drinkGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.drinkGiftLockedCellPolicy
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.

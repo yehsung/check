@@ -126,6 +126,9 @@ private func gcStore(host: String, server: GiftServer, spy: GiftWindowSpy, signe
     store.characterDefaults = CheckTestScratch.defaults("v0366-gift-char-" + host, function: function)
     store.characterSync.broadcast = CharacterSelectionBroadcast()
     store.cakeGiftWindowHooks = spy.hooks
+    // 이 묶음은 생일 선물(능력 번호 4)의 시험이다 — 이슬까지 그리는 빌드(5 — v0.3.74)가 되어도 4 로 잰다(술 선물 · 5 의 '다음 선물'은
+    // `V0374IsulMacGiftStoreTests` 가 잰다).
+    store.drawableCharacterIDs = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.isulCharacterIDs.contains($0) }
     V0354CoreStub.retain(store)
     return store
 }

@@ -15,6 +15,15 @@ import Foundation
 //  ④ 결론은 서버가 낸다(검토 수리) — 축하 창은 **자기가 그리는 선물**로 확인한다(조회가 그 선물을 내려도 `replayed` · `already_claimed` 가
 //     받은 뒤 화면으로 데려간다). 결론이 난 선물 id(`cakeGiftSettledIDs`)를 말하는 낡은 조회는 버리고, 상점 보유를 읽으면 열린 선물의
 //     선택지를 보유와 맞춘다(`reconcileCakeGiftWithOwnership` — 다른 기기에서 받은 선물).
+//
+// ── '술 한잔' 선물 — 이슬 아잉이 (v0.3.74 맥 먼저) ──
+// 이 박자는 이제 **종류를 아는 박자**다. 이름(`cakeGift…`)은 생일 선물 때의 것을 그대로 두되, 상태는 선물 전용 캐릭터 선물 **한 장**
+// (생일 · 술 한잔 — `CharacterGiftOffer.kind`)을 담는다. 서버는 한 번에 하나만 내려 준다(p ≥ 5 면 두 종류 중 먼저 지급된 것):
+//  ⑤ 다음 선물 — 선물이 결론 난 뒤(받았다 · 이미 받았다 · 없다) 창이 닫히면(또는 창이 이미 닫혀 있었으면 결론 즉시) 열린 선물을 **한 번 더**
+//     묻는다(`CakeGiftCheckReason.followUp`). 생일과 술이 둘 다 열린 사람은 그렇게 차례로 받는다. 이 문은 술 선물을 받을 수 있는 빌드
+//     (능력 번호 5 — `supportsDrinkGift`)에만 있다: 4 인 빌드는 서버가 생일만 싣고 (사용자, 종류)당 열린 선물은 하나라 '다음'이 없다 —
+//     그래서 0.3.66~0.3.73 의 생일 흐름은 요청 하나까지 그대로다.
+//  ⑥ 문구 — 창 · 다시 열기 카드 · 수령 한 줄은 선물 종류의 문구 묶음(`CharacterGiftKind.copy` — `CakeGiftText` · `DrinkGiftText`)에서 온다.
 
 /// 축하 창을 띄우고 내리는 문. 스토어가 쥔다(`WorkTimerStore.cakeGiftWindowHooks`) — 테스트가 갈아 끼워 "창이 열렸는가"를 센다.
 struct CakeGiftWindowHooks {
@@ -49,6 +58,8 @@ enum CakeGiftCheckReason: String, Equatable, Sendable {
     case shop
     /// 15초 폴링(`localExpiryTick`) — 10분 문을 지날 때만.
     case periodic
+    /// 선물이 결론 난 뒤의 다음 선물(v0.3.74 — 서버는 한 번에 하나만 내린다). 능력 번호 5 인 빌드에서만 난다(`followUpCakeGiftIfNeeded`).
+    case followUp
 }
 
 @MainActor
@@ -61,9 +72,25 @@ extension WorkTimerStore {
         ShopWire.supportsCakeGift(protocolVersion: shopProtocolVersion)
     }
 
+    /// 이 빌드가 술 한잔 선물(이슬 아잉이)을 받을 수 있는가(능력 번호 5 — 이슬까지 그린다). 조회 문은 여전히 `supportsCakeGift`(4)다 —
+    /// 서버가 번호에 맞는 종류만 싣는다. 이 값은 '다음 선물' 되묻기(`followUpCakeGiftIfNeeded`)의 문이다.
+    var supportsDrinkGift: Bool {
+        ShopWire.supportsDrinkGift(protocolVersion: shopProtocolVersion)
+    }
+
     /// 메뉴 팝오버 '다시 열기' 카드를 세우는가 — 열린 선물이 있다(받으면 내려간다).
     var showsCakeGiftCard: Bool {
         cakeGiftOffer != nil
+    }
+
+    /// '다시 열기' 카드의 문구 묶음 — 열린 선물의 종류(생일 · 술 한잔). 선물이 없으면 생일(카드가 안 서므로 읽히지 않는다).
+    var cakeGiftCardCopy: CharacterGiftCopy {
+        (cakeGiftOffer?.kind ?? .birthday).copy
+    }
+
+    /// 받는 창의 문구 묶음 — 창이 그리는 선물의 종류. 창이 그리는 선물이 없으면 생일.
+    var cakeGiftWindowCopy: CharacterGiftCopy {
+        (cakeGiftPresented?.kind ?? .birthday).copy
     }
 
     // MARK: 박자
@@ -94,7 +121,17 @@ extension WorkTimerStore {
             guard let self else { return }
             // 세대가 바뀌었으면(로그아웃 · 계정 전환) 깃발은 `resetCakeGiftState` 가 이미 내렸고, 그 뒤 새 계정의 조회가 다시 들었을 수 있다 —
             // 옛 조회가 그 깃발을 내리면 겹쳐 쏜다. 내 세대일 때만 내린다.
-            defer { if generation == self.sessionGeneration { self.cakeGiftChecking = false } }
+            defer {
+                if generation == self.sessionGeneration {
+                    self.cakeGiftChecking = false
+                    // 이 조회가 떠 있는 동안 선물이 결론 났다 — 이 응답은 결론 **전**의 것일 수 있으니 다음 선물을 한 번 더 묻는다
+                    // (`followUpCakeGiftIfNeeded` 가 깃발만 세워 둔 자리 — 능력 번호 5 에서만 선다).
+                    if self.cakeGiftFollowUpQueued {
+                        self.cakeGiftFollowUpQueued = false
+                        self.refreshCakeGift(reason: .followUp)
+                    }
+                }
+            }
             do {
                 let offer = try await self.withSessionRetry { activeSession in
                     try await self.service.fetchCharacterGiftPending(accessToken: activeSession.accessToken,
@@ -218,13 +255,34 @@ extension WorkTimerStore {
             cakeGiftReceivedID = id
             cakeGiftNotice = nil
         default:
-            cakeGiftNotice = CakeGiftText.notice(for: outcome) { self.gachaDisplayName($0) }
+            // 문구는 그 선물 종류의 묶음에서(생일 · 술 한잔 — 실패 · 거절 줄은 두 종류가 같은 글자다).
+            let name: (String) -> String = { self.gachaDisplayName($0) }
+            switch cakeGiftPresented?.kind ?? .birthday {
+            case .birthday: cakeGiftNotice = CakeGiftText.notice(for: outcome, name: name)
+            case .drink: cakeGiftNotice = DrinkGiftText.notice(for: outcome, name: name)
+            }
         }
         if outcome.settlesGift {
             cakeGiftSettledIDs.insert(giftID)
             if cakeGiftOffer?.id == giftID { cakeGiftOffer = nil }
             loadShopState()
+            // 다음 선물(v0.3.74): 창이 떠 있으면 사용자가 닫을 때 묻는다(`cakeGiftDidClose` — 받은 뒤 화면 위로 다음 창을 겹치지 않게).
+            // 받는 사이에 창을 닫았으면 닫기가 이미 지나갔다 — 지금 묻는다.
+            if !cakeGiftWindowHooks.isOpen() { followUpCakeGiftIfNeeded() }
         }
+    }
+
+    /// 선물이 결론 난 뒤 다음 선물을 한 번 묻는다(v0.3.74 — 서버는 한 번에 하나만 내린다). **술 선물을 받을 수 있는 빌드에서만**
+    /// (`supportsDrinkGift`): 4 인 빌드엔 '다음'이 없다(머리 주석 ⑤) — 그 빌드의 요청 수는 0.3.73 과 같다. 조회가 이미 떠 있으면
+    /// 겹쳐 쏘지 않고 깃발만 세운다 — 그 조회가 끝나는 자리(`refreshCakeGift` 의 defer)가 한 번 더 묻는다(결론 전에 떠난 응답일 수 있다).
+    @discardableResult
+    func followUpCakeGiftIfNeeded() -> Task<Void, Never>? {
+        guard supportsDrinkGift, session != nil else { return nil }
+        if cakeGiftChecking {
+            cakeGiftFollowUpQueued = true
+            return nil
+        }
+        return refreshCakeGift(reason: .followUp)
     }
 
     // MARK: 보유와 맞추기
@@ -236,7 +294,8 @@ extension WorkTimerStore {
         let left = offer.options.filter { !ownedCharacterIDs.contains($0) }
         guard !left.isEmpty else { return nil }
         guard left.count != offer.options.count else { return offer }
-        return CharacterGiftOffer(id: offer.id, options: left, note: offer.note, createdAt: offer.createdAt)
+        // 종류를 실어 옮긴다(선택지는 그 종류의 내장 목록으로 다시 걸러진다 — 빼먹으면 술 선물이 생일로 읽혀 선택지가 0 이 된다).
+        return CharacterGiftOffer(id: offer.id, options: left, note: offer.note, createdAt: offer.createdAt, kind: offer.kind)
     }
 
     /// 상점 상태(보유)를 읽은 뒤 — 열린 선물의 선택지를 보유와 맞추고, 남는 게 없으면 선물 · '다시 열기' 카드를 거둔다(다른 기기에서 받았다).
@@ -268,6 +327,8 @@ extension WorkTimerStore {
     /// 다음에 열 때 고르기 화면부터다. 팝오버의 [고르기] 로 연 창이면 팝오버로 돌아간다(v0.3.69) — **한 번만**: 돌아가는 문은 디바운스를
     /// 안 보므로 두 번 부르면 방금 연 팝오버가 도로 닫힌다. 로그아웃(`resetCakeGiftState`)은 이 길을 안 지난다(팝오버가 튀어나오지 않게).
     func cakeGiftDidClose() {
+        // 닫는 창의 선물이 결론 났는가(받았다 · 서버가 이미 결론을 줬다) — 그러면 다음 선물을 묻는다(v0.3.74 ⑤ · 능력 번호 5 에서만).
+        let settled = cakeGiftReceivedID != nil || (cakeGiftPresented.map { cakeGiftSettledIDs.contains($0.id) } ?? false)
         cakeGiftNotice = nil
         if cakeGiftReceivedID != nil {
             cakeGiftReceivedID = nil
@@ -278,6 +339,7 @@ extension WorkTimerStore {
             cakeGiftReturnsToPopover = false
             cakeGiftWindowHooks.returnToPopover()
         }
+        if settled { followUpCakeGiftIfNeeded() }
     }
 
     /// 로그아웃 · 계정 전환 — 앞 계정의 선물을 다음 사람이 보지도 받지도 않게. 창도 내린다. 실행당 한 번 기록은 남긴다(실행 단위).
@@ -292,5 +354,18 @@ extension WorkTimerStore {
         cakeGiftNotice = nil
         cakeGiftLastCheckAt = nil
         cakeGiftChecking = false
+        cakeGiftFollowUpQueued = false
+    }
+}
+
+// MARK: - 다시 열기 카드의 그림 기호(v0.3.74)
+
+extension CharacterGiftKind {
+    /// 메뉴 팝오버 '다시 열기' 카드의 SF Symbol — 생일은 선물 상자(0.3.66 그대로), 술 한잔은 잔.
+    var reopenSymbolName: String {
+        switch self {
+        case .birthday: return "gift.fill"
+        case .drink: return "wineglass.fill"
+        }
     }
 }

@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
-# 20261107120000_tetris_frames.sql 생성기. 두 함수 본문을 ONE 파일에서 바이트 그대로 뽑아 치환표만 적용한다(손으로 베끼면 흘러내린다).
+# 20261108133700_tetris_frames.sql 생성기. 두 함수 본문을 ONE 파일에서 바이트 그대로 뽑아 치환표만 적용한다(손으로 베끼면 흘러내린다).
 # 사용: gen_migration.py <ONE 파일> <출력 파일> [--old-out <구버전 복제 SQL>]
+# 번호는 자리표시다. 11-03 에 main 의 20261107120000_token_board_closed_month.sql 과 겹쳐 20261108120000 으로 옮겼고, 같은 날
+# 그 번호도 다른 세션 초안(isul-aing 20261108120000_isul_aing_drink_gift.sql)과 겹쳐 20261108133700 으로 다시 옮겼다.
+# 푸시 직전 대기열 · 원격 마지막 적용분 · 다른 세션 초안을 다시 보고, 그보다 앞서거나 겹치면 파일 이름 · rollback.sql 머리 · 아래 HEAD (3) 을
+# 함께 고친다.
 import re, sys
 one_path, out_path = sys.argv[1], sys.argv[2]
 one = open(one_path, encoding='utf-8').read()
@@ -81,6 +85,10 @@ HEAD = f"""-- ══════════════════════
 --      값을 v_dev 에 담아 my_device 와 frames 가 같이 쓴다. 응답의 my_device 값은 같다.
 --   ② 명세는 auth.uid() 를 선언부에서 읽는다. 선언부 예외는 함수 밖으로 새므로(깨진 sub → 정책 오류 → 초인종 조인 실패) 토픽 접두사
 --      검사 뒤, 예외 블록 안에서 읽는다. tetris: 가 아닌 토픽은 사용자 값을 읽지 않고 돌아간다.
+--   ③ 참가자 판정을 null 에 안전하게 쓴다(`is distinct from`). `v_uid not in (v_a, v_b)` 는 한 칸이 null 이면 식 전체가 null 이 되어
+--      IF 를 지나쳐 true 에 닿는다. 지금은 세 칸이 not null 이라 생기지 않지만 제약이 바뀌어도 닫힌 쪽으로 넘어지게 둔다(11-03 검토).
+--   ④ 정책은 인가 함수를 `(select …)` 로 감싸 문장마다 한 번만 부른다(InitPlan — 찌르기 정책의 `(select auth.uid())` 와 같은 꼴).
+--      인자는 상수이고 함수가 읽는 realtime.topic() 은 문장 안에서 바뀌지 않으니 뜻은 같다.
 --
 -- ── 잠금 · 적용 ────────────────────────────────────────────────────────────────────────────
 --   CREATE POLICY 는 realtime.messages 에 가장 강한 잠금을 잡고, 그 표는 모든 realtime.send 가 쓴다. 그래서 첫 문장이 lock_timeout 3초
@@ -94,6 +102,11 @@ HEAD = f"""-- ══════════════════════
 --       tetris__state {CANON_STATE} · tetris_report {CANON_REPORT} · tetris__due {DUE}
 --   (2) 결정 D10 으로 tetris__due 가 먼저 바뀌면 §0 · §6 의 그 값을 함께 고친다.
 --   (3) `supabase migration list --linked` 로 대기열을 보고 번호를 정한다(메모리 migration-include-all-applies-agent-drafts).
+--       20261108133700 은 자리표시다. 처음 잡은 20261107120000 은 main 의 token_board_closed_month 와, 다음 20261108120000 은 다른 세션
+--       초안(isul_aing_drink_gift)과 겹쳐 옮겼다(11-03). CLI 는 버전 번호로만 적용 여부를 가린다 — 같은 번호의 다른 파일이 먼저 원격에
+--       적히면 이 파일은 적용된 것으로 보여 **조용히 건너뛰어진다**(칸 · 정책 없이 앱만 p_protocol 2 를 보낸다). 그래서 둘을 다 본다.
+--       ① 원격 migration list 에 같은 번호가 있는가 ② ~/.claude/projects/-Users-yesung-check/** 의 다른 세션 초안에 같은 번호가 있는가.
+--       원격 마지막 적용분보다 앞서거나 무엇과든 겹치면 뒤로 다시 민다(rollback.sql 머리도 같이).
 --   (4) 적용 직후 실제 앱의 poke: 조인 + 찌르기 수신을 본다(명세 P3b). 조인 오류면 곧바로 두 정책을 지운다(rollback.sql).
 --
 -- ★ 달러 인용 블록 안 주석에는 그 블록의 태그 글자를 적지 않는다.
@@ -192,7 +205,9 @@ begin
     v_id := substr(v_topic, 8)::uuid;
     select g.challenger, g.opponent, g.status into v_a, v_b, v_status
       from public.tetris_matches g where g.id = v_id;
-    if not found or v_status <> 'active' or v_uid not in (v_a, v_b) then
+    -- null 에 안전하게(명세와 다른 곳 ③): 한 칸이라도 비면 false 쪽으로 넘어진다.
+    if not found or v_status is distinct from 'active'
+       or (v_uid is distinct from v_a and v_uid is distinct from v_b) then
       return false;
     end if;
     if p_write then
@@ -212,12 +227,13 @@ grant execute on function public.tetris_frame_allowed(boolean) to authenticated,
 
 
 -- ── §5 정책 둘(파일 맨 뒤 — 여기서 잡은 realtime.messages 잠금이 커밋까지 간다) ─────────────────────
+-- 인가 함수는 `(select …)` 로 감싼다 — 행마다가 아니라 문장마다 한 번(명세와 다른 곳 ④).
 drop policy if exists "tetris frames read" on realtime.messages;
 create policy "tetris frames read" on realtime.messages for select to authenticated
-  using (realtime.messages.extension = 'broadcast' and public.tetris_frame_allowed(false));
+  using (realtime.messages.extension = 'broadcast' and (select public.tetris_frame_allowed(false)));
 drop policy if exists "tetris frames write" on realtime.messages;
 create policy "tetris frames write" on realtime.messages for insert to authenticated
-  with check (realtime.messages.extension = 'broadcast' and public.tetris_frame_allowed(true));
+  with check (realtime.messages.extension = 'broadcast' and (select public.tetris_frame_allowed(true)));
 
 """
 
@@ -272,12 +288,14 @@ begin
   if not exists (select 1 from pg_policies where schemaname = 'realtime' and tablename = 'messages'
                   and policyname = 'tetris frames write' and cmd = 'INSERT' and roles = array['authenticated']::name[]
                   and qual is null and strpos(with_check, 'tetris_frame_allowed(true)') > 0
+                  and strpos(lower(with_check), 'select tetris_frame_allowed(true)') > 0
                   and strpos(with_check, 'broadcast') > 0) then
     raise exception '(4) 쓰기 정책의 모양이 다르다. 배포 중단';
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'realtime' and tablename = 'messages'
                   and policyname = 'tetris frames read' and cmd = 'SELECT' and roles = array['authenticated']::name[]
                   and with_check is null and strpos(qual, 'tetris_frame_allowed(false)') > 0
+                  and strpos(lower(qual), 'select tetris_frame_allowed(false)') > 0
                   and strpos(qual, 'broadcast') > 0) then
     raise exception '(4) 읽기 정책의 모양이 다르다. 배포 중단';
   end if;
@@ -305,6 +323,13 @@ begin
      or strpos(v_src, 'left(v_topic, 7) <> ''tetris:''') > strpos(v_src, 'auth.uid()')
      or strpos(v_src, 'exception when others then') = 0 then
     raise exception '(5) tetris_frame_allowed 가 poke: 토픽에서 표를 읽기 전에 돌아가지 않는다. 배포 중단';
+  end if;
+
+  -- (6) 앱 역할의 표 권한(명세 §0 [확인] 사실의 고정). 이게 없으면 §7 의 42501 이 "RLS 거절"이 아니라 "표 권한 없음"이라
+  --     프로브가 헛되이 통과하고, 판 프레임 쓰기·조인이 전부 막혀 기능이 죽는다(판은 1초로 돈다).
+  if not has_table_privilege('authenticated', 'realtime.messages', 'INSERT')
+     or not has_table_privilege('authenticated', 'realtime.messages', 'SELECT') then
+    raise exception '(6) authenticated 에 realtime.messages INSERT · SELECT 표 권한이 없다 — 판 프레임이 전부 막힌다. 배포 중단';
   end if;
 
   raise notice 'tetris_frames 사후 단언 전부 통과: 칸 · 프로토콜 1 · tetris__due 불변 · 본문 정본 · 정책 3개 · 인가 함수';
@@ -346,8 +371,13 @@ begin
       begin
         insert into realtime.messages (topic, extension, event, payload, private)
         values (v_topic, 'broadcast', 'frame', '{{}}'::jsonb, true);
-      exception when insufficient_privilege then
-        v_ok := true;
+      exception
+        when insufficient_privilege then
+          v_ok := true;
+        when check_violation then
+          -- 파티션 표에 오늘 파티션이 없으면 RLS 보다 행 경로 찾기가 먼저 23514 로 실패한다. 정책 탓이 아니다.
+          raise exception 'realtime.messages 에 오늘(%)을 덮는 파티션이 없다 — Realtime 이 아직 만들지 않았다, 나중에 다시(%). 배포 중단',
+                          now()::date, sqlerrm;
       end;
       if not v_ok then
         raise exception '토픽 "%" 쓰기가 42501 로 거절되지 않았다 — 가짜 초인종이 열렸다. 배포 중단', v_topic;

@@ -338,6 +338,8 @@ declare
   v_old jsonb; v_new jsonb; v_old_r jsonb; v_new_r jsonb; sc_name text; sc_row record;
   v_exec text := current_user;
   n int;
+  tp text;
+  wo bigint; wn bigint; ro bigint; rn bigint; wmax bigint := 0; rmax bigint := 0;
 begin
   if P is distinct from 1 then raise exception 'tetris_protocol() 이 %', P; end if;
   checks := checks + 1;
@@ -460,6 +462,22 @@ begin
   if v -> 'state' -> 'frames' is distinct from v_on or v -> 'state' -> 'my_device' <> 'null'::jsonb then raise exception 'B10 세션 없음 %', v; end if;
   checks := checks + 4;
 
+  -- B11 뒤에 올 프로토콜(3)도 프레임을 아는 기기다(>= 2): 쓰기 1 · 초인종 0 · 칸 1 · 켜진 채
+  v := pg_temp.tf_report(b, sb1, mid, 6, 0, 2, 3);
+  if v ->> 'status' is distinct from 'ok' or v -> 'state' -> 'frames' is distinct from v_on then raise exception 'B11 %', v; end if;
+  if (select frames_v from public.tetris_players where match_id = mid and user_id = b) is distinct from 1::smallint then raise exception 'B11 frames_v'; end if;
+  if (select count(*) from public.tf_writes) - w0 <> 1 then raise exception 'B11 쓰기'; end if;
+  if (select count(*) from realtime.messages rm where rm.event = 'tetris') - r0 <> 0 then raise exception 'B11 초인종'; end if;
+  w0 := w0 + 1;
+  -- B12 p_protocol null(옛 본문이 칸을 빠뜨린 모양): unsupported_client · 쓰기 0 · 칸 그대로
+  v := pg_temp.tf_rpc(b, sb1, format(
+    'select public.tetris_report(p_protocol => null, p_match_id => %L::uuid, p_seq => 7, p_board => %L, p_lines => 0, '
+    'p_garbage_sent => 2, p_garbage_applied => 0, p_pending => 0)', mid, repeat('.', 200)));
+  if v ->> 'status' is distinct from 'unsupported_client' then raise exception 'B12 %', v; end if;
+  if (select count(*) from public.tf_writes) - w0 <> 0 then raise exception 'B12 쓰기'; end if;
+  if (select frames_v from public.tetris_players where match_id = mid and user_id = b) is distinct from 1::smallint then raise exception 'B12 칸'; end if;
+  checks := checks + 8;
+
   ----------------------------------------------------------------------------------------------
   -- C. state.frames 진리표: frames_v(a) × frames_v(b) × 스위치 × 판 상태 × 기기 = 2·2·2·2·3 = 48칸
   ----------------------------------------------------------------------------------------------
@@ -500,6 +518,23 @@ begin
   update public.tetris_matches set status = 'active', result = null, end_reason = null, finished_at = null where id = mid;
   execute 'create or replace function public.tetris_frames_enabled() returns boolean language sql immutable as ''select true''';
 
+  -- C2. active 가 아닌 나머지 상태(거절 · 취소 · 만료. 대기는 A, 끝남은 C · G)도 꺼진다 — 두 자리 1 · 스위치 켬 · 이 기기여도
+  foreach st in array array['declined', 'cancelled', 'expired'] loop
+    update public.tetris_matches set status = st where id = mid;
+    v := pg_temp.tf_state(a, sa1, mid);
+    if v ->> 'status' is distinct from 'ok' or v -> 'state' ->> 'status' is distinct from st
+       or not (v -> 'state' ? 'frames') or v -> 'state' -> 'frames' <> 'null'::jsonb then
+      raise exception 'C2 [%] frames %', st, v -> 'state';
+    end if;
+    if pg_temp.tf_allowed(a, sa1, 'tetris:' || mid, false) is distinct from false then raise exception 'C2 [%] 읽기 인가', st; end if;
+    if pg_temp.tf_allowed(b, sb1, 'tetris:' || mid, true)  is distinct from false then raise exception 'C2 [%] 쓰기 인가', st; end if;
+    checks := checks + 3;
+  end loop;
+  update public.tetris_matches set status = 'active' where id = mid;
+  -- 되돌리면 다시 켜진다(앞 단언이 언제나 null 인 응답에 헛돌지 않았다)
+  if pg_temp.tf_state(a, sa1, mid) -> 'state' -> 'frames' is distinct from v_on then raise exception 'C2 복귀'; end if;
+  checks := checks + 1;
+
   ----------------------------------------------------------------------------------------------
   -- D. tetris_frame_allowed 경우별
   ----------------------------------------------------------------------------------------------
@@ -536,6 +571,21 @@ begin
   if pg_temp.tf_allowed(null, sa1, 'poke:' || a, true, 'garbage')     is distinct from false then raise exception 'D 깨진 sub poke'; end if;
   if pg_temp.tf_allowed(null, null, 'tetris:' || mid, true, '')       is distinct from false then raise exception 'D 빈 sub'; end if;
   checks := checks + 26;
+
+  -- 서버가 내린 토픽 글자를 그대로 쓴다(클라는 조립하지 않는다): 'tetris:' + 소문자 하이픈 uuid = 43자, 인가가 바로 그 글자를 받는다
+  tp := pg_temp.tf_state(b, sb1, mid) -> 'state' -> 'frames' ->> 'topic';
+  if tp is distinct from 'tetris:' || lower(mid::text) or length(tp) <> 43 then raise exception 'D 서버 토픽 글자 %', tp; end if;
+  if pg_temp.tf_allowed(b, sb1, tp, true) is distinct from true or pg_temp.tf_allowed(a, sa1, tp, false) is distinct from true then
+    raise exception 'D 서버 토픽 인가';
+  end if;
+  -- 같은 판의 다른 철자(대문자 · 중괄호 · 하이픈 없음)는 uuid 로는 같은 판이라 참가자는 통과한다(서버가 내리지 않는 다른 채널일 뿐 표시 전용).
+  -- 제3자는 어떤 철자로도 거절이다.
+  foreach tp in array array['tetris:' || upper(mid::text), 'tetris:{' || mid::text || '}', 'tetris:' || replace(mid::text, '-', '')] loop
+    if pg_temp.tf_allowed(c, sc, tp, false) is distinct from false or pg_temp.tf_allowed(c, sc, tp, true) is distinct from false then
+      raise exception 'D 제3자 다른 철자 % 통과', tp;
+    end if;
+  end loop;
+  checks := checks + 5;
 
   -- poke 토픽은 표를 안 읽는다: tetris_matches 스캔 수가 그대로다(양성 대조: tetris 토픽은 는다)
   select coalesce(seq_scan, 0) + coalesce(idx_scan, 0) into s0 from pg_stat_xact_user_tables where relid = 'public.tetris_matches'::regclass;
@@ -627,18 +677,32 @@ begin
     ) t(name, uid, sess, seq, lines, sent, topped, board, proto, want)
   loop
     sc_name := sc_row.name;
+    -- 쓰기 수(사람 행 UPDATE · 초인종)는 센티널 안에서 재 둔다. 변수는 롤백되지 않는다.
     begin
+      wo := (select count(*) from public.tf_writes);
+      ro := (select count(*) from realtime.messages rm where rm.event = 'tetris');
       v_old := pg_temp.tf_report(sc_row.uid, sc_row.sess, mid, sc_row.seq, greatest(sc_row.lines, 0), sc_row.sent, sc_row.proto, sc_row.topped, 'public.tf_old_report', sc_row.board);
       v_old_r := pg_temp.tf_rows(mid);
+      wo := (select count(*) from public.tf_writes) - wo;
+      ro := (select count(*) from realtime.messages rm where rm.event = 'tetris') - ro;
       raise exception 'sentinel' using errcode = 'TFSNT';
     exception when sqlstate 'TFSNT' then null;
     end;
     begin
+      wn := (select count(*) from public.tf_writes);
+      rn := (select count(*) from realtime.messages rm where rm.event = 'tetris');
       v_new := pg_temp.tf_report(sc_row.uid, sc_row.sess, mid, sc_row.seq, greatest(sc_row.lines, 0), sc_row.sent, sc_row.proto, sc_row.topped, 'public.tetris_report', sc_row.board);
       v_new_r := pg_temp.tf_rows(mid);
+      wn := (select count(*) from public.tf_writes) - wn;
+      rn := (select count(*) from realtime.messages rm where rm.event = 'tetris') - rn;
       raise exception 'sentinel' using errcode = 'TFSNT';
     exception when sqlstate 'TFSNT' then null;
     end;
+    if wn is distinct from wo or rn is distinct from ro then
+      raise exception 'F [%] 호출당 쓰기가 다르다: 옛 UPDATE % · 초인종 % / 새 UPDATE % · 초인종 %', sc_name, wo, ro, wn, rn;
+    end if;
+    wmax := greatest(wmax, wn); rmax := greatest(rmax, rn);
+    checks := checks + 1;
     if v_new ->> 'status' is distinct from sc_row.want or v_old ->> 'status' is distinct from sc_row.want then
       raise exception 'F [%] 상태 옛 % 새 % (기대 %)', sc_name, v_old ->> 'status', v_new ->> 'status', sc_row.want;
     end if;
@@ -655,7 +719,9 @@ begin
   -- 차등이 헛돌지 않았다: 위 경우들이 정말 서로 다른 상태를 냈다(탑아웃은 끝난 판, 프로토콜 0 은 거절)
   if v_new ->> 'status' is distinct from 'ok' then raise exception 'F 마지막 경우가 %', v_new; end if;
   if (select status from public.tetris_matches where id = mid) is distinct from 'active' then raise exception 'F 센티널이 판을 못 되돌렸다'; end if;
-  checks := checks + 2;
+  -- 쓰기 수 비교가 헛돌지 않았다: 어떤 경우는 실제로 사람 행을 쓰고 초인종을 울렸다(0 = 0 만 견준 게 아니다)
+  if wmax < 1 or rmax < 1 then raise exception 'F 쓰기 계수가 헛돈다(UPDATE 최대 % · 초인종 최대 %)', wmax, rmax; end if;
+  checks := checks + 3;
 
   ----------------------------------------------------------------------------------------------
   -- G. 끝난 판: 진짜 탑아웃으로 끝낸다 → 양쪽 frames null · 인가 false(정책 평가도 거절)

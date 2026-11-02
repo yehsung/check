@@ -12,6 +12,10 @@ import Testing
 private let tfOneWriter = "20261103124000_tetris_one_writer.sql"
 private let tfDuel = "20261021120000_tetris_duel.sql"
 private let tfSuffix = "_tetris_frames.sql"
+// 커밋되는 초안 자리. 이름의 번호(지금 20261108133700)는 자리표시다 — 11-03 에 main 의 20261107120000_token_board_closed_month.sql 과,
+// 이어 다른 세션 초안(20261108120000_isul_aing_drink_gift.sql)과 겹쳐 두 번 옮겼고, 푸시 직전 대기열 · 원격 마지막 적용분 · 다른 세션
+// 초안을 다시 보고 정한다(gen_migration.py 머리 주석).
+private let tfDraftDirectory = "docs/plan/tetris-broadcast/server"
 
 private struct TFError: Error, CustomStringConvertible {
     let description: String
@@ -37,6 +41,25 @@ private func tfChain() -> [String] {
 }
 
 private func tfFileName() -> String? { tfChain().first { $0.hasSuffix(tfSuffix) } }
+
+private func tfRepoRoot() -> URL? {
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    while directory.path != "/" {
+        if FileManager.default.fileExists(atPath: directory.appendingPathComponent("Package.swift").path) { return directory }
+        directory = directory.deletingLastPathComponent()
+    }
+    return nil
+}
+
+/// 커밋된 초안 이름들(`<번호>_tetris_frames.sql`). 체인 밖에 있어도 보인다.
+private func tfDraftNames() -> [String] {
+    guard let root = tfRepoRoot(),
+          let names = try? FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent(tfDraftDirectory).path)
+    else { return [] }
+    return names.filter { $0.hasSuffix(tfSuffix) }.sorted()
+}
+
+private func tfVersion(_ name: String) -> String { String(name.prefix(while: { $0.isNumber })) }
 
 private func tfRaw(_ name: String) throws -> String {
     guard let directory = tfDirectory() else { throw TFError(description: "supabase/migrations 를 못 찾았다") }
@@ -163,7 +186,11 @@ struct TetrisFramesMigrationTests {
             let at = try #require(body.range(of: later)?.lowerBound, Comment(rawValue: "\(later) 가 없다"))
             #expect(prefix < at, Comment(rawValue: "\(later) 가 접두사 검사보다 앞이다"))
         }
-        #expect(body.contains("v_status <> 'active'") && body.contains("v_uid not in (v_a, v_b)"), "참가자 · 진행 중 판 조건이 없다")
+        // 참가자 · 진행 중 판 조건은 null 에 안전하게(`is distinct from`) — `not in`/`<>` 는 한 칸이 null 이면 식이 null 이 되어 IF 를
+        // 지나쳐 true 에 닿는다(11-03 검토 6. 지금은 not null 제약이 막지만 제약이 바뀌어도 닫힌 쪽으로).
+        #expect(body.contains("if not found or v_status is distinct from 'active' or (v_uid is distinct from v_a and v_uid is distinct from v_b) then return false; end if;"),
+                "참가자 · 진행 중 판 조건이 없다(또는 null 에 안전하지 않다)")
+        #expect(!body.contains("not in (v_a, v_b)") && !body.contains("v_status <> 'active'"), "null 에 안전하지 않은 판정이 남았다")
         #expect(body.contains("is distinct from 'other'"), "쓰기의 세션 대조가 없다")
         let flat = tfFlat(mine)
         #expect(flat.contains("revoke all on function public.tetris_frame_allowed(boolean) from public, anon;"))
@@ -186,8 +213,37 @@ struct TetrisFramesMigrationTests {
         }
         #expect(tfCount(raw, "create policy ") == 2, "정책이 둘이 아니다")
         let flat = tfFlat(raw)
-        #expect(flat.contains("using (realtime.messages.extension = 'broadcast' and public.tetris_frame_allowed(false));"))
-        #expect(flat.contains("with check (realtime.messages.extension = 'broadcast' and public.tetris_frame_allowed(true));"))
+        // 인가 함수는 `(select …)` 로 감싼다(InitPlan — 행마다가 아니라 문장마다 한 번, 찌르기 정책의 `(select auth.uid())` 와 같은 꼴).
+        #expect(flat.contains("using (realtime.messages.extension = 'broadcast' and (select public.tetris_frame_allowed(false)));"))
+        #expect(flat.contains("with check (realtime.messages.extension = 'broadcast' and (select public.tetris_frame_allowed(true)));"))
         #expect(!flat.contains("poke:%"), "쓰기 정책이 초인종 토픽을 연다")
+    }
+}
+
+// 위 묶음은 초안이 체인(supabase/migrations)에 들어가야 돈다. 번호 겹침은 초안이 아직 docs 에 있을 때 생기므로 따로 잰다.
+@Suite("테트리스 프레임 초안 번호", .enabled(if: tfDirectory() != nil && !tfDraftNames().isEmpty))
+struct TetrisFramesDraftNumberTests {
+    @Test("커밋된 초안은 하나 · 번호가 체인의 다른 파일과 겹치지 않고 한 판 한 기기 정본 뒤다 · 체인에 들어갔으면 바이트까지 같다")
+    func draftVersionDoesNotCollide() throws {
+        // 없으면: 11-03 에 초안 번호 20261107120000 이 main 의 token_board_closed_month 와 겹쳤는데 아무 시험도 몰랐다(초안이 체인 밖이라
+        // 위 묶음은 건너뛴다). CLI 는 버전 번호로만 적용 여부를 가린다 — 두 파일이 같은 대기열에 있으면 키 충돌로 멈추고, 같은 번호의 다른
+        // 파일이 먼저 원격에 적혔으면 이 파일은 적용된 것으로 보여 **조용히 건너뛰어진다**. 이 시험은 체인과의 겹침만 잰다. 아직 체인 밖인
+        // 다른 세션 초안(같은 날 20261108120000 이 그랬다)과 원격 마지막 적용분은 푸시 직전 `supabase migration list` 와 초안 번호 검사로
+        // 본다(앞서면 db push 가 --include-all 을 강요해 대기열 전체가 올라간다).
+        let drafts = tfDraftNames()
+        #expect(drafts.count == 1, Comment(rawValue: "초안이 \(drafts.count)개다: \(drafts)"))
+        let draft = try #require(drafts.first)
+        let version = tfVersion(draft)
+        #expect(version.count == 14, Comment(rawValue: "초안 번호 '\(version)' 이 14자리가 아니다"))
+        #expect(draft > tfOneWriter, "초안 번호가 얹을 정본(20261103124000)보다 앞이다")
+        let chain = tfChain()
+        #expect(chain.count > 100, Comment(rawValue: "마이그레이션을 \(chain.count)개밖에 못 읽었다 — 이 검사가 헛돈다"))
+        let clash = chain.filter { tfVersion($0) == version && $0 != draft }
+        #expect(clash.isEmpty, Comment(rawValue: "초안 번호 \(version) 이 체인의 \(clash) 와 겹친다 — 뒤로 다시 밀어라(파일 이름 · rollback.sql 머리 · gen_migration.py)"))
+        if chain.contains(draft), let directory = tfDirectory(), let root = tfRepoRoot() {
+            let inChain = try Data(contentsOf: directory.appendingPathComponent(draft))
+            let committed = try Data(contentsOf: root.appendingPathComponent("\(tfDraftDirectory)/\(draft)"))
+            #expect(inChain == committed, "체인 사본과 커밋된 초안이 다르다 — 생성기(gen_migration.py)로 다시 만들어 두 곳에 같게 둬라")
+        }
     }
 }

@@ -238,11 +238,11 @@ SQL 약칭: ONE = `supabase/migrations/20261103124000_tetris_one_writer.sql`, DU
 
 한쪽이라도 못 하면 DB 보고다. 구버전 쪽 화면과 "상대 연결 확인 중"이 망가지지 않는다.
 
-**구버전 호환** [확인]: Swift `TetrisStatePayload` 는 모르는 키를 무시하고 전 칸이 Optional 이다(`TetrisWire.swift:8-9`). Kotlin `SwiftJson` 은 `ignoreUnknownKeys = true`(`core/wire/.../json/SwiftJson.kt:49`). 응답에 `frames` 칸을 더해도 옛 클라는 깨지지 않는다 [추정]. 메모리 교훈대로 **구버전 본문을 운영에 그대로 쏘는 프로브**(P7)로 판정하라.
+**구버전 호환** [확인]: Swift `TetrisStatePayload` 는 모르는 키를 무시하고 전 칸이 Optional 이다(`TetrisWire.swift:8-9`). Kotlin 은 디코드가 `SwiftObjectDecoder.decodeElementIndex` 를 거치고, 이 디코더는 서술자 칸만 돌아 모르는 키를 구조상 무시한다(`origin/xplat/main` f522475c 확인 — 11-03 검토. 처음 적은 `SwiftJson.kt:49` `ignoreUnknownKeys = true` 는 **인코더** 설정이라 근거가 아니다). 응답에 `frames` 칸을 더해도 옛 클라는 깨지지 않는다 [추정]. 메모리 교훈대로 **구버전 본문을 운영에 그대로 쏘는 프로브**(P7)로 판정하라.
 
 ## 12. 서버 변경 목록 [설계]
 
-새 마이그레이션 한 장. 번호는 푸시 직전 `supabase migration list --linked` 로 대기열 확인(메모리 `migration-include-all-applies-agent-drafts`). 현재 최신은 `20261106140000`. 메인 `supabase/migrations` 에 초안을 먼저 두지 마라.
+새 마이그레이션 한 장. 번호는 푸시 직전 `supabase migration list --linked` 로 대기열 확인(메모리 `migration-include-all-applies-agent-drafts`). 현재 최신은 `20261106140000`(10-31 기준. 11-03 main 은 `20261107160000`). **다른 세션 초안과의 겹침도 본다** — 11-03 에 자리표시 번호가 main 파일과 한 번, 다른 세션 초안과 한 번 겹쳐 `20261108133700` 으로 옮겼다. CLI 는 버전 번호로만 적용 여부를 가려, 같은 번호의 다른 파일이 먼저 원격에 적히면 이 파일이 조용히 건너뛰어진다. 메인 `supabase/migrations` 에 초안을 먼저 두지 마라.
 
 1. **칸.** `alter table public.tetris_players add column frames_v smallint not null default 0;` (표 213kB. 새 칸에 인덱스가 없어 HOT 영향 없음. 피크를 피해 적용.)
 2. **스위치.** `public.tetris_frames_enabled() returns boolean` — 기존 상수 함수 모양(DUEL:293-306). 초기값은 `true` 로 올려도 protocol 2 클라가 나오기 전에는 아무 영향이 없다.

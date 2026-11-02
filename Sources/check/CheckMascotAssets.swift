@@ -182,6 +182,8 @@ enum CheckMascotAssets {
     }
 
     static func image(for mood: Mood, characterID: String) -> NSImage? {
+        // 이슬 초상은 그림 저장소가 새로 받을 수 있다 — 그리는 화면이 그 관찰 값에 묶이게 읽어 둔다(`IsulArtRevision`).
+        IsulArtRevision.observe(characterID: characterID)
         if let image = cache.image(key: cacheKey(mood: mood, characterID: characterID),
                                    url: portraitURL(for: mood, characterID: characterID)) {
             return image
@@ -207,6 +209,7 @@ enum CheckMascotAssets {
     }
 
     static func menuBarImage(for mood: Mood, characterID: String) -> NSImage? {
+        IsulArtRevision.observe(characterID: characterID)
         if let image = cache.menuBarImage(key: cacheKey(mood: mood, characterID: characterID),
                                           url: portraitURL(for: mood, characterID: characterID),
                                           size: menuBarSize) {

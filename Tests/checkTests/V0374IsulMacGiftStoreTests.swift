@@ -273,7 +273,7 @@ struct V0374IsulMacGiftStoreTests {
     // MARK: ② 받기 결과 갈래
 
     @Test("술 선물 받기 결과: replayed 는 받은 뒤 화면 · needs_update · invalid_choice 는 문구 + 선물 그대로 · not_found 는 잠그고 카드 거둠",
-          arguments: ["replayed", "needs_update", "invalid_choice", "not_found"])
+          arguments: ["replayed", "needs_update", "invalid_choice", "not_found", "502"])
     func drinkClaimOutcomes(status: String) async throws {
         let host = isHost("outcome-\(status)")
         let server = IsulGiftServer()
@@ -281,9 +281,10 @@ struct V0374IsulMacGiftStoreTests {
         let reply: String = switch status {
         case "replayed": #"{"status":"ok","character_id":"aing_isul","replayed":true}"#
         case "needs_update": #"{"status":"needs_update","min_protocol":5}"#
+        case "502": #"{"message":"bad gateway"}"#
         default: #"{"status":"\#(status)"}"#
         }
-        server.claimOverride = .init(body: reply)
+        server.claimOverride = status == "502" ? .init(status: 502, body: reply) : .init(body: reply)
         let spy = IsulWindowSpy()
         let store = isStore(host: host, server: server, spy: spy)
         await store.refreshCakeGift(reason: .launch)?.value
@@ -297,6 +298,12 @@ struct V0374IsulMacGiftStoreTests {
             #expect(store.cakeGiftNotice == DrinkGiftText.notice(for: .needsUpdate) { $0 } && store.cakeGiftNotice == CakeGiftText.needsUpdate)
             #expect(store.cakeGiftReceivedID == nil && !store.ownedCharacterIDs.contains(isIsul), "needs_update 인데 받은 것으로 적었다")
             #expect(store.cakeGiftOffer == offer && store.showsCakeGiftCard && store.canConfirmCakeGift, "선물이 그대로 열려 있어야 한다")
+        case "502":
+            // 결과를 모르는 수령 — 문구는 술 한잔 묶음의 실패 줄(검토 수리 G3 — 생일 묶음을 박지 않는다) · 다시 누를 수 있다.
+            #expect(CharacterGiftCopy.drink.claimFailed == DrinkGiftText.claimFailed
+                    && CharacterGiftCopy.birthday.claimFailed == CakeGiftText.claimFailed)
+            #expect(store.cakeGiftNotice == CharacterGiftKind.drink.copy.claimFailed, "실패 줄이 \(store.cakeGiftNotice ?? "nil")")
+            #expect(store.cakeGiftReceivedID == nil && store.cakeGiftOffer == offer && store.canConfirmCakeGift, "다시 누를 수 없다")
         case "invalid_choice":
             #expect(store.cakeGiftNotice == CakeGiftText.invalidChoice)
             #expect(store.cakeGiftReceivedID == nil && store.cakeGiftOffer == offer && store.showsCakeGiftCard)
@@ -386,6 +393,80 @@ struct V0374IsulMacGiftStoreTests {
         #expect(await V0354CoreStub.waitUntil { store.cakeGiftOffer?.kind == .drink }, "떠 있던 조회 뒤에 다음 선물을 안 물었다")
         #expect(isPendingCount(host) == 3)
         #expect(spy.shows.last == false && spy.shows.count == 2, "술 선물 띄우기가 \(spy.shows)")
+    }
+
+    @Test("받은 뒤 화면이 떠 있는 동안 조회가 다음 선물을 돌려주면 '띄웠음'으로 적지 않는다 — 닫으면 다음 선물 창이 한 번 뜬다(검토 수리)")
+    func nextGiftArrivingUnderTheReceivedScreenShowsAfterClose() async throws {
+        let host = isHost("under")
+        let server = IsulGiftServer()
+        server.grant(id: isBirthdayID, kind: "birthday", options: [isChoco], createdAt: "2026-11-01T09:00:00+00:00")
+        server.grant(id: isDrinkID, kind: "drink", options: [isIsul], createdAt: "2026-11-08T12:00:00+00:00")
+        let spy = IsulWindowSpy()
+        let store = isStore(host: host, server: server, spy: spy)
+        await store.refreshCakeGift(reason: .launch)?.value
+        #expect(spy.shows == [false] && store.cakeGiftChoice == isChoco, "전제: 생일을 스스로 띄우고 하나 남은 선택지를 미리 골랐다")
+        await store.claimCakeGift()?.value
+        #expect(store.cakeGiftReceivedID == isChoco && spy.open, "전제: 받은 뒤 화면이 떠 있다")
+
+        // 받은 뒤 화면이 떠 있는 동안 상점 진입 조회가 다음 선물(술)을 돌려준다 — 겹쳐 띄우지 않고, '띄웠음'으로도 적지 않는다.
+        await store.refreshCakeGift(reason: .shop)?.value
+        #expect(store.cakeGiftOffer?.id == isDrinkID && store.showsCakeGiftCard, "전제: 조회가 다음 선물을 못 읽었다")
+        #expect(spy.shows == [false], "받은 뒤 화면 위로 다음 창을 겹쳤다 — \(spy.shows)")
+        #expect(!store.cakeGiftAutoShownIDs.contains(isDrinkID), "띄우지 않은 선물을 '띄웠음'으로 적었다 — 닫은 뒤에도 안 뜬다")
+
+        // 닫는다 → 다음 선물 되묻기가 같은 선물을 받아 이번엔 스스로 띄운다(키 안 잡음).
+        store.closeCakeGiftWindow()
+        #expect(await V0354CoreStub.waitUntil { spy.shows.count == 2 }, "닫았는데 다음 선물 창이 안 떴다 — \(spy.shows)")
+        #expect(spy.shows == [false, false] && store.cakeGiftPresented?.id == isDrinkID && store.cakeGiftChoice == isIsul)
+        #expect(store.cakeGiftAutoShownIDs.contains(isDrinkID) && isPendingCount(host) == 3, "조회 \(isPendingCount(host))번")
+
+
+        // 짝: 열린 창이 **같은** 선물을 그리면(받은 뒤 화면에서 카드의 [받기] 로 연 술 선물) 그것은 띄운 것이다 — 조회가 그 선물을 말하면
+        // '띄웠음'으로 적고, 고르지 않고 닫은 뒤 다시 물어도 스스로 또 띄우지 않는다(실행당 한 번).
+        let host2 = isHost("under-same")
+        let server2 = IsulGiftServer()
+        server2.grant(id: isBirthdayID, kind: "birthday", options: [isChoco], createdAt: "2026-11-01T09:00:00+00:00")
+        server2.grant(id: isDrinkID, kind: "drink", options: [isIsul], createdAt: "2026-11-08T12:00:00+00:00")
+        let spy2 = IsulWindowSpy()
+        let store2 = isStore(host: host2, server: server2, spy: spy2)
+        await store2.refreshCakeGift(reason: .launch)?.value
+        await store2.claimCakeGift()?.value
+        await store2.refreshCakeGift(reason: .shop)?.value
+        #expect(store2.cakeGiftReceivedID == isChoco && store2.cakeGiftOffer?.id == isDrinkID && spy2.shows == [false], "전제")
+        store2.openCakeGiftWindow()
+        #expect(spy2.shows == [false, true] && store2.cakeGiftPresented?.id == isDrinkID && store2.cakeGiftReceivedID == nil)
+        await store2.refreshCakeGift(reason: .shop)?.value
+        #expect(store2.cakeGiftAutoShownIDs.contains(isDrinkID), "같은 선물을 그리는 창인데 '띄웠음'으로 안 적었다")
+        store2.closeCakeGiftWindow()
+        await store2.refreshCakeGift(reason: .periodic)?.value
+        #expect(spy2.shows == [false, true], "이미 본 선물을 닫은 뒤 다시 물었더니 스스로 또 띄웠다 — \(spy2.shows)")
+    }
+
+    @Test("로그아웃 · 다른 계정: 앞 계정이 가진 이슬로 새 계정의 술 선물을 거르지 않는다 — 이 계정의 상점을 읽기 전엔 보유로 안 거른다(검토 수리)")
+    func previousAccountOwnershipDoesNotSwallowTheDrinkGift() async throws {
+        let host = isHost("switch")
+        let server = IsulGiftServer()
+        server.owned = [isIsul]
+        let spy = IsulWindowSpy()
+        let store = isStore(host: host, server: server, spy: spy)
+        store.loadShopState()
+        #expect(await V0354CoreStub.waitUntil { store.ownedCharacterIDs.contains(isIsul) }, "전제: 앞 계정의 이슬 보유를 못 읽었다")
+        store.signOut(notifyServer: false)
+        #expect(store.ownedCharacterIDs.contains(isIsul), "전제: 로그아웃 뒤에도 보유 집합이 남는다(이 시험이 재는 자리)")
+
+        // 다음 사람(이슬 없음)에게 술 선물이 열려 있다.
+        server.owned = []
+        server.grant(id: isDrinkID, kind: "drink", options: [isIsul], createdAt: "2026-11-08T12:00:00+00:00")
+        store.session = SupabaseSession(accessToken: "access-token-b", refreshToken: nil, userID: "00000000-0000-0000-0000-0000000000f2")
+        store.membershipConfirmed = true
+        await store.refreshCakeGift(reason: .signIn)?.value
+        #expect(store.cakeGiftOffer?.id == isDrinkID && store.showsCakeGiftCard, "앞 계정의 보유로 새 계정의 술 선물을 걸렀다")
+        #expect(spy.shows.last == false && store.cakeGiftPresented?.id == isDrinkID, "새 계정의 술 선물이 안 떴다 — \(spy.shows)")
+
+        // 이 계정의 상점을 읽으면 그 보유로 맞춘다(여전히 이슬 없음 → 선물 그대로).
+        store.loadShopState()
+        #expect(await V0354CoreStub.waitUntil { !store.ownedCharacterIDs.contains(isIsul) }, "새 계정의 상점을 못 읽었다")
+        #expect(store.cakeGiftOffer?.id == isDrinkID)
     }
 
     // MARK: ④ 번호 4 — 이슬을 못 그리는 빌드

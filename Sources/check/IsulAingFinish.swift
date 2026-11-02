@@ -176,7 +176,7 @@ enum IsulAingFinish {
             float3 ckP = in.ckVP;
             float3 ckVn = normalize(in.ckVN);
             float3 ckEye = normalize(-in.ckVE);
-            float ckNV = abs(dot(ckVn, ckEye));
+            float ckNV = min(abs(dot(ckVn, ckEye)), 1.0);
             float ckT = (\(f5(bodyTop)) - ckP.y) / \(f5(bodyHeight));
             float ckTh = atan2(ckP.x, ckP.z);
             float ckFx = ckP.x / 0.60;
@@ -458,6 +458,8 @@ enum IsulAingFinish {
     private struct TemplateState {
         var template: SCNNode?
         var builds = 0
+        /// 원본을 구운 스레드가 메인이었는가(굽기마다 하나 — 시험 전용 관찰).
+        var onMain: [Bool] = []
     }
 
     private static let templateState = OSAllocatedUnfairLock(uncheckedState: TemplateState())
@@ -466,9 +468,9 @@ enum IsulAingFinish {
     /// 자리가 캐릭터마다 같다. 사본은 지오메트리 · 재질을 나눠 쓴다. 메시를 못 읽으면 nil.
     ///
     /// 처음 만들기 비용은 `V0374IsulMac3DTests.decorIsBuiltOncePerProcess` 가 찍는다(뚜껑 한 조각 — 241×41 정점 · 512×128 텍스처). 실측
-    /// debug 210ms(2026-11-03) — 케이크 딸기(debug 2.7초 · release 78ms)의 1/13 이라 release 는 수 ms 다. 그래서 케이크처럼 시작 뒤 메인 밖에서
-    /// 미리 굽지 않는다(`CakeAingFinish.prewarmDecorTemplates` — 처음 이슬을 세우는 씬이 메인에서 한 번 굽는다). 원본은 **어느 씬에도 붙지 않은**
-    /// 새 노드라 어느 스레드에서 불러도 된다(케이크 `decorNode` 주석과 같은 이유) — 미리 굽기가 필요해지면 그 함수에 이 호출을 더하면 된다.
+    /// debug 210ms(2026-11-03) — 케이크 딸기(debug 2.7초 · release 78ms)의 1/13 이지만 첫 이슬 씬이 메인에서 구우면 그만큼 멎으므로, 케이크와
+    /// 같은 자리 · 같은 방식으로 시작 뒤 메인 밖에서 미리 굽는다(`CakeAingFinish.prewarmDecorTemplates` — 검토 수리). 원본은 **어느 씬에도 붙지 않은**
+    /// 새 노드라 어느 스레드에서 불러도 된다(케이크 `decorNode` 주석과 같은 이유). 자물쇠 안에서 굽고 넣으므로 미리 굽기와 메인이 겹쳐도 한 번이다.
     static func decorNode() -> SCNNode? {
         templateState.withLockUnchecked { state -> SCNNode? in
             if let template = state.template { return template.clone() }
@@ -485,12 +487,21 @@ enum IsulAingFinish {
             logger.notice("isul cap built ms=\(ms, format: .fixed(precision: 1), privacy: .public) main=\(onMain, privacy: .public)")
             state.template = template
             state.builds += 1
+            state.onMain.append(onMain)
             return template.clone()
         }
     }
 
     /// 시험 전용: 지금까지 원본을 새로 구운 횟수.
     static var decorBuildCountForTesting: Int { templateState.withLockUnchecked { $0.builds } }
+
+    /// 시험 전용: 원본을 구운 스레드가 메인이었는가(굽기마다 하나).
+    static var decorBuildsOnMainForTesting: [Bool] { templateState.withLockUnchecked { $0.onMain } }
+
+    /// 시험 전용: 병뚜껑 원본을 버린다(굽기 기록도 — 케이크 `resetCacheForTesting` 과 같다).
+    static func resetDecorCacheForTesting() {
+        templateState.withLockUnchecked { $0 = TemplateState() }
+    }
 
     private static func firstGeometryNode(in root: SCNNode) -> SCNNode? {
         var found: SCNNode?

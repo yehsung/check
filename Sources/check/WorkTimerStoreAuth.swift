@@ -648,6 +648,7 @@ extension WorkTimerStore {
         var owned: Set<String> = [CharacterCatalog.builtInAingID]
         for row in rows where row.owned == true { owned.insert(row.id) }
         ownedCharacterIDs = owned
+        shopOwnershipGeneration = sessionGeneration
         // 생일 선물(v0.3.66): 다른 기기에서 받았으면 열린 선물의 선택지가 보유와 어긋난다 — 맞추고, 남는 게 없으면 선물 · 카드를 거둔다.
         reconcileCakeGiftWithOwnership()
     }

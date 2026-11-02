@@ -1376,7 +1376,13 @@ final class ReactionEngine {
         if let rect = projectedBodyViewRect(in: view), rect.contains(local) == false {
             return false // 프리체크 탈락(투영 rect 계산 실패 시엔 통과시켜 hitTest 로 확정).
         }
-        let hits = view.hitTest(local, options: [
+        return isBodyHit(atViewPoint: local, renderer: view)
+    }
+
+    /// 판정의 둘째 · 셋째 단 — 뷰(렌더러) 좌표 `local` 의 지오메트리 맞음이 몸인가. 창 · 프리체크와 떨어져 있어 시험이 창 없는
+    /// 오프스크린 렌더러(`SCNRenderer`)로 이 판정을 그대로 부른다(뚜껑 투영점 = 거짓 · 몸 가운데 = 참).
+    func isBodyHit(atViewPoint local: CGPoint, renderer: SCNSceneRenderer) -> Bool {
+        let hits = renderer.hitTest(local, options: [
             .rootNode: reactionNode as Any,      // 캐릭터 서브트리만(색종이·💤 노드 제외).
             .boundingBoxOnly: false,             // 지오메트리 정밀.
             .ignoreHiddenNodes: true,

@@ -42,6 +42,13 @@ struct CheckCakeGiftWindowView: View {
     let onClose: () -> Void
 
     var body: some View {
+        screen
+            .frame(width: CakeGiftWindowLayout.contentSize.width, height: CakeGiftWindowLayout.contentSize.height)
+    }
+
+    /// 창 크기로 자르기 **전**의 화면 — 시험이 창 폭에서 자연 높이(`.fixedSize`)를 재 창 높이 예산 안인지 본다(긴 두 줄 note ·
+    /// 실패 한 줄이 겹쳐도 단추가 잘리지 않는가). 창은 `body` 가 고정 크기로 감싼다.
+    var screen: some View {
         ZStack {
             CheckTheme.background
             if let received = store.cakeGiftReceivedID {
@@ -52,7 +59,6 @@ struct CheckCakeGiftWindowView: View {
                 choosingScreen
             }
         }
-        .frame(width: CakeGiftWindowLayout.contentSize.width, height: CakeGiftWindowLayout.contentSize.height)
     }
 
     // MARK: ① 고르기
@@ -332,6 +338,12 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
         kind?.copy.title ?? windowTitle
     }
 
+    /// `show()` 가 창 제목으로 쓰는 값 — **창이 그리는 선물**(`cakeGiftPresented`)의 종류 제목. 그리는 선물이 없으면 생일 제목(순수 —
+    /// 시험이 값으로 재고, `show()` 가 이 함수를 부르는지는 소스 계약으로 잰다).
+    static func title(presenting offer: CharacterGiftOffer?) -> String {
+        title(for: offer?.kind)
+    }
+
     /// 창 위치를 기억하는 키 = 창 식별자. 다른 창과 겹치면 안 된다(`MiniGameSpaceKey.standaloneWindowIDs` 가 이 문자열로 이 창을 알아본다).
     static let frameAutosaveName = "check.cakeGift.window"
 
@@ -428,7 +440,7 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     func show(activating: Bool = true) {
         guard let window else { return }
         // 창 제목은 그리는 선물의 종류(생일 "생일 축하해요! 🎂" · 술 한잔 "술 한잔 하자! 🍶" — v0.3.74). 선물이 없으면 생일 제목 그대로.
-        window.title = Self.title(for: wiring?.store.cakeGiftPresented?.kind)
+        window.title = Self.title(presenting: wiring?.store.cakeGiftPresented)
         if window.isMiniaturized { window.deminiaturize(nil) }
         let fixedFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: Self.fixedContentSize)).size
         if window.frame.size != fixedFrame { window.setContentSize(Self.fixedContentSize) }

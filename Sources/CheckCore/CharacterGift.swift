@@ -426,6 +426,8 @@ package nonisolated enum DrinkGiftText {
     /// 받지 않고 닫은 뒤 메뉴 팝오버 · 상점에 남는 카드.
     package static let reopenTitle = "술 한잔 선물이 도착했어요"
     package static let reopenButton = "받기"
+    /// 결과를 모르는 수령(오프라인 · 5xx · 응답 해석 실패)의 한 줄 — 생일과 같은 글자다(다시 눌러도 안전하다).
+    package static let claimFailed = CakeGiftText.claimFailed
 
     /// 받은 뒤 한 줄 — "이슬 아잉이를 받았어요!"(조사 규칙은 생일과 한 곳).
     package static func received(name: String) -> String {
@@ -449,13 +451,16 @@ package struct CharacterGiftCopy: Equatable, Sendable {
     package let lockedHint: String
     package let reopenTitle: String
     package let reopenButton: String
+    /// 결과를 모르는 수령의 한 줄(`CakeGiftText.claimFailed` · `DrinkGiftText.claimFailed`).
+    package let claimFailed: String
 
     /// 생일 선물(케이크 아잉이 — v0.3.66).
     package static let birthday = CharacterGiftCopy(
         title: CakeGiftText.title, body: CakeGiftText.body, confirmButton: CakeGiftText.confirmButton,
         wearNowButton: CakeGiftText.wearNowButton, closeButton: CakeGiftText.closeButton,
         lockedCaption: CakeGiftText.lockedCaption, lockedHint: CakeGiftText.lockedHint,
-        reopenTitle: CakeGiftText.reopenTitle, reopenButton: CakeGiftText.reopenButton
+        reopenTitle: CakeGiftText.reopenTitle, reopenButton: CakeGiftText.reopenButton,
+        claimFailed: CakeGiftText.claimFailed
     )
 
     /// '술 한잔' 선물(이슬 아잉이 — v0.3.74).
@@ -463,7 +468,8 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         title: DrinkGiftText.title, body: DrinkGiftText.body, confirmButton: DrinkGiftText.confirmButton,
         wearNowButton: DrinkGiftText.wearNowButton, closeButton: DrinkGiftText.closeButton,
         lockedCaption: DrinkGiftText.lockedCaption, lockedHint: DrinkGiftText.lockedHint,
-        reopenTitle: DrinkGiftText.reopenTitle, reopenButton: DrinkGiftText.reopenButton
+        reopenTitle: DrinkGiftText.reopenTitle, reopenButton: DrinkGiftText.reopenButton,
+        claimFailed: DrinkGiftText.claimFailed
     )
 
     /// 받은 뒤 한 줄(종류와 무관하게 한 규칙 — "○○를 받았어요!").

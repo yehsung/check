@@ -880,6 +880,10 @@ final class WorkTimerStore {
     ///   로드 전에는 이 집합이 비어 있어서, 그대로 게이트를 걸면 **이미 산 캐릭터까지 잠긴 채** 첫 화면이
     ///   그려진다. 서버가 말해 주기 전의 침묵을 "안 샀다"로 읽으면 안 된다.
     var ownedCharacterIDs: Set<String> = [CharacterCatalog.builtInAingID]
+    /// `ownedCharacterIDs` 를 서버 상점 행으로 마지막에 채운 세션 세대(`applyShopState`). 로그아웃 · 계정 전환은 세대를 올리고 보유는 남기므로,
+    /// 이 값이 지금 세대와 다르면 보유는 **앞 계정의 것일 수 있다** — 선물 거르기(`cakeGiftFilteredByOwnership`)가 이 값으로 믿을지 가른다.
+    /// 화면이 읽지 않는다.
+    @ObservationIgnored var shopOwnershipGeneration: Int?
 
     /// 이 캐릭터를 고를 수 있는가. **로드 전에는 언제나 true** — 위 주석 참고.
     /// 아잉은 무료라 서버 응답과 무관하게 언제나 true 다.

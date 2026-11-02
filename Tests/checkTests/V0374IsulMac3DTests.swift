@@ -1,4 +1,5 @@
 import AppKit
+import Observation
 import SceneKit
 import Testing
 @testable import check
@@ -280,8 +281,14 @@ import Testing
         let raw = renderer.hitTest(CGPoint(x: p.x, y: p.y), options: options)
         #expect(raw.contains { AingDecor.isDecor($0.node) }, "기준선: 뚜껑 자리의 날 hitTest 가 뚜껑을 안 맞힌다 — 점을 잘못 잡았다")
         #expect(!raw.contains { !AingDecor.isDecor($0.node) }, "뚜껑 자리 hitTest 에 몸이 섞였다 — 머리 위가 아니다")
-        let center = renderer.hitTest(CGPoint(x: Self.appSize.width / 2, y: Self.appSize.height / 2), options: options)
+        let centerPoint = CGPoint(x: Self.appSize.width / 2, y: Self.appSize.height / 2)
+        let center = renderer.hitTest(centerPoint, options: options)
         #expect(center.contains { !AingDecor.isDecor($0.node) }, "몸 가운데가 몸이 아니다")
+        // 엔진의 판정 함수 그대로(창 없이 — 오프스크린 렌더러를 뷰 자리에): 뚜껑 투영점 = 몸 아님 · 몸 가운데 = 몸(검토 수리).
+        let engine = ReactionEngine()
+        engine.attach(node: try V0354GoldAing3DTests.wrapper(scene), sceneRoot: scene.rootNode, view: nil)
+        #expect(!engine.isBodyHit(atViewPoint: CGPoint(x: p.x, y: p.y), renderer: renderer), "엔진이 뚜껑 자리를 몸으로 친다 — 바탕화면 클릭을 먹는다")
+        #expect(engine.isBodyHit(atViewPoint: centerPoint, renderer: renderer), "엔진이 몸 가운데를 몸이 아니라 한다")
         // 엔진의 판정 줄이 이 함수를 쓴다(소스 계약 — 주석을 걷고 본다).
         let reactions = V0351IfConfig.strippingComments(try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayReactions.swift"))
         #expect(reactions.contains("return hits.contains { !AingDecor.isDecor($0.node) }"), "몸 클릭 판정이 AingDecor 를 안 쓴다")
@@ -444,7 +451,19 @@ import Testing
         #expect(A.outcome(status: 200, data: Data("not a png".utf8), kind: .neutral) == .keep)
         #expect(A.outcome(status: 304, data: Data(), kind: .label) == .keep)
         #expect(A.outcome(status: 404, data: Data(), kind: .negative) == .revert)
-        for status in [400, 401, 500, 503] { #expect(A.outcome(status: status, data: label, kind: .label) == .keep, "\(status)") }
+        // 없는 개체 — Supabase Storage 는 버전 · 게이트웨이에 따라 400 + 본문 not_found 로 준다(`deleteAvatarFile` 과 같은 판정).
+        let notFound = Data(#"{"statusCode":"404","error":"not_found","message":"Object not found"}"#.utf8)
+        #expect(A.outcome(status: 400, data: notFound, kind: .label) == .revert, "400 + not_found 본문을 없는 개체로 안 읽었다")
+        #expect(A.outcome(status: 400, data: Data(#"{"error":"not_found"}"#.utf8), kind: .neutral) == .revert)
+        #expect(A.outcome(status: 400, data: Data(#"{"statusCode":"404"}"#.utf8), kind: .negative) == .revert)
+        // 본문 없는 400 · not_found 표식 없는 400 = 잘못된 요청 — 그대로.
+        #expect(A.outcome(status: 400, data: Data(), kind: .label) == .keep, "본문 없는 400 을 되돌렸다")
+        #expect(A.outcome(status: 400, data: Data(#"{"statusCode":"400","error":"InvalidRequest"}"#.utf8), kind: .label) == .keep)
+        // 표식은 400 에서만 본다(403 · 5xx 본문에 같은 글자가 섞여도 캐시를 안 지운다).
+        for status in [401, 403, 500, 503] {
+            #expect(A.outcome(status: status, data: label, kind: .label) == .keep, "\(status)")
+            #expect(A.outcome(status: status, data: notFound, kind: .label) == .keep, "\(status) + not_found")
+        }
     }
 
     @Test("그림 위치: Storage game-art/isul/<이름>.png · 캐시 Caches/check.game-art/isul/<이름>.png · 번들 폴백 세 장이 실재하고 쓸 만하다 · 시험 중엔 캐시도 네트워크도 안 탄다")
@@ -485,6 +504,10 @@ import Testing
         let other = IsulArt(cacheDirectory: dir, readsCache: true, usesNetwork: false)
         try Data(contentsOf: bundledNeutral).write(to: other.cacheFile(.label))
         #expect(other.url(.label) == bundledLabel, "못 쓰는 캐시를 썼다")
+        // 못 쓰는 캐시엔 조건부 머리를 안 단다(메타가 남아 있어도) — 달면 304 를 받아 번들에 갇힌다(검토 수리).
+        try Data(#"{"etag":"\"v1\"","last_modified":"Sun, 02 Nov 2026 00:00:00 GMT"}"#.utf8).write(to: other.metaFile(.label))
+        #expect(other.conditionalRequest(.label).value(forHTTPHeaderField: "If-None-Match") == nil, "못 쓰는 캐시인데 If-None-Match 를 단다")
+        #expect(other.conditionalRequest(.label).value(forHTTPHeaderField: "If-Modified-Since") == nil, "못 쓰는 캐시인데 If-Modified-Since 를 단다")
         // 받아들이기 200 — 새 라벨(번들 라벨 바이트 · 캐시에 씀) → 캐시 파일 · 메타.
         let labelData = try Data(contentsOf: bundledLabel)
         let before = art.labelImage()
@@ -511,9 +534,114 @@ import Testing
         #expect(art.portraitURL(.neutral) == art.cacheFile(.neutral) && art.portraitURL(.negative) == IsulArt.bundledURL(.negative))
         // 시험 중 공용 저장소가 고른 파일은 3D 마감 · 초상 둘 다 같은 저장소를 탄다(소스 계약 — 주석을 걷고 본다).
         let bridge = V0351IfConfig.strippingComments(try Self.source("Sources/check/CheckCoreBridge.swift"))
-        #expect(bridge.contains("IsulArt.shared.portraitURL(mood)"), "초상 조회가 그림 저장소를 안 탄다")
+        #expect(bridge.contains("IsulArt.current.portraitURL(mood)"), "초상 조회가 그림 저장소를 안 탄다")
         let finish = V0351IfConfig.strippingComments(try Self.source("Sources/check/IsulAingFinish.swift"))
         #expect(finish.contains("let label = IsulArt.shared.labelImage()"), "3D 라벨이 그림 저장소를 안 탄다")
+    }
+
+    @Test("라벨 풀기: 고른 캐시 파일이 그 뒤 깨졌으면(풀리지 않는다) 번들로 한 번 더 푼다 — 라벨 없는 병이 되지 않는다(검토 수리)")
+    func labelFallsBackToTheBundleWhenTheCacheWontDecode() throws {
+        let dir = try Self.scratchCache("label-fallback")
+        let art = IsulArt(cacheDirectory: dir, readsCache: true, usesNetwork: false)
+        let bundledLabel = try #require(IsulArt.bundledURL(.label))
+        try Data(contentsOf: bundledLabel).write(to: art.cacheFile(.label))
+        #expect(art.url(.label) == art.cacheFile(.label), "전제: 쓸 만한 캐시를 고르지 않았다")
+        // 고른 뒤 캐시 파일이 깨졌다(다른 프로세스 · 디스크) — 기억한 주소는 캐시 그대로다.
+        try Data("not a png".utf8).write(to: art.cacheFile(.label))
+        let image = try #require(art.labelImage(), "캐시를 못 풀자 라벨 없이 섰다 — 번들로 다시 풀지 않았다")
+        let bundled = try #require(CGImageSourceCreateWithURL(bundledLabel as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) })
+        #expect(image.width == bundled.width && image.height == bundled.height, "번들 라벨이 아니다(\(image.width)×\(image.height))")
+    }
+
+    /// 관찰 바뀜 횟수(onChange 는 어느 스레드에서든 온다).
+    final class RedrawCount: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        func add() { lock.withLock { count += 1 } }
+        var value: Int { lock.withLock { count } }
+    }
+
+    /// 번들 초상 PNG 의 왼쪽 위 한 점만 빨강으로 칠한 PNG(사람 눈엔 같은 그림 — 시험은 그 점으로 새 그림을 가른다).
+    static func markedPortrait(_ data: Data) throws -> Data {
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        // RGBA 버퍼에 그리고 버퍼 0행 0열(= 그림의 왼쪽 위)을 불투명 빨강으로 — 표현(rep)의 색공간에 기대지 않는다.
+        let w = image.width, h = image.height
+        let context = try #require(CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                                             space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+        let pixels = try #require(context.data).assumingMemoryBound(to: UInt8.self)
+        pixels[0] = 255; pixels[1] = 0; pixels[2] = 0; pixels[3] = 255
+        let marked = try #require(context.makeImage())
+        let out = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(out as CFMutableData, "public.png" as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, marked, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        return out as Data
+    }
+
+    static func isRedCorner(_ image: NSImage?) -> Bool {
+        guard let cg = image?.cgImage(forProposedRect: nil, context: nil, hints: nil),
+              let color = NSBitmapImageRep(cgImage: cg).colorAt(x: 0, y: 0), color.type == .componentBased,
+              color.numberOfComponents >= 3 else { return false }
+        // 표현의 RGB 성분 그대로(sRGB 로 옮기면 색공간 변환이 초록을 0.15 까지 올린다 — 옛 그림의 구석은 투명 0 0 0 0 이다).
+        return color.alphaComponent > 0.9 && color.redComponent > 0.9 && color.greenComponent < 0.3 && color.blueComponent < 0.3
+    }
+
+    @Test("받은 초상은 곧바로 화면으로: 초상 조회가 타는 저장소에 200 을 흡수하면 관찰 값이 올라(그린 화면이 다시 그린다) 메뉴바 · 헤더 · 카드 · 아바타 캐시가 새 그림을 준다(검토 수리)")
+    func absorbedPortraitReachesTheDrawnCaches() async throws {
+        let dir = try Self.scratchCache("redraw")
+        let art = IsulArt(cacheDirectory: dir, readsCache: true, usesNetwork: false)
+        let id = CharacterCatalog.isulAingID
+        let marked = try Self.markedPortrait(try Data(contentsOf: try #require(IsulArt.bundledURL(.neutral))))
+        #expect(IsulArt.isAcceptable(data: marked, kind: .neutral), "전제: 칠한 초상이 판정을 못 지난다")
+        try await IsulArt.$testOverride.withValue(art) {
+            #expect(IsulArt.current === art, "전제: 따로 저장소가 안 끼워졌다")
+            IsulArt.forgetDrawnPortraits()
+            let before = CheckMascotAssets.image(for: .neutral, characterID: id)
+            #expect(before != nil && !Self.isRedCorner(before), "기준선: 흡수 전부터 새 그림이다")
+            let cardBefore = try #require(CharacterCardArt.image(characterID: id))
+            #expect(AppUserAvatarArt.portrait(characterID: id) != nil)
+            // 그린 화면이 관찰하는 값 — 초상을 그리는 함수를 부르는 동안 읽힌다.
+            let redraws = RedrawCount()
+            withObservationTracking {
+                _ = CheckMascotAssets.menuBarImage(for: .neutral, characterID: id)
+            } onChange: { redraws.add() }
+            let revision = IsulArtRevision.shared.count
+
+            #expect(art.absorb(kind: .neutral, status: 200, data: marked) == .replace)
+            #expect(await V0354CoreStub.waitUntil { IsulArtRevision.shared.count > revision }, "관찰 값이 안 올랐다 — 그린 화면이 다시 안 그린다")
+            #expect(redraws.value == 1, "메뉴바 초상을 그린 화면이 바뀜을 못 들었다(\(redraws.value))")
+            #expect(Self.isRedCorner(CheckMascotAssets.image(for: .neutral, characterID: id)), "헤더 초상이 옛 그림이다 — 캐시를 안 비웠다")
+            #expect(Self.isRedCorner(CheckMascotAssets.menuBarImage(for: .neutral, characterID: id)), "메뉴바 초상이 옛 그림이다")
+            let cardAfter = try #require(CharacterCardArt.image(characterID: id))
+            #expect(cardAfter !== cardBefore, "카드 그림이 옛 그림 객체다 — CharacterCardArt 의 이슬 몫을 안 비웠다")
+            #expect(cardAfter.width > cardBefore.width || cardAfter.height > cardBefore.height,
+                    "카드 그림이 새 초상(구석 한 점까지 조인 상자)이 아니다 — \(cardBefore.width)×\(cardBefore.height) → \(cardAfter.width)×\(cardAfter.height)")
+            // 다른 캐릭터는 이 값에 묶이지 않는다.
+            let aingRedraws = RedrawCount()
+            withObservationTracking {
+                _ = CheckMascotAssets.menuBarImage(for: .neutral, characterID: CharacterCatalog.builtInAingID)
+            } onChange: { aingRedraws.add() }
+            IsulArtRevision.shared.bump()
+            #expect(aingRedraws.value == 0, "아잉 초상을 그린 화면까지 이슬 그림 값에 묶였다")
+        }
+        // 뒷정리: 시험 그림을 쥔 앱 캐시를 비운다(공용 저장소 = 번들로 다시 읽는다).
+        IsulArt.forgetDrawnPortraits()
+        #expect(!Self.isRedCorner(CheckMascotAssets.image(for: .neutral, characterID: id)), "뒷정리 뒤에도 시험 그림이 남았다")
+    }
+
+    @Test("병뚜껑 미리 굽기: 케이크와 같은 자리(prewarmDecorTemplates)가 메인 밖에서 한 번 굽는다 — 그 뒤 첫 이슬 씬은 굽지 않는다(검토 수리)")
+    func capIsPrewarmedOffMain() async throws {
+        IsulAingFinish.resetDecorCacheForTesting()
+        let work = CakeAingFinish.prewarmDecorTemplates()
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in work.notify(queue: .main) { done.resume() } }
+        #expect(IsulAingFinish.decorBuildCountForTesting == 1 && IsulAingFinish.decorBuildsOnMainForTesting == [false],
+                "미리 굽기가 병뚜껑을 메인 밖에서 한 번 굽지 않았다 — \(IsulAingFinish.decorBuildsOnMainForTesting)")
+        let decor = try #require(IsulAingFinish.decorNode())
+        #expect(decor.name == IsulAingFinish.decorNodeName)
+        #expect(IsulAingFinish.decorBuildCountForTesting == 1, "미리 구웠는데 첫 씬이 메인에서 또 구웠다")
     }
 
     // MARK: ⑨ 증거 스틸(사람이 보는 그림 — 기본 실행에서는 꺼져 있다)

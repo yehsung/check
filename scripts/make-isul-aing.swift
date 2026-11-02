@@ -336,7 +336,7 @@ enum IsulBody {
         float3 ckP = in.ckVP;
         float3 ckVn = normalize(in.ckVN);
         float3 ckEye = normalize(-in.ckVE);
-        float ckNV = abs(dot(ckVn, ckEye));
+        float ckNV = min(abs(dot(ckVn, ckEye)), 1.0);
         float ckT = (\(f5(bodyTop)) - ckP.y) / \(f5(bodyHeight));
         float ckTh = atan2(ckP.x, ckP.z);
         float ckFx = ckP.x / 0.60;

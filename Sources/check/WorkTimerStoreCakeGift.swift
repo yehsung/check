@@ -160,9 +160,16 @@ extension WorkTimerStore {
         if vanished { loadShopState() }
         guard let offer = fresh else { return }
         guard !cakeGiftAutoShownIDs.contains(offer.id) else { return }
+        // '띄웠음'은 **실제로 띄울 때만** 적는다(검토 수리). 창이 이미 떠 있으면 끌어오지 않는다:
+        //  · 그 창이 이 선물을 그린다(다시 열기로 연 창) — 이미 본 선물이다, 적고 돌아간다.
+        //  · 다른 선물을 그린다(앞 선물의 받은 뒤 화면) — 적지 않고 돌아간다. 사용자가 닫으면 닫기 · 다음 선물 되묻기
+        //    (`cakeGiftDidClose` → `followUpCakeGiftIfNeeded`)가 같은 선물을 다시 받아 그때 띄운다. 여기서 적으면 그 되묻기가 위
+        //    문에서 돌아가 이번 실행 내내 안 뜬다(상점 진입 · 10분 주기 · 다른 기기 수령이 받은 뒤 화면 사이에 끼면 난다).
+        if cakeGiftWindowHooks.isOpen() {
+            if cakeGiftPresented?.id == offer.id { cakeGiftAutoShownIDs.insert(offer.id) }
+            return
+        }
         cakeGiftAutoShownIDs.insert(offer.id)
-        // 이미 떠 있으면(다시 열기로 연 창) 끌어오지 않는다.
-        guard !cakeGiftWindowHooks.isOpen() else { return }
         // 스스로 띄울 때는 키를 잡지 않는다(`CakeGiftWindowHooks.show` 주석 — 대결 · 다른 앱의 키를 가로채지 않게).
         // 팝오버에서 온 것이 아니므로 닫아도 팝오버로 돌아가지 않는다.
         cakeGiftReturnsToPopover = false
@@ -239,7 +246,8 @@ extension WorkTimerStore {
                 }
                 // 결과를 모른다(오프라인 · 5xx · 응답 해석 실패) — 같은 선택으로 다시 눌러도 안전하다(같은 캐릭터면 `replayed`).
                 if case .cancelled = self.classifyAuthError(error) { return }
-                self.cakeGiftNotice = CakeGiftText.claimFailed
+                // 문구는 받던 선물 종류의 묶음에서(생일 · 술 한잔 — 지금은 두 종류가 같은 글자다).
+                self.cakeGiftNotice = offer.kind.copy.claimFailed
             }
         }
     }
@@ -291,6 +299,9 @@ extension WorkTimerStore {
     /// `ownedCharacterIDs` 는 그때 아잉뿐이라 아무것도 안 빠진다. 서버 조회는 읽는 시점에 이미 거르므로 이 거름은 **우리가 더 최근에 안**
     /// 보유(다른 기기에서 받은 뒤 다시 읽은 상점)만 반영한다. 보유는 줄지 않으므로 거르는 쪽이 늘 안전하다.
     func cakeGiftFilteredByOwnership(_ offer: CharacterGiftOffer) -> CharacterGiftOffer? {
+        // 보유는 **이 세대(이 계정)에 읽은 상점**의 것만 믿는다(검토 수리) — 로그아웃 · 계정 전환은 세대를 올리지만 상점 행 · 보유는
+        // 남는다(고르기 화면의 규약). 앞 계정이 가진 이슬로 새 계정의 술 선물(선택지 하나)을 거르면 선물이 통째로 사라진다.
+        guard shopOwnershipGeneration == sessionGeneration else { return offer }
         let left = offer.options.filter { !ownedCharacterIDs.contains($0) }
         guard !left.isEmpty else { return nil }
         guard left.count != offer.options.count else { return offer }

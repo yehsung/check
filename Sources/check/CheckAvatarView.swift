@@ -242,6 +242,7 @@ enum AppUserAvatarArt {
     ///   **남의 얼굴에 아잉이 선다** — 2026-09-21 에 한 번 그렇게 바꿨다가 되돌렸다(머리 주석 ★).
     @MainActor
     static func portrait(characterID: String) -> CGImage? {
+        IsulArtRevision.observe(characterID: characterID)
         if let hit = cache[characterID] { return hit }
         guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID),
               let source = CGImageSourceCreateWithURL(url as CFURL, nil),

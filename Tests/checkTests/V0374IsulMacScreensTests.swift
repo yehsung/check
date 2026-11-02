@@ -37,6 +37,19 @@ private func isBitmap(_ view: some View, width: CGFloat? = nil) -> NSBitmapImage
     return once()
 }
 
+/// 받는 창 화면의 **자연 높이**(pt) — 창 폭에서 세로를 풀어(`.fixedSize`) 잰다. 창(`body`)은 고정 크기로 자르므로 그 그림으로는 넘침을
+/// 못 잰다(언제나 창 크기다) — 자르기 전의 화면(`screen`)을 잰다.
+@MainActor
+private func scNaturalHeight(_ store: WorkTimerStore) throws -> CGFloat {
+    let view = CheckCakeGiftWindowView(store: store, onClose: {}).screen
+        .frame(width: CakeGiftWindowLayout.contentSize.width)
+        .fixedSize(horizontal: false, vertical: true)
+    let renderer = ImageRenderer(content: view)
+    renderer.scale = 1
+    _ = renderer.nsImage
+    return try #require(renderer.nsImage, "자연 높이를 못 쟀다").size.height
+}
+
 private func scFingerprint(_ bitmap: NSBitmapImageRep) -> String {
     guard let png = bitmap.representation(using: .png, properties: [:]) else { return "" }
     return SHA256.hash(data: png).map { String(format: "%02x", $0) }.joined().prefix(16).description
@@ -119,8 +132,34 @@ struct V0374IsulMacScreensTests {
         for (name, bitmap) in [("invite-note", inviteNote), ("invite-plain", invitePlain), ("received", received)] {
             #expect(scColorful(bitmap) > 4_000, "\(name): 초상이 안 칠해졌다(\(scColorful(bitmap)))")
             #expect(V0317ShopTests.longestYellowRun(bitmap) < 24, "\(name): ImageRenderer '못 그림' 상자가 있다")
-            #expect(bitmap.pixelsWide == Int(size.width) * 2 && bitmap.pixelsHigh == Int(size.height) * 2, "\(name): 창 크기를 넘었다")
         }
+        // 창 높이 예산(검토 수리): 긴 두 줄 note + 실패 한 줄이 겹친 최악의 초대장 · 받은 뒤 · 생일 고르기(실패 한 줄)의 자연 높이가 창 높이
+        // 안이다(넘치면 고정 창이 위아래를 잘라 [받을게요] 가 잘린다). 기준선: 잰 값이 진짜 화면 높이다(창의 절반 이상).
+        let long = V0366CakeMacScreensTests.menuStore("isul-window-long")
+        long.cakeGiftOffer = scDrinkOffer(note: "오늘 저녁 일곱 시, 회사 앞 포장마차에서 우리 팀 다 같이 한잔 어때요? 꼭 와요!")
+        long.openCakeGiftWindow()
+        long.cakeGiftNotice = DrinkGiftText.claimFailed
+        let inviteHeight = try scNaturalHeight(long)
+        long.cakeGiftNotice = nil
+        let plainHeight = try scNaturalHeight(plainStore)
+        let receivedHeight = try scNaturalHeight(noted)
+        birthdayStore.cakeGiftNotice = CakeGiftText.claimFailed
+        let birthdayHeight = try scNaturalHeight(birthdayStore)
+        print("[v0374-screens] 자연 높이 초대장(긴 note + 실패) \(inviteHeight) · 초대장(note 없음) \(plainHeight) · 받은 뒤 \(receivedHeight) · 생일(실패) \(birthdayHeight) / 창 \(size.height)")
+        for (name, height) in [("invite-long", inviteHeight), ("invite-plain", plainHeight), ("received", receivedHeight), ("birthday-failed", birthdayHeight)] {
+            #expect(height <= size.height, "\(name): 자연 높이 \(height)pt 가 창 높이 \(size.height)pt 를 넘는다 — 단추가 잘린다")
+            #expect(height > size.height / 2, "\(name): 잰 높이 \(height)pt 가 화면 높이가 아니다(시험이 헛돈다)")
+        }
+        #expect(inviteHeight > plainHeight, "긴 두 줄 note + 실패 한 줄이 높이를 안 늘렸다(\(inviteHeight) vs \(plainHeight)) — 시험이 헛돈다")
+
+        // 창 제목(검토 수리): `show()` 가 쓰는 제목 결정 = 그리는 선물의 종류 제목(순수 함수) · `show()` 가 그 함수를 그리는 선물로 부른다.
+        #expect(CheckCakeGiftWindowController.title(presenting: noted.cakeGiftPresented) == DrinkGiftText.title)
+        #expect(CheckCakeGiftWindowController.title(presenting: birthdayStore.cakeGiftPresented) == CakeGiftText.title)
+        #expect(CheckCakeGiftWindowController.title(presenting: nil) == CheckCakeGiftWindowController.windowTitle)
+        let window = V0351IfConfig.strippingComments(try V0374IsulMac3DTests.source("Sources/check/CheckCakeGiftWindow.swift"))
+        let show = try V0366CakeMac3DTests.region(window, from: "func show(activating", to: "func close()")
+        #expect(show.contains("window.title = Self.title(presenting: wiring?.store.cakeGiftPresented)"), "show() 가 그리는 선물로 제목을 안 정한다")
+        #expect(show.components(separatedBy: "window.title =").count == 2, "show() 가 제목을 두 번 쓴다")
         scSave(inviteNote, "isul-window-invite-note.png")
         scSave(invitePlain, "isul-window-invite-plain.png")
         scSave(failed, "isul-window-invite-failed.png")

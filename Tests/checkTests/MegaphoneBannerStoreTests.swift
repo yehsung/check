@@ -6,7 +6,7 @@ import Testing
 // 계약 docs/plan/megaphone-banner-contract.md "그물 — 시험 · 코어" 줄의 항목을 하나씩 잰다. **모양이 아니라 결과를 잰다.**
 //
 // 서버는 스텁이다(`GomokuStubProtocol` — 시험마다 고유 호스트). 시계와 타이머는 `MBTimeline` 하나가 쥔다 — `advance` 가 시각을
-// 옮기고 그때까지 만기된 타이머를 순서대로 부른다(5초를 실제로 기다리지 않는다). 본 것 기록은 격리 스위트(`CheckTestScratch`)다.
+// 옮기고 그때까지 만기된 타이머를 순서대로 부른다(1분을 실제로 기다리지 않는다). 본 것 기록은 격리 스위트(`CheckTestScratch`)다.
 //
 // 각 시험은 비교 기준선을 하나씩 둔다 — 같은 입력에서 그 값 하나만 바꿔 결과가 갈리는 것을 보인다("상수가 있다"가 아니라).
 
@@ -258,36 +258,36 @@ struct MegaphoneBannerStoreTests {
         #expect(seen.first == "own-5" && seen.last == "own-104", "오래된 다섯을 밀어낸다 · 자리값 id 는 기록하지 않는다")
     }
 
-    // 없으면: 두 장이 한꺼번에 뜨거나, 5초가 아닌 시간에 닫히거나, 닫히자마자 다음 장이 붙는 결함이 초록.
-    // 2026-10-30 사용자 결정으로 8초 → 5초("너무 오래 떠있으면 안좋을듯").
-    @Test("한 번에 하나 · 5초 · 다음 장은 0.4초 뒤 · 오래된 것부터")
-    func oneAtATimeFiveSeconds() async {
+    // 없으면: 두 장이 한꺼번에 뜨거나, 1분이 아닌 시간에 닫히거나, 닫히자마자 다음 장이 붙는 결함이 초록.
+    // 2026-10-30 사용자 결정으로 8초 → 5초, 2026-11-02 사용자 결정으로 5초 → 1분("1분으로 늘려달라는거야").
+    @Test("한 번에 하나 · 1분 · 다음 장은 0.4초 뒤 · 오래된 것부터")
+    func oneAtATimeOneMinute() async {
         let items = mbReply([mbItem("msg-b", "mega-b", agoSeconds: 60), mbItem("msg-a", "mega-a", agoSeconds: 120)])
         let rig = mbMake("one") { rpc, _, _ in rpc == "megaphone_inbox" ? items : nil }
         await rig.store.refresh()
         #expect(rig.store.current?.megaphoneID == "mega-a", "먼저 보낸 것부터")
         #expect(rig.store.queue.map(\.megaphoneID) == ["mega-b"])
-        #expect(MegaphoneBannerRules.displaySeconds == 5)
-        rig.timeline.advance(4.9)
-        #expect(rig.store.current?.megaphoneID == "mega-a", "기준선: 5초 전에는 그대로")
+        #expect(MegaphoneBannerRules.displaySeconds == 60)
+        rig.timeline.advance(59.9)
+        #expect(rig.store.current?.megaphoneID == "mega-a", "기준선: 1분 전에는 그대로")
         rig.timeline.advance(0.1)
         #expect(rig.store.current == nil)
         rig.timeline.advance(0.39)
         #expect(rig.store.current == nil, "쉬는 0.4초 동안은 비어 있다")
         rig.timeline.advance(0.01)
         #expect(rig.store.current?.megaphoneID == "mega-b")
-        rig.timeline.advance(5)
+        rig.timeline.advance(60)
         #expect(rig.store.current == nil)
     }
 
     // 없으면: 보이스오버 사용자가 본문(최대 198자)을 다 듣기 전에 배너가 올라가는 결함이 초록(2026-10-31 모바일 세션 지적).
-    @Test("보이스오버: 저절로 닫기를 붙들면 [닫기]로만 · 미룸에서 돌아와 다시 떠도 붙든다 · 풀리면 다시 5초 · 기준선: 안 붙들면 5초")
+    @Test("보이스오버: 저절로 닫기를 붙들면 [닫기]로만 · 미룸에서 돌아와 다시 떠도 붙든다 · 풀리면 다시 1분 · 기준선: 안 붙들면 1분")
     func voiceOverHoldsAutoDismiss() async {
         let rig = mbMake("voiceover") { _, _, _ in nil }
         let held = MBFlag(true)
         rig.store.holdsAutoDismiss = { held.value }
         rig.store.presentOwn(body: "천천히 들어요", senderName: "나")
-        #expect(!rig.timeline.scheduledDelays.contains(MegaphoneBannerRules.displaySeconds), "붙드는데 5초 타이머가 걸렸다")
+        #expect(!rig.timeline.scheduledDelays.contains(MegaphoneBannerRules.displaySeconds), "붙드는데 1분 타이머가 걸렸다")
         rig.timeline.advance(100)
         #expect(rig.store.current?.body == "천천히 들어요", "보이스오버가 켜져 있는데 저절로 닫혔다")
         // 멈췄다 풀어도(누르기·호버) 붙듦이 이긴다.
@@ -309,18 +309,18 @@ struct MegaphoneBannerStoreTests {
         rig.store.dismissCurrent()
         #expect(rig.store.current == nil)
 
-        // 보이스오버를 끄면 떠 있는 배너를 처음부터 5초 센다.
+        // 보이스오버를 끄면 떠 있는 배너를 처음부터 1분 센다.
         rig.timeline.advance(MegaphoneBannerRules.gap)
         rig.store.presentOwn(body: "끄면 다시 센다", senderName: "나")
         rig.timeline.advance(30)
         held.value = false
         rig.store.autoDismissHoldChanged()
-        rig.timeline.advance(4.9)
-        #expect(rig.store.current != nil, "풀린 뒤 5초가 아니다")
+        rig.timeline.advance(59.9)
+        #expect(rig.store.current != nil, "풀린 뒤 1분이 아니다")
         rig.timeline.advance(0.1)
-        #expect(rig.store.current == nil, "풀린 뒤 5초에 안 닫혔다")
+        #expect(rig.store.current == nil, "풀린 뒤 1분에 안 닫혔다")
 
-        // 기준선: 처음부터 안 붙들면 5초 뒤 닫힌다 · 다시 켜면 걸린 타이머를 버린다.
+        // 기준선: 처음부터 안 붙들면 1분 뒤 닫힌다 · 다시 켜면 걸린 타이머를 버린다.
         rig.timeline.advance(MegaphoneBannerRules.gap)
         rig.store.presentOwn(body: "기준선", senderName: "나")
         rig.timeline.advance(2)
@@ -340,14 +340,14 @@ struct MegaphoneBannerStoreTests {
         rig.timeline.advance(100)
         #expect(rig.store.current != nil && rig.store.isTimerPaused)
         rig.store.resumeTimer()
-        rig.timeline.advance(3.9)
-        #expect(rig.store.current != nil, "남은 4초가 3초보다 길다")
+        rig.timeline.advance(58.9)
+        #expect(rig.store.current != nil, "남은 59초가 3초보다 길다")
         rig.timeline.advance(0.1)
         #expect(rig.store.current == nil)
 
         rig.timeline.advance(MegaphoneBannerRules.gap)
         rig.store.presentOwn(body: "거의 끝", senderName: "나")
-        rig.timeline.advance(4.5)
+        rig.timeline.advance(59.5)
         rig.store.pauseTimer()
         rig.store.resumeTimer()
         rig.timeline.advance(2.9)
@@ -501,7 +501,7 @@ struct MegaphoneBannerStoreTests {
         #expect(rig.store.unreadSummaryFunction == MegaphoneBannerStore.unreadSummaryV1)
 
         rig.store.presentOwn(body: "새 배너", senderName: "나")
-        rig.timeline.advance(2.5)   // reset 전 타이머(5초)가 만기 — 새 배너를 닫으면 안 된다
+        rig.timeline.advance(57.5)  // reset 전 타이머(1분)가 만기 — 새 배너를 닫으면 안 된다
         #expect(rig.store.current?.isOwn == true, "기준선: 지난 타이머는 세대로 버린다")
         rig.timeline.advance(2.5)
         #expect(rig.store.current == nil)

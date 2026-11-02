@@ -12,7 +12,7 @@ import Observation
 //    `refresh(verifying:)` 를 한 번 기다린 뒤 다시 거른다. 그 refresh 뒤에도 모르면(위조 DM · 연결 실패) 메시지로 보인다.
 // ③ **안 읽음 요약과 필터는 함께 움직인다.** 필터가 켜져 있으면 확성기 줄을 안 세는 `message_unread_summary_v2` 를, 아니면 옛 함수를
 //    쓴다. v2 가 없으면(PGRST202 · 404) 옛 함수로 내리고 **필터도 끈다** — 줄만 숨기고 옛 요약이 그 줄을 세면 배지가 영영 안 꺼진다.
-// ④ **한 번에 하나 · 5초 · 쉬고 0.4초.** 타이머는 주입(`clock` · `schedule`)이라 시험이 5초를 기다리지 않는다. 지난 타이머는
+// ④ **한 번에 하나 · 1분 · 쉬고 0.4초.** 타이머는 주입(`clock` · `schedule`)이라 시험이 1분을 기다리지 않는다. 지난 타이머는
 //    `timerToken` 으로 버린다(취소 대신 세대).
 // ⑤ **본 것 기록**: 계정별 키로 최근 100개 `megaphoneID` 를 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다.
 //    (기기 사이에는 나누지 않는다 — 맥에서 본 것이 폰에 또 뜨는 것은 허용.) `reset()` 은 메모리 캐시만 비운다(기록은 계정 키에 남는다).
@@ -46,7 +46,7 @@ package final class MegaphoneBannerStore {
     @ObservationIgnored private let defaults: UserDefaults
     /// 시각(신선도 · 남은 표시 시간).
     @ObservationIgnored package var clock: () -> Date
-    /// 타이머(5초 · 0.4초 · 멈춤 뒤 다시 세기).
+    /// 타이머(1분 · 0.4초 · 멈춤 뒤 다시 세기).
     @ObservationIgnored package var schedule: MegaphoneBannerSchedule
     /// 지금 배너를 미뤄야 하는가(맥: 실시간 대결·미니게임 판 · 폰: 시트·대결 화면·미니게임 판). 바뀌면 `deferralChanged()` 를 부른다.
     @ObservationIgnored package var isBannerDeferred: () -> Bool = { false }
@@ -55,7 +55,7 @@ package final class MegaphoneBannerStore {
     /// 실시간·푸시의 refresh 가 필터를 켜도 옛 요약이 숨긴 확성기 줄을 세어 배지가 남는다(2026-10-30 안드로이드 이식 검증에서 발견).
     @ObservationIgnored package var onCapabilityChange: (@MainActor () -> Void)?
     /// 저절로 닫기를 붙드는가 — 보이스오버가 켜져 있으면 참(맥 `NSWorkspace.isVoiceOverEnabled` · 폰 `UIAccessibility.isVoiceOverRunning`).
-    /// 본문은 최대 198자라 읽어 주는 데 5초를 훌쩍 넘고, "누르고 있으면 멈춤"은 보이스오버 사용자의 조작이 아니다 — 참이면 [닫기] 동작으로만
+    /// 본문은 최대 198자라 읽어 주는 시간을 정해 둘 수 없고, "누르고 있으면 멈춤"은 보이스오버 사용자의 조작이 아니다 — 참이면 [닫기] 동작으로만
     /// 닫힌다(2026-10-31 모바일 세션 지적). 켬·끔이 바뀌면 소유자가 `autoDismissHoldChanged()` 를 부른다.
     @ObservationIgnored package var holdsAutoDismiss: () -> Bool = { false }
 
@@ -270,7 +270,7 @@ package final class MegaphoneBannerStore {
         pump()
     }
 
-    /// 지금 배너를 닫는다([닫기] · 위로 쓸기 · 5초). 다음 장은 0.4초 뒤.
+    /// 지금 배너를 닫는다([닫기] · 위로 쓸기 · 1분). 다음 장은 0.4초 뒤.
     package func dismissCurrent() {
         guard current != nil else { return }
         current = nil

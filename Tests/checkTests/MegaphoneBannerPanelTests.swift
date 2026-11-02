@@ -10,7 +10,7 @@ import Testing
 // 컨트롤러의 바깥 문(팝오버 · 마우스 · 화면 목록)은 가짜로 갈아 끼운다 — **진짜 팝오버 단추를 누르지 않는다.**
 // 시험마다 비교 기준선을 둔다: 같은 자리에서 값 하나만 바꾸면 결과가 갈린다는 것을 함께 보인다.
 
-/// 배너 스토어의 시계 · 타이머(5초를 기다리지 않는다 — 걸린 타이머를 시험이 손으로 부른다).
+/// 배너 스토어의 시계 · 타이머(1분을 기다리지 않는다 — 걸린 타이머를 시험이 손으로 부른다).
 @MainActor
 private final class MbpTimers {
     var now = Date(timeIntervalSince1970: 1_800_000_000)
@@ -166,7 +166,7 @@ struct MegaphoneBannerPanelTests {
 
     // MARK: 호버
 
-    @Test("호버: 들어오면 5초 타이머가 멈추고, 떠나면 남은 시간과 3초 중 긴 쪽으로 다시 센다(남은 2초 → 3초 · 남은 4초 → 4초)")
+    @Test("호버: 들어오면 1분 타이머가 멈추고, 떠나면 남은 시간과 3초 중 긴 쪽으로 다시 센다(남은 2초 → 3초 · 남은 4초 → 4초)")
     func hoverPausesAndResumes() async throws {
         let timers = MbpTimers()
         let store = mbpStore("hover", timers: timers)
@@ -180,14 +180,14 @@ struct MegaphoneBannerPanelTests {
         let options = try #require(hover.hoverTrackingArea?.options, "추적 영역이 없다")
         #expect(options.contains(.activeAlways) && options.contains(.mouseEnteredAndExited),
                 "추적 영역이 키 아닌 패널에서 안 온다(.activeAlways 없음)")
-        #expect(timers.scheduled.last?.after == MegaphoneBannerRules.displaySeconds, "전제: 5초 타이머")
+        #expect(timers.scheduled.last?.after == MegaphoneBannerRules.displaySeconds, "전제: 1분 타이머")
         let firstTimer = try #require(timers.scheduled.last?.fire)
 
-        timers.now += 3
+        timers.now += MegaphoneBannerRules.displaySeconds - 2
         hover.onHoverChanged?(true)                       // 마우스가 들어왔다(추적 영역이 부르는 문)
         #expect(store.megaphoneBanner.isTimerPaused)
-        firstTimer()                                       // 5초가 지났다 — 멈춰 있으니 안 닫힌다
-        #expect(store.megaphoneBanner.current != nil, "호버 중인데 5초 타이머가 배너를 닫았다")
+        firstTimer()                                       // 1분이 지났다 — 멈춰 있으니 안 닫힌다
+        #expect(store.megaphoneBanner.current != nil, "호버 중인데 1분 타이머가 배너를 닫았다")
         timers.now += 100
         hover.onHoverChanged?(false)
         #expect(!store.megaphoneBanner.isTimerPaused)
@@ -196,11 +196,11 @@ struct MegaphoneBannerPanelTests {
         #expect(store.megaphoneBanner.current == nil, "다시 센 타이머가 배너를 안 닫았다")
         #expect(await mbpWait { !controller.isOpen })
 
-        // 기준선: 1초 만에 올렸다 떠나면 남은 4초 그대로(3초 하한이 남은 시간을 줄이지 않는다).
+        // 기준선: 남은 4초에 올렸다 떠나면 4초 그대로(3초 하한이 남은 시간을 줄이지 않는다).
         timers.scheduled.last?.fire()                      // 쉬는 0.4초
         store.megaphoneBanner.presentOwn(body: "둘째 배너", senderName: "나")
         #expect(await mbpWait { controller.isOpen && controller.presentation.banner?.body == "둘째 배너" })
-        timers.now += 1
+        timers.now += MegaphoneBannerRules.displaySeconds - 4
         hover.onHoverChanged?(true)
         timers.now += 50
         hover.onHoverChanged?(false)
@@ -209,9 +209,9 @@ struct MegaphoneBannerPanelTests {
 
     // MARK: [닫기]만
 
-    @Test("[닫기]만(2026-10-30 사용자 결정): 남이 보낸 배너에도 단추는 [닫기] 하나 · 누르면 닫힌다 · 아무것도 안 하면 5초")
+    @Test("[닫기]만(2026-10-30 사용자 결정): 남이 보낸 배너에도 단추는 [닫기] 하나 · 누르면 닫힌다 · 아무것도 안 하면 1분")
     func closeIsTheOnlyButton() async throws {
-        #expect(MegaphoneBannerRules.displaySeconds == 5, "보여 주는 시간이 5초가 아니다")
+        #expect(MegaphoneBannerRules.displaySeconds == 60, "보여 주는 시간이 1분이 아니다")
         let timers = MbpTimers()
         let store = mbpStore("close-only", timers: timers)
         let world = MbpWorld()
@@ -221,7 +221,7 @@ struct MegaphoneBannerPanelTests {
         store.megaphoneBanner.presentFromPush(megaphoneID: "mp-c", senderName: "확성기님", body: "📢 라운지에 간식 있어요",
                                               senderID: "peer-c")
         #expect(await mbpWait { controller.isOpen })
-        #expect(timers.scheduled.last?.after == 5, "남이 보낸 배너가 5초 타이머로 안 걸렸다")
+        #expect(timers.scheduled.last?.after == 60, "남이 보낸 배너가 1분 타이머로 안 걸렸다")
         controller.close()
         #expect(store.megaphoneBanner.current == nil, "[닫기] 뒤에도 배너가 남았다")
         #expect(!store.isMessagePanelVisible, "[닫기] 가 대화를 열었다")

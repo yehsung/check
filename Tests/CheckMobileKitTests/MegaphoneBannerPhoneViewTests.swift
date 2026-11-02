@@ -239,7 +239,7 @@ final class MegaphoneTimerLog {
 
     @Test("보이스오버: 오버레이가 켬 여부를 코어에 넘기고 켬·끔 알림에 다시 판단한다 · 힌트는 손짓이 아니라 닫기 동작을 말한다")
     func voiceOverHoldsTheBanner() throws {
-        // 2026-10-31 모바일 세션 지적: 5초 안에 본문(최대 198자)을 다 못 듣고, "누르고 있으면 멈춤"은 보이스오버 조작이 아니다.
+        // 2026-10-31 모바일 세션 지적: 정해진 시간 안에 본문(최대 198자)을 다 듣는다고 보장할 수 없고, "누르고 있으면 멈춤"은 보이스오버 조작이 아니다.
         let overlay = Self.squashed(try IntegrationContractTests.code(Self.overlayPath))
         #expect(overlay.contains("store.holdsAutoDismiss={UIAccessibility.isVoiceOverRunning}"), "보이스오버 상태를 코어에 안 넘긴다")
         #expect(overlay.contains("UIAccessibility.voiceOverStatusDidChangeNotification")

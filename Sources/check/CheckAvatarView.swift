@@ -269,15 +269,23 @@ enum AppUserAvatarArt {
         case tight
         /// 불투명 몸 상자 + 둘레 8% — 후광을 구운 희귀 마감(황금 · 무지개).
         case bodyFramed
-        /// 몸 상자(폭 · 바닥 + 몸 비) + 둘레 8% — 머리 위에 불투명 장식이 선 케이크 둘.
+        /// 몸 상자(폭 · 바닥 + 몸 비) + 둘레 8% — 머리 위에 불투명 장식이 선 케이크 둘 · 이슬(병뚜껑).
         case cakeBodyFramed
     }
 
     /// 이 캐릭터 초상의 조이기(순수 — 시험이 같은 판정으로 기대값을 만든다).
     nonisolated static func framing(characterID: String) -> Framing {
         let finish = CharacterManifest.Finish(characterID: characterID)
-        if finish.isCake { return .cakeBodyFramed }
+        // 이슬 아잉이(v0.3.74)도 같은 2D 몸(0.88배) 위에 **불투명 병뚜껑**이 머리 위에 섰다 — 케이크와 같은 자르기(몸 상자 + 둘레 8%)로
+        // 얼굴을 아잉 변형과 같은 눈금에 세운다(코어 `isCake` 는 케이크 뜻만이라 따로 묻는다 — 설계서 §2 함정).
+        if finish.isCake || finish == .isul { return .cakeBodyFramed }
         return finish.isRare ? .bodyFramed : .tight
+    }
+
+    /// 이 캐릭터의 조인 그림을 버린다 — 다음 조회가 초상을 다시 읽는다(그림 저장소 `IsulArt` 가 새 초상을 받았을 때 — v0.3.74).
+    @MainActor
+    static func forget(characterID: String) {
+        cache[characterID] = nil
     }
 
     @MainActor private static var cache: [String: CGImage] = [:]

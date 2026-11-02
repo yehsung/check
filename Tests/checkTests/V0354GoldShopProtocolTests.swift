@@ -130,7 +130,10 @@ struct V0354GoldShopProtocolTests {
         let rainbow = V0359RainbowShopProtocolTests.macRainbowArtInSourceTree
         // v0.3.66: 케이크 아잉이 둘의 초상까지 실리면 4 다(누적 — 케이크의 기준선은 V0366CakeCoreTests.macCakePortraitsInSourceTree).
         let cakes = ShopWire.cakeCharacterIDs.allSatisfy(V0366CakeCoreTests.macCakePortraitsInSourceTree)
-        let expected = robot ? (gold ? (rainbow ? (cakes ? ShopWire.cakeProtocol : ShopWire.rainbowProtocol) : ShopWire.goldProtocol)
+        // v0.3.74: 이슬 아잉이 그림(초상 · 라벨)까지 실리면 5 다(누적 — 이슬의 기준선은 V0374IsulCoreTests.macIsulArtInSourceTree).
+        let isul = V0374IsulCoreTests.macIsulArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? ShopWire.isulProtocol : ShopWire.cakeProtocol) : ShopWire.rainbowProtocol)
+                                                : ShopWire.goldProtocol)
                                      : ShopWire.robotProtocol)
                              : ShopWire.legacyProtocol
 

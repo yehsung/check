@@ -68,6 +68,9 @@ struct V0336PortraitBoxTests {
         // 금 · 무지개와 같은 눈금에 선다(조정자 결정: 얼굴 크기를 아잉 변형과 같게 — 장식은 원 위로 조금 잘려도 된다).
         ("aing_cake_strawberry", CGSize(width: 162, height: 153)),
         ("aing_cake_choco", CGSize(width: 162, height: 153)),
+        // v0.3.74 이슬 아잉이: 같은 2D 몸(0.88배) 위에 불투명 병뚜껑 — 알파 상자(146×150)로 조이면 얼굴이 아잉 변형보다 커진다.
+        // 케이크와 같은 자르기(`cakeBodyFramed`)로 같은 상자에 선다(얼굴 크기를 아잉 변형과 같게).
+        ("aing_isul", CGSize(width: 162, height: 153)),
     ]
 
     @Test func 높이를_지름에_맞추고_폭은_원본_비대로_따라간다() {
@@ -112,7 +115,9 @@ struct V0336PortraitBoxTests {
             let box = AppUserAvatarArt.portraitBox(diameter: 26, artSize: size)
             let capped = abs(box.height - 26 * AppUserAvatarArt.artHeightFraction) > 1e-9
             // v0.3.66 케이크 둘도 금과 같은 몸 상자(가로가 세로보다 넓다)라 상한에 걸린다.
-            #expect(capped == (id == "aing" || id == "aing_gold" || id == "aing_rainbow" || CharacterCatalog.isCakeAing(id)),
+            // v0.3.74 이슬도 케이크와 같은 몸 상자라 상한에 걸린다.
+            #expect(capped == (id == "aing" || id == "aing_gold" || id == "aing_rainbow" || CharacterCatalog.isCakeAing(id)
+                               || CharacterCatalog.isIsulAing(id)),
                     "\(id) 가 상한에 \(capped ? "걸렸다" : "안 걸렸다")")
             // 어느 캐릭터든 원보다 크게 넘치지 않는다(레퍼런스는 1.018/0.80 이었다).
             #expect(box.height <= 26 * 1.03 + 1e-9 && box.width <= 26 * 1.02 + 1e-9)
@@ -162,7 +167,11 @@ struct V0336AvatarArtSourceTests {
             let gold = CharacterManifest.Finish(characterID: id).isRare
             // 케이크 아잉이(v0.3.66)는 머리 위 불투명 장식을 빼고 **몸 상자 + 둘레 8%** 로 자른다(`cakeBodyFramed` — 금과 같은 눈금).
             let cake = CharacterCatalog.isCakeAing(id)
-            let tight = gold ? CharacterCardArt.bodyFramed(raw) : (cake ? CharacterCardArt.cakeBodyFramed(raw) : CharacterCardArt.tightened(raw))
+            // 이슬 아잉이(v0.3.74)도 같은 자르기(머리 위 불투명 병뚜껑 — `AppUserAvatarArt.framing`). 뚜껑이 낮아 알파 상자보다 짧지는 않다
+            // (얼굴 눈금은 V0374IsulMac3DTests.avatarFramesTheBodyLikeTheOtherVariants 가 케이크 · 금과 맞댄다).
+            let isul = CharacterCatalog.isIsulAing(id)
+            let tight = gold ? CharacterCardArt.bodyFramed(raw)
+                : (cake || isul ? CharacterCardArt.cakeBodyFramed(raw) : CharacterCardArt.tightened(raw))
             #expect(art.width == tight.width && art.height == tight.height,
                     "\(id) 프로필이 \(art.width)×\(art.height) 인데 조인 초상은 \(tight.width)×\(tight.height) 다")
             if cake {
@@ -293,7 +302,9 @@ struct V0336FaceScaleTests {
         }
         // v0.3.66: 케이크 둘은 소스 트리에 초상이 있을 때만 센다(V0335 · knownIDs 와 같은 기준선).
         let cakes = CharacterCatalog.birthdayGiftBuiltInIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree).count
-        #expect(widths.count == 9 + cakes, "\(widths.count) 종만 쟀다")
+        // v0.3.74: 이슬도 같은 기준선(소스 트리의 이슬 초상).
+        let isul = V0374IsulCoreTests.macIsulPortraitsInSourceTree ? 1 : 0
+        #expect(widths.count == 9 + cakes + isul, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
         #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")
@@ -408,7 +419,8 @@ struct V0336AvatarRenderTests {
             // 케이크 아잉이(v0.3.66)는 금 · 무지개와 **같은 자르기 눈금**(몸 + 둘레 8%)인데 그 8% 를 채울 후광이 없다 — 금 · 무지개는 그 띠를
             // 빛이 채워 0.90 을 넘는다. 얼굴 크기를 아잉 변형과 같게 둔 것은 조정자 결정이라(키우면 장식이 더 잘리고 얼굴만 커진다)
             // 케이크의 하한은 그 띠만큼 낮춘다(실측 2026-10-26: 딸기 0.883 · 초코 0.875). 얼굴 크기 자체는 V0366CakeMacScreensTests.avatarFaceMatchesTheAingVariants 가 금과 맞댄다.
-            let minHeight = CharacterCatalog.isCakeAing(id) ? 0.86 : 0.90
+            // 이슬 아잉이(v0.3.74)도 같은 눈금 · 후광 없음이라 같은 하한이다.
+            let minHeight = CharacterCatalog.isCakeAing(id) || CharacterCatalog.isIsulAing(id) ? 0.86 : 0.90
             #expect(ink.height > minHeight, "\(id) 세로 \(ink.height) — 원을 못 채운다")
         }
     }

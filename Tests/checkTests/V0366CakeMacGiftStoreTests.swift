@@ -158,10 +158,11 @@ struct V0366CakeMacGiftStoreTests {
         server.pending = .init(body: gcPendingNone)
         let spy = GiftWindowSpy()
         let store = gcStore(host: host, server: server, spy: spy)
-        #expect(store.shopProtocolVersion == ShopWire.cakeProtocol, "전제: 이 빌드는 케이크를 그린다(능력 번호 \(store.shopProtocolVersion))")
+        // v0.3.74: 이슬까지 그리는 빌드는 5 다(누적) — 케이크 선물의 전제는 '4 이상'이고, 본문은 그 빌드의 번호를 그대로 싣는다.
+        #expect(store.shopProtocolVersion >= ShopWire.cakeProtocol, "전제: 이 빌드는 케이크를 그린다(능력 번호 \(store.shopProtocolVersion))")
         await store.refreshCakeGift(reason: .launch)?.value
         let call = try #require(GomokuStubProtocol.calls(host: host, rpc: "character_gift_pending").first, "묻지 않았다")
-        #expect(Set(call.json.keys) == ["p_protocol"] && call.json["p_protocol"] as? Int == ShopWire.cakeProtocol, "본문 \(call.json)")
+        #expect(Set(call.json.keys) == ["p_protocol"] && call.json["p_protocol"] as? Int == store.shopProtocolVersion, "본문 \(call.json)")
         #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard)
         #expect(spy.shows.isEmpty, "선물이 없는데 창을 띄웠다")
     }
@@ -374,7 +375,7 @@ struct V0366CakeMacGiftStoreTests {
         let call = try #require(GomokuStubProtocol.calls(host: host, rpc: "claim_character_gift").last, "수령이 안 나갔다")
         #expect(Set(call.json.keys) == ["p_gift", "p_character", "p_protocol"], "본문 \(call.json)")
         #expect(call.json["p_gift"] as? String == gcGiftID && call.json["p_character"] as? String == gcStrawberry
-                && call.json["p_protocol"] as? Int == ShopWire.cakeProtocol, "본문 \(call.json)")
+                && call.json["p_protocol"] as? Int == store.shopProtocolVersion, "본문 \(call.json)")
         #expect(store.cakeGiftReceivedID == gcStrawberry, "받은 뒤 화면으로 안 넘어갔다")
         #expect(store.cakeGiftNotice == nil)
         #expect(store.ownedCharacterIDs.contains(gcStrawberry))

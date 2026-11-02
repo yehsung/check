@@ -1,0 +1,81 @@
+{
+    "state": {
+        "match": {
+            "id": "dee7fac8-0df3-42dc-89be-639ca0911c7c",
+            "turn": null,
+            "black": "b0000000-0000-4000-8000-000000000001",
+            "board": "bbbbbbbbbbbbbbbbbbbbbbbbbbbwwwwwwwwwwwwwwwwwwwwwwwwwwwbbwwwwwbbb",
+            "discs": {
+                "black": 32,
+                "empty": 0,
+                "white": 32
+            },
+            "score": {
+                "black": 32,
+                "white": 32
+            },
+            "stake": 10,
+            "white": "b0000000-0000-4000-8000-000000000002",
+            "result": "draw",
+            "status": "finished",
+            "winner": null,
+            "opponent": "b0000000-0000-4000-8000-000000000002",
+            "challenger": "b0000000-0000-4000-8000-000000000001",
+            "end_reason": "board_full",
+            "move_count": 1,
+            "started_ms": 1793662005456,
+            "deadline_ms": null,
+            "finished_ms": 1793662005457,
+            "turn_started_ms": 1793662005457,
+            "invite_expires_ms": 1793662065455
+        },
+        "moves": [
+            {
+                "idx": 63,
+                "seq": 1,
+                "auto": false,
+                "kind": "stone",
+                "at_ms": 1793662005457,
+                "color": "black",
+                "flipped": [
+                    62
+                ]
+            }
+        ],
+        "grace_ms": 2000,
+        "my_color": "black",
+        "opponent": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000002",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험02"
+        },
+        "watchers": 0,
+        "black_user": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000001",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험01"
+        },
+        "white_user": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000002",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험02"
+        },
+        "legal_moves": [
+        ],
+        "ruby_balance": 95,
+        "turn_seconds": 30,
+        "server_now_ms": 1793662005458,
+        "my_auto_streak": 0,
+        "black_auto_streak": 0,
+        "white_auto_streak": 0,
+        "auto_abandon_streak": 3,
+        "opponent_auto_streak": 0
+    },
+    "status": "ok"
+}

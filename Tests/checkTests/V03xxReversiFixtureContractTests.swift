@@ -4,9 +4,13 @@ import Testing
 
 // 아잉 뒤집기(reversi) — 와이어 디코딩 계약(갈래 C1). 출시 버전이 정해지면 `git mv` + `@Suite` 이름을 함께 바꾼다(SPEC §1).
 //
-// 지금은 설계서 §3.5(로비)·§3.6(state) 모양으로 **손으로 쓴 픽스처**를 앱 디코더와 같은 설정(`SupabaseWorkService.init` —
-// snake_case → camelCase)로 읽어 값까지 대조한다. 서버 갈래 픽스처(`FLIP/server/fixtures` → `Fixtures/reversi-rpc/`)가
-// 들어오면 C2 가 같은 파일에서 원문 대조(매니페스트 · 봉투 키 = `v_*_keys` · 독립 산식)를 더하고 손 픽스처를 갈아 끼운다.
+// 두 겹이다:
+//  ① `V03xxReversiFixtureContractTests`(C1) — 설계서 §3.5·§3.6 모양의 **손 픽스처**를 앱 디코더와 같은 설정으로 읽어 값까지 대조한다
+//     (원문에 없는 값 — 센터 글자·패스 줄의 빠진 키·모르는 어휘 — 을 일부러 싣는다).
+//  ② `V03xxReversiServerFixtureContractTests`(C2) — 서버 갈래 픽스처 **원문**(`Fixtures/reversi-rpc/`, `FLIP/server/fixtures` 복사)을
+//     매니페스트 · 봉투 키 = 마이그레이션 `v_*_keys` · 독립 산식(Swift 규칙으로 서버 판·합법 수·점수를 다시 셈) ·
+//     요청 본문 키 = SQL 인자 이름으로 잰다. 마이그레이션은 `REVERSI_MIGRATION_SQL`(없으면 저장소 `supabase/migrations/…`)에서
+//     읽고, `REVERSI_REQUIRE_MIGRATION=1` 이면 파일이 없을 때 건너뛰지 않고 빨갛다(SPEC §6.2).
 //
 // 옵셔널 칸은 키 이름이 한 글자만 어긋나도 **조용히 nil** 이 되어 초록이 된다 — 그래서 "디코드된다" 가 아니라
 // **값이 원문과 같다** 를 잰다(nil 이면 빨갛다).
@@ -351,5 +355,333 @@ private let rfcWatchJSON = """
         #expect(row.displayName == "나")
         #expect(row.center == "seoul")
         #expect(row.wins == 3 && row.losses == 1 && row.draws == 2 && row.points == 2)
+    }
+}
+
+// MARK: - ② 서버 픽스처 원문 계약 (C2)
+
+private let rfcServerDirectory = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent("Fixtures/reversi-rpc", isDirectory: true)
+
+private func rfcServerJSON(_ file: String) throws -> [String: Any] {
+    let data = try Data(contentsOf: rfcServerDirectory.appendingPathComponent(file))
+    guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        throw RFCError("\(file) 는 JSON 객체가 아니다")
+    }
+    return object
+}
+
+private struct RFCError: Error, CustomStringConvertible {
+    let description: String
+    init(_ description: String) { self.description = description }
+}
+
+/// 디스크의 픽스처 파일 이름(매니페스트 제외), 정렬.
+private func rfcServerFiles() throws -> [String] {
+    try FileManager.default.contentsOfDirectory(atPath: rfcServerDirectory.path)
+        .filter { $0.hasSuffix(".json") && $0 != "_manifest.json" }
+        .sorted()
+}
+
+private func rfcKeySet(_ value: Any?) -> Set<String> {
+    Set((value as? [String: Any])?.keys.map { $0 } ?? [])
+}
+
+private func rfcInt(_ value: Any?) -> Int? {
+    (value as? NSNumber).map(\.intValue)
+}
+
+private func rfcDouble(_ value: Any?) -> Double? {
+    (value as? NSNumber).map(\.doubleValue)
+}
+
+/// 상태가 실린 원문 픽스처 전부(파일 이름 · state 객체).
+private func rfcServerStates() throws -> [(file: String, state: [String: Any])] {
+    try rfcServerFiles().compactMap { file in
+        guard let state = try rfcServerJSON(file)["state"] as? [String: Any] else { return nil }
+        return (file, state)
+    }
+}
+
+/// 리버시 마이그레이션 한 장의 위치(SPEC §6.2 — 공용 `CHECK_MIGRATIONS_DIR` 가 아니다).
+private func rfcMigrationURL() -> URL? {
+    let fileManager = FileManager.default
+    if let path = ProcessInfo.processInfo.environment["REVERSI_MIGRATION_SQL"], !path.isEmpty {
+        return fileManager.fileExists(atPath: path) ? URL(fileURLWithPath: path) : nil
+    }
+    var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    for _ in 0..<6 {
+        let candidate = directory.appendingPathComponent("supabase/migrations/20261108200000_reversi.sql")
+        if fileManager.fileExists(atPath: candidate.path) { return candidate }
+        directory.deleteLastPathComponent()
+    }
+    return nil
+}
+
+private let rfcMigrationRequired = ProcessInfo.processInfo.environment["REVERSI_REQUIRE_MIGRATION"] == "1"
+/// 마이그레이션을 읽는 시험이 돌아야 하는가 — 파일이 있거나, 없으면 빨개져야 할 때(REQUIRE).
+private let rfcMigrationGate = rfcMigrationURL() != nil || rfcMigrationRequired
+
+/// 마이그레이션 원문(`--` 주석을 걷는다 — 키 배열 줄에는 문자열 안 `--` 가 없다).
+private func rfcMigrationText() throws -> String {
+    guard let url = rfcMigrationURL() else {
+        throw RFCError("""
+            리버시 마이그레이션이 없다(REVERSI_MIGRATION_SQL=\(ProcessInfo.processInfo.environment["REVERSI_MIGRATION_SQL"] ?? "(없음)")) — \
+            REVERSI_REQUIRE_MIGRATION=1 이라 건너뛰지 않는다
+            """)
+    }
+    let raw = try String(contentsOf: url, encoding: .utf8)
+    return raw.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
+        if let range = line.range(of: "--") { return line[line.startIndex..<range.lowerBound] }
+        return line
+    }.joined(separator: "\n")
+}
+
+/// 마이그레이션 사후 단언의 키 배열 상수(`v_<이름>_keys constant text[] := array[...]`). 이름 → 키 집합.
+private func rfcMigrationKeyArrays(_ sql: String) throws -> [String: Set<String>] {
+    let pattern = #"v_([a-z_]+)_keys\s+constant\s+text\[\]\s*:=\s*array\[([^\]]*)\]"#
+    let regex = try NSRegularExpression(pattern: pattern)
+    var out: [String: Set<String>] = [:]
+    let range = NSRange(sql.startIndex..., in: sql)
+    for match in regex.matches(in: sql, range: range) {
+        guard let nameRange = Range(match.range(at: 1), in: sql),
+              let bodyRange = Range(match.range(at: 2), in: sql) else { continue }
+        let keys = sql[bodyRange].split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "'"))
+        }
+        out[String(sql[nameRange])] = Set(keys)
+    }
+    return out
+}
+
+/// 마이그레이션의 `create or replace function public.<이름>(<인자>)` — **마지막 정의**의 인자 이름(순서대로).
+private func rfcMigrationArguments(_ sql: String, function: String) throws -> [String]? {
+    let pattern = #"create\s+or\s+replace\s+function\s+public\."# + function + #"\s*\(([^)]*)\)"#
+    let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    let matches = regex.matches(in: sql, range: NSRange(sql.startIndex..., in: sql))
+    guard let last = matches.last, let argsRange = Range(last.range(at: 1), in: sql) else { return nil }
+    return sql[argsRange].split(separator: ",").compactMap {
+        $0.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ").first.map(String.init)
+    }
+}
+
+@Suite("아잉 뒤집기 서버 픽스처 원문 — 매니페스트 · 봉투 키 · 독립 산식 · 요청 인자")
+struct V03xxReversiServerFixtureContractTests {
+
+    // 없으면: 서버 갈래가 픽스처를 다시 뽑다 한 갈래를 빠뜨리거나 이름·status 가 어긋나도(스토어 시험이 엉뚱한 원문을 먹는다)
+    // 초록이고, 앱 디코더가 원문 status 를 `.unknown` 으로 접어도(어휘 한 글자 차이) 안 보인다.
+    @Test func 매니페스트가_디스크와_같고_원문_status_를_앱이_읽는다() throws {
+        let manifest = try rfcServerJSON("_manifest.json")
+        let entries = try #require(manifest["files"] as? [[String: Any]])
+        let listed = entries.compactMap { $0["file"] as? String }.sorted()
+        let onDisk = try rfcServerFiles()
+        #expect(listed == onDisk)
+        #expect(onDisk.count == 51, "픽스처 \(onDisk.count)장 — 줄면 어느 갈래가 사라진 것이다")
+        for entry in entries {
+            let file = try #require(entry["file"] as? String)
+            let rpc = try #require(entry["rpc"] as? String)
+            let kase = try #require(entry["case"] as? String)
+            #expect(file == "\(rpc)__\(kase).json", "\(file): 이름이 rpc__case 가 아니다")
+            #expect(ReversiWire.RPC.all.contains(rpc), "\(file): 모르는 rpc \(rpc)")
+            let top = try rfcServerJSON(file)
+            let status = try #require(top["status"] as? String, "\(file): status 없음")
+            #expect(status == entry["status"] as? String, "\(file): 매니페스트 status 와 다르다")
+            #expect((top["state"] != nil) == (entry["has_state"] as? Bool), "\(file): has_state 가 다르다")
+            let text = try String(contentsOf: rfcServerDirectory.appendingPathComponent(file), encoding: .utf8)
+            let decoded: ReversiRPCStatus
+            switch rpc {
+            case ReversiWire.RPC.lobby.rawValue: decoded = try rfcDecode(ReversiLobbyResponse.self, text).status
+            case ReversiWire.RPC.ranking.rawValue: decoded = try rfcDecode(ReversiRankingResponse.self, text).status
+            default:
+                let action = try rfcDecode(ReversiActionResponse.self, text)
+                decoded = action.status
+                #expect((action.state != nil) == (top["state"] != nil), "\(file): state 디코드가 빠졌다")
+                if top["state"] != nil {
+                    #expect(action.state?.match?.board != nil, "\(file): 판 문자열을 못 읽었다")
+                    #expect(action.state?.match?.matchStatus != .unknown, "\(file): 판 status 를 모른다")
+                }
+            }
+            #expect(decoded.rawValue == status, "\(file): 앱이 status 를 \(decoded) 로 읽었다")
+        }
+        // 매니페스트가 말하는 시청자 A·B 가 스토어 시험의 상수와 같다(손으로 적은 uuid 가 조용히 어긋나지 않게).
+        let viewers = try #require(manifest["viewers"] as? [String: String])
+        #expect(viewers["A"] == "b0000000-0000-4000-8000-000000000001")
+        #expect(viewers["B"] == "b0000000-0000-4000-8000-000000000002")
+    }
+
+    // 없으면: 서버가 키를 하나 빼거나 이름을 바꿔도(= 그 자리 화면이 조용히 빈다 — 옵셔널 디코드) 아무도 모른다.
+    // 늘기만 하면 디코더는 무사하지만 줄면 빈다 — 그래서 **정확 집합**을 마이그레이션 사후 단언 상수와 잰다.
+    @Test(.enabled(if: rfcMigrationGate))
+    func 봉투_키가_마이그레이션_v_keys_와_같다() throws {
+        let keys = try rfcMigrationKeyArrays(try rfcMigrationText())
+        for name in ["state", "match", "move", "user", "lobby", "lobby_me", "lobby_user", "lobby_match", "peer"] {
+            #expect(keys[name] != nil, "마이그레이션에 v_\(name)_keys 가 없다")
+        }
+        // 매니페스트가 적은 키 집합도 같은 상수다(서버 갈래가 뽑은 시점과 지금 마이그레이션이 같은가).
+        let manifestKeys = try #require(try rfcServerJSON("_manifest.json")["keys"] as? [String: [String]])
+        for (name, list) in manifestKeys {
+            #expect(Set(list) == keys[name], "매니페스트 keys.\(name) 가 마이그레이션과 다르다")
+        }
+        var states = 0
+        for (file, state) in try rfcServerStates() {
+            states += 1
+            #expect(rfcKeySet(state) == keys["state"], "\(file): state 키")
+            #expect(rfcKeySet(state["match"]) == keys["match"], "\(file): match 키")
+            for move in (state["moves"] as? [[String: Any]]) ?? [] {
+                #expect(Set(move.keys) == keys["move"], "\(file): moves[] 키")
+            }
+            for key in ["black_user", "white_user", "opponent"] where state[key] is [String: Any] {
+                #expect(rfcKeySet(state[key]) == keys["user"], "\(file): \(key) 키")
+            }
+        }
+        #expect(states == 30, "상태가 실린 픽스처 \(states)장")
+        var lobbies = 0
+        for file in try rfcServerFiles() where file.hasPrefix("reversi_lobby__") {
+            let top = try rfcServerJSON(file)
+            guard top["status"] as? String == "ok" else { continue }
+            lobbies += 1
+            #expect(rfcKeySet(top) == keys["lobby"], "\(file): lobby 키")
+            let me = try #require(top["me"] as? [String: Any])
+            #expect(Set(me.keys) == keys["lobby_me"], "\(file): me 키")
+            for user in (top["users"] as? [[String: Any]]) ?? [] {
+                #expect(Set(user.keys) == keys["lobby_user"], "\(file): users[] 키")
+            }
+            for row in (me["incoming"] as? [[String: Any]]) ?? [] {
+                #expect(rfcKeySet(row["from"]) == keys["peer"], "\(file): incoming[].from 키")
+            }
+            if let outgoing = me["outgoing"] as? [String: Any] {
+                #expect(rfcKeySet(outgoing["to"]) == keys["peer"], "\(file): outgoing.to 키")
+            }
+        }
+        #expect(lobbies == 3)
+    }
+
+    // 없으면: 서버 판정(SQL)과 Swift 규칙이 갈려도(합법 수·뒤집힌 칸·끝 분류·WOF 점수) 스텁 시험은 서버 원문을 그대로 믿어 초록이다.
+    // 원문 값을 **Swift 규칙으로 다시 셈한** 값과 잰다(체스 독립 산식과 같은 방식). 씨앗 판(수 기록이 1 부터가 아닌 판)도 있어
+    // 시작 판 재생 대신 "마지막 돌 한 수를 되돌려 다시 둔다" 로 잰다.
+    @Test func 독립_산식_서버_판과_Swift_규칙이_같다() throws {
+        var legalChecked = 0
+        var undoChecked = 0
+        var scored = 0
+        for (file, state) in try rfcServerStates() {
+            let match = try #require(state["match"] as? [String: Any])
+            let boardText = try #require(match["board"] as? String, "\(file): 판 글자")
+            let board = try #require(ReversiBoard(string: boardText), "\(file): 판")
+            let discs = try #require(match["discs"] as? [String: Any])
+            #expect(ReversiCounts(black: rfcInt(discs["black"]) ?? -1, white: rfcInt(discs["white"]) ?? -1,
+                                  empty: rfcInt(discs["empty"]) ?? -1) == board.counts, "\(file): discs")
+            let status = match["status"] as? String
+            let legal = (state["legal_moves"] as? [NSNumber])?.map(\.intValue) ?? []
+            let myColor = (state["my_color"] as? String).flatMap(ReversiColor.init(rawValue:))
+            let turn = (match["turn"] as? String).flatMap(ReversiColor.init(rawValue:))
+            if status == "active" {
+                let mover = try #require(turn, "\(file): active 인데 차례가 없다")
+                #expect(ReversiRules.hasLegalMove(board, color: mover), "\(file): 차례 주인이 둘 곳이 없다(V-09 불변식)")
+                if let myColor, myColor == mover {
+                    #expect(legal == ReversiRules.legalMoves(board, color: mover), "\(file): legal_moves")
+                    legalChecked += 1
+                } else {
+                    #expect(legal.isEmpty, "\(file): 내 차례가 아닌데 legal_moves 가 있다")
+                }
+                let started = try #require(rfcDouble(match["turn_started_ms"]))
+                let deadline = try #require(rfcDouble(match["deadline_ms"]))
+                #expect(deadline - started == Double((rfcInt(state["turn_seconds"]) ?? 0) * 1000), "\(file): 마감 = 시작 + 30초")
+            } else {
+                #expect(legal.isEmpty, "\(file): 진행 중이 아닌데 legal_moves 가 있다")
+                #expect(match["deadline_ms"] is NSNull, "\(file): 진행 중이 아닌데 마감이 있다")
+            }
+            if status == "finished" {
+                let reason = match["end_reason"] as? String
+                if let score = match["score"] as? [String: Any] {
+                    // 자연 종료 — WOF 점수 · 끝 분류가 Swift 와 같다(V-10·V-11).
+                    let swift = try #require(ReversiRules.score(board), "\(file): 끝난 판인데 Swift 는 안 끝났다고 한다")
+                    #expect(rfcInt(score["black"]) == swift.black && rfcInt(score["white"]) == swift.white, "\(file): 점수")
+                    #expect(match["result"] as? String == swift.result.rawValue, "\(file): 결과")
+                    #expect(reason == ReversiRules.endKind(board)?.rawValue, "\(file): 끝 분류")
+                    scored += 1
+                } else {
+                    #expect(reason == "resign" || reason == "abandoned", "\(file): 점수 없는 자연 종료")
+                }
+            }
+            // 마지막 돌 한 수를 되돌려 다시 두면 서버 판이 나와야 한다(뒤에 패스만 있을 때).
+            let moves = (state["moves"] as? [[String: Any]]) ?? []
+            if let lastIndex = moves.lastIndex(where: { $0["kind"] as? String == "stone" }),
+               moves[(lastIndex + 1)...].allSatisfy({ $0["kind"] as? String == "pass" }) {
+                let row = moves[lastIndex]
+                let color = try #require((row["color"] as? String).flatMap(ReversiColor.init(rawValue:)))
+                let idx = try #require(rfcInt(row["idx"]))
+                let flipped = (row["flipped"] as? [NSNumber])?.map(\.intValue) ?? []
+                var cells = Array(board.string)
+                cells[idx] = "."
+                for cell in flipped { cells[cell] = color.opponent.cell }
+                let prior = try #require(ReversiBoard(string: String(cells)))
+                guard case .success(let outcome) = ReversiRules.play(prior, color: color, idx: idx) else {
+                    Issue.record("\(file): 되돌린 판에서 그 수가 불법이다")
+                    continue
+                }
+                #expect(outcome.board == board, "\(file): 다시 둔 판이 서버 판과 다르다")
+                #expect(outcome.flipped == flipped, "\(file): 뒤집힌 칸")
+                let passes = moves.count - 1 - lastIndex
+                #expect(outcome.passed == (passes == 1), "\(file): 뒤따른 패스 줄")
+                if status == "active" { #expect(outcome.next == turn, "\(file): 다음 차례") }
+                undoChecked += 1
+            }
+        }
+        #expect(legalChecked == 6, "내 차례 원문 \(legalChecked)장")
+        #expect(undoChecked == 10, "되돌려 다시 둔 원문 \(undoChecked)장")
+        #expect(scored == 7)
+        // 시작 판 재생 — 수 기록이 1 부터 빠짐없는 원문 하나(첫 수 d3).
+        let firstMove = try #require(try rfcServerJSON("reversi_move__ok.json")["state"] as? [String: Any])
+        let firstMatch = try #require(firstMove["match"] as? [String: Any])
+        guard case .success(let replay) = ReversiRules.play(.start, color: .black, idx: 19) else {
+            Issue.record("시작 판 d3 가 불법이다")
+            return
+        }
+        #expect(replay.board.string == firstMatch["board"] as? String)
+    }
+
+    // 없으면: 앱 요청 본문 키가 서버 인자 이름과 한 글자만 달라도(PostgREST 는 본문 키 집합으로 함수를 고른다 → PGRST202)
+    // 스텁 시험은 전부 초록이다. 손으로 적은 이름(C1 시험)이 아니라 **마이그레이션 원문**과 잰다.
+    @Test(.enabled(if: rfcMigrationGate))
+    func 요청_본문_키가_마이그레이션_인자_이름과_같다() throws {
+        let sql = try rfcMigrationText()
+        let bodies: [(ReversiWire.RPC, Set<String>)] = [
+            (.lobby, try rfcKeys(ReversiProtocolRequest())),
+            (.ranking, try rfcKeys(ReversiProtocolRequest())),
+            (.challenge, try rfcKeys(ReversiChallengeRequest(pOpponent: rfcPeer, pStake: 3))),
+            (.cancel, try rfcKeys(ReversiMatchRequest(pMatchId: rfcMatch))),
+            (.resign, try rfcKeys(ReversiMatchRequest(pMatchId: rfcMatch))),
+            (.respond, try rfcKeys(ReversiRespondRequest(pMatchId: rfcMatch, pAccept: true))),
+            (.state, try rfcKeys(ReversiStateRequest(pMatchId: rfcMatch, pSinceSeq: 0))),
+            (.move, try rfcKeys(ReversiMoveRequest(pMatchId: rfcMatch, pExpectedSeq: 0, pIdx: 19))),
+            (.watch, try rfcKeys(ReversiWatchRequest(pMatchId: rfcMatch, pSinceSeq: 0))),
+            (.watchLive, try rfcKeys(ReversiWatchRequest(pMatchId: rfcMatch, pSinceSeq: 0))),
+        ]
+        #expect(Set(bodies.map(\.0)) == Set(ReversiWire.RPC.allCases))
+        for (rpc, keys) in bodies {
+            let arguments = try #require(try rfcMigrationArguments(sql, function: rpc.rawValue),
+                                         "마이그레이션에 \(rpc.rawValue) 정의가 없다")
+            #expect(Set(arguments) == keys, "\(rpc.rawValue): 서버 인자 \(arguments) · 앱 본문 \(keys.sorted())")
+            #expect(arguments.first == "p_protocol", "\(rpc.rawValue): p_protocol 이 첫 인자가 아니다")
+        }
+    }
+
+    // 없으면: 관전 응답에 참가자 전용 칸(내 색·남의 지갑·둘 수 있는 칸)이 섞여 나가도(= 제3자에게 남의 루비가 간다) 초록이고,
+    // 스토어가 관전 응답을 대국으로 착각할 길이 열려도 안 보인다.
+    @Test func 관전_원문은_참가자_칸이_비어_있다() throws {
+        var seen = 0
+        for file in ["reversi_watch__ok.json", "reversi_watch_live__ok.json"] {
+            let state = try #require(try rfcServerJSON(file)["state"] as? [String: Any])
+            seen += 1
+            for key in ["my_color", "opponent", "my_auto_streak", "opponent_auto_streak", "ruby_balance"] {
+                #expect(state[key] is NSNull, "\(file): \(key) 가 실렸다")
+            }
+            #expect((state["legal_moves"] as? [Any])?.isEmpty == true, "\(file): legal_moves 가 실렸다")
+        }
+        #expect(seen == 2)
+        // watch 는 관전자 수를 안 센다(0) — watch_live 만 센다(1, 관전자 D 한 명).
+        #expect(rfcInt((try rfcServerJSON("reversi_watch__ok.json")["state"] as? [String: Any])?["watchers"]) == 0)
+        #expect(rfcInt((try rfcServerJSON("reversi_watch_live__ok.json")["state"] as? [String: Any])?["watchers"]) == 1)
     }
 }

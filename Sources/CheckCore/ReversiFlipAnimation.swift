@@ -76,17 +76,26 @@ package nonisolated struct ReversiFlipAnimation: Equatable, Sendable {
         from previous: ReversiMatchState?, to next: ReversiMatchState, at now: Date
     ) -> ReversiFlipAnimation? {
         guard let previous, previous.id == next.id else { return nil }
-        let delta = next.moveCount - previous.moveCount
+        return make(matchID: next.id, previousMoveCount: previous.moveCount, nextMoveCount: next.moveCount,
+                    plies: next.plies, at: now)
+    }
+
+    /// 같은 판정의 값 버전 — 관전(`ReversiSpectating`)처럼 `ReversiMatchState` 가 없는 깔때기가 쓴다.
+    /// `plies` 는 새 판의 기록(이번에 온 수가 들어 있어야 한다).
+    package static func make(
+        matchID: String, previousMoveCount: Int, nextMoveCount: Int, plies: [ReversiPly], at now: Date
+    ) -> ReversiFlipAnimation? {
+        let delta = nextMoveCount - previousMoveCount
         guard delta == 1 || delta == 2 else { return nil }
-        let fresh = next.plies
-            .filter { $0.seq > previous.moveCount && $0.seq <= next.moveCount }
+        let fresh = plies
+            .filter { $0.seq > previousMoveCount && $0.seq <= nextMoveCount }
             .sorted { $0.seq < $1.seq }
-        guard fresh.count == delta, let stone = fresh.first, stone.seq == previous.moveCount + 1,
+        guard fresh.count == delta, let stone = fresh.first, stone.seq == previousMoveCount + 1,
               stone.kind == .stone, let idx = stone.idx, !stone.flipped.isEmpty
         else { return nil }
         if delta == 2, fresh[1].kind != .pass { return nil }
         return ReversiFlipAnimation(
-            matchID: next.id, startedAt: now, placedIdx: idx, color: stone.color, flipped: stone.flipped)
+            matchID: matchID, startedAt: now, placedIdx: idx, color: stone.color, flipped: stone.flipped)
     }
 
     /// 두 칸의 고리 거리(행·열 2차원 — 1차원 idx 차로 재지 않는다, V-01).

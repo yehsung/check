@@ -1,0 +1,38 @@
+{
+    "me": {
+        "rank": 2,
+        "wins": 1,
+        "draws": 2,
+        "losses": 3,
+        "points": -2
+    },
+    "rows": [
+        {
+            "rank": 1,
+            "wins": 3,
+            "draws": 2,
+            "center": null,
+            "losses": 1,
+            "points": 2,
+            "user_id": "b0000000-0000-4000-8000-000000000002",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험02"
+        },
+        {
+            "rank": 2,
+            "wins": 1,
+            "draws": 2,
+            "center": null,
+            "losses": 3,
+            "points": -2,
+            "user_id": "b0000000-0000-4000-8000-000000000001",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험01"
+        }
+    ],
+    "status": "ok",
+    "server_now_ms": 1793662005519,
+    "record_since_ms": null
+}

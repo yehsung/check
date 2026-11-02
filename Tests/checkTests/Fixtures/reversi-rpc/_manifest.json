@@ -1,0 +1,535 @@
+{
+    "keys": {
+        "move": [
+            "at_ms",
+            "auto",
+            "color",
+            "flipped",
+            "idx",
+            "kind",
+            "seq"
+        ],
+        "peer": [
+            "avatar_url",
+            "character",
+            "display_name",
+            "id"
+        ],
+        "user": [
+            "avatar_url",
+            "center",
+            "character",
+            "display_name",
+            "user_id"
+        ],
+        "lobby": [
+            "auto_abandon_streak",
+            "invite_ttl_seconds",
+            "matches",
+            "me",
+            "server_now_ms",
+            "stakes",
+            "status",
+            "turn_grace_seconds",
+            "turn_seconds",
+            "users"
+        ],
+        "match": [
+            "black",
+            "board",
+            "challenger",
+            "deadline_ms",
+            "discs",
+            "end_reason",
+            "finished_ms",
+            "id",
+            "invite_expires_ms",
+            "move_count",
+            "opponent",
+            "result",
+            "score",
+            "stake",
+            "started_ms",
+            "status",
+            "turn",
+            "turn_started_ms",
+            "white",
+            "winner"
+        ],
+        "state": [
+            "auto_abandon_streak",
+            "black_auto_streak",
+            "black_user",
+            "grace_ms",
+            "legal_moves",
+            "match",
+            "moves",
+            "my_auto_streak",
+            "my_color",
+            "opponent",
+            "opponent_auto_streak",
+            "ruby_balance",
+            "server_now_ms",
+            "turn_seconds",
+            "watchers",
+            "white_auto_streak",
+            "white_user"
+        ],
+        "lobby_me": [
+            "active_match_id",
+            "draws",
+            "incoming",
+            "losses",
+            "outgoing",
+            "ruby_balance",
+            "wins"
+        ],
+        "lobby_user": [
+            "avatar_url",
+            "capable",
+            "center",
+            "character",
+            "display_name",
+            "focus_mode",
+            "id",
+            "in_match",
+            "is_working"
+        ],
+        "lobby_match": [
+            "a",
+            "b",
+            "id",
+            "stake",
+            "started_at_ms",
+            "watchers"
+        ]
+    },
+    "files": [
+        {
+            "rpc": "reversi_cancel",
+            "case": "not_found",
+            "file": "reversi_cancel__not_found.json",
+            "status": "not_found",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_cancel",
+            "case": "not_pending",
+            "file": "reversi_cancel__not_pending.json",
+            "status": "not_pending",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_cancel",
+            "case": "ok",
+            "file": "reversi_cancel__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "already_pending",
+            "file": "reversi_challenge__already_pending.json",
+            "status": "already_pending",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "blackout",
+            "file": "reversi_challenge__blackout.json",
+            "status": "blackout",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "busy",
+            "file": "reversi_challenge__busy.json",
+            "status": "busy",
+            "viewer": "b0000000-0000-4000-8000-000000000008",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "insufficient",
+            "file": "reversi_challenge__insufficient.json",
+            "status": "insufficient",
+            "viewer": "b0000000-0000-4000-8000-000000000007",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "invalid",
+            "file": "reversi_challenge__invalid.json",
+            "status": "invalid",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "ok",
+            "file": "reversi_challenge__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "target_busy",
+            "file": "reversi_challenge__target_busy.json",
+            "status": "target_busy",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "target_focused",
+            "file": "reversi_challenge__target_focused.json",
+            "status": "target_focused",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_challenge",
+            "case": "target_outdated",
+            "file": "reversi_challenge__target_outdated.json",
+            "status": "target_outdated",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_lobby",
+            "case": "incoming",
+            "file": "reversi_lobby__incoming.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_lobby",
+            "case": "ok",
+            "file": "reversi_lobby__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_lobby",
+            "case": "outgoing",
+            "file": "reversi_lobby__outgoing.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_lobby",
+            "case": "unauthorized",
+            "file": "reversi_lobby__unauthorized.json",
+            "status": "unauthorized",
+            "viewer": null,
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_lobby",
+            "case": "unsupported_client",
+            "file": "reversi_lobby__unsupported_client.json",
+            "status": "unsupported_client",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "auto_placed",
+            "file": "reversi_move__auto_placed.json",
+            "status": "auto_placed",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "finished_board_full",
+            "file": "reversi_move__finished_board_full.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "finished_draw",
+            "file": "reversi_move__finished_draw.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "finished_no_moves",
+            "file": "reversi_move__finished_no_moves.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "finished_wipeout",
+            "file": "reversi_move__finished_wipeout.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "illegal_no_flip",
+            "file": "reversi_move__illegal_no_flip.json",
+            "status": "illegal",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "illegal_occupied",
+            "file": "reversi_move__illegal_occupied.json",
+            "status": "illegal",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "illegal_out_of_range",
+            "file": "reversi_move__illegal_out_of_range.json",
+            "status": "illegal",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "invalid",
+            "file": "reversi_move__invalid.json",
+            "status": "invalid",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "not_active",
+            "file": "reversi_move__not_active.json",
+            "status": "not_active",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "not_your_turn",
+            "file": "reversi_move__not_your_turn.json",
+            "status": "not_your_turn",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "ok",
+            "file": "reversi_move__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "ok_pass",
+            "file": "reversi_move__ok_pass.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_move",
+            "case": "stale",
+            "file": "reversi_move__stale.json",
+            "status": "stale",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_ranking",
+            "case": "ok",
+            "file": "reversi_ranking__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_resign",
+            "case": "not_active",
+            "file": "reversi_resign__not_active.json",
+            "status": "not_active",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_resign",
+            "case": "ok",
+            "file": "reversi_resign__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "accepted",
+            "file": "reversi_respond__accepted.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "busy",
+            "file": "reversi_respond__busy.json",
+            "status": "busy",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "declined",
+            "file": "reversi_respond__declined.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "expired",
+            "file": "reversi_respond__expired.json",
+            "status": "expired",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "insufficient_challenger",
+            "file": "reversi_respond__insufficient_challenger.json",
+            "status": "insufficient",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "insufficient_me",
+            "file": "reversi_respond__insufficient_me.json",
+            "status": "insufficient",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "invalid",
+            "file": "reversi_respond__invalid.json",
+            "status": "invalid",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "not_pending",
+            "file": "reversi_respond__not_pending.json",
+            "status": "not_pending",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_respond",
+            "case": "target_busy",
+            "file": "reversi_respond__target_busy.json",
+            "status": "target_busy",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_state",
+            "case": "finished",
+            "file": "reversi_state__finished.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_state",
+            "case": "my_turn",
+            "file": "reversi_state__my_turn.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000002",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_state",
+            "case": "not_found",
+            "file": "reversi_state__not_found.json",
+            "status": "not_found",
+            "viewer": "b0000000-0000-4000-8000-000000000004",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_state",
+            "case": "pending",
+            "file": "reversi_state__pending.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_state",
+            "case": "their_turn",
+            "file": "reversi_state__their_turn.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000001",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_watch",
+            "case": "not_found",
+            "file": "reversi_watch__not_found.json",
+            "status": "not_found",
+            "viewer": "b0000000-0000-4000-8000-000000000004",
+            "has_state": false
+        },
+        {
+            "rpc": "reversi_watch",
+            "case": "ok",
+            "file": "reversi_watch__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000004",
+            "has_state": true
+        },
+        {
+            "rpc": "reversi_watch_live",
+            "case": "ok",
+            "file": "reversi_watch_live__ok.json",
+            "status": "ok",
+            "viewer": "b0000000-0000-4000-8000-000000000004",
+            "has_state": true
+        }
+    ],
+    "notes": [
+        "uuid · match_id · 시각(ms)은 실행마다 바뀐다 — 키 집합 · status · 값의 관계로 비교할 것",
+        "busy · target_busy 는 리버시 active 판(흑 · 백)으로 세웠다 — game__busy_users 의 리버시 조각(S2 §9)",
+        "watch_live 의 watchers = 1(관전자 D 한 명 — match_watch_ping 의 reversi 갈래 · match_watchers CHECK 에 reversi)"
+    ],
+    "viewers": {
+        "A": "b0000000-0000-4000-8000-000000000001",
+        "B": "b0000000-0000-4000-8000-000000000002",
+        "C": "b0000000-0000-4000-8000-000000000003",
+        "D": "b0000000-0000-4000-8000-000000000004",
+        "F": "b0000000-0000-4000-8000-000000000006",
+        "G": "b0000000-0000-4000-8000-000000000007",
+        "H": "b0000000-0000-4000-8000-000000000008"
+    },
+    "contract": "SPEC v1.1 §3.4~§3.6 — {status, state} 봉투, 상태 키 집합은 마이그레이션 §11-7 v_*_keys 와 같다",
+    "migration": "20261108200000_reversi.sql",
+    "generated_at": "2026-11-02T23:26:45Z",
+    "generated_by": "FLIP/server/tests/b_flow.sql (하네스 verify_new.sh — 실제 RPC 응답 원문)"
+}

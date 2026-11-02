@@ -1,0 +1,67 @@
+{
+    "state": {
+        "match": {
+            "id": "8aa6c219-44c7-44de-aba4-71381496bd2b",
+            "turn": null,
+            "black": "b0000000-0000-4000-8000-000000000001",
+            "board": "...........................wb......bw...........................",
+            "discs": {
+                "black": 2,
+                "empty": 60,
+                "white": 2
+            },
+            "score": null,
+            "stake": 5,
+            "white": "b0000000-0000-4000-8000-000000000002",
+            "result": "white_win",
+            "status": "finished",
+            "winner": "b0000000-0000-4000-8000-000000000002",
+            "opponent": "b0000000-0000-4000-8000-000000000002",
+            "challenger": "b0000000-0000-4000-8000-000000000001",
+            "end_reason": "resign",
+            "move_count": 0,
+            "started_ms": 1793662005464,
+            "deadline_ms": null,
+            "finished_ms": 1793662005465,
+            "turn_started_ms": 1793662005464,
+            "invite_expires_ms": 1793662065463
+        },
+        "moves": [
+        ],
+        "grace_ms": 2000,
+        "my_color": "black",
+        "opponent": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000002",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험02"
+        },
+        "watchers": 0,
+        "black_user": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000001",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험01"
+        },
+        "white_user": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000002",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험02"
+        },
+        "legal_moves": [
+        ],
+        "ruby_balance": 90,
+        "turn_seconds": 30,
+        "server_now_ms": 1793662005465,
+        "my_auto_streak": 0,
+        "black_auto_streak": 0,
+        "white_auto_streak": 0,
+        "auto_abandon_streak": 3,
+        "opponent_auto_streak": 0
+    },
+    "status": "ok"
+}

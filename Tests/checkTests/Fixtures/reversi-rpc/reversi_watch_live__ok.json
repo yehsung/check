@@ -1,0 +1,61 @@
+{
+    "state": {
+        "match": {
+            "id": "1764f45e-b76d-42cf-9c6b-d03c391f9624",
+            "turn": "black",
+            "black": "b0000000-0000-4000-8000-000000000001",
+            "board": "...........................wb......bw...........................",
+            "discs": {
+                "black": 2,
+                "empty": 60,
+                "white": 2
+            },
+            "score": null,
+            "stake": 3,
+            "white": "b0000000-0000-4000-8000-000000000002",
+            "result": null,
+            "status": "active",
+            "winner": null,
+            "opponent": "b0000000-0000-4000-8000-000000000002",
+            "challenger": "b0000000-0000-4000-8000-000000000001",
+            "end_reason": null,
+            "move_count": 0,
+            "started_ms": 1793662005509,
+            "deadline_ms": 1793662035509,
+            "finished_ms": null,
+            "turn_started_ms": 1793662005509,
+            "invite_expires_ms": 1793662065508
+        },
+        "moves": [
+        ],
+        "grace_ms": 2000,
+        "my_color": null,
+        "opponent": null,
+        "watchers": 1,
+        "black_user": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000001",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험01"
+        },
+        "white_user": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000002",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험02"
+        },
+        "legal_moves": [
+        ],
+        "ruby_balance": null,
+        "turn_seconds": 30,
+        "server_now_ms": 1793662005511,
+        "my_auto_streak": null,
+        "black_auto_streak": 0,
+        "white_auto_streak": 0,
+        "auto_abandon_streak": 3,
+        "opponent_auto_streak": null
+    },
+    "status": "ok"
+}

@@ -1445,6 +1445,13 @@ package struct PokeDirectoryRow: Decodable, Equatable {
     /// 이 칸을 안 내려주는 옛 서버(db push 전 창)에서도 디렉터리 디코드가 깨지지 않는다(nil = 없음).
     /// 화면에 올리기 전 관문은 toPokeDirectoryEntries 의 `StatusMessage.display` 한 곳이다.
     package let statusMessage: String?
+    /// 이 사람이 집중 모드인가(`focus_mode` — 대표 요청 5 "콕/메세지 창에서부터 집중 모드인 사람들은 표시"). 서버가 이 칸을
+    /// 명부에 싣는 것은 **다음 서버 판**이다 — 지금 서버(7칸)는 안 보낸다. 그래서 status_message 와 같은 이유로 Optional·decodeIfPresent 고,
+    /// nil 은 "집중이 아니다"가 아니라 **"모른다"** 이다. 모를 때의 해석(= 집중 아님)은 toPokeDirectoryEntries 한 곳에 있다.
+    /// ⚠︎ 그래서 이 칸을 싣는 서버 초안(20261108120000_app_user_directory_focus_mode — 대표 결재 대기)이 운영에 오르기 전에는
+    /// 요청 5(상대 집중 '집중' 칩 · 상대 집중 잠금)가 **운영에서 꺼져 있다**. 클라만으로는 못 켠다(팀 밖 사람의 profiles 는 RLS 로 안 보인다).
+    /// 두 서버 모양의 실출력은 Tests/checkTests/Fixtures/directory-rpc 가 잰다.
+    package let focusMode: Bool?
 
     /// 키는 `.convertFromSnakeCase` 가 이미 카멜로 바꾼 뒤에 매칭되므로 **카멜로 적는다**
     /// (`message_capable` → `messageCapable`). 스네이크로 적으면 어떤 키도 안 잡혀 전부 nil 이 된다.
@@ -1453,6 +1460,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         case messageCapable, canReceiveMessage
         case center
         case statusMessage
+        case focusMode
     }
 
     package init(from decoder: Decoder) throws {
@@ -1465,6 +1473,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
             ?? container.decodeIfPresent(Bool.self, forKey: .canReceiveMessage)
         center = try container.decodeIfPresent(String.self, forKey: .center)
         statusMessage = try container.decodeIfPresent(String.self, forKey: .statusMessage)
+        focusMode = try container.decodeIfPresent(Bool.self, forKey: .focusMode)
     }
 
     /// 테스트/변환 픽스처용 직접 생성자. 커스텀 init(from:) 을 만든 순간 멤버와이즈 init 이 사라지므로
@@ -1476,7 +1485,8 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         isWorking: Bool,
         canReceiveMessage: Bool? = nil,
         center: String? = nil,
-        statusMessage: String? = nil
+        statusMessage: String? = nil,
+        focusMode: Bool? = nil
     ) {
         self.userId = userId
         self.displayName = displayName
@@ -1485,6 +1495,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
         self.canReceiveMessage = canReceiveMessage
         self.center = center
         self.statusMessage = statusMessage
+        self.focusMode = focusMode
     }
 }
 
@@ -1511,6 +1522,13 @@ package struct PokeDirectoryEntry: Identifiable, Equatable {
     /// 상태메시지(v0.3.51). 이미 `StatusMessage.display` 를 지난 값이다 — nil 이면 두 번째 줄을 그리지 않는다.
     /// **맨 끝에 둔다**: 멤버와이즈 init 을 쓰는 기존 호출부·테스트가 그대로 컴파일되게(기본값 nil).
     package var statusMessage: String? = nil
+    /// 이 사람이 집중 모드인가(대표 요청 5). 맥 콕찌르기 행의 '집중' 칩과 찌르기·보내기 비활성의 근거다.
+    ///
+    /// **모르면 false 인 이유**: canReceiveMessage 를 모를 때 true 로 읽는 것과 같은 판단이다 — 서버가 이 칸을 아직 안 보내는
+    /// 구간(옛 서버)에서 true 로 접으면 클라가 서버에 없는 금지를 발명해 **전원**의 찌르기·메시지가 꺼진다. false 로 두면 최악이
+    /// "보낸 뒤 target_focused 안내"이고, 그건 지금까지 이 기능이 감당해 온 실패다(최종 판정은 언제나 서버다).
+    /// **맨 끝에 둔다**: 폰과 같이 쓰는 멤버와이즈 init 호출부·시험이 그대로 컴파일되게(기본값 false).
+    package var isFocused: Bool = false
 
     package var id: String { userID }
 }
@@ -1529,7 +1547,9 @@ extension [PokeDirectoryRow] {
                 // 서버값 → 화면 글자. **모르는 값이 화면에 닿는 유일한 관문이 여기다**(모르면 nil = 배지 없음).
                 center: CenterLabel.display(row.center),
                 // 상태메시지 관문: 빈 값·보이는 글자 없는 값은 nil(두 번째 줄을 안 그린다).
-                statusMessage: StatusMessage.display(row.statusMessage)
+                statusMessage: StatusMessage.display(row.statusMessage),
+                // '모름(nil)'은 집중 아님으로 읽는다 — 옛 서버에서 전원이 비활성이 되지 않게(근거는 위 프로퍼티 주석).
+                isFocused: row.focusMode ?? false
             )
         }
     }

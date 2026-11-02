@@ -1,0 +1,63 @@
+#!/bin/bash
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+# 사람 찾기 명부(app_user_directory) 계약 픽스처 생성기 — 대표 요청 5(상대 집중 미리 표시) · 2026-11-03
+#
+# 무엇을 만드나: 로컬 하네스(체인 재생 + 서버 초안 20261108120000_app_user_directory_focus_mode.sql 3회 적용)에서
+#   harness.login 으로 authenticated 사용자를 흉내 내 app_user_directory() 를 **실제로 부른 출력 그대로**를 떨군다.
+#   스텁 추측이 아니다 — 맥 시험(FocusSendGateTests)의 상대 집중 쪽이 "스텁이 focus_mode 를 실어 준다"는 가정에만
+#   기대지 않게, 서버 초안이 정말로 내는 바이트와 지금 운영 정본(7칸)이 내는 바이트를 나란히 둔다.
+#
+# 직렬화는 PostgREST 와 같게: 표 반환 → select coalesce(json_agg(t), '[]'::json) from f() t (message-rpc 생성기와 같은 규약).
+# 파일 끝의 psql 줄바꿈 한 개만 걷는다(json_agg 가 넣는 원소 사이 줄바꿈은 남는다).
+#
+# 두 장 모두 같은 장면이다: 호출자 A(abto) · B(예은)가 **자기 행을 켠다**(앱의 PATCH 와 같은 길 — authenticated · 내 행 update) ·
+#   C(지유)·거부목록·씨앗다섯은 끈 채. 한 트랜잭션 = 한 요청이고 끝에 롤백한다(다음 장면을 흐리지 않게).
+#   · app_user_directory__draft_8col   — 초안이 만든 8칸(맨 끝 focus_mode).
+#   · app_user_directory__current_7col — 같은 트랜잭션에서 되돌리기 초안(= 20261014121000 §3 정본)으로 바꾼 뒤의 7칸.
+#     B 가 켰는데도 칸이 없다 — 지금 운영에서 새 맥이 받는 모양이다.
+#
+# 사용(하네스를 KEEP_CLUSTER=1 로 켜 둔 뒤):
+#   HARNESS_PORT=<포트> HARNESS=<하네스 사본>/replay-harness-v2 DRAFT=<초안 폴더> generate.sh <출력 폴더>
+# 운영에는 닿지 않는다 — lib.sh 가 PG* 를 지우고 127.0.0.1:$HARNESS_PORT 로 못 박는다. 아무것도 지우지 않는다.
+# ══════════════════════════════════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+OUT="${1:?출력 폴더}"
+: "${HARNESS:?하네스 사본 경로}" "${DRAFT:?초안 폴더}" "${HARNESS_PORT:?포트}"
+export HARNESS_PORT
+# shellcheck disable=SC1091
+. "$HARNESS/lib.sh"
+cluster_running || { echo "ERROR: 클러스터가 꺼져 있다(verify_new.sh 를 KEEP_CLUSTER=1 로 먼저 돌려라)"; exit 10; }
+mkdir -p "$OUT"
+
+A=267a3495-643c-40cc-b1a7-14967166eae1   # abto.app
+B=3e240c02-8972-478e-a674-014f498a641b   # 코덱스토큰도둑예은
+C=544e3837-f01c-4560-b82f-4d44c269f044   # 코덱스토큰도둑지유
+
+tx() {
+  { printf "\\\\o /dev/null\nset role postgres;\nbegin;\n"; cat; printf "rollback;\n"; } \
+    | "$PGBIN/psql" -X -q -At -v ON_ERROR_STOP=1 -U migrator -d postgres
+}
+
+echo "== 8칸(초안)"
+tx <<SQL
+select harness.expect(pg_get_function_result('public.app_user_directory()'::regprocedure) like '%, focus_mode boolean)', '초안 8칸이 올라가 있다');
+select harness.expect(not exists (select 1 from public.profiles where focus_mode), '기준선: 켠 사람이 없다');
+select harness.login('$B'::uuid);
+update public.profiles set focus_mode = true where id = auth.uid();
+select harness.login('$A'::uuid);
+select coalesce(json_agg(t), '[]'::json) from public.app_user_directory() t \g '$OUT/app_user_directory__draft_8col.json'
+SQL
+
+echo "== 7칸(지금 운영 정본 — 되돌리기 초안)"
+tx <<SQL
+\ir $DRAFT/rollback_app_user_directory_focus_mode.sql
+select harness.expect(pg_get_function_result('public.app_user_directory()'::regprocedure) like '%, status_message text)', '7칸 정본으로 돌아왔다');
+select harness.login('$B'::uuid);
+update public.profiles set focus_mode = true where id = auth.uid();
+select harness.login('$A'::uuid);
+select coalesce(json_agg(t), '[]'::json) from public.app_user_directory() t \g '$OUT/app_user_directory__current_7col.json'
+SQL
+
+for f in "$OUT"/app_user_directory__*.json; do perl -pi -e 'chomp if eof' "$f"; done
+ls -l "$OUT"

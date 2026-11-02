@@ -42,6 +42,9 @@ import CheckCore
 // 노란 상자로 나왔다). 그대로 두면 스냅샷이 머리만 남은 빈 화면이 되어 "잘림·겹침을 눈으로 본다"는
 // 렌더 테스트의 목적이 통째로 사라진다. 그래서 **렌더 테스트만** 같은 자리·같은 치수의 순수 SwiftUI
 // 대체 경로를 쓴다. **앱은 언제나 진짜 위젯이다**(두 스위치의 기본값이 false 이고 프로덕션에 true 를 주는 자리는 없다).
+// 2026-11-03 ④부터 말풍선 본문도 AppKit 글자 뷰(`ChatBubbleText` — 끌어 고르기 · 우클릭 신고)라, 입력칸과 **같은 스위치**
+// (`rendersPlainTextEditor`)가 말풍선도 같은 조각의 SwiftUI `Text` 로 바꾼다(`MessageConversationView.rendersPlainText`).
+// 앱 갈래의 말풍선은 AppKit 이 직접 그린 픽셀로 따로 잰다(ChatBubbleSelectionTests · ChatMarkdownBubble 의 두 갈래 픽셀 시험).
 
 /// 대화 패널의 치수. **한 곳에서만 온다** — 뷰마다 숫자를 적으면 창 높이 상한 예산과 조용히 어긋나고,
 /// 그 어긋남은 배너가 뜬 날에만 드러난다(테스트는 배너 없는 화면을 그려서 못 잡는다).
@@ -147,16 +150,17 @@ enum MessagePanelLayout {
     /// 전체 글자 수만 세서 "짧은 줄 여러 개"를 한 줄로 셌다.
     ///
     /// ★ **꾸밈 없는 한 줄 본문은 예전 산식과 같은 값이다**(⌈글자 수 / 15⌉ 줄 × 15pt + 10). 이 함수가 바꾸는 것은
-    ///   줄바꿈·제목·글머리가 있는 본문뿐이다. 틀려도 잘리지 않는 이유는 위 `conversationContentHeight` 주석 그대로다
+    ///   줄바꿈·제목·링크 꼬리표가 있는 본문뿐이다. 틀려도 잘리지 않는 이유는 위 `conversationContentHeight` 주석 그대로다
     ///   (틀 높이만 정하고 안쪽은 언제나 스크롤이다 · 말풍선 자체는 `fixedSize(vertical:)` 로 줄 수만큼 자란다).
     static func textBubbleHeight(_ text: String) -> CGFloat {
-        var total: CGFloat = 10   // 말풍선 세로 padding 5×2
+        var total: CGFloat = 10   // 말풍선 위아래 여백 5×2(`ChatBubbleTextLayout.inset`)
         for line in ChatMarkdown.parse(text) {
             let scale = Double(ChatMarkdownText.fontSize(for: line.kind) / ChatMarkdownText.baseSize)
             let perRow = max(1, Int((Double(charactersPerBubbleLine) / scale).rounded(.down)))
-            // 글머리 •·인용 막대는 해석 글자에 없다(그리는 쪽이 붙인다) — 두 칸으로 센다.
-            let marker = line.kind == .bullet || line.kind == .quote ? 2 : 0
-            let rows = max(1, Int((Double(line.text.count + marker) / Double(perRow)).rounded(.up)))
+            // 링크 호스트 꼬리표(`[글](주소)` → `글 (호스트)`)는 해석 글자에 없고 그리는 쪽이 붙인다 — 같이 센다.
+            // 그리는 쪽이 붙이는 글자는 이것뿐이다(글머리 •·인용 막대는 2026-11-03 대표 결정 "제목·굵게·링크만"으로 걷혔다).
+            let added = ChatMarkdownText.addedCharacters(line)
+            let rows = max(1, Int((Double(line.text.count + added) / Double(perRow)).rounded(.up)))
             total += CGFloat(Double(rows) * 15 * scale)
         }
         return total
@@ -481,7 +485,10 @@ struct CheckMessageView: View {
                 onReport: { entry in
                     guard let target = MessageBubbleReportRule.target(for: entry) else { return }
                     store.openReport(target, surface: .message)
-                }
+                },
+                // 말풍선 본문은 AppKit 글자 뷰다(끌어 고르기 · 우클릭 신고 — 2026-11-03 ④). 입력칸과 **같은 스냅샷 스위치**로
+                // SwiftUI `Text` 대체 경로를 탄다: 둘 다 "ImageRenderer 가 못 그리는 NSView 를 같은 치수의 SwiftUI 로 바꾼다"는 같은 이유다.
+                rendersPlainText: rendersPlainTextEditor
             )
             .frame(height: min(cap, natural))
             .frame(maxWidth: .infinity)
@@ -566,9 +573,12 @@ struct MessageConversationView: View {
     var clipsInsteadOfScrolling: Bool = false
     /// 따라가기 상태가 바뀔 때마다 알린다(테스트 전용 관찰 문 — 앱은 nil).
     var onFollowChange: ((MessageScrollFollow) -> Void)? = nil
-    /// 받은 말풍선 우클릭 → [이 메시지 신고하기](v0.3.34). nil 이면 우클릭 메뉴가 없다(스냅샷·옛 호출부). 어느 말풍선에 서는지는
+    /// 받은 말풍선 우클릭 → [이 메시지 신고하기](v0.3.34). nil 이면 메뉴에 [복사]만 선다(스냅샷·옛 호출부). 어느 말풍선에 서는지는
     /// `MessageBubbleReportRule.offersReport` 한 곳이 정한다 — **내 말풍선에는 서지 않는다.**
     var onReport: ((MessageHistoryEntry) -> Void)? = nil
+    /// 렌더 시험·스냅샷 전용: 말풍선 본문을 AppKit 글자 뷰(`ChatBubbleText`) 대신 같은 조각의 SwiftUI `Text` 로 그린다
+    /// (`ImageRenderer` 는 NSView 를 못 그린다 — 파일 머리 "ImageRenderer 눈가리개"). **앱은 언제나 false** 다.
+    var rendersPlainText: Bool = false
 
     /// 맨 아래로 보낼 앵커. 마지막 말풍선 id 를 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
     private static let bottomAnchorID = "message-thread-bottom"
@@ -665,7 +675,8 @@ struct MessageConversationView: View {
                         showsUnreadOne: MessageReadReceiptMark.showsUnreadOne(
                             for: entry, receiptsAvailable: readReceiptsAvailable
                         ),
-                        onReport: MessageBubbleReportRule.offersReport(for: entry) ? onReport.map { report in { report(entry) } } : nil
+                        onReport: MessageBubbleReportRule.offersReport(for: entry) ? onReport.map { report in { report(entry) } } : nil,
+                        rendersPlainText: rendersPlainText
                     )
                 case .poke(let entry):
                     // 말풍선이 아니다 — 답장·읽음 1·신고 메뉴 대상이 아니다(v0.3.65).
@@ -689,7 +700,8 @@ extension MessageConversationView {
         readReceiptsAvailable: Bool = false,
         clipsInsteadOfScrolling: Bool = false,
         onFollowChange: ((MessageScrollFollow) -> Void)? = nil,
-        onReport: ((MessageHistoryEntry) -> Void)? = nil
+        onReport: ((MessageHistoryEntry) -> Void)? = nil,
+        rendersPlainText: Bool = false
     ) {
         self.init(
             lines: items.map { item in
@@ -704,7 +716,8 @@ extension MessageConversationView {
             readReceiptsAvailable: readReceiptsAvailable,
             clipsInsteadOfScrolling: clipsInsteadOfScrolling,
             onFollowChange: onFollowChange,
-            onReport: onReport
+            onReport: onReport,
+            rendersPlainText: rendersPlainText
         )
     }
 }
@@ -843,6 +856,8 @@ private struct MessageBubbleRow: View {
     var showsUnreadOne: Bool = false
     /// 우클릭 → [이 메시지 신고하기](v0.3.34). **받은 말풍선에만** 들어온다(`MessageBubbleReportRule` — 대화 뷰가 거른다).
     var onReport: (() -> Void)? = nil
+    /// 렌더 시험·스냅샷 전용: 글자 본문을 SwiftUI `Text` 로 그린다(`MessageConversationView.rendersPlainText`). 앱은 언제나 false.
+    var rendersPlainText: Bool = false
 
     private var clockText: String { MessageThreadBuilder.clockText(entry.createdAt) }
 
@@ -897,39 +912,37 @@ private struct MessageBubbleRow: View {
     ///
     /// **`fixedSize(horizontal: true)` 는 금지다** — 200자가 한 줄을 요구해 화면 밖으로 넘친다.
     ///
-    /// **받은 말풍선은 우클릭 메뉴를 갖는다**(v0.3.34 — [복사] · [이 메시지 신고하기]). 그 말풍선에는 글자 선택(`textSelection`)을
-    /// 걸지 않는다: 선택 가능한 글자는 우클릭을 자기 메뉴(복사·찾아보기)로 가져가 신고 항목이 안 뜬다. 대신 [복사]를 메뉴에 둔다
-    /// (폰의 길게 누름 메뉴와 같은 차림). 내 말풍선은 예전 그대로 글자 선택이다.
-    @ViewBuilder
-    private var bubble: some View {
-        if let onReport {
-            bubbleText
-                .contextMenu {
-                    Button {
-                        CheckPasteboard.copy(entry.body)
-                    } label: {
-                        Label("복사", systemImage: "doc.on.doc")
-                    }
-                    Button(role: .destructive, action: onReport) {
-                        Label(BlockReportText.reportMessageAction, systemImage: "exclamationmark.bubble")
-                    }
-                }
-        } else {
-            bubbleText
-                .textSelection(.enabled)
-        }
-    }
-
-    /// 본문이 아잉이 이모티콘 하나면 **글자 대신 그림**이다(v0.3.62). 아니면 예전 그대로 글자 말풍선이다.
+    /// 본문이 아잉이 이모티콘 하나면 **글자 대신 그림**이다(v0.3.62). 아니면 글자 말풍선이다.
     ///
     /// ★ **그림을 못 읽으면 글자로 접는다.** 번들이 깨진 배포본(맥 패키징이 리소스 번들 복사를 빠뜨린 경우)에서
     ///   빈 말풍선이 되면 사용자는 상대가 뭘 보냈는지 알 길이 없다 — 이름 글자("아잉이 기쁨")가 보이는 쪽이
     ///   낫다. 그 판정은 `AingStickerArt.drawable` 하나이고, **틀 높이 추정이 부르는 것과 같은 함수다**
     ///   (`MessagePanelLayout.conversationContentHeight` — 두 자리가 갈리면 빈 회색 판이 생긴다).
+    ///
+    /// **우클릭 메뉴**(v0.3.34 [신고] · 2026-11-03 대표 결정 "받은 말풍선도 드래그, 우클릭에 신고 유지"):
+    ///   · 글자 말풍선은 **받은 것도 내 것도 끌어 고를 수 있다.** 메뉴는 글자 뷰(`ChatBubbleTextView`)가 직접 짓는다 — 받은 말풍선은
+    ///     [복사] · [이 메시지 신고하기], 내 말풍선은 [복사]. [복사]는 고른 글자가 있으면 그 글자, 없으면 말풍선 원문이다.
+    ///     예전(v0.3.34~)에는 받은 말풍선의 글자 선택을 꺼 두었다: SwiftUI 의 고를 수 있는 글자(`textSelection`)는 우클릭을 자기
+    ///     메뉴(복사·찾아보기)로 가져가 `.contextMenu` 의 신고 항목이 안 떴다. 메뉴를 직접 세우는 글자 뷰로 바꿔 둘을 함께 채운다.
+    ///   · 그림 말풍선은 고를 글자가 없다 — 받은 그림에만 SwiftUI 메뉴([복사] 원문 토큰 · [신고])가 예전 그대로 선다.
     @ViewBuilder
-    private var bubbleText: some View {
+    private var bubble: some View {
         if let drawn = AingStickerArt.drawable(for: entry.body) {
-            stickerBubble(drawn.art)
+            if let onReport {
+                stickerBubble(drawn.art)
+                    .contextMenu {
+                        Button {
+                            CheckPasteboard.copy(entry.body)
+                        } label: {
+                            Label(ChatBubbleMenuText.copy, systemImage: ChatBubbleMenuText.copySymbol)
+                        }
+                        Button(role: .destructive, action: onReport) {
+                            Label(BlockReportText.reportMessageAction, systemImage: ChatBubbleMenuText.reportSymbol)
+                        }
+                    }
+            } else {
+                stickerBubble(drawn.art)
+            }
         } else {
             textBubble
         }
@@ -951,27 +964,46 @@ private struct MessageBubbleRow: View {
     /// 글자 말풍선. **이모티콘 폴백도 이 자리로 온다** — 그때는 날것 토큰(`[아잉:기쁨]`) 대신 이름으로
     /// 읽힌다("아잉이 기쁨"). 같은 저장소가 날것을 "깨진 메시지로 읽힌다"고 적어 둔 그 글자이고,
     /// 폴백의 목적(상대가 뭘 보냈는지 알게)은 이름이 더 잘 달성한다. 평범한 본문은 `preview` 가
-    /// **글자 하나도** 바꾸지 않는다. 우클릭 [복사]는 날것 그대로다(붙여넣어 다시 보내면 그림이 된다 —
+    /// **글자 하나도** 바꾸지 않는다. 고른 글자 없는 [복사]는 날것 그대로다(`raw: entry.body` — 붙여넣어 다시 보내면 그림이 된다 —
     /// 마크다운도 같다: 기호째 복사되므로 붙여넣어 보내면 같은 꾸밈으로 다시 그려진다).
     ///
-    /// **마크다운**(대표 요청 2026-11-03 ③④): 이모티콘 폴백을 지난 글자를 `ChatMarkdownText` 가 꾸민다 —
-    /// `## 제목` 은 크게, `**굵게**`·`*기울임*`·`~~취소~~`·`` `코드` ``, 글머리·인용·``` 코드 블록, 그리고 http·https 링크.
-    /// 링크는 누르면 기본 브라우저가 연다(같은 팝오버의 `SignUpTermsNotice` 선례). 여는 문 앞에 스킴 검사를 한 번 더
-    /// 세운다(`ChatMarkdownText.openAction`). 링크 색은 바탕을 따른다(내 말풍선은 흰 글자 + 밑줄).
+    /// **마크다운**(대표 요청 2026-11-03 ③④ · 범위는 대표 결정 "제목·굵게·링크만"): 이모티콘 폴백을 지난 글자를
+    /// `ChatMarkdownText` 가 꾸민다 — `## 제목` 은 크게, `**굵게**`, 그리고 http·https 링크. 그 밖의 문법
+    /// (`*기울임*`·`~~취소~~`·`` `코드` ``·글머리·인용·``` 울타리)은 친 글자 그대로 보인다.
+    /// 링크는 한 번 누르면 기본 브라우저가 연다. 여는 자리에서 스킴 검사를 한 번 더 한다(앱 갈래 `ChatBubbleTextView.followLink` ·
+    /// 스냅샷 갈래 `ChatMarkdownText.openAction`). 링크 색은 바탕을 따른다(내 말풍선은 흰 글자 + 밑줄).
+    ///
+    /// 두 갈래는 **같은 조각 목록**(`ChatMarkdownText.pieces`)을 그린다 — 글자·크기·굵기·링크·색이 같고, 폭·여백·바탕은 이 자리 하나가 준다.
+    ///   · 앱: `ChatBubbleText` — 고를 수 있는 AppKit 글자 뷰(끌어 고르기 · ⌘C · 우클릭 메뉴 · 링크 한 번 누름).
+    ///     **여백(8 · 5)까지 글자 뷰다**(`ChatBubbleTextLayout.inset`) — 여백 띠를 우클릭해도 [신고]가 뜨고 거기서 끌어도 고르기가 시작된다
+    ///     (2026-11-03 검토 P1: 여백이 SwiftUI padding 이던 첫 판은 짧은 말풍선 면적의 절반 넘게 메뉴가 안 떴다).
+    ///   · 렌더 시험·스냅샷(`rendersPlainText`): SwiftUI `Text` + 같은 값의 padding — `ImageRenderer` 는 NSView 를 못 그린다.
     private var textBubble: some View {
-        Text(ChatMarkdownText.attributed(AingStickerText.preview(for: entry.body), isMine: entry.isMine))
-            .font(.caption)
-            .foregroundStyle(entry.isMine ? .white : CheckTheme.primaryText)
-            .tint(ChatMarkdownText.linkColor(isMine: entry.isMine))
-            .environment(\.openURL, OpenURLAction(handler: ChatMarkdownText.openAction))
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: MessagePanelLayout.corner, style: .continuous)
-                    .fill(entry.isMine ? CheckTheme.accent.opacity(0.85) : Color.white.opacity(0.10))
-            )
+        Group {
+            if rendersPlainText {
+                Text(ChatMarkdownText.attributed(AingStickerText.preview(for: entry.body), isMine: entry.isMine))
+                    .font(.caption)
+                    .foregroundStyle(ChatMarkdownText.bodyColor(isMine: entry.isMine))
+                    .tint(ChatMarkdownText.linkColor(isMine: entry.isMine))
+                    .environment(\.openURL, OpenURLAction(handler: ChatMarkdownText.openAction))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, ChatBubbleTextLayout.inset.width)
+                    .padding(.vertical, ChatBubbleTextLayout.inset.height)
+            } else {
+                ChatBubbleText(
+                    shown: AingStickerText.preview(for: entry.body),
+                    raw: entry.body,
+                    isMine: entry.isMine,
+                    onReport: onReport
+                )
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .background(
+            RoundedRectangle(cornerRadius: MessagePanelLayout.corner, style: .continuous)
+                .fill(entry.isMine ? CheckTheme.accent.opacity(0.85) : Color.white.opacity(0.10))
+        )
     }
 }
 

@@ -12,6 +12,8 @@ import Testing
 //
 // 이 파일이 재는 것(맥 클라 몫 — 서버가 명부에 focus_mode 칸을 싣는 것은 다른 갈래다):
 //  ① 디코드: 칸 있음(true/false) · 없음(옛 서버) · null — 모르면 '집중 아님'(옛 서버에서 전원이 잠기면 안 된다)
+//  ①-2 서버 실출력(하네스 픽스처 Fixtures/directory-rpc): 서버 초안 8칸에서는 켠 사람만 집중 · 지금 운영 7칸에서는 아무도 아님
+//      — 요청 5(상대 집중 미리 표시)는 서버 초안이 운영에 올라가기 전엔 꺼져 있다(2026-11-03 검토 P1, 대표 결재 대기).
 //  ② 행: '집중' 칩 · 찌르기 버튼 잠금(상대 집중 · 내 집중 · 둘 다 아님 — 기준선이 셋 다 다르다)
 //  ③ 스토어 짝 게이트: 찌르기 · 울트라 · 메시지 · 이모티콘 · [보내기] 문(요청 0건 vs 1건)
 //  ④ 서버 target_focused 뒤 명부 재조회 · 대화 화면에 있는 동안의 명부 갱신(30초 틱 · 팝오버 다시 열기)
@@ -116,6 +118,70 @@ private func fsLoadDirectory(_ store: WorkTimerStore) async {
         #expect(!store.isPeerFocused(fsAbsent), "칸이 없는 행(옛 서버)을 집중으로 읽었다")
         #expect(!store.isPeerFocused(fsNull))
         #expect(!store.isPeerFocused("명부에-없는-사람"))
+    }
+}
+
+// MARK: - ①-2 서버 실출력 픽스처(하네스) — 스텁이 실어 준다는 가정이 아니라 서버가 내는 바이트
+
+/// 하네스에서 app_user_directory() 를 **실제로 부른 출력**(Fixtures/directory-rpc · 생성기 `_generate.sh.txt` · `_manifest.json`).
+/// 두 장은 같은 장면이다 — 예은(B)이 자기 행을 켰고 나머지는 끈 채, 호출자는 abto(A):
+///   · draft_8col   — 서버 초안 20261108120000(맨 끝 focus_mode)을 올린 서버. **운영에는 아직 없다(대표 결재 대기).**
+///   · current_7col — 지금 운영 정본(20261014121000 §3, 7칸). B 가 켰는데도 칸이 없다.
+/// 위 ① 의 행은 시험이 손으로 만든 사전이다 — 서버 초안의 칸 이름·자리·타입이 그것과 어긋나도 ① 은 초록이다. 여기가 그 틈을 막는다.
+private let fsServerFixtureFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+    .appendingPathComponent("Fixtures/directory-rpc", isDirectory: true)
+/// 하네스 씨앗 B(예은) — 장면에서 집중을 켠 사람.
+private let fsServerFocusedPeer = "3e240c02-8972-478e-a674-014f498a641b"
+
+private func fsServerFixture(_ name: String) throws -> (body: String, rows: [[String: Any]]) {
+    let body = try String(contentsOf: fsServerFixtureFolder.appendingPathComponent("\(name).json"), encoding: .utf8)
+    let rows = try #require(try JSONSerialization.jsonObject(with: Data(body.utf8)) as? [[String: Any]], "\(name): 배열이 아니다")
+    return (body, rows)
+}
+
+@MainActor
+@Suite struct FocusSendGateServerFixtureTests {
+    @Test(.gomokuDefaultsCleanup)
+    func 서버_초안_8칸_실출력에서는_켠_사람만_집중으로_읽고_그_사람만_잠근다() async throws {
+        let (body, rows) = try fsServerFixture("app_user_directory__draft_8col")
+        var raw: [String: Bool] = [:]
+        for row in rows {
+            let id = try #require(row["user_id"] as? String)
+            raw[id] = try #require(row["focus_mode"] as? Bool, "\(id): 8칸인데 focus_mode 가 불리언이 아니다")
+        }
+        // 장면 전제(비교 기준선이 달라야 한다): 켠 사람 하나 · 끈 사람 여럿. 전부 같은 값이면 이 시험은 아무것도 못 가른다.
+        #expect(raw[fsServerFocusedPeer] == true)
+        #expect(raw.values.filter { !$0 }.count >= 2)
+
+        let (store, _) = fsStore("server-8col", directory: { _ in MessageReadStubProtocol.Reply(body: body) })
+        await fsLoadDirectory(store)
+        #expect(store.pokeDirectory.count == rows.count, "실출력 행이 디코드에서 사라졌다")
+        for (id, focused) in raw {
+            // 키 이름·자리 하나만 어긋나도 옵셔널이 조용히 nil → '집중 아님'으로 접혀 B 의 줄이 빨개진다(손으로 만든 사전은 못 보는 결함).
+            #expect(store.isPeerFocused(id) == focused, "\(id): 서버 \(focused) → 클라 \(store.isPeerFocused(id))")
+            #expect(store.focusSendBlock(to: id) == (focused ? .peer : nil))
+        }
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 지금_운영_7칸_실출력에서는_켠_사람도_집중_아님이다() async throws {
+        // 검토 P1(2026-11-03): 운영 명부에는 focus_mode 칸이 없다 — 새 맥만 내보내면 요청 5 의 '집중' 칩·대화 머리 '집중 중'·
+        // 상대 집중 잠금은 0 이고, 요청 6(내 집중이면 못 보냄)만 동작한다. 클라가 메울 수 없다(팀 밖 사람의 집중은 RLS 로 안 보인다) —
+        // 서버 초안의 운영 적용이 먼저다. 이 시험은 그 사실과 '모름 = 집중 아님'(전원이 잠기지 않는다)을 서버가 실제로 내는 바이트로 못 박는다.
+        let (body, rows) = try fsServerFixture("app_user_directory__current_7col")
+        let (_, draftRows) = try fsServerFixture("app_user_directory__draft_8col")
+        #expect(rows.allSatisfy { $0["focus_mode"] == nil }, "7칸 픽스처에 focus_mode 가 있다 — 장면이 바뀌었다")
+        // 두 장은 같은 장면이다: 같은 사람들 · 칸 집합은 초안이 맨 끝에 focus_mode 하나만 더한 것.
+        #expect(Set(rows.compactMap { $0["user_id"] as? String }) == Set(draftRows.compactMap { $0["user_id"] as? String }))
+        #expect(Set(rows.flatMap(\.keys)).union(["focus_mode"]) == Set(draftRows.flatMap(\.keys)))
+
+        let (store, _) = fsStore("server-7col", directory: { _ in MessageReadStubProtocol.Reply(body: body) })
+        await fsLoadDirectory(store)
+        #expect(store.pokeDirectory.count == rows.count, "옛 서버 명부가 디코드에서 죽었다")
+        // 초안 서버에서는 집중으로 읽히는 바로 그 사람(위 시험)이 여기서는 아니다 — 모름을 집중으로 읽으면 전원이 잠긴다.
+        #expect(!store.isPeerFocused(fsServerFocusedPeer))
+        #expect(store.pokeDirectory.allSatisfy { !$0.isFocused })
+        #expect(store.focusSendBlock(to: fsServerFocusedPeer) == nil)
     }
 }
 

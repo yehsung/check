@@ -23,6 +23,9 @@ extension CharacterManifest {
         case cakeStrawberry
         /// 초코 케이크 아잉이(v0.3.66 생일 선물 전용) — 딸기와 같은 구조, 칠과 장식만 초코다.
         case cakeChoco
+        /// 이슬 아잉이(v0.3.74 '술 한잔' 선물 전용) — 아잉 메시 + 몸 셰이더(초록 유리 · 라벨) + 런타임 장식 노드(비스듬한 초록 병뚜껑).
+        /// 렌더러는 kind 가 아니라 이 값으로 가른다(금과 같은 이유). **희귀가 아니다**(`isRare` 거짓 — 뽑기 화면에 나오지 않는다).
+        case isul
     }
 
     /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개·케이크는 코드에 박힌 내장 항목뿐이다).
@@ -41,18 +44,20 @@ extension CharacterManifest.Finish {
             self = .cakeStrawberry
         } else if characterID == CharacterCatalog.cakeChocoAingID {
             self = .cakeChoco
+        } else if CharacterCatalog.isIsulAing(characterID) {
+            self = .isul
         } else {
             self = .standard
         }
     }
 
     /// 희귀(뽑기 전용 내장 — 황금 · 무지개)인가. 확률표 강조 · 결과 연출 · 교환 목록 맨 위가 이 값으로 갈린다.
-    /// ★ 케이크(v0.3.66)는 **거짓**이다 — 생일 선물 전용이라 뽑기 화면 · 확률표 · 교환 목록 · 캡슐 기계에 서지 않는다.
+    /// ★ 케이크(v0.3.66) · 이슬(v0.3.74)은 **거짓**이다 — 선물 전용이라 뽑기 화면 · 확률표 · 교환 목록 · 캡슐 기계에 서지 않는다.
     ///   `self != .standard` 로 두면 마감이 늘 때마다 희귀가 저절로 넓어진다(그래서 열거한다).
     package var isRare: Bool {
         switch self {
         case .gold, .rainbow: return true
-        case .standard, .cakeStrawberry, .cakeChoco: return false
+        case .standard, .cakeStrawberry, .cakeChoco, .isul: return false
         }
     }
 
@@ -60,7 +65,7 @@ extension CharacterManifest.Finish {
     package var isCake: Bool {
         switch self {
         case .cakeStrawberry, .cakeChoco: return true
-        case .standard, .gold, .rainbow: return false
+        case .standard, .gold, .rainbow, .isul: return false
         }
     }
 }

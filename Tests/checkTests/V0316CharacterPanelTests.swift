@@ -304,8 +304,8 @@ func 캐릭터가_늘어도_창이_상한_안에_선다() throws {
         onBack: {}
     )
     let height = try #require(cpHeight(panel, width: CheckMenuView.contentColumnWidth))
-    // 13종(내장 5 + filler 8) = 5행 = 자연 512pt 인데 예산이 깎아 격자는 상한(400pt)에서 멈춘다.
-    #expect(many.allIDs.count == 13, "전제: 13종 — \(many.allIDs)")
+    // 14종(내장 6 + filler 8 — v0.3.74 이슬까지) = 5행 = 자연 512pt 인데 예산이 깎아 격자는 상한(400pt)에서 멈춘다.
+    #expect(many.allIDs.count == 14, "전제: 14종 — \(many.allIDs)")
     #expect(CharacterPanelGridBudget.rowCount(cardCount: many.allIDs.count) == 5)
     #expect(CharacterPanelGridBudget.naturalHeight(rowCount: 5) > CharacterPanelGridBudget.maxGridHeight,
             "이 검사는 예산을 넘기는 행 수라야 의미가 있다")

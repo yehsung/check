@@ -306,6 +306,8 @@ struct GachaWindowPalette {
         case .standard: return nil
         // 케이크(v0.3.66)는 희귀가 아니다 — 생일 선물 전용이라 뽑기 화면에 서지 않는다(`Finish.isRare` 거짓).
         case .cakeStrawberry, .cakeChoco: return nil
+        // 이슬(v0.3.74)도 희귀가 아니다 — 술 한잔 선물 전용(`Finish.isRare` 거짓).
+        case .isul: return nil
         }
     }
 

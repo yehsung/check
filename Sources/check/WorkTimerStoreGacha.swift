@@ -116,9 +116,10 @@ extension WorkTimerStore {
         }
         if !isShopPanelVisible { toggleShopPanel() }
         guard isShopPanelVisible else { return }
-        // 생일 선물 전용(케이크 아잉이 — v0.3.66): 상점을 열고 얻는 길(생일 선물)을 말한다 — 뽑기 창도 [구매하기]도 그 캐릭터에는 거짓이다.
-        if CharacterCatalog.isGiftOnlyBuiltIn(id) {
-            shopNotice = CakeGiftText.lockedHint
+        // 선물 전용(케이크 아잉이 — v0.3.66 생일 · 이슬 아잉이 — v0.3.74 술 한잔): 상점을 열고 얻는 길(그 종류의 선물)을 말한다 —
+        // 뽑기 창도 [구매하기]도 그 캐릭터에는 거짓이다. 안내 글자는 종류마다 다르다(`CharacterGiftKind.copy`).
+        if let gift = CharacterCatalog.giftKind(ofBuiltIn: id) {
+            shopNotice = gift.copy.lockedHint
             return
         }
         guard CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
@@ -225,10 +226,11 @@ extension WorkTimerStore {
             .map { ShopCharacterRow(id: $0, price: nil, owned: false) }
     }
 
-    /// 서버 목록의 순서를 지키되 **케이크 둘끼리만** 표시 순서(딸기 → 초코 — `CharacterCatalog.giftOnlyBuiltInIDs`)로 바로 세운다(순수).
-    /// 서버는 값 · id 순이라 같은 값(2000)의 두 케이크가 초코 → 딸기로 온다(설계서 §1 은 딸기 먼저). 다른 줄의 자리는 한 칸도 안 옮긴다.
+    /// 서버 목록의 순서를 지키되 **케이크 둘끼리만** 표시 순서(딸기 → 초코 — `CharacterCatalog.birthdayGiftBuiltInIDs`)로 바로 세운다(순수).
+    /// 서버는 값 · id 순이라 같은 값(2000)의 두 케이크가 초코 → 딸기로 온다(설계서 §1 은 딸기 먼저). 다른 줄의 자리는 한 칸도 안 옮긴다
+    /// (v0.3.74 이슬 — 값 2002 라 서버 순서로도 케이크 뒤다 — 도 그 '다른 줄'이다: 케이크 뜻 목록이라 생일 목록을 쓴다).
     nonisolated static func giftOnlyInDisplayOrder(_ rows: [ShopCharacterRow]) -> [ShopCharacterRow] {
-        let order = CharacterCatalog.giftOnlyBuiltInIDs
+        let order = CharacterCatalog.birthdayGiftBuiltInIDs
         let slots = rows.indices.filter { order.contains(rows[$0].id) }
         guard slots.count > 1 else { return rows }
         let sorted = slots.map { rows[$0] }.sorted { (order.firstIndex(of: $0.id) ?? 0) < (order.firstIndex(of: $1.id) ?? 0) }

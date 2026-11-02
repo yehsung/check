@@ -32,7 +32,8 @@ struct CheckApp: App {
         //   쓰기도 같이 거른다 — 아이콘을 빼 둔 대기 중에 온 쓰기는 사용자가 뺀 것이 아니다(그 실행은 판정대로 남거나 끝난다).
         MenuBarExtra(isInserted: Binding(get: { appDelegate.retirement.menuBarInserted && appDelegate.singleInstance.menuBarInserted }, set: { inserted in
             guard appDelegate.singleInstance.menuBarInserted, appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+            // 메인 큐 블록(`DispatchQueue.main.async`) 안에서 끝내면 근무 중 퇴근 정리가 교착한다 — 런루프 블록으로 미룬다(`AppTerminationRequest`).
+            AppTerminationRequest.terminate()
         })) {
             menuContent
         } label: {

@@ -174,7 +174,8 @@ struct MoveToApplicationsEffects {
             NSApp.activate()
             alert.runModal()
         },
-        terminate: { NSApp.terminate(nil) }
+        // `run` 은 Task 안(메인 큐 블록)에서 이 문을 부른다 — 근무 중이면 퇴근 정리가 교착하므로 런루프 블록으로 미룬다(`AppTerminationRequest`).
+        terminate: { AppTerminationRequest.terminate() }
     ) }
 }
 

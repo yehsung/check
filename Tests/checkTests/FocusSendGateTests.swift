@@ -602,3 +602,157 @@ private func fsMessageBitmap(_ store: WorkTimerStore, worstChrome: Bool = false)
         #expect(MessagePeerFocusChip.text == "집중 중")
     }
 }
+
+// MARK: - ⑥ 내 집중 따라잡기 — 같은 계정의 다른 맥이 끈 집중(2026-11-03 검토 P2)
+//
+// 요청 6 게이트는 이 맥의 focusMode 하나를 본다. 서버값은 로그인 때 한 번만 읽었으므로, 맥 A 에서 끄면 맥 B 는 재시작 전까지
+// 켜짐을 쥐고 아무에게도 못 보냈다(예전엔 표시만 틀렸다). B 가 콕/대화 화면을 보는 동안 · 팝오버를 여는 순간 한 행 GET 으로 맞춘다.
+// 기준선은 셋이다: 서버도 켜짐(그대로 잠김) · 서버가 모름(행 없음 — 그대로 잠김) · 이 맥이 꺼짐(GET 0건).
+
+/// 프로필 GET 의 응답. nil 이면 **행이 없다**(`[]`), 그 밖에는 `focus_mode` 하나짜리 행.
+@MainActor
+private func fsSyncStore(
+    _ label: String, serverFocus: Bool?, function: String = #function
+) -> (store: WorkTimerStore, host: String) {
+    let made = makeMessageReadStore(label, handler: { call, _ in
+        switch call.rpc {
+        case "app_user_directory": return FsFx.directory()
+        case "/rest/v1/profiles":
+            guard let serverFocus else { return MessageReadStubProtocol.Reply(body: "[]") }
+            return MessageReadStubProtocol.Reply(body: Fx.json([["focus_mode": serverFocus]]))
+        default: return nil
+        }
+    }, function: function)
+    made.store.startedAt = Fx.now
+    // 로그인 때 받은 서버값이 켜짐 + 이 맥에 단계 기록 없음 = 2단(계속) — 다른 맥에서 켠 집중을 이 맥이 아는 모양이다.
+    made.store.applyServerFocusMode(true, intentSerialAtRequest: made.store.focusIntentSerial)
+    return made
+}
+
+/// 내 집중만 묻는 GET(select=focus_mode) 의 수. 로그인 설정 GET(token_usage_* 를 함께 묻는다)은 세지 않는다.
+private func fsMyFocusFetches(_ host: String) -> Int {
+    MessageReadStubProtocol.calls(host: host, rpc: "/rest/v1/profiles").filter {
+        let query = ($0.url.query ?? "").removingPercentEncoding ?? ""
+        return query.contains("select=focus_mode") && !query.contains("token_usage")
+    }.count
+}
+
+@MainActor
+@Suite struct FocusSendGateMyFocusSyncTests {
+    @Test(.gomokuDefaultsCleanup)
+    func 다른_맥에서_끈_집중을_대화_화면의_틱이_따라잡아_보내기가_풀린다() async {
+        let (store, host) = fsSyncStore("sync-off", serverFocus: false)
+        store.isMenuPresented = true
+        store.openMessagePanel(peer: fsPlain)
+        store.messageDraft = "안녕"
+        #expect(store.focusMode && !store.canSendMessageNow, "전제: 이 맥은 집중이라 알고 보내기가 잠겼다")
+
+        await store.refreshPokeDirectoryIfVisible()
+        #expect(fsMyFocusFetches(host) == 1, "콕/대화 화면 틱이 내 집중을 묻지 않았다")
+        #expect(!store.focusMode, "서버가 꺼짐이라는데 이 맥이 켜짐을 쥐고 있다")
+        #expect(store.canSendMessageNow, "다른 맥에서 끈 집중이 이 맥의 보내기를 계속 막는다")
+        #expect(store.focusSendBlock(to: fsPlain) == nil)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 서버도_켜짐이면_그대로_잠겨_있다() async {
+        // 기준선 ①: 같은 스크립트 · 서버값만 다르다.
+        let (store, host) = fsSyncStore("sync-still-on", serverFocus: true)
+        store.isMenuPresented = true
+        store.openMessagePanel(peer: fsPlain)
+        store.messageDraft = "안녕"
+        await store.refreshPokeDirectoryIfVisible()
+        #expect(fsMyFocusFetches(host) == 1)
+        #expect(store.focusMode)
+        #expect(!store.canSendMessageNow)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 서버가_모르면_켜짐을_풀지_않는다() async {
+        // 기준선 ②: 행이 안 오면(RLS·일시 장애) 모름이다 — 꺼짐으로 접으면 장애 한 번에 집중이 조용히 풀린다.
+        let (store, host) = fsSyncStore("sync-unknown", serverFocus: nil)
+        store.isMenuPresented = true
+        store.openMessagePanel(peer: fsPlain)
+        store.messageDraft = "안녕"
+        await store.refreshPokeDirectoryIfVisible()
+        #expect(fsMyFocusFetches(host) == 1)
+        #expect(store.focusMode, "행이 없다는 이유로 집중이 풀렸다")
+        #expect(!store.canSendMessageNow)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 이_맥이_집중이_아니면_묻지_않는다() async {
+        // 기준선 ③: 꺼진 맥은 요청 0건(틱 · 팝오버 다시 열기 둘 다).
+        let (store, host) = fsSyncStore("sync-not-focused", serverFocus: true)
+        store.applyServerFocusMode(false, intentSerialAtRequest: store.focusIntentSerial)
+        #expect(!store.focusMode, "전제: 이 맥은 꺼짐")
+        store.isMenuPresented = true
+        store.openMessagePanel(peer: fsPlain)
+        await store.refreshPokeDirectoryIfVisible()
+        store.isMenuPresented = false
+        store.setMenuPresented(true)
+        await messageReadWait(0.3) { false }
+        #expect(fsMyFocusFetches(host) == 0)
+        #expect(!store.focusMode)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 팝오버를_다시_열면_홈_화면에서도_한_번_따라잡는다() async {
+        let (store, host) = fsSyncStore("sync-reopen", serverFocus: false)
+        #expect(!store.isPokePanelVisible && !store.isMessagePanelVisible, "전제: 콕/대화 화면이 아니다")
+        store.isMenuPresented = false
+        store.setMenuPresented(true)
+        await messageReadWait { !store.focusMode }
+        #expect(!store.focusMode, "팝오버를 다시 열어도 다른 맥에서 끈 집중을 모른다")
+        #expect(fsMyFocusFetches(host) == 1)
+    }
+}
+
+// MARK: - ⑦ 화면 배선 — 짝 게이트의 뷰 쪽 자리(2026-11-03 검토 P2)
+//
+// 행 시험(②)은 PokeDirectoryRowView 를 직접 만들어 isMyselfFocused 를 손으로 넘긴다. 그래서 부르는 자리를 지워도
+// 기본값(false) 덕에 컴파일되고 초록이다 — 결과는 '내가 집중인데 찌르기 버튼이 살아 보이고 누르면 스토어만 조용히 막는' 화면이다.
+// 이모티콘 칸의 사유 툴팁도 같다. 부르는 자리 글자를 주석을 걷고 잰다.
+
+private func fsStripComments(_ source: String) -> String {
+    var out = ""
+    var inLine = false, inBlock = false, inString = false, escaped = false
+    var index = source.startIndex
+    while index < source.endIndex {
+        let c = source[index]
+        let nextIndex = source.index(after: index)
+        let next: Character? = nextIndex < source.endIndex ? source[nextIndex] : nil
+        if inLine {
+            if c == "\n" { inLine = false; out.append(c) }
+        } else if inBlock {
+            if c == "*", next == "/" { inBlock = false; index = nextIndex }
+        } else if inString {
+            out.append(c)
+            if escaped { escaped = false } else if c == "\\" { escaped = true } else if c == "\"" { inString = false }
+        } else if c == "/", next == "/" {
+            inLine = true; index = nextIndex
+        } else if c == "/", next == "*" {
+            inBlock = true; index = nextIndex
+        } else {
+            if c == "\"" { inString = true }
+            out.append(c)
+        }
+        index = source.index(after: index)
+    }
+    return out
+}
+
+@Suite struct FocusSendGateWiringTests {
+    @Test func 콕_패널이_스토어의_내_집중을_행의_찌르기_버튼까지_넘긴다() throws {
+        let menu = fsStripComments(try CheckCoreSourceLayout.joinedSplitSource("CheckMenuView.swift"))
+        let flat = menu.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\n", with: "")
+        #expect(flat.contains("isFocusMode:store.focusMode,"), "PokePanel 에 store.focusMode 가 안 내려간다")
+        #expect(flat.contains("isMyselfFocused:isFocusMode,"), "PokePanel 이 행에 내 집중을 안 넘긴다 — 기본값 false 로 버튼이 살아 보인다")
+    }
+
+    @Test func 이모티콘_칸이_집중_사유를_툴팁으로_받는다() throws {
+        let message = fsStripComments(try CheckCoreSourceLayout.joinedSplitSource("CheckMessageView.swift"))
+        let flat = message.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "\n", with: "")
+        #expect(flat.contains("blockedHelp:store.messageFocusBlock?.messageText"), "이모티콘 칸이 집중 사유를 모른다 — '보내는 중'으로 접힌다")
+    }
+}

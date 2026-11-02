@@ -85,6 +85,26 @@ extension WorkTimerStore {
     func refreshPokeDirectoryIfVisible() async {
         guard isMenuPresented, isPokePanelVisible || isMessagePanelVisible else { return }
         await performLoadPokeDirectory()
+        await refreshMyFocusModeIfFocused()
+    }
+
+    /// 내 집중 값을 서버에서 다시 읽는다 — **이 맥이 집중이라고 알고 있을 때만**(2026-11-03 검토 P2).
+    /// 요청 6 게이트(`focusSendBlock` 의 `.myself`)는 이 맥의 `focusMode` 하나를 본다. 그런데 서버값은 로그인 때 한 번만 읽는다
+    /// (`loadTokenUsagePrivacyIfNeeded`). 그래서 같은 계정의 다른 맥에서 끄면(1단 만료 포함) 이 맥은 재시작 전까지 켜짐을 쥐고
+    /// 아무에게도 못 보낸다 — 예전엔 버튼 표시만 틀렸지만 이제는 실제로 막힌다. 대표처럼 맥을 두 대 쓰는 사람이 바로 걸린다.
+    /// 부르는 자리: 팝오버를 여는 순간(`setMenuPresented`) · 콕/대화 화면이 열린 동안의 30초 틱(`refreshPokeDirectoryIfVisible`).
+    /// 꺼진 맥은 묻지 않는다(요청 0) — 반대 방향(다른 맥이 켬)은 막을 것을 못 막는 쪽이라 옛 앱·폰과 같은 클라 게이트의 한계로 둔다.
+    /// 반영은 로그인 때와 같은 `applyServerFocusMode` 다 — 날아가는 PATCH·방금 누른 선택이 있으면 이 응답이 낡았으니 덮지 않는다.
+    /// 서버가 모른다(행·칸 없음 · 실패)면 아무것도 바꾸지 않는다.
+    func refreshMyFocusModeIfFocused() async {
+        guard focusMode, session != nil, focusPatchInFlight == nil else { return }
+        let generation = sessionGeneration
+        let intentAtRequest = focusIntentSerial
+        let fetched = try? await withSessionRetry { activeSession in
+            try await service.fetchMyFocusMode(accessToken: activeSession.accessToken, userID: activeSession.userID)
+        }
+        guard generation == sessionGeneration, let serverOn = fetched ?? nil else { return }
+        applyServerFocusMode(serverOn, intentSerialAtRequest: intentAtRequest)
     }
 
     // MARK: 집중 선게이트(2026-11-03 — 대표 요청 5·6)

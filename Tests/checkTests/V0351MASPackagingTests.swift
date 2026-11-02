@@ -201,7 +201,8 @@ struct V0351MASPackagingTests {
         #expect(plist["com.apple.security.network.client"] as? Bool == true)
         #expect(plist["com.apple.security.files.user-selected.read-only"] as? Bool == true, "아바타 사진 고르기(NSOpenPanel)가 막힌다")
         #expect(plist["com.apple.security.temporary-exception.files.home-relative-path.read-only"] as? [String]
-                == ["/.claude/", "/.codex/", "/.gemini/", "/Library/Application Support/orca/"])
+                == ["/.claude/", "/.codex/", "/.gemini/", "/Library/Application Support/orca/",
+                    "/Library/Application Support/Claude/local-agent-mode-sessions/"])
         #expect(plist["com.apple.application-identifier"] as? String == "MQ2KQK37WD.com.yehsung.aingcheck")
         #expect(plist["com.apple.developer.team-identifier"] as? String == "MQ2KQK37WD")
         // 배포 서명에 디버거 붙이기 권한이 섞이면 업로드가 거절된다. 위 집합 비교가 잡지만 이유를 따로 적어 둔다.
@@ -239,8 +240,8 @@ struct V0351MASPackagingTests {
         // 뽑기가 헛돌지 않는다: 지금 스캐너가 읽는 다섯 경로가 뽑힌 집합에 있어야 한다(코드 모양이 바뀌어 뽑기가 0 이 되면 위 루프는
         // 아무것도 안 재고 초록이 된다). 이 표가 틀리면 뽑기 정규식을 새 코드 모양에 맞춘다.
         for path in [
-            ".claude/projects",                        // Claude Code 로그
-            ".claude/transcripts",
+            ".claude",                                 // Claude Code 로그(v0.3.73: 설정 폴더마다 projects·transcripts 를 붙인다)
+            "Library/Application Support/Claude/local-agent-mode-sessions",   // Claude 데스크톱 로컬 에이전트 모드(v0.3.73)
             ".codex",                                  // Codex rollout · auth.json(리밋)
             ".gemini/antigravity-cli/conversations",   // 안티그래비티 sqlite
             "Library/Application Support/orca",        // Orca 런타임 미러·계정별 Codex 홈

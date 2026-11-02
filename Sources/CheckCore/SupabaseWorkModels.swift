@@ -1916,6 +1916,9 @@ package enum PokeSendOutcome: Equatable {
     /// 받아 줄 맥(0.3.51+ · 최근 입력)이 없으면 서버가 거절한다. 몫도 쿨타임도 소모되지 않는다 — 서버가 행을 안 남긴다.
     /// 0.3.50 이하는 이 값을 모르므로 `.invalid`("지금은 찌를 수 없어요")로 접힌다 — 아래 default 가 그 계약이다.
     case targetOnPhone
+    /// **보낸 사람**이 집중 모드다(2026-11-03 서버 차단 — 대표 결정 "지금 서버에서도 막기"). 몫도 쿨타임도 소모되지 않는다 —
+    /// 서버가 쓰기 전에 거절한다. 0.3.73 이하·폰은 이 값을 모르므로 `.invalid`("지금은 찌를 수 없어요")로 접힌다(감수한 결정).
+    case senderFocused
     case invalid
 
     package init(response: PokeSendResponse) {
@@ -1927,6 +1930,7 @@ package enum PokeSendOutcome: Equatable {
         case "ultra_used_today": self = .ultraUsedToday(resetAfterSeconds: max(1, response.resetAfterSeconds ?? 3600))
         case "target_focused": self = .targetFocused
         case "target_on_phone": self = .targetOnPhone
+        case "sender_focused": self = .senderFocused
         default: self = .invalid
         }
     }
@@ -2506,8 +2510,8 @@ package enum MessageBody {
 
 /// 메시지 전송 결과의 도메인 표현(스토어/UI 공유). 미지 status 가 .invalid 로 접히는 규약은 PokeSendOutcome 과 같다.
 ///
-/// **서버 status 는 정확히 아홉이다**(20260910 계약): ok · invalid · blackout · not_working · not_text ·
-/// too_long · target_not_working · target_focused · flood.
+/// **서버 status 는 정확히 열이다**(20260910 계약 + 2026-11-03): ok · invalid · blackout · not_working · not_text ·
+/// too_long · target_not_working · target_focused · flood · sender_focused(보낸이 집중 — 서버 차단 초안 20261108121000).
 ///
 /// ★ **`cooldown` 과 `target_outdated` 는 여기 없다 — 둘 다 죽은 가지다.**
 ///   · 쿨타임은 폐지됐다(찌르기에만 남았다). 케이스를 되살리면 화면에 카운트다운이 돌아오고,
@@ -2540,6 +2544,8 @@ package enum MessageSendOutcome: Equatable {
     /// 1분 60건 초과. **속도 제한 UI 로 보이면 안 된다**(사람이 못 내는 속도라 실사용에서 안 걸린다).
     /// 화면은 조용한 일반 안내로 접는다 — 카운트다운을 만들면 그건 다시 쿨타임이다.
     case flood
+    /// **보낸 사람**이 집중 모드다(2026-11-03 서버 차단). 서버가 쓰기 전에 거절한다. 0.3.73 이하는 `.invalid` 로 접힌다(감수한 결정).
+    case senderFocused
 
     package init(response: PokeSendResponse) {
         switch response.status {
@@ -2551,6 +2557,7 @@ package enum MessageSendOutcome: Equatable {
         case "target_not_working":  self = .targetNotWorking
         case "target_focused":      self = .targetFocused
         case "flood":               self = .flood
+        case "sender_focused":      self = .senderFocused
         default:                    self = .invalid
         }
     }

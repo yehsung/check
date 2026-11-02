@@ -88,6 +88,13 @@ extension WorkTimerStore {
         await refreshMyFocusModeIfFocused()
     }
 
+    /// 서버가 보내기를 **내 집중**으로 거절했다(status `sender_focused` — 2026-11-03 서버 차단, 대표 결정 "지금 서버에서도 막기").
+    /// 이 맥은 그 집중을 몰랐다(알았으면 `focusSendBlock` 이 요청 전에 막았다) — 다른 맥에서 켰거나 로그인 뒤 바뀌었다. 서버값을
+    /// 로그인 때와 같은 문(`applyServerFocusMode`)으로 들인다: 날아가는 PATCH·요청 뒤 이 맥에서 고른 것이 있으면 이 응답이 낡았으니 덮지 않는다.
+    func adoptServerSenderFocused(intentSerialAtRequest: Int) {
+        applyServerFocusMode(true, intentSerialAtRequest: intentSerialAtRequest)
+    }
+
     /// 내 집중 값을 서버에서 다시 읽는다 — **이 맥이 집중이라고 알고 있을 때만**(2026-11-03 검토 P2).
     /// 요청 6 게이트(`focusSendBlock` 의 `.myself`)는 이 맥의 `focusMode` 하나를 본다. 그런데 서버값은 로그인 때 한 번만 읽는다
     /// (`loadTokenUsagePrivacyIfNeeded`). 그래서 같은 계정의 다른 맥에서 끄면(1단 만료 포함) 이 맥은 재시작 전까지 켜짐을 쥐고
@@ -162,6 +169,8 @@ extension WorkTimerStore {
             return
         }
         let generation = sessionGeneration
+        // 보내기 **전의** 집중 선택 번호 — sender_focused 를 받았을 때 그 사이 이 맥에서 고른 것이 있으면 서버값으로 덮지 않는다.
+        let focusIntentAtRequest = focusIntentSerial
         Task { @MainActor in
             do {
                 let response = try await withSessionRetry { activeSession in
@@ -196,6 +205,11 @@ extension WorkTimerStore {
                     // 폰으로만 근무 중 — 받는 쪽이 맥뿐이라 서버가 거절했다(쿨타임 기록 없음). 디렉토리는 낡지 않았다:
                     // 그 사람은 정말 근무 중이다. 그래서 재조회하지 않는다.
                     pokeNotice = Self.targetOnPhoneNotice
+                case .senderFocused:
+                    // 서버가 **내** 집중을 이유로 거절했다(2026-11-03 서버 차단). 이 맥은 몰랐다(알았으면 선게이트가 막았다) —
+                    // 다른 맥에서 켰다. 서버값을 이 맥에 들여 찌르기 버튼·[보내기] 잠금이 따라오게 한다(`adoptServerSenderFocused`).
+                    pokeNotice = Self.myFocusBlocksSendingNotice
+                    adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -229,6 +243,8 @@ extension WorkTimerStore {
             return
         }
         let generation = sessionGeneration
+        // 보내기 **전의** 집중 선택 번호 — sender_focused 를 받았을 때 그 사이 이 맥에서 고른 것이 있으면 서버값으로 덮지 않는다.
+        let focusIntentAtRequest = focusIntentSerial
         Task { @MainActor in
             do {
                 let response = try await withSessionRetry { activeSession in
@@ -288,6 +304,10 @@ extension WorkTimerStore {
                 case .targetOnPhone:
                     // 폰으로만 근무 중 — 서버가 관리자 분기·재화(ultra_wallet_touch)보다 **앞에서** 거절한다. 잔량을 건드리지 않는다.
                     pokeNotice = Self.targetOnPhoneNotice
+                case .senderFocused:
+                    // 내 집중으로 서버가 재화 차감 **앞에서** 거절했다 — 잔량을 건드리지 않는다(sendPoke 의 같은 분기와 같은 처리).
+                    pokeNotice = Self.myFocusBlocksSendingNotice
+                    adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }

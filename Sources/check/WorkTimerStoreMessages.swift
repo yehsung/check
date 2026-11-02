@@ -640,6 +640,8 @@ extension WorkTimerStore {
         // 10분 안에 다시 보내면 그때의 키를 다시 쓴다(`MessageSendLedger.key`): 앞 전송이 이미 저장됐어도 서버가 한 통으로 접는다.
         // 확정 답을 받은 말은 기억하지 않으므로 같은 말을 일부러 두 번 보내는 것은 두 통이다(정상 사용).
         let clientMessageID = messageReadRuntime.sendLedger.key(peer: userID, body: body, now: clock())
+        // 보내기 **전의** 집중 선택 번호(sender_focused 를 들일 때 낡음을 가른다 — sendPoke 와 같은 규약).
+        let focusIntentAtRequest = focusIntentSerial
         Task { @MainActor in
             // 세대가 바뀐 뒤(로그아웃/재로그인)의 잠금 해제는 새 세션의 잠금을 푸는 짓이 된다 —
             // 그쪽은 clearPersistedSession 이 이미 false 로 되돌려 놓았다.
@@ -693,6 +695,10 @@ extension WorkTimerStore {
                 // 명부가 그 사람을 집중 아님으로 알고 있었다(알았으면 위 선게이트가 막았다) — 대화 중에 상대가 켠 경우다.
                 // 다시 받아 머리의 '집중 중' 표시와 [보내기] 잠금이 따라오게 한다(target_not_working 과 같은 처리). 문구는 그대로다.
                 loadPokeDirectory()
+            case .senderFocused:
+                // 서버가 **내** 집중으로 거절했다(2026-11-03 서버 차단). 이 맥은 몰랐다 — 서버값을 들여 [보내기] 잠금이 따라오게 한다.
+                messageNotice = Self.myFocusBlocksSendingNotice
+                adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
             case .tooLong:
                 // 서버가 숫자를 알려 줬으면 그 숫자를 말한다(클라 상수와 갈리는 날 진실은 거절한 쪽에 있다).
                 messageNotice = Self.messageTooLongNotice(maxLength: response.maxLength)

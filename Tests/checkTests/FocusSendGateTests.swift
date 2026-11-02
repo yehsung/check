@@ -756,3 +756,73 @@ private func fsStripComments(_ source: String) -> String {
         #expect(flat.contains("blockedHelp:store.messageFocusBlock?.messageText"), "이모티콘 칸이 집중 사유를 모른다 — '보내는 중'으로 접힌다")
     }
 }
+
+// MARK: - ⑧ 서버 차단 응답 sender_focused(2026-11-03 — 대표 결정 "지금 서버에서도 막기")
+//
+// 서버가 **내** 집중을 이유로 거절하면(이 맥은 몰랐다 — 다른 맥에서 켰다) 문구는 내 집중 문장이고, 서버값을 이 맥에 들여
+// 다음 누름부터는 요청 없이 막힌다. 기준선: 같은 장면에서 target_focused(상대 집중)는 내 집중을 켜지 않는다.
+
+@Suite struct FocusSendGateSenderFocusedDecodeTests {
+    @Test func 세_보내기_결과가_sender_focused_를_안다() throws {
+        let response = try JSONDecoder().decode(PokeSendResponse.self, from: Data(#"{"status":"sender_focused"}"#.utf8))
+        #expect(PokeSendOutcome(response: response) == .senderFocused)
+        #expect(MessageSendOutcome(response: response) == .senderFocused)
+        // 기준선: 모르는 status 는 여전히 invalid 로 접힌다(옛 맥이 sender_focused 를 보는 모양 — 감수한 결정).
+        let unknown = try JSONDecoder().decode(PokeSendResponse.self, from: Data(#"{"status":"sender_focused_v2"}"#.utf8))
+        #expect(PokeSendOutcome(response: unknown) == .invalid)
+        #expect(MessageSendOutcome(response: unknown) == .invalid)
+    }
+
+}
+
+@MainActor
+@Suite struct FocusSendGateSenderFocusedStoreTests {
+    @Test(.gomokuDefaultsCleanup)
+    func 찌르기가_sender_focused_를_받으면_내_집중을_들이고_다음_찌르기는_요청이_없다() async {
+        let (store, host) = fsStore("sender-focused-poke", sendStatus: "sender_focused")
+        await fsLoadDirectory(store)
+        #expect(!store.focusMode, "전제: 이 맥은 집중을 모른다")
+        store.sendPoke(to: fsPlain)
+        await messageReadWait { store.pokeNotice == WorkTimerStore.myFocusBlocksSendingNotice }
+        #expect(store.pokeNotice == WorkTimerStore.myFocusBlocksSendingNotice)
+        #expect(store.focusMode, "서버가 내 집중이라는데 이 맥이 몰랐던 채다")
+        #expect(fsCalls(host, rpc: "poke_user", to: fsPlain) == 1)
+        // 이제 선게이트가 막는다 — 요청 0건 추가.
+        store.sendPoke(to: fsPlain)
+        store.sendUltraPoke(to: fsPlain)
+        await messageReadWait(0.3) { false }
+        #expect(fsCalls(host, rpc: "poke_user", to: fsPlain) == 1)
+        #expect(fsCalls(host, rpc: "ultra_poke_user", to: fsPlain) == 0)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 울트라와_메시지도_같다() async {
+        let (store, host) = fsStore("sender-focused-ultra", sendStatus: "sender_focused")
+        await fsLoadDirectory(store)
+        store.sendUltraPoke(to: fsPlain)
+        await messageReadWait { store.focusMode }
+        #expect(store.pokeNotice == WorkTimerStore.myFocusBlocksSendingNotice)
+        #expect(fsCalls(host, rpc: "ultra_poke_user", to: fsPlain) == 1)
+
+        let (store2, host2) = fsStore("sender-focused-message", sendStatus: "sender_focused")
+        await fsLoadDirectory(store2)
+        store2.openMessagePanel(peer: fsPlain)
+        store2.sendMessage(to: fsPlain, body: "안녕")
+        await messageReadWait { store2.focusMode }
+        #expect(store2.messageNotice == WorkTimerStore.myFocusBlocksSendingNotice)
+        #expect(fsCalls(host2, rpc: "send_message", to: fsPlain) == 1)
+        store2.messageDraft = "또 안녕"
+        #expect(!store2.canSendMessageNow, "들인 집중이 [보내기]를 잠그지 않는다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 상대_집중_거절은_내_집중을_켜지_않는다() async {
+        // 기준선: 같은 장면 · status 만 target_focused.
+        let (store, _) = fsStore("target-focused-baseline", sendStatus: "target_focused")
+        await fsLoadDirectory(store)
+        store.sendPoke(to: fsPlain)
+        await messageReadWait { store.pokeNotice == WorkTimerStore.targetFocusedNotice }
+        await messageReadWait(0.2) { false }
+        #expect(!store.focusMode)
+    }
+}

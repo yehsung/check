@@ -420,4 +420,22 @@ import Testing
                 "넘김 예시에서 흑이 둘 곳이 있다")
         #expect(examples[3].detail.contains("63 : 1"), "끝과 점수 예시의 빈칸 몫이 틀렸다")
     }
+
+    @Test("규칙 시트는 새 판이 서면 접는다(검토 지적 — 로비에서 읽던 사람이 시트 아래서 30초를 흘리지 않게) · 판 중에 연 시트 · 로비로 돌아갈 때는 그대로")
+    func rulesSheetClosesOnNewMatch() throws {
+        // 새 판: 로비(nil) → 판 · 판 → 다른 판(로봇 판 중 수락).
+        #expect(GamesReversiRulesSheetRule.closesOnMatchChange(from: nil, to: "m-1"))
+        #expect(GamesReversiRulesSheetRule.closesOnMatchChange(from: "ai-1", to: "m-2"))
+        // 기준선: 같은 판(판 중에 책 버튼) · 로비로 돌아감은 접지 않는다.
+        #expect(!GamesReversiRulesSheetRule.closesOnMatchChange(from: "m-1", to: "m-1"))
+        #expect(!GamesReversiRulesSheetRule.closesOnMatchChange(from: "m-1", to: nil))
+        #expect(!GamesReversiRulesSheetRule.closesOnMatchChange(from: nil, to: nil))
+        // 화면 배선(주석 걷은 소스): 판 id 바뀜 블록이 이 규칙으로 규칙 시트를 내린다. 뷰는 `#if os(iOS)` 라 맥 스위트가 컴파일하지 않는다.
+        let code = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesReversiScreen.swift")
+        let hit = try #require(code.range(of: ".onChange(of: reversi.match?.id) { old, new in"), "판 id 바뀜 블록이 old/new 를 안 받는다")
+        let block = String(code[hit.upperBound...].prefix(600))
+        #expect(block.contains("if GamesReversiRulesSheetRule.closesOnMatchChange(from: old, to: new) { reversi.isRulesVisible = false }"),
+                "새 판이 서도 규칙 시트가 판을 가린다")
+        #expect(block.contains("stakeTarget = nil") && block.contains("showsAIColorSheet = false"), "다른 시트 접기가 빠졌다")
+    }
 }

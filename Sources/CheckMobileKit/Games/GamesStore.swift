@@ -39,7 +39,8 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     case tetris
     /// 아잉 큐브(1.0.16). 서버 `chess__busy` 가 그 자리(joined·playing)까지 본다 — 클라도 네 방향을 막아 까닭을 먼저 그린다.
     case rummy
-    /// 아잉 뒤집기(1.0.17). 서버 `game__busy_users()` 가 리버시 active 판까지 본다(20261107140000 — 맥 0.3.74 와 함께 운영 적용) —
+    /// 아잉 뒤집기(1.0.17). 서버 `game__busy_users()` 가 리버시 active 판까지 본다(함수는 20261107140000 이 만들고, 리버시 줄은
+    /// 20261108200000_reversi.sql 이 조각 치환으로 더했다 — 맥 0.3.74 와 함께 운영 적용) —
     /// 클라는 **다섯 방향**을 막아 까닭을 먼저 그린다.
     case reversi
 

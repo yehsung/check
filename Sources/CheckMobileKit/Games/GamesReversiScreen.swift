@@ -132,6 +132,16 @@ package enum GamesReversiStakeSend {
     }
 }
 
+/// 판 id 가 바뀔 때 규칙 시트를 접는가(1.0.17 검토 지적). **새 판이 섰을 때만** 접는다 — 로비에서 규칙을 읽으며 수락을 기다리던 사람(흑은 서버가
+/// 무작위로 고른다)이 시트 아래서 30초를 흘려 자동 착수 · 3회 패(판돈)를 맞지 않게. 판 중에 책 버튼으로 연 시트는 판 id 가 그대로라 접지 않고,
+/// 판이 끝나 로비로 돌아갈 때(새 id 가 nil)도 접지 않는다(그때는 시트가 떠 있을 수 없다 — 시트가 [로비로]를 가린다).
+package enum GamesReversiRulesSheetRule {
+    package static func closesOnMatchChange(from old: String?, to new: String?) -> Bool {
+        guard let new else { return false }
+        return new != old
+    }
+}
+
 #if os(iOS)
 
 /// 아잉 뒤집기 화면 — 게임 탭 목적지(`GamesDestination.reversi`). 코어 `phase` 로 로비 · 판(1:1 · 로봇 연습) · 결과를 갈아 끼우고,
@@ -142,7 +152,8 @@ package enum GamesReversiStakeSend {
 /// 그대로 둔다 — 순서를 쥔 곳이 `GamesStore` 다.
 ///
 /// ★ **시트의 주인은 이 루트 하나다**(돌 색 · 판돈 · 규칙 · 로봇 판 확인) — 행·카드가 시트를 직접 띄우면 판이 서는 순간(로비가 판 화면으로
-///   바뀌며) 그 행이 사라져 시트가 고아가 된다. 판 id 가 바뀌면 판돈·돌 색·로봇 확인 시트를 접는다(규칙 시트는 판 중에도 읽을 수 있어 둔다).
+///   바뀌며) 그 행이 사라져 시트가 고아가 된다. 판 id 가 바뀌면 판돈·돌 색·로봇 확인 시트를 접고, **새 판이 서면 규칙 시트도 접는다**
+///   (`GamesReversiRulesSheetRule` — 판 중에 책 버튼으로 연 규칙은 그대로 읽는다).
 /// ★ 사람 절(받은·보낸 신청 · 상대 · 관전 · 순위)은 **이 기기·서버가 아잉 뒤집기를 할 수 있을 때만** 선다(`GamesReversiLobbyPlan.showsPeopleSections`) —
 ///   업데이트가 필요하거나 서버가 준비 중이면 안내 한 줄 + 로봇 연습만 선다(로봇 연습은 서버를 안 탄다).
 struct GamesReversiScreen: View {
@@ -187,10 +198,12 @@ struct GamesReversiScreen: View {
             .onAppear { store.reversiScreenDidAppear() }
             .onDisappear { store.reversiScreenDidDisappear() }
             // 판이 섰다(신청 수락 · 다른 기기에서 연 판을 읽음) — 들고 있던 시트가 로비로 돌아올 때 되살아나지 않게 접는다.
-            .onChange(of: reversi.match?.id) { _, _ in
+            .onChange(of: reversi.match?.id) { old, new in
                 showsAIColorSheet = false
                 stakeTarget = nil
                 acceptNeedsRobotConfirm = nil
+                // 새 판이 섰다 — 시계가 돈다. 로비에서 열어 둔 규칙 시트가 판을 가리지 않게 접는다(검토 지적).
+                if GamesReversiRulesSheetRule.closesOnMatchChange(from: old, to: new) { reversi.isRulesVisible = false }
             }
     }
 

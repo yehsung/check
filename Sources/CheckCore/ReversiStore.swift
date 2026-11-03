@@ -508,9 +508,10 @@ package final class ReversiStore {
     package var isRulesVisible = false
     /// 차단 거울(맥 `blockHiddenPeerIDs` didSet 이 채운다). 소문자 uuid.
     package var hiddenPeerIDs: Set<String> = []
-    /// 순위 적재 스위치. 기본 false — 켜는 곳은 맥 배선뿐(폰이 그리지도 않는 순위를 당기지 않게).
+    /// 순위 적재 스위치. 기본 false — 켜는 곳은 맥 배선과 폰 배선(1.0.17 부터 — 폰도 순위를 그린다, `MobileAppModel`).
+    /// 기본값을 false 로 두는 까닭: 순위를 그리지 않는 조립(시험 · 다른 타깃)이 순위를 당기지 않게.
     package var rankingEnabled = false
-    /// 관전 폴링·관전자 수 스위치. 기본 false — 켜는 곳은 맥 배선뿐.
+    /// 관전 폴링·관전자 수 스위치. 기본 false — 켜는 곳은 맥 배선과 폰 배선(1.0.17 부터 — 폰도 관전을 그린다, `MobileAppModel`).
     package var spectatorFeaturesEnabled = false
 
     // MARK: 계산 칸

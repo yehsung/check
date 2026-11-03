@@ -565,12 +565,13 @@ enum IsulAingFinish {
 
 // MARK: - 아잉 메시에 붙는 런타임 장식(케이크 · 이슬) — 몸이 아니다
 
-/// 케이크 장식(`check.cakeDecor` — v0.3.66)과 이슬 병뚜껑(`check.isulDecor` — v0.3.74)을 **한 판정**으로 뺀다. 얼굴 재질 탐색
+/// 케이크 장식(`check.cakeDecor` — v0.3.66) · 이슬 병뚜껑(`check.isulDecor` — v0.3.74) · 빼빼로 상자 · 막대(`check.peperoDecor` — v0.3.77)를 **한 판정**으로 뺀다. 얼굴 재질 탐색
 /// (`ReactionEngine.locateSleepEyeTargets`) · 몸 클릭 hitTest(`isBodyAtScreenPoint`) · 리액션 진폭과 클릭 프리체크 상자(`modelExtent` ·
 /// `projectedBodyViewRect`)가 이것을 쓴다 — 장식이 늘면 이름을 여기 하나에 더한다.
 enum AingDecor {
     /// 장식 루트 이름들. 이 이름의 노드 **아래 전부**가 장식이다.
-    static let rootNames: Set<String> = [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.IsulCap.decorNodeName]
+    /// 빼빼로 상자 · 막대(`check.peperoDecor` — v0.3.77)도 여기 하나에 더했다(얼굴 탐색 · 몸 클릭 · 진폭 · 클릭 상자가 같이 뺀다).
+    static let rootNames: Set<String> = [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.IsulCap.decorNodeName, PeperoDecor.decorNodeName]
 
     /// 이 노드가 장식인가 — 자기나 조상 중에 장식 루트가 있다.
     static func isDecor(_ node: SCNNode) -> Bool {

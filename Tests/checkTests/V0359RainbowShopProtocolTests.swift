@@ -117,8 +117,10 @@ struct V0359RainbowShopProtocolTests {
         let cakes = ShopWire.cakeCharacterIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree)
         // v0.3.74: 이슬 아잉이 그림(초상 · 라벨)까지 실리면 5 다(누적 — 이슬의 기준선은 V0374IsulCoreTests.macIsulArtInSourceTree).
         let isul = V0374IsulCoreTests.macIsulArtInSourceTree ? [CharacterCatalog.isulAingID] : []
+        // v0.3.77: 빼빼로 그림까지 실리면 6 이다(누적 — 빼빼로의 기준선은 V0377PeperoCoreTests.macPeperoArtInSourceTree).
+        let pepero = V0377PeperoCoreTests.macPeperoArtInSourceTree ? [CharacterCatalog.peperoAingID] : []
         let expected = ShopWire.protocolVersion(drawableCharacterIDs:
-            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul)
+            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul + pepero)
         #expect(rainbow, "무지개 그림 네 장이 소스 트리에 없다 — scripts/make-rainbow-aing.swift 를 돌려라")
 
         let host = "v0359-rainbow-bundle-\(UUID().uuidString.prefix(8))".lowercased()

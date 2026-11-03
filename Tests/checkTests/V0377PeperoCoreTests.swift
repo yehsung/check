@@ -37,6 +37,16 @@ struct V0377PeperoCoreTests {
         ["\(pepero)-neutral", "\(pepero)-negative"].allSatisfy(V0354CoreArtBaseline.macResourceExists)
     }
 
+    /// 맥 소스 트리에 빼빼로 그림이 다 있는가(초상 두 장 + 상자 인쇄 판 폴백 — 3D 마감 `PeperoAingFinish` 의 번들 재료).
+    static var macPeperoArtInSourceTree: Bool {
+        macPeperoPortraitsInSourceTree && V0354CoreArtBaseline.macResourceExists("\(pepero)-box")
+    }
+
+    /// 맥 빌드의 상점 능력 번호 기대값(누적): 이슬 그림이 있으면 5, 빼빼로 그림까지 있으면 6, 아니면 케이크 4.
+    static var expectedMacProtocolFromIsulOn: Int {
+        V0374IsulCoreTests.macIsulArtInSourceTree ? (macPeperoArtInSourceTree ? ShopWire.peperoProtocol : ShopWire.isulProtocol) : ShopWire.cakeProtocol
+    }
+
     // MARK: - ① 카탈로그
 
     @Test("카탈로그: id · 표시 이름(한 곳 상수) · scene3D · 내장 일곱째(이슬 뒤) · 정확한 id 만")
@@ -135,25 +145,27 @@ struct V0377PeperoCoreTests {
         #expect(CharacterGiftKind.pepero.isSupported(protocolVersion: 6))
     }
 
-    @Test("맥 번들: 빼빼로 그림이 없다 → 그릴 수 없음 → 능력 번호는 빼빼로 전(이슬 그림이 있으면 5) 그대로 · 6 을 말하지 않는다")
+    @Test("맥 번들: 빼빼로 그림(판 · 초상 두 장)이 소스 트리에 있으면 그릴 수 있음 → 능력 번호 6, 없으면 빼빼로 전(이슬까지 5) 그대로(누적 규칙)")
     @MainActor
-    func macDoesNotClaimPeperoBeforeTheArt() {
-        #expect(!Self.macPeperoPortraitsInSourceTree,
-                "빼빼로 초상이 소스 트리에 들어왔다 — 그림 갈래다: drawableCharacterIDs 의 빼빼로 줄을 마감 실재 판정으로 바꾸고 이 못을 고쳐라")
+    func macProtocolFollowsThePeperoArt() {
+        // v0.3.77 그림 갈래(078df8ed 병합)부터 판 · 초상이 번들에 있다 — 그 전의 못(`macDoesNotClaimPeperoBeforeTheArt`)을 이슬과 같은 모양으로 뒤집었다.
+        let art = Self.macPeperoArtInSourceTree
+        let expected = Self.expectedMacProtocolFromIsulOn
         let drawable = CheckMascotAssets.drawableCharacterIDs()
-        #expect(!drawable.contains(Self.pepero), "그림 없는 빼빼로를 그릴 수 있다고 말한다 — \(drawable)")
-        #expect(!WorkTimerStore.bundledDrawableCharacterIDs.contains(Self.pepero))
-        let expected = V0374IsulCoreTests.macIsulArtInSourceTree ? ShopWire.isulProtocol : ShopWire.cakeProtocol
+        #expect(drawable.contains(Self.pepero) == art, "빼빼로 그림 판정이 소스 트리와 갈렸다 — \(drawable)")
+        #expect(WorkTimerStore.bundledDrawableCharacterIDs.contains(Self.pepero) == art)
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == expected)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) < ShopWire.peperoProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == expected)
         let store = V0317ShopTests.plainStore()
         #expect(store.shopProtocolVersion == expected, "스토어 번호 \(store.shopProtocolVersion)")
-        #expect(!ShopWire.supportsPeperoGift(protocolVersion: store.shopProtocolVersion))
-        // 반대 방향: 빼빼로를 그릴 수 있게 되는 날(그림 갈래) 번호는 저절로 6 이 된다(이슬까지 그릴 때).
-        if expected == ShopWire.isulProtocol {
-            #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable + [Self.pepero]) == ShopWire.peperoProtocol)
+        #expect(ShopWire.supportsPeperoGift(protocolVersion: store.shopProtocolVersion) == (expected == ShopWire.peperoProtocol))
+        // 판정은 마감 실재 한 곳 — 그림 셋 중 하나만 빠져도 빼빼로는 빠지고 번호는 5 로 내려간다.
+        if art {
+            for missing in PeperoAingFinish.requiredResourceNames() {
+                #expect(!PeperoAingFinish.isDrawable { $0 != missing }, "\(missing) 가 빠져도 그릴 수 있다고 한다")
+            }
+            #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable.filter { $0 != Self.pepero }) < ShopWire.peperoProtocol)
         }
-        // 마감 판정이 아잉 갈래로 떨어지지 않는다(3D 는 지금 평범 갈래지만 `Finish` 는 빼빼로를 안다).
         #expect(CheckCharacter3DScene.catalog.manifest(id: Self.pepero)?.finish == .pepero)
     }
 

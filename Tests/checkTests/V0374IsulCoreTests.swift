@@ -139,7 +139,8 @@ struct V0374IsulCoreTests {
     @MainActor
     func macProtocolFollowsTheIsulArt() {
         let art = Self.macIsulArtInSourceTree
-        let expected = art ? ShopWire.isulProtocol : ShopWire.cakeProtocol
+        // v0.3.77: 빼빼로 그림(판 · 초상)까지 실리면 누적으로 6 이다(이슬의 몫은 "5 이상" — 6 의 기준선은 V0377PeperoCoreTests).
+        let expected = V0377PeperoCoreTests.expectedMacProtocolFromIsulOn
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(Self.isul) == art, "\(drawable)")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == expected)

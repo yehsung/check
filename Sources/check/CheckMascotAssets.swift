@@ -156,10 +156,10 @@ enum CheckMascotAssets {
             // 이슬 아잉이(v0.3.74): 케이크 규약 — 초상 두 장 + 마감 실재(라벨 폴백 + 무지개와 같이 쓰는 밝기 맵 — 병뚜껑은 코드가 만든다).
             // robot · 금 · 무지개 · 케이크 둘까지 서고 이슬도 서야 상점 능력 번호 5 가 나간다(`ShopWire.protocolVersion`). 정의는 `IsulAingFinish.isDrawable` 한 곳.
             if CharacterCatalog.isIsulAing(id) { return IsulAingFinish.isDrawable(fileManager: fileManager) }
-            // 빼빼로 아잉이(v0.3.77): **그림이 아직 없다**(시안을 고르는 중) — 그릴 수 없다. 그래서 맥 능력 번호는 5 에 머물고(`ShopWire.peperoProtocol`
-            // 6 을 말하지 않는다) 서버는 빼빼로 행 · 빼빼로 선물을 이 빌드에 싣지 않는다(그림 없는 캐릭터를 받지 않게). 그림이 붙는 날 이 줄을
-            // 이슬처럼 마감 실재 판정(초상 두 장 + 마감 재료)으로 바꾼다 — V0377PeperoCoreTests 가 그 전까지 거짓 · 번호 5 를 못 박는다.
-            if CharacterCatalog.isPeperoAing(id) { return false }
+            // 빼빼로 아잉이(v0.3.77): 이슬 규약 — 마감 실재(상자 인쇄 판 폴백 `aing_pepero-box.png` — 상자 · 막대 형상은 코드가 만든다) + 초상 두 장.
+            // 이슬까지 서고 빼빼로도 서야 상점 능력 번호 6 이 나간다(`ShopWire.protocolVersion` — 하나라도 빠지면 5 에 머물고 서버가 빼빼로 행 ·
+            // 빼빼로 선물을 안 싣는다). 정의는 `PeperoAingFinish.isDrawable` 한 곳.
+            if CharacterCatalog.isPeperoAing(id) { return PeperoAingFinish.isDrawable(fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]
@@ -188,6 +188,7 @@ enum CheckMascotAssets {
     static func image(for mood: Mood, characterID: String) -> NSImage? {
         // 이슬 초상은 그림 저장소가 새로 받을 수 있다 — 그리는 화면이 그 관찰 값에 묶이게 읽어 둔다(`IsulArtRevision`).
         IsulArtRevision.observe(characterID: characterID)
+        PeperoArtRevision.observe(characterID: characterID)
         if let image = cache.image(key: cacheKey(mood: mood, characterID: characterID),
                                    url: portraitURL(for: mood, characterID: characterID)) {
             return image
@@ -214,6 +215,7 @@ enum CheckMascotAssets {
 
     static func menuBarImage(for mood: Mood, characterID: String) -> NSImage? {
         IsulArtRevision.observe(characterID: characterID)
+        PeperoArtRevision.observe(characterID: characterID)
         if let image = cache.menuBarImage(key: cacheKey(mood: mood, characterID: characterID),
                                           url: portraitURL(for: mood, characterID: characterID),
                                           size: menuBarSize) {

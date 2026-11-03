@@ -366,8 +366,12 @@ struct V0343RobotShopProtocolTests {
         // v0.3.74: 이슬 아잉이도 같은 내장 · 앱 번들 그림이라, 다섯(케이크 둘 포함)에 이슬까지 실린 빌드는 누적으로 5 다.
         let isulDrawable = fullDrawable.contains(CharacterCatalog.isulAingID)
         #expect(isulDrawable == V0374IsulCoreTests.macIsulArtInSourceTree, "이슬 그림 판정이 소스 트리와 갈렸다")
+        // v0.3.77: 빼빼로 아잉이(판 · 초상)까지 실린 빌드는 누적으로 6 이다.
+        let peperoDrawable = fullDrawable.contains(CharacterCatalog.peperoAingID)
+        #expect(peperoDrawable == V0377PeperoCoreTests.macPeperoArtInSourceTree, "빼빼로 그림 판정이 소스 트리와 갈렸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable)
-                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? ShopWire.isulProtocol : ShopWire.cakeProtocol)
+                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? (peperoDrawable ? ShopWire.peperoProtocol : ShopWire.isulProtocol)
+                                                                                     : ShopWire.cakeProtocol)
                                                                      : ShopWire.rainbowProtocol)
                                                     : ShopWire.goldProtocol)
                                  : ShopWire.robotProtocol))

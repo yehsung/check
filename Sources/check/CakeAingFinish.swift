@@ -1223,6 +1223,9 @@ enum CakeAingFinish {
         let work = DispatchWorkItem(qos: .utility) {
             for kind in Kind.allCases { _ = decorNode(kind) }
             _ = IsulAingFinish.decorNode()
+            // 빼빼로 상자 · 막대(v0.3.77 — 한 벌 -O 0.73초, 상자 2048×768 굽기)도 같은 자리에서 메인 밖으로 미리 굽는다. 11-11 선물은 맥 쓰는 사람
+            // 전체에게 가므로 가진 사람만 고르지 않는다 — 첫 빼빼로 씬(착용 · 울트라 교체)이 메인에서 구우면 그만큼 멎는다.
+            _ = PeperoAingFinish.decorNode()
         }
         DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + max(0, delay), execute: work)
         return work

@@ -77,7 +77,8 @@ import Testing
         #expect(Body.shadeMapKey == CakeAingFinish.ChocoBody.shadeMapKey && Body.shadeMapKey == "ckShadeMap")
         #expect(Body.labelMapKey == "ckLabelMap")
         #expect(IsulAingFinish.decorNodeName == "check.isulDecor" && Cap.capNodeName == "check.isul.cap")
-        #expect(AingDecor.rootNames == [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.decorNodeName])
+        // v0.3.77: 빼빼로 상자 · 막대도 같은 판정에 들었다(장식 루트 셋 — V0377PeperoMac3DTests 가 빼빼로 쪽을 잰다).
+        #expect(AingDecor.rootNames == [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.decorNodeName, PeperoAingFinish.decorNodeName])
         // 뚜껑 꼭대기: 앱이 만든 뚜껑으로 다시 잰다(생성기가 실행 때 맞대는 상수와 같다).
         let decor = try #require(IsulAingFinish.decorNode())
         #expect(abs(Double(Cap.topY(decor)) - Cap.capTopY) < 5e-4, "뚜껑 꼭대기 \(Cap.topY(decor)) ≠ 상수 \(Cap.capTopY)")
@@ -386,10 +387,13 @@ import Testing
     func drawableAndProtocolFive() throws {
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(CharacterCatalog.isulAingID), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.isulProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == 5)
+        // v0.3.77: 빼빼로 그림까지 실린 빌드는 누적으로 6 이다(이슬의 몫은 "5 이상" — 6 의 기준선은 V0377PeperoCoreTests).
+        let expected = V0377PeperoCoreTests.expectedMacProtocolFromIsulOn
+        #expect(expected >= ShopWire.isulProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == expected)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == expected)
         let store = V0317ShopTests.plainStore()
-        #expect(store.shopProtocolVersion == 5 && store.supportsCakeGift)
+        #expect(store.shopProtocolVersion == expected && store.supportsDrinkGift && store.supportsCakeGift)
         #expect(IsulAingFinish.isDrawable())
         #expect(IsulAingFinish.requiredResourceNames() == ["aing_isul-label", "aing_isul-neutral", "aing_isul-negative", "aing_rainbow-shade"])
         for missing in IsulAingFinish.requiredResourceNames() {

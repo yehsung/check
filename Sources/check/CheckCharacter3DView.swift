@@ -128,7 +128,7 @@ enum CheckCharacter3DScene {
         return makeAingScene(animated: animated, finish: character.finish)
     }
 
-    /// 아잉 메시 위의 마감(금 · 무지개 · 케이크 둘 · 이슬) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
+    /// 아잉 메시 위의 마감(금 · 무지개 · 케이크 둘 · 이슬 · 빼빼로) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
     /// 스프라이트는 언제나 `.standard` 라 여기 오지 않는다.
     private static func applyFinish(_ finish: CharacterManifest.Finish, to character: SCNNode) {
         switch finish {
@@ -141,9 +141,9 @@ enum CheckCharacter3DScene {
         // 이슬(v0.3.74): 무지개와 같은 디퓨즈 합성 + 초록 유리 몸 셰이더(ckShadeMap · 라벨 ckLabelMap) + 병뚜껑 장식 노드(`check.isulDecor`).
         // 케이크처럼 내려 세우지 않는다(뚜껑이 낮아 지금 구도로 부유 꼭대기까지 안 잘린다 — `IsulAingFinish` 머리말 ★ 프레이밍).
         case .isul: IsulAingFinish.apply(to: character)
-        // 빼빼로(v0.3.77): 지금은 평범 갈래(아잉 그대로) — 그림(몸 셰이더 · 장식)은 시안 결정 뒤 빼빼로 마감 갈래가 채운다.
-        // 그 전엔 맥이 빼빼로를 "그릴 수 있다"고 말하지 않으므로(`CheckMascotAssets.drawableCharacterIDs`) 서버가 빼빼로를 주지 않는다.
-        case .pepero: break
+        // 빼빼로(v0.3.77): 몸은 아잉 그대로(재질 안 바꿈) + 상자 · 막대 셋 장식 노드(`check.peperoDecor` — 인쇄 판은 `PeperoArt`) + 표식.
+        // 내려 세우지 않는다(막대 끝이 초코 불꽃보다 낮아 지금 구도로 부유 꼭대기까지 안 잘린다 — `PeperoAingFinish` 머리말 ★ 프레이밍).
+        case .pepero: PeperoAingFinish.apply(to: character)
         }
     }
 

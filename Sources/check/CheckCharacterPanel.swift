@@ -293,6 +293,7 @@ enum CharacterCardArt {
     static func image(characterID: String) -> CGImage? {
         // 이슬 초상은 그림 저장소가 새로 받을 수 있다 — 카드가 그 관찰 값에 묶이게 읽어 둔다(`IsulArtRevision` — 받으면 `forget` 뒤 다시 그린다).
         IsulArtRevision.observe(characterID: characterID)
+        PeperoArtRevision.observe(characterID: characterID)
         if let hit = cache[characterID] { return hit }
         guard let raw = rawImage(characterID: characterID) else { return nil }
         let tight = tightened(raw)

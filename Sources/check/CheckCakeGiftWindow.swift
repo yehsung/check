@@ -290,8 +290,16 @@ struct CheckCakeGiftWindowView: View {
 
     @MainActor private static var portraitCache: [String: CGImage] = [:]
 
+    /// 이 캐릭터의 초상 캐시를 버린다 — 그림 저장소(`IsulArt` · `PeperoArt`)가 새 초상을 받았을 때 부른다(v0.3.77 — 안 비우면 받는 창이 옛 그림을
+    /// 프로세스 내내 쥔다). 화면은 관찰 값(`IsulArtRevision` · `PeperoArtRevision`)으로 다시 그린다.
+    @MainActor static func forgetPortrait(characterID: String) {
+        portraitCache[characterID] = nil
+    }
+
     /// 192px 중립 초상 그대로(장식까지 다 보이게 — 조이지 않는다). `Image(nsImage:)` 는 보간을 무시하므로 CGImage 로 내린다.
     @MainActor static func portrait(_ id: String) -> some View {
+        IsulArtRevision.observe(characterID: id)
+        PeperoArtRevision.observe(characterID: id)
         let cg: CGImage? = portraitCache[id] ?? {
             let made = CheckMascotAssets.image(for: .neutral, characterID: id)?
                 .cgImage(forProposedRect: nil, context: nil, hints: nil)

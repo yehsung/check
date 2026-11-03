@@ -132,7 +132,10 @@ struct V0354GoldShopProtocolTests {
         let cakes = ShopWire.cakeCharacterIDs.allSatisfy(V0366CakeCoreTests.macCakePortraitsInSourceTree)
         // v0.3.74: 이슬 아잉이 그림(초상 · 라벨)까지 실리면 5 다(누적 — 이슬의 기준선은 V0374IsulCoreTests.macIsulArtInSourceTree).
         let isul = V0374IsulCoreTests.macIsulArtInSourceTree
-        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? ShopWire.isulProtocol : ShopWire.cakeProtocol) : ShopWire.rainbowProtocol)
+        // v0.3.77: 빼빼로 그림(판 · 초상)까지 실리면 6 이다(누적 — 빼빼로의 기준선은 V0377PeperoCoreTests.macPeperoArtInSourceTree).
+        let pepero = V0377PeperoCoreTests.macPeperoArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? ShopWire.peperoProtocol : ShopWire.isulProtocol) : ShopWire.cakeProtocol)
+                                                         : ShopWire.rainbowProtocol)
                                                 : ShopWire.goldProtocol)
                                      : ShopWire.robotProtocol)
                              : ShopWire.legacyProtocol

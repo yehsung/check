@@ -608,6 +608,8 @@ final class ReactionEngine {
         if let cake = CakeAingFinish.kind(of: character) { return cake.characterID }
         // 이슬 아잉이(v0.3.74)도 같은 메시라 자기 표식(`IsulAingFinish.markerName`)으로 가른다 — 이슬 ↔ 아잉 · 케이크 사이의 울트라도 갈아입는다.
         if IsulAingFinish.isIsul(character) { return CharacterCatalog.isulAingID }
+        // 빼빼로 아잉이(v0.3.77)도 같은 메시 · 같은 몸 재질이라 자기 표식(`PeperoAingFinish.markerName`)으로만 가른다 — 빼빼로 ↔ 아잉 사이의 울트라도 갈아입는다.
+        if PeperoAingFinish.isPepero(character) { return CharacterCatalog.peperoAingID }
         return CharacterCatalog.builtInAingID
     }
 

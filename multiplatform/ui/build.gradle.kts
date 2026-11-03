@@ -48,9 +48,17 @@ kotlin {
 //   Sources/CheckCore/Resources/Stickers/sticker-*.png(0.3.62 아잉이 이모티콘, G §8-2) → files/stickers/…
 //   Sources/CheckCore/Resources/GachaMachine/gacha_*.png(0.3.54 캡슐 뽑기 기계 다섯 장, W4-c) → files/gacha/…
 //   Sources/check/Resources/rummy-{rack,table}.png(0.3.69 아잉 큐브 받침대·펠트 폴백 사본, 합쳐 1.05MB) → files/art/…
+//   Sources/check/Resources/aing_isul-<표정>.png(맥 0.3.74 이슬 아잉이 — '술 한잔' 선물 전용, 판 7) → files/characters/aing_isul/portrait-<표정>.png
+//     (상점 번호 5(ShopProtocol.isulProtocol)는 이 두 장 + 케이크 둘까지 다 실려야 선다. Windows v1 은 CharacterArt.takesDrinkGift 로 번호 4 그대로)
 // 아틀라스(atlas.png)는 싣지 않는다(살아 있는 캐릭터는 구운 자산 — W0-d·W5).
 val repoDir = rootDir.parentFile
 val aingFamily = listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco")
+// 이슬 초상 원본 폴더 — **그림을 갈아 끼우는 자리는 여기 하나다**(대표 결정 대기: 폰 그림의 '참이슬' 상표 글자 — 추천 '맥과 같이 그대로 +
+// 대체 그림 준비'). 지금은 맥 그림(scripts/make-isul-aing.swift 산출) 그대로. 대체 그림으로 바꿀 때는 같은 이름(aing_isul-<표정>.png)
+// 두 장이 든 폴더를 이 값으로 준다(속성 -Paingcheck.isulPortraitDir=<저장소 뿌리 기준 폴더> 로도 덮을 수 있다).
+val isulPortraitSource: File = repoDir.resolve(
+    (findProperty("aingcheck.isulPortraitDir") as String?) ?: "Sources/check/Resources",
+)
 val composeResourcesSynced = layout.buildDirectory.dir("generated/aingcheck/composeResources/commonMain")
 val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
     description = "맥 원본 캐릭터·루비·이모티콘·뽑기 기계 그림과 ui 리소스를 Compose 리소스 폴더 하나로 모은다(git 사본 0, A-X18)."
@@ -66,6 +74,11 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
             rename("^$id-(neutral|negative)\\.png$", "portrait-$1.png")
             into("files/characters/$id")
         }
+    }
+    from(isulPortraitSource) {
+        include("aing_isul-neutral.png", "aing_isul-negative.png")
+        rename("^aing_isul-(neutral|negative)\\.png$", "portrait-$1.png")
+        into("files/characters/aing_isul")
     }
     from(repoDir.resolve("Sources/CheckMobileKit/Resources/Art")) {
         // aing-side.png: 플래피 아잉 옆모습(W4-b — 미니게임 캐릭터는 아잉 고정, MiniGameArt.FLAPPY_SIDE_PATH). 없으면 캔버스가 초록 원으로 폴백한다.

@@ -170,6 +170,7 @@ import com.yehsung.aingcheck.ui.resources.ms_visibility_fill
 import com.yehsung.aingcheck.ui.resources.ms_warning
 import com.yehsung.aingcheck.ui.resources.ms_warning_fill
 import com.yehsung.aingcheck.ui.resources.ms_wb_twilight_fill
+import com.yehsung.aingcheck.ui.resources.ms_wine_bar_fill
 import com.yehsung.aingcheck.ui.resources.ms_workspace_premium
 import org.jetbrains.compose.resources.DrawableResource
 
@@ -338,6 +339,8 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     Warning("warning", false),
     WarningFill("warning", true),
     WbTwilightFill("wb_twilight", true),
+    /** 잔(맥 0.3.74 술 한잔 선물 다시 열기 카드 `wineglass.fill` — WorkTimerStoreCakeGift.swift `reopenSymbolName`). */
+    WineBarFill("wine_bar", true),
     WorkspacePremium("workspace_premium", false),
     ;
 
@@ -510,6 +513,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             Warning -> Res.drawable.ms_warning
             WarningFill -> Res.drawable.ms_warning_fill
             WbTwilightFill -> Res.drawable.ms_wb_twilight_fill
+            WineBarFill -> Res.drawable.ms_wine_bar_fill
             WorkspacePremium -> Res.drawable.ms_workspace_premium
         }
 }

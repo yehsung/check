@@ -48,9 +48,11 @@ class GameAvatarCallSiteContractTest {
     fun rankingLiveAndResultRowsPassTheCharacterHint() {
         val rows = calls().filter { (file, call) ->
             file.endsWith("GomokuRanking.kt") || file.endsWith("ChessRanking.kt") || file.endsWith("GamesTetrisDuelRankingSection.kt") ||
-                file.endsWith("ChessWatch.kt") || file.endsWith("GomokuMatch.kt") || file.endsWith("GamesHubScreen.kt") || "live." in call
+                file.endsWith("ChessWatch.kt") || file.endsWith("GomokuMatch.kt") || file.endsWith("GamesHubScreen.kt") ||
+                file.endsWith("ReversiRanking.kt") || file.endsWith("ReversiWatch.kt") || "live." in call
         }
-        assertEquals(10, rows.size, rows.joinToString("\n") { it.second })
+        // 13 = 판 7 이전 10 + 아잉 뒤집기 순위 줄 1 · 지금 대결 중 두 얼굴 2(iOS GamesReversiRanking.swift:225 · GamesReversiWatch.swift:260-268).
+        assertEquals(13, rows.size, rows.joinToString("\n") { it.second })
         assertEquals(emptyList(), rows.filter { "characterHint = " !in it.second }.map { "${it.first}: ${it.second}" })
     }
 }

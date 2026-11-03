@@ -2,6 +2,7 @@
 package com.yehsung.aingcheck.core.stores.games
 
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameContext
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 
@@ -102,6 +103,13 @@ interface GamesContext : GamesMiniGameContext {
      * 여럿 있다 — 필수로 두면 큐브를 쓰지 않는 그 자리가 전부 깨진다. null 이면 게임 탭은 큐브가 없는 것처럼 돈다(입구 막기·배지·화면 꺼짐 모두 건너뛴다).
      */
     val rummy: RummyStore? get() = null
+
+    /**
+     * 아잉 뒤집기 스토어(폰 조립이 넣는다 — 판 7). **기본이 null 인 까닭은 큐브와 같다**(Windows 조립 · 시험 조립이 여럿). 또 하나: 폰 조립도 떼어 내기
+     * 깃발(`AppConfig.reversiEnabled`)이 꺼지면 null 을 넣는다 — null 이면 게임 탭은 리버시가 없는 것처럼 돈다(카드 · 배지 · 입구 막기 · 화면 꺼짐 ·
+     * 허브 조회 · 화면 문 모두 건너뛴다). 그래서 이 칸 하나가 리버시 입구의 유일한 스위치다.
+     */
+    val reversi: ReversiStore? get() = null
     val gomoku: GamesGomokuLink
     val chess: GamesBoardGameLink
     val router: GamesRouter

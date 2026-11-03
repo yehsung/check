@@ -386,8 +386,14 @@ object MeText {
     /**
      * 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 아잉 큐브 줄만 비운다 — 서버가 큐브 없는 옛 폰을 위해 '맥에서 할 수 있어요'를 싣는데,
      * 이 판의 폰은 큐브를 할 수 있어 거짓이다(서버 글자를 바꾸면 옛 폰에서 거짓이 된다).
+     * 아잉 뒤집기(판 7) 줄은 [reversiPlayable] 일 때만 비운다 — 리버시가 없는 조립(Windows · 떼어 내기 깃발 끔)에서는 서버 글자가 참이다
+     * (iOS 1.0.17 `phonePlayableMacFirstGames` = rummy · reversi 와 같은 규칙).
      */
-    fun dailyMissionCaption(game: String, detail: String): String = if (game == "rummy") "" else detail
+    fun dailyMissionCaption(game: String, detail: String, reversiPlayable: Boolean = false): String =
+        if (game == "rummy" || (reversiPlayable && game == GAME_REVERSI)) "" else detail
+
+    /** 서버 `daily_mission_defs()` 의 아잉 뒤집기 game 값(`daily_reversi`). */
+    const val GAME_REVERSI: String = "reversi"
 
     /**
      * 일일 줄 아이콘 — **게임 이름으로 고른다**. 미니게임은 코어 `MiniGameKind.icon`(길건너 아잉이 줄도 서버가 주면 그대로 선다 — 폰은 거르지

@@ -20,6 +20,7 @@ import com.yehsung.aingcheck.ui.components.AndroidSnapshots
 import com.yehsung.aingcheck.ui.components.PixelImage
 import com.yehsung.aingcheck.ui.components.SnapshotCompare
 import com.yehsung.aingcheck.ui.components.SnapshotPolicy
+import com.yehsung.aingcheck.ui.games.reversi.ReversiScenes
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -52,6 +53,20 @@ class BoardSnapshotAndroidTest {
     @Test fun chessLobbyDuelsOn() { check(BoardScenes.chessLobby(true), BoardScenes.chessLobby(true, ruby = 107)) }
     /** 판돈 시트(§8-17 신청 쪽 — 잔액 7 이면 10 칸이 흐리다 · 기준선은 잔액 100). */
     @Test fun gomokuStakeSheet() { check(BoardScenes.gomokuStakeSheet(), BoardScenes.gomokuStakeSheet(ruby = 100)) }
+
+    // 아잉 뒤집기(판 7) — 로비 · 판 진행 · 자동 착수 경고 · 결과(승 · 무) · AI 연습 · 관전 · 순위 · 규칙 · 큰 글꼴(360). 라이트/다크.
+    @Test fun reversiLobbyLight() { check(ReversiScenes.lobby(false), ReversiScenes.lobby(false, ruby = 107)) }
+    @Test fun reversiLobbyDark() { check(ReversiScenes.lobby(true), ReversiScenes.lobby(true, ruby = 107)) }
+    @Test fun reversiLobbyLargeFont() { check(ReversiScenes.lobbyLargeFont(), ReversiScenes.lobbyLargeFont(ruby = 107)) }
+    @Test fun reversiMatchLight() { check(ReversiScenes.match(false), ReversiScenes.match(false, meName = "나검정둘")) }
+    @Test fun reversiMatchDark() { check(ReversiScenes.match(true), ReversiScenes.match(true, meName = "나검정둘")) }
+    @Test fun reversiMatchWarning() { check(ReversiScenes.matchWarning(), ReversiScenes.matchWarning(meName = "나검정둘")) }
+    @Test fun reversiResult() { check(ReversiScenes.result(), ReversiScenes.result(meName = "나검정둘")) }
+    @Test fun reversiResultDrawDark() { check(ReversiScenes.resultDraw(), ReversiScenes.resultDraw(meName = "나검정둘")) }
+    @Test fun reversiAI() { check(ReversiScenes.ai(), ReversiScenes.ai(meName = "나검정둘")) }
+    @Test fun reversiWatch() { check(ReversiScenes.watch(), ReversiScenes.watch(blackName = "달토끼둘")) }
+    @Test fun reversiRanking() { check(ReversiScenes.ranking(), ReversiScenes.ranking(expanded = false)) }
+    @Test fun reversiRules() { check(ReversiScenes.rules(), ReversiScenes.rules(turnSeconds = 300)) }
 
     /** 깃발 꺼짐과 켜짐 두 장은 서로 달라야 한다(같으면 깃발이 화면에 닿지 않는다). */
     @Test

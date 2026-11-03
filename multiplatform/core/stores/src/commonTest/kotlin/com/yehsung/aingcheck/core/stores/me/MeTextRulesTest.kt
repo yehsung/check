@@ -73,6 +73,29 @@ class MeTextRulesTest {
         assertTrue(failed.showsCaptionLine)
     }
 
+    /**
+     * 판 7: 아잉 뒤집기 줄의 '맥에서 할 수 있어요'는 리버시가 있는 조립에서만 비운다(iOS 1.0.17 `phonePlayableMacFirstGames`). 떼어 내기 깃발이 꺼진 조립 ·
+     * Windows 는 서버 글자 그대로다. 큐브 깃발과 서로 섞이지 않는다(큐브만 되는 조립에서 리버시 줄은 그대로 · 리버시만 되는 조립에서 큐브 줄은 그대로).
+     */
+    @Test
+    fun reversiDailyRowHidesTheServerCaptionOnlyWhenPlayable() {
+        assertEquals("맥에서 할 수 있어요", MeText.dailyMissionCaption("reversi", "맥에서 할 수 있어요"))
+        assertEquals("", MeText.dailyMissionCaption("reversi", "맥에서 할 수 있어요", reversiPlayable = true))
+        val row = { mission("daily_reversi", true, false, progress = 1) }
+        assertEquals("보조", MeDailyMissionRowContent.make(DailyMissionStatus.Mission("reversi", row())).caption, "리버시가 없는 조립")
+        assertEquals("보조", MeDailyMissionRowContent.make(DailyMissionStatus.Mission("reversi", row()), rummyPlayable = true).caption, "큐브 깃발이 리버시 줄을 비웠다")
+        val playable = MeDailyMissionRowContent.make(DailyMissionStatus.Mission("reversi", row()), rummyPlayable = true, reversiPlayable = true)
+        assertEquals("", playable.caption)
+        assertFalse(playable.showsCaptionLine, "받을 수 있는 리버시 줄에 빈 줄이 선다")
+        assertEquals(
+            "보조",
+            MeDailyMissionRowContent.make(DailyMissionStatus.Mission("rummy", mission("daily_rummy", true, false, progress = 1)), reversiPlayable = true).caption,
+            "리버시 깃발이 큐브 줄을 비웠다",
+        )
+        val failed = MeDailyMissionRowContent.make(DailyMissionStatus.Mission("reversi", row()), failed = true, reversiPlayable = true)
+        assertEquals(MeText.claimFailed, failed.caption, "실패 문장은 리버시 줄에도 나온다")
+    }
+
     @Test
     fun tileStatusNeverShowsARubyPriceForGachaOrGiftOnlyCharacters() {
         assertEquals(MeCharacterTileStatus.Content.Acquire("뽑기 · 조각 20"), MeCharacterTileStatus.GachaOnly(20).content)

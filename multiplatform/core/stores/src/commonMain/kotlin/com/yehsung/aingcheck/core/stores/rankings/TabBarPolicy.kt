@@ -19,6 +19,12 @@ object TabBarPolicy {
 
         /** 아잉 큐브 판·결과 — 차례 시간이 서버에서 흐르고 3회 연속 시간 초과면 기권이다(탭을 잘못 눌러 나가면 안 보이는 채로 시간이 간다). */
         rummyMatch("rummyMatch"),
+
+        /**
+         * 아잉 뒤집기 대국·결과(판 7 — iOS 1.0.17 `reversiMatch`) — 오목과 같은 한 수 30초 몰입 화면 + 자체 동작 줄. 탭을 잘못 눌러 빠져나가면 서버 시계가 계속 흘러
+         * 자동 착수가 쌓이고, 연속 3번이면 판돈째 진다.
+         */
+        reversiMatch("reversiMatch"),
         shop("shop"),
         miniGamePlay("miniGamePlay"),
 

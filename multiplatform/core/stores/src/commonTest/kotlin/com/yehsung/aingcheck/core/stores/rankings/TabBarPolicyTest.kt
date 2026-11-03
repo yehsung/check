@@ -1,4 +1,4 @@
-// 원본: Tests/CheckMobileKitTests/GamesTetrisScreenTests.swift(TabBarPolicy.tetrisMatch) @ 1b8260d
+// 원본: Tests/CheckMobileKitTests/GamesTetrisScreenTests.swift(TabBarPolicy.tetrisMatch) @ 1b8260d · BaseComponentTests.swift(목록 아홉 — reversiMatch) @ ios-1017-int 467aec40
 package com.yehsung.aingcheck.core.stores.rankings
 
 import kotlin.test.Test
@@ -11,7 +11,7 @@ class TabBarPolicyTest {
     fun everyListedScreenHidesTheTabBarIncludingTetrisMatch() {
         for (screen in TabBarPolicy.Screen.entries) assertTrue(TabBarPolicy.hidesTabBar(screen), "$screen 이 탭 막대를 안 숨긴다")
         assertEquals(
-            listOf("conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "shop", "miniGamePlay", "grassDetail"),
+            listOf("conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "reversiMatch", "shop", "miniGamePlay", "grassDetail"),
             TabBarPolicy.Screen.entries.map { it.rawValue },
         )
     }

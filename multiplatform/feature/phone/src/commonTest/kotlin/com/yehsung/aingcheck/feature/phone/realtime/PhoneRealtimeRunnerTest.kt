@@ -33,7 +33,8 @@ class PhoneRealtimeRunnerTest {
         "message_history_with_pokes", "message_history_with_reads", "message_history" -> Reply.missingFunction
         "app_user_directory" -> Reply.Json("[]")
         "message_blocks", "my_blocked_users", "blocked_users" -> Reply.Json("[]")
-        "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby", "rummy_lobby" -> Reply.missingFunction
+        // 판 7: 아잉 뒤집기도 조인 따라잡기에서 로비를 한 번 읽는다 — 다른 게임 로비와 같은 대접.
+        "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby", "rummy_lobby", "reversi_lobby" -> Reply.missingFunction
         else -> null
     }
 

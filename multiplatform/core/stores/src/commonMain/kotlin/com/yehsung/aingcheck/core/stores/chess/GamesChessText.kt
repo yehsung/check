@@ -135,7 +135,10 @@ object ChessPhoneText {
      * 정해지지 않아 틀린 안내를 했다. 그래서 문구 함수가 **두는 판(playing)과 막힌 입구(blocked)를 둘 다** 받는다.
      */
     enum class BusyGame(val rawValue: String) {
-        gomoku("gomoku"), chess("chess"), tetris("tetris"), rummy("rummy");
+        gomoku("gomoku"), chess("chess"), tetris("tetris"), rummy("rummy"),
+
+        /** 아잉 뒤집기(판 7 — iOS 1.0.17). 이름 글자는 코어 `ReversiNoticeText.gameName` 한 곳에서 받는다. */
+        reversi("reversi");
 
         /** 게임 이름("오목" · "체스" · "1:1 테트리스"). */
         val gameName: String
@@ -144,21 +147,24 @@ object ChessPhoneText {
                 chess -> "체스"
                 tetris -> "1:1 테트리스"
                 rummy -> "아잉 큐브"
+                reversi -> com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName
             }
 
-        /** 진행 중인 판을 가리키는 말. 셋 다 받침으로 끝나므로 뒤에 "이" 를 붙인다. */
+        /** 진행 중인 판을 가리키는 말. 모두 받침으로 끝나므로 뒤에 "이" 를 붙인다. */
         val matchNoun: String
             get() = when (this) {
                 gomoku -> "오목 판"
                 chess -> "체스 판"
                 tetris -> "테트리스 대결"
                 rummy -> "아잉 큐브 판"
+                reversi -> "${com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName} 판"
             }
     }
 
     /** 다른 판을 두는 중이라 입구가 막혔다(테트리스는 '둔다'고 하지 않는다). */
     fun busyTitle(playing: BusyGame): String = when (playing) {
-        BusyGame.gomoku, BusyGame.chess -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
+        // 아잉 뒤집기도 돌을 **둔다**(iOS 1.0.17 · 맥 `ReversiText` 의 "두기" 낱말과 같다).
+        BusyGame.gomoku, BusyGame.chess, BusyGame.reversi -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
         BusyGame.tetris -> "${playing.gameName} 대결 중이에요"
         BusyGame.rummy -> "${playing.gameName} 하는 중이에요"
     }
@@ -733,6 +739,11 @@ data class ChessPhoneRuleLine(val title: String, val detail: String) {
             initialMs: Long = ChessClock.initialMs.toLong(),
             incrementMs: Long = (ChessClock.incrementSeconds * 1000).toLong(),
             inviteTtlSeconds: Int = ChessPhoneText.inviteTtlSecondsFallback,
+            /**
+             * '한 사람 한 판' 줄에 셋(체스·오목·1:1 테트리스) 뒤로 더 말할 게임 이름 — **그 조립에 있는 게임만**(폰 조립: 아잉 큐브 · 아잉 뒤집기 — 떼어 내기 깃발이
+             * 꺼지면 빠진다). 비면 셋만 말한다(Windows 조립 · 기본값 — 판 7 이전과 같은 글자). 둘 다 있으면 iOS 1.0.17 글자와 한 글자도 다르지 않다.
+             */
+            extraOneMatchGames: List<String> = emptyList(),
         ): List<ChessPhoneRuleLine> = listOf(
             ChessPhoneRuleLine("기본", "백이 먼저 둬요. 왕을 잡히지 않게 두면서 상대 왕을 피할 수 없게 만들면(체크메이트) 이겨요."),
             ChessPhoneRuleLine("캐슬링", "왕과 룩이 한 번도 움직이지 않았고 사이가 비어 있으면 왕을 두 칸 옮겨 룩과 자리를 바꿔요."),
@@ -752,7 +763,9 @@ data class ChessPhoneRuleLine(val title: String, val detail: String) {
                 "한 사람 한 판",
                 // INV-GamesChessText-869daee5 이식: 게임이 셋이다(1.0.11 — 1:1 테트리스). 셋을 다 말해야 한다 — 이름이 빠진 게임은 사용자가
                 // "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
-                "체스·오목·1:1 테트리스는 한 번에 한 판만 할 수 있어요. 한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.",
+                // 판 7: 게임이 다섯이다(iOS 1.0.17 — 1:1 테트리스 · 아잉 큐브 · 아잉 뒤집기). 이 조립에 있는 게임은 다 말한다(뒤 이름은 모두 받침 없이 끝나 "는").
+                (listOf("체스", "오목", "1:1 테트리스") + extraOneMatchGames).joinToString("·") +
+                    "는 한 번에 한 판만 할 수 있어요. 한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.",
             ),
         )
     }

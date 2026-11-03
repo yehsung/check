@@ -68,8 +68,16 @@ data class MeDailyMissionRowContent(
     val showsCaptionLine: Boolean get() = caption.isNotEmpty() || progress != null || claimedMark != null
 
     companion object {
-        /** [failed] = 이 줄의 마지막 받기가 실패했는가. **[받기] 가 선 줄에서만** 실패를 말한다. [rummyPlayable] = 이 앱에서 큐브를 할 수 있다([MeLinks.rummyPlayable]). */
-        fun make(mission: DailyMissionStatus.Mission, failed: Boolean = false, rummyPlayable: Boolean = false): MeDailyMissionRowContent {
+        /**
+         * [failed] = 이 줄의 마지막 받기가 실패했는가. **[받기] 가 선 줄에서만** 실패를 말한다. [rummyPlayable] = 이 앱에서 큐브를 할 수 있다([MeLinks.rummyPlayable]).
+         * [reversiPlayable] = 이 앱에서 아잉 뒤집기를 할 수 있다([MeLinks.reversiPlayable] — 리버시 줄의 '맥에서' 꼬리를 비운다).
+         */
+        fun make(
+            mission: DailyMissionStatus.Mission,
+            failed: Boolean = false,
+            rummyPlayable: Boolean = false,
+            reversiPlayable: Boolean = false,
+        ): MeDailyMissionRowContent {
             val row = mission.row
             val state = row.state
             val showsFailure = state == AchievementStatus.RowState.claimable && failed
@@ -80,7 +88,12 @@ data class MeDailyMissionRowContent(
                 claimAmount = if (state == AchievementStatus.RowState.claimable) row.reward else null,
                 progress = if (state == AchievementStatus.RowState.inProgress) MeText.missionProgress(row) else null,
                 claimedMark = if (state == AchievementStatus.RowState.claimed) MeText.claimedMark else null,
-                caption = if (showsFailure) MeText.claimFailed else if (rummyPlayable) MeText.dailyMissionCaption(mission.game, row.detail) else row.detail,
+                caption = when {
+                    showsFailure -> MeText.claimFailed
+                    rummyPlayable && mission.game == "rummy" -> MeText.dailyMissionCaption(mission.game, row.detail)
+                    reversiPlayable && mission.game == MeText.GAME_REVERSI -> MeText.dailyMissionCaption(mission.game, row.detail, reversiPlayable = true)
+                    else -> row.detail
+                },
                 showsFailure = showsFailure,
                 fraction = row.fraction,
                 isClaimed = state == AchievementStatus.RowState.claimed,

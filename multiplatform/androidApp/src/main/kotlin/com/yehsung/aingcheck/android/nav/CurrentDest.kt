@@ -17,6 +17,7 @@ object CurrentDest {
             d.hasRoute<Dest.MiniGame>() -> entry.toRoute<Dest.MiniGame>()
             d.hasRoute<Dest.Gomoku>() -> entry.toRoute<Dest.Gomoku>()
             d.hasRoute<Dest.Chess>() -> entry.toRoute<Dest.Chess>()
+            d.hasRoute<Dest.Reversi>() -> Dest.Reversi
             d.hasRoute<Dest.MeHome>() -> Dest.MeHome
             d.hasRoute<Dest.Shop>() -> Dest.Shop
             d.hasRoute<Dest.Feedback>() -> entry.toRoute<Dest.Feedback>()

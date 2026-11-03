@@ -19,6 +19,7 @@ import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.session.app.SessionClock
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStoreHost
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.tetris.StoreNaturalCollation
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
@@ -302,6 +303,9 @@ class StoreHarness(
     /** 아잉 큐브 자리. 기본은 비어 있다 — 큐브를 안 재는 시험의 요청 열에 `rummy_lobby` 가 끼지 않게(옵트인). */
     var rummyStore: RummyStore? = null
 
+    /** 아잉 뒤집기 자리(판 7). 기본은 비어 있다 — 리버시를 안 재는 시험의 요청 열에 `reversi_lobby` 가 끼지 않게(옵트인 — 큐브와 같은 규약). */
+    var reversiStore: ReversiStore? = null
+
     val context: GamesContext = object : GamesContext {
         override val sessionStore: SessionStore get() = this@StoreHarness.sessionStore
         override val appConfig: AppConfig = appConfig
@@ -310,6 +314,7 @@ class StoreHarness(
         override fun refreshAchievementsAfterGameResult(game: String) { achievementRefreshes += game }
         override val tetris: TetrisDuelStore get() = this@StoreHarness.tetris
         override val rummy: RummyStore? get() = rummyStore
+        override val reversi: ReversiStore? get() = reversiStore
         override val gomoku: GamesGomokuLink get() = this@StoreHarness.gomoku
         override val chess: GamesBoardGameLink get() = this@StoreHarness.chess
         override val router: GamesRouter get() = this@StoreHarness.router

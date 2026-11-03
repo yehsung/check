@@ -51,6 +51,13 @@ object RealtimeLinkConstants {
     const val rummyBroadcastEvent = "rummy"
 
     /**
+     * 아잉 뒤집기(1:1 리버시 — 내부 이름 reversi) 신호(원본 RealtimeLink.swift `reversiBroadcastEvent` @ 12624739 · 서버 `reversi__ring`). 와이어 상수
+     * `ReversiWire.broadcastEvent` 와 **문자 그대로 같다**. 이 이름이 없으면 초인종(신청·수락·거절·취소·착수·기권·정산)이 '모르는 이름' 갈래로 떨어져
+     * **수마다 메시지 조회가 한 번씩 더** 나가고 소켓은 판 상태를 한 번도 당기지 않는다.
+     */
+    const val reversiBroadcastEvent = "reversi"
+
+    /**
      * 확성기 배너 신호(2026-10-30 — 원본 RealtimeLink.swift `megaphoneBroadcastEvent` @ a6791165). 서버 `send_megaphone` 이 받는 사람마다
      * `poke_ring` 다음에 보내는 `realtime.send({v:1, m:<megaphone_id>}, 'megaphone', poke_topic(…), true)` 와 **문자 그대로 같다**.
      * payload 는 믿지 않고 "배너 목록(`megaphone_inbox`)을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 확성기 줄의 소비는
@@ -105,6 +112,9 @@ sealed interface RealtimeEffect {
 
     /** 아잉 큐브 신호('rummy')를 받았다 → 아잉 큐브 상태 재조회 1회. **take_pokes 가 아니다.** */
     data object RummySignal : RealtimeEffect
+
+    /** 아잉 뒤집기 신호('reversi')를 받았다 → 아잉 뒤집기 상태 재조회 1회(직렬화는 스토어 `handleSignal` 이 한다). **take_pokes 가 아니다.** */
+    data object ReversiSignal : RealtimeEffect
     data object MessageReadSignal : RealtimeEffect
 
     /** 확성기 신호('megaphone')를 받았다 → 배너 목록 재조회 1회(겹치면 배너 스토어 refresh 가 하나로 모은다). **take_pokes 가 아니다.** */
@@ -315,6 +325,8 @@ class RealtimeLink(transportAvailable: Boolean = false) {
                     // 확성기(2026-10-30)는 테트리스 가지 앞에 선다(Swift 와 같은 순서). 이 줄이 없으면 아래 기본값으로 떨어져 배너는 안 뜨고
                     // 메시지 조회만 한 번 더 나간다.
                     RealtimeLinkConstants.megaphoneBroadcastEvent -> listOf(RealtimeEffect.MegaphoneSignal)
+                    // 아잉 뒤집기는 큐브 줄 **앞**에 선다(Swift 와 같은 순서). 이 줄이 없으면 수마다 아래 기본값으로 떨어진다.
+                    RealtimeLinkConstants.reversiBroadcastEvent -> listOf(RealtimeEffect.ReversiSignal)
                     RealtimeLinkConstants.rummyBroadcastEvent -> listOf(RealtimeEffect.RummySignal)
                     RealtimeLinkConstants.tetrisBroadcastEvent -> listOf(RealtimeEffect.TetrisSignal)
                     RealtimeLinkConstants.gomokuBroadcastEvent -> listOf(RealtimeEffect.GomokuSignal)

@@ -192,6 +192,9 @@ fun TestScope.settle() {
 const val GOMOKU_FIXTURES: String = "Tests/checkTests/Fixtures/gomoku-rpc"
 const val CHESS_FIXTURES: String = "Tests/checkTests/Fixtures/chess-rpc"
 
+/** 아잉 뒤집기 서버 픽스처(하네스 Postgres 에서 RPC 를 실제로 부른 jsonb 원문 51장 + 매니페스트 — 맥 V03xxReversi* 시험과 같은 파일). */
+const val REVERSI_FIXTURES: String = "Tests/checkTests/Fixtures/reversi-rpc"
+
 fun fixtureText(directory: String, name: String): String = RepoFiles.readText("$directory/$name.json")
 
 fun fixtureJSON(directory: String, name: String): JsonObject = Json.parseToJsonElement(fixtureText(directory, name)).jsonObject

@@ -32,5 +32,6 @@ class GamesRoutesTest {
         assertEquals(Dest.Chess(GameSection.LOBBY.raw), GamesRoutes.destination(GamesDestination.Chess))
         assertEquals(Dest.TetrisDuel, GamesRoutes.destination(GamesDestination.TetrisDuel))
         assertEquals(Dest.Rummy, GamesRoutes.destination(GamesDestination.Rummy))
+        assertEquals(Dest.Reversi, GamesRoutes.destination(GamesDestination.Reversi))
     }
 }

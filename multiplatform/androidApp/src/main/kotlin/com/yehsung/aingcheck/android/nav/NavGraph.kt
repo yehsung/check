@@ -27,6 +27,7 @@ import com.yehsung.aingcheck.android.screens.games.chess.ChessDestination
 import com.yehsung.aingcheck.android.screens.games.gomoku.GomokuDestination
 import com.yehsung.aingcheck.android.screens.games.hub.GamesHubRoute
 import com.yehsung.aingcheck.android.screens.games.minigame.MiniGameRoute
+import com.yehsung.aingcheck.android.screens.games.reversi.ReversiDestination
 import com.yehsung.aingcheck.android.screens.games.rummy.RummyRoute
 import com.yehsung.aingcheck.android.screens.games.tetris.TetrisDuelRoute
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerRouteScreen
@@ -88,6 +89,7 @@ import com.yehsung.aingcheck.android.screens.games.GamesHomePlaceholder
 import com.yehsung.aingcheck.android.screens.games.GomokuPlaceholder
 import com.yehsung.aingcheck.android.screens.games.MiniGamePlaceholder
 import com.yehsung.aingcheck.android.screens.games.RummyPlaceholder
+import com.yehsung.aingcheck.android.screens.games.ReversiPlaceholder
 import com.yehsung.aingcheck.android.screens.games.StakeSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.games.TetrisDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerPlaceholder
@@ -240,6 +242,7 @@ private fun NavGraphBuilder.gamesGraph(open: (Any) -> Unit) =
         shellScreen<Dest.Chess> { ChessPlaceholder(it.toRoute<Dest.Chess>(), open) }
         shellScreen<Dest.TetrisDuel> { TetrisDuelPlaceholder(open) }
         shellScreen<Dest.Rummy> { RummyPlaceholder() }
+        shellScreen<Dest.Reversi> { ReversiPlaceholder() }
         dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }
     }
 
@@ -285,7 +288,7 @@ private fun NavGraphBuilder.gamesGraph(
 ) = navigation<Dest.GamesGraph>(startDestination = Dest.GamesHome) {
     val p = app.phone
     // 대국 화면은 두 겹 쌓지 않는다(W4-a §1 끝 — 알림 · 딥링크 · 허브 카드 모두).
-    val openGame: (Any) -> Unit = { d -> if (d is Dest.Gomoku || d is Dest.Chess) nav.navigate(d) { launchSingleTop = true } else open(d) }
+    val openGame: (Any) -> Unit = { d -> if (d is Dest.Gomoku || d is Dest.Chess || d is Dest.Reversi) nav.navigate(d) { launchSingleTop = true } else open(d) }
     shellScreen<Dest.GamesHome> {
         GamesHubRoute(
             store = p.games,
@@ -343,6 +346,14 @@ private fun NavGraphBuilder.gamesGraph(
             myUserID = p.session.userID,
             me = RummySeatFace(name = p.me.displayName ?: RummyPhoneText.me, avatarUrl = p.me.avatarURL?.toString(), characterId = p.me.equippedServerID),
             onLeave = { nav.popBackStack() },
+        )
+    }
+    shellScreen<Dest.Reversi> {
+        ReversiDestination(
+            games = p.games,
+            me = app.boardGameMe(),
+            onLeave = { nav.popBackStack() },
+            onTabBarHidden = onTabBarHidden,
         )
     }
     dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }

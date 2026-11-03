@@ -27,6 +27,7 @@ import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
 import com.yehsung.aingcheck.core.stores.rummy.GamesRummyInterfaceOrientation
 import com.yehsung.aingcheck.core.stores.rummy.RummyExitReason
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.leaveForExit
 import com.yehsung.aingcheck.core.stores.rummy.needsExitLeave
@@ -122,6 +123,12 @@ class PhoneContext(
     /** 아잉 큐브가 이어졌는가(조립 전 · 시험 문맥에서는 거짓). */
     val hasRummy: Boolean get() = ::rummy.isInitialized
 
+    /**
+     * 코어 아잉 뒤집기 스토어(판 7 — 호스트는 오목과 **같은** 하나). **null = 이 조립에 리버시가 없다** — 떼어 내기 깃발(`AppConfig.reversiEnabled`)이
+     * 꺼졌거나 조립 전·시험 문맥이다. 게임 탭·나 탭·실시간이 전부 이 칸 하나를 본다.
+     */
+    var reversi: ReversiStore? = null
+
     /** 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). */
     lateinit var characters: AppUserCharacterStore
 
@@ -185,6 +192,9 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
     }
 
     override val rummyPlayable: Boolean get() = context.hasRummy
+
+    /** 리버시 줄의 '맥에서 할 수 있어요'를 비운다 — 이 조립에 리버시 스토어가 있을 때만(떼어 내기 깃발이 꺼지면 서버 글자 그대로). */
+    override val reversiPlayable: Boolean get() = context.reversi != null
 
     override fun popMeToRoot() {
         context.router.popToRoot(PhoneTab.me)

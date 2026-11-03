@@ -22,6 +22,7 @@ import com.yehsung.aingcheck.core.stores.gomoku.aiMoveChooser
 import com.yehsung.aingcheck.core.stores.gomoku.isAIMatch
 import com.yehsung.aingcheck.core.stores.gomoku.isAIThinking
 import com.yehsung.aingcheck.core.stores.gomoku.stopWatching
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +38,8 @@ class PhoneGamesContext(private val phone: PhoneContext, override val gomoku: Ph
     override val collation: Collation get() = phone.collation
     override val tetris: TetrisDuelStore get() = phone.tetris
     override val rummy: RummyStore? get() = phone.rummy
+    /** 아잉 뒤집기(판 7). 떼어 내기 깃발이 꺼진 조립은 null — 게임 탭이 리버시가 없는 것처럼 돈다. */
+    override val reversi: ReversiStore? get() = phone.reversi
     override val router: GamesRouter get() = phone.router
 
     /** 메시지 탭이 차단해 숨긴 상대(Swift `context.links.messages?.hiddenBlockedPeerIDs`). 메시지 스토어가 없으면 빈 집합. */

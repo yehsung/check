@@ -1448,7 +1448,7 @@ package struct PokeDirectoryRow: Decodable, Equatable {
     /// 이 사람이 집중 모드인가(`focus_mode` — 대표 요청 5 "콕/메세지 창에서부터 집중 모드인 사람들은 표시"). 서버가 이 칸을
     /// 명부에 싣는 것은 **다음 서버 판**이다 — 지금 서버(7칸)는 안 보낸다. 그래서 status_message 와 같은 이유로 Optional·decodeIfPresent 고,
     /// nil 은 "집중이 아니다"가 아니라 **"모른다"** 이다. 모를 때의 해석(= 집중 아님)은 toPokeDirectoryEntries 한 곳에 있다.
-    /// ⚠︎ 그래서 이 칸을 싣는 서버 초안(20261108120000_app_user_directory_focus_mode — 대표 결재 대기)이 운영에 오르기 전에는
+    /// ⚠︎ 그래서 이 칸을 싣는 서버 초안(20261108120500_app_user_directory_focus_mode — 대표 결재 대기)이 운영에 오르기 전에는
     /// 요청 5(상대 집중 '집중' 칩 · 상대 집중 잠금)가 **운영에서 꺼져 있다**. 클라만으로는 못 켠다(팀 밖 사람의 profiles 는 RLS 로 안 보인다).
     /// 두 서버 모양의 실출력은 Tests/checkTests/Fixtures/directory-rpc 가 잰다.
     package let focusMode: Bool?

@@ -125,7 +125,7 @@ private func fsLoadDirectory(_ store: WorkTimerStore) async {
 
 /// 하네스에서 app_user_directory() 를 **실제로 부른 출력**(Fixtures/directory-rpc · 생성기 `_generate.sh.txt` · `_manifest.json`).
 /// 두 장은 같은 장면이다 — 예은(B)이 자기 행을 켰고 나머지는 끈 채, 호출자는 abto(A):
-///   · draft_8col   — 서버 초안 20261108120000(맨 끝 focus_mode)을 올린 서버. **운영에는 아직 없다(대표 결재 대기).**
+///   · draft_8col   — 서버 초안 20261108120500(맨 끝 focus_mode — 떠 낼 때 번호는 120000, 다른 초안과 겹쳐 옮김)을 올린 서버. **운영에는 아직 없다(대표 결재 대기).**
 ///   · current_7col — 지금 운영 정본(20261014121000 §3, 7칸). B 가 켰는데도 칸이 없다.
 /// 위 ① 의 행은 시험이 손으로 만든 사전이다 — 서버 초안의 칸 이름·자리·타입이 그것과 어긋나도 ① 은 초록이다. 여기가 그 틈을 막는다.
 private let fsServerFixtureFolder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -771,6 +771,30 @@ private func fsStripComments(_ source: String) -> String {
         let unknown = try JSONDecoder().decode(PokeSendResponse.self, from: Data(#"{"status":"sender_focused_v2"}"#.utf8))
         #expect(PokeSendOutcome(response: unknown) == .invalid)
         #expect(MessageSendOutcome(response: unknown) == .invalid)
+    }
+
+    /// 서버 초안을 하네스에 올려 **실제로 부른 출력**(Fixtures/sender-focus-rpc · _manifest.json). 손으로 쓴 `{"status":"sender_focused"}`
+    /// 가 아니라 서버가 내는 바이트(공백·키 모양 포함)가 같은 결과로 접히는지 본다. 폴더의 json 과 manifest 목록이 같은지도 잰다.
+    @Test func 서버_실출력_골든이_sender_focused_로_접힌다() throws {
+        let folder = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/sender-focus-rpc", isDirectory: true)
+        let manifestData = try Data(contentsOf: folder.appendingPathComponent("_manifest.json"))
+        let manifest = try #require(try JSONSerialization.jsonObject(with: manifestData) as? [String: Any])
+        let listed = Set(try #require(manifest["fixtures"] as? [String: Any]).keys)
+        let onDisk = Set(try FileManager.default.contentsOfDirectory(atPath: folder.path)
+            .filter { $0.hasSuffix(".json") && !$0.hasPrefix("_") }
+            .map { String($0.dropLast(5)) })
+        #expect(listed == onDisk)
+        #expect(onDisk == ["poke_user__sender_focused", "ultra_poke_user__sender_focused", "send_message__sender_focused"])
+        for name in onDisk.sorted() {
+            let data = try Data(contentsOf: folder.appendingPathComponent(name + ".json"))
+            let response = try JSONDecoder().decode(PokeSendResponse.self, from: data)
+            if name.hasPrefix("send_message") {
+                #expect(MessageSendOutcome(response: response) == .senderFocused, "\(name)")
+            } else {
+                #expect(PokeSendOutcome(response: response) == .senderFocused, "\(name)")
+            }
+        }
     }
 
 }

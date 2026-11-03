@@ -1,9 +1,9 @@
 {
-  "generator": "_generate.sh.txt (replay-harness-v2 · 체인 158장 재생 + 서버 초안 20261108120000_app_user_directory_focus_mode.sql 3회 적용 · 2026-11-03)",
+  "generator": "_generate.sh.txt (replay-harness-v2 · 체인 158장 재생 + 서버 초안 20261108120500_app_user_directory_focus_mode.sql (떠 낼 때 이름은 20261108120000_…, 번호만 옮김) 3회 적용 · 2026-11-03)",
   "serialization": "select coalesce(json_agg(t), '[]'::json) from public.app_user_directory() t — PostgREST 표 반환과 같은 모양",
   "fixtures": {
     "app_user_directory__draft_8col": {
-      "server": "서버 초안 20261108120000(맨 끝 focus_mode boolean — 대표 결재 대기, 운영 미적용)",
+      "server": "서버 초안 20261108120500(맨 끝 focus_mode boolean — 대표 결재 대기, 운영 미적용)",
       "scene": "B(3e240c02 · 예은)가 자기 행 focus_mode 를 켬(authenticated · 내 행 update — 앱 PATCH 와 같은 길) · 나머지는 끈 채",
       "caller": "A(267a3495 · abto)",
       "end": "rollback"

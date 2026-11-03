@@ -174,8 +174,8 @@ func resigningKeyWhileAlreadyPausedChangesNothing() {
             "이미 정지 중인데 또 전이한다 — 수신처가 정지 감시를 새로 걸어 1초 수면이 처음부터 간다")
 
     // ★ 이것이 (b) 의 **결과**다: 키를 잃었다 되찾기를 되풀이해도 전이가 한 번도 안 일어난다.
-    //   한 번이라도 일어나면 `armPauseWatchdog()` 이 다시 걸리고, 그 감시는 1초를 **자고 나서** 누적을 올리므로
-    //   1초 안에 반복되는 이탈은 `pausedSecondsUsed` 를 영영 0 으로 묶는다 → 5분 상한이 통째로 무력해진다
+    //   한 번이라도 일어나면 `armPauseWatchdog()` 이 다시 걸려 1초 수면이 처음부터 간다. 누적은 다음 판부터
+    //   벽시계(`MiniGamePauseMeter`, V0374)라 시간이 버려지지는 않지만, 감시를 쓸데없이 갈아 끼울 이유가 없다
     //   (상한은 "안 돌아오면 그 점수로 확정"을 집행하는 순위 공정성의 보루다).
     var transitions = 0
     for _ in 0..<50 where Pause.paused.resigningKey(isPlaying: true) != nil { transitions += 1 }
@@ -274,7 +274,7 @@ func thePanelHandlerWiresThePureTransitionAndGuardsTheWatchdog() throws {
     #expect(!block.contains("miniGameInterruptToken"), "정지 수신처가 판 종료 토큰을 올린다")
     #expect(!block.contains("abortMiniGameRound"), "정지 수신처가 판을 접는다")
     // 정지 예산을 되돌리지 않는다(되돌리면 회당 상한이 되어 벽시계를 무한히 늘릴 수 있다).
-    #expect(!block.contains("pausedSecondsUsed"), "정지 수신처가 정지 예산을 건드린다")
+    #expect(!block.contains("pauseMeter ="), "정지 수신처가 정지 예산을 되돌린다")
     // 자동 재개 금지 — 돌아온 순간에 사람이 화면을 보고 있다는 보장이 없다.
     #expect(!block.contains("beginResume()"), "키를 잃은 판을 자동으로 재개한다")
     // 눌린 채 얼어붙는 출구이기도 하다(← 를 누른 채 다른 창을 클릭하는 그 경로).
@@ -486,7 +486,7 @@ func thePauseWatchdogAsksThePureScopeQuestion() throws {
 
     #expect(watchdog.contains("guard PauseState.quittingKeepsTheScore(store.miniGameKind) else { return }"),
             "상한이 범위를 안 가른다 — 걷으면 타이밍 바의 수동 정지까지 5분에 기록 없이 잘린다")
-    #expect(watchdog.contains("while pausedSecondsUsed < PauseState.pauseLimitSeconds"), "상한 시계가 없다")
+    #expect(watchdog.contains("while !pauseMeter.isOver()"), "상한 시계가 없다")
     #expect(watchdog.contains("quitRound()"), "상한이 판을 접지 않는다")
 
     // 자동 정지 수신처는 종류를 **묻지 않는다** — 범위 판정은 한 자리(`armPauseWatchdog`)에만 있어야

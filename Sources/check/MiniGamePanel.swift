@@ -605,10 +605,11 @@ struct CheckMiniGameWindowView: View {
     /// 재개 카운트다운 Task. 창이 닫히거나 interruptToken 이 오르면 반드시 cancel 한다 — 안 그러면 죽은 화면의
     /// @State 를 1초마다 두드리는 Task 가 남는다.
     @State private var resumeTask: Task<Void, Never>?
-    /// 이 판에서 **누적으로** 멈춰 있던 초. 정지를 풀어도 0 으로 안 돌아간다 — 상한이 회당이면
+    /// 이 판에서 **누적으로** 얼어 있던 시간(`MiniGamePauseMeter`). 정지를 풀어도 0 으로 안 돌아간다 — 상한이 회당이면
     /// "4분 59초 멈춤 → 재개 → 다시 멈춤"을 반복해 벽시계를 무한히 늘릴 수 있고, 그러면 상한이
-    /// 막으려던 바로 그 일(토큰이 늙어 판을 통째로 잃는 것)이 그대로 일어난다. 새 판에서만 0 이 된다.
-    @State private var pausedSecondsUsed = 0
+    /// 막으려던 바로 그 일(토큰이 늙어 판을 통째로 잃는 것)이 그대로 일어난다. 새 판에서만 비운다.
+    /// `pauseState` 를 바꾸는 자리마다 바로 뒤에서 `notePauseClock()` 으로 알린다.
+    @State private var pauseMeter = MiniGamePauseMeter()
     /// 정지 감시(v0.3.38). 너무 오래 멈춰 있으면 그 점수로 확정하고 판을 끝낸다 — 아래 `pauseLimitSeconds` 참조.
     @State private var pauseWatchdog: Task<Void, Never>?
     /// 판 도중 토큰 감시(v0.3.67 — 끝이 정해지지 않은 판만). `tokenKeeperInterval` 마다 스토어에 "토큰이 늙었으면 갈아 끼워라" 를 묻는다.
@@ -707,6 +708,7 @@ struct CheckMiniGameWindowView: View {
             isPlaying = false
             cancelResume()
             pauseState = .none
+            notePauseClock()
             MiniGameKeyLatch.releaseAll(&input)
             cancelTokenKeeper()
         }
@@ -725,6 +727,7 @@ struct CheckMiniGameWindowView: View {
             cancelResume()
             MiniGameKeyLatch.releaseAll(&input)
             pauseState = next
+            notePauseClock()
             // `next` 는 언제나 `.paused` 다(위 순수 값의 유일한 비-nil 결과). 감시는 카드가 떠 있는 동안만 돈다.
             // 여기서는 게임 종류를 **묻지 않는다** — 범위 판정은 `armPauseWatchdog` 한 자리에 있다(수동 정지와
             // 같은 문으로 들어가야 두 길이 갈리지 않는다).
@@ -841,8 +844,8 @@ struct CheckMiniGameWindowView: View {
                     store.beginMiniGameLiveRound(kind: kind)
                     // 끝이 정해지지 않은 판(길건너)은 판 도중 토큰을 갈아 끼운다 — 감시는 그 게임에서만 돈다.
                     armTokenKeeper(kind: kind)
-                    // 정지 예산은 **판마다** 새로 준다(위 `pausedSecondsUsed` 주석).
-                    pausedSecondsUsed = 0
+                    // 정지 예산은 **판마다** 새로 준다(위 `pauseMeter` 주석).
+                    pauseMeter = MiniGamePauseMeter()
                 }
                 // 판이 스스로 끝났으면(게임오버·10라운드 완주) 정지 상태도 같이 푼다 — 안 그러면 결과 화면 위에
                 // 스크림이 남아 아무것도 못 누르는 창이 된다.
@@ -851,6 +854,7 @@ struct CheckMiniGameWindowView: View {
                     cancelPauseWatchdog()
                     cancelTokenKeeper()
                     pauseState = .none
+                    notePauseClock()
                     // 출구 ① 탑아웃(자연 종료). 토큰이 **안 오르는** 자리라 공통 수신처가 못 잡는다 —
                     // 결과 카드를 보는 동안 ← 를 놓았는데 그 뗌이 반영되지 않으면 다음 판이 왼쪽으로 출발한다.
                     MiniGameKeyLatch.releaseAll(&input)
@@ -1058,9 +1062,10 @@ struct CheckMiniGameWindowView: View {
             beginResume()
         } else {
             pauseState = next
+            notePauseClock()
         }
-        // 정지 감시는 **카드가 떠 있는 동안만** 돈다. 카운트다운(`resuming`)은 3초짜리라 상한과 무관하고,
-        // 재개 취소로 다시 `.paused` 가 되면 여기서 새로 걸린다(멱등 — 시계가 처음부터 다시 간다).
+        // 정지 감시는 **카드가 떠 있는 동안만** 돈다. 카운트다운(`resuming`) 동안은 끊지 않지만 그 3초도 시계에는
+        // 쌓인다(`MiniGamePauseMeter`). 재개 취소로 다시 `.paused` 가 되면 여기서 새로 걸리고, 이미 넘었으면 바로 접는다.
         if case .paused = pauseState { armPauseWatchdog() } else { cancelPauseWatchdog() }
     }
 
@@ -1068,13 +1073,21 @@ struct CheckMiniGameWindowView: View {
     private func beginResume() {
         cancelResume()
         cancelPauseWatchdog()
+        // [이어하기] 를 눌렀어도 이미 넘었으면 풀어 주지 않고 그 점수로 접는다(폰 `applyPause` 와 같다).
+        // 감시는 1초마다 보므로 그 사이에 넘은 판이 여기로 올 수 있다.
+        if isPlaying, PauseState.quittingKeepsTheScore(store.miniGameKind), pauseMeter.isOver() {
+            quitRound()
+            return
+        }
         pauseState = .resuming(PauseState.countdownStart)
+        notePauseClock()
         resumeTask = Task { @MainActor in
             while true {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 guard case .resuming = pauseState else { return }
                 pauseState = pauseState.steppedDown()
+                notePauseClock()
                 if pauseState == .none { return }
             }
         }
@@ -1107,18 +1120,22 @@ struct CheckMiniGameWindowView: View {
         // 접어도 기록이 안 남는 게임에는 안 건다 — 거는 순간 상한이 점수를 건지는 장치가 아니라 판을
         // 없애는 장치가 된다(위 머리말 · `PauseState.quittingKeepsTheScore`).
         guard PauseState.quittingKeepsTheScore(store.miniGameKind) else { return }
-        // 1초씩 센다. **남은 시간이 아니라 쓴 시간을 누적**하므로, 정지를 풀었다 다시 걸어도
-        // 시계가 처음부터 가지 않는다(`pausedSecondsUsed` 가 판 단위로 산다).
+        // 1초마다 판 누적(`pauseMeter`)을 본다. **남은 시간이 아니라 쓴 시간을 누적**하므로, 정지를 풀었다 다시
+        // 걸어도 시계가 처음부터 가지 않는다(시계는 판 단위로 산다).
         pauseWatchdog = Task { @MainActor in
-            while pausedSecondsUsed < PauseState.pauseLimitSeconds {
+            while !pauseMeter.isOver() {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 // 그 사이 이어하기·그만두기·판 종료가 있었으면 아무것도 하지 않는다(누적은 남긴다).
                 guard case .paused = pauseState, isPlaying else { return }
-                pausedSecondsUsed += 1
             }
             quitRound()
         }
+    }
+
+    /// 방금 바뀐 `pauseState` 를 정지 시계에 알린다. 상태를 바꾸는 자리마다 바로 뒤에서 부른다.
+    private func notePauseClock() {
+        pauseMeter.observe(pauseState)
     }
 
     private func cancelPauseWatchdog() {
@@ -1151,6 +1168,7 @@ struct CheckMiniGameWindowView: View {
         cancelResume()
         cancelPauseWatchdog()
         pauseState = .none
+        notePauseClock()
         isPlaying = false
         // 출구 ⑥ [그만두기]. 아래 `abortMiniGameRound()` 가 토큰을 올려 공통 수신처도 지나가지만,
         // **여기서도 푼다** — 토큰을 올리는 쪽이 스토어라 그 구현이 바뀌면(예: 이미 끝난 판이면 안 올림)

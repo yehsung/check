@@ -150,6 +150,12 @@ struct V03xxMahjongWindowTests {
         MJWindowRetention.owners.append(owner)
         let store = MahjongStore()
         store.attach(host: owner)
+        // 진행 중 판을 든 채 닫는다(판이 없으면 나가기 RPC 가 스스로 멈춰 이 단언이 뜻이 없다).
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let active = #"{"match":{"id":"11111111-2222-4333-8444-555555555555","status":"active","seq":9,"hand_index":0,"phase":"turn","turn_seat":1},"my_seat":0,"my_hand":[0,4]}"#
+        #expect(store.applyState(try decoder.decode(MahjongStatePayload.self, from: Data(active.utf8))) == .applied)
+        #expect(store.match?.match?.matchStatus == .active)
         let c = controller(store: store)
         let window = try #require(c.prepareWindow())
         defer { c.discardWindowForTesting() }
@@ -157,7 +163,7 @@ struct V03xxMahjongWindowTests {
         c.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
         c.windowDidBecomeKey(Notification(name: NSWindow.didBecomeKeyNotification, object: window))
         c.close()
-        for _ in 0..<20 { await Task.yield() }
+        for _ in 0..<40 { await Task.yield(); try? await Task.sleep(for: .milliseconds(2)) }
         let writes = GomokuStubProtocol.calls(host: host).map(\.rpc).filter {
             $0.hasPrefix("mahjong_") && !["mahjong_state", "mahjong_lobby", "mahjong_ranking"].contains($0)
         }

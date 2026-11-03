@@ -50,6 +50,8 @@ class SfSymbolCoverageTest {
         assertTrue(SfSymbols.toAppIcon.keys.containsAll(SfSymbols.desktopOnly), "데스크톱 전용 이름이 대응표에 없다: ${SfSymbols.desktopOnly - SfSymbols.toAppIcon.keys}")
         val nowInSwift = SfSymbols.desktopOnly.intersect(used.keys)
         assertTrue(nowInSwift.isEmpty(), "Swift 가 쓰기 시작한 데스크톱 전용 이름 — SfSymbols.desktopOnly 에서 지운다: $nowInSwift")
+        val shadowing = SfSymbolScan.NOT_SYMBOLS.intersect(SfSymbols.toAppIcon.keys)
+        assertTrue(shadowing.isEmpty(), "기호가 아닌 글자 목록이 대응표 이름을 가린다: ${shadowing.sorted()}")
         val staleIndirect = SfSymbolScan.INDIRECT.filter { name -> sources.none { (_, code) -> code.contains("\"$name\"") } }
         assertTrue(staleIndirect.isEmpty(), "간접 기호 목록에 원문에서 사라진 이름: $staleIndirect")
         println("AINGCHECK-SFSYMBOLS swift=${sources.size} used=${used.size} mapped=${SfSymbols.toAppIcon.size} icons=${AppIcon.entries.size}")
@@ -134,7 +136,10 @@ class SfSymbolCoverageTest {
 }
 
 internal object SfSymbolScan {
-    /** 점 붙은 기호 꼴이지만 기호가 아닌 글자(설정 키·파일 이름·번들 id·PostgREST 연산자·판 표기). 이유는 원문 자리. */
+    /**
+     * 기호 꼴이지만 기호가 아닌 글자(설정 키·파일 이름·번들 id·PostgREST 연산자·판 표기 · 기호 인자 안 안쪽 호출의 인자). 이유는 원문 자리.
+     * 수집기의 어느 규칙((1) 기호 인자 · (2) 같은 줄 문맥 · (3) 점 글자)으로 잡혀도 뺀다. 대응표 이름과 겹치면 시험이 빨갛다(진짜 기호를 가리지 않게).
+     */
     val NOT_SYMBOLS: Set<String> = setOf(
         // 파일 이름
         "agy.log", "auth.json", "entries.json", "manifest.json", "state.json",
@@ -156,6 +161,11 @@ internal object SfSymbolScan {
         "lamp.off", "lamp.on", "road.dashes", "signal.post", "tree.0", "tree.1", "tree.2",
         // 아잉 큐브 창 id · 저장 키 · 스크롤 자리(0.3.69~) · 맥 파일 격리 속성(0.3.69 MoveToApplications) — 기호가 아니다
         "check.rummy.window", "rummy.engaged.v2", "rummy.engaged.v2.owner", "rummy.match", "com.apple.quarantine",
+        // 아잉 뒤집기 창 자리 저장 키(0.3.74 Sources/check/CheckReversiWindow.swift `frameAutosaveName`) — 기호가 아니다
+        "check.reversi.window",
+        // 일일 미션 게임 이름(0.3.74 Sources/CheckMobileKit/Games/GamesRummyTile.swift `Image(systemName: MeText.dailyMissionIcon(game: "rummy"))`)
+        // — 기호 인자 안 **안쪽 호출의 game: 인자**라 수집기 (1)·(2)에 걸린다. 기호는 dailyMissionIcon 이 돌려주는 cube.fill(이미 대응표에 있다)
+        "rummy",
     )
 
     /** 문맥 낱말도 점도 없이 쓰이는 간접 기호(낱말 하나). 지금은 없다 — 생기면 여기 적고 원문 대조가 따라온다. */
@@ -181,7 +191,8 @@ internal object SfSymbolScan {
                 val line = lineStarts.binarySearch(at).let { if (it >= 0) it else -it - 2 }
                 val inLineContext = context.containsMatchIn(code.substring(lineStarts[line], at))
                 val inArgument = arguments.any { at in it }
-                val isDotted = dotted.matches(s) && s !in NOT_SYMBOLS
+                if (s in NOT_SYMBOLS) continue
+                val isDotted = dotted.matches(s)
                 if (inArgument || inLineContext || isDotted || s in INDIRECT) out.getOrPut(s) { mutableListOf() } += "$path:${line + 1}"
             }
         }

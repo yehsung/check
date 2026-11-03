@@ -3252,6 +3252,7 @@
         "gift": {
           "createdAt": "2026-10-25T00:00:00Z",
           "id": "g1",
+          "kind": "birthday",
           "note": null,
           "options": [
             "aing_cake_strawberry",
@@ -3496,6 +3497,7 @@
         "gift": {
           "createdAt": null,
           "id": "g1",
+          "kind": "birthday",
           "note": null,
           "options": [
             "aing_cake_choco"
@@ -5747,6 +5749,157 @@
           "op": "num",
           "path": "$[0].opened_session",
           "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": {
+          "createdAt": "2026-11-03T00:00:00Z",
+          "id": "g2",
+          "kind": "drink",
+          "note": "짠",
+          "options": [
+            "aing_isul"
+          ]
+        },
+        "status": "ok"
+      },
+      "id": "gift-pending-drink",
+      "json": "{\"status\":\"ok\",\"gift\":{\"id\":\"g2\",\"kind\":\"drink\",\"options\":[\"aing_cake_choco\",\"aing_isul\",\"aing_isul\"],\"note\":\"짠\",\"created_at\":\"2026-11-03T00:00:00Z\"}}",
+      "type": "CharacterGiftPendingResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift.kind",
+              "birthday"
+            ],
+            [
+              "$.gift.options[0]",
+              "aing_cake_choco"
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift.kind",
+              "birthday"
+            ],
+            [
+              "$.gift.options[0]",
+              "aing_cake_choco"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": {
+          "createdAt": null,
+          "id": "g3",
+          "kind": "birthday",
+          "note": null,
+          "options": [
+            "aing_cake_strawberry"
+          ]
+        },
+        "status": "ok"
+      },
+      "id": "gift-pending-kind-null",
+      "json": "{\"status\":\"ok\",\"gift\":{\"id\":\"g3\",\"kind\":null,\"options\":[\"aing_isul\",\"aing_cake_strawberry\"]}}",
+      "type": "CharacterGiftPendingResponse",
+      "variants": [
+        {
+          "op": "str",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": null,
+        "status": "ok"
+      },
+      "id": "gift-pending-kind-unknown",
+      "json": "{\"status\":\"ok\",\"gift\":{\"id\":\"g4\",\"kind\":\"beer\",\"options\":[\"aing_isul\"]}}",
+      "type": "CharacterGiftPendingResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "body": null,
+        "createdAt": null,
+        "duplicate": null,
+        "maxLength": null,
+        "messageId": null,
+        "resetAfterSeconds": null,
+        "retryAfterSeconds": null,
+        "ring": null,
+        "status": "sender_focused",
+        "ultraBalance": null,
+        "ultraRemaining": null
+      },
+      "id": "send-sender-focused",
+      "json": "{\"status\":\"sender_focused\"}",
+      "type": "PokeSendResponse",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.status",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.status",
+          "result": [
+            [
+              "$.status",
+              "zz_unknown_value"
+            ]
+          ]
         }
       ]
     }

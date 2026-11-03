@@ -15,6 +15,14 @@ class TrayDotReasonsTest {
     /** 맥 소스(주석 걷고)에서 MenuBarDotReasons 의 글·순서·구분자를 뽑는다 — 기대값을 Kotlin 상수에서 가져오지 않는다. */
     private data class MacDots(val order: List<Pair<String, String>>, val separator: String)
 
+    /**
+     * 맥에는 있지만 데스크톱이 **아직 일부러 안 가진** 점 사유(맥 깃발 이름 → 이유). 맥 대조에서 이 깃발만 빼고 나머지 글·순서를 그대로 잰다.
+     * 데스크톱이 그 사유를 옮기면 여기서 지운다(only() 가 그 깃발을 알게 되면 아래 단언이 빨강으로 알린다).
+     */
+    private val desktopDeferred: Map<String, String> = mapOf(
+        "reversiInvite" to "아잉 뒤집기 — 윈도우 v1.1 대기열(10-31 기능 동결)",
+    )
+
     private fun macDots(): MacDots {
         val repo = System.getProperty("aingcheck.repoRoot") ?: error("aingcheck.repoRoot 시스템 속성이 없다(aingcheck.test-seal 밖 실행)")
         val swift = File(repo, "Sources/check/CheckMenuView.swift").readText()
@@ -32,16 +40,17 @@ class TrayDotReasonsTest {
         val updateText = Regex("""static\s+let\s+updateDotAccessibilityDescription\s*=\s*"([^"]+)"""").find(code)?.groupValues?.get(1)
             ?: error("맥 updateDotAccessibilityDescription 을 못 찾았다")
         val desc = body.substring(body.indexOf("var accessibilityDescription"))
-        val order = Regex("""if\s+(\w+)\s*\{\s*parts\.append\(([^)]+)\)\s*\}""").findAll(desc).map { m ->
-            val flag = m.groupValues[1]
-            val expr = m.groupValues[2].trim()
+        val appended = Regex("""if\s+(\w+)\s*\{\s*parts\.append\(([^)]+)\)\s*\}""").findAll(desc).map { m -> m.groupValues[1] to m.groupValues[2].trim() }.toList()
+        // 빠짐 목록이 낡지 않게: 맥에 아직 그 사유가 있다.
+        for ((flag, why) in desktopDeferred) check(appended.any { it.first == flag }) { "빠짐 목록의 $flag 가 맥 MenuBarDotReasons 에 없다 — 목록에서 지운다($why)" }
+        val order = appended.filterNot { it.first in desktopDeferred }.map { (flag, expr) ->
             val text = when {
                 expr.startsWith("Self.") -> texts[expr.removePrefix("Self.")] ?: error("맥 글 상수 $expr 를 못 찾았다")
                 expr == "MenuBarStatusLabel.updateDotAccessibilityDescription" -> updateText
                 else -> error("모르는 맥 식: $expr")
             }
             flag to text
-        }.toList()
+        }
         val sep = Regex("""joined\(separator:\s*"([^"]+)"\)""").find(desc)?.groupValues?.get(1) ?: error("맥 구분자를 못 찾았다")
         return MacDots(order, sep)
     }
@@ -60,7 +69,8 @@ class TrayDotReasonsTest {
     @Test
     fun star2TextsAndOrderMatchTheMacSource() {
         val mac = macDots()
-        assertEquals(7, mac.order.size, "맥 사유는 일곱이다: ${mac.order}")
+        assertEquals(7, mac.order.size, "맥 사유는 (데스크톱 빠짐 ${desktopDeferred.keys} 을 빼고) 일곱이다: ${mac.order}")
+        for ((flag, why) in desktopDeferred) assertTrue(runCatching { only(flag) }.isFailure, "데스크톱이 $flag 를 옮겼다 — 빠짐 목록에서 지운다($why)")
         assertEquals(mac.separator, TrayDotReasons.SEPARATOR)
         val all = TrayDotReasons(true, true, true, true, true, true, true)
         assertEquals(mac.order.joinToString(mac.separator) { it.second }, all.accessibilityDescription)

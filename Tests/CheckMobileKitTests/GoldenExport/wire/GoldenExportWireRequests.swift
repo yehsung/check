@@ -574,7 +574,29 @@ struct GoldenExportWireRequests {
             // 기기 이름 = 스칼라 64 · 넘치면 그래핌 단위로 자름).
             WireCall(id: "fetchMyAILimits#filters", responses: [.json(Self.aiLimitFilterRows)]) { s, t in try await s.fetchMyAILimits(accessToken: t, userID: u) },
             WireCall(id: "fetchMyAILimits#labels", responses: [.json(Self.aiLimitLabelRows)]) { s, t in try await s.fetchMyAILimits(accessToken: t, userID: u) },
+            // ---- 맥 main 0.3.74(판 7 기준선): 아잉 뒤집기 · 내 집중 모드 읽기. 기존 case 순서를 밀지 않게 맨 뒤에 둔다 ----
+            WireCall(id: "reversiLobby") { s, t in try await s.reversiLobby(accessToken: t) },
+            WireCall(id: "reversiLobby#data", responses: [Self.reversiFixture("reversi_lobby__incoming.json")]) { s, t in try await s.reversiLobby(accessToken: t) },
+            WireCall(id: "reversiChallenge") { s, t in try await s.reversiChallenge(accessToken: t, opponentID: p, stake: 5) },
+            WireCall(id: "reversiCancel") { s, t in try await s.reversiCancel(accessToken: t, matchID: m) },
+            WireCall(id: "reversiRespond") { s, t in try await s.reversiRespond(accessToken: t, matchID: m, accept: true) },
+            WireCall(id: "reversiState") { s, t in try await s.reversiState(accessToken: t, matchID: m, sinceSeq: 3) },
+            WireCall(id: "reversiState#data", responses: [Self.reversiFixture("reversi_state__my_turn.json")]) { s, t in try await s.reversiState(accessToken: t, matchID: m) },
+            WireCall(id: "reversiMove") { s, t in try await s.reversiMove(accessToken: t, matchID: m, expectedSeq: 4, idx: 19) },
+            WireCall(id: "reversiResign") { s, t in try await s.reversiResign(accessToken: t, matchID: m) },
+            WireCall(id: "reversiRanking") { s, t in try await s.reversiRanking(accessToken: t) },
+            WireCall(id: "reversiWatch") { s, t in try await s.reversiWatch(accessToken: t, matchID: m, sinceSeq: 2) },
+            WireCall(id: "reversiWatchLive") { s, t in try await s.reversiWatchLive(accessToken: t, matchID: m, sinceSeq: 2) },
+            WireCall(id: "fetchMyFocusMode") { s, t in try await s.fetchMyFocusMode(accessToken: t, userID: u) },
+            WireCall(id: "fetchMyFocusMode#data", responses: [.json(#"[{"focus_mode":true}]"#)]) { s, t in try await s.fetchMyFocusMode(accessToken: t, userID: u) },
         ]
+    }
+
+    /// 아잉 뒤집기 서버 응답 픽스처(Tests/checkTests/Fixtures/reversi-rpc — 맥 main 0.3.74).
+    static func reversiFixture(_ rel: String) -> MobileStubResponse {
+        let url = WireRepo.url("Tests/checkTests/Fixtures/reversi-rpc/" + rel)
+        guard let text = try? String(contentsOf: url, encoding: .utf8) else { fatalError("픽스처 \(rel) 를 못 읽었다") }
+        return .json(text)
     }
 
     /// 데모 픽스처(앱 화면이 그리는 응답 원문 — `Sources/CheckMobileKit/Demo/Fixtures/<rel>`)를 응답 대본으로.
@@ -829,7 +851,7 @@ struct GoldenExportWireRequests {
                 "Sources/CheckMobileKit/Session/MobileSignOutCleanup.swift", "Sources/CheckMobileKit/Me/MeProfileService.swift",
                 "Sources/CheckMobileKit/Me/MeAILimitsService.swift", "Sources/CheckCore/SupabaseWorkServiceAILimits.swift",
                 "Sources/CheckCore/MegaphoneBanner.swift", "Sources/CheckCore/RummyWire.swift", "Sources/CheckCore/RummyRules.swift",
-                "Sources/CheckCore/RummyTableLayout.swift",
+                "Sources/CheckCore/RummyTableLayout.swift", "Sources/CheckCore/ReversiWire.swift",
             ],
             spec: [
                 "values": .object([

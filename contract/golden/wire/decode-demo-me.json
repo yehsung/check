@@ -9,6 +9,47 @@
     {
       "dump": [
         {
+          "center": null
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me-/rest.profiles.get@select=center.json",
+      "type": "[ProfileCenterRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].center",
+          "result": []
+        },
+        {
+          "op": "str",
+          "path": "$[0].center",
+          "result": [
+            [
+              "$[0].center",
+              "3"
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$[0].center",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
           "character": null
         }
       ],
@@ -3456,16 +3497,6 @@
       "variants": [
         {
           "op": "null",
-          "path": "$[0]",
-          "result": "error"
-        },
-        {
-          "op": "str",
-          "path": "$[0]",
-          "result": "error"
-        },
-        {
-          "op": "remove",
           "path": "$[0].center",
           "result": [
             [
@@ -3473,21 +3504,6 @@
               null
             ]
           ]
-        },
-        {
-          "op": "null",
-          "path": "$[0].center",
-          "result": [
-            [
-              "$[0].center",
-              null
-            ]
-          ]
-        },
-        {
-          "op": "num",
-          "path": "$[0].center",
-          "result": "error"
         },
         {
           "op": "enum",
@@ -5460,6 +5476,7 @@
         "gift": {
           "createdAt": "2026-09-17T04:30:00.123456+00:00",
           "id": "d0000000-0000-4000-8000-0000000c4e01",
+          "kind": "birthday",
           "note": null,
           "options": [
             "aing_cake_strawberry",

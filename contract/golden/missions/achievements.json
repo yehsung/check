@@ -2,7 +2,7 @@
   "cases": [
     {
       "id": "fixture-_me/rpc.achievements_status.json",
-      "json": "{\n  \"__note\": [\n    \"achievements_status() — 데모 계정(장면 _me · 라우트 `me` 또는 `me/missions`). **받을 것 넷**: 할 일 20 · 콕10 5 · 콕50 20 · 연속14 30 = 75.\",\n    \"★ 콕은 50회까지 채웠는데 10회를 안 받았다 — 계열 줄(AchievementStatus.seriesRows)은 **poke10** 의 [받기]를 세워야 한다. 위 단계(poke50)가 가리면 사용자는 받을 보상을 영영 못 본다(사장님 지시의 핵심).\",\n    \"팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.\",\n    \"claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).\",\n    \"값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).\",\n    \"시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
+      "json": "{\n  \"__note\": [\n    \"achievements_status() — 데모 계정(장면 _me · 라우트 `me` 또는 `me/missions`). **받을 것 넷**: 할 일 20 · 콕10 5 · 콕50 20 · 연속14 30 = 75.\",\n    \"★ 콕은 50회까지 채웠는데 10회를 안 받았다 — 계열 줄(AchievementStatus.seriesRows)은 **poke10** 의 [받기]를 세워야 한다. 위 단계(poke50)가 가리면 사용자는 받을 보상을 영영 못 본다(사장님 지시의 핵심).\",\n    \"팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.\",\n    \"claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).\",\n    \"값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).\",\n    \"시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
       "status": {
         "claimable": [
           "todo3",
@@ -132,6 +132,24 @@
                   "target": 1,
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
+                },
+                {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "fractionBits": "0000000000000000",
+                  "isClaimable": false,
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "state": "inProgress",
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
                 }
               ],
               "serverNowMs": null
@@ -252,6 +270,24 @@
                   "target": 1,
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
+                },
+                {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "fractionBits": "0000000000000000",
+                  "isClaimable": false,
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "state": "inProgress",
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
                 }
               ],
               "serverNowMs": 1789621500000
@@ -372,6 +408,24 @@
                   "target": 1,
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
+                },
+                {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "fractionBits": "0000000000000000",
+                  "isClaimable": false,
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "state": "inProgress",
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
                 }
               ],
               "serverNowMs": 1789657199999
@@ -489,6 +543,24 @@
                   "target": 1,
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
+                },
+                {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "fractionBits": "0000000000000000",
+                  "isClaimable": false,
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "state": "inProgress",
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
                 }
               ],
               "serverNowMs": 1789657200000
@@ -606,6 +678,24 @@
                   "target": 1,
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
+                },
+                {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "fractionBits": "0000000000000000",
+                  "isClaimable": false,
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "state": "inProgress",
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
                 }
               ],
               "serverNowMs": 1789657200001
@@ -737,6 +827,27 @@
                 "target": 1,
                 "tier": 1,
                 "title": "1:1 테트리스 한 판 하기"
+              }
+            },
+            {
+              "game": "rummy",
+              "row": {
+                "achieved": false,
+                "achievedAtMs": null,
+                "claimed": false,
+                "claimedAtMs": null,
+                "detail": "맥에서 할 수 있어요",
+                "fractionBits": "0000000000000000",
+                "isClaimable": false,
+                "key": "daily_rummy",
+                "progress": 0,
+                "reward": 5,
+                "series": "daily_rummy",
+                "sort": 70,
+                "state": "inProgress",
+                "target": 1,
+                "tier": 1,
+                "title": "아잉 큐브 한 판 하기"
               }
             }
           ],

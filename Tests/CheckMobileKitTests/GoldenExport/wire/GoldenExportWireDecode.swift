@@ -243,6 +243,21 @@ enum WireDecodeRegistry {
         "rpc.create_team": "[CreateTeamRow]",
         "rpc.join_team": "[JoinTeamRow]",
         "rpc.lookup_team_by_code": "[TeamJoinPreviewRow]",
+        // 아잉 큐브 폰 데모(맥 main 0.3.74 의 아이폰 큐브 화면 — RummyWire.swift 의 서비스가 디코드하는 타입 그대로).
+        "rpc.rummy_lobby": "RummyLobby",
+        "rpc.rummy_ranking": "RummyRanking",
+        "rpc.rummy_create": "RummyActionResponse",
+        "rpc.rummy_decline": "RummyActionResponse",
+        "rpc.rummy_draft": "RummyActionResponse",
+        "rpc.rummy_draw": "RummyActionResponse",
+        "rpc.rummy_heartbeat": "RummyActionResponse",
+        "rpc.rummy_invite": "RummyActionResponse",
+        "rpc.rummy_join": "RummyActionResponse",
+        "rpc.rummy_leave": "RummyActionResponse",
+        "rpc.rummy_play": "RummyActionResponse",
+        "rpc.rummy_react": "RummyActionResponse",
+        "rpc.rummy_start": "RummyActionResponse",
+        "rpc.rummy_state": "RummyActionResponse",
     ]
 
     /// `rest.profiles.get@…` 는 select 칸으로 타입이 갈린다(같은 표, 다른 GET).
@@ -392,7 +407,7 @@ struct GoldenExportWireDecode {
         ))
     }
 
-    /// 데모 픽스처(Sources/CheckMobileKit/Demo/Fixtures — 193개). 영역 하나 = 골든 하나(크기 예산).
+    /// 데모 픽스처(Sources/CheckMobileKit/Demo/Fixtures — 255개: 193 + 맥 main 0.3.74 의 아이폰 큐브 57 · 지금 탭 팀 명부 4 · 내 센터 1). 영역 하나 = 골든 하나(크기 예산).
     func demo(_ area: String) throws -> (cases: [GoldenJSON], other: [GoldenJSON], none: [GoldenJSON]) {
         var files: [(id: String, type: String)] = []
         var other: [GoldenJSON] = []
@@ -469,6 +484,12 @@ struct GoldenExportWireDecode {
             ("phone-work-lossy", "PhoneWorkResponse", #"{"status":"ok","session":{"id":"S","started_at":5},"check_after_seconds":"10","wallet":{"ruby_balance":3}}"#),
             ("latest-release", "AppLatestRelease", #"{"v":1,"version":"0.3.67","build":120,"notes":["a","b"],"published_at":"2026-10-27T00:00:00Z"}"#),
             ("devices", "[WorkStatusDeviceRow]", #"[{"user_id":"u","device_id":"d","session_id":null,"opened_session":true}]"#),
+            // v0.3.74 '술 한잔' 선물(gift.kind — 없거나 null 이면 생일 · 모르는 값이면 선물 없음) · 이슬 sender_focused 거절.
+            ("gift-pending-drink", "CharacterGiftPendingResponse",
+             #"{"status":"ok","gift":{"id":"g2","kind":"drink","options":["aing_cake_choco","aing_isul","aing_isul"],"note":"짠","created_at":"2026-11-03T00:00:00Z"}}"#),
+            ("gift-pending-kind-null", "CharacterGiftPendingResponse", #"{"status":"ok","gift":{"id":"g3","kind":null,"options":["aing_isul","aing_cake_strawberry"]}}"#),
+            ("gift-pending-kind-unknown", "CharacterGiftPendingResponse", #"{"status":"ok","gift":{"id":"g4","kind":"beer","options":["aing_isul"]}}"#),
+            ("send-sender-focused", "PokeSendResponse", #"{"status":"sender_focused"}"#),
         ]
         var seen = Set<String>()
         var cases: [GoldenJSON] = []
@@ -490,7 +511,7 @@ struct GoldenExportWireDecode {
                 #expect(known, "분류 안 된 데모 픽스처 \(rel)")
             }
         }
-        #expect(total == 193, "데모 픽스처 수가 바뀌었다(\(total)) — 배정표(193)와 골든을 다시 본다")
+        #expect(total == 255, "데모 픽스처 수가 바뀌었다(\(total)) — 배정표(255)와 골든을 다시 본다")
         let fixtures = try fixtureFiles(["chess-rpc", "chess-rpc-clock10", "gomoku-rpc", "message-rpc", "todo-rpc", "rummy/server"])
         #expect(fixtures.count == 276, "시험 픽스처 수가 바뀌었다(\(fixtures.count))")
     }

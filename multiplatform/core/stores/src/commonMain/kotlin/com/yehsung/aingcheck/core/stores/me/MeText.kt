@@ -401,6 +401,9 @@ object MeText {
             "tetris_duel" to "rectangle.split.2x1.fill",
             // 아잉 큐브(내부 식별자 rummy — 원본 MeText.swift @ ab6e49ac · 071afacc). 맥과 한 벌인 기호다.
             "rummy" to "cube.fill",
+            // 아잉 뒤집기(서버 20261108200000 의 아홉째 일일 미션 daily_reversi — 화면은 아직 없어도 서버가 이 줄을 모두에게 준다).
+            // 맥과 한 벌인 기호: Sources/check/CheckAchievementRows.swift:105-106 → ReversiPanelBanner.swift:276 ReversiEntryIcon.symbol @ 12624739.
+            "reversi" to "circle.lefthalf.filled",
         )
         return table.firstOrNull { it.first == game }?.second ?: missionFallbackIcon
     }

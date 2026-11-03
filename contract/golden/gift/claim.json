@@ -202,6 +202,198 @@
       "wearNowButton": "지금 입기"
     },
     {
+      "body": "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!",
+      "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+      "closeButton": "닫기",
+      "confirmButton": "짠 받기",
+      "id": "texts-drink",
+      "lockedCaption": "술 한잔 선물 전용",
+      "lockedHint": "술 한잔 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.",
+      "received": "이슬 아잉이를 받았어요!",
+      "reopenButton": "받기",
+      "reopenTitle": "짠! 선물이 왔어요",
+      "title": "짠! 🥂",
+      "wearNowButton": "지금 입기"
+    },
+    {
+      "builtInIDs": [
+        {
+          "characterID": "aing",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_gold",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_rainbow",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_cake_strawberry",
+          "giftKindOfBuiltIn": "birthday",
+          "kind": "birthday"
+        },
+        {
+          "characterID": "aing_cake_choco",
+          "giftKindOfBuiltIn": "birthday",
+          "kind": "birthday"
+        },
+        {
+          "characterID": "robot",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "fox",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": " aing_gold",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "AING_GOLD",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_cake",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_cake_strawberry ",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": null,
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_isul",
+          "giftKindOfBuiltIn": "drink",
+          "kind": "drink"
+        },
+        {
+          "characterID": "AING_ISUL",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_isul ",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_isul",
+          "giftKindOfBuiltIn": "drink",
+          "kind": "drink"
+        }
+      ],
+      "id": "kinds",
+      "rows": [
+        {
+          "builtInIDs": [
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ],
+          "copy": {
+            "body": "생일 선물로 케이크 아잉이를 하나 골라 주세요.",
+            "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+            "closeButton": "닫기",
+            "confirmButton": "이걸로 받을게요",
+            "lockedCaption": "생일 선물 전용",
+            "lockedHint": "생일에 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.",
+            "reopenButton": "고르기",
+            "reopenTitle": "생일 선물이 도착했어요",
+            "title": "생일 축하해요! 🎂",
+            "wearNowButton": "지금 입기"
+          },
+          "minProtocol": 4,
+          "supported": [
+            false,
+            false,
+            true,
+            true,
+            true
+          ],
+          "wireValue": "birthday"
+        },
+        {
+          "builtInIDs": [
+            "aing_isul"
+          ],
+          "copy": {
+            "body": "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!",
+            "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+            "closeButton": "닫기",
+            "confirmButton": "짠 받기",
+            "lockedCaption": "술 한잔 선물 전용",
+            "lockedHint": "술 한잔 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.",
+            "reopenButton": "받기",
+            "reopenTitle": "짠! 선물이 왔어요",
+            "title": "짠! 🥂",
+            "wearNowButton": "지금 입기"
+          },
+          "minProtocol": 5,
+          "supported": [
+            false,
+            false,
+            false,
+            true,
+            true
+          ],
+          "wireValue": "drink"
+        }
+      ],
+      "supportedProtocols": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "wireValues": [
+        {
+          "kind": "birthday",
+          "raw": "birthday"
+        },
+        {
+          "kind": "drink",
+          "raw": "drink"
+        },
+        {
+          "kind": null,
+          "raw": "Drink"
+        },
+        {
+          "kind": null,
+          "raw": ""
+        },
+        {
+          "kind": null,
+          "raw": "beer"
+        },
+        {
+          "kind": null,
+          "raw": null
+        }
+      ]
+    },
+    {
       "id": "particles",
       "rows": [
         {
@@ -333,12 +525,16 @@
   "platformSensitive": false,
   "schema": 1,
   "spec": {
+    "kinds": "v0.3.74 선물 종류 — birthday(케이크 둘 · 번호 ≥ 4) · drink(이슬 · 번호 ≥ 5). 전선 값은 정확히 소문자만. supported 는 supportedProtocols 순서",
     "lines": "CharacterGift.swift 의 W1-c 몫(164–217 수령 결과 · 269–326 문구). 전선 모양(요청 · 응답 · choosable)은 W1-d wire",
     "outcome": "ok → received(서버 id 가 비면 보낸 id) · already_claimed → 받은 id(비면 null) · 대소문자 정확히 · 모르는 status → failed(원문)",
     "particle": "마지막 스칼라(앞뒤 whitespacesAndNewlines trim 뒤)가 받침 있는 한글 음절이면 '을', 그 밖은 '를'",
-    "settlesGift": "받음 · 이미 받음 · 없음 → 선물 카드를 거둔다. 그 밖은 열린 채"
+    "settlesGift": "받음 · 이미 받음 · 없음 → 선물 카드를 거둔다. 그 밖은 열린 채",
+    "texts-drink": "v0.3.74 술 한잔 선물(이슬 아잉이) 받는 창 · 잠긴 칸 · 다시 열기 문구. 착용 · 닫기 · 실패 · 받음 문구는 케이크와 같다"
   },
   "swiftSources": [
-    "Sources/CheckCore/CharacterGift.swift"
+    "Sources/CheckCore/CharacterGift.swift",
+    "Sources/CheckCore/ShopProtocol.swift",
+    "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"
   ]
 }

@@ -17,7 +17,7 @@ package nonisolated enum MahjongNoticeText {
 
     package static let tryAgain = "잠시 후 다시 시도해 주세요"
     package static let checkConnection = "연결을 확인하고 다시 시도해 주세요"
-    /// 내 앱이 옛 버전이다(`unsupported_client` · Availability `.updateRequired`).
+    /// 내 앱이 옛 버전이다(`unsupported_client` · Availability `.updateRequired`) · 내 앱이 문 밖이다(`outdated` — 만들기·들어가기·[시작]).
     package static let updateRequired = "앱을 업데이트해 주세요"
     package static let signInAgain = "다시 로그인해 주세요"
     /// 서버에 아잉 마작이 아직 없다(PGRST202 — 배포 중간 창).
@@ -81,10 +81,13 @@ package nonisolated enum MahjongNoticeText {
     }
 
     /// 방장 화면 — `mahjong_start` 의 `seats_dropped{reasons}` 원문 값들 → 한 줄. 까닭이 한 가지면 그 까닭, 섞였거나 모르면 공용 문구.
+    /// `outdated`(앉은 뒤 앱이 문 밖이 된 사람 — X1)가 섞이면 루비·자리 문구가 틀리므로 까닭을 말하지 않는 줄.
     package static func droppedOthers(reasons: [String]) -> String {
         let kinds = Set(reasons)
         if kinds == ["insufficient"] { return "루비가 모자란 사람이 빠졌어요" }
         if kinds == ["unseen"] { return "자리를 비운 사람이 빠졌어요" }
+        if kinds == ["outdated"] { return "앱 업데이트가 필요한 사람이 빠졌어요" }
+        if kinds.contains("outdated") { return "방에서 빠진 사람이 있어요" }
         return "자리를 비웠거나 루비가 모자란 사람이 빠졌어요"
     }
 
@@ -105,6 +108,7 @@ package nonisolated enum MahjongNoticeText {
         case .notEnoughPlayers: return "4명이 모여야 시작할 수 있어요"
         case .seatsDropped: return droppedOthers(reasons: [])
         case .unsupportedClient: return updateRequired
+        case .outdated: return updateRequired
         case .unauthorized: return signInAgain
         case .alreadyInRoom: return "이미 들어가 있는 방이 있어요"
         case .notHost: return "방장만 할 수 있어요"

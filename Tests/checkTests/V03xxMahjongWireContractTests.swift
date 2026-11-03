@@ -4,7 +4,7 @@ import Foundation
 import Testing
 
 // 아잉 마작 와이어 디코딩 단위 시험(갈래 C1 — SPEC §3.4~3.6 · §4.4). 아래 첫 묶음은 인라인 JSON 으로 '이름·모양·접기'를,
-// 둘째 묶음(C2 → T)은 S2 하네스 실응답 63(`Fixtures/mahjong-rpc`, md5 고정 — F 가 빠진 사람 state 하나를 더함)로 원문 왕복·봉투 키(판 파일 사후 단언)·숨은 정보를 잰다. 디코더·인코더는 `SupabaseWorkService` 와 같은 설정(snake_case ↔ camelCase).
+// 둘째 묶음(C2 → T)은 S2 하네스 실응답 67(`Fixtures/mahjong-rpc`, md5 고정 — F 가 빠진 사람 state 하나 · X1 이 문 밖(outdated) 넷을 더함)로 원문 왕복·봉투 키(판 파일 사후 단언)·숨은 정보를 잰다. 디코더·인코더는 `SupabaseWorkService` 와 같은 설정(snake_case ↔ camelCase).
 
 @Suite("아잉 마작 와이어 — RPC 이름 · status 어휘 · 요청 본문 · 응답 디코딩 · 모르는 값 접기")
 struct V03xxMahjongWireContractTests {
@@ -81,6 +81,7 @@ struct V03xxMahjongWireContractTests {
             "ok", "unauthorized", "unsupported_client", "invalid", "blackout", "target_focused", "target_outdated", "busy",
             "target_busy", "already_in_room", "already_invited", "room_full", "too_many_invites", "room_closed",
             "not_invited", "not_host", "not_enough_players", "seats_dropped", "insufficient", "not_found", "not_active",
+            "outdated",
             "not_your_turn", "stale", "illegal", "window_closed", "too_fast", "too_early",
         ]
         let known = MahjongRPCStatus.allCases.filter { $0 != .unknown }.map(\.rawValue)
@@ -286,7 +287,7 @@ struct V03xxMahjongWireContractTests {
     }
 }
 
-// MARK: - 픽스처 계약(C2 → T) — `Fixtures/mahjong-rpc` = S2 하네스(55492) **실응답 원문 63 + `_manifest.json`**(바이트 그대로, md5 대조)
+// MARK: - 픽스처 계약(C2 → T) — `Fixtures/mahjong-rpc` = S2 하네스(55492) **실응답 원문 67 + `_manifest.json`**(바이트 그대로, md5 대조)
 
 private enum MJWire {
     static let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -474,14 +475,14 @@ private struct MJStrictEvents: Decodable {
 
 @Suite("아잉 마작 와이어 — 실응답 픽스처 매니페스트 · 원문 왕복 · 모르는 값 접기 · 숨은 정보 · 마이그레이션 대조(C2 → T)")
 struct V03xxMahjongFixtureContractTests {
-    @Test("매니페스트 — 실응답 63 · md5 = 매니페스트 · source = S2 하네스 · 모르는 파일 없음 · 응답 타입마다 디코드")
+    @Test("매니페스트 — 실응답 67 · md5 = 매니페스트 · source = S2 하네스 · 모르는 파일 없음 · 응답 타입마다 디코드")
     func manifestListsEveryFixture() throws {
         // 없으면: 픽스처를 손으로 고치거나(md5) 서버 원문이 아닌 파일이 섞여도(source·목록) 와이어 시험이 그 위에서 초록이다.
         let manifest = try MJWire.manifest()
         let files = try #require(manifest["files"] as? [String: String])
         #expect(manifest["source"] as? String == MJWire.serverSource, "실응답 원문이어야 한다")
         let names = try MJWire.fixtureNames()
-        #expect(names.count == 63)
+        #expect(names.count == 67)
         let onDisk = try FileManager.default.contentsOfDirectory(atPath: MJWire.dir.path)
             .filter { $0.hasSuffix(".json") && $0 != "_manifest.json" }.map { String($0.dropLast(5)) }
         #expect(Set(onDisk).subtracting(names).isEmpty, "매니페스트에 없는 픽스처(옛 손 픽스처 14장은 F 가 git rm)")
@@ -695,7 +696,7 @@ struct V03xxMahjongFixtureContractTests {
     @Test("장면 픽스처(`Fixtures/mahjong-scenes`, 스토어 장면 시험용) 모양 ⊆ 실응답 — 서버가 안 보내는 칸·타입·status 를 짓지 않는다")
     func sceneFixturesStayInsideTheRealShape() throws {
         // 없으면: 장면 시험이 서버가 보내지 않는 칸(또는 다른 타입)에 기대 초록이어도 아무도 모른다 — 실서버에선 그 칸이 없다.
-        // 장면 픽스처는 한 판 이야기(같은 id·시각·seq)를 위해 C2 가 지은 값이고, 모양은 여기서 실응답 63 에 묶는다.
+        // 장면 픽스처는 한 판 이야기(같은 id·시각·seq)를 위해 C2 가 지은 값이고, 모양은 여기서 실응답 67 에 묶는다.
         func paths(_ value: Any, _ path: String, into out: inout [String: Set<String>]) {
             if let dict = value as? [String: Any] {
                 for (key, inner) in dict {

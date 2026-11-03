@@ -67,6 +67,9 @@ package nonisolated enum MahjongRPCStatus: String, Equatable, Hashable, Sendable
     case blackout
     case targetFocused = "target_focused"
     case targetOutdated = "target_outdated"
+    /// **내** 앱이 아잉 마작 문 밖이다(만들기 · 들어가기 · [시작]만 — 서버 `mahjong_capable` 거짓, 되돌리기 '문 닫기' 포함).
+    /// 방·판은 안 생긴다. `unsupported_client`(프로토콜 — 가용성 `.updateRequired`)와 달리 안내줄 한 줄만 바꾼다(X1).
+    case outdated
     case busy
     case targetBusy = "target_busy"
     case alreadyInRoom = "already_in_room"
@@ -78,7 +81,7 @@ package nonisolated enum MahjongRPCStatus: String, Equatable, Hashable, Sendable
     case notHost = "not_host"
     /// joined ≠ 4(DEC:9 — 사람 넷이 다 모여야 시작).
     case notEnoughPlayers = "not_enough_players"
-    /// 시작 검사에서 빠진 멤버가 있다(`dropped` · `reasons{uid: unseen|insufficient}`). 커밋됐고 시작은 안 했다.
+    /// 시작 검사에서 빠진 멤버가 있다(`dropped` · `reasons{uid: unseen|outdated|insufficient}`). 커밋됐고 시작은 안 했다.
     case seatsDropped = "seats_dropped"
     case insufficient
     case notFound = "not_found"
@@ -738,7 +741,7 @@ package nonisolated struct MahjongActionResponse: Decodable, Equatable, Sendable
     package var side: String?
     /// seats_dropped — 빠진 사람 uuid.
     package var dropped: [String]?
-    /// seats_dropped — uuid → 'unseen'|'insufficient'(원문).
+    /// seats_dropped — uuid → 'unseen'|'outdated'|'insufficient'(원문).
     package var reasons: [String: String]?
     /// too_fast(back) — 다시 누를 수 있을 때까지 ms.
     package var retryMs: Double?

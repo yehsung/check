@@ -1,0 +1,94 @@
+{
+  "state": {
+    "match": {
+      "id": "526366d7-5b43-4c2c-a57f-8b71e8de11f0",
+      "seq": 0,
+      "host": {
+        "id": "3a07d996-a5eb-44b4-b1b6-2d7e02c8a9a5",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-3a07d996-a5eb-44b4-b1b6-2d7e02c8a9a5"
+      },
+      "honba": 0,
+      "phase": "room",
+      "round": 0,
+      "stake": 3,
+      "format": "tonpuu",
+      "status": "forming",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": false,
+      "kan_count": 0,
+      "turn_seat": null,
+      "wake_seat": null,
+      "created_ms": 1793733892070,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": null,
+      "wake_at_ms": null,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": null,
+      "bank_full_ms": 20000,
+      "next_hand_ms": null,
+      "wall_remaining": null,
+      "dora_indicators": [],
+      "room_expires_ms": 1793734492070
+    },
+    "seats": [],
+    "events": [],
+    "members": [
+      {
+        "user": {
+          "id": "3a07d996-a5eb-44b4-b1b6-2d7e02c8a9a5",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-3a07d996-a5eb-44b4-b1b6-2d7e02c8a9a5"
+        },
+        "state": "joined",
+        "is_host": true
+      },
+      {
+        "user": {
+          "id": "5e03fe8f-6707-4725-8f5d-a52c99687a0d",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-5e03fe8f-6707-4725-8f5d-a52c99687a0d"
+        },
+        "state": "joined",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "4e048f5e-b005-4e80-a96a-8ce393a33488",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-4e048f5e-b005-4e80-a96a-8ce393a33488"
+        },
+        "state": "joined",
+        "is_host": false
+      }
+    ],
+    "my_away": null,
+    "my_hand": [],
+    "my_seat": null,
+    "my_drawn": null,
+    "my_waits": [],
+    "last_hand": null,
+    "reactions": [],
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793733892076
+  },
+  "status": "seats_dropped",
+  "dropped": [
+    "05195c1c-eecb-4907-be92-7f14be2e8c8c"
+  ],
+  "reasons": {
+    "05195c1c-eecb-4907-be92-7f14be2e8c8c": "outdated"
+  }
+}

@@ -259,6 +259,9 @@ enum MahjongMyClock {
         if store.isPractice, store.practice?.timed == false { return nil }
         switch store.myDecision {
         case .turn(let turn)?:
+            // 리치 자동 쯔모기리 차례(쯔모·암깡 선택지 없음)는 서버 마감이 not_before(시작 + 멈춤)다 — 고를 것이 없고 버림은 곧 나간다.
+            //   시계(5초 + 예비)를 그리면 25초를 세다 0.7초에 사라진다(검증 V3-05) — 링 · 막대 · 3초 경고를 그리지 않는다.
+            if let notBefore = turn.notBeforeMs, turn.deadlineMs <= notBefore { return nil }
             guard let started = MahjongClockMath.local(turn.startedMs, store: store) else { return nil }
             return Window(started: started, bankMs: turn.bankMs, isCall: false)
         case .call(let call)?:
@@ -315,8 +318,26 @@ struct MahjongActionsView: View {
     let store: MahjongStore
     let payload: MahjongStatePayload
 
-    @State private var chiOpen = false
+    /// 조합 고르기 줄이 열린 울기 종류(치 조합 · 적5 퐁·대명깡 — 검증 V3-07). nil = 닫힘.
+    @State private var choiceKind: MahjongClaimKind?
     @State private var kanOpen = false
+
+    /// 울기 단추 하나가 하는 일. 조합이 하나면 그 패로 바로 보내고, 둘 이상이면(치 조합 · 적5 를 쓸지 고르는 퐁 · 대명깡) 고르기 줄.
+    enum CallButtonPlan: Equatable {
+        case none
+        case send([MahjongTile])
+        case choose([[MahjongTile]])
+    }
+
+    /// 검증 V3-07: 퐁 · 대명깡 단추가 첫 조합을 박아 보내면 적5 를 낼지 고를 수 없었다 — 치와 같은 규칙으로 고른다.
+    static func plan(_ kind: MahjongClaimKind, _ call: MahjongDecision.Call) -> CallButtonPlan {
+        let options = MahjongStore.options(of: kind, in: call)
+        switch options.count {
+        case 0: return .none
+        case 1: return .send(options[0])
+        default: return .choose(options)
+        }
+    }
 
     private var isAway: Bool { payload.myAway != nil || payload.mySeatRow?.away == true }
 
@@ -333,7 +354,7 @@ struct MahjongActionsView: View {
             }
         }
         .frame(width: MahjongMatchLayout.actions.width, height: MahjongMatchLayout.actions.height, alignment: .top)
-        .onChange(of: store.decisionKey) { _, _ in chiOpen = false; kanOpen = false }
+        .onChange(of: store.decisionKey) { _, _ in choiceKind = nil; kanOpen = false }
     }
 
     // MARK: 자리 비움 — 큰 [돌아왔어요]
@@ -421,17 +442,17 @@ struct MahjongActionsView: View {
             MahjongCallClockBar(store: store)
                 .frame(height: 4)
         }
-        if chiOpen, call.chi.count > 1 {
+        if let kind = choiceKind, case .choose(let options) = Self.plan(kind, call) {
             HStack(spacing: 4) {
-                ForEach(Array(call.chi.enumerated()), id: \.offset) { _, pair in
+                ForEach(Array(options.enumerated()), id: \.offset) { _, pair in
                     MahjongCallTilesButton(title: nil, tiles: pair, isEnabled: !store.isWorking && !store.isAnsweringCall) {
-                        chiOpen = false
-                        Task { await store.call(.chi, tiles: pair) }
+                        choiceKind = nil
+                        Task { await store.call(kind, tiles: pair) }
                     }
                 }
             }
             .frame(height: 28)
-            action(MahjongText.cancel, CheckTheme.secondaryText, filled: false) { chiOpen = false }
+            action(MahjongText.cancel, CheckTheme.secondaryText, filled: false) { choiceKind = nil }
                 .frame(height: 28)
         } else {
             HStack(spacing: 4) {
@@ -439,22 +460,25 @@ struct MahjongActionsView: View {
             }
             .frame(height: call.ron ? 28 : 0)
             HStack(spacing: 4) {
-                if let pon = call.pon.first {
-                    action(MahjongText.pon, CheckTheme.working) { Task { await store.call(.pon, tiles: pon) } }
+                switch Self.plan(.pon, call) {
+                case .send(let pon): action(MahjongText.pon, CheckTheme.working) { Task { await store.call(.pon, tiles: pon) } }
+                case .choose: action("\(MahjongText.pon) ▸", CheckTheme.working) { choiceKind = .pon }
+                case .none: EmptyView()
                 }
-                if let kan = call.minkan.first {
-                    action(MahjongText.kan, CheckTheme.working) { Task { await store.call(.minkan, tiles: kan) } }
+                switch Self.plan(.minkan, call) {
+                case .send(let kan): action(MahjongText.kan, CheckTheme.working) { Task { await store.call(.minkan, tiles: kan) } }
+                case .choose: action("\(MahjongText.kan) ▸", CheckTheme.working) { choiceKind = .minkan }
+                case .none: EmptyView()
                 }
-                if let chi = call.chi.first {
-                    // 쓰일 내 패 두 장을 작게 붙인다(§5.4). 조합이 여럿이면 ▸ 로 고르는 줄을 연다(그 줄도 패 그림).
-                    if call.chi.count > 1 {
-                        action("\(MahjongText.chi) ▸", CheckTheme.working) { chiOpen = true }
-                    } else {
-                        MahjongCallTilesButton(title: MahjongText.chi, tiles: chi,
-                                               isEnabled: !store.isWorking && !store.isAnsweringCall) {
-                            Task { await store.call(.chi, tiles: chi) }
-                        }
+                // 치는 쓰일 내 패 두 장을 작게 붙인다(§5.4). 조합이 여럿이면 ▸ 로 고르는 줄을 연다(그 줄도 패 그림 — 퐁 · 깡도 같다).
+                switch Self.plan(.chi, call) {
+                case .send(let chi):
+                    MahjongCallTilesButton(title: MahjongText.chi, tiles: chi,
+                                           isEnabled: !store.isWorking && !store.isAnsweringCall) {
+                        Task { await store.call(.chi, tiles: chi) }
                     }
+                case .choose: action("\(MahjongText.chi) ▸", CheckTheme.working) { choiceKind = .chi }
+                case .none: EmptyView()
                 }
             }
             .frame(height: call.pon.isEmpty && call.minkan.isEmpty && call.chi.isEmpty ? 0 : 28)

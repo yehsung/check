@@ -32,6 +32,10 @@ extension MahjongStore {
                 let active = response.me?.activeMatchId?.lowercased()
                 let held = match?.match
                 if let active, held?.id != active || held?.matchStatus != .active {
+                    // 검증 V3-03 · V2-01: 서버가 '지금 앉아 있는 진행 판'이라 말하는 id 는 접은 기록(가드 (a))을 걷는다 — 다른 맥에서
+                    //   나갔다 다시 들어가 선 판 · [나가기]와 [시작]이 겹쳐 not_found 로 접은 판. 접는 것은 방(forming)과 끝난 판뿐이라
+                    //   진행 판을 걷어도 늦은 방 응답은 가드 ⓔ 가 버린다.
+                    dismissedMatchIDs.remove(active)
                     await refreshMatch(id: active)
                 } else if active == nil, held == nil || held?.matchStatus.isTerminal == true,
                           let room = response.me?.room?.id.uuidString.lowercased(), held?.id != room {
@@ -198,6 +202,10 @@ extension MahjongStore {
             leaveHeldRoom(held.id)
         }
         if response.status == .ok, action == .create || action == .join || action == .leave || action == .decline {
+            Task { @MainActor [weak self] in await self?.refreshLobby() }
+        } else if action == .leave, response.status == .notFound || response.status == .roomClosed {
+            // 검증 V2-01: 방 [나가기]가 방장 [시작]과 겹치면 옛 서버는 not_found(state 없음)로 답했다 — 그 사이 판이 섰을 수 있으니
+            //   로비로 진행 판을 한 번 묻는다(있으면 위 refreshLobby 가 접은 기록을 걷고 든다).
             Task { @MainActor [weak self] in await self?.refreshLobby() }
         }
     }

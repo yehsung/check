@@ -254,6 +254,8 @@ extension MahjongStore {
                     }
                 case .failure(let error)?:
                     if isSchemaMissing(error) { noteServerMissing() }
+                    // 검증 V3-04: 응답 적용이 없으면 다음 깨우기도 안 잡힌다 — 같은 열쇠의 재시도(1초 · 상한 그대로)를 다시 건다.
+                    scheduleWake()
                 case nil:
                     break
                 }

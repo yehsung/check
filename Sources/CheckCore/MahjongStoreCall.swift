@@ -62,7 +62,7 @@ extension MahjongStore {
     }
 
     /// 종류별 조합 목록(서버가 준 것 그대로).
-    nonisolated static func options(of kind: MahjongClaimKind, in call: MahjongDecision.Call) -> [[MahjongTile]] {
+    package nonisolated static func options(of kind: MahjongClaimKind, in call: MahjongDecision.Call) -> [[MahjongTile]] {
         switch kind {
         case .ron: return call.ron ? [[]] : []
         case .pon: return call.pon
@@ -88,7 +88,20 @@ extension MahjongStore {
             try await $0.mahjongCallAnswer(
                 accessToken: $1, matchID: matchID, windowID: windowID, action: answer, tiles: tiles)
         })
+        // 검증 V3-02: 답이 서버에 못 닿았다(끊김 · 5xx · 요청 마감) — 보내기 전에 적은 '답함'을 걷는다. 안 걷으면 같은 창에서 다시 못
+        //   보내고(openServerCall 이 막음) 다음 조회의 answered == nil 도 가드 (h)가 덮어 단추가 사라진다. 서버가 받았는지 모를 때(마감)도
+        //   서버 사실(다음 조회의 answered)을 따르면 된다 — 받았으면 answered 가 실려 온다.
+        if case .failure? = result, generation == resetGeneration {
+            forgetCallAnswered(matchID: matchID, windowID: windowID)
+        }
         await handleDecisionResponse(result, action: .call, ticket: ticket, matchID: matchID)
+    }
+
+    /// 보낸 답이 서버에 못 닿았다 — `noteCallAnswered` 를 되돌린다(검증 V3-02).
+    func forgetCallAnswered(matchID: String, windowID: Int) {
+        let key = Self.windowKey(matchID: matchID, windowID: windowID)
+        answeredWindowIDs.remove(key)
+        answeredWindowAnswers[key] = nil
     }
 
     /// 이 창에 답했다고 적는다(요청 직전). 늦게 온 `answered == nil` 조회가 프롬프트를 되살리지 않게 한다(가드 (h)).

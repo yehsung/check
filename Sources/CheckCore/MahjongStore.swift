@@ -511,9 +511,13 @@ package final class MahjongStore {
 
     /// 창이 실제로 보이기 시작했다.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다**(검증 V3-01 — 오목 · 체스 ·
+        // 테트리스 · 뒤집기와 같은 수리, main 6d53d0d2 · 4ae9b489). 창이 정말 앞으로 오면 가림 통지(visible)가 와서 풀고, 못 오면
+        // (다른 전체 화면 앱 위로 못 올라옴) 가린 채로 남아야 시작 · 내 차례 말풍선이 산다. 숨겼다 다시 여는 길은 `windowDidHide` 가
+        // 이미 지웠으므로 낡은 가림 기록이 폴링을 막지 않는다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다 — 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다.
-        if isWindowOccluded { isWindowOccluded = false }
+        if !reshownWhileOccluded, isWindowOccluded { isWindowOccluded = false }
         tableVisibilityDidChange()
     }
 

@@ -107,7 +107,8 @@ package enum ChatMarkdown {
     /// 누를 수 있는 주소면 URL, 아니면 nil. **링크를 만드는 모든 길이 이 한 함수를 지난다**(맨 주소 · `[글](주소)`).
     ///
     /// 공백 · 제어 문자 · 비ASCII 가 섞인 주소는 받지 않는다: 보이는 글자와 실제로 여는 주소가 달라지는 자동
-    /// 인코딩(국제화 도메인 · 퍼센트 인코딩)을 사용자가 모르는 채 거치지 않게 한다.
+    /// 인코딩(국제화 도메인 · 퍼센트 인코딩)을 사용자가 모르는 채 거치지 않게 한다. 호스트의 퍼센트 인코딩은 `isOpenable` 이 막는다
+    /// (원문은 ASCII 여도 `n%D0%B0ver.com` 은 키릴 문자 호스트다 — 2026-11-03 폰 1.0.17 검토).
     package static func openableLink(_ raw: String) -> URL? {
         guard !raw.isEmpty, raw.unicodeScalars.allSatisfy({ $0.value > 0x20 && $0.value < 0x7F }) else { return nil }
         guard let url = URL(string: raw), isOpenable(url) else { return nil }
@@ -121,9 +122,15 @@ package enum ChatMarkdown {
     ///   evil.com 을 연다. 맨 주소는 "글 = 주소"라 호스트 꼬리표(`disclosedHost`)도 안 붙어 속임수가 그대로 통한다. 채팅에서 주소에
     ///   아이디·비밀번호를 실어 보낼 일은 없으므로 링크로 만들지 않고 **친 글자 그대로** 둔다(`[글](주소)` 도 같다 — 원문 기호째 보인다).
     ///   `user` 는 비어 있어도(`https://@evil.com`) nil 이 아니다 — 빈 사용자 정보도 막힌다.
+    ///
+    /// ★ **호스트에 `%` 가 있으면 받지 않는다**(2026-11-03 폰 1.0.17 검토 critical·major). 원문 글자가 ASCII 여도 호스트를 퍼센트 인코딩하면
+    ///   ① `[naver.com](https://n%D0%B0ver.com)` — 꼬리표가 풀린 키릴 'а' 로 "naver.com (nаver.com)" 이 되어 진짜 도메인처럼 보이고, 브라우저는
+    ///   `xn--nver-53d.com` 을 연다. ② 맨 주소 `https://naver.com%2Eevil.com` — 글 = 주소라 꼬리표가 없는데 실제 호스트는 `naver.com.evil.com` 이다.
+    ///   보이는 호스트와 여는 호스트가 갈리는 길이라 링크로 만들지 않고 **친 글자 그대로** 둔다. 경로 · 질의의 `%`(브라우저에서 복사한 한글 경로)는
+    ///   호스트가 아니라 그대로 링크다. Foundation 이 원문에 없던 `%` 를 호스트에 만드는 경우(`|` 같은 글자의 자동 인코딩)도 같이 막힌다.
     package static func isOpenable(_ url: URL) -> Bool {
         guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return false }
-        guard let host = url.host(percentEncoded: false), !host.isEmpty else { return false }
+        guard let host = url.host(percentEncoded: true), !host.isEmpty, !host.contains("%") else { return false }
         guard url.user(percentEncoded: true) == nil, url.password(percentEncoded: true) == nil else { return false }
         return true
     }
@@ -153,7 +160,9 @@ package enum ChatMarkdown {
     /// 알아챌 수 없었다 — 글자 흉내 검사(`isDisguisedAddress`)는 폭 없는 공백 · 전각 쌍점 · 방향 문자로 쉽게 비켜 간다.
     /// 그래서 막는 대신 **보여 준다**: 글이 주소 그 자체이거나(맨 주소) 호스트와 같을 때만 생략하고, 나머지는 `글 (호스트)` 로 그린다.
     /// 반환: 줄의 조각 위치 → 그 조각 뒤에 붙일 호스트(한 링크가 여러 조각이면 마지막 조각 뒤 한 번).
-    /// 호스트는 ASCII 다(`openableLink` 가 비ASCII 주소를 링크로 만들지 않는다) — 국제화 도메인은 `xn--` 모양 그대로 보인다.
+    /// 호스트는 ASCII 다: `openableLink` 가 비ASCII 원문을, `isOpenable` 이 퍼센트 인코딩 호스트(`n%D0%B0ver.com` — 풀면 키릴 문자)를 링크로
+    /// 만들지 않는다. 그래서 국제화 도메인은 `xn--` 모양 그대로 보인다(2026-11-03 폰 1.0.17 검토 전에는 이 말이 사실이 아니었다 — 꼬리표가
+    /// 퍼센트 인코딩을 풀어 닮은꼴 도메인을 진짜처럼 보였다).
     package static func linkDisclosures(_ line: ChatMarkdownLine) -> [Int: String] {
         var result: [Int: String] = [:]
         var label = ""
@@ -172,8 +181,9 @@ package enum ChatMarkdown {
     }
 
     /// 한 링크의 글과 주소 → 따로 보일 호스트(nil = 글이 이미 그것을 말한다).
+    /// 호스트는 **인코딩된 그대로** 읽는다 — 풀어서 보이면 `%D0%B0` 가 키릴 'а' 로 바뀌어 닮은꼴이 진짜처럼 찍힌다(`isOpenable` 이 이미 막지만 두 겹).
     package static func disclosedHost(label: String, url: URL) -> String? {
-        guard let host = url.host(percentEncoded: false)?.lowercased(), !host.isEmpty else { return nil }
+        guard let host = url.host(percentEncoded: true)?.lowercased(), !host.isEmpty else { return nil }
         let shown = comparableAddress(label)
         if shown == comparableAddress(url.absoluteString) || shown == host { return nil }
         return host

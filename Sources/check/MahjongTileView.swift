@@ -11,8 +11,10 @@ import CheckCore
 //  · CoreGraphics/CoreText 로 `NSImage(size:flipped:drawingHandler:)` 에 그린다. 배율이 바뀌면(레티나 ↔ 1배 모니터) AppKit 이
 //    처리기를 다시 부른다. **실행 중 `ImageRenderer` 로 Canvas 를 굽지 않는다** — 이 저장소에서 첫 두 장이 다르게 나와 첫 장이
 //    캐시에 박히면 그 세션 내내 틀린 패가 된다(CC-15).
-//  · 캐시 열쇠 `(face, size, state, rotation, 보조 글자)` — 강·부로 네 방향과 리치 가로 포함. 화면 비트맵은 `cgImage(…scale:)` 가
-//    배율마다 따로 굽는다(같은 열쇠·같은 배율이면 같은 바이트).
+//  · 캐시 열쇠 `(face, size, state, rotation, 보조 글자, 선택지)` — 강·부로 네 방향과 리치 가로 포함. 화면 비트맵은
+//    `cgImage(…scale:)` 가 배율마다 따로 굽는다(같은 열쇠·같은 배율이면 같은 바이트).
+//  · 선택지(`MahjongTileArtStyle` — 뒷면 · 1삭 모양 · 보조 글자)는 환경 값 `\.mahjongTileArtStyle` 로 내려온다. 기본은
+//    `MahjongTileArtStyle.chosen` — 판 화면(MahjongPanel*)은 손대지 않아도 고른 값으로 그린다. 시트는 칸마다 환경 값을 바꾼다.
 //  · **패 몸체만 극단 밝기**(밝은 크림) — 펠트·칸·덮개는 중간 톤이라 렌더 시험이 '그 자리에 패가 섰는가'를 잉크로 잰다.
 //    `.shadow` 금지(첫 두 장이 다르다). 큐브 `RummyTileBack` 은 `.shadow` 를 쓰므로 베끼지 않았다.
 //  · 글꼴은 PostScript 이름이 요청과 같은지 확인한다(조용한 대체 방지 — 伍 포함, CC-29).
@@ -29,6 +31,22 @@ enum MahjongTileArt {
         /// 시계 방향 90° 회전 수(0~3).
         let rotation: Int
         let cornerLabels: Bool
+        /// 선택지 가운데 패 그림에 닿는 셋(펠트는 패 그림 밖).
+        let back: MahjongTileBackScheme
+        let oneSou: MahjongOneSouMotif
+        let corner: MahjongCornerLabelStyle
+
+        init(face: MahjongTileFace, size: MahjongTileSize, state: MahjongTileState, rotation: Int, cornerLabels: Bool,
+             style: MahjongTileArtStyle) {
+            self.face = face
+            self.size = size
+            self.state = state
+            self.rotation = ((rotation % 4) + 4) % 4
+            self.cornerLabels = cornerLabels && !size.isSimplified
+            back = style.backScheme
+            oneSou = style.oneSouMotif
+            corner = style.cornerLabel
+        }
     }
 
     nonisolated private struct BitmapKey: Hashable, Sendable {
@@ -36,19 +54,24 @@ enum MahjongTileArt {
         let scale: Int
     }
 
-    /// 지금 팔레트(코드 기본값 — 선택 JSON 이 오면 `apply(palette:)`).
-    private(set) static var palette = MahjongTilePalette.standard
+    /// 받은 팔레트 JSON(Storage `tiles.json`) — 오면 일곱 색이 코드 팔레트(고른 뒷면 짝 포함) 위에 선다. nil = 코드 팔레트.
+    private(set) static var deliveredPalette: MahjongTilePalette?
     private static var images: [Key: NSImage] = [:]
     private static var bitmaps: [BitmapKey: CGImage] = [:]
     /// 진단 — 처리기가 실제로 그린 횟수(시험이 캐시를 잰다). 처리기는 어느 스레드에서든 불릴 수 있다.
     nonisolated(unsafe) private(set) static var drawCount = 0
 
-    /// 팔레트를 바꾼다(받은 JSON → `MahjongTilePalette.resolved(from:)`). 바뀌면 캐시를 비운다.
-    static func apply(palette next: MahjongTilePalette) {
-        guard next != palette else { return }
-        palette = next
+    /// 받은 팔레트를 놓는다(받은 JSON → `MahjongTilePalette.delivered(from:)` — 틀리면 nil 로 코드 팔레트). 바뀌면 캐시를 비운다.
+    static func apply(palette next: MahjongTilePalette?) {
+        guard next != deliveredPalette else { return }
+        deliveredPalette = next
         images.removeAll()
         bitmaps.removeAll()
+    }
+
+    /// 이 선택지로 그릴 팔레트.
+    static func palette(for style: MahjongTileArtStyle) -> MahjongTilePalette {
+        MahjongTilePalette.effective(back: style.backScheme, delivered: deliveredPalette)
     }
 
     /// 회전을 반영한 그림 크기(pt).
@@ -58,11 +81,10 @@ enum MahjongTileArt {
 
     /// 면 그림(벡터 — 배율마다 AppKit 이 처리기를 부른다).
     static func image(_ face: MahjongTileFace, size: MahjongTileSize, state: MahjongTileState = .normal,
-                      rotation: Int = 0, cornerLabels: Bool = true) -> NSImage {
-        let key = Key(face: face, size: size, state: state, rotation: ((rotation % 4) + 4) % 4,
-                      cornerLabels: cornerLabels && !size.isSimplified)
+                      rotation: Int = 0, cornerLabels: Bool = true, style: MahjongTileArtStyle = .chosen) -> NSImage {
+        let key = Key(face: face, size: size, state: state, rotation: rotation, cornerLabels: cornerLabels, style: style)
         if let cached = images[key] { return cached }
-        let palette = palette
+        let palette = palette(for: style)
         let made = NSImage(size: imageSize(size, rotation: key.rotation), flipped: true) { @Sendable _ in
             guard let context = NSGraphicsContext.current?.cgContext else { return false }
             MahjongTileArt.drawCount += 1
@@ -76,10 +98,10 @@ enum MahjongTileArt {
 
     /// 배율 `scale` 로 구운 비트맵(sRGB). 같은 열쇠·같은 배율이면 캐시의 같은 그림.
     static func cgImage(_ face: MahjongTileFace, size: MahjongTileSize, state: MahjongTileState = .normal,
-                        rotation: Int = 0, cornerLabels: Bool = true, scale: CGFloat) -> CGImage? {
-        let source = image(face, size: size, state: state, rotation: rotation, cornerLabels: cornerLabels)
-        let key = Key(face: face, size: size, state: state, rotation: ((rotation % 4) + 4) % 4,
-                      cornerLabels: cornerLabels && !size.isSimplified)
+                        rotation: Int = 0, cornerLabels: Bool = true, style: MahjongTileArtStyle = .chosen,
+                        scale: CGFloat) -> CGImage? {
+        let source = image(face, size: size, state: state, rotation: rotation, cornerLabels: cornerLabels, style: style)
+        let key = Key(face: face, size: size, state: state, rotation: rotation, cornerLabels: cornerLabels, style: style)
         let bitmapKey = BitmapKey(key: key, scale: max(1, Int(scale.rounded())))
         if let cached = bitmaps[bitmapKey] { return cached }
         guard let made = rasterize(source, scale: CGFloat(bitmapKey.scale)) else { return nil }
@@ -150,8 +172,8 @@ enum MahjongTileArt {
         } else {
             drawBody(body, radius: radius, palette: palette, in: ctx)
             let face = CGRect(x: w * 0.10, y: h * 0.10, width: w * 0.80, height: h * 0.74)
-            drawFace(layout, face: face, size: key.size, palette: palette, font: font, in: ctx)
-            if key.cornerLabels, let label = layout.cornerLabel {
+            drawFace(layout, face: face, size: key.size, oneSou: key.oneSou, palette: palette, font: font, in: ctx)
+            if key.cornerLabels, let label = key.corner.label(layout, face: key.face) {
                 drawCorner(label, tile: body, palette: palette, in: ctx)
             }
             if key.state == .tsumogiri {
@@ -222,7 +244,8 @@ enum MahjongTileArt {
     }
 
     nonisolated private static func drawFace(_ layout: MahjongTileLayout, face: CGRect, size: MahjongTileSize,
-                                             palette: MahjongTilePalette, font: CTFont, in ctx: CGContext) {
+                                             oneSou: MahjongOneSouMotif, palette: MahjongTilePalette, font: CTFont,
+                                             in ctx: CGContext) {
         func point(_ p: MahjongArtPoint) -> CGPoint {
             CGPoint(x: face.minX + face.width * p.x, y: face.minY + face.height * p.y)
         }
@@ -249,7 +272,13 @@ enum MahjongTileArt {
             ctx.setFillColor(color(palette.bodyTop))
             ctx.fill(CGRect(x: rect.minX, y: c.y - max(0.5, length * 0.04), width: rect.width, height: max(1, length * 0.08)))
         }
-        if layout.sprout { drawSprout(face: face, palette: palette, in: ctx) }
+        if layout.sprout {
+            switch oneSou {
+            case .sprout: drawSprout(face: face, palette: palette, in: ctx)
+            case .aingFace: drawAingFace(face: face, simplified: size.isSimplified, in: ctx)
+            case .bambooNode: drawBambooNode(face: face, palette: palette, in: ctx)
+            }
+        }
         if layout.hakuFrame {
             let frame = face.insetBy(dx: face.width * 0.16, dy: face.height * 0.12)
             ctx.addPath(CGPath(roundedRect: frame, cornerWidth: frame.width * 0.2, cornerHeight: frame.width * 0.2,
@@ -295,6 +324,93 @@ enum MahjongTileArt {
         ctx.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
     }
 
+    /// 1삭 선택지 B — 아잉이 얼굴 느낌의 둥근 얼굴(코드 도형: 라벤더 몸 · 작은 팔 · 눈 둘 · 볼 · 입).
+    /// 색은 저장소 아잉이(aing-neutral.png)의 결을 참고만 했다. 작은 크기(24×32 이하)는 눈 반짝임을 뺀다.
+    nonisolated private static func drawAingFace(face: CGRect, simplified: Bool, in ctx: CGContext) {
+        let fw = face.width, fh = face.height
+        let center = CGPoint(x: face.midX, y: face.minY + fh * 0.56)
+        let body = CGRect(x: center.x - fw * 0.43, y: center.y - fh * 0.35, width: fw * 0.86, height: fh * 0.70)
+        let line = color("#7462CF")
+        let lineWidth = max(0.8, fw * 0.035)
+        // 팔 — 몸 양옆 아래(몸이 덮는다).
+        for side in [-1.0, 1.0] {
+            let arm = CGRect(x: -fw * 0.09, y: -fh * 0.07, width: fw * 0.18, height: fh * 0.14)
+            var transform = CGAffineTransform(translationX: center.x + side * fw * 0.40, y: center.y + fh * 0.12)
+                .rotated(by: side * 0.5)
+            let path = CGPath(ellipseIn: arm, transform: &transform)
+            ctx.addPath(path)
+            ctx.setFillColor(color("#A898EF"))
+            ctx.fillPath()
+            ctx.addPath(path)
+            ctx.setStrokeColor(line)
+            ctx.setLineWidth(lineWidth)
+            ctx.strokePath()
+        }
+        // 몸 — 위 밝고 아래 짙은 라벤더.
+        ctx.saveGState()
+        ctx.addEllipse(in: body)
+        ctx.clip()
+        if let gradient = CGGradient(colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+                                     colors: [color("#D3C9FF"), color("#9D8DEC")] as CFArray, locations: [0, 1]) {
+            ctx.drawLinearGradient(gradient, start: CGPoint(x: 0, y: body.minY), end: CGPoint(x: 0, y: body.maxY), options: [])
+        }
+        ctx.restoreGState()
+        ctx.addEllipse(in: body)
+        ctx.setStrokeColor(line)
+        ctx.setLineWidth(lineWidth)
+        ctx.strokePath()
+        // 볼.
+        ctx.setFillColor(color("#FF8FB8", alpha: 0.85))
+        for side in [-1.0, 1.0] {
+            let c = CGPoint(x: center.x + side * fw * 0.27, y: center.y + fh * 0.08)
+            ctx.fillEllipse(in: CGRect(x: c.x - fw * 0.075, y: c.y - fh * 0.04, width: fw * 0.15, height: fh * 0.08))
+        }
+        // 눈 — 짙은 밤색 + 반짝임.
+        for side in [-1.0, 1.0] {
+            let c = CGPoint(x: center.x + side * fw * 0.165, y: center.y - fh * 0.04)
+            ctx.setFillColor(color("#3B2522"))
+            ctx.fillEllipse(in: CGRect(x: c.x - fw * 0.065, y: c.y - fh * 0.075, width: fw * 0.13, height: fh * 0.15))
+            if !simplified {
+                let r = fw * 0.03
+                ctx.setFillColor(color("#FFFFFF"))
+                ctx.fillEllipse(in: CGRect(x: c.x + fw * 0.005 - r, y: c.y - fh * 0.035 - r, width: r * 2, height: r * 2))
+            }
+        }
+        // 입 — 위가 평평하고 아래가 둥근 웃는 입.
+        let mouthTop = center.y + fh * 0.07, half = fw * 0.075
+        let mouth = CGMutablePath()
+        mouth.move(to: CGPoint(x: center.x - half, y: mouthTop))
+        mouth.addLine(to: CGPoint(x: center.x + half, y: mouthTop))
+        mouth.addQuadCurve(to: CGPoint(x: center.x - half, y: mouthTop), control: CGPoint(x: center.x, y: mouthTop + fh * 0.13))
+        mouth.closeSubpath()
+        ctx.addPath(mouth)
+        ctx.setFillColor(color("#D63D5C"))
+        ctx.fillPath()
+    }
+
+    /// 1삭 선택지 C — 굵은 대나무 한 마디(통 하나 + 위·아래 마디 띠 + 왼쪽 밝은 줄). 가장 단순.
+    nonisolated private static func drawBambooNode(face: CGRect, palette: MahjongTilePalette, in ctx: CGContext) {
+        let fw = face.width, fh = face.height
+        let width = fw * 0.36
+        let tube = CGRect(x: face.midX - width / 2, y: face.minY + fh * 0.08, width: width, height: fh * 0.84)
+        ctx.addPath(CGPath(roundedRect: tube, cornerWidth: width * 0.3, cornerHeight: width * 0.3, transform: nil))
+        ctx.setFillColor(color(palette.hex(.green)))
+        ctx.fillPath()
+        // 왼쪽 밝은 줄(둥근 통 느낌).
+        let shine = CGRect(x: tube.minX + width * 0.18, y: tube.minY + fh * 0.12, width: width * 0.16, height: tube.height - fh * 0.24)
+        ctx.addPath(CGPath(roundedRect: shine, cornerWidth: shine.width / 2, cornerHeight: shine.width / 2, transform: nil))
+        ctx.setFillColor(color("#8DE6C6"))
+        ctx.fillPath()
+        // 마디 띠 — 통보다 조금 넓은 짙은 초록.
+        let band = max(1.5, fh * 0.07)
+        for y in [tube.minY + fh * 0.03, tube.maxY - fh * 0.03 - band] {
+            let rect = CGRect(x: tube.minX - width * 0.1, y: y, width: width * 1.2, height: band)
+            ctx.addPath(CGPath(roundedRect: rect, cornerWidth: band / 2, cornerHeight: band / 2, transform: nil))
+            ctx.setFillColor(color("#0B7D5B"))
+            ctx.fillPath()
+        }
+    }
+
     /// 글자 한 자를 (center) 에 높이 `height` 로 — 뒤집힌 좌표라 글자 행렬을 위아래로 뒤집는다.
     nonisolated private static func drawGlyph(_ text: String, center: CGPoint, height: CGFloat, color: CGColor,
                                               font: CTFont, in ctx: CGContext) {
@@ -330,6 +446,25 @@ enum MahjongTileArt {
     }
 }
 
+// MARK: - 선택지 환경 값 · 펠트 색
+
+private struct MahjongTileArtStyleKey: EnvironmentKey {
+    static let defaultValue = MahjongTileArtStyle.chosen
+}
+
+extension EnvironmentValues {
+    /// 패 그림 선택지. 기본 `MahjongTileArtStyle.chosen` — 시트(선택지 비교)만 칸마다 바꾼다.
+    var mahjongTileArtStyle: MahjongTileArtStyle {
+        get { self[MahjongTileArtStyleKey.self] }
+        set { self[MahjongTileArtStyleKey.self] = newValue }
+    }
+}
+
+extension MahjongArtRGB {
+    /// SwiftUI 색(sRGB — `Color(red:green:blue:)` 와 같은 공간).
+    var color: Color { Color(red: r, green: g, blue: b) }
+}
+
 // MARK: - SwiftUI 패 한 장
 
 /// 패 한 장(손패·결과·작은 조각). 강·상대 띠는 띠마다 Canvas 한 장으로 `MahjongTileStrip` 이 그린다.
@@ -341,12 +476,13 @@ struct MahjongTileView: View {
     var cornerLabels: Bool = true
 
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.mahjongTileArtStyle) private var artStyle
 
     var body: some View {
         let frame = MahjongTileArt.imageSize(size, rotation: rotation)
         Group {
             if let image = MahjongTileArt.cgImage(face, size: size, state: state, rotation: rotation,
-                                                  cornerLabels: cornerLabels, scale: displayScale) {
+                                                  cornerLabels: cornerLabels, style: artStyle, scale: displayScale) {
                 Image(decorative: image, scale: CGFloat(max(1, Int(displayScale.rounded()))))
                     .resizable()
                     .interpolation(.high)
@@ -377,12 +513,14 @@ struct MahjongTileStrip: View {
     var accessibilityText: String = ""
 
     @Environment(\.displayScale) private var displayScale
+    @Environment(\.mahjongTileArtStyle) private var artStyle
 
     var body: some View {
         let scale = displayScale
+        let style = artStyle
         let images: [(CGImage, CGRect)] = tiles.compactMap { tile in
             guard let image = MahjongTileArt.cgImage(tile.face, size: tile.size, state: tile.state, rotation: tile.rotation,
-                                                     cornerLabels: cornerLabels, scale: scale)
+                                                     cornerLabels: cornerLabels, style: style, scale: scale)
             else { return nil }
             return (image, CGRect(origin: tile.origin, size: MahjongTileArt.imageSize(tile.size, rotation: tile.rotation)))
         }

@@ -9,13 +9,9 @@ import Testing
 // 다음 릴리스가 오면 이 둘을 그쪽 파일로 옮기고, 여기는 0.3.74 섹션의 **내용**만 남겨라 —
 // 안 옮기면 버전을 올리는 그 커밋에서 전체 스위트가 빨개진다.
 // 마작(아잉 마작)은 이 판에 넣지 않는다(대표 11-03 "마작 제외하고 일단 출시") — 체인지로그에 마작이 있으면 빨갛다.
-@Test("버전 0.3.74 / 127 · CHANGELOG 0.3.74 가 맨 위(뒤집기·이슬 · 메시지 서식 · 알림·창 · 배너 폭 안)")
+@Test("CHANGELOG 0.3.74 (뒤집기·이슬 · 메시지 서식 · 알림·창 · 배너 폭 안)")
 func v0374VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.74</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>127</string>"))
 
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.74\n") })
@@ -34,6 +30,5 @@ func v0374VersionAndChangelog() throws {
     #expect(items.contains { $0.contains("이슬 아잉이") }, "이슬 아잉이 줄이 없다(feat/isul-aing)")
     #expect(items.contains { $0.contains("메시지") }, "메시지 서식 줄이 없다(feat/chat-markdown-focus)")
     #expect(items.contains { $0.contains("내 차례") }, "가려진 창 차례 알림 줄이 없다(fix/turn-alert-1103)")
-    #expect(changelog.range(of: "## 0.3.74")!.lowerBound < changelog.range(of: "## 0.3.73")!.lowerBound,
-            "0.3.74 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
+    // 버전 고정과 맨 위 섹션 단언은 0.3.75 로 옮겼다(V0375ReleaseTests).
 }

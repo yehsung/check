@@ -292,6 +292,54 @@ package final class MahjongStore {
     /// 깨우기 작업(창과 무관 — 장부 판에서만). C2 가 채운다.
     @ObservationIgnored package internal(set) var wakeTask: Task<Void, Never>?
 
+    // MARK: 조회 직렬화 · 합치기 · 요청 표(C2)
+
+    @ObservationIgnored var lobbyInFlight = false
+    @ObservationIgnored var lobbyAgain = false
+    @ObservationIgnored var stateInFlight = false
+    @ObservationIgnored var stateAgain = false
+    /// 지금 날고 있는 state 조회의 판 id.
+    @ObservationIgnored package internal(set) var stateInFlightID: String?
+    /// 도는 중에 온 **다른 판** 조회 — 지금 것이 끝난 뒤 한 번.
+    @ObservationIgnored var pendingStateID: String?
+    /// 초인종 합치기 작업(⑥) — 도는 중에 온 신호는 끝난 뒤 정확히 한 번 더.
+    @ObservationIgnored package internal(set) var syncTask: Task<Void, Never>?
+    @ObservationIgnored var syncPendingTrailing = false
+    @ObservationIgnored var pollToken = 0
+    /// 폴링 루프의 걸음 간격(초). 시험은 크게 두고 `pollTick(at:)` 을 직접 밟는다.
+    @ObservationIgnored package var pollStepSeconds: TimeInterval = 0.5
+    /// 깨우기·보조 자동 보내기를 실제 타이머로 돌린다(시험은 끄고 `checkWake(at:)` 를 직접 밟는다).
+    @ObservationIgnored package var timersEnabled = true
+    /// 요청 표(④ (c) 끝 · (d)) — state 를 돌려줄 수 있는 요청을 **보내기 직전에** 하나씩 오른다.
+    @ObservationIgnored package internal(set) var requestTicket = 0
+    /// 지금 `match` 를 만든 응답의 표.
+    @ObservationIgnored package internal(set) var appliedTicket = 0
+    @ObservationIgnored var lastMenuLobbyAt: Date = .distantPast
+    @ObservationIgnored package internal(set) var lastRankingRequestAt: Date = .distantPast
+    /// 내가 joined 인 forming 방을 마지막으로 읽은 때(방 확인 30초 — 창과 무관).
+    @ObservationIgnored package internal(set) var lastRoomCheckAt: Date = .distantPast
+    /// 깨우기: 마지막으로 쏜 열쇠 · 그 열쇠로 쏜 횟수 · 마지막으로 쏜 때(같은 열쇠 재시도 2회 상한).
+    @ObservationIgnored package internal(set) var wakeFiredKey: String?
+    @ObservationIgnored package internal(set) var wakeFiredCount = 0
+    @ObservationIgnored package internal(set) var wakeFiredAt: Date = .distantPast
+    /// 예약해 둔 깨우기 열쇠(같은 깨우기 시각이면 한 번만 예약).
+    @ObservationIgnored var wakeScheduledKey: String?
+    /// 동작 비행 꼬리표 — 늦게 끝난 옛 요청이 새 요청의 잠금을 풀지 않게.
+    @ObservationIgnored var actionToken = 0
+    @ObservationIgnored var callToken = 0
+    /// 요청 마감 상하한(초 — §4.5 CC-06 `min(8, max(2, …))`). 시험이 줄인다.
+    @ObservationIgnored package var requestDeadlineFloor: TimeInterval = 2
+    @ObservationIgnored package var requestDeadlineCeiling: TimeInterval = 8
+    /// 보조 쯔모기리 지연(결정 시작 + 이 값 초 — CC-19 0.5~1.0 무작위). 시험이 고정한다.
+    @ObservationIgnored package var aidJitter: () -> TimeInterval = { Double.random(in: 0.5...1.0) }
+    /// 보조가 이미 다룬 결정 키(결정마다 한 번).
+    @ObservationIgnored package internal(set) var aidHandledKeys: Set<MahjongDecisionKey> = []
+    @ObservationIgnored package internal(set) var aidTask: Task<Void, Never>?
+    /// '울지 않음'을 켠 국("판#국") — 국이 바뀌면 꺼진다.
+    @ObservationIgnored var noCallsHandKey: String?
+    /// 시간 초과 문구를 이미 낸 결정(같은 결정에 두 번 말하지 않는다).
+    @ObservationIgnored var timeoutNoticeKeys: Set<String> = []
+
     // MARK: 계산 속성
 
     /// ⓐ '창이 말할 수 있다' = 보이고 가려지지 않았다. 알림·폴링·연습판 멈춤이 **모두 이것만** 읽는다(CC-01 · D41).
@@ -401,8 +449,18 @@ package final class MahjongStore {
 
     /// 창을 연다(메뉴·배너·사이드바). `focusMatchID` 가 있으면 그 판·방을 먼저 읽는다.
     package func openWindow(focusMatchID: String?) {
-        // C2: focusMatchID 판 state 조회 · 로비 재조회.
         presentWindow?()
+        guard host?.session != nil else { return }
+        let focus = focusMatchID?.lowercased()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if let focus, !focus.hasPrefix(MahjongStatePayload.practiceIDPrefix) {
+                await self.refreshMatch(id: focus)
+            } else if let current = self.match?.match, !current.matchStatus.isTerminal {
+                await self.refreshMatch(id: current.id)
+            }
+            await self.refreshLobby()
+        }
     }
 
     /// 창이 실제로 보이기 시작했다.
@@ -437,7 +495,7 @@ package final class MahjongStore {
 
     /// '창이 탁자를 보인다'가 바뀐 뒤 — 폴링 켜고 끄기(C2) · 연습판 멈춤(C3).
     func tableVisibilityDidChange() {
-        // C2: isWindowShowingTable 이면 startPolling(), 아니면 stopPolling().
+        if isWindowShowingTable { startPolling() } else { stopPolling() }
         // C3: 연습판 멈춤/재개(봇 포함).
     }
 
@@ -454,6 +512,32 @@ package final class MahjongStore {
         pollTask = nil
         wakeTask?.cancel()
         wakeTask = nil
+        syncTask?.cancel()
+        syncTask = nil
+        syncPendingTrailing = false
+        aidTask?.cancel()
+        aidTask = nil
+        pollToken &+= 1
+        lobbyInFlight = false
+        lobbyAgain = false
+        stateInFlight = false
+        stateAgain = false
+        stateInFlightID = nil
+        pendingStateID = nil
+        requestTicket = 0
+        appliedTicket = 0
+        lastMenuLobbyAt = .distantPast
+        lastRankingRequestAt = .distantPast
+        lastRoomCheckAt = .distantPast
+        wakeFiredKey = nil
+        wakeFiredCount = 0
+        wakeFiredAt = .distantPast
+        wakeScheduledKey = nil
+        actionToken &+= 1
+        callToken &+= 1
+        aidHandledKeys = []
+        noCallsHandKey = nil
+        timeoutNoticeKeys = []
         practice = nil
         showsPractice = false
         match = nil
@@ -530,5 +614,194 @@ package final class MahjongStore {
             }
         }
         if phase != next { phase = next }
+    }
+}
+
+// MARK: - 공용 관용구 · 폴링 · 초인종(C2)
+
+extension MahjongStore {
+    /// 로비 폴링 주기(③ — 창이 탁자를 보일 때만).
+    nonisolated static let lobbyPollSeconds: TimeInterval = 30
+    /// 방(forming) 폴링 주기.
+    nonisolated static let roomPollSeconds: TimeInterval = 10
+    /// 판 폴링 주기 — 실시간 구독 중 / 미구독(큐브 15초 그물은 5초 결정에 너무 성기다, MCL:77).
+    nonisolated static let statePollSecondsSubscribed: TimeInterval = 5
+    nonisolated static let statePollSecondsUnsubscribed: TimeInterval = 1.5
+    /// 순위 폴링 주기.
+    nonisolated static let rankingPollSeconds: TimeInterval = 60
+    /// 방 확인(창과 무관 — 내가 joined 인 forming 방 + 장부, CS-03).
+    nonisolated static let roomCheckSeconds: TimeInterval = 30
+    /// 팝오버 열림 로비 스로틀(초).
+    nonisolated static let menuLobbyThrottleSeconds: TimeInterval = 30
+    /// 깨우기 재시도 간격 · 같은 열쇠 재시도 상한(첫 깨우기 뒤 2번 — MCL:142).
+    nonisolated static let wakeRetrySeconds: TimeInterval = 1
+    nonisolated static let wakeRetryLimit = 2
+    /// 결정 주인 깨우기 여유(마감 + 유예 + 100ms).
+    nonisolated static let wakeSlackMs: Double = 100
+    /// 박자 기기 깨우기 흔들림 상한(ms — 0~150).
+    nonisolated static let beatJitterMs: Double = 150
+    /// 서버가 유예를 안 실었을 때(§3.6 `grace_ms` 1000).
+    nonisolated static let defaultGraceMs: Double = 1_000
+
+    /// 판 폴링 주기(구독 여부만 본다 — 마감 박자는 깨우기 몫).
+    nonisolated static func statePollSeconds(subscribed: Bool) -> TimeInterval {
+        subscribed ? statePollSecondsSubscribed : statePollSecondsUnsubscribed
+    }
+
+    /// 공용 호출 관용구: 세션 가드 → 두 세대 캡처 → withSessionRetry → 두 세대 대조(리버시 `perform` 과 같다).
+    /// nil = 버린 결과(세션 없음·세대가 밀림·취소). 호출부는 nil 이면 **아무것도 바꾸지 않는다.**
+    func perform<T: Sendable>(
+        _ operation: @escaping @Sendable (SupabaseWorkService, String) async throws -> T
+    ) async -> Result<T, any Error>? {
+        guard let host, host.session != nil else { return nil }
+        let sessionGeneration = host.sessionGeneration
+        let generation = resetGeneration
+        let service = host.service
+        do {
+            let value = try await host.withSessionRetry { session in
+                try await operation(service, session.accessToken)
+            }
+            guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return nil }
+            return .success(value)
+        } catch {
+            guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return nil }
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { return nil }
+            if case .cancelled = host.classifyAuthError(error) { return nil }
+            return .failure(error)
+        }
+    }
+
+    /// 요청 마감(CC-06 — D44): `seconds` 안에 안 끝나면 그 요청 작업을 취소하고 nil. 서버는 이미 처리했을 수 있다 — 다음 state 가 진실이다.
+    /// 공용 `DuelRPC.swift`·공용 세션 한도는 안 고친다(URLSession async `data(for:)` 는 작업 취소를 따른다).
+    func performWithin(
+        _ seconds: TimeInterval,
+        _ operation: @escaping @Sendable (SupabaseWorkService, String) async throws -> MahjongActionResponse
+    ) async -> Result<MahjongActionResponse, any Error>? {
+        let request = Task { @MainActor [weak self] () -> Result<MahjongActionResponse, any Error>? in
+            guard let self else { return nil }
+            return await self.perform(operation)
+        }
+        let timer = Task {
+            try? await Task.sleep(for: .seconds(max(0, seconds)))
+            if !Task.isCancelled { request.cancel() }
+        }
+        let value = await request.value
+        timer.cancel()
+        return value
+    }
+
+    /// act·call·back 의 요청 마감(초) — `min(천장, max(바닥, 내 deadline_ms − 지금 + grace_ms))`.
+    func requestDeadlineSeconds(deadlineMs: Double?) -> TimeInterval {
+        let grace = (match?.match?.graceMs).map(Double.init) ?? Self.defaultGraceMs
+        guard let deadline = localDate(serverMs: deadlineMs.map { $0 + grace }) else { return requestDeadlineCeiling }
+        return min(requestDeadlineCeiling, max(requestDeadlineFloor, deadline.timeIntervalSince(clock())))
+    }
+
+    /// 서버에 아잉 마작 RPC 가 아직 없다(PGRST202 — 앱이 db push 보다 먼저 나간 창).
+    nonisolated func isSchemaMissing(_ error: any Error) -> Bool {
+        (error as? SupabaseWorkServiceError) == .databaseSchemaMissing
+    }
+
+    /// 쓰기 동작이 throw 로 실패했다(5xx·오프라인·PGRST202).
+    func noteActionFailure(_ error: any Error) {
+        if isSchemaMissing(error) { noteServerMissing() } else { setNotice(MahjongNoticeText.checkConnection) }
+    }
+
+    /// Availability `.serverMissing` — 서버에 아잉 마작이 아직 없다.
+    func noteServerMissing() {
+        if availability != .serverMissing { availability = .serverMissing }
+        setNotice(MahjongNoticeText.unavailable)
+    }
+
+    /// Availability `.updateRequired` — 내 앱이 옛 버전이다.
+    func noteUpdateRequired() {
+        if availability != .updateRequired { availability = .updateRequired }
+        setNotice(MahjongNoticeText.updateRequired)
+    }
+
+    /// 안내줄 한 문(⑤).
+    func setNotice(_ text: String?) {
+        if notice != text { notice = text }
+    }
+
+    /// 잔액 한 문 — 호스트 루비 미러도 같이.
+    func applyRuby(_ value: Int?) {
+        guard let value else { return }
+        if rubyBalance != value { rubyBalance = value }
+        if let host, host.rubyBalance != value { host.rubyBalance = value }
+    }
+
+    /// 요청 표 하나를 뗀다(state 를 돌려줄 수 있는 요청을 **보내기 직전에**).
+    func issueTicket() -> Int {
+        requestTicket &+= 1
+        return requestTicket
+    }
+
+    /// 내 사용자 id(소문자) — 호스트가 없으면 nil.
+    var myUserID: String? { host?.session?.userID.lowercased() }
+
+    // MARK: 초인종 · 계기
+
+    /// 직렬화된 재조회 — 도는 중이면 뒤따르는 **한 번**으로 합친다(V2-02 · CC-17).
+    func requestSync() {
+        guard host?.session != nil else { return }
+        guard syncTask == nil else {
+            syncPendingTrailing = true
+            return
+        }
+        let generation = resetGeneration
+        syncTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            repeat {
+                // 루프 **안에서 먼저** 내린다 — 뒤에 내리면 이번 조회가 도는 동안 온 신호를 지운다.
+                self.syncPendingTrailing = false
+                await self.syncOnce()
+            } while self.syncPendingTrailing && generation == self.resetGeneration
+            if generation == self.resetGeneration { self.syncTask = nil }
+        }
+    }
+
+    /// 신호 한 번의 조회: 서버 `match`(방 포함)가 끝나지 않았으면 그 판, 아니면 로비 — **연습 여부와 무관**(CC-02).
+    func syncOnce() async {
+        if let current = match?.match, !current.matchStatus.isTerminal {
+            await refreshMatch(id: current.id)
+        } else {
+            await refreshLobby()
+        }
+    }
+
+    // MARK: 폴링(③ — 창이 탁자를 보일 때만)
+
+    func startPolling() {
+        guard pollTask == nil, isWindowShowingTable, host?.session != nil else { return }
+        pollToken &+= 1
+        let token = pollToken
+        pollTask = Task { @MainActor [weak self] in
+            while true {
+                let step = self?.pollStepSeconds ?? 0.5
+                try? await Task.sleep(for: .seconds(step))
+                guard let self else { return }
+                guard !Task.isCancelled, token == self.pollToken, self.isWindowShowingTable else {
+                    if token == self.pollToken { self.pollTask = nil }
+                    return
+                }
+                await self.pollTick(at: self.clock())
+            }
+        }
+    }
+
+    func stopPolling() {
+        pollToken &+= 1
+        pollTask?.cancel()
+        pollTask = nil
+    }
+
+    /// ⓑ 폴링 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다(리버시 `outsidePolling` 꼴, V2-03).
+    /// 창을 닫는 순간의 취소가 그 조회에 합쳐진 초인종 조회까지 죽이지 않게 한다. 남은 걸음은 ⓒ 가드가 막는다(VR-04).
+    func outsidePolling(_ body: @escaping @MainActor (MahjongStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
     }
 }

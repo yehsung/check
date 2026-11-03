@@ -71,6 +71,9 @@ object PokeSendEffects {
             PokeSendOutcome.TargetFocused -> PokeSendEffect(PokeNoticeChange.Set(DesktopPokeRules.TARGET_FOCUSED_NOTICE))
             PokeSendOutcome.TargetOnPhone -> PokeSendEffect(PokeNoticeChange.Set(DesktopPokeRules.TARGET_ON_PHONE_NOTICE))
             PokeSendOutcome.Invalid -> PokeSendEffect(PokeNoticeChange.Set(DesktopPokeRules.INVALID_NOTICE))
+            // 보낸이 집중(sender_focused · 서버 20261108121000)은 와이어가 갈래로 가른다(판 7 — 폰 메시지 게이트 몫). Windows v1 은 기능 동결이라
+            // 동작은 그대로 둔다: 갈래가 생기기 전과 같은 Invalid 안내다(맥 myFocusBlocksSendingNotice 로 바꾸는 일은 다음 Windows 판 몫).
+            PokeSendOutcome.SenderFocused -> PokeSendEffect(PokeNoticeChange.Set(DesktopPokeRules.INVALID_NOTICE))
         }
 }
 

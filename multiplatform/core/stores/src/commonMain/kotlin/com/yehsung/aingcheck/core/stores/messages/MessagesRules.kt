@@ -199,6 +199,8 @@ object MessagesSendRules {
         MessageSendOutcome.NotText -> MessageNoticeText.notText
         MessageSendOutcome.Blackout -> MessageNoticeText.blackout
         MessageSendOutcome.Flood, MessageSendOutcome.Invalid -> MessageNoticeText.invalid
+        // 내 집중으로 거절(서버 20261108121000). iOS `MessagesSendRules.notice` 와 같은 코어 문장 — 미리 막을 때의 사유 줄과 같은 글자다.
+        MessageSendOutcome.SenderFocused -> MessageNoticeText.senderFocused
     }
 }
 

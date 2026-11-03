@@ -485,6 +485,16 @@ suspend fun SupabaseWorkService.fetchTokenUsageSettings(accessToken: String, use
     return TokenUsageSettings(first?.tokenUsagePublic ?: true, first?.tokenUsageCollect ?: true, first?.focusMode ?: false)
 }
 
+/**
+ * 내 집중 모드 한 행 GET(Swift `fetchMyFocusMode` · SupabaseWorkService.swift @ 12624739 — `select=focus_mode`). 행이나 칸이 없으면 null(모름).
+ * **읽기만 한다** — 폰은 집중을 켜고 끄지 않는다(profiles PATCH 본문에 focus_mode 가 실리면 금지 호출이다 · PhoneForbiddenCalls).
+ * 부르는 쪽은 메시지 스토어 하나다(대화가 설 때 · 대화가 떠 있는 채 앞으로 올 때 · 켜짐으로 알 때만 60초 틱).
+ */
+suspend fun SupabaseWorkService.fetchMyFocusMode(accessToken: String, userID: String): Boolean? {
+    val data = send("/rest/v1/profiles", "GET", profileQuery(userID, "focus_mode"), null, accessToken, null)
+    return decode(ListSerializer(ProfilePrivacyRow.serializer()), data).firstOrNull()?.focusMode
+}
+
 suspend fun SupabaseWorkService.updateTokenUsagePublic(accessToken: String, userID: String, isPublic: Boolean) {
     sendNoBody(
         "/rest/v1/profiles", "PATCH", listOf("id" to "eq.$userID"),

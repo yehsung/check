@@ -26,6 +26,12 @@ object MessageNoticeText {
     const val notWorking = "근무 중일 때만 메시지를 보낼 수 있어요"
     const val targetNotWorking = "자리비움 상태에는 보낼 수 없어요"
     const val targetFocused = "지금 집중 중이에요. 나중에 보내 주세요"
+    /**
+     * 내가 집중 중이라 서버가 거절했다(`sender_focused` · 20261108121000). 폰에는 집중을 끄는 단추가 없다 — 맥에서 끄라고 말한다.
+     * 원문: Sources/CheckCore/MessageRules.swift `MessageNoticeText.senderFocused` @ 12624739(iOS 폰과 같은 글자). 미리 막을 때(입력칸 위 사유 줄)와
+     * 서버가 거절할 때 **같은 문장**이다.
+     */
+    const val senderFocused = "집중 모드에서는 메시지를 보낼 수 없어요. 맥에서 집중을 끄면 보낼 수 있어요"
     const val notText = "보낼 수 없는 글자가 섞여 있어요"
     const val blackout = "지금은 메시지를 주고받을 수 없어요"
     const val invalid = "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요"

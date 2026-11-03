@@ -98,6 +98,7 @@ class DesktopPokeGoldenTest {
                 PokeSendOutcome.TargetFocused -> "targetFocused"
                 PokeSendOutcome.TargetOnPhone -> "targetOnPhone"
                 PokeSendOutcome.Invalid -> "invalid"
+                PokeSendOutcome.SenderFocused -> "senderFocused"
             }
             assertEquals(o.string("outcome"), outcome, golden.failure("outcomes", o.string("response")))
             assertEquals(o.opt("ultraBalanceForDisplay"), response.ultraBalanceForDisplay?.toString(), golden.failure("outcomes", o.string("response")))
@@ -140,7 +141,15 @@ class PokeSendEffectsTest {
         val onPhone = PokeSendEffects.of(false, r("""{"status":"target_on_phone"}"""), null)
         assertEquals(false, onPhone.reloadDirectory, "target_on_phone → 다시 읽지 않는다")
         assertEquals(PokeNoticeChange.Set(DesktopPokeRules.TARGET_ON_PHONE_NOTICE), onPhone.notice)
-        for (status in listOf("target_focused", "target_on_phone", "target_not_working", "not_working", "invalid")) {
+        // 보낸이 집중(판 7 에서 와이어 갈래가 생겼다): Windows v1 동결 — 갈래가 생기기 전(Invalid)과 같은 효과 그대로다.
+        for (ultra in listOf(false, true)) {
+            assertEquals(
+                PokeSendEffects.of(ultra, r("""{"status":"invalid"}"""), 3),
+                PokeSendEffects.of(ultra, r("""{"status":"sender_focused"}"""), 3),
+                "sender_focused 가 데스크톱 동작을 바꿨다(ultra=$ultra)",
+            )
+        }
+        for (status in listOf("target_focused", "target_on_phone", "target_not_working", "not_working", "invalid", "sender_focused")) {
             assertNull(PokeSendEffects.of(true, r("""{"status":"$status","ultra_balance":7}"""), 3).ultraBalance, "울트라 $status 는 잔량을 건드리지 않는다")
         }
         assertEquals(0L, PokeSendEffects.of(true, r("""{"status":"ultra_used_today"}"""), 3).ultraBalance, "ultra_used_today · 잔량 없음 → 0")

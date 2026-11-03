@@ -195,6 +195,8 @@ class WireRequestsGoldenTest {
         "fetchMyCenter" to { s -> s.fetchMyCenter(t, u) },
         "fetchMyStatusMessage" to { s -> s.fetchMyStatusMessage(t, u) },
         "fetchTokenUsageSettings" to { s -> s.fetchTokenUsageSettings(t, u) },
+        // 내 집중 한 행 GET(판 7 — 폰 메시지 게이트가 읽기만 한다). 집중을 바꾸는 updateFocusMode 는 'H'(맥 전용) 그대로다.
+        "fetchMyFocusMode" to { s -> s.fetchMyFocusMode(t, u) },
         "updateTokenUsagePublic" to { s -> s.updateTokenUsagePublic(t, u, true) },
         "setDisplayName" to { s -> s.setDisplayName(t, "새이름") },
         "fetchDisplayNameChangedAt" to { s -> s.fetchDisplayNameChangedAt(t, u) },
@@ -350,6 +352,7 @@ class WireRequestsGoldenTest {
         "fetchMyStatusMessage#data" to { s -> s.fetchMyStatusMessage(t, u) },
         "fetchTokenUsageSettings#data" to { s -> s.fetchTokenUsageSettings(t, u) },
         "fetchTokenUsageSettings#none" to { s -> s.fetchTokenUsageSettings(t, u) },
+        "fetchMyFocusMode#data" to { s -> s.fetchMyFocusMode(t, u) },
         "setDisplayName#data" to { s -> s.setDisplayName(t, "새이름") },
         "fetchDisplayNameChangedAt#data" to { s -> s.fetchDisplayNameChangedAt(t, u) },
         "fetchEquippedCharacter#data" to { s -> s.fetchEquippedCharacter(t, u) },

@@ -101,6 +101,13 @@ class MessagesStore(
      * 글·이모티콘을 막고 · `sender_focused` 를 켜짐으로 들이고 · `target_focused`/`target_not_working` 뒤에 명부 둘(메시지 + 지금 탭)을 다시 받는다.
      */
     val focusSendGate: Boolean = false,
+    /**
+     * 채팅 서식(판 7 · 대표 요청 2026-11-03 ③④ — 범위는 대표 결정 "제목·굵게·링크만")을 그릴까. **폰 조립(PhoneAppModel)만 켠다.**
+     * 같은 스토어 · 같은 화면을 Windows 플라이아웃이 쓰는데 Windows v1 은 기능 동결이라 꺼진 채(기본값) 지금과 글자 그대로 같다.
+     * 켜면: 말풍선이 제목 · 굵게 · 링크(+ 호스트 꼬리표)를 그리고 링크를 누르면 브라우저로 열며 · 대화 목록 미리보기 · 신고 인용 · TalkBack 글이
+     * 서식 기호를 벗긴다([com.yehsung.aingcheck.core.rules.text.ChatMarkdown.plainPreview]).
+     */
+    val chatMarkdown: Boolean = false,
 ) {
     val scope: CoroutineScope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[Job]))
 
@@ -473,6 +480,7 @@ class MessagesStore(
             workingPeerIDs = MessagesSortRules.workingPeerIDs(board),
             workKnown = board.isKnown,
             now = now,
+            chatMarkdown = chatMarkdown,
         )
     }
 

@@ -102,6 +102,7 @@ class PhoneAppModelTest {
             }
         }
         assertTrue(h.app.messages.focusSendGate, "폰 조립이 집중 게이트를 안 켰다")
+        assertTrue(h.app.messages.chatMarkdown, "폰 조립이 채팅 서식을 안 켰다(판 7 — 말풍선이 기호째 보인다)")
         h.signIn()
         h.app.messages.appDidBecomeActive()
         h.app.messages.conversationDidAppear("p-1", "t1")

@@ -213,7 +213,10 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         now = NowStore(context, scope, env.todoStorage, runsPeriodicRefresh = env.runsTimers)
         // 집중 모드 보내기 게이트(판 7 · 대표 요청 5·6)는 폰만 켠다 — 같은 스토어를 쓰는 Windows 는 v1 동결로 꺼 둔다(MessagesStore.focusSendGate).
         // "기본값이 꺼짐이니 빼도 되겠지"로 지우지 마라 — 이 줄이 없으면 폰에서 상대 '집중' 표시 · 보내기 잠금 · 내 집중 안내가 모두 사라진다.
-        messages = MessagesStore(context, scope, env.collation, megaphoneHost = PhoneMegaphoneHost(context, ruby), focusSendGate = true)
+        // 채팅 서식(판 7 — 제목·굵게·링크)도 폰만 켠다(MessagesStore.chatMarkdown). 이 인자가 빠지면 폰 말풍선이 기호째 보이고 링크가 안 열린다.
+        messages = MessagesStore(
+            context, scope, env.collation, megaphoneHost = PhoneMegaphoneHost(context, ruby), focusSendGate = true, chatMarkdown = true,
+        )
         megaphoneBanner = MegaphoneBannerStore(PhoneMegaphoneHost(context, ruby), scope, env.prefs, clock = { env.clock.now() })
         rankings = RankingsStore(context, scope, env.collation)
         gamesContext = PhoneGamesContext(context, PhoneGomokuLink(gomoku), PhoneChessLink(chess))

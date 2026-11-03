@@ -5,6 +5,7 @@ import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.net.AuthErrorRules
 import com.yehsung.aingcheck.core.rules.format.roundedHalfAwayFromZero
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
+import com.yehsung.aingcheck.core.rules.text.ChatMarkdown
 import com.yehsung.aingcheck.core.rules.text.Graphemes
 import com.yehsung.aingcheck.core.rules.text.MessageBody
 import com.yehsung.aingcheck.core.rules.text.MessageHistoryReadSnapshot
@@ -417,9 +418,10 @@ object MessagesThreadListRules {
         workKnown: Boolean,
         now: SwiftDate,
         zone: TimeZone = MessagesTime.kst,
+        chatMarkdown: Boolean = false,
     ): List<MessagesThreadItem> {
         val unread = MessagesSortRules.combinedUnreadPeerIDs(messageUnreadPeerIDs, pokeUnreadPeerIDs)
-        val decorated = items(threads, pokes, chronology, zone).map { item ->
+        val decorated = items(threads, pokes, chronology, zone, chatMarkdown).map { item ->
             val peer = item.peerUserID
             val isUnread = peer in unread
             item.copy(
@@ -439,17 +441,18 @@ object MessagesThreadListRules {
         pokes: List<MessagePokeLogEntry>,
         chronology: Map<String, Int>,
         zone: TimeZone,
+        chatMarkdown: Boolean = false,
     ): List<MessagesThreadItem> {
         fun plain(thread: MessageThread<MessageEntry>): MessagesThreadItem {
             val last = thread.lastMessage
-            return draft(thread, emptyList(), last?.createdDate ?: distantPast, last?.let { MessagesListRules.preview(it.body) } ?: "",
+            return draft(thread, emptyList(), last?.createdDate ?: distantPast, last?.let { MessagesListRules.preview(it.body, chatMarkdown) } ?: "",
                 last?.isMine ?: false)
         }
         if (pokes.isEmpty()) return threads.map(::plain)
         val ordered = MessagePokeLogRules.sorted(pokes, chronology)
         val byPeer = LinkedHashMap<String, MutableList<MessagePokeLogEntry>>()
         for (poke in ordered) byPeer.getOrPut(poke.peerUserID) { mutableListOf() } += poke
-        val items = threads.mapTo(ArrayList()) { thread -> item(thread, byPeer[thread.peerUserID] ?: emptyList(), chronology, zone) }
+        val items = threads.mapTo(ArrayList()) { thread -> item(thread, byPeer[thread.peerUserID] ?: emptyList(), chronology, zone, chatMarkdown) }
         val known = threads.map { it.peerUserID }.toSet()
         val pokeOnlyOrder = ArrayList<String>()
         for (poke in ordered) if (poke.peerUserID !in known && poke.peerUserID !in pokeOnlyOrder) pokeOnlyOrder += poke.peerUserID
@@ -458,7 +461,7 @@ object MessagesThreadListRules {
             // 이름·아바타는 **가장 최근 행의 것**이다(코어 `MessageThreadBuilder.threads` 와 같은 규약).
             val latest = own.lastOrNull() ?: continue
             val thread = MessageThread<MessageEntry>(peer, latest.peerName, latest.peerAvatarURL?.absoluteString, emptyList())
-            items += item(thread, own, chronology, zone)
+            items += item(thread, own, chronology, zone, chatMarkdown)
         }
         return items
     }
@@ -468,6 +471,7 @@ object MessagesThreadListRules {
         pokes: List<MessagePokeLogEntry>,
         chronology: Map<String, Int>,
         zone: TimeZone,
+        chatMarkdown: Boolean,
     ): MessagesThreadItem {
         val lastMessage = thread.lastMessage
         val lastPoke = pokes.lastOrNull()
@@ -486,7 +490,7 @@ object MessagesThreadListRules {
                 thread, pokes, last.entry.createdAt, MessagesSortRules.pokePreview(last.entry, zone), last.entry.isMine, previewIsPoke = true,
             )
             is MessageConversationLine.bubble -> draft(
-                thread, pokes, last.entry.createdDate, MessagesListRules.preview(last.entry.body), last.entry.isMine, previewIsPoke = false,
+                thread, pokes, last.entry.createdDate, MessagesListRules.preview(last.entry.body, chatMarkdown), last.entry.isMine, previewIsPoke = false,
             )
             else -> draft(thread, pokes, anchor, "", false)
         }
@@ -584,10 +588,12 @@ object MessagesListRules {
 
     /**
      * 목록 한 줄 미리보기: 줄바꿈·연속 공백을 한 칸으로 접는다. 아잉이 이모티콘을 **먼저** 거친다(목록은 그림을 못 그린다).
+     * [chatMarkdown](판 7 · 폰만 — [MessagesStore.chatMarkdown]): 서식 기호(`## ` · `**` · `[글](주소)`)도 벗긴다 — [ChatMarkdown.plainPreview]
+     * (iOS 1.0.17 MessagesListRules.preview 와 같은 함수 · 이모티콘 규칙을 먼저 거치므로 아래 순서는 그대로다). 꺼져 있으면(Windows) 예전 글자 그대로.
      */
     // INV-MessagesRules-5f8f5138 이식: 순서가 거꾸로면 안 된다 — 이모티콘 판정(AingStickerText.preview)이 정규화 원문을 먼저 보고, 접기는 그 뒤다.
-    fun preview(body: String): String {
-        val text = AingStickerText.preview(body)
+    fun preview(body: String, chatMarkdown: Boolean = false): String {
+        val text = if (chatMarkdown) ChatMarkdown.plainPreview(body) else AingStickerText.preview(body)
         // Swift `split(whereSeparator: { $0.isWhitespace || $0.isNewline })` — 글자(그래핌)의 첫 스칼라가 White_Space 면 가르개(줄바꿈 넷도 White_Space).
         val words = ArrayList<String>()
         val current = StringBuilder()

@@ -6,6 +6,7 @@
 package com.yehsung.aingcheck.android.shell
 
 import android.view.accessibility.AccessibilityManager
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.unit.dp
@@ -96,4 +97,25 @@ class MegaphoneBannerCardTest {
             MegaphoneBannerPhoneText.accessibilityHint.contains(MegaphoneBannerPhoneText.close))
         assertFalse("힌트가 화면 읽기 사용자가 못 하는 손짓을 말한다", MegaphoneBannerPhoneText.accessibilityHint.contains("누르고 있으면"))
     }
+
+    /**
+     * 판 7(아이폰 1.0.17 · 맥 배너와 같은 plainPreview): 카드 글과 TalkBack 라벨이 서식 기호 · 이모티콘 토큰을 벗긴 같은 글이다. 링크는 누를 수 없는 글자다 —
+     * 누를 수 있는 것은 여전히 [닫기] 하나다. 기준선: 평범한 한 줄 본문은 한 글자도 안 바뀐다.
+     */
+    @Test
+    fun cardShowsFormattedBodiesAsPlainTextAndLinksAreNotTappable() {
+        val store = MegaphoneBannerStore(null, CoroutineScope(Dispatchers.Unconfined), null, clock = { SwiftDate(1_800_000_000.0) }, schedule = { _, _ -> })
+        compose.setContent { MegaphoneBannerOverlay(store) }
+        store.presentFromPush("mp-md", senderName = "보낸사람", body = "## 공지\n**오늘** [회의록](https://docs.example/a) 확인해 주세요", senderID = null)
+        compose.waitForIdle()
+        compose.onAllNodesWithText("공지 오늘 회의록 확인해 주세요").assertCountEquals(1)
+        compose.onAllNodesWithText("## 공지", substring = true).assertCountEquals(0)
+        compose.onAllNodes(hasClickAction()).assertCountEquals(1)
+        val label = compose.onNodeWithTag(MegaphoneBannerTags.CARD).fetchSemanticsNode().config
+            .getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription)?.joinToString()
+        assertTrue("TalkBack 라벨이 기호를 읽는다: $label", label!!.startsWith("보낸사람님의 확성기, 공지 오늘 회의록 확인해 주세요."))
+        assertEquals("다들 화이팅", MegaphoneBannerPhoneText.shownBody("다들 화이팅"))
+        assertEquals("아잉이 기쁨", MegaphoneBannerPhoneText.shownBody("[아잉:기쁨]"))
+    }
+
 }

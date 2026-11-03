@@ -134,12 +134,16 @@ package enum GamesReversiStakeSend {
 
 #if os(iOS)
 
-/// 아잉 뒤집기 화면 — 게임 탭 목적지(`GamesDestination.reversi`)의 **진입 뷰**.
+/// 아잉 뒤집기 화면 — 게임 탭 목적지(`GamesDestination.reversi`). 코어 `phase` 로 로비 · 판(1:1 · 로봇 연습) · 결과를 갈아 끼운다.
 ///
-/// 배선 갈래(1/4)는 수명 훅 둘과 '할 수 없음' 안내만 세운다. 로비·판·AI 연습·결과·관전·순위·규칙 그림은 화면 갈래가 이 `content` 를 바꿔 채운다
-/// (넘김 메모 phone-1017/lane-notes/reversi.md '다음 갈래가 바꿀 자리'). 수명 훅 두 줄(`onAppear`·`onDisappear`)은 그대로 둔다 — 순서를 쥔 곳이 `GamesStore` 다.
+/// 판·결과·로봇 연습은 판 갈래(2/4)가 채웠다(`GamesReversiMatchView` · `GamesReversiAI*`). **로비 절**(`lobby`)은 지금 '할 수 없음' 안내 ·
+/// 전적 한 줄 · 안내 · 로봇 연습 입구만 세운다 — 상대 목록 · 신청 · 관전 · 순위 · 규칙은 로비 갈래가 이 절을 바꿔 채운다
+/// (넘김 메모 phone-1017/lane-notes/reversi.md). 수명 훅 두 줄(`onAppear`·`onDisappear`)은 그대로 둔다 — 순서를 쥔 곳이 `GamesStore` 다.
 struct GamesReversiScreen: View {
     let store: GamesStore
+
+    /// [로봇과 연습하기] → 돌 색 시트. 시트의 주인은 화면 루트다(판돈·규칙 시트와 같은 관례).
+    @State private var showsAIColorSheet = false
 
     private var reversi: ReversiStore { store.reversi }
 
@@ -148,21 +152,54 @@ struct GamesReversiScreen: View {
             .background(MobileTheme.background.ignoresSafeArea())
             .navigationTitle(ReversiPhoneText.title)
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showsAIColorSheet) {
+                GamesReversiAIColorSheet(store: reversi)
+            }
             .onAppear { store.reversiScreenDidAppear() }
             .onDisappear { store.reversiScreenDidDisappear() }
+            // 판이 섰다(신청 수락 · 다른 기기에서 연 판을 읽음) — 열려 있던 돌 색 시트를 들고 있으면 로비로 돌아올 때 되살아난다.
+            .onChange(of: reversi.match?.id) { _, _ in showsAIColorSheet = false }
     }
 
     @ViewBuilder
     private var content: some View {
-        if let unavailable = GamesReversiUnavailable.title(reversi.availability) {
-            // 할 수 없는 기기·서버 상태다 — 로비를 그리면 [도전]이 서고 그 요청은 전부 거절된다.
-            EmptyStateView(systemImage: GamesReversiUnavailable.icon(reversi.availability), title: unavailable)
-                .padding(.horizontal, MobileTheme.sideMargin)
-        } else {
-            EmptyStateView(systemImage: "circle.lefthalf.filled", title: ReversiPhoneText.title,
-                           message: reversi.record.map { ReversiPhoneText.recordTitle + " " + ReversiPhoneText.record($0) }
-                               ?? ReversiPhoneText.subtitle)
-                .padding(.horizontal, MobileTheme.sideMargin)
+        switch reversi.phase {
+        case .playing, .result:
+            // 판이 없으면 로비가 선다 — 늦게 온 응답이 단계만 올려 놓고 판을 못 세운 틈이다(체스·오목과 같은 대체 갈래).
+            if reversi.match != nil {
+                GamesReversiMatchView(store: store)
+            } else {
+                lobby
+            }
+        case .lobby:
+            lobby
+        }
+    }
+
+    // MARK: - 로비 (로비 갈래가 상대 목록 · 신청 · 관전 · 순위로 채운다)
+
+    private var lobby: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
+                if let unavailable = GamesReversiUnavailable.title(reversi.availability) {
+                    // 할 수 없는 기기·서버 상태다 — 사람에게 신청하는 길은 서지 않는다. **로봇 연습은 서버를 안 타므로 그대로 연다**(맥 머리글과 같다).
+                    InlineNotice(text: unavailable, kind: .warning)
+                } else {
+                    Text(reversi.record.map { ReversiPhoneText.recordTitle + " " + ReversiPhoneText.record($0) }
+                         ?? ReversiPhoneText.subtitle)
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                }
+                if let notice = reversi.notice {
+                    InlineNotice(text: notice, kind: .warning)
+                }
+                GamesReversiAIEntryCard(store: reversi, onPlay: { showsAIColorSheet = true })
+            }
+            .padding(.horizontal, MobileTheme.sideMargin)
+            .padding(.top, MobileTheme.space2)
+            .padding(.bottom, MobileTheme.space6)
         }
     }
 }

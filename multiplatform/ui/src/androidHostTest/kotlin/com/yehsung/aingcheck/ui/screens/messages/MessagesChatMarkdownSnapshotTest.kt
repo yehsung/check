@@ -8,14 +8,23 @@ package com.yehsung.aingcheck.ui.screens.messages
 
 import android.content.ClipboardManager
 import android.content.Context
+import androidx.compose.foundation.text.contextmenu.builder.item
 import androidx.compose.foundation.text.contextmenu.data.ProcessTextKey
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
+import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
+import androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuDropdownProvider
+import androidx.compose.foundation.text.contextmenu.provider.LocalTextContextMenuToolbarProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuDataProvider
+import androidx.compose.foundation.text.contextmenu.provider.TextContextMenuProvider
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
@@ -26,7 +35,9 @@ import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInputSelection
+import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runComposeUiTest
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Density
@@ -355,6 +366,84 @@ class MessagesChatMarkdownSnapshotTest {
             assertFalse("$key 를 남겼다", ChatSelectCopyMenu.keeps(key))
         }
     }
+
+    /**
+     * 검토 F4 — 시트가 실제로 띄우는 글 칸 메뉴를 부르는 자리에서 잰다(위 시험은 술어 ChatSelectCopyMenu.keeps 만 잰다 — 시트가 거름을 안 걸어도 초록).
+     * 메뉴 판은 가짜 제공자(LocalTextContextMenuToolbarProvider · LocalTextContextMenuDropdownProvider)로 받는다 — 글 칸이 메뉴를 띄울 때 그 제공자에게
+     * 메뉴 자료를 넘긴다. 길은 둘: 손가락 길게 누르기(도구 막대 — 폰의 실제 손짓) · 고른 글 위 마우스 오른쪽(드롭다운).
+     * Robolectric 에는 PROCESS_TEXT 앱(번역 · 웹 검색)이 없어, 바깥에서 그 자리의 항목 둘(공유 · 번역 흉내)을 끼워 넣어 거름이 실제로 걷는지 본다
+     * (거름은 위아래 가리지 않고 모은 항목 전부에 걸린다). 기준선: 같은 끼움 · 같은 손짓을 거름 없는 글 칸에 하면 끼운 항목이 남는다(이 시험이 거름을 재는 증거).
+     *
+     * ★ 두 길 모두 메뉴를 띄우기 전에 붙여넣기판의 기기 참조(getNativeClipboardManager)를 묻는다 — 시트가 갈아 끼운 붙여넣기판이 AndroidClipboard 가
+     *   아니면 IllegalArgumentException 으로 죽는다(이 시험이 처음 찾은 결함 — 시트에서 길게 누르면 앱이 죽었다).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    private fun shownMenuKeys(touch: Boolean, sheet: @androidx.compose.runtime.Composable () -> Unit): List<Any> {
+        val shown = mutableListOf<List<Any>>()
+        val provider = object : TextContextMenuProvider {
+            override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
+                shown += dataProvider.data().components.map { it.key }
+                kotlinx.coroutines.awaitCancellation()
+            }
+        }
+        // 손가락 길: Robolectric 의 플랫폼 돋보기(API 28+)는 표면이 없어 길게 누른 뒤 닫다가 죽는다 — 이 시험 동안만 돋보기 없는 판(27)으로 보인다.
+        val sdk = android.os.Build.VERSION.SDK_INT
+        if (touch) org.robolectric.util.ReflectionHelpers.setStaticField(android.os.Build.VERSION::class.java, "SDK_INT", 27)
+        try {
+            runComposeUiTest {
+                setContent {
+                    ScreenSnapshots.Frame(false, art, characters.directory) {
+                        CompositionLocalProvider(
+                            LocalTextContextMenuToolbarProvider provides provider,
+                            LocalTextContextMenuDropdownProvider provides provider,
+                        ) {
+                            Box(Modifier.appendTextContextMenuComponents {
+                                item(key = "test-share", label = "공유") {}
+                                item(key = ProcessTextKey::class.java.getDeclaredConstructor(Int::class.javaPrimitiveType).apply { isAccessible = true }.newInstance(7), label = "번역") {}
+                            }) { sheet() }
+                        }
+                    }
+                }
+                waitForIdle()
+                val field = onNodeWithTag(MessagesTags.SELECT_COPY_FIELD)
+                if (touch) {
+                    field.performTouchInput { longClick(Offset(30f, centerY)) }
+                } else {
+                    field.performTextInputSelection(TextRange(0, 5))
+                    waitForIdle()
+                    field.performMouseInput { rightClick(Offset(12f, centerY)) }
+                }
+                waitForIdle()
+                // 메뉴는 누름이 끝난 뒤 다음 프레임들에서 뜬다(드롭다운은 특히 늦다) — 시계를 밀며 기다리되 시한이 지나도 던지지 않는다(아래 전제 단언이 말한다).
+                runCatching { waitUntil(timeoutMillis = 3_000) { shown.isNotEmpty() } }
+            }
+        } finally {
+            if (touch) org.robolectric.util.ReflectionHelpers.setStaticField(android.os.Build.VERSION::class.java, "SDK_INT", sdk)
+        }
+        assertTrue("touch=$touch 글을 고르고 메뉴를 청했는데 글 칸 메뉴가 뜨지 않았다(전제)", shown.isNotEmpty())
+        return shown.last()
+    }
+
+    private fun assertSheetMenu(touch: Boolean) {
+        val keys = shownMenuKeys(touch) { ChatSelectCopySheet(ChatSelectCopyState("**굵게** [자료](https://a.example/doc) 끝")) }
+        assertEquals("touch=$touch 시트 글 칸 메뉴: $keys", setOf<Any>(TextContextMenuKeys.CopyKey, TextContextMenuKeys.SelectAllKey), keys.toSet())
+        // 기준선: 거름 없는 같은 모양 글 칸 — 끼운 항목이 그대로 뜬다.
+        val unfiltered = shownMenuKeys(touch) {
+            androidx.compose.foundation.text.BasicTextField(
+                state = androidx.compose.runtime.remember { androidx.compose.foundation.text.input.TextFieldState("굵게 자료 (a.example) 끝") },
+                readOnly = true,
+                modifier = Modifier.testTag(MessagesTags.SELECT_COPY_FIELD),
+            )
+        }
+        assertTrue("touch=$touch 기준선: 거름 없는 글 칸에 끼운 공유가 없다 — 이 시험이 거름을 못 잰다: $unfiltered", "test-share" in unfiltered)
+        assertTrue("touch=$touch 기준선: 거름 없는 글 칸에 끼운 PROCESS_TEXT 가 없다: $unfiltered", unfiltered.any { it is ProcessTextKey })
+    }
+
+    /** 폰의 실제 손짓 — 시트 글을 길게 눌러 고르면 도구 막대가 [복사] · [모두 선택]만 싣고 뜬다(죽지 않는다). */
+    @Test fun selectSheetLongPressToolbarKeepsOnlyCopyAndSelectAll() = assertSheetMenu(touch = true)
+
+    /** 마우스(크롬북 · 블루투스 마우스) — 고른 글 위 오른쪽 누르기 드롭다운도 같은 거름(죽지 않는다). */
+    @Test fun selectSheetRightClickMenuKeepsOnlyCopyAndSelectAll() = assertSheetMenu(touch = false)
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertExistsCompat() = apply { assertExists() }
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertDoesNotExistCompat() = apply { assertDoesNotExist() }

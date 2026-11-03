@@ -86,9 +86,13 @@ object ChatSelectCopyMenu {
 /**
  * 글 칸의 복사가 쓰는 붙여넣기판을 갈아 끼운 것(①). 쓰기 요청이 오면 그 내용(보이는 글자)을 버리고 [text] 를 서식 없이 쓴다.
  * 읽기 · 기기 붙여넣기판은 원래 것에 그대로 넘긴다.
+ *
+ * ★ 안드로이드에서는 이것이 `AndroidClipboard` 여야 한다([chatSelectClipboard] 의 안드로이드 몫이 그 짝을 단다). 글 칸은 메뉴(길게 누르기 도구 막대 ·
+ *   마우스 오른쪽 드롭다운)를 띄우기 전에 붙여넣기 가능 여부를 이 붙여넣기판의 기기 참조(getNativeClipboardManager)로 묻는데, AndroidClipboard 가
+ *   아니면 IllegalArgumentException 으로 죽는다 — 시트에서 글을 길게 누르는 순간 앱이 죽었다(검토 F4 를 부르는 자리에서 재다 찾음).
  */
-private class ChatSelectClipboard(
-    private val real: Clipboard,
+internal open class ChatSelectClipboard(
+    protected val real: Clipboard,
     @Suppress("DEPRECATION") private val writer: ClipboardManager,
     private val text: () -> String?,
 ) : Clipboard {
@@ -101,6 +105,10 @@ private class ChatSelectClipboard(
 
     override val nativeClipboard: NativeClipboard get() = real.nativeClipboard
 }
+
+/** 플랫폼별 [ChatSelectClipboard] — 안드로이드는 `AndroidClipboard` 짝까지 단다(위 ★). */
+@Suppress("DEPRECATION")
+internal expect fun chatSelectClipboard(real: Clipboard, writer: ClipboardManager, text: () -> String?): Clipboard
 
 /** 골라 복사 시트 본문 — 말풍선 모양 그대로(받은 말풍선 색 — 시트 바탕 위에서 읽히게) 읽기 전용 글 칸. */
 @OptIn(ExperimentalFoundationApi::class)
@@ -115,7 +123,7 @@ fun ChatSelectCopySheet(state: ChatSelectCopyState, modifier: Modifier = Modifie
     LaunchedEffect(state) { snapshotFlow { state.field.selection }.collect(state::noteSelection) }
     @Suppress("DEPRECATION") val writer = LocalClipboardManager.current
     val real = LocalClipboard.current
-    val clipboard = remember(real, writer, state) { ChatSelectClipboard(real, writer) { state.copyText() } }
+    val clipboard = remember(real, writer, state) { chatSelectClipboard(real, writer) { state.copyText() } }
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 24.dp).testTag(MessagesTags.SELECT_COPY_SHEET)) {
         CompositionLocalProvider(LocalClipboard provides clipboard) {
             Box(

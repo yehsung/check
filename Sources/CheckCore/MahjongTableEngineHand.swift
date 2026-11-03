@@ -175,8 +175,10 @@ extension MahjongTableEngine {
         return c
     }
 
+    /// 대기 종류(MahjongHand.waits) — 같은 꼴은 기억해 둔 값(순수 함수라 결과가 같다).
     static func waits(_ ids: [Int], melds: Int) -> [Int] {
-        MahjongHand.waits(counts(ids), melds: melds)
+        let c = counts(ids)
+        return MahjongEngineMemo.shared.value(.waits, c, melds) { MahjongHand.waits(c, melds: melds) }
     }
 
     static let redIDs: Set<Int> = [16, 52, 88]
@@ -336,9 +338,19 @@ extension MahjongTableEngine {
         let s = seatState[seat]
         guard s.drawn != nil, !s.riichi, s.menzen, points[seat] >= 1000, liveLeft >= 4 else { return [] }
         let c14 = s.closed14
-        let ks = Set(MahjongRules.riichiDiscards(closed14: Self.tiles(c14), ankans: s.melds.count, score: 1000, liveLeft: 4,
-                                                 menzen: true, already: false))
+        let ks = Set(Self.riichiKinds(c14, ankans: s.melds.count))
         return c14.filter { ks.contains($0 / 4) }.sorted()
+    }
+
+    /// 버려서 텐파이가 되는 종류(= `MahjongRules.riichiDiscards` 의 싼 조건 통과 뒤 값 — 싼 조건은 부르는 쪽이 먼저 본다).
+    /// 14장 샹텐이 1 이상이면 R 을 부르지 않고 [] — 샹텐은 '더 들여야 할 최소 장수 − 1'(남는 패는 버린다고 친다)이라 패를 하나 더 쥔
+    /// 손이 더 멀 수 없고(14장 ≤ 버린 뒤 13장), 13장 텐파이 ⇔ 샹텐 0(R 시험)이다. 디버그 빌드에서 대기 14번(~2ms)을 매 차례 돌지 않게.
+    static func riichiKinds(_ c14: [Int], ankans: Int) -> [Int] {
+        let c = counts(c14)
+        return MahjongEngineMemo.shared.value(.riichi, c, ankans) {
+            guard MahjongHand.shanten(c, melds: ankans) <= 0 else { return [] }
+            return MahjongRules.riichiDiscards(closed14: tiles(c14), ankans: ankans, score: 1000, liveLeft: 4, menzen: true, already: false)
+        }
     }
 
     func ankanOptions(_ seat: Int) -> [[Int]] {
@@ -962,5 +974,39 @@ extension MahjongTableEngine {
             nextHand = adv.next
             stage = .handEnd
         }
+    }
+}
+
+/// 판 진행이 되풀이해 묻는 순수 판정(대기 · 리치 선언 종류)의 기억 — 종류 34칸 장수 + 손 밖 몸통 수가 같으면 결과가 같다.
+/// 연습판 봇 자체 대국·replay 가 같은 꼴을 수없이 다시 묻는다(디버그 빌드에서 대기 한 번이 ~1ms). 크기가 넘치면 통째로 비운다.
+nonisolated final class MahjongEngineMemo: @unchecked Sendable {
+    enum Table: Sendable { case waits, riichi }
+
+    struct Key: Hashable, Sendable {
+        let table: Int
+        let counts: [UInt8]
+        let melds: Int
+    }
+
+    static let shared = MahjongEngineMemo()
+    static let capacity = 200_000
+
+    private let lock = NSLock()
+    private var store: [Key: [Int]] = [:]
+
+    func value(_ table: Table, _ counts: [Int], _ melds: Int, compute: () -> [Int]) -> [Int] {
+        let key = Key(table: table == .waits ? 0 : 1, counts: counts.map { UInt8(clamping: $0) }, melds: melds)
+        lock.lock()
+        if let hit = store[key] {
+            lock.unlock()
+            return hit
+        }
+        lock.unlock()
+        let v = compute()
+        lock.lock()
+        if store.count >= Self.capacity { store.removeAll(keepingCapacity: true) }
+        store[key] = v
+        lock.unlock()
+        return v
     }
 }

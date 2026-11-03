@@ -3,7 +3,7 @@
 // 「미션」 화면(데스크톱 오프스크린) — 진짜 나 탭 스토어를 데모 픽스처(미션 · 일일 · 이번 주 근무)로 채워 그린다.
 //  ① 스냅숏(밝음 · 어두움) · 받기 연출 한 순간
 //  ② 순서: 일일 → 이번 주 근무 → 누적(맥 0.3.64 와 같은 순서)
-//  ③ 일일 줄은 **서버가 주는 대로**(G §8-18 7): 서버가 일곱 번째 줄(길건너)을 주면 일곱 줄이 선다(기준선: 여섯 줄 응답은 여섯 줄)
+//  ③ 일일 줄은 **서버가 주는 대로**(G §8-18 7): 데모 일곱 줄(큐브 포함)은 일곱 · 길건너를 더하면 여덟 · 서버의 아홉째 daily_reversi 까지 아홉(글자 그대로)
 //  ④ 서버에 기능이 없으면 그 절이 통째로 빠진다(INV-MeMissionsView-ea2bbdd7): 일일 없는 응답 → 일일 카드 0
 package com.yehsung.aingcheck.ui.missions
 
@@ -23,6 +23,9 @@ import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -137,15 +140,29 @@ class MissionsScreenDesktopTest {
 
     @Test
     fun dailyRowsFollowTheServer() {
-        // 기준선: 서버가 여섯 줄을 주면 여섯 줄.
-        assertEquals(6, dailyRows(MeScreenFixtures.achievements))
-        // 서버가 일곱 번째 줄(길건너 아잉이 — 폰 1.0.14 바닥에도 '모두에게 보이기', G §8-18 7)을 주면 일곱 줄. 화면이 거르지 않는다.
-        val seven = MeScreenFixtures.achievements.replacingOnce(
+        // 기준선: 데모 픽스처(맥 main 0.3.74 — 여섯 줄 + 아잉 큐브 daily_rummy)가 주는 일곱 줄이면 일곱 줄.
+        assertEquals(7, dailyRows(MeScreenFixtures.achievements))
+        // 서버가 길건너 아잉이 줄(폰 1.0.14 바닥에도 '모두에게 보이기', G §8-18 7)을 더 주면 여덟 줄. 화면이 거르지 않는다.
+        val eight = MeScreenFixtures.achievements.replacingOnce(
             """"key": "daily_tetris_duel",""",
             """"key": "daily_crossy", "game": "crossy", "title": "길건너 아잉이 한 판 하기", "detail": "", "reward": 5, "target": 1, "progress": 0,
             "achieved": false, "claimed": false, "claimed_at_ms": null, "sort": 70}, {"key": "daily_tetris_duel",""",
         )
-        assertEquals(7, dailyRows(seven))
+        assertEquals(8, dailyRows(eight))
+        // 서버 20261108200000 의 아홉째 줄 daily_reversi(아잉 뒤집기 — 이 판엔 화면이 없다)도 서버 글자 그대로 선다: 아홉 줄.
+        val nine = eight.replacingOnce(
+            """"key": "daily_rummy",""",
+            """"key": "daily_reversi", "game": "reversi", "title": "$REVERSI_TITLE", "detail": "$REVERSI_DETAIL", "reward": 5, "target": 1, "progress": 0,
+            "achieved": false, "claimed": false, "claimed_at_ms": null, "sort": 80}, {"key": "daily_rummy",""",
+        )
+        assertEquals(9, dailyRows(nine))
+        runDesktopComposeUiTest(W, H) {
+            val s = store(achievements = nine)
+            setContent { W4cDesktopSnapshots.frame(false, W, H) { MeMissionsContent(s, scrolls = false) }() }
+            val inReversiRow = hasAnyAncestor(hasTestTag(MissionTags.row("daily_reversi")))
+            onNode(hasText(REVERSI_TITLE) and inReversiRow, useUnmergedTree = true).assertExists()
+            onNode(hasText(REVERSI_DETAIL) and inReversiRow, useUnmergedTree = true).assertExists()
+        }
     }
 
     @Test
@@ -179,5 +196,8 @@ class MissionsScreenDesktopTest {
     private companion object {
         const val W = 390
         const val H = 1640
+        /** 서버 글자 그대로 — /Users/yesung/check/supabase/migrations/20261108200000_reversi.sql:2041 의 daily_reversi 정의(title · detail). */
+        const val REVERSI_TITLE = "아잉 뒤집기 한 판 하기"
+        const val REVERSI_DETAIL = "맥에서 할 수 있어요"
     }
 }

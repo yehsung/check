@@ -52,6 +52,7 @@ class MeTextRulesTest {
         assertEquals("보조", claimed.caption, "버튼이 없는 줄은 실패를 말하지 않는다")
         assertEquals(MeText.missionFallbackIcon, MeText.dailyMissionIcon("새게임"))
         assertEquals("cube.fill", MeText.dailyMissionIcon("rummy"))
+        assertEquals("circle.lefthalf.filled", MeText.dailyMissionIcon("reversi"), "아잉 뒤집기 줄은 맥 ReversiEntryIcon.symbol 과 같은 기호")
     }
 
     /** 서버가 큐브 없는 옛 폰을 위해 싣는 '맥에서 할 수 있어요'는 큐브가 있는 이 폰에선 거짓이다 — 큐브 줄만 비운다. 빈 줄은 안 세운다. */

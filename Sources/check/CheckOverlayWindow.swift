@@ -1956,7 +1956,7 @@ final class CheckOverlayController {
     /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 떠 있으면 거짓이다(화면이 이미 말한다).
     /// 수 번호(`moveCount`)까지 같아야 한다 — 두 수 전의 "내 차례예요"는 거짓이다.
     static func reversiAttentionIsCurrent(_ attention: ReversiAttention, in reversi: ReversiStore) -> Bool {
-        guard !reversi.isWindowVisible, let match = reversi.match else { return false }
+        guard !reversi.isWindowVisible || reversi.isWindowOccluded, let match = reversi.match else { return false }
         return match.id == attention.matchID && match.isMyTurn && attention.moveCount == match.moveCount
     }
 

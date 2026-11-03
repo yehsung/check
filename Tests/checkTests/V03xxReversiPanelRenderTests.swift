@@ -62,6 +62,33 @@ struct V03xxReversiPanelRenderTests {
         #expect(rvMaxChannelDifference(stake, full, rect: rvCenterRect) > 60, "판돈 창이 안 그려졌다")
     }
 
+    /// 없으면(적대 검증 1차 V2-05): 로비 "지금 대결 중" 의 **내 판** 줄에 [관전] 단추가 서도 초록이다 — 화면의 내 판 판정이
+    /// `live.id == store.match?.id` 였고 로비가 그려질 때 `match` 는 늘 nil 이다. 같은 장면을 **보는 사람만** 바꿔(낀 사람 · 남)
+    /// 두 번 그려, 대결 중 상자만 갈리는지 본다(재현 시험 flip/v2 e04cfa54 를 옮겼다).
+    @Test(.gomokuDefaultsCleanup)
+    func myOwnLiveMatchRowSaysMyMatchInsteadOfOfferingWatch() throws {
+        let meUser = ReversiUser(id: rvMe.userID ?? "", displayName: rvMe.name, characterID: rvMe.characterID)
+        func scene(viewer: String, _ label: String) throws -> ReversiStore {
+            let (store, _) = makeReversiStore(label, me: viewer, clock: RVClock(rvNow), handler: rvHandler([:]))
+            let filled = try rvLobbyStore(into: store)
+            filled.liveMatches[0] = ReversiLiveMatch(id: "live-1", a: meUser, b: rvJunho, stake: 5,
+                                                     startedAt: rvNow.addingTimeInterval(-300), watchers: 2)
+            return filled
+        }
+        let mine = try scene(viewer: meUser.id, "render-live-mine")
+        let stranger = try scene(viewer: rvA, "render-live-stranger")
+        #expect(mine.isMine(mine.liveMatches[0]) && !stranger.isMine(stranger.liveMatches[0]))   // 전제: 스토어 판정은 갈린다
+        #expect(mine.match == nil)                                  // 로비 화면 — 내 판을 들고 있지 않다
+        let mineBitmap = try rvBitmap(rvPanel(mine))
+        let strangerBitmap = try rvBitmap(rvPanel(stranger))
+        rvSave(mineBitmap, "lobby-live-mine")
+        let liveDiff = rvMaxChannelDifference(mineBitmap, strangerBitmap, rect: rvLobbyLiveRect)
+        let usersDiff = rvMaxChannelDifference(mineBitmap, strangerBitmap, rect: rvLobbyUsersColumn)
+        print("[로비 대결 중] 내 판 vs 남의 판: 대결 중 상자 \(liveDiff) · 상대 목록 \(usersDiff)")
+        #expect(liveDiff > 60, "내 판 줄이 남이 보는 줄과 똑같이 그려진다 — 내 판에 [관전] 단추가 선다")
+        #expect(usersDiff < 30, "보는 사람만 바꿨는데 대결 중 상자 밖이 갈렸다 — 기준선이 아니다")
+    }
+
     // MARK: ② 내 차례 — 합법 수 점은 서버 목록만
 
     /// ★ 없으면: 판이 `ReversiRules.legalMoves` 로 점을 그려도(DEC:26 위반) 초록이다 — 진짜 판에서는 두 목록이 늘 같다.
@@ -477,8 +504,8 @@ private let rvMe = ReversiPlayerFace(name: "영식", avatarURL: nil, characterID
 /// 순위(두 줄)를 `applyRanking` 으로 넣는다. 원문 로비의 matches 가 비어 있어(갈래 C2 남은 문제) "대결 중" 목록만 심는다.
 /// 빈 쪽은 원문 없이 루비 · 전적만 있는 가게(내용 없는 기준선).
 @MainActor
-private func rvLobbyStore(populated: Bool = true) throws -> ReversiStore {
-    let store = ReversiStore(clock: { rvNow })
+private func rvLobbyStore(populated: Bool = true, into existing: ReversiStore? = nil) throws -> ReversiStore {
+    let store = existing ?? ReversiStore(clock: { rvNow })
     guard populated else {
         store.rubyBalance = 42
         store.record = ReversiRecord(wins: 7, losses: 3, draws: 1)
@@ -608,6 +635,13 @@ private var rvLobbyRankColumn: CGRect {
 private var rvLobbySideColumn: CGRect {
     CGRect(x: rvLobbyRankColumn.maxX + ReversiWindowLayout.columnSpacing, y: rvBodyOrigin.y,
            width: ReversiWindowLayout.lobbySideWidth, height: ReversiWindowLayout.bodyHeight)
+}
+
+/// 로비 오른쪽 열의 "지금 대결 중" 상자(전적 카드 아래).
+private var rvLobbyLiveRect: CGRect {
+    let side = rvLobbySideColumn
+    return CGRect(x: side.minX, y: side.minY + ReversiWindowLayout.lobbyRecordHeight + ReversiWindowLayout.lobbySideSpacing,
+                  width: side.width, height: ReversiWindowLayout.lobbyLiveHeight)
 }
 
 /// 창 가운데(가운데 작은 창 자리).

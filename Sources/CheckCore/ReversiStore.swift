@@ -14,7 +14,9 @@ import OSLog
 //     첫 수가 자동 착수가 되고 연속 횟수가 1 오른다).
 //  ④ **늦게 온 응답은 버린다** — 세대(reset·watch·ai) · 같은 판 `move_count` 감소 무시 · 끝난 판 뒤 진행 응답 무시 ·
 //     다른 진행 판이 있을 때 끝난 판 무시 · 접은 판 · 같은 판 조회 합치기 · `outgoingRevision` ·
-//     `visibleIncomingInvites` 는 `match?.id` 와 같은 id 를 뺀다(수락 전에 나간 로비 응답이 수락 뒤에 와서 되살리는 것 방지).
+//     `visibleIncomingInvites` 는 `match?.id` 와 같은 id 를 뺀다(수락 전에 나간 로비 응답이 수락 뒤에 와서 되살리는 것 방지) ·
+//     같은 id 를 판으로 든 동안 온 신청 단계 응답(pending·declined·cancelled·expired) 무시 · `writeRevision`(쓰기 응답보다 먼저
+//     나간 로비는 잔액·진행 판 id 를 덮지 않는다) · 로비 조회 합치기(`lobbyAgain` — 도는 중에 온 초인종은 끝난 뒤 한 번 더).
 //  ⑤ **사용자 문구는 `ReversiNoticeText` 한 곳**(진단 어휘 금지).
 //  ⑥ **초 단위 값은 잎 뷰만** 읽는다(`remainingSeconds(now:)` 는 순수 계산 — 스토어는 매초 대입하지 않는다).
 //  ⑦ **합법 수는 서버 `legal_moves` 로만**(내 차례일 때만 온다, DEC:26). **AI 판은 로컬 규칙**이 권위다.
@@ -566,6 +568,9 @@ package final class ReversiStore {
     @ObservationIgnored private var stateInFlight = false
     @ObservationIgnored private var stateAgain = false
     @ObservationIgnored private var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(큐브 `RummyStoreLobby` 꼴). 앞 조회는 그 뒤에 생긴 신청·수락을
+    /// 모르므로, 그 사이 온 초인종을 버리면 받은 신청·수락 소식이 다음 계기(30초 폴링·팝오버)까지 안 선다.
+    @ObservationIgnored private var lobbyAgain = false
     /// 마지막으로 "내 차례가 왔다" 를 본 (판 id#move_count). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
     @ObservationIgnored private var attentionKey: String?
     /// 서버가 말한 내 진행 중 대국 id(로비 `me.active_match_id`).
@@ -589,6 +594,9 @@ package final class ReversiStore {
     /// 이 기기에서 보낸 신청을 새로 세울 때마다 오른다. 그보다 **먼저** 나간 로비 응답이 방금 보낸 신청을 지우지 않게 한다.
     @ObservationIgnored package private(set) var outgoingRevision = 0
     @ObservationIgnored private var lobbyRequestOutgoingRevision = 0
+    /// 쓰기 RPC(신청·취소·응답·착수·기권) 응답을 받을 때마다 오른다. 그보다 **먼저** 나간 로비 응답은 잔액·진행 판 id 를 덮지 않는다 —
+    /// 로비는 읽기 전용이라 쓰기 전 스냅숏일 수 있고, 무거워서 쓰기 응답보다 늦게 온다(판돈이 빠진 95 가 100 으로 돌아가는 것 방지).
+    @ObservationIgnored package private(set) var writeRevision = 0
     /// 서버가 말한 숫자(로비 응답이 덮는다 — 상수를 베끼지 않는다).
     @ObservationIgnored package private(set) var inviteTTLSeconds: TimeInterval = 60
     @ObservationIgnored package private(set) var turnSeconds = 30
@@ -684,35 +692,51 @@ package final class ReversiStore {
 
     // MARK: - 조회
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
+    /// 합친 한 바퀴에는 진행 판 꼬리(`refreshMatch(active)`)까지 들어간다 — 꼬리가 도는 동안 온 초인종도 뒤따르는 한 번으로 간다.
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        let revision = outgoingRevision
-        guard let result = await perform({ try await $0.reversiLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            lobbyRequestOutgoingRevision = revision
-            applyLobby(response)
-            // 서버가 진행 중이라 말하는 판을 들고 있지 않다(다른 기기에서 수락 · 재시작) — 그 판을 읽어 세운다.
-            if response.status == .ok, let active = activeMatchID,
-               match?.id != active || match?.isFinished == true {
-                await refreshMatch(id: active)
+        repeat {
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            let revision = outgoingRevision
+            let writes = writeRevision
+            guard let result = await perform({ try await $0.reversiLobby(accessToken: $1) }) else { return }
+            switch result {
+            case .success(let response):
+                lobbyRequestOutgoingRevision = revision
+                applyLobby(response, predatesWrite: writes != writeRevision)
+                // 서버가 진행 중이라 말하는 판을 들고 있지 않다(다른 기기에서 수락 · 재시작) — 그 판을 읽어 세운다.
+                if response.status == .ok, let active = activeMatchID,
+                   match?.id != active || match?.isFinished == true {
+                    await refreshMatch(id: active)
+                }
+            case .failure(let error):
+                if isSchemaMissing(error) {
+                    Self.logger.notice("lobby unavailable — reversi functions missing on server")
+                    noteServerMissing()
+                } else {
+                    Self.logger.notice("lobby request failed")
+                }
             }
-        case .failure(let error):
-            if isSchemaMissing(error) {
-                Self.logger.notice("lobby unavailable — reversi functions missing on server")
-                noteServerMissing()
-            } else {
-                Self.logger.notice("lobby request failed")
-            }
-        }
+        } while lobbyAgain && generation == resetGeneration
     }
 
     /// 로비 응답을 화면 상태로 옮긴다(받은 신청은 통째로 갈아 끼운다).
     package func applyLobby(_ response: ReversiLobbyResponse) {
+        applyLobby(response, predatesWrite: false)
+    }
+
+    /// `predatesWrite` — 이 응답은 그 뒤에 받은 쓰기 응답보다 **먼저** 나갔다(`writeRevision`). 잔액·진행 판 id 는 쓰기 응답이 더 새 사실이라
+    /// 덮지 않는다. 나머지(사람·대결 중·신청)는 그대로 옮긴다 — 신청은 `answeredInviteIDs`·`outgoingRevision` 이 따로 지킨다.
+    private func applyLobby(_ response: ReversiLobbyResponse, predatesWrite: Bool) {
         guard response.status == .ok else {
             Self.logger.notice("lobby refused status=\(response.status.rawValue, privacy: .public)")
             switch response.status {
@@ -729,11 +753,11 @@ package final class ReversiStore {
         if let value = response.inviteTtlSeconds, value > 0 { inviteTTLSeconds = TimeInterval(value) }
         if let value = response.autoAbandonStreak, value > 0 { autoAbandonStreak = value }
         if let me = response.me {
-            applyRuby(me.rubyBalance)
+            if !predatesWrite { applyRuby(me.rubyBalance) }
             let fresh = ReversiRecord(wins: me.wins ?? 0, losses: me.losses ?? 0, draws: me.draws ?? 0)
             if record != fresh { record = fresh }
             // ★ 신청을 옮기기 **전에** 적는다 — 보낸 신청이 판으로 이어졌는지(becameMatch)를 이 값으로 가른다.
-            activeMatchID = me.activeMatchId?.lowercased()
+            if !predatesWrite { activeMatchID = me.activeMatchId?.lowercased() }
         }
         if let rows = response.users {
             let mapped = Self.sortedForLobby(rows.compactMap(Self.user(from:)))
@@ -872,6 +896,14 @@ package final class ReversiStore {
         guard let row = payload.match, let id = row.id?.lowercased(), !id.isEmpty else { return .ignored }
         let status = row.matchStatus
         switch status {
+        case .pending, .declined, .cancelled, .expired:
+            // ④ 같은 id 를 판(진행·끝남)으로 들고 있거나 접었다 — 신청 단계의 응답은 그 판보다 먼저 읽힌 옛 스냅숏이다
+            //    (판은 신청으로 돌아가지 않는다). 판을 지우지도, 잔액을 되돌리지도 않는다 — 잔액은 이 가드를 지난 응답만 옮긴다.
+            if match?.id == id || dismissedMatchIDs.contains(id) { return .ignored }
+        case .active, .finished, .unknown:
+            break
+        }
+        switch status {
         case .pending:
             noteServerNow(payload.serverNowMs)
             applyRuby(payload.rubyBalance)
@@ -972,7 +1004,9 @@ package final class ReversiStore {
 
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다 — 열린 채 가려진 창(다른 전체 화면 앱·다른 스페이스)은 화면이 말하지 못하고
+        // 폴링도 멈춰 있어, 초인종이 세운 내 차례를 알릴 길이 말풍선뿐이다(30초 자동 착수 · 세 번이면 패). 시계 잎 뷰·AI 시계는 그대로.
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
         if incoming.contains(where: { $0.id == id }) {
             incoming.removeAll { $0.id == id }
@@ -1020,6 +1054,7 @@ package final class ReversiStore {
         case .failure(let error):
             noteActionFailure(error)
         case .success(let response):
+            writeRevision &+= 1             // 이 응답보다 먼저 나간 로비는 잔액·진행 판 id 를 덮지 않는다
             noteServerNow(response.serverNowMs)
             applyRuby(response.rubyBalance)
             if response.status == .unsupportedClient {
@@ -1061,6 +1096,7 @@ package final class ReversiStore {
         case .failure(let error):
             noteActionFailure(error)
         case .success(let response):
+            writeRevision &+= 1             // 이 응답보다 먼저 나간 로비는 잔액·진행 판 id 를 덮지 않는다
             noteServerNow(response.serverNowMs)
             applyRuby(response.rubyBalance)
             if response.status == .unsupportedClient {
@@ -1102,6 +1138,7 @@ package final class ReversiStore {
         case .failure(let error):
             noteActionFailure(error)
         case .success(let response):
+            writeRevision &+= 1             // 이 응답보다 먼저 나간 로비는 잔액·진행 판 id 를 덮지 않는다
             noteServerNow(response.serverNowMs)
             applyRuby(response.rubyBalance)
             if response.status == .unsupportedClient {
@@ -1179,6 +1216,7 @@ package final class ReversiStore {
         case .failure(let error):
             noteActionFailure(error)
         case .success(let response):
+            writeRevision &+= 1             // 이 응답보다 먼저 나간 로비는 잔액·진행 판 id 를 덮지 않는다
             noteServerNow(response.serverNowMs)
             applyRuby(response.rubyBalance)
             if response.status == .unsupportedClient {
@@ -1223,6 +1261,7 @@ package final class ReversiStore {
         case .failure(let error):
             noteActionFailure(error)
         case .success(let response):
+            writeRevision &+= 1             // 이 응답보다 먼저 나간 로비는 잔액·진행 판 id 를 덮지 않는다
             noteServerNow(response.serverNowMs)
             applyRuby(response.rubyBalance)
             if response.status == .unsupportedClient {
@@ -1354,6 +1393,16 @@ package final class ReversiStore {
         pollTask = nil
     }
 
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
+    /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`stateAgain`·`lobbyAgain`)까지 같이 죽는다 — 창도 폴링도 없는 사람이
+    /// 상대 수·수락을 모른 채 30초 자동 착수를 맞는다. 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은 세대 가드가 버린다).
+    private func outsidePolling(_ body: @escaping @MainActor (ReversiStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다**(③).
     ///  · 진행 중 1:1 판이 상대 차례거나 내 마감 + 유예가 지났으면 `statePollSeconds` 마다 상태(서버가 자동 착수를 정산한다)
     ///  · 보낸 신청이 있으면 5초마다 그 판의 상태(수락·거절·만료를 한 조회가 다 말한다)
@@ -1369,17 +1418,19 @@ package final class ReversiStore {
                 let subscribed = host?.realtimeState.isSubscribed ?? false
                 let interval = Self.statePollSeconds(subscribed: subscribed, deadline: current.deadline, now: now)
                 if now.timeIntervalSince(lastStateRequestAt) >= interval {
-                    await refreshMatch(id: current.id)
+                    let id = current.id
+                    await outsidePolling { await $0.refreshMatch(id: id) }
                 }
             }
         }
         guard isWindowVisible else { return }
         if let sent = outgoing, now.timeIntervalSince(lastOutgoingRequestAt) >= Self.outgoingPollSeconds {
-            await refreshMatch(id: sent.id)
+            let id = sent.id
+            await outsidePolling { await $0.refreshMatch(id: id) }
         }
         guard isWindowVisible else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
         guard isWindowVisible else { return }
         await pollSpectatorFeatures(at: now)
@@ -1402,6 +1453,7 @@ package final class ReversiStore {
         stateInFlight = false
         stateAgain = false
         lobbyInFlight = false
+        lobbyAgain = false
         stateInFlightID = nil
         pendingStateID = nil
         if phase != .lobby { phase = .lobby }
@@ -1436,6 +1488,7 @@ package final class ReversiStore {
         dismissedMatchIDs = []
         outgoingRevision = 0
         lobbyRequestOutgoingRevision = 0
+        writeRevision = 0
         lastStateRequestAt = .distantPast
         lastLobbyRequestAt = .distantPast
         lastOutgoingRequestAt = .distantPast

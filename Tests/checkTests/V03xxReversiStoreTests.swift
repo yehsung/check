@@ -696,6 +696,192 @@ struct V03xxReversiStoreTests {
         #expect(expired.visibleIncoming == nil)
         #expect(expired.notice == "신청 시간이 지났어요")
     }
+
+    // MARK: ⑫ 적대 검증 1차(FLIP/verify/findings-round1.json V2-01·02·03·04·06 — 재현 시험 flip/v2 e04cfa54 를 옮겼다)
+
+    @Test(.gomokuDefaultsCleanup)
+    func 가려진_창에서도_초인종으로_온_내_차례를_알린다() throws {
+        // 없으면(V2-01): 창을 연 채 다른 전체 화면 앱·다른 스페이스로 넘어간 사람은 폴링이 멈추고(가림) 말풍선 문도
+        // `isWindowVisible` 에 막혀 내 차례를 알 길이 0 이다 — 30초 + 유예 뒤 자동 착수, 세 번이면 판돈을 잃는데도 초록이다.
+        let (store, _) = makeReversiStore("attention-occluded", me: rvB, handler: rvHandler([:]))
+        var seen: [ReversiAttention] = []
+        store.onAttention = { seen.append($0) }
+        store.isWindowVisible = true
+        store.windowOcclusionDidChange(visible: false)
+        #expect(store.pollTask == nil)                             // 가려진 동안 안전망 폴링은 없다 — 초인종만 남는다
+        store.applyState(try rvState("reversi_move__ok"))          // B 흑 1수 뒤 상대 차례
+        store.applyState(try rvState("reversi_move__ok_pass"), requestedSince: 0)
+        #expect(store.match?.isMyTurn == true)
+        #expect(seen.map(\.kind) == [.myTurn], "가려진 창인데 내 차례 알림이 없다")
+        #expect(seen.last?.moveCount == 4)
+        #expect(store.isWindowVisible)                             // 시계 잎 뷰가 읽는 값은 그대로다
+
+        // 기준선: 보이고 안 가려진 창이면 같은 진행에도 말풍선을 안 연다(화면이 이미 말한다).
+        let (shown, _) = makeReversiStore("attention-occluded-base", me: rvB, handler: rvHandler([:]))
+        var shownSeen: [ReversiAttention] = []
+        shown.onAttention = { shownSeen.append($0) }
+        shown.isWindowVisible = true
+        shown.applyState(try rvState("reversi_move__ok"))
+        shown.applyState(try rvState("reversi_move__ok_pass"), requestedSince: 0)
+        #expect(shown.match?.isMyTurn == true)
+        #expect(shownSeen.isEmpty)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 도는_로비_조회_중에_온_초인종은_끝난_뒤_로비를_한_번_더_읽는다() async throws {
+        // 없으면(V2-02): 신청이 생기기 **전에** 읽힌 로비(팝오버 열기·재접속 따라잡기·30초 폴링)가 날던 중 온 '새 신청' 초인종이
+        // 그냥 버려져, 받는 쪽이 신청 카드·메뉴바 점·말풍선을 못 본 채 60초 TTL 이 지나가도 초록이다.
+        // 기준선: 로비가 안 돌 때 온 초인종은 로비 한 번으로 받은 신청을 세운다.
+        let (base, baseHost) = makeReversiStore("signal-lobby-base", me: rvB, handler: rvHandler(
+            ["reversi_lobby": [try rvText("reversi_lobby__incoming")]]))
+        base.handleSignal()
+        await rvWait { !base.incoming.isEmpty }
+        #expect(GomokuStubProtocol.count(host: baseHost, rpc: "reversi_lobby") == 1)
+        #expect(base.incoming.map(\.id) == [rvMainMatch])
+
+        // 바꾼 칸: 첫 로비의 me.incoming 을 비웠다(신청 전 스냅숏).
+        let before = try rvMutated("reversi_lobby__incoming") { top in
+            var me = top["me"] as? [String: Any] ?? [:]
+            me["incoming"] = [Any]()
+            top["me"] = me
+        }
+        let (store, host) = makeReversiStore("signal-lobby", me: rvB, handler: rvHandler(
+            ["reversi_lobby": [before, try rvText("reversi_lobby__incoming")]],
+            delays: ["reversi_lobby": 0.4]))
+        var arrived: [String] = []
+        store.onInviteArrived = { arrived.append($0.id) }
+        let first = Task { await store.refreshLobby() }
+        await rvWait { GomokuStubProtocol.count(host: host, rpc: "reversi_lobby") == 1 }
+        store.handleSignal()                                       // 상대가 막 신청했다는 초인종
+        await first.value
+        await rvWait(400) { !store.incoming.isEmpty }
+        #expect(GomokuStubProtocol.count(host: host, rpc: "reversi_lobby") == 2, "초인종이 로비 조회를 한 번도 못 냈다")
+        #expect(store.incoming.map(\.id) == [rvMainMatch], "받은 신청이 화면·메뉴바 점에 안 섰다")
+        #expect(arrived == [rvMainMatch], "말풍선(onInviteArrived)이 안 울렸다")
+        // 합친 뒤 남은 깃발이 없다 — 다음 조회는 한 번만 나간다.
+        await store.refreshLobby()
+        #expect(GomokuStubProtocol.count(host: host, rpc: "reversi_lobby") == 3)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 창을_닫는_순간에도_폴링에_합쳐진_초인종_조회는_끝까지_간다() async throws {
+        // 없으면(V2-03): 상대 차례 안전망 폴링 조회에 초인종 조회가 합쳐진(stateAgain) 순간 창을 닫으면 `pollTask.cancel()` 이
+        // 날던 조회와 합쳐진 조회를 함께 죽여, 창도 폴링도 없는 사람이 내 차례를 모른 채 30초 뒤 자동 착수돼도 초록이다.
+        // B 흑 · 1수 뒤 상대(백) 차례(move__ok) → 상대가 두고 패스까지 해 내 차례(ok_pass, mc 4).
+        func make(_ label: String) throws -> (ReversiStore, String) {
+            let (store, host) = makeReversiStore(label, me: rvB, handler: rvHandler(
+                ["reversi_state": [try rvText("reversi_move__ok"), try rvText("reversi_move__ok_pass")]],
+                delays: ["reversi_state": 0.5]))
+            store.applyState(try rvState("reversi_move__ok"))
+            store.isWindowVisible = true
+            store.pollStepSeconds = 0.02
+            return (store, host)
+        }
+
+        // 기준선: 창을 그대로 두면 합쳐진 초인종 조회가 이어서 나가 내 차례가 선다.
+        let (base, baseHost) = try make("pollcancel-base")
+        base.startPolling()
+        await rvWait { GomokuStubProtocol.count(host: baseHost, rpc: "reversi_state") == 1 }
+        base.handleSignal()
+        await rvWait(600) { base.match?.moveCount == 4 }
+        #expect(base.match?.moveCount == 4)
+        base.stopPolling()
+
+        let (store, host) = try make("pollcancel")
+        var attentions: [ReversiAttention] = []
+        store.onAttention = { attentions.append($0) }
+        store.startPolling()
+        await rvWait { GomokuStubProtocol.count(host: host, rpc: "reversi_state") == 1 }
+        store.handleSignal()                                       // stateAgain 으로 합쳐진다
+        store.windowDidHide()                                      // 최소화·빨간 점 — 폴링이 멈춘다
+        #expect(store.pollTask == nil)
+        await rvWait(600) { store.match?.moveCount == 4 }
+        #expect(store.match?.moveCount == 4, "초인종이 알린 상대 수가 안 들어왔다(창이 닫혀 폴링도 없다)")
+        #expect(attentions.contains { $0.kind == .myTurn }, "창이 닫혔는데 내 차례 말풍선이 안 떴다 — 30초 뒤 자동 착수")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 늦은_응답_수락_전에_읽힌_pending_은_진행_판과_잔액을_안_건드린다() async throws {
+        // 없으면(V2-04): 배너 [보기] 가 신청을 읽는 동안 [수락] 했고 수락 응답이 먼저 왔을 때, 늦게 온 pending 이 진행 판을 지우고
+        // (판 화면 → 로비) 잔액을 수락 전 값으로 되돌려도 초록이다 — 흑이면 첫 수 30초가 아무 화면 없이 흐른다.
+        #expect(try rvViewer("reversi_respond__accepted") == rvB)
+        // 바꾼 칸: pending 원문은 A 가 불렀다 — B 가 본 모양이 되게 opponent 만 A 로 바꾼다.
+        let stalePending = try rvMutatedState("reversi_state__pending") { state in
+            state["opponent"] = ["user_id": rvA, "display_name": "비시험01", "avatar_url": NSNull(),
+                                 "character": NSNull(), "center": NSNull()] as [String: Any]
+        }
+        let pending = try rvStateText(stalePending)
+        #expect(pending.match?.id == rvMainMatch)
+
+        let (store, host) = makeReversiStore("stale-pending", me: rvB, handler: rvHandler(
+            [
+                "reversi_lobby": [try rvText("reversi_lobby__incoming")],
+                "reversi_state": [stalePending],
+                "reversi_respond": [try rvText("reversi_respond__accepted")],
+            ],
+            delays: ["reversi_state": 0.6]))
+        store.openWindow(focusMatchID: rvMainMatch)
+        await rvWait { GomokuStubProtocol.count(host: host, rpc: "reversi_state") == 1 }
+        #expect(store.incoming.map(\.id) == [rvMainMatch])
+        await store.respond(inviteID: rvMainMatch, accept: true)
+        #expect(store.match?.id == rvMainMatch)
+        #expect(store.phase == .playing)
+        #expect(store.rubyBalance == 95)
+        #expect(store.match?.isMyTurn == true)                     // B 흑 — 첫 수 30초가 돈다
+        await rvWait(400) { store.stateInFlightID == nil }
+        #expect(store.stateInFlightID == nil)                      // 늦은 pending 이 도착해 처리됐다
+        #expect(store.match?.id == rvMainMatch, "수락 전에 읽힌 pending 이 진행 중 판을 지웠다")
+        #expect(store.phase == .playing)
+        #expect(store.rubyBalance == 95, "판돈이 빠진 잔액(95)이 수락 전 값으로 되돌아갔다")
+        #expect(store.incoming.isEmpty)
+        // 진행 판을 든 동안 같은 id 의 신청 단계 응답은 어느 갈래(pending · declined)든 버린다 — 판은 신청으로 돌아가지 않는다.
+        #expect(store.applyState(pending) == .ignored)
+        let declined = try rvStateText(try rvMutatedState("reversi_state__pending") { state in   // 바꾼 칸: match.status
+            var match = state["match"] as? [String: Any] ?? [:]
+            match["status"] = "declined"
+            state["match"] = match
+        })
+        #expect(store.applyState(declined) == .ignored)
+        #expect(store.match?.id == rvMainMatch)
+        #expect(store.rubyBalance == 95)
+
+        // 기준선: 그 판을 안 든 기기에는 같은 pending 이 받은 신청으로 선다.
+        let (fresh, _) = makeReversiStore("stale-pending-base", me: rvB, handler: rvHandler([:]))
+        #expect(fresh.applyState(pending) == .applied)
+        #expect(fresh.incoming.map(\.id) == [rvMainMatch])
+        #expect(fresh.match == nil)
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 늦은_응답_쓰기보다_먼저_나간_로비는_잔액과_진행_판_id_를_안_덮는다() async throws {
+        // 없으면(V2-06): 팝오버 열기 로비가 날던 중 [수락] 했고 로비(수락 전 스냅숏)가 늦게 왔을 때, 잔액 칩·앱 전체 루비 거울이
+        // 판돈 빠지기 전 값으로 돌아가고 진행 판 id 가 지워져도 초록이다.
+        let (store, host) = makeReversiStore("stale-lobby-ruby", me: rvB, handler: rvHandler(
+            [
+                "reversi_lobby": [try rvText("reversi_lobby__incoming")],
+                "reversi_respond": [try rvText("reversi_respond__accepted")],
+                "reversi_state": [try rvText("reversi_respond__accepted")],
+            ],
+            delays: ["reversi_lobby": 0.5]))
+        let lobbyRuby = try #require(try rvDecode(ReversiLobbyResponse.self, try rvText("reversi_lobby__incoming")).me?.rubyBalance)
+        #expect(lobbyRuby != 95)                                   // 결과가 갈리는 입력이다
+        let lobby = Task { await store.refreshLobby() }
+        await rvWait { GomokuStubProtocol.count(host: host, rpc: "reversi_lobby") == 1 }
+        await store.respond(inviteID: rvMainMatch, accept: true)
+        #expect(store.match?.id == rvMainMatch)
+        #expect(store.rubyBalance == 95)                           // 서버가 판돈을 뺀 값
+        #expect(store.activeMatchID == rvMainMatch)
+        await lobby.value
+        #expect(store.match?.id == rvMainMatch)
+        #expect(store.incoming.isEmpty)                            // 답한 신청은 안 되살아난다(C2 ②)
+        #expect(store.rubyBalance == 95, "수락 전 로비가 잔액 칩을 되돌렸다")
+        #expect(store.host?.rubyBalance == 95, "수락 전 로비가 앱 전체 루비 거울을 되돌렸다")
+        #expect(store.activeMatchID == rvMainMatch, "수락 전 로비가 진행 판 id 를 지웠다")
+
+        // 기준선: 쓰기 **뒤에** 나간 로비는 잔액을 그대로 옮긴다(서버 값이 권위다).
+        await store.refreshLobby()
+        #expect(store.rubyBalance == lobbyRuby)
+    }
 }
 
 /// 관찰 콜백이 다른 실행 맥락에서 불려도 안전한 깃발.

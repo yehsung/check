@@ -494,6 +494,11 @@ struct V03xxReversiWiringTests {
         #expect(!CheckOverlayController.reversiAttentionIsCurrent(stale, in: reversi), "두 수 전의 내 차례를 띄운다")
         reversi.isWindowVisible = true
         #expect(!CheckOverlayController.reversiAttentionIsCurrent(attention, in: reversi), "창이 보이는데 말풍선을 띄운다")
+        // ★ 열려 있어도 완전히 가려진 창(다른 전체 화면 앱·다른 스페이스)은 화면이 말하지 못한다 — 말풍선이 사실이다(적대 검증 V2-01).
+        reversi.windowOcclusionDidChange(visible: false)
+        #expect(CheckOverlayController.reversiAttentionIsCurrent(attention, in: reversi), "가려진 창인데 차례 말풍선을 버린다")
+        reversi.windowOcclusionDidChange(visible: true)
+        #expect(!CheckOverlayController.reversiAttentionIsCurrent(attention, in: reversi), "가림이 풀린 창인데 말풍선을 띄운다")
         reversi.isWindowVisible = false
         reversi.match?.turn = .white
         #expect(!CheckOverlayController.reversiAttentionIsCurrent(attention, in: reversi), "상대 차례인데 내 차례라고 한다")

@@ -267,7 +267,9 @@ struct ReversiLobbySide: View {
                         ForEach(store.liveMatches) { live in
                             ReversiLiveRow(
                                 live: live,
-                                isMine: live.id == store.match?.id,
+                                // ★ 스토어 판정(내 user id 가 줄에 있다)을 쓴다 — 로비가 그려질 때 `store.match` 는 늘 nil 이라
+                                //   판 id 비교로는 내 판에도 [관전] 이 선다.
+                                isMine: store.isMine(live),
                                 // ★ 관전 입구의 잠금은 `watchUnavailable` **하나**로만 판정한다(깃발 겸업 금지).
                                 canWatch: !store.watchUnavailable,
                                 onWatch: { store.startWatching(matchID: live.id) }

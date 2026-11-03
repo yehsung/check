@@ -225,4 +225,67 @@ struct V03xxReversiWatchTests {
         store.applyRanking(try rvDecode(ReversiRankingResponse.self, try rvText("reversi_ranking__ok")))
         #expect(store.rankingUnavailable == false)
     }
+
+    // MARK: 내 판은 관전이 아니다(적대 검증 1차 V2-05 — 재현 시험 flip/v2 e04cfa54 를 옮겼다)
+
+    @Test(.gomokuDefaultsCleanup)
+    func 로비에_보이는_내_진행_판의_관전은_관전_대신_내_판을_연다() async throws {
+        // 없으면(V2-05): 서버가 진행 판 = M 이라 했는데 M 의 state 읽기가 실패해(5xx·시간 초과) 로비에 머문 순간 내 판 줄의 [관전] 이
+        // 입력 없는 관전 화면으로 내 판을 열고(내 시계는 서버에서 흐른다) 관전 생존 신호까지 보내 상대 화면 관전자 수에 내가 잡혀도 초록이다.
+        // 바꾼 칸: 로비 원문의 me.incoming 을 비우고 me.active_match_id = M, matches 에 A·B 의 M 한 줄(원문 로비의 matches 는 비어 있다).
+        func lobbyText(active: String?) throws -> String {
+            try rvMutated("reversi_lobby__incoming") { top in
+                var me = top["me"] as? [String: Any] ?? [:]
+                me["incoming"] = [Any]()
+                me["active_match_id"] = active.map { $0 as Any } ?? NSNull()
+                top["me"] = me
+                let now = top["server_now_ms"] ?? NSNull()
+                let face: (String, String) -> [String: Any] = { id, name in
+                    ["id": id, "display_name": name, "avatar_url": NSNull(), "character": NSNull()]
+                }
+                top["matches"] = [["id": rvMainMatch, "a": face(rvA, "비시험01"), "b": face(rvB, "비시험02"),
+                                   "stake": 5, "watchers": 0, "started_at_ms": now] as [String: Any]]
+            }
+        }
+        let lobby = try lobbyText(active: rvMainMatch)
+        let watchBody = try rvText("reversi_watch_live__ok")
+        let handler: GomokuStubProtocol.Handler = { rpc, _, _ in
+            switch rpc {
+            case "reversi_lobby": return GomokuStubProtocol.Reply(body: lobby)
+            case "reversi_state": return GomokuStubProtocol.Reply(status: 503, body: "{}")
+            case "reversi_watch_live": return GomokuStubProtocol.Reply(body: watchBody)
+            default: return nil
+            }
+        }
+        let (store, host) = makeReversiStore("watch-own", me: rvB, handler: handler)
+        store.spectatorFeaturesEnabled = true
+        store.isWindowVisible = true
+        await store.refreshLobby()
+        #expect(store.phase == .lobby)
+        #expect(store.match == nil)
+        #expect(store.activeMatchID == rvMainMatch)
+        let live = try #require(store.liveMatches.first)
+        #expect(live.id == rvMainMatch)
+        #expect(store.isMine(live))
+        let statesBefore = GomokuStubProtocol.count(host: host, rpc: "reversi_state")
+        store.startWatching(matchID: live.id)
+        #expect(store.spectating == nil, "내 진행 판을 관전 화면(입력 없음)으로 열었다")
+        await rvWait { GomokuStubProtocol.count(host: host, rpc: "reversi_state") > statesBefore }
+        #expect(GomokuStubProtocol.count(host: host, rpc: "reversi_state") == statesBefore + 1, "관전 대신 내 판을 다시 읽지 않았다")
+        #expect(GomokuStubProtocol.count(host: host, rpc: "reversi_watch_live") == 0,
+                "내 판에 관전 생존 신호를 보냈다(상대 화면 관전자 수에 내가 잡힌다)")
+
+        // 기준선: 같은 로비를 **남**(C)이 보면 같은 줄의 [관전] 이 관전을 세우고 생존 신호를 보낸다.
+        let (other, otherHost) = makeReversiStore("watch-own-base", me: "b0000000-0000-4000-8000-000000000004",
+                                                  handler: handler)
+        other.spectatorFeaturesEnabled = true
+        other.isWindowVisible = true
+        other.applyLobby(try rvDecode(ReversiLobbyResponse.self, try lobbyText(active: nil)))   // C 의 me 는 진행 판이 없다
+        let row = try #require(other.liveMatches.first)
+        #expect(!other.isMine(row))
+        other.startWatching(matchID: row.id)
+        #expect(other.spectating?.id == rvMainMatch)
+        await rvWait { GomokuStubProtocol.count(host: otherHost, rpc: "reversi_watch_live") > 0 }
+        #expect(GomokuStubProtocol.count(host: otherHost, rpc: "reversi_watch_live") == 1)
+    }
 }

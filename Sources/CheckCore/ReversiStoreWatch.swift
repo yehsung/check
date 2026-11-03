@@ -148,12 +148,20 @@ extension ReversiStore {
 
     /// 로비 "지금 대결 중" 줄의 [관전]. 로비 카드의 두 얼굴을 씨앗으로 관전 상태를 세우고, 창이 보이면 곧바로 한 번 읽는다.
     /// 내 판이 진행 중(1:1·AI)이거나 결과 화면이면 아무것도 하지 않는다 — 관전 화면은 로비 자리에 선다.
+    /// 누른 줄이 **내 판**(진행 판 id · 줄에 내가 있다)이면 관전 대신 그 판을 읽어 연다.
     package func startWatching(matchID rawID: String) {
         let id = rawID.lowercased()
         guard spectatorFeaturesEnabled, !id.isEmpty, !ReversiAIGame.isAIMatchID(id),
               host?.session != nil else { return }
         if let current = match, !current.isFinished { return }
         guard phase == .lobby else { return }
+        // ★ 내 판이다(서버가 진행 중이라 말한 판 · 로비 줄에 내가 있다) — 입력 없는 관전 화면이 아니라 **내 판**을 다시 읽어 연다.
+        //   state 읽기가 실패해 로비에 머문 순간의 줄이다. 관전 생존 신호도 안 보낸다(상대 화면 관전자 수에 내가 잡히지 않게).
+        let listedAsMine = liveMatches.first(where: { $0.id == id }).map { isMine($0) } ?? false
+        if id == activeMatchID || listedAsMine {
+            Task { [weak self] in await self?.refreshMatch(id: id) }
+            return
+        }
         if spectating?.id == id { return }
         // ★ 문 앞에서 막는다 — 404 뒤 `stopWatching()` 이 비우므로 재진입 가드가 다시 통과한다. 잠금은 순위 주기가 풀어 준다.
         guard !watchUnavailable else {

@@ -8,7 +8,15 @@ package com.yehsung.aingcheck.ui.screens.messages
 
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.pm.ActivityInfo
+import android.content.pm.ApplicationInfo
+import android.content.pm.ResolveInfo
+import androidx.compose.foundation.text.contextmenu.builder.TextContextMenuBuilderScope
 import androidx.compose.foundation.text.contextmenu.builder.item
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuComponent
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuItem
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuSeparator
+import androidx.compose.foundation.text.contextmenu.data.TextContextMenuSession
 import androidx.compose.foundation.text.contextmenu.data.ProcessTextKey
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.appendTextContextMenuComponents
@@ -34,12 +42,10 @@ import androidx.compose.ui.test.click
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performSemanticsAction
-import androidx.compose.ui.test.performTextInputSelection
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.rightClick
 import androidx.compose.ui.test.runComposeUiTest
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.unit.Density
 import androidx.test.core.app.ApplicationProvider
 import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
@@ -257,12 +263,12 @@ class MessagesChatMarkdownSnapshotTest {
             // 내 말풍선(오른쪽)의 [글](주소) — 링크 글자를 누르면 Foundation 과 같은 인코딩 주소(| → %7C)가 브라우저로 간다. 첫 글자 자리는 TalkBack 동작으로 잰다.
             val actions = onNodeWithTag(MessagesTags.bubble(id("e00b"))).fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions).orEmpty()
             val titles = actions.map { it.label }
-            assertEquals(listOf(ConversationText.copy, ChatBubbleText.selectCopy, "링크 열기: 시안 (figma.example)"), titles)
+            assertEquals(listOf(ConversationText.copy, "링크 열기: 시안 (figma.example)"), titles)
             assertTrue(actions.first { it.label.startsWith(ChatBubbleText.openLinkActionPrefix) }.action())
             assertEquals("https://figma.example/x%7Cy", handler.opened.last())
-            // 받은 말풍선의 동작 순서: [복사] · [골라 복사] · 링크 · [이 메시지 신고하기](아이폰과 같은 차례).
+            // 받은 말풍선의 동작 순서: [복사] · 링크 · [이 메시지 신고하기](아이폰과 같은 차례 — 판 7 바로 고르기 뒤에도 TalkBack 줄 동작은 그대로다).
             val received = onNodeWithTag(MessagesTags.bubble(id("e005"))).fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions).orEmpty().map { it.label }
-            assertEquals(listOf(ConversationText.copy, ChatBubbleText.selectCopy, "링크 열기: https://b.example/x", com.yehsung.aingcheck.core.rules.text.BlockReportText.reportMessageAction), received)
+            assertEquals(listOf(ConversationText.copy, "링크 열기: https://b.example/x", com.yehsung.aingcheck.core.rules.text.BlockReportText.reportMessageAction), received)
         }
         // 기준선: 꺼진 조립(Windows)은 같은 자리를 눌러도 열지 않고 링크 동작도 없다.
         runComposeUiTest {
@@ -294,156 +300,372 @@ class MessagesChatMarkdownSnapshotTest {
         assertEquals(listOf("https://a.example/x%7Cy"), opened)
     }
 
-    // ---------------------------------------------------------------- 길게 누르기 메뉴 · 골라 복사 시트
+    // ---------------------------------------------------------------- 말풍선에서 바로 고르기(판 7 · 대표 답 #d_M9wR9l9VLNvx)
+    //
+    // 대표 답 원문: "말풍선에서 바로 길게 눌러 고르기"(맥과 가장 비슷, 메뉴는 기본 편집 메뉴 + 신고). 모두 **대화 화면을 그려 손짓으로** 잰다 —
+    // 길게 누르기 → Compose 고르기 → 시스템 메뉴 판(도구 막대 · 드롭다운)에 넘어간 메뉴 자료 · 그 항목을 눌렀을 때 붙여넣기판에 실제로 쓰인 글.
+    // 메뉴 판은 가짜 제공자([RecordingMenu])로 받는다(Robolectric 에는 떠다니는 도구 막대가 없다 — 고르기 칸이 메뉴를 띄울 때 그 제공자에게 자료를 넘긴다).
+    // ★ Robolectric 의 플랫폼 돋보기(API 28+)는 표면이 없어 길게 누른 뒤 닫다가 죽는다 — 손가락 시험 동안만 돋보기 없는 판(27)으로 보인다([withTouchSelection]).
 
-    @OptIn(ExperimentalTestApi::class)
-    @Test fun longPressMenuAndSelectCopySheetCopyRealAddressesAsPlainText() {
-        load(mapOf(id("e00a") to "**굵게** [자료](https://a.example/doc) 끝", id("e00b") to "내 말 **굵게**", id("e005") to "[아잉:기쁨]"))
-        val clipboard = ApplicationProvider.getApplicationContext<Context>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        runComposeUiTest {
-            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { ConversationScreen(store, hangyeol, onBack = {}, composerState = rememberTextFieldState()) } }
-            waitForIdle()
-            // 받은 말풍선: [복사] · [골라 복사] · [이 메시지 신고하기].
-            onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(38f, centerY)) }
-            waitForIdle()
-            onNodeWithTag(MessagesTags.MENU_COPY).assertExistsCompat()
-            onNodeWithTag(MessagesTags.MENU_REPORT_MESSAGE).assertExistsCompat()
-            // [복사]는 원문 전체(기호째 — 붙여넣어 다시 보내면 같은 꾸밈).
-            onNodeWithTag(MessagesTags.MENU_COPY).performSemanticsAction(SemanticsActions.OnClick)
-            waitForIdle()
-            assertEquals("**굵게** [자료](https://a.example/doc) 끝", clipboard.primaryClip?.getItemAt(0)?.text?.toString())
-            onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(38f, centerY)) }
-            waitForIdle()
-            onNodeWithTag(MessagesTags.MENU_SELECT_COPY).performSemanticsAction(SemanticsActions.OnClick)
-            waitForIdle()
-            // 시트: 말풍선과 같은 글(꼬리표째)을 고른다 → 복사는 꼬리표 대신 실제 주소 · 서식 없는 글.
-            val field = onNodeWithTag(MessagesTags.SELECT_COPY_FIELD)
-            val shown = field.fetchSemanticsNode().config.getOrNull(SemanticsProperties.EditableText)?.text
-            assertEquals("굵게 자료 (a.example) 끝", shown)
-            field.performTextInputSelection(TextRange(3, 15))
-            waitForIdle()
-            field.performSemanticsAction(SemanticsActions.CopyText)
-            waitForIdle()
-            val clip = clipboard.primaryClip?.getItemAt(0)?.text
-            assertEquals("자료 (https://a.example/doc)", clip?.toString())
-            assertTrue("붙여넣기판에 서식이 실렸다: ${clip?.javaClass}", clip is String || (clip as? android.text.Spanned)?.getSpans(0, clip.length, Any::class.java).isNullOrEmpty())
+    /**
+     * 시험용 메뉴 판: 고르기 칸이 띄우는 메뉴 자료를 받아 둔다(화면에는 아무것도 안 띄운다). [click] 은 그 항목을 사람이 누른 것과 같다.
+     * [keys] · [labels] 는 구분선을 뺀 항목들이다(구분선은 Compose 가 무리 사이에 스스로 넣고 거름에 걸리지 않는다 — 판에 보이는 항목이 아니다).
+     */
+    private class RecordingMenu : TextContextMenuProvider {
+        val shown = mutableListOf<List<TextContextMenuComponent>>()
+
+        override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
+            shown += dataProvider.data().components
+            kotlinx.coroutines.awaitCancellation()
         }
-        runComposeUiTest {
-            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { ConversationScreen(store, hangyeol, onBack = {}, composerState = rememberTextFieldState()) } }
-            waitForIdle()
-            // 내 말풍선: [복사] · [골라 복사] — 신고 없음.
-            onNodeWithTag(MessagesTags.bubble(id("e00b"))).performTouchInput { longClick(Offset(right - 38f, centerY)) }
-            waitForIdle()
-            onNodeWithTag(MessagesTags.MENU_SELECT_COPY).assertExistsCompat()
-            onNodeWithTag(MessagesTags.MENU_REPORT_MESSAGE).assertDoesNotExistCompat()
-        }
-        runComposeUiTest {
-            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { ConversationScreen(store, hangyeol, onBack = {}, composerState = rememberTextFieldState()) } }
-            waitForIdle()
-            // 이모티콘 말풍선: [골라 복사] 없음(동작도 없음).
-            val titles = onNodeWithTag(MessagesTags.bubble(id("e005"))).fetchSemanticsNode().config.getOrNull(SemanticsActions.CustomActions).orEmpty().map { it.label }
-            assertFalse("이모티콘 말풍선에 [골라 복사]가 섰다: $titles", ChatBubbleText.selectCopy in titles)
+
+        private val items: List<TextContextMenuComponent> get() = shown.last().filter { it !== TextContextMenuSeparator }
+        val keys: List<Any> get() = items.map { it.key }
+        val labels: List<String?> get() = items.map { (it as? TextContextMenuItem)?.label }
+
+        fun click(key: Any) {
+            val item = shown.last().first { it.key == key } as TextContextMenuItem
+            item.onClick(object : TextContextMenuSession {
+                override fun close() {}
+            })
         }
     }
 
-    /** 골라 복사 시트(추천안 A): 말풍선과 같은 서식 · 같은 꼬리표 글을 받은 말풍선 색으로 그린다(시트 바탕 위에서 내 말풍선 흰 글자가 묻히지 않게). */
-    @Test fun selectCopySheetPhoneLight() {
-        val body = "## 회의 자료\n**오늘** [자료](https://a.example/doc) 확인 `코드` 그대로"
-        ScreenSnapshots.check(
-            "screens/messages", "select-copy-sheet-phone-light", ScreenFrame.Phone, art,
-            scene = { ScreenSnapshots.Frame(false, art, characters.directory) { ChatSelectCopySheet(ChatSelectCopyState(body)) } },
-            other = { ScreenSnapshots.Frame(false, art, characters.directory) { ChatSelectCopySheet(ChatSelectCopyState("$body!")) } },
-        )
-    }
-
-    /** 시트 글 칸 메뉴는 [복사] · [모두 선택]만 — 공유 · 번역 · 웹 검색(PROCESS_TEXT) · 자동 채움은 꼬리표 글을 넘기므로 걸러 낸다. */
-    @Test fun selectSheetMenuKeepsOnlyCopyAndSelectAll() {
-        assertTrue(ChatSelectCopyMenu.keeps(TextContextMenuKeys.CopyKey))
-        assertTrue(ChatSelectCopyMenu.keeps(TextContextMenuKeys.SelectAllKey))
-        // PROCESS_TEXT 항목(번역 · 웹 검색 · 공유 앱)의 열쇠 — 생성자가 모듈 안쪽이라 반사로 짓는다(Compose 가 메뉴에 싣는 값과 같은 꼴).
-        fun processText(id: Int): Any = ProcessTextKey::class.java.getDeclaredConstructor(Int::class.javaPrimitiveType).apply { isAccessible = true }.newInstance(id)
-        for (key in listOf(TextContextMenuKeys.CutKey, TextContextMenuKeys.PasteKey, TextContextMenuKeys.AutofillKey, processText(1), processText(2), "share")) {
-            assertFalse("$key 를 남겼다", ChatSelectCopyMenu.keeps(key))
+    private fun <T> withTouchSelection(block: () -> T): T {
+        val sdk = android.os.Build.VERSION.SDK_INT
+        org.robolectric.util.ReflectionHelpers.setStaticField(android.os.Build.VERSION::class.java, "SDK_INT", 27)
+        try {
+            return block()
+        } finally {
+            org.robolectric.util.ReflectionHelpers.setStaticField(android.os.Build.VERSION::class.java, "SDK_INT", sdk)
         }
     }
 
     /**
-     * 검토 F4 — 시트가 실제로 띄우는 글 칸 메뉴를 부르는 자리에서 잰다(위 시험은 술어 ChatSelectCopyMenu.keeps 만 잰다 — 시트가 거름을 안 걸어도 초록).
-     * 메뉴 판은 가짜 제공자(LocalTextContextMenuToolbarProvider · LocalTextContextMenuDropdownProvider)로 받는다 — 글 칸이 메뉴를 띄울 때 그 제공자에게
-     * 메뉴 자료를 넘긴다. 길은 둘: 손가락 길게 누르기(도구 막대 — 폰의 실제 손짓) · 고른 글 위 마우스 오른쪽(드롭다운).
-     * Robolectric 에는 PROCESS_TEXT 앱(번역 · 웹 검색)이 없어, 바깥에서 그 자리의 항목 둘(공유 · 번역 흉내)을 끼워 넣어 거름이 실제로 걷는지 본다
-     * (거름은 위아래 가리지 않고 모은 항목 전부에 걸린다). 기준선: 같은 끼움 · 같은 손짓을 거름 없는 글 칸에 하면 끼운 항목이 남는다(이 시험이 거름을 재는 증거).
-     *
-     * ★ 두 길 모두 메뉴를 띄우기 전에 붙여넣기판의 기기 참조(getNativeClipboardManager)를 묻는다 — 시트가 갈아 끼운 붙여넣기판이 AndroidClipboard 가
-     *   아니면 IllegalArgumentException 으로 죽는다(이 시험이 처음 찾은 결함 — 시트에서 길게 누르면 앱이 죽었다).
+     * 기기의 PROCESS_TEXT 앱(번역 · 웹 검색 등)을 흉내 낸다 — Compose 가 고르기 칸 **자기 항목**으로 싣는 바로 그 길(ProcessTextApi23Impl 의 조회 함수 —
+     * 시험용으로 열어 둔 자리)을 갈아 끼우고 끝나면 되돌린다. 실제 기기에서 [번역]은 이 길로 온다(Google 번역 · 파파고 등).
      */
-    @OptIn(ExperimentalTestApi::class)
-    private fun shownMenuKeys(touch: Boolean, sheet: @androidx.compose.runtime.Composable () -> Unit): List<Any> {
-        val shown = mutableListOf<List<Any>>()
-        val provider = object : TextContextMenuProvider {
-            override suspend fun showTextContextMenu(dataProvider: TextContextMenuDataProvider) {
-                shown += dataProvider.data().components.map { it.key }
-                kotlinx.coroutines.awaitCancellation()
-            }
-        }
-        // 손가락 길: Robolectric 의 플랫폼 돋보기(API 28+)는 표면이 없어 길게 누른 뒤 닫다가 죽는다 — 이 시험 동안만 돋보기 없는 판(27)으로 보인다.
-        val sdk = android.os.Build.VERSION.SDK_INT
-        if (touch) org.robolectric.util.ReflectionHelpers.setStaticField(android.os.Build.VERSION::class.java, "SDK_INT", 27)
-        try {
-            runComposeUiTest {
-                setContent {
-                    ScreenSnapshots.Frame(false, art, characters.directory) {
-                        CompositionLocalProvider(
-                            LocalTextContextMenuToolbarProvider provides provider,
-                            LocalTextContextMenuDropdownProvider provides provider,
-                        ) {
-                            Box(Modifier.appendTextContextMenuComponents {
-                                item(key = "test-share", label = "공유") {}
-                                item(key = ProcessTextKey::class.java.getDeclaredConstructor(Int::class.javaPrimitiveType).apply { isAccessible = true }.newInstance(7), label = "번역") {}
-                            }) { sheet() }
-                        }
+    private fun <T> withProcessTextApps(labels: List<String>, block: () -> T): T {
+        val impl = Class.forName("androidx.compose.foundation.text.contextmenu.ProcessTextApi23Impl")
+        val instance = impl.getField("INSTANCE").get(null)
+        val getter = impl.getMethod("getProcessTextActivitiesQuery")
+        val setter = impl.getMethod("setProcessTextActivitiesQuery", Function1::class.java)
+        val original = getter.invoke(instance)
+        val fake: (Context) -> List<ResolveInfo> = { _ ->
+            labels.mapIndexed { index, label ->
+                ResolveInfo().apply {
+                    nonLocalizedLabel = label
+                    activityInfo = ActivityInfo().apply {
+                        packageName = "test.process$index"
+                        name = "test.process$index.ProcessTextActivity"
+                        exported = true
+                        nonLocalizedLabel = label
+                        applicationInfo = ApplicationInfo().apply { packageName = "test.process$index" }
                     }
                 }
-                waitForIdle()
-                val field = onNodeWithTag(MessagesTags.SELECT_COPY_FIELD)
-                if (touch) {
-                    field.performTouchInput { longClick(Offset(30f, centerY)) }
-                } else {
-                    field.performTextInputSelection(TextRange(0, 5))
+            }
+        }
+        setter.invoke(instance, fake)
+        try {
+            return block()
+        } finally {
+            setter.invoke(instance, original)
+        }
+    }
+
+    /** 고르기 시험 장면: 대화 화면 + 가짜 메뉴 판 + 링크 기록 + (있으면) 바깥에서 끼운 항목(공유 흉내 — 거름이 위아래 가리지 않고 걸리는지 본다). */
+    @androidx.compose.runtime.Composable
+    private fun SelectingScene(
+        menu: RecordingMenu,
+        uri: UriHandler = RecordingUriHandler(),
+        dark: Boolean = false,
+        outer: (TextContextMenuBuilderScope.() -> Unit)? = null,
+    ) {
+        CompositionLocalProvider(
+            LocalUriHandler provides uri,
+            LocalTextContextMenuToolbarProvider provides menu,
+            LocalTextContextMenuDropdownProvider provides menu,
+        ) {
+            ScreenSnapshots.Frame(dark, art, characters.directory) {
+                Box(if (outer != null) Modifier.appendTextContextMenuComponents(outer) else Modifier) {
+                    ConversationScreen(store, hangyeol, onBack = {}, composerState = rememberTextFieldState())
+                }
+            }
+        }
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    private fun ComposeUiTest.awaitMenu(menu: RecordingMenu, count: Int) {
+        waitForIdle()
+        // 메뉴는 누름이 끝난 뒤 다음 프레임들에서 뜬다 — 시계를 밀며 기다리되 시한이 지나도 던지지 않는다(아래 전제 단언이 말한다).
+        runCatching { waitUntil(timeoutMillis = 3_000) { menu.shown.size >= count } }
+        assertTrue("길게 눌러 골랐는데 메뉴가 뜨지 않았다(전제 — ${menu.shown.size}/$count)", menu.shown.size >= count)
+    }
+
+    private val systemClipboard get() = ApplicationProvider.getApplicationContext<Context>().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+
+    private fun clip(): CharSequence? = systemClipboard.primaryClip?.getItemAt(0)?.text
+
+    private fun assertPlain(clip: CharSequence?) =
+        assertTrue("붙여넣기판에 서식이 실렸다: ${clip?.javaClass}", clip is String || (clip as? android.text.Spanned)?.getSpans(0, clip.length, Any::class.java).isNullOrEmpty())
+
+    /**
+     * 메뉴 거름을 **부르는 자리에서** 잰다: 받은 글 말풍선을 길게 누르면 [복사] · [모두 선택] · [번역](PROCESS_TEXT 앱) · [이 메시지 신고하기] 만 이 차례로 남고,
+     * 웹 검색(PROCESS_TEXT) · 바깥에서 끼운 공유는 걸러진다. 내 말풍선에는 [신고]가 없다. 판 7 전의 길게 누르기 메뉴([복사] 단추)는 글 말풍선에 서지 않는다.
+     * 기준선: 같은 앱 · 같은 끼움 · 같은 손짓을 거름 없는 고르기 칸에 하면 웹 검색 · 공유가 그대로 뜬다(이 시험이 거름을 재는 증거).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun longPressingATextBubbleSelectsAndTheToolbarKeepsCopySelectAllTranslateAndReport() {
+        load(mapOf(id("e00a") to "[자료](https://a.example/doc) 끝 **굵게**", id("e00b") to "내 말 **굵게** 끝"))
+        val menu = RecordingMenu()
+        val baseline = RecordingMenu()
+        withProcessTextApps(listOf("번역", "웹 검색")) {
+            withTouchSelection {
+                runComposeUiTest {
+                    setContent { SelectingScene(menu) { item(key = "test-share", label = "공유") {} } }
                     waitForIdle()
-                    field.performMouseInput { rightClick(Offset(12f, centerY)) }
+                    onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(38f, 26f)) }
+                    awaitMenu(menu, 1)
+                    println("AINGCHECK-SELECT received keys=${menu.keys} labels=${menu.labels}")
+                    assertEquals(listOf(TextContextMenuKeys.CopyKey, TextContextMenuKeys.SelectAllKey), menu.keys.take(2))
+                    assertTrue("셋째가 PROCESS_TEXT [번역]이 아니다: ${menu.keys}", menu.keys.getOrNull(2) is ProcessTextKey)
+                    assertEquals("번역", menu.labels.getOrNull(2))
+                    assertEquals(ChatBubbleSelection.ReportKey, menu.keys.getOrNull(3))
+                    assertEquals(com.yehsung.aingcheck.core.rules.text.BlockReportText.reportMessageAction, menu.labels.getOrNull(3))
+                    assertEquals("남은 항목: ${menu.labels}", 4, menu.keys.size)
+                    // 예전 길게 누르기 메뉴는 글 말풍선에 서지 않는다.
+                    onNodeWithTag(MessagesTags.MENU_COPY).assertDoesNotExistCompat()
+                    onNodeWithTag(MessagesTags.MENU_REPORT_MESSAGE).assertDoesNotExistCompat()
+                    // 내 말풍선: [복사] · [모두 선택] · [번역] — [신고] 없음.
+                    val before = menu.shown.size
+                    onNodeWithTag(MessagesTags.bubble(id("e00b"))).performTouchInput { longClick(Offset(right - 38f, centerY)) }
+                    awaitMenu(menu, before + 1)
+                    println("AINGCHECK-SELECT mine keys=${menu.keys} labels=${menu.labels}")
+                    assertEquals(listOf(TextContextMenuKeys.CopyKey, TextContextMenuKeys.SelectAllKey), menu.keys.take(2))
+                    assertEquals(listOf("번역"), menu.labels.drop(2))
+                    assertFalse(ChatBubbleSelection.ReportKey in menu.keys)
+                }
+                // 기준선: 거름 없는 고르기 칸 — 같은 앱 · 같은 끼움이 그대로 뜬다.
+                runComposeUiTest {
+                    setContent {
+                        CompositionLocalProvider(LocalTextContextMenuToolbarProvider provides baseline, LocalTextContextMenuDropdownProvider provides baseline) {
+                            ScreenSnapshots.Frame(false, art, characters.directory) {
+                                Box(Modifier.appendTextContextMenuComponents { item(key = "test-share", label = "공유") {} }) {
+                                    androidx.compose.foundation.text.selection.SelectionContainer {
+                                        androidx.compose.material3.Text("자료 (a.example) 끝 굵게", Modifier.testTag("baseline-text"))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    waitForIdle()
+                    onNodeWithTag("baseline-text").performTouchInput { longClick(Offset(12f, centerY)) }
+                    awaitMenu(baseline, 1)
+                }
+            }
+        }
+        println("AINGCHECK-SELECT baseline keys=${baseline.keys} labels=${baseline.labels}")
+        assertTrue("기준선: 거름 없는 칸에 끼운 공유가 없다 — 이 시험이 거름을 못 잰다: ${baseline.keys}", "test-share" in baseline.keys)
+        assertTrue("기준선: 거름 없는 칸에 PROCESS_TEXT 웹 검색이 없다: ${baseline.labels}", "웹 검색" in baseline.labels)
+    }
+
+    /** 마우스(크롬북 · 블루투스 마우스) — 글 위 오른쪽 누르기 드롭다운도 같은 거름이다(공유 · 웹 검색 없음 · 받은 말풍선이면 [신고]). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun rightClickMenuOnATextBubbleHasTheSameFilter() {
+        load(mapOf(id("e00a") to "[자료](https://a.example/doc) 끝 **굵게**"))
+        val menu = RecordingMenu()
+        withProcessTextApps(listOf("번역", "웹 검색")) {
+            runComposeUiTest {
+                setContent { SelectingScene(menu) { item(key = "test-share", label = "공유") {} } }
+                waitForIdle()
+                onNodeWithTag(MessagesTags.bubble(id("e00a"))).performMouseInput { rightClick(Offset(38f, 26f)) }
+                awaitMenu(menu, 1)
+            }
+        }
+        println("AINGCHECK-SELECT right-click keys=${menu.keys} labels=${menu.labels}")
+        // 고른 것 없이 오른쪽을 누르면 [모두 선택] · [신고]만 선다([복사] · PROCESS_TEXT 는 고른 글이 있어야 선다 — Compose 규칙).
+        assertFalse("test-share" in menu.keys)
+        assertFalse("웹 검색" in menu.labels)
+        assertTrue("남은 항목: ${menu.labels}", menu.keys.all { it == TextContextMenuKeys.CopyKey || it == TextContextMenuKeys.SelectAllKey || it == ChatBubbleSelection.ReportKey || it is ProcessTextKey })
+        assertEquals(listOf(TextContextMenuKeys.SelectAllKey, ChatBubbleSelection.ReportKey), menu.keys)
+    }
+
+    /**
+     * [복사]를 **부르는 자리에서** 잰다: 고른 낱말이 `[글](주소)` 링크면 꼬리표 대신 실제 주소째 · 서식 없는 글(기본 복사는 보이는 글자 "자료 (a.example)" 를 쓴다).
+     * [모두 선택] → [복사]는 서식 기호 없이 전부. 새 메시지가 와서 화면이 다시 그려져도 고르던 구간이 남는다(그 뒤의 [복사]가 같은 글을 쓴다).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun copyWritesTheRealAddressAsPlainTextAndTheSelectionSurvivesANewMessage() {
+        load(mapOf(id("e00a") to "[자료](https://a.example/doc) 끝 **굵게**"))
+        val menu = RecordingMenu()
+        withTouchSelection {
+            runComposeUiTest {
+                setContent { SelectingScene(menu) }
+                waitForIdle()
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(38f, 26f)) }
+                awaitMenu(menu, 1)
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("자료 (https://a.example/doc)", clip()?.toString())
+                assertPlain(clip())
+
+                // 모두 선택 → 복사: 기호 없이 · 꼬리표 대신 주소. (떠 있는 판은 다시 뜨지 않고 같은 항목이 지금 고른 것을 복사한다.)
+                mainClock.advanceTimeBy(1_000)
+                onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(38f, 26f)) }
+                awaitMenu(menu, 2)
+                menu.click(TextContextMenuKeys.SelectAllKey)
+                waitForIdle()
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("자료 (https://a.example/doc) 끝 굵게", clip()?.toString())
+                assertPlain(clip())
+
+                // 고른 채로 새 메시지가 온다(보이는 대화에 바로 넣는 길 — 실시간 도착과 같은 자리) → 다시 그려진 뒤에도 같은 구간을 복사한다.
+                mainClock.advanceTimeBy(1_000)
+                val beforeArrival = menu.shown.size
+                onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(38f, 26f)) }
+                awaitMenu(menu, beforeArrival + 1)
+                val arrived = id("e0ff")
+                harness.onStore {
+                    val template = store.history.first { it.peerUserID == hangyeol && !it.isMine }.wire
+                    val added = store.insertConsumedMessagesIntoVisibleConversation(
+                        listOf(com.yehsung.aingcheck.core.stores.messages.MessageEntry(template.copy(id = arrived, body = "새 메시지 도착", createdAt = harness.clock.now()))),
+                    )
+                    assertEquals("새 메시지가 대화에 안 들어갔다(전제)", 1, added)
                 }
                 waitForIdle()
-                // 메뉴는 누름이 끝난 뒤 다음 프레임들에서 뜬다(드롭다운은 특히 늦다) — 시계를 밀며 기다리되 시한이 지나도 던지지 않는다(아래 전제 단언이 말한다).
-                runCatching { waitUntil(timeoutMillis = 3_000) { shown.isNotEmpty() } }
+                onNodeWithTag(MessagesTags.bubble(arrived)).assertExistsCompat()
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("새 메시지 뒤에 고르던 구간이 날아갔다", "자료 (https://a.example/doc)", clip()?.toString())
             }
-        } finally {
-            if (touch) org.robolectric.util.ReflectionHelpers.setStaticField(android.os.Build.VERSION::class.java, "SDK_INT", sdk)
         }
-        assertTrue("touch=$touch 글을 고르고 메뉴를 청했는데 글 칸 메뉴가 뜨지 않았다(전제)", shown.isNotEmpty())
-        return shown.last()
     }
 
-    private fun assertSheetMenu(touch: Boolean) {
-        val keys = shownMenuKeys(touch) { ChatSelectCopySheet(ChatSelectCopyState("**굵게** [자료](https://a.example/doc) 끝")) }
-        assertEquals("touch=$touch 시트 글 칸 메뉴: $keys", setOf<Any>(TextContextMenuKeys.CopyKey, TextContextMenuKeys.SelectAllKey), keys.toSet())
-        // 기준선: 거름 없는 같은 모양 글 칸 — 끼운 항목이 그대로 뜬다.
-        val unfiltered = shownMenuKeys(touch) {
-            androidx.compose.foundation.text.BasicTextField(
-                state = androidx.compose.runtime.remember { androidx.compose.foundation.text.input.TextFieldState("굵게 자료 (a.example) 끝") },
-                readOnly = true,
-                modifier = Modifier.testTag(MessagesTags.SELECT_COPY_FIELD),
+    /** 고르는 중이면 링크 위 한 번 누름은 고른 것을 지울 뿐 열지 않는다 — 다음 누름(고르는 중 아님)은 연다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun aTapWhileSelectingClearsTheSelectionInsteadOfOpeningTheLink() {
+        load(mapOf(id("e00a") to "[자료](https://a.example/doc) 끝"))
+        val menu = RecordingMenu()
+        val handler = RecordingUriHandler()
+        withTouchSelection {
+            runComposeUiTest {
+                setContent { SelectingScene(menu, handler) }
+                waitForIdle()
+                val bubble = onNodeWithTag(MessagesTags.bubble(id("e00a")))
+                bubble.performTouchInput { longClick(Offset(38f, 26f)) }
+                awaitMenu(menu, 1)
+                assertTrue("길게 누르기가 링크를 열었다: ${handler.opened}", handler.opened.isEmpty())
+                bubble.performTouchInput { click(Offset(38f, 26f)) }
+                waitForIdle()
+                assertTrue("고르는 중 링크 누름이 링크를 열었다: ${handler.opened}", handler.opened.isEmpty())
+                // 그 누름이 고른 것을 지웠다 — [복사]가 아무것도 안 쓴다.
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("링크 위 누름이 고르기를 안 지웠다", "전", clip()?.toString())
+                // 두 번 누름(두 번 눌러 낱말 고르기)으로 읽히지 않게 시계를 민다.
+                mainClock.advanceTimeBy(1_000)
+                bubble.performTouchInput { click(Offset(38f, 26f)) }
+                waitForIdle()
+                assertEquals("고르기가 풀린 뒤 누름은 연다", listOf("https://a.example/doc"), handler.opened)
+            }
+        }
+    }
+
+    /**
+     * 여백 띠(좌우 13dp)를 길게 눌러도 가장 가까운 낱말을 고르고 메뉴([신고])가 뜬다 — 짧은 말풍선은 대부분이 여백이다(아이폰 · 맥 검토 P1).
+     * ★ 글자 칸이 48dp 보다 작으면 Compose 가 누름 자리를 최소 크기까지 넓혀 여백 누름도 글자 칸이 받는다(한 줄 높이 21dp — 위아래 여백은 늘 그렇다).
+     *   그래서 이 시험은 48dp 보다 **넓은** 한 줄 글의 왼쪽 여백을 누른다 — 넓힘이 닿지 않는 자리라 여백 고르기(ChatBubbleTextHit.selectNearestWord)만 받는다
+     *   (그 함수를 끄면 메뉴가 안 뜬다 — 2026-11-04 변이 실측. 한 글자 "응" 은 넓힘이 받아 변이가 살았다).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun longPressingTheBubblePaddingSelectsTheNearestWord() {
+        load(mapOf(id("e00a") to "응 알겠어요"))
+        val menu = RecordingMenu()
+        withTouchSelection {
+            runComposeUiTest {
+                setContent { SelectingScene(menu) }
+                waitForIdle()
+                // 받은 말풍선 왼쪽 여백 띠(13dp = 26px 안) · 줄 가운데 높이.
+                onNodeWithTag(MessagesTags.bubble(id("e00a"))).performTouchInput { longClick(Offset(8f, centerY)) }
+                awaitMenu(menu, 1)
+                assertEquals(ChatBubbleSelection.ReportKey, menu.keys.last())
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("응", clip()?.toString())
+            }
+        }
+    }
+
+    /** 이모티콘 말풍선은 판 7 전 길게 누르기 메뉴 그대로다: [복사](원문 토큰 — 붙여넣어 다시 보내면 그림) · [이 메시지 신고하기]. 고르기 메뉴는 뜨지 않는다. */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun stickerBubbleKeepsTheLongPressMenu() {
+        load(mapOf(id("e005") to "[아잉:기쁨]"))
+        val menu = RecordingMenu()
+        withTouchSelection {
+            runComposeUiTest {
+                kotlinx.coroutines.runBlocking { ScreenSnapshots.prewarm(art) }
+                setContent { SelectingScene(menu) }
+                waitForIdle()
+                onNodeWithTag(MessagesTags.bubble(id("e005"))).performTouchInput { longClick(Offset(60f, centerY)) }
+                waitForIdle()
+                onNodeWithTag(MessagesTags.MENU_COPY).assertExistsCompat()
+                onNodeWithTag(MessagesTags.MENU_REPORT_MESSAGE).assertExistsCompat()
+                onNodeWithTag(MessagesTags.MENU_COPY).performSemanticsAction(SemanticsActions.OnClick)
+                waitForIdle()
+                assertEquals("[아잉:기쁨]", clip()?.toString())
+            }
+        }
+        assertTrue("이모티콘 말풍선에 고르기 메뉴가 떴다: ${menu.shown.map { c -> c.map { it.key } }}", menu.shown.isEmpty())
+    }
+
+    /** 보내는 중 말풍선도 같은 고르기 칸이다 — [신고] 없음(내 말이다). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun pendingBubbleIsSelectableWithoutReport() {
+        load(mapOf(id("e00a") to "받은 말"))
+        harness.onStore {
+            store.setDraft("보내는 중 **굵게**", hangyeol)
+            assertTrue("보내기가 안 떴다(전제)", store.sendDraft(hangyeol, isComposing = false))
+        }
+        val menu = RecordingMenu()
+        withTouchSelection {
+            runComposeUiTest {
+                setContent { SelectingScene(menu) }
+                waitForIdle()
+                onNodeWithTag(MessagesTags.pending("local-1")).performTouchInput { longClick(Offset(right - 38f, centerY)) }
+                awaitMenu(menu, 1)
+                println("AINGCHECK-SELECT pending keys=${menu.keys} labels=${menu.labels}")
+                assertEquals(listOf(TextContextMenuKeys.CopyKey, TextContextMenuKeys.SelectAllKey), menu.keys)
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("굵게", clip()?.toString())
+            }
+        }
+    }
+
+    /**
+     * 고르는 중 모습(골든 — 사람이 PNG 를 연다): 내 말풍선(파란 바탕)에서 낱말 하나를 고르면 강조가 본문 글자색(label)으로 깔려 보인다
+     * (기본 accent 강조는 파란 바탕에서 안 보인다 — ChatBubbleSelection ⑤). 말풍선 크기 · 줄바꿈은 고르지 않은 장면과 같다.
+     * 음성 기준선: 같은 장면 · 고르지 않음(다른 곳은 강조 한 군데뿐).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun conversationSelectingPhoneLight() {
+        load()
+        withTouchSelection {
+            ScreenSnapshots.check(
+                "screens/messages", "conversation-selecting-phone-light", ScreenFrame.Phone, art,
+                scene = { SelectingScene(RecordingMenu()) },
+                other = { SelectingScene(RecordingMenu()) },
+                // 내 말풍선 첫 줄 오른쪽 끝 낱말(위 여백 8dp + 줄 가운데 ≈ 37px · 오른쪽 여백 13dp 안쪽).
+                sceneAct = { onNodeWithTag(MessagesTags.bubble(id("e00b"))).performTouchInput { longClick(Offset(right - 60f, 37f)) } },
             )
         }
-        assertTrue("touch=$touch 기준선: 거름 없는 글 칸에 끼운 공유가 없다 — 이 시험이 거름을 못 잰다: $unfiltered", "test-share" in unfiltered)
-        assertTrue("touch=$touch 기준선: 거름 없는 글 칸에 끼운 PROCESS_TEXT 가 없다: $unfiltered", unfiltered.any { it is ProcessTextKey })
     }
-
-    /** 폰의 실제 손짓 — 시트 글을 길게 눌러 고르면 도구 막대가 [복사] · [모두 선택]만 싣고 뜬다(죽지 않는다). */
-    @Test fun selectSheetLongPressToolbarKeepsOnlyCopyAndSelectAll() = assertSheetMenu(touch = true)
-
-    /** 마우스(크롬북 · 블루투스 마우스) — 고른 글 위 오른쪽 누르기 드롭다운도 같은 거름(죽지 않는다). */
-    @Test fun selectSheetRightClickMenuKeepsOnlyCopyAndSelectAll() = assertSheetMenu(touch = false)
 
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertExistsCompat() = apply { assertExists() }
     private fun androidx.compose.ui.test.SemanticsNodeInteraction.assertDoesNotExistCompat() = apply { assertDoesNotExist() }

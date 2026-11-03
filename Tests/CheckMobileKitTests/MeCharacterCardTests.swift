@@ -1,4 +1,5 @@
 import CheckCore
+import CheckMobileShared
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -8,7 +9,10 @@ import UniformTypeIdentifiers
 
 /// 나 탭 캐릭터 카드 그림(박힌 HEIC)의 **드리프트 검사**와 **다시 굽기**.
 ///
-/// - 평소: 맥 캐릭터 폴더(`Sources/check/Characters/<id>/manifest.json` + atlas, `Resources/aing-neutral.png`)를 다시 읽어 맥
+/// - 내장 캐릭터(아잉 · 황금 · 무지개 · 케이크 둘 · 이슬)의 원천은 **폰이 싣는 초상**(`AingCharacterArt.portraitURL` — 맥 원본과 같은 픽셀임은
+///   `BaseComponentTests.portraitsAreBundledCopiesOfMacArt` 가 잰다)이다. 폰 사본만 바꿔 끼우는 날(이슬 대체 그림 — 심사 5.2.1 대비,
+///   `ios/isul-alt/README.md`)에 카드를 다시 구우면 **바꿔 끼운 그림**으로 구워진다 — 맥 원본에서 구우면 상표 그림이 카드로 되돌아온다(검토 지적).
+/// - 평소: 맥 캐릭터 폴더(`Sources/check/Characters/<id>/manifest.json` + atlas)를 다시 읽어 맥
 ///   `CharacterCardArt` 와 같은 규칙(frontIdle 첫 셀 → 알파>8 상자)으로 자른 크기가 박힌 값과 같은지, id·이름·픽셀아트 여부가 같은지,
 ///   박힌 그림이 디코드되고 알파가 살아 있는지 본다. 캐릭터가 늘거나 아틀라스가 다시 구워지면 빨개진다.
 /// - `AING_REGENERATE_CHARACTER_CARDS=1 swift test --build-system native --filter MeCharacterCardTests` 면 `MeCharacterCardData.swift` 를 다시 쓴다.
@@ -22,6 +26,21 @@ struct MeCharacterCardTests {
         let displayName: String
         let pixelArt: Bool
         let crop: CGImage
+        /// 이 카드를 구운 그림 파일(내장 = 폰 초상 · 스프라이트 = 맥 아틀라스).
+        let url: URL
+    }
+
+    /// 내장 캐릭터 카드의 원천 — 폰 번들 초상(무표정). 파일 이름을 이 자리에 다시 적지 않는다(`AingCharacterArt` 가 폰 초상의 유일한 출처).
+    static func builtInPortraitURL(_ id: String) throws -> URL {
+        try #require(AingCharacterArt.portraitURL(id: id, expression: .neutral), "\(id) 폰 초상이 번들에 없다")
+    }
+
+    static func builtInSource(id: String, displayName: String) throws -> Source {
+        let url = try builtInPortraitURL(id)
+        let image = try loadImage(url)
+        let box = try #require(alphaBounds(image))
+        let crop = try #require(image.cropping(to: box))
+        return Source(id: id, displayName: displayName, pixelArt: false, crop: crop, url: url)
     }
 
     struct Manifest: Decodable {
@@ -77,34 +96,14 @@ struct MeCharacterCardTests {
     }
 
     static func sources() throws -> [Source] {
-        let aing = try loadImage(repoRoot.appendingPathComponent("Sources/check/Resources/aing-neutral.png"))
-        let aingBox = try #require(alphaBounds(aing))
-        let aingCrop = try #require(aing.cropping(to: aingBox))
-        var result = [Source(id: "aing", displayName: "아잉", pixelArt: false, crop: aingCrop)]
-        // 황금 아잉이(v0.3.54)는 아잉과 같은 내장 3D 캐릭터다 — 매니페스트·아틀라스가 없고(밑줄 id 는 매니페스트 문법 밖),
-        // 원천은 맥 초상 PNG 다(아잉과 같은 갈래). 이름은 코어 내장 항목의 이름을 그대로 쓴다(맥 카탈로그와 같은 글자).
-        let gold = try loadImage(repoRoot.appendingPathComponent(
-            "Sources/check/Resources/\(GoldAingArt.neutralPortraitResourceName).\(GoldAingArt.resourceExtension)"))
-        let goldBox = try #require(alphaBounds(gold))
-        let goldCrop = try #require(gold.cropping(to: goldBox))
-        result.append(Source(id: CharacterCatalog.goldAingID, displayName: CharacterCatalog.builtInGoldAing.displayName,
-                             pixelArt: false, crop: goldCrop))
-        // 무지개 아잉이(v0.3.59 맥 / 폰 1.0.10)는 **금과 같은 갈래**다 — 매니페스트·아틀라스가 없고 원천은 맥 초상 PNG 다.
-        // 파일 이름을 이 자리에 다시 적지 않는다(`RainbowAingArt` 가 유일한 출처 — 맥 번들·폰 초상·아트 스크립트가 같은 글자를 쓴다).
-        let rainbow = try loadImage(repoRoot.appendingPathComponent(
-            "Sources/check/Resources/\(RainbowAingArt.neutralPortraitResourceName).\(RainbowAingArt.resourceExtension)"))
-        let rainbowBox = try #require(alphaBounds(rainbow))
-        let rainbowCrop = try #require(rainbow.cropping(to: rainbowBox))
-        result.append(Source(id: CharacterCatalog.rainbowAingID, displayName: CharacterCatalog.builtInRainbowAing.displayName,
-                             pixelArt: false, crop: rainbowCrop))
-        // 케이크 아잉이 둘(v0.3.66 맥 / 폰 1.0.14 — 생일 선물 전용)도 금 · 무지개와 같은 갈래다: 매니페스트 · 아틀라스가 없고 원천은
-        // 맥 초상 PNG(`Resources/<id>-neutral.png`, 장식 포함)다. 이름은 코어 내장 항목 그대로, 순서는 내장 순서(딸기 → 초코).
-        // 이슬 아잉이(v0.3.74 맥 / 폰 1.0.17 — '술 한잔' 선물 전용)도 같은 갈래 · 내장 순서 여섯째(초코 다음, 병뚜껑 포함).
-        for cake in [CharacterCatalog.builtInCakeStrawberryAing, CharacterCatalog.builtInCakeChocoAing, CharacterCatalog.builtInIsulAing] {
-            let image = try loadImage(repoRoot.appendingPathComponent("Sources/check/Resources/\(cake.id)-neutral.png"))
-            let box = try #require(alphaBounds(image))
-            let crop = try #require(image.cropping(to: box))
-            result.append(Source(id: cake.id, displayName: cake.displayName, pixelArt: false, crop: crop))
+        // 아잉 · 황금 아잉이(v0.3.54) · 무지개 아잉이(v0.3.59 / 폰 1.0.10) · 케이크 아잉이 둘(v0.3.66 / 폰 1.0.14 — 생일 선물 전용) ·
+        // 이슬 아잉이(v0.3.74 / 폰 1.0.17 — '술 한잔' 선물 전용)는 내장 3D 캐릭터다 — 매니페스트 · 아틀라스가 없고(밑줄 id 는 매니페스트 문법 밖)
+        // 원천은 초상 PNG 다. 이름은 코어 내장 항목 그대로, 순서는 내장 순서(아잉 → 금 → 무지개 → 딸기 → 초코 → 이슬).
+        var result: [Source] = []
+        result.append(try builtInSource(id: "aing", displayName: "아잉"))
+        for builtIn in [CharacterCatalog.builtInGoldAing, CharacterCatalog.builtInRainbowAing, CharacterCatalog.builtInCakeStrawberryAing,
+                        CharacterCatalog.builtInCakeChocoAing, CharacterCatalog.builtInIsulAing] {
+            result.append(try builtInSource(id: builtIn.id, displayName: builtIn.displayName))
         }
         let charactersDir = repoRoot.appendingPathComponent("Sources/check/Characters")
         let names = try FileManager.default.contentsOfDirectory(atPath: charactersDir.path).sorted()
@@ -118,7 +117,8 @@ struct MeCharacterCardTests {
             let cell = try #require(atlas.cropping(to: CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h)))
             let box = try #require(alphaBounds(cell))
             let crop = try #require(cell.cropping(to: box))
-            result.append(Source(id: manifest.id, displayName: manifest.displayName, pixelArt: manifest.pixelArt ?? false, crop: crop))
+            result.append(Source(id: manifest.id, displayName: manifest.displayName, pixelArt: manifest.pixelArt ?? false, crop: crop,
+                                 url: charactersDir.appendingPathComponent(name).appendingPathComponent(atlasInfo.file)))
         }
         return result
     }
@@ -146,6 +146,20 @@ struct MeCharacterCardTests {
             #expect(card.pixelWidth == w && card.pixelHeight == h)
         }
         #expect(MeCharacterCards.knownIDs.first == CharacterCatalog.builtInAingID)
+    }
+
+    @Test("원천: 내장 캐릭터 카드는 폰이 싣는 초상에서 굽는다 — 이슬 대체 그림으로 바꿔 끼운 판에서 다시 구워도 상표 그림이 카드로 돌아오지 않는다(검토 지적)")
+    func builtInCardsBakeFromPhonePortraits() throws {
+        let sources = try Self.sources()
+        let builtIns = [CharacterCatalog.builtInAingID] + CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.builtInAingID }
+        for id in builtIns {
+            let source = try #require(sources.first { $0.id == id }, "\(id) 카드 원천이 없다")
+            let phone = try Self.builtInPortraitURL(id)
+            #expect(source.url.standardizedFileURL == phone.standardizedFileURL, "\(id) 카드를 폰 초상이 아닌 곳(\(source.url.lastPathComponent))에서 굽는다")
+            #expect(!source.url.path.contains("/Sources/check/"), "\(id) 카드를 맥 그림에서 굽는다 — 폰 사본만 바꿔 끼운 판에서 다시 구우면 맥 그림이 돌아온다")
+        }
+        let isul = try #require(sources.first { $0.id == CharacterCatalog.isulAingID })
+        #expect(isul.url.lastPathComponent == "\(CharacterCatalog.isulAingID)-neutral.png")
     }
 
     @Test("그림: 전부 디코드되고 크기가 맞고 알파가 살아 있다(모서리 투명)")

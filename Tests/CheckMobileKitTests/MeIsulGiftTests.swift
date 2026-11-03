@@ -430,17 +430,50 @@ import Testing
         #expect(drinkLedger.needle == MobileDemoCakeGiftRoute.drinkNeedle)
     }
 
-    @Test("데모 글에 상표 글자('참이슬')가 없다 — 픽스처 · 폰 코드 · 스토어 문서(그림 라벨에만 있다 · 대표 결정 #d_dk4IjWRZvFYR)")
+    @Test("데모 글에 상표 글자('참이슬')가 없다 — 픽스처 · 폰이 링크하는 코드(코어 포함) · 스토어 문서 · 게시 문서 · 랜딩(그림 라벨에만 있다 · 대표 결정 #d_dk4IjWRZvFYR)")
     func noTrademarkTextInDemoOrStoreCopy() throws {
         let mark = "참" + "이슬"
         for entry in MeCakeGiftTests.fixtures.entries {
             #expect(!String(decoding: entry.data, as: UTF8.self).contains(mark), "\(entry.relativePath) 에 상표 글자가 있다")
         }
-        for relative in ["Sources/CheckMobileKit", "Sources/CheckMobileShared", "Sources/CheckWidgetsKit"] {
+        // 코어(`Sources/CheckCore`)도 본다(검토 지적) — 받는 창 · 잠긴 칸 문구(`DrinkGiftText`)가 거기서 오고 폰 화면에 그대로 선다.
+        for relative in ["Sources/CheckMobileKit", "Sources/CheckMobileShared", "Sources/CheckWidgetsKit", "Sources/CheckCore"] {
             #expect(try IntegrationContractTests.files(containing: [mark], under: relative).isEmpty, "\(relative) 코드에 상표 글자가 있다")
         }
-        let store = try String(contentsOf: MeIsulProtocolPinTests.root.appendingPathComponent("docs/appstore.md"), encoding: .utf8)
-        #expect(!store.contains(mark), "스토어 문서(설명 · 새 기능 · 심사 메모 초안)에 상표 글자가 있다")
+        // 사람이 읽는 게시물: 스토어 문서 · GitHub Pages 로 게시되는 처리방침 · 약관 · 첫 화면, 그리고 랜딩(지원 URL 이 가리키는 곳)의 글.
+        for relative in Self.publishedTextFiles() {
+            let text = try String(contentsOf: MeIsulProtocolPinTests.root.appendingPathComponent(relative), encoding: .utf8)
+            #expect(!text.contains(mark), "\(relative) 에 상표 글자가 있다(스토어 · 게시 글)")
+        }
+    }
+
+    /// 상표 글자 그물이 훑는 게시 글 파일(저장소 루트 기준). 랜딩은 화면을 짓는 폴더(app · components · lib · data)의 글 파일만 —
+    /// node_modules · .next 같은 산출물은 저장소에 없거나 훑지 않는다. 빈 목록이면 그물이 아무것도 안 잰다(아래 시험이 막는다).
+    static func publishedTextFiles() -> [String] {
+        let root = MeIsulProtocolPinTests.root
+        var out = ["docs/appstore.md", "docs/privacy.md", "docs/terms.md", "docs/index.md"]
+            .filter { FileManager.default.fileExists(atPath: root.appendingPathComponent($0).path) }
+        let textExtensions: Set<String> = ["ts", "tsx", "js", "mjs", "json", "md", "mdx", "css", "html", "txt"]
+        for folder in ["landing/app", "landing/components", "landing/lib", "landing/data"] {
+            guard let walker = FileManager.default.enumerator(at: root.appendingPathComponent(folder), includingPropertiesForKeys: [.isRegularFileKey])
+            else { continue }
+            for case let url as URL in walker {
+                if url.lastPathComponent == "node_modules" || url.lastPathComponent == ".next" { walker.skipDescendants(); continue }
+                // 폴더 이름이 글 파일 꼴일 수 있다(Next.js 경로 `app/llms.txt/` 는 폴더다) — 보통 파일만.
+                guard (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
+                      textExtensions.contains(url.pathExtension.lowercased()) else { continue }
+                out.append(String(url.standardizedFileURL.path.dropFirst(root.standardizedFileURL.path.count + 1)))
+            }
+        }
+        return out.sorted()
+    }
+
+    @Test("상표 글자 그물의 게시 글 목록이 비지 않았다 — 처리방침 · 스토어 문서 · 랜딩 화면 글이 실제로 들어 있다(기준선)")
+    func trademarkNetCoversPublishedText() {
+        let files = Self.publishedTextFiles()
+        #expect(files.contains("docs/privacy.md") && files.contains("docs/appstore.md"), "처리방침 · 스토어 문서를 안 훑는다: \(files.prefix(5))")
+        #expect(files.contains { $0.hasPrefix("landing/app/") && $0.hasSuffix(".tsx") }, "랜딩 화면 글을 안 훑는다")
+        #expect(files.contains("landing/app/delete-account/page.tsx"), "계정 삭제 안내(처리방침 짝)를 안 훑는다")
     }
 
     @Test("스토어 문서 §3: 이슬을 그리는 빌드면 '술·담배·약물' 칸은 드묾(대표 결정 원문 #d_E3bxq1b2jSsS) · 다른 칸이 약물을 '없음'으로 겹쳐 말하지 않는다")

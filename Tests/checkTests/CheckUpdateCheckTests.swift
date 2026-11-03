@@ -1052,31 +1052,8 @@ func standaloneWatchdogWaitsForTheDMGBudgetNotTheBrewOne() async {
 
 // MARK: - SIGTERM → 평소 종료 절차
 
-// 기본 처분으로 SIGTERM 이 오면 프로세스가 즉사해 applicationShouldTerminate 가 돌지 않는다 —
-// 근무 중이었다면 열린 세션이 서버에 남고 하트비트만 끊긴다(이 저장소가 이미 크게 겪은 사고의 부류).
-// 실제로 신호를 보내 받는지 확인한다. install 이 먼저 SIG_IGN 을 걸므로, 배선이 깨져 있어도
-// 테스트 프로세스가 죽지 않고 타임아웃으로 빨개진다.
-@MainActor
-@Test
-func sigtermRunsTheGracefulTerminationPathInsteadOfKillingUsOutright() async {
-    final class Flag: @unchecked Sendable {
-        private let lock = NSLock()
-        private var value = false
-        func raise() { lock.lock(); value = true; lock.unlock() }
-        var raised: Bool { lock.lock(); defer { lock.unlock() }; return value }
-    }
-    let flag = Flag()
-    GracefulTerminationSignal.install { flag.raise() }
-    defer { GracefulTerminationSignal.uninstallForTesting() }
-
-    kill(getpid(), SIGTERM)
-
-    // 신호 전달은 비동기다 — 짧게 기다린다(실측: 실제 앱에서 600ms 안에 종료까지 끝났다).
-    for _ in 0..<100 where !flag.raised {
-        try? await Task.sleep(for: .milliseconds(20))
-    }
-    #expect(flag.raised, "SIGTERM 이 평소 종료 절차로 이어지지 않았다")
-}
+// 시험은 `SigtermQuitDeadlockTests` 로 옮겼다(2026-11-03). 신호 처리기는 프로세스에 하나뿐이라, 이 파일의 자유 함수와 그 스위트가 나란히 돌면
+// 한쪽의 install 이 무시되거나(이미 설치됨) 한쪽의 uninstall 이 기본 처분(SIG_DFL)을 되살린 사이 다른 쪽 신호가 프로세스를 죽인다.
 
 // MARK: - 헬퍼
 

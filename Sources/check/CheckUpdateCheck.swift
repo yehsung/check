@@ -519,7 +519,12 @@ enum GracefulTerminationSignal {
         // 기본 처분을 끄지 않으면 소스를 달기 전에 프로세스가 죽는다.
         signal(SIGTERM, SIG_IGN)
         let s = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
-        s.setEventHandler(handler: onTerminate)
+        // ★ **여기서 onTerminate 를 곧바로 부르지 마라**(2026-11-03 교착 — `AppTerminationRequest` 주석). 이 처리기는 메인 큐의 블록이다.
+        //   그 안에서 `NSApp.terminate` 가 근무 중 `.terminateLater` 를 받으면 AppKit 이 **이 블록 안에서** 응답을 기다리고, 퇴근 정리
+        //   Task(메인 큐의 다음 차례)는 영영 못 돈다 — 대표 맥의 0.3.73 이 그렇게 멈췄다. 메인 런루프의 블록으로 미루면 이 블록이 끝난 뒤에 불린다.
+        s.setEventHandler {
+            AppTerminationRequest.performOutsideQueueBlock { onTerminate() }
+        }
         s.resume()
         source = s
     }
@@ -530,6 +535,36 @@ enum GracefulTerminationSignal {
         source?.cancel()
         source = nil
         signal(SIGTERM, SIG_DFL)
+    }
+}
+
+// MARK: - 종료를 메인 큐 블록 밖에서 시작하기 (2026-11-03 교착 수리)
+
+/// `NSApp.terminate` 를 **메인 큐 블록 밖**에서 부르게 하는 문.
+///
+/// **왜 필요한가**(2026-11-03 실측 — 대표 맥 설치본 0.3.73): 근무 중이면 `applicationShouldTerminate` 가 `.terminateLater` 를 돌려주고
+/// `Task { @MainActor in finishWorkBeforeQuit(); NSApp.reply(...) }` 로 퇴근 정리를 띄운다. AppKit 은 응답이 올 때까지 **부른 자리에서**
+/// 메인 런루프를 중첩해 돈다. 부른 자리가 메인 큐의 블록이면(SIGTERM 디스패치 소스 처리기 · `DispatchQueue.main.async` · MainActor Task)
+/// 메인 큐는 그 블록이 끝나야 다음 것을 꺼내므로 정리 Task 가 영영 못 돌고, 앱은 근무 신호도 끊긴 채 멈춘다(샘플: 메인 스레드
+/// `GracefulTerminationSignal → terminate: → _shouldTerminate → mach_msg`). 메뉴의 [앱 종료]·⌘Q 는 런루프의 이벤트 처리에서 부르므로
+/// 이 문제가 없었다 — 그래서 평소엔 멀쩡하고 신호(업데이트 · 하나만 실행 교체 · 로그아웃)에서만 멈췄다.
+///
+/// 고침: 메인 런루프에 블록으로 건다(`CFRunLoopPerformBlock`, common modes). 런루프는 지금 큐 블록이 끝난 **뒤에** 그 블록을 부르고,
+/// 거기서 시작한 종료 대기의 중첩 런루프는 메인 큐를 비울 수 있다.
+/// **메인 큐 블록이나 Task 안에서 앱을 끝낼 때는 `NSApp.terminate` 대신 이 문을 써라.**
+enum AppTerminationRequest {
+    /// `body` 를 메인 런루프의 다음 차례(메인 큐 블록 밖)에 부른다. 어느 스레드 · 어느 맥락에서 불러도 된다.
+    static func performOutsideQueueBlock(_ body: @escaping @MainActor @Sendable () -> Void) {
+        let loop = CFRunLoopGetMain()
+        CFRunLoopPerformBlock(loop, CFRunLoopMode.commonModes.rawValue) {
+            MainActor.assumeIsolated { body() }
+        }
+        CFRunLoopWakeUp(loop)
+    }
+
+    /// 평소 종료(`NSApp.terminate` — 근무 중이면 퇴근 정리 포함)를 위 문으로 건다.
+    static func terminate() {
+        performOutsideQueueBlock { NSApp.terminate(nil) }
     }
 }
 

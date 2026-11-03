@@ -49,7 +49,7 @@ package nonisolated enum ShopWire {
     package static let cakeProtocol = 4
 
     /// 이 번호를 요구하는 캐릭터 — **케이크 둘**이다(`CharacterCatalog.birthdayGiftBuiltInIDs` 와 같은 값 · 같은 순서).
-    /// ★ (v0.3.74) 선물 전용 **전부**(`giftOnlyBuiltInIDs` — 이슬까지)가 아니다. 이슬을 여기 섞으면 이슬 초상이 없는 빌드(폰)가
+    /// ★ (v0.3.74) 선물 전용 **전부**(`giftOnlyBuiltInIDs` — 이슬까지)가 아니다. 이슬을 여기 섞으면 이슬 초상이 없는 빌드(폰 1.0.16 이하)가
     ///   4 대신 3 을 말해 케이크 선물까지 잃는다(설계서 §2). 그래서 케이크 둘로 고정한다.
     package static let cakeCharacterIDs = CharacterCatalog.birthdayGiftBuiltInIDs
 

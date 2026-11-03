@@ -200,6 +200,22 @@ import Testing
         }
         character.simdPosition.y = 0
         let fraction = Double(CheckOverlayCharacterView.timerVerticalFraction(characterID: Self.id))
+        if Self.evidenceDirectory != nil {
+            // 사람이 보는 그림: 앱 구도(패널 140×170 @2x) 위에 실제 라벨 부품을 새 자리 · 옛 자리에 얹는다.
+            let still = NSImage(cgImage: try V0359Rainbow3DTests.render(scene, size: size), size: panel)
+            for (name, y) in [("new", fraction), ("old", Double(CheckOverlayCharacterView.timerVerticalFraction))] {
+                let mock = ZStack {
+                    Image(nsImage: still).resizable().frame(width: panel.width, height: panel.height)
+                    CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(2 * 3_600 + 17 * 60))
+                        .position(x: panel.width / 2, y: panel.height * y)
+                }
+                .frame(width: panel.width, height: panel.height)
+                .background(Color(red: 0.11, green: 0.11, blue: 0.12))
+                let renderer = ImageRenderer(content: mock)
+                renderer.scale = 2
+                try V0377PeperoMac3DTests.write(try #require(renderer.cgImage), "timer-\(name)-pepero@2x.png")
+            }
+        }
         print(String(format: "[v0377-fix] 상자 빨강 %.3f…%.3f · 라벨 높이 %.1fpt(반 %.3f) · 빼빼로 라벨 %.3f…%.3f", redTop, redBottom, label.height, half, fraction - half, fraction + half))
         #expect(redTop < redBottom && redBottom - redTop > 0.1, "전제: 상자 빨강 띠를 못 쟀다(\(redTop)…\(redBottom))")
         #expect(fraction - half >= redBottom + 0.01, "빼빼로 근무 시계(\(fraction - half)…)가 상자(…\(redBottom))와 겹친다")

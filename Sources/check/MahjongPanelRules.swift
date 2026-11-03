@@ -50,6 +50,8 @@ struct MahjongRulesSheet: View {
     let tab: MahjongRulesTab
     let onSelect: (MahjongRulesTab) -> Void
     let onClose: () -> Void
+    /// [처음이에요 다시 보기](§5.7 — 연습판은 열지 않는다).
+    var onReopenGuide: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -70,7 +72,15 @@ struct MahjongRulesSheet: View {
             case .scores: scoresBody
             }
             Spacer(minLength: 0)
-            Text(MahjongRulesText.footer).font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+            HStack(spacing: 10) {
+                Text(MahjongRulesText.footer).font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+                Spacer(minLength: 8)
+                if tab == .rules {
+                    MahjongCapsuleButton(title: MahjongText.guideReopen, tint: CheckTheme.working, filled: false, height: 28,
+                                         action: onReopenGuide)
+                        .frame(width: 170)
+                }
+            }
         }
         .padding(20)
         .frame(width: MahjongWindowLayout.rulesSize.width, height: MahjongWindowLayout.rulesSize.height, alignment: .topLeading)

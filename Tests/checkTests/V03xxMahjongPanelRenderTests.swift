@@ -9,7 +9,7 @@ import Testing
 // 울기 프롬프트 있음/없음 · 리치 무장 흐림 · `wait` "기다리는 중" · 남의 차례 · 자리 비움 · 국 결과(화료·유국) · 판 결과 ·
 // 규칙·역·점수표 · 연습 시작 · 연습 탁자 + 방 띠 · 배율 0.82.
 //
-// 전부 ImageRenderer(scale 2)로 `CheckRenderSettle` 이 굳힌 뒤 재고, `CHECK_SNAPSHOT_DIR/mahjong/` 에 PNG 를 남긴다(사람이 본다).
+// 전부 ImageRenderer(scale 2)로 `CheckRenderSettle` 이 굳힌 뒤 잰다. PNG 는 `MAHJONG_RENDER_DIR` 을 줄 때만 그 폴더에 남긴다(사람이 본다).
 // ★ "노란 상자 0" 을 감지기로 쓰지 않는다. **패는 밝은 크림 덩어리**로 잰다 — 펠트·칸·덮개는 중간 톤이고 패 몸체만 극단 밝기라
 //   '손 칸의 큰 크림 덩어리 수 = 그려진 패 수'다(흐린 패 — 못 버리는 패 — 는 크림이 아니다).
 // ★ 상태는 스토어 문(`applyState` · `applyLobby`)과 `package internal(set)` 칸으로 심는다. S2 서버 픽스처가 아직 없어
@@ -229,6 +229,38 @@ struct V03xxMahjongPanelRenderTests {
         let plain = try mjBitmap(mjPanel(noBand))
         #expect(mjMaxDiff(bitmap, plain, bandRect) > 60, "방 띠가 안 그려졌다")
         #expect(mjCreamBlobs(bitmap, rect: mjHandProbe, minHeight: 100) == 14, "연습판도 table 한 길로 손을 그린다")
+    }
+
+    // MARK: ⑦-2 처음이에요(U2)
+
+    @Test
+    func firstTimeGuidePagesAndTheRulesReopenButton() throws {
+        // 없으면: '처음이에요' 네 장이 빈 카드거나 모두 같은 장으로 그려지거나(장 넘김이 안 됨), 예시 손이 안 서거나,
+        // [규칙] 창에 [처음이에요 다시 보기]가 없어도 초록이다.
+        let store = try mjLobbyStore()
+        let lobby = try mjBitmap(mjPanel(store))
+        let launch = MahjongPracticeLaunch(format: .tonpuu, timed: false)
+        let size = MahjongFirstTimeGuideSheet.size
+        let card = CGRect(x: (MahjongWindowLayout.contentSize.width - size.width) / 2,
+                          y: (MahjongWindowLayout.contentSize.height - size.height) / 2, width: size.width, height: size.height)
+        var pages: [NSBitmapImageRep] = []
+        for page in 0..<4 {
+            let bitmap = try mjBitmap(mjPanel(store, overlay: .firstTime(page: page, launch: page == 3 ? launch : nil)))
+            mjSave(bitmap, "first-time-\(page + 1)")
+            #expect(mjMaxDiff(bitmap, lobby, card) > 60, "\(page + 1)장이 안 그려졌다")
+            pages.append(bitmap)
+        }
+        for a in 0..<4 { for b in (a + 1)..<4 { #expect(mjMaxDiff(pages[a], pages[b], card) > 60, "\(a + 1)장과 \(b + 1)장이 같다") } }
+        // 첫 장 예시 손(123m456p789s11122z = 14장, 34×46)이 크림 덩어리로 선다.
+        #expect(mjCreamBlobs(pages[0], rect: card, minHeight: 80) == 14, "예시 손 패 수가 틀리다")
+        // [규칙] 탭에만 [처음이에요 다시 보기](오른쪽 아래) — 역 탭과 그 자리가 다르다.
+        let rules = try mjBitmap(mjPanel(store, overlay: .rules(.rules)))
+        let yaku = try mjBitmap(mjPanel(store, overlay: .rules(.yaku)))
+        let sheet = MahjongWindowLayout.rulesSize
+        let origin = CGPoint(x: (MahjongWindowLayout.contentSize.width - sheet.width) / 2,
+                             y: (MahjongWindowLayout.contentSize.height - sheet.height) / 2)
+        let reopen = CGRect(x: origin.x + sheet.width - 20 - 170, y: origin.y + sheet.height - 20 - 28, width: 170, height: 28)
+        #expect(mjInk(rules, reopen) > 300 && mjMaxDiff(rules, yaku, reopen) > 60, "[처음이에요 다시 보기]가 없다")
     }
 
     // MARK: ⑧ 배율 0.82
@@ -595,6 +627,11 @@ private func mjBitmap(_ view: some View) throws -> NSBitmapImageRep {
     return bitmap
 }
 
+/// 사람이 볼 PNG — `MAHJONG_RENDER_DIR` 을 줄 때만 그 폴더에 쓴다(주지 않으면 아무 데도 안 쓴다 — 임시 폴더에 쌓이지 않게).
 private func mjSave(_ bitmap: NSBitmapImageRep, _ name: String) {
-    MiniGameSnapshots.save(bitmap, name: "\(name).png", sub: "mahjong")
+    guard let dir = ProcessInfo.processInfo.environment["MAHJONG_RENDER_DIR"], !dir.isEmpty,
+          let png = bitmap.representation(using: .png, properties: [:]) else { return }
+    let folder = URL(fileURLWithPath: dir, isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    try? png.write(to: folder.appendingPathComponent("\(name).png"))
 }

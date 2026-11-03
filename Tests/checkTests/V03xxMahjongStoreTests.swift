@@ -482,7 +482,8 @@ struct V03xxMahjongStoreSceneTests {
         a.store.windowDidHide()
         await step.value
         #expect(a.count("ranking") == 0)
-        // 기준선.
+        // 기준선(지연 없는 서버).
+        server.set("mahjong_lobby", try MJFixture.text("mahjong_lobby__ok"))
         let b = mjDevice("vr04b", server: server)
         b.store.rankingEnabled = true
         b.store.windowDidShow()
@@ -529,7 +530,7 @@ struct V03xxMahjongStoreSceneTests {
         // state 도 같다 — 쓰기 전에 나간 더 새 seq 의 state(잔액 100)는 판은 넣되 잔액은 안 덮는다.
         server.enqueue("mahjong_state", try MJFixture.mutated("mahjong_state__their_turn") { top in
             mjEditState(&top) { $0["ruby_balance"] = 100 }
-        }, delay: 0.045)
+        }, delay: 0.03)
         let poll = Task { await a.store.refreshMatch(id: mjRoom) }
         await mjWait { a.count("state") == 1 }
         await a.store.discard(mjTile(129))
@@ -538,6 +539,21 @@ struct V03xxMahjongStoreSceneTests {
         // 기준선: 쓰기 뒤에 나간 로비는 덮는다.
         await a.store.refreshLobby()
         #expect(a.store.rubyBalance == 100)
+    }
+
+    @Test("나갔던 방에 다시 참가 — 접은 기록이 새 참가 응답을 막지 않는다 · 나간 방의 늦은 응답은 버린다", .gomokuDefaultsCleanup)
+    func rejoiningALeftRoomShowsIt() async throws {
+        // 없으면: 방에서 나간 뒤 같은 공개 방에 다시 들어가도 참가 응답이 버려져 방 화면이 안 선다.
+        let server = MJServer()
+        server.set("mahjong_leave", try MJFixture.text("mahjong_leave__ok_room"))
+        server.set("mahjong_join", try MJFixture.text("mahjong_join__ok"))
+        let b = mjDevice("rejoin", me: mjB, server: server)
+        b.store.applyState(try MJFixture.state("mahjong_state__room_four_b"))
+        await b.store.leaveRoom()
+        #expect(b.store.phase == .lobby && b.store.match == nil)
+        #expect(b.store.applyState(try MJFixture.state("mahjong_state__room_four_b")) == .ignored, "나간 방의 늦은 응답")
+        await b.store.join(roomID: UUID(uuidString: mjRoom)!)
+        #expect(b.store.phase == .room && b.store.ownsMatch(mjRoom))
     }
 }
 
@@ -632,8 +648,8 @@ struct V03xxMahjongStoreDecisionTests {
         server.enqueue("mahjong_act", try MJFixture.text("mahjong_act__ok"), delay: 30)
         server.set("mahjong_act", try MJFixture.text("mahjong_act__ok"))
         let a = mjDevice("deadline", server: server)
-        a.store.requestDeadlineFloor = 0.06
-        a.store.requestDeadlineCeiling = 0.06
+        a.store.requestDeadlineFloor = 0.04
+        a.store.requestDeadlineCeiling = 0.04
         a.store.applyState(try MJFixture.state("mahjong_start__ok"))
         let hung = Task { await a.store.discard(mjTile(129)) }
         await mjWait { a.count("act") == 1 }
@@ -649,8 +665,8 @@ struct V03xxMahjongStoreDecisionTests {
         // 마감 자체: 응답 없는 요청은 마감(0.3초)에 풀린다.
         server.enqueue("mahjong_act", try MJFixture.text("mahjong_act__ok"), delay: 30)
         let b = mjDevice("deadline-b", server: server)
-        b.store.requestDeadlineFloor = 0.05
-        b.store.requestDeadlineCeiling = 0.05
+        b.store.requestDeadlineFloor = 0.03
+        b.store.requestDeadlineCeiling = 0.03
         b.store.applyState(try MJFixture.state("mahjong_start__ok"))
         let started = Date()
         await b.store.discard(mjTile(129))

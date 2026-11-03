@@ -183,6 +183,8 @@ extension MahjongStore {
             default: break
             }
         }
+        // 나갔던 방에 다시 참가했다 — 그 방의 접은 기록을 지운다(안 지우면 새 참가 응답까지 가드 (a)가 버린다).
+        if response.status == .ok, action == .create || action == .join, let id { dismissedMatchIDs.remove(id) }
         if let state {
             applyState(state, requestedSince: 0, ticket: ticket, predatesWrite: false)
             if response.status == .ok, action == .leave, state.match?.matchStatus != .active, let id {

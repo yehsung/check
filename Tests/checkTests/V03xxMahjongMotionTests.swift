@@ -56,7 +56,9 @@ struct V03xxMahjongMotionTests {
         #expect(m.to == .init(compass: .bottom, area: .river) && m.startedAt == clock.now && m.handIndex == 0)
         store.applyState(try MJFixture.state("mahjong_state__call_prompt"))
         #expect(store.motion?.seq == 5 && store.motion?.from.compass == .right, "하가(1)의 버림은 오른쪽에서")
-        store.applyState(try MJFixture.state("mahjong_state__next_hand"))
+        // 다른 국(버림 사건 셋이 든 첫 적용) — 옛 국 움직임 그대로, 새로 만들지 않는다.
+        store.applyState(try MJFixture.state("mahjong_state__my_turn_hand2"))
         #expect(store.motion?.seq == 5, "다른 국 첫 적용은 새 움직임을 만들지 않는다")
+        #expect(store.motion?.applies(matchID: store.match?.match?.id, handIndex: store.match?.match?.handIndex) == false)
     }
 }

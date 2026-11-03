@@ -369,7 +369,10 @@ private enum MJWire {
     }
 
     static var migrationRequired: Bool { ProcessInfo.processInfo.environment["MAHJONG_REQUIRE_MIGRATION"] == "1" }
-    static var migrationTestsEnabled: Bool { tableSQL() != nil || migrationRequired }
+    /// 변수를 주었거나(파일이 없으면 빨강) 기본 자리에 판 파일이 있거나 REQUIRE 면 돈다 — 변수가 있으면 건너뜀 0.
+    static var migrationTestsEnabled: Bool {
+        tableSQL() != nil || migrationRequired || ProcessInfo.processInfo.environment["MAHJONG_TABLE_SQL"] != nil
+    }
 
     /// `v_<name>_keys … array['a','b',…]` 를 읽는다.
     static func sqlKeyArray(_ sql: String, name: String) -> Set<String>? {

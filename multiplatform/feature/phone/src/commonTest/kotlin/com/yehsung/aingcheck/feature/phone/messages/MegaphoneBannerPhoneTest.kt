@@ -1,6 +1,6 @@
 // 원본: Tests/CheckMobileKitTests/MegaphoneBannerPhoneTests.swift · MegaphoneBannerPhoneViewTests.swift(판정 · 배선 몫) @ f3360b47
 // 폰 배선: 메시지함 필터가 visibleHistory 한 자리에서 배지까지 · 옛 서버 기준선 · v2 없음 · 접두 경합 · 푸시 앞/뒤/눌러 들어옴 · 실시간 'megaphone' ·
-// 보낸 뒤 내 배너 · 로그아웃 · 미룸 규칙/배선 · 코어 상수 5초 뒤 스스로 닫힘 · 늦게 켜진 필터의 요약 v2 다시 받기.
+// 보낸 뒤 내 배너 · 로그아웃 · 미룸 규칙/배선 · 코어 상수 1분 뒤 스스로 닫힘 · 늦게 켜진 필터의 요약 v2 다시 받기.
 // 진짜 조립(PhoneAppModel)을 붙여 **스텁이 받은 요청**으로 잰다. 카드 단추([닫기] 하나)는 androidApp MegaphoneBannerCardTest 가 잰다.
 package com.yehsung.aingcheck.feature.phone.messages
 
@@ -73,7 +73,7 @@ class MegaphoneBannerPhoneTest {
             }
         }
         h.signIn()
-        // 타이머는 시험이 잰다 — advanceUntilIdle 이 5초 표시를 지나쳐 배너를 닫지 않게 손으로 돌리지 않는 타이머를 꽂는다.
+        // 타이머는 시험이 잰다 — advanceUntilIdle 이 1분 표시를 지나쳐 배너를 닫지 않게 손으로 돌리지 않는 타이머를 꽂는다.
         h.app.megaphoneBanner.schedule = { _, _ -> }
         return Rig(h, transport)
     }
@@ -292,8 +292,8 @@ class MegaphoneBannerPhoneTest {
         r.banner.schedule = { after, fire -> delays += after; fires += fire }
         r.banner.presentFromPush("g-5", senderName = "보낸이", body = "📢 곧 올라가요", senderID = peer)
         assertEquals("g-5", r.banner.current?.megaphoneID)
-        // 폰 배너의 보여 주는 시간은 맥과 한 벌인 코어 상수다(2026-10-30 사용자 결정 — 5초).
-        assertEquals(5.0, MegaphoneBannerRules.displaySeconds)
+        // 폰 배너의 보여 주는 시간은 맥과 한 벌인 코어 상수다(2026-11-02 사용자 결정 — 1분).
+        assertEquals(60.0, MegaphoneBannerRules.displaySeconds)
         assertEquals(listOf(MegaphoneBannerRules.displaySeconds), delays, "폰 배너가 코어 상수 말고 다른 시간을 센다")
         assertTrue(r.banner.current != null, "기준선: 시간이 오기 전에 배너가 사라졌다")
         fires.first()()

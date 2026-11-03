@@ -4,7 +4,7 @@
 // - 자리: 셸(SignedInTabs)의 탭 화면 위 한 곳. **상태바 아래**(statusBarsPadding — 상태바·카메라 구멍을 덮지 않는다) · 좌우 16dp.
 // - 모양: 둥근 카드(아바타 · 닉네임 · 📢 · 본문 4줄 · [닫기]). 단추는 [닫기] 하나뿐이다(2026-10-30 사용자 결정 — [답장]을 걷었다).
 // - 손: **카드에만** 손짓을 단다 — 카드 밖 터치는 그대로 아래 화면으로 지나간다(게임 캔버스 제스처를 먹지 않는다).
-//   누르고 있는 동안 보여 주는 시간(코어 MegaphoneBannerRules.displaySeconds — 5초) 타이머가 멈추고(pauseTimer), 놓으면 다시 센다(resumeTimer).
+//   누르고 있는 동안 보여 주는 시간(코어 MegaphoneBannerRules.displaySeconds — 1분) 타이머가 멈추고(pauseTimer), 놓으면 다시 센다(resumeTimer).
 //   위로 쓸거나(판정은 MegaphoneBannerPhoneRules) [닫기]를 누르면 닫힌다. 아무것도 안 하면 그 시간 뒤 스스로 올라간다.
 //   ★ 화면 읽기(TalkBack — AccessibilityManager.isTouchExplorationEnabled)가 켜져 있으면 저절로 올리지 않는다(코어 holdsAutoDismiss —
 //   5초 안에 본문을 다 못 듣는다). [닫기]로만 닫힌다. 켬·끔은 TouchExplorationStateChangeListener 로 다시 판단한다(DisposableEffect 로 걸고 푼다).

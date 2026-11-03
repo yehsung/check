@@ -87,7 +87,7 @@ class MegaphoneBannerCardTest {
         assertEquals("전제: 배너가 떴다", "mp-2", store.current?.megaphoneID)
         assertFalse("TalkBack 이 켜져 있는데 저절로 닫는 타이머가 걸렸다: $delays", MegaphoneBannerRules.displaySeconds in delays)
 
-        // 끄면(알림) 떠 있는 배너를 처음부터 5초 센다.
+        // 끄면(알림) 떠 있는 배너를 처음부터 1분 센다.
         shadowOf(manager).setTouchExplorationEnabled(false)
         compose.waitForIdle()
         assertFalse(store.holdsAutoDismiss())

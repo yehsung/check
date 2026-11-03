@@ -99,8 +99,14 @@ class MessagesFocusGateTest {
         advanceUntilIdle()
         assertEquals(1, r.sends())
         // 문구는 iOS 코어 문장 그대로 · 글은 입력칸으로 · 보내는 중 말풍선은 거둔다.
-        assertEquals(MessageNoticeText.senderFocused, r.store.sendNotices[peerA])
-        assertEquals("집중 모드에서는 메시지를 보낼 수 없어요. 맥에서 집중을 끄면 보낼 수 있어요", r.store.sendNotices[peerA])
+        // ★ 결과 문구 자리(sendNotices)에는 적지 않는다 — 켜짐을 들인 순간부터 focusBlock 이 같은 문장을 띄우고, 맥에서 끈 값을 받으면 그 줄과 함께
+        //   사라진다(아이폰 1.0.17 99bd480d · 검토 F1). 적어 두면 집중이 풀린 뒤에도 켜진 [보내기] 위에 "맥에서 집중을 끄면"이 남는다.
+        assertNull(r.store.sendNotices[peerA], "sender_focused 문구를 결과 문구 자리에 적었다(풀린 뒤에도 남는다)")
+        assertEquals(MessageNoticeText.senderFocused, MessagesComposerRules.noticeLine(r.store.focusBlock(peerA), r.store.sendNotices[peerA]))
+        assertEquals(
+            "집중 모드에서는 메시지를 보낼 수 없어요. 맥에서 집중을 끄면 보낼 수 있어요",
+            MessagesComposerRules.noticeLine(r.store.focusBlock(peerA), r.store.sendNotices[peerA]),
+        )
         assertEquals("안녕하세요", r.store.draft(peerA), "거절된 글이 입력칸으로 돌아오지 않았다")
         assertEquals(emptyList(), r.store.pendingOutgoing)
         // 기억: 다음 누름은 미리 막힌다(요청 0) — 글도 이모티콘도.
@@ -114,6 +120,43 @@ class MessagesFocusGateTest {
         assertEquals(1, r.sends(), "집중을 안 뒤에도 요청이 나갔다")
         assertEquals("안녕하세요", r.store.draft(peerA), "막힌 누름이 초안을 지웠다")
         assertEquals(MessageNoticeText.senderFocused, MessagesComposerRules.noticeLine(r.store.focusBlock(peerA), r.store.sendNotices[peerA]))
+        r.h.assertClean()
+    }
+
+    /**
+     * 검토 F1: 서버 거절(sender_focused)로 들인 내 집중을 맥에서 끄면 사유 줄도 함께 사라진다 — 대화를 닫았다 다시 열어 GET 이 false 를 받은 뒤
+     * [보내기]가 켜지고 그 위에 "맥에서 집중을 끄면"이 남지 않는다. 기준선: 끄기 전(GET true)에는 같은 줄이 그 문장이다.
+     */
+    @Test
+    fun senderFocusedSentenceLeavesWhenTheMacTurnsFocusOff() = runTest {
+        val r = rig { it.received("a1", peerA, 0, unread = false) }
+        r.server.sendReply = Reply.Json(senderFocusedReply)
+        r.store.appDidBecomeActive()
+        r.store.conversationDidAppear(peerA, "t1")
+        advanceUntilIdle()
+        r.store.setDraft("안녕하세요", peerA)
+        assertTrue(r.store.sendDraft(peerA, isComposing = false))
+        advanceUntilIdle()
+        assertEquals(true, r.store.myFocusMode)
+        // 기준선: 아직 켜짐 — 다시 열어도(GET true) 같은 문장이다.
+        r.focus.reply = Reply.Json("""[{"focus_mode":true}]""")
+        r.store.conversationDidDisappear("t1")
+        r.store.conversationDidAppear(peerA, "t2")
+        advanceUntilIdle()
+        assertEquals(MessageNoticeText.senderFocused, MessagesComposerRules.noticeLine(r.store.focusBlock(peerA), r.store.sendNotices[peerA]))
+        assertFalse(r.store.canSend(peerA))
+        // 맥에서 껐다 → 대화를 닫았다 다시 연다 → GET false.
+        r.focus.reply = Reply.Json("""[{"focus_mode":false}]""")
+        r.store.conversationDidDisappear("t2")
+        r.store.conversationDidAppear(peerA, "t3")
+        advanceUntilIdle()
+        assertEquals(false, r.store.myFocusMode)
+        assertNull(r.store.focusBlock(peerA))
+        assertTrue(r.store.canSend(peerA))
+        assertNull(
+            MessagesComposerRules.noticeLine(r.store.focusBlock(peerA), r.store.sendNotices[peerA]),
+            "집중을 끈 뒤에도 켜진 [보내기] 위에 옛 집중 문장이 남았다",
+        )
         r.h.assertClean()
     }
 

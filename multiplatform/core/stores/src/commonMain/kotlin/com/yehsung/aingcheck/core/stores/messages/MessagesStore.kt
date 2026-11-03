@@ -795,8 +795,14 @@ class MessagesStore(
                     //   ([MessagesFocusRules.focusedPeerIDs]). 메시지 명부만 다시 받으면 지금 탭이 쥔 옛 값이 이겨 칩·잠금이 다음 60초 틱까지 안 따라온다.
                     //   상대를 여기서 집중으로 찍지는 않는다([isPeerFocused] 주석).
                     refreshesNowDirectory = focusSendGate && refreshesDirectory
-                    // 내 집중으로 거절했다 — 이 폰은 몰랐다. 켜짐으로 들인다(문구는 위 notice 가 senderFocused 로 세운다).
-                    if (outcome == MessageSendOutcome.SenderFocused) adoptServerSenderFocused()
+                    // 내 집중으로 거절했다 — 이 폰은 몰랐다. 켜짐으로 들인다. 문구는 [sendNotices] 에 적지 않는다: 켜짐을 들인 순간부터 [focusBlock] 이
+                    // 같은 문장(MessageNoticeText.senderFocused)을 입력줄에 띄우고, 맥에서 끈 값을 받으면 그 줄과 함께 사라진다. 적어 두면 집중이 풀린 뒤에도
+                    // "맥에서 집중을 끄면 보낼 수 있어요"가 켜진 [보내기] 위에 남는다(아이폰 1.0.17 99bd480d · 검토 F1).
+                    // 게이트가 꺼진 조립은 위에서 Invalid 로 접혀 이 갈래에 오지 않는다.
+                    if (outcome == MessageSendOutcome.SenderFocused) {
+                        adoptServerSenderFocused()
+                        notice = null
+                    }
                     // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
                     if (succeeded) runtime.serverKnowsSendKey = response.messageId != null
                     // 확정 답 — 이 키·이 (상대, 본문)의 기억을 지운다.

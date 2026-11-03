@@ -126,6 +126,14 @@ package enum RealtimeLinkConstants {
     /// '모르는 이름' 갈래로 떨어져 **울릴 때마다 `take_pokes` 가 한 번씩 더** 나간다. 작업 판(`rummy_draft`)은 끌기마다
     /// 울리므로 테트리스만큼 잦다. payload 는 `{v, m, s}` 뿐이라 이름만 보고 재조회 한 번으로 갚는다.
     package static let rummyBroadcastEvent = "rummy"
+
+    /// 아잉 뒤집기(1:1 리버시 — 내부 이름 reversi) 신호의 브로드캐스트 이벤트 이름. 서버 `reversi__ring` 의
+    /// `realtime.send(…, 'reversi', poke_topic(…), true)` 와 **문자 그대로 같다**(FLIP/SPEC.md §1).
+    ///
+    /// 아잉 큐브 가지와 **같은 이유로** 따로 둔다: 이 이름이 없으면 아잉 뒤집기 초인종(신청·수락·거절·취소·착수·기권·정산)이
+    /// '모르는 이름' 갈래로 떨어져 **수마다 `take_pokes` 가 한 번씩 더** 나가고 소켓은 판 상태를 한 번도 당기지 않는다.
+    /// 옛 앱은 이 이름을 몰라 drain 으로 접는다 — 같은 계정의 옛 기기만 해당하고 서버는 수·상태가 바뀔 때만 울린다.
+    package static let reversiBroadcastEvent = "reversi"
     /// 확성기 배너 신호의 브로드캐스트 이벤트 이름(2026-10-30). 서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보내는
     /// `realtime.send({v:1, m:<megaphone_id>}, 'megaphone', poke_topic(…), true)` 와 **문자 그대로 같다**.
     /// payload 는 믿지 않고 "배너 목록(`megaphone_inbox`)을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 확성기 줄의
@@ -214,6 +222,9 @@ package enum RealtimeEffect: Equatable, Sendable {
     /// 아잉 큐브 신호('rummy')를 받았다 → 아잉 큐브 상태 재조회 1회(직렬화는 `RummyStore.handleSignal` 이 한다).
     /// **take_pokes 가 아니다** — 오목·체스·테트리스와 같은 사정이다. 폰은 판을 잇기 전까지 이 가지를 **비워 둔다**(drain 으로 안 떨어지게).
     case rummySignal
+    /// 아잉 뒤집기 신호('reversi')를 받았다 → 아잉 뒤집기 상태 재조회 1회(직렬화는 `ReversiStore.handleSignal` 이 한다).
+    /// **take_pokes 가 아니다** — 오목·체스·테트리스·아잉 큐브와 같은 사정이다. 폰은 판을 잇기 전까지 이 가지를 **비워 둔다**(drain 으로 안 떨어지게).
+    case reversiSignal
     /// 읽음 신호('message_read')를 받았다 → 메시지 활동 새로고침(요약 + 대화 패널이 보이면 이력) 1회.
     /// **take_pokes 가 아니다**(v0.3.30) — 읽음은 소비할 행을 만들지 않는다.
     case messageReadSignal
@@ -515,6 +526,10 @@ package struct RealtimeLink: Equatable, Sendable {
             // 붙어 있어야 하는 소스 계약 V0327 · V0360). 이 줄이 없으면 확성기 신호가 아래 기본값으로 떨어져 배너는 안 뜨고
             // take_pokes 만 한 번 더 나간다.
             if event == RealtimeLinkConstants.megaphoneBroadcastEvent { return [.megaphoneSignal] }
+            // 아잉 뒤집기도 같은 까닭으로 아잉 큐브 줄 **앞**에 선다 — 큐브·테트리스·오목·체스 네 줄과 drain 기본값이 한 문장으로
+            // 붙어 있어야 하는 소스 계약(V0369RummyWiringTests)을 지키기 위해서다. 이 줄이 없으면 수마다 아래 기본값으로 떨어져
+            // take_pokes 가 한 번씩 더 나가고 소켓은 아잉 뒤집기 상태를 한 번도 당기지 않는다.
+            if event == RealtimeLinkConstants.reversiBroadcastEvent { return [.reversiSignal] }
             // 테트리스(v0.3.60)는 오목 줄 **앞**에 선다 — 순서에 뜻이 있어서가 아니라 오목·체스 가지와 drain 기본값이 한 문장으로
             // 붙어 있어야 하는 소스 계약(V0327GomokuRealtimeTests)을 지키기 위해서다. 이 줄이 없으면 테트리스 초인종이 아래
             // 기본값으로 떨어져 **울릴 때마다 take_pokes 가 한 번씩 더** 나가고 소켓은 테트리스 상태를 한 번도 당기지 않는다.

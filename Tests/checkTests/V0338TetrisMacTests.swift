@@ -448,7 +448,8 @@ func theHeaderFitsInThreeHundredFortyFour() throws {
     print("[머리글] 시작 전 \(String(format: "%.1f", idle))pt · 판이 도는 중 \(String(format: "%.1f", busy))pt / \(budget)pt")
     #expect(busy > idle + 40, "판이 도는 중에도 [일시정지] 가 안 선다(\(busy) vs \(idle))")
 
-    // 사이드바 줄 여덟 개 — 자연 폭(이름을 한 줄로 다 그린 폭)이 줄 폭 안에 든다. 넘치면 `lineLimit(1)` 이 이름 끝을 "…" 로 자른다.
+    // 사이드바 줄 아홉 개(아잉 뒤집기 문이 더해졌다) — 자연 폭(이름을 한 줄로 다 그린 폭)이 줄 폭 안에 든다. 넘치면 `lineLimit(1)` 이
+    // 이름 끝을 "…" 로 자른다.
     let room = MiniGameWindowLayout.sidebarRowWidth
     var rows: [(String, Double)] = []
     for kind in MiniGameKind.macCases {
@@ -459,6 +460,8 @@ func theHeaderFitsInThreeHundredFortyFour() throws {
     rows.append((MiniGameChessEntryButton.title, try tmNaturalWidth(MiniGameChessEntryButton {})))
     rows.append((MiniGameTetrisDuelEntryButton.title, try tmNaturalWidth(MiniGameTetrisDuelEntryButton(hasInvite: true) {})))
     rows.append((MiniGameRummyEntryButton.title, try tmNaturalWidth(MiniGameRummyEntryButton {})))
+    // 아잉 뒤집기 문은 받은 신청 점까지 단 가장 넓은 꼴로 잰다(점이 이름 자리를 밀어낸다).
+    rows.append((MiniGameReversiEntryButton.title, try tmNaturalWidth(MiniGameReversiEntryButton(hasInvite: true) {})))
     for (title, width) in rows {
         print("[사이드바] \(title): \(String(format: "%.1f", width))pt / \(room)pt")
         #expect(width <= room, "사이드바 줄 '\(title)' 이 \(width)pt 라 \(room)pt 줄에서 이름이 잘린다")

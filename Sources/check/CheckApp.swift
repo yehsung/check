@@ -80,7 +80,10 @@ struct CheckApp: App {
             // 테트리스 폴링은 창이 보일 때만 돈다). 만료는 스토어 타이머가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
             hasTetrisInvite: appDelegate.store.tetris.visibleIncoming != nil,
             // v0.3.69: 받은 **아잉 큐브** 초대도 같은 점(테트리스와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
-            hasRummyInvite: appDelegate.store.rummy.hasIncomingInvite
+            hasRummyInvite: appDelegate.store.rummy.hasIncomingInvite,
+            // 받은 **아잉 뒤집기** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
+            // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
+            hasReversiInvite: appDelegate.store.reversi.visibleIncoming != nil
         )
     }
 }
@@ -205,6 +208,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireTetrisDuel()
         // 아잉 큐브(v0.3.69) — 테트리스와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireRummy()
+        // 아잉 뒤집기 — 큐브와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireReversi()
         // 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로. **오버레이 컨트롤러를 만든 뒤에** 잇는다: 배너는 캐릭터 패널 한 칸 위에
         // 서고, 대결 미룸(위 세 판의 단계)이 이미 배선돼 있어야 첫 확성기가 제자리에 뜬다.
         wireMegaphoneBanner()
@@ -366,6 +371,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CheckRummyWindowController.shared.configure(store: store.rummy, me: { [weak self] in
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
+        // 아잉 뒤집기 창도 같은 자리에서 배선한다 — 체스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다). 내 얼굴은
+        // `ReversiPlayerFace`(순위표의 내 줄을 가리려고 user id 를 함께 싣는다)로 읽는다.
+        CheckReversiWindowController.shared.configure(store: store.reversi, me: { [weak self] in
+            guard let self else { return ReversiPlayerFace.fallback }
+            return ReversiPlayerFace.me(from: self.store)
         }, safety: store)
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
@@ -559,6 +570,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 rummy.heartbeatNow()
             }
         }
+    }
+
+    /// 아잉 뒤집기(1:1 리버시)의 문들을 잇는다(실행당 1회). 체스와 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V03xxReversiWiringTests)이 줄마다 되묻는다.
+    ///   ① `rankingEnabled` · `spectatorFeaturesEnabled` — 순위·관전의 **주 스위치**(스토어는 폰과 공용이라 기본이 꺼짐).
+    ///   ② `presentWindow` — `openWindow(focusMatchID:)` 와 판 시작이 창을 띄우는 유일한 문.
+    ///   ③ `dismissWindow` — 로그아웃·계정 전환의 `reset()` 이 부르는 닫기 문(아래 감시자와 겹쳐도 멱등이다).
+    ///   ④ `requestAttention` — 판이 막 시작됐는데 앱이 뒤에 있을 때 주의를 끈다.
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 아잉 뒤집기를 아는 길**(받은 신청 · "내 차례예요" 말풍선).
+    ///      한 수 30초라 창을 닫아 둔 사람에게 이 길이 없으면 자동 착수 3번으로 **판돈을 잃는다**.
+    ///   ⑥ `onOpenReversi` — 그 말풍선을 눌렀을 때 그 판의 창.
+    /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 다른 1:1 게임과 같은 자리다.
+    private func wireReversi() {
+        let reversi = store.reversi
+        reversi.rankingEnabled = true
+        reversi.spectatorFeaturesEnabled = true
+        reversi.presentWindow = { CheckReversiWindowController.shared.show() }
+        reversi.dismissWindow = { CheckReversiWindowController.shared.close() }
+        reversi.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        reversi.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueReversiInvite(invite)
+        }
+        reversi.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueReversiAttention(attention)
+        }
+        overlayController?.onOpenReversi = { [weak self] matchID in
+            self?.store.reversi.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckReversiWindowController.shared.close()
+            self?.overlayController?.clearReversiInvites()
+        }.start()
     }
 
     /// 아잉 큐브 창을 닫는다(멱등 — 창이 아직 없으면 아무것도 안 한다). 창 컨트롤러의 공개 표면은 `configure`·`show` 뿐이라

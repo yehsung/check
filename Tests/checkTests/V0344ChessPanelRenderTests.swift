@@ -513,7 +513,7 @@ func theMiniGameHeaderShowsBothDuelEntries() throws {
     func sidebar(playing: Bool) throws -> NSBitmapImageRep {
         try cpBitmap(
             MiniGameSidebar(selected: .flappy, isPlaying: playing, isFrozen: false, invites: MiniGameDuelInvites(),
-                            onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {})
+                            onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {})
                 .frame(width: sidebarBox.width, height: sidebarBox.height)
                 .background(CheckTheme.background))
     }

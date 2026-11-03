@@ -423,7 +423,9 @@ private func avFetches(_ host: String) -> Int {
         // 0.3.60: 1:1 테트리스 창이 여섯 자리를 더했다(로비 상대 줄 · 받은 신청 · 순위 행 · 지금 대결 중 둘 · 대결 상대 카드).
         // 0.3.69: 아잉 큐브 창이 일곱 자리를 더했다(아래 `rummy` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다).
         // 2026-10-30: 확성기 배너 카드가 한 자리를 더했다(보낸 사람 얼굴). 31 + 7 + 1.
-        #expect(avatars.count == 39, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 아잉 뒤집기 창이 다섯 자리를 더했다(로비 상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청). 39 + 5 — 아래 `reversi` 필터가
+        // 자리마다 그 사람 id 와 착용값을 되묻는다.
+        #expect(avatars.count == 44, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -486,6 +488,25 @@ private func avFetches(_ host: String) -> Int {
         #expect(lobbyCode.contains("RummyTableChair(kind: .person, userID: myUserID, name: me.name,"))
         #expect(lobbyCode.contains("return RummyTableChair(kind: .person, userID: seat.userId, name: seat.displayName ?? \"?\","))
 
+        // 아잉 뒤집기 다섯 자리: 로비 상대 줄 · 순위 행 · 지금 대결 중(두 사람) · 받은 신청 카드. 44 만 올리면 한 자리가 남의 id 나
+        // 착용값 없이 그려도 초록이라, 자리마다 **그 사람의** id·착용값을 되묻는다.
+        let reversi = avatars.filter { $0.file.hasPrefix("Reversi") }
+        #expect(reversi.count == 5, "\(reversi.map(\.text))")
+        for call in reversi {
+            #expect(call.text.contains("characterHint:"), "아잉 뒤집기 \(call.text) 가 행의 착용값을 버린다")
+        }
+        let reversiIDs: [(String, String)] = [
+            ("userID: user.id,", "characterHint: user.characterID)"),
+            ("userID: entry.user.id,", "characterHint: entry.user.characterID)"),
+            ("userID: live.a.id,", "characterHint: live.a.characterID)"),
+            ("userID: live.b.id,", "characterHint: live.b.characterID)"),
+            ("userID: invite.peer.id,", "characterHint: invite.peer.characterID)"),
+        ]
+        for (id, hint) in reversiIDs {
+            #expect(reversi.contains { $0.file == "ReversiPanelLobby.swift" && $0.text.contains(id) && $0.text.contains(hint) },
+                    "ReversiPanelLobby.swift 에 \(id) · \(hint) 짝이 없다")
+        }
+
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")
         #expect(editable.count == 1 && editable.allSatisfy { $0.text.contains("userID: userID") }, "\(editable)")
@@ -532,8 +553,13 @@ private func avFetches(_ host: String) -> Int {
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
         #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
-                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
+                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1", "RummyPanel.swift:1",
+                          "TetrisDuelPanel.swift:1"],
                 "\(roots)")
+        // 아잉 뒤집기 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·순위·신청의 남의 얼굴이 이니셜로 떨어진다).
+        #expect(sources["ReversiPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckReversiWindow.swift"]?.contains("ReversiPanel(store: reversi, me: me, safety: safety)") == true)
+        #expect(sources["CheckApp.swift"]?.contains("CheckReversiWindowController.shared.configure(store: store.reversi, me:") == true)
         // 아잉 큐브 창(v0.3.69)도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 탁자·결과의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["RummyPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
         #expect(sources["CheckRummyWindow.swift"]?.contains("RummyPanel(store: rummy, me: me, safety: safety)") == true)

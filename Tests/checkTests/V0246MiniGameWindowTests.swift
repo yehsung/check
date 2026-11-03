@@ -300,7 +300,7 @@ func windowLayoutIsAFixedTwoColumnConstantTable() {
     #expect(MiniGameWindowLayout.gameColumnOrigin == CGPoint(x: MiniGameWindowLayout.sidebarWidth + 14, y: 14))
     // 사이드바 두 묶음(혼자 넷 + 같이 넷)이 안쪽 높이 안에 든다 — 게임이 또 늘면 여기서 먼저 빨개진다(그때 줄 높이·창 높이를 다시 재라).
     let sidebar = MiniGameWindowLayout.sidebarContentHeight
-    #expect(sidebar == 420, "사이드바 세로 합이 \(sidebar) 다")
+    #expect(sidebar == 434, "사이드바 세로 합이 \(sidebar) 다") // 임시(대표 시안 결정 전) — FLIP/SPEC.md §5.8 (같이 하기 다섯 · 줄 40/2)
     #expect(sidebar <= inner.height, "사이드바 \(sidebar) 가 안쪽 높이 \(inner.height) 를 넘는다 — 아래 문이 창 밖으로 잘린다")
     #expect(MiniGameWindowLayout.sidebarDuelGroupRect.maxY <= MiniGameWindowLayout.contentSize.height - MiniGameWindowLayout.contentPadding)
     // 크게: 옛 칩(26pt 캡슐 · caption2 아이콘)보다 줄과 아이콘이 확실히 크다(사용자 요구 "좀 더 크게").

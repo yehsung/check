@@ -257,6 +257,17 @@ final class CheckOverlayController {
     private(set) var pendingRummyAttention: String?
     private var rummyAttentionTask: Task<Void, Never>?
     private(set) var shownRummyAttention: (text: String, matchID: UUID?)?
+    /// 아잉 뒤집기(1:1 리버시)의 같은 일곱 칸. 체스와 형제다 — 다른 것은 문구(`ReversiText`)와 여는 창, 그리고 받은 신청이
+    /// **여러 건**일 수 있어 살아 있음 판정이 테트리스처럼 목록 전체(`visibleIncomingInvites`)를 본다는 것이다.
+    /// 한 수 30초라 창을 닫아 둔 사람에게 "내 차례" 말풍선이 없으면 자동 착수 3번으로 **판돈을 잃는다**.
+    private(set) var reversiInviteQueue: [ReversiInvite] = []
+    private var reversiDrainTask: Task<Void, Never>?
+    private(set) var shownReversiInvite: (text: String, matchID: String)?
+    /// 아잉 뒤집기 말풍선을 눌렀을 때 열 곳(인자 = 판 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenReversi: ((String) -> Void)?
+    private(set) var pendingReversiAttention: ReversiAttention?
+    private var reversiAttentionTask: Task<Void, Never>?
+    private(set) var shownReversiAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -844,6 +855,8 @@ final class CheckOverlayController {
         if let rect = tetrisInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 아잉 큐브 말풍선(v0.3.69)도 같은 이유로 몸체로 쳐 준다.
         if let rect = rummyInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 아잉 뒤집기 말풍선도 같은 이유로 몸체로 쳐 준다.
+        if let rect = reversiInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -983,6 +996,10 @@ final class CheckOverlayController {
         }
         if let rect = rummyInviteBubbleScreenRect(), rect.contains(location), let target = rummyBubbleTarget() {
             onOpenRummy?(target.matchID)
+            return
+        }
+        if let rect = reversiInviteBubbleScreenRect(), rect.contains(location), let matchID = reversiBubbleMatchID() {
+            onOpenReversi?(matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -1834,6 +1851,125 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.rummyAttentionTask = nil
+        }
+    }
+
+    // MARK: - 아잉 뒤집기 말풍선 (1:1 리버시 — 체스 네 묶음의 형제)
+    //
+    // ★ 아잉 뒤집기 폴링도 `isWindowVisible` 을 요구하고 창을 여는 길은 미니게임 창 사이드바 하나뿐이다. 받은 신청의 TTL 은 60초이고
+    //   푸시가 없다(DECISIONS) — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 신청을 아는 세 표면이다. 한 수 30초라 차례 말풍선이 없으면
+    //   창을 닫아 둔 사람은 자동 착수 3번으로 판돈을 잃는다.
+    // 문구 글자는 여기 쓰지 않는다 — 맥 문구 집 `ReversiText`(ReversiPanelBanner.swift) 한 곳이다(같은 사실은 한 문구).
+
+    /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 판 id 는 한 번만). `ReversiStore.onInviteArrived` 가 부른다.
+    func enqueueReversiInvite(_ invite: ReversiInvite) {
+        guard !reversiInviteQueue.contains(where: { $0.id == invite.id }) else { return }
+        reversiInviteQueue.append(invite)
+        drainReversiInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearReversiInvites() {
+        reversiInviteQueue.removeAll()
+        shownReversiInvite = nil
+        pendingReversiAttention = nil
+        shownReversiAttention = nil
+    }
+
+    /// 큐 맨 앞 신청 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 살아 있음은 **목록 전체**로 본다(테트리스형) — 받은 신청이 여러 건일 수 있어서, 체스처럼 첫 건 하나와만 대조하면
+    /// 둘째 신청부터 큐에서 조용히 지워진다.
+    @discardableResult
+    func showNextReversiInviteBubble(now: Date = Date()) -> Bool {
+        let alive = Set(store.reversi.visibleIncomingInvites.map(\.id))
+        reversiInviteQueue.removeAll { $0.expiresAt <= now || !alive.contains($0.id) }
+        guard let invite = reversiInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = ReversiText.bubbleText(name: invite.peer.displayName, stake: invite.stake)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownReversiInvite = (text, invite.id)
+        reversiInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainReversiInvitesIfNeeded() {
+        guard reversiDrainTask == nil, !reversiInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        reversiDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.reversiInviteQueue.isEmpty else { break }
+                self.showNextReversiInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.reversiDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 아잉 뒤집기 신청 펌프가 돌고 있는가.
+    var isDrainingReversiInvites: Bool { reversiDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 아잉 뒤집기 말풍선(신청·차례)의 화면 사각형(아니면 nil).
+    func reversiInviteBubbleScreenRect() -> NSRect? {
+        guard reversiBubbleMatchID() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 아잉 뒤집기 말풍선이 열 판 id. 문구와 id 를 **함께** 본다.
+    func reversiBubbleMatchID() -> String? {
+        guard onOpenReversi != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownReversiAttention, shown.text == text { return shown.matchID }
+        if let shown = shownReversiInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    /// 차례 알림을 넣고 펌프를 돌린다. `ReversiStore.onAttention` 이 부른다.
+    func enqueueReversiAttention(_ attention: ReversiAttention) {
+        pendingReversiAttention = attention
+        drainReversiAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingReversiAttentionBubble() -> Bool {
+        guard let attention = pendingReversiAttention else { return false }
+        guard Self.reversiAttentionIsCurrent(attention, in: store.reversi) else {
+            pendingReversiAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = ReversiText.attentionText(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownReversiAttention = (text, attention.matchID)
+        pendingReversiAttention = nil
+        return true
+    }
+
+    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 떠 있으면 거짓이다(화면이 이미 말한다).
+    /// 수 번호(`moveCount`)까지 같아야 한다 — 두 수 전의 "내 차례예요"는 거짓이다.
+    static func reversiAttentionIsCurrent(_ attention: ReversiAttention, in reversi: ReversiStore) -> Bool {
+        guard !reversi.isWindowVisible, let match = reversi.match else { return false }
+        return match.id == attention.matchID && match.isMyTurn && attention.moveCount == match.moveCount
+    }
+
+    func drainReversiAttentionIfNeeded() {
+        guard reversiAttentionTask == nil, pendingReversiAttention != nil else { return }
+        let tick = messageBubbleSleep
+        reversiAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingReversiAttention != nil else { break }
+                self.showPendingReversiAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.reversiAttentionTask = nil
         }
     }
 

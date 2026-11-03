@@ -1084,10 +1084,15 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(count("refreshAchievements(reason: .gameResult)") == 2 && count("refreshAchievements(reason: .missionPanel)") == 1,
                 "게임 결과 박자(문 1 + 뒤따르는 한 번 1) · 막힌 일일 받기(1) 자리가 바뀌었다")
         // v0.3.69: 아잉 큐브 판 끝남이 넷째 1:1 자리다(2~4인이지만 같은 문 — 일일 미션 키 `daily_rummy`).
-        #expect(count("refreshAchievementsAfterGameResult(game:") == 6,
-                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 1:1 판 끝남 4(오목·체스·테트리스·아잉 큐브) 가 아니다")
+        // 아잉 뒤집기 판 끝남이 다섯째다(일일 미션 키 `daily_reversi`). 새 타이머가 아니라 같은 이벤트 문이다.
+        #expect(count("refreshAchievementsAfterGameResult(game:") == 7,
+                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 1:1 판 끝남 5(오목·체스·테트리스·아잉 큐브·아잉 뒤집기) 가 아니다")
         #expect(count("rummy.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: \"rummy\") }") == 1,
                 "아잉 큐브 판 끝남 자리가 오목·체스·테트리스와 같은 모양(약한 self · 게임 이름 rummy)이 아니다")
+        #expect(count("reversi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: \"reversi\") }") == 1,
+                "아잉 뒤집기 판 끝남 자리가 다른 1:1 게임과 같은 모양(약한 self · 게임 이름 reversi)이 아니다")
+        // 게임 이름이 일일 미션 키의 꼬리다 — 이미 채운 줄이면 묻지 않는 가드가 이 키로 찾는다(서버 `daily_reversi`).
+        #expect(DailyMissionStatus.key(game: "reversi") == "daily_reversi")
         // 스토어가 묻는 시점: **끝난 판 state 를 처음 받은 순간 한 번**(판 id 로 막는다) — 결과 접기·의도적 이탈·다시 그리기로
         // 또 울리지 않는다. 울리는 자리는 코어 한 곳뿐이고 타이머가 없다.
         let rummyCore = V0317ShopTests.stripped(try String(contentsOf: URL(fileURLWithPath: #filePath)

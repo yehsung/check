@@ -20,7 +20,7 @@ import CheckCore
 // v0.3.69 에 **게임 고르기가 위쪽 칩 줄에서 왼쪽 사이드바로** 옮겨 갔다(사용자 요구 2026-10-30: "미니게임이 너무 많아져서
 // 미니게임 창을 살짝 개편해야될거 같아. 아예 위가 아니라 게임창 왼쪽편에 미니게임들이 좀 더 크게 뜨면 좋을듯").
 // 혼자 게임 넷 + 대결 문 넷이 344pt 머리글 한 줄을 다투느라 고른 칩만 이름을 달고 나머지는 12pt 아이콘이었다.
-// 사이드바(`MiniGameSidebar`)는 여덟 줄 전부에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
+// 사이드바(`MiniGameSidebar`)는 줄 전부(아잉 뒤집기가 더해져 아홉)에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
 // 창이 사이드바 폭만큼 왼쪽으로 늘었을 뿐이다.
 
 /// 미니게임 창의 **고정** 레이아웃(캔버스 · 순위 열 · 무스크롤 행수). 순수 상수 — 결정적 검증 지점.
@@ -66,13 +66,14 @@ enum MiniGameWindowLayout {
     static let sidebarGroupTitleSpacing: CGFloat = 6
     /// 두 묶음 사이.
     static let sidebarGroupSpacing: CGFloat = 16
-    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다).
-    static let sidebarRowHeight: CGFloat = 42
-    static let sidebarRowSpacing: CGFloat = 4
+    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다). 같이 하기 다섯째 줄(아잉 뒤집기)이 들어오며 42·4 로는 466 > 안쪽 442 라
+    /// 줄을 눌러 담는다(434). 대표가 시안(창 높이 · 같이 하기 허브 · 스크롤)을 고르면 바뀐다.
+    static let sidebarRowHeight: CGFloat = 40 // 임시(대표 시안 결정 전) — FLIP/SPEC.md §5.8
+    static let sidebarRowSpacing: CGFloat = 2 // 임시(대표 시안 결정 전) — FLIP/SPEC.md §5.8
     /// 줄 왼쪽 아이콘 타일 한 변(옛 칩 아이콘은 caption2 ≈ 12pt 였다).
     static let sidebarIconSize: CGFloat = 30
-    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브).
-    static let sidebarDuelRows = 4
+    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브 · 아잉 뒤집기).
+    static let sidebarDuelRows = 5
 
     /// 한 묶음 세로(머리 + 줄들).
     static func sidebarGroupHeight(rows: Int) -> CGFloat {
@@ -433,6 +434,8 @@ enum MiniGameSpaceKey {
     /// 키보드로도 눌린다(전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 [완료]를
     /// 스페이스로 누를 때 게임이 삼킨다 — 60초 차례에서 그 한 번이 시간 초과 벌칙이 된다.
     /// v0.3.66: 생일 축하 창이 더해져 **여섯**이다. 글을 받지 않지만 두 초상 · [이걸로 받을게요] · [지금 입기] 가 키보드로도 눌린다(뽑기 창과 같은 이유).
+    /// 아잉 뒤집기 창이 더해져 **여덟**이다. 판은 클릭이지만 [기권]·[로비로]·판돈 창·규칙 창 단추가 키보드로도 눌린다(전체 키보드 접근).
+    /// 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
@@ -440,7 +443,8 @@ enum MiniGameSpaceKey {
          CheckGachaWindowController.frameAutosaveName,
          CheckTetrisDuelWindowController.frameAutosaveName,
          CheckCakeGiftWindowController.frameAutosaveName,
-         CheckRummyWindowController.frameAutosaveName]
+         CheckRummyWindowController.frameAutosaveName,
+         CheckReversiWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -758,7 +762,7 @@ struct CheckMiniGameWindowView: View {
         )
     }
 
-    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 넷(각자 넓은 창을 연다).
+    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 다섯(각자 넓은 창을 연다 — 다섯째는 아잉 뒤집기).
     private var gameSidebar: some View {
         MiniGameSidebar(
             selected: store.miniGameKind,
@@ -769,7 +773,8 @@ struct CheckMiniGameWindowView: View {
             onGomoku: { store.openGomokuFromMiniGame() },
             onChess: { store.openChessFromMiniGame() },
             onTetrisDuel: { store.openTetrisDuelFromMiniGame() },
-            onRummy: { store.openRummyFromMiniGame() }
+            onRummy: { store.openRummyFromMiniGame() },
+            onReversi: { store.openReversiFromMiniGame() }
         )
     }
 
@@ -1464,7 +1469,7 @@ struct MiniGameGameHeader: View {
     }
 }
 
-/// 대결 문 넷의 '받은 신청' 점(v0.3.69). 값은 **메뉴바 점과 같은 네 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
+/// 대결 문의 '받은 신청' 점(v0.3.69 — 넷, 아잉 뒤집기가 더해져 다섯). 값은 **메뉴바 점과 같은 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
 /// hasTetrisInvite · hasRummyInvite 와 같은 식) — 새 조회를 하지 않고, 스토어가 이미 들고 있는 것을 읽기만 한다.
 ///
 /// 이 창에서 점이 필요한 이유: 대결 창을 여는 길이 이 사이드바다. 신청이 와 있는데 문이 아무 말도 안 하면 메뉴바 점을 보고
@@ -1474,12 +1479,15 @@ struct MiniGameDuelInvites: Equatable {
     var chess = false
     var tetris = false
     var rummy = false
+    var reversi = false
 
-    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false) {
+    /// 새 문의 칸은 **맨 뒤**에 기본값과 함께 붙인다 — 기존 호출(`MiniGameDuelInvites(tetris: true)` 등)이 한 글자도 안 바뀐다.
+    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false) {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
         self.rummy = rummy
+        self.reversi = reversi
     }
 
     @MainActor
@@ -1488,7 +1496,8 @@ struct MiniGameDuelInvites: Equatable {
             gomoku: !store.gomoku.pendingIncomingInvites.isEmpty,
             chess: store.chess.visibleIncoming != nil,
             tetris: store.tetris.visibleIncoming != nil,
-            rummy: store.rummy.hasIncomingInvite
+            rummy: store.rummy.hasIncomingInvite,
+            reversi: store.reversi.visibleIncoming != nil
         )
     }
 }
@@ -1520,6 +1529,7 @@ struct MiniGameSidebar: View {
     let onChess: () -> Void
     let onTetrisDuel: () -> Void
     let onRummy: () -> Void
+    let onReversi: () -> Void
 
     /// 대결 문이 열려 있는가(위 잠금 규칙).
     private var doorsOpen: Bool { !isPlaying || isFrozen }
@@ -1544,6 +1554,7 @@ struct MiniGameSidebar: View {
                 MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }
                 MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
                 MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
+                MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() }
             }
             .disabled(!doorsOpen)
             Spacer(minLength: 0)
@@ -1751,6 +1762,21 @@ struct MiniGameRummyEntryButton: View {
 
     var body: some View {
         MiniGameSidebarRow(title: Self.title, icon: RummyEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
+    }
+}
+
+/// 사이드바의 [아잉 뒤집기] 문(1:1 리버시). 이름·도움말 글자는 맥 문구 집 `ReversiText` 한 곳에서 온다(큐브 문이
+/// `RummyInviteText.gameName` 을 쓰는 것과 같은 방식). 렌더 테스트가 단독으로 그린다(internal).
+struct MiniGameReversiEntryButton: View {
+    static let title = ReversiText.gameName
+    static let help = ReversiText.sidebarHelp
+
+    var hasInvite: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        MiniGameSidebarRow(title: Self.title, icon: ReversiEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
                            hasInvite: hasInvite, help: Self.help, action: action)
     }
 }

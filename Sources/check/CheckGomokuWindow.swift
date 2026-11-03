@@ -336,7 +336,7 @@ final class CheckGomokuWindowController: NSObject, NSWindowDelegate {
         if isOpen { notifyVisibility(true) }
     }
 
-    /// 가림 상태가 바뀌었다 — 다른 창에 완전히 가려짐 · 다른 Space · 화면 잠금. 스토어에 **폴링만** 멈추라고 알린다
+    /// 가림 상태가 바뀌었다 — 다른 창에 완전히 가려짐 · 다른 Space · 화면 잠금. 스토어에 폴링을 멈추고 **말풍선 문을 열라고** 알린다
     /// (`isWindowVisible` 과 시계 잎 뷰는 그대로다 — 가림 통지가 틀려도 보이는 창의 시계가 멈추면 안 된다).
     /// 대국 중 가려진 동안에도 실시간 신호로는 판을 다시 읽으므로 수를 놓치지 않는다.
     func windowDidChangeOcclusionState(_ notification: Notification) {

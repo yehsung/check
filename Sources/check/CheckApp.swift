@@ -410,7 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gomoku.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
-        // 창이 안 보이는 동안 내 차례가 왔다 → 캐릭터 말풍선("○○님이 뒀어요 · 내 차례예요"). 누르면 위 onOpenGomoku 로 창이 열린다.
+        // 창이 안 보이거나 가려진 동안 내 차례가 왔다 → 캐릭터 말풍선("○○님이 뒀어요 · 내 차례예요"). 누르면 위 onOpenGomoku 로 창이 열린다.
         gomoku.onAttention = { [weak self] attention in
             self?.overlayController?.enqueueGomokuAttention(attention)
         }

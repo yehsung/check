@@ -934,9 +934,12 @@ package final class GomokuStore {
 
     /// 창이 실제로 보이기 시작했다(컨트롤러가 부른다). 폴링 시작·로비/인박스 재조회.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다**. 창이 정말 앞으로 오면
+        // 가림 통지(visible)가 와서 풀고, 못 오면(다른 전체 화면 앱 위로 못 올라옴) 가린 채로 남아야 시작 · 차례 말풍선이 산다.
+        // 숨겼다가 다시 여는 길은 `windowDidHide` 가 이미 지웠으므로(아래 그대로) 낡은 가림 기록이 폴링을 막지 않는다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다. 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다(가려지면 통지가 다시 온다).
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }
@@ -986,7 +989,8 @@ package final class GomokuStore {
         if match?.isFinished == true { foldFinishedMatch() }
     }
 
-    /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
+    /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). 폴링을 멈추고 되살린다 — 가려진 동안은 말풍선 문도 열린다
+    /// (`applyState` 의 `windowWasVisible` · 오버레이 `gomokuAttentionIsCurrent` 가 이 값을 본다).
     /// `isWindowVisible` 은 건드리지 않는다 — 가림 통지가 틀려도 보이는 창의 시계가 멈추면 안 된다.
     /// 실시간 신호(handleSignal)는 이 값과 무관하게 계속 받는다.
     package func windowOcclusionDidChange(visible: Bool) {

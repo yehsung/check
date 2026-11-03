@@ -289,7 +289,7 @@ final class CheckTetrisDuelWindowController: NSObject, NSWindowDelegate {
         if isOpen { notifyVisibility(true) }
     }
 
-    /// 가림 — 스토어에 **폴링만** 멈추라고 알린다(판은 흐른다 · `isWindowVisible` 은 그대로).
+    /// 가림 — 스토어에 폴링을 멈추고 **시작 말풍선 문을 열라고** 알린다(판은 흐른다 · `isWindowVisible` 은 그대로).
     func windowDidChangeOcclusionState(_ notification: Notification) {
         guard let window = notification.object as? NSWindow, window === windowStorage else { return }
         applyOcclusion(visible: window.occlusionState.contains(.visible))

@@ -891,9 +891,12 @@ package final class ChessStore {
 
     /// 창이 실제로 보이기 시작했다. 폴링 시작 · 로비 재조회 · AI 시계 재개.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다** — 오목과 같은 규칙.
+        // 창이 정말 앞으로 오면 가림 통지(visible)가 풀고, 못 오면 가린 채로 남아야 말풍선이 산다. 숨겼다 다시 여는 길은
+        // `windowDidHide` 가 이미 지웠다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다 — 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다.
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }

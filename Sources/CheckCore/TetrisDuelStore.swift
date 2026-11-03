@@ -683,8 +683,11 @@ package final class TetrisDuelStore {
 
     /// 창이 실제로 보이기 시작했다. 폴링 시작 · 로비 재조회 · **준비 보고의 문이 열린다**(머리말 ⑨).
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다** — 오목과 같은 규칙.
+        // 창이 정말 앞으로 오면 가림 통지(visible)가 풀고, 못 오면 가린 채로 남아야 시작 말풍선이 산다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         startPolling()
         // 준비를 기다리던 판이면 지금 곧바로 낸다(다음 판 루프 걸음을 기다리지 않는다).
         if duel != nil { tick() }
@@ -718,7 +721,7 @@ package final class TetrisDuelStore {
         foldFinishedMatch()
     }
 
-    /// 창의 가림 상태가 바뀌었다. **폴링만** 멈추고 되살린다 — `isWindowVisible` 은 건드리지 않는다.
+    /// 창의 가림 상태가 바뀌었다. 폴링을 멈추고 되살린다(가려진 동안은 시작 말풍선 문도 열린다) — `isWindowVisible` 은 건드리지 않는다.
     package func windowOcclusionDidChange(visible: Bool) {
         isWindowOccluded = !visible
         if visible {

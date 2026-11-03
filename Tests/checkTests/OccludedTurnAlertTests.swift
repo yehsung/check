@@ -9,7 +9,7 @@ import Testing
 // 폴링을 멈추지만 `isWindowVisible` 은 true 로 남는다. 상대 수가 초인종으로 와 `applyState` 가 내 차례를 세워도
 // 말풍선 문(`noteMatchProgress` · `noteMatchStarted` 의 `guard !windowWasVisible`)이 막혀 캐릭터 말풍선이 안 운다 —
 // 30초 + 유예 뒤 서버 자동 착수, 세 번 연속이면 abandoned 패로 판돈을 잃는다(테트리스는 시작을 모른 채 준비 30초가 지나간다).
-// 맥 오버레이 펌프의 순수 판정(`*AttentionIsCurrent`)도 같은 `guard !isWindowVisible` 이라, 말풍선이 떠도 곧바로 거짓이 되어 걷혔다.
+// 맥 오버레이 펌프의 순수 판정(`*AttentionIsCurrent`)도 같은 `guard !isWindowVisible` 이라, 대기 알림이 띄우기 전에 버려졌다.
 // 아잉 뒤집기(feat/aing-flip de10fd71 V2-01)에서 적대 검증으로 찾았고 같은 틀을 쓰는 세 게임에 남아 있었다.
 //
 // 갈래마다 셋이 짝이다: (a) 기준선 — 창이 안 보이면 알림이 있다 · (b) 결함 — 창이 보이는데 가려졌으면 알림이 있어야 한다 ·

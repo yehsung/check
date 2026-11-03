@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
+import com.yehsung.aingcheck.core.rules.text.ChatMarkdown
 import com.yehsung.aingcheck.core.rules.text.BlockReportRules
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
@@ -203,8 +204,9 @@ fun MessagesReportSheet(
             )
             target.messageBody?.let { body ->
                 // 이모티콘은 이름으로 읽힌다("아잉이 기쁨") — 날것 토큰은 신고하려는 사람에게 "깨진 메시지"로 보인다. 서버로 가는 것은 id 다.
+                // 판 7(폰만 — store.chatMarkdown): 서식 기호(`## ` · `**` · `[글](주소)`)도 벗긴다(맥 신고 인용 · 아이폰 1.0.17 과 같은 plainPreview — 이모티콘 규칙이 먼저다).
                 Text(
-                    AingStickerText.preview(body), style = MaterialTheme.typography.bodyMedium, color = colors.label, maxLines = 3,
+                    if (store.chatMarkdown) ChatMarkdown.plainPreview(body) else AingStickerText.preview(body), style = MaterialTheme.typography.bodyMedium, color = colors.label, maxLines = 3,
                     modifier = Modifier.fillMaxWidth().background(colors.bubbleIn, RoundedCornerShape(AingDimens.innerRadius)).padding(AingDimens.cardPadding),
                 )
             }

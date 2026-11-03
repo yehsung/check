@@ -446,6 +446,46 @@ struct ChatMarkdownParserTests {
         }
     }
 
+    /// 호스트를 **퍼센트 인코딩한** 주소는 링크가 아니다(2026-11-03 폰 1.0.17 검토 critical·major). 원문이 ASCII 라 첫 관문을 지나는데,
+    /// 꼬리표가 인코딩을 풀어 키릴 닮은꼴(`nаver.com`)을 진짜처럼 보였고, 맨 주소는 꼬리표 없이 `naver.com.evil.com` 을 열었다.
+    /// 기준선: 경로 · 질의의 퍼센트 인코딩(브라우저에서 복사한 한글 경로)은 그대로 링크다 — 결과가 다르다.
+    @Test func 호스트를_퍼센트_인코딩한_주소는_링크가_아니다() {
+        let disguised = [
+            "[naver.com](https://n%D0%B0ver.com)", "[apple.com](https://%D0%B0pple.com/login)",
+            "[애플 로그인](https://%D0%B0%D1%80%D1%80%D3%8F%D0%B5.com/id)",
+            "확인 https://naver.com%2E%65%76%69%6C%2E%63%6F%6D/login", "https://naver.com%2Eevil.com",
+            "https://%D0%B0pple.com/login", "**https://naver.com%2Eevil.com**",
+        ]
+        for body in disguised {
+            let spans = ChatMarkdown.parse(body).flatMap(\.spans)
+            #expect(spans.allSatisfy { $0.link == nil }, "\"\(body)\" 가 링크가 됐다: \(spans.compactMap(\.link))")
+            if !body.hasPrefix("**") { #expect(cmVisible(body) == body, "\"\(body)\" 의 글자가 바뀌었다: \(cmVisible(body))") }
+        }
+        // 여는 문의 두 번째 검사도 막는다(붙여넣은 서식 등 해석 밖의 길).
+        for raw in ["https://n%D0%B0ver.com", "https://%D0%B0pple.com/login", "https://%D0%B0%D1%80%D1%80%D3%8F%D0%B5.com/id",
+                    "https://naver.com%2E%65%76%69%6C%2E%63%6F%6D/login", "https://naver.com%2Eevil.com"] {
+            let url = URL(string: raw)!
+            #expect(url.host(percentEncoded: true)?.contains("%") == true, "전제: \(raw) 의 호스트가 인코딩돼 있지 않다")
+            #expect(!ChatMarkdown.isOpenable(url), "\(raw) 를 열 수 있다고 한다")
+            // 꼬리표도 풀지 않는다(두 겹) — 풀면 키릴 문자가 진짜 도메인처럼 찍힌다.
+            let shown = ChatMarkdown.disclosedHost(label: "다른 글", url: url) ?? ""
+            let asciiOnly = shown.unicodeScalars.allSatisfy { $0.isASCII }
+            #expect(asciiOnly, "\(raw) 꼬리표가 인코딩을 풀었다: \(shown)")
+        }
+        // 기준선: 경로 · 질의의 인코딩은 링크다.
+        let table: [(String, [CMRun])] = [
+            ("https://ko.wikipedia.org/wiki/%ED%95%9C%EA%B8%80",
+             [("https://ko.wikipedia.org/wiki/%ED%95%9C%EA%B8%80", false, "https://ko.wikipedia.org/wiki/%ED%95%9C%EA%B8%80")]),
+            ("[문서](https://a.com/%ED%95%9C?q=%20)", [("문서", false, "https://a.com/%ED%95%9C?q=%20")]),
+            ("https://naver.com", [("https://naver.com", false, "https://naver.com")]),
+        ]
+        for (body, expected) in table {
+            let runs = cmInline(body)
+            #expect(cmSame(runs, expected), "\"\(body)\" → \(cmDescribe(runs)) · 기대 \(cmDescribe(expected))")
+        }
+        #expect(ChatMarkdown.isOpenable(URL(string: "https://ko.wikipedia.org/wiki/%ED%95%9C")!))
+    }
+
     /// 여는 `**` 가 링크 **앞**에 있어도 닫는 짝을 주소 안에서 찾지 않는다(2026-11-03 검토 nit — 머리 주석 "링크가 굵게보다 먼저").
     /// 첫 판은 `**a [글](https://x.com/**) b**` 의 닫는 짝을 주소 안의 `**` 로 잡아 링크가 `https://x.com/` 으로 바뀌고 `) b**` 가 남았다.
     /// 기준선: 링크가 없는 같은 모양은 첫 `**` 에서 닫힌다 · 링크 뒤의 `**` 는 그대로 닫는 짝이다.

@@ -169,6 +169,8 @@ struct MahjongTableView: View {
         .onChange(of: payload.reactions, initial: true) { _, _ in
             feed.ingest(payload, now: store.clock(), serverOffset: store.serverClockOffset)
         }
+        // 판 화면이 처음 뜰 때 한 번 펠트·팔레트를 조건부로 받는다(시험 중엔 아무것도 안 한다).
+        .onAppear { MahjongArt.shared.refreshIfNeeded() }
     }
 
     /// 반응을 보낼 수 있는 판 — 루비 판이 진행 중일 때만(연습판은 스토어가 보내지 않는다).
@@ -408,8 +410,8 @@ struct MahjongFeltView: View {
         let block = CGSize(width: MahjongMatchLayout.blockWidth, height: MahjongMatchLayout.blockHeight)
         let origin = MahjongMatchLayout.blockOrigin
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MahjongFeltStyle.felt)
-            RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(MahjongFeltStyle.rim, lineWidth: 3)
+            // 받은 펠트 그림(Storage `game-art/mahjong/table.png`) 또는 코드 펠트 색 — 번들 사본 없음.
+            MahjongFeltSurface()
             ZStack(alignment: .topLeading) {
                 // 강·상대 손 띠 — 움직임(버림·울기·깡)이 있을 때만 프레임이 돈다. 펠트에는 입력이 없다.
                 MahjongMotionFrames(store: store, payload: payload, fixedNow: fixedNow) { motion, now in

@@ -298,6 +298,8 @@ struct MahjongPanel: View {
                                      onRules: { overlay = .rules($0) },
                                      onToLobby: { dismissedMatchID = payload.match?.id },
                                      onRematch: { dismissedMatchID = payload.match?.id; overlay = .createRoom })
+                        // 받은 팔레트가 바뀌면(세션에 많아야 한 번) 패 띠를 새 색으로 다시 그린다.
+                        .id(MahjongArt.shared.paletteRevision)
                         .frame(width: MahjongMatchLayout.bodySize.width, height: MahjongMatchLayout.bodySize.height,
                                alignment: .topLeading)
                         .offset(x: MahjongMatchLayout.bodyOrigin.x, y: MahjongMatchLayout.bodyOrigin.y)

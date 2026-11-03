@@ -543,3 +543,72 @@ package nonisolated struct MahjongTileArtStyle: Hashable, Sendable {
     /// 펠트는 맥 판 화면 `MahjongFeltStyle`(CK/MahjongPanelTable.swift)이 아직 따로 쥔다 — 어긋나면 선택지 시험이 빨갛다.
     package static let chosen = MahjongTileArtStyle(backScheme: .navyPink, feltScheme: .teal, oneSouMotif: .sprout, cornerLabel: .numbersAndHonors)
 }
+
+// MARK: - Storage 받기 판정(펠트 그림 · 팔레트 JSON)
+
+/// 공개 버킷 `game-art` 의 마작 그림 — 받을지·쓸지 판정만(순수, 맥·폰 공용). 네트워크·디스크는 화면 쪽 일(맥 `MahjongArt`).
+/// 큐브 `RummyArt` 길과 같다(조건부 요청 · 200 = 바꿈 · 304 = 그대로 · 404 = 캐시 지우고 기본으로 · 그 밖 = 그대로).
+/// 다른 점: **번들 사본이 없다** — 기본은 코드(펠트 = `MahjongFeltScheme` 색 · 팔레트 = `MahjongTilePalette.code`).
+package nonisolated enum MahjongArtRemote {
+    package enum Kind: String, CaseIterable, Hashable, Sendable {
+        /// 판 바닥 펠트(반복 무늬).
+        case table
+        /// 패 팔레트(색 7개, `MahjongTilePalette` 키).
+        case tiles
+
+        /// 버킷 안 경로.
+        package var remotePath: String {
+            switch self {
+            case .table: "mahjong/table.png"
+            case .tiles: "mahjong/tiles.json"
+            }
+        }
+
+        /// 캐시 파일 이름.
+        package var cacheName: String { (remotePath as NSString).lastPathComponent }
+
+        /// 받을 크기 상한(바이트).
+        package var maxBytes: Int {
+            switch self {
+            case .table: 8 * 1024 * 1024
+            case .tiles: 16 * 1024
+            }
+        }
+    }
+
+    /// 조건부 요청 결과 → 할 일.
+    package enum Outcome: Equatable, Sendable {
+        /// 새 것으로 바꾼다(캐시에 쓰고 화면도).
+        case replace
+        /// 그대로(304 · 일시 실패 · 못 쓰는 것).
+        case keep
+        /// 서버에서 지워졌다(404) — 캐시를 지우고 코드 기본으로.
+        case revert
+    }
+
+    /// 펠트 그림을 써도 되나 — 정사각에 가까운 128px 이상(큐브 펠트와 같은 문턱).
+    package static func feltAcceptable(pixelsWide: Int, pixelsHigh: Int) -> Bool {
+        guard pixelsWide >= 128, pixelsHigh > 0 else { return false }
+        return (0.5...2.0).contains(Double(pixelsWide) / Double(pixelsHigh))
+    }
+
+    /// 받은 것을 써도 되나 — 펠트는 그림 크기(화면 쪽이 디코드해 넘긴다, 못 읽으면 nil), 팔레트는 일곱 색이 모두 바른 JSON.
+    package static func acceptable(_ kind: Kind, data: Data, feltPixels: (width: Int, height: Int)?) -> Bool {
+        guard !data.isEmpty, data.count <= kind.maxBytes else { return false }
+        switch kind {
+        case .table:
+            guard let feltPixels else { return false }
+            return feltAcceptable(pixelsWide: feltPixels.width, pixelsHigh: feltPixels.height)
+        case .tiles:
+            return MahjongTilePalette.delivered(from: data) != nil
+        }
+    }
+
+    package static func outcome(_ kind: Kind, status: Int, data: Data, feltPixels: (width: Int, height: Int)?) -> Outcome {
+        switch status {
+        case 200: return acceptable(kind, data: data, feltPixels: feltPixels) ? .replace : .keep
+        case 404: return .revert
+        default: return .keep
+        }
+    }
+}

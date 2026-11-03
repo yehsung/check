@@ -401,6 +401,46 @@ class MessagesFocusSnapshotTest {
         }
     }
 
+    /**
+     * 목록 위 한 줄은 한글 어절 사이에서만 꺾인다(검토 F4 — 아이폰 InlineNotice 와 같다). 폰 폭 360dp 에서 두 줄이 되는 문장으로,
+     * 둘째 줄부터 각 줄의 첫 글자 앞이 빈칸인가를 실제 배치(GetTextLayoutResult)로 잰다 — 판 7 첫 골든은 "…맥에서 집중 / 을 끄면…"이었다.
+     * 기준선: 같은 문장 · 같은 폭 · 같은 글꼴을 줄바꿈 설정 없는 Text 로 그리면 어절 가운데서 꺾인다(이 재기가 꺾인 자리를 본다).
+     * ★ 어구(Phrase) 줄바꿈은 글 언어가 한국어일 때만 어절 단위다(minikin — 기기 언어 ko). 이 시험만 기기 언어를 한국어로 둔다(아래 Config).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Config(qualifiers = "ko-rKR-w360dp-h800dp-xhdpi")
+    @Test fun listFocusNoticeBreaksOnlyBetweenWords() {
+        assertEquals("전제: 기기 언어가 한국어여야 한다", "ko", java.util.Locale.getDefault().language)
+        load(peerFocus = emptySet(), myFocus = true)
+        fun midWordBreaks(layout: TextLayoutResult): List<Int> {
+            val text = layout.layoutInput.text.text
+            return (1 until layout.lineCount).map { layout.getLineStart(it) }.filter { start -> start in 1 until text.length && !text[start - 1].isWhitespace() }
+        }
+        var width = 0
+        runComposeUiTest {
+            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { MessagesListScreen(store, {}, {}, {}) } }
+            waitForIdle()
+            val layouts = mutableListOf<TextLayoutResult>()
+            onNodeWithText(MessageNoticeText.senderFocused, useUnmergedTree = true).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+            val layout = layouts.single()
+            assertTrue("전제: 폰 폭에서 안내가 두 줄 이상이어야 한다(${layout.lineCount})", layout.lineCount >= 2)
+            assertEquals("목록 위 한 줄이 어절 가운데서 꺾였다(줄 시작 ${midWordBreaks(layout)})", emptyList<Int>(), midWordBreaks(layout))
+            width = layout.layoutInput.constraints.maxWidth
+        }
+        runComposeUiTest {
+            setContent {
+                ScreenSnapshots.Frame(false, art, characters.directory) {
+                    val dp = with(LocalDensity.current) { width.toDp() }
+                    androidx.compose.material3.Text(MessageNoticeText.senderFocused, style = androidx.compose.material3.MaterialTheme.typography.bodySmall, modifier = Modifier.width(dp))
+                }
+            }
+            waitForIdle()
+            val layouts = mutableListOf<TextLayoutResult>()
+            onNodeWithText(MessageNoticeText.senderFocused).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+            assertTrue("기준선: 줄바꿈 설정 없는 글은 어절 가운데서 꺾여야 한다 — 이 시험이 꺾인 자리를 못 본다", midWordBreaks(layouts.single()).isNotEmpty())
+        }
+    }
+
     /** 목록 위 한 줄의 부르는 자리: 내 집중이 켜짐이면 서고 문장은 입력줄 사유와 같다 · 게이트 끈 스토어(Windows)는 같은 순간에도 없다(기준선). */
     @OptIn(ExperimentalTestApi::class)
     @Test fun listFocusNoticeStandsOnlyForMyFocus() {

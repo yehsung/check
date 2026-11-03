@@ -152,9 +152,15 @@ fun InlineNotice(text: String, kind: NoticeKind = NoticeKind.Info, modifier: Mod
         verticalAlignment = Alignment.Top,
     ) {
         AingIcon(icon, contentDescription = null, size = 18.dp, tint = tint)
-        Text(text, style = MaterialTheme.typography.bodySmall, color = colors.label, modifier = Modifier.weight(1f))
+        Text(text, style = MaterialTheme.typography.bodySmall.noticeLineBreak(), color = colors.label, modifier = Modifier.weight(1f))
     }
 }
+
+/**
+ * 안내 글자의 줄바꿈(검토 F4): 안드로이드는 한글 어절 단위 — 기본값은 음절 사이에서 꺾여 "…맥에서 집중 / 을 끄면…"이 된다
+ * (아이폰 InlineNotice 는 어절 단위로 꺾는다). 데스크톱은 손대지 않는다(Windows v1 동결).
+ */
+internal expect fun androidx.compose.ui.text.TextStyle.noticeLineBreak(): androidx.compose.ui.text.TextStyle
 
 enum class AingButtonKind { Filled, Gray, Plain, Destructive, Tinted }
 

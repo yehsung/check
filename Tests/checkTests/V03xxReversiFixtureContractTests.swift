@@ -667,6 +667,36 @@ struct V03xxReversiServerFixtureContractTests {
         }
     }
 
+    // 없으면: 서버가 자동 착수 뒤 다음 차례 시계를 **지난 마감**에서 시작해(적대 검증 1차 V1a-1 — 앞 초안) 다음 사람이 응답을 받는
+    // 순간 이미 몇 초를 잃었거나(원문으로 22초 남음) 한 따라잡기에 두 사람 자동 착수가 연달아 놓여도, 스토어 시험은 원문을 그대로
+    // 믿어 초록이다. 서버를 실제로 돌려 뽑은 원문에서 **결과**를 잰다: 새 시계는 이번 따라잡기 시각(= 자동 착수 기록 시각 · 응답의
+    // server_now)에서 시작하고, 받는 순간 남은 시간은 한 차례(turn_seconds) 거의 그대로다.
+    @Test func 자동_착수_뒤_다음_차례_시계는_그_따라잡기_시각에서_시작한다() throws {
+        let file = "reversi_move__auto_placed.json"
+        let top = try rfcServerJSON(file)
+        #expect(top["status"] as? String == "auto_placed")
+        // 한 번의 따라잡기에 자동 착수는 많아야 한 수다(V1a-1 뒤 규칙 — 0 이면 status 가 auto_placed 일 수 없다).
+        #expect(rfcInt(top["auto_placed_count"]) == 1, "\(file): auto_placed_count \(String(describing: top["auto_placed_count"]))")
+        let state = try #require(top["state"] as? [String: Any])
+        let match = try #require(state["match"] as? [String: Any])
+        #expect(match["status"] as? String == "active", "\(file): 자동 착수 뒤 판이 끝났다 — 시계를 잴 다음 차례가 없다")
+        let autoMove = try #require((state["moves"] as? [[String: Any]])?.last { $0["auto"] as? Bool == true },
+                                    "\(file): 자동 착수 줄이 없다")
+        let placedAt = try #require(rfcDouble(autoMove["at_ms"]))
+        let serverNow = try #require(rfcDouble(state["server_now_ms"]))
+        let started = try #require(rfcDouble(match["turn_started_ms"]))
+        let deadline = try #require(rfcDouble(match["deadline_ms"]))
+        let turnMs = Double((rfcInt(state["turn_seconds"]) ?? 0) * 1000)
+        try #require(turnMs > 0, "\(file): turn_seconds 가 없다")
+        // 차례 주인이 바뀌었다(자동 착수한 색 ≠ 지금 차례) — 같은 사람 연속 차례(상대 패스)면 아래 잣대가 다른 뜻이 된다.
+        #expect(autoMove["color"] as? String != match["turn"] as? String, "\(file): 자동 착수 뒤 차례가 넘어가지 않았다")
+        // 새 시계 = 이번 따라잡기 시각: 자동 착수 기록과 1초 안(앞 초안은 8초 앞 — 지난 마감).
+        #expect(abs(started - placedAt) < 1000, "\(file): 새 차례 시작 \(Int(started)) · 자동 착수 \(Int(placedAt)) — 시계가 소급된다")
+        #expect(started <= serverNow, "\(file): 새 차례가 응답 시각보다 늦게 시작한다")
+        // 받는 순간 남은 시간 = 한 차례에서 1초도 안 빠진다(앞 초안 원문은 21,999ms).
+        #expect(deadline - serverNow > turnMs - 1000, "\(file): 응답 순간 남은 시간 \(Int(deadline - serverNow))ms — 한 차례 \(Int(turnMs))ms 를 다 못 받는다")
+    }
+
     // 없으면: 관전 응답에 참가자 전용 칸(내 색·남의 지갑·둘 수 있는 칸)이 섞여 나가도(= 제3자에게 남의 루비가 간다) 초록이고,
     // 스토어가 관전 응답을 대국으로 착각할 길이 열려도 안 보인다.
     @Test func 관전_원문은_참가자_칸이_비어_있다() throws {

@@ -48,8 +48,11 @@ public enum AingCharacterArt {
     /// 얼굴 크기가 같다. **케이크 초상만 다르다**: 머리 위 장식(초 · 딸기)이 캔버스에 들어가도록 아잉 몸을 0.88 배로 줄여 아래로 내렸다
     /// (`scripts/make-cake-aing.swift` — 네 장 같은 배율 · 자리). 그대로 그리면 케이크 착용자만 원 안 얼굴이 12% 작고 낮다.
     /// 그래서 케이크는 그 줄임을 되돌려(×1/0.88) 몸을 아잉 자리로 올린다 — 장식은 원 위로 조금 잘린다(조정자 결정 — 괜찮다).
+    /// **이슬 초상도 같다**(폰 1.0.17): 정수리의 비스듬한 병뚜껑이 들어가도록 몸을 같은 0.88 배로 줄였고(`scripts/make-isul-aing.swift`
+    /// `portraitBodyScale`), 뚜껑까지 합친 상자를 가운데 놓아 몸 자리만 케이크와 다르다(`isulPortraitBodyTop`). 맥은 같은 일을 알파로 몸을
+    /// 잘라 하고(`CharacterCardArt.cakeBodyFramed` — 케이크 · 이슬 한 갈래), 폰은 잰 상수로 한다.
     ///
-    /// 전신을 보이는 자리(무대 · 상점 타일 · 미리 보기 · 축하 시트)는 이 틀을 쓰지 않는다 — 장식이 케이크의 핵심이다.
+    /// 전신을 보이는 자리(무대 · 상점 타일 · 미리 보기 · 축하 시트)는 이 틀을 쓰지 않는다 — 장식이 케이크 · 이슬의 핵심이다.
     public struct AvatarFraming: Equatable, Sendable {
         /// 초상 그림의 배율(가운데 기준). 1 = 그대로.
         public let scale: Double
@@ -70,14 +73,27 @@ public enum AingCharacterArt {
     public static let cakePortraitBodyScale = 0.88
     public static let cakePortraitBodyTop = 28.0
 
-    /// 이 캐릭터의 아바타 틀. 케이크 둘만 `identity` 가 아니다(모르는 id 는 아잉으로 접히므로 `identity`).
+    /// 이슬 초상의 몸 배치 — 케이크와 같은 식 **(96 + (x − 96)·s, top + y·s)**. 배율은 생성기 `commonLayout` 의 `k`(0.88 상한 — 뚜껑이 작아 상한에
+    /// 걸린다), 세로 자리(18.0px)는 두 장(두 표정)을 아잉 초상에 맞춰 잰 값이다(아래 절반 알파 불일치 최소 — 케이크를 같은 방법으로 재면 28.0 이 나온다).
+    /// 가로는 케이크와 같이 가운데다(가장 넓은 줄 24–167px, 케이크와 같은 칸). 뚜껑이 케이크 장식보다 낮아 몸이 케이크보다 10px 위에 선다 —
+    /// 케이크 값을 그대로 쓰면 원 안 얼굴이 아래로 10px 밀린다. `MeIsulGiftTests` 가 실제 PNG 를 이 값으로 되돌려 아잉 몸과 겹치는지 잰다.
+    public static let isulPortraitBodyScale = 0.88
+    public static let isulPortraitBodyTop = 18.0
+
+    /// 이 캐릭터의 아바타 틀. 케이크 둘 · 이슬만 `identity` 가 아니다(모르는 id 는 아잉으로 접히므로 `identity`).
     public static func avatarFraming(id: String?) -> AvatarFraming {
-        let resolved = resolvedID(id)
-        guard resolved == "aing_cake_strawberry" || resolved == "aing_cake_choco" else { return .identity }
-        let s = cakePortraitBodyScale
+        let s: Double, top: Double
+        switch resolvedID(id) {
+        case "aing_cake_strawberry", "aing_cake_choco":
+            (s, top) = (cakePortraitBodyScale, cakePortraitBodyTop)
+        case "aing_isul":
+            (s, top) = (isulPortraitBodyScale, isulPortraitBodyTop)
+        default:
+            return .identity
+        }
         let side = Double(portraitPixelSize)
-        // 가운데 기준으로 1/s 배 키우면 케이크 Y 는 side/2 + (Y − side/2)/s 에 선다. 아잉 자리 (Y − top)/s 와의 차가 이동량이다.
-        let shift = (side / 2 - cakePortraitBodyTop) / s - side / 2
+        // 가운데 기준으로 1/s 배 키우면 그 초상의 Y 는 side/2 + (Y − side/2)/s 에 선다. 아잉 자리 (Y − top)/s 와의 차가 이동량이다.
+        let shift = (side / 2 - top) / s - side / 2
         return AvatarFraming(scale: 1 / s, offsetY: shift / side)
     }
 

@@ -56,7 +56,7 @@ struct MahjongHandResultCard: View {
             }
             .padding(18)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(RoundedRectangle(cornerRadius: 18).fill(CheckTheme.panelElevated.opacity(0.97)))
+            .background(RoundedRectangle(cornerRadius: 18).fill(CheckTheme.panelElevated))
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(CheckTheme.pending.opacity(0.6), lineWidth: 2))
         }
     }
@@ -254,7 +254,7 @@ struct MahjongMatchResultCard: View {
             }
         }
         .padding(20)
-        .background(RoundedRectangle(cornerRadius: 18).fill(CheckTheme.panelElevated.opacity(0.98)))
+        .background(RoundedRectangle(cornerRadius: 18).fill(CheckTheme.panelElevated))
         .overlay(RoundedRectangle(cornerRadius: 18).stroke(CheckTheme.accent.opacity(0.6), lineWidth: 2))
     }
 }

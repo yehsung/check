@@ -161,8 +161,9 @@ enum MahjongWindowScale {
         let best = visibleFrames.max { overlap($0) < overlap($1) } ?? first
         let screen = overlap(best) > 0 ? best : first
         let scale = fit(visible: screen.size)
-        let size = NSSize(width: (MahjongWindowLayout.contentSize.width * scale).rounded(),
-                          height: (MahjongWindowLayout.contentSize.height * scale).rounded() + titleBarHeight)
+        // 내림 — 반올림하면 1pt 넘쳐 화면 밖으로 나간다(1280×705 에서 706).
+        let size = NSSize(width: (MahjongWindowLayout.contentSize.width * scale).rounded(.down),
+                          height: (MahjongWindowLayout.contentSize.height * scale).rounded(.down) + titleBarHeight)
         var sized = NSRect(x: frame.minX, y: frame.maxY - size.height, width: size.width, height: size.height)
         sized.origin = CheckMiniGameWindowController.originKeepingOnScreen(sized, visibleFrames: visibleFrames)
         return (scale, sized, isCramped(visible: screen.size))
@@ -297,6 +298,10 @@ final class CheckMahjongWindowController: NSObject, NSWindowDelegate {
         return created
     }
 
+    /// 창을 (아직 없으면) 만들기만 한다 — 화면에 올리지 않는다(헤드리스 검증 문. 시험은 `show()` 대신 이것을 부른다).
+    @discardableResult
+    func prepareWindow() -> NSWindow? { window }
+
     /// 아잉 마작 창을 만든다.
     static func makeWindow() -> NSWindow {
         let window = NSWindow(
@@ -326,8 +331,8 @@ final class CheckMahjongWindowController: NSObject, NSWindowDelegate {
         let placed = MahjongWindowScale.placement(frame: window.frame, visibleFrames: visibleFrames())
         scaleBox.scale = placed.scale
         scaleBox.cramped = placed.cramped
-        let content = NSSize(width: (Self.fixedContentSize.width * placed.scale).rounded(),
-                             height: (Self.fixedContentSize.height * placed.scale).rounded())
+        let content = NSSize(width: (Self.fixedContentSize.width * placed.scale).rounded(.down),
+                             height: (Self.fixedContentSize.height * placed.scale).rounded(.down))
         let target = window.frameRect(forContentRect: NSRect(origin: .zero, size: content))
         var frame = NSRect(x: placed.frame.minX, y: window.frame.maxY - target.height, width: target.width, height: target.height)
         frame.origin = CheckMiniGameWindowController.originKeepingOnScreen(frame, visibleFrames: visibleFrames())

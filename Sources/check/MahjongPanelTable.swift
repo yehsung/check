@@ -16,10 +16,11 @@ import CheckCore
 
 /// 펠트 색(중간 톤 — 렌더 감지기 규칙). 큐브 펠트(남보라)와 구별되는 청록.
 enum MahjongFeltStyle {
+    // 채널 폭 < 40 · 최대 ≤ 234 · 최소 ≥ 56 — 렌더 시험의 '잉크'(유채색·밝은 글자)로 세지지 않는 중간 톤.
     static let felt = Color(red: 0.24, green: 0.39, blue: 0.36)
-    static let rim = Color(red: 0.31, green: 0.47, blue: 0.44)
-    static let board = Color(red: 0.30, green: 0.46, blue: 0.43)
-    static let boardRim = Color(red: 0.42, green: 0.58, blue: 0.55)
+    static let rim = Color(red: 0.32, green: 0.46, blue: 0.44)
+    static let board = Color(red: 0.31, green: 0.45, blue: 0.43)
+    static let boardRim = Color(red: 0.44, green: 0.58, blue: 0.56)
     static let glyph = Color(red: 0.86, green: 0.84, blue: 0.80)
 }
 
@@ -308,6 +309,8 @@ struct MahjongSeatCard: View {
     private var score: some View {
         Text(MahjongText.score(seat.score))
             .font(.system(size: style == .top ? 17 : 20, weight: .heavy, design: .rounded).monospacedDigit())
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
     }
 
     private var top: some View {

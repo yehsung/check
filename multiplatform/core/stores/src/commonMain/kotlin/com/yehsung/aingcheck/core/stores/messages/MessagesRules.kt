@@ -261,6 +261,17 @@ object MessagesComposerRules {
         canSendCommittedDraft -> SendAction.send
         else -> SendAction.none
     }
+
+    /**
+     * 입력칸 위(또는 이모티콘 시트 안) 한 줄(판 7 · iOS 1.0.17 `noticeLine`): **집중 사유가 먼저이고 늘 뜬다**, 없으면 지난 결과 문구.
+     * 집중은 상태라 지금 일이고 결과는 지난 일이다(맥 `CheckMessageView` 입력줄의 noticeLine 과 같은 순서). 한 줄만 돌려준다 — 두 줄이 서면
+     * 입력줄이 자라 마지막 말풍선을 덮는다.
+     */
+    fun noticeLine(focus: MessagesFocusBlock?, sendNotice: String?): String? {
+        if (focus != null) return focus.notice
+        if (sendNotice.isNullOrEmpty()) return null
+        return sendNotice
+    }
 }
 
 // ---------------------------------------------------------------- 사람 찾기
@@ -790,6 +801,12 @@ data class MessagesPresenceBoard(
     val working: List<MessagesWorkingPerson>,
     /** 사람별 상태메시지(이미 `StatusMessage.display` 를 지난 값, 없는 사람은 키가 없다). `peers` 와 따로 둔다. */
     val statuses: Map<String, String> = emptyMap(),
+    /**
+     * 집중 중인 사람(판 7 · 대표 요청 5 — 명부 `focus_mode`). [statuses] 와 **같은 이유로 따로 둔다**(출처가 사람 목록 둘뿐이다).
+     * 겹치기 규칙은 [MessagesFocusRules.focusedPeerIDs] 한 곳이다 — 스토어 잠금(`MessagesStore.isPeerFocused`)도 같은 함수를 부른다.
+     * 기본값이 빈 집합이라 기존 생성 호출부가 그대로다.
+     */
+    val focused: Set<String> = emptySet(),
 ) {
     companion object {
         val unknown: MessagesPresenceBoard = MessagesPresenceBoard(isKnown = false, peers = emptyMap(), working = emptyList())
@@ -858,7 +875,10 @@ object MessagesPresenceRules {
                 val order = collation.compare(lhs.name, rhs.name)
                 if (order != 0) order else SwiftStrings.compare(lhs.id, rhs.id)
             }
-        return MessagesPresenceBoard(true, peers, working + others, statuses(nowDirectory, messagesDirectory, me))
+        return MessagesPresenceBoard(
+            true, peers, working + others, statuses(nowDirectory, messagesDirectory, me),
+            focused = MessagesFocusRules.focusedPeerIDs(nowDirectory, messagesDirectory, me),
+        )
     }
 
     /**
@@ -891,6 +911,84 @@ object MessagesPresenceRules {
         val center = CenterLabel.display(presence.center) ?: return state
         return "$state · $center"
     }
+}
+
+// ---------------------------------------------------------------- 집중 모드(판 7 · 대표 요청 5·6 — 맥 `FocusSendBlock` · iOS 1.0.17 의 Android 짝)
+
+/**
+ * 집중 모드가 보내기(글 · 이모티콘)를 막는 사유. **규칙은 [MessagesFocusRules.block] 한 곳**이고, 스토어 짝 게이트(`canSend` · `canSendSticker` ·
+ * `sendDraft` · `sendSticker`)와 화면(입력줄 [보내기] · 사유 줄 · 이모티콘 시트)이 전부 그 답을 본다(memory client-gates-come-in-pairs).
+ *
+ *  · [myself] — 내가 집중 중(요청 6 "자기는 못받으면서 남들한텐 할 수 있는게 안맞음"). 누구에게도 못 보낸다. 서버도 `sender_focused` 로 거절한다
+ *    (20261108121000 · 11-03 운영). 폰은 집중을 켜지도 끄지도 않는다(focus_mode PATCH 금지) — 그래서 문장이 "맥에서 끄라"다.
+ *  · [peer] — 명부가 상대를 집중이라 말한다(요청 5 — 서버 `target_focused` 를 **보내기 전에** 알린다).
+ *
+ * 문장은 코어 `MessageNoticeText` 다 — **서버가 거절했을 때 뜨는 문장과 같은 글자**라([MessagesSendRules.notice]) 미리 막혔을 때와 보낸 뒤 거절됐을 때
+ * 사용자가 읽는 말이 같다(원본 iOS `MessagesFocusBlock` · wt-phone-1017 62f9115c).
+ */
+enum class MessagesFocusBlock {
+    myself, peer;
+
+    /** 입력칸 위 사유 줄 · 이모티콘 시트 한 줄([MessagesComposerRules.noticeLine]). `sendNotices` 에는 적지 않는다(`MessagesStore.sendDraft` 주석). */
+    val notice: String
+        get() = when (this) {
+            myself -> MessageNoticeText.senderFocused
+            peer -> MessageNoticeText.targetFocused
+        }
+}
+
+/**
+ * 집중 표시 글자(맥 · iOS 와 같은 두 자리 · 같은 글자 — 맥 `PokeDirectoryRowView` '집중' · `MessagePeerFocusChip` '집중 중' · iOS `MessagesFocusText`).
+ * 칩 부품은 화면 갈래의 `FocusChip` 하나다 — 표시 자리를 넓히게 되면(대표 결정 대기 ②) 그 부품을 꽂으면 된다.
+ */
+object MessagesFocusText {
+    /** 새 대화 시트 사람 줄 칩(근무 중 · 근무 안 함과 나란한 **상태 이름**). */
+    const val personChip = "집중"
+
+    /** 대화 이름표 칩 — 이름 옆에 홀로 서는 자리라 "집중" 두 글자만 두면 이름의 일부로 읽힌다(맥 `MessagePeerFocusChip.text` 와 같은 판단). */
+    const val conversationChip = "집중 중"
+
+    /** TalkBack 이 사람 줄 · 이름표 문장에 덧붙이는 말. */
+    const val accessibility = "집중 중"
+}
+
+object MessagesFocusRules {
+    /**
+     * 보내기를 막는 사유. **내 집중이 앞이다**(서버 조각 순서와 같다 — 내가 풀어야 하는 사정이 있으면 상대 사정은 아직 의미가 없다).
+     * [myFocus] 는 내 집중 서버값이고 **null 은 "모른다"이며 막지 않는다**(서버가 최종 판정 — 아직 받은 적 없음 · 행이나 칸이 없음).
+     * 모름을 켜짐으로 읽으면 RLS·일시 장애 한 번에 폰 메시지 전체가 잠긴다.
+     */
+    fun block(myFocus: Boolean?, peerFocused: Boolean): MessagesFocusBlock? = when {
+        myFocus == true -> MessagesFocusBlock.myself
+        peerFocused -> MessagesFocusBlock.peer
+        else -> null
+    }
+
+    /**
+     * 집중 중인 사람들 — 상태메시지([MessagesPresenceRules.statuses])와 **같은 겹치기**다: 새 대화 시트 목록 → 지금 탭 목록(1분마다 받는 더 새 값).
+     * **목록에 있는 사람은 그 목록의 값이 답이다**: 뒤 목록이 그 사람을 집중 아님(또는 칸 없음)이라 말하면 앞 목록의 옛 집중을 지운다 —
+     * 방금 집중을 끈 사람이 시트가 받아 둔 옛 값으로 계속 잠기지 않게. 칸이 없거나 null 이면 집중 아님이다(`toPokeDirectoryEntries` 와 같은
+     * 해석 — 옛 7칸 서버에서 전원이 잠기면 안 된다). 나([me])는 넣지 않는다.
+     */
+    fun focusedPeerIDs(nowDirectory: List<PokeDirectoryRow>?, messagesDirectory: List<PokeDirectoryEntry>?, me: String?): Set<String> {
+        val latest = LinkedHashMap<String, Boolean>()
+        for (entry in messagesDirectory ?: emptyList()) {
+            if (entry.userID == me) continue
+            latest[entry.userID] = entry.isFocused
+        }
+        for (row in nowDirectory ?: emptyList()) {
+            if (row.userId == me) continue
+            latest[row.userId] = row.focusMode ?: false
+        }
+        return latest.filterValues { it }.keys
+    }
+
+    /**
+     * 지금 탭 60초 틱에서 내 집중을 다시 물을까 — **켜짐으로 알고 있고 대화가 떠 있을 때만**(맥 `refreshMyFocusModeIfFocused` 가 "켜져 있다고
+     * 알 때만 · 콕/대화 화면이 열린 동안의 틱"인 것과 같은 규약). 꺼짐·모름이면 묻지 않는다(요청 0) — 반대 방향(맥에서 켬)은 대화가 설 때 ·
+     * 앱이 앞으로 올 때의 조회와 서버 `sender_focused` 가 맡는다.
+     */
+    fun rechecksOnTick(myFocus: Boolean?, conversationOpen: Boolean): Boolean = myFocus == true && conversationOpen
 }
 
 // ---------------------------------------------------------------- 바닥 따라가기

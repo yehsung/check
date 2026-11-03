@@ -103,6 +103,13 @@ class NowStore(
     /** 나 탭 미션 조회가 아는 연속 근무일(Swift `context.links.me?.streakDays` @ 1ca907fa). 조립이 잇는다 — 안 이은 조립은 칩이 없다. */
     var streakDaysSource: () -> Long? = { null }
 
+    /**
+     * 60초 새로고침 틱마다 한 번(판 7 — iOS 1.0.17 NowStore.armRefreshTimer 의 `context.links.messages?.refreshMyFocusModeIfFocused()` 자리).
+     * 폰 조립이 메시지 스토어의 내 집중 다시 묻기를 잇는다(조건은 그쪽이 판정한다 — 켜짐으로 알고 대화가 떠 있을 때만). 대화 화면에는 따로 도는
+     * 시계가 없어 이 틱에 기댄다. 안 이은 조립(데스크톱 · 시험)은 아무 일도 안 한다.
+     */
+    var onPeriodicTick: () -> Unit = {}
+
     /** 상태 카드의 연속 근무 칩(읽기만 — 새 서버 호출 없음). 나 탭 미션 조회가 앞에 올 때마다 탭과 무관하게 받아 둔 값이다. */
     val myStreakDays: Long? get() = streakDaysSource()
 
@@ -373,6 +380,8 @@ class NowStore(
         refreshTimer = timers.schedule(refreshIntervalSeconds) {
             if (isActive) {
                 refresh()
+                // 내 집중(판 7): 켜짐으로 알고 대화가 떠 있을 때만 다시 묻는다 — 맥에서 끈 집중을 대화에 머무는 동안 따라잡는다.
+                onPeriodicTick()
                 // 앱을 켜 둔 채 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만(간격은 그쪽이 정한다).
                 if (phoneSession?.origin == NowWorkOrigin.phone) phoneWork?.periodicTick()
                 armRefreshTimer()

@@ -87,6 +87,38 @@ class PhoneAppModelTest {
     }
 
     /**
+     * 집중 모드 보내기 게이트의 부르는 자리(판 7 · 대표 요청 5·6). 없으면: 스토어 시험(MessagesFocusGateTest — 게이트를 직접 켠다)은 초록인데
+     * 폰 조립이 게이트를 안 켜거나 지금 탭 틱을 안 이어 '집중' 표시 · 보내기 잠금 · 맥에서 끈 집중 따라잡기가 폰에서 영영 안 돈다.
+     * 기준선: 대화를 닫으면 같은 틱이 묻지 않는다(틱 하나가 늘 GET 을 내는 배선이 아니다).
+     */
+    @Test
+    fun assemblyTurnsOnTheFocusGateAndWiresTheNowTick() = runTest {
+        fun isFocusGet(r: RecordedRequest) = r.method == "GET" && r.path == "/rest/v1/profiles" && r.query.any { it.first == "select" && it.second == "focus_mode" }
+        val h = PhoneHarness(this) { r ->
+            when {
+                isFocusGet(r) -> Reply.Json("""[{"focus_mode":true}]""")
+                r.rpcName == "message_unread_summary" || r.rpcName?.startsWith("message_history") == true -> Reply.missingFunction
+                else -> null
+            }
+        }
+        assertTrue(h.app.messages.focusSendGate, "폰 조립이 집중 게이트를 안 켰다")
+        h.signIn()
+        h.app.messages.appDidBecomeActive()
+        h.app.messages.conversationDidAppear("p-1", "t1")
+        advanceUntilIdle()
+        assertEquals(true, h.app.messages.myFocusMode)
+        val asked = h.appRequests.count(::isFocusGet)
+        h.app.now.onPeriodicTick()
+        advanceUntilIdle()
+        assertEquals(asked + 1, h.appRequests.count(::isFocusGet), "지금 탭 틱이 내 집중 다시 묻기에 이어지지 않았다")
+        h.app.messages.conversationDidDisappear("t1")
+        h.app.now.onPeriodicTick()
+        advanceUntilIdle()
+        assertEquals(asked + 1, h.appRequests.count(::isFocusGet), "대화가 없는데 틱이 물었다")
+        assertEquals(emptyList(), com.yehsung.aingcheck.testkit.mock.PhoneForbiddenCalls.violations(h.server.requests), "폰 금지 호출")
+    }
+
+    /**
      * 한 판 한 기기(0.3.69 — Swift V0360TetrisDuelRealtimeTests `theMacOwnerKeepsTetrisOwnershipInItsOwnDefaults` 의 폰 몫 · MobileAppModel 75c31cd2).
      * 없으면: '이 기기가 연 판' 기록이 프로세스 안에만 살아, 판 중에 앱을 다시 켠 폰이 옛 서버(my_device 없음)에서 자기 판을 못 알아보고
      * 보고를 멈춘다 — 15초 침묵 패. 스토어 시험은 defaults 를 직접 넣어 초록이다.

@@ -7,6 +7,8 @@ object MessagesTags {
     const val MEGAPHONE_BUTTON = "messages-megaphone"
     const val NEW_CONVERSATION_BUTTON = "messages-new-conversation"
     const val BLOCK_NOTICE = "messages-block-notice"
+    /** 내 집중이면 대화 목록 위 한 줄(판 7 · MessagesFocusRules.listNotice). */
+    const val LIST_FOCUS_NOTICE = "messages-list-focus-notice"
     fun threadRow(peerID: String): String = "messages-thread-$peerID"
 
     const val CONVERSATION_SCREEN = "conversation"

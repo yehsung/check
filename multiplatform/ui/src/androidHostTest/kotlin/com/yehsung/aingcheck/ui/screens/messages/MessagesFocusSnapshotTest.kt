@@ -5,12 +5,20 @@
 //  · 상대 집중 = 명부 app_user_directory 에서 한결(b1)의 focus_mode 를 켠 판(운영 20261108120500 의 8칸 모양).
 //  · 내 집중 = profiles GET select=focus_mode 가 [{"focus_mode":true}].
 // 음성 기준선: 대화 = 입력칸에 "안녕" 이 든 같은 화면(글이 있어도 [보내기]는 잠겨 있다) · 새 대화 = 게이트가 꺼진 스토어(Windows 조립 — 칩이 없다).
+//
+// 집중 표시 넓히기(ios-1017-int 1776440d — 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부"): 대화 목록 줄 '집중' 칩(하린 — 아이폰 데모와 같은 사람) ·
+// 얼굴 띠 TalkBack · 내 집중이면 목록 위 한 줄. 기준선: 목록 줄 칩 = 게이트가 꺼진 스토어(Windows — 같은 명부인데 칩이 없다) · 목록 위 한 줄 =
+// 한결 한 사람만 다른 캐릭터를 입은 같은 장면(한 줄이 없는 장면은 아래가 통째로 밀려 '한 군데'가 아니다).
 package com.yehsung.aingcheck.ui.screens.messages
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.dp
@@ -27,6 +35,7 @@ import com.yehsung.aingcheck.core.rules.text.MessageNoticeText
 import com.yehsung.aingcheck.core.stores.characters.AppUserCharacterStore
 import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.stores.messages.MessagesFocusBlock
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusRules
 import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.messages.MobileLoadText
@@ -66,6 +75,7 @@ import org.robolectric.annotation.GraphicsMode
 class MessagesFocusSnapshotTest {
     private val hangyeol = "d0000000-0000-4000-8000-0000000000b1"
     private val sora = "d0000000-0000-4000-8000-0000000000b2"
+    private val harin = "d0000000-0000-4000-8000-0000000000b5"
     private val harness = ScreenHarness("messages", AndroidSnapshots.repoRoot).also { it.signIn() }
     private val art = ScreenArt.bundledOnly()
 
@@ -81,6 +91,9 @@ class MessagesFocusSnapshotTest {
         }
     }
     private val characters = harness.onStore { AppUserCharacterStore(harness.context, harness.scope, CharacterArt.portraitIds) }
+
+    /** 목록 위 한 줄의 음성 기준선 표 — 한결 한 사람만 다른 캐릭터(MessagesScreensSnapshotTest 의 목록 기준선과 같은 판). */
+    private val otherCharacters = harness.onStore { AppUserCharacterStore(harness.context, harness.scope, CharacterArt.portraitIds) }
 
     @After
     fun close() = harness.close()
@@ -113,9 +126,12 @@ class MessagesFocusSnapshotTest {
                 s.loadDirectory(force = true)
             }
             characters.refresh()
+            otherCharacters.refresh()
             characters.inflight?.join()
+            otherCharacters.inflight?.join()
         }
         harness.awaitStore("사람 목록") { store.directoryLoaded && !store.directoryLoading && gateOff.directoryLoaded && !gateOff.directoryLoading }
+        otherCharacters.directory.setEquipped("ghost", hangyeol)
         harness.onStore {
             store.conversationDidAppear(hangyeol, "warmup")
             store.refreshNow()
@@ -298,6 +314,108 @@ class MessagesFocusSnapshotTest {
                 assertTrue("전제: 이름이 폭을 넘쳐야 한다(focused=$focused)", layout.hasVisualOverflow || layout.isLineEllipsized(0))
                 assertEquals("focused=$focused 이름 줄 말줄임", focused, layout.isLineEllipsized(0))
             }
+        }
+    }
+
+    // ---------------------------------------------------------------- 대화 목록(대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부")
+
+    @Composable
+    private fun Scaled(fontScale: Float?, content: @Composable () -> Unit) {
+        if (fontScale == null) {
+            content()
+        } else {
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale), content = content)
+        }
+    }
+
+    /** 하린(아이폰 데모와 같은 사람 — 대화 목록 맨 윗줄 · 얼굴 띠)만 집중을 켠 판. 내 집중은 꺼짐(목록 위 한 줄 없음). */
+    private fun listPeerFocusScene() {
+        load(peerFocus = setOf(harin), myFocus = false)
+        assertEquals(setOf(harin), store.focusedPeerIDs)
+        assertEquals("게이트 끈 스토어(Windows)가 집중 집합을 냈다", emptySet<String>(), gateOff.focusedPeerIDs)
+        assertEquals(false, store.myFocusMode)
+        assertNull(MessagesFocusRules.listNotice(store.myFocusMode))
+        assertEquals("하린", store.threadItems(harness.clock.now()).first().peerName)
+    }
+
+    /** 목록 줄 칩: 장면 = 게이트 켠 스토어(하린 줄 이름 뒤 '집중') · 기준선 = 게이트 끈 스토어(같은 명부 · 같은 이력 — 칩만 없다). */
+    private fun listPeerFocus(dark: Boolean, name: String, fontScale: Float? = null) {
+        listPeerFocusScene()
+        ScreenSnapshots.check(
+            "screens/messages", name, ScreenFrame.Phone, art,
+            scene = { Scaled(fontScale) { ScreenSnapshots.Frame(dark, art, characters.directory) { MessagesListScreen(store, {}, {}, {}) } } },
+            other = { Scaled(fontScale) { ScreenSnapshots.Frame(dark, art, characters.directory) { MessagesListScreen(gateOff, {}, {}, {}) } } },
+        )
+    }
+
+    @Test fun listPeerFocusPhoneLight() = listPeerFocus(false, "list-peer-focus-phone-light")
+
+    @Test fun listPeerFocusPhoneDark() = listPeerFocus(true, "list-peer-focus-phone-dark")
+
+    @Test fun listPeerFocusPhoneLargeFont() = listPeerFocus(false, "list-peer-focus-phone-large-font", fontScale = 1.6f)
+
+    /** 내가 집중 중: 목록 위 한 줄(입력줄 사유 · sender_focused 와 같은 문장 — 폰엔 [집중 끄기] 단추가 없다). */
+    private fun listMyFocus(dark: Boolean, name: String) {
+        load(peerFocus = emptySet(), myFocus = true)
+        assertEquals(true, store.myFocusMode)
+        assertEquals(MessageNoticeText.senderFocused, MessagesFocusRules.listNotice(store.myFocusMode))
+        assertNull("게이트 끈 스토어(Windows)가 내 집중을 물었다", gateOff.myFocusMode)
+        ScreenSnapshots.check(
+            "screens/messages", name, ScreenFrame.Phone, art,
+            scene = { ScreenSnapshots.Frame(dark, art, characters.directory) { MessagesListScreen(store, {}, {}, {}) } },
+            other = { ScreenSnapshots.Frame(dark, art, otherCharacters.directory) { MessagesListScreen(store, {}, {}, {}) } },
+        )
+    }
+
+    @Test fun listMyFocusPhoneLight() = listMyFocus(false, "list-my-focus-phone-light")
+
+    @Test fun listMyFocusPhoneDark() = listMyFocus(true, "list-my-focus-phone-dark")
+
+    /**
+     * 부르는 자리(화면이 스토어 값을 실제로 읽는가): 목록 줄 TalkBack 에 '집중 중' · 얼굴 띠 TalkBack(칩 없이 말만) · 목록 위 한 줄.
+     * 기준선: 집중 아닌 줄 · 게이트 끈 스토어(Windows)는 판 7 전 문장 그대로이고 한 줄이 없다.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun listTalkBackAndNoticeFollowTheStore() {
+        listPeerFocusScene()
+        runComposeUiTest {
+            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { MessagesListScreen(store, {}, {}, {}) } }
+            waitForIdle()
+            val harinRow = onNodeWithTag(MessagesTags.threadRow(harin)).fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() ?: ""
+            assertTrue(harinRow, harinRow.startsWith("하린, 근무 중 · 서울, ${MessagesFocusText.accessibility}, "))
+            val soraRow = onNodeWithTag(MessagesTags.threadRow(sora)).fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() ?: ""
+            assertFalse(soraRow, soraRow.contains(MessagesFocusText.accessibility))
+            // 얼굴 띠: 칩 없이 말만.
+            onNode(hasContentDescription("하린, 근무 중, ${MessagesFocusText.accessibility}")).assertExists()
+            onNode(hasContentDescription("소라, 근무 중")).assertExists()
+            onNodeWithTag(MessagesTags.LIST_FOCUS_NOTICE).assertDoesNotExist()
+        }
+        runComposeUiTest {
+            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { MessagesListScreen(gateOff, {}, {}, {}) } }
+            waitForIdle()
+            val harinRow = onNodeWithTag(MessagesTags.threadRow(harin)).fetchSemanticsNode().config.getOrNull(SemanticsProperties.ContentDescription)?.joinToString() ?: ""
+            assertFalse("게이트 끈 목록(Windows)이 집중을 읽었다: $harinRow", harinRow.contains(MessagesFocusText.accessibility))
+            onNode(hasContentDescription("하린, 근무 중")).assertExists()
+            onNode(hasContentDescription("하린, 근무 중, ${MessagesFocusText.accessibility}")).assertDoesNotExist()
+        }
+    }
+
+    /** 목록 위 한 줄의 부르는 자리: 내 집중이 켜짐이면 서고 문장은 입력줄 사유와 같다 · 게이트 끈 스토어(Windows)는 같은 순간에도 없다(기준선). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun listFocusNoticeStandsOnlyForMyFocus() {
+        load(peerFocus = emptySet(), myFocus = true)
+        runComposeUiTest {
+            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { MessagesListScreen(store, {}, {}, {}) } }
+            waitForIdle()
+            onNodeWithTag(MessagesTags.LIST_FOCUS_NOTICE).assertExists()
+            onNodeWithText(MessageNoticeText.senderFocused).assertExists()
+        }
+        runComposeUiTest {
+            setContent { ScreenSnapshots.Frame(false, art, characters.directory) { MessagesListScreen(gateOff, {}, {}, {}) } }
+            waitForIdle()
+            onNodeWithTag(MessagesTags.LIST_FOCUS_NOTICE).assertDoesNotExist()
+            onNodeWithText(MessageNoticeText.senderFocused).assertDoesNotExist()
         }
     }
 }

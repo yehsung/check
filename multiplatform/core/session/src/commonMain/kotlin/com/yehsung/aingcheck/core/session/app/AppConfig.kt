@@ -15,9 +15,20 @@ data class AppConfig(
      * 이 깃발은 일일 미션 목록을 가리지 않는다 — 대결 3종 미션 줄은 깃발과 무관하게 그대로 보인다(길건너 '모두에게 보이기' 선례).
      */
     val duelsEnabled: Boolean = DUELS_ENABLED_DEFAULT,
+    /**
+     * **아잉 뒤집기 떼어 내기 깃발**(판 7 — 대표 답 #d_DdwzmxPClGqk "다 넣기 (루비 걸기 포함)" · 제때 안 서면 떼어 내고 다음 판으로).
+     * 끄면 폰 조립이 리버시 스토어를 **만들지 않는다** — 게임 탭 카드 · 받은 신청(탭 배지 · 카드 칩) · 실시간 'reversi' 가지 · 허브 조회 ·
+     * 한 사람 한 판의 다섯째 방향 · 일일 미션 줄의 '맥에서' 꼬리 숨김이 전부 스토어가 있는지 하나만 보므로 함께 사라지고, 다른 게임은 판 7 이전과
+     * 같이 돈다(시험 PhoneReversiWiringTest 가 요청 기록으로 잰다). 판돈 대결 깃발([duelsEnabled])과는 **다른 축**이다 — 이 깃발이 켜져 있어도
+     * 판돈 깃발이 꺼진 빌드는 리버시 신청·수락이 체스처럼 잠긴다(AI 연습 · 관전 · 순위는 열린다). Windows 조립은 이 값을 읽지 않는다.
+     */
+    val reversiEnabled: Boolean = REVERSI_ENABLED_DEFAULT,
 ) {
     companion object {
         /** 기본은 꺼짐이다(§8-17 #1). 켜는 것은 빌드 N 의 조립 지점 몫 — 여기 기본값을 true 로 바꾸지 않는다. */
         const val DUELS_ENABLED_DEFAULT: Boolean = false
+
+        /** 기본은 켜짐이다(판 7). 떼어 낼 때는 이 한 줄을 false 로 바꾼다(또는 조립 지점이 `AppConfig(reversiEnabled = false)` 로 넣는다). */
+        const val REVERSI_ENABLED_DEFAULT: Boolean = true
     }
 }

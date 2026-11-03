@@ -72,6 +72,28 @@ object MeScreenFixtures {
     val equipped: String get() = fixture("rest.profiles.get@select=character.json")
     val giftPending: String get() = fixture("rpc.character_gift_pending@demo-gift.json")
 
+    /** Android 판 7 그림 집합(상점 번호 5) — 초상 열둘(맥 0.3.74 이슬 아잉이 포함). 데스크톱(Windows v1)은 [allPortraits](번호 4) 그대로다. */
+    val androidPortraits: Set<String> = allPortraits + "aing_isul"
+
+    /**
+     * 번호 5 의 shop_state(서버 20261108122000 — 케이크 둘 뒤에 이슬 행: 장식값 2002 · gacha_only · gift_only). 데모 선물 상점 픽스처에 그 한 줄을 더한다
+     * (Swift 데모 픽스처에는 아직 이슬 판이 없다 — 아이폰 1.0.17 이 더한다). [owned] 면 가진 사람의 보유 칸.
+     */
+    fun isulShopState(owned: Boolean = false): String {
+        val base = fixture("_me/rpc.shop_state@demo-gift.json")
+        val anchor = "\"id\": \"aing_cake_choco\""
+        val at = base.indexOf(anchor)
+        require(at >= 0) { "데모 선물 상점에 초코 케이크 행이 없다" }
+        val close = base.indexOf('}', at)
+        val row = ",\n    {\n      \"id\": \"aing_isul\",\n      \"price\": 2002,\n      \"owned\": $owned,\n      \"gacha_only\": true,\n      \"gift_only\": true\n    }"
+        return base.substring(0, close + 1) + row + base.substring(close + 1)
+    }
+
+    /** 술 한잔 선물(서버 p ≥ 5 응답 — gift.kind "drink" · 선택지 이슬 하나). [note] = 운영자 한 줄(서버 머리말의 지급 예 "오늘 한잔 어때?"). */
+    fun drinkPending(note: String? = "오늘 한잔 어때?"): String =
+        """{"status":"ok","gift":{"id":"d0000000-0000-4000-8000-00000015a001","kind":"drink","options":["aing_isul"],""" +
+            """"note":${note?.let { "\"$it\"" } ?: "null"},"created_at":"2026-11-03T09:00:00.123456+00:00"}}"""
+
     const val registerOK = """{"status":"ok","device_id":"dev-1","push_prefs":{"message":true,"gomoku_invite":true,"feedback_reply":true}}"""
 }
 

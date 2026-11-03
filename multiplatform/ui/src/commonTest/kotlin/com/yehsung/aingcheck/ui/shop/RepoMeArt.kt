@@ -2,7 +2,7 @@
 //
 // 스냅숏이 첫 장부터 그림을 갖게 한다(비동기 0). 경로 표는 ui/build.gradle.kts `aingcheckSyncCharacterArt`(+ 이 갈래 패치 0001 의 기계 그림)와 같다:
 //   files/characters/<id>/portrait-<표정>.png → Sources/check/Characters/<id>/portrait-<표정>.png
-//                                               (아잉 가족 다섯은 Sources/check/Resources/<id>-<표정>.png)
+//                                               (아잉 가족 다섯 · 이슬(0.3.74)은 Sources/check/Resources/<id>-<표정>.png)
 //   files/art/<이름>.png                     → Sources/CheckMobileKit/Resources/Art/<이름>.png
 //   files/gacha/<이름>.png                   → Sources/CheckCore/Resources/GachaMachine/<이름>.png
 // 바이트 읽기는 플랫폼 시험이 넘긴다(데스크톱 · Android 호스트 모두 java.io.File).
@@ -26,7 +26,7 @@ class RepoMeArt(private val readRepoBytes: (String) -> ByteArray?) : MeArtSource
     fun has(path: String): Boolean = peek(path) != null
 
     companion object {
-        private val aingFamily = setOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco")
+        private val aingFamily = setOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul")
         private val portrait = Regex("^files/characters/([a-z0-9_]+)/portrait-([a-z]+)\\.png$")
 
         fun repoPath(resourcePath: String): String? {

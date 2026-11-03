@@ -58,20 +58,22 @@ data class CharacterManifest(
         /** 딸기 케이크 아잉이(v0.3.66 생일 선물 전용). */
         cakeStrawberry,
         cakeChoco,
+        /** 이슬 아잉이(맥 0.3.74 '술 한잔' 선물 전용 — 초록 유리 몸 · 라벨 · 병뚜껑). Android 는 정지 초상만 그린다. */
+        isul,
         ;
 
         /** 희귀(뽑기 전용 내장 — 황금 · 무지개). 확률표 강조 · 결과 연출 · 교환 목록 맨 위가 이 값으로 갈린다. */
         val isRare: Boolean
             get() = when (this) {
                 gold, rainbow -> true
-                standard, cakeStrawberry, cakeChoco -> false
+                standard, cakeStrawberry, cakeChoco, isul -> false
             }
 
         /** 케이크 마감(딸기 · 초코)인가. */
         val isCake: Boolean
             get() = when (this) {
                 cakeStrawberry, cakeChoco -> true
-                standard, gold, rainbow -> false
+                standard, gold, rainbow, isul -> false
             }
 
         companion object {
@@ -81,6 +83,7 @@ data class CharacterManifest(
                 CharacterCatalog.isRainbowAing(characterID) -> rainbow
                 characterID == CharacterCatalog.cakeStrawberryAingID -> cakeStrawberry
                 characterID == CharacterCatalog.cakeChocoAingID -> cakeChoco
+                CharacterCatalog.isIsulAing(characterID) -> isul
                 else -> standard
             }
         }

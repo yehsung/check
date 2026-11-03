@@ -170,6 +170,7 @@ import com.yehsung.aingcheck.ui.resources.ms_visibility_fill
 import com.yehsung.aingcheck.ui.resources.ms_warning
 import com.yehsung.aingcheck.ui.resources.ms_warning_fill
 import com.yehsung.aingcheck.ui.resources.ms_wb_twilight_fill
+import com.yehsung.aingcheck.ui.resources.ms_wine_bar_fill
 import com.yehsung.aingcheck.ui.resources.ms_workspace_premium
 import org.jetbrains.compose.resources.DrawableResource
 
@@ -338,6 +339,12 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     Warning("warning", false),
     WarningFill("warning", true),
     WbTwilightFill("wb_twilight", true),
+    /**
+     * 잔(맥 0.3.74 술 한잔 선물 다시 열기 카드 `wineglass.fill` — WorkTimerStoreCakeGift.swift `reopenSymbolName`).
+     * ★ SF 기호 대응표(SfSymbolCoverageTest — 맥 원문의 기호마다 짝이 있어야 한다) 몫이고 **화면에서는 쓰지 않는다**: 폰의 다시 열기 줄은
+     *   iOS MeCakeGiftReopenRow(아이폰 1.0.17 — 기호 🥂)처럼 제목 끝 그림 글자를 쓴다(ui/shop MeCakeGiftReopenRow). 검토 ISUL-5.
+     */
+    WineBarFill("wine_bar", true),
     WorkspacePremium("workspace_premium", false),
     ;
 
@@ -510,6 +517,7 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             Warning -> Res.drawable.ms_warning
             WarningFill -> Res.drawable.ms_warning_fill
             WbTwilightFill -> Res.drawable.ms_wb_twilight_fill
+            WineBarFill -> Res.drawable.ms_wine_bar_fill
             WorkspacePremium -> Res.drawable.ms_workspace_premium
         }
 }

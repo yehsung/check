@@ -215,7 +215,8 @@ const val TAB_ICON_SIDE = 26f
 /**
  * 원형 아바타 안에서 초상을 얼마나 키우고(가운데 기준 [scale]) 어디로 옮길지([offsetY] — 그림 한 변(88% 기준)에 대한 비율, 음수 = 위로).
  * 원본: Sources/CheckMobileShared/AingCharacterArt.swift (AvatarFraming · avatarFraming(id:)).
- * **케이크 둘만** identity 가 아니다: 머리 위 장식이 캔버스에 들어가게 아잉 몸을 0.88 배로 줄여 내려 그렸으므로 그 줄임을 되돌려 몸을 아잉 자리로 올린다.
+ * **케이크 둘 · 이슬만** identity 가 아니다: 머리 위 장식(케이크 장식 · 이슬 병뚜껑)이 캔버스에 들어가게 아잉 몸을 0.88 배로 줄여 그렸으므로
+ * 그 줄임을 되돌려 몸을 아잉 자리로 올린다(맥은 `cakeBodyFramed` 자르기 — CheckAvatarView `finish.isCake || finish == .isul`).
  * 모르는 id · null · 공백은 아잉으로 접히므로 identity(iOS resolvedID 와 같은 접기 — 앞뒤 공백은 걷는다).
  */
 data class AvatarFraming(val scale: Float, val offsetY: Float) {
@@ -228,12 +229,27 @@ data class AvatarFraming(val scale: Float, val offsetY: Float) {
         const val PORTRAIT_PIXEL_SIZE = 192.0
         private val CAKE_IDS = setOf("aing_cake_strawberry", "aing_cake_choco")
 
+        /**
+         * 이슬 초상의 몸 배치(192px 캔버스): 몸 배율 0.88(scripts/make-isul-aing.swift `portraitBodyScale` 상한 — 생성기 실측 0.880) ·
+         * 몸 위끝 18.1px. 위끝은 생성기가 몸 + 병뚜껑 합친 상자를 가운데 놓아 정해지므로 상수로 박혀 있지 않다 — 이 판에서 맥 초상
+         * `aing_isul-{neutral,negative}.png` 의 줄별 알파 질량을 `aing-*.png` 의 0.88 배 사본과 맞대 잰 값이다(두 표정 모두 18.1 · 같은 방법으로
+         * 케이크를 재면 28.1/27.9 — iOS 상수 28 과 맞는다). 아이폰 1.0.17 이 iOS 상수를 정하면 그 값과 맞춘다.
+         */
+        const val ISUL_BODY_SCALE = 0.88
+        const val ISUL_BODY_TOP = 18.1
+        private const val ISUL_ID = "aing_isul"
+
         fun of(id: String?): AvatarFraming {
-            if (id?.trim() !in CAKE_IDS) return Identity
-            val s = CAKE_BODY_SCALE
+            val resolved = id?.trim()
+            val top = when (resolved) {
+                in CAKE_IDS -> CAKE_BODY_TOP
+                ISUL_ID -> ISUL_BODY_TOP
+                else -> return Identity
+            }
+            val s = if (resolved == ISUL_ID) ISUL_BODY_SCALE else CAKE_BODY_SCALE
             val side = PORTRAIT_PIXEL_SIZE
-            // 가운데 기준으로 1/s 배 키우면 케이크 Y 는 side/2 + (Y − side/2)/s 에 선다. 아잉 자리 (Y − top)/s 와의 차가 이동량이다.
-            val shift = (side / 2 - CAKE_BODY_TOP) / s - side / 2
+            // 가운데 기준으로 1/s 배 키우면 장식 초상의 Y 는 side/2 + (Y − side/2)/s 에 선다. 아잉 자리 (Y − top)/s 와의 차가 이동량이다.
+            val shift = (side / 2 - top) / s - side / 2
             return AvatarFraming((1 / s).toFloat(), (shift / side).toFloat())
         }
     }

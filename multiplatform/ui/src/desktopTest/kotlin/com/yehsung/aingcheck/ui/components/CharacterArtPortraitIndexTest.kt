@@ -26,16 +26,26 @@ class CharacterArtPortraitIndexTest {
         assertTrue(onDisk.isNotEmpty(), "Sync 출력에 초상이 없다: $synced")
         assertEquals(onDisk, index, "목록은 실린 파일 그대로(손 목록이 아니다)")
         val expected = CharacterArt.portraitIds.flatMap { id -> CharacterExpression.entries.map { "$id-${it.fileSuffix}" } }.sorted()
-        assertEquals(expected, index, "1b8260d 번들 = 초상 11 × 2(케이크 둘 포함)")
+        assertEquals(expected, index, "번들 = 초상 12 × 2(케이크 둘 · 이슬 포함 — 맥 0.3.74)")
+        assertEquals(24, index.size, "초상 12 × 2")
     }
 
     @Test
     fun shopProtocolComesFromTheShippedPortraitsAndDropsWhenOneIsMissing() {
+        // 데스크톱(Windows v1 — 기능 동결)은 술 한잔 선물을 안 받는다: 이슬 초상은 실렸지만 그림 재료에서 빠져 번호가 4 그대로다.
+        assertEquals(false, CharacterArt.takesDrinkGift, "데스크톱 문")
         val drawable = runBlocking { CharacterArt.drawableCharacterIDs() }
-        assertEquals(CharacterArt.portraitIds.toSet(), drawable)
-        assertEquals(ShopWire.cakeProtocol, ShopWire.protocolVersion(drawable), "케이크 둘까지 다 실렸다 → 4")
+        assertEquals(CharacterArt.portraitIds.toSet() - ShopWire.isulCharacterIDs.toSet(), drawable)
+        assertEquals(ShopWire.cakeProtocol, ShopWire.protocolVersion(drawable), "데스크톱: 케이크 둘까지 → 4(이슬은 실려도 빼낸다)")
         assertEquals(drawable, runBlocking { CharacterArt.drawableCharacterSource.drawableCharacterIDs() }, "스토어에 꽂는 재료가 같은 집합")
+        assertEquals(false, CharacterArt.drawableCharacterSource.takesDrinkGift, "스토어의 이슬 접기 문도 같은 플랫폼 문(검토 ISUL-1 — 데스크톱은 이슬을 아잉으로 접는다)")
         val index = runBlocking { CharacterArt.portraitResourceNames() }
+        // Android(판 7) 문 = 같은 그림 묶음에서 이슬까지 → 5. 이슬 한 장만 빠져도 4 로 내려간다(번호를 건너뛰어 말할 수 없다).
+        assertEquals(ShopWire.isulProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index, takesDrinkGift = true)), "Android: 이슬까지 → 5")
+        assertEquals(CharacterArt.portraitIds.toSet(), CharacterArt.drawableFor(index, takesDrinkGift = true))
+        assertEquals(ShopWire.cakeProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_isul-negative", takesDrinkGift = true)))
+        assertEquals(ShopWire.rainbowProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_cake_choco-neutral", takesDrinkGift = true)),
+            "이슬이 있어도 케이크 하나가 빠지면 3")
         // 초코 케이크의 한 장(negative)만 빠져도 그 캐릭터는 그릴 수 없다 → 번호가 무지개(3)로 내려간다.
         assertEquals(ShopWire.rainbowProtocol, ShopWire.protocolVersion(ShopWire.drawableCharacterIDs(index - "aing_cake_choco-negative")))
         assertEquals(ShopWire.legacyProtocol, ShopWire.protocolVersion(ShopWire.drawableCharacterIDs(index - "robot-neutral")))

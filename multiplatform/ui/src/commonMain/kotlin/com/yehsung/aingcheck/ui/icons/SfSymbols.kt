@@ -119,6 +119,9 @@ object SfSymbols {
         "gearshape" to AppIcon.Settings,
         "gearshape.fill" to AppIcon.SettingsFill,
         "gift.fill" to AppIcon.RedeemFill,
+        // 술 한잔 선물 다시 열기 카드의 잔(맥 0.3.74 `CharacterGiftKind.reopenSymbolName` — 생일은 gift.fill). 공식 Material Symbols wine_bar(채움).
+        // 대응표 몫(커버리지)이고 화면 미사용 — 폰 다시 열기 줄은 iOS 처럼 제목 끝 그림 글자 🥂 를 쓴다(검토 ISUL-5).
+        "wineglass.fill" to AppIcon.WineBarFill,
         "hand.point.right.fill" to AppIcon.PanToolAltFill,
         "hand.tap.fill" to AppIcon.TouchAppFill,
         "hare.fill" to AppIcon.CrueltyFreeFill,

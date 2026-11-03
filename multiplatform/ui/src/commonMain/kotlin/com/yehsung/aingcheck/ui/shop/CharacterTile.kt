@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.character.CharacterManifest
-import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
+import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.core.stores.me.MeCharacterTileStatus
 import com.yehsung.aingcheck.core.stores.me.MeText
 import com.yehsung.aingcheck.ui.components.CharacterExpression
@@ -101,7 +101,7 @@ object MeCharacterTileRules {
         MeCharacterTileStatus.Owned -> "$name, ${MeText.owned}"
         is MeCharacterTileStatus.Price -> "$name, ${RubyPriceRule.accessibilityText(status.price.toLong(), RubyPriceRule.isShort(status.price.toLong(), status.balance))}"
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
-        MeCharacterTileStatus.GiftOnly -> "$name, ${CakeGiftText.lockedCaption}"
+        is MeCharacterTileStatus.GiftOnly -> "$name, ${status.kind.copy.lockedCaption}"
         MeCharacterTileStatus.UnknownPrice -> "$name, 가격 모름"
         MeCharacterTileStatus.Busy -> "$name, ${MeText.loading}"
         MeCharacterTileStatus.None -> name
@@ -168,10 +168,16 @@ private fun StatusLine(id: String, status: MeCharacterTileStatus) {
             AingIcon(AppIcon.AutoAwesome, contentDescription = null, size = 12.dp, tint = GachaPaint.sparkle(CharacterManifest.Finish.of(id)))
             Text(content.text, style = MeType.footnote, color = c.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        // 생일 선물 전용 잠긴 칸 — 선물 기호(자물쇠가 아니다) + 한 줄. 루비 값도 반짝임도 없다.
+        // 선물 전용 잠긴 칸 — 선물 기호(자물쇠가 아니다) + 한 줄. 루비 값도 반짝임도 없다. 술 한잔 캡션("술 한잔 선물 전용")은 생일보다 길어
+        // 세 칸 격자 폭에서 넘친다 — 3sp 까지 줄여 담는다(Swift minimumScaleFactor 결). 단계는 원래 크기에서 0.5sp 씩 내려가게 맞춘다 —
+        // 최솟값에서 0.5 씩 올라가는 단계가 원래 크기에 안 닿으면 들어맞는 생일 캡션까지 한 단계 작아진다(실측: 0.75 배 최솟값이 그랬다).
         is MeCharacterTileStatus.Content.Locked -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             AingIcon(AppIcon.RedeemFill, contentDescription = null, size = 12.dp, tint = c.label2)
-            Text(content.text, style = MeType.footnote, color = c.label2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val size = MeType.footnote.fontSize
+            Text(
+                content.text, style = MeType.footnote, color = c.label2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                autoSize = TextAutoSize.StepBased(minFontSize = (size.value - 3f).sp, maxFontSize = size, stepSize = 0.5.sp),
+            )
         }
         MeCharacterTileStatus.Content.Spinner -> CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
     }

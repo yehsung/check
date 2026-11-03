@@ -52,7 +52,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.character.CharacterManifest
-import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
+import com.yehsung.aingcheck.core.rules.character.gift.copy
+import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
 import com.yehsung.aingcheck.core.stores.me.MeCharacterName
 import com.yehsung.aingcheck.core.stores.me.MeCharacterTileStatus
 import com.yehsung.aingcheck.core.stores.me.MeStore
@@ -62,6 +63,7 @@ import com.yehsung.aingcheck.core.stores.me.chooseCharacter
 import com.yehsung.aingcheck.core.stores.me.equippedCharacterID
 import com.yehsung.aingcheck.core.stores.me.gachaShardCost
 import com.yehsung.aingcheck.core.stores.me.isGachaOnly
+import com.yehsung.aingcheck.core.stores.me.giftKind
 import com.yehsung.aingcheck.core.stores.me.isGiftOnly
 import com.yehsung.aingcheck.core.stores.me.isOwned
 import com.yehsung.aingcheck.core.stores.me.isUnlocked
@@ -148,12 +150,13 @@ object CharacterPickerRules {
         price: Long?,
         balance: Long?,
         unlocked: Boolean,
+        giftKind: CharacterGiftKind = CharacterGiftKind.birthday,
     ): MeCharacterTileStatus = when {
         savingThis -> MeCharacterTileStatus.Busy
         isOn -> MeCharacterTileStatus.Equipped
         owned -> MeCharacterTileStatus.Owned
         // 고르기에는 가진 사람에게만 서므로(pickerIDs) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
-        giftOnly -> MeCharacterTileStatus.GiftOnly
+        giftOnly -> MeCharacterTileStatus.GiftOnly(giftKind)
         gachaOnly -> MeCharacterTileStatus.GachaOnly(shardCost)
         price != null -> MeCharacterTileStatus.Price(price, balance)
         unlocked -> MeCharacterTileStatus.None
@@ -173,15 +176,15 @@ object CharacterPickerRules {
             "$name, ${RubyPriceRule.accessibilityText(p.toLong(), RubyPriceRule.isShort(p.toLong(), status.balance))}"
         }
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
-        MeCharacterTileStatus.GiftOnly -> "$name, ${CakeGiftText.lockedCaption}"
+        is MeCharacterTileStatus.GiftOnly -> "$name, ${status.kind.copy.lockedCaption}"
         MeCharacterTileStatus.UnknownPrice -> "$name, 가격 모름"
         MeCharacterTileStatus.Busy -> "$name, ${MeText.loading}"
         MeCharacterTileStatus.None -> name
     }
 
     /** 잠긴 타일 읽기 글자(얻는 길을 말한다). */
-    fun lockedLabel(name: String, giftOnly: Boolean, gachaOnly: Boolean, shardCost: Long?): String = when {
-        giftOnly -> "$name, 잠김 — ${CakeGiftText.lockedCaption}"
+    fun lockedLabel(name: String, giftOnly: Boolean, gachaOnly: Boolean, shardCost: Long?, giftKind: CharacterGiftKind = CharacterGiftKind.birthday): String = when {
+        giftOnly -> "$name, 잠김 — ${giftKind.copy.lockedCaption}"
         gachaOnly -> "$name, 잠김 — ${MeText.gachaAcquirePhrase(shardCost)}"
         else -> "$name, 잠김 — 상점에서 사기"
     }
@@ -289,8 +292,10 @@ private fun PickerTile(store: MeStore, id: String, openGachaMachine: () -> Unit,
         price = store.price(id),
         balance = store.rubyBalance,
         unlocked = unlocked,
+        giftKind = store.giftKind(id),
     )
-    val label = if (unlocked) CharacterPickerRules.accessibilityText(name, status) else CharacterPickerRules.lockedLabel(name, giftOnly, gachaOnly, shardCost)
+    val label = if (unlocked) CharacterPickerRules.accessibilityText(name, status)
+    else CharacterPickerRules.lockedLabel(name, giftOnly, gachaOnly, shardCost, store.giftKind(id))
     MeCharacterTile(
         id = id,
         name = name,
@@ -419,7 +424,7 @@ object TileSparkle {
     fun solid(colors: AingColors, finish: CharacterManifest.Finish): androidx.compose.ui.graphics.Color? = when (finish) {
         CharacterManifest.Finish.rainbow -> if (colors.isDark) null else colors.rainbowStops[5]
         CharacterManifest.Finish.gold, CharacterManifest.Finish.standard,
-        CharacterManifest.Finish.cakeStrawberry, CharacterManifest.Finish.cakeChoco -> colors.gold
+        CharacterManifest.Finish.cakeStrawberry, CharacterManifest.Finish.cakeChoco, CharacterManifest.Finish.isul -> colors.gold
     }
 }
 

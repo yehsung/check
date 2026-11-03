@@ -32,7 +32,7 @@ class MeSubScreenRulesTest {
         assertEquals(MeCharacterTileStatus.Busy, status(saving = true, on = true, owned = true), "저장 중이 무엇보다 먼저")
         assertEquals(MeCharacterTileStatus.Equipped, status(on = true, owned = true))
         assertEquals(MeCharacterTileStatus.Owned, status(owned = true, price = 60))
-        assertEquals(MeCharacterTileStatus.GiftOnly, status(gift = true, gacha = true, price = 2000), "선물 전용이 뽑기 전용·가격보다 먼저")
+        assertEquals(MeCharacterTileStatus.GiftOnly(), status(gift = true, gacha = true, price = 2000), "선물 전용이 뽑기 전용·가격보다 먼저")
         assertEquals(MeCharacterTileStatus.GachaOnly(20), status(gacha = true, shard = 20, price = 1000), "뽑기 전용은 명목가(1000)를 말하지 않는다")
         assertEquals(MeCharacterTileStatus.Price(60, 120), status(price = 60, balance = 120))
         assertEquals(MeCharacterTileStatus.None, status(unlocked = true))

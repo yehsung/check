@@ -10,6 +10,8 @@ import com.yehsung.aingcheck.core.rules.character.CharacterSyncDecision
  * Swift 판은 카드 그림을 HEIC base64 로 **소스에 박았다**(폰 번들 자리가 기반 소유라). Android·Windows 는 그림을 git 에 두지 않는다(A-X18):
  * 카드 그림은 ui 의 Gradle Sync 가 싣는 초상(`CharacterArt.portraitPath`)이 맡고, 여기에는 id · 이름 · 자르기 값만 남긴다
  * (무지개·케이크 카드 자르기 값은 0.3.59·0.3.66 의 Swift 생성물과 같은 수 — 드리프트는 Swift `MeCharacterCardTests` 가 잰다).
+ * 이슬(맥 0.3.74 · Android 판 7)은 Swift 카드 생성물이 아직 없어(아이폰 1.0.17 이 굽는다) 맥 초상 `aing_isul-neutral.png` 의 알파 상자
+ * (x 23–168 · y 20–170, 알파 > 0)를 직접 잰 값이다 — Kotlin 은 이 자르기 값을 그리기에 쓰지 않는다(메타).
  */
 data class MeCharacterCard(
     val id: String,
@@ -37,6 +39,7 @@ object MeCharacterCards {
         MeCharacterCard("aing_rainbow", "무지개 아잉이", false, 180, 179, 180, 179),
         MeCharacterCard("aing_cake_strawberry", "딸기 케이크 아잉이", false, 146, 163, 146, 163),
         MeCharacterCard("aing_cake_choco", "초코 케이크 아잉이", false, 146, 169, 146, 169),
+        MeCharacterCard("aing_isul", "이슬 아잉이", false, 146, 151, 146, 151),
         MeCharacterCard("fox", "여우", false, 444, 512, 187, 216),
         MeCharacterCard("ghost", "유령", false, 504, 512, 213, 216),
         MeCharacterCard("jellyfish", "해파리", false, 444, 512, 187, 216),
@@ -50,7 +53,7 @@ object MeCharacterCards {
     fun displayName(id: String): String = card(id)?.displayName ?: id
 
     /**
-     * 이 빌드가 아는 캐릭터 id — 코어 `CharacterCatalog.allIDs` 와 같은 순서: 내장(아잉 · 황금 · 무지개 · 딸기 케이크 · 초코 케이크)이 그 순서로
+     * 이 빌드가 아는 캐릭터 id — 코어 `CharacterCatalog.allIDs` 와 같은 순서: 내장(아잉 · 황금 · 무지개 · 딸기 케이크 · 초코 케이크 · 이슬)이 그 순서로
      * 먼저, 나머지는 정렬(케이크 둘은 정렬이면 금보다 앞이고 초코가 딸기보다 앞이라 내장 순서로 박는다).
      */
     val knownIDs: List<String>
@@ -60,11 +63,27 @@ object MeCharacterCards {
             return builtIns + ids.filter { it !in builtIns }.sorted()
         }
 
+    /** 카드 표에 있는가(이름 · 자르기 메타 — 플랫폼과 무관). 착용값 접기 · 고르기 목록은 [isKnown] 의 두 인자 판을 쓴다. */
     fun isKnown(id: String): Boolean = card(id) != null
 
-    /** 서버 착용값 → 화면에 세울 id. 비었거나 이 빌드가 모르는 id 면 아잉(서버 값은 건드리지 않는다). */
-    fun equippedID(fromServer: String?): String {
+    /**
+     * 이 플랫폼이 아는 캐릭터 id — [knownIDs] 에서 술 한잔 선물 캐릭터(이슬)는 그 선물을 받는 플랫폼([takesDrinkGift] — Android 판 7)에만 남긴다.
+     * 번호 4 플랫폼(Windows v1)은 0.3.73 처럼 이슬을 모른다: 서버가 이슬 행을 가진 사람에게도 안 싣는 상대라(20261108122000 §5-2) 알면 잠긴
+     * '착용 중' 칸이 선다(검토 ISUL-1). 문은 나 탭 스토어가 쥔 그림 재료의 [DrawableCharacterSource.takesDrinkGift] 하나다.
+     */
+    fun knownIDs(takesDrinkGift: Boolean): List<String> =
+        if (takesDrinkGift) knownIDs else knownIDs.filter { it !in CharacterCatalog.drinkGiftBuiltInIDs }
+
+    /** [knownIDs] (두 인자 판)에 드는가. */
+    fun isKnown(id: String, takesDrinkGift: Boolean): Boolean =
+        isKnown(id) && (takesDrinkGift || id !in CharacterCatalog.drinkGiftBuiltInIDs)
+
+    /**
+     * 서버 착용값 → 화면에 세울 id. 비었거나 이 플랫폼이 모르는 id 면 아잉(서버 값은 건드리지 않는다). 술 한잔 선물을 안 받는 플랫폼은
+     * 이슬도 아잉으로 접는다(0.3.73 과 같다 — 서버 설계 전제 '옛 클라는 모르는 착용 id 를 아잉으로 접는다').
+     */
+    fun equippedID(fromServer: String?, takesDrinkGift: Boolean): String {
         val id = CharacterSyncDecision.normalized(fromServer) ?: return aingID
-        return if (isKnown(id)) id else aingID
+        return if (isKnown(id, takesDrinkGift)) id else aingID
     }
 }

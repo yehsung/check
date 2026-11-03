@@ -1,8 +1,9 @@
 // 원본: Sources/CheckMobileKit/Me/MeCharacterViews.swift:1-63 @ 1b8260d (64– 는 `#if os(iOS)` 화면 — W4-c)
 package com.yehsung.aingcheck.core.stores.me
 
-import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
+import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.core.rules.gacha.GachaRules
+import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
 
 /**
  * 타일 · 구매 막대 · 고르기 머리에 설 캐릭터 이름. 카드 표 → **코어 내장 이름** → id 차례다.
@@ -23,8 +24,11 @@ sealed interface MeCharacterTileStatus {
     /** 뽑기·조각 교환으로만 얻는다(황금 · 무지개 아잉이) — 가격 대신 얻는 길. 교환값은 서버 값(모르면 null). */
     data class GachaOnly(val shardCost: Long?) : MeCharacterTileStatus
 
-    /** 생일 선물로만 얻는다(케이크 아잉이 둘) — 안 가진 사람의 잠긴 칸. 가격 · 사기 단추 없이 "생일 선물 전용". */
-    data object GiftOnly : MeCharacterTileStatus
+    /**
+     * 선물로만 얻는다 — 안 가진 사람의 잠긴 칸. 가격 · 사기 단추 없이 그 선물 종류의 캡션(생일 "생일 선물 전용" · 술 한잔 "술 한잔 선물 전용").
+     * [kind] 는 내장 id 로 안다(`MeStore.giftKind` — 서버 행은 종류를 싣지 않는다).
+     */
+    data class GiftOnly(val kind: CharacterGiftKind = CharacterGiftKind.birthday) : MeCharacterTileStatus
     data object UnknownPrice : MeCharacterTileStatus
     data object Busy : MeCharacterTileStatus
     data object None : MeCharacterTileStatus
@@ -46,8 +50,8 @@ sealed interface MeCharacterTileStatus {
     }
 
     /**
-     * **뽑기 전용은 Acquire 다 — Ruby 가 아니다**: 서버가 금·무지개 행에 싣는 명목 가격(1000)은 사는 값이 아니다. 생일 선물 전용(케이크 —
-     * 장식값 2000)도 같은 까닭으로 Locked 다.
+     * **뽑기 전용은 Acquire 다 — Ruby 가 아니다**: 서버가 금·무지개 행에 싣는 명목 가격(1000)은 사는 값이 아니다. 선물 전용(케이크 —
+     * 장식값 2000 · 이슬 — 2002)도 같은 까닭으로 Locked 다.
      */
     val content: Content
         get() = when (this) {
@@ -55,7 +59,7 @@ sealed interface MeCharacterTileStatus {
             Owned -> Content.Text(MeText.owned, emphasized = false)
             is Price -> Content.Ruby(price, balance)
             is GachaOnly -> Content.Acquire(MeText.gachaTileStatus(shardCost))
-            GiftOnly -> Content.Locked(CakeGiftText.lockedCaption)
+            is GiftOnly -> Content.Locked(kind.copy.lockedCaption)
             UnknownPrice -> Content.Text("—", emphasized = false)
             Busy -> Content.Spinner
             None -> Content.Text(" ", emphasized = false)

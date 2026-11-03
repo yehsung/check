@@ -158,6 +158,8 @@ internal object SfSymbolScan {
         // SceneKit 노드·재질 이름·모양 캐시 키(0.3.66 케이크 아잉이 장식 Sources/check/CakeAingFinish.swift ·
         // 0.3.67 길건너 판 Sources/check/MiniGameCrossyScene.swift) — 기호가 아니다(CoreGlyphs 이름표에 없음)
         "aing.fallback", "cake.cream", "cake.leaf", "cake.wick", "check.cake.candle", "check.cake.strawberry",
+        // 0.3.74 이슬 아잉이 병뚜껑 노드 이름(Sources/check/IsulAingFinish.swift `IsulCap.capNodeName`) — 기호가 아니다
+        "check.isul.cap",
         "lamp.off", "lamp.on", "road.dashes", "signal.post", "tree.0", "tree.1", "tree.2",
         // 아잉 큐브 창 id · 저장 키 · 스크롤 자리(0.3.69~) · 맥 파일 격리 속성(0.3.69 MoveToApplications) — 기호가 아니다
         "check.rummy.window", "rummy.engaged.v2", "rummy.engaged.v2.owner", "rummy.match", "com.apple.quarantine",

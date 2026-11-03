@@ -130,7 +130,11 @@ suspend fun SupabaseWorkService.fetchAppUserCharacters(accessToken: String): Lis
 
 // ======================================================================== 케이크 선물(v0.3.66)
 
-/** 받을 선물(status ok 일 때만). 함수가 없으면 null(서버 준비 전 — 선물 없음과 같다). */
+/**
+ * 받을 선물(status ok 일 때만). 함수가 없으면 null(서버 준비 전 — 선물 없음과 같다).
+ * 이 빌드의 번호로 받을 수 없는 종류(술 선물인데 번호 4)는 서버가 안 싣는 것이 정본이지만, 섞여 와도 null 이다
+ * (열어 봐야 수령이 `needs_update` 다 — 받을 수 없는 창을 띄우지 않는다 · Swift `fetchCharacterGiftPending` 0.3.74 와 같다).
+ */
 suspend fun SupabaseWorkService.fetchCharacterGiftPending(accessToken: String, protocolVersion: Long): CharacterGiftOffer? {
     val data = try {
         send(
@@ -141,7 +145,8 @@ suspend fun SupabaseWorkService.fetchCharacterGiftPending(accessToken: String, p
         if (ServiceErrorClassifier.isMissingFunction(e)) return null
         throw e
     }
-    return decode(CharacterGiftPendingResponse.serializer(), data).offer
+    val offer = decode(CharacterGiftPendingResponse.serializer(), data).offer ?: return null
+    return if (offer.kind.isSupported(protocolVersion.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt())) offer else null
 }
 
 suspend fun SupabaseWorkService.claimCharacterGift(accessToken: String, giftID: String, characterID: String, protocolVersion: Long): CharacterGiftClaimResponse {

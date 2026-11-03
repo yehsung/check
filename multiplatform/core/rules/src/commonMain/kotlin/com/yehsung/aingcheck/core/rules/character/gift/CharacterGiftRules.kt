@@ -1,8 +1,10 @@
-// 원본: Sources/CheckCore/CharacterGift.swift:164-217(CharacterGiftClaimOutcome) · :269-326(CakeGiftText) @ 1b8260d
-//       (1–163 전선 모양 · 218–268 서비스 · 327– 디코드 보조는 W1-d — 배정표 round5 의 줄 구간)
+// 원본: Sources/CheckCore/CharacterGift.swift(CharacterGiftClaimOutcome · CakeGiftText · DrinkGiftText · CharacterGiftCopy · CharacterGiftKind.copy) @ 12624739
+//       (전선 모양 · CharacterGiftKind 의 원문 값 · 서비스 · 디코드 보조는 W1-d core/wire — 배정표 round5)
 package com.yehsung.aingcheck.core.rules.character.gift
 
+import com.yehsung.aingcheck.core.rules.gacha.ShopWire
 import com.yehsung.aingcheck.core.rules.text.TextScalars
+import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
 
 /**
  * 생일 선물 수령 한 번의 도메인 결과(맥 · 폰 · Android 한 벌). **모르는 status 는 `failed(원문)`** — 화면이 죽지 않는다.
@@ -13,7 +15,7 @@ sealed interface CharacterGiftClaimOutcome {
     data class received(val characterID: String, val replayed: Boolean) : CharacterGiftClaimOutcome
     /** 이미 **다른** 캐릭터로 받은 선물(받은 것 — 서버가 안 실었으면 null). */
     data class alreadyClaimed(val characterID: String?) : CharacterGiftClaimOutcome
-    /** 이 빌드는 케이크를 못 그린다(p_protocol < 4) — 아무것도 안 움직였다. */
+    /** 이 빌드는 그 선물의 캐릭터를 못 그린다(생일 p_protocol < 4 · 술 < 5) — 아무것도 안 움직였다. */
     data object needsUpdate : CharacterGiftClaimOutcome
     /** 내 선물이 아니거나 없다. */
     data object notFound : CharacterGiftClaimOutcome
@@ -109,3 +111,94 @@ object CakeGiftText {
         return low.code
     }
 }
+
+/**
+ * '술 한잔' 선물 문구(맥 0.3.74 이슬 아잉이 — Swift `DrinkGiftText` 글자 그대로). [CakeGiftText] 와 같은 모양이다 — 받는 창 · 상점 잠긴 칸 ·
+ * 다시 열기 카드가 같이 쓴다. 실패 · 거절 줄은 생일과 한 벌이다.
+ * 문구는 대표 결정(2026-11-03, 결재 #d_QKdjqLLU7S0b "C 짧고 가볍게 (짠! 🥂)" — 수고 인사처럼 가볍게). 잠긴 칸 캡션 · 안내 · 받은 뒤 한 줄은
+ * C 안에 따로 없어 설계서 §5 가제를 그대로 둔다(맥과 같다).
+ */
+object DrinkGiftText {
+    /** 받는 창 제목. */
+    const val title = "짠! 🥂"
+    /** 받는 창 본문(운영자 한 줄 `note` 가 있으면 화면이 그 위에 크게 — 초대장처럼). */
+    const val body = "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!"
+    /** 확인 단추(고를 것이 없다 — 선택지는 이슬 하나). */
+    const val confirmButton = "짠 받기"
+    /** 받은 뒤의 단추 둘(생일과 같은 글자). */
+    const val wearNowButton = CakeGiftText.wearNowButton
+    const val closeButton = CakeGiftText.closeButton
+    /** 상점 잠긴 칸 캡션(가격 · 사기 단추 자리). */
+    const val lockedCaption = "술 한잔 선물 전용"
+    /** 잠긴 칸을 골랐을 때의 안내. */
+    const val lockedHint = "술 한잔 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요."
+    /** 받지 않고 닫은 뒤 나 탭에 남는 카드. */
+    const val reopenTitle = "짠! 선물이 왔어요"
+    const val reopenButton = "받기"
+    /** 결과를 모르는 수령의 한 줄 — 생일과 같은 글자다(다시 눌러도 안전하다). */
+    const val claimFailed = CakeGiftText.claimFailed
+
+    /** 받은 뒤 한 줄 — "이슬 아잉이를 받았어요!"(조사 규칙은 생일과 한 곳). */
+    fun received(name: String): String = CakeGiftText.received(name)
+
+    /** 수령 결과 중 받은 화면이 아닌 것의 한 줄 — 생일과 같은 어휘 · 같은 글자. */
+    fun notice(outcome: CharacterGiftClaimOutcome, name: (String) -> String): String? = CakeGiftText.notice(outcome, name)
+}
+
+/** 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 [CharacterGiftKind.copy] 로 받는다(글자는 [CakeGiftText] · [DrinkGiftText] 한 곳). */
+data class CharacterGiftCopy(
+    val title: String,
+    val body: String,
+    val confirmButton: String,
+    val wearNowButton: String,
+    val closeButton: String,
+    val lockedCaption: String,
+    val lockedHint: String,
+    val reopenTitle: String,
+    val reopenButton: String,
+    /** 결과를 모르는 수령의 한 줄. */
+    val claimFailed: String,
+) {
+    /** 받은 뒤 한 줄(종류와 무관하게 한 규칙 — "○○를 받았어요!"). */
+    fun received(name: String): String = CakeGiftText.received(name)
+
+    /** 수령 결과 한 줄(실패 · 거절 줄은 두 종류가 같은 글자다). */
+    fun notice(outcome: CharacterGiftClaimOutcome, name: (String) -> String): String? = CakeGiftText.notice(outcome, name)
+
+    companion object {
+        /** 생일 선물(케이크 아잉이 — 0.3.66). */
+        val birthday = CharacterGiftCopy(
+            title = CakeGiftText.title, body = CakeGiftText.body, confirmButton = CakeGiftText.confirmButton,
+            wearNowButton = CakeGiftText.wearNowButton, closeButton = CakeGiftText.closeButton,
+            lockedCaption = CakeGiftText.lockedCaption, lockedHint = CakeGiftText.lockedHint,
+            reopenTitle = CakeGiftText.reopenTitle, reopenButton = CakeGiftText.reopenButton,
+            claimFailed = CakeGiftText.claimFailed,
+        )
+
+        /** '술 한잔' 선물(이슬 아잉이 — 0.3.74). */
+        val drink = CharacterGiftCopy(
+            title = DrinkGiftText.title, body = DrinkGiftText.body, confirmButton = DrinkGiftText.confirmButton,
+            wearNowButton = DrinkGiftText.wearNowButton, closeButton = DrinkGiftText.closeButton,
+            lockedCaption = DrinkGiftText.lockedCaption, lockedHint = DrinkGiftText.lockedHint,
+            reopenTitle = DrinkGiftText.reopenTitle, reopenButton = DrinkGiftText.reopenButton,
+            claimFailed = DrinkGiftText.claimFailed,
+        )
+    }
+}
+
+/** 이 종류의 문구 묶음(Swift `CharacterGiftKind.copy`). */
+val CharacterGiftKind.copy: CharacterGiftCopy
+    get() = when (this) {
+        CharacterGiftKind.birthday -> CharacterGiftCopy.birthday
+        CharacterGiftKind.drink -> CharacterGiftCopy.drink
+    }
+
+/**
+ * 이 종류를 받을 수 있는 최소 능력 번호 — rules 의 정본 상수(`ShopWire.cakeProtocol` · `ShopWire.isulProtocol`). 와이어 열거의
+ * [CharacterGiftKind.minProtocol] 와 같아야 한다(rules 시험이 맞댄다 — 와이어는 rules 를 못 봐서 숫자를 따로 쥔다).
+ */
+val CharacterGiftKind.shopMinProtocol: Int
+    get() = when (this) {
+        CharacterGiftKind.birthday -> ShopWire.cakeProtocol
+        CharacterGiftKind.drink -> ShopWire.isulProtocol
+    }

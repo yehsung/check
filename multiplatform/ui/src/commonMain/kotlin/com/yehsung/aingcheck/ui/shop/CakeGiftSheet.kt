@@ -4,6 +4,12 @@
 // [이걸로 받을게요] → 받은 뒤 "○○를 받았어요!" + [지금 입기] [닫기]. 실패하면 한 줄 안내를 보이고 다시 누르게 한다.
 // 상태 · 판정은 스토어(W2-c MeStoreCakeGift), 문구는 코어(rules CakeGiftText — 맥과 같은 글자)다. 이 파일은 그리기만 한다.
 // 사용자 결정(기억 cake-aing-decisions): 딸기 · 초코 둘 중 **하나를 골라** 받는다 · 구매·뽑기·조각 불가 · 받으면 축하(고르기) 창 한 번.
+//
+// '술 한잔' 선물(맥 0.3.74 이슬 아잉이 · Android 판 7 — 원본: Sources/check/CheckCakeGiftWindow.swift @ 12624739 `inviteScreen`):
+// 같은 시트가 선물 종류로 가른다(MeCakeGiftSheet.kind). 술 선물은 선택지가 이슬 하나라 **고르기가 없다** — 초대장 화면:
+// 제목 "짠! 🥂" · 초대장 카드(운영자 한 줄 note 가 있으면 그것을 크게, 본문은 그 아래 작게 — 없으면 본문이 초대장의 큰 글) · 이슬 초상 하나 ·
+// [짠 받기]. 받은 뒤 화면 · 닫기는 생일과 한 길이다. 글자는 전부 종류의 문구 묶음(rules CharacterGiftCopy — CakeGiftText · DrinkGiftText)에서 온다.
+// 대표 결정(되묻지 않는다): 얻는 길 "선물 전용 (케이크처럼)" · 받는 창 문구 "C 짧고 가볍게 (짠! 🥂)".
 package com.yehsung.aingcheck.ui.shop
 
 import androidx.compose.foundation.background
@@ -38,6 +44,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -50,7 +58,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
 import com.yehsung.aingcheck.core.stores.me.MeCakeGiftSheet
 import com.yehsung.aingcheck.core.stores.me.MeCharacterName
 import com.yehsung.aingcheck.core.stores.me.MeStore
@@ -62,6 +69,7 @@ import com.yehsung.aingcheck.core.stores.me.reopenCakeGift
 import com.yehsung.aingcheck.core.stores.me.selectCakeGiftOption
 import com.yehsung.aingcheck.core.stores.me.showsCakeGiftReopen
 import com.yehsung.aingcheck.core.stores.me.wearReceivedCakeGift
+import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
@@ -73,6 +81,12 @@ object CakeGiftTags {
     const val CONFIRM = "cakeGift.confirm"
     const val TITLE_TEXT = "cakeGift.title.text"
     const val TITLE_GLYPH = "cakeGift.title.glyph"
+    /** 술 한잔 초대장 카드(운영자 한 줄 · 본문). */
+    const val INVITE_CARD = "cakeGift.invite.card"
+    /** 술 한잔 초대장의 캐릭터(이슬) 초상 칸. */
+    const val INVITE_ART = "cakeGift.invite.art"
+    /** 다시 열기 줄의 그림 글자 칸. */
+    const val REOPEN_GLYPH = "cakeGift.reopen.glyph"
 }
 
 /**
@@ -130,10 +144,11 @@ fun MeCakeGiftSheetContent(store: MeStore, item: MeCakeGiftSheet, modifier: Modi
             verticalArrangement = Arrangement.spacedBy(AingDimens.space4),
         ) {
             when (val phase = sheet.phase) {
-                MeCakeGiftSheet.Phase.Choosing, MeCakeGiftSheet.Phase.Claiming -> Choosing(store, sheet)
-                is MeCakeGiftSheet.Phase.Received -> Received(phase.characterID)
+                MeCakeGiftSheet.Phase.Choosing, MeCakeGiftSheet.Phase.Claiming ->
+                    if (sheet.choosesOption) Choosing(store, sheet) else Invite(sheet)
+                is MeCakeGiftSheet.Phase.Received -> Received(sheet, phase.characterID)
                 MeCakeGiftSheet.Phase.Closed -> {
-                    Heading(CakeGiftText.title, null)
+                    Heading(sheet.texts.title, null)
                     sheet.notice?.let { MeInlineNotice(it, MeNoticeKind.Info) }
                 }
             }
@@ -145,12 +160,68 @@ fun MeCakeGiftSheetContent(store: MeStore, item: MeCakeGiftSheet, modifier: Modi
 @Composable
 private fun Choosing(store: MeStore, sheet: MeCakeGiftSheet) {
     val c = AingTheme.colors
-    Heading(CakeGiftText.title, CakeGiftText.body)
+    Heading(sheet.texts.title, sheet.texts.body)
     sheet.gift.note?.let { Text(it, style = MeType.subheadline, color = c.label2, textAlign = TextAlign.Center) }
     Row(horizontalArrangement = Arrangement.spacedBy(AingDimens.space3), verticalAlignment = Alignment.Top) {
         for (id in sheet.gift.options) {
             OptionCard(store, id, isSelected = sheet.selection == id, isLocked = sheet.phase != MeCakeGiftSheet.Phase.Choosing, Modifier.weight(1f))
         }
+    }
+    sheet.notice?.let { MeInlineNotice(it, MeNoticeKind.Warning) }
+}
+
+/**
+ * 술 한잔 초대장(고르기 없음 — 스토어가 이슬 하나를 미리 골라 둔다). "술 한잔 하자고 초대 보내는 느낌"(대표 메모):
+ * 운영자 한 줄(note)이 있으면 초대장 카드의 큰 글이고 본문은 그 아래 작게, 없으면 본문이 큰 글이다(맥 inviteScreen 과 같은 위계).
+ * 카드 = 강조색 옅은 받침 + 강조색 점선 테(맥: 게이지 그라데이션 14% · accent 75% 점선 6/4).
+ */
+@Composable
+private fun Invite(sheet: MeCakeGiftSheet) {
+    val c = AingTheme.colors
+    val copy = sheet.texts
+    val id = sheet.gift.options.firstOrNull() ?: return
+    val note = sheet.gift.note
+    MeCakeGiftTitle(copy.title)
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .testTag(CakeGiftTags.INVITE_CARD)
+            .background(c.accent.copy(alpha = 0.10f), shape)
+            .drawBehind {
+                val stroke = 1.5.dp.toPx()
+                drawRoundRect(
+                    color = c.accent.copy(alpha = 0.75f),
+                    topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(16.dp.toPx() - stroke / 2),
+                    style = Stroke(stroke, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 4.dp.toPx()))),
+                )
+            }
+            .semantics(mergeDescendants = true) { }
+            .padding(vertical = 12.dp, horizontal = AingDimens.space4),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        // 줄 수를 막지 않는다(검토 ISUL-2): 시트는 세로로 스크롤되고, 맥의 lineLimit 2 는 고정 창 몫이다(그래서 맥은 0.75 배 줄이기를 같이 건다).
+        // 막으면 좁은 폰 · 큰 글꼴(2.0 배 — 본문은 320dp, 긴 한 줄은 360dp 에서 3 줄)에서 뒷부분이 말줄임도 없이 사라진다 — 줄을 늘려 다 보인다.
+        if (note != null) {
+            Text(note, style = MeType.title3.copy(fontWeight = FontWeight.Bold), color = c.label, textAlign = TextAlign.Center)
+        }
+        Text(
+            copy.body,
+            style = if (note == null) MeType.headline else MeType.footnote,
+            color = if (note == null) c.label else c.label2,
+            textAlign = TextAlign.Center,
+        )
+    }
+    Column(
+        Modifier.semantics(mergeDescendants = true) { },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(AingDimens.space1),
+    ) {
+        Box(Modifier.testTag(CakeGiftTags.INVITE_ART), contentAlignment = Alignment.Center) { MeCharacterArt(id, 132.dp) }
+        Text(MeCharacterName.display(id), style = MeType.subheadline.copy(fontWeight = FontWeight.SemiBold), color = c.label, maxLines = 1)
     }
     sheet.notice?.let { MeInlineNotice(it, MeNoticeKind.Warning) }
 }
@@ -199,7 +270,7 @@ private fun OptionCard(store: MeStore, id: String, isSelected: Boolean, isLocked
 }
 
 @Composable
-private fun Received(id: String) {
+private fun Received(sheet: MeCakeGiftSheet, id: String) {
     val c = AingTheme.colors
     Box(
         Modifier.padding(top = AingDimens.space4).size(170.dp, 170.dp).drawBehind {
@@ -215,7 +286,7 @@ private fun Received(id: String) {
         // 초상 원본은 192px 다 — 너무 키우면 흐리다. 나 탭 무대(132)와 비슷한 크기로.
         MeLiveOrPortrait(id, 144.dp, Modifier.padding(bottom = 10.dp))
     }
-    Heading(CakeGiftText.received(MeCharacterName.display(id)), null)
+    Heading(sheet.texts.received(MeCharacterName.display(id)), null)
 }
 
 @Composable
@@ -259,32 +330,43 @@ private fun BottomBar(store: MeStore, sheet: MeCakeGiftSheet) {
     ) {
         when (sheet.phase) {
             MeCakeGiftSheet.Phase.Choosing, MeCakeGiftSheet.Phase.Claiming -> MeButton(
-                CakeGiftText.confirmButton, Modifier.testTag(CakeGiftTags.CONFIRM), kind = MeButtonKind.Filled, size = MeButtonSize.Lg, fillsWidth = true,
+                sheet.texts.confirmButton, Modifier.testTag(CakeGiftTags.CONFIRM), kind = MeButtonKind.Filled, size = MeButtonSize.Lg, fillsWidth = true,
                 isBusy = sheet.phase == MeCakeGiftSheet.Phase.Claiming, enabled = sheet.canConfirm,
             ) { store.confirmCakeGift() }
             is MeCakeGiftSheet.Phase.Received -> {
-                MeButton(CakeGiftText.wearNowButton, kind = MeButtonKind.Filled, size = MeButtonSize.Lg, fillsWidth = true) { store.wearReceivedCakeGift() }
-                MeButton(CakeGiftText.closeButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Lg, fillsWidth = true) { store.dismissCakeGiftSheet() }
+                MeButton(sheet.texts.wearNowButton, kind = MeButtonKind.Filled, size = MeButtonSize.Lg, fillsWidth = true) { store.wearReceivedCakeGift() }
+                MeButton(sheet.texts.closeButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Lg, fillsWidth = true) { store.dismissCakeGiftSheet() }
             }
             MeCakeGiftSheet.Phase.Closed ->
-                MeButton(CakeGiftText.closeButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Lg, fillsWidth = true) { store.dismissCakeGiftSheet() }
+                MeButton(sheet.texts.closeButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Lg, fillsWidth = true) { store.dismissCakeGiftSheet() }
         }
     }
 }
 
-/** 고르지 않고 닫은 열린 선물 — 나 탭 무대 카드 바로 아래에 **수령할 때까지** 선다("생일 선물이 도착했어요" [고르기]). 자리는 W3-b 나 탭 루트. */
+/**
+ * 고르지 않고 닫은 열린 선물 — 나 탭 무대 카드 바로 아래에 **수령할 때까지** 선다. 자리는 W3-b 나 탭 루트.
+ * 글자는 선물 종류의 묶음(생일 "생일 선물이 도착했어요" [고르기] · 술 한잔 "짠! 선물이 왔어요" [받기]). 그림 글자는 그 종류 제목의 끝 글자다
+ * (생일 🎂 — iOS MeCakeGiftReopenRow 그대로 · 술 한잔 🥂 — 새 글자를 짓지 않는다). 맥 카드는 SF 기호(gift.fill · wineglass.fill)를 쓰지만 폰은
+ * 아이폰 1.0.17 처럼 그림 글자다 — AppIcon.WineBarFill 은 기호 대응표 몫이고 여기서 쓰지 않는다(검토 ISUL-5).
+ */
 @Composable
 fun MeCakeGiftReopenRow(store: MeStore, modifier: Modifier = Modifier) {
     if (!store.showsCakeGiftReopen) return
+    val gift = store.cakeGift ?: return
+    val copy = gift.kind.copy
+    val glyph = CakeGiftTitleParts.split(copy.title).second
     val c = AingTheme.colors
     MeCard(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-            Box(Modifier.size(40.dp).background(c.accentTint, RoundedCornerShape(10.dp)).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-                Text("🎂", style = MeType.title3)
+            Box(
+                Modifier.size(40.dp).background(c.accentTint, RoundedCornerShape(10.dp)).testTag(CakeGiftTags.REOPEN_GLYPH).clearAndSetSemantics { },
+                contentAlignment = Alignment.Center,
+            ) {
+                if (glyph != null) Text(glyph, style = MeType.title3)
             }
-            Text(CakeGiftText.reopenTitle, style = MeType.body.copy(fontWeight = FontWeight.SemiBold), color = c.label, modifier = Modifier.weight(1f))
-            // 틴트 — 나 탭에는 이미 채운 버튼이 있다(채운 버튼은 화면당 하나). [고르기]는 서버에 다시 묻고 연다(묻는 동안 단추가 돈다).
-            MeButton(CakeGiftText.reopenButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Md, isBusy = store.cakeGiftReopening) { store.reopenCakeGift() }
+            Text(copy.reopenTitle, style = MeType.body.copy(fontWeight = FontWeight.SemiBold), color = c.label, modifier = Modifier.weight(1f))
+            // 틴트 — 나 탭에는 이미 채운 버튼이 있다(채운 버튼은 화면당 하나). [고르기]·[받기]는 서버에 다시 묻고 연다(묻는 동안 단추가 돈다).
+            MeButton(copy.reopenButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Md, isBusy = store.cakeGiftReopening) { store.reopenCakeGift() }
         }
     }
 }

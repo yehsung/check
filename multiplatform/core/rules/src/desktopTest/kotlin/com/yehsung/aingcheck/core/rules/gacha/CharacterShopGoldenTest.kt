@@ -15,6 +15,11 @@ import com.yehsung.aingcheck.core.rules.character.RainbowAingArt
 import com.yehsung.aingcheck.core.rules.character.SpriteFramePlayer
 import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
 import com.yehsung.aingcheck.core.rules.character.gift.CharacterGiftClaimOutcome
+import com.yehsung.aingcheck.core.rules.character.gift.DrinkGiftText
+import com.yehsung.aingcheck.core.rules.character.gift.copy
+import com.yehsung.aingcheck.core.rules.character.gift.shopMinProtocol
+import com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds
+import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
 import com.yehsung.aingcheck.core.rules.format.parseSwiftJson
 import com.yehsung.aingcheck.testkit.golden.Golden
@@ -81,7 +86,7 @@ class CharacterShopGoldenTest {
         val builtins = golden.case("builtins")
         assertJson(builtins["builtIns"], arr(CharacterCatalog.builtIns.map {
             obj("id" to s(it.id), "displayName" to s(it.displayName), "kind" to s(it.kind.rawValue), "finish" to s(it.finish.name))
-        }), "내장 다섯(표시 순서)")
+        }), "내장 여섯(표시 순서)")
         // 병합 접기: 내장 id 의 정본은 와이어(BuiltInCharacterIds, W1-d) — 카탈로그의 내장 차례가 그 목록과 같아야 한다.
         assertEquals(com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds.builtInIDs, CharacterCatalog.builtIns.map { it.id }, "와이어 내장 id 차례")
         assertEquals(builtins.string("builtInAingID"), CharacterCatalog.builtInAingID)
@@ -91,6 +96,11 @@ class CharacterShopGoldenTest {
         assertEquals(builtins.string("cakeChocoAingID"), CharacterCatalog.cakeChocoAingID)
         assertJson(builtins["gachaOnlyBuiltInIDs"], arr(CharacterCatalog.gachaOnlyBuiltInIDs.map(::s)), "gachaOnlyBuiltInIDs")
         assertJson(builtins["giftOnlyBuiltInIDs"], arr(CharacterCatalog.giftOnlyBuiltInIDs.map(::s)), "giftOnlyBuiltInIDs")
+        // 이슬(0.3.74): 선물 전용 전부 = 생일(케이크 둘) + 술(이슬). 케이크 뜻 자리(상점 번호 4 · 생일 선택지)는 생일 목록만 쓴다(설계서 §2).
+        assertEquals(CharacterCatalog.birthdayGiftBuiltInIDs + CharacterCatalog.drinkGiftBuiltInIDs, CharacterCatalog.giftOnlyBuiltInIDs, "선물 전용 = 생일 + 술")
+        assertEquals(listOf(CharacterCatalog.cakeStrawberryAingID, CharacterCatalog.cakeChocoAingID), CharacterCatalog.birthdayGiftBuiltInIDs, "생일 = 케이크 둘")
+        assertEquals(listOf(CharacterCatalog.isulAingID), CharacterCatalog.drinkGiftBuiltInIDs, "술 = 이슬 하나")
+        assertEquals(builtins.array("builtIns").last().jsonObject.string("id"), CharacterCatalog.isulAingID, "이슬 id")
         assertEquals(builtins.string("charactersSubdirectory"), CharacterCatalog.charactersSubdirectory)
         var ids = 0
         for (case in golden.cases.filter { it.string("id").startsWith("id-") }) {
@@ -181,6 +191,63 @@ class CharacterShopGoldenTest {
         }
     }
 
+    /**
+     * gift/claim `kinds`(맥 0.3.74 CharacterGiftKind): 원문 값 · 그 종류의 내장 id · 최소 번호(생일 4 · 술 5) · 번호별 지원 · 문구 묶음 ·
+     * 원문 → 종류(정확히 소문자 두 값만) · 내장 id → 종류. 와이어 열거의 번호(minProtocol)와 rules 정본 상수(ShopWire)도 맞댄다.
+     */
+    @Test
+    fun giftKindsMatchSwift() {
+        val golden = Golden.load("gift/claim")
+        val kinds = golden.case("kinds")
+        val protocols = kinds.array("supportedProtocols").map { it.jsonPrimitive.content.removePrefix("int:").toInt() }
+        val rows = kinds.array("rows").map { it.jsonObject }
+        assertEquals(CharacterGiftKind.entries.map { it.wireValue }, rows.map { it.string("wireValue") }, "종류 차례(생일 → 술)")
+        for ((kind, r) in CharacterGiftKind.entries.zip(rows)) {
+            assertJson(r["builtInIDs"], arr(kind.builtInIDs.map(::s)), "${kind.name} builtInIDs")
+            assertEquals(r.int("minProtocol"), kind.minProtocol, "${kind.name} minProtocol(와이어)")
+            assertEquals(kind.minProtocol, kind.shopMinProtocol, "${kind.name} 와이어 번호 = rules ShopWire 상수")
+            assertJson(r["supported"], arr(protocols.map { b(kind.isSupported(it)) }), "${kind.name} supported $protocols")
+            val c = kind.copy
+            val copy = mapOf(
+                "title" to c.title, "body" to c.body, "confirmButton" to c.confirmButton, "wearNowButton" to c.wearNowButton,
+                "closeButton" to c.closeButton, "lockedCaption" to c.lockedCaption, "lockedHint" to c.lockedHint,
+                "reopenTitle" to c.reopenTitle, "reopenButton" to c.reopenButton, "claimFailed" to c.claimFailed,
+            )
+            val want = r.obj("copy")
+            assertEquals(want.keys, copy.keys, "${kind.name} 문구 칸 목록")
+            for ((key, value) in copy) assertEquals(want.string(key), value, "${kind.name}.copy.$key")
+        }
+        for (row in kinds.array("wireValues")) {
+            val r = row.jsonObject
+            val raw = r["raw"].let { if (it == null || it is JsonNull) null else it.jsonPrimitive.content }
+            assertJson(r["kind"], s(CharacterGiftKind.fromWire(raw)?.name), "원문 '$raw'")
+        }
+        for (row in kinds.array("builtInIDs")) {
+            val r = row.jsonObject
+            val id = r["characterID"].let { if (it == null || it is JsonNull) null else it.jsonPrimitive.content }
+            assertJson(r["kind"], s(CharacterGiftKind.ofBuiltIn(id)?.name), "내장 → 종류 '$id'")
+            assertJson(r["giftKindOfBuiltIn"], s(CharacterGiftKind.ofBuiltIn(id)?.name), "giftKindOfBuiltIn '$id'")
+        }
+        // 생일 목록과 술 목록이 갈렸다 — 겹치지 않고, 합치면 선물 전용 전부다(케이크 뜻 자리에 이슬이 섞이지 않는다).
+        assertTrue(CharacterGiftKind.birthday.builtInIDs.intersect(CharacterGiftKind.drink.builtInIDs.toSet()).isEmpty(), "생일 · 술 목록이 겹친다")
+        assertEquals(BuiltInCharacterIds.giftOnlyBuiltInIDs, CharacterGiftKind.entries.flatMap { it.builtInIDs }, "종류 목록 합 = 선물 전용 전부")
+    }
+
+    /** gift/claim `texts-drink` — Swift `DrinkGiftText` 글자 그대로(대표 결정 C "짠! 🥂"). */
+    @Test
+    fun drinkTextsMatchSwift() {
+        val texts = Golden.load("gift/claim").case("texts-drink")
+        val mine = mapOf(
+            "title" to DrinkGiftText.title, "body" to DrinkGiftText.body, "confirmButton" to DrinkGiftText.confirmButton,
+            "wearNowButton" to DrinkGiftText.wearNowButton, "closeButton" to DrinkGiftText.closeButton,
+            "lockedCaption" to DrinkGiftText.lockedCaption, "lockedHint" to DrinkGiftText.lockedHint,
+            "reopenTitle" to DrinkGiftText.reopenTitle, "reopenButton" to DrinkGiftText.reopenButton,
+            "claimFailed" to DrinkGiftText.claimFailed, "received" to DrinkGiftText.received(CharacterCatalog.builtInIsulAing.displayName),
+        )
+        assertEquals(texts.keys - "id", mine.keys, "문구 칸 목록")
+        for ((key, value) in mine) assertEquals(texts.string(key), value, "DrinkGiftText.$key")
+    }
+
     // ---------- gacha/shop-protocol ----------
 
     @Test
@@ -207,6 +274,15 @@ class CharacterShopGoldenTest {
             assertEquals(r["supportsGacha"]!!.jsonPrimitive.boolean, ShopWire.supportsGacha(version), "supportsGacha $version")
             assertEquals(r["supportsCakeGift"]!!.jsonPrimitive.boolean, ShopWire.supportsCakeGift(version), "supportsCakeGift $version")
         }
+        // 이슬(0.3.74): 번호 5 · 이슬 하나 · 술 선물 문턱.
+        val isul = golden.case("constants-isul")
+        assertEquals(isul.int("isulProtocol"), ShopWire.isulProtocol)
+        assertJson(isul["isulCharacterIDs"], arr(ShopWire.isulCharacterIDs.map(::s)), "isulCharacterIDs")
+        for (row in isul.array("thresholds")) {
+            val r = row.jsonObject
+            val version = r.int("protocol")
+            assertEquals(r["supportsDrinkGift"]!!.jsonPrimitive.boolean, ShopWire.supportsDrinkGift(version), "supportsDrinkGift $version")
+        }
         // G §8-7 ③ "플랫폼별 그림 집합 → 번호": 초상 파일 이름 목록에서 그릴 수 있는 id 를 뽑아 번호를 낸다.
         var sets = 0
         for (case in golden.cases.filter { it.string("id").startsWith("portraits-") }) {
@@ -215,7 +291,8 @@ class CharacterShopGoldenTest {
             sets++
         }
         // 짝 없는 한 장(…-neutral-only · …-negative-only) 여섯 줄 포함 — 초상 두 장 중 하나라도 빠진 id 는 그릴 수 없다.
-        assertEquals(13, sets)
+        // 이슬(0.3.74) 두 줄: 케이크 둘 + 이슬 → 5 · 케이크 하나 + 이슬 → 3(번호를 건너뛰어 말할 수 없다).
+        assertEquals(15, sets)
     }
 
     // ---------- gacha/odds ----------

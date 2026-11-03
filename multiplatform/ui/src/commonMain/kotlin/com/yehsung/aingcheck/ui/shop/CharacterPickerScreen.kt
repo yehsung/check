@@ -37,7 +37,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
-import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
+import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.core.stores.me.MeCharacterName
 import com.yehsung.aingcheck.core.stores.me.MeCharacterTileStatus
 import com.yehsung.aingcheck.core.stores.me.MeStore
@@ -47,6 +47,7 @@ import com.yehsung.aingcheck.core.stores.me.chooseCharacter
 import com.yehsung.aingcheck.core.stores.me.equippedCharacterID
 import com.yehsung.aingcheck.core.stores.me.gachaShardCost
 import com.yehsung.aingcheck.core.stores.me.isGachaOnly
+import com.yehsung.aingcheck.core.stores.me.giftKind
 import com.yehsung.aingcheck.core.stores.me.isGiftOnly
 import com.yehsung.aingcheck.core.stores.me.isOwned
 import com.yehsung.aingcheck.core.stores.me.isUnlocked
@@ -155,13 +156,13 @@ private fun PickerTile(store: MeStore, id: String, onOpenMachine: () -> Unit) {
         isOn -> MeCharacterTileStatus.Equipped
         store.isOwned(id) -> MeCharacterTileStatus.Owned
         // 고르기에는 가진 사람에게만 서므로(pickerIDs) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
-        store.isGiftOnly(id) -> MeCharacterTileStatus.GiftOnly
+        store.isGiftOnly(id) -> MeCharacterTileStatus.GiftOnly(store.giftKind(id))
         store.isGachaOnly(id) -> MeCharacterTileStatus.GachaOnly(store.gachaShardCost(id))
         else -> store.price(id)?.let { MeCharacterTileStatus.Price(it, store.rubyBalance) }
             ?: if (unlocked) MeCharacterTileStatus.None else MeCharacterTileStatus.UnknownPrice
     }
     val lockedLabel = when {
-        store.isGiftOnly(id) -> "$name, 잠김 — ${CakeGiftText.lockedCaption}"
+        store.isGiftOnly(id) -> "$name, 잠김 — ${store.giftKind(id).copy.lockedCaption}"
         store.isGachaOnly(id) -> "$name, 잠김 — ${MeText.gachaAcquirePhrase(store.gachaShardCost(id))}"
         else -> "$name, 잠김 — 상점에서 사기"
     }

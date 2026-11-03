@@ -77,7 +77,7 @@ class MeTextRulesTest {
     fun tileStatusNeverShowsARubyPriceForGachaOrGiftOnlyCharacters() {
         assertEquals(MeCharacterTileStatus.Content.Acquire("뽑기 · 조각 20"), MeCharacterTileStatus.GachaOnly(20).content)
         assertEquals(MeCharacterTileStatus.Content.Acquire("뽑기 전용"), MeCharacterTileStatus.GachaOnly(null).content)
-        assertEquals(MeCharacterTileStatus.Content.Locked(CakeGiftText.lockedCaption), MeCharacterTileStatus.GiftOnly.content)
+        assertEquals(MeCharacterTileStatus.Content.Locked(CakeGiftText.lockedCaption), MeCharacterTileStatus.GiftOnly().content)
         assertEquals(MeCharacterTileStatus.Content.Ruby(60, 10), MeCharacterTileStatus.Price(60, 10).content)
         assertEquals("무지개 아잉이", MeCharacterName.display("aing_rainbow"))
         assertEquals("future_id", MeCharacterName.display("future_id"), "모르는 캐릭터는 id 그대로(이름을 지어내지 않는다)")
@@ -86,12 +86,32 @@ class MeTextRulesTest {
     @Test
     fun knownIDsFollowTheBuiltInOrderThenSorted() {
         assertEquals(
-            listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"),
+            listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"),
             MeCharacterCards.knownIDs,
+            "내장 여섯(이슬 — 맥 0.3.74 · 판 7 은 케이크 뒤) 다음 이름순",
         )
-        assertEquals("aing", MeCharacterCards.equippedID(" "), "빈 착용값 = 아잉")
-        assertEquals("aing", MeCharacterCards.equippedID("future_id"), "모르는 착용값 = 아잉(서버 값은 건드리지 않는다)")
-        assertEquals("robot", MeCharacterCards.equippedID(" robot\n"))
+        for (drinks in listOf(true, false)) {
+            assertEquals("aing", MeCharacterCards.equippedID(" ", drinks), "빈 착용값 = 아잉")
+            assertEquals("aing", MeCharacterCards.equippedID("future_id", drinks), "모르는 착용값 = 아잉(서버 값은 건드리지 않는다)")
+            assertEquals("robot", MeCharacterCards.equippedID(" robot\n", drinks))
+            assertEquals("aing_cake_choco", MeCharacterCards.equippedID("aing_cake_choco", drinks), "케이크는 두 플랫폼 다 안다(번호 4)")
+        }
+        // 검토 ISUL-1: 술 한잔 선물(이슬)은 그 선물을 받는 플랫폼(Android 판 7)만 안다. 번호 4(Windows v1)는 0.3.73 처럼 아잉으로 접는다.
+        assertEquals("aing_isul", MeCharacterCards.equippedID("aing_isul", takesDrinkGift = true))
+        assertEquals("aing", MeCharacterCards.equippedID("aing_isul", takesDrinkGift = false))
+        assertEquals(MeCharacterCards.knownIDs, MeCharacterCards.knownIDs(takesDrinkGift = true))
+        assertEquals(MeCharacterCards.knownIDs - "aing_isul", MeCharacterCards.knownIDs(takesDrinkGift = false))
+        assertTrue(MeCharacterCards.isKnown("aing_isul"), "이름 · 메타 표에는 두 플랫폼 다 있다(남의 이름을 그릴 수 있게)")
+        assertFalse(MeCharacterCards.isKnown("aing_isul", takesDrinkGift = false))
+    }
+
+    @Test
+    fun fixedDrawableSetsDeriveTheDrinkGiftGateFromTheirProtocol() {
+        // 시험 · 데모 재료(DrawableCharacterSource.of)의 술 선물 문은 그 집합이 말하는 번호에서 판다 — 그림 집합과 문이 어긋나지 않는다.
+        assertTrue(DrawableCharacterSource.of(MeFixtures.allPortraits + "aing_isul").takesDrinkGift, "이슬까지 다 그린다(번호 5) → 참")
+        assertFalse(DrawableCharacterSource.of(MeFixtures.allPortraits).takesDrinkGift, "번호 4 → 거짓")
+        assertFalse(DrawableCharacterSource.of(setOf("aing", "aing_isul")).takesDrinkGift, "이슬만 있고 앞 번호가 빠지면(번호 0) 거짓")
+        assertFalse(DrawableCharacterSource { emptySet() }.takesDrinkGift, "람다 재료는 기본 거짓(모르는 재료는 0.3.73 쪽으로 틀린다)")
     }
 
     @Test

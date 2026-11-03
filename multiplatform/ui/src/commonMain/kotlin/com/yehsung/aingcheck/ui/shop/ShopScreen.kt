@@ -61,6 +61,7 @@ import com.yehsung.aingcheck.core.stores.me.confirmPurchase
 import com.yehsung.aingcheck.core.stores.me.equippedCharacterID
 import com.yehsung.aingcheck.core.stores.me.gachaShardCost
 import com.yehsung.aingcheck.core.stores.me.isGachaOnly
+import com.yehsung.aingcheck.core.stores.me.giftKind
 import com.yehsung.aingcheck.core.stores.me.isGiftOnly
 import com.yehsung.aingcheck.core.stores.me.isOwned
 import com.yehsung.aingcheck.core.stores.me.loadShop
@@ -213,7 +214,7 @@ fun TileGrid(ids: List<String>, columns: Int = 3, tile: @Composable (String) -> 
 @Composable
 private fun ShopTile(store: MeStore, id: String, onOpenMachine: () -> Unit) {
     val owned = store.isOwned(id)
-    // 생일 선물 전용 잠긴 칸을 누르면 그 칸이 '고름' 틴트를 받는다 — 아래 막대가 그 칸의 이름과 얻는 길을 말한다(사지는 않는다).
+    // 선물 전용(케이크 · 이슬) 잠긴 칸을 누르면 그 칸이 '고름' 틴트를 받는다 — 아래 막대가 그 칸의 이름과 얻는 길을 말한다(사지는 않는다).
     val picked = store.shopSelection == id || store.shopGiftHintID == id
     val equipped = store.equippedLoaded && store.equippedCharacterID == id
     val name = MeCharacterName.display(id)
@@ -221,7 +222,7 @@ private fun ShopTile(store: MeStore, id: String, onOpenMachine: () -> Unit) {
         store.purchasingID == id -> MeCharacterTileStatus.Busy
         equipped -> MeCharacterTileStatus.Equipped
         owned -> MeCharacterTileStatus.Owned
-        store.isGiftOnly(id) -> MeCharacterTileStatus.GiftOnly
+        store.isGiftOnly(id) -> MeCharacterTileStatus.GiftOnly(store.giftKind(id))
         // 뽑기 전용(황금 · 무지개 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
         store.isGachaOnly(id) -> MeCharacterTileStatus.GachaOnly(store.gachaShardCost(id))
         else -> store.price(id)?.let { MeCharacterTileStatus.Price(it, store.rubyBalance) } ?: MeCharacterTileStatus.UnknownPrice

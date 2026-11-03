@@ -217,8 +217,8 @@ class MeStore(
     /** 사용자 동작 한 번 = request_id 하나(결과를 모르는 실패 뒤 다시 누르면 같은 id — 서버가 처음 결과를 `replayed` 로 준다). */
     internal val gachaRequestIDs = GachaRequestIDs()
 
-    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66 · 폰 1.0.14 — MeStoreCakeGift)
-    /** 서버가 말한 **열린** 생일 선물. null = 없음이거나 아직 모름 — 못 읽었으면 지난 값을 둔다. */
+    // MARK: 선물 — 케이크 아잉이(생일, v0.3.66 · 폰 1.0.14) · 이슬 아잉이(술 한잔, 맥 0.3.74 · Android 판 7) — MeStoreCakeGift
+    /** 서버가 말한 **열린** 선물 한 장(생일 · 술 한잔 — [CharacterGiftOffer.kind]). null = 없음이거나 아직 모름 — 못 읽었으면 지난 값을 둔다. */
     var cakeGift by mutableStateOf<CharacterGiftOffer?>(null)
         internal set
 
@@ -240,6 +240,9 @@ class MeStore(
     /** '다시 열기' 줄의 [고르기]가 서버에 다시 묻는 중. */
     var cakeGiftReopening by mutableStateOf(false)
         internal set
+
+    /** '다음 선물' 되묻기(맥 0.3.74 ⑤ — 번호 5 에서만)를 낸 횟수. 시험이 "번호 4 면 0 · 5 면 결론마다 한 번"을 잰다. */
+    internal var cakeGiftFollowUps = 0
 
     // MARK: 이번 주 근무 보상 (v0.3.55 — MeStoreWeeklyWork)
     /** 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답. null = 아직 모른다(못 읽었으면 지난 값을 둔다). */

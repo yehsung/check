@@ -79,6 +79,41 @@ class MeTabFaceFramingTest {
         assertTrue("케이크 얼굴 몸 높이가 아잉과 다르다(케이크 $framed · 아잉 $reference)", abs(framed.widestY - reference.widestY) <= 4)
     }
 
+    /**
+     * 이슬 아잉이(맥 0.3.74 · 판 7): 병뚜껑 때문에 몸을 0.88 배로 줄여 그린 초상 — 케이크와 같은 틀 공식에 몸 위끝만 다르다(18.1, 실측).
+     * 부르는 자리(탭 막대)의 몸 최대폭 · 그 줄 높이가 아잉과 같고, 틀 없이 그린 이슬은 다르다(기준선). 이슬 초상은 맥 원본(Sources/check/Resources)을 쓴다.
+     */
+    @Test
+    fun isulTabFaceMatchesAingBody() {
+        val isulFraming = AvatarFraming.of(ISUL)
+        assertEquals(1 / 0.88f, isulFraming.scale, 1e-4f)
+        assertEquals((((96.0 - 18.1) / 0.88 - 96.0) / 192.0).toFloat(), isulFraming.offsetY, 1e-4f)
+        assertEquals("착용값 접기와 같은 공백 규칙", isulFraming, AvatarFraming.of(" $ISUL "))
+        assertEquals("대소문자는 접지 않는다", AvatarFraming.Identity, AvatarFraming.of("AING_ISUL"))
+
+        val aing = portrait("aing-neutral")
+        val isul = macPortrait("$ISUL-neutral")
+        compose.setContent {
+            AingTheme(dark = false) {
+                Column {
+                    AingTabBar(selected = { false }, badge = { 0 }, meFace = MeTabFace(aing, CharacterMood.Plain, "aing"), onSelect = {})
+                    AingTabBar(selected = { false }, badge = { 0 }, meFace = MeTabFace(isul, CharacterMood.Plain, ISUL), onSelect = {})
+                    Box(Modifier.testTag(RAW)) { CharacterTabIcon(isul, CharacterMood.Plain) }
+                }
+            }
+        }
+        compose.waitForIdle()
+        val icons = compose.onAllNodesWithTag(ShellTabTags.icon(AingTab.ME), useUnmergedTree = true)
+        val reference = bodyShape(icons[0].captureToImage())
+        val framed = bodyShape(icons[1].captureToImage())
+        val raw = bodyShape(compose.onNodeWithTag(RAW).captureToImage())
+        println("AINGCHECK-FRAMING aing=$reference isul=$framed isulRaw=$raw")
+        assertTrue("몸을 못 찾았다(채도 문턱): $reference", reference.widest > 20)
+        assertTrue("틀 없는 이슬이 이미 아잉 폭이다 — 기준선이 같다(raw=$raw · 아잉 $reference)", abs(raw.widest - reference.widest) > 4)
+        assertTrue("이슬 얼굴 몸 폭이 아잉과 다르다 — 아바타 틀이 안 걸렸다(이슬 $framed · 아잉 $reference)", abs(framed.widest - reference.widest) <= 3)
+        assertTrue("이슬 얼굴 몸 높이가 아잉과 다르다(이슬 $framed · 아잉 $reference)", abs(framed.widestY - reference.widestY) <= 4)
+    }
+
     /** 최대폭 줄의 폭(px)과 그 줄의 높이(이미지 가운데 기준 — 칸 크기가 달라도 원은 가운데). 아래 절반에서만 잰다(장식은 머리 위다). */
     data class Shape(val widest: Int, val widestY: Int)
 
@@ -111,7 +146,16 @@ class MeTabFaceFramingTest {
         return requireNotNull(BitmapFactory.decodeFile(file.path, options)) { "초상 디코드 실패: $file" }.asImageBitmap()
     }
 
+    /** 맥 원본 초상(폰 번들 사본이 아직 없는 이슬 — Android 는 ui Gradle Sync 가 맥 원본을 싣는다). */
+    private fun macPortrait(name: String): ImageBitmap {
+        val root = File(requireNotNull(System.getProperty("aingcheck.repoRoot")) { "aingcheck.repoRoot 없음 — Gradle 시험 작업으로 돌린다" })
+        val file = File(root, "Sources/check/Resources/$name.png")
+        val options = BitmapFactory.Options().apply { inPreferredConfig = Bitmap.Config.ARGB_8888 }
+        return requireNotNull(BitmapFactory.decodeFile(file.path, options)) { "초상 디코드 실패: $file" }.asImageBitmap()
+    }
+
     private companion object {
+        const val ISUL = "aing_isul"
         const val CAKE = "aing_cake_strawberry"
         const val RAW = "raw-cake-face"
         /** 몸(아잉 보라 · 케이크 분홍)과 회색 받침 · 막대를 가르는 채도(최대 − 최소 채널). */

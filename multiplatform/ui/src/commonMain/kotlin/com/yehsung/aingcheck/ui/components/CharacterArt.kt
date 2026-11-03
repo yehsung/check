@@ -6,6 +6,7 @@
 // Compose 리소스 files/ 아래에 싣는다(조정자 패치 — ui/build.gradle.kts `aingcheckSyncCharacterArt`).
 //   Sources/check/Characters/<id>/{manifest.json, portrait-neutral.png, portrait-negative.png} → files/characters/<id>/…
 //   Sources/check/Resources/<aing·aing_gold·aing_rainbow·aing_cake_strawberry·aing_cake_choco>-<표정>.png → files/characters/<id>/portrait-<표정>.png
+//   Sources/check/Resources/aing_isul-<표정>.png(맥 0.3.74 이슬 아잉이 — 그림 갈아 끼우는 자리는 ui/build.gradle.kts `isulPortraitSource` 하나) → files/characters/aing_isul/…
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-<id>-neutral}.png    → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-<이름>.png(0.3.62 아잉이 이모티콘)           → files/stickers/…
 // 스프라이트 아틀라스(atlas.png)는 싣지 않는다 — 살아 있는 캐릭터는 구운 자산(W0-d·W5)이 맡는다.
@@ -28,9 +29,16 @@ object CharacterArt {
      * 아니라 **실제로 실린 파일 목록**([PORTRAIT_INDEX_PATH] → [drawableCharacterIDs])에서 파생한다.
      */
     val portraitIds: List<String> = listOf(
-        "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco",
+        "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul",
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
     )
+
+    /**
+     * 이 플랫폼이 '술 한잔' 선물(이슬 아잉이)을 받는가 — 상점 능력 번호 5 의 문([drawableCharacterIDs]). Android(판 7) 참 · Windows v1 거짓
+     * (기능 동결 — 기억 windows-v1-feature-freeze). 거짓이면 그림 재료에서 이슬을 빼 번호가 4 에 머문다: 서버가 이슬 행 · 술 선물을 싣지 않고
+     * 술 선물 수령은 needs_update 라 데스크톱의 상점 · 선물 흐름이 0.3.73 그대로다. 초상 자체는 두 플랫폼 묶음에 다 실린다(남이 입은 이슬을 그린다).
+     */
+    val takesDrinkGift: Boolean get() = PlatformTakesDrinkGift
 
     /** 매니페스트가 있는 스프라이트 캐릭터(Sources/check/Characters/<id>). */
     val spriteIds: List<String> = listOf("fox", "ghost", "jellyfish", "robot", "shiba", "squirrel")
@@ -60,11 +68,25 @@ object CharacterArt {
     suspend fun portraitResourceNames(): List<String> =
         readBytesOrNull(PORTRAIT_INDEX_PATH)?.decodeToString()?.lines()?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
 
-    /** K9: 초상 두 장(neutral · negative)이 **다** 실린 캐릭터 → 상점 능력 번호의 재료(W1-c `ShopWire.drawableCharacterIDs`). */
-    suspend fun drawableCharacterIDs(): Set<String> = ShopWire.drawableCharacterIDs(portraitResourceNames())
+    /**
+     * K9: 초상 두 장(neutral · negative)이 **다** 실린 캐릭터 → 상점 능력 번호의 재료(W1-c `ShopWire.drawableCharacterIDs`).
+     * 술 한잔 선물을 안 받는 플랫폼([takesDrinkGift] 거짓 — Windows v1)은 이슬을 뺀다(번호 4 그대로).
+     */
+    suspend fun drawableCharacterIDs(): Set<String> = drawableFor(portraitResourceNames(), takesDrinkGift)
+
+    /** 초상 이름 목록 + 플랫폼 문 → 그릴 수 있는 id(순수 — 시험이 두 플랫폼 값을 다 잰다). */
+    fun drawableFor(portraitResourceNames: Iterable<String>, takesDrinkGift: Boolean): Set<String> {
+        val ids = ShopWire.drawableCharacterIDs(portraitResourceNames)
+        return if (takesDrinkGift) ids else ids - ShopWire.isulCharacterIDs.toSet()
+    }
 
     /** 나 탭 스토어(W2-c `MeStore`)에 꽂는 재료 — 조립(K11)이 넘긴다. */
-    val drawableCharacterSource: DrawableCharacterSource = DrawableCharacterSource { drawableCharacterIDs() }
+    val drawableCharacterSource: DrawableCharacterSource = object : DrawableCharacterSource {
+        override suspend fun drawableCharacterIDs(): Set<String> = this@CharacterArt.drawableCharacterIDs()
+
+        /** 나 탭 스토어의 이슬 접기 문(검토 ISUL-1) — 그림 재료와 같은 플랫폼 문 [takesDrinkGift] 하나를 본다. */
+        override val takesDrinkGift: Boolean get() = this@CharacterArt.takesDrinkGift
+    }
 
     /** 리소스 바이트(없으면 null — 이 빌드에 그림이 빠졌다는 뜻이다). */
     @OptIn(ExperimentalResourceApi::class)

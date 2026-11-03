@@ -17,6 +17,9 @@ import com.yehsung.aingcheck.core.wire.games.GomokuWatchResponse
 import com.yehsung.aingcheck.core.wire.games.RummyActionResponse
 import com.yehsung.aingcheck.core.wire.games.RummyLobby
 import com.yehsung.aingcheck.core.wire.games.RummyRanking
+import com.yehsung.aingcheck.core.wire.games.ReversiActionResponse
+import com.yehsung.aingcheck.core.wire.games.ReversiLobbyResponse
+import com.yehsung.aingcheck.core.wire.games.ReversiRankingResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisActionResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisLobbyResponse
 import com.yehsung.aingcheck.core.wire.games.TetrisRankingResponse
@@ -47,6 +50,10 @@ object WireDecodeRegistry {
         "RummyLobby" to RummyLobby.serializer(),
         "RummyActionResponse" to RummyActionResponse.serializer(),
         "RummyRanking" to RummyRanking.serializer(),
+        // 아잉 뒤집기(판 7) — Swift 골든 내보내기에 리버시 픽스처가 들어오는 날(Base 단계 golden-export) 미이식 빨강이 나지 않게 미리 둔다.
+        "ReversiLobbyResponse" to ReversiLobbyResponse.serializer(),
+        "ReversiActionResponse" to ReversiActionResponse.serializer(),
+        "ReversiRankingResponse" to ReversiRankingResponse.serializer(),
         "TetrisActionResponse" to TetrisActionResponse.serializer(),
         "TetrisLobbyResponse" to TetrisLobbyResponse.serializer(),
         "TetrisRankingResponse" to TetrisRankingResponse.serializer(),

@@ -22,8 +22,8 @@ import kotlin.math.cos
 //    `flipped` 로 시작하고, 한 번에 돌 두 수 이상 건너뛰면 애니메이션 없이 바로 맞춘다. 다른 판 id 면 무시한다.
 //  · 화면 좌표·그림은 없다(뷰 몫). 입력·합법성·판정은 이 값을 보지 않는다.
 //
-// Kotlin 이식 메모: 시각은 Swift `Date` → 1970 기준 초 Double. `make(from: ReversiMatchState?, to:, at:)` 는 스토어 값이 생기는 다음 단계가
-// 아래 값 버전 [make] 를 불러 한 줄로 잇는다(판 id 가 같을 때만 — Swift `previous.id == next.id`).
+// Kotlin 이식 메모: 시각은 Swift `Date` → 1970 기준 초 Double. `make(from: ReversiMatchState?, to:, at:)` 는 판 상태 타입이 스토어에 있어
+// 판 id · move_count 를 풀어 받는 짝 [make](previousMatchID, …) 로 옮겼다 — 판 id 가드(Swift `previous.id == next.id`)가 그 안에 있다.
 
 /** Swift `ReversiFlipAnimation` — 판 위에서 **뒤집히는 중인 수 하나**. `now` 하나면 어느 프레임이든 결정적이다. */
 data class ReversiFlipAnimation(
@@ -71,6 +71,24 @@ data class ReversiFlipAnimation(
 
         /** 놓은 칸에서 한 고리 멀어질 때마다 늦게 시작하는 시간(초). */
         const val ringDelay: Double = 0.06
+
+        /**
+         * Swift `make(from:to:at:)` — 직전 판과 새 판으로 정한다. **직전 판이 없거나(null) 판 id 가 다르면 그림 없음**(Swift
+         * `guard let previous, previous.id == next.id`) — 관전 판 A 에서 내 판 B 로 바뀐 화면 전환이, 두 판의 `move_count` 차가 우연히 1 이라도
+         * 애니메이션으로 둔갑하지 않게. 스토어는 판이 바뀌는 자리에서 **이 함수**를 부른다(아래 값 버전은 관전처럼 판 id 가 늘 같은 깔때기 몫).
+         * [previousMoveCount] 는 [previousMatchID] 가 null 이면 보지 않는다.
+         */
+        fun make(
+            previousMatchID: String?,
+            previousMoveCount: Int,
+            nextMatchID: String,
+            nextMoveCount: Int,
+            plies: List<ReversiPly>,
+            now: Double,
+        ): ReversiFlipAnimation? {
+            if (previousMatchID == null || previousMatchID != nextMatchID) return null
+            return make(nextMatchID, previousMoveCount, nextMoveCount, plies, now)
+        }
 
         /**
          * Swift `make(matchID:previousMoveCount:nextMoveCount:plies:at:)` — 같은 판의 `move_count` 가 **돌 한 수**(1) 또는

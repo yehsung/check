@@ -25,11 +25,9 @@ class ReversiFlipAnimationTest {
 
     private fun pass(seq: Int, color: ReversiColor) = ReversiPly(seq, color, ReversiPly.Kind.pass, null, emptyList(), false)
 
-    /** Swift `make(from: rvMatch("m", count: 4), to: rvMatch(id, count:, plies:))` — 같은 판 id 일 때만 값 버전을 부른다(스토어가 잇는 한 줄). */
-    private fun make(previousID: String?, nextID: String, count: Int, plies: List<ReversiPly>): ReversiFlipAnimation? {
-        if (previousID == null || previousID != nextID) return null
-        return ReversiFlipAnimation.make(nextID, 4, count, plies, t0)
-    }
+    /** Swift `make(from: rvMatch("m", count: 4), to: rvMatch(id, count:, plies:))` — 프로덕션 짝 [ReversiFlipAnimation.make](previousMatchID, …) 를 그대로 부른다(판 id 가드는 그 안에 있다). */
+    private fun make(previousID: String?, nextID: String, count: Int, plies: List<ReversiPly>): ReversiFlipAnimation? =
+        ReversiFlipAnimation.make(previousID, 4, nextID, count, plies, t0)
 
     @Test
     fun startsWithOldColorAndSwitchesAtHalf() {

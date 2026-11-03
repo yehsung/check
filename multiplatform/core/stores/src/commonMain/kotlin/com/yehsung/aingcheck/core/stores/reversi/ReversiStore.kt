@@ -65,7 +65,13 @@ import kotlin.math.abs
 //    안내 한 줄([ReversiNoticeText.updateMine])만 남긴다. 받은 신청은 서버 사실([incoming]) 그대로 두되 [visibleIncomingInvites] 를 비우고
 //    [incomingFoldedNotice] 로 접는다. AI 연습 · 관전 · 순위 · 이미 선 판(같은 계정 다른 기기에서 수락한 판)은 깃발과 무관하다.
 //  · **'이 기기가 연 판' 장부(Swift `GameDeviceLedger`)는 옮기지 않았다** — Android 오목·체스 스토어에도 없다(같은 수준으로 둔다). 그래서 판 시작의
-//    창 띄우기·말풍선은 같은 계정의 다른 기기가 연 판에서도 선다(Android 체스와 같은 동작). 장부를 이식하는 날 [noteMatchProgress] 첫 줄에 건다.
+//    창 띄우기·말풍선은 같은 계정의 다른 기기가 연 판에서도 선다 — **Android 오목과 같은 동작**이다(리버시·오목은 실시간 초인종을 잇는다. Android 체스는
+//    초인종 가지가 비어 있어 다른 기기 판으로 끌려가는 일이 드물다 — 같은 장부 없음이라도 체스보다 자주 선다). 같은 계정 맥에서 두는 판이면 폰이 리버시 판
+//    화면으로 열리고, 그 판이 끝날 때까지 화면 꺼짐 방지(GamesStore `wantsIdleTimerDisabled` 의 1:1 갈래)가 켜진다. 장부를 이식하는 날 [noteMatchProgress]
+//    첫 줄과 화면 꺼짐 갈래에 건다(아이폰 1.0.17 `ownsMatch`).
+//  · 로비가 진행 판이 없다는데(`active_match_id` null) 진행 중 1:1 판을 들고 있으면 그 판을 한 번 다시 읽는다([refreshLobby] — Swift 에는 없다, 검토 S-F5).
+//  · 차례가 나에게 돌아오면 '상대 차례예요' 안내를 걷는다([noteBoardProgress] — Swift 에는 없다, 검토 U-F4).
+//  · 초인종 직렬화([requestSync])는 앱 범위가 `Main.immediate` 라 Job 이 **살아 있는가**로 합친다(검토 S-F1). 관전 조회의 도는 중 깃발은 finally 로 내린다(S-F2).
 //  · 서버 `reversi_android_min_build` 가 닫혀 있으면(2147483647) 상대 능력이 false 로 오고 신청은 `target_outdated` 로 돌아온다 — 원문 처리
 //    ([ReversiNoticeText.targetOutdated] · 로비 재조회)로 깨지지 않는다. 로비·순위·관전은 부르는 사람 능력을 보지 않는다.
 //  · 뒤집기 그림 값([flip])은 판정이 아니라 그림이다 — 이 값이 서 있든 없든 판·합법 수·시계는 같다. 창이 보일 때만 선다.
@@ -526,8 +532,16 @@ class ReversiStore(
                         // 서버가 진행 중이라 말하는 판을 들고 있지 않다(다른 기기에서 수락 · 재시작) — 그 판을 읽어 세운다.
                         // 쓰기보다 먼저 나간 응답이라 `activeMatchID` 를 안 덮었어도, 그 순간 판이 서 있었다는 사실은 쓴다(VR-01).
                         val active = activeMatchID ?: response.me?.activeMatchId?.lowercase()
-                        if (response.status == ReversiRPCStatus.ok && active != null && (match?.id != active || match?.isFinished == true)) {
+                        val held = match
+                        if (response.status == ReversiRPCStatus.ok && active != null && (held?.id != active || held.isFinished)) {
                             refreshMatch(active)
+                        } else if (response.status == ReversiRPCStatus.ok && active == null && response.me != null && writes == writeRevision &&
+                            held != null && !held.isFinished && !held.isAI
+                        ) {
+                            // Android 몫(판 7 검토 S-F5 — Swift 에는 없다): 서버는 진행 판이 없다는데 진행 중 1:1 판을 들고 있다(앱이 뒤에 있는 사이 자동 착수
+                            // 3번으로 서버가 닫았다 · 소켓이 내려가 끝 신호를 놓쳤다). 그 판을 **한 번** 다시 읽어 끝을 본다 — 안 그러면 리버시 카드를 열 때까지
+                            // 다른 네 게임 입구가 막히고 화면 꺼짐 방지가 켜진 채다. 쓰기보다 먼저 나간 응답(`writes`)은 그 뒤 사실을 몰라 믿지 않는다.
+                            refreshMatch(held.id)
                         }
                     }
                     is CallResult.Failure -> {
@@ -1149,9 +1163,15 @@ class ReversiStore(
         requestSync()
     }
 
+    /**
+     * ★ 합치기는 `syncTask != null` 이 아니라 **살아 있는가**(`isActive`)로 가른다(판 7 검토 S-F1 — 큐브 `RummyStore.requestSync` 와 같은 판정). 앱 범위는
+     * `Dispatchers.Main.immediate` 라 `launch` 가 그 자리에서 곧바로 돈다 — [syncOnce] 가 한 번도 멈추지 않고 끝나면(로비·상태 조회가 이미 도는 중이라
+     * `lobbyAgain`·`stateAgain` 만 세우고 돌아옴) 꼬리의 비우기가 대입보다 **먼저** 돌아 `syncTask` 가 끝난 Job 으로 굳고, 그 뒤 초인종이 전부 버려진다.
+     * 꼬리는 **자기 Job 일 때만** 비운다(Swift 는 Task 라 동기 실행이 없다).
+     */
     fun requestSync() {
         if (host?.session == null) return
-        if (syncTask != null) {
+        if (syncTask?.isActive == true) {
             syncPendingTrailing = true
             return
         }
@@ -1162,7 +1182,7 @@ class ReversiStore(
                 syncPendingTrailing = false
                 syncOnce()
             } while (syncPendingTrailing && generation == resetGeneration)
-            if (generation == resetGeneration) syncTask = null
+            if (generation == resetGeneration && syncTask === coroutineContext[Job]) syncTask = null
         }
     }
 
@@ -1452,7 +1472,7 @@ class ReversiStore(
     /**
      * 판 진행을 사람에게 알린다(진행 중 판을 옮긴 직후). 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다. 창이 안
      * 보이는 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, move_count) 에는 한 번뿐이다.
-     * Swift 는 첫 줄에서 '이 기기가 연 판'(`ownsMatch`)만 통과시킨다 — Android 는 장부가 없어(오목·체스와 같은 수준) 모든 판이 지난다(머리말).
+     * Swift 는 첫 줄에서 '이 기기가 연 판'(`ownsMatch`)만 통과시킨다 — Android 는 장부가 없어(Android 오목과 같은 수준) 모든 판이 지난다(머리말).
      */
     private fun noteMatchProgress(previous: ReversiMatchState?, next: ReversiMatchState, windowWasVisible: Boolean) {
         val started = previous == null || previous.isFinished || previous.id != next.id
@@ -1501,7 +1521,13 @@ class ReversiStore(
             passNotice = text
         } else {
             val shown = passNotice
-            if (shown != null && notice == shown) setNotice(null) // 지난 패스 안내는 다음 수가 오면 걷는다
+            if (shown != null && notice == shown) {
+                setNotice(null) // 지난 패스 안내는 다음 수가 오면 걷는다
+            } else if (notice == ReversiNoticeText.notYourTurn && (next.isFinished || next.turn == next.myColor)) {
+                // Android 몫(판 7 검토 U-F4 — Swift 에는 없다): 상대 차례에 누른 칸의 '상대 차례예요'는 차례가 나에게 돌아오면(또는 판이 끝나면) 사실이 아니다.
+                // 걷지 않으면 로봇 판에서 두 번 누른 뒤 '내 차례예요'와 '상대 차례예요'가 함께 남는다(1:1 도 상대 수가 오면 같다).
+                setNotice(null)
+            }
         }
     }
 

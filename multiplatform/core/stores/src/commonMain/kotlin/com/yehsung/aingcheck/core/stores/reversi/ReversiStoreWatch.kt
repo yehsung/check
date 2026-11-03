@@ -161,7 +161,13 @@ private fun ReversiStore.clearWatchNotice() {
 
 // MARK: 조회
 
-/** 관전 판 한 번 조회. 도는 중에 또 불리면 뒤따르는 한 번으로 합친다. 세대·판 id 두 자물쇠를 지난 응답만 [applyWatch] 로. */
+/**
+ * 관전 판 한 번 조회. 도는 중에 또 불리면 뒤따르는 한 번으로 합친다. 세대·판 id 두 자물쇠를 지난 응답만 [applyWatch] 로.
+ * ★ `watchInFlight` 는 **finally 에서** 내린다(판 7 검토 S-F2). 폴링 한 걸음([pollSpectatorFeatures])은 이 함수를 폴링 작업 안에서 부르므로, 앱이 뒤로 가는
+ *   순간 `stopPolling` 의 취소가 날던 조회에 닿으면 `performDuelCall` 이 취소를 다시 던진다 — 그때 깃발이 참으로 남으면 앞으로 돌아와도 모든 관전 조회가
+ *   '도는 중'으로 합쳐져 영영 안 나간다(Swift 는 취소가 `perform` 에서 nil 로 접혀 루프 끝에서 내려간다). 세대가 밀렸으면 장부는 그쪽이 이미 비웠고 새 관전의
+ *   깃발일 수 있으니 건드리지 않는다.
+ */
 suspend fun ReversiStore.refreshWatch() {
     if (!spectatorFeaturesEnabled || host?.session == null) return
     val watched = spectating ?: return
@@ -174,21 +180,24 @@ suspend fun ReversiStore.refreshWatch() {
     val generation = runtime.watchGeneration
     val resetMark = resetGeneration
     val id = watched.id
-    do {
-        runtime.watchAgain = false
-        val since = if (runtime.watchWantsFull) 0 else (spectating?.appliedSeq ?: 0)
-        runtime.lastWatchRequestAt = clock()
-        val result = watchFetch(id, since)
-        // 세대가 밀렸으면(나가기·판 전환·내 판·로그아웃) 장부는 그쪽이 이미 비웠다 — 아무것도 건드리지 않는다.
-        if (generation != runtime.watchGeneration || resetMark != resetGeneration) return
-        when (result) {
-            is CallResult.Success -> applyWatch(result.value, since)
-            is CallResult.Failure -> noteWatchFailure(result.error)
-            null -> Unit
-        }
-        if (generation != runtime.watchGeneration) return
-    } while (runtime.watchAgain && spectating != null)
-    runtime.watchInFlight = false
+    try {
+        do {
+            runtime.watchAgain = false
+            val since = if (runtime.watchWantsFull) 0 else (spectating?.appliedSeq ?: 0)
+            runtime.lastWatchRequestAt = clock()
+            val result = watchFetch(id, since)
+            // 세대가 밀렸으면(나가기·판 전환·내 판·로그아웃) 장부는 그쪽이 이미 비웠다 — 아무것도 건드리지 않는다.
+            if (generation != runtime.watchGeneration || resetMark != resetGeneration) return
+            when (result) {
+                is CallResult.Success -> applyWatch(result.value, since)
+                is CallResult.Failure -> noteWatchFailure(result.error)
+                null -> Unit
+            }
+            if (generation != runtime.watchGeneration) return
+        } while (runtime.watchAgain && spectating != null)
+    } finally {
+        if (generation == runtime.watchGeneration && resetMark == resetGeneration) runtime.watchInFlight = false
+    }
 }
 
 /**

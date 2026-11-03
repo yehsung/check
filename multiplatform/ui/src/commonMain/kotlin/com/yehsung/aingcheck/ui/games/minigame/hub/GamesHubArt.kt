@@ -228,6 +228,36 @@ fun GamesRummyTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Th
     }
 }
 
+/**
+ * 아잉 뒤집기 썸네일 60 — 오목 나무판·체스판·테트리스 썸네일과 **같은 변·같은 둥글기**라 다섯 카드가 한 열로 선다(iOS 1.0.17 `GamesReversiTabThumbnail` 그대로).
+ * 초록 판 8×8 한 장 + 가운데 처음 네 돌 + 한 수 둔 뒤의 돌 둘 + **막 뒤집히는 돌 하나**(반은 흑·반은 백 — 맥 입구 기호와 같은 뜻). 정지 그림 한 장이다.
+ */
+@Composable
+fun GamesReversiTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Thumbnail(side, modifier) {
+    drawRect(Brush.linearGradient(listOf(gamesHex(0x2F8A57), gamesHex(0x1F6A41)), Offset.Zero, Offset(size.width, size.height)))
+    val cell = size.width / 8
+    for (index in 1 until 8) {
+        val o = index * cell
+        drawLine(Color.Black.copy(alpha = 0.22f), Offset(o, 0f), Offset(o, size.height), 0.5f * density)
+        drawLine(Color.Black.copy(alpha = 0.22f), Offset(0f, o), Offset(size.width, o), 0.5f * density)
+    }
+    val dark = Color(0.1f, 0.1f, 0.1f)
+    val light = Color(0.97f, 0.97f, 0.97f)
+    val edge = Color.Black.copy(alpha = 0.25f)
+    // (열, 행, 흑인가) — 처음 네 돌(d4 백 · e4 흑 · d5 흑 · e5 백)과 한 수 둔 뒤의 돌 둘.
+    for ((col, row, black) in listOf(Triple(3, 3, false), Triple(4, 3, true), Triple(3, 4, true), Triple(4, 4, false), Triple(4, 2, true), Triple(2, 4, false))) {
+        val c = Offset(col * cell + cell / 2, row * cell + cell / 2)
+        drawCircle(if (black) dark else light, cell * 0.38f, c)
+        drawCircle(edge, cell * 0.38f, c, style = Stroke(0.5f * density))
+    }
+    // 막 뒤집히는 돌(반은 흑 · 반은 백).
+    val c = Offset(5 * cell + cell / 2, 2 * cell + cell / 2)
+    val r = cell * 0.38f
+    drawCircle(light, r, c)
+    drawArc(dark, 90f, 180f, true, Offset(c.x - r, c.y - r), Size(r * 2, r * 2))
+    drawCircle(edge, r, c, style = Stroke(0.5f * density))
+}
+
 /** 나무판 썸네일(시안 `.b-woodthumb` 60) — 판 그림과 같은 나무·돌. */
 @Composable
 fun GamesWoodThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Thumbnail(side, modifier) {

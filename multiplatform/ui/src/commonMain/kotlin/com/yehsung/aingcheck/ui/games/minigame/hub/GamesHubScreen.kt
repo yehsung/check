@@ -1,6 +1,7 @@
 // 원본: Sources/CheckMobileKit/Games/GamesTab.swift @ 3bd04bd (게임 탭 — 타일 · 오목/체스/1:1 테트리스 카드 · 오늘 내 순위 · 지금 대결 중)
 // 원본: Sources/CheckMobileKit/Games/GamesComponents.swift:233-414 @ 3bd04bd (GamesLiveMatchRow — 허브 쪽 몫: 관전 입구 없이 관전자 수만)
 // 아잉 큐브 카드는 ios-1017 설계서 §3(대결 절의 테트리스 옆 — 칩·보조 줄 서열은 core GamesRummyCard). 스토어가 없는 조립(Windows)에는 카드가 서지 않는다.
+// 아잉 뒤집기 카드는 큐브 아래 다섯째(iOS 1.0.17 GamesTab `reversiCard` · 서열 core GamesReversiCard). 스토어가 없으면(떼어 내기 깃발 끔 · Windows) 서지 않는다.
 //
 // 게임 탭 첫 화면(SPEC-ios §3.5 · w15 시안 B 07): 큰 제목 + 상품 부제 · 오른쪽 위 루비 유리 알약(→ 상점) · 미니게임 타일(2열 격자) ·
 // 1:1 오목·체스·테트리스 카드 · 오늘 내 순위 · 지금 대결 중(오목 — 로비를 이미 알 때만, 새 조회를 더하지 않는다).
@@ -54,6 +55,8 @@ import com.yehsung.aingcheck.core.stores.gomoku.GomokuLiveMatch
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuRecord
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameBoard
 import com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure
+import com.yehsung.aingcheck.core.stores.reversi.GamesReversiCard
+import com.yehsung.aingcheck.core.stores.reversi.ReversiPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.GamesRummyCard
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.tetris.GamesTetrisDuelCard
@@ -127,6 +130,7 @@ object GamesHubTags {
     const val CHESS: String = "games.hub.chess"
     const val TETRIS_DUEL: String = "games.hub.tetrisDuel"
     const val RUMMY: String = "games.hub.rummy"
+    const val REVERSI: String = "games.hub.reversi"
 }
 
 /** 이 빌드 게임 탭에 서는 미니게임(폰 노출 규칙 ∩ 표시 깃발). 타일·오늘 내 순위·새로고침이 **같은 한 목록**을 본다. */
@@ -163,6 +167,7 @@ fun GamesHubScreen(
             ChessCard(store, facts, onOpen, Modifier.padding(top = 12.dp))
             TetrisDuelCard(store, onOpen, Modifier.padding(top = 12.dp))
             RummyCard(store, onOpen, Modifier.padding(top = 12.dp))
+            ReversiCard(store, onOpen, Modifier.padding(top = 12.dp))
             TodayRanks(store, art, onOpen, onOpenRankings)
             LiveMatches(facts, now)
         }
@@ -334,6 +339,21 @@ private fun RummyCard(store: GamesStore, onOpen: (GamesDestination) -> Unit, mod
         if (blockedBy == null) RummyPhoneText.cardOpenHint else GamesBusyText.entryBlockHint(blockedBy, GamesBusyGame.rummy) ?: "",
         GamesHubTags.RUMMY, modifier, { GamesRummyTabThumbnail() },
     ) { onOpen(GamesDestination.Rummy) }
+}
+
+/**
+ * 아잉 뒤집기 카드(판 7 — iOS 1.0.17 `reversiCard`). **다섯째 방향**이다 — 다른 넷 중 하나의 판이 흐르면 이 카드가 막히고(`reversiEntryBlock`), 리버시 판이 흐르면
+ * 위 네 카드가 막힌다. 칩과 보조 줄의 서열은 `GamesReversiCard` 한 곳이다. 스토어가 없는 조립(떼어 내기 깃발 끔 · Windows)에는 **카드가 서지 않는다**.
+ */
+@Composable
+private fun ReversiCard(store: GamesStore, onOpen: (GamesDestination) -> Unit, modifier: Modifier) {
+    if (store.reversi == null) return
+    val blockedBy = store.reversiEntryBlock
+    BoardGameCard(
+        ReversiPhoneText.title, ReversiPhoneText.cardSubtitle, GamesReversiCard.chip(store), GamesReversiCard.detail(store), blockedBy != null,
+        if (blockedBy == null) ReversiPhoneText.cardOpenHint else GamesBusyText.entryBlockHint(blockedBy, GamesBusyGame.reversi) ?: "",
+        GamesHubTags.REVERSI, modifier, { GamesReversiTabThumbnail() },
+    ) { onOpen(GamesDestination.Reversi) }
 }
 
 // MARK: 오늘 내 순위

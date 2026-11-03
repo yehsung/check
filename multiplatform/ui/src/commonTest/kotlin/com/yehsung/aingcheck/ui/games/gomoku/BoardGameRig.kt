@@ -28,6 +28,7 @@ import com.yehsung.aingcheck.core.stores.games.GamesRouter
 import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStore
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuStoreHost
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
 import com.yehsung.aingcheck.core.stores.tetris.StoreNaturalCollation
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStoreHost
@@ -64,6 +65,8 @@ import kotlinx.serialization.json.longOrNull
 class BoardGameRig(
     me: String? = null,
     duelsEnabled: Boolean = true,
+    /** 아잉 뒤집기 스토어를 꽂는가(판 7). 기본은 끔 — 오목·체스 시험의 요청 열이 판 7 이전과 같게(떼어 내기 깃발이 꺼진 조립과 같은 모양). */
+    withReversi: Boolean = false,
     configure: RpcStub.() -> Unit = {},
 ) {
     val testScope = TestScope()
@@ -76,6 +79,16 @@ class BoardGameRig(
     val scope: CoroutineScope = CoroutineScope(testScope.coroutineContext + SupervisorJob())
     val gomoku = GomokuStore(scope, host).also { it.clock = clock }
     val chess = ChessStore(scope, host).also { it.clock = clock }
+    /** 아잉 뒤집기(판 7) — 폰 조립과 같은 호스트 하나 · 주 스위치 둘(순위 · 관전)을 켠다. [withReversi] 가 거짓이면 null(깃발 끔과 같은 모양). */
+    val reversi: ReversiStore? = if (withReversi) {
+        ReversiStore(scope, host).also {
+            it.clock = clock
+            it.rankingEnabled = true
+            it.spectatorFeaturesEnabled = true
+        }
+    } else {
+        null
+    }
     val sessionStore = SessionStore(
         service = service,
         vault = InMemoryTokenVault(),
@@ -117,6 +130,7 @@ class BoardGameRig(
         override val tetris: TetrisDuelStore get() = this@BoardGameRig.tetris
         override val gomoku: GamesGomokuLink get() = gomokuLink
         override val chess: GamesBoardGameLink get() = chessLink
+        override val reversi: ReversiStore? get() = this@BoardGameRig.reversi
         override val router: GamesRouter get() = this@BoardGameRig.router
         override val hiddenBlockedPeerIDs: Set<String> get() = hiddenBlocked
         override val sharedRubyBalance: Long? get() = sharedRuby

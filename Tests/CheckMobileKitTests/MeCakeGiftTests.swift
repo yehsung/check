@@ -465,6 +465,7 @@ import Testing
         defer { h.tearDown() }
         let store = h.me
         await store.loadCakeGift()
+        store.cakeGiftSheetDidAppear()      // 시트가 화면에 섰다(실제 앱 — 받은 뒤 닫으면 '다음 선물'은 내려간 뒤에 묻는다)
         store.selectCakeGiftOption(Self.strawberry)
         // ① 조회 하나를 붙잡아 둔다 — 응답은 수령 **전**의 서버(열린 선물).
         let hold = BaseHold.install(host: h.host) { $0.rpcName == "character_gift_pending" }
@@ -482,6 +483,13 @@ import Testing
         await h.quiesceMe()
         #expect(store.cakeGift == nil && !store.showsCakeGiftReopen && store.cakeGiftSheet == nil,
                 "수령 전에 떠난 조회가 받은 선물을 되살렸다")
+        // ④ 시트가 다 내려가면 '다음 선물'을 한 번 묻는다(폰 1.0.17 · 번호 5) — 서버는 받은 선물을 닫았다(선물 없음).
+        server.pending.mutate { $0 = .json(#"{"status":"ok"}"#) }
+        let asked = h.requests(rpc: "character_gift_pending").count
+        store.cakeGiftSheetDidDisappear()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == asked + 1)
+        #expect(store.cakeGift == nil && !store.showsCakeGiftReopen && store.cakeGiftSheet == nil)
         // 기준선: 도장이 같은(수령이 끼지 않은) 조회는 옮긴다 — 새로 열린 선물이면 줄이 선다.
         server.pending.mutate { $0 = .json(Self.pendingJSON(options: [Self.choco], id: "fresh-gift")) }
         await store.loadCakeGift()

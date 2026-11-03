@@ -14,6 +14,9 @@ import Testing
 //   ① 아바타 틀: 이슬 초상을 틀로 되돌리면 몸이 아잉 몸과 겹친다 · 케이크 값을 그대로 쓰면 안 겹친다(기준선이 다르다)
 //   ② 잠긴 칸: 이슬 칸은 '술 한잔 선물 전용'(캡션 · 안내 · 접근성 글) — 같은 상점의 케이크 칸은 그대로 '생일 선물 전용'(대표 결정
 //      #d_zCowzb68KWlC "모두에게 잠긴 칸 (케이크와 같게)" — 안 가진 사람도 흐린 칸으로 본다 · 고르기엔 가진 사람에게만)
+//   ③ 받는 시트: 술 선물은 고르기 없이 이슬이 미리 골라진 채 · 문구 C("짠! 🥂" · [짠 받기]) · 수령 본문 · 실패 한 줄 · 다시 열기 줄(🥂 "짠! 선물이 왔어요" [받기])
+//   ④ 다음 선물: 결론 난 시트가 내려간 뒤 스로틀 없이 한 번 더 묻는다(생일 → 술 차례로) — 번호 4 빌드는 묻지 않는다(기준선) · 안 끝난 시트는 묻지 않는다
+//   ⑤ 종류 보존: 보유로 거른 새 선물 값은 언제나 종류를 싣는다(소스 — 술 선물은 선택지가 하나라 값으로는 그 길을 못 탄다)
 @MainActor
 @Suite struct MeIsulGiftTests {
     nonisolated static let isul = CharacterCatalog.isulAingID
@@ -126,5 +129,246 @@ import Testing
         #expect(!views.contains("CakeGiftText.lockedCaption"), "타일이 생일 캡션을 박았다 — 이슬 칸에 '생일 선물 전용'이 선다")
         let store = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeStoreCharacters.swift")
         #expect(!store.contains("CakeGiftText.lockedHint"), "상점 · 고르기 안내가 생일 글자를 박았다")
+    }
+
+    // MARK: - ③ 받는 시트(술 한잔)
+
+    nonisolated static let drinkGiftID = "d0000000-0000-4000-8000-00000000d71c"
+    nonisolated static let birthdayGiftID = "9f3c1b2a-0000-4000-8000-00000000ca4e"
+
+    nonisolated static func drinkPendingJSON(id: String = drinkGiftID, note: String? = "오늘 한잔 어때요?") -> String {
+        let noteJSON = note.map { "\"\($0)\"" } ?? "null"
+        return #"{"status":"ok","gift":{"id":"\#(id)","kind":"drink","options":["aing_isul"],"note":\#(noteJSON),"created_at":"2026-11-03T09:00:00+00:00"}}"#
+    }
+
+    nonisolated static func birthdayPendingJSON(id: String = birthdayGiftID) -> String {
+        #"{"status":"ok","gift":{"id":"\#(id)","kind":"birthday","options":["aing_cake_strawberry","aing_cake_choco"],"note":null,"created_at":"2026-11-03T08:00:00+00:00"}}"#
+    }
+
+    /// 선물 · 수령 · 상점 · 착용 응답 상자.
+    final class Server: @unchecked Sendable {
+        let pending = BaseLockedBox(MobileStubResponse.json(MeIsulGiftTests.drinkPendingJSON()))
+        let claim = BaseLockedBox(MobileStubResponse.json(#"{"status":"ok","character_id":"aing_isul","replayed":false}"#))
+        let shop = BaseLockedBox(MeIsulGiftTests.shopJSON(ownsIsul: false))
+
+        func respond(_ request: MobileStubRequest) -> MobileStubResponse? {
+            switch request.rpcName {
+            case "character_gift_pending": return pending.get()
+            case "claim_character_gift": return claim.get()
+            case "shop_state": return .json(shop.get())
+            case "set_character":
+                let id = request.jsonBody["p_id"] as? String ?? ""
+                return .json(#"{"status":"ok","character":"\#(id)"}"#)
+            default: return nil
+            }
+        }
+    }
+
+    static func harness(_ label: String, server: Server) async -> RankMeHarness {
+        await RankMeHarness(label: label) { server.respond($0) }
+    }
+
+    @Test("시트 값: 술 선물은 이슬이 미리 골라진 채(누르면 곧바로 받기) · 문구 C · 생일 선물은 하나 남아도 고르게 한다(1.0.14 그대로)")
+    func drinkSheetPreselectsAndUsesCopyC() {
+        let drink = CharacterGiftOffer(id: "g", options: [Self.isul], note: nil, createdAt: nil, kind: .drink)
+        let sheet = MeCakeGiftSheet(gift: drink)
+        #expect(sheet.selection == Self.isul && sheet.canConfirm, "술 선물 시트가 고른 것 없이 섰다 — [짠 받기]가 꺼진다")
+        #expect(sheet.copy == .drink)
+        #expect(sheet.copy.title == "짠! 🥂" && sheet.copy.confirmButton == "짠 받기")
+        #expect(sheet.copy.body == "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!")
+        #expect(sheet.copy.received(name: MeCharacterName.display(Self.isul)) == "이슬 아잉이를 받았어요!")
+        // 기준선: 생일 선물은 하나만 남아도 미리 고르지 않는다 · 문구는 생일 그대로.
+        let cake = MeCakeGiftSheet(gift: CharacterGiftOffer(id: "c", options: [CharacterCatalog.cakeChocoAingID]))
+        #expect(cake.selection == nil && !cake.canConfirm && cake.copy == .birthday)
+        #expect(!sheet.isSettled && MeCakeGiftSheet(gift: drink, phase: .received(characterID: Self.isul)).isSettled
+                && MeCakeGiftSheet(gift: drink, phase: .closed).isSettled && !MeCakeGiftSheet(gift: drink, phase: .claiming).isSettled)
+    }
+
+    @Test("술 선물: 번호 5 로 묻고 스스로 뜬다 · note 를 쥔다 · [짠 받기] = 이슬 · 번호 5 · 받은 뒤 상점 다시 읽기 · [지금 입기]는 기존 착용 경로")
+    func drinkGiftClaimFlow() async throws {
+        let server = Server()
+        let h = await Self.harness("me-isul-claim", server: server)
+        defer { h.tearDown() }
+        let store = h.me
+        store.appDidBecomeActive()
+        await h.quiesceMe()
+        let asked = try #require(h.requests(rpc: "character_gift_pending").first?.jsonBody)
+        #expect(asked["p_protocol"] as? Int == ShopWire.isulProtocol)
+        let sheet = try #require(store.cakeGiftSheet, "열린 술 선물인데 시트가 안 섰다")
+        #expect(sheet.gift.kind == .drink && sheet.gift.options == [Self.isul] && sheet.gift.note == "오늘 한잔 어때요?")
+        #expect(sheet.selection == Self.isul && sheet.canConfirm && sheet.copy == .drink)
+        store.cakeGiftSheetDidAppear()
+        server.shop.mutate { $0 = Self.shopJSON(ownsIsul: true) }
+        let shopBefore = h.requests(rpc: "shop_state").count
+        store.confirmCakeGift()
+        #expect(store.cakeGiftSheet?.phase == .claiming)
+        await h.quiesceMe()
+        let body = try #require(h.requests(rpc: "claim_character_gift").last?.jsonBody)
+        #expect(Set(body.keys) == ["p_gift", "p_character", "p_protocol"])
+        #expect(body["p_gift"] as? String == Self.drinkGiftID && body["p_character"] as? String == Self.isul
+                && body["p_protocol"] as? Int == ShopWire.isulProtocol, "\(body)")
+        #expect(store.cakeGiftSheet?.phase == .received(characterID: Self.isul))
+        #expect(store.isOwned(Self.isul) && store.cakeGift == nil && !store.showsCakeGiftReopen)
+        #expect(h.requests(rpc: "shop_state").count == shopBefore + 1, "받은 뒤 상점을 다시 안 읽었다")
+        #expect(store.pickerIDs.contains(Self.isul), "받은 이슬이 고르기에 없다")
+        server.pending.mutate { $0 = .json(#"{"status":"ok"}"#) }
+        store.wearReceivedCakeGift()
+        #expect(store.cakeGiftSheet == nil)
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "set_character").last?.jsonBody["p_id"] as? String == Self.isul)
+        #expect(store.equippedCharacterID == Self.isul, "착용값이 아잉으로 접혔다 — 카드 표가 이슬을 모른다")
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("술 선물 실패 · 다시 열기: 오프라인은 그 종류의 실패 한 줄 · 닫으면 🥂 '짠! 선물이 왔어요' [받기] · 생일 선물 줄은 🎂 그대로")
+    func drinkGiftFailureAndReopenRow() async throws {
+        let server = Server()
+        server.claim.mutate { $0 = .networkFailure() }
+        let h = await Self.harness("me-isul-reopen", server: server)
+        defer { h.tearDown() }
+        let store = h.me
+        await store.loadCakeGift()
+        store.cakeGiftSheetDidAppear()
+        store.confirmCakeGift()
+        await h.quiesceMe()
+        #expect(store.cakeGiftSheet?.phase == .choosing && store.cakeGiftSheet?.notice == DrinkGiftText.claimFailed)
+        #expect(store.cakeGiftSheet?.selection == Self.isul, "다시 누를 수 있게 이슬이 골라진 채여야 한다")
+        let asked = h.requests(rpc: "character_gift_pending").count
+        store.dismissCakeGiftSheet()
+        store.cakeGiftSheetDidDisappear()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == asked, "안 끝난 시트를 닫았는데 다음 선물을 물었다")
+        #expect(store.showsCakeGiftReopen && store.cakeGiftReopenKind == .drink)
+        #expect(store.cakeGiftReopenKind.copy.reopenTitle == "짠! 선물이 왔어요" && store.cakeGiftReopenKind.copy.reopenButton == "받기")
+        #expect(store.cakeGiftReopenKind.phoneReopenEmoji == "🥂")
+        // [받기] — 서버에 다시 묻고 같은 선물로 연다(미리 골라진 채).
+        store.reopenCakeGift()
+        await h.quiesceMe()
+        #expect(store.cakeGiftSheet?.gift.id == Self.drinkGiftID && store.cakeGiftSheet?.canConfirm == true)
+        // 기준선: 생일 선물의 줄은 🎂 · 생일 글자 그대로.
+        store.dismissCakeGiftSheet()
+        server.pending.mutate { $0 = .json(Self.birthdayPendingJSON()) }
+        await store.loadCakeGift()
+        store.dismissCakeGiftSheet()
+        #expect(store.cakeGiftReopenKind == .birthday && store.cakeGiftReopenKind.phoneReopenEmoji == "🎂")
+        #expect(store.cakeGiftReopenKind.copy.reopenTitle == CakeGiftText.reopenTitle)
+    }
+
+    @Test("뷰 배선: 시트 · 다시 열기 줄의 글자는 선물 종류의 묶음에서 · 술 선물은 초대장 갈래 · 생일 글자를 박지 않는다 — 주석을 걷고 본다")
+    func giftViewWiring() throws {
+        let sheet = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeCakeGiftViews.swift")
+        #expect(!sheet.contains("CakeGiftText."), "시트가 생일 글자를 박았다 — 술 선물에 '생일 축하해요! 🎂'가 선다")
+        #expect(!sheet.contains("Text(\"🎂\")"), "다시 열기 줄 기호가 케이크로 박혔다")
+        #expect(sheet.contains("if sheet.gift.kind == .drink {") && sheet.contains("invite(sheet)"), "술 선물 초대장 갈래가 없다")
+        #expect(sheet.contains("store.cakeGiftReopenKind.copy.reopenTitle") && sheet.contains("store.cakeGiftReopenKind.phoneReopenEmoji"))
+        #expect(sheet.contains("sheet.copy.confirmButton"), "확인 단추가 종류의 글자를 안 쓴다(술 = [짠 받기])")
+    }
+
+    // MARK: - ④ 다음 선물
+
+    @Test("다음 선물: 생일을 받고 시트가 내려간 뒤 스로틀 없이 한 번 더 묻는다 → 술 선물 시트가 스스로 뜬다 · 내려가기 전엔 묻지 않는다")
+    func followUpAfterSettledSheetDisappears() async throws {
+        let server = Server()
+        server.pending.mutate { $0 = .json(Self.birthdayPendingJSON()) }
+        server.claim.mutate { $0 = .json(#"{"status":"ok","character_id":"aing_cake_strawberry","replayed":false}"#) }
+        let h = await Self.harness("me-isul-followup", server: server)
+        defer { h.tearDown() }
+        let store = h.me
+        await store.loadCakeGift()
+        #expect(store.cakeGiftSheet?.gift.kind == .birthday)
+        store.cakeGiftSheetDidAppear()
+        store.selectCakeGiftOption(CharacterCatalog.cakeStrawberryAingID)
+        // 서버: 생일을 받으면 다음으로 열린 술 선물이 보인다.
+        server.pending.mutate { $0 = .json(Self.drinkPendingJSON()) }
+        server.shop.mutate { $0 = Self.shopJSON(ownsIsul: false, ownsStrawberry: true) }
+        store.confirmCakeGift()
+        await h.quiesceMe()
+        #expect(store.cakeGiftSheet?.phase == .received(characterID: CharacterCatalog.cakeStrawberryAingID))
+        let before = h.requests(rpc: "character_gift_pending").count
+        store.dismissCakeGiftSheet()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == before, "시트가 내려가기도 전에 다음 선물을 물었다(겹쳐 띄우기)")
+        #expect(store.cakeGiftFollowUpPending)
+        store.cakeGiftSheetDidDisappear()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == before + 1, "결론 난 시트가 내려갔는데 다음 선물을 안 물었다(10분 스로틀 안)")
+        let next = try #require(store.cakeGiftSheet, "다음 선물(술) 시트가 스스로 안 섰다")
+        #expect(next.gift.id == Self.drinkGiftID && next.gift.kind == .drink && next.canConfirm)
+        #expect(!store.cakeGiftFollowUpPending)
+        h.expectNoForbiddenCalls()
+    }
+
+    @Test("다음 선물 기준선: 번호 4 빌드(이슬 초상 없음)는 결론 난 시트가 내려가도 다시 묻지 않는다 — 다시 열기 줄도 없다")
+    func noFollowUpOnProtocolFour() async throws {
+        let server = Server()
+        server.pending.mutate { $0 = .json(Self.birthdayPendingJSON()) }
+        server.claim.mutate { $0 = .json(#"{"status":"ok","character_id":"aing_cake_strawberry","replayed":false}"#) }
+        let h = await Self.harness("me-isul-followup-p4", server: server)
+        defer { h.tearDown() }
+        let store = h.me
+        store.drawableCharacterIDs = AingCharacterArt.knownIDs.filter { $0 != Self.isul }
+        #expect(store.shopProtocolVersion == ShopWire.cakeProtocol, "전제: 번호 4")
+        await store.loadCakeGift()
+        store.cakeGiftSheetDidAppear()
+        store.selectCakeGiftOption(CharacterCatalog.cakeStrawberryAingID)
+        server.pending.mutate { $0 = .json(Self.drinkPendingJSON()) }
+        store.confirmCakeGift()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "claim_character_gift").last?.jsonBody["p_protocol"] as? Int == ShopWire.cakeProtocol)
+        let before = h.requests(rpc: "character_gift_pending").count
+        store.dismissCakeGiftSheet()
+        store.cakeGiftSheetDidDisappear()
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == before, "번호 4 빌드가 '다음 선물'을 물었다(0.3.66~ 요청 수가 늘었다)")
+        #expect(store.cakeGiftSheet == nil && !store.showsCakeGiftReopen)
+    }
+
+    @Test("다음 선물: 시트 없이 결론 나면(받는 사이 내려감) 그 자리에서 묻는다 · 계정이 바뀌면 깃발을 비운다")
+    func followUpWhenNoSheetAndReset() async throws {
+        let server = Server()
+        let h = await Self.harness("me-isul-followup-nosheet", server: server)
+        defer { h.tearDown() }
+        let store = h.me
+        await store.loadCakeGift()
+        // 시트가 화면에 서지 못하고(다른 시트가 떠 있었다) 거둬졌다 — 선물만 안다.
+        store.dismissCakeGiftSheet()
+        #expect(store.cakeGiftSheet == nil && store.cakeGift?.kind == .drink)
+        server.pending.mutate { $0 = .json(#"{"status":"ok"}"#) }
+        server.shop.mutate { $0 = Self.shopJSON(ownsIsul: true) }
+        let before = h.requests(rpc: "character_gift_pending").count
+        await store.applyCakeGiftClaim(.received(characterID: Self.isul, replayed: false), giftID: Self.drinkGiftID,
+                                       generation: store.context.generation)
+        await h.quiesceMe()
+        #expect(h.requests(rpc: "character_gift_pending").count == before + 1, "시트 없이 결론 났는데 다음 선물을 안 물었다")
+        #expect(store.cakeGift == nil && store.isOwned(Self.isul))
+        store.cakeGiftFollowUpPending = true
+        store.reset()
+        #expect(!store.cakeGiftFollowUpPending)
+    }
+
+    // MARK: - ⑤ 종류 보존
+
+    @Test("종류 보존: 스토어가 선물 값을 새로 만드는 자리는 언제나 kind 를 싣는다 — 주석을 걷고 본다")
+    func offerRebuildsCarryKind() throws {
+        let code = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeStoreCakeGift.swift")
+        var calls: [String] = []
+        var rest = Substring(code)
+        while let start = rest.range(of: "CharacterGiftOffer(") {
+            var depth = 0
+            var end = start.upperBound
+            var index = start.lowerBound
+            while index < rest.endIndex {
+                let ch = rest[index]
+                if ch == "(" { depth += 1 }
+                if ch == ")" { depth -= 1; if depth == 0 { end = rest.index(after: index); break } }
+                index = rest.index(after: index)
+            }
+            calls.append(String(rest[start.lowerBound..<end]))
+            rest = rest[end...]
+        }
+        #expect(calls.count >= 2, "선물 값을 새로 만드는 자리를 못 찾았다: \(calls)")
+        for call in calls {
+            #expect(call.contains("kind:"), "종류 없이 선물 값을 만든다(술 선물이 생일로 읽혀 사라진다): \(call)")
+        }
     }
 }

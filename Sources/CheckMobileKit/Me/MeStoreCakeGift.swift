@@ -14,11 +14,24 @@ import Foundation
 //   스토어가 시트를 세웠어도 화면에 못 섰으면(다른 시트가 떠 있다) 쓴 것이 아니다. 계정을 바꿔도 같은 실행에서 같은 선물을 두 번 띄우지 않는다.
 // - **대국·관전 중에는 스스로 띄우지 않는다**(오목·체스·테트리스 화면 — `GamesStore.isAnyMatchScreenVisible`): 30초 수·15초 침묵이
 //   걸린 판을 시트가 덮으면 진다. 그동안은 나 탭 '다시 열기' 줄만 서고, 다음 기회(앞으로 올 때 · 탭을 옮길 때)에 띄운다.
-// - 고르지 않고 닫으면 나 탭에 '다시 열기' 줄(`CakeGiftText.reopenTitle` · `reopenButton`)이 **수령할 때까지** 남는다. [고르기]는
+// - 고르지 않고 닫으면 나 탭에 '다시 열기' 줄(그 종류의 `reopenTitle` · `reopenButton`)이 **수령할 때까지** 남는다. [고르기]는
 //   스로틀을 건너뛰고 서버에 다시 물은 뒤 연다(다른 기기에서 이미 받았으면 줄이 걷히고 시트는 안 뜬다).
 // - 선택지는 **보유와 맞춰 거른다**(`unownedCakeGift`): 이미 가진 케이크를 고르는 길이 없다. 상점 상태가 새 보유를 말하면 거르고,
 //   남는 게 없으면 선물 · 다시 열기 줄을 거두고, 보유가 움직였으면 서버에 다시 묻는다(다른 기기 수령 — `reconcileCakeGiftWithOwnership`).
 // - 받은 뒤 `shop_state` 를 다시 읽어 보유를 맞추고, [지금 입기]는 기존 착용 경로(`chooseCharacter`)를 탄다.
+//
+// ── '술 한잔' 선물 — 이슬 아잉이 (맥 0.3.74 먼저 → 폰 1.0.17) ──
+// 이름(`cakeGift…`)은 생일 선물 때의 것을 그대로 두되 상태는 선물 전용 캐릭터 선물 **한 장**(생일 · 술 한잔 — `CharacterGiftOffer.kind`)이다.
+// 맥 `WorkTimerStoreCakeGift` ⑤ · ⑥ 과 같은 규칙:
+// - 문구 — 시트 · 다시 열기 줄 · 수령 한 줄은 선물 종류의 문구 묶음(`CharacterGiftKind.copy` — `CakeGiftText` · `DrinkGiftText`)에서 온다
+//   (대표 결정 #d_QKdjqLLU7S0b 문구 C "짠! 🥂").
+// - 술 선물은 선택지가 이슬 하나라 **고르기가 없다** — 시트는 그 하나를 미리 고른 채 선다(`MeCakeGiftSheet.init`). 생일 선물은 그대로다
+//   (하나 남은 케이크도 고르게 한다 — 1.0.14 동작).
+// - 보유로 거른 뒤 새 선물 값을 만들 때 **종류를 실어 옮긴다**(빼먹으면 술 선물이 생일로 읽혀 선택지가 0 이 된다 — 선물이 사라진다).
+// - 다음 선물 — 서버는 한 번에 하나만 내린다(p ≥ 5 면 두 종류 중 먼저 지급된 것). 선물이 결론 난 시트(받았다 · 끝났다)가 **화면에서
+//   내려간 뒤**(`cakeGiftSheetDidDisappear`) 스로틀을 건너뛰고 한 번 더 묻는다(시트가 없을 때 결론 나면 그 자리에서). 생일과 술이 같이
+//   열린 사람은 그렇게 차례로 받는다 — 10분 스로틀을 기다리지 않는다. 이 문은 술 선물을 받을 수 있는 번호(5 — `supportsDrinkGift`)에만
+//   있다(4 인 빌드엔 '다음'이 없다). 내려간 뒤에 묻는 까닭: 내려가는 동안 다음 시트를 세우면 SwiftUI 가 조용히 못 띄울 수 있다.
 
 /// 축하 시트 한 장의 상태. 시트는 선물 id 로 선다(`Identifiable`) — 단계가 바뀌어도 같은 시트다.
 package struct MeCakeGiftSheet: Equatable, Identifiable, Sendable {
@@ -36,14 +49,27 @@ package struct MeCakeGiftSheet: Equatable, Identifiable, Sendable {
     package let gift: CharacterGiftOffer
     package var selection: String?
     package var phase: Phase
-    /// 실패 · 거절 한 줄(코어 `CakeGiftText.notice(for:name:)` · `claimFailed`). nil 이면 없음.
+    /// 실패 · 거절 한 줄(그 선물 종류의 묶음 — `MeStore.cakeGiftNotice(for:kind:)` · `copy.claimFailed`). nil 이면 없음.
     package var notice: String?
 
+    /// 술 한잔 선물은 선택지가 이슬 하나라 고르기가 없다 — 그 하나를 미리 고른 채 선다(`canConfirm` 이 곧바로 참 · 맥 `presentCakeGiftWindow`
+    /// 와 같은 결). 생일 선물은 넘겨준 값 그대로다(하나 남아도 고르게 한다 — 1.0.14 동작).
     package init(gift: CharacterGiftOffer, selection: String? = nil, phase: Phase = .choosing, notice: String? = nil) {
         self.gift = gift
-        self.selection = selection
+        self.selection = selection ?? (gift.kind == .drink ? gift.options.first : nil)
         self.phase = phase
         self.notice = notice
+    }
+
+    /// 이 선물 종류의 문구 묶음(제목 · 본문 · 단추 · 다시 열기). 시트가 이것으로만 글자를 그린다.
+    package var copy: CharacterGiftCopy { gift.kind.copy }
+
+    /// 이 시트의 선물이 **결론 났는가**(받았다 · 끝났다) — 내려간 뒤 다음 선물을 묻는 조건(`cakeGiftSheetDidDisappear`).
+    package var isSettled: Bool {
+        switch phase {
+        case .received, .closed: return true
+        case .choosing, .claiming: return false
+        }
     }
 
     package var id: String { gift.id }
@@ -145,7 +171,8 @@ extension MeStore {
         let remaining = gift.options.filter { !isOwned($0) }
         if remaining == gift.options { return gift }
         if remaining.isEmpty { return nil }
-        return CharacterGiftOffer(id: gift.id, options: remaining, note: gift.note, createdAt: gift.createdAt)
+        // 종류를 실어 옮긴다(선택지는 그 종류의 내장 목록으로 다시 걸러진다 — 빼먹으면 술 선물이 생일로 읽혀 선택지가 0 이 된다).
+        return CharacterGiftOffer(id: gift.id, options: remaining, note: gift.note, createdAt: gift.createdAt, kind: gift.kind)
     }
 
     /// 상점 상태(`applyShopState`)가 보유를 새로 말한 뒤: 아는 선물과 고르는 중인 시트의 선택지를 보유와 맞춘다.
@@ -169,10 +196,11 @@ extension MeStore {
             if remaining != sheet.gift.options {
                 moved = true
                 if remaining.isEmpty {
-                    cakeGiftSheet = MeCakeGiftSheet(gift: sheet.gift, phase: .closed, notice: CakeGiftText.alreadyClaimed)
+                    cakeGiftSheet = MeCakeGiftSheet(gift: sheet.gift, phase: .closed,
+                                                    notice: Self.cakeGiftNotice(for: .alreadyClaimed(characterID: nil), kind: sheet.gift.kind))
                 } else {
                     let gift = CharacterGiftOffer(id: sheet.gift.id, options: remaining, note: sheet.gift.note,
-                                                  createdAt: sheet.gift.createdAt)
+                                                  createdAt: sheet.gift.createdAt, kind: sheet.gift.kind)
                     cakeGiftSheet = MeCakeGiftSheet(gift: gift, selection: sheet.selection.flatMap { remaining.contains($0) ? $0 : nil },
                                                     notice: sheet.notice)
                 }
@@ -186,6 +214,19 @@ extension MeStore {
     /// 나 탭에 서는 '다시 열기' 줄의 조건 — 열린 선물이 있고 시트가 떠 있지 않다.
     package var showsCakeGiftReopen: Bool {
         cakeGift != nil && cakeGiftSheet == nil
+    }
+
+    /// '다시 열기' 줄의 선물 종류 — 열린 선물의 종류(생일 · 술 한잔). 선물이 없으면 생일(줄이 안 서므로 읽히지 않는다).
+    package var cakeGiftReopenKind: CharacterGiftKind {
+        cakeGift?.kind ?? .birthday
+    }
+
+    /// 수령 결과 중 받은 화면이 아닌 것의 한 줄 — 그 선물 종류의 묶음에서(생일 · 술 한잔 — 지금은 같은 글자다 · 맥 `applyCakeGiftClaim` 과 같은 갈래).
+    static func cakeGiftNotice(for outcome: CharacterGiftClaimOutcome, kind: CharacterGiftKind) -> String? {
+        switch kind {
+        case .birthday: return CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
+        case .drink: return DrinkGiftText.notice(for: outcome, name: MeCharacterName.display)
+        }
     }
 
     /// '다시 열기' 줄의 [고르기] — **스로틀을 건너뛰고 서버에 다시 묻고** 연다. 다른 기기에서 이미 받았으면 서버가 선물 없음을 말해
@@ -218,7 +259,29 @@ extension MeStore {
     /// (머리 [X] 도 그동안 꺼져 있다 · 끌어 닫기는 `interactiveDismissDisabled`).
     package func dismissCakeGiftSheet() {
         guard cakeGiftSheet?.phase != .claiming else { return }
+        closeCakeGiftSheet()
+    }
+
+    /// 시트를 내린다. 결론 난 선물의 시트면 다음 선물을 묻는다 — 화면에 서 있었으면 **내려간 뒤**(`cakeGiftSheetDidDisappear`),
+    /// 아직 안 섰으면(못 띄운 시트) 지금.
+    private func closeCakeGiftSheet() {
+        guard let sheet = cakeGiftSheet else { return }
         cakeGiftSheet = nil
+        guard sheet.isSettled else { return }
+        if cakeGiftSheetOnScreen {
+            cakeGiftFollowUpPending = true
+        } else {
+            followUpCakeGiftIfNeeded()
+        }
+    }
+
+    /// 선물이 결론 난 뒤 다음 선물을 한 번 묻는다(서버는 한 번에 하나만 내린다 — 머리 주석). **술 선물을 받을 수 있는 번호에서만**
+    /// (`ShopWire.supportsDrinkGift` — 5): 4 인 빌드엔 '다음'이 없다. 스로틀을 건너뛴다. 이미 떠 있는 조회가 있어도 새로 묻는다 —
+    /// 앞 조회는 결론 **전**의 서버일 수 있고, 순번(`isCurrent`)이 새 조회만 옮긴다.
+    func followUpCakeGiftIfNeeded() {
+        cakeGiftFollowUpPending = false
+        guard context.session.isSignedIn, ShopWire.supportsDrinkGift(protocolVersion: shopProtocolVersion) else { return }
+        launch { [weak self] in await self?.loadCakeGift() }
     }
 
     /// 시트 뷰가 화면에 섰다 · 내려갔다(뷰의 onAppear · onDisappear). 섰을 때 그 선물을 **띄운 것으로 센다**(실행당 한 번).
@@ -229,6 +292,8 @@ extension MeStore {
 
     package func cakeGiftSheetDidDisappear() {
         cakeGiftSheetOnScreen = false
+        // 결론 난 시트가 다 내려갔다 — 다음 선물을 묻는다(`closeCakeGiftSheet`). 그사이 새 시트가 섰으면(다시 열기) 묻지 않는다.
+        if cakeGiftFollowUpPending, cakeGiftSheet == nil { followUpCakeGiftIfNeeded() }
     }
 
     /// [이걸로 받을게요] — `claim_character_gift`. 같은 선택으로 다시 불러도 안전하다(서버가 `replayed` 로 같은 답을 준다).
@@ -259,7 +324,7 @@ extension MeStore {
                 // 결과를 모른다(오프라인 · 5xx · 취소) — 고르는 화면으로 돌려 다시 누르게 한다(같은 선택이면 replayed).
                 guard var current = self.cakeGiftSheet, current.gift.id == giftID, current.phase == .claiming else { return }
                 current.phase = .choosing
-                current.notice = AuthErrorRules.classify(error) == .cancelled ? nil : CakeGiftText.claimFailed
+                current.notice = AuthErrorRules.classify(error) == .cancelled ? nil : current.copy.claimFailed
                 self.cakeGiftSheet = current
             }
         }
@@ -290,9 +355,12 @@ extension MeStore {
                 sheet.notice = nil
             } else {
                 sheet.phase = outcome.settlesGift ? .closed : .choosing
-                sheet.notice = CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
+                sheet.notice = Self.cakeGiftNotice(for: outcome, kind: sheet.gift.kind)
             }
             cakeGiftSheet = sheet
+        } else if outcome.settlesGift, !cakeGiftSheetOnScreen {
+            // 이 선물의 시트가 없다(받는 사이 내려갔다) — 내려갈 때 물을 자리가 지나갔으니 지금 묻는다.
+            followUpCakeGiftIfNeeded()
         }
         if received != nil { await loadShop() }
     }
@@ -300,7 +368,20 @@ extension MeStore {
     /// 받은 뒤 [지금 입기] — 시트를 닫고 **기존 착용 경로**(`chooseCharacter` → `set_character`)를 탄다.
     package func wearReceivedCakeGift() {
         guard let id = cakeGiftSheet?.receivedID else { return }
-        cakeGiftSheet = nil
+        closeCakeGiftSheet()
         chooseCharacter(id)
+    }
+}
+
+// MARK: - 다시 열기 줄의 그림 기호(폰 1.0.17)
+
+extension CharacterGiftKind {
+    /// 나 탭 '다시 열기' 줄 왼쪽 기호 — 생일은 케이크(1.0.14 그대로), 술 한잔은 잔(문구 C 제목 "짠! 🥂" 과 같은 잔).
+    /// 맥 메뉴 팝오버 카드는 같은 뜻의 SF Symbol 을 쓴다(`reopenSymbolName` — 선물 상자 · 잔).
+    package var phoneReopenEmoji: String {
+        switch self {
+        case .birthday: return "🎂"
+        case .drink: return "🥂"
+        }
     }
 }

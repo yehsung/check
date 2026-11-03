@@ -5,8 +5,12 @@ import SwiftUI
 
 // MARK: - 생일 선물 축하 시트 (폰 1.0.14 — 맥 0.3.66 축하 창의 짝)
 //
-// 상태 · 판정은 `MeStoreCakeGift.swift`(플랫폼 무관 — 맥 스위트가 값으로 잰다), 문구는 코어 `CakeGiftText`(맥과 같은 글자)다.
-// 이 파일은 그리기만 한다. 띄우는 자리는 탭 막대 위(`MobileTabsView.cakeGiftSheet`) — 어느 탭에 있든 뜬다.
+// 상태 · 판정은 `MeStoreCakeGift.swift`(플랫폼 무관 — 맥 스위트가 값으로 잰다), 문구는 코어 선물 종류의 묶음(`CharacterGiftKind.copy` —
+// `CakeGiftText` · `DrinkGiftText`, 맥과 같은 글자)이다. 이 파일은 그리기만 한다. 띄우는 자리는 탭 막대 위(`MobileTabsView.cakeGiftSheet`).
+//
+// 폰 1.0.17 — '술 한잔' 선물(이슬 아잉이): 같은 시트가 선물 종류로 가른다. 술 선물은 선택지가 이슬 하나라 **고르기가 없다** —
+// 초대장 화면(맥 `CheckCakeGiftWindowView.inviteScreen` 의 짝): 제목 "짠! 🥂" · 초대장 카드(운영자 한 줄 `note` 가 있으면 그것을 크게,
+// 본문은 그 아래 작게 — 없으면 본문이 큰 글) · 이슬 초상 하나 · [짠 받기]. 받은 뒤 화면 · 닫기는 생일과 한 길이다.
 
 /// 축하 시트: 두 초상(전신 — 장식이 케이크의 핵심이라 원에 가두지 않는다) → 고르기 → [이걸로 받을게요] → 받은 뒤
 /// "○○를 받았어요!" + [지금 입기] [닫기]. 실패하면 한 줄 안내를 보이고 다시 누르게 한다.
@@ -35,7 +39,11 @@ struct MeCakeGiftSheetView: View {
                     VStack(spacing: MobileTheme.space4) {
                         switch sheet.phase {
                         case .choosing, .claiming:
-                            choosing(sheet)
+                            if sheet.gift.kind == .drink {
+                                invite(sheet)
+                            } else {
+                                choosing(sheet)
+                            }
                         case .received(let id):
                             received(id)
                         case .closed:
@@ -67,7 +75,7 @@ struct MeCakeGiftSheetView: View {
 
     private func choosing(_ sheet: MeCakeGiftSheet) -> some View {
         VStack(spacing: MobileTheme.space4) {
-            heading(title: CakeGiftText.title, body: CakeGiftText.body)
+            heading(title: sheet.copy.title, body: sheet.copy.body)
             if let note = sheet.gift.note {
                 Text(note)
                     .font(.subheadline)
@@ -83,6 +91,56 @@ struct MeCakeGiftSheetView: View {
                     optionCard(id, isSelected: sheet.selection == id, isLocked: sheet.phase != .choosing)
                 }
             }
+            if let notice = sheet.notice {
+                InlineNotice(text: notice, kind: .warning)
+            }
+        }
+    }
+
+    // MARK: 술 한잔 초대장(고르기 없음)
+
+    /// 술 한잔 선물 — 선택지가 이슬 하나라 고르지 않는다(스토어가 미리 골라 둔다 — `MeCakeGiftSheet.init`). "술 한잔 하자고 초대 보내는 느낌":
+    /// 운영자 한 줄(`note`)이 있으면 초대장 카드의 큰 글이고 본문은 그 아래 작게, 없으면 본문이 큰 글이다(맥 초대장과 같은 위계).
+    private func invite(_ sheet: MeCakeGiftSheet) -> some View {
+        let copy = sheet.copy
+        let id = sheet.gift.options.first ?? CharacterCatalog.isulAingID
+        let note = sheet.gift.note
+        let card = RoundedRectangle(cornerRadius: MobileTheme.tileRadius, style: .continuous)
+        return VStack(spacing: MobileTheme.space4) {
+            Text(copy.title)
+                .font(MobileTheme.title(.title2))
+                .foregroundStyle(MobileTheme.label)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            VStack(spacing: MobileTheme.space2) {
+                if let note {
+                    Text(note)
+                        .font(MobileTheme.title(.title3))
+                        .foregroundStyle(MobileTheme.label)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(copy.body)
+                    .font(note == nil ? .body.weight(.semibold) : .subheadline)
+                    .foregroundStyle(note == nil ? MobileTheme.label : MobileTheme.label2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.vertical, MobileTheme.space3)
+            .padding(.horizontal, MobileTheme.space4)
+            .frame(maxWidth: .infinity)
+            .background(card.fill(MobileTheme.accentTint))
+            .overlay(card.strokeBorder(MobileTheme.accent.opacity(0.75), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+            .accessibilityElement(children: .combine)
+            VStack(spacing: MobileTheme.space2) {
+                CharacterPortrait(id: id, mood: .plain, size: 132, framed: false)
+                Text(MeCharacterName.display(id))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label)
+                    .multilineTextAlignment(.center)
+            }
+            .accessibilityElement(children: .combine)
             if let notice = sheet.notice {
                 InlineNotice(text: notice, kind: .warning)
             }
@@ -151,13 +209,13 @@ struct MeCakeGiftSheetView: View {
             }
             .padding(.top, MobileTheme.space4)
             .accessibilityHidden(true)
-            heading(title: CakeGiftText.received(name: MeCharacterName.display(id)), body: nil)
+            heading(title: sheet.copy.received(name: MeCharacterName.display(id)), body: nil)
         }
     }
 
     private func closed(_ sheet: MeCakeGiftSheet) -> some View {
         VStack(spacing: MobileTheme.space4) {
-            heading(title: CakeGiftText.title, body: nil)
+            heading(title: sheet.copy.title, body: nil)
             if let notice = sheet.notice {
                 InlineNotice(text: notice, kind: .info)
             }
@@ -190,20 +248,20 @@ struct MeCakeGiftSheetView: View {
         VStack(spacing: MobileTheme.space2) {
             switch sheet.phase {
             case .choosing, .claiming:
-                AingButton(CakeGiftText.confirmButton, kind: .filled, size: .lg, fillsWidth: true,
+                AingButton(sheet.copy.confirmButton, kind: .filled, size: .lg, fillsWidth: true,
                            isBusy: sheet.phase == .claiming) {
                     store.confirmCakeGift()
                 }
                 .disabled(!sheet.canConfirm && sheet.phase != .claiming)
             case .received:
-                AingButton(CakeGiftText.wearNowButton, kind: .filled, size: .lg, fillsWidth: true) {
+                AingButton(sheet.copy.wearNowButton, kind: .filled, size: .lg, fillsWidth: true) {
                     store.wearReceivedCakeGift()
                 }
-                AingButton(CakeGiftText.closeButton, kind: .tinted, size: .lg, fillsWidth: true) {
+                AingButton(sheet.copy.closeButton, kind: .tinted, size: .lg, fillsWidth: true) {
                     store.dismissCakeGiftSheet()
                 }
             case .closed:
-                AingButton(CakeGiftText.closeButton, kind: .tinted, size: .lg, fillsWidth: true) {
+                AingButton(sheet.copy.closeButton, kind: .tinted, size: .lg, fillsWidth: true) {
                     store.dismissCakeGiftSheet()
                 }
             }
@@ -230,7 +288,8 @@ struct MeCakeGiftSheetView: View {
 
 // MARK: - 나 탭 '다시 열기' 줄
 
-/// 고르지 않고 닫은 열린 선물 — 나 탭 무대 카드 바로 아래에 **수령할 때까지** 선다("생일 선물이 도착했어요" [고르기]).
+/// 고르지 않고 닫은 열린 선물 — 나 탭 무대 카드 바로 아래에 **수령할 때까지** 선다(그 종류의 글 — 생일 "생일 선물이 도착했어요" [고르기] ·
+/// 술 한잔 "짠! 선물이 왔어요" [받기]).
 struct MeCakeGiftReopenRow: View {
     let store: MeStore
 
@@ -257,7 +316,7 @@ struct MeCakeGiftReopenRow: View {
     }
 
     private var icon: some View {
-        Text("🎂")
+        Text(store.cakeGiftReopenKind.phoneReopenEmoji)
             .font(.system(size: 22))
             .frame(width: 40, height: 40)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.accentTint))
@@ -265,7 +324,7 @@ struct MeCakeGiftReopenRow: View {
     }
 
     private var title: some View {
-        Text(CakeGiftText.reopenTitle)
+        Text(store.cakeGiftReopenKind.copy.reopenTitle)
             .font(.body.weight(.semibold))
             .foregroundStyle(MobileTheme.label)
     }
@@ -273,7 +332,7 @@ struct MeCakeGiftReopenRow: View {
     private var button: some View {
         // 틴트 — 나 탭에는 이미 채운 버튼(주간 [받기])이 있다(채운 버튼은 화면당 하나 — 버튼 3단 규칙).
         // [고르기]는 서버에 다시 묻고 연다(`reopenCakeGift`) — 묻는 동안 단추가 돈다(겹쳐 누르기 막기).
-        AingButton(CakeGiftText.reopenButton, kind: .tinted, size: .md, isBusy: store.cakeGiftReopening) {
+        AingButton(store.cakeGiftReopenKind.copy.reopenButton, kind: .tinted, size: .md, isBusy: store.cakeGiftReopening) {
             store.reopenCakeGift()
         }
     }

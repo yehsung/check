@@ -157,6 +157,8 @@ package final class MeStore {
     @ObservationIgnored package internal(set) var cakeGiftAutoShownIDs: Set<String> = []
     /// '다시 열기' 줄의 [고르기]가 서버에 다시 묻는 중(단추가 돈다 · 겹쳐 누르기 막기).
     package internal(set) var cakeGiftReopening = false
+    /// 결론 난 선물의 시트를 내렸다 — 화면에서 다 내려가면(`cakeGiftSheetDidDisappear`) 다음 선물을 묻는다(폰 1.0.17 · 번호 5 에서만).
+    @ObservationIgnored package internal(set) var cakeGiftFollowUpPending = false
 
     // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
     /// 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답(CheckCore 모델 — 맥과 한 벌). nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
@@ -384,6 +386,7 @@ package final class MeStore {
         cakeGiftCheckedAt = nil
         cakeGiftLoading = false
         cakeGiftReopening = false
+        cakeGiftFollowUpPending = false
         // 주간 보상도 계정에 묶인다 — 안 비우면 다음 계정 카드에 앞 사람의 근무 시간·받은 칸·'받았어요'가 선다.
         // 계정별 '본 칸' 저장값(defaults)은 키가 계정별이라 그대로 둔다.
         weeklyWork = nil

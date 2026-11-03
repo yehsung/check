@@ -91,6 +91,12 @@ interface MeLinks {
     /** 이 조립에서 아잉 큐브를 할 수 있는가(폰 — 일일 미션 큐브 줄의 서버 글자 '맥에서 할 수 있어요'가 거짓이 된다). 큐브가 없는 조립은 서버 글자 그대로다. */
     val rummyPlayable: Boolean get() = false
 
+    /**
+     * 이 조립에서 아잉 뒤집기를 할 수 있는가(폰 판 7 — 일일 미션 리버시 줄의 서버 글자 '맥에서 할 수 있어요'가 거짓이 된다). 리버시가 없는 조립
+     * (Windows · 떼어 내기 깃발 끔)은 서버 글자 그대로다(iOS 1.0.17 `MeText.phonePlayableMacFirstGames` 와 같은 규칙).
+     */
+    val reversiPlayable: Boolean get() = false
+
     /** 나 탭 경로를 루트로(Swift `context.router.popToRoot(.me)`, W2-f). */
     fun popMeToRoot() {}
 

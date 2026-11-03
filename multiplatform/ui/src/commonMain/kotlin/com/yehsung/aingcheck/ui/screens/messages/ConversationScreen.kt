@@ -289,6 +289,24 @@ private fun ConversationTopBar(
 }
 
 /**
+ * 이름표의 이름 줄. 집중이 아니면 판 7 전 그림 **그대로**다(한 줄 · 넘치면 잘림) — Windows 플라이아웃도 같은 화면을 쓰는데 게이트가 꺼져 칩이 서지 않으므로,
+ * 데스크톱 그림이 바뀌지 않게 한다(검토 F6). 칩이 설 때만 이름이 폭을 양보하며 말줄임표로 끝난다(칩이 밀려나지 않게).
+ */
+@Composable
+internal fun NameplateTitle(title: String, isFocused: Boolean) {
+    val colors = AingTheme.colors
+    val style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+    if (!isFocused) {
+        Text(title, style = style, color = colors.label, maxLines = 1)
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = style, color = colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        FocusChip(MessagesFocusText.conversationChip)
+    }
+}
+
+/**
  * 유리 이름표: 이름(+ 집중이면 '집중 중' 칩 — 판 7) + "● 근무 중 · 서울" + 상태메시지(있으면 한 줄). TalkBack 은 이 이름표가 읽는다.
  * 칩은 이름 줄 안에 서고 이름표 높이를 늘리지 않는다 — 폭은 이름이 양보한다(꼬리 줄임).
  */
@@ -308,11 +326,7 @@ private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeer
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(header.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (isFocused) FocusChip(MessagesFocusText.conversationChip)
-            }
+            NameplateTitle(header.title, isFocused)
             if (line != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val status = presence?.status

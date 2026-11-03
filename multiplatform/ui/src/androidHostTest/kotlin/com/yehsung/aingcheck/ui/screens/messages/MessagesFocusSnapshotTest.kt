@@ -7,7 +7,13 @@
 // 음성 기준선: 대화 = 입력칸에 "안녕" 이 든 같은 화면(글이 있어도 [보내기]는 잠겨 있다) · 새 대화 = 게이트가 꺼진 스토어(Windows 조립 — 칩이 없다).
 package com.yehsung.aingcheck.ui.screens.messages
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -269,6 +275,28 @@ class MessagesFocusSnapshotTest {
                 }
                 assertEquals("gate=$gate 지금 탭 명부 재조회 수", if (gate) nowBefore + 1 else nowBefore, harness.onStore { now.refreshCount })
                 assertEquals("gate=$gate 명부 요청 수", requestsBefore + (if (gate) 2 else 1), directoryRequests())
+            }
+        }
+    }
+
+    /**
+     * 검토 F6 — 공용 이름표의 이름 줄은 집중이 아닐 때 예전 그림 그대로다(Windows 플라이아웃도 같은 ConversationScreen 을 쓰고 게이트가 꺼져 칩이 없다):
+     * 넘치는 긴 이름은 잘린다(Clip — 말줄임표 없음). 칩이 설 때만 이름이 폭을 양보하며 말줄임표로 끝난다(기준선 — 같은 이름 · 같은 폭).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun nameplateTitleKeepsTheOldClipUnlessTheChipStands() {
+        val long = "아주아주아주아주아주아주아주아주긴이름의동료입니다"
+        for (focused in listOf(false, true)) {
+            runComposeUiTest {
+                setContent {
+                    ScreenSnapshots.Frame(false, art, characters.directory) { Box(Modifier.width(120.dp)) { NameplateTitle(long, focused) } }
+                }
+                waitForIdle()
+                val layouts = mutableListOf<TextLayoutResult>()
+                onNodeWithText(long).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+                val layout = layouts.single()
+                assertTrue("전제: 이름이 폭을 넘쳐야 한다(focused=$focused)", layout.hasVisualOverflow || layout.isLineEllipsized(0))
+                assertEquals("focused=$focused 이름 줄 말줄임", focused, layout.isLineEllipsized(0))
             }
         }
     }

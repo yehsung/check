@@ -34,6 +34,9 @@ import Testing
 // 2026-11-03(0.3.69): `20261103120000_rummy.sql` §50.2 가 또 다시 만든다 — 아잉 큐브 자리를 정리한다(playing 은
 // `rummy__forfeit(…, 'account_deleted')` 기권, joined 는 방장이면 방 cancelled · 아니면 left). 지갑 키는 같은 판 전원을
 // 세 게임 상대와 **한 번의 정렬**로 잡는다. 같은 표에 등록했다(테트리스 키는 그 파일 본문을 그대로 잰다).
+//
+// 2026-11-03(출시 판 미정): 아잉 뒤집기 `20261108200000_reversi.sql` §9 가 또 다시 만든다 — 진행 중 리버시 판을
+// `reversi__settle(…, 'abandoned')` 로 닫고, 그 판의 두 사람을 네 게임 상대와 한 번의 정렬로 잡는다. 같은 표에 등록했다.
 
 // MARK: - 마이그레이션 찾기
 
@@ -256,6 +259,55 @@ private let deleteAccountLaterRedefinitionsAllowed:
                 "delete from public.teams t where t.id = any(v_teams) and not exists (select 1 from public.memberships m where m.team_id = t.id);",
             ],
             ["perform public.gomoku__settle(", "perform public.chess__settle(", "perform public.tetris__settle(", "perform public.rummy__forfeit("]
+        ),
+        // 아잉 뒤집기(20261108200000 §9 핀형 — 출시 판 미정)가 왜 덮어썼는가: reversi_matches.challenger/opponent 가 auth.users 에
+        // on delete cascade 라, 진행 중 리버시 판을 먼저 닫지 않으면 수락 순간 양쪽에서 빠진 판돈(`spend:reversi:stake:<판>`)이 체스·테트리스
+        // 때와 똑같이 소각된다. 떠나는 사람 패 'abandoned' → 남는 사람이 2×판돈을 받는다(수수료 0 — reversi__settle). 판 행은 정산 전에
+        // for update 로 잡는다. 지갑 키는 리버시 판의 두 사람(= reversi__settle 이 잡을 키)을 네 게임 상대와 **한 번의 정렬**로 잡고,
+        // 잠근 뒤 다시 모으는 늦은 키에도 같은 줄이 있다. 본문은 생성기(FLIP/server/build.py)가 저장소 최신 정의(20261103120000 §50.2)에
+        // ★ 조각만 끼워 조립했고(조각을 빼면 한 글자도 같음을 조립 때 단언), 적용 순간 §1 ③ 이 직전 md5 를 가드한다.
+        // 이 파일이 체인의 **마지막 정의**가 되므로 큐브·테트리스·체스·오목 절과 이 파일이 지키던 것도 여기서 다시 잰다.
+        // (초안은 승인 전까지 supabase/migrations 밖에 있다 — 그동안 이 줄은 '등록했는데 파일에 없는 덮어쓰기'로 빨갛다. 출시 때
+        //  초안이 들어오는 순간 맞는 쪽을 골랐다: 이 줄이 없으면 그 순간 '근거 없는 덮어쓰기'로 빨갛다.)
+        "20261108200000_reversi.sql:delete_my_account": (
+            "아잉 뒤집기 판을 닫는다 — 진행 중 판을 abandoned 로 정산해야 상대 판돈이 소각되지 않는다(reversi §9) · 지갑 키는 다섯 게임 한 번의 정렬",
+            [
+                // ㉠ 덮어쓴 이유 — 정렬 집합에 리버시 줄이 테트리스와 큐브 사이에 있고 곧바로 기다리는 잠금으로 들어간다(뮤턴트 m6 과 같은 까닭:
+                //    `… ) k` 까지만 재면 정렬 집합에서 리버시를 빼도 늦은 키 쪽 같은 줄 때문에 초록이다).
+                "union select unnest(array[g.challenger, g.opponent]) from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent) union select unnest(array[g.black, g.white]) from public.reversi_matches g where g.status = 'active' and v_uid in (g.black, g.white) union select s2.user_id from public.rummy_seats s1 join public.rummy_seats s2 on s2.match_id = s1.match_id where s1.user_id = v_uid and s1.state in ('joined', 'playing')) k; foreach v_key in array v_keys loop perform pg_advisory_xact_lock(",
+                // 늦은 키(잠금 뒤 다시 모으기)에도 리버시 줄이 있다.
+                "union select unnest(array[g.black, g.white]) from public.reversi_matches g where g.status = 'active' and v_uid in (g.black, g.white) union select s2.user_id from public.rummy_seats s1 join public.rummy_seats s2 on s2.match_id = s1.match_id where s1.user_id = v_uid and s1.state in ('joined', 'playing')) k where not (k.uid = any (v_keys));",
+                "for v_rvmatch in select g.id, g.black from public.reversi_matches g where g.status = 'active' and v_uid in (g.black, g.white) order by g.id loop perform 1 from public.reversi_matches g where g.id = v_rvmatch.id for update;",
+                "perform public.reversi__settle(v_rvmatch.id, case when v_rvmatch.black = v_uid then 'white_win' else 'black_win' end, 'abandoned');",
+                "if exists (select 1 from public.reversi_matches g where g.status = 'active' and v_uid in (g.black, g.white)) then raise exception",
+                // 큐브 절(20261103120000)
+                "for v_rmatch in select s.match_id, s.state from public.rummy_seats s where s.user_id = v_uid and s.state in ('playing', 'joined') order by s.match_id loop",
+                "perform public.rummy__lock(v_rmatch.match_id);",
+                "perform public.rummy__forfeit(v_rmatch.match_id, v_uid, 'account_deleted');",
+                "update public.rummy_matches m set status = 'cancelled' where m.id = v_rmatch.match_id and m.status = 'forming';",
+                "if exists (select 1 from public.rummy_seats s where s.user_id = v_uid and s.state in ('playing', 'joined')) then raise exception",
+                // 테트리스 절(20261021120000)
+                "for v_tmatch in select g.id, g.challenger from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent) order by g.id loop",
+                "perform public.tetris__settle(v_tmatch.id, case when v_tmatch.challenger = v_uid then 'opponent_win' else 'challenger_win' end, 'abandoned');",
+                "if exists (select 1 from public.tetris_matches g where g.status = 'active' and v_uid in (g.challenger, g.opponent)) then raise exception",
+                "if not pg_try_advisory_xact_lock(hashtext('ultra_wallet:' || v_key::text)) then raise exception",
+                "using errcode = '40001';",
+                // 체스 절(20261005160000)
+                "from public.chess_matches g where g.status = 'active' and v_uid in (g.white, g.black)",
+                "perform public.chess__settle(v_cmatch.id, case when v_cmatch.white = v_uid then 'black_win' else 'white_win' end, 'abandoned');",
+                "if exists (select 1 from public.chess_matches g where g.status = 'active' and v_uid in (g.white, g.black)) then raise exception",
+                // ㉡ 원래 이 파일(20260918120000)이 지키던 것
+                "perform public.gomoku__settle(v_match.id, case when v_match.black = v_uid then 'white_win' else 'black_win' end, 'resign');",
+                "if exists (select 1 from public.gomoku_matches g where g.status = 'active' and v_uid in (g.black, g.white)) then raise exception",
+                "perform pg_advisory_xact_lock(hashtext('ultra_wallet:' || v_key::text));",
+                "order by k.uid",
+                "v_uid uuid := auth.uid();",
+                "raise exception 'authentication required' using errcode = '28000';",
+                "delete from auth.users where id = v_uid;",
+                "delete from public.teams t where t.id = any(v_teams) and not exists (select 1 from public.memberships m where m.team_id = t.id);",
+            ],
+            ["perform public.gomoku__settle(", "perform public.chess__settle(", "perform public.tetris__settle(",
+             "perform public.rummy__forfeit(", "perform public.reversi__settle("]
         ),
     ]
 

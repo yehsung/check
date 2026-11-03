@@ -20,7 +20,7 @@ import CheckCore
 // v0.3.69 에 **게임 고르기가 위쪽 칩 줄에서 왼쪽 사이드바로** 옮겨 갔다(사용자 요구 2026-10-30: "미니게임이 너무 많아져서
 // 미니게임 창을 살짝 개편해야될거 같아. 아예 위가 아니라 게임창 왼쪽편에 미니게임들이 좀 더 크게 뜨면 좋을듯").
 // 혼자 게임 넷 + 대결 문 넷이 344pt 머리글 한 줄을 다투느라 고른 칩만 이름을 달고 나머지는 12pt 아이콘이었다.
-// 사이드바(`MiniGameSidebar`)는 여덟 줄 전부에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
+// 사이드바(`MiniGameSidebar`)는 줄 전부(아잉 뒤집기가 더해져 아홉)에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
 // 창이 사이드바 폭만큼 왼쪽으로 늘었을 뿐이다.
 
 /// 미니게임 창의 **고정** 레이아웃(캔버스 · 순위 열 · 무스크롤 행수). 순수 상수 — 결정적 검증 지점.
@@ -66,32 +66,63 @@ enum MiniGameWindowLayout {
     static let sidebarGroupTitleSpacing: CGFloat = 6
     /// 두 묶음 사이.
     static let sidebarGroupSpacing: CGFloat = 16
-    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다).
+    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다). v0.3.69 값 그대로다 — 같이 하기 다섯째 줄(아잉 뒤집기)부터 안쪽 442 를
+    /// 넘는 것은 줄을 누르거나 창을 키우지 않고 **같이 하기 칸만 스크롤**해 담는다(대표 결정 2026-11-03 #d_zw7CXHEtevVS
+    /// "C 스크롤로" — 줄·창 그대로, 같이 하기 칸만 스크롤). 게임이 더 늘어도(마작) 줄·창은 그대로고 스크롤 내용만 길어진다.
     static let sidebarRowHeight: CGFloat = 42
     static let sidebarRowSpacing: CGFloat = 4
     /// 줄 왼쪽 아이콘 타일 한 변(옛 칩 아이콘은 caption2 ≈ 12pt 였다).
     static let sidebarIconSize: CGFloat = 30
-    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브).
-    static let sidebarDuelRows = 4
+    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브 · 아잉 뒤집기) — 문 목록(`MiniGameDuelDoor`) 하나에서 온다.
+    static var sidebarDuelRows: Int { MiniGameDuelDoor.allCases.count }
+
+    /// 줄들만의 세로(머리 빼고).
+    static func sidebarRowsHeight(rows: Int) -> CGFloat {
+        CGFloat(rows) * sidebarRowHeight + CGFloat(max(rows - 1, 0)) * sidebarRowSpacing
+    }
 
     /// 한 묶음 세로(머리 + 줄들).
     static func sidebarGroupHeight(rows: Int) -> CGFloat {
-        sidebarGroupTitleHeight + sidebarGroupTitleSpacing
-            + CGFloat(rows) * sidebarRowHeight + CGFloat(max(rows - 1, 0)) * sidebarRowSpacing
+        sidebarGroupTitleHeight + sidebarGroupTitleSpacing + sidebarRowsHeight(rows: rows)
     }
 
     /// 사이드바 한 줄 폭(168).
     static var sidebarRowWidth: CGFloat { sidebarWidth - sidebarPadding * 2 }
 
-    /// 같이 하기(대결 문) 묶음이 서는 자리(창 콘텐츠 좌표 — 렌더 시험이 초록 잉크를 찾는 곳).
-    static var sidebarDuelGroupRect: CGRect {
-        CGRect(x: 0, y: contentPadding + sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing,
-               width: sidebarWidth, height: sidebarGroupHeight(rows: sidebarDuelRows))
+    /// 사이드바 안쪽 높이(창 높이 − 위아래 여백 = 442). 두 묶음이 이 안에 선다.
+    static var sidebarInnerHeight: CGFloat { contentSize.height - contentPadding * 2 }
+
+    /// 같이 하기 줄 전체 세로(스크롤 내용 — 꼬리 빼고). 다섯 줄이면 226.
+    static var sidebarDuelRowsHeight: CGFloat { sidebarRowsHeight(rows: sidebarDuelRows) }
+
+    /// 같이 하기 칸(스크롤 창) 세로 — 안쪽 높이에서 혼자 하기 묶음 · 묶음 사이 · 같이 하기 머리를 뺀 나머지(202).
+    /// 줄이 다 들어가면 줄 높이만큼이다(스크롤 없음).
+    static var sidebarDuelViewportHeight: CGFloat {
+        let room = sidebarInnerHeight - sidebarGroupHeight(rows: MiniGameKind.macCases.count) - sidebarGroupSpacing
+            - sidebarGroupTitleHeight - sidebarGroupTitleSpacing
+        return min(sidebarDuelRowsHeight, room)
     }
 
-    /// 사이드바 내용 세로 합(두 묶음). 안쪽 높이(442)를 넘으면 아래 줄이 창 밖으로 잘린다 — 게임이 또 늘면 여기서 먼저 걸린다.
+    /// 같이 하기 줄이 칸을 넘쳐 스크롤되는가(다섯 줄부터 참).
+    static var sidebarDuelScrolls: Bool { sidebarDuelRowsHeight > sidebarDuelViewportHeight }
+
+    /// 넘칠 때 같이 하기 칸 바닥을 흐리는 높이 = 스크롤 내용 끝에 붙는 빈 꼬리. 같은 높이라 끝까지 내리면 마지막 문이 흐림 위에 온전히 선다.
+    static let sidebarDuelFadeHeight: CGFloat = 16
+    /// 흐림의 바닥 불투명도. 끝까지 지우지 않는다 — 접힘 아래 문의 신청 점이 흐림 속에서도 보여야 한다.
+    static let sidebarDuelFadeFloor: Double = 0.3
+
+    /// 같이 하기(대결 문) 묶음이 서는 자리(창 콘텐츠 좌표 — 렌더 시험이 초록 잉크를 찾는 곳). 머리 + 보이는 칸.
+    static var sidebarDuelGroupRect: CGRect {
+        CGRect(x: 0, y: contentPadding + sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing,
+               width: sidebarWidth, height: sidebarGroupTitleHeight + sidebarGroupTitleSpacing + sidebarDuelViewportHeight)
+    }
+
+    /// 사이드바 내용 세로 합(혼자 하기 묶음 + 같이 하기 머리·보이는 칸). 안쪽 높이(442)를 넘으면 아래가 창 밖으로 잘린다.
+    /// 같이 하기 칸은 남은 자리만큼만 서고 넘치는 문은 그 안에서 스크롤되므로, 대결 문이 늘어도 이 값은 442 를 넘지 않는다 —
+    /// 혼자 하기 게임이 늘면 여기서 먼저 걸린다(같이 하기 칸이 문 한 줄도 못 담게 줄어든다).
     static var sidebarContentHeight: CGFloat {
-        sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing + sidebarGroupHeight(rows: sidebarDuelRows)
+        sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing
+            + sidebarGroupTitleHeight + sidebarGroupTitleSpacing + sidebarDuelViewportHeight
     }
     /// 게임 열 ↔ 순위 열 사이.
     static let columnSpacing: CGFloat = 14
@@ -433,6 +464,8 @@ enum MiniGameSpaceKey {
     /// 키보드로도 눌린다(전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 [완료]를
     /// 스페이스로 누를 때 게임이 삼킨다 — 60초 차례에서 그 한 번이 시간 초과 벌칙이 된다.
     /// v0.3.66: 생일 축하 창이 더해져 **여섯**이다. 글을 받지 않지만 두 초상 · [이걸로 받을게요] · [지금 입기] 가 키보드로도 눌린다(뽑기 창과 같은 이유).
+    /// 아잉 뒤집기 창이 더해져 **여덟**이다. 판은 클릭이지만 [기권]·[로비로]·판돈 창·규칙 창 단추가 키보드로도 눌린다(전체 키보드 접근).
+    /// 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
@@ -440,7 +473,8 @@ enum MiniGameSpaceKey {
          CheckGachaWindowController.frameAutosaveName,
          CheckTetrisDuelWindowController.frameAutosaveName,
          CheckCakeGiftWindowController.frameAutosaveName,
-         CheckRummyWindowController.frameAutosaveName]
+         CheckRummyWindowController.frameAutosaveName,
+         CheckReversiWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -761,7 +795,8 @@ struct CheckMiniGameWindowView: View {
         )
     }
 
-    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 넷(각자 넓은 창을 연다).
+    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 다섯(각자 넓은 창을 연다 — 다섯째는 아잉 뒤집기,
+    /// 넘치는 문은 같이 하기 칸 안에서 스크롤된다).
     private var gameSidebar: some View {
         MiniGameSidebar(
             selected: store.miniGameKind,
@@ -772,7 +807,9 @@ struct CheckMiniGameWindowView: View {
             onGomoku: { store.openGomokuFromMiniGame() },
             onChess: { store.openChessFromMiniGame() },
             onTetrisDuel: { store.openTetrisDuelFromMiniGame() },
-            onRummy: { store.openRummyFromMiniGame() }
+            onRummy: { store.openRummyFromMiniGame() },
+            onReversi: { store.openReversiFromMiniGame() },
+            clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll
         )
     }
 
@@ -1482,7 +1519,7 @@ struct MiniGameGameHeader: View {
     }
 }
 
-/// 대결 문 넷의 '받은 신청' 점(v0.3.69). 값은 **메뉴바 점과 같은 네 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
+/// 대결 문의 '받은 신청' 점(v0.3.69 — 넷, 아잉 뒤집기가 더해져 다섯). 값은 **메뉴바 점과 같은 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
 /// hasTetrisInvite · hasRummyInvite 와 같은 식) — 새 조회를 하지 않고, 스토어가 이미 들고 있는 것을 읽기만 한다.
 ///
 /// 이 창에서 점이 필요한 이유: 대결 창을 여는 길이 이 사이드바다. 신청이 와 있는데 문이 아무 말도 안 하면 메뉴바 점을 보고
@@ -1492,12 +1529,15 @@ struct MiniGameDuelInvites: Equatable {
     var chess = false
     var tetris = false
     var rummy = false
+    var reversi = false
 
-    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false) {
+    /// 새 문의 칸은 **맨 뒤**에 기본값과 함께 붙인다 — 기존 호출(`MiniGameDuelInvites(tetris: true)` 등)이 한 글자도 안 바뀐다.
+    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false) {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
         self.rummy = rummy
+        self.reversi = reversi
     }
 
     @MainActor
@@ -1506,7 +1546,107 @@ struct MiniGameDuelInvites: Equatable {
             gomoku: !store.gomoku.pendingIncomingInvites.isEmpty,
             chess: store.chess.visibleIncoming != nil,
             tetris: store.tetris.visibleIncoming != nil,
-            rummy: store.rummy.hasIncomingInvite
+            rummy: store.rummy.hasIncomingInvite,
+            reversi: store.reversi.visibleIncoming != nil
+        )
+    }
+}
+
+extension MiniGameDuelInvites {
+    subscript(door: MiniGameDuelDoor) -> Bool {
+        switch door {
+        case .gomoku: gomoku
+        case .chess: chess
+        case .tetris: tetris
+        case .rummy: rummy
+        case .reversi: reversi
+        }
+    }
+
+    /// 같이 하기 칸이 저절로 굴러가 보여 줄 문 — **새로 선** 신청 점 가운데 가장 아래 문(창을 처음 열 때(`old == nil`)는 서 있는 점
+    /// 가운데 가장 아래 문). 없으면 nil(굴리지 않는다). 가장 아래인 이유: 위쪽 문은 맨 위 화면에 이미 보이고, 접힘 아래로 숨는 것은
+    /// 아래쪽 문이다(대표 결정 C 의 약점 "아래 줄 · 그 신청 점을 놓치기 쉬움"을 메우는 자리).
+    static func scrollTarget(from old: MiniGameDuelInvites?, to new: MiniGameDuelInvites) -> MiniGameDuelDoor? {
+        MiniGameDuelDoor.allCases.last { new[$0] && !(old?[$0] ?? false) }
+    }
+}
+
+/// 같이 하기 칸(2026-11-03 대표 결정 #d_zw7CXHEtevVS "C 스크롤로"): 줄·창은 그대로 두고 **이 칸만** 스크롤한다.
+///
+/// macOS 는 스크롤 막대를 평소 숨겨서 접힘 아래 문(아잉 뒤집기 · 다음 마작)과 그 신청 점을 놓치기 쉽다(카드에 적어 드린 약점).
+/// 그래서 둘을 더한다:
+///   · **바닥 흐림** — 순위 목록의 `overflowFade` 와 같은 말("이어진다"). 다만 끝까지 지우지 않는다(`sidebarDuelFadeFloor`) —
+///     접힌 문의 신청 점이 흐림 속에서도 보여야 한다. 스크롤 내용 끝에 흐림 높이만큼 빈 꼬리를 두어 끝까지 내리면 마지막 문이 온전히 선다.
+///   · **신청이 오면 그 문까지 굴린다** — `MiniGameDuelInvites.scrollTarget`. 애니메이션 없이 한 번에(메시지 창의 검증된 갈래와 같다).
+///
+/// 줄 자체에는 id 를 달지 않는다 — 남의 시험들이 문 다섯 줄의 글자를 그대로 잰다(V0360 · V0369 · 리버시 배선). 대신 줄과 같은 높이·간격의
+/// 투명 자리표를 줄 뒤에 겹쳐 세우고 거기에 id 를 단다(줄 높이는 `sidebarRowHeight` 로 굳어 있어 두 열이 어긋나지 않는다).
+struct MiniGameSidebarDuelViewport<Rows: View>: View {
+    /// 스크롤 내용 끝 꼬리의 id — 마지막 문을 흐림 위로 올릴 때 겨눈다.
+    static var tailID: String { "minigame-duel-tail" }
+
+    let invites: MiniGameDuelInvites
+    var clipsOverflowInsteadOfScroll: Bool = false
+    @ViewBuilder let rows: () -> Rows
+
+    private typealias L = MiniGameWindowLayout
+
+    var body: some View {
+        if !L.sidebarDuelScrolls {
+            rowStack
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: 앱이 처음 보여 주는 그림(맨 위)과 같게 위를 남기고 아래를 자른다.
+            rowStack
+                .frame(height: L.sidebarDuelViewportHeight, alignment: .top)
+                .clipped()
+                .mask(fade)
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        rowStack.background(alignment: .top) { anchors }
+                        Color.clear.frame(height: L.sidebarDuelFadeHeight).id(Self.tailID)
+                    }
+                }
+                .frame(height: L.sidebarDuelViewportHeight)
+                .mask(fade)
+                .onAppear { reveal(MiniGameDuelInvites.scrollTarget(from: nil, to: invites), proxy) }
+                .onChange(of: invites) { old, new in reveal(MiniGameDuelInvites.scrollTarget(from: old, to: new), proxy) }
+            }
+        }
+    }
+
+    private var rowStack: some View {
+        VStack(spacing: L.sidebarRowSpacing) { rows() }
+    }
+
+    /// 줄과 같은 자리의 투명 자리표(id = 문).
+    private var anchors: some View {
+        VStack(spacing: L.sidebarRowSpacing) {
+            ForEach(MiniGameDuelDoor.allCases, id: \.self) { door in
+                Color.clear.frame(height: L.sidebarRowHeight).id(door)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// 마지막 문은 꼬리까지 내려 흐림 위에 온전히 세운다. 다른 문은 최소한만 굴려 문 전체가 보이게 한다(이미 보이면 안 움직인다).
+    private func reveal(_ door: MiniGameDuelDoor?, _ proxy: ScrollViewProxy) {
+        guard let door else { return }
+        if door == MiniGameDuelDoor.allCases.last {
+            proxy.scrollTo(Self.tailID, anchor: .bottom)
+        } else {
+            proxy.scrollTo(door, anchor: nil)
+        }
+    }
+
+    private var fade: LinearGradient {
+        let start = (L.sidebarDuelViewportHeight - L.sidebarDuelFadeHeight) / L.sidebarDuelViewportHeight
+        return LinearGradient(
+            stops: [.init(color: .black, location: 0),
+                    .init(color: .black, location: start),
+                    .init(color: .black.opacity(L.sidebarDuelFadeFloor), location: 1)],
+            startPoint: .top, endPoint: .bottom
         )
     }
 }
@@ -1538,6 +1678,9 @@ struct MiniGameSidebar: View {
     let onChess: () -> Void
     let onTetrisDuel: () -> Void
     let onRummy: () -> Void
+    let onReversi: () -> Void
+    /// 스냅샷 전용: 같이 하기 칸을 ScrollView 대신 클립으로 그린다(ImageRenderer 는 ScrollView 안쪽을 못 그린다). 앱은 언제나 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
 
     /// 대결 문이 열려 있는가(위 잠금 규칙).
     private var doorsOpen: Bool { !isPlaying || isFrozen }
@@ -1558,10 +1701,14 @@ struct MiniGameSidebar: View {
                 }
             }
             group(Self.duelTitle) {
-                MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }
-                MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }
-                MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
-                MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
+                // 줄 순서 = `MiniGameDuelDoor` 순서(칸이 저절로 굴러갈 때 겨누는 자리가 이 순서로 선다 — 둘이 갈리면 엉뚱한 문으로 간다).
+                MiniGameSidebarDuelViewport(invites: invites, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll) {
+                    MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }
+                    MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }
+                    MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
+                    MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
+                    MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() }
+                }
             }
             .disabled(!doorsOpen)
             Spacer(minLength: 0)
@@ -1769,6 +1916,21 @@ struct MiniGameRummyEntryButton: View {
 
     var body: some View {
         MiniGameSidebarRow(title: Self.title, icon: RummyEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
+    }
+}
+
+/// 사이드바의 [아잉 뒤집기] 문(1:1 리버시). 이름·도움말 글자는 맥 문구 집 `ReversiText` 한 곳에서 온다(큐브 문이
+/// `RummyInviteText.gameName` 을 쓰는 것과 같은 방식). 렌더 테스트가 단독으로 그린다(internal).
+struct MiniGameReversiEntryButton: View {
+    static let title = ReversiText.gameName
+    static let help = ReversiText.sidebarHelp
+
+    var hasInvite: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        MiniGameSidebarRow(title: Self.title, icon: ReversiEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
                            hasInvite: hasInvite, help: Self.help, action: action)
     }
 }

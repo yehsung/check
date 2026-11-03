@@ -201,10 +201,17 @@ extension WorkTimerStore {
         closeMiniGamePanel()
     }
 
+    /// 미니게임 창 사이드바의 **아잉 뒤집기** 문. 위와 같은 규약이다 — 아잉 뒤집기 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    func openReversiFromMiniGame() {
+        noteMiniGameDuelReturn(.reversi)
+        reversi.openWindow(focusMatchID: nil)
+        closeMiniGamePanel()
+    }
+
     // MARK: 대결 창 → 미니게임 창 되돌아오기 (2026-11-03 대표 요청 ⑧)
     //
     // 원문: "미니게임 화면에서도 사람들이랑 붙은 게임들 누르면 해당 게임 로비로 가지잖아. 거기서 엑스 누르면 다시 기본 미니게임 창이
-    // 다시 뜨면서 교대되는 느낌이면 좋을듯." 들어갈 때 대결 창을 먼저 띄우고 미니게임 창을 내렸으니(위 네 문), 나올 때는 그 거꾸로 —
+    // 다시 뜨면서 교대되는 느낌이면 좋을듯." 들어갈 때 대결 창을 먼저 띄우고 미니게임 창을 내렸으니(위 다섯 문), 나올 때는 그 거꾸로 —
     // 사람이 대결 창을 닫는 순간 미니게임 창을 띄운다(닫히는 창이 사라지는 동안 새 창이 앞에 선다).
     //  · **미니게임 창에서 들어온 대결 창만**이다. 팝오버 배너 · 말풍선 · 메뉴로 연 대결 창은 닫으면 그냥 닫힌다.
     //  · **사람이 닫았을 때만**이다(빨간 점 · ⌘W · 큐브의 확인 뒤 닫기). 로그아웃 · 계정 전환의 프로그램 닫기는 표지만 지운다 —
@@ -983,6 +990,8 @@ extension WorkTimerStore {
 }
 
 /// 미니게임 창 사이드바에서 들어가는 대결 창(2026-11-03 대표 요청 ⑧ — `WorkTimerStore.miniGameDuelReturn`).
-enum MiniGameDuelDoor: Equatable, Sendable {
-    case gomoku, chess, tetris, rummy
+/// 사이드바 같이 하기 칸(`MiniGamePanel`)도 이 목록을 쓴다 — 선언 순서가 곧 같이 하기 줄 순서이자 저절로 굴리기 자리표 순서다.
+/// 새 문은 **맨 뒤**에 붙인다(아잉 뒤집기는 큐브 뒤 · 마작 가지는 reversi 뒤에 mahjong — MJ/SPEC.md §5.8).
+enum MiniGameDuelDoor: Equatable, Sendable, CaseIterable {
+    case gomoku, chess, tetris, rummy, reversi
 }

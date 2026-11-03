@@ -1,0 +1,59 @@
+{
+    "have": null,
+    "need": 3,
+    "side": "challenger",
+    "state": {
+        "match": {
+            "id": "b404c200-ee80-46e1-a155-4524c0e991c4",
+            "turn": null,
+            "black": null,
+            "board": "...........................wb......bw...........................",
+            "discs": {
+                "black": 2,
+                "empty": 60,
+                "white": 2
+            },
+            "score": null,
+            "stake": 3,
+            "white": null,
+            "result": null,
+            "status": "pending",
+            "winner": null,
+            "opponent": "b0000000-0000-4000-8000-000000000002",
+            "challenger": "b0000000-0000-4000-8000-000000000003",
+            "end_reason": null,
+            "move_count": 0,
+            "started_ms": null,
+            "deadline_ms": null,
+            "finished_ms": null,
+            "turn_started_ms": null,
+            "invite_expires_ms": 1793677498519
+        },
+        "moves": [
+        ],
+        "grace_ms": 2000,
+        "my_color": null,
+        "opponent": {
+            "center": null,
+            "user_id": "b0000000-0000-4000-8000-000000000003",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "비시험03"
+        },
+        "watchers": 0,
+        "black_user": null,
+        "white_user": null,
+        "legal_moves": [
+        ],
+        "ruby_balance": 100,
+        "turn_seconds": 30,
+        "server_now_ms": 1793677438526,
+        "my_auto_streak": null,
+        "black_auto_streak": 0,
+        "white_auto_streak": 0,
+        "auto_abandon_streak": 3,
+        "opponent_auto_streak": null
+    },
+    "status": "insufficient",
+    "ruby_balance": 100
+}

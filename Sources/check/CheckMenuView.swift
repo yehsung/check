@@ -44,6 +44,8 @@ struct CheckMenuView: View {
     var previewTetrisInvite: TetrisDuelInvite? = nil
     /// 스냅샷 전용: 받은 **아잉 큐브** 초대 배너(v0.3.69)를 강제로 그린다. 앱에서는 store.rummy.incomingInvites 로만 결정.
     var previewRummyInvite: RummyRoom? = nil
+    /// 스냅샷 전용: 받은 **아잉 뒤집기** 신청 배너를 강제로 그린다. 앱에서는 store.reversi.visibleIncoming 로만 결정.
+    var previewReversiInvite: ReversiInvite? = nil
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
@@ -82,6 +84,9 @@ struct CheckMenuView: View {
         /// 받은 **아잉 큐브** 초대(v0.3.69). 사람(방장)이 기다리는 요청이지만 방 TTL 이 10분이라 60초짜리 1:1 신청보다
         /// 덜 급하다 — 테트리스 바로 뒤다(밀려도 초대는 서버에 남아 큐브 창 로비에서 다시 보인다).
         case rummyInvite
+        /// 받은 **아잉 뒤집기** 신청. 뜻으로는 60초 신청이라 큐브(방 TTL 10분) 앞이 맞지만, 큐브 뒤에 둔다(설계 결정 D7 —
+        /// 둘이 동시에 오면 큐브가 이기고 아잉 뒤집기는 다음 팝오버로 밀린다. 신청은 서버에 남아 창 로비에서 다시 보인다).
+        case reversiInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -119,6 +124,8 @@ struct CheckMenuView: View {
     static let tetrisInviteBannerHeight: CGFloat = 92
     /// 받은 아잉 큐브 초대 배너(v0.3.69). `RummyInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
     static let rummyInviteBannerHeight: CGFloat = 92
+    /// 받은 아잉 뒤집기 신청 배너. `ReversiInviteBanner` 는 체스 배너를 베낀 **같은 모양**이라 높이도 같다.
+    static let reversiInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -298,6 +305,47 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 팝오버에 띄울 받은 **아잉 뒤집기** 신청(없으면 nil). 체스와 같은 규약: **스토어가 만료·차단을 걷은 결과만** 읽는다
+    /// (`visibleIncoming` — 만료는 스토어 타이머가 `incoming` 에서 걷어낸다). 여기서 시각을 비교하면 팝오버 전체가 매초 무효화된다.
+    private var reversiBannerInvite: ReversiInvite? {
+        previewReversiInvite ?? store.reversi.visibleIncoming
+    }
+
+    /// 배너 [수락]: 서버 수락 → 아잉 뒤집기 창 → 팝오버 닫기(체스와 **같은 순서** — 창 먼저, 팝오버 나중).
+    private func acceptReversiInvite(_ invite: ReversiInvite) {
+        let reversi = store.reversi
+        Task { @MainActor in
+            await reversi.respond(inviteID: invite.id, accept: true)
+            reversi.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineReversiInvite(_ invite: ReversiInvite) {
+        let reversi = store.reversi
+        Task { @MainActor in
+            await reversi.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openReversiInvite(_ invite: ReversiInvite) {
+        store.reversi.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 아잉 뒤집기 신청 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var reversiInviteBanner: some View {
+        if topBanner == .reversiInvite, let invite = reversiBannerInvite {
+            ReversiInviteBanner(
+                invite: invite,
+                onAccept: { acceptReversiInvite(invite) },
+                onDecline: { declineReversiInvite(invite) },
+                onOpen: { openReversiInvite(invite) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -319,6 +367,7 @@ struct CheckMenuView: View {
         if store.isSignedIn, chessBannerInvite != nil { return .chessInvite }
         if store.isSignedIn, tetrisBannerInvite != nil { return .tetrisInvite }
         if store.isSignedIn, rummyBannerInvite != nil { return .rummyInvite }
+        if store.isSignedIn, reversiBannerInvite != nil { return .reversiInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -339,6 +388,7 @@ struct CheckMenuView: View {
         case .chessInvite: return Self.chessInviteBannerHeight
         case .tetrisInvite: return Self.tetrisInviteBannerHeight
         case .rummyInvite: return Self.rummyInviteBannerHeight
+        case .reversiInvite: return Self.reversiInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -593,6 +643,7 @@ struct CheckMenuView: View {
                     chessInviteBanner
                     tetrisInviteBanner
                     rummyInviteBanner
+                    reversiInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -623,6 +674,8 @@ struct CheckMenuView: View {
                     tetrisInviteBanner
                     // 받은 아잉 큐브 초대도 **같은 자리**(v0.3.69 — 테트리스와 같은 사정).
                     rummyInviteBanner
+                    // 받은 아잉 뒤집기 신청도 **같은 자리**(체스와 같은 사정 — 창을 여는 길이 미니게임 창 사이드바 하나뿐이다).
+                    reversiInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -1288,12 +1341,17 @@ struct MenuBarStatusLabel: View {
     /// 받은 **아잉 큐브** 초대가 있다(v0.3.69). 테트리스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다.
     var hasRummyInvite: Bool = false
 
+    /// 받은 **아잉 뒤집기** 신청이 있다. 체스와 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    /// ★ 기본값 false 라 `CheckApp` 의 인자 자리를 빠뜨려도 컴파일·시험이 초록이고 점만 영영 안 켜진다 — 짝(앱 인자 · 이 칸 ·
+    ///   `dotReasons`)을 소스 계약 시험이 함께 잰다.
+    var hasReversiInvite = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
             openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite,
-            rummyInvite: hasRummyInvite
+            rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite
         )
     }
 
@@ -1426,16 +1484,20 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var tetrisInvite: Bool = false
     /// 받은 아잉 큐브 초대가 있다(v0.3.69). 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var rummyInvite: Bool = false
+    /// 받은 아잉 뒤집기 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var reversiInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
     static let chessInviteText = "체스 신청"
     static let tetrisInviteText = "테트리스 신청"
     static let rummyInviteText = RummyInviteText.dotReason
+    static let reversiInviteText = ReversiText.dotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
-        !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !updateAvailable && !openReports
+        !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !reversiInvite && !updateAvailable
+            && !openReports
     }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
@@ -1449,6 +1511,8 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if tetrisInvite { parts.append(Self.tetrisInviteText) }
         // 아잉 큐브 초대는 방 TTL 이 10분이라 1:1 신청들 뒤다.
         if rummyInvite { parts.append(Self.rummyInviteText) }
+        // 아잉 뒤집기 신청은 큐브 뒤다(팝오버 배너 · 사이드바와 같은 순서 — 설계 결정 D7).
+        if reversiInvite { parts.append(Self.reversiInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }

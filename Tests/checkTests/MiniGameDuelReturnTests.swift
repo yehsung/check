@@ -10,7 +10,7 @@ import Testing
 // 원문: "미니게임 화면에서도 사람들이랑 붙은 게임들 누르면 해당 게임 로비로 가지잖아. 거기서 엑스 누르면 다시 기본 미니게임 창이
 // 다시 뜨면서 교대되는 느낌이면 좋을듯."
 // 들어갈 때는 0.3.50 부터 '대결 창 먼저, 미니게임 창 나중'으로 바꿔 넘어갔다(`V0350MiniGameDuelEntryTests`). 나올 때는 창만 닫히고
-// 아무것도 안 남았다(메뉴바 앱이라 독 아이콘도 없다). 여기서 재는 것: ① 스토어의 되돌림 판정(네 문 · 사람 닫기만 · 미니게임에서
+// 아무것도 안 남았다(메뉴바 앱이라 독 아이콘도 없다). 여기서 재는 것: ① 스토어의 되돌림 판정(다섯 문 · 사람 닫기만 · 미니게임에서
 // 들어온 창만) ② 창 컨트롤러가 '사람이 닫았다'와 '프로그램이 닫았다'를 가려 알린다 ③ 앱 배선이 둘을 잇는다.
 
 @MainActor
@@ -36,6 +36,7 @@ private func mdrEnter(_ store: WorkTimerStore, _ door: MiniGameDuelDoor) {
     case .chess: store.openChessFromMiniGame()
     case .tetris: store.openTetrisDuelFromMiniGame()
     case .rummy: store.openRummyFromMiniGame()
+    case .reversi: store.openReversiFromMiniGame()
     }
 }
 
@@ -60,8 +61,8 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ① 스토어 판정
 
-    @Test("네 대결 창 모두: 미니게임 창에서 들어가 사람이 닫으면 미니게임 창이 다시 선다", .gomokuDefaultsCleanup,
-          arguments: [MiniGameDuelDoor.gomoku, .chess, .tetris, .rummy])
+    @Test("다섯 대결 창 모두: 미니게임 창에서 들어가 사람이 닫으면 미니게임 창이 다시 선다", .gomokuDefaultsCleanup,
+          arguments: [MiniGameDuelDoor.gomoku, .chess, .tetris, .rummy, .reversi])
     func closingTheDuelWindowReturnsToTheMiniGameWindow(door: MiniGameDuelDoor) {
         // 없으면: 대결 창을 닫으면 화면에 아무것도 안 남는다 — 사용자는 팝오버를 다시 열고 미니게임을 다시 눌러야 한다.
         let store = mdrStore("return")
@@ -124,7 +125,7 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ② 창 컨트롤러 — 사람이 닫았는가
 
-    @Test("오목·체스·테트리스 창: 빨간 점(windowWillClose)은 '사람이 닫았다', close()(로그아웃의 orderOut)는 '프로그램'")
+    @Test("오목·체스·테트리스·아잉 뒤집기 창: 빨간 점(windowWillClose)은 '사람이 닫았다', close()(로그아웃의 orderOut)는 '프로그램'")
     func duelControllersTellUserCloseFromProgramClose() throws {
         var heard: [String] = []
 
@@ -161,7 +162,18 @@ struct MiniGameDuelReturnTests {
         tetris.show()
         tetris.close()
 
-        #expect(heard == ["gomoku:true", "gomoku:false", "chess:true", "chess:false", "tetris:true", "tetris:false"])
+        let reversi = CheckReversiWindowController()
+        reversi.configure(store: ReversiStore(), content: { _ in AnyView(Color.clear) })
+        reversi.onClosed = { heard.append("reversi:\($0)") }
+        defer { reversi.discardWindowForTesting() }
+        reversi.show()
+        let rw = try #require(reversi.currentWindow)
+        reversi.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: rw))
+        reversi.show()
+        reversi.close()
+
+        #expect(heard == ["gomoku:true", "gomoku:false", "chess:true", "chess:false", "tetris:true", "tetris:false",
+                          "reversi:true", "reversi:false"])
     }
 
     @Test("큐브 창: windowShouldClose 를 지난 닫기만 '사람' — 프로그램의 window.close()(로그아웃)는 '프로그램'")
@@ -187,12 +199,13 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ③ 앱 배선
 
-    @Test("CheckApp 이 네 창의 닫힘을 스토어의 duelWindowDidClose 로 잇는다(문마다 자기 이름으로)")
+    @Test("CheckApp 이 다섯 창의 닫힘을 스토어의 duelWindowDidClose 로 잇는다(문마다 자기 이름으로)")
     func theAppWiresAllFourWindows() throws {
         // 없으면: 스토어 판정·컨트롤러 알림이 다 초록인데 둘을 잇는 줄이 없어 실제 앱에서는 아무 일도 안 일어난다.
         let app = mdrCode(try mdrSource("CheckApp.swift"))
         for (controller, door) in [("CheckGomokuWindowController", "gomoku"), ("CheckChessWindowController", "chess"),
-                                   ("CheckTetrisDuelWindowController", "tetris"), ("CheckRummyWindowController", "rummy")] {
+                                   ("CheckTetrisDuelWindowController", "tetris"), ("CheckRummyWindowController", "rummy"),
+                                   ("CheckReversiWindowController", "reversi")] {
             let hook = try #require(app.range(of: "\(controller).shared.onClosed = {"), "\(controller) 의 닫힘을 안 잇는다")
             let body = String(app[hook.upperBound...].prefix(160))
             #expect(body.contains("duelWindowDidClose(.\(door), byUser: byUser)"), "\(controller) 가 다른 문 이름으로 이어졌다: \(body)")

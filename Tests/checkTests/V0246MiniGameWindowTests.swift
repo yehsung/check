@@ -298,9 +298,13 @@ func windowLayoutIsAFixedTwoColumnConstantTable() {
     #expect(MiniGameWindowLayout.gameAreaSize == CGSize(width: 700, height: 470))
     #expect(MiniGameWindowLayout.contentSize.width == MiniGameWindowLayout.sidebarWidth + MiniGameWindowLayout.gameAreaSize.width)
     #expect(MiniGameWindowLayout.gameColumnOrigin == CGPoint(x: MiniGameWindowLayout.sidebarWidth + 14, y: 14))
-    // 사이드바 두 묶음(혼자 넷 + 같이 넷)이 안쪽 높이 안에 든다 — 게임이 또 늘면 여기서 먼저 빨개진다(그때 줄 높이·창 높이를 다시 재라).
+    // 사이드바 두 묶음(혼자 넷 + 같이 하기)이 안쪽 높이 안에 든다. 같이 하기 문이 다섯(아잉 뒤집기)부터는 같이 하기 칸만 스크롤된다
+    // (대표 결정 2026-11-03 #d_zw7CXHEtevVS "C 스크롤로" — 줄 42/4 · 창 그대로). 칸이 남은 자리를 꽉 채워 합이 안쪽 높이와 같다.
+    // 합은 칸이 남은 자리를 채우므로 언제나 442 다 — 그래서 **칸 높이(202 = 문 넷 + 다섯째 윗머리)**를 따로 잰다. 혼자 하기 게임이
+    // 늘면 칸이 줄어 여기서 빨개진다(그때 칸에 문이 몇 줄 보이는지 다시 재라).
     let sidebar = MiniGameWindowLayout.sidebarContentHeight
-    #expect(sidebar == 420, "사이드바 세로 합이 \(sidebar) 다")
+    #expect(sidebar == 442, "사이드바 세로 합이 \(sidebar) 다")
+    #expect(MiniGameWindowLayout.sidebarDuelViewportHeight == 202, "같이 하기 칸이 \(MiniGameWindowLayout.sidebarDuelViewportHeight) 다")
     #expect(sidebar <= inner.height, "사이드바 \(sidebar) 가 안쪽 높이 \(inner.height) 를 넘는다 — 아래 문이 창 밖으로 잘린다")
     #expect(MiniGameWindowLayout.sidebarDuelGroupRect.maxY <= MiniGameWindowLayout.contentSize.height - MiniGameWindowLayout.contentPadding)
     // 크게: 옛 칩(26pt 캡슐 · caption2 아이콘)보다 줄과 아이콘이 확실히 크다(사용자 요구 "좀 더 크게").

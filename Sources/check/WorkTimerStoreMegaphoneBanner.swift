@@ -134,7 +134,8 @@ extension WorkTimerStore {
     /// 지금 배너를 미뤄야 하는가(실시간 대결 · 미니게임 판). 배너 스토어의 `isBannerDeferred` 가 이것을 읽는다.
     var isMegaphoneBannerDeferred: Bool {
         MegaphoneBannerDeferral.isDeferred(gomoku: gomoku.phase, chess: chess.phase, tetris: tetris.phase,
-                                           miniGameRoundLive: isMiniGameRoundLive, rummyLive: rummy.defersMegaphoneBanner)
+                                           miniGameRoundLive: isMiniGameRoundLive, rummyLive: rummy.defersMegaphoneBanner,
+                                           reversiLive: reversi.defersMegaphoneBanner)
     }
 
     /// 미룸이 바뀌었으면 배너 스토어에 알린다(바뀐 때만 — 미루기 시작이면 떠 있던 배너를 줄로 되돌리고, 풀렸으면 신선한 것만 띄운다).
@@ -147,10 +148,11 @@ extension WorkTimerStore {
     }
 }
 
-/// 배너 미룸 판정(순수 함수). 오목 · 체스는 `playing`, 테트리스는 `countdown` · `playing`, 미니게임은 판 진행 중, 아잉 큐브는 손댄 판에서 내 자리 playing.
+/// 배너 미룸 판정(순수 함수). 오목 · 체스는 `playing`, 테트리스는 `countdown` · `playing`, 미니게임은 판 진행 중, 아잉 큐브는 손댄 판에서 내 자리 playing,
+/// 아잉 뒤집기는 `playing`.
 enum MegaphoneBannerDeferral {
     static func isDeferred(gomoku: GomokuPhase, chess: ChessPhase, tetris: TetrisDuelPhase, miniGameRoundLive: Bool,
-                           rummyLive: Bool = false) -> Bool {
+                           rummyLive: Bool = false, reversiLive: Bool = false) -> Bool {
         if gomoku == .playing { return true }
         if chess == .playing { return true }
         if tetris == .countdown || tetris == .playing { return true }
@@ -158,6 +160,8 @@ enum MegaphoneBannerDeferral {
         // 아잉 큐브(v0.3.69): 이 기기가 손댄 판이 진행 중이고 내 자리가 playing(`RummyStore.defersMegaphoneBanner`).
         // 관찰 추적이 `rummy.phase`·`match` 를 읽으므로 판이 시작·끝·기권될 때 배너 창 컨트롤러가 다시 판단한다.
         if rummyLive { return true }
+        // 아잉 뒤집기: 1:1 판이 진행 중(`ReversiStore.defersMegaphoneBanner` = phase == .playing). 큐브와 같은 Bool 꼴로 받는다.
+        if reversiLive { return true }
         return false
     }
 }

@@ -1,0 +1,170 @@
+{
+    "me": {
+        "wins": 0,
+        "draws": 0,
+        "losses": 0,
+        "incoming": [
+            {
+                "from": {
+                    "id": "b0000000-0000-4000-8000-000000000001",
+                    "character": null,
+                    "avatar_url": null,
+                    "display_name": "비시험01"
+                },
+                "stake": 5,
+                "match_id": "9e39ff11-1b1a-45b2-836a-982b916de122",
+                "expires_at_ms": 1793677498434
+            }
+        ],
+        "outgoing": null,
+        "ruby_balance": 100,
+        "active_match_id": null
+    },
+    "users": [
+        {
+            "id": "b0000000-0000-4000-8000-000000000001",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험01"
+        },
+        {
+            "id": "b0000000-0000-4000-8000-000000000003",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험03"
+        },
+        {
+            "id": "b0000000-0000-4000-8000-000000000004",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험04"
+        },
+        {
+            "id": "b0000000-0000-4000-8000-000000000005",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험05"
+        },
+        {
+            "id": "b0000000-0000-4000-8000-000000000006",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험06"
+        },
+        {
+            "id": "b0000000-0000-4000-8000-000000000007",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험07"
+        },
+        {
+            "id": "b0000000-0000-4000-8000-000000000008",
+            "center": null,
+            "capable": true,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "비시험08"
+        },
+        {
+            "id": "267a3495-643c-40cc-b1a7-14967166eae1",
+            "center": "seoul",
+            "capable": false,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "abto.app"
+        },
+        {
+            "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+            "center": "seoul",
+            "capable": false,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "거부목록사용자"
+        },
+        {
+            "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+            "center": "seoul",
+            "capable": false,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "씨앗다섯"
+        },
+        {
+            "id": "3e240c02-8972-478e-a674-014f498a641b",
+            "center": "seoul",
+            "capable": false,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "코덱스토큰도둑예은"
+        },
+        {
+            "id": "544e3837-f01c-4560-b82f-4d44c269f044",
+            "center": "seoul",
+            "capable": false,
+            "in_match": false,
+            "character": null,
+            "avatar_url": null,
+            "focus_mode": false,
+            "is_working": false,
+            "display_name": "코덱스토큰도둑지유"
+        }
+    ],
+    "stakes": [
+        3,
+        5,
+        10
+    ],
+    "status": "ok",
+    "matches": [
+    ],
+    "turn_seconds": 30,
+    "server_now_ms": 1793677438435,
+    "invite_ttl_seconds": 60,
+    "turn_grace_seconds": 2,
+    "auto_abandon_streak": 3
+}

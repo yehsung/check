@@ -51,16 +51,16 @@
 .ic-dmg__text { display: flex; min-width: 0; flex-direction: column; gap: 3px; }
 .ic-meta { font-size: 13px; line-height: 1.4; color: var(--ink-2); white-space: nowrap; }
 
-/* ── 휴대폰 앱 줄(docs/v3/brief.md §12): 이름 왼쪽 · 칩 둘 오른쪽 한 줄(폭 380 안 — 이름 + 칩 둘 ≈ 280px < 안쪽 340px).
-   이름 왼쪽 끝 = 아래 '설치 방법 자세히 보기' 글자 · 칩 오른쪽 끝 = 위 DMG 판 오른쪽 끝. [아이폰] = App Store 새 탭 ·
-   [안드로이드 베타] = 창을 닫고 설치 절 안드로이드 카드(/#android).
-   창이 46px 길어져 1440×900 히어로에서 아래 자리가 3px 모자라 위로 뒤집혔다(실측) → 이 줄 위 8 · 창 아래 패딩 12 · 자세히 보기 위 0 으로
-   8px 줄여 아래로 연다(창 313px). 1024×768 은 아래 자리(298px)가 원래 모자라 위로 연다 — computePlacement 규칙 그대로.
+/* ── 휴대폰 앱 줄(docs/v3/brief.md §12): 이름 왼쪽 · 오른쪽 한 줄에 [아이폰] 칩 + 안드로이드 상태 글자(링크 아님 — Play 스토어 출시 준비 중).
+   이름 왼쪽 끝 = 아래 '설치 방법 자세히 보기' 글자 · 오른쪽 끝 = 위 DMG 판 오른쪽 끝(폭 380 안 — 이름 + 칩 + 글자 ≈ 300px < 안쪽 340px).
+   [아이폰] = App Store 새 탭. 줄 높이·여백은 칩 둘일 때와 같다(창 높이 313px 그대로 — 1440×900 히어로에서 아래로 연다).
    낮은 노트북 창(657–713)의 페이지 끝 아웃트로는 위아래 어디에도 다 안 들어가 computePlacement 가 덜 굴리는 쪽으로 열고 페이지를 굴린다 ── */
 .ic-phone { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 8px; }
 .ic-phone__title { font-size: 13.5px; line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
-.ic-phone__chips { display: flex; flex: none; align-items: center; gap: 6px; }
+.ic-phone__chips { display: flex; flex: none; align-items: center; gap: 10px; }
 .ic-chip { flex: none; }  /* 높이 36 · 글자 13.5px = .gbtn--chip 그대로 */
+/* 안드로이드 상태 — 칩 모양을 쓰지 않는다(누를 것으로 읽히지 않게). 글자 13px ink-2 */
+.ic-soon { flex: none; font-size: 13px; line-height: 1.3; color: var(--ink-2); white-space: nowrap; }
 
 /* ── 맨 아래: 설치 방법 자세히 보기(/#install) — 글자는 작게, 누를 자리는 44px. 포커스 링이 [복사]·DMG 판처럼 둥글게(8px) ·
    좌우 6px 패딩은 음수 바깥 여백으로 상쇄(글자는 위 글과 같은 선) ── */

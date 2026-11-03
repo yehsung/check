@@ -7,7 +7,7 @@ import Testing
 // (화면에 아무것도 안 뜬다). 서버는 호스트별 스텁인데, 응답을 고정하지 않고 **서버 갈래가 하네스로 확인한 규칙**을 그대로 흉내 낸다
 // (`IsulGiftServer` — pending: p<4 없음 · p=4 생일만(kind 키 없음) · p≥5 먼저 지급된 것 하나 + kind · claim 의 needs_update 문턱 ·
 // 선택지 · replayed · already_claimed · not_found). 재는 것:
-//  ① 술 선물: 실행당 한 번 스스로(키 안 잡음) · 고르기 없이 미리 골라 둠 · [받을게요] 본문 키 셋(p_protocol 5) · 받은 뒤 보유 · 카드 거둠 ·
+//  ① 술 선물: 실행당 한 번 스스로(키 안 잡음) · 고르기 없이 미리 골라 둠 · [짠 받기] 본문 키 셋(p_protocol 5) · 받은 뒤 보유 · 카드 거둠 ·
 //     상점 다시 읽기 · [지금 입기]는 기존 착용 경로.
 //  ② 받기 결과: ok · replayed · needs_update · invalid_choice · not_found 의 화면 상태와 문구(종류 문구 묶음).
 //  ③ 차례: 생일과 술이 둘 다 열린 사람은 하나씩 — 받고 창을 닫으면 다음 선물을 묻고 한 번 스스로 띄운다 · 받지 않고 닫으면 묻지 않는다 ·
@@ -380,6 +380,9 @@ struct V0374IsulMacGiftStoreTests {
         server.pendingDelay = 0.6
         let slow = store.refreshCakeGift(reason: .shop)
         #expect(slow != nil && store.cakeGiftChecking, "전제: 둘째 조회가 안 떠났다")
+        // 스텁은 요청이 **닿는 순간** 본문을 정한다 — 받기 RPC 가 먼저 닿으면 느린 조회가 이미 술을 싣고 와
+        // '떠 있던 조회 뒤 한 번 더'를 재지 못한다(셋째 조회가 기다림보다 늦게 닿아 2 에서 빨강, 11-03 한 번).
+        #expect(await V0354CoreStub.waitUntil { isPendingCount(host) == 2 }, "전제: 느린 조회가 스텁에 안 닿았다")
         // 받는 사이 창을 닫는다(빨간 점) — 결론이 아직 없으니 이 닫기는 묻지 않는다.
         let claim = store.claimCakeGift()
         store.closeCakeGiftWindow()

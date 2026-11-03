@@ -231,7 +231,8 @@ extension WorkTimerStore {
     }
 
     /// 이슬 아잉이(술 한잔 선물 전용 — v0.3.74)의 잠긴 칸을 안 가진 사람에게도 세우는가 — **정책은 이 상수 하나다.**
-    /// 기본 = 케이크 선례('모두에게 잠긴 칸' — 얻는 길을 말한다). 대표 확인 뒤 뒤집으면 `.ownersOnly`(가진 사람에게만 — 고르기와 같다).
+    /// 대표 결정(2026-11-03, 결재 #d_zCowzb68KWlC) "모두에게 잠긴 칸 (케이크와 같게)" — 안 가진 사람도 흐린 칸으로 본다(얻는 길을 말한다).
+    /// 뒤집으면 `.ownersOnly`(가진 사람에게만 — 고르기와 같다).
     /// 서버(p ≥ 5)는 이슬 행을 모두에게 싣는다 — 숨기는 것은 이 화면의 몫이다.
     nonisolated static let drinkGiftLockedCellPolicy: GiftLockedCellPolicy = .everyone
 

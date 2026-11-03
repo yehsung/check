@@ -262,16 +262,16 @@ struct V0374IsulCoreTests {
 
     // MARK: - ⑤ 문구
 
-    @Test("문구: 설계서 §5 가제 그대로 · 비어 있지 않음 · 종류 → 묶음")
+    @Test("문구: 대표 결정 C(짠! 🥂) 그대로 · 비어 있지 않음 · 종류 → 묶음")
     func drinkText() {
-        #expect(DrinkGiftText.title == "술 한잔 하자! 🍶")
-        #expect(DrinkGiftText.body == "이슬 아잉이가 도착했어요. 같이 한잔 어때요?")
-        #expect(DrinkGiftText.confirmButton == "받을게요")
+        #expect(DrinkGiftText.title == "짠! 🥂")
+        #expect(DrinkGiftText.body == "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!")
+        #expect(DrinkGiftText.confirmButton == "짠 받기")
         #expect(DrinkGiftText.wearNowButton == "지금 입기")
         #expect(DrinkGiftText.closeButton == "닫기")
         #expect(DrinkGiftText.lockedCaption == "술 한잔 선물 전용")
         #expect(DrinkGiftText.lockedHint == "술 한잔 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.")
-        #expect(DrinkGiftText.reopenTitle == "술 한잔 선물이 도착했어요")
+        #expect(DrinkGiftText.reopenTitle == "짠! 선물이 왔어요")
         #expect(DrinkGiftText.reopenButton == "받기")
         #expect(DrinkGiftText.received(name: "이슬 아잉이") == "이슬 아잉이를 받았어요!")
 

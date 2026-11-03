@@ -409,13 +409,15 @@ package nonisolated enum CakeGiftText {
 
 /// '술 한잔' 선물 문구(v0.3.74 이슬 아잉이). 설계서 §5 표의 **가제** 글자 그대로다(대표 확인 전 시안 — 바뀌면 여기 한 곳만 고친다).
 /// `CakeGiftText` 와 같은 모양이다 — 받는 창 · 상점 잠긴 칸 · 다시 열기 카드가 같이 쓴다. 실패 · 거절 줄은 생일과 한 벌이다.
+/// 문구는 대표 결정(2026-11-03, 결재 #d_QKdjqLLU7S0b "C 짧고 가볍게 (짠! 🥂)" — 수고 인사처럼 가볍게).
+/// 잠긴 칸 캡션 · 안내 · 받은 뒤 한 줄은 C 안에 따로 없어 설계서 §5 가제를 그대로 둔다.
 package nonisolated enum DrinkGiftText {
     /// 받는 창 제목.
-    package static let title = "술 한잔 하자! 🍶"
+    package static let title = "짠! 🥂"
     /// 받는 창 본문(운영자 한 줄 `note` 가 있으면 화면이 그 위에 크게 — 초대장처럼).
-    package static let body = "이슬 아잉이가 도착했어요. 같이 한잔 어때요?"
+    package static let body = "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!"
     /// 확인 단추(고를 것이 없다 — 선택지는 이슬 하나).
-    package static let confirmButton = "받을게요"
+    package static let confirmButton = "짠 받기"
     /// 받은 뒤의 단추 둘(생일과 같은 글자).
     package static let wearNowButton = CakeGiftText.wearNowButton
     package static let closeButton = CakeGiftText.closeButton
@@ -424,7 +426,7 @@ package nonisolated enum DrinkGiftText {
     /// 잠긴 칸을 골랐을 때의 안내.
     package static let lockedHint = "술 한잔 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요."
     /// 받지 않고 닫은 뒤 메뉴 팝오버 · 상점에 남는 카드.
-    package static let reopenTitle = "술 한잔 선물이 도착했어요"
+    package static let reopenTitle = "짠! 선물이 왔어요"
     package static let reopenButton = "받기"
     /// 결과를 모르는 수령(오프라인 · 5xx · 응답 해석 실패)의 한 줄 — 생일과 같은 글자다(다시 눌러도 안전하다).
     package static let claimFailed = CakeGiftText.claimFailed

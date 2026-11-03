@@ -19,7 +19,7 @@ import CheckCore
 // ── '술 한잔' 선물(v0.3.74 — 이슬 아잉이) ──
 // 같은 창이 선물 종류로 가른다(`CharacterGiftOffer.kind`). 술 선물은 선택지가 이슬 하나라 **고르기가 없다** — ①' 초대장 화면:
 // 제목 · 초대장 카드(운영자 한 줄 `note` 가 있으면 그것을 크게, 본문은 그 아래 작게 — 없으면 본문이 초대장의 큰 글) · 이슬 초상 하나 ·
-// [받을게요]. 받은 뒤 화면(②)과 닫기 · 팝오버 복귀는 생일과 한 길이다. 글자는 전부 종류의 문구 묶음(`CharacterGiftCopy` —
+// [짠 받기]. 받은 뒤 화면(②)과 닫기 · 팝오버 복귀는 생일과 한 길이다. 글자는 전부 종류의 문구 묶음(`CharacterGiftCopy` —
 // `CakeGiftText` · `DrinkGiftText`)에서 온다. 창 제목도 띄울 때 그 종류의 제목으로 바꾼다.
 
 /// 축하 창의 고정 크기와 초상 크기.
@@ -107,7 +107,7 @@ struct CheckCakeGiftWindowView: View {
             .frame(height: 30)
     }
 
-    /// 확인 단추(받기 — 수령 RPC 는 `claimCakeGift` 하나뿐이다). 글자는 그 선물 종류의 것(생일 "이걸로 받을게요" · 술 한잔 "받을게요").
+    /// 확인 단추(받기 — 수령 RPC 는 `claimCakeGift` 하나뿐이다). 글자는 그 선물 종류의 것(생일 "이걸로 받을게요" · 술 한잔 "짠 받기").
     private func confirmButton(_ title: String) -> some View {
         Button {
             store.claimCakeGift()
@@ -439,7 +439,7 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
     /// (`CakeGiftWindowHooks.show` 주석 — 대결 창 · 다른 앱에서 치던 키를 가로채지 않는다). 거짓이면 창은 맨 앞에 서되 키는 그대로다.
     func show(activating: Bool = true) {
         guard let window else { return }
-        // 창 제목은 그리는 선물의 종류(생일 "생일 축하해요! 🎂" · 술 한잔 "술 한잔 하자! 🍶" — v0.3.74). 선물이 없으면 생일 제목 그대로.
+        // 창 제목은 그리는 선물의 종류(생일 "생일 축하해요! 🎂" · 술 한잔 "짠! 🥂" — v0.3.74). 선물이 없으면 생일 제목 그대로.
         window.title = Self.title(presenting: wiring?.store.cakeGiftPresented)
         if window.isMiniaturized { window.deminiaturize(nil) }
         let fixedFrame = window.frameRect(forContentRect: NSRect(origin: .zero, size: Self.fixedContentSize)).size

@@ -134,7 +134,7 @@ struct V0374IsulMacScreensTests {
             #expect(V0317ShopTests.longestYellowRun(bitmap) < 24, "\(name): ImageRenderer '못 그림' 상자가 있다")
         }
         // 창 높이 예산(검토 수리): 긴 두 줄 note + 실패 한 줄이 겹친 최악의 초대장 · 받은 뒤 · 생일 고르기(실패 한 줄)의 자연 높이가 창 높이
-        // 안이다(넘치면 고정 창이 위아래를 잘라 [받을게요] 가 잘린다). 기준선: 잰 값이 진짜 화면 높이다(창의 절반 이상).
+        // 안이다(넘치면 고정 창이 위아래를 잘라 [짠 받기] 가 잘린다). 기준선: 잰 값이 진짜 화면 높이다(창의 절반 이상).
         let long = V0366CakeMacScreensTests.menuStore("isul-window-long")
         long.cakeGiftOffer = scDrinkOffer(note: "오늘 저녁 일곱 시, 회사 앞 포장마차에서 우리 팀 다 같이 한잔 어때요? 꼭 와요!")
         long.openCakeGiftWindow()

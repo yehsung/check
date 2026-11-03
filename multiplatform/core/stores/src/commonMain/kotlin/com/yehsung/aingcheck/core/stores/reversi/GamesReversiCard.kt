@@ -12,34 +12,7 @@ import com.yehsung.aingcheck.core.stores.games.GamesText
 //
 // ── 어디까지가 이 표의 몫인가 ── 안내·결과 사유는 코어 [ReversiNoticeText] 가 쥔다(맥과 폰이 같은 서버 응답을 같은 말로 옮긴다). 이 표는 카드에 붙는 글자만.
 // ── 상표 ── 게임 이름은 '아잉 뒤집기'뿐이다. '리버시'는 **규칙 설명**으로만 쓴다(부제 — 맥 `ReversiText.subtitle` 과 같은 자리).
-// 글자는 iOS 1.0.17 `ReversiPhoneText` 와 한 글자도 다르지 않다.
-
-/** 폰 아잉 뒤집기 카드 문구 표(iOS `ReversiPhoneText` 카드 절). */
-object ReversiPhoneText {
-    const val title: String = ReversiNoticeText.gameName
-
-    /** 게임 탭 카드 부제 · 로비 머리글 부제(맥 `ReversiText.subtitle` 과 같은 한 줄 — 규칙 · 선공 · 한 수 시간). */
-    const val subtitle: String = "리버시 규칙 · 흑 선공 · 한 수 30초"
-    const val cardSubtitle: String = subtitle
-
-    /** 게임 탭 카드의 화면 읽기 힌트(막히지 않았을 때). */
-    const val cardOpenHint: String = "${ReversiNoticeText.gameName} 대결 화면을 열어요"
-
-    /** 카드 칩: 받은 신청이 있다(몇 건인지는 칩이 말한다 — 탭 배지와 같은 수). */
-    fun incomingChip(count: Int): String = "받은 신청 ${count}건"
-
-    /** 카드 보조 줄: 보낸 신청의 답을 기다린다. */
-    const val outgoingLine: String = "보낸 신청의 답을 기다리고 있어요"
-
-    /** 칩도 보조 줄 재료도 없을 때의 카드 한 줄(= 할 일을 말한다). AI 연습이 있다는 것도 함께 말한다. */
-    const val idleLine: String = "사람을 골라 신청하거나 로봇과 연습해 보세요"
-
-    const val recordTitle: String = "내 전적"
-
-    fun record(wins: Int, losses: Int, draws: Int): String = "${wins}승 ${losses}패 ${draws}무"
-
-    fun record(record: ReversiRecord?): String = if (record == null) record(0, 0, 0) else record(record.wins, record.losses, record.draws)
-}
+// 카드 글자는 [ReversiPhoneText](ReversiPhoneText.kt — iOS 1.0.17 표 전부)의 카드 절이다.
 
 /**
  * 게임 탭 **아잉 뒤집기 카드**가 그리는 한 줄의 판정(칩 + 보조 줄). 서열을 한 열거로 못 박는다(테트리스·큐브 카드와 같은 까닭 — 자리마다 삼항으로 고르면

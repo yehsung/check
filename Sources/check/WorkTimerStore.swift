@@ -645,6 +645,9 @@ final class WorkTimerStore {
     // ── 미니게임 창 (v0.2.46) ── 별도 NSWindow 라 팝오버 패널들과 **상호 배타가 아니다**(공존한다).
     //    이 플래그는 '창이 열려 있다'는 뜻이고, 레일 진입 버튼의 하이라이트와 순위 재조회 게이트로 쓴다.
     var isMiniGamePanelVisible = false
+    /// 미니게임 창 사이드바에서 들어간 대결 창(2026-11-03 대표 요청 ⑧). 사람이 그 대결 창을 닫으면 미니게임 창이 다시 뜬다
+    /// (`duelWindowDidClose` — 들어갈 때 '대결 창 먼저, 미니게임 창 나중'으로 바꿔 넘어간 것의 되돌림). 화면이 읽지 않으므로 관찰하지 않는다.
+    @ObservationIgnored var miniGameDuelReturn: MiniGameDuelDoor?
     /// 값이 바뀌면 게임 잎 뷰가 진행 중인 판을 즉시 끝낸다(MiniGameHost.interruptToken). 팝오버가 닫혀도 뷰 트리는 상주하고
     /// isMenuPresented 는 관찰 대상이 아니라서, **판을 끝내는 신호는 관찰 가능한 이것 하나뿐**이다 — setMenuPresented(false)·
     /// closeMiniGamePanel·selectMiniGame·로그아웃이 올린다. 60Hz 게임 상태는 여기 두지 않는다(잎 뷰 @State).

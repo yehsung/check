@@ -94,8 +94,8 @@ package final class MeStore {
     /// 상점에서 마지막으로 누른 뽑기 전용 타일(황금 아잉이). 안내 줄(`shopBarDetail`)이 **읽을 때** 문장을 만든다 —
     /// 누를 때 만들어 두면 상점이 아직 안 읽힌 순간의 "뽑기로만"이 교환값(조각 20)을 안 뒤에도 남는다(시뮬레이터 실측).
     package internal(set) var shopGachaHintID: String?
-    /// 상점에서 마지막으로 누른 **생일 선물 전용** 잠긴 칸(케이크 아잉이 — v0.3.66). 고른 것(`shopSelection`)이 아니다 — 살 수 없다.
-    /// 아래 막대가 이 값으로 그 칸 이름과 얻는 길(`CakeGiftText.lockedHint`)만 말하고 사기 단추를 세우지 않는다.
+    /// 상점에서 마지막으로 누른 **선물 전용** 잠긴 칸(케이크 아잉이 — v0.3.66 · 이슬 아잉이 — 폰 1.0.17). 고른 것(`shopSelection`)이 아니다 — 살 수 없다.
+    /// 아래 막대가 이 값으로 그 칸 이름과 얻는 길(그 선물 종류의 `lockedHint` — `giftCopy(for:)`)만 말하고 사기 단추를 세우지 않는다.
     package internal(set) var shopGiftHintID: String?
     package internal(set) var purchasingID: String?
     /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 번들에 초상이 있는 캐릭터 id.

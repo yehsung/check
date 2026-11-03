@@ -216,10 +216,10 @@ import Testing
 
     @Test("타일 상태: 잠긴 칸은 자물쇠 + '생일 선물 전용' — 루비 값 · 반짝임이 아니다")
     func lockedTileContent() {
-        #expect(MeCharacterTileStatus.giftOnly.content == .locked("생일 선물 전용"))
-        #expect(MeCharacterTileStatus.giftOnly.content == .locked(CakeGiftText.lockedCaption))
-        if case .ruby = MeCharacterTileStatus.giftOnly.content { Issue.record("잠긴 칸이 루비 값을 말한다") }
-        if case .acquire = MeCharacterTileStatus.giftOnly.content { Issue.record("잠긴 칸이 뽑기 길을 말한다") }
+        #expect(MeCharacterTileStatus.giftOnly(.birthday).content == .locked("생일 선물 전용"))
+        #expect(MeCharacterTileStatus.giftOnly(.birthday).content == .locked(CakeGiftText.lockedCaption))
+        if case .ruby = MeCharacterTileStatus.giftOnly(.birthday).content { Issue.record("잠긴 칸이 루비 값을 말한다") }
+        if case .acquire = MeCharacterTileStatus.giftOnly(.birthday).content { Issue.record("잠긴 칸이 뽑기 길을 말한다") }
     }
 
     // MARK: - ④ 축하 시트

@@ -24,8 +24,9 @@ package enum MeCharacterTileStatus: Equatable, Sendable {
     case price(Int, balance: Int?)
     /// 뽑기·조각 교환으로만 얻는다(황금 · 무지개 아잉이) — 가격 대신 얻는 길("뽑기 · 조각 20"). 교환값은 서버 값(모르면 nil).
     case gachaOnly(shardCost: Int?)
-    /// 생일 선물로만 얻는다(케이크 아잉이 둘 — v0.3.66) — **안 가진 사람의 잠긴 칸**. 가격 · 사기 단추 없이 "생일 선물 전용".
-    case giftOnly
+    /// 선물로만 얻는다 — **안 가진 사람의 잠긴 칸**. 가격 · 사기 단추 없이 그 선물 종류의 캡션(케이크 아잉이 둘 — v0.3.66
+    /// "생일 선물 전용" · 이슬 아잉이 — 폰 1.0.17 "술 한잔 선물 전용"). 종류는 `MeStore.giftKind(of:)` 가 정한다(맥 `giftCopy(for:)` 와 같은 규칙).
+    case giftOnly(CharacterGiftKind)
     case unknownPrice
     case busy
     case none
@@ -38,7 +39,7 @@ package enum MeCharacterTileStatus: Equatable, Sendable {
         case text(String, emphasized: Bool)
         /// 반짝임 + 얻는 길("뽑기 · 조각 20") — 반짝임은 희귀 마감 빛깔(금빛 · 일곱 빛)이다.
         case acquire(String)
-        /// 선물 기호 + 한 줄("생일 선물 전용") — 잠긴 칸이다. 루비 값도 반짝임도 없다(사는 줄도 뽑는 줄도 아니다).
+        /// 선물 기호 + 한 줄("생일 선물 전용" · "술 한잔 선물 전용") — 잠긴 칸이다. 루비 값도 반짝임도 없다(사는 줄도 뽑는 줄도 아니다).
         /// 기호는 자물쇠가 아니다 — 상점 · 고르기는 자물쇠를 쓰지 않는다(w15 디자인 계약 `MeDesignContractTests`).
         case locked(String)
         case spinner
@@ -53,7 +54,7 @@ package enum MeCharacterTileStatus: Equatable, Sendable {
         case .owned: return .text(MeText.owned, emphasized: false)
         case .price(let price, let balance): return .ruby(price: price, balance: balance)
         case .gachaOnly(let shardCost): return .acquire(MeText.gachaTileStatus(shardCost: shardCost))
-        case .giftOnly: return .locked(CakeGiftText.lockedCaption)
+        case .giftOnly(let kind): return .locked(kind.copy.lockedCaption)
         case .unknownPrice: return .text("—", emphasized: false)
         case .busy: return .spinner
         case .none: return .text(" ", emphasized: false)
@@ -211,8 +212,8 @@ struct MeShopView: View {
         } else if owned {
             status = .owned
         } else if store.isGiftOnly(id) {
-            // 생일 선물 전용(케이크 아잉이) — 잠긴 칸. 장식값(2000)도 사기 단추도 없다. 누르면 아래 막대가 얻는 길을 말한다.
-            status = .giftOnly
+            // 선물 전용(케이크 · 이슬 아잉이) — 잠긴 칸. 장식값(2000 · 2002)도 사기 단추도 없다. 누르면 아래 막대가 얻는 길을 말한다.
+            status = .giftOnly(store.giftKind(of: id))
         } else if store.isGachaOnly(id) {
             // 뽑기 전용(황금 · 무지개 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
             status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
@@ -479,7 +480,7 @@ struct MeCharacterPickerView: View {
             status = .owned
         } else if store.isGiftOnly(id) {
             // 고르기에는 가진 사람에게만 서므로(`pickerIDs`) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
-            status = .giftOnly
+            status = .giftOnly(store.giftKind(of: id))
         } else if store.isGachaOnly(id) {
             status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
         } else if let price = store.price(of: id) {
@@ -489,7 +490,7 @@ struct MeCharacterPickerView: View {
         }
         let lockedLabel: String
         if store.isGiftOnly(id) {
-            lockedLabel = "\(name), 잠김 — \(CakeGiftText.lockedCaption)"
+            lockedLabel = "\(name), 잠김 — \(store.giftCopy(for: id).lockedCaption)"
         } else if store.isGachaOnly(id) {
             lockedLabel = "\(name), 잠김 — \(MeText.gachaAcquirePhrase(shardCost: store.gachaShardCost(of: id)))"
         } else {
@@ -561,7 +562,7 @@ struct MeCharacterTile: View {
         case .owned: return "\(name), \(MeText.owned)"
         case .price(let price, let balance): return "\(name), \(RubyPriceRule.accessibilityText(price: price, isShort: RubyPriceRule.isShort(price: price, balance: balance)))"
         case .gachaOnly(let shardCost): return MeText.gachaTileAccessibility(name: name, shardCost: shardCost)
-        case .giftOnly: return "\(name), \(CakeGiftText.lockedCaption)"
+        case .giftOnly(let kind): return "\(name), \(kind.copy.lockedCaption)"
         case .unknownPrice: return "\(name), 가격 모름"
         case .busy: return "\(name), \(MeText.loading)"
         case .none: return name

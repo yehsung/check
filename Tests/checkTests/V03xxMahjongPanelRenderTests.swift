@@ -298,6 +298,38 @@ struct V03xxMahjongPanelRenderTests {
         #expect(mjMaxDiff(without, practiceBitmap, button) > 60, "[반응] 단추가 루비 판에만 있지 않다")
     }
 
+    // MARK: ⑦-4 움직임(U2)
+
+    @Test
+    func discardSlidesInMidFrameAndStopsUnderReduceMotion() throws {
+        // 없으면: 스토어가 움직임을 두어도 화면이 버린 패를 끝 자리에만 그리거나(움직임 없음), 동작 줄이기에도 미끄러지거나,
+        // 끝난 움직임이 어긋난 채 남아도 초록이다.
+        let store = try mjTableStore(mjActive())
+        let matchID = try #require(store.table?.match?.id)
+        let plain = try mjBitmap(mjPanel(store))
+        // 상가(왼쪽, 자리 3)가 방금 버린 패 — 0.05초 지난 프레임(0.15초 중).
+        store.motion = MahjongMotion(matchID: matchID, handIndex: 2, seq: 39, kind: .discard,
+                                     from: .init(compass: .left, area: .hand), to: .init(compass: .left, area: .river),
+                                     startedAt: mjNow.addingTimeInterval(-0.05))
+        let moving = try mjBitmap(mjPanel(store))
+        mjSave(moving, "motion-discard-mid")
+        let reduced = try mjBitmap(mjPanel(store).environment(\.mahjongReduceMotion, true))
+        let seat3 = try #require(store.table?.seats?.first { $0.seatNo == 3 })
+        let last = try #require(MahjongTableGeometry.river(seat3.discards ?? [], compass: .left).last)
+        let felt = mjBody(MahjongMatchLayout.felt)
+        let block = MahjongMatchLayout.blockOrigin
+        let size = MahjongTileArt.imageSize(last.size, rotation: last.rotation)
+        let slot = CGRect(x: felt.minX + block.x + last.origin.x - MahjongMotionPlan.travel, y: felt.minY + block.y + last.origin.y,
+                          width: size.width + MahjongMotionPlan.travel, height: size.height)
+        #expect(mjMaxDiff(moving, plain, slot) > 60, "버린 패가 움직이지 않았다")
+        #expect(mjMaxDiff(reduced, plain, slot) <= 8, "동작 줄이기에도 움직였다")
+        // 끝난 움직임(1초 전)은 끝 그림 그대로.
+        store.motion = MahjongMotion(matchID: matchID, handIndex: 2, seq: 39, kind: .discard,
+                                     from: .init(compass: .left, area: .hand), to: .init(compass: .left, area: .river),
+                                     startedAt: mjNow.addingTimeInterval(-1))
+        #expect(mjMaxDiff(try mjBitmap(mjPanel(store)), plain, slot) <= 8, "끝난 움직임이 남았다")
+    }
+
     // MARK: ⑧ 배율 0.82
 
     @Test

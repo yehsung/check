@@ -45,6 +45,8 @@ struct MahjongHandView: View {
     let store: MahjongStore
     let payload: MahjongStatePayload
     var hoverIndex: Int? = nil
+    /// 스냅샷 전용 시각(내 부로 움직임 한 장) — 앱 nil.
+    var fixedNow: Date? = nil
 
     @State private var hovered: Int?
     @State private var selected: MahjongTile?
@@ -119,8 +121,21 @@ struct MahjongHandView: View {
         if !melds.isEmpty {
             let tiles = Self.meldTiles(melds, rightEdge: MahjongMatchLayout.hand.width,
                                        top: MahjongMatchLayout.handTileTop + MahjongTileSize.hand.height - MahjongTileSize.meld.height)
-            MahjongTileStrip(tiles: tiles, size: MahjongMatchLayout.hand.size, cornerLabels: false,
-                             accessibilityText: "내 울음 \(melds.count)")
+            // 방금 운 부로(마지막 묶음 = 가장 왼쪽)만 따로 미끄러진다 — 이 TimelineView 는 부로 띠만 감싼다(입력은 바깥 ZStack).
+            MahjongMotionFrames(store: store, payload: payload, fixedNow: fixedNow) { motion, now in
+                let melding = motion.flatMap { MahjongMotionPlan.movesNewestMeld($0, compass: .bottom, melds: melds) ? $0 : nil }
+                let moving = melding == nil ? 0 : min(tiles.count, melds.last?.tiles.count ?? 0)
+                ZStack(alignment: .topLeading) {
+                    MahjongTileStrip(tiles: Array(tiles.dropLast(moving)), size: MahjongMatchLayout.hand.size, cornerLabels: false,
+                                     accessibilityText: "내 울음 \(melds.count)")
+                    if let melding, moving > 0 {
+                        MahjongTileStrip(tiles: Array(tiles.suffix(moving)), size: MahjongMatchLayout.hand.size, cornerLabels: false)
+                            .offset(MahjongMotionPlan.offset(melding, now: now))
+                            .accessibilityHidden(true)
+                    }
+                }
+            }
+            .allowsHitTesting(false)
         }
     }
 

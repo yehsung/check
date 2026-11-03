@@ -49,6 +49,12 @@ class ChessPhoneRulesTest {
         assertTrue("10분 + 한 수 3초" in lines.first { it.title == "시간" }.detail)
         assertTrue("무승부" in lines.first { it.title == "시간" }.detail, "시간 줄이 FIDE 6.9 예외를 말하지 않는다")
         assertTrue("1:1 테트리스" in lines.last().detail, "한 사람 한 판 줄이 세 게임을 다 말하지 않는다")
+        // 판 7: 폰 조립(아잉 큐브 · 아잉 뒤집기)은 다섯을 다 말한다 — iOS 1.0.17 글자 그대로. 빈 목록(Windows · 기본값)은 판 7 이전 글자 그대로(기준선).
+        assertEquals("체스·오목·1:1 테트리스는 한 번에 한 판만 할 수 있어요. 한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.", lines.last().detail)
+        assertEquals(
+            "체스·오목·1:1 테트리스·아잉 큐브·아잉 뒤집기는 한 번에 한 판만 할 수 있어요. 한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.",
+            ChessPhoneRuleLine.all(600_000, 3_000, 60, extraOneMatchGames = listOf("아잉 큐브", "아잉 뒤집기")).last().detail,
+        )
         assertTrue(lines.none { "수수료" in it.detail })
         assertEquals("FIDE 규칙 · 백 선공 · 5분 + 한 수 2초", ChessPhoneText.subtitle(300_000, 2_000), "서버가 말한 시계를 따르지 않는다")
     }

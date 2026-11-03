@@ -119,9 +119,9 @@ internal fun ChessPieceTile(kind: ChessPieceKind, color: ChessColor, side: Dp) {
 
 /** 규칙 시트: FIDE 요약 여덟 줄(시간 수치는 **스토어가 서버에서 받은 값**). 예시 판은 두지 않는다(체스는 한 국면이 규칙 하나를 말해 주지 않는다). */
 @Composable
-internal fun BoxScope.ChessRulesSheet(initialMs: Long, incrementMs: Long, inviteTtlSeconds: Int, onClose: () -> Unit) {
+internal fun BoxScope.ChessRulesSheet(initialMs: Long, incrementMs: Long, inviteTtlSeconds: Int, onClose: () -> Unit, extraOneMatchGames: List<String> = emptyList()) {
     val colors = AingTheme.colors
-    val lines = ChessPhoneRuleLine.all(initialMs, incrementMs, inviteTtlSeconds)
+    val lines = ChessPhoneRuleLine.all(initialMs, incrementMs, inviteTtlSeconds, extraOneMatchGames)
     BoardSheetOverlay(ChessPhoneText.rulesTitle, onDismiss = onClose, subtitle = ChessPhoneText.subtitle(initialMs, incrementMs), testTag = ChessScreenTags.rulesSheet) {
         Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState())) {
             BoardGroup {

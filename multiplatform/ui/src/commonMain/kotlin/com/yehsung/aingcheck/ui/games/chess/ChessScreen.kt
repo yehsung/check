@@ -67,6 +67,8 @@ import com.yehsung.aingcheck.core.stores.games.GamesBusyGame
 import com.yehsung.aingcheck.core.stores.games.GamesChessChallengeGate
 import com.yehsung.aingcheck.core.stores.games.GamesLobbyRoster
 import com.yehsung.aingcheck.core.stores.games.GamesStore
+import com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText
+import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.ui.games.gomoku.BarIcon
 import com.yehsung.aingcheck.ui.games.gomoku.BoardAvatar
@@ -301,7 +303,11 @@ fun ChessScreen(
         if (state.robotScreenOpen) ChessRobotScreen(chess, state, onClose = { state.robotScreenOpen = false })
         // INV-GamesChessScreen-e7b934ee 이식: 규칙 시트의 TTL 은 **로비 응답이 말한 값**이다(코어 `inviteTTLSeconds` — 없으면 60). 상수를 베껴 넘기면 서버가 TTL 을
         //   바꾼 날 규칙 시트만 옛 숫자를 말한다.
-        if (chess.isRulesVisible) ChessRulesSheet(chess.initialMs, chess.incrementMs, chess.inviteTTLSeconds.toInt(), onClose = { chess.isRulesVisible = false })
+        // '한 사람 한 판' 줄은 이 조립에 있는 게임을 다 말한다(판 7 — 아잉 큐브 · 아잉 뒤집기는 폰 조립에만 있고 아잉 뒤집기는 떼어 내기 깃발을 따른다).
+        if (chess.isRulesVisible) {
+            val extra = listOfNotNull(games.context.rummy?.let { RummyPhoneText.title }, games.reversi?.let { ReversiNoticeText.gameName })
+            ChessRulesSheet(chess.initialMs, chess.incrementMs, chess.inviteTTLSeconds.toInt(), onClose = { chess.isRulesVisible = false }, extraOneMatchGames = extra)
+        }
         state.stakeTarget?.let { target -> ChessStakeSheet(games, chess, target, onClose = { state.stakeTarget = null }) }
         chess.promotion?.let { prompt -> ChessPromotionSheet(chess, prompt, myColor = chess.match?.myColor ?: com.yehsung.aingcheck.core.rules.chess.ChessColor.white) }
         state.acceptNeedsRobotConfirm?.let { invite ->

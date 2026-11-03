@@ -616,9 +616,9 @@ enum TetrisWireJSON {
 
     @Test("한 사람 한 판은 **삼각**이다: 세 게임 가운데 하나가 흐르면 나머지 둘의 입구가 막히고, 끝난 판은 안 막는다")
     func oneMatchPerPersonBlocksAllThreeDirections() async {
-        // 없으면(한 방향이라도 열어 두면): 그 길로 들어가 다른 판을 **판돈째** 잃는다. 서버도 못 막는다 —
-        // `chess__busy` 는 셋을 함께 보지만 **오목 쪽 게이트는 남을 모른다**(알려진 비대칭). 그리고 테트리스는
-        // 15초 침묵이면 그쪽 패(D5)라 오목·체스보다 빨리 진다.
+        // 없으면(한 방향이라도 열어 두면): 그 입구가 열려 있다가 신청·수락에서야 서버의 일반 `busy` 문구로 막힌다 —
+        // 서버는 세 게임 모두 `chess__busy` 로 거절하지만(오목 쪽도 — `GamesBusyGame` 머리말) **어느 판 때문인지**
+        // 말하는 것은 이 입구 판정뿐이다.
         let harness = TetrisWireHarness(label: "tetris-triangle")
         serve(harness)
         await harness.signIn()

@@ -70,8 +70,8 @@ package enum GamesTetrisDuelCard {
     }
 
     package static func line(_ store: GamesStore) -> Line {
-        // ① 차단이 맨 앞이다. 다른 게임 판이 흐르는 동안 이 카드를 열어 두면 로비 [수락]으로 테트리스가 서고
-        //    흐르던 판이 조용히 시간패한다(P3 — 서버 오목 게이트는 테트리스를 모른다).
+        // ① 차단이 맨 앞이다. 다른 게임 판이 흐르는 동안 서버는 신청·수락을 `busy` 로 거절하지만(P3 — `chess__busy`,
+        //    `GamesBusyGame` 머리말) 그 문구는 어느 판 때문인지 말하지 않는다 — 카드가 먼저 그 까닭을 말한다.
         if store.tetrisEntryBlock != nil { return .blocked }
         // ② 내 판이 흐르면 그것이 가장 급한 사실이다(받은 신청보다 먼저 — 판돈이 걸려 있다).
         if store.hasActiveTetrisMatch { return .activeMatch }

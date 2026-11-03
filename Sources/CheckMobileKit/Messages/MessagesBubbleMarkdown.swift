@@ -11,7 +11,7 @@ import SwiftUI
 //
 // 무엇을 그리는가(글자 · 제목 단계 · 굵게 · 링크 · 호스트 꼬리표 · 복사 표시)는 코어 `ChatMarkdownPieces` 한 곳이 정한다 — 맥 말풍선과 한 벌이다.
 // 여기는 그 조각에 **폰 글꼴과 색**을 입혀 TextKit 글 한 장(`NSAttributedString`)으로 옮긴다. 그 글을 말풍선 본문 뷰
-// (`MessagesBubbleTextUIView` — 한글 어절 줄바꿈 때문에 SwiftUI `Text` 가 아니라 TextKit 으로 직접 그린다)가 그대로 그린다.
+// (`MessagesBubbleTextUIView` — 한글 어절 줄바꿈 때문에 SwiftUI `Text` 가 아니라 TextKit 1 틀째 넘긴 고를 수 있는 글 칸)가 그대로 그린다.
 //
 // 이 파일은 UIKit · AppKit 양쪽에서 컴파일된다(`MessagesBubbleTextLayout` 과 같은 까닭) — 맥 `swift test` 가 NSFont 로 글꼴을 넣어
 // 글자 · 크기 · 굵기 · 링크 · 색 · 누름 판정 · 복사 글을 잰다. 폰 글꼴을 짓는 자리(Dynamic Type)만 iOS 전용이다(맨 아래).
@@ -111,7 +111,7 @@ package enum MessagesBubbleMarkdown {
     /// · 문단 스타일은 어절 줄바꿈(`MessagesBubbleTextLayout.paragraphStyle()`) 하나다 — 서식이 생겨도 줄바꿈 규칙은 그대로다.
     /// · 링크 글자: `linkKey`(주소) + 링크 색 + 밑줄. 꼬리표 " (호스트)": 꼬리표 색 · 밑줄 없음 · 누름 없음.
     /// · 복사 표시(`ChatMarkdownCopy.linkKey` · `disclosureKey`)를 맥 말풍선과 같은 자리에 싣는다 — 고른 글을 복사할 때
-    ///   `ChatMarkdownCopy.text` 가 꼬리표 대신 실제 주소를 담는다(폰 '골라 복사'는 다음 판 — 그때 이 글을 그대로 쓴다).
+    ///   `ChatMarkdownCopy.text` 가 꼬리표 대신 실제 주소를 담는다(폰 골라 복사 1.0.17 — 글 칸이 이 글을 그대로 들고 `MessagesBubbleSelection.copyText` 로 담는다).
     package static func attributed(_ shown: String, fonts: Fonts, colors: Colors) -> NSAttributedString {
         let paragraph = MessagesBubbleTextLayout.paragraphStyle()
         let pieces = ChatMarkdownPieces.pieces(shown)

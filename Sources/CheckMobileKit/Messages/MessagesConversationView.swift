@@ -12,7 +12,8 @@ import UIKit
 /// 읽음 처리·즉시 이력은 스토어가 그 사실로 판정한다 — 뷰는 조건을 세지 않는다.
 ///
 /// 오른쪽 위 ··· 메뉴(앱스토어 심사 지침 1.2): [신고하기] · [차단하기]. 둘 다 **시트만 연다** — 차단은 확인 시트를,
-/// 신고는 사유 시트를 지나야 서버로 나간다(소스 계약). 받은 말풍선을 길게 누르면 그 **메시지 한 건**을 신고한다.
+/// 신고는 사유 시트를 지나야 서버로 나간다(소스 계약). 받은 말풍선을 길게 누르면 그 **메시지 한 건**을 신고한다
+/// (1.0.17 부터 글 말풍선은 iOS 고르기 뒤 편집 메뉴의 [신고], 이모티콘 말풍선은 예전 길게 누름 메뉴의 [신고] — 같은 `reportMessage`).
 ///
 /// 1.0.13: 말풍선 사이에 **찌르기 줄**(가운데 정렬 작은 회색 줄)이 시간 순서로 낀다 — 줄 만들기는
 /// `MessagesStore.conversationItems`(→ `MessagesConversationRules.items` → 코어 `MessageConversationTimeline`),
@@ -396,9 +397,9 @@ struct MessagesBubbleRow: View {
             if entry.isMine {
                 Spacer(minLength: oppositeInset)
                 meta
-                bubble
+                bubbleContent
             } else {
-                bubble
+                bubbleContent
                 meta
                 Spacer(minLength: oppositeInset)
             }
@@ -425,22 +426,22 @@ struct MessagesBubbleRow: View {
         MessagesBubbleMarkdown.linkActions(AingStickerText.preview(for: line.entry.body))
     }
 
-    /// 복사는 길게 눌러 메뉴로(원문 그대로 — 붙여넣어 다시 보내면 그림이 된다). 본문이 `UILabel`(어절 줄바꿈)이라
-    /// SwiftUI `textSelection` 이 닿지 않는다. 메뉴는 **이모티콘 말풍선에도 그대로 달린다**(두 갈래가 이 한 자리를 쓴다).
-    private var bubble: some View {
-        bubbleContent
-            .contextMenu {
-                Button {
-                    MessagesBubbleCopy.copy(line.entry.body)
-                } label: {
-                    Label(MessagesBubbleCopy.title, systemImage: "doc.on.doc")
-                }
-                if let onReport {
-                    Button(role: .destructive, action: onReport) {
-                        Label(BlockReportText.reportMessageAction, systemImage: "exclamationmark.bubble")
-                    }
-                }
+    /// 이모티콘 말풍선의 길게 누름 메뉴 — [복사](원문 토큰 그대로 — 붙여넣어 다시 보내면 그림이 된다) · [신고](받은 말풍선만).
+    /// 1.0.16 까지는 모든 말풍선의 메뉴였다. 1.0.17 부터 **글 말풍선에는 이 메뉴가 없다**(대표 답 #d_M9wR9l9VLNvx "말풍선에서 바로 길게 눌러 고르기"):
+    /// 글 칸이 길게 누르기를 iOS 고르기로 받고, [복사] · [전체 선택] · [번역] + [신고]는 그 편집 메뉴에 선다(`MessagesBubbleTextUIView`).
+    /// 들어 올림 미리보기도 이모티콘 말풍선에만 남는다.
+    @ViewBuilder
+    private var stickerMenu: some View {
+        Button {
+            MessagesBubbleCopy.copy(line.entry.body)
+        } label: {
+            Label(MessagesBubbleCopy.title, systemImage: "doc.on.doc")
+        }
+        if let onReport {
+            Button(role: .destructive, action: onReport) {
+                Label(BlockReportText.reportMessageAction, systemImage: MessagesBubbleSelection.reportSymbol)
             }
+        }
     }
 
     /// 본문이 아잉이 이모티콘 하나면 **글자 대신 그림**이다(1.0.12). 아니면 예전 그대로 글자 말풍선이다.
@@ -450,19 +451,20 @@ struct MessagesBubbleRow: View {
     ///   센 쪽과 못 그린 쪽), 보낸 순간엔 글자였다가 이력이 오면 그림이 되는 꼴이 된다(맥 v0.3.62 의 그 사고).
     ///   그림을 못 읽으면 **빈 말풍선이 아니라 지금 그대로의 글자 말풍선**으로 접는다.
     ///
-    /// 누르는 모양(`contentShape`)만 갈래마다 다르다: 그림은 배경이 없으니 그림 사각형, 글자는 말풍선 반경이다.
+    /// 길게 누르기는 갈래마다 다르다: 그림은 SwiftUI 메뉴(`stickerMenu` · 그림 사각형 미리보기), 글자는 글 칸의 iOS 고르기 · 편집 메뉴다.
     @ViewBuilder
     private var bubbleContent: some View {
         if let drawn = AingStickerArt.drawable(for: line.entry.body) {
             MessagesStickerBubble(art: drawn.art)
                 .contentShape(.contextMenuPreview, Rectangle())
+                .contextMenu { stickerMenu }
         } else {
             // 그림 길이 아니면 글자 말풍선이다. ★ 번들 그림을 못 읽은 이모티콘은 **날것 토큰이 아니라**
             // "아잉이 기쁨"으로 접는다 — `AingStickerArt` 머리말의 계약이고 맥이 하는 것과 같다(`[아잉:기쁨]` 은
             // "깨진 메시지"로 읽힌다). 평범한 본문은 `preview` 가 **손대지 않고** 그대로 돌려준다.
-            // 복사는 아래 메뉴에서 `entry.body` 원문 그대로다 — 이 줄은 **보여 주는 글자**만 바꾼다.
-            MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine)
-                .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: MessagesBubbleText.cornerRadius, style: .continuous))
+            // 고른 글 복사는 보이는 글자(꼬리표 대신 실제 주소)이고, 보이스오버 [복사]는 `entry.body` 원문 그대로다 — 이 줄은 **보여 주는 글자**만 바꾼다.
+            // 받은 말풍선이면 `onReport` 가 편집 메뉴의 [신고]가 된다(내 말풍선은 nil — 메뉴에 없다).
+            MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine, onReport: onReport)
         }
     }
 
@@ -505,9 +507,10 @@ struct MessagesBubbleRow: View {
     }
 }
 
-/// 말풍선 복사(길게 누름 메뉴 · 보이스오버 동작). 늘 원문을 담는다 — 맥 [복사]의 "고른 글자가 없으면 원문"과 같은 규칙이다
-/// (`ChatMarkdownCopy.menuText` — 폰 메뉴에는 고르는 길이 없다). 원문은 서식 기호 · 이모티콘 토큰 그대로라 붙여넣어 다시 보내면
-/// 같은 꾸밈 · 같은 그림이 된다. 붙여넣기판에는 서식 없는 글자만 쓴다(`string`).
+/// 고른 것 없는 말풍선 복사(이모티콘 말풍선의 길게 누름 메뉴 · 보이스오버 동작). 늘 원문을 담는다 — 맥 [복사]의 "고른 글자가 없으면 원문"과
+/// 같은 규칙이다(`ChatMarkdownCopy.menuText`). 원문은 서식 기호 · 이모티콘 토큰 그대로라 붙여넣어 다시 보내면 같은 꾸밈 · 같은 그림이 된다.
+/// 붙여넣기판에는 서식 없는 글자만 쓴다(`string`). 글 말풍선에서 **고른 글자**의 복사는 글 칸 몫이다(`MessagesBubbleTextUIView.copy` —
+/// 보이는 글자 · 링크는 실제 주소째).
 enum MessagesBubbleCopy {
     static let title = "복사"
 
@@ -526,34 +529,39 @@ enum MessagesBubbleLinkDoor {
     }
 }
 
-/// 링크 누름 인식기의 대리자 — **링크 글자 위에서만** 누름을 시작시킨다. 그 밖의 누름은 인식기가 아예 시작하지 않아
-/// 스크롤 · 길게 누르기(말풍선 메뉴) · 다른 손짓이 예전 그대로다.
+/// 링크 누름 인식기의 대리자 — **링크 글자 위에서, 고르는 중이 아닐 때만** 누름을 시작시킨다. 그 밖의 누름은 인식기가 아예 시작하지 않아
+/// 스크롤 · 길게 누르기(iOS 고르기) · 고른 것을 지우는 누름 · 다른 손짓이 글 칸 그대로다.
 ///
 /// ★ 말풍선 뷰의 `UIView.gestureRecognizerShouldBegin(_:)` 를 재정의하지 않는다 — 그 메서드는 이 뷰를 지나는 **다른 인식기**(바깥 스크롤
-///   끌기 · 길게 누름 메뉴)에도 불릴 수 있어, 링크 밖에서 false 를 주면 말풍선 위 스크롤 · 메뉴까지 막힐 수 있다. 이 인식기 하나만 따로 묻는다.
+///   끌기 · 글 칸의 고르기 인식기)에도 불릴 수 있어, 링크 밖에서 false 를 주면 말풍선 위 스크롤 · 고르기까지 막힐 수 있다. 이 인식기 하나만 따로 묻는다.
+/// ★ 고르는 중(고른 글자가 있다)엔 시작하지 않는다(`MessagesBubbleSelection.linkToOpen`) — 그때 링크 위 한 번 누름은 고른 것을 지우는 누름이다.
 @MainActor
 final class MessagesBubbleLinkTapGate: NSObject, UIGestureRecognizerDelegate {
     weak var bubble: MessagesBubbleTextUIView?
 
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let bubble else { return false }
-        return bubble.link(at: gestureRecognizer.location(in: bubble)) != nil
+        return MessagesBubbleSelection.linkToOpen(
+            selectedLength: bubble.selectedRange.length,
+            linkAtTap: bubble.link(at: gestureRecognizer.location(in: bubble))
+        ) != nil
     }
 }
 
 /// 말풍선 글자 + 바탕(시안 `.b-bub`: 16pt · 안쪽 8/13/9 · 반경 19). 보내는 중 자리 말풍선도 같은 모양을 흐리게 쓴다.
+/// 1.0.17: 안쪽 여백은 SwiftUI padding 이 아니라 **글 칸 안**이다(`MessagesBubbleTextLayout.bubbleInsets` — 값은 예전 그대로) —
+/// 여백 띠를 길게 눌러도 고르기 · 편집 메뉴가 뜬다. 바탕(둥근 판)만 SwiftUI 가 그린다.
 private struct MessagesBubbleText: View {
     static let cornerRadius: CGFloat = 19
 
     let text: String
     let isMine: Bool
     var isPending = false
+    /// 편집 메뉴의 [신고](받은 말풍선만). 내 말풍선 · 보내는 중 말풍선은 nil — 메뉴에 없다.
+    var onReport: (() -> Void)?
 
     var body: some View {
-        MessagesBubbleLabel(text: text, isMine: isMine)
-            .padding(.horizontal, 13)
-            .padding(.top, 8)
-            .padding(.bottom, 9)
+        MessagesBubbleLabel(text: text, isMine: isMine, onReport: onReport)
             .background(
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .fill(isMine ? MobileTheme.accentFill : MobileTheme.bubbleIn)
@@ -592,46 +600,100 @@ private struct MessagesStickerBubble: View {
 ///
 /// 1.0.17: 서식(제목 · 굵게 · 링크 + 호스트 꼬리표 — 대표 결정 "제목·굵게·링크만")을 그린다. 무엇을 그리는가는 코어 조각(맥과 한 벌),
 /// 폰 글꼴 · 색은 `MessagesBubbleMarkdown` 이 입힌다. `text` 는 이모티콘 폴백을 지난 본문이다(마크다운 해석은 그 뒤 — 맥과 같은 순서).
+/// 1.0.17 골라 복사: 이 칸은 고를 수 있는 글 칸이다(`MessagesBubbleTextUIView`). 크기는 **말풍선 한 장**(안쪽 여백 포함)이다.
 private struct MessagesBubbleLabel: UIViewRepresentable {
     let text: String
     let isMine: Bool
+    var onReport: (() -> Void)?
 
     func makeUIView(context: Context) -> MessagesBubbleTextUIView {
         MessagesBubbleTextUIView()
     }
 
+    /// 글은 **보이는 것이 바뀔 때만** 다시 박는다(`show` 가 열쇠로 견준다) — SwiftUI 는 대화 화면이 다시 그려질 때마다(명부 · 새 메시지 · 틱)
+    /// 이 함수를 부르고, 그때마다 글을 박으면 고르던 구간이 날아간다(외관별 색 객체는 매번 새것이라 글 비교로는 못 거른다).
     func updateUIView(_ view: MessagesBubbleTextUIView, context: Context) {
-        view.set(MessagesBubbleMarkdown.attributed(
-            text,
-            fonts: MessagesBubbleMarkdown.fonts(for: context.environment.dynamicTypeSize),
-            colors: MessagesBubbleMarkdown.colors(isMine: isMine)
-        ))
+        view.onReport = onReport
+        view.show(MessagesBubbleTextUIView.Shown(text: text, isMine: isMine, dynamicTypeSize: context.environment.dynamicTypeSize)) {
+            MessagesBubbleMarkdown.attributed(
+                text,
+                fonts: MessagesBubbleMarkdown.fonts(for: context.environment.dynamicTypeSize),
+                colors: MessagesBubbleMarkdown.colors(isMine: isMine)
+            )
+        }
     }
 
+    /// 말풍선 한 장 크기 = 여백 뺀 폭에서 잰 글 크기 + 여백(1.0.16 의 padding + `fittingSize` 와 같은 값). 재는 것은 **재기 전용 엔진**이다 —
+    /// SwiftUI 가 여러 폭(0 포함)을 물어도 그려 놓은 배치를 흔들지 않는다.
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: MessagesBubbleTextUIView, context: Context) -> CGSize? {
-        view.engine.fittingSize(width: proposal.width ?? .greatestFiniteMagnitude)
+        view.measure.bubbleFittingSize(proposedWidth: proposal.width)
     }
 }
 
-/// TextKit 으로 그리는 글 칸(말풍선 본문 전용). 보이스오버는 줄 전체 라벨이 읽는다(이 칸은 요소가 아니다).
+/// 말풍선 본문 글 칸 — **고를 수 있는(편집 불가) `UITextView`**(1.0.17 · 대표 답 #d_M9wR9l9VLNvx "말풍선에서 바로 길게 눌러 고르기").
+/// 보이스오버는 줄 전체 라벨 · 동작이 읽는다(이 칸은 요소가 아니다 — 줄이 `children: .ignore`).
 ///
-/// 링크는 **한 번 눌러** 연다(1.0.17 · 대표 요청 "링크같은건 클릭해서 실제 해당 링크로 브라우저 열리게"). 누름 인식기는 링크 글자 위에서만
-/// 시작한다(`MessagesBubbleLinkTapGate`) — 그 밖의 누름 · 스크롤 · 길게 누르기는 예전 그대로 지나간다. 링크를 **길게** 누르면
-/// 웹 미리보기가 아니라 말풍선 메뉴([복사] · [신고])가 뜬다: 이 칸은 `UITextView` 가 아니라 링크 미리보기가 없고, 길게 누르기는 바깥
-/// `.contextMenu` 몫이다.
-final class MessagesBubbleTextUIView: UIView {
-    let engine = MessagesBubbleTextLayout.Engine()
+/// ## 줄바꿈 · 크기는 예전 엔진 그대로
+/// TextKit 1 틀째 `MessagesBubbleTextLayout.Engine` 의 것을 넘겨 짓는다(`init(frame:textContainer:)` — TextKit 2 가 아니다). 줄을 나누는 것은
+/// 그 엔진의 배치 관리자와 어절 끊기 대리자이고, 줄 조각 여백 0 · 안쪽 여백(`bubbleInsets`)은 예전 SwiftUI padding 과 같은 값이다.
+/// 크기는 같은 글을 넣은 **재기 전용 엔진**(`measure`)이 잰다(`Engine.bubbleFittingSize`).
+///
+/// ## 길게 누르기 → iOS 고르기 · 편집 메뉴
+/// 메뉴는 iOS 가 제안한 것 가운데 [복사] · [전체 선택] · [번역]만 남기고, 받은 말풍선이면 [이 메시지 신고하기]를 끝에 단다
+/// (`MessagesBubbleSelection.menu` — 공유 · 찾아보기 등은 거른다). [복사]는 고른 글자를 서식 없이, 링크는 실제 주소째 담는다(`copy`).
+/// 들어 올림 미리보기는 없다(바깥 `.contextMenu` 를 걷었다). 고르는 동안 이 칸이 첫 응답자가 되어 입력칸 키보드가 내려간다(iOS 고르기의 성질).
+///
+/// ## 링크
+/// 링크는 **한 번 눌러** 연다(대표 요청 "링크같은건 클릭해서 실제 해당 링크로 브라우저 열리게"). 누름 인식기는 링크 글자 위에서, 고르는 중이 아닐 때만
+/// 시작한다(`MessagesBubbleLinkTapGate`). 링크는 시스템 `.link` 속성이 아니라 직접 정한 키라 이 글 칸에 링크 항목이 없다 — 시스템의
+/// 검사 없는 열기 · 길게 눌러 웹 미리보기가 생기지 않는다. 혹시 생겨도 링크 항목 대리자 둘이 nil(막음)을 돌려준다. 자료 감지도 끈다.
+final class MessagesBubbleTextUIView: UITextView, UITextViewDelegate {
+    /// 보이는 글의 열쇠 — 같으면 글을 다시 박지 않는다(고르던 구간이 날아간다).
+    struct Shown: Equatable {
+        let text: String
+        let isMine: Bool
+        let dynamicTypeSize: DynamicTypeSize
+    }
+
+    /// 그리는 배치 — 이 글 칸의 TextKit 1 틀(어절 끊기 대리자째). 링크 누름도 이 배치로 잰다.
+    let engine: MessagesBubbleTextLayout.Engine
+    /// 크기 재기 전용 엔진(같은 글). SwiftUI 가 묻는 여러 폭이 그리는 배치를 흔들지 않게 따로 둔다.
+    let measure = MessagesBubbleTextLayout.Engine()
+    /// 편집 메뉴의 [이 메시지 신고하기]. nil 이면 메뉴에 신고가 없다(내 말풍선 · 보내는 중).
+    var onReport: (() -> Void)?
+
+    private var shown: Shown?
     private let linkTapGate = MessagesBubbleLinkTapGate()
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init() {
+        let engine = MessagesBubbleTextLayout.Engine()
+        engine.prepareForTextView()
+        self.engine = engine
+        super.init(frame: .zero, textContainer: engine.container)
+        // 넘긴 틀은 글 칸이 그대로 쓴다 — 혹시 바뀌어도 재는 엔진과 같은 값으로 되돌린다(어절 끊기 대리자 · 줄 조각 여백 0).
+        if engine.layoutManager.delegate !== engine { engine.layoutManager.delegate = engine }
+        engine.container.lineFragmentPadding = 0
+        isEditable = false
+        isSelectable = true
+        isScrollEnabled = false
         backgroundColor = .clear
-        isOpaque = false
-        contentMode = .redraw
+        // 고르기 손잡이가 말풍선 가장자리에서 잘리지 않게(글자는 늘 글 칸 안이다).
+        clipsToBounds = false
+        let insets = MessagesBubbleTextLayout.bubbleInsets
+        textContainerInset = UIEdgeInsets(top: insets.top, left: insets.horizontal, bottom: insets.bottom, right: insets.horizontal)
+        contentInset = .zero
+        contentInsetAdjustmentBehavior = .never
+        adjustsFontForContentSizeCategory = false
+        dataDetectorTypes = []
+        isFindInteractionEnabled = false
+        writingToolsBehavior = .none
+        // 끌어 놓기는 보이는 글자(꼬리표째 · 서식째)를 싣는다 — 고른 글은 [복사]로만 나간다.
+        textDragInteraction?.isEnabled = false
         isAccessibilityElement = false
+        delegate = self
         // 외관(라이트·다크 · 앱 화면 모드 설정)이 바뀌면 테마 색을 다시 풀어 그린다.
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: MessagesBubbleTextUIView, _: UITraitCollection) in
-            view.setNeedsDisplay()
+            view.redrawText()
         }
         let tap = UITapGestureRecognizer(target: self, action: #selector(tappedLink(_:)))
         linkTapGate.bubble = self
@@ -639,27 +701,105 @@ final class MessagesBubbleTextUIView: UIView {
         addGestureRecognizer(tap)
     }
 
-    /// 이 칸의 `point`(뷰 좌표 = 글을 그린 좌표)에 있는 링크. 그린 폭 그대로 배치해 잰다.
-    func link(at point: CGPoint) -> URL? {
-        engine.link(at: point, width: bounds.width)
-    }
-
-    @objc private func tappedLink(_ recognizer: UITapGestureRecognizer) {
-        guard recognizer.state == .ended, let url = link(at: recognizer.location(in: self)) else { return }
-        MessagesBubbleLinkDoor.open(url)
-    }
-
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    func set(_ attributed: NSAttributedString) {
-        if engine.set(attributed) { setNeedsDisplay() }
+    /// 보일 글을 바꾼다. 열쇠가 같으면 아무것도 안 한다(고르던 구간 · 편집 메뉴가 그대로다). 바뀌면 고른 것을 지우고
+    /// 그리는 엔진 · 재는 엔진에 **같은 글**을 넣는다.
+    func show(_ next: Shown, drawn: () -> NSAttributedString) {
+        guard shown != next else { return }
+        shown = next
+        let text = drawn()
+        if selectedRange.length > 0 { selectedRange = NSRange(location: 0, length: 0) }
+        engine.set(text)
+        measure.set(text)
+        tintColor = MobileTheme.uiColor(MessagesBubbleSelection.selectionTint(isMine: next.isMine))
     }
 
-    override func draw(_ rect: CGRect) {
-        engine.layout(width: bounds.width)
-        let glyphs = engine.layoutManager.glyphRange(for: engine.container)
-        engine.layoutManager.drawGlyphs(forGlyphRange: glyphs, at: .zero)
+    private func redrawText() {
+        engine.layoutManager.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: engine.storage.length))
+        setNeedsDisplay()
+    }
+
+    // MARK: 링크
+
+    /// 이 칸의 `point`(뷰 좌표 — 안쪽 여백 포함)에 있는 링크. 그린 폭 그대로 배치해 잰다.
+    func link(at point: CGPoint) -> URL? {
+        engine.link(atBubblePoint: point, bubbleWidth: bounds.width)
+    }
+
+    @objc private func tappedLink(_ recognizer: UITapGestureRecognizer) {
+        guard recognizer.state == .ended,
+              let url = MessagesBubbleSelection.linkToOpen(selectedLength: selectedRange.length, linkAtTap: link(at: recognizer.location(in: self)))
+        else { return }
+        MessagesBubbleLinkDoor.open(url)
+    }
+
+    // MARK: 복사
+
+    /// 편집 메뉴 [복사] · 키보드 ⌘C. **고른 글자만**, **서식 없이** 쓴다 — `[글](주소)` 는 꼬리표 대신 실제 주소째(코어 `ChatMarkdownCopy.text` —
+    /// 맥 ⌘C 와 한 함수). 서식째 쓰면 내 말풍선의 흰 글자가 흰 문서에 붙는다. 고른 것이 없으면 아무것도 안 쓴다.
+    override func copy(_ sender: Any?) {
+        guard let text = MessagesBubbleSelection.copyText(engine.storage, selected: selectedRange) else { return }
+        UIPasteboard.general.string = text
+    }
+
+    /// 편집 메뉴 밖의 길(키보드 단축키 등)에서도 공유는 거절한다(보이는 글자를 꼬리표째 다른 앱으로 넘긴다).
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if MessagesBubbleSelection.refuses(actionNamed: NSStringFromSelector(action)) { return false }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    /// 포커스가 떠나면 고른 것을 지운다 — 다른 말풍선 · 입력칸으로 옮긴 뒤 옛 강조가 남아 여러 말풍선이 함께 골라진 것처럼 보이지 않게(맥과 같다).
+    override func resignFirstResponder() -> Bool {
+        let resigned = super.resignFirstResponder()
+        if resigned, selectedRange.length > 0 { selectedRange = NSRange(location: 0, length: 0) }
+        return resigned
+    }
+
+    // MARK: 편집 메뉴
+
+    /// 고른 뒤 뜨는 편집 메뉴. **언제나 메뉴를 돌려준다** — nil 은 "시스템 기본 메뉴"(공유 · 찾아보기 포함)라는 뜻이다.
+    func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
+        UIMenu(children: MessagesBubbleSelection.menu(suggested: Self.leaves(suggestedActions), report: reportMenuItem()))
+    }
+
+    /// 제안 메뉴를 펼친 낱 항목(이름 · 항목). 묶음 메뉴는 속까지 펼친다. 이름을 모르는 항목(미뤄 짓는 항목 등)은 버린다.
+    private static func leaves(_ elements: [UIMenuElement]) -> [(name: String, element: UIMenuElement)] {
+        elements.flatMap { element -> [(name: String, element: UIMenuElement)] in
+            if let menu = element as? UIMenu { return leaves(menu.children) }
+            if let command = element as? UICommand { return [(NSStringFromSelector(command.action), command)] }
+            if let action = element as? UIAction { return [(action.identifier.rawValue, action)] }
+            return []
+        }
+    }
+
+    /// [이 메시지 신고하기](받은 말풍선만 — `onReport` 가 있을 때). 맥 · 이모티콘 메뉴와 같은 신고 흐름(메시지 한 건 · 사유 시트)이다.
+    private func reportMenuItem() -> UIMenuElement? {
+        guard onReport != nil else { return nil }
+        return UIAction(
+            title: BlockReportText.reportMessageAction,
+            image: UIImage(systemName: MessagesBubbleSelection.reportSymbol),
+            attributes: .destructive
+        ) { [weak self] _ in
+            self?.reportFromMenu()
+        }
+    }
+
+    private func reportFromMenu() {
+        if selectedRange.length > 0 { selectedRange = NSRange(location: 0, length: 0) }
+        _ = resignFirstResponder()
+        onReport?()
+    }
+
+    // MARK: 링크 항목 — 막음(이 칸에는 `.link` · 자료 감지가 없어 불리지 않는다. 생겨도 검사 없는 열기 · 웹 미리보기가 없게)
+
+    func textView(_ textView: UITextView, primaryActionFor textItem: UITextItem, defaultAction: UIAction) -> UIAction? {
+        nil
+    }
+
+    func textView(_ textView: UITextView, menuConfigurationFor textItem: UITextItem, defaultMenu: UIMenu) -> UITextItem.MenuConfiguration? {
+        nil
     }
 }
 

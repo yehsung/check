@@ -8,9 +8,9 @@ import Testing
 // 폰 1.0.17 — 채팅 서식 · 링크 이식. 맥 `Tests/checkTests/ChatMarkdownTests.swift` · `ChatBubbleSelectionTests.swift` 를 본으로 한 폰판이다.
 //
 // 대표 결정(되묻지 말 것): 서식은 "제목·굵게·링크만"(코어 `ChatMarkdown` 그대로) · 링크 뒤에 실제 도메인을 붙이고 겉과 속이 다른 주소는
-// 링크로 만들지 않는다 · 링크를 누르면 브라우저로 열린다 · 길게 누르기 메뉴 [복사]·[신고]는 그대로다.
+// 링크로 만들지 않는다 · 링크를 누르면 브라우저로 열린다. 골라 복사는 V1017BubbleSelectionMobileTests(대표 답 "말풍선에서 바로 길게 눌러 고르기").
 //
-// 폰 말풍선 본문은 SwiftUI `Text` 가 아니라 TextKit 으로 직접 그리는 UIView 다(한글 어절 줄바꿈). 그 뷰는 `#if os(iOS)` 라 맥 `swift test` 가
+// 폰 말풍선 본문은 SwiftUI `Text` 가 아니라 TextKit 1 글 칸이다(한글 어절 줄바꿈 — 1.0.17 부터 고를 수 있는 UITextView). 그 뷰는 `#if os(iOS)` 라 맥 `swift test` 가
 // 컴파일하지 않는다(메모리 '폰 뷰는 맥 스위트가 못 본다') — 그래서 이 파일은 둘로 잰다:
 //  ① **값**: 뷰가 그리는 글 한 장(`MessagesBubbleMarkdown.attributed` — UIKit·AppKit 양쪽 컴파일)을 NSFont 로 지어 글자 · 크기 · 굵기 ·
 //     링크 · 색 · 줄바꿈 규칙을 재고, 같은 TextKit 엔진(`MessagesBubbleTextLayout.Engine`)에 넣어 **누름 판정**을 그린 배치 그대로 잰다.
@@ -426,7 +426,7 @@ struct V1017ChatMarkdownLinkTapTests {
 @Suite("V1017ChatMarkdownCopy")
 struct V1017ChatMarkdownCopyTests {
     /// 고른 구간에 `[글](주소)` 링크가 걸치면 꼬리표 대신 **실제 주소**를 담는다 — 맥 ChatBubbleSelectionTests `고른_링크는_실제_주소째_복사한다`
-    /// 열세 칸을 **폰 말풍선 글** 위에서 그대로 돌린다(폰 '골라 복사'가 다음 판에 이 함수를 쓴다). 기준선: 보이는 글자 그대로면 꼬리표가 들어간다.
+    /// 열세 칸을 **폰 말풍선 글** 위에서 그대로 돌린다(폰 골라 복사 1.0.17 이 이 함수를 쓴다). 기준선: 보이는 글자 그대로면 꼬리표가 들어간다.
     @Test func 고른_링크는_실제_주소째_복사한다() throws {
         let drawn = CM17.drawn("**굵게** [자료](https://a.example/doc) 끝")
         try #require(drawn.string == "굵게 자료 (a.example) 끝")
@@ -472,7 +472,8 @@ struct V1017ChatMarkdownCopyTests {
         let copy = try CM17.block(of: "enum MessagesBubbleCopy", in: code)
         #expect(copy.contains("UIPasteboard.general.string = body"), "붙여넣기판에 서식 없는 글자만 쓰지 않는다")
         #expect(!copy.contains("setItems") && !copy.contains("attributedString"), "붙여넣기판에 서식이 실린다")
-        let menu = try CM17.block(of: "private var bubble: some View", in: code)
+        // 1.0.17: 길게 누름 메뉴는 이모티콘 말풍선에만 남는다(글 말풍선은 편집 메뉴 — V1017BubbleSelectionContract).
+        let menu = try CM17.block(of: "private var stickerMenu: some View", in: code)
         #expect(menu.contains("MessagesBubbleCopy.copy(line.entry.body)"), "[복사]가 원문이 아니다")
         #expect(menu.contains("if let onReport {"), "[신고]가 신고 문이 있을 때만 뜨지 않는다")
         #expect(code.contains("MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })"),
@@ -560,7 +561,10 @@ struct V1017ChatMarkdownViewContractTests {
         #expect(!update.contains("NSAttributedString(string:"), "평문 한 덩어리로 되돌아갔다")
         #expect(label.contains("MessagesBubbleTextUIView()"), "TextKit 글 칸이 아니다")
         #expect(!code.contains("Text(text)") && !code.contains(".textSelection("), "SwiftUI Text 로 바꾸면 한글이 음절에서 끊긴다")
-        #expect(!code.contains("UITextView"), "링크 기본 동작(검사 없는 열기 · 웹 미리보기)이 있는 글 뷰가 들어왔다")
+        // 1.0.17 골라 복사(대표 답 #d_M9wR9l9VLNvx): 글 칸은 고를 수 있는 UITextView 다 — 엔진의 TextKit 1 틀째 짓고(TextKit 2 아님),
+        // 링크 기본 동작(검사 없는 열기 · 웹 미리보기)은 막는다. 그 배선은 V1017BubbleSelectionContract 가 잰다.
+        #expect(code.contains("final class MessagesBubbleTextUIView: UITextView") && !code.contains("textLayoutManager"),
+                "글 칸이 엔진 틀째 지은 TextKit 1 UITextView 가 아니다")
 
         let markdown = try CM17.code(CM17.markdownPath)
         let attributed = try CM17.block(of: "package static func attributed(", in: markdown)
@@ -573,17 +577,18 @@ struct V1017ChatMarkdownViewContractTests {
     /// 말풍선 뷰는 `gestureRecognizerShouldBegin` 을 재정의하지 않는다(조상 인식기 — 스크롤 · 메뉴 — 까지 막는다).
     @Test func 링크_누름은_판정을_지나_한_문으로_연다() throws {
         let code = try CM17.code(CM17.conversationPath)
-        let view = try CM17.block(of: "final class MessagesBubbleTextUIView: UIView", in: code)
+        let view = try CM17.block(of: "final class MessagesBubbleTextUIView: UITextView", in: code)
         #expect(view.contains("UITapGestureRecognizer(target: self, action: #selector(tappedLink(_:)))"))
         #expect(view.contains("tap.delegate = linkTapGate") && view.contains("addGestureRecognizer(tap)"))
         #expect(!view.contains("gestureRecognizerShouldBegin"), "말풍선 뷰가 조상 인식기의 시작까지 막는다")
         let at = try CM17.block(of: "func link(at point: CGPoint) -> URL?", in: view)
-        #expect(at.contains("engine.link(at: point, width: bounds.width)"), "그린 폭과 다른 배치로 판정한다")
+        #expect(at.contains("engine.link(atBubblePoint: point, bubbleWidth: bounds.width)"), "그린 폭 · 여백과 다른 배치로 판정한다")
         let tapped = try CM17.block(of: "@objc private func tappedLink(", in: view)
         #expect(tapped.contains("link(at: recognizer.location(in: self))") && tapped.contains("MessagesBubbleLinkDoor.open(url)"))
 
         let gate = try CM17.block(of: "final class MessagesBubbleLinkTapGate", in: code)
-        #expect(gate.contains("bubble.link(at: gestureRecognizer.location(in: bubble)) != nil"), "링크 밖에서도 누름이 시작한다")
+        #expect(gate.contains("linkAtTap: bubble.link(at: gestureRecognizer.location(in: bubble))") && gate.contains(") != nil"),
+                "링크 밖에서도 누름이 시작한다")
 
         let door = try CM17.block(of: "enum MessagesBubbleLinkDoor", in: code)
         #expect(door.contains("MessagesBubbleMarkdown.follow(url) { UIApplication.shared.open($0) }"), "여는 문 앞의 스킴 검사가 없다")

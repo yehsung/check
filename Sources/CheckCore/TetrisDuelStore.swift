@@ -634,6 +634,9 @@ package final class TetrisDuelStore {
     @ObservationIgnored private var stateInFlight = false
     @ObservationIgnored private var stateAgain = false
     @ObservationIgnored private var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(큐브 `RummyStoreLobby` 꼴). 판 밖의 신청·수락 초인종이 곧
+    /// 로비 조회라(`syncOnce`), 버리면 받은 신청 카드·메뉴바 점·말풍선이 다음 계기(30초 폴링·팝오버)까지 안 선다.
+    @ObservationIgnored private var lobbyAgain = false
     @ObservationIgnored var rankingInFlight = false
     /// 서버가 말한 내 진행 중 대결 id.
     @ObservationIgnored package private(set) var activeMatchID: String?
@@ -728,27 +731,37 @@ package final class TetrisDuelStore {
 
     // MARK: - 조회
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
+    /// 앞 조회는 그 뒤에 생긴 신청·수락을 모른다 — 합친 한 바퀴에는 진행 판 꼬리(`applyLobby` 의 `refreshMatch`)까지 들어간다.
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        lobbyRequestOutgoingRevision = outgoingRevision
-        guard let result = await perform({ try await $0.tetrisLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            await applyLobby(response)
-        case .failure(let error):
-            if isSchemaMissing(error) {
-                Self.logger.notice("lobby unavailable — tetris functions missing on server")
-                noteServerMissing()
-            } else {
-                Self.logger.notice("lobby request failed")
+        repeat {
+            // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 초인종을 지우지 않게(requestSync 와 같은 규약).
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            lobbyRequestOutgoingRevision = outgoingRevision
+            guard let result = await perform({ try await $0.tetrisLobby(accessToken: $1) }) else { return }
+            switch result {
+            case .success(let response):
+                await applyLobby(response)
+            case .failure(let error):
+                if isSchemaMissing(error) {
+                    Self.logger.notice("lobby unavailable — tetris functions missing on server")
+                    noteServerMissing()
+                } else {
+                    Self.logger.notice("lobby request failed")
+                }
+                // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
+                if !lobbyLoadFailed { lobbyLoadFailed = true }
             }
-            // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
-            if !lobbyLoadFailed { lobbyLoadFailed = true }
-        }
+        } while lobbyAgain && generation == resetGeneration
     }
 
     package func applyLobby(_ response: TetrisLobbyResponse) async {
@@ -1321,23 +1334,37 @@ package final class TetrisDuelStore {
         pollTask = nil
     }
 
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
+    /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`lobbyAgain` · 로비 꼬리가 합친 `stateAgain`)까지 같이 죽는다 — 창도
+    /// 폴링도 없는 사람이 받은 신청·수락을 모른다(아잉 뒤집기 V2-03 과 같은 수리). 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은
+    /// 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드(창 보임 · 안 가림 · 폴링 작업 안 취소)가 막는다(VR-04).
+    /// 관전(`pollWatch`)·순위(`loadRanking`)는 초인종과 합쳐지지 않아 폴링 안에 둔다(창이 내려가면 같이 멈추는 것이 맞다).
+    private func outsidePolling(_ body: @escaping @MainActor (TetrisDuelStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
     ///  · 보낸 신청이 있으면 5초마다 그 판의 상태(수락·거절·만료를 한 조회가 다 말한다)
     ///  · 로비를 보고 있으면 30초마다 목록 · 순위는 60초(주 스위치)
     /// **판 중에는 조회하지 않는다** — 1초 보고가 상대 판과 판 상태를 함께 받아 온다(같은 일을 두 번 하지 않는다).
+    /// 신청·로비 조회는 `outsidePolling` 으로 낸다. **걸음 사이사이 창 보임 · 가림 · 취소를 다시 본다.**
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let sent = outgoing, now.timeIntervalSince(lastOutgoingRequestAt) >= Self.outgoingPollSeconds {
-            await refreshMatch(id: sent.id)
+            let id = sent.id
+            await outsidePolling { await $0.refreshMatch(id: id) }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         // 관전 중이면 이 걸음은 관전이 가져간다(순위는 돌리지 않는다 — 돌아올 때 로비가 한 번 읽는다).
         if await pollWatch(at: now) { return }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if rankingEnabled, phase == .lobby, now.timeIntervalSince(lastRankingRequestAt) >= Self.rankingPollSeconds {
             await loadRanking()
         }
@@ -1359,6 +1386,7 @@ package final class TetrisDuelStore {
         stateInFlight = false
         stateAgain = false
         lobbyInFlight = false
+        lobbyAgain = false
         rankingInFlight = false
         stateInFlightID = nil
         pendingStateID = nil

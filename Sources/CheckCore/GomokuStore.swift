@@ -879,6 +879,9 @@ package final class GomokuStore {
     @ObservationIgnored private var inboxInFlight = false
     @ObservationIgnored private var inboxAgain = false
     @ObservationIgnored private var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(큐브 `RummyStoreLobby` · `inboxAgain` 과 같은 꼴).
+    /// 버리면 겹친 계기(판 끝 전적 재조회 · [로비로] · 관전 나가기 · 창 열기)가 빠져 전적·대결 중 목록·진행 판 id 가 다음 30초까지 옛것이다.
+    @ObservationIgnored private var lobbyAgain = false
     @ObservationIgnored package var lastStateRequestAt: Date = .distantPast
     @ObservationIgnored package var lastInboxRequestAt: Date = .distantPast
     @ObservationIgnored package var lastLobbyRequestAt: Date = .distantPast
@@ -999,21 +1002,31 @@ package final class GomokuStore {
 
     // MARK: - 조회
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `loadInbox` 의 `inboxAgain` 과 같은 꼴).
+    /// 오목의 초인종은 받은함으로 가지만(`syncOnce`), 로비를 부르는 다른 계기가 도는 로비와 겹치면 그 계기가 통째로 빠졌다.
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        guard let result = await perform({ try await $0.gomokuLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            applyLobby(response)
-        case .failure:
-            Self.logger.notice("lobby request failed")
-            // 빈 목록을 "대결할 사람이 없다"로 믿게 하지 않는다 — 화면이 연결 안내와 [다시 불러오기]를 그린다.
-            if !lobbyLoadFailed { lobbyLoadFailed = true }
-        }
+        repeat {
+            // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 부름을 지우지 않게(requestSync 와 같은 규약).
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            guard let result = await perform({ try await $0.gomokuLobby(accessToken: $1) }) else { return }
+            switch result {
+            case .success(let response):
+                applyLobby(response)
+            case .failure:
+                Self.logger.notice("lobby request failed")
+                // 빈 목록을 "대결할 사람이 없다"로 믿게 하지 않는다 — 화면이 연결 안내와 [다시 불러오기]를 그린다.
+                if !lobbyLoadFailed { lobbyLoadFailed = true }
+            }
+        } while lobbyAgain && generation == resetGeneration
     }
 
     package func applyLobby(_ response: GomokuLobbyResponse) {
@@ -1840,11 +1853,23 @@ package final class GomokuStore {
         pollTask = nil
     }
 
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
+    /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`inboxAgain`·`stateAgain`·`lobbyAgain`)까지 같이 죽는다 — 창을 닫은
+    /// 신청자가 수락을 모른 채 흑이면 첫 수를 자동 착수당한다(아잉 뒤집기 V2-03 과 같은 수리). 폴링은 멈추고 날던 조회만 끝까지 간다
+    /// (로그아웃은 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드(창 보임 · 안 가림 · 폴링 작업 안 취소)가 막는다(VR-04).
+    private func outsidePolling(_ body: @escaping @MainActor (GomokuStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
     ///  · 진행 중 판이 상대 차례면(또는 표시 마감 + 유예가 지났으면) 구독 중 10초(마감 10초 안쪽은 3초) / 미구독 1.5초마다 상태.
     ///  · 결과 화면의 끝난 판이면 끝난 뒤 130초 동안 구독 중 10초 / 미구독 5초마다 상태(상대의 끝인사 — 내가 껐으면 안 돈다).
     ///  · 내 대기 신청이 있으면 5초마다 인박스(수락·거절·만료를 본다).
     ///  · 로비를 보고 있으면 30초마다 목록.
+    /// 조회는 `outsidePolling` 으로 낸다. **걸음 사이사이 창 보임 · 가림 · 취소를 다시 본다** — await 중에 창이 내려가거나 가려질 수 있다.
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let current = match, !current.isFinished, !isAIMatch {
@@ -1854,7 +1879,8 @@ package final class GomokuStore {
                 let subscribed = host?.realtimeState.isSubscribed ?? false
                 let interval = Self.statePollSeconds(subscribed: subscribed, deadline: current.deadline, now: now)
                 if now.timeIntervalSince(lastStateRequestAt) >= interval {
-                    await refreshMatch(id: current.id)
+                    let id = current.id
+                    await outsidePolling { await $0.refreshMatch(id: id) }
                 }
             }
         } else if let farewellID = farewellMatchID(at: now) {
@@ -1864,19 +1890,19 @@ package final class GomokuStore {
             let interval = subscribed
                 ? Self.finishedChatPollSecondsWhileSubscribed : Self.finishedChatPollSecondsUnsubscribed
             if now.timeIntervalSince(lastStateRequestAt) >= interval {
-                await refreshMatch(id: farewellID)
+                await outsidePolling { await $0.refreshMatch(id: farewellID) }
             }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if outgoing != nil, now.timeIntervalSince(lastInboxRequestAt) >= Self.outgoingInboxPollSeconds {
-            await loadInbox()
+            await outsidePolling { await $0.loadInbox() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
         // 관전·순위(0.3.41): 관전 중이면 2초마다 판, 로비면 60초마다 순위. 주 스위치·가림·세션·화면은 확장이 본다(GomokuStoreWatch.swift).
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         await pollSpectatorFeatures(at: now)
     }
 
@@ -1910,6 +1936,7 @@ package final class GomokuStore {
         inboxInFlight = false
         inboxAgain = false
         lobbyInFlight = false
+        lobbyAgain = false
         if phase != .lobby { phase = .lobby }
         if !users.isEmpty { users = [] }
         if record != nil { record = nil }

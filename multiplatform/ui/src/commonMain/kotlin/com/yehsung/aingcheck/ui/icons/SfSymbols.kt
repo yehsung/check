@@ -36,6 +36,13 @@ object SfSymbols {
         "arrowshape.turn.up.left.fill" to AppIcon.ReplyFill,
         "arrowtriangle.left.fill" to AppIcon.ArrowLeftFill,
         "arrowtriangle.right.fill" to AppIcon.ArrowRightFill,
+        // 맥 main 0.3.74 의 아이폰 큐브 판(Sources/CheckMobileKit/Games/GamesRummy*.swift)이 더한 기호 넷. 새 벡터 없이 안드로이드 큐브 판
+        // (ui games/rummy — vc5)이 이미 그리는 그림으로 잇는다: 더미 위·아래 화살표 = GamesRummyBoardCanvas 의 ExpandLess·ExpandMore,
+        // 다른 기기 판 안내 = GamesRummyElsewhereCard 의 Smartphone, 반응 단추 = GamesRummyReactions 의 Mood.
+        "arrowtriangle.up.fill" to AppIcon.ExpandLess,
+        "arrowtriangle.down.fill" to AppIcon.ExpandMore,
+        "iphone.and.arrow.forward" to AppIcon.Smartphone,
+        "smiley" to AppIcon.Mood,
         "bag" to AppIcon.ShoppingBag,
         "bag.fill" to AppIcon.ShoppingBagFill,
         "bell" to AppIcon.Notifications,

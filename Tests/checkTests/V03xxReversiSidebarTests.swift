@@ -31,6 +31,10 @@ private enum RSB {
     static var viewportBottom: CGFloat { duelRowsTop + layout.sidebarDuelViewportHeight }
     /// 끝까지 내렸을 때의 스크롤 거리 = 줄 + 꼬리 − 칸.
     static var maxScroll: CGFloat { layout.sidebarDuelRowsHeight + layout.sidebarDuelFadeHeight - layout.sidebarDuelViewportHeight }
+    /// 다섯째(아잉 뒤집기) 문 신청이 오면 굴러가는 거리 — 그 줄 바닥이 칸 바닥에 닿을 만큼만(`scrollTo(door, anchor: nil)`, 마지막 문이 아니다).
+    static var reversiRevealScroll: CGFloat {
+        5 * layout.sidebarRowHeight + 4 * layout.sidebarRowSpacing - layout.sidebarDuelViewportHeight
+    }
 
     /// 줄 높이·간격을 주어진 값으로 두고 같이 하기를 **스크롤 없이** 세운 사이드바의 세로 합(옛 방식 — 기준선 산식).
     static func unscrolledHeight(rowHeight: CGFloat, spacing: CGFloat, duelRows: Int) -> CGFloat {
@@ -220,15 +224,15 @@ struct V03xxReversiSidebarTests {
         #expect(RSB.layout.sidebarIconSize == 30)
         #expect(RSB.layout.contentSize == CGSize(width: 888, height: 470))
         #expect(RSB.layout.gameAreaSize == CGSize(width: 700, height: 470))
-        // 문 수는 문 목록 하나에서 온다.
-        #expect(RSB.layout.sidebarDuelRows == 5)
-        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi])
+        // 문 수는 문 목록 하나에서 온다(아잉 마작이 여섯째 — MJ/SPEC.md §5.8, 마작 T 가 다섯 문 숫자를 여섯 문으로 고쳤다).
+        #expect(RSB.layout.sidebarDuelRows == 6)
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong])
 
         let inner = RSB.windowHeight - RSB.layout.contentPadding * 2
         #expect(inner == 442 && RSB.layout.sidebarInnerHeight == inner)
-        // 같이 하기 칸 = 남은 자리(202), 줄 다섯(226)은 그보다 길어 칸 안에서 스크롤된다.
+        // 같이 하기 칸 = 남은 자리(202), 줄 여섯(272)은 그보다 길어 칸 안에서 스크롤된다.
         #expect(RSB.layout.sidebarDuelViewportHeight == 202)
-        #expect(RSB.layout.sidebarDuelRowsHeight == 226)
+        #expect(RSB.layout.sidebarDuelRowsHeight == 272)
         #expect(RSB.layout.sidebarDuelScrolls)
         #expect(RSB.layout.sidebarContentHeight == inner, "사이드바 합 \(RSB.layout.sidebarContentHeight) 이 안쪽 높이와 다르다")
         #expect(RSB.viewportBottom == RSB.innerBottom)
@@ -236,9 +240,12 @@ struct V03xxReversiSidebarTests {
         #expect(RSB.duelTile(3).maxY <= RSB.viewportBottom - RSB.layout.sidebarDuelFadeHeight)
         let fifthRowTop = RSB.duelRowsTop + 4 * (RSB.layout.sidebarRowHeight + RSB.layout.sidebarRowSpacing)
         #expect(fifthRowTop < RSB.viewportBottom && fifthRowTop + RSB.layout.sidebarRowHeight > RSB.viewportBottom)
-        // 끝까지 내리면(꼬리 = 흐림 높이) 다섯째 문 전체가 흐림 위에 선다.
-        #expect(RSB.maxScroll == 40)
-        #expect(fifthRowTop - RSB.maxScroll + RSB.layout.sidebarRowHeight == RSB.viewportBottom - RSB.layout.sidebarDuelFadeHeight)
+        // 끝까지 내리면(꼬리 = 흐림 높이) 마지막(여섯째) 문 전체가 흐림 위에 선다. 다섯째(아잉 뒤집기)는 그보다 46 위다.
+        #expect(RSB.maxScroll == 86)
+        let lastRowTop = fifthRowTop + RSB.layout.sidebarRowHeight + RSB.layout.sidebarRowSpacing
+        #expect(lastRowTop - RSB.maxScroll + RSB.layout.sidebarRowHeight == RSB.viewportBottom - RSB.layout.sidebarDuelFadeHeight)
+        // 아잉 뒤집기 신청이면 그 줄만 칸 바닥까지 최소로 굴린다(마지막 문이 아니라 꼬리까지 내리지 않는다).
+        #expect(RSB.reversiRevealScroll == 24)
         #expect(RSB.layout.sidebarDuelFadeFloor > 0, "흐림이 바닥을 다 지우면 접힌 문의 신청 점까지 사라진다")
 
         // ★ 기준선: 같은 줄(42 · 4)로 스크롤 없이 다섯 줄을 세우면 넘친다 — C 를 둔 이유.
@@ -332,14 +339,14 @@ struct V03xxReversiSidebarTests {
         deliver(MiniGameDuelInvites(gomoku: true))
         #expect(rsbScrolled(scrollView) < 0.5, "보이는 문의 신청에 칸이 굴렀다(\(rsbScrolled(scrollView)))")
 
-        // 아잉 뒤집기 신청 — 끝까지 굴러 다섯째 문과 점이 흐림 위에 선다.
+        // 아잉 뒤집기 신청 — 다섯째 문 줄이 칸 안에 들어올 만큼 굴러 점이 보인다(여섯째 아잉 마작 문이 뒤에 있어 끝까지는 아니다).
         deliver(MiniGameDuelInvites(gomoku: true, reversi: true))
         print("[사이드바] 아잉 뒤집기 신청 뒤 굴린 거리 \(rsbScrolled(scrollView))")
-        #expect(abs(rsbScrolled(scrollView) - RSB.maxScroll) < 0.5, "아잉 뒤집기 신청이 왔는데 칸이 다섯째 문까지 안 굴렀다")
+        #expect(abs(rsbScrolled(scrollView) - RSB.reversiRevealScroll) < 0.5, "아잉 뒤집기 신청이 왔는데 칸이 다섯째 문까지 안 굴렀다")
         let lit = try rsbHostBitmap(host)
         rsbSave(lit, "minigame-sidebar-reversi-invite-dot")
-        let fifth = RSB.duelTile(4, scrolled: RSB.maxScroll).insetBy(dx: -6, dy: -6)
-        let fourth = RSB.duelTile(3, scrolled: RSB.maxScroll).insetBy(dx: -6, dy: -6)
+        let fifth = RSB.duelTile(4, scrolled: RSB.reversiRevealScroll).insetBy(dx: -6, dy: -6)
+        let fourth = RSB.duelTile(3, scrolled: RSB.reversiRevealScroll).insetBy(dx: -6, dy: -6)
         let litFifth = rsbInk(lit, in: fifth, rsbRed).count
         print("[사이드바] 다섯째 문 점 \(litFifth)px")
         #expect(litFifth > 20, "아잉 뒤집기 신청이 있는데 다섯째 문에 점이 안 보인다")
@@ -350,7 +357,7 @@ struct V03xxReversiSidebarTests {
                                         width: RSB.layout.sidebarWidth, height: RSB.windowHeight)
         defer { window2.contentView = nil; window2.close() }
         let scrollView2 = try #require(rsbFirstSubview(of: host2, NSScrollView.self))
-        #expect(abs(rsbScrolled(scrollView2) - RSB.maxScroll) < 0.5, "신청이 있는 채로 열었는데 다섯째 문이 접힘 아래에 있다")
+        #expect(abs(rsbScrolled(scrollView2) - RSB.reversiRevealScroll) < 0.5, "신청이 있는 채로 열었는데 다섯째 문이 접힘 아래에 있다")
     }
 
     /// 없으면: 저절로 굴리기가 아무 변화에나(점이 내려갈 때도) 굴러가거나, 새 점이 둘이면 위쪽을 골라 접힌 문을 못 보여 준다.
@@ -393,11 +400,12 @@ struct V03xxReversiSidebarTests {
             "MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() } ",
             "MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() } ",
             "MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() } ",
-            "MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() } }",
+            "MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() } ",
+            "MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() } }",
         ].joined()
-        #expect(panel.contains(order), "같이 하기 묶음이 오목 · 체스 · 테트리스 · 큐브 · 아잉 뒤집기 순이 아니다")
+        #expect(panel.contains(order), "같이 하기 묶음이 오목 · 체스 · 테트리스 · 큐브 · 아잉 뒤집기 · 아잉 마작 순이 아니다")
         // 줄 순서와 저절로 굴리기의 자리표 순서가 같은 목록이다(선언은 합칠 때 다른 파일로 옮겨 가므로 글자가 아니라 값으로 잰다).
-        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi], "문 목록 순서가 줄 순서와 다르다")
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong], "문 목록 순서가 줄 순서와 다르다")
 
         let alone = CGRect(x: 6, y: (RSB.layout.sidebarRowHeight - RSB.layout.sidebarIconSize) / 2,
                            width: RSB.layout.sidebarIconSize, height: RSB.layout.sidebarIconSize)

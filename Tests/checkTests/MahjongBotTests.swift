@@ -5,6 +5,7 @@ import Testing
 // 아잉 마작 연습 봇(갈래 B) 시험 — SPEC §4.3 · §6.3 B 줄 · UX §3.6.
 // ① E 엔진 자체 대국(봇 넷)에서 뽑은 결정점 1만 개 이상: 결정 ⊂ myDecision · 엔진이 받는다 · 종류별 표본 하한
 //    (울기 창 ≥ 1,000 · 리치 중 ≥ 300 · 쿠이카에 직후 ≥ 100 · 남은 패 0(해저·하저) ≥ 50) — 조각마다 몫을 채울 때까지 둔다.
+//    (T) 기본 게이트는 조각 하나씩만(결정 ⊂ myDecision · 조각 몫), 조각 전부와 합 하한은 `MAHJONG_BOT_SLOW=1`.
 // ② 봇 샹텐 셈 = R `MahjongHand.shanten`(무작위 손) ③ 결정 단위 규칙(손 픽스처, 결과가 갈리는 기준선과 짝)
 // ④ 느린 시계 주입 — 마감을 넘기면 2단 보기를 버리고 1단 결과 ⑤ SLOW(`MAHJONG_BOT_SLOW=1`): 봇 넷 동풍전 수백 판 끝까지 ·
 //    '효율만 봇' 대비 듀플리케이트 평균 등수 · 실제 시계 결정 시간.
@@ -223,6 +224,12 @@ final class MahjongBotLedger: @unchecked Sendable {
     static var ledgerCount: Int { chunks + riichiChunks }
     static let lastTileChunks = 50
     static let lastTileQuota = MahjongBotPlay.Tally(lastTile: 1)
+    /// 기본 게이트 표본(T — 게이트는 시험 하나 100ms 미만 · 합계도 작게): 조각 하나씩. 전부(170 · 30 · 50)와 합 하한(1만 · 울기 1,000 ·
+    /// 리치 중 300 · 쿠이카에 100)은 `MAHJONG_BOT_SLOW=1` 에서만 돈다(11-03 B 실측: 전부 11.5초).
+    static let gateChunks = 1
+    static var naturalRange: Range<Int> { MahjongBotSlowTests.slow ? 0..<chunks : 0..<gateChunks }
+    static var riichiRange: Range<Int> { MahjongBotSlowTests.slow ? 0..<riichiChunks : 0..<gateChunks }
+    static var lastTileRange: Range<Int> { MahjongBotSlowTests.slow ? 0..<lastTileChunks : 0..<gateChunks }
     static let maxHandsPerChunk = 8
 
     /// 조각 n: 판 모양을 돌려 가며 국을 이어 두어 몫을 채운다(국 상한 8 · 판 상한 4).
@@ -253,6 +260,7 @@ final class MahjongBotLedger: @unchecked Sendable {
 
     /// 조각 합 단언 — 모든 조각(자연 + 리치)이 모인 순간 한 번.
     static func checkLedger(_ key: String, _ total: MahjongBotPlay.Tally) {
+        guard MahjongBotSlowTests.slow else { return }   // 합 하한은 조각 전부가 도는 SLOW 에서만
         guard let all = MahjongBotLedger.shared.add(key, total, of: ledgerCount) else { return }
         #expect(all.decisions >= 10_000, "합: \(all.decisions)")
         #expect(all.claim >= 1_000, "합: \(all.claim)")
@@ -286,7 +294,7 @@ final class MahjongBotLedger: @unchecked Sendable {
     // 없으면: 봇이 myDecision 밖의 패·동작(쿠이카에 패 · 리치 중 손패 · 없는 울기 조합 · 낡은 창 번호)을 골라도 손 픽스처 몇 개로는
     // 안 보이고, 엔진이 거절해 연습판이 멎는다. 조각마다 울기 창·리치 중·쿠이카에 직후 몫을 채울 때까지 국을 이어 둔다.
     // 조각이 모두 모이면(마지막으로 끝난 조각이) 리치 중 · 쿠이카에 직후(치·퐁 직후 차례 — 뽑은 패 없음 · 막힌 종류 빠짐) 합의 하한을 잰다.
-    @Test(arguments: 0..<MahjongBotSelfPlayTests.chunks)
+    @Test(arguments: MahjongBotSelfPlayTests.naturalRange)
     func decisionsStayInsideMyDecision(_ n: Int) {
         let total = Self.chunk(n)
         #expect(total.illegal.isEmpty, "\(total.illegal.prefix(3))")
@@ -295,7 +303,7 @@ final class MahjongBotLedger: @unchecked Sendable {
     }
 
     // 없으면: 리치 중 차례(쯔모기리 · 대기 불변 안깡만)에서 봇이 손패를 버리거나 대기가 바뀌는 안깡을 골라도 모른다.
-    @Test(arguments: 0..<MahjongBotSelfPlayTests.riichiChunks)
+    @Test(arguments: MahjongBotSelfPlayTests.riichiRange)
     func riichiDecisionsStayInside(_ n: Int) {
         let total = Self.riichiChunk(n)
         #expect(total.illegal.isEmpty, "\(total.illegal.prefix(3))")
@@ -304,7 +312,7 @@ final class MahjongBotLedger: @unchecked Sendable {
 
     // 없으면: 해저 차례·하저 창(남은 패 0)에서 봇이 리치·깡·울기처럼 그때 못 하는 것을 골라도 자연 대국에서는 판 100번에 한두 번이라
     // 표본에 안 든다.
-    @Test(arguments: 0..<MahjongBotSelfPlayTests.lastTileChunks)
+    @Test(arguments: MahjongBotSelfPlayTests.lastTileRange)
     func lastTileDecisionsStayInside(_ n: Int) {
         let total = Self.lastTileChunk(n)
         #expect(total.illegal.isEmpty, "\(total.illegal.prefix(3))")

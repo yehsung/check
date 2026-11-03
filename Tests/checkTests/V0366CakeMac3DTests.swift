@@ -537,10 +537,12 @@ import Testing
     func drawableAndProtocolFour() throws {
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(CharacterCatalog.cakeStrawberryAingID) && drawable.contains(CharacterCatalog.cakeChocoAingID), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.cakeProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == 4)
+        // v0.3.74: 이슬 그림까지 실린 빌드는 누적으로 5 다(케이크의 몫은 "4 이상" — 5 의 기준선은 V0374IsulCoreTests).
+        let expected = V0374IsulCoreTests.macIsulArtInSourceTree ? ShopWire.isulProtocol : ShopWire.cakeProtocol
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == expected)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == expected)
         let store = V0317ShopTests.plainStore()
-        #expect(store.shopProtocolVersion == 4 && store.supportsCakeGift)
+        #expect(store.shopProtocolVersion == expected && store.shopProtocolVersion >= ShopWire.cakeProtocol && store.supportsCakeGift)
         for kind in CakeAingFinish.Kind.allCases {
             #expect(CakeAingFinish.isDrawable(kind))
             #expect(CakeAingFinish.requiredResourceNames(kind) == ["\(kind.characterID)-neutral", "\(kind.characterID)-negative", "aing_rainbow-shade"])

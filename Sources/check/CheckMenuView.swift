@@ -87,7 +87,8 @@ struct CheckMenuView: View {
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
         /// 뜨는 안내라 밀리면 그 주를 통째로 잃는 반면, 이 배너는 본인이 확인할 때까지 남기 때문이다.
         case feedbackReply
-        /// 생일 선물이 도착했다(v0.3.66 — 케이크 아잉이). 축하 창을 고르지 않고 닫은 사람에게 **수령할 때까지** 남는 '다시 열기' 카드다
+        /// 선물이 도착했다(v0.3.66 생일 — 케이크 아잉이 · v0.3.74 술 한잔 — 이슬 아잉이, 한 번에 하나). 받는 창을 받지 않고 닫은 사람에게
+        /// **수령할 때까지** 남는 '다시 열기' 카드다
         /// (닫기 X 가 없다 — 받는 것이 끝이다). 답장보다 덜 급하고(사람이 기다리지 않는다) 새 버전 안내보다 먼저다 — 업데이트는 미뤄 두는
         /// 사람이 많아, 뒤에 두면 그동안 카드가 안 선다(축하 창은 실행당 한 번만 스스로 뜬다). 한 줄 배너라 높이는 회고와 같다.
         case cakeGift
@@ -322,7 +323,7 @@ struct CheckMenuView: View {
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
         if store.isSignedIn, store.showsFeedbackReplyBanner { return .feedbackReply }
-        // 받을 생일 선물(v0.3.66). 판정은 스토어가 끝내 둔 값(열린 선물)을 읽기만 한다.
+        // 받을 선물(v0.3.66 생일 · v0.3.74 술 한잔). 판정은 스토어가 끝내 둔 값(열린 선물)을 읽기만 한다.
         if store.isSignedIn, store.showsCakeGiftCard { return .cakeGift }
         if showsUpdateBanner { return .update }
         // 공지는 **업데이트 다음**이다(TopBanner.appNotice 주석). 로그인한 사람에게만 — 공지는 이미 쓰는 사람에게 하는
@@ -565,13 +566,14 @@ struct CheckMenuView: View {
                     onDismiss: { store.markFeedbackReplyBannerSeen() }
                 )
             }
-            // 생일 선물 '다시 열기' 카드(v0.3.66). 축하 창을 고르지 않고 닫았으면 **받을 때까지** 여기 남는다 — 그래서 닫기(X)가 없다.
-            // [고르기]는 축하 창을 다시 띄운다(창 먼저, 팝오버 나중 — `openCakeGiftWindow`).
+            // 선물 '다시 열기' 카드(v0.3.66 생일 · v0.3.74 술 한잔). 받는 창을 받지 않고 닫았으면 **받을 때까지** 여기 남는다 — 그래서 닫기(X)가 없다.
+            // [고르기] · [받기]는 받는 창을 다시 띄운다(창 먼저, 팝오버 나중 — `openCakeGiftWindow`). 글자 · 기호는 열린 선물의 종류에서
+            // (`cakeGiftCardCopy` — `CakeGiftText` · `DrinkGiftText`).
             if topBanner == .cakeGift {
                 InlineActionBanner(
-                    icon: "gift.fill",
-                    title: CakeGiftText.reopenTitle,
-                    actionTitle: CakeGiftText.reopenButton,
+                    icon: (store.cakeGiftOffer?.kind ?? .birthday).reopenSymbolName,
+                    title: store.cakeGiftCardCopy.reopenTitle,
+                    actionTitle: store.cakeGiftCardCopy.reopenButton,
                     tint: CheckTheme.accent,
                     action: { store.openCakeGiftWindow() }
                 )

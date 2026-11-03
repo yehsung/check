@@ -363,8 +363,13 @@ struct V0343RobotShopProtocolTests {
         let cakesDrawable = ShopWire.cakeCharacterIDs.allSatisfy(fullDrawable.contains)
         #expect(cakesDrawable == ShopWire.cakeCharacterIDs.allSatisfy(V0366CakeCoreTests.macCakePortraitsInSourceTree),
                 "케이크 그림 판정이 소스 트리와 갈렸다")
+        // v0.3.74: 이슬 아잉이도 같은 내장 · 앱 번들 그림이라, 다섯(케이크 둘 포함)에 이슬까지 실린 빌드는 누적으로 5 다.
+        let isulDrawable = fullDrawable.contains(CharacterCatalog.isulAingID)
+        #expect(isulDrawable == V0374IsulCoreTests.macIsulArtInSourceTree, "이슬 그림 판정이 소스 트리와 갈렸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable)
-                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? ShopWire.cakeProtocol : ShopWire.rainbowProtocol) : ShopWire.goldProtocol)
+                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? ShopWire.isulProtocol : ShopWire.cakeProtocol)
+                                                                     : ShopWire.rainbowProtocol)
+                                                    : ShopWire.goldProtocol)
                                  : ShopWire.robotProtocol))
 
         // ③ 한 장만 빼도 0 이다(초상 한쪽·아틀라스 각각). 세 파일이 전부 요구되는지 낱개로 잰다.

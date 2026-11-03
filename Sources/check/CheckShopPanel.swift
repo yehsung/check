@@ -182,8 +182,15 @@ enum ShopText {
     /// 하단 바에 [구매하기] 를 세우는가. 생일 선물 전용 잠긴 칸(케이크 아잉이 — v0.3.66)을 눌러 바가 **얻는 길**(`CakeGiftText.lockedHint`)을
     /// 말하는 동안은 세우지 않는다 — 루비로 살 수 없는 것을 말하는 줄 옆에 흐린 [구매하기] 가 서면 "지금은 못 산다(루비가 모자라다)"로
     /// 읽힌다(폰 검토의 흐린 '사기' 단추와 같은 결함). 그 자리는 안내가 두 줄로 쓴다. 그 밖(아무것도 안 고름 · 고름 · 다른 안내)은 그대로다.
+    /// (v0.3.74) 술 한잔 선물 전용(이슬 아잉이)의 잠긴 칸도 같다 — 안내가 **어느 선물 종류의** 얻는 길이든(`CharacterGiftKind.allCases`).
     static func barShowsBuyButton(selection: ShopSelection?, notice: String?) -> Bool {
-        !(selection == nil && notice == CakeGiftText.lockedHint)
+        !(selection == nil && isGiftLockedHint(notice))
+    }
+
+    /// 이 안내가 선물 전용 잠긴 칸의 얻는 길인가(생일 · 술 한잔 — 종류의 문구 묶음 그대로).
+    static func isGiftLockedHint(_ notice: String?) -> Bool {
+        guard let notice else { return false }
+        return CharacterGiftKind.allCases.contains { $0.copy.lockedHint == notice }
     }
 
     /// 바의 둘째 줄. **언제나 문자열을 돌려준다**(빈 문자열이어도) — 높이를 상태에 안 맡긴다.
@@ -387,12 +394,13 @@ struct CheckShopPanel: View {
                     store.confirmShopPurchase()
                 }
             } else {
-                // 생일 선물 전용 잠긴 칸을 눌렀다(v0.3.66) — 살 수 없으므로 [구매하기] · 값을 세우지 않고, 얻는 길만 두 줄로 말한다
+                // 선물 전용 잠긴 칸을 눌렀다(v0.3.66 생일 · v0.3.74 술 한잔) — 살 수 없으므로 [구매하기] · 값을 세우지 않고, 얻는 길만 두 줄로 말한다
                 // (한 줄이면 "루비나 뽑기로…" 에서 잘린다). 두 줄 caption2 는 바의 고정 높이 안에 든다 — 높이는 그대로다.
+                // 글자는 스토어가 고른 그 종류의 안내다(`selectShopItem` → `WorkTimerStore.giftCopy(for:)`).
                 Image(systemName: "lock.fill")
                     .font(.system(size: 9, weight: .bold))
                     .foregroundStyle(CheckTheme.secondaryText)
-                Text(CakeGiftText.lockedHint)
+                Text(store.shopNotice ?? CharacterGiftCopy.birthday.lockedHint)
                     .font(.caption2)
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(2)
@@ -682,6 +690,8 @@ struct CheckShopPanel: View {
         let line = ShopCardLine.of(id: entry.id, owned: owned, rows: store.shopCharacters)
         let gachaOnly = line == .gachaOnly
         let giftLocked = line == .giftLocked
+        // 잠긴 칸의 글자는 그 캐릭터를 주는 선물 종류의 묶음(케이크 → 생일 · 이슬 → 술 한잔 — v0.3.74).
+        let giftCopy = WorkTimerStore.giftCopy(for: entry.id)
         let affordable = !giftLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
@@ -700,7 +710,7 @@ struct CheckShopPanel: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 if giftLocked {
-                    ShopGiftLockedCaption()
+                    ShopGiftLockedCaption(copy: giftCopy)
                 } else if gachaOnly {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
                     // 문구는 코어 한 벌(`GachaText.gachaOnlyPrice` — 확률표 금 줄 · 폰과 같은 글자): "뽑기 또는 조각 20개", 교환값을 모르면
@@ -749,8 +759,8 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(line.tooltip(name: name, owned: owned))
-        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned))
+        .checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy))
+        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned, gift: giftCopy))
     }
 }
 
@@ -769,35 +779,37 @@ enum ShopCardLine: Equatable, Sendable {
         return .price
     }
 
-    /// 말풍선 — 얻는 길을 말한다(잠긴 칸 · 뽑기 전용에 "사기"는 거짓이다).
-    func tooltip(name: String, owned: Bool) -> String {
+    /// 말풍선 — 얻는 길을 말한다(잠긴 칸 · 뽑기 전용에 "사기"는 거짓이다). `gift` = 잠긴 칸을 주는 선물 종류의 문구(기본 생일 — 0.3.66).
+    func tooltip(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday) -> String {
         if owned { return "\(name) — 보유 중" }
         switch self {
-        case .giftLocked: return "\(name) — \(CakeGiftText.lockedHint)"
+        case .giftLocked: return "\(name) — \(gift.lockedHint)"
         case .gachaOnly: return "\(name) — \(GachaText.gachaOnlyHint)"
         case .price: return "\(name) 사기"
         }
     }
 
     /// 읽기 이름.
-    func accessibilityLabel(name: String, owned: Bool) -> String {
+    func accessibilityLabel(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday) -> String {
         if owned { return "\(name) 보유 중" }
         switch self {
-        case .giftLocked: return "\(name) 잠김, \(CakeGiftText.lockedCaption) — \(CakeGiftText.lockedHint)"
+        case .giftLocked: return "\(name) 잠김, \(gift.lockedCaption) — \(gift.lockedHint)"
         case .gachaOnly: return "\(name), \(GachaText.gachaOnlyHint)"
         case .price: return "\(name) 사기"
         }
     }
 }
 
-/// 상점 잠긴 칸(생일 선물 전용 — v0.3.66 케이크 아잉이)의 아래 줄: 자물쇠 + `CakeGiftText.lockedCaption`. 가격 · 사기 단추 자리를 대신한다.
-/// 카드 높이(112)는 그대로다(가격 줄 한 줄 자리에 든다).
+/// 상점 잠긴 칸(선물 전용 — v0.3.66 케이크 아잉이 · v0.3.74 이슬 아잉이)의 아래 줄: 자물쇠 + 그 선물 종류의 `lockedCaption`
+/// ('생일 선물 전용' · '술 한잔 선물 전용'). 가격 · 사기 단추 자리를 대신한다. 카드 높이(112)는 그대로다(가격 줄 한 줄 자리에 든다).
 struct ShopGiftLockedCaption: View {
+    var copy: CharacterGiftCopy = .birthday
+
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "lock.fill")
                 .font(.system(size: 8, weight: .bold))
-            Text(CakeGiftText.lockedCaption)
+            Text(copy.lockedCaption)
                 .font(.caption2.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

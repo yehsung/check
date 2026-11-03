@@ -681,7 +681,9 @@ struct V0325TooltipTests {
             // v0.3.54: 루비로 안 파는 황금 아잉이 카드는 "사기" 대신 얻는 길(`GachaText.gachaOnlyHint`)을 말한다.
             // v0.3.66: 생일 선물 전용(케이크) 잠긴 칸이 셋째 갈래로 붙어 문구가 순수 판정 `ShopCardLine.tooltip` 으로 옮겼다 —
             // 글자 그대로("— 보유 중" · "— 뽑기…" · "사기")는 V0366CakeMacShopTests 가 값으로 잰다.
-            ("CheckShopPanel.swift", ".checkTooltip(line.tooltip(name: name, owned: owned))"),
+            // v0.3.74: 잠긴 칸의 얻는 길이 선물 종류마다 다르다(생일 · 술 한잔) — 카드가 그 종류의 문구 묶음(`gift:`)을 넘긴다
+            // (글자는 V0374IsulMacGiftStoreTests 가 값으로 잰다).
+            ("CheckShopPanel.swift", ".checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy))"),
             ("CheckSettingsView.swift", #".checkTooltip(store.isDisplayNameLocked ? "일주일에 한 번만 바꿀 수 있어요" : "별명 저장")"#),
             ("CheckSettingsView.swift", #".checkTooltip("\(WorkShortcut.default.displayString) 로 되돌려요")"#),
             ("CheckTodoBoardView.swift", ".checkTooltip(item.isDone ? TodoBoardStrings.markUndone : TodoBoardStrings.markDone)"),

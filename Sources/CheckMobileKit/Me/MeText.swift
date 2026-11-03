@@ -490,6 +490,8 @@ package enum MeText {
 
     /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 아잉 큐브 줄만 비운다 — 서버가 큐브 없는 옛 폰을 위해 '맥에서 할 수 있어요'를 싣는데,
     /// 이 판의 폰은 큐브를 할 수 있어 거짓이다(서버 글자를 바꾸면 옛 폰에서 거짓이 된다).
+    /// 아잉 뒤집기(`reversi`) 줄은 서버 글자를 **그대로 둔다** — 이 판의 폰에는 그 게임이 없어 '맥에서 할 수 있어요'가 참이다.
+    /// 폰에 아잉 뒤집기를 넣는 판에서 여기에 `reversi` 를 더한다(큐브 때와 같은 자리).
     package static func dailyMissionCaption(game: String, detail: String) -> String {
         game == "rummy" ? "" : detail
     }
@@ -519,6 +521,11 @@ package enum MeText {
             //    시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다 — **없는 이름은 런타임에 경고 없이 빈 칸**
             //    이 된다(그 함정은 `MiniGameKind.icon` 주석에 있다).
             ("rummy", "cube.fill"),
+            // '아잉 뒤집기'(리버시 — 서버 `daily_reversi`, sort 80). 이 판의 폰에는 게임이 없지만 서버는 1.0.16 폰에도 이 줄을
+            // 내린다(20261108200000 — 모든 플랫폼). 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른 그림이 된다(위 ①).
+            // 맥 `ReversiEntryIcon.symbol`(반은 흑, 반은 백인 원 — 뒤집히는 돌)과 같은 이름이다. 폰 설정의 화면 모드(`.system`)가
+            // 이미 쓰는 이름이라 이 앱의 iOS 바닥에서 산다(시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다).
+            ("reversi", "circle.lefthalf.filled"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }

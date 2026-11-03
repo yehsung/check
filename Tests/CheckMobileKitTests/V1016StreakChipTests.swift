@@ -6,7 +6,8 @@ import Testing
 
 // MARK: - 연속 근무 칩 '연속 N일 근무!' — 폰 1.0.16
 //
-// 값은 `achievements_status` 응답의 새 최상위 키 `streak_days`(서버 초안 — 저장소 밖, 적용 전). 키가 있을 때만 칩을 그려서 서버와 폰의 출시 순서가 자유롭다.
+// 값은 `achievements_status` 응답의 최상위 키 `streak_days`(supabase/migrations/20261106150000 — 11-02 운영 적용). 키가 있을 때만 칩을 그려서
+// 서버와 폰의 출시 순서가 자유로웠고, 키가 없는 옛 서버에서도 칩만 숨는다. 데모 픽스처 값은 `MeAchievementsFixtureContractTests` §1b 가 잰다.
 // 미션 줄의 `progress` 로 대신하면 안 된다: target 에서 잘리고 달성 뒤 target 에 고정이라 30일을 넘긴 사람은 2일째여도 30 이다.
 @MainActor
 @Suite(.serialized) struct V1016StreakChipTests {

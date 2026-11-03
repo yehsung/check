@@ -1,7 +1,9 @@
 {
   "__note": [
     "daily_mission_claim(p_key='daily_gomoku') — 그 줄 하나만(루비 5). 타이밍 바는 아직 [받기] 로 남는다(받을 것 1 · 5).",
-    "잔량 120 + 5 = 125."
+    "잔량 120 + 5 = 125.",
+    "daily 는 서버 정의표 아홉 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 포함 — 20261108200000).",
+    "streak_days 17 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 일일 받기 응답도 같은 모양이다(상태 조회와 같은 값)."
   ],
   "launch_at_ms": 1789398000000,
   "missions": [
@@ -249,6 +251,19 @@
         "sort": 30
       },
       {
+        "key": "daily_crossy",
+        "game": "crossy",
+        "title": "길건너 아잉이 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 35
+      },
+      {
         "key": "daily_gomoku",
         "game": "gomoku",
         "title": "1:1 오목 한 판 두기",
@@ -286,6 +301,32 @@
         "claimed": false,
         "claimed_at_ms": null,
         "sort": 60
+      },
+      {
+        "key": "daily_rummy",
+        "game": "rummy",
+        "title": "아잉 큐브 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 70
+      },
+      {
+        "key": "daily_reversi",
+        "game": "reversi",
+        "title": "아잉 뒤집기 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 80
       }
     ],
     "claimable_count": 1,
@@ -297,5 +338,6 @@
       "title": "1:1 오목 한 판 두기",
       "reward": 5
     }
-  ]
+  ],
+  "streak_days": 17
 }

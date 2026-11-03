@@ -5,7 +5,9 @@
     "팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.",
     "claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).",
     "값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).",
-    "시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST."
+    "시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.",
+    "daily 는 서버 정의표 아홉 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 포함 — 20261108200000).",
+    "streak_days 17 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 안 받은 연속 줄 streak30 의 진행 17/30 과 같다(달성한 streak14 는 14 에 고정)."
   ],
   "launch_at_ms": 1789398000000,
   "missions": [
@@ -253,6 +255,19 @@
         "sort": 30
       },
       {
+        "key": "daily_crossy",
+        "game": "crossy",
+        "title": "길건너 아잉이 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 35
+      },
+      {
         "key": "daily_gomoku",
         "game": "gomoku",
         "title": "1:1 오목 한 판 두기",
@@ -303,9 +318,23 @@
         "claimed": false,
         "claimed_at_ms": null,
         "sort": 70
+      },
+      {
+        "key": "daily_reversi",
+        "game": "reversi",
+        "title": "아잉 뒤집기 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 80
       }
     ],
     "claimable_count": 2,
     "claimable_ruby": 10
-  }
+  },
+  "streak_days": 17
 }

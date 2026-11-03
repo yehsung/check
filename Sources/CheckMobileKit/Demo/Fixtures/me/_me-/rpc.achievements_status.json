@@ -3,7 +3,9 @@
     "achievements_status() — **갓 가입**(장면 _me- · 라우트 `me/` 또는 `me/missions/fresh`). 달성 0 · 받을 것 0 · 진행 전부 0.",
     "기기 등록이 아직 안 된 창(맥에서 만든 계정이 폰에 처음 들어온 순간)이라 phone_login 도 0 이다 — 정산이 적고 나면 그 줄이 [받기]가 된다.",
     "claimed_at_ms · achieved_at_ms 는 **null 이다**(달성 행이 없다) — 숫자를 넣으면 관대한 디코더가 '받았다'로 읽는다.",
-    "잔량 12 는 같은 장면의 rpc.shop_state.json 과 같은 값이다(두 값이 갈리면 스크린샷 알약이 깜박인다)."
+    "잔량 12 는 같은 장면의 rpc.shop_state.json 과 같은 값이다(두 값이 갈리면 스크린샷 알약이 깜박인다).",
+    "daily 는 서버 정의표 아홉 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 포함 — 20261108200000).",
+    "streak_days 0 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 근무 기록이 없어도 서버는 0 을 준다(achievements__eval 의 coalesce) — null 이 아니다."
   ],
   "launch_at_ms": 1789398000000,
   "missions": [
@@ -251,6 +253,19 @@
         "sort": 30
       },
       {
+        "key": "daily_crossy",
+        "game": "crossy",
+        "title": "길건너 아잉이 한 판 하기",
+        "detail": "",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 35
+      },
+      {
         "key": "daily_gomoku",
         "game": "gomoku",
         "title": "1:1 오목 한 판 두기",
@@ -288,9 +303,36 @@
         "claimed": false,
         "claimed_at_ms": null,
         "sort": 60
+      },
+      {
+        "key": "daily_rummy",
+        "game": "rummy",
+        "title": "아잉 큐브 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 70
+      },
+      {
+        "key": "daily_reversi",
+        "game": "reversi",
+        "title": "아잉 뒤집기 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 0,
+        "achieved": false,
+        "claimed": false,
+        "claimed_at_ms": null,
+        "sort": 80
       }
     ],
     "claimable_count": 0,
     "claimable_ruby": 0
-  }
+  },
+  "streak_days": 0
 }

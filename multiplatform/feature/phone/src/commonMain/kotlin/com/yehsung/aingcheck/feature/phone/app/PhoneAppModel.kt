@@ -35,6 +35,7 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.setHiddenPeers
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
@@ -119,6 +120,12 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
 
     /** 아잉 큐브(2~4인). 화면은 다음 단계 — 지금은 초대 배지 · 한 사람 한 판 · 확성기 미룸 · 실시간까지 잇는다. */
     val rummy: RummyStore
+
+    /**
+     * 아잉 뒤집기(판 7 — 대표 답 #d_DdwzmxPClGqk "다 넣기 (루비 걸기 포함)"). **떼어 내기 깃발**(`AppConfig.reversiEnabled`)이 꺼지면 null 이다 — 스토어를
+     * 만들지 않으니 요청 · 실시간 가지 · 카드 · 배지 · 입구 막기 · 미션 꼬리 숨김이 전부 판 7 이전과 같다(PhoneReversiWiringTest 가 잰다).
+     */
+    val reversi: ReversiStore?
     val characters: AppUserCharacterStore
     val push: PhonePushCoordinator
     val now: NowStore
@@ -187,6 +194,19 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         rummy.rackDefaults = env.prefs
         rummy.engagedDefaults = env.prefs
         rummy.rankingEnabled = true
+        // 아잉 뒤집기 — 호스트는 위 넷과 같은 하나(루비 미러 한 칸 · 같은 판돈 깃발 문). 떼어 내기 깃발이 꺼지면 만들지 않는다.
+        reversi = if (env.appConfig.reversiEnabled) ReversiStore(scope, gomokuHost) else null
+        reversi?.let { store ->
+            // 순위·관전의 **주 스위치 둘**(코어 기본 false — 따로 두는 것이 코어 규약이다). 이 두 줄이 없으면 `reversi_ranking`·`reversi_watch` 가 한 번도 안 나간다 —
+            // "기본값이니 지워도 되겠지"로 지우지 마라(PhoneReversiWiringTest 가 요청 건수로 잰다).
+            store.rankingEnabled = true
+            store.spectatorFeaturesEnabled = true
+            // 실시간 'reversi' 초인종을 받을 자리. 빠지면 받은 신청이 다음 허브 진입(30초 스로틀)까지 안 서고, 조인 따라잡기도 안 돈다.
+            realtime.reversi = object : RealtimeSignalReceiver {
+                override fun handleSignal() = store.handleSignal()
+                override fun realtimeDidJoin() = store.realtimeDidJoin()
+            }
+        }
         realtime.gomoku = object : RealtimeSignalReceiver {
             override fun handleSignal() = gomoku.handleSignal()
             override fun realtimeDidJoin() = gomoku.realtimeDidJoin()
@@ -207,6 +227,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         context.chess = chess
         context.tetris = tetris
         context.rummy = rummy
+        context.reversi = reversi
         context.characters = characters
 
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
@@ -267,7 +288,14 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         now.onDirectoryApplied = { messages.settleFocusNotices() }
         messages.router = router
         // 차단은 메시지·찌르기·게임을 **함께** 막는 관계다 — 차단한 사람이 큐브 로비·공개 방·받은 초대에 남지 않게(맥 WorkTimerStore `rummy.setHiddenPeers`). 스토어는 UUID 로 받는다.
-        messages.onHiddenBlockedPeersChange = { ids -> rummy.setHiddenPeers(ids.mapNotNull { SwiftUUID.parse(it) }.toSet()) }
+        // 아잉 뒤집기도 같은 관계다(맥 WorkTimerStore `reversi.hiddenPeerIDs = blockHiddenPeerIDs`) — 차단한 사람이 로비·받은 신청·탭 배지에 남지 않게. 코어는 소문자 uuid.
+        messages.onHiddenBlockedPeersChange = { ids ->
+            rummy.setHiddenPeers(ids.mapNotNull { SwiftUUID.parse(it) }.toSet())
+            reversi?.let { store ->
+                val hidden = ids.map { it.lowercase() }.toSet()
+                if (store.hiddenPeerIDs != hidden) store.hiddenPeerIDs = hidden
+            }
+        }
         // 메시지 탭이 실시간 신호를 받는 자리(Swift 는 MessagesStore.init 이 등록했다 — Kotlin 은 조립이 잇는다). `.drain` 은 take_pokes 가 아니라
         // 이 조회다(C§4 #15).
         realtime.onMessageActivity { messages.realtimeMessageActivity() }
@@ -279,6 +307,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         chess.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_CHESS) }
         tetris.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_TETRIS_DUEL) }
         rummy.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_RUMMY) }
+        // 아잉 뒤집기 — 서버 `daily_reversi` 의 game 값. 코어는 **1:1 판에서만** 부른다(AI 연습은 미션을 채우지 않는다 — 서버가 안 센다).
+        reversi?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_REVERSI) }
 
         session.onSignedIn = { sessionDidSignIn() }
         session.onSignedOut = { sessionDidSignOut() }
@@ -415,6 +445,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         tetris.reset()
         // 아잉 큐브도 같은 사슬이다 — 빠뜨리면 다음 사람이 앞 계정의 방·판·랙·초대를 보고, 앞 판의 하트비트가 새 토큰으로 나간다.
         rummy.reset()
+        // 아잉 뒤집기도 같은 사슬이다 — 안 넣으면 다음 사람의 로비에 앞 사람의 판·신청·순위·루비가 남고, 앞 계정의 신호 재조회가 다음 사람의 화면에 신청을
+        // 세운다. `reset()` 은 배선 값(주 스위치 둘 · 문 · 시계)을 건드리지 않는다.
+        reversi?.reset()
         ruby.rubyBalance = null
         router.reset()
         widgets.forgetCurrent()
@@ -445,5 +478,6 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         const val GAME_CHESS: String = "chess"
         const val GAME_TETRIS_DUEL: String = "tetris_duel"
         const val GAME_RUMMY: String = "rummy"
+        const val GAME_REVERSI: String = "reversi"
     }
 }

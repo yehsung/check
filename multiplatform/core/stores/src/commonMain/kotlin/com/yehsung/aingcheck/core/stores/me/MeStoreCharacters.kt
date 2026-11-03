@@ -121,34 +121,43 @@ suspend fun MeStore.loadEquippedCharacter() {
 
 // MARK: 표시값
 
-/** 지금 서 있는 캐릭터(모르면 아잉). */
-val MeStore.equippedCharacterID: String get() = MeCharacterCards.equippedID(equippedServerID)
+/**
+ * 이 플랫폼이 술 한잔 선물 캐릭터(이슬)를 아는가 — 조립이 넘긴 그림 재료의 문([DrawableCharacterSource.takesDrinkGift]: Android 판 7 참 ·
+ * Windows v1 거짓). 착용값 접기 · 고르기 목록 · 상점 자리표시가 이 문 **하나**를 본다(검토 ISUL-1 — 데스크톱은 0.3.73 그대로).
+ */
+val MeStore.takesDrinkGift: Boolean get() = drawableCharacters.takesDrinkGift
+
+/** 지금 서 있는 캐릭터(모르면 아잉 — 술 한잔 선물을 안 받는 플랫폼에선 이슬도 아잉). */
+val MeStore.equippedCharacterID: String get() = MeCharacterCards.equippedID(equippedServerID, takesDrinkGift)
 
 /**
- * 상점 목록(서버 순서). 아직 못 읽었으면 이 빌드가 아는 캐릭터를 가격 모름으로.
- * 술 한잔 선물 캐릭터(이슬)는 이 플랫폼의 그림 재료([MeStore.drawableCharacters])가 그것을 그린다고 말했을 때만 자리표시로 세운다 —
- * 서버는 번호 5 미만에게 이슬 행을 아예 안 보내므로(가진 사람에게도), 번호 4 인 플랫폼(Windows v1)의 자리표시에 이슬이 섰다 사라지지 않게.
+ * 상점 목록(서버 순서). 아직 못 읽었으면 이 플랫폼이 아는 캐릭터를 가격 모름으로.
+ * 술 한잔 선물 캐릭터(이슬)는 그 선물을 받는 플랫폼([takesDrinkGift])에서만 자리표시로 세운다 — 서버는 번호 5 미만에게 이슬 행을 아예 안
+ * 보내므로(가진 사람에게도), 번호 4 인 플랫폼(Windows v1)의 자리표시에 이슬이 섰다 사라지지 않게.
  */
 val MeStore.shopRows: List<ShopCharacterRow>
     get() = shopCharacters.ifEmpty {
-        val drawsDrinkGift = resolvedDrawable?.containsAll(ShopWire.isulCharacterIDs) == true
-        MeCharacterCards.knownIDs
-            .filter { it != MeCharacterCards.aingID && (drawsDrinkGift || CharacterGiftKind.ofBuiltIn(it) != CharacterGiftKind.drink) }
+        MeCharacterCards.knownIDs(takesDrinkGift)
+            .filter { it != MeCharacterCards.aingID }
             .map { ShopCharacterRow(id = it) }
     }
 
 /**
- * 고르기 목록: 아잉 + 이 빌드가 아는 캐릭터 + 서버가 준 모르는 캐릭터. 뽑기 전용은 서버가 말했거나 내가 가졌을 때만(상점을 아직 못 읽었으면
+ * 고르기 목록: 아잉 + 이 플랫폼이 아는 캐릭터 + 서버가 준 모르는 캐릭터. 뽑기 전용은 서버가 말했거나 내가 가졌을 때만(상점을 아직 못 읽었으면
  * 막지 않는다). 선물 전용(케이크 둘 · 이슬)은 **가진 사람에게만** 선다 — 지금 입고 있으면(착용값을 안다) 가진 것이다.
+ * 술 한잔 선물을 안 받는 플랫폼([takesDrinkGift] 거짓 — Windows v1)엔 이슬 칸이 없다: 착용값이 이미 아잉으로 접혀 '착용 중' 갈래로도 서지
+ * 않고, 서버 행이 섞여 와도 세우지 않는다(검토 ISUL-1 — 잠긴 '착용 중' 칸 · 선물 안내가 서지 않게).
  */
 val MeStore.pickerIDs: List<String>
     get() {
-        val ids = MeCharacterCards.knownIDs.filter { id ->
+        val drinks = takesDrinkGift
+        val ids = MeCharacterCards.knownIDs(drinks).filter { id ->
             if (isGiftOnly(id)) isOwned(id) || isWearing(id)
             else !shopState.hasLoaded || !isGachaOnly(id) || isOwned(id) || shopCharacters.any { it.id == id }
         }.toMutableList()
         for (row in shopCharacters) {
             if (row.id in ids) continue
+            if (!drinks && row.id in CharacterCatalog.drinkGiftBuiltInIDs) continue
             if (row.isGiftOnly && !(isOwned(row.id) || isWearing(row.id))) continue
             ids += row.id
         }

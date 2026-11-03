@@ -38,6 +38,7 @@ class CharacterArtPortraitIndexTest {
         assertEquals(CharacterArt.portraitIds.toSet() - ShopWire.isulCharacterIDs.toSet(), drawable)
         assertEquals(ShopWire.cakeProtocol, ShopWire.protocolVersion(drawable), "데스크톱: 케이크 둘까지 → 4(이슬은 실려도 빼낸다)")
         assertEquals(drawable, runBlocking { CharacterArt.drawableCharacterSource.drawableCharacterIDs() }, "스토어에 꽂는 재료가 같은 집합")
+        assertEquals(false, CharacterArt.drawableCharacterSource.takesDrinkGift, "스토어의 이슬 접기 문도 같은 플랫폼 문(검토 ISUL-1 — 데스크톱은 이슬을 아잉으로 접는다)")
         val index = runBlocking { CharacterArt.portraitResourceNames() }
         // Android(판 7) 문 = 같은 그림 묶음에서 이슬까지 → 5. 이슬 한 장만 빠져도 4 로 내려간다(번호를 건너뛰어 말할 수 없다).
         assertEquals(ShopWire.isulProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index, takesDrinkGift = true)), "Android: 이슬까지 → 5")

@@ -46,10 +46,11 @@ class IsulProtocolPinAndroidTest {
         assertTrue(ShopWire.supportsDrinkGift(derived))
         assertTrue(CharacterGiftKind.drink.isSupported(derived))
         assertEquals(drawable, runBlocking { CharacterArt.drawableCharacterSource.drawableCharacterIDs() })
+        assertTrue("스토어의 이슬 접기 문도 같은 플랫폼 문(검토 ISUL-1)", CharacterArt.drawableCharacterSource.takesDrinkGift)
         // 카드 목록(고르기 · 상점 자리표시 · 착용값 접기)에도 이슬이 선다 — 케이크 뒤, 스프라이트 앞(내장 순서).
-        val known = MeCharacterCards.knownIDs
+        val known = MeCharacterCards.knownIDs(CharacterArt.drawableCharacterSource.takesDrinkGift)
         assertEquals(known.indexOf(CharacterCatalog.cakeChocoAingID) + 1, known.indexOf(CharacterCatalog.isulAingID))
-        assertEquals(CharacterCatalog.isulAingID, MeCharacterCards.equippedID(CharacterCatalog.isulAingID))
+        assertEquals(CharacterCatalog.isulAingID, MeCharacterCards.equippedID(CharacterCatalog.isulAingID, CharacterArt.drawableCharacterSource.takesDrinkGift))
         // 반대 방향(함정 §2): 이슬 한 장이 빠진 빌드는 4(케이크 선물은 그대로 산다) — 3 으로 떨어지지 않는다.
         assertEquals(ShopWire.cakeProtocol, ShopWire.protocolVersion(drawable - CharacterCatalog.isulAingID))
     }

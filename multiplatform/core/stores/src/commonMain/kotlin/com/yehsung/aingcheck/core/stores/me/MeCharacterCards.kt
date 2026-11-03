@@ -63,11 +63,27 @@ object MeCharacterCards {
             return builtIns + ids.filter { it !in builtIns }.sorted()
         }
 
+    /** 카드 표에 있는가(이름 · 자르기 메타 — 플랫폼과 무관). 착용값 접기 · 고르기 목록은 [isKnown] 의 두 인자 판을 쓴다. */
     fun isKnown(id: String): Boolean = card(id) != null
 
-    /** 서버 착용값 → 화면에 세울 id. 비었거나 이 빌드가 모르는 id 면 아잉(서버 값은 건드리지 않는다). */
-    fun equippedID(fromServer: String?): String {
+    /**
+     * 이 플랫폼이 아는 캐릭터 id — [knownIDs] 에서 술 한잔 선물 캐릭터(이슬)는 그 선물을 받는 플랫폼([takesDrinkGift] — Android 판 7)에만 남긴다.
+     * 번호 4 플랫폼(Windows v1)은 0.3.73 처럼 이슬을 모른다: 서버가 이슬 행을 가진 사람에게도 안 싣는 상대라(20261108122000 §5-2) 알면 잠긴
+     * '착용 중' 칸이 선다(검토 ISUL-1). 문은 나 탭 스토어가 쥔 그림 재료의 [DrawableCharacterSource.takesDrinkGift] 하나다.
+     */
+    fun knownIDs(takesDrinkGift: Boolean): List<String> =
+        if (takesDrinkGift) knownIDs else knownIDs.filter { it !in CharacterCatalog.drinkGiftBuiltInIDs }
+
+    /** [knownIDs] (두 인자 판)에 드는가. */
+    fun isKnown(id: String, takesDrinkGift: Boolean): Boolean =
+        isKnown(id) && (takesDrinkGift || id !in CharacterCatalog.drinkGiftBuiltInIDs)
+
+    /**
+     * 서버 착용값 → 화면에 세울 id. 비었거나 이 플랫폼이 모르는 id 면 아잉(서버 값은 건드리지 않는다). 술 한잔 선물을 안 받는 플랫폼은
+     * 이슬도 아잉으로 접는다(0.3.73 과 같다 — 서버 설계 전제 '옛 클라는 모르는 착용 id 를 아잉으로 접는다').
+     */
+    fun equippedID(fromServer: String?, takesDrinkGift: Boolean): String {
         val id = CharacterSyncDecision.normalized(fromServer) ?: return aingID
-        return if (isKnown(id)) id else aingID
+        return if (isKnown(id, takesDrinkGift)) id else aingID
     }
 }

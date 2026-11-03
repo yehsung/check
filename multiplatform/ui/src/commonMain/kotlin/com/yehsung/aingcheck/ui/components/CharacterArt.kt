@@ -81,7 +81,12 @@ object CharacterArt {
     }
 
     /** 나 탭 스토어(W2-c `MeStore`)에 꽂는 재료 — 조립(K11)이 넘긴다. */
-    val drawableCharacterSource: DrawableCharacterSource = DrawableCharacterSource { drawableCharacterIDs() }
+    val drawableCharacterSource: DrawableCharacterSource = object : DrawableCharacterSource {
+        override suspend fun drawableCharacterIDs(): Set<String> = this@CharacterArt.drawableCharacterIDs()
+
+        /** 나 탭 스토어의 이슬 접기 문(검토 ISUL-1) — 그림 재료와 같은 플랫폼 문 [takesDrinkGift] 하나를 본다. */
+        override val takesDrinkGift: Boolean get() = this@CharacterArt.takesDrinkGift
+    }
 
     /** 리소스 바이트(없으면 null — 이 빌드에 그림이 빠졌다는 뜻이다). */
     @OptIn(ExperimentalResourceApi::class)

@@ -38,9 +38,13 @@ class MeIsulDrinkGiftTest {
 
     private val none = """{"status":"ok"}"""
 
-    /** p ≥ 5 shop_state — 이슬 행(장식값 2002 · gacha_only · gift_only, 미보유면 잠긴 칸). */
-    private fun shop(owned: Set<String> = emptySet()): String {
-        val rows = listOf("fox" to 60, "aing_cake_strawberry" to 2000, "aing_cake_choco" to 2001, ISUL to 2002).joinToString(",") { (id, price) ->
+    /**
+     * p ≥ 5 shop_state — 이슬 행(장식값 2002 · gacha_only · gift_only, 미보유면 잠긴 칸). [isulRow] 거짓 = p < 5 응답(서버 §5-2: 이슬 행은
+     * 가진 사람에게도 싣지 않는다 — 데스크톱 Windows v1 이 받는 모양).
+     */
+    private fun shop(owned: Set<String> = emptySet(), isulRow: Boolean = true): String {
+        val ids = listOf("fox" to 60, "aing_cake_strawberry" to 2000, "aing_cake_choco" to 2001) + (if (isulRow) listOf(ISUL to 2002) else emptyList())
+        val rows = ids.joinToString(",") { (id, price) ->
             val gift = id.startsWith("aing_")
             """{"id":"$id","price":$price,"owned":${id in owned},"gacha_only":$gift,"gift_only":$gift}"""
         }
@@ -350,6 +354,41 @@ class MeIsulDrinkGiftTest {
         assertEquals(0, h.server.count("set_character"))
         assertEquals(0, h.server.count("buy_character"))
         h.assertClean()
+    }
+
+    @Test
+    fun desktopFoldsAWornIsulToAingLike0373AndroidKeepsIt() = runTest {
+        // 검토 ISUL-1: 서버는 번호 5 미만에게 이슬 행을 **가진 사람에게도** 싣지 않는다(20261108122000 §5-2). 그 설계 전제가 '옛 클라는 모르는
+        // 착용 id 를 아잉으로 접는다'이다. 공용 카드 표에 이슬이 들어간 뒤에도 데스크톱(Windows v1 · 번호 4)의 나 탭은 0.3.73 처럼 아잉으로 접어야
+        // 한다 — 안 접으면 '착용 중'인 잠긴 이슬 칸이 서고, 누르면 "술 한잔 선물로만…" 안내가 뜨며, 다른 캐릭터로 바꾸면 다시 고를 길이 없다.
+        for ((drawable, isDesktop) in listOf(desktop to true, android to false)) {
+            val h = MeHarness(this, drawable = drawable) { r ->
+                when {
+                    r.rpcName == "shop_state" -> MeReply.Json(shop(setOf(ISUL), isulRow = !isDesktop))
+                    r.method == "GET" && r.path == "/rest/v1/profiles" -> MeReply.Json("""[{"character":"$ISUL"}]""")
+                    else -> null
+                }
+            }
+            h.signIn()
+            h.store.launch { h.store.loadShop() }
+            h.store.launch { h.store.loadEquippedCharacter() }
+            advanceUntilIdle()
+            val label = if (isDesktop) "데스크톱" else "Android"
+            assertEquals(ISUL, h.store.equippedServerID, "$label: 서버 착용값은 원문 그대로 쥔다(건드리지 않는다)")
+            assertTrue(h.store.equippedLoaded)
+            if (isDesktop) {
+                assertEquals("aing", h.store.equippedCharacterID, "데스크톱: 이슬 착용값 = 아잉(0.3.73 과 같다)")
+                assertTrue(h.store.isWearing("aing"), "데스크톱: 아잉 칸이 '착용 중'")
+                assertFalse(h.store.isWearing(ISUL))
+                assertFalse(ISUL in h.store.pickerIDs, "데스크톱: 고르기 목록에 이슬 칸이 서지 않는다(잠긴 '착용 중' 칸 없음)")
+                assertFalse(ISUL in h.store.shopRows.map { it.id }, "데스크톱: 상점에도 이슬 칸이 없다(서버가 안 싣는다)")
+            } else {
+                assertEquals(ISUL, h.store.equippedCharacterID, "Android: 이슬을 입은 그대로 선다")
+                assertTrue(h.store.isWearing(ISUL))
+                assertTrue(ISUL in h.store.pickerIDs, "Android: 가진 이슬은 고르기 목록에 선다")
+            }
+            h.assertClean()
+        }
     }
 
     @Test

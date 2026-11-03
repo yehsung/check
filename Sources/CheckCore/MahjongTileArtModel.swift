@@ -9,6 +9,9 @@ import Foundation
 //    자패 글자(東南西北白發中) · 1삭 = 우리 모양(새싹) · 白 = 라벤더 둥근 테두리 · 적5 = 잉크 전부 빨강 + 오른쪽 위 금색 점.
 //  · 크기 6종(`MahjongTileSize`) · 상태(`MahjongTileState`) · 방위 회전(`rotation(for:)` — `MahjongSeatCompass` 방위 그대로).
 //  · 팔레트(`MahjongTilePalette`) — 코드 기본값 + 선택 JSON(`game-art/mahjong/tiles.json`, 색 7개). 틀린 JSON 은 코드 팔레트.
+//  · 그림 선택지(`MahjongTileArtStyle`) — 뒷면 · 펠트 · 1삭 모양 · 보조 글자. 대표가 그림으로 고른다(SPEC §9.1).
+//    **고르면 `MahjongTileArtStyle.chosen` 한 줄만 바꾼다.** 코드 팔레트의 뒷면 세 색은 고른 뒷면 짝에서 나오고,
+//    팔레트 JSON 이 오면 JSON 일곱 색이 그 위에 선다(Storage 로 다듬는 길이 코드 기본값보다 위).
 //
 // 전통 배치(통의 원 개수·자리, 萬·東 글자)는 보편 관례라 따르고, 선·색·1삭·뒷면은 우리가 정한다(DEC:26).
 // 다른 마작 서비스의 패 그림·서체·뒷면을 베끼지 않는다.
@@ -145,7 +148,7 @@ package nonisolated struct MahjongTileLayout: Equatable, Sendable {
     package var pips: [Pip] = []
     package var sticks: [Stick] = []
     package var glyphs: [Glyph] = []
-    /// 1삭 — 우리 모양(대 한 마디 + 잎 둘 + 빨간 점).
+    /// 1삭 — 막대 대신 **우리 모양** 자리. 무엇을 그릴지는 `MahjongTileArtStyle.oneSouMotif`(기본 새싹 — 대 한 마디 + 잎 둘 + 빨간 점).
     package var sprout = false
     /// 白 — 라벤더 둥근 사각 테두리.
     package var hakuFrame = false
@@ -168,10 +171,15 @@ package nonisolated struct MahjongTilePalette: Equatable, Sendable, Codable {
     package var backRim: String
     package var ink: String
 
-    /// 코드 팔레트(UX §2.6 — 큐브 타일 몸체 결 · 짙은 남색 뒷면 + 분홍 테두리).
-    package static let standard = MahjongTilePalette(
-        bodyTop: "#FBF9FF", bodyBottom: "#ECE7F7", bevel: "#C9C0E3", backTop: "#2A3270", backBottom: "#1B2150",
-        backRim: "#FF6FA5", ink: "#1F2A5A")
+    /// 코드 팔레트(UX §2.6 — 큐브 타일 몸체 결 · 뒷면은 **고른 뒷면 짝**, 1차 시안은 짙은 남색 + 분홍 테두리).
+    package static let standard = code(back: MahjongTileArtStyle.chosen.backScheme)
+
+    /// 코드 팔레트 — 몸체·베벨·글자 남색은 고정, 뒷면 세 색은 `back` 짝.
+    package static func code(back: MahjongTileBackScheme) -> MahjongTilePalette {
+        let colors = back.colors
+        return MahjongTilePalette(bodyTop: "#FBF9FF", bodyBottom: "#ECE7F7", bevel: "#C9C0E3", backTop: colors.top,
+                                  backBottom: colors.bottom, backRim: colors.rim, ink: "#1F2A5A")
+    }
 
     package init(bodyTop: String, bodyBottom: String, bevel: String, backTop: String, backBottom: String,
                  backRim: String, ink: String) {
@@ -186,10 +194,20 @@ package nonisolated struct MahjongTilePalette: Equatable, Sendable, Codable {
 
     /// 받은 JSON → 팔레트. 못 받았거나(nil) 틀리면(키 빠짐·색 글자 틀림) **코드 팔레트**(네트워크는 이 함수 밖 일).
     package static func resolved(from json: Data?) -> MahjongTilePalette {
+        delivered(from: json) ?? .standard
+    }
+
+    /// 받은 JSON 이 바른 팔레트면 그 값, 아니면 nil(= 코드 팔레트를 쓴다). 그리는 쪽은 nil 일 때 **스타일의 뒷면 짝**으로 간다.
+    package static func delivered(from json: Data?) -> MahjongTilePalette? {
         guard let json, let decoded = try? JSONDecoder().decode(MahjongTilePalette.self, from: json),
               decoded.allColors.allSatisfy({ rgb(hex: $0) != nil })
-        else { return .standard }
+        else { return nil }
         return decoded
+    }
+
+    /// 그릴 팔레트 — 받은 JSON 이 있으면 그것(일곱 색 모두), 없으면 코드 팔레트(뒷면은 `back` 짝).
+    package static func effective(back: MahjongTileBackScheme, delivered: MahjongTilePalette?) -> MahjongTilePalette {
+        delivered ?? code(back: back)
     }
 
     package var allColors: [String] { [bodyTop, bodyBottom, bevel, backTop, backBottom, backRim, ink] }
@@ -355,4 +373,173 @@ package nonisolated enum MahjongTileArtModel {
         }
         return layout
     }
+}
+
+// MARK: - 그림 선택지(대표에게 그림으로 묻는 손잡이 — SPEC §9.1 '렌더로 나중에 물을 것')
+//
+// 선택지는 모두 아잉체크 고유 — 다른 마작 서비스의 뒷면·판 색·1삭 그림을 떠올리게 하지 않는다(전통 '새' 1삭 없음).
+// 시트(MJ/reports/M.md)의 칸 글자: 각 축의 첫 case 가 A(1차 시안 = 지금 그대로), 다음이 B·C·D.
+
+/// 색 하나(0~1 sRGB) — 펠트처럼 코어가 정하는 색.
+package nonisolated struct MahjongArtRGB: Hashable, Sendable {
+    package let r: Double
+    package let g: Double
+    package let b: Double
+
+    package init(_ r: Double, _ g: Double, _ b: Double) {
+        self.r = r
+        self.g = g
+        self.b = b
+    }
+
+    /// 0~255 채널(반올림).
+    package var channels: [Int] { [r, g, b].map { Int(($0 * 255).rounded()) } }
+}
+
+/// ① 패 뒷면(상대 손 띠 · 닫힌 도라 · 암깡 양 끝). 판(펠트) 색과 **짝으로** 묻는다(`pairedFelt`).
+package nonisolated enum MahjongTileBackScheme: String, CaseIterable, Hashable, Sendable {
+    /// A 지금 — 짙은 남색 + 분홍 테두리.
+    case navyPink
+    /// B 보라 + 분홍 테두리.
+    case violetPink
+    /// C 산딸기 분홍 + 연분홍 테두리.
+    case raspberryBlush
+    /// D 라벤더(아잉이 몸 결) + 진분홍 테두리.
+    case lavenderPink
+
+    /// (위 · 아래 · 테두리) "#RRGGBB" — 코드 팔레트의 뒷면 세 색.
+    package var colors: (top: String, bottom: String, rim: String) {
+        switch self {
+        case .navyPink: ("#2A3270", "#1B2150", "#FF6FA5")
+        case .violetPink: ("#5B3FB2", "#3A2680", "#FF8DC7")
+        case .raspberryBlush: ("#C2407E", "#8A2456", "#FFD3E8")
+        case .lavenderPink: ("#8B7BE0", "#5F4FBF", "#FF7EB8")
+        }
+    }
+
+    /// 시트에서 함께 보이는 판 색(짝).
+    package var pairedFelt: MahjongFeltScheme {
+        switch self {
+        case .navyPink: .teal
+        case .violetPink: .slateNavy
+        case .raspberryBlush: .plum
+        case .lavenderPink: .charcoal
+        }
+    }
+}
+
+/// ① 판(펠트) 색 — 펠트 · 펠트 테두리 · 가운데 판 · 판 테두리 · 판 글자.
+/// 글자 말고 넷은 **중간 톤**(렌더 감지기 규칙 — `isMidTone`)이라 '그 자리에 패가 섰는가'를 잉크로 잰다.
+package nonisolated enum MahjongFeltScheme: String, CaseIterable, Hashable, Sendable {
+    /// A 지금 — 청록(큐브 펠트 남보라와 갈린다). 값은 `MahjongFeltStyle`(맥 판 화면)과 같다.
+    case teal
+    /// B 남색(푸른 회색).
+    case slateNavy
+    /// C 자두색(보랏빛 회색).
+    case plum
+    /// D 먹색(살짝 푸른 숯).
+    case charcoal
+
+    package var felt: MahjongArtRGB {
+        switch self {
+        case .teal: MahjongArtRGB(0.24, 0.39, 0.36)
+        case .slateNavy: MahjongArtRGB(0.25, 0.28, 0.39)
+        case .plum: MahjongArtRGB(0.33, 0.26, 0.37)
+        case .charcoal: MahjongArtRGB(0.27, 0.27, 0.31)
+        }
+    }
+
+    package var rim: MahjongArtRGB {
+        switch self {
+        case .teal: MahjongArtRGB(0.32, 0.46, 0.44)
+        case .slateNavy: MahjongArtRGB(0.33, 0.36, 0.48)
+        case .plum: MahjongArtRGB(0.42, 0.34, 0.46)
+        case .charcoal: MahjongArtRGB(0.35, 0.35, 0.40)
+        }
+    }
+
+    package var board: MahjongArtRGB {
+        switch self {
+        case .teal: MahjongArtRGB(0.31, 0.45, 0.43)
+        case .slateNavy: MahjongArtRGB(0.31, 0.34, 0.46)
+        case .plum: MahjongArtRGB(0.40, 0.32, 0.44)
+        case .charcoal: MahjongArtRGB(0.33, 0.33, 0.38)
+        }
+    }
+
+    package var boardRim: MahjongArtRGB {
+        switch self {
+        case .teal: MahjongArtRGB(0.44, 0.58, 0.56)
+        case .slateNavy: MahjongArtRGB(0.44, 0.47, 0.58)
+        case .plum: MahjongArtRGB(0.53, 0.45, 0.57)
+        case .charcoal: MahjongArtRGB(0.46, 0.46, 0.52)
+        }
+    }
+
+    /// 판 위 글자(국 이름 · 바람) — 밝은 잉크라 중간 톤 규칙 밖.
+    package var glyph: MahjongArtRGB { MahjongArtRGB(0.86, 0.84, 0.80) }
+
+    /// 중간 톤이어야 하는 넷(펠트 · 테두리 · 가운데 판 · 판 테두리).
+    package var midTones: [MahjongArtRGB] { [felt, rim, board, boardRim] }
+
+    /// 렌더 감지기 규칙(FS:431): 최대 채널 ≤ 234 · 최소 ≥ 56. 더해 판 렌더 시험의 '잉크'(채널 폭 ≥ 40 이거나 최대 ≥ 150)로
+    /// 세지지 않는다 — 펠트가 잉크로 세지면 '그 자리에 패가 섰는가'가 늘 참이 된다.
+    package static func isMidTone(_ color: MahjongArtRGB) -> Bool {
+        let c = color.channels
+        guard let high = c.max(), let low = c.min() else { return false }
+        return high <= 234 && low >= 56 && high - low < 40 && high < 150
+    }
+}
+
+/// ② 1삭 그림(막대 대신 우리 모양).
+package nonisolated enum MahjongOneSouMotif: String, CaseIterable, Hashable, Sendable {
+    /// A 지금 — 새싹(대 한 마디 + 잎 둘 + 빨간 점).
+    case sprout
+    /// B 아잉이 얼굴 느낌의 둥근 얼굴(코드 도형 — 라벤더 몸 · 눈 둘 · 볼 · 입).
+    case aingFace
+    /// C 굵은 대나무 한 마디(가장 단순).
+    case bambooNode
+}
+
+/// ③ 모서리 보조 글자(패 숫자 표기).
+package nonisolated enum MahjongCornerLabelStyle: String, CaseIterable, Hashable, Sendable {
+    /// A 지금 — 수패 1~9 + 자패 동남서북백발중.
+    case numbersAndHonors
+    /// B 숫자만 — 수패 1~9, 자패는 없음.
+    case numbersOnly
+    /// C 없음.
+    case hidden
+
+    /// 배치의 보조 글자(`MahjongTileLayout.cornerLabel`)를 이 표기로 거른다.
+    package func label(_ layout: MahjongTileLayout, face: MahjongTileFace) -> String? {
+        switch self {
+        case .numbersAndHonors: layout.cornerLabel
+        case .numbersOnly: (face.kind ?? 99) < 27 ? layout.cornerLabel : nil
+        case .hidden: nil
+        }
+    }
+}
+
+/// 패 그림 선택지 한 벌.
+package nonisolated struct MahjongTileArtStyle: Hashable, Sendable {
+    package var backScheme: MahjongTileBackScheme
+    package var feltScheme: MahjongFeltScheme
+    package var oneSouMotif: MahjongOneSouMotif
+    package var cornerLabel: MahjongCornerLabelStyle
+
+    package init(backScheme: MahjongTileBackScheme, feltScheme: MahjongFeltScheme, oneSouMotif: MahjongOneSouMotif,
+                 cornerLabel: MahjongCornerLabelStyle) {
+        self.backScheme = backScheme
+        self.feltScheme = feltScheme
+        self.oneSouMotif = oneSouMotif
+        self.cornerLabel = cornerLabel
+    }
+
+    /// U 1차 시안(11-03) — 시트의 A 칸들. 시험이 이 값의 그림을 U 그림 바이트와 맞춰 본다(바꾸지 않는다).
+    package static let firstDraft = MahjongTileArtStyle(backScheme: .navyPink, feltScheme: .teal, oneSouMotif: .sprout,
+                                                        cornerLabel: .numbersAndHonors)
+
+    /// ★ 화면이 쓰는 값 — 대표가 그림으로 고르면 **이 한 줄만** 바꾼다(예: 1삭 B → `oneSouMotif: .aingFace`).
+    /// 펠트는 맥 판 화면 `MahjongFeltStyle`(CK/MahjongPanelTable.swift)이 아직 따로 쥔다 — 어긋나면 선택지 시험이 빨갛다.
+    package static let chosen = MahjongTileArtStyle(backScheme: .navyPink, feltScheme: .teal, oneSouMotif: .sprout, cornerLabel: .numbersAndHonors)
 }

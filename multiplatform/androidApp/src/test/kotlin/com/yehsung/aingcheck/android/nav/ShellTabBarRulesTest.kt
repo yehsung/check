@@ -24,7 +24,7 @@ class ShellTabBarRulesTest {
 
     @Test
     fun inPlayRoutesHideTheTabBar() {
-        for (route in listOf(Dest.Gomoku::class, Dest.Chess::class, Dest.TetrisDuel::class, Dest.MiniGame::class)) {
+        for (route in listOf(Dest.Gomoku::class, Dest.Chess::class, Dest.Reversi::class, Dest.TetrisDuel::class, Dest.MiniGame::class)) {
             assertTrue("$route: 판 중인데 탭 막대가 보인다", ShellTabBarRules.hidesTabBar(route, inPlay))
         }
         // 1:1 테트리스 — 판만 들고 있으면 숨는다(오목·체스 화면 알림과 무관).
@@ -36,7 +36,7 @@ class ShellTabBarRulesTest {
     @Test
     fun lobbyAndSpectatingKeepTheTabBar() {
         // 오목·체스 로비·관전은 화면이 숨김을 알리지 않는다(iOS: 로비·관전 화면엔 `.hidesTabBar` 가 없다). 테트리스 로비도 보인다.
-        for (route in listOf(Dest.Gomoku::class, Dest.Chess::class, Dest.TetrisDuel::class, Dest.Rummy::class)) {
+        for (route in listOf(Dest.Gomoku::class, Dest.Chess::class, Dest.Reversi::class, Dest.TetrisDuel::class, Dest.Rummy::class)) {
             assertFalse("$route: 로비·관전인데 탭 막대가 숨었다", ShellTabBarRules.hidesTabBar(route, idle))
         }
     }

@@ -17,7 +17,7 @@ object ShellTabBarRules {
     data class Play(
         /** 1:1 테트리스 판을 들고 있다(GamesStore.tetris.match != null). 로비에서는 보인다(iOS 는 판 화면에만 붙였다). */
         val tetrisMatch: Boolean = false,
-        /** 오목·체스 화면이 '판(대국·결과·로봇 화면)'이라고 알렸다(GomokuTabBarPolicy · ChessTabBarPolicy → onTabBarHidden). 로비·관전은 거짓. */
+        /** 오목·체스·아잉 뒤집기 화면이 '판(대국·결과·로봇 화면)'이라고 알렸다(GomokuTabBarPolicy · ChessTabBarPolicy · ReversiTabBarPolicy → onTabBarHidden). 로비·관전은 거짓. */
         val boardScreenHides: Boolean = false,
         /** 아잉 큐브 판·결과(`RummyPhase.playing`·`finished`). 로비·방에서는 보인다. */
         val rummyMatch: Boolean = false,
@@ -34,6 +34,8 @@ object ShellTabBarRules {
         Row(Dest.TetrisDuel::class, TabBarPolicy.Screen.tetrisMatch) { it.tetrisMatch },
         // 차례 시간이 서버에서 흐른다 — 탭을 잘못 눌러 나가면 안 보이는 채로 시간 초과가 쌓여 3회째 기권이다.
         Row(Dest.Rummy::class, TabBarPolicy.Screen.rummyMatch) { it.rummyMatch },
+        // 아잉 뒤집기 대국·결과(1:1 · 로봇 연습) — 한 수 30초가 서버에서 흐른다. 화면이 알린다(ReversiTabBarPolicy → onTabBarHidden — 로비·관전은 거짓).
+        Row(Dest.Reversi::class, TabBarPolicy.Screen.reversiMatch) { it.boardScreenHides },
         Row(Dest.Shop::class, TabBarPolicy.Screen.shop) { true },
         Row(Dest.MiniGame::class, TabBarPolicy.Screen.miniGamePlay) { true },
         Row(Dest.GrassDetail::class, TabBarPolicy.Screen.grassDetail) { true },

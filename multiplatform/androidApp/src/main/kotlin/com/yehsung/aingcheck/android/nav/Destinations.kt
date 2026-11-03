@@ -51,6 +51,8 @@ object Dest {
     @Serializable data object TetrisDuel
     /** 아잉 큐브(로비·방·판·결과 한 화면). 테트리스처럼 딥링크 글자가 없다(받은 초대는 푸시가 아니라 탭 배지·허브 칩·로비 카드로 안다). */
     @Serializable data object Rummy
+    /** 아잉 뒤집기(판 7 — 로비·신청·판·AI 연습·관전·순위·결과 한 화면). 딥링크·푸시 글자가 없다(결정 "채팅·푸시 없음" — 받은 신청은 탭 배지·허브 칩·로비 카드로 안다). */
+    @Serializable data object Reversi
     /** 판돈 고르기(오목·체스·테트리스 — 판돈 목록은 서버값). [game] = gomoku·chess·tetris. */
     @Serializable data class StakeSheet(val game: String)
 

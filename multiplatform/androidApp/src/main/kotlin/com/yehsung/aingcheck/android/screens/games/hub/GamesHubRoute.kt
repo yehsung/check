@@ -31,8 +31,8 @@ object GamesRoutes {
         GamesDestination.Chess -> Dest.Chess(GameSection.LOBBY.raw)
         GamesDestination.TetrisDuel -> Dest.TetrisDuel
         GamesDestination.Rummy -> Dest.Rummy
-        // 아잉 뒤집기(판 7): 화면 갈래가 셸 목적지를 세우기 전까지는 null(셸은 쌓지 않는다). 그 갈래가 여기와 AppScreens.NavRequests 를 함께 바꾼다.
-        GamesDestination.Reversi -> null
+        // 아잉 뒤집기(판 7). 카드는 스토어가 있을 때만 서므로(떼어 내기 깃발) 이 갈래는 깃발이 켜진 조립에서만 닿는다.
+        GamesDestination.Reversi -> Dest.Reversi
     }
 
     /**

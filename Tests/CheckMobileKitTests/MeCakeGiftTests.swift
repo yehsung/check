@@ -622,9 +622,9 @@ import Testing
         #expect(strawberry.giftOnly == true && strawberry.gachaOnly == true && strawberry.price == 2000 && strawberry.owned == true)
         #expect(choco.giftOnly == true && choco.gachaOnly == true && choco.price == 2001 && choco.owned == false)
         #expect(!strawberry.isPurchasable && !choco.isPurchasable && choco.isGiftOnly && !choco.isGachaOnly)
-        // 서버 순서 그대로(가격 → id): 케이크 둘이 맨 뒤, 딸기 → 초코.
-        #expect(rows.suffix(2).map(\.id) == [Self.strawberry, Self.choco])
-        #expect(rows.dropLast(2).allSatisfy { $0.giftOnly == false }, "케이크가 아닌 줄의 gift_only 는 false 다(서버 모양)")
+        // 서버 순서 그대로(가격 → id): 케이크 둘이 맨 뒤, 딸기 → 초코 — 번호 5(폰 1.0.17)에는 그 뒤에 이슬(2002 · 모두에게 잠긴 칸).
+        #expect(rows.suffix(3).map(\.id) == [Self.strawberry, Self.choco, CharacterCatalog.isulAingID])
+        #expect(rows.dropLast(3).allSatisfy { $0.giftOnly == false }, "선물 전용이 아닌 줄의 gift_only 는 false 다(서버 모양)")
         // 확률표 · 교환표에는 케이크가 없다(뽑기 ✗ · 조각 교환 ✗).
         let gacha = try #require(state.gacha)
         #expect(!(gacha.odds ?? []).contains { CharacterCatalog.isCakeAing($0.characterID) })

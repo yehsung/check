@@ -57,12 +57,14 @@ import Testing
     ]
     /// 뽑기가 없는 장면(옛 서버·갓 가입 모양) — 확률표 계약을 적용하지 않는 유일한 예외.
     static let shopPathWithoutGacha = "me/_me-/rpc.shop_state.json"
-    /// 생일 선물 장면(`me/gift…` — v0.3.66)의 상점 변형 셋(받기 전 · 딸기 받은 뒤 · 초코 받은 뒤). `_me` 와 **케이크 보유 칸만** 다르다
+    /// 선물 장면(`me/gift…` — v0.3.66 생일 셋 · 폰 1.0.17 술 하나)의 상점 변형 넷. `_me` 와 **선물 전용 보유 칸만** 다르다
     /// (확률표 · 교환표 · 다른 행 글자 그대로 — `MeCakeGiftRepairTests.giftSceneShopVariants` 가 잰다).
     static let giftScenePaths = [
         "me/_me/rpc.shop_state@demo-gift.json",
         "me/_me/rpc.shop_state@demo-gift-got-strawberry.json",
         "me/_me/rpc.shop_state@demo-gift-got-choco.json",
+        // 술 한잔 장면(`me/gift/drink…` — 폰 1.0.17)의 받은 뒤 상점(이슬 보유). 받기 전은 `_me` 그대로다.
+        "me/_me/rpc.shop_state@demo-drink-got.json",
     ]
 
     static let pullPath = "me/rpc.gacha_pull.json"
@@ -125,7 +127,7 @@ import Testing
 
     // MARK: - §1 확률표: 8줄 · 정수 · 합 100 · 황금 3 · 무지개 2
 
-    @Test("상점 픽스처 로스터: 확률표를 싣는 파일은 정확히 둘(+ 그 하나와 케이크 보유만 다른 선물 장면 변형 셋)이고, 뽑기 없는 장면은 하나다")
+    @Test("상점 픽스처 로스터: 확률표를 싣는 파일은 정확히 둘(+ 그 하나와 선물 전용 보유만 다른 선물 장면 변형 넷)이고, 뽑기 없는 장면은 하나다")
     func shopFixtureRoster() throws {
         let found = Set(Self.index.entries.filter { $0.key == "rpc.shop_state" }.map(\.relativePath))
         let want = Set(Self.shopPaths + Self.giftScenePaths + [Self.shopPathWithoutGacha])

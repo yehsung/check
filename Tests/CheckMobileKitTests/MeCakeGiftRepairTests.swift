@@ -245,19 +245,19 @@ import Testing
 
     // MARK: - 데모 선물 장면 상점 변형
 
-    @Test("데모 선물 장면 상점 변형 셋은 _me 상점과 케이크 보유 칸만 다르다(받기 전 둘 다 잠김 · 받은 뒤 받은 것만)")
+    @Test("데모 선물 장면 상점 변형 넷은 _me 상점과 선물 전용 보유 칸만 다르다(받기 전 잠김 · 받은 뒤 받은 것만 — 생일 셋 · 술 하나)")
     func giftSceneShopVariants() throws {
         func object(_ path: String) throws -> [String: Any] {
             let entry = try #require(MeRainbowFixtureContractTests.index.entries.first { $0.relativePath == path }, "\(path) 가 없다")
             return try #require(try JSONSerialization.jsonObject(with: entry.data) as? [String: Any])
         }
-        /// 케이크 보유 칸을 걷어 낸 모양(비교용) · 케이크 보유 표.
+        /// 선물 전용(케이크 · 이슬) 보유 칸을 걷어 낸 모양(비교용) · 그 보유 표.
         func split(_ shop: [String: Any]) throws -> (rest: NSDictionary, owned: [String: Bool]) {
             var copy = shop
             var owned: [String: Bool] = [:]
             let rows = try #require(shop["characters"] as? [[String: Any]])
             copy["characters"] = rows.map { row -> [String: Any] in
-                guard let id = row["id"] as? String, CharacterCatalog.isCakeAing(id) else { return row }
+                guard let id = row["id"] as? String, CharacterCatalog.isGiftOnlyBuiltIn(id) else { return row }
                 owned[id] = row["owned"] as? Bool
                 var stripped = row
                 stripped["owned"] = nil
@@ -266,10 +266,13 @@ import Testing
             return (copy as NSDictionary, owned)
         }
         let base = try split(try object("me/_me/rpc.shop_state.json"))
+        let isul = CharacterCatalog.isulAingID
         let want: [String: [String: Bool]] = [
-            "me/_me/rpc.shop_state@demo-gift.json": [Self.strawberry: false, Self.choco: false],
-            "me/_me/rpc.shop_state@demo-gift-got-strawberry.json": [Self.strawberry: true, Self.choco: false],
-            "me/_me/rpc.shop_state@demo-gift-got-choco.json": [Self.strawberry: false, Self.choco: true],
+            "me/_me/rpc.shop_state@demo-gift.json": [Self.strawberry: false, Self.choco: false, isul: false],
+            "me/_me/rpc.shop_state@demo-gift-got-strawberry.json": [Self.strawberry: true, Self.choco: false, isul: false],
+            "me/_me/rpc.shop_state@demo-gift-got-choco.json": [Self.strawberry: false, Self.choco: true, isul: false],
+            // 술 한잔 장면(폰 1.0.17): 받기 전은 일반 _me 상점 그대로(이슬 잠김), 받은 뒤 이슬만 보유로.
+            "me/_me/rpc.shop_state@demo-drink-got.json": [Self.strawberry: true, Self.choco: false, isul: true],
         ]
         #expect(Set(want.keys) == Set(MeRainbowFixtureContractTests.giftScenePaths))
         for (path, owned) in want {
@@ -277,7 +280,8 @@ import Testing
             #expect(variant.rest == base.rest, "\(path) 가 케이크 보유 밖에서 _me 상점과 다르다")
             #expect(variant.owned == owned, "\(path) 케이크 보유 \(variant.owned)")
         }
-        #expect(base.owned == [Self.strawberry: true, Self.choco: false], "일반 상점 장면(심사원 기본 경로)의 케이크 두 행이 바뀌었다")
+        #expect(base.owned == [Self.strawberry: true, Self.choco: false, isul: false],
+                "일반 상점 장면(심사원 기본 경로)의 선물 전용 세 행이 바뀌었다(이슬은 모두에게 잠긴 칸)")
     }
 
     // MARK: - ⑤ 뷰 배선(iOS 전용 — 소스로)

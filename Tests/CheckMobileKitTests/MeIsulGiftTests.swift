@@ -17,6 +17,7 @@ import Testing
 //   ③ 받는 시트: 술 선물은 고르기 없이 이슬이 미리 골라진 채 · 문구 C("짠! 🥂" · [짠 받기]) · 수령 본문 · 실패 한 줄 · 다시 열기 줄(🥂 "짠! 선물이 왔어요" [받기])
 //   ④ 다음 선물: 결론 난 시트가 내려간 뒤 스로틀 없이 한 번 더 묻는다(생일 → 술 차례로) — 번호 4 빌드는 묻지 않는다(기준선) · 안 끝난 시트는 묻지 않는다
 //   ⑤ 종류 보존: 보유로 거른 새 선물 값은 언제나 종류를 싣는다(소스 — 술 선물은 선택지가 하나라 값으로는 그 길을 못 탄다)
+//   ⑥ 데모: `me/gift/drink…` 장면(열린 술 선물 → 받기 → 이슬 보유 · 선물 없음) · 일반 상점 장면의 이슬 잠긴 칸 · 데모 글에 상표 글자 없음
 @MainActor
 @Suite struct MeIsulGiftTests {
     nonisolated static let isul = CharacterCatalog.isulAingID
@@ -370,5 +371,87 @@ import Testing
         for call in calls {
             #expect(call.contains("kind:"), "종류 없이 선물 값을 만든다(술 선물이 생일로 읽혀 사라진다): \(call)")
         }
+    }
+
+    // MARK: - ⑥ 데모 픽스처
+
+    static func demoRequest(_ rpc: String, body: String) -> MobileStubRequest {
+        MobileStubRequest(method: "POST", host: MobileDemo.host, path: "/rest/v1/rpc/\(rpc)", query: "", headers: [:], bodyText: body)
+    }
+
+    @Test("데모 me/gift/drink…: 바늘로 열린 술 선물(이슬 하나 · 운영자 한 줄) · 받으면 이슬만 보유 · 선물 없음 · [지금 입기]는 이슬 · 생일 장면은 그대로")
+    func demoDrinkGiftRoute() throws {
+        let fixtures = MeCakeGiftTests.fixtures
+        let decoder = MeCakeGiftTests.snakeDecoder
+        #expect(MobileDemoCakeGiftRoute(demoRoute: "me/gift/drink") == MobileDemoCakeGiftRoute(action: nil, kind: .drink))
+        #expect(MobileDemoCakeGiftRoute(demoRoute: "/me/gift/drink/received/") == MobileDemoCakeGiftRoute(action: "received", kind: .drink))
+        #expect(MobileDemoCakeGiftRoute(demoRoute: "me/gift/drink/dismissed")?.action == "dismissed")
+        #expect(MobileDemoCakeGiftRoute(demoRoute: "me/gift/received")?.kind == .birthday, "생일 장면이 술로 읽혔다")
+        let route = try #require(MobileDemoCakeGiftRoute(demoRoute: "me/gift/drink"))
+        #expect(route.needle == MobileDemoCakeGiftRoute.drinkNeedle && AingRoute(path: route.openRoute) != nil)
+        let pendingBody = #"{"p_protocol":5}"#
+        let ledger = route.makeLedger()
+        #expect(ledger.needle == "demo-drink")
+        let pending = fixtures.response(for: route.rewrite(Self.demoRequest("character_gift_pending", body: pendingBody), ledger: ledger),
+                                        scenario: route.scene)
+        let offer = try #require(try decoder.decode(CharacterGiftPendingResponse.self, from: pending.body).offer, "술 장면에 열린 선물이 없다")
+        #expect(offer.kind == .drink && offer.options == [Self.isul] && offer.note != nil)
+        // 받기 전 상점(일반 _me — 이슬은 잠긴 칸): 서버가 만들 수 있는 상태(가진 이슬에게 술 선물을 주지 않는다).
+        let shopRequest = Self.demoRequest("shop_state", body: pendingBody)
+        let before = try decoder.decode(ShopStateResponse.self, from: fixtures.response(for: route.rewrite(shopRequest, ledger: ledger),
+                                                                                         scenario: route.scene).body)
+        #expect(before.characters?.first { $0.id == Self.isul }?.owned == false, "술 장면(받기 전)에 이미 이슬이 있다")
+        // 받기 → 받은 뒤 바늘.
+        let claimRequest = Self.demoRequest("claim_character_gift",
+                                            body: #"{"p_gift":"\#(offer.id)","p_character":"aing_isul","p_protocol":5}"#)
+        let claim = fixtures.response(for: route.rewrite(claimRequest, ledger: ledger), scenario: route.scene)
+        let claimed = try decoder.decode(CharacterGiftClaimResponse.self, from: claim.body)
+        #expect(CharacterGiftClaimOutcome(response: claimed, requestedID: Self.isul) == .received(characterID: Self.isul, replayed: false))
+        ledger.record(claimRequest, response: claim)
+        #expect(ledger.needle == "demo-drink-got")
+        let after = try decoder.decode(ShopStateResponse.self, from: fixtures.response(for: route.rewrite(shopRequest, ledger: ledger),
+                                                                                        scenario: route.scene).body)
+        #expect(after.characters?.first { $0.id == Self.isul }?.owned == true, "받은 뒤 상점에 이슬 보유가 없다")
+        let pendingAfter = fixtures.response(for: route.rewrite(Self.demoRequest("character_gift_pending", body: pendingBody), ledger: ledger),
+                                             scenario: route.scene)
+        #expect(try decoder.decode(CharacterGiftPendingResponse.self, from: pendingAfter.body).offer == nil, "받은 뒤에도 술 선물이 열려 있다")
+        let wear = fixtures.response(for: route.rewrite(Self.demoRequest("set_character", body: #"{"p_id":"aing_isul"}"#), ledger: ledger),
+                                     scenario: route.scene)
+        #expect(try decoder.decode(SetCharacterResponse.self, from: wear.body).character == Self.isul)
+        let other = fixtures.response(for: route.rewrite(Self.demoRequest("set_character", body: #"{"p_id":"fox"}"#), ledger: ledger),
+                                      scenario: route.scene)
+        #expect(try decoder.decode(SetCharacterResponse.self, from: other.body).character != Self.isul, "받은 뒤 바늘이 여우 착용을 이슬로 가로챘다")
+        // 생일 기록은 이슬 수령을 적지 않는다(종류마다 기록이 따로다) · 술 기록은 케이크 수령을 적지 않는다.
+        let birthdayLedger = MobileDemoCakeGiftRoute.Ledger()
+        birthdayLedger.record(claimRequest, response: claim)
+        #expect(birthdayLedger.needle == MobileDemoCakeGiftRoute.needle)
+        let drinkLedger = MobileDemoCakeGiftRoute.Ledger(kind: .drink)
+        drinkLedger.record(claimRequest, response: .json(#"{"status":"ok","character_id":"aing_cake_choco"}"#))
+        #expect(drinkLedger.needle == MobileDemoCakeGiftRoute.drinkNeedle)
+    }
+
+    @Test("데모 글에 상표 글자('참이슬')가 없다 — 픽스처 · 폰 코드 · 스토어 문서(그림 라벨에만 있다 · 대표 결정 #d_dk4IjWRZvFYR)")
+    func noTrademarkTextInDemoOrStoreCopy() throws {
+        let mark = "참" + "이슬"
+        for entry in MeCakeGiftTests.fixtures.entries {
+            #expect(!String(decoding: entry.data, as: UTF8.self).contains(mark), "\(entry.relativePath) 에 상표 글자가 있다")
+        }
+        for relative in ["Sources/CheckMobileKit", "Sources/CheckMobileShared", "Sources/CheckWidgetsKit"] {
+            #expect(try IntegrationContractTests.files(containing: [mark], under: relative).isEmpty, "\(relative) 코드에 상표 글자가 있다")
+        }
+        let store = try String(contentsOf: MeIsulProtocolPinTests.root.appendingPathComponent("docs/appstore.md"), encoding: .utf8)
+        #expect(!store.contains(mark), "스토어 문서(설명 · 새 기능 · 심사 메모 초안)에 상표 글자가 있다")
+    }
+
+    @Test("스토어 문서 §3: 이슬을 그리는 빌드면 '술·담배·약물' 칸은 드묾(대표 결정 원문 #d_E3bxq1b2jSsS) · 다른 칸이 약물을 '없음'으로 겹쳐 말하지 않는다")
+    func ageRatingRowFollowsIsul() throws {
+        #expect(AingCharacterArt.knownIDs.contains(Self.isul), "전제: 이 번들은 이슬을 그린다")
+        let doc = try AppStoreDocContractTests.document("docs/appstore.md")
+        let survey = try AppStoreDocContractTests.section(of: doc, heading: "## 3. 연령 등급 설문 예상 답")
+        let alcohol = try AppStoreDocContractTests.row(in: survey, containing: "술·담배·약물 사용 또는 언급")
+        #expect(alcohol[1].contains("드묾") && !alcohol[1].contains("없음 |"), "술 칸 답: \(alcohol[1])")
+        #expect(alcohol[2].contains("#d_E3bxq1b2jSsS") && alcohol[2].contains(DrinkGiftText.lockedCaption), "술 칸 근거: \(alcohol[2])")
+        let lumped = survey.split(separator: "\n").filter { $0.contains("| 없음 |") && $0.contains("약물") }
+        #expect(lumped.isEmpty, "다른 줄이 약물을 '없음'으로 답한다 — 설문 답이 둘로 갈린다: \(lumped)")
     }
 }

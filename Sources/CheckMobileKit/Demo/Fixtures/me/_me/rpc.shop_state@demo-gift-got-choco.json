@@ -73,6 +73,13 @@
       "owned": true,
       "gacha_only": true,
       "gift_only": true
+    },
+    {
+      "id": "aing_isul",
+      "price": 2002,
+      "owned": false,
+      "gacha_only": true,
+      "gift_only": true
     }
   ],
   "gacha": {

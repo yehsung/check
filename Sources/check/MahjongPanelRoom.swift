@@ -122,8 +122,16 @@ struct MahjongRoomCard: View {
                     }
                     .frame(width: 140)
                 }
-                MahjongCapsuleButton(title: MahjongText.practice, tint: CheckTheme.working, filled: false, action: onPractice)
+                if store.practice != nil {
+                    // 방 띠의 [방 보기]로 나왔으면 하던 연습판으로 돌아가는 길(CC-02).
+                    MahjongCapsuleButton(title: MahjongText.practiceViewButton, tint: CheckTheme.working, filled: false) {
+                        store.showPractice()
+                    }
                     .frame(width: 120)
+                } else {
+                    MahjongCapsuleButton(title: MahjongText.practice, tint: CheckTheme.working, filled: false, action: onPractice)
+                        .frame(width: 120)
+                }
                 Spacer()
                 MahjongCapsuleButton(title: MahjongText.leave, tint: CheckTheme.danger, filled: false,
                                      isEnabled: !store.isWorking) {

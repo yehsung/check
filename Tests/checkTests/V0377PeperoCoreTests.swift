@@ -15,7 +15,7 @@ import Testing
 ///     (빼빼로가 `drawableCharacterIDs` 에 없다) — 그림 없는 캐릭터를 받지 않게. 그림이 붙는 날 이 못을 고친다.
 ///  ④ 선물 전선: `kind = "pepero"` + 빼빼로만 · 다른 종류에 빼빼로가 섞이면 버림 · 번호 5 이하 빌드엔 빼빼로 선물을 띄우지 않는다 ·
 ///     수령 needs_update(min 6)도 같은 어휘.
-///  ⑤ 문구는 가안 그대로 · 비어 있지 않다 · 본문의 캐릭터 이름은 표시 이름 상수에서 온다.
+///  ⑤ 문구는 대표 결정 C(#d_JyxuQRmHOYKC) 그대로 · 비어 있지 않다 · 본문의 캐릭터 이름은 표시 이름 상수에서 온다.
 @Suite("v0.3.77 빼빼로 아잉이 공용 코어")
 struct V0377PeperoCoreTests {
     static let pepero = "aing_pepero"
@@ -240,15 +240,15 @@ struct V0377PeperoCoreTests {
         #expect(PeperoGiftText.notice(for: received) { $0 } == nil)
     }
 
-    // MARK: - ⑤ 문구(가안)
+    // MARK: - ⑤ 문구(대표 결정 C — #d_JyxuQRmHOYKC)
 
-    @Test("문구: 가안 그대로 · 본문 이름은 표시 이름 상수 · 비어 있지 않음 · 종류 → 묶음 · 이슬 · 생일 묶음과 다르다")
+    @Test("문구: 대표 결정 C 그대로 · 본문 이름은 표시 이름 상수 · 비어 있지 않음 · 종류 → 묶음 · 이슬 · 생일 묶음과 다르다")
     func peperoText() {
-        #expect(PeperoGiftText.title == "빼빼로 데이! 🍫")
-        #expect(PeperoGiftText.body == "오늘은 마음을 전하는 날이에요. 빼빼로 아잉이 받아요!")
+        #expect(PeperoGiftText.title == "빼빼로 받아랏! 🍫")
+        #expect(PeperoGiftText.body == "몰래 하나 챙겨 왔어요. 빼빼로 아잉이 쏙!")
         #expect(PeperoGiftText.body.contains(CharacterCatalog.peperoAingDisplayName), "본문의 캐릭터 이름이 상수에서 안 온다")
-        #expect(PeperoGiftText.confirmButton == "받기")
-        #expect(PeperoGiftText.reopenTitle == "빼빼로 선물이 왔어요")
+        #expect(PeperoGiftText.confirmButton == "쏙 받기")
+        #expect(PeperoGiftText.reopenTitle == "빼빼로가 쏙 들어왔어요")
         #expect(PeperoGiftText.reopenButton == "받기")
         #expect(PeperoGiftText.wearNowButton == "지금 입기" && PeperoGiftText.closeButton == "닫기")
         #expect(PeperoGiftText.lockedCaption == "빼빼로 데이 선물 전용")

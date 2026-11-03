@@ -454,17 +454,17 @@ package nonisolated enum DrinkGiftText {
     }
 }
 
-/// 빼빼로 데이 선물 문구(v0.3.77 빼빼로 아잉이 — 11-11 기간 선물). **가안**이다(2026-11-04, 대표 확인 전 — 바뀌면 여기 한 곳만 고친다).
+/// 빼빼로 데이 선물 문구(v0.3.77 빼빼로 아잉이 — 11-11 기간 선물). **대표 결정 C "장난스럽게"**(2026-11-04 결재 #d_JyxuQRmHOYKC — 몰래 챙겨 온 느낌, 단추도 '쏙 받기'). 바뀌면 여기 한 곳만 고친다.
 /// `DrinkGiftText` 와 같은 모양 · 같은 자리다. '빼빼로'는 남의 상표라 행사 이름 · 캐릭터 이름이 바뀔 수 있다 — 캐릭터 이름은
 /// `CharacterCatalog.peperoAingDisplayName` 한 곳에서 읽고, 행사 이름이 든 줄(제목 · 다시 열기 · 잠긴 칸)은 이 묶음에만 있다.
 /// 실패 · 거절 줄은 생일과 한 벌이다.
 package nonisolated enum PeperoGiftText {
     /// 받는 창 제목.
-    package static let title = "빼빼로 데이! 🍫"
+    package static let title = "빼빼로 받아랏! 🍫"
     /// 받는 창 본문(운영자 한 줄 `note` 가 있으면 화면이 그 위에 크게 — 이슬 초대장과 같은 틀).
-    package static let body = "오늘은 마음을 전하는 날이에요. \(CharacterCatalog.peperoAingDisplayName) 받아요!"
+    package static let body = "몰래 하나 챙겨 왔어요. \(CharacterCatalog.peperoAingDisplayName) 쏙!"
     /// 확인 단추(고를 것이 없다 — 선택지는 빼빼로 하나).
-    package static let confirmButton = "받기"
+    package static let confirmButton = "쏙 받기"
     /// 받은 뒤의 단추 둘(생일과 같은 글자).
     package static let wearNowButton = CakeGiftText.wearNowButton
     package static let closeButton = CakeGiftText.closeButton
@@ -473,7 +473,7 @@ package nonisolated enum PeperoGiftText {
     /// 잠긴 칸을 골랐을 때의 안내.
     package static let lockedHint = "빼빼로 데이 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요."
     /// 받지 않고 닫은 뒤 메뉴 팝오버 · 상점에 남는 카드.
-    package static let reopenTitle = "빼빼로 선물이 왔어요"
+    package static let reopenTitle = "빼빼로가 쏙 들어왔어요"
     package static let reopenButton = "받기"
     /// 결과를 모르는 수령의 한 줄 — 생일과 같은 글자다(다시 눌러도 안전하다).
     package static let claimFailed = CakeGiftText.claimFailed
@@ -522,7 +522,7 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         claimFailed: DrinkGiftText.claimFailed
     )
 
-    /// 빼빼로 데이 선물(빼빼로 아잉이 — v0.3.77, 가안).
+    /// 빼빼로 데이 선물(빼빼로 아잉이 — v0.3.77, 문구는 대표 결정 C).
     package static let pepero = CharacterGiftCopy(
         title: PeperoGiftText.title, body: PeperoGiftText.body, confirmButton: PeperoGiftText.confirmButton,
         wearNowButton: PeperoGiftText.wearNowButton, closeButton: PeperoGiftText.closeButton,

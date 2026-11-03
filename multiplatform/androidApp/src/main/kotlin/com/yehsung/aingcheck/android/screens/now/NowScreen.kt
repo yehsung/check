@@ -9,6 +9,9 @@
 // 근무 시작·종료·생존 신호는 폰 근무 갈래(W2-f NowStorePhoneWork) 몫이다 — 이 화면은 [NowWorkActions] 문으로만 부른다. 그 문이 없는
 // 조립(W2-f 병합 전)에서는 버튼 줄을 그리지 않고 "근무 시작과 종료는 맥 앱에서 해요" 를 말한다(서버에 폰 근무 함수가 없을 때와 같은 모양).
 // 시각은 스토어 시계에서만 읽는다(1초 · 1분 다시 그리기는 rememberNow).
+//
+// 집중(판 7 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" — iOS 1.0.17 1776440d NowWorkingSection · NowWorkingGroup · NowWorkingRow 의 짝):
+// 근무 중 줄(우리 팀 · 다른 팀)의 이름 뒤 '집중' 칩. 출처는 NowStore.focusedPeerIDs(= 메시지 스토어 집합 그대로 — 폰 조립이 잇는다) 하나다.
 package com.yehsung.aingcheck.android.screens.now
 
 import androidx.compose.foundation.background
@@ -87,6 +90,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LoadingRow
 import com.yehsung.aingcheck.ui.screens.session.kit.NoticeKind
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonName
+import com.yehsung.aingcheck.ui.screens.session.kit.personFocusChip
 import com.yehsung.aingcheck.ui.screens.session.kit.READABLE_WIDTH
 import com.yehsung.aingcheck.ui.screens.session.kit.SectionHeader
 import com.yehsung.aingcheck.ui.screens.session.kit.rememberNow
@@ -485,10 +489,14 @@ internal fun ProgressBar(fraction: Double, fill: androidx.compose.ui.graphics.Co
 
 // ---------------------------------------------------------------- 지금 근무 중
 
+// internal: 지금 탭 시험이 근무 중 절만 따로 찍는다(화면 한 장 높이 아래에 있어 NowScreen 골든에는 안 잡힌다).
 @Composable
-private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftDate, onTalk: (String) -> Unit, onOpenTeamRoster: () -> Unit) {
+internal fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftDate, onTalk: (String) -> Unit, onOpenTeamRoster: () -> Unit) {
     val colors = AingTheme.colors
     val people = store.workingPeople(now)
+    // 집중 중인 사람은 **한 번** 받아 줄마다 묻는다 — 출처는 메시지 스토어 한 곳(NowStore.focusedPeerIDs → MessagesStore.focusedPeerIDs —
+    // [보내기] 잠금과 같은 겹치기 · 같은 차단 거르기).
+    val focused = store.focusedPeerIDs
     val teammates = people.filter { it.isTeammate }
     val others = people.filter { !it.isTeammate }
     val state = store.workingLoadState
@@ -511,12 +519,12 @@ private fun WorkingSection(store: NowStore, phoneWorkWired: Boolean, now: SwiftD
                 }
             }
         } else if (teammates.isNotEmpty() && others.isNotEmpty()) {
-            WorkingGroup(NowText.ourTeam, teammates, now, store, onTalk, onShowRoster = showRoster)
-            WorkingGroup(NowText.otherTeams, others, now, store, onTalk)
+            WorkingGroup(NowText.ourTeam, teammates, focused, now, store, onTalk, onShowRoster = showRoster)
+            WorkingGroup(NowText.otherTeams, others, focused, now, store, onTalk)
         } else {
             // 다른 팀 묶음에는 [전체 보기]를 붙이지 않는다 — 우리 팀 명단으로 가는 입구다.
             WorkingGroup(
-                if (teammates.isEmpty()) NowText.otherTeams else NowText.ourTeam, people, now, store, onTalk,
+                if (teammates.isEmpty()) NowText.otherTeams else NowText.ourTeam, people, focused, now, store, onTalk,
                 onShowRoster = if (teammates.isEmpty()) null else showRoster,
             )
         }
@@ -577,7 +585,15 @@ private fun NowTeamRosterLink(title: String, onClick: () -> Unit) {
 /** [onShowRoster] 는 우리 팀 묶음만. 그때 사람 수는 이름 옆으로 오고 오른쪽 끝이 [전체 보기]다(큰 글자에서 한 줄에 안 들어가면 링크가 아래 줄로). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WorkingGroup(label: String, people: List<NowWorkingPerson>, now: SwiftDate, store: NowStore, onTalk: (String) -> Unit, onShowRoster: (() -> Unit)? = null) {
+private fun WorkingGroup(
+    label: String,
+    people: List<NowWorkingPerson>,
+    focused: Set<String>,
+    now: SwiftDate,
+    store: NowStore,
+    onTalk: (String) -> Unit,
+    onShowRoster: (() -> Unit)? = null,
+) {
     val colors = AingTheme.colors
     val headerStyle = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold)
     Column(Modifier.fillMaxWidth().background(colors.surface, RoundedCornerShape(AingDimens.groupRadius))) {
@@ -601,33 +617,42 @@ private fun WorkingGroup(label: String, people: List<NowWorkingPerson>, now: Swi
             }
         }
         people.forEachIndexed { index, person ->
-            WorkingRow(person, now) { onTalk(person.id) }
+            WorkingRow(person, person.id in focused, now) { onTalk(person.id) }
             if (index < people.size - 1) HorizontalDivider(Modifier.padding(start = 64.dp), thickness = AingDimens.hairline, color = colors.separator)
         }
         Spacer(Modifier.height(6.dp))
     }
 }
 
+/**
+ * 사람 한 줄. [isFocused] = 이 사람이 집중 중(우리 팀 · 다른 팀 줄 모두 — 대표 답 #d_6A32rmcoJZZd). 이름 뒤 '집중' 칩 — 이 줄은 조각을 하나씩
+ * 읽으므로 TalkBack 은 칩 자신이 "집중 중"으로 말한다(FocusChip). 다른 팀 줄의 [말 걸기]는 그대로 대화를 연다(보내기만 막힌다).
+ *
+ * 두 모양(iOS NowWorkingRow 의 보통 · 접근성 크기 갈래 — 칩은 두 모양 모두 이름 줄에 선다): 큰 글자([TeamRosterLayout.STACK_FONT_SCALE] 이상 —
+ * 명단 줄과 같은 기준)에서는 첫 줄이 얼굴 · 이름(+ 칩)(+ 다른 팀 말 걸기)이고, 상태메시지 · 끊김 부제 · 우리 팀 경과는 아랫줄로 내린다.
+ * 한 줄에 얼굴 · 이름 · 배지 · 칩 · 경과를 두면 큰 글자에서 이름이 말줄임표만 남는다(판 7 큰 글꼴 골든 실측 — iOS 는 AX5 에서 이름이 꺾였다).
+ */
 @Composable
-private fun WorkingRow(person: NowWorkingPerson, now: SwiftDate, onTalk: () -> Unit) {
+private fun WorkingRow(person: NowWorkingPerson, isFocused: Boolean, now: SwiftDate, onTalk: () -> Unit) {
     val colors = AingTheme.colors
-    Row(
-        Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp).testTag(NowTags.workingRow(person.id)),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
+    val stacked = LocalDensity.current.fontScale >= TeamRosterLayout.STACK_FONT_SCALE
+    val rowModifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp).testTag(NowTags.workingRow(person.id))
+    val avatar: @Composable () -> Unit = {
         PersonAvatar(person.name, person.id, person.avatarURL?.absoluteString, 36.dp, status = if (person.isStale) PresenceStatus.pending else PresenceStatus.working)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            PersonName(person.name, person.center)
-            person.statusMessage?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.semantics { contentDescription = "상태메시지 $it" })
-            }
-            if (person.isStale) {
-                Text(NowText.staleLastSeen(person.lastSeenAt?.let { MobileRelativeTime.text(it, now) }),
-                    style = MaterialTheme.typography.bodySmall, color = colors.pending)
-            }
+    }
+    val statusText: @Composable (Int) -> Unit = { lines ->
+        person.statusMessage?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = lines, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { contentDescription = "상태메시지 $it" })
         }
+    }
+    val staleText: @Composable () -> Unit = {
+        if (person.isStale) {
+            Text(NowText.staleLastSeen(person.lastSeenAt?.let { MobileRelativeTime.text(it, now) }),
+                style = MaterialTheme.typography.bodySmall, color = colors.pending)
+        }
+    }
+    val trailing: @Composable () -> Unit = {
         if (person.isTeammate) {
             // 경과(분 단위). 신호가 끊긴 사람은 스토어가 멈춘 값을 준다.
             val seconds = NowWorkingElapsed.seconds(person, now)
@@ -639,6 +664,29 @@ private fun WorkingRow(person: NowWorkingPerson, now: SwiftDate, onTalk: () -> U
                     .semantics { contentDescription = NowText.talkTo(person.name) }.testTag(NowTags.talk(person.id)),
                 contentAlignment = Alignment.Center,
             ) { AingIcon(sf("bubble.left", AppIcon.ChatBubble), null, size = 22.dp, tint = colors.accent) }
+        }
+    }
+    if (stacked) {
+        Column(rowModifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                avatar()
+                PersonName(person.name, person.center, Modifier.weight(1f), focusChip = personFocusChip(isFocused))
+                if (!person.isTeammate) trailing()
+            }
+            // 상태메시지는 아랫줄에서 여러 줄로 접혀도 이름을 꺾지 않는다(iOS 3줄).
+            statusText(3)
+            staleText()
+            if (person.isTeammate) trailing()
+        }
+    } else {
+        Row(rowModifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            avatar()
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                PersonName(person.name, person.center, focusChip = personFocusChip(isFocused))
+                statusText(1)
+                staleText()
+            }
+            trailing()
         }
     }
 }

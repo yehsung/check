@@ -1445,11 +1445,11 @@ package struct PokeDirectoryRow: Decodable, Equatable {
     /// 이 칸을 안 내려주는 옛 서버(db push 전 창)에서도 디렉터리 디코드가 깨지지 않는다(nil = 없음).
     /// 화면에 올리기 전 관문은 toPokeDirectoryEntries 의 `StatusMessage.display` 한 곳이다.
     package let statusMessage: String?
-    /// 이 사람이 집중 모드인가(`focus_mode` — 대표 요청 5 "콕/메세지 창에서부터 집중 모드인 사람들은 표시"). 서버가 이 칸을
-    /// 명부에 싣는 것은 **다음 서버 판**이다 — 지금 서버(7칸)는 안 보낸다. 그래서 status_message 와 같은 이유로 Optional·decodeIfPresent 고,
+    /// 이 사람이 집중 모드인가(`focus_mode` — 대표 요청 5 "콕/메세지 창에서부터 집중 모드인 사람들은 표시"). 서버는 2026-11-03 운영 적용
+    /// (20261108120500)부터 이 칸을 싣는다 — 그 전 서버(7칸)는 안 보냈다. 그래서 status_message 와 같은 이유로 Optional·decodeIfPresent 고,
     /// nil 은 "집중이 아니다"가 아니라 **"모른다"** 이다. 모를 때의 해석(= 집중 아님)은 toPokeDirectoryEntries 한 곳에 있다.
-    /// ⚠︎ 그래서 이 칸을 싣는 서버 초안(20261108120500_app_user_directory_focus_mode — 대표 결재 대기)이 운영에 오르기 전에는
-    /// 요청 5(상대 집중 '집중' 칩 · 상대 집중 잠금)가 **운영에서 꺼져 있다**. 클라만으로는 못 켠다(팀 밖 사람의 profiles 는 RLS 로 안 보인다).
+    /// ⚠︎ 그래서 이 칸을 싣는 마이그레이션(20261108120500_app_user_directory_focus_mode — 대표 답 "지금 둘 다 올려", 11-03 운영 적용)이
+    /// 없는 서버에서는 요청 5(상대 집중 '집중' 칩 · 상대 집중 잠금)가 **꺼진다**. 클라만으로는 못 켠다(팀 밖 사람의 profiles 는 RLS 로 안 보인다).
     /// 두 서버 모양의 실출력은 Tests/checkTests/Fixtures/directory-rpc 가 잰다.
     package let focusMode: Bool?
 
@@ -2511,7 +2511,7 @@ package enum MessageBody {
 /// 메시지 전송 결과의 도메인 표현(스토어/UI 공유). 미지 status 가 .invalid 로 접히는 규약은 PokeSendOutcome 과 같다.
 ///
 /// **서버 status 는 정확히 열이다**(20260910 계약 + 2026-11-03): ok · invalid · blackout · not_working · not_text ·
-/// too_long · target_not_working · target_focused · flood · sender_focused(보낸이 집중 — 서버 차단 초안 20261108121000).
+/// too_long · target_not_working · target_focused · flood · sender_focused(보낸이 집중 — 서버 차단 20261108121000 · 11-03 운영 적용).
 ///
 /// ★ **`cooldown` 과 `target_outdated` 는 여기 없다 — 둘 다 죽은 가지다.**
 ///   · 쿨타임은 폐지됐다(찌르기에만 남았다). 케이스를 되살리면 화면에 카운트다운이 돌아오고,

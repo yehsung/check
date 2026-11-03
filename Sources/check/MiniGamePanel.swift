@@ -20,7 +20,7 @@ import CheckCore
 // v0.3.69 에 **게임 고르기가 위쪽 칩 줄에서 왼쪽 사이드바로** 옮겨 갔다(사용자 요구 2026-10-30: "미니게임이 너무 많아져서
 // 미니게임 창을 살짝 개편해야될거 같아. 아예 위가 아니라 게임창 왼쪽편에 미니게임들이 좀 더 크게 뜨면 좋을듯").
 // 혼자 게임 넷 + 대결 문 넷이 344pt 머리글 한 줄을 다투느라 고른 칩만 이름을 달고 나머지는 12pt 아이콘이었다.
-// 사이드바(`MiniGameSidebar`)는 여덟 줄 전부에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
+// 사이드바(`MiniGameSidebar`)는 줄 전부(아잉 뒤집기가 더해져 아홉)에 큰 아이콘과 이름을 단다. 게임 열·순위 열(700×470 구역)은 **한 픽셀도 안 바뀐다** —
 // 창이 사이드바 폭만큼 왼쪽으로 늘었을 뿐이다.
 
 /// 미니게임 창의 **고정** 레이아웃(캔버스 · 순위 열 · 무스크롤 행수). 순수 상수 — 결정적 검증 지점.
@@ -66,32 +66,63 @@ enum MiniGameWindowLayout {
     static let sidebarGroupTitleSpacing: CGFloat = 6
     /// 두 묶음 사이.
     static let sidebarGroupSpacing: CGFloat = 16
-    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다).
+    /// 사이드바 한 줄 높이·줄 사이(옛 칩은 26pt 캡슐이었다). v0.3.69 값 그대로다 — 같이 하기 다섯째 줄(아잉 뒤집기)부터 안쪽 442 를
+    /// 넘는 것은 줄을 누르거나 창을 키우지 않고 **같이 하기 칸만 스크롤**해 담는다(대표 결정 2026-11-03 #d_zw7CXHEtevVS
+    /// "C 스크롤로" — 줄·창 그대로, 같이 하기 칸만 스크롤). 게임이 더 늘어도(마작) 줄·창은 그대로고 스크롤 내용만 길어진다.
     static let sidebarRowHeight: CGFloat = 42
     static let sidebarRowSpacing: CGFloat = 4
     /// 줄 왼쪽 아이콘 타일 한 변(옛 칩 아이콘은 caption2 ≈ 12pt 였다).
     static let sidebarIconSize: CGFloat = 30
-    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브).
-    static let sidebarDuelRows = 4
+    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브 · 아잉 뒤집기) — 문 목록(`MiniGameDuelDoor`) 하나에서 온다.
+    static var sidebarDuelRows: Int { MiniGameDuelDoor.allCases.count }
+
+    /// 줄들만의 세로(머리 빼고).
+    static func sidebarRowsHeight(rows: Int) -> CGFloat {
+        CGFloat(rows) * sidebarRowHeight + CGFloat(max(rows - 1, 0)) * sidebarRowSpacing
+    }
 
     /// 한 묶음 세로(머리 + 줄들).
     static func sidebarGroupHeight(rows: Int) -> CGFloat {
-        sidebarGroupTitleHeight + sidebarGroupTitleSpacing
-            + CGFloat(rows) * sidebarRowHeight + CGFloat(max(rows - 1, 0)) * sidebarRowSpacing
+        sidebarGroupTitleHeight + sidebarGroupTitleSpacing + sidebarRowsHeight(rows: rows)
     }
 
     /// 사이드바 한 줄 폭(168).
     static var sidebarRowWidth: CGFloat { sidebarWidth - sidebarPadding * 2 }
 
-    /// 같이 하기(대결 문) 묶음이 서는 자리(창 콘텐츠 좌표 — 렌더 시험이 초록 잉크를 찾는 곳).
-    static var sidebarDuelGroupRect: CGRect {
-        CGRect(x: 0, y: contentPadding + sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing,
-               width: sidebarWidth, height: sidebarGroupHeight(rows: sidebarDuelRows))
+    /// 사이드바 안쪽 높이(창 높이 − 위아래 여백 = 442). 두 묶음이 이 안에 선다.
+    static var sidebarInnerHeight: CGFloat { contentSize.height - contentPadding * 2 }
+
+    /// 같이 하기 줄 전체 세로(스크롤 내용 — 꼬리 빼고). 다섯 줄이면 226.
+    static var sidebarDuelRowsHeight: CGFloat { sidebarRowsHeight(rows: sidebarDuelRows) }
+
+    /// 같이 하기 칸(스크롤 창) 세로 — 안쪽 높이에서 혼자 하기 묶음 · 묶음 사이 · 같이 하기 머리를 뺀 나머지(202).
+    /// 줄이 다 들어가면 줄 높이만큼이다(스크롤 없음).
+    static var sidebarDuelViewportHeight: CGFloat {
+        let room = sidebarInnerHeight - sidebarGroupHeight(rows: MiniGameKind.macCases.count) - sidebarGroupSpacing
+            - sidebarGroupTitleHeight - sidebarGroupTitleSpacing
+        return min(sidebarDuelRowsHeight, room)
     }
 
-    /// 사이드바 내용 세로 합(두 묶음). 안쪽 높이(442)를 넘으면 아래 줄이 창 밖으로 잘린다 — 게임이 또 늘면 여기서 먼저 걸린다.
+    /// 같이 하기 줄이 칸을 넘쳐 스크롤되는가(다섯 줄부터 참).
+    static var sidebarDuelScrolls: Bool { sidebarDuelRowsHeight > sidebarDuelViewportHeight }
+
+    /// 넘칠 때 같이 하기 칸 바닥을 흐리는 높이 = 스크롤 내용 끝에 붙는 빈 꼬리. 같은 높이라 끝까지 내리면 마지막 문이 흐림 위에 온전히 선다.
+    static let sidebarDuelFadeHeight: CGFloat = 16
+    /// 흐림의 바닥 불투명도. 끝까지 지우지 않는다 — 접힘 아래 문의 신청 점이 흐림 속에서도 보여야 한다.
+    static let sidebarDuelFadeFloor: Double = 0.3
+
+    /// 같이 하기(대결 문) 묶음이 서는 자리(창 콘텐츠 좌표 — 렌더 시험이 초록 잉크를 찾는 곳). 머리 + 보이는 칸.
+    static var sidebarDuelGroupRect: CGRect {
+        CGRect(x: 0, y: contentPadding + sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing,
+               width: sidebarWidth, height: sidebarGroupTitleHeight + sidebarGroupTitleSpacing + sidebarDuelViewportHeight)
+    }
+
+    /// 사이드바 내용 세로 합(혼자 하기 묶음 + 같이 하기 머리·보이는 칸). 안쪽 높이(442)를 넘으면 아래가 창 밖으로 잘린다.
+    /// 같이 하기 칸은 남은 자리만큼만 서고 넘치는 문은 그 안에서 스크롤되므로, 대결 문이 늘어도 이 값은 442 를 넘지 않는다 —
+    /// 혼자 하기 게임이 늘면 여기서 먼저 걸린다(같이 하기 칸이 문 한 줄도 못 담게 줄어든다).
     static var sidebarContentHeight: CGFloat {
-        sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing + sidebarGroupHeight(rows: sidebarDuelRows)
+        sidebarGroupHeight(rows: MiniGameKind.macCases.count) + sidebarGroupSpacing
+            + sidebarGroupTitleHeight + sidebarGroupTitleSpacing + sidebarDuelViewportHeight
     }
     /// 게임 열 ↔ 순위 열 사이.
     static let columnSpacing: CGFloat = 14
@@ -433,6 +464,8 @@ enum MiniGameSpaceKey {
     /// 키보드로도 눌린다(전체 키보드 접근 — 스페이스가 초점 단추를 누른다). 등록이 빠지면 미니게임 창을 띄워 둔 채 [완료]를
     /// 스페이스로 누를 때 게임이 삼킨다 — 60초 차례에서 그 한 번이 시간 초과 벌칙이 된다.
     /// v0.3.66: 생일 축하 창이 더해져 **여섯**이다. 글을 받지 않지만 두 초상 · [이걸로 받을게요] · [지금 입기] 가 키보드로도 눌린다(뽑기 창과 같은 이유).
+    /// 아잉 뒤집기 창이 더해져 **여덟**이다. 판은 클릭이지만 [기권]·[로비로]·판돈 창·규칙 창 단추가 키보드로도 눌린다(전체 키보드 접근).
+    /// 등록이 빠지면 미니게임 창을 띄워 둔 채 그 단추를 스페이스로 누를 때 게임이 삼킨다.
     static var standaloneWindowIDs: Set<String> {
         [CheckGomokuWindowController.frameAutosaveName,
          CheckChessWindowController.frameAutosaveName,
@@ -440,7 +473,8 @@ enum MiniGameSpaceKey {
          CheckGachaWindowController.frameAutosaveName,
          CheckTetrisDuelWindowController.frameAutosaveName,
          CheckCakeGiftWindowController.frameAutosaveName,
-         CheckRummyWindowController.frameAutosaveName]
+         CheckRummyWindowController.frameAutosaveName,
+         CheckReversiWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -519,140 +553,74 @@ enum MiniGameKeyLatch {
     }
 }
 
+/// 일시정지의 **맥 몫**. 순수한 전이는 코어 `MiniGamePauseState` 에 있다.
+extension MiniGamePauseState {
+    /// **ESC 한 번**의 전이(0.3.62). 게이트에 걸리면 `nil` 이다 — 수신처는 그때 이벤트를 **안 삼키고**
+    /// 남의 창으로 흘려보낸다(그래야 그 창의 ESC, 예컨대 팝오버 닫기가 산다).
+    ///
+    /// 왜 뷰 클로저에서 떼어내 여기 두는가: 판정이 클로저 안에 있던 동안은 헤드리스에서 부를 수가 없어
+    /// 이 게이트를 지키는 단언이 전부 **소스의 모양**(substring·순서)뿐이었다. 그래서 게이트 극성을
+    /// 뒤집어도(`guard !strokeBelongsToGame`) `gameWindow` 에 nil 을 넘겨도 시험이 통째로 초록이었다 —
+    /// 그 구멍으로 되살아나는 것이 바로 이 게이트가 막는 사고다(팝오버를 닫으려고 누른 ESC 가 게임 창으로
+    /// 가 정지해 둔 판을 3-2-1 뒤 재개한다. 조작키는 `strokeBelongsToGame` 가 전부 막으므로 한 수도 못 두고
+    /// 탑아웃 → 그 점수로 확정되고, 그 ESC 는 삼켜져 팝오버도 안 닫힌다).
+    ///
+    /// `nil` 인 자리 둘:
+    ///   · **키가 게임 창으로 간 것이 아니다** — 남의 창·팝오버·'아직 어느 창에도 안 간 순간'. 판정은
+    ///     방향키와 같은 `strokeBelongsToGame`(이벤트 창이 게임 창과 같은 객체인가 + 보이는가)이다.
+    ///   · **판이 도는 중이 아니다** — 시작 전·결과 화면의 ESC 까지 먹으면 다른 화면의 취소 키를 훔친다.
+    ///
+    /// 셋째 가드(`next != self`)는 **오늘은 도달할 수 없다** — `isPlaying` 이 참이면 `toggled` 가 세 상태
+    /// 모두에서 제자리를 안 돌려준다. 지우지 않고 두는 이유는 `toggled` 에 제자리 전이가 생기는 날
+    /// "바뀌지도 않았는데 ESC 를 삼키는" 상태를 여기서 막기 위해서다. 재현 가능한 분기로 읽지 마라
+    /// (그래서 위 목록에서 뺐다 — 뮤테이션을 넣어도 빨개지는 시험이 없는 것이 정상이다).
+    ///
+    /// 규칙은 `toggled(isPlaying:)` **한 벌**이다. 여기서 베껴 적으면 두 벌이 되어 언젠가 갈린다.
+    @MainActor
+    func escaped(eventWindow: NSWindow?, gameWindow: NSWindow?, isPlaying: Bool) -> MiniGamePauseState? {
+        guard MiniGameSpaceKey.strokeBelongsToGame(eventWindow, gameWindow: gameWindow) else { return nil }
+        guard isPlaying else { return nil }
+        let next = toggled(isPlaying: isPlaying)
+        guard next != self else { return nil }
+        return next
+    }
+
+    /// **정지 상한을 이 게임에 거는가.** 기준은 게임 이름이 아니라 **"접었을 때 기록이 남는가"** 다 —
+    /// 상한이 하는 일은 `quitRound()` 로 판을 접는 것 하나이고, 접는 결과가 게임마다 다르기 때문이다.
+    /// 기록이 남는 게임에서 상한은 **점수를 건진다**(멈춰 뒀다는 이유로 토큰이 늙어 판을 통째로 잃는 것을
+    /// 막는다). 기록이 안 남는 게임에서는 같은 동작이 **판을 없앤다** — 거기 걸면 돕는 게 아니라 뺏는다.
+    ///
+    /// 코드에서 확인한 사실(2026-10-21):
+    ///   · 테트리스·플래피 — `interrupt()` 가 `phase = .result` 로 **결과를 확정**하고(TetrisGame·FlappyGame),
+    ///     잎 뷰의 `onChange(of: game.phase)` 가 그 전이에서 `host.onFinished(점수)` 를 부른다 → 기록이 남는다.
+    ///   · 타이밍 바 — `interrupt()` 가 `game.invalidate()` 만 한다(MiniGameTimingBar). phase 가 `.ready` 로
+    ///     되돌아가고 `onFinished` 는 **안 불린다** → 남는 것이 없다(10라운드를 못 채워 애초에 점수가 없다).
+    ///
+    /// 그래서 타이밍 바의 정지는 상한 없이 얼어 있어도 **해롭지 않다**: 프레임 루프가 멈춰 있어 유휴 0% 는
+    /// 그대로고(`TimelineView(.animation(paused:))`), 접어 봐야 건질 점수가 없으며, 라운드 토큰이 30분에
+    /// 만료되면 어차피 기록되지 않는다 — 상한이 있든 없든 그 판의 결과는 '없음'으로 같고, 상한을 걸면
+    /// 돌아와 이어서 끝낼 기회만 사라진다.
+    ///
+    /// **게임이 늘면 여기서 멈춰 서서 그 게임의 `interrupt()` 를 읽어라.** 기본 가지를 두지 않는 이유다.
+    static func quittingKeepsTheScore(_ kind: MiniGameKind) -> Bool {
+        switch kind {
+        // 길건너 아잉이(v0.3.67)도 `interrupt()` 가 그 점수로 결과를 확정한다(CrossyGame) — 접어도 기록이 남는다.
+        case .tetris, .flappy, .crossy: return true
+        case .timingBar: return false
+        }
+    }
+}
+
 /// 미니게임 창의 콘텐츠. store 를 통째로 받지만 초 단위 시계(displayNow)는 읽지 않는다 — 60Hz 는 게임 잎 뷰의 TimelineView 안이다.
 struct CheckMiniGameWindowView: View {
-    /// 허브가 소유하는 **일시정지** 상태(v0.2.48).
+    /// 허브가 소유하는 **일시정지** 상태(v0.2.48). 순수한 전이는 코어 `MiniGamePauseState` 한 벌이다(폰 1.0.16 이 같은 것을 쓴다).
     ///
     /// 왜 허브인가: 정지 중에는 판을 못 들여다보게 캔버스를 통째로 가려야 하는데(순위표가 걸린 게임에서 멈춰 놓고
     /// 다음 기둥을 외우는 것이 이득이면 안 된다), 그 스크림을 게임마다 그리면 두 벌이 된다. 게임은 `isPaused`
     /// 한 값만 읽는다.
-    enum PauseState: Equatable {
-        case none
-        case paused
-        /// 재개 카운트다운(3 → 2 → 1). 이 동안에도 판은 **얼어 있다** — 안 그러면 정지로 얻은 리듬 이점이 남는다.
-        case resuming(Int)
-
-        /// 카운트다운 시작값. 3-2-1 이 있어야 정지 직전 화면을 보고 손을 맞춰 두는 이득이 사라진다.
-        static let countdownStart = 3
-
-        /// **정지 상한(초).** 넘으면 판을 그 점수로 확정하고 끝낸다(무효가 아니다).
-        ///
-        /// 왜 필요한가: 서버는 정지를 **모른다** — 라운드 토큰의 만료를 `clock_timestamp() - started_at` 실시간으로만
-        /// 재고(20260914010000:296-297), 유효기간은 30분이다. 클라가 판 시작 때 토큰을 최대 12분 묵은 것까지
-        /// 재사용하고(WorkTimerStoreMiniGame) 테트리스 한 판이 최장 9분쯤이므로, 남는 여유가 **9분 안팎**이다.
-        /// 그 이상 멈춰 두면 돌아와 끝내도 제출이 `token_expired` 로 거절된다 — **멈춰 뒀다는 이유로 기록을 잃는다.**
-        /// 5분에서 잘라 그 시점 점수를 확정하면, 잃는 것은 "이어서 더 할 기회"뿐이고 번 점수는 남는다.
-        /// 이것은 설정 스위치가 아니라 게임 상수다(2026-09-15 '자동 종료는 사용자 스위치로 주지 않는다').
-        /// 거는 범위는 **접었을 때 기록이 남는 게임**이다(v0.3.62 · `quittingKeepsTheScore`) — 0.3.61 까지는
-        /// "두 기존 게임은 한 판이 짧아 이 여유를 쓸 일이 없다"로 테트리스에만 걸었는데, 자동 정지(키 상실)가
-        /// 그 전제를 무너뜨려 플래피가 들어왔다. 타이밍 바는 접어도 남는 것이 없어 빠진다.
-        ///
-        /// **이 상한은 앱이 켜져 있는 동안만 산다** — 집행하는 쪽이 1초씩 자는 Task 라 프로세스가 죽으면 같이
-        /// 죽는다(`armPauseWatchdog`). 5분이 차기 전에 앱을 끄면 그 판 점수는 어디에도 안 남는다.
-        static let pauseLimitSeconds = 5 * 60
-
-        /// 판이 얼어 있는가(= `MiniGameHost.isPaused`). 카운트다운 중에도 참이다.
-        var isFrozen: Bool { self != .none }
-        /// 정지 카드(이어하기·그만두기)가 떠 있는가. **화면이 실제로 이 프로퍼티로 분기한다** —
-        /// 테스트만 부르고 화면은 `countdown == nil` 로 따로 판정하면, 상태가 하나 더 생기는 날
-        /// 테스트는 초록인 채 화면만 갈린다.
-        var showsCard: Bool { self == .paused }
-        /// 카운트다운 숫자(아니면 nil).
-        var countdown: Int? {
-            if case let .resuming(remaining) = self { return remaining }
-            return nil
-        }
-
-        /// [일시정지] 버튼과 ESC 가 공유하는 전이. **진행 중일 때만** 정지할 수 있다 —
-        /// 시작 전·결과 화면에서 얼리면 클릭이 안 먹는 화면이 된다.
-        func toggled(isPlaying: Bool) -> PauseState {
-            switch self {
-            case .none: return isPlaying ? .paused : .none
-            case .paused: return .resuming(Self.countdownStart)
-            case .resuming: return .paused          // 카운트다운 중 ESC 는 다시 정지(취소)
-            }
-        }
-
-        /// **ESC 한 번**의 전이(0.3.62). 게이트에 걸리면 `nil` 이다 — 수신처는 그때 이벤트를 **안 삼키고**
-        /// 남의 창으로 흘려보낸다(그래야 그 창의 ESC, 예컨대 팝오버 닫기가 산다).
-        ///
-        /// 왜 뷰 클로저에서 떼어내 여기 두는가: 판정이 클로저 안에 있던 동안은 헤드리스에서 부를 수가 없어
-        /// 이 게이트를 지키는 단언이 전부 **소스의 모양**(substring·순서)뿐이었다. 그래서 게이트 극성을
-        /// 뒤집어도(`guard !strokeBelongsToGame`) `gameWindow` 에 nil 을 넘겨도 시험이 통째로 초록이었다 —
-        /// 그 구멍으로 되살아나는 것이 바로 이 게이트가 막는 사고다(팝오버를 닫으려고 누른 ESC 가 게임 창으로
-        /// 가 정지해 둔 판을 3-2-1 뒤 재개한다. 조작키는 `strokeBelongsToGame` 가 전부 막으므로 한 수도 못 두고
-        /// 탑아웃 → 그 점수로 확정되고, 그 ESC 는 삼켜져 팝오버도 안 닫힌다).
-        ///
-        /// `nil` 인 자리 둘:
-        ///   · **키가 게임 창으로 간 것이 아니다** — 남의 창·팝오버·'아직 어느 창에도 안 간 순간'. 판정은
-        ///     방향키와 같은 `strokeBelongsToGame`(이벤트 창이 게임 창과 같은 객체인가 + 보이는가)이다.
-        ///   · **판이 도는 중이 아니다** — 시작 전·결과 화면의 ESC 까지 먹으면 다른 화면의 취소 키를 훔친다.
-        ///
-        /// 셋째 가드(`next != self`)는 **오늘은 도달할 수 없다** — `isPlaying` 이 참이면 `toggled` 가 세 상태
-        /// 모두에서 제자리를 안 돌려준다. 지우지 않고 두는 이유는 `toggled` 에 제자리 전이가 생기는 날
-        /// "바뀌지도 않았는데 ESC 를 삼키는" 상태를 여기서 막기 위해서다. 재현 가능한 분기로 읽지 마라
-        /// (그래서 위 목록에서 뺐다 — 뮤테이션을 넣어도 빨개지는 시험이 없는 것이 정상이다).
-        ///
-        /// 규칙은 `toggled(isPlaying:)` **한 벌**이다. 여기서 베껴 적으면 두 벌이 되어 언젠가 갈린다.
-        @MainActor
-        func escaped(eventWindow: NSWindow?, gameWindow: NSWindow?, isPlaying: Bool) -> PauseState? {
-            guard MiniGameSpaceKey.strokeBelongsToGame(eventWindow, gameWindow: gameWindow) else { return nil }
-            guard isPlaying else { return nil }
-            let next = toggled(isPlaying: isPlaying)
-            guard next != self else { return nil }
-            return next
-        }
-
-        /// **정지 상한을 이 게임에 거는가.** 기준은 게임 이름이 아니라 **"접었을 때 기록이 남는가"** 다 —
-        /// 상한이 하는 일은 `quitRound()` 로 판을 접는 것 하나이고, 접는 결과가 게임마다 다르기 때문이다.
-        /// 기록이 남는 게임에서 상한은 **점수를 건진다**(멈춰 뒀다는 이유로 토큰이 늙어 판을 통째로 잃는 것을
-        /// 막는다). 기록이 안 남는 게임에서는 같은 동작이 **판을 없앤다** — 거기 걸면 돕는 게 아니라 뺏는다.
-        ///
-        /// 코드에서 확인한 사실(2026-10-21):
-        ///   · 테트리스·플래피 — `interrupt()` 가 `phase = .result` 로 **결과를 확정**하고(TetrisGame·FlappyGame),
-        ///     잎 뷰의 `onChange(of: game.phase)` 가 그 전이에서 `host.onFinished(점수)` 를 부른다 → 기록이 남는다.
-        ///   · 타이밍 바 — `interrupt()` 가 `game.invalidate()` 만 한다(MiniGameTimingBar). phase 가 `.ready` 로
-        ///     되돌아가고 `onFinished` 는 **안 불린다** → 남는 것이 없다(10라운드를 못 채워 애초에 점수가 없다).
-        ///
-        /// 그래서 타이밍 바의 정지는 상한 없이 얼어 있어도 **해롭지 않다**: 프레임 루프가 멈춰 있어 유휴 0% 는
-        /// 그대로고(`TimelineView(.animation(paused:))`), 접어 봐야 건질 점수가 없으며, 라운드 토큰이 30분에
-        /// 만료되면 어차피 기록되지 않는다 — 상한이 있든 없든 그 판의 결과는 '없음'으로 같고, 상한을 걸면
-        /// 돌아와 이어서 끝낼 기회만 사라진다.
-        ///
-        /// **게임이 늘면 여기서 멈춰 서서 그 게임의 `interrupt()` 를 읽어라.** 기본 가지를 두지 않는 이유다.
-        static func quittingKeepsTheScore(_ kind: MiniGameKind) -> Bool {
-            switch kind {
-            // 길건너 아잉이(v0.3.67)도 `interrupt()` 가 그 점수로 결과를 확정한다(CrossyGame) — 접어도 기록이 남는다.
-            case .tetris, .flappy, .crossy: return true
-            case .timingBar: return false
-            }
-        }
-
-        /// **창이 키를 잃었을 때**의 전이(0.3.62 — 실사용 제보 "테트리스 일시정지하고 다른 창을 클릭하면
-        /// 아예 끝나버려요"의 수리). `toggled(isPlaying:)` 를 재사용하지 않는 이유는 **방향이 하나**라는 것이다 —
-        /// 키 상실은 언제나 '얼린다'이고 절대 풀지 않는다. `toggled` 를 그대로 쓰면 이미 정지해 둔 판이 키를
-        /// 잃는 순간 `.resuming` 으로 **풀려** 안 보이는 창에서 3-2-1 이 흐른다(제보의 반대 방향 사고다).
-        ///
-        /// `nil` 은 "아무 일도 하지 않는다"다(지금 상태를 그대로 둔다). 두 자리에서 돌려준다:
-        ///   · **판이 도는 중이 아니다** — 시작 전·결과 화면에서 얼리면 클릭이 안 먹는 창이 된다(위 `toggled` 와 같은 근거).
-        ///   · **이미 `.paused` 다** — 여기서 또 얼리면 수신처가 정지 감시(`armPauseWatchdog`)를 새로 걸고,
-        ///     그 시계는 1초 수면부터 다시 시작한다. 1초 안에 키를 잃었다 되찾기를 반복하면 누적(`pausedSecondsUsed`)이
-        ///     영영 안 올라 5분 상한이 통째로 무력해진다 — 그 상한은 순위 공정성의 보루다.
-        func resigningKey(isPlaying: Bool) -> PauseState? {
-            guard isPlaying else { return nil }
-            switch self {
-            case .paused: return nil
-            // 카운트다운 중이면 **취소하고 다시 언다.** 안 그러면 안 보이는 창에서 3-2-1 이 흘러 판이 저절로 풀린다.
-            case .none, .resuming: return .paused
-            }
-        }
-
-        /// 카운트다운 한 걸음(1초). 3 → 2 → 1 → none.
-        func steppedDown() -> PauseState {
-            guard case let .resuming(remaining) = self else { return self }
-            return remaining <= 1 ? .none : .resuming(remaining - 1)
-        }
-    }
+    ///
+    /// 여기 남은 맥 몫은 아래 확장 둘이다 — ESC 판정(`NSWindow` 를 읽는다)과 상한 범위(플랫폼마다 값이 다르다).
+    typealias PauseState = MiniGamePauseState
 
     let store: WorkTimerStore
     /// 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
@@ -671,10 +639,11 @@ struct CheckMiniGameWindowView: View {
     /// 재개 카운트다운 Task. 창이 닫히거나 interruptToken 이 오르면 반드시 cancel 한다 — 안 그러면 죽은 화면의
     /// @State 를 1초마다 두드리는 Task 가 남는다.
     @State private var resumeTask: Task<Void, Never>?
-    /// 이 판에서 **누적으로** 멈춰 있던 초. 정지를 풀어도 0 으로 안 돌아간다 — 상한이 회당이면
+    /// 이 판에서 **누적으로** 얼어 있던 시간(`MiniGamePauseMeter`). 정지를 풀어도 0 으로 안 돌아간다 — 상한이 회당이면
     /// "4분 59초 멈춤 → 재개 → 다시 멈춤"을 반복해 벽시계를 무한히 늘릴 수 있고, 그러면 상한이
-    /// 막으려던 바로 그 일(토큰이 늙어 판을 통째로 잃는 것)이 그대로 일어난다. 새 판에서만 0 이 된다.
-    @State private var pausedSecondsUsed = 0
+    /// 막으려던 바로 그 일(토큰이 늙어 판을 통째로 잃는 것)이 그대로 일어난다. 새 판에서만 비운다.
+    /// `pauseState` 를 바꾸는 자리마다 바로 뒤에서 `notePauseClock()` 으로 알린다.
+    @State private var pauseMeter = MiniGamePauseMeter()
     /// 정지 감시(v0.3.38). 너무 오래 멈춰 있으면 그 점수로 확정하고 판을 끝낸다 — 아래 `pauseLimitSeconds` 참조.
     @State private var pauseWatchdog: Task<Void, Never>?
     /// 판 도중 토큰 감시(v0.3.67 — 끝이 정해지지 않은 판만). `tokenKeeperInterval` 마다 스토어에 "토큰이 늙었으면 갈아 끼워라" 를 묻는다.
@@ -773,6 +742,7 @@ struct CheckMiniGameWindowView: View {
             isPlaying = false
             cancelResume()
             pauseState = .none
+            notePauseClock()
             MiniGameKeyLatch.releaseAll(&input)
             cancelTokenKeeper()
         }
@@ -791,6 +761,7 @@ struct CheckMiniGameWindowView: View {
             cancelResume()
             MiniGameKeyLatch.releaseAll(&input)
             pauseState = next
+            notePauseClock()
             // `next` 는 언제나 `.paused` 다(위 순수 값의 유일한 비-nil 결과). 감시는 카드가 떠 있는 동안만 돈다.
             // 여기서는 게임 종류를 **묻지 않는다** — 범위 판정은 `armPauseWatchdog` 한 자리에 있다(수동 정지와
             // 같은 문으로 들어가야 두 길이 갈리지 않는다).
@@ -824,7 +795,8 @@ struct CheckMiniGameWindowView: View {
         )
     }
 
-    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 넷(각자 넓은 창을 연다).
+    /// 게임 고르기 사이드바(v0.3.69): 혼자 게임 넷(이 창에서 바뀐다) + 대결 문 다섯(각자 넓은 창을 연다 — 다섯째는 아잉 뒤집기,
+    /// 넘치는 문은 같이 하기 칸 안에서 스크롤된다).
     private var gameSidebar: some View {
         MiniGameSidebar(
             selected: store.miniGameKind,
@@ -835,7 +807,9 @@ struct CheckMiniGameWindowView: View {
             onGomoku: { store.openGomokuFromMiniGame() },
             onChess: { store.openChessFromMiniGame() },
             onTetrisDuel: { store.openTetrisDuelFromMiniGame() },
-            onRummy: { store.openRummyFromMiniGame() }
+            onRummy: { store.openRummyFromMiniGame() },
+            onReversi: { store.openReversiFromMiniGame() },
+            clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll
         )
     }
 
@@ -907,8 +881,8 @@ struct CheckMiniGameWindowView: View {
                     store.beginMiniGameLiveRound(kind: kind)
                     // 끝이 정해지지 않은 판(길건너)은 판 도중 토큰을 갈아 끼운다 — 감시는 그 게임에서만 돈다.
                     armTokenKeeper(kind: kind)
-                    // 정지 예산은 **판마다** 새로 준다(위 `pausedSecondsUsed` 주석).
-                    pausedSecondsUsed = 0
+                    // 정지 예산은 **판마다** 새로 준다(위 `pauseMeter` 주석).
+                    pauseMeter = MiniGamePauseMeter()
                 }
                 // 판이 스스로 끝났으면(게임오버·10라운드 완주) 정지 상태도 같이 푼다 — 안 그러면 결과 화면 위에
                 // 스크림이 남아 아무것도 못 누르는 창이 된다.
@@ -917,6 +891,7 @@ struct CheckMiniGameWindowView: View {
                     cancelPauseWatchdog()
                     cancelTokenKeeper()
                     pauseState = .none
+                    notePauseClock()
                     // 출구 ① 탑아웃(자연 종료). 토큰이 **안 오르는** 자리라 공통 수신처가 못 잡는다 —
                     // 결과 카드를 보는 동안 ← 를 놓았는데 그 뗌이 반영되지 않으면 다음 판이 왼쪽으로 출발한다.
                     MiniGameKeyLatch.releaseAll(&input)
@@ -1124,9 +1099,10 @@ struct CheckMiniGameWindowView: View {
             beginResume()
         } else {
             pauseState = next
+            notePauseClock()
         }
-        // 정지 감시는 **카드가 떠 있는 동안만** 돈다. 카운트다운(`resuming`)은 3초짜리라 상한과 무관하고,
-        // 재개 취소로 다시 `.paused` 가 되면 여기서 새로 걸린다(멱등 — 시계가 처음부터 다시 간다).
+        // 정지 감시는 **카드가 떠 있는 동안만** 돈다. 카운트다운(`resuming`) 동안은 끊지 않지만 그 3초도 시계에는
+        // 쌓인다(`MiniGamePauseMeter`). 재개 취소로 다시 `.paused` 가 되면 여기서 새로 걸리고, 이미 넘었으면 바로 접는다.
         if case .paused = pauseState { armPauseWatchdog() } else { cancelPauseWatchdog() }
     }
 
@@ -1134,13 +1110,21 @@ struct CheckMiniGameWindowView: View {
     private func beginResume() {
         cancelResume()
         cancelPauseWatchdog()
+        // [이어하기] 를 눌렀어도 이미 넘었으면 풀어 주지 않고 그 점수로 접는다(폰 `applyPause` 와 같다).
+        // 감시는 1초마다 보므로 그 사이에 넘은 판이 여기로 올 수 있다.
+        if isPlaying, PauseState.quittingKeepsTheScore(store.miniGameKind), pauseMeter.isOver() {
+            quitRound()
+            return
+        }
         pauseState = .resuming(PauseState.countdownStart)
+        notePauseClock()
         resumeTask = Task { @MainActor in
             while true {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 guard case .resuming = pauseState else { return }
                 pauseState = pauseState.steppedDown()
+                notePauseClock()
                 if pauseState == .none { return }
             }
         }
@@ -1173,18 +1157,22 @@ struct CheckMiniGameWindowView: View {
         // 접어도 기록이 안 남는 게임에는 안 건다 — 거는 순간 상한이 점수를 건지는 장치가 아니라 판을
         // 없애는 장치가 된다(위 머리말 · `PauseState.quittingKeepsTheScore`).
         guard PauseState.quittingKeepsTheScore(store.miniGameKind) else { return }
-        // 1초씩 센다. **남은 시간이 아니라 쓴 시간을 누적**하므로, 정지를 풀었다 다시 걸어도
-        // 시계가 처음부터 가지 않는다(`pausedSecondsUsed` 가 판 단위로 산다).
+        // 1초마다 판 누적(`pauseMeter`)을 본다. **남은 시간이 아니라 쓴 시간을 누적**하므로, 정지를 풀었다 다시
+        // 걸어도 시계가 처음부터 가지 않는다(시계는 판 단위로 산다).
         pauseWatchdog = Task { @MainActor in
-            while pausedSecondsUsed < PauseState.pauseLimitSeconds {
+            while !pauseMeter.isOver() {
                 try? await Task.sleep(for: .seconds(1))
                 guard !Task.isCancelled else { return }
                 // 그 사이 이어하기·그만두기·판 종료가 있었으면 아무것도 하지 않는다(누적은 남긴다).
                 guard case .paused = pauseState, isPlaying else { return }
-                pausedSecondsUsed += 1
             }
             quitRound()
         }
+    }
+
+    /// 방금 바뀐 `pauseState` 를 정지 시계에 알린다. 상태를 바꾸는 자리마다 바로 뒤에서 부른다.
+    private func notePauseClock() {
+        pauseMeter.observe(pauseState)
     }
 
     private func cancelPauseWatchdog() {
@@ -1217,6 +1205,7 @@ struct CheckMiniGameWindowView: View {
         cancelResume()
         cancelPauseWatchdog()
         pauseState = .none
+        notePauseClock()
         isPlaying = false
         // 출구 ⑥ [그만두기]. 아래 `abortMiniGameRound()` 가 토큰을 올려 공통 수신처도 지나가지만,
         // **여기서도 푼다** — 토큰을 올리는 쪽이 스토어라 그 구현이 바뀌면(예: 이미 끝난 판이면 안 올림)
@@ -1530,7 +1519,7 @@ struct MiniGameGameHeader: View {
     }
 }
 
-/// 대결 문 넷의 '받은 신청' 점(v0.3.69). 값은 **메뉴바 점과 같은 네 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
+/// 대결 문의 '받은 신청' 점(v0.3.69 — 넷, 아잉 뒤집기가 더해져 다섯). 값은 **메뉴바 점과 같은 사실**이다(`CheckApp` 의 hasGomokuInvite · hasChessInvite ·
 /// hasTetrisInvite · hasRummyInvite 와 같은 식) — 새 조회를 하지 않고, 스토어가 이미 들고 있는 것을 읽기만 한다.
 ///
 /// 이 창에서 점이 필요한 이유: 대결 창을 여는 길이 이 사이드바다. 신청이 와 있는데 문이 아무 말도 안 하면 메뉴바 점을 보고
@@ -1540,12 +1529,15 @@ struct MiniGameDuelInvites: Equatable {
     var chess = false
     var tetris = false
     var rummy = false
+    var reversi = false
 
-    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false) {
+    /// 새 문의 칸은 **맨 뒤**에 기본값과 함께 붙인다 — 기존 호출(`MiniGameDuelInvites(tetris: true)` 등)이 한 글자도 안 바뀐다.
+    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false) {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
         self.rummy = rummy
+        self.reversi = reversi
     }
 
     @MainActor
@@ -1554,7 +1546,107 @@ struct MiniGameDuelInvites: Equatable {
             gomoku: !store.gomoku.pendingIncomingInvites.isEmpty,
             chess: store.chess.visibleIncoming != nil,
             tetris: store.tetris.visibleIncoming != nil,
-            rummy: store.rummy.hasIncomingInvite
+            rummy: store.rummy.hasIncomingInvite,
+            reversi: store.reversi.visibleIncoming != nil
+        )
+    }
+}
+
+extension MiniGameDuelInvites {
+    subscript(door: MiniGameDuelDoor) -> Bool {
+        switch door {
+        case .gomoku: gomoku
+        case .chess: chess
+        case .tetris: tetris
+        case .rummy: rummy
+        case .reversi: reversi
+        }
+    }
+
+    /// 같이 하기 칸이 저절로 굴러가 보여 줄 문 — **새로 선** 신청 점 가운데 가장 아래 문(창을 처음 열 때(`old == nil`)는 서 있는 점
+    /// 가운데 가장 아래 문). 없으면 nil(굴리지 않는다). 가장 아래인 이유: 위쪽 문은 맨 위 화면에 이미 보이고, 접힘 아래로 숨는 것은
+    /// 아래쪽 문이다(대표 결정 C 의 약점 "아래 줄 · 그 신청 점을 놓치기 쉬움"을 메우는 자리).
+    static func scrollTarget(from old: MiniGameDuelInvites?, to new: MiniGameDuelInvites) -> MiniGameDuelDoor? {
+        MiniGameDuelDoor.allCases.last { new[$0] && !(old?[$0] ?? false) }
+    }
+}
+
+/// 같이 하기 칸(2026-11-03 대표 결정 #d_zw7CXHEtevVS "C 스크롤로"): 줄·창은 그대로 두고 **이 칸만** 스크롤한다.
+///
+/// macOS 는 스크롤 막대를 평소 숨겨서 접힘 아래 문(아잉 뒤집기 · 다음 마작)과 그 신청 점을 놓치기 쉽다(카드에 적어 드린 약점).
+/// 그래서 둘을 더한다:
+///   · **바닥 흐림** — 순위 목록의 `overflowFade` 와 같은 말("이어진다"). 다만 끝까지 지우지 않는다(`sidebarDuelFadeFloor`) —
+///     접힌 문의 신청 점이 흐림 속에서도 보여야 한다. 스크롤 내용 끝에 흐림 높이만큼 빈 꼬리를 두어 끝까지 내리면 마지막 문이 온전히 선다.
+///   · **신청이 오면 그 문까지 굴린다** — `MiniGameDuelInvites.scrollTarget`. 애니메이션 없이 한 번에(메시지 창의 검증된 갈래와 같다).
+///
+/// 줄 자체에는 id 를 달지 않는다 — 남의 시험들이 문 다섯 줄의 글자를 그대로 잰다(V0360 · V0369 · 리버시 배선). 대신 줄과 같은 높이·간격의
+/// 투명 자리표를 줄 뒤에 겹쳐 세우고 거기에 id 를 단다(줄 높이는 `sidebarRowHeight` 로 굳어 있어 두 열이 어긋나지 않는다).
+struct MiniGameSidebarDuelViewport<Rows: View>: View {
+    /// 스크롤 내용 끝 꼬리의 id — 마지막 문을 흐림 위로 올릴 때 겨눈다.
+    static var tailID: String { "minigame-duel-tail" }
+
+    let invites: MiniGameDuelInvites
+    var clipsOverflowInsteadOfScroll: Bool = false
+    @ViewBuilder let rows: () -> Rows
+
+    private typealias L = MiniGameWindowLayout
+
+    var body: some View {
+        if !L.sidebarDuelScrolls {
+            rowStack
+        } else if clipsOverflowInsteadOfScroll {
+            // 스냅샷 전용: 앱이 처음 보여 주는 그림(맨 위)과 같게 위를 남기고 아래를 자른다.
+            rowStack
+                .frame(height: L.sidebarDuelViewportHeight, alignment: .top)
+                .clipped()
+                .mask(fade)
+        } else {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        rowStack.background(alignment: .top) { anchors }
+                        Color.clear.frame(height: L.sidebarDuelFadeHeight).id(Self.tailID)
+                    }
+                }
+                .frame(height: L.sidebarDuelViewportHeight)
+                .mask(fade)
+                .onAppear { reveal(MiniGameDuelInvites.scrollTarget(from: nil, to: invites), proxy) }
+                .onChange(of: invites) { old, new in reveal(MiniGameDuelInvites.scrollTarget(from: old, to: new), proxy) }
+            }
+        }
+    }
+
+    private var rowStack: some View {
+        VStack(spacing: L.sidebarRowSpacing) { rows() }
+    }
+
+    /// 줄과 같은 자리의 투명 자리표(id = 문).
+    private var anchors: some View {
+        VStack(spacing: L.sidebarRowSpacing) {
+            ForEach(MiniGameDuelDoor.allCases, id: \.self) { door in
+                Color.clear.frame(height: L.sidebarRowHeight).id(door)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+
+    /// 마지막 문은 꼬리까지 내려 흐림 위에 온전히 세운다. 다른 문은 최소한만 굴려 문 전체가 보이게 한다(이미 보이면 안 움직인다).
+    private func reveal(_ door: MiniGameDuelDoor?, _ proxy: ScrollViewProxy) {
+        guard let door else { return }
+        if door == MiniGameDuelDoor.allCases.last {
+            proxy.scrollTo(Self.tailID, anchor: .bottom)
+        } else {
+            proxy.scrollTo(door, anchor: nil)
+        }
+    }
+
+    private var fade: LinearGradient {
+        let start = (L.sidebarDuelViewportHeight - L.sidebarDuelFadeHeight) / L.sidebarDuelViewportHeight
+        return LinearGradient(
+            stops: [.init(color: .black, location: 0),
+                    .init(color: .black, location: start),
+                    .init(color: .black.opacity(L.sidebarDuelFadeFloor), location: 1)],
+            startPoint: .top, endPoint: .bottom
         )
     }
 }
@@ -1586,6 +1678,9 @@ struct MiniGameSidebar: View {
     let onChess: () -> Void
     let onTetrisDuel: () -> Void
     let onRummy: () -> Void
+    let onReversi: () -> Void
+    /// 스냅샷 전용: 같이 하기 칸을 ScrollView 대신 클립으로 그린다(ImageRenderer 는 ScrollView 안쪽을 못 그린다). 앱은 언제나 false.
+    var clipsOverflowInsteadOfScroll: Bool = false
 
     /// 대결 문이 열려 있는가(위 잠금 규칙).
     private var doorsOpen: Bool { !isPlaying || isFrozen }
@@ -1606,10 +1701,14 @@ struct MiniGameSidebar: View {
                 }
             }
             group(Self.duelTitle) {
-                MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }
-                MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }
-                MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
-                MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
+                // 줄 순서 = `MiniGameDuelDoor` 순서(칸이 저절로 굴러갈 때 겨누는 자리가 이 순서로 선다 — 둘이 갈리면 엉뚱한 문으로 간다).
+                MiniGameSidebarDuelViewport(invites: invites, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll) {
+                    MiniGameGomokuEntryButton(hasInvite: invites.gomoku) { onGomoku() }
+                    MiniGameChessEntryButton(hasInvite: invites.chess) { onChess() }
+                    MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
+                    MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
+                    MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() }
+                }
             }
             .disabled(!doorsOpen)
             Spacer(minLength: 0)
@@ -1817,6 +1916,21 @@ struct MiniGameRummyEntryButton: View {
 
     var body: some View {
         MiniGameSidebarRow(title: Self.title, icon: RummyEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
+    }
+}
+
+/// 사이드바의 [아잉 뒤집기] 문(1:1 리버시). 이름·도움말 글자는 맥 문구 집 `ReversiText` 한 곳에서 온다(큐브 문이
+/// `RummyInviteText.gameName` 을 쓰는 것과 같은 방식). 렌더 테스트가 단독으로 그린다(internal).
+struct MiniGameReversiEntryButton: View {
+    static let title = ReversiText.gameName
+    static let help = ReversiText.sidebarHelp
+
+    var hasInvite: Bool = false
+    let action: () -> Void
+
+    var body: some View {
+        MiniGameSidebarRow(title: Self.title, icon: ReversiEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
                            hasInvite: hasInvite, help: Self.help, action: action)
     }
 }

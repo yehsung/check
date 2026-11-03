@@ -1,0 +1,189 @@
+{
+  "__note": "말풍선 장면: 상대 둘 + 내 자리. 데모 시계가 고정이라 말풍선이 사라지지 않는다.",
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "state": {
+    "id": "d0000000-0000-4000-8000-00000000c002",
+    "status": "active",
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "stake": 5,
+    "is_public": false,
+    "max_seats": 4,
+    "seat_count": 4,
+    "seq": 9,
+    "server_now_ms": 1789621500000,
+    "grace_ms": 2000,
+    "expires_at_ms": null,
+    "finished_at_ms": null,
+    "end_reason": null,
+    "turn_seat_no": 0,
+    "turn_started_ms": 1789621482000,
+    "turn_deadline_ms": 1789621542000,
+    "consecutive_passes": 0,
+    "pool_count": 46,
+    "table": [
+      [
+        "B3",
+        "B4",
+        "B5"
+      ],
+      [
+        "A7",
+        "B7",
+        "C7"
+      ],
+      [
+        "D1",
+        "D2",
+        "D3",
+        "D4"
+      ],
+      [
+        "C10",
+        "C11",
+        "C12",
+        "C13"
+      ],
+      [
+        "A1",
+        "B1",
+        "C1"
+      ]
+    ],
+    "table_layout": [
+      [
+        40,
+        40
+      ],
+      [
+        260,
+        40
+      ],
+      [
+        40,
+        130
+      ],
+      [
+        680,
+        40
+      ],
+      [
+        700,
+        200
+      ]
+    ],
+    "draft": null,
+    "my_seat_no": 0,
+    "my_rack": [
+      "A10",
+      "A11",
+      "A12",
+      "B1",
+      "B2",
+      "C9",
+      "D10",
+      "D11",
+      "D13",
+      "A3",
+      "C5",
+      "B8",
+      "C2",
+      "J",
+      "D6"
+    ],
+    "my_initial_done": false,
+    "seats": [
+      {
+        "user_id": "d0000000-0000-4000-8000-000000000001",
+        "display_name": "아잉러",
+        "avatar_url": null,
+        "character": "aing",
+        "seat_no": 0,
+        "state": "playing",
+        "rack_count": 15,
+        "initial_done": false,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b1",
+        "display_name": "구름빵",
+        "avatar_url": null,
+        "character": "jellyfish",
+        "seat_no": 1,
+        "state": "playing",
+        "rack_count": 8,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b2",
+        "display_name": "초코칩",
+        "avatar_url": null,
+        "character": "ghost",
+        "seat_no": 2,
+        "state": "playing",
+        "rack_count": 11,
+        "initial_done": true,
+        "timeout_streak": 1,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b3",
+        "display_name": "민트별",
+        "avatar_url": null,
+        "character": null,
+        "seat_no": 3,
+        "state": "playing",
+        "rack_count": 5,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": null,
+        "final_rank": null,
+        "final_score": null,
+        "forfeit_order": null,
+        "is_winner": null,
+        "payout": null
+      }
+    ],
+    "reactions": [
+      {
+        "seat_no": 1,
+        "key": "joy",
+        "at_ms": 1789621499200
+      },
+      {
+        "seat_no": 2,
+        "key": "sleepy",
+        "at_ms": 1789621499400
+      },
+      {
+        "seat_no": 0,
+        "key": "heart",
+        "at_ms": 1789621499600
+      }
+    ],
+    "last_event": {
+      "kind": "play",
+      "seat_no": 3,
+      "count": 3,
+      "at_ms": 1789621498000
+    }
+  }
+}

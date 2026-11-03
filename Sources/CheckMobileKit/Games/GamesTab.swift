@@ -30,6 +30,8 @@ struct GamesTab: View {
                         .padding(.top, 12)
                     tetrisDuelCard
                         .padding(.top, 12)
+                    rummyCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -51,6 +53,8 @@ struct GamesTab: View {
                 // 테트리스도 같다(P5) — 당겨서 새로고침이 카드의 "받은 신청" 칩을 **지금** 맞추는 유일한 길이다
                 // (허브 조회는 30초 스로틀이라 사용자가 당긴 것에 답하지 않는다).
                 await store.tetris.refreshLobby()
+                // 아잉 큐브도 같다 — 받은 초대·내 방이 전부 로비 응답이다.
+                await store.rummy.refreshLobby()
             }
             .navigationDestination(for: GamesDestination.self) { destination in
                 switch destination {
@@ -73,6 +77,10 @@ struct GamesTab: View {
                     //   목적지가 다시 세워져 화면이 헐리고 `tetrisScreenDidDisappear()` 가 돌아, 수락한 판이
                     //   화면 없이 15초 침묵으로 진다(D5). 로비 탭 선택은 화면 안에서 쥔다.
                     GamesTetrisDuelScreen(store: store)
+                case .rummy:
+                    // ★ 위 둘과 같은 까닭으로 **데모 닻을 여기 달지 않는다**: 이 클로저에서 읽는 값이 바뀌면 목적지가 다시 세워져
+                    //   `rummyScreenDidDisappear()` 가 돌고, 끝난 판이 접힌다. 로비 탭·데모 장면은 화면 안에서 쥔다.
+                    GamesRummyScreen(store: store)
                 }
             }
         }
@@ -82,6 +90,7 @@ struct GamesTab: View {
             consumeRoute()
             applyDemoChessRoute()
             applyDemoTetrisRoute()
+            applyDemoRummyRoute()
             applyDemoSeed()
         }
         // 라우트 계기에서도 꺼낸다 — 탭 막대가 이 탭을 **먼저** 마운트했으면 깃발이 서기 전에 onAppear 가 끝난다.
@@ -89,6 +98,7 @@ struct GamesTab: View {
             consumeRoute()
             applyDemoChessRoute()
             applyDemoTetrisRoute()
+            applyDemoRummyRoute()
         }
     }
 
@@ -153,7 +163,8 @@ struct GamesTab: View {
     // MARK: 오목 카드
 
     private var gomokuCard: some View {
-        let incoming = store.badgeCount
+        // ★ `badgeCount` 가 아니다 — 탭 배지에는 큐브 초대도 들어가고, 이 카드는 오목 신청만 말한다.
+        let incoming = store.gomokuIncomingCount
         let gomoku = store.context.gomoku
         // ★ 한 사람 한 판(B8) — **이 방향은 클라밖에 막는 데가 없다.** 서버의 오목 게이트는 체스를 모르므로
         //   (`GamesBusyGame` 머리말) 체스 판이 흐르는 동안 이 카드를 열어 두면 오목 로비의 [수락]으로
@@ -337,6 +348,55 @@ struct GamesTab: View {
                            : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .tetris) ?? ""))
     }
 
+    // MARK: 아잉 큐브 카드
+
+    /// 아잉 큐브 카드(1.0.16) — 테트리스 카드 **바로 아래**, 모양도 같다(썸네일 60 · 제목 · 부제 · 칩 + 보조 한 줄 · 꺾쇠). 2~4인 게임이라 이름에 "1:1" 이 없다.
+    /// 입구 하나로 로비·방·판·결과·순위를 다 연다(화면이 `phase` 로 갈아 끼운다).
+    /// ★ 칩과 보조 줄의 서열은 `GamesRummyCard` 한 곳이다(여기서 삼항으로 다시 고르면 두 벌이 된다 — 그 판정은 맥 스위트가 값으로 잰다).
+    private var rummyCard: some View {
+        let blockedBy = store.rummyEntryBlock
+        let chip = GamesRummyCard.chip(store)
+        let detail = GamesRummyCard.detail(store)
+        return Button {
+            store.context.router.push(GamesDestination.rummy, on: .games)
+        } label: {
+            InsetGroup {
+                HStack(spacing: 14) {
+                    GamesRummyTabThumbnail()
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(GamesRummyText.title)
+                            .font(MobileTheme.rowTitle)
+                            .foregroundStyle(MobileTheme.label)
+                        Text(GamesRummyText.cardSubtitle)
+                            .font(MobileTheme.rowSubtitle)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) { gomokuChip(chip); gomokuDetail(detail) }
+                            VStack(alignment: .leading, spacing: 4) { gomokuChip(chip); gomokuDetail(detail) }
+                        }
+                        .padding(.top, 3)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MobileTheme.cardPadding)
+                .padding(.vertical, 14)
+            }
+            .opacity(blockedBy == nil ? 1 : 0.55)
+            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil
+                           ? GamesRummyText.cardOpenHint
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .rummy) ?? ""))
+    }
+
     @ViewBuilder
     private func gomokuChip(_ text: String?) -> some View {
         if let text {
@@ -437,6 +497,12 @@ struct GamesTab: View {
     private func applyDemoTetrisRoute() {
         guard store.consumePendingDemoTetrisScreen() else { return }
         store.context.router.push(GamesDestination.tetrisDuel, on: .games)
+    }
+
+    /// 데모 스크린샷 전용: 시작 라우트가 아잉 큐브 장면(`games/rummy/…`)이면 큐브를 쌓는다(위 테트리스와 같은 규약).
+    private func applyDemoRummyRoute() {
+        guard store.consumePendingDemoRummyScreen() else { return }
+        store.context.router.push(GamesDestination.rummy, on: .games)
     }
 
     /// 데모 스크린샷 전용: 로비를 다녀온 상태(`visited`) — 허브 자체는 로비를 부르지 않는다(새 조회 없음).

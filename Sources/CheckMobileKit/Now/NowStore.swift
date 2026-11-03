@@ -728,6 +728,11 @@ package final class NowStore {
         knownEquippedCharacterID ?? context.widgetSnapshots.current?.characterID
     }
 
+    /// 상태 카드의 연속 근무 칩(읽기만 — 새 서버 호출 없음). 나 탭 미션 조회가 앞에 올 때마다 탭과 무관하게 받아 둔 값이다.
+    package var myStreakDays: Int? {
+        context.links.me?.streakDays
+    }
+
     /// 내 초상 표정 = 지금 근무 상태(내 카드 → 위젯 스냅숏 → 둘 다 모르면 링 없는 기본 얼굴).
     /// 순위·게임·탭 막대가 같은 규칙을 쓴다(`GamesMeIdentity` · `RankingsStore.myCharacterMood`).
     package var displayedMood: CharacterMood {

@@ -1,0 +1,209 @@
+{
+  "about": "아잉 뒤집기(리버시 규칙) 수 세기(perft) 기대값 — Swift 시험(ReversiPerftTests)과 SQL 마이그레이션(reversi_perft 적용 시점 자기 검사)이 같이 읽는 한 벌이다. 숫자를 한쪽에만 적으면 둘이 갈려도 아무도 모른다. 손으로 고치지 말고 FLIP/fixtures/make_perft.py 로 다시 만든다(원천 md5: cases.json a6e1387ad7e7a4b569d1067e406b8c9c · reference.py e99fcfef5cd9524005d6b45bf1960235).",
+  "positions_source": "시작 판 depth 1~10 은 research/cases.json → perft.values.<depth>.ply_pass 를 옮긴 것이다 (공표값 OEIS A124004 와 같다 — known 칸과 1~10 모두 같음을 단언했다). depth 1~7 는 make_perft.py 가 research/reference.py 로 다시 세어 같음을 단언했고, depth 8~10 은 순수 파이썬으로 느려 옮기기만 했다. 어긋나면 우리 구현이 틀린 것이다 — 이 숫자를 고치지 마라.",
+  "leaves_source": "이 저장소가 만든 자리 — research/cases.json hand 사례 E02 · E05 · F02(expected.board_after) · H05 · B01(board, 두기 전)을 id 로 집었다. 노드 수·outcome·score·discs·terminal_children 은 make_perft.py 가 reference.py 로 계산했고, 사례의 expected(resolution·end·score·board_after)와도 맞춰 보았다. 공표값이 아니라 구현 셋(SQL·Swift·파이썬)을 맞세우는 자리다.",
+  "leaves_why": "SQL `array_length('{}',1)` = NULL 결함을 ⓐⓑ 가 ms 안에 밟는다 — 빈 배열의 array_length 는 0 이 아니라 NULL 이라, 합법 수가 0 인 국면이 섞이면 합계·조건이 통째로 사라진다(길이는 cardinality() 로 잰다). 시작 판에서는 첫 패스가 depth 9 에야 나와 그 결함이 깊이를 올려야만 우연히 드러난다. ⓐ 는 패스(뿌리 합법 수 0, 상대는 있음) · ⓑ 는 둘 다 0(빈칸 남은 끝) · ⓒⓓ 는 끝 사유 board_full·wipeout 의 갈림 · ⓔ 는 depth 1 = 1 인데 depth 2 = 0(유일한 수 e5 뒤 전멸 — 자식에서 합법 수 0). 0 짜리 잎과 0 아닌 잎이 둘 다 있어야 한다.",
+  "counts_note": "ply_pass 관례(rules.md V-17): 강제 패스도 한 수(깊이 1)로 센다 · depth 에 닿기 전에 끝난 판(둘 다 둘 곳 없음)은 세지 않는다(정확히 depth 수 경로만, 끝난 판은 0). counts[0] 이 depth 1 이다. 시작 판 depth 10 은 24,571,056 이고 24,571,284 는 ply_pass_ended 관례 값이라 쓰지 않는다. 잎의 outcome: null = 차례인 쪽이 둘 곳 있음 · 'pass' = 차례인 쪽만 둘 곳 없음(V-09 자동 패스) · 'wipeout'|'board_full'|'no_moves' = 둘 다 없음(V-10, reversi_end_kind 값). score 는 reversi_score 모양 {black, white, result}(안 끝났으면 null, 빈칸은 이긴 쪽에, 합 64) · discs 는 판 위 실제 돌 수. terminal_children 은 '그 수를 둔 뒤 상대가 둘 곳이 없는' 수의 idx(오름차순) — divide(depth 2)에서 둘 다 없으면 0, 둔 쪽만 있으면 1(패스 한 수)로 나와야 하는 줄이다. other_conventions 는 같은 자리를 다른 관례로 센 값 — 관례를 잘못 고른 구현과 결과가 갈리는 기준선이다.",
+  "sql_contract": "마이그레이션(FLIP/server/20261108200000_reversi.sql, 생성기 FLIP/server/build.py)은 이 숫자를 베껴 적는다. 행 모양은 pg_temp.reversi_perft_expect(label, board, color, depth, nodes) 의 ('<라벨>', '<판 64자>', '<black|white>', <깊이>, <노드>) — 색 다음에 정수 둘, 깊이가 먼저다. 그 행들은 식별자에 reversi_perft 가 든 문장 안에 있어야 한다(대조 시험 ReversiPerftFixtureSQLContractTests 가 그 문장만 읽는다). 라벨은 이 파일의 label 글자 그대로, 판은 64자 .bw (빈칸 '.', '-' 금지 — 대조 시험의 주석 걷기가 빼기 두 개 이어진 곳에서 줄을 자른다). reversi_perft 는 depth 0~6 만 받으므로 SQL 에는 depth 6 이하 행만 둔다 — 시작 판 depth 1~4 와 잎 ⓐ~ⓔ depth 1·2 가 필수다. 깊이·노드를 손으로 바꾸면 대조 시험이 빨개진다.",
+  "positions": [
+    {
+      "label": "① 시작 판",
+      "board": "...........................wb......bw...........................",
+      "color": "black",
+      "counts": [
+        4,
+        12,
+        56,
+        244,
+        1396,
+        8200,
+        55092,
+        390216,
+        3005288,
+        24571056
+      ],
+      "recounted_to_depth": 7
+    }
+  ],
+  "leaves": [
+    {
+      "label": "ⓐ 패스 국면(E02)",
+      "case_id": "E02",
+      "board": "wb..............................................................",
+      "color": "black",
+      "counts": [
+        1,
+        1
+      ],
+      "outcome": "pass",
+      "score": null,
+      "discs": {
+        "black": 1,
+        "white": 1,
+        "empty": 62
+      },
+      "terminal_children": [],
+      "other_conventions": {
+        "ply_pass_ended": [
+          1,
+          1
+        ],
+        "move_only": [
+          1,
+          0
+        ],
+        "move_only_ended": [
+          1,
+          1
+        ]
+      },
+      "note": "흑 차례인데 흑은 둘 곳이 없고(백 a1 은 모서리) 백은 c1 이 있다 → 자동 패스. depth 1 은 패스 한 수가 잎 1개, depth 2 는 패스 뒤 백 c1(흑 전멸) 한 줄. 합법 수 목록이 빈 국면을 뿌리에서 바로 밟는다."
+    },
+    {
+      "label": "ⓑ 둘 다 못 둠·빈칸 남음(E05)",
+      "case_id": "E05",
+      "board": "bbb.....................................................w.......",
+      "color": "black",
+      "counts": [
+        0,
+        0
+      ],
+      "outcome": "no_moves",
+      "score": {
+        "black": 63,
+        "white": 1,
+        "result": "black_win"
+      },
+      "discs": {
+        "black": 3,
+        "white": 1,
+        "empty": 60
+      },
+      "terminal_children": [],
+      "other_conventions": {
+        "ply_pass_ended": [
+          1,
+          1
+        ],
+        "move_only": [
+          0,
+          0
+        ],
+        "move_only_ended": [
+          1,
+          1
+        ]
+      },
+      "note": "흑·백 모두 합법 수가 없는데 빈칸이 60개 남았다 → 끝(no_moves). 빈칸은 이긴 흑에 더해 63:1. 어느 깊이에서도 0 — 합법 수 목록 길이가 NULL 이 되는 구현은 여기서 바로 갈린다."
+    },
+    {
+      "label": "ⓒ 판 가득 32:32 무승부(F02 결과 판)",
+      "case_id": "F02",
+      "board": "bbbbbbbbbbbbbbbbbbbbbbbbbbbwwwwwwwwwwwwwwwwwwwwwwwwwwwbbwwwwwbbb",
+      "color": "white",
+      "counts": [
+        0,
+        0
+      ],
+      "outcome": "board_full",
+      "score": {
+        "black": 32,
+        "white": 32,
+        "result": "draw"
+      },
+      "discs": {
+        "black": 32,
+        "white": 32,
+        "empty": 0
+      },
+      "terminal_children": [],
+      "other_conventions": {
+        "ply_pass_ended": [
+          1,
+          1
+        ],
+        "move_only": [
+          0,
+          0
+        ],
+        "move_only_ended": [
+          1,
+          1
+        ]
+      },
+      "note": "F02 에서 흑이 h8 을 둔 뒤의 판(64칸 가득, 32:32). 백 차례로 넘어간 자리지만 둘 곳이 없어 끝. 점수 32:32 무승부, 끝 사유 board_full."
+    },
+    {
+      "label": "ⓓ 전멸 64:0(H05)",
+      "case_id": "H05",
+      "board": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "color": "white",
+      "counts": [
+        0,
+        0
+      ],
+      "outcome": "wipeout",
+      "score": {
+        "black": 64,
+        "white": 0,
+        "result": "black_win"
+      },
+      "discs": {
+        "black": 64,
+        "white": 0,
+        "empty": 0
+      },
+      "terminal_children": [],
+      "other_conventions": {
+        "ply_pass_ended": [
+          1,
+          1
+        ],
+        "move_only": [
+          0,
+          0
+        ],
+        "move_only_ended": [
+          1,
+          1
+        ]
+      },
+      "note": "판 전체가 흑 64(사례 H05 는 색이 없다 — 흑이 마지막에 둬 백 차례로 넘어간 자리로 둔다). 끝 사유는 판 가득보다 전멸이 앞선다(V-10)."
+    },
+    {
+      "label": "ⓔ 8방향 동시 뒤집기(B01 직전 판)",
+      "case_id": "B01",
+      "board": "..................b.b.b....www....bw.wb....www....b.b.b.........",
+      "color": "black",
+      "counts": [
+        1,
+        0
+      ],
+      "outcome": null,
+      "score": null,
+      "discs": {
+        "black": 8,
+        "white": 8,
+        "empty": 48
+      },
+      "terminal_children": [
+        36
+      ],
+      "other_conventions": {
+        "ply_pass_ended": [
+          1,
+          1
+        ],
+        "move_only": [
+          1,
+          0
+        ],
+        "move_only_ended": [
+          1,
+          1
+        ]
+      },
+      "note": "B01 의 두기 전 판, 흑 차례. 흑의 합법 수는 e5(36) 하나뿐이고 e5 는 8방향을 한 번에 뒤집어 백을 전멸시킨다 → depth 1 = 1, depth 2 = 0(끝난 판은 세지 않음 — 자식 국면의 합법 수 0 을 밟는다). 8방향 가운데 한 방향이라도 덜 뒤집는 구현은 백이 남아 depth 2 가 6 이 된다(방향마다 확인)."
+    }
+  ]
+}

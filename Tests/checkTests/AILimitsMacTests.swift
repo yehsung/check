@@ -73,11 +73,11 @@ private let amClaudeUsageJSON = """
 """
 
 /// 키체인 `security -w` 출력의 실측 모양. **토큰 자리는 자리표시자**이고 `expiresAt` 은 epoch **밀리초**다.
-private func amClaudeCredentialsJSON(expiresAtMilliseconds: Double, plan: String = "max") -> String {
+private func amClaudeCredentialsJSON(expiresAtMilliseconds: Double, plan: String = "max", tier: String = "default") -> String {
     """
     {"claudeAiOauth":{"accessToken":"PLACEHOLDER-NOT-A-TOKEN","refreshToken":"PLACEHOLDER-NOT-A-TOKEN",
     "expiresAt":\(Int(expiresAtMilliseconds)),"scopes":["user:inference"],"subscriptionType":"\(plan)",
-    "rateLimitTier":"default"}}
+    "rateLimitTier":"\(tier)"}}
     """
 }
 
@@ -319,6 +319,28 @@ struct AILimitsMacReaderTests {
         #expect(credentials.planLabel == "max")
         // ★ 액세스 토큰은 값으로 들고 있지만 **에러·분류에는 담길 자리가 없다**(AILimitReadError 에 메시지 필드가 없다).
         #expect(credentials.accessToken.isEmpty == false)
+    }
+
+    /// 200달러 플랜은 울트라다. `subscriptionType` 이 100달러와 같은 "max" 라 등급 칸으로만 가른다.
+    @Test(arguments: [
+        ("max", "default_claude_max_20x", "ultra"),
+        ("max", "default_claude_max_5x", "max"),
+        ("max", "default", "max"),
+        ("pro", "default_claude_max_20x", "pro"),
+        ("ultra", "default", "ultra")
+    ])
+    func claudePlanNameFollowsTheTier(plan: String, tier: String, expected: String) throws {
+        let credentials = try AILimitClaudeReader.parseCredentials(
+            Data(amClaudeCredentialsJSON(expiresAtMilliseconds: 9_999_999_999_999, plan: plan, tier: tier).utf8)
+        ).get()
+        #expect(credentials.planLabel == expected)
+    }
+
+    /// 등급 칸이 없는 자격 증명을 울트라로 올려 적지 않는다.
+    @Test
+    func claudePlanNameStaysMaxWithoutTier() {
+        #expect(AILimitClaudeReader.planLabel(subscriptionType: "max", rateLimitTier: nil) == "max")
+        #expect(AILimitClaudeReader.planLabel(subscriptionType: nil, rateLimitTier: "default_claude_max_20x") == nil)
     }
 
     /// 토큰이 비면 '미로그인'이다(항목은 있다) → 숨긴다.
@@ -2563,14 +2585,15 @@ struct AILimitsMacCardContentTests {
         #expect(sources["CheckAILimitsRow.swift"]?.contains("자세히 ›") == false,
                 "누를 데가 없는 '자세히 ›' 가 남았다")
         // 독립 창 목록에서도 빠졌다(없는 창의 식별자가 남으면 "등록이 빠졌다"로 읽힌다).
-        // 일곱 = 오목 · 체스 · 설정 · 캐릭터 뽑기(v0.3.54) · 1:1 테트리스(v0.3.60) · 생일 축하(v0.3.66) · 아잉 큐브(v0.3.69).
+        // 여덟 = 오목 · 체스 · 설정 · 캐릭터 뽑기(v0.3.54) · 1:1 테트리스(v0.3.60) · 생일 축하(v0.3.66) · 아잉 큐브(v0.3.69) · 아잉 뒤집기.
         #expect(MiniGameSpaceKey.standaloneWindowIDs == [CheckGomokuWindowController.frameAutosaveName,
                                                          CheckChessWindowController.frameAutosaveName,
                                                          CheckSettingsWindowController.frameAutosaveName,
                                                          CheckGachaWindowController.frameAutosaveName,
                                                          CheckTetrisDuelWindowController.frameAutosaveName,
                                                          CheckCakeGiftWindowController.frameAutosaveName,
-                                                         CheckRummyWindowController.frameAutosaveName])
+                                                         CheckRummyWindowController.frameAutosaveName,
+                                                         CheckReversiWindowController.frameAutosaveName])
         #expect(!MiniGameSpaceKey.standaloneWindowIDs.contains("check.aiLimitsWindow"))
         // 팝오버가 갱신을 당기는 길은 **남아 있다**(창의 `onOpen` 이 하던 일 — 그게 사라지면 팝오버를 열어도
         // 숫자가 안 갱신된다). 스토어의 5분 하한이 난사를 막는 것도 그대로다.

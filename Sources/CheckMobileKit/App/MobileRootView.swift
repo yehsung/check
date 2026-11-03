@@ -20,6 +20,8 @@ public struct MobileRootView: View {
             .tint(MobileTheme.accent)
             // 스크롤한 내용이 접힌 내비 머리 뒤로 비치지 않게 — 앱 전체에 한 번 건다(스크롤 뷰로 내려간다).
             .opaqueNavigationEdge()
+            // 아잉 큐브 판 화면의 방향을 시스템에 알리는 자리 — 세션 단계와 무관하게 늘 살아 있어야 한다(가로에 남는 길을 막는다).
+            .background(GamesRummyOrientationDriver(games: model.games))
             .onAppear {
                 // 화면 모드는 앱 델리게이트가 창이 생기기 전에 걸었다 — 여기서 한 번 더(앱 타깃이 빠뜨려도 첫 화면에서 걸린다).
                 model.installAppearance()
@@ -71,7 +73,8 @@ public struct MobileRootView: View {
             model.sceneDidEnterBackground()
         case .inactive:
             // inactive(알림 센터 내리기 · 앱 전환 중)는 연결을 끊지 않는다 — 곧 active 로 돌아오는 일이 대부분이다.
-            break
+            // 미니게임 판만 얼린다: 앱 전환기 스냅숏에 판이 찍히기 전에 가려야 한다.
+            model.sceneWillResignActive()
         @unknown default:
             break
         }
@@ -90,7 +93,9 @@ struct MobileTabsView: View {
     var body: some View {
         @Bindable var router = model.router
         let badges = model.badges
-        TabView(selection: $router.selectedTab) {
+        // 문이 탭을 막으면(큐브 방의 방장 — `MobileRouter.departureGuard`) 이 본문을 다시 돌려 막대를 원래 탭으로 되돌린다.
+        let _ = router.tabRefusalSerial
+        TabView(selection: $router.tabBarSelection) {
             NowTab(store: model.now)
                 .tabItem { Label(AingTab.now.title, systemImage: AingTab.now.systemImage) }
                 .tag(AingTab.now)
@@ -153,7 +158,8 @@ struct MobileTabsView: View {
             get: {
                 guard let sheet = model.me.cakeGiftSheet else { return nil }
                 if model.me.cakeGiftSheetOnScreen { return sheet }
-                guard !model.push.isPrimerPresented, !model.games.isAnyMatchScreenVisible else { return nil }
+                guard !model.push.isPrimerPresented, !model.games.isAnyMatchScreenVisible,
+                      model.games.rummyInterfaceOrientation != .landscape else { return nil }
                 #if DEBUG
                 // 데모 `me/gift/dismissed`: 띄우지 않는다 — 위 거두기가 닫은 것으로 쳐 나 탭 '다시 열기' 줄이 선다(스크린샷).
                 if MeDemoHooks.cakeGiftAction() == "dismissed" { return nil }

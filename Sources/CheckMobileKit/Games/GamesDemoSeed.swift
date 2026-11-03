@@ -9,6 +9,8 @@ import Foundation
 ///
 ///     -AingCheckGamesDemo playing   미니게임: 판 도중(프레임 멈춤)
 ///     -AingCheckGamesDemo result    미니게임: 끝난 판의 점수 카드
+///     -AingCheckGamesDemo paused    미니게임: 정지 카드(스크림이 판을 가린 채)
+///     -AingCheckGamesDemo countdown 미니게임: 재개 3-2-1 의 3(시계가 안 흐른다 — 그 장면에 멈춰 있다)
 ///     -AingCheckGamesDemo preview   오목 대국: 미리보기 돌을 세운 채
 ///     -AingCheckGamesDemo stake     오목 로비: 판돈 시트
 ///     -AingCheckGamesDemo rules     오목: 규칙 시트
@@ -17,13 +19,26 @@ import Foundation
 ///     -AingCheckGamesDemo visited   게임 탭: 오목 로비를 한 번 다녀온 뒤(전적 · 지금 대결 중이 채워진 첫 화면)
 ///     -AingCheckGamesDemo leave     오목 결과: 2.5초 뒤 [로비로] — 같은 화면 안에서 단계가 바뀔 때 탭 막대가 되살아나는지 보는 장면
 enum GamesDemoSeed: String {
-    case playing, result, preview, stake, rules, resign, bottom, visited, leave
+    case playing, result, preview, stake, rules, resign, bottom, visited, leave, paused, countdown
 
     static let argument = "-AingCheckGamesDemo"
 
     static func current(isDemo: Bool, arguments: [String] = ProcessInfo.processInfo.arguments) -> GamesDemoSeed? {
         guard isDemo, let index = arguments.firstIndex(of: argument), arguments.indices.contains(index + 1) else { return nil }
         return GamesDemoSeed(rawValue: arguments[index + 1].lowercased())
+    }
+
+    /// 테트리스·길건너: 막 시작한 판(정지 장면의 밑그림 — 스크림이 가리므로 판의 모양은 중요하지 않다).
+    static func tetrisRunning() -> TetrisGame {
+        var game = TetrisGame(seed: 917)
+        game.action()
+        return game
+    }
+
+    static func crossyRunning() -> CrossyGame {
+        var game = CrossyGame(seed: 917)
+        game.action()
+        return game
     }
 
     /// 타이밍 바: 판 도중(4라운드, 마커가 목표 왼쪽을 지나는 중 · 앞 세 라운드는 명중) 또는 완주.

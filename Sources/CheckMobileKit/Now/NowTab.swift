@@ -63,6 +63,11 @@ struct NowTab: View {
                 .scrollContentBackground(.hidden)
                 .background(MobileTheme.background.ignoresSafeArea())
                 .scrollDismissesKeyboard(.interactively)
+                .navigationDestination(for: NowDestination.self) { destination in
+                    switch destination {
+                    case .teamRoster: NowTeamRosterScreen(store: store)
+                    }
+                }
                 .refreshable { await store.refreshNow() }
                 .onScrollGeometryChange(for: Bool.self) { geometry in
                     geometry.contentOffset.y + geometry.contentInsets.top > NowTab.collapseOffset
@@ -100,7 +105,7 @@ struct NowTab: View {
     }
 
     private func consumeRoute() {
-        // aingcheck://now(위젯 탭)는 탭 자체다 — 이 탭은 쌓는 화면이 없으니 꺼내 비우기만 한다(라우터가 이미 탭을 골랐다).
+        // aingcheck://now(위젯 탭)는 탭 자체다 — 꺼내 비우기만 한다(라우터가 이미 탭을 고르고 쌓인 명단 화면도 비웠다).
         _ = store.context.router.consumePendingRoute(for: .now)
     }
 }
@@ -207,11 +212,67 @@ private struct NowUpdateNoticeRow: View {
 struct NowSectionHeader: View {
     let title: String
     let trailing: String?
+    /// 값이 있으면 오른쪽 글자 대신 [우리 팀 전체 보기] 링크를 둔다(우리 팀 줄이 없는 자리 — `NowWorkingSection`).
+    var onShowTeamRoster: (() -> Void)? = nil
 
     var body: some View {
-        SectionHeader(title, trailing: trailing.map { .text($0) } ?? .none)
+        content
             .textCase(nil)
             .listRowInsets(EdgeInsets(top: 16, leading: MobileTheme.titleMargin, bottom: 8, trailing: MobileTheme.titleMargin))
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let onShowTeamRoster {
+            // 큰 글자에서 한 줄에 안 들어가면 링크를 아래 줄로 내린다(제목이 꺾이지 않게).
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    titleText
+                    Spacer(minLength: 8)
+                    NowTeamRosterLink(title: NowText.teamRosterSeeAllInHeader, action: onShowTeamRoster)
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    titleText
+                    NowTeamRosterLink(title: NowText.teamRosterSeeAllInHeader, action: onShowTeamRoster)
+                }
+            }
+        } else {
+            SectionHeader(title, trailing: trailing.map { .text($0) } ?? .none)
+        }
+    }
+
+    private var titleText: some View {
+        Text(title)
+            .font(MobileTheme.sectionTitle)
+            .foregroundStyle(MobileTheme.label)
+            .lineLimit(1)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// [전체 보기] 링크. 누르는 칸은 44pt 이지만 **자리는 글자 높이만큼만 차지한다** — 지금 탭 첫 화면 길이를 늘리지 않는 것이 이 링크의 조건이다.
+/// 접근성 글자 크기에서는 음수 여백을 풀어 준다 — 글자가 44pt 를 넘으면 위아래 줄과 겹친다.
+struct NowTeamRosterLink: View {
+    let title: String
+    let action: () -> Void
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 2) {
+                Text(title)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .accessibilityHidden(true)
+            }
+            .font(.footnote.weight(.semibold))
+            .foregroundStyle(MobileTheme.accent)
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.borderless)
+        .padding(.vertical, typeSize.isAccessibilitySize ? 0 : -14)
+        .accessibilityLabel(Text(NowText.teamRosterSeeAllInHeader))
     }
 }
 
@@ -261,7 +322,7 @@ struct NowStatusSection: View {
     @ViewBuilder
     private func content(now: Date) -> some View {
         if let card = store.myCard(now: now) {
-            NowStatusCard(card: card, characterID: store.displayedCharacterID, onEditGoal: onEditGoal)
+            NowStatusCard(card: card, characterID: store.displayedCharacterID, streakDays: store.myStreakDays, onEditGoal: onEditGoal)
         } else if store.teamLoadState == .failed {
             // 시도는 끝났는데 모른다(오프라인 · 5xx) — 도는 요청이 없는데 "불러오는 중"을 남기지 않는다.
             NowUnavailableRow(title: NowText.statusUnavailableTitle, isRetrying: store.isRefreshing) { store.refresh() }
@@ -342,24 +403,51 @@ struct NowUnavailableRow: View {
 struct NowStatusCard: View {
     let card: NowMyCard
     let characterID: String?
+    /// 연속 근무일. nil 이면 칩이 없다(서버가 안 알려 줌).
+    let streakDays: Int?
     let onEditGoal: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             top
-            Text(NowFormat.clock(card.todaySeconds))
-                .scaledFont(size: 48, weight: .semibold)
-                .monospacedDigit()
-                .kerning(-1)
-                .foregroundStyle(MobileTheme.label)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
+            timerLine
                 .padding(.top, 12)
-                .accessibilityLabel(Text("\(NowText.todayLabel) \(NowFormat.spokenDuration(card.todaySeconds))"))
             meter
                 .padding(.top, 10)
         }
+    }
+
+    /// 큰 타이머 줄. 칩은 그 오른쪽 빈자리에 선다 — 타이머(48pt)보다 낮아 카드 높이를 1pt 도 안 더한다. 큰 글자에서 한 줄에 안 들어가면
+    /// 그때만 아래로 내린다(타이머가 칩 때문에 줄어들지 않는다).
+    @ViewBuilder
+    private var timerLine: some View {
+        if let streakDays {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 8) {
+                    timer
+                    Spacer(minLength: 0)
+                    NowStreakChip(days: streakDays)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    timer
+                    NowStreakChip(days: streakDays)
+                }
+            }
+        } else {
+            timer
+        }
+    }
+
+    private var timer: some View {
+        Text(NowFormat.clock(card.todaySeconds))
+            .scaledFont(size: 48, weight: .semibold)
+            .monospacedDigit()
+            .kerning(-1)
+            .foregroundStyle(MobileTheme.label)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .accessibilityLabel(Text("\(NowText.todayLabel) \(NowFormat.spokenDuration(card.todaySeconds))"))
     }
 
     private var mood: CharacterMood {
@@ -472,6 +560,31 @@ struct NowStatusCard: View {
     }
 }
 
+/// 연속 근무 칩(맥 `HeaderStreakChipLabel` 과 같은 문장 · 같은 기호). 0일도 그린다(사용자 예시가 "연속 0일 근무!"다).
+/// 불꽃만 빨강이다 — 앰버(`pending`)는 같은 카드에서 '연결 끊김'을 말한다.
+private struct NowStreakChip: View {
+    let days: Int
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: HeaderStreakCopy.icon)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(MobileTheme.danger)
+            Text(HeaderStreakCopy.text(days))
+                .font(.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(MobileTheme.label2)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 8)
+        .frame(minHeight: 22)
+        .background(Capsule().fill(MobileTheme.fill))
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(HeaderStreakCopy.accessibilityLabel(days)))
+    }
+}
+
 // MARK: - 지금 근무 중
 
 struct NowWorkingSection: View {
@@ -483,9 +596,15 @@ struct NowWorkingSection: View {
         let teammates = people.filter(\.isTeammate)
         let others = people.filter { !$0.isTeammate }
         let state = store.workingLoadState
+        // [전체 보기]는 "우리 팀" 줄에 있다. 근무 중인 팀원이 없으면 그 줄이 없으므로 절 머리로 옮긴다 — 줄을 하나 더 세우면 첫 화면이 길어지고,
+        // 머리의 사람 수는 "다른 팀" 줄(또는 "근무 중인 사람이 없어요")이 이미 말하고 있어 잃는 것이 없다.
+        let showRoster: (() -> Void)? = store.showsTeamRosterEntry
+            ? { store.openTeamRoster() }
+            : nil
         let header = NowSectionHeader(
             title: NowText.workingTitle(count: nil),
-            trailing: state == .loaded ? NowText.peopleCount(people.count) : nil
+            trailing: state == .loaded ? NowText.peopleCount(people.count) : nil,
+            onShowTeamRoster: teammates.isEmpty ? showRoster : nil
         )
         if state != .loaded || people.isEmpty {
             Section {
@@ -511,7 +630,7 @@ struct NowWorkingSection: View {
         } else if !teammates.isEmpty, !others.isEmpty {
             // 우리 팀 · 다른 팀은 그룹 두 장(시안 02 — 사이 12pt).
             Section {
-                NowWorkingGroup(store: store, label: NowText.ourTeam, people: teammates, anchorID: NowTab.workingSectionID)
+                NowWorkingGroup(store: store, label: NowText.ourTeam, people: teammates, anchorID: NowTab.workingSectionID, onShowRoster: showRoster)
             } header: {
                 header
             }
@@ -523,7 +642,13 @@ struct NowWorkingSection: View {
             }
         } else {
             Section {
-                NowWorkingGroup(store: store, label: teammates.isEmpty ? NowText.otherTeams : NowText.ourTeam, people: people, anchorID: NowTab.workingSectionID)
+                NowWorkingGroup(
+                    store: store,
+                    label: teammates.isEmpty ? NowText.otherTeams : NowText.ourTeam,
+                    people: people,
+                    anchorID: NowTab.workingSectionID,
+                    onShowRoster: teammates.isEmpty ? nil : showRoster
+                )
             } header: {
                 header
             } footer: {
@@ -553,17 +678,34 @@ struct NowWorkingGroup: View {
     let people: [NowWorkingPerson]
     /// 데모 장면 `working` 이 스크롤해 갈 자리(첫 그룹만).
     let anchorID: String?
+    /// 우리 팀 묶음만: [전체 보기].
+    var onShowRoster: (() -> Void)? = nil
 
     static let dividerLeading: CGFloat = 64
 
     var body: some View {
         let count = people.count + 1
-        HStack(alignment: .firstTextBaseline) {
-            Text(label)
-                .accessibilityAddTraits(.isHeader)
-            Spacer(minLength: 8)
-            Text(NowText.peopleCount(people.count))
-                .monospacedDigit()
+        Group {
+            if let onShowRoster {
+                // 큰 글자에서 셋이 한 줄에 안 들어가면 링크를 아래 줄로 내린다(이름이 세로로 꺾이지 않게 — 절 머리와 같은 처방).
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline) {
+                        labelAndCount
+                        Spacer(minLength: 8)
+                        NowTeamRosterLink(title: NowText.teamRosterSeeAll, action: onShowRoster)
+                    }
+                    VStack(alignment: .leading, spacing: 8) {
+                        labelAndCount
+                        NowTeamRosterLink(title: NowText.teamRosterSeeAll, action: onShowRoster)
+                    }
+                }
+            } else {
+                HStack(alignment: .firstTextBaseline) {
+                    labelText
+                    Spacer(minLength: 8)
+                    countText
+                }
+            }
         }
         .font(.footnote.weight(.semibold))
         .foregroundStyle(MobileTheme.label2)
@@ -578,6 +720,23 @@ struct NowWorkingGroup: View {
                 store.context.router.open(.message(peerID: person.id))
             }
             .cardSegmentRow(.of(index: 1 + offset, count: count), dividerLeading: Self.dividerLeading)
+        }
+    }
+
+    private var labelText: some View {
+        Text(label)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var countText: some View {
+        Text(NowText.peopleCount(people.count))
+            .monospacedDigit()
+    }
+
+    private var labelAndCount: some View {
+        HStack(alignment: .firstTextBaseline) {
+            labelText
+            countText
         }
     }
 }

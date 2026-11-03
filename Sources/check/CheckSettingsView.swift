@@ -725,34 +725,7 @@ struct StatusMessageSettingsRow: View {
 
 // MARK: - 프로필 사진 삭제 행 (v0.3.36)
 
-/// 사진 삭제 자리의 문구 한 벌. **순수 값이라 테스트가 글자 그대로 되묻는다** — 스토어가 세우는 네 문구
-/// (성공·파일 남음·실패·로그인 전)도 여기서 가져간다. 문구가 뷰와 스토어 두 곳에 흩어지면 한쪽만 고쳐도
-/// 아무 테스트가 안 빨개진다.
-enum AvatarRemovalText {
-    static let title = "프로필 사진"
-    /// 평소 설명. **"사진이 있으면"이라고 말하지 않는다** — 이 행은 사진 유무와 무관하게 늘 같은 자리에 있다.
-    static let detail = "지우면 내 자리에 착용한 캐릭터가 대신 보여요."
-    /// 확인 단계의 설명. 되돌릴 수 없다는 사실만 말한다(겁주는 문장이 아니라 사실 한 줄).
-    static let confirmDetail = "지운 사진은 되돌릴 수 없어요. 다시 쓰려면 새로 올려야 해요."
-    static let action = "기본 캐릭터로 되돌리기"
-    static let confirm = "되돌리기"
-    static let cancel = "취소"
-    static let inFlight = "지우는 중…"
-    static let successMessage = "기본 캐릭터로 되돌렸어요"
-    /// 표는 비웠는데 **파일이 남은** 경우. "되돌렸어요"라고 말하면 거짓말이다 — 공개 버킷의 얼굴은 URL 만 알면 보인다.
-    /// 문구 근거: 앞부분은 일어난 사실(표는 비었다)을, 뒷부분은 이 저장소가 이미 쓰는 재시도 안내 문장
-    /// ("잠시 후 다시 시도해 주세요" — 별명 행의 연결 실패 안내)을 그대로 쓴다.
-    static let fileLeftMessage = "사진 파일이 아직 남아 있어요. 잠시 후 다시 시도해 주세요"
-
-    /// 팝오버 푸터(한 줄)용 짧은 쪽. 설정 행은 전문을 쓰고, 푸터만 이 값을 쓴다 — 긴 문장은 푸터에서 뒤가 잘리는데
-    /// 하필 잘리는 부분이 사용자가 할 일("다시 시도해 주세요")이다. 매핑을 여기 한 곳에 둬야 문구가 갈리지 않는다.
-    static func shortForFooter(_ message: String) -> String {
-        message == fileLeftMessage ? "사진 파일이 아직 남아 있어요" : message
-    }
-    static let failureMessage = "사진을 지우지 못했어요"
-    /// 로그인 전. 위젯의 "로그인하면 지금 근무 중인 사람이 떠요" 와 같은 어법이다.
-    static let signedOutMessage = "로그인하면 사진을 지울 수 있어요"
-}
+// 문구 한 벌(`AvatarRemovalText`)은 코어에 있다(폰 프로필 화면도 같은 문장을 쓴다 — 폰 1.0.16).
 
 /// 사진 되돌리기 결과 한 줄의 색 갈래. Bool 이 아닌 이유는 `WorkTimerStore.avatarRemovalNoticeTone` 주석에 있다.
 enum AvatarRemovalNoticeTone {
@@ -1132,51 +1105,7 @@ struct WorkShortcutRecorderRow: View {
 
 // MARK: - 소속 센터 행 (v0.3.13) — 읽기 전용
 
-/// 설정 창 '내 정보' 의 소속 센터 행이 그릴 세 가지 상태. **순수 값이라 테스트가 직접 되묻는다.**
-///
-/// ★ 이 타입의 존재 이유는 `loading` 과 `unset` 을 **가르는 것 하나다.** 둘 다 `myCenter == nil` 이지만
-///   뜻이 정반대다: 전자는 "서버가 아직 말 안 했다", 후자는 "서버가 없다고 말했다". 플래그 없이 nil 을
-///   '미지정'으로 읽으면 로그인 직후 창이 미지정으로 한 번 그려졌다가 GET 이 도착하며 값으로 바뀐다 —
-///   사용자 눈에는 깜빡임이다.
-///
-/// ★ **여기엔 바꾸는 길이 없다**(사장님 지시 2026-09-12). 센터는 가입 때 한 번 고르고 그 뒤로는 본인이
-///   못 바꾼다. 강제 수단은 서버 쪽이다 — `profiles.center` 에 `grant update` 를 주지 않았으므로 이 계정의
-///   PATCH 는 거절된다. 그래서 피커를 여기 남겨 두는 것이 '있어도 그만'이 아니라 **최악**이다: 낙관 반영이
-///   화면만 바꿨다가 실패 원복이 조용히 되돌리고, 사용자는 자기가 바꿨다고 믿은 채 아무 안내도 못 받는다.
-///   잘못 고른 사람은 운영자가 SQL 로 고친다. 되살리려면 SPEC 의 'DB' 절부터 다시 읽어라 — 서버 권한이 먼저다.
-enum CenterSettingsRowState: Equatable {
-    /// 서버값을 아직 못 받았다.
-    case loading
-    /// 서버가 '미지정'이라고 말해 줬다(가입 때 안 고른 계정).
-    case unset
-    /// 화면 글자("서울"/"부산"). 모르는 서버값은 여기 도달하지 못한다 — CenterLabel 이 걸러 unset 으로 접는다.
-    case chosen(String)
-
-    static func of(loaded: Bool, center: String?) -> CenterSettingsRowState {
-        guard loaded else { return .loading }
-        guard let display = CenterLabel.display(center) else { return .unset }
-        return .chosen(display)
-    }
-
-    /// 행 우측에 그릴 **값 한 마디**. 이 행이 전하는 사실의 본체다.
-    var value: String {
-        switch self {
-        case .loading:          return "…"
-        case .unset:            return "미지정"
-        case .chosen(let name): return name
-        }
-    }
-
-    /// 값 아래 한 줄. 상태마다 **다른 문장**이어야 한다 — 셋이 같은 글자면 이 행은 아무것도 말하지 않는다.
-    /// 배지 자리를 '이름 옆'이라고 적지 마라: 확정된 자리는 **아바타 모서리**다(SPEC 확정 1 · CheckAvatarView).
-    var caption: String {
-        switch self {
-        case .loading: return "불러오는 중…"
-        case .unset:   return "가입할 때 안 골랐어요. 운영자에게 말해 주세요."
-        case .chosen:  return "아바타 모서리에 배지로 보여요. 바꾸려면 운영자에게."
-        }
-    }
-}
+// 행이 그릴 세 가지 상태(`CenterSettingsRowState`)는 코어 `CenterLabel.swift` 에 있다(폰 나 → 설정도 같은 판정을 쓴다 — 폰 1.0.16).
 
 /// 소속 센터 행. **읽기 전용이다** — 피커도 버튼도 PATCH 도 없다(위 열거형 주석에 근거).
 /// 토글 행과 같은 좌우 구조(제목·설명 열 + 우측 값)라 '내 정보' 카드 안에서 층이 맞는다.

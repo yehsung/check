@@ -536,7 +536,7 @@ update public.teams set weekly_goal_hours = 40 where name = '팀이름';
 | `com.apple.security.app-sandbox` | MAS 필수 |
 | `com.apple.security.network.client` | Supabase REST · Realtime 웹소켓 · 사용량 API |
 | `com.apple.security.files.user-selected.read-only` | 아바타 사진 고르기(NSOpenPanel) |
-| `com.apple.security.temporary-exception.files.home-relative-path.read-only` = `/.claude/` `/.codex/` `/.gemini/` `/Library/Application Support/orca/` | AI 토큰 집계가 사용자 홈의 AI 도구 사용 기록을 **읽기만** 한다(2026-10-14 소유자 결정: 폴더 고르기 대신 예외 권한 신청, 반려 위험 감수). ASC 의 *App Sandbox Entitlement Usage Information* 에 사유를 적어야 한다 |
+| `com.apple.security.temporary-exception.files.home-relative-path.read-only` = `/.claude/` `/.codex/` `/.gemini/` `/Library/Application Support/orca/` `/Library/Application Support/Claude/local-agent-mode-sessions/`(v0.3.73) | AI 토큰 집계가 사용자 홈의 AI 도구 사용 기록을 **읽기만** 한다(2026-10-14 소유자 결정: 폴더 고르기 대신 예외 권한 신청, 반려 위험 감수). ASC 의 *App Sandbox Entitlement Usage Information* 에 사유를 적어야 한다 |
 | `com.apple.application-identifier` · `com.apple.developer.team-identifier` | 프로파일과 짝(`MQ2KQK37WD.com.yehsung.aingcheck` · `MQ2KQK37WD`) |
 
 그 밖의 키는 없습니다 — Developer ID 전용(하드닝 런타임 예외 등)도, `get-task-allow` 도 없고, 스크립트가 서명 뒤 **서명된 엔타이틀먼트가 이 파일과

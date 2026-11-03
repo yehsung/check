@@ -105,13 +105,32 @@ private func makeFocusStore(host: String) -> WorkTimerStore {
 
     @MainActor
     @Test
-    func focusModePanelNoticeYieldsToTheBlockingReason() {
-        // 안내줄은 하나뿐이다. 지금 이 화면에서 하려는 일(찌르기)의 차단 사유가 우선이고,
-        // 집중 모드는 내 수신 설정이라 정보에 가깝다 — 그래서 비근무 안내가 앞선다.
+    func focusModePanelNoticeSaysPokesAndMessagesBothWays() {
+        // 안내줄은 하나뿐이다. 2026-11-03(대표 요청 6)부터 집중은 받기만이 아니라 **보내기도** 막는다(찌르기·울트라·메시지·이모티콘) —
+        // 그래서 문장이 "받지 않아요"에서 "주고받지 않아요"로 바뀌었고, 순서도 비근무 안내보다 앞이다(아래 순서 단언).
         #expect(PokeFocusNotice.text(for: .off) == nil)
         // v0.3.11: 단계마다 **차이**를 말한다(2026-09-11 지적 — 버튼만으론 1단과 2단의 차이를 모른다).
-        #expect(PokeFocusNotice.text(for: .timed) == "집중 모드 1단 — 3시간 동안 콕찌르기를 받지 않아요")
-        #expect(PokeFocusNotice.text(for: .always) == "집중 모드 2단 — 해제 전까지 콕찌르기를 받지 않아요")
+        #expect(PokeFocusNotice.text(for: .timed) == "집중 모드 1단 — 3시간 동안 찌르기·메시지를 주고받지 않아요")
+        #expect(PokeFocusNotice.text(for: .always) == "집중 모드 2단 — 해제 전까지 찌르기·메시지를 주고받지 않아요")
+        // 순서: 집중 안내가 비근무 안내("메시지는 언제든")보다 앞이다 — 집중 중에 그 줄이 뜨면 거짓이다. 기준선은 셋 다 다르다.
+        let focusedOffWork = PokePanelNoticeLine.line(
+            disconnected: false, messageNotice: nil, notice: nil, isMyselfWorking: false, focusStage: .always
+        )
+        let plainOffWork = PokePanelNoticeLine.line(
+            disconnected: false, messageNotice: nil, notice: nil, isMyselfWorking: false, focusStage: .off
+        )
+        let focusedWorking = PokePanelNoticeLine.line(
+            disconnected: false, messageNotice: nil, notice: nil, isMyselfWorking: true, focusStage: .timed
+        )
+        #expect(focusedOffWork?.text == PokeFocusNotice.text(for: .always), "집중 중인데 '메시지는 언제든'이 떴다")
+        #expect(plainOffWork?.text == MessageAnytimeNotice.pokeOffWork, "집중이 아니면 비근무 안내가 그대로 서야 한다")
+        #expect(focusedWorking?.text == PokeFocusNotice.text(for: .timed))
+        // 방금 한 일의 결과(찌르기 거절 등)는 여전히 집중 안내보다 앞이다.
+        let withNotice = PokePanelNoticeLine.line(
+            disconnected: false, messageNotice: nil, notice: WorkTimerStore.myFocusBlocksSendingNotice,
+            isMyselfWorking: true, focusStage: .always
+        )
+        #expect(withNotice?.text == WorkTimerStore.myFocusBlocksSendingNotice && withNotice?.isWarning == true)
         // 두 문구는 292pt 본문 한 줄에 든다(두 줄로 넘어가면 패널 높이가 단계마다 흔들린다).
         let font = NSFont.systemFont(ofSize: 10)
         for stage in [FocusStage.timed, .always] {

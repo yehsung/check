@@ -727,3 +727,94 @@ struct V0369RummyMegaphoneDeferralTests {
         #expect(src.contains("rummyLive: rummy.defersMegaphoneBanner"))
     }
 }
+
+@Suite("폰 1.0.16 검토 — 하트비트는 판을 든 순간 · 깨어난 순간 곧바로 한 번(코어 · 맥도 같은 문)", .serialized)
+@MainActor
+struct V1016RummyHeartbeatCoreTests {
+    private func beats(_ label: String, engaged: Bool = true) -> (RummyStore, String) {
+        let script = EGScript()
+        script.stand("rummy_heartbeat", egEnvelope())
+        let (store, _, host) = egMake(label, script: script, engaged: engaged)
+        store.heartbeatSeconds = 3_600
+        return (store, host)
+    }
+
+    @Test("첫 걸음: 주기가 1시간이어도 판을 든 순간 1건 · 그 뒤는 주기를 기다린다")
+    func firstTickIsImmediate() async throws {
+        // 없으면: 앱을 새로 켠 직후 첫 전송이 10초 늦어, 마지막 하트비트에서 80~90초 사이에 돌아온 사람이 끊김 기권되는 결함이 초록이 된다.
+        let (store, host) = beats("first")
+        store.applyState(try egDecode(egState()))
+        await egWait { egCount(host, "rummy_heartbeat") >= 1 }
+        #expect(egCount(host, "rummy_heartbeat") == 1, "판을 들었는데 주기를 기다린다")
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(egCount(host, "rummy_heartbeat") == 1, "주기 전에 또 보냈다")
+
+        // 시계: 둘째 걸음은 주기 뒤에만 나간다(주기를 건너뛰면 초당 수십 번 쓴다).
+        let (timed, timedHost) = beats("period")
+        timed.heartbeatSeconds = 0.3
+        let started = ContinuousClock.now
+        timed.applyState(try egDecode(egState()))
+        await egWait { egCount(timedHost, "rummy_heartbeat") >= 2 }
+        #expect(egCount(timedHost, "rummy_heartbeat") >= 2, "첫 걸음 뒤 루프가 멎었다")
+        #expect(ContinuousClock.now - started >= .seconds(0.3), "주기를 안 기다리고 둘째를 보냈다")
+        timed.reset()
+    }
+
+    @Test("heartbeatNow: 곧바로 1건 · 루프는 늘 하나 · 한 차례에 여러 번 불러도 1건")
+    func nowSendsOneAndKeepsOneLoop() async throws {
+        // 없으면: 깨어날 때 다음 주기를 기다려 기권되거나, 부를 때마다 루프가 늘어 쓰기가 불어나는 결함이 초록이 된다.
+        let (store, host) = beats("now")
+        store.applyState(try egDecode(egState()))
+        await egWait { egCount(host, "rummy_heartbeat") >= 1 }
+        let previous = try #require(store.heartbeatTask)
+        store.heartbeatNow()
+        #expect(previous.isCancelled, "앞 루프가 살아 있어 이중으로 돈다")
+        #expect(store.heartbeatTask != previous)
+        await egWait { egCount(host, "rummy_heartbeat") >= 2 }
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(egCount(host, "rummy_heartbeat") == 2)
+        store.heartbeatNow()
+        store.heartbeatNow()
+        store.heartbeatNow()
+        await egWait { egCount(host, "rummy_heartbeat") >= 3 }
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(egCount(host, "rummy_heartbeat") == 3, "한 차례에 부른 것이 겹쳐 나갔다")
+        store.reset()
+    }
+
+    @Test("heartbeatNow 0건: 놀던 기기 · 하트비트를 쉬는 방 · 로그아웃 뒤")
+    func nowSendsNothingWhenNotHolding() async throws {
+        // 없으면: 놀던 맥이 깨어나며 다른 맥의 판을 살려 두거나, 화면 밖 방이 복귀 한 번에 살아나 모르는 사이 판돈이 걷히는 결함이 초록이 된다.
+        let (idle, idleHost) = beats("now-idle", engaged: false)
+        idle.applyState(try egDecode(egState()))
+        idle.heartbeatNow()
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(idle.heartbeatTask == nil && egCount(idleHost, "rummy_heartbeat") == 0, "놀던 기기가 하트비트를 보냈다")
+
+        let (held, heldHost) = beats("now-held")
+        held.roomHeartbeatHeld = true
+        held.applyState(try egDecode(egState(status: "forming", hostID: egB)))
+        #expect(held.phase == .room && held.heartbeatMatchID == nil)
+        held.heartbeatNow()
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(held.heartbeatTask == nil && egCount(heldHost, "rummy_heartbeat") == 0, "쉬는 방에 하트비트가 나갔다")
+        // 다시 보기 시작하면 정확히 한 번(주기를 안 기다리고 · 겹치지 않고).
+        held.roomHeartbeatHeld = false
+        await egWait { egCount(heldHost, "rummy_heartbeat") >= 1 }
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(egCount(heldHost, "rummy_heartbeat") == 1, "방을 다시 볼 때 하트비트가 안 나가거나 겹쳤다")
+        held.reset()
+
+        // 세대: 문을 지난 직후 로그아웃하면 다음 사람 토큰으로 안 나간다.
+        let (gone, goneHost) = beats("now-reset")
+        gone.applyState(try egDecode(egState()))
+        await egWait { egCount(goneHost, "rummy_heartbeat") >= 1 }
+        gone.heartbeatNow()
+        gone.reset()
+        try await Task.sleep(for: .milliseconds(150))
+        #expect(gone.heartbeatTask == nil && egCount(goneHost, "rummy_heartbeat") == 1, "로그아웃 뒤에 하트비트가 나갔다")
+        gone.heartbeatNow()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(egCount(goneHost, "rummy_heartbeat") == 1)
+    }
+}

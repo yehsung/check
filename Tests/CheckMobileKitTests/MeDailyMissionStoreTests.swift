@@ -711,7 +711,8 @@ struct MeDailyMissionStoreTests {
         let before = harness.requests(rpc: "achievements_status").count
 
         // ① 이미 채운 게임 — 제출은 성공하지만 미션 조회는 0건.
-        await harness.model.games.miniGames.performSubmit(kind: .timingBar, score: 10, token: "tok-1")
+        await harness.model.games.miniGames.performSubmit(entry: MiniGamePendingSubmit(
+            id: UUID(), kind: .timingBar, score: 10, token: "tok-1", tokenIssuedAt: Date(), recordedAt: Date(), attempts: 0))
         await harness.quiesceMe()
         #expect(harness.requests(rpc: "minigame_submit_score").count == 1, "제출 경로를 안 돌았다")
         #expect(harness.requests(rpc: "achievements_status").count == before,
@@ -719,7 +720,8 @@ struct MeDailyMissionStoreTests {
 
         // ② 아직 안 한 게임 — 정확히 한 건.
         harness.enqueue("achievements_status", .json(Self.status(dailyJSON: Self.daily(done: ["daily_timing_bar", "daily_flappy"]))))
-        await harness.model.games.miniGames.performSubmit(kind: .flappy, score: 10, token: "tok-2")
+        await harness.model.games.miniGames.performSubmit(entry: MiniGamePendingSubmit(
+            id: UUID(), kind: .flappy, score: 10, token: "tok-2", tokenIssuedAt: Date(), recordedAt: Date(), attempts: 0))
         await harness.quiesceMe()
         #expect(harness.requests(rpc: "achievements_status").count == before + 1,
                 "제출이 미션 조회를 안 냈다 — 판을 했는데 [받기]가 안 뜬다")

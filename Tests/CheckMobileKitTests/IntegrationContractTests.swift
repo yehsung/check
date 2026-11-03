@@ -119,6 +119,18 @@ import Testing
         "games/tetris/lobby", "games/tetris/lobby/invites", "games/tetris/ranking",
         "games/tetris/match/ready", "games/tetris/match/countdown", "games/tetris/match/playing",
         "games/tetris/match/speedup", "games/tetris/match/won", "games/tetris/match/lost",
+        // 아잉 큐브(1.0.16 — 라우트 표는 `MobileDemoRummyRoute` 머리말, 픽스처 계약은 `GamesRummyFixtureContractTests`).
+        "games/rummy/lobby", "games/rummy/ranking", "games/rummy/rules", "games/rummy/room",
+        "games/rummy/match/my-turn", "games/rummy/match/waiting", "games/rummy/match/edited",
+        "games/rummy/match/elsewhere", "games/rummy/match/full", "games/rummy/match/overview", "games/rummy/match/many",
+        "games/rummy/match/narrow", "games/rummy/match/tiny", "games/rummy/match/dragging", "games/rummy/match/attach", "games/rummy/match/placing",
+        "games/rummy/match/refused", "games/rummy/match/lifted", "games/rummy/match/handle", "games/rummy/match/reaction",
+        "games/rummy/match/reaction-picker", "games/rummy/match/exit", "games/rummy/match/motion", "games/rummy/match/rules", "games/rummy/match/leave",
+        "games/rummy/match/signout", "games/rummy/result",
+        "games/rummy/result/board", "games/rummy/result/won",
+        "games/rummy/room/guest", "games/rummy/room/tab-exit", "games/rummy/room/guest/tab-exit", "games/rummy/lobby/empty", "games/rummy/lobby/failed", "games/rummy/lobby/short",
+        "games/rummy/lobby/update", "games/rummy/lobby/missing", "games/rummy/lobby/people", "games/rummy/lobby/busy",
+        "games/rummy/lobby/sheet", "games/rummy/ranking/failed",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
         // 상점 뽑기 시트(폰 1.0.10 색 시안): 라우트는 `me/shop` 으로 열리고 장면도 `_me-shop` 이다 —
@@ -150,8 +162,10 @@ import Testing
             // 미니게임이라 두 기능이 한 글자를 다툰다 — `MobileDemoTetrisRoute` 머리말 3) 앱 모델의 데모 갈래가 연다.
             // 아래 ★ 단언이 이 예외를 스스로 만료시킨다.
             let tetrisHasNoRouteYet = route?.hasPrefix("games/tetris/") == true
+            // 아잉 큐브도 같은 갈래다(`AingRoute` 에 가지가 없고 앱 모델의 데모 갈래가 연다). 아래 ★ 단언이 스스로 만료시킨다.
+            let rummyHasNoRouteYet = route?.hasPrefix("games/rummy/") == true
             if let route, !["login", "update", "now/teamless"].contains(route), !chessHasNoRouteYet,
-               !tetrisHasNoRouteYet, MobileAuthRoute.demo(route) == nil {
+               !tetrisHasNoRouteYet, !rummyHasNoRouteYet, MobileAuthRoute.demo(route) == nil {
                 #expect(AingRoute(path: route) != nil, "장면 _\(scene) 의 라우트 \(route) 를 앱이 열지 못한다")
             }
         }
@@ -162,6 +176,8 @@ import Testing
                 "체스 라우트가 생겼다 — 위 games/chess 예외 갈래를 지워라")
         #expect(AingRoute(path: "games/tetris/lobby") == nil,
                 "1:1 테트리스 라우트가 생겼다 — 위 games/tetris 예외 갈래를 지워라")
+        #expect(AingRoute(path: "games/rummy/lobby") == nil,
+                "아잉 큐브 라우트가 생겼다 — 위 games/rummy 예외 갈래를 지워라")
         // ★ 그리고 **`games/tetris` 한 토막은 여전히 솔로 미니게임이어야 한다.** 1:1 쪽이 이 글자를 가로채는 날
         // (데모 갈래가 `AingRoute` 보다 앞이므로 가로채는 것은 한 줄이다) 솔로 테트리스 데모 라우트가 조용히 사라진다 —
         // 설계서 P1 의 "솔로는 한 글자도 건드리지 않는다" 를 동작으로 어기는 자리다.
@@ -186,13 +202,20 @@ import Testing
             "games/chess/lobby": ["rpc.chess_lobby"],
             "games/chess/match": ["rpc.chess_state", "rpc.chess_lobby"],
             "games/chess/ranking": ["rpc.chess_ranking"],
-            // 1:1 테트리스. 판 장면이 `rpc.tetris_report` 를 함께 요구하는 것이 핵심이다 — 판 중에는 1초마다 보고가
+            // 1:1 테트리스. 판 장면이 `rpc.tetris_report` 를 함께 요구하는 것이 핵심이다 — 판 중에는 1초(판 표시 프레임이 오가는 동안 3초)마다 보고가
             // 나가고, 그 키가 404 면 `noteServerMissing()` 이 1초 뒤 판 화면을 통째로 내린다(빈 화면 스틸의 정체).
             "games/tetris/lobby": ["rpc.tetris_lobby"],
             "games/tetris/lobby/invites": ["rpc.tetris_lobby", "rpc.tetris_state"],
             "games/tetris/ranking": ["rpc.tetris_ranking"],
             "games/tetris/match/playing": ["rpc.tetris_lobby", "rpc.tetris_state", "rpc.tetris_report"],
             "games/tetris/match/won": ["rpc.tetris_lobby", "rpc.tetris_state"],
+            // 아잉 큐브. 판 장면이 `rpc.rummy_heartbeat` 를 함께 요구한다 — 손댄 판은 10초마다 하트비트가 나간다.
+            "games/rummy/lobby": ["rpc.rummy_lobby"],
+            "games/rummy/ranking": ["rpc.rummy_ranking"],
+            "games/rummy/room": ["rpc.rummy_lobby", "rpc.rummy_state", "rpc.rummy_heartbeat"],
+            "games/rummy/match/my-turn": ["rpc.rummy_lobby", "rpc.rummy_state", "rpc.rummy_heartbeat"],
+            "games/rummy/match/edited": ["rpc.rummy_lobby", "rpc.rummy_state", "rpc.rummy_draft"],
+            "games/rummy/result": ["rpc.rummy_lobby", "rpc.rummy_state"],
             "me": ["rpc.shop_state", "rest.work_sessions.get"],
             "me/shop": ["rpc.shop_state"],
             "me/feedback": ["rpc.feedback_list"],

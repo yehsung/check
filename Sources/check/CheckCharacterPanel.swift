@@ -256,7 +256,8 @@ struct CheckCharacterPanel: View {
     /// 생일 선물 전용(케이크 아잉이 — v0.3.66)은 생일 선물 · 황금 · 무지개 아잉이(v0.3.54 · v0.3.59)는 뽑기 · 그 밖은 상점.
     /// 앞의 둘은 상점에서 못 산다 — "상점에서 사기"는 그 캐릭터에 거짓이다.
     nonisolated static func lockedLabel(_ id: String, name: String) -> String {
-        if CharacterCatalog.isGiftOnlyBuiltIn(id) { return "\(name) 잠김 — \(CakeGiftText.lockedHint)" }
+        // 선물 전용(케이크 = 생일 · 이슬 = 술 한잔 — v0.3.74)은 종류마다 안내가 다르다(`CharacterGiftKind.copy`).
+        if let gift = CharacterCatalog.giftKind(ofBuiltIn: id) { return "\(name) 잠김 — \(gift.copy.lockedHint)" }
         if CharacterCatalog.isGachaOnlyBuiltIn(id) { return "\(name) 잠김 — \(GachaText.gachaOnlyHint)" }
         return "\(name) 잠김 — 상점에서 사기"
     }
@@ -290,6 +291,8 @@ enum CharacterCardArt {
 
     /// 카드에 그릴 그림. 스프라이트면 아틀라스 `frontIdle` 셀, 아니면(아잉·에셋 결손) 초상 PNG.
     static func image(characterID: String) -> CGImage? {
+        // 이슬 초상은 그림 저장소가 새로 받을 수 있다 — 카드가 그 관찰 값에 묶이게 읽어 둔다(`IsulArtRevision` — 받으면 `forget` 뒤 다시 그린다).
+        IsulArtRevision.observe(characterID: characterID)
         if let hit = cache[characterID] { return hit }
         guard let raw = rawImage(characterID: characterID) else { return nil }
         let tight = tightened(raw)
@@ -305,6 +308,11 @@ enum CharacterCardArt {
         // `CGImage.cropping(to:)` 의 rect 는 **좌상단 원점 픽셀**이고 매니페스트 `Rect` 도 같은 규약이라
         // 부호를 뒤집지 않는다(`MiniGameMascot.spriteSideProfile` 이 못 박은 그 규약).
         return atlas.cropping(to: CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h))
+    }
+
+    /// 이 캐릭터의 조인 그림을 버린다 — 다음 조회가 초상을 다시 읽는다(그림 저장소 `IsulArt` 가 새 초상을 받았을 때 — v0.3.74).
+    static func forget(characterID: String) {
+        cache[characterID] = nil
     }
 
     private static func rawImage(characterID: String) -> CGImage? {

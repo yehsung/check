@@ -114,11 +114,14 @@ package enum CodexAccountUsageProbe {
         package var environment: [String: String]
     }
 
-    /// 로그인 셸 조회 결과(PATH · CODEX_HOME · `command -v codex`). 성공하면 프로세스 수명 동안 캐시한다.
+    /// 로그인 셸 조회 결과(PATH · CODEX_HOME · `command -v codex` · CLAUDE_CONFIG_DIR). 성공하면 `shellRefreshInterval` 동안 캐시한다.
+    /// claudeConfigDir(v0.3.73): 셸에 `CLAUDE_CONFIG_DIR` 를 건 사용자는 Claude Code 기록이 `<그 폴더>/projects` 에 쌓인다 —
+    /// 토큰 스캐너가 `~/.claude` 만 보면 그 사람의 Claude 가 통째로 0 이다(2026-11-03 실사용자 신고).
     package struct ShellEnvironment: Equatable, Sendable {
         package var path: String?
         package var codexHome: String?
         package var codex: String?
+        package var claudeConfigDir: String? = nil
     }
 
     /// 로그인 셸 조회 제한(초). `/bin/zsh -lc` 는 실측 86ms, `-ic` 는 0.5s 지만 느린 dotfile(nvm 초기화 등)을 감안한다.
@@ -129,6 +132,10 @@ package enum CodexAccountUsageProbe {
     package nonisolated static let killGrace: TimeInterval = 2
     /// 실행 파일 탐색 실패·셸 조회 실패의 캐시 수명(초). 성공은 프로세스 수명 동안 캐시한다.
     package nonisolated static let locateFailureTTL: TimeInterval = 1800
+    /// 성공한 셸 조회의 수명(초, v0.3.73). 예전엔 프로세스 수명 캐시였지만 사람이 dotfile 의 `CODEX_HOME`·`CLAUDE_CONFIG_DIR` 를
+    /// 바꾸면 앱을 다시 켜기 전까지 옛 폴더를 읽었다. 하루 한 번 다시 묻는다(셸 1~2회 — 비용은 무시할 만하다).
+    /// 다시 묻다 실패하면 직전 성공 결과를 그대로 쓴다(일시적 셸 실패로 기록 위치를 잃지 않게).
+    package nonisolated static let shellRefreshInterval: TimeInterval = 86_400
     /// 한 프로브에서 실행해 보는 후보 수 상한. 실패한 후보는 즉시 종료(exit 127 등)라 값싸지만, 목록이 길어도 무한히 띄우지 않는다.
     package nonisolated static let maxCandidateAttempts = 4
     /// `account/usage/read` 요청 id. 응답 줄은 이 id 로만 고른다(초기화 응답·알림 줄이 앞뒤로 섞여 온다).
@@ -144,8 +151,10 @@ package enum CodexAccountUsageProbe {
     package typealias SessionRunner = @Sendable (Toolchain) async -> (result: Result<CodexAccountUsage, Failure>, kind: SessionKind)
 
     fileprivate struct LocateState {
-        /// 로그인 셸 조회 결과(성공 시 프로세스 수명 캐시).
+        /// 로그인 셸 조회 결과(성공 시 `shellRefreshInterval` 동안 캐시).
         var shell: ShellEnvironment?
+        /// 마지막으로 셸 조회에 성공한 시각.
+        var shellResolvedAt: Date?
         /// 셸 조회 실패 시각(타임아웃·기동 실패) → `locateFailureTTL` 뒤 재시도.
         var shellFailedAt: Date?
         /// **실행으로 확인된** 툴체인(응답 성공 또는 인증 오류 = 바이너리와 메서드가 살아 있다). 존재만으로는 캐시하지 않는다 —
@@ -176,6 +185,19 @@ package enum CodexAccountUsageProbe {
     /// 토큰 스캐너가 이것을 읽어도 셸이 뜨지 않는다(테스트에서 프로세스가 새는 통로를 막는다). 첫 셸 조회 전엔 nil.
     package static func cachedCodexHome(cache: LocateCache = .shared) -> URL? {
         cache.state.withLock { $0.shell?.codexHome }.flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
+    }
+
+    /// 로그인 셸의 `CLAUDE_CONFIG_DIR`(v0.3.73). cachedCodexHome 과 같은 규약 — 캐시만 읽고 셸을 띄우지 않는다.
+    /// 상대 경로·`~` 로 시작하는 값은 버린다(셸이 펼치지 않은 값이면 어디를 가리키는지 모른다).
+    package static func cachedClaudeConfigDir(cache: LocateCache = .shared) -> URL? {
+        cache.state.withLock { $0.shell?.claudeConfigDir }.flatMap { usableDirectoryPath($0) }
+    }
+
+    /// 셸 값이 쓸 만한 절대 경로면 URL(순수). 빈 값·공백·상대 경로·`~`·NUL·줄바꿈이 섞인 값은 nil.
+    package static func usableDirectoryPath(_ raw: String) -> URL? {
+        let value = raw.trimmingCharacters(in: .whitespaces)
+        guard value.hasPrefix("/"), !value.contains("\0"), !value.contains("\n"), value != "/" else { return nil }
+        return URL(fileURLWithPath: value, isDirectory: true).standardizedFileURL
     }
 
     /// 로그인 셸의 `CODEX_HOME`(있으면). 셸 조회를 **한 번** 돌려 캐시한다 — 계정 스토어가 auth.json 을 찾기 전에 부른다
@@ -214,8 +236,9 @@ package enum CodexAccountUsageProbe {
         now: Date = Date(), cache: LocateCache = .shared, lookup: ShellLookup? = nil
     ) async -> ShellEnvironment? {
         let cached: ShellEnvironment?? = cache.state.withLock { state in
-            if let s = state.shell { return .some(s) }
-            if let failedAt = state.shellFailedAt, now.timeIntervalSince(failedAt) < locateFailureTTL { return .some(nil) }
+            if let failedAt = state.shellFailedAt, now.timeIntervalSince(failedAt) < locateFailureTTL { return .some(state.shell) }
+            if let s = state.shell, let at = state.shellResolvedAt, now.timeIntervalSince(at) < shellRefreshInterval,
+               now >= at { return .some(s) }
             return nil
         }
         if let cached { return cached }
@@ -224,18 +247,25 @@ package enum CodexAccountUsageProbe {
         if needsInteractiveLookup(shell), let interactive = await lookup(true) {
             shell = merged(login: shell, interactive: interactive)
         }
-        let resolved = shell
-        cache.state.withLock { state in
-            state.shell = resolved
-            state.shellFailedAt = resolved == nil ? now : nil
+        let fresh = shell
+        return cache.state.withLock { state in
+            if let fresh {
+                state.shell = fresh
+                state.shellResolvedAt = now
+                state.shellFailedAt = nil
+            } else {
+                // 실패: 직전 성공 결과는 지우지 않는다(하루 뒤 재조회가 한 번 실패했다고 기록 위치를 잃지 않게).
+                state.shellFailedAt = now
+            }
+            return state.shell
         }
-        return resolved
     }
 
     /// 대화형(`-ic`) 재조회가 필요한가(순수): 로그인 셸 결과가 없거나, codex 를 못 찾았거나, CODEX_HOME 이 비어 있을 때.
     package static func needsInteractiveLookup(_ login: ShellEnvironment?) -> Bool {
         guard let login else { return true }
         return (login.codex?.isEmpty ?? true) || (login.codexHome?.isEmpty ?? true)
+            || (login.claudeConfigDir?.isEmpty ?? true)
     }
 
     /// 로그인 셸 결과와 대화형 결과의 병합(순수): 필드별로 비어 있지 않은 쪽, 둘 다 있으면 대화형.
@@ -244,7 +274,8 @@ package enum CodexAccountUsageProbe {
         return ShellEnvironment(
             path: pick(interactive.path, login?.path),
             codexHome: pick(interactive.codexHome, login?.codexHome),
-            codex: pick(interactive.codex, login?.codex)
+            codex: pick(interactive.codex, login?.codex),
+            claudeConfigDir: pick(interactive.claudeConfigDir, login?.claudeConfigDir)
         )
     }
 
@@ -347,7 +378,7 @@ package enum CodexAccountUsageProbe {
     #if !CHECK_MAS
     /// 로그인 셸 조회 스크립트. 표지 뒤에 PATH·CODEX_HOME·codex 경로를 NUL 구분으로 찍는다.
     package static var shellLookupScript: String {
-        "printf '\\n\(shellLookupMarker)\\0%s\\0%s\\0%s\\0' \"$PATH\" \"${CODEX_HOME-}\" \"$(command -v codex 2>/dev/null)\""
+        "printf '\\n\(shellLookupMarker)\\0%s\\0%s\\0%s\\0%s\\0' \"$PATH\" \"${CODEX_HOME-}\" \"$(command -v codex 2>/dev/null)\" \"${CLAUDE_CONFIG_DIR-}\""
     }
 
     /// 셸 조회 출력 파싱(순수). 마지막 표지 뒤의 NUL 세 토막만 읽는다 — 그 앞은 dotfile 이 찍은 잡음일 수 있다.
@@ -356,7 +387,9 @@ package enum CodexAccountUsageProbe {
         guard let marker = text.range(of: shellLookupMarker, options: .backwards) else { return nil }
         let parts = text[marker.upperBound...].split(separator: "\0", omittingEmptySubsequences: false).map(String.init)
         guard parts.count >= 4 else { return nil }   // parts[0] 은 표지 직후의 빈 조각(첫 NUL 앞)
-        return ShellEnvironment(path: parts[1], codexHome: parts[2], codex: parts[3])
+        // v0.3.73: 다섯째 토막이 CLAUDE_CONFIG_DIR. 옛 모양(토막 넷)이면 nil — 뒤의 빈 조각(마지막 NUL 뒤)과 구분하려고 개수로 본다.
+        let claude = parts.count >= 6 ? parts[4] : nil
+        return ShellEnvironment(path: parts[1], codexHome: parts[2], codex: parts[3], claudeConfigDir: claude)
     }
 
     /// 로그인 셸에서 PATH·CODEX_HOME·codex 경로를 뽑는다. 제한 시간 안에 안 끝나면 죽이고 nil. 호출 스레드를 막지 않는다

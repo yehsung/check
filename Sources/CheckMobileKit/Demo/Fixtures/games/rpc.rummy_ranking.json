@@ -1,0 +1,57 @@
+{
+  "__note": "순위 탭(1등 많은 순). 내 행은 rows 의 id 로 고른다.",
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "me": {
+    "games": 12,
+    "wins": 5,
+    "rank": 2
+  },
+  "rows": [
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b2",
+      "display_name": "초코칩",
+      "avatar_url": null,
+      "character": "ghost",
+      "games": 20,
+      "wins": 9,
+      "rank": 1
+    },
+    {
+      "id": "d0000000-0000-4000-8000-000000000001",
+      "display_name": "아잉러",
+      "avatar_url": null,
+      "character": "aing",
+      "games": 12,
+      "wins": 5,
+      "rank": 2
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b1",
+      "display_name": "구름빵",
+      "avatar_url": null,
+      "character": "jellyfish",
+      "games": 18,
+      "wins": 4,
+      "rank": 3
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b3",
+      "display_name": "민트별",
+      "avatar_url": null,
+      "character": null,
+      "games": 7,
+      "wins": 2,
+      "rank": 4
+    },
+    {
+      "id": "d0000000-0000-4000-8000-0000000000b6",
+      "display_name": "달토끼",
+      "avatar_url": null,
+      "character": "fox",
+      "games": 3,
+      "wins": 0,
+      "rank": 5
+    }
+  ]
+}

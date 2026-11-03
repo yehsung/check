@@ -854,8 +854,9 @@ func probeShellEnvironmentRetriesInteractivelyAndCachesOutcome() async {
     #expect(env?.path == "/Users/x/.nvm/versions/node/v22/bin:/usr/bin:/bin")
     #expect(env?.codexHome == "/Users/x/cx")
     #expect(CodexAccountUsageProbe.cachedCodexHome(cache: cache)?.path == "/Users/x/cx")
-    // 캐시: 두 번째 호출은 셸을 띄우지 않는다.
-    _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0.addingTimeInterval(86_400), cache: cache, lookup: shell.lookup)
+    // 캐시: 두 번째 호출은 셸을 띄우지 않는다(v0.3.73 부터 수명은 하루 — shellRefreshInterval. 하루 뒤 재조회는 V0373 이 잰다).
+    _ = await CodexAccountUsageProbe.resolveShellEnvironment(
+        now: t0.addingTimeInterval(CodexAccountUsageProbe.shellRefreshInterval - 1), cache: cache, lookup: shell.lookup)
     #expect(shell.calls == [false, true])
 
     // -ic 도 못 찾으면 codex 는 비고 PATH 는 더 넓은 쪽(대화형)을 쓴다.
@@ -904,7 +905,10 @@ func probeShellLookupRetriesInteractivelyWhenCodexHomeIsEmptyAndMergesNonEmptyFi
     #expect(env?.codex == npm, "대화형이 codex 를 못 찾았다고 로그인 셸이 찾은 codex 를 지웠다")
     #expect(env?.path == "/usr/bin:/bin", "대화형 PATH 가 비었으면 로그인 셸 PATH 를 유지해야 한다")
     #expect(CodexAccountUsageProbe.cachedCodexHome(cache: cache)?.path == custom.path)
-    #expect(CodexAccountUsageProbe.needsInteractiveLookup(.init(path: "/usr/bin", codexHome: "/x", codex: "/x/codex")) == false)
+    // v0.3.73: CLAUDE_CONFIG_DIR 도 채워져 있어야 대화형 조회를 건너뛴다(.zshrc 에만 둔 그 값을 놓치지 않게).
+    #expect(CodexAccountUsageProbe.needsInteractiveLookup(
+        .init(path: "/usr/bin", codexHome: "/x", codex: "/x/codex", claudeConfigDir: "/x/claude")) == false)
+    #expect(CodexAccountUsageProbe.needsInteractiveLookup(.init(path: "/usr/bin", codexHome: "/x", codex: "/x/codex")))
     #expect(CodexAccountUsageProbe.needsInteractiveLookup(nil))
 
     // 그 캐시로 만든 계정 스토어: `$CODEX_HOME/auth.json` 을 찾아 러너가 정확히 1회 돈다(옛 규칙이면 미로그인 → 0).
@@ -918,8 +922,10 @@ func probeShellLookupRetriesInteractivelyWhenCodexHomeIsEmptyAndMergesNonEmptyFi
     #expect(store.lastStatus == .ok)
     #expect(shell.calls == [false, true], "캐시된 셸 환경을 두고 셸을 다시 띄웠다(프로세스 수명당 1회여야 한다)")
 
-    // 둘 다 채워져 있으면 대화형 조회는 없다(비용 0).
-    let full = C41ShellLookup(login: .init(path: "/usr/bin:/bin", codexHome: "/Users/x/cx", codex: "/usr/local/bin/codex"), interactive: nil)
+    // 모두 채워져 있으면 대화형 조회는 없다(비용 0).
+    let full = C41ShellLookup(
+        login: .init(path: "/usr/bin:/bin", codexHome: "/Users/x/cx", codex: "/usr/local/bin/codex", claudeConfigDir: "/Users/x/claude"),
+        interactive: nil)
     let c2 = CodexAccountUsageProbe.LocateCache()
     _ = await CodexAccountUsageProbe.resolveShellEnvironment(now: t0, cache: c2, lookup: full.lookup)
     #expect(full.calls == [false])

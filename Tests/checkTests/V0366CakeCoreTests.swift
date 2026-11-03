@@ -15,7 +15,8 @@ import Testing
 struct V0366CakeCoreTests {
     static let strawberry = "aing_cake_strawberry"
     static let choco = "aing_cake_choco"
-    static let fiveBuiltIns = ["aing", "aing_gold", "aing_rainbow", strawberry, choco]
+    /// 내장 전부(표시 순서). v0.3.66 에 케이크 둘로 다섯, v0.3.74 에 이슬이 여섯째로 붙었다(V0374IsulCoreTests).
+    static let builtInIDs = ["aing", "aing_gold", "aing_rainbow", strawberry, choco, "aing_isul"]
 
     /// 맥 케이크 초상 두 장(`<id>-neutral` · `<id>-negative`)이 소스 트리(`Sources/check/Resources/`)에 있는가 — 금 · 무지개와 같은 기준선.
     /// 이 단계(코어)에는 없다. 그림 단계가 넣는 순간 아바타 · 고르기 시험이 그 초상을 찾아야 초록이다(못 찾으면 배선이 빠졌다).
@@ -29,12 +30,12 @@ struct V0366CakeCoreTests {
     func cakesAreBuiltIn() {
         #expect(CharacterCatalog.cakeStrawberryAingID == Self.strawberry)
         #expect(CharacterCatalog.cakeChocoAingID == Self.choco)
-        #expect(CharacterCatalog.builtIns.map(\.id) == Self.fiveBuiltIns)
+        #expect(CharacterCatalog.builtIns.map(\.id) == Self.builtInIDs)
         #expect(CharacterCatalog.builtInCakeStrawberryAing.id == Self.strawberry)
         #expect(CharacterCatalog.builtInCakeChocoAing.id == Self.choco)
 
         let empty = CharacterCatalog.load(charactersDirectory: nil)
-        #expect(empty.allIDs == Self.fiveBuiltIns)
+        #expect(empty.allIDs == Self.builtInIDs)
         for (id, name) in [(Self.strawberry, "딸기 케이크 아잉이"), (Self.choco, "초코 케이크 아잉이")] {
             let manifest = empty.manifest(id: id)
             #expect(manifest?.displayName == name, "\(id)")
@@ -50,12 +51,12 @@ struct V0366CakeCoreTests {
     @Test("표시 순서: 케이크는 정렬로는 금보다 앞(`aing_cake_*` < `aing_gold`)이라도 내장 순서 그대로 · 나머지는 id 정렬")
     func orderIsBuiltInNotSorted() {
         // 기준선: 정렬만 하면 케이크가 금 앞에 선다 — 내장 순서가 실제로 일을 한다.
-        #expect(Self.fiveBuiltIns.sorted().prefix(3) == ["aing", "aing_cake_choco", "aing_cake_strawberry"])
+        #expect(Self.builtInIDs.sorted().prefix(3) == ["aing", "aing_cake_choco", "aing_cake_strawberry"])
         let catalog = CharacterCatalog(manifests: [
             CharacterManifest(id: "zebra", displayName: "얼룩말", kind: .sprite),
             CharacterManifest(id: "aardvark", displayName: "땅돼지", kind: .sprite),
         ])
-        #expect(catalog.allIDs == Self.fiveBuiltIns + ["aardvark", "zebra"])
+        #expect(catalog.allIDs == Self.builtInIDs + ["aardvark", "zebra"])
     }
 
     @Test("파일 매니페스트로는 케이크를 못 싣는다(밑줄 id) · 같은 id 를 넣어도 내장이 이긴다")
@@ -70,12 +71,14 @@ struct V0366CakeCoreTests {
         let catalog = CharacterCatalog(manifests: [fake])
         #expect(catalog.manifest(id: Self.choco)?.kind == .scene3D)
         #expect(catalog.manifest(id: Self.choco)?.displayName == "초코 케이크 아잉이")
-        #expect(catalog.allIDs == Self.fiveBuiltIns)
+        #expect(catalog.allIDs == Self.builtInIDs)
     }
 
     @Test("판정 셋은 서로를 삼키지 않는다 — 케이크는 선물 전용이지 뽑기 전용이 아니다 · 비슷한 이름에 반응하지 않는다")
     func predicatesAreDisjoint() {
-        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco])
+        // v0.3.74: 케이크 뜻 목록은 생일 목록이다 — 선물 전용 전부(`giftOnlyBuiltInIDs`)에는 이슬이 뒤에 붙는다(V0374IsulCoreTests).
+        #expect(CharacterCatalog.birthdayGiftBuiltInIDs == [Self.strawberry, Self.choco])
+        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, "aing_isul"])
         #expect(CharacterCatalog.gachaOnlyBuiltInIDs == ["aing_gold", "aing_rainbow"], "뽑기 전용 목록이 케이크로 넓어졌다")
         for id in [Self.strawberry, Self.choco] {
             #expect(CharacterCatalog.isCakeAing(id))
@@ -162,7 +165,7 @@ struct V0366CakeCoreTests {
         #expect(ShopWire.cakeProtocol == 4, "서버 `character_prices.min_protocol = 4` 와 같은 숫자여야 한다")
         #expect(ShopWire.rainbowProtocol < ShopWire.cakeProtocol)
         #expect(ShopWire.cakeCharacterIDs == [Self.strawberry, Self.choco])
-        #expect(ShopWire.cakeCharacterIDs == CharacterCatalog.giftOnlyBuiltInIDs)
+        #expect(ShopWire.cakeCharacterIDs == CharacterCatalog.birthdayGiftBuiltInIDs, "케이크 번호(4)의 재료는 생일 목록 — 이슬이 섞이면 폰이 3 으로 떨어진다")
     }
 
     /// 동치를 **양방향으로** 못 박는다: 다섯 id(robot · 금 · 무지개 · 딸기 · 초코)의 32 부분집합 전부에서

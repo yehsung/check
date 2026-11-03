@@ -93,15 +93,16 @@ func theRummyRouteStandsInFrontOfTheTetrisAndGomokuSentence() throws {
                           + "return [.drain]"))
 }
 
-// MARK: - #4 폰 러너: 빈 가지(폰 판에서 잇는다)
+// MARK: - #4 폰 러너: 폰 1.0.16 부터 잇는다(빈 가지였다)
 
 /// 없으면: 폰 러너의 exhaustive switch 가 컴파일되지 않거나(가지 없음), `default`/`.drain` 으로 떨어뜨리면 같은 계정의 맥이
-/// 판을 하는 동안 작업 판 초인종마다 폰이 **메시지** 요약·이력을 한 번씩 더 조회한다.
+/// 판을 하는 동안 작업 판 초인종마다 폰이 **메시지** 요약·이력을 한 번씩 더 조회한다. 가지가 비면 폰 판이 초대·차례를 다음 폴링까지 모른다.
+/// 요청 건수로 재는 못은 `GamesRummyWiringTests`(폰 스위트)에 있다.
 @MainActor
 @Test
-func thePhoneRunnerKeepsAnEmptyRummyBranch() throws {
+func thePhoneRunnerWiresTheRummyBranchToTheStore() throws {
     let runner = try rwPhoneRunner()
-    #expect(runner.contains("case .rummySignal: break"), "폰 러너의 아잉 큐브 가지가 비어 있지 않거나 없다")
+    #expect(runner.contains("case .rummySignal: rummy?.handleSignal()"), "폰 러너의 아잉 큐브 가지가 스토어로 안 간다")
     #expect(rwCount("case .rummySignal", in: runner) == 1, "폰 러너에 아잉 큐브 가지가 하나가 아니다")
 }
 
@@ -230,7 +231,8 @@ func theCharacterBubblesCarryRummyInvitesAndTurns() throws {
 func theMiniGameWindowOpensTheRummyWindow() throws {
     #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.rummy.window"))
     #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckRummyWindowController.frameAutosaveName))
-    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 7)
+    // 아잉 뒤집기 창이 더해져 여덟이다(큐브 창은 그대로 들어 있다 — 위 두 줄).
+    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 8)
 
     // v0.3.69 — 입구가 사이드바 줄이 되며 짧은 이름("큐브")을 떼고 **전체 이름**을 단다(사용자 요구 "좀 더 크게").
     #expect(MiniGameRummyEntryButton.title == "아잉 큐브")
@@ -244,6 +246,7 @@ func theMiniGameWindowOpensTheRummyWindow() throws {
     #expect(!panel.contains("var onRummy: () -> Void = {}"), "큐브 문에 빈 기본값이 남았다")
 
     let miniGame = try rwMac("WorkTimerStoreMiniGame.swift")
-    #expect(miniGame.contains("func openRummyFromMiniGame() { rummy.openWindow(focusMatchID: nil) closeMiniGamePanel() }"),
+    // 2026-11-03 ⑧: 문 머리에서 '미니게임 창에서 들어왔다' 표지를 적는다(큐브 창을 닫으면 미니게임 창이 다시 선다 — MiniGameDuelReturnTests).
+    #expect(miniGame.contains("func openRummyFromMiniGame() { noteMiniGameDuelReturn(.rummy) rummy.openWindow(focusMatchID: nil) closeMiniGamePanel() }"),
             "큐브 창을 먼저 띄우고 미니게임 창을 내려야 한다")
 }

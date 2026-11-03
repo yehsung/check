@@ -27,7 +27,11 @@ extension MeStore {
             displayNameNotice = nil
             isDisplayNameNoticeError = false
         }
-        if !isUploadingAvatar { avatarNotice = nil }
+        if !isUploadingAvatar, !isRemovingAvatar {
+            avatarNotice = nil
+            isAvatarNoticeError = false
+            isAvatarNoticeWarning = false
+        }
         statusMessageDraft = ""
         if !isUpdatingStatusMessage {
             statusMessageNotice = nil
@@ -151,10 +155,11 @@ extension MeStore {
 
     /// 사진 올리기. `imageData` 는 PhotosPicker 가 준 원본 — 여기서 256px JPEG 로 줄인다(메인 액터 밖).
     package func uploadAvatar(imageData: Data) async {
-        guard context.session.isSignedIn, !isUploadingAvatar else { return }
+        guard context.session.isSignedIn, !isUploadingAvatar, !isRemovingAvatar else { return }
         isUploadingAvatar = true
         avatarNotice = nil
         isAvatarNoticeError = false
+        isAvatarNoticeWarning = false
         let generation = context.generation
         defer { if generation == context.generation { isUploadingAvatar = false } }
         let jpeg = await Task.detached(priority: .userInitiated) { MeAvatarImage.jpegData(from: imageData) }.value
@@ -179,6 +184,48 @@ extension MeStore {
             guard generation == context.generation else { return }
             if AuthErrorRules.classify(error) == .cancelled { return }
             avatarNotice = AuthErrorRules.message(for: error, fallback: MeText.avatarFailed)
+            isAvatarNoticeError = true
+        }
+    }
+
+    /// 사진 지우기(기본 캐릭터로 되돌리기 — 맥 설정 [프로필 사진] 행과 같은 코어 `removeAvatar`). 확인은 화면이 받고 여기는 지우기만 한다.
+    ///
+    /// 사진 유무를 묻지 않는다: 사진이 없어도 서버가 404 를 "없다"로 읽어 성공이고, 파일만 남은 사람은 표가 비어(`avatarURL` nil) 있어도
+    /// 다시 눌러야 하기 때문이다 — 유무로 막으면 "잠시 후 다시 시도해 주세요"가 거짓말이 된다.
+    /// 표를 못 비웠으면 코어가 던지고 사진은 그대로다. 표를 비웠으면 파일이 남았어도 화면은 기본 캐릭터가 맞고, 안내만 경고로 말한다.
+    package func removeAvatar() async {
+        guard !isRemovingAvatar, !isUploadingAvatar else { return }
+        avatarNotice = nil
+        isAvatarNoticeError = false
+        isAvatarNoticeWarning = false
+        guard context.session.isSignedIn else {
+            avatarNotice = AvatarRemovalText.signedOutMessage
+            isAvatarNoticeError = true
+            return
+        }
+        isRemovingAvatar = true
+        let generation = context.generation
+        defer { if generation == context.generation { isRemovingAvatar = false } }
+        let service = context.service
+        do {
+            let outcome = try await context.withMobileSessionRetry { session in
+                try await service.removeAvatar(accessToken: session.accessToken, userID: session.userID)
+            }
+            guard generation == context.generation else { return }
+            // 떠 있던 머리 GET 은 지우기 전 사진 URL 이다 — 도착해도 덮지 않게(올리기와 같은 표).
+            noteLocalWrite(Self.avatarWriteKey)
+            avatarURL = nil
+            switch outcome {
+            case .removed:
+                avatarNotice = AvatarRemovalText.successMessage
+            case .tableClearedFileLeft:
+                avatarNotice = AvatarRemovalText.fileLeftMessage
+                isAvatarNoticeWarning = true
+            }
+        } catch {
+            guard generation == context.generation else { return }
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            avatarNotice = AvatarRemovalText.failureMessage
             isAvatarNoticeError = true
         }
     }

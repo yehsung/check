@@ -1,0 +1,151 @@
+{
+  "__note": "내가 이긴 2인 판(판돈 10): 내 순수익 +10 · 상대 −10.",
+  "status": "ok",
+  "server_now_ms": 1789621500000,
+  "state": {
+    "id": "d0000000-0000-4000-8000-00000000c004",
+    "status": "finished",
+    "host_id": "d0000000-0000-4000-8000-000000000001",
+    "stake": 10,
+    "is_public": true,
+    "max_seats": 4,
+    "seat_count": 2,
+    "seq": 64,
+    "server_now_ms": 1789621500000,
+    "grace_ms": 2000,
+    "expires_at_ms": null,
+    "finished_at_ms": 1789621497000,
+    "end_reason": "rack_empty",
+    "turn_seat_no": null,
+    "turn_started_ms": null,
+    "turn_deadline_ms": null,
+    "consecutive_passes": 0,
+    "pool_count": 11,
+    "table": [
+      [
+        "A1",
+        "A2",
+        "A3"
+      ],
+      [
+        "B4",
+        "B5",
+        "B6",
+        "B7"
+      ],
+      [
+        "C7",
+        "C8",
+        "C9"
+      ],
+      [
+        "D10",
+        "D11",
+        "D12",
+        "D13"
+      ],
+      [
+        "A9",
+        "B9",
+        "C9"
+      ],
+      [
+        "A12",
+        "B12",
+        "D12"
+      ]
+    ],
+    "table_layout": [
+      [
+        20,
+        20
+      ],
+      [
+        200,
+        20
+      ],
+      [
+        420,
+        20
+      ],
+      [
+        600,
+        20
+      ],
+      [
+        820,
+        20
+      ],
+      [
+        20,
+        120
+      ]
+    ],
+    "draft": null,
+    "my_seat_no": 0,
+    "my_rack": null,
+    "my_initial_done": true,
+    "seats": [
+      {
+        "user_id": "d0000000-0000-4000-8000-000000000001",
+        "display_name": "아잉러",
+        "avatar_url": null,
+        "character": "aing",
+        "seat_no": 0,
+        "state": "done",
+        "rack_count": 0,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": [],
+        "final_rank": 1,
+        "final_score": 112,
+        "forfeit_order": null,
+        "is_winner": true,
+        "payout": 20
+      },
+      {
+        "user_id": "d0000000-0000-4000-8000-0000000000b2",
+        "display_name": "초코칩",
+        "avatar_url": null,
+        "character": "ghost",
+        "seat_no": 2,
+        "state": "done",
+        "rack_count": 18,
+        "initial_done": true,
+        "timeout_streak": 0,
+        "final_rack": [
+          "A1",
+          "A2",
+          "B9",
+          "C3",
+          "C4",
+          "C5",
+          "C6",
+          "C7",
+          "D1",
+          "D2",
+          "D3",
+          "D4",
+          "D5",
+          "D6",
+          "D7",
+          "D8",
+          "D9",
+          "J"
+        ],
+        "final_rank": 2,
+        "final_score": -112,
+        "forfeit_order": null,
+        "is_winner": false,
+        "payout": 0
+      }
+    ],
+    "reactions": [],
+    "last_event": {
+      "kind": "finish",
+      "seat_no": 2,
+      "count": 1,
+      "at_ms": 1789621497000
+    }
+  }
+}

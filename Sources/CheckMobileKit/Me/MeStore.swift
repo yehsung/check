@@ -52,6 +52,9 @@ package final class MeStore {
     package internal(set) var avatarURL: URL?
     /// 센터 **서버값**("seoul"). 화면은 `CenterBadge` 가 글자로 접는다.
     package internal(set) var centerServerValue: String?
+    /// 서버가 센터를 말해 줬다. nil 인 `centerServerValue` 가 '미지정'인지 '아직 모름'인지 가르는 유일한 값이다(맥 `myCenterLoaded`).
+    package internal(set) var centerLoaded = false
+    package internal(set) var centerLoadFailed = false
     package internal(set) var headerState = MeLoadState()
 
     // MARK: 기록
@@ -225,6 +228,10 @@ package final class MeStore {
     package internal(set) var isUploadingAvatar = false
     package internal(set) var avatarNotice: String?
     package internal(set) var isAvatarNoticeError = false
+    /// 사진 지우기(기본 캐릭터로 되돌리기)가 떠 있다. 올리기와 한 번에 하나만 돈다.
+    package internal(set) var isRemovingAvatar = false
+    /// 안내가 **경고**다 — 표는 비웠는데 파일이 남았다(`AvatarRemovalText.fileLeftMessage`). 실패는 아니지만 성공이라고 말하면 안 되는 자리.
+    package internal(set) var isAvatarNoticeWarning = false
 
     // MARK: 상태메시지 (v0.3.51 — MeStoreStatusMessage.swift)
     /// 서버값 미러(`profiles.status_message`). nil = 없음이거나 아직 모름 — `statusMessageLoaded` 가 가른다.
@@ -328,6 +335,8 @@ package final class MeStore {
         displayName = nil
         avatarURL = nil
         centerServerValue = nil
+        centerLoaded = false
+        centerLoadFailed = false
         headerState = MeLoadState()
         heatmap = .empty
         retro = nil
@@ -410,8 +419,10 @@ package final class MeStore {
         displayNameChangedAt = nil
         displayNameAvailableAt = nil
         isUploadingAvatar = false
+        isRemovingAvatar = false
         avatarNotice = nil
         isAvatarNoticeError = false
+        isAvatarNoticeWarning = false
         // 상태메시지도 계정에 묶인다 — 남기면 다음 계정의 편집 화면에 앞 사람의 문장이 '내 값'으로 서고 [저장]이 그걸 올린다.
         statusMessage = nil
         statusMessageLoaded = false
@@ -564,7 +575,11 @@ package final class MeStore {
                 try await service.fetchMyCenter(accessToken: session.accessToken, userID: session.userID)
             }
             guard generation == context.generation, isCurrent("header", serial) else { return }
-            if case .success(let value) = center { centerServerValue = value }
+            if case .success(let value) = center {
+                centerServerValue = value
+                centerLoaded = true
+                centerLoadFailed = false
+            }
             headerState.hasLoaded = true
             headerState.loadedAt = context.clock.now()
         } catch {

@@ -16,12 +16,13 @@
 
 **외부 프로세스(2.5.2)** — 로그인 셸 조회(`/bin/zsh -lc/-ic`), `codex app-server` 계정 프로브, 안티그래비티 리밋(`agy`)이 컴파일되지 않는다. **Claude 리밋(시스템 `/usr/bin/security` 로 키체인 항목 읽기)은 남긴다**(2026-10-14 사용자 결정 "AI 리밋은 예외 권한으로 기능 그대로" + 샌드박스 실측: 상속 샌드박스에서 프롬프트 없이 exit 0 — `MacEdition.readsClaudeLimits` 한 줄로 끈다). 계정 프로브는 무해 인스턴스이고 업로드 경로가 부르지도 않는다(계정 상태는 서버에 '모름'으로 간다). Codex 리밋(`~/.codex/auth.json` 읽기)은 **남긴다**(2026-10-14 결정 — `MacEdition.readsCodexLimits` 한 줄로 끌 수 있다).
 
-**진짜 홈** — 샌드박스에서는 `homeDirectoryForCurrentUser` 가 컨테이너다. 토큰 스캐너·Codex 진단·Codex 리밋은 `AIToolHome.current()`(앱스토어 판은 `getpwuid_r`)로 사용자의 진짜 홈을 읽는다. 읽는 자리는 다음 넷이고, 패키징의 읽기 전용 임시 예외(`com.apple.security.temporary-exception.files.home-relative-path.read-only`)와 짝이다.
+**진짜 홈** — 샌드박스에서는 `homeDirectoryForCurrentUser` 가 컨테이너다. 토큰 스캐너·Codex 진단·Codex 리밋은 `AIToolHome.current()`(앱스토어 판은 `getpwuid_r`)로 사용자의 진짜 홈을 읽는다. 읽는 자리는 다음 다섯이고, 패키징의 읽기 전용 임시 예외(`com.apple.security.temporary-exception.files.home-relative-path.read-only`)와 짝이다.
 
 - `/.claude/` — `projects`·`transcripts` 의 사용 기록
 - `/.codex/` — `sessions`·`archived_sessions` 와 리밋용 `auth.json`(로그인 셸의 `CODEX_HOME` 은 못 묻는다 — 늘 `~/.codex`)
 - `/.gemini/` — `antigravity-cli/conversations/*.db`(읽기 전용이라 `-shm` 을 못 만들면 `?immutable=1` 로 읽는다)
-- `/Library/Application Support/orca/` — Orca 의 Codex 홈들
+- `/Library/Application Support/orca/` — Orca 의 Codex 홈들과 Claude 계정 폴더(`claude-profiles/*/home`)
+- `/Library/Application Support/Claude/local-agent-mode-sessions/` — Claude 데스크톱 앱 로컬 에이전트 모드의 세션별 `.claude/projects`(v0.3.73)
 
 **동의(2.4.5(iii) · 5.1.1(ii) · 2.5.14)** — 첫 실행에 창 하나로 두 가지를 묻는다(한 번만): 로그인 시 자동 실행(기본 꺼짐)과 AI 도구 기록 읽기([허용하고 시작] / [나중에]). 설정 '일반'의 자동 실행 스위치와 '내 정보'의 **AI 사용 기록 읽기** 스위치로 바꾼다. 동의가 없으면 스캔·업로드·일별 업로드·스캔 하트비트·Codex 진단·리밋 읽기가 전부 멈춘다(읽지도 올리지도 않는다). 동의를 거두면 리밋 축도 잠재워 이미 올라간 리밋 행을 비운다.
 

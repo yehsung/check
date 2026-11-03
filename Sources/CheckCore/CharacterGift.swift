@@ -14,8 +14,14 @@ import Foundation
 // ── 이 파일이 지키는 것 ──
 // ① **맥과 폰이 한 벌이다.** 전선 모양 · 결과 분류 · 문구를 여기서 만들고 화면은 그리기만 한다.
 // ② **옛 서버에서도 앱이 산다.** 함수가 없는 서버(404 · PGRST202 — 앱이 db push 보다 먼저 나간 창)의 조회는 오류가 아니라 "선물 없음"(nil)이다.
-// ③ **모르는 선택지를 그리지 않는다.** 선택지는 이 빌드가 아는 생일 선물 내장 캐릭터(`CharacterCatalog.isGiftOnlyBuiltIn`)만 남기고
-//    딸기 → 초코 순서로 세운다. 남는 게 없으면 선물이 없는 것으로 읽는다(열 수 없는 창을 띄우지 않는다).
+// ③ **모르는 선택지를 그리지 않는다.** 선택지는 이 빌드가 아는 **그 선물 종류의** 내장 캐릭터(`CharacterGiftKind.builtInIDs`)만 남기고
+//    표시 순서(생일 = 딸기 → 초코 · 술 = 이슬)로 세운다. 남는 게 없으면 선물이 없는 것으로 읽는다(열 수 없는 창을 띄우지 않는다).
+//
+// ── '술 한잔' 선물 — 이슬 아잉이 (v0.3.74 맥 먼저) ──
+// 서버 초안(설계서 §4): `character_gifts.kind`('birthday' · 'drink')가 생기고, 운영자는 생일은 `grant_character_gift`, 술은
+// `grant_drink_gift` 로 지급한다. `character_gift_pending(p_protocol)` 은 p < 4 면 gift 없음 · 4 면 **생일만**(옛 행동 그대로) ·
+// 5 이상이면 두 종류 중 먼저 지급된 것 하나이고, gift 객체에 `"kind"` 를 싣는다(키가 없으면 옛 서버 — 생일로 읽는다).
+// 술 선물 수령은 p < 5 면 `needs_update`(아무것도 안 움직인다). 수령 · 결과 분류는 생일과 같은 함수 · 같은 어휘다.
 
 // MARK: 전선 모양 — character_gift_pending
 
@@ -28,30 +34,91 @@ package struct CharacterGiftPendingRequest: Encodable, Equatable, Sendable {
     }
 }
 
-/// 열린 생일 선물 한 장 — `{"id":"…","options":["aing_cake_strawberry","aing_cake_choco"],"note":null|"…","created_at":"…"}`.
+// MARK: 선물 종류 — birthday · drink (v0.3.74)
+
+/// 선물 종류. 서버 `character_gifts.kind` · `character_prices.gift_kind` 의 원문 값과 같다(`rawValue`).
 ///
-/// ★ 디코드 규칙: `id` 가 없거나 비었으면, 또는 거른 뒤 선택지가 하나도 없으면 **throw** 한다 — 감싼 응답
-///   (`CharacterGiftPendingResponse`)이 그걸 "선물 없음"(nil)으로 삼킨다. `note` · `created_at` 은 모양이 틀려도 nil 이다.
+/// ★ 종류마다 **선택지 집합이 따로**다 — 생일 선물엔 케이크만, 술 선물엔 이슬만 선다(`builtInIDs`). 서버가 섞어 보내도(초안 전 ·
+///   잘못 지급) 클라는 그 종류의 것만 남긴다. 그리고 종류마다 **받을 수 있는 능력 번호가 다르다**(`minProtocol` — 생일 4 · 술 5).
+package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
+    /// 생일 선물(v0.3.66) — 케이크 아잉이 둘 중 하나를 받는 사람이 고른다.
+    case birthday
+    /// '술 한잔' 선물(v0.3.74) — 이슬 아잉이 하나, 고를 것 없이 받는다.
+    case drink
+
+    /// 서버 원문 값("birthday" · "drink"). 문자열을 적는 곳은 여기(`rawValue`) 하나다.
+    package var wireValue: String { rawValue }
+
+    /// 서버 원문 → 종류. 정확히 그 두 값만(공백 · 대소문자를 봐주지 않는다 — 서버 CHECK 가 두 값만 허락한다). 그 밖은 nil.
+    package init?(wireValue: String?) {
+        guard let wireValue, let kind = Self(rawValue: wireValue) else { return nil }
+        self = kind
+    }
+
+    /// 이 종류의 선물로 받는 내장 캐릭터 — **표시 순서 그대로**(생일 = 딸기 → 초코 · 술 = 이슬). 선물 선택지는 이 목록으로 거른다.
+    package var builtInIDs: [String] {
+        switch self {
+        case .birthday: return CharacterCatalog.birthdayGiftBuiltInIDs
+        case .drink: return CharacterCatalog.drinkGiftBuiltInIDs
+        }
+    }
+
+    /// 이 종류의 선물을 받을 수 있는 최소 능력 번호(서버 `claim_character_gift` 의 문턱과 같다 — 생일 4 · 술 5).
+    package var minProtocol: Int {
+        switch self {
+        case .birthday: return ShopWire.cakeProtocol
+        case .drink: return ShopWire.isulProtocol
+        }
+    }
+
+    /// 이 번호의 빌드가 이 종류의 선물을 받을 수 있는가(번호는 누적이다 — `ShopWire.protocolVersion`).
+    package func isSupported(protocolVersion: Int) -> Bool {
+        protocolVersion >= minProtocol
+    }
+
+    /// 내장 캐릭터 → 그 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술). 선물 전용 내장이 아니면 nil.
+    package init?(builtInID id: String?) {
+        guard let id, let kind = Self.allCases.first(where: { $0.builtInIDs.contains(id) }) else { return nil }
+        self = kind
+    }
+
+    /// 이 종류의 문구 묶음(받는 창 · 잠긴 칸 · 다시 열기 카드). 글자는 `CakeGiftText` · `DrinkGiftText` 한 곳에 있다.
+    package var copy: CharacterGiftCopy {
+        switch self {
+        case .birthday: return .birthday
+        case .drink: return .drink
+        }
+    }
+}
+
+/// 열린 선물 한 장 — `{"id":"…","kind":"birthday"|"drink","options":["aing_cake_strawberry","aing_cake_choco"],"note":null|"…","created_at":"…"}`.
+///
+/// ★ 디코드 규칙: `id` 가 없거나 비었으면, `kind` 가 이 빌드가 모르는 값이면, 또는 **그 종류로** 거른 뒤 선택지가 하나도 없으면
+///   **throw** 한다 — 감싼 응답(`CharacterGiftPendingResponse`)이 그걸 "선물 없음"(nil)으로 삼킨다. `kind` 키가 없거나 null 이면
+///   옛 서버(0.3.66 생일 선물만 있던 시절) — **생일**로 읽는다. `note` · `created_at` 은 모양이 틀려도 nil 이다.
 package struct CharacterGiftOffer: Decodable, Equatable, Sendable, Identifiable {
     /// 선물 행 id(uuid 문자열 — 서버가 준 그대로). 수령 때 `p_gift` 로 돌려준다.
     package let id: String
-    /// 고를 수 있는 캐릭터 id — **이 빌드가 아는 생일 선물 내장 캐릭터만**, 딸기 → 초코 순서, 중복 없음.
+    /// 선물 종류(생일 · 술 한잔). 서버가 안 실었으면 생일.
+    package let kind: CharacterGiftKind
+    /// 고를 수 있는 캐릭터 id — **이 빌드가 아는 그 종류의 내장 캐릭터만**, 표시 순서(생일 = 딸기 → 초코 · 술 = 이슬), 중복 없음.
     package let options: [String]
     /// 운영자가 남긴 한 줄(없으면 nil).
     package let note: String?
     /// 지급 시각(서버 timestamptz 원문). 화면 판정에 쓰지 않는다 — 진단용이다.
     package let createdAt: String?
 
-    package init(id: String, options: [String], note: String? = nil, createdAt: String? = nil) {
+    package init(id: String, options: [String], note: String? = nil, createdAt: String? = nil, kind: CharacterGiftKind = .birthday) {
         self.id = id
-        self.options = Self.choosable(options)
+        self.kind = kind
+        self.options = Self.choosable(options, kind: kind)
         self.note = note
         self.createdAt = createdAt
     }
 
     package enum CodingKeys: String, CodingKey {
         // 서비스 디코더가 `created_at` → `createdAt` 으로 바꾼 뒤 찾는다.
-        case id, options, note, createdAt
+        case id, kind, options, note, createdAt
     }
 
     package init(from decoder: Decoder) throws {
@@ -60,22 +127,33 @@ package struct CharacterGiftOffer: Decodable, Equatable, Sendable, Identifiable 
               !rawID.isEmpty else {
             throw DecodingError.dataCorruptedError(forKey: .id, in: container, debugDescription: "gift id 가 없다")
         }
-        let options = Self.choosable(container.giftLossyStrings(forKey: .options) ?? [])
+        // kind: 키가 없거나 null → 생일(옛 서버). 있는데 모르는 값 · 모양이 틀림 → 이 빌드가 열 수 없는 선물(throw → 선물 없음).
+        let kind: CharacterGiftKind
+        if (try? container.decodeNil(forKey: .kind)) ?? true {
+            kind = .birthday
+        } else if let known = CharacterGiftKind(wireValue: container.giftLossy(String.self, forKey: .kind)) {
+            kind = known
+        } else {
+            throw DecodingError.dataCorruptedError(forKey: .kind, in: container, debugDescription: "모르는 선물 종류다")
+        }
+        let options = Self.choosable(container.giftLossyStrings(forKey: .options) ?? [], kind: kind)
         guard !options.isEmpty else {
             throw DecodingError.dataCorruptedError(forKey: .options, in: container, debugDescription: "고를 수 있는 선택지가 없다")
         }
         self.id = rawID
+        self.kind = kind
         self.options = options
         let note = container.giftLossy(String.self, forKey: .note)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.note = (note?.isEmpty ?? true) ? nil : note
         self.createdAt = container.giftLossy(String.self, forKey: .createdAt)
     }
 
-    /// 서버 선택지 → 화면 선택지: 이 빌드가 아는 생일 선물 내장 캐릭터만, `CharacterCatalog.giftOnlyBuiltInIDs` 순서(딸기 → 초코)로.
-    /// 순서를 서버에 기대지 않는다(설계서 §1 "지급 선택지의 순서도 딸기 → 초코").
-    package static func choosable(_ raw: [String]) -> [String] {
+    /// 서버 선택지 → 화면 선택지: 이 빌드가 아는 **그 종류의** 내장 캐릭터만, `CharacterGiftKind.builtInIDs` 순서로
+    /// (생일 = `CharacterCatalog.birthdayGiftBuiltInIDs` 딸기 → 초코 · 술 = 이슬). 순서를 서버에 기대지 않는다
+    /// (설계서 §1 "지급 선택지의 순서도 딸기 → 초코"). ★ 생일 선물에 이슬이 섞여 와도 버리고, 술 선물엔 이슬만 남긴다.
+    package static func choosable(_ raw: [String], kind: CharacterGiftKind = .birthday) -> [String] {
         let given = Set(raw)
-        return CharacterCatalog.giftOnlyBuiltInIDs.filter { given.contains($0) }
+        return kind.builtInIDs.filter { given.contains($0) }
     }
 }
 
@@ -169,7 +247,7 @@ package enum CharacterGiftClaimOutcome: Equatable, Sendable {
     case received(characterID: String, replayed: Bool)
     /// 이미 **다른** 캐릭터로 받은 선물이다. `characterID` 는 받은 것(서버가 안 실었으면 nil). 사용자는 이미 케이크를 가졌다.
     case alreadyClaimed(characterID: String?)
-    /// 이 빌드는 케이크를 못 그린다(p_protocol < 4) — 아무것도 안 움직였다.
+    /// 이 빌드는 그 선물의 캐릭터를 못 그린다(생일 p_protocol < 4 · 술 < 5) — 아무것도 안 움직였다.
     case needsUpdate
     /// 내 선물이 아니거나 없다(회수됐거나 계정이 바뀌었다).
     case notFound
@@ -228,7 +306,8 @@ extension SupabaseWorkService {
     ///   앱이 db push 보다 먼저 나간 창에서 오류를 올리지 않는다(`fetchAppUserCharacters` 와 같은 두 모양).
     /// - 그 밖의 실패(네트워크 · 5xx · 세션 만료 · status 없는 응답)는 **던진다** — 호출부는 지금 아는 선물을 그대로 둔다.
     ///
-    /// `protocolVersion` 은 `ShopWire.protocolVersion(drawableCharacterIDs:)` 로만 만든다 — 4 미만이면 서버가 gift 를 싣지 않는다.
+    /// `protocolVersion` 은 `ShopWire.protocolVersion(drawableCharacterIDs:)` 로만 만든다 — 4 미만이면 서버가 gift 를 싣지 않고,
+    /// 4 면 생일 선물만 싣는다(술 선물은 5 부터 — v0.3.74). 이 빌드의 번호로 받을 수 없는 종류가 섞여 오면 nil 이다.
     package func fetchCharacterGiftPending(accessToken: String, protocolVersion: Int) async throws -> CharacterGiftOffer? {
         let data: Data
         do {
@@ -242,7 +321,11 @@ extension SupabaseWorkService {
         } catch let error as SupabaseWorkServiceError where BlockReportRules.isMissingFunction(error) {
             return nil
         }
-        return try decoder.decode(CharacterGiftPendingResponse.self, from: data).offer
+        // 이 빌드가 받을 수 없는 종류(술 선물인데 번호 4)는 서버가 안 싣는 것이 정본이지만, 섞여 와도 띄우지 않는다
+        // (열어 봐야 수령이 `needs_update` 다 — 받을 수 없는 창을 띄우지 않는다).
+        guard let offer = try decoder.decode(CharacterGiftPendingResponse.self, from: data).offer,
+              offer.kind.isSupported(protocolVersion: protocolVersion) else { return nil }
+        return offer
     }
 
     /// 선물을 받는다. `claim_character_gift(p_gift, p_character, p_protocol)`.
@@ -321,6 +404,79 @@ package nonisolated enum CakeGiftText {
         guard let last = word.trimmingCharacters(in: .whitespacesAndNewlines).unicodeScalars.last,
               (0xAC00...0xD7A3).contains(last.value) else { return "를" }
         return (last.value - 0xAC00) % 28 == 0 ? "를" : "을"
+    }
+}
+
+/// '술 한잔' 선물 문구(v0.3.74 이슬 아잉이). 설계서 §5 표의 **가제** 글자 그대로다(대표 확인 전 시안 — 바뀌면 여기 한 곳만 고친다).
+/// `CakeGiftText` 와 같은 모양이다 — 받는 창 · 상점 잠긴 칸 · 다시 열기 카드가 같이 쓴다. 실패 · 거절 줄은 생일과 한 벌이다.
+/// 문구는 대표 결정(2026-11-03, 결재 #d_QKdjqLLU7S0b "C 짧고 가볍게 (짠! 🥂)" — 수고 인사처럼 가볍게).
+/// 잠긴 칸 캡션 · 안내 · 받은 뒤 한 줄은 C 안에 따로 없어 설계서 §5 가제를 그대로 둔다.
+package nonisolated enum DrinkGiftText {
+    /// 받는 창 제목.
+    package static let title = "짠! 🥂"
+    /// 받는 창 본문(운영자 한 줄 `note` 가 있으면 화면이 그 위에 크게 — 초대장처럼).
+    package static let body = "오늘도 고생 많았어요. 이슬 아잉이 한 병 받아요!"
+    /// 확인 단추(고를 것이 없다 — 선택지는 이슬 하나).
+    package static let confirmButton = "짠 받기"
+    /// 받은 뒤의 단추 둘(생일과 같은 글자).
+    package static let wearNowButton = CakeGiftText.wearNowButton
+    package static let closeButton = CakeGiftText.closeButton
+    /// 상점 잠긴 칸 캡션(가격 · 사기 단추 자리).
+    package static let lockedCaption = "술 한잔 선물 전용"
+    /// 잠긴 칸을 골랐을 때의 안내.
+    package static let lockedHint = "술 한잔 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요."
+    /// 받지 않고 닫은 뒤 메뉴 팝오버 · 상점에 남는 카드.
+    package static let reopenTitle = "짠! 선물이 왔어요"
+    package static let reopenButton = "받기"
+    /// 결과를 모르는 수령(오프라인 · 5xx · 응답 해석 실패)의 한 줄 — 생일과 같은 글자다(다시 눌러도 안전하다).
+    package static let claimFailed = CakeGiftText.claimFailed
+
+    /// 받은 뒤 한 줄 — "이슬 아잉이를 받았어요!"(조사 규칙은 생일과 한 곳).
+    package static func received(name: String) -> String {
+        CakeGiftText.received(name: name)
+    }
+
+    /// 수령 결과 중 받은 화면이 아닌 것의 한 줄 — 생일과 같은 어휘 · 같은 글자(`CakeGiftText.notice`).
+    package static func notice(for outcome: CharacterGiftClaimOutcome, name: (String) -> String) -> String? {
+        CakeGiftText.notice(for: outcome, name: name)
+    }
+}
+
+/// 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 `CharacterGiftKind.copy` 로 받는다(글자는 `CakeGiftText` · `DrinkGiftText` 한 곳).
+package struct CharacterGiftCopy: Equatable, Sendable {
+    package let title: String
+    package let body: String
+    package let confirmButton: String
+    package let wearNowButton: String
+    package let closeButton: String
+    package let lockedCaption: String
+    package let lockedHint: String
+    package let reopenTitle: String
+    package let reopenButton: String
+    /// 결과를 모르는 수령의 한 줄(`CakeGiftText.claimFailed` · `DrinkGiftText.claimFailed`).
+    package let claimFailed: String
+
+    /// 생일 선물(케이크 아잉이 — v0.3.66).
+    package static let birthday = CharacterGiftCopy(
+        title: CakeGiftText.title, body: CakeGiftText.body, confirmButton: CakeGiftText.confirmButton,
+        wearNowButton: CakeGiftText.wearNowButton, closeButton: CakeGiftText.closeButton,
+        lockedCaption: CakeGiftText.lockedCaption, lockedHint: CakeGiftText.lockedHint,
+        reopenTitle: CakeGiftText.reopenTitle, reopenButton: CakeGiftText.reopenButton,
+        claimFailed: CakeGiftText.claimFailed
+    )
+
+    /// '술 한잔' 선물(이슬 아잉이 — v0.3.74).
+    package static let drink = CharacterGiftCopy(
+        title: DrinkGiftText.title, body: DrinkGiftText.body, confirmButton: DrinkGiftText.confirmButton,
+        wearNowButton: DrinkGiftText.wearNowButton, closeButton: DrinkGiftText.closeButton,
+        lockedCaption: DrinkGiftText.lockedCaption, lockedHint: DrinkGiftText.lockedHint,
+        reopenTitle: DrinkGiftText.reopenTitle, reopenButton: DrinkGiftText.reopenButton,
+        claimFailed: DrinkGiftText.claimFailed
+    )
+
+    /// 받은 뒤 한 줄(종류와 무관하게 한 규칙 — "○○를 받았어요!").
+    package func received(name: String) -> String {
+        CakeGiftText.received(name: name)
     }
 }
 

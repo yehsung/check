@@ -555,7 +555,8 @@ package enum MobileSignUpText {
     package static let termsAgreement = "가입하면 이용약관과 개인정보 처리방침에 동의하는 것으로 봅니다"
     package static let termsLink = "이용약관"
     package static let privacyLink = "개인정보 처리방침"
-    package static let termsURL = URL(string: "https://yehsung.github.io/check/terms")!
+    /// 나 → 설정의 이용약관 링크 · 맥과 같은 주소 — 코어 한 곳(`CheckAppLinks`)이다.
+    package static let termsURL = CheckAppLinks.termsOfService
     /// 나 → 설정의 처리방침 링크와 **같은 주소**여야 한다(`MeText.privacyPolicyURL`).
     package static let privacyURL = URL(string: "https://yehsung.github.io/check/privacy")!
 

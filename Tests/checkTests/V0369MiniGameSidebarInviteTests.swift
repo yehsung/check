@@ -39,7 +39,7 @@ private func sidebarInviteWakes(_ store: WorkTimerStore, _ body: () throws -> Vo
 }
 
 @MainActor
-@Test("사이드바 신청 점: 창이 부르는 MiniGameDuelInvites(store:) 가 네 사실을 따라가고, 바뀌면 창을 깨운다")
+@Test("사이드바 신청 점: 창이 부르는 MiniGameDuelInvites(store:) 가 다섯 사실을 따라가고, 바뀌면 창을 깨운다")
 func sidebarInviteDotsFollowTheLiveStoreFacts() throws {
     let store = sidebarInviteStore()
     #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(), "아무 신청도 없는데 점이 섰다")
@@ -87,6 +87,21 @@ func sidebarInviteDotsFollowTheLiveStoreFacts() throws {
     #expect(sidebarInviteWakes(store) { store.rummy.lobby = lobby }, "큐브 초대가 들어왔는데 창이 안 깨어난다")
     #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(rummy: true))
     #expect(sidebarInviteWakes(store) { store.rummy.lobby = nil })
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
+
+    // ⑤ 아잉 뒤집기 — 메뉴바와 같은 사실(`visibleIncoming` — 차단을 거른 첫 신청).
+    let reversiPeer = ReversiUser(id: "00000000-0000-0000-0000-000000000013", displayName: "서연", characterID: "fox",
+                                  isWorking: true)
+    #expect(sidebarInviteWakes(store) {
+        store.reversi.incoming = [ReversiInvite(id: "r-1", peer: reversiPeer, stake: 5, expiresAt: Date().addingTimeInterval(45))]
+    }, "아잉 뒤집기 신청이 들어왔는데 창이 안 깨어난다")
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(reversi: true))
+    // 차단으로 걷어낸 사람의 신청은 점을 내린다 — 앱 소유자의 차단 거울(`blockHiddenPeerIDs`)을 지나 스토어까지 닿는다.
+    #expect(sidebarInviteWakes(store) { store.blockHiddenPeerIDs = [reversiPeer.id] })
+    #expect(MiniGameDuelInvites(store: store).reversi == false, "차단한 사람의 아잉 뒤집기 신청에 점이 남았다")
+    store.blockHiddenPeerIDs = []
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(reversi: true))
+    #expect(sidebarInviteWakes(store) { store.reversi.incoming = [] })
     #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
 
     // 창 뷰가 실제로 이 생성자를 부른다(스냅샷 전용 previewInvites 가 없을 때) — 위 측정이 창의 길이라는 연결.

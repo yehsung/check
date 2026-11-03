@@ -33,6 +33,9 @@ package struct MobileContext {
     /// `GomokuStoreHost` 의 별명이다, `TetrisDuelStore.swift:33`). 오목·체스와 **같은 자리**에 둔 것이 계약이다:
     /// 루비 미러를 셋이 한 칸으로 읽어야 정산이 탭마다 다른 잔액을 그리지 않는다.
     package let tetris: TetrisDuelStore
+    /// 코어 아잉 큐브 스토어(host = **같은** `MobileGomokuHost` — `RummyStoreHost` 도 `GomokuStoreHost` 의 별명이다,
+    /// `RummyStore.swift`). 루비 미러를 넷이 한 칸으로 읽는다(위 테트리스 주석과 같은 까닭).
+    package let rummy: RummyStore
     /// 오목·체스·테트리스 스토어의 호스트(루비 미러 `rubyBalance` 를 나 탭·게임 탭이 함께 읽는다).
     package let gomokuHost: MobileGomokuHost
     /// App Group 저장소(할 일 파일 `storage.todoFileURL(userID:)` · 공용 suite).
@@ -57,6 +60,7 @@ package struct MobileContext {
         gomoku: GomokuStore,
         chess: ChessStore,
         tetris: TetrisDuelStore,
+        rummy: RummyStore,
         gomokuHost: MobileGomokuHost,
         storage: AingSharedStorage,
         appInfo: MobileAppInfo,
@@ -74,6 +78,7 @@ package struct MobileContext {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
+        self.rummy = rummy
         self.gomokuHost = gomokuHost
         self.storage = storage
         self.appInfo = appInfo

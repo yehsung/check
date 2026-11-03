@@ -1,18 +1,22 @@
 #if DEBUG
+import CheckCore
 import Foundation
 
 /// 데모 스크린샷용 장면(DEBUG 전용 — Release 에서 컴파일되지 않는다). 데모 라우트 `now` 위에 실행 인자로 한 장면을 더 연다:
 ///
-///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now -AingCheckDemoNow goal|undo|edit|old|working(쉼표로 여러 개)
+///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now -AingCheckDemoNow goal|undo|edit|old|working|streak(쉼표로 여러 개)
 ///
 /// - goal: 주간 목표 시트 · undo: 첫 할 일을 지운 뒤 되돌리기 토스트(닫히지 않게 붙잡음) · edit: 둘째 할 일 수정 중 · old: 오래된 항목 펼침
 /// - working: 지금 근무 중 절까지 스크롤
+/// - streak: 타이머 줄의 연속 근무 칩(`now` 장면엔 미션 픽스처가 없고 서버 키도 적용 전이라 값을 넣는다)
 ///
 /// 무소속 합류 카드(라우트 `now/teamless` — 소속 픽스처가 빈 배열이다):
 ///
 ///     simctl launch <기기> com.yehsung.aingcheck -AingCheckDemo YES -AingCheckDemoRoute now/teamless -AingCheckDemoNow teamjoin|teamcreate
 ///
 /// - teamjoin: 팀 코드를 채우고 미리보기("팀 아잉 데모팀 · 6명 · 주 40시간")까지 · teamcreate: 팀 만들기 칸(이름 · 주간 목표)
+///
+/// 우리 팀 전체 명단은 라우트 `now/team…` 이 연다(`MobileDemoTeamRosterRoute` — 깃발 없이 라우트만으로).
 @MainActor
 enum NowDemoStage {
     static let argument = "-AingCheckDemoNow"
@@ -50,8 +54,29 @@ enum NowDemoStage {
         return false
     }
 
-    /// 탭 화면 단 장면(시트 · 토스트 · 무소속 합류 카드).
+    /// 데모 라우트 `now/team…` 이 명단 화면을 쌓았는가(탭으로 돌아올 때마다 다시 쌓지 않게).
+    private static var didOpenTeamRoster = false
+
+    /// 명단 화면을 쌓는다. 앱 모델이 라우트를 연 **뒤**여야 한다 — `router.open` 이 쌓인 경로를 비운다.
+    private static func openTeamRosterIfRouted(store: NowStore) async {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard store.context.isDemo, !didOpenTeamRoster,
+              let index = arguments.firstIndex(of: "-AingCheckDemoRoute"), arguments.indices.contains(index + 1),
+              MobileDemoTeamRosterRoute(demoRoute: arguments[index + 1])?.opensRoster == true
+        else { return }
+        didOpenTeamRoster = true
+        for _ in 0..<120 {
+            if store.context.router.lastOpenedRoute != nil {
+                store.openTeamRoster()
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    /// 탭 화면 단 장면(시트 · 토스트 · 무소속 합류 카드 · 명단 화면).
     static func apply(store: NowStore, openGoalSheet: () -> Void) async {
+        await openTeamRosterIfRouted(store: store)
         let stages = stages()
         guard store.context.isDemo, !stages.isEmpty else { return }
         if stages.contains("teamjoin") || stages.contains("teamcreate") {
@@ -67,6 +92,22 @@ enum NowDemoStage {
             if let first = store.todoRows().main.first {
                 store.deleteTodo(first.id)
             }
+        }
+        await applyStreak(store: store, stages: stages)
+    }
+
+    /// 데모 연속 근무일(칩의 폭을 재기에 두 자리가 맞다).
+    static let demoStreakDays = 12
+
+    /// 연속 근무 칩. 실제 화면이 읽는 값을 세운다 — 나 탭 미션 값을 진짜 길(`applyAchievementStatus`)로 옮겨 `myStreakDays` 가 그대로 읽는다.
+    static func applyStreak(store: NowStore, stages: Set<String>) async {
+        if stages.contains("streak"), let me = store.context.links.me {
+            // 떠 있는 조회가 픽스처 없음(404)으로 끝나면 값을 지운다 — 끝난 뒤에 넣는다.
+            for _ in 0..<120 {
+                guard me.achievementsState.isLoading else { break }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            me.applyAchievementStatus(AchievementStatus(streakDays: demoStreakDays))
         }
     }
 

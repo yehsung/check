@@ -395,10 +395,15 @@ struct V0369RummyVerifyV5Tests {
         let start = try #require(try v5Object("start_ok")["state"] as? [String: Any])
         var mine = start
         mine["turn_seat_no"] = 0
+        // 두 기기 다 이 판에 손댔다(시작을 보냈다 — 머리말 ⑮). 손대지 않은 기기는 창이 안 보여도 말하지 않는다(2026-11-03 ·
+        // `V0369RummyStoreTests.idleDeviceStaysQuietOnStartAndTurns`).
+        let matchID = try v5State(mine).id
+        shown.markEngaged(matchID)
         shown.applyState(try v5State(mine))
         #expect(shownTally.attentions.isEmpty)
 
         let (hidden, _, hiddenTally) = v5Make("att-hidden", script: script)
+        hidden.markEngaged(matchID)
         hidden.applyState(try v5State(mine))
         #expect(hiddenTally.attentions == [RummyNoticeText.myTurnAttention])
     }

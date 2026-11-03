@@ -12,6 +12,10 @@ import SwiftUI
 ///   `.onChange(of: router.routeSerial)` 등으로 `consumePendingRoute(for:)` 를 불러 자기 방식(경로 push · 시트 · 세그먼트)으로 연다.
 ///   한 번 꺼내면 비워진다 — 같은 링크를 두 번 여는 일이 없다.
 /// - 지금 화면에 보이는 대화 상대는 `visibleConversationPeerID` 에 적는다(메시지 탭이 쓰고, 푸시 코디네이터가 포그라운드 배너를 숨길 때 읽는다).
+///
+/// 떠나는 문(`departureGuard`): **사람이 지금 화면을 떠나는 세 길**(탭 막대 · `open` · 시스템 뒤로·탭 재선택)이 한 곳에 묻는다.
+/// 지금 묻는 쪽은 아잉 큐브 방 하나다(`GamesStore.rummyDepartureAllowed`). `onDisappear` 로 가르지 않는 까닭: 그 신호는 목적지가 다시 세워질 때도 온다(`GamesTab` 주석) — 그때 손님을 내보내면 안 된다.
+/// `popToRoot`·`push`·`reset` 은 묻지 않는다: 부르는 쪽이 이미 판단을 지났다(`open` 뒤의 `consumeRoute` · 화면의 [나가기] · 로그아웃).
 @MainActor
 @Observable
 package final class MobileRouter {
@@ -24,11 +28,38 @@ package final class MobileRouter {
     package private(set) var lastOpenedRoute: AingRoute?
     /// 지금 화면에 떠 있는 대화의 상대(메시지 탭이 대화 화면 표시·숨김에 맞춰 적는다). 앱이 background 면 nil 로 본다.
     package var visibleConversationPeerID: String?
+    /// 떠나도 되는지 묻는 문. true = 지금 간다. false = 확인을 띄웠다 — 수락하면 받은 `resume` 이 원래 가려던 곳으로 간다.
+    @ObservationIgnored package var departureGuard: (@MainActor (_ resume: @escaping @MainActor () -> Void) -> Bool)?
+    /// 문이 탭 막대를 막은 횟수. 탭 막대가 읽어 **다시 그린다** — 안 그리면 막대만 눌린 탭으로 옮겨 가고 내용은 그대로일 수 있다.
+    package private(set) var tabRefusalSerial = 0
+    /// 뒤로·탭 재선택을 막았을 때 화면을 되세우기까지(내려가는 애니메이션이 끝난 뒤에 쌓아야 경로와 화면이 갈리지 않는다).
+    @ObservationIgnored package var pathRestoreSeconds: Double = 0.45
 
     package init() {}
 
+    /// 탭 막대가 쥐는 선택. 눌린 탭은 문을 지나야 `selectedTab` 이 된다.
+    package var tabBarSelection: AingTab {
+        get { selectedTab }
+        set { selectTab(newValue) }
+    }
+
+    /// 사람이 탭을 골랐다. 같은 탭이면 떠나는 것이 아니다(재선택의 뒤로는 경로 쪽에서 온다).
+    package func selectTab(_ tab: AingTab) {
+        guard tab != selectedTab else { return }
+        guard departureAllowed({ [weak self] in self?.selectedTab = tab }) else {
+            tabRefusalSerial &+= 1
+            return
+        }
+        selectedTab = tab
+    }
+
+    private func departureAllowed(_ resume: @escaping @MainActor () -> Void) -> Bool {
+        departureGuard?(resume) ?? true
+    }
+
     /// 딥링크 열기. 탭을 고르고, 그 탭의 쌓인 화면을 비우고, 탭이 꺼내 갈 라우트를 남긴다.
     package func open(_ route: AingRoute) {
+        guard departureAllowed({ [weak self] in self?.open(route) }) else { return }
         let tab = route.tab
         selectedTab = tab
         paths[tab] = NavigationPath()
@@ -60,8 +91,25 @@ package final class MobileRouter {
     package func pathBinding(for tab: AingTab) -> Binding<NavigationPath> {
         Binding(
             get: { [weak self] in self?.paths[tab] ?? NavigationPath() },
-            set: { [weak self] in self?.paths[tab] = $0 }
+            set: { [weak self] in self?.pathChangedByView($0, on: tab) }
         )
+    }
+
+    /// 화면(시스템 뒤로·탭 재선택)이 경로를 바꿨다. 줄어드는 쪽만 떠나는 길이다.
+    /// 막으면 화면은 **이미 내려갔다** — 값만 안 바꾸면 경로와 화면이 갈려 다음 진입이 두 겹으로 쌓인다. 그래서 사실대로 적고, 내려간 뒤에 다시 쌓는다.
+    private func pathChangedByView(_ path: NavigationPath, on tab: AingTab) {
+        let current = paths[tab] ?? NavigationPath()
+        guard path.count < current.count,
+              !departureAllowed({ [weak self] in self?.paths[tab] = path }) else {
+            paths[tab] = path
+            return
+        }
+        paths[tab] = path
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: .seconds(self.pathRestoreSeconds))
+            if self.paths[tab]?.count == path.count { self.paths[tab] = current }
+        }
     }
 
     package func push<Value: Hashable>(_ value: Value, on tab: AingTab) {

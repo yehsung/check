@@ -488,6 +488,12 @@ package enum MeText {
     /// 맥 `DailyMissionCopy.resetNote` 와 한 글자도 다르지 않다.
     package static let dailyMissionsResetNote = "자정에 초기화 · 안 받으면 사라져요"
 
+    /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 아잉 큐브 줄만 비운다 — 서버가 큐브 없는 옛 폰을 위해 '맥에서 할 수 있어요'를 싣는데,
+    /// 이 판의 폰은 큐브를 할 수 있어 거짓이다(서버 글자를 바꾸면 옛 폰에서 거짓이 된다).
+    package static func dailyMissionCaption(game: String, detail: String) -> String {
+        game == "rummy" ? "" : detail
+    }
+
     /// 일일 줄 아이콘(SF Symbol) — **게임 이름으로 고른다**(키가 아니다: 누적 미션의 `gomoku1` 과 일일 `daily_gomoku` 가
     /// 같은 기호를 쓰게). 미니게임 셋은 코어 `MiniGameKind.icon`(게임 화면 · 순위표가 쓰는 그 기호)이고, 1:1 셋은 맥 입구
     /// 기호와 같다(오목 3×3 격자 · 체스 체커보드 · 1:1 테트리스 반으로 나뉜 네모). 모르는 게임은 별 —
@@ -884,6 +890,15 @@ package enum MeText {
     package static let inviteCodeTitle = "팀 코드"
     package static let inviteCodeShare = "팀 코드 공유"
     package static let inviteCodeMissing = "팀 코드를 아직 못 읽었어요"
+    package static let centerRowTitle = "소속 센터"
+    package static let centerLoadFailed = "소속 센터를 아직 못 읽었어요"
+
+    /// 소속 센터 행의 값 아래 한 줄. 바꾸는 길은 없다(읽기 전용 — 운영자가 고친다). 폰의 배지는 아바타 모서리가 아니라 이름 줄에 서므로
+    /// `.chosen` 은 맥 문장("아바타 모서리에…")을 쓰지 않는다. 나머지는 코어 문장 그대로다.
+    package static func centerRowCaption(_ state: CenterSettingsRowState) -> String {
+        if case .chosen = state { return "이름 줄에 배지로 보여요. 바꾸려면 운영자에게." }
+        return state.caption
+    }
 
     package static func inviteShareMessage(teamName: String?, code: String) -> String {
         let team = teamName.map { "「\($0)」 " } ?? ""
@@ -902,6 +917,9 @@ package enum MeText {
     /// 주소는 저장소 docs/ 를 GitHub Pages 로 켜 만든 것이다(같은 문서가 스토어 제출 폼의 처리방침 URL 이기도 하다).
     package static let privacyPolicy = "개인정보 처리방침"
     package static let privacyPolicyURL = URL(string: "https://yehsung.github.io/check/privacy")!
+    /// 이용약관 — 가입 화면에만 있으면 가입 뒤에는 다시 볼 길이 없다(맥 설정 머리 줄과 같은 문서). 주소는 코어 한 곳이다.
+    package static let termsOfService = "이용약관"
+    package static let termsOfServiceURL = CheckAppLinks.termsOfService
 
     package static let deleteAccount = "계정 삭제"
     package static let deleteAccountTitle = "계정을 지울까요?"

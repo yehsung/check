@@ -66,13 +66,29 @@ package struct GamesMiniGameBoard: Equatable {
 /// 5. 늦게 온 토큰 응답은 버린다(`roundGeneration`). 서버는 (사용자, 게임)당 미사용 토큰을 한 행만 두고 갈아 끼운다.
 /// 6. `minigame_public == false` 면 토큰도 제출도 없다(설정 문구가 약속한 "올라가지도 않아요").
 ///
-/// 폰 규칙: 앱이 background 로 가거나 화면을 떠나면 판을 **끝낸다**(`endRound()`). 무엇을 하는지는 게임마다 다르다 —
-/// 타이밍 바·플래피는 예전처럼 기록 없이 버리고, **테트리스·길건너는 여기까지의 점수로 확정해 제출한다**(까닭은
-/// `GamesPlayController.endRound()` 주석: 폰에서 background 는 비용 0.03~0.05초짜리 무한 일시정지다).
-/// 로그아웃(`reset`)과 화면 경합 정리(`openScreen`)는 **`abandon()` 그대로**다 — 셋의 의도가 다르다.
+/// 폰 규칙(1.0.16): **앱이 내려가면 판을 얼린다**(`appWillResignActive` · `appDidEnterBackground`), 화면을 떠나면 끝낸다(`endRound()`).
+/// 끝내는 결과는 게임마다 다르다 — 타이밍 바·플래피는 기록 없이 버리고, **테트리스·길건너는 여기까지의 점수로 확정해 제출한다**
+/// (`GamesMiniGamePausePolicy`). 로그아웃(`reset`)은 **`abandon()` 그대로**다 — 남의 계정에 올리면 안 된다.
 ///
-/// 제출 인편(`pendingSubmit`): 제출이 **네트워크로** 실패하면 (게임, 점수, 토큰)을 들고 있다가 앱이 다시 active 가 될 때
-/// 같은 토큰으로 한 번 더 보낸다. 지금까지는 그 자리에서 점수가 그냥 사라졌다(세 게임 모두).
+/// 일시정지(맥 v0.2.48 → 폰 1.0.16 — 전이는 코어 `MiniGamePauseState` 한 벌, 아래 일시정지 절):
+///  · 맥과 **같은 것**: 스크림 · 카드 · 3-2-1 · 자동 정지는 절대 풀지 않음 · 상한 5분 · 상한은 접어도 기록이 남는 게임에만.
+///  · 맥과 **다른 것 셋**: ① 시계가 벽시계다(1초씩 자는 Task 는 background 에서 멈춘다) ② 3-2-1 도 상한에 든다(맥은 안 세어서
+///    카드↔3-2-1 왕복으로 영영 안 찬다) ③ 플래피를 접으면 버리므로 플래피에 상한이 없다.
+///  · **임시 항목**: 얼린 판은 끝난 판이 아니라서 iOS 가 앱을 죽이면 점수가 사라진다. 그래서 테트리스·길건너는 내려갈 때 지금 점수·토큰을
+///    따로 적어 둔다(`pauseDraftKey`). 인편과 **키가 다르다** — 인편에 넣으면 도는 판의 토큰이 나가 버린다. 다음 실행에 남아 있으면 인편으로 올린다.
+///
+/// 제출 인편(`pendingSubmits` · 맥 v0.3.39 → 폰 1.0.16 — 타입과 판정은 코어 `MiniGamePendingSubmit` 한 벌): 끝난 판의 점수는
+/// 제출 **전에** 대기열에 적고 계정별로 영속한다. 지우는 것은 `ok`·`token_used`·terminal 거절·TTL(30분)뿐이고, 네트워크 실패·
+/// `too_fast` 는 2 → 8 → 30초 간격으로 **같은 토큰으로** 되보낸다. 판이 끝난 순간 토큰이 없으면 토큰을 기다리고,
+/// `no_token` 은 한 번 되살린다(다른 기기가 토큰을 갈아 끼운 판).
+///
+/// ★ 불변식: **그 게임의 인편이 살아 있는 동안 그 게임의 `start_round` 는 나가지 않는다.**
+///   서버가 (사용자, 게임)당 미사용 토큰을 한 행만 두고 갈아 끼우므로, 순서가 뒤집히면 인편의 점수가 `no_token` 으로 죽는다.
+///
+/// 맥과 다른 점 둘 — 전부 폰이어서다.
+///  · **방아쇠(앱 복귀·화면 열기·판 시작·판 끝)는 백오프도 푼다.** 맥의 깨어남은 깨어난 뒤 연결을 기다리는 게이트가 따로 있지만,
+///    폰은 복귀가 곧 사람이 돌아왔다는 신호다. 사람의 행동 한 번에 한 번이라 두드리기가 되지 않는다(꼬리·타이머는 `fromTrigger: false`).
+///  · **다른 게임 판이 도는 중에는 토큰을 기다리는 인편에 토큰을 받아 주지 않는다**(토큰 칸이 하나라 그 판의 토큰을 치운다). 판이 끝나면 밀린다.
 /// 진단: 거절 status 이름까지만 로그에 남긴다 — need_seconds·elapsed_seconds 는 화면에도 로그에도 쓰지 않는다(위조 보조 도구).
 @MainActor
 @Observable
@@ -82,6 +98,8 @@ package final class GamesMiniGameHub {
     /// ⚠️ v0.3.38 부터 **게임별**이다 — 판정은 `MiniGameKind.roundTokenReuseSeconds` 한 곳에서 나온다(테트리스는 12분).
     /// 이 상수는 기존 두 게임의 값(20분)을 가리키는 별명으로 남긴다: 여기를 고쳐도 테트리스는 안 움직인다.
     package nonisolated static let tokenRefreshSeconds: TimeInterval = MiniGameKind.flappy.roundTokenReuseSeconds
+    /// 정지 감시 간격(초 · 맥 `armPauseWatchdog` 과 같은 1초).
+    package nonisolated static let pauseWatchInterval: TimeInterval = 1
     /// 첫 화면 카드(오늘 최고·순위)를 다시 읽는 간격(초).
     package nonisolated static let summaryThrottleSeconds: TimeInterval = 60
 
@@ -93,41 +111,15 @@ package final class GamesMiniGameHub {
     /// 사용자 스위치로 주지 않는다(2026-09-15 '자동 종료는 사용자 스위치로 주지 않는다').
     package nonisolated static let tetrisRoundLimitSeconds: TimeInterval = 15 * 60
 
-    /// 서버가 **명시적으로 거절**한 status. 이걸 받으면 그 토큰으로는 영영 못 올리므로 제출 인편을 지운다.
-    /// (`token_used` 는 여기 없다 — 그건 **성공**이다. 아래 `performSubmit` 주석.)
+    /// 서버 status 분류 — 코어 한 벌(`MiniGameSubmitRules`). 까닭은 그쪽 주석.
     ///
-    /// ⚠️ `unauthorized`·`no_profile` 도 여기다. 둘은 **토큰이 아니라 호출자 쪽 거절**이라
-    /// `minigame_submit_score` 가 uid·프로필 검사에서 곧장 돌아오고 30분 TTL 판정까지 가지도 않는다 —
-    /// 즉 스스로 `token_expired` 로 바뀌지 않는다. 지우지 않으면 인편이 남아 **앱을 켤 때마다 영원히**
-    /// 같은 토큰을 다시 보낸다(그 사이 프리페치는 A1 가드에 막혀 그 게임의 새 토큰도 못 받는다).
-    /// 다만 `deadTokenStatuses` 에는 넣지 않는다 — 문구는 "점수를 못 올렸어요"(`submitRefused`)로 남긴다.
-    nonisolated static let terminalSubmitStatuses: Set<String> =
-        ["invalid", "no_token", "token_expired", "unauthorized", "no_profile"]
-
-    /// 서버가 **"아직 이르다"**로 되돌린 status — 토큰이 살아 있어 같은 토큰으로 다시 보내면 통과한다.
-    ///
-    /// ★ `too_fast` 는 거절이 아니다. `minigame_submit_score` 는 이 응답을 **`used_at` 을 찍기 전에** 돌려주고
-    ///   (20260914010000:305-312 가 반환, :314 가 소모) 판정에 쓰는 `clock_timestamp() - started_at` 은
-    ///   단조증가한다 — 즉 조금 뒤 같은 토큰으로 보내면 같은 점수가 통과한다. terminal 에 두면 올라갈 점수를 버렸다.
-    ///
-    /// **정직한 판이 왜 여기 닿는가** — 하한과 실제 소요의 여유가 타이밍바에서 **0.1906초**뿐이다
-    /// (반주기 합 7.625 → 실제 최소 3.8125초 vs 하한 3.8125 × `minigame_time_margin()` 0.95 = 3.6219초).
-    /// `beginRound` 는 쓸 만한 토큰이 없으면 **판을 세우지 않고** 토큰을 받으므로(그 자리 주석 "이번 판이 토큰 없이
-    /// 시작될 수는 있다"), 토큰이 플레이 중에 생기면 `started_at` 이 그만큼 뒤로 찍혀 10라운드를 다 돈 판도
-    /// 하한 밑으로 나온다. 플래피는 0점 하한이 0 이라(그 함수의 `if v_n > 0`) 즉사로는 닿지 않고,
-    /// 테트리스는 하한이 실제 소요의 2~4%라 사실상 닿지 않는다.
-    nonisolated static let retryableSubmitStatuses: Set<String> = ["too_fast"]
-
-    /// `too_fast` 재시도 지연(초). **눈먼 값이고 횟수가 묶여 있다.**
-    ///
-    /// ⚠️ 서버가 같이 주는 `need_seconds`·`elapsed_seconds` 로 지연을 **계산하지 않는다** — 그 함수 주석이
-    /// "클라가 이 숫자로 재시도 타이밍을 계산하면 그게 곧 위조 보조 도구가 된다"로 못 박았다(20260914010000:306-307).
-    ///
-    /// ⚠️ 무한 백오프로 두지 않는다. 그러면 "하한이 지나갈 때까지 기다려 주는 기계"가 되어 즉시 위조한 점수도
-    /// 결국 올려 준다. 정직한 판에 필요한 것은 0.2초뿐이므로 두 번으로 남는다 — 그 뒤엔 사실대로 "못 올렸어요".
-    nonisolated static let tooFastRetryDelaysSeconds: [TimeInterval] = [1.5, 4]
-    /// 토큰이 죽어 **그 판은 영영 못 올리는** 거절. 문구가 "다시 해 주세요"(복구된다는 뜻)와 갈린다.
-    nonisolated static let deadTokenStatuses: Set<String> = ["no_token", "token_expired"]
+    /// `too_fast` 가 정직한 판에 닿는 길이 둘이다: 타이밍바는 하한과 실제 최소의 여유가 **0.1906초**뿐이라 플레이 중에 생긴 토큰이면
+    /// 하한 밑으로 나오고, 길건너는 판 도중 갈아 끼운 직후 끝나면 새 토큰 기준으로 다시 재서 **길면 450초**를 기다려야 한다
+    /// (상한 5000 × 0.09초 — `MiniGameKind.roundTokenMidRunRefreshSeconds`). 그래서 횟수가 아니라 TTL 이 끝을 낸다.
+    /// ⚠️ 서버가 같이 주는 `need_seconds`·`elapsed_seconds` 로 지연을 **계산하지 않는다** — 간격은 눈먼 고정값뿐이다(위조 보조 도구).
+    nonisolated static let terminalSubmitStatuses = MiniGameSubmitRules.terminalStatuses
+    nonisolated static let retryableSubmitStatuses = MiniGameSubmitRules.retryableStatuses
+    nonisolated static let deadTokenStatuses = MiniGameSubmitRules.deadTokenStatuses
 
     nonisolated static let logger = Logger(subsystem: "aingcheck", category: "minigame")
 
@@ -135,9 +127,6 @@ package final class GamesMiniGameHub {
     @ObservationIgnored package var sleep: @Sendable (TimeInterval) async -> Void = { seconds in
         try? await Task.sleep(for: .seconds(seconds))
     }
-
-    /// `too_fast` 를 이 토큰으로 몇 번 되보냈나. 토큰과 짝지어 둔다 — 새 판이 인편을 갈아 끼우면 같이 리셋된다.
-    @ObservationIgnored private var tooFastRetries: (token: String, count: Int)?
 
     @ObservationIgnored package let context: MobileContext
 
@@ -168,16 +157,45 @@ package final class GamesMiniGameHub {
     /// 지금 왕복 중인 토큰 요청의 게임(없으면 nil). 선발급이 도는 중에 판이 시작되면 **또 요청하지 않는다** —
     /// 또 보내면 서버가 started_at 을 새로 찍어 앞 요청이 벌어 둔 여유를 버린다(폰에서 화면을 열자마자 탭하는 경로).
     @ObservationIgnored package private(set) var roundTokenInFlightKind: MiniGameKind?
-    /// 아직 서버가 받았다고 확인해 주지 않은 제출 한 건. **네트워크로 실패하면 남고**, 성공·명시적 거절이면 지운다.
-    /// 앱이 다시 active 가 될 때 `retryPendingSubmitIfAny()` 가 **같은 토큰으로** 한 번 더 보낸다.
-    @ObservationIgnored package private(set) var pendingSubmit: (kind: MiniGameKind, score: Int, token: String)?
-    /// 지금 제출 왕복이 떠 있다(인편 재시도가 같은 토큰을 두 번 보내지 않게).
-    @ObservationIgnored private var isSubmitting = false
-    /// 출구에서 세운 안내("앱을 나가서 …")를 **비동기 제출 성공이 지우지 않게** 붙든다.
+    /// **제출 인편** — 아직 서버가 받았다고 확인해 주지 않은 끝난 판들. 읽고 쓰는 문은 아래 인편 절 하나다(영속과 어긋나지 않게).
+    @ObservationIgnored package private(set) var pendingSubmits: [MiniGamePendingSubmit] = []
+    /// 메모리의 인편이 **어느 계정 것인가**(nil = 아직 안 읽었거나 로그아웃). 계정이 바뀌면 그 계정의 키에서 다시 읽는다.
+    @ObservationIgnored private var pendingOwner: String?
+    /// 지금 제출 왕복이 떠 있는 게임들(같은 토큰을 두 번 동시에 보내지 않게).
+    @ObservationIgnored private var submittingKinds: Set<MiniGameKind> = []
+    /// 실패 뒤 백오프 타이머(한 개 — 가장 먼저 돌아오는 인편에 맞춘다).
+    @ObservationIgnored private var pendingRetryTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingRetryTarget: Date?
+    /// 이번 로그인에서 공개 여부를 서버에게 **들었다.** 디스크에서 되살린 인편은 이걸 안 뒤에만 나간다 — `isPublic` 의 기본값은 "모름 = 공개"라
+    /// 재시작 직후에 그대로 믿으면 그 사이 공개를 끈 사람의 점수가 나간다(`refreshPublic` 주석의 games-verify PROBE-1 과 같은 구멍).
+    @ObservationIgnored private var publicIsKnown = false
+    @ObservationIgnored private var pendingAwaitsPublicCheck = false
+    @ObservationIgnored private var isCheckingPublicForPending = false
+    /// 상한에서 세운 안내("5분 넘게 멈춰서 …")를 **비동기 제출 성공이 지우지 않게** 붙든다.
     /// 성공 갈래는 `submitNotice = nil` 인데, 그게 이 문장을 지우면 사용자에게는 판이 조용히 사라진 것처럼 보인다.
     @ObservationIgnored private var exitNoticeIsSticky = false
     @ObservationIgnored private var resetGeneration = 0
     @ObservationIgnored private var lastSummaryAt: Date = .distantPast
+
+    // MARK: 일시정지(관찰 대상 아님 — 화면은 `controller.pauseState` 를 본다)
+
+    /// 3-2-1 · 정지 감시의 기다리기. **`sleep` 과 일부러 나눴다** — 테스트가 `sleep` 을 즉시 돌아오는 것으로 바꾸므로, 같은 값을 쓰면
+    /// 시계가 안 흐르는 빌드에서 감시 고리가 메인 액터를 잡고 돈다. 시험은 `advanceResumeCountdown` · `pauseWatchTick` 을 직접 부른다.
+    @ObservationIgnored package var pauseSleep: @Sendable (TimeInterval) async -> Void = { seconds in
+        try? await Task.sleep(for: .seconds(seconds))
+    }
+    /// 이번 판에서 이미 **닫힌** 정지 구간의 합(초). 새 판에서만 0 이 된다 — 회당이면 정지를 풀었다 걸기만 해도 상한이 되돌아간다.
+    @ObservationIgnored private var frozenSecondsBanked: TimeInterval = 0
+    /// 지금 열려 있는 정지 구간의 시작 시각(`.none` 이면 nil).
+    @ObservationIgnored private var frozenSince: Date?
+    @ObservationIgnored private var resumeTask: Task<Void, Never>?
+    @ObservationIgnored private var pauseWatchTask: Task<Void, Never>?
+    /// 정지 중 토큰 감시를 마지막으로 돈 시각(길건너만).
+    @ObservationIgnored private var lastFrozenKeepAliveAt: Date?
+    /// 앱이 background 에 있다 — 잠깐 도는 감시가 그 사이 판을 끝내지 않게(복귀가 판정한다).
+    @ObservationIgnored private var isInBackground = false
+    /// 이 실행에서 임시 항목을 적은 계정. 살아 있는 판의 것이라 **인편으로 올리지 않는다**(다음 실행에 남은 것만 올린다).
+    @ObservationIgnored private var liveDraftOwner: String?
     /// 엔진 시드 — 화면을 열 때마다 달라야 같은 판이 반복되지 않는다(데모 고정 시계에서도).
     @ObservationIgnored private var seedCounter: UInt64 = 0
 
@@ -204,9 +222,18 @@ package final class GamesMiniGameHub {
 
     /// 게임 화면이 열렸다. 오늘 순위·어제 1등·공개 여부를 읽고 **토큰을 미리 받는다**.
     package func openScreen(_ kind: MiniGameKind) {
-        if activeKind == kind, controller != nil { return }
+        if activeKind == kind, controller != nil {
+            enforcePauseCap()
+            return
+        }
         // 화면 경합 정리는 **버리는 것**이다(`abandon()`) — 사람이 쌓아 올린 판을 끝내는 자리가 아니다.
-        controller?.abandon()
+        // ★ 단 **얼려 둔 판은 다르다**: 정지 카드를 띄운 채 알림을 눌러 다른 게임 화면이 열리면(새 화면의 등장이 옛 화면의 퇴장보다 먼저 올 수 있다)
+        //   그 판은 사람이 쌓아 올린 판이다 — 맥이 정지 중 다른 게임으로 넘어갈 때처럼 [그만두기]와 같은 결과로 접는다.
+        if let controller, controller.isFrozen {
+            endFrozenRound(controller, notice: nil)
+        } else {
+            controller?.abandon()
+        }
         activeKind = kind
         submitNotice = nil
         exitNoticeIsSticky = false
@@ -215,9 +242,15 @@ package final class GamesMiniGameHub {
         let controller = GamesPlayController(kind: kind, seed: seed)
         controller.onStarted = { [weak self] in self?.beginRound(kind: kind) }
         controller.onFinished = { [weak self] score in self?.recordScore(kind: kind, score: score) }
+        // 끝이 정해지지 않은 판(길건너)만 판 도중에 토큰을 갈아 끼운다. 나머지는 프레임마다 시간을 재지도 않는다.
+        if kind.roundTokenMidRunRefreshSeconds != nil {
+            controller.onRoundKeepAlive = { [weak self] in self?.keepRoundTokenFresh(kind: kind) }
+        }
         self.controller = controller
         loadLocalBest(kind)
         guard context.session.isSignedIn else { return }
+        // 화면을 닫아 둔 사이에 죽은 점수가 있으면 **여기서 한 번 말하고 표식을 지운다**(아래 밀기가 문구를 덮기 전에).
+        showLostNoticeIfAny()
         let generation = resetGeneration
         Task { [weak self] in
             // 공개 여부를 **먼저** 안다 — 끈 사람에게 토큰을 받아 두지 않는다. 그 왕복 동안 판이 시작되면 `beginRound` 가
@@ -246,35 +279,39 @@ package final class GamesMiniGameHub {
     }
 
     /// 게임 화면을 떠났다. 진행 중인 판은 **끝낸다**(`endRound()` — 테트리스·길건너는 여기까지의 점수로 확정 제출).
+    /// 얼려 둔 판도 같다 — 정지 중 뒤로 가기는 [그만두기]와 같은 결과다.
     /// 토큰은 들고 있는다(재사용 나이 안에 다시 열면 그대로 쓴다).
     ///
     /// 안내 한 줄은 세우지 않는다 — 이 화면은 지금 사라지는 중이고, 다시 열면 `openScreen` 이 어차피 비운다.
     package func closeScreen(_ kind: MiniGameKind) {
         guard activeKind == kind else { return }
-        controller?.endRound()
+        if let controller {
+            endFrozenRound(controller, notice: nil)
+        }
         controller = nil
         activeKind = nil
     }
 
-    /// 앱이 background 로 간다 — 판은 끝. 기존 두 게임은 제출하지 않고(SPEC-ios §3.5),
-    /// **테트리스·길건너는 여기까지의 점수로 확정 제출한다**(`GamesPlayController.endRound()`).
+    /// 장면이 앞에서 물러난다(`.inactive` — 전화 수신 · 제어 센터 · 앱 전환기). 도는 판을 얼린다.
+    ///
+    /// background 까지 기다리지 않는다: 앱 전환기 스냅숏은 그 전에 찍히고, 앱 전환기에서 쓸어 올려 죽이면 background 가 안 올 수도 있다.
+    package func appWillResignActive() {
+        freezeForSceneChange()
+    }
+
+    /// 앱이 background 로 간다. **판은 끝나지 않고 얼어 있는다**(폰 1.0.16 — 전화에 판이 산다).
+    /// 대신 iOS 가 앱을 죽여도 테트리스·길건너 점수가 남도록 임시 항목을 적는다(`writePauseDraft`).
     package func appDidEnterBackground() {
-        guard let controller else { return }
-        switch controller.endRound() {
-        case .none:
-            return
-        case .abandoned:
-            submitNotice = GamesMiniGameText.endedInBackground(controller.kind)
-            exitNoticeIsSticky = false
-        case .confirmed:
-            // 이 줄에 닿기 전에 `endRound()` 안에서 `recordScore` 가 이미 돌았다.
-            //  · 제출이 떠 있으면(인편이 있으면) "여기까지 기록했어요" 가 참이다 — 비동기 성공이 못 지우게 붙든다.
-            //  · 못 띄웠으면(토큰이 없어 `recordScore` 가 그 사실을 말한 경우) 그 말을 **덮지 않는다** —
-            //    안 올라간 점수를 올렸다고 하는 것이 이 화면에서 제일 나쁜 거짓말이다.
-            guard pendingSubmit != nil || !isPublic || !context.session.isSignedIn else { return }
-            submitNotice = GamesMiniGameText.endedInBackground(controller.kind)
-            exitNoticeIsSticky = pendingSubmit != nil
-        }
+        isInBackground = true
+        freezeForSceneChange()
+    }
+
+    /// 장면이 앞으로 왔다. 상한을 재고, 넘지 않았으면 토큰을 챙긴다. **자동으로 풀지 않는다** — 사람이 [이어하기] 를 눌러야 한다.
+    package func sceneDidComeForward() {
+        isInBackground = false
+        guard let controller, controller.isFrozen else { return }
+        if enforcePauseCap() { return }
+        keepFrozenRoundTokenFresh(controller)
     }
 
     /// 로그아웃·치명 만료. 계정에 묶인 값을 전부 비운다.
@@ -283,6 +320,10 @@ package final class GamesMiniGameHub {
     package func reset() {
         resetGeneration &+= 1
         roundGeneration &+= 1
+        stopPauseTasks()
+        resetPauseClock()
+        // 얼려 둔 판의 임시 항목도 함께 지운다 — 로그아웃은 그 판을 버리는 자리다(`abandon()` 과 같은 뜻).
+        clearPauseDraft()
         controller?.abandon()
         controller = nil
         activeKind = nil
@@ -299,7 +340,17 @@ package final class GamesMiniGameHub {
         roundTokenKind = nil
         roundTokenAt = nil
         roundTokenInFlightKind = nil
-        pendingSubmit = nil
+        // 인편은 **메모리만** 비운다 — 디스크의 것은 계정별 키에 남아 같은 계정의 다음 로그인에서 살아난다(TTL 안이면).
+        pendingSubmits = []
+        pendingOwner = nil
+        submittingKinds = []
+        pendingRetryTask?.cancel()
+        pendingRetryTask = nil
+        pendingRetryTarget = nil
+        publicIsKnown = false
+        pendingAwaitsPublicCheck = false
+        // 떠 있는 앞 로그인의 조회는 세대 가드가 버린다 — 이 깃발이 남으면 다음 로그인의 인편이 묻지도 못하고 멈춘다.
+        isCheckingPublicForPending = false
         lastSummaryAt = .distantPast
     }
 
@@ -345,27 +396,29 @@ package final class GamesMiniGameHub {
     }
 
     /// 토큰을 미리 받는다(화면 열기 · 제출 뒤). 쓸 만한 토큰이 있으면 다시 받지 않는다.
-    /// - Parameter force: 왕복 중인 요청이 있어도 새로 받는다 — 판이 **이미 끝났는데** 토큰이 없던 자리(그 왕복은 이번 판에
-    ///   늦었고, 실패로 끝나면 아무도 다시 받지 않는다). 새 요청이 나가면 앞 요청의 응답은 세대 가드가 버린다.
-    package func prefetchRoundToken(kind: MiniGameKind, force: Bool = false) {
+    package func prefetchRoundToken(kind: MiniGameKind) {
         guard isPublic, context.session.isSignedIn else { return }
-        // ★ 그 게임의 **인편이 살아 있으면 받지 않는다**(force 여도). 서버는 (사용자, 게임)당 미사용 토큰을 한 행만 두고
+        // ★ 그 게임의 **인편이 살아 있으면 받지 않고 인편부터 민다.** 서버는 (사용자, 게임)당 미사용 토큰을 한 행만 두고
         //   새 요청이 오면 갈아 끼운다(`minigame_rounds_one_open`) — 그래서 `requestRoundToken` 주석의
         //   "새 요청이 나가는 순간 들고 있던 것은 죽는다"가 **인편이 들고 있는 토큰에도 그대로** 걸린다.
-        //   제출이 네트워크로 실패한 직후 여기서 새 토큰을 받으면, 복귀 재시도는 `no_token`(terminal)을 받고
-        //   인편이 버려진다 — 인편이라는 장치의 유일한 이득이 자기 손으로 무너진다.
-        //   막힌 채로 굳지 않는다: 인편은 `retryPendingSubmitIfAny()`(복귀)와 `beginRound`(새 판)가 밀어내고,
-        //   비워지는 순간 `performSubmit` 의 꼬리가 여기를 다시 불러 새 토큰을 받는다.
-        guard pendingSubmit?.kind != kind else { return }
+        //   막힌 채로 굳지 않는다: 인편이 비워지는 순간 `performSubmit` 의 꼬리가 여기를 다시 불러 새 토큰을 받는다.
+        if hasPendingSubmit(for: kind) {
+            retryPendingSubmitIfAny()
+            return
+        }
         guard !hasUsableRoundToken(for: kind) else { return }
-        guard force || roundTokenInFlightKind != kind else { return }
+        guard roundTokenInFlightKind != kind else { return }
+        // 다른 게임의 인편이 토큰을 기다리며 왕복 중이면 비킨다 — 토큰 칸이 하나라 새 요청은 그 응답을 세대 가드로 버리고,
+        // 그 인편에는 왕복도 타이머도 안 남아 다음 방아쇠까지 굳는다. 선발급은 급하지 않다: 그 인편의 제출 꼬리가 여기를 다시 부르고, 판 시작도 받는다.
+        if let inFlight = roundTokenInFlightKind, pendingSubmits.contains(where: { $0.kind == inFlight && $0.token == nil }) { return }
         requestRoundToken(kind: kind)
     }
 
     /// 판이 시작됐다(엔진 onStarted). 쓸 만한 토큰이 없을 때만 받는다 — 게임은 기다리지 않는다.
     package func beginRound(kind: MiniGameKind) {
+        resetPauseClock()
         // 판 벽시계 상한은 **가드보다 먼저** 건다: 순위 공정성 장치라 공개 여부·로그인과 무관하다.
-        // 기존 두 게임은 nil(판이 스스로 끝나거나 자동잠금이 상한이다 — `GamesStore.wantsIdleTimerDisabled`).
+        // 기존 두 게임은 nil(판이 스스로 끝나거나 자동잠금이 판을 얼린다 — `GamesStore.wantsIdleTimerDisabled`).
         // **길건너도 nil 이다**(폰 1.0.15 D4): `CrossyGame.idleLimit` 9초가 가만히 있는 판을 이미 죽이므로
         // 벽시계 상한이 할 일이 없다(테트리스는 조각을 세워 두고 생각하는 무입력 구간이 있어 필요했다).
         //
@@ -378,15 +431,38 @@ package final class GamesMiniGameHub {
         submitNotice = nil
         guard !hasUsableRoundToken(for: kind) else { return }
         // ★ 이 게임의 인편이 살아 있으면 토큰을 받는 대신 **인편부터 밀어낸다**(까닭은 `prefetchRoundToken` 의 가드).
-        //   여기가 인편을 푸는 두 방아쇠 가운데 하나다(다른 하나는 복귀 `retryPendingSubmitIfAny()`).
-        //   성공·명시적 거절로 비워지면 `performSubmit` 꼬리의 프리페치가 곧바로 새 토큰을 받아 준다.
-        //   이번 판이 토큰 없이 시작될 수는 있다 — 그건 앞 판을 확실히 버리는 것보다 싸고, `recordScore` 가
-        //   "못 올렸어요"로 사실대로 말한다.
-        guard pendingSubmit?.kind != kind else {
+        //   이번 판이 토큰 없이 시작될 수는 있다 — 그러면 이 판의 점수는 토큰을 기다리는 인편이 되어 앞 인편이 비워진 뒤
+        //   토큰을 받는다. 앞 판을 확실히 버리는 것보다 싸다.
+        if hasPendingSubmit(for: kind) {
             retryPendingSubmitIfAny()
             return
         }
         guard roundTokenInFlightKind != kind else { return }
+        requestRoundToken(kind: kind)
+    }
+
+    /// 판 도중 토큰 갈아 끼우기(맥 v0.3.67 → 폰 1.0.16 — 길건너처럼 끝이 정해지지 않은 판). 구동기가 판이 도는 동안 30초마다 부른다.
+    ///
+    /// 들고 있는 그 게임의 토큰이 `roundTokenMidRunRefreshSeconds` 보다 늙었으면 새로 받는다(서버가 안 쓴 토큰을 갈아 끼우며
+    /// TTL 을 새로 센다). 이게 없으면 약 28분을 넘긴 판이 다 끝난 뒤 `token_expired` 로 **통째로** 거절된다.
+    /// 대가: 서버 시간 하한도 새 토큰부터 다시 잰다 — 갈아 끼운 직후에 끝난 판은 `too_fast` 를 받고 인편이 통과할 때까지 되보낸다.
+    /// 아무것도 안 하는 자리: 갈아 끼우지 않는 게임 · 아직 젊다 · 이미 왕복 중이다 ·
+    /// **그 게임의 인편이 살아 있다**(불변식 — 새 토큰을 받는 순간 인편이 든 옛 토큰이 죽는다. 인편을 먼저 민다).
+    /// 들고 있는 토큰이 아예 없으면(판 시작 왕복이 실패했다) 받는다 — 그 판이 끝나기 전에 쥐어야 한다.
+    package func keepRoundTokenFresh(kind: MiniGameKind) {
+        guard let limit = kind.roundTokenMidRunRefreshSeconds else { return }
+        guard isPublic, context.session.isSignedIn else { return }
+        if hasPendingSubmit(for: kind) {
+            // 사람의 행동이 아니라 시계가 부른 자리다 — 백오프를 풀지 않는다.
+            retryPendingSubmitIfAny(fromTrigger: false)
+            return
+        }
+        guard roundTokenInFlightKind != kind else { return }
+        if roundToken != nil, roundTokenKind == kind, let issued = roundTokenAt,
+           context.clock.now().timeIntervalSince(issued) < limit {
+            return
+        }
+        Self.logger.notice("round token refreshed mid-run game=\(kind.rawValue, privacy: .public)")
         requestRoundToken(kind: kind)
     }
 
@@ -415,6 +491,13 @@ package final class GamesMiniGameHub {
             guard requested == roundGeneration else { return }
             guard response.status == "ok", let token = response.token else {
                 Self.logger.notice("round token refused status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
+                deferPendingTokenWait(kind: kind)
+                return
+            }
+            // ★ 토큰을 기다리는 인편이 있으면 **그 인편이 먼저 받는다**(살아 있는 판보다 앞). 판이 끝난 뒤에 나간 요청이었다면
+            //   서버가 too_fast 를 줄 수 있는데, 경과는 자라기만 하니 백오프 재시도가 통과시킨다.
+            if adoptTokenIntoWaitingPending(kind: kind, token: token) {
+                retryPendingSubmitIfAny(fromTrigger: false)
                 return
             }
             roundToken = token
@@ -423,183 +506,584 @@ package final class GamesMiniGameHub {
         } catch {
             guard requested == roundGeneration else { return }
             Self.logger.notice("round token request failed game=\(kind.rawValue, privacy: .public)")
+            deferPendingTokenWait(kind: kind)
         }
     }
 
     /// 유효하게 끝난 판(엔진 onFinished). 범위 밖은 버리고, 로컬 최고를 올리고, 공개면 토큰과 함께 올린다.
+    ///
+    /// 여기서부터 점수는 **인편**이다 — 제출을 시도하기 **전에** 적는다(맥 `recordMiniGameScore` 와 같은 자리).
     package func recordScore(kind: MiniGameKind, score: Int) {
+        // 얼렸던 판이 정말 끝났다 — 임시 항목의 일은 끝났다. 남겨 두면 다음 실행에 **같은 판이 또 올라간다.**
+        clearPauseDraft()
         guard score >= 0, score <= kind.maxScore else { return }
         raiseLocalBest(kind, to: score)
         guard isPublic, context.session.isSignedIn else { return }
-        guard let token = roundToken, roundTokenKind == kind else {
-            Self.logger.notice("submit skipped — no token game=\(kind.rawValue, privacy: .public)")
-            submitNotice = GamesMiniGameText.submitFailedConnection
-            prefetchRoundToken(kind: kind, force: true)
-            return
-        }
-        // 한 토큰에 한 점수 — 여기서 비워 두면 같은 토큰이 두 번 나가지 않는다.
-        // 대신 **인편**(pendingSubmit)에 적는다: 네트워크로 실패해도 점수가 그 자리에서 사라지지 않게.
-        roundToken = nil
-        roundTokenKind = nil
-        roundTokenAt = nil
-        // ★ 인편 칸은 하나뿐이다. 밀려나는 앞 판을 **조용히 버리지 않는다** — 예전에는 그대로 덮어써서
-        //   앞 판 점수가 재시도 한 번 없이 사라졌고, 그 판의 실패 안내마저 `beginRound` 의 `submitNotice = nil` 이
-        //   이미 지운 뒤였다(사용자에게는 판이 통째로 증발한 것으로 보인다).
-        if let superseded = pendingSubmit, superseded.token != token {
-            sendSupersededPending(superseded)
-        }
-        pendingSubmit = (kind: kind, score: score, token: token)
-        Task { [weak self] in await self?.performSubmit(kind: kind, score: score, token: token) }
-    }
-
-    /// 인편 칸에서 밀려나는 제출을 **마지막으로 한 번** 보낸다(버리기 전에).
-    ///
-    /// 왜 그냥 버리지 않는가: 네트워크 실패는 "요청이 못 갔다"만이 아니라 **"응답만 유실됐다"** 일 수도 있다.
-    /// 후자면 점수는 이미 올라가 있고 서버가 `token_used` 로 답한다 — 그때 진짜 최고와 순위를 다시 읽어 온다.
-    /// 전자면 새 토큰이 그 행을 갈아 끼웠으므로 `no_token` 이 오고, 잃는 것은 왕복 한 번뿐이다.
-    ///
-    /// 왜 `performSubmit` 을 재활용하지 않는가: 그쪽은 **`submitNotice` 를 쓴다.** 그 한 줄은 지금 막 끝난
-    /// 이 판의 것이고, 밀려난 앞 판의 거절 문구가 그 자리를 덮으면 사용자는 **엉뚱한 판**에 대한 말을 읽는다.
-    /// 그래서 여기서는 화면에 한 글자도 쓰지 않고 로컬 최고·순위만 고친다(인편 칸도 건드리지 않는다 —
-    /// 이 시점의 주인은 새 판이다).
-    private func sendSupersededPending(_ superseded: (kind: MiniGameKind, score: Int, token: String)) {
-        Self.logger.notice("pending submit superseded — sending once more game=\(superseded.kind.rawValue, privacy: .public)")
-        let sessionGeneration = context.generation
-        let generation = resetGeneration
-        let service = context.service
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                let response = try await context.withMobileSessionRetry { session in
-                    try await service.submitMiniGameScore(accessToken: session.accessToken, kind: superseded.kind,
-                                                          score: superseded.score, token: superseded.token)
-                }
-                guard sessionGeneration == self.context.generation, generation == self.resetGeneration else { return }
-                // `token_used` 는 여기서도 성공이다(위 이유 그대로 — 응답만 유실된 첫 제출).
-                guard response.status == "ok" || response.status == "token_used" else {
-                    Self.logger.notice("superseded submit refused status=\(response.status, privacy: .public) game=\(superseded.kind.rawValue, privacy: .public)")
-                    return
-                }
-                if let best = response.bestScore { self.raiseLocalBest(superseded.kind, to: best) }
-                // 밀려난 판도 서버에 남았다 — 그 게임의 역대 표는 낡았다. **다시 받지는 않는다**: 이 시점의 주인은 새 판이고,
-                // 그 판의 제출 꼬리가 [역대] 를 보는 중이면 어차피 받아 온다(아니면 다음 전환이 받는다).
-                self.noteAllTimeStale(superseded.kind)
-                await self.loadBoard(superseded.kind, withWinner: false)
-            } catch {
-                Self.logger.notice("superseded submit failed (network) game=\(superseded.kind.rawValue, privacy: .public)")
-            }
-        }
-    }
-
-    /// 앱이 다시 active 가 됐다 — 서버가 받았다고 확인해 주지 않은 제출이 있으면 **같은 토큰으로** 한 번 더.
-    /// 같은 토큰이라 두 번 올라가지 않는다(서버가 `token_used` 로 돌려주고, 그건 아래에서 성공으로 접는다).
-    package func retryPendingSubmitIfAny() {
-        guard let pending = pendingSubmit, !isSubmitting else { return }
-        guard isPublic, context.session.isSignedIn else { return }
-        Task { [weak self] in
-            await self?.performSubmit(kind: pending.kind, score: pending.score, token: pending.token)
-        }
-    }
-
-    package func performSubmit(kind: MiniGameKind, score: Int, token: String) async {
-        guard context.session.isSignedIn else { return }
-        isSubmitting = true
-        defer { isSubmitting = false }
-        let sessionGeneration = context.generation
-        let generation = resetGeneration
-        let service = context.service
-        do {
-            let response = try await context.withMobileSessionRetry { session in
-                try await service.submitMiniGameScore(accessToken: session.accessToken, kind: kind, score: score, token: token)
-            }
-            guard sessionGeneration == context.generation, generation == resetGeneration else { return }
-            // ★ `token_used` 는 **성공이다.** 서버는 제출이 성공한 순간 그 토큰에 used_at 을 찍고, 이미 쓴 토큰에는
-            //   `token_used` 를 돌려준다. 즉 이 응답을 받는 경우는 **응답만 유실된 첫 제출의 재시도**뿐이고,
-            //   그때 점수는 이미 올라가 있다. 이걸 거절로 그리면 올라간 점수를 "못 올렸어요"라고 말하는 거짓말이 된다.
-            if response.status == "ok" || response.status == "token_used" {
-                if let best = response.bestScore { raiseLocalBest(kind, to: best) }
-                clearPendingSubmit(token: token)
-                // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다) — 아래에서 바로 다시 받거나,
-                // [오늘] 을 보는 중이면 다음에 [역대] 로 넘어갈 때 받는다(보지도 않는 표를 판마다 받지 않는다).
-                noteAllTimeStale(kind)
-                // 출구에서 세운 안내("앱을 나가서 …")는 제출과 무관한 사실이라 지우지 않는다.
-                if !exitNoticeIsSticky { submitNotice = nil }
-                // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로).
-                // 오늘 이 게임 줄을 이미 채웠으면 요청 0건이고, 미션 조회가 떠 있으면 그 옛 답에 합류하지 않고 끝난 뒤 한 번 더다
-                // (`MeStore.refreshAchievementsAfterGameResult` 주석). 순위 재조회보다 **앞**에 둔다 — 순위 왕복을 기다리는
-                // 동안 사용자는 이미 미션 화면으로 갈 수 있다.
-                context.links.me?.refreshAchievementsAfterGameResult(game: kind.rawValue)
-                // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다).
-                await loadBoard(kind, withWinner: false)
-                // 역대는 **[역대] 를 보는 중일 때만**, 오늘 순위 뒤에 받는다(맥 `reloadsBoard, miniGameBoardScope == .allTime` 와 같은 자리).
-                if boardScope == .allTime { await performLoadAllTimeBoard(kind) }
-            } else if Self.retryableSubmitStatuses.contains(response.status) {
-                // 아직 하한을 못 넘겼다 — 토큰이 살아 있으니 **인편을 남기고** 눈먼 지연 뒤 같은 토큰으로 다시 보낸다.
-                // ★ 여기서 `prefetchRoundToken` 으로 내려가지 않는다. 새 토큰 요청은 서버가 (사용자, 게임) 행을
-                //   갈아 끼워 **지금 되보낼 토큰을 죽인다**(`minigame_rounds_one_open`). 인편이 살아 있으면 그쪽
-                //   가드가 한 번 더 막지만, 이 갈래의 생명줄이라 여기서도 명시적으로 비켜 간다.
-                Self.logger.notice("submit too early — will retry status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
-                scheduleTooFastRetry(kind: kind, score: score, token: token)
-                return
-            } else {
-                Self.logger.notice("submit refused status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
-                // 토큰이 죽은 거절은 **그 판이 영영 못 올라간다** — "다시 해 주세요"(복구된다는 뜻)와 문장을 가른다.
-                submitNotice = Self.deadTokenStatuses.contains(response.status)
-                    ? GamesMiniGameText.submitTokenDead
-                    : GamesMiniGameText.submitRefused
+        loadPendingIfNeeded()
+        var token: String?
+        var issuedAt: Date?
+        if let held = roundToken, roundTokenKind == kind {
+            // 정지·복귀로 토큰이 이미 서버 TTL 을 넘겼다(상한 없는 플래피·타이밍 바를 오래 얼려 둔 판 · 오래 내려 뒀다 돌아온 판). 보내 봐야 `token_expired` 다.
+            // "연결을 확인하고 다시 해 주세요"(인편 TTL 문구)가 아니라 **그 판은 못 올라간다**를 말한다. 새 토큰으로 되살리지 않는다 —
+            // 그 점수가 다른 날 순위표에 올라갈 수 있다(`MiniGamePendingSubmit.deadline` 과 같은 근거).
+            if let issued = roundTokenAt,
+               context.clock.now().timeIntervalSince(issued) >= MiniGameSubmitRules.pendingTTL {
+                roundToken = nil
+                roundTokenKind = nil
+                roundTokenAt = nil
+                submitNotice = GamesMiniGameText.submitTokenDead
                 exitNoticeIsSticky = false
-                if Self.terminalSubmitStatuses.contains(response.status) { clearPendingSubmit(token: token) }
+                pushPendingAndPrefetch(after: kind)
+                return
             }
-            prefetchRoundToken(kind: kind)
+            // 한 토큰에 한 점수다. 여기서 비워 두면 같은 토큰이 두 번 나가지 않는다 — 인편이 그 토큰의 유일한 주인이 된다.
+            token = held
+            issuedAt = roundTokenAt ?? context.clock.now()
+            roundToken = nil
+            roundTokenKind = nil
+            roundTokenAt = nil
+        } else {
+            // 토큰이 없다. **버리지 않는다** — 토큰을 기다리는 인편으로 적는다. 왕복 중인 요청이 있으면 그 응답이 이 인편에 온다.
+            Self.logger.notice("submit waiting for token game=\(kind.rawValue, privacy: .public)")
+            submitNotice = GamesMiniGameText.submitRetrying
+        }
+        pendingSubmits.append(MiniGamePendingSubmit(
+            id: UUID(), kind: kind, score: score, token: token, tokenIssuedAt: issuedAt, recordedAt: context.clock.now(), attempts: 0))
+        persistPendingSubmits()
+        retryPendingSubmitIfAny()
+    }
+
+    // MARK: 제출 인편
+
+    /// 맨 앞 인편(없으면 nil).
+    package var pendingSubmit: MiniGamePendingSubmit? {
+        loadPendingIfNeeded()
+        return pendingSubmits.first
+    }
+
+    /// 이 게임의 인편이 하나라도 있는가(토큰 유무 무관). TTL 을 넘긴 것은 없는 것이다.
+    package func hasPendingSubmit(for kind: MiniGameKind) -> Bool {
+        loadPendingIfNeeded()
+        dropExpiredPendingSubmits()
+        return pendingSubmits.contains { $0.kind == kind }
+    }
+
+    /// 인편을 민다. 방아쇠(앱 복귀 · 로그인 · 화면 열기 · 판 시작 · 판 끝)와 백오프 타이머가 전부 여기로 온다. 인편이 없으면 비용이 없다.
+    ///
+    /// 게임마다: 토큰을 실은 인편이 있으면 그것을 **같은 토큰으로** 보낸다(서버가 `token_used` 로 돌려주므로 두 번 올라가지 않는다).
+    /// 전부 토큰을 기다리는 인편이면 맨 앞 것에 토큰을 받아 준다 — 왕복이 없을 때만 띄운다(있으면 그 응답이 온다).
+    ///
+    /// - Parameter fromTrigger: 바깥 방아쇠(기본)면 모르는 status 로 붙든 인편과 백오프를 푼다. 제출·토큰 응답의 **꼬리**와 타이머는
+    ///   false — 그 꼬리가 방아쇠로 치면 거절 응답이 곧 다음 제출을 부르는 고리가 된다(두드리기).
+    package func retryPendingSubmitIfAny(fromTrigger: Bool = true) {
+        loadPendingIfNeeded()
+        dropExpiredPendingSubmits()
+        if fromTrigger {
+            for index in pendingSubmits.indices {
+                pendingSubmits[index].heldUntilTrigger = false
+                pendingSubmits[index].nextRetryAt = nil
+            }
+        }
+        guard isPublic, context.session.isSignedIn, !pendingSubmits.isEmpty else {
+            schedulePendingRetry()
+            return
+        }
+        guard !holdsPendingForPublicCheck() else { return }
+        let now = context.clock.now()
+        let generation = resetGeneration
+        for kind in MiniGameKind.phoneCases {
+            guard !submittingKinds.contains(kind) else { continue }
+            let entries = pendingSubmits.filter { $0.kind == kind }
+            guard !entries.isEmpty else { continue }
+            // 보험: 들고 있던 토큰이 이 게임 것인데 인편이 토큰을 기다린다면 넘겨준다(정상 흐름에선 recordScore 가 이미 실었다).
+            if !entries.contains(where: { $0.token != nil }), hasUsableRoundToken(for: kind), let held = roundToken {
+                roundToken = nil
+                roundTokenKind = nil
+                roundTokenAt = nil
+                _ = adoptTokenIntoWaitingPending(kind: kind, token: held)
+            }
+            switch pendingSubmits.nextStep(for: kind, at: now) {
+            case .submit(let ready):
+                Task { [weak self] in
+                    guard let self, generation == self.resetGeneration else { return }
+                    await self.performSubmit(entry: ready)
+                }
+            case .requestToken:
+                guard roundTokenInFlightKind != kind else { continue }
+                // 토큰 칸은 하나다 — 다른 게임 판이 도는 중에 받으면 **그 판의 토큰을 치운다.** 그 판이 끝나면(`recordScore`) 다시 민다.
+                if let controller, controller.isPlaying, controller.kind != kind { continue }
+                requestRoundToken(kind: kind)
+            case .wait:
+                continue
+            }
+        }
+        schedulePendingRetry()
+    }
+
+    /// 디스크에서 되살린 인편이 있는데 이번 로그인의 공개 여부를 아직 못 들었으면 먼저 묻고 **이번 밀기를 멈춘다**. 못 들으면 다음 방아쇠가 다시 묻는다.
+    private func holdsPendingForPublicCheck() -> Bool {
+        guard pendingAwaitsPublicCheck else { return false }
+        guard !publicIsKnown else {
+            pendingAwaitsPublicCheck = false
+            return false
+        }
+        guard !isCheckingPublicForPending else { return true }
+        isCheckingPublicForPending = true
+        let generation = resetGeneration
+        Task { [weak self] in
+            await self?.refreshPublic()
+            guard let self, generation == self.resetGeneration else { return }
+            self.isCheckingPublicForPending = false
+            guard self.publicIsKnown else { return }
+            self.retryPendingSubmitIfAny(fromTrigger: false)
+        }
+        return true
+    }
+
+    /// 제출 왕복 한 번. 인편은 **성공과 terminal 거절에서만** 지운다. 네트워크 실패·재시도 대상 거절·모르는 status 는 남긴다.
+    /// 진단: 거절 status 이름까지만 남긴다(`need_seconds`·`elapsed_seconds` 는 화면에도 로그에도 쓰지 않는다).
+    package func performSubmit(entry: MiniGamePendingSubmit) async {
+        guard context.session.isSignedIn, let token = entry.token else { return }
+        let kind = entry.kind
+        guard !submittingKinds.contains(kind) else { return }
+        submittingKinds.insert(kind)
+        let sessionGeneration = context.generation
+        let generation = resetGeneration
+        let service = context.service
+        let outcome: Result<MiniGameSubmitScoreResponse, Error>
+        do {
+            outcome = .success(try await context.withMobileSessionRetry { session in
+                try await service.submitMiniGameScore(accessToken: session.accessToken, kind: kind, score: entry.score, token: token)
+            })
         } catch {
+            outcome = .failure(error)
+        }
+        // 비워진 허브(로그아웃)에는 한 글자도 쓰지 않는다. 인편은 디스크에 남아 같은 계정의 다음 로그인에서 살아난다.
+        guard generation == resetGeneration else { return }
+        // 꼬리에서 다음 인편을 밀어야 하므로 깃발은 **여기서** 내린다.
+        submittingKinds.remove(kind)
+        guard sessionGeneration == context.generation else {
+            retryPendingSubmitIfAny(fromTrigger: false)
+            return
+        }
+        switch outcome {
+        case .failure(let error):
             if case .cancelled = AuthErrorRules.classify(error) { return }
-            guard sessionGeneration == context.generation, generation == resetGeneration else { return }
             Self.logger.notice("submit failed (network) game=\(kind.rawValue, privacy: .public)")
-            // 네트워크 실패는 인편을 **남긴다** — 복귀 때 같은 토큰으로 한 번 더 보낸다.
-            submitNotice = GamesMiniGameText.submitFailedConnection
+            // 네트워크 실패는 인편을 **남긴다** — 백오프 뒤, 그리고 다음 방아쇠에 같은 토큰으로 한 번 더 보낸다.
+            deferPendingRetry(id: entry.id)
+            submitNotice = GamesMiniGameText.submitRetrying
             exitNoticeIsSticky = false
-            prefetchRoundToken(kind: kind)
+        case .success(let response):
+            await handleSubmitResponse(response, entry: entry)
         }
     }
 
-    /// `too_fast` 를 받은 판을 눈먼 지연 뒤 **같은 토큰으로** 다시 보낸다. 횟수를 다 쓰면 그때 비로소 포기한다.
-    ///
-    /// 화면 문구를 여기서 세운다: 기다리는 동안은 `submitRetrying`("올리는 중"), 포기할 때만 `submitRefused`.
-    /// 기다리는 동안 "못 올렸어요"를 띄우면 곧 올라갈 점수를 못 올렸다고 말하는 거짓말이 된다.
-    private func scheduleTooFastRetry(kind: MiniGameKind, score: Int, token: String) {
-        let attempt = tooFastRetries?.token == token ? (tooFastRetries?.count ?? 0) : 0
-        exitNoticeIsSticky = false
-        guard attempt < Self.tooFastRetryDelaysSeconds.count else {
-            // 묶은 횟수를 다 썼다 — 여기서부터는 사실대로 말하고 인편을 놓아 준다(안 놓으면 프리페치가 계속 막힌다).
-            Self.logger.notice("submit too early — giving up game=\(kind.rawValue, privacy: .public)")
-            submitNotice = GamesMiniGameText.submitRefused
-            clearPendingSubmit(token: token)
-            prefetchRoundToken(kind: kind)
+    private func handleSubmitResponse(_ response: MiniGameSubmitScoreResponse, entry: MiniGamePendingSubmit) async {
+        let kind = entry.kind
+        // ★ `token_used` 는 **성공이다.** 서버는 제출이 성공한 순간 그 토큰에 used_at 을 찍고, 이미 쓴 토큰에는
+        //   `token_used` 를 돌려준다. 즉 이 응답을 받는 경우는 **응답만 유실된 첫 제출의 재시도**뿐이고,
+        //   그때 점수는 이미 올라가 있다. 이걸 거절로 그리면 올라간 점수를 "못 올렸어요"라고 말하는 거짓말이 된다.
+        if response.status == "ok" || response.status == "token_used" {
+            if let best = response.bestScore { raiseLocalBest(kind, to: best) }
+            removePendingSubmit(id: entry.id)
+            // 이 게임의 역대 표는 이제 낡았다(새 개인 최고가 들어갔을 수 있다) — 아래에서 바로 다시 받거나,
+            // [오늘] 을 보는 중이면 다음에 [역대] 로 넘어갈 때 받는다(보지도 않는 표를 판마다 받지 않는다).
+            noteAllTimeStale(kind)
+            // 상한에서 세운 안내("5분 넘게 멈춰서 …")는 제출과 무관한 사실이라 지우지 않는다.
+            if !exitNoticeIsSticky, !hasPendingSubmit(for: kind) { submitNotice = nil }
+            pushPendingAndPrefetch(after: kind)
+            // 일일 미션(v0.3.64) — 판이 서버에 남은 직후 **한 번** 묻는다(새 타이머 없이 이벤트로).
+            // 오늘 이 게임 줄을 이미 채웠으면 요청 0건이고, 미션 조회가 떠 있으면 그 옛 답에 합류하지 않고 끝난 뒤 한 번 더다
+            // (`MeStore.refreshAchievementsAfterGameResult` 주석). 순위 재조회보다 **앞**에 둔다 — 순위 왕복을 기다리는
+            // 동안 사용자는 이미 미션 화면으로 갈 수 있다.
+            context.links.me?.refreshAchievementsAfterGameResult(game: kind.rawValue)
+            // 순위 재조회는 **화면을 떠난 뒤에도** 한다(activeKind 로 막으면 뒤로가기로 끝낸 판이 반영되지 않는다).
+            await loadBoard(kind, withWinner: false)
+            // 역대는 **[역대] 를 보는 중일 때만**, 오늘 순위 뒤에 받는다(맥 `reloadsBoard, miniGameBoardScope == .allTime` 와 같은 자리).
+            if boardScope == .allTime { await performLoadAllTimeBoard(kind) }
             return
         }
-        tooFastRetries = (token: token, count: attempt + 1)
-        submitNotice = GamesMiniGameText.submitRetrying
-        let delay = Self.tooFastRetryDelaysSeconds[attempt]
-        let sessionGeneration = context.generation
+        exitNoticeIsSticky = false
+        if Self.terminalSubmitStatuses.contains(response.status) {
+            Self.logger.notice("submit refused status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
+            // ★ `no_token` 은 **한 번은 되살린다.** 그 판은 진짜로 있었고 점수도 진짜다 — 죽은 것은 토큰뿐이다(다른 기기가 같은
+            //   계정으로 토큰을 청하면 이쪽 토큰이 죽는다). 새 토큰 기준으로 하한만큼 기다려야 통과하므로 서버 방어는 그대로다.
+            if response.status == "no_token", !entry.recoveredFromDeadTokenOnce,
+               let index = pendingSubmits.firstIndex(where: { $0.id == entry.id }) {
+                pendingSubmits[index].demoteToTokenWait()
+                persistPendingSubmits()
+                Self.logger.notice("pending submit recovered from dead token game=\(kind.rawValue, privacy: .public)")
+                submitNotice = GamesMiniGameText.submitRetrying
+                retryPendingSubmitIfAny(fromTrigger: false)
+                return
+            }
+            removePendingSubmit(id: entry.id)
+            // 토큰이 죽은 거절은 **그 판이 영영 못 올라간다** — "다시 해 주세요"(복구된다는 뜻)와 문장을 가른다.
+            submitNotice = Self.deadTokenStatuses.contains(response.status)
+                ? GamesMiniGameText.submitTokenDead
+                : GamesMiniGameText.submitRefused
+        } else if Self.retryableSubmitStatuses.contains(response.status) {
+            // 아직 하한을 못 넘겼다 — 토큰이 살아 있으니 **인편을 남기고** 눈먼 지연 뒤 같은 토큰으로 다시 보낸다.
+            // 기다리는 동안 "못 올렸어요"를 띄우면 곧 올라갈 점수를 못 올렸다고 말하는 거짓말이 된다.
+            Self.logger.notice("submit too early — will retry status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
+            deferPendingRetry(id: entry.id)
+            submitNotice = GamesMiniGameText.submitRetrying
+        } else {
+            // 모르는 status(신버전 서버). 이해 못 한 거절을 두드리지는 않되 점수를 버리지도 않는다 — 타이머 없이 남기고,
+            // 방아쇠에서만 다시 보낸다. TTL 이 끝을 낸다.
+            Self.logger.notice("submit refused (unknown status) status=\(response.status, privacy: .public) game=\(kind.rawValue, privacy: .public)")
+            if let index = pendingSubmits.firstIndex(where: { $0.id == entry.id }) {
+                pendingSubmits[index].heldUntilTrigger = true
+            }
+            submitNotice = GamesMiniGameText.submitRetrying
+        }
+        pushPendingAndPrefetch(after: kind)
+    }
+
+    /// 제출 꼬리: 다음 인편을 밀고, 그 게임의 인편이 다 비었으면 **다음 판의 토큰**을 미리 받는다(방금 쓴 토큰은 죽었다).
+    /// 인편이 남아 있으면 선발급하지 않는다 — 그게 불변식이다.
+    private func pushPendingAndPrefetch(after kind: MiniGameKind) {
+        retryPendingSubmitIfAny(fromTrigger: false)
+        // 다른 게임 인편의 토큰이 왕복 중이면 비킨다 — 새 요청은 그 응답을 세대 가드로 버린다. 그 인편의 꼬리가 여기로 다시 온다.
+        guard roundTokenInFlightKind == nil else { return }
+        // 받는 토큰은 **지금 화면의 게임** 것이다(다른 게임의 토큰을 받으면 토큰 칸 하나를 그 게임이 차지한다).
+        let next = activeKind ?? kind
+        if !hasPendingSubmit(for: next) { prefetchRoundToken(kind: next) }
+    }
+
+    /// 화면을 닫아 둔 사이에 인편이 TTL 로 죽었다면 한 줄로 말하고 표식을 지운다(한 번만 말한다).
+    private func showLostNoticeIfAny() {
+        loadPendingIfNeeded()
+        dropExpiredPendingSubmits()
+        guard let owner = pendingOwner, context.storage.defaults.bool(forKey: Self.lostNoticeKey(userID: owner)) else { return }
+        context.storage.defaults.removeObject(forKey: Self.lostNoticeKey(userID: owner))
+        submitNotice = GamesMiniGameText.submitFailedConnection
+    }
+
+    /// 토큰을 기다리는 이 게임의 맨 앞 인편에 토큰을 넘긴다. 넘겼으면 true(호출자가 인편을 민다).
+    private func adoptTokenIntoWaitingPending(kind: MiniGameKind, token: String) -> Bool {
+        guard let index = pendingSubmits.firstIndex(where: { $0.kind == kind && $0.token == nil }) else { return false }
+        pendingSubmits[index].adopt(token: token, at: context.clock.now())
+        persistPendingSubmits()
+        return true
+    }
+
+    /// 실패한 인편의 백오프를 한 단계 올리고 타이머를 다시 잡는다.
+    private func deferPendingRetry(id: UUID) {
+        guard let index = pendingSubmits.firstIndex(where: { $0.id == id }) else { return }
+        pendingSubmits[index].noteFailure(delays: MiniGameSubmitRules.retryDelays, at: context.clock.now())
+        persistPendingSubmits()
+        schedulePendingRetry()
+    }
+
+    /// 토큰 요청이 실패했는데 그 게임에 토큰을 기다리는 인편이 있으면 그 인편의 백오프를 올린다(다음 요청은 타이머가 띄운다).
+    private func deferPendingTokenWait(kind: MiniGameKind) {
+        guard let head = pendingSubmits.first(where: { $0.kind == kind && $0.token == nil }) else { return }
+        deferPendingRetry(id: head.id)
+    }
+
+    /// 백오프 타이머 한 개 — 가장 먼저 돌아오는 인편의 시각에 맞춘다. 기다릴 것이 없으면 거둔다.
+    private func schedulePendingRetry() {
+        let now = context.clock.now()
+        let next = pendingSubmits.nextRetryDate(after: now, ttl: MiniGameSubmitRules.pendingTTL)
+        // 같은 시각을 이미 기다리고 있으면 그대로 둔다(꼬리마다 다시 잡지 않는다).
+        if next == pendingRetryTarget, pendingRetryTask != nil { return }
+        pendingRetryTask?.cancel()
+        pendingRetryTask = nil
+        pendingRetryTarget = next
+        guard let next else { return }
+        let delay = next.timeIntervalSince(now)
         let generation = resetGeneration
         let wait = sleep
-        Task { [weak self] in
+        pendingRetryTask = Task { [weak self] in
             await wait(delay)
-            guard let self else { return }
-            guard sessionGeneration == self.context.generation, generation == self.resetGeneration else { return }
-            // 그 사이 새 판이 인편을 갈아 끼웠거나(그 판의 주인은 새 판이다) 다른 길로 비워졌으면 여기서 멈춘다.
-            guard self.pendingSubmit?.token == token else { return }
-            await self.performSubmit(kind: kind, score: score, token: token)
+            guard !Task.isCancelled, let self, generation == self.resetGeneration else { return }
+            self.pendingRetryTask = nil
+            self.pendingRetryTarget = nil
+            // 이 타이머가 돌아온 것이 곧 '그 시각이 됐다'다 — 시계를 주입한 빌드(데모·테스트)는 시계가 안 흘러서 시각을 다시 재면 영영 못 나간다.
+            for index in self.pendingSubmits.indices {
+                if let at = self.pendingSubmits[index].nextRetryAt, at <= next { self.pendingSubmits[index].nextRetryAt = nil }
+            }
+            self.retryPendingSubmitIfAny(fromTrigger: false)
         }
     }
 
-    /// 이 토큰의 인편만 지운다(그 사이 새 판이 인편을 갈아 끼웠으면 건드리지 않는다).
-    private func clearPendingSubmit(token: String) {
-        guard pendingSubmit?.token == token else { return }
-        pendingSubmit = nil
-        // 재시도 횟수는 인편과 한 벌이다 — 남겨 두면 다음 판이 이 토큰의 횟수를 물려받을 수 있다.
-        if tooFastRetries?.token == token { tooFastRetries = nil }
+    private func removePendingSubmit(id: UUID) {
+        guard pendingSubmits.contains(where: { $0.id == id }) else { return }
+        pendingSubmits.removeAll { $0.id == id }
+        persistPendingSubmits()
     }
+
+    /// TTL 을 넘긴 인편을 버린다(토큰이 죽었다). 화면이 열려 있으면 그 사실을 말하고, 닫혀 있으면 표식을 남겨 다음에 화면을 열 때 말한다 —
+    /// 안 그러면 로그에만 남아 사용자는 그 판이 사라진 것을 영영 모른다.
+    private func dropExpiredPendingSubmits() {
+        let now = context.clock.now()
+        let expired = pendingSubmits.filter { $0.isExpired(at: now, ttl: MiniGameSubmitRules.pendingTTL) }
+        guard !expired.isEmpty else { return }
+        for entry in expired {
+            Self.logger.notice("pending submit expired game=\(entry.kind.rawValue, privacy: .public)")
+        }
+        let gone = Set(expired.map(\.id))
+        pendingSubmits.removeAll { gone.contains($0.id) }
+        persistPendingSubmits()
+        if activeKind != nil {
+            submitNotice = GamesMiniGameText.submitFailedConnection
+            exitNoticeIsSticky = false
+        } else if let owner = pendingOwner {
+            context.storage.defaults.set(true, forKey: Self.lostNoticeKey(userID: owner))
+        }
+    }
+
+    /// 메모리의 인편이 지금 계정 것이 아니면(처음 · 계정 전환 · 재로그인) 그 계정의 키에서 읽는다. TTL 을 넘긴 것은 여기서 버린다.
+    private func loadPendingIfNeeded() {
+        let owner = context.session.isSignedIn ? myUserID : nil
+        guard pendingOwner != owner else { return }
+        pendingOwner = owner
+        guard let owner else {
+            pendingSubmits = []
+            return
+        }
+        var restored: [MiniGamePendingSubmit] = []
+        if let data = context.storage.defaults.data(forKey: Self.pendingKey(userID: owner)),
+           let decoded = try? JSONDecoder().decode([MiniGamePendingSubmit].self, from: data) {
+            restored = decoded
+        }
+        pendingSubmits = restored
+        adoptOrphanedPauseDraft(owner: owner)
+        dropExpiredPendingSubmits()
+        if !pendingSubmits.isEmpty {
+            pendingAwaitsPublicCheck = true
+            Self.logger.notice("pending submits restored count=\(self.pendingSubmits.count, privacy: .public)")
+        }
+    }
+
+    /// 영속본을 메모리와 맞춘다. 비었으면 키를 지운다. 주인이 없으면(로그아웃 상태) 쓰지 않는다.
+    private func persistPendingSubmits() {
+        guard let owner = pendingOwner else { return }
+        let key = Self.pendingKey(userID: owner)
+        if pendingSubmits.isEmpty {
+            context.storage.defaults.removeObject(forKey: key)
+        } else if let data = try? JSONEncoder().encode(pendingSubmits) {
+            context.storage.defaults.set(data, forKey: key)
+        }
+    }
+
+    // MARK: 일시정지
+
+    /// 이 판에서 지금까지 얼어 있던 초(판 단위 누적 · 3-2-1 포함).
+    ///
+    /// **벽시계로 잰다**: 맥의 1초 Task 는 폰 background 에서 멈춘다. 시작 시각을 들고 빼면 돌아온 그 순간 바로 판정할 수 있다.
+    /// 3-2-1 도 넣는다(맥은 안 넣는다) — 안 넣으면 카드 → 3-2-1 → 카드 왕복으로 영영 안 차서 토큰이 그대로 늙는다.
+    package var pausedSecondsUsed: TimeInterval {
+        let open = frozenSince.map { max(0, context.clock.now().timeIntervalSince($0)) } ?? 0
+        return frozenSecondsBanked + open
+    }
+
+    /// [일시정지] 버튼 · 카드의 [이어하기]. 도는 판 → 정지, 정지 → 3-2-1, 3-2-1 → 다시 정지(취소). 규칙은 코어 `toggled` 한 벌이다.
+    package func togglePause() {
+        guard let controller else { return }
+        let next = controller.pauseState.toggled(isPlaying: controller.isPlaying)
+        guard next != controller.pauseState else { return }
+        applyPause(next, to: controller)
+    }
+
+    /// 카드의 [그만두기]. 결과는 게임마다 다르다(`endRound()` — 테트리스·길건너는 확정, 플래피·타이밍 바는 버림).
+    package func quitPausedRound() {
+        guard let controller, controller.isFrozen else { return }
+        endFrozenRound(controller, notice: nil)
+    }
+
+    /// 3-2-1 한 걸음. 돌 일이 남았으면 true(바깥 고리가 다음 1초를 잔다). 다 내려가면 판이 풀린다.
+    @discardableResult
+    package func advanceResumeCountdown() -> Bool {
+        guard let controller, case .resuming = controller.pauseState else { return false }
+        let next = controller.pauseState.steppedDown()
+        guard next == .none else {
+            controller.setPauseState(next)
+            return true
+        }
+        closeFrozenSpan()
+        stopPauseTasks()
+        controller.setPauseState(.none)
+        return false
+    }
+
+    /// 상한을 넘었으면 그 판을 끝낸다. 끝냈으면 true.
+    ///
+    /// 거는 범위는 `GamesMiniGamePausePolicy.capApplies` 뿐이다 — 플래피·타이밍 바는 접으면 버리는 게임이라 여기 걸면 판을 없앤다.
+    @discardableResult
+    package func enforcePauseCap() -> Bool {
+        guard let controller, controller.isFrozen,
+              GamesMiniGamePausePolicy.capApplies(controller.kind),
+              pausedSecondsUsed >= TimeInterval(MiniGamePauseState.pauseLimitSeconds) else { return false }
+        Self.logger.notice("pause limit reached game=\(controller.kind.rawValue, privacy: .public)")
+        endFrozenRound(controller, notice: GamesMiniGameText.pauseCapEnded)
+        return true
+    }
+
+    /// 감시 한 걸음. 카드가 떠 있는 동안 1초마다: 상한을 재고, 정지 중에도 토큰을 챙긴다(맥과 같다 — 멈춰 둔 동안에도 TTL 은 흐른다).
+    /// 3-2-1 동안은 상한으로 끊지 않는다 — 넘기 전에 [이어하기] 를 누른 사람의 판이다(그 3초는 다음 정지에 세어 넣는다).
+    /// background 면 아무것도 안 한다: 복귀(`sceneDidComeForward`)가 판정하고 토큰을 챙긴다.
+    package func pauseWatchTick() {
+        guard let controller, controller.isFrozen, !isInBackground else { return }
+        if case .paused = controller.pauseState, enforcePauseCap() { return }
+        if let last = lastFrozenKeepAliveAt,
+           context.clock.now().timeIntervalSince(last) < GamesPlayController.keepAliveInterval { return }
+        keepFrozenRoundTokenFresh(controller)
+    }
+
+    private func freezeForSceneChange() {
+        guard let controller else { return }
+        if let next = controller.pauseState.resigningKey(isPlaying: controller.isPlaying) {
+            applyPause(next, to: controller)
+        }
+        writePauseDraft(controller)
+    }
+
+    /// 정해진 다음 상태를 판과 시계에 **옮긴다** — 버튼과 자동 정지가 같은 순서를 밟는 한 자리다(맥 `applyPause`).
+    private func applyPause(_ next: MiniGamePauseState, to controller: GamesPlayController) {
+        resumeTask?.cancel()
+        resumeTask = nil
+        if next.isFrozen, frozenSince == nil { frozenSince = context.clock.now() }
+        controller.setPauseState(next)
+        // [이어하기] 를 눌렀어도 이미 넘었으면 풀어 주지 않는다. 재정지로 시계를 되돌릴 길이 없는 까닭이다.
+        if enforcePauseCap() { return }
+        if case .resuming = next {
+            // 사람이 돌아와 이어 한다 — 임시 항목은 지운다. 다시 내려가면 그때의 점수·토큰으로 다시 적는다.
+            clearPauseDraft()
+            startResumeCountdown()
+        }
+        armPauseWatch(controller)
+    }
+
+    private func startResumeCountdown() {
+        let wait = pauseSleep
+        resumeTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await wait(1)
+                guard !Task.isCancelled, let self else { return }
+                guard self.advanceResumeCountdown() else { return }
+            }
+        }
+    }
+
+    /// 정지 감시를 건다. 할 일이 없는 게임(플래피·타이밍 바 — 상한도 토큰 갈아 끼우기도 없다)에는 안 건다.
+    private func armPauseWatch(_ controller: GamesPlayController) {
+        guard pauseWatchTask == nil,
+              GamesMiniGamePausePolicy.capApplies(controller.kind) || controller.kind.roundTokenMidRunRefreshSeconds != nil else { return }
+        let wait = pauseSleep
+        pauseWatchTask = Task { [weak self] in
+            while !Task.isCancelled {
+                await wait(Self.pauseWatchInterval)
+                guard !Task.isCancelled, let self else { return }
+                self.pauseWatchTick()
+            }
+        }
+    }
+
+    /// 정지 중 토큰 갈아 끼우기. 규칙은 판 도중과 같은 `keepRoundTokenFresh` 한 벌이다(인편이 살아 있으면 인편부터 민다 — 불변식).
+    private func keepFrozenRoundTokenFresh(_ controller: GamesPlayController) {
+        lastFrozenKeepAliveAt = context.clock.now()
+        keepRoundTokenFresh(kind: controller.kind)
+    }
+
+    /// 얼려 둔(또는 떠나는 화면의) 판을 끝낸다. [그만두기] · 뒤로 · 판 전환 · 상한이 전부 여기로 온다.
+    ///
+    /// 안내는 **그 판이 토큰을 들고 인편에 올랐을 때만** 세운다. 토큰을 기다리면 `recordScore` 가 "올리는 중"을 말했고,
+    /// 토큰이 죽었으면 "못 올렸어요"를 말했다 — 그 말을 "기록했어요"로 덮는 것이 이 화면에서 제일 나쁜 거짓말이다.
+    private func endFrozenRound(_ controller: GamesPlayController, notice: String?) {
+        stopPauseTasks()
+        resetPauseClock()
+        let known = Set(pendingSubmits.map(\.id))
+        let outcome = controller.endRound()
+        clearPauseDraft()
+        guard let notice, case .confirmed = outcome else { return }
+        let carriesToken = pendingSubmits.last { !known.contains($0.id) }?.token != nil
+        guard carriesToken || !isPublic || !context.session.isSignedIn else { return }
+        submitNotice = notice
+        // 비동기 제출 성공이 이 문장을 지우면 판이 조용히 사라진 것처럼 보인다.
+        exitNoticeIsSticky = carriesToken
+    }
+
+    private func closeFrozenSpan() {
+        frozenSecondsBanked = pausedSecondsUsed
+        frozenSince = nil
+    }
+
+    private func resetPauseClock() {
+        frozenSecondsBanked = 0
+        frozenSince = nil
+        lastFrozenKeepAliveAt = nil
+    }
+
+    private func stopPauseTasks() {
+        resumeTask?.cancel()
+        resumeTask = nil
+        pauseWatchTask?.cancel()
+        pauseWatchTask = nil
+    }
+
+    // MARK: 임시 항목(iOS 가 앱을 죽여도 점수를 건진다)
+    //
+    // 지금까지 테트리스·길건너는 앱을 내리는 순간 점수를 확정해서 iOS 가 앱을 죽여도 남았다. 얼리는 것으로 바꾸면 그 판은 메모리에만 있다.
+    // 그래서 내려갈 때 지금 점수·토큰을 **인편과 다른 키**에 적는다. 인편에 넣으면 밀기가 도는 판의 토큰을 그 자리에서 보내 버린다.
+    //
+    //  · 사람이 돌아와 [이어하기] → 지운다(다시 내려가면 다시 적는다).
+    //  · 판이 끝났다([그만두기]·상한·뒤로) → `recordScore` 가 지운다(진짜 인편이 대신한다 — 이중 제출 없음).
+    //  · 로그아웃 → 지운다(`reset`) · 계정 삭제 → 지운다(`forgetPendingSubmits`).
+    //  · 프로세스가 죽었다 → 다음 실행의 `loadPendingIfNeeded` 가 그 계정의 인편으로 올린다. 토큰이 죽었으면 인편 규칙대로 끝난다.
+    //
+    // 플래피·타이밍 바는 적지 않는다 — 접으면 버리는 게임이다(`GamesMiniGamePausePolicy`).
+
+    private func writePauseDraft(_ controller: GamesPlayController) {
+        let kind = controller.kind
+        guard controller.isPlaying, controller.isFrozen, GamesMiniGamePausePolicy.quittingKeepsTheScore(kind) else { return }
+        let score = controller.score
+        guard score >= 0, score <= kind.maxScore, context.session.isSignedIn else { return }
+        // 공개를 끈 사람은 제출이 없다 — 죽어도 남아야 하는 것은 로컬 최고뿐이다.
+        guard isPublic else {
+            raiseLocalBest(kind, to: score)
+            return
+        }
+        loadPendingIfNeeded()
+        guard let owner = pendingOwner else { return }
+        let carries = roundTokenKind == kind
+        let draft = MiniGamePendingSubmit(
+            id: UUID(), kind: kind, score: score,
+            token: carries ? roundToken : nil, tokenIssuedAt: carries ? roundTokenAt : nil,
+            recordedAt: context.clock.now(), attempts: 0)
+        guard let data = try? JSONEncoder().encode(draft) else { return }
+        context.storage.defaults.set(data, forKey: Self.pauseDraftKey(userID: owner))
+        liveDraftOwner = owner
+    }
+
+    private func clearPauseDraft() {
+        guard let owner = liveDraftOwner else { return }
+        context.storage.defaults.removeObject(forKey: Self.pauseDraftKey(userID: owner))
+        liveDraftOwner = nil
+    }
+
+    /// 앞 실행이 남긴 임시 항목을 그 계정의 인편으로 올린다. 이 실행에서 적은 것은 살아 있는 판의 것이라 건드리지 않는다.
+    private func adoptOrphanedPauseDraft(owner: String) {
+        guard liveDraftOwner != owner else { return }
+        let key = Self.pauseDraftKey(userID: owner)
+        guard let data = context.storage.defaults.data(forKey: key) else { return }
+        if let draft = try? JSONDecoder().decode(MiniGamePendingSubmit.self, from: data),
+           !pendingSubmits.contains(where: { $0.id == draft.id }) {
+            raiseLocalBest(draft.kind, to: draft.score)
+            pendingSubmits.append(draft)
+            persistPendingSubmits()
+        }
+        context.storage.defaults.removeObject(forKey: key)
+    }
+
+    #if DEBUG
+    /// 데모 스크린샷 전용: 정지 카드 · 3-2-1 장면을 그 상태에서 시작한다(시계도 Task 도 없다 — 합성 탭을 넣지 않는다).
+    func demoFreeze(_ state: MiniGamePauseState) {
+        controller?.setPauseState(state)
+    }
+    #endif
 
     // MARK: 조회
 
@@ -631,6 +1115,7 @@ package final class GamesMiniGameHub {
             return
         }
         guard sessionGeneration == context.generation, generation == resetGeneration else { return }
+        publicIsKnown = true
         if isPublic != resolved { isPublic = resolved }
         if !resolved {
             // 꺼져 있으면 들고 있는 토큰은 쓸 일이 없다.
@@ -664,7 +1149,7 @@ package final class GamesMiniGameHub {
         Task { [weak self] in await self?.performLoadAllTimeBoard(kind) }
     }
 
-    /// 그 게임의 역대 표가 **낡았다**고 표시한다(판이 서버에 남은 직후). 부르는 자리는 둘 — 제출 성공, 밀려난 제출 성공.
+    /// 그 게임의 역대 표가 **낡았다**고 표시한다(판이 서버에 남은 직후). 부르는 자리는 하나 — 제출 성공.
     private func noteAllTimeStale(_ kind: MiniGameKind) {
         if allTimeFreshKind == kind { allTimeFreshKind = nil }
         // 떠 있는 받기가 이 제출 **전**에 떠났을 수 있다 — 그 응답이 늦게 닿아 '최신'을 다시 세우지 못하게 한다.
@@ -804,6 +1289,29 @@ package final class GamesMiniGameHub {
     /// 로컬 최고 키 — **계정별**(같은 폰을 다른 계정이 쓰면 남의 최고를 물려받지 않는다). 공용 suite 에 둔다.
     package nonisolated static func bestKey(userID: String?, kind: MiniGameKind) -> String {
         "aing.minigame.best.\(userID ?? "local").\(kind.rawValue)"
+    }
+
+    /// 제출 인편의 영속 키. **계정별**이다(남의 점수를 내 이름으로 올리지 않는다).
+    package nonisolated static func pendingKey(userID: String) -> String {
+        "aing.minigame.pending.\(userID)"
+    }
+
+    /// 얼려 둔 판의 임시 항목 영속 키(계정별 · 한 칸 — 한 번에 판은 하나다). 인편(`pendingKey`)과 일부러 나눴다(`writePauseDraft`).
+    package nonisolated static func pauseDraftKey(userID: String) -> String {
+        "aing.minigame.pausedraft.\(userID)"
+    }
+
+    /// 화면이 닫힌 채 인편이 TTL 로 버려졌다는 표식의 영속 키(계정별). 다음에 화면을 열 때 한 번 말하고 지운다.
+    package nonisolated static func lostNoticeKey(userID: String) -> String {
+        "aing.minigame.lostnotice.\(userID)"
+    }
+
+    /// 계정이 지워졌다 — 그 계정의 인편·표식을 기기에서 지운다. 로그아웃에는 남기는 값이지만(같은 계정이 돌아오면 올린다) 지운 계정은 돌아오지 않는다.
+    package nonisolated static func forgetPendingSubmits(userID: String, in defaults: UserDefaults) {
+        let owner = userID.lowercased()
+        defaults.removeObject(forKey: pendingKey(userID: owner))
+        defaults.removeObject(forKey: pauseDraftKey(userID: owner))
+        defaults.removeObject(forKey: lostNoticeKey(userID: owner))
     }
 
     private var myUserID: String? { context.session.session?.userID.lowercased() }

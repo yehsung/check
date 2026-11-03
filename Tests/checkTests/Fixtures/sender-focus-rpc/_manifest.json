@@ -1,0 +1,9 @@
+{
+  "source": "replay-harness-v2 사본(PG17) · main 체인 159장 + 서버 초안 20261108121000_sender_focus_gate.sql 3회 적용 · 2026-11-03 · 운영 미적용(대표 결재 대기)",
+  "draft_folder": "tools/drafts/chat-focus-1103 (저장소 밖)",
+  "fixtures": {
+    "poke_user__sender_focused": "집중을 켠 보낸이가 poke_user(상대) — 쓰기 0",
+    "ultra_poke_user__sender_focused": "집중을 켠 보낸이가 ultra_poke_user(상대) — 잔량·장부 그대로",
+    "send_message__sender_focused": "집중을 켠 보낸이가 새 키로 send_message — 같은 키 재시도는 duplicate(ok)"
+  }
+}

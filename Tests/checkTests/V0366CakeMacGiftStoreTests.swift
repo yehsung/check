@@ -110,7 +110,8 @@ private func gcInertTokenStore(_ label: String, function: String) -> TokenUsageS
 /// 로그인 + 팀 확정 상태의 스토어(서버 = 스텁 호스트). `signedIn: false` 면 세션 없이 — 시작 · 로그인 경로가 세운다.
 @MainActor
 private func gcStore(host: String, server: GiftServer, spy: GiftWindowSpy, signedIn: Bool = true,
-                     defaults: UserDefaults? = nil, function: String = #function) -> WorkTimerStore {
+                     defaults: UserDefaults? = nil, protocolVersion: Int = ShopWire.cakeProtocol,
+                     function: String = #function) -> WorkTimerStore {
     GomokuStubProtocol.register(host: host) { rpc, body, _ in server.handle(rpc, body) }
     let service = SupabaseWorkService(projectURL: URL(string: "http://\(host)")!, anonKey: "anon-test-key",
                                       session: GomokuStubProtocol.session())
@@ -126,8 +127,20 @@ private func gcStore(host: String, server: GiftServer, spy: GiftWindowSpy, signe
     store.characterDefaults = CheckTestScratch.defaults("v0366-gift-char-" + host, function: function)
     store.characterSync.broadcast = CharacterSelectionBroadcast()
     store.cakeGiftWindowHooks = spy.hooks
+    // 이 묶음은 생일 선물(능력 번호 4)의 시험이다 — 이슬까지 그리는 빌드(5 — v0.3.74)가 되어도 기본은 4 로 잰다(술 선물은
+    // `V0374IsulMacGiftStoreTests` 가 잰다). 핵심 시나리오(한 번 띄우기 · 안 받고 닫기 · 받은 뒤 낡은 응답 · 다른 기기 수령 · 팝오버 복귀)는
+    // 실제 출하 번호 5 로도 돈다(`gcProtocols` — 검토 수리): 5 에선 결론 난 선물을 닫으면 '다음 선물'을 한 번 더 묻는다.
+    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.isulCharacterIDs.contains($0) }
+    store.drawableCharacterIDs = protocolVersion >= ShopWire.isulProtocol ? base + ShopWire.isulCharacterIDs : base
     V0354CoreStub.retain(store)
     return store
+}
+
+/// 핵심 시나리오를 도는 능력 번호 — 생일만 받는 빌드(4 · 0.3.66~0.3.73) · 실제 출하 빌드(5 — 술 한잔까지).
+private let gcProtocols = [ShopWire.cakeProtocol, ShopWire.isulProtocol]
+
+private func gcPendingCount(_ host: String) -> Int {
+    GomokuStubProtocol.count(host: host, rpc: "character_gift_pending")
 }
 
 private func gcHost(_ name: String) -> String {
@@ -158,20 +171,23 @@ struct V0366CakeMacGiftStoreTests {
         server.pending = .init(body: gcPendingNone)
         let spy = GiftWindowSpy()
         let store = gcStore(host: host, server: server, spy: spy)
-        #expect(store.shopProtocolVersion == ShopWire.cakeProtocol, "전제: 이 빌드는 케이크를 그린다(능력 번호 \(store.shopProtocolVersion))")
+        // v0.3.74: 이슬까지 그리는 빌드는 5 다(누적) — 케이크 선물의 전제는 '4 이상'이고, 본문은 그 빌드의 번호를 그대로 싣는다.
+        #expect(store.shopProtocolVersion >= ShopWire.cakeProtocol, "전제: 이 빌드는 케이크를 그린다(능력 번호 \(store.shopProtocolVersion))")
         await store.refreshCakeGift(reason: .launch)?.value
         let call = try #require(GomokuStubProtocol.calls(host: host, rpc: "character_gift_pending").first, "묻지 않았다")
-        #expect(Set(call.json.keys) == ["p_protocol"] && call.json["p_protocol"] as? Int == ShopWire.cakeProtocol, "본문 \(call.json)")
+        #expect(Set(call.json.keys) == ["p_protocol"] && call.json["p_protocol"] as? Int == store.shopProtocolVersion, "본문 \(call.json)")
         #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard)
         #expect(spy.shows.isEmpty, "선물이 없는데 창을 띄웠다")
     }
 
-    @Test("열린 선물: 실행당 한 번 스스로 띄운다(키를 잡지 않는다) · 닫아도 카드가 남는다 · 다시 물어도 또 안 띄운다 · [고르기]는 키를 잡는다")
-    func giftShowsOncePerLaunchAndLeavesTheCard() async throws {
-        let host = gcHost("once")
+    @Test("열린 선물: 실행당 한 번 스스로 띄운다(키를 잡지 않는다) · 닫아도 카드가 남는다 · 다시 물어도 또 안 띄운다 · [고르기]는 키를 잡는다",
+          arguments: gcProtocols)
+    func giftShowsOncePerLaunchAndLeavesTheCard(protocolVersion: Int) async throws {
+        let host = gcHost("once-p\(protocolVersion)")
         let server = GiftServer()
         let spy = GiftWindowSpy()
-        let store = gcStore(host: host, server: server, spy: spy)
+        let store = gcStore(host: host, server: server, spy: spy, protocolVersion: protocolVersion)
+        #expect(store.shopProtocolVersion == protocolVersion, "전제: 번호 \(protocolVersion) 주입이 안 먹었다(\(store.shopProtocolVersion))")
         #expect(!store.showsCakeGiftCard, "기준선: 묻기 전부터 카드가 섰다")
         await store.refreshCakeGift(reason: .launch)?.value
         let offer = try #require(store.cakeGiftOffer, "선물을 못 읽었다")
@@ -180,10 +196,14 @@ struct V0366CakeMacGiftStoreTests {
         #expect(store.cakeGiftPresented == offer && store.cakeGiftChoice == nil, "선택지가 둘인데 미리 골라 뒀다")
         #expect(store.showsCakeGiftCard)
 
-        // 고르지 않고 닫는다 → 선물은 남는다('다시 열기' 카드).
+        #expect(GomokuStubProtocol.calls(host: host, rpc: "character_gift_pending").first?.json["p_protocol"] as? Int == protocolVersion)
+
+        // 고르지 않고 닫는다 → 선물은 남는다('다시 열기' 카드). 결론이 안 났으니 번호 5 에서도 '다음 선물'을 묻지 않는다.
         store.closeCakeGiftWindow()
         #expect(spy.closes == 1 && !spy.open)
         #expect(store.cakeGiftOffer == offer && store.showsCakeGiftCard, "닫았더니 선물 카드가 사라졌다")
+        await gcQuiet()
+        #expect(gcPendingCount(host) == 1, "번호 \(protocolVersion): 받지 않고 닫았는데 다시 물었다(\(gcPendingCount(host)))")
 
         // 같은 실행에서 다시 물어도(상점 진입 · 주기) 스스로는 또 안 띄운다.
         await store.refreshCakeGift(reason: .shop)?.value
@@ -196,7 +216,7 @@ struct V0366CakeMacGiftStoreTests {
 
         // 새 실행(새 스토어)은 다시 한 번 띄운다.
         let spy2 = GiftWindowSpy()
-        let next = gcStore(host: host, server: server, spy: spy2)
+        let next = gcStore(host: host, server: server, spy: spy2, protocolVersion: protocolVersion)
         await next.refreshCakeGift(reason: .launch)?.value
         #expect(spy2.shows == [false], "다음 실행에서 안 띄웠다")
     }
@@ -374,7 +394,7 @@ struct V0366CakeMacGiftStoreTests {
         let call = try #require(GomokuStubProtocol.calls(host: host, rpc: "claim_character_gift").last, "수령이 안 나갔다")
         #expect(Set(call.json.keys) == ["p_gift", "p_character", "p_protocol"], "본문 \(call.json)")
         #expect(call.json["p_gift"] as? String == gcGiftID && call.json["p_character"] as? String == gcStrawberry
-                && call.json["p_protocol"] as? Int == ShopWire.cakeProtocol, "본문 \(call.json)")
+                && call.json["p_protocol"] as? Int == store.shopProtocolVersion, "본문 \(call.json)")
         #expect(store.cakeGiftReceivedID == gcStrawberry, "받은 뒤 화면으로 안 넘어갔다")
         #expect(store.cakeGiftNotice == nil)
         #expect(store.ownedCharacterIDs.contains(gcStrawberry))
@@ -495,12 +515,13 @@ struct V0366CakeMacGiftStoreTests {
         #expect(!store.canConfirmCakeGift)
     }
 
-    @Test("창이 떠 있는 동안 다른 기기에서 먼저 받음: 맥 단추는 회색이 아니고 · 누르면 already_claimed 가 받은 뒤 화면(받은 케이크)으로")
-    func claimedElsewhereWhileTheWindowIsOpen() async throws {
-        let host = gcHost("elsewhere")
+    @Test("창이 떠 있는 동안 다른 기기에서 먼저 받음: 맥 단추는 회색이 아니고 · 누르면 already_claimed 가 받은 뒤 화면(받은 케이크)으로",
+          arguments: gcProtocols)
+    func claimedElsewhereWhileTheWindowIsOpen(protocolVersion: Int) async throws {
+        let host = gcHost("elsewhere-p\(protocolVersion)")
         let server = GiftServer()
         let spy = GiftWindowSpy()
-        let store = gcStore(host: host, server: server, spy: spy)
+        let store = gcStore(host: host, server: server, spy: spy, protocolVersion: protocolVersion)
         await store.refreshCakeGift(reason: .launch)?.value
         store.chooseCakeGift(gcStrawberry)
         #expect(spy.open && store.canConfirmCakeGift)
@@ -519,6 +540,19 @@ struct V0366CakeMacGiftStoreTests {
         #expect(sent.json["p_gift"] as? String == gcGiftID && sent.json["p_character"] as? String == gcStrawberry, "그리던 선물로 확인하지 않았다 — \(sent.json)")
         #expect(store.cakeGiftReceivedID == gcChoco, "받은 뒤 화면이 받은 케이크(초코)가 아니다 — \(store.cakeGiftReceivedID ?? "nil")")
         #expect(store.cakeGiftNotice == nil)
+        // 받은 뒤 화면이 떠 있는 동안은 아무 번호도 더 묻지 않는다(시작 · 주기 둘뿐).
+        await gcQuiet()
+        #expect(gcPendingCount(host) == 2, "번호 \(protocolVersion): 받은 뒤 화면이 떠 있는데 물었다(\(gcPendingCount(host)))")
+        // 닫는다 — 번호 5 는 결론 난 선물 뒤 '다음 선물'을 한 번 묻고(없음 → 아무것도 안 뜬다), 4 는 0.3.73 그대로 안 묻는다.
+        store.closeCakeGiftWindow()
+        if protocolVersion >= ShopWire.isulProtocol {
+            #expect(await V0354CoreStub.waitUntil { gcPendingCount(host) == 3 }, "번호 5: 받고 닫았는데 다음 선물을 안 물었다")
+            _ = await V0354CoreStub.waitUntil { !store.cakeGiftChecking }
+        } else {
+            await gcQuiet()
+            #expect(gcPendingCount(host) == 2, "번호 4: 받고 닫았더니 다시 물었다(0.3.73 은 묻지 않는다)")
+        }
+        #expect(spy.shows == [false] && !store.showsCakeGiftCard, "번호 \(protocolVersion): 다음 선물이 없는데 무언가 떴다 — \(spy.shows)")
     }
 
     @Test("not_found 로 끝난 선물에는 확인 단추가 잠긴다(같은 결론만 되풀이) — 조회가 같은 선물을 다시 말해도 카드가 안 선다")
@@ -537,12 +571,13 @@ struct V0366CakeMacGiftStoreTests {
         #expect(store.cakeGiftOffer == nil && !store.showsCakeGiftCard, "결론 난 선물을 말하는 조회가 카드를 되살렸다")
     }
 
-    @Test("수령 전에 떠난 조회가 수령 뒤에 도착해도 '다시 열기' 카드가 되살아나지 않는다 — 다른(새) 선물은 그대로 선다")
-    func staleLookupDoesNotReviveTheCard() async throws {
-        let host = gcHost("stale")
+    @Test("수령 전에 떠난 조회가 수령 뒤에 도착해도 '다시 열기' 카드가 되살아나지 않는다 — 다른(새) 선물은 그대로 선다",
+          arguments: gcProtocols)
+    func staleLookupDoesNotReviveTheCard(protocolVersion: Int) async throws {
+        let host = gcHost("stale-p\(protocolVersion)")
         let server = GiftServer()
         let spy = GiftWindowSpy()
-        let store = gcStore(host: host, server: server, spy: spy)
+        let store = gcStore(host: host, server: server, spy: spy, protocolVersion: protocolVersion)
         await store.refreshCakeGift(reason: .launch)?.value
         #expect(store.cakeGiftOffer?.id == gcGiftID)
 
@@ -563,6 +598,9 @@ struct V0366CakeMacGiftStoreTests {
         server.pending = .init(body: #"{"status":"ok","gift":{"id":"\#(nextID)","options":["aing_cake_choco"],"note":null,"created_at":"2027-10-26T07:51:40+00:00"}}"#)
         await store.refreshCakeGift(reason: .shop)?.value
         #expect(store.cakeGiftOffer?.id == nextID && store.showsCakeGiftCard, "새 선물까지 버렸다")
+        // 받은 뒤 화면이 떠 있는 동안 온 새 선물은 겹쳐 띄우지 않는다(닫으면 띄운다 — 번호 5 는 '다음 선물' 되묻기, 4 는 다음 조회).
+        #expect(spy.shows == [false], "번호 \(protocolVersion): 받은 뒤 화면 위로 새 선물 창을 겹쳤다 — \(spy.shows)")
+        #expect(gcPendingCount(host) == 3, "번호 \(protocolVersion): 조회 \(gcPendingCount(host))번(시작 · 낡은 조회 · 새 선물)")
     }
 
     // MARK: ③-c 다른 기기에서 받은 선물 — 보유와 맞추기
@@ -667,12 +705,13 @@ struct V0366CakeMacGiftStoreTests {
 
     // MARK: ⑤ 닫으면 팝오버로 (v0.3.69)
 
-    @Test("[고르기] 로 연 창은 사용자가 닫으면 팝오버로 한 번 돌아간다([닫기] · [지금 입기]) — 스스로 띄운 창(기준선) · 겹친 닫기 · 로그아웃은 안 돌아간다")
-    func userCloseReturnsToThePopoverOnlyWhenOpenedFromIt() async throws {
-        let host = gcHost("return")
+    @Test("[고르기] 로 연 창은 사용자가 닫으면 팝오버로 한 번 돌아간다([닫기] · [지금 입기]) — 스스로 띄운 창(기준선) · 겹친 닫기 · 로그아웃은 안 돌아간다",
+          arguments: gcProtocols)
+    func userCloseReturnsToThePopoverOnlyWhenOpenedFromIt(protocolVersion: Int) async throws {
+        let host = gcHost("return-p\(protocolVersion)")
         let server = GiftServer()
         let spy = GiftWindowSpy()
-        let store = gcStore(host: host, server: server, spy: spy)
+        let store = gcStore(host: host, server: server, spy: spy, protocolVersion: protocolVersion)
         await store.refreshCakeGift(reason: .launch)?.value
         #expect(spy.shows == [false], "전제: 스스로 띄웠다")
         // 기준선(달라야 한다): 스스로 띄운 창은 팝오버에서 온 것이 아니다 — 닫아도 팝오버가 튀어나오지 않는다.
@@ -695,11 +734,21 @@ struct V0366CakeMacGiftStoreTests {
         store.wearCakeGift()
         #expect(!spy.open && spy.returns == 2, "[지금 입기] 로 창을 닫았는데 팝오버로 안 돌아갔다(\(spy.returns))")
         #expect(await V0354CoreStub.waitUntil { GomokuStubProtocol.count(host: host, rpc: "set_character") == 1 })
+        // 받고 닫았다 — 번호 5 는 '다음 선물'을 한 번 묻는다(서버는 같은 선물을 말하지만 결론 난 id 라 버린다 → 아무것도 안 뜬다) · 4 는 안 묻는다.
+        if protocolVersion >= ShopWire.isulProtocol {
+            #expect(await V0354CoreStub.waitUntil { gcPendingCount(host) == 2 }, "번호 5: 받고 닫았는데 다음 선물을 안 물었다")
+            _ = await V0354CoreStub.waitUntil { !store.cakeGiftChecking }
+        } else {
+            await gcQuiet()
+            #expect(gcPendingCount(host) == 1, "번호 4: 받고 닫았더니 다시 물었다")
+        }
+        #expect(spy.shows == [false, true, true] && spy.returns == 2 && !store.showsCakeGiftCard,
+                "번호 \(protocolVersion): 받고 닫은 뒤 창 \(spy.shows) · 돌아가기 \(spy.returns)")
 
         // [고르기] 로 연 창이 떠 있는 채 로그아웃: 창은 내려가되 팝오버는 안 띄운다(다음 사람 앞에 저절로 튀어나오지 않게).
-        let outHost = gcHost("return-signout")
+        let outHost = gcHost("return-signout-p\(protocolVersion)")
         let outSpy = GiftWindowSpy()
-        let outStore = gcStore(host: outHost, server: GiftServer(), spy: outSpy)
+        let outStore = gcStore(host: outHost, server: GiftServer(), spy: outSpy, protocolVersion: protocolVersion)
         await outStore.refreshCakeGift(reason: .launch)?.value
         outStore.openCakeGiftWindow()
         #expect(outSpy.open, "전제: [고르기] 가 창을 열었다")

@@ -18,6 +18,7 @@
 		<string>/.codex/</string>
 		<string>/.gemini/</string>
 		<string>/Library/Application Support/orca/</string>
+		<string>/Library/Application Support/Claude/local-agent-mode-sessions/</string>
 	</array>
 </dict>
 </plist>

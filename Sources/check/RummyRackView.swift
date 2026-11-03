@@ -79,6 +79,10 @@ struct RummyRackGeometry: Equatable {
     }
 }
 
+extension RummyRackGeometry: RummyRackDropGeometry {
+    var dropTileWidth: CGFloat { tileSize.width }
+}
+
 /// 뽑은 타일 날아 들어가기 상태.
 struct RummyFlyIn: Equatable {
     let serial: Int

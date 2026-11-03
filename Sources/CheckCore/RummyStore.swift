@@ -40,6 +40,7 @@ import OSLog
 //  ⑪ **배치도 작업 상태다.** 편집기가 판 배치(`points`)를 들고, 작업 상태 전송·[완료]가 `p_layout` 으로 싣는다.
 //     같은 판·같은 배치면 다시 보내지 않는다(`lastSentDraft` + `lastSentLayout`).
 //  ⑫ **하트비트**는 phase 가 room·playing 인 동안 10초마다(창과 무관). 서버는 90초 안 보이면 끊김 기권시킨다.
+//     판을 든 순간 한 번 보내고 주기로 들어간다. 앱이 앞으로 오거나 맥이 깨어나면 `heartbeatNow` 로 곧바로 한 번.
 //     의도적 이탈(창 닫기·앱 종료·로그아웃)은 `leaveForExit` — 최대 2초 기다리고, 못 닿아도 이 기기에선 접는다.
 //  ⑬ **반응**은 꾸밈이라 내 말풍선을 바로 띄우고(같은 반응이 state 로 돌아오면 한 번 삼킨다), 남의 것은 state 의
 //     `reactions` 에서 처음 보는 것만 낸다. **뽑기**는 다음 편집기의 랙에서 새로 생긴 면을 찾아 `onTileDrawn` 으로 알린다.
@@ -146,6 +147,10 @@ package final class RummyStore {
     /// 요청 비행 중(버튼 잠금). 작업 상태 전송·폴링은 세우지 않는다 — 사용자가 누른 동작만.
     package internal(set) var isWorking: Bool = false
     package internal(set) var ranking: RummyRanking?
+    /// 마지막 로비 조회가 실패했다(1.0.16 폰 — 맥은 읽지 않는다). 받은 적 있는지는 `lobby != nil` 이 말한다: 둘을 합쳐 '빈 목록'과 '못 받음'을 가른다.
+    package internal(set) var lobbyLoadFailed = false
+    /// 마지막 순위 조회가 실패했다(같은 뜻 · `ranking != nil`). 안내줄로 새지 않는다 — 순위 탭 안에서만 말한다.
+    package internal(set) var rankingLoadFailed = false
     package var selectedStake: Int = 3
     package var createPublic: Bool = false
     package var rulesShown: Bool = false
@@ -204,6 +209,15 @@ package final class RummyStore {
 
     /// 하트비트 주 스위치(시험은 끄고 `heartbeatTick(matchID:)` 를 직접 밟는다).
     @ObservationIgnored package var heartbeatEnabled = true
+    /// 방(`room`)의 하트비트를 쉰다 — 폰이 쓴다(맥은 안 쓴다): 방 화면이 안 보이는 동안 자리가 살아 있으면 모르는 사이 시작돼 판돈이 걷힌다.
+    /// 쉬면 서버가 시작 검사에서 90초 넘게 안 보인 자리를 `dropped` 로 뺀다. **판(`playing`)은 그대로 돈다** — 끊기면 90초 규칙으로 기권이다.
+    @ObservationIgnored package var roomHeartbeatHeld = false {
+        didSet {
+            guard oldValue != roomHeartbeatHeld else { return }
+            // 다시 보기 시작하면 이 호출이 세운 루프의 첫 걸음이 곧바로 나간다 — 주기(10초)를 기다리면 그 사이 시작 검사에서 빠질 수 있다.
+            updateHeartbeat()
+        }
+    }
     /// 하트비트 주기(초).
     @ObservationIgnored package var heartbeatSeconds: TimeInterval = RummyStore.heartbeatDefaultSeconds
     /// 받침대 자리 저장소. **nil 이면 저장하지 않는다**(기본 — 시험이 Preferences 를 더럽히지 않게). 맥 배선이 `.standard` 를 꽂는다.
@@ -475,22 +489,42 @@ package final class RummyStore {
         pollTask = nil
     }
 
-    /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다(오목·체스·테트리스 · 아잉 뒤집기 V2-03 과 같은 수리).
+    /// 창을 닫거나(숨김) 가리는 순간 `stopPolling` 의 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`stateAgain` · `lobbyAgain`)
+    /// 까지 같이 죽는다 — 창도 폴링도 없는 사람이 받은 초대 · 판 시작 · 내 차례를 모른 채 60초 차례가 흐른다(2026-11-03 적대 검증 P1).
+    /// 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드가 막는다.
+    private func outsidePolling(_ body: @escaping @MainActor (RummyStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
+    /// 안전망 한 걸음. **창이 안 보이거나 가려졌으면 아무것도 하지 않는다.**
     ///  · 방·판에 있으면 구독 중 15초(마감 15초 안쪽은 5초) · 미구독 5초마다 그 state(참가·시작·작업 판·시간 초과를 한 조회가 다 말한다) · 마감이 지났으면 다시
     ///  · 로비·방 화면이면 30초마다 로비(사람 목록·초대) · 순위는 60초(주 스위치)
+    ///
+    /// state · 마감 · 로비 조회는 `outsidePolling` 으로 낸다 — 셋 다 초인종이 합쳐지는 조회다(마감 재조회도 같은 `refreshMatch` 직렬화를
+    /// 타고, 끝난 뒤의 `scheduleDeadlineWake` 는 창과 무관한 깨우기다 — 도중에 끊으면 세 번뿐인 재조회 한 번을 헛쓴다).
+    /// 순위(`loadRanking`)는 초인종과 합쳐지지 않아 폴링 안에 둔다(창이 내려가면 같이 멈추는 것이 맞다).
+    /// **걸음 사이사이 창 보임 · 가림 · 취소를 다시 본다** — await 중에 창이 내려가거나 가려질 수 있다(가려진 창의 남은 걸음이 로비를 새로 내지 않게).
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let match, Self.isUnsettled(match.status),
            now.timeIntervalSince(lastStateRequestAt) >= matchPollInterval(at: now) {
-            await refreshMatch(id: match.id)
+            let id = match.id
+            await outsidePolling { await $0.refreshMatch(id: id) }
         }
-        guard isWindowVisible else { return }
-        await checkDeadline(at: now)
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
+        // 진행 중 판일 때만 띄운다(`checkDeadline` 의 첫 문과 같은 조건 — 걸음마다 Task 를 만들지 않게).
+        if match?.status == .active {
+            await outsidePolling { await $0.checkDeadline(at: now) }
+        }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby || phase == .room, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if rankingEnabled, phase == .lobby, now.timeIntervalSince(lastRankingRequestAt) >= Self.rankingPollSeconds {
             await loadRanking()
         }
@@ -546,6 +580,8 @@ package final class RummyStore {
         if rubyBalance != nil { rubyBalance = nil }
         if isWorking { isWorking = false }
         if ranking != nil { ranking = nil }
+        if lobbyLoadFailed { lobbyLoadFailed = false }
+        if rankingLoadFailed { rankingLoadFailed = false }
         if selectedStake != 3 { selectedStake = 3 }
         if createPublic { createPublic = false }
         if rulesShown { rulesShown = false }

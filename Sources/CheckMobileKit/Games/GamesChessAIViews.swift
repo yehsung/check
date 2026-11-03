@@ -424,7 +424,8 @@ struct GamesChessAIScreen: View {
                 legalTargets: board.legalTargets,
                 lastMove: board.lastMove.map { (from: $0.from, to: $0.to) },
                 checkSquare: board.checkSquare,
-                onTapSquare: { square in Task { await store.tap(square) } }
+                onTapSquare: { square in Task { await store.tap(square) } },
+                dragStore: store
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(ChessPhoneText.boardAccessibility(

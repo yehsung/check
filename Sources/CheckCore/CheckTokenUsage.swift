@@ -983,6 +983,11 @@ package enum TokenUsageIncrementalScanner {
         package var codexForkCopyEvents = 0
         /// 다른 home 의 정본에 밀려 읽지 않은 별칭 rollout 수(v0.3.15, dedupeCodexAliases — Orca 하드링크/복사본). 업로드 안 함, 계측용.
         package var codexAliasFilesSkipped = 0
+        /// 찾은 기록 위치 수(v0.3.73): 실제로 있는 Claude 설정 폴더 · Codex home 수. 경로는 기기 밖으로 내지 않고 이 개수만 쓴다.
+        package var claudeHomesFound = 0
+        package var codexHomesFound = 0
+        /// 다른 위치에서 같은 실제 파일(심볼릭 링크·같은 inode)로 이미 읽어 건너뛴 Claude 기록 수(v0.3.73). 계측용.
+        package var claudeAliasFilesSkipped = 0
         /// 안티그래비티(v0.3.12): stat 한 대화 db 수 · 실제로 연 수 · 새로 읽은 행 수 · 파싱이 거부한 행 수.
         /// AntigravityUsageScanner.Stats 를 그대로 옮겨 담는다(그쪽이 원본 — 여기서 다시 세지 않는다).
         package var antigravityFilesStatted = 0
@@ -1032,7 +1037,10 @@ package enum TokenUsageIncrementalScanner {
     /// 캐시를 받아 증분 갱신한 결과를 돌려준다. 빈 캐시를 주면 전체 스캔과 동일(첫 실행 경로).
     /// codexHome: 로그인 셸의 `CODEX_HOME` 이 있으면 그 경로(스토어가 CodexAccountUsageProbe 의 캐시된 셸 환경에서 넘긴다).
     /// nil 이면 `~/.codex`. 그 아래 `sessions/` 와 `archived_sessions/` 두 루트를 읽는다.
-    package static func update(_ input: TokenUsageCache, homeDirectory: URL, codexHome: URL? = nil, now: Date = Date()) -> Result {
+    /// claudeConfigDir(v0.3.73): 로그인 셸의 `CLAUDE_CONFIG_DIR`(있으면). `claudeHomes` 가 이것과 `~/.claude`·Orca·데스크톱 앱 폴더를 모은다.
+    package static func update(
+        _ input: TokenUsageCache, homeDirectory: URL, codexHome: URL? = nil, claudeConfigDir: URL? = nil, now: Date = Date()
+    ) -> Result {
         var cache = input
         var stats = Stats()
 
@@ -1064,9 +1072,13 @@ package enum TokenUsageIncrementalScanner {
         )
 
         // 2) 소스별 증분 스캔. Claude 프리필터 컷오프 = 창 시작, Codex = 현재 월 시작(이벤트 월/일 귀속을 위해 현재 월키를 받는다).
+        let claudeHomeList = claudeHomes(homeDirectory: homeDirectory, claudeConfigDir: claudeConfigDir)
+        stats.claudeHomesFound = claudeHomeList.filter { FileManager.default.fileExists(atPath: $0.path) }.count
         let oldestClaudeMtime = scanClaude(
-            &cache, homeDirectory: homeDirectory, cutoff: window.start, evictTs14: claudeRetentionTs14, stats: &stats
+            &cache, homes: claudeHomeList, cutoff: window.start, evictTs14: claudeRetentionTs14, stats: &stats
         )
+        let codexHomeList = codexHomes(homeDirectory: homeDirectory, codexHome: codexHome)
+        stats.codexHomesFound = codexHomeList.filter { FileManager.default.fileExists(atPath: $0.path) }.count
         scanCodex(
             &cache, roots: codexRoots(homeDirectory: homeDirectory, codexHome: codexHome),
             cutoff: monthStart, monthString: monthString, stats: &stats
@@ -1160,6 +1172,57 @@ package enum TokenUsageIncrementalScanner {
         }
         var seen = Set<String>()
         return candidates.filter { seen.insert(canonicalPathAllowingMissingTail($0.path)).inserted }
+    }
+
+    /// 스캔할 Claude 설정 폴더 목록(v0.3.73). 각 폴더 아래 `projects/`·`transcripts/` 를 읽는다. **순서가 곧 순위**다
+    /// (같은 실제 파일이 여러 곳에 보이면 앞선 폴더의 경로로 한 번만 읽는다).
+    ///   0: 로그인 셸의 `CLAUDE_CONFIG_DIR`(있을 때). Claude Code 는 이 값이 있으면 `~/.claude` 대신 여기에만 쓴다.
+    ///   1: `~/.claude`(없어도 넣는다 — 열거 비용 0, 종전 동작).
+    ///   2…: Orca 계정별 설정 폴더 `orca/claude-profiles/<id>/home`(이름순). Orca 는 연동 계정마다 이 폴더를 CLAUDE_CONFIG_DIR 로
+    ///       띄우고 보통 `projects` 를 `~/.claude/projects` 로 링크하지만, 링크 전 판·링크 실패면 기록이 여기 진짜 폴더로 남는다.
+    ///   …: Claude 데스크톱 앱의 로컬 에이전트 모드 `Claude/local-agent-mode-sessions/<a>/<b>/<세션>/.claude`(깊이 고정).
+    /// 왜(2026-11-03): 셸에 CLAUDE_CONFIG_DIR 를 건 사용자의 Claude 가 통째로 0 이었다. 사람마다 위치가 달라 기기가 스스로 찾는다.
+    /// 홈 전체를 뒤지지 않는다 — 알려진 자리만 본다(느리고, 볼 필요가 없는 사적인 폴더까지 훑게 된다).
+    /// `<id>`·세션 폴더가 심볼릭 링크면 넣지 않는다(무관한 큰 트리를 따라가지 않게). 실제 경로가 같은 폴더는 한 번만 넣는다.
+    package static func claudeHomes(homeDirectory: URL, claudeConfigDir: URL?) -> [URL] {
+        var candidates: [URL] = []
+        if let claudeConfigDir { candidates.append(claudeConfigDir) }
+        candidates.append(homeDirectory.appendingPathComponent(".claude", isDirectory: true))
+        let profilesRoot = orcaUserDataDirectory(homeDirectory: homeDirectory)
+            .appendingPathComponent("claude-profiles", isDirectory: true)
+        for id in ((try? FileManager.default.contentsOfDirectory(atPath: profilesRoot.path)) ?? []).sorted() {
+            let idDirectory = profilesRoot.appendingPathComponent(id, isDirectory: true)
+            let home = idDirectory.appendingPathComponent("home", isDirectory: true)
+            guard isRealDirectory(idDirectory), isRealDirectory(home) else { continue }
+            candidates.append(home)
+        }
+        candidates += claudeDesktopAgentHomes(homeDirectory: homeDirectory)
+        var seen = Set<String>()
+        return candidates.filter { seen.insert(canonicalPathAllowingMissingTail($0.path)).inserted }
+    }
+
+    /// Claude 데스크톱 앱 로컬 에이전트 모드의 세션별 설정 폴더(v0.3.73, 2026-11-03 이 맥 실측 모양:
+    /// `~/Library/Application Support/Claude/local-agent-mode-sessions/<계정>/<조직>/local_<세션>/.claude/projects/…`).
+    /// 깊이를 고정해 세 단계만 내려간다. 각 단계가 진짜 폴더일 때만.
+    package static func claudeDesktopAgentHomes(homeDirectory: URL) -> [URL] {
+        let root = homeDirectory.appendingPathComponent(
+            "Library/Application Support/Claude/local-agent-mode-sessions", isDirectory: true
+        )
+        func children(_ url: URL) -> [URL] {
+            ((try? FileManager.default.contentsOfDirectory(atPath: url.path)) ?? []).sorted()
+                .map { url.appendingPathComponent($0, isDirectory: true) }
+                .filter(isRealDirectory)
+        }
+        var out: [URL] = []
+        for a in children(root) {
+            for b in children(a) {
+                for session in children(b) {
+                    let home = session.appendingPathComponent(".claude", isDirectory: true)
+                    if isRealDirectory(home) { out.append(home) }
+                }
+            }
+        }
+        return out
     }
 
     /// 심볼릭 링크가 **아닌** 디렉터리인가. attributesOfItem 은 링크를 따라가지 않는다(링크 자체면 .typeSymbolicLink).
@@ -1298,14 +1361,43 @@ package enum TokenUsageIncrementalScanner {
     /// 멀쩡한 날들이 빠진다.
     @discardableResult
     private static func scanClaude(
-        _ cache: inout TokenUsageCache, homeDirectory: URL, cutoff: Date, evictTs14: Int, stats: inout Stats
+        _ cache: inout TokenUsageCache, homes: [URL], cutoff: Date, evictTs14: Int, stats: inout Stats
     ) -> Int? {
-        let projectsRoot = homeDirectory.appendingPathComponent(".claude/projects", isDirectory: true)
-        let transcriptsRoot = homeDirectory.appendingPathComponent(".claude/transcripts", isDirectory: true)
         let isJSONL: (URL) -> Bool = { $0.pathExtension == "jsonl" }
         // 워크/stat 는 클로저 밖에서(엔트리 맵을 캡처하는 tail 클로저와 배타적 접근이 겹치지 않게).
-        let projectFiles = recentFiles(under: projectsRoot, cutoff: cutoff, matching: isJSONL)
-        let files = projectFiles + recentFiles(under: transcriptsRoot, cutoff: cutoff, matching: isJSONL)
+        // v0.3.73: 폴더가 여럿이다(claudeHomes). 폴더마다 projects 를 먼저, transcripts 를 나중에 모은다.
+        // 같은 루트(실제 경로)는 한 번만 연다 — Orca 계정 폴더의 projects 가 ~/.claude/projects 로 링크돼 있으면 같은 트리다.
+        var seenRoots = Set<String>()
+        var projectFiles: [(url: URL, size: Int, mtimeMicros: Int)] = []
+        var transcriptFiles: [(url: URL, size: Int, mtimeMicros: Int)] = []
+        for home in homes {
+            for (name, isProjects) in [("projects", true), ("transcripts", false)] {
+                let root = home.appendingPathComponent(name, isDirectory: true)
+                let canonical = canonicalPathAllowingMissingTail(root.path)
+                guard seenRoots.insert(canonical).inserted else { continue }
+                // 루트 자체가 심볼릭 링크면(설정 폴더의 projects → ~/.claude/projects) 열거자가 들어가지 않는다 — 실제 경로로 연다.
+                // 그러지 않으면 실제 경로가 '본 루트'로 찍혀 원래 자리에서도 건너뛰어 그 기록이 통째로 0 이 된다(시험이 잡은 결함).
+                // 링크가 아닌 루트는 종전 경로 그대로 연다(파일 상태 키가 바뀌어 전부 다시 읽는 일을 막는다).
+                let isLink = (try? FileManager.default.attributesOfItem(atPath: root.path))?[.type] as? FileAttributeType
+                    == .typeSymbolicLink
+                let found = recentFiles(
+                    under: isLink ? URL(fileURLWithPath: canonical, isDirectory: true) : root, cutoff: cutoff, matching: isJSONL
+                )
+                if isProjects { projectFiles += found } else { transcriptFiles += found }
+            }
+        }
+        // ★ 두 배 집계 방지 1단: 같은 실제 파일(심볼릭 링크로 다른 경로에 보이는 것)은 처음 본 경로로 한 번만 읽는다.
+        //   2단은 엔트리 키((message.id, requestId) 전역 dedupe) — 하드링크·복사본이 남아도 한 번만 계상된다.
+        var seenFiles = Set<String>()
+        func unique(_ list: [(url: URL, size: Int, mtimeMicros: Int)]) -> [(url: URL, size: Int, mtimeMicros: Int)] {
+            list.filter { f in
+                let fresh = seenFiles.insert(canonicalPathAllowingMissingTail(f.url.path)).inserted
+                if !fresh { stats.claudeAliasFilesSkipped += 1 }
+                return fresh
+            }
+        }
+        projectFiles = unique(projectFiles)
+        let files = projectFiles + unique(transcriptFiles)
         let oldestMtime = projectFiles.map(\.mtimeMicros).min()
         for f in files {
             stats.claudeFilesStatted += 1
@@ -1988,8 +2080,12 @@ package enum TokenUsageIncrementalScanner {
 
 /// 기존 API 호환용 얇은 진입점. 빈 캐시로 증분 갱신 = 전체 스캔이라, "첫 스캔 == 전체 스캔"을 코드로 보장한다.
 package enum TokenUsageScanner {
-    package static func scan(homeDirectory: URL, codexHome: URL? = nil, now: Date = Date()) -> TokenUsageMonthly {
-        TokenUsageIncrementalScanner.update(TokenUsageCache(), homeDirectory: homeDirectory, codexHome: codexHome, now: now).usage
+    package static func scan(
+        homeDirectory: URL, codexHome: URL? = nil, claudeConfigDir: URL? = nil, now: Date = Date()
+    ) -> TokenUsageMonthly {
+        TokenUsageIncrementalScanner.update(
+            TokenUsageCache(), homeDirectory: homeDirectory, codexHome: codexHome, claudeConfigDir: claudeConfigDir, now: now
+        ).usage
     }
 }
 
@@ -2051,6 +2147,10 @@ package final class TokenUsageStore {
     /// 똑같이 "사용량 0"으로 보이는데 원인도 처방도 정반대라, 두 값을 같이 올려 갈라 본다.
     /// 2026-09-02 에 활동 중인데 9월 행이 없는 8명의 원인을 못 가른 것이 정확히 이 구분이 없어서였다.
     @ObservationIgnored package private(set) var lastScanFileCount: Int = 0
+    /// 마지막 스캔이 찾은 기록 위치 수(v0.3.73 — 실제로 있는 Claude 설정 폴더 · Codex home). 경로는 기기 밖으로 내지 않는다.
+    /// 서버 진단(token_scan_health)에 올리려면 표에 칸이 필요해 이 판은 기기 안 관측값으로만 둔다.
+    @ObservationIgnored package private(set) var lastScanClaudeHomesFound: Int = 0
+    @ObservationIgnored package private(set) var lastScanCodexHomesFound: Int = 0
     /// 마지막 스캔이 **끝난** 시각(주입 clock 기준). nil 은 이 프로세스에서 스캔이 한 번도 완주하지 않았다는 뜻이며,
     /// lastScanFileCount == 0 ("스캔은 돌았고 파일이 없었다")과 구분되는 유일한 신호다 — 위 구분의 나머지 반쪽이다.
     @ObservationIgnored package private(set) var lastScanAt: Date?
@@ -2119,6 +2219,7 @@ package final class TokenUsageStore {
     /// Codex 홈 재정의(로그인 셸의 `CODEX_HOME`). 스캔마다 부른다 — 기본 구현은 CodexAccountUsageProbe 가 **이미 캐시한**
     /// 셸 환경만 읽으므로 셸을 새로 띄우지 않는다(첫 계정 프로브 전엔 nil → `~/.codex`). 테스트는 nil/고정값을 주입한다.
     private let codexHomeResolver: @Sendable () -> URL?
+    private let claudeConfigDirResolver: @Sendable () -> URL?
     // 증분 캐시(인메모리). 첫 스캔에서 디스크로부터 로드하고 이후엔 메모리에서 이어받는다(재디코드 회피).
     @ObservationIgnored private var cache: TokenUsageCache?
     // 마지막 갱신 시작 시각(churn 가드 기준).
@@ -2160,6 +2261,7 @@ package final class TokenUsageStore {
         clock: @escaping () -> Date = { Date() },
         notificationCenter: NotificationCenter = .default,
         codexHomeResolver: @escaping @Sendable () -> URL? = { CodexAccountUsageProbe.cachedCodexHome() },
+        claudeConfigDirResolver: @escaping @Sendable () -> URL? = { CodexAccountUsageProbe.cachedClaudeConfigDir() },
         edition: MacEdition = .current
     ) {
         self.defaults = defaults
@@ -2168,6 +2270,7 @@ package final class TokenUsageStore {
         self.clock = clock
         self.notificationCenter = notificationCenter
         self.codexHomeResolver = codexHomeResolver
+        self.claudeConfigDirResolver = claudeConfigDirResolver
         self.edition = edition
         self.lastSaveAt = clock()
         // 재시작 후 즉시 표시: 영속 스냅샷을 먼저 읽는다. 단, 귀속 월(month)이 현재 KST 월과 다르면(달이 바뀜)
@@ -2263,13 +2366,16 @@ package final class TokenUsageStore {
         }
         let home = blocked ? Self.blockedScanHome : homeDirectory
         let codexHome = blocked ? Self.blockedScanHome : codexHomeResolver()
+        let claudeConfigDir = blocked ? nil : claudeConfigDirResolver()
         let url = cacheURL
         // 인메모리 캐시가 있으면 그대로 이어받고, 없으면(첫 스캔) 백그라운드에서 디스크 로드 → 증분(=전체) 스캔.
         let inMemory = blocked ? TokenUsageCache() : cache
         scanTask = Task { @MainActor [weak self] in
             let result = await Task.detached(priority: .utility) { () -> TokenUsageIncrementalScanner.Result in
                 let base = inMemory ?? TokenUsageCacheStore.load(from: url)
-                return TokenUsageIncrementalScanner.update(base, homeDirectory: home, codexHome: codexHome, now: now)
+                return TokenUsageIncrementalScanner.update(
+                    base, homeDirectory: home, codexHome: codexHome, claudeConfigDir: claudeConfigDir, now: now
+                )
             }.value
             guard let self else { return }
             self.cache = result.cache
@@ -2280,6 +2386,8 @@ package final class TokenUsageStore {
             // "안 씀(파일 0)"과 "스캐너 죽음(미갱신)"의 구분이 무너진다.
             // 세 소스의 stat 파일 수 합(v0.3.12 에 안티그래비티 합류). 0 은 여전히 "스캔은 돌았고 볼 파일이 없었다"이고,
             // 안티그래비티만 쓰는 사람도 이제 0 이 아니다 — 그 구분이 이 값의 존재 이유다.
+            self.lastScanClaudeHomesFound = result.stats.claudeHomesFound
+            self.lastScanCodexHomesFound = result.stats.codexHomesFound
             self.lastScanFileCount = result.stats.claudeFilesStatted + result.stats.codexFilesStatted
                 + result.stats.antigravityFilesStatted
             self.lastScanAntigravityBlind = result.stats.antigravityBlind

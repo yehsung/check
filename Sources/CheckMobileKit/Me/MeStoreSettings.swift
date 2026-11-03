@@ -33,6 +33,7 @@ extension MeStore {
         tokenUsagePublicLoadFailed = false
         miniGamePublicLoadFailed = false
         inviteCodeLoadFailed = false
+        centerLoadFailed = false
         defer { if isCurrent("settings", serial) { isLoadingSettings = false } }
 
         let tokenStamp = privacyReadStamp("token")
@@ -80,6 +81,31 @@ extension MeStore {
             if AuthErrorRules.classify(error) == .cancelled { return }
             inviteCodeLoadFailed = true
         }
+
+        // 소속 센터 행. 나 탭 머리가 이미 받았으면 묻지 않는다(머리를 건너뛰고 설정만 열리는 길 · 머리의 센터 조회가 실패한 사람을 위한 자리다).
+        guard !centerLoaded else { return }
+        let center = await attempt { session in
+            try await service.fetchMyCenter(accessToken: session.accessToken, userID: session.userID)
+        }
+        guard generation == context.generation, isCurrent("settings", serial) else { return }
+        switch center {
+        case .success(let value):
+            centerServerValue = value
+            centerLoaded = true
+        case .failure(let error):
+            if AuthErrorRules.classify(error) == .cancelled { return }
+            centerLoadFailed = true
+        }
+    }
+
+    /// 소속 센터 행의 상태(코어 판정 — 맥과 한 벌). **모르는 것을 '미지정'으로 그리지 않는다.**
+    package var centerRowState: CenterSettingsRowState {
+        .of(loaded: centerLoaded, center: centerServerValue)
+    }
+
+    /// 센터를 아직 못 읽었고 마지막 조회가 실패했다(행 대신 실패 줄 · [다시 시도]).
+    package var centerFailed: Bool {
+        centerLoadFailed && !centerLoaded
     }
 
     /// 공개 설정을 **아직 한 번도** 못 읽었고 마지막 조회가 실패했다(스위치가 죽어 있는 이유를 말한다).
@@ -176,6 +202,15 @@ extension MeStore {
     package func signOut() async {
         guard context.session.isSignedIn, !isSigningOut else { return }
         isSigningOut = true
+        // 아잉 큐브 판·방 중이면 `rummy_leave`(최대 2초)를 먼저 보낸다 — 세션을 먼저 지우면 이탈 요청이 토큰 없이 떠나 판이
+        // '플레이 중'으로 남는다(맥 `signOutLeavingRummy` 와 같다). 놀던 기기는 아무것도 안 보낸다.
+        let generation = context.session.generation
+        await GamesRummyExit.leaveBeforeSessionEnds(context.rummy)
+        // 그 2초 사이 다른 길(치명 만료)이 이미 세션을 내렸으면 두 번 내리지 않는다.
+        guard context.session.generation == generation else {
+            isSigningOut = false
+            return
+        }
         await context.session.signOut()
         // 세션이 세대를 올리며 앱 모델이 reset() 을 불렀다 — 깃발은 거기서 이미 내려갔다.
         isSigningOut = false

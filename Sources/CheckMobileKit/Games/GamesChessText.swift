@@ -149,7 +149,7 @@ package enum ChessPhoneText {
     ///   라고 **틀린 안내**를 했다(그래도 테스트는 초록이었다 — 둘만 있을 때 참이던 식이라서).
     ///   지금은 문구 함수가 **두는 판(playing)과 막힌 입구(blocked)를 둘 다** 받는다.
     package enum BusyGame: String, CaseIterable, Sendable {
-        case gomoku, chess, tetris
+        case gomoku, chess, tetris, rummy
 
         /// 게임 이름("오목" · "체스" · "1:1 테트리스").
         package var gameName: String {
@@ -157,6 +157,7 @@ package enum ChessPhoneText {
             case .gomoku: return "오목"
             case .chess: return "체스"
             case .tetris: return "1:1 테트리스"
+            case .rummy: return "아잉 큐브"
             }
         }
 
@@ -166,6 +167,7 @@ package enum ChessPhoneText {
             case .gomoku: return "오목 판"
             case .chess: return "체스 판"
             case .tetris: return "테트리스 대결"
+            case .rummy: return "아잉 큐브 판"
             }
         }
     }
@@ -178,6 +180,9 @@ package enum ChessPhoneText {
             return "\(playing.gameName)\(objectParticle(playing.gameName)) 두는 중이에요"
         case .tetris:
             return "\(playing.gameName) 대결 중이에요"
+        case .rummy:
+            // 타일 게임이라 '둔다'가 아니다. 방에 앉아 시작을 기다리는 동안도 이 말이다(서버 `chess__busy` 가 joined 도 본다).
+            return "\(playing.gameName)\(objectParticle(playing.gameName)) 하는 중이에요"
         }
     }
 
@@ -825,9 +830,9 @@ package struct ChessPhoneRuleLine: Identifiable, Equatable, Sendable {
                       + "\(ChessPhoneText.stakeNotHeldYet(ttlSeconds: inviteTtlSeconds))."),
             ChessPhoneRuleLine(
                 title: "한 사람 한 판",
-                // ★ 게임이 셋이다(1.0.11 — 1:1 테트리스). 셋을 다 말해야 한다: 이름이 빠진 게임은
+                // ★ 게임이 넷이다(1.0.11 1:1 테트리스 · 1.0.16 아잉 큐브). 넷을 다 말해야 한다: 이름이 빠진 게임은
                 //   사용자가 "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
-                detail: "체스·오목·1:1 테트리스는 한 번에 한 판만 할 수 있어요. "
+                detail: "체스·오목·1:1 테트리스·아잉 큐브는 한 번에 한 판만 할 수 있어요. "
                       + "한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.")
         ]
     }

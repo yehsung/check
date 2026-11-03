@@ -417,11 +417,22 @@ extension WorkTimerStore {
     nonisolated static let gachaOnlyRevertNotice = "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + GachaText.gachaOnlyHint
 
     /// 생일 선물 전용(케이크 아잉이 — v0.3.66)을 되돌렸을 때. "상점에서 살 수 있어요" · "뽑기나 조각…" 은 그 캐릭터에 거짓이라 얻는 길(생일 선물)을 말한다.
-    nonisolated static let giftOnlyRevertNotice = "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + CakeGiftText.lockedHint
+    nonisolated static let giftOnlyRevertNotice = giftRevertNotice(copy: .birthday)
+
+    /// 선물 전용 캐릭터를 되돌렸을 때 — 그 캐릭터를 주는 선물 종류의 얻는 길(생일 · 술 한잔 — v0.3.74).
+    nonisolated static func giftRevertNotice(copy: CharacterGiftCopy) -> String {
+        "아직 없는 캐릭터라 기본으로 돌아갔어요 — " + copy.lockedHint
+    }
+
+    /// 선물 전용 캐릭터의 문구 묶음(순수) — 내장 id 면 그 선물 종류(케이크 → 생일 · 이슬 → 술 한잔), 서버 표식으로만 선물 전용인
+    /// 모르는 id 는 생일(0.3.66 선례 — 그때는 선물이 생일뿐이었다). 상점 잠긴 칸 · 안내 · 되돌림이 이 한 곳을 묻는다.
+    nonisolated static func giftCopy(for id: String) -> CharacterGiftCopy {
+        (CharacterCatalog.giftKind(ofBuiltIn: id) ?? .birthday).copy
+    }
 
     /// 되돌린 캐릭터에 맞는 안내(순수).
     nonisolated static func revertNotice(for id: String, rows: [ShopCharacterRow]) -> String {
-        if isGiftOnly(id, rows: rows) { return giftOnlyRevertNotice }
+        if isGiftOnly(id, rows: rows) { return giftRevertNotice(copy: giftCopy(for: id)) }
         return isGachaOnly(id, rows: rows) ? gachaOnlyRevertNotice : notOwnedRevertNotice
     }
 
@@ -637,6 +648,7 @@ extension WorkTimerStore {
         var owned: Set<String> = [CharacterCatalog.builtInAingID]
         for row in rows where row.owned == true { owned.insert(row.id) }
         ownedCharacterIDs = owned
+        shopOwnershipGeneration = sessionGeneration
         // 생일 선물(v0.3.66): 다른 기기에서 받았으면 열린 선물의 선택지가 보유와 어긋난다 — 맞추고, 남는 게 없으면 선물 · 카드를 거둔다.
         reconcileCakeGiftWithOwnership()
     }
@@ -660,10 +672,11 @@ extension WorkTimerStore {
             shopNotice = Self.alreadyOwnedNotice
             return
         }
-        // 생일 선물 전용(케이크 아잉이 — v0.3.66)은 **고르지 않는다** — 가격도 [구매하기]도 없는 잠긴 칸이다. 얻는 길만 말한다.
+        // 선물 전용(케이크 아잉이 — v0.3.66 · 이슬 아잉이 — v0.3.74)은 **고르지 않는다** — 가격도 [구매하기]도 없는 잠긴 칸이다.
+        // 얻는 길만 말한다(그 선물 종류의 문구 — `giftCopy(for:)`).
         if case .character(let id) = selection, Self.isGiftOnly(id, rows: shopCharacters) {
             shopSelection = nil
-            shopNotice = CakeGiftText.lockedHint
+            shopNotice = Self.giftCopy(for: id).lockedHint
             return
         }
         // 루비로 살 수 없는 캐릭터(황금 · 무지개 아잉이)는 **고르지 않는다** — 하단 바에 [구매하기]를 세우면 거짓이다. 뽑기 패널을 연다.
@@ -728,10 +741,10 @@ extension WorkTimerStore {
             shopNotice = GachaText.gachaOnlyHint
             return
         }
-        // 생일 선물 전용(v0.3.66)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
+        // 선물 전용(v0.3.66 생일 · v0.3.74 술 한잔)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
         if case .character(let id) = selection, Self.isGiftOnly(id, rows: shopCharacters) {
             shopSelection = nil
-            shopNotice = CakeGiftText.lockedHint
+            shopNotice = Self.giftCopy(for: id).lockedHint
             return
         }
         guard let have = rubyBalance else {
@@ -784,8 +797,8 @@ extension WorkTimerStore {
                     self.shopNotice = Self.shortfallNotice(need: response.need, have: response.have)
                 case "not_for_sale":
                     // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
-                    // 케이크 아잉이(v0.3.66)도 같은 갈래로 거절되지만 얻는 길이 다르다(생일 선물).
-                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? CakeGiftText.lockedHint : GachaText.gachaOnlyHint
+                    // 케이크 아잉이(v0.3.66) · 이슬 아잉이(v0.3.74)도 같은 갈래로 거절되지만 얻는 길이 다르다(그 선물 종류).
+                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? Self.giftCopy(for: id).lockedHint : GachaText.gachaOnlyHint
                 case "needs_update":
                     // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.
                     // `default:` 의 "구매 실패" 로 떨어지면 사용자는 돈이 빠졌는지, 다시 눌러야 하는지 알 수 없다.

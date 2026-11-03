@@ -292,6 +292,7 @@ struct MeSettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: MobileTheme.space2)
                 }
+                centerRow
                 GroupRow(divider: store.inviteCodeFailed || store.inviteCode != nil ? .inset(MobileTheme.cardPadding) : .none) {
                     Text(MeText.inviteCodeTitle)
                         .font(.subheadline)
@@ -324,6 +325,36 @@ struct MeSettingsView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// 소속 센터 행. **읽기 전용이다** — 피커도 버튼도 쓰기도 없다(코어 `CenterSettingsRowState` 주석: 본인은 못 바꾸고 운영자가 고친다).
+    @ViewBuilder
+    private var centerRow: some View {
+        if store.centerFailed {
+            GroupRow {
+                loadFailureRow(MeText.centerLoadFailed)
+            }
+        } else {
+            let state = store.centerRowState
+            GroupRow(minHeight: MobileTheme.rowHeightTwoLine) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(MeText.centerRowTitle)
+                        .font(.body)
+                        .foregroundStyle(MobileTheme.label)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(MeText.centerRowCaption(state))
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: MobileTheme.space2)
+                Text(state.value)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label)
+                    .fixedSize()
+            }
+            .accessibilityElement(children: .combine)
         }
     }
 
@@ -375,31 +406,36 @@ struct MeSettingsView: View {
         }
     }
 
-    /// 개인정보 처리방침 링크(앱스토어 5.1.1(i) — 처리방침은 **스토어 메타데이터와 앱 안 둘 다**에 있어야 한다).
-    /// 절 머리가 없다: 설정 목록의 끝, 버전 줄 바로 위에 붙는 한 행이다(로그아웃·계정 삭제 같은 '하는 일'이 아니라 '읽는 것'이라
+    /// 읽는 문서 두 행: 이용약관 · 개인정보 처리방침(앱스토어 5.1.1(i) — 처리방침은 **스토어 메타데이터와 앱 안 둘 다**에 있어야 한다).
+    /// 절 머리가 없다: 설정 목록의 끝, 버전 줄 바로 위에 붙는 묶음이다(로그아웃·계정 삭제 같은 '하는 일'이 아니라 '읽는 것'이라
     /// 계정 절 안에 섞지 않았다). 주소는 저장소 docs/ 를 GitHub Pages 로 켜 만든 것이다.
     private var policyRow: some View {
         InsetGroup {
-            GroupRow(divider: .none, padding: EdgeInsets(top: 0, leading: MobileTheme.cardPadding, bottom: 0, trailing: MobileTheme.cardPadding)) {
-                Button {
-                    openURL(MeText.privacyPolicyURL)
-                } label: {
-                    HStack(spacing: MobileTheme.space3) {
-                        Text(MeText.privacyPolicy)
-                            .font(.body)
-                            .foregroundStyle(MobileTheme.label)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Spacer(minLength: MobileTheme.space2)
-                        Image(systemName: "arrow.up.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(MobileTheme.label3)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: AingButtonMetrics.minimumTarget)
-                    .contentShape(Rectangle())
+            legalRow(MeText.termsOfService, url: MeText.termsOfServiceURL, hasDivider: true)
+            legalRow(MeText.privacyPolicy, url: MeText.privacyPolicyURL, hasDivider: false)
+        }
+    }
+
+    private func legalRow(_ title: String, url: URL, hasDivider: Bool) -> some View {
+        GroupRow(divider: hasDivider ? .inset(MobileTheme.cardPadding) : .none, padding: EdgeInsets(top: 0, leading: MobileTheme.cardPadding, bottom: 0, trailing: MobileTheme.cardPadding)) {
+            Button {
+                openURL(url)
+            } label: {
+                HStack(spacing: MobileTheme.space3) {
+                    Text(title)
+                        .font(.body)
+                        .foregroundStyle(MobileTheme.label)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: MobileTheme.space2)
+                    Image(systemName: "arrow.up.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
                 }
-                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, minHeight: AingButtonMetrics.minimumTarget)
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
     }
 

@@ -81,8 +81,8 @@ package enum MegaphoneBannerRules {
     package static let freshness: TimeInterval = 600
     /// 푸시를 눌러 들어온 항목은 이 안이면 신선도를 무시한다(24시간 — 서버 inbox 창과 같다).
     package static let pushWindow: TimeInterval = 24 * 3_600
-    /// 한 장이 떠 있는 시간.
-    package static let displaySeconds: TimeInterval = 5
+    /// 한 장이 떠 있는 시간. 2026-11-02 사용자 결정으로 5초 → 1분("1분으로 늘려달라는거야").
+    package static let displaySeconds: TimeInterval = 60
     /// 닫힌 뒤 다음 장까지 쉬는 시간.
     package static let gap: TimeInterval = 0.4
     /// 멈췄다(호버·누르고 있기) 풀리면 남은 시간과 이것 중 긴 쪽으로 다시 센다.

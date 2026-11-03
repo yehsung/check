@@ -238,6 +238,18 @@ struct MeAILimitsTests {
         #expect(bundle.provider(.codex)?.isLinked == false)
     }
 
+    /// 폰은 맥이 올린 이름을 그대로 그린다 — 200달러 플랜 이름(`ultra`)을 받으려고 폰 코드를 고칠 일이 없다.
+    @Test("플랜 이름: 맥이 올린 ultra 가 그대로 카드까지 온다")
+    func planNameFromMacReachesTheCard() throws {
+        let base = MobileClock.demoInstant
+        let rows = [
+            AILimitFetchedRow(deviceID: mePureMac, provider: "claude", fiveHourPercent: 27, fiveHourResetsAt: nil, weeklyPercent: 60,
+                              weeklyResetsAt: nil, planLabel: "ultra", observedAt: base)
+        ]
+        let claude = try #require(meOneDeviceBundle(from: rows, now: base).provider(.claude))
+        #expect(claude.planLabel == "ultra")
+    }
+
     /// ★ 유령 행을 숨긴다(v0.3.45 P2). 맥에서 로그아웃한 제공자는 업로드에서 **빠질 뿐**이고 서버에는 DELETE
     /// 권한도 정리 cron 도 없다 → 그 행이 영원히 남아, 시간이 지나면 리셋을 지나 `0% · 초기화됨` 으로 굳는다.
     /// 쓰지도 않는 제공자가 "한도를 하나도 안 썼다"로 **영구 표시**되는 것이다.

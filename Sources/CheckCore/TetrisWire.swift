@@ -23,6 +23,17 @@ import Foundation
 /// 테트리스 RPC 프로토콜 버전. 서버 `tetris_protocol()` 이 1 이고, 이보다 **작으면** `unsupported_client` 다.
 package nonisolated enum TetrisWire {
     package static let protocolVersion = 1
+    /// 판 표시 프레임을 아는 기기가 **`tetris_report` 에만** 싣는 번호(명세 §11 서버 층 — 자리 단위 능력 협상).
+    /// 서버는 이 값을 `tetris_players.frames_v` 에 같은 UPDATE 로 적고, 두 자리가 모두 2 를 보냈고 서버 스위치가 켜져 있으면
+    /// `state.frames` 를 내린다. **`protocolVersion` 을 2로 올리지 마라** — 서버 `tetris_protocol()` 은 1 그대로이고 비교가 `<` 라
+    /// 2 는 통과하지만, 그 상수를 올리면 다른 아홉 요청도 2 를 싣는다(서버가 그 값을 안 보더라도 "보고에만"이 계약이다).
+    package static let framesProtocolVersion = 2
+
+    /// `tetris_report` 의 `p_protocol`. 프레임 소켓을 실제로 열 수 있는 기기(프레임 켠 빌드 + `RealtimeFeature.isEnabled`)만 2 다 —
+    /// 소켓을 못 여는 기기가 2를 보내면 상대가 헛되이 소켓을 연다(§11).
+    package static func reportProtocol(framesCapable: Bool) -> Int {
+        framesCapable ? framesProtocolVersion : protocolVersion
+    }
 }
 
 /// 테트리스 RPC 의 status 어휘. **모르는 값은 `.unknown`** 이다(머리말 ②). 집합은 설계서 §2.4 에서 베꼈다.
@@ -84,10 +95,11 @@ package struct TetrisRespondRequest: Encodable {
     package let pAccept: Bool
 }
 
-/// tetris_report 본문(1초 하트비트 겸). 값은 전부 **누계**라 한 보고가 사라져도 다음 보고가 같은 사실을 다시 싣는다.
-/// `p_seq` 가 서버 저장값 이하면 `stale` 로 버려진다(쓰지 않는다).
+/// tetris_report 본문(하트비트 겸 — 기본 1초, 판 표시 프레임이 양쪽에서 확인된 동안 3초). 값은 전부 **누계**라 한 보고가 사라져도
+/// 다음 보고가 같은 사실을 다시 싣는다. `p_seq` 가 서버 저장값 이하면 `stale` 로 버려진다(쓰지 않는다).
+/// `p_protocol` 은 이 요청만 1 또는 2 다(`TetrisWire.reportProtocol(framesCapable:)`) — 다른 요청은 언제나 1.
 package struct TetrisReportRequest: Encodable {
-    package var pProtocol = TetrisWire.protocolVersion
+    package var pProtocol: Int
     package let pMatchId: String
     package let pSeq: Int
     /// 보이는 판 200글자(`TetrisDuelBoard`).
@@ -98,7 +110,9 @@ package struct TetrisReportRequest: Encodable {
     package let pPending: Int
     package let pToppedOut: Bool
 
-    package init(matchID: String, report: TetrisDuelReport) {
+    /// - Parameter framesCapable: 이 기기가 판 표시 프레임 소켓을 열 수 있다. 참이면 `p_protocol` 2, 아니면 1(기본 — 옛 본문과 같은 키·값이다).
+    package init(matchID: String, report: TetrisDuelReport, framesCapable: Bool = false) {
+        pProtocol = TetrisWire.reportProtocol(framesCapable: framesCapable)
         pMatchId = matchID
         pSeq = report.seq
         pBoard = report.board
@@ -234,6 +248,41 @@ package struct TetrisStatePayload: Decodable, Equatable, Sendable {
     /// 이 판의 내 자리를 **이 기기가** 두는가(서버 20261103124000 — 부르는 토큰의 로그인 세션을 그 자리를 연 세션과 견준다).
     /// 'this' | 'other' | nil. nil 은 "모른다" 다(옛 서버 · 기록 없는 판 · 세션 없는 토큰) — 스토어가 '이 기기가 연 판' 기록으로 가른다.
     package var myDevice: String?
+    /// 판 표시 프레임(명세 §11·§12-4). 진행 중 판에서 서버 스위치가 켜져 있고 **두 자리 모두** 프레임을 아는 기기(`p_protocol` 2)가
+    /// 마지막으로 보고했고 이 기기가 그 판을 두면 `{on:true, topic:"tetris:<match>"}`, 아니면 null. 옛 서버엔 없다 → nil → 끔(1초 보고).
+    package var frames: TetrisFramesRow?
+}
+
+/// `state.frames` 한 칸. **전 칸 Optional 이고 디코드가 절대 throw 하지 않는다** — 이 칸이 깨져 와도(타입이 다르다 · 객체가 아니다)
+/// 판 상태 전체가 디코드 실패로 죽으면 대결 창이 죽는다(머리말 ①). 깨진 칸은 "꺼짐"으로 읽는다(1초 보고 = 지금과 같다).
+package struct TetrisFramesRow: Decodable, Equatable, Sendable {
+    package var on: Bool?
+    /// 조인할 토픽(접두사 `realtime:` 없음). **서버가 조립한 글자를 그대로 쓴다** — 클라가 만들면 한쪽만 고쳐지는 날 조용히 죽는다
+    /// (`RealtimeTransport.swift` 머리말 채널명 규약).
+    package var topic: String?
+
+    package init(on: Bool? = nil, topic: String? = nil) {
+        self.on = on
+        self.topic = topic
+    }
+
+    private enum CodingKeys: String, CodingKey { case on, topic }
+
+    package init(from decoder: any Decoder) throws {
+        let container = try? decoder.container(keyedBy: CodingKeys.self)
+        on = try? container?.decodeIfPresent(Bool.self, forKey: .on)
+        topic = try? container?.decodeIfPresent(String.self, forKey: .topic)
+    }
+
+    /// 켜졌으면 조인할 토픽, 아니면 nil. `tetris:` 로 시작하지 않는 토픽은 꺼짐으로 읽는다 — 프레임을 `poke:` 채널에 쓰면 구버전 맥이
+    /// 프레임마다 take_pokes 를 한 번 더 부른다(§4). 접두사가 바뀌면 프레임이 안 열릴 뿐 판은 1초 보고로 그대로 돈다(안전한 쪽).
+    package var activeTopic: String? {
+        guard on == true, let topic, topic.hasPrefix(Self.topicPrefix), topic.count > Self.topicPrefix.count else { return nil }
+        return topic
+    }
+
+    /// 서버 `'tetris:' || m.id::text` 의 접두사.
+    package static let topicPrefix = "tetris:"
 }
 
 /// 쓰기·조회 공용 응답(challenge · cancel · respond · report · state · resign).
@@ -378,12 +427,15 @@ extension SupabaseWorkService {
             accessToken: accessToken, retriesDeadlockOnce: true)
     }
 
-    /// 판 보고(1초 하트비트 겸). 첫 보고가 준비다.
+    /// 판 보고(하트비트 겸 — 기본 1초, 프레임 확인 중 3초). 첫 보고가 준비다.
+    /// - Parameter framesCapable: 이 기기가 판 표시 프레임 소켓을 열 수 있다(프레임 켠 빌드 + `RealtimeFeature.isEnabled`).
+    ///   참이면 이 요청만 `p_protocol` 2 를 싣는다(§11 — 서버가 `frames_v` 로 적는다).
     package func tetrisReport(
-        accessToken: String, matchID: String, report: TetrisDuelReport
+        accessToken: String, matchID: String, report: TetrisDuelReport, framesCapable: Bool = false
     ) async throws -> TetrisActionResponse {
         try await duelRPC(
-            "tetris_report", body: TetrisReportRequest(matchID: matchID, report: report),
+            "tetris_report",
+            body: TetrisReportRequest(matchID: matchID, report: report, framesCapable: framesCapable),
             accessToken: accessToken, retriesDeadlockOnce: true)
     }
 

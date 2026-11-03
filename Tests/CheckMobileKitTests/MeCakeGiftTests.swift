@@ -13,7 +13,7 @@ import Testing
 // 못 본다'). 그래서 화면이 가르는 판정을 전부 플랫폼 무관한 자리(`MeStoreCakeGift` · `MeStoreCharacters` · `MeCharacterTileStatus` ·
 // `AingCharacterArt.avatarFraming`)에 두었고, 여기서 **값**과 **실제 요청**으로 잰다. 뷰는 시뮬레이터 스크린샷이 본다.
 //
-//   ① 번호: 번들 그대로의 폰은 4 를 말한다 · 케이크 하나만 빼도 3 — 초상 파일 ⟺ 목록 ⟺ 번호 양방향
+//   ① 번호: 번들 그대로의 폰은 5 를 말한다(1.0.17 이슬까지 — 생일 선물 문은 4 이상) · 케이크 하나만 빼도 3 — 초상 파일 ⟺ 목록 ⟺ 번호 양방향
 //   ② 아바타 틀: 케이크 초상을 틀로 되돌리면 몸이 아잉 몸과 겹친다(얼굴 크기가 같다) · 아잉 · 금 · 무지개 · 모르는 id 는 그대로
 //   ③ 상점 · 고르기: 고르기는 가진 사람에게만 · 안 가진 사람은 상점의 잠긴 칸('생일 선물 전용' — 가격 · 구매 없음) · 누르면 안내
 //   ④ 축하 시트: 앞에 올 때 10분 스로틀 · 실행당 한 번 · 닫으면 다시 열기 · 수령 · 받은 뒤 상점 다시 읽기 · [지금 입기] · 실패 갈래
@@ -34,7 +34,7 @@ import Testing
 
     // MARK: - ① 번호
 
-    @Test("번들 그대로의 폰은 4 를 말한다 · 케이크 하나만 빼도 3 이다 — 초상 파일 ⟺ 목록 ⟺ 번호")
+    @Test("번들 그대로의 폰은 5 를 말한다(생일 선물 문 4 를 넘는다) · 케이크 하나만 빼도 3 이다 — 초상 파일 ⟺ 목록 ⟺ 번호")
     func protocolTracksCakePortraits() {
         #expect(ShopWire.cakeProtocol == 4, "서버 `character_prices.min_protocol = 4` 와 같은 숫자여야 한다")
         let known = AingCharacterArt.knownIDs
@@ -43,7 +43,8 @@ import Testing
             #expect(known.contains(id) == Self.portraitFileExists(id), "\(id): 번들 초상과 knownIDs 가 갈렸다")
         }
         let derived = ShopWire.protocolVersion(drawableCharacterIDs: known)
-        #expect(derived == ShopWire.cakeProtocol, Comment(rawValue: "목록 \(known) → \(derived)"))
+        // 1.0.17 은 이슬까지 그려 5 다(`MeIsulProtocolPinTests`) — 생일 선물은 4 이상이면 받는다(번호는 누적).
+        #expect(derived == ShopWire.isulProtocol, Comment(rawValue: "목록 \(known) → \(derived)"))
         #expect(ShopWire.supportsCakeGift(protocolVersion: derived))
         // 반대 방향: 케이크 하나만 빠져도 4 가 아니다(그림 없는 쪽을 골라 받으면 아잉 그림의 '케이크 아잉이'가 된다).
         for id in ShopWire.cakeCharacterIDs {
@@ -52,9 +53,9 @@ import Testing
                     Comment(rawValue: "\(id) 를 뺀 목록이 3 이 아니다 — 번호가 목록에서 파생되지 않는다"))
         }
         // 스토어 자리(번호를 박지 않는다 — `MeStore.drawableCharacterIDs` 기본값이 이 목록이다).
-        #expect(known == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco,
+        #expect(known == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, CharacterCatalog.isulAingID,
                           "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"],
-                "순서: 내장 다섯(코어 CharacterCatalog.allIDs 순서) → 나머지 이름순")
+                "순서: 내장 여섯(코어 CharacterCatalog.allIDs 순서) → 나머지 이름순")
         #expect(AingCharacterArt.resolvedID(Self.choco) == Self.choco && AingCharacterArt.resolvedID(" \(Self.strawberry) ") == Self.strawberry)
     }
 
@@ -249,7 +250,7 @@ import Testing
         await RankMeHarness(label: label) { server.respond($0) }
     }
 
-    @Test("앞에 올 때: 번호 4 로 묻고 · 열린 선물이면 시트가 스스로 뜬다 · 10분 안에는 다시 묻지 않는다")
+    @Test("앞에 올 때: 번들 번호(1.0.17 = 5)로 묻고 · 열린 선물이면 시트가 스스로 뜬다 · 10분 안에는 다시 묻지 않는다")
     func foregroundChecksWithThrottle() async throws {
         let server = GiftServer()
         let h = await Self.harness("me-cake-foreground", server: server)
@@ -259,7 +260,8 @@ import Testing
         await h.quiesceMe()
         let sent = h.requests(rpc: "character_gift_pending")
         #expect(sent.count == 1)
-        #expect(Set(sent.first?.jsonBody.keys.map { $0 } ?? []) == ["p_protocol"] && sent.first?.jsonBody["p_protocol"] as? Int == 4)
+        #expect(Set(sent.first?.jsonBody.keys.map { $0 } ?? []) == ["p_protocol"]
+                && sent.first?.jsonBody["p_protocol"] as? Int == ShopWire.isulProtocol)
         let sheet = try #require(store.cakeGiftSheet, "열린 선물인데 시트가 안 섰다")
         #expect(sheet.gift.options == [Self.strawberry, Self.choco] && sheet.phase == .choosing && sheet.selection == nil && !sheet.canConfirm)
         #expect(store.cakeGift?.id == Self.giftID && !store.showsCakeGiftReopen)
@@ -325,7 +327,8 @@ import Testing
         await h.quiesceMe()
         let body = try #require(h.requests(rpc: "claim_character_gift").last?.jsonBody)
         #expect(Set(body.keys) == ["p_gift", "p_character", "p_protocol"], "키 셋을 언제나 싣는다: \(body)")
-        #expect(body["p_gift"] as? String == Self.giftID && body["p_character"] as? String == Self.strawberry && body["p_protocol"] as? Int == 4)
+        #expect(body["p_gift"] as? String == Self.giftID && body["p_character"] as? String == Self.strawberry
+                && body["p_protocol"] as? Int == ShopWire.isulProtocol)
         #expect(store.cakeGiftSheet?.phase == .received(characterID: Self.strawberry))
         #expect(CakeGiftText.received(name: MeCharacterName.display(Self.strawberry)) == "딸기 케이크 아잉이를 받았어요!")
         #expect(store.isOwned(Self.strawberry) && store.cakeGift == nil && !store.showsCakeGiftReopen)

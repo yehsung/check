@@ -4,9 +4,9 @@ import CoreGraphics
 import ImageIO
 #endif
 
-/// 캐릭터 초상 그림(11 캐릭터 × 표정 2 = 22장) — **앱과 위젯 확장이 함께 읽는 번들 리소스**(App Group 이 아니다).
+/// 캐릭터 초상 그림(12 캐릭터 × 표정 2 = 24장) — **앱과 위젯 확장이 함께 읽는 번들 리소스**(App Group 이 아니다).
 ///
-/// 원본은 맥 에셋 그대로다: 스프라이트는 `Sources/check/Characters/<id>/portrait-{neutral,negative}.png`, 아잉·황금·무지개·케이크 아잉이는
+/// 원본은 맥 에셋 그대로다: 스프라이트는 `Sources/check/Characters/<id>/portrait-{neutral,negative}.png`, 아잉·황금·무지개·케이크·이슬 아잉이는
 /// `Sources/check/Resources/<id>-{neutral,negative}.png`(모두 192px — 맥 원본 해상도). 이 패키지 리소스(`Resources/Portraits`)는
 /// 그 사본이고, `BaseComponentTests` 가 **픽셀 단위로** 원본과 같은지 잰다(맥 그림이 바뀌면 빨강 — 사본은 재압축돼 바이트가 다르다).
 ///
@@ -15,14 +15,17 @@ public enum AingCharacterArt {
     /// 기본 캐릭터(서버 착용값이 비었거나 이 빌드가 모르는 id).
     public static let defaultID = "aing"
 
-    /// 이 번들에 초상이 있는 캐릭터 — **코어 `CharacterCatalog.allIDs` 순서 규칙과 같다**: 내장 다섯(아잉 · 황금 · 무지개 · 딸기 케이크 ·
-    /// 초코 케이크)이 그 순서로 먼저, 나머지는 이름순. (케이크 둘은 이름순이면 금보다 **앞**이라 — `aing_cake_*` < `aing_gold` —
+    /// 이 번들에 초상이 있는 캐릭터 — **코어 `CharacterCatalog.allIDs` 순서 규칙과 같다**: 내장 여섯(아잉 · 황금 · 무지개 · 딸기 케이크 ·
+    /// 초코 케이크 · 이슬)이 그 순서로 먼저, 나머지는 이름순. (케이크 둘은 이름순이면 금보다 **앞**이라 — `aing_cake_*` < `aing_gold` —
     /// 내장 순서로 박는다. 고르기·상점 자리표시가 이 순서를 그대로 쓴다.)
     ///
     /// v0.3.54(폰 1.0.8): 황금 아잉이(`aing_gold` — 뽑기·조각 교환으로만 얻는다)의 초상 두 장이 들어와 8 캐릭터가 됐다.
     /// v0.3.59(폰 1.0.10): 무지개 아잉이(`aing_rainbow` — 금과 같은 급의 뽑기 전용)가 들어와 **9 캐릭터**가 됐다.
     /// v0.3.66(폰 1.0.14): 케이크 아잉이 둘(`aing_cake_strawberry` · `aing_cake_choco` — 생일 선물 전용)이 들어와 **11 캐릭터**가 됐고,
     /// 능력 번호가 저절로 **4** 가 된다(`ShopWire.protocolVersion` — 두 케이크를 **다** 그릴 수 있어야 4 다).
+    /// v0.3.74(맥 먼저) · 폰 1.0.17: 이슬 아잉이(`aing_isul` — '술 한잔' 선물 전용)가 들어와 **12 캐릭터**가 됐고, 능력 번호가 저절로
+    /// **5** 가 된다(번호를 적는 자리는 없다 — 이 한 줄로 상점 · 뽑기 · 선물 RPC 의 `p_protocol` 이 함께 오른다). 5 를 말하면 서버가
+    /// 이슬 행(모두에게 잠긴 칸) · 술 선물(`kind: "drink"`)을 내려 준다.
     ///
     /// ★ 이 목록이 상점 능력 번호의 재료다(`MeStore.drawableCharacterIDs` → `ShopWire.protocolVersion`), 그리고 번호는
     ///   **누적**이다: `robot` 까지면 1, `aing_gold` 까지면 2, `aing_rainbow` 까지 있어야 **3** 이다. 폰이 3 을 말해야 서버가
@@ -31,9 +34,9 @@ public enum AingCharacterArt {
     ///   폰에서 무지개가 통째로 사라진다(뽑히지도, 교환되지도 않는다).
     /// ★ 초상 파일 없이 이름만 더하면 그 반대로 틀린다 — 아잉 그림의 "황금/무지개 아잉이"를 뽑게 된다.
     ///   파일 ⟺ 목록 ⟺ 번호를 양방향으로 재는 자리는 `MeGoldShopProtocolTests`(2) · `MeRainbowProtocolTests`(3) ·
-    ///   `MeCakeGiftTests`(4)다.
+    ///   `MeCakeGiftTests`(4) · `MeIsulProtocolPinTests`(5)다.
     public static let knownIDs: [String] = [
-        "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco",
+        "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul",
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
     ]
 
@@ -98,7 +101,7 @@ public enum AingCharacterArt {
         "\(resolvedID(id))-\(expression.rawValue)"
     }
 
-    /// 초상 파일 위치(번들 안). 없으면 nil — 이 빌드의 리소스가 빠졌다는 뜻이다(테스트가 16장 모두 있는지 잰다).
+    /// 초상 파일 위치(번들 안). 없으면 nil — 이 빌드의 리소스가 빠졌다는 뜻이다(테스트가 명단의 모든 장이 있는지 잰다 — `BaseComponentTests`).
     public static func portraitURL(id: String, expression: Expression, bundle: Bundle? = nil) -> URL? {
         (bundle ?? .module).url(forResource: portraitName(id: id, expression: expression), withExtension: "png", subdirectory: "Portraits")
     }

@@ -13,7 +13,7 @@ import Testing
 
     // MARK: 에셋
 
-    @Test("초상 22장: 11 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
+    @Test("초상 24장: 12 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
     func portraitsAreBundledCopiesOfMacArt() throws {
         // 0.3.43(2026-10-05)에 로봇이 들어와 6 → **7 캐릭터 · 14장**이 됐다(맥 `AppUserAvatarArt.knownIDs` 도 7).
         // 개수를 **두 자리**에서 잰다: 명단 길이(7)와 **맥 원본과 실제로 대조한 장수**(14). 명단만 재면 번들 사본이
@@ -24,7 +24,11 @@ import Testing
         // 0.3.59(폰 1.0.10, 2026-10-20)에 무지개 아잉이가 들어와 **9 캐릭터 · 18장**이 됐다 — 금과 같은 자리(`Resources/aing_rainbow-<표정>.png`).
         // 0.3.66(폰 1.0.14, 2026-10-26)에 케이크 아잉이 둘(딸기 · 초코 — 생일 선물 전용)이 들어와 **11 캐릭터 · 22장**이 됐다 — 같은 자리
         // (`Resources/aing_cake_<맛>-<표정>.png`, 생성기 `scripts/make-cake-aing.swift` 가 맥 · 폰 사본을 바이트 그대로 굽는다).
-        #expect(AingCharacterArt.knownIDs.count == 11, "폰 초상 명단이 11 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        // 폰 1.0.17(맥 0.3.74 먼저)에 이슬 아잉이('술 한잔' 선물 전용)가 들어와 **12 캐릭터 · 24장**이 됐다 — 같은 자리
+        // (`Resources/aing_isul-<표정>.png`, 생성기 `scripts/make-isul-aing.swift` 는 맥 사본만 굽고 폰 사본은 그 파일을 바이트 그대로 복사했다).
+        #expect(AingCharacterArt.knownIDs.count == 12, "폰 초상 명단이 12 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        #expect(AingCharacterArt.knownIDs.contains("aing_isul"),
+                "이슬 아잉이(폰 1.0.17)가 폰 초상 명단에 없다 — 폰이 능력 번호 5 를 못 말해 술 선물을 못 받고, 이슬 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.knownIDs.contains("aing_cake_strawberry") && AingCharacterArt.knownIDs.contains("aing_cake_choco"),
                 "케이크 아잉이(0.3.66)가 폰 초상 명단에 없다 — 폰이 능력 번호 4 를 못 말해 생일 선물을 못 받고, 케이크 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.knownIDs.contains("robot"), "로봇(0.3.43)이 폰 초상 명단에 없다 — 맥에만 있는 캐릭터는 폰에서 이니셜로 선다")
@@ -49,14 +53,15 @@ import Testing
                 comparedWithMac += 1
             }
         }
-        #expect(comparedWithMac == 22, "맥 원본과 대조한 초상이 22장이 아니다: \(comparedWithMac)장")
+        #expect(comparedWithMac == 24, "맥 원본과 대조한 초상이 24장이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")
     func portraitIDsMatchAppCatalog() {
         #expect(AingCharacterArt.knownIDs == MeCharacterCards.knownIDs)
         for raw in [nil, "", "  ", "fox", " fox ", "ghost", "unknown-new", "aing", "FOX", "aing_gold", "AING_GOLD",
-                    "aing_cake_strawberry", "aing_cake_choco", "AING_CAKE_CHOCO", "aing-cake-choco"] as [String?] {
+                    "aing_cake_strawberry", "aing_cake_choco", "AING_CAKE_CHOCO", "aing-cake-choco",
+                    "aing_isul", " aing_isul ", "AING_ISUL", "aing-isul"] as [String?] {
             #expect(AingCharacterArt.resolvedID(raw) == MeCharacterCards.equippedID(fromServer: raw), "\(String(describing: raw))")
         }
     }

@@ -99,7 +99,8 @@ struct MeCharacterCardTests {
                              pixelArt: false, crop: rainbowCrop))
         // 케이크 아잉이 둘(v0.3.66 맥 / 폰 1.0.14 — 생일 선물 전용)도 금 · 무지개와 같은 갈래다: 매니페스트 · 아틀라스가 없고 원천은
         // 맥 초상 PNG(`Resources/<id>-neutral.png`, 장식 포함)다. 이름은 코어 내장 항목 그대로, 순서는 내장 순서(딸기 → 초코).
-        for cake in [CharacterCatalog.builtInCakeStrawberryAing, CharacterCatalog.builtInCakeChocoAing] {
+        // 이슬 아잉이(v0.3.74 맥 / 폰 1.0.17 — '술 한잔' 선물 전용)도 같은 갈래 · 내장 순서 여섯째(초코 다음, 병뚜껑 포함).
+        for cake in [CharacterCatalog.builtInCakeStrawberryAing, CharacterCatalog.builtInCakeChocoAing, CharacterCatalog.builtInIsulAing] {
             let image = try loadImage(repoRoot.appendingPathComponent("Sources/check/Resources/\(cake.id)-neutral.png"))
             let box = try #require(alphaBounds(image))
             let crop = try #require(image.cropping(to: box))
@@ -185,11 +186,13 @@ struct MeCharacterCardTests {
         #expect(MeCharacterCards.equippedID(fromServer: "aing_cake_choco") == "aing_cake_choco")
         #expect(MeCharacterCards.displayName(for: "aing_cake_strawberry") == "딸기 케이크 아잉이")
         #expect(MeCharacterCards.displayName(for: "aing_cake_choco") == "초코 케이크 아잉이")
-        // 순서: 내장 다섯이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
-        // 이슬 아잉이(맥 0.3.74 먼저 — 코어 내장 여섯째)는 폰 카드가 아직 없다(다음 폰 판): 폰 목록에 없고, 착용값은 아잉으로 접힌다.
-        #expect(Array(MeCharacterCards.knownIDs.prefix(5)) == CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.isulAingID })
-        #expect(!MeCharacterCards.knownIDs.contains(CharacterCatalog.isulAingID))
-        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.isulAingID) == MeCharacterCards.aingID)
+        // 순서: 내장 여섯이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
+        // 이슬 아잉이(맥 0.3.74 먼저 → 폰 1.0.17 — 코어 내장 여섯째): 카드가 박혔으므로 접히지 않는다. 1.0.16 은 이 값을 몰라 아잉으로 접었다.
+        #expect(Array(MeCharacterCards.knownIDs.prefix(6)) == CharacterCatalog.builtIns.map(\.id))
+        #expect(MeCharacterCards.knownIDs.contains(CharacterCatalog.isulAingID))
+        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.isulAingID) == CharacterCatalog.isulAingID)
+        #expect(MeCharacterCards.equippedID(fromServer: " aing_isul ") == CharacterCatalog.isulAingID)
+        #expect(MeCharacterCards.displayName(for: CharacterCatalog.isulAingID) == "이슬 아잉이")
     }
 
     // MARK: 다시 굽기

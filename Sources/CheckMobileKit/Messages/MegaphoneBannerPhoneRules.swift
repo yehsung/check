@@ -67,8 +67,16 @@ package enum MegaphoneBannerPhoneRules {
 package enum MegaphoneBannerPhoneText {
     package static let close = "닫기"
 
+    /// 배너 카드에 보일 본문 — 서식 기호(`## ` · `**` · `[글](주소)`)와 이모티콘 토큰(`[아잉:기쁨]` → "아잉이 기쁨")을 벗긴 한 줄 글.
+    /// 맥 배너와 같은 함수다(`ChatMarkdown.plainPreview` — 이모티콘 규칙을 먼저 거친다). 1.0.16 까지는 원문 그대로 그려 토큰까지 날것이었다.
+    /// 평범한 한 줄 본문은 한 글자도 안 바뀐다.
+    package static func shownBody(_ body: String) -> String {
+        ChatMarkdown.plainPreview(body)
+    }
+
+    /// 보이스오버 라벨 — 본문은 화면과 **같은 글**(`shownBody`)이다. 화면만 벗기면 보이스오버가 기호 · 토큰을 또박또박 읽는다.
     package static func accessibilityLabel(name: String, body: String) -> String {
-        "\(name)님의 확성기, \(body)"
+        "\(name)님의 확성기, \(shownBody(body))"
     }
 
     /// 보이스오버만 읽는 글이다 — 그 사용자에게 배너는 저절로 닫히지 않는다(코어 `holdsAutoDismiss`). 손짓(쓸기·누르기) 말고 동작으로 닫는 길을 말한다.

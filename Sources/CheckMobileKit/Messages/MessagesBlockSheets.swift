@@ -206,8 +206,9 @@ struct MessagesReportSheet: View {
     ///
     /// 이모티콘은 이름으로 읽힌다("아잉이 기쁨") — 날것 토큰(`[아잉:기쁨]`)은 신고하려는 사람에게 "깨진 메시지"로
     /// 보인다. **서버로 가는 본문은 원문 그대로다**(`MessagesConversationView` 의 `messageBody:` — 운영자는 날것을 본다).
+    /// 1.0.17: 서식 기호(`## ` · `**` · `[글](주소)`)도 벗긴다 — `ChatMarkdown.plainPreview`(이모티콘 규칙을 먼저 거친다 · 맥 신고 인용과 같은 함수).
     private func quotedMessage(_ body: String) -> some View {
-        Text(AingStickerText.preview(for: body))
+        Text(ChatMarkdown.plainPreview(body))
             .font(.subheadline)
             .foregroundStyle(MobileTheme.label)
             .lineLimit(3)

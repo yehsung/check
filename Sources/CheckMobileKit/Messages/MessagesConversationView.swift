@@ -408,11 +408,21 @@ struct MessagesBubbleRow: View {
         .accessibilityLabel(Text(accessibilityText))
         .accessibilityAction(named: Text(MessagesBubbleCopy.title)) { MessagesBubbleCopy.copy(entry.body) }
         // 보이스오버는 길게 누름 메뉴를 못 연다 — 신고도 동작으로 단다(복사와 같은 자리).
+        // 줄이 요소 하나(children: .ignore)라 링크 글자에 닿을 수 없다 — 링크마다 "링크 열기: 글 (호스트)" 동작을 단다(1.0.17).
+        // 여는 문은 손가락 누름과 같은 한 곳이다(`MessagesBubbleLinkDoor` — 스킴 검사 두 겹).
         .accessibilityActions {
+            ForEach(linkActions, id: \.self) { link in
+                Button(link.title) { MessagesBubbleLinkDoor.open(link.url) }
+            }
             if let onReport {
                 Button(BlockReportText.reportMessageAction, action: onReport)
             }
         }
+    }
+
+    /// 이 말풍선의 링크들(보이스오버 동작). 그림 말풍선은 글이 "아잉이 기쁨"이라 링크가 없다.
+    private var linkActions: [MessagesBubbleMarkdown.LinkAction] {
+        MessagesBubbleMarkdown.linkActions(AingStickerText.preview(for: line.entry.body))
     }
 
     /// 복사는 길게 눌러 메뉴로(원문 그대로 — 붙여넣어 다시 보내면 그림이 된다). 본문이 `UILabel`(어절 줄바꿈)이라
@@ -484,22 +494,50 @@ struct MessagesBubbleRow: View {
     ///
     /// ★ 그림 안에는 이미 문구가 구워져 있지만(`AingStickerArt.labeledImage`) 이 줄은
     ///   `accessibilityElement(children: .ignore)` 라 **그 라벨이 줄 라벨에 섞이지 않는다** — 여기를 안 바꾸면
-    ///   보이스오버가 대괄호 토큰을 또박또박 읽는다. 평범한 본문은 `preview` 가 한 글자도 바꾸지 않는다.
+    ///   보이스오버가 대괄호 토큰을 또박또박 읽는다. 평범한 한 줄 본문은 한 글자도 안 바뀐다.
+    /// 1.0.17: 서식 기호(`## ` · `**` · `[글](주소)`)도 벗겨 읽는다 — `ChatMarkdown.plainPreview`(이모티콘 규칙을 먼저 거친다 · 맥 한 줄 자리와 같은 함수).
+    ///   링크가 여는 곳은 링크마다 단 동작 이름이 말한다("링크 열기: 글 (호스트)").
     private var accessibilityText: String {
         let entry = line.entry
-        var parts = [(entry.isMine ? "나" : entry.peerName) + ": " + AingStickerText.preview(for: entry.body), line.clockText]
+        var parts = [(entry.isMine ? "나" : entry.peerName) + ": " + ChatMarkdown.plainPreview(entry.body), line.clockText]
         if line.showsUnreadOne { parts.append(MessagesConversationRules.unreadOneAccessibilityLabel) }
         return parts.joined(separator: ", ")
     }
 }
 
-/// 말풍선 복사(길게 누름 메뉴 · 보이스오버 동작). 늘 원문을 담는다.
+/// 말풍선 복사(길게 누름 메뉴 · 보이스오버 동작). 늘 원문을 담는다 — 맥 [복사]의 "고른 글자가 없으면 원문"과 같은 규칙이다
+/// (`ChatMarkdownCopy.menuText` — 폰 메뉴에는 고르는 길이 없다). 원문은 서식 기호 · 이모티콘 토큰 그대로라 붙여넣어 다시 보내면
+/// 같은 꾸밈 · 같은 그림이 된다. 붙여넣기판에는 서식 없는 글자만 쓴다(`string`).
 enum MessagesBubbleCopy {
     static let title = "복사"
 
     @MainActor
     static func copy(_ body: String) {
         UIPasteboard.general.string = body
+    }
+}
+
+/// 말풍선 링크를 여는 **한 문**(손가락 누름 · 보이스오버 동작). 스킴 검사(`MessagesBubbleMarkdown.follow` → `ChatMarkdown.isOpenable`)를
+/// 지난 http·https 만 시스템에 넘긴다 — 기본 브라우저(유니버설 링크면 그 앱)가 연다.
+@MainActor
+enum MessagesBubbleLinkDoor {
+    static func open(_ url: URL) {
+        MessagesBubbleMarkdown.follow(url) { UIApplication.shared.open($0) }
+    }
+}
+
+/// 링크 누름 인식기의 대리자 — **링크 글자 위에서만** 누름을 시작시킨다. 그 밖의 누름은 인식기가 아예 시작하지 않아
+/// 스크롤 · 길게 누르기(말풍선 메뉴) · 다른 손짓이 예전 그대로다.
+///
+/// ★ 말풍선 뷰의 `UIView.gestureRecognizerShouldBegin(_:)` 를 재정의하지 않는다 — 그 메서드는 이 뷰를 지나는 **다른 인식기**(바깥 스크롤
+///   끌기 · 길게 누름 메뉴)에도 불릴 수 있어, 링크 밖에서 false 를 주면 말풍선 위 스크롤 · 메뉴까지 막힐 수 있다. 이 인식기 하나만 따로 묻는다.
+@MainActor
+final class MessagesBubbleLinkTapGate: NSObject, UIGestureRecognizerDelegate {
+    weak var bubble: MessagesBubbleTextUIView?
+
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let bubble else { return false }
+        return bubble.link(at: gestureRecognizer.location(in: bubble)) != nil
     }
 }
 
@@ -551,6 +589,9 @@ private struct MessagesStickerBubble: View {
 
 /// 말풍선 본문 글자 — **한글 어절 단위로 줄을 바꾼다**. SwiftUI `Text` · `UILabel` 은 음절 사이에서 끊어 TextKit 으로 재고 그린다
 /// (까닭과 실측은 `MessagesBubbleTextLayout`). 글자 크기는 SwiftUI 의 `dynamicTypeSize` 를, 색은 테마(외관별 UIColor)를 따른다.
+///
+/// 1.0.17: 서식(제목 · 굵게 · 링크 + 호스트 꼬리표 — 대표 결정 "제목·굵게·링크만")을 그린다. 무엇을 그리는가는 코어 조각(맥과 한 벌),
+/// 폰 글꼴 · 색은 `MessagesBubbleMarkdown` 이 입힌다. `text` 는 이모티콘 폴백을 지난 본문이다(마크다운 해석은 그 뒤 — 맥과 같은 순서).
 private struct MessagesBubbleLabel: UIViewRepresentable {
     let text: String
     let isMine: Bool
@@ -560,16 +601,11 @@ private struct MessagesBubbleLabel: UIViewRepresentable {
     }
 
     func updateUIView(_ view: MessagesBubbleTextUIView, context: Context) {
-        let font = UIFont.preferredFont(
-            forTextStyle: .callout,
-            compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(context.environment.dynamicTypeSize))
-        )
-        let color = MobileTheme.uiColor(isMine ? MobileThemePalette.onAccentFill : MobileThemePalette.label)
-        view.set(NSAttributedString(string: text, attributes: [
-            .font: font,
-            .foregroundColor: color,
-            .paragraphStyle: MessagesBubbleTextLayout.paragraphStyle(),
-        ]))
+        view.set(MessagesBubbleMarkdown.attributed(
+            text,
+            fonts: MessagesBubbleMarkdown.fonts(for: context.environment.dynamicTypeSize),
+            colors: MessagesBubbleMarkdown.colors(isMine: isMine)
+        ))
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView view: MessagesBubbleTextUIView, context: Context) -> CGSize? {
@@ -578,8 +614,14 @@ private struct MessagesBubbleLabel: UIViewRepresentable {
 }
 
 /// TextKit 으로 그리는 글 칸(말풍선 본문 전용). 보이스오버는 줄 전체 라벨이 읽는다(이 칸은 요소가 아니다).
+///
+/// 링크는 **한 번 눌러** 연다(1.0.17 · 대표 요청 "링크같은건 클릭해서 실제 해당 링크로 브라우저 열리게"). 누름 인식기는 링크 글자 위에서만
+/// 시작한다(`MessagesBubbleLinkTapGate`) — 그 밖의 누름 · 스크롤 · 길게 누르기는 예전 그대로 지나간다. 링크를 **길게** 누르면
+/// 웹 미리보기가 아니라 말풍선 메뉴([복사] · [신고])가 뜬다: 이 칸은 `UITextView` 가 아니라 링크 미리보기가 없고, 길게 누르기는 바깥
+/// `.contextMenu` 몫이다.
 final class MessagesBubbleTextUIView: UIView {
     let engine = MessagesBubbleTextLayout.Engine()
+    private let linkTapGate = MessagesBubbleLinkTapGate()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -591,6 +633,20 @@ final class MessagesBubbleTextUIView: UIView {
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: MessagesBubbleTextUIView, _: UITraitCollection) in
             view.setNeedsDisplay()
         }
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tappedLink(_:)))
+        linkTapGate.bubble = self
+        tap.delegate = linkTapGate
+        addGestureRecognizer(tap)
+    }
+
+    /// 이 칸의 `point`(뷰 좌표 = 글을 그린 좌표)에 있는 링크. 그린 폭 그대로 배치해 잰다.
+    func link(at point: CGPoint) -> URL? {
+        engine.link(at: point, width: bounds.width)
+    }
+
+    @objc private func tappedLink(_ recognizer: UITapGestureRecognizer) {
+        guard recognizer.state == .ended, let url = link(at: recognizer.location(in: self)) else { return }
+        MessagesBubbleLinkDoor.open(url)
     }
 
     @available(*, unavailable)
@@ -630,7 +686,8 @@ struct MessagesPendingBubbleRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("나: \(AingStickerText.preview(for: item.body)), " + (item.state == .sending ? "보내는 중" : "보냄")))
+        // 줄 라벨은 서식 기호를 벗겨 읽는다(위 말풍선 줄 라벨과 같은 함수).
+        .accessibilityLabel(Text("나: \(ChatMarkdown.plainPreview(item.body)), " + (item.state == .sending ? "보내는 중" : "보냄")))
     }
 }
 #endif

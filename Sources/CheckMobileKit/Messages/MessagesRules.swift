@@ -656,8 +656,11 @@ package enum MessagesListRules {
     /// ⚠️ **순서가 거꾸로면 안 된다.** 판정(`AingSticker.parse`)은 `MessageBody.sanitized` 를 거친 **원문**을
     ///    봐야 한다 — 접힌 글자를 넘기면 공백·줄바꿈이 섞인 본문이 판정 앞에서 이미 달라져 있다. 토큰 안에는
     ///    공백이 없어 지금은 값이 같지만, 값이 같다는 사실로 순서를 정하면 다음 토큰이 그 사실을 깬다.
+    ///
+    /// 1.0.17: 서식 기호(`## ` · `**` · `[글](주소)`)도 벗긴다 — `ChatMarkdown.plainPreview`(맥 한 줄 자리와 같은 함수). 그 함수가
+    /// 이모티콘 규칙을 **먼저** 거치므로 위 순서는 그대로다. 접기는 그 뒤에 한다(줄 안의 연속 공백 · 탭까지 한 칸).
     package static func preview(_ body: String) -> String {
-        AingStickerText.preview(for: body)
+        ChatMarkdown.plainPreview(body)
             .split(whereSeparator: { $0.isWhitespace || $0.isNewline })
             .joined(separator: " ")
     }

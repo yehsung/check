@@ -127,7 +127,9 @@ private struct MegaphoneBannerCard: View {
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
             }
-            Text(banner.body)
+            // 서식 기호 · 이모티콘 토큰을 벗긴 글(1.0.17 — 맥 배너와 같은 `ChatMarkdown.plainPreview`). 링크는 누를 수 없는 글자다(맥과 같다).
+            // 보이스오버 라벨(아래)도 같은 함수를 지난다.
+            Text(MegaphoneBannerPhoneText.shownBody(banner.body))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(MobileTheme.label)
                 .lineLimit(MegaphoneBannerPhoneRules.bodyLineLimit)

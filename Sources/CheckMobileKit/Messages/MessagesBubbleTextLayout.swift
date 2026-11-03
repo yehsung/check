@@ -17,6 +17,9 @@ import AppKit
 /// "오후에 디자인 리뷰 10 / 분만 가능할까요?"처럼 숫자와 한글 사이를 끊었다(TextKit 실측 · 폭 180~240pt 모두).
 /// `hangulWordPriority` 는 **한글과 한글 사이**만 막는다 — "봤어요! 2 / 번이"처럼 숫자·기호와 한글 사이는 여전히 끊겨서,
 /// 배치 대리자가 "한글이 든 어절 안"의 끊기를 한 번 더 거른다(`allowsWordBreak`). 폭보다 긴 어절은 TextKit 이 글자 단위로 접는다.
+///
+/// 1.0.17: 글은 서식(제목 · 굵게 · 링크 — `MessagesBubbleMarkdown.attributed`)째 들어온다. 글꼴이 섞여도 재기 · 줄바꿈은 이 엔진 그대로이고,
+/// 링크 누름 판정(`Engine.link(at:width:)`)도 그린 배치 그대로 잰다.
 package enum MessagesBubbleTextLayout {
     package static let lineBreakStrategy: NSParagraphStyle.LineBreakStrategy = [.hangulWordPriority]
 
@@ -106,6 +109,25 @@ package enum MessagesBubbleTextLayout {
             let size = CGSize(width: max(width, 1), height: .greatestFiniteMagnitude)
             if container.size != size { container.size = size }
             layoutManager.ensureLayout(for: container)
+        }
+
+        /// 손가락 오차(pt). 누른 자리에서 가장 가까운 글자의 상자를 이만큼 넓혀 본다 — 줄 끝 너머 멀리 · 빈 곳은 여전히 아니다.
+        package static let touchSlop: CGFloat = 4
+
+        /// 폭 `width` 로 배치한 글에서 `point`(글 칸 좌표 — 말풍선 본문 뷰가 그리는 자리 그대로)를 누르면 열 링크.
+        /// 판정: 누른 자리에서 가장 가까운 글자 → 그 글자 상자(+`touchSlop`) 안인가 → 그 글자의 `MessagesBubbleMarkdown.linkKey`.
+        /// 링크 글자 위가 아니면 nil — 호스트 꼬리표(링크가 아니다) · 평범한 글자 · 줄 끝 너머 · 글 아래 빈 곳.
+        /// 여는 것은 이 값이 아니라 `MessagesBubbleMarkdown.follow` 를 지난 값이다(스킴 검사 두 겹).
+        package func link(at point: CGPoint, width: CGFloat) -> URL? {
+            layout(width: width)
+            guard storage.length > 0, layoutManager.numberOfGlyphs > 0 else { return nil }
+            var fraction: CGFloat = 0
+            let glyph = layoutManager.glyphIndex(for: point, in: container, fractionOfDistanceThroughGlyph: &fraction)
+            let box = layoutManager.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container)
+            guard box.insetBy(dx: -Self.touchSlop, dy: -Self.touchSlop).contains(point) else { return nil }
+            let character = layoutManager.characterIndexForGlyph(at: glyph)
+            guard character < storage.length else { return nil }
+            return storage.attribute(MessagesBubbleMarkdown.linkKey, at: character, effectiveRange: nil) as? URL
         }
     }
 }

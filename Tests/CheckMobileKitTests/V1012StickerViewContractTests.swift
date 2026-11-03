@@ -48,17 +48,22 @@ import Testing
 
     // MARK: - 2. 보이스오버는 이름으로 읽는다
 
+    /// 1.0.17: 줄 라벨은 `ChatMarkdown.plainPreview` 를 지난다 — 그 함수가 이모티콘 규칙(`AingStickerText.preview`)을 **먼저** 거친 뒤
+    /// 서식 기호까지 벗긴다(값은 V1017ChatMarkdownMobileTests 가 토큰마다 잰다).
     @Test("줄 보이스오버는 이모티콘을 이름으로 읽는다(날것 토큰이 아니다)")
     func rowAccessibilityReadsName() throws {
         let code = try Self.conversation()
         let ax = try Self.block(of: "private var accessibilityText", in: code)
-        #expect(ax.contains("AingStickerText.preview(for: entry.body)"),
+        #expect(ax.contains("ChatMarkdown.plainPreview(entry.body)"),
                 "줄 라벨이 본문을 날것으로 읽는다 — 그림 안에 구운 라벨은 children: .ignore 에 묻힌다")
         #expect(!ax.contains("+ entry.body"), "줄 라벨이 아직 본문을 날것으로 잇는다")
 
         let pending = try Self.block(of: "struct MessagesPendingBubbleRow", in: code)
-        #expect(pending.contains("AingStickerText.preview(for: item.body)"), "자리 말풍선 라벨이 날것이다")
+        #expect(pending.contains(#"\(ChatMarkdown.plainPreview(item.body))"#), "자리 말풍선 라벨이 날것이다")
         #expect(!pending.contains(#"\(item.body)"#), "자리 말풍선 라벨이 아직 본문을 날것으로 끼운다")
+        for sticker in AingSticker.allCases {
+            #expect(ChatMarkdown.plainPreview(sticker.token) == "아잉이 \(sticker.label)", "줄 라벨 함수가 이모티콘 규칙을 안 거친다")
+        }
     }
 
     // MARK: - 3. 복사는 원문이다
@@ -106,12 +111,14 @@ import Testing
 
     // MARK: - 5·6. 신고: 보는 글자와 보내는 글자
 
+    /// 1.0.17: 인용은 `ChatMarkdown.plainPreview`(이모티콘 규칙을 먼저 거친 뒤 서식 기호까지 벗긴다 — 맥 신고 인용과 같은 함수).
     @Test("신고 시트 인용은 이름으로 읽힌다(사람이 보는 자리)")
     func reportQuoteReadsName() throws {
         let sheets = try Self.code("Sources/CheckMobileKit/Messages/MessagesBlockSheets.swift")
         let quoted = try Self.block(of: "private func quotedMessage(", in: sheets)
-        #expect(quoted.contains("Text(AingStickerText.preview(for: body))"),
+        #expect(quoted.contains("Text(ChatMarkdown.plainPreview(body))"),
                 "신고 인용이 날것 토큰이다 — 신고하는 사람에게 '깨진 메시지'로 보인다")
+        #expect(!quoted.contains("Text(body)"))
     }
 
     @Test("서버로 가는 신고 본문은 원문 그대로다(운영자가 날것을 본다)")

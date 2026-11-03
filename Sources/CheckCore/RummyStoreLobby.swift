@@ -8,6 +8,7 @@ extension RummyStore {
 
     /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(합치기 — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
     /// 앞 조회는 그 뒤에 생긴 초대를 모르므로, 그 사이 온 초인종을 버리면 배너·말풍선이 다음 계기까지 안 뜬다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffLobby`).
     package func refreshLobby() async {
         guard host?.session != nil else { return }
         if lobbyInFlight {
@@ -16,12 +17,23 @@ extension RummyStore {
         }
         lobbyInFlight = true
         let generation = resetGeneration
+        let sessionGeneration = host?.sessionGeneration
+        // 넘기기는 비구조 Task 를 만들 뿐이라, 넘겨받은 조회는 이 함수가 돌아오고 아래 `lobbyInFlight` 내리기까지 끝난 **뒤에** 돈다
+        //   (MainActor). 그래서 두 defer 의 선언 순서와 무관하다 — 넘겨받은 조회가 "도는 중" 에 막히는 일은 없다.
+        var handOff = false
+        defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
         repeat {
             lobbyAgain = false
             lastLobbyRequestAt = clock()
             let revision = matchRevision
-            guard let result = await perform({ try await $0.rummyLobby(accessToken: $1) }) else { return }
+            guard let result = await perform({ try await $0.rummyLobby(accessToken: $1) }) else {
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 더 읽을 수 없다. 합쳐진 부름이 있으면 넘긴다.
+                handOff = Task.isCancelled && (owed || lobbyAgain)
+                return
+            }
             switch result {
             case .success(let response):
                 await applyLobby(response, revision: revision)
@@ -34,7 +46,21 @@ extension RummyStore {
                     if !lobbyLoadFailed { lobbyLoadFailed = true }
                 }
             }
+            owed = true
         } while lobbyAgain && generation == resetGeneration
+    }
+
+    /// 로비를 **나르던 작업 자체**가 취소돼(폰 `.refreshable` · 화면을 떠남 — 구조적 작업이라 `outsidePolling` 이 못 지킨다) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(초대 초인종 · 겹친 계기)이 남았다 —
+    /// 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2 · 체스와 같은 수리).
+    /// 로그아웃(세대 · 세션 세대가 바뀜) 뒤에는 내지 않는다. 그 사이 다른 로비 조회가 이미 돌기 시작했으면 그것이 이 부름보다 나중에
+    /// 나간 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다(무한 반복 없음).
+    func handOffLobby(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.lobbyInFlight else { return }
+            await self.refreshLobby()
+        }
     }
 
     /// 로비 응답을 옮긴다. `revision` 은 그 요청을 낼 때의 `matchRevision` 이다(nil = 지금 것).

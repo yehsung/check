@@ -824,7 +824,7 @@ package final class GomokuStore {
     @ObservationIgnored package var dismissWindow: (@MainActor () -> Void)?
     /// 판이 막 시작됐다 — 앱이 앞에 없으면 사용자의 주의를 끈다(CheckApp 이 NSApp.requestUserAttention 으로 잇는다).
     @ObservationIgnored package var requestAttention: (@MainActor () -> Void)?
-    /// 창이 안 보이는 동안 차례가 나에게 왔다(같은 판 id·기록 수에 한 번). CheckApp 이 캐릭터 말풍선으로 잇는다.
+    /// 창이 안 보이거나 가려진 동안 차례가 나에게 왔다(같은 판 id·기록 수에 한 번). CheckApp 이 캐릭터 말풍선으로 잇는다.
     @ObservationIgnored package var onAttention: (@MainActor (GomokuAttention) -> Void)?
     /// v0.3.64: 내 1:1 판이 끝난 것을 **처음 본** 순간(결과를 받은 순간) 한 번 부른다 — 같은 판을 다시 받아도(폴링 · 받은함) 또 안 부른다.
     /// 맥은 여기서 일일 미션 진행을 한 번 묻는다(새 타이머 없이 이벤트로 — WorkTimerStoreAchievements.swift). AI 판은 부르지 않는다
@@ -843,7 +843,8 @@ package final class GomokuStore {
     @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored package private(set) var resetGeneration = 0
     /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다(창 컨트롤러의 가림 통지).
-    /// **폴링만** 이 값을 본다 — 시계 잎 뷰·말풍선 판정은 `isWindowVisible` 그대로다(가림 통지가 틀려도 보이는 창의 시계는 돈다).
+    /// **폴링과 말풍선 문**(`applyState` 의 `windowWasVisible`)이 이 값을 본다 — 시계 잎 뷰는 `isWindowVisible` 그대로다
+    /// (가림 통지가 틀려도 보이는 창의 시계는 돈다). 말풍선 문이 보는 까닭: 가려진 창은 화면이 말하지 못하고 폴링도 멈춰 있다.
     @ObservationIgnored package private(set) var isWindowOccluded = false
     /// 지금 조회 중인 판 id 와, 그 사이 다른 판으로 들어온 조회 요청(마지막 것 하나).
     @ObservationIgnored package private(set) var stateInFlightID: String?
@@ -878,6 +879,9 @@ package final class GomokuStore {
     @ObservationIgnored private var inboxInFlight = false
     @ObservationIgnored private var inboxAgain = false
     @ObservationIgnored private var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(큐브 `RummyStoreLobby` · `inboxAgain` 과 같은 꼴).
+    /// 버리면 겹친 계기(판 끝 전적 재조회 · [로비로] · 관전 나가기 · 창 열기)가 빠져 전적·대결 중 목록·진행 판 id 가 다음 30초까지 옛것이다.
+    @ObservationIgnored private var lobbyAgain = false
     @ObservationIgnored package var lastStateRequestAt: Date = .distantPast
     @ObservationIgnored package var lastInboxRequestAt: Date = .distantPast
     @ObservationIgnored package var lastLobbyRequestAt: Date = .distantPast
@@ -930,9 +934,12 @@ package final class GomokuStore {
 
     /// 창이 실제로 보이기 시작했다(컨트롤러가 부른다). 폴링 시작·로비/인박스 재조회.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다**. 창이 정말 앞으로 오면
+        // 가림 통지(visible)가 와서 풀고, 못 오면(다른 전체 화면 앱 위로 못 올라옴) 가린 채로 남아야 시작 · 차례 말풍선이 산다.
+        // 숨겼다가 다시 여는 길은 `windowDidHide` 가 이미 지웠으므로(아래 그대로) 낡은 가림 기록이 폴링을 막지 않는다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다. 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다(가려지면 통지가 다시 온다).
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }
@@ -982,7 +989,8 @@ package final class GomokuStore {
         if match?.isFinished == true { foldFinishedMatch() }
     }
 
-    /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). **폴링만** 멈추고 되살린다.
+    /// 창의 가림 상태가 바뀌었다(다른 창 뒤·다른 Space·잠금 화면). 폴링을 멈추고 되살린다 — 가려진 동안은 말풍선 문도 열린다
+    /// (`applyState` 의 `windowWasVisible` · 오버레이 `gomokuAttentionIsCurrent` 가 이 값을 본다).
     /// `isWindowVisible` 은 건드리지 않는다 — 가림 통지가 틀려도 보이는 창의 시계가 멈추면 안 된다.
     /// 실시간 신호(handleSignal)는 이 값과 무관하게 계속 받는다.
     package func windowOcclusionDidChange(visible: Bool) {
@@ -998,20 +1006,56 @@ package final class GomokuStore {
 
     // MARK: - 조회
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `loadInbox` 의 `inboxAgain` 과 같은 꼴).
+    /// 오목의 초인종은 받은함으로 가지만(`syncOnce`), 로비를 부르는 다른 계기가 도는 로비와 겹치면 그 계기가 통째로 빠졌다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffLobby` — 받은함은 `handOffInbox`).
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
+        let sessionGeneration = host?.sessionGeneration
+        // 넘기기는 비구조 Task 를 만들 뿐이라, 넘겨받은 조회는 이 함수가 돌아오고 아래 `lobbyInFlight` 내리기까지 끝난 **뒤에** 돈다
+        //   (MainActor). 그래서 두 defer 의 선언 순서와 무관하다 — 넘겨받은 조회가 "도는 중" 에 막히는 일은 없다.
+        var handOff = false
+        defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        guard let result = await perform({ try await $0.gomokuLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            applyLobby(response)
-        case .failure:
-            Self.logger.notice("lobby request failed")
-            // 빈 목록을 "대결할 사람이 없다"로 믿게 하지 않는다 — 화면이 연결 안내와 [다시 불러오기]를 그린다.
-            if !lobbyLoadFailed { lobbyLoadFailed = true }
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
+        repeat {
+            // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 부름을 지우지 않게(requestSync 와 같은 규약).
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            guard let result = await perform({ try await $0.gomokuLobby(accessToken: $1) }) else {
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 더 읽을 수 없다. 합쳐진 부름이 있으면 넘긴다.
+                handOff = Task.isCancelled && (owed || lobbyAgain)
+                return
+            }
+            switch result {
+            case .success(let response):
+                applyLobby(response)
+            case .failure:
+                Self.logger.notice("lobby request failed")
+                // 빈 목록을 "대결할 사람이 없다"로 믿게 하지 않는다 — 화면이 연결 안내와 [다시 불러오기]를 그린다.
+                if !lobbyLoadFailed { lobbyLoadFailed = true }
+            }
+            owed = true
+        } while lobbyAgain && generation == resetGeneration
+    }
+
+    /// 로비를 **나르던 작업 자체**가 취소돼(폰 `.refreshable` · 화면을 떠남 — 구조적 작업이라 `outsidePolling` 이 못 지킨다) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(판 끝 전적 재조회 · [로비로] · 관전 나가기 · 창 열기)이 남았다 —
+    /// 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2 · 체스와 같은 수리).
+    /// 로그아웃(세대 · 세션 세대가 바뀜) 뒤에는 내지 않는다. 그 사이 다른 로비 조회가 이미 돌기 시작했으면 그것이 이 부름보다 나중에
+    /// 나간 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다(무한 반복 없음).
+    private func handOffLobby(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.lobbyInFlight else { return }
+            await self.refreshLobby()
         }
     }
 
@@ -1053,6 +1097,7 @@ package final class GomokuStore {
 
     /// 받은·보낸 신청과 진행 중 대국 id 를 읽는다. 도는 중에 또 불리면 **뒤따르는 한 번으로 합친다** —
     /// 버리면 조회가 나간 뒤 도착한 신호(신청·수락)가 다음 계기까지 화면에 안 온다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffInbox` — 오목의 초인종은 여기로 온다).
     package func loadInbox() async {
         guard host?.session != nil else { return }
         if inboxInFlight {
@@ -1061,7 +1106,11 @@ package final class GomokuStore {
         }
         inboxInFlight = true
         let generation = resetGeneration
-        repeat {
+        let sessionGeneration = host?.sessionGeneration
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
+        var handOff = false
+        reading: repeat {
             inboxAgain = false
             lastInboxRequestAt = clock()
             inboxRequestOutgoingRevision = outgoingRevision
@@ -1075,10 +1124,30 @@ package final class GomokuStore {
                 Self.logger.notice("inbox request failed")
                 if !inboxLoadFailed { inboxLoadFailed = true }
             case nil:
-                break
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 다음 조회도 곧바로 취소로 접힌다.
+                // 합쳐진 부름(수락 초인종 등)이 있으면 취소 밖으로 넘기고 빠진다.
+                if Task.isCancelled {
+                    handOff = owed || inboxAgain
+                    break reading
+                }
             }
+            owed = true
         } while inboxAgain
         inboxInFlight = false
+        // 넘기기는 비구조 Task 를 만들 뿐이라 넘겨받은 조회는 이 함수가 돌아온 뒤에 돈다(MainActor) — 줄 순서는 읽기 쉽게 둔 것이다.
+        if handOff { handOffInbox(generation: generation, sessionGeneration: sessionGeneration) }
+    }
+
+    /// 받은함을 **나르던 작업 자체**가 취소돼(폰 오목 화면 · 게임 탭의 `.refreshable` — `outsidePolling` 이 못 지키는 구조적 작업) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(신청·수락 초인종)이 남았다 — 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2 와 같은 갈래:
+    /// 버리면 창이 없는 흑 신청자는 수락을 모른 채 30초 뒤 첫 수를 자동 착수당한다). 로그아웃 뒤에는 내지 않고, 그 사이 다른 받은함
+    /// 조회가 돌기 시작했으면 그것이 더 나중 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다.
+    private func handOffInbox(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.inboxInFlight else { return }
+            await self.loadInbox()
+        }
     }
 
     package func applyInbox(_ response: GomokuInboxResponse) async {
@@ -1387,7 +1456,10 @@ package final class GomokuStore {
         )
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 아잉 뒤집기 V2-01 과 같은 결함). 열린 채 가려진 창(다른 전체 화면 앱 ·
+        // 다른 스페이스)은 화면이 말하지 못하고 폴링도 멈춰 있어, 초인종이 세운 내 차례를 알릴 길이 말풍선뿐이다(30초 자동 착수 ·
+        // 세 번이면 판돈 패). 시계 잎 뷰 · AI 시계 · 폴링은 그대로 `isWindowVisible` 을 본다.
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         if match != next { match = next }
         // 내 판을 보고 있는 사람 수(서버 `gomoku__state` 의 한 칸). **`match` 대입 뒤**에 세운다 —
         // 그 didSet 이 판이 바뀌는 길목에서 0 으로 되돌리므로 앞에 두면 방금 받은 값이 지워진다.
@@ -1836,11 +1908,23 @@ package final class GomokuStore {
         pollTask = nil
     }
 
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
+    /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`inboxAgain`·`stateAgain`·`lobbyAgain`)까지 같이 죽는다 — 창을 닫은
+    /// 신청자가 수락을 모른 채 흑이면 첫 수를 자동 착수당한다(아잉 뒤집기 V2-03 과 같은 수리). 폴링은 멈추고 날던 조회만 끝까지 간다
+    /// (로그아웃은 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드(창 보임 · 안 가림 · 폴링 작업 안 취소)가 막는다(VR-04).
+    private func outsidePolling(_ body: @escaping @MainActor (GomokuStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
     ///  · 진행 중 판이 상대 차례면(또는 표시 마감 + 유예가 지났으면) 구독 중 10초(마감 10초 안쪽은 3초) / 미구독 1.5초마다 상태.
     ///  · 결과 화면의 끝난 판이면 끝난 뒤 130초 동안 구독 중 10초 / 미구독 5초마다 상태(상대의 끝인사 — 내가 껐으면 안 돈다).
     ///  · 내 대기 신청이 있으면 5초마다 인박스(수락·거절·만료를 본다).
     ///  · 로비를 보고 있으면 30초마다 목록.
+    /// 조회는 `outsidePolling` 으로 낸다. **걸음 사이사이 창 보임 · 가림 · 취소를 다시 본다** — await 중에 창이 내려가거나 가려질 수 있다.
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let current = match, !current.isFinished, !isAIMatch {
@@ -1850,7 +1934,8 @@ package final class GomokuStore {
                 let subscribed = host?.realtimeState.isSubscribed ?? false
                 let interval = Self.statePollSeconds(subscribed: subscribed, deadline: current.deadline, now: now)
                 if now.timeIntervalSince(lastStateRequestAt) >= interval {
-                    await refreshMatch(id: current.id)
+                    let id = current.id
+                    await outsidePolling { await $0.refreshMatch(id: id) }
                 }
             }
         } else if let farewellID = farewellMatchID(at: now) {
@@ -1860,19 +1945,19 @@ package final class GomokuStore {
             let interval = subscribed
                 ? Self.finishedChatPollSecondsWhileSubscribed : Self.finishedChatPollSecondsUnsubscribed
             if now.timeIntervalSince(lastStateRequestAt) >= interval {
-                await refreshMatch(id: farewellID)
+                await outsidePolling { await $0.refreshMatch(id: farewellID) }
             }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if outgoing != nil, now.timeIntervalSince(lastInboxRequestAt) >= Self.outgoingInboxPollSeconds {
-            await loadInbox()
+            await outsidePolling { await $0.loadInbox() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
         // 관전·순위(0.3.41): 관전 중이면 2초마다 판, 로비면 60초마다 순위. 주 스위치·가림·세션·화면은 확장이 본다(GomokuStoreWatch.swift).
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         await pollSpectatorFeatures(at: now)
     }
 
@@ -1906,6 +1991,7 @@ package final class GomokuStore {
         inboxInFlight = false
         inboxAgain = false
         lobbyInFlight = false
+        lobbyAgain = false
         if phase != .lobby { phase = .lobby }
         if !users.isEmpty { users = [] }
         if record != nil { record = nil }
@@ -2300,7 +2386,7 @@ package final class GomokuStore {
     ///    들고 있다 — 사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`place`) 그 기기도 연 기기가 된다.
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가 수락한
     ///    순간을 모르면 흑 30초를 흘려 판돈을 잃는다. 내가 수락해 연 판도 같은 문을 지난다(경로마다 따로 두지 않는다).
-    ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문(onAttention)을 연다. 같은 (판 id, 기록 수)에는 한 번뿐이다.
+    ///  · 창이 안 보이거나 가려진 동안 차례가 나에게 오면 말풍선 문(onAttention)을 연다. 같은 (판 id, 기록 수)에는 한 번뿐이다.
     private func noteMatchProgress(previous: GomokuMatchState?, next: GomokuMatchState, windowWasVisible: Bool) {
         guard ownsMatch(next.id) else { return }
         let started = previous == nil || previous?.isFinished == true || previous?.id != next.id

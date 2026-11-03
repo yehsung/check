@@ -808,13 +808,17 @@ package final class ChessStore {
     @ObservationIgnored package private(set) var serverClockOffset: TimeInterval = 0
     @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored package private(set) var resetGeneration = 0
-    /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다. **폴링만** 이 값을 본다.
+    /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다. **폴링과 말풍선 문**(`applyState` 의 `windowWasVisible`)이
+    /// 이 값을 본다 — 시계 잎 뷰는 `isWindowVisible` 그대로다.
     @ObservationIgnored package private(set) var isWindowOccluded = false
     @ObservationIgnored package private(set) var stateInFlightID: String?
     @ObservationIgnored private var pendingStateID: String?
     @ObservationIgnored private var stateInFlight = false
     @ObservationIgnored private var stateAgain = false
     @ObservationIgnored private var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(큐브 `RummyStoreLobby` 꼴). 체스는 신청·수락 초인종이 곧
+    /// 로비 조회라(`syncOnce`), 버리면 받은 신청 카드·메뉴바 점·말풍선이 다음 계기(30초 폴링·팝오버)까지 안 선다.
+    @ObservationIgnored private var lobbyAgain = false
     /// 마지막으로 "내 차례가 왔다" 를 본 (판 id#ply). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
     @ObservationIgnored private var attentionKey: String?
     /// **이 기기가 연 판** 장부(한 계정 여러 기기 — `GameDeviceLedger` 머리말 · 오목과 같은 규칙). 창 띄우기 · 주의 · 말풍선은
@@ -887,9 +891,12 @@ package final class ChessStore {
 
     /// 창이 실제로 보이기 시작했다. 폴링 시작 · 로비 재조회 · AI 시계 재개.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다** — 오목과 같은 규칙.
+        // 창이 정말 앞으로 오면 가림 통지(visible)가 풀고, 못 오면 가린 채로 남아야 말풍선이 산다. 숨겼다 다시 여는 길은
+        // `windowDidHide` 가 이미 지웠다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다 — 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다.
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }
@@ -965,26 +972,62 @@ package final class ChessStore {
 
     // MARK: - 조회
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
+    /// 앞 조회는 그 뒤에 생긴 신청·수락을 모른다 — 합친 한 바퀴에는 신청·진행 판 꼬리(`applyLobby` 의 `refreshMatch`)까지 들어간다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffLobby`).
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
+        let sessionGeneration = host?.sessionGeneration
+        // 넘기기는 비구조 Task 를 만들 뿐이라, 넘겨받은 조회는 이 함수가 돌아오고 아래 `lobbyInFlight` 내리기까지 끝난 **뒤에** 돈다
+        //   (MainActor). 그래서 두 defer 의 선언 순서와 무관하다 — 넘겨받은 조회가 "도는 중" 에 막히는 일은 없다.
+        var handOff = false
+        defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        lobbyRequestOutgoingRevision = outgoingRevision
-        guard let result = await perform({ try await $0.chessLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            await applyLobby(response)
-        case .failure(let error):
-            if isSchemaMissing(error) {
-                Self.logger.notice("lobby unavailable — chess functions missing on server")
-                setNotice(ChessNoticeText.unavailable)
-            } else {
-                Self.logger.notice("lobby request failed")
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
+        repeat {
+            // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 초인종을 지우지 않게(requestSync 와 같은 규약).
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            lobbyRequestOutgoingRevision = outgoingRevision
+            guard let result = await perform({ try await $0.chessLobby(accessToken: $1) }) else {
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 더 읽을 수 없다. 합쳐진 부름이 있으면 넘긴다.
+                handOff = Task.isCancelled && (owed || lobbyAgain)
+                return
             }
-            // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
-            if !lobbyLoadFailed { lobbyLoadFailed = true }
+            switch result {
+            case .success(let response):
+                await applyLobby(response)
+            case .failure(let error):
+                if isSchemaMissing(error) {
+                    Self.logger.notice("lobby unavailable — chess functions missing on server")
+                    setNotice(ChessNoticeText.unavailable)
+                } else {
+                    Self.logger.notice("lobby request failed")
+                }
+                // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
+                if !lobbyLoadFailed { lobbyLoadFailed = true }
+            }
+            owed = true
+        } while lobbyAgain && generation == resetGeneration
+    }
+
+    /// 로비를 **나르던 작업 자체**가 취소돼(폰 `.refreshable` · 화면을 떠남 — 구조적 작업이라 `outsidePolling` 이 못 지킨다) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(신청·수락 초인종 · 겹친 계기)이 남았다 — 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2:
+    /// 당겨서 새로고침 중 화면을 떠나면 받은 신청 초인종이 같이 죽어 카드·메뉴바 점·말풍선이 다음 계기까지 안 섰다).
+    /// 로그아웃(세대 · 세션 세대가 바뀜) 뒤에는 내지 않는다. 그 사이 다른 로비 조회가 이미 돌기 시작했으면 그것이 이 부름보다 나중에
+    /// 나간 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다(무한 반복 없음).
+    private func handOffLobby(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.lobbyInFlight else { return }
+            await self.refreshLobby()
         }
     }
 
@@ -1232,7 +1275,10 @@ package final class ChessStore {
 
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 오목과 같은 수리). 열린 채 가려진 창(다른 전체 화면 앱 ·
+        // 다른 스페이스)은 화면이 말하지 못하고 폴링도 멈춰 있어, 초인종이 세운 내 차례를 알릴 길이 말풍선뿐이다.
+        // 시계 잎 뷰 · AI 시계 · 날던 수(`beginFlight`)는 이 값과 무관하다.
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
         if incoming?.id == id { incoming = nil }
         if outgoing?.id == id { outgoing = nil }
@@ -1975,13 +2021,24 @@ package final class ChessStore {
         pollTask = nil
     }
 
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
+    /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`lobbyAgain`·`stateAgain`)까지 같이 죽는다 — 창도 폴링도 없는 사람이
+    /// 받은 신청·상대 수를 모른 채 시계가 흐른다(아잉 뒤집기 V2-03 과 같은 수리). 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은
+    /// 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드(창 보임 · 안 가림 · 폴링 작업 안 취소)가 막는다(VR-04).
+    private func outsidePolling(_ body: @escaping @MainActor (ChessStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다**(규약 ③).
     ///  · 진행 중 내 판이 상대 차례거나 깃발+유예가 지났으면 `statePollSeconds` 마다 상태
     ///  · 보낸 신청이 있으면 5초마다 그 판의 상태(수락·거절·만료를 한 조회가 다 말한다)
     ///  · 로비를 보고 있으면 30초마다 목록
     ///  · 관전 2초 / 순위 60초(확장이 주 스위치·가림을 본다)
     ///
-    /// **분기 사이사이 `isWindowVisible` 을 다시 본다** — await 중에 창이 내려갈 수 있다.
+    /// 조회는 `outsidePolling` 으로 낸다. **분기 사이사이 창 보임 · 가림 · 취소를 다시 본다** — await 중에 창이 내려가거나 가려질 수 있다.
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let current = match, !current.isFinished, !isAIMatch {
@@ -1990,19 +2047,21 @@ package final class ChessStore {
             if waiting || overdue {
                 let subscribed = host?.realtimeState.isSubscribed ?? false
                 if now.timeIntervalSince(lastStateRequestAt) >= Self.statePollSeconds(subscribed: subscribed) {
-                    await refreshMatch(id: current.id)
+                    let id = current.id
+                    await outsidePolling { await $0.refreshMatch(id: id) }
                 }
             }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if let sent = outgoing, now.timeIntervalSince(lastOutgoingRequestAt) >= Self.outgoingPollSeconds {
-            await refreshMatch(id: sent.id)
+            let id = sent.id
+            await outsidePolling { await $0.refreshMatch(id: id) }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         await pollSpectatorFeatures(at: now)
     }
 
@@ -2039,6 +2098,7 @@ package final class ChessStore {
         stateInFlight = false
         stateAgain = false
         lobbyInFlight = false
+        lobbyAgain = false
         stateInFlightID = nil
         pendingStateID = nil
         if phase != .lobby { phase = .lobby }
@@ -2246,7 +2306,7 @@ package final class ChessStore {
     /// 판 진행을 사람에게 알린다(진행 중 판을 옮긴 직후).
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가
     ///    수락한 순간을 모르면 10분 시계를 흘린다.
-    ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, ply) 에는 한 번뿐이다.
+    ///  · 창이 안 보이거나 가려진 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, ply) 에는 한 번뿐이다.
     ///  · **이 기기가 연 판에서만**(2026-11-03 — `GameDeviceLedger` 머리말 · 오목과 같은 규칙). 연 기기가 아니면 판 상태만 들고 있다 —
     ///    사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`send`) 그 기기도 연 기기가 된다.
     private func noteMatchProgress(previous: ChessMatchState?, next: ChessMatchState, windowWasVisible: Bool) {

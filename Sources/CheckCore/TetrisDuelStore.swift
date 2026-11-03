@@ -627,13 +627,16 @@ package final class TetrisDuelStore {
     @ObservationIgnored package private(set) var serverClockOffset: TimeInterval = 0
     @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored package private(set) var resetGeneration = 0
-    /// 창이 완전히 가려졌다. **폴링만** 이 값을 본다(판은 계속 흐른다).
+    /// 창이 완전히 가려졌다. **폴링과 시작 말풍선 문**(`applyState` 의 `windowWasVisible`)이 이 값을 본다(판은 계속 흐른다).
     @ObservationIgnored package private(set) var isWindowOccluded = false
     @ObservationIgnored package private(set) var stateInFlightID: String?
     @ObservationIgnored private var pendingStateID: String?
     @ObservationIgnored private var stateInFlight = false
     @ObservationIgnored private var stateAgain = false
     @ObservationIgnored private var lobbyInFlight = false
+    /// 로비 조회가 도는 중에 또 불렸다 — 끝난 뒤 **한 번 더** 읽는다(큐브 `RummyStoreLobby` 꼴). 판 밖의 신청·수락 초인종이 곧
+    /// 로비 조회라(`syncOnce`), 버리면 받은 신청 카드·메뉴바 점·말풍선이 다음 계기(30초 폴링·팝오버)까지 안 선다.
+    @ObservationIgnored private var lobbyAgain = false
     @ObservationIgnored var rankingInFlight = false
     /// 서버가 말한 내 진행 중 대결 id.
     @ObservationIgnored package private(set) var activeMatchID: String?
@@ -680,8 +683,11 @@ package final class TetrisDuelStore {
 
     /// 창이 실제로 보이기 시작했다. 폴링 시작 · 로비 재조회 · **준비 보고의 문이 열린다**(머리말 ⑨).
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다** — 오목과 같은 규칙.
+        // 창이 정말 앞으로 오면 가림 통지(visible)가 풀고, 못 오면 가린 채로 남아야 시작 말풍선이 산다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         startPolling()
         // 준비를 기다리던 판이면 지금 곧바로 낸다(다음 판 루프 걸음을 기다리지 않는다).
         if duel != nil { tick() }
@@ -715,7 +721,7 @@ package final class TetrisDuelStore {
         foldFinishedMatch()
     }
 
-    /// 창의 가림 상태가 바뀌었다. **폴링만** 멈추고 되살린다 — `isWindowVisible` 은 건드리지 않는다.
+    /// 창의 가림 상태가 바뀌었다. 폴링을 멈추고 되살린다(가려진 동안은 시작 말풍선 문도 열린다) — `isWindowVisible` 은 건드리지 않는다.
     package func windowOcclusionDidChange(visible: Bool) {
         isWindowOccluded = !visible
         if visible {
@@ -728,26 +734,62 @@ package final class TetrisDuelStore {
 
     // MARK: - 조회
 
+    /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
+    /// 앞 조회는 그 뒤에 생긴 신청·수락을 모른다 — 합친 한 바퀴에는 진행 판 꼬리(`applyLobby` 의 `refreshMatch`)까지 들어간다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffLobby`).
     package func refreshLobby() async {
-        guard host?.session != nil, !lobbyInFlight else { return }
+        guard host?.session != nil else { return }
+        if lobbyInFlight {
+            lobbyAgain = true
+            return
+        }
         lobbyInFlight = true
         let generation = resetGeneration
+        let sessionGeneration = host?.sessionGeneration
+        // 넘기기는 비구조 Task 를 만들 뿐이라, 넘겨받은 조회는 이 함수가 돌아오고 아래 `lobbyInFlight` 내리기까지 끝난 **뒤에** 돈다
+        //   (MainActor). 그래서 두 defer 의 선언 순서와 무관하다 — 넘겨받은 조회가 "도는 중" 에 막히는 일은 없다.
+        var handOff = false
+        defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
-        lastLobbyRequestAt = clock()
-        lobbyRequestOutgoingRevision = outgoingRevision
-        guard let result = await perform({ try await $0.tetrisLobby(accessToken: $1) }) else { return }
-        switch result {
-        case .success(let response):
-            await applyLobby(response)
-        case .failure(let error):
-            if isSchemaMissing(error) {
-                Self.logger.notice("lobby unavailable — tetris functions missing on server")
-                noteServerMissing()
-            } else {
-                Self.logger.notice("lobby request failed")
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
+        repeat {
+            // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 초인종을 지우지 않게(requestSync 와 같은 규약).
+            lobbyAgain = false
+            lastLobbyRequestAt = clock()
+            lobbyRequestOutgoingRevision = outgoingRevision
+            guard let result = await perform({ try await $0.tetrisLobby(accessToken: $1) }) else {
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 더 읽을 수 없다. 합쳐진 부름이 있으면 넘긴다.
+                handOff = Task.isCancelled && (owed || lobbyAgain)
+                return
             }
-            // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
-            if !lobbyLoadFailed { lobbyLoadFailed = true }
+            switch result {
+            case .success(let response):
+                await applyLobby(response)
+            case .failure(let error):
+                if isSchemaMissing(error) {
+                    Self.logger.notice("lobby unavailable — tetris functions missing on server")
+                    noteServerMissing()
+                } else {
+                    Self.logger.notice("lobby request failed")
+                }
+                // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
+                if !lobbyLoadFailed { lobbyLoadFailed = true }
+            }
+            owed = true
+        } while lobbyAgain && generation == resetGeneration
+    }
+
+    /// 로비를 **나르던 작업 자체**가 취소돼(폰 `.refreshable` · 화면을 떠남 — 구조적 작업이라 `outsidePolling` 이 못 지킨다) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(신청·수락 초인종 · 겹친 계기)이 남았다 —
+    /// 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2 · 체스와 같은 수리).
+    /// 로그아웃(세대 · 세션 세대가 바뀜) 뒤에는 내지 않는다. 그 사이 다른 로비 조회가 이미 돌기 시작했으면 그것이 이 부름보다 나중에
+    /// 나간 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다(무한 반복 없음).
+    private func handOffLobby(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.lobbyInFlight else { return }
+            await self.refreshLobby()
         }
     }
 
@@ -1030,7 +1072,9 @@ package final class TetrisDuelStore {
 
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 오목 · 체스와 같은 수리). 로비 창을 띄운 채 다른 전체 화면 앱 ·
+        // 다른 스페이스에 있는 사람은 화면이 말하지 못하고 폴링도 멈춰 있어, 판이 열린 것을 알릴 길이 말풍선뿐이다(준비 30초).
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
         if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
         if outgoing?.id == id { outgoing = nil }
@@ -1319,23 +1363,37 @@ package final class TetrisDuelStore {
         pollTask = nil
     }
 
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
+    /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`lobbyAgain` · 로비 꼬리가 합친 `stateAgain`)까지 같이 죽는다 — 창도
+    /// 폴링도 없는 사람이 받은 신청·수락을 모른다(아잉 뒤집기 V2-03 과 같은 수리). 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은
+    /// 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드(창 보임 · 안 가림 · 폴링 작업 안 취소)가 막는다(VR-04).
+    /// 관전(`pollWatch`)·순위(`loadRanking`)는 초인종과 합쳐지지 않아 폴링 안에 둔다(창이 내려가면 같이 멈추는 것이 맞다).
+    private func outsidePolling(_ body: @escaping @MainActor (TetrisDuelStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
     /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
     ///  · 보낸 신청이 있으면 5초마다 그 판의 상태(수락·거절·만료를 한 조회가 다 말한다)
     ///  · 로비를 보고 있으면 30초마다 목록 · 순위는 60초(주 스위치)
     /// **판 중에는 조회하지 않는다** — 1초 보고가 상대 판과 판 상태를 함께 받아 온다(같은 일을 두 번 하지 않는다).
+    /// 신청·로비 조회는 `outsidePolling` 으로 낸다. **걸음 사이사이 창 보임 · 가림 · 취소를 다시 본다.**
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let sent = outgoing, now.timeIntervalSince(lastOutgoingRequestAt) >= Self.outgoingPollSeconds {
-            await refreshMatch(id: sent.id)
+            let id = sent.id
+            await outsidePolling { await $0.refreshMatch(id: id) }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         // 관전 중이면 이 걸음은 관전이 가져간다(순위는 돌리지 않는다 — 돌아올 때 로비가 한 번 읽는다).
         if await pollWatch(at: now) { return }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if rankingEnabled, phase == .lobby, now.timeIntervalSince(lastRankingRequestAt) >= Self.rankingPollSeconds {
             await loadRanking()
         }
@@ -1357,6 +1415,7 @@ package final class TetrisDuelStore {
         stateInFlight = false
         stateAgain = false
         lobbyInFlight = false
+        lobbyAgain = false
         rankingInFlight = false
         stateInFlightID = nil
         pendingStateID = nil
@@ -1549,7 +1608,7 @@ package final class TetrisDuelStore {
         syncStats()
     }
 
-    /// 진행 중 판으로 **처음** 넘어갔다 — 창을 띄우고 주의를 끈다. 창이 안 보였으면 말풍선 문도 연다(판 id 마다 한 번).
+    /// 진행 중 판으로 **처음** 넘어갔다 — 창을 띄우고 주의를 끈다. 창이 안 보였거나 가려졌으면 말풍선 문도 연다(판 id 마다 한 번).
     private func noteMatchStarted(_ next: TetrisDuelMatchState, windowWasVisible: Bool) {
         guard !announcedMatchIDs.contains(next.id) else { return }
         announcedMatchIDs.insert(next.id)

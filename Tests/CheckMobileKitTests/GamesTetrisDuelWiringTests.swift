@@ -524,8 +524,9 @@ enum TetrisWireJSON {
     @Test("P8: active 복귀의 로비 조회는 **어느 가지에서도 한 번**이고, 화면이 없으면 창 깃발·폴링·준비 보고가 서지 않는다")
     func wakingUpCatchesUpOnceAndOnlyOpensTheWindowWhenTheScreenIsThere() async {
         // ★ 설계 P8 은 "둘 다 부르면 로비를 두 번 긁는다"고 적었는데 **실측은 다르다**: `catchUp()` 과
-        //   `systemDidWake()` 는 본문이 같고(둘 다 `refreshLobby()`), 코어 `refreshLobby` 의 `lobbyInFlight`
-        //   가드가 겹친 호출을 하나로 합친다. 그래서 **조회 셈만으로는 가지를 뒤집은 결함이 안 잡힌다.**
+        //   `systemDidWake()` 는 본문이 같고(둘 다 `refreshLobby()`), 이 시험을 쓸 때는 코어 `lobbyInFlight` 가드가
+        //   겹친 호출을 하나로 합쳤다(2026-11-03 부터는 도는 로비 뒤에 한 번 더 읽는다 — `lobbyAgain`. 그래서 지금은 둘을
+        //   겹쳐 부르면 셈이 +2 가 된다). 그래도 **조회 셈만으로는 가지를 뒤집은 결함이 다 안 잡힌다.**
         //   값으로 갈리는 것은 창 깃발이다: 화면이 없는데 `windowDidShow()` 를 부르면 코어가 폴링을 띄우고
         //   **보이지 않는 판의 준비 보고까지 낸다**(머리말 ⑨) — 사용자는 못 보는 카운트다운에 끌려 들어가 판돈을
         //   잃는다. 아래는 그 둘을 함께 잰다(상한으로서의 '한 번' + 가지의 실제 결과).

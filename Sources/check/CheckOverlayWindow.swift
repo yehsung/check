@@ -1406,9 +1406,10 @@ final class CheckOverlayController {
         return true
     }
 
-    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다).
+    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 보이고 안 가려졌으면 거짓이다(화면이 이미 말한다).
+    /// 열린 채 가려진 창(다른 전체 화면 앱 · 다른 스페이스)은 말하지 못하므로 사실로 남긴다 — 스토어 말풍선 문과 같은 기준.
     static func gomokuAttentionIsCurrent(_ attention: GomokuAttention, in gomoku: GomokuStore) -> Bool {
-        guard !gomoku.isWindowVisible, let match = gomoku.match else { return false }
+        guard !gomoku.isWindowVisible || gomoku.isWindowOccluded, let match = gomoku.match else { return false }
         return match.id == attention.matchID && !match.isFinished && match.turn == match.myColor
             && match.moveCount == attention.moveCount
     }
@@ -1551,9 +1552,10 @@ final class CheckOverlayController {
         return true
     }
 
-    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 떠 있으면 거짓이다(화면이 이미 말한다).
+    /// 차례 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 보이고 안 가려졌으면 거짓이다(화면이 이미 말한다).
+    /// 열린 채 가려진 창은 말하지 못하므로 사실로 남긴다 — 스토어 말풍선 문과 같은 기준.
     static func chessAttentionIsCurrent(_ attention: ChessAttention, in chess: ChessStore) -> Bool {
-        guard !chess.isWindowVisible, let match = chess.match else { return false }
+        guard !chess.isWindowVisible || chess.isWindowOccluded, let match = chess.match else { return false }
         return match.id == attention.matchID && !match.isFinished && match.turn == match.myColor
             && match.plyCount == attention.plyCount
     }
@@ -1690,9 +1692,10 @@ final class CheckOverlayController {
         return true
     }
 
-    /// 시작 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 떠 있으면 거짓이다(화면이 이미 말한다).
+    /// 시작 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 보이고 안 가려졌으면 거짓이다(화면이 이미 말한다).
+    /// 열린 채 가려진 창은 말하지 못하므로 사실로 남긴다 — 스토어 말풍선 문과 같은 기준.
     static func tetrisAttentionIsCurrent(_ attention: TetrisDuelAttention, in tetris: TetrisDuelStore) -> Bool {
-        guard !tetris.isWindowVisible, let match = tetris.match else { return false }
+        guard !tetris.isWindowVisible || tetris.isWindowOccluded, let match = tetris.match else { return false }
         return match.id == attention.matchID && !match.isFinished
     }
 

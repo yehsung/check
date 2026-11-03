@@ -489,22 +489,42 @@ package final class RummyStore {
         pollTask = nil
     }
 
-    /// 안전망 한 걸음. **창이 안 보이면 아무것도 하지 않는다.**
+    /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다(오목·체스·테트리스 · 아잉 뒤집기 V2-03 과 같은 수리).
+    /// 창을 닫거나(숨김) 가리는 순간 `stopPolling` 의 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`stateAgain` · `lobbyAgain`)
+    /// 까지 같이 죽는다 — 창도 폴링도 없는 사람이 받은 초대 · 판 시작 · 내 차례를 모른 채 60초 차례가 흐른다(2026-11-03 적대 검증 P1).
+    /// 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은 세대 가드가 버린다). 그 뒤 **남은 걸음**은 걸음 사이 가드가 막는다.
+    private func outsidePolling(_ body: @escaping @MainActor (RummyStore) async -> Void) async {
+        await Task { @MainActor [weak self] in
+            guard let self else { return }
+            await body(self)
+        }.value
+    }
+
+    /// 안전망 한 걸음. **창이 안 보이거나 가려졌으면 아무것도 하지 않는다.**
     ///  · 방·판에 있으면 구독 중 15초(마감 15초 안쪽은 5초) · 미구독 5초마다 그 state(참가·시작·작업 판·시간 초과를 한 조회가 다 말한다) · 마감이 지났으면 다시
     ///  · 로비·방 화면이면 30초마다 로비(사람 목록·초대) · 순위는 60초(주 스위치)
+    ///
+    /// state · 마감 · 로비 조회는 `outsidePolling` 으로 낸다 — 셋 다 초인종이 합쳐지는 조회다(마감 재조회도 같은 `refreshMatch` 직렬화를
+    /// 타고, 끝난 뒤의 `scheduleDeadlineWake` 는 창과 무관한 깨우기다 — 도중에 끊으면 세 번뿐인 재조회 한 번을 헛쓴다).
+    /// 순위(`loadRanking`)는 초인종과 합쳐지지 않아 폴링 안에 둔다(창이 내려가면 같이 멈추는 것이 맞다).
+    /// **걸음 사이사이 창 보임 · 가림 · 취소를 다시 본다** — await 중에 창이 내려가거나 가려질 수 있다(가려진 창의 남은 걸음이 로비를 새로 내지 않게).
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let match, Self.isUnsettled(match.status),
            now.timeIntervalSince(lastStateRequestAt) >= matchPollInterval(at: now) {
-            await refreshMatch(id: match.id)
+            let id = match.id
+            await outsidePolling { await $0.refreshMatch(id: id) }
         }
-        guard isWindowVisible else { return }
-        await checkDeadline(at: now)
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
+        // 진행 중 판일 때만 띄운다(`checkDeadline` 의 첫 문과 같은 조건 — 걸음마다 Task 를 만들지 않게).
+        if match?.status == .active {
+            await outsidePolling { await $0.checkDeadline(at: now) }
+        }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby || phase == .room, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
-            await refreshLobby()
+            await outsidePolling { await $0.refreshLobby() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if rankingEnabled, phase == .lobby, now.timeIntervalSince(lastRankingRequestAt) >= Self.rankingPollSeconds {
             await loadRanking()
         }

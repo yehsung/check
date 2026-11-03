@@ -24,6 +24,11 @@ import Foundation
 //     (능력 번호 5 — `supportsDrinkGift`)에만 있다: 4 인 빌드는 서버가 생일만 싣고 (사용자, 종류)당 열린 선물은 하나라 '다음'이 없다 —
 //     그래서 0.3.66~0.3.73 의 생일 흐름은 요청 하나까지 그대로다.
 //  ⑥ 문구 — 창 · 다시 열기 카드 · 수령 한 줄은 선물 종류의 문구 묶음(`CharacterGiftKind.copy` — `CakeGiftText` · `DrinkGiftText`)에서 온다.
+//
+// ── 빼빼로 데이 선물 — 빼빼로 아잉이 (v0.3.77 맥 먼저 · 11-11 기간 선물) ──
+// 셋째 종류(`.pepero`)도 같은 박자 · 같은 창이다 — 이슬처럼 고를 것 없이 받는 초대장 화면(`showsInviteScreen`) · 종류 문구(`PeperoGiftText`).
+// 빼빼로 선물은 능력 번호 6(빼빼로까지 그린다)인 빌드에만 온다(서버가 번호로 거르고, 섞여 와도 `fetchCharacterGiftPending` 이 버린다) —
+// 그림이 붙기 전의 이 빌드는 5 라 빼빼로 선물이 뜨지 않는다. '다음 선물' 문은 그대로 5(`supportsDrinkGift`)다: 6 인 빌드는 5 의 문도 지난다.
 
 /// 축하 창을 띄우고 내리는 문. 스토어가 쥔다(`WorkTimerStore.cakeGiftWindowHooks`) — 테스트가 갈아 끼워 "창이 열렸는가"를 센다.
 struct CakeGiftWindowHooks {
@@ -268,6 +273,7 @@ extension WorkTimerStore {
             switch cakeGiftPresented?.kind ?? .birthday {
             case .birthday: cakeGiftNotice = CakeGiftText.notice(for: outcome, name: name)
             case .drink: cakeGiftNotice = DrinkGiftText.notice(for: outcome, name: name)
+            case .pepero: cakeGiftNotice = PeperoGiftText.notice(for: outcome, name: name)
             }
         }
         if outcome.settlesGift {
@@ -369,14 +375,24 @@ extension WorkTimerStore {
     }
 }
 
-// MARK: - 다시 열기 카드의 그림 기호(v0.3.74)
+// MARK: - 다시 열기 카드의 그림 기호(v0.3.74) · 받는 창의 화면(v0.3.77)
 
 extension CharacterGiftKind {
-    /// 메뉴 팝오버 '다시 열기' 카드의 SF Symbol — 생일은 선물 상자(0.3.66 그대로), 술 한잔은 잔.
+    /// 메뉴 팝오버 '다시 열기' 카드의 SF Symbol — 생일은 선물 상자(0.3.66 그대로), 술 한잔은 잔, 빼빼로 데이는 하트(마음을 전하는 날).
     var reopenSymbolName: String {
         switch self {
         case .birthday: return "gift.fill"
         case .drink: return "wineglass.fill"
+        case .pepero: return "heart.fill"
+        }
+    }
+
+    /// 받는 창이 고르기 없이 **초대장 화면**으로 서는가 — 선택지가 하나뿐인 종류(술 한잔 · 빼빼로 데이). 생일은 둘 중 하나를 고른다.
+    /// 화면을 가르는 판정은 이 한 곳이다(`CheckCakeGiftWindowView.body`).
+    var showsInviteScreen: Bool {
+        switch self {
+        case .birthday: return false
+        case .drink, .pepero: return true
         }
     }
 }

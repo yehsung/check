@@ -239,6 +239,8 @@ struct V0336AvatarArtSourceTests {
                         && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
                         // v0.3.74: 이슬(내장)도 같은 규칙 — 소스 트리에 이슬 초상이 있을 때만 센다.
                         && (!CharacterCatalog.isIsulAing($0) || V0374IsulCoreTests.macIsulPortraitsInSourceTree)
+                        // v0.3.77: 빼빼로(내장)도 같은 규칙 — 그림 갈래 전엔 초상이 없다.
+                        && (!CharacterCatalog.isPeperoAing($0) || V0377PeperoCoreTests.macPeperoPortraitsInSourceTree)
                 }))
     }
 }

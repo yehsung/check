@@ -109,12 +109,17 @@ private func avFetches(_ host: String) -> Int {
                 && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
                 // v0.3.74: 이슬(내장)도 같은 규칙 — 기준선은 소스 트리의 이슬 초상 파일이다(그림 갈래 전엔 없다 → 이니셜).
                 && (!CharacterCatalog.isIsulAing($0) || V0374IsulCoreTests.macIsulPortraitsInSourceTree)
+                // v0.3.77: 빼빼로(내장)도 같은 규칙 — 그림 갈래 전엔 초상이 없다 → 이니셜.
+                && (!CharacterCatalog.isPeperoAing($0) || V0377PeperoCoreTests.macPeperoPortraitsInSourceTree)
         }
         #expect(Set(AppUserAvatarArt.knownIDs) == Set(drawableCatalog), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
         #expect(directory.knownIDs == Set(AppUserAvatarArt.knownIDs))
         // v0.3.74: 이슬도 소스 트리에 초상이 있으면 하나 더(초상 조회가 그림 저장소 `IsulArt` 를 탄다 — 3D 갈래).
         let isulPortraits = V0374IsulCoreTests.macIsulPortraitsInSourceTree ? 1 : 0
+        // v0.3.77: 빼빼로도 소스 트리에 초상이 있으면 하나 더(그림 갈래 전엔 0).
+        let peperoPortraits = V0377PeperoCoreTests.macPeperoPortraitsInSourceTree ? 1 : 0
         #expect(AppUserAvatarArt.knownIDs.count == 7 + (goldPortraits ? 1 : 0) + (rainbowPortraits ? 1 : 0) + cakePortraits + isulPortraits
+                    + peperoPortraits
                     && AppUserAvatarArt.knownIDs.contains("aing"),
                 Comment(rawValue: "아는 캐릭터 \(AppUserAvatarArt.knownIDs) · 금 초상 \(goldPortraits) · 무지개 초상 \(rainbowPortraits)"))
         // 로봇(2026-10-05)은 **폴더만 넣어** 들어온 일곱 번째다 — 카탈로그가 번들 폴더를 실제로 훑는다는 증거다.

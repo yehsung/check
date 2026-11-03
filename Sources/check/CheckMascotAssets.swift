@@ -156,6 +156,10 @@ enum CheckMascotAssets {
             // 이슬 아잉이(v0.3.74): 케이크 규약 — 초상 두 장 + 마감 실재(라벨 폴백 + 무지개와 같이 쓰는 밝기 맵 — 병뚜껑은 코드가 만든다).
             // robot · 금 · 무지개 · 케이크 둘까지 서고 이슬도 서야 상점 능력 번호 5 가 나간다(`ShopWire.protocolVersion`). 정의는 `IsulAingFinish.isDrawable` 한 곳.
             if CharacterCatalog.isIsulAing(id) { return IsulAingFinish.isDrawable(fileManager: fileManager) }
+            // 빼빼로 아잉이(v0.3.77): **그림이 아직 없다**(시안을 고르는 중) — 그릴 수 없다. 그래서 맥 능력 번호는 5 에 머물고(`ShopWire.peperoProtocol`
+            // 6 을 말하지 않는다) 서버는 빼빼로 행 · 빼빼로 선물을 이 빌드에 싣지 않는다(그림 없는 캐릭터를 받지 않게). 그림이 붙는 날 이 줄을
+            // 이슬처럼 마감 실재 판정(초상 두 장 + 마감 재료)으로 바꾼다 — V0377PeperoCoreTests 가 그 전까지 거짓 · 번호 5 를 못 박는다.
+            if CharacterCatalog.isPeperoAing(id) { return false }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

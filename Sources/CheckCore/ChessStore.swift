@@ -974,6 +974,7 @@ package final class ChessStore {
 
     /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `refreshMatch` 의 `stateAgain` 과 같은 꼴).
     /// 앞 조회는 그 뒤에 생긴 신청·수락을 모른다 — 합친 한 바퀴에는 신청·진행 판 꼬리(`applyLobby` 의 `refreshMatch`)까지 들어간다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffLobby`).
     package func refreshLobby() async {
         guard host?.session != nil else { return }
         if lobbyInFlight {
@@ -982,13 +983,24 @@ package final class ChessStore {
         }
         lobbyInFlight = true
         let generation = resetGeneration
+        let sessionGeneration = host?.sessionGeneration
+        // ★ defer 는 **거꾸로** 돈다 — 아래 줄(`lobbyInFlight` 내리기)이 먼저, 이 줄(넘기기)이 나중이다. 내리기 전에 넘기면
+        //   넘겨받은 조회가 "도는 중" 에 막혀 또 합쳐지기만 하고 아무도 안 읽는다.
+        var handOff = false
+        defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
         repeat {
             // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 초인종을 지우지 않게(requestSync 와 같은 규약).
             lobbyAgain = false
             lastLobbyRequestAt = clock()
             lobbyRequestOutgoingRevision = outgoingRevision
-            guard let result = await perform({ try await $0.chessLobby(accessToken: $1) }) else { return }
+            guard let result = await perform({ try await $0.chessLobby(accessToken: $1) }) else {
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 더 읽을 수 없다. 합쳐진 부름이 있으면 넘긴다.
+                handOff = Task.isCancelled && (owed || lobbyAgain)
+                return
+            }
             switch result {
             case .success(let response):
                 await applyLobby(response)
@@ -1002,7 +1014,21 @@ package final class ChessStore {
                 // 빈 목록을 "대결할 사람이 없다" 로 믿게 하지 않는다.
                 if !lobbyLoadFailed { lobbyLoadFailed = true }
             }
+            owed = true
         } while lobbyAgain && generation == resetGeneration
+    }
+
+    /// 로비를 **나르던 작업 자체**가 취소돼(폰 `.refreshable` · 화면을 떠남 — 구조적 작업이라 `outsidePolling` 이 못 지킨다) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(신청·수락 초인종 · 겹친 계기)이 남았다 — 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2:
+    /// 당겨서 새로고침 중 화면을 떠나면 받은 신청 초인종이 같이 죽어 카드·메뉴바 점·말풍선이 다음 계기까지 안 섰다).
+    /// 로그아웃(세대 · 세션 세대가 바뀜) 뒤에는 내지 않는다. 그 사이 다른 로비 조회가 이미 돌기 시작했으면 그것이 이 부름보다 나중에
+    /// 나간 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다(무한 반복 없음).
+    private func handOffLobby(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.lobbyInFlight else { return }
+            await self.refreshLobby()
+        }
     }
 
     package func applyLobby(_ response: ChessLobbyResponse) async {

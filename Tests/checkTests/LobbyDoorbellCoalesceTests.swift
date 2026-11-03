@@ -600,3 +600,579 @@ struct LobbyDoorbellCoalesceTests {
         #expect(tetris.incoming.isEmpty)
     }
 }
+
+// MARK: - 후속(적대 검증 2차) 하네스
+
+// (c') 판 중 · 보낸 신청 · 끝인사 폴링 걸음도 초인종을 합친다(상태 조회의 `stateAgain`). 앞 스위트의 (c)는 체스 · 테트리스는
+//      로비 걸음만, 오목은 보낸 신청 받은함 걸음만 쟀다 — 체스 판 중 걸음 하나만 옛 `await refreshMatch` 로 되돌려도 초록이었다.
+// (e)  큐브(`RummyStore.pollTick`)에 같은 구멍이 남아 있었다 — 상태 · 마감 · 로비 걸음이 폴링 작업 안에서 돌고 사이 가드는 창 보임뿐.
+// (f)  로비(오목은 받은함도)를 **나르던 작업 자체**가 취소되면(폰 `.refreshable` · 화면을 떠남) 합쳐진 부름이 같이 죽었다 —
+//      `outsidePolling` 은 폴링 운반자만 지킨다.
+
+/// 진행 중 오목 판(나는 흑): 거짓이면 내가 한 수 둔 뒤 상대(백) 차례, 참이면 상대가 둬서 내 차례(`OccludedTurnAlertTests` 흉내 서버와 같은 판).
+private func ldGomokuInMatch(moved: Bool) -> String {
+    var cells = Array(repeating: Character("."), count: 225)
+    cells[7 * 15 + 7] = "b"
+    if moved { cells[7 * 15 + 8] = "w" }
+    let now = ldNowMs()
+    return ldJSON([
+        "status": "ok",
+        "match": [
+            "id": ldGomokuMatch, "status": "active", "stake": 5, "black": ldMe, "white": ldRival,
+            "challenger": ldMe, "opponent": ldRival, "move_count": moved ? 2 : 1, "turn": moved ? "black" : "white",
+            "deadline_ms": now + 30_000, "result": NSNull(), "end_reason": NSNull(), "winner": NSNull(),
+            "invite_expires_ms": now, "board": String(cells),
+        ] as [String: Any],
+        "moves": [] as [Any], "my_color": "black",
+        "opponent": ["user_id": ldRival, "display_name": "라이벌", "avatar_url": NSNull(), "character": "aing"],
+        "ruby_balance": 20, "server_now_ms": now,
+    ])
+}
+
+/// 결과 화면의 끝난 오목 판(기권 패) — 끝인사 대화 줄만 다르다(`V0350GomokuExitChatTests.geState` 와 같은 키).
+private func ldGomokuFinished(chat: [[String: Any]], chatSeq: Int) -> String {
+    ldJSON([
+        "status": "ok",
+        "match": [
+            "id": ldGomokuMatch, "status": "finished", "stake": 5, "black": ldMe, "white": ldRival,
+            "challenger": ldRival, "opponent": ldMe, "move_count": 0, "turn": NSNull(), "deadline_ms": NSNull(),
+            "result": "white_win", "end_reason": "resign", "winner": NSNull(), "invite_expires_ms": NSNull(),
+            "finished_ms": NSNull(),
+        ] as [String: Any],
+        "moves": [] as [Any], "my_color": "black",
+        "opponent": ["user_id": ldRival, "display_name": "라이벌", "avatar_url": NSNull(), "character": "aing"],
+        "ruby_balance": NSNull(), "server_now_ms": NSNull(), "chat": chat, "chat_seq": chatSeq,
+    ])
+}
+
+private func ldDecodeSnake<T: Decodable>(_ type: T.Type, _ text: String) throws -> T {
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try decoder.decode(T.self, from: Data(text.utf8))
+}
+
+/// 체스 B(흑)의 상대 차례 판(ply 0) → 백이 첫 수를 둬서 내 차례(ply 1). 실서버 원문 두 장을 B 시점으로 엮는다(프로브 P4 와 같은 판).
+private func ldChessBlackAfterWhiteFirst() throws -> String {
+    var top = try ldChessJSON("chess_state__ok_initial_their_turn")
+    let moveTop = try ldChessJSON("chess_move__ok_white_first")
+    var moved = try #require(moveTop["state"] as? [String: Any])
+    moved["my_color"] = "black"
+    moved["opponent"] = top["opponent"]
+    for key in ["match", "moves", "my_color", "legal_moves", "in_check"] { top[key] = moved[key] }
+    top["state"] = moved
+    return ldJSON(top)
+}
+
+/// 테트리스 보낸 신청이 수락돼 열린 판(준비 단계 · 이 기기가 둔다) — `OccludedTurnAlertTests.otTetrisState` 와 같은 키.
+private func ldTetrisActiveState() -> String {
+    let now = ldNowMs()
+    func player(_ id: String, _ name: String) -> [String: Any] {
+        ["id": id, "display_name": name, "avatar_url": NSNull(), "character": NSNull(), "ready": false, "seq": 0,
+         "board": NSNull(), "lines": 0, "garbage_sent": 0, "garbage_applied": 0, "pending": 0,
+         "last_seen_ms": NSNull(), "topped_out": false]
+    }
+    return ldJSON(["status": "ok", "state": [
+        "match_id": ldTetrisMatch, "status": "active", "stake": 3, "seed": 4_242, "server_now_ms": now,
+        "accepted_at_ms": now - 2_000, "start_at_ms": NSNull(), "ready_deadline_ms": now + 28_000, "max_end_ms": NSNull(),
+        "finished_at_ms": NSNull(), "me": player(ldMe, "나"), "opponent": player(ldRival, "라이벌"),
+        "result": NSNull(), "winner": NSNull(), "end_reason": NSNull(), "ruby_balance": 97, "my_device": "this",
+    ] as [String: Any]])
+}
+
+private func ldTetrisLobbyInMatch() -> String {
+    ldJSON([
+        "status": "ok", "server_now_ms": ldNowMs(), "stakes": [3, 5, 10],
+        "me": ["ruby_balance": 97, "wins": 0, "losses": 0, "draws": 0,
+               "active_match_id": ldTetrisMatch, "incoming": [] as [Any], "outgoing": NSNull()],
+        "users": [] as [Any], "matches": [] as [Any],
+    ])
+}
+
+// MARK: 큐브(실서버 출력 원문 `Fixtures/rummy/server`)
+
+private let ldRummyFixtures = URL(fileURLWithPath: #filePath)
+    .deletingLastPathComponent()
+    .appendingPathComponent("Fixtures/rummy/server", isDirectory: true)
+/// 방장(seat 0) — `state_*` 원문의 '나'.
+private let ldRummyHost = "d0000000-0000-4000-8000-000000000001"
+/// 초대받은 사람 — `lobby_with_room_invites_public` 의 초대 대상.
+private let ldRummyInvitee = "d0000000-0000-4000-8000-000000000002"
+private let ldRummyRoom = UUID(uuidString: "2a0b2f9f-3150-48bb-b727-267da36924f7")!
+
+private func ldRummyText(_ name: String) throws -> String {
+    try String(contentsOf: ldRummyFixtures.appendingPathComponent("\(name).json"), encoding: .utf8)
+}
+
+private func ldRummyObject(_ name: String) throws -> [String: Any] {
+    let data = try Data(contentsOf: ldRummyFixtures.appendingPathComponent("\(name).json"))
+    return try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+/// 빈 로비 → 초대가 생긴 로비(`lobby_empty` 에 `lobby_with_room_invites_public` 의 invites 만 얹는다 — 프로브 P1 과 같은 판).
+private func ldRummyLobbies() throws -> (empty: String, withInvite: String) {
+    let empty = try ldRummyText("lobby_empty")
+    var withInvite = try ldRummyObject("lobby_empty")
+    withInvite["invites"] = try #require(try ldRummyObject("lobby_with_room_invites_public")["invites"])
+    return (empty, ldJSON(withInvite))
+}
+
+@MainActor
+private final class LDRummyTally {
+    var arrived: [UUID] = []
+    var attentions: [String] = []
+}
+
+@MainActor
+private func ldRummy(_ label: String, me: String, handler: @escaping GomokuStubProtocol.Handler)
+    -> (RummyStore, String, LDRummyTally) {
+    let (owner, host) = ldOwner(label, me: me, handler: handler)
+    let rummy = owner.rummy
+    rummy.pollStepSeconds = 3_600
+    rummy.deadlineWakeEnabled = false
+    let tally = LDRummyTally()
+    rummy.onInviteArrived = { tally.arrived.append($0.id) }
+    rummy.onAttention = { tally.attentions.append($0) }
+    return (rummy, host, tally)
+}
+
+// MARK: - 후속 시험
+
+@Suite("결함 ② 후속 — 판 중·보낸 신청·끝인사 폴링 걸음 · 큐브 폴링 · 로비를 나르던 작업의 취소")
+@MainActor
+struct LobbyDoorbellCoalesceFollowupTests {
+
+    // MARK: (c') 체스 · 오목 판 중 상태 걸음
+
+    @Test(.gomokuDefaultsCleanup, arguments: LDWindowExit.allCases)
+    fileprivate func 체스_판중_폴링_상태에_합쳐진_수_초인종은_창이_내려가도_내_차례를_세운다(_ exit: LDWindowExit) async throws {
+        // B(흑)가 상대 차례 판을 보고 있다 — 폴링 걸음의 상태 조회(0.4초)가 나는 중 백의 수 초인종이 `stateAgain` 으로 합쳐지고
+        // 그 순간 창이 내려간다. 고치기 전에는 폴링 취소가 합쳐진 조회까지 죽여 10분 시계가 말풍선 없이 흘렀다.
+        let waiting = try ldChessText("chess_state__ok_initial_their_turn")
+        let after = try ldChessBlackAfterWhiteFirst()
+        let (store, host, _) = ldChess("c-inmatch-\(exit)", me: ldChessB, handler: ldHandler(
+            ["chess_state": { $0 < 2 ? waiting : after }, "chess_lobby": { _ in "{}" }],
+            delays: ["chess_state": 0.4]))
+        final class Kinds { var all: [ChessAttention.Kind] = [] }
+        let kinds = Kinds()
+        store.onAttention = { kinds.all.append($0.kind) }
+        store.noteOwnsMatch(ldChessMatch)
+        await store.refreshMatch(id: ldChessMatch)
+        try #require(store.match?.id == ldChessMatch && store.match?.plyCount == 0 && store.match?.turn != store.match?.myColor,
+                     "준비: 상대 차례 판")
+        store.isWindowVisible = true
+        store.lastStateRequestAt = .distantPast
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "chess_state") == 2 }
+        try #require(ldCount(host, "chess_state") == 2, "준비: 폴링 걸음의 상태 조회가 날고 있다")
+        store.handleSignal()                     // 백이 뒀다 — 도는 상태 조회에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        switch exit {
+        case .hidden: store.windowDidHide()
+        case .occluded: store.windowOcclusionDidChange(visible: false)
+        case .stays: break
+        }
+        await ldWait(600) { store.match?.plyCount == 1 }
+        #expect(ldCount(host, "chess_state") >= 3, "합쳐진 수 초인종의 상태 조회가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.match?.plyCount == 1, "상대 수가 안 섰다(\(exit))")
+        if exit == .stays {
+            #expect(kinds.all.isEmpty, "대조: 창이 보이고 앞에 있으면 말풍선은 없다(화면이 이미 말한다)")
+        } else {
+            #expect(kinds.all == [.myTurn], "창을 내린 사람에게 내 차례 말풍선이 한 번 안 떴다(\(exit))")
+        }
+        store.stopPolling()
+    }
+
+    @Test(.gomokuDefaultsCleanup, arguments: LDWindowExit.allCases)
+    fileprivate func 오목_판중_폴링_상태에_합쳐진_수_초인종은_창이_내려가도_내_차례를_세운다(_ exit: LDWindowExit) async throws {
+        // 흑(나)이 둔 뒤 백 차례 — 폴링 상태 조회가 나는 중 백의 수 초인종이 합쳐지고 창이 내려간다. 고치기 전에는 30초 + 유예 뒤
+        // 자동 착수(세 번이면 abandoned 패)까지 말풍선이 없었다.
+        let (store, host, tally) = ldGomoku("g-inmatch-\(exit)", handler: ldHandler(
+            ["gomoku_state": { $0 == 0 ? ldGomokuInMatch(moved: false) : ldGomokuInMatch(moved: true) },
+             "gomoku_inbox": { _ in ldJSON(["status": "ok", "incoming": [] as [Any], "outgoing": NSNull(),
+                                            "active_match_id": ldGomokuMatch, "server_now_ms": ldNowMs()]) },
+             "gomoku_lobby": { _ in ldGomokuLobby(wins: 0) }],
+            delays: ["gomoku_state": 0.4]))
+        store.noteOwnsMatch(ldGomokuMatch)
+        store.applyState(try ldDecodeSnake(GomokuStatePayload.self, ldGomokuInMatch(moved: false)))
+        try #require(store.match?.moveCount == 1 && store.match?.turn == .white, "준비: 상대 차례 판")
+        store.isWindowVisible = true
+        store.lastStateRequestAt = .distantPast
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "gomoku_state") == 1 }
+        try #require(ldCount(host, "gomoku_state") == 1, "준비: 폴링 걸음의 상태 조회가 날고 있다")
+        store.handleSignal()                     // 백이 뒀다 — 도는 상태 조회에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        switch exit {
+        case .hidden: store.windowDidHide()
+        case .occluded: store.windowOcclusionDidChange(visible: false)
+        case .stays: break
+        }
+        await ldWait(600) { store.match?.moveCount == 2 }
+        #expect(ldCount(host, "gomoku_state") >= 2, "합쳐진 수 초인종의 상태 조회가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.match?.moveCount == 2 && store.match?.turn == .black, "상대 수가 안 섰다(\(exit))")
+        if exit == .stays {
+            #expect(tally.attentions.isEmpty, "대조: 창이 보이고 앞에 있으면 말풍선은 없다")
+        } else {
+            #expect(tally.attentions.map(\.kind) == [.myTurn], "창을 내린 사람에게 내 차례 말풍선이 한 번 안 떴다(\(exit))")
+        }
+        store.stopPolling()
+    }
+
+    // MARK: (c') 오목 끝인사 걸음
+
+    @Test(.gomokuDefaultsCleanup, arguments: [LDWindowExit.stays, LDWindowExit.occluded])
+    fileprivate func 오목_끝인사_폴링에_합쳐진_초인종은_창이_가려져도_상대_말을_읽는다(_ exit: LDWindowExit) async throws {
+        // 결과 화면의 끝인사 안전망 조회가 나는 중 상대 끝인사 초인종이 합쳐지고 창이 가려진다. 닫기(.hidden)는 끝난 판에서
+        // 나가는 것이라(`windowDidHide` → leaveMatch) 이 갈래가 아니다.
+        let quiet = ldGomokuFinished(chat: [], chatSeq: 0)
+        let farewell = ldGomokuFinished(
+            chat: [["seq": 1, "kind": "text", "body": "수고하셨어요", "mine": false, "created_ms": 1_800_000_000_000.0]], chatSeq: 1)
+        let (store, host, _) = ldGomoku("g-farewell-\(exit)", handler: ldHandler(
+            ["gomoku_state": { $0 == 0 ? quiet : farewell },
+             "gomoku_inbox": { _ in ldJSON(["status": "ok", "incoming": [] as [Any], "outgoing": NSNull()]) },
+             "gomoku_lobby": { _ in ldGomokuLobby(wins: 0) }],
+            delays: ["gomoku_state": 0.4]))
+        store.applyState(try ldDecodeSnake(GomokuStatePayload.self, quiet))
+        try #require(store.phase == .result && store.finishedChatWatch?.id == ldGomokuMatch, "준비: 결과 화면 · 끝인사 시간 안")
+        store.isWindowVisible = true
+        store.lastStateRequestAt = .distantPast
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "gomoku_state") == 1 }
+        try #require(ldCount(host, "gomoku_state") == 1, "준비: 폴링 걸음의 끝인사 조회가 날고 있다")
+        store.handleSignal()                     // 상대가 끝인사를 보냈다 — 받은함 뒤 도는 끝난 판 조회에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        if exit == .occluded { store.windowOcclusionDidChange(visible: false) }
+        await ldWait(600) { !store.chat.isEmpty }
+        #expect(ldCount(host, "gomoku_state") >= 2, "합쳐진 끝인사 초인종의 조회가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.chat.map(\.body) == ["수고하셨어요"], "상대 끝인사가 안 섰다(\(exit))")
+        store.stopPolling()
+    }
+
+    // MARK: (c') 체스 · 테트리스 보낸 신청 상태 걸음
+
+    @Test(.gomokuDefaultsCleanup, arguments: LDWindowExit.allCases)
+    fileprivate func 체스_보낸_신청_폴링에_합쳐진_수락은_창이_내려가도_판을_연다(_ exit: LDWindowExit) async throws {
+        // A(신청자)의 보낸 신청 5초 상태 조회가 나는 중 수락 초인종 → 로비 → 진행 판 꼬리(`applyLobby` 의 refreshMatch)가 같은 id 의
+        // 도는 조회에 `stateAgain` 으로 합쳐지고 창이 내려간다. 고치기 전에는 폴링 취소가 그 조회까지 죽여, 신청자가 수락을 모른 채
+        // 10분 시계가 흘렀다.
+        let pending = try ldChessPending("chess_state__ok_initial_my_turn")
+        let active = try ldChessText("chess_state__ok_initial_my_turn")
+        let lobby = try ldChessText("chess_lobby__ok_in_match")
+        let challenge = ldJSON(["status": "ok", "match_id": ldChessMatch, "ruby_balance": 100,
+                                "server_now_ms": ldNowMs(), "invite_expires_ms": ldNowMs() + 60_000])
+        let (store, host, _) = ldChess("c-sent-\(exit)", me: ldChessA, handler: ldHandler(
+            ["chess_state": { $0 == 0 ? pending : active }, "chess_lobby": { _ in lobby },
+             "chess_challenge": { _ in challenge }],
+            delays: ["chess_state": 0.4]))
+        final class Kinds { var all: [ChessAttention.Kind] = [] }
+        let kinds = Kinds()
+        store.onAttention = { kinds.all.append($0.kind) }
+        await store.challenge(userID: ldChessB)
+        try #require(store.outgoing?.id == ldChessMatch && store.phase == .lobby, "준비: 로비 · 보낸 신청 하나")
+        store.isWindowVisible = true
+        store.lastOutgoingRequestAt = .distantPast
+        store.lastLobbyRequestAt = Date()        // 로비 걸음은 이 시험 밖
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "chess_state") == 1 }
+        try #require(ldCount(host, "chess_state") == 1, "준비: 폴링 걸음의 보낸 신청 조회가 날고 있다")
+        store.handleSignal()                     // 수락 초인종 — 로비 → 진행 판 꼬리가 도는 조회에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        try #require(ldCount(host, "chess_lobby") >= 1, "준비: 초인종의 로비가 나갔다")
+        switch exit {
+        case .hidden: store.windowDidHide()
+        case .occluded: store.windowOcclusionDidChange(visible: false)
+        case .stays: break
+        }
+        await ldWait(600) { store.match?.id == ldChessMatch }
+        #expect(ldCount(host, "chess_state") >= 2, "합쳐진 수락의 상태 조회가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.match?.id == ldChessMatch && store.match?.isFinished == false, "수락된 판이 안 열렸다(\(exit))")
+        if exit == .stays {
+            #expect(kinds.all.isEmpty, "대조: 창이 보이고 앞에 있으면 말풍선은 없다")
+        } else {
+            #expect(kinds.all == [.matchStarted], "창을 내린 신청자에게 판 시작 말풍선이 한 번 안 떴다(\(exit))")
+        }
+        store.stopPolling()
+    }
+
+    @Test(.gomokuDefaultsCleanup, arguments: LDWindowExit.allCases)
+    fileprivate func 테트리스_보낸_신청_폴링에_합쳐진_수락은_창이_내려가도_판을_연다(_ exit: LDWindowExit) async throws {
+        // 체스와 같은 갈래(테트리스는 판 중 폴링이 조회하지 않는다 — 1초 보고가 판을 받아 온다. 그래서 보낸 신청 걸음이 상태 걸음이다).
+        let sentLobby = ldTetrisLobby(outgoing: ldTetrisInvite(peerKey: "to"))
+        let (store, host, _) = ldTetris("t-sent-\(exit)", handler: ldHandler(
+            ["tetris_state": { $0 == 0 ? ldTetrisPendingState() : ldTetrisActiveState() },
+             "tetris_lobby": { _ in ldTetrisLobbyInMatch() }],
+            delays: ["tetris_state": 0.4]))
+        final class Kinds { var all: [String] = [] }
+        let kinds = Kinds()
+        store.onAttention = { kinds.all.append("\($0)") }
+        await store.applyLobby(try ldDecodeSnake(TetrisLobbyResponse.self, sentLobby))
+        try #require(store.outgoing?.id == ldTetrisMatch && store.phase == .lobby, "준비: 로비 · 보낸 신청 하나")
+        store.isWindowVisible = true
+        store.lastOutgoingRequestAt = .distantPast
+        store.lastLobbyRequestAt = Date()
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "tetris_state") == 1 }
+        try #require(ldCount(host, "tetris_state") == 1, "준비: 폴링 걸음의 보낸 신청 조회가 날고 있다")
+        store.handleSignal()
+        await ldWait { store.syncTask == nil }
+        try #require(ldCount(host, "tetris_lobby") >= 1, "준비: 초인종의 로비가 나갔다")
+        switch exit {
+        case .hidden: store.windowDidHide()
+        case .occluded: store.windowOcclusionDidChange(visible: false)
+        case .stays: break
+        }
+        await ldWait(600) { store.match?.id == ldTetrisMatch }
+        #expect(ldCount(host, "tetris_state") >= 2, "합쳐진 수락의 상태 조회가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.match?.id == ldTetrisMatch && store.match?.isFinished == false, "수락된 판이 안 열렸다(\(exit))")
+        if exit == .stays {
+            #expect(kinds.all.isEmpty, "대조: 창이 보이고 앞에 있으면 말풍선은 없다")
+        } else {
+            #expect(kinds.all.count == 1, "창을 내린 신청자에게 판 시작 말풍선이 한 번 안 떴다(\(exit)) — \(kinds.all)")
+        }
+        store.stopPolling()
+    }
+
+    // MARK: (e) 큐브 폴링
+
+    @Test(.gomokuDefaultsCleanup, arguments: LDWindowExit.allCases)
+    fileprivate func 큐브_폴링_로비에_합쳐진_초대_초인종은_창이_내려가도_나간다(_ exit: LDWindowExit) async throws {
+        let lobbies = try ldRummyLobbies()
+        let (store, host, tally) = ldRummy("r-lobby-\(exit)", me: ldRummyInvitee, handler: ldHandler(
+            ["rummy_lobby": { $0 == 0 ? lobbies.empty : lobbies.withInvite }], delays: ["rummy_lobby": 0.4]))
+        store.isWindowVisible = true
+        store.lastLobbyRequestAt = .distantPast
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "rummy_lobby") == 1 }
+        try #require(ldCount(host, "rummy_lobby") == 1, "준비: 폴링 걸음의 로비가 날고 있다")
+        store.handleSignal()                     // 초대 초인종 — 도는 로비에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        switch exit {
+        case .hidden: store.setWindowVisible(false)
+        case .occluded: store.setWindowOccluded(true)
+        case .stays: break
+        }
+        await ldWait(600) { store.hasIncomingInvite }
+        #expect(ldCount(host, "rummy_lobby") >= 2, "합쳐진 초대 초인종의 로비가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.hasIncomingInvite, "창을 내린 사람에게 받은 초대가 안 섰다(\(exit))")
+        #expect(tally.arrived == [ldRummyRoom], "초대 말풍선(onInviteArrived)이 한 번 안 울렸다(\(exit))")
+        store.stopPolling()
+    }
+
+    @Test(.gomokuDefaultsCleanup, arguments: LDWindowExit.allCases)
+    fileprivate func 큐브_방_폴링_상태에_합쳐진_시작_초인종은_창이_내려가도_판을_세운다(_ exit: LDWindowExit) async throws {
+        // 방(forming)의 5초 상태 조회가 나는 중 판 시작 초인종이 `stateAgain` 으로 합쳐지고 창이 내려간다. 고치기 전에는 60초 차례가
+        // 말풍선 없이 흘렀다(시간 초과 연속이면 탈락 · 판돈).
+        let forming = try ldRummyText("state_forming")
+        let active = try ldRummyText("state_active_my_turn")
+        let (store, host, tally) = ldRummy("r-room-\(exit)", me: ldRummyHost, handler: ldHandler(
+            ["rummy_state": { $0 < 2 ? forming : active }, "rummy_lobby": { _ in (try? ldRummyText("lobby_empty")) ?? "{}" }],
+            delays: ["rummy_state": 0.4]))
+        store.markEngaged(ldRummyRoom)           // 이 기기가 앉은 방(창 · 주의 · 말풍선 문)
+        await store.refreshMatch(id: ldRummyRoom)
+        try #require(store.match?.id == ldRummyRoom && store.match?.status == .forming, "준비: 방(forming)")
+        store.isWindowVisible = true
+        store.lastStateRequestAt = .distantPast
+        store.lastLobbyRequestAt = Date()        // 로비 걸음은 이 시험 밖
+        store.pollStepSeconds = 0.02
+        store.startPolling()
+        await ldWait { ldCount(host, "rummy_state") == 2 }
+        try #require(ldCount(host, "rummy_state") == 2, "준비: 폴링 걸음의 방 상태 조회가 날고 있다")
+        store.handleSignal()                     // 방장이 시작했다 — 도는 상태 조회에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        switch exit {
+        case .hidden: store.setWindowVisible(false)
+        case .occluded: store.setWindowOccluded(true)
+        case .stays: break
+        }
+        await ldWait(600) { store.match?.status == .active }
+        #expect(ldCount(host, "rummy_state") >= 3, "합쳐진 시작 초인종의 상태 조회가 폴링 취소와 함께 죽었다(\(exit))")
+        #expect(store.match?.status == .active, "시작된 판이 안 섰다(\(exit))")
+        if exit == .stays {
+            #expect(tally.attentions.isEmpty, "대조: 창이 보이고 앞에 있으면 말풍선은 없다")
+        } else {
+            #expect(tally.attentions.count == 1, "창을 내린 사람에게 판 시작 말풍선이 한 번 안 떴다(\(exit))")
+        }
+        store.stopPolling()
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 큐브_가려진_뒤_남은_폴링_걸음이_로비를_새로_내지_않는다() async throws {
+        let forming = try ldRummyText("state_forming")
+        let lobby = try ldRummyText("lobby_empty")
+        func make(_ label: String) async throws -> (RummyStore, String) {
+            let (store, host, _) = ldRummy(label, me: ldRummyHost, handler: ldHandler(
+                ["rummy_state": { _ in forming }, "rummy_lobby": { _ in lobby }], delays: ["rummy_state": 0.5]))
+            await store.refreshMatch(id: ldRummyRoom)
+            try #require(store.match?.status == .forming && store.phase == .room, "준비: 방 화면")
+            store.isWindowVisible = true
+            store.lastStateRequestAt = .distantPast
+            store.lastLobbyRequestAt = .distantPast
+            store.pollStepSeconds = 0.02
+            store.startPolling()
+            await ldWait { ldCount(host, "rummy_state") == 2 }
+            try #require(ldCount(host, "rummy_state") == 2, "준비: 폴링이 방 상태 조회를 냈다")
+            return (store, host)
+        }
+
+        // 기준선: 상태 조회(0.5초)가 나는 중 창을 내린다 → 남은 걸음(로비)은 안 나간다.
+        let (base, baseHost) = try await make("r-occl-base")
+        base.setWindowVisible(false)
+        await ldWait(300) { false }
+        #expect(ldCount(baseHost, "rummy_lobby") == 0, "기준선: 창을 내린 뒤 남은 걸음이 로비를 불렀다")
+
+        // 같은 순간 창이 가려진다 → 폴링 작업은 멈췄으니 남은 걸음도 로비를 새로 내면 안 된다.
+        let (store, host) = try await make("r-occl")
+        store.setWindowOccluded(true)
+        #expect(store.pollTask == nil)
+        await ldWait(300) { ldCount(host, "rummy_lobby") > 0 }
+        #expect(ldCount(host, "rummy_lobby") == 0, "가려진 창에서 취소된 폴링 걸음이 로비 요청을 새로 냈다")
+    }
+
+    // MARK: (f) 로비 · 받은함을 나르던 작업의 취소
+
+    @Test(.gomokuDefaultsCleanup)
+    func 체스_로비를_나르던_작업이_취소돼도_합쳐진_신청_초인종은_나간다() async throws {
+        let pendingIn = try ldChessText("chess_lobby__ok_pending_in")
+        let before = try ldChessLobbyBeforeInvite()
+        let pending = try ldChessPending("chess_state__ok_initial_their_turn")
+        let (store, host, arrived) = ldChess("c-carrier", me: ldChessB, handler: ldHandler(
+            ["chess_lobby": { $0 == 0 ? before : pendingIn }, "chess_state": { _ in pending }],
+            delays: ["chess_lobby": 0.4]))
+        let carrier = Task { await store.refreshLobby() }      // 폰 `.refreshable { await chess.refreshLobby() }` 의 모형
+        await ldWait { ldCount(host, "chess_lobby") == 1 }
+        try #require(ldCount(host, "chess_lobby") == 1, "준비: 첫 로비가 날고 있다")
+        store.handleSignal()                     // 신청 초인종 — 도는 로비에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        carrier.cancel()                         // 당겨서 새로고침 중 화면을 떠났다
+        await carrier.value
+        await ldWait(600) { store.incoming != nil }
+        #expect(ldCount(host, "chess_lobby") == 2, "나르던 작업의 취소가 합쳐진 초인종 조회를 죽였다")
+        #expect(store.incoming?.id == ldChessMatch, "받은 신청이 안 섰다")
+        #expect(arrived.ids == [ldChessMatch], "말풍선이 안 울렸다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 테트리스_로비를_나르던_작업이_취소돼도_합쳐진_신청_초인종은_나간다() async throws {
+        let (store, host, arrived) = ldTetris("t-carrier", handler: ldHandler(
+            ["tetris_lobby": { $0 == 0 ? ldTetrisLobby() : ldTetrisLobby(incoming: [ldTetrisInvite(peerKey: "from")]) }],
+            delays: ["tetris_lobby": 0.4]))
+        let carrier = Task { await store.refreshLobby() }
+        await ldWait { ldCount(host, "tetris_lobby") == 1 }
+        try #require(ldCount(host, "tetris_lobby") == 1, "준비: 첫 로비가 날고 있다")
+        store.handleSignal()
+        await ldWait { store.syncTask == nil }
+        carrier.cancel()
+        await carrier.value
+        await ldWait(600) { !store.incoming.isEmpty }
+        #expect(ldCount(host, "tetris_lobby") == 2, "나르던 작업의 취소가 합쳐진 초인종 조회를 죽였다")
+        #expect(store.incoming.map(\.id) == [ldTetrisMatch], "받은 신청이 안 섰다")
+        #expect(arrived.ids == [ldTetrisMatch], "말풍선이 안 울렸다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 큐브_로비를_나르던_작업이_취소돼도_합쳐진_초대_초인종은_나간다() async throws {
+        let lobbies = try ldRummyLobbies()
+        let (store, host, tally) = ldRummy("r-carrier", me: ldRummyInvitee, handler: ldHandler(
+            ["rummy_lobby": { $0 == 0 ? lobbies.empty : lobbies.withInvite }], delays: ["rummy_lobby": 0.4]))
+        let carrier = Task { await store.refreshLobby() }      // 폰 `GamesRummyLobby` · 게임 탭의 `.refreshable`
+        await ldWait { ldCount(host, "rummy_lobby") == 1 }
+        try #require(ldCount(host, "rummy_lobby") == 1, "준비: 첫 로비가 날고 있다")
+        store.handleSignal()
+        await ldWait { store.syncTask == nil }
+        carrier.cancel()
+        await carrier.value
+        await ldWait(600) { store.hasIncomingInvite }
+        #expect(ldCount(host, "rummy_lobby") == 2, "나르던 작업의 취소가 합쳐진 초인종 조회를 죽였다")
+        #expect(store.hasIncomingInvite, "받은 초대가 안 섰다")
+        #expect(tally.arrived == [ldRummyRoom], "초대 말풍선이 안 울렸다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 오목_로비를_나르던_작업이_취소돼도_겹친_로비_계기는_뒤따르는_한_번으로_간다() async throws {
+        let (store, host, _) = ldGomoku("g-carrier-lobby", handler: ldHandler(
+            ["gomoku_lobby": { ldGomokuLobby(wins: $0 == 0 ? 0 : 1) }], delays: ["gomoku_lobby": 0.4]))
+        let carrier = Task { await store.refreshLobby() }      // 폰 `GamesGomokuScreen` 의 `.refreshable`
+        await ldWait { ldCount(host, "gomoku_lobby") == 1 }
+        try #require(ldCount(host, "gomoku_lobby") == 1, "준비: 첫 로비가 날고 있다")
+        await store.refreshLobby()               // 겹친 계기(판 끝 전적 재조회 등) — 도는 로비에 합쳐진다
+        carrier.cancel()
+        await carrier.value
+        await ldWait(600) { store.record?.wins == 1 }
+        #expect(ldCount(host, "gomoku_lobby") == 2, "나르던 작업의 취소가 겹친 로비 계기를 죽였다")
+        #expect(store.record?.wins == 1, "판이 끝난 뒤의 전적이 안 섰다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 오목_받은함을_나르던_작업이_취소돼도_합쳐진_수락_초인종은_판을_연다() async throws {
+        // 오목의 초인종은 받은함으로 간다 — 폰 `.refreshable`(오목 화면 · 게임 탭)이 받은함을 나르다 취소되면 합쳐진 수락이 같이 죽어
+        // 흑인 신청자는 30초 뒤 첫 수를 자동 착수당했다.
+        let server = LDGomokuServer()
+        let (store, host, tally) = ldGomoku("g-carrier-inbox", handler: ldHandler(
+            ["gomoku_inbox": { _ in server.inbox() }, "gomoku_state": { _ in server.state() },
+             "gomoku_challenge": { _ in LDGomokuServer.challenge() }, "gomoku_lobby": { _ in ldGomokuLobby(wins: 0) }],
+            delays: ["gomoku_inbox": 0.4]))
+        await store.challenge(userID: ldRival)
+        try #require(store.outgoing?.id == ldGomokuMatch, "준비: 보낸 신청 하나")
+        let inboxBefore = ldCount(host, "gomoku_inbox")
+        let carrier = Task { await store.loadInbox() }
+        await ldWait { ldCount(host, "gomoku_inbox") == inboxBefore + 1 }
+        try #require(ldCount(host, "gomoku_inbox") == inboxBefore + 1, "준비: 받은함이 날고 있다")
+        server.accept()
+        store.handleSignal()                     // 수락 초인종 — 도는 받은함에 합쳐진다
+        await ldWait { store.syncTask == nil }
+        carrier.cancel()
+        await carrier.value
+        await ldWait(800) { store.match?.id == ldGomokuMatch }
+        #expect(ldCount(host, "gomoku_inbox") == inboxBefore + 2, "나르던 작업의 취소가 합쳐진 수락 초인종의 받은함을 죽였다")
+        #expect(store.match?.id == ldGomokuMatch, "수락된 판이 안 열렸다")
+        #expect(tally.attentions.map(\.kind) == [.matchStarted], "창이 없는 신청자에게 판 시작 말풍선이 안 떴다")
+    }
+
+    @Test(.gomokuDefaultsCleanup)
+    func 나르던_작업의_취소만으로는_더_읽지_않고_로그아웃_뒤에는_되살리지_않는다() async throws {
+        // 대조 둘: (i) 합쳐진 부름이 없으면 취소된 조회를 다시 내지 않는다(무한 반복 · 군더더기 없음).
+        //          (ii) 합쳐진 뒤 로그아웃(reset)이면 넘기지 않는다(앞 사람의 뒤따르는 조회를 다음 사람에게 넘기지 않는다).
+        let pendingIn = try ldChessText("chess_lobby__ok_pending_in")
+        let (alone, aloneHost, _) = ldChess("c-cancel-alone", me: ldChessB, handler: ldHandler(
+            ["chess_lobby": { _ in pendingIn }], delays: ["chess_lobby": 0.4]))
+        let aloneCarrier = Task { await alone.refreshLobby() }
+        await ldWait { ldCount(aloneHost, "chess_lobby") == 1 }
+        aloneCarrier.cancel()
+        await aloneCarrier.value
+        await ldWait(200) { ldCount(aloneHost, "chess_lobby") > 1 }
+        #expect(ldCount(aloneHost, "chess_lobby") == 1, "합쳐진 부름이 없는데 취소된 로비를 다시 냈다")
+
+        let (gone, goneHost, _) = ldChess("c-cancel-reset", me: ldChessB, handler: ldHandler(
+            ["chess_lobby": { _ in pendingIn }], delays: ["chess_lobby": 0.4]))
+        let goneCarrier = Task { await gone.refreshLobby() }
+        await ldWait { ldCount(goneHost, "chess_lobby") == 1 }
+        gone.handleSignal()
+        await ldWait { gone.syncTask == nil }
+        gone.reset()
+        goneCarrier.cancel()
+        await goneCarrier.value
+        await ldWait(200) { ldCount(goneHost, "chess_lobby") > 1 }
+        #expect(ldCount(goneHost, "chess_lobby") == 1, "로그아웃 뒤에 앞 사람의 뒤따르는 로비가 나갔다")
+        #expect(gone.incoming == nil)
+
+        let lobbies = try ldRummyLobbies()
+        let (rummy, rummyHost, _) = ldRummy("r-cancel-reset", me: ldRummyInvitee, handler: ldHandler(
+            ["rummy_lobby": { _ in lobbies.withInvite }], delays: ["rummy_lobby": 0.4]))
+        let rummyCarrier = Task { await rummy.refreshLobby() }
+        await ldWait { ldCount(rummyHost, "rummy_lobby") == 1 }
+        rummy.handleSignal()
+        await ldWait { rummy.syncTask == nil }
+        rummy.reset()
+        rummyCarrier.cancel()
+        await rummyCarrier.value
+        await ldWait(200) { ldCount(rummyHost, "rummy_lobby") > 1 }
+        #expect(ldCount(rummyHost, "rummy_lobby") == 1, "로그아웃 뒤에 앞 사람의 뒤따르는 로비가 나갔다(큐브)")
+        #expect(!rummy.hasIncomingInvite)
+    }
+}

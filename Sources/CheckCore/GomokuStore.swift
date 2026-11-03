@@ -1008,6 +1008,7 @@ package final class GomokuStore {
 
     /// 로비를 읽는다. 도는 중에 또 불리면 끝난 뒤 **한 번 더** 읽는다(`lobbyAgain` — `loadInbox` 의 `inboxAgain` 과 같은 꼴).
     /// 오목의 초인종은 받은함으로 가지만(`syncOnce`), 로비를 부르는 다른 계기가 도는 로비와 겹치면 그 계기가 통째로 빠졌다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffLobby` — 받은함은 `handOffInbox`).
     package func refreshLobby() async {
         guard host?.session != nil else { return }
         if lobbyInFlight {
@@ -1016,12 +1017,23 @@ package final class GomokuStore {
         }
         lobbyInFlight = true
         let generation = resetGeneration
+        let sessionGeneration = host?.sessionGeneration
+        // ★ defer 는 **거꾸로** 돈다 — 아래 줄(`lobbyInFlight` 내리기)이 먼저, 이 줄(넘기기)이 나중이다. 내리기 전에 넘기면
+        //   넘겨받은 조회가 "도는 중" 에 막혀 또 합쳐지기만 하고 아무도 안 읽는다.
+        var handOff = false
+        defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
         repeat {
             // 루프 **안에서 먼저** 내린다 — 이번 조회가 도는 동안 온 부름을 지우지 않게(requestSync 와 같은 규약).
             lobbyAgain = false
             lastLobbyRequestAt = clock()
-            guard let result = await perform({ try await $0.gomokuLobby(accessToken: $1) }) else { return }
+            guard let result = await perform({ try await $0.gomokuLobby(accessToken: $1) }) else {
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 더 읽을 수 없다. 합쳐진 부름이 있으면 넘긴다.
+                handOff = Task.isCancelled && (owed || lobbyAgain)
+                return
+            }
             switch result {
             case .success(let response):
                 applyLobby(response)
@@ -1030,7 +1042,21 @@ package final class GomokuStore {
                 // 빈 목록을 "대결할 사람이 없다"로 믿게 하지 않는다 — 화면이 연결 안내와 [다시 불러오기]를 그린다.
                 if !lobbyLoadFailed { lobbyLoadFailed = true }
             }
+            owed = true
         } while lobbyAgain && generation == resetGeneration
+    }
+
+    /// 로비를 **나르던 작업 자체**가 취소돼(폰 `.refreshable` · 화면을 떠남 — 구조적 작업이라 `outsidePolling` 이 못 지킨다) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(판 끝 전적 재조회 · [로비로] · 관전 나가기 · 창 열기)이 남았다 —
+    /// 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2 · 체스와 같은 수리).
+    /// 로그아웃(세대 · 세션 세대가 바뀜) 뒤에는 내지 않는다. 그 사이 다른 로비 조회가 이미 돌기 시작했으면 그것이 이 부름보다 나중에
+    /// 나간 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다(무한 반복 없음).
+    private func handOffLobby(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.lobbyInFlight else { return }
+            await self.refreshLobby()
+        }
     }
 
     package func applyLobby(_ response: GomokuLobbyResponse) {
@@ -1071,6 +1097,7 @@ package final class GomokuStore {
 
     /// 받은·보낸 신청과 진행 중 대국 id 를 읽는다. 도는 중에 또 불리면 **뒤따르는 한 번으로 합친다** —
     /// 버리면 조회가 나간 뒤 도착한 신호(신청·수락)가 다음 계기까지 화면에 안 온다.
+    /// 나르던 작업이 취소돼 조회가 접히면, 합쳐진 부름은 취소 밖으로 넘긴다(`handOffInbox` — 오목의 초인종은 여기로 온다).
     package func loadInbox() async {
         guard host?.session != nil else { return }
         if inboxInFlight {
@@ -1079,7 +1106,11 @@ package final class GomokuStore {
         }
         inboxInFlight = true
         let generation = resetGeneration
-        repeat {
+        let sessionGeneration = host?.sessionGeneration
+        // 이번 바퀴가 합쳐진 부름의 몫인가(첫 바퀴는 부른 작업 자신의 몫).
+        var owed = false
+        var handOff = false
+        reading: repeat {
             inboxAgain = false
             lastInboxRequestAt = clock()
             inboxRequestOutgoingRevision = outgoingRevision
@@ -1093,10 +1124,30 @@ package final class GomokuStore {
                 Self.logger.notice("inbox request failed")
                 if !inboxLoadFailed { inboxLoadFailed = true }
             case nil:
-                break
+                // 나르던 작업(폰 `.refreshable` 등)이 취소됐다 — 이 작업 안에서는 다음 조회도 곧바로 취소로 접힌다.
+                // 합쳐진 부름(수락 초인종 등)이 있으면 취소 밖으로 넘기고 빠진다.
+                if Task.isCancelled {
+                    handOff = owed || inboxAgain
+                    break reading
+                }
             }
+            owed = true
         } while inboxAgain
         inboxInFlight = false
+        // `inboxInFlight` 를 내린 **뒤에** 넘긴다 — 먼저 넘기면 넘겨받은 조회가 "도는 중" 에 막혀 또 합쳐지기만 한다.
+        if handOff { handOffInbox(generation: generation, sessionGeneration: sessionGeneration) }
+    }
+
+    /// 받은함을 **나르던 작업 자체**가 취소돼(폰 오목 화면 · 게임 탭의 `.refreshable` — `outsidePolling` 이 못 지키는 구조적 작업) 조회가
+    /// 접혔는데, 그 조회에 합쳐진 부름(신청·수락 초인종)이 남았다 — 그 한 번을 **취소 밖** Task 로 낸다(2026-11-03 적대 검증 P2 와 같은 갈래:
+    /// 버리면 창이 없는 흑 신청자는 수락을 모른 채 30초 뒤 첫 수를 자동 착수당한다). 로그아웃 뒤에는 내지 않고, 그 사이 다른 받은함
+    /// 조회가 돌기 시작했으면 그것이 더 나중 조회라 내지 않는다. 넘겨받은 조회는 취소되지 않는 작업이라 또 넘길 일이 없다.
+    private func handOffInbox(generation: Int, sessionGeneration: Int?) {
+        Task { @MainActor [weak self] in
+            guard let self, generation == self.resetGeneration, self.host?.sessionGeneration == sessionGeneration,
+                  !self.inboxInFlight else { return }
+            await self.loadInbox()
+        }
     }
 
     package func applyInbox(_ response: GomokuInboxResponse) async {

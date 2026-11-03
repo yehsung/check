@@ -1,7 +1,7 @@
 {
     "state": {
         "match": {
-            "id": "dee7fac8-0df3-42dc-89be-639ca0911c7c",
+            "id": "ca2575de-faf6-4895-8934-9e41b2bc6c6f",
             "turn": null,
             "black": "b0000000-0000-4000-8000-000000000001",
             "board": "bbbbbbbbbbbbbbbbbbbbbbbbbbbwwwwwwwwwwwwwwwwwwwwwwwwwwwbbwwwwwbbb",
@@ -23,11 +23,11 @@
             "challenger": "b0000000-0000-4000-8000-000000000001",
             "end_reason": "board_full",
             "move_count": 1,
-            "started_ms": 1793662005456,
+            "started_ms": 1793670094998,
             "deadline_ms": null,
-            "finished_ms": 1793662005457,
-            "turn_started_ms": 1793662005457,
-            "invite_expires_ms": 1793662065455
+            "finished_ms": 1793670095000,
+            "turn_started_ms": 1793670094999,
+            "invite_expires_ms": 1793670154998
         },
         "moves": [
             {
@@ -35,7 +35,7 @@
                 "seq": 1,
                 "auto": false,
                 "kind": "stone",
-                "at_ms": 1793662005457,
+                "at_ms": 1793670094999,
                 "color": "black",
                 "flipped": [
                     62
@@ -70,7 +70,7 @@
         ],
         "ruby_balance": 95,
         "turn_seconds": 30,
-        "server_now_ms": 1793662005458,
+        "server_now_ms": 1793670095000,
         "my_auto_streak": 0,
         "black_auto_streak": 0,
         "white_auto_streak": 0,

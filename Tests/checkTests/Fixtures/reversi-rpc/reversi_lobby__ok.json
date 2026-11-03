@@ -152,7 +152,7 @@
     "matches": [
     ],
     "turn_seconds": 30,
-    "server_now_ms": 1793662005403,
+    "server_now_ms": 1793670094953,
     "invite_ttl_seconds": 60,
     "turn_grace_seconds": 2,
     "auto_abandon_streak": 3

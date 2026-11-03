@@ -4,7 +4,7 @@
     "side": "challenger",
     "state": {
         "match": {
-            "id": "0a772f8e-203b-4ca6-a90c-b93a8073ff5f",
+            "id": "f1571f37-c039-4c8c-9cfc-d622973fc5bf",
             "turn": null,
             "black": null,
             "board": "...........................wb......bw...........................",
@@ -27,7 +27,7 @@
             "deadline_ms": null,
             "finished_ms": null,
             "turn_started_ms": null,
-            "invite_expires_ms": 1793662065494
+            "invite_expires_ms": 1793670155033
         },
         "moves": [
         ],
@@ -47,7 +47,7 @@
         ],
         "ruby_balance": 100,
         "turn_seconds": 30,
-        "server_now_ms": 1793662005500,
+        "server_now_ms": 1793670095039,
         "my_auto_streak": null,
         "black_auto_streak": 0,
         "white_auto_streak": 0,

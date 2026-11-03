@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -870,6 +871,41 @@ class NowScreenSnapshotTest {
     @Test fun workingFocusPhoneDark() = checkWorkingFocus("now-working-focus-phone-dark", dark = true)
 
     @Test fun workingFocusPhoneLargeFont() = checkWorkingFocus("now-working-focus-phone-large-font", dark = false, fontScale = 1.6f)
+
+    /** 글꼴 '크게'(1.3 — iOS xxxLarge 쯤): 아직 한 줄 모양이다(검토 F5). 칩 · 배지 · 경과가 있어도 이름이 말줄임표만 남지 않는지 사람이 PNG 를 연다. */
+    @Test fun workingFocusPhoneFont130() = checkWorkingFocus("now-working-focus-phone-font-130", dark = false, fontScale = 1.3f)
+
+    /**
+     * 큰 글자 모양의 기준(검토 F5): 줄을 쌓는 것은 iOS `NowWorkingRow` 의 `isAccessibilitySize` 갈래(AX 크기부터)다 — 이 화면 새 버전 안내 ·
+     * 나 탭 AI 한도와 같은 1.5 자리. 1.0 · 1.3('크게' · iOS xxxLarge 쯤)은 판 7 전과 같은 한 줄 모양(우리 팀 경과가 이름 줄 오른쪽),
+     * 1.5 · 1.6 은 쌓은 모양(경과가 이름 아래 줄)이다. 잰다: 민트(우리 팀 · 집중) 줄에서 경과 글자의 윗변이 이름 글자의 아랫변 아래인가.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun workingRowStacksOnlyFromAccessibilitySizes() {
+        loadFocus()
+        val name = store.workingPeople(clock.now()).first { it.id == FOCUS_TEAMMATE }.name
+        val inRow = hasAnyAncestor(hasTestTag(NowTags.workingRow(FOCUS_TEAMMATE)))
+        // 경과 글자 = "근무 …째"(얼굴의 상태 점 "근무 중"과 가른다).
+        val elapsed = SemanticsMatcher("우리 팀 경과") { node ->
+            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription).orEmpty().any { it.startsWith("근무 ") && it.endsWith("째") }
+        }
+        fun stackedAt(scale: Float): Boolean {
+            var stacked: Boolean? = null
+            runComposeUiTest {
+                setContent { WorkingOnly(false, focusOn, scale) }
+                waitForIdle()
+                val nameBox = onNode(hasText(name) and inRow, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                val elapsedBox = onNode(elapsed and inRow, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                stacked = elapsedBox.top >= nameBox.bottom
+            }
+            return requireNotNull(stacked)
+        }
+        assertEquals("보통 글자(1.0)는 한 줄 모양", false, stackedAt(1.0f))
+        assertEquals("'크게'(1.3 — iOS xxxLarge 쯤)는 아직 한 줄 모양이어야 한다(iOS 는 AX 크기부터 쌓는다)", false, stackedAt(1.3f))
+        assertEquals("접근성 크기(1.5)부터 쌓는다", true, stackedAt(1.5f))
+        assertEquals("1.6 은 쌓은 모양", true, stackedAt(1.6f))
+    }
 
     /**
      * 부르는 자리: 집중인 줄(우리 팀 민트 · 다른 팀 하늘)에만 칩이 서고, 이 줄은 조각을 하나씩 읽으므로 칩 자신이 "집중"이 아니라 "집중 중"으로 읽힌다.

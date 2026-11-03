@@ -625,17 +625,26 @@ private fun WorkingGroup(
 }
 
 /**
+ * 근무 중 줄의 큰 글자 모양 기준(검토 F5). iOS `NowWorkingRow` 는 접근성 크기(AX)부터 쌓는다 — 이 화면 새 버전 안내([NowUpdateNoticeLayout]) ·
+ * 나 탭 AI 한도와 같은 1.5 자리다. 명단 줄([TeamRosterLayout] 1.3)을 따르면 '크게'(1.3 — iOS xxxLarge 쯤)에서 집중과 무관한 모든 줄의 배치가
+ * 판 7 전과 달라진다(iOS xxxLarge 는 한 줄 그대로).
+ */
+object NowWorkingRowLayout {
+    const val STACK_FONT_SCALE: Float = NowUpdateNoticeLayout.STACK_FONT_SCALE
+}
+
+/**
  * 사람 한 줄. [isFocused] = 이 사람이 집중 중(우리 팀 · 다른 팀 줄 모두 — 대표 답 #d_6A32rmcoJZZd). 이름 뒤 '집중' 칩 — 이 줄은 조각을 하나씩
  * 읽으므로 TalkBack 은 칩 자신이 "집중 중"으로 말한다(FocusChip). 다른 팀 줄의 [말 걸기]는 그대로 대화를 연다(보내기만 막힌다).
  *
- * 두 모양(iOS NowWorkingRow 의 보통 · 접근성 크기 갈래 — 칩은 두 모양 모두 이름 줄에 선다): 큰 글자([TeamRosterLayout.STACK_FONT_SCALE] 이상 —
- * 명단 줄과 같은 기준)에서는 첫 줄이 얼굴 · 이름(+ 칩)(+ 다른 팀 말 걸기)이고, 상태메시지 · 끊김 부제 · 우리 팀 경과는 아랫줄로 내린다.
+ * 두 모양(iOS NowWorkingRow 의 보통 · 접근성 크기 갈래 — 칩은 두 모양 모두 이름 줄에 선다): 큰 글자([NowWorkingRowLayout.STACK_FONT_SCALE] 이상 —
+ * iOS `isAccessibilitySize` 자리)에서는 첫 줄이 얼굴 · 이름(+ 칩)(+ 다른 팀 말 걸기)이고, 상태메시지 · 끊김 부제 · 우리 팀 경과는 아랫줄로 내린다.
  * 한 줄에 얼굴 · 이름 · 배지 · 칩 · 경과를 두면 큰 글자에서 이름이 말줄임표만 남는다(판 7 큰 글꼴 골든 실측 — iOS 는 AX5 에서 이름이 꺾였다).
  */
 @Composable
 private fun WorkingRow(person: NowWorkingPerson, isFocused: Boolean, now: SwiftDate, onTalk: () -> Unit) {
     val colors = AingTheme.colors
-    val stacked = LocalDensity.current.fontScale >= TeamRosterLayout.STACK_FONT_SCALE
+    val stacked = LocalDensity.current.fontScale >= NowWorkingRowLayout.STACK_FONT_SCALE
     val rowModifier = Modifier.fillMaxWidth().heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 6.dp).testTag(NowTags.workingRow(person.id))
     val avatar: @Composable () -> Unit = {
         PersonAvatar(person.name, person.id, person.avatarURL?.absoluteString, 36.dp, status = if (person.isStale) PresenceStatus.pending else PresenceStatus.working)

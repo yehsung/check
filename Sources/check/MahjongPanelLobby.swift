@@ -244,8 +244,8 @@ private struct MahjongUserRow: View {
             if isMember {
                 MahjongChip(text: MahjongText.invited, tint: CheckTheme.secondaryText)
             } else {
-                MahjongCapsuleButton(title: locked ? "🔒" : MahjongText.invite, tint: CheckTheme.accent, height: 28,
-                                     isEnabled: !locked && !short && !store.isWorking) {
+                MahjongCapsuleButton(title: locked ? "" : MahjongText.invite, systemImage: locked ? MahjongText.lockSymbol : nil,
+                                     tint: CheckTheme.accent, height: 28, isEnabled: !locked && !short && !store.isWorking) {
                     if store.match?.match?.matchStatus == .forming || store.lobbyRoom != nil {
                         Task { await store.invite(userID: user.id) }
                     } else {
@@ -253,6 +253,7 @@ private struct MahjongUserRow: View {
                     }
                 }
                 .frame(width: 64)
+                .accessibilityLabel(locked ? MahjongText.lockedLabel : MahjongText.invite)
             }
         }
         .padding(.horizontal, 10)

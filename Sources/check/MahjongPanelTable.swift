@@ -285,6 +285,8 @@ struct MahjongSeatCard: View {
     var me: ChessPlayerFace?
 
     private var isMine: Bool { style == .mine }
+    /// 연습판의 남 자리 = 봇(UX:359 '연습 상대' 꼬리표).
+    private var isPracticeBot: Bool { store.isPractice && seat.seatNo != payload.mySeat }
     private var isTurn: Bool { payload.match?.phase == "turn" && payload.match?.turnSeat == seat.seatNo }
     private var name: String { seat.deleted == true ? MahjongText.deletedChip : (me?.name ?? seat.user?.displayName ?? "?") }
 
@@ -338,7 +340,11 @@ struct MahjongSeatCard: View {
     private var top: some View {
         HStack(spacing: 8) {
             avatar(30)
-            Text(name).font(.callout.weight(.semibold)).lineLimit(1).frame(maxWidth: 110, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name).font(.callout.weight(.semibold)).lineLimit(1)
+                if isPracticeBot { botTag }
+            }
+            .frame(maxWidth: 110, alignment: .leading)
             score
             HStack(spacing: 3) { chips }
             Spacer(minLength: 0)
@@ -349,7 +355,10 @@ struct MahjongSeatCard: View {
     private var side: some View {
         VStack(spacing: 8) {
             avatar(52)
-            Text(name).font(.callout.weight(.semibold)).lineLimit(1)
+            VStack(spacing: 2) {
+                Text(name).font(.callout.weight(.semibold)).lineLimit(1)
+                if isPracticeBot { botTag }
+            }
             score
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
@@ -363,6 +372,14 @@ struct MahjongSeatCard: View {
             }
         }
         .padding(10)
+    }
+
+    /// '연습 상대' 꼬리표(작은 글자 — 칩보다 가볍게).
+    private var botTag: some View {
+        Text(MahjongText.practiceBotTag)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(CheckTheme.working)
+            .lineLimit(1)
     }
 
     private var mine: some View {

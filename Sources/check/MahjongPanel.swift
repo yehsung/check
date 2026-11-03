@@ -105,6 +105,11 @@ enum MahjongText {
     static let emptyRanking = "아직 10판을 채운 사람이 없어요"
     static let gamesUntilRanked = "판 더 하면 순위에 올라요"
     static let firstTimeTitle = "처음이에요"
+    /// 사람 줄 잠금(대국 중 · 업데이트 필요 · 집중 모드) — SF Symbol(이모지 아님).
+    static let lockSymbol = "lock.fill"
+    static let lockedLabel = "지금은 초대할 수 없어요"
+    /// 연습판 봇 자리 카드 꼬리표(UX:359).
+    static let practiceBotTag = "연습 상대"
 
     static func record(avg: Double?, games: Int) -> String {
         guard games >= MahjongRules.rankingMinGames, let avg else { return "\(games)판 · \(recordUnranked)" }
@@ -444,6 +449,8 @@ struct MahjongChip: View {
 /// 캡슐 단추(앱의 둥근 단추 — 다른 마작 앱의 버튼 그림을 쓰지 않는다).
 struct MahjongCapsuleButton: View {
     let title: String
+    /// 글자 앞(또는 글자 대신) SF Symbol — 이모지를 쓰지 않는다(잠금 = `lock.fill`).
+    var systemImage: String? = nil
     var tint: Color = CheckTheme.accent
     var filled = true
     var height: CGFloat = 32
@@ -452,7 +459,12 @@ struct MahjongCapsuleButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
+            HStack(spacing: 4) {
+                if let systemImage {
+                    Image(systemName: systemImage).font(.system(size: max(10, height * 0.38), weight: .bold))
+                }
+                if !title.isEmpty { Text(title) }
+            }
                 .font(.callout.weight(.bold))
                 .foregroundStyle(filled ? Color.white : tint)
                 .lineLimit(1)

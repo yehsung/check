@@ -320,6 +320,71 @@ struct V03xxMahjongPanelRenderTests {
         #expect(mjMaxDiff(dotted, lobby, inner) > 60, "점이 없다")
     }
 
+    // MARK: ⑦-5 작은 고침(U2) — 잠금 아이콘 · '넉넉히' 링 · 울기 안내 · 연습 상대 · [치] 패
+
+    @Test
+    func untimedPracticeHidesMyClockAndBotsCarryAPracticeTag() throws {
+        // 없으면: '넉넉히' 연습판(결정 시계 칸 0)에 내 링이 '예비 0'으로 서거나, 봇 자리 카드에 '연습 상대' 꼬리표가 없어도 초록이다.
+        let untimed = try mjPracticeStore(timed: false, payload: mjActive(matchID: "ai-practice-1"))
+        let timed = try mjPracticeStore(timed: true, payload: mjActive(matchID: "ai-practice-1"))
+        let idle = try mjPracticeStore(timed: false, payload: mjActive(matchID: "ai-practice-1") { $0["my_decision"] = NSNull() })
+        let untimedBitmap = try mjBitmap(mjPanel(untimed))
+        let timedBitmap = try mjBitmap(mjPanel(timed))
+        mjSave(untimedBitmap, "practice-untimed")
+        let ring = mjBody(MahjongMatchLayout.mySeat).insetBy(dx: 4, dy: 4)
+        #expect(mjMaxDiff(timedBitmap, untimedBitmap, ring) > 60, "기준선: '실전처럼'에는 링이 선다")
+        #expect(mjMaxDiff(try mjBitmap(mjPanel(idle)), untimedBitmap, ring) <= 8, "'넉넉히'인데 내 링이 섰다")
+        // 연습 상대 — 루비 판의 같은 자리 카드와 다르다(내 카드는 같다).
+        let ruby = try mjBitmap(mjPanel(try mjTableStore(mjActive())))
+        for rect in [MahjongMatchLayout.leftSeat, MahjongMatchLayout.rightSeat, MahjongMatchLayout.topSeat] {
+            #expect(mjMaxDiff(timedBitmap, ruby, mjBody(rect).insetBy(dx: 4, dy: 4)) > 60, "봇 카드에 '연습 상대'가 없다")
+        }
+        #expect(mjMaxDiff(timedBitmap, ruby, ring) <= 8, "내 카드에도 꼬리표가 붙었다")
+        #expect(MahjongText.practiceBotTag == "연습 상대")
+    }
+
+    @Test
+    func idleCallHintSitsAboveThePassButtonOnce() throws {
+        // 없으면: '넉넉히' 울기 안내(5초 뒤)가 화면 어디에도 없거나, 상태 줄과 ACTIONS 에 두 번 쓰여도 초록이다.
+        let payload = mjCall()
+        let hinted = try mjPracticeStore(timed: false, payload: payload)
+        hinted.notice = MahjongNoticeText.practiceIdleCallHint
+        let quiet = try mjPracticeStore(timed: false, payload: payload)
+        let with = try mjBitmap(mjPanel(hinted))
+        let without = try mjBitmap(mjPanel(quiet))
+        mjSave(with, "practice-call-hint")
+        let actions = mjBody(MahjongMatchLayout.actions)
+        let top = CGRect(x: actions.minX, y: actions.minY, width: actions.width, height: 14)
+        #expect(mjMaxDiff(with, without, top) > 60, "ACTIONS 위에 울기 안내가 없다")
+        let status = mjBody(CGRect(x: MahjongMatchLayout.hand.minX, y: MahjongMatchLayout.hand.minY, width: MahjongMatchLayout.hand.width,
+                                   height: MahjongMatchLayout.statusLineHeight))
+        #expect(mjMaxDiff(with, without, status) <= 8, "상태 줄에도 같은 안내가 또 쓰였다")
+    }
+
+    @Test
+    func chiButtonCarriesMyTwoTilesAndLockIsASymbol() throws {
+        // 없으면: [치] 단추가 글자뿐이라 어떤 두 장으로 우는지 모르거나(§5.4), 사람 줄 잠금이 이모지(🔒 — 글꼴마다 다른 그림)여도 초록이다.
+        let bitmap = try mjBitmap(mjPanel(try mjTableStore(mjCall())))
+        mjSave(bitmap, "call-chi-tiles")
+        let actions = mjBody(MahjongMatchLayout.actions)
+        #expect(mjCreamBlobs(bitmap, rect: actions, minHeight: 30) == 2, "[치] 단추에 내 패 두 장이 없다")
+        // 기준선: 퐁만 되는 프롬프트엔 패 그림이 없다.
+        let pon = try mjBitmap(mjPanel(try mjTableStore(mjCall { state in
+            var decision = state["my_decision"] as! [String: Any]
+            decision["chi"] = [] as [Any]
+            decision["pon"] = [[mjID(3, 0), mjID(3, 1)]]
+            state["my_decision"] = decision
+        })))
+        #expect(mjCreamBlobs(pon, rect: actions, minHeight: 30) == 0)
+        #expect(MahjongText.lockSymbol == "lock.fill" && NSImage(systemSymbolName: MahjongText.lockSymbol, accessibilityDescription: nil) != nil)
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/check")
+        for name in try FileManager.default.contentsOfDirectory(atPath: sources.path) where name.hasPrefix("Mahjong") {
+            let text = try String(contentsOf: sources.appendingPathComponent(name), encoding: .utf8)
+            #expect(!text.contains("\u{1F512}"), "\(name) 에 잠금 이모지가 남았다")
+        }
+    }
+
     // MARK: ⑦-4 움직임(U2)
 
     @Test
@@ -544,6 +609,17 @@ private func mjTableStore(_ state: [String: Any]) throws -> MahjongStore {
     let store = MahjongStore(clock: { mjNow })
     let outcome = store.applyState(try mjDecode(state))
     #expect(outcome == .applied)
+    return store
+}
+
+/// 연습판 스토어(사람 자리 0 · 판 = 주어진 state).
+@MainActor
+private func mjPracticeStore(timed: Bool, payload: [String: Any]) throws -> MahjongStore {
+    let store = MahjongStore(clock: { mjNow })
+    store.practice = MahjongPracticeSession(matchID: "ai-practice-1", format: .tonpuu, timed: timed, humanSeat: 0, generation: 1,
+                                            payload: try mjDecode(payload))
+    store.showsPractice = true
+    #expect(store.isPractice)
     return store
 }
 

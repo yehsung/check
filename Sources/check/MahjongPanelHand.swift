@@ -187,7 +187,8 @@ private struct MahjongStatusLine: View {
 
     private var line: String {
         if payload.myAway != nil || payload.mySeatRow?.away == true { return MahjongNoticeText.away }
-        if let notice = store.notice { return notice }
+        // 울기 안내('[넘기기]를 누르면 계속돼요')는 [넘기기] 바로 위 ACTIONS 칸이 보인다 — 두 번 쓰지 않는다.
+        if let notice = store.notice, notice != MahjongNoticeText.practiceIdleCallHint { return notice }
         if store.riichiArmed { return MahjongText.riichiArmedHint }
         if let hoverTile, let turn, turn.discard.contains(hoverTile) { return preview(discarding: hoverTile) }
         if let turn, payload.mySeatRow?.riichi != true, payload.mySeatRow?.melds?.isEmpty == false {
@@ -202,7 +203,8 @@ private struct MahjongStatusLine: View {
     }
 
     private var lineColor: Color {
-        if payload.myAway != nil || store.notice != nil { return CheckTheme.pending }
+        if payload.myAway != nil { return CheckTheme.pending }
+        if let notice = store.notice, notice != MahjongNoticeText.practiceIdleCallHint { return CheckTheme.pending }
         if store.riichiArmed { return CheckTheme.accent }
         return CheckTheme.primaryText
     }
@@ -253,6 +255,8 @@ enum MahjongMyClock {
     }
 
     static func window(store: MahjongStore) -> Window? {
+        // '넉넉히' 연습판은 결정 시계 칸이 0 이다(C3) — 링·막대·3초 경고를 모두 숨긴다(1970 기준 '예비 0' 이 뜨지 않게).
+        if store.isPractice, store.practice?.timed == false { return nil }
         switch store.myDecision {
         case .turn(let turn)?:
             guard let started = MahjongClockMath.local(turn.startedMs, store: store) else { return nil }
@@ -406,12 +410,21 @@ struct MahjongActionsView: View {
 
     @ViewBuilder
     private func callContent(_ call: MahjongDecision.Call) -> some View {
-        MahjongCallClockBar(store: store)
-            .frame(height: 4)
+        if store.notice == MahjongNoticeText.practiceIdleCallHint {
+            // '넉넉히' 연습판 울기 안내 한 줄(C3 — 5초 뒤) — [넘기기] 위. 이때는 시계 막대가 없다(넉넉히).
+            Text(MahjongNoticeText.practiceIdleCallHint)
+                .font(.caption2.weight(.semibold)).foregroundStyle(CheckTheme.pending)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .frame(height: 12)
+        } else {
+            MahjongCallClockBar(store: store)
+                .frame(height: 4)
+        }
         if chiOpen, call.chi.count > 1 {
             HStack(spacing: 4) {
                 ForEach(Array(call.chi.enumerated()), id: \.offset) { _, pair in
-                    action(pair.map { "\($0.number ?? 0)" }.joined(separator: "·"), CheckTheme.working) {
+                    MahjongCallTilesButton(title: nil, tiles: pair, isEnabled: !store.isWorking && !store.isAnsweringCall) {
                         chiOpen = false
                         Task { await store.call(.chi, tiles: pair) }
                     }
@@ -433,8 +446,14 @@ struct MahjongActionsView: View {
                     action(MahjongText.kan, CheckTheme.working) { Task { await store.call(.minkan, tiles: kan) } }
                 }
                 if let chi = call.chi.first {
-                    action(call.chi.count > 1 ? "\(MahjongText.chi) ▸" : MahjongText.chi, CheckTheme.working) {
-                        if call.chi.count > 1 { chiOpen = true } else { Task { await store.call(.chi, tiles: chi) } }
+                    // 쓰일 내 패 두 장을 작게 붙인다(§5.4). 조합이 여럿이면 ▸ 로 고르는 줄을 연다(그 줄도 패 그림).
+                    if call.chi.count > 1 {
+                        action("\(MahjongText.chi) ▸", CheckTheme.working) { chiOpen = true }
+                    } else {
+                        MahjongCallTilesButton(title: MahjongText.chi, tiles: chi,
+                                               isEnabled: !store.isWorking && !store.isAnsweringCall) {
+                            Task { await store.call(.chi, tiles: chi) }
+                        }
                     }
                 }
             }
@@ -471,5 +490,40 @@ private struct MahjongCallClockBar: View {
                 }
             }
         }
+    }
+}
+
+/// 울기 단추 + 쓰일 내 패 작게(치 — §5.4). 패는 24×32 를 0.72 로 줄여 28pt 단추 안에 세운다.
+struct MahjongCallTilesButton: View {
+    static let tileScale: CGFloat = 0.72
+
+    let title: String?
+    let tiles: [MahjongTile]
+    var tint: Color = CheckTheme.working
+    var isEnabled = true
+    let action: () -> Void
+
+    var body: some View {
+        let size = MahjongTileSize.smallMeld
+        Button(action: action) {
+            HStack(spacing: 3) {
+                if let title {
+                    Text(title).font(.callout.weight(.bold)).foregroundStyle(Color.white).lineLimit(1)
+                }
+                ForEach(Array(tiles.enumerated()), id: \.offset) { _, tile in
+                    MahjongTileView(face: MahjongTileFace(tile), size: size, cornerLabels: false)
+                        .scaleEffect(Self.tileScale)
+                        .frame(width: size.width * Self.tileScale, height: size.height * Self.tileScale)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Capsule().fill(tint))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .opacity(isEnabled ? 1 : 0.45)
+        .frame(height: 28)
+        .accessibilityLabel(([title ?? MahjongText.chi] + tiles.map { MahjongTileFace($0).spokenName }).joined(separator: " "))
     }
 }

@@ -230,7 +230,7 @@ struct MeDailyMissionViewTests {
         #expect(macRows.contains(#"case "reversi": return ReversiEntryIcon.resolved"#), "맥 일일 줄이 뒤집기 입구 기호를 안 쓴다")
         // 내부 식별자는 `reversi` 하나다(1:1 완전 일치 — 접두가 아니다).
         #expect(MeText.dailyMissionIcon(game: "reversi1") == MeText.missionFallbackIcon)
-        #expect(MeText.dailyMissionIcon(game: "othello") == MeText.missionFallbackIcon)
+        #expect(MeText.dailyMissionIcon(game: "flip") == MeText.missionFallbackIcon)
 
         // 서버가 지금 내리는 아홉 줄 전부: 별이 없고 · 서로 다르다(줄을 눈으로 가른다).
         let icons = Self.serverRoster.map { MeText.dailyMissionIcon(game: $0.game) }

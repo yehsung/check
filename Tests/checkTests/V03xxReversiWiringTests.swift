@@ -227,20 +227,27 @@ struct V03xxReversiWiringTests {
         #expect(skewed == ["Reversi"] && skewed != [RealtimeLinkConstants.reversiBroadcastEvent])
     }
 
-    // MARK: #4 폰 러너(모바일 세션 파일 — 빈 가지만)
+    // MARK: #4 폰 러너(모바일 세션 파일 — 폰 1.0.17 부터 잇는다)
 
     /// 없으면: 폰 러너의 exhaustive switch 가 컴파일되지 않거나(가지 없음 — `#if os(iOS)` 밖이라 맥 빌드도 깨진다), `.drain` 으로
-    /// 떨어뜨리면 같은 계정의 맥이 판을 하는 동안 수마다 폰이 **메시지** 요약·이력을 한 번씩 더 조회한다. 폰은 다음 폰 판에서 잇는다.
+    /// 떨어뜨리면 같은 계정의 맥이 판을 하는 동안 수마다 폰이 **메시지** 요약·이력을 한 번씩 더 조회한다. 가지가 비면(1.0.16 까지의 `break`)
+    /// 폰 판이 신청·수락·상대 수를 다음 폴링까지 모른다 — 한 수 30초라 그 사이 서버가 대신 둔다.
+    /// 폰 1.0.17(대표 답 #d_DdwzmxPClGqk "다 넣기")부터 `reversi?.handleSignal()` 로 잇고 조인 따라잡기에 `reversi?.realtimeDidJoin()` 을 더한다.
+    /// 요청 건수로 재는 못은 `GamesReversiWiringTests`(폰 스위트)에 있다.
     @Test
-    func thePhoneRunnerKeepsAnEmptyReversiBranch() throws {
+    func thePhoneRunnerWiresTheReversiBranchToTheStore() throws {
         let runner = try rwtPhoneRunner()
         #expect(rwtCount("case .reversiSignal", in: runner) == 1, "폰 러너에 아잉 뒤집기 가지가 하나가 아니다")
         let branch = try #require(rwtBetween(runner, "case .reversiSignal:", "case .megaphoneSignal:"))
-        #expect(branch == "case .reversiSignal: break ", "폰 러너의 아잉 뒤집기 가지가 비어 있지 않다: \(branch)")
-        #expect(!branch.contains("?.handleSignal()") && !branch.contains("requestDrain"))
-        // ★ 기준선: 큐브 가지는 잇는다(같은 읽기가 '잇는 가지'를 알아본다).
+        #expect(branch == "case .reversiSignal: reversi?.handleSignal() ", "폰 러너의 아잉 뒤집기 가지가 스토어로 안 간다: \(branch)")
+        #expect(!branch.contains("requestDrain") && !branch.contains("requestMessageActivity"), "아잉 뒤집기 초인종이 메시지 조회로 샌다")
+        #expect(runner.contains("rummy?.realtimeDidJoin() reversi?.realtimeDidJoin()"), "조인 따라잡기에 아잉 뒤집기가 없다(큐브 바로 뒤)")
+        #expect(runner.contains("@ObservationIgnored package weak var reversi: ReversiStore?"), "러너가 스토어를 약한 참조로 들지 않는다")
+        // ★ 기준선: 큐브 가지는 같은 읽기로 '잇는 가지'다 · 체스 가지는 여전히 비어 있다(같은 읽기가 빈 가지를 알아본다).
         let rummy = try #require(rwtBetween(runner, "case .rummySignal:", "case .reversiSignal:"))
         #expect(rummy.contains("rummy?.handleSignal()"))
+        let chess = try #require(rwtBetween(runner, "case .chessSignal:", "case .tetrisSignal:"))
+        #expect(chess == "case .chessSignal: break ", "기준선이 안 갈린다 — 빈 가지 읽기가 바뀌었다: \(chess)")
     }
 
     // MARK: #5~#12 맥 소유 배선(WorkTimerStore · WorkTimerStoreRealtime)

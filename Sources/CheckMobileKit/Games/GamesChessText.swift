@@ -150,24 +150,28 @@ package enum ChessPhoneText {
     ///   지금은 문구 함수가 **두는 판(playing)과 막힌 입구(blocked)를 둘 다** 받는다.
     package enum BusyGame: String, CaseIterable, Sendable {
         case gomoku, chess, tetris, rummy
+        /// 아잉 뒤집기(폰 1.0.17). 이름 글자는 코어 `ReversiNoticeText.gameName` 한 곳에서 받는다(맥 `ReversiText.gameName` 과 같은 출처).
+        case reversi
 
-        /// 게임 이름("오목" · "체스" · "1:1 테트리스").
+        /// 게임 이름("오목" · "체스" · "1:1 테트리스" · "아잉 큐브" · "아잉 뒤집기").
         package var gameName: String {
             switch self {
             case .gomoku: return "오목"
             case .chess: return "체스"
             case .tetris: return "1:1 테트리스"
             case .rummy: return "아잉 큐브"
+            case .reversi: return ReversiNoticeText.gameName
             }
         }
 
-        /// 진행 중인 판을 가리키는 말("오목 판" · "체스 판" · "테트리스 대결"). 셋 다 받침으로 끝나므로 뒤에 "이" 를 붙인다.
+        /// 진행 중인 판을 가리키는 말("오목 판" · "체스 판" · "테트리스 대결"). 모두 받침으로 끝나므로 뒤에 "이" 를 붙인다.
         package var matchNoun: String {
             switch self {
             case .gomoku: return "오목 판"
             case .chess: return "체스 판"
             case .tetris: return "테트리스 대결"
             case .rummy: return "아잉 큐브 판"
+            case .reversi: return "\(ReversiNoticeText.gameName) 판"
             }
         }
     }
@@ -176,7 +180,8 @@ package enum ChessPhoneText {
     /// "1:1 테트리스 대결 중이에요"(테트리스는 '둔다'고 하지 않는다).
     package static func busyTitle(_ playing: BusyGame) -> String {
         switch playing {
-        case .gomoku, .chess:
+        case .gomoku, .chess, .reversi:
+            // 아잉 뒤집기도 돌을 **둔다**(맥 `ReversiText` 의 "두기" 낱말과 같다).
             return "\(playing.gameName)\(objectParticle(playing.gameName)) 두는 중이에요"
         case .tetris:
             return "\(playing.gameName) 대결 중이에요"
@@ -830,9 +835,9 @@ package struct ChessPhoneRuleLine: Identifiable, Equatable, Sendable {
                       + "\(ChessPhoneText.stakeNotHeldYet(ttlSeconds: inviteTtlSeconds))."),
             ChessPhoneRuleLine(
                 title: "한 사람 한 판",
-                // ★ 게임이 넷이다(1.0.11 1:1 테트리스 · 1.0.16 아잉 큐브). 넷을 다 말해야 한다: 이름이 빠진 게임은
+                // ★ 게임이 다섯이다(1.0.11 1:1 테트리스 · 1.0.16 아잉 큐브 · 1.0.17 아잉 뒤집기). 다섯을 다 말해야 한다: 이름이 빠진 게임은
                 //   사용자가 "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
-                detail: "체스·오목·1:1 테트리스·아잉 큐브는 한 번에 한 판만 할 수 있어요. "
+                detail: "체스·오목·1:1 테트리스·아잉 큐브·\(ReversiNoticeText.gameName)는 한 번에 한 판만 할 수 있어요. "
                       + "한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.")
         ]
     }

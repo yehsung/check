@@ -147,6 +147,25 @@ struct MeDailyMissionViewTests {
         #expect(future.caption == "서버 글자", "다른 게임의 서버 글자가 사라졌다")
     }
 
+    @Test("아잉 뒤집기 줄(1.0.17): 서버 글자 '맥에서 할 수 있어요'를 안 그린다 · 실패 문장은 그대로 · 빈 줄을 안 세운다 · 표가 큐브와 뒤집기 둘뿐이다")
+    func reversiRowHidesTheMacOnlyDetail() throws {
+        // 없으면: 폰에서 아잉 뒤집기를 둘 수 있는데 미션 줄이 "맥에서 할 수 있어요"라고 거짓말을 한다(서버 글자는 옛 폰을 위해 그대로 내려온다).
+        let row = #"{"key":"daily_reversi","game":"reversi","title":"아잉 뒤집기 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":1,"achieved":true,"claimed":false,"claimed_at_ms":null,"sort":80}"#
+        let waiting = #"{"key":"daily_reversi","game":"reversi","title":"아잉 뒤집기 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":0,"achieved":false,"claimed":false,"claimed_at_ms":null,"sort":80}"#
+        let claimable = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [row]))), "daily_reversi")
+        #expect(claimable.caption.isEmpty, "폰에서 할 수 있는데 맥에서 하라고 한다")
+        #expect(!claimable.showsCaptionLine, "그릴 것이 없는 줄이 빈 줄로 선다")
+        let failed = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [row]))), "daily_reversi", failed: true)
+        #expect(failed.caption == MeText.claimFailed && failed.showsCaptionLine, "받기 실패를 삼켰다")
+        let progressing = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [waiting]))), "daily_reversi")
+        #expect(progressing.caption.isEmpty && progressing.progress == "0/1" && progressing.showsCaptionLine, "진행 숫자가 사라졌다")
+        // 기준선: 같은 서버 글자도 **다른 게임 이름**이면 그대로 그린다(이름으로 가른다 — 글자로 가르지 않는다).
+        #expect(MeText.dailyMissionCaption(game: "reversi", detail: "맥에서 할 수 있어요").isEmpty)
+        #expect(MeText.dailyMissionCaption(game: "mahjong", detail: "맥에서 할 수 있어요") == "맥에서 할 수 있어요",
+                "폰에 없는 게임의 '맥에서' 글자까지 지웠다")
+        #expect(MeText.phonePlayableMacFirstGames == ["rummy", "reversi"], "표가 바뀌었다 — 폰에 없는 게임을 넣으면 어디서 하는지 안 말한다")
+    }
+
     @Test("줄 셋의 그림: 진행 중(칩 +5 · '0/1') · [받기] 캡슐(칩 없음) · '✓ 받음'(진행 숫자 없음)")
     func rowContentDrawsTheThreeStates() throws {
         let section = try Self.section(Self.response(daily: Self.dailyJSON(met: ["daily_timing_bar"], claimed: ["daily_flappy"])))
@@ -424,15 +443,16 @@ struct MeDailyMissionViewTests {
             let status = try MeAchievementsFixtureContractTests.status(path)
             let section = MeDailyMissionSection.make(daily: status.daily, serverNowMs: status.serverNowMs)
             #expect(section.rows.count == Self.serverRoster.count, "\(path): 디코드 뒤 줄이 버려졌다")
-            // 보조 문장: 큐브 줄은 서버 글자 '맥에서 할 수 있어요'를 숨기고(이 폰은 큐브를 한다), 뒤집기 줄은 **그대로 보인다**
-            // (이 판의 폰에는 아잉 뒤집기가 없다 — 폰에 넣는 판이 이 줄을 큐브 쪽으로 옮긴다). 나머지는 빈 글자다.
+            // 보조 문장: 큐브 · 뒤집기 줄은 서버 글자 '맥에서 할 수 있어요'를 숨긴다(이 폰은 두 게임을 한다 — 뒤집기는 1.0.17 부터).
+            // 픽스처의 서버 글자는 **그대로**다(서버는 옛 폰·안드로이드·윈도우를 위해 계속 싣는다). 나머지는 빈 글자다.
             for def in Self.serverRoster {
                 let content = try Self.content(section, def.key)
-                let want = def.game == "rummy" ? "" : def.detail
+                let want = MeText.phonePlayableMacFirstGames.contains(def.game) ? "" : def.detail
                 #expect(content.caption == want, "\(path) \(def.key): 보조 문장 '\(content.caption)' ≠ '\(want)'")
             }
-            #expect(try Self.content(section, "daily_reversi").caption == "맥에서 할 수 있어요",
-                    "\(path): 폰에 없는 게임인데 어디서 하는지 안 말한다")
+            #expect(try Self.content(section, "daily_reversi").caption.isEmpty,
+                    "\(path): 폰에서 아잉 뒤집기를 할 수 있는데 맥에서 하라고 한다")
+            #expect(try Self.content(section, "daily_rummy").caption.isEmpty)
             for (mission, def) in zip(section.rows, Self.serverRoster) {
                 #expect(mission.key == def.key && mission.game == def.game, "\(path): 순서 · 게임 — \(mission.key)")
                 #expect(mission.row.title == def.title, "\(path) \(def.key): 제목")

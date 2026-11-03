@@ -23,6 +23,7 @@ public final class MobileAppModel {
     package let chess: ChessStore
     package let tetris: TetrisDuelStore
     package let rummy: RummyStore
+    package let reversi: ReversiStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -157,6 +158,24 @@ public final class MobileAppModel {
         rummy.rankingEnabled = true
         // 실시간 'rummy' 초인종을 받을 자리(위 테트리스 칸과 같은 꼴 · 약한 참조).
         realtime.rummy = rummy
+        // 아잉 뒤집기(맥 0.3.74 · 폰 1.0.17 — 대표 답 #d_DdwzmxPClGqk "다 넣기 (루비 걸기 포함)"). 호스트는 **위 넷과 같은 하나**다(루비 미러 한 칸).
+        let reversi = ReversiStore()
+        reversi.attach(host: host)
+        reversi.clock = { clock.now() }
+        // '이 기기가 연 판' 장부를 둘 곳(`GameDeviceLedger` — 판 화면은 판을 연 기기에서만 저절로 열린다). 빠지면 장부가 프로세스 안에만 살아,
+        // 판 중에 앱을 다시 켠 폰이 자기 판의 화면을 안 열고 30초 시계를 흘린다(자동 착수 3번이면 판돈째 진다). 오목·체스와 같은 줄이다.
+        reversi.deviceLedger.defaults = env.storage.defaults
+        // 순위·관전의 **주 스위치 둘**(코어 `ReversiStore.rankingEnabled` · `spectatorFeaturesEnabled`, 기본 false — 맥 배선 `CheckApp.wireReversi` 만 켰다).
+        // 이 두 줄이 없으면 `reversi_ranking`·`reversi_watch` 가 **한 번도 안 나간다** — `refreshRanking`·`startWatching`·`refreshWatch` 와
+        // `pollSpectatorFeatures`·`spectatorWindowDidShow` 가 전부 이 값을 먼저 본다(`canPollRanking` · `canPollSpectatorFeatures`).
+        // 순위 절은 영영 로딩 문구이고 [관전]은 눌러도 관전 상태조차 서지 않는데 **빨간 테스트가 없다**(뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다) —
+        // 못: `Tests/CheckMobileKitTests/GamesReversiWiringTests.swift`(켠 효과를 요청 건수로 재고, 스위치만 되돌린 기준선과 나란히 본다).
+        // 바로 위 오목·체스·테트리스·큐브 줄과 같은 까닭으로 "기본값이니 지워도 되겠지"로 지우지 마라. 둘을 **따로** 두는 것이 코어 규약이다.
+        reversi.rankingEnabled = true
+        reversi.spectatorFeaturesEnabled = true
+        // 실시간 'reversi' 초인종을 받을 자리(위 큐브 칸과 같은 꼴 · 약한 참조). 빠지면 러너의 `.reversiSignal` 가지가 nil 에 말을 건다 —
+        // 받은 신청이 다음 허브 진입(30초 스로틀)까지 안 서고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.
+        realtime.reversi = reversi
         let links = MobileStoreLinks()
         // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
         let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
@@ -175,6 +194,7 @@ public final class MobileAppModel {
             chess: chess,
             tetris: tetris,
             rummy: rummy,
+            reversi: reversi,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -193,6 +213,7 @@ public final class MobileAppModel {
         self.chess = chess
         self.tetris = tetris
         self.rummy = rummy
+        self.reversi = reversi
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -228,6 +249,8 @@ public final class MobileAppModel {
         chess.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "chess") }
         tetris.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         rummy.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "rummy") }
+        // 아잉 뒤집기 — 서버 `daily_reversi` 의 game 값. 코어는 **1:1 판에서만** 부른다(AI 연습은 미션을 채우지 않는다 — 서버가 안 센다).
+        reversi.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "reversi") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -347,6 +370,10 @@ public final class MobileAppModel {
         // 아잉 큐브도 같은 사슬이다. 안 넣으면 다음 사람의 로비에 앞 사람의 방·판·받침대·초대가 남는다.
         // 쥐던 판의 장부(`engagedMatchIDs`)는 코어가 계정에 묶어 남긴다 — 같은 사람이 다시 들어오면 하트비트가 이어진다.
         rummy.reset()
+        // 아잉 뒤집기도 같은 사슬이다. 안 넣으면 다음 사람의 로비에 앞 사람의 판·신청·순위·루비가 남고, 앞 계정의 신호 재조회(`syncTask`)가
+        // 다음 사람의 화면에 신청을 세운다. `reset()` 은 배선 값(`rankingEnabled`·`spectatorFeaturesEnabled`·`clock`·`presentWindow`·장부 저장소)을
+        // 건드리지 않는다. '이 기기가 연 판' 장부는 사용자별 키라 비우지 않는다(같은 사람이 돌아오면 자기 판을 알아본다).
+        reversi.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

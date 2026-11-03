@@ -488,13 +488,16 @@ package enum MeText {
     /// 맥 `DailyMissionCopy.resetNote` 와 한 글자도 다르지 않다.
     package static let dailyMissionsResetNote = "자정에 초기화 · 안 받으면 사라져요"
 
-    /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 아잉 큐브 줄만 비운다 — 서버가 큐브 없는 옛 폰을 위해 '맥에서 할 수 있어요'를 싣는데,
-    /// 이 판의 폰은 큐브를 할 수 있어 거짓이다(서버 글자를 바꾸면 옛 폰에서 거짓이 된다).
-    /// 아잉 뒤집기(`reversi`) 줄은 서버 글자를 **그대로 둔다** — 이 판의 폰에는 그 게임이 없어 '맥에서 할 수 있어요'가 참이다.
-    /// 폰에 아잉 뒤집기를 넣는 판에서 여기에 `reversi` 를 더한다(큐브 때와 같은 자리).
+    /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 **이 폰이 할 수 있는 게임 줄**은 비운다 — 서버가 그 게임이 없는 옛 폰을 위해
+    /// '맥에서 할 수 있어요'를 싣는데, 이 판의 폰에서는 거짓이다. 서버 글자는 바꾸지 않는다: 옛 폰(1.0.16 이하)과 안드로이드·윈도우에서는 여전히 참이다.
+    ///  · 아잉 큐브(`rummy`) — 폰 1.0.16 부터.
+    ///  · 아잉 뒤집기(`reversi`) — 폰 1.0.17 부터(대표 답 #d_DdwzmxPClGqk). AI 연습은 미션을 채우지 않는다(서버가 1:1 판만 센다 — 규칙 시트 몫).
     package static func dailyMissionCaption(game: String, detail: String) -> String {
-        game == "rummy" ? "" : detail
+        phonePlayableMacFirstGames.contains(game) ? "" : detail
     }
+
+    /// 서버가 '맥에서 할 수 있어요'를 싣는 게임 중 **이 폰이 할 수 있는 것**(위 `dailyMissionCaption`). 폰에 게임을 넣는 판에서 여기에 더한다.
+    package static let phonePlayableMacFirstGames: Set<String> = ["rummy", "reversi"]
 
     /// 일일 줄 아이콘(SF Symbol) — **게임 이름으로 고른다**(키가 아니다: 누적 미션의 `gomoku1` 과 일일 `daily_gomoku` 가
     /// 같은 기호를 쓰게). 미니게임 셋은 코어 `MiniGameKind.icon`(게임 화면 · 순위표가 쓰는 그 기호)이고, 1:1 셋은 맥 입구
@@ -521,8 +524,8 @@ package enum MeText {
             //    시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다 — **없는 이름은 런타임에 경고 없이 빈 칸**
             //    이 된다(그 함정은 `MiniGameKind.icon` 주석에 있다).
             ("rummy", "cube.fill"),
-            // '아잉 뒤집기'(리버시 — 서버 `daily_reversi`, sort 80). 이 판의 폰에는 게임이 없지만 서버는 1.0.16 폰에도 이 줄을
-            // 내린다(20261108200000 — 모든 플랫폼). 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른 그림이 된다(위 ①).
+            // '아잉 뒤집기'(리버시 — 서버 `daily_reversi`, sort 80). 서버는 모든 플랫폼에 이 줄을 내린다(20261108200000 — 1.0.16 폰에도).
+            // 폰 1.0.17 부터 게임도 있다. 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른 그림이 된다(위 ①).
             // 맥 `ReversiEntryIcon.symbol`(반은 흑, 반은 백인 원 — 뒤집히는 돌)과 같은 이름이다. 폰 설정의 화면 모드(`.system`)가
             // 이미 쓰는 이름이라 이 앱의 iOS 바닥에서 산다(시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다).
             ("reversi", "circle.lefthalf.filled"),

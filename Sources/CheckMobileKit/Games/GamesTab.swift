@@ -32,6 +32,8 @@ struct GamesTab: View {
                         .padding(.top, 12)
                     rummyCard
                         .padding(.top, 12)
+                    reversiCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -55,6 +57,8 @@ struct GamesTab: View {
                 await store.tetris.refreshLobby()
                 // 아잉 큐브도 같다 — 받은 초대·내 방이 전부 로비 응답이다.
                 await store.rummy.refreshLobby()
+                // 아잉 뒤집기도 같다 — 받은 신청·보낸 신청·진행 판 id·전적이 전부 로비 응답이다(허브 조회는 30초 스로틀이라 당긴 것에 답하지 않는다).
+                await store.reversi.refreshLobby()
             }
             .navigationDestination(for: GamesDestination.self) { destination in
                 switch destination {
@@ -81,6 +85,10 @@ struct GamesTab: View {
                     // ★ 위 둘과 같은 까닭으로 **데모 닻을 여기 달지 않는다**: 이 클로저에서 읽는 값이 바뀌면 목적지가 다시 세워져
                     //   `rummyScreenDidDisappear()` 가 돌고, 끝난 판이 접힌다. 로비 탭·데모 장면은 화면 안에서 쥔다.
                     GamesRummyScreen(store: store)
+                case .reversi:
+                    // ★ 위 셋과 같은 까닭으로 **데모 닻·관전 값을 여기서 읽지 않는다**: 이 클로저에서 읽는 값이 바뀌면 목적지가 다시 세워져
+                    //   `reversiScreenDidDisappear()` → `stopWatching()` 이 돌고, 보던 관전이 내려가며 끝난 판이 접힌다.
+                    GamesReversiScreen(store: store)
                 }
             }
         }
@@ -394,6 +402,56 @@ struct GamesTab: View {
         .accessibilityHint(blockedBy == nil
                            ? GamesRummyText.cardOpenHint
                            : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .rummy) ?? ""))
+    }
+
+    // MARK: 아잉 뒤집기 카드
+
+    /// 아잉 뒤집기 카드(1.0.17) — 아잉 큐브 카드 **바로 아래**, 모양도 같다(썸네일 60 · 제목 · 부제 · 칩 + 보조 한 줄 · 꺾쇠).
+    /// 입구 하나로 로비·판·AI 연습·결과·관전·순위를 다 연다(화면이 단계를 갈아 끼운다).
+    /// ★ 칩과 보조 줄의 서열은 `GamesReversiCard` 한 곳이다(여기서 삼항으로 다시 고르면 두 벌이 된다 — 그 판정은 맥 스위트가 값으로 잰다).
+    /// ★ 막는 방향은 **다섯이다**: 다른 넷 중 하나의 판이 흐르면 이 카드가 막히고(`reversiEntryBlock`), 리버시 판이 흐르면 위 네 카드가 막힌다.
+    private var reversiCard: some View {
+        let blockedBy = store.reversiEntryBlock
+        let chip = GamesReversiCard.chip(store)
+        let detail = GamesReversiCard.detail(store)
+        return Button {
+            store.context.router.push(GamesDestination.reversi, on: .games)
+        } label: {
+            InsetGroup {
+                HStack(spacing: 14) {
+                    GamesReversiTabThumbnail()
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(ReversiPhoneText.title)
+                            .font(MobileTheme.rowTitle)
+                            .foregroundStyle(MobileTheme.label)
+                        Text(ReversiPhoneText.cardSubtitle)
+                            .font(MobileTheme.rowSubtitle)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 6) { gomokuChip(chip); gomokuDetail(detail) }
+                            VStack(alignment: .leading, spacing: 4) { gomokuChip(chip); gomokuDetail(detail) }
+                        }
+                        .padding(.top, 3)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MobileTheme.cardPadding)
+                .padding(.vertical, 14)
+            }
+            .opacity(blockedBy == nil ? 1 : 0.55)
+            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil
+                           ? ReversiPhoneText.cardOpenHint
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .reversi) ?? ""))
     }
 
     @ViewBuilder
@@ -863,6 +921,57 @@ private struct GamesTetrisDuelTabThumbnail: View {
          (0, 5, .l), (1, 5, .o), (2, 5, .o), (0, 6, .l), (1, 6, .o), (2, 6, .o), (3, 6, .t)],
         [(2, 3, .s), (3, 3, .s), (1, 4, .s), (2, 4, .s),
          (0, 5, .z), (1, 5, .z), (2, 5, .t), (0, 6, nil), (1, 6, nil), (2, 6, nil), (3, 6, nil)]
+    ]
+}
+
+/// 아잉 뒤집기 썸네일 60pt — 오목 나무판·체스판·테트리스 썸네일과 **같은 변·같은 둥글기**라 다섯 카드가 한 열로 선다.
+///
+/// 그림은 초록 판 8×8 한 장 + 가운데 처음 네 돌 + **막 뒤집히는 돌 하나**(반은 흑·반은 백 — 맥 입구 기호 `circle.lefthalf.filled` 와 같은 뜻)다.
+/// 판 캔버스(화면 갈래)와는 별개다: 이쪽은 정지 그림 한 장이고 좌표·애니메이션이 없다.
+private struct GamesReversiTabThumbnail: View {
+    var side: CGFloat = 60
+
+    var body: some View {
+        Canvas { context, size in
+            let rect = CGRect(origin: .zero, size: size)
+            let clip = Path(roundedRect: rect, cornerRadius: side * 0.2, style: .continuous)
+            context.fill(clip, with: .linearGradient(
+                Gradient(colors: [gamesHex(0x2F8A57), gamesHex(0x1F6A41)]),
+                startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)))
+            context.clip(to: clip)
+            let cell = size.width / 8
+            var grid = Path()
+            for index in 1..<8 {
+                let offset = CGFloat(index) * cell
+                grid.move(to: CGPoint(x: offset, y: 0))
+                grid.addLine(to: CGPoint(x: offset, y: size.height))
+                grid.move(to: CGPoint(x: 0, y: offset))
+                grid.addLine(to: CGPoint(x: size.width, y: offset))
+            }
+            context.stroke(grid, with: .color(Color.black.opacity(0.22)), lineWidth: 0.5)
+            for (col, row, dark) in Self.stones {
+                let disc = CGRect(x: CGFloat(col) * cell + cell * 0.12, y: CGFloat(row) * cell + cell * 0.12,
+                                  width: cell * 0.76, height: cell * 0.76)
+                context.fill(Path(ellipseIn: disc), with: .color(dark ? Color(white: 0.1) : Color(white: 0.97)))
+                context.stroke(Path(ellipseIn: disc), with: .color(Color.black.opacity(0.25)), lineWidth: 0.5)
+            }
+            // 막 뒤집히는 돌(반은 흑 · 반은 백).
+            let flip = CGRect(x: 5 * cell + cell * 0.12, y: 2 * cell + cell * 0.12, width: cell * 0.76, height: cell * 0.76)
+            context.fill(Path(ellipseIn: flip), with: .color(Color(white: 0.97)))
+            var half = Path()
+            half.addArc(center: CGPoint(x: flip.midX, y: flip.midY), radius: flip.width / 2,
+                        startAngle: .degrees(90), endAngle: .degrees(270), clockwise: false)
+            half.closeSubpath()
+            context.fill(half, with: .color(Color(white: 0.1)))
+            context.stroke(Path(ellipseIn: flip), with: .color(Color.black.opacity(0.25)), lineWidth: 0.5)
+        }
+        .frame(width: side, height: side)
+        .accessibilityHidden(true)
+    }
+
+    /// (열, 행, 흑인가) — 처음 네 돌(d4 백 · e4 흑 · d5 흑 · e5 백)과 한 수 둔 뒤의 돌 둘.
+    private static let stones: [(Int, Int, Bool)] = [
+        (3, 3, false), (4, 3, true), (3, 4, true), (4, 4, false), (4, 2, true), (2, 4, false)
     ]
 }
 

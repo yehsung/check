@@ -171,8 +171,13 @@ struct GamesChessTextTests {
 
     @Test("막힌 입구는 세 방향 모두 말한다 — 두는 판과 **막힌 입구**를 둘 다 이름으로")
     func oneMatchPerPersonIsSaidInEveryDirection() {
-        #expect(ChessPhoneText.BusyGame.allCases.count == 4, "게임이 넷이다(오목·체스·테트리스·아잉 큐브) — 늘면 문구를 더해라")
+        #expect(ChessPhoneText.BusyGame.allCases.count == 5, "게임이 다섯이다(오목·체스·테트리스·아잉 큐브·아잉 뒤집기) — 늘면 문구를 더해라")
         #expect(ChessPhoneText.busyTitle(.rummy) == "아잉 큐브를 하는 중이에요")
+        // 아잉 뒤집기는 돌을 **둔다**(맥 낱말과 같다) · 이름은 코어 한 곳에서 온다 · 조사는 받침 없는 '기' 뒤라 '를'.
+        #expect(ChessPhoneText.busyTitle(.reversi) == "아잉 뒤집기를 두는 중이에요")
+        #expect(ChessPhoneText.BusyGame.reversi.gameName == ReversiNoticeText.gameName)
+        #expect(ChessPhoneText.busyHint(playing: .reversi, blocked: .chess) == "아잉 뒤집기 판이 끝나면 체스를 신청할 수 있어요")
+        #expect(ChessPhoneText.busyHint(playing: .gomoku, blocked: .reversi) == "오목 판이 끝나면 아잉 뒤집기를 신청할 수 있어요")
         #expect(ChessPhoneText.busyTitle(.gomoku) == "오목을 두는 중이에요")
         #expect(ChessPhoneText.busyTitle(.chess) == "체스를 두는 중이에요")
         // 테트리스는 '둔다'고 하지 않는다 — 같은 틀에 끼우면 "1:1 테트리스를 두는 중" 이 된다.
@@ -205,8 +210,8 @@ struct GamesChessTextTests {
                 hints.insert(hint)
             }
         }
-        // 열두 쌍(게임 넷)이 **열두 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
-        #expect(hints.count == 12, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
+        // 스무 쌍(게임 다섯)이 **스무 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
+        #expect(hints.count == 20, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
         #expect(ChessPhoneText.entryBlock(playing: nil) == nil)
         #expect(ChessPhoneText.entryBlockHint(playing: nil, blocked: .chess) == nil)
     }
@@ -245,10 +250,16 @@ struct GamesChessTextTests {
         //   뷰 밖으로 뺐다 — 폰 뷰는 맥 스위트가 못 본다). 그래서 **두 파일을 합쳐** 센다: 자리는 셋이고,
         //   어느 하나라도 문구 함수를 안 지나면 그 카드가 사유를 지어내는 것이다.
         let tetrisCard = try Self.code("Sources/CheckMobileKit/Games/GamesTetrisDuelScreen.swift")
-        let blockChips = (tab + tetrisCard).components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1
-        #expect(blockChips == 3, "게임 탭 카드 셋의 막힌 칩이 세 자리가 아니다: \(blockChips)")
+        // ★ 1.0.16 · 1.0.17 에 카드가 둘 더 섰다(아잉 큐브 · 아잉 뒤집기). 두 카드의 판정도 각자 화면 파일에 있다(`GamesRummyCard` · `GamesReversiCard`).
+        let rummyCard = try Self.code("Sources/CheckMobileKit/Games/GamesRummyScreen.swift")
+        let reversiCard = try Self.code("Sources/CheckMobileKit/Games/GamesReversiScreen.swift")
+        let blockChips = (tab + tetrisCard + rummyCard + reversiCard).components(separatedBy: "ChessPhoneText.entryBlock(playing:").count - 1
+        #expect(blockChips == 5, "게임 탭 카드 다섯의 막힌 칩이 다섯 자리가 아니다: \(blockChips)")
         #expect(tetrisCard.contains("ChessPhoneText.entryBlockHint(playing: store.tetrisEntryBlock?.text, blocked: .tetris)"),
                 "★ 테트리스 카드가 **언제 풀리는지**를 안 말한다 — 칩 한 자리만 그리면 사용자가 기다릴 끝을 모른다")
+        #expect(reversiCard.contains("ChessPhoneText.entryBlock(playing: store.reversiEntryBlock?.text)")
+                && reversiCard.contains("ChessPhoneText.entryBlockHint(playing: store.reversiEntryBlock?.text, blocked: .reversi)"),
+                "★ 아잉 뒤집기 카드가 자기 입구 판정(`reversiEntryBlock`)으로 왜·언제를 말하지 않는다")
         #expect(tab.components(separatedBy: "ChessPhoneText.entryBlockHint(playing:").count - 1 >= 3,
                 "게임 탭 카드 셋이 모두 힌트를 그리지 않는다")
     }

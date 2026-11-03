@@ -151,10 +151,12 @@ extension MahjongStore {
 
         // 루비 판이 서면 연습판을 버린다(리버시 ChessStore:658 과 같다).
         if let current, current.matchStatus == .active, !(sameMatch && previous?.matchStatus == .active), practice != nil {
-            practice = nil
+            discardPracticeGame()   // 봇·걸음·시계 작업까지 거둔다
             showsPractice = false
             notice = MahjongNoticeText.practiceClosed
         }
+        // 연습 중 서버 방에 넷째가 앉았다/빠졌다 — 방장이면 연습을 멈추거나 푼다(CC-02).
+        syncPracticeRoomHold(old: old)
 
         // 끝난 판을 처음 본 순간 한 번 — 장부에서 걷고, 무효 판이 아니면 판 끝 콜백.
         if let current, current.matchStatus.isTerminal, !(sameMatch && previous?.matchStatus.isTerminal == true) {
@@ -580,7 +582,10 @@ extension MahjongStore {
 
     /// 패를 버린다. 리치 무장이면 리치 선언 버림, 자리 비움이면 `comeBack()`(손패를 한 번 누르면 복귀 — 카드 ⑨).
     package func discard(_ tile: MahjongTile) async {
-        guard !showsPractice else { return }   // C3: 연습판 버림.
+        if showsPractice {   // 연습판 — 엔진에 바로(서버 왕복 없음)
+            practiceDiscard(tile)
+            return
+        }
         if isAwayHere {
             await comeBack()
             return
@@ -611,34 +616,64 @@ extension MahjongStore {
     }
 
     package func declareTsumo() async {
+        if showsPractice {
+            if let turn = practiceTurn, turn.tsumo { practiceAct(.tsumo) }
+            return
+        }
         guard !isWorking, let (_, current, turn) = serverTurn, turn.tsumo else { return }
         await sendAct("tsumo", tiles: [], turn: turn, matchID: current.id, expectedSeq: current.seq ?? turn.seq)
     }
 
     package func declareKyuushu() async {
+        if showsPractice {
+            if let turn = practiceTurn, turn.kyuushu { practiceAct(.kyuushu) }
+            return
+        }
         guard !isWorking, let (_, current, turn) = serverTurn, turn.kyuushu else { return }
         await sendAct("kyuushu", tiles: [], turn: turn, matchID: current.id, expectedSeq: current.seq ?? turn.seq)
     }
 
     /// 암깡(4장 id 묶음). 빈 배열이면: 후보가 하나뿐이면 그것을, 깡 후보(암깡 + 가깡)가 둘 이상이면 고르기를 펼친다.
     package func ankan(_ tiles: [MahjongTile]) async {
-        guard !isWorking, let (_, current, turn) = serverTurn else { return }
+        if showsPractice {
+            if let turn = practiceTurn, let chosen = chooseAnkan(tiles, turn: turn) {
+                practiceAct(.ankan(turn.ankan.first { $0.sorted() == chosen } ?? chosen))
+            }
+            return
+        }
+        guard !isWorking, let (_, current, turn) = serverTurn, let chosen = chooseAnkan(tiles, turn: turn) else { return }
+        await sendAct("ankan", tiles: chosen, turn: turn, matchID: current.id, expectedSeq: current.seq ?? turn.seq)
+    }
+
+    /// 암깡 묶음 고르기(서버·연습 같은 규칙) — 고를 것이 둘 이상이면 고르기를 펼치고 nil.
+    func chooseAnkan(_ tiles: [MahjongTile], turn: MahjongDecision.Turn) -> [MahjongTile]? {
         var chosen = tiles.sorted()
         if chosen.isEmpty {
             if turn.ankan.count + turn.kakan.count > 1 {
                 if riichiArmed { riichiArmed = false }
                 if !kanChoicesOpen { kanChoicesOpen = true }
-                return
+                return nil
             }
-            guard turn.ankan.count == 1, let only = turn.ankan.first else { return }
+            guard turn.ankan.count == 1, let only = turn.ankan.first else { return nil }
             chosen = only.sorted()
         }
-        guard turn.ankan.contains(where: { $0.sorted() == chosen }) else { return }
-        await sendAct("ankan", tiles: chosen, turn: turn, matchID: current.id, expectedSeq: current.seq ?? turn.seq)
+        guard turn.ankan.contains(where: { $0.sorted() == chosen }) else { return nil }
+        return chosen
+    }
+
+    /// 연습판의 지금 내 차례 결정(엔진).
+    var practiceTurn: MahjongDecision.Turn? {
+        guard showsPractice, case .turn(let turn)? = practice?.payload.myDecision else { return nil }
+        return turn
     }
 
     /// 가깡(더할 패 id).
     package func kakan(_ tile: MahjongTile) async {
+        if showsPractice {
+            if kanChoicesOpen { kanChoicesOpen = false }
+            if let turn = practiceTurn, turn.kakan.contains(tile) { practiceAct(.kakan(tile)) }
+            return
+        }
         guard !isWorking, let (_, current, turn) = serverTurn, turn.kakan.contains(tile) else { return }
         await sendAct("kakan", tiles: [tile], turn: turn, matchID: current.id, expectedSeq: current.seq ?? turn.seq)
     }
@@ -703,6 +738,10 @@ extension MahjongStore {
 
     /// [돌아왔어요]. 나가기 뒤 10초 안이면 `too_fast` → "잠시 뒤에 다시 눌러 주세요".
     package func comeBack() async {
+        if showsPractice {
+            practiceComeBack()
+            return
+        }
         guard !isWorking, host?.session != nil, let payload = match, let current = payload.match,
               current.matchStatus == .active else { return }
         let id = current.id

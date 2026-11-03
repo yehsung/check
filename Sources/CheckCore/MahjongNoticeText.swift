@@ -51,6 +51,10 @@ package nonisolated enum MahjongNoticeText {
     package static let practiceClosed = "루비 판이 시작돼 연습판을 닫았어요"
     /// '넉넉히' 연습판의 론 아닌 울기 프롬프트가 5초 넘게 서 있다(CC-28).
     package static let practiceIdleCallHint = "[넘기기]를 누르면 계속돼요"
+    /// 연습판 내 자리 이름.
+    package static let practiceMe = "나"
+    /// 연습판 봇 이름(1~3).
+    package static func practiceBotName(_ number: Int) -> String { "로봇 \(number)" }
 
     // 덮개 말풍선(창이 탁자를 안 보일 때 — `MahjongAttention`).
     package static let myTurnAttention = "\(gameName) — 내 차례예요"

@@ -9,11 +9,20 @@ extension MahjongStore {
     /// `tiles` 가 비었고 그 종류의 조합이 둘 이상이면(치 조합·적5 고르기) 보내지 않고 고르기 줄을 펼친다(`chiChoicesOpen`),
     /// 하나뿐이면 그 조합을 보낸다.
     package func call(_ kind: MahjongClaimKind, tiles: [MahjongTile]) async {
-        guard !showsPractice, let (current, call) = openServerCall else { return }   // C3: 연습판 울기.
+        if showsPractice {   // 연습판 — 엔진에 바로
+            practiceCall(kind, tiles: tiles)
+            return
+        }
+        guard let (current, call) = openServerCall, let chosen = chooseCallTiles(kind, tiles: tiles, call: call) else { return }
+        await sendCall(kind.rawValue, tiles: chosen, call: call, matchID: current.id)
+    }
+
+    /// 울기 조합 고르기(서버·연습 같은 규칙) — 고를 것이 둘 이상이면 고르기 줄을 펼치고 nil.
+    func chooseCallTiles(_ kind: MahjongClaimKind, tiles: [MahjongTile], call: MahjongDecision.Call) -> [MahjongTile]? {
         var chosen = tiles.sorted()
         switch kind {
         case .ron:
-            guard call.ron else { return }
+            guard call.ron else { return nil }
             chosen = []
         case .pon, .minkan, .chi:
             let options = Self.options(of: kind, in: call).map { $0.sorted() }
@@ -21,19 +30,26 @@ extension MahjongStore {
                 if options.count > 1 {
                     if riichiArmed { riichiArmed = false }
                     if !chiChoicesOpen { chiChoicesOpen = true }
-                    return
+                    return nil
                 }
-                guard let only = options.first else { return }
+                guard let only = options.first else { return nil }
                 chosen = only
             }
-            guard options.contains(chosen) else { return }
+            guard options.contains(chosen) else { return nil }
         }
-        await sendCall(kind.rawValue, tiles: chosen, call: call, matchID: current.id)
+        return chosen
     }
 
     /// 넘기기.
     package func passCall() async {
-        guard !showsPractice, let (current, call) = openServerCall else { return }
+        if showsPractice {
+            if case .call(let call)? = practice?.payload.myDecision, call.answered == nil {
+                if chiChoicesOpen { chiChoicesOpen = false }
+                practiceAnswer(.pass)
+            }
+            return
+        }
+        guard let (current, call) = openServerCall else { return }
         await sendCall(MahjongClaimAnswer.pass.rawValue, tiles: [], call: call, matchID: current.id)
     }
 

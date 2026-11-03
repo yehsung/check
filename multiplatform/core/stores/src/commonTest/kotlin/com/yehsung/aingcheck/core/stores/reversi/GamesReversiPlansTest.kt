@@ -183,9 +183,7 @@ class GamesReversiPlansTest {
         assertTrue("45초 안에" in rules[7])
         assertNotEquals(rules, ReversiPhoneText.rules(30, 3, 60), "숫자를 받지 않으면 서버가 바꾼 날 옛 숫자를 말한다")
         assertEquals(1, rules.count { "리버시" in it })
-        for (word in listOf("오델로", "Othello", "오셀로")) {
-            assertFalse(rules.any { word in it } || word in ReversiPhoneText.title || word in ReversiPhoneText.subtitle, "상표 낱말 $word")
-        }
+        // 상표 낱말 0건은 core/rules ReversiTrademarkTest 가 multiplatform/ 전역(이 파일 포함)을 훑어 잰다 — 여기 그 낱말을 적지 않는다.
     }
 
     @Test

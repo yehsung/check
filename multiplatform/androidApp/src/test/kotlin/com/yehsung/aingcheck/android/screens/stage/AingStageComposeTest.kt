@@ -209,6 +209,14 @@ class AingStageComposeTest {
         compose.waitUntil(60_000) { compose.mainClock.advanceTimeByFrame(); !stagePixels().contentEquals(strawberry) }
         assertEquals(StageMode.Portrait, handle.mode)
         save(compose.onNodeWithTag(STAGE_TAG).captureToImage().asAndroidBitmap(), "cake-choco-portrait.png")
+        // 이슬(맥 0.3.74 · 판 7): 케이크처럼 굽지 않고 정지 초상이 선다 — 일반 아잉이로 접지 않는다(앞 그림과 달라질 때까지 기다린다).
+        val choco = stagePixels()
+        id = CharacterCatalog.isulAingID
+        frames(100)
+        assertEquals(StageMode.Portrait, handle.mode)
+        compose.onNodeWithTag(STAGE_LIVE_TAG).assertDoesNotExist()
+        compose.waitUntil(60_000) { compose.mainClock.advanceTimeByFrame(); !stagePixels().contentEquals(choco) }
+        save(compose.onNodeWithTag(STAGE_TAG).captureToImage().asAndroidBitmap(), "isul-portrait.png")
     }
 
     @Test

@@ -972,6 +972,8 @@ final class WorkTimerStore {
     /// 상점이 안 가진 사람에게 이슬 아잉이(술 한잔 선물 전용)의 잠긴 칸을 세우는가(v0.3.74). 정본은 상수 하나
     /// (`WorkTimerStore.drinkGiftLockedCellPolicy`)이고, 이 칸은 시험이 두 값을 다 재려고 갈아 끼우는 이음새다. 격자가 읽는다.
     var drinkGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.drinkGiftLockedCellPolicy
+    /// 빼빼로 아잉이(v0.3.77) 잠긴 칸 정책 — 정본은 상수(`WorkTimerStore.peperoGiftLockedCellPolicy`), 이 칸은 시험의 이음새다(이슬 칸과 같다).
+    var peperoGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.peperoGiftLockedCellPolicy
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.

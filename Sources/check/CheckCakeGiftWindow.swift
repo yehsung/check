@@ -53,7 +53,8 @@ struct CheckCakeGiftWindowView: View {
             CheckTheme.background
             if let received = store.cakeGiftReceivedID {
                 receivedScreen(received)
-            } else if store.cakeGiftPresented?.kind == .drink {
+            } else if store.cakeGiftPresented?.kind.showsInviteScreen == true {
+                // 술 한잔(v0.3.74) · 빼빼로 데이(v0.3.77) — 선택지가 하나라 고르기 없이 초대장 화면.
                 inviteScreen
             } else {
                 choosingScreen
@@ -133,13 +134,13 @@ struct CheckCakeGiftWindowView: View {
         .accessibilityLabel(title)
     }
 
-    // MARK: ①' 술 한잔 초대장 (v0.3.74 — 고르기 없음)
+    // MARK: ①' 술 한잔 초대장 (v0.3.74 — 고르기 없음) · 빼빼로 데이(v0.3.77)도 같은 틀
 
     /// 술 한잔 선물 — 선택지가 이슬 하나라 고르지 않는다(스토어가 미리 골라 둔다 — `presentCakeGiftWindow`). "술 한잔 하자고 초대 보내는 느낌":
     /// 운영자 한 줄(`note`)이 있으면 초대장 카드의 큰 글이고 본문은 그 아래 작게, 없으면 본문(가제)이 큰 글이다.
     private var inviteScreen: some View {
         let copy = store.cakeGiftWindowCopy
-        let id = store.cakeGiftPresented?.options.first ?? CharacterCatalog.isulAingID
+        let id = store.cakeGiftPresented.flatMap { $0.options.first ?? $0.kind.builtInIDs.first } ?? CharacterCatalog.isulAingID
         let name = catalog.manifest(id: id)?.displayName ?? id
         let note = store.cakeGiftPresented?.note
         return VStack(spacing: 10) {

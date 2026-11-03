@@ -9,7 +9,8 @@
 //     글 칸의 기본 복사는 보이는 글자(꼬리표째)를 붙여넣기판에 쓰므로, 이 시트는 붙여넣기판(LocalClipboard)을 갈아 끼워 그 쓰기를 가로챈다.
 //  ② 글 칸 메뉴는 [복사] · [모두 선택]만 남긴다. 공유 · 번역 · 웹 검색(PROCESS_TEXT) · 똑똑한 선택 동작(링크 열기 · 전화 등)은 보이는 글자를 다른 앱에 넘긴다 —
 //     꼬리표가 붙은 글이 나가고, 링크 열기는 여는 문(isOpenable)을 거치지 않는다. 그래서 걸러 낸다([ChatSelectCopyMenu.keeps]).
-//  ③ 글은 바뀌지 않는다(읽기 전용 · 바뀐 값이 와도 글은 원래 글로 되돌린다). 키보드가 뜨지 않는다.
+//  ③ 글은 바뀌지 않는다(읽기 전용 상태 기반 글 칸 — 이 갈래 화면 규약 "상태 기반 TextFieldState 만"(NoTruncationWhileComposingStructureTest T2)).
+//     서식은 글을 고치지 않는 출력 변환(OutputTransformation.addStyle)으로만 입힌다. 키보드가 뜨지 않는다.
 package com.yehsung.aingcheck.ui.screens.messages
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -20,14 +21,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.contextmenu.data.TextContextMenuKeys
 import androidx.compose.foundation.text.contextmenu.modifier.filterTextContextMenuComponents
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -40,10 +42,6 @@ import androidx.compose.ui.platform.NativeClipboard
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextRange
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.ChatMarkdownCopy
 import com.yehsung.aingcheck.core.rules.text.ChatMarkdownPieces
@@ -56,25 +54,27 @@ class ChatSelectCopyState(shown: String) {
     /** 시트에 보이는 글자 전부(꼬리표 포함 — 말풍선과 같은 글). */
     val drawn: String = ChatMarkdownPieces.drawn(pieces)
 
-    var value: TextFieldValue by mutableStateOf(TextFieldValue(drawn, TextRange(0)))
-        private set
+    /** 글 칸 상태(읽기 전용 — 글은 [drawn] 그대로다). */
+    val field = TextFieldState(drawn, TextRange(0))
 
     /**
-     * 마지막으로 고른 구간. 글 칸의 복사는 붙여넣기판 쓰기를 **코루틴으로 미루고 그 사이 고른 것을 접는다** — 쓰는 순간의 값은 이미 접혀 있다.
-     * 복사는 고른 것이 있을 때만 일어나므로, 그때 쓰일 구간은 언제나 마지막으로 고른 구간이다.
+     * 마지막으로 고른(접히지 않은) 구간. 복사가 붙여넣기판에 쓰고 나서 고른 것을 접는 순서가 바뀌어도(쓰기가 미뤄져도) 쓰일 구간을 잃지 않게
+     * 따로 쥔다 — 복사는 고른 것이 있을 때만 일어나므로 그때 쓰일 구간은 지금 고른 것 아니면 마지막으로 고른 것이다.
      */
     var lastSelection: TextRange? = null
         private set
 
-    fun onValueChange(next: TextFieldValue) {
-        // 읽기 전용 — 글은 바꾸지 않는다(고른 구간 · 조합만 받는다).
-        val selection = TextRange(next.selection.start.coerceIn(0, drawn.length), next.selection.end.coerceIn(0, drawn.length))
-        value = TextFieldValue(drawn, selection)
+    fun noteSelection(selection: TextRange) {
         if (!selection.collapsed) lastSelection = selection
     }
 
     /** 지금 복사할 글(서식 없음 · 링크는 실제 주소째). 고른 것이 없었으면 null. */
-    fun copyText(): String? = lastSelection?.let { ChatMarkdownCopy.text(pieces, listOf(it.min until it.max)) }
+    fun copyText(): String? {
+        val range = field.selection.takeIf { !it.collapsed } ?: lastSelection ?: return null
+        val start = range.min.coerceIn(0, drawn.length)
+        val end = range.max.coerceIn(0, drawn.length)
+        return ChatMarkdownCopy.text(pieces, listOf(start until end))
+    }
 }
 
 /** 시트 글 칸 메뉴의 거름(②). */
@@ -110,7 +110,9 @@ fun ChatSelectCopySheet(state: ChatSelectCopyState, modifier: Modifier = Modifie
     val style = rememberChatBubbleStyle()
     val bubbleColors = chatBubbleColors(isMine = false)
     val annotated = remember(state, style, bubbleColors) { ChatBubbleMarkdown.annotated(state.pieces, bubbleColors, style) }
-    val transformation = remember(annotated) { VisualTransformation { TransformedText(annotated, OffsetMapping.Identity) } }
+    // 서식은 출력 변환으로만 입힌다(글은 그대로 — 고른 자리 = 그린 글 자리).
+    val output = remember(annotated) { OutputTransformation { for (range in annotated.spanStyles) addStyle(range.item, range.start, range.end) } }
+    LaunchedEffect(state) { snapshotFlow { state.field.selection }.collect(state::noteSelection) }
     @Suppress("DEPRECATION") val writer = LocalClipboardManager.current
     val real = LocalClipboard.current
     val clipboard = remember(real, writer, state) { ChatSelectClipboard(real, writer) { state.copyText() } }
@@ -123,11 +125,10 @@ fun ChatSelectCopySheet(state: ChatSelectCopyState, modifier: Modifier = Modifie
                     .padding(start = 13.dp, end = 13.dp, top = 8.dp, bottom = 9.dp),
             ) {
                 BasicTextField(
-                    value = state.value,
-                    onValueChange = state::onValueChange,
+                    state = state.field,
                     readOnly = true,
                     textStyle = style.textStyle(state.pieces).copy(color = bubbleColors.text),
-                    visualTransformation = transformation,
+                    outputTransformation = output,
                     cursorBrush = SolidColor(Color.Transparent),
                     modifier = Modifier.fillMaxWidth().testTag(MessagesTags.SELECT_COPY_FIELD),
                 )

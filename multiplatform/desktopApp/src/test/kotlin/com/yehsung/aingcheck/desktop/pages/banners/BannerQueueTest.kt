@@ -121,16 +121,31 @@ class BannerQueueTest {
         }
     }
 
+    /**
+     * 맥에는 있지만 데스크톱이 **아직 일부러 안 가진** 배너(맥 case 이름 → 이유). 맥 대조에서 이 이름만 빼고 나머지 순서를 그대로 잰다.
+     * 데스크톱이 그 배너를 옮기면 여기서 지운다(아래 단언이 '코틀린에 생겼는데 아직 빠짐 목록에 있다'를 빨강으로 알린다).
+     */
+    private val desktopDeferred: Map<String, String> = mapOf(
+        "reversiInvite" to "아잉 뒤집기 — 윈도우 v1.1 대기열(10-31 기능 동결)",
+    )
+
     /** 맥 소스 대조: topBanner 의 `return .x` 순서 = enum 선언 순서 = 코틀린 TopBanner 순서 = 손 표. 맥이 배너를 더하면 여기가 빨강. */
     @Test
     fun macSourceOrderMatches() {
         val src = HomeTestKit.stripLineComments(HomeTestKit.swiftSource("Sources/check/CheckMenuView.swift"))
         val pickBlock = src.substringAfter("private var topBanner: TopBanner? {").substringBefore("return nil")
-        val picked = Regex("""return \.(\w+)""").findAll(pickBlock).map { it.groupValues[1] }.toList()
+        val pickedAll = Regex("""return \.(\w+)""").findAll(pickBlock).map { it.groupValues[1] }.toList()
         val enumBlock = src.substringAfter("enum TopBanner {").substringBefore("static let inlineBannerHeight")
-        val declared = Regex("""case (\w+)""").findAll(enumBlock).map { it.groupValues[1] }.toList()
+        val declaredAll = Regex("""case (\w+)""").findAll(enumBlock).map { it.groupValues[1] }.toList()
         val kotlin = TopBanner.entries.map { it.swiftCase }
-        assertEquals(macOrder.map { it.swiftCase }, picked, "맥 topBanner 고르기 순서")
+        // 빠짐 목록이 낡지 않게: 맥에 아직 있고(고르기 · 선언 둘 다), 코틀린에는 아직 없다.
+        for ((case, why) in desktopDeferred) {
+            assertTrue(case in pickedAll && case in declaredAll, "빠짐 목록의 $case 가 맥 topBanner 에 없다 — 목록에서 지운다($why)")
+            assertTrue(case !in kotlin, "코틀린 TopBanner 에 $case 가 생겼다 — 빠짐 목록에서 지운다($why)")
+        }
+        val picked = pickedAll.filterNot { it in desktopDeferred }
+        val declared = declaredAll.filterNot { it in desktopDeferred }
+        assertEquals(macOrder.map { it.swiftCase }, picked, "맥 topBanner 고르기 순서(데스크톱 빠짐 ${desktopDeferred.keys} 제외)")
         assertEquals(picked, declared, "맥 enum 선언 순서")
         assertEquals(picked, kotlin, "코틀린 TopBanner 순서")
     }

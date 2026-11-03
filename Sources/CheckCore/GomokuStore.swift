@@ -1018,8 +1018,8 @@ package final class GomokuStore {
         lobbyInFlight = true
         let generation = resetGeneration
         let sessionGeneration = host?.sessionGeneration
-        // ★ defer 는 **거꾸로** 돈다 — 아래 줄(`lobbyInFlight` 내리기)이 먼저, 이 줄(넘기기)이 나중이다. 내리기 전에 넘기면
-        //   넘겨받은 조회가 "도는 중" 에 막혀 또 합쳐지기만 하고 아무도 안 읽는다.
+        // 넘기기는 비구조 Task 를 만들 뿐이라, 넘겨받은 조회는 이 함수가 돌아오고 아래 `lobbyInFlight` 내리기까지 끝난 **뒤에** 돈다
+        //   (MainActor). 그래서 두 defer 의 선언 순서와 무관하다 — 넘겨받은 조회가 "도는 중" 에 막히는 일은 없다.
         var handOff = false
         defer { if handOff { handOffLobby(generation: generation, sessionGeneration: sessionGeneration) } }
         defer { if generation == resetGeneration { lobbyInFlight = false } }
@@ -1134,7 +1134,7 @@ package final class GomokuStore {
             owed = true
         } while inboxAgain
         inboxInFlight = false
-        // `inboxInFlight` 를 내린 **뒤에** 넘긴다 — 먼저 넘기면 넘겨받은 조회가 "도는 중" 에 막혀 또 합쳐지기만 한다.
+        // 넘기기는 비구조 Task 를 만들 뿐이라 넘겨받은 조회는 이 함수가 돌아온 뒤에 돈다(MainActor) — 줄 순서는 읽기 쉽게 둔 것이다.
         if handOff { handOffInbox(generation: generation, sessionGeneration: sessionGeneration) }
     }
 

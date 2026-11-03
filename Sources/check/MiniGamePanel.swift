@@ -1536,7 +1536,10 @@ struct MiniGameDuelInvites: Equatable {
 
 /// 같이 하기 문(사이드바 줄 순서 그대로). 새 문은 **맨 뒤**에 붙인다 — 이 순서가 곧 줄 순서이고, 같이 하기 칸이 저절로 굴러갈 때
 /// 겨누는 자리(`MiniGameSidebarDuelViewport` 의 자리표)도 이 순서로 선다.
-enum MiniGameDuelDoor: Int, CaseIterable, Hashable {
+/// ⚠ 합칠 때: 버그 개선 가지(`fix/window-return-1103` b63734bd)가 같은 이름 · 같은 모양(`Equatable, Sendable`, 같은 순서)의 enum 을
+/// `WorkTimerStoreMiniGame.swift` 에 둔다. 그 가지와 만나면 이 선언을 지우고 그쪽 선언에 `CaseIterable` 과 `reversi` 를 더한다
+/// (두 선언이 함께 있으면 재선언으로 컴파일이 멈춘다 — 조용히 갈리지 않는다). 절차 `FLIP/MERGE-NOTES.md` 3절 ①.
+enum MiniGameDuelDoor: Equatable, Sendable, CaseIterable {
     case gomoku, chess, tetris, rummy, reversi
 }
 

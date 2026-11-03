@@ -395,8 +395,8 @@ struct V03xxReversiSidebarTests {
             "MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() } }",
         ].joined()
         #expect(panel.contains(order), "같이 하기 묶음이 오목 · 체스 · 테트리스 · 큐브 · 아잉 뒤집기 순이 아니다")
-        // 줄 순서와 저절로 굴리기의 자리표 순서가 같은 목록이다.
-        #expect(panel.contains("case gomoku, chess, tetris, rummy, reversi"), "문 목록 순서가 줄 순서와 다르다")
+        // 줄 순서와 저절로 굴리기의 자리표 순서가 같은 목록이다(선언은 합칠 때 다른 파일로 옮겨 가므로 글자가 아니라 값으로 잰다).
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi], "문 목록 순서가 줄 순서와 다르다")
 
         let alone = CGRect(x: 6, y: (RSB.layout.sidebarRowHeight - RSB.layout.sidebarIconSize) / 2,
                            width: RSB.layout.sidebarIconSize, height: RSB.layout.sidebarIconSize)

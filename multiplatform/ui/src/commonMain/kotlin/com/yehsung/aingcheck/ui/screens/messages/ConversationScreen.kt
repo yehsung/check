@@ -17,6 +17,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,18 +48,25 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
@@ -69,17 +77,22 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.text.AingSticker
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
+import com.yehsung.aingcheck.core.rules.text.ChatMarkdown
+import com.yehsung.aingcheck.core.rules.text.ChatMarkdownPieces
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.messages.MessageEntry
 import com.yehsung.aingcheck.core.stores.messages.MessagesBubbleLine
 import com.yehsung.aingcheck.core.stores.messages.MessagesConversationHeader
 import com.yehsung.aingcheck.core.stores.messages.MessagesConversationItem
 import com.yehsung.aingcheck.core.stores.messages.MessagesConversationRules
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import com.yehsung.aingcheck.core.stores.messages.MessagesPeerPresence
 import com.yehsung.aingcheck.core.stores.messages.MessagesPendingOutgoing
 import com.yehsung.aingcheck.core.stores.messages.MessagesPokeLogLine
@@ -92,6 +105,7 @@ import com.yehsung.aingcheck.core.stores.messages.blockPeer
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.session.kit.EmptyStateView
+import com.yehsung.aingcheck.ui.screens.session.kit.FocusChip
 import com.yehsung.aingcheck.ui.screens.session.kit.InlineNotice
 import com.yehsung.aingcheck.ui.screens.session.kit.NoticeKind
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
@@ -141,6 +155,10 @@ fun ConversationScreen(
     var showsBlock by rememberSaveable(peerID) { mutableStateOf(false) }
     var reportTarget by remember(peerID) { mutableStateOf<MessagesReportTarget?>(null) }
     var showsStickers by rememberSaveable(peerID) { mutableStateOf(false) }
+    // 골라 복사 시트에 띄운 말풍선 본문(판 7 · 폰만 — 서식이 켜진 조립에서만 메뉴가 선다).
+    var selectCopyBody by remember(peerID) { mutableStateOf<String?>(null) }
+    // 채팅 서식(판 7 — 제목·굵게·링크)은 폰 조립만 켠다(MessagesStore.chatMarkdown). 꺼져 있으면(Windows) 말풍선 · 메뉴 · TalkBack 이 예전 글자 그대로다.
+    val formatting = store.chatMarkdown
 
     val now = rememberNow(store.context.clock, everySeconds = 60)
     val items = store.conversationItems(peerID)
@@ -148,6 +166,9 @@ fun ConversationScreen(
     val board = if (header.avatarName == null) null else store.presenceBoard(now)
     val presence = board?.peers?.get(peerID)
     val statusMessage = board?.statuses?.get(peerID)
+    // 상대가 집중 중인가(판 7 · 대표 요청 5) — 이름표 '집중 중' 칩. 판(board)이 아니라 스토어 판정이다: 입력줄 잠금과 같은 값이어야 하고,
+    // 판은 이름을 알 때만 계산한다(이름 모르는 대화도 잠금은 선다). 내 집중은 칩이 아니라 입력줄 사유 줄이 말한다(칩은 상대의 상태다).
+    val peerFocused = store.isPeerFocused(peerID)
     val peerDisplayName = store.peerName(peerID) ?: MessagesConversationHeader.fallbackTitle
     val stickerArt = rememberStickerArt()
     val scope = rememberCoroutineScope()
@@ -162,7 +183,7 @@ fun ConversationScreen(
             onReport = { reportTarget = MessagesReportTarget(peerID, peerDisplayName) },
             onBlock = { showsBlock = true },
         )
-        Nameplate(header, presence, statusMessage)
+        Nameplate(header, presence, statusMessage, peerFocused)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             ConversationList(
                 items = items,
@@ -172,6 +193,8 @@ fun ConversationScreen(
                 empty = if (items.isEmpty()) MessagesConversationRules.emptyState(store.historyLoaded, store.historyFailed) else null,
                 onRetry = { scope.launch { store.retryConversation(peerID) } },
                 onReportMessage = { entry -> reportTarget = MessagesReportTarget(peerID, entry.peerName, entry.id, entry.body) },
+                formatting = formatting,
+                onSelectCopy = { entry -> selectCopyBody = entry.body },
                 modifier = Modifier.widthIn(max = READABLE_WIDTH),
             )
         }
@@ -224,6 +247,13 @@ fun ConversationScreen(
             MessagesStickerSheet(store, peerID, onClose = { showsStickers = false })
         }
     }
+    selectCopyBody?.let { body ->
+        ModalPresenceMark()
+        ModalBottomSheet(onDismissRequest = { selectCopyBody = null }, containerColor = colors.surface) {
+            // 시트 글은 말풍선과 같은 글(이모티콘 폴백을 지난 본문)이다 — 이모티콘 말풍선에는 메뉴가 서지 않는다.
+            ChatSelectCopySheet(remember(body) { ChatSelectCopyState(AingStickerText.preview(body)) })
+        }
+    }
 }
 
 /** 머리: 뒤로 · 가운데 상대 얼굴(이름을 모르면 일반 인물 기호 — 가짜 이니셜 금지) · ⋮(신고 · 차단). */
@@ -258,12 +288,35 @@ private fun ConversationTopBar(
     }
 }
 
-/** 유리 이름표: 이름 + "● 근무 중 · 서울" + 상태메시지(있으면 한 줄). 보이스오버는 이 이름표가 읽는다. */
+/**
+ * 이름표의 이름 줄. 집중이 아니면 판 7 전 그림 **그대로**다(한 줄 · 넘치면 잘림) — Windows 플라이아웃도 같은 화면을 쓰는데 게이트가 꺼져 칩이 서지 않으므로,
+ * 데스크톱 그림이 바뀌지 않게 한다(검토 F6). 칩이 설 때만 이름이 폭을 양보하며 말줄임표로 끝난다(칩이 밀려나지 않게).
+ */
 @Composable
-private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeerPresence?, statusMessage: String?) {
+internal fun NameplateTitle(title: String, isFocused: Boolean) {
+    val colors = AingTheme.colors
+    val style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
+    if (!isFocused) {
+        Text(title, style = style, color = colors.label, maxLines = 1)
+        return
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, style = style, color = colors.label, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        FocusChip(MessagesFocusText.conversationChip)
+    }
+}
+
+/**
+ * 유리 이름표: 이름(+ 집중이면 '집중 중' 칩 — 판 7) + "● 근무 중 · 서울" + 상태메시지(있으면 한 줄). TalkBack 은 이 이름표가 읽는다.
+ * 칩은 이름 줄 안에 서고 이름표 높이를 늘리지 않는다 — 폭은 이름이 양보한다(꼬리 줄임).
+ */
+@Composable
+private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeerPresence?, statusMessage: String?, isFocused: Boolean) {
     val colors = AingTheme.colors
     val line = MessagesPresenceRules.headerLine(presence)
-    val label = listOfNotNull(header.accessibilityLabel, line, statusMessage?.let { "상태메시지 $it" }).joinToString(", ")
+    val label = listOfNotNull(
+        header.accessibilityLabel, if (isFocused) MessagesFocusText.accessibility else null, line, statusMessage?.let { "상태메시지 $it" },
+    ).joinToString(", ")
     Box(Modifier.fillMaxWidth().padding(bottom = 8.dp), contentAlignment = Alignment.Center) {
         Column(
             Modifier
@@ -273,7 +326,7 @@ private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeer
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            Text(header.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label, maxLines = 1)
+            NameplateTitle(header.title, isFocused)
             if (line != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val status = presence?.status
@@ -302,6 +355,8 @@ private fun ConversationList(
     empty: com.yehsung.aingcheck.core.stores.messages.MessagesEmptyState?,
     onRetry: () -> Unit,
     onReportMessage: (MessageEntry) -> Unit,
+    formatting: Boolean = false,
+    onSelectCopy: (MessageEntry) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AingTheme.colors
@@ -340,9 +395,13 @@ private fun ConversationList(
                         item.line, stickerArt,
                         // 신고는 받은 말풍선만이다.
                         onReport = if (item.line.entry.isMine) null else ({ onReportMessage(item.line.entry) }),
+                        formatting = formatting,
+                        // [골라 복사]는 서식이 켜진 조립 · 추천안 A(시트) · 글 말풍선만(이모티콘 말풍선엔 없다 — 아이폰 설계와 같다).
+                        onSelectCopy = if (formatting && ChatBubbleMarkdownSettings.selectCopy == ChatSelectCopyStyle.sheet &&
+                            AingSticker.parse(item.line.entry.body) == null) ({ onSelectCopy(item.line.entry) }) else null,
                         modifier = Modifier.padding(top = if (item.line.startsGroup) 7.dp else 0.dp),
                     )
-                    is MessagesConversationItem.pending -> PendingBubbleRow(item.item, stickerArt)
+                    is MessagesConversationItem.pending -> PendingBubbleRow(item.item, stickerArt, formatting)
                 }
             }
             if (empty != null) {
@@ -416,17 +475,32 @@ private val STICKER_SIDE = 120.dp
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun BubbleRow(line: MessagesBubbleLine, stickerArt: StickerArtState, onReport: (() -> Unit)?, modifier: Modifier = Modifier) {
+private fun BubbleRow(
+    line: MessagesBubbleLine,
+    stickerArt: StickerArtState,
+    onReport: (() -> Unit)?,
+    formatting: Boolean = false,
+    onSelectCopy: (() -> Unit)? = null,
+    modifier: Modifier = Modifier,
+) {
     val entry = line.entry
     val clipboard = LocalClipboardManager.current
+    val uriHandler = LocalUriHandler.current
     var menu by remember { mutableStateOf(false) }
+    // 링크를 여는 한 문(판 7): 여는 자리에서 isOpenable 을 다시 보고(ChatBubbleMarkdown.follow) 기본 브라우저(ACTION_VIEW)로 넘긴다. 열 앱이 없으면 조용히 접는다.
+    val open: (String) -> Unit = { address -> ChatBubbleMarkdown.follow(address) { runCatching { uriHandler.openUri(it) } } }
+    val links = if (formatting) remember(entry.body) { ChatBubbleMarkdown.linkActions(AingStickerText.preview(entry.body)) } else emptyList()
+    // 줄 라벨: 서식이 켜졌으면 기호를 벗겨 읽는다(아이폰 1.0.17 — plainPreview 는 이모티콘 규칙을 먼저 거친다). 링크가 여는 곳은 링크마다 단 동작 이름이 말한다.
+    val spoken = if (formatting) ChatMarkdown.plainPreview(entry.body) else AingStickerText.preview(entry.body)
     val description = buildList {
-        add((if (entry.isMine) "나" else entry.peerName) + ": " + AingStickerText.preview(entry.body))
+        add((if (entry.isMine) "나" else entry.peerName) + ": " + spoken)
         add(line.clockText)
         if (line.showsUnreadOne) add(MessagesConversationRules.unreadOneAccessibilityLabel)
     }.joinToString(", ")
     val actions = buildList {
         add(CustomAccessibilityAction(ConversationText.copy) { clipboard.setText(AnnotatedString(entry.body)); true })
+        if (onSelectCopy != null) add(CustomAccessibilityAction(ChatBubbleText.selectCopy) { onSelectCopy(); true })
+        for (link in links) add(CustomAccessibilityAction(link.title) { open(link.address); true })
         if (onReport != null) add(CustomAccessibilityAction(BlockReportText.reportMessageAction) { onReport(); true })
     }
     Row(
@@ -440,8 +514,27 @@ private fun BubbleRow(line: MessagesBubbleLine, stickerArt: StickerArtState, onR
             Spacer(Modifier.size(6.dp, 1.dp))
         }
         Box(Modifier.weight(1f, fill = false)) {
-            Box(Modifier.combinedClickable(onClick = {}, onLongClick = { menu = true })) {
-                BubbleContent(entry.body, entry.isMine, stickerArt, isPending = false)
+            if (formatting) {
+                // 서식 말풍선: 한 번 누르면 그 자리의 링크를 연다(링크 글자 상자 + 손가락 오차 — 링크 밖은 아무 일 없다) · 길게 누르면 메뉴.
+                val hit = remember { ChatBubbleLinkHit() }
+                val currentOpen by rememberUpdatedState(open)
+                val slop = with(LocalDensity.current) { ChatBubbleMarkdown.LINK_TOUCH_SLOP.toPx() }
+                Box(
+                    Modifier
+                        .onPlaced { hit.outer = it }
+                        .pointerInput(entry.body) {
+                            detectTapGestures(
+                                onLongPress = { menu = true },
+                                onTap = { position -> hit.linkAt(position, slop)?.let { currentOpen(it) } },
+                            )
+                        },
+                ) {
+                    BubbleContent(entry.body, entry.isMine, stickerArt, isPending = false, formatting = true, hit = hit)
+                }
+            } else {
+                Box(Modifier.combinedClickable(onClick = {}, onLongClick = { menu = true })) {
+                    BubbleContent(entry.body, entry.isMine, stickerArt, isPending = false)
+                }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(
@@ -450,6 +543,14 @@ private fun BubbleRow(line: MessagesBubbleLine, stickerArt: StickerArtState, onR
                     onClick = { menu = false; clipboard.setText(AnnotatedString(entry.body)) },
                     modifier = Modifier.testTag(MessagesTags.MENU_COPY),
                 )
+                if (onSelectCopy != null) {
+                    DropdownMenuItem(
+                        text = { Text(ChatBubbleText.selectCopy) },
+                        leadingIcon = { AingIcon(AppIcon.PanToolAltFill, null, size = 20.dp) },
+                        onClick = { menu = false; onSelectCopy() },
+                        modifier = Modifier.testTag(MessagesTags.MENU_SELECT_COPY),
+                    )
+                }
                 if (onReport != null) {
                     DropdownMenuItem(
                         text = { Text(BlockReportText.reportMessageAction, color = AingTheme.colors.danger) },
@@ -465,6 +566,25 @@ private fun BubbleRow(line: MessagesBubbleLine, stickerArt: StickerArtState, onR
             BubbleMeta(line)
             Spacer(Modifier.size(OPPOSITE_INSET, 1.dp))
         }
+    }
+}
+
+/**
+ * 서식 말풍선의 링크 누름 판정 재료(판 7): 그린 글 · 글자 배치 · 글 칸과 손짓 상자의 자리. 손짓은 말풍선 바깥 상자(여백 포함)가 받고,
+ * 여기서 글 칸 좌표로 옮겨 코어 판정(ChatBubbleMarkdown.linkAt)을 부른다. 상태가 아니다(그리기를 다시 부르지 않는다).
+ */
+private class ChatBubbleLinkHit {
+    var text: AnnotatedString? = null
+    var layout: TextLayoutResult? = null
+    var inner: LayoutCoordinates? = null
+    var outer: LayoutCoordinates? = null
+
+    fun linkAt(position: Offset, slop: Float): String? {
+        val text = text ?: return null
+        val layout = layout ?: return null
+        val inner = inner?.takeIf { it.isAttached } ?: return null
+        val outer = outer?.takeIf { it.isAttached } ?: return null
+        return ChatBubbleMarkdown.linkAt(text, layout, inner.localPositionOf(outer, position), slop)
     }
 }
 
@@ -492,7 +612,14 @@ private fun BubbleMeta(line: MessagesBubbleLine) {
  * INV-MessagesConversationView-dc9db4cd 이식: 이모티콘 그림 자체에는 라벨을 달지 않는다(contentDescription = null) — 읽는 것은 바깥 줄 라벨이다.
  */
 @Composable
-private fun BubbleContent(body: String, isMine: Boolean, stickerArt: StickerArtState, isPending: Boolean) {
+private fun BubbleContent(
+    body: String,
+    isMine: Boolean,
+    stickerArt: StickerArtState,
+    isPending: Boolean,
+    formatting: Boolean = false,
+    hit: ChatBubbleLinkHit? = null,
+) {
     val colors = AingTheme.colors
     val drawn = StickerArt.drawable(body, stickerArt)
     when {
@@ -503,21 +630,41 @@ private fun BubbleContent(body: String, isMine: Boolean, stickerArt: StickerArtS
                 .background((if (isMine) colors.accentFill else colors.bubbleIn).copy(alpha = if (isPending) 0.6f else 1f), RoundedCornerShape(BUBBLE_RADIUS))
                 .padding(start = 13.dp, end = 13.dp, top = 8.dp, bottom = 9.dp),
         ) {
-            Text(
-                AingStickerText.preview(body),
-                // 한글 어절 단위 줄바꿈(기본값은 음절 중간에서 끊겨 "두/었어요"가 된다 — iOS MessagesBubbleTextLayout 의 실측).
-                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal, lineBreak = BubbleLineBreak),
-                color = if (isMine) colors.onAccentFill else colors.label,
-            )
+            if (formatting) {
+                // 판 7: 제목 · 굵게 · 링크(+ 호스트 꼬리표). 이모티콘 폴백을 먼저 지나고(맥 · 아이폰과 같은 순서) 서식은 그 뒤다.
+                // 본문 스타일 · 어절 줄바꿈은 아래 예전 갈래와 같다 — 기호 없는 메시지는 꾸밈 없는 글로 같은 글자를 그린다.
+                val style = rememberChatBubbleStyle()
+                val bubbleColors = chatBubbleColors(isMine)
+                val shown = AingStickerText.preview(body)
+                val pieces = remember(shown) { ChatMarkdownPieces.pieces(shown) }
+                val annotated = remember(pieces, bubbleColors, style) { ChatBubbleMarkdown.annotated(pieces, bubbleColors, style) }
+                SideEffect { hit?.text = annotated }
+                Text(
+                    annotated,
+                    style = style.textStyle(pieces),
+                    color = bubbleColors.text,
+                    onTextLayout = { hit?.layout = it },
+                    modifier = Modifier.onPlaced { hit?.inner = it },
+                )
+            } else {
+                Text(
+                    AingStickerText.preview(body),
+                    // 한글 어절 단위 줄바꿈(기본값은 음절 중간에서 끊겨 "두/었어요"가 된다 — iOS MessagesBubbleTextLayout 의 실측).
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal, lineBreak = BubbleLineBreak),
+                    color = if (isMine) colors.onAccentFill else colors.label,
+                )
+            }
         }
     }
 }
 
 /** 보내는 중(또는 서버가 받았지만 이력이 아직 안 들고 온) 내 말풍선. 판정은 말풍선 행과 **같은 한 함수**다. */
 @Composable
-private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerArtState) {
+private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerArtState, formatting: Boolean = false) {
     val sending = item.state == MessagesPendingOutgoing.State.sending
-    val label = "나: ${AingStickerText.preview(item.body)}, " + if (sending) ConversationText.sending else ConversationText.sent
+    // 줄 라벨은 서식 기호를 벗겨 읽는다(판 7 · 위 말풍선 줄 라벨과 같은 함수 — 꺼져 있으면 예전 글자).
+    val spoken = if (formatting) ChatMarkdown.plainPreview(item.body) else AingStickerText.preview(item.body)
+    val label = "나: $spoken, " + if (sending) ConversationText.sending else ConversationText.sent
     Row(
         Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = label; testTag = MessagesTags.pending(item.id) },
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
@@ -525,7 +672,7 @@ private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerA
     ) {
         Spacer(Modifier.size(OPPOSITE_INSET, 1.dp))
         if (sending) CircularProgressIndicator(Modifier.size(12.dp), color = AingTheme.colors.label2, strokeWidth = 1.5.dp)
-        Box(Modifier.weight(1f, fill = false)) { BubbleContent(item.body, isMine = true, stickerArt = stickerArt, isPending = true) }
+        Box(Modifier.weight(1f, fill = false)) { BubbleContent(item.body, isMine = true, stickerArt = stickerArt, isPending = true, formatting = formatting) }
     }
 }
 

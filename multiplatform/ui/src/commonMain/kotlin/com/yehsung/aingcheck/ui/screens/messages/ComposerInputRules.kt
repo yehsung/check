@@ -41,8 +41,13 @@ object ComposerInputRules {
         }
     }
 
-    /** 단추를 켤지: 조합 중이면 켠다(누르면 확정한 뒤 판정한다) — 아니면 스토어 판정 그대로. 왕복 중이면 끈다. */
-    fun sendEnabled(composing: Boolean, canSend: Boolean, isSending: Boolean): Boolean = !isSending && (composing || canSend)
+    /**
+     * 단추를 켤지: 조합 중이면 켠다(누르면 확정한 뒤 판정한다) — 아니면 스토어 판정 그대로. 왕복 중이면 끈다.
+     * **집중이 막으면 조합 중이어도 끈다**(판 7 · iOS 1.0.17 `sendEnabled`) — 켜 두면 확정 뒤 스토어가 거절해 눌리는 척만 한다(짝 게이트의 화면 쪽).
+     * 입력칸은 그대로 쓸 수 있고 초안은 남는다. [focusBlocked] 는 기본값을 두지 않는다 — 부르는 자리가 스토어 `focusBlock` 을 꼭 넘기게.
+     */
+    fun sendEnabled(composing: Boolean, canSend: Boolean, isSending: Boolean, focusBlocked: Boolean): Boolean =
+        !isSending && !focusBlocked && (composing || canSend)
 
     /** 보내기 원을 파랑으로 칠할지(보내는 중에도 파랑 — 돌림표가 흰색이다). */
     fun sendLooksEnabled(isSending: Boolean, sendEnabled: Boolean): Boolean = isSending || sendEnabled

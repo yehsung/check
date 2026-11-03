@@ -7,6 +7,7 @@ package com.yehsung.aingcheck.feature.phone.app
 import com.yehsung.aingcheck.core.session.SessionPhase
 import com.yehsung.aingcheck.core.session.app.AppConfig
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.rules.text.MessageNoticeText
 import com.yehsung.aingcheck.core.stores.games.GamesPlayController
 import com.yehsung.aingcheck.core.stores.games.GamesRouteRequest
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
@@ -84,6 +85,79 @@ class PhoneAppModelTest {
         assertEquals(42L, app.context.ruby.rubyBalance)
         app.ruby.rubyBalance = 5_000_000_000
         assertEquals(5_000_000_000L, app.gamesContext.sharedRubyBalance, "Int 범위를 넘어도 자르지 않는다(8차 fold — 칸은 Long 하나)")
+    }
+
+    /**
+     * 집중 모드 보내기 게이트의 부르는 자리(판 7 · 대표 요청 5·6). 없으면: 스토어 시험(MessagesFocusGateTest — 게이트를 직접 켠다)은 초록인데
+     * 폰 조립이 게이트를 안 켜거나 지금 탭 틱을 안 이어 '집중' 표시 · 보내기 잠금 · 맥에서 끈 집중 따라잡기가 폰에서 영영 안 돈다.
+     * 기준선: 대화를 닫으면 같은 틱이 묻지 않는다(틱 하나가 늘 GET 을 내는 배선이 아니다).
+     */
+    @Test
+    fun assemblyTurnsOnTheFocusGateAndWiresTheNowTick() = runTest {
+        fun isFocusGet(r: RecordedRequest) = r.method == "GET" && r.path == "/rest/v1/profiles" && r.query.any { it.first == "select" && it.second == "focus_mode" }
+        val h = PhoneHarness(this) { r ->
+            when {
+                isFocusGet(r) -> Reply.Json("""[{"focus_mode":true}]""")
+                r.rpcName == "message_unread_summary" || r.rpcName?.startsWith("message_history") == true -> Reply.missingFunction
+                else -> null
+            }
+        }
+        assertTrue(h.app.messages.focusSendGate, "폰 조립이 집중 게이트를 안 켰다")
+        assertTrue(h.app.messages.chatMarkdown, "폰 조립이 채팅 서식을 안 켰다(판 7 — 말풍선이 기호째 보인다)")
+        h.signIn()
+        h.app.messages.appDidBecomeActive()
+        h.app.messages.conversationDidAppear("p-1", "t1")
+        advanceUntilIdle()
+        assertEquals(true, h.app.messages.myFocusMode)
+        val asked = h.appRequests.count(::isFocusGet)
+        h.app.now.onPeriodicTick()
+        advanceUntilIdle()
+        assertEquals(asked + 1, h.appRequests.count(::isFocusGet), "지금 탭 틱이 내 집중 다시 묻기에 이어지지 않았다")
+        h.app.messages.conversationDidDisappear("t1")
+        h.app.now.onPeriodicTick()
+        advanceUntilIdle()
+        assertEquals(asked + 1, h.appRequests.count(::isFocusGet), "대화가 없는데 틱이 물었다")
+        assertEquals(emptyList(), com.yehsung.aingcheck.testkit.mock.PhoneForbiddenCalls.violations(h.server.requests), "폰 금지 호출")
+    }
+
+    /**
+     * 지금 탭 명부 → 상대 집중 거절 문구 걷기의 부르는 자리(판 7 · 검토 F2 — 아이폰 NowStore 의 `links.messages?.settleFocusNotices()`).
+     * 없으면: 스토어 시험(MessagesFocusGateTest — 시험 조립이 직접 잇는다)은 초록인데 폰에서는 지금 탭 명부가 켜짐을 알아도 "지금 집중 중이에요"가
+     * 결과 문구 자리에 남아, 상대가 끈 뒤에도 켜진 [보내기] 위에 남는다. 기준선: 두 명부가 다 모를 때는 같은 문구가 남는다.
+     */
+    @Test
+    fun assemblyWiresTheNowDirectoryToSettleTheTargetFocusedSentence() = runTest {
+        val focused = "3e240c02-8972-478e-a674-014f498a641b"
+        val directory7 = RepoFiles.readText("Tests/checkTests/Fixtures/directory-rpc/app_user_directory__current_7col.json")
+        val directory8 = RepoFiles.readText("Tests/checkTests/Fixtures/directory-rpc/app_user_directory__draft_8col.json")
+        var directory = directory7
+        val h = PhoneHarness(this) { r ->
+            when {
+                r.rpcName == "app_user_directory" -> Reply.Json(directory)
+                r.rpcName == "send_message" -> Reply.Json("""{"status":"target_focused"}""")
+                r.rpcName == "message_unread_summary" || r.rpcName?.startsWith("message_history") == true -> Reply.missingFunction
+                else -> null
+            }
+        }
+        h.signIn()
+        val messages = h.app.messages
+        messages.appDidBecomeActive()
+        messages.conversationDidAppear(focused, "t1")
+        messages.loadDirectory(force = true)
+        advanceUntilIdle()
+        messages.setDraft("안녕", focused)
+        assertTrue(messages.sendDraft(focused, isComposing = false))
+        advanceUntilIdle()
+        // 기준선: 두 명부가 다 모른다(7칸) — 거절 문구가 유일한 사유로 남는다.
+        assertFalse(messages.isPeerFocused(focused))
+        assertEquals(MessageNoticeText.targetFocused, messages.sendNotices[focused])
+        // 지금 탭 명부만 다시 받는다(60초 틱의 그 조회) — 이제 켜짐을 안다.
+        directory = directory8
+        h.app.now.refresh()
+        advanceUntilIdle()
+        assertTrue(messages.isPeerFocused(focused), "전제: 지금 탭 명부가 켜짐을 알아야 한다")
+        assertNull(messages.sendNotices[focused], "폰 조립이 지금 탭 명부를 거절 문구 걷기에 잇지 않았다")
+        assertEquals(emptyList(), com.yehsung.aingcheck.testkit.mock.PhoneForbiddenCalls.violations(h.server.requests), "폰 금지 호출")
     }
 
     /**

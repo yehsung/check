@@ -180,8 +180,9 @@ private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore) {
                 Text(MegaphoneText.icon, fontSize = 15.sp)
             }
             Spacer(Modifier.padding(top = 8.dp))
+            // 서식 기호 · 이모티콘 토큰을 벗긴 글(판 7 — iOS 1.0.17 · 맥 배너와 같은 plainPreview). 링크는 누를 수 없는 글자다. TalkBack 라벨도 같은 글이다.
             Text(
-                banner.body,
+                MegaphoneBannerPhoneText.shownBody(banner.body),
                 color = colors.label,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 17.sp,

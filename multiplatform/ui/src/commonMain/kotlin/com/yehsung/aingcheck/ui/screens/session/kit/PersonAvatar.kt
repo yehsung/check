@@ -7,6 +7,7 @@ package com.yehsung.aingcheck.ui.screens.session.kit
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -172,7 +173,7 @@ fun InitialFace(name: String, size: Dp, colorSeed: String = name) {
 }
 
 /**
- * 이름 + 이름 뒤 센터 배지("서울") · '나' 칩([isMe]). 이름이 넘치면 꼬리 줄임.
+ * 이름 + 이름 뒤 센터 배지("서울") · '나' 칩([isMe]) · '집중' 칩([focusChip] — 판 7, null 이면 없음). 이름이 넘치면 꼬리 줄임.
  * [stacked] 는 큰 글자 줄 — 배지가 이름 아랫줄로 내려가고 이름은 꺾인다(Swift `PersonName.stacked`).
  */
 @Composable
@@ -184,15 +185,17 @@ fun PersonName(
     color: Color = AingTheme.colors.label,
     isMe: Boolean = false,
     stacked: Boolean = false,
+    focusChip: String? = null,
 ) {
     val centerText = CenterLabel.display(center)
     if (stacked) {
         Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(name, style = style, color = color)
-            if (centerText != null || isMe) {
+            if (centerText != null || isMe || focusChip != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     centerText?.let { CenterChip(it) }
                     if (isMe) MeChip()
+                    focusChip?.let { FocusChip(it) }
                 }
             }
         }
@@ -201,7 +204,33 @@ fun PersonName(
             Text(name, style = style, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
             centerText?.let { CenterChip(it) }
             if (isMe) MeChip()
+            focusChip?.let { FocusChip(it) }
         }
+    }
+}
+
+/**
+ * 집중 칩(판 7 · 대표 요청 5 "콕/메세지 창에서부터 집중 모드인 사람들은 표시") — 보라(`aiToken`) 글자 + 같은 빛 테두리. 맥 콕 목록 '집중' 칩 ·
+ * 대화 머리 '집중 중' 칩 · iOS 1.0.17 `FocusChip` 과 같은 색 계열이다.
+ *
+ * **테두리형인 까닭**(iOS 와 같은 계산): 칠한 칩(글자 색 14% 바탕)이면 라이트에서 글자가 4.3:1 로 4.5:1 에 못 미친다(aiToken #7A4FE0).
+ * 테두리형은 글자가 줄 바탕(흰 카드 · 유리 이름표) 위에 바로 앉는다. 다크는 aiToken 다크값(밝은 보라)이라 넉넉하다.
+ *
+ * **한 조각으로 둔다**: 새 대화 사람 줄(`PersonName(focusChip=)`)과 대화 이름표가 이 부품 하나를 부른다. 표시 자리를 넓히게 되면(대표 결정 대기 —
+ * 대화 목록 줄 · 지금 탭 근무 중 줄 등) 이것을 꽂으면 된다(글자는 코어 `MessagesFocusText`). TalkBack 은 칩을 따로 읽지 않는다 —
+ * 줄·이름표가 자기 문장에 `MessagesFocusText.accessibility` 를 잇는다(그 자리들은 clearAndSetSemantics 다).
+ */
+@Composable
+fun FocusChip(text: String, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    Box(
+        modifier
+            .heightIn(min = 18.dp)
+            .border(1.dp, colors.aiToken, CircleShape)
+            .padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(text, style = MaterialTheme.typography.labelSmall, color = colors.aiToken, maxLines = 1)
     }
 }
 

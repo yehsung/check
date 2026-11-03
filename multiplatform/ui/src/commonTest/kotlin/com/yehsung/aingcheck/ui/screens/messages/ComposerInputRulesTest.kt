@@ -42,10 +42,13 @@ class ComposerInputRulesTest {
     @Test
     fun sendButtonStates() {
         // 조합 중이면 켠다(누르면 확정한 뒤 판정) · 아니면 스토어 판정 · 왕복 중이면 끈다.
-        assertTrue(ComposerInputRules.sendEnabled(composing = true, canSend = false, isSending = false))
-        assertTrue(ComposerInputRules.sendEnabled(composing = false, canSend = true, isSending = false))
-        assertFalse(ComposerInputRules.sendEnabled(composing = false, canSend = false, isSending = false))
-        assertFalse(ComposerInputRules.sendEnabled(composing = true, canSend = true, isSending = true))
+        assertTrue(ComposerInputRules.sendEnabled(composing = true, canSend = false, isSending = false, focusBlocked = false))
+        assertTrue(ComposerInputRules.sendEnabled(composing = false, canSend = true, isSending = false, focusBlocked = false))
+        assertFalse(ComposerInputRules.sendEnabled(composing = false, canSend = false, isSending = false, focusBlocked = false))
+        assertFalse(ComposerInputRules.sendEnabled(composing = true, canSend = true, isSending = true, focusBlocked = false))
+        // 판 7: 집중이 막으면 조합 중이어도 끈다(확정 뒤 스토어가 거절해 눌리는 척만 하지 않게).
+        assertFalse(ComposerInputRules.sendEnabled(composing = true, canSend = false, isSending = false, focusBlocked = true))
+        assertFalse(ComposerInputRules.sendEnabled(composing = false, canSend = true, isSending = false, focusBlocked = true))
         // 보내는 중에도 원은 파랑(흰 돌림표).
         assertTrue(ComposerInputRules.sendLooksEnabled(isSending = true, sendEnabled = false))
         assertFalse(ComposerInputRules.sendLooksEnabled(isSending = false, sendEnabled = false))

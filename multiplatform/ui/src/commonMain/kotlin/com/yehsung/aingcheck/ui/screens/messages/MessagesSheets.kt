@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.AingSticker
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
 import com.yehsung.aingcheck.core.rules.text.MegaphoneText
+import com.yehsung.aingcheck.core.stores.messages.MessagesComposerRules
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.messages.MobileLoadText
 import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
@@ -102,7 +104,8 @@ fun MessagesStickerSheet(store: MessagesStore, peerID: String, onClose: () -> Un
     Column(modifier.fillMaxWidth().background(colors.background).testTag(MessagesTags.STICKER_SHEET)) {
         SheetHeader(AingStickerText.gridTitle, onClose, closeLabel = AingStickerText.closeGridLabel)
         Column(Modifier.padding(horizontal = AingDimens.sideMargin).padding(bottom = AingDimens.space6), verticalArrangement = Arrangement.spacedBy(AingDimens.space3)) {
-            notice?.let { InlineNotice(it, NoticeKind.Warning) }
+            // 집중이 막고 있으면(판 7) 고르기 **전에** 그 사유가 선다(입력줄 사유 줄은 이 시트 뒤에 가린다). 고른 뒤의 한 줄보다 앞이다.
+            MessagesComposerRules.noticeLine(store.focusBlock(peerID), notice)?.let { InlineNotice(it, NoticeKind.Warning) }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(AingDimens.space3), verticalArrangement = Arrangement.spacedBy(AingDimens.space3), maxItemsInEachRow = 3) {
                 for (sticker in AingSticker.entries) {
                     StickerCell(sticker, art, Modifier.weight(1f)) {
@@ -110,7 +113,9 @@ fun MessagesStickerSheet(store: MessagesStore, peerID: String, onClose: () -> Un
                             notice = null
                             onClose()
                         } else {
-                            notice = AingStickerText.sendingNowNotice
+                            // 까닭은 집중이 먼저다(판 7 — 맥 blockedHelp 짝): "보내는 중"으로 접으면 다시 누르면 될 것처럼 읽힌다. 집중 사유는 위 줄이
+                            // 스토어에서 **바로** 읽으므로 여기 적어 두지 않는다 — 적어 두면 집중이 풀린 뒤에도 옛 사유가 남는다.
+                            notice = if (store.focusBlock(peerID) == null) AingStickerText.sendingNowNotice else null
                         }
                     }
                 }
@@ -178,7 +183,8 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
             when {
                 store.directoryFailed && store.directory.isEmpty() -> item("failed") {
                     EmptyStateView(sf("exclamationmark.triangle", AppIcon.Warning), NewConversationText.loadFailed, MobileLoadText.checkConnection,
-                        MobileLoadText.retry, { store.loadDirectory(force = true) })
+                        // 명부 둘(메시지 + 지금 탭)을 받는다 — 메시지 명부만 받으면 지금 탭이 쥔 옛 집중 값이 이긴다(refreshPeopleDirectories · 검토 F5).
+                        MobileLoadText.retry, { store.refreshPeopleDirectories() })
                 }
                 !store.directoryLoaded -> item("loading") { Box(Modifier.padding(horizontal = AingDimens.sideMargin)) { LoadingRow() } }
                 people.isEmpty() -> item("empty") {
@@ -189,11 +195,15 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
                 else -> {
                     if (working.isNotEmpty()) {
                         item("working-title") { GroupTitle(NewConversationText.workingGroup(working.size)) }
-                        itemsIndexed(working, key = { _, p -> "w-${p.userID}" }) { index, person -> PersonRowCard(person, index, working.size, onSelect) }
+                        itemsIndexed(working, key = { _, p -> "w-${p.userID}" }) { index, person ->
+                            PersonRowCard(person, store.isPeerFocused(person.userID), index, working.size, onSelect)
+                        }
                     }
                     if (others.isNotEmpty()) {
                         item("others-title") { GroupTitle(NewConversationText.othersGroup) }
-                        itemsIndexed(others, key = { _, p -> "o-${p.userID}" }) { index, person -> PersonRowCard(person, index, others.size, onSelect) }
+                        itemsIndexed(others, key = { _, p -> "o-${p.userID}" }) { index, person ->
+                            PersonRowCard(person, store.isPeerFocused(person.userID), index, others.size, onSelect)
+                        }
                     }
                     item("foot") {
                         Text(NewConversationText.footnote, style = MaterialTheme.typography.bodySmall, color = colors.label2,
@@ -211,12 +221,17 @@ private fun GroupTitle(title: String) {
         modifier = Modifier.padding(start = AingDimens.titleMargin, end = AingDimens.titleMargin, top = 14.dp, bottom = 6.dp))
 }
 
+/**
+ * 사람 줄. [isFocused] 는 스토어 판정 그대로다(`MessagesStore.isPeerFocused` — 대화의 [보내기] 잠금과 같은 겹치기). 이 시트의 명부 행 값만 보면
+ * 지금 탭이 1분마다 받는 더 새 값과 갈려, 칩은 '집중'인데 대화는 열려 있는 창이 생긴다. 고르면 대화는 그대로 열린다(대표 답 "대화는 열고 보내기만 막기").
+ */
 @Composable
-private fun PersonRowCard(person: PokeDirectoryEntry, index: Int, count: Int, onSelect: (String) -> Unit) {
+private fun PersonRowCard(person: PokeDirectoryEntry, isFocused: Boolean, index: Int, count: Int, onSelect: (String) -> Unit) {
     val colors = AingTheme.colors
     val r = AingDimens.groupRadius
     val shape = RoundedCornerShape(if (index == 0) r else 0.dp, if (index == 0) r else 0.dp, if (index == count - 1) r else 0.dp, if (index == count - 1) r else 0.dp)
     val label = listOfNotNull(person.name, person.center?.let { "${it}센터" }, if (person.isWorking) "근무 중" else "근무 안 함",
+        if (isFocused) MessagesFocusText.accessibility else null,
         person.statusMessage?.let { "상태메시지 $it" }).joinToString(", ")
     Column(Modifier.padding(horizontal = AingDimens.sideMargin).background(colors.surface, shape)) {
         Row(
@@ -236,7 +251,9 @@ private fun PersonRowCard(person: PokeDirectoryEntry, index: Int, count: Int, on
         ) {
             PersonAvatar(person.name, person.userID, person.avatarURL?.absoluteString, 40.dp, status = if (person.isWorking) PresenceStatus.working else null)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                PersonName(person.name, CenterLabel.serverValue(person.center))
+                // 집중 중이면 이름 뒤 '집중' 칩(판 7 · 대표 요청 5 — 맥 콕 목록 칩 · iOS 사람 줄 칩의 Android 짝).
+                PersonName(person.name, CenterLabel.serverValue(person.center),
+                    focusChip = if (isFocused) MessagesFocusText.personChip else null)
                 person.statusMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }

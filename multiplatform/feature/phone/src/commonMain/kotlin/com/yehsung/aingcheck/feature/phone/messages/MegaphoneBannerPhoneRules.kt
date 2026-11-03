@@ -3,6 +3,8 @@
 // 판정은 전부 여기 둔다 — 위로 쓸기 판정 · 끌림 오프셋 · 미룸 집계 · 미룸 다시 맞추기. 단추는 [닫기] 하나뿐이다([답장]은 2026-10-30 걷었다).
 package com.yehsung.aingcheck.feature.phone.messages
 
+import com.yehsung.aingcheck.core.rules.text.ChatMarkdown
+
 /** 배너 화면 판정(순수 함수). 길이는 dp. */
 object MegaphoneBannerPhoneRules {
     /** 본문 최대 줄 수. */
@@ -58,7 +60,16 @@ object MegaphoneBannerPhoneRules {
 /** 배너에 보이는 글자. */
 object MegaphoneBannerPhoneText {
     const val close = "닫기"
-    fun accessibilityLabel(name: String, body: String): String = "${name}님의 확성기, $body"
+
+    /**
+     * 배너 카드에 보일 본문 — 서식 기호(`## ` · `**` · `[글](주소)`)와 이모티콘 토큰(`[아잉:기쁨]` → "아잉이 기쁨")을 벗긴 한 줄 글
+     * (판 7 · iOS 1.0.17 MegaphoneBannerPhoneText.shownBody · 맥 배너와 같은 ChatMarkdown.plainPreview). 링크는 누를 수 없는 글자다.
+     * 평범한 한 줄 본문은 한 글자도 안 바뀐다.
+     */
+    fun shownBody(body: String): String = ChatMarkdown.plainPreview(body)
+
+    /** 화면 읽기 라벨 — 본문은 화면과 **같은 글**([shownBody])이다(화면만 벗기면 TalkBack 이 기호 · 토큰을 또박또박 읽는다). */
+    fun accessibilityLabel(name: String, body: String): String = "${name}님의 확성기, ${shownBody(body)}"
     /**
      * 화면 읽기만 읽는 글이다 — 그 사용자에게 배너는 저절로 닫히지 않는다(코어 holdsAutoDismiss · Swift a3d59e74). 손짓(쓸기·누르기)
      * 말고 닫는 길을 말한다. Swift 는 보이스오버 동작 목록("위아래로 쓸어 닫기 동작을 고르세요")을, 안드로이드는 TalkBack 이 따로 짚는

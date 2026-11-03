@@ -79,7 +79,9 @@ fun MessageComposer(
     val composing = state.isComposing
     val counter = MessagesComposerRules.counterText(text)
     val overflowing = ComposerInputRules.isOverflowing(text)
-    val sendEnabled = ComposerInputRules.sendEnabled(composing, store.canSend(peerID) || isSendableField(text), store.isSending)
+    // 집중(판 7 — 스토어 focusBlock 한 규칙): [보내기]를 끄고 입력칸 위 사유 줄을 늘 세운다. 게이트가 꺼진 조립(Windows)은 언제나 null.
+    val focus = store.focusBlock(peerID)
+    val sendEnabled = ComposerInputRules.sendEnabled(composing, store.canSend(peerID) || isSendableField(text), store.isSending, focusBlocked = focus != null)
     val looksEnabled = ComposerInputRules.sendLooksEnabled(store.isSending, sendEnabled)
     val metrics = MessagesComposerRules.sendButtonMetrics(MessagesComposerRules.minimumTouchTarget)
 
@@ -109,7 +111,11 @@ fun MessageComposer(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        store.sendNotices[peerID]?.let { InlineNotice(it, NoticeKind.Warning, Modifier.testTag(MessagesTags.SEND_NOTICE)) }
+        // 입력칸 위 한 줄(판 7 · iOS 1.0.17): 집중 사유가 **먼저이고 늘 뜬다**(누르기 전에 [보내기]가 흐린 까닭을 말한다) — 없으면 지난 전송 결과.
+        // 한 줄만 그린다(MessagesComposerRules.noticeLine) — 두 줄이면 입력줄이 자라 마지막 말풍선을 덮는다.
+        MessagesComposerRules.noticeLine(focus, store.sendNotices[peerID])?.let {
+            InlineNotice(it, NoticeKind.Warning, Modifier.testTag(MessagesTags.SEND_NOTICE))
+        }
         if (counter != null) {
             Text(
                 counter,

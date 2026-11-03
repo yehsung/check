@@ -37,6 +37,12 @@ data class PokeDirectoryRow(
     val canReceiveMessage: Boolean? = null,
     val center: String? = null,
     val statusMessage: String? = null,
+    /**
+     * 이 사람이 집중 모드인가(`focus_mode` — 서버 20261108120500 · 11-03 운영 적용부터 싣는다). 그 전 서버(7칸)는 안 보낸다 —
+     * 그래서 status_message 와 같은 이유로 Optional 이고, null 은 "집중 아님"이 아니라 **"모른다"** 다. 모를 때의 해석(= 집중 아님)은
+     * [toPokeDirectoryEntries] 한 곳에 있다(Swift `PokeDirectoryRow.focusMode` · SupabaseWorkModels.swift @ 12624739).
+     */
+    val focusMode: Boolean? = null,
 ) {
     object Serializer : SwiftDecodableSerializer<PokeDirectoryRow>("PokeDirectoryRow") {
         override fun deserialize(decoder: Decoder): PokeDirectoryRow {
@@ -49,6 +55,8 @@ data class PokeDirectoryRow(
                 canReceiveMessage = c.boolIfPresent("message_capable") ?: c.boolIfPresent("can_receive_message"),
                 center = c.stringIfPresent("center"),
                 statusMessage = c.stringIfPresent("status_message"),
+                // 이 줄을 빼고 칸만 더하면 값은 영원히 null 이다(INV-SupabaseWorkModels-27bf4155 — 디코드 줄과 칸을 함께).
+                focusMode = c.boolIfPresent("focus_mode"),
             )
         }
     }
@@ -64,6 +72,12 @@ data class PokeDirectoryEntry(
     val canReceiveMessage: Boolean = true,
     val center: String? = null,
     val statusMessage: String? = null,
+    /**
+     * 이 사람이 집중 모드인가(대표 요청 5 — 상대 '집중' 칩과 보내기 잠금의 근거). **모르면 false** — 서버가 칸을 안 보내는 옛 서버에서
+     * true 로 접으면 클라가 서버에 없는 금지를 발명해 **전원**에게 보내기가 잠긴다. false 면 최악이 "보낸 뒤 target_focused 안내"다.
+     * **맨 끝에 둔다**(기본값 false — 기존 생성 호출부가 그대로 컴파일된다).
+     */
+    val isFocused: Boolean = false,
 ) {
     val id: String get() = userID
 }
@@ -78,6 +92,8 @@ fun List<PokeDirectoryRow>.toPokeDirectoryEntries(text: WireTextRules): List<Pok
         canReceiveMessage = row.canReceiveMessage ?: true,
         center = CenterLabel.display(row.center),
         statusMessage = text.statusMessageDisplay(row.statusMessage),
+        // '모름(null)'은 집중 아님으로 읽는다 — 옛 서버에서 전원이 잠기지 않게(근거는 PokeDirectoryEntry.isFocused 주석).
+        isFocused = row.focusMode ?: false,
     )
 }
 
@@ -170,6 +186,8 @@ sealed interface PokeSendOutcome {
     data object TargetFocused : PokeSendOutcome
     data object TargetOnPhone : PokeSendOutcome
     data object Invalid : PokeSendOutcome
+    /** **보낸 사람**이 집중 모드다(`sender_focused` — 서버 차단 20261108121000 · 11-03 운영 적용). 쓰기 전에 거절된다(몫·쿨타임·잔량 그대로). */
+    data object SenderFocused : PokeSendOutcome
 
     companion object {
         fun of(response: PokeSendResponse): PokeSendOutcome = when (response.status) {
@@ -180,6 +198,7 @@ sealed interface PokeSendOutcome {
             "ultra_used_today" -> UltraUsedToday(maxOf(1L, response.resetAfterSeconds ?: 3600))
             "target_focused" -> TargetFocused
             "target_on_phone" -> TargetOnPhone
+            "sender_focused" -> SenderFocused
             else -> Invalid
         }
     }
@@ -220,6 +239,11 @@ sealed interface MessageSendOutcome {
     data object TargetFocused : MessageSendOutcome
     data object TargetNotWorking : MessageSendOutcome
     data object Flood : MessageSendOutcome
+    /**
+     * **보낸 사람**이 집중 모드다(2026-11-03 서버 차단 · `sender_focused`). 서버가 쓰기 전에 거절한다. 이 갈래를 모르는 옛 앱은 Invalid 로
+     * 접어 "잠시 후 다시 시도"를 띄운다(다시 해도 계속 실패하는 거짓 안내 — 대표가 감수한 결정).
+     */
+    data object SenderFocused : MessageSendOutcome
 
     companion object {
         fun of(response: PokeSendResponse): MessageSendOutcome = when (response.status) {
@@ -231,6 +255,7 @@ sealed interface MessageSendOutcome {
             "target_not_working" -> TargetNotWorking
             "target_focused" -> TargetFocused
             "flood" -> Flood
+            "sender_focused" -> SenderFocused
             else -> Invalid
         }
     }

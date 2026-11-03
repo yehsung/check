@@ -211,7 +211,12 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
 
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
         now = NowStore(context, scope, env.todoStorage, runsPeriodicRefresh = env.runsTimers)
-        messages = MessagesStore(context, scope, env.collation, megaphoneHost = PhoneMegaphoneHost(context, ruby))
+        // 집중 모드 보내기 게이트(판 7 · 대표 요청 5·6)는 폰만 켠다 — 같은 스토어를 쓰는 Windows 는 v1 동결로 꺼 둔다(MessagesStore.focusSendGate).
+        // "기본값이 꺼짐이니 빼도 되겠지"로 지우지 마라 — 이 줄이 없으면 폰에서 상대 '집중' 표시 · 보내기 잠금 · 내 집중 안내가 모두 사라진다.
+        // 채팅 서식(판 7 — 제목·굵게·링크)도 폰만 켠다(MessagesStore.chatMarkdown). 이 인자가 빠지면 폰 말풍선이 기호째 보이고 링크가 안 열린다.
+        messages = MessagesStore(
+            context, scope, env.collation, megaphoneHost = PhoneMegaphoneHost(context, ruby), focusSendGate = true, chatMarkdown = true,
+        )
         megaphoneBanner = MegaphoneBannerStore(PhoneMegaphoneHost(context, ruby), scope, env.prefs, clock = { env.clock.now() })
         rankings = RankingsStore(context, scope, env.collation)
         gamesContext = PhoneGamesContext(context, PhoneGomokuLink(gomoku), PhoneChessLink(chess))
@@ -256,6 +261,10 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 지금 탭 칩의 연속 근무일은 나 탭 미션 조회의 값이다(Swift `NowStore.myStreakDays` 의 links.me) — 칩 때문에 조회를 늘리지 않는다.
         now.streakDaysSource = { me.streakDays }
         messages.nowStore = now
+        // 지금 탭 60초 틱에 내 집중 다시 묻기를 잇는다(켜짐으로 알고 대화가 떠 있을 때만 — 조건은 메시지 스토어가 판정한다).
+        now.onPeriodicTick = { messages.refreshMyFocusModeIfFocused() }
+        // 지금 탭 명부가 새로 서면 서버 거절로 세운 '집중 중' 문구를 상태로 넘긴다(집중 판정은 이 명부가 이긴다 — MessagesStore.settleFocusNotices).
+        now.onDirectoryApplied = { messages.settleFocusNotices() }
         messages.router = router
         // 차단은 메시지·찌르기·게임을 **함께** 막는 관계다 — 차단한 사람이 큐브 로비·공개 방·받은 초대에 남지 않게(맥 WorkTimerStore `rummy.setHiddenPeers`). 스토어는 UUID 로 받는다.
         messages.onHiddenBlockedPeersChange = { ids -> rummy.setHiddenPeers(ids.mapNotNull { SwiftUUID.parse(it) }.toSet()) }

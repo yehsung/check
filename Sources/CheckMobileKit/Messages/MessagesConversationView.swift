@@ -37,6 +37,9 @@ struct MessagesConversationView: View {
         let presence = board?.peers[peerID]
         // 상대의 상태메시지(v0.3.51) — 이름을 모르면(머리가 아직 이름을 못 찾았으면) 세우지 않는다.
         let statusMessage = board?.statuses[peerID]
+        // 상대가 집중 중인가(1.0.17 · 대표 요청 5) — 이름표 '집중 중' 칩. 판(`board`)이 아니라 스토어 판정이다: 입력줄 잠금과 같은 값이어야 하고,
+        // 판은 이름을 알 때만 계산한다(이름 모르는 대화도 잠금은 선다). 내 집중은 칩이 아니라 입력줄 사유 줄이 말한다(칩은 상대의 상태다).
+        let peerFocused = store.isPeerFocused(peerID)
         ScrollViewReader { proxy in
             ScrollView {
                 // Lazy 가 아니다: 화면 밖 줄의 높이를 어림하면 큰 글자에서 `scrollTo` 가 바닥에 못 닿았다(AX3 실측). 이력은 24시간 · 200건 상한이다.
@@ -119,7 +122,7 @@ struct MessagesConversationView: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                MessagesConversationNameplate(header: header, presence: presence, statusMessage: statusMessage)
+                MessagesConversationNameplate(header: header, presence: presence, statusMessage: statusMessage, isFocused: peerFocused)
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 MessagesComposerView(store: store, peerID: peerID)
@@ -286,14 +289,22 @@ private struct MessagesConversationNameplate: View {
     let presence: MessagesPeerPresence?
     /// 상대의 상태메시지(v0.3.51). 있으면 근무 줄 아래 한 줄(꼬리 줄임표) — 이름표가 한 줄 자랄 뿐 머리 모양은 그대로다.
     var statusMessage: String? = nil
+    /// 상대가 집중 중인가(1.0.17 · 대표 요청 5 — `MessagesStore.isPeerFocused`). 이름 옆 '집중 중' 칩(맥 대화 머리 `MessagePeerFocusChip` 의 폰 짝).
+    /// **이름표 높이를 늘리지 않는다** — 칩은 이름 줄 안에 서고(small 18pt ≈ 이름 줄 높이), 폭은 이름이 양보한다(꼬리 줄임표).
+    var isFocused: Bool = false
 
     var body: some View {
         let line = MessagesPresenceRules.headerLine(presence)
         VStack(spacing: 1) {
-            Text(header.title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(MobileTheme.label)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(header.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(MobileTheme.label)
+                    .lineLimit(1)
+                if isFocused {
+                    FocusChip(text: MessagesFocusText.conversationChip)
+                }
+            }
             if let line {
                 HStack(spacing: 4) {
                     if let status = presence?.status, status != .off {
@@ -326,7 +337,8 @@ private struct MessagesConversationNameplate: View {
         // 이름표는 작은 머리다 — 가장 큰 글자에서 화면 위를 통째로 먹지 않게 상한을 둔다(보이스오버는 글자 그대로 읽는다).
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text([header.accessibilityLabel, line, statusMessage.map { "상태메시지 \($0)" }]
+        .accessibilityLabel(Text([header.accessibilityLabel, isFocused ? MessagesFocusText.accessibility : nil, line,
+                                  statusMessage.map { "상태메시지 \($0)" }]
             .compactMap { $0 }.joined(separator: ", ")))
         .accessibilityAddTraits(.isHeader)
         .frame(maxWidth: .infinity)

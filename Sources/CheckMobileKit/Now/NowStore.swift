@@ -292,6 +292,9 @@ package final class NowStore {
         refreshTimer = timers.schedule(after: Self.refreshIntervalSeconds) { [weak self] in
             guard let self, self.isActive else { return }
             self.refresh()
+            // 내 집중(1.0.17): 켜짐으로 알고 대화가 떠 있을 때만 다시 묻는다 — 맥에서 끈 집중을 대화에 머무는 동안 따라잡는다
+            // (조건은 메시지 스토어가 판정한다 · `MessagesFocusRules.rechecksOnTick`). 이 틱에 기대는 까닭: 대화 화면에는 따로 도는 시계가 없다.
+            self.context.links.messages?.refreshMyFocusModeIfFocused()
             // 앱을 켜 둔 채(화면 꺼짐 없음) 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만, 5분에 한 번.
             if self.phoneSession?.origin == .phone {
                 self.touchPhoneWorkIfNeeded(minimumInterval: Self.phoneTouchWhileActiveSeconds)

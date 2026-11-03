@@ -28,8 +28,10 @@ struct MessagesComposerView: View {
         let sendMetrics = MessagesComposerRules.sendButtonMetrics(scaledDiameter: Double(scaledSendDiameter))
         let fieldShape = RoundedRectangle(cornerRadius: MessagesComposerRules.minimumTouchTarget / 2, style: .continuous)
         VStack(alignment: .trailing, spacing: 6) {
-            if let notice = store.sendNotices[peerID] {
-                InlineNotice(text: notice, kind: .warning)
+            // 입력칸 위 한 줄(1.0.17): 집중 사유가 **먼저이고 늘 뜬다**(대표 요청 5 "미리 알 수 있게" — [보내기]가 흐린 까닭을 누르기 전에 말한다).
+            // 전송 결과보다 앞인 까닭: 결과는 지난 일이고 사유는 지금 일이다(맥 `noticeLine` 과 같은 순서). 한 줄만 그린다 — 높이가 그대로다.
+            if let line = MessagesComposerRules.noticeLine(focus: store.focusBlock(for: peerID), sendNotice: store.sendNotices[peerID]) {
+                InlineNotice(text: line, kind: .warning)
             }
             if let counter {
                 Text(counter)
@@ -146,8 +148,9 @@ struct MessagesComposerView: View {
     }
 
     /// 버튼을 켤지: 조합 중이면 켠다(누르면 확정한 뒤 판정한다) — 아니면 스토어 판정 그대로.
+    /// **집중이 막으면 조합 중이어도 끈다**(1.0.17) — 켜 두면 확정 뒤 스토어가 거절해 눌리는 척만 한다(짝 게이트의 뷰 쪽). 입력칸은 그대로 쓸 수 있고 초안은 남는다.
     private var sendEnabled: Bool {
-        guard !store.isSending else { return false }
+        guard !store.isSending, store.focusBlock(for: peerID) == nil else { return false }
         return isComposing || store.canSend(to: peerID)
     }
 
@@ -198,8 +201,9 @@ private struct MessagesStickerSheet: View {
             SheetHeader(AingStickerText.gridTitle, onClose: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: MobileTheme.space3) {
-                    if let notice {
-                        InlineNotice(text: notice, kind: .warning)
+                    // 집중이 막고 있으면(1.0.17) 고르기 **전에** 그 사유가 선다(입력줄 사유 줄은 이 시트 뒤에 가린다). 고른 뒤의 한 줄보다 앞이다.
+                    if let line = MessagesComposerRules.noticeLine(focus: store.focusBlock(for: peerID), sendNotice: notice) {
+                        InlineNotice(text: line, kind: .warning)
                     }
                     LazyVGrid(
                         columns: [GridItem(.adaptive(minimum: MessagesStickerCell.side), spacing: MobileTheme.space3)],
@@ -221,12 +225,14 @@ private struct MessagesStickerSheet: View {
     }
 
     /// 한 칸을 골랐다. **보냈으면 닫고, 못 보냈으면 까닭을 세운 채 열어 둔다.**
+    /// 까닭은 집중이 먼저다(1.0.17 — 맥 `blockedHelp` 짝): "보내는 중"으로 접으면 다시 누르면 될 것처럼 읽힌다.
+    /// 집중 사유는 위 줄이 스토어에서 **바로** 읽으므로(`focusBlock`) 여기 적어 두지 않는다 — 적어 두면 집중이 풀린 뒤에도 옛 사유가 남는다.
     private func pick(_ sticker: AingSticker) {
         if store.sendSticker(sticker, to: peerID) {
             notice = nil
             dismiss()
         } else {
-            notice = AingStickerText.sendingNowNotice
+            notice = store.focusBlock(for: peerID) == nil ? AingStickerText.sendingNowNotice : nil
         }
     }
 }

@@ -119,6 +119,19 @@ package final class MessagesStore {
     /// 전송 왕복 중인가. **한 번에 하나** — 순서가 곧 상대가 읽는 순서라 두 전송을 나란히 띄우지 않는다.
     package private(set) var isSending = false
 
+    // MARK: 집중 모드 (1.0.17 · 대표 요청 5·6 — 규칙은 `MessagesFocusRules`)
+
+    /// **내** 집중 모드 서버값(`profiles.focus_mode`). **nil = 모른다 = 막지 않는다** — 서버(`sender_focused`)가 최종 판정이다.
+    ///
+    /// 폰은 이 값을 켜지도 끄지도 않는다(R9 — focus_mode PATCH 는 금지 호출이다). 맥이 켜고 끈 값을 **따라가기만** 하므로
+    /// 켜짐과 꺼짐을 둘 다 묻는다(맥은 자기가 켜니 "켜져 있다고 알 때만" 묻는다 — 폰은 그 반쪽만으로는 맥에서 켠 집중을 영영 모른다).
+    /// 묻는 때(`refreshMyFocusMode`): ① 대화 화면이 설 때 ② 대화가 떠 있는 채 앱이 앞으로 올 때(맥에서 끄고 폰으로 돌아오는 흔한 길)
+    /// ③ 켜짐으로 알고 대화가 떠 있을 때만 지금 탭 60초 틱(`refreshMyFocusModeIfFocused`). 대화가 없으면 묻지 않는다 — 이 값을 쓰는
+    /// 화면이 대화뿐이고, 로그인·앞으로 오기마다 profiles GET 을 더하면 나 탭의 조회 수 계약(`MeStoreTests` 루트 시나리오)이 깨진다.
+    /// 서버가 `sender_focused` 로 거절하면 켜짐으로 받아들인다(`adoptServerSenderFocused`). 조회가 실패하거나 행·칸이 없으면 **값을 바꾸지 않는다**.
+    /// 같은 칸을 나 탭 설정·순위 탭이 공개 설정 GET 에 딸려 받지만 읽고 버린다 — 주인은 이 스토어 하나다.
+    package private(set) var myFocusMode: Bool?
+
     // MARK: 조절 값(테스트가 바꾼다)
 
     /// 목록이 설 때 이력을 다시 받는 최소 간격(초). 사이의 변화는 실시간 신호·푸시가 메운다. 낡음 표시가 있으면 무시한다.
@@ -165,6 +178,8 @@ package final class MessagesStore {
         // 포그라운드 진입: 요약은 언제나, 이력은 메시지 화면이 떠 있으면 곧바로(아니면 낡음으로 적고 화면이 설 때).
         requestActivityRefresh()
         evaluateReadMarking()
+        // 대화가 떠 있는 채 앞으로 왔다 — 그 사이 맥에서 집중을 켜거나 껐을 수 있다(`myFocusMode` ②). 대화가 없으면 묻지 않는다.
+        if openConversationPeerID != nil { refreshMyFocusMode() }
     }
 
     package func appDidEnterBackground() {
@@ -214,6 +229,8 @@ package final class MessagesStore {
         pendingOutgoing = []
         sendNotices = [:]
         isSending = false
+        // 내 집중은 계정의 값이다 — 남기면 다음 사람이 앞 사람의 집중으로 잠긴다(조회 순번·날아가는 표시는 장부째 바뀐다).
+        myFocusMode = nil
         // 확성기 글·요청 id·정보도 계정에 묶인다 — 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
         context.router.visibleConversationPeerID = nil
@@ -378,7 +395,8 @@ package final class MessagesStore {
             peers: board.peers.filter { !hiddenBlockedPeerIDs.contains($0.key) },
             working: board.working.filter { !hiddenBlockedPeerIDs.contains($0.id) },
             // 차단한 사람의 상태메시지도 같이 걷는다 — 대화 머리에 그 사람이 쓴 문장이 남지 않게.
-            statuses: board.statuses.filter { !hiddenBlockedPeerIDs.contains($0.key) }
+            statuses: board.statuses.filter { !hiddenBlockedPeerIDs.contains($0.key) },
+            focused: board.focused.subtracting(hiddenBlockedPeerIDs)
         )
     }
 
@@ -432,11 +450,74 @@ package final class MessagesStore {
         if drafts[peerID] != text { drafts[peerID] = text }
     }
 
-    /// 확정된 입력으로 지금 보낼 수 있는가(왕복 중 아님 · 본문이 서버 경계 안). 근무 여부는 보지 않는다(서버도 안 본다 — v0.3.30).
+    /// 확정된 입력으로 지금 보낼 수 있는가(왕복 중 아님 · 집중이 막지 않음 · 본문이 서버 경계 안). 근무 여부는 보지 않는다(서버도 안 본다 — v0.3.30).
+    /// 집중(1.0.17)은 본다 — `focusBlock(for:)` 한 규칙이고, 이모티콘(`canSendSticker`)과 두 전송 문(`sendDraft` · `sendSticker`)이 같은 것을 본다.
     package func canSend(to peerID: String) -> Bool {
-        guard isSignedIn, !peerID.isEmpty, !isSending else { return false }
+        guard isSignedIn, !peerID.isEmpty, !isSending, focusBlock(for: peerID) == nil else { return false }
         if case .ok = MessageBody.validate(draft(for: peerID)) { return true }
         return false
+    }
+
+    // MARK: - 집중 모드 (1.0.17 · 대표 요청 5·6)
+
+    /// 그 사람에게 **집중 모드 때문에** 지금 못 보내는 사유(nil = 집중은 막지 않는다). 내 집중이 상대 집중보다 앞이다(`MessagesFocusRules.block`).
+    /// 스토어 짝 게이트와 화면(입력줄 [보내기] · 사유 줄 · 이모티콘 시트)이 **전부 이것 하나**를 본다.
+    ///
+    /// 대화 머리처럼 이름을 알 때만 판을 계산하는 자리(`MessagesConversationView` 의 `board`)에 기대지 않는다 — 이름을 모르는 대화에서도 잠금은 같아야 한다.
+    package func focusBlock(for peerID: String) -> MessagesFocusBlock? {
+        MessagesFocusRules.block(myFocus: myFocusMode, peerFocused: isPeerFocused(peerID))
+    }
+
+    /// 그 사람이 집중 중인가 — 사람 목록 둘(새 대화 시트 · 지금 탭 1분 주기)을 판(`presenceBoard`)과 **같은 겹치기**로 읽는다
+    /// (`MessagesFocusRules.focusedPeerIDs`). **서버를 부르지 않는다.** 모르면 false(막지 않는다 — 서버가 `target_focused` 로 판정).
+    ///
+    /// ★ 서버가 `target_focused` 로 거절해도 **여기서 그 사람을 집중으로 찍지 않는다** — 명부 둘을 다시 받아 따라온다(`performSend`).
+    ///   로컬에서 찍으면 명부가 "아님"이라 말하는 동안에도 잠겨, 방금 집중을 끈 사람에게 영영 못 보낸다(기존 시험 셋도 그 재전송을 잰다).
+    package func isPeerFocused(_ peerID: String) -> Bool {
+        guard !peerID.isEmpty else { return false }
+        let nowStore = context.links.now
+        return MessagesFocusRules.focusedPeerIDs(
+            nowDirectory: nowStore.flatMap { $0.hasLoadedDirectory ? $0.directory : nil },
+            messagesDirectory: directoryLoaded ? directory : nil,
+            me: context.session.userID
+        ).contains(peerID)
+    }
+
+    /// 지금 탭 60초 틱(`NowStore.armRefreshTimer`)이 부른다 — 켜짐으로 알고 대화가 떠 있을 때만 내 집중을 다시 묻는다
+    /// (`MessagesFocusRules.rechecksOnTick` — 맥 `refreshMyFocusModeIfFocused` 와 같은 규약). 맥에서 끈 집중을 대화에 머무는 동안 따라잡는다.
+    package func refreshMyFocusModeIfFocused() {
+        guard MessagesFocusRules.rechecksOnTick(myFocus: myFocusMode, conversationOpen: isAppActive && openConversationPeerID != nil) else { return }
+        refreshMyFocusMode()
+    }
+
+    /// 내 집중 한 행 GET(`fetchMyFocusMode` — `select=focus_mode`). 날아가는 중이면 또 띄우지 않는다.
+    /// 반영 규칙: 세대가 바뀌었으면 버린다 · 행·칸이 없거나(nil) 실패하면 **아무것도 바꾸지 않는다**(모름을 꺼짐으로 읽으면 일시 장애 한 번에
+    /// 막아야 할 전송이 열리고, 켜짐으로 읽으면 전부 잠긴다) · 띄운 뒤에 서버 거절(`sender_focused`)로 켜짐을 들였으면 그보다 낡은 답이라 버린다.
+    private func refreshMyFocusMode() {
+        guard isSignedIn, !runtime.myFocusFetchInFlight else { return }
+        runtime.myFocusFetchInFlight = true
+        let serial = runtime.nextSerial()
+        let generation = context.generation
+        let service = context.service
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let fetched: Bool?? = try? await self.context.withMobileSessionRetry { session in
+                try await service.fetchMyFocusMode(accessToken: session.accessToken, userID: session.userID)
+            }
+            guard generation == self.context.generation else { return }
+            self.runtime.myFocusFetchInFlight = false
+            guard let value = fetched ?? nil, serial > self.runtime.myFocusAppliedSerial else { return }
+            self.runtime.myFocusAppliedSerial = serial
+            if self.myFocusMode != value { self.myFocusMode = value }
+        }
+    }
+
+    /// 서버가 보내기를 **내** 집중으로 거절했다(`sender_focused` — 20261108121000). 이 폰은 몰랐다(알았으면 `focusBlock` 이 요청 전에 막았다) —
+    /// 맥에서 켰다. 켜짐으로 들여 [보내기] 잠금과 사유 줄이 따라오게 한다(맥 `adoptServerSenderFocused` 의 폰 짝). 폰은 PATCH 가 없어
+    /// 맥의 의도 번호가 필요 없다 — 그 전에 띄운 조회의 답만 낡은 것으로 버린다(`myFocusAppliedSerial`).
+    private func adoptServerSenderFocused() {
+        runtime.myFocusAppliedSerial = runtime.nextSerial()
+        if myFocusMode != true { myFocusMode = true }
     }
 
     /// 사람 찾기 목록(검색 + 차단해 숨긴 사람 제외). 서버도 서로 차단이면 목록에서 빼지만, 차단 직후의 이 화면은
@@ -496,6 +577,8 @@ package final class MessagesStore {
         evaluateReadMarking()
         // 대화가 서면 언제나 최신을 받는다(스로틀 없음 — 합치기만).
         requestActivityRefresh(includeHistory: true)
+        // 내 집중도 이때 묻는다(`myFocusMode` ①) — 폰은 집중을 스스로 바꾸지 않으니 맥이 바꾼 값을 여기서 따라간다.
+        refreshMyFocusMode()
         if thread(for: peerID) == nil, !directoryLoaded {
             loadDirectory()
         }
@@ -516,6 +599,10 @@ package final class MessagesStore {
     /// 입력칸에 글을 되돌리고 문구를 세운다 — **보내지 못한 글은 사라지지 않는다**(맥: "실패해도 글은 남는다").
     ///
     /// 입력칸을 비우는 자리는 **여기 하나다**(`performSend` 가 아니다 — 이모티콘 입구는 초안을 읽지도 쓰지도 않는다).
+    ///
+    /// 집중(1.0.17)이 막으면 `canSend` 가 거짓이라 요청을 띄우지 않고 false 다 — **초안은 그대로 남는다**(비우는 줄보다 앞에서 돌아선다).
+    /// 사유는 `sendNotices` 에 적지 않는다: 입력줄과 이모티콘 시트가 `focusBlock(for:)` 를 **바로** 읽어 늘 띄우므로(`MessagesComposerRules.noticeLine`),
+    /// 여기 적어 두면 집중이 풀린 뒤에도 옛 사유가 결과 문구 자리에 남아 "아직 막혔다"고 말한다.
     @discardableResult
     package func sendDraft(to peerID: String, isComposing: Bool) -> Bool {
         guard !isComposing, canSend(to: peerID) else { return false }
@@ -527,11 +614,11 @@ package final class MessagesStore {
     /// 지금 아잉이 이모티콘을 보낼 수 있는가(1.0.12).
     ///
     /// **`canSend` 를 쓰지 않는 이유는 그 판정이 입력칸 글을 보기 때문이다**(`validate(draft) == .ok` — 빈 칸이면 거짓).
-    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과하므로 남는 조건은 셋뿐이고, 그 셋은
-    /// `canSend` 의 첫 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다). 근무 여부·집중 모드는 여기서도 보지 않는다
-    /// (v0.3.30 에 서버가 그 조건을 지웠다 — `sendDraft` 주석).
+    /// 이모티콘의 본문은 상수 토큰이라 빈 칸·200자 판정이 **언제나** 통과하므로 남는 조건은 넷이고, 그 넷은
+    /// `canSend` 의 guard 줄과 **글자 그대로 같다**(순서까지 같게 적어 둔다). 근무 여부는 여기서도 보지 않는다
+    /// (v0.3.30 에 서버가 그 조건을 지웠다 — `sendDraft` 주석). 집중은 본다(1.0.17 — `focusBlock(for:)`, 글과 같은 규칙).
     package func canSendSticker(to peerID: String) -> Bool {
-        isSignedIn && !peerID.isEmpty && !isSending
+        isSignedIn && !peerID.isEmpty && !isSending && focusBlock(for: peerID) == nil
     }
 
     /// 아잉이 이모티콘 한 장을 보낸다(1.0.12 · 맥 0.3.62 의 폰 쪽 사본).
@@ -542,6 +629,7 @@ package final class MessagesStore {
     ///
     /// 나갔는가를 돌려준다 — 그리드는 이 값으로 접을지 정한다. 못 보냈는데 접으면 화면에 남는 신호가 "그리드가
     /// 닫혔다" 하나뿐이라, 직전 전송의 안내를 보고 이모티콘도 간 줄 안다(맥 `sendSticker` 와 같은 규약).
+    /// 집중(1.0.17)이 막으면 `canSendSticker` 가 거짓이라 요청 없이 false 다 — 사유는 시트가 `focusBlock(for:)` 로 바로 띄운다(`sendDraft` 주석).
     @discardableResult
     package func sendSticker(_ sticker: AingSticker, to peerID: String) -> Bool {
         guard canSendSticker(to: peerID) else { return false }
@@ -611,7 +699,11 @@ package final class MessagesStore {
                 let outcome = MessageSendOutcome(response: response)
                 notice = MessagesSendRules.notice(for: outcome, maxLength: response.maxLength)
                 succeeded = outcome == .ok
-                refreshesDirectory = outcome == .targetNotWorking
+                // 상대가 자리비움·집중이라 거절했다 — 명부가 낡았다(알았으면 집중은 `focusBlock` 이 막았다). 명부 둘을 다시 받는다(아래).
+                // 상대를 여기서 집중으로 찍지는 않는다(`isPeerFocused` 주석).
+                refreshesDirectory = outcome == .targetNotWorking || outcome == .targetFocused
+                // 내 집중으로 거절했다 — 이 폰은 몰랐다. 켜짐으로 들인다(문구는 위 `notice` 가 `senderFocused` 로 세운다).
+                if outcome == .senderFocused { self.adoptServerSenderFocused() }
                 // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다(서버 되돌림 · 코어가 옛 모양으로 되물었다).
                 // 한 번 선 깃발을 그대로 두면 되돌린 서버에서 재시도가 두 통을 만든다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
                 if succeeded { self.runtime.serverKnowsSendKey = response.messageId != nil }
@@ -643,7 +735,12 @@ package final class MessagesStore {
             // "비어 있을 때만"은 그대로다: 왕복 중에 새로 친 글을 실패한 옛 글이 덮으면 안 된다.
             if restoresDraftOnFailure, self.draft(for: peerID).isEmpty { self.drafts[peerID] = body }
             if !cancelled, let notice { self.sendNotices[peerID] = notice }
-            if refreshesDirectory { self.loadDirectory(force: true) }
+            if refreshesDirectory {
+                // ★ 둘 다 받는다(겹치기 순서 함정): 판과 집중 판정은 지금 탭 명부가 메시지 명부를 **덮는다**(`MessagesFocusRules.focusedPeerIDs`).
+                //   메시지 명부만 다시 받으면 지금 탭이 쥔 옛 값이 이겨 칩·잠금이 다음 60초 틱까지 안 따라온다.
+                self.loadDirectory(force: true)
+                self.context.links.now?.refresh()
+            }
         }
         return true
     }
@@ -1114,6 +1211,7 @@ package final class MessagesStore {
     package var isMarkingRead: Bool { !runtime.markInFlight.isEmpty }
     package var isHistoryStale: Bool { runtime.historyStale }
     package var serverKnowsSendKey: Bool { runtime.serverKnowsSendKey }
+    package var isFetchingMyFocusMode: Bool { runtime.myFocusFetchInFlight }
     package var unconfirmedSends: [MessagesUnconfirmedSend] { runtime.unconfirmedSends }
 }
 
@@ -1150,6 +1248,10 @@ private final class MessagesRuntime {
     var megaphoneVerifying: Set<String> = []
     /// 마지막 요약을 받은 함수 이름(v1/v2) — 필터가 바뀌면 다시 받을지 가른다.
     var lastSummaryFunction: String?
+    /// 내 집중 조회가 날아가는 중인가(`refreshMyFocusMode` — 겹쳐 띄우지 않는다).
+    var myFocusFetchInFlight = false
+    /// 마지막으로 반영한 내 집중 사실의 순번(조회를 띄운 순간 · 서버 거절을 들인 순간). 그보다 먼저 띄운 조회의 답은 낡았다.
+    var myFocusAppliedSerial = 0
 
     nonisolated init() {}
 

@@ -216,6 +216,8 @@ package struct PersonName: View {
         case accent(String)
         /// '비공개' 같은 회색 칩.
         case muted(String)
+        /// '집중' 보라 칩(1.0.17 · 대표 요청 5 — `FocusChip`).
+        case focus(String)
     }
 
     private let name: String
@@ -291,8 +293,31 @@ package struct PersonName: View {
             case .muted(let text):
                 AingChip(text: text, tint: MobileTheme.label2, background: MobileTheme.fill,
                          outlined: false, size: .small)
+            case .focus(let text):
+                FocusChip(text: text)
             }
         }
+    }
+}
+
+/// 집중 칩(1.0.17 · 대표 요청 5 "콕/메세지 창에서부터 집중 모드인 사람들은 표시") — 보라(`MobileTheme.aiToken`) 글자 + 같은 빛 테두리.
+/// 맥의 콕 목록 '집중' 칩 · 대화 머리 '집중 중' 칩과 같은 색 계열이다(맥 `CheckTheme.aiToken`).
+///
+/// **테두리형인 까닭**: 칠한 칩(글자 색 14% 바탕)이면 라이트에서 글자가 4.3:1 로 4.5:1 에 못 미친다(aiToken #7A4FE0 계산). 테두리형은
+/// 글자가 줄 바탕(흰 카드 · 유리 이름표) 위에 바로 앉아 라이트 약 5.2:1 이다. 다크는 aiToken 다크값(밝은 보라)이라 어느 쪽이든 넉넉하다.
+///
+/// **한 조각으로 둔다**: 새 대화 사람 줄(`PersonName.Chip.focus`)과 대화 이름표가 이 부품 하나를 부른다. 대화 목록 줄 · 지금 탭 근무 중 줄에
+/// 붙일지는 대표 답 대기(폰 1.0.17 D2)라 이번 판엔 두 자리뿐이고, 붙이게 되면 이것을 꽂으면 된다(글자는 `MessagesFocusText`).
+/// 보이스오버는 칩 하나를 따로 읽지 않는다 — 줄·이름표가 자기 문장에 `MessagesFocusText.accessibility` 를 잇는다(`children: .ignore` 자리들).
+package struct FocusChip: View {
+    private let text: String
+
+    package init(text: String) {
+        self.text = text
+    }
+
+    package var body: some View {
+        AingChip(text: text, tint: MobileTheme.aiToken, outlined: true, size: .small)
     }
 }
 

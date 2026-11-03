@@ -6,7 +6,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "seoul",
-    "status_message": "오늘은 회의 많은 날 🙏"
+    "status_message": "오늘은 회의 많은 날 🙏",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b2",
@@ -15,7 +16,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "busan",
-    "status_message": "부산에서 커피 한 잔 ☕️"
+    "status_message": "부산에서 커피 한 잔 ☕️",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b5",
@@ -24,7 +26,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "seoul",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": true
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b4",
@@ -33,7 +36,8 @@
     "is_working": false,
     "message_capable": true,
     "center": "busan",
-    "status_message": "4시 이후에 답장할게요"
+    "status_message": "4시 이후에 답장할게요",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b3",
@@ -42,7 +46,8 @@
     "is_working": false,
     "message_capable": true,
     "center": "seoul",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b6",
@@ -51,7 +56,8 @@
     "is_working": false,
     "message_capable": true,
     "center": null,
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b9",
@@ -60,7 +66,8 @@
     "is_working": false,
     "message_capable": true,
     "center": "busan",
-    "status_message": "점심 먹고 올게요"
+    "status_message": "점심 먹고 올게요",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-0000000000b7",
@@ -69,6 +76,7 @@
     "is_working": false,
     "message_capable": true,
     "center": "seoul",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   }
 ]

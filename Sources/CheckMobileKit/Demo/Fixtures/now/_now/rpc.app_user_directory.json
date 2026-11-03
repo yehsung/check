@@ -6,7 +6,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "seoul",
-    "status_message": "3시까지 집중할게요 🎧"
+    "status_message": "3시까지 집중할게요 🎧",
+    "focus_mode": true
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000103",
@@ -15,7 +16,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "seoul",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000104",
@@ -24,7 +26,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "busan",
-    "status_message": "점심 먹고 올게요"
+    "status_message": "점심 먹고 올게요",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000201",
@@ -33,7 +36,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "busan",
-    "status_message": "오늘은 재택 중이에요"
+    "status_message": "오늘은 재택 중이에요",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000203",
@@ -42,7 +46,8 @@
     "is_working": true,
     "message_capable": true,
     "center": "seoul",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000202",
@@ -51,7 +56,8 @@
     "is_working": true,
     "message_capable": true,
     "center": null,
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000105",
@@ -60,7 +66,8 @@
     "is_working": false,
     "message_capable": true,
     "center": "seoul",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000204",
@@ -69,7 +76,8 @@
     "is_working": false,
     "message_capable": true,
     "center": "seoul",
-    "status_message": "휴가 중 🌴"
+    "status_message": "휴가 중 🌴",
+    "focus_mode": false
   },
   {
     "user_id": "d0000000-0000-4000-8000-000000000205",
@@ -78,6 +86,7 @@
     "is_working": false,
     "message_capable": true,
     "center": "busan",
-    "status_message": null
+    "status_message": null,
+    "focus_mode": false
   }
 ]

@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/ReversiWire.swift:487-559(서비스 호출 10개) · DuelRPC.swift(40P01 한 번 재시도) @ 12624739 — 요청 골든(G5)이 아직 없는 자리라 손으로 적은 표로 잰다
+// 원본: Sources/CheckCore/ReversiWire.swift:487-559(서비스 호출 10개) · DuelRPC.swift(40P01 한 번 재시도) @ 12624739 — 요청 본문·결과 대조는 G5 요청 골든(core/stores WireRequestsGoldenTest 의 reversi* 12 case)이 한다. 이 시험은 그와 별개로 RPC 열 개 전부의 경로·본문 키와 교착 재시도 횟수를 잰다
 package com.yehsung.aingcheck.core.net
 
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -23,7 +23,7 @@ import kotlin.test.assertTrue
 /**
  * 아잉 뒤집기 서비스 호출 10개 — 실제로 나간 요청(경로 · 방법 · 본문)과 교착(40P01) 한 번 재시도를 MockEngine 으로 잰다(망 0).
  * ① 경로는 `/rest/v1/rpc/reversi_*` 그대로 ② 본문은 `p_protocol` 1 을 **언제나** 싣고 키가 서버 인자 이름과 같다 ③ 쓰기 전부 + reversi_state 만
- * 교착 둘 중 정확히 한 번 더(2회), 로비·순위·관전 둘은 다시 보내지 않는다(1회). 오목·체스 G5 요청 골든과 같은 눈금을 손으로 적었다.
+ * 교착 둘 중 정확히 한 번 더(2회), 로비·순위·관전 둘은 다시 보내지 않는다(1회). G5 골든은 교착 case 가 없어(오목·체스·큐브의 `#deadlock` 과 달리) 재시도 횟수는 여기서만 잡힌다.
  */
 class ReversiRpcTest {
     private class Scripted(private val script: List<Pair<Int, String>>) {

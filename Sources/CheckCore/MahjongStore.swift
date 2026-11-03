@@ -282,6 +282,9 @@ package final class MahjongStore {
     @ObservationIgnored package var onAttention: (@MainActor (MahjongAttention) -> Void)?
     /// 루비 판이 끝난 것을 처음 본 순간 한 번(연습판·무효 판 제외).
     @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
+    /// App Nap 붙들기 신호(맥 `MahjongActivityHold` — 큐브 `onHoldingMatchChange` 꼴). 값이 바뀔 때만 부른다(T 배선).
+    @ObservationIgnored package var onHoldingActivityChange: (@MainActor (Bool) -> Void)?
+    @ObservationIgnored package private(set) var isHoldingActivity = false
     /// 보조 설정을 둘 곳(nil 이면 이 값 안에만 산다 — 시험이 실행기 `.standard` 에 키를 흘리지 않게). 넣는 순간 읽어 온다.
     @ObservationIgnored package var aidsDefaults: UserDefaults? {
         didSet { loadAids() }
@@ -464,11 +467,28 @@ package final class MahjongStore {
     /// 이 기기가 이 판을 열었다(방 만들기·참가·시작 ok · act·call·back·react 를 보낼 때). 이미 있으면 그대로 둔다.
     func noteOwnsMatch(_ matchID: String) {
         deviceLedger.note(matchID, userID: host?.session?.userID, now: clock())
+        syncHoldingActivity()
     }
 
     /// 이 판의 기록을 지운다(finished·cancelled·expired·접은 판·내가 dropped 된 방).
     func dropOwnership(_ matchID: String) {
         deviceLedger.drop(matchID, userID: host?.session?.userID, now: clock())
+        syncHoldingActivity()
+    }
+
+    /// App Nap 을 붙들어야 하는가 — **이 기기가 연** 방·판(forming·active)이 있는 동안(SPEC §4.6 #13). 연습판은 빼다:
+    /// 창이 탁자를 안 보이면 연습판은 멈추므로 붙들 까닭이 없다. 방은 30초 방 확인 때문에 잡는다.
+    package var holdsActivity: Bool {
+        guard let header = match?.match, header.matchStatus == .forming || header.matchStatus == .active else { return false }
+        return ownsMatch(header.id)
+    }
+
+    /// 붙들기 값이 바뀌었으면 한 번 알린다(같은 값 두 번은 조용히).
+    func syncHoldingActivity() {
+        let holding = holdsActivity
+        guard holding != isHoldingActivity else { return }
+        isHoldingActivity = holding
+        onHoldingActivityChange?(holding)
     }
 
     // MARK: 창
@@ -592,6 +612,7 @@ package final class MahjongStore {
         writeRevision = 0
         serverClockOffset = 0
         recomputePhase()
+        syncHoldingActivity()
     }
 
     // MARK: 공용 도우미

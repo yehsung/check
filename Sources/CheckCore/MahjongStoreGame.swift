@@ -186,6 +186,7 @@ extension MahjongStore {
 
         recomputePhase()
         scheduleWake()
+        syncHoldingActivity()
     }
 
     /// 울기 창 열쇠("판#창번호").

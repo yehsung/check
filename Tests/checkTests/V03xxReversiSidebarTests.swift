@@ -50,7 +50,7 @@ private enum RSB {
 
     static func sidebar(invites: MiniGameDuelInvites = MiniGameDuelInvites(), clips: Bool) -> some View {
         MiniGameSidebar(selected: .flappy, isPlaying: false, isFrozen: false, invites: invites,
-                        onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {},
+                        onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {},
                         clipsOverflowInsteadOfScroll: clips)
             .frame(width: layout.sidebarWidth, height: windowHeight, alignment: .top)
             .background(CheckTheme.background)
@@ -375,6 +375,7 @@ struct V03xxReversiSidebarTests {
             case .tetris: invites.tetris = true
             case .rummy: invites.rummy = true
             case .reversi: invites.reversi = true
+            case .mahjong: invites.mahjong = true
             }
             #expect(MiniGameDuelInvites.scrollTarget(from: none, to: invites) == door)
             #expect(MiniGameDuelDoor.allCases.filter { invites[$0] } == [door])

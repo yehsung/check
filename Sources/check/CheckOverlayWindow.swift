@@ -268,6 +268,16 @@ final class CheckOverlayController {
     private(set) var pendingReversiAttention: ReversiAttention?
     private var reversiAttentionTask: Task<Void, Never>?
     private(set) var shownReversiAttention: (text: String, matchID: String)?
+    /// 아잉 마작(4인 리치 마작)의 같은 일곱 칸. 아잉 큐브와 형제다 — 받은 초대가 여러 건일 수 있어 살아 있음은 **큐브형**
+    /// (`visibleInvites` 목록 전체)으로 본다. 알림은 `MahjongAttention` 네 갈래(판 시작 · 국마다 첫 내 결정 · 자리 비움 · 닫기 안내).
+    private(set) var mahjongInviteQueue: [MahjongRoom] = []
+    private var mahjongDrainTask: Task<Void, Never>?
+    private(set) var shownMahjongInvite: (text: String, matchID: String)?
+    /// 아잉 마작 말풍선을 눌렀을 때 열 곳(인자 = 방·판 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenMahjong: ((String?) -> Void)?
+    private(set) var pendingMahjongAttention: MahjongAttention?
+    private var mahjongAttentionTask: Task<Void, Never>?
+    private(set) var shownMahjongAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -857,6 +867,8 @@ final class CheckOverlayController {
         if let rect = rummyInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 아잉 뒤집기 말풍선도 같은 이유로 몸체로 쳐 준다.
         if let rect = reversiInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 아잉 마작 말풍선도 같은 이유로 몸체로 쳐 준다.
+        if let rect = mahjongInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -1000,6 +1012,10 @@ final class CheckOverlayController {
         }
         if let rect = reversiInviteBubbleScreenRect(), rect.contains(location), let matchID = reversiBubbleMatchID() {
             onOpenReversi?(matchID)
+            return
+        }
+        if let rect = mahjongInviteBubbleScreenRect(), rect.contains(location), let matchID = mahjongBubbleMatchID() {
+            onOpenMahjong?(matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -1977,6 +1993,133 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.reversiAttentionTask = nil
+        }
+    }
+
+    // MARK: - 마작 말풍선 (아잉 마작 4인 — 아잉 큐브·아잉 뒤집기 묶음의 형제)
+    //
+    // ★ 아잉 마작 폴링도 창이 탁자를 보일 때만 돌고 창을 여는 길은 미니게임 창 사이드바·팝오버 배너뿐이다. 받은 초대는 방 TTL(10분)
+    //   안에서만 살고 푸시가 없다 — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 초대를 아는 세 표면이다. 차례는 5+20초라 창을 닫아 둔 사람에게
+    //   국마다 첫 차례 말풍선이 없으면 자동 쯔모기리로 국을 흘린다. 장부 가드(이 기기가 연 판)는 스토어가 건다(MJ/SPEC.md §4.7).
+    // 문구 글자는 여기 쓰지 않는다 — 맥 문구 집 `MahjongInviteText`(MahjongInviteBanner.swift)와 코어 `MahjongNoticeText` 한 곳이다.
+
+    /// 새 받은 초대를 큐에 넣고 펌프를 돌린다(같은 방 id 는 한 번만). `MahjongStore.onInviteArrived` 가 부른다.
+    func enqueueMahjongInvite(_ room: MahjongRoom) {
+        guard !mahjongInviteQueue.contains(where: { $0.id == room.id }) else { return }
+        mahjongInviteQueue.append(room)
+        drainMahjongInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearMahjongInvites() {
+        mahjongInviteQueue.removeAll()
+        shownMahjongInvite = nil
+        pendingMahjongAttention = nil
+        shownMahjongAttention = nil
+    }
+
+    /// 큐 맨 앞 초대 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 살아 있음은 **큐브형** — 스토어가 지금 보이는 초대 목록 전체(`visibleInvites`, 만료·차단·참가한 방은 이미 빠짐)로 본다.
+    @discardableResult
+    func showNextMahjongInviteBubble(now: Date = Date()) -> Bool {
+        let alive = Set(store.mahjong.visibleInvites.map(\.id))
+        let nowMs = now.timeIntervalSince1970 * 1_000
+        mahjongInviteQueue.removeAll { ($0.expiresAtMs.map { $0 <= nowMs } ?? false) || !alive.contains($0.id) }
+        guard let room = mahjongInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = MahjongInviteText.bubbleText(name: room.host?.displayName, stake: room.stake ?? 0)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownMahjongInvite = (text, room.id.uuidString.lowercased())
+        mahjongInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainMahjongInvitesIfNeeded() {
+        guard mahjongDrainTask == nil, !mahjongInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        mahjongDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.mahjongInviteQueue.isEmpty else { break }
+                self.showNextMahjongInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.mahjongDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 아잉 마작 초대 펌프가 돌고 있는가.
+    var isDrainingMahjongInvites: Bool { mahjongDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 아잉 마작 말풍선(초대·알림)의 화면 사각형(아니면 nil).
+    func mahjongInviteBubbleScreenRect() -> NSRect? {
+        guard mahjongBubbleMatchID() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 아잉 마작 말풍선이 열 방·판 id. 문구와 id 를 **함께** 본다.
+    func mahjongBubbleMatchID() -> String? {
+        guard onOpenMahjong != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownMahjongAttention, shown.text == text { return shown.matchID }
+        if let shown = shownMahjongInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    /// 알림 한 건을 넣고 펌프를 돌린다(같은 열쇠가 다시 오면 글자만 갈아 끼운다). `MahjongStore.onAttention` 이 부른다.
+    func enqueueMahjongAttention(_ attention: MahjongAttention) {
+        pendingMahjongAttention = attention
+        drainMahjongAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingMahjongAttentionBubble() -> Bool {
+        guard let attention = pendingMahjongAttention else { return false }
+        guard Self.mahjongAttentionIsCurrent(attention, in: store.mahjong) else {
+            pendingMahjongAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = attention.kind == .away ? MahjongInviteText.awayBubbleText() : MahjongNoticeText.attention(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownMahjongAttention = (text, attention.matchID)
+        pendingMahjongAttention = nil
+        return true
+    }
+
+    /// 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 탁자를 보이고 있으면 거짓이다(화면이 이미 말한다 — 가려진 창은
+    /// 보이는 것으로 치지 않는다, 리버시 수리 `!isWindowVisible || isWindowOccluded` 와 같은 뜻). 열쇠의 판·국이 지금과 같아야 한다.
+    static func mahjongAttentionIsCurrent(_ attention: MahjongAttention, in mahjong: MahjongStore) -> Bool {
+        guard !mahjong.isWindowShowingTable, let payload = mahjong.match, let match = payload.match,
+              match.id == attention.matchID, match.matchStatus == .active else { return false }
+        switch attention.kind {
+        case .matchStarted, .closedWhilePlaying:
+            return true
+        case .myTurn:
+            return match.handIndex == attention.handIndex && payload.myDecision != nil
+        case .away:
+            return payload.myAway != nil
+        }
+    }
+
+    func drainMahjongAttentionIfNeeded() {
+        guard mahjongAttentionTask == nil, pendingMahjongAttention != nil else { return }
+        let tick = messageBubbleSleep
+        mahjongAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingMahjongAttention != nil else { break }
+                self.showPendingMahjongAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.mahjongAttentionTask = nil
         }
     }
 

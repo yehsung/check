@@ -154,9 +154,9 @@ struct MessagesPersonRow: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// 이름 뒤 칩 — 집중 중이면 '집중' 하나(아니면 칩 없음 — 지금까지와 같다).
+    /// 이름 뒤 칩 — 집중 중이면 '집중' 하나(아니면 칩 없음 — 지금까지와 같다). 사람 줄 셋이 같은 조각을 부른다(`PersonName.focusChips`).
     static func chips(isFocused: Bool) -> [PersonName.Chip] {
-        isFocused ? [.focus(MessagesFocusText.personChip)] : []
+        PersonName.focusChips(isFocused: isFocused)
     }
 }
 #endif

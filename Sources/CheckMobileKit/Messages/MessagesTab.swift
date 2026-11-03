@@ -151,6 +151,9 @@ struct MessagesListView: View {
         // ① 근무중+안읽음 ② 근무안함+안읽음 ③ 근무중+다읽음 ④ 근무안함+다읽음, 같은 무리 안에서는 최근순.
         // **찌르기만 있는 사람도 행이 선다**. 뷰는 값을 그대로 그린다(배지·시각·안 읽음을 다시 세지 않는다).
         let rows = store.threadItems(now: now)
+        // 집중 중인 상대(1.0.17 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부")는 **한 번** 받아 줄마다 묻는다 — 출처는 [보내기] 잠금과 같은
+        // `MessagesStore.focusedPeerIDs` 하나다(차단 거르기도 거기서 한다).
+        let focused = store.focusedPeerIDs
         let dividerLeading = MessagesThreadRow.dividerLeading(avatarSide: MobileAvatarScale.side(base: MessagesThreadRow.avatarBase, textScale: textScale))
         List {
             if #available(iOS 26.0, *) {
@@ -163,6 +166,12 @@ struct MessagesListView: View {
                         .foregroundStyle(MobileTheme.label2)
                         .cardListPlainRow(top: 0, bottom: 4)
                 }
+            }
+            // 내가 집중 중이면 목록 위 한 줄(대표 답 #d_6A32rmcoJZZd) — 입력줄 사유와 같은 문장("맥에서 집중을 끄면 보낼 수 있어요").
+            // 폰에는 [집중 끄기] 단추가 없다(대표 답 #d_ldP912RctnTt "안내만 (단추 없음)"). 맥에서 끈 값을 받으면 스스로 사라진다.
+            if let focusNotice = MessagesFocusRules.listNotice(myFocus: store.myFocusMode) {
+                InlineNotice(text: focusNotice, kind: .info)
+                    .cardListPlainRow()
             }
             // 차단·신고 결과 한 줄(신고 접수 · 차단 되돌림 실패). 당겨서 새로고침하면 사라진다.
             if let notice = store.blockNotice {
@@ -182,7 +191,7 @@ struct MessagesListView: View {
                         Button {
                             onOpen(row.peerUserID)
                         } label: {
-                            MessagesThreadRow(row: row, presence: presence.peers[row.peerUserID])
+                            MessagesThreadRow(row: row, presence: presence.peers[row.peerUserID], isFocused: focused.contains(row.peerUserID))
                         }
                         .buttonStyle(.plain)
                         // 한 그룹 안의 줄(시안 B) — 시스템 절 모양을 쓰지 않는다. 구분선은 이름 글자 시작점부터.
@@ -202,7 +211,7 @@ struct MessagesListView: View {
                 Section {
                     SectionHeader(MessagesListText.workingTitle, trailing: .text(MessagesListText.workingTrailing), padded: true)
                         .cardListPlainRow(top: 0, bottom: 0)
-                    MessagesWorkingStrip(people: presence.working, onOpen: onOpen, onNewConversation: onNewConversation)
+                    MessagesWorkingStrip(people: presence.working, focused: focused, onOpen: onOpen, onNewConversation: onNewConversation)
                         .cardSegmentRow(.single, padding: EdgeInsets())
                 }
             }
@@ -288,6 +297,9 @@ struct MessagesThreadRow: View {
 
     let row: MessagesThreadItem
     let presence: MessagesPeerPresence?
+    /// 상대가 집중 중인가(1.0.17 — `MessagesStore.focusedPeerIDs`). 이름 뒤 '집중' 칩 · 보이스오버 한 마디. 줄은 그대로 눌려 대화가 열린다
+    /// (대표 답 "대화는 열고 보내기만 막기").
+    var isFocused: Bool = false
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -305,7 +317,8 @@ struct MessagesThreadRow: View {
             )
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    PersonName(row.peerName, center: presence?.center, font: row.isUnread ? .callout.weight(.bold) : MobileTheme.rowTitle)
+                    PersonName(row.peerName, center: presence?.center, chips: PersonName.focusChips(isFocused: isFocused),
+                               font: row.isUnread ? .callout.weight(.bold) : MobileTheme.rowTitle)
                     Spacer(minLength: 4)
                     Text(row.timeText)
                         .font(row.isUnread ? .subheadline.weight(.semibold) : .subheadline)
@@ -333,7 +346,7 @@ struct MessagesThreadRow: View {
     }
 
     private var accessibilityText: String {
-        MessagesThreadListRules.accessibilityText(row: row, presenceLine: MessagesPresenceRules.headerLine(presence))
+        MessagesThreadListRules.accessibilityText(row: row, presenceLine: MessagesPresenceRules.headerLine(presence), isFocused: isFocused)
     }
 }
 
@@ -358,6 +371,9 @@ private struct MessagesCountBadge: View {
 /// 사람이 많으면 가로로 넘긴다(그룹 폭 안에서 잘린다). 아무도 없으면 한 줄 안내 + "새 대화".
 private struct MessagesWorkingStrip: View {
     let people: [MessagesWorkingPerson]
+    /// 집중 중인 사람(1.0.17 — `MessagesStore.focusedPeerIDs`). 얼굴 띠는 52pt 얼굴과 이름뿐이라 칩을 달지 않고 **보이스오버만** 잇는다
+    /// (대표 답 #d_6A32rmcoJZZd — 얼굴 띠는 보이스오버 말만).
+    let focused: Set<String>
     let onOpen: (String) -> Void
     let onNewConversation: () -> Void
 
@@ -386,7 +402,7 @@ private struct MessagesWorkingStrip: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(Text(person.status == .pending ? "\(person.name), 연결 끊김" : "\(person.name), 근무 중"))
+                        .accessibilityLabel(Text(MessagesPresenceRules.workingAccessibilityText(person, isFocused: focused.contains(person.id))))
                         .accessibilityHint(Text("대화 열기"))
                         .accessibilityAddTraits(.isButton)
                     }

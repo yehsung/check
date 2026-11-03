@@ -359,7 +359,8 @@ import Testing
         #expect(tab.contains("store.openTeamRoster()"))
         #expect(tab.contains("store.showsTeamRosterEntry"), "입구가 store 판정을 안 본다")
         #expect(tab.contains("onShowTeamRoster: teammates.isEmpty ? showRoster : nil"), "근무 중인 팀원이 없을 때 입구가 사라졌다")
-        #expect(tab.contains("label: NowText.ourTeam, people: teammates, anchorID: NowTab.workingSectionID, onShowRoster: showRoster"))
+        // 1.0.17: 그룹이 집중 집합도 받는다(`focused: focused` — 대표 답 #d_6A32rmcoJZZd). 이 단언이 재는 것(우리 팀 묶음에 [전체 보기])은 그대로다.
+        #expect(tab.contains("label: NowText.ourTeam, people: teammates, focused: focused, anchorID: NowTab.workingSectionID, onShowRoster: showRoster"))
         #expect(tab.contains("onShowRoster: teammates.isEmpty ? nil : showRoster"), "다른 팀 묶음에 [전체 보기]가 붙으면 안 된다")
     }
 

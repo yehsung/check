@@ -125,9 +125,12 @@ package final class MessagesStore {
     ///
     /// 폰은 이 값을 켜지도 끄지도 않는다(R9 — focus_mode PATCH 는 금지 호출이다). 맥이 켜고 끈 값을 **따라가기만** 하므로
     /// 켜짐과 꺼짐을 둘 다 묻는다(맥은 자기가 켜니 "켜져 있다고 알 때만" 묻는다 — 폰은 그 반쪽만으로는 맥에서 켠 집중을 영영 모른다).
-    /// 묻는 때(`refreshMyFocusMode`): ① 대화 화면이 설 때 ② 대화가 떠 있는 채 앱이 앞으로 올 때(맥에서 끄고 폰으로 돌아오는 흔한 길)
-    /// ③ 켜짐으로 알고 대화가 떠 있을 때만 지금 탭 60초 틱(`refreshMyFocusModeIfFocused`). 대화가 없으면 묻지 않는다 — 이 값을 쓰는
-    /// 화면이 대화뿐이고, 로그인·앞으로 오기마다 profiles GET 을 더하면 나 탭의 조회 수 계약(`MeStoreTests` 루트 시나리오)이 깨진다.
+    /// 묻는 때(`refreshMyFocusMode`): ① 대화 화면이 설 때 ①-2 대화 목록이 설 때(목록 위 한 줄 `MessagesFocusRules.listNotice` — 대표 답
+    /// #d_6A32rmcoJZZd "내가 집중 중이면 메시지 탭 위에 한 줄") ② 메시지 화면(목록 · 대화)이 떠 있는 채 앱이 앞으로 올 때(맥에서 끄고 폰으로
+    /// 돌아오는 흔한 길) ③ 켜짐으로 알고 메시지 화면이 떠 있을 때만 지금 탭 60초 틱(`refreshMyFocusModeIfFocused`). 메시지 화면이 없으면
+    /// 묻지 않는다 — 이 값을 쓰는 화면이 목록 한 줄과 대화뿐이고, 로그인·앞으로 오기마다 profiles GET 을 더하면 나 탭의 조회 수 계약
+    /// (`MeStoreTests` 루트 시나리오 — 메시지 화면이 서지 않는 길)이 깨진다. 시간 스로틀은 두지 않는다(날아가는 중이면 겹쳐 띄우지 않을 뿐) —
+    /// 사람이 화면을 옮길 때만 일어나는 한 행 GET 이고, 맥에서 방금 끈 집중이 목록에 남지 않는 쪽이 낫다.
     /// 서버가 `sender_focused` 로 거절하면 켜짐으로 받아들인다(`adoptServerSenderFocused`). 조회가 실패하거나 행·칸이 없으면 **값을 바꾸지 않는다**.
     /// 같은 칸을 나 탭 설정·순위 탭이 공개 설정 GET 에 딸려 받지만 읽고 버린다 — 주인은 이 스토어 하나다.
     package private(set) var myFocusMode: Bool?
@@ -178,8 +181,9 @@ package final class MessagesStore {
         // 포그라운드 진입: 요약은 언제나, 이력은 메시지 화면이 떠 있으면 곧바로(아니면 낡음으로 적고 화면이 설 때).
         requestActivityRefresh()
         evaluateReadMarking()
-        // 대화가 떠 있는 채 앞으로 왔다 — 그 사이 맥에서 집중을 켜거나 껐을 수 있다(`myFocusMode` ②). 대화가 없으면 묻지 않는다.
-        if openConversationPeerID != nil { refreshMyFocusMode() }
+        // 메시지 화면(목록 · 대화)이 떠 있는 채 앞으로 왔다 — 그 사이 맥에서 집중을 켜거나 껐을 수 있다(`myFocusMode` ②).
+        // 메시지 화면이 없으면 묻지 않는다(나 탭 조회 수 계약).
+        if isMessagesScreenVisible { refreshMyFocusMode() }
     }
 
     package func appDidEnterBackground() {
@@ -476,24 +480,29 @@ package final class MessagesStore {
         !peerID.isEmpty && focusedPeerIDs.contains(peerID)
     }
 
-    /// 집중 중인 사람 **전부** — 상대 집중의 출처는 이것 하나다(`isPeerFocused` · 잠금 · 새 대화 시트 칩이 모두 여기서 읽는다).
+    /// 집중 중인 사람 **전부** — 상대 집중의 출처는 이것 하나다(`isPeerFocused` · 잠금 · 칩 · 보이스오버가 모두 여기서 읽는다).
     /// 사람 줄이 여럿인 화면은 이 집합을 **한 번** 받아 줄마다 `contains` 만 묻는다(줄마다 `isPeerFocused` 를 부르면 명부 둘을 줄 수만큼 다시 겹친다).
-    /// 대화 목록 줄 · 지금 탭 근무 중 줄에 칩을 붙이는 판(결정 카드 D2 — 대표 답 대기)도 이것을 읽는다 — 판(`MessagesPresenceBoard`)에 칸을
-    /// 다시 만들지 않는다(2026-11-03 검토: 판의 집중 칸은 차단을 걸렀는데 화면은 안 거른 이 값을 따로 읽어, 같은 사실의 출처가 두 벌이었다).
-    /// 차단한 사람은 거르지 않는다 — 그 사람은 사람 찾기(`filteredDirectory`)에서 빠지고 대화도 스스로 닫혀, 이 값을 묻는 화면에 서지 않는다.
+    /// 읽는 화면(대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부"): 새 대화 시트 사람 줄 · 대화 이름표 · 메시지 탭 대화 목록 줄 ·
+    /// "지금 근무 중 · 바로 말 걸기" 얼굴 띠(보이스오버만) · 지금 탭 근무 중 줄(`NowStore.focusedPeerIDs` 가 이것을 그대로 넘긴다).
+    /// 판(`MessagesPresenceBoard`)에 칸을 다시 만들지 않는다(2026-11-03 검토: 판의 집중 칸은 차단을 걸렀는데 화면은 안 거른 이 값을 따로 읽어,
+    /// 같은 사실의 출처가 두 벌이었다).
+    /// 차단해 숨긴 사람은 **여기서** 거른다(`MessagesFocusRules.focusedPeerIDs` 의 `hidden` — 판의 근무 점 · 상태메시지와 같은 규칙). 메시지 화면에는
+    /// 그 사람이 서지 않지만 지금 탭 근무 중 줄은 차단한 팀원도 세우므로, 거르는 곳이 화면마다 갈리지 않게 출처에서 한 번 거른다.
     package var focusedPeerIDs: Set<String> {
         let nowStore = context.links.now
         return MessagesFocusRules.focusedPeerIDs(
             nowDirectory: nowStore.flatMap { $0.hasLoadedDirectory ? $0.directory : nil },
             messagesDirectory: directoryLoaded ? directory : nil,
-            me: context.session.userID
+            me: context.session.userID,
+            hidden: hiddenBlockedPeerIDs
         )
     }
 
-    /// 지금 탭 60초 틱(`NowStore.armRefreshTimer`)이 부른다 — 켜짐으로 알고 대화가 떠 있을 때만 내 집중을 다시 묻는다
-    /// (`MessagesFocusRules.rechecksOnTick` — 맥 `refreshMyFocusModeIfFocused` 와 같은 규약). 맥에서 끈 집중을 대화에 머무는 동안 따라잡는다.
+    /// 지금 탭 60초 틱(`NowStore.armRefreshTimer`)이 부른다 — 켜짐으로 알고 메시지 화면(목록 · 대화)이 떠 있을 때만 내 집중을 다시 묻는다
+    /// (`MessagesFocusRules.rechecksOnTick` — 맥 `refreshMyFocusModeIfFocused` 와 같은 규약). 맥에서 끈 집중을 메시지 화면에 머무는 동안 따라잡는다
+    /// (목록 위 한 줄도 입력줄 잠금도 함께 풀린다).
     package func refreshMyFocusModeIfFocused() {
-        guard MessagesFocusRules.rechecksOnTick(myFocus: myFocusMode, conversationOpen: isAppActive && openConversationPeerID != nil) else { return }
+        guard MessagesFocusRules.rechecksOnTick(myFocus: myFocusMode, messagesShown: isMessagesScreenVisible) else { return }
         refreshMyFocusMode()
     }
 
@@ -541,6 +550,9 @@ package final class MessagesStore {
     package func listDidAppear() {
         isListVisible = true
         guard isSignedIn else { return }
+        // 내 집중도 이때 묻는다(`myFocusMode` ①-2) — 목록 위 한 줄(`MessagesFocusRules.listNotice`)이 맥에서 켜고 끈 값을 따라온다.
+        // 이력 스로틀(아래)과 묶지 않는다: 그 창 안에 대화에서 돌아와도 내 집중은 그 사이 맥에서 바뀌었을 수 있다(조회 규칙은 `refreshMyFocusMode` 그대로).
+        refreshMyFocusMode()
         let now = context.clock.now()
         let due = !historyLoaded || runtime.historyStale
             || now.timeIntervalSince(runtime.lastListRefreshAt) >= listRefreshThrottleSeconds

@@ -570,9 +570,11 @@ package enum MessagesThreadListRules {
     }
 
     /// 목록 줄 보이스오버. 안 읽음이 **찌르기뿐**이면 "안 읽은 메시지"라고 말하지 않는다(인수인계 §6-4).
-    package static func accessibilityText(row: MessagesThreadItem, presenceLine: String?) -> String {
+    /// 상대가 집중 중이면(1.0.17 · `MessagesStore.focusedPeerIDs`) 근무 줄 뒤에 "집중 중" — 줄의 '집중' 칩을 소리로 옮긴다(`children: .ignore` 자리).
+    package static func accessibilityText(row: MessagesThreadItem, presenceLine: String?, isFocused: Bool = false) -> String {
         var parts = [row.peerName]
         if let presenceLine { parts.append(presenceLine) }
+        if isFocused { parts.append(MessagesFocusText.accessibility) }
         if let countBadge = row.countBadge {
             parts.append("안 읽은 메시지 \(countBadge)개")
         } else if row.isUnread {
@@ -947,7 +949,8 @@ package struct MessagesPresenceBoard: Equatable, Sendable {
     /// 상태를 `MessagesPeerPresence` 에 넣으면 그 네 자리를 하나라도 빠뜨리는 순간 그 경로의 사람만 상태가 조용히 사라진다.
     /// 상태의 출처는 사람 목록 둘(`app_user_directory`)뿐이라 여기서 한 번만 겹친다.
     package let statuses: [String: String]
-    // 집중 중인 사람(1.0.17)은 이 판에 **칸을 두지 않는다** — 출처는 `MessagesStore.focusedPeerIDs` 하나다(잠금 · 칩 · D2 줄 칩 모두).
+    // 집중 중인 사람(1.0.17)은 이 판에 **칸을 두지 않는다** — 출처는 `MessagesStore.focusedPeerIDs` 하나다(잠금 · 칩 · 대화 목록 줄 ·
+    // 지금 탭 근무 중 줄 · 얼굴 띠 보이스오버 모두 — 대표 답 #d_6A32rmcoJZZd).
     // 첫 판은 여기에도 `focused` 칸을 두었는데 읽는 화면이 없고 차단 거르기만 달라, 같은 사실의 출처가 두 벌이었다(2026-11-03 검토 minor).
 
     package init(
@@ -1056,6 +1059,14 @@ package enum MessagesPresenceRules {
         return result
     }
 
+    /// "지금 근무 중 · 바로 말 걸기" 얼굴 띠 한 칸의 보이스오버("하린, 근무 중" · "하린, 연결 끊김, 집중 중").
+    /// 띠는 52pt 얼굴과 이름뿐이라 칩을 달지 않고 **소리로만** 집중을 말한다(대표 답 #d_6A32rmcoJZZd — 얼굴 띠는 보이스오버 말만).
+    package static func workingAccessibilityText(_ person: MessagesWorkingPerson, isFocused: Bool) -> String {
+        var parts = [person.name, person.status == .pending ? "연결 끊김" : "근무 중"]
+        if isFocused { parts.append(MessagesFocusText.accessibility) }
+        return parts.joined(separator: ", ")
+    }
+
     /// 대화 머리 이름 아래 한 줄("근무 중 · 서울" · "연결 끊김" · "근무 안 함 · 부산"). 근무 여부를 모르면 nil(센터만 있어도 세우지 않는다 — 머리는 이름만).
     package static func headerLine(_ presence: MessagesPeerPresence?) -> String? {
         guard let presence else { return nil }
@@ -1101,11 +1112,12 @@ package enum MessagesFocusBlock: Equatable, Sendable {
 /// ★ 두 칩 글자는 15바이트 이하라 Release 바이너리 strings 게이트로는 못 잡는다(메모리 short-korean-literals-vanish-in-release) —
 ///   출시 게이트 문구 표에는 `MessageNoticeText.senderFocused`·`targetFocused` 같은 긴 문장을 쓴다.
 package enum MessagesFocusText {
-    /// 새 대화 시트 사람 줄 칩(근무 중 · 근무 안 함과 나란한 **상태 이름**).
+    /// 사람 줄 칩(근무 중 · 근무 안 함과 나란한 **상태 이름**) — 새 대화 시트 사람 줄 · 메시지 탭 대화 목록 줄 · 지금 탭 근무 중 줄
+    /// (대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부"). 세 줄 모두 이름 뒤 센터 배지 옆에 서는 같은 모양이라 같은 글자다.
     package static let personChip = "집중"
     /// 대화 이름표 칩 — 이름 옆에 홀로 서는 자리라 "집중" 두 글자만 두면 이름의 일부로 읽힌다(맥 `MessagePeerFocusChip.text` 와 같은 판단).
     package static let conversationChip = "집중 중"
-    /// 보이스오버가 사람 줄 · 이름표에 덧붙이는 말.
+    /// 보이스오버가 사람 줄 · 이름표 · 얼굴 띠에 덧붙이는 말(칩 하나를 따로 읽는 자리에서는 칩 자신의 이름이기도 하다 — `FocusChip`).
     package static let accessibility = "집중 중"
 }
 
@@ -1124,10 +1136,16 @@ package enum MessagesFocusRules {
     /// **목록에 있는 사람은 그 목록의 값이 답이다**: 뒤 목록이 그 사람을 집중 아님(또는 칸 없음)이라 말하면 앞 목록의 옛 집중을 지운다 —
     /// 방금 집중을 끈 사람이 시트가 받아 둔 옛 값으로 계속 잠기지 않게. 칸이 없거나 null 이면 집중 아님이다(코어 `toPokeDirectoryEntries`
     /// 와 같은 해석 — 옛 7칸 서버에서 전원이 잠기면 안 된다). 나(`me`)는 넣지 않는다.
+    ///
+    /// `hidden`(차단해 화면에서 걷어낸 사람)은 넣지 않는다 — 메시지 판(`MessagesStore.hidingBlocked`)이 근무 점 · 상태메시지를 걷는 것과
+    /// 같은 규칙이다. 지금 탭 근무 중 줄은 차단한 팀원도 그대로 세우므로(팀 명단과 같은 약속 — `NowTeamRoster` 머리말) 이 값을 묻는다.
+    /// 서버는 서로 차단한 사람을 명부에서 빼므로 보통은 재료부터 없고, 방금 차단해 옛 명부를 쥔 창만 이것이 막는다
+    /// (거르지 않으면 그 창에만 칩이 섰다가 다음 새로고침에 사라진다).
     package static func focusedPeerIDs(
         nowDirectory: [PokeDirectoryRow]?,
         messagesDirectory: [PokeDirectoryEntry]?,
-        me: String?
+        me: String?,
+        hidden: Set<String> = []
     ) -> Set<String> {
         var latest: [String: Bool] = [:]
         for entry in messagesDirectory ?? [] where entry.userID != me {
@@ -1136,14 +1154,23 @@ package enum MessagesFocusRules {
         for row in nowDirectory ?? [] where row.userId != me {
             latest[row.userId] = row.focusMode ?? false
         }
-        return Set(latest.compactMap { id, focused in focused ? id : nil })
+        return Set(latest.compactMap { id, focused in focused && !hidden.contains(id) ? id : nil })
     }
 
-    /// 지금 탭 60초 틱에서 내 집중을 다시 물을까 — **켜짐으로 알고 있고 대화가 떠 있을 때만**(맥 `refreshMyFocusModeIfFocused` 가
-    /// "켜져 있다고 알 때만 · 콕/대화 화면이 열린 동안의 틱"인 것과 같은 규약). 꺼짐·모름이면 묻지 않는다(요청 0) — 반대 방향(맥에서 켬)은
-    /// 대화가 설 때 · 앱이 앞으로 올 때의 조회와 서버 `sender_focused` 가 맡는다. 대화가 없으면 이 값을 쓰는 화면이 없다.
-    package static func rechecksOnTick(myFocus: Bool?, conversationOpen: Bool) -> Bool {
-        myFocus == true && conversationOpen
+    /// 지금 탭 60초 틱에서 내 집중을 다시 물을까 — **켜짐으로 알고 있고 메시지 화면(대화 목록 · 대화)이 떠 있을 때만**(맥
+    /// `refreshMyFocusModeIfFocused` 가 "켜져 있다고 알 때만 · 콕/대화 화면이 열린 동안의 틱"인 것과 같은 규약). 꺼짐·모름이면 묻지 않는다
+    /// (요청 0) — 반대 방향(맥에서 켬)은 화면이 설 때 · 앱이 앞으로 올 때의 조회와 서버 `sender_focused` 가 맡는다. 메시지 화면이 없으면
+    /// 이 값을 쓰는 화면이 없다(대화 목록 위 한 줄 `listNotice` · 입력줄 잠금).
+    package static func rechecksOnTick(myFocus: Bool?, messagesShown: Bool) -> Bool {
+        myFocus == true && messagesShown
+    }
+
+    /// 메시지 탭 대화 목록 위 한 줄(1.0.17 · 대표 답 #d_6A32rmcoJZZd "내가 집중 중이면 메시지 탭 위에 한 줄"). **켜짐으로 알 때만** 선다 —
+    /// 모름(nil)은 막지 않으므로 말하지도 않는다. 문장은 입력줄 사유 · 서버 거절(`sender_focused`)과 **같은 글자**다(`MessagesFocusBlock.myself`)
+    /// — 목록에서 읽은 말과 대화에서 막혔을 때 읽는 말이 같아야 같은 사정으로 읽힌다. 폰에는 [집중 끄기] 단추가 없다
+    /// (대표 답 #d_ldP912RctnTt "안내만 (단추 없음)") — 그래서 문장이 "맥에서 끄라"다.
+    package static func listNotice(myFocus: Bool?) -> String? {
+        myFocus == true ? MessagesFocusBlock.myself.notice : nil
     }
 }
 

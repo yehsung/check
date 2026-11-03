@@ -593,6 +593,9 @@ struct NowWorkingSection: View {
     var body: some View {
         let now = store.context.clock.now()
         let people = store.workingPeople(now: now)
+        // 집중 중인 사람(1.0.17 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부")은 **한 번** 받아 줄마다 묻는다 — 출처는 메시지 스토어
+        // 한 곳(`NowStore.focusedPeerIDs` → `MessagesStore.focusedPeerIDs` — [보내기] 잠금과 같은 겹치기 · 같은 차단 거르기).
+        let focused = store.focusedPeerIDs
         let teammates = people.filter(\.isTeammate)
         let others = people.filter { !$0.isTeammate }
         let state = store.workingLoadState
@@ -630,13 +633,13 @@ struct NowWorkingSection: View {
         } else if !teammates.isEmpty, !others.isEmpty {
             // 우리 팀 · 다른 팀은 그룹 두 장(시안 02 — 사이 12pt).
             Section {
-                NowWorkingGroup(store: store, label: NowText.ourTeam, people: teammates, anchorID: NowTab.workingSectionID, onShowRoster: showRoster)
+                NowWorkingGroup(store: store, label: NowText.ourTeam, people: teammates, focused: focused, anchorID: NowTab.workingSectionID, onShowRoster: showRoster)
             } header: {
                 header
             }
             .listSectionSpacing(12)
             Section {
-                NowWorkingGroup(store: store, label: NowText.otherTeams, people: others, anchorID: nil)
+                NowWorkingGroup(store: store, label: NowText.otherTeams, people: others, focused: focused, anchorID: nil)
             } footer: {
                 NowWorkingFooter(phoneWorkAvailable: store.phoneWorkAvailable)
             }
@@ -646,6 +649,7 @@ struct NowWorkingSection: View {
                     store: store,
                     label: teammates.isEmpty ? NowText.otherTeams : NowText.ourTeam,
                     people: people,
+                    focused: focused,
                     anchorID: NowTab.workingSectionID,
                     onShowRoster: teammates.isEmpty ? nil : showRoster
                 )
@@ -676,6 +680,8 @@ struct NowWorkingGroup: View {
     let store: NowStore
     let label: String
     let people: [NowWorkingPerson]
+    /// 집중 중인 사람(1.0.17 — `NowStore.focusedPeerIDs`). 줄마다 `contains` 만 묻는다.
+    let focused: Set<String>
     /// 데모 장면 `working` 이 스크롤해 갈 자리(첫 그룹만).
     let anchorID: String?
     /// 우리 팀 묶음만: [전체 보기].
@@ -716,7 +722,7 @@ struct NowWorkingGroup: View {
         )
         .id(anchorID ?? label)
         ForEach(Array(people.enumerated()), id: \.element.id) { offset, person in
-            NowWorkingRow(person: person, clock: store.context.clock) {
+            NowWorkingRow(person: person, isFocused: focused.contains(person.id), clock: store.context.clock) {
                 store.context.router.open(.message(peerID: person.id))
             }
             .cardSegmentRow(.of(index: 1 + offset, count: count), dividerLeading: Self.dividerLeading)
@@ -744,6 +750,9 @@ struct NowWorkingGroup: View {
 /// 사람 한 줄(시안 B 사람 행): 이니셜 원 + 상태 점(초록 · 앰버) · 이름 뒤 센터 배지 · (끊김 부제) · 오른쪽 = 우리 팀 경과 / 다른 팀 말 걸기.
 struct NowWorkingRow: View {
     let person: NowWorkingPerson
+    /// 이 사람이 집중 중인가(1.0.17 · 대표 답 #d_6A32rmcoJZZd — 우리 팀 · 다른 팀 줄 모두). 이름 뒤 '집중' 칩 — 이 줄은 조각을 하나씩
+    /// 읽으므로 보이스오버는 칩 자신이 "집중 중"으로 말한다(`FocusChip`). 다른 팀 줄의 [말 걸기]는 그대로 대화를 연다(보내기만 막힌다).
+    var isFocused: Bool = false
     let clock: MobileClock
     let onTalk: () -> Void
     @Environment(\.dynamicTypeSize) private var typeSize
@@ -756,7 +765,7 @@ struct NowWorkingRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(alignment: .center, spacing: 12) {
                         avatar
-                        PersonName(person.name, center: person.center)
+                        PersonName(person.name, center: person.center, chips: PersonName.focusChips(isFocused: isFocused))
                         if !person.isTeammate {
                             Spacer(minLength: 8)
                             trailing
@@ -771,7 +780,7 @@ struct NowWorkingRow: View {
                 HStack(spacing: 12) {
                     avatar
                     VStack(alignment: .leading, spacing: 1) {
-                        PersonName(person.name, center: person.center)
+                        PersonName(person.name, center: person.center, chips: PersonName.focusChips(isFocused: isFocused))
                         // 상태메시지(v0.3.51) — 있는 사람만 이름 아래 한 줄(꼬리 줄임표).
                         if let status = person.statusMessage { statusText(status, lineLimit: 1) }
                         if person.isStale { staleText }

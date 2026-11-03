@@ -11,11 +11,12 @@ import Testing
 //   6. "집중모드중인 사람들은 남들 찌르거나 메세지 못보내게 해줘. (자기는 못받으면서 남들한텐 할 수 있는게 안맞음)"
 // 대표 결정(되묻지 말 것): 상대가 집중이면 '집중' 표시 · 대화는 열리되 보내기(글·이모티콘)만 막힘. 내가 집중이면 메시지 막힘
 // (폰엔 찌르기·울트라 보내는 길이 없다). 확성기·게임 신청은 그대로.
-// ★ 결정이 **아닌** 것(현재 상태 — 대표 답 대기, 2026-11-03 결정 카드):
-//   D1 폰 [집중 끄기] 단추 — 지금은 없다(profiles PATCH 금지 그대로 · 문장은 "맥에서 집중을 끄면"). 답이 B(끄기 단추)면
-//      `MobileForbiddenCalls` 의 focus_mode PATCH 금지 · 이 파일 ⑧(`phoneNeverWritesFocus`) · 내 집중 문장을 함께 고친다.
-//   D2 집중 표시 범위 — 지금은 맥과 같은 두 곳(새 대화 사람 줄 · 대화 이름표). 답이 B(대화 목록 줄 · 지금 탭 근무 중 줄)면
-//      칩은 `MessagesStore.focusedPeerIDs` 한 곳을 읽는다(판에 칸을 다시 만들지 않는다).
+// ★ 폰 결정 카드 두 장 — **결정됨**(대표 결재함 답, 2026-11-03 원문. 되묻지 말 것):
+//   D1 폰 [집중 끄기] 단추 #d_ldP912RctnTt: "안내만 (단추 없음)"(추가 일 없음. 덮은 맥의 지난 집중은 맥을 다시 켜야 풀림.
+//      제보가 오면 다음 판에 단추) → profiles PATCH 금지 그대로(⑧ `phoneNeverWritesFocus`) · 문장은 "맥에서 집중을 끄면".
+//   D2 집중 표시 범위 #d_6A32rmcoJZZd: "말 걸 수 있는 줄 전부"(두 곳 + 대화 목록 줄·지금 탭 근무 중 줄, 내가 집중 중이면 메시지 탭 위에
+//      한 줄. 반나절 더) → 칩은 `MessagesStore.focusedPeerIDs` 한 곳을 읽는다(판에 칸을 다시 만들지 않는다). 얼굴 띠는 보이스오버만.
+//      넓힌 몫(대화 목록 줄 · 지금 탭 근무 중 줄 · 얼굴 띠 · 목록 위 한 줄 · 목록이 설 때 내 집중 조회)은 `V1017FocusRowsMobileTests.swift` 가 잰다.
 //
 // 이 파일이 재는 것:
 //  ① 규칙: 내 집중 > 상대 집중 · 모름(nil)은 막지 않음 · 명부 겹치기(뒤 목록이 이긴다) · 입력줄 한 줄의 순서 · 틱 조건
@@ -127,12 +128,12 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         #expect(MessagesComposerRules.noticeLine(focus: nil, sendNotice: nil) == nil)
     }
 
-    @Test("60초 틱 재확인은 켜짐으로 알고 대화가 떠 있을 때만이다")
+    @Test("60초 틱 재확인은 켜짐으로 알고 메시지 화면(목록 · 대화)이 떠 있을 때만이다")
     func tickCondition() {
-        #expect(MessagesFocusRules.rechecksOnTick(myFocus: true, conversationOpen: true))
-        #expect(!MessagesFocusRules.rechecksOnTick(myFocus: true, conversationOpen: false))
-        #expect(!MessagesFocusRules.rechecksOnTick(myFocus: false, conversationOpen: true))
-        #expect(!MessagesFocusRules.rechecksOnTick(myFocus: nil, conversationOpen: true), "모름까지 틱마다 물으면 집중을 안 쓰는 사람도 매분 GET 이다")
+        #expect(MessagesFocusRules.rechecksOnTick(myFocus: true, messagesShown: true))
+        #expect(!MessagesFocusRules.rechecksOnTick(myFocus: true, messagesShown: false))
+        #expect(!MessagesFocusRules.rechecksOnTick(myFocus: false, messagesShown: true))
+        #expect(!MessagesFocusRules.rechecksOnTick(myFocus: nil, messagesShown: true), "모름까지 틱마다 물으면 집중을 안 쓰는 사람도 매분 GET 이다")
     }
 
     @Test("칩 글자는 맥과 같다('집중' · '집중 중') — 짧아서 Release strings 게이트에 못 쓴다")
@@ -585,7 +586,11 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         #expect(body.contains("chips: Self.chips(isFocused: isFocused)"), "이름 줄에 칩을 안 넘긴다")
         #expect(body.contains("isFocused ? MessagesFocusText.accessibility : nil"), "보이스오버가 집중을 안 읽는다")
         let chips = try Self.block(of: "static func chips(isFocused: Bool)", in: row)
-        #expect(chips.contains(".focus(MessagesFocusText.personChip)"), "칩이 '집중' 보라 칩이 아니다")
+        // 사람 줄 셋(새 대화 · 대화 목록 · 지금 탭 근무 중)이 한 조각을 부른다(D2 결정 뒤 — `PersonName.focusChips`).
+        #expect(chips.contains("PersonName.focusChips(isFocused: isFocused)"), "새 대화 사람 줄이 공용 칩 조각을 안 부른다")
+        let shared = try Self.block(of: "package static func focusChips(isFocused: Bool)",
+                                    in: try Self.code("Sources/CheckMobileKit/Components/PersonComponents.swift"))
+        #expect(shared.contains(".focus(MessagesFocusText.personChip)"), "칩이 '집중' 보라 칩이 아니다")
     }
 
     @Test("집중의 출처는 스토어 한 곳이다: 판에는 집중 칸이 없고 · 화면은 focusedPeerIDs/isPeerFocused 만 읽는다(검토 2026-11-03 — 출처 두 벌)")

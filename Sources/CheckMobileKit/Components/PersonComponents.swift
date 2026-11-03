@@ -306,9 +306,10 @@ package struct PersonName: View {
 /// **테두리형인 까닭**: 칠한 칩(글자 색 14% 바탕)이면 라이트에서 글자가 4.3:1 로 4.5:1 에 못 미친다(aiToken #7A4FE0 계산). 테두리형은
 /// 글자가 줄 바탕(흰 카드 · 유리 이름표) 위에 바로 앉아 라이트 약 5.2:1 이다. 다크는 aiToken 다크값(밝은 보라)이라 어느 쪽이든 넉넉하다.
 ///
-/// **한 조각으로 둔다**: 새 대화 사람 줄(`PersonName.Chip.focus`)과 대화 이름표가 이 부품 하나를 부른다. 대화 목록 줄 · 지금 탭 근무 중 줄에
-/// 붙일지는 대표 답 대기(폰 1.0.17 D2)라 이번 판엔 두 자리뿐이고, 붙이게 되면 이것을 꽂으면 된다(글자는 `MessagesFocusText`).
-/// 보이스오버는 칩 하나를 따로 읽지 않는다 — 줄·이름표가 자기 문장에 `MessagesFocusText.accessibility` 를 잇는다(`children: .ignore` 자리들).
+/// **한 조각으로 둔다**: 사람 줄 셋(새 대화 시트 · 메시지 탭 대화 목록 · 지금 탭 근무 중 — `PersonName.Chip.focus`)과 대화 이름표가
+/// 이 부품 하나를 부른다(대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" · 글자는 `MessagesFocusText`). 얼굴 띠는 칩 없이 보이스오버만 잇는다.
+/// 보이스오버: 줄을 한 덩이로 읽는 자리(`children: .ignore` — 새 대화 · 대화 목록 · 이름표)는 줄이 자기 문장에 `MessagesFocusText.accessibility`
+/// 를 잇는다. 줄의 조각을 하나씩 읽는 자리(지금 탭 근무 중 줄)는 이 칩이 "집중"이 아니라 "집중 중"으로 읽힌다(아래 라벨 — '나' 칩과 같은 꼴).
 package struct FocusChip: View {
     private let text: String
 
@@ -318,6 +319,14 @@ package struct FocusChip: View {
 
     package var body: some View {
         AingChip(text: text, tint: MobileTheme.aiToken, outlined: true, size: .small)
+            .accessibilityLabel(Text(MessagesFocusText.accessibility))
+    }
+}
+
+extension PersonName {
+    /// 사람 줄 이름 뒤 칩 — 집중 중이면 '집중' 하나(아니면 칩 없음). 사람 줄 셋(새 대화 시트 · 대화 목록 · 지금 탭 근무 중)이 이것 하나를 부른다.
+    package static func focusChips(isFocused: Bool) -> [Chip] {
+        isFocused ? [.focus(MessagesFocusText.personChip)] : []
     }
 }
 

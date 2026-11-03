@@ -135,7 +135,10 @@ object ChessPhoneText {
      * 정해지지 않아 틀린 안내를 했다. 그래서 문구 함수가 **두는 판(playing)과 막힌 입구(blocked)를 둘 다** 받는다.
      */
     enum class BusyGame(val rawValue: String) {
-        gomoku("gomoku"), chess("chess"), tetris("tetris"), rummy("rummy");
+        gomoku("gomoku"), chess("chess"), tetris("tetris"), rummy("rummy"),
+
+        /** 아잉 뒤집기(판 7 — iOS 1.0.17). 이름 글자는 코어 `ReversiNoticeText.gameName` 한 곳에서 받는다. */
+        reversi("reversi");
 
         /** 게임 이름("오목" · "체스" · "1:1 테트리스"). */
         val gameName: String
@@ -144,21 +147,24 @@ object ChessPhoneText {
                 chess -> "체스"
                 tetris -> "1:1 테트리스"
                 rummy -> "아잉 큐브"
+                reversi -> com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName
             }
 
-        /** 진행 중인 판을 가리키는 말. 셋 다 받침으로 끝나므로 뒤에 "이" 를 붙인다. */
+        /** 진행 중인 판을 가리키는 말. 모두 받침으로 끝나므로 뒤에 "이" 를 붙인다. */
         val matchNoun: String
             get() = when (this) {
                 gomoku -> "오목 판"
                 chess -> "체스 판"
                 tetris -> "테트리스 대결"
                 rummy -> "아잉 큐브 판"
+                reversi -> "${com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName} 판"
             }
     }
 
     /** 다른 판을 두는 중이라 입구가 막혔다(테트리스는 '둔다'고 하지 않는다). */
     fun busyTitle(playing: BusyGame): String = when (playing) {
-        BusyGame.gomoku, BusyGame.chess -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
+        // 아잉 뒤집기도 돌을 **둔다**(iOS 1.0.17 · 맥 `ReversiText` 의 "두기" 낱말과 같다).
+        BusyGame.gomoku, BusyGame.chess, BusyGame.reversi -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
         BusyGame.tetris -> "${playing.gameName} 대결 중이에요"
         BusyGame.rummy -> "${playing.gameName} 하는 중이에요"
     }

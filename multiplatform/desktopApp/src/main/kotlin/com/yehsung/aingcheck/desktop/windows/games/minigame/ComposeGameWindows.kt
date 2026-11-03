@@ -296,7 +296,7 @@ object ComposeGamesWindows {
                         GamesDestination.Chess -> host.openChess()
                         GamesDestination.TetrisDuel -> host.openTetrisDuel()
                         // Windows 메뉴에는 입구를 붙이지 않는다 — 컴파일용 빈 가지.
-                        GamesDestination.Rummy -> Unit
+                        GamesDestination.Rummy, GamesDestination.Reversi -> Unit
                         is GamesDestination.MiniGame -> host.openGames(destination.kind)
                     }
                 },

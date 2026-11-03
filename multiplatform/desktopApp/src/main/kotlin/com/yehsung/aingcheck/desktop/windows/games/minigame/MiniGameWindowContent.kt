@@ -67,7 +67,7 @@ fun MiniGameWindowContent(
                         is GamesDestination.MiniGame -> state.show(destination.kind)
                         GamesDestination.Gomoku, GamesDestination.Chess, GamesDestination.TetrisDuel -> onOpenBoard(destination)
                         // 데스크톱 문맥엔 큐브 스토어가 없어(GamesContext.rummy = null) 허브에 카드가 안 선다 — 컴파일용 빈 가지.
-                        GamesDestination.Rummy -> Unit
+                        GamesDestination.Rummy, GamesDestination.Reversi -> Unit
                     }
                 },
                 onOpenShop = onOpenShop,

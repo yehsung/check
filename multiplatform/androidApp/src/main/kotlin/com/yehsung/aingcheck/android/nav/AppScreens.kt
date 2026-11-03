@@ -169,6 +169,8 @@ object NavRequests {
                     GamesDestination.Chess -> ChessRoute.lobby()
                     GamesDestination.TetrisDuel -> Dest.TetrisDuel
                     GamesDestination.Rummy -> Dest.Rummy
+                    // 아잉 뒤집기(판 7): 화면 갈래가 셸 목적지(Dest.Reversi)를 세우기 전까지는 쌓지 않는다(null — 빈 화면으로 오배달하지 않게).
+                    GamesDestination.Reversi -> null
                     is GamesDestination.MiniGame -> RouteTargets.miniGame(d.kind)?.let { Dest.MiniGame(it.raw) }
                 }
                 dest?.let { nav.navigate(it) { launchSingleTop = true } }

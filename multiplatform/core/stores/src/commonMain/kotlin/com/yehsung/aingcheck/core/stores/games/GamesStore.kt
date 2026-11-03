@@ -6,6 +6,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
+import com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText
+import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
+import com.yehsung.aingcheck.core.stores.reversi.ReversiUser
+import com.yehsung.aingcheck.core.stores.reversi.isAIMatch as reversiIsAIMatch
+import com.yehsung.aingcheck.core.stores.reversi.stopWatching as reversiStopWatching
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameHub
 import com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure
 import com.yehsung.aingcheck.core.rules.rummy.RummyCloseDecision
@@ -53,6 +58,12 @@ sealed interface GamesDestination {
 
     /** 아잉 큐브(2~4인) — 로비·방·판·결과·순위를 **입구 하나**로 연다(테트리스와 같은 구조). */
     data object Rummy : GamesDestination
+
+    /**
+     * 아잉 뒤집기(판 7 — iOS 1.0.17 `GamesDestination.reversi`) — 로비·판·AI 연습·결과·관전·순위를 **입구 하나**로 연다(체스와 같은 구조 — 화면이
+     * `phase`·`spectating` 으로 갈아 끼운다). 떼어 내기 깃발이 꺼진 조립(스토어 없음)에서는 이 목적지로 가는 문이 하나도 서지 않는다.
+     */
+    data object Reversi : GamesDestination
 }
 
 /**
@@ -71,7 +82,13 @@ enum class GamesBusyGame(val rawValue: String) {
     tetris("tetris"),
 
     /** 아잉 큐브. 서버 `chess__busy` 는 모으는 방에 앉은 것(joined)과 판 중(playing)을 함께 바쁨으로 본다 — 방도 막는다. */
-    rummy("rummy");
+    rummy("rummy"),
+
+    /**
+     * 아잉 뒤집기(판 7). 서버 `game__busy_users()` 가 리버시 active 판까지 본다(다른 게임과 겹침을 서버도 막는다) — 클라는 **다섯 방향**을 막아
+     * 어느 판 때문인지 먼저 그린다(iOS 1.0.17 `GamesBusyGame.reversi`).
+     */
+    reversi("reversi");
 
     /**
      * 문구 표가 쓰는 이름(Swift `ChessPhoneText.BusyGame.gameName` — 그 표는 W2-d 의 GamesChessText 다).
@@ -84,6 +101,7 @@ enum class GamesBusyGame(val rawValue: String) {
             chess -> "체스"
             tetris -> "1:1 테트리스"
             rummy -> "아잉 큐브"
+            reversi -> ReversiNoticeText.gameName
         }
 }
 
@@ -151,10 +169,17 @@ class GamesStore(val context: GamesContext) {
     var isTetrisScreenVisible: Boolean by mutableStateOf(false)
         private set
 
-    /** 오목 · 체스 · 테트리스 화면 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)가 이때는 스스로 뜨지 않는다(W2-c `presentCakeGiftIfDue`). */
+    /**
+     * 오목 · 체스 · 테트리스 · 아잉 큐브 · 아잉 뒤집기 화면 중 하나가 떠 있다. 생일 선물 축하 시트(v0.3.66)와 확성기 배너가 이때는 스스로 뜨지 않는다
+     * (W2-c `presentCakeGiftIfDue` · PhoneAppModel.isMegaphoneBannerDeferred).
+     *
+     * 아잉 뒤집기는 **화면으로만** 가른다(오목·체스·테트리스와 같다 — iOS 1.0.17 91ea495d 와 같은 결정). 코어 `defersMegaphoneBanner`(phase == playing)를
+     * 쓰지 않는 까닭: 폰 스토어는 같은 계정 **맥이 두는 판**도 로비 `active_match_id` 로 읽어 들고 있어(playing), 그 값을 쓰면 맥이 한 판 두는 동안
+     * 폰의 확성기·생일 선물이 통째로 멎는다. 내 판이 흐르는 동안 다른 탭에 있으면 배너를 보는 것이 맞다(체스와 같은 대접).
+     */
     val isAnyMatchScreenVisible: Boolean
         get() {
-            if (isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible) return true
+            if (isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible) return true
             // 큐브: 손댄 판에서 내 자리가 playing 이면 다른 탭에 있어도 참(언제든 차례가 돌아온다). 놀던 기기가 판을 읽기만 하는 동안 · 기권 뒤 구경은 거짓. 로비 · 방 · 결과 화면은 다른 대결 화면과 같은 대접(iOS 61d75d8c).
             val rummy = context.rummy ?: return false
             return rummy.defersMegaphoneBanner || (isRummyScreenVisible && rummy.phase != RummyPhase.playing)
@@ -162,6 +187,13 @@ class GamesStore(val context: GamesContext) {
 
     /** 아잉 큐브 화면이 지금 떠 있다(코어 '창 표시'를 폰 화면 수명으로 옮긴 값). */
     var isRummyScreenVisible: Boolean by mutableStateOf(false)
+        private set
+
+    /**
+     * 아잉 뒤집기 화면이 지금 떠 있다(코어 '창 표시'를 폰 화면 수명으로 옮긴 값). [appDidBecomeActive] 가 이 값으로 갈린다 — 거짓인데 `windowDidShow()` 를
+     * 부르면 보이지도 않는 판에 폴링이 돌고 AI 연습 판의 사람 시계가 흐른다.
+     */
+    var isReversiScreenVisible: Boolean by mutableStateOf(false)
         private set
 
     /** 결과에서 [최종 판]을 펴 둔 판. 판 id 를 쥐는 까닭: 다음 판의 결과가 이 표시를 물려받아 저절로 가로가 되면 안 된다. */
@@ -262,6 +294,10 @@ class GamesStore(val context: GamesContext) {
         if (context.rummy != null) context.router.installDepartureGuard { resume -> rummyDepartureAllowed(resume) }
         // 방 화면이 설 때만 방 하트비트를 돌린다(rummyScreenDidAppear) — 어느 길로 화면 밖에 앉게 됐든(앱을 다시 켬 · 다른 게임 화면이 덮음) 모르는 사이 판돈이 걷히지 않는다.
         context.rummy?.roomHeartbeatHeld = true
+        // 아잉 뒤집기도 **같은 문**이다. 안 물리면 수락·시작이 화면을 못 연다 — 신청자는 수락된 순간을 몰라 흑 30초를 흘리고 자동 착수가 쌓인다
+        // (연속 3번이면 판돈째 진다). 코어가 부르는 자리 셋: `openWindow` · 수락 응답(`respond`) · 진행 판으로 처음 넘어갈 때(`noteMatchProgress`).
+        // 로그아웃 `reset()` 이 부르는 `dismissWindow` 는 달지 않는다 — 폰은 로그아웃의 `router.reset()` 이 경로를 비운다. 스토어가 없는 조립은 건너뛴다.
+        context.reversi?.presentWindow = { presentReversiScreen() }
     }
 
     // MARK: 자리 API
@@ -313,6 +349,19 @@ class GamesStore(val context: GamesContext) {
                 rummy.systemDidWake()
             }
         }
+        // 아잉 뒤집기: 체스와 같은 세 걸음이되 **두 갈래를 겹쳐 부르지 않는다**(iOS 1.0.17).
+        //  · 화면이 보이면 — 창이 서 있으면 가림만 풀고(background 에서 '가림'으로 멈춘 폴링 · AI 사람 시계를 되살린다), 안 서 있으면 `windowDidShow()`.
+        //    그리고 `catchUp()` 으로 background 동안 놓친 것을 읽는다(신청·수락·상대 수·서버가 대신 둔 수 — 시계는 서버에서 흘렀다).
+        //  · 안 보이면 — `refreshLobbyIfStale()`(30초 스로틀). 탭 배지의 받은 신청과 한 사람 한 판의 `activeMatchID` 가 이 계기에 달려 있다.
+        // 꼬리에 guard 를 쓰지 않는다(위 INV-GamesStore-bb34b219 — 뒤에 올 게임을 죽인다).
+        context.reversi?.let { reversi ->
+            if (isReversiScreenVisible) {
+                if (reversi.isWindowVisible) reversi.windowOcclusionDidChange(visible = true) else reversi.windowDidShow()
+                context.scope.launch { reversi.catchUp() }
+            } else {
+                reversi.refreshLobbyIfStale()
+            }
+        }
         syncIdleTimer()
     }
 
@@ -350,6 +399,11 @@ class GamesStore(val context: GamesContext) {
             rummy.rummyAppDidEnterBackground()
             if (isRummyScreenVisible && rummy.isWindowVisible) rummy.setWindowOccluded(true)
         }
+        // 아잉 뒤집기도 **가림**이다(체스와 같은 까닭 둘 — 결과 화면이 접히지 않고, 보던 관전이 끊기지 않는다). 가림은 폴링 · AI 사람 시계 · 뒤집기 그림만
+        // 멈춘다. ★ **1:1 판은 멈추지 않는다** — 서버 시계가 흐르고 30초가 지나면 서버가 대신 둔다(연속 3번이면 패).
+        context.reversi?.let { reversi ->
+            if (isReversiScreenVisible && reversi.isWindowVisible) reversi.windowOcclusionDidChange(visible = false)
+        }
         syncIdleTimer()
     }
 
@@ -359,6 +413,7 @@ class GamesStore(val context: GamesContext) {
         isChessScreenVisible = false
         isTetrisScreenVisible = false
         isRummyScreenVisible = false
+        isReversiScreenVisible = false
         rummyPersonLeftScreen = false
         rummyFinalBoardMatchID = null
         rummyDeparturePrompt = null
@@ -381,6 +436,9 @@ class GamesStore(val context: GamesContext) {
     /** 코어 테트리스 대결 스토어 줄임(= `context.tetris`). 화면·다른 갈래가 읽는 자리는 **두 이름이 같은 인스턴스**다. */
     val tetris: TetrisDuelStore get() = context.tetris
 
+    /** 코어 아잉 뒤집기 스토어 줄임(= `context.reversi`). null = 이 조립에 리버시가 없다(Windows · 떼어 내기 깃발 끔) — 카드·화면 문을 세우지 않는다. */
+    val reversi: ReversiStore? get() = context.reversi
+
     /**
      * 탭 배지: 만료 안 된 받은 오목 신청 수 + 받은 아잉 큐브 초대 수.
      *
@@ -391,8 +449,14 @@ class GamesStore(val context: GamesContext) {
      * 허브·체스 화면에서만 나간다 — 배지에 넣으면 "60초 TTL 짜리 숫자가 30초 스로틀로 갱신되는" 꼴이 되어 없는 신청을 가리키거나 놓친다.
      * INV-GamesStore-3d7a8f45 이식: **테트리스 신청도 안 센다**(P5 — 같은 근거다). 받은 신청이 `tetris_lobby` 응답에만 실려 오고 그 조회는
      * **게임 탭·테트리스 화면에서만** 나간다. 알리는 자리는 **둘**이다: 게임 탭 테트리스 카드의 "받은 신청" 칩 · 테트리스 화면 로비 맨 위 신청 카드.
+     *
+     * **아잉 뒤집기 신청도 센다**(판 7 — iOS 1.0.17 `badgeCount` 와 같은 근거): 초인종을 잇는다('reversi' → `handleSignal` → 판이 없으면 로비). 신청이 오면
+     * 그 자리에서 로비를 읽어 `me.incoming` 을 갈아 끼우고, 60초 만료는 코어 타이머가 `incoming` 에서 걷는다 — 숫자가 30초 스로틀에 묶이지 않는다.
+     * 차단 거울·판돈 깃발(§8-17 #1 — 잠긴 빌드는 0)을 거친 값(`visibleIncomingInvites`)을 센다. 스토어가 없는 조립(떼어 내기 깃발 끔)은 판 7 이전 값 그대로다.
      */
-    val badgeCount: Int get() = context.gomoku.pendingIncomingInviteCount + (context.rummy?.pendingIncomingInviteCount ?: 0)
+    val badgeCount: Int
+        get() = context.gomoku.pendingIncomingInviteCount + (context.rummy?.pendingIncomingInviteCount ?: 0) +
+            (context.reversi?.visibleIncomingInvites?.size ?: 0)
 
     /** 게임 탭이 보여 주는 루비 잔액 — **공유 미러**를 먼저 읽는다(나 탭 상점 구매가 미러만 적는다). 미러를 모르면 테트리스 코어 값. */
     val rubyBalance: Long? get() = context.sharedRubyBalance ?: context.tetris.rubyBalance
@@ -423,6 +487,13 @@ class GamesStore(val context: GamesContext) {
      */
     val tetrisLobbyUsers: List<TetrisDuelUser>
         get() = hidingBlockedPeers(context.tetris.visibleUsers) { it.id }
+
+    /**
+     * 아잉 뒤집기 로비의 상대 고르기 목록 — 같은 근거·같은 방식(위 세 주석). 코어 `visibleUsers` 는 차단 거울([syncReversiHiddenPeers])까지 거른 값이고,
+     * 거기에 메시지 탭의 차단 목록을 **지금 값으로** 한 번 더 겹친다. **정렬은 하지 않는다**(코어 `sortedForLobby` 가 이미 맞춰 뒀다). 스토어가 없으면 빈 목록.
+     */
+    val reversiLobbyUsers: List<ReversiUser>
+        get() = hidingBlockedPeers(context.reversi?.visibleUsers ?: emptyList()) { it.id }
 
     /** 세 로비가 같은 규칙으로 거른다: 메시지 탭 차단 목록이 비면 코어 목록 그대로(같은 순서), 아니면 그 사람만 뺀다. */
     private fun <U> hidingBlockedPeers(users: List<U>, id: (U) -> String): List<U> {
@@ -483,12 +554,39 @@ class GamesStore(val context: GamesContext) {
             return rummy.holdsLiveSeat
         }
 
-    /** 체스 입구를 막는 까닭(없으면 null). 오목·테트리스·큐브 판이 흐르면 체스를 신청·수락할 수 없다 — 서버도 같은 판정을 한다(`chess__busy`). */
+    /**
+     * 사람과의 **아잉 뒤집기** 판이 지금 흐르고 있는가(오목·체스와 같은 규칙 — AI 연습 판·끝난 판은 아니다). 스토어가 없는 조립은 늘 false.
+     * ★ `activeMatchID` 를 먼저 본다(테트리스 주석과 같은 근거): 로비가 진행 판 id 를 주면 코어가 곧바로 `reversi_state` 를 쏘지만, 그 조회가 실패하면
+     *   `match` 는 null 인 채 id 만 남는다. 그 틈에 오목을 수락하면 흐르던 리버시 판은 30초마다 서버가 대신 두고 3번째에 **판돈째 진다**. AI 판 id 는
+     *   이 칸에 오르지 않는다(서버 판만 적는다).
+     * ★ 같은 계정의 **다른 기기**(맥)가 두는 판도 막는다 — 한 사람은 한 판만이다(서버 `game__busy_users` 도 기기를 가리지 않는다).
+     */
+    val hasLiveReversiMatch: Boolean
+        get() {
+            val reversi = context.reversi ?: return false
+            if (reversi.activeMatchID != null) return true
+            val match = reversi.match ?: return false
+            return !match.isFinished && !match.isAI
+        }
+
+    /**
+     * **AI 연습 판**이 지금 진행 중인가(끝난 판은 아니다). 서버는 이 판을 볼 수 없다(행이 없다). 코어 `challenge`·`respond` 에는 AI 가드가 없어 1:1 판이
+     * 서는 순간 두던 AI 판이 문구 없이 버려진다 — 신청은 [com.yehsung.aingcheck.core.stores.reversi.GamesReversiChallengeGate] 가, 수락은 화면 확인이 막는다.
+     */
+    val hasLiveReversiAIGame: Boolean
+        get() {
+            val reversi = context.reversi ?: return false
+            val match = reversi.match ?: return false
+            return reversi.reversiIsAIMatch && !match.isFinished
+        }
+
+    /** 체스 입구를 막는 까닭(없으면 null). 오목·테트리스·큐브·리버시 판이 흐르면 체스를 신청·수락할 수 없다 — 서버도 같은 판정을 한다. */
     val chessEntryBlock: GamesBusyGame?
         get() {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
-            return if (hasLiveRummyMatch) GamesBusyGame.rummy else null
+            if (hasLiveRummyMatch) return GamesBusyGame.rummy
+            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
         }
 
     /**
@@ -500,7 +598,8 @@ class GamesStore(val context: GamesContext) {
         get() {
             if (hasLiveChessMatch) return GamesBusyGame.chess
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
-            return if (hasLiveRummyMatch) GamesBusyGame.rummy else null
+            if (hasLiveRummyMatch) return GamesBusyGame.rummy
+            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
         }
 
     /**
@@ -511,7 +610,8 @@ class GamesStore(val context: GamesContext) {
         get() {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveChessMatch) return GamesBusyGame.chess
-            return if (hasLiveRummyMatch) GamesBusyGame.rummy else null
+            if (hasLiveRummyMatch) return GamesBusyGame.rummy
+            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
         }
 
     /**
@@ -522,7 +622,20 @@ class GamesStore(val context: GamesContext) {
         get() {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveChessMatch) return GamesBusyGame.chess
-            return if (hasLiveTetrisMatch) GamesBusyGame.tetris else null
+            if (hasLiveTetrisMatch) return GamesBusyGame.tetris
+            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
+        }
+
+    /**
+     * 아잉 뒤집기 입구를 막는 까닭(없으면 null) — 다섯 방향의 마지막 하나. 서버도 막는다(`reversi_challenge`·`reversi_respond` 가 `game__busy_users` 를 본다) —
+     * 이 값은 **어느 판 때문인지** 화면이 먼저 말하게 한다. 판돈 걸린 다른 판을 두는 중에 리버시를 수락하면 그 판이 시간패한다(테트리스는 15초 침묵).
+     */
+    val reversiEntryBlock: GamesBusyGame?
+        get() {
+            if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
+            if (hasLiveChessMatch) return GamesBusyGame.chess
+            if (hasLiveTetrisMatch) return GamesBusyGame.tetris
+            return if (hasLiveRummyMatch) GamesBusyGame.rummy else null
         }
 
     /**
@@ -554,6 +667,23 @@ class GamesStore(val context: GamesContext) {
         context.tetris.refreshLobbyIfStale()
         // 아잉 큐브도 받은함 RPC 가 없다 — 받은 초대(배지)·내 방·판 id 가 전부 `rummy_lobby` 로 온다(30초 스로틀 · 잠긴 빌드는 코어가 안 낸다).
         context.rummy?.refreshLobbyIfStale()
+        // 아잉 뒤집기도 **받은함 RPC 가 없다** — 받은 신청·보낸 신청·진행 판 id·전적이 전부 `reversi_lobby` 의 `me` 로 온다. 허브에서 한 번 당긴다(30초
+        // 스로틀 — 로비는 사람마다 `reversi_capable` 을 부르는 무거운 조회라 스로틀을 꼭 지난다). 빠지면 둘이 함께 죽는다: ① 카드 칩과 탭 배지가 다음 초인종까지
+        // 비고, ② 앱을 막 켠 사람의 `activeMatchID` 가 null 이라 리버시 판(같은 계정 맥의 판 포함)이 흐르는 중에도 다른 카드가 열려 있다.
+        if (context.reversi != null) {
+            syncReversiHiddenPeers()
+            context.reversi?.refreshLobbyIfStale()
+        }
+    }
+
+    /**
+     * 아잉 뒤집기 차단 거울(맥 `WorkTimerStore` 의 `reversi.hiddenPeerIDs = blockHiddenPeerIDs` 와 같은 길). 코어가 로비 사람·받은 신청·탭 배지를 이 집합으로
+     * 거른다. 코어 id 는 소문자 uuid 라 소문자로 맞춘다. 같은 값이면 쓰지 않는다(관찰을 깨우지 않게). 폰 조립은 메시지 탭의 차단 변화 때도 같은 값을 넣는다.
+     */
+    fun syncReversiHiddenPeers() {
+        val reversi = context.reversi ?: return
+        val hidden = context.hiddenBlockedPeerIDs.map { it.lowercase() }.toSet()
+        if (reversi.hiddenPeerIDs != hidden) reversi.hiddenPeerIDs = hidden
     }
 
     /** 오목 카드의 한 줄 재료: 진행 중인 판이 있는가(서버가 말한 진행 판 id 또는 들고 있는 끝나지 않은 판). */
@@ -572,6 +702,18 @@ class GamesStore(val context: GamesContext) {
             val match = tetris.match
             if (match != null && !match.isFinished) return true
             return tetris.activeMatchID != null
+        }
+
+    /**
+     * 아잉 뒤집기 카드의 한 줄 재료(위 체스와 같은 뜻 — **AI 연습 판도 포함**이다. 카드가 '대국 중'을 앞세울지는 [com.yehsung.aingcheck.core.stores.reversi.GamesReversiCard]
+     * 가 AI 판과 받은 신청을 함께 보아 정한다 — 체스 카드와 같은 관례).
+     */
+    val hasActiveReversiMatch: Boolean
+        get() {
+            val reversi = context.reversi ?: return false
+            val match = reversi.match
+            if (match != null && !match.isFinished) return true
+            return reversi.activeMatchID != null
         }
 
     // MARK: 오목 화면 수명
@@ -681,6 +823,37 @@ class GamesStore(val context: GamesContext) {
         context.tetris.windowDidHide()
         // 폰에서 '떠남'은 맥의 '닫기'다 — 끝난 판을 접는 자리는 이 문뿐이다(진행 중인 판은 코어가 가른다).
         context.tetris.windowDidClose()
+    }
+
+    // MARK: 아잉 뒤집기 화면 수명 (체스에서 수리한 모양 그대로 — 관전이 있다 · 화면 갈래가 부른다)
+
+    /**
+     * 아잉 뒤집기 화면이 나타났다: 차단 거울을 맞추고 로비·진행 판을 읽고(`openWindow`) 앱이 active 면 창을 세운다(`windowDidShow`).
+     * [isReversiScreenVisible] 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를 봐야 화면을 또 열지 않는다.
+     * ★★ **`windowDidShow()` 가 이 화면의 둘째 주 스위치다.** 코어 `isWindowVisible` 도 기본이 false 이고 그 깃발을 켜는 문은 이것뿐이다. 꺼져 있으면 넷이
+     *   함께 죽는다: 폴링(상대 차례·보낸 신청 5초·로비 30초) · 순위·관전 · **뒤집기 그림** · **AI 연습의 사람 시계**.
+     */
+    fun reversiScreenDidAppear() {
+        val reversi = context.reversi ?: return
+        isReversiScreenVisible = true
+        syncReversiHiddenPeers()
+        reversi.openWindow(null)
+        if (isAppActive) reversi.windowDidShow()
+    }
+
+    /**
+     * 아잉 뒤집기 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃). **`stopWatching()` 이 먼저, `windowDidHide()` 가 나중이다**(체스와 같은 순서) —
+     * 폰에서 그 통지는 "화면을 떠났다"다. `leaveWatch()` 가 **아니다**(로비·순위를 다시 읽는 네트워크 호출이다).
+     * ★★ **`windowDidClose()` 가 마지막이다** — 빼면 끝난 내 판(결과 카드)이 남아 다시 누를 때 로비가 아니라 결과가 다시 선다. **진행 중인 판은 남는다**
+     *   (코어 `foldFinishedMatch` 가 `isFinished` 를 먼저 본다 — 1:1 은 서버 시계로 계속 흐르고, AI 연습은 숨김이 사람 시계를 멈춘다). 요청은 한 건도 안 나간다.
+     */
+    fun reversiScreenDidDisappear() {
+        if (!isReversiScreenVisible) return
+        isReversiScreenVisible = false
+        val reversi = context.reversi ?: return
+        reversi.reversiStopWatching()
+        reversi.windowDidHide()
+        reversi.windowDidClose()
     }
 
     // MARK: 아잉 큐브 화면 수명 (테트리스에서 수리한 모양 그대로 — GamesRummyScreen 이 부른다)
@@ -894,6 +1067,18 @@ class GamesStore(val context: GamesContext) {
             // 아잉 큐브: 이 기기가 쥔 방·판이면 **어느 화면에 있든 켠다** — 남의 차례를 기다리는 동안(한 차례 60초 × 3명) 자동잠금이 닿으면 앱이 뒤로 가고 하트비트가 멈춰
             // 90초 뒤 끊김 기권으로 **판돈을 잃는다**. 놀던 기기 · 기권 뒤 구경은 쥐지 않는다(코어 `isHoldingMatch`).
             if (context.rummy?.isHoldingMatch == true) return true
+            // 아잉 뒤집기: 1:1 판은 **어느 화면에 있든** 켠다(한 수 30초 — 자동잠금이 닿으면 소켓이 내려가 상대 수를 모르고, 서버가 대신 둔 수가 연속 3번이면
+            // 판돈째 진다). AI 연습은 화면이 보일 때만(떠나면 코어가 사람 시계를 멈춘다 — 체스 로봇과 같다). '이 기기가 연 판' 장부가 없어 같은 계정 다른 기기의
+            // 판에서도 켠다 — Android 체스와 같은 수준(ReversiStore 머리말).
+            context.reversi?.match?.let { match ->
+                if (!match.isFinished) {
+                    if (match.isAI) {
+                        if (isReversiScreenVisible) return true
+                    } else {
+                        return true
+                    }
+                }
+            }
             if (!context.gomoku.hasMatch) return false
             if (context.gomoku.isAIMatch) return context.gomoku.hasUnfinishedMatch && isGomokuScreenVisible
             return context.gomoku.hasUnfinishedMatch
@@ -1017,6 +1202,15 @@ class GamesStore(val context: GamesContext) {
      * **이 기기가 손댄 판에서만 연다**(iOS GamesStore.swift `presentRummyScreen` @ ios-1017-cube): 다른 기기로 하는 판을 읽기만 한 기기가 보던 탭에서 끌려 나와 가로로 돌면 안 된다.
      * 여기서 보낸 만들기 · 참가 · 시작은 보내기 전에 장부에 적으므로 이 기기의 판은 언제나 열린다. 놀던 기기의 판은 게임 탭 카드로 들어간다.
      */
+    /**
+     * 아잉 뒤집기 판이 막 열렸다(내 신청이 수락됨 · 내가 수락함 · 앱을 다시 켜니 진행 중인 판) — 아잉 뒤집기 화면을 연다(게임 탭을 고르고 · 쌓인 화면을
+     * 비우고 · 쌓는다). 딥링크·푸시 가지는 없다(결정 "채팅·푸시 없음"). `!isReversiScreenVisible` 가드가 화면을 두 번 쌓는 것을 막는다.
+     */
+    private fun presentReversiScreen() {
+        if (!isAppActive || !context.sessionStore.isSignedIn || isReversiScreenVisible || context.reversi == null) return
+        context.router.present(GamesDestination.Reversi)
+    }
+
     private fun presentRummyScreen() {
         if (!isAppActive || !context.sessionStore.isSignedIn || isRummyScreenVisible || context.rummy?.isEngagedInCurrentMatch != true) return
         context.router.present(GamesDestination.Rummy)

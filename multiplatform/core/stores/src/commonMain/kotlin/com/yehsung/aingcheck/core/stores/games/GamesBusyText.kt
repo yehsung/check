@@ -2,6 +2,8 @@
 //       entryBlockNotice) · :763-766(objectParticle) @ 1b8260d
 package com.yehsung.aingcheck.core.stores.games
 
+import com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText
+
 /**
  * 한 사람 한 판(B8) 입구 막힘 문구 — Swift `ChessPhoneText` 의 막힘 절을 [GamesBusyGame] 위에 옮긴 것.
  *
@@ -20,11 +22,14 @@ object GamesBusyText {
         GamesBusyGame.chess -> "체스 판"
         GamesBusyGame.tetris -> "테트리스 대결"
         GamesBusyGame.rummy -> "아잉 큐브 판"
+        // 아잉 뒤집기(판 7 — iOS 1.0.17 `ChessPhoneText.BusyGame.matchNoun` 과 같은 글자). 받침으로 끝나 뒤에 "이" 가 붙는다.
+        GamesBusyGame.reversi -> "${ReversiNoticeText.gameName} 판"
     }
 
     /** 다른 판을 두는 중이라 입구가 막혔다 — "오목을 두는 중이에요" · "체스를 두는 중이에요" · "1:1 테트리스 대결 중이에요". */
     fun busyTitle(playing: GamesBusyGame): String = when (playing) {
-        GamesBusyGame.gomoku, GamesBusyGame.chess -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
+        // 아잉 뒤집기도 돌을 **둔다**(iOS 1.0.17 · 맥 `ReversiText` 의 "두기" 낱말과 같다).
+        GamesBusyGame.gomoku, GamesBusyGame.chess, GamesBusyGame.reversi -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
         GamesBusyGame.tetris -> "${playing.gameName} 대결 중이에요"
         GamesBusyGame.rummy -> "${playing.gameName} 하는 중이에요"
     }

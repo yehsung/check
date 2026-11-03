@@ -222,6 +222,8 @@ struct MahjongCreateRoomSheet: View {
 struct MahjongPracticeStartSheet: View {
     let store: MahjongStore
     let onClose: () -> Void
+    /// 여는 일은 창 루트가 한다 — 처음이면 '처음이에요' 4장 뒤에(§5.7).
+    var onStart: (MahjongPracticeLaunch) -> Void = { _ in }
     @State private var format: MahjongFormat = .tonpuu
 
     var body: some View {
@@ -246,8 +248,7 @@ struct MahjongPracticeStartSheet: View {
             HStack(spacing: 8) {
                 MahjongCapsuleButton(title: MahjongText.close, tint: CheckTheme.secondaryText, filled: false, action: onClose)
                 MahjongCapsuleButton(title: MahjongText.practiceStart, tint: CheckTheme.working) {
-                    onClose()
-                    store.startPractice(format: format, timed: store.practiceTimed)
+                    onStart(MahjongPracticeLaunch(format: format, timed: store.practiceTimed))
                 }
             }
         }

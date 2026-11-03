@@ -74,6 +74,8 @@ enum MahjongMatchLayout {
     static let mySeat = CGRect(x: 0, y: 564, width: 150, height: 96)
     static let hand = CGRect(x: 158, y: 564, width: 790, height: 96)
     static let actions = CGRect(x: 964, y: 564, width: 236, height: 96)
+    /// CL 줄 [반응] 얼굴 단추 폭(루비 판만 — [역][점수표]가 남은 폭을 나눈다).
+    static let reactionButtonWidth: CGFloat = 34
 
     // MARK: 펠트 안 탁자 덩어리 536×502(가운데, 펠트 좌표 x=174)
     static let handStrip: CGFloat = 34

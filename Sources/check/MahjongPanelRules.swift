@@ -45,11 +45,56 @@ enum MahjongRulesText {
     static let hanColumns = [1, 2, 3, 4]
 }
 
+/// 역 목록의 '지금 손으로 될 수 있는 역' 점(§5.7 · UX:436 보조 #9) — **내 손 + 공개 정보만**, R 표면(`MahjongScoring.evaluate`)으로.
+///
+/// 싸고 틀리지 않는 경우만 센다: ① 쯔모한 패를 쥐고 있으면(14장) 그 패로 쯔모 화료가 되는가 ② 13장이면 텐파이일 때
+/// 기다리는 패마다 론·쯔모로 화료해 본다(대기 = 서버 `my_waits`, 없으면 R `MahjongHand.waits`). 둘 다 화료 꼴일 때 붙는 역만이고,
+/// 텐파이 전 손의 '나중에 될지도 모르는 역'은 점을 찍지 않는다(추측이라 틀릴 위험이 크고, 효율 계산기 금지와 같은 선 — UX:446-452).
+/// 일발·영상개화·창깡·해저·하저·천화 같은 '그 순간'의 역은 넣지 않는다(공개 정보로 미리 알 수 없다). 많아야 13대기 × 2 = 26번 계산.
+enum MahjongPossibleYaku {
+    static func of(_ payload: MahjongStatePayload) -> Set<MahjongYaku> {
+        guard let hand = payload.myHand, !hand.isEmpty, let row = payload.mySeatRow else { return [] }
+        let wireMelds = row.melds ?? []
+        let melds = wireMelds.compactMap(\.meld)
+        guard melds.count == wireMelds.count, let seatWind = row.wind.flatMap(MahjongWind.init(rawValue:)) else { return [] }
+        let round = payload.match?.round ?? 0
+        let roundWind = MahjongWind.allCases[max(0, min(3, round))]
+        let riichi = row.riichi == true
+        func yaku(closed: [MahjongTile], win: MahjongTile, tsumo: Bool) -> [MahjongYaku] {
+            let context = MahjongWinContext(closed: closed, melds: melds, win: win, tsumo: tsumo, seatWind: seatWind,
+                                            roundWind: roundWind, riichi: riichi)
+            guard case .success(let score) = MahjongScoring.evaluate(context), score.agari else { return [] }
+            return score.yaku.map(\.yaku)
+        }
+        if let drawn = payload.myDrawn {
+            return Set(yaku(closed: hand, win: drawn, tsumo: true))
+        }
+        let waits = payload.myWaits.flatMap { $0.isEmpty ? nil : $0 }
+            ?? MahjongHand.waits(MahjongTiles.counts34(hand), melds: melds.count)
+        let used = Set(hand.map(\.id) + melds.flatMap { $0.tiles.map(\.id) })
+        var out = Set<MahjongYaku>()
+        for kind in waits where (0..<34).contains(kind) {
+            // 그 종류의 내 손에 없는 패 한 장(적5 는 피한다 — 적도라는 역이 아니다).
+            guard let tile = [3, 2, 1, 0].lazy.compactMap({ MahjongTile(id: kind * 4 + $0) })
+                .first(where: { !used.contains($0.id) && !$0.isRed }) else { continue }
+            out.formUnion(yaku(closed: hand, win: tile, tsumo: false))
+            out.formUnion(yaku(closed: hand, win: tile, tsumo: true))
+        }
+        return out
+    }
+}
+
+extension MahjongText {
+    static let possibleYakuLegend = "● 지금 손으로 될 수 있는 역(내 손과 공개된 정보로만)"
+}
+
 struct MahjongRulesSheet: View {
     let store: MahjongStore
     let tab: MahjongRulesTab
     let onSelect: (MahjongRulesTab) -> Void
     let onClose: () -> Void
+    /// [처음이에요 다시 보기](§5.7 — 연습판은 열지 않는다).
+    var onReopenGuide: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -70,7 +115,15 @@ struct MahjongRulesSheet: View {
             case .scores: scoresBody
             }
             Spacer(minLength: 0)
-            Text(MahjongRulesText.footer).font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+            HStack(spacing: 10) {
+                Text(MahjongRulesText.footer).font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+                Spacer(minLength: 8)
+                if tab == .rules {
+                    MahjongCapsuleButton(title: MahjongText.guideReopen, tint: CheckTheme.working, filled: false, height: 28,
+                                         action: onReopenGuide)
+                        .frame(width: 170)
+                }
+            }
         }
         .padding(20)
         .frame(width: MahjongWindowLayout.rulesSize.width, height: MahjongWindowLayout.rulesSize.height, alignment: .topLeading)
@@ -113,12 +166,18 @@ struct MahjongRulesSheet: View {
     private var yakuBody: some View {
         let table = MahjongRulesText.yakuTable
         let third = (table.count + 2) / 3
+        // 판을 보고 있을 때만(로비의 규칙 창엔 손이 없다).
+        let possible = store.table.map(MahjongPossibleYaku.of) ?? []
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 14) {
                 ForEach(0..<3, id: \.self) { column in
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(table.dropFirst(column * third).prefix(third).enumerated()), id: \.offset) { _, row in
-                            HStack {
+                            HStack(spacing: 6) {
+                                if possible.contains(row.yaku) {
+                                    Circle().fill(CheckTheme.accent).frame(width: 7, height: 7)
+                                        .accessibilityLabel("지금 될 수 있는 역")
+                                }
                                 Text(row.yaku.koreanName).font(.caption.weight(.semibold))
                                 Spacer()
                                 Text(row.open.map { "\(row.closed)판 · 울면 \($0)판" } ?? "\(row.closed)판 · 멘젠만")
@@ -131,6 +190,9 @@ struct MahjongRulesSheet: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+            }
+            if !possible.isEmpty {
+                Text(MahjongText.possibleYakuLegend).font(.caption.weight(.semibold)).foregroundStyle(CheckTheme.accent)
             }
             Text("역만").font(.callout.weight(.bold)).foregroundStyle(CheckTheme.pending)
             Text(MahjongRulesText.yakumanList.map(\.koreanName).joined(separator: " · "))

@@ -105,6 +105,11 @@ enum MahjongText {
     static let emptyRanking = "아직 10판을 채운 사람이 없어요"
     static let gamesUntilRanked = "판 더 하면 순위에 올라요"
     static let firstTimeTitle = "처음이에요"
+    /// 사람 줄 잠금(대국 중 · 업데이트 필요 · 집중 모드) — SF Symbol(이모지 아님).
+    static let lockSymbol = "lock.fill"
+    static let lockedLabel = "지금은 초대할 수 없어요"
+    /// 연습판 봇 자리 카드 꼬리표(UX:359).
+    static let practiceBotTag = "연습 상대"
 
     static func record(avg: Double?, games: Int) -> String {
         guard games >= MahjongRules.rankingMinGames, let avg else { return "\(games)판 · \(recordUnranked)" }
@@ -222,6 +227,8 @@ enum MahjongOverlay: Equatable {
     case rules(MahjongRulesTab)
     case createRoom
     case practiceStart
+    /// '처음이에요' 4장(§5.7) — `launch` 가 있으면 다 본 뒤 그 연습판을 연다(연습 시작에서 왔다), nil 이면 [규칙]에서 다시 보기.
+    case firstTime(page: Int, launch: MahjongPracticeLaunch?)
 }
 
 /// 규칙 창 탭.
@@ -269,11 +276,18 @@ struct MahjongPanel: View {
     var previewOverlay: MahjongOverlay? = nil
     var previewHoverIndex: Int? = nil
     var previewLobbyTab: MahjongLobbyTab? = nil
+    /// '처음이에요'를 봤는지 적는 곳(앱 = 표준 · 시험 = 시험 전용 스위트).
+    var guideDefaults: UserDefaults = .standard
+    /// 반응 말풍선 공급기 — nil 이면 창 루트가 자기 것을 쥔다(렌더 시험은 미리 먹인 것을 넘긴다).
+    var reactionFeed: MahjongReactionFeed? = nil
+    /// 스냅샷 전용: 말풍선·움직임을 이 시각 한 장으로 그린다(앱은 nil — 살아 있는 시계).
+    var previewNow: Date? = nil
 
     @State private var overlay: MahjongOverlay?
     @State private var lobbyTab: MahjongLobbyTab = .users
     /// 판 결과에서 [로비로]·[한 판 더]를 누른 판 id(스토어는 그 판을 들고 있어도 화면은 로비로).
     @State private var dismissedMatchID: String?
+    @State private var ownReactionFeed = MahjongReactionFeed()
     @Environment(\.mahjongCramped) private var cramped
 
     private var shownOverlay: MahjongOverlay? { previewOverlay ?? overlay }
@@ -285,9 +299,12 @@ struct MahjongPanel: View {
             case .table:
                 if let payload = store.table {
                     MahjongTableView(store: store, payload: payload, me: me(), hoverIndex: previewHoverIndex,
+                                     feed: reactionFeed ?? ownReactionFeed, fixedNow: previewNow,
                                      onRules: { overlay = .rules($0) },
                                      onToLobby: { dismissedMatchID = payload.match?.id },
                                      onRematch: { dismissedMatchID = payload.match?.id; overlay = .createRoom })
+                        // 받은 팔레트가 바뀌면(세션에 많아야 한 번) 패 띠를 새 색으로 다시 그린다.
+                        .id(MahjongArt.shared.paletteRevision)
                         .frame(width: MahjongMatchLayout.bodySize.width, height: MahjongMatchLayout.bodySize.height,
                                alignment: .topLeading)
                         .offset(x: MahjongMatchLayout.bodyOrigin.x, y: MahjongMatchLayout.bodyOrigin.y)
@@ -314,8 +331,13 @@ struct MahjongPanel: View {
                 .padding(MahjongWindowLayout.contentPadding)
             }
             if let shown = shownOverlay {
-                MahjongOverlayHost(store: store, overlay: shown, onClose: { overlay = nil },
-                                   onSwitchRules: { overlay = .rules($0) })
+                MahjongOverlayHost(store: store, overlay: shown, onClose: { closeOverlay(shown) },
+                                   onSwitchRules: { overlay = .rules($0) },
+                                   onStartPractice: startPractice,
+                                   onGuidePage: { page in
+                                       if case .firstTime(_, let launch) = shown { overlay = .firstTime(page: page, launch: launch) }
+                                   },
+                                   onReopenGuide: { overlay = .firstTime(page: 0, launch: nil) })
             }
         }
         .frame(width: MahjongWindowLayout.contentSize.width, height: MahjongWindowLayout.contentSize.height,
@@ -331,6 +353,26 @@ struct MahjongPanel: View {
         }
         .onChange(of: store.phase) { _, phase in
             if phase == .playing, overlay == .createRoom || overlay == .practiceStart { overlay = nil }
+        }
+    }
+
+    /// [연습 시작] — 처음이면 '처음이에요' 4장 뒤에 연다(§5.7).
+    private func startPractice(_ launch: MahjongPracticeLaunch) {
+        if let guide = MahjongFirstTimeGuide.overlayBeforePractice(launch, defaults: guideDefaults) {
+            overlay = guide
+            return
+        }
+        overlay = nil
+        store.startPractice(format: launch.format, timed: launch.timed)
+    }
+
+    /// 덮개 닫기 — 안내면 '봤음'을 적고(연습 시작에서 왔으면 연다), 아니면 그냥 닫는다.
+    private func closeOverlay(_ shown: MahjongOverlay) {
+        overlay = nil
+        if case .firstTime(_, let launch) = shown {
+            MahjongFirstTimeGuide.finish(launch: launch, defaults: guideDefaults) { launch in
+                store.startPractice(format: launch.format, timed: launch.timed)
+            }
         }
     }
 }
@@ -360,6 +402,9 @@ struct MahjongOverlayHost: View {
     let overlay: MahjongOverlay
     let onClose: () -> Void
     let onSwitchRules: (MahjongRulesTab) -> Void
+    var onStartPractice: (MahjongPracticeLaunch) -> Void = { _ in }
+    var onGuidePage: (Int) -> Void = { _ in }
+    var onReopenGuide: () -> Void = {}
 
     var body: some View {
         ZStack {
@@ -368,11 +413,13 @@ struct MahjongOverlayHost: View {
                 .onTapGesture(perform: onClose)
             switch overlay {
             case .rules(let tab):
-                MahjongRulesSheet(store: store, tab: tab, onSelect: onSwitchRules, onClose: onClose)
+                MahjongRulesSheet(store: store, tab: tab, onSelect: onSwitchRules, onClose: onClose, onReopenGuide: onReopenGuide)
             case .createRoom:
                 MahjongCreateRoomSheet(store: store, onClose: onClose)
             case .practiceStart:
-                MahjongPracticeStartSheet(store: store, onClose: onClose)
+                MahjongPracticeStartSheet(store: store, onClose: onClose, onStart: onStartPractice)
+            case .firstTime(let page, let launch):
+                MahjongFirstTimeGuideSheet(page: page, launch: launch, onPage: onGuidePage, onFinish: onClose)
             }
         }
         .frame(width: MahjongWindowLayout.contentSize.width, height: MahjongWindowLayout.contentSize.height)
@@ -402,6 +449,8 @@ struct MahjongChip: View {
 /// 캡슐 단추(앱의 둥근 단추 — 다른 마작 앱의 버튼 그림을 쓰지 않는다).
 struct MahjongCapsuleButton: View {
     let title: String
+    /// 글자 앞(또는 글자 대신) SF Symbol — 이모지를 쓰지 않는다(잠금 = `lock.fill`).
+    var systemImage: String? = nil
     var tint: Color = CheckTheme.accent
     var filled = true
     var height: CGFloat = 32
@@ -410,7 +459,12 @@ struct MahjongCapsuleButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
+            HStack(spacing: 4) {
+                if let systemImage {
+                    Image(systemName: systemImage).font(.system(size: max(10, height * 0.38), weight: .bold))
+                }
+                if !title.isEmpty { Text(title) }
+            }
                 .font(.callout.weight(.bold))
                 .foregroundStyle(filled ? Color.white : tint)
                 .lineLimit(1)

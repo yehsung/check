@@ -9,7 +9,7 @@ import Testing
 // 울기 프롬프트 있음/없음 · 리치 무장 흐림 · `wait` "기다리는 중" · 남의 차례 · 자리 비움 · 국 결과(화료·유국) · 판 결과 ·
 // 규칙·역·점수표 · 연습 시작 · 연습 탁자 + 방 띠 · 배율 0.82.
 //
-// 전부 ImageRenderer(scale 2)로 `CheckRenderSettle` 이 굳힌 뒤 재고, `CHECK_SNAPSHOT_DIR/mahjong/` 에 PNG 를 남긴다(사람이 본다).
+// 전부 ImageRenderer(scale 2)로 `CheckRenderSettle` 이 굳힌 뒤 잰다. PNG 는 `MAHJONG_RENDER_DIR` 을 줄 때만 그 폴더에 남긴다(사람이 본다).
 // ★ "노란 상자 0" 을 감지기로 쓰지 않는다. **패는 밝은 크림 덩어리**로 잰다 — 펠트·칸·덮개는 중간 톤이고 패 몸체만 극단 밝기라
 //   '손 칸의 큰 크림 덩어리 수 = 그려진 패 수'다(흐린 패 — 못 버리는 패 — 는 크림이 아니다).
 // ★ 상태는 스토어 문(`applyState` · `applyLobby`)과 `package internal(set)` 칸으로 심는다. S2 서버 픽스처가 아직 없어
@@ -178,6 +178,69 @@ struct V03xxMahjongPanelRenderTests {
     }
 
     @Test
+    func handEndFixtureAgreesWithTheRulesAndTheRealShape() throws {
+        // 없으면: 국 결과 렌더 픽스처가 '론'인데 멘젠쯔모가 붙거나 손에 없는 역(백)이 붙거나, 화료 손에 화료패가 섞이거나(실응답은 13장),
+        // 한 패(id)가 두 곳에 있거나, 실응답에 없는 키를 써서 — 앞뒤 안 맞는 그림을 사람이 보는데도 초록이다.
+        let state = mjHandEnd(win: true)
+        let last = try #require(state["last_hand"] as? [String: Any])
+        let win = try #require((last["wins"] as? [[String: Any]])?.first)
+        // 실응답 모양(키 집합)과 같다.
+        let realURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/mahjong-rpc/mahjong_state__hand_end_double_ron.json")
+        let real = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: realURL)) as? [String: Any])
+        let realLast = try #require((real["state"] as? [String: Any])?["last_hand"] as? [String: Any])
+        let realWin = try #require((realLast["wins"] as? [[String: Any]])?.first)
+        #expect(Set(last.keys) == Set(realLast.keys))
+        #expect(Set(win.keys) == Set(realWin.keys))
+        #expect((realWin["hand"] as? [Int])?.count == 13 && (realWin["hand"] as? [Int])?.contains(realWin["win_tile"] as? Int ?? -1) == false)
+        // 화료 손 13장(화료패 제외) · 같은 id 가 두 곳에 없다(손 · 화료패 · 강 넷 · 부로 · 도라 · 뒷도라).
+        let hand = try #require(win["hand"] as? [Int])
+        let winTile = try #require(win["win_tile"] as? Int)
+        #expect(hand.count == 13 && !hand.contains(winTile))
+        let match = try #require(state["match"] as? [String: Any])
+        let seats = try #require(state["seats"] as? [[String: Any]])
+        var ids = hand + [winTile] + (match["dora_indicators"] as? [Int] ?? []) + (win["ura_indicators"] as? [Int] ?? [])
+        for seat in seats {
+            // 울려 간 패(`taken`)는 강에 표시로 남고 부로에서 센다(CC-08) — 한 번만.
+            ids += (seat["discards"] as? [[String: Any]] ?? []).filter { $0["taken"] as? Bool != true }.compactMap { $0["tile"] as? Int }
+            ids += (seat["melds"] as? [[String: Any]] ?? []).flatMap { $0["tiles"] as? [Int] ?? [] }
+        }
+        #expect(Set(ids).count == ids.count, "같은 패가 두 곳에 있다")
+        let draw = try #require(mjHandEnd(win: false)["last_hand"] as? [String: Any])
+        let tenpai = (draw["tenpai"] as? [[String: Any]] ?? []).flatMap { $0["hand"] as? [Int] ?? [] }
+        #expect(Set(tenpai).count == tenpai.count, "유국 텐파이 손 둘이 같은 패를 쥐었다")
+        for row in draw["tenpai"] as? [[String: Any]] ?? [] {
+            let tiles = (row["hand"] as? [Int] ?? []).compactMap { MahjongTile(id: $0) }
+            #expect(!MahjongHand.waits(MahjongTiles.counts34(tiles), melds: 0).isEmpty, "텐파이 아닌 손이 텐파이 줄에 있다")
+        }
+        // 판·부·역·도라·합계를 R 이 같은 손에서 그대로 낸다(론 = from_seat 있음 → 멘젠쯔모 없음).
+        let decoded = try #require(try mjDecode(state).lastHand?.wins?.first)
+        let seat0 = try #require(seats.first { $0["seat_no"] as? Int == 0 })
+        let context = MahjongWinContext(
+            closed: hand.compactMap { MahjongTile(id: $0) }, win: try #require(MahjongTile(id: winTile)), tsumo: win["from_seat"] is NSNull,
+            seatWind: MahjongWind(rawValue: seat0["wind"] as? String ?? "") ?? .east, roundWind: .east,
+            riichi: seat0["riichi"] as? Bool == true,
+            doraIndicators: (match["dora_indicators"] as? [Int] ?? []).compactMap { MahjongTile(id: $0) },
+            uraIndicators: (win["ura_indicators"] as? [Int] ?? []).compactMap { MahjongTile(id: $0) },
+            honba: match["honba"] as? Int ?? 0, kyoutaku: 2)
+        guard case .success(let score) = MahjongScoring.evaluate(context) else { Issue.record("판정 실패"); return }
+        #expect(score.agari)
+        print("[국 결과 픽스처] R: \(score.yaku.map { "\($0.yaku.rawValue)#\($0.han)" }) \(score.han)판 \(score.fu)부 \(score.limit) "
+              + "도라 \(score.dora) 뒷도라 \(score.ura) 합 \(score.total)")
+        #expect(Set(score.yaku.map { "\($0.yaku.rawValue)#\($0.han)" })
+                == Set((win["yaku"] as? [[Any]] ?? []).map { "\($0[0])#\($0[1])" }), "역이 R 과 다르다")
+        #expect(!(win["yaku"] as? [[Any]] ?? []).contains { $0.first as? String == "menzen_tsumo" }, "론인데 멘젠쯔모")
+        #expect(score.han == decoded.han && score.fu == decoded.fu && score.limit == decoded.limit)
+        #expect(score.dora == decoded.dora && score.aka == decoded.aka && score.ura == decoded.ura)
+        #expect(score.total == decoded.total, "합계가 R 과 다르다(점수 + 본장 + 공탁)")
+        // 점수 이동의 합 = 가져간 리치봉, 국 뒤 점수 = 자리 카드 점수.
+        let deltas = try #require(last["deltas"] as? [Int])
+        #expect(deltas.reduce(0, +) == 2_000 && deltas[0] == score.total)
+        #expect((last["scores_after"] as? [Int]) == seats.sorted { ($0["seat_no"] as? Int ?? 0) < ($1["seat_no"] as? Int ?? 0) }
+            .map { $0["score"] as? Int ?? 0 })
+    }
+
+    @Test
     func matchResultCard() throws {
         // 없으면: 판 결과가 등수·루비 줄 없이 빈 카드여도 초록이다.
         let store = try mjTableStore(mjFinished())
@@ -231,6 +294,192 @@ struct V03xxMahjongPanelRenderTests {
         #expect(mjCreamBlobs(bitmap, rect: mjHandProbe, minHeight: 100) == 14, "연습판도 table 한 길로 손을 그린다")
     }
 
+    // MARK: ⑦-2 처음이에요(U2)
+
+    @Test
+    func firstTimeGuidePagesAndTheRulesReopenButton() throws {
+        // 없으면: '처음이에요' 네 장이 빈 카드거나 모두 같은 장으로 그려지거나(장 넘김이 안 됨), 예시 손이 안 서거나,
+        // [규칙] 창에 [처음이에요 다시 보기]가 없어도 초록이다.
+        let store = try mjLobbyStore()
+        let lobby = try mjBitmap(mjPanel(store))
+        let launch = MahjongPracticeLaunch(format: .tonpuu, timed: false)
+        let size = MahjongFirstTimeGuideSheet.size
+        let card = CGRect(x: (MahjongWindowLayout.contentSize.width - size.width) / 2,
+                          y: (MahjongWindowLayout.contentSize.height - size.height) / 2, width: size.width, height: size.height)
+        var pages: [NSBitmapImageRep] = []
+        for page in 0..<4 {
+            let bitmap = try mjBitmap(mjPanel(store, overlay: .firstTime(page: page, launch: page == 3 ? launch : nil)))
+            mjSave(bitmap, "first-time-\(page + 1)")
+            #expect(mjMaxDiff(bitmap, lobby, card) > 60, "\(page + 1)장이 안 그려졌다")
+            pages.append(bitmap)
+        }
+        for a in 0..<4 { for b in (a + 1)..<4 { #expect(mjMaxDiff(pages[a], pages[b], card) > 60, "\(a + 1)장과 \(b + 1)장이 같다") } }
+        // 첫 장 예시 손(123m456p789s11122z = 14장, 34×46)이 크림 덩어리로 선다.
+        #expect(mjCreamBlobs(pages[0], rect: card, minHeight: 80) == 14, "예시 손 패 수가 틀리다")
+        // [규칙] 탭에만 [처음이에요 다시 보기](오른쪽 아래) — 역 탭과 그 자리가 다르다.
+        let rules = try mjBitmap(mjPanel(store, overlay: .rules(.rules)))
+        let yaku = try mjBitmap(mjPanel(store, overlay: .rules(.yaku)))
+        let sheet = MahjongWindowLayout.rulesSize
+        let origin = CGPoint(x: (MahjongWindowLayout.contentSize.width - sheet.width) / 2,
+                             y: (MahjongWindowLayout.contentSize.height - sheet.height) / 2)
+        let reopen = CGRect(x: origin.x + sheet.width - 20 - 170, y: origin.y + sheet.height - 20 - 28, width: 170, height: 28)
+        #expect(mjInk(rules, reopen) > 300 && mjMaxDiff(rules, yaku, reopen) > 60, "[처음이에요 다시 보기]가 없다")
+    }
+
+    // MARK: ⑦-3 반응 덮개(U2)
+
+    @Test
+    func reactionBubbleStandsAtTheSenderSeatAndTheButtonOnlyInRubyMatches() throws {
+        // 없으면: 받은 반응이 안 그려지거나 보낸 사람 자리(상가 = 왼쪽 카드 옆)가 아닌 곳에 서거나,
+        // [반응] 단추가 루비 판에 없거나 연습판(스토어가 안 보낸다)에 있어도 초록이다.
+        let store = try mjTableStore(mjActive { state in
+            state["reactions"] = [["seat_no": 3, "key": "joy", "at_ms": mjNowMs - 400, "user_id": mjPeople[3].id]]
+        })
+        let feed = MahjongReactionFeed()
+        feed.ingest(try #require(store.table), now: mjNow, serverOffset: store.serverClockOffset)
+        #expect(feed.bubbles.map(\.seatNo) == [3])
+        // 화면이 스스로 먹인다(새 공급기 — `onChange(initial:)`). 기준선은 반응 없는 같은 판.
+        let with = try mjBitmap(mjPanel(store, feed: MahjongReactionFeed()))
+        let without = try mjBitmap(mjPanel(try mjTableStore(mjActive()), feed: MahjongReactionFeed()))
+        mjSave(with, "reaction")
+        let side = RummyReactionBubbleView.height
+        let left = mjBody(MahjongMatchLayout.leftSeat)
+        let bubble = CGRect(x: left.maxX + 6, y: left.midY - side / 2, width: side, height: side)
+        #expect(mjMaxDiff(with, without, bubble) > 60, "상가 자리 옆에 말풍선이 없다")
+        let right = mjBody(MahjongMatchLayout.rightSeat)
+        let elsewhere = CGRect(x: right.minX - 6 - side, y: right.midY - side / 2, width: side, height: side)
+        #expect(mjMaxDiff(with, without, elsewhere) <= 8, "말풍선이 하가 쪽에도 섰다")
+        // [반응]: 루비 판 CL 줄 끝에만.
+        let practice = MahjongStore(clock: { mjNow })
+        practice.practice = MahjongPracticeSession(matchID: "ai-practice-1", format: .tonpuu, timed: false, humanSeat: 0,
+                                                   generation: 1, payload: try mjDecode(mjActive(matchID: "ai-practice-1")))
+        practice.showsPractice = true
+        let practiceBitmap = try mjBitmap(mjPanel(practice))
+        let chrome = mjBody(MahjongMatchLayout.chromeLeft)
+        let button = CGRect(x: chrome.maxX - MahjongMatchLayout.reactionButtonWidth + 4, y: chrome.minY + 10,
+                            width: MahjongMatchLayout.reactionButtonWidth - 8, height: chrome.height - 20)
+        #expect(mjMaxDiff(without, practiceBitmap, button) > 60, "[반응] 단추가 루비 판에만 있지 않다")
+    }
+
+    // MARK: ⑦-3b 지금 될 수 있는 역(U2)
+
+    @Test
+    func yakuSheetDotsTheYakuMyTenpaiHandWouldBring() throws {
+        // 없으면: 판에서 연 역 목록에 '지금 될 수 있는 역' 점이 없거나, 텐파이가 아닌 손에도 점·안내 줄이 그려져도 초록이다.
+        // 내 손 123m456p789s 東東南南(친 · 동장) — 대기 東·南 → 장풍·자풍(東) · 멘젠쯔모.
+        let tenpai = try mjTableStore(mjActive(turnSeat: 3))
+        #expect(MahjongPossibleYaku.of(try #require(tenpai.table)) == [.bakaze, .jikaze, .menzenTsumo])
+        let notTenpai = try mjTableStore(mjActive())   // 쯔모한 적5만을 쥔 14장 — 화료 꼴 아님
+        #expect(MahjongPossibleYaku.of(try #require(notTenpai.table)).isEmpty)
+        let lobby = try mjBitmap(mjPanel(try mjLobbyStore(), overlay: .rules(.yaku)))
+        let dotted = try mjBitmap(mjPanel(tenpai, overlay: .rules(.yaku)))
+        let plain = try mjBitmap(mjPanel(notTenpai, overlay: .rules(.yaku)))
+        mjSave(dotted, "rules-yaku-possible")
+        let sheet = MahjongWindowLayout.rulesSize
+        let inner = CGRect(x: (MahjongWindowLayout.contentSize.width - sheet.width) / 2 + 20,
+                           y: (MahjongWindowLayout.contentSize.height - sheet.height) / 2 + 60, width: sheet.width - 40,
+                           height: sheet.height - 120)
+        #expect(mjMaxDiff(plain, lobby, inner) <= 8, "텐파이가 아닌 손에 점이 찍혔다")
+        #expect(mjMaxDiff(dotted, lobby, inner) > 60, "점이 없다")
+    }
+
+    // MARK: ⑦-5 작은 고침(U2) — 잠금 아이콘 · '넉넉히' 링 · 울기 안내 · 연습 상대 · [치] 패
+
+    @Test
+    func untimedPracticeHidesMyClockAndBotsCarryAPracticeTag() throws {
+        // 없으면: '넉넉히' 연습판(결정 시계 칸 0)에 내 링이 '예비 0'으로 서거나, 봇 자리 카드에 '연습 상대' 꼬리표가 없어도 초록이다.
+        let untimed = try mjPracticeStore(timed: false, payload: mjActive(matchID: "ai-practice-1"))
+        let timed = try mjPracticeStore(timed: true, payload: mjActive(matchID: "ai-practice-1"))
+        let idle = try mjPracticeStore(timed: false, payload: mjActive(matchID: "ai-practice-1") { $0["my_decision"] = NSNull() })
+        let untimedBitmap = try mjBitmap(mjPanel(untimed))
+        let timedBitmap = try mjBitmap(mjPanel(timed))
+        mjSave(untimedBitmap, "practice-untimed")
+        let ring = mjBody(MahjongMatchLayout.mySeat).insetBy(dx: 4, dy: 4)
+        #expect(mjMaxDiff(timedBitmap, untimedBitmap, ring) > 60, "기준선: '실전처럼'에는 링이 선다")
+        #expect(mjMaxDiff(try mjBitmap(mjPanel(idle)), untimedBitmap, ring) <= 8, "'넉넉히'인데 내 링이 섰다")
+        // 연습 상대 — 루비 판의 같은 자리 카드와 다르다(내 카드는 같다).
+        let ruby = try mjBitmap(mjPanel(try mjTableStore(mjActive())))
+        for rect in [MahjongMatchLayout.leftSeat, MahjongMatchLayout.rightSeat, MahjongMatchLayout.topSeat] {
+            #expect(mjMaxDiff(timedBitmap, ruby, mjBody(rect).insetBy(dx: 4, dy: 4)) > 60, "봇 카드에 '연습 상대'가 없다")
+        }
+        #expect(mjMaxDiff(timedBitmap, ruby, ring) <= 8, "내 카드에도 꼬리표가 붙었다")
+        #expect(MahjongText.practiceBotTag == "연습 상대")
+    }
+
+    @Test
+    func idleCallHintSitsAboveThePassButtonOnce() throws {
+        // 없으면: '넉넉히' 울기 안내(5초 뒤)가 화면 어디에도 없거나, 상태 줄과 ACTIONS 에 두 번 쓰여도 초록이다.
+        let payload = mjCall()
+        let hinted = try mjPracticeStore(timed: false, payload: payload)
+        hinted.notice = MahjongNoticeText.practiceIdleCallHint
+        let quiet = try mjPracticeStore(timed: false, payload: payload)
+        let with = try mjBitmap(mjPanel(hinted))
+        let without = try mjBitmap(mjPanel(quiet))
+        mjSave(with, "practice-call-hint")
+        let actions = mjBody(MahjongMatchLayout.actions)
+        let top = CGRect(x: actions.minX, y: actions.minY, width: actions.width, height: 14)
+        #expect(mjMaxDiff(with, without, top) > 60, "ACTIONS 위에 울기 안내가 없다")
+        let status = mjBody(CGRect(x: MahjongMatchLayout.hand.minX, y: MahjongMatchLayout.hand.minY, width: MahjongMatchLayout.hand.width,
+                                   height: MahjongMatchLayout.statusLineHeight))
+        #expect(mjMaxDiff(with, without, status) <= 8, "상태 줄에도 같은 안내가 또 쓰였다")
+    }
+
+    @Test
+    func chiButtonCarriesMyTwoTilesAndLockIsASymbol() throws {
+        // 없으면: [치] 단추가 글자뿐이라 어떤 두 장으로 우는지 모르거나(§5.4), 사람 줄 잠금이 이모지(🔒 — 글꼴마다 다른 그림)여도 초록이다.
+        let bitmap = try mjBitmap(mjPanel(try mjTableStore(mjCall())))
+        mjSave(bitmap, "call-chi-tiles")
+        let actions = mjBody(MahjongMatchLayout.actions)
+        #expect(mjCreamBlobs(bitmap, rect: actions, minHeight: 30) == 2, "[치] 단추에 내 패 두 장이 없다")
+        // 기준선: 퐁만 되는 프롬프트엔 패 그림이 없다.
+        let pon = try mjBitmap(mjPanel(try mjTableStore(mjCall { state in
+            var decision = state["my_decision"] as! [String: Any]
+            decision["chi"] = [] as [Any]
+            decision["pon"] = [[mjID(3, 0), mjID(3, 1)]]
+            state["my_decision"] = decision
+        })))
+        #expect(mjCreamBlobs(pon, rect: actions, minHeight: 30) == 0)
+        #expect(MahjongText.lockSymbol == "lock.fill" && NSImage(systemSymbolName: MahjongText.lockSymbol, accessibilityDescription: nil) != nil)
+        let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/check")
+        for name in try FileManager.default.contentsOfDirectory(atPath: sources.path) where name.hasPrefix("Mahjong") {
+            let text = try String(contentsOf: sources.appendingPathComponent(name), encoding: .utf8)
+            #expect(!text.contains("\u{1F512}"), "\(name) 에 잠금 이모지가 남았다")
+        }
+    }
+
+    // MARK: ⑦-4 움직임(U2)
+
+    @Test
+    func discardSlidesInMidFrameAndStopsUnderReduceMotion() throws {
+        // 없으면: 스토어가 움직임을 두어도 화면이 버린 패를 끝 자리에만 그리거나(움직임 없음), 동작 줄이기에도 미끄러지거나,
+        // 끝난 움직임이 어긋난 채 남아도 초록이다.
+        let store = try mjTableStore(mjActive())
+        let matchID = try #require(store.table?.match?.id)
+        let plain = try mjBitmap(mjPanel(store))
+        // 상가(왼쪽, 자리 3)가 방금 버린 패 — 0.05초 지난 프레임(0.15초 중).
+        store.motion = MahjongMotion(matchID: matchID, handIndex: 2, seq: 39, kind: .discard,
+                                     from: .init(compass: .left, area: .hand), to: .init(compass: .left, area: .river),
+                                     startedAt: mjNow.addingTimeInterval(-0.05))
+        let moving = try mjBitmap(mjPanel(store))
+        mjSave(moving, "motion-discard-mid")
+        let reduced = try mjBitmap(mjPanel(store).environment(\.mahjongReduceMotion, true))
+        let seat3 = try #require(store.table?.seats?.first { $0.seatNo == 3 })
+        let last = try #require(MahjongTableGeometry.river(seat3.discards ?? [], compass: .left).last)
+        let felt = mjBody(MahjongMatchLayout.felt)
+        let block = MahjongMatchLayout.blockOrigin
+        let size = MahjongTileArt.imageSize(last.size, rotation: last.rotation)
+        let slot = CGRect(x: felt.minX + block.x + last.origin.x - MahjongMotionPlan.travel, y: felt.minY + block.y + last.origin.y,
+                          width: size.width + MahjongMotionPlan.travel, height: size.height)
+        #expect(mjMaxDiff(moving, plain, slot) > 60, "버린 패가 움직이지 않았다")
+        #expect(mjMaxDiff(reduced, plain, slot) <= 8, "동작 줄이기에도 움직였다")
+        // 끝난 움직임(1초 전)은 끝 그림 그대로.
+        store.motion = MahjongMotion(matchID: matchID, handIndex: 2, seq: 39, kind: .discard,
+                                     from: .init(compass: .left, area: .hand), to: .init(compass: .left, area: .river),
+                                     startedAt: mjNow.addingTimeInterval(-1))
+        #expect(mjMaxDiff(try mjBitmap(mjPanel(store)), plain, slot) <= 8, "끝난 움직임이 남았다")
+    }
+
     // MARK: ⑧ 배율 0.82
 
     @Test
@@ -278,7 +527,7 @@ private func mjSeats(away: Bool = false) -> [[String: Any]] {
         [mjDisc(33, 2), mjDisc(32, 2), mjDisc(0, 2, tsumogiri: true), mjDisc(8, 2), mjDisc(17, 2), mjDisc(30, 2), mjDisc(9, 2)],
         [mjDisc(29, 2), mjDisc(31, 3), mjDisc(18, 2), mjDisc(7, 2), mjDisc(16, 2), mjDisc(3, 2, riichi: true), mjDisc(20, 2, tsumogiri: true),
          mjDisc(11, 2)],
-        (0..<13).map { mjDisc([5, 6, 15, 19, 21, 23, 10, 22, 30, 32, 33, 6, 15][$0], 3) },
+        (0..<13).map { mjDisc([5, 6, 15, 19, 20, 23, 11, 22, 30, 32, 33, 7, 16][$0], 3) },
         [mjDisc(29, 3), mjDisc(31, 2, taken: true), mjDisc(5, 2), mjDisc(19, 2), mjDisc(10, 3), mjDisc(21, 3)],
     ]
     return (0..<4).map { seat in
@@ -290,7 +539,8 @@ private func mjSeats(away: Bool = false) -> [[String: Any]] {
             "away": seat == 0 && away, "deleted": false,
         ]
         if seat == 1 {
-            row["melds"] = [["type": "pon", "tiles": [mjID(31, 0), mjID(31, 1), mjID(31, 3)], "called": mjID(31, 3), "from_seat": 0]]
+            // 하가(자리 3)가 버린 發(강에 '울려 간 패'로 남았다)을 퐁.
+            row["melds"] = [["type": "pon", "tiles": [mjID(31, 0), mjID(31, 1), mjID(31, 2)], "called": mjID(31, 2), "from_seat": 3]]
         }
         return row
     }
@@ -344,37 +594,56 @@ private func mjCall(wakeMs: Double = mjNowMs - 200, edit: ((inout [String: Any])
     }
 }
 
+/// 국 결과(실응답 `mahjong_state__hand_end_double_ron` 모양 — 화료 손 13장은 화료패를 빼고, 리치 화료만 뒷도라 표시패,
+/// `total` = 점수 + 본장 + 공탁). 화료: 친(자리 0, 동장 동가)이 리치 뒤 대면(자리 2)의 東 으로 론 —
+/// 손 123m4p0p6p789s 東東南南 + 東 → 리치·장풍·자풍·도라 1(7삭)·적도라 1(적5통)·뒷도라 1(5통) = 6판 40부 하네만 18000
+/// + 본장 300 + 공탁 2(리치봉 둘) = 20300.
+/// 판·부·역은 시험이 R `MahjongScoring.evaluate` 로 되묻는다(`handEndFixtureAgreesWithTheRulesAndTheRealShape`).
 private func mjHandEnd(win: Bool) -> [String: Any] {
     mjActive { state in
         var match = state["match"] as! [String: Any]
         match["phase"] = "hand_end"
         match["turn_seat"] = NSNull()
         match["next_hand_ms"] = mjNowMs + 4_000
-        state["match"] = match
         state["my_decision"] = NSNull()
         state["my_drawn"] = NSNull()
+        var seats = state["seats"] as! [[String: Any]]
         if win {
+            match["kyotaku"] = 0   // 리치봉 둘은 화료자가 가져갔다
+            seats[0]["riichi"] = true
+            var river = seats[0]["discards"] as! [[String: Any]]
+            river[3]["riichi"] = true
+            seats[0]["discards"] = river
+            let after = [44_300, 24_000, 7_700, 25_000]
+            for i in 0..<4 { seats[i]["score"] = after[i] }
             state["last_hand"] = [
-                "hand_index": 2, "kind": "win",
+                "hand_index": 2, "kind": "win", "reason": NSNull(),
                 "wins": [[
-                    "seat": 0, "from_seat": 2, "hand": mjHand + [mjID(28, 2)], "melds": [] as [Any], "win_tile": mjID(28, 2),
-                    "yaku": [["riichi", 1], ["yakuhai_haku", 1], ["menzen_tsumo", 1]], "yakuman": 0, "han": 4, "fu": 40,
-                    "limit": "mangan", "dora": 1, "aka": 0, "ura": 0, "ura_indicators": [mjID(12, 3)], "total": 12_000,
+                    "seat": 0, "from_seat": 2, "hand": mjHand, "melds": [] as [Any], "win_tile": mjID(27, 2),
+                    "yaku": [["riichi", 1], ["bakaze", 1], ["jikaze", 1]], "yakuman": 0, "han": 6, "fu": 40,
+                    "limit": "haneman", "dora": 1, "aka": 1, "ura": 1, "ura_indicators": [mjID(12, 3)], "total": 20_300,
                     "pao": NSNull(),
                 ] as [String: Any]],
-                "tenpai": [] as [Any], "nagashi": [] as [Any], "deltas": [13_300, 0, -12_300, 0],
-                "scores_after": [38_300, 24_000, 13_700, 25_000], "bonus_to": NSNull(), "renchan": true,
+                "tenpai": [] as [Any], "nagashi": [] as [Any], "deltas": [20_300, 0, -18_300, 0],
+                "scores_after": after, "bonus_to": 0, "renchan": true,
             ] as [String: Any]
         } else {
+            let after = [26_500, 22_500, 27_500, 23_500]
+            for i in 0..<4 { seats[i]["score"] = after[i] }
             state["last_hand"] = [
                 "hand_index": 2, "kind": "exhaustive", "reason": "exhaustive", "wins": [] as [Any],
-                "tenpai": [["seat": 0, "hand": mjHand, "melds": [] as [Any]], ["seat": 2, "hand": mjHand, "melds": [] as [Any]]],
-                "nagashi": [] as [Any], "deltas": [1_500, -1_500, 1_500, -1_500], "scores_after": [26_500, 22_500, 27_500, 23_500],
+                "tenpai": [["seat": 0, "hand": mjHand, "melds": [] as [Any]], ["seat": 2, "hand": mjOtherTenpai, "melds": [] as [Any]]],
+                "nagashi": [] as [Any], "deltas": [1_500, -1_500, 1_500, -1_500], "scores_after": after,
                 "bonus_to": NSNull(), "renchan": true,
             ] as [String: Any]
         }
+        state["match"] = match
+        state["seats"] = seats
     }
 }
+
+/// 대면(자리 2)의 유국 텐파이 손 345m678m234s56s88p(4·7삭 대기) — 내 손·강·도라와 같은 패(id)가 없다.
+private let mjOtherTenpai = [9, 13, 17, 21, 25, 29, 77, 81, 85, 89, 92, 64, 65]
 
 private func mjFinished() -> [String: Any] {
     mjActive { state in
@@ -423,6 +692,17 @@ private func mjTableStore(_ state: [String: Any]) throws -> MahjongStore {
     let store = MahjongStore(clock: { mjNow })
     let outcome = store.applyState(try mjDecode(state))
     #expect(outcome == .applied)
+    return store
+}
+
+/// 연습판 스토어(사람 자리 0 · 판 = 주어진 state).
+@MainActor
+private func mjPracticeStore(timed: Bool, payload: [String: Any]) throws -> MahjongStore {
+    let store = MahjongStore(clock: { mjNow })
+    store.practice = MahjongPracticeSession(matchID: "ai-practice-1", format: .tonpuu, timed: timed, humanSeat: 0, generation: 1,
+                                            payload: try mjDecode(payload))
+    store.showsPractice = true
+    #expect(store.isPractice)
     return store
 }
 
@@ -482,10 +762,15 @@ private func mjHostedStore(_ label: String) throws -> MahjongStore {
 
 @MainActor
 private func mjPanel(_ store: MahjongStore, overlay: MahjongOverlay? = nil, hover: Int? = nil,
-                     tab: MahjongLobbyTab? = nil) -> MahjongPanel {
+                     tab: MahjongLobbyTab? = nil, feed: MahjongReactionFeed? = nil) -> MahjongPanel {
     MahjongPanel(store: store, me: { ChessPlayerFace(name: "영식", avatarURL: nil, characterID: "shiba") },
-                 clipsOverflowInsteadOfScroll: true, previewOverlay: overlay, previewHoverIndex: hover, previewLobbyTab: tab)
+                 clipsOverflowInsteadOfScroll: true, previewOverlay: overlay, previewHoverIndex: hover, previewLobbyTab: tab,
+                 guideDefaults: mjRenderDefaults, reactionFeed: feed ?? MahjongReactionFeed(), previewNow: mjNow)
 }
+
+/// 렌더 시험의 '처음이에요' 스위트(표준 스위트에 쓰지 않는다).
+@MainActor
+private let mjRenderDefaults = GomokuTestDefaults.make("v03xx-mahjong-render-guide")
 
 // MARK: - 좌표(창 pt) · 픽셀 도우미
 
@@ -595,6 +880,11 @@ private func mjBitmap(_ view: some View) throws -> NSBitmapImageRep {
     return bitmap
 }
 
+/// 사람이 볼 PNG — `MAHJONG_RENDER_DIR` 을 줄 때만 그 폴더에 쓴다(주지 않으면 아무 데도 안 쓴다 — 임시 폴더에 쌓이지 않게).
 private func mjSave(_ bitmap: NSBitmapImageRep, _ name: String) {
-    MiniGameSnapshots.save(bitmap, name: "\(name).png", sub: "mahjong")
+    guard let dir = ProcessInfo.processInfo.environment["MAHJONG_RENDER_DIR"], !dir.isEmpty,
+          let png = bitmap.representation(using: .png, properties: [:]) else { return }
+    let folder = URL(fileURLWithPath: dir, isDirectory: true)
+    try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    try? png.write(to: folder.appendingPathComponent("\(name).png"))
 }

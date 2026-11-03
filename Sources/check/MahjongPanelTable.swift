@@ -108,6 +108,10 @@ struct MahjongTableView: View {
     let payload: MahjongStatePayload
     let me: ChessPlayerFace
     var hoverIndex: Int? = nil
+    /// 반응 말풍선(§5.3) — 창 루트가 쥔 공급기.
+    var feed = MahjongReactionFeed()
+    /// 스냅샷 전용 시각(앱 nil).
+    var fixedNow: Date? = nil
     let onRules: (MahjongRulesTab) -> Void
     var onToLobby: () -> Void = {}
     var onRematch: () -> Void = {}
@@ -129,6 +133,10 @@ struct MahjongTableView: View {
                     MahjongCapsuleButton(title: MahjongText.scoreTable, tint: CheckTheme.secondaryText, filled: false) {
                         onRules(.scores)
                     }
+                    if canReact {
+                        MahjongReactionButton(store: store, feed: feed, payload: payload)
+                            .frame(width: MahjongMatchLayout.reactionButtonWidth)
+                    }
                 }
                 .padding(.vertical, 7)
             }
@@ -146,14 +154,27 @@ struct MahjongTableView: View {
             place(MahjongMatchLayout.aids) { MahjongAidsBox(store: store) }
             place(MahjongMatchLayout.leftSeat) { seatCard(.left, style: .side) }
             place(MahjongMatchLayout.rightSeat) { seatCard(.right, style: .side) }
-            place(MahjongMatchLayout.felt) { MahjongFeltView(store: store, payload: payload) }
+            place(MahjongMatchLayout.felt) { MahjongFeltView(store: store, payload: payload, fixedNow: fixedNow) }
             place(MahjongMatchLayout.mySeat) { seatCard(.bottom, style: .mine) }
-            place(MahjongMatchLayout.hand) { MahjongHandView(store: store, payload: payload, hoverIndex: hoverIndex) }
+            place(MahjongMatchLayout.hand) {
+                MahjongHandView(store: store, payload: payload, hoverIndex: hoverIndex, fixedNow: fixedNow)
+            }
             place(MahjongMatchLayout.actions) { MahjongActionsView(store: store, payload: payload) }
             overlays
         }
         .frame(width: MahjongMatchLayout.bodySize.width, height: MahjongMatchLayout.bodySize.height, alignment: .topLeading)
+        // 반응 말풍선 — 자리 카드 앵커(`rummyReactionAnchor`) 위(큐브 덮개 그대로, 방위는 `compass:` 클로저).
+        .rummyReactionLayer(bubbles: feed.bubbles, compass: { MahjongReactionCompass.of(seat: $0, mySeat: mySeat) },
+                            fixedNow: fixedNow)
+        .onChange(of: payload.reactions, initial: true) { _, _ in
+            feed.ingest(payload, now: store.clock(), serverOffset: store.serverClockOffset)
+        }
+        // 판 화면이 처음 뜰 때 한 번 펠트·팔레트를 조건부로 받는다(시험 중엔 아무것도 안 한다).
+        .onAppear { MahjongArt.shared.refreshIfNeeded() }
     }
+
+    /// 반응을 보낼 수 있는 판 — 루비 판이 진행 중일 때만(연습판은 스토어가 보내지 않는다).
+    private var canReact: Bool { !store.isPractice && match?.matchStatus == .active }
 
     @ViewBuilder
     private var overlays: some View {
@@ -185,6 +206,7 @@ struct MahjongTableView: View {
     private func seatCard(_ compass: MahjongCompass, style: MahjongSeatCard.Style) -> some View {
         if let seat = seat(compass) {
             MahjongSeatCard(store: store, payload: payload, seat: seat, style: style, me: compass == .bottom ? me : nil)
+                .rummyReactionAnchor(seatNo: seat.seatNo, edge: MahjongReactionCompass.edge(compass))
         } else {
             Color.clear
         }
@@ -263,6 +285,8 @@ struct MahjongSeatCard: View {
     var me: ChessPlayerFace?
 
     private var isMine: Bool { style == .mine }
+    /// 연습판의 남 자리 = 봇(UX:359 '연습 상대' 꼬리표).
+    private var isPracticeBot: Bool { store.isPractice && seat.seatNo != payload.mySeat }
     private var isTurn: Bool { payload.match?.phase == "turn" && payload.match?.turnSeat == seat.seatNo }
     private var name: String { seat.deleted == true ? MahjongText.deletedChip : (me?.name ?? seat.user?.displayName ?? "?") }
 
@@ -316,7 +340,11 @@ struct MahjongSeatCard: View {
     private var top: some View {
         HStack(spacing: 8) {
             avatar(30)
-            Text(name).font(.callout.weight(.semibold)).lineLimit(1).frame(maxWidth: 110, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name).font(.callout.weight(.semibold)).lineLimit(1)
+                if isPracticeBot { botTag }
+            }
+            .frame(maxWidth: 110, alignment: .leading)
             score
             HStack(spacing: 3) { chips }
             Spacer(minLength: 0)
@@ -327,7 +355,10 @@ struct MahjongSeatCard: View {
     private var side: some View {
         VStack(spacing: 8) {
             avatar(52)
-            Text(name).font(.callout.weight(.semibold)).lineLimit(1)
+            VStack(spacing: 2) {
+                Text(name).font(.callout.weight(.semibold)).lineLimit(1)
+                if isPracticeBot { botTag }
+            }
             score
             VStack(spacing: 4) {
                 HStack(spacing: 3) {
@@ -341,6 +372,14 @@ struct MahjongSeatCard: View {
             }
         }
         .padding(10)
+    }
+
+    /// '연습 상대' 꼬리표(작은 글자 — 칩보다 가볍게).
+    private var botTag: some View {
+        Text(MahjongText.practiceBotTag)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(CheckTheme.working)
+            .lineLimit(1)
     }
 
     private var mine: some View {
@@ -374,6 +413,8 @@ struct MahjongSeatCard: View {
 struct MahjongFeltView: View {
     let store: MahjongStore
     let payload: MahjongStatePayload
+    /// 스냅샷 전용 시각(움직임 한 장) — 앱 nil.
+    var fixedNow: Date? = nil
 
     private var mySeat: Int { payload.mySeat ?? 0 }
 
@@ -386,24 +427,19 @@ struct MahjongFeltView: View {
         let block = CGSize(width: MahjongMatchLayout.blockWidth, height: MahjongMatchLayout.blockHeight)
         let origin = MahjongMatchLayout.blockOrigin
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 18, style: .continuous).fill(MahjongFeltStyle.felt)
-            RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(MahjongFeltStyle.rim, lineWidth: 3)
+            // 받은 펠트 그림(Storage `game-art/mahjong/table.png`) 또는 코드 펠트 색 — 번들 사본 없음.
+            MahjongFeltSurface()
             ZStack(alignment: .topLeading) {
-                ForEach(MahjongCompass.allCases, id: \.self) { compass in
-                    if let seat = seatRow(compass) {
-                        MahjongTileStrip(
-                            tiles: MahjongTableGeometry.river(seat.discards ?? [], compass: compass,
-                                                              highlightLast: lastDiscarder == seat.seatNo),
-                            size: block, cornerLabels: store.aids.cornerLabels,
-                            accessibilityText: "\(compassName(compass)) 버림패 \(seat.discards?.count ?? 0)장")
-                        if compass != .bottom {
-                            MahjongTileStrip(
-                                tiles: MahjongTableGeometry.handStrip(count: seat.handCount ?? 0, melds: seat.melds ?? [],
-                                                                      compass: compass),
-                                size: block, cornerLabels: false,
-                                accessibilityText: "\(compassName(compass)) 손 \(seat.handCount ?? 0)장 · 울음 \(seat.melds?.count ?? 0)")
+                // 강·상대 손 띠 — 움직임(버림·울기·깡)이 있을 때만 프레임이 돈다. 펠트에는 입력이 없다.
+                MahjongMotionFrames(store: store, payload: payload, fixedNow: fixedNow) { motion, now in
+                    ZStack(alignment: .topLeading) {
+                        ForEach(MahjongCompass.allCases, id: \.self) { compass in
+                            if let seat = seatRow(compass) {
+                                seatStrips(seat, compass: compass, motion: motion, now: now, block: block)
+                            }
                         }
                     }
+                    .frame(width: block.width, height: block.height, alignment: .topLeading)
                 }
                 MahjongCenterBoard(store: store, payload: payload)
                     .frame(width: MahjongMatchLayout.centerSide, height: MahjongMatchLayout.centerSide)
@@ -417,6 +453,35 @@ struct MahjongFeltView: View {
     private func seatRow(_ compass: MahjongCompass) -> MahjongStateSeat? {
         let number = MahjongSeatCompass.seat(at: compass, mySeat: mySeat)
         return payload.seats?.first { $0.seatNo == number }
+    }
+
+    /// 한 자리의 강 + (남이면) 손 띠. 움직이는 패(방금 버린 패 · 방금 운 부로)는 띠에서 빼 따로 끝 자리 + 어긋남으로 그린다.
+    @ViewBuilder
+    private func seatStrips(_ seat: MahjongStateSeat, compass: MahjongCompass, motion: MahjongMotion?, now: Date,
+                            block: CGSize) -> some View {
+        let river = MahjongTableGeometry.river(seat.discards ?? [], compass: compass, highlightLast: lastDiscarder == seat.seatNo)
+        let discarding = motion.flatMap { $0.kind == .discard && $0.to.compass == compass && !river.isEmpty ? $0 : nil }
+        MahjongTileStrip(tiles: discarding == nil ? river : Array(river.dropLast()), size: block,
+                         cornerLabels: store.aids.cornerLabels,
+                         accessibilityText: "\(compassName(compass)) 버림패 \(seat.discards?.count ?? 0)장")
+        if let discarding, let last = river.last {
+            MahjongMovingTile(tile: last, offset: MahjongMotionPlan.offset(discarding, now: now),
+                              tilt: MahjongMotionPlan.tilt(discarding, discard: seat.discards?.last, now: now),
+                              cornerLabels: store.aids.cornerLabels)
+                .frame(width: block.width, height: block.height, alignment: .topLeading)
+        }
+        if compass != .bottom {
+            let strip = MahjongTableGeometry.handStrip(count: seat.handCount ?? 0, melds: seat.melds ?? [], compass: compass)
+            let melding = motion.flatMap { MahjongMotionPlan.movesNewestMeld($0, compass: compass, melds: seat.melds ?? []) ? $0 : nil }
+            let moving = melding == nil ? 0 : min(strip.count, seat.melds?.last?.tiles.count ?? 0)
+            MahjongTileStrip(tiles: Array(strip.dropLast(moving)), size: block, cornerLabels: false,
+                             accessibilityText: "\(compassName(compass)) 손 \(seat.handCount ?? 0)장 · 울음 \(seat.melds?.count ?? 0)")
+            if let melding, moving > 0 {
+                MahjongTileStrip(tiles: Array(strip.suffix(moving)), size: block, cornerLabels: false)
+                    .offset(MahjongMotionPlan.offset(melding, now: now))
+                    .accessibilityHidden(true)
+            }
+        }
     }
 
     private func compassName(_ compass: MahjongCompass) -> String {

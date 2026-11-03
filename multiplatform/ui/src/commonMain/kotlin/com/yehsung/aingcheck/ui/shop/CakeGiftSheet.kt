@@ -203,15 +203,16 @@ private fun Invite(sheet: MeCakeGiftSheet) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // 줄 수를 막지 않는다(검토 ISUL-2): 시트는 세로로 스크롤되고, 맥의 lineLimit 2 는 고정 창 몫이다(그래서 맥은 0.75 배 줄이기를 같이 건다).
+        // 막으면 좁은 폰 · 큰 글꼴(2.0 배 — 본문은 320dp, 긴 한 줄은 360dp 에서 3 줄)에서 뒷부분이 말줄임도 없이 사라진다 — 줄을 늘려 다 보인다.
         if (note != null) {
-            Text(note, style = MeType.title3.copy(fontWeight = FontWeight.Bold), color = c.label, textAlign = TextAlign.Center, maxLines = 2)
+            Text(note, style = MeType.title3.copy(fontWeight = FontWeight.Bold), color = c.label, textAlign = TextAlign.Center)
         }
         Text(
             copy.body,
             style = if (note == null) MeType.headline else MeType.footnote,
             color = if (note == null) c.label else c.label2,
             textAlign = TextAlign.Center,
-            maxLines = 2,
         )
     }
     Column(

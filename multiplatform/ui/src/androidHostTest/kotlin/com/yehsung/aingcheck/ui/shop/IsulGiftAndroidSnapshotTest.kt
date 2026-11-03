@@ -15,12 +15,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import com.yehsung.aingcheck.core.rules.character.gift.DrinkGiftText
 import com.yehsung.aingcheck.core.stores.me.MeCakeGiftSheet
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.dismissCakeGiftSheet
@@ -82,6 +88,44 @@ class IsulGiftAndroidSnapshotTest {
             return frame(true, W, SHEET_H) { MeCakeGiftSheetContent(store, sheet, scrolls = false) }
         }
         check("drink-gift-dark", scene(null), scene("짠"), maxChangedFraction = 0.35)
+    }
+
+    /**
+     * 검토 ISUL-2: 좁은 폰 · 큰 글꼴(2.0 배)에서 초대장 카드의 글(운영자 한 줄 · 본문)이 말없이 잘리지 않고 줄을 늘린다. 시트는 세로로
+     * 스크롤되므로 줄 수를 막을 까닭이 없다(맥은 고정 창이라 lineLimit 2 + minimumScaleFactor 0.75 였다). 한 줄이 없으면 본문이 큰 글(headline),
+     * 긴 한 줄이 있으면 그 줄이 큰 글(title3)이다 — 둘 다 큰 글이 2 줄을 넘는 배치에서 잰다(실측: 본문 320dp 3 줄 · 한 줄 360dp 3 줄.
+     * 본문은 360dp 에선 이 렌더러 글꼴로 2 줄에 든다). 수리 전(maxLines = 2) 빨강: 본문 320dp "잘렸다(줄 2)".
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun inviteCardTextWrapsInsteadOfClippingAtLargeFontScale() {
+        val longNote = "오늘 하루도 정말 고생 많았어요. 퇴근길에 한잔하면서 푹 쉬어요!"
+        for ((note, width) in listOf(null to 320, longNote to 360)) {
+            val (store, sheet) = drinkStore(note)
+            runComposeUiTest {
+                setContent {
+                    val base = LocalDensity.current
+                    CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale = 2f)) {
+                        frame(false, width, 1600) { MeCakeGiftSheetContent(store, sheet, scrolls = false) }()
+                    }
+                }
+                waitForIdle()
+                for (text in listOfNotNull(note, DrinkGiftText.body)) {
+                    val node = onNode(hasText(text), useUnmergedTree = true).fetchSemanticsNode()
+                    val layouts = mutableListOf<TextLayoutResult>()
+                    node.config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+                    val layout = layouts.single()
+                    println("AINGCHECK-INVITE-LINES note=${note != null} w=$width text=${text.take(8)} lines=${layout.lineCount} overflow=${layout.hasVisualOverflow}")
+                    assertFalse("'$text' 이(가) 잘렸다(줄 ${layout.lineCount}) — 말줄임도 없이 뒷부분이 사라진다", layout.hasVisualOverflow)
+                    assertEquals("'$text' 의 마지막 글자까지 그린다", text.length, layout.getLineEnd(layout.lineCount - 1, visibleEnd = true))
+                }
+                // 잴 만한 배치인가(기준선): 큰 글은 이 크기에서 2 줄을 넘는다 — 넘지 않으면 이 시험은 잘림을 잡지 못한다.
+                val big = note ?: DrinkGiftText.body
+                val layouts = mutableListOf<TextLayoutResult>()
+                onNode(hasText(big), useUnmergedTree = true).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(layouts)
+                assertTrue("큰 글이 2 줄을 넘는 배치여야 한다(${layouts.single().lineCount})", layouts.single().lineCount > 2)
+            }
+        }
     }
 
     /** 받지 않고 닫은 뒤 나 탭의 다시 열기 줄 — "짠! 선물이 왔어요" [받기] + 🥂. 기준선: 생일 선물 줄. */

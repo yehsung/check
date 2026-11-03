@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/CharacterKit/CharacterCatalog.swift @ 1b8260d
+// 원본: Sources/CheckCore/CharacterKit/CharacterCatalog.swift @ 12624739(이슬 아잉이 · 생일/술 선물 목록)
 package com.yehsung.aingcheck.core.rules.character
 
 import com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds
@@ -18,7 +18,7 @@ class CharacterCatalog(entries: List<Entry>) {
     private val entries: Map<String, Entry>
 
     init {
-        // 아잉(과 내장 다섯)은 항상 들어가고 항상 이긴다 — 번들이 같은 id 를 실어 보내도 덮어쓰지 못한다.
+        // 아잉(과 내장 여섯)은 항상 들어가고 항상 이긴다 — 번들이 같은 id 를 실어 보내도 덮어쓰지 못한다.
         val map = LinkedHashMap<String, Entry>()
         val builtInIDs = builtIns.map { it.id }.toSet()
         for (entry in entries) if (entry.manifest.id !in builtInIDs) map[entry.manifest.id] = entry
@@ -30,7 +30,7 @@ class CharacterCatalog(entries: List<Entry>) {
 
     fun entry(id: String): Entry? = entries[id]
 
-    /** 표시 순서: **내장 다섯(내장 순서 그대로) 다음 나머지 id 정렬**. 케이크 둘은 정렬로는 금 앞이라 내장 순서가 아니면 자리가 틀린다. */
+    /** 표시 순서: **내장 여섯(내장 순서 그대로) 다음 나머지 id 정렬**. 케이크 둘은 정렬로는 금 앞이라 내장 순서가 아니면 자리가 틀린다. */
     val allIDs: List<String>
         get() {
             val builtInIDs = builtIns.map { it.id }
@@ -71,9 +71,16 @@ class CharacterCatalog(entries: List<Entry>) {
         val builtInCakeStrawberryAing = CharacterManifest(id = cakeStrawberryAingID, displayName = "딸기 케이크 아잉이", kind = CharacterManifest.Kind.scene3D)
         val builtInCakeChocoAing = CharacterManifest(id = cakeChocoAingID, displayName = "초코 케이크 아잉이", kind = CharacterManifest.Kind.scene3D)
 
-        /** 내장 항목 전부 — **표시 순서 그대로**(아잉, 황금, 무지개, 딸기, 초코). */
+        /**
+         * 이슬 아잉이(맥 0.3.74 · Android 판 7 — '술 한잔' 선물 전용: 루비 · 뽑기 · 조각으로 못 얻고 운영자가 지급한 술 선물에서 고를 것 없이 받는다).
+         * 서버 CHECK·가격표(`gift_only = true` · `gift_kind = 'drink'`)의 id 와 같다. Android 는 3D 를 그리지 않고 정지 초상을 쓴다(케이크와 같다).
+         */
+        const val isulAingID = BuiltInCharacterIds.isulAingID
+        val builtInIsulAing = CharacterManifest(id = isulAingID, displayName = "이슬 아잉이", kind = CharacterManifest.Kind.scene3D)
+
+        /** 내장 항목 전부 — **표시 순서 그대로**(아잉, 황금, 무지개, 딸기, 초코, 이슬). */
         val builtIns: List<CharacterManifest> = listOf(
-            builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing,
+            builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
         )
 
         /** 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 그 id 다). */
@@ -88,14 +95,24 @@ class CharacterCatalog(entries: List<Entry>) {
 
         fun isCakeAing(id: String?): Boolean = BuiltInCharacterIds.isCakeAing(id)
 
+        /** 이슬 아잉이인가(정확히 `aing_isul` 만). */
+        fun isIsulAing(id: String?): Boolean = BuiltInCharacterIds.isIsulAing(id)
+
         /**
-         * 생일 선물로만 얻는 내장(딸기 · 초코 케이크) — 서버 `gift_only` 표식이 빠져도 루비 · 뽑기 · 조각으로는 못 얻는다.
-         * INV-CharacterCatalog-d7d845ac 이식: [isGachaOnlyBuiltIn] 과 **겹치지 않는다**(케이크는 뽑기 전용이 아니다 — 뽑기 화면 · 확률표 ·
-         * 교환 목록에 서지 않는다). 서버가 케이크 행에 `gacha_only = true` 도 싣지만 '뽑기 전용' 판정은 선물 전용을 먼저 본다.
+         * 선물로만 얻는 내장(딸기 · 초코 케이크 · 이슬) — 서버 `gift_only` 표식이 빠져도 루비 · 뽑기 · 조각으로는 못 얻는다.
+         * INV-CharacterCatalog-d7d845ac 이식: [isGachaOnlyBuiltIn] 과 **겹치지 않는다**(선물 전용은 뽑기 전용이 아니다 — 뽑기 화면 · 확률표 ·
+         * 교환 목록에 서지 않는다). 서버가 선물 행에 `gacha_only = true` 도 싣지만 '뽑기 전용' 판정은 선물 전용을 먼저 본다.
+         * ★ '루비로 못 산다 · 잠긴 칸' 뜻으로만 쓴다 — 케이크(생일) 뜻이면 [birthdayGiftBuiltInIDs], 종류별 문구는 `CharacterGiftKind.ofBuiltIn`.
          */
         fun isGiftOnlyBuiltIn(id: String?): Boolean = BuiltInCharacterIds.isGiftOnlyBuiltIn(id)
 
-        /** 생일 선물 내장의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 선물 선택지 순서가 같다). */
+        /** 생일 선물 내장의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 선물 선택지 순서가 같다). 상점 번호 4 의 재료다. */
+        val birthdayGiftBuiltInIDs: List<String> = BuiltInCharacterIds.birthdayGiftBuiltInIDs
+
+        /** 술 한잔 선물 내장(이슬 하나). 상점 번호 5 의 재료다. */
+        val drinkGiftBuiltInIDs: List<String> = BuiltInCharacterIds.drinkGiftBuiltInIDs
+
+        /** 선물 전용 내장 **전부**(생일 → 술, 표시 순서) — '루비로 못 산다 · 잠긴 칸' 뜻으로만. 케이크 뜻 자리에 쓰지 마라(설계서 §2). */
         val giftOnlyBuiltInIDs: List<String> = BuiltInCharacterIds.giftOnlyBuiltInIDs
 
         /** 폴더 없는 매니페스트만으로 만드는 편의 생성자(시험·메모리 카탈로그). */

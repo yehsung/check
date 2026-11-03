@@ -419,7 +419,7 @@ object TileSparkle {
     fun solid(colors: AingColors, finish: CharacterManifest.Finish): androidx.compose.ui.graphics.Color? = when (finish) {
         CharacterManifest.Finish.rainbow -> if (colors.isDark) null else colors.rainbowStops[5]
         CharacterManifest.Finish.gold, CharacterManifest.Finish.standard,
-        CharacterManifest.Finish.cakeStrawberry, CharacterManifest.Finish.cakeChoco -> colors.gold
+        CharacterManifest.Finish.cakeStrawberry, CharacterManifest.Finish.cakeChoco, CharacterManifest.Finish.isul -> colors.gold
     }
 }
 

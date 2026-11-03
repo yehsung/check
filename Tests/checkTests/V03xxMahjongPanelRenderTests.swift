@@ -298,6 +298,28 @@ struct V03xxMahjongPanelRenderTests {
         #expect(mjMaxDiff(without, practiceBitmap, button) > 60, "[반응] 단추가 루비 판에만 있지 않다")
     }
 
+    // MARK: ⑦-3b 지금 될 수 있는 역(U2)
+
+    @Test
+    func yakuSheetDotsTheYakuMyTenpaiHandWouldBring() throws {
+        // 없으면: 판에서 연 역 목록에 '지금 될 수 있는 역' 점이 없거나, 텐파이가 아닌 손에도 점·안내 줄이 그려져도 초록이다.
+        // 내 손 123m456p789s 東東南南(친 · 동장) — 대기 東·南 → 장풍·자풍(東) · 멘젠쯔모.
+        let tenpai = try mjTableStore(mjActive(turnSeat: 3))
+        #expect(MahjongPossibleYaku.of(try #require(tenpai.table)) == [.bakaze, .jikaze, .menzenTsumo])
+        let notTenpai = try mjTableStore(mjActive())   // 쯔모한 적5만을 쥔 14장 — 화료 꼴 아님
+        #expect(MahjongPossibleYaku.of(try #require(notTenpai.table)).isEmpty)
+        let lobby = try mjBitmap(mjPanel(try mjLobbyStore(), overlay: .rules(.yaku)))
+        let dotted = try mjBitmap(mjPanel(tenpai, overlay: .rules(.yaku)))
+        let plain = try mjBitmap(mjPanel(notTenpai, overlay: .rules(.yaku)))
+        mjSave(dotted, "rules-yaku-possible")
+        let sheet = MahjongWindowLayout.rulesSize
+        let inner = CGRect(x: (MahjongWindowLayout.contentSize.width - sheet.width) / 2 + 20,
+                           y: (MahjongWindowLayout.contentSize.height - sheet.height) / 2 + 60, width: sheet.width - 40,
+                           height: sheet.height - 120)
+        #expect(mjMaxDiff(plain, lobby, inner) <= 8, "텐파이가 아닌 손에 점이 찍혔다")
+        #expect(mjMaxDiff(dotted, lobby, inner) > 60, "점이 없다")
+    }
+
     // MARK: ⑦-4 움직임(U2)
 
     @Test

@@ -16,7 +16,12 @@ import Testing
 //   "칸 가운데 50% 상자에 극단 픽셀이 있는가" 가 곧 "그 칸에 돌이 섰는가" 이고, 돌 잉크 칸 수 = 판의 돌 수여야 한다.
 // ★ **합법 수 점은 서버 목록만 그린다**(DEC:26). 진짜 판에서는 서버 목록과 로컬 규칙이 늘 같아 이 규칙을 못 잰다 —
 //   그래서 시작 판 흑 차례에 서버가 `[19]` 만 준 **어긋난 기준선**을 그려 점 덩어리 1 대 4 로 가른다(CCT I7).
-// 상태는 `package internal(set)` 칸에 직접 심는다(C1 뼈대의 `applyState`/`applyLobby` 몸통은 갈래 C 가 채우는 중이다).
+// 상태는 **서버 픽스처 원문**(`Fixtures/reversi-rpc` — 하네스 Postgres 가 실제로 낸 응답)을 스토어 문 `applyState` · `applyLobby` ·
+// `applyRanking` · `applyWatch` 로 넣어 세운다(SPEC §6.3 U 줄 v1.1 · CCT B1) — 와이어 디코딩 → 스토어 매핑 → 화면을 한 줄로 잰다.
+// 원문을 바꾼 곳은 `rvFixtureStore(…) { 바꾼 칸 }` 으로 그 칸만 적는다(어긋난 기준선 · 결과가 갈리는 입력).
+// 원문이 없는 장면만 `package internal(set)` 칸에 심는다: 규칙으로 만든 중반 판 여럿(③) · 뒤집기 시각(⑤의 `flip`) · 로비 "대결 중"
+// 목록(원문 로비의 matches 가 비어 있다) · 긴 관전 기록(⑧) · AI 판(⑨ — 서버가 없다). 상대 차례 점(②)은 원문 길과 심은 길을 둘 다 그린다
+// (점을 막는 문이 스토어 `applyState` 와 계산 칸 둘이다 — 메모리 client-gates-come-in-pairs).
 // 스토어에 host 를 물리지 않아 네트워크는 한 건도 안 나간다. 시각은 `previewNow` 로 고정한다(30초 링 · 뒤집기 프레임).
 
 @MainActor
@@ -27,8 +32,14 @@ struct V03xxReversiPanelRenderTests {
     /// 없으면: 로비 세 열이 크롬(카드 테두리·제목)만 그리고 내용(사람·순위·대결 중·신청)이 비어도 초록이다.
     @Test
     func theLobbyDrawsInkInAllThreeColumns() throws {
-        let full = try rvBitmap(rvPanel(rvLobbyStore()))
-        let bare = try rvBitmap(rvPanel(rvLobbyStore(populated: false)))
+        let filled = try rvLobbyStore()
+        // 원문 로비(받은 쪽 B)가 스토어를 지나 화면 값이 됐다 — 사람 · 받은 신청 · 순위.
+        #expect(try rvViewer("reversi_lobby__incoming") == rvB)
+        #expect(filled.users.count >= 5, "원문 로비의 사람이 \(filled.users.count)명만 옮겨졌다")
+        #expect(filled.incoming.count == 1 && filled.incoming.first?.peer.id == rvA, "원문 받은 신청(A → B)이 카드가 안 됐다")
+        #expect((filled.ranking?.entries.count ?? 0) == 2, "원문 순위 두 줄이 안 옮겨졌다")
+        let full = try rvBitmap(rvPanel(filled))
+        let bare = try rvBitmap(rvPanel(try rvLobbyStore(populated: false)))
         rvSave(full, "lobby")
         rvSave(bare, "lobby-empty")
 
@@ -46,7 +57,7 @@ struct V03xxReversiPanelRenderTests {
         }
 
         // 판돈 창(가운데 작은 창)도 그린다 — 사람이 보는 PNG.
-        let stake = try rvBitmap(rvPanel(rvLobbyStore(), previewStakeTarget: rvMinsu, previewStakeSelection: .five))
+        let stake = try rvBitmap(rvPanel(try rvLobbyStore(), previewStakeTarget: rvMinsu, previewStakeSelection: .five))
         rvSave(stake, "lobby-stake-prompt")
         #expect(rvMaxChannelDifference(stake, full, rect: rvCenterRect) > 60, "판돈 창이 안 그려졌다")
     }
@@ -56,8 +67,14 @@ struct V03xxReversiPanelRenderTests {
     /// ★ 없으면: 판이 `ReversiRules.legalMoves` 로 점을 그려도(DEC:26 위반) 초록이다 — 진짜 판에서는 두 목록이 늘 같다.
     @Test
     func myTurnDotsFollowTheServerListNotTheRules() throws {
-        let four = try rvBitmap(rvPanel(rvPlayingStore(legalMoves: [19, 26, 37, 44])))
-        let one = try rvBitmap(rvPanel(rvPlayingStore(legalMoves: [19])))
+        // 원문: 수락 직후 B(흑) 차례 · 시작 판 · 서버 합법 수 넷. 기준선은 같은 원문에서 legal_moves 만 [19] 로 바꾼 것.
+        #expect(try rvViewer("reversi_state__my_turn") == rvB)
+        let fourStore = try rvFixtureStore("reversi_state__my_turn")
+        let oneStore = try rvFixtureStore("reversi_state__my_turn") { $0["legal_moves"] = [19] }   // 바꾼 칸: legal_moves
+        #expect(fourStore.match?.board == .start && fourStore.match?.myColor == .black && fourStore.match?.isMyTurn == true)
+        #expect(fourStore.legalTargets == [19, 26, 37, 44] && oneStore.legalTargets == [19])
+        let four = try rvBitmap(rvPanel(fourStore))
+        let one = try rvBitmap(rvPanel(oneStore))
         rvSave(four, "my-turn")
         rvSave(one, "my-turn-server-one-dot")
 
@@ -77,16 +94,26 @@ struct V03xxReversiPanelRenderTests {
     }
 
     /// 없으면: 상대 차례에도 점을 그려도 초록이다(서버는 내 차례에만 목록을 준다 — 스토어도 내 차례에만 연다).
+    /// 문이 둘이라 둘 다 그린다: ⓐ 원문 길 — 상대 차례 원문에 서버가 목록을 실어 보내도 `applyState` 가 안 옮긴다
+    /// ⓑ 심은 길 — 판 값에 목록이 들어 있어도 계산 칸(`legalTargets`)과 판 뷰가 상대 차례엔 안 그린다.
     @Test
     func opponentTurnDrawsNoDots() throws {
-        let theirs = try rvBitmap(rvPanel(rvPlayingStore(turn: .white, legalMoves: [19, 26, 37, 44])))
+        // ⓐ 원문: A(백)가 본 수락 직후 판 — 흑 차례. 바꾼 칸: legal_moves(서버가 실수로 실었다고 치고).
+        #expect(try rvViewer("reversi_state__their_turn") == rvA)
+        let fixture = try rvFixtureStore("reversi_state__their_turn") { $0["legal_moves"] = [19, 26, 37, 44] }
+        #expect(fixture.match?.myColor == .white && fixture.match?.turn == .black)
+        let theirs = try rvBitmap(rvPanel(fixture))
         rvSave(theirs, "their-turn")
-        #expect(rvDotBlobs(theirs).isEmpty, "상대 차례인데 점이 찍혔다")
-        #expect(rvStoneCells(theirs).count == 4)
+        #expect(rvDotBlobs(theirs).isEmpty, "상대 차례 원문인데 점이 찍혔다")
+        let board = try #require(fixture.match?.board)
+        #expect(rvStoneCells(theirs).count == board.counts.black + board.counts.white)
+        // ⓑ 심은 길.
+        let planted = try rvBitmap(rvPanel(rvPlayingStore(turn: .white, legalMoves: [19, 26, 37, 44])))
+        #expect(rvDotBlobs(planted).isEmpty, "판 값에 목록이 있다고 상대 차례에 점을 그렸다")
         // 상태 상자 글자(값).
-        let match = try #require(rvPlayingStore(turn: .white).match)
+        let match = try #require(fixture.match)
         #expect(ReversiMatchStatusText.headline(match, isAIThinking: false) == ReversiText.opponentTurn)
-        let mine = try #require(rvPlayingStore().match)
+        let mine = try #require(try rvFixtureStore("reversi_state__my_turn").match)
         #expect(ReversiMatchStatusText.headline(mine, isAIThinking: false) == ReversiText.myTurn)
     }
 
@@ -131,10 +158,13 @@ struct V03xxReversiPanelRenderTests {
         // 돌 색은 극단이다(감지기가 돌을 세는 근거).
         #expect(rvRGB(ReversiBoardView.blackStone).max() ?? 255 <= 55)
         #expect(rvRGB(ReversiBoardView.whiteStone).min() ?? 0 >= 235)
-        // 기준선: 64칸이 다 찬 판(결과 화면)은 64 — 앞의 장면들과 갈린다.
-        let full = try #require(ReversiBoard(string: rvF02After))
-        let bitmap = try rvBitmap(rvPanel(rvFinishedStore(board: full, myColor: .black, result: .draw, reason: .boardFull)))
-        #expect(rvStoneCells(bitmap).count == 64)
+        // 기준선: 64칸이 다 찬 판(결과 화면 — 서버 원문 32 : 32 무승부)은 64 — 앞의 장면들과 갈린다. 칸마다도 원문 판과 같다.
+        let full = try rvFixtureStore("reversi_move__finished_draw")
+        let fullBoard = try #require(full.match?.board)
+        let bitmap = try rvBitmap(rvPanel(full))
+        let fullStones = rvStoneCells(bitmap)
+        #expect(fullStones.count == 64)
+        #expect(fullStones.black == Set((0..<64).filter { fullBoard[$0] == .black }), "원문 판 가득 무승부의 흑 칸이 그림과 다르다")
     }
 
     // MARK: ④ 패스 안내
@@ -142,19 +172,29 @@ struct V03xxReversiPanelRenderTests {
     /// 없으면: 상대가 둘 곳이 없어 내 차례가 이어진 사실이 판에서 드러나지 않는데(돌이 안 바뀐다) 글자로도 안 말해도 초록이다.
     @Test
     func aPassIsSpokenInWords() throws {
-        let passed = rvPassStore(lastIsPass: true)
-        let plain = rvPassStore(lastIsPass: false)
+        // 원문: B(흑)가 c1 을 두자 A(백)가 둘 곳이 없어 넘겼다 — 다시 B 차례(서버 기록 = 돌 줄 + 패스 줄).
+        // 기준선은 같은 원문에서 패스 줄만 뺀 것(바꾼 칸: moves · match.move_count).
+        #expect(try rvViewer("reversi_move__ok_pass") == rvB)
+        let passed = try rvFixtureStore("reversi_move__ok_pass")
+        let plain = try rvFixtureStore("reversi_move__ok_pass") { state in
+            state["moves"] = (state["moves"] as? [[String: Any]])?.filter { ($0["kind"] as? String) != "pass" }
+            var row = state["match"] as? [String: Any]
+            row?["move_count"] = 3
+            state["match"] = row
+        }
         let match = try #require(passed.match)
+        #expect(match.plies.last?.kind == .pass && match.plies.last?.color == .white && match.turn == .black)
+        #expect(try #require(plain.match).plies.allSatisfy { $0.kind == .stone })
         #expect(ReversiMatchStatusText.detail(match, notice: nil, opponentName: "민수")
                 == ReversiNoticeText.opponentPassed(name: "민수"))
         #expect(ReversiMatchStatusText.detail(try #require(plain.match), notice: nil, opponentName: "민수") == nil)
         // 스토어 안내가 있으면 그것이 먼저다.
         #expect(ReversiMatchStatusText.detail(match, notice: ReversiNoticeText.autoPlaced, opponentName: "민수")
                 == ReversiNoticeText.autoPlaced)
-        // 내가 넘겼고 상대 차례면 "차례가 넘어가요".
+        // 내가(흑) 넘겼고 상대 차례면 "차례가 넘어가요".
         var mine = match
-        mine.plies = [ReversiPly(seq: 1, color: .white, kind: .pass, idx: nil, flipped: [], auto: false)]
-        mine.turn = .black
+        mine.plies = [ReversiPly(seq: 1, color: .black, kind: .pass, idx: nil, flipped: [], auto: false)]
+        mine.turn = .white
         #expect(ReversiMatchStatusText.passLine(mine, opponentName: "민수") == ReversiNoticeText.myPass)
 
         let withPass = try rvBitmap(rvPanel(passed))
@@ -171,15 +211,19 @@ struct V03xxReversiPanelRenderTests {
     /// 이 판으로 새도 초록이다.
     @Test
     func theFlipKeepsStonesExtremeAndSwapsColourAtHalfway() throws {
-        // 시작 판에서 흑 d3(19) → d4(27) 가 뒤집힌다.
+        // 원문: B(흑)가 시작 판에 d3(19) 를 둔 응답 — d4(27) 가 뒤집혔다. 판·기록은 원문, 뒤집기 시각(`flip`)만 심는다
+        // (창이 안 보이는 시험 가게에서는 스토어가 애니메이션을 세우지 않는다 — 그 판정은 V03xxReversiFlipAnimationTests 몫).
         let outcome = try #require(try? ReversiRules.play(.start, color: .black, idx: 19).get())
         #expect(outcome.flipped == [27])
+        let probe = try rvFixtureStore("reversi_move__ok")
+        #expect(probe.match?.board == outcome.board, "원문 판이 규칙으로 둔 d3 판과 다르다")
+        #expect(probe.match?.plies.last?.idx == 19 && probe.match?.plies.last?.flipped == [27])
+        let fixtureMatchID = try #require(probe.match?.id)
         let started = rvNow
-        func frame(_ offset: TimeInterval, matchID: String = "m-1") throws -> NSBitmapImageRep {
-            let store = rvPlayingStore(board: outcome.board, turn: .white, legalMoves: [],
-                                       plies: [ReversiPly(seq: 1, color: .black, kind: .stone, idx: 19, flipped: [27], auto: false)],
-                                       lastStone: 19)
-            store.flip = ReversiFlipAnimation(matchID: matchID, startedAt: started, placedIdx: 19, color: .black, flipped: [27])
+        func frame(_ offset: TimeInterval, matchID: String? = nil) throws -> NSBitmapImageRep {
+            let store = try rvFixtureStore("reversi_move__ok")
+            store.flip = ReversiFlipAnimation(matchID: matchID ?? fixtureMatchID, startedAt: started, placedIdx: 19,
+                                              color: .black, flipped: [27])
             return try rvBitmap(rvPanel(store, now: started.addingTimeInterval(offset)))
         }
         let early = try frame(0.05)
@@ -221,20 +265,23 @@ struct V03xxReversiPanelRenderTests {
         #expect(ReversiText.scoreLine(ReversiScore(black: 50, white: 14, result: .blackWin),
                                       counts: ReversiCounts(black: 50, white: 14, empty: 0)) == "50 : 14")
 
-        // ① 승 — 둘 다 둘 곳이 없어 끝(빈칸 60 은 이긴 흑 몫 → 63 : 1). 나는 흑.
-        let e05 = try #require(ReversiBoard(string: rvE05))
-        let won = rvFinishedStore(board: e05, myColor: .black, result: .blackWin, reason: .noMoves)
-        // ② 패 — 내 돌(백)이 모두 뒤집혔다(B01 결과 판).
-        let b01 = try #require(ReversiBoard(string: rvB01After))
-        let lost = rvFinishedStore(board: b01, myColor: .white, result: .blackWin, reason: .wipeout)
-        // ③ 무 — 판 가득 32 : 32, 판돈 환불.
-        let f02 = try #require(ReversiBoard(string: rvF02After))
-        let draw = rvFinishedStore(board: f02, myColor: .black, result: .draw, reason: .boardFull)
-        // ④ abandoned — 상대가 자리 비움 3번(나 백 승). WOF 점수 없음.
-        let mid = rvGreedyGame(plies: 20).board
-        // ★ 점수 칸이 실려 와도(서버·스토어가 잘못 채워도) 자리 비움 판은 점수 줄을 쓰지 않는다 — 기준선이 갈리는 입력.
-        let abandoned = rvFinishedStore(board: mid, myColor: .white, result: .whiteWin, reason: .abandoned,
-                                        serverScore: ReversiScore(black: 20, white: 44, result: .whiteWin))
+        // 끝난 판은 전부 서버 원문이다(하네스가 실제로 정산한 응답).
+        // ① 승 — 둘 다 둘 곳이 없어 끝(빈칸 60 은 이긴 흑 몫 → 63 : 1). 나는 흑(B).
+        #expect(try rvViewer("reversi_move__finished_no_moves") == rvB)
+        let won = try rvFixtureStore("reversi_move__finished_no_moves")
+        // ② 패 — 판이 가득 차 41 : 23 으로 흑 승. 나는 백(A).
+        #expect(try rvViewer("reversi_state__finished") == rvA)
+        let lost = try rvFixtureStore("reversi_state__finished")
+        // ③ 무 — 판 가득 32 : 32, 판돈 환불. 나는 흑(A).
+        let draw = try rvFixtureStore("reversi_move__finished_draw")
+        // ④ abandoned — 원문(기권으로 끝난 판, 나 흑 A 패)에서 끝 사유만 자리 비움으로 바꾸고 점수 칸을 실었다
+        // (바꾼 칸: match.end_reason · match.score). ★ 점수 칸이 실려 와도 자리 비움 판은 점수 줄을 쓰지 않는다 — 기준선이 갈리는 입력.
+        let abandoned = try rvFixtureStore("reversi_resign__ok") { state in
+            var row = state["match"] as? [String: Any]
+            row?["end_reason"] = "abandoned"
+            row?["score"] = ["black": 20, "white": 44]
+            state["match"] = row
+        }
 
         let wonMatch = try #require(won.match)
         #expect(wonMatch.outcome == .won)
@@ -242,16 +289,22 @@ struct V03xxReversiPanelRenderTests {
         #expect(ReversiText.endReason(wonMatch.endReason, outcome: wonMatch.outcome) == "둘 다 둘 곳이 없어요")
         let lostMatch = try #require(lost.match)
         #expect(lostMatch.outcome == .lost)
-        #expect(ReversiText.endReason(lostMatch.endReason, outcome: .lost) == "내 돌이 모두 뒤집혔어요")
-        #expect(ReversiResultCard.scoreText(lostMatch) == "흑 : 백  64 : 0 (판 위 17 : 0)")
+        #expect(ReversiText.endReason(lostMatch.endReason, outcome: .lost) == "판이 가득 찼어요")
+        #expect(ReversiResultCard.scoreText(lostMatch) == "흑 : 백  41 : 23")
         let drawMatch = try #require(draw.match)
         #expect(drawMatch.outcome == .draw)
         #expect(ReversiResultCard.scoreText(drawMatch) == "흑 : 백  32 : 32")
         let abandonedMatch = try #require(abandoned.match)
-        #expect(abandonedMatch.outcome == .won)
-        #expect(ReversiText.endReason(abandonedMatch.endReason, outcome: .won) == "자리 비움 3번으로 끝났어요")
-        #expect(ReversiResultCard.scoreText(abandonedMatch) == ReversiText.boardOnlyLine(mid.counts),
+        #expect(abandonedMatch.outcome == .lost && abandonedMatch.score != nil, "바꾼 원문이 의도한 판(점수 칸이 실린 자리 비움 패)이 아니다")
+        #expect(ReversiText.endReason(abandonedMatch.endReason, outcome: .lost) == "자리 비움 3번으로 끝났어요")
+        #expect(ReversiResultCard.scoreText(abandonedMatch) == ReversiText.boardOnlyLine(abandonedMatch.board.counts),
                 "자리 비움 판에 WOF 점수를 지어냈다(V-15)")
+        // 전멸(원문 — 나 흑 A 승, 판 위 3 : 0) · 전멸 패 문구(값).
+        let wipeout = try #require(try rvFixtureStore("reversi_move__finished_wipeout").match)
+        #expect(wipeout.outcome == .won && wipeout.endReason == .wipeout)
+        #expect(ReversiResultCard.scoreText(wipeout) == "흑 : 백  64 : 0 (판 위 3 : 0)")
+        #expect(ReversiText.endReason(.wipeout, outcome: .won) == "상대 돌을 모두 뒤집었어요")
+        #expect(ReversiText.endReason(.wipeout, outcome: .lost) == "내 돌이 모두 뒤집혔어요")
 
         var bitmaps: [String: NSBitmapImageRep] = [:]
         for (name, store) in [("result-won", won), ("result-lost", lost), ("result-draw", draw),
@@ -292,10 +345,10 @@ struct V03xxReversiPanelRenderTests {
         #expect(ReversiRules.legalMoves(examples[2].board, color: .black).isEmpty, "넘김 예시에서 흑이 둘 곳이 있다")
         #expect(examples[3].detail.contains("63 : 1"))
 
-        let store = rvLobbyStore()
+        let store = try rvLobbyStore()
         store.isRulesVisible = true
         let rules = try rvBitmap(rvPanel(store))
-        let lobby = try rvBitmap(rvPanel(rvLobbyStore()))
+        let lobby = try rvBitmap(rvPanel(try rvLobbyStore()))
         rvSave(rules, "rules")
         #expect(rvMaxChannelDifference(rules, lobby, rect: rvCenterRect) > 60, "규칙 창이 안 그려졌다")
         // 예시 판 한 장 한 장: 돌 잉크 = 그 판의 돌 수 · 점 덩어리 = 그 장면의 둘 곳 수(규칙 창이 그리는 바로 그 판 뷰).
@@ -319,45 +372,53 @@ struct V03xxReversiPanelRenderTests {
     /// 없으면: 관전 판이 서버가 말한 색을 안 기다리고 로비 카드(a/b — 색 아님)로 색 배지를 지어내도, 관전 판의 돌이 안 그려져도 초록이다.
     @Test
     func spectateDrawsTheBoardAndBothSides() throws {
-        let game = rvGreedyGame(plies: 23)
-        let loaded = rvLobbyStore()
-        loaded.spectating = ReversiSpectating(
-            id: "live-1", faces: [rvMinsu, rvJunho], stake: 5, blackUser: rvJunho, whiteUser: rvMinsu,
-            board: game.board, moveCount: game.plies.count, appliedSeq: game.plies.count, plies: game.plies,
-            lastStoneIdx: game.plies.last(where: { $0.kind == .stone })?.idx, turn: game.next,
-            turnStartedAt: rvNow.addingTimeInterval(-12), deadline: rvNow.addingTimeInterval(18),
-            startedAt: rvNow.addingTimeInterval(-300), watchers: 3)
-        loaded.spectatorCount = 3
-        let seed = rvLobbyStore()
-        seed.spectating = ReversiSpectating(id: "live-1", faces: [rvMinsu, rvJunho], stake: 5)
+        // 원문: 제3자(D)가 본 관전 응답(watch_live — 관전자 수 칸이 있다). 로비 카드에서 연 씨앗(색 모름)에 `applyWatch` 로 넣는다.
+        #expect(try rvViewer("reversi_watch_live__ok") == "b0000000-0000-4000-8000-000000000004")
+        let watchState = try #require(try rvJSON("reversi_watch_live__ok")["state"] as? [String: Any])
+        let watchID = try #require((watchState["match"] as? [String: Any])?["id"] as? String).lowercased()
+        let faces = [ReversiUser(id: rvA, displayName: "비시험01"), ReversiUser(id: rvB, displayName: "비시험02")]
+        let seed = try rvLobbyStore()
+        seed.spectating = ReversiSpectating(id: watchID, faces: faces, stake: 3)
+        let loaded = try rvLobbyStore()
+        loaded.spectating = ReversiSpectating(id: watchID, faces: faces, stake: 3)
+        loaded.applyWatch(try rvDecode(ReversiActionResponse.self, try rvText("reversi_watch_live__ok")))
 
         let watch = try #require(loaded.spectating)
         let waiting = try #require(seed.spectating)
-        #expect(ReversiWatchStatusText.headline(watch) == "\(ReversiText.stoneName(try #require(game.next))) 차례")
+        #expect(watch.blackUser?.id == rvA && watch.whiteUser?.id == rvB && watch.turn == .black,
+                "원문 관전이 흑·백·차례를 안 옮겼다(흑 \(watch.blackUser?.id ?? "nil") · 차례 \(String(describing: watch.turn)))")
+        #expect(ReversiWatchStatusText.headline(watch) == "\(ReversiText.stoneName(.black)) 차례")
         #expect(ReversiWatchStatusText.headline(waiting) == ReversiText.watchLoading, "색이 서기 전에 차례를 말했다")
 
         let bitmap = try rvBitmap(rvPanel(loaded))
         let empty = try rvBitmap(rvPanel(seed))
         rvSave(bitmap, "spectate")
         rvSave(empty, "spectate-loading")
-        #expect(rvStoneCells(bitmap).count == game.board.counts.black + game.board.counts.white)
+        #expect(rvStoneCells(bitmap).count == watch.board.counts.black + watch.board.counts.white)
         #expect(rvDotBlobs(bitmap).isEmpty, "관전 판에 둘 수 있는 칸 점이 찍혔다 — 관전자는 둘 수 없다")
         #expect(rvMaxChannelDifference(bitmap, empty, rect: rvMatchSideColumn) > 60)
         // 12줄이 넘는 수 목록도 카드 높이를 밀지 않는다 — 상태 상자와 수 기록 카드 사이 간격이 짧은 기록의 장면과 같다
-        // (스냅샷 클립 갈래가 내용 높이를 부모로 흘리면 간격이 눌려 앱과 다른 그림이 된다).
+        // (스냅샷 클립 갈래가 내용 높이를 부모로 흘리면 간격이 눌려 앱과 다른 그림이 된다). 원문 관전은 0수라 긴 기록만 심는다.
+        let game = rvGreedyGame(plies: 23)
         #expect(ReversiMoveLog.rows(game.plies).count > ReversiWindowLayout.moveVisibleRows)
-        let short = rvGreedyGame(plies: 6)
-        let shortStore = rvLobbyStore()
-        var shortWatch = watch
-        shortWatch.board = short.board
-        shortWatch.plies = short.plies
-        shortWatch.counts = short.board.counts
-        shortStore.spectating = shortWatch
-        shortStore.spectatorCount = 3
-        let shortBitmap = try rvBitmap(rvPanel(shortStore))
+        func planted(_ scene: (board: ReversiBoard, plies: [ReversiPly], next: ReversiColor?)) throws -> NSBitmapImageRep {
+            let store = try rvLobbyStore()
+            store.spectating = ReversiSpectating(
+                id: watch.id, faces: watch.faces, stake: watch.stake, blackUser: watch.blackUser, whiteUser: watch.whiteUser,
+                board: scene.board, moveCount: scene.plies.count, appliedSeq: scene.plies.count, plies: scene.plies,
+                lastStoneIdx: scene.plies.last(where: { $0.kind == .stone })?.idx, turn: scene.next,
+                turnStartedAt: rvNow.addingTimeInterval(-12), deadline: rvNow.addingTimeInterval(18),
+                startedAt: rvNow.addingTimeInterval(-300), watchers: 3)
+            store.spectatorCount = 3
+            return try rvBitmap(rvPanel(store))
+        }
+        let longBitmap = try planted(game)
+        let shortBitmap = try planted(rvGreedyGame(plies: 6))
+        rvSave(longBitmap, "spectate-long")
+        #expect(rvStoneCells(longBitmap).count == game.board.counts.black + game.board.counts.white)
         let gap = CGRect(x: rvMatchSideColumn.minX, y: rvStatusBoxRect.maxY + 4,
                          width: rvMatchSideColumn.width, height: 4)
-        #expect(rvMaxChannelDifference(bitmap, shortBitmap, rect: gap) <= 8,
+        #expect(rvMaxChannelDifference(longBitmap, shortBitmap, rect: gap) <= 8,
                 "긴 수 기록이 카드를 밀어 올렸다 — 상태 상자와 수 기록 카드 사이 간격이 짧은 기록과 다르다")
 
         // 끝난 관전은 3인칭이다(내 기준 "기권했어요" 가 아니다).
@@ -374,8 +435,8 @@ struct V03xxReversiPanelRenderTests {
     /// 없으면: AI 색 고르기 창이 안 그려지거나(Menu 로 바꾸면 픽셀 0), AI 판이 서버 목록(빈 배열)을 따라 점을 안 그려도 초록이다.
     @Test
     func theAIPromptAndTheAIMatchDraw() throws {
-        let prompt = try rvBitmap(rvPanel(rvLobbyStore(populated: false), previewAIPrompt: true))
-        let lobby = try rvBitmap(rvPanel(rvLobbyStore(populated: false)))
+        let prompt = try rvBitmap(rvPanel(try rvLobbyStore(populated: false), previewAIPrompt: true))
+        let lobby = try rvBitmap(rvPanel(try rvLobbyStore(populated: false)))
         rvSave(prompt, "ai-color")
         #expect(rvMaxChannelDifference(prompt, lobby, rect: rvCenterRect) > 60, "AI 색 고르기 창이 안 그려졌다")
 
@@ -412,31 +473,19 @@ private let rvJunho = rvUser("준호", 12, character: "squirrel")
 private let rvMe = ReversiPlayerFace(name: "영식", avatarURL: nil, characterID: "shiba",
                                      userID: "00000000-0000-0000-0000-000000000013")
 
-private func rvUsers() -> [ReversiUser] {
-    [
-        rvUser("지영", 14, working: false),
-        rvMinsu,
-        rvUser("태화", 15, inMatch: true),
-        rvUser("옛버전사용자", 16, capable: false),
-        rvJunho,
-        rvUser("서연", 17, focus: true, character: "ghost"),
-        rvUser("하늘", 18, working: false),
-        rvUser("가장긴별명열두글자입니다", 19)
-    ]
-}
-
-/// 코퍼스 판(research/cases.json — 64자 '.bw').
-private let rvE05 = "bbb" + String(repeating: ".", count: 53) + "w......."
-private let rvB01After = "..................b.b.b....bbb....bbbbb....bbb....b.b.b........."
-private let rvF02After = "bbbbbbbbbbbbbbbbbbbbbbbbbbbwwwwwwwwwwwwwwwwwwwwwwwwwwwbbwwwwwbbb"
-
+/// 로비 가게. 채운 쪽은 **서버 원문**이다 — 받은 쪽 B 의 로비(사람 목록 · 받은 신청 1 · 전적 · 루비)를 `applyLobby` 로,
+/// 순위(두 줄)를 `applyRanking` 으로 넣는다. 원문 로비의 matches 가 비어 있어(갈래 C2 남은 문제) "대결 중" 목록만 심는다.
+/// 빈 쪽은 원문 없이 루비 · 전적만 있는 가게(내용 없는 기준선).
 @MainActor
-private func rvLobbyStore(populated: Bool = true) -> ReversiStore {
+private func rvLobbyStore(populated: Bool = true) throws -> ReversiStore {
     let store = ReversiStore(clock: { rvNow })
-    store.rubyBalance = 42
-    store.record = ReversiRecord(wins: 7, losses: 3, draws: 1)
-    guard populated else { return store }
-    store.users = rvUsers()
+    guard populated else {
+        store.rubyBalance = 42
+        store.record = ReversiRecord(wins: 7, losses: 3, draws: 1)
+        return store
+    }
+    store.applyLobby(try rvDecode(ReversiLobbyResponse.self, try rvText("reversi_lobby__incoming")))
+    store.applyRanking(try rvDecode(ReversiRankingResponse.self, try rvText("reversi_ranking__ok")))
     store.liveMatches = [
         ReversiLiveMatch(id: "live-1", a: rvMinsu, b: rvJunho, stake: 5, startedAt: rvNow.addingTimeInterval(-300),
                          watchers: 2),
@@ -445,15 +494,17 @@ private func rvLobbyStore(populated: Bool = true) -> ReversiStore {
         ReversiLiveMatch(id: "live-3", a: rvUser("산", 21), b: rvUser("하늘", 18), stake: 3,
                          startedAt: rvNow.addingTimeInterval(-60))
     ]
-    store.incoming = [ReversiInvite(id: "in-1", peer: rvMinsu, stake: 5, expiresAt: Date().addingTimeInterval(48))]
-    store.outgoing = ReversiOutgoing(id: "out-1", peer: rvJunho, stake: 10, expiresAt: Date().addingTimeInterval(31))
-    store.ranking = ReversiRanking(
-        entries: (rvUsers() + [rvUser("영식", 13)]).enumerated().map { index, user in
-            ReversiRankEntry(id: user.id, rank: index + 1, user: user, wins: 12 - index, losses: index, draws: 1,
-                             points: 12 - index * 2)
-        },
-        me: ReversiMyRank(rank: 4, wins: 7, losses: 3, draws: 1, points: 4),
-        recordSince: Date(timeIntervalSince1970: 1_780_000_000))
+    return store
+}
+
+/// 서버 원문 하나(`Fixtures/reversi-rpc/<name>.json` 의 state)를 `applyState` 로 넣은 가게. `edit` 는 원문에서 **바꾼 칸**만 적는다
+/// (state 봉투 안 — `rvMutatedState`). 넣은 결과가 `.applied` 가 아니면 그 장면은 원문이 아니다 — 빨갛게 멈춘다.
+@MainActor
+private func rvFixtureStore(_ name: String, edit: ((inout [String: Any]) -> Void)? = nil) throws -> ReversiStore {
+    let store = ReversiStore(clock: { rvNow })
+    let payload = try edit.map { try rvStateText(try rvMutatedState(name, $0)) } ?? rvState(name)
+    let outcome = store.applyState(payload)
+    try #require(outcome == .applied, "\(name): applyState 가 \(outcome) 다 — 원문이 화면 상태가 되지 않았다")
     return store
 }
 
@@ -475,39 +526,6 @@ private func rvPlayingStore(
         board: board, moveCount: plies.count, turn: turn, turnStartedAt: rvNow.addingTimeInterval(-9),
         deadline: (isAI && !humanTurn) ? nil : rvNow.addingTimeInterval(21),
         legalMoves: humanTurn ? legalMoves : (isAI ? [] : legalMoves), plies: plies, lastStoneIdx: lastStone)
-    return store
-}
-
-/// 패스 장면: 나 백 · 상대(민수, 흑)가 둘 곳이 없어 넘겼고 다시 내 차례(코퍼스 E02 판).
-@MainActor
-private func rvPassStore(lastIsPass: Bool) -> ReversiStore {
-    var plies = [
-        ReversiPly(seq: 1, color: .black, kind: .stone, idx: 1, flipped: [], auto: false),
-        ReversiPly(seq: 2, color: .white, kind: .stone, idx: 0, flipped: [], auto: true)
-    ]
-    if lastIsPass { plies.append(ReversiPly(seq: 3, color: .black, kind: .pass, idx: nil, flipped: [], auto: false)) }
-    let store = rvPlayingStore(board: ReversiBoard(string: "wb" + String(repeating: ".", count: 62)) ?? .start,
-                               myColor: .white, turn: .white, legalMoves: [2], plies: plies, lastStone: 0)
-    store.match?.autoStones = [0]
-    store.match?.myAutoStreak = 1
-    return store
-}
-
-/// 끝난 판 가게(결과 화면).
-@MainActor
-private func rvFinishedStore(board: ReversiBoard, myColor: ReversiColor, result: ReversiResult,
-                             reason: ReversiEndReason, serverScore: ReversiScore? = nil) -> ReversiStore {
-    let store = ReversiStore(clock: { rvNow })
-    store.phase = .result
-    store.rubyBalance = 47
-    // WOF 점수는 자연 종료에만 있다(기권·자리 비움은 nil, V-15).
-    let natural = reason == .wipeout || reason == .boardFull || reason == .noMoves
-    let resolvedScore: ReversiScore? = serverScore ?? (natural ? ReversiRules.score(board) : nil)
-    let game = rvGreedyGame(plies: 12)
-    store.match = ReversiMatchState(
-        id: "m-done", status: .finished, stake: 5, myColor: myColor, opponent: rvMinsu, board: board,
-        moveCount: game.plies.count, turn: nil, plies: game.plies, lastStoneIdx: nil, score: resolvedScore,
-        result: result, endReason: reason, winner: result.winner)
     return store
 }
 

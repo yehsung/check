@@ -56,6 +56,8 @@ val aingFamily = listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawber
 // 이슬 초상 원본 폴더 — **그림을 갈아 끼우는 자리는 여기 하나다**(대표 결정 대기: 폰 그림의 '참이슬' 상표 글자 — 추천 '맥과 같이 그대로 +
 // 대체 그림 준비'). 지금은 맥 그림(scripts/make-isul-aing.swift 산출) 그대로. 대체 그림으로 바꿀 때는 같은 이름(aing_isul-<표정>.png)
 // 두 장이 든 폴더를 이 값으로 준다(속성 -Paingcheck.isulPortraitDir=<저장소 뿌리 기준 폴더> 로도 덮을 수 있다).
+// ★ 맞바꿈(검토 ISUL-4): 맥 IsulArt 는 운영 Storage game-art/isul/{neutral,negative}.png 를 조건부로 받아 번들을 덮지만 Android 는 여기서
+//   **굽는다** — Storage 로 그림을 바꾸면 맥만 바뀌고 Android 는 Play 판을 새로 내야 바뀐다('참이슬' 결정과 묶어 보고 · 받기 길은 그 뒤).
 val isulPortraitSource: File = repoDir.resolve(
     (findProperty("aingcheck.isulPortraitDir") as String?) ?: "Sources/check/Resources",
 )

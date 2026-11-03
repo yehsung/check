@@ -8,9 +8,12 @@ import Testing
 /// 어긋나면 빨개진다** — 애플의 정의 문구 자체는 외부 사실이라 여기서 못 재지만, 그 정의를 적용한 결론은
 /// 코드 사실(환금 불가 재화의 판돈이 있다 · 자정 상품이 매일 있다)에서 따라 나오므로 그 **함의**를 묶는다.
 ///
-/// - 모의 도박(Simulated Gambling) = "실제 돈이나 환금 가능한 재화 **없이** 거는 것" → 판돈이 있는 한 '예', 등급 13+ 이상.
+/// - 모의 도박(Simulated Gambling): **문서의 답은 실제 ASC 값('아니오' · NONE)이다**(폰 1.0.17 갈래 4/4 에서 뒤집었다). 정의 글자만 보면 환금 불가
+///   루비 판돈도 걸리지만, '예 · 드묾' 으로 낸 1.0 이 2026-09-19 개인 개발자 계정 자동 반려(지침 2.3.6)를 맞았고 2026-09-21 NONE 으로 고친 뒤
+///   루비 1:1 넷(오목 · 체스 · 테트리스 · 큐브)이 통과했다. 이 계약이 예전에 '예' 를 정답으로 박아 두어, 문서를 믿고 설문을 고치면 자동 반려가
+///   다시 나는 자리였다 — 이제는 답 칸이 '아니오(NONE)' 이고 근거 칸이 그 까닭(2.3.6 · 개인 개발자 · 자동 반려)을 말해야 초록이다.
 /// - 경연(Contests) = "순위·보상을 두고 겨루는 행사"(실물 상품 조건 없음) → 매일 자정 상품이 있는 한 '예·잦음', 13+.
-/// 출처: <https://developer.apple.com/help/app-store-connect/reference/age-ratings/> (2026-09-18 원문).
+/// 출처: <https://developer.apple.com/help/app-store-connect/reference/age-ratings/> (2026-09-18 원문) · 반려 원문 요지는 문서 §3.
 @Suite("w16 제출 자료 계약")
 struct AppStoreDocContractTests {
     static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -54,7 +57,7 @@ struct AppStoreDocContractTests {
 
     // MARK: medium 1 — 연령 설문
 
-    @Test("판돈(환금 불가 루비)이 있는 한 §3 모의 도박은 '예' · 자정 상품이 있는 한 경연은 '예' · 예상 등급은 13+")
+    @Test("§3 모의 도박은 실제 ASC 값 '아니오(NONE)'와 그 까닭(2.3.6 자동 반려) · 판돈 사실(아잉 뒤집기 포함) · 자정 상품이 있는 한 경연은 '예' · 예상 등급은 13+ · §3.1 1.0.17 제출 값")
     func ageRatingFollowsWageringFacts() throws {
         // 대조 — 코드 사실이 사라지면 이 계약의 전제도 사라진다(그때는 문서와 함께 이 테스트를 고친다).
         let stakes = try Self.lobbyStakes()
@@ -66,10 +69,15 @@ struct AppStoreDocContractTests {
         let survey = try Self.section(of: doc, heading: "## 3. 연령 등급 설문 예상 답")
 
         let gambling = try Self.row(in: survey, containing: "모의 도박(Simulated Gambling)")
-        #expect(gambling[1].contains("예") && !gambling[1].contains("아니오"),
-                "환금 불가 재화로 거는 것이 애플의 모의 도박 정의 그 자체다 — '아니오' 로 답하면 심사에서 등급이 정정된다: \(gambling[1])")
-        #expect(gambling[1].contains("13+"), "모의 도박 '드묾' 은 13+ 다: \(gambling[1])")
+        // 답 칸 = ASC 실제 값. '예 · 드묾' 으로 되돌리면 개인 개발자 계정은 제출 단계에서 자동 반려된다(2026-09-19 실측).
+        #expect(gambling[1].contains("아니오") && gambling[1].contains("NONE") && !gambling[1].contains("드묾") && !gambling[1].contains("예 ·"),
+                "모의 도박 답이 실제 ASC 값(NONE)이 아니다 — 문서를 믿고 설문을 '예' 로 고치면 2.3.6 자동 반려가 다시 난다: \(gambling[1])")
+        for reason in ["2.3.6", "개인 개발자", "자동 반려", "INFREQUENT_OR_MILD"] {
+            #expect(gambling[2].contains(reason), "모의 도박 근거 칸이 '아니오' 의 까닭(\(reason))을 말하지 않는다 — 다음 사람이 정의만 읽고 되돌린다")
+        }
         #expect(gambling[2].contains("\(stakes[0])/\(stakes[1])/\(stakes[2])"), "근거 칸의 판돈 숫자가 픽스처와 다르다: \(gambling[2])")
+        // 루비를 거는 1:1 이 늘면 근거 칸도 그 게임을 말한다(설문 답이 그대로라는 판단의 근거) — 아잉 뒤집기(1.0.17).
+        #expect(gambling[2].contains(ReversiNoticeText.gameName), "모의 도박 근거 칸이 \(ReversiNoticeText.gameName)(루비 3/5/10 · 1.0.17)를 모른다")
 
         let contests = try Self.row(in: survey, containing: "경연(Contests)")
         #expect(contests[1].contains("예") && !contests[1].contains("아니오") && !contests[1].contains("확인 필요"),
@@ -82,7 +90,17 @@ struct AppStoreDocContractTests {
 
         let verdict = try #require(survey.split(separator: "\n").first { $0.hasPrefix("예상 결과 등급") }, "예상 등급 줄이 없다")
         #expect(verdict.contains("**13+**") && !verdict.contains("**4+**"),
-                "모의 도박·경연 어느 한쪽만으로도 13+ 인데 4+ 를 예상한다: \(verdict)")
+                "경연(잦음)만으로도 13+ 인데 4+ 를 예상한다: \(verdict)")
+        #expect(verdict.contains("NONE"), "예상 등급 줄이 모의 도박 답(NONE)과 어긋난 말을 한다: \(verdict)")
+
+        // §3.1 — 1.0.17 제출 때 ASC 에서 바꿀 값(대표 결정 원문 번호 · 값). ASC 일이라 저장소는 기록만 한다.
+        let submit = try Self.section(of: doc, heading: "### 3.1 1.0.17 제출 때")
+        for fact in ["#d_E3bxq1b2jSsS", "INFREQUENT_OR_MILD", "#d_ON6kUqxzfy9m", "https://aing-check.vercel.app", "gamblingSimulated"] {
+            #expect(submit.contains(fact), "§3.1 이 1.0.17 제출 값(\(fact))을 적지 않았다")
+        }
+        let support = try Self.row(in: submit, containing: "지원 URL")
+        #expect(support[2].contains("https://aing-check.vercel.app") && support[1].contains("https://yehsung.github.io/check/"),
+                "지원 URL 줄: 지금 \(support[1]) → 제출 때 \(support[2])")
     }
 
     // MARK: 1.0.8 — 루트 상자(캐릭터 뽑기)

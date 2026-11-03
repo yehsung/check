@@ -299,7 +299,9 @@ struct BlockReportSheetView: View {
                 //   여기에 날것 토큰(`[아잉:기쁨]`)이 적히면 "내가 신고하려던 게 이게 맞나"가 된다.
                 //   서버로 가는 증거(`messageBody` 그 값 · 운영자 화면)는 **날것 그대로** 남긴다 — 바꾸는 것은
                 //   사용자에게 보여 주는 인용 한 장뿐이다.
-                Text(AingStickerText.preview(for: quoted))
+                //   마크다운 기호도 같은 이유로 벗긴다(대표 요청 2026-11-03 ③ — 사용자는 꾸며진 말풍선을 보고 신고한다).
+                //   `ChatMarkdown.plainPreview` 가 이모티콘 규칙을 먼저 거친다.
+                Text(ChatMarkdown.plainPreview(quoted))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(3)

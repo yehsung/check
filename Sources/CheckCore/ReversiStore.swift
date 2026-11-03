@@ -573,12 +573,11 @@ package final class ReversiStore {
     @ObservationIgnored private var lobbyAgain = false
     /// 마지막으로 "내 차례가 왔다" 를 본 (판 id#move_count). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
     @ObservationIgnored private var attentionKey: String?
-    /// **이 기기가 연 판** 장부(한 계정 여러 기기 — 오목·체스와 같은 규칙, 가지 `fix/game-window-one-device` 62ecdf73). 창 띄우기 ·
+    /// **이 기기가 연 판** 장부(한 계정 여러 기기 — 오목·체스와 같은 규칙, `GameDeviceLedger` 머리말). 창 띄우기 ·
     /// 주의 · 말풍선은 이 장부에 오른 판에서만 한다(`noteMatchProgress`). 기록을 둘 곳(`deviceLedger.defaults`)은 **앱 배선이 넣는다**
     /// (맥 `WorkTimerStore`) — 빠지면 판 중에 앱을 다시 켠 기기가 자기 판을 못 알아봐 창이 안 뜬다. 로그아웃은 비우지 않는다(사용자별 키).
     /// 기한 6시간: 30초 × 60수여도 한 판은 한 시간이 안 된다 — 판 중에 앱을 다시 켜도 넉넉히 남고, 끝을 못 본 기록은 쌓이지 않는다.
-    /// ⚠ 타입은 임시 다리다 — `GameDeviceLedger` 가 main 에 들어오면 그 타입으로 바꾸고 다리 파일을 지운다(`ReversiDeviceLedgerShim` 머리말).
-    @ObservationIgnored package var deviceLedger = ReversiDeviceLedgerShim(game: "reversi", ttlSeconds: 6 * 3_600)
+    @ObservationIgnored package var deviceLedger = GameDeviceLedger(game: "reversi", ttlSeconds: 6 * 3_600)
     /// 서버가 말한 내 진행 중 대국 id(로비 `me.active_match_id`).
     @ObservationIgnored package internal(set) var activeMatchID: String?
     @ObservationIgnored package private(set) var seenInviteIDs: Set<String> = []
@@ -645,9 +644,13 @@ package final class ReversiStore {
 
     /// 창이 실제로 보이기 시작했다. 폴링 시작 · 로비 재조회 · AI 시계 재개.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다**. 창이 정말 앞으로 오면
+        // 가림 통지(visible)가 와서 풀고, 못 오면(다른 전체 화면 앱 위로 못 올라옴) 가린 채로 남아야 시작 · 차례 말풍선이 산다
+        // (오목 · 체스 · 테트리스와 같은 수리 — 0.3.74 통합). 숨겼다가 다시 여는 길은 `windowDidHide` 가 이미 지웠으므로
+        // 낡은 가림 기록이 폴링을 막지 않는다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다 — 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다.
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }

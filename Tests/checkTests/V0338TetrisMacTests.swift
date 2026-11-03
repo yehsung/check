@@ -745,18 +745,19 @@ func pauseWatchdogArmsOnlyWhileTheCardIsUpAndConfirmsTheScore() throws {
     #expect(watchdog.contains("quitRound()"), "상한에서 판을 무효로 끝낸다 — 점수가 사라진다")
     // ★ 상한은 **회당이 아니라 판 누적**이다. 회당이면 "4분 59초 → 재개 → 다시 정지" 를 반복해
     //   벽시계를 무한히 늘릴 수 있고, 그러면 상한이 막으려던 바로 그 손실이 그대로 일어난다.
-    #expect(watchdog.contains("while pausedSecondsUsed < PauseState.pauseLimitSeconds"),
-            "감시가 한 번 자고 끝난다 — 정지를 풀었다 걸면 시계가 처음부터 간다")
-    #expect(watchdog.contains("pausedSecondsUsed += 1"), "누적을 안 센다")
+    #expect(watchdog.contains("while !pauseMeter.isOver()"),
+            "감시가 판 누적 시계를 안 본다 — 정지를 풀었다 걸면 시계가 처음부터 간다")
+    // 누적은 화면이 아니라 시계(`MiniGamePauseMeter`)가 벽시계로 센다(3-2-1 포함 — V0374).
+    #expect(!watchdog.contains("+= 1"), "감시가 1초씩 따로 센다 — 1초 미만 구간과 3-2-1 이 빠진다")
     #expect(!watchdog.contains("sleep(for: .seconds(PauseState.pauseLimitSeconds))"),
             "상한만큼 한 번에 자면 누적이 성립하지 않는다")
     // 0 으로 되돌리는 자리는 **판 시작 한 곳뿐**이어야 한다(재개에서 되돌리면 회당으로 돌아간다).
     // 선언(`@State … = 0`) + 판 시작 리셋, 딱 둘이어야 한다. 셋째가 생기면 회당으로 돌아간다.
-    #expect(panel.contains("@State private var pausedSecondsUsed = 0"), "선언 모양이 바뀌었다 — 아래 개수 단언의 전제")
-    #expect(panel.components(separatedBy: "pausedSecondsUsed = 0").count - 1 == 2,
+    #expect(panel.contains("@State private var pauseMeter = MiniGamePauseMeter()"), "선언 모양이 바뀌었다 — 아래 개수 단언의 전제")
+    #expect(panel.components(separatedBy: "pauseMeter = MiniGamePauseMeter()").count - 1 == 2,
             "정지 예산을 판 시작 말고 다른 곳에서도 되돌린다(재개에서 되돌리면 회당 상한이 된다)")
     let begin = try tmRegion(after: "if playing {", in: panel, includingAnchorBrace: true)
-    #expect(begin.contains("pausedSecondsUsed = 0"), "새 판에 정지 예산을 안 준다")
+    #expect(begin.contains("pauseMeter = MiniGamePauseMeter()"), "새 판에 정지 예산을 안 준다")
     // ★ 0.3.62: 종류 가드의 **기준을 바꿨다.** 전에는 `guard store.miniGameKind == .tetris` 였고 그 전제는
     //   "두 기존 게임은 한 판이 짧아 이 여유를 쓸 일이 없다" 였는데, 자동 정지(키 상실)가 그 전제를 무너뜨려
     //   플래피가 들어왔다. 그렇다고 통째로 걷으면 타이밍 바의 **수동 정지**까지 잘리는데 거기서는 접어도

@@ -403,12 +403,23 @@ private func brDrain() async {
         #expect(view.contains("onReport: MessageBubbleReportRule.offersReport(for: entry) ? onReport.map"),
                 "받은 말풍선만 고르는 판정을 대화 뷰가 안 지난다")
         let row = try #require(brRegion(view, from: "private struct MessageBubbleRow: View {", to: "// MARK: - 입력줄"))
+        // 그림 말풍선: SwiftUI 메뉴는 신고 문이 있을 때만 붙는다(내 그림에는 안 선다).
         let guardRange = try #require(row.range(of: "if let onReport {"))
-        let menuRange = try #require(row.range(of: ".contextMenu {"), "말풍선에 우클릭 메뉴가 없다")
+        let menuRange = try #require(row.range(of: ".contextMenu {"), "그림 말풍선에 우클릭 메뉴가 없다")
         #expect(guardRange.lowerBound < menuRange.lowerBound, "우클릭 메뉴가 신고 갈래 밖에도 붙는다(내 말풍선에도 선다)")
         #expect(row.contains("BlockReportText.reportMessageAction"))
-        #expect(row.contains(".textSelection(.enabled)"), "내 말풍선의 글자 선택이 사라졌다")
         #expect(row.components(separatedBy: ".contextMenu {").count - 1 == 1)
+        // 글자 말풍선(2026-11-03 대표 결정 "받은 말풍선도 드래그, 우클릭에 신고 유지"): 받은 것도 내 것도 고를 수 있는 글자 뷰이고,
+        // 행이 받은 신고 문(대화 뷰가 `MessageBubbleReportRule` 로 거른 것)을 **그대로** 넘긴다. 메뉴에 [신고]가 서는지는 그 문이
+        // 있는지 하나로 갈린다 — 받은/내 말풍선의 실제 메뉴는 ChatBubbleSelectionTests 가 진짜 대화 뷰를 호스팅해 잰다.
+        let textView = try #require(brRegion(row, from: "ChatBubbleText(", to: ".fixedSize"), "글자 말풍선이 고를 수 있는 글자 뷰가 아니다")
+        #expect(textView.contains("onReport: onReport"), "글자 말풍선이 신고 문을 안 넘긴다")
+        #expect(!row.contains(".textSelection("), "SwiftUI 글자 선택이 돌아왔다 — 우클릭이 시스템 메뉴로 가서 [신고]가 사라진다(v0.3.34)")
+        let bubbleSource = try brSource("ChatBubbleTextView.swift")
+        let menu = try #require(brRegion(bubbleSource, from: "func bubbleMenu() -> NSMenu {", to: "\n    }"))
+        let reportGuard = try #require(menu.range(of: "if onReport != nil {"))
+        let reportItem = try #require(menu.range(of: "BlockReportText.reportMessageAction"), "글자 말풍선 메뉴에 [신고]가 없다")
+        #expect(reportGuard.lowerBound < reportItem.lowerBound, "[신고]가 신고 문 없이도 선다(내 말풍선에도 선다)")
     }
 
     @Test func 오목_채팅의_신고_차단은_사람과_두는_판에만_선다() throws {

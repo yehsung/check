@@ -32,7 +32,8 @@ struct CheckApp: App {
         //   쓰기도 같이 거른다 — 아이콘을 빼 둔 대기 중에 온 쓰기는 사용자가 뺀 것이 아니다(그 실행은 판정대로 남거나 끝난다).
         MenuBarExtra(isInserted: Binding(get: { appDelegate.retirement.menuBarInserted && appDelegate.singleInstance.menuBarInserted }, set: { inserted in
             guard appDelegate.singleInstance.menuBarInserted, appDelegate.retirement.shouldQuitAfterMenuBarWrite(inserted: inserted) else { return }
-            DispatchQueue.main.async { NSApp.terminate(nil) }
+            // 메인 큐 블록(`DispatchQueue.main.async`) 안에서 끝내면 근무 중 퇴근 정리가 교착한다 — 런루프 블록으로 미룬다(`AppTerminationRequest`).
+            AppTerminationRequest.terminate()
         })) {
             menuContent
         } label: {
@@ -83,7 +84,11 @@ struct CheckApp: App {
             hasRummyInvite: appDelegate.store.rummy.hasIncomingInvite,
             // 받은 **아잉 뒤집기** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
             // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
-            hasReversiInvite: appDelegate.store.reversi.visibleIncoming != nil
+            hasReversiInvite: appDelegate.store.reversi.visibleIncoming != nil,
+            // 받은 **아잉 마작** 초대도 같은 점(큐브와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
+            hasMahjongInvite: appDelegate.store.mahjong.hasIncomingInvite,
+            // 아잉 마작 **자리 비움**(이 기기가 연 판)도 같은 점 — 판은 자동으로 흐르니 돌아갈 길을 창 밖에서 알린다.
+            hasMahjongAway: appDelegate.store.mahjong.hasAwaySeatHere
         )
     }
 }
@@ -210,6 +215,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireRummy()
         // 아잉 뒤집기 — 큐브와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireReversi()
+        // 아잉 마작 — 뒤집기와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireMahjong()
         // 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로. **오버레이 컨트롤러를 만든 뒤에** 잇는다: 배너는 캐릭터 패널 한 칸 위에
         // 서고, 대결 미룸(위 세 판의 단계)이 이미 배선돼 있어야 첫 확성기가 제자리에 뜬다.
         wireMegaphoneBanner()
@@ -378,6 +385,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return ReversiPlayerFace.fallback }
             return ReversiPlayerFace.me(from: self.store)
         }, safety: store)
+        // 아잉 마작 창도 같은 자리에서 배선한다 — 큐브 창의 형제다(닫아도 판은 자동으로 끝까지 — 닫기 ≠ 기권).
+        CheckMahjongWindowController.shared.configure(store: store.mahjong, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
         CheckGachaWindowController.shared.configure(store: store)
@@ -414,6 +426,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gomoku.presentWindow = { CheckGomokuWindowController.shared.show() }
         // 로그아웃·계정 전환의 reset() 이 부르는 닫기 문. 아래 계정 감시자와 겹쳐도 close() 는 멱등이다 — 둘 중 하나만 살아도 창이 남지 않게.
         gomoku.dismissWindow = { CheckGomokuWindowController.shared.close() }
+        // 사람이 오목 창을 닫았다 — 미니게임 창에서 들어온 창이면 미니게임 창이 다시 선다(2026-11-03 대표 요청 ⑧ · `duelWindowDidClose`).
+        CheckGomokuWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.gomoku, byUser: byUser)
+        }
         gomoku.onInviteArrived = { [weak self] invite in
             self?.overlayController?.enqueueGomokuInvite(invite)
         }
@@ -421,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         gomoku.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
-        // 창이 안 보이는 동안 내 차례가 왔다 → 캐릭터 말풍선("○○님이 뒀어요 · 내 차례예요"). 누르면 위 onOpenGomoku 로 창이 열린다.
+        // 창이 안 보이거나 가려진 동안 내 차례가 왔다 → 캐릭터 말풍선("○○님이 뒀어요 · 내 차례예요"). 누르면 위 onOpenGomoku 로 창이 열린다.
         gomoku.onAttention = { [weak self] attention in
             self?.overlayController?.enqueueGomokuAttention(attention)
         }
@@ -467,6 +483,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         chess.spectatorFeaturesEnabled = true
         chess.presentWindow = { CheckChessWindowController.shared.show() }
         chess.dismissWindow = { CheckChessWindowController.shared.close() }
+        CheckChessWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.chess, byUser: byUser)
+        }
         chess.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
@@ -497,12 +516,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   ⑦ `spectatorFeaturesEnabled`(v0.3.65) — **관전의 주 스위치**. 오목·체스와 같은 까닭으로 스토어 기본이 꺼짐이고,
     ///      이 한 줄이 없으면 로비 줄에 [관전] 칩이 아예 안 서고 `tetris_watch` 요청도 **한 번도** 안 나간다
     ///      (`rankingEnabled` 와 **따로** 둔다 — 순위 없이 관전만 여는 날이 온다).
+    ///   ⑧ `framesEnabled` — **판 표시 프레임의 주 스위치**(명세 docs/plan/tetris-broadcast/SPEC.md). 스토어 기본이 꺼짐이라 이 한 줄이
+    ///      없으면 `tetris_report` 가 언제나 `p_protocol` 1 이고 판 전용 소켓을 한 번도 안 연다(보고는 지금처럼 1초). 켜도 출시를 가르는
+    ///      것은 서버 스위치(`tetris_frames_enabled()`)다 — 서버가 두 자리 모두 켰다고 말한 판에서만 소켓이 열린다.
     private func wireTetrisDuel() {
         let tetris = store.tetris
         tetris.rankingEnabled = true
         tetris.spectatorFeaturesEnabled = true
+        tetris.framesEnabled = true
         tetris.presentWindow = { CheckTetrisDuelWindowController.shared.show() }
         tetris.dismissWindow = { CheckTetrisDuelWindowController.shared.close() }
+        CheckTetrisDuelWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.tetris, byUser: byUser)
+        }
         tetris.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
@@ -536,6 +562,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rummy.rankingEnabled = true
         rummy.presentWindow = { CheckRummyWindowController.shared.show() }
         rummy.dismissWindow = { Self.closeRummyWindow() }
+        CheckRummyWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.rummy, byUser: byUser)
+        }
         rummy.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
@@ -581,6 +610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 아잉 뒤집기를 아는 길**(받은 신청 · "내 차례예요" 말풍선).
     ///      한 수 30초라 창을 닫아 둔 사람에게 이 길이 없으면 자동 착수 3번으로 **판돈을 잃는다**.
     ///   ⑥ `onOpenReversi` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑦ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만 · duelWindowDidClose).
     /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 다른 1:1 게임과 같은 자리다.
     private func wireReversi() {
         let reversi = store.reversi
@@ -588,6 +618,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reversi.spectatorFeaturesEnabled = true
         reversi.presentWindow = { CheckReversiWindowController.shared.show() }
         reversi.dismissWindow = { CheckReversiWindowController.shared.close() }
+        // 사람이 아잉 뒤집기 창을 닫았다 — 미니게임 창에서 들어온 창이면 미니게임 창이 다시 선다(2026-11-03 대표 요청 ⑧ · `duelWindowDidClose`).
+        CheckReversiWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.reversi, byUser: byUser)
+        }
         reversi.requestAttention = {
             if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
         }
@@ -604,6 +638,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             CheckReversiWindowController.shared.close()
             self?.overlayController?.clearReversiInvites()
         }.start()
+    }
+
+    /// 아잉 마작(4인 리치 마작)의 문들을 잇는다(실행당 1회). 뒤집기와 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V03xxMahjongWiringTests)이 줄마다 되묻는다.
+    ///   ① `rankingEnabled` — 순위의 주 스위치(스토어는 폰과 공용이라 기본이 꺼짐). 관전은 없다(대표 답).
+    ///   ② `presentWindow` · ③ `dismissWindow` — 창을 띄우고 닫는 유일한 문.
+    ///   ④ `requestAttention` — 모양만(메뉴바 앱이라 독 주의는 거의 안 보인다 — 완화책은 말풍선·점·배너).
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 아잉 마작을 아는 길**(받은 초대 · 판 시작·국마다 첫 차례·자리 비움·닫기 안내).
+    ///   ⑥ `onOpenMahjong` — 그 말풍선을 눌렀을 때 그 방·판의 창.
+    ///   ⑦ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만). 닫기 안내 말풍선은 창 컨트롤러가
+    ///      스토어(`windowDidClose(byUser:)`)에 직접 알린다 — 여기서 또 부르면 한 번 닫기에 두 번 알린다.
+    ///   ⑧ App Nap — 이 기기가 연 방·판(room·active) 동안 붙든다(5초 깨우기가 밀리면 판이 멎는다). 연습판은 빼다.
+    /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 다른 게임과 같은 자리다.
+    private func wireMahjong() {
+        let mahjong = store.mahjong
+        mahjong.rankingEnabled = true
+        mahjong.presentWindow = { CheckMahjongWindowController.shared.show() }
+        mahjong.dismissWindow = { CheckMahjongWindowController.shared.close() }
+        CheckMahjongWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.mahjong, byUser: byUser)
+        }
+        mahjong.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        mahjong.onInviteArrived = { [weak self] room in
+            self?.overlayController?.enqueueMahjongInvite(room)
+        }
+        mahjong.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueMahjongAttention(attention)
+        }
+        overlayController?.onOpenMahjong = { [weak self] matchID in
+            self?.store.mahjong.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckMahjongWindowController.shared.close()
+            self?.overlayController?.clearMahjongInvites()
+        }.start()
+        let mahjongActivity = MahjongActivityHold()
+        mahjong.onHoldingActivityChange = { holding in mahjongActivity.set(holding) }
     }
 
     /// 아잉 큐브 창을 닫는다(멱등 — 창이 아직 없으면 아무것도 안 한다). 창 컨트롤러의 공개 표면은 `configure`·`show` 뿐이라

@@ -104,6 +104,8 @@ enum DailyMissionCopy {
         case "rummy": return RummyEntryIcon.resolved
         // 일일 미션 아홉째 줄(daily_reversi) — 미니게임 창 사이드바의 [아잉 뒤집기] 문과 같은 기호.
         case "reversi": return ReversiEntryIcon.resolved
+        // 일일 미션 열째 줄(daily_mahjong) — 미니게임 창 사이드바의 [아잉 마작] 문과 같은 기호.
+        case "mahjong": return MahjongEntryIcon.resolved
         default: return AchievementCopy.fallbackIcon
         }
     }

@@ -1245,6 +1245,24 @@ package actor SupabaseWorkService {
         )
     }
 
+    /// 내 집중 모드 서버값 **하나만** 다시 읽는다(2026-11-03 — 같은 계정의 다른 맥이 바꾼 값을 따라잡는다).
+    /// 행이나 칸이 없으면 nil(모름)이다 — `fetchTokenUsageSettings` 처럼 false 로 접지 않는다. 호출부(`refreshMyFocusModeIfFocused`)는
+    /// 켜진 집중을 **끌지 말지** 정하는 데 이 값을 쓰므로, 모름을 꺼짐으로 읽으면 RLS·일시 장애 한 번에 집중이 조용히 풀린다.
+    package func fetchMyFocusMode(accessToken: String, userID: String) async throws -> Bool? {
+        let data = try await send(
+            path: "/rest/v1/profiles",
+            method: "GET",
+            queryItems: [
+                URLQueryItem(name: "id", value: "eq.\(userID)"),
+                URLQueryItem(name: "select", value: "focus_mode")
+            ],
+            body: Optional<EmptyBody>.none,
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode([ProfilePrivacyRow].self, from: data).first?.focusMode
+    }
+
     /// 서버가 아는 최신 릴리스(v0.3.20). `app_latest_release()` RPC 를 **anon Bearer**(accessToken 없이)로 호출한다 —
     /// 로그인 전·로그아웃 상태에서도 업데이트는 알아야 하므로 로그인 토큰에 묶지 않는다(lookupTeamByCode 와 같은 문).
     /// 반환은 jsonb 단일 객체(배열 아님)라 그대로 디코드한다. 함수가 없는 옛 서버(404)·일시 장애(5xx)는 다른 호출과 같이

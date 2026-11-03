@@ -116,9 +116,10 @@ extension WorkTimerStore {
         }
         if !isShopPanelVisible { toggleShopPanel() }
         guard isShopPanelVisible else { return }
-        // 생일 선물 전용(케이크 아잉이 — v0.3.66): 상점을 열고 얻는 길(생일 선물)을 말한다 — 뽑기 창도 [구매하기]도 그 캐릭터에는 거짓이다.
-        if CharacterCatalog.isGiftOnlyBuiltIn(id) {
-            shopNotice = CakeGiftText.lockedHint
+        // 선물 전용(케이크 아잉이 — v0.3.66 생일 · 이슬 아잉이 — v0.3.74 술 한잔): 상점을 열고 얻는 길(그 종류의 선물)을 말한다 —
+        // 뽑기 창도 [구매하기]도 그 캐릭터에는 거짓이다. 안내 글자는 종류마다 다르다(`CharacterGiftKind.copy`).
+        if let gift = CharacterCatalog.giftKind(ofBuiltIn: id) {
+            shopNotice = gift.copy.lockedHint
             return
         }
         guard CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
@@ -216,7 +217,11 @@ extension WorkTimerStore {
     /// 상점 격자의 줄. 서버 목록이 유일한 출처다 — 아직 못 읽었거나 비었으면 **번들 목록으로 자리만**(가격 없음) 그리되,
     /// 금 · 무지개는 고르기와 같은 규칙으로 거른다(`isCharacterListed`).
     func shopGridRows(catalog: CharacterCatalog) -> [ShopCharacterRow] {
-        guard shopCharacters.isEmpty else { return Self.giftOnlyInDisplayOrder(shopCharacters) }
+        guard shopCharacters.isEmpty else {
+            // 선물 전용 잠긴 칸 정책(v0.3.74 — 술 한잔 선물은 상수 하나로 '모두에게' ↔ '가진 사람만'). 생일 케이크는 언제나 모두에게(0.3.66 그대로).
+            return Self.shopRowsApplyingGiftCellPolicy(Self.giftOnlyInDisplayOrder(shopCharacters),
+                                                       owned: ownedCharacterIDs, drinkPolicy: drinkGiftCellPolicy)
+        }
         // 착용 관용(`wearing` — 입은 케이크)은 고르기 몫이다: 자리표시 줄은 `owned: false` 라 입은 케이크를 세우면 잠긴 칸('생일 선물 전용')으로 선다.
         return catalog.allIDs
             .filter { $0 != CharacterCatalog.builtInAingID
@@ -225,10 +230,28 @@ extension WorkTimerStore {
             .map { ShopCharacterRow(id: $0, price: nil, owned: false) }
     }
 
-    /// 서버 목록의 순서를 지키되 **케이크 둘끼리만** 표시 순서(딸기 → 초코 — `CharacterCatalog.giftOnlyBuiltInIDs`)로 바로 세운다(순수).
-    /// 서버는 값 · id 순이라 같은 값(2000)의 두 케이크가 초코 → 딸기로 온다(설계서 §1 은 딸기 먼저). 다른 줄의 자리는 한 칸도 안 옮긴다.
+    /// 이슬 아잉이(술 한잔 선물 전용 — v0.3.74)의 잠긴 칸을 안 가진 사람에게도 세우는가 — **정책은 이 상수 하나다.**
+    /// 대표 결정(2026-11-03, 결재 #d_zCowzb68KWlC) "모두에게 잠긴 칸 (케이크와 같게)" — 안 가진 사람도 흐린 칸으로 본다(얻는 길을 말한다).
+    /// 뒤집으면 `.ownersOnly`(가진 사람에게만 — 고르기와 같다).
+    /// 서버(p ≥ 5)는 이슬 행을 모두에게 싣는다 — 숨기는 것은 이 화면의 몫이다.
+    nonisolated static let drinkGiftLockedCellPolicy: GiftLockedCellPolicy = .everyone
+
+    /// 상점 줄에 선물 전용 잠긴 칸 정책을 입힌다(순수 — 값으로 검증한다). 술 한잔 선물(이슬)만 `drinkPolicy` 를 따르고, 생일 케이크 ·
+    /// 그 밖의 줄은 한 칸도 안 건드린다. 가진 줄(서버 `owned` 또는 이 맥이 아는 보유)은 정책과 무관하게 선다(보유 칸이다).
+    nonisolated static func shopRowsApplyingGiftCellPolicy(_ rows: [ShopCharacterRow], owned: Set<String>,
+                                                          drinkPolicy: GiftLockedCellPolicy) -> [ShopCharacterRow] {
+        guard drinkPolicy == .ownersOnly else { return rows }
+        return rows.filter { row in
+            guard CharacterCatalog.giftKind(ofBuiltIn: row.id) == .drink else { return true }
+            return row.owned == true || owned.contains(row.id)
+        }
+    }
+
+    /// 서버 목록의 순서를 지키되 **케이크 둘끼리만** 표시 순서(딸기 → 초코 — `CharacterCatalog.birthdayGiftBuiltInIDs`)로 바로 세운다(순수).
+    /// 서버는 값 · id 순이라 같은 값(2000)의 두 케이크가 초코 → 딸기로 온다(설계서 §1 은 딸기 먼저). 다른 줄의 자리는 한 칸도 안 옮긴다
+    /// (v0.3.74 이슬 — 값 2002 라 서버 순서로도 케이크 뒤다 — 도 그 '다른 줄'이다: 케이크 뜻 목록이라 생일 목록을 쓴다).
     nonisolated static func giftOnlyInDisplayOrder(_ rows: [ShopCharacterRow]) -> [ShopCharacterRow] {
-        let order = CharacterCatalog.giftOnlyBuiltInIDs
+        let order = CharacterCatalog.birthdayGiftBuiltInIDs
         let slots = rows.indices.filter { order.contains(rows[$0].id) }
         guard slots.count > 1 else { return rows }
         let sorted = slots.map { rows[$0] }.sorted { (order.firstIndex(of: $0.id) ?? 0) < (order.firstIndex(of: $1.id) ?? 0) }
@@ -483,3 +506,10 @@ extension WorkTimerStore {
     }
 }
 
+/// 선물 전용 캐릭터의 상점 잠긴 칸을 누구에게 세우는가(v0.3.74 — `WorkTimerStore.drinkGiftLockedCellPolicy`).
+enum GiftLockedCellPolicy: Equatable, Sendable {
+    /// 모두에게 — 안 가진 사람에겐 자물쇠 + '○○ 선물 전용' 잠긴 칸(케이크 선례).
+    case everyone
+    /// 가진 사람에게만 — 안 가진 사람의 상점엔 칸이 없다(가진 사람은 보유 칸).
+    case ownersOnly
+}

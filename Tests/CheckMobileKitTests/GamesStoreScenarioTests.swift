@@ -353,6 +353,9 @@ import Testing
 
         let active = try JSONDecoder.gamesSnake.decode(GomokuStateResponse.self, from: Data(
             GamesGomokuJSON.state(nowMs: nowMs, matchID: matchID, moves: [("black", "H8"), ("white", "I9")]).utf8))
+        // 이 폰이 연 판이다(신청 ok · 수락 ok 가 적는다 — 2026-11-03 `GameDeviceLedger`). 같은 계정의 다른 기기가 연 판이면
+        // 화면이 저절로 열리지 않는다(코어 `GameWindowOneDeviceTests`).
+        harness.gomoku.noteOwnsMatch(matchID)
         harness.gomoku.applyState(active.state)
         #expect(harness.gomoku.phase == .playing)
         #expect(harness.model.router.selectedTab == .games, "판이 시작됐는데 오목 화면을 열지 않았다")

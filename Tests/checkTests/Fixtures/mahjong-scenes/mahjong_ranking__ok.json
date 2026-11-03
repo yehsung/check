@@ -1,0 +1,27 @@
+{
+  "me": {
+    "avg_rank": 2.3333333333,
+    "firsts": 1,
+    "fourths": 1,
+    "games": 3,
+    "rank": null,
+    "seconds": 0,
+    "thirds": 1
+  },
+  "record_since_ms": null,
+  "rows": [
+    {
+      "avatar_url": null,
+      "avg_rank": 1.75,
+      "center": null,
+      "character": "aing",
+      "display_name": "씨씨",
+      "firsts": 6,
+      "games": 12,
+      "rank": 1,
+      "user_id": "00000000-0000-0000-0000-0000000000c3"
+    }
+  ],
+  "server_now_ms": 1800000000000,
+  "status": "ok"
+}

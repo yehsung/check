@@ -1,0 +1,128 @@
+{
+  "state": {
+    "match": {
+      "id": "3d24034e-6f6d-4755-a723-11decc8528d4",
+      "seq": 0,
+      "host": {
+        "id": "e9e23fed-9fa6-4453-98d0-cebc39650a23",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-e9e23fed-9fa6-4453-98d0-cebc39650a23"
+      },
+      "honba": 0,
+      "phase": "room",
+      "round": 0,
+      "stake": 3,
+      "format": "tonpuu",
+      "status": "forming",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": false,
+      "kan_count": 0,
+      "turn_seat": null,
+      "wake_seat": null,
+      "created_ms": 1793699161590,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": null,
+      "wake_at_ms": null,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": null,
+      "bank_full_ms": 20000,
+      "next_hand_ms": null,
+      "wall_remaining": null,
+      "dora_indicators": [],
+      "room_expires_ms": 1793699761589
+    },
+    "seats": [],
+    "events": [],
+    "members": [
+      {
+        "user": {
+          "id": "e9e23fed-9fa6-4453-98d0-cebc39650a23",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-e9e23fed-9fa6-4453-98d0-cebc39650a23"
+        },
+        "state": "joined",
+        "is_host": true
+      },
+      {
+        "user": {
+          "id": "ec0ec1ec-d011-4279-8302-9f29420b6597",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-ec0ec1ec-d011-4279-8302-9f29420b6597"
+        },
+        "state": "invited",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "32fe53f9-30ba-432c-8b06-6a92079fb4cc",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-32fe53f9-30ba-432c-8b06-6a92079fb4cc"
+        },
+        "state": "invited",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "81e9bbb2-553b-4eef-b7d9-f887cd6930ea",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-81e9bbb2-553b-4eef-b7d9-f887cd6930ea"
+        },
+        "state": "invited",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "37452067-ead3-49bf-831f-ce775dc1771a",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-37452067-ead3-49bf-831f-ce775dc1771a"
+        },
+        "state": "invited",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "8f8a21fb-13f3-4787-a647-17d482d398bd",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-8f8a21fb-13f3-4787-a647-17d482d398bd"
+        },
+        "state": "invited",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "969bde76-1f50-452f-a536-01d44a0de2e8",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-969bde76-1f50-452f-a536-01d44a0de2e8"
+        },
+        "state": "invited",
+        "is_host": false
+      }
+    ],
+    "my_away": null,
+    "my_hand": [],
+    "my_seat": null,
+    "my_drawn": null,
+    "my_waits": [],
+    "last_hand": null,
+    "reactions": [],
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793699161597
+  },
+  "status": "too_many_invites"
+}

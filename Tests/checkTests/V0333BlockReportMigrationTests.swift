@@ -327,6 +327,24 @@ private let laterRedefinitionsAllowed: [String: [String]] = [
         "blocked_between", "public.same_visibility(",
         "on conflict (from_user, client_message_id) where client_message_id is not null do nothing",
     ],
+    // 2026-11-03 서버 안정화가 로비 사람 목록을 도우미 `lobby__others(uid)` 조인으로 바꾼다. 로비 4종이 DB 시간의 21% 를 썼고,
+    // 원인은 사람마다 술어 함수를 부른 것이다. 오목 로비 users[] 의 차단·숨김 게이트는 도우미로 넘어가고, matches[] 의 숨김 격리는
+    // 본문에 남는다. 측정: 덮어쓴 **이유**(lobby__others 조인)와 본문에 남은 숨김 게이트, 전적 정본 술어.
+    // 넘어간 게이트가 정본 술어를 지나는지는 아래 `로비_도우미는_정본_술어로만_거른다` 가 체인의 마지막 정의에서 잰다.
+    // 20261107140000 판 도우미는 user_blocks 를 직접 읽어 ②를 어겼고, 20261107160000 이 고쳤다.
+    "20261107140000_lobby_set_based.sql:gomoku_lobby": [
+        "public.lobby__others(uid)", "public.same_visibility(", "public.gomoku__record(uid)",
+    ],
+    // 2026-11 사람 찾기 명부에 집중 칸(대표 요청 5) — status_message 때와 같은 drop+create(returns table 이 바뀐다). 본문은 운영 정본
+    // (20261014121000 §3)을 그대로 옮기고 select 끝에 `p.focus_mode` 한 줄만 더했다(그 파일의 §0 · §4 가 접은 글자와 md5 로 되묻는다).
+    // 측정: 덮어쓴 **이유**(p.focus_mode)와 차단·숨김 게이트가 살아 있는지. 번호를 바꾸면 이 키도 같이 바꾼다(allowedSeen == keys).
+    "20261108120500_app_user_directory_focus_mode.sql:app_user_directory": ["blocked_between", "public.same_visibility(", "p.focus_mode"],
+    // 2026-11 보낸이 집중 차단(대표 요청 6 · "찌르기·메시지만" · "지금 서버에서도 막기") — 세 함수를 운영 정본에서 출발해 같은 서명으로
+    // create or replace 하고 한 조각(sender_focused)만 더했다(그 파일의 §0 · §4 가 '정본 + 조각'을 바이트로 되묻는다). 조각의 **자리**
+    // (쓰기 · 상대 집중 앞)는 SenderFocusGateMigrationTests ① 이 최종 정의에 대해 잰다. 측정: 덮어쓴 이유와 차단·숨김 게이트.
+    "20261108121000_sender_focus_gate.sql:send_message": ["blocked_between", "public.same_visibility(", "'sender_focused'"],
+    "20261108121000_sender_focus_gate.sql:poke_user": ["blocked_between", "public.same_visibility(", "'sender_focused'"],
+    "20261108121000_sender_focus_gate.sql:ultra_poke_user": ["blocked_between", "public.same_visibility(", "'sender_focused'"],
 ]
 
 @Test
@@ -357,6 +375,26 @@ func 이_파일이_고친_아홉_함수의_최종_정의다() throws {
 }
 
 // MARK: - ② 차단 판정은 한 함수만 지난다
+
+@Test
+func 로비_도우미는_정본_술어로만_거른다() throws {
+    // 없으면: 로비 4종의 사람 목록 게이트가 사는 `lobby__others` 를 누가 "집합으로 빠르게" 다시 쓰면서 user_blocks 를 직접
+    // 읽거나 숨김 식(is_hidden_user)을 다시 적어도 초록이다. 20261107140000 이 실제로 그랬다. 결과는 같았지만, 차단·숨김
+    // 규칙이 바뀌면 로비만 따라가지 못하는 두 벌이 된다. 숨김은 심사·시험 계정을 실사용자와 떼어 놓는 장치다.
+    var last: (file: String, body: String)?
+    for file in try migrationFiles() where file.lastPathComponent > blockMigrationName {
+        let sql = try String(contentsOf: file, encoding: .utf8)
+        if let body = functionBody(of: "lobby__others", in: sql) { last = (file.lastPathComponent, body) }
+    }
+    let found = try #require(last, "lobby__others 를 정의하는 파일이 없다 — 로비 4종이 이 도우미를 조인한다")
+    let code = codeLines(found.body).joined(separator: "\n")
+    #expect(code.contains("public.blocked_between(p_uid, p.id)"),
+            "\(found.file): 로비 도우미의 차단 판정이 blocked_between 을 지나지 않는다(차단은 양방향 — 한 함수만)")
+    #expect(code.contains("public.same_visibility(p_uid, p.id)"),
+            "\(found.file): 로비 도우미의 숨김 격리가 same_visibility 를 지나지 않는다")
+    #expect(!code.contains("user_blocks"), "\(found.file): 로비 도우미가 user_blocks 를 직접 읽는다 — 판정은 blocked_between 한 함수만(②)")
+    #expect(!code.contains("is_hidden"), "\(found.file): 로비 도우미가 숨김 식을 다시 적었다 — same_visibility 한 함수만")
+}
 
 @Test
 func 게이트는_user_blocks_를_직접_조회하지_않는다() throws {

@@ -46,6 +46,11 @@ extension CharacterCatalog {
         if let cake = CakeAingFinish.Kind(characterID: id) {
             return entry(id: id) == nil ? nil : CakeAingFinish.portraitURL(cake, mood: mood)
         }
+        // 이슬 아잉이(v0.3.74 내장)도 같은 자리지만 **굽지 않는다**(설계서 §6): 그림 저장소 `IsulArt` 가 디스크 캐시(운영 Storage 에서 받은 새 초상)
+        // → 번들 폴백(`aing_isul-*.png`) 순으로 고른 파일을 준다. 메뉴바 · 헤더 · 카드 · 남의 아바타 · 상점 칸이 이 한 길을 탄다.
+        if CharacterCatalog.isIsulAing(id) {
+            return entry(id: id) == nil ? nil : IsulArt.current.portraitURL(mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

@@ -175,32 +175,69 @@ extension WorkTimerStore {
     /// `windowDidResignKey` 가 이미 판을 끝냈으니 결과가 같았지만, 지금 키 상실은 **멈추기만** 한다 —
     /// 그래서 여기서 판이 끝나는 이유는 이제 **창 닫힘** 하나다.
     func openGomokuFromMiniGame() {
+        noteMiniGameDuelReturn(.gomoku)
         gomoku.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 
     /// 미니게임 창 사이드바의 **1:1 체스** 문. 위와 같은 규약이다.
     func openChessFromMiniGame() {
+        noteMiniGameDuelReturn(.chess)
         chess.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 
     /// 미니게임 창 사이드바의 **1:1 테트리스** 문(v0.3.60). 위와 같은 규약이다 — 대결 창을 **먼저** 띄우고 이 창은 나중에 내린다.
     func openTetrisDuelFromMiniGame() {
+        noteMiniGameDuelReturn(.tetris)
         tetris.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 
     /// 미니게임 창 사이드바의 **아잉 큐브** 문(v0.3.69). 위와 같은 규약이다 — 큐브 창을 **먼저** 띄우고 이 창은 나중에 내린다.
     func openRummyFromMiniGame() {
+        noteMiniGameDuelReturn(.rummy)
         rummy.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 
     /// 미니게임 창 사이드바의 **아잉 뒤집기** 문. 위와 같은 규약이다 — 아잉 뒤집기 창을 **먼저** 띄우고 이 창은 나중에 내린다.
     func openReversiFromMiniGame() {
+        noteMiniGameDuelReturn(.reversi)
         reversi.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
+    }
+
+    /// 미니게임 창 사이드바의 **아잉 마작** 문. 위와 같은 규약이다 — 아잉 마작 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    func openMahjongFromMiniGame() {
+        noteMiniGameDuelReturn(.mahjong)
+        mahjong.openWindow(focusMatchID: nil)
+        closeMiniGamePanel()
+    }
+
+    // MARK: 대결 창 → 미니게임 창 되돌아오기 (2026-11-03 대표 요청 ⑧)
+    //
+    // 원문: "미니게임 화면에서도 사람들이랑 붙은 게임들 누르면 해당 게임 로비로 가지잖아. 거기서 엑스 누르면 다시 기본 미니게임 창이
+    // 다시 뜨면서 교대되는 느낌이면 좋을듯." 들어갈 때 대결 창을 먼저 띄우고 미니게임 창을 내렸으니(위 다섯 문), 나올 때는 그 거꾸로 —
+    // 사람이 대결 창을 닫는 순간 미니게임 창을 띄운다(닫히는 창이 사라지는 동안 새 창이 앞에 선다).
+    //  · **미니게임 창에서 들어온 대결 창만**이다. 팝오버 배너 · 말풍선 · 메뉴로 연 대결 창은 닫으면 그냥 닫힌다.
+    //  · **사람이 닫았을 때만**이다(빨간 점 · ⌘W · 큐브의 확인 뒤 닫기). 로그아웃 · 계정 전환의 프로그램 닫기는 표지만 지운다 —
+    //    그때 미니게임 창이 튀어나오면 안 된다.
+    //  · 판 중에 닫아도 판은 그대로다(대결 창의 닫기는 기권이 아니다 — 큐브는 묻고 닫는다). 미니게임 창이 다시 서도 판은 서버에서 흐른다.
+
+    /// 미니게임 창이 **떠 있을 때** 그 사이드바에서 대결 창으로 들어간다 — 그 대결 창을 표지로 적는다(닫혀 있었으면 적지 않는다).
+    private func noteMiniGameDuelReturn(_ door: MiniGameDuelDoor) {
+        guard isMiniGamePanelVisible else { return }
+        miniGameDuelReturn = door
+    }
+
+    /// 대결 창이 닫혔다(창 컨트롤러의 `onClosed` 가 알린다 — `CheckApp` 배선). 그 창이 미니게임 창에서 들어온 것이고 사람이 닫았으면
+    /// 미니게임 창을 다시 띄운다. 프로그램 닫기면 표지만 지운다. 다른 대결 창의 닫힘은 표지를 건드리지 않는다.
+    func duelWindowDidClose(_ door: MiniGameDuelDoor, byUser: Bool) {
+        guard miniGameDuelReturn == door else { return }
+        miniGameDuelReturn = nil
+        guard byUser, !isMiniGamePanelVisible else { return }
+        openMiniGameWindow()
     }
 
     /// 진행 중인 판을 **사용자 의사로** 접는다(정지 카드의 [그만두기] — v0.2.48).
@@ -957,4 +994,11 @@ extension WorkTimerStore {
             }
         }
     }
+}
+
+/// 미니게임 창 사이드바에서 들어가는 대결 창(2026-11-03 대표 요청 ⑧ — `WorkTimerStore.miniGameDuelReturn`).
+/// 사이드바 같이 하기 칸(`MiniGamePanel`)도 이 목록을 쓴다 — 선언 순서가 곧 같이 하기 줄 순서이자 저절로 굴리기 자리표 순서다.
+/// 새 문은 **맨 뒤**에 붙인다(아잉 뒤집기는 큐브 뒤 · 마작 가지는 reversi 뒤에 mahjong — MJ/SPEC.md §5.8).
+enum MiniGameDuelDoor: Equatable, Sendable, CaseIterable {
+    case gomoku, chess, tetris, rummy, reversi, mahjong
 }

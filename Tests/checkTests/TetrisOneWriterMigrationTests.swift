@@ -21,6 +21,7 @@ import Testing
 private let towMigration = "20261103124000_tetris_one_writer.sql"
 private let towDuelMigration = "20261021120000_tetris_duel.sql"
 private let towWatchersMigration = "20261023120000_match_watchers.sql"
+private let towFramesMigrationSuffix = "_tetris_frames.sql"
 
 private struct TOWError: Error, CustomStringConvertible {
     let message: String
@@ -260,7 +261,11 @@ struct TetrisOneWriterMigrationTests {
                 if file < towMigration { beforeMine = file }
                 last = file
             }
-            #expect(last == towMigration, Comment(rawValue: "\(name) 의 마지막 정의가 \(last ?? "없음") 다 — 뒤 파일이 쓰기 규칙을 덮었다면 이 시험의 치환표를 그 파일로 옮겨라"))
+            // 프레임 초안(_tetris_frames.sql)은 보고 · 상태를 일부러 다시 쓴다. 그 파일이 체인에 있을 때만 기대가 그쪽이고,
+            // 본문 = 이 파일 본문 + 치환표(쓰기 규칙이 그대로다)는 TetrisFramesMigrationTests 가 바이트로 잰다.
+            let intended = ["tetris_report", "tetris__state"].contains(name)
+                ? chain.first { $0.hasSuffix(towFramesMigrationSuffix) } : nil
+            #expect(last == intended ?? towMigration, Comment(rawValue: "\(name) 의 마지막 정의가 \(last ?? "없음") 다 — 뒤 파일이 쓰기 규칙을 덮었다면 이 시험의 치환표를 그 파일로 옮겨라"))
             if let canon = towPatches.first(where: { $0.name == name })?.canon {
                 #expect(beforeMine == canon, Comment(rawValue: "\(name) 의 직전 정의가 \(beforeMine ?? "없음") 다(기대 \(canon)) — 정본이 바뀌었다"))
             } else {

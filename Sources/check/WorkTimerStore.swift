@@ -300,7 +300,10 @@ final class WorkTimerStore {
             syncLeagueWeekToCurrent()
             if isLeaderboardVisible { loadLeaderboard() }
             if isTokenBoardVisible { loadTokenBoard() }
-            if isPokePanelVisible { loadPokeDirectory() }
+            // 대화 화면도 명부를 읽는다(머리의 상태·집중 표시 · [보내기] 잠금 — 2026-11-03). 두 화면은 상호 배타라 여는 순간 한 건이다.
+            if isPokePanelVisible || isMessagePanelVisible { loadPokeDirectory() }
+            // 내 집중을 다른 맥에서 껐을 수 있다 — 켜져 있다고 알 때만 한 행 GET 으로 맞춘다(`refreshMyFocusModeIfFocused`, 2026-11-03).
+            if focusMode { Task { @MainActor in await refreshMyFocusModeIfFocused() } }
             if isMiniGamePanelVisible { loadMiniGameBoard() }
             // 지갑 화면(미션 · 울트라)도 같은 규약이다(v0.3.56 검토 수리). 미션 화면은 레일 칸이 되면서 팝오버를 닫았다 열어도
             // 그대로 떠 있는 화면이 됐는데, 주기 sync 는 **근무 중에만** 돈다(`syncUltraWalletIfDue` 의 startedAt 게이트) —
@@ -358,6 +361,8 @@ final class WorkTimerStore {
             // 아잉 뒤집기 받은 신청도 같은 자리에서 본다 — 폴링이 창이 보일 때만 도는 것도 같아서, 창을 안 연 사람에게는
             // 이 한 줄과 소켓 신호가 신청(TTL 60초)을 아는 전부다.
             reversi.refreshLobbyIfStale()
+            // 아잉 마작 받은 초대도 같은 자리에서 본다 — 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 초대(방 TTL 10분)를 아는 전부다.
+            mahjong.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
@@ -648,6 +653,9 @@ final class WorkTimerStore {
     // ── 미니게임 창 (v0.2.46) ── 별도 NSWindow 라 팝오버 패널들과 **상호 배타가 아니다**(공존한다).
     //    이 플래그는 '창이 열려 있다'는 뜻이고, 레일 진입 버튼의 하이라이트와 순위 재조회 게이트로 쓴다.
     var isMiniGamePanelVisible = false
+    /// 미니게임 창 사이드바에서 들어간 대결 창(2026-11-03 대표 요청 ⑧). 사람이 그 대결 창을 닫으면 미니게임 창이 다시 뜬다
+    /// (`duelWindowDidClose` — 들어갈 때 '대결 창 먼저, 미니게임 창 나중'으로 바꿔 넘어간 것의 되돌림). 화면이 읽지 않으므로 관찰하지 않는다.
+    @ObservationIgnored var miniGameDuelReturn: MiniGameDuelDoor?
     /// 값이 바뀌면 게임 잎 뷰가 진행 중인 판을 즉시 끝낸다(MiniGameHost.interruptToken). 팝오버가 닫혀도 뷰 트리는 상주하고
     /// isMenuPresented 는 관찰 대상이 아니라서, **판을 끝내는 신호는 관찰 가능한 이것 하나뿐**이다 — setMenuPresented(false)·
     /// closeMiniGamePanel·selectMiniGame·로그아웃이 올린다. 60Hz 게임 상태는 여기 두지 않는다(잎 뷰 @State).
@@ -883,6 +891,10 @@ final class WorkTimerStore {
     ///   로드 전에는 이 집합이 비어 있어서, 그대로 게이트를 걸면 **이미 산 캐릭터까지 잠긴 채** 첫 화면이
     ///   그려진다. 서버가 말해 주기 전의 침묵을 "안 샀다"로 읽으면 안 된다.
     var ownedCharacterIDs: Set<String> = [CharacterCatalog.builtInAingID]
+    /// `ownedCharacterIDs` 를 서버 상점 행으로 마지막에 채운 세션 세대(`applyShopState`). 로그아웃 · 계정 전환은 세대를 올리고 보유는 남기므로,
+    /// 이 값이 지금 세대와 다르면 보유는 **앞 계정의 것일 수 있다** — 선물 거르기(`cakeGiftFilteredByOwnership`)가 이 값으로 믿을지 가른다.
+    /// 화면이 읽지 않는다.
+    @ObservationIgnored var shopOwnershipGeneration: Int?
 
     /// 이 캐릭터를 고를 수 있는가. **로드 전에는 언제나 true** — 위 주석 참고.
     /// 아잉은 무료라 서버 응답과 무관하게 언제나 true 다.
@@ -924,9 +936,10 @@ final class WorkTimerStore {
     /// 뽑기 창을 띄우고 내리는 문(테스트 이음새 — 앱은 언제나 `.live`, 곧 `CheckGachaWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var gachaWindowHooks = GachaWindowHooks.live
 
-    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66) — 상태. 동작은 WorkTimerStoreCakeGift.swift
+    // MARK: 생일 선물 — 케이크 아잉이 (v0.3.66) · 술 한잔 선물 — 이슬 아잉이 (v0.3.74) — 상태. 동작은 WorkTimerStoreCakeGift.swift
+    // 이름은 생일 선물 때의 것이다. 담는 것은 선물 전용 캐릭터 선물 **한 장**(종류 = `CharacterGiftOffer.kind` — 생일 · 술 한잔)이다.
 
-    /// 서버가 말한 **열린** 생일 선물(`character_gift_pending`). nil = 없음(또는 아직 모름). 메뉴 팝오버의 '다시 열기' 카드가 이 값으로 선다 —
+    /// 서버가 말한 **열린** 선물(`character_gift_pending` — 생일 또는 술 한잔, 한 번에 하나). nil = 없음(또는 아직 모름). 메뉴 팝오버의 '다시 열기' 카드가 이 값으로 선다 —
     /// 받거나(`settlesGift`) 서버가 없다고 하면 내려간다.
     var cakeGiftOffer: CharacterGiftOffer?
     /// 축하 창이 지금 그리는 선물(창을 연 순간의 사본). 창이 떠 있는 동안 조회가 `cakeGiftOffer` 를 바꿔도 고르던 화면이 흔들리지 않게 나눈다.
@@ -956,6 +969,11 @@ final class WorkTimerStore {
     @ObservationIgnored var cakeGiftReturnsToPopover = false
     /// 축하 창을 띄우고 내리는 문(테스트 이음새 — 앱은 `.live`, 곧 `CheckCakeGiftWindowController.shared`). 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
+    /// 조회가 떠 있는 동안 선물이 결론 났다 — 그 조회가 끝나면 다음 선물을 한 번 더 묻는다(v0.3.74 `followUpCakeGiftIfNeeded`). 화면이 읽지 않는다.
+    @ObservationIgnored var cakeGiftFollowUpQueued = false
+    /// 상점이 안 가진 사람에게 이슬 아잉이(술 한잔 선물 전용)의 잠긴 칸을 세우는가(v0.3.74). 정본은 상수 하나
+    /// (`WorkTimerStore.drinkGiftLockedCellPolicy`)이고, 이 칸은 시험이 두 값을 다 재려고 갈아 끼우는 이음새다. 격자가 읽는다.
+    var drinkGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.drinkGiftLockedCellPolicy
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
@@ -1318,6 +1336,10 @@ final class WorkTimerStore {
     /// (`ReversiStoreHost = GomokuStoreHost`). 판정은 서버가 하고 이 스토어는 서버 state 를 그대로 든다(AI 연습 판만 로컬).
     let reversi: ReversiStore
 
+    /// 아잉 마작(4인 리치 마작 — 내부 이름 mahjong) 스토어. 아잉 뒤집기와 **같은 호스트 프로토콜**을 요구한다
+    /// (`MahjongStoreHost = GomokuStoreHost`). 판정은 서버가 하고 이 스토어는 서버 state 를 그대로 든다(혼자 연습판만 로컬).
+    let mahjong: MahjongStore
+
     /// 확성기(📢 v0.3.51) 작성 스토어 — **폰과 같은 코어 스토어**다(`MegaphoneStore`). 이 스토어는 호스트(세션·루비 미러)만
     /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
     let megaphone: MegaphoneStore
@@ -1679,6 +1701,8 @@ final class WorkTimerStore {
             rummy.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
             // 아잉 뒤집기도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선에 남지 않게.
             if reversi.hiddenPeerIDs != blockHiddenPeerIDs { reversi.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 아잉 마작도 같은 관계다 — 차단한 사람이 로비·공개 방·받은 초대·배너에 남지 않게(큐브 꼴, 같음 가드는 스토어 안).
+            mahjong.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
         }
     }
     /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
@@ -2003,6 +2027,8 @@ final class WorkTimerStore {
         self.rummy = RummyStore()
         // 아잉 뒤집기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.reversi = ReversiStore()
+        // 아잉 마작도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.mahjong = MahjongStore()
         // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.megaphone = MegaphoneStore()
         // 확성기 배너도 같다(2026-10-30). 본 것 기록은 이 앱의 defaults 에 둔다(시험은 격리 스위트).
@@ -2067,12 +2093,19 @@ final class WorkTimerStore {
         tetris.attach(host: self)
         rummy.attach(host: self)
         reversi.attach(host: self)
+        mahjong.attach(host: self)
         // v0.3.69: '이 기기가 연 판' 기록(한 판 한 기기 — TetrisDuelStore 머리말 ⑩)을 이 앱의 defaults 에 둔다. 빠지면 기록이
         // 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 침묵 패를 한다.
         tetris.defaults = defaults
+        // 2026-11-03: 오목·체스도 '이 기기가 연 판' 장부를 이 앱의 defaults 에 둔다(`GameDeviceLedger` — 창은 판을 연 기기에서만 저절로
+        // 열린다). 빠지면 장부가 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 자기 판의 창을 안 띄워 시계를 흘린다.
+        gomoku.deviceLedger.defaults = defaults
+        chess.deviceLedger.defaults = defaults
         // 2026-11-03: 아잉 뒤집기도 '이 기기가 연 판' 장부를 이 앱의 defaults 에 둔다(오목·체스와 같은 규칙 — 창은 판을 연 기기에서만
         // 저절로 열린다). 빠지면 장부가 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 자기 판의 창을 안 띄워 30초를 흘린다.
         reversi.deviceLedger.defaults = defaults
+        // 아잉 마작도 같은 장부를 이 앱의 defaults 에 둔다(같은 규칙 — 창·주의·말풍선·깨우기·방 확인은 판을 연 기기에서만).
+        mahjong.deviceLedger.defaults = defaults
         // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
         // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
         gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }
@@ -2080,6 +2113,7 @@ final class WorkTimerStore {
         tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         rummy.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "rummy") }
         reversi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "reversi") }
+        mahjong.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "mahjong") }
         megaphone.attach(host: self)
         megaphoneBanner.attach(host: self)
         // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).
@@ -4234,6 +4268,8 @@ extension WorkTimerStore {
         rummy.reset()
         // 아잉 뒤집기도 같은 이유로 내린다. 빠뜨리면 다음 사람이 앞 계정의 판·신청을 보고 앞 계정의 폴링이 새 토큰으로 돈다.
         reversi.reset()
+        // 아잉 마작도 같은 이유로 내린다(방·판·초대·연습판·장부 판).
+        mahjong.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
         // 확성기 배너의 큐·필터 id·스로틀도 계정에 묶인다(2026-10-30). 남기면 앞 사람이 받은 확성기 id 로 다음 사람의 줄을 거른다.
@@ -4380,6 +4416,7 @@ extension WorkTimerStore {
         tetris.reset()
         rummy.reset()
         reversi.reset()
+        mahjong.reset()
         megaphone.reset()
         resetMegaphoneBanner()
         resetGachaState()

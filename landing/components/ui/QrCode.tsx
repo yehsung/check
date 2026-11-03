@@ -2,7 +2,8 @@ import { asset, LINKS } from "@/data/fixtures";
 
 // QR 흰 타일(--r-window). desk 에서만 보인다.
 // 기본 = App Store QR(지역 코드 없는 주소로 새로 만든 SVG) — 누르면 App Store 새 탭(SPEC S11). 기존 호출부(<QrCode size={96} />)는 그대로.
-// href·src·alt 를 넘기면 다른 QR(설치 절 안드로이드 카드 — /#android 안내, docs/v3/brief.md §12). 바깥 주소(http…)만 새 탭, 같은 사이트 경로는 같은 탭.
+// href·src·alt 를 넘기면 다른 QR(지금 쓰는 곳 없음 — 10-30 안드로이드 베타 카드가 /#android 로 썼다. 정식 출시 때 스토어 QR 에 쓸 수 있다).
+// 바깥 주소(http…)만 새 탭, 같은 사이트 경로는 같은 탭.
 
 export interface QrCodeProps {
   size?: number;

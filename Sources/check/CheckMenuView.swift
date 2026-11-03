@@ -46,6 +46,10 @@ struct CheckMenuView: View {
     var previewRummyInvite: RummyRoom? = nil
     /// 스냅샷 전용: 받은 **아잉 뒤집기** 신청 배너를 강제로 그린다. 앱에서는 store.reversi.visibleIncoming 로만 결정.
     var previewReversiInvite: ReversiInvite? = nil
+    /// 스냅샷 전용: 받은 **아잉 마작** 초대 배너를 강제로 그린다. 앱에서는 store.mahjong.visibleInvites 로만 결정.
+    var previewMahjongInvite: MahjongRoom? = nil
+    /// 스냅샷 전용: 아잉 마작 **자리 비움** 배너를 강제로 그린다. 앱에서는 store.mahjong.hasAwaySeatHere 로만 결정.
+    var previewMahjongAway: Bool = false
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
@@ -87,12 +91,19 @@ struct CheckMenuView: View {
         /// 받은 **아잉 뒤집기** 신청. 뜻으로는 60초 신청이라 큐브(방 TTL 10분) 앞이 맞지만, 큐브 뒤에 둔다(설계 결정 D7 —
         /// 둘이 동시에 오면 큐브가 이기고 아잉 뒤집기는 다음 팝오버로 밀린다. 신청은 서버에 남아 창 로비에서 다시 보인다).
         case reversiInvite
+        /// 받은 **아잉 마작** 초대. 방 TTL 이 10분이라 1:1 신청들보다 덜 급하다 — 아잉 뒤집기 뒤다(밀려도 초대는 서버에 남아
+        /// 마작 창 로비에서 다시 보인다).
+        case mahjongInvite
+        /// 아잉 마작 **자리 비움**(이 기기가 연 판 — 창을 닫았거나 [나가기]). 판은 자동으로 흐르고 [돌아가기]가 창을 연다.
+        /// 초대 뒤다(같은 사람에게 둘이 함께 뜰 일은 드물다 — 판 중에는 초대를 못 받는다).
+        case mahjongAway
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
         /// 뜨는 안내라 밀리면 그 주를 통째로 잃는 반면, 이 배너는 본인이 확인할 때까지 남기 때문이다.
         case feedbackReply
-        /// 생일 선물이 도착했다(v0.3.66 — 케이크 아잉이). 축하 창을 고르지 않고 닫은 사람에게 **수령할 때까지** 남는 '다시 열기' 카드다
+        /// 선물이 도착했다(v0.3.66 생일 — 케이크 아잉이 · v0.3.74 술 한잔 — 이슬 아잉이, 한 번에 하나). 받는 창을 받지 않고 닫은 사람에게
+        /// **수령할 때까지** 남는 '다시 열기' 카드다
         /// (닫기 X 가 없다 — 받는 것이 끝이다). 답장보다 덜 급하고(사람이 기다리지 않는다) 새 버전 안내보다 먼저다 — 업데이트는 미뤄 두는
         /// 사람이 많아, 뒤에 두면 그동안 카드가 안 선다(축하 창은 실행당 한 번만 스스로 뜬다). 한 줄 배너라 높이는 회고와 같다.
         case cakeGift
@@ -125,6 +136,10 @@ struct CheckMenuView: View {
     static let rummyInviteBannerHeight: CGFloat = 92
     /// 받은 아잉 뒤집기 신청 배너. `ReversiInviteBanner` 는 체스 배너를 베낀 **같은 모양**이라 높이도 같다.
     static let reversiInviteBannerHeight: CGFloat = 92
+    /// 받은 아잉 마작 초대 배너. `MahjongInviteBanner` 는 큐브 배너를 베낀 **같은 모양**이라 높이도 같다.
+    static let mahjongInviteBannerHeight: CGFloat = 92
+    /// 아잉 마작 자리 비움 배너(`MahjongAwayBanner`) — 초대 배너와 같은 틀이라 높이도 같다.
+    static let mahjongAwayBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -345,6 +360,69 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 팝오버에 띄울 받은 **아잉 마작** 초대(없으면 nil). 큐브와 같은 규약: **스토어가 만료·차단을 걷은 목록만** 읽는다.
+    private var mahjongBannerInvite: MahjongRoom? {
+        previewMahjongInvite ?? store.mahjong.visibleInvites.first
+    }
+
+    /// 배너 [참가]: 서버 참가 → 마작 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 큐브와 같은 순서).
+    /// 참가 결과(방이 찼다 · 루비가 모자라다 …)는 스토어 문구가 창에서 말한다.
+    private func joinMahjongInvite(_ room: MahjongRoom) {
+        let mahjong = store.mahjong
+        Task { @MainActor in
+            await mahjong.join(roomID: room.id)
+            mahjong.openWindow(focusMatchID: room.id.uuidString.lowercased())
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineMahjongInvite(_ room: MahjongRoom) {
+        let mahjong = store.mahjong
+        Task { @MainActor in
+            await mahjong.decline(roomID: room.id)
+        }
+    }
+
+    private func openMahjongInvite(_ room: MahjongRoom) {
+        store.mahjong.openWindow(focusMatchID: room.id.uuidString.lowercased())
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 아잉 마작 초대 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var mahjongInviteBanner: some View {
+        if topBanner == .mahjongInvite, let room = mahjongBannerInvite {
+            MahjongInviteBanner(
+                room: room,
+                onJoin: { joinMahjongInvite(room) },
+                onDecline: { declineMahjongInvite(room) },
+                onOpen: { openMahjongInvite(room) }
+            )
+        }
+    }
+
+    /// 아잉 마작 자리 비움 배너 후보 — **이 기기가 연 판**의 내 자리가 비움일 때만(스토어 `hasAwaySeatHere` 가 장부까지 본다).
+    private var showsMahjongAwayBanner: Bool {
+        previewMahjongAway || store.mahjong.hasAwaySeatHere
+    }
+
+    /// 배너 [돌아가기]: 마작 창을 열고 → 자리로 돌아온다 → 팝오버 닫기(창 먼저, 팝오버 나중).
+    private func comeBackToMahjong() {
+        let mahjong = store.mahjong
+        mahjong.openWindow(focusMatchID: mahjong.match?.match?.id)
+        Task { @MainActor in
+            await mahjong.comeBack()
+        }
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    @ViewBuilder
+    private var mahjongAwayBanner: some View {
+        if topBanner == .mahjongAway {
+            MahjongAwayBanner(onComeBack: { comeBackToMahjong() })
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -367,11 +445,13 @@ struct CheckMenuView: View {
         if store.isSignedIn, tetrisBannerInvite != nil { return .tetrisInvite }
         if store.isSignedIn, rummyBannerInvite != nil { return .rummyInvite }
         if store.isSignedIn, reversiBannerInvite != nil { return .reversiInvite }
+        if store.isSignedIn, mahjongBannerInvite != nil { return .mahjongInvite }
+        if store.isSignedIn, showsMahjongAwayBanner { return .mahjongAway }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
         if store.isSignedIn, store.showsFeedbackReplyBanner { return .feedbackReply }
-        // 받을 생일 선물(v0.3.66). 판정은 스토어가 끝내 둔 값(열린 선물)을 읽기만 한다.
+        // 받을 선물(v0.3.66 생일 · v0.3.74 술 한잔). 판정은 스토어가 끝내 둔 값(열린 선물)을 읽기만 한다.
         if store.isSignedIn, store.showsCakeGiftCard { return .cakeGift }
         if showsUpdateBanner { return .update }
         // 공지는 **업데이트 다음**이다(TopBanner.appNotice 주석). 로그인한 사람에게만 — 공지는 이미 쓰는 사람에게 하는
@@ -388,6 +468,8 @@ struct CheckMenuView: View {
         case .tetrisInvite: return Self.tetrisInviteBannerHeight
         case .rummyInvite: return Self.rummyInviteBannerHeight
         case .reversiInvite: return Self.reversiInviteBannerHeight
+        case .mahjongInvite: return Self.mahjongInviteBannerHeight
+        case .mahjongAway: return Self.mahjongAwayBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -615,13 +697,14 @@ struct CheckMenuView: View {
                     onDismiss: { store.markFeedbackReplyBannerSeen() }
                 )
             }
-            // 생일 선물 '다시 열기' 카드(v0.3.66). 축하 창을 고르지 않고 닫았으면 **받을 때까지** 여기 남는다 — 그래서 닫기(X)가 없다.
-            // [고르기]는 축하 창을 다시 띄운다(창 먼저, 팝오버 나중 — `openCakeGiftWindow`).
+            // 선물 '다시 열기' 카드(v0.3.66 생일 · v0.3.74 술 한잔). 받는 창을 받지 않고 닫았으면 **받을 때까지** 여기 남는다 — 그래서 닫기(X)가 없다.
+            // [고르기] · [받기]는 받는 창을 다시 띄운다(창 먼저, 팝오버 나중 — `openCakeGiftWindow`). 글자 · 기호는 열린 선물의 종류에서
+            // (`cakeGiftCardCopy` — `CakeGiftText` · `DrinkGiftText`).
             if topBanner == .cakeGift {
                 InlineActionBanner(
-                    icon: "gift.fill",
-                    title: CakeGiftText.reopenTitle,
-                    actionTitle: CakeGiftText.reopenButton,
+                    icon: (store.cakeGiftOffer?.kind ?? .birthday).reopenSymbolName,
+                    title: store.cakeGiftCardCopy.reopenTitle,
+                    actionTitle: store.cakeGiftCardCopy.reopenButton,
                     tint: CheckTheme.accent,
                     action: { store.openCakeGiftWindow() }
                 )
@@ -642,6 +725,8 @@ struct CheckMenuView: View {
                     tetrisInviteBanner
                     rummyInviteBanner
                     reversiInviteBanner
+                    mahjongInviteBanner
+                    mahjongAwayBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -674,6 +759,9 @@ struct CheckMenuView: View {
                     rummyInviteBanner
                     // 받은 아잉 뒤집기 신청도 **같은 자리**(체스와 같은 사정 — 창을 여는 길이 미니게임 창 사이드바 하나뿐이다).
                     reversiInviteBanner
+                    // 받은 아잉 마작 초대 · 자리 비움도 **같은 자리**(큐브와 같은 사정 — 창을 여는 길이 사이드바·이 배너뿐이다).
+                    mahjongInviteBanner
+                    mahjongAwayBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -1344,12 +1432,20 @@ struct MenuBarStatusLabel: View {
     ///   `dotReasons`)을 소스 계약 시험이 함께 잰다.
     var hasReversiInvite = false
 
+    /// 받은 **아잉 마작** 초대가 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxMahjongWiringTests)이 함께 잰다.
+    var hasMahjongInvite = false
+
+    /// 아잉 마작 **자리 비움**(이 기기가 연 판)이다. 같은 짝 셋(앱 인자 · 이 칸 · `dotReasons`)이다.
+    var hasMahjongAway = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
             openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite,
-            rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite
+            rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite, mahjongInvite: hasMahjongInvite,
+            mahjongAway: hasMahjongAway
         )
     }
 
@@ -1484,6 +1580,10 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var rummyInvite: Bool = false
     /// 받은 아잉 뒤집기 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var reversiInvite: Bool = false
+    /// 받은 아잉 마작 초대가 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var mahjongInvite: Bool = false
+    /// 아잉 마작 자리 비움(이 기기가 연 판). 같은 이유로 **맨 뒤에 선언**한다.
+    var mahjongAway: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
@@ -1491,11 +1591,13 @@ struct MenuBarDotReasons: Equatable, Sendable {
     static let tetrisInviteText = "테트리스 신청"
     static let rummyInviteText = RummyInviteText.dotReason
     static let reversiInviteText = ReversiText.dotReason
+    static let mahjongInviteText = MahjongInviteText.dotReason
+    static let mahjongAwayText = MahjongInviteText.awayDotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
         !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !reversiInvite && !updateAvailable
-            && !openReports
+            && !openReports && !mahjongInvite && !mahjongAway
     }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
@@ -1511,6 +1613,9 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if rummyInvite { parts.append(Self.rummyInviteText) }
         // 아잉 뒤집기 신청은 큐브 뒤다(팝오버 배너 · 사이드바와 같은 순서 — 설계 결정 D7).
         if reversiInvite { parts.append(Self.reversiInviteText) }
+        // 아잉 마작 초대(방 TTL 10분)는 아잉 뒤집기 뒤 · 자리 비움은 그 뒤(팝오버 배너와 같은 순서).
+        if mahjongInvite { parts.append(Self.mahjongInviteText) }
+        if mahjongAway { parts.append(Self.mahjongAwayText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }
@@ -3405,11 +3510,14 @@ enum PokeFocusNotice {
     /// 버튼은 "1단/2단" 이름만 그리므로 차이의 설명은 이 줄이 맡는다. 남은 시간은 넣지 않는다 — 292pt 한 줄에
     /// "(2시간 59분 남음)"까지 붙이면 실측 286.6pt 라 글꼴 차이 한 번에 두 줄로 넘어가 패널 높이가 흔들린다(툴팁이 말한다).
     /// 1단 길이는 상수에서 파생한다 — 문구에 "3시간"을 베껴 두지 않는다.
+    ///
+    /// ★ 2026-11-03(대표 요청 6): 받기만 막던 것이 **보내기도** 막는다(찌르기·울트라·메시지·이모티콘). 그래서 "받지 않아요"가 아니라
+    ///   "주고받지 않아요"다 — 옛 문장으로 두면 켠 사람이 [보내기]가 왜 잠겼는지 모른다. 실측 10pt 249pt(2단) — 한 줄(≤272) 안이다.
     static func text(for stage: FocusStage) -> String? {
         switch stage {
         case .off: nil
-        case .timed: "집중 모드 1단 — \(FocusModeButtonText.timedDurationText) 동안 콕찌르기를 받지 않아요"
-        case .always: "집중 모드 2단 — 해제 전까지 콕찌르기를 받지 않아요"
+        case .timed: "집중 모드 1단 — \(FocusModeButtonText.timedDurationText) 동안 찌르기·메시지를 주고받지 않아요"
+        case .always: "집중 모드 2단 — 해제 전까지 찌르기·메시지를 주고받지 않아요"
         }
     }
 }
@@ -3492,7 +3600,9 @@ struct PokeMessageReceiptStrip: View {
             // ★ 아잉이 이모티콘(v0.3.62)은 여기서 **"아잉이 기쁨"으로 읽힌다**. 이 줄은 34pt 짜리 글자 자리라
             //   그림을 그릴 수 없는데, 날것(`[아잉:기쁨]`)을 그대로 띄우면 사용자는 그것을 '깨진 메시지'로 읽는다.
             //   평범한 본문은 `AingStickerText.preview` 가 **손대지 않고** 그대로 돌려준다.
-            Text(AingStickerText.preview(for: message.body))
+            // ★ 마크다운(대표 요청 2026-11-03 ③)은 여기서 **기호를 벗긴 한 줄**이다(`## 제목` → `제목`, `[글](주소)` → `글`).
+            //   `ChatMarkdown.plainPreview` 가 이모티콘 규칙(`AingStickerText.preview`)을 먼저 거친다 — 위 갈래는 그대로다.
+            Text(ChatMarkdown.plainPreview(message.body))
                 .font(.subheadline.weight(.bold))
                 .foregroundStyle(CheckTheme.accent)
                 .lineLimit(1)
@@ -3667,7 +3777,7 @@ enum PokeRowUnreadMark: Equatable, Sendable {
 
 /// 팀 카드 자리를 대체하는 콕찌르기 페이지(앱 로그인 사용자 전체). 리그/토큰 보드와 같은 뼈대다:
 /// 뒤로 버튼 + 제목 + (조건부 안내줄) + 고정 행높이 리스트(maxVisibleRows 초과 시 스크롤). 행은 아바타 + 이름 +
-/// 상태 칩(근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/대상 자리비움=흐린 비활성).
+/// 상태 칩(집중/근무중/자리비움) + 우측 찌르기 버튼(손가락 아이콘: 가능=accent 원형, 쿨타임/내 비근무/집중/대상 자리비움=흐린 비활성).
 /// 자리비움 대상은 찌를 수 없다(서버 강제, 클라 선게이트). store 값을 값+클로저로만 받아 렌더 테스트 친화적으로 유지한다.
 ///
 /// **초 단위 시계는 이 패널 body 가 읽지 않는다.** 쿨타임 잔여·수신 시각·연결 경고는 읽기 클로저로 받아 MenuClockLeaf
@@ -3902,6 +4012,8 @@ private struct PokePanel: View {
                         // 목록 전체가 초당 재평가로 돌아간다(v0.2.37 까지의 결함 지점).
                         cooldownRemaining: { cooldownRemaining(entry.userID) },
                         canPoke: isMyselfWorking,
+                        // 내가 집중 중이면 누구도 못 찌른다(2026-11-03 · 요청 6). 스토어 sendPoke 의 같은 가드와 짝이다.
+                        isMyselfFocused: isFocusMode,
                         ultraBalance: ultraBalance,
                         ultraUnlimited: ultraUnlimited,
                         center: entry.center,
@@ -3943,15 +4055,18 @@ private struct PokePanel: View {
 /// 목록 행수 예산에 안 잡힌 높이만큼 자라 비근무 사용자의 팝오버만 700pt 상한에 다가간다(V0330 테스트가 한 줄임을 잰다).
 enum MessageAnytimeNotice {
     /// 비근무 사용자의 콕찌르기 안내줄. 찌르기만 막혔고 메시지는 된다는 두 사실을 함께 말한다.
+    /// ★ **내가 집중 중이면 이 줄은 뜨지 않는다**(2026-11-03) — 그때는 메시지도 막히므로 "언제든"이 거짓이 된다. 안내줄 순서에서
+    ///   집중 안내가 이 줄보다 앞인 이유가 그것이다(`PokePanelNoticeLine.line`).
     static let pokeOffWork = "콕 찌르기는 근무 중에만 · 메시지는 언제든 보낼 수 있어요"
 }
 
-/// 콕찌르기 패널의 안내줄(연결 끊김 / 메시지 결과 / 찌르기 결과 / 비근무 / 집중 모드 중 하나, 없으면 아무것도 안 그린다).
+/// 콕찌르기 패널의 안내줄(연결 끊김 / 메시지 결과 / 찌르기 결과 / 집중 모드 / 비근무 중 하나, 없으면 아무것도 안 그린다).
 ///
 /// 왜 잎인가: 연결 끊김 판정(isPokeDisconnected)이 시계를 읽는다(재연결 유예 경과 여부). 그 판정을 패널 body 에 두면
 /// 패널이 매초 무효화된다 — PokeEntryIconButton/FooterSyncStatus 가 같은 이유로 잎이다. 줄이 **뜨는지 자체**도
 /// 그 판정에 달려 있으므로 `if let` 까지 이 안에 있다(없으면 빈 뷰라 VStack 간격을 먹지 않는다).
-private struct PokePanelNoticeLine: View {
+/// (`line` 순서를 시험이 값으로 되묻도록 private 이 아니다 — 앱에서 이 줄을 세우는 곳은 여전히 PokePanel 하나다.)
+struct PokePanelNoticeLine: View {
     let isPokeDisconnected: () -> Bool
     let messageNotice: String?
     let notice: String?
@@ -3980,9 +4095,10 @@ private struct PokePanelNoticeLine: View {
         }
     }
 
-    // 안내줄 내용/톤(순수). notice 가 있으면 그것을(주황), 없고 비근무면 근무 안내(회색), 그다음 집중 모드 상태,
-    // 셋 다 아니면 nil(생략 — 상단 앵커 유지). 비근무 안내가 집중 모드보다 앞인 이유는 그것이 **지금 이 화면에서
-    // 하려는 일**(찌르기)의 차단 사유이기 때문이다. 집중 모드는 내 수신 설정이라 정보에 가깝다.
+    // 안내줄 내용/톤(순수). notice 가 있으면 그것을(주황), 없고 집중 모드면 집중 안내(회색), 그다음 비근무 안내(회색),
+    // 셋 다 아니면 nil(생략 — 상단 앵커 유지).
+    // ★ 2026-11-03 에 **집중이 비근무보다 앞으로** 왔다(대표 요청 6). 예전엔 집중이 '내 수신 설정(정보)'이라 찌르기 차단 사유인 비근무가
+    //   앞이었는데, 이제 집중은 찌르기·메시지를 **둘 다** 막는 더 큰 사유다. 비근무 안내는 "메시지는 언제든"을 말하므로 집중 중에 뜨면 거짓이다.
     static func line(
         disconnected: Bool,
         messageNotice: String?,
@@ -4006,21 +4122,21 @@ private struct PokePanelNoticeLine: View {
         if let notice, !notice.isEmpty {
             return (notice, true)
         }
+        if let focusText = PokeFocusNotice.text(for: focusStage) {
+            return (focusText, false)
+        }
         if !isMyselfWorking {
             // 찌르기 **전용** 차단 사유다(v0.3.30). 이 화면은 이제 근무 밖 사용자가 메시지를 보내러 들어오는 문이기도 해서,
             // "근무 중일 때만 …"만 떠 있으면 행의 말풍선 버튼까지 막힌 것처럼 읽힌다 — 메시지는 된다는 사실을 같은 줄에 붙인다.
             return (MessageAnytimeNotice.pokeOffWork, false)
         }
-        if let focusText = PokeFocusNotice.text(for: focusStage) {
-            return (focusText, false)
-        }
         return nil
     }
 }
 
-/// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(근무중/자리비움) + 우측 찌르기 버튼.
+/// 콕찌르기 한 행 = 좌측 세로 해시색 바(유저 컬러 포인트) + 아바타 + 이름 + 상태 칩(집중/근무중/자리비움) + 우측 찌르기 버튼.
 /// 상태 칩은 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움". 찌르기 버튼은 손가락 아이콘: 가능(accent 원형·눌림 탄성),
-/// 쿨타임 중/내가 비근무/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
+/// 쿨타임 중/내가 비근무/집중(내 것·상대 것)/대상이 자리비움(흐린 비활성 아이콘, 숫자 없음). 자리비움 대상은 찌를 수 없다(서버 강제).
 // (렌더 테스트가 이 행 하나만 떼어 그릴 수 있도록 internal 로 둔다 — TokenBoardRowView 와 같은 근거.
 //  앱에서 이 행을 세우는 곳은 여전히 PokePanel 하나다.)
 struct PokeDirectoryRowView: View {
@@ -4030,6 +4146,9 @@ struct PokeDirectoryRowView: View {
     let cooldownRemaining: () -> Int
     // 내가 근무중이라 찌를 수 있는지. false면 버튼이 흐려지고 비활성된다.
     let canPoke: Bool
+    // 내가 집중 모드인가(2026-11-03 · 대표 요청 6 — 나는 못 받으니 남에게도 못 보낸다). true 면 찌르기 버튼이 흐려진다(울트라도 같은 버튼이다).
+    // 기본값 false 라 이 값을 안 넘기는 자리(렌더 시험 호출부)는 지금과 같다. 앱에서 넘기는 곳은 PokePanel 하나다.
+    var isMyselfFocused: Bool = false
     // 내 울트라 잔량 — **툴팁 문구 분기 전용**이다. nil = 아직 모름(허용으로 읽는다).
     // 찌르기 자체의 활성 여부와도, 울트라 발사 여부와도 무관하다: 3초 홀드는 잔량과 **무관하게**
     // 무조건 발사되고 판정은 서버가 한다. 잔량 0 툴팁이 떠 있어도 누르면 요청은 나간다 —
@@ -4124,10 +4243,29 @@ struct PokeDirectoryRowView: View {
         )
     }
 
-    // 상태 칩: 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움"(caption2).
+    /// 집중 칩 글자(2026-11-03). 큐브 로비의 칩(`RummyPanelLobby` — "집중" · aiToken)과 **같은 낱말·같은 색 계열**이다 — 같은 사정을 두 화면이
+    /// 다른 말로 부르면 사용자는 다른 일로 읽는다. 폭은 점 6 + 간격 4 + 글자(실측 17.3pt) ≈ 27pt 로 "근무중"(≈36)·"자리비움"(≈35)보다
+    /// 좁다 — 이름 몫 81.05pt 를 1pt 도 깎지 않는다(FocusSendGateTests이 실측으로 되묻는다).
+    static let focusChipText = "집중"
+
+    // 상태 칩: 집중이면 보라 점+"집중"(2026-11-03 · 대표 요청 5), 근무중이면 초록 점+"근무중", 아니면 회색 "자리비움"(caption2).
+    // ★ 집중이 **맨 앞**이다 — 자리비움보다도. 서버 send_message 는 상대 근무를 보지 않고 집중만 보므로, 자리를 비운 집중인 사람도
+    //   메시지는 막힌다. 그 사실을 미리 말하는 자리가 이 칩 하나다(찌르기는 어느 쪽이든 막힌다).
     @ViewBuilder
     private var statusChip: some View {
-        if entry.isWorking {
+        if entry.isFocused {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(CheckTheme.aiToken)
+                    .frame(width: 6, height: 6)
+                Text(Self.focusChipText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.aiToken)
+            }
+            .fixedSize()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(entry.name)님은 집중 중이에요")
+        } else if entry.isWorking {
             HStack(spacing: 4) {
                 Circle()
                     .fill(CheckTheme.working)
@@ -4156,22 +4294,33 @@ struct PokeDirectoryRowView: View {
         }
     }
 
+    /// 찌르기 버튼을 흐리게 그리는 사유(쿨타임 제외 — 그건 초를 읽는 잎의 몫이다). nil 이면 누를 수 있다. **순수 함수**라 시험이 값으로 잰다.
+    ///
+    /// 순서: 내 비근무 → 집중(내 집중 → 상대 집중 — `FocusSendBlock.of`) → 상대 자리비움.
+    ///  · 내 사정이 상대 사정보다 앞이다 — 내가 풀어야 할 것이 있으면 상대 사정은 아직 의미가 없다. 스토어 sendPoke 의 가드 순서
+    ///    (근무 → 집중)와 같다(memory client-gates-come-in-pairs — 화면과 스토어가 같은 사유를 말한다).
+    ///  · 상대 집중이 상대 자리비움보다 앞이다 — 칩이 '집중'을 그리는 사람에게 "자리비움 상태에는…"이라 말하면 두 표시가 엇갈린다.
+    /// 집중 문장은 스토어 상수에서 온다(`FocusSendBlock.pokeText` — 서버 거절 문구와 같은 문장).
+    static func pokeBlockedReason(canPoke: Bool, isMyselfFocused: Bool, entry: PokeDirectoryEntry) -> String? {
+        if !canPoke { return "내가 근무 중일 때만 콕 찌를 수 있어요" }
+        if let focus = FocusSendBlock.of(myFocus: isMyselfFocused, peerFocused: entry.isFocused) { return focus.pokeText }
+        if !entry.isWorking { return "자리비움 상태에는 찌를 수 없어요" }
+        return nil
+    }
+
     @ViewBuilder
     private func pokeButton(remainingCooldown: Int) -> some View {
         if remainingCooldown > 0 {
             // 쿨타임 중 — 숫자 없이 흐린 비활성. 같은 대상 60초 쿨타임을 서버가 강제하고 여기선 미러링만 한다.
             pokeIconLabel(active: false)
                 .checkTooltip("잠시 후 다시 찌를 수 있어요")
-        } else if !canPoke {
-            // 내가 비근무 — 찌를 수 없다(서버 강제). 쿨타임과 같은 흐린 비활성 아이콘으로 표시.
+        } else if let reason = Self.pokeBlockedReason(canPoke: canPoke, isMyselfFocused: isMyselfFocused, entry: entry) {
+            // 내 비근무 · 집중(내 것 · 상대 것) · 대상 자리비움 — 찌를 수 없다. 쿨타임과 같은 흐린 비활성 아이콘으로 표시하고 사유는 툴팁이 말한다.
+            // 울트라도 여기서 같이 막힌다(같은 버튼을 3초 누르는 것이라 제스처 대상 자체가 없다).
             pokeIconLabel(active: false)
-                .checkTooltip("내가 근무 중일 때만 콕 찌를 수 있어요")
-        } else if !entry.isWorking {
-            // 대상이 자리비움 — 찌를 수 없다(서버 강제). 쿨타임/내 비근무와 같은 흐린 비활성 아이콘으로 표시.
-            pokeIconLabel(active: false)
-                .checkTooltip("자리비움 상태에는 찌를 수 없어요")
+                .checkTooltip(reason)
         } else {
-            // 가능 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 쿨타임 중·내가 비근무·대상 자리비움일 때는
+            // 가능 — 짧게 누르면 일반, 3초 꾹 누르면 울트라. 쿨타임 중·내가 비근무·집중·대상 자리비움일 때는
             // 위 분기에서 Button 이 아니라 흐린 라벨(pokeIconLabel)로 그려지므로 **제스처 대상 자체가 없다** —
             // 그 상태의 꾹 누르기는 아무 일도 일어나지 않고 help 툴팁이 이유를 말한다(숨은 규칙을 만들지 않는다).
             PokeChargeButton(
@@ -4192,8 +4341,10 @@ struct PokeDirectoryRowView: View {
     //   ① 최소 빌드 게이트는 폐기됐다(모든 버전이 받는다 — `target_outdated` 는 서버가 더 이상 내지 않는다).
     //   ② 이 버튼은 **아무것도 보내지 않는다.** 창을 여는 일에 근무 여부를 물을 이유가 없고,
     //      자리비움인 사람과 나눈 **지난 대화를 읽는 것**은 오히려 그때 가장 하고 싶은 일이다.
-    //   ③ 못 보내는 사정(상대 집중 · 옛 서버라면 내 비근무·상대 자리비움)은 **보낼 때** 서버가 판정해 창 안에서 말한다.
-    //      화면이 미리 잠그면 그 문장을 말할 자리가 사라진다.
+    //   ③ 못 보내는 사정은 **대화 화면 안에서** 말한다. 집중(2026-11-03 · 대표 요청 5·6 — 내 집중 · 상대 집중)은 대화 화면이 열린 채
+    //      [보내기]·Enter·이모티콘만 잠그고 그 사유를 입력칸 위 줄과 [보내기] 툴팁에 미리 적는다. 옛 서버라면 내 비근무·상대 자리비움은
+    //      보낼 때 서버가 판정한다. 이 버튼을 잠그면 그 문장을 말할 자리도, 집중인 사람과 나눈 **지난 대화를 읽을 문**도 같이 사라진다
+    //      (대표 답 "대화는 열고 보내기만 막기" — 말풍선 버튼은 살려 둔다. 행의 '집중' 칩이 미리 알린다).
     //   ④ v0.3.30 부터는 근무 밖에서도 **보내진다**(서버가 send_message 의 근무 조건을 지웠다). 여기에 `canPoke`(내 근무)나
     //      `entry.isWorking`(상대 근무)를 얹으면 서버·스토어를 다 풀어도 비근무 사용자는 대화에 들어가지도 못한다 —
     //      찌르기 버튼의 근무 조건은 서버 규칙이 그대로라 남지만, 이 버튼에는 옮겨 오지 마라.

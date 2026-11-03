@@ -39,10 +39,9 @@ package nonisolated enum MahjongNoticeText {
     package static let backTooFast = "잠시 뒤에 다시 눌러 주세요"
 
     // 방.
-    /// 시작 검사에서 **내가** 90초 넘게 안 보여 빠졌다(`seats_dropped{reasons: unseen}`, CS-03).
-    package static let droppedUnseen = "자리를 비워 방에서 빠졌어요"
-    /// 시작 검사에서 **내가** 루비가 모자라 빠졌다(`seats_dropped{reasons: insufficient}`).
-    package static let droppedInsufficient = "루비가 모자라 방에서 빠졌어요"
+    /// 시작 검사에서 **내가** 빠졌다 — 서버는 빠진 사람에게 까닭을 주지 않으므로 까닭을 짐작하지 않는 중립 문구 하나
+    /// (SPEC v1.0.3 §3.4·§4.5 오케스트레이터 결정. `reasons` 는 방장 응답에만 — `droppedOthers(reasons:)`).
+    package static let droppedAtStart = "판이 시작될 때 방에서 빠졌어요"
     /// 넷째가 앉았다(방 띠 강조 · 방장은 [시작]).
     package static let fourGathered = "4명이 모였어요"
 
@@ -51,6 +50,10 @@ package nonisolated enum MahjongNoticeText {
     package static let practiceClosed = "루비 판이 시작돼 연습판을 닫았어요"
     /// '넉넉히' 연습판의 론 아닌 울기 프롬프트가 5초 넘게 서 있다(CC-28).
     package static let practiceIdleCallHint = "[넘기기]를 누르면 계속돼요"
+    /// 연습판 내 자리 이름.
+    package static let practiceMe = "나"
+    /// 연습판 봇 이름(1~3).
+    package static func practiceBotName(_ number: Int) -> String { "로봇 \(number)" }
 
     // 덮개 말풍선(창이 탁자를 안 보일 때 — `MahjongAttention`).
     package static let myTurnAttention = "\(gameName) — 내 차례예요"
@@ -77,9 +80,12 @@ package nonisolated enum MahjongNoticeText {
         }
     }
 
-    /// 시작 검사에서 빠진 까닭(내 uuid 의 `reasons` 원문) → 문구.
-    package static func dropped(reason: String?) -> String {
-        reason == "insufficient" ? droppedInsufficient : droppedUnseen
+    /// 방장 화면 — `mahjong_start` 의 `seats_dropped{reasons}` 원문 값들 → 한 줄. 까닭이 한 가지면 그 까닭, 섞였거나 모르면 공용 문구.
+    package static func droppedOthers(reasons: [String]) -> String {
+        let kinds = Set(reasons)
+        if kinds == ["insufficient"] { return "루비가 모자란 사람이 빠졌어요" }
+        if kinds == ["unseen"] { return "자리를 비운 사람이 빠졌어요" }
+        return "자리를 비웠거나 루비가 모자란 사람이 빠졌어요"
     }
 
     /// RPC 거절 한 줄. **nil = 말하지 않는다** — 성공 · `stale`(결정 동작) · `window_closed` · `too_early` · 반응 쿨다운은
@@ -97,7 +103,7 @@ package nonisolated enum MahjongNoticeText {
         case .roomFull: return "방이 가득 찼어요"
         case .roomClosed: return roomClosed
         case .notEnoughPlayers: return "4명이 모여야 시작할 수 있어요"
-        case .seatsDropped: return "자리를 비웠거나 루비가 모자란 사람이 빠졌어요"
+        case .seatsDropped: return droppedOthers(reasons: [])
         case .unsupportedClient: return updateRequired
         case .unauthorized: return signInAgain
         case .alreadyInRoom: return "이미 들어가 있는 방이 있어요"

@@ -1,0 +1,248 @@
+{
+  "state": {
+    "events": [
+      {
+        "at_ms": 1800000060000,
+        "end_reason": "max_round",
+        "kind": "end",
+        "seat": null,
+        "seq": 20
+      }
+    ],
+    "last_hand": {
+      "bonus_to": null,
+      "deltas": [
+        -2000,
+        -1000,
+        4000,
+        -1000
+      ],
+      "hand_index": 0,
+      "kind": "win",
+      "nagashi": [],
+      "reason": null,
+      "renchan": false,
+      "scores_after": [
+        23000,
+        24000,
+        29000,
+        24000
+      ],
+      "tenpai": [],
+      "wins": [
+        {
+          "aka": 0,
+          "dora": 0,
+          "from_seat": null,
+          "fu": 20,
+          "han": 2,
+          "hand": [
+            3,
+            7,
+            11,
+            39,
+            43,
+            47,
+            75,
+            79,
+            83,
+            114,
+            115,
+            119,
+            123,
+            127
+          ],
+          "limit": null,
+          "melds": [],
+          "pao": null,
+          "seat": 2,
+          "total": 4000,
+          "ura": 0,
+          "ura_indicators": null,
+          "win_tile": 119,
+          "yaku": [
+            [
+              "menzen_tsumo",
+              1
+            ],
+            [
+              "pinfu",
+              1
+            ]
+          ],
+          "yakuman": 0
+        }
+      ]
+    },
+    "match": {
+      "backup_at_ms": null,
+      "bank_full_ms": 20000,
+      "base_ms": 5000,
+      "created_ms": 1799999880000,
+      "dealer_seat": 1,
+      "dora_indicators": [
+        100
+      ],
+      "end_reason": "max_round",
+      "extension": false,
+      "finished_ms": 1800000060000,
+      "format": "tonpuu",
+      "grace_ms": 1000,
+      "hand_index": 1,
+      "hand_no": 1,
+      "honba": 0,
+      "host": {
+        "avatar_url": null,
+        "character": "aing",
+        "display_name": "아잉",
+        "id": "00000000-0000-0000-0000-0000000000a1"
+      },
+      "id": "7e7e0000-0000-4000-8000-0000000000aa",
+      "is_public": false,
+      "kan_count": 0,
+      "kyotaku": 0,
+      "next_hand_ms": null,
+      "phase": "finished",
+      "room_expires_ms": 1800000480000,
+      "round": 0,
+      "seq": 20,
+      "stake": 5,
+      "started_ms": 1800000000000,
+      "status": "finished",
+      "turn_seat": null,
+      "wake_at_ms": null,
+      "wake_seat": null,
+      "wall_remaining": 0
+    },
+    "members": [],
+    "my_away": null,
+    "my_decision": null,
+    "my_drawn": null,
+    "my_furiten": [],
+    "my_hand": [
+      1,
+      5,
+      9,
+      37,
+      41,
+      45,
+      73,
+      77,
+      81,
+      109,
+      110,
+      121,
+      125
+    ],
+    "my_seat": 0,
+    "my_waits": [],
+    "reactions": [],
+    "ruby_balance": 95,
+    "seats": [
+      {
+        "away": false,
+        "deleted": false,
+        "discards": [
+          {
+            "riichi": false,
+            "taken": false,
+            "tile": 129,
+            "tsumogiri": true
+          }
+        ],
+        "final_rank": 4,
+        "final_score": 23000,
+        "hand_count": 13,
+        "is_dealer": true,
+        "melds": [],
+        "payout": 0,
+        "riichi": false,
+        "score": 23000,
+        "seat_no": 0,
+        "user": {
+          "avatar_url": null,
+          "center": null,
+          "character": "aing",
+          "display_name": "아잉",
+          "user_id": "00000000-0000-0000-0000-0000000000a1"
+        },
+        "wind": "E"
+      },
+      {
+        "away": false,
+        "deleted": false,
+        "discards": [
+          {
+            "riichi": false,
+            "taken": false,
+            "tile": 111,
+            "tsumogiri": false
+          }
+        ],
+        "final_rank": 2,
+        "final_score": 24000,
+        "hand_count": 13,
+        "is_dealer": false,
+        "melds": [],
+        "payout": 5,
+        "riichi": false,
+        "score": 24000,
+        "seat_no": 1,
+        "user": {
+          "avatar_url": null,
+          "center": null,
+          "character": "aing",
+          "display_name": "비비",
+          "user_id": "00000000-0000-0000-0000-0000000000b2"
+        },
+        "wind": "S"
+      },
+      {
+        "away": false,
+        "deleted": false,
+        "discards": [],
+        "final_rank": 1,
+        "final_score": 29000,
+        "hand_count": 14,
+        "is_dealer": false,
+        "melds": [],
+        "payout": 15,
+        "riichi": false,
+        "score": 29000,
+        "seat_no": 2,
+        "user": {
+          "avatar_url": null,
+          "center": null,
+          "character": "aing",
+          "display_name": "씨씨",
+          "user_id": "00000000-0000-0000-0000-0000000000c3"
+        },
+        "wind": "W"
+      },
+      {
+        "away": false,
+        "deleted": false,
+        "discards": [],
+        "final_rank": 3,
+        "final_score": 24000,
+        "hand_count": 13,
+        "is_dealer": false,
+        "melds": [],
+        "payout": 0,
+        "riichi": false,
+        "score": 24000,
+        "seat_no": 3,
+        "user": {
+          "avatar_url": null,
+          "center": null,
+          "character": "aing",
+          "display_name": "디디",
+          "user_id": "00000000-0000-0000-0000-0000000000d4"
+        },
+        "wind": "N"
+      }
+    ],
+    "server_now_ms": 1800000060100
+  },
+  "status": "ok"
+}

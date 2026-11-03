@@ -103,14 +103,18 @@ private func avFetches(_ host: String) -> Int {
         let goldPortraits = V0354CoreArtBaseline.macGoldPortraitsInSourceTree
         let rainbowPortraits = V0359RainbowBaseline.macRainbowPortraitsInSourceTree
         // v0.3.66: 케이크 둘(내장)도 같은 규칙 — 기준선은 소스 트리의 그 케이크 초상 파일이다.
-        let cakePortraits = CharacterCatalog.giftOnlyBuiltInIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree).count
+        let cakePortraits = CharacterCatalog.birthdayGiftBuiltInIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree).count
         let drawableCatalog = CheckMascotAssets.catalog.allIDs.filter {
             (!CharacterCatalog.isGoldAing($0) || goldPortraits) && (!CharacterCatalog.isRainbowAing($0) || rainbowPortraits)
                 && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
+                // v0.3.74: 이슬(내장)도 같은 규칙 — 기준선은 소스 트리의 이슬 초상 파일이다(그림 갈래 전엔 없다 → 이니셜).
+                && (!CharacterCatalog.isIsulAing($0) || V0374IsulCoreTests.macIsulPortraitsInSourceTree)
         }
         #expect(Set(AppUserAvatarArt.knownIDs) == Set(drawableCatalog), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
         #expect(directory.knownIDs == Set(AppUserAvatarArt.knownIDs))
-        #expect(AppUserAvatarArt.knownIDs.count == 7 + (goldPortraits ? 1 : 0) + (rainbowPortraits ? 1 : 0) + cakePortraits
+        // v0.3.74: 이슬도 소스 트리에 초상이 있으면 하나 더(초상 조회가 그림 저장소 `IsulArt` 를 탄다 — 3D 갈래).
+        let isulPortraits = V0374IsulCoreTests.macIsulPortraitsInSourceTree ? 1 : 0
+        #expect(AppUserAvatarArt.knownIDs.count == 7 + (goldPortraits ? 1 : 0) + (rainbowPortraits ? 1 : 0) + cakePortraits + isulPortraits
                     && AppUserAvatarArt.knownIDs.contains("aing"),
                 Comment(rawValue: "아는 캐릭터 \(AppUserAvatarArt.knownIDs) · 금 초상 \(goldPortraits) · 무지개 초상 \(rainbowPortraits)"))
         // 로봇(2026-10-05)은 **폴더만 넣어** 들어온 일곱 번째다 — 카탈로그가 번들 폴더를 실제로 훑는다는 증거다.
@@ -425,7 +429,9 @@ private func avFetches(_ host: String) -> Int {
         // 2026-10-30: 확성기 배너 카드가 한 자리를 더했다(보낸 사람 얼굴). 31 + 7 + 1.
         // 아잉 뒤집기 창이 다섯 자리를 더했다(로비 상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청). 39 + 5 — 아래 `reversi` 필터가
         // 자리마다 그 사람 id 와 착용값을 되묻는다.
-        #expect(avatars.count == 44, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 아잉 마작 창이 다섯 자리를 더했다(로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리 · 판 결과 줄). 44 + 5 — 아래
+        // `mahjong` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다.
+        #expect(avatars.count == 49, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -507,6 +513,21 @@ private func avFetches(_ host: String) -> Int {
                     "ReversiPanelLobby.swift 에 \(id) · \(hint) 짝이 없다")
         }
 
+        // 아잉 마작 다섯 자리: 로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리(나 = 내 얼굴) · 판 결과 줄. 49 만 올리면 한
+        // 자리가 남의 id 나 착용값 없이 그려도 초록이라, 자리마다 **그 사람의** id·착용값을 되묻는다.
+        let mahjong = avatars.filter { $0.file.hasPrefix("Mahjong") }
+        #expect(mahjong.count == 5, "\(mahjong.map(\.text))")
+        let mahjongIDs: [(String, String, String)] = [
+            ("MahjongPanelLobby.swift", "userID: user.id.uuidString.lowercased()", "characterHint: user.character"),
+            ("MahjongPanelLobby.swift", "userID: row.userId,", "characterHint: row.character"),
+            ("MahjongPanelLobby.swift", "userID: room.host?.id,", "characterHint: room.host?.character"),
+            ("MahjongPanelTable.swift", "userID: seat.user?.userId,", "characterHint: me?.characterID ?? seat.user?.character"),
+            ("MahjongPanelResult.swift", "userID: seat.user?.userId,", "characterHint: seat.user?.character"),
+        ]
+        for (file, id, hint) in mahjongIDs {
+            #expect(mahjong.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
+        }
+
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")
         #expect(editable.count == 1 && editable.allSatisfy { $0.text.contains("userID: userID") }, "\(editable)")
@@ -552,9 +573,10 @@ private func avFetches(_ host: String) -> Int {
             let n = V0325TooltipTests.count(".appUserAvatarCharacters(from:", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
+        // 아잉 마작 창(MahjongPanel)이 열째 루트다(MJ/SPEC.md §4.6 #23 — 툴팁 레이어 짝은 V0325).
         #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
-                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1", "RummyPanel.swift:1",
-                          "TetrisDuelPanel.swift:1"],
+                          "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1",
+                          "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
                 "\(roots)")
         // 아잉 뒤집기 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·순위·신청의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["ReversiPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)

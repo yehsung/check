@@ -303,3 +303,14 @@ import Testing
         #expect(MessagesConversationRules.header(peerName: " 소라 ", isResolving: false).title == "소라")
     }
 }
+
+/// 서버 차단 응답 sender_focused(2026-11-03, 대표 결정 "지금 서버에서도 막기"). 폰에는 집중을 끄는 단추가 없다 — 맥에서 끄라고 말한다.
+/// 기준선: 상대 집중(target_focused)과 다른 문장이다.
+@Suite struct MessagesSenderFocusedNoticeTests {
+    @Test func 보낸이_집중_문구는_맥에서_끄라고_말한다() {
+        #expect(MessagesSendRules.notice(for: .senderFocused, maxLength: nil) == MessageNoticeText.senderFocused)
+        #expect(MessageNoticeText.senderFocused.contains("맥에서"))
+        #expect(MessagesSendRules.notice(for: .senderFocused, maxLength: nil)
+                != MessagesSendRules.notice(for: .targetFocused, maxLength: nil))
+    }
+}

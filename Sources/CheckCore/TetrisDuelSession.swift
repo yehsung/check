@@ -9,7 +9,8 @@ import Foundation
 //      그 사람을 패로 닫으므로(`tetris_silence_ms`) 그 판은 끝난 판이다.
 //   ② 가속(D7). 서버 기준 경과초 t 로 레벨 바닥을 정해 엔진에 넣는다: t < 120 → 1, 그 뒤 min(28, 10 + (t−120)/10)
 //      (정수 나눗셈). 바닥은 따라잡기 조각마다 그 조각이 시작하는 판 시각으로 다시 정한다.
-//   ③ 보고 차분. 보낼 때가 됐는지(준비 · 탑아웃 · 공격 누계 증가는 곧바로 · 최소 간격 0.25초 · 그 밖엔 1초 하트비트)와
+//   ③ 보고 차분. 보낼 때가 됐는지(준비 · 탑아웃 · 공격 누계 증가는 곧바로 · 최소 간격 0.25초 · 그 밖엔 하트비트 — 기본 1초,
+//      판 표시 프레임이 양쪽에서 확인된 동안만 3초 체크포인트, `TetrisFrameLink.reportInterval`)와
 //      상대 공격 누계에서 **아직 반영 안 한 차분만** 대기열에 넣는 일. 누계로 주고받으므로 응답이 겹치거나 빠져도 멱등이다.
 //
 // ── 시계는 주입받는다 ───────────────────────────────────────────────────────────────────
@@ -69,7 +70,9 @@ package enum TetrisDuelReportReason: Equatable, Sendable {
     case toppedOut
     /// 공격 누계가 늘었다 — 곧바로(최소 간격만 지킨다).
     case attack
-    /// 1초 하트비트(침묵 판정을 막고 상대 판을 받아 온다).
+    /// 정기 하트비트 — 서버 침묵 판정(15초)을 막는다. 기본 1초이고, 판 표시 프레임이 양쪽에서 오가는 것이 확인된 동안만
+    /// 3초 체크포인트다(`TetrisFrameLink.reportInterval` — 명세 §5). 상대 판을 받아 오는 일은 그동안 프레임이 함께 맡는다
+    /// (프레임이 없거나 끊기면 1초로 돌아와 지금처럼 이 보고의 응답이 상대 판을 싣는다).
     case heartbeat
 }
 
@@ -87,8 +90,11 @@ package struct TetrisDuelSession: Equatable, Sendable {
     package static let rampMaxLevel = 28
     /// 한 번에 따라잡는 판 시간의 상한(D10).
     package static let maxCatchUpSeconds: TimeInterval = 30
-    /// 하트비트 간격.
+    /// 하트비트 간격(기본값 — 판 표시 프레임이 없거나 조건이 하나라도 어긋난 판).
     package static let heartbeatSeconds: TimeInterval = 1.0
+    /// 체크포인트 간격(D1) — 판 표시 프레임이 양쪽에서 확인된 동안의 하트비트이자 `reportReason(at:heartbeat:)` 이 받는 **상한**이다.
+    /// 서버 침묵 15초(`tetris_silence_ms`) 안에서 끊김 허용 여유가 12초 남고, 요청이 멎어도 3초 버림으로 15초 안에 네 번 시도한다(명세 §5 표).
+    package static let checkpointSeconds: TimeInterval = 3.0
     /// 곧바로 보내는 보고(공격·탑아웃) 사이의 최소 간격.
     package static let minReportGapSeconds: TimeInterval = 0.25
 
@@ -351,8 +357,12 @@ package struct TetrisDuelSession: Equatable, Sendable {
     // MARK: - 보고
 
     /// 지금 보고할 때인가. 첫 보고는 준비(언제든 곧바로), 그 뒤로는 탑아웃·공격 누계 증가는 최소 간격(0.25초)만 지키고 곧바로,
-    /// 그 밖에는 1초 하트비트다. 서버가 판을 닫은 뒤에는 보내지 않는다.
-    package func reportReason(at now: TimeInterval) -> TetrisDuelReportReason? {
+    /// 그 밖에는 하트비트다. 서버가 판을 닫은 뒤에는 보내지 않는다.
+    /// - Parameter heartbeat: 하트비트 간격. 기본 1초이고 프레임 링크가 있는 판만 `TetrisFrameLink.reportInterval(at:)` 을 넣는다.
+    ///   **이 인자는 하트비트 줄만 본다** — 준비·탑아웃·공격은 언제나 곧바로다. 값은 [1초, 3초]로 자른다: 1초보다 짧으면 판 루프 걸음마다
+    ///   보고가 나가 DB 를 치고, 3초보다 길면 서버 침묵 판정(15초)에 대한 여유가 명세가 잰 12초보다 준다. 이상한 값(NaN 등)은 1초다.
+    package func reportReason(at now: TimeInterval,
+                              heartbeat: TimeInterval = TetrisDuelSession.heartbeatSeconds) -> TetrisDuelReportReason? {
         guard !finished else { return nil }
         guard let last = lastReportAt else { return .ready }
         let since = now - last
@@ -360,7 +370,10 @@ package struct TetrisDuelSession: Equatable, Sendable {
             if toppedOut && !reportedToppedOut { return .toppedOut }
             if game.attackSentTotal > reportedAttackSent { return .attack }
         }
-        if since >= Self.heartbeatSeconds { return .heartbeat }
+        let interval = heartbeat.isFinite
+            ? min(Self.checkpointSeconds, max(Self.heartbeatSeconds, heartbeat))
+            : Self.heartbeatSeconds
+        if since >= interval { return .heartbeat }
         return nil
     }
 

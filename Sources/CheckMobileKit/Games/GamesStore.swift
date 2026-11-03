@@ -295,8 +295,8 @@ package final class GamesStore {
         //    **판돈이 걸린 실시간 판**이라서다 — 돌아온 순간 "내 판이 지금 흐르는가"를 스로틀에 맡기면
         //    30초까지 오목·체스 입구가 열린 채다.
         // ★ **두 가지를 겹쳐 부르지 마라.** `catchUp()` 과 `systemDidWake()` 는 **본문이 같다**(둘 다
-        //   `refreshLobby()` — 코어 1166·1177줄). 겹쳐 불러도 코어 `lobbyInFlight` 가드가 합쳐서 조회가
-        //   늘지는 않지만(실측), `windowDidShow()` 를 화면 없이 부르면 **보이지 않는 판의 준비 보고가 나간다.**
+        //   `refreshLobby()`). 겹쳐 부르면 코어가 도는 로비 뒤에 **한 번 더** 읽고(`lobbyAgain` — 2026-11-03, 도는 중에
+        //   온 초인종을 버리지 않으려고), `windowDidShow()` 를 화면 없이 부르면 **보이지 않는 판의 준비 보고가 나간다.**
         let tetris = context.tetris
         if isTetrisScreenVisible {
             if tetris.isWindowVisible {

@@ -194,6 +194,7 @@ package enum MessagesSendRules {
         case .notWorking: return MessageNoticeText.notWorking
         case .targetNotWorking: return MessageNoticeText.targetNotWorking
         case .targetFocused: return MessageNoticeText.targetFocused
+        case .senderFocused: return MessageNoticeText.senderFocused
         case .tooLong: return MessageNoticeText.tooLong(maxLength: maxLength)
         case .notText: return MessageNoticeText.notText
         case .blackout: return MessageNoticeText.blackout

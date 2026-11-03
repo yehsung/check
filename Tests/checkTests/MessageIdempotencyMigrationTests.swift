@@ -17,6 +17,10 @@ import Testing
 // `supabase/` 는 .gitignore 라 워크트리에 없을 수 있다 — 조상을 훑어 올라가며 찾고, `CHECK_MIGRATIONS_DIR` 로 덮어쓸 수 있다.
 
 private let idemMigrationName = "20261101131000_message_idempotency.sql"
+/// send_message 의 **최종** 정의(번호 순 마지막 create). 2026-11 보낸이 집중 차단(20261108121000)이 운영 정본에서 출발해 같은 서명으로
+/// 다시 만든다 — 그 정의가 이 파일의 멱등 계약(3인자 · 키 기본값 null · 멱등 조회 맨 앞 · on conflict)을 그대로 지니는지는
+/// SenderFocusGateMigrationTests ①② 가 최종 정의에 대해 잰다. 여기서는 '그 파일 말고 다른 파일이 최종이 아니다'만 본다.
+private let idemFinalDefinitionName = "20261108121000_sender_focus_gate.sql"
 
 private struct IdemContractError: Error, CustomStringConvertible {
     let message: String
@@ -108,7 +112,7 @@ private func idemSentKeys(_ body: SendMessageRequest) throws -> Set<String> {
 @Suite("send_message 멱등 키 마이그레이션(20261101131000) 소스 계약")
 struct MessageIdempotencyMigrationTests {
 
-    @Test("① 최종 정의는 이 파일의 3인자 — 앱이 빼는 키는 기본값 null")
+    @Test("① 최종 정의는 보낸이 집중 차단 파일 · 이 파일의 3인자 — 앱이 빼는 키는 기본값 null")
     func 최종_정의는_이_파일의_3인자다() throws {
         let directory = try idemMigrationsDirectory()
         let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
@@ -119,7 +123,7 @@ struct MessageIdempotencyMigrationTests {
             let code = idemStripLineComments(try String(contentsOf: file, encoding: .utf8))
             if idemSendMessageDefinition(in: code) != nil { finalFile = file.lastPathComponent }
         }
-        #expect(finalFile == idemMigrationName, "send_message 의 최종 정의가 \(finalFile ?? "없음") 이다 — 뒤 번호 파일이 멱등 키를 되돌린다")
+        #expect(finalFile == idemFinalDefinitionName, "send_message 의 최종 정의가 \(finalFile ?? "없음") 이다 — 뒤 번호 파일이 멱등 키 · 보낸이 집중 차단을 되돌린다")
 
         let code = idemStripLineComments(try idemMigrationRaw())
         let definition = try #require(idemSendMessageDefinition(in: code), "이 파일에 send_message create 헤더가 없다")

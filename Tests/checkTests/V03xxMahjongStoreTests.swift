@@ -89,7 +89,9 @@ struct V03xxMahjongStoreTests {
     }
 }
 
-// MARK: - 하네스(C2) — 스텁 서버 · 호스트 · 손 픽스처(`Fixtures/mahjong-rpc` — S2 실서버 픽스처가 나오면 원문으로 바꾼다)
+// MARK: - 하네스(C2) — 스텁 서버 · 호스트 · 장면 픽스처(`Fixtures/mahjong-scenes` — 한 판 이야기를 같은 id·시각·seq 로 잇는
+// C2 픽스처. 모양은 `V03xxMahjongFixtureContractTests.sceneFixturesStayInsideTheRealShape` 가 실응답 62 안에 묶는다.
+// 실응답 원문은 `Fixtures/mahjong-rpc` — 아래 `V03xxMahjongStoreRealResponseTests` 가 스토어에 그대로 먹인다)
 //
 // 서버는 오목 `GomokuStubProtocol`(호스트별 스크립트) · defaults 는 `GomokuTestDefaults` 격리. 벽시계는 주입, 폴링 루프는 3,600초로
 // 재우고 `pollTick(at:)`·`checkWake(at:)` 를 직접 밟는다(`timersEnabled = false`). 각 시험 첫 줄 주석은 "없으면 어떤 결함이 초록인가".
@@ -222,7 +224,18 @@ func mjRing(_ store: MahjongStore) async {
 
 enum MJFixture {
     static let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/mahjong-scenes", isDirectory: true)
+    /// S2 하네스 실응답 원문(바이트 그대로).
+    static let realDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
         .appendingPathComponent("Fixtures/mahjong-rpc", isDirectory: true)
+
+    static func real(_ name: String) throws -> MahjongActionResponse {
+        try decoder().decode(MahjongActionResponse.self, from: Data(contentsOf: realDir.appendingPathComponent("\(name).json")))
+    }
+
+    static func realText(_ name: String) throws -> String {
+        try String(contentsOf: realDir.appendingPathComponent("\(name).json"), encoding: .utf8)
+    }
 
     static func text(_ name: String) throws -> String {
         try String(contentsOf: dir.appendingPathComponent("\(name).json"), encoding: .utf8)
@@ -883,10 +896,10 @@ struct V03xxMahjongStoreDecisionTests {
         // 시작 검사에서 빠졌다 — 넷이 모인 방에서 방장 아닌 내가 not_found.
         server.set("mahjong_state", #"{"status":"not_found","server_now_ms":1800000000000}"#)
         await mjRing(b.store)
-        #expect(b.store.notice == MahjongNoticeText.droppedUnseen && b.store.phase == .lobby && !b.store.ownsMatch(mjRoom))
+        #expect(b.store.notice == MahjongNoticeText.droppedAtStart && b.store.phase == .lobby && !b.store.ownsMatch(mjRoom))
     }
 
-    @Test("seats_dropped — 남이 빠지면 공용 문구 · 내가 빠지면(까닭) 내 문구 + 방에서 내림", .gomokuDefaultsCleanup)
+    @Test("seats_dropped — 방장: 까닭(reasons)대로 한 줄 · 빠진 사람: 까닭 없는 중립 문구 + 방에서 내림", .gomokuDefaultsCleanup)
     func seatsDroppedNotice() async throws {
         // 없으면: 시작 검사에서 빠진 방장이 방 화면에 남아 [시작]을 계속 누른다.
         let server = MJServer()
@@ -894,14 +907,15 @@ struct V03xxMahjongStoreDecisionTests {
         let a = mjDevice("drop", server: server)
         a.store.applyState(try MJFixture.state("mahjong_state__room_four"))
         await a.store.start()
-        #expect(a.store.notice == MahjongNoticeText.status(.seatsDropped, for: .start) && a.store.phase == .room)
+        #expect(a.store.notice == "자리를 비운 사람이 빠졌어요" && a.store.phase == .room)
+        #expect(a.store.notice != MahjongNoticeText.droppedOthers(reasons: ["insufficient"]), "기준선: 까닭이 다르면 다른 줄")
         #expect(MahjongStore.joinedCount(a.store.match) == 3)
         server.set("mahjong_start", try MJFixture.mutated("mahjong_start__seats_dropped") { top in
             top["reasons"] = [mjA: "insufficient"]
         })
         a.store.applyState(try MJFixture.state("mahjong_state__room_four"), requestedSince: 0)
         await a.store.start()
-        #expect(a.store.notice == MahjongNoticeText.droppedInsufficient && a.store.phase == .lobby)
+        #expect(a.store.notice == MahjongNoticeText.droppedAtStart && a.store.phase == .lobby)
     }
 
     @Test("가용성 세 갈래 — 로비 ok · unsupported_client · 함수 없음(PGRST202)", .gomokuDefaultsCleanup)
@@ -933,5 +947,162 @@ struct V03xxMahjongStoreDecisionTests {
         #expect(b.tally.invites == [UUID(uuidString: mjRoom)!] && b.store.hasIncomingInvite)
         await b.store.decline(roomID: UUID(uuidString: mjRoom)!)
         #expect(b.count("decline") == 1)
+    }
+}
+
+// MARK: - 실응답 원문을 스토어에(T) — `Fixtures/mahjong-rpc`(S2 하네스 55492, 바이트 그대로). 시청자는 그 응답의 내 자리 주인,
+// 벽시계는 그 응답의 server_now_ms. 장면 픽스처(위)와 달리 id·시각·seq 를 고치지 않는다.
+
+@MainActor
+@Suite("아잉 마작 스토어 — S2 실응답 원문을 그대로 먹인다(로비·방·시작·차례·울기·비움·국 끝·판 끝)", .serialized)
+struct V03xxMahjongStoreRealResponseTests {
+    static let host = "0e57a3c9-f9a2-4f0c-b585-d78604e285e5"
+    static let room = "46e50796-140c-433d-9de6-6271c3cc8f85"
+
+    func device(_ label: String, me: String, nowMs: Double, server: MJServer) -> MJDevice {
+        let d = mjDevice(label, me: me, server: server)
+        d.clock.now = mjDate(ms: nowMs)
+        return d
+    }
+
+    func state(_ name: String) throws -> MahjongStatePayload {
+        try #require(try MJFixture.real(name).state, "\(name): state 없음")
+    }
+
+    @Test("로비 ok · 초대 — 잔액·가용성·초대 카드가 실응답에서 읽힌다", .gomokuDefaultsCleanup)
+    func lobbyFromRealResponses() async throws {
+        // 없으면: 로비 원문 칸 하나(초대 방 모양·잔액)가 스토어 경로에서 어긋나도 와이어 디코드 시험만으로는 초록이다.
+        let server = MJServer()
+        server.set("mahjong_lobby", try MJFixture.realText("mahjong_lobby__ok"))
+        let a = device("real-lobby", me: Self.host, nowMs: 1_793_699_161_571, server: server)
+        await mjRing(a.store)
+        #expect(a.store.phase == .lobby && a.store.availability == .available && a.store.rubyBalance == 100)
+        #expect(!a.store.hasIncomingInvite, "기준선: 초대 없는 로비")
+        let invites = try MJFixture.decoder().decode(
+            MahjongLobbyResponse.self, from: Data(MJFixture.realText("mahjong_lobby__invites").utf8))
+        a.store.applyLobby(invites)
+        #expect(a.store.hasIncomingInvite && a.store.visibleInvites.map { $0.id.uuidString.lowercased() } == [Self.room])
+    }
+
+    @Test("방 — 만들기 → 둘(시작 못 함) → 넷(room_full 응답의 state) → seats_dropped(방장: insufficient 한 줄) → 넷 → 시작 ok",
+          .gomokuDefaultsCleanup)
+    func roomToStartFromRealResponses() async throws {
+        // 없으면: 실서버 방 응답(멤버 상태·방장·seats_dropped 의 uuid 사전)이 스토어의 [시작] 게이트·문구와 어긋나도 모른다.
+        let server = MJServer()
+        server.set("mahjong_create", try MJFixture.realText("mahjong_create__ok"))
+        let a = device("real-room", me: Self.host, nowMs: 1_793_699_161_555, server: server)
+        await a.store.createRoom()
+        #expect(a.store.phase == .room && a.store.isHost && a.store.ownsMatch(Self.room) && !a.store.canStart)
+        server.set("mahjong_state", try MJFixture.realText("mahjong_state__room"))
+        await mjRing(a.store)
+        #expect(MahjongStore.joinedCount(a.store.match) == 2 && !a.store.canStart)
+        let full = try state("mahjong_invite__room_full")
+        a.store.applyState(full, requestedSince: 0)
+        #expect(MahjongStore.joinedCount(a.store.match) == 4 && a.store.canStart)
+        server.set("mahjong_start", try MJFixture.realText("mahjong_start__seats_dropped"))
+        await a.store.start()
+        #expect(a.store.notice == "루비가 모자란 사람이 빠졌어요" && a.store.phase == .room, "방장: 까닭(insufficient)대로")
+        #expect(MahjongStore.joinedCount(a.store.match) == 3 && !a.store.canStart)
+        a.store.applyState(full, requestedSince: 0)
+        server.set("mahjong_start", try MJFixture.realText("mahjong_start__ok"))
+        await a.store.start()
+        #expect(a.store.phase == .playing && a.store.rubyBalance == 95 && a.tally.presents == 1)
+        #expect(a.store.table?.mySeat == 3 && a.store.myDecision == nil, "방장은 자리 3 — 기가(0)가 아니라 결정 없음")
+    }
+
+    @Test("내 차례 — 결정(turn)이 실응답에서 · 뽑은 패를 버리면 expected_seq = 그 state 의 seq · stale 은 말없이", .gomokuDefaultsCleanup)
+    func myTurnFromRealResponse() async throws {
+        // 없으면: 실서버 결정 칸(discard 목록·seq)이 스토어 결정 해석과 갈라져 단추가 안 켜지거나 엉뚱한 seq 로 보낸다.
+        let server = MJServer()
+        let mine = try state("mahjong_state__turn_mine")
+        let a = device("real-turn", me: "03bfb832-9c03-492f-b401-2cfe07a8e771", nowMs: 1_793_699_167_276, server: server)
+        a.store.noteOwnsMatch(try #require(mine.match?.id))
+        #expect(a.store.applyState(mine) == .applied)
+        guard case .turn(let turn)? = a.store.myDecision else { Issue.record("내 차례가 아니다"); return }
+        #expect(turn.discard.contains(mjTile(124)) && turn.discard.count == 14)
+        server.set("mahjong_act", try MJFixture.realText("mahjong_act__stale"))
+        await a.store.discard(mjTile(124))
+        let act = try #require(a.calls("act").first?.json)
+        #expect(act["p_tiles"] as? [Int] == [124] && act["p_expected_seq"] as? Int == mine.match?.seq)
+        #expect(a.store.notice == nil, "stale 은 실린 state 로 답한다(문구 없음)")
+        let other = try state("mahjong_state__turn_other")
+        let b = device("real-turn-other", me: "5d419d6e-57a2-4629-8a0d-83b81b16843f", nowMs: 1_793_699_167_277, server: server)
+        #expect(b.store.applyState(other) == .applied && b.store.myDecision == nil, "기준선: 남의 차례엔 결정 없음")
+    }
+
+    @Test("울기 — 선택지 있는 자리: call 결정(퐁·깡) → 패스 → window_closed 는 말없이 내림 · 없는 자리: 결정 없음", .gomokuDefaultsCleanup)
+    func callPromptFromRealResponses() async throws {
+        // 없으면: 실서버 울기 결정(창 번호·퐁 조합)과 window_closed 를 스토어가 다르게 읽어 프롬프트가 남거나 문구가 뜬다.
+        let server = MJServer()
+        let prompt = try state("mahjong_state__claim_option")
+        let a = device("real-call", me: "42f407fc-1fe2-4872-a9d7-454dabc83b6a", nowMs: 1_793_699_167_293, server: server)
+        a.store.noteOwnsMatch(try #require(prompt.match?.id))
+        a.store.applyState(prompt)
+        guard case .call(let call)? = a.store.myDecision else { Issue.record("울기 프롬프트가 없다"); return }
+        #expect(call.windowId == 1 && call.pon == [[mjTile(133), mjTile(134)]] && call.minkan == [[mjTile(133), mjTile(134), mjTile(135)]])
+        server.set("mahjong_call", try MJFixture.realText("mahjong_call__ok"))
+        await a.store.passCall()
+        let answer = try #require(a.calls("call").first?.json)
+        #expect(answer["p_action"] as? String == "pass" && answer["p_window_id"] as? Int == 1)
+        #expect(a.store.myDecision == nil && a.store.notice == nil)
+        // window_closed 원문은 '다른 창 번호로 보낸 답'이라 실린 state 에 창 1 이 answered:null 로 아직 열려 있다 —
+        // 스토어는 문구 없이, 이미 답한 창을 프롬프트로 되살리지 않는다(가드 (e)·(h)).
+        let w = device("real-call-closed", me: "42f407fc-1fe2-4872-a9d7-454dabc83b6a", nowMs: 1_793_699_167_293, server: server)
+        w.store.noteOwnsMatch(try #require(prompt.match?.id))
+        w.store.applyState(prompt)
+        server.set("mahjong_call", try MJFixture.realText("mahjong_call__window_closed"))
+        await w.store.passCall()
+        #expect(w.store.notice == nil)
+        if case .call(let held)? = w.store.myDecision { #expect(held.windowId == 1 && held.answered == "pass") }
+        let none = try state("mahjong_state__claim_no_option")
+        let c = device("real-call-none", me: "01a79352-cba1-400b-9c7b-f4bab3494afc", nowMs: 1_793_699_167_293, server: server)
+        c.store.applyState(none)
+        #expect(c.store.myDecision == nil && c.store.phase == .playing)
+    }
+
+    @Test("자리 비움 — 나가기 응답의 my_away → 이 기기 점·배너 후보 · back ok 로 풀림 · 기준선: 장부 없는 기기 0", .gomokuDefaultsCleanup)
+    func awayAndBackFromRealResponses() async throws {
+        // 없으면: 실서버 my_away 모양(since·back_ready)이 스토어의 자리 비움 짝과 어긋나 점·배너가 안 켜지거나 안 꺼진다.
+        let server = MJServer()
+        let me = "021334d5-fb69-4a53-9185-8b68d9d6f9d6"
+        let away = try state("mahjong_leave__active")
+        let a = device("real-away", me: me, nowMs: 1_793_699_162_617, server: server)
+        a.store.noteOwnsMatch(try #require(away.match?.id))
+        a.store.applyState(away)
+        #expect(a.store.hasAwaySeatHere)
+        let idle = device("real-away-idle", me: me, nowMs: 1_793_699_162_617, server: server)
+        idle.store.applyState(away)
+        #expect(!idle.store.hasAwaySeatHere, "기준선: 이 기기가 연 판이 아니면 0")
+        server.set("mahjong_back", try MJFixture.realText("mahjong_back__ok"))
+        a.clock.now = mjDate(ms: 1_793_699_172_700)
+        await a.store.comeBack()
+        #expect(a.calls("back").count == 1 && !a.store.hasAwaySeatHere)
+    }
+
+    @Test("국 끝·판 끝 — 론 둘·셋·천화(역 id heavenly 를 아는 이름으로) · finished 는 판 끝 한 번", .gomokuDefaultsCleanup)
+    func handAndMatchEndFromRealResponses() async throws {
+        // 없으면: 실서버 국 결과(wins 여럿·역 id)를 스토어·문구가 '새 역'으로 접거나 판 끝 콜백이 안 운다.
+        let server = MJServer()
+        for (name, me, wins) in [("mahjong_state__hand_end_double_ron", "844cbe40-0ee9-44d4-8bd1-b77eaff1b8dc", 2),
+                                 ("mahjong_state__hand_end_triple_ron", "b6464e10-3e97-46b5-9fa0-d89c606b9e4a", 3),
+                                 ("mahjong_state__hand_end_heavenly", "15d6b80c-ff9e-402e-87dc-c48aecc28be5", 1)] {
+            let payload = try state(name)
+            let d = device("real-\(wins)", me: me, nowMs: payload.serverNowMs ?? 0, server: server)
+            #expect(d.store.applyState(payload) == .applied, "\(name)")
+            #expect(d.store.phase == .playing && d.store.match?.lastHand?.kind == "win", "\(name)")
+            #expect(d.store.match?.lastHand?.wins?.count == wins, "\(name)")
+            for win in d.store.match?.lastHand?.wins ?? [] {
+                for yaku in win.yaku ?? [] {
+                    #expect(MahjongNoticeText.yakuName(yaku.id) != MahjongNoticeText.newYaku, "\(name): \(yaku.id)")
+                }
+            }
+        }
+        let finished = try state("mahjong_state__finished")
+        let f = device("real-finished", me: "03364ce8-1ea1-4e35-b88d-bc7b138b8fd7", nowMs: finished.serverNowMs ?? 0, server: server)
+        f.store.noteOwnsMatch(try #require(finished.match?.id))
+        f.store.applyState(finished)
+        #expect(f.store.phase == .finished && f.tally.finished == 1)
+        f.store.applyState(finished, requestedSince: 0)
+        #expect(f.tally.finished == 1, "판 끝 콜백은 한 번")
     }
 }

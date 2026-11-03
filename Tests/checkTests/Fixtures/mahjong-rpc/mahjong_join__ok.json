@@ -1,98 +1,78 @@
 {
   "state": {
-    "events": [],
-    "last_hand": null,
     "match": {
+      "id": "46e50796-140c-433d-9de6-6271c3cc8f85",
+      "seq": 0,
+      "host": {
+        "id": "0e57a3c9-f9a2-4f0c-b585-d78604e285e5",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-0e57a3c9-f9a2-4f0c-b585-d78604e285e5"
+      },
+      "honba": 0,
+      "phase": "room",
+      "round": 0,
+      "stake": 5,
+      "format": "tonpuu",
+      "status": "forming",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": false,
+      "kan_count": 0,
+      "turn_seat": null,
+      "wake_seat": null,
+      "created_ms": 1793699161553,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": null,
+      "wake_at_ms": null,
+      "dealer_seat": 0,
+      "finished_ms": null,
       "backup_at_ms": null,
       "bank_full_ms": 20000,
-      "base_ms": 5000,
-      "created_ms": 1799999880000,
-      "dealer_seat": null,
-      "dora_indicators": [],
-      "end_reason": null,
-      "extension": false,
-      "finished_ms": null,
-      "format": "tonpuu",
-      "grace_ms": 1000,
-      "hand_index": null,
-      "hand_no": null,
-      "honba": null,
-      "host": {
-        "avatar_url": null,
-        "character": "aing",
-        "display_name": "아잉",
-        "id": "00000000-0000-0000-0000-0000000000a1"
-      },
-      "id": "7e7e0000-0000-4000-8000-0000000000aa",
-      "is_public": false,
-      "kan_count": null,
-      "kyotaku": null,
       "next_hand_ms": null,
-      "phase": "room",
-      "room_expires_ms": 1800000480000,
-      "round": null,
-      "seq": 0,
-      "stake": 5,
-      "started_ms": null,
-      "status": "forming",
-      "turn_seat": null,
-      "wake_at_ms": null,
-      "wake_seat": null,
-      "wall_remaining": null
+      "wall_remaining": null,
+      "dora_indicators": [],
+      "room_expires_ms": 1793699761553
     },
+    "seats": [],
+    "events": [],
     "members": [
       {
-        "is_host": true,
+        "user": {
+          "id": "0e57a3c9-f9a2-4f0c-b585-d78604e285e5",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-0e57a3c9-f9a2-4f0c-b585-d78604e285e5"
+        },
         "state": "joined",
-        "user": {
-          "avatar_url": null,
-          "character": "aing",
-          "display_name": "아잉",
-          "id": "00000000-0000-0000-0000-0000000000a1"
-        }
+        "is_host": true
       },
       {
-        "is_host": false,
+        "user": {
+          "id": "102fac6b-377f-4d6e-9e9f-e1fb5991b46d",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-102fac6b-377f-4d6e-9e9f-e1fb5991b46d"
+        },
         "state": "joined",
-        "user": {
-          "avatar_url": null,
-          "character": "aing",
-          "display_name": "비비",
-          "id": "00000000-0000-0000-0000-0000000000b2"
-        }
-      },
-      {
-        "is_host": false,
-        "state": "invited",
-        "user": {
-          "avatar_url": null,
-          "character": "aing",
-          "display_name": "씨씨",
-          "id": "00000000-0000-0000-0000-0000000000c3"
-        }
-      },
-      {
-        "is_host": false,
-        "state": "invited",
-        "user": {
-          "avatar_url": null,
-          "character": "aing",
-          "display_name": "디디",
-          "id": "00000000-0000-0000-0000-0000000000d4"
-        }
+        "is_host": false
       }
     ],
     "my_away": null,
-    "my_decision": null,
-    "my_drawn": null,
-    "my_furiten": [],
     "my_hand": [],
     "my_seat": null,
+    "my_drawn": null,
     "my_waits": [],
+    "last_hand": null,
     "reactions": [],
-    "ruby_balance": 80,
-    "seats": [],
-    "server_now_ms": 1799999900000
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793699161567
   },
   "status": "ok"
 }

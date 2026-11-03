@@ -95,12 +95,16 @@ public final class MobileAppModel {
         // 순위를 1분마다 당기지 않게 맥 배선(`CheckApp.wireGomoku` · CheckApp.swift:248)만 켰다. 폰이 그 화면을 갖는
         // 지금은 폰도 자기 배선에서 켠다(같은 스토어를 쓰는 두 앱의 유일한 차이라 배선에만 있다).
         gomoku.spectatorFeaturesEnabled = true
+        // '이 기기가 연 판' 장부를 둘 곳(2026-11-03 — `GameDeviceLedger`: 판 화면은 판을 연 기기에서만 저절로 열린다).
+        // 빠지면 장부가 프로세스 안에만 살아, 판 중에 앱을 다시 켠 폰이 자기 판의 화면을 안 연다. 체스도 아래 같은 줄이 있다.
+        gomoku.deviceLedger.defaults = env.storage.defaults
         realtime.gomoku = gomoku
         // 1:1 체스(0.3.44 서버·맥 · 폰은 이 세션부터). 호스트는 **오목과 같은 하나**다 —
         // `ChessStoreHost` 는 `GomokuStoreHost` 의 별명이고(ChessStore.swift:43), 루비 미러를 한 칸으로 두면
         // 체스 정산이 오목·상점과 같은 잔액을 적는다(두 벌이면 탭마다 다른 잔액이 보인다).
         let chess = ChessStore(host: host)
         chess.clock = { clock.now() }
+        chess.deviceLedger.defaults = env.storage.defaults
         // 순위·관전(체스)의 **주 스위치**. 기본이 꺼짐(`ChessStore.spectatorFeaturesEnabled`, ChessStore.swift:745)이라
         // 이 한 줄이 없으면 `chess_ranking`·`chess_watch` 가 **한 번도 안 나간다** — `loadRanking`·`startWatching`·
         // `refreshWatch` 와 `pollTick`·`windowDidShow` 의 두 분기가 전부 `canPollSpectatorFeatures` 를 먼저 본다.
@@ -129,6 +133,11 @@ public final class MobileAppModel {
         // 바로 위 오목·체스 두 줄과 같은 못이고, 같은 까닭으로 "기본값이니 지워도 되겠지"로 지우지 마라
         // (뷰는 `#if os(iOS)` 안이라 맥 스위트가 못 본다). 못: `Tests/CheckMobileKitTests/GamesTetrisWatchTests.swift`.
         tetris.spectatorFeaturesEnabled = true
+        // 판 표시 프레임의 **주 스위치**(명세 docs/plan/tetris-broadcast/SPEC.md · 결정 D5 — 폰도 이번 가지에서 켠다). 기본이 꺼짐이라
+        // 이 한 줄이 없으면 `tetris_report` 가 언제나 `p_protocol` 1 이고 판 전용 소켓을 한 번도 안 연다(보고는 지금처럼 1초).
+        // 켜도 출시를 가르는 것은 서버 스위치(`tetris_frames_enabled()`)다. 리얼타임 킬스위치는 위 `tetris.defaults`(이 앱의 저장소)로
+        // 읽는다 — `MobileEnvironment` 가 초인종 전송자를 만들 때와 같은 곳이다. 못: `Tests/CheckMobileKitTests/GamesTetrisDuelWiringTests.swift`.
+        tetris.framesEnabled = true
         // 실시간 'tetris' 초인종을 받을 자리(오목 `realtime.gomoku` 바로 옆 · 같은 꼴). 이 한 줄이 없으면
         // 러너의 `.tetrisSignal` 가지가 **nil 에 말을 걸어** 아무 일도 안 한다 — 초인종이 와도 폰은 자기 보고
         // 왕복(1초)까지 방해 줄을 모르고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.

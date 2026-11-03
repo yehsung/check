@@ -1,210 +1,194 @@
 {
   "state": {
-    "events": [
-      {
-        "at_ms": 1800000000000,
-        "dealer_seat": 0,
-        "dora": [
-          100
-        ],
-        "hand_index": 0,
-        "hand_no": 0,
-        "honba": 0,
-        "kind": "deal",
-        "kyotaku": 0,
-        "round": 0,
-        "seat": null,
-        "seq": 1
-      },
-      {
-        "at_ms": 1800000000000,
-        "kind": "draw",
-        "rinshan": false,
-        "seat": 0,
-        "seq": 2,
-        "tile": 129
-      },
-      {
-        "at_ms": 1800000001500,
-        "kind": "discard",
-        "riichi": false,
-        "seat": 0,
-        "seq": 3,
-        "tile": 129,
-        "tsumogiri": true
-      },
-      {
-        "at_ms": 1800000002100,
-        "kind": "draw",
-        "rinshan": false,
-        "seat": 1,
-        "seq": 4,
-        "tile": null
-      }
-    ],
-    "last_hand": null,
     "match": {
-      "backup_at_ms": 1800000030100,
-      "bank_full_ms": 20000,
-      "base_ms": 5000,
-      "created_ms": 1799999880000,
-      "dealer_seat": 0,
-      "dora_indicators": [
-        100
-      ],
-      "end_reason": null,
-      "extension": false,
-      "finished_ms": null,
-      "format": "tonpuu",
-      "grace_ms": 1000,
-      "hand_index": 0,
-      "hand_no": 0,
-      "honba": 0,
+      "id": "f8578962-b0a7-46cf-a591-50d9d4dbb5f7",
+      "seq": 2,
       "host": {
+        "id": "b3dd3cf4-6f7f-4857-8fa8-b4d9b10227bc",
+        "character": null,
         "avatar_url": null,
-        "character": "aing",
-        "display_name": "아잉",
-        "id": "00000000-0000-0000-0000-0000000000a1"
+        "display_name": "mjt-b3dd3cf4-6f7f-4857-8fa8-b4d9b10227bc"
       },
-      "id": "7e7e0000-0000-4000-8000-0000000000aa",
+      "honba": 0,
+      "phase": "wait",
+      "round": 0,
+      "stake": 3,
+      "format": "tonpuu",
+      "status": "active",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
       "is_public": false,
       "kan_count": 0,
-      "kyotaku": 0,
+      "turn_seat": null,
+      "wake_seat": 1,
+      "created_ms": 1793699167278,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": 1793699167278,
+      "wake_at_ms": 1793699168083,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": 1793699171083,
+      "bank_full_ms": 20000,
       "next_hand_ms": null,
-      "phase": "turn",
-      "room_expires_ms": 1800000480000,
-      "round": 0,
-      "seq": 4,
-      "stake": 5,
-      "started_ms": 1800000000000,
-      "status": "active",
-      "turn_seat": 1,
-      "wake_at_ms": 1800000008100,
-      "wake_seat": 2,
-      "wall_remaining": 68
+      "wall_remaining": 69,
+      "dora_indicators": [
+        116
+      ],
+      "room_expires_ms": 1793699167278
     },
-    "members": [],
-    "my_away": null,
-    "my_decision": null,
-    "my_drawn": null,
-    "my_furiten": [],
-    "my_hand": [
-      1,
-      5,
-      9,
-      37,
-      41,
-      45,
-      73,
-      77,
-      81,
-      109,
-      110,
-      121,
-      125
-    ],
-    "my_seat": 0,
-    "my_waits": [],
-    "reactions": [],
-    "ruby_balance": 95,
     "seats": [
       {
         "away": false,
+        "user": {
+          "center": null,
+          "user_id": "b3dd3cf4-6f7f-4857-8fa8-b4d9b10227bc",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-b3dd3cf4-6f7f-4857-8fa8-b4d9b10227bc"
+        },
+        "wind": "E",
+        "melds": [],
+        "score": 25000,
+        "payout": null,
+        "riichi": false,
         "deleted": false,
+        "seat_no": 0,
         "discards": [
           {
-            "riichi": false,
+            "tile": 132,
             "taken": false,
-            "tile": 129,
-            "tsumogiri": true
+            "riichi": false,
+            "tsumogiri": false
           }
         ],
-        "final_rank": null,
-        "final_score": null,
-        "hand_count": 13,
         "is_dealer": true,
-        "melds": [],
-        "payout": null,
-        "riichi": false,
-        "score": 25000,
-        "seat_no": 0,
-        "user": {
-          "avatar_url": null,
-          "center": null,
-          "character": "aing",
-          "display_name": "아잉",
-          "user_id": "00000000-0000-0000-0000-0000000000a1"
-        },
-        "wind": "E"
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
       },
       {
         "away": false,
-        "deleted": false,
-        "discards": [],
-        "final_rank": null,
-        "final_score": null,
-        "hand_count": 14,
-        "is_dealer": false,
+        "user": {
+          "center": null,
+          "user_id": "42f407fc-1fe2-4872-a9d7-454dabc83b6a",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-42f407fc-1fe2-4872-a9d7-454dabc83b6a"
+        },
+        "wind": "S",
         "melds": [],
+        "score": 25000,
         "payout": null,
         "riichi": false,
-        "score": 25000,
+        "deleted": false,
         "seat_no": 1,
-        "user": {
-          "avatar_url": null,
-          "center": null,
-          "character": "aing",
-          "display_name": "비비",
-          "user_id": "00000000-0000-0000-0000-0000000000b2"
-        },
-        "wind": "S"
+        "discards": [],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
       },
       {
         "away": false,
-        "deleted": false,
-        "discards": [],
-        "final_rank": null,
-        "final_score": null,
-        "hand_count": 13,
-        "is_dealer": false,
+        "user": {
+          "center": null,
+          "user_id": "01a79352-cba1-400b-9c7b-f4bab3494afc",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-01a79352-cba1-400b-9c7b-f4bab3494afc"
+        },
+        "wind": "W",
         "melds": [],
+        "score": 25000,
         "payout": null,
         "riichi": false,
-        "score": 25000,
+        "deleted": false,
         "seat_no": 2,
-        "user": {
-          "avatar_url": null,
-          "center": null,
-          "character": "aing",
-          "display_name": "씨씨",
-          "user_id": "00000000-0000-0000-0000-0000000000c3"
-        },
-        "wind": "W"
+        "discards": [],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
       },
       {
         "away": false,
-        "deleted": false,
-        "discards": [],
-        "final_rank": null,
-        "final_score": null,
-        "hand_count": 13,
-        "is_dealer": false,
+        "user": {
+          "center": null,
+          "user_id": "732c8d80-068f-44cf-9624-2fbc5daafb16",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-732c8d80-068f-44cf-9624-2fbc5daafb16"
+        },
+        "wind": "N",
         "melds": [],
+        "score": 25000,
         "payout": null,
         "riichi": false,
-        "score": 25000,
+        "deleted": false,
         "seat_no": 3,
-        "user": {
-          "avatar_url": null,
-          "center": null,
-          "character": "aing",
-          "display_name": "디디",
-          "user_id": "00000000-0000-0000-0000-0000000000d4"
-        },
-        "wind": "N"
+        "discards": [],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
       }
     ],
-    "server_now_ms": 1800000002200
+    "events": [
+      {
+        "seq": 1,
+        "dora": [
+          116
+        ],
+        "kind": "deal",
+        "seat": 0,
+        "at_ms": 1793699167283,
+        "honba": 0,
+        "round": 0,
+        "hand_no": 0,
+        "kyotaku": 0,
+        "hand_index": 0,
+        "dealer_seat": 0
+      },
+      {
+        "seq": 2,
+        "kind": "discard",
+        "seat": 0,
+        "tile": 132,
+        "at_ms": 1793699167288,
+        "riichi": false,
+        "tsumogiri": false
+      }
+    ],
+    "members": [],
+    "my_away": null,
+    "my_hand": [
+      0,
+      8,
+      17,
+      32,
+      36,
+      44,
+      53,
+      68,
+      72,
+      80,
+      89,
+      104,
+      120
+    ],
+    "my_seat": 0,
+    "my_drawn": null,
+    "my_waits": [],
+    "last_hand": null,
+    "reactions": [],
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793699167292
   },
   "status": "ok"
 }

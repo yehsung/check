@@ -73,10 +73,23 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
-    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이).
-    /// 번들이 비어도 이 다섯은 늘 있다.
+    /// 이슬 아잉이(v0.3.74 · '술 한잔' 선물 전용)의 고정 id. 서버 CHECK·가격표(`gift_only = true` · `gift_kind = 'drink'`)·
+    /// `character_gifts.options` 의 id 와 같다. 매니페스트 파일로 못 싣는 이유는 케이크와 같다(밑줄 id · scene3D 는 초상을 못 가진다).
+    package static let isulAingID = "aing_isul"
+
+    /// 코드에 박힌 이슬 아잉이 — 아잉과 **같은 3D 메시**에 이슬 마감(`CharacterManifest.Finish.isul` — 초록 유리 몸 · 라벨 · 병뚜껑)을 입힌 변형이다.
+    /// **'술 한잔' 선물 전용**이다(사용자 결정 2026-11-03 "선물 전용 (케이크처럼)" + "술한잔 하자고 초대보내는느낌으로 같이 선물할거야"):
+    /// 루비로도 · 뽑기로도 · 조각 교환으로도 못 얻고, 운영자가 지급한 술 선물(`character_gifts.kind = 'drink'`)에서 고를 것 없이 받는다.
+    package static let builtInIsulAing = CharacterManifest(
+        id: isulAingID,
+        displayName: "이슬 아잉이",
+        kind: .scene3D
+    )
+
+    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이, 이슬 아잉이).
+    /// 번들이 비어도 이 여섯은 늘 있다.
     package static let builtIns: [CharacterManifest] = [
-        builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing,
+        builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
     ]
 
     /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
@@ -104,19 +117,41 @@ package struct CharacterCatalog: Sendable {
         id == cakeStrawberryAingID || id == cakeChocoAingID
     }
 
-    /// **생일 선물로만** 얻는 내장 캐릭터(딸기 · 초코 케이크 아잉이)인가 — 서버 `gift_only` 표식이 빠지거나 false 로 와도 루비 · 뽑기 ·
-    /// 조각으로는 못 얻는다(사용자 결정 2026-10-26 "뽑기로도 못뽑는걸로"). 상점 구매 가능(`ShopCharacterRow.isPurchasable`) · 잠긴 칸의
-    /// '생일 선물 전용' · 선물 선택지 거르기가 전부 이 한 곳을 묻는다.
+    /// 이 id 가 이슬 아잉이인가. 금과 같은 규칙(정확히 `aing_isul` 만 — 공백 · 대소문자를 봐주지 않는다).
+    package static func isIsulAing(_ id: String?) -> Bool {
+        id == isulAingID
+    }
+
+    /// **선물로만** 얻는 내장 캐릭터(생일 — 딸기 · 초코 케이크 아잉이, 술 한잔 — 이슬 아잉이)인가 — 서버 `gift_only` 표식이 빠지거나
+    /// false 로 와도 루비 · 뽑기 · 조각으로는 못 얻는다(사용자 결정 2026-10-26 "뽑기로도 못뽑는걸로" · 2026-11-03 "선물 전용 (케이크처럼)").
+    /// 상점 구매 가능(`ShopCharacterRow.isPurchasable`) · 잠긴 칸 · 조각 교환 금지 · 고르기의 '가진 사람만'이 이 한 곳을 묻는다.
+    ///
+    /// ★ (v0.3.74) 이 판정은 **'선물 전용 전부'** 뜻으로만 쓴다. '케이크(생일)' 뜻 — 생일 선물 선택지 · 능력 번호 4 · 케이크 순서 — 은
+    ///   `birthdayGiftBuiltInIDs` 를, 종류별 문구는 `CharacterGiftKind(builtInID:)` 를 묻는다. 이슬을 케이크 뜻 자리에 섞으면
+    ///   이슬 초상이 없는 빌드(폰)가 능력 번호 3 으로 떨어져 케이크까지 잃는다(설계서 §2).
     ///
     /// ★ `isGachaOnlyBuiltIn` 과 **겹치지 않는다**(케이크는 뽑기 전용이 아니다 — 뽑기 화면 · 확률표 · 교환 목록에 서지 않는다).
     ///   서버는 not_for_sale 갈래를 타게 하려고 케이크 행에 `gacha_only = true` 도 싣지만, 클라의 '뽑기 전용' 판정은 그 표식을
     ///   `gift_only` 보다 뒤에 본다(화면이 "뽑기나 조각 교환으로 얻을 수 있어요"라고 거짓말하지 않게).
     package static func isGiftOnlyBuiltIn(_ id: String?) -> Bool {
-        isCakeAing(id)
+        isCakeAing(id) || isIsulAing(id)
     }
 
-    /// 생일 선물 내장 캐릭터의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 선물 선택지의 순서가 같다).
-    package static let giftOnlyBuiltInIDs: [String] = [cakeStrawberryAingID, cakeChocoAingID]
+    /// 생일 선물 내장 캐릭터의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 생일 선물 선택지의 순서가 같다). '케이크' 뜻 자리는 이 목록이다.
+    package static let birthdayGiftBuiltInIDs: [String] = [cakeStrawberryAingID, cakeChocoAingID]
+
+    /// '술 한잔' 선물 내장 캐릭터 — 이슬 하나(v0.3.74). 술 선물의 선택지는 이 목록뿐이다.
+    package static let drinkGiftBuiltInIDs: [String] = [isulAingID]
+
+    /// 선물 전용 내장 캐릭터 **전부**(생일 → 술, 표시 순서) — '루비로 못 산다 · 잠긴 칸' 뜻으로만 쓴다(`isGiftOnlyBuiltIn` 과 같은 집합).
+    /// ★ 케이크 뜻(생일 선물 선택지 · `ShopWire.cakeCharacterIDs`)에 쓰지 마라 — `birthdayGiftBuiltInIDs` 다.
+    package static let giftOnlyBuiltInIDs: [String] = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs
+
+    /// 이 내장 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술 한잔). 선물 전용 내장이 아니면 nil.
+    /// 잠긴 칸 · 잠긴 카드의 안내처럼 **종류마다 말이 다른** 자리가 이 한 곳을 묻는다(`CharacterGiftKind.copy`).
+    package static func giftKind(ofBuiltIn id: String?) -> CharacterGiftKind? {
+        CharacterGiftKind(builtInID: id)
+    }
 
     /// 카탈로그 한 칸 — 매니페스트와 그 에셋이 있는 폴더. 내장 아잉은 폴더가 없다(씬 파일은 종전 경로).
     package struct Entry: Sendable, Equatable {

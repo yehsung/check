@@ -236,8 +236,15 @@ enum TetrisWireJSON {
         #expect(model.tetris.host === model.gomokuHost, "테트리스 호스트가 오목·체스와 다르다 — 루비 미러가 갈린다")
         #expect(model.tetris.presentWindow != nil,
                 "코어의 화면 여는 문이 안 물렸다 — 수락·시작이 화면을 못 열고 준비 보고가 30초를 흘린다")
+        // 판 표시 프레임의 주 스위치(D5 — 폰도 켠다). 없으면 폰은 언제나 p_protocol 1 · 소켓 0 이라 서버 스위치를 켜도 1초 보고다.
+        #expect(model.tetris.framesEnabled, "배선이 framesEnabled 를 안 켰다 — 폰 판은 영영 1초 보고다")
+        // ★ 기준선: 스토어 기본은 꺼짐이다(위 참이 배선 한 줄 덕이다). 테스트 프로세스엔 라이브 소켓이 없어 능력은 서지 않는다
+        //   — 그래서 이 스위트의 보고 본문은 계속 p_protocol 1 이다(픽스처 계약 그대로).
+        #expect(TetrisDuelStore().framesEnabled == false)
+        #expect(!model.tetris.framesCapable, "테스트 프로세스에서 프레임 소켓이 열릴 수 있다고 말한다")
         // 배선 값은 로그아웃 reset 이 건드리지 않는다(재로그인 뒤에도 순위·문이 살아야 한다).
         model.tetris.reset()
+        #expect(model.tetris.framesEnabled, "reset 이 framesEnabled 를 껐다")
         #expect(model.tetris.rankingEnabled, "reset 이 배선 값을 껐다")
         #expect(model.tetris.presentWindow != nil, "reset 이 화면 문을 떼었다")
         await harness.tearDown()
@@ -524,8 +531,9 @@ enum TetrisWireJSON {
     @Test("P8: active 복귀의 로비 조회는 **어느 가지에서도 한 번**이고, 화면이 없으면 창 깃발·폴링·준비 보고가 서지 않는다")
     func wakingUpCatchesUpOnceAndOnlyOpensTheWindowWhenTheScreenIsThere() async {
         // ★ 설계 P8 은 "둘 다 부르면 로비를 두 번 긁는다"고 적었는데 **실측은 다르다**: `catchUp()` 과
-        //   `systemDidWake()` 는 본문이 같고(둘 다 `refreshLobby()`), 코어 `refreshLobby` 의 `lobbyInFlight`
-        //   가드가 겹친 호출을 하나로 합친다. 그래서 **조회 셈만으로는 가지를 뒤집은 결함이 안 잡힌다.**
+        //   `systemDidWake()` 는 본문이 같고(둘 다 `refreshLobby()`), 이 시험을 쓸 때는 코어 `lobbyInFlight` 가드가
+        //   겹친 호출을 하나로 합쳤다(2026-11-03 부터는 도는 로비 뒤에 한 번 더 읽는다 — `lobbyAgain`. 그래서 지금은 둘을
+        //   겹쳐 부르면 셈이 +2 가 된다). 그래도 **조회 셈만으로는 가지를 뒤집은 결함이 다 안 잡힌다.**
         //   값으로 갈리는 것은 창 깃발이다: 화면이 없는데 `windowDidShow()` 를 부르면 코어가 폴링을 띄우고
         //   **보이지 않는 판의 준비 보고까지 낸다**(머리말 ⑨) — 사용자는 못 보는 카운트다운에 끌려 들어가 판돈을
         //   잃는다. 아래는 그 둘을 함께 잰다(상한으로서의 '한 번' + 가지의 실제 결과).

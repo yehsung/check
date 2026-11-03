@@ -128,7 +128,7 @@ enum CheckCharacter3DScene {
         return makeAingScene(animated: animated, finish: character.finish)
     }
 
-    /// 아잉 메시 위의 마감(금 · 무지개 · 케이크 둘) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
+    /// 아잉 메시 위의 마감(금 · 무지개 · 케이크 둘 · 이슬) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
     /// 스프라이트는 언제나 `.standard` 라 여기 오지 않는다.
     private static func applyFinish(_ finish: CharacterManifest.Finish, to character: SCNNode) {
         switch finish {
@@ -138,6 +138,9 @@ enum CheckCharacter3DScene {
         // 케이크(v0.3.66): 무지개와 같은 디퓨즈 합성 + 몸 셰이더 + 장식 노드(`check.cakeDecor`) + 프레이밍 내림(`CakeAingFinish.framingDrop`).
         case .cakeStrawberry: CakeAingFinish.apply(.strawberry, to: character)
         case .cakeChoco: CakeAingFinish.apply(.choco, to: character)
+        // 이슬(v0.3.74): 무지개와 같은 디퓨즈 합성 + 초록 유리 몸 셰이더(ckShadeMap · 라벨 ckLabelMap) + 병뚜껑 장식 노드(`check.isulDecor`).
+        // 케이크처럼 내려 세우지 않는다(뚜껑이 낮아 지금 구도로 부유 꼭대기까지 안 잘린다 — `IsulAingFinish` 머리말 ★ 프레이밍).
+        case .isul: IsulAingFinish.apply(to: character)
         }
     }
 
@@ -297,7 +300,7 @@ enum CheckCharacter3DScene {
             // 아잉은 모델을 다시 읽는다(씬 하나에 캐릭터는 한 마리라 예비를 들고 있을 자리가 없다).
             // unlit 정규화 → 감은눈 노드까지 `makeScene` 과 **같은 순서**로 세운다. 순서가 갈리면
             // 감은눈 선이 unlit 정규화를 못 받아 조명에 허옇게 뜬다.
-            // 황금 아잉이(v0.3.54)·무지개 아잉이(v0.3.59)·케이크 아잉이(v0.3.66)는 unlit 정규화 **뒤**·감은눈 노드 **앞**에 마감을 입힌다
+            // 황금 아잉이(v0.3.54)·무지개 아잉이(v0.3.59)·케이크 아잉이(v0.3.66)·이슬 아잉이(v0.3.74)는 unlit 정규화 **뒤**·감은눈 노드 **앞**에 마감을 입힌다
             // (`makeAingScene` 과 같은 순서). 케이크의 프레이밍 내림은 이 노드에 실려 남의 씬(울트라)에서도 같이 간다.
             guard let scene = loadModelScene() else { return nil }
             applyUnlitMaterials(to: scene.rootNode)
@@ -349,6 +352,7 @@ enum CheckCharacter3DScene {
         // 무지개 아잉이(v0.3.59)도 같은 순서 — 라벤더 원본에서 감은 눈을 굽고 밝기 맵을 합성한다(덮인 눈 자리가 둘레와 이어진 밝기를 받는다).
         // 케이크 아잉이(v0.3.66)도 이 갈래다: 얼굴 디퓨즈가 무지개와 **같은 그림 · 같은 객체**(`CakeAingFinish.apply` 가 무지개 캐시를 쓴다)라
         // 여기서 알아보고, 덮인 눈 자리를 밝기 맵 피부로 받은 뒤 케이크 몸 셰이더가 그 자리를 케이크로 칠한다.
+        // 이슬 아잉이(v0.3.74)도 같다(`IsulAingFinish.apply` 가 무지개 캐시를 쓴다) — 덮인 눈 자리를 초록 유리 셰이더가 칠한다.
         if let original = RainbowAingFinish.lavenderOriginal(ofRainbowFace: faceImage) {
             return RainbowAingFinish.closedEyesImage(rainbowFace: faceImage, original: original) { lavender in
                 lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)

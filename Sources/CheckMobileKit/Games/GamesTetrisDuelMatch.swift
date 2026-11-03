@@ -81,7 +81,8 @@ package struct GamesTetrisDuelChrome: Equatable, Sendable {
     }
 
     /// 상대 보고가 이만큼 끊기면 "상대 연결 확인 중" 을 띄운다(서버 침묵 판정 15초의 1/3 — 1초 하트비트 서넛을
-    /// 놓친 자리. 맥 `TetrisDuelOpponentPresence.silenceHintSeconds` 와 같은 값이다).
+    /// 놓친 자리. 맥 `TetrisDuelOpponentPresence.silenceHintSeconds` 와 같은 값이다). 재료는 DB 의 상대 last_seen 과
+    /// 판 표시 프레임 수신 시각 중 최근 쪽이다(코어 `opponentSilenceSeconds` — 체크포인트 3초 동안에도 프레임이 오면 뜨지 않는다).
     package nonisolated static let opponentSilenceHintSeconds: TimeInterval = 5
     /// 준비 마감을 모를 때 보여 줄 기본 남은 초(서버 `tetris_ready_timeout_seconds()`).
     package nonisolated static let readyTimeoutSeconds = 30

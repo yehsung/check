@@ -4,15 +4,12 @@ import Testing
 @testable import CheckCore
 
 // 아잉 뒤집기 '이 기기가 연 판' 장부 단위 시험 — 가지 `fix/game-window-one-device`(62ecdf73 · 6e95a55a)의 `GameDeviceLedgerTests` 를
-// 리버시 다리(`ReversiDeviceLedgerShim`)로 옮긴 꼴. 사용자별 키 · 기한 · 상한 · 지우기 · 앱 defaults. 판정이 섞이면 놀던 기기가 창을
+// `GameDeviceLedger(game: "reversi")` 로 옮긴 꼴. 사용자별 키 · 기한 · 상한 · 지우기 · 앱 defaults. 판정이 섞이면 놀던 기기가 창을
 // 열거나(남는 기록) 판을 연 기기가 창을 못 연다(사라진 기록). 스토어 쪽 동작은 `ReversiWindowOneDeviceTests` 가 잰다.
-//
-// ⚠ 합칠 때: `GameDeviceLedger` 가 main 에 들어오면 아래 `RVLedgerUnderTest` 한 줄을 `GameDeviceLedger` 로 바꾼다 — 같은 단언이
-// 그대로 초록이어야 한다(다리와 그 타입의 공개 모양 · 저장 키가 같다는 뜻). 절차는 `FLIP/MERGE-NOTES.md`.
-private typealias RVLedgerUnderTest = ReversiDeviceLedgerShim
+private typealias RVLedgerUnderTest = GameDeviceLedger
 
-@Suite("아잉 뒤집기 — 이 기기가 연 판 장부(GameDeviceLedger 와 같은 모양의 다리)")
-struct ReversiDeviceLedgerShimTests {
+@Suite("아잉 뒤집기 — 이 기기가 연 판 장부(GameDeviceLedger)")
+struct ReversiDeviceLedgerTests {
     private let t0 = Date(timeIntervalSince1970: 1_800_000_000)
 
     @Test("적은 판만 연 판이다 · 사람마다 따로 · 로그인 전은 언제나 아니다 · 대소문자 무관")

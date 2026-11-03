@@ -1,0 +1,265 @@
+{
+  "state": {
+    "match": {
+      "id": "23f2990c-10d1-4897-8ec9-5828b048c07a",
+      "seq": 3,
+      "host": {
+        "id": "15d6b80c-ff9e-402e-87dc-c48aecc28be5",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-15d6b80c-ff9e-402e-87dc-c48aecc28be5"
+      },
+      "honba": 0,
+      "phase": "hand_end",
+      "round": 0,
+      "stake": 3,
+      "format": "tonpuu",
+      "status": "active",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": false,
+      "kan_count": 0,
+      "turn_seat": null,
+      "wake_seat": 0,
+      "created_ms": 1793699162313,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": 1793699162313,
+      "wake_at_ms": 1793699169319,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": 1793699172319,
+      "bank_full_ms": 20000,
+      "next_hand_ms": 1793699169319,
+      "wall_remaining": 69,
+      "dora_indicators": [
+        122
+      ],
+      "room_expires_ms": 1793699162313
+    },
+    "seats": [
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "15d6b80c-ff9e-402e-87dc-c48aecc28be5",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-15d6b80c-ff9e-402e-87dc-c48aecc28be5"
+        },
+        "wind": "E",
+        "melds": [],
+        "score": 73000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 0,
+        "discards": [],
+        "is_dealer": true,
+        "final_rank": null,
+        "hand_count": 14,
+        "final_score": null
+      },
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "84610b57-60e2-41a5-a9bc-e5d2184c8e95",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-84610b57-60e2-41a5-a9bc-e5d2184c8e95"
+        },
+        "wind": "S",
+        "melds": [],
+        "score": 9000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 1,
+        "discards": [],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
+      },
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "85da5492-d29e-484e-aa48-501e7d6056e0",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-85da5492-d29e-484e-aa48-501e7d6056e0"
+        },
+        "wind": "W",
+        "melds": [],
+        "score": 9000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 2,
+        "discards": [],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
+      },
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "fbdd6818-e393-4f50-b5c5-cbae60136643",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-fbdd6818-e393-4f50-b5c5-cbae60136643"
+        },
+        "wind": "N",
+        "melds": [],
+        "score": 9000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 3,
+        "discards": [],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
+      }
+    ],
+    "events": [
+      {
+        "seq": 1,
+        "dora": [
+          122
+        ],
+        "kind": "deal",
+        "seat": 0,
+        "at_ms": 1793699162314,
+        "honba": 0,
+        "round": 0,
+        "hand_no": 0,
+        "kyotaku": 0,
+        "hand_index": 0,
+        "dealer_seat": 0
+      },
+      {
+        "seq": 2,
+        "kind": "win",
+        "seat": null,
+        "at_ms": 1793699162319,
+        "seats": [
+          0
+        ],
+        "from_seat": null
+      },
+      {
+        "seq": 3,
+        "kind": "scores",
+        "seat": null,
+        "at_ms": 1793699162320,
+        "deltas": [
+          48000,
+          -16000,
+          -16000,
+          -16000
+        ],
+        "scores_after": [
+          73000,
+          9000,
+          9000,
+          9000
+        ]
+      }
+    ],
+    "members": [],
+    "my_away": null,
+    "my_hand": [
+      0,
+      4,
+      8,
+      12,
+      17,
+      20,
+      24,
+      28,
+      32,
+      36,
+      37,
+      40,
+      44
+    ],
+    "my_seat": 0,
+    "my_drawn": 48,
+    "my_waits": [],
+    "last_hand": {
+      "kind": "win",
+      "wins": [
+        {
+          "fu": null,
+          "aka": 0,
+          "han": 13,
+          "pao": null,
+          "ura": 0,
+          "dora": 0,
+          "hand": [
+            0,
+            4,
+            8,
+            12,
+            17,
+            20,
+            24,
+            28,
+            32,
+            36,
+            37,
+            40,
+            44
+          ],
+          "seat": 0,
+          "yaku": [
+            [
+              "heavenly",
+              13
+            ]
+          ],
+          "limit": "yakuman",
+          "melds": [],
+          "total": 48000,
+          "yakuman": 1,
+          "win_tile": 48,
+          "from_seat": null,
+          "ura_indicators": null
+        }
+      ],
+      "deltas": [
+        48000,
+        -16000,
+        -16000,
+        -16000
+      ],
+      "reason": null,
+      "tenpai": [],
+      "nagashi": [],
+      "renchan": true,
+      "bonus_to": 0,
+      "hand_index": 0,
+      "scores_after": [
+        73000,
+        9000,
+        9000,
+        9000
+      ]
+    },
+    "reactions": [],
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793699162321
+  },
+  "status": "ok"
+}

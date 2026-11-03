@@ -149,6 +149,30 @@ package struct MahjongPracticeSession: Sendable {
     /// 창이 탁자를 안 보이거나 방 넷째가 앉아 멈춘 동안 참(봇도 안 둔다).
     package var isPaused: Bool
 
+    // MARK: 연습판 몸통(C3) — 모듈 안에만(엔진은 숨은 정보를 쥔다 — 화면은 `payload` 만 본다)
+
+    /// 판 권위(갈래 E). 패산·남의 손은 이 안에만 있다.
+    var engine: MahjongTableEngine?
+    /// 지금 사람 결정의 정체성("국#turn#결정번호" | "국#call#창번호") — 바뀌면 시계·안내·2단 입력을 새로 잡는다.
+    var humanAnchor: String?
+    /// 사람 결정 시계 시작(실전처럼) — 멈췄다 이어 가면 멈춘 만큼 뒤로 민다.
+    var humanStartedAt: Date?
+    /// 사람 예비(ms) — 국마다 20초, 국 안 회복 없음(MJ-53).
+    var bankMs = MahjongClock.bankFullMs
+    var bankHandIndex = -1
+    /// '넉넉히' 론 아닌 울기 프롬프트가 선 때 · 안내를 띄웠나.
+    var callPromptAt: Date?
+    var hintShown = false
+    /// 지금 울기 창 번호 · 봇 답을 받기 시작하는 때(창 멈춤 0.5~1.0초).
+    var windowID: Int?
+    var claimReadyAt: Date?
+    /// 보조 쯔모기리를 보낼 때.
+    var aidDueAt: Date?
+    /// 멈춘 때.
+    var pausedAt: Date?
+    /// 방장 + 서버 방 넷째 착석으로 멈췄다.
+    var roomHold = false
+
     package init(
         matchID: String, format: MahjongFormat, timed: Bool, humanSeat: Int, generation: Int,
         payload: MahjongStatePayload, isPaused: Bool = false
@@ -258,6 +282,9 @@ package final class MahjongStore {
     @ObservationIgnored package var onAttention: (@MainActor (MahjongAttention) -> Void)?
     /// 루비 판이 끝난 것을 처음 본 순간 한 번(연습판·무효 판 제외).
     @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
+    /// App Nap 붙들기 신호(맥 `MahjongActivityHold` — 큐브 `onHoldingMatchChange` 꼴). 값이 바뀔 때만 부른다(T 배선).
+    @ObservationIgnored package var onHoldingActivityChange: (@MainActor (Bool) -> Void)?
+    @ObservationIgnored package private(set) var isHoldingActivity = false
     /// 보조 설정을 둘 곳(nil 이면 이 값 안에만 산다 — 시험이 실행기 `.standard` 에 키를 흘리지 않게). 넣는 순간 읽어 온다.
     @ObservationIgnored package var aidsDefaults: UserDefaults? {
         didSet { loadAids() }
@@ -291,6 +318,8 @@ package final class MahjongStore {
     @ObservationIgnored package internal(set) var pollTask: Task<Void, Never>?
     /// 깨우기 작업(창과 무관 — 장부 판에서만). C2 가 채운다.
     @ObservationIgnored package internal(set) var wakeTask: Task<Void, Never>?
+    /// 연습판 장부(봇 결정 주입 · 세대 · 봇/걸음/시계 작업 — C3).
+    @ObservationIgnored let practiceRuntime = MahjongPracticeRuntime()
 
     // MARK: 조회 직렬화 · 합치기 · 요청 표(C2)
 
@@ -438,11 +467,28 @@ package final class MahjongStore {
     /// 이 기기가 이 판을 열었다(방 만들기·참가·시작 ok · act·call·back·react 를 보낼 때). 이미 있으면 그대로 둔다.
     func noteOwnsMatch(_ matchID: String) {
         deviceLedger.note(matchID, userID: host?.session?.userID, now: clock())
+        syncHoldingActivity()
     }
 
     /// 이 판의 기록을 지운다(finished·cancelled·expired·접은 판·내가 dropped 된 방).
     func dropOwnership(_ matchID: String) {
         deviceLedger.drop(matchID, userID: host?.session?.userID, now: clock())
+        syncHoldingActivity()
+    }
+
+    /// App Nap 을 붙들어야 하는가 — **이 기기가 연** 방·판(forming·active)이 있는 동안(SPEC §4.6 #13). 연습판은 빼다:
+    /// 창이 탁자를 안 보이면 연습판은 멈추므로 붙들 까닭이 없다. 방은 30초 방 확인 때문에 잡는다.
+    package var holdsActivity: Bool {
+        guard let header = match?.match, header.matchStatus == .forming || header.matchStatus == .active else { return false }
+        return ownsMatch(header.id)
+    }
+
+    /// 붙들기 값이 바뀌었으면 한 번 알린다(같은 값 두 번은 조용히).
+    func syncHoldingActivity() {
+        let holding = holdsActivity
+        guard holding != isHoldingActivity else { return }
+        isHoldingActivity = holding
+        onHoldingActivityChange?(holding)
     }
 
     // MARK: 창
@@ -496,7 +542,7 @@ package final class MahjongStore {
     /// '창이 탁자를 보인다'가 바뀐 뒤 — 폴링 켜고 끄기(C2) · 연습판 멈춤(C3).
     func tableVisibilityDidChange() {
         if isWindowShowingTable { startPolling() } else { stopPolling() }
-        // C3: 연습판 멈춤/재개(봇 포함).
+        syncPracticePause()   // 연습판 멈춤/재개(봇 포함)
     }
 
     /// 알림 한 건을 내보낸다 — 같은 열쇠는 한 번만(장부 확인은 부르는 쪽 몫).
@@ -538,7 +584,7 @@ package final class MahjongStore {
         aidHandledKeys = []
         noCallsHandKey = nil
         timeoutNoticeKeys = []
-        practice = nil
+        discardPracticeGame()   // 봇·걸음·시계 작업까지 거둔다(봇은 취소를 받고 곧바로 돌아온다)
         showsPractice = false
         match = nil
         users = []
@@ -566,6 +612,7 @@ package final class MahjongStore {
         writeRevision = 0
         serverClockOffset = 0
         recomputePhase()
+        syncHoldingActivity()
     }
 
     // MARK: 공용 도우미

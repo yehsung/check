@@ -205,6 +205,11 @@ extension WorkTimerStore {
         if case .didWake = event, !realtime.transportAvailable {
             reversi.systemDidWake()
         }
+        // 아잉 마작도 같은 게이트다 — 별도 블록(기존 블록에 끼우면 V0327·V0360·V0369·리버시 글자 계약이 빨개진다, MJ/SPEC.md §4.6 #7).
+        // 진행 중 판은 서버 시계로 차례가 넘어가고 방은 10분 TTL 이라 뚜껑을 닫아 둔 사이 자동 버림이 쌓인다.
+        if case .didWake = event, !realtime.transportAvailable {
+            mahjong.systemDidWake()
+        }
     }
 
     /// full jitter 의 난수원. 링은 순수해야 하므로 난수는 **주입**이다.
@@ -252,6 +257,8 @@ extension WorkTimerStore {
                 rummy.realtimeDidJoin()
                 // 아잉 뒤집기도 같다 — 소켓이 끊긴 사이 온 신청(TTL 60초)과 상대 수(한 수 30초)를 이 한 번이 따라잡는다.
                 reversi.realtimeDidJoin()
+                // 아잉 마작도 같다 — 소켓이 끊긴 사이 온 초대와 넘어간 차례(5+20 시계)를 이 한 번이 따라잡는다.
+                mahjong.realtimeDidJoin()
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
@@ -285,6 +292,9 @@ extension WorkTimerStore {
             case .reversiSignal:
                 // 아잉 뒤집기 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
                 reversi.handleSignal()
+            case .mahjongSignal:
+                // 아잉 마작 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
+                mahjong.handleSignal()
             case .megaphoneSignal:
                 // 확성기 신호(2026-10-30)도 조회뿐이다(소비 아님 — 줄의 소비는 같은 묶음의 `ring` 이 맡는다). 근무 게이트가 없다:
                 // 배너는 근무 밖에서도 뜬다. 스로틀도 없다 — 겹친 호출은 배너 스토어가 하나로 모은다.

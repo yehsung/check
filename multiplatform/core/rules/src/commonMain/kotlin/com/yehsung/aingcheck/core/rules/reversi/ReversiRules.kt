@@ -92,13 +92,13 @@ data class ReversiNextTurn(val next: ReversiColor?, val passed: Boolean)
 data class ReversiPerftDivide(val idx: Int?, val nodes: Long)
 
 /** Swift `ReversiBoard.sides(_:)` — `color` 쪽에서 본 (내 돌, 상대 돌). */
-fun ReversiBoard.sides(color: ReversiColor): Pair<ULong, ULong> = if (color == ReversiColor.black) black to white else white to black
+internal fun ReversiBoard.sides(color: ReversiColor): Pair<ULong, ULong> = if (color == ReversiColor.black) black to white else white to black
 
 /** Swift `ReversiBoard.bits(_:)` — 그 색의 돌 비트. */
-fun ReversiBoard.bits(color: ReversiColor): ULong = if (color == ReversiColor.black) black else white
+internal fun ReversiBoard.bits(color: ReversiColor): ULong = if (color == ReversiColor.black) black else white
 
 /** Swift `ReversiBoard.init(own:opp:color:)` — `color` 쪽 (내 돌, 상대 돌)에서 판을 다시 만든다. */
-fun reversiBoardOf(own: ULong, opp: ULong, color: ReversiColor): ReversiBoard =
+internal fun reversiBoardOf(own: ULong, opp: ULong, color: ReversiColor): ReversiBoard =
     if (color == ReversiColor.black) ReversiBoard(black = own, white = opp) else ReversiBoard(black = opp, white = own)
 
 /** Swift `ReversiRules` — 규칙 판정(순수 함수). 서버 `reversi_*` 판정 함수와 cases.json 이 정답지다. */
@@ -188,14 +188,14 @@ object ReversiRules {
         }
     }
 
-    // MARK: 내부(AI 판·엔진이 같이 쓴다)
+    // MARK: 내부(AI 판·엔진이 같이 쓴다 — Swift 처럼 internal: 끝났는지 안 보는 점수·분류를 모듈 밖이 부르지 못하게, 검토 F5)
 
     /** 둘 다 둘 곳이 없다(V-10). */
-    fun isOver(board: ReversiBoard): Boolean =
+    internal fun isOver(board: ReversiBoard): Boolean =
         ReversiBits.moves(board.black, board.white) == 0uL && ReversiBits.moves(board.white, board.black) == 0uL
 
     /** 끝났다고 이미 아는 판의 분류: 한쪽 0개 → wipeout(가득 차도 전멸 먼저) → 빈칸 0 → board_full → no_moves. */
-    fun endKindOfFinished(board: ReversiBoard): ReversiEndKind {
+    internal fun endKindOfFinished(board: ReversiBoard): ReversiEndKind {
         val counts = board.counts
         if (counts.black == 0 || counts.white == 0) return ReversiEndKind.wipeout
         if (counts.empty == 0) return ReversiEndKind.boardFull
@@ -203,7 +203,7 @@ object ReversiRules {
     }
 
     /** WOF 점수 계산(끝났는지는 보지 않는다). */
-    fun wofScore(board: ReversiBoard): ReversiScore {
+    internal fun wofScore(board: ReversiBoard): ReversiScore {
         val counts = board.counts
         if (counts.black > counts.white) return ReversiScore(counts.black + counts.empty, counts.white, ReversiResult.blackWin)
         if (counts.white > counts.black) return ReversiScore(counts.black, counts.white + counts.empty, ReversiResult.whiteWin)

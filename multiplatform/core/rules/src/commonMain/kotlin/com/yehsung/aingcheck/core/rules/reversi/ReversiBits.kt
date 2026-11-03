@@ -15,8 +15,11 @@ package com.yehsung.aingcheck.core.rules.reversi
 // **도착한 칸이 반대쪽 끝 열이면 지운다**(가면 mask): 동쪽 계열(+1·+9·−7)은 a열 도착을, 서쪽 계열(−1·+7·−9)은 h열 도착을 지운다.
 // 위아래(±8)는 64비트 밖으로 밀려 나가 저절로 0 이 된다(Kotlin `ULong` 의 shl·shr 은 부호 없는 이동이라 Swift 와 같다).
 
-/** Swift `ReversiBits` — 비트보드 계산(할당 없음). */
-object ReversiBits {
+/**
+ * Swift `ReversiBits` — 비트보드 계산(할당 없음). Swift 처럼 **모듈 안 전용**(internal): `flips` 는 칸 범위를 보지 않고 Kotlin `shl` 은
+ * 이동 수를 64 로 나눈 나머지만큼 민다(칸 64 → a1). 모듈 밖은 범위를 거르는 공개 표면 `ReversiRules` 를 쓴다(검토 F5).
+ */
+internal object ReversiBits {
     /** a열(col 0) 비트를 뺀 가면 — 동쪽으로 옮긴 뒤 a열에 도착했다면 h열에서 감아 넘어온 것이다. */
     const val notAFile: ULong = 0xFEFE_FEFE_FEFE_FEFEuL
 

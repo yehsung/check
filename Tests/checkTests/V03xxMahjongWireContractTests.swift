@@ -285,3 +285,325 @@ struct V03xxMahjongWireContractTests {
         #expect(naive == 4)
     }
 }
+
+// MARK: - 픽스처 계약(C2) — `Fixtures/mahjong-rpc`(지금은 §3.5·§3.6 모양 **손 픽스처** — S2 실서버 원문이 나오면 바꾼다)
+
+private enum MJWire {
+    static let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+        .appendingPathComponent("Fixtures/mahjong-rpc", isDirectory: true)
+
+    static func object(_ name: String) throws -> [String: Any] {
+        let data = try Data(contentsOf: dir.appendingPathComponent(name.hasSuffix(".json") ? name : "\(name).json"))
+        return try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
+    }
+
+    static func manifest() throws -> [String: Any] { try object("_manifest") }
+
+    static func fixtureNames() throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: dir.path)
+            .filter { $0.hasSuffix(".json") && $0 != "_manifest.json" }
+            .map { String($0.dropLast(5)) }.sorted()
+    }
+
+    static func decoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }
+
+    static func encoder() -> JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        return encoder
+    }
+
+    /// null 값과 빈 키를 걷는다(서버는 null 을 싣고 인코더는 nil 을 뺀다 — 값만 대조한다).
+    static func dropNulls(_ value: Any) -> Any {
+        if let dict = value as? [String: Any] {
+            var out: [String: Any] = [:]
+            for (key, inner) in dict where !(inner is NSNull) { out[key] = dropNulls(inner) }
+            return out
+        }
+        if let array = value as? [Any] { return array.map(dropNulls) }
+        return value
+    }
+
+    static func same(_ lhs: Any, _ rhs: Any) -> Bool {
+        NSDictionary(dictionary: ["v": lhs]).isEqual(to: ["v": rhs])
+    }
+
+    /// 패 id 를 싣는 칸(이름으로 가른다 — §1 '이름으로 가른다')의 정수 전부.
+    static let tileKeys: Set<String> = [
+        "tile", "tiles", "my_hand", "my_drawn", "discard", "riichi", "ankan", "kakan", "pon", "minkan", "chi",
+        "dora_indicators", "dora", "indicator", "hand", "called", "win_tile", "ura_indicators",
+    ]
+
+    static func tileIDs(in value: Any, underTileKey: Bool = false, into out: inout Set<Int>) {
+        if let dict = value as? [String: Any] {
+            for (key, inner) in dict { tileIDs(in: inner, underTileKey: tileKeys.contains(key), into: &out) }
+        } else if let array = value as? [Any] {
+            for inner in array { tileIDs(in: inner, underTileKey: underTileKey, into: &out) }
+        } else if underTileKey, let number = value as? NSNumber, CFGetTypeID(number) != CFBooleanGetTypeID() {
+            out.insert(number.intValue)
+        }
+    }
+
+    static func allKeys(in value: Any, into out: inout [String]) {
+        if let dict = value as? [String: Any] {
+            for (key, inner) in dict {
+                out.append(key)
+                allKeys(in: inner, into: &out)
+            }
+        } else if let array = value as? [Any] {
+            for inner in array { allKeys(in: inner, into: &out) }
+        }
+    }
+
+    /// 판 파일(MAHJONG_TABLE_SQL → 없으면 supabase/migrations 기본 자리). 없으면 nil.
+    static func tableSQL() -> String? {
+        let env = ProcessInfo.processInfo.environment
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let path = env["MAHJONG_TABLE_SQL"] ?? root.appendingPathComponent(
+            "supabase/migrations/20261108221000_mahjong_table.sql").path
+        return try? String(contentsOfFile: path, encoding: .utf8)
+    }
+
+    static var migrationRequired: Bool { ProcessInfo.processInfo.environment["MAHJONG_REQUIRE_MIGRATION"] == "1" }
+    static var migrationTestsEnabled: Bool { tableSQL() != nil || migrationRequired }
+
+    /// `v_<name>_keys … array['a','b',…]` 를 읽는다.
+    static func sqlKeyArray(_ sql: String, name: String) -> Set<String>? {
+        guard let start = sql.range(of: "v_\(name)_keys"),
+              let open = sql.range(of: "array[", range: start.upperBound..<sql.endIndex),
+              let close = sql.range(of: "]", range: open.upperBound..<sql.endIndex) else { return nil }
+        let body = sql[open.upperBound..<close.lowerBound]
+        return Set(body.split(separator: ",").map {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "'"))
+        })
+    }
+
+    /// `function public.<name>(` 의 인자 이름.
+    static func sqlArguments(_ sql: String, function: String) -> [String]? {
+        guard let head = sql.range(of: "function public.\(function)(") else { return nil }
+        var depth = 1
+        var index = head.upperBound
+        while index < sql.endIndex, depth > 0 {
+            if sql[index] == "(" { depth += 1 } else if sql[index] == ")" { depth -= 1 }
+            index = sql.index(after: index)
+        }
+        let list = sql[head.upperBound..<sql.index(before: index)]
+        return list.split(separator: ",").compactMap {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ").first.map(String.init)
+        }.filter { $0.hasPrefix("p_") }
+    }
+}
+
+/// 엄격 기준선 — 사건 kind 를 닫힌 raw 열거로 읽는 디코더(모르는 값에 통째로 실패한다).
+private struct MJStrictEvents: Decodable {
+    enum Kind: String, Decodable { case deal, draw, discard, call, kan, dora, riichi, win, handDraw = "hand_draw", scores, away, end }
+    struct Event: Decodable { let kind: Kind }
+    struct State: Decodable { let events: [Event] }
+    let state: State
+}
+
+@Suite("아잉 마작 와이어 — 픽스처 매니페스트 · 원문 왕복 · 모르는 값 접기 · 숨은 정보 · 마이그레이션 대조(C2)")
+struct V03xxMahjongFixtureContractTests {
+    @Test("매니페스트 — 파일 목록 = 매니페스트 · 시청자 · 손 픽스처 표지 · 응답 타입마다 디코드")
+    func manifestListsEveryFixture() throws {
+        // 없으면: 픽스처를 더하거나 지워도 매니페스트가 몰라, 통합 때 원문으로 바꿀 목록이 어긋난다.
+        let manifest = try MJWire.manifest()
+        let listed = try #require(manifest["fixtures"] as? [String: [String: Any]])
+        let names = try MJWire.fixtureNames()
+        #expect(Set(listed.keys) == Set(names) && names.count >= 20)
+        #expect(manifest["source"] as? String == "hand", "S2 원문으로 바꾸면 이 줄도 바꾼다")
+        for name in names {
+            let meta = try #require(listed[name])
+            #expect((meta["viewer"] as? String)?.count == 36, "\(name): 시청자")
+            let data = try Data(contentsOf: MJWire.dir.appendingPathComponent("\(name).json"))
+            if name.hasPrefix("mahjong_lobby__") {
+                #expect(try MJWire.decoder().decode(MahjongLobbyResponse.self, from: data).status == .ok, "\(name)")
+            } else if name.hasPrefix("mahjong_ranking__") {
+                #expect(try MJWire.decoder().decode(MahjongRankingResponse.self, from: data).status == .ok, "\(name)")
+            } else {
+                let response = try MJWire.decoder().decode(MahjongActionResponse.self, from: data)
+                #expect(response.status != .unknown, "\(name)")
+            }
+        }
+    }
+
+    @Test("디코드 값 = 원본 — state 를 읽어 스네이크로 다시 쓰면 원문과 같다(null 제외) · 키 집합 = 매니페스트")
+    func stateRoundTripsToTheOriginal() throws {
+        // 없으면: Swift 타입이 모르는 칸(이름이 한 글자 다른 칸)이 디코드에서 조용히 사라져 화면이 그 값을 영영 못 그린다.
+        let manifest = try MJWire.manifest()
+        let keys = try #require(manifest["keys"] as? [String: [String]])
+        var checked = 0
+        for name in try MJWire.fixtureNames() {
+            let top = try MJWire.object(name)
+            guard let original = top["state"] as? [String: Any] else { continue }
+            #expect(Set(original.keys) == Set(keys["state"] ?? []), "\(name): state 키")
+            if let match = original["match"] as? [String: Any] {
+                #expect(Set(match.keys) == Set(keys["match"] ?? []), "\(name): match 키")
+            }
+            let payload = try MJWire.decoder().decode(
+                MahjongStatePayload.self, from: JSONSerialization.data(withJSONObject: original))
+            let back = try JSONSerialization.jsonObject(with: MJWire.encoder().encode(payload))
+            #expect(MJWire.same(MJWire.dropNulls(back), MJWire.dropNulls(original)), "\(name): 왕복이 원문과 다르다")
+            checked += 1
+        }
+        #expect(checked >= 18)
+    }
+
+    @Test("모르는 값 접기(CC-07) — 원문에서 한 칸만 바꿔도 디코드 성공 · 스토어 적용 · 기준선: 엄격 디코더는 실패")
+    @MainActor
+    func unknownValuesFoldOnRealShapes() throws {
+        // 없으면: 서버 2판이 새 역·새 사건·새 부로·새 끝 이유를 하나 더하는 순간 옛 앱의 판 전체가 안 읽힌다.
+        func mutate(_ name: String, _ edit: (inout [String: Any]) -> Void) throws -> Data {
+            var top = try MJWire.object(name)
+            var state = top["state"] as? [String: Any] ?? [:]
+            edit(&state)
+            top["state"] = state
+            return try JSONSerialization.data(withJSONObject: top)
+        }
+        let cases: [(String, Data)] = [
+            ("yaku", try mutate("mahjong_state__hand_end") { st in
+                var last = st["last_hand"] as? [String: Any] ?? [:]
+                var wins = last["wins"] as? [[String: Any]] ?? []
+                wins[0]["yaku"] = [["future_yaku", 2]]
+                last["wins"] = wins
+                st["last_hand"] = last
+            }),
+            ("event", try mutate("mahjong_state__their_turn") { st in
+                var events = st["events"] as? [[String: Any]] ?? []
+                events[1]["kind"] = "future_event"
+                st["events"] = events
+            }),
+            ("meld", try mutate("mahjong_state__their_turn") { st in
+                var seats = st["seats"] as? [[String: Any]] ?? []
+                seats[1]["melds"] = [["type": "future_meld", "tiles": [24, 28, 32], "called": 24, "from_seat": 0]]
+                st["seats"] = seats
+            }),
+            ("end", try mutate("mahjong_state__finished") { st in
+                var match = st["match"] as? [String: Any] ?? [:]
+                match["end_reason"] = "future"
+                st["match"] = match
+            }),
+        ]
+        for (label, data) in cases {
+            let response = try MJWire.decoder().decode(MahjongActionResponse.self, from: data)
+            let state = try #require(response.state, "\(label): state 가 통째로 실패")
+            let store = MahjongStore()
+            #expect(store.applyState(state) == .applied, "\(label)")
+            if label == "yaku" {
+                #expect(MahjongNoticeText.yakuName(state.lastHand?.wins?.first?.yaku?.first?.id ?? "") == MahjongNoticeText.newYaku)
+            }
+            if label == "meld" { #expect(state.seats?[1].melds?.first?.meld == nil, "모르는 부로는 엔진 값 nil") }
+        }
+        // 기준선: 같은 '새 사건' 입력을 엄격 raw 열거로 읽으면 실패한다.
+        #expect(throws: (any Error).self) { try MJWire.decoder().decode(MJStrictEvents.self, from: cases[1].1) }
+        let plain = try JSONSerialization.data(withJSONObject: MJWire.object("mahjong_state__their_turn"))
+        #expect((try? MJWire.decoder().decode(MJStrictEvents.self, from: plain)) != nil, "기준선의 기준선: 아는 값이면 엄격 디코더도 읽는다")
+    }
+
+    @Test("공개 DISC 에 auto 없음 — 자동 버림 표지는 사건의 priv 안에만(CC-19)")
+    func publicDiscardsCarryNoAutoFlag() throws {
+        // 없으면: 리치 자동 버림과 '고민하다 낸 버림'이 공개 칸 하나로 갈려 멈춤으로 숨긴 것이 다시 드러난다.
+        for name in try MJWire.fixtureNames() {
+            guard let state = try MJWire.object(name)["state"] as? [String: Any] else { continue }
+            for seat in state["seats"] as? [[String: Any]] ?? [] {
+                for disc in seat["discards"] as? [[String: Any]] ?? [] {
+                    #expect(Set(disc.keys).isSubset(of: ["tile", "tsumogiri", "riichi", "taken"]), "\(name)")
+                }
+            }
+            for event in state["events"] as? [[String: Any]] ?? [] {
+                #expect(event["auto"] == nil, "\(name): 사건 겉에 auto")
+            }
+        }
+    }
+
+    @Test("숨은 정보를 원문 JSON 에서 — 남의 손·패산·뒷도라·남의 울기 선택지·남의 bank 가 없다(id 칸 집합으로)")
+    func hiddenInformationNeverAppears() throws {
+        // 없으면: 키 이름은 맞는데 남의 손 id 가 다른 칸(예: 사건 draw.tile)에 실려 와도 글자 검색으로는 못 잡는다.
+        let manifest = try MJWire.manifest()
+        let secrets = try #require(manifest["secrets"] as? [String: Any])
+        let hands = try #require(secrets["others_hands"] as? [String: [Int]])
+        let ura = Set(secrets["ura"] as? [Int] ?? [])
+        let wall = Set(secrets["wall_sample"] as? [Int] ?? [])
+        let seatOf = ["00000000-0000-0000-0000-0000000000a1": 0, "00000000-0000-0000-0000-0000000000b2": 1,
+                      "00000000-0000-0000-0000-0000000000c3": 2, "00000000-0000-0000-0000-0000000000d4": 3]
+        let listed = try #require(manifest["fixtures"] as? [String: [String: Any]])
+        var checked = 0
+        for name in ["mahjong_start__ok", "mahjong_state__their_turn", "mahjong_state__their_turn_c",
+                     "mahjong_state__call_prompt", "mahjong_state__call_none", "mahjong_call__window_closed"] {
+            let top = try MJWire.object(name)
+            let state = try #require(top["state"] as? [String: Any])
+            let viewer = try #require(seatOf[listed[name]?["viewer"] as? String ?? ""])
+            var seen = Set<Int>()
+            MJWire.tileIDs(in: state, into: &seen)
+            var publicTiles = Set<Int>()
+            for seat in state["seats"] as? [[String: Any]] ?? [] {
+                for disc in seat["discards"] as? [[String: Any]] ?? [] { if let t = disc["tile"] as? Int { publicTiles.insert(t) } }
+            }
+            for (seat, hand) in hands where Int(seat) != viewer {
+                let leaked = Set(hand).subtracting(publicTiles).intersection(seen)
+                #expect(leaked.isEmpty, "\(name): 남(\(seat))의 손 id \(leaked)")
+            }
+            #expect(seen.intersection(ura).isEmpty && seen.intersection(wall).isEmpty, "\(name): 뒷도라·패산")
+            var keys: [String] = []
+            MJWire.allKeys(in: state.filter { $0.key != "my_decision" }, into: &keys)
+            for banned in ["hand", "drawn", "waits", "call_options", "turn_options", "call_answer", "bank_ms", "window_id",
+                           "due_at", "decision_seq", "ron_yaku_kinds", "ippatsu"] {
+                #expect(!keys.contains(banned), "\(name): \(banned) 가 my_decision 밖에")
+            }
+            checked += 1
+        }
+        #expect(checked == 6)
+    }
+
+    @Test("울 수 있는 사람과 없는 사람의 응답 모양이 my_* · 잔액 말고 같다(MCL:470)")
+    func callersAndNonCallersLookTheSame() throws {
+        // 없으면: 선택지 있는 사람에게만 붙는 공개 칸(창 번호·phase 차이)이 '누가 울 수 있나'를 흘린다.
+        func publicPart(_ name: String) throws -> [String: Any] {
+            let state = try #require(try MJWire.object(name)["state"] as? [String: Any])
+            return state.filter { !$0.key.hasPrefix("my_") && $0.key != "ruby_balance" }
+        }
+        let caller = try publicPart("mahjong_state__call_prompt")
+        let other = try publicPart("mahjong_state__call_none")
+        #expect(MJWire.same(caller, other))
+        // 기준선: 선택지가 있는 쪽만 my_decision 이 있다.
+        #expect((try MJWire.object("mahjong_state__call_prompt")["state"] as? [String: Any])?["my_decision"] is [String: Any])
+    }
+
+    @Test("봉투 키 집합 = 마이그레이션 v_*_keys · 요청 본문 키 = SQL 인자 이름(판 파일이 있을 때)",
+          .enabled(if: MJWire.migrationTestsEnabled, "MAHJONG_TABLE_SQL 이 없다 — 판 파일이 서면 돈다"))
+    func envelopeKeysMatchTheMigration() throws {
+        // 없으면: 서버가 키 하나를 바꿔도 손 픽스처는 옛 키 그대로라 스텁 시험이 초록이다.
+        let sql = try #require(MJWire.tableSQL(), "MAHJONG_REQUIRE_MIGRATION=1 인데 판 파일이 없다")
+        let keys = try #require(try MJWire.manifest()["keys"] as? [String: [String]])
+        for (sqlName, manifestName) in [("state", "state"), ("match", "match"), ("seat", "seat"),
+                                        ("decision_turn", "decision_turn"), ("decision_call", "decision_call"),
+                                        ("hand_result", "hand_result"), ("lobby", "lobby")] {
+            let fromSQL = try #require(MJWire.sqlKeyArray(sql, name: sqlName), "v_\(sqlName)_keys 가 없다")
+            #expect(fromSQL == Set(keys[manifestName] ?? []), "\(sqlName)")
+        }
+        let encoder = MJWire.encoder()
+        func bodyKeys(_ body: some Encodable) throws -> [String] {
+            let object = try JSONSerialization.jsonObject(with: encoder.encode(body)) as? [String: Any] ?? [:]
+            return object.keys.sorted()
+        }
+        let tile = MahjongTile(id: 0)!
+        let bodies: [(String, [String])] = [
+            ("mahjong_create", try bodyKeys(MahjongCreateRequest(pStake: 3, pPublic: false, pFormat: "tonpuu"))),
+            ("mahjong_invite", try bodyKeys(MahjongInviteRequest(pMatchId: "m", pUserId: "u"))),
+            ("mahjong_state", try bodyKeys(MahjongStateRequest(pMatchId: "m", pSinceSeq: 0))),
+            ("mahjong_act", try bodyKeys(MahjongActRequest(pMatchId: "m", pExpectedSeq: 0, pAction: "discard", pTiles: [tile]))),
+            ("mahjong_call", try bodyKeys(MahjongCallRequest(pMatchId: "m", pWindowId: 0, pAction: "pass", pTiles: []))),
+            ("mahjong_react", try bodyKeys(MahjongReactRequest(pMatchId: "m", pKey: "k"))),
+            ("mahjong_join", try bodyKeys(MahjongMatchRequest(pMatchId: "m"))),
+            ("mahjong_lobby", try bodyKeys(MahjongProtocolRequest())),
+        ]
+        for (function, swiftKeys) in bodies {
+            let args = try #require(MJWire.sqlArguments(sql, function: function), "\(function) 가 없다")
+            #expect(Set(args) == Set(swiftKeys), "\(function)")
+        }
+    }
+}

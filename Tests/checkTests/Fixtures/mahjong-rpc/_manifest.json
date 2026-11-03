@@ -1,0 +1,344 @@
+{
+  "fixtures": {
+    "mahjong_act__ok": {
+      "note": "A 버림 뒤 — B 차례(A 는 결정 없음)",
+      "rpc": "mahjong_act",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_back__too_fast": {
+      "note": "나가기 뒤 10초 안",
+      "rpc": "mahjong_back",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_call__ok_pass": {
+      "note": "넘김 — 창 닫힘, C 차례",
+      "rpc": "mahjong_call",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_call__window_closed": {
+      "note": "창이 이미 닫힘 — C 차례",
+      "rpc": "mahjong_call",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_create__ok": {
+      "note": "방장 A 혼자",
+      "rpc": "mahjong_create",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_join__ok": {
+      "note": "B 참가",
+      "rpc": "mahjong_join",
+      "viewer": "00000000-0000-0000-0000-0000000000b2"
+    },
+    "mahjong_leave__ok_away": {
+      "note": "판 중 나가기 = 자리 비움",
+      "rpc": "mahjong_leave",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_leave__ok_room": {
+      "note": "방에서 나가기",
+      "rpc": "mahjong_leave",
+      "viewer": "00000000-0000-0000-0000-0000000000b2"
+    },
+    "mahjong_lobby__invited": {
+      "note": "A 방의 초대를 받은 B",
+      "rpc": "mahjong_lobby",
+      "viewer": "00000000-0000-0000-0000-0000000000b2"
+    },
+    "mahjong_lobby__ok": {
+      "note": "방 없음 · 전적 0판",
+      "rpc": "mahjong_lobby",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_ranking__ok": {
+      "note": "10판 미만 me.rank null",
+      "rpc": "mahjong_ranking",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_start__ok": {
+      "note": "판 시작 — A 차례(쯔모 129)",
+      "rpc": "mahjong_start",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_start__seats_dropped": {
+      "note": "D 가 90초 넘게 안 보여 빠짐",
+      "rpc": "mahjong_start",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__call_none": {
+      "note": "같은 순간 C — 선택지 없음",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000c3"
+    },
+    "mahjong_state__call_prompt": {
+      "note": "A 퐁 프롬프트(창 3)",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__finished": {
+      "note": "판 끝 — A 4위",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__hand_end": {
+      "note": "동1국 C 쯔모 화료",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__my_turn_hand2": {
+      "note": "동2국 A 첫 차례",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__next_hand": {
+      "note": "동2국 시작 — B 차례",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__room_four": {
+      "note": "넷이 앉음 — 방장 [시작]",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__room_four_b": {
+      "note": "넷이 앉음 — B 가 본 방",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000b2"
+    },
+    "mahjong_state__room_three": {
+      "note": "셋이 앉음",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__their_turn": {
+      "note": "B 차례 — 박자 자리 2, 백업 시각",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000a1"
+    },
+    "mahjong_state__their_turn_c": {
+      "note": "같은 순간 C 가 본 판(박자 자리)",
+      "rpc": "mahjong_state",
+      "viewer": "00000000-0000-0000-0000-0000000000c3"
+    }
+  },
+  "keys": {
+    "decision_call": [
+      "answered",
+      "bank_ms",
+      "chi",
+      "deadline_ms",
+      "from_seat",
+      "kind",
+      "minkan",
+      "pon",
+      "ron",
+      "started_ms",
+      "tile",
+      "window_id",
+      "window_kind"
+    ],
+    "decision_turn": [
+      "ankan",
+      "bank_ms",
+      "deadline_ms",
+      "decision_seq",
+      "discard",
+      "kakan",
+      "kind",
+      "kyuushu",
+      "not_before_ms",
+      "riichi",
+      "seq",
+      "started_ms",
+      "tsumo"
+    ],
+    "hand_result": [
+      "bonus_to",
+      "deltas",
+      "hand_index",
+      "kind",
+      "nagashi",
+      "reason",
+      "renchan",
+      "scores_after",
+      "tenpai",
+      "wins"
+    ],
+    "lobby": [
+      "bank_ms",
+      "base_ms",
+      "formats",
+      "invites",
+      "max_invites",
+      "me",
+      "public_rooms",
+      "room_ttl_seconds",
+      "server_now_ms",
+      "stakes",
+      "status",
+      "users"
+    ],
+    "lobby_me": [
+      "active_match_id",
+      "record",
+      "room",
+      "ruby_balance"
+    ],
+    "match": [
+      "backup_at_ms",
+      "bank_full_ms",
+      "base_ms",
+      "created_ms",
+      "dealer_seat",
+      "dora_indicators",
+      "end_reason",
+      "extension",
+      "finished_ms",
+      "format",
+      "grace_ms",
+      "hand_index",
+      "hand_no",
+      "honba",
+      "host",
+      "id",
+      "is_public",
+      "kan_count",
+      "kyotaku",
+      "next_hand_ms",
+      "phase",
+      "room_expires_ms",
+      "round",
+      "seq",
+      "stake",
+      "started_ms",
+      "status",
+      "turn_seat",
+      "wake_at_ms",
+      "wake_seat",
+      "wall_remaining"
+    ],
+    "member": [
+      "is_host",
+      "state",
+      "user"
+    ],
+    "room": [
+      "expires_at_ms",
+      "format",
+      "host",
+      "id",
+      "is_public",
+      "max_seats",
+      "seats",
+      "stake"
+    ],
+    "seat": [
+      "away",
+      "deleted",
+      "discards",
+      "final_rank",
+      "final_score",
+      "hand_count",
+      "is_dealer",
+      "melds",
+      "payout",
+      "riichi",
+      "score",
+      "seat_no",
+      "user",
+      "wind"
+    ],
+    "state": [
+      "events",
+      "last_hand",
+      "match",
+      "members",
+      "my_away",
+      "my_decision",
+      "my_drawn",
+      "my_furiten",
+      "my_hand",
+      "my_seat",
+      "my_waits",
+      "reactions",
+      "ruby_balance",
+      "seats",
+      "server_now_ms"
+    ]
+  },
+  "note": "갈래 C2 손 픽스처(SPEC v1.0.2 §3.5·§3.6 모양). S2 실서버 픽스처가 나오면 원문으로 바꾼다.",
+  "schema": "mahjong-rpc/hand-1",
+  "secrets": {
+    "others_hands": {
+      "0": [
+        1,
+        5,
+        9,
+        37,
+        41,
+        45,
+        73,
+        77,
+        81,
+        109,
+        110,
+        121,
+        125
+      ],
+      "1": [
+        2,
+        6,
+        10,
+        38,
+        42,
+        46,
+        74,
+        78,
+        82,
+        111,
+        113,
+        122,
+        126
+      ],
+      "2": [
+        3,
+        7,
+        11,
+        39,
+        43,
+        47,
+        75,
+        79,
+        83,
+        114,
+        115,
+        123,
+        127
+      ],
+      "3": [
+        13,
+        17,
+        21,
+        49,
+        53,
+        57,
+        85,
+        89,
+        93,
+        117,
+        118,
+        130,
+        131
+      ]
+    },
+    "ura": [
+      101
+    ],
+    "wall_sample": [
+      102,
+      103,
+      104
+    ]
+  },
+  "source": "hand"
+}

@@ -104,7 +104,8 @@ extension MahjongStore {
 
         appliedTicket = max(appliedTicket, ticket)
         let previous = match
-        if incoming.matchStatus == .forming { lastRoomCheckAt = max(lastRoomCheckAt, lastStateRequestAt) }
+        // 방 단계 응답(state·참가·만들기)은 서버가 내 `last_seen_at` 을 갱신한 증거다 — 방 확인 30초를 여기서 다시 센다.
+        if incoming.matchStatus == .forming { lastRoomCheckAt = clock() }
         noteTimeouts(previous: previous, next: next)
         noteMotion(previous: previous, next: next)
         if previous != next { match = next }

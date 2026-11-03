@@ -606,6 +606,8 @@ package nonisolated struct MahjongHandResult: Codable, Equatable, Hashable, Send
 /// 반응 한 줄(큐브 모양 `{seat_no, key, at_ms}`).
 package nonisolated struct MahjongReaction: Codable, Equatable, Hashable, Sendable {
     package var seatNo: Int?
+    /// 보낸 사람(실응답 `{key, at_ms, seat_no, user_id}` — S2 하네스 픽스처에서 확인, T).
+    package var userId: String?
     package var key: String?
     package var atMs: Double?
 

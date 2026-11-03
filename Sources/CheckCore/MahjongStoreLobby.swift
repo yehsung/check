@@ -162,12 +162,13 @@ extension MahjongStore {
             return
         case .seatsDropped:
             let me = myUserID
-            if let mine = response.reasons?.first(where: { $0.key.lowercased() == me })?.value {
-                setNotice(MahjongNoticeText.dropped(reason: mine))
+            if response.reasons?.keys.contains(where: { $0.lowercased() == me }) == true
+                || response.dropped?.contains(where: { $0.lowercased() == me }) == true {
+                setNotice(MahjongNoticeText.droppedAtStart)
                 if let id = match?.match?.id { leaveHeldRoom(id) }
                 return
             }
-            setNotice(MahjongNoticeText.status(.seatsDropped, for: action))
+            setNotice(MahjongNoticeText.droppedOthers(reasons: response.reasons.map { Array($0.values) } ?? []))
         case .ok:
             setNotice(action == .invite ? MahjongNoticeText.invited : nil)
         default:

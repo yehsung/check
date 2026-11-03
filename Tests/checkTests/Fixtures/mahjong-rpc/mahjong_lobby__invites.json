@@ -1,0 +1,273 @@
+{
+  "me": {
+    "room": null,
+    "record": {
+      "games": 0,
+      "firsts": 0,
+      "thirds": 0,
+      "fourths": 0,
+      "seconds": 0,
+      "avg_rank": null
+    },
+    "ruby_balance": 100,
+    "active_match_id": null
+  },
+  "users": [
+    {
+      "id": "03a713f2-1d88-49bb-abc3-7fe29b4d1dde",
+      "capable": true,
+      "in_match": true,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-03a713f2-1d88-49bb-abc3-7fe29b4d1dde"
+    },
+    {
+      "id": "0e57a3c9-f9a2-4f0c-b585-d78604e285e5",
+      "capable": true,
+      "in_match": true,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-0e57a3c9-f9a2-4f0c-b585-d78604e285e5"
+    },
+    {
+      "id": "102fac6b-377f-4d6e-9e9f-e1fb5991b46d",
+      "capable": true,
+      "in_match": true,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-102fac6b-377f-4d6e-9e9f-e1fb5991b46d"
+    },
+    {
+      "id": "13b80d6b-7d47-4aa6-b86e-629488587a43",
+      "capable": true,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-13b80d6b-7d47-4aa6-b86e-629488587a43"
+    },
+    {
+      "id": "176572e1-04d3-4e3d-8b38-b00783dc21df",
+      "capable": true,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-176572e1-04d3-4e3d-8b38-b00783dc21df"
+    },
+    {
+      "id": "3e95cf2b-a912-412b-9674-1b57f2ad00f1",
+      "capable": true,
+      "in_match": true,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-3e95cf2b-a912-412b-9674-1b57f2ad00f1"
+    },
+    {
+      "id": "41b08bf5-9e89-4b56-8bf5-7d894d4c222e",
+      "capable": true,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-41b08bf5-9e89-4b56-8bf5-7d894d4c222e"
+    },
+    {
+      "id": "5e1d6a06-098d-4804-9ae1-8689fbb9517d",
+      "capable": true,
+      "in_match": true,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-5e1d6a06-098d-4804-9ae1-8689fbb9517d"
+    },
+    {
+      "id": "71d5f8f0-3d60-429d-94c3-b3b6796c95bc",
+      "capable": true,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-71d5f8f0-3d60-429d-94c3-b3b6796c95bc"
+    },
+    {
+      "id": "c7b68476-28fa-4a39-9bcf-3454fdc1e9f0",
+      "capable": true,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-c7b68476-28fa-4a39-9bcf-3454fdc1e9f0"
+    },
+    {
+      "id": "e9e23fed-9fa6-4453-98d0-cebc39650a23",
+      "capable": true,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "mjt-e9e23fed-9fa6-4453-98d0-cebc39650a23"
+    },
+    {
+      "id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "capable": false,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "abto.app"
+    },
+    {
+      "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+      "capable": false,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "거부목록사용자"
+    },
+    {
+      "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "capable": false,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "씨앗다섯"
+    },
+    {
+      "id": "3e240c02-8972-478e-a674-014f498a641b",
+      "capable": false,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "코덱스토큰도둑예은"
+    },
+    {
+      "id": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "capable": false,
+      "in_match": false,
+      "character": null,
+      "avatar_url": null,
+      "focus_mode": false,
+      "is_working": false,
+      "display_name": "코덱스토큰도둑지유"
+    }
+  ],
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "bank_ms": 20000,
+  "base_ms": 5000,
+  "formats": [
+    "tonpuu",
+    "hanchan"
+  ],
+  "invites": [
+    {
+      "id": "46e50796-140c-433d-9de6-6271c3cc8f85",
+      "host": {
+        "id": "0e57a3c9-f9a2-4f0c-b585-d78604e285e5",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-0e57a3c9-f9a2-4f0c-b585-d78604e285e5"
+      },
+      "seats": [
+        {
+          "user": {
+            "id": "0e57a3c9-f9a2-4f0c-b585-d78604e285e5",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "mjt-0e57a3c9-f9a2-4f0c-b585-d78604e285e5"
+          },
+          "state": "joined"
+        },
+        {
+          "user": {
+            "id": "102fac6b-377f-4d6e-9e9f-e1fb5991b46d",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "mjt-102fac6b-377f-4d6e-9e9f-e1fb5991b46d"
+          },
+          "state": "joined"
+        },
+        {
+          "user": {
+            "id": "e0278372-6aa1-4b32-affe-64cc84e1f5ce",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "mjt-e0278372-6aa1-4b32-affe-64cc84e1f5ce"
+          },
+          "state": "invited"
+        }
+      ],
+      "stake": 5,
+      "format": "tonpuu",
+      "is_public": false,
+      "max_seats": 4,
+      "expires_at_ms": 1793699761553
+    }
+  ],
+  "max_invites": 6,
+  "public_rooms": [
+    {
+      "id": "1ec0724f-9880-48c1-a1ca-4af78210d6e4",
+      "host": {
+        "id": "5e1d6a06-098d-4804-9ae1-8689fbb9517d",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-5e1d6a06-098d-4804-9ae1-8689fbb9517d"
+      },
+      "seats": [
+        {
+          "user": {
+            "id": "5e1d6a06-098d-4804-9ae1-8689fbb9517d",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "mjt-5e1d6a06-098d-4804-9ae1-8689fbb9517d"
+          },
+          "state": "joined"
+        },
+        {
+          "user": {
+            "id": "03a713f2-1d88-49bb-abc3-7fe29b4d1dde",
+            "character": null,
+            "avatar_url": null,
+            "display_name": "mjt-03a713f2-1d88-49bb-abc3-7fe29b4d1dde"
+          },
+          "state": "joined"
+        }
+      ],
+      "stake": 3,
+      "format": "hanchan",
+      "is_public": true,
+      "max_seats": 4,
+      "expires_at_ms": 1793699761555
+    }
+  ],
+  "server_now_ms": 1793699161571,
+  "room_ttl_seconds": 600
+}

@@ -1,344 +1,68 @@
 {
-  "fixtures": {
-    "mahjong_act__ok": {
-      "note": "A 버림 뒤 — B 차례(A 는 결정 없음)",
-      "rpc": "mahjong_act",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_back__too_fast": {
-      "note": "나가기 뒤 10초 안",
-      "rpc": "mahjong_back",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_call__ok_pass": {
-      "note": "넘김 — 창 닫힘, C 차례",
-      "rpc": "mahjong_call",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_call__window_closed": {
-      "note": "창이 이미 닫힘 — C 차례",
-      "rpc": "mahjong_call",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_create__ok": {
-      "note": "방장 A 혼자",
-      "rpc": "mahjong_create",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_join__ok": {
-      "note": "B 참가",
-      "rpc": "mahjong_join",
-      "viewer": "00000000-0000-0000-0000-0000000000b2"
-    },
-    "mahjong_leave__ok_away": {
-      "note": "판 중 나가기 = 자리 비움",
-      "rpc": "mahjong_leave",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_leave__ok_room": {
-      "note": "방에서 나가기",
-      "rpc": "mahjong_leave",
-      "viewer": "00000000-0000-0000-0000-0000000000b2"
-    },
-    "mahjong_lobby__invited": {
-      "note": "A 방의 초대를 받은 B",
-      "rpc": "mahjong_lobby",
-      "viewer": "00000000-0000-0000-0000-0000000000b2"
-    },
-    "mahjong_lobby__ok": {
-      "note": "방 없음 · 전적 0판",
-      "rpc": "mahjong_lobby",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_ranking__ok": {
-      "note": "10판 미만 me.rank null",
-      "rpc": "mahjong_ranking",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_start__ok": {
-      "note": "판 시작 — A 차례(쯔모 129)",
-      "rpc": "mahjong_start",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_start__seats_dropped": {
-      "note": "D 가 90초 넘게 안 보여 빠짐",
-      "rpc": "mahjong_start",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__call_none": {
-      "note": "같은 순간 C — 선택지 없음",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000c3"
-    },
-    "mahjong_state__call_prompt": {
-      "note": "A 퐁 프롬프트(창 3)",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__finished": {
-      "note": "판 끝 — A 4위",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__hand_end": {
-      "note": "동1국 C 쯔모 화료",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__my_turn_hand2": {
-      "note": "동2국 A 첫 차례",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__next_hand": {
-      "note": "동2국 시작 — B 차례",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__room_four": {
-      "note": "넷이 앉음 — 방장 [시작]",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__room_four_b": {
-      "note": "넷이 앉음 — B 가 본 방",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000b2"
-    },
-    "mahjong_state__room_three": {
-      "note": "셋이 앉음",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__their_turn": {
-      "note": "B 차례 — 박자 자리 2, 백업 시각",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000a1"
-    },
-    "mahjong_state__their_turn_c": {
-      "note": "같은 순간 C 가 본 판(박자 자리)",
-      "rpc": "mahjong_state",
-      "viewer": "00000000-0000-0000-0000-0000000000c3"
-    }
-  },
-  "keys": {
-    "decision_call": [
-      "answered",
-      "bank_ms",
-      "chi",
-      "deadline_ms",
-      "from_seat",
-      "kind",
-      "minkan",
-      "pon",
-      "ron",
-      "started_ms",
-      "tile",
-      "window_id",
-      "window_kind"
-    ],
-    "decision_turn": [
-      "ankan",
-      "bank_ms",
-      "deadline_ms",
-      "decision_seq",
-      "discard",
-      "kakan",
-      "kind",
-      "kyuushu",
-      "not_before_ms",
-      "riichi",
-      "seq",
-      "started_ms",
-      "tsumo"
-    ],
-    "hand_result": [
-      "bonus_to",
-      "deltas",
-      "hand_index",
-      "kind",
-      "nagashi",
-      "reason",
-      "renchan",
-      "scores_after",
-      "tenpai",
-      "wins"
-    ],
-    "lobby": [
-      "bank_ms",
-      "base_ms",
-      "formats",
-      "invites",
-      "max_invites",
-      "me",
-      "public_rooms",
-      "room_ttl_seconds",
-      "server_now_ms",
-      "stakes",
-      "status",
-      "users"
-    ],
-    "lobby_me": [
-      "active_match_id",
-      "record",
-      "room",
-      "ruby_balance"
-    ],
-    "match": [
-      "backup_at_ms",
-      "bank_full_ms",
-      "base_ms",
-      "created_ms",
-      "dealer_seat",
-      "dora_indicators",
-      "end_reason",
-      "extension",
-      "finished_ms",
-      "format",
-      "grace_ms",
-      "hand_index",
-      "hand_no",
-      "honba",
-      "host",
-      "id",
-      "is_public",
-      "kan_count",
-      "kyotaku",
-      "next_hand_ms",
-      "phase",
-      "room_expires_ms",
-      "round",
-      "seq",
-      "stake",
-      "started_ms",
-      "status",
-      "turn_seat",
-      "wake_at_ms",
-      "wake_seat",
-      "wall_remaining"
-    ],
-    "member": [
-      "is_host",
-      "state",
-      "user"
-    ],
-    "room": [
-      "expires_at_ms",
-      "format",
-      "host",
-      "id",
-      "is_public",
-      "max_seats",
-      "seats",
-      "stake"
-    ],
-    "seat": [
-      "away",
-      "deleted",
-      "discards",
-      "final_rank",
-      "final_score",
-      "hand_count",
-      "is_dealer",
-      "melds",
-      "payout",
-      "riichi",
-      "score",
-      "seat_no",
-      "user",
-      "wind"
-    ],
-    "state": [
-      "events",
-      "last_hand",
-      "match",
-      "members",
-      "my_away",
-      "my_decision",
-      "my_drawn",
-      "my_furiten",
-      "my_hand",
-      "my_seat",
-      "my_waits",
-      "reactions",
-      "ruby_balance",
-      "seats",
-      "server_now_ms"
-    ]
-  },
-  "note": "갈래 C2 손 픽스처(SPEC v1.0.2 §3.5·§3.6 모양). S2 실서버 픽스처가 나오면 원문으로 바꾼다.",
-  "schema": "mahjong-rpc/hand-1",
-  "secrets": {
-    "others_hands": {
-      "0": [
-        1,
-        5,
-        9,
-        37,
-        41,
-        45,
-        73,
-        77,
-        81,
-        109,
-        110,
-        121,
-        125
-      ],
-      "1": [
-        2,
-        6,
-        10,
-        38,
-        42,
-        46,
-        74,
-        78,
-        82,
-        111,
-        113,
-        122,
-        126
-      ],
-      "2": [
-        3,
-        7,
-        11,
-        39,
-        43,
-        47,
-        75,
-        79,
-        83,
-        114,
-        115,
-        123,
-        127
-      ],
-      "3": [
-        13,
-        17,
-        21,
-        49,
-        53,
-        57,
-        85,
-        89,
-        93,
-        117,
-        118,
-        130,
-        131
-      ]
-    },
-    "ura": [
-      101
-    ],
-    "wall_sample": [
-      102,
-      103,
-      104
-    ]
-  },
-  "source": "hand"
+  "schema": "mahjong-rpc-fixtures/1",
+  "source": "MJ/server/table/tests (harness 55492)",
+  "files": {
+    "mahjong_act__illegal_not_in_hand.json": "52a31a6cff5f5f0f1ae49cd746c1c3bd",
+    "mahjong_act__illegal_not_option.json": "142f6bdd3667b5ebec0e38e584ad879a",
+    "mahjong_act__invalid.json": "280b0de9a736ff7a4d0aa178fac8984f",
+    "mahjong_act__not_active.json": "6c41a88bc0dc0b30879a02b34f0e8eb2",
+    "mahjong_act__not_your_turn.json": "af0e47889989a46615c160dd8a1cd286",
+    "mahjong_act__ok.json": "84dcd8540a443004c4c74c49b99a7e8e",
+    "mahjong_act__stale.json": "e6ed95a889a97894b581851b3bdb9af3",
+    "mahjong_act__too_early.json": "9dbd7332eef7d8c1f45a9da68f2094ab",
+    "mahjong_back__not_away.json": "46ac4705645010e619177159a0d92548",
+    "mahjong_back__ok.json": "cd7e800fdaedf4a0c244c868b93d696f",
+    "mahjong_back__too_fast.json": "93ea2f0ed795ca47d466054a1f0e188a",
+    "mahjong_call__ok.json": "123fca0d8b2dfc60aa8f991cfdf00c6d",
+    "mahjong_call__window_closed.json": "e4fda59ef04760086595e6362a2daf36",
+    "mahjong_create__already_in_room.json": "3299d00c5b7dd6c4c7448894655f4417",
+    "mahjong_create__busy.json": "5cf045b8171ddd1c1000ebc017509a1d",
+    "mahjong_create__insufficient.json": "e16be08a9084f34c7d901eda4c64b50e",
+    "mahjong_create__invalid.json": "276190c3de0ee091aa6a84b205796922",
+    "mahjong_create__ok.json": "02fd99227dd44414f5d9de7b71245530",
+    "mahjong_decline__not_found.json": "aea31d68a8c6b0b81b25b01baf6afbe8",
+    "mahjong_decline__ok.json": "83044b95d084f85c59642453692f1cce",
+    "mahjong_invite__already_invited.json": "a82e651962fe8ff641891f15e5c47f3a",
+    "mahjong_invite__blackout.json": "37762aa15f1e230507250149a46876ce",
+    "mahjong_invite__invalid.json": "280b0de9a736ff7a4d0aa178fac8984f",
+    "mahjong_invite__not_host.json": "634ff16ac65c197c20945d4dab435a22",
+    "mahjong_invite__ok.json": "220d34f67a7d504307379a90d2a37688",
+    "mahjong_invite__room_full.json": "4a980f593956e9f232f0765f7d8ff443",
+    "mahjong_invite__target_busy.json": "1b49ab16fafb028b78fe17e556bbf058",
+    "mahjong_invite__target_focused.json": "2e5f839512040dca57bda4c6cd0c7816",
+    "mahjong_invite__target_outdated.json": "2931a0047c3e4e26c067311940bb7924",
+    "mahjong_invite__too_many_invites.json": "153bf008540602ad5d21ff1db6a7d0f7",
+    "mahjong_join__already_in_room.json": "2454972fde36efd14d71be8a63262050",
+    "mahjong_join__busy.json": "5cf045b8171ddd1c1000ebc017509a1d",
+    "mahjong_join__insufficient.json": "2339167dcc32a62c3f90c15368b2f829",
+    "mahjong_join__invalid.json": "280b0de9a736ff7a4d0aa178fac8984f",
+    "mahjong_join__not_invited.json": "cc6f50fc5da7657079dfae9e3221c82c",
+    "mahjong_join__ok.json": "d3de5ea04734decf9b5f8750022ead71",
+    "mahjong_leave__active.json": "ecab47572614b23250f7135bd6494cbb",
+    "mahjong_leave__room_host.json": "bf630b937ba9b54bbc16e6a459855603",
+    "mahjong_lobby__invites.json": "e3ee1f2ea5eb6f259e827894fa2e4a63",
+    "mahjong_lobby__ok.json": "a6d0b60a007c9acb903532366c75230c",
+    "mahjong_lobby__unauthorized.json": "9dae4b4891f52f35bb6c584b6cef679c",
+    "mahjong_lobby__unsupported_client.json": "7b1c284669b7ff6c04bb574fa4796b92",
+    "mahjong_ranking__ok.json": "1b32bce9e04e0ef0af2ac75e6b90837f",
+    "mahjong_react__ok.json": "53c3b9615c9ab557c04fce6851111a4e",
+    "mahjong_react__too_fast.json": "3d5471817e8cda818abb8583213fbad0",
+    "mahjong_start__not_enough_players.json": "122f7cb413e81b78c8687eb55d9516ad",
+    "mahjong_start__not_host.json": "634ff16ac65c197c20945d4dab435a22",
+    "mahjong_start__ok.json": "392202803e3a79a2874a27dda38976dd",
+    "mahjong_start__seats_dropped.json": "540f2e956800932382c5764d7db4aeda",
+    "mahjong_state__away_leave.json": "bd3a230eebbf86ac071a39e568817761",
+    "mahjong_state__away_mine.json": "af4fc561c5fac48ba40868b36343e92a",
+    "mahjong_state__claim_no_option.json": "5c5ee0758defe67d242aa594ac2a12d5",
+    "mahjong_state__claim_option.json": "7d905811060e1222e3a9a8cbd5da3444",
+    "mahjong_state__finished.json": "344da82721d9a0b36229f67a950045f8",
+    "mahjong_state__hand_end_double_ron.json": "bd93fd615e3c823ca0904a883902825a",
+    "mahjong_state__hand_end_heavenly.json": "03c03d5a1e8a49bcb55f87634887a4a6",
+    "mahjong_state__hand_end_triple_ron.json": "d3512af5cc705e927a3027f7e891f025",
+    "mahjong_state__not_found.json": "aea31d68a8c6b0b81b25b01baf6afbe8",
+    "mahjong_state__room.json": "ee07b945a75c375e57cab1adb0afcea7",
+    "mahjong_state__turn_mine.json": "48040896ccd9ccc7b7c3d3f2a8994f3d",
+    "mahjong_state__turn_other.json": "1a5d4a1db0fa10d5d574e422f45a527f",
+    "mahjong_state__unsupported_client.json": "8373f3990b98eed1f88953c9265a74a8"
+  }
 }

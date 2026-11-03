@@ -83,8 +83,11 @@ extension MahjongStore {
         if let me = myUserID, !Self.isParticipant(payload, userID: me) {
             if match?.match?.id == incoming.id {
                 appliedTicket = max(appliedTicket, ticket)
+                // 시작 검사에서 빠진 멤버(state 'dropped')면 까닭을 짐작하지 않는 중립 문구(SPEC v1.0.3 §4.5).
+                let droppedHere = incoming.matchStatus == .forming
+                    && (payload.members?.contains { $0.user?.id?.lowercased() == me && $0.state == "dropped" } ?? false)
                 leaveHeldRoom(incoming.id)
-                setNotice(MahjongNoticeText.roomClosed)
+                setNotice(droppedHere ? MahjongNoticeText.droppedAtStart : MahjongNoticeText.roomClosed)
             }
             return .ignored
         }
@@ -274,7 +277,7 @@ extension MahjongStore {
         switch held.matchStatus {
         case .forming:
             let wasFull = Self.joinedCount(match) == 4 && !isHost
-            setNotice(wasFull ? MahjongNoticeText.droppedUnseen : MahjongNoticeText.roomClosed)
+            setNotice(wasFull ? MahjongNoticeText.droppedAtStart : MahjongNoticeText.roomClosed)
         case .active:
             setNotice(MahjongNoticeText.finishedMatch)
         default:

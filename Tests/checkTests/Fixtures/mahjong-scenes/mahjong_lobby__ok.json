@@ -1,0 +1,64 @@
+{
+  "bank_ms": 20000,
+  "base_ms": 5000,
+  "formats": [
+    "tonpuu",
+    "hanchan"
+  ],
+  "invites": [],
+  "max_invites": 6,
+  "me": {
+    "active_match_id": null,
+    "record": {
+      "avg_rank": null,
+      "firsts": 0,
+      "fourths": 0,
+      "games": 0,
+      "seconds": 0,
+      "thirds": 0
+    },
+    "room": null,
+    "ruby_balance": 100
+  },
+  "public_rooms": [],
+  "room_ttl_seconds": 600,
+  "server_now_ms": 1799999800000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "users": [
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": "aing",
+      "display_name": "비비",
+      "focus_mode": false,
+      "id": "00000000-0000-0000-0000-0000000000b2",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": "aing",
+      "display_name": "씨씨",
+      "focus_mode": false,
+      "id": "00000000-0000-0000-0000-0000000000c3",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": "aing",
+      "display_name": "디디",
+      "focus_mode": false,
+      "id": "00000000-0000-0000-0000-0000000000d4",
+      "in_match": false,
+      "is_working": true
+    }
+  ]
+}

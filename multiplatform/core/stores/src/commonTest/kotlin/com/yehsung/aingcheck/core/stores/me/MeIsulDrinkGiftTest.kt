@@ -309,17 +309,24 @@ class MeIsulDrinkGiftTest {
 
     @Test
     fun ownershipFilteringKeepsTheGiftKind() = runTest {
-        // 보유로 거른 새 선물이 종류를 잃으면(생일로 읽히면) 이슬 선택지가 0 이 된다 — 맥이 고친 잠재 결함. 여러 선택지를 가진 술 선물로 잰다.
-        val offer = com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer("g1", listOf(ISUL), kind = CharacterGiftKind.drink)
+        // 보유로 거른 새 선물이 종류를 잃으면(생일로 읽히면) 이슬 선택지가 0 이 된다 — 맥이 고친 잠재 결함(검토 ISUL-3).
+        // 지금 술 선물의 선택지는 언제나 이슬 하나라 스토어의 거름(unownedCakeGift · 시트 맞추기)은 '그대로' 아니면 '없음'으로 끝나고, 새 선물을
+        // 만드는 갈래를 술 선물로는 타지 않는다(잠재 결함 방지). 그래서 그 갈래가 지나는 한 곳(CharacterGiftOffer.narrowed)을 술 선물로 직접 잰다 —
+        // 종류를 빼면 이 단언이 빨강이다(수리 전 뮤턴트: 스토어 두 자리에서 kind 를 빼도 이 시험 · MeCakeGiftShopTest 가 초록이었다).
+        val drink = com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer("g1", listOf(ISUL), note = "한잔", kind = CharacterGiftKind.drink)
+        val narrowed = drink.narrowed(listOf(ISUL))
+        assertEquals(CharacterGiftKind.drink, narrowed.kind, "줄인 새 선물도 술 선물이다")
+        assertEquals(listOf(ISUL), narrowed.options, "종류를 잃으면 생일로 다시 걸러 이슬 선택지가 사라진다")
+        assertEquals(drink, narrowed, "id · 한 줄 · 시각도 그대로")
         val h = MeHarness(this, drawable = android) { r -> if (r.rpcName == "shop_state") MeReply.Json(shop(setOf("aing_cake_strawberry"))) else null }
         h.signIn()
         h.store.launch { h.store.loadShop() }
         advanceUntilIdle()
-        assertEquals(offer, h.store.unownedCakeGift(offer), "가진 것이 선택지에 없으면 그대로")
+        assertTrue(drink === h.store.unownedCakeGift(drink), "가진 것이 선택지에 없으면 같은 값 그대로(새로 만들지 않는다)")
         val mixed = com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer("g2", listOf("aing_cake_strawberry", "aing_cake_choco"))
         val kept = assertNotNull(h.store.unownedCakeGift(mixed))
         assertEquals(CharacterGiftKind.birthday, kept.kind)
-        assertEquals(listOf("aing_cake_choco"), kept.options)
+        assertEquals(listOf("aing_cake_choco"), kept.options, "생일은 줄인 새 선물(narrowed 갈래)")
         h.assertClean()
     }
 

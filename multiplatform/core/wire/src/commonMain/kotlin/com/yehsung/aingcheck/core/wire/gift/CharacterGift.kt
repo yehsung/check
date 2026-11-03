@@ -78,6 +78,12 @@ data class CharacterGiftOffer private constructor(
     /** 선물 종류(생일 · 술 한잔). 서버가 안 실었으면 생일. */
     val kind: CharacterGiftKind,
 ) {
+    /**
+     * 같은 선물에서 선택지만 줄인 새 값 — **종류를 실어 옮긴다**(빼면 술 선물이 생일로 읽혀 그 종류로 다시 거른 선택지가 0 이 된다 — 맥이 고친
+     * 잠재 결함 · 검토 ISUL-3). 보유로 거른 선물(나 탭 `unownedCakeGift` · 시트 맞추기)이 이 한 곳을 지난다. 선택지는 그 종류로 다시 거른다.
+     */
+    fun narrowed(options: List<String>): CharacterGiftOffer = CharacterGiftOffer(id, choosable(options, kind), note, createdAt, kind)
+
     companion object {
         /** Swift memberwise init — options 도 그 종류로 [choosable] 을 거친다. 보유로 거른 새 선물을 만들 때는 **kind 를 실어 옮긴다**. */
         operator fun invoke(

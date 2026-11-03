@@ -27,6 +27,7 @@ import com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer
 //  - 시트 · 다시 열기 줄 · 수령 한 줄은 그 선물 종류의 문구 묶음(`CharacterGiftKind.copy` — CakeGiftText · DrinkGiftText)에서 온다.
 //  - 술 선물은 선택지가 이슬 하나라 **고르기가 없다** — 시트가 설 때 그 하나를 미리 골라 둔다([MeCakeGiftSheet.open]).
 //  - 보유로 거른 새 선물을 만들 때 **종류를 실어 옮긴다**(빼먹으면 술 선물이 생일로 읽혀 선택지가 0 이 된다 — 맥이 고친 잠재 결함).
+//    새 선물을 만드는 자리는 `CharacterGiftOffer.narrowed` 하나다(unownedCakeGift · 시트 맞추기 둘 다 — 시험은 그 한 곳을 술 선물로 잰다).
 //  - 다음 선물(맥 ⑤): 서버는 한 번에 하나만 준다(p ≥ 5 면 두 종류 중 먼저 지급된 것). 선물이 결론 난 뒤(받았다 · 이미 받았다 · 없다) 시트가
 //    닫히면(또는 이미 닫혀 있었으면 결론 즉시) 10분 문을 건너뛰고 **한 번 더** 묻는다. 술 선물을 받을 수 있는 빌드(번호 5)에서만 —
 //    번호 4 인 빌드(Windows v1)는 서버가 생일만 싣고 (사용자, 종류)당 열린 선물은 하나라 '다음'이 없다(요청 수가 0.3.73 그대로다).
@@ -154,13 +155,14 @@ internal val MeStore.isGameScreenUp: Boolean get() = context.meLinks.isAnyMatchS
 /**
  * 선택지를 **지금 아는 보유**와 맞춰 거른다. 남는 게 없으면 null. 보유를 아직 못 읽었으면(아잉뿐) 서버 값 그대로.
  * 보유는 계정에 묶여 [MeStore.reset] 이 비운다 — 앞 계정이 가진 이슬로 새 계정의 술 선물(선택지 하나)을 거르는 일이 없다.
- * 새 선물은 **종류를 실어** 만든다(선택지가 그 종류의 내장 목록으로 다시 걸러진다 — 빼면 술 선물이 생일로 읽혀 선택지가 0 이 된다).
+ * 새 선물은 **종류를 실어** 만든다(`CharacterGiftOffer.narrowed` 한 곳 — 선택지가 그 종류의 내장 목록으로 다시 걸러진다. 빼면 술 선물이 생일로
+ * 읽혀 선택지가 0 이 된다). 지금 술 선물은 선택지가 이슬 하나라 '그대로' 아니면 '없음'으로 끝난다 — 그 갈래는 잠재 결함 방지다(검토 ISUL-3).
  */
 internal fun MeStore.unownedCakeGift(gift: CharacterGiftOffer): CharacterGiftOffer? {
     val remaining = gift.options.filter { !isOwned(it) }
     if (remaining == gift.options) return gift
     if (remaining.isEmpty()) return null
-    return CharacterGiftOffer(gift.id, remaining, gift.note, gift.createdAt, gift.kind)
+    return gift.narrowed(remaining)
 }
 
 /**
@@ -184,7 +186,7 @@ internal fun MeStore.reconcileCakeGiftWithOwnership() {
             cakeGiftSheet = if (remaining.isEmpty()) {
                 MeCakeGiftSheet(sheet.gift, phase = MeCakeGiftSheet.Phase.Closed, notice = sheet.texts.notice(CharacterGiftClaimOutcome.alreadyClaimed(null)) { it })
             } else {
-                val gift = CharacterGiftOffer(sheet.gift.id, remaining, sheet.gift.note, sheet.gift.createdAt, sheet.gift.kind)
+                val gift = sheet.gift.narrowed(remaining)
                 MeCakeGiftSheet(gift, sheet.selection?.takeIf { it in remaining } ?: MeCakeGiftSheet.preselection(gift), notice = sheet.notice)
             }
         }

@@ -947,22 +947,19 @@ package struct MessagesPresenceBoard: Equatable, Sendable {
     /// 상태를 `MessagesPeerPresence` 에 넣으면 그 네 자리를 하나라도 빠뜨리는 순간 그 경로의 사람만 상태가 조용히 사라진다.
     /// 상태의 출처는 사람 목록 둘(`app_user_directory`)뿐이라 여기서 한 번만 겹친다.
     package let statuses: [String: String]
-    /// 집중 중인 사람(1.0.17 · 대표 요청 5 — 명부 `focus_mode`). `statuses` 와 **같은 이유로 따로 둔다**(출처가 사람 목록 둘뿐이다).
-    /// 겹치기 규칙은 `MessagesFocusRules.focusedPeerIDs` 한 곳이다 — 스토어 잠금(`MessagesStore.isPeerFocused`)도 같은 함수를 부른다.
-    package let focused: Set<String>
+    // 집중 중인 사람(1.0.17)은 이 판에 **칸을 두지 않는다** — 출처는 `MessagesStore.focusedPeerIDs` 하나다(잠금 · 칩 · D2 줄 칩 모두).
+    // 첫 판은 여기에도 `focused` 칸을 두었는데 읽는 화면이 없고 차단 거르기만 달라, 같은 사실의 출처가 두 벌이었다(2026-11-03 검토 minor).
 
     package init(
         isKnown: Bool,
         peers: [String: MessagesPeerPresence],
         working: [MessagesWorkingPerson],
-        statuses: [String: String] = [:],
-        focused: Set<String> = []
+        statuses: [String: String] = [:]
     ) {
         self.isKnown = isKnown
         self.peers = peers
         self.working = working
         self.statuses = statuses
-        self.focused = focused
     }
 }
 
@@ -1038,10 +1035,7 @@ package enum MessagesPresenceRules {
                 return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
             }
         return MessagesPresenceBoard(isKnown: true, peers: peers, working: working + others,
-                                     statuses: statuses(nowDirectory: nowDirectory, messagesDirectory: messagesDirectory, me: me),
-                                     focused: MessagesFocusRules.focusedPeerIDs(
-                                         nowDirectory: nowDirectory, messagesDirectory: messagesDirectory, me: me
-                                     ))
+                                     statuses: statuses(nowDirectory: nowDirectory, messagesDirectory: messagesDirectory, me: me))
     }
 
     /// 상태메시지 겹치기 — 판과 같은 순서(뒤가 앞을 덮는다): 새 대화 시트 목록 → 지금 탭 목록(1분마다 받는 더 새 값).

@@ -395,8 +395,7 @@ package final class MessagesStore {
             peers: board.peers.filter { !hiddenBlockedPeerIDs.contains($0.key) },
             working: board.working.filter { !hiddenBlockedPeerIDs.contains($0.id) },
             // 차단한 사람의 상태메시지도 같이 걷는다 — 대화 머리에 그 사람이 쓴 문장이 남지 않게.
-            statuses: board.statuses.filter { !hiddenBlockedPeerIDs.contains($0.key) },
-            focused: board.focused.subtracting(hiddenBlockedPeerIDs)
+            statuses: board.statuses.filter { !hiddenBlockedPeerIDs.contains($0.key) }
         )
     }
 
@@ -474,13 +473,21 @@ package final class MessagesStore {
     /// ★ 서버가 `target_focused` 로 거절해도 **여기서 그 사람을 집중으로 찍지 않는다** — 명부 둘을 다시 받아 따라온다(`performSend`).
     ///   로컬에서 찍으면 명부가 "아님"이라 말하는 동안에도 잠겨, 방금 집중을 끈 사람에게 영영 못 보낸다(기존 시험 셋도 그 재전송을 잰다).
     package func isPeerFocused(_ peerID: String) -> Bool {
-        guard !peerID.isEmpty else { return false }
+        !peerID.isEmpty && focusedPeerIDs.contains(peerID)
+    }
+
+    /// 집중 중인 사람 **전부** — 상대 집중의 출처는 이것 하나다(`isPeerFocused` · 잠금 · 새 대화 시트 칩이 모두 여기서 읽는다).
+    /// 사람 줄이 여럿인 화면은 이 집합을 **한 번** 받아 줄마다 `contains` 만 묻는다(줄마다 `isPeerFocused` 를 부르면 명부 둘을 줄 수만큼 다시 겹친다).
+    /// 대화 목록 줄 · 지금 탭 근무 중 줄에 칩을 붙이는 판(결정 카드 D2 — 대표 답 대기)도 이것을 읽는다 — 판(`MessagesPresenceBoard`)에 칸을
+    /// 다시 만들지 않는다(2026-11-03 검토: 판의 집중 칸은 차단을 걸렀는데 화면은 안 거른 이 값을 따로 읽어, 같은 사실의 출처가 두 벌이었다).
+    /// 차단한 사람은 거르지 않는다 — 그 사람은 사람 찾기(`filteredDirectory`)에서 빠지고 대화도 스스로 닫혀, 이 값을 묻는 화면에 서지 않는다.
+    package var focusedPeerIDs: Set<String> {
         let nowStore = context.links.now
         return MessagesFocusRules.focusedPeerIDs(
             nowDirectory: nowStore.flatMap { $0.hasLoadedDirectory ? $0.directory : nil },
             messagesDirectory: directoryLoaded ? directory : nil,
             me: context.session.userID
-        ).contains(peerID)
+        )
     }
 
     /// 지금 탭 60초 틱(`NowStore.armRefreshTimer`)이 부른다 — 켜짐으로 알고 대화가 떠 있을 때만 내 집중을 다시 묻는다
@@ -602,7 +609,8 @@ package final class MessagesStore {
     ///
     /// 집중(1.0.17)이 막으면 `canSend` 가 거짓이라 요청을 띄우지 않고 false 다 — **초안은 그대로 남는다**(비우는 줄보다 앞에서 돌아선다).
     /// 사유는 `sendNotices` 에 적지 않는다: 입력줄과 이모티콘 시트가 `focusBlock(for:)` 를 **바로** 읽어 늘 띄우므로(`MessagesComposerRules.noticeLine`),
-    /// 여기 적어 두면 집중이 풀린 뒤에도 옛 사유가 결과 문구 자리에 남아 "아직 막혔다"고 말한다.
+    /// 여기 적어 두면 집중이 풀린 뒤에도 옛 사유가 결과 문구 자리에 남아 "아직 막혔다"고 말한다. 서버 거절(`sender_focused` · `target_focused`)로
+    /// 알게 된 집중도 같은 약속을 지킨다 — `performSend` 가 상태로 넘긴다(`settleFocusNotices`).
     @discardableResult
     package func sendDraft(to peerID: String, isComposing: Bool) -> Bool {
         guard !isComposing, canSend(to: peerID) else { return false }
@@ -702,8 +710,13 @@ package final class MessagesStore {
                 // 상대가 자리비움·집중이라 거절했다 — 명부가 낡았다(알았으면 집중은 `focusBlock` 이 막았다). 명부 둘을 다시 받는다(아래).
                 // 상대를 여기서 집중으로 찍지는 않는다(`isPeerFocused` 주석).
                 refreshesDirectory = outcome == .targetNotWorking || outcome == .targetFocused
-                // 내 집중으로 거절했다 — 이 폰은 몰랐다. 켜짐으로 들인다(문구는 위 `notice` 가 `senderFocused` 로 세운다).
-                if outcome == .senderFocused { self.adoptServerSenderFocused() }
+                // 내 집중으로 거절했다 — 이 폰은 몰랐다. 켜짐으로 들인다. 문구는 `sendNotices` 에 적지 않는다: 켜짐을 들인 순간부터
+                // `focusBlock` 이 같은 문장(`MessageNoticeText.senderFocused`)을 입력줄에 띄우고, 맥에서 끈 값을 받으면 그 줄과 함께 사라진다.
+                // 적어 두면 집중이 풀린 뒤에도 "맥에서 집중을 끄면 보낼 수 있어요"가 켜진 [보내기] 위에 남는다(2026-11-03 검토 minor).
+                if outcome == .senderFocused {
+                    self.adoptServerSenderFocused()
+                    notice = nil
+                }
                 // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다(서버 되돌림 · 코어가 옛 모양으로 되물었다).
                 // 한 번 선 깃발을 그대로 두면 되돌린 서버에서 재시도가 두 통을 만든다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
                 if succeeded { self.runtime.serverKnowsSendKey = response.messageId != nil }
@@ -736,10 +749,9 @@ package final class MessagesStore {
             if restoresDraftOnFailure, self.draft(for: peerID).isEmpty { self.drafts[peerID] = body }
             if !cancelled, let notice { self.sendNotices[peerID] = notice }
             if refreshesDirectory {
-                // ★ 둘 다 받는다(겹치기 순서 함정): 판과 집중 판정은 지금 탭 명부가 메시지 명부를 **덮는다**(`MessagesFocusRules.focusedPeerIDs`).
-                //   메시지 명부만 다시 받으면 지금 탭이 쥔 옛 값이 이겨 칩·잠금이 다음 60초 틱까지 안 따라온다.
-                self.loadDirectory(force: true)
-                self.context.links.now?.refresh()
+                // ★ 둘 다 받는다(겹치기 순서 함정 — `refreshPeopleDirectories`). `target_focused` 문구는 명부가 그 사람을 집중으로 알게 되면
+                //   상태로 넘어간다(`settleFocusNotices` — 두 명부가 각자 끝날 때 부른다).
+                self.refreshPeopleDirectories()
             }
         }
         return true
@@ -769,6 +781,29 @@ package final class MessagesStore {
 
     // MARK: - 사람 찾기
 
+    /// 사람 명부 **둘**을 지금 다시 받는다 — 메시지 명부(`loadDirectory(force: true)`)와 지금 탭 명부(`NowStore.refresh`).
+    /// 집중(`focusedPeerIDs`)과 상태메시지(`MessagesPresenceRules.statuses`)는 지금 탭 명부가 메시지 명부를 **받은 시각과 상관없이 덮는다** —
+    /// 메시지 명부만 다시 받으면 지금 탭이 쥔 최대 60초 낡은 값이 이겨, 방금 집중을 끈 사람의 칩·잠금이 다음 틱까지 남는다.
+    /// 부르는 자리: 서버 거절(`target_focused` · `target_not_working`) · 새 대화 시트의 당겨서 새로고침과 [다시 시도](2026-11-03 검토 minor —
+    /// 그 둘은 메시지 명부만 받았다). 사람이 누를 때만 일어나 요청 수 걱정은 없다(지금 탭 쪽은 돌고 있으면 뒤따르는 한 번으로 합친다).
+    package func refreshPeopleDirectories() {
+        loadDirectory(force: true)
+        context.links.now?.refresh()
+    }
+
+    /// 사람 명부가 새로 섰다(메시지 명부 · 지금 탭 명부 — 지금 탭은 `NowStore` 가 부른다). 서버 거절로 세운 상대 집중 문구(`target_focused`)를
+    /// 명부가 그 사람을 **집중으로 알게 된 뒤** 걷는다: 그때부터는 `focusBlock` 이 같은 문장을 띄우고, 상대가 끄면 그 줄과 함께 사라진다.
+    /// 명부가 아직 모르면(옛 7칸 서버 · 조회 실패 · 다른 명부가 더 낡음) 남긴다 — 그동안 유일한 사유이고, 다음 전송이 지운다.
+    /// 거절 직후 명부를 다시 받는 동안에도 사유가 보이는 것은 그래서다(지우는 때가 재조회 **뒤**다).
+    package func settleFocusNotices() {
+        let stale = sendNotices.filter { $0.value == MessageNoticeText.targetFocused }.map(\.key)
+        guard !stale.isEmpty else { return }
+        let focused = focusedPeerIDs
+        for peerID in stale where focused.contains(peerID) {
+            sendNotices[peerID] = nil
+        }
+    }
+
     /// `app_user_directory`(읽기). 새 대화 시트가 설 때 · 이름을 모르는 대화가 설 때.
     package func loadDirectory(force: Bool = false) {
         guard isSignedIn, !directoryLoading else { return }
@@ -795,6 +830,7 @@ package final class MessagesStore {
                 self.directory = rows.toPokeDirectoryEntries().sortedForPokeDisplay(unreadPeerIDs: [], workKnown: true)
                 self.directoryLoaded = true
                 self.directoryFailed = false
+                self.settleFocusNotices()
             } catch {
                 guard generation == self.context.generation else { return }
                 self.directoryLoading = false

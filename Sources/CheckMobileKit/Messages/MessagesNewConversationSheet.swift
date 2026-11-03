@@ -19,6 +19,8 @@ struct MessagesNewConversationSheet: View {
         let people = store.filteredDirectory(query: query)
         let working = people.filter(\.isWorking)
         let others = people.filter { !$0.isWorking }
+        // 집중 중인 사람은 **한 번** 받아 줄마다 묻는다(`MessagesStore.focusedPeerIDs` — 줄마다 `isPeerFocused` 를 부르면 명부 둘을 줄 수만큼 다시 겹친다).
+        let focused = store.focusedPeerIDs
         NavigationStack {
             List {
                 if store.directoryFailed, store.directory.isEmpty {
@@ -28,7 +30,7 @@ struct MessagesNewConversationSheet: View {
                             title: "사람 목록을 불러오지 못했어요",
                             message: MobileLoadText.checkConnection,
                             actionTitle: MobileLoadText.retry,
-                            action: { store.loadDirectory(force: true) }
+                            action: { store.refreshPeopleDirectories() }
                         )
                     }
                     .cardListPlainRow()
@@ -44,10 +46,10 @@ struct MessagesNewConversationSheet: View {
                     .cardListPlainRow()
                 } else {
                     if !working.isEmpty {
-                        group(title: "근무 중 \(working.count)", people: working, isFirst: true)
+                        group(title: "근무 중 \(working.count)", people: working, focused: focused, isFirst: true)
                     }
                     if !others.isEmpty {
-                        group(title: "근무 안 함", people: others, isFirst: working.isEmpty)
+                        group(title: "근무 안 함", people: others, focused: focused, isFirst: working.isEmpty)
                     }
                     Text("근무 중이 아니어도 메시지를 보낼 수 있어요")
                         .font(.footnote)
@@ -69,13 +71,15 @@ struct MessagesNewConversationSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: Text("이름 검색"))
             .sheetCloseButton { dismiss() }
-            .refreshable { store.loadDirectory(force: true) }
+            // 명부 **둘**을 다시 받는다 — 집중 칩 · 상태메시지는 지금 탭 명부가 이 시트 명부를 덮으므로, 이 시트 명부만 받으면
+            // 방금 집중을 끈 사람의 칩이 최대 60초 남는다(`MessagesStore.refreshPeopleDirectories`).
+            .refreshable { store.refreshPeopleDirectories() }
         }
         .onAppear { store.loadDirectory() }
     }
 
     @ViewBuilder
-    private func group(title: String, people: [PokeDirectoryEntry], isFirst: Bool) -> some View {
+    private func group(title: String, people: [PokeDirectoryEntry], focused: Set<String>, isFirst: Bool) -> some View {
         Section {
             Text(title)
                 .font(.footnote.weight(.semibold))
@@ -88,9 +92,9 @@ struct MessagesNewConversationSheet: View {
                 Button {
                     onSelect(person.userID)
                 } label: {
-                    // 집중 여부는 스토어 판정 그대로다(`isPeerFocused` — 대화의 [보내기] 잠금과 같은 겹치기). 이 시트의 명부 행 값만 보면
-                    // 지금 탭이 1분마다 받는 더 새 값과 갈려, 칩은 '집중'인데 대화는 열려 있는 창이 생긴다.
-                    MessagesPersonRow(person: person, isFocused: store.isPeerFocused(person.userID))
+                    // 집중 여부는 스토어 판정 그대로다(`focusedPeerIDs` — 대화의 [보내기] 잠금과 같은 겹치기). 이 시트의 명부 행 값만 보면
+                    // 잠금이 읽는 겹친 값과 갈려, 칩은 '집중'인데 [보내기]는 켜진 창이 생긴다.
+                    MessagesPersonRow(person: person, isFocused: focused.contains(person.userID))
                 }
                 .buttonStyle(.plain)
                 .cardSegmentRow(

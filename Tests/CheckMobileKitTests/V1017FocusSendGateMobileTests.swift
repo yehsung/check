@@ -10,7 +10,12 @@ import Testing
 //   5. "콕/메세지 창 에서부터 집중 모드인 사람들은 표시가 되게끔 하고 메세지나 찌르기 비활성화 되게."
 //   6. "집중모드중인 사람들은 남들 찌르거나 메세지 못보내게 해줘. (자기는 못받으면서 남들한텐 할 수 있는게 안맞음)"
 // 대표 결정(되묻지 말 것): 상대가 집중이면 '집중' 표시 · 대화는 열리되 보내기(글·이모티콘)만 막힘. 내가 집중이면 메시지 막힘
-// (폰엔 찌르기·울트라 보내는 길이 없다). 확성기·게임 신청은 그대로. 폰에는 집중 끄기 단추가 없다(profiles PATCH 금지 그대로).
+// (폰엔 찌르기·울트라 보내는 길이 없다). 확성기·게임 신청은 그대로.
+// ★ 결정이 **아닌** 것(현재 상태 — 대표 답 대기, 2026-11-03 결정 카드):
+//   D1 폰 [집중 끄기] 단추 — 지금은 없다(profiles PATCH 금지 그대로 · 문장은 "맥에서 집중을 끄면"). 답이 B(끄기 단추)면
+//      `MobileForbiddenCalls` 의 focus_mode PATCH 금지 · 이 파일 ⑧(`phoneNeverWritesFocus`) · 내 집중 문장을 함께 고친다.
+//   D2 집중 표시 범위 — 지금은 맥과 같은 두 곳(새 대화 사람 줄 · 대화 이름표). 답이 B(대화 목록 줄 · 지금 탭 근무 중 줄)면
+//      칩은 `MessagesStore.focusedPeerIDs` 한 곳을 읽는다(판에 칸을 다시 만들지 않는다).
 //
 // 이 파일이 재는 것:
 //  ① 규칙: 내 집중 > 상대 집중 · 모름(nil)은 막지 않음 · 명부 겹치기(뒤 목록이 이긴다) · 입력줄 한 줄의 순서 · 틱 조건
@@ -18,8 +23,9 @@ import Testing
 //  ② 상대 집중 짝 게이트: canSend · canSendSticker · sendDraft · sendSticker — 요청 0건, 글은 남는다(기준선: 집중 아닌 사람은 1건)
 //  ③ 내 집중(한 행 GET): true 면 모두에게 막힘 · false·실패·행 없음·null 은 막지 않음 · 실패는 알던 값을 안 바꾼다
 //  ④ 서버 sender_focused(맥 하네스 골든): 문구 · 켜짐으로 받아들임 · 다음 누름은 요청 0 · 그보다 먼저 띄운 조회의 답은 버린다
+//     · 문구는 상태로 넘어가 맥에서 끈 값을 받으면 사라진다(target_focused 도 명부가 알게 된 뒤 같다 — 검토 2026-11-03)
 //  ⑤ 따라잡기: 묻는 때(대화가 설 때 · 대화가 떠 있는 채 앞으로 올 때 · 켜짐으로 알 때만 60초 틱) · 묻지 않는 때
-//  ⑥ target_focused 뒤 명부 둘(메시지 · 지금 탭)을 다시 받는다 — 겹치기 순서 함정 · 로컬에서 찍지 않는다
+//  ⑥ target_focused 뒤 명부 둘(메시지 · 지금 탭)을 다시 받는다 — 겹치기 순서 함정 · 로컬에서 찍지 않는다 · 새 대화 시트 새로고침도 둘을 받는다
 //  ⑦ 내 집중이어도 확성기는 나간다 · ⑧ 금지 호출 0 · profiles 쓰기 0
 //  ⑨ 화면 배선 소스 계약(주석 걷기) — 폰 뷰는 맥 스위트도 swift test 도 컴파일하지 않는다
 //  ⑩ 데모 픽스처: 명부 다섯 장의 focus_mode 칸 · 상대 집중 장면(하린) · 내 집중 장면(도윤) · 민재 장면은 그대로
@@ -87,7 +93,7 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         #expect(MessagesFocusBlock.myself.notice != MessagesFocusBlock.peer.notice)
     }
 
-    @Test("명부 겹치기: 뒤(지금 탭) 목록이 이긴다 · 목록에 있는 사람은 그 목록 값이 답 · 칸 없음/null 은 아님 · 나는 빼고 · 판도 같은 값")
+    @Test("명부 겹치기: 뒤(지금 탭) 목록이 이긴다 · 목록에 있는 사람은 그 목록 값이 답 · 칸 없음/null 은 아님 · 나는 빼고")
     func focusedOverlay() {
         func entry(_ id: String, focused: Bool) -> PokeDirectoryEntry {
             var value = PokeDirectoryEntry(userID: id, name: id, avatarURL: nil, isWorking: true)
@@ -110,15 +116,6 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         // 목록이 하나뿐이어도 된다 · 둘 다 없으면 아무도 아니다.
         #expect(MessagesFocusRules.focusedPeerIDs(nowDirectory: nil, messagesDirectory: [entry("x", focused: true)], me: nil) == ["x"])
         #expect(MessagesFocusRules.focusedPeerIDs(nowDirectory: nil, messagesDirectory: nil, me: nil).isEmpty)
-
-        let board = MessagesPresenceRules.board(
-            nowWorking: [], teamMemberIDs: [],
-            nowDirectory: [row("a", focus: false)],
-            messagesDirectory: [entry("a", focused: true), entry("b", focused: true)],
-            me: nil
-        )
-        #expect(board.focused == ["b"], "판의 집중 칸이 스토어 판정과 다른 겹치기를 쓴다")
-        #expect(MessagesPresenceBoard.unknown.focused.isEmpty)
     }
 
     @Test("입력줄 한 줄: 집중 사유가 결과 문구보다 앞이고 늘 선다 · 집중이 없으면 결과 문구 · 빈 글은 줄 없음")
@@ -166,7 +163,7 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
             #expect(h.store.directory.count == 4, "\(file): 명부 디코드가 깨졌다")
             #expect(h.store.isPeerFocused(focusedID) == expectFocused, "\(file)")
             #expect(!h.store.isPeerFocused(otherID), "\(file)")
-            #expect(h.store.presenceBoard(now: h.model.context.clock.now()).focused == (expectFocused ? [focusedID] : []), "\(file)")
+            #expect(h.store.focusedPeerIDs == (expectFocused ? [focusedID] : []), "\(file)")
             h.store.setDraft("안녕하세요", for: focusedID)
             h.store.setDraft("안녕하세요", for: otherID)
             #expect(h.store.canSend(to: focusedID) == !expectFocused, "\(file)")
@@ -233,13 +230,25 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         #expect(await baseWaitUntil { !h.store.isSending })
         await h.settle()
         #expect(h.count("send_message") == 1)
-        #expect(h.store.sendNotices[fgPlain] == MessageNoticeText.targetFocused)
         #expect(h.store.draft(for: fgPlain) == "방금 켠 사람에게", "거절된 글이 입력칸으로 안 돌아왔다")
         #expect(h.count("app_user_directory") >= directoryBefore + 2, "명부를 하나만 다시 받았다 — 지금 탭 옛 값이 덮는다")
         #expect(h.model.now.refreshCount > nowRefreshBefore, "지금 탭 새로고침을 안 불렀다")
         #expect(h.store.isPeerFocused(fgPlain), "다시 받은 뒤에도 잠금이 안 따라왔다")
-        #expect(h.store.presenceBoard(now: h.model.context.clock.now()).focused.contains(fgPlain), "칩이 안 따라왔다")
+        #expect(h.store.focusedPeerIDs.contains(fgPlain), "칩이 안 따라왔다")
         #expect(!h.store.canSend(to: fgPlain))
+        // 문구는 상태로 넘어갔다 — 결과 문구 자리는 비고, 입력줄은 같은 문장을 집중 판정에서 띄운다.
+        #expect(h.store.sendNotices[fgPlain] == nil, "명부가 알게 된 뒤에도 거절 문구를 따로 쥐고 있다 — 상대가 끄면 남는다")
+        #expect(MessagesComposerRules.noticeLine(focus: h.store.focusBlock(for: fgPlain), sendNotice: h.store.sendNotices[fgPlain])
+                == MessageNoticeText.targetFocused, "넘긴 뒤 입력줄 사유가 사라졌다")
+
+        // 상대가 집중을 껐다 — 지금 탭 다음 새로고침(60초 틱과 같은 길)이 받으면 사유 줄도 [보내기] 잠금도 풀린다(검토 2026-11-03 재현).
+        h.server.setDirectory(FgFx.directory(plainIsFocused: false))
+        h.model.now.refresh()
+        await h.settle()
+        #expect(!h.store.isPeerFocused(fgPlain))
+        #expect(h.store.canSend(to: fgPlain), "상대가 껐는데 [보내기]가 잠겨 있다")
+        #expect(MessagesComposerRules.noticeLine(focus: h.store.focusBlock(for: fgPlain), sendNotice: h.store.sendNotices[fgPlain]) == nil,
+                "상대가 껐는데 '지금 집중 중이에요'가 켜진 [보내기] 위에 남았다")
         fgExpectNoProfileWrites(h)
     }
 
@@ -258,6 +267,8 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         await h.settle()
         #expect(!h.store.isPeerFocused(fgPlain))
         #expect(h.store.canSend(to: fgPlain))
+        // 명부가 아직 모르면 거절 문구가 유일한 사유라 남는다(넘길 상태가 없다 — 위 시험의 '넘긴 뒤 비었다'와 다른 결과).
+        #expect(h.store.sendNotices[fgPlain] == MessageNoticeText.targetFocused, "명부가 모르는데 거절 사유를 지웠다")
         #expect(h.store.sendDraft(to: fgPlain, isComposing: false))
         #expect(await baseWaitUntil { !h.store.isSending })
         #expect(h.count("send_message") == 2)
@@ -356,8 +367,11 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         #expect(await baseWaitUntil { !h.store.isSending })
         await h.settle()
         #expect(h.count("send_message") == 1)
-        #expect(h.store.sendNotices[fgPlain] == MessageNoticeText.senderFocused,
+        // 거절 직후 입력줄은 sender_focused 문장이다(기준선) — 결과 문구 자리가 아니라 켜짐을 들인 집중 판정이 띄운다.
+        #expect(MessagesComposerRules.noticeLine(focus: h.store.focusBlock(for: fgPlain), sendNotice: h.store.sendNotices[fgPlain])
+                == MessageNoticeText.senderFocused,
                 "1.0.16 처럼 '잠시 후 다시 시도'로 접혔다: \(String(describing: h.store.sendNotices[fgPlain]))")
+        #expect(h.store.sendNotices[fgPlain] == nil, "sender_focused 를 결과 문구로도 적었다 — 맥에서 끈 뒤에도 남는다")
         #expect(h.store.myFocusMode == true, "서버가 알려 준 내 집중을 받아들이지 않았다")
         #expect(h.store.draft(for: fgPlain) == "맥에서 켠 줄 모르고")
         #expect(h.store.focusBlock(for: fgPlain) == .myself)
@@ -367,6 +381,16 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         #expect(!h.store.sendDraft(to: fgAbsent, isComposing: false), "내 집중은 누구에게나다")
         await h.settle()
         #expect(h.count("send_message") == 1, "받아들인 뒤에도 요청이 또 나갔다")
+
+        // 맥에서 껐다 — 대화를 띄운 채 앞으로 오면 조회(false)가 풀고, 입력줄에 옛 사유가 남지 않는다(검토 2026-11-03 재현 그대로).
+        h.server.setMyFocus(FgFx.myFocus(false))
+        h.store.appDidEnterBackground()
+        h.store.appDidBecomeActive()
+        await h.settle()
+        #expect(h.store.myFocusMode == false)
+        #expect(h.store.canSend(to: fgPlain), "맥에서 껐는데 [보내기]가 잠겨 있다")
+        #expect(MessagesComposerRules.noticeLine(focus: h.store.focusBlock(for: fgPlain), sendNotice: h.store.sendNotices[fgPlain]) == nil,
+                "맥에서 껐는데 '맥에서 집중을 끄면 보낼 수 있어요'가 켜진 [보내기] 위에 남았다")
         fgExpectNoProfileWrites(h)
     }
 
@@ -547,14 +571,33 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
     @Test("새 대화 시트: 사람 줄이 스토어 판정으로 '집중' 칩을 달고 보이스오버에 잇는다")
     func personRowShowsFocusChip() throws {
         let code = try Self.code("Sources/CheckMobileKit/Messages/MessagesNewConversationSheet.swift")
-        #expect(code.contains("MessagesPersonRow(person: person, isFocused: store.isPeerFocused(person.userID))"),
+        let sheet = try Self.block(of: "struct MessagesNewConversationSheet: View", in: code)
+        #expect(sheet.contains("let focused = store.focusedPeerIDs"), "시트가 잠금과 같은 출처(focusedPeerIDs)를 한 번 받지 않는다")
+        #expect(sheet.contains("MessagesPersonRow(person: person, isFocused: focused.contains(person.userID))"),
                 "사람 줄이 잠금과 다른 값(시트 명부 행)으로 칩을 고른다")
+        #expect(!sheet.contains("isPeerFocused("), "줄마다 겹치기를 다시 한다(사람 수의 제곱)")
+        // 당겨서 새로고침 · [다시 시도]는 명부 둘을 받는다 — 시트 명부만 받으면 지금 탭 옛 값이 칩을 덮는다(검토 2026-11-03).
+        #expect(sheet.contains(".refreshable { store.refreshPeopleDirectories() }"), "당겨서 새로고침이 지금 탭 명부를 안 받는다")
+        #expect(sheet.contains("action: { store.refreshPeopleDirectories() }"), "[다시 시도]가 지금 탭 명부를 안 받는다")
+        #expect(!sheet.contains("loadDirectory(force: true)"), "시트가 메시지 명부만 다시 받는 길이 남았다")
         let row = try Self.block(of: "struct MessagesPersonRow: View", in: code)
         let body = try Self.block(of: "var body: some View", in: row)
         #expect(body.contains("chips: Self.chips(isFocused: isFocused)"), "이름 줄에 칩을 안 넘긴다")
         #expect(body.contains("isFocused ? MessagesFocusText.accessibility : nil"), "보이스오버가 집중을 안 읽는다")
         let chips = try Self.block(of: "static func chips(isFocused: Bool)", in: row)
         #expect(chips.contains(".focus(MessagesFocusText.personChip)"), "칩이 '집중' 보라 칩이 아니다")
+    }
+
+    @Test("집중의 출처는 스토어 한 곳이다: 판에는 집중 칸이 없고 · 화면은 focusedPeerIDs/isPeerFocused 만 읽는다(검토 2026-11-03 — 출처 두 벌)")
+    func singleFocusSource() throws {
+        let rules = try Self.code("Sources/CheckMobileKit/Messages/MessagesRules.swift")
+        let board = try Self.block(of: "package struct MessagesPresenceBoard", in: rules)
+        #expect(!board.contains("focused"), "판에 집중 칸이 다시 생겼다 — 잠금(focusedPeerIDs)과 다른 출처가 된다")
+        let store = try Self.code("Sources/CheckMobileKit/Messages/MessagesStore.swift")
+        // 겹치기 함수를 부르는 곳은 스토어에서 `focusedPeerIDs` 하나다(잠금 · 칩 · 시트가 모두 여기서 받는다).
+        #expect(store.components(separatedBy: "MessagesFocusRules.focusedPeerIDs(").count - 1 == 1, "스토어가 겹치기를 두 군데서 한다")
+        let isPeer = try Self.block(of: "package func isPeerFocused(", in: store)
+        #expect(isPeer.contains("focusedPeerIDs.contains(peerID)"))
     }
 
     @Test("칩 부품: PersonName 의 .focus 가 FocusChip 한 조각을 부르고, 그 색은 aiToken 이다(맥 '집중' 칩과 같은 계열)")
@@ -646,7 +689,7 @@ private func fgExpectNoProfileWrites(_ h: MessagesHarness, sourceLocation: Sourc
         defer { demo.tearDown() }
         demo.store.loadDirectory(force: true)
         await demo.settle()
-        #expect(demo.store.presenceBoard(now: MobileClock.demoInstant).focused == [Self.harin])
+        #expect(demo.store.focusedPeerIDs == [Self.harin])
         #expect(demo.store.isPeerFocused(Self.harin))
         #expect(!demo.store.isPeerFocused(MessagesDemoFixtureTests.minjae))
         #expect(MobileForbiddenCalls.violations(in: demo.requests).isEmpty)

@@ -185,7 +185,10 @@ struct V1017ChatMarkdownAttributedTests {
 
     /// 열 수 없는 링크 · 주소 흉내 링크는 **링크가 아니고** 원문 그대로 보인다(코어 규칙 그대로).
     @Test func 나쁜_스킴과_주소_흉내는_링크가_아니다() {
-        for body in ["[나쁜](javascript:alert(1))", "[글](file:///etc/passwd)", "[https://bank.com](https://evil.com)", "https://naver.com:443@evil.com"] {
+        // 뒤 넷: 호스트를 퍼센트 인코딩한 주소(2026-11-03 검토 critical·major) — 꼬리표가 키릴 닮은꼴을 진짜처럼 보였고, 맨 주소는 다른 호스트를 열었다.
+        for body in ["[나쁜](javascript:alert(1))", "[글](file:///etc/passwd)", "[https://bank.com](https://evil.com)", "https://naver.com:443@evil.com",
+                     "[naver.com](https://n%D0%B0ver.com)", "[apple.com](https://%D0%B0pple.com/login)",
+                     "[애플 로그인](https://%D0%B0%D1%80%D1%80%D3%8F%D0%B5.com/id)", "확인 https://naver.com%2E%65%76%69%6C%2E%63%6F%6D/login"] {
             let drawn = CM17.drawn(body)
             #expect(drawn.string == body, "\(body) 원문이 바뀌었다: \(drawn.string)")
             drawn.enumerateAttribute(MessagesBubbleMarkdown.linkKey, in: NSRange(location: 0, length: drawn.length)) { value, _, _ in
@@ -318,6 +321,46 @@ struct V1017ChatMarkdownLinkTapTests {
         #expect(tail.link(at: CGPoint(x: box.maxX + 60, y: box.midY), width: width) == nil, "줄 끝 너머가 링크로 열린다")
     }
 
+    /// 손가락 오차는 **링크 옆에 다른 글리프가 있어도** 듣는다(2026-11-03 검토 minor). 첫 판은 가장 가까운 글자 하나의 상자만 봐서,
+    /// 링크 뒤 줄바꿈 글리프(상자가 칸 끝까지 이어진다) · 꼬리표 앞 공백이 가장 가까운 글자가 되면 링크 끝 바로 옆이 nil 이었다.
+    /// 기준선: 같은 자리에서 오차 너머 · 다음 줄 · 꼬리표 가운데는 여전히 nil 이다(넓히기가 링크를 줄 전체로 키우지 않았다).
+    @Test func 손가락_오차는_링크_뒤_줄바꿈과_꼬리표_옆에서도_듣는다() throws {
+        let width: CGFloat = 300
+        let slop = MessagesBubbleTextLayout.Engine.touchSlop
+        func lastBox(of part: String, in engine: MessagesBubbleTextLayout.Engine) throws -> CGRect {
+            engine.layout(width: width)
+            let range = (engine.storage.string as NSString).range(of: part)
+            try #require(range.location != NSNotFound, "\(part) 가 글에 없다")
+            let glyphs = engine.layoutManager.glyphRange(forCharacterRange: NSRange(location: range.location + range.length - 1, length: 1),
+                                                         actualCharacterRange: nil)
+            return engine.layoutManager.boundingRect(forGlyphRange: glyphs, in: engine.container)
+        }
+
+        // ① 링크로 끝나는 줄 다음에 줄바꿈 — 가장 가까운 글리프가 줄바꿈이어도 오차 안쪽은 링크다.
+        let newline = CM17.engine("보세요 https://a.example/x\n다음 줄은 평범한 글자가 꽤 길게 이어집니다")
+        let x = try lastBox(of: "a.example/x", in: newline)
+        #expect(newline.link(at: CGPoint(x: x.maxX + 2, y: x.midY), width: width)?.absoluteString == "https://a.example/x", "줄바꿈 옆 +2pt 가 안 열린다")
+        #expect(newline.link(at: CGPoint(x: x.maxX + slop - 0.5, y: x.midY), width: width) != nil)
+        #expect(newline.link(at: CGPoint(x: x.maxX + slop + 2, y: x.midY), width: width) == nil, "오차 너머가 열린다")
+        #expect(newline.link(at: CGPoint(x: x.maxX + 60, y: x.midY), width: width) == nil, "줄 끝 너머가 열린다")
+        #expect(newline.link(at: try CM17.center(of: "평범한", in: newline, width: width), width: width) == nil, "다음 줄 글자가 열린다")
+
+        // ② `[자료](…) 끝` — 꼬리표 앞 공백이 가장 가까운 글리프여도 라벨 끝 +2pt 는 링크다. 꼬리표 가운데 · 뒤 글자는 아니다.
+        let tail = CM17.engine("[자료](https://a.example/doc) 끝")
+        #expect(tail.storage.string == "자료 (a.example) 끝", "전제: 꼬리표가 붙은 글이 아니다: \(tail.storage.string)")
+        let label = try lastBox(of: "자료", in: tail)
+        #expect(tail.link(at: CGPoint(x: label.maxX + 2, y: label.midY), width: width)?.absoluteString == "https://a.example/doc",
+                "꼬리표 공백 옆 +2pt 가 안 열린다")
+        #expect(tail.link(at: CGPoint(x: label.maxX + slop + 2, y: label.midY), width: width) == nil, "오차 너머(꼬리표)가 열린다")
+        #expect(tail.link(at: try CM17.center(of: "(a.example)", in: tail, width: width), width: width) == nil)
+        #expect(tail.link(at: try CM17.center(of: "끝", in: tail, width: width), width: width) == nil)
+
+        // ③ 링크 둘이 가까우면 바로 위에 놓인 쪽이 이긴다(넓힌 상자가 겹쳐도 옆 링크로 새지 않는다).
+        let pair = CM17.engine("https://a.example/x https://b.example/y")
+        #expect(pair.link(at: try CM17.center(of: "b.example", in: pair, width: width, at: 0), width: width)?.absoluteString == "https://b.example/y")
+        #expect(pair.link(at: try CM17.center(of: "a.example/x", in: pair, width: width, at: 10), width: width)?.absoluteString == "https://a.example/x")
+    }
+
     /// 좁은 폭에서 여러 줄로 접힌 링크도 **어느 줄을 눌러도** 같은 주소다. 같은 글을 넓은 폭에서 재면 다른 자리다(배치를 따른다).
     @Test func 접힌_링크는_어느_줄을_눌러도_같은_주소다() throws {
         let label = "자료실 문서 모음 바로가기 링크"
@@ -329,6 +372,10 @@ struct V1017ChatMarkdownLinkTapTests {
             #expect(engine.link(at: point, width: width)?.absoluteString == "https://a.example/docs", "\(offset) 번째 글자")
         }
         #expect(engine.link(at: try CM17.center(of: "뒤", in: engine, width: width), width: width) == nil)
+        // 접힌 줄의 오른쪽 빈 곳(칸 끝 너머)은 링크가 아니다 — 줄 조각별 상자가 줄 끝 빈칸까지 늘지 않는다.
+        engine.layout(width: width)
+        let firstLine = engine.layoutManager.lineFragmentUsedRect(forGlyphAt: 0, effectiveRange: nil)
+        #expect(engine.link(at: CGPoint(x: width + 20, y: firstLine.midY), width: width) == nil, "칸 너머가 링크로 열린다")
     }
 
     /// 열 수 없는 링크 모양은 누를 자리가 없다(속성이 없다). 빈 글도 nil.
@@ -347,7 +394,9 @@ struct V1017ChatMarkdownLinkTapTests {
             let ok = MessagesBubbleMarkdown.follow(url) { opened.append($0.absoluteString) }
             #expect(ok, "\(raw) 가 안 열렸다")
         }
-        for raw in ["javascript:alert(1)", "file:///etc/passwd", "https://naver.com:443@evil.com", "aingcheck://message/x", "tel:01012345678"] {
+        for raw in ["javascript:alert(1)", "file:///etc/passwd", "https://naver.com:443@evil.com", "aingcheck://message/x", "tel:01012345678",
+                    "https://n%D0%B0ver.com", "https://%D0%B0pple.com/login", "https://%D0%B0%D1%80%D1%80%D3%8F%D0%B5.com/id",
+                    "https://naver.com%2E%65%76%69%6C%2E%63%6F%6D/login"] {
             let url = try #require(URL(string: raw))
             let ok = MessagesBubbleMarkdown.follow(url) { opened.append($0.absoluteString) }
             #expect(!ok, "\(raw) 가 열렸다")
@@ -363,6 +412,8 @@ struct V1017ChatMarkdownLinkTapTests {
         #expect(MessagesBubbleMarkdown.linkActions("[a.example](https://a.example)").map(\.title) == ["링크 열기: a.example"])
         #expect(MessagesBubbleMarkdown.linkActions("평범한 글").isEmpty)
         #expect(MessagesBubbleMarkdown.linkActions("[나쁜](javascript:alert(1))").isEmpty)
+        // 퍼센트 인코딩 호스트는 링크가 아니라 보이스오버 동작도 없다(이름에 풀린 키릴 호스트가 들던 길).
+        #expect(MessagesBubbleMarkdown.linkActions("[naver.com](https://n%D0%B0ver.com) 와 https://naver.com%2Eevil.com/login").isEmpty)
         for sticker in AingSticker.allCases {
             #expect(MessagesBubbleMarkdown.linkActions(AingStickerText.preview(for: sticker.token)).isEmpty)
         }

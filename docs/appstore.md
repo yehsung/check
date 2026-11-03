@@ -33,7 +33,7 @@
 
 | 탭 | 화면에 있는 것 | 서버에 **쓰는** 것 | 근거 |
 | --- | --- | --- | --- |
-| 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), **우리 팀 전체 명단(1.0.16 — 「우리 팀 전체 보기」 → 쉬는 사람까지 전원 · 근무 중 먼저 · 새 요청 0)**, 연속 근무 칩(1.0.16 — 서버 `achievements_status.streak_days` 가 있을 때만 그린다 · **그 서버 칸은 아직 안 올라갔다**), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료**(1.0.7 — `work_phone_start/stop/touch`, 서버 시계) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
+| 지금 | 내 상태 카드(착용 캐릭터·오늘 타이머·이번 주 막대), 오늘 할 일, 지금 근무 중(우리 팀 경과 / 다른 팀 말 걸기), **우리 팀 전체 명단(1.0.16 — 「우리 팀 전체 보기」 → 쉬는 사람까지 전원 · 근무 중 먼저 · 새 요청 0)**, 연속 근무 칩(1.0.16 — 서버 `achievements_status.streak_days` 가 있을 때만 그린다 · 그 서버 칸은 **11-02 운영에 올라갔다**(`20261106150000`)), 주간 목표 편집 시트 | 할 일(`todo_sync`), 팀 주간 목표(`set_team_weekly_goal`). **근무 시작/종료**(1.0.7 — `work_phone_start/stop/touch`, 서버 시계) | `Now/NowTab.swift:7-9`, `Now/NowStore.swift:15-20`, `Now/NowTodoSupport.swift:10-22` |
 | 메시지 | 대화 목록 → 1:1 대화, 새 대화(앱 사용자 전체에서 사람 찾기), 오른쪽 위 📢 확성기(1.0.7 — 루비로 앱 사용자 모두에게 한마디, 받는 사람에게는 `📢 ` 로 시작하는 1:1 메시지로 간다 · 집중 중인 사람·차단 관계 제외 · 10분에 한 번), 입력칸 왼쪽 이모티콘 버튼 → **아잉이 이모티콘 여섯 종**(1.0.12 — 앱 번들에 든 그림 여섯 장. 본문이 `[아잉:기쁨]` 같은 토큰과 **통째로 같을 때만** 그림으로 그린다) | 메시지 보내기(`send_message`, 200자), 읽음 위치(`mark_messages_read`), 확성기(`megaphone_info` · `send_megaphone`, 198자 · 2단 확인). **이모티콘도 같은 `send_message` 로 글자만 간다**(1.0.12 — 새 RPC·새 칸·새 열거값 0) | `Messages/MessagesTab.swift:5-8`, `Messages/MessagesNewConversationSheet.swift:5`, `Messages/MessagesStore.swift:17-20`, `Messages/MessagesMegaphoneSheet.swift`, `Sources/CheckCore/Megaphone.swift`, `Sources/CheckCore/AingSticker.swift`, `Messages/MessagesComposerView.swift` |
 | 순위 | 팀 리그(이번 주) · AI 토큰(이번 달) · 미니게임(오늘·역대) 세 판 — **미니게임 판의 [오늘]·[역대] 전환은 1.0.16** | 없음(전부 읽기) | `Rankings/RankingsTab.swift:5-6`, `Rankings/RankingsStore.swift:20-21`, `Rankings/RankingsText.swift:21-27` |
 | 게임 | 미니게임 넷(타이밍 바·플래피 아잉·테트리스 혼자, **길건너 아잉이(1.0.15 — 맥 0.3.67 의 게임에 폰 화면·조작을 붙였다. 쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸 · 혼자 하는 게임이고 판돈이 없다)**), 미니게임 순위 머리의 **[오늘]·[역대] 전환(1.0.15 — 칩 두 개다. 역대 순위는 사람마다 가장 높은 점수 하나만 올라간다. 「순위」 탭에는 1.0.16 에 같은 전환이 붙었다)**, **미니게임 일시정지(1.0.16 — 앱을 내리면 판이 얼고 불투명한 화면으로 가린다 · [이어하기] 3-2-1 · [그만두기]. 테트리스·길건너는 여기까지 점수를 남기고 5분이 넘으면 끝난다, 플래피·타이밍 바는 버린다)**, 1:1 오목(로비·신청·대국·채팅), 1:1 체스(1.0.6 · 1.0.16 말 끌어 두기 — 탭 2단도 그대로다), **1:1 테트리스(1.0.11 — 로비·신청·준비·판·결과·순위. 둘이 같은 시드로 각자 판을 돌리고 지운 줄 수만큼 상대 바닥에 방해 줄이 올라간다. 먼저 꼭대기까지 쌓이는 쪽이 진다)**, **아잉 큐브(1.0.16 — 2~4명 숫자 타일. 로비·규칙·전적·순위·공개 방·초대·판·결과. 한 차례 60초. 판 화면만 가로. 맥과 같은 서버)**, 오늘 내 순위, 지금 대결 중, 루비 알약 → 상점 | 미니게임 판 시작·점수 제출(길건너도 **같은 두 RPC** — 1.0.15 에 새 쓰기 0), 오목 신청·수락·착수·기권·채팅·음소거, 체스 신청·수락·착수·기권, 테트리스 신청·수락·판 보고·기권(`tetris_challenge` · `tetris_respond` · `tetris_report` · `tetris_resign`), 아잉 큐브 방·초대·시작·놓기·뽑기·반응·나가기(`rummy_create` · `rummy_join` · `rummy_invite` · `rummy_decline` · `rummy_start` · `rummy_draft` · `rummy_play` · `rummy_draw` · `rummy_react` · `rummy_leave` · `rummy_heartbeat` — 1.0.16). 역대 순위는 **읽기만**(`minigame_alltime_board`) | `Games/GamesTab.swift:5-8`, `Games/GamesStore.swift:20-30`, `Games/GamesMiniGameHub.swift:220, 263`, `Sources/CheckCore/SupabaseWorkService.swift:1255-1290`, `Sources/CheckCore/TetrisWire.swift`, `Sources/CheckMobileKit/Games/GamesTetrisDuelText.swift`; 1.0.15 — `Sources/CheckCore/MiniGameEngine.swift:166`(`phoneCases` 넷), `Sources/CheckCore/CrossyGame.swift`·`CrossyScene.swift`, `Sources/CheckMobileKit/Games/GamesCrossyCanvas.swift`·`GamesCrossyGesture.swift`, `Sources/CheckCore/SupabaseWorkModels.swift:3179`(`MiniGameBoardScope`), `Sources/CheckCore/SupabaseWorkService.swift:844, 869`, `Sources/CheckMobileKit/Games/GamesMiniGameBoardScope.swift`; 1.0.16 — `Sources/CheckCore/RummyStore.swift`, `Sources/CheckMobileKit/Games/GamesRummyText.swift`·`GamesRummyLobby.swift`·`GamesRummyMatch.swift`, `Sources/CheckCore/MiniGamePauseState.swift`, `Games/GamesMiniGamePause.swift`, `Games/GamesChessBoardDrag.swift` |
@@ -88,7 +88,7 @@ ASC 를 다시 읽어 대조하지는 않았다. **제출 때 ASC 값과 대조�
 3. **「■ 지금」** — 우리 팀 전체 명단.
 4. **4,000 자리를 마련하려고 줄인 곳** — 이모티콘 여섯 이름 · 케이크 아잉이 뒷문장 · 맥마다 따로 보여 주는 AI 리밋 · 서버 시계 · 가입 문장.
 
-★ **연속 근무 칩과 새 버전 안내는 적지 않았다.** 둘 다 서버 값(`streak_days` · `latest_build`)이 올라가야 화면에 뜬다.
+★ **연속 근무 칩과 새 버전 안내는 적지 않았다.** 둘 다 서버 값(`streak_days` · `latest_build`)이 올라가야 화면에 뜬다 — 1.0.15 문구를 쓸 때의 이유다. 두 값은 11-02 운영에 올라갔다(`20261106150000` · `latest_build` 28).
 
 > 아잉체크는 작은 팀을 위한 근무 타이머의 아이폰 앱입니다.
 > 맥 메뉴바 앱이나 아이폰에서 누른 근무 시작·종료가 팀 전체에 실시간으로 공유되고, 아이폰에서는 그 현황을 언제 어디서나 보고 팀원과 이야기할 수 있습니다.
@@ -440,7 +440,7 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
   ★ 연령 설문: 판 값이 3·5·10 으로 앞의 1:1 셋과 같고 등수대로 오간다. **§3 의 답과 등급(13+)은 바뀌지 않는다.** 앱 글자 `판돈` 은 체스·오목에서 심사를 지났다. 스토어 글과 심사 메모에는 그 낱말을 쓰지 않는다.
   ② **가로** — Info.plist 가 가로 둘을 선언한다. 판 화면만 돈다(`GamesRummyOrientationRule`).
   ③ **일시정지** — 전이는 코어 `MiniGamePauseState`, 게임별 표는 `GamesMiniGamePausePolicy`.
-  ④ **출시 때 서버 값이 있어야 뜨는 것 둘** — 연속 근무 칩(`streak_days`) · 새 버전 안내(`client_release('ios').latest_build`). 스토어 글에 적지 않았다.
+  ④ **출시 때 서버 값이 있어야 뜨는 것 둘** — 연속 근무 칩(`streak_days`) · 새 버전 안내(`client_release('ios').latest_build`). 스토어 글에 적지 않았다. (뒤 기록: 둘 다 11-02 운영에 올라갔다 — `20261106150000` 적용 · `latest_build` 28.)
 - 1.0.7 부터 근무 시작/종료는 폰 지금 탭에서도 된다 — 심사 메모에 [근무 시작] 위치와 2시간 30분 확인 알림을 적는다.
 
 ---

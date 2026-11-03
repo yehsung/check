@@ -357,6 +357,8 @@ package final class NowStore {
             guard stillCurrent() else { return }
             directory = rows
             hasLoadedDirectory = true
+            // 메시지의 상대 집중 판정은 이 명부가 이긴다 — 서버 거절로 세운 '집중 중' 문구를 상태로 넘길 때다(`MessagesStore.settleFocusNotices`).
+            context.links.messages?.settleFocusNotices()
         } catch {
             guard stillCurrent() else { return }
             if MobileDeviceRPC.isMissingFunction(error) {

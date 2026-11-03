@@ -328,6 +328,63 @@ class ReversiScreenFlowTest {
         rig.close()
     }
 
+    /**
+     * 판 7 검토 S-F3 · U-F1(아이폰 33727592 이식): 로비에서 규칙 시트를 읽는 사이 신청이 수락돼 **새 판이 서면** 시트를 접는다 — 흑이면 곧바로 내 30초가 돈다.
+     * 기준선: 판 중에 책 단추로 연 시트는 다음 수가 와도(같은 판 id) 그대로다.
+     */
+    @Test
+    fun rulesSheetFoldsWhenANewMatchStandsButStaysForTheSameMatch() = runDesktopComposeUiTest(420, 1600) {
+        val rig = lobbyRig()
+        val reversi = requireNotNull(rig.reversi)
+        reversi.applyLobby(ReversiHand.lobby(ReversiHand.lobbyJson()))
+        setContent { BoardTestTheme { ReversiScreen(rig.games, BoardGameMe.unknown, onLeave = {}) } }
+        settle(rig)
+        onNodeWithTag(ReversiScreenTags.rules).performClick()
+        waitForIdle()
+        onNodeWithTag(ReversiScreenTags.rulesSheet).assertExists()
+        // 수락됐다 — 판이 선다(나는 흑 · 내 차례).
+        val opening = ReversiHand.play(listOf(0, 1))
+        reversi.applyState(ReversiHand.state(ReversiHand.stateJson(opening)))
+        settle(rig)
+        onNodeWithTag(ReversiScreenTags.match).assertExists()
+        assertFalse(reversi.isRulesVisible, "새 판이 섰는데 규칙 시트가 판을 덮은 채 남았다")
+        onNodeWithTag(ReversiScreenTags.rulesSheet).assertDoesNotExist()
+        // 기준선: 판 중에 연 규칙은 다음 수가 와도 그대로 읽는다.
+        onNodeWithTag(ReversiScreenTags.rules).performClick()
+        waitForIdle()
+        reversi.applyState(ReversiHand.state(ReversiHand.stateJson(ReversiHand.play(listOf(0, 1, 2, 0)))))
+        settle(rig)
+        assertTrue(reversi.isRulesVisible, "같은 판의 다음 수가 규칙 시트를 접었다")
+        onNodeWithTag(ReversiScreenTags.rulesSheet).assertExists()
+        rig.close()
+    }
+
+    /** 판 7 검토 U-F3: 뒤로가기 '대국 화면을 나갈까요?'를 띄운 채 판이 끝나면(상대 기권) 확인을 접어 결과 카드가 보인다. 기준선: 진행 중이면 확인은 그대로다. */
+    @Test
+    fun leaveConfirmFoldsWhenTheMatchFinishes() = runDesktopComposeUiTest(420, 1600) {
+        val rig = lobbyRig()
+        val reversi = requireNotNull(rig.reversi)
+        val played = ReversiHand.play(listOf(0, 1, 2, 0))
+        reversi.applyState(ReversiHand.state(ReversiHand.stateJson(played)))
+        val state = ReversiScreenState()
+        setContent { BoardTestTheme { ReversiScreen(rig.games, BoardGameMe.unknown, onLeave = {}, state = state) } }
+        settle(rig)
+        assertTrue(state.handleBack(reversi), "사람 판의 뒤로가기는 확인을 띄운다")
+        waitForIdle()
+        onNodeWithTag(ReversiScreenTags.leaveConfirm).assertExists()
+        // 기준선: 다음 수(진행 중)는 확인을 접지 않는다.
+        reversi.applyState(ReversiHand.state(ReversiHand.stateJson(ReversiHand.play(listOf(0, 1, 2, 0, 1)))))
+        settle(rig)
+        assertTrue(state.confirmingLeave)
+        // 상대 기권 — 내가 이겼다.
+        reversi.applyState(ReversiHand.state(ReversiHand.stateJson(ReversiHand.play(listOf(0, 1, 2, 0, 1)), finished = true, result = "black_win", endReason = "resign")))
+        settle(rig)
+        assertFalse(state.confirmingLeave, "끝난 판 위에 나가기 확인이 남았다")
+        onNodeWithTag(ReversiScreenTags.leaveConfirm).assertDoesNotExist()
+        onNodeWithTag(ReversiScreenTags.result).assertExists()
+        rig.close()
+    }
+
     /** 결과 화면: [로비로]가 끝난 판을 접는다. 기권 확인은 덮개를 지난다 — [기권] 한 번으로는 요청 0건, [기권하기] 에서 한 건. */
     @Test
     fun resignAsksThenSendsAndResultFoldsBackToTheLobby() = runDesktopComposeUiTest(420, 1200) {

@@ -238,6 +238,29 @@ class GamesReversiWiringTest {
         assertEquals(ReversiPhase.lobby, x.reversi.phase)
     }
 
+    /**
+     * 판 7 검토 S-F3 · U-F1 의 Android 몫: 규칙 시트(주인은 코어 `isRulesVisible`)는 화면이 **사라지면** 접는다. 다른 탭에 있는 사이 신청이 수락돼 판 시작 문이
+     * 화면을 다시 열면, 새 화면은 그 판 id 를 처음 보는 것이라 '새 판'을 못 알아본다 — 시트가 남아 있으면 판과 30초 시계를 덮는다. 아이폰은 탭을 옮겨도 화면이
+     * 살아 있어 `onChange` 가 잡는다. 기준선: 화면이 떠 있는 채 앱이 뒤로 갔다 오는 것(가림)은 시트를 접지 않는다.
+     */
+    @Test
+    fun rulesSheetFoldsWhenTheScreenLeaves() = runTest {
+        val x = rig()
+        val games = x.games
+        games.appDidBecomeActive()
+        games.reversiScreenDidAppear()
+        runCurrent()
+        x.reversi.isRulesVisible = true
+        games.reversiScreenDidDisappear()
+        assertFalse(x.reversi.isRulesVisible, "화면이 사라졌는데 규칙 시트가 남아 다음에 열리는 판을 덮는다")
+        games.reversiScreenDidAppear()
+        x.reversi.isRulesVisible = true
+        games.appDidEnterBackground()
+        games.appDidBecomeActive()
+        runCurrent()
+        assertTrue(x.reversi.isRulesVisible, "앱이 뒤로 갔다 온 것만으로 읽던 규칙을 접었다")
+    }
+
     /** 앱이 뒤로 가면 **가림**(폴링·AI 시계만 멈춘다 — 1:1 판은 서버 시계로 흐른다). 돌아오면 가림을 풀고 따라잡는다. 화면이 안 보이면 30초 스로틀 로비. */
     @Test
     fun backgroundOccludesAndForegroundCatchesUp() = runTest {

@@ -198,6 +198,18 @@ class GamesReversiPlansTest {
         assertTrue(ReversiPhoneText.lockLegends(listOf(ok)).isEmpty(), "까닭이 없으면 풀이 줄도 없다")
     }
 
+    /** 아이폰 1.0.17 검토 수리 33727592(GamesReversiLobbyTests `rulesSheetClosesOnNewMatch`)의 규칙 값 다섯 — 판 7 검토 S-F3 · U-F1. */
+    @Test
+    fun rulesSheetClosesOnlyWhenANewMatchStands() {
+        // 새 판: 로비(null) → 판 · 판 → 다른 판(로봇 판 중 수락).
+        assertTrue(GamesReversiRulesSheetRule.closesOnMatchChange(null, "m-1"))
+        assertTrue(GamesReversiRulesSheetRule.closesOnMatchChange("ai-1", "m-2"))
+        // 기준선: 같은 판(판 중에 책 단추) · 로비로 돌아감은 접지 않는다.
+        assertFalse(GamesReversiRulesSheetRule.closesOnMatchChange("m-1", "m-1"))
+        assertFalse(GamesReversiRulesSheetRule.closesOnMatchChange("m-1", null))
+        assertFalse(GamesReversiRulesSheetRule.closesOnMatchChange(null, null))
+    }
+
     @Test
     fun aiEntryBlockSaysWhenItOpens() {
         val store = ReversiStore(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined))

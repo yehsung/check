@@ -1,4 +1,5 @@
 // 원본: Sources/CheckMobileKit/Games/GamesReversiScreen.swift:135-459(GamesReversiScreen — 루트 · 시트 넷의 주인 · 로비 스크롤) @ ios-1017-int 879c9952
+//       + 새 판이 서면 규칙 시트를 접는 수리(`GamesReversiRulesSheetRule`) @ ios-1017-int 33727592
 //
 // 폰 아잉 뒤집기 **화면 하나**(판 7 — 대표 답 #d_DdwzmxPClGqk "다 넣기 (루비 걸기 포함)") — 로비 · 판 · AI 연습 · 결과 · 관전 · 순위를 코어 `phase`·`spectating`
 // 으로 갈아 끼운다(체스와 같은 구조). 판정은 전부 core/stores(`GamesReversi*` · `ReversiPhoneText`)이고 이 파일은 배치만 한다.
@@ -7,7 +8,9 @@
 //   `stopWatching`·`windowDidHide`·`windowDidClose` 의 순서와 끝난 판 접기를 쥔다(배선 갈래). 순위·관전은 **자식 목적지가 아니라 이 화면 안의 절**이다 —
 //   목적지를 밀면 이 화면이 컴포지션에서 빠져 `windowDidHide()` 로 폴링이 죽는다. 시트(돌 색 · 판돈 · 규칙 · 로봇 판 확인 · 기권 확인)도 전부 **화면 안 덮개**다.
 // ── 시트의 주인은 이 루트 하나다 ── 행·카드가 시트를 직접 띄우면 판이 서는 순간(로비가 판 화면으로 바뀌며) 그 행이 사라져 시트가 고아가 된다. 판 id 가 바뀌면
-//   판돈·돌 색·로봇 확인·기권 확인을 접는다(규칙 시트는 판 중에도 읽을 수 있어 둔다).
+//   판돈·돌 색·로봇 확인·기권 확인을 접고, **새 판이 서면 규칙 시트도 접는다**(`GamesReversiRulesSheetRule` — 판 중에 책 단추로 연 규칙은 그대로 읽는다).
+//   화면이 사라질 때도 규칙 시트를 접는다(`GamesStore.reversiScreenDidDisappear` — 다시 열린 화면은 그 판 id 를 처음 보는 것이라 '새 판'을 못 알아본다).
+//   판이 끝나면 기권 확인과 Android 몫 나가기 확인을 접는다(끝난 판 위에 남으면 결과 카드를 못 본 채 나가게 된다).
 // ── 사람 절(받은·보낸 신청 · 상대 · 관전 · 순위)은 이 기기·서버가 아잉 뒤집기를 할 수 있을 때만 선다 ── 업데이트가 필요하거나 서버가 준비 중이면 안내 한 줄 +
 //   로봇 연습만 선다(로봇 연습은 서버를 안 탄다). 서버 `reversi_android_min_build` 가 닫혀 있는 동안에도 화면은 깨지지 않는다 — 상대 줄은 `capable=false` 로
 //   [업데이트 필요] 가 서고, 신청 거절(`target_outdated`)은 코어 문구로 선다.
@@ -59,6 +62,7 @@ import com.yehsung.aingcheck.core.stores.games.GamesStore
 import com.yehsung.aingcheck.core.stores.reversi.GamesReversiInviteBanner
 import com.yehsung.aingcheck.core.stores.reversi.GamesReversiLobbyPlan
 import com.yehsung.aingcheck.core.stores.reversi.GamesReversiRespond
+import com.yehsung.aingcheck.core.stores.reversi.GamesReversiRulesSheetRule
 import com.yehsung.aingcheck.core.stores.reversi.GamesReversiUnavailable
 import com.yehsung.aingcheck.core.stores.reversi.ReversiInvite
 import com.yehsung.aingcheck.core.stores.reversi.ReversiMatchOutcome
@@ -157,9 +161,16 @@ class ReversiScreenState {
     private var observedMatch = false
     private var lastMatchID: String? = null
 
-    /** 화면이 본 판 id 를 적는다 — 처음 본 값은 변화가 아니다(Swift `onChange(of:)` 는 나타날 때 안 불린다). 그다음 바뀌면 [matchChanged]. */
-    fun observeMatch(id: String?) {
-        if (observedMatch && id != lastMatchID) matchChanged()
+    /**
+     * 화면이 본 판 id 를 적는다 — 처음 본 값은 변화가 아니다(Swift `onChange(of:)` 는 나타날 때 안 불린다). 그다음 바뀌면 [matchChanged], 그 바뀜이 **새 판**이면
+     * [closeRules] 도 부른다(규칙 시트의 주인은 코어 `isRulesVisible` 이라 이 화면 상태 밖이다 — 아이폰 33727592).
+     */
+    fun observeMatch(id: String?, closeRules: () -> Unit = {}) {
+        if (observedMatch && id != lastMatchID) {
+            val old = lastMatchID
+            matchChanged()
+            if (GamesReversiRulesSheetRule.closesOnMatchChange(old, id)) closeRules()
+        }
         observedMatch = true
         lastMatchID = id
     }
@@ -170,6 +181,12 @@ class ReversiScreenState {
         stakeTarget = null
         acceptNeedsRobotConfirm = null
         confirmsResign = false
+    }
+
+    /** 판이 끝났다(상대 기권 · 자동 착수 3번 · 판이 찼다) — 끝난 판에 '기권하기'·'나가기' 확인이 남지 않게 접는다(나가기 확인이 남으면 결과 카드를 못 본 채 떠난다). */
+    fun matchFinished() {
+        confirmsResign = false
+        confirmingLeave = false
     }
 }
 
@@ -251,11 +268,12 @@ fun ReversiScreen(
     val hidesTabBar = ReversiTabBarPolicy.hidesTabBar(reversi.phase, reversi.match != null)
     LaunchedEffect(hidesTabBar) { onTabBarHidden(hidesTabBar) }
     LaunchedEffect(reversi.match?.id) {
-        state.observeMatch(reversi.match?.id)
+        // 새 판이 섰다 — 시계가 돈다. 로비에서 열어 둔 규칙 시트가 판을 가리지 않게 접는다(아이폰 33727592 · 판 7 검토 S-F3 · U-F1).
+        state.observeMatch(reversi.match?.id) { reversi.isRulesVisible = false }
         state.shownAt = reversi.clock()
     }
-    // 확인을 띄운 채 판이 끝났다(상대 기권 · 자동 착수 3번) — 끝난 판에 '기권하기'가 남지 않게 접는다.
-    LaunchedEffect(reversi.match?.isFinished) { if (reversi.match?.isFinished == true) state.confirmsResign = false }
+    // 확인을 띄운 채 판이 끝났다(상대 기권 · 자동 착수 3번) — 끝난 판에 '기권하기'·'나가기'가 남지 않게 접는다(판 7 검토 U-F3).
+    LaunchedEffect(reversi.match?.isFinished) { if (reversi.match?.isFinished == true) state.matchFinished() }
     // 햅틱(Swift `.sensoryFeedback(won ? .success : .warning, trigger: match.isFinished)` · 판 `.impact(.medium, trigger: moveCount)`).
     val haptics = LocalHapticFeedback.current
     val feedback = remember { BoardMatchFeedback() }

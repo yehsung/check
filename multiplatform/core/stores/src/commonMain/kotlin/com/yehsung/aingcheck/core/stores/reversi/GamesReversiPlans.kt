@@ -111,6 +111,18 @@ object GamesReversiRespond {
 }
 
 /**
+ * 판 id 가 바뀔 때 규칙 시트를 접는가(아이폰 1.0.17 검토 수리 33727592 `GamesReversiRulesSheetRule` 이식 — 판 7 검토 S-F3 · U-F1). **새 판이 섰을 때만** 접는다 —
+ * 로비에서 규칙을 읽으며 수락을 기다리던 사람(흑은 서버가 무작위로 고른다)이 시트 아래서 30초를 흘려 자동 착수 · 3회 패(판돈)를 맞지 않게. 판 중에 책 단추로
+ * 연 시트는 판 id 가 그대로라 접지 않고, 판이 끝나 로비로 돌아갈 때(새 id 가 null)도 접지 않는다.
+ */
+object GamesReversiRulesSheetRule {
+    fun closesOnMatchChange(old: String?, new: String?): Boolean {
+        if (new == null) return false
+        return new != old
+    }
+}
+
+/**
  * 판 화면(로봇 연습 · 끝난 판) 위에 세울 **받은 신청 띠**의 판정. 판·결과 화면이 로비를 통째로 덮어 60초 신청이 만료되는 길을 막는다.
  * ★ **두는 중인 1:1 판 위에는 세우지 않는다** — 서버가 수락을 `busy` 로 거절하고(한 사람 한 판), 띠가 30초 시계·판을 밀어 내린다.
  */

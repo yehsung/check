@@ -846,11 +846,15 @@ class GamesStore(val context: GamesContext) {
      * 폰에서 그 통지는 "화면을 떠났다"다. `leaveWatch()` 가 **아니다**(로비·순위를 다시 읽는 네트워크 호출이다).
      * ★★ **`windowDidClose()` 가 마지막이다** — 빼면 끝난 내 판(결과 카드)이 남아 다시 누를 때 로비가 아니라 결과가 다시 선다. **진행 중인 판은 남는다**
      *   (코어 `foldFinishedMatch` 가 `isFinished` 를 먼저 본다 — 1:1 은 서버 시계로 계속 흐르고, AI 연습은 숨김이 사람 시계를 멈춘다). 요청은 한 건도 안 나간다.
+     * ★ **규칙 시트도 접는다**(판 7 검토 S-F3 · U-F1 의 Android 몫). 시트의 주인은 코어 `isRulesVisible` 이라 화면이 빠져도 남는다 — 다른 탭에 있는 사이 신청이
+     *   수락돼 판 시작 문이 화면을 다시 열면, 새 화면은 그 판 id 를 처음 보는 것이라 '새 판'을 못 알아보고 시트가 판과 30초 시계를 덮는다. 다른 시트(돌 색 · 판돈 ·
+     *   확인)는 화면 상태라 화면과 함께 사라진다 — 같은 수명으로 맞춘다. 아이폰은 탭을 옮겨도 화면이 살아 있어 `onChange` 가 잡는다.
      */
     fun reversiScreenDidDisappear() {
         if (!isReversiScreenVisible) return
         isReversiScreenVisible = false
         val reversi = context.reversi ?: return
+        if (reversi.isRulesVisible) reversi.isRulesVisible = false
         reversi.reversiStopWatching()
         reversi.windowDidHide()
         reversi.windowDidClose()

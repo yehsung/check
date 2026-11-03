@@ -4,9 +4,11 @@
 // 손으로 짠 서버 모양)이고 스토어 일은 가상 시간에서 돈다(settle). 시험마다 결과가 갈리는 기준선(누르기 전 0건 · 깃발 끔 · 고르기 전 비활성)을 같이 잰다.
 package com.yehsung.aingcheck.ui.games.reversi
 
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -17,11 +19,13 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.reversi.ReversiPoint
 import com.yehsung.aingcheck.core.rules.reversi.ReversiRules
 import com.yehsung.aingcheck.core.stores.games.GamesDestination
@@ -412,6 +416,40 @@ class ReversiScreenFlowTest {
         assertNull(reversi.match)
         assertEquals(ReversiPhase.lobby, reversi.phase)
         onNodeWithTag(ReversiScreenTags.lobby).assertExists()
+        rig.close()
+    }
+
+    // MARK: 큰 화면 가로 · 화면 나눔(판 7 검토 U-F2)
+
+    /**
+     * 큰 화면 가로(1280×640)에서 판이 보이는 높이 안에 들고, 내 차례 줄('내 차례예요' — 그 아래가 3회 패 줄 · 시계 규칙)이 스크롤 없이 화면 안에 선다.
+     * 열 폭 그대로면 판이 1248 이 되어 차례 줄이 화면 밖으로 밀린다. 기준선: 폰 세로(390×1000)는 판이 열 폭 그대로다(아이폰과 같은 값).
+     */
+    @Test
+    fun landscapeBoardFitsTheVisibleHeightAndKeepsTheTurnLineOnScreen() = runDesktopComposeUiTest(1280, 640) {
+        val rig = lobbyRig()
+        val reversi = requireNotNull(rig.reversi)
+        reversi.applyState(ReversiHand.state(ReversiHand.stateJson(ReversiHand.play(listOf(0, 1)))))
+        var portrait by mutableStateOf(false)
+        setContent {
+            BoardTestTheme {
+                ReversiScreen(rig.games, BoardGameMe.unknown, onLeave = {}, modifier = if (portrait) Modifier.size(390.dp, 1000.dp) else Modifier)
+            }
+        }
+        settle(rig)
+        // 잘리지 않은 자리(positionInRoot + size)로 잰다 — boundsInRoot 는 스크롤 뷰포트에 잘려 화면 밖 노드도 안에 있는 것처럼 보인다.
+        val rootHeight = onRoot().fetchSemanticsNode().size.height
+        val board = onNodeWithTag(ReversiScreenTags.board).fetchSemanticsNode()
+        val turn = onNodeWithTag(ReversiScreenTags.turnLine, useUnmergedTree = true).fetchSemanticsNode()
+        val bar = onNodeWithTag(ReversiScreenTags.resign).fetchSemanticsNode()
+        assertTrue(board.size.height <= rootHeight * 0.52f + 1f, "판(${board.size.height})이 보이는 높이($rootHeight)의 절반을 넘는다")
+        val turnBottom = turn.positionInRoot.y + turn.size.height
+        assertTrue(turnBottom <= bar.positionInRoot.y, "내 차례 줄(아래 끝 $turnBottom)이 아래 막대(${bar.positionInRoot.y}) 밑으로 밀렸다")
+        // 기준선: 폰 세로는 열 폭 그대로(390 − 여백 둘 → 8 의 배수 352 — 아이폰과 같은 값).
+        portrait = true
+        settle(rig)
+        val portraitBoard = onNodeWithTag(ReversiScreenTags.board).fetchSemanticsNode()
+        assertEquals(352f, portraitBoard.size.width / density.density, 0.5f)
         rig.close()
     }
 

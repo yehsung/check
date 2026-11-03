@@ -568,19 +568,29 @@ data class GamesReversiBoardGeometry(val side: Double) {
 /**
  * 판 한 변. 기본 글자에서는 **열 폭 그대로**(화면 폭 − 좌우 여백)다 — 판이 열보다 넓으면 같은 열의 카드가 전부 오른쪽으로 넘친다. 글자가 커지면 보이는
  * 높이에 맞춰 줄인다(대국에서 가장 중요한 상태가 판보다 먼저다). 칸이 정수가 되게 8 의 배수로 내린다.
+ * ★ Android 몫(판 7 검토 U-F2 — 아이폰은 세로 고정이라 없다): 판 한 장이 **보이는 높이에도 안 들어가면**(큰 화면 가로 — sw≥600 은 방향을 풀어 두고
+ *   Android 16 은 방향 요청을 무시한다 · 화면 나눔) 기본 글자에서도 보이는 높이의 52%(오목 `compactHeight` 와 같은 몫)로 줄인다. 열 폭 그대로면 판이
+ *   1248dp 가 되어 내 카드의 30초 링 · '내 차례예요' · 3회 패 줄이 스크롤 아래로 밀린다. 폰 세로는 열이 보이는 높이보다 늘 좁아 값이 그대로다(아이폰과 같다).
  */
 object GamesReversiBoardLayout {
     /** 판이 이보다 작아지지 않는다(열이 더 좁으면 열 폭). */
     const val minimumSide: Double = 200.0
+
+    /** 판 한 장이 보이는 높이에 안 들어갈 때(가로 · 화면 나눔) 판이 차지할 보이는 높이의 몫. */
+    const val shortHeightFraction: Double = 0.52
 
     fun side(visibleWidth: Double, visibleHeight: Double, sideMargin: Double, isLargeText: Boolean, isAccessibilitySize: Boolean): Double {
         val column = maxOf(0.0, visibleWidth - sideMargin * 2)
         // 첫 배치에서 폭이 0 인 한 틱 — 0 으로 그리면 판이 사라졌다 돌아온다. 그 틱은 바닥값으로 선다.
         if (column <= 0) return minimumSide
         var side = column
-        if (isLargeText && visibleHeight > 0) {
-            val fraction = if (isAccessibilitySize) 0.40 else 0.52
-            side = minOf(side, kotlin.math.round(visibleHeight * fraction))
+        if (visibleHeight > 0) {
+            val fraction = when {
+                isLargeText -> if (isAccessibilitySize) 0.40 else 0.52
+                visibleHeight < column -> shortHeightFraction
+                else -> null
+            }
+            if (fraction != null) side = minOf(side, kotlin.math.round(visibleHeight * fraction))
         }
         side = maxOf(minOf(minimumSide, column), side)
         return maxOf(8.0, kotlin.math.floor(side / 8) * 8)

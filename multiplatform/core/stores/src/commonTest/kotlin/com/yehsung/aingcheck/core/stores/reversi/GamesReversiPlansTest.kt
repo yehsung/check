@@ -198,6 +198,30 @@ class GamesReversiPlansTest {
         assertTrue(ReversiPhoneText.lockLegends(listOf(ok)).isEmpty(), "까닭이 없으면 풀이 줄도 없다")
     }
 
+    /**
+     * 판 7 검토 U-F2(Android 몫): 판 한 장이 **보이는 높이에도 안 들어가면**(큰 화면 가로 · 화면 나눔) 기본 글자에서도 보이는 높이의 52% 로 줄인다 — 열 폭
+     * 그대로면 내 카드의 30초 링 · '내 차례예요' · 3회 패 줄이 스크롤 아래로 밀린다. 폰 세로(360 · 390 · 411 폭)는 아이폰과 같은 값 그대로다(기준선).
+     */
+    @Test
+    fun boardSideShrinksWhenTheBoardIsTallerThanTheVisibleHeight() {
+        // 큰 화면 가로(태블릿 · 폴더블) · 화면 나눔 — 판이 보이는 높이 안에 든다.
+        assertEquals(328.0, GamesReversiBoardLayout.side(1280.0, 640.0, 16.0, false, false), "1280×640 가로에서 판이 보이는 높이를 넘는다")
+        assertEquals(264.0, GamesReversiBoardLayout.side(960.0, 520.0, 16.0, false, false))
+        assertEquals(312.0, GamesReversiBoardLayout.side(840.0, 600.0, 16.0, false, false))
+        assertEquals(GamesReversiBoardLayout.minimumSide, GamesReversiBoardLayout.side(411.0, 290.0, 16.0, false, false), "폰 위아래 나눔은 바닥값")
+        for ((w, h) in listOf(1280.0 to 640.0, 960.0 to 520.0, 840.0 to 600.0)) {
+            assertTrue(GamesReversiBoardLayout.side(w, h, 16.0, false, false) <= h * 0.52, "$w×$h")
+        }
+        // 기준선: 폰 세로 기본 글자는 열 폭 그대로(작은 폰의 짧은 높이 447 까지) — 아이폰과 픽셀이 같다.
+        assertEquals(328.0, GamesReversiBoardLayout.side(360.0, 447.0, 16.0, false, false))
+        assertEquals(352.0, GamesReversiBoardLayout.side(390.0, 640.0, 16.0, false, false))
+        assertEquals(376.0, GamesReversiBoardLayout.side(411.0, 600.0, 16.0, false, false))
+        // 기준선: 큰 화면 세로(태블릿)도 열 폭 그대로다 — 판이 보이는 높이 안에 든다.
+        assertEquals(768.0, GamesReversiBoardLayout.side(800.0, 1100.0, 16.0, false, false))
+        // 큰 글자는 지금 규칙 그대로(접근성 크기 40% 가 더 작으면 그쪽).
+        assertEquals(256.0, GamesReversiBoardLayout.side(1280.0, 640.0, 16.0, true, true))
+    }
+
     /** 아이폰 1.0.17 검토 수리 33727592(GamesReversiLobbyTests `rulesSheetClosesOnNewMatch`)의 규칙 값 다섯 — 판 7 검토 S-F3 · U-F1. */
     @Test
     fun rulesSheetClosesOnlyWhenANewMatchStands() {

@@ -248,10 +248,15 @@ extension RummyStore {
         // 같은 차례(남의 기권으로 seq 만 올랐다)에 알림을 또 울리지 않게 차례 정체성으로 가른다.
         let turnKey = RummyEditorKey(state).text
         let windowShown = isWindowVisible && !isWindowOccluded
+        // 창 · 주의 · 말풍선은 **이 기기가 손댄 판에서만**(머리말 ⑮ · 2026-11-03 "맥미니에도 동시에 열리는데 안 꺼져요").
+        // 초인종은 같은 계정의 모든 기기로 가므로, 그냥 두면 맥북에서 앉은 방의 판이 놀던 맥미니에서도 창을 연다.
+        // 손대지 않은 기기는 판 상태만 들고 있다 — 사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 내면 engaged 가 된다.
+        let engaged = isEngaged(id)
         if !startAnnouncedIDs.contains(id) {
             // 판으로 **처음** 넘어갔다 — 창을 띄우고 주의를 끈다(테트리스 noteMatchStarted 와 같은 길).
             startAnnouncedIDs.insert(id)
             if myTurn { turnAnnouncedKeys.insert(turnKey) }
+            guard engaged else { return }
             presentWindow?()
             guard !windowShown else { return }
             requestAttention?()
@@ -260,7 +265,7 @@ extension RummyStore {
         }
         guard myTurn, !turnAnnouncedKeys.contains(turnKey) else { return }
         turnAnnouncedKeys.insert(turnKey)
-        guard !windowShown else { return }
+        guard !windowShown, engaged else { return }
         requestAttention?()
         onAttention?(RummyNoticeText.myTurnAttention)
     }

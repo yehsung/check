@@ -850,6 +850,11 @@ package final class GomokuStore {
     @ObservationIgnored private var pendingStateID: String?
     /// 마지막으로 "내 차례가 왔다"를 본 (판 id#기록 수). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
     @ObservationIgnored private var attentionKey: String?
+    /// **이 기기가 연 판** 장부(한 계정 여러 기기 — `GameDeviceLedger` 머리말). 창 띄우기 · 주의 · 말풍선은 이 장부에 오른
+    /// 판에서만 한다(`noteMatchProgress`). 기록을 둘 곳(`deviceLedger.defaults`)은 **앱 배선이 넣는다**(맥 `WorkTimerStore` ·
+    /// 폰 `MobileAppModel`) — 빠지면 판 중에 앱을 다시 켠 기기가 자기 판을 못 알아봐 창이 안 뜬다. 로그아웃은 비우지 않는다(사용자별 키).
+    /// 기한 6시간: 오목 한 판은 30초 × 225수여도 2시간이 안 된다 — 판 중에 앱을 다시 켜도 넉넉히 남고, 끝을 못 본 기록은 쌓이지 않는다.
+    @ObservationIgnored package var deviceLedger = GameDeviceLedger(game: "gomoku", ttlSeconds: 6 * 3_600)
     /// 결과 화면을 한 번이라도 세운 끝난 판(받은함 last_finished 로 같은 결과를 다시 세우지 않는다).
     @ObservationIgnored package private(set) var shownResultIDs: Set<String> = []
     /// 보낸 신청을 이 기기에서 새로 세울 때마다 오른다. 그보다 **먼저** 나간 받은함 응답이 방금 보낸 신청을 지우지 않게 한다.
@@ -1403,6 +1408,8 @@ package final class GomokuStore {
             if outgoing?.id == id { outgoing = nil }
             if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
         } else {
+            // 끝난 판의 기록은 여기서 걷는다(남겨 둘 까닭이 없다 — 끝을 못 본 기록은 장부의 기한이 걷는다).
+            dropOwnership(id)
             shownResultIDs.insert(id)
             // 끝인사 안전망의 끝을 **판마다 한 번만** 적는다(같은 끝난 판을 다시 읽을 때마다 늘리면 영영 안 닫힌다).
             // 서버가 끝난 시각을 말해 주면 거기서 세고(오래전에 끝난 판을 뒤늦게 세워도 헛돌지 않는다), 없으면 지금부터 센다.
@@ -1464,6 +1471,8 @@ package final class GomokuStore {
                 let expiresAt = deviceDate(serverMs: response.inviteExpiresMs)
                     ?? clock().addingTimeInterval(inviteTTLSeconds)
                 outgoingRevision &+= 1
+                // 이 기기가 신청했다 — 수락 초인종이 같은 계정의 모든 기기에 가도 창은 여기서만 뜬다(`noteMatchProgress`).
+                noteOwnsMatch(id)
                 outgoing = GomokuInvite(id: id, peer: peer, stake: stake, expiresAt: expiresAt)
                 scheduleInviteExpiry()
             case .alreadyPending, .busy:
@@ -1538,6 +1547,8 @@ package final class GomokuStore {
                 // 다음 받은함에서 '상대가 신청을 받지 않았어요'가 뜨고, 남은 보낸 신청 카드는 60초 뒤 '응답하지 않았어요'를 띄운다.
                 if outgoing != nil { outgoing = nil }
                 if !incoming.isEmpty { incoming = [] }
+                // 이 기기가 수락했다 — 상태를 옮기기 **전에** 적는다(그 applyState 가 창을 띄울지 이 장부로 정한다).
+                noteOwnsMatch(id)
                 if let state = response.state {
                     applyState(state, chatGeneration: requestChatGeneration)
                 } else {
@@ -1578,6 +1589,8 @@ package final class GomokuStore {
         guard host?.session != nil else { refuseTap(.signedOut, at: point); return }
         let id = current.id
         let expected = current.moveCount
+        // 이 기기에서 수를 뒀다 — 사람이 이 기기로 옮겨 와 두는 중이다. 그 뒤로 내 차례 말풍선이 여기서도 뜬다.
+        noteOwnsMatch(id)
         isBusy = true
         setNotice(nil)
         let generation = resetGeneration
@@ -2282,10 +2295,14 @@ package final class GomokuStore {
     }
 
     /// 판 진행을 사람에게 알린다(applyState 가 진행 중 판을 옮긴 직후).
+    ///  · **이 기기가 연 판에서만**(2026-11-03 — `GameDeviceLedger` 머리말). 초인종은 같은 계정의 모든 기기로 가므로, 그냥 두면
+    ///    맥북에서 신청한 판이 놀던 맥미니에서도 창을 열고 그 창은 사람이 가서 닫기 전까지 남는다. 연 기기가 아니면 판 상태만
+    ///    들고 있다 — 사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`place`) 그 기기도 연 기기가 된다.
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가 수락한
     ///    순간을 모르면 흑 30초를 흘려 판돈을 잃는다. 내가 수락해 연 판도 같은 문을 지난다(경로마다 따로 두지 않는다).
     ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문(onAttention)을 연다. 같은 (판 id, 기록 수)에는 한 번뿐이다.
     private func noteMatchProgress(previous: GomokuMatchState?, next: GomokuMatchState, windowWasVisible: Bool) {
+        guard ownsMatch(next.id) else { return }
         let started = previous == nil || previous?.isFinished == true || previous?.id != next.id
         if started {
             presentWindow?()
@@ -2300,6 +2317,23 @@ package final class GomokuStore {
         onAttention?(GomokuAttention(
             kind: started ? .matchStarted : .myTurn, matchID: next.id,
             opponentName: next.opponent.displayName, moveCount: next.moveCount))
+    }
+
+    // MARK: - 한 계정 여러 기기(이 기기가 연 판 — `GameDeviceLedger`)
+
+    /// 이 기기가 이 판을 열었는가(신청 ok · 수락 ok · 수를 뒀다). 로그인 전이면 언제나 아니다.
+    package func ownsMatch(_ matchID: String) -> Bool {
+        deviceLedger.owns(matchID, userID: host?.session?.userID, now: clock())
+    }
+
+    /// 이 기기가 이 판을 열었다. 이미 있으면 그대로 둔다.
+    func noteOwnsMatch(_ matchID: String) {
+        deviceLedger.note(matchID, userID: host?.session?.userID, now: clock())
+    }
+
+    /// 이 판의 기록을 지운다(끝났다).
+    func dropOwnership(_ matchID: String) {
+        deviceLedger.drop(matchID, userID: host?.session?.userID, now: clock())
     }
 
     /// server_now_ms 로 기기 시계 어긋남을 잰다. 처음 잰 값은 그대로 받고, 그 뒤로는 문턱(250ms) 넘게 벗어날 때만 간다 —

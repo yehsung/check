@@ -95,12 +95,16 @@ public final class MobileAppModel {
         // 순위를 1분마다 당기지 않게 맥 배선(`CheckApp.wireGomoku` · CheckApp.swift:248)만 켰다. 폰이 그 화면을 갖는
         // 지금은 폰도 자기 배선에서 켠다(같은 스토어를 쓰는 두 앱의 유일한 차이라 배선에만 있다).
         gomoku.spectatorFeaturesEnabled = true
+        // '이 기기가 연 판' 장부를 둘 곳(2026-11-03 — `GameDeviceLedger`: 판 화면은 판을 연 기기에서만 저절로 열린다).
+        // 빠지면 장부가 프로세스 안에만 살아, 판 중에 앱을 다시 켠 폰이 자기 판의 화면을 안 연다. 체스도 아래 같은 줄이 있다.
+        gomoku.deviceLedger.defaults = env.storage.defaults
         realtime.gomoku = gomoku
         // 1:1 체스(0.3.44 서버·맥 · 폰은 이 세션부터). 호스트는 **오목과 같은 하나**다 —
         // `ChessStoreHost` 는 `GomokuStoreHost` 의 별명이고(ChessStore.swift:43), 루비 미러를 한 칸으로 두면
         // 체스 정산이 오목·상점과 같은 잔액을 적는다(두 벌이면 탭마다 다른 잔액이 보인다).
         let chess = ChessStore(host: host)
         chess.clock = { clock.now() }
+        chess.deviceLedger.defaults = env.storage.defaults
         // 순위·관전(체스)의 **주 스위치**. 기본이 꺼짐(`ChessStore.spectatorFeaturesEnabled`, ChessStore.swift:745)이라
         // 이 한 줄이 없으면 `chess_ranking`·`chess_watch` 가 **한 번도 안 나간다** — `loadRanking`·`startWatching`·
         // `refreshWatch` 와 `pollTick`·`windowDidShow` 의 두 분기가 전부 `canPollSpectatorFeatures` 를 먼저 본다.

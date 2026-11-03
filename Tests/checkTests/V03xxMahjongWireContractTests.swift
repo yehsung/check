@@ -4,7 +4,7 @@ import Foundation
 import Testing
 
 // 아잉 마작 와이어 디코딩 단위 시험(갈래 C1 — SPEC §3.4~3.6 · §4.4). 아래 첫 묶음은 인라인 JSON 으로 '이름·모양·접기'를,
-// 둘째 묶음(C2 → T)은 S2 하네스 실응답 62(`Fixtures/mahjong-rpc`, md5 고정)로 원문 왕복·봉투 키(판 파일 사후 단언)·숨은 정보를 잰다. 디코더·인코더는 `SupabaseWorkService` 와 같은 설정(snake_case ↔ camelCase).
+// 둘째 묶음(C2 → T)은 S2 하네스 실응답 63(`Fixtures/mahjong-rpc`, md5 고정 — F 가 빠진 사람 state 하나를 더함)로 원문 왕복·봉투 키(판 파일 사후 단언)·숨은 정보를 잰다. 디코더·인코더는 `SupabaseWorkService` 와 같은 설정(snake_case ↔ camelCase).
 
 @Suite("아잉 마작 와이어 — RPC 이름 · status 어휘 · 요청 본문 · 응답 디코딩 · 모르는 값 접기")
 struct V03xxMahjongWireContractTests {
@@ -286,7 +286,7 @@ struct V03xxMahjongWireContractTests {
     }
 }
 
-// MARK: - 픽스처 계약(C2 → T) — `Fixtures/mahjong-rpc` = S2 하네스(55492) **실응답 원문 62 + `_manifest.json`**(바이트 그대로, md5 대조)
+// MARK: - 픽스처 계약(C2 → T) — `Fixtures/mahjong-rpc` = S2 하네스(55492) **실응답 원문 63 + `_manifest.json`**(바이트 그대로, md5 대조)
 
 private enum MJWire {
     static let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -294,14 +294,6 @@ private enum MJWire {
 
     /// 서버 매니페스트의 source 줄(S2 `tests/split_fixtures.py` 가 쓴다).
     static let serverSource = "MJ/server/table/tests (harness 55492)"
-
-    /// C2 손 픽스처 중 실응답에 같은 이름이 없던 14장 — 지우기는 오케스트레이터 몫(T 보고). 시험은 읽지 않는다.
-    static let retiredHandFixtures: Set<String> = [
-        "mahjong_call__ok_pass", "mahjong_leave__ok_away", "mahjong_leave__ok_room", "mahjong_lobby__invited",
-        "mahjong_state__call_none", "mahjong_state__call_prompt", "mahjong_state__hand_end", "mahjong_state__my_turn_hand2",
-        "mahjong_state__next_hand", "mahjong_state__room_four", "mahjong_state__room_four_b", "mahjong_state__room_three",
-        "mahjong_state__their_turn", "mahjong_state__their_turn_c",
-    ]
 
     /// 봉투 키(판 파일 `pg_temp.mahjong_probe_keys(…, array[…], '<라벨>')` 와 같은 글자 — 판 파일이 있으면 그 줄과 대조한다).
     static let keys: [String: Set<String>] = [
@@ -482,17 +474,17 @@ private struct MJStrictEvents: Decodable {
 
 @Suite("아잉 마작 와이어 — 실응답 픽스처 매니페스트 · 원문 왕복 · 모르는 값 접기 · 숨은 정보 · 마이그레이션 대조(C2 → T)")
 struct V03xxMahjongFixtureContractTests {
-    @Test("매니페스트 — 실응답 62 · md5 = 매니페스트 · source = S2 하네스 · 모르는 파일 없음 · 응답 타입마다 디코드")
+    @Test("매니페스트 — 실응답 63 · md5 = 매니페스트 · source = S2 하네스 · 모르는 파일 없음 · 응답 타입마다 디코드")
     func manifestListsEveryFixture() throws {
         // 없으면: 픽스처를 손으로 고치거나(md5) 서버 원문이 아닌 파일이 섞여도(source·목록) 와이어 시험이 그 위에서 초록이다.
         let manifest = try MJWire.manifest()
         let files = try #require(manifest["files"] as? [String: String])
         #expect(manifest["source"] as? String == MJWire.serverSource, "실응답 원문이어야 한다")
         let names = try MJWire.fixtureNames()
-        #expect(names.count == 62)
+        #expect(names.count == 63)
         let onDisk = try FileManager.default.contentsOfDirectory(atPath: MJWire.dir.path)
             .filter { $0.hasSuffix(".json") && $0 != "_manifest.json" }.map { String($0.dropLast(5)) }
-        #expect(Set(onDisk).subtracting(names).isSubset(of: MJWire.retiredHandFixtures), "매니페스트에 없는 픽스처")
+        #expect(Set(onDisk).subtracting(names).isEmpty, "매니페스트에 없는 픽스처(옛 손 픽스처 14장은 F 가 git rm)")
         for name in names {
             let data = try Data(contentsOf: MJWire.dir.appendingPathComponent("\(name).json"))
             #expect(MJWire.md5(data) == files["\(name).json"], "\(name): 원문과 바이트가 다르다")
@@ -703,7 +695,7 @@ struct V03xxMahjongFixtureContractTests {
     @Test("장면 픽스처(`Fixtures/mahjong-scenes`, 스토어 장면 시험용) 모양 ⊆ 실응답 — 서버가 안 보내는 칸·타입·status 를 짓지 않는다")
     func sceneFixturesStayInsideTheRealShape() throws {
         // 없으면: 장면 시험이 서버가 보내지 않는 칸(또는 다른 타입)에 기대 초록이어도 아무도 모른다 — 실서버에선 그 칸이 없다.
-        // 장면 픽스처는 한 판 이야기(같은 id·시각·seq)를 위해 C2 가 지은 값이고, 모양은 여기서 실응답 62 에 묶는다.
+        // 장면 픽스처는 한 판 이야기(같은 id·시각·seq)를 위해 C2 가 지은 값이고, 모양은 여기서 실응답 63 에 묶는다.
         func paths(_ value: Any, _ path: String, into out: inout [String: Set<String>]) {
             if let dict = value as? [String: Any] {
                 for (key, inner) in dict {

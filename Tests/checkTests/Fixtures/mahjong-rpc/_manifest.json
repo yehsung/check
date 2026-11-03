@@ -55,6 +55,7 @@
     "mahjong_state__away_mine.json": "af4fc561c5fac48ba40868b36343e92a",
     "mahjong_state__claim_no_option.json": "5c5ee0758defe67d242aa594ac2a12d5",
     "mahjong_state__claim_option.json": "7d905811060e1222e3a9a8cbd5da3444",
+    "mahjong_state__dropped_self.json": "e7c9c4bb5aa4d0700a636ab521edfaf0",
     "mahjong_state__finished.json": "344da82721d9a0b36229f67a950045f8",
     "mahjong_state__hand_end_double_ron.json": "bd93fd615e3c823ca0904a883902825a",
     "mahjong_state__hand_end_heavenly.json": "03c03d5a1e8a49bcb55f87634887a4a6",

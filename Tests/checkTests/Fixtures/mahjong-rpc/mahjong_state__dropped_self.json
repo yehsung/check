@@ -1,0 +1,98 @@
+{
+  "state": {
+    "match": {
+      "id": "ddb8f992-0968-4829-b96b-58ffb7aaedaa",
+      "seq": 0,
+      "host": {
+        "id": "5ec7c899-0966-4b0a-b1e1-ac1f759038fc",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-5ec7c899-0966-4b0a-b1e1-ac1f759038fc"
+      },
+      "honba": 0,
+      "phase": "room",
+      "round": 0,
+      "stake": 3,
+      "format": "tonpuu",
+      "status": "forming",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": false,
+      "kan_count": 0,
+      "turn_seat": null,
+      "wake_seat": null,
+      "created_ms": 1793720923238,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": null,
+      "wake_at_ms": null,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": null,
+      "bank_full_ms": 20000,
+      "next_hand_ms": null,
+      "wall_remaining": null,
+      "dora_indicators": [],
+      "room_expires_ms": 1793721523238
+    },
+    "seats": [],
+    "events": [],
+    "members": [
+      {
+        "user": {
+          "id": "5ec7c899-0966-4b0a-b1e1-ac1f759038fc",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-5ec7c899-0966-4b0a-b1e1-ac1f759038fc"
+        },
+        "state": "joined",
+        "is_host": true
+      },
+      {
+        "user": {
+          "id": "22fae4ce-39fe-43aa-9c7e-e7ae379809d8",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-22fae4ce-39fe-43aa-9c7e-e7ae379809d8"
+        },
+        "state": "joined",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "67464737-f725-4e64-94c4-37e0764aaf58",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-67464737-f725-4e64-94c4-37e0764aaf58"
+        },
+        "state": "dropped",
+        "is_host": false
+      },
+      {
+        "user": {
+          "id": "e0af8a33-693f-40dc-84f7-bb1fc019fed0",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-e0af8a33-693f-40dc-84f7-bb1fc019fed0"
+        },
+        "state": "joined",
+        "is_host": false
+      }
+    ],
+    "my_away": null,
+    "my_hand": [],
+    "my_seat": null,
+    "my_drawn": null,
+    "my_waits": [],
+    "last_hand": null,
+    "reactions": [],
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793720923251
+  },
+  "status": "ok"
+}

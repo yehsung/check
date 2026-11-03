@@ -263,6 +263,41 @@ struct V03xxMahjongPanelRenderTests {
         #expect(mjInk(rules, reopen) > 300 && mjMaxDiff(rules, yaku, reopen) > 60, "[처음이에요 다시 보기]가 없다")
     }
 
+    // MARK: ⑦-3 반응 덮개(U2)
+
+    @Test
+    func reactionBubbleStandsAtTheSenderSeatAndTheButtonOnlyInRubyMatches() throws {
+        // 없으면: 받은 반응이 안 그려지거나 보낸 사람 자리(상가 = 왼쪽 카드 옆)가 아닌 곳에 서거나,
+        // [반응] 단추가 루비 판에 없거나 연습판(스토어가 안 보낸다)에 있어도 초록이다.
+        let store = try mjTableStore(mjActive { state in
+            state["reactions"] = [["seat_no": 3, "key": "joy", "at_ms": mjNowMs - 400, "user_id": mjPeople[3].id]]
+        })
+        let feed = MahjongReactionFeed()
+        feed.ingest(try #require(store.table), now: mjNow, serverOffset: store.serverClockOffset)
+        #expect(feed.bubbles.map(\.seatNo) == [3])
+        // 화면이 스스로 먹인다(새 공급기 — `onChange(initial:)`). 기준선은 반응 없는 같은 판.
+        let with = try mjBitmap(mjPanel(store, feed: MahjongReactionFeed()))
+        let without = try mjBitmap(mjPanel(try mjTableStore(mjActive()), feed: MahjongReactionFeed()))
+        mjSave(with, "reaction")
+        let side = RummyReactionBubbleView.height
+        let left = mjBody(MahjongMatchLayout.leftSeat)
+        let bubble = CGRect(x: left.maxX + 6, y: left.midY - side / 2, width: side, height: side)
+        #expect(mjMaxDiff(with, without, bubble) > 60, "상가 자리 옆에 말풍선이 없다")
+        let right = mjBody(MahjongMatchLayout.rightSeat)
+        let elsewhere = CGRect(x: right.minX - 6 - side, y: right.midY - side / 2, width: side, height: side)
+        #expect(mjMaxDiff(with, without, elsewhere) <= 8, "말풍선이 하가 쪽에도 섰다")
+        // [반응]: 루비 판 CL 줄 끝에만.
+        let practice = MahjongStore(clock: { mjNow })
+        practice.practice = MahjongPracticeSession(matchID: "ai-practice-1", format: .tonpuu, timed: false, humanSeat: 0,
+                                                   generation: 1, payload: try mjDecode(mjActive(matchID: "ai-practice-1")))
+        practice.showsPractice = true
+        let practiceBitmap = try mjBitmap(mjPanel(practice))
+        let chrome = mjBody(MahjongMatchLayout.chromeLeft)
+        let button = CGRect(x: chrome.maxX - MahjongMatchLayout.reactionButtonWidth + 4, y: chrome.minY + 10,
+                            width: MahjongMatchLayout.reactionButtonWidth - 8, height: chrome.height - 20)
+        #expect(mjMaxDiff(without, practiceBitmap, button) > 60, "[반응] 단추가 루비 판에만 있지 않다")
+    }
+
     // MARK: ⑧ 배율 0.82
 
     @Test
@@ -514,10 +549,15 @@ private func mjHostedStore(_ label: String) throws -> MahjongStore {
 
 @MainActor
 private func mjPanel(_ store: MahjongStore, overlay: MahjongOverlay? = nil, hover: Int? = nil,
-                     tab: MahjongLobbyTab? = nil) -> MahjongPanel {
+                     tab: MahjongLobbyTab? = nil, feed: MahjongReactionFeed? = nil) -> MahjongPanel {
     MahjongPanel(store: store, me: { ChessPlayerFace(name: "영식", avatarURL: nil, characterID: "shiba") },
-                 clipsOverflowInsteadOfScroll: true, previewOverlay: overlay, previewHoverIndex: hover, previewLobbyTab: tab)
+                 clipsOverflowInsteadOfScroll: true, previewOverlay: overlay, previewHoverIndex: hover, previewLobbyTab: tab,
+                 guideDefaults: mjRenderDefaults, reactionFeed: feed ?? MahjongReactionFeed(), previewNow: mjNow)
 }
+
+/// 렌더 시험의 '처음이에요' 스위트(표준 스위트에 쓰지 않는다).
+@MainActor
+private let mjRenderDefaults = GomokuTestDefaults.make("v03xx-mahjong-render-guide")
 
 // MARK: - 좌표(창 pt) · 픽셀 도우미
 

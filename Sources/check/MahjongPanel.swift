@@ -273,11 +273,16 @@ struct MahjongPanel: View {
     var previewLobbyTab: MahjongLobbyTab? = nil
     /// '처음이에요'를 봤는지 적는 곳(앱 = 표준 · 시험 = 시험 전용 스위트).
     var guideDefaults: UserDefaults = .standard
+    /// 반응 말풍선 공급기 — nil 이면 창 루트가 자기 것을 쥔다(렌더 시험은 미리 먹인 것을 넘긴다).
+    var reactionFeed: MahjongReactionFeed? = nil
+    /// 스냅샷 전용: 말풍선·움직임을 이 시각 한 장으로 그린다(앱은 nil — 살아 있는 시계).
+    var previewNow: Date? = nil
 
     @State private var overlay: MahjongOverlay?
     @State private var lobbyTab: MahjongLobbyTab = .users
     /// 판 결과에서 [로비로]·[한 판 더]를 누른 판 id(스토어는 그 판을 들고 있어도 화면은 로비로).
     @State private var dismissedMatchID: String?
+    @State private var ownReactionFeed = MahjongReactionFeed()
     @Environment(\.mahjongCramped) private var cramped
 
     private var shownOverlay: MahjongOverlay? { previewOverlay ?? overlay }
@@ -289,6 +294,7 @@ struct MahjongPanel: View {
             case .table:
                 if let payload = store.table {
                     MahjongTableView(store: store, payload: payload, me: me(), hoverIndex: previewHoverIndex,
+                                     feed: reactionFeed ?? ownReactionFeed, fixedNow: previewNow,
                                      onRules: { overlay = .rules($0) },
                                      onToLobby: { dismissedMatchID = payload.match?.id },
                                      onRematch: { dismissedMatchID = payload.match?.id; overlay = .createRoom })

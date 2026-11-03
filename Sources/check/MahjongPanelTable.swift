@@ -108,6 +108,10 @@ struct MahjongTableView: View {
     let payload: MahjongStatePayload
     let me: ChessPlayerFace
     var hoverIndex: Int? = nil
+    /// 반응 말풍선(§5.3) — 창 루트가 쥔 공급기.
+    var feed = MahjongReactionFeed()
+    /// 스냅샷 전용 시각(앱 nil).
+    var fixedNow: Date? = nil
     let onRules: (MahjongRulesTab) -> Void
     var onToLobby: () -> Void = {}
     var onRematch: () -> Void = {}
@@ -128,6 +132,10 @@ struct MahjongTableView: View {
                     MahjongCapsuleButton(title: MahjongText.yaku, tint: CheckTheme.secondaryText, filled: false) { onRules(.yaku) }
                     MahjongCapsuleButton(title: MahjongText.scoreTable, tint: CheckTheme.secondaryText, filled: false) {
                         onRules(.scores)
+                    }
+                    if canReact {
+                        MahjongReactionButton(store: store, feed: feed, payload: payload)
+                            .frame(width: MahjongMatchLayout.reactionButtonWidth)
                     }
                 }
                 .padding(.vertical, 7)
@@ -153,7 +161,16 @@ struct MahjongTableView: View {
             overlays
         }
         .frame(width: MahjongMatchLayout.bodySize.width, height: MahjongMatchLayout.bodySize.height, alignment: .topLeading)
+        // 반응 말풍선 — 자리 카드 앵커(`rummyReactionAnchor`) 위(큐브 덮개 그대로, 방위는 `compass:` 클로저).
+        .rummyReactionLayer(bubbles: feed.bubbles, compass: { MahjongReactionCompass.of(seat: $0, mySeat: mySeat) },
+                            fixedNow: fixedNow)
+        .onChange(of: payload.reactions, initial: true) { _, _ in
+            feed.ingest(payload, now: store.clock(), serverOffset: store.serverClockOffset)
+        }
     }
+
+    /// 반응을 보낼 수 있는 판 — 루비 판이 진행 중일 때만(연습판은 스토어가 보내지 않는다).
+    private var canReact: Bool { !store.isPractice && match?.matchStatus == .active }
 
     @ViewBuilder
     private var overlays: some View {
@@ -185,6 +202,7 @@ struct MahjongTableView: View {
     private func seatCard(_ compass: MahjongCompass, style: MahjongSeatCard.Style) -> some View {
         if let seat = seat(compass) {
             MahjongSeatCard(store: store, payload: payload, seat: seat, style: style, me: compass == .bottom ? me : nil)
+                .rummyReactionAnchor(seatNo: seat.seatNo, edge: MahjongReactionCompass.edge(compass))
         } else {
             Color.clear
         }

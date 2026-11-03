@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // 아잉 마작 규칙 — 화료 꼴·대기·샹텐(MJ-22 · MJ-26 · X-03).
 // 직접 작성, 외부 판정 코드 없음 — 정본 rules.md MJ-22·MJ-26, 대조 reference.py `is_complete`·`waits`·`shanten`.
@@ -33,14 +34,38 @@ package nonisolated enum MahjongHand {
     }
 
     /// 샹텐. −1 = 화료 꼴, 0 = 텐파이(X-03 판 — 4장 쥔 종류만 기다리는 손은 텐파이가 아니다).
-    /// 표준형·치또이·국사 중 작은 값(치또이·국사는 울기 없을 때만). 색마다 파레토 후보를 합친다(UX:268).
-    // R2 가 채운다 — 지금은 화료 꼴이면 −1, 대기가 있으면 0, 아니면 8(임시: 봇·보조가 쓰기 전에 코퍼스로 채운다).
+    /// 표준형·치또이·국사 중 작은 값(치또이·국사는 울기 없을 때만). = reference `shanten`.
+    /// 표준형 정의(reference `shanten_standard`): 손 안 패에 **더 들여야 할 최소 장수 − 1**. 목표 화료 꼴의 종류마다 장수는
+    /// 손 안 4장 이하(머리 2 + 커쯔 3 처럼 5장이 드는 꼴은 버린다 — MJ-26 '4장째는 대기가 아님'과 같은 뜻). 남는 패는 버린다고 친다.
+    /// 색마다 (몸통 수 0~4 × 머리 0~1) 열 칸의 최소 비용 표 — 파레토 후보 전부 — 를 만들고 배낭 합으로 합친다(UX:268).
+    /// 색마다 최선 하나만 골라 합치면 머리를 두 색이 서로 쓰려는 손에서 틀린다(시험 MahjongHandTests 의 기준선).
+    /// counts 가 34칸이 아니거나 melds 가 0~4 밖이면 8(가장 먼 값)을 돌려준다.
     package static func shanten(_ counts: [Int], melds: Int) -> Int {
-        guard counts.count == 34 else { return 8 }
-        let total = counts.reduce(0, +)
-        if total % 3 == 2 && isComplete(counts, melds: melds) { return -1 }
-        if total % 3 == 1 && !waits(counts, melds: melds).isEmpty { return 0 }
-        return 8
+        guard counts.count == 34, (0...4).contains(melds) else { return 8 }
+        var acc = ShantenTable.identity
+        for s in 0..<3 {
+            acc = ShantenTable.knap(acc, ShantenTable.suitCost(counts, from: s * 9))
+        }
+        for k in 27..<34 {
+            acc = ShantenTable.knap(acc, ShantenTable.honorCost(counts[k]))
+        }
+        var best = acc[(4 - melds) * 2 + 1] - 1
+        if melds == 0 {
+            var pairs = 0, kinds = 0
+            for x in counts {
+                if x >= 2 { pairs += 1 }
+                if x >= 1 { kinds += 1 }
+            }
+            let chiitoi = 6 - pairs + max(0, 7 - kinds)
+            var yaochuKinds = 0, yaochuPair = false
+            for k in MahjongTiles.yaochu {
+                if counts[k] >= 1 { yaochuKinds += 1 }
+                if counts[k] >= 2 { yaochuPair = true }
+            }
+            let kokushi = 13 - yaochuKinds - (yaochuPair ? 1 : 0)
+            best = min(best, chiitoi, kokushi)
+        }
+        return best
     }
 
     // MARK: - 내부
@@ -81,5 +106,137 @@ package nonisolated enum MahjongHand {
             if ok { return true }
         }
         return false
+    }
+}
+
+/// 샹텐 비용 표(reference `_suit_cost`·`_honor_cost`·`_knap`). 표 = 10칸 `[몸통 수 m × 2 + 머리 수 p]` → 더 들일 최소 장수(없으면 `inf`).
+nonisolated enum ShantenTable {
+    static let inf = 99
+
+    /// 아무 패도 없을 때의 합 단위(몸통 0·머리 0 = 0).
+    static let identity: [Int] = [0, inf, inf, inf, inf, inf, inf, inf, inf, inf]
+
+    /// 두 표의 배낭 합 — m1 + m2 ≤ 4, p1 + p2 ≤ 1 에서 비용의 최소.
+    static func knap(_ a: [Int], _ b: [Int]) -> [Int] {
+        var out = [Int](repeating: inf, count: 10)
+        for m1 in 0...4 {
+            for p1 in 0...1 {
+                let x = a[m1 * 2 + p1]
+                if x >= inf { continue }
+                for m2 in 0...(4 - m1) {
+                    for p2 in 0...(1 - p1) {
+                        let v = x + b[m2 * 2 + p2]
+                        let i = (m1 + m2) * 2 + p1 + p2
+                        if v < out[i] { out[i] = v }
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    /// 자패 한 종류: 커쯔 하나(3 − h) 또는 머리 하나(2 − h). 같은 자패로 커쯔 + 머리(5장)는 없다.
+    static func honorCost(_ h: Int) -> [Int] {
+        var t = [Int](repeating: inf, count: 10)
+        t[0] = 0
+        t[2] = max(0, 3 - h)
+        t[1] = max(0, 2 - h)
+        return t
+    }
+
+    /// 한 색(9칸, counts[start..<start+9])의 비용 표. 같은 9칸 장수는 같은 표라 기억해 둔다(봇이 한 결정에 수천 번 부른다).
+    static func suitCost(_ counts: [Int], from start: Int) -> [Int] {
+        var have = [Int](repeating: 0, count: 9)
+        var key = 0
+        for i in 0..<9 {
+            let h = min(max(counts[start + i], 0), 4)   // 한 종류에 필요한 장수는 4 이하라 4장 넘게 쥔 것은 4와 같다
+            have[i] = h
+            key = key * 5 + h
+        }
+        let code = key
+        if let hit = memo.withLock({ $0[code] }) { return hit }
+        let table = suitCostUncached(have)
+        memo.withLock { cache in
+            if cache.count >= 200_000 { cache.removeAll(keepingCapacity: true) }
+            cache[code] = table
+        }
+        return table
+    }
+
+    private static let memo = OSAllocatedUnfairLock<[Int: [Int]]>(initialState: [:])
+
+    /// 상태 (s1 = i−1 에서 시작한 순쯔 수, s2 = i−2 에서 시작한 순쯔 수, 몸통 수 m, 머리 수 p) → 최소 비용을 9칸 앞으로 민다.
+    /// 칸 i 에서 순쯔 st 개(i ≤ 6 만)·커쯔 tr(0/1)·머리 pr(0/1)를 새로 시작하면 그 종류에 드는 장수 need = st + s1 + s2 + 3tr + 2pr ≤ 4,
+    /// 비용 += max(0, need − 가진 장수). 끝에서 s1 = s2 = 0 인 상태만 센다. 상태 번호 = ((s1 * 5 + s2) * 5 + m) * 2 + p (250칸).
+    /// 옮김(상태 → 다음 상태, need)은 가진 장수와 무관하므로 미리 펼쳐 두고(`Edges`), 닿은 상태의 옮김만 돈다.
+    static func suitCostUncached(_ have: [Int]) -> [Int] {
+        var cur = [Int](repeating: inf, count: 250)
+        var nxt = [Int](repeating: inf, count: 250)
+        cur[0] = 0
+        for i in 0..<9 {
+            let e = i <= 6 ? edgesWithSeq : edgesNoSeq
+            let h = have[i]
+            cur.withUnsafeBufferPointer { a in
+                nxt.withUnsafeMutableBufferPointer { b in
+                    e.start.withUnsafeBufferPointer { start in
+                        e.to.withUnsafeBufferPointer { to in
+                            e.need.withUnsafeBufferPointer { need in
+                                var j = 0
+                                while j < 250 { b[j] = inf; j += 1 }
+                                var from = 0
+                                while from < 250 {
+                                    let c = a[from]
+                                    if c < inf {
+                                        var k = start[from]
+                                        let end = start[from + 1]
+                                        while k < end {
+                                            let d = need[k] - h
+                                            let nc = d > 0 ? c + d : c
+                                            let t = to[k]
+                                            if nc < b[t] { b[t] = nc }
+                                            k += 1
+                                        }
+                                    }
+                                    from += 1
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            swap(&cur, &nxt)
+        }
+        return Array(cur[0..<10])   // s1 = s2 = 0 인 상태 = 앞쪽 10칸(m * 2 + p)
+    }
+
+    /// 한 칸의 옮김 목록. start[from] ..< start[from + 1] 이 그 상태의 옮김.
+    struct Edges: Sendable {
+        let start: [Int]
+        let to: [Int]
+        let need: [Int]
+    }
+
+    static let edgesWithSeq = makeEdges(stMax: 4)
+    static let edgesNoSeq = makeEdges(stMax: 0)
+
+    static func makeEdges(stMax: Int) -> Edges {
+        var start: [Int] = [], to: [Int] = [], need: [Int] = []
+        for from in 0..<250 {
+            start.append(to.count)
+            let p = from % 2, m = (from / 2) % 5, s2 = (from / 10) % 5, s1 = from / 50
+            if s1 + s2 > 4 { continue }
+            for st in 0...stMax where st + s1 + s2 <= 4 && m + st <= 4 {
+                for tr in 0...1 where m + st + tr <= 4 {
+                    for pr in 0...(1 - p) {
+                        let n = st + s1 + s2 + 3 * tr + 2 * pr
+                        if n > 4 { continue }
+                        to.append(((st * 5 + s1) * 5 + m + st + tr) * 2 + p + pr)
+                        need.append(n)
+                    }
+                }
+            }
+        }
+        start.append(to.count)
+        return Edges(start: start, to: to, need: need)
     }
 }

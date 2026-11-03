@@ -21,11 +21,14 @@ package nonisolated struct MahjongClock: Equatable, Sendable {
         started.addingTimeInterval(Double(baseMs + max(bankMs, 0)) / 1000)
     }
 
-    /// 도착한 답의 차감. timedOut = 도착이 판정 마감(마감 + 유예)을 넘었다. = SQL `mahjong_clock_charge`.
-    // R2 가 S1 의 SQL 과 같은 반올림(ms 자르기)인지 대조한다 — 지금은 ms 아래를 버린다.
+    /// 도착한 답의 차감. timedOut = 도착이 판정 마감(마감 + 유예)을 넘었다(같으면 받는다). = SQL `mahjong_clock_charge`.
+    /// 경과 ms = **µs 로 맞춘 뒤 ms 아래를 버린다** — 서버는 timestamptz(µs 정수)에서 `floor(extract(epoch from 도착 − 시작) * 1000)`
+    /// (체스 `chess__clock_charge` 틀, CD:837)로 잰다. Date 는 Double 초라 `5.1 초 × 1000` 이 5099.99… 로 떨어져 바로 버리면
+    /// 서버보다 1ms 적게 센다(MahjongClockTests 의 기준선). 음수 경과(시계 역행)는 0.
     package static func charge(started: Date, arrived: Date, bankMs: Int) -> (bankLeft: Int, usedMs: Int, timedOut: Bool) {
         let bank = max(bankMs, 0)
-        let used = max(Int((arrived.timeIntervalSince(started) * 1000).rounded(.down)), 0)
+        let micros = Int((arrived.timeIntervalSince(started) * 1_000_000).rounded())
+        let used = max(micros >= 0 ? micros / 1000 : -((-micros + 999) / 1000), 0)
         let bankLeft = bank - min(max(used - baseMs, 0), bank)
         let timedOut = used > baseMs + bank + graceMs
         return (bankLeft, used, timedOut)

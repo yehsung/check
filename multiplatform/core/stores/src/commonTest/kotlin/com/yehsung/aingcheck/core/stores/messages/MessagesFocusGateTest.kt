@@ -255,14 +255,16 @@ class MessagesFocusGateTest {
         r.h.assertClean()
     }
 
-    /** 묻는 때: 대화가 설 때 · 대화가 떠 있는 채 앞으로 올 때. 목록만 · 대화 없이 앞으로 올 때는 묻지 않는다. 날아가는 중이면 겹쳐 띄우지 않는다. */
+    /**
+     * 묻는 때: 대화가 설 때 · 대화가 떠 있는 채 앞으로 올 때. 메시지 화면(목록 · 대화)이 하나도 없는 앞으로 오기는 묻지 않는다. 날아가는 중이면
+     * 겹쳐 띄우지 않는다. 목록이 설 때 · 목록이 떠 있는 채 앞으로 올 때(대표 답 #d_6A32rmcoJZZd — 목록 위 한 줄)는 MessagesFocusRowsTest 가 잰다.
+     */
     @Test
     fun asksOnlyWhenAConversationStandsOrComesForwardOpen() = runTest {
         val r = rig { it.received("a1", peerA, 0, unread = false) }
         r.store.appDidBecomeActive()
-        r.store.listDidAppear()
         advanceUntilIdle()
-        assertEquals(0, r.focusGets(), "대화가 없는데 내 집중을 물었다")
+        assertEquals(0, r.focusGets(), "메시지 화면이 없는데 내 집중을 물었다")
         r.store.conversationDidAppear(peerA, "t1")
         advanceUntilIdle()
         assertEquals(1, r.focusGets())
@@ -271,12 +273,12 @@ class MessagesFocusGateTest {
         r.store.appDidBecomeActive()
         advanceUntilIdle()
         assertEquals(2, r.focusGets())
-        // 대화를 닫고 앞으로 — 묻지 않는다.
+        // 대화를 닫고(목록도 없다) 앞으로 — 묻지 않는다.
         r.store.conversationDidDisappear("t1")
         r.store.appDidEnterBackground()
         r.store.appDidBecomeActive()
         advanceUntilIdle()
-        assertEquals(2, r.focusGets(), "대화가 없는 앞으로 오기에 물었다")
+        assertEquals(2, r.focusGets(), "메시지 화면이 없는 앞으로 오기에 물었다")
         // 겹침: 응답을 붙잡은 채 두 번 서도 한 건.
         r.focus.gate = CompletableDeferred()
         r.store.conversationDidAppear(peerA, "t2")
@@ -291,8 +293,8 @@ class MessagesFocusGateTest {
     }
 
     /**
-     * 지금 탭 60초 틱(폰 조립이 잇는 onPeriodicTick): 켜짐으로 알고 대화가 떠 있을 때만 다시 묻는다 — 맥에서 끈 집중을 따라잡는다.
-     * 기준선: 꺼짐을 알 때 · 대화가 없을 때는 틱이 돌아도 묻지 않는다.
+     * 지금 탭 60초 틱(폰 조립이 잇는 onPeriodicTick): 켜짐으로 알고 메시지 화면(여기서는 대화 — 목록은 MessagesFocusRowsTest)이 떠 있을 때만
+     * 다시 묻는다 — 맥에서 끈 집중을 따라잡는다. 기준선: 꺼짐을 알 때 · 메시지 화면이 없을 때는 틱이 돌아도 묻지 않는다.
      */
     @Test
     fun nowTabTickRechecksOnlyWhileKnownOnAndConversationOpen() = runTest {
@@ -328,7 +330,7 @@ class MessagesFocusGateTest {
         assertEquals(false, r.store.myFocusMode, "맥에서 끈 집중을 틱이 따라잡지 못했다")
         r.server.sendReply = Reply.Json("""{"status":"ok"}""")
         assertTrue(r.store.canSend(peerA))
-        // 켜짐이어도 대화가 없으면 묻지 않는다.
+        // 켜짐이어도 메시지 화면(대화 · 목록)이 없으면 묻지 않는다.
         r.server.sendReply = Reply.Json(senderFocusedReply)
         r.store.sendDraft(peerA, isComposing = false)
         advanceUntilIdle()
@@ -336,7 +338,7 @@ class MessagesFocusGateTest {
         r.store.conversationDidDisappear("t1")
         scheduler.advance(60.0)
         advanceUntilIdle()
-        assertEquals(3, r.focusGets(), "대화가 없는데 틱이 물었다")
+        assertEquals(3, r.focusGets(), "메시지 화면이 없는데 틱이 물었다")
         r.h.assertClean()
     }
 
@@ -420,8 +422,8 @@ class MessagesFocusGateTest {
         r.store.setDraft("안녕", notFocusedInFixture)
         assertTrue(r.store.canSend(notFocusedInFixture))
         assertNull(r.store.focusBlock(notFocusedInFixture))
-        // 판에도 같은 값(이름표 칩 · 사람 줄 칩의 재료).
-        assertEquals(setOf(focusedInFixture), r.store.presenceBoard(r.h.now()).focused)
+        // 칩의 재료도 같은 값(출처 한 곳 — 이름표 · 사람 줄 셋 · 얼굴 띠 TalkBack 이 이 집합을 읽는다).
+        assertEquals(setOf(focusedInFixture), r.store.focusedPeerIDs)
         r.h.assertClean()
     }
 
@@ -439,7 +441,7 @@ class MessagesFocusGateTest {
             assertFalse(r.store.isPeerFocused(entry.userID), "칸이 없는 서버에서 ${entry.name} 이 잠겼다")
             assertTrue(r.store.canSend(entry.userID))
         }
-        assertEquals(emptySet(), r.store.presenceBoard(r.h.now()).focused)
+        assertEquals(emptySet(), r.store.focusedPeerIDs)
         r.h.assertClean()
     }
 
@@ -625,11 +627,11 @@ class MessagesFocusGateTest {
         // 지금 탭에 없는 사람은 메시지 명부 값이 남는다.
         assertEquals(setOf("a", "b", "c"), MessagesFocusRules.focusedPeerIDs(listOf(row("c", true)), messages, me))
         assertEquals(emptySet(), MessagesFocusRules.focusedPeerIDs(null, null, me))
-        // 틱 조건.
-        assertTrue(MessagesFocusRules.rechecksOnTick(true, conversationOpen = true))
-        assertFalse(MessagesFocusRules.rechecksOnTick(true, conversationOpen = false))
-        assertFalse(MessagesFocusRules.rechecksOnTick(false, conversationOpen = true))
-        assertFalse(MessagesFocusRules.rechecksOnTick(null, conversationOpen = true))
+        // 틱 조건(켜짐으로 알고 메시지 화면 — 목록 · 대화 — 이 떠 있을 때만).
+        assertTrue(MessagesFocusRules.rechecksOnTick(true, messagesShown = true))
+        assertFalse(MessagesFocusRules.rechecksOnTick(true, messagesShown = false))
+        assertFalse(MessagesFocusRules.rechecksOnTick(false, messagesShown = true))
+        assertFalse(MessagesFocusRules.rechecksOnTick(null, messagesShown = true), "모름까지 틱마다 물으면 집중을 안 쓰는 사람도 매분 GET 이다")
         // 입력줄 한 줄: 집중 사유가 결과 문구보다 앞 · 빈 결과는 없음.
         assertEquals(MessageNoticeText.targetFocused, MessagesComposerRules.noticeLine(MessagesFocusBlock.peer, "연결이 불안정해요"))
         assertEquals("연결이 불안정해요", MessagesComposerRules.noticeLine(null, "연결이 불안정해요"))
@@ -637,7 +639,10 @@ class MessagesFocusGateTest {
         assertNull(MessagesComposerRules.noticeLine(null, null))
     }
 
-    /** 차단해 숨긴 사람은 판의 집중 집합에서도 빠진다(다른 칸과 같은 관문). */
+    /**
+     * 차단해 숨긴 사람은 집중 집합(출처 한 곳 — MessagesStore.focusedPeerIDs)에서도 빠진다(판의 근무 점 · 상태메시지와 같은 관문).
+     * 판(presenceBoard)에는 집중 칸이 없다 — 같은 사실의 출처가 두 벌이 되지 않게(iOS 1.0.17 검토 · 1776440d).
+     */
     @Test
     fun blockedPeerLeavesTheFocusedSet() = runTest {
         val r = rig()
@@ -646,10 +651,12 @@ class MessagesFocusGateTest {
         r.store.appDidBecomeActive()
         r.store.loadDirectory(force = true)
         advanceUntilIdle()
-        assertEquals(setOf(focusedInFixture), r.store.presenceBoard(r.h.now()).focused)
+        assertEquals(setOf(focusedInFixture), r.store.focusedPeerIDs)
+        assertTrue(r.store.isPeerFocused(focusedInFixture))
         r.store.blockPeer(focusedInFixture)
-        // 숨김은 낙관적이다 — 서버 답을 기다리지 않고 판에서 빠진다.
-        assertEquals(emptySet(), r.store.presenceBoard(r.h.now()).focused)
+        // 숨김은 낙관적이다 — 서버 답을 기다리지 않고 집합에서 빠진다.
+        assertEquals(emptySet(), r.store.focusedPeerIDs)
+        assertFalse(r.store.isPeerFocused(focusedInFixture))
         advanceUntilIdle()
         r.h.assertClean()
     }

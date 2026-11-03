@@ -37,6 +37,8 @@ internal actual fun chatSelectClipboard(real: Clipboard, writer: ClipboardManage
  * 메뉴 항목의 이름 — 보통 항목(복사 · 모두 선택 · PROCESS_TEXT 앱: 번역 앱이면 "번역" · 웹 검색 앱 · 공유 앱 …)만 이름이 있다.
  * 글 분류기의 똑똑한 동작(링크 열기 · 전화 · 기기가 외국어 글에 내놓는 번역 등)은 Compose 가 그 항목 꼴(TextContextMenuTextClassificationItem)을
  * 모듈 안쪽(internal)으로 감춰 이름을 읽을 수 없다 — null 이라 모두 걸러진다. 그래서 [번역]은 번역 앱이 PROCESS_TEXT 로 내놓을 때만 남는다.
+ * 그 앱 조회(queryIntentActivities)가 targetSdk 30+ 에서 번역 앱을 보려면 앱 매니페스트의 <queries> PROCESS_TEXT 가 있어야 한다
+ * (androidApp AndroidManifest.xml · MergedManifestTest — 검토 F1).
  */
 internal fun chatBubbleMenuLabel(component: TextContextMenuComponent): String? = (component as? TextContextMenuItem)?.label
 

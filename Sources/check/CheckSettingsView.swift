@@ -1254,12 +1254,18 @@ struct CheckCharacterSettingsRow: View {
             }
             // 목록 순서의 주인은 카탈로그다(`allIDs` 가 **아잉 먼저**, 나머지는 id 정렬).
             // 여기서 다시 정렬하면 폴백 대상이 첫 칸이라는 사실이 두 곳에 적히고, 갈리는 날 조용히 어긋난다.
+            // 칩이 줄어들 만큼 줄어도 행 폭을 넘치면(v0.3.77 빼빼로로 내장이 일곱 — 칩 13개) **앞을 붙잡고 뒤를 자른다**: 넘친 HStack 은
+            // 가운데 정렬로 양쪽이 잘려 첫 칸(아잉 — 폴백 대상, 대개 고른 칩)이 통째로 화면 밖으로 밀렸다(V0316 '진짜 칩' 시험이 잡았다).
+            // 넘치지 않을 때의 모양(칩이 '…' 로 줄어 한 줄에 다 선다)은 그대로다. 관리자 전용 행이다(`store.ultraUnlimited`).
+            // minWidth 0 이 핵심이다 — 빼면 틀이 넘친 자식의 폭을 하한으로 삼아 행 전체가 넓어지고 도로 가운데로 밀린다(실측).
             HStack(spacing: 6) {
                 ForEach(catalog.allIDs, id: \.self) { id in
                     chip(id)
                 }
                 Spacer(minLength: 0)
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            .clipped()
         }
     }
 

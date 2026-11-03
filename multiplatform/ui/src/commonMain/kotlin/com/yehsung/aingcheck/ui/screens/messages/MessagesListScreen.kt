@@ -6,6 +6,10 @@
 // 줄 세우기·정렬은 스토어 규칙 하나(MessagesStore.threadItems → MessagesThreadListRules.rows — 네 무리 정렬: 근무중+안읽음 → 근무안함+안읽음 →
 // 근무중+다읽음 → 근무안함+다읽음, 같은 무리 안은 최근순)다. **찌르기만 있는 사람도 줄이 선다.** 이 화면은 값을 그대로 그린다(배지·시각·안 읽음을
 // 다시 세지 않는다 — iOS 1.0.14 와 같다).
+//
+// 집중(판 7 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" — iOS 1.0.17 1776440d 의 Android 짝): 상대가 집중이면 대화 목록 줄 이름 뒤 '집중' 칩 ·
+// 얼굴 띠는 칩 없이 TalkBack 만 · 내가 집중이면 목록 위 한 줄(입력줄 사유와 같은 문장 — [집중 끄기] 단추는 없다, #d_ldP912RctnTt "안내만").
+// 출처는 MessagesStore.focusedPeerIDs · myFocusMode 하나다. 게이트가 꺼진 조립(Windows 플라이아웃)은 둘 다 비어 판 7 전 그림 그대로다.
 package com.yehsung.aingcheck.ui.screens.messages
 
 import androidx.compose.foundation.background
@@ -47,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.MessageNoticeText
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusRules
 import com.yehsung.aingcheck.core.stores.messages.MessagesListRules
 import com.yehsung.aingcheck.core.stores.messages.MessagesPeerPresence
 import com.yehsung.aingcheck.core.stores.messages.MessagesPresenceRules
@@ -55,7 +60,6 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesThreadItem
 import com.yehsung.aingcheck.core.stores.messages.MessagesThreadListRules
 import com.yehsung.aingcheck.core.stores.messages.MessagesWorkingPerson
 import com.yehsung.aingcheck.core.stores.messages.MobileLoadText
-import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.session.kit.AingCard
@@ -65,6 +69,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LoadingRow
 import com.yehsung.aingcheck.ui.screens.session.kit.NoticeKind
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonName
+import com.yehsung.aingcheck.ui.screens.session.kit.personFocusChip
 import com.yehsung.aingcheck.ui.screens.session.kit.READABLE_WIDTH
 import com.yehsung.aingcheck.ui.screens.session.kit.rememberNow
 import com.yehsung.aingcheck.ui.screens.session.kit.sf
@@ -107,6 +112,8 @@ fun MessagesListScreen(
     val now = rememberNow(store.context.clock, everySeconds = 30)
     val presence = store.presenceBoard(now)
     val rows = store.threadItems(now)
+    // 집중 중인 상대는 **한 번** 받아 줄마다 묻는다 — 출처는 [보내기] 잠금과 같은 MessagesStore.focusedPeerIDs 하나다(차단 거르기도 거기서).
+    val focused = store.focusedPeerIDs
     val scope = rememberCoroutineScope()
 
     Box(modifier.fillMaxSize().background(colors.background).testTag(MessagesTags.LIST_SCREEN), contentAlignment = Alignment.TopCenter) {
@@ -117,6 +124,14 @@ fun MessagesListScreen(
                     onMegaphone = onMegaphone,
                     onNewConversation = onNewConversation,
                 )
+            }
+            // 내가 집중 중이면 목록 위 한 줄 — 입력줄 사유 · 서버 거절과 같은 문장("맥에서 집중을 끄면 보낼 수 있어요"). 맥에서 끈 값을 받으면
+            // 스스로 사라진다(목록이 설 때 · 앞으로 올 때 · 켜짐일 때 60초 틱이 내 집중을 다시 묻는다 — MessagesStore.myFocusMode).
+            MessagesFocusRules.listNotice(store.myFocusMode)?.let { notice ->
+                item("focus-notice") {
+                    InlineNotice(notice, NoticeKind.Info,
+                        Modifier.padding(horizontal = AingDimens.sideMargin, vertical = 4.dp).testTag(MessagesTags.LIST_FOCUS_NOTICE))
+                }
             }
             store.blockNotice?.let { notice ->
                 item("block-notice") {
@@ -149,7 +164,7 @@ fun MessagesListScreen(
                 }
             } else {
                 itemsIndexed(rows, key = { _, row -> "row-${row.id}" }) { index, row ->
-                    ThreadRowCard(row, presence.peers[row.peerUserID], index, rows.size) { onOpen(row.peerUserID) }
+                    ThreadRowCard(row, presence.peers[row.peerUserID], row.peerUserID in focused, index, rows.size) { onOpen(row.peerUserID) }
                 }
                 item("expiry") {
                     ExpiryNote(Modifier.padding(horizontal = AingDimens.titleMargin).padding(top = 8.dp, bottom = 4.dp))
@@ -168,7 +183,7 @@ fun MessagesListScreen(
                 }
                 item("working-strip") {
                     Box(Modifier.padding(horizontal = AingDimens.sideMargin).padding(bottom = AingDimens.space6)) {
-                        WorkingStrip(presence.working, onOpen, onNewConversation)
+                        WorkingStrip(presence.working, focused, onOpen, onNewConversation)
                     }
                 }
             }
@@ -213,7 +228,7 @@ internal fun ToolbarCircle(icon: AppIcon, label: String, tag: String, onClick: (
 
 /** 한 그룹 안의 대화 줄(시안 B — 위아래 모서리는 첫·마지막 줄만 둥글다, 구분선은 이름 글자 시작점부터). */
 @Composable
-private fun ThreadRowCard(row: MessagesThreadItem, presence: MessagesPeerPresence?, index: Int, count: Int, onClick: () -> Unit) {
+private fun ThreadRowCard(row: MessagesThreadItem, presence: MessagesPeerPresence?, isFocused: Boolean, index: Int, count: Int, onClick: () -> Unit) {
     val colors = AingTheme.colors
     val radius = AingDimens.groupRadius
     val shape = RoundedCornerShape(
@@ -221,7 +236,7 @@ private fun ThreadRowCard(row: MessagesThreadItem, presence: MessagesPeerPresenc
         bottomStart = if (index == count - 1) radius else 0.dp, bottomEnd = if (index == count - 1) radius else 0.dp,
     )
     Column(Modifier.padding(horizontal = AingDimens.sideMargin).background(colors.surface, shape)) {
-        MessagesThreadRow(row, presence, onClick)
+        MessagesThreadRow(row, presence, isFocused, onClick)
         if (index < count - 1) {
             HorizontalDivider(Modifier.padding(start = AingDimens.cardPadding + THREAD_AVATAR + 12.dp), thickness = AingDimens.hairline, color = colors.separator)
         }
@@ -230,11 +245,14 @@ private fun ThreadRowCard(row: MessagesThreadItem, presence: MessagesPeerPresenc
 
 private val THREAD_AVATAR = 48.dp
 
-/** 목록 한 줄(시안 B `.b-thread-row`). 값은 전부 MessagesThreadItem 이 미리 정한다 — 이 뷰는 조건을 세지 않는다. */
+/**
+ * 목록 한 줄(시안 B `.b-thread-row`). 값은 전부 MessagesThreadItem 이 미리 정한다 — 이 뷰는 조건을 세지 않는다.
+ * [isFocused] = 상대가 집중 중(`MessagesStore.focusedPeerIDs`) — 이름 뒤 '집중' 칩 · TalkBack 한 마디. 줄은 그대로 눌려 대화가 열린다(대표 답 "대화는 열고 보내기만 막기").
+ */
 @Composable
-fun MessagesThreadRow(row: MessagesThreadItem, presence: MessagesPeerPresence?, onClick: () -> Unit) {
+fun MessagesThreadRow(row: MessagesThreadItem, presence: MessagesPeerPresence?, isFocused: Boolean, onClick: () -> Unit) {
     val colors = AingTheme.colors
-    val description = MessagesThreadListRules.accessibilityText(row, MessagesPresenceRules.headerLine(presence))
+    val description = MessagesThreadListRules.accessibilityText(row, MessagesPresenceRules.headerLine(presence), isFocused)
     Row(
         Modifier
             .fillMaxWidth()
@@ -255,6 +273,7 @@ fun MessagesThreadRow(row: MessagesThreadItem, presence: MessagesPeerPresence?, 
                 PersonName(
                     row.peerName, presence?.center, Modifier.weight(1f),
                     style = if (row.isUnread) MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold) else MaterialTheme.typography.titleSmall,
+                    focusChip = personFocusChip(isFocused),
                 )
                 Text(
                     row.timeText,
@@ -306,9 +325,13 @@ fun ExpiryNote(modifier: Modifier = Modifier, centered: Boolean = false) {
     }
 }
 
-/** "지금 근무 중 · 바로 말 걸기" 가로 줄: 근무 중인 사람(점) + 이름 · 끝에 "새 대화". 아무도 없으면 한 줄 안내 + "새 대화". */
+/**
+ * "지금 근무 중 · 바로 말 걸기" 가로 줄: 근무 중인 사람(점) + 이름 · 끝에 "새 대화". 아무도 없으면 한 줄 안내 + "새 대화".
+ * [focused] = 집중 중인 사람(`MessagesStore.focusedPeerIDs`). 얼굴 띠는 52dp 얼굴과 이름뿐이라 칩을 달지 않고 **TalkBack 만** 잇는다
+ * (대표 답 #d_6A32rmcoJZZd — 얼굴 띠는 보이스오버 말만).
+ */
 @Composable
-private fun WorkingStrip(people: List<MessagesWorkingPerson>, onOpen: (String) -> Unit, onNewConversation: () -> Unit) {
+private fun WorkingStrip(people: List<MessagesWorkingPerson>, focused: Set<String>, onOpen: (String) -> Unit, onNewConversation: () -> Unit) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(AingDimens.groupRadius)
     if (people.isEmpty()) {
@@ -327,7 +350,7 @@ private fun WorkingStrip(people: List<MessagesWorkingPerson>, onOpen: (String) -
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             for (person in people) {
-                val label = if (person.status == PresenceStatus.pending) "${person.name}, 연결 끊김" else "${person.name}, 근무 중"
+                val label = MessagesPresenceRules.workingAccessibilityText(person, person.id in focused)
                 Tile(person.name, colors.label, Modifier.clearAndSetSemantics {
                     contentDescription = label
                     role = Role.Button

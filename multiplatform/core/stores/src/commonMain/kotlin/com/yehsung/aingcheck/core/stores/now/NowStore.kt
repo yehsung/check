@@ -104,9 +104,16 @@ class NowStore(
     var streakDaysSource: () -> Long? = { null }
 
     /**
+     * 집중 중인 사람(판 7 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" — iOS 1.0.17 `NowStore.focusedPeerIDs` 의
+     * `context.links.messages?.focusedPeerIDs`). **출처는 메시지 스토어 한 곳**(`MessagesStore.focusedPeerIDs` — [보내기] 잠금 · 대화 목록 칩과 같은
+     * 겹치기 · 같은 차단 거르기)이고 폰 조립이 그것을 그대로 잇는다. 안 이은 조립(데스크톱 · 시험)은 빈 집합 — 칩 없음.
+     */
+    var focusedPeerIDsSource: () -> Set<String> = { emptySet() }
+
+    /**
      * 60초 새로고침 틱마다 한 번(판 7 — iOS 1.0.17 NowStore.armRefreshTimer 의 `context.links.messages?.refreshMyFocusModeIfFocused()` 자리).
-     * 폰 조립이 메시지 스토어의 내 집중 다시 묻기를 잇는다(조건은 그쪽이 판정한다 — 켜짐으로 알고 대화가 떠 있을 때만). 대화 화면에는 따로 도는
-     * 시계가 없어 이 틱에 기댄다. 안 이은 조립(데스크톱 · 시험)은 아무 일도 안 한다.
+     * 폰 조립이 메시지 스토어의 내 집중 다시 묻기를 잇는다(조건은 그쪽이 판정한다 — 켜짐으로 알고 메시지 화면(목록 · 대화)이 떠 있을 때만).
+     * 메시지 화면에는 따로 도는 시계가 없어 이 틱에 기댄다. 안 이은 조립(데스크톱 · 시험)은 아무 일도 안 한다.
      */
     var onPeriodicTick: () -> Unit = {}
 
@@ -386,7 +393,8 @@ class NowStore(
         refreshTimer = timers.schedule(refreshIntervalSeconds) {
             if (isActive) {
                 refresh()
-                // 내 집중(판 7): 켜짐으로 알고 대화가 떠 있을 때만 다시 묻는다 — 맥에서 끈 집중을 대화에 머무는 동안 따라잡는다.
+                // 내 집중(판 7): 켜짐으로 알고 메시지 화면(목록 · 대화)이 떠 있을 때만 다시 묻는다 — 맥에서 끈 집중을 메시지 화면에 머무는 동안
+                // 따라잡는다(조건은 메시지 스토어가 판정한다 — 위 onPeriodicTick 머리말).
                 onPeriodicTick()
                 // 앱을 켜 둔 채 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만(간격은 그쪽이 정한다).
                 if (phoneSession?.origin == NowWorkOrigin.phone) phoneWork?.periodicTick()
@@ -576,6 +584,13 @@ class NowStore(
             origin = if (working) workOrigin(me) else NowWorkOrigin.unknown,
         )
     }
+
+    /**
+     * 집중 중인 사람 — 근무 중 줄의 '집중' 칩 재료([focusedPeerIDsSource] 그대로). [NowWorkingPerson] 에 칸을 두지 않는 까닭: [workingPeople] 은
+     * 메시지 판(`MessagesStore.presenceBoard`)도 부르는 재료라 거기에 집중을 구우면 같은 사실의 출처가 두 벌이 된다(iOS 1.0.17 1776440d 와 같은 판단).
+     * 이 스토어는 명부 겹치기 규칙(`MessagesFocusRules.focusedPeerIDs`)을 직접 부르지 않는다.
+     */
+    val focusedPeerIDs: Set<String> get() = focusedPeerIDsSource()
 
     /**
      * 지금 근무 중(나 제외): 우리 팀(경과 시간 · 오래 일한 순) 먼저, 그다음 다른 팀(근무 여부만 · 이름순 — Swift String `<`).

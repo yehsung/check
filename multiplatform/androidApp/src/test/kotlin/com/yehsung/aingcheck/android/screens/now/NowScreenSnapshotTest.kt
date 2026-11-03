@@ -4,10 +4,21 @@
 // G §2-3 W3-a ① Roborazzi: 지금 탭 — 폰(밝음 · 어두움) · sw600dp. 지금 탭은 Android 전용 화면(androidApp …/screens/now)이라 골든도
 // 이 갈래 소유 자리(이 폴더의 golden/)에 둔다. 판정은 부품·화면 스냅숏과 같다: 두 번 그려 같다 · 골든과 같다(기록 기계 픽셀 그대로, 다른
 // 러너 굵은 대조) · 한 군데 다른 장면(착용 캐릭터만 다른 카드)은 다르다. 기록은 AINGCHECK_SNAPSHOT_RECORD=1(그 실행은 실패로 끝난다).
+//
+// 근무 중 줄 '집중' 칩(판 7 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" — ios-1017-int 1776440d NowWorkingRow): 민트(우리 팀 — 아이폰 데모와 같은
+// 사람) · 하늘(다른 팀)이 집중을 켠 명부. 근무 중 절은 화면 한 장 아래라 절만 따로 찍는다. 출처는 폰 조립과 같은 줄(NowStore.focusedPeerIDsSource =
+// MessagesStore.focusedPeerIDs)이고, 음성 기준선은 게이트가 꺼진 메시지 스토어(Windows 조립 — 같은 명부인데 칩이 없다)다.
 package com.yehsung.aingcheck.android.screens.now
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.assertCountEquals
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
@@ -21,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -158,6 +170,9 @@ class NowScreenSnapshotTest {
     /** 무소속 장면(iOS 데모 `now/team/noteam`). */
     private var teamless = false
 
+    /** 명부(app_user_directory)에서 집중을 켠 사람(판 7 — 저장소 데모 픽스처에는 아직 focus_mode 칸이 없어 여기서 얹는다). */
+    private var focusIDs: Set<String> = emptySet()
+
     private val fixtures = File(repoRoot, "Sources/CheckMobileKit/Demo/Fixtures").walkTopDown().filter { it.isFile && it.name.endsWith(".json") }.map { f ->
         val rel = f.relativeTo(File(repoRoot, "Sources/CheckMobileKit/Demo/Fixtures")).invariantSeparatorsPath
         val scenario = rel.split('/').dropLast(1).lastOrNull { it.startsWith("_") }?.drop(1)
@@ -192,6 +207,13 @@ class NowScreenSnapshotTest {
             ?: return 404 to """{"code":"PGRST202","message":"Could not find the function public.$key"}"""
         val parsed = runCatching { Json.parseToJsonElement(hit.text) }.getOrNull()
         if (parsed is JsonObject && parsed["__status"] != null) return (parsed["__status"]!!.jsonPrimitive.intOrNull ?: 500) to (parsed["__body"]?.toString() ?: "{}")
+        if (key == "rpc.app_user_directory" && focusIDs.isNotEmpty()) {
+            val rows = requireNotNull(parsed as? JsonArray).map { row ->
+                val o = row.jsonObject
+                JsonObject(o + ("focus_mode" to JsonPrimitive(o["user_id"]?.jsonPrimitive?.content in focusIDs)))
+            }
+            return 200 to JsonArray(rows).toString()
+        }
         val mate = offWorkMate
         if (key == "rest.work_statuses.get" && (mate != null || allOffWork)) {
             val rows = requireNotNull(parsed as? JsonArray).map { row ->
@@ -773,8 +795,155 @@ class NowScreenSnapshotTest {
     @Test @Config(qualifiers = "w600dp-h960dp-xhdpi")
     fun nowTabletLight() = check("now-sw600dp-light", 600.dp, 900.dp, dark = false)
 
+    // ---------------------------------------------------------------- 근무 중 줄 '집중' 칩(판 7 · 대표 답 #d_6A32rmcoJZZd)
+
+    /** 메시지 스토어 둘(게이트 켬 = 폰 · 끔 = Windows)을 지금 탭에 잇고, 지금 탭은 [focusSource] 의 집합을 읽는다(폰 조립과 같은 줄). */
+    private lateinit var focusOn: MessagesStore
+    private lateinit var focusOff: MessagesStore
+    private var focusSource: MessagesStore? = null
+
+    private fun loadFocus() {
+        focusIDs = setOf(FOCUS_TEAMMATE, FOCUS_OTHER)
+        load()
+        focusOn = MessagesStore(context, scope, NaturalKoNameCollation, focusSendGate = true).also { it.nowStore = store }
+        focusOff = MessagesStore(context, scope, NaturalKoNameCollation).also { it.nowStore = store }
+        focusSource = focusOn
+        store.focusedPeerIDsSource = { focusSource?.focusedPeerIDs ?: emptySet() }
+        val people = store.workingPeople(clock.now())
+        assertEquals("장면: 집중 둘이 우리 팀 · 다른 팀 줄에 하나씩", setOf(true, false), people.filter { it.id in focusOn.focusedPeerIDs }.map { it.isTeammate }.toSet())
+        assertEquals(setOf(FOCUS_TEAMMATE, FOCUS_OTHER), focusOn.focusedPeerIDs)
+        assertEquals("게이트 끈 스토어(Windows)가 집중 집합을 냈다", emptySet<String>(), focusOff.focusedPeerIDs)
+    }
+
+    @Composable
+    private fun WorkingOnly(dark: Boolean, source: MessagesStore, fontScale: Float?) {
+        // 지금 탭이 읽을 메시지 스토어를 고른다 — 그리기 전에 정한다(같은 지금 탭 스토어 · 같은 명부, 집합의 출처만 다르다).
+        focusSource = source
+        val body: @Composable () -> Unit = {
+            Frame(dark) {
+                Column(Modifier.fillMaxSize().background(AingTheme.colors.background)) {
+                    WorkingSection(store, phoneWorkWired = true, now = clock.now(), onTalk = {}, onOpenTeamRoster = {})
+                }
+            }
+        }
+        if (fontScale == null) {
+            body()
+        } else {
+            val base = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(base.density, fontScale), content = body)
+        }
+    }
+
+    private fun checkWorkingFocus(name: String, dark: Boolean, fontScale: Float? = null) {
+        loadFocus()
+        val scene: @Composable () -> Unit = { WorkingOnly(dark, focusOn, fontScale) }
+        val other: @Composable () -> Unit = { WorkingOnly(dark, focusOff, fontScale) }
+        val first = render(360.dp, 760.dp, scene)
+        assertEquals("$name: 두 번 그린 장면이 다르다", 0, first.differing(render(360.dp, 760.dp, scene)))
+        assertTrue("$name: 장면이 그려지지 않았다", first.argb.toHashSet().size >= 64)
+        System.getenv("AINGCHECK_EVIDENCE_DIR")?.let { runCatching { first.writePng(File(it, "android-$name.png")) } }
+        val golden = File(mpRoot, "androidApp/src/test/kotlin/com/yehsung/aingcheck/android/screens/now/golden/$name.png")
+        if (System.getenv("AINGCHECK_SNAPSHOT_RECORD") == "1") {
+            first.writePng(golden)
+            fail("$name: 골든을 기록했다(${golden.path}) — 기록 실행은 실패로 끝난다")
+        }
+        assertTrue("$name: 골든이 없다(${golden.path})", golden.isFile)
+        val expected = IntArrayImage.readPng(golden)
+        val exact = System.getProperty("os.name")?.startsWith("Mac") == true && System.getProperty("os.arch") == "aarch64"
+        val diff = expected.differing(first)
+        val block = expected.maxBlockDelta(first)
+        println("AINGCHECK-SNAPSHOT android now/$name mode=${if (exact) "exact" else "coarse"} ${first.width}x${first.height} diff=$diff block=$block")
+        if (if (exact) diff != 0 else (diff < 0 || block > 64)) {
+            first.writePng(File(mpRoot, "androidApp/build/aingcheck-snapshots/$name-actual.png"))
+            fail("$name: 골든과 다르다(diff=$diff block=$block)")
+        }
+        // 음성 기준선: 게이트 끈 스토어(Windows) — 같은 명부인데 칩 두 개만 없다.
+        val baseline = render(360.dp, 760.dp, other)
+        val negative = first.differing(baseline)
+        println("AINGCHECK-SNAPSHOT-NEGATIVE android now/$name diff=$negative block=${first.maxBlockDelta(baseline)}")
+        assertFalse("$name: 칩만 다른 장면인데 같은 픽셀 — 비교가 칩을 못 본다", negative == 0)
+        assertTrue("$name: 기준선 차이 ${negative}px — 칩 자리만 달라야 한다", negative in 1 until first.argb.size / 10)
+        assertTrue("$name: 굵은 대조가 칩만 다른 장면을 못 잡는다", first.maxBlockDelta(baseline) > 64)
+    }
+
+    @Test fun workingFocusPhoneLight() = checkWorkingFocus("now-working-focus-phone-light", dark = false)
+
+    @Test fun workingFocusPhoneDark() = checkWorkingFocus("now-working-focus-phone-dark", dark = true)
+
+    @Test fun workingFocusPhoneLargeFont() = checkWorkingFocus("now-working-focus-phone-large-font", dark = false, fontScale = 1.6f)
+
+    /** 글꼴 '크게'(1.3 — iOS xxxLarge 쯤): 아직 한 줄 모양이다(검토 F5). 칩 · 배지 · 경과가 있어도 이름이 말줄임표만 남지 않는지 사람이 PNG 를 연다. */
+    @Test fun workingFocusPhoneFont130() = checkWorkingFocus("now-working-focus-phone-font-130", dark = false, fontScale = 1.3f)
+
+    /**
+     * 큰 글자 모양의 기준(검토 F5): 줄을 쌓는 것은 iOS `NowWorkingRow` 의 `isAccessibilitySize` 갈래(AX 크기부터)다 — 이 화면 새 버전 안내 ·
+     * 나 탭 AI 한도와 같은 1.5 자리. 1.0 · 1.3('크게' · iOS xxxLarge 쯤)은 판 7 전과 같은 한 줄 모양(우리 팀 경과가 이름 줄 오른쪽),
+     * 1.5 · 1.6 은 쌓은 모양(경과가 이름 아래 줄)이다. 잰다: 민트(우리 팀 · 집중) 줄에서 경과 글자의 윗변이 이름 글자의 아랫변 아래인가.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun workingRowStacksOnlyFromAccessibilitySizes() {
+        loadFocus()
+        val name = store.workingPeople(clock.now()).first { it.id == FOCUS_TEAMMATE }.name
+        val inRow = hasAnyAncestor(hasTestTag(NowTags.workingRow(FOCUS_TEAMMATE)))
+        // 경과 글자 = "근무 …째"(얼굴의 상태 점 "근무 중"과 가른다).
+        val elapsed = SemanticsMatcher("우리 팀 경과") { node ->
+            node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.ContentDescription).orEmpty().any { it.startsWith("근무 ") && it.endsWith("째") }
+        }
+        fun stackedAt(scale: Float): Boolean {
+            var stacked: Boolean? = null
+            runComposeUiTest {
+                setContent { WorkingOnly(false, focusOn, scale) }
+                waitForIdle()
+                val nameBox = onNode(hasText(name) and inRow, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                val elapsedBox = onNode(elapsed and inRow, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+                stacked = elapsedBox.top >= nameBox.bottom
+            }
+            return requireNotNull(stacked)
+        }
+        assertEquals("보통 글자(1.0)는 한 줄 모양", false, stackedAt(1.0f))
+        assertEquals("'크게'(1.3 — iOS xxxLarge 쯤)는 아직 한 줄 모양이어야 한다(iOS 는 AX 크기부터 쌓는다)", false, stackedAt(1.3f))
+        assertEquals("접근성 크기(1.5)부터 쌓는다", true, stackedAt(1.5f))
+        assertEquals("1.6 은 쌓은 모양", true, stackedAt(1.6f))
+    }
+
+    /**
+     * 부르는 자리: 집중인 줄(우리 팀 민트 · 다른 팀 하늘)에만 칩이 서고, 이 줄은 조각을 하나씩 읽으므로 칩 자신이 "집중"이 아니라 "집중 중"으로 읽힌다.
+     * 기준선: 집중 아닌 줄(라임 · 코랄)엔 없다 · 게이트 끈 스토어(Windows)는 같은 명부에서도 칩이 하나도 없다.
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun workingRowChipSpeaksAndFollowsTheMessagesStore() {
+        loadFocus()
+        fun chipIn(id: String) = hasContentDescription(MessagesFocusText.accessibility) and hasAnyAncestor(hasTestTag(NowTags.workingRow(id)))
+        runComposeUiTest {
+            setContent { WorkingOnly(false, focusOn, null) }
+            waitForIdle()
+            onNode(chipIn(FOCUS_TEAMMATE)).assertExists()
+            onNode(chipIn(FOCUS_OTHER)).assertExists()
+            onNode(chipIn(PLAIN_TEAMMATE)).assertDoesNotExist()
+            onNode(chipIn(PLAIN_OTHER)).assertDoesNotExist()
+            // 칩 글자 '집중'은 따로 읽히지 않는다(칩이 "집중 중" 한 마디로 읽힌다). TalkBack 이 읽는 트리(병합 트리 — clearAndSetSemantics 가 걷은
+            // 자식은 빠진다)로 잰다. 병합하지 않은 시험 트리는 걷힌 자식도 그대로 보여 준다.
+            onAllNodes(hasText(MessagesFocusText.personChip)).assertCountEquals(0)
+            onAllNodes(hasContentDescription(MessagesFocusText.accessibility)).assertCountEquals(2)
+        }
+        runComposeUiTest {
+            setContent { WorkingOnly(false, focusOff, null) }
+            waitForIdle()
+            onNodeWithTag(NowTags.workingRow(FOCUS_TEAMMATE)).assertExists()
+            onAllNodes(hasContentDescription(MessagesFocusText.accessibility)).assertCountEquals(0)
+        }
+    }
+
     private companion object {
         const val TAG = "aingcheck-now"
         const val ROSTER_OFF_MATE = "d0000000-0000-4000-8000-000000000103"
+
+        /** 집중 장면: 민트(우리 팀) · 하늘(다른 팀)이 켰다. 라임(우리 팀) · 코랄(다른 팀)은 기준선. */
+        const val FOCUS_TEAMMATE = "d0000000-0000-4000-8000-000000000102"
+        const val FOCUS_OTHER = "d0000000-0000-4000-8000-000000000202"
+        const val PLAIN_TEAMMATE = "d0000000-0000-4000-8000-000000000103"
+        const val PLAIN_OTHER = "d0000000-0000-4000-8000-000000000201"
     }
 }

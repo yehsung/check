@@ -7,6 +7,8 @@ object MessagesTags {
     const val MEGAPHONE_BUTTON = "messages-megaphone"
     const val NEW_CONVERSATION_BUTTON = "messages-new-conversation"
     const val BLOCK_NOTICE = "messages-block-notice"
+    /** 내 집중이면 대화 목록 위 한 줄(판 7 · MessagesFocusRules.listNotice). */
+    const val LIST_FOCUS_NOTICE = "messages-list-focus-notice"
     fun threadRow(peerID: String): String = "messages-thread-$peerID"
 
     const val CONVERSATION_SCREEN = "conversation"
@@ -16,9 +18,6 @@ object MessagesTags {
     const val MENU_BLOCK = "conversation-menu-block"
     const val MENU_COPY = "bubble-menu-copy"
     const val MENU_REPORT_MESSAGE = "bubble-menu-report"
-    const val MENU_SELECT_COPY = "bubble-menu-select-copy"
-    const val SELECT_COPY_SHEET = "select-copy-sheet"
-    const val SELECT_COPY_FIELD = "select-copy-field"
     fun bubble(messageID: String): String = "bubble-$messageID"
     fun pending(localID: String): String = "pending-$localID"
     const val NEW_MESSAGE_BUTTON = "conversation-new-message"

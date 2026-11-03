@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.min
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.text.Graphemes
 import com.yehsung.aingcheck.core.rules.text.TextScalars
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
 import com.yehsung.aingcheck.core.wire.CenterLabel
 import com.yehsung.aingcheck.core.wire.SwiftURL
@@ -216,9 +217,11 @@ fun PersonName(
  * **테두리형인 까닭**(iOS 와 같은 계산): 칠한 칩(글자 색 14% 바탕)이면 라이트에서 글자가 4.3:1 로 4.5:1 에 못 미친다(aiToken #7A4FE0).
  * 테두리형은 글자가 줄 바탕(흰 카드 · 유리 이름표) 위에 바로 앉는다. 다크는 aiToken 다크값(밝은 보라)이라 넉넉하다.
  *
- * **한 조각으로 둔다**: 새 대화 사람 줄(`PersonName(focusChip=)`)과 대화 이름표가 이 부품 하나를 부른다. 표시 자리를 넓히게 되면(대표 결정 대기 —
- * 대화 목록 줄 · 지금 탭 근무 중 줄 등) 이것을 꽂으면 된다(글자는 코어 `MessagesFocusText`). TalkBack 은 칩을 따로 읽지 않는다 —
- * 줄·이름표가 자기 문장에 `MessagesFocusText.accessibility` 를 잇는다(그 자리들은 clearAndSetSemantics 다).
+ * **한 조각으로 둔다**: 사람 줄 셋(새 대화 시트 · 메시지 탭 대화 목록 · 지금 탭 근무 중 — `PersonName(focusChip = personFocusChip(..))`)과
+ * 대화 이름표가 이 부품 하나를 부른다(대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" · 글자는 코어 `MessagesFocusText`). 얼굴 띠는 칩 없이 TalkBack 만 잇는다.
+ * TalkBack: 줄을 한 덩이로 읽는 자리(clearAndSetSemantics — 새 대화 · 대화 목록 · 이름표)는 줄이 자기 문장에 `MessagesFocusText.accessibility` 를 잇는다
+ * (그 자리에서는 이 칩의 의미가 지워진다). 줄의 조각을 하나씩 읽는 자리(지금 탭 근무 중 줄)는 이 칩이 "집중"이 아니라 "집중 중"으로 읽힌다
+ * (iOS 1.0.17 1776440d `FocusChip.accessibilityLabel` 과 같은 꼴).
  */
 @Composable
 fun FocusChip(text: String, modifier: Modifier = Modifier) {
@@ -227,12 +230,19 @@ fun FocusChip(text: String, modifier: Modifier = Modifier) {
         modifier
             .heightIn(min = 18.dp)
             .border(1.dp, colors.aiToken, CircleShape)
-            .padding(horizontal = 6.dp),
+            .padding(horizontal = 6.dp)
+            .clearAndSetSemantics { contentDescription = MessagesFocusText.accessibility },
         contentAlignment = Alignment.Center,
     ) {
         Text(text, style = MaterialTheme.typography.labelSmall, color = colors.aiToken, maxLines = 1)
     }
 }
+
+/**
+ * 사람 줄 이름 뒤 칩 글자 — 집중 중이면 '집중' 하나(아니면 null = 칩 없음). 사람 줄 셋(새 대화 시트 · 메시지 탭 대화 목록 · 지금 탭 근무 중)이
+ * 이것 하나를 부른다(iOS 1.0.17 `PersonName.focusChips` 의 Android 짝).
+ */
+fun personFocusChip(isFocused: Boolean): String? = if (isFocused) MessagesFocusText.personChip else null
 
 /** '나' 칩(Swift `MeChip` — 파랑 틴트 · 높이 18). */
 @Composable

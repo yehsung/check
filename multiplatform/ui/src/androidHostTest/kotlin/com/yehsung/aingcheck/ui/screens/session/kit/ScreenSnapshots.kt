@@ -14,6 +14,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.SemanticsNodeInteractionsProvider
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
@@ -64,8 +65,9 @@ object ScreenSnapshots {
         }
     }
 
+    /** [act] 는 그린 뒤 찍기 전에 하는 손짓(판 7 말풍선 고르기 장면처럼 — 길게 눌러 고른 모습). 없으면 그린 그대로 찍는다. */
     @OptIn(ExperimentalTestApi::class)
-    fun render(frame: ScreenFrame, art: ScreenArt, content: @Composable () -> Unit): PixelImage {
+    fun render(frame: ScreenFrame, art: ScreenArt, act: (SemanticsNodeInteractionsProvider.() -> Unit)? = null, content: @Composable () -> Unit): PixelImage {
         var out: PixelImage? = null
         runComposeUiTest {
             // Compose 리소스 읽개는 Android 문맥(활동)이 선 뒤에 연다 — 그래서 이 블록 안에서 채운다.
@@ -76,6 +78,10 @@ object ScreenSnapshots {
                 }
             }
             waitForIdle()
+            if (act != null) {
+                act()
+                waitForIdle()
+            }
             out = AndroidSnapshots.pixels(onNodeWithTag(TAG).captureToImage())
         }
         return requireNotNull(out)
@@ -83,10 +89,20 @@ object ScreenSnapshots {
 
     /**
      * [scene] 의 골든 판정 + 음성 기준선([other] — 한 군데만 다른 같은 크기 장면). [group] 은 `screens/messages` 처럼 골든 폴더.
+     * [sceneAct] · [otherAct] 는 그린 뒤 찍기 전의 손짓([render] — 없으면 그린 그대로).
      */
-    fun check(group: String, name: String, frame: ScreenFrame, art: ScreenArt, scene: @Composable () -> Unit, other: @Composable () -> Unit) {
-        val first = render(frame, art, scene)
-        val second = render(frame, art, scene)
+    fun check(
+        group: String,
+        name: String,
+        frame: ScreenFrame,
+        art: ScreenArt,
+        scene: @Composable () -> Unit,
+        other: @Composable () -> Unit,
+        sceneAct: (SemanticsNodeInteractionsProvider.() -> Unit)? = null,
+        otherAct: (SemanticsNodeInteractionsProvider.() -> Unit)? = null,
+    ) {
+        val first = render(frame, art, sceneAct, scene)
+        val second = render(frame, art, sceneAct, scene)
         val out = AndroidSnapshots.outDir()
         val again = SnapshotCompare.diff(first, second)
         if (!again.identical) {
@@ -111,7 +127,7 @@ object ScreenSnapshots {
             SnapshotCompare.diffImage(expected, first)?.let { AndroidSnapshots.writePng(it, File(out, "$name-diff.png")) }
             fail("$name: 골든과 다르다(${if (exact) "픽셀 그대로" else "굵은 대조"} — $diff · $coarse) — build/aingcheck-snapshots/android/$name-{actual,diff}.png")
         }
-        val baseline = render(frame, art, other)
+        val baseline = render(frame, art, otherAct, other)
         assertEquals("$name: 기준선 크기가 다르다", first.width to first.height, baseline.width to baseline.height)
         val negative = SnapshotCompare.diff(first, baseline)
         val negativeCoarse = SnapshotCompare.coarse(first, baseline)

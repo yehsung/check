@@ -39,25 +39,13 @@ import com.yehsung.aingcheck.core.rules.text.TextScalars
 import com.yehsung.aingcheck.ui.theme.AingColors
 import com.yehsung.aingcheck.ui.theme.AingTheme
 
-/**
- * 골라 복사 모양(대표 결정 대기 — 아이폰 1.0.17 카드 '골라 복사 모양'). **한 곳에서만 바꾼다.**
- * 추천안 A: 길게 누르기 메뉴에 [골라 복사] → 시트에서 끌어 고르기(ChatSelectCopySheet). [none] 이면 메뉴 항목 · TalkBack 동작 · 시트가 모두 사라진다
- * ([복사]는 그대로 원문 전체).
- */
-enum class ChatSelectCopyStyle { none, sheet }
-
-object ChatBubbleMarkdownSettings {
-    /** 대표 답이 오면 여기 하나만 바꾼다(pending_decisions). */
-    val selectCopy: ChatSelectCopyStyle = ChatSelectCopyStyle.sheet
-}
+// 고른 글 복사의 모양은 대표 답 #d_M9wR9l9VLNvx "말풍선에서 바로 길게 눌러 고르기"로 정해졌다 — 글 말풍선 자체가 고르기 칸이다(ChatBubbleSelection.kt).
+// 판 7 초안의 메뉴 항목 → 시트 방식과 그 깃발은 걷어 냈다.
 
 /** 말풍선 서식 문구(아이폰 원문). */
 object ChatBubbleText {
     /** TalkBack 링크 동작 이름의 머리 — 뒤에 화면에 보이는 링크 글 + 꼬리표가 붙는다("링크 열기: 자료 (a.example)"). 아이폰 1.0.17 원문. */
     const val openLinkActionPrefix = "링크 열기: "
-
-    /** 길게 누르기 메뉴 · TalkBack 동작 [골라 복사](아이폰 1.0.17 설계 문서 A안의 이름 — 아이폰은 아직 내지 않았다 · invented_strings). */
-    const val selectCopy = "골라 복사"
 }
 
 object ChatBubbleMarkdown {

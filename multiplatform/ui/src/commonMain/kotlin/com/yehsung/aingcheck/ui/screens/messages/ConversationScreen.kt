@@ -10,6 +10,8 @@
 //
 // 신고·차단 세 입구(E§4.3): ① 머리 ⋮ 메뉴(ReportBlockMenuButton) ② 받은 말풍선 길게 누르기 → [이 메시지 신고하기] ③ 오목 채팅 서랍 ⋮(W4-a 가 같은 단추).
 // 신고는 **받은 말풍선만**이다 — 내 말을 내가 신고하는 길은 만들지 않는다.
+// ②의 모양(판 7 · 대표 답 #d_M9wR9l9VLNvx "말풍선에서 바로 길게 눌러 고르기"): 서식 켠 조립(폰)의 **글 말풍선**은 길게 누르면 글을 고르고, 시스템 도구 막대
+// ([복사] · [모두 선택] · [번역] + [이 메시지 신고하기])가 뜬다(ChatBubbleSelection.kt). 이모티콘 말풍선 · 꺼진 조립(Windows)은 예전 길게 누르기 메뉴 그대로다.
 package com.yehsung.aingcheck.ui.screens.messages
 
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -37,6 +39,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.text.selection.rememberSelectionState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -46,6 +51,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -60,10 +66,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
@@ -77,14 +83,14 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.yehsung.aingcheck.core.rules.text.AingSticker
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
 import com.yehsung.aingcheck.core.rules.text.ChatMarkdown
+import com.yehsung.aingcheck.core.rules.text.ChatMarkdownPiece
 import com.yehsung.aingcheck.core.rules.text.ChatMarkdownPieces
 import com.yehsung.aingcheck.core.rules.text.BlockReportText
 import com.yehsung.aingcheck.core.stores.messages.MessageEntry
@@ -155,8 +161,6 @@ fun ConversationScreen(
     var showsBlock by rememberSaveable(peerID) { mutableStateOf(false) }
     var reportTarget by remember(peerID) { mutableStateOf<MessagesReportTarget?>(null) }
     var showsStickers by rememberSaveable(peerID) { mutableStateOf(false) }
-    // 골라 복사 시트에 띄운 말풍선 본문(판 7 · 폰만 — 서식이 켜진 조립에서만 메뉴가 선다).
-    var selectCopyBody by remember(peerID) { mutableStateOf<String?>(null) }
     // 채팅 서식(판 7 — 제목·굵게·링크)은 폰 조립만 켠다(MessagesStore.chatMarkdown). 꺼져 있으면(Windows) 말풍선 · 메뉴 · TalkBack 이 예전 글자 그대로다.
     val formatting = store.chatMarkdown
 
@@ -194,7 +198,6 @@ fun ConversationScreen(
                 onRetry = { scope.launch { store.retryConversation(peerID) } },
                 onReportMessage = { entry -> reportTarget = MessagesReportTarget(peerID, entry.peerName, entry.id, entry.body) },
                 formatting = formatting,
-                onSelectCopy = { entry -> selectCopyBody = entry.body },
                 modifier = Modifier.widthIn(max = READABLE_WIDTH),
             )
         }
@@ -245,13 +248,6 @@ fun ConversationScreen(
         ModalPresenceMark()
         ModalBottomSheet(onDismissRequest = { showsStickers = false }, containerColor = colors.background) {
             MessagesStickerSheet(store, peerID, onClose = { showsStickers = false })
-        }
-    }
-    selectCopyBody?.let { body ->
-        ModalPresenceMark()
-        ModalBottomSheet(onDismissRequest = { selectCopyBody = null }, containerColor = colors.surface) {
-            // 시트 글은 말풍선과 같은 글(이모티콘 폴백을 지난 본문)이다 — 이모티콘 말풍선에는 메뉴가 서지 않는다.
-            ChatSelectCopySheet(remember(body) { ChatSelectCopyState(AingStickerText.preview(body)) })
         }
     }
 }
@@ -356,7 +352,6 @@ private fun ConversationList(
     onRetry: () -> Unit,
     onReportMessage: (MessageEntry) -> Unit,
     formatting: Boolean = false,
-    onSelectCopy: (MessageEntry) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val colors = AingTheme.colors
@@ -396,9 +391,6 @@ private fun ConversationList(
                         // 신고는 받은 말풍선만이다.
                         onReport = if (item.line.entry.isMine) null else ({ onReportMessage(item.line.entry) }),
                         formatting = formatting,
-                        // [골라 복사]는 서식이 켜진 조립 · 추천안 A(시트) · 글 말풍선만(이모티콘 말풍선엔 없다 — 아이폰 설계와 같다).
-                        onSelectCopy = if (formatting && ChatBubbleMarkdownSettings.selectCopy == ChatSelectCopyStyle.sheet &&
-                            AingSticker.parse(item.line.entry.body) == null) ({ onSelectCopy(item.line.entry) }) else null,
                         modifier = Modifier.padding(top = if (item.line.startsGroup) 7.dp else 0.dp),
                     )
                     is MessagesConversationItem.pending -> PendingBubbleRow(item.item, stickerArt, formatting)
@@ -468,7 +460,11 @@ private val STICKER_SIDE = 120.dp
 
 /**
  * 말풍선 한 줄. 받은 것은 왼쪽(bubbleIn), 보낸 것은 오른쪽(accentFill · 흰 글자). 곁 글자("1 13:52")는 말풍선 바깥 아래쪽에 가로로.
- * 길게 누르면 [복사](원문 그대로 — 붙여넣어 다시 보내면 그림이 된다) · 받은 말풍선이면 [이 메시지 신고하기].
+ * 길게 누르기(판 7 · 대표 답 #d_M9wR9l9VLNvx "말풍선에서 바로 길게 눌러 고르기"):
+ *  · 서식 켠 조립(폰)의 **글 말풍선** — 글을 고른다. 시스템 도구 막대에 [복사](고른 글 · 서식 없이 · 링크는 실제 주소째) · [모두 선택] · [번역](기기가 내놓으면)
+ *    + 받은 말풍선이면 [이 메시지 신고하기](ChatBubbleSelection). 판 7 전의 길게 누르기 메뉴는 글 말풍선에 없다.
+ *  · **이모티콘 말풍선** · 꺼진 조립(Windows) — 예전 메뉴 그대로: [복사](원문 그대로 — 붙여넣어 다시 보내면 그림이 된다) · 받은 말풍선이면 [이 메시지 신고하기].
+ * TalkBack 줄 동작은 그대로다: [복사](원문) · 링크마다 "링크 열기: …" · 받은 말풍선이면 [이 메시지 신고하기].
  *
  * INV-MessagesConversationView-21fa1bf0 이식: 줄 전체 라벨(TalkBack)은 이모티콘이면 날것 토큰이 아니라 이름("아잉이 기쁨")으로 읽는다 —
  *   clearAndSetSemantics 라 그림 쪽 문구가 줄 라벨에 섞이지 않는다. 평범한 본문은 preview 가 한 글자도 바꾸지 않는다.
@@ -480,7 +476,6 @@ private fun BubbleRow(
     stickerArt: StickerArtState,
     onReport: (() -> Unit)?,
     formatting: Boolean = false,
-    onSelectCopy: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val entry = line.entry
@@ -499,7 +494,6 @@ private fun BubbleRow(
     }.joinToString(", ")
     val actions = buildList {
         add(CustomAccessibilityAction(ConversationText.copy) { clipboard.setText(AnnotatedString(entry.body)); true })
-        if (onSelectCopy != null) add(CustomAccessibilityAction(ChatBubbleText.selectCopy) { onSelectCopy(); true })
         for (link in links) add(CustomAccessibilityAction(link.title) { open(link.address); true })
         if (onReport != null) add(CustomAccessibilityAction(BlockReportText.reportMessageAction) { onReport(); true })
     }
@@ -515,21 +509,11 @@ private fun BubbleRow(
         }
         Box(Modifier.weight(1f, fill = false)) {
             if (formatting) {
-                // 서식 말풍선: 한 번 누르면 그 자리의 링크를 연다(링크 글자 상자 + 손가락 오차 — 링크 밖은 아무 일 없다) · 길게 누르면 메뉴.
-                val hit = remember { ChatBubbleLinkHit() }
-                val currentOpen by rememberUpdatedState(open)
-                val slop = with(LocalDensity.current) { ChatBubbleMarkdown.LINK_TOUCH_SLOP.toPx() }
-                Box(
-                    Modifier
-                        .onPlaced { hit.outer = it }
-                        .pointerInput(entry.body) {
-                            detectTapGestures(
-                                onLongPress = { menu = true },
-                                onTap = { position -> hit.linkAt(position, slop)?.let { currentOpen(it) } },
-                            )
-                        },
-                ) {
-                    BubbleContent(entry.body, entry.isMine, stickerArt, isPending = false, formatting = true, hit = hit)
+                // 서식 말풍선: 한 번 누르면 그 자리의 링크를 연다(고르는 중이 아닐 때) · 길게 누르면 글 말풍선은 고르기, 이모티콘 말풍선은 메뉴.
+                // 판정하는 자리는 BubbleContent 와 같은 StickerArt 두 함수다(그림이면 그림 메뉴, 그림을 못 읽어 글자로 접혔으면 글 말풍선 — 아이폰과 같다).
+                val sticker = StickerArt.drawable(entry.body, stickerArt) != null || StickerArt.isPendingArt(entry.body, stickerArt)
+                FormattedBubbleTouch(entry.body, onStickerMenu = if (sticker) ({ menu = true }) else null, onOpen = open) { hit ->
+                    BubbleContent(entry.body, entry.isMine, stickerArt, isPending = false, formatting = true, hit = hit, onReport = onReport)
                 }
             } else {
                 Box(Modifier.combinedClickable(onClick = {}, onLongClick = { menu = true })) {
@@ -543,14 +527,6 @@ private fun BubbleRow(
                     onClick = { menu = false; clipboard.setText(AnnotatedString(entry.body)) },
                     modifier = Modifier.testTag(MessagesTags.MENU_COPY),
                 )
-                if (onSelectCopy != null) {
-                    DropdownMenuItem(
-                        text = { Text(ChatBubbleText.selectCopy) },
-                        leadingIcon = { AingIcon(AppIcon.PanToolAltFill, null, size = 20.dp) },
-                        onClick = { menu = false; onSelectCopy() },
-                        modifier = Modifier.testTag(MessagesTags.MENU_SELECT_COPY),
-                    )
-                }
                 if (onReport != null) {
                     DropdownMenuItem(
                         text = { Text(BlockReportText.reportMessageAction, color = AingTheme.colors.danger) },
@@ -570,21 +546,40 @@ private fun BubbleRow(
 }
 
 /**
- * 서식 말풍선의 링크 누름 판정 재료(판 7): 그린 글 · 글자 배치 · 글 칸과 손짓 상자의 자리. 손짓은 말풍선 바깥 상자(여백 포함)가 받고,
- * 여기서 글 칸 좌표로 옮겨 코어 판정(ChatBubbleMarkdown.linkAt)을 부른다. 상태가 아니다(그리기를 다시 부르지 않는다).
+ * 서식 말풍선(판 7)의 손짓 상자 — 말풍선 바깥(여백 포함)이 받는다. 재료는 [content] 에 넘기는 [ChatBubbleTextHit] 하나다.
+ *  · 한 번 누름: 그 자리의 링크를 연다([onOpen] — 링크 글자 상자 + 손가락 오차, 링크 밖은 아무 일 없다). 누름이 시작될 때나 끝날 때 고르는 중이면 열지 않는다
+ *    (그 누름은 고른 것을 지우는 누름이다 — ChatBubbleSelection ③). [onOpen] 이 null 이면(보내는 중 말풍선) 링크를 열지 않는다(판 7 전과 같다).
+ *  · 길게 누름: 이모티콘 말풍선이면 메뉴([onStickerMenu]). 글 말풍선이면 글자 위는 고르기 칸이 스스로 받고, 여백 띠면 가장 가까운 낱말을 고른다(④).
  */
-private class ChatBubbleLinkHit {
-    var text: AnnotatedString? = null
-    var layout: TextLayoutResult? = null
-    var inner: LayoutCoordinates? = null
-    var outer: LayoutCoordinates? = null
-
-    fun linkAt(position: Offset, slop: Float): String? {
-        val text = text ?: return null
-        val layout = layout ?: return null
-        val inner = inner?.takeIf { it.isAttached } ?: return null
-        val outer = outer?.takeIf { it.isAttached } ?: return null
-        return ChatBubbleMarkdown.linkAt(text, layout, inner.localPositionOf(outer, position), slop)
+@Composable
+private fun FormattedBubbleTouch(
+    touchKey: Any,
+    onStickerMenu: (() -> Unit)?,
+    onOpen: ((String) -> Unit)?,
+    content: @Composable (ChatBubbleTextHit) -> Unit,
+) {
+    val hit = remember { ChatBubbleTextHit() }
+    val currentOpen by rememberUpdatedState(onOpen)
+    val currentMenu by rememberUpdatedState(onStickerMenu)
+    val slop = with(LocalDensity.current) { ChatBubbleMarkdown.LINK_TOUCH_SLOP.toPx() }
+    Box(
+        Modifier
+            .onPlaced { hit.outer = it }
+            .pointerInput(touchKey) {
+                detectTapGestures(
+                    onPress = { hit.notePress() },
+                    onLongPress = { position ->
+                        val stickerMenu = currentMenu
+                        if (stickerMenu != null) stickerMenu() else hit.selectNearestWord(position)
+                    },
+                    onTap = { position ->
+                        val opener = currentOpen
+                        if (opener != null) hit.linkToOpen(position, slop)?.let { opener(it) }
+                    },
+                )
+            },
+    ) {
+        content(hit)
     }
 }
 
@@ -618,7 +613,8 @@ private fun BubbleContent(
     stickerArt: StickerArtState,
     isPending: Boolean,
     formatting: Boolean = false,
-    hit: ChatBubbleLinkHit? = null,
+    hit: ChatBubbleTextHit? = null,
+    onReport: (() -> Unit)? = null,
 ) {
     val colors = AingTheme.colors
     val drawn = StickerArt.drawable(body, stickerArt)
@@ -628,6 +624,9 @@ private fun BubbleContent(
         else -> Box(
             Modifier
                 .background((if (isMine) colors.accentFill else colors.bubbleIn).copy(alpha = if (isPending) 0.6f else 1f), RoundedCornerShape(BUBBLE_RADIUS))
+                // 판 7 고르기 메뉴의 거름 · [신고](받은 말풍선만) — 고르기 칸의 조상에 단다. 꺼진 조립(Windows)은 예전 그대로(아무것도 안 단다).
+                // [신고]는 고른 구간을 먼저 지우고 신고를 연다(아이폰 reportFromMenu — 시트 뒤에 강조가 남지 않게 · 검토 F2).
+                .then(if (formatting) Modifier.chatBubbleSelectionMenu(onReport?.let { report -> { hit?.selection?.clear(); report() } }) else Modifier)
                 .padding(start = 13.dp, end = 13.dp, top = 8.dp, bottom = 9.dp),
         ) {
             if (formatting) {
@@ -637,15 +636,12 @@ private fun BubbleContent(
                 val bubbleColors = chatBubbleColors(isMine)
                 val shown = AingStickerText.preview(body)
                 val pieces = remember(shown) { ChatMarkdownPieces.pieces(shown) }
-                val annotated = remember(pieces, bubbleColors, style) { ChatBubbleMarkdown.annotated(pieces, bubbleColors, style) }
+                // 조각 표식(ChatBubbleSelection.PIECE_TAG)은 그림을 바꾸지 않는다 — 고른 글에서 그린 글 구간을 되찾는 데만 쓴다(복사 ②).
+                val annotated = remember(pieces, bubbleColors, style) {
+                    ChatBubbleSelection.marked(ChatBubbleMarkdown.annotated(pieces, bubbleColors, style), pieces)
+                }
                 SideEffect { hit?.text = annotated }
-                Text(
-                    annotated,
-                    style = style.textStyle(pieces),
-                    color = bubbleColors.text,
-                    onTextLayout = { hit?.layout = it },
-                    modifier = Modifier.onPlaced { hit?.inner = it },
-                )
+                SelectableBubbleText(annotated, pieces, style.textStyle(pieces), bubbleColors.text, isMine, hit)
             } else {
                 Text(
                     AingStickerText.preview(body),
@@ -658,7 +654,51 @@ private fun BubbleContent(
     }
 }
 
-/** 보내는 중(또는 서버가 받았지만 이력이 아직 안 들고 온) 내 말풍선. 판정은 말풍선 행과 **같은 한 함수**다. */
+/**
+ * 글 말풍선 본문 = 고르기 칸(판 7 · ChatBubbleSelection ② · ⑤). 고르기 상태는 말풍선 하나에 하나다 — 줄은 메시지 id 열쇠라 화면이 다시 그려지거나
+ * 새 메시지가 와도 같은 상태가 남아 고르던 구간이 날아가지 않는다. 다른 말풍선을 길게 누르면 초점이 옮겨 가 앞 말풍선의 고르기는 풀린다.
+ * 붙여넣기판은 이 칸 안에서만 갈아 끼운다 — TalkBack [복사] · 이모티콘 메뉴 [복사]는 원래 붙여넣기판(원문)이다.
+ * 글자 · 글꼴 · 줄바꿈은 판 7 전 Text 그대로다(SelectionContainer 는 배치를 바꾸지 않는다 — 기존 말풍선 스냅숏이 그대로 초록).
+ */
+@Composable
+private fun SelectableBubbleText(
+    annotated: AnnotatedString,
+    pieces: List<ChatMarkdownPiece>,
+    style: TextStyle,
+    color: Color,
+    isMine: Boolean,
+    hit: ChatBubbleTextHit?,
+) {
+    val selection = rememberSelectionState()
+    val memory = remember { ChatSelectionMemory() }
+    SideEffect { hit?.selection = selection }
+    LaunchedEffect(selection) { snapshotFlow { selection.selectedTexts }.collect(memory::note) }
+    @Suppress("DEPRECATION") val writer = LocalClipboardManager.current
+    val real = LocalClipboard.current
+    val currentPieces by rememberUpdatedState(pieces)
+    val clipboard = remember(real, writer, selection, memory) {
+        chatSelectClipboard(real, writer) { ChatBubbleSelection.copyText(memory.current(selection), currentPieces) }
+    }
+    CompositionLocalProvider(
+        LocalClipboard provides clipboard,
+        LocalTextSelectionColors provides ChatBubbleSelection.selectionColors(isMine, AingTheme.colors),
+    ) {
+        SelectionContainer(state = selection) {
+            Text(
+                annotated,
+                style = style,
+                color = color,
+                onTextLayout = { hit?.layout = it },
+                modifier = Modifier.onPlaced { hit?.inner = it },
+            )
+        }
+    }
+}
+
+/**
+ * 보내는 중(또는 서버가 받았지만 이력이 아직 안 들고 온) 내 말풍선. 판정은 말풍선 행과 **같은 한 함수**다.
+ * 서식 켠 조립(폰)이면 글 말풍선은 같은 고르기 칸이다(판 7 — [신고] 없음 · 링크 누름은 판 7 전처럼 없음).
+ */
 @Composable
 private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerArtState, formatting: Boolean = false) {
     val sending = item.state == MessagesPendingOutgoing.State.sending
@@ -672,7 +712,15 @@ private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerA
     ) {
         Spacer(Modifier.size(OPPOSITE_INSET, 1.dp))
         if (sending) CircularProgressIndicator(Modifier.size(12.dp), color = AingTheme.colors.label2, strokeWidth = 1.5.dp)
-        Box(Modifier.weight(1f, fill = false)) { BubbleContent(item.body, isMine = true, stickerArt = stickerArt, isPending = true, formatting = formatting) }
+        Box(Modifier.weight(1f, fill = false)) {
+            if (formatting) {
+                FormattedBubbleTouch(item.body, onStickerMenu = null, onOpen = null) { hit ->
+                    BubbleContent(item.body, isMine = true, stickerArt = stickerArt, isPending = true, formatting = true, hit = hit)
+                }
+            } else {
+                BubbleContent(item.body, isMine = true, stickerArt = stickerArt, isPending = true)
+            }
+        }
     }
 }
 

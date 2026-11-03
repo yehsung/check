@@ -130,6 +130,23 @@ class MergedManifestTest {
         assertEquals("false", service.a("exported"))
         assertTrue(service.children("action").any { it.a("name") == "com.google.firebase.MESSAGING_EVENT" })
     }
+    /**
+     * 판 7 말풍선 바로 고르기의 [번역](검토 F1): 고르기 메뉴의 [번역]은 Compose 가 PROCESS_TEXT 앱을 **앱 안에서** 묻는 길
+     * (foundation ProcessTextApi23Impl → PackageManager.queryIntentActivities(PROCESS_TEXT · text/plain, 0))로만 온다. targetSdk 30 이상은
+     * 패키지 공개 범위가 그 조회 결과에서 번역 앱(Google 번역 · 파파고 등)을 지우므로, 매니페스트 꼭대기 <queries> 에 이 intent 하나를 연다.
+     * 넓은 QUERY_ALL_PACKAGES 는 쓰지 않는다(권한 허용 목록 그대로 — 위 permissionsAreExactlyTheAllowList).
+     */
+    @Test
+    fun processTextAppsAreVisibleToTheSelectionMenu() {
+        val top = manifest.children("queries").filter { it.parentNode === manifest }
+        val processText = top.flatMap { it.children("intent") }.filter { i ->
+            i.children("action").any { it.a("name") == "android.intent.action.PROCESS_TEXT" }
+        }
+        assertEquals("매니페스트 꼭대기 <queries> 에 PROCESS_TEXT intent 가 하나가 아니다 — 고르기 메뉴에 [번역]이 안 뜬다", 1, processText.size)
+        assertEquals(listOf("text/plain"), processText.single().children("data").mapNotNull { it.a("mimeType") })
+        assertTrue("PROCESS_TEXT 말고 다른 앱 공개 범위를 열었다", top.all { q -> q.children("package").isEmpty() && q.children("provider").isEmpty() })
+    }
+
     private val widgetStrings: Map<String, String> by lazy {
         val root = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(File("src/main/res/values/aing_widget_strings.xml")).documentElement
         root.children("string").associate { it.getAttribute("name") to it.textContent }

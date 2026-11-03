@@ -282,8 +282,10 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 지금 탭 칩의 연속 근무일은 나 탭 미션 조회의 값이다(Swift `NowStore.myStreakDays` 의 links.me) — 칩 때문에 조회를 늘리지 않는다.
         now.streakDaysSource = { me.streakDays }
         messages.nowStore = now
-        // 지금 탭 60초 틱에 내 집중 다시 묻기를 잇는다(켜짐으로 알고 대화가 떠 있을 때만 — 조건은 메시지 스토어가 판정한다).
+        // 지금 탭 60초 틱에 내 집중 다시 묻기를 잇는다(켜짐으로 알고 메시지 화면(목록 · 대화)이 떠 있을 때만 — 조건은 메시지 스토어가 판정한다).
         now.onPeriodicTick = { messages.refreshMyFocusModeIfFocused() }
+        // 지금 탭 근무 중 줄의 '집중' 칩은 메시지 스토어의 집합을 그대로 읽는다(출처 한 곳 · 차단 거르기도 거기서 — 대표 답 #d_6A32rmcoJZZd).
+        now.focusedPeerIDsSource = { messages.focusedPeerIDs }
         // 지금 탭 명부가 새로 서면 서버 거절로 세운 '집중 중' 문구를 상태로 넘긴다(집중 판정은 이 명부가 이긴다 — MessagesStore.settleFocusNotices).
         now.onDirectoryApplied = { messages.settleFocusNotices() }
         messages.router = router

@@ -15,6 +15,7 @@ import com.yehsung.aingcheck.core.stores.minigame.MiniGamePauseState
 import com.yehsung.aingcheck.testkit.mock.RecordedRequest
 import kotlinx.coroutines.awaitCancellation
 import com.yehsung.aingcheck.core.stores.me.MeDestination
+import com.yehsung.aingcheck.core.stores.messages.blockPeer
 import com.yehsung.aingcheck.core.stores.me.MeRoute
 import com.yehsung.aingcheck.core.stores.me.dismissCakeGiftSheet
 import com.yehsung.aingcheck.core.stores.rankings.RankingsBoard
@@ -157,6 +158,42 @@ class PhoneAppModelTest {
         advanceUntilIdle()
         assertTrue(messages.isPeerFocused(focused), "전제: 지금 탭 명부가 켜짐을 알아야 한다")
         assertNull(messages.sendNotices[focused], "폰 조립이 지금 탭 명부를 거절 문구 걷기에 잇지 않았다")
+        assertEquals(emptyList(), com.yehsung.aingcheck.testkit.mock.PhoneForbiddenCalls.violations(h.server.requests), "폰 금지 호출")
+    }
+
+    /**
+     * 지금 탭 근무 중 줄 '집중' 칩의 부르는 자리(판 7 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부" — 아이폰 `NowStore.focusedPeerIDs` 의
+     * `links.messages?.focusedPeerIDs`). 없으면: 스토어 시험(MessagesFocusRowsTest — 시험 조립이 직접 잇는다)은 초록인데 폰 지금 탭은 빈 집합을
+     * 읽어 칩이 영영 안 선다. 기준선: 명부가 모를 때(7칸)는 두 탭 모두 비어 있다 · 차단해 숨기면 지금 탭에서도 빠진다(출처 한 곳의 거르기).
+     */
+    @Test
+    fun assemblyHandsTheNowTabTheMessagesFocusSet() = runTest {
+        val focused = "3e240c02-8972-478e-a674-014f498a641b"
+        val directory7 = RepoFiles.readText("Tests/checkTests/Fixtures/directory-rpc/app_user_directory__current_7col.json")
+        val directory8 = RepoFiles.readText("Tests/checkTests/Fixtures/directory-rpc/app_user_directory__draft_8col.json")
+        var directory = directory7
+        val h = PhoneHarness(this) { r ->
+            when {
+                r.rpcName == "app_user_directory" -> Reply.Json(directory)
+                r.rpcName == "block_user" -> Reply.Json("{}")
+                r.rpcName == "message_unread_summary" || r.rpcName?.startsWith("message_history") == true -> Reply.missingFunction
+                else -> null
+            }
+        }
+        h.signIn()
+        h.app.now.refresh()
+        advanceUntilIdle()
+        assertTrue(h.app.now.hasLoadedDirectory, "전제: 지금 탭 명부를 받았다")
+        assertEquals(emptySet(), h.app.now.focusedPeerIDs, "기준선: 7칸 명부는 아무도 집중이라 말하지 않는다")
+        directory = directory8
+        h.app.now.refresh()
+        advanceUntilIdle()
+        assertEquals(setOf(focused), h.app.messages.focusedPeerIDs, "전제: 메시지 스토어가 지금 탭 명부로 켜짐을 안다")
+        assertEquals(h.app.messages.focusedPeerIDs, h.app.now.focusedPeerIDs, "폰 조립이 지금 탭에 메시지 스토어의 집중 집합을 잇지 않았다")
+        h.app.messages.blockPeer(focused)
+        assertEquals(emptySet(), h.app.now.focusedPeerIDs, "차단해 숨긴 사람의 칩이 지금 탭 근무 중 줄에 남는다")
+        advanceUntilIdle()
+        assertEquals(emptySet(), h.app.now.focusedPeerIDs, "차단이 끝난 뒤 칩이 되돌아왔다")
         assertEquals(emptyList(), com.yehsung.aingcheck.testkit.mock.PhoneForbiddenCalls.violations(h.server.requests), "폰 금지 호출")
     }
 

@@ -16,6 +16,8 @@
     화면이 전부 Compose 라 직접 받아도 그대로 다시 잰다: 색은 isSystemInDarkTheme(LocalConfiguration) → AingTheme, 시스템 막대는 MainActivity 의 barStyle(시험 SystemBarIconsConfigChangeTest), 글자는 LocalDensity(시험 ActivityConfigChangeTest).
     창 바탕은 XML 테마(라이트 고정 · 다크 값 없음)라 원래 구성을 안 따르고, 그 위를 Compose Surface 가 덮는다. 방향 값 소유자는 RummyOrientationDriver.
   - Firebase 자동 초기화 0: FirebaseInitProvider 를 지우고, 메시징 자동 토큰도 끈다(release 조립 지점만 손으로 초기화 — E§6.6).
+  - 앱 공개 범위(queries): PROCESS_TEXT(text/plain) 하나만 연다 — 판 7 말풍선 고르기 메뉴의 [번역]은 Compose 가 앱 안에서 번역 앱을 묻는
+    길(queryIntentActivities)로만 오고, targetSdk 30+ 는 이 선언 없이는 그 결과에서 번역 앱을 지운다(검토 F1). QUERY_ALL_PACKAGES 는 쓰지 않는다.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
@@ -30,6 +32,14 @@
     <uses-permission
         android:name="com.google.android.gms.permission.AD_ID"
         tools:node="remove" />
+
+    <!-- 판 7 말풍선 고르기 [번역](PROCESS_TEXT 앱 — MergedManifestTest.processTextAppsAreVisibleToTheSelectionMenu). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT" />
+            <data android:mimeType="text/plain" />
+        </intent>
+    </queries>
 
     <application
         android:name=".app.AingApplication"

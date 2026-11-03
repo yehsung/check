@@ -75,6 +75,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.LoadingRow
 import com.yehsung.aingcheck.ui.screens.session.kit.NoticeKind
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonName
+import com.yehsung.aingcheck.ui.screens.session.kit.personFocusChip
 import com.yehsung.aingcheck.ui.screens.session.kit.SheetHeader
 import com.yehsung.aingcheck.ui.screens.session.kit.StickerArtState
 import com.yehsung.aingcheck.ui.screens.session.kit.hairlineBorder
@@ -171,6 +172,9 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
     val people = store.filteredDirectory(q)
     val working = people.filter { it.isWorking }
     val others = people.filter { !it.isWorking }
+    // 집중 중인 사람은 **한 번** 받아 줄마다 묻는다 — 출처는 [보내기] 잠금과 같은 MessagesStore.focusedPeerIDs 하나다(차단 거르기도 거기서 ·
+    // 게이트가 꺼진 조립은 빈 집합).
+    val focused = store.focusedPeerIDs
     Column(modifier.fillMaxWidth().background(colors.background).testTag(MessagesTags.NEW_CONVERSATION_SHEET)) {
         SheetHeader(NewConversationText.title, onClose)
         AingTextInput(
@@ -196,13 +200,13 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
                     if (working.isNotEmpty()) {
                         item("working-title") { GroupTitle(NewConversationText.workingGroup(working.size)) }
                         itemsIndexed(working, key = { _, p -> "w-${p.userID}" }) { index, person ->
-                            PersonRowCard(person, store.isPeerFocused(person.userID), index, working.size, onSelect)
+                            PersonRowCard(person, person.userID in focused, index, working.size, onSelect)
                         }
                     }
                     if (others.isNotEmpty()) {
                         item("others-title") { GroupTitle(NewConversationText.othersGroup) }
                         itemsIndexed(others, key = { _, p -> "o-${p.userID}" }) { index, person ->
-                            PersonRowCard(person, store.isPeerFocused(person.userID), index, others.size, onSelect)
+                            PersonRowCard(person, person.userID in focused, index, others.size, onSelect)
                         }
                     }
                     item("foot") {
@@ -222,7 +226,7 @@ private fun GroupTitle(title: String) {
 }
 
 /**
- * 사람 줄. [isFocused] 는 스토어 판정 그대로다(`MessagesStore.isPeerFocused` — 대화의 [보내기] 잠금과 같은 겹치기). 이 시트의 명부 행 값만 보면
+ * 사람 줄. [isFocused] 는 스토어 판정 그대로다(`MessagesStore.focusedPeerIDs` — 대화의 [보내기] 잠금과 같은 겹치기). 이 시트의 명부 행 값만 보면
  * 지금 탭이 1분마다 받는 더 새 값과 갈려, 칩은 '집중'인데 대화는 열려 있는 창이 생긴다. 고르면 대화는 그대로 열린다(대표 답 "대화는 열고 보내기만 막기").
  */
 @Composable
@@ -252,8 +256,7 @@ private fun PersonRowCard(person: PokeDirectoryEntry, isFocused: Boolean, index:
             PersonAvatar(person.name, person.userID, person.avatarURL?.absoluteString, 40.dp, status = if (person.isWorking) PresenceStatus.working else null)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 // 집중 중이면 이름 뒤 '집중' 칩(판 7 · 대표 요청 5 — 맥 콕 목록 칩 · iOS 사람 줄 칩의 Android 짝).
-                PersonName(person.name, CenterLabel.serverValue(person.center),
-                    focusChip = if (isFocused) MessagesFocusText.personChip else null)
+                PersonName(person.name, CenterLabel.serverValue(person.center), focusChip = personFocusChip(isFocused))
                 person.statusMessage?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = colors.label2, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
         }

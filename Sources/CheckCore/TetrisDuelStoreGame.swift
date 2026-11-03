@@ -5,12 +5,15 @@ import Foundation
 //
 // ── 보고 루프 한눈에 ──
 //   판 루프(창과 무관, 0.05초) ─┐
-//   뷰 프레임 루프(창이 보일 때) ─┼→ tick(now:) → duel.advance → 상대 공격 차분 반영 → 숫자·흐름 → considerReport
-//   입력 문(하드드롭)       ─────┘                                                        │
-//                         reportReason: 준비 · 탑아웃 · 공격 증가(0.25초 바닥) · 1초 하트비트  │
-//                         한 번에 하나(reportInFlight) — 응답이 오면 곧바로 한 번 더 묻는다 ←──┘
+//   뷰 프레임 루프(창이 보일 때) ─┼→ tick(now:) → duel.advance → 상대 공격 차분 반영 → 숫자·흐름 → considerFrame → considerReport
+//   입력 문(하드드롭)       ─────┘                                                                      │
+//                         reportReason: 준비 · 탑아웃 · 공격 증가(0.25초 바닥) · 하트비트(기본 1초 ·       │
+//                                       프레임이 양쪽에서 확인된 동안 3초 — `frameLink.reportInterval`)   │
+//                         한 번에 하나(reportInFlight) — 응답이 오면 곧바로 한 번 더 묻는다 ←────────────────┘
 //                         3초 넘게 답이 없으면 그 보고를 버리고 새로 낸다(reportStallSeconds · reportTicket)
-//   응답(ok/stale) → applyState: 시작 시각(단조 시계로) · 서버 seq 따라잡기 · 상대 판 · 상대 공격 누계 · 정산
+//   응답(ok/stale) → applyState: 시작 시각(단조 시계로) · 서버 seq 따라잡기 · 상대 판 · 상대 공격 누계 · 정산 · 프레임 켬/끔
+//   considerFrame(TetrisDuelStoreFrames.swift): 프레임 소켓 열기·닫기 · 1초 + 공격 즉시 프레임 · ring 유실 힌트 —
+//                         **보고와 따로 돈다**(`reportInFlight` 에 묶이지 않는다).
 //
 // ★ 보고 값은 전부 **누계**다(지운 줄 · 보낸 공격 · 받아들인 공격). 그래서 보고 하나가 사라져도(오프라인 · 멎어서 버림)
 //   다음 보고가 같은 사실을 다시 싣고, 서버 seq 가 늦게 온 옛 보고를 `stale` 로 버린다 — 재전송 큐가 필요 없다.
@@ -60,6 +63,8 @@ extension TetrisDuelStore {
     /// 구동기를 버린다(판 루프를 멈추고, 나가 있는 보고의 응답은 세대로 버려진다 — 요청 자체는 끊지 않는다).
     func discardDuel() {
         stopGameLoop()
+        // 판 표시 프레임 소켓도 같이 닫는다(구동기와 수명이 같다 — 판을 내림 · 물러남 · 로그아웃 · 다른 판이 전부 여기를 지난다).
+        discardFrames()
         duelGeneration &+= 1
         reportInFlight = false
         reportSentAt = nil
@@ -105,6 +110,8 @@ extension TetrisDuelStore {
         duel?.absorbOpponentAttack(total: opponentAttackTotal)
         syncStats()
         refreshPhase()
+        // 프레임(소켓 · 보내기 · 힌트)은 보고보다 **먼저**, 따로 묻는다 — 나가 있는 보고가 프레임을 막지 않는다.
+        considerFrame(at: instant)
         considerReport(at: instant)
     }
 
@@ -147,9 +154,18 @@ extension TetrisDuelStore {
         duel?.countdownRemaining(at: now ?? uptime())
     }
 
-    /// 상대의 마지막 보고 뒤 흐른 초(서버 시각 보정). 모르면 nil.
+    /// 상대가 조용한 초. 모르면 nil. 두 재료 중 **짧은 쪽**이다(명세 §4 ★ — 체크포인트 3초 동안 옛 DB 시각이 "상대 연결 확인 중"을
+    /// 깜빡이지 않게, 프레임과 보고가 함께 끊기면 뜨게):
+    ///  · DB 의 상대 마지막 보고 뒤 흐른 초(서버 시각 보정 — 벽시계)
+    ///  · 이 판의 판 표시 프레임을 마지막으로 받은 뒤 흐른 초(**단조** 시계). 벽시계로 재면 기기 시계가 뒤로 갈 때 옛 수신 시각이 앞날에
+    ///    남아 끊긴 상대를 가린다(11-03 검토 F2).
     package func opponentSilenceSeconds(now: Date? = nil) -> TimeInterval? {
-        opponentLastSeenAt.map { max(0, (now ?? clock()).timeIntervalSince($0)) }
+        let reported = opponentLastSeenAt.map { max(0, (now ?? clock()).timeIntervalSince($0)) }
+        guard let heardAt = frameLink?.lastFrameAt, frameLinkMatchID != nil, frameLinkMatchID == match?.id else {
+            return reported
+        }
+        let heard = max(0, uptime() - heardAt)
+        return reported.map { min($0, heard) } ?? heard
     }
 
     // MARK: - 입력 문 (키 모니터·제스처가 부른다)
@@ -177,8 +193,8 @@ extension TetrisDuelStore {
         duel?.rotate(clockwise: clockwise)
     }
 
-    /// 가로·세로 **한 칸**(폰 제스처·보이스오버). 굳힘이 없으므로 보고를 재촉하지 않는다 — 다음 하트비트(1초)나
-    /// 하드드롭이 싣는다. 보고 값은 전부 누계라 한 칸 이동이 따로 실릴 필요가 없다.
+    /// 가로·세로 **한 칸**(폰 제스처·보이스오버). 굳힘이 없으므로 보고를 재촉하지 않는다 — 다음 하트비트(1~3초)·판 표시
+    /// 프레임(1초)이나 하드드롭이 싣는다. 보고 값은 전부 누계라 한 칸 이동이 따로 실릴 필요가 없다.
     package func moveLeftOneCell() {
         advanceToNow()
         duel?.moveLeftOneCell()
@@ -205,7 +221,9 @@ extension TetrisDuelStore {
         advanceToNow()
         duel?.hardDrop()
         syncStats()
-        considerReport(at: uptime())
+        let now = uptime()
+        considerFrame(at: now)       // 공격이 늘었으면 프레임도 곧바로(최소 간격 0.25초는 장부가 지킨다)
+        considerReport(at: now)
     }
 
     /// 눌린 키를 전부 놓는다(창 숨김·가림·닫힘 · 키 모니터가 포커스를 잃었을 때).
@@ -231,7 +249,9 @@ extension TetrisDuelStore {
               let duel, duelMatchID == current.id, host?.session != nil else { return }
         // 준비(첫 보고)는 창이 화면에 떠 있을 때만(머리말 ⑨). 서버가 이미 준비를 받았으면(앱을 다시 열었다) 묻지 않는다.
         if duel.lastReportAt == nil, !current.meReady, !isWindowVisible { return }
-        guard let reason = duel.reportReason(at: now) else { return }
+        // 하트비트 간격은 프레임 장부가 정한다(조건 7개가 모두 참일 때만 3초 · 장부가 없으면 1초).
+        guard let reason = duel.reportReason(at: now, heartbeat: frameReportInterval(at: now, matchID: current.id))
+        else { return }
         var next = duel
         let report = next.makeReport(at: now)
         self.duel = next
@@ -245,6 +265,7 @@ extension TetrisDuelStore {
         reportInFlight = false
         reportSentAt = nil
         reportFailureStreak += 1
+        noteFrameReportStreak()
         if reportFailureStreak >= Self.reportFailureLimit, !connectionTrouble { connectionTrouble = true }
         Self.logger.notice("report stalled \(now - sentAt, format: .fixed(precision: 1))s — abandoned streak=\(self.reportFailureStreak)")
     }
@@ -256,13 +277,15 @@ extension TetrisDuelStore {
         reportTicket &+= 1
         let ticket = reportTicket
         let token = duelGeneration
+        // `p_protocol` 2 는 이 요청에만, 프레임 소켓을 실제로 열 수 있는 기기만(명세 §11 — 못 여는 기기가 2를 보내면 상대가 헛되이 연다).
+        let framesCapable = self.framesCapable
         if reason != .heartbeat {
             Self.logger.notice("report reason=\(String(describing: reason), privacy: .public) seq=\(report.seq)")
         }
         reportTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.perform({
-                try await $0.tetrisReport(accessToken: $1, matchID: matchID, report: report)
+                try await $0.tetrisReport(accessToken: $1, matchID: matchID, report: report, framesCapable: framesCapable)
             })
             let receivedAt = self.uptime()
             // 판이 바뀌었다(접기 · 로그아웃 · 다른 판) — 이 응답은 지금 판의 것이 아니다.
@@ -284,11 +307,14 @@ extension TetrisDuelStore {
         switch result {
         case .failure(let error):
             reportFailureStreak += 1
+            // 조건 5 — 실패 뒤에는 곧바로 1초로 다시 낸다(공격 보고 실패 복구의 핵심: 재시도는 '공격' 사유로 안 잡힌다, §6).
+            noteFrameReportStreak()
             if reportFailureStreak >= Self.reportFailureLimit, !connectionTrouble { connectionTrouble = true }
             if isSchemaMissing(error) { noteServerMissing() }
             Self.logger.notice("report failed streak=\(self.reportFailureStreak)")
         case .success(let response):
             reportFailureStreak = 0
+            noteFrameReportStreak()
             if connectionTrouble { connectionTrouble = false }
             noteServerNow(response.serverNowMs)
             switch response.status {

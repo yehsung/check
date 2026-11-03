@@ -153,7 +153,8 @@ struct GamesTetrisDuelCanvas: View {
 // MARK: - 상대 미니 판
 
 /// 상대 판을 작게. **스냅숏이 올 때만 다시 그린다** — 이 뷰는 프레임 루프(`TimelineView`) **밖**에 서고
-/// 받는 값(`cells`)은 보고 응답에서만 바뀌는 관찰 값(`match.opponentBoard`)이다.
+/// 받는 값(`cells`)은 보고 응답 또는 판 표시 프레임(판 전용 Broadcast · 1초 + 공격 즉시)을 받을 때만 바뀌는 관찰 값
+/// (`match.opponentBoard`)이다. 두 길의 병합은 코어(`TetrisDuelStore.mergedOpponentBoard`)가 한다 — 이 뷰는 값만 읽는다.
 ///
 /// 셀 변(pt)은 **순수 표가 쥔다**(`GamesTetrisDuelChrome.miniBoardCell` — 5pt. 고른 까닭과 검산은 그 주석에
 /// 있다). 그 수가 판 폭을 깎고 판 폭이 곧 제스처 한 칸 문턱이라(P11) 맥 스위트가 값으로 재야 하기 때문이다 —

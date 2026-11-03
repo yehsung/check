@@ -15,7 +15,8 @@ import CheckCore
 //     무효화된다. 그래서 판 칸·떨어지는 조각·경과 초·카운트다운은 **잎 뷰의 TimelineView 안에서만** 읽는다
 //     (`TetrisDuelBoardView` · `TetrisDuelElapsedLeaf`). 조각이 굳을 때만 바뀌는 숫자(지운 줄·공격·들어올 줄·속도)는
 //     관찰 가능한 `store.myStats` 로 읽는다.
-//   · **상대 판은 스냅숏이 올 때만 다시 그린다**(`store.match?.opponentBoard` — 관찰 값이고 보고 응답에서만 바뀐다).
+//   · **상대 판은 스냅숏이 올 때만 다시 그린다**(`store.match?.opponentBoard` — 관찰 값이고 보고 응답 또는 판 표시 프레임
+//     (판 전용 Broadcast · 1초 + 공격 즉시)을 받을 때만 바뀐다. 두 길의 병합은 코어가 한다 — 이 뷰는 값만 읽는다).
 //   · 판의 프레임 루프는 **창이 보일 때만** 돈다. 창이 숨어도 판은 스토어의 판 루프가 민다(설계 D10) — 이 뷰의 틱은
 //     "더 자주 그리기" 일 뿐이다(같은 시각이면 멱등).
 //   · 문구는 `TetrisDuelText`(화면 글자)와 `TetrisDuelNoticeText`(안내·결과 사유, 코어) 두 표에만 있다.
@@ -1216,6 +1217,8 @@ struct TetrisDuelOpponentPresence: View {
     let isFinished: Bool
 
     /// 상대 보고가 이만큼 끊기면 "상대 연결 확인 중" 을 띄운다(서버 판정 15초의 1/3 — 1초 하트비트 서넛을 놓친 자리).
+    /// 재료(`opponentSilenceSeconds`)는 DB 의 상대 last_seen 과 판 표시 프레임 수신 시각 중 **최근 쪽**이다 — 체크포인트(3초)
+    /// 동안에도 프레임(1초)이 오면 뜨지 않고, 프레임과 보고가 함께 끊기면 뜬다(코어 `opponentSilenceSeconds`).
     static let silenceHintSeconds: TimeInterval = 5
 
     var body: some View {

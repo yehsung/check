@@ -109,6 +109,44 @@ package enum RealtimeFrame {
         )
     }
 
+    /// 클라 발신 브로드캐스트 1건(테트리스 판 표시 프레임 — 명세 docs/plan/tetris-broadcast/SPEC.md §4). 초인종은 수신 전용이라
+    /// 이 함수를 안 쓴다 — **`poke:` 채널에 싣지 마라**(모르는 이름은 구버전 맥에서 drain 이라 프레임마다 take_pokes 가 한 번 더 나간다).
+    ///
+    /// vsn 1.0.0 객체형: 바깥 `event` 는 "broadcast", 바깥 `payload` 에 `{type:"broadcast", event:<이름>, payload:<본문>}` 을 싣는다.
+    /// 받는 쪽 모양(`decode` 의 broadcast 가지)과 같은 봉투다. [추정] 공식 문서의 송신 예시는 v2 배열형뿐이라 운영 왕복으로 확정해야 한다(P2).
+    /// - Parameters:
+    ///   - channel: 접두사 없는 채널명(`state.frames.topic` 글자 그대로). `realtime:` 은 `wireTopic` 이 붙인다.
+    ///   - joinRef: 이 채널 phx_join 의 ref — Phoenix 는 join_ref 가 맞지 않는 push 를 그 채널 것으로 보지 않는다.
+    package static func broadcast(
+        channel: String, event: String, payload: [String: Any], ref: String, joinRef: String
+    ) -> String {
+        encode(
+            topic: wireTopic(channel: channel),
+            event: "broadcast",
+            payload: ["type": "broadcast", "event": event, "payload": payload],
+            ref: ref,
+            joinRef: joinRef
+        )
+    }
+
+    /// 들어온 텍스트 프레임이 **우리 채널의 브로드캐스트**면 이름과 안쪽 본문을 꺼낸다. 아니면 nil(깨진 JSON · 다른 토픽 ·
+    /// 다른 이벤트 · 본문이 객체가 아님).
+    ///
+    /// `decode` 는 이름만 넘기고 본문을 버린다 — 초인종 경로 전체가 그 계약에 서 있으므로(`.broadcast(event:)`) 바꾸지 않고,
+    /// 본문이 필요한 길(판 표시 프레임)만 이 함수를 따로 쓴다. 토픽은 **정확히** 맞아야 한다(`decode` 처럼 토픽 없는 프레임을 받지 않는다 —
+    /// 누가 보낸 판인지 모르는 본문은 표시할 수 없다).
+    package static func decodeBroadcastPayload(text: String, channel: String) -> (event: String, payload: [String: Any])? {
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["event"] as? String == "broadcast",
+              object["topic"] as? String == wireTopic(channel: channel),
+              let envelope = object["payload"] as? [String: Any],
+              let event = envelope["event"] as? String,
+              let payload = envelope["payload"] as? [String: Any]
+        else { return nil }
+        return (event, payload)
+    }
+
     private static func encode(
         topic: String,
         event: String,

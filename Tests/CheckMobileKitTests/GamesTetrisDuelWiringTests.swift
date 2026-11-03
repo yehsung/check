@@ -236,8 +236,15 @@ enum TetrisWireJSON {
         #expect(model.tetris.host === model.gomokuHost, "테트리스 호스트가 오목·체스와 다르다 — 루비 미러가 갈린다")
         #expect(model.tetris.presentWindow != nil,
                 "코어의 화면 여는 문이 안 물렸다 — 수락·시작이 화면을 못 열고 준비 보고가 30초를 흘린다")
+        // 판 표시 프레임의 주 스위치(D5 — 폰도 켠다). 없으면 폰은 언제나 p_protocol 1 · 소켓 0 이라 서버 스위치를 켜도 1초 보고다.
+        #expect(model.tetris.framesEnabled, "배선이 framesEnabled 를 안 켰다 — 폰 판은 영영 1초 보고다")
+        // ★ 기준선: 스토어 기본은 꺼짐이다(위 참이 배선 한 줄 덕이다). 테스트 프로세스엔 라이브 소켓이 없어 능력은 서지 않는다
+        //   — 그래서 이 스위트의 보고 본문은 계속 p_protocol 1 이다(픽스처 계약 그대로).
+        #expect(TetrisDuelStore().framesEnabled == false)
+        #expect(!model.tetris.framesCapable, "테스트 프로세스에서 프레임 소켓이 열릴 수 있다고 말한다")
         // 배선 값은 로그아웃 reset 이 건드리지 않는다(재로그인 뒤에도 순위·문이 살아야 한다).
         model.tetris.reset()
+        #expect(model.tetris.framesEnabled, "reset 이 framesEnabled 를 껐다")
         #expect(model.tetris.rankingEnabled, "reset 이 배선 값을 껐다")
         #expect(model.tetris.presentWindow != nil, "reset 이 화면 문을 떼었다")
         await harness.tearDown()

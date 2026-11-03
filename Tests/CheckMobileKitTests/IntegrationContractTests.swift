@@ -202,7 +202,7 @@ import Testing
             "games/chess/lobby": ["rpc.chess_lobby"],
             "games/chess/match": ["rpc.chess_state", "rpc.chess_lobby"],
             "games/chess/ranking": ["rpc.chess_ranking"],
-            // 1:1 테트리스. 판 장면이 `rpc.tetris_report` 를 함께 요구하는 것이 핵심이다 — 판 중에는 1초마다 보고가
+            // 1:1 테트리스. 판 장면이 `rpc.tetris_report` 를 함께 요구하는 것이 핵심이다 — 판 중에는 1초(판 표시 프레임이 오가는 동안 3초)마다 보고가
             // 나가고, 그 키가 404 면 `noteServerMissing()` 이 1초 뒤 판 화면을 통째로 내린다(빈 화면 스틸의 정체).
             "games/tetris/lobby": ["rpc.tetris_lobby"],
             "games/tetris/lobby/invites": ["rpc.tetris_lobby", "rpc.tetris_state"],

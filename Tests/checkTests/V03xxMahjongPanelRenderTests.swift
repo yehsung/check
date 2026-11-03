@@ -178,6 +178,69 @@ struct V03xxMahjongPanelRenderTests {
     }
 
     @Test
+    func handEndFixtureAgreesWithTheRulesAndTheRealShape() throws {
+        // 없으면: 국 결과 렌더 픽스처가 '론'인데 멘젠쯔모가 붙거나 손에 없는 역(백)이 붙거나, 화료 손에 화료패가 섞이거나(실응답은 13장),
+        // 한 패(id)가 두 곳에 있거나, 실응답에 없는 키를 써서 — 앞뒤 안 맞는 그림을 사람이 보는데도 초록이다.
+        let state = mjHandEnd(win: true)
+        let last = try #require(state["last_hand"] as? [String: Any])
+        let win = try #require((last["wins"] as? [[String: Any]])?.first)
+        // 실응답 모양(키 집합)과 같다.
+        let realURL = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/mahjong-rpc/mahjong_state__hand_end_double_ron.json")
+        let real = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: realURL)) as? [String: Any])
+        let realLast = try #require((real["state"] as? [String: Any])?["last_hand"] as? [String: Any])
+        let realWin = try #require((realLast["wins"] as? [[String: Any]])?.first)
+        #expect(Set(last.keys) == Set(realLast.keys))
+        #expect(Set(win.keys) == Set(realWin.keys))
+        #expect((realWin["hand"] as? [Int])?.count == 13 && (realWin["hand"] as? [Int])?.contains(realWin["win_tile"] as? Int ?? -1) == false)
+        // 화료 손 13장(화료패 제외) · 같은 id 가 두 곳에 없다(손 · 화료패 · 강 넷 · 부로 · 도라 · 뒷도라).
+        let hand = try #require(win["hand"] as? [Int])
+        let winTile = try #require(win["win_tile"] as? Int)
+        #expect(hand.count == 13 && !hand.contains(winTile))
+        let match = try #require(state["match"] as? [String: Any])
+        let seats = try #require(state["seats"] as? [[String: Any]])
+        var ids = hand + [winTile] + (match["dora_indicators"] as? [Int] ?? []) + (win["ura_indicators"] as? [Int] ?? [])
+        for seat in seats {
+            // 울려 간 패(`taken`)는 강에 표시로 남고 부로에서 센다(CC-08) — 한 번만.
+            ids += (seat["discards"] as? [[String: Any]] ?? []).filter { $0["taken"] as? Bool != true }.compactMap { $0["tile"] as? Int }
+            ids += (seat["melds"] as? [[String: Any]] ?? []).flatMap { $0["tiles"] as? [Int] ?? [] }
+        }
+        #expect(Set(ids).count == ids.count, "같은 패가 두 곳에 있다")
+        let draw = try #require(mjHandEnd(win: false)["last_hand"] as? [String: Any])
+        let tenpai = (draw["tenpai"] as? [[String: Any]] ?? []).flatMap { $0["hand"] as? [Int] ?? [] }
+        #expect(Set(tenpai).count == tenpai.count, "유국 텐파이 손 둘이 같은 패를 쥐었다")
+        for row in draw["tenpai"] as? [[String: Any]] ?? [] {
+            let tiles = (row["hand"] as? [Int] ?? []).compactMap { MahjongTile(id: $0) }
+            #expect(!MahjongHand.waits(MahjongTiles.counts34(tiles), melds: 0).isEmpty, "텐파이 아닌 손이 텐파이 줄에 있다")
+        }
+        // 판·부·역·도라·합계를 R 이 같은 손에서 그대로 낸다(론 = from_seat 있음 → 멘젠쯔모 없음).
+        let decoded = try #require(try mjDecode(state).lastHand?.wins?.first)
+        let seat0 = try #require(seats.first { $0["seat_no"] as? Int == 0 })
+        let context = MahjongWinContext(
+            closed: hand.compactMap { MahjongTile(id: $0) }, win: try #require(MahjongTile(id: winTile)), tsumo: win["from_seat"] is NSNull,
+            seatWind: MahjongWind(rawValue: seat0["wind"] as? String ?? "") ?? .east, roundWind: .east,
+            riichi: seat0["riichi"] as? Bool == true,
+            doraIndicators: (match["dora_indicators"] as? [Int] ?? []).compactMap { MahjongTile(id: $0) },
+            uraIndicators: (win["ura_indicators"] as? [Int] ?? []).compactMap { MahjongTile(id: $0) },
+            honba: match["honba"] as? Int ?? 0, kyoutaku: 2)
+        guard case .success(let score) = MahjongScoring.evaluate(context) else { Issue.record("판정 실패"); return }
+        #expect(score.agari)
+        print("[국 결과 픽스처] R: \(score.yaku.map { "\($0.yaku.rawValue)#\($0.han)" }) \(score.han)판 \(score.fu)부 \(score.limit) "
+              + "도라 \(score.dora) 뒷도라 \(score.ura) 합 \(score.total)")
+        #expect(Set(score.yaku.map { "\($0.yaku.rawValue)#\($0.han)" })
+                == Set((win["yaku"] as? [[Any]] ?? []).map { "\($0[0])#\($0[1])" }), "역이 R 과 다르다")
+        #expect(!(win["yaku"] as? [[Any]] ?? []).contains { $0.first as? String == "menzen_tsumo" }, "론인데 멘젠쯔모")
+        #expect(score.han == decoded.han && score.fu == decoded.fu && score.limit == decoded.limit)
+        #expect(score.dora == decoded.dora && score.aka == decoded.aka && score.ura == decoded.ura)
+        #expect(score.total == decoded.total, "합계가 R 과 다르다(점수 + 본장 + 공탁)")
+        // 점수 이동의 합 = 가져간 리치봉, 국 뒤 점수 = 자리 카드 점수.
+        let deltas = try #require(last["deltas"] as? [Int])
+        #expect(deltas.reduce(0, +) == 2_000 && deltas[0] == score.total)
+        #expect((last["scores_after"] as? [Int]) == seats.sorted { ($0["seat_no"] as? Int ?? 0) < ($1["seat_no"] as? Int ?? 0) }
+            .map { $0["score"] as? Int ?? 0 })
+    }
+
+    @Test
     func matchResultCard() throws {
         // 없으면: 판 결과가 등수·루비 줄 없이 빈 카드여도 초록이다.
         let store = try mjTableStore(mjFinished())
@@ -464,7 +527,7 @@ private func mjSeats(away: Bool = false) -> [[String: Any]] {
         [mjDisc(33, 2), mjDisc(32, 2), mjDisc(0, 2, tsumogiri: true), mjDisc(8, 2), mjDisc(17, 2), mjDisc(30, 2), mjDisc(9, 2)],
         [mjDisc(29, 2), mjDisc(31, 3), mjDisc(18, 2), mjDisc(7, 2), mjDisc(16, 2), mjDisc(3, 2, riichi: true), mjDisc(20, 2, tsumogiri: true),
          mjDisc(11, 2)],
-        (0..<13).map { mjDisc([5, 6, 15, 19, 21, 23, 10, 22, 30, 32, 33, 6, 15][$0], 3) },
+        (0..<13).map { mjDisc([5, 6, 15, 19, 20, 23, 11, 22, 30, 32, 33, 7, 16][$0], 3) },
         [mjDisc(29, 3), mjDisc(31, 2, taken: true), mjDisc(5, 2), mjDisc(19, 2), mjDisc(10, 3), mjDisc(21, 3)],
     ]
     return (0..<4).map { seat in
@@ -476,7 +539,8 @@ private func mjSeats(away: Bool = false) -> [[String: Any]] {
             "away": seat == 0 && away, "deleted": false,
         ]
         if seat == 1 {
-            row["melds"] = [["type": "pon", "tiles": [mjID(31, 0), mjID(31, 1), mjID(31, 3)], "called": mjID(31, 3), "from_seat": 0]]
+            // 하가(자리 3)가 버린 發(강에 '울려 간 패'로 남았다)을 퐁.
+            row["melds"] = [["type": "pon", "tiles": [mjID(31, 0), mjID(31, 1), mjID(31, 2)], "called": mjID(31, 2), "from_seat": 3]]
         }
         return row
     }
@@ -530,37 +594,56 @@ private func mjCall(wakeMs: Double = mjNowMs - 200, edit: ((inout [String: Any])
     }
 }
 
+/// 국 결과(실응답 `mahjong_state__hand_end_double_ron` 모양 — 화료 손 13장은 화료패를 빼고, 리치 화료만 뒷도라 표시패,
+/// `total` = 점수 + 본장 + 공탁). 화료: 친(자리 0, 동장 동가)이 리치 뒤 대면(자리 2)의 東 으로 론 —
+/// 손 123m4p0p6p789s 東東南南 + 東 → 리치·장풍·자풍·도라 1(7삭)·적도라 1(적5통)·뒷도라 1(5통) = 6판 40부 하네만 18000
+/// + 본장 300 + 공탁 2(리치봉 둘) = 20300.
+/// 판·부·역은 시험이 R `MahjongScoring.evaluate` 로 되묻는다(`handEndFixtureAgreesWithTheRulesAndTheRealShape`).
 private func mjHandEnd(win: Bool) -> [String: Any] {
     mjActive { state in
         var match = state["match"] as! [String: Any]
         match["phase"] = "hand_end"
         match["turn_seat"] = NSNull()
         match["next_hand_ms"] = mjNowMs + 4_000
-        state["match"] = match
         state["my_decision"] = NSNull()
         state["my_drawn"] = NSNull()
+        var seats = state["seats"] as! [[String: Any]]
         if win {
+            match["kyotaku"] = 0   // 리치봉 둘은 화료자가 가져갔다
+            seats[0]["riichi"] = true
+            var river = seats[0]["discards"] as! [[String: Any]]
+            river[3]["riichi"] = true
+            seats[0]["discards"] = river
+            let after = [44_300, 24_000, 7_700, 25_000]
+            for i in 0..<4 { seats[i]["score"] = after[i] }
             state["last_hand"] = [
-                "hand_index": 2, "kind": "win",
+                "hand_index": 2, "kind": "win", "reason": NSNull(),
                 "wins": [[
-                    "seat": 0, "from_seat": 2, "hand": mjHand + [mjID(28, 2)], "melds": [] as [Any], "win_tile": mjID(28, 2),
-                    "yaku": [["riichi", 1], ["yakuhai_haku", 1], ["menzen_tsumo", 1]], "yakuman": 0, "han": 4, "fu": 40,
-                    "limit": "mangan", "dora": 1, "aka": 0, "ura": 0, "ura_indicators": [mjID(12, 3)], "total": 12_000,
+                    "seat": 0, "from_seat": 2, "hand": mjHand, "melds": [] as [Any], "win_tile": mjID(27, 2),
+                    "yaku": [["riichi", 1], ["bakaze", 1], ["jikaze", 1]], "yakuman": 0, "han": 6, "fu": 40,
+                    "limit": "haneman", "dora": 1, "aka": 1, "ura": 1, "ura_indicators": [mjID(12, 3)], "total": 20_300,
                     "pao": NSNull(),
                 ] as [String: Any]],
-                "tenpai": [] as [Any], "nagashi": [] as [Any], "deltas": [13_300, 0, -12_300, 0],
-                "scores_after": [38_300, 24_000, 13_700, 25_000], "bonus_to": NSNull(), "renchan": true,
+                "tenpai": [] as [Any], "nagashi": [] as [Any], "deltas": [20_300, 0, -18_300, 0],
+                "scores_after": after, "bonus_to": 0, "renchan": true,
             ] as [String: Any]
         } else {
+            let after = [26_500, 22_500, 27_500, 23_500]
+            for i in 0..<4 { seats[i]["score"] = after[i] }
             state["last_hand"] = [
                 "hand_index": 2, "kind": "exhaustive", "reason": "exhaustive", "wins": [] as [Any],
-                "tenpai": [["seat": 0, "hand": mjHand, "melds": [] as [Any]], ["seat": 2, "hand": mjHand, "melds": [] as [Any]]],
-                "nagashi": [] as [Any], "deltas": [1_500, -1_500, 1_500, -1_500], "scores_after": [26_500, 22_500, 27_500, 23_500],
+                "tenpai": [["seat": 0, "hand": mjHand, "melds": [] as [Any]], ["seat": 2, "hand": mjOtherTenpai, "melds": [] as [Any]]],
+                "nagashi": [] as [Any], "deltas": [1_500, -1_500, 1_500, -1_500], "scores_after": after,
                 "bonus_to": NSNull(), "renchan": true,
             ] as [String: Any]
         }
+        state["match"] = match
+        state["seats"] = seats
     }
 }
+
+/// 대면(자리 2)의 유국 텐파이 손 345m678m234s56s88p(4·7삭 대기) — 내 손·강·도라와 같은 패(id)가 없다.
+private let mjOtherTenpai = [9, 13, 17, 21, 25, 29, 77, 81, 85, 89, 92, 64, 65]
 
 private func mjFinished() -> [String: Any] {
     mjActive { state in

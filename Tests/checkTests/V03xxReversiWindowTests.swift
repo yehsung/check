@@ -250,6 +250,44 @@ struct V03xxReversiWindowTests {
         #expect(controller.closedNoticeCount == 1, "남의 창 닫기 통지에 반응했다")
     }
 
+    /// 창이 닫힘을 **사람이 닫았다(true) / 프로그램이 닫았다(false)** 로 가려 알린다(가지 `fix/window-return-1103` b63734bd 의
+    /// 오목·체스·테트리스 창과 같은 칸 — 합칠 때 `CheckApp` 이 이 칸을 `duelWindowDidClose(.reversi, byUser:)` 로 잇는다).
+    /// 없으면: 빨간 점·⌘W 와 로그아웃 닫기를 같은 값으로 알려도(둘 다 true — 로그아웃·계정 전환마다 미니게임 창이 튀어나온다)
+    /// 아예 안 알려도(사람이 닫아도 미니게임 창이 안 선다) · 최소화나 못 뜬 창 재생성을 닫기로 알려도 초록이다.
+    @Test
+    func closingTellsAUserCloseFromAProgramClose() throws {
+        var heard: [Bool] = []
+        let controller = rvController(ReversiStore())
+        controller.onClosed = { heard.append($0) }
+        defer { controller.discardWindowForTesting() }
+        controller.show()
+        let window = try #require(controller.currentWindow)
+
+        // 사람: 빨간 점 · ⌘W — AppKit 이 창을 닫으며 대리자에게 windowWillClose 를 보낸다(메서드를 직접 부르지 않는다 —
+        // 대리자 배선이 빠져도 초록이 되지 않게).
+        window.close()
+        #expect(heard == [true], "사람이 닫았는데 '사람'으로 안 알렸다: \(heard)")
+        #expect(!controller.isOpen && controller.closedNoticeCount == 1)
+
+        // 프로그램: 로그아웃 · 계정 전환의 close()(orderOut — windowWillClose 를 안 보낸다).
+        controller.show()
+        controller.close()
+        #expect(heard == [true, false], "로그아웃 닫기를 '프로그램'으로 안 알렸다: \(heard)")
+
+        // 기준선: 닫기가 아닌 것들은 울리지 않는다 — 최소화 · 남의 창 닫기 통지 · 못 뜬 창의 재생성(대리자를 떼고 닫는다).
+        controller.show()
+        controller.windowDidMiniaturize(Notification(name: NSWindow.didMiniaturizeNotification, object: window))
+        controller.windowDidDeminiaturize(Notification(name: NSWindow.didDeminiaturizeNotification, object: window))
+        let stranger = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 10, height: 10),
+                                styleMask: [.titled], backing: .buffered, defer: false)
+        stranger.isReleasedWhenClosed = false
+        defer { stranger.close() }
+        controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: stranger))
+        controller.rebuildStuckWindow()
+        #expect(controller.isOpen && controller.stuckWindowRebuilds == 1, "전제: 재생성이 돌아 창이 다시 섰다")
+        #expect(heard == [true, false], "닫기가 아닌 통지에 울렸다: \(heard)")
+    }
+
     /// 가림은 **폴링만** 멈춘다 — '안 보임'으로 번지지 않는다. 닫힌 창의 가림 통지는 무시한다.
     @Test
     func occlusionStopsPollingButNotVisibility() throws {

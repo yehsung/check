@@ -573,6 +573,12 @@ package final class ReversiStore {
     @ObservationIgnored private var lobbyAgain = false
     /// 마지막으로 "내 차례가 왔다" 를 본 (판 id#move_count). 같은 차례에 말풍선이 두 번 뜨지 않게 한다.
     @ObservationIgnored private var attentionKey: String?
+    /// **이 기기가 연 판** 장부(한 계정 여러 기기 — 오목·체스와 같은 규칙, 가지 `fix/game-window-one-device` 62ecdf73). 창 띄우기 ·
+    /// 주의 · 말풍선은 이 장부에 오른 판에서만 한다(`noteMatchProgress`). 기록을 둘 곳(`deviceLedger.defaults`)은 **앱 배선이 넣는다**
+    /// (맥 `WorkTimerStore`) — 빠지면 판 중에 앱을 다시 켠 기기가 자기 판을 못 알아봐 창이 안 뜬다. 로그아웃은 비우지 않는다(사용자별 키).
+    /// 기한 6시간: 30초 × 60수여도 한 판은 한 시간이 안 된다 — 판 중에 앱을 다시 켜도 넉넉히 남고, 끝을 못 본 기록은 쌓이지 않는다.
+    /// ⚠ 타입은 임시 다리다 — `GameDeviceLedger` 가 main 에 들어오면 그 타입으로 바꾸고 다리 파일을 지운다(`ReversiDeviceLedgerShim` 머리말).
+    @ObservationIgnored package var deviceLedger = ReversiDeviceLedgerShim(game: "reversi", ttlSeconds: 6 * 3_600)
     /// 서버가 말한 내 진행 중 대국 id(로비 `me.active_match_id`).
     @ObservationIgnored package internal(set) var activeMatchID: String?
     @ObservationIgnored package private(set) var seenInviteIDs: Set<String> = []
@@ -1026,6 +1032,8 @@ package final class ReversiStore {
         let nextPhase: ReversiPhase = isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }
         activeMatchID = isFinished ? nil : id
+        // 끝난 판의 기록은 여기서 걷는다(끝을 못 본 기록은 장부의 기한이 걷는다).
+        if isFinished { dropOwnership(id) }
         if !isFinished {
             // 새 판이 열렸다 — 로비에서 남긴 안내("신청을 보냈어요")가 대국 상태줄을 가리지 않게 한다.
             if previous?.id != id || previous?.isFinished == true { setNotice(nil) }
@@ -1075,6 +1083,8 @@ package final class ReversiStore {
                 let expiresAt = deviceDate(serverMs: response.inviteExpiresMs)
                     ?? clock().addingTimeInterval(inviteTTLSeconds)
                 outgoingRevision &+= 1
+                // 이 기기가 신청했다 — 수락 초인종이 같은 계정의 모든 기기에 가도 창은 여기서만 뜬다(`noteMatchProgress`).
+                noteOwnsMatch(id)
                 outgoing = ReversiOutgoing(id: id, peer: peer, stake: stake, expiresAt: expiresAt)
                 lastOutgoingRequestAt = clock()
                 scheduleInviteExpiry()
@@ -1163,6 +1173,8 @@ package final class ReversiStore {
                     outgoing = nil
                     scheduleInviteExpiry()
                 }
+                // 이 기기가 수락했다 — 상태를 옮기기 **전에** 적는다(그 applyState 가 창을 띄울지 이 장부로 정한다).
+                noteOwnsMatch(id)
                 if let state = response.state {
                     applyState(state)
                 } else {
@@ -1208,6 +1220,8 @@ package final class ReversiStore {
         }
         let id = current.id
         let expected = current.moveCount
+        // 이 기기에서 수를 뒀다 — 사람이 이 기기로 옮겨 와 두는 중이다. 그 뒤로 내 차례 말풍선이 여기서도 뜬다.
+        noteOwnsMatch(id)
         isBusy = true
         setNotice(nil)
         let generation = resetGeneration
@@ -1650,9 +1664,14 @@ package final class ReversiStore {
     }
 
     /// 판 진행을 사람에게 알린다(진행 중 판을 옮긴 직후).
+    ///  · **이 기기가 연 판에서만**(2026-11-03 — 오목·체스와 같은 규칙, `deviceLedger`). 초인종은 같은 계정의 모든 기기로 가므로,
+    ///    그냥 두면 맥북에서 신청한 판이 놀던 맥미니에서도 창을 열고 그 창은 사람이 가서 닫기 전까지 남는다. 연 기기가 아니면 판 상태만
+    ///    들고 있다 — 사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`place`) 그 기기도 연 기기가 된다.
+    ///    받은 신청(`onInviteArrived` · 메뉴바 점 · 배너)은 여기를 지나지 않는다 — 모든 기기에 그대로 선다.
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다.
     ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, move_count) 에는 한 번뿐이다.
     private func noteMatchProgress(previous: ReversiMatchState?, next: ReversiMatchState, windowWasVisible: Bool) {
+        guard ownsMatch(next.id) else { return }
         let started = previous == nil || previous?.isFinished == true || previous?.id != next.id
         if started {
             presentWindow?()
@@ -1667,6 +1686,23 @@ package final class ReversiStore {
         onAttention?(ReversiAttention(
             kind: started ? .matchStarted : .myTurn, matchID: next.id,
             opponentName: next.opponent.displayName, moveCount: next.moveCount))
+    }
+
+    // MARK: - 한 계정 여러 기기(이 기기가 연 판 — `deviceLedger`)
+
+    /// 이 기기가 이 판을 열었는가(신청 ok · 수락 ok · 수를 뒀다). 로그인 전이면 언제나 아니다.
+    package func ownsMatch(_ matchID: String) -> Bool {
+        deviceLedger.owns(matchID, userID: host?.session?.userID, now: clock())
+    }
+
+    /// 이 기기가 이 판을 열었다. 이미 있으면 그대로 둔다.
+    func noteOwnsMatch(_ matchID: String) {
+        deviceLedger.note(matchID, userID: host?.session?.userID, now: clock())
+    }
+
+    /// 이 판의 기록을 지운다(끝났다).
+    func dropOwnership(_ matchID: String) {
+        deviceLedger.drop(matchID, userID: host?.session?.userID, now: clock())
     }
 
     /// 판이 나아갔다 — 뒤집기 그림과 패스 안내를 정한다(1:1 `applyState` · AI `commitAIGame` 두 깔때기가 같이 지난다).

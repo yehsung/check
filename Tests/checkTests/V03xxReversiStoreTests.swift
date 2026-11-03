@@ -649,6 +649,9 @@ struct V03xxReversiStoreTests {
     func 창이_안_보이면_판_시작과_내_차례를_한_번씩_알린다() throws {
         // 없으면: 창을 닫아 둔 사람이 수락·상대 수를 몰라 30초를 흘리거나(자동 착수), 같은 차례에 말풍선이 두 번 떠도 초록이다.
         let (store, _) = makeReversiStore("attention", me: rvB, handler: rvHandler([:]))
+        // 이 기기가 연 판이다(수락 ok 가 적는 '이 기기가 연 판' 기록 — 2026-11-03, 창 · 말풍선은 그런 판에서만).
+        // 같은 계정의 다른 기기 쪽은 `ReversiWindowOneDeviceTests`. 이 시험은 applyState 만 부르므로 전제를 직접 적는다.
+        store.noteOwnsMatch(rvMainMatch)
         var seen: [ReversiAttention] = []
         var presented = 0
         store.onAttention = { seen.append($0) }
@@ -664,6 +667,7 @@ struct V03xxReversiStoreTests {
         #expect(seen.last?.moveCount == 4)
         // 기준선: 창이 보이면 같은 진행에도 말풍선을 안 연다.
         let (visible, _) = makeReversiStore("attention-visible", me: rvB, handler: rvHandler([:]))
+        visible.noteOwnsMatch(rvMainMatch)                          // 같은 전제 — 창 보임만 다르다(장부 탓의 가짜 초록이 아니게)
         var visibleSeen = 0
         visible.onAttention = { _ in visibleSeen += 1 }
         visible.isWindowVisible = true
@@ -704,6 +708,9 @@ struct V03xxReversiStoreTests {
         // 없으면(V2-01): 창을 연 채 다른 전체 화면 앱·다른 스페이스로 넘어간 사람은 폴링이 멈추고(가림) 말풍선 문도
         // `isWindowVisible` 에 막혀 내 차례를 알 길이 0 이다 — 30초 + 유예 뒤 자동 착수, 세 번이면 판돈을 잃는데도 초록이다.
         let (store, _) = makeReversiStore("attention-occluded", me: rvB, handler: rvHandler([:]))
+        // 이 기기가 연 판이다(수락 ok 가 적는 '이 기기가 연 판' 기록 — 2026-11-03, 창 · 말풍선은 그런 판에서만).
+        // 같은 계정의 다른 기기 쪽은 `ReversiWindowOneDeviceTests`. 이 시험은 applyState 만 부르므로 전제를 직접 적는다.
+        store.noteOwnsMatch(rvMainMatch)
         var seen: [ReversiAttention] = []
         store.onAttention = { seen.append($0) }
         store.isWindowVisible = true
@@ -718,6 +725,7 @@ struct V03xxReversiStoreTests {
 
         // 기준선: 보이고 안 가려진 창이면 같은 진행에도 말풍선을 안 연다(화면이 이미 말한다).
         let (shown, _) = makeReversiStore("attention-occluded-base", me: rvB, handler: rvHandler([:]))
+        shown.noteOwnsMatch(rvMainMatch)                            // 같은 전제 — 가림만 다르다
         var shownSeen: [ReversiAttention] = []
         shown.onAttention = { shownSeen.append($0) }
         shown.isWindowVisible = true
@@ -772,6 +780,8 @@ struct V03xxReversiStoreTests {
             let (store, host) = makeReversiStore(label, me: rvB, handler: rvHandler(
                 ["reversi_state": [try rvText("reversi_move__ok"), try rvText("reversi_move__ok_pass")]],
                 delays: ["reversi_state": 0.5]))
+            // 이 기기가 연 판이다(착수 · 수락이 적는 기록 — 2026-11-03, 말풍선은 그런 판에서만). 다른 기기 쪽은 `ReversiWindowOneDeviceTests`.
+            store.noteOwnsMatch(rvMainMatch)
             store.applyState(try rvState("reversi_move__ok"))
             store.isWindowVisible = true
             store.pollStepSeconds = 0.02

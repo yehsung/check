@@ -1,0 +1,168 @@
+{
+  "__note": [
+    "아잉 뒤집기 로비(기본 · 장면 없음이라 모든 데모 장면에 걸린다). 닿는 길: -AingCheckDemoRoute games/reversi/lobby (games/reversi · …/ranking · …/rules · …/watch · …/ai 도 이 층).",
+    "모양은 서버 reversi_lobby(20261108200000_reversi.sql) 그대로다 — 사람 행 id 키는 'id'(state·순위는 'user_id'), users 에 나는 없다(lobby__others), matches 의 a/b 는 uuid 오름차순이고 색이 아니다.",
+    "상대 목록이 막힘 까닭 셋을 다 덮는다: 대결 중(민트별·달토끼·솜사탕·꿀떡 — 지금 대결 중 두 판의 네 사람) · 업데이트 필요(보리차 capable=false) · 집중 모드(모카빵). 그래서 로비 풀이 줄 셋이 다 선다. 신청할 수 있는 사람은 구름빵·호두과자·초코칩.",
+    "matches 의 두 판 중 …e6(민트별·달토끼, 판돈 10, 관전자 3)이 관전 장면의 판이다(rpc.reversi_watch_live@…e6). 판 id 는 실서버처럼 uuid 다.",
+    "me = 4승 2패 1무 · 루비 42(다른 1:1 데모와 같은 잔액). 순위 rpc.reversi_ranking.json 의 me 줄과 같은 전적이라 '내 순위' 줄이 선다."
+  ],
+  "auto_abandon_streak": 3,
+  "invite_ttl_seconds": 60,
+  "matches": [
+    {
+      "a": {
+        "avatar_url": null,
+        "character": "ghost",
+        "display_name": "솜사탕",
+        "id": "d0000000-0000-4000-8000-0000000000b7"
+      },
+      "b": {
+        "avatar_url": null,
+        "character": "aing",
+        "display_name": "꿀떡",
+        "id": "d0000000-0000-4000-8000-0000000000b9"
+      },
+      "id": "d0000000-0000-4000-8000-0000000000e8",
+      "stake": 3,
+      "started_at_ms": 1789621439000,
+      "watchers": 0
+    },
+    {
+      "a": {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "민트별",
+        "id": "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b": {
+        "avatar_url": null,
+        "character": "fox",
+        "display_name": "달토끼",
+        "id": "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "id": "d0000000-0000-4000-8000-0000000000e6",
+      "stake": 10,
+      "started_at_ms": 1789621248000,
+      "watchers": 3
+    }
+  ],
+  "me": {
+    "active_match_id": null,
+    "draws": 1,
+    "incoming": [],
+    "losses": 2,
+    "outgoing": null,
+    "ruby_balance": 42,
+    "wins": 4
+  },
+  "server_now_ms": 1789621500000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "turn_grace_seconds": 2,
+  "turn_seconds": 30,
+  "users": [
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b1",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": "aing",
+      "display_name": "꿀떡",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b9",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": "fox",
+      "display_name": "달토끼",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b6",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": null,
+      "display_name": "민트별",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b3",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "busan",
+      "character": "ghost",
+      "display_name": "솜사탕",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b7",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": null,
+      "character": "shiba",
+      "display_name": "호두과자",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b4",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": null,
+      "character": "robot",
+      "display_name": "모카빵",
+      "focus_mode": true,
+      "id": "d0000000-0000-4000-8000-0000000000b8",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "busan",
+      "character": "ghost",
+      "display_name": "초코칩",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b2",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "center": "busan",
+      "character": "squirrel",
+      "display_name": "보리차",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b5",
+      "in_match": false,
+      "is_working": false
+    }
+  ]
+}

@@ -99,6 +99,7 @@ struct GamesTab: View {
             applyDemoChessRoute()
             applyDemoTetrisRoute()
             applyDemoRummyRoute()
+            applyDemoReversiRoute()
             applyDemoSeed()
         }
         // 라우트 계기에서도 꺼낸다 — 탭 막대가 이 탭을 **먼저** 마운트했으면 깃발이 서기 전에 onAppear 가 끝난다.
@@ -107,6 +108,7 @@ struct GamesTab: View {
             applyDemoChessRoute()
             applyDemoTetrisRoute()
             applyDemoRummyRoute()
+            applyDemoReversiRoute()
         }
     }
 
@@ -560,6 +562,14 @@ struct GamesTab: View {
     private func applyDemoRummyRoute() {
         guard store.consumePendingDemoRummyScreen() else { return }
         store.context.router.push(GamesDestination.rummy, on: .games)
+    }
+
+    /// 데모 스크린샷 전용: 시작 라우트가 아잉 뒤집기 장면(`games/reversi/…`)이면 아잉 뒤집기를 쌓는다(위 큐브와 같은 규약).
+    /// 꼬리는 여기서 쓰지 않는다 — 열넷이 다 같은 `.reversi` 한 화면이다. 꼬리는 `store.demoReversiRoute` 에 남아 `reversiScreenDidAppear`
+    /// (판 · 관전 · 로봇 연습 · 규칙)와 화면 안 스크롤 닻(`GamesReversiScreen.lobby`)이 읽는다.
+    private func applyDemoReversiRoute() {
+        guard store.consumePendingDemoReversiScreen() else { return }
+        store.context.router.push(GamesDestination.reversi, on: .games)
     }
 
     /// 데모 스크린샷 전용: 로비를 다녀온 상태(`visited`) — 허브 자체는 로비를 부르지 않는다(새 조회 없음).

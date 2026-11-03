@@ -251,6 +251,15 @@ struct GamesReversiScreen: View {
     /// 안내 → 다른 게임 판 막힘 → 보낸 신청 → 로봇 연습 → 상대 고르기 → 지금 대결 중(↔ 관전 판) → 순위.
     /// 이 기기·서버가 아잉 뒤집기를 못 하면(업데이트 필요 · 서버 준비 중) 안내 + 로봇 연습만 선다.
     private var lobby: some View {
+        ScrollViewReader { proxy in
+            lobbyScroll(proxy: proxy)
+        }
+    }
+
+    /// 데모 닻이 관전 절을 화면 위로 올릴 자리(운영에서는 아무도 이 id 를 부르지 않는다 — 체스 `watchSectionAnchorID` 와 같은 몫).
+    private static let watchSectionAnchorID = "reversi-watch-section"
+
+    private func lobbyScroll(proxy: ScrollViewProxy) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if GamesReversiLobbyPlan.showsPeopleSections(reversi) {
@@ -264,6 +273,7 @@ struct GamesReversiScreen: View {
                         .padding(.top, MobileTheme.rowSpacing)
                     opponents
                     GamesReversiWatchSection(store: reversi)
+                        .id(Self.watchSectionAnchorID)
                     GamesReversiRankingSection(store: reversi)
                 } else {
                     // 할 수 없는 기기·서버 상태다 — 사람에게 신청하는 길은 서지 않는다. **로봇 연습은 서버를 안 타므로 그대로 연다**.
@@ -283,6 +293,16 @@ struct GamesReversiScreen: View {
         }
         // 데모 스크린샷(`-AingCheckGamesDemo bottom`)에서 맨 아래(순위·관전 절)부터 보여 준다 — 다른 1:1 로비와 같은 모양.
         .gamesDemoScrollAnchor(isDemo: store.context.isDemo)
+        // 데모 라우트 닻 둘(`MobileDemoReversiRoute`). ★ **게임 탭 목적지 클로저가 아니라 여기**다 — 그 클로저에서 관전 값을 읽으면 관전이 서는 순간
+        //   목적지가 다시 세워져 `reversiScreenDidDisappear()` → `stopWatching()` 이 관전을 내린다(체스에서 실측한 자리).
+        // ① `games/reversi/ranking` 은 맨 아래 절(순위)에서 시작한다. 관전이 서면 닻을 놓는다(바닥 닻이 관전 판을 접힘 위로 밀어 올린다 — 체스 실측 A).
+        //    `if/else` 로 가르지 않는다 — 값이 뒤집히는 순간 로비 스크롤이 헐리고 다시 선다(nil 이 '닻 없음'이다).
+        #if DEBUG
+        .defaultScrollAnchor(store.demoReversiRoute?.scene.startsAtBottom == true && reversi.spectating == nil ? .bottom : nil)
+        #endif
+        // ② `games/reversi/watch[/over]` 는 관전 절을 화면 위로 올린다(로비 · 관전 응답이 차례로 오며 위쪽이 자라므로 처음 몇 초 되풀이 — 체스와 같은 닻).
+        .gamesDemoChessWatchAnchor(isDemo: store.context.isDemo, watchID: reversi.spectating?.id,
+                                   proxy: proxy, id: Self.watchSectionAnchorID)
     }
 
     // MARK: 머리 두 칸 — 내 전적 · 내 루비

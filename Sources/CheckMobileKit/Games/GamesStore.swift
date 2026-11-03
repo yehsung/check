@@ -232,6 +232,16 @@ package final class GamesStore {
     package var demoRummyRoute: MobileDemoRummyRoute?
     #endif
 
+    /// 데모 전용: 시작 라우트가 아잉 뒤집기 장면(`games/reversi/…`)이라 게임 탭이 아잉 뒤집기를 쌓아야 한다. 위 세 깃발과 같은 규약이다
+    /// (Bool 한 칸이라 `#if DEBUG` 밖 · 세우는 자리가 데모뿐이라 Release 에서는 영원히 false).
+    package var pendingDemoReversiScreen = false
+
+    /// 데모 전용: 시작 라우트의 꼬리를 푼 값(열 판 · 걸 관전 · 로봇 연습 · 규칙 시트 · 로비 시작 절 — `MobileDemoReversiRoute`).
+    /// 위 값들과 같은 규약이다(꺼내 비우지 않는다 · 로그아웃 `reset()` 이 비운다 · 타입이 DEBUG 전용이라 `#if DEBUG` 안).
+    #if DEBUG
+    package var demoReversiRoute: MobileDemoReversiRoute?
+    #endif
+
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
 
@@ -436,10 +446,12 @@ package final class GamesStore {
         pendingDemoChessScreen = false
         pendingDemoTetrisScreen = false
         pendingDemoRummyScreen = false
+        pendingDemoReversiScreen = false
         #if DEBUG
         demoChessRoute = nil
         demoTetrisRoute = nil
         demoRummyRoute = nil
+        demoReversiRoute = nil
         #endif
         syncAIThinker()
     }
@@ -448,6 +460,13 @@ package final class GamesStore {
     package func consumePendingDemoRummyScreen() -> Bool {
         guard pendingDemoRummyScreen else { return false }
         pendingDemoRummyScreen = false
+        return true
+    }
+
+    /// 데모 아잉 뒤집기 장면 깃발을 **한 번** 꺼낸다(같은 규약 — 게임 탭이 두 계기에서 부르므로 비우지 않으면 화면이 두 번 쌓인다).
+    package func consumePendingDemoReversiScreen() -> Bool {
+        guard pendingDemoReversiScreen else { return false }
+        pendingDemoReversiScreen = false
         return true
     }
 
@@ -998,12 +1017,42 @@ package final class GamesStore {
     ///   깃발이 꺼져 있으면 넷이 함께 죽는다: 폴링(`startPolling` 가드 — 상대 차례·보낸 신청 5초·로비 30초) · 순위·관전(`canPollRanking` ·
     ///   `canPollSpectatorFeatures`) · **뒤집기 그림**(`noteBoardProgress` 가 `isWindowVisible` 을 먼저 본다 — 돌이 순간이동한다) ·
     ///   **AI 연습의 사람 시계**(`resumeAIClockIfVisible`). 못: `GamesReversiWiringTests`.
+    /// ★ `focusMatchID` 는 **데모 라우트의 꼬리**다(`games/reversi/match/<장면>` — `MobileDemoReversiRoute`). 사람이 쓰는 길에서는 nil 이다 —
+    ///   코어가 로비 `me.active_match_id` 로 내 판을 스스로 연다. 두 갈래는 **같은 동작**이다: `demoReversiRoute` 는 DEBUG 전용 값이고
+    ///   Release 에서는 원래부터 영원히 nil 이다(체스 · 테트리스 · 큐브와 같은 꼴). 데모 장면의 규칙 시트 · 로봇 판은 `prepare` 가 판을 읽기 **전에** 세운다.
     package func reversiScreenDidAppear() {
         let reversi = context.reversi
         isReversiScreenVisible = true
         syncReversiHiddenPeers()
+        #if DEBUG
+        demoReversiRoute?.prepare(reversi)
+        reversi.openWindow(focusMatchID: demoReversiRoute?.focusMatchID)
+        #else
         reversi.openWindow(focusMatchID: nil)
+        #endif
         if isAppActive { reversi.windowDidShow() }
+        startDemoReversiWatchIfNeeded()
+    }
+
+    /// 데모 전용: 라우트 꼬리가 관전(`games/reversi/watch[/over]`)이면 **[관전] 칩을 누른 것과 같은 문**(`startWatching(matchID:)`)을 직접 건다 —
+    /// 스크린샷에는 합성 탭이 없다(체스 `startDemoChessWatchIfNeeded` 와 같은 까닭). 코어 게이트는 하나도 우회하지 않는다.
+    ///
+    /// 로비 응답을 **먼저 기다린다**(`record` 가 서는 순간 = 로비를 옮겼다): 진행 중 판은 `liveMatches` 의 두 얼굴을 씨앗으로 쓰고,
+    /// 끝난 판은 로비 목록에 없어(서버는 active 만 싣는다) 얼굴 없이 들어가 첫 응답이 채운다. 3초 안에 로비가 안 오면 그냥 건다.
+    /// Release 에는 본문이 없다(`demoReversiRoute` 가 DEBUG 전용) — 그 구성에서도 값이 늘 nil 이라 동작이 같다.
+    private func startDemoReversiWatchIfNeeded() {
+        #if DEBUG
+        guard let id = demoReversiRoute?.watchMatchID else { return }
+        Task { [weak self] in
+            for _ in 0..<60 {
+                guard let self, self.isReversiScreenVisible else { return }
+                if self.context.reversi.record != nil { break }
+                try? await Task.sleep(nanoseconds: 50_000_000)
+            }
+            guard let self, self.isReversiScreenVisible else { return }
+            self.context.reversi.startWatching(matchID: id)
+        }
+        #endif
     }
 
     /// 아잉 뒤집기 화면이 사라졌다(뒤로 · 다른 탭으로 · 로그아웃).

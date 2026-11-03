@@ -1,0 +1,57 @@
+{
+  "__note": [
+    "받은 신청 [거절] 응답 — 같은 판(…e9)이 declined 로 실려 온다(서버 reversi_respond__declined 모양 · accepted false)."
+  ],
+  "accepted": false,
+  "state": {
+    "auto_abandon_streak": 3,
+    "black_auto_streak": 0,
+    "black_user": null,
+    "grace_ms": 2000,
+    "legal_moves": [],
+    "match": {
+      "black": null,
+      "board": "...........................wb......bw...........................",
+      "challenger": "d0000000-0000-4000-8000-0000000000b1",
+      "deadline_ms": null,
+      "discs": {
+        "black": 2,
+        "empty": 60,
+        "white": 2
+      },
+      "end_reason": null,
+      "finished_ms": null,
+      "id": "d0000000-0000-4000-8000-0000000000e9",
+      "invite_expires_ms": 1789621545000,
+      "move_count": 0,
+      "opponent": "d0000000-0000-4000-8000-000000000001",
+      "result": null,
+      "score": null,
+      "stake": 5,
+      "started_ms": null,
+      "status": "declined",
+      "turn": null,
+      "turn_started_ms": null,
+      "white": null,
+      "winner": null
+    },
+    "moves": [],
+    "my_auto_streak": null,
+    "my_color": null,
+    "opponent": {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "user_id": "d0000000-0000-4000-8000-0000000000b1"
+    },
+    "opponent_auto_streak": null,
+    "ruby_balance": 42,
+    "server_now_ms": 1789621500000,
+    "turn_seconds": 30,
+    "watchers": 0,
+    "white_auto_streak": 0,
+    "white_user": null
+  },
+  "status": "ok"
+}

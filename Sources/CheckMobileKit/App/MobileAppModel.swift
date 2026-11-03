@@ -448,6 +448,15 @@ public final class MobileAppModel {
             router.open(.games)
             return
         }
+        // 아잉 뒤집기 장면(`games/reversi/…` — 폰 1.0.17)도 **`AingRoute` 에 가지가 없다** — 같은 꼴로 게임 탭만 열고 탭이 쌓는다.
+        // 푸는 자리는 `MobileDemoReversiRoute(demoRoute:)` 하나다(여기서 판정을 다시 적지 않는다). `games/reversi` 한 토막은 미니게임 이름이
+        // 아니라 `AingRoute` 가 nil 이다 — 가로채도 잃는 라우트가 없다(테트리스와 다른 자리 · `GamesReversiDemoTests` 가 잰다).
+        if let reversi = MobileDemoReversiRoute(demoRoute: raw) {
+            games.pendingDemoReversiScreen = true
+            games.demoReversiRoute = reversi
+            router.open(.games)
+            return
+        }
         #endif
         guard let route = AingRoute(path: raw) ?? Self.demoOnlyRoute(raw) else { return }
         router.open(route)

@@ -1,0 +1,869 @@
+{
+  "__note": [
+    "결과 장면(나 = 흑 승 · 판 가득 · 구름빵 = 백 · 판돈 5). 닿는 길: games/reversi/match/won.",
+    "61수(패스 줄 포함 · 시드 212). score 는 WOF(빈칸은 이긴 쪽) · discs 는 판 위 실제 돌 수.",
+    "ruby_balance 47 = 42 − 5 + 10(이긴 쪽이 두 사람 몫을 받는다 — DuelFee.winnerPayout). 장면 로비도 47 · 전적 5승."
+  ],
+  "state": {
+    "auto_abandon_streak": 3,
+    "black_auto_streak": 0,
+    "black_user": {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "fox",
+      "display_name": "새벽",
+      "user_id": "d0000000-0000-4000-8000-000000000001"
+    },
+    "grace_ms": 2000,
+    "legal_moves": [],
+    "match": {
+      "black": "d0000000-0000-4000-8000-000000000001",
+      "board": "bbbbbbbbbwwwwwbbbwbbwbwbbbwwbwbbbwbbwbbbbwbwbbbbbbwbwbbbbwwwwwbb",
+      "challenger": "d0000000-0000-4000-8000-000000000001",
+      "deadline_ms": null,
+      "discs": {
+        "black": 42,
+        "empty": 0,
+        "white": 22
+      },
+      "end_reason": "board_full",
+      "finished_ms": 1789621496000,
+      "id": "d0000000-0000-4000-8000-0000000000e3",
+      "invite_expires_ms": 1789620401000,
+      "move_count": 61,
+      "opponent": "d0000000-0000-4000-8000-0000000000b1",
+      "result": "black_win",
+      "score": {
+        "black": 42,
+        "white": 22
+      },
+      "stake": 5,
+      "started_ms": 1789620360000,
+      "status": "finished",
+      "turn": null,
+      "turn_started_ms": 1789621496000,
+      "white": "d0000000-0000-4000-8000-0000000000b1",
+      "winner": "d0000000-0000-4000-8000-000000000001"
+    },
+    "moves": [
+      {
+        "at_ms": 1789620596000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          27
+        ],
+        "idx": 19,
+        "kind": "stone",
+        "seq": 1
+      },
+      {
+        "at_ms": 1789620611000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          27
+        ],
+        "idx": 18,
+        "kind": "stone",
+        "seq": 2
+      },
+      {
+        "at_ms": 1789620626000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          18
+        ],
+        "idx": 17,
+        "kind": "stone",
+        "seq": 3
+      },
+      {
+        "at_ms": 1789620641000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          18
+        ],
+        "idx": 9,
+        "kind": "stone",
+        "seq": 4
+      },
+      {
+        "at_ms": 1789620656000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          36
+        ],
+        "idx": 37,
+        "kind": "stone",
+        "seq": 5
+      },
+      {
+        "at_ms": 1789620671000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          36
+        ],
+        "idx": 45,
+        "kind": "stone",
+        "seq": 6
+      },
+      {
+        "at_ms": 1789620686000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          27
+        ],
+        "idx": 26,
+        "kind": "stone",
+        "seq": 7
+      },
+      {
+        "at_ms": 1789620701000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          37
+        ],
+        "idx": 29,
+        "kind": "stone",
+        "seq": 8
+      },
+      {
+        "at_ms": 1789620716000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          9,
+          18
+        ],
+        "idx": 0,
+        "kind": "stone",
+        "seq": 9
+      },
+      {
+        "at_ms": 1789620731000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          26,
+          27,
+          28
+        ],
+        "idx": 25,
+        "kind": "stone",
+        "seq": 10
+      },
+      {
+        "at_ms": 1789620746000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          25
+        ],
+        "idx": 32,
+        "kind": "stone",
+        "seq": 11
+      },
+      {
+        "at_ms": 1789620761000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          18,
+          19
+        ],
+        "idx": 10,
+        "kind": "stone",
+        "seq": 12
+      },
+      {
+        "at_ms": 1789620776000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          10,
+          18,
+          19,
+          27
+        ],
+        "idx": 11,
+        "kind": "stone",
+        "seq": 13
+      },
+      {
+        "at_ms": 1789620791000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          10,
+          19
+        ],
+        "idx": 1,
+        "kind": "stone",
+        "seq": 14
+      },
+      {
+        "at_ms": 1789620806000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          1,
+          10
+        ],
+        "idx": 2,
+        "kind": "stone",
+        "seq": 15
+      },
+      {
+        "at_ms": 1789620821000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          35
+        ],
+        "idx": 44,
+        "kind": "stone",
+        "seq": 16
+      },
+      {
+        "at_ms": 1789620836000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          19,
+          28,
+          37
+        ],
+        "idx": 46,
+        "kind": "stone",
+        "seq": 17
+      },
+      {
+        "at_ms": 1789620851000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          19
+        ],
+        "idx": 12,
+        "kind": "stone",
+        "seq": 18
+      },
+      {
+        "at_ms": 1789620866000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          26,
+          35,
+          44,
+          45
+        ],
+        "idx": 53,
+        "kind": "stone",
+        "seq": 19
+      },
+      {
+        "at_ms": 1789620881000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          25,
+          26,
+          27,
+          28
+        ],
+        "idx": 24,
+        "kind": "stone",
+        "seq": 20
+      },
+      {
+        "at_ms": 1789620896000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          24
+        ],
+        "idx": 16,
+        "kind": "stone",
+        "seq": 21
+      },
+      {
+        "at_ms": 1789620911000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          37,
+          46
+        ],
+        "idx": 55,
+        "kind": "stone",
+        "seq": 22
+      },
+      {
+        "at_ms": 1789620926000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          46
+        ],
+        "idx": 47,
+        "kind": "stone",
+        "seq": 23
+      },
+      {
+        "at_ms": 1789620941000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          45,
+          53
+        ],
+        "idx": 61,
+        "kind": "stone",
+        "seq": 24
+      },
+      {
+        "at_ms": 1789620956000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          12
+        ],
+        "idx": 13,
+        "kind": "stone",
+        "seq": 25
+      },
+      {
+        "at_ms": 1789620971000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          11,
+          18
+        ],
+        "idx": 4,
+        "kind": "stone",
+        "seq": 26
+      },
+      {
+        "at_ms": 1789620986000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          25,
+          26,
+          27,
+          28,
+          29,
+          37
+        ],
+        "idx": 30,
+        "kind": "stone",
+        "seq": 27
+      },
+      {
+        "at_ms": 1789621001000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          26,
+          35
+        ],
+        "idx": 34,
+        "kind": "stone",
+        "seq": 28
+      },
+      {
+        "at_ms": 1789621016000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          55
+        ],
+        "idx": 63,
+        "kind": "stone",
+        "seq": 29
+      },
+      {
+        "at_ms": 1789621031000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          28,
+          29,
+          37
+        ],
+        "idx": 21,
+        "kind": "stone",
+        "seq": 30
+      },
+      {
+        "at_ms": 1789621046000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          11,
+          18,
+          19,
+          28,
+          36
+        ],
+        "idx": 20,
+        "kind": "stone",
+        "seq": 31
+      },
+      {
+        "at_ms": 1789621061000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          44
+        ],
+        "idx": 51,
+        "kind": "stone",
+        "seq": 32
+      },
+      {
+        "at_ms": 1789621076000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          34,
+          35,
+          44,
+          45
+        ],
+        "idx": 43,
+        "kind": "stone",
+        "seq": 33
+      },
+      {
+        "at_ms": 1789621091000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          36,
+          43
+        ],
+        "idx": 50,
+        "kind": "stone",
+        "seq": 34
+      },
+      {
+        "at_ms": 1789621106000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          29,
+          36,
+          37
+        ],
+        "idx": 38,
+        "kind": "stone",
+        "seq": 35
+      },
+      {
+        "at_ms": 1789621121000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          11,
+          12,
+          19,
+          27,
+          35
+        ],
+        "idx": 3,
+        "kind": "stone",
+        "seq": 36
+      },
+      {
+        "at_ms": 1789621136000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          3,
+          4
+        ],
+        "idx": 5,
+        "kind": "stone",
+        "seq": 37
+      },
+      {
+        "at_ms": 1789621151000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          30,
+          36,
+          37,
+          38,
+          46
+        ],
+        "idx": 39,
+        "kind": "stone",
+        "seq": 38
+      },
+      {
+        "at_ms": 1789621166000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          11,
+          19,
+          27,
+          35,
+          43,
+          51
+        ],
+        "idx": 59,
+        "kind": "stone",
+        "seq": 39
+      },
+      {
+        "at_ms": 1789621181000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          28,
+          34,
+          35,
+          43,
+          44,
+          45
+        ],
+        "idx": 42,
+        "kind": "stone",
+        "seq": 40
+      },
+      {
+        "at_ms": 1789621196000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          34,
+          42,
+          43,
+          44,
+          45,
+          46,
+          50
+        ],
+        "idx": 41,
+        "kind": "stone",
+        "seq": 41
+      },
+      {
+        "at_ms": 1789621211000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          42
+        ],
+        "idx": 49,
+        "kind": "stone",
+        "seq": 42
+      },
+      {
+        "at_ms": 1789621226000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          53
+        ],
+        "idx": 62,
+        "kind": "stone",
+        "seq": 43
+      },
+      {
+        "at_ms": 1789621241000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          45,
+          46
+        ],
+        "idx": 54,
+        "kind": "stone",
+        "seq": 44
+      },
+      {
+        "at_ms": 1789621256000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          21,
+          30,
+          38,
+          46,
+          54
+        ],
+        "idx": 22,
+        "kind": "stone",
+        "seq": 45
+      },
+      {
+        "at_ms": 1789621271000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          9,
+          10,
+          11,
+          17
+        ],
+        "idx": 8,
+        "kind": "stone",
+        "seq": 46
+      },
+      {
+        "at_ms": 1789621286000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          28,
+          35,
+          42,
+          49
+        ],
+        "idx": 56,
+        "kind": "stone",
+        "seq": 47
+      },
+      {
+        "at_ms": 1789621301000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          27,
+          28,
+          29,
+          30,
+          38
+        ],
+        "idx": 31,
+        "kind": "stone",
+        "seq": 48
+      },
+      {
+        "at_ms": 1789621316000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          30,
+          31,
+          37,
+          39
+        ],
+        "idx": 23,
+        "kind": "stone",
+        "seq": 49
+      },
+      {
+        "at_ms": 1789621331000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          13,
+          21,
+          22,
+          30
+        ],
+        "idx": 14,
+        "kind": "stone",
+        "seq": 50
+      },
+      {
+        "at_ms": 1789621346000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          13,
+          14,
+          22,
+          30,
+          38
+        ],
+        "idx": 6,
+        "kind": "stone",
+        "seq": 51
+      },
+      {
+        "at_ms": 1789621361000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          16,
+          24,
+          32,
+          41,
+          42,
+          43,
+          44
+        ],
+        "idx": 40,
+        "kind": "stone",
+        "seq": 52
+      },
+      {
+        "at_ms": 1789621376000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          8,
+          16,
+          24,
+          32,
+          40,
+          41
+        ],
+        "idx": 48,
+        "kind": "stone",
+        "seq": 53
+      },
+      {
+        "at_ms": 1789621391000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          25,
+          34,
+          35
+        ],
+        "idx": 33,
+        "kind": "stone",
+        "seq": 54
+      },
+      {
+        "at_ms": 1789621406000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          25,
+          28,
+          34,
+          36,
+          43,
+          44,
+          45
+        ],
+        "idx": 52,
+        "kind": "stone",
+        "seq": 55
+      },
+      {
+        "at_ms": 1789621421000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          20,
+          28,
+          36,
+          44,
+          51,
+          52
+        ],
+        "idx": 60,
+        "kind": "stone",
+        "seq": 56
+      },
+      {
+        "at_ms": 1789621436000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          44,
+          51
+        ],
+        "idx": 58,
+        "kind": "stone",
+        "seq": 57
+      },
+      {
+        "at_ms": 1789621451000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          41,
+          43,
+          49,
+          50,
+          58,
+          59
+        ],
+        "idx": 57,
+        "kind": "stone",
+        "seq": 58
+      },
+      {
+        "at_ms": 1789621466000,
+        "auto": false,
+        "color": "black",
+        "flipped": [],
+        "idx": null,
+        "kind": "pass",
+        "seq": 59
+      },
+      {
+        "at_ms": 1789621481000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          13,
+          14,
+          22
+        ],
+        "idx": 15,
+        "kind": "stone",
+        "seq": 60
+      },
+      {
+        "at_ms": 1789621496000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          14,
+          15,
+          21,
+          28,
+          35,
+          42,
+          49
+        ],
+        "idx": 7,
+        "kind": "stone",
+        "seq": 61
+      }
+    ],
+    "my_auto_streak": 0,
+    "my_color": "black",
+    "opponent": {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "user_id": "d0000000-0000-4000-8000-0000000000b1"
+    },
+    "opponent_auto_streak": 0,
+    "ruby_balance": 47,
+    "server_now_ms": 1789621500000,
+    "turn_seconds": 30,
+    "watchers": 0,
+    "white_auto_streak": 0,
+    "white_user": {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "user_id": "d0000000-0000-4000-8000-0000000000b1"
+    }
+  },
+  "status": "ok"
+}

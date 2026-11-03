@@ -1,0 +1,115 @@
+{
+  "__note": [
+    "아잉 뒤집기 순위(승점 = 승 − 패, 서버가 매긴 순서 그대로). 닿는 길: games/reversi/ranking(로비 맨 아래 절).",
+    "여덟 줄이라 접힘(5) 아래 [전체 보기]가 선다. me 줄 = 기본 로비 전적(4승 2패 1무)과 같아 '내 순위' 줄이 선다.",
+    "record_since_ms 는 null — 전적 컷이 없으면 서버가 null 을 준다(머리 캡션이 '전체 기간')."
+  ],
+  "me": {
+    "draws": 1,
+    "losses": 2,
+    "points": 2,
+    "rank": 4,
+    "wins": 4
+  },
+  "record_since_ms": null,
+  "rows": [
+    {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "fox",
+      "display_name": "달토끼",
+      "draws": 1,
+      "losses": 3,
+      "points": 6,
+      "rank": 1,
+      "user_id": "d0000000-0000-4000-8000-0000000000b6",
+      "wins": 9
+    },
+    {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": null,
+      "display_name": "민트별",
+      "draws": 0,
+      "losses": 3,
+      "points": 4,
+      "rank": 2,
+      "user_id": "d0000000-0000-4000-8000-0000000000b3",
+      "wins": 7
+    },
+    {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "draws": 2,
+      "losses": 2,
+      "points": 3,
+      "rank": 3,
+      "user_id": "d0000000-0000-4000-8000-0000000000b1",
+      "wins": 5
+    },
+    {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "fox",
+      "display_name": "새벽",
+      "draws": 1,
+      "losses": 2,
+      "points": 2,
+      "rank": 4,
+      "user_id": "d0000000-0000-4000-8000-000000000001",
+      "wins": 4
+    },
+    {
+      "avatar_url": null,
+      "center": null,
+      "character": "shiba",
+      "display_name": "호두과자",
+      "draws": 0,
+      "losses": 3,
+      "points": 1,
+      "rank": 5,
+      "user_id": "d0000000-0000-4000-8000-0000000000b4",
+      "wins": 4
+    },
+    {
+      "avatar_url": null,
+      "center": "busan",
+      "character": "ghost",
+      "display_name": "솜사탕",
+      "draws": 1,
+      "losses": 2,
+      "points": 0,
+      "rank": 6,
+      "user_id": "d0000000-0000-4000-8000-0000000000b7",
+      "wins": 2
+    },
+    {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "aing",
+      "display_name": "꿀떡",
+      "draws": 0,
+      "losses": 2,
+      "points": -2,
+      "rank": 7,
+      "user_id": "d0000000-0000-4000-8000-0000000000b9",
+      "wins": 0
+    },
+    {
+      "avatar_url": null,
+      "center": "busan",
+      "character": "ghost",
+      "display_name": "초코칩",
+      "draws": 0,
+      "losses": 4,
+      "points": -3,
+      "rank": 8,
+      "user_id": "d0000000-0000-4000-8000-0000000000b2",
+      "wins": 1
+    }
+  ],
+  "server_now_ms": 1789621500000,
+  "status": "ok"
+}

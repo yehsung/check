@@ -137,8 +137,7 @@ struct V03xxMahjongPanelRenderTests {
         print("[남의 차례] 오른쪽 카드 안쪽 차이 \(diff)")
         #expect(diff <= 8, "남의 차례인 자리 카드 안에 무언가(링·숫자)가 더 그려졌다")
         // 기준선: 빛줄은 가운데 판에서 갈린다(차례 표시 자체는 있다).
-        let board = CGRect(x: 520, y: 242, width: 200, height: 200)
-        #expect(mjMaxDiff(theirs, elsewhere, board) > 60)
+        #expect(mjMaxDiff(theirs, elsewhere, mjCenterBoard) > 60)
     }
 
     @Test
@@ -467,9 +466,8 @@ struct V03xxMahjongPanelRenderTests {
         let seat3 = try #require(store.table?.seats?.first { $0.seatNo == 3 })
         let last = try #require(MahjongTableGeometry.river(seat3.discards ?? [], compass: .left).last)
         let felt = mjBody(MahjongMatchLayout.felt)
-        let block = MahjongMatchLayout.blockOrigin
         let size = MahjongTileArt.imageSize(last.size, rotation: last.rotation)
-        let slot = CGRect(x: felt.minX + block.x + last.origin.x - MahjongMotionPlan.travel, y: felt.minY + block.y + last.origin.y,
+        let slot = CGRect(x: felt.minX + last.origin.x - MahjongMotionPlan.travel, y: felt.minY + last.origin.y,
                           width: size.width + MahjongMotionPlan.travel, height: size.height)
         #expect(mjMaxDiff(moving, plain, slot) > 60, "버린 패가 움직이지 않았다")
         #expect(mjMaxDiff(reduced, plain, slot) <= 8, "동작 줄이기에도 움직였다")
@@ -498,6 +496,40 @@ struct V03xxMahjongPanelRenderTests {
         let scaledActions = CGRect(x: actions.minX * 0.82, y: actions.minY * 0.82, width: actions.width * 0.82,
                                    height: actions.height * 0.82)
         #expect(scaledActions.maxX <= 1240 * 0.82 && mjInk(bitmap, scaledActions) > 500, "줄인 창에서 ACTIONS 가 잘렸다")
+    }
+
+    // MARK: ⑨ 판 채우기(v1.0.4 — 강 36×48, 대표 답 #d_UIE0E5Aqqkxv)
+
+    @Test
+    func worstCaseRiversAndMeldsAllStandInsideTheFelt() throws {
+        // 없으면: 강·부로가 가장 많은 국 끝(네 자리 강 27장 · 부로 4묶음)에서 셋째 줄이 펠트 밖으로 잘려 나가거나 옆 강·손 띠와
+        // 겹쳐(크림 덩어리가 합쳐지거나 사라진다) 버린 패를 못 읽어도 초록이다. 기하 상한은 순수 값 시험(V03xxMahjongBoardFillTests)이
+        // 사각형으로 되묻고, 여기는 **실제로 그린 그림**에서 패 하나하나가 따로 섰는지를 잰다.
+        let state = mjWorst()
+        let store = try mjTableStore(state)
+        let bitmap = try mjBitmap(mjPanel(store))
+        mjSave(bitmap, "worst")
+        let expected = mjWorstCreamCount(state)
+        let seen = mjCreamBlobs(bitmap, rect: mjBody(MahjongMatchLayout.felt), minHeight: 24)
+        print("[최악 경우] 펠트 안 크림 덩어리 \(seen) · 앞면으로 선 패 \(expected)")
+        #expect(seen == expected, "펠트 안 크림 덩어리 \(seen) — 강·상대 부로·도라 앞면 \(expected) 장이 따로따로 서야 한다")
+    }
+
+    @Test
+    func reviewScenesAtSixteenHundredPixels() throws {
+        // 대표가 볼 판 그림 넷(내 차례 · 울기 창 · 리치 · 최악 경우) — `MAHJONG_MOCKS_DIR` 를 줄 때만 쓴다(주지 않으면 아무것도 안 한다).
+        guard let path = ProcessInfo.processInfo.environment["MAHJONG_MOCKS_DIR"], !path.isEmpty else { return }
+        let directory = URL(fileURLWithPath: path, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let riichi = try mjTableStore(mjActive())
+        riichi.armRiichi()
+        let scenes: [(name: String, store: MahjongStore, hover: Int?)] = [
+            ("board-my-turn", try mjTableStore(mjActive()), 2), ("board-call", try mjTableStore(mjCall()), nil),
+            ("board-riichi", riichi, nil), ("board-worst", try mjTableStore(mjWorst()), nil),
+        ]
+        for scene in scenes {
+            try mjWriteReview(try mjBitmap(mjPanel(scene.store, hover: scene.hover)), name: scene.name, in: directory)
+        }
     }
 }
 
@@ -666,6 +698,64 @@ private func mjFinished() -> [String: Any] {
     }
 }
 
+/// 최악 경우(v1.0.4 — 강 36×48 이 펠트 안에 서는가): 네 자리 모두 강 27장(한 국 한 자리 이론 최대 — 산 70장 · 부로 넷 ·
+/// 셋이 퐁 12번, `V03xxMahjongBoardFillTests` 가 셈을 되묻는다) · 리치 선언패 가로(스물한째 — 셋째 줄) · 울려 간 패 · 쯔모기리 섞음 ·
+/// 네 사람 부로 4묶음(가깡 · 안깡 · 대명깡 · 퐁) · 도라 표시 5장. 리치와 부로가 함께인 손은 규칙상 없고 패 id 도 겹친다(136장으로
+/// 이 장면을 다 만들 수 없다) — **기하 상한**을 보려는 그림이다. 白(라벤더 테두리 — 테두리 안팎 크림이 두 덩어리로 갈린다)은 크림
+/// 덩어리 수로 패를 세는 시험이라 넣지 않았다.
+private func mjWorst() -> [String: Any] {
+    func kind(_ raw: Int) -> Int { raw % 34 == 31 ? 33 : raw % 34 }
+    return mjActive(turnSeat: 1) { state in
+        var match = state["match"] as! [String: Any]
+        match["wall_remaining"] = 0
+        match["kan_count"] = 4
+        match["dora_indicators"] = [mjID(23, 1), mjID(5, 1), mjID(11, 1), mjID(30, 1), mjID(14, 1)]
+        state["match"] = match
+        state["my_hand"] = [mjID(33, 0)]
+        state["my_drawn"] = NSNull()
+        state["my_decision"] = NSNull()
+        var seats = state["seats"] as! [[String: Any]]
+        for seat in 0..<4 {
+            seats[seat]["discards"] = (0..<MahjongMatchLayout.riverWorstCount).map { i in
+                mjDisc(kind(seat * 9 + i * 7), (i / 9) % 4, tsumogiri: i % 5 == 4 && i != 20, riichi: i == 20, taken: i % 7 == 3)
+            }
+            let kinds = (0..<4).map { kind(seat * 8 + $0 * 2 + 1) }
+            seats[seat]["melds"] = [
+                ["type": "kakan", "tiles": (0..<4).map { mjID(kinds[0], $0) }, "called": mjID(kinds[0], 2), "from_seat": (seat + 2) % 4],
+                ["type": "ankan", "tiles": (0..<4).map { mjID(kinds[1], $0) }, "called": NSNull(), "from_seat": NSNull()],
+                ["type": "minkan", "tiles": (0..<4).map { mjID(kinds[2], $0) }, "called": mjID(kinds[2], 3), "from_seat": (seat + 1) % 4],
+                ["type": "pon", "tiles": (0..<3).map { mjID(kinds[3], $0) }, "called": mjID(kinds[3], 2), "from_seat": (seat + 3) % 4],
+            ] as [[String: Any]]
+            seats[seat]["hand_count"] = seat == 1 ? 2 : 1
+            seats[seat]["riichi"] = true
+        }
+        state["seats"] = seats
+    }
+}
+
+/// 최악 경우 그림의 펠트 안에서 **앞면 크림**으로 서는 패 수 — 강의 보통 패(울려 간 패는 흐리고 쯔모기리는 한 단 어둡다. 방금 버린
+/// 사람의 마지막 패는 강조라 크림) + 상대 부로 앞면(안깡 양 끝은 뒷면 · 내 부로는 펠트 밖 손 칸) + 열린 도라 표시패.
+private func mjWorstCreamCount(_ state: [String: Any]) -> Int {
+    let seats = state["seats"] as? [[String: Any]] ?? []
+    let lastDiscarder = (state["events"] as? [[String: Any]])?.last { $0["kind"] as? String == "discard" }?["seat"] as? Int
+    var count = 0
+    for seat in seats {
+        let number = seat["seat_no"] as? Int
+        let discards = seat["discards"] as? [[String: Any]] ?? []
+        for (index, discard) in discards.enumerated() {
+            let taken = discard["taken"] as? Bool == true, tsumogiri = discard["tsumogiri"] as? Bool == true
+            let highlighted = number == lastDiscarder && index == discards.count - 1 && !taken
+            if !taken && (!tsumogiri || highlighted) { count += 1 }
+        }
+        guard number != state["my_seat"] as? Int else { continue }
+        for meld in seat["melds"] as? [[String: Any]] ?? [] {
+            let tiles = (meld["tiles"] as? [Int])?.count ?? 0
+            count += meld["type"] as? String == "ankan" ? tiles - 2 : tiles
+        }
+    }
+    return count + ((state["match"] as? [String: Any])?["dora_indicators"] as? [Int] ?? []).count
+}
+
 /// forming 방 — 방장은 나, joined 수만큼 앉고 나머지는 초대 중.
 private func mjRoom(joined: Int) -> [String: Any] {
     [
@@ -786,12 +876,16 @@ private var mjHandProbe: CGRect {
                   width: hand.width, height: MahjongMatchLayout.hand.height - MahjongMatchLayout.handTileTop + MahjongMatchLayout.hoverLift)
 }
 
-/// 가운데 판의 "기다리는 중…" 줄(도라 줄 아래 · 바람 글자 위).
+/// 가운데 판(창 좌표).
+private var mjCenterBoard: CGRect {
+    let felt = MahjongMatchLayout.felt
+    return mjBody(MahjongMatchLayout.center.offsetBy(dx: felt.minX, dy: felt.minY))
+}
+
+/// 가운데 판의 "기다리는 중…" 줄(도라 줄 아래 · 아래 변 바람 글자·리치봉 위 — 판 162 의 y 124…140 근처).
 private var mjWaitingBand: CGRect {
-    let felt = mjBody(MahjongMatchLayout.felt)
-    let center = MahjongMatchLayout.center
-    let origin = CGPoint(x: felt.minX + MahjongMatchLayout.blockOrigin.x + center.minX, y: felt.minY + center.minY)
-    return CGRect(x: origin.x + 50, y: origin.y + 150, width: 100, height: 22)
+    let board = mjCenterBoard
+    return CGRect(x: board.minX + 31, y: board.minY + 124, width: 100, height: 18)
 }
 
 private func mjCount(_ bitmap: NSBitmapImageRep, _ rect: CGRect, where predicate: (Int, Int, Int) -> Bool) -> Int {
@@ -878,6 +972,28 @@ private enum MJRenderError: Error { case failed }
 private func mjBitmap(_ view: some View) throws -> NSBitmapImageRep {
     guard let bitmap = CheckRenderSettle.bitmap(view.fixedSize(), scale: 2) else { throw MJRenderError.failed }
     return bitmap
+}
+
+/// 대표가 볼 PNG — 배율 2 로 구운 판을 가로 1600px 로 줄여 쓴다. 1MB 를 넘으면 40px 씩 더 줄인다(1400px 아래로는 안 간다 — 그래도
+/// 넘으면 빨강). 부르는 쪽이 `MAHJONG_MOCKS_DIR` 을 확인한다.
+private func mjWriteReview(_ bitmap: NSBitmapImageRep, name: String, in directory: URL) throws {
+    guard let source = bitmap.cgImage, let space = CGColorSpace(name: CGColorSpace.sRGB) else { throw MJRenderError.failed }
+    var width = min(source.width, 1600)
+    var png = Data()
+    repeat {
+        let height = Int((Double(source.height) * Double(width) / Double(source.width)).rounded())
+        guard let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { throw MJRenderError.failed }
+        context.interpolationQuality = .high
+        context.draw(source, in: CGRect(x: 0, y: 0, width: width, height: height))
+        guard let small = context.makeImage(), let data = NSBitmapImageRep(cgImage: small).representation(using: .png, properties: [:])
+        else { throw MJRenderError.failed }
+        png = data
+        width -= 40
+    } while png.count > 1_000_000 && width >= 1400
+    try png.write(to: directory.appendingPathComponent("\(name).png"))
+    #expect(png.count <= 1_000_000, "\(name) \(png.count) 바이트 — 1MB 를 넘는다")
 }
 
 /// 사람이 볼 PNG — `MAHJONG_RENDER_DIR` 을 줄 때만 그 폴더에 쓴다(주지 않으면 아무 데도 안 쓴다 — 임시 폴더에 쌓이지 않게).

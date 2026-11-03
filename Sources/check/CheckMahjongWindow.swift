@@ -77,40 +77,68 @@ enum MahjongMatchLayout {
     /// CL 줄 [반응] 얼굴 단추 폭(루비 판만 — [역][점수표]가 남은 폭을 나눈다).
     static let reactionButtonWidth: CGFloat = 34
 
-    // MARK: 펠트 안 탁자 덩어리 536×502(가운데, 펠트 좌표 x=174)
-    static let handStrip: CGFloat = 34
-    static let riverDepth: CGFloat = 122
-    static let centerSide: CGFloat = 200
-    static let gap: CGFloat = 6
-    /// 세로 34+6+122+6+200+6+122+6 = 502(내 손은 펠트 밖 — 아래쪽 손 띠가 없다).
-    static var blockHeight: CGFloat { handStrip + gap + riverDepth + gap + centerSide + gap + riverDepth + gap }
-    /// 가로 34+6+122+6+200+6+122+6+34 = 536.
-    static var blockWidth: CGFloat { handStrip + gap + riverDepth + gap + centerSide + gap + riverDepth + gap + handStrip }
-    /// 펠트 안 덩어리 왼쪽 위(펠트 좌표).
-    static var blockOrigin: CGPoint { CGPoint(x: (felt.width - blockWidth) / 2, y: 0) }
-    /// 가운데 판(덩어리 좌표).
+    // MARK: 펠트 안 탁자(펠트 좌표 884×502) — (v1.0.4) 강 36×48 로 펠트를 채운다(대표 답 #d_UIE0E5Aqqkxv)
+    //
+    // 세로 4 + 위 손 띠 32 + 4 + 위 강 144 + 4 + 가운데 판 162 + 4 + 아래 강 144 + 4 = 502(내 손은 펠트 밖 — 아래 손 띠가 없다).
+    // 가운데 판은 가로 가운데(x 361…523). 좌우 손 띠는 펠트 가장자리(x 4…36 · 848…880), 위 손 띠는 그 사이(x 40…844).
+    // 강은 바람개비 — 네 강의 칸(`riverLane`)이 서로도, 가운데 판·손 띠와도 겹치지 않게 나뉜다:
+    //   아래 {x ≥ 판 왼쪽, y ≥ 판 아래 + 4} · 오른쪽 {x ≥ 판 오른쪽 + 4, y ≤ 판 아래} · 위 {x ≤ 판 오른쪽, y ≤ 판 위 − 4} ·
+    //   왼쪽 {x ≤ 판 왼쪽 − 4, y ≥ 판 위}. 패가 제 칸 안에만 서면 아무것과도 겹치지 않는다(최악 경우는 시험이 사각형으로 되묻는다).
+    //   위아래 강은 세로가 꽉 차 3줄, 좌우 강은 가로 자리가 남아 4줄까지(`MahjongTableGeometry.riverRowCounts`).
+    /// 펠트 가장자리 ↔ 손 띠 · 맨 바깥 강 줄.
+    static let feltInset: CGFloat = 4
+    /// 상대 손 띠 두께(부로 24×32 가 선다).
+    static let handStrip: CGFloat = 32
+    static let gap: CGFloat = 4
+    static let centerSide: CGFloat = 162
+    /// 강 패 한 장 36×48(30×40 의 1.2배).
+    static var riverTile: CGSize { MahjongTileSize.discard.size }
+    /// 위아래 강 3줄 깊이(144).
+    static var riverDepth: CGFloat { riverTile.height * 3 }
+    /// 한 국 한 자리 강의 이론 최대 — 산 70장 · 사람마다 부로 넷까지일 때, 셋이 퐁 12번을 몰아 주면 친·남 27장 · 서·북 26장
+    /// (자기 울음만이면 21 · 한 사람이 더 울어 주면 24). 패 종류는 따지지 않은 상한이고 시험이 같은 셈을 되묻는다.
+    static let riverWorstCount = 27
+
+    /// 가운데 판(펠트 좌표) — (361, 188, 162, 162).
     static var center: CGRect {
-        CGRect(x: handStrip + gap + riverDepth + gap, y: handStrip + gap + riverDepth + gap, width: centerSide, height: centerSide)
+        CGRect(x: (felt.width - centerSide) / 2, y: feltInset + handStrip + gap + riverDepth + gap, width: centerSide, height: centerSide)
     }
 
-    /// 방위별 강 자리(덩어리 좌표). 셋째 줄은 넘치면 이 칸 밖(바람개비 모서리)으로 늘어난다.
-    static func river(_ compass: MahjongCompass) -> CGRect {
-        let c = center
+    /// 강 줄 수 한도 — 위아래 3(세로가 꽉 찼다) · 좌우 4(바깥에 한 줄 더 놓을 가로 자리가 있다).
+    static func riverMaxRows(_ compass: MahjongCompass) -> Int { compass == .left || compass == .right ? 4 : 3 }
+
+    /// 방위별 강 칸(펠트 좌표). 첫 패는 주인 기준 왼쪽 = 가운데 판 모서리에 서고, 줄은 판 쪽에서 바깥으로 쌓인다.
+    /// 아래 (361, 354, 483, 144) · 위 (40, 40, 483, 144) · 왼쪽 (165, 188, 192, 310) · 오른쪽 (527, 40, 192, 310).
+    static func riverLane(_ compass: MahjongCompass) -> CGRect {
+        let c = center, edge = feltInset + handStrip + gap
+        let rows = riverTile.height * CGFloat(riverMaxRows(compass))
         switch compass {
-        case .bottom: return CGRect(x: c.minX, y: c.maxY + gap, width: centerSide, height: riverDepth)
-        case .top: return CGRect(x: c.minX, y: c.minY - gap - riverDepth, width: centerSide, height: riverDepth)
-        case .right: return CGRect(x: c.maxX + gap, y: c.minY, width: riverDepth, height: centerSide)
-        case .left: return CGRect(x: c.minX - gap - riverDepth, y: c.minY, width: riverDepth, height: centerSide)
+        case .bottom: return CGRect(x: c.minX, y: c.maxY + gap, width: felt.width - edge - c.minX, height: rows)
+        case .top: return CGRect(x: edge, y: c.minY - gap - rows, width: c.maxX - edge, height: rows)
+        case .right: return CGRect(x: c.maxX + gap, y: edge, width: rows, height: c.maxY - edge)
+        case .left: return CGRect(x: c.minX - gap - rows, y: c.minY, width: rows, height: felt.height - feltInset - c.minY)
         }
     }
 
-    /// 상대 손 띠(덩어리 좌표). 나(아래)는 손이 펠트 밖이라 없다.
+    /// 강 한 줄에 놓을 수 있는 장수 — 칸 길이에서 리치 가로 한 장 몫(48 − 36)을 뺀 만큼(위아래 13 · 좌우 8).
+    static func riverLaneTiles(_ compass: MahjongCompass) -> Int {
+        let lane = riverLane(compass)
+        let along = compass == .top || compass == .bottom ? lane.width : lane.height
+        return Int((along - (riverTile.height - riverTile.width)) / riverTile.width)
+    }
+
+    /// 좌우 손 띠의 위아래 끝 여백 — 펠트 둥근 모서리(반지름 18)에 띠 꼭짓점이 걸리지 않게.
+    static let sideStripEndInset: CGFloat = 10
+
+    /// 상대 손 띠(펠트 좌표). 나(아래)는 손이 펠트 밖이라 없다. 띠 안에서 패는 가운데 맞춤(가장 긴 꼴 — 깡 넷 + 손 2장 — 472).
+    /// 위 (40, 4, 804, 32) · 왼쪽 (4, 10, 32, 482) · 오른쪽 (848, 10, 32, 482).
     static func handStripRect(_ compass: MahjongCompass) -> CGRect? {
+        let edge = feltInset + handStrip + gap, sideLength = felt.height - sideStripEndInset * 2
         switch compass {
         case .bottom: return nil
-        case .top: return CGRect(x: 0, y: 0, width: blockWidth, height: handStrip)
-        case .left: return CGRect(x: 0, y: 0, width: handStrip, height: blockHeight)
-        case .right: return CGRect(x: blockWidth - handStrip, y: 0, width: handStrip, height: blockHeight)
+        case .top: return CGRect(x: edge, y: feltInset, width: felt.width - edge * 2, height: handStrip)
+        case .left: return CGRect(x: feltInset, y: sideStripEndInset, width: handStrip, height: sideLength)
+        case .right: return CGRect(x: felt.width - feltInset - handStrip, y: sideStripEndInset, width: handStrip, height: sideLength)
         }
     }
 

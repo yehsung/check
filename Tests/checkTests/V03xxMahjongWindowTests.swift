@@ -31,16 +31,25 @@ struct V03xxMahjongWindowTests {
         #expect(!made.isVisible, "만들기만 했는데 화면에 올라왔다")
     }
 
-    @Test("레이아웃 항등식 — 탁자 덩어리 502·536 · 펠트 안 가운데 · 손 658 ≤ 790 · 위 줄 안 겹침")
+    @Test("레이아웃 항등식 — 펠트 세로 502 · 강 36×48 · 가운데 판 162 · 강 칸 · 손 658 ≤ 790 · 위 줄 안 겹침")
     func layoutIdentities() {
-        // 없으면: UX §1.3 표의 숫자 하나가 바뀌어 강이 손 칸을 덮거나 펠트 밖으로 나가도 초록이다.
+        // 없으면: UX §1.3 표나 (v1.0.4) 판 채우기 숫자 하나가 바뀌어 강이 손 칸을 덮거나 펠트 밖으로 나가도 초록이다.
         typealias L = MahjongMatchLayout
-        #expect(L.blockHeight == 502 && L.blockHeight == L.felt.height)
-        #expect(L.blockWidth == 536 && L.blockOrigin.x == 174 && L.blockOrigin.x * 2 + L.blockWidth == L.felt.width)
-        #expect(L.center == CGRect(x: 168, y: 168, width: 200, height: 200))
-        #expect(L.river(.bottom).maxY + L.gap == L.blockHeight)
-        #expect(L.river(.top).minY == L.handStrip + L.gap && L.river(.left).minX == L.handStrip + L.gap)
-        #expect(L.river(.right).maxX + L.gap + L.handStrip == L.blockWidth)
+        // 세로 4 + 32 + 4 + 144 + 4 + 162 + 4 + 144 + 4 = 502(대표 답 #d_UIE0E5Aqqkxv — 강 36×48).
+        #expect(L.riverTile == CGSize(width: 36, height: 48) && L.riverDepth == 144 && L.centerSide == 162)
+        #expect(L.feltInset + L.handStrip + L.gap + L.riverDepth + L.gap + L.centerSide + L.gap + L.riverDepth + L.feltInset
+                == L.felt.height)
+        #expect(L.center == CGRect(x: 361, y: 188, width: 162, height: 162) && L.center.midX * 2 == L.felt.width)
+        #expect(L.riverLane(.bottom) == CGRect(x: 361, y: 354, width: 483, height: 144))
+        #expect(L.riverLane(.top) == CGRect(x: 40, y: 40, width: 483, height: 144))
+        #expect(L.riverLane(.left) == CGRect(x: 165, y: 188, width: 192, height: 310))
+        #expect(L.riverLane(.right) == CGRect(x: 527, y: 40, width: 192, height: 310))
+        #expect(L.riverLane(.bottom).maxY + L.feltInset == L.felt.height && L.riverLane(.top).minY == L.handStripRect(.top)!.maxY + L.gap)
+        let laneTiles: [Int] = [L.riverLaneTiles(.top), L.riverLaneTiles(.bottom), L.riverLaneTiles(.left), L.riverLaneTiles(.right)]
+        #expect(laneTiles == [13, 13, 8, 8])
+        #expect(L.handStripRect(.top) == CGRect(x: 40, y: 4, width: 804, height: 32) && L.handStripRect(.bottom) == nil)
+        #expect(L.handStripRect(.left) == CGRect(x: 4, y: 10, width: 32, height: 482))
+        #expect(L.handStripRect(.right) == CGRect(x: 848, y: 10, width: 32, height: 482))
         #expect(L.fullHandWidth == 658 && L.fullHandWidth <= L.hand.width)
         let body = CGRect(origin: .zero, size: L.bodySize)
         let all = [L.info, L.chromeLeft, L.topSeat, L.chromeRight, L.aids, L.leftSeat, L.rightSeat, L.felt, L.mySeat, L.hand, L.actions]

@@ -4,11 +4,13 @@ import CheckCore
 // MARK: - 아잉 마작 판 화면 (SPEC §5.2 판 · §5.3 탁자)
 //
 // 본문 1200×660(창 머리글 없음 — 큐브 0.3.70): INFO · CL [역][점수표] · TOP SEAT · CR [규칙][나가기] · AIDS · 좌우 자리 카드 ·
-// FELT(884×502, 안에 536×502 탁자 덩어리) · MY SEAT · HAND · ACTIONS. 사각형은 모두 `MahjongMatchLayout` 한 곳.
+// FELT(884×502 — 강 36×48 바람개비 · 가운데 판 162 · 손 띠는 펠트 가장자리) · MY SEAT · HAND · ACTIONS. 사각형은 모두
+// `MahjongMatchLayout` 한 곳.
 //
 // ── 탁자 약속 ──
 //  · 방위 `MahjongSeatCompass` — 나 아래, **하가 오른쪽**, 대면 위, 상가 왼쪽(큐브와 반대).
-//  · 강은 바람개비(주인 기준 왼쪽 모서리부터 6장씩 3줄, 셋째 줄은 넘치면 옆으로) · 강·상대 손 띠·도라 판은 **띠마다 Canvas 한 장**.
+//  · 강은 바람개비(주인 기준 왼쪽 모서리부터 6장씩 3줄, 셋째 줄은 넘치면 옆으로 — 칸 끝에 닿으면 좌우 강은 바깥 넷째 줄,
+//    위아래 강은 줄을 고르게 늘린다) · 강·상대 손 띠·도라 판은 **띠마다 Canvas 한 장**.
 //  · 가운데 판: 국 이름 · 본장·공탁 · 남은 패 · 도라 5칸(열린 것만 앞면) · 네 변의 바람 · 리치봉 · **차례인 사람 쪽 변에 빛줄**
 //    (phase turn 일 때만). `wait` 에는 아무 쪽도 아니고, 멈춤 끝(`wake_at_ms`)을 1.5초 넘기면 누구인지 없이 "기다리는 중…" 하나.
 //  · 남의 시계는 링으로 그리지 않는다(남의 예비를 모른다 — CC-25). 차례인 남의 카드는 테두리 **색**만 느리게 맥동(숫자 없음).
@@ -24,21 +26,41 @@ enum MahjongFeltStyle {
     static let glyph = Color(red: 0.86, green: 0.84, blue: 0.80)
 }
 
-/// 강·손 띠 배치(순수 — 시험이 되묻는다). 좌표는 탁자 덩어리(536×502) 좌표.
+/// 강·손 띠 배치(순수 — 시험이 되묻는다). 좌표는 펠트(884×502) 좌표.
 enum MahjongTableGeometry {
-    static let riverTile = MahjongTileSize.river
+    static let riverTile = MahjongTileSize.discard
     static let rowLength = 6
+
+    /// 줄마다 패 수(판 쪽 줄부터). 6 · 6 · 나머지 — 셋째 줄은 칸 끝(`riverLaneTiles` — 위아래 13 · 좌우 8)까지 옆으로 늘고,
+    /// 좌우 강은 그다음을 바깥 넷째 줄에 잇는다(앞 줄의 패는 움직이지 않는다). 그래도 넘치면(위아래 강 26장부터 — 이론 최대
+    /// `riverWorstCount` 27) 줄 수 한도 안에서 줄을 고르게 늘린다(⌈n ÷ 줄 수⌉, 읽는 순서는 그대로). 27장까지는 늘 칸 안이다.
+    static func riverRowCounts(_ count: Int, compass: MahjongCompass) -> [Int] {
+        let lane = MahjongMatchLayout.riverLaneTiles(compass), rows = MahjongMatchLayout.riverMaxRows(compass)
+        let caps = [rowLength, rowLength] + Array(repeating: lane, count: rows - 2)
+        let widened = count > caps.reduce(0, +) ? caps.map { max($0, (count + rows - 1) / rows) } : caps
+        var left = max(0, count)
+        var out: [Int] = []
+        for cap in widened where left > 0 {
+            out.append(min(cap, left))
+            left -= min(cap, left)
+        }
+        return out
+    }
 
     /// 한 자리의 강 패들. `highlightLast` 면 마지막 패(울려 가지 않았으면)를 강조한다(방금 버린 사람).
     static func river(_ discards: [MahjongDiscard], compass: MahjongCompass, highlightLast: Bool = false) -> [MahjongStripTile] {
-        let rect = MahjongMatchLayout.river(compass)
+        let rect = MahjongMatchLayout.riverLane(compass)
         let w = riverTile.width, h = riverTile.height
         let base = MahjongTileArtModel.rotation(for: compass)
+        var rowOf: [Int] = []
+        for (row, length) in riverRowCounts(discards.count, compass: compass).enumerated() {
+            rowOf += Array(repeating: row, count: length)
+        }
         var out: [MahjongStripTile] = []
         var u: CGFloat = 0
         var row = 0
         for (index, discard) in discards.enumerated() {
-            let nextRow = min(2, index / rowLength)
+            let nextRow = index < rowOf.count ? rowOf[index] : row
             if nextRow != row { row = nextRow; u = 0 }
             let sideways = discard.riichi == true
             let lw = sideways ? h : w, lh = sideways ? w : h
@@ -424,8 +446,8 @@ struct MahjongFeltView: View {
     }
 
     var body: some View {
-        let block = CGSize(width: MahjongMatchLayout.blockWidth, height: MahjongMatchLayout.blockHeight)
-        let origin = MahjongMatchLayout.blockOrigin
+        // 강·손 띠·가운데 판 모두 펠트 좌표(884×502) 그대로 — 따로 덩어리를 옮기지 않는다.
+        let canvas = MahjongMatchLayout.felt.size
         ZStack(alignment: .topLeading) {
             // 받은 펠트 그림(Storage `game-art/mahjong/table.png`) 또는 코드 펠트 색 — 번들 사본 없음.
             MahjongFeltSurface()
@@ -435,18 +457,17 @@ struct MahjongFeltView: View {
                     ZStack(alignment: .topLeading) {
                         ForEach(MahjongCompass.allCases, id: \.self) { compass in
                             if let seat = seatRow(compass) {
-                                seatStrips(seat, compass: compass, motion: motion, now: now, block: block)
+                                seatStrips(seat, compass: compass, motion: motion, now: now, canvas: canvas)
                             }
                         }
                     }
-                    .frame(width: block.width, height: block.height, alignment: .topLeading)
+                    .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
                 }
                 MahjongCenterBoard(store: store, payload: payload)
                     .frame(width: MahjongMatchLayout.centerSide, height: MahjongMatchLayout.centerSide)
                     .offset(x: MahjongMatchLayout.center.minX, y: MahjongMatchLayout.center.minY)
             }
-            .frame(width: block.width, height: block.height, alignment: .topLeading)
-            .offset(x: origin.x, y: origin.y)
+            .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
         }
     }
 
@@ -458,26 +479,26 @@ struct MahjongFeltView: View {
     /// 한 자리의 강 + (남이면) 손 띠. 움직이는 패(방금 버린 패 · 방금 운 부로)는 띠에서 빼 따로 끝 자리 + 어긋남으로 그린다.
     @ViewBuilder
     private func seatStrips(_ seat: MahjongStateSeat, compass: MahjongCompass, motion: MahjongMotion?, now: Date,
-                            block: CGSize) -> some View {
+                            canvas: CGSize) -> some View {
         let river = MahjongTableGeometry.river(seat.discards ?? [], compass: compass, highlightLast: lastDiscarder == seat.seatNo)
         let discarding = motion.flatMap { $0.kind == .discard && $0.to.compass == compass && !river.isEmpty ? $0 : nil }
-        MahjongTileStrip(tiles: discarding == nil ? river : Array(river.dropLast()), size: block,
+        MahjongTileStrip(tiles: discarding == nil ? river : Array(river.dropLast()), size: canvas,
                          cornerLabels: store.aids.cornerLabels,
                          accessibilityText: "\(compassName(compass)) 버림패 \(seat.discards?.count ?? 0)장")
         if let discarding, let last = river.last {
             MahjongMovingTile(tile: last, offset: MahjongMotionPlan.offset(discarding, now: now),
                               tilt: MahjongMotionPlan.tilt(discarding, discard: seat.discards?.last, now: now),
                               cornerLabels: store.aids.cornerLabels)
-                .frame(width: block.width, height: block.height, alignment: .topLeading)
+                .frame(width: canvas.width, height: canvas.height, alignment: .topLeading)
         }
         if compass != .bottom {
             let strip = MahjongTableGeometry.handStrip(count: seat.handCount ?? 0, melds: seat.melds ?? [], compass: compass)
             let melding = motion.flatMap { MahjongMotionPlan.movesNewestMeld($0, compass: compass, melds: seat.melds ?? []) ? $0 : nil }
             let moving = melding == nil ? 0 : min(strip.count, seat.melds?.last?.tiles.count ?? 0)
-            MahjongTileStrip(tiles: Array(strip.dropLast(moving)), size: block, cornerLabels: false,
+            MahjongTileStrip(tiles: Array(strip.dropLast(moving)), size: canvas, cornerLabels: false,
                              accessibilityText: "\(compassName(compass)) 손 \(seat.handCount ?? 0)장 · 울음 \(seat.melds?.count ?? 0)")
             if let melding, moving > 0 {
-                MahjongTileStrip(tiles: Array(strip.suffix(moving)), size: block, cornerLabels: false)
+                MahjongTileStrip(tiles: Array(strip.suffix(moving)), size: canvas, cornerLabels: false)
                     .offset(MahjongMotionPlan.offset(melding, now: now))
                     .accessibilityHidden(true)
             }
@@ -494,10 +515,16 @@ struct MahjongFeltView: View {
     }
 }
 
-/// 가운데 판 200×200.
+/// 가운데 판 162×162((v1.0.4) 강 36×48 에 자리를 내주고 200 → 162). 도라 표시패는 24×32 다섯 칸(가로 128 — 네 변의 바람·리치봉 띠 안쪽).
 struct MahjongCenterBoard: View {
     let store: MahjongStore
     let payload: MahjongStatePayload
+
+    /// 도라 표시패 크기와 칸 간격(24 + 2).
+    static let doraSize = MahjongTileSize.smallMeld
+    static let doraPitch: CGFloat = 26
+    /// 네 변의 바람 글자·리치봉 중심이 변에서 떨어진 거리 — 도라 줄(가로 128)이 좌우 리치봉과 닿지 않게 변 가까이 둔다.
+    static let edgeInset: CGFloat = 12
 
     private var mySeat: Int { payload.mySeat ?? 0 }
 
@@ -515,7 +542,8 @@ struct MahjongCenterBoard: View {
                     .font(.system(size: 11, weight: .semibold)).foregroundStyle(MahjongFeltStyle.glyph)
                 Text(MahjongText.wall(match?.wallRemaining))
                     .font(.system(size: 11, weight: .semibold).monospacedDigit()).foregroundStyle(MahjongFeltStyle.glyph)
-                MahjongTileStrip(tiles: doraTiles(match?.doraIndicators ?? []), size: CGSize(width: 166, height: 40),
+                MahjongTileStrip(tiles: doraTiles(match?.doraIndicators ?? []),
+                                 size: CGSize(width: Self.doraPitch * 4 + Self.doraSize.width, height: Self.doraSize.height),
                                  cornerLabels: false, accessibilityText: "도라 표시패 \(match?.doraIndicators?.count ?? 0)장")
                     .padding(.top, 2)
                 waiting.frame(height: 16)
@@ -529,8 +557,8 @@ struct MahjongCenterBoard: View {
     /// 도라 5칸 — 열린 것만 앞면, 나머지 뒷면.
     private func doraTiles(_ open: [MahjongTile]) -> [MahjongStripTile] {
         (0..<5).map { index in
-            MahjongStripTile(face: index < open.count ? MahjongTileFace(open[index]) : .back, size: .river,
-                             origin: CGPoint(x: CGFloat(index) * 34, y: 0))
+            MahjongStripTile(face: index < open.count ? MahjongTileFace(open[index]) : .back, size: Self.doraSize,
+                             origin: CGPoint(x: CGFloat(index) * Self.doraPitch, y: 0))
         }
     }
 
@@ -561,13 +589,13 @@ struct MahjongCenterBoard: View {
             Text(windGlyph(seat?.wind))
                 .font(.system(size: 13, weight: .heavy))
                 .foregroundStyle(seat?.isDealer == true ? CheckTheme.pending : MahjongFeltStyle.glyph)
-                .offset(x: -side / 2 + 22, y: side / 2 - 16)
+                .offset(x: -side / 2 + 22, y: side / 2 - Self.edgeInset)
             if seat?.riichi == true {
                 ZStack {
                     Capsule().fill(Color(red: 0.92, green: 0.90, blue: 0.86)).frame(width: 56, height: 6)
                     Circle().fill(CheckTheme.danger).frame(width: 4, height: 4)
                 }
-                .offset(x: 30, y: side / 2 - 16)
+                .offset(x: 30, y: side / 2 - Self.edgeInset)
             }
         }
         .frame(width: side, height: side)

@@ -49,15 +49,17 @@ package nonisolated enum MahjongTileFace: Hashable, Sendable {
     }
 }
 
-/// 크기 6종(UX §1.4). 24×32 이하는 단순화(보조 글자 없음 · 8·9삭 막대 사이 넓힘), 18×24 는 뒷면만.
+/// 크기 7종(UX §1.4 의 6종 + (v1.0.4) 강 36×48). 24×32 이하는 단순화(보조 글자 없음 · 8·9삭 막대 사이 넓힘), 18×24 는 뒷면만.
 package nonisolated enum MahjongTileSize: String, CaseIterable, Hashable, Sendable {
     /// 내 손패 46×62.
     case hand
     /// 결과 화면 손 40×54.
     case result
+    /// (v1.0.4) 강(버린 패) 36×48 — 대표 답 '버린 패를 더 크게(빈 판 채우기)'(#d_UIE0E5Aqqkxv). 30×40 을 1.2배.
+    case discard
     /// 내 울음 34×46.
     case meld
-    /// 강 · 도라 표시 30×40.
+    /// 30×40 — v1.0.3 까지의 강·도라 크기. 판 화면은 더 쓰지 않고, 패 그림 선택지 시트와 1차 시안 기준 그림이 이 크기로 굳어 있다.
     case river
     /// 상대 울음 24×32.
     case smallMeld
@@ -68,6 +70,7 @@ package nonisolated enum MahjongTileSize: String, CaseIterable, Hashable, Sendab
         switch self {
         case .hand: 46
         case .result: 40
+        case .discard: 36
         case .meld: 34
         case .river: 30
         case .smallMeld: 24
@@ -79,6 +82,7 @@ package nonisolated enum MahjongTileSize: String, CaseIterable, Hashable, Sendab
         switch self {
         case .hand: 62
         case .result: 54
+        case .discard: 48
         case .meld: 46
         case .river: 40
         case .smallMeld: 32

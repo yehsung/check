@@ -265,6 +265,8 @@ extension WorkTimerStore {
             // (`CakeGiftText.notice` 도 "○○를 받았어요!" 로 말한다).
             noteShopMutation()
             ownedCharacterIDs.insert(id)
+            // 빼빼로를 받아 가진 순간 장식을 메인 밖에서 미리 굽는다([지금 입기] 의 첫 씬이 상자 없이 서지 않게 — `PeperoPrewarmGate`, 한 번만).
+            if id == CharacterCatalog.peperoAingID { peperoPrewarmGate.request() }
             cakeGiftReceivedID = id
             cakeGiftNotice = nil
         default:

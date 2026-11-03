@@ -20,9 +20,10 @@ import simd
 //
 // ★ 굽기는 비싸다(상자 2048×768 텍스처 · 220×140 메시 + 막대 셋 256×1024 — 생성기 -O 실측 한 벌 0.73초). 그래서 **프로세스당 한 번** 만들고
 //   씬마다 `clone()` 을 붙인다(지오메트리 · 재질을 나눠 쓴다). 원본은 **판 객체**에 묶인다 — 그림 저장소가 새 판을 받으면(`PeperoArt.absorb`)
-//   판 객체가 바뀌어 다음 조회가 다시 굽는다(받은 쪽이 메인 밖에서 미리 굽는다). 시작 뒤 미리 굽기는 케이크 · 이슬과 같은 자리
-//   (`CakeAingFinish.prewarmDecorTemplates` — 메인 밖). **메인은 굽지 않는다**(검토 수리 — `apply` ★): 원본이 아직 없으면 상자 없이 세우고
-//   메인 밖에서 구워 붙인다(시작 5초 안에 오버레이가 서도 메인이 0.73초 멎지 않는다).
+//   판 객체가 바뀌어 다음 조회가 다시 굽는다(구울 사람이면 받은 쪽이 메인 밖에서 미리 굽는다). 시작 뒤 미리 굽기는 케이크 · 이슬과 같은 때
+//   (시작 + 5초 · 메인 밖)지만 **입었거나 가진 사람만**이다(조정자 결정 11-04 — `PeperoPrewarmGate`: 13MB 를 모든 사람에게 굽지 않는다. 상점 상태가
+//   늦게 와 가진 것이 확인되거나 선물을 받으면 그때 한 번). **메인은 굽지 않는다**(검토 수리 — `apply` ★): 원본이 아직 없으면 상자 없이 세우고
+//   메인 밖에서 구워 붙인다(시작 5초 안에 오버레이가 서도 · 안 가진 사람이 남의 울트라로 처음 빼빼로를 맞아도 메인이 0.73초 멎지 않는다).
 // ★ 장식은 몸이 아니다: 얼굴 재질 탐색(상자 텍스처 2048×768 · 막대 256×1024 는 '큰 CGImage 디퓨즈' 조건을 만족한다) · 몸 클릭 hitTest ·
 //   리액션 진폭 · 클릭 프리체크 상자는 케이크 · 이슬과 **같은 자리**에서 `AingDecor`(장식 루트 이름 셋)로 뺀다.
 // ★ 반응 배율(찌부 · 늘이기)은 리액션 wrapper(`CheckCharacter3DScene.reactionWrapperName`)에 걸린다(`ReactionEngine.runReaction` — `reactionNode`).
@@ -629,5 +630,91 @@ enum PeperoAingFinish {
     /// 이 캐릭터 노드가 빼빼로인가(표식).
     static func isPepero(_ character: SCNNode?) -> Bool {
         character?.childNode(withName: markerName, recursively: false) != nil
+    }
+}
+
+// MARK: - 미리 굽기 문(가진 사람 · 입은 사람만 — 조정자 결정 11-04)
+
+/// 빼빼로 장식 미리 굽기의 문. 상자 2048×768 + 막대 셋(≈ 13MB · release ~0.7초)을 **모든 사람에게** 굽지 않는다 — 지금 입었거나(로컬 저장
+/// 선택값 — 상점 상태 전에도 안다) 가진 사람만 시작 뒤 메인 밖에서 한 번 굽는다. 그 밖의 사람은 빼빼로 씬이 처음 필요할 때(남의 울트라 ·
+/// 처음 입기) 메인 밖에서 굽고 그동안 상자가 ~0.7초 늦게 붙는다(`PeperoAingFinish.apply` ★ — 메인은 여전히 굽지 않는다).
+///
+/// 문을 여는 자리는 셋이다: ① 앱 시작(`arm` — 입었다 · 가졌다, 그리고 '이 시각 전엔 굽지 않는다' = 시작 + 5초 — 케이크 · 이슬 미리 굽기와 같은 때) ·
+/// ② 상점 상태가 늦게 와 가진 것이 확인됐다(`WorkTimerStore.applyShopState`) · ③ 선물을 받았다(`WorkTimerStore.applyCakeGiftClaim`).
+/// 굽기는 **프로세스당 한 번**이다 — 둘째 요청부터는 처음 건 손잡이를 돌려준다(상점 상태는 여러 번 온다). 시작이 문을 열기 전에 온 요청은
+/// 기억만 했다가 시작이 열 때 건다(앱에서는 상점 응답이 시작보다 늦게 오지만, 차례가 바뀌어도 잃지 않는다). 그래서 앱 시작이 없는 시험
+/// 프로세스에서는 공용 문이 아무것도 굽지 않는다 — 시험은 자기 문(`init(bake:)`)을 만들어 스토어에 끼운다.
+final class PeperoPrewarmGate: @unchecked Sendable {
+    /// 앱의 문(스토어 기본값 · 앱 시작 · 그림 저장소가 쓴다).
+    static let shared = PeperoPrewarmGate(bake: liveBake)
+
+    /// 앱이 굽는 것 — 그림 저장소가 고른 판으로 장식 원본(`PeperoAingFinish.decorNode` — 이미 그 판으로 구웠으면 사본만 준다).
+    static let liveBake: @Sendable () -> Void = { _ = PeperoAingFinish.decorNode() }
+
+    private struct State {
+        /// 시작이 정한 '이 시각 전엔 굽지 않는다'. nil = 시작이 아직 문을 안 열었다(요청은 `wanted` 로 기억만 한다).
+        var notBefore: DispatchTime?
+        /// 구울 사람으로 확인됐다(입었다 · 가졌다 · 방금 받았다).
+        var wanted = false
+        /// 건 미리 굽기(프로세스당 하나).
+        var work: DispatchWorkItem?
+        /// 미리 굽기를 건 횟수(새 판 다시 굽기 포함 — 시험 관찰).
+        var scheduled = 0
+    }
+
+    private let state = OSAllocatedUnfairLock(uncheckedState: State())
+    private let bake: @Sendable () -> Void
+
+    init(bake: @escaping @Sendable () -> Void) {
+        self.bake = bake
+    }
+
+    /// 미리 구울 사람인가 — 지금 입었거나(`wornID` — 로컬 저장 선택값) 가진 목록에 빼빼로가 있다.
+    static func wants(wornID: String, ownedIDs: Set<String>) -> Bool {
+        wornID == CharacterCatalog.peperoAingID || ownedIDs.contains(CharacterCatalog.peperoAingID)
+    }
+
+    /// 앱 시작이 부른다: '이 시각 전엔 굽지 않는다'를 `delay` 초 뒤로 세우고, 구울 사람이면(입었다 · 가졌다 · 그 전에 요청이 왔다) 그때 메인 밖에서
+    /// 굽도록 건다. 반환 = 건 굽기(안 구울 사람이면 nil — 시험이 끝을 기다리는 손잡이).
+    @discardableResult
+    func arm(after delay: TimeInterval, wornID: String, ownedIDs: Set<String>) -> DispatchWorkItem? {
+        state.withLockUnchecked { state in
+            state.notBefore = .now() + max(0, delay)
+            if Self.wants(wornID: wornID, ownedIDs: ownedIDs) { state.wanted = true }
+            return scheduleLocked(&state)
+        }
+    }
+
+    /// 가진 것이 확인된 자리(상점 상태 · 선물 받기)가 부른다. 이미 걸었으면 그 손잡이를 돌려준다(다시 안 건다). 시작이 아직 문을 안 열었으면 기억만
+    /// 하고 nil.
+    @discardableResult
+    func request() -> DispatchWorkItem? {
+        state.withLockUnchecked { state in
+            state.wanted = true
+            return scheduleLocked(&state)
+        }
+    }
+
+    /// 그림 저장소가 새 판을 받았다(`PeperoArt.absorb`) — 구울 사람이면 그 판으로 메인 밖에서 다시 굽는다(시작이 정한 시각 뒤). 안 구울 사람은
+    /// 새 판도 미리 굽지 않는다(다음 빼빼로 씬이 메인 밖에서 굽는다). 시작이 아직 문을 안 열었으면 시작이 걸 굽기가 그때의 판으로 굽는다.
+    func rebakeForNewSheet(_ body: @escaping @Sendable () -> Void) {
+        state.withLockUnchecked { state in
+            guard state.wanted, let notBefore = state.notBefore else { return }
+            state.scheduled += 1
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: max(notBefore, .now()), execute: DispatchWorkItem(qos: .utility, block: body))
+        }
+    }
+
+    /// 시험 관찰: 미리 굽기를 건 횟수.
+    var scheduledCount: Int { state.withLockUnchecked { $0.scheduled } }
+
+    private func scheduleLocked(_ state: inout State) -> DispatchWorkItem? {
+        if let work = state.work { return work }
+        guard state.wanted, let notBefore = state.notBefore else { return nil }
+        let work = DispatchWorkItem(qos: .utility, block: bake)
+        state.work = work
+        state.scheduled += 1
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: max(notBefore, .now()), execute: work)
+        return work
     }
 }

@@ -649,6 +649,9 @@ extension WorkTimerStore {
         for row in rows where row.owned == true { owned.insert(row.id) }
         ownedCharacterIDs = owned
         shopOwnershipGeneration = sessionGeneration
+        // 빼빼로 장식 미리 굽기(조정자 결정 11-04 — 가진 사람만): 상점 상태가 시작보다 늦게 와 가진 것이 확인되면 그때 한 번 굽는다
+        // (상점 상태는 여러 번 온다 — 문이 둘째 요청부터 접는다, `PeperoPrewarmGate`).
+        if owned.contains(CharacterCatalog.peperoAingID) { peperoPrewarmGate.request() }
         // 생일 선물(v0.3.66): 다른 기기에서 받았으면 열린 선물의 선택지가 보유와 어긋난다 — 맞추고, 남는 게 없으면 선물 · 카드를 거둔다.
         reconcileCakeGiftWithOwnership()
     }

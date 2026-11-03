@@ -300,6 +300,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 미리 안 구우면 케이크를 입은 사람의 첫 오버레이나, 케이크를 안 입은 사람이 울트라로 남의 케이크를 맞는 순간 메인이 그만큼 멎는다.
         // 조건 없이 누구에게나 한 번이다(`CakeAingFinish.prewarmDecorTemplates` 주석).
         CakeAingFinish.prewarmDecorTemplates(after: 5)
+        // 빼빼로 아잉이 장식(v0.3.77 — 상자 2048×768 + 막대 셋 ≈ 13MB · release ~0.7초)은 **입었거나 가진 사람만** 같은 때 메인 밖에서 미리 굽는다
+        // (조정자 결정 11-04 — `PeperoPrewarmGate`). 시작 직후엔 상점 상태가 없어 보유를 모를 수 있다 — 로컬 저장 선택값(지금 입은 캐릭터)으로 먼저
+        // 가르고, 가진 것은 상점 상태(`applyShopState`) · 선물 받기(`applyCakeGiftClaim`)가 문을 다시 두드린다(한 번만 굽는다).
+        PeperoPrewarmGate.shared.arm(after: 5,
+                                     wornID: CheckCharacter3DScene.selectedCharacter(defaults: store.characterDefaults).id,
+                                     ownedIDs: store.ownedCharacterIDs)
         // 맥 앱스토어 판(v0.3.51): 첫 실행 안내(로그인 시 자동 실행 · AI 기록 읽기 동의를 한 화면에서 — 한 번만)와
         // 다른 판(brew·DMG) 동시 실행 경고(한 번만). Developer ID 판에서는 `start()` 가 아무 창도 만들지 않는다.
         masOnboarding = MacAppStoreOnboardingController(store: store)

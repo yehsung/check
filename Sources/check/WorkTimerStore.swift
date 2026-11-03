@@ -974,6 +974,9 @@ final class WorkTimerStore {
     var drinkGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.drinkGiftLockedCellPolicy
     /// 빼빼로 아잉이(v0.3.77) 잠긴 칸 정책 — 정본은 상수(`WorkTimerStore.peperoGiftLockedCellPolicy`), 이 칸은 시험의 이음새다(이슬 칸과 같다).
     var peperoGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.peperoGiftLockedCellPolicy
+    /// 빼빼로 장식 미리 굽기의 문(조정자 결정 11-04 — 가진 사람 · 입은 사람만, `PeperoPrewarmGate`). 상점 상태가 가진 것을 확인하거나 선물을 받으면
+    /// 이 문을 두드린다. 앱은 언제나 `.shared`(앱 시작이 연 문), 시험은 자기 문을 끼운다(테스트 이음새). 화면이 읽지 않는다.
+    @ObservationIgnored var peperoPrewarmGate = PeperoPrewarmGate.shared
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.

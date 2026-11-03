@@ -17,7 +17,7 @@ import os
 //
 // 언제 받나 — 빼빼로를 그릴 일이 처음 생길 때 한 번(`url(_:)` 첫 조회가 연다 — 프로세스당 한 번, 이슬과 같은 결).
 // 받은 그림은 **다음에 그리는 자리부터** 쓴다: 판은 다음에 세우는 3D 씬(착용 · 울트라 교체)부터 — 판 객체가 바뀌어 `PeperoAingFinish.decorNode`
-// 가 다시 굽는다(받은 쪽이 메인 밖에서 미리 굽는다). 초상은 그 그림을 쥔 캐시(메뉴바 · 헤더 — `CheckMascotAssets`, 남의 아바타 — `AppUserAvatarArt`,
+// 가 다시 굽는다(입었거나 가진 사람이면 받은 쪽이 메인 밖에서 미리 굽는다 — `PeperoPrewarmGate`). 초상은 그 그림을 쥔 캐시(메뉴바 · 헤더 — `CheckMascotAssets`, 남의 아바타 — `AppUserAvatarArt`,
 // 고르기 · 상점 카드 — `CharacterCardArt`, 받는 창 — `CheckCakeGiftWindowView`, 뽑기 창 — `CheckGachaWindowView`)의 빼빼로 몫을 비우고
 // 관찰 값(`PeperoArtRevision`)을 올려 그 초상을 그린 SwiftUI 화면이 곧바로 다시 그린다. 이미 서 있는 3D 씬의 상자는 바꾸지 않는다.
 // 시험 중엔 디스크 캐시도 네트워크도 타지 않는다(`CheckPanelVisibility.isRunningTests`).
@@ -284,8 +284,9 @@ final class PeperoArt: @unchecked Sendable {
         Self.logger.notice("pepero art: \(kind.rawValue, privacy: .public) \(outcome == .replace ? "replaced" : "reverted", privacy: .public)")
         let isShared = self === PeperoArt.current
         if kind == .box, isShared {
-            // 새 판으로 장식 원본을 메인 밖에서 미리 굽는다 — 다음 빼빼로 씬이 메인에서 구우며 멎지 않게(판 객체가 바뀌어 원본이 낡았다).
-            DispatchQueue.global(qos: .utility).async { _ = PeperoAingFinish.decorNode(sheet: self.boxImage()) }
+            // 새 판으로 장식 원본을 메인 밖에서 미리 굽는다 — 다음 빼빼로 씬이 상자 없이 서지 않게(판 객체가 바뀌어 원본이 낡았다). 구울 사람
+            // (입었다 · 가졌다)만이다 — 안 가진 사람은 새 판도 미리 안 굽는다(조정자 결정 11-04 — `PeperoPrewarmGate`).
+            PeperoPrewarmGate.shared.rebakeForNewSheet { _ = PeperoAingFinish.decorNode(sheet: self.boxImage()) }
         }
         Task { @MainActor in
             if isShared, kind.isPortrait { PeperoArt.forgetDrawnPortraits() }

@@ -569,13 +569,16 @@ import Testing
         #expect(pepero.contains("CheckCakeGiftWindowView.forgetPortrait(characterID: id)") && pepero.contains("CheckGachaWindowView.forgetPortrait(characterID: id)"))
     }
 
-    @Test("장식 미리 굽기: 케이크 · 이슬과 같은 자리(prewarmDecorTemplates)가 메인 밖에서 빼빼로도 한 번 굽는다 — 그 뒤 첫 빼빼로 씬은 굽지 않는다")
+    /// 케이크 · 이슬 미리 굽기(모든 사람)가 빼빼로를 안 굽는 것은 `V0377PeperoPrewarmTests.nonOwnerNeverBakes` 가 그 함수 몸통으로 잰다 — 여기서
+    /// 공용 굽기 횟수로 재면 나란히 도는 빼빼로 묶음(`V0377PeperoReviewFixTests` 의 init)이 비운 캐시를 다시 구워 엉킨다.
+    @Test("장식 미리 굽기(입은 사람 · 가진 사람만 — 조정자 결정 11-04): 앱 굽기(liveBake)를 단 문이 입은 사람에게 메인 밖에서 한 번 굽는다 — 그 뒤 첫 빼빼로 씬은 굽지 않는다")
     func decorIsPrewarmedOffMain() async throws {
         PeperoAingFinish.resetDecorCacheForTesting()
-        let work = CakeAingFinish.prewarmDecorTemplates()
+        let gate = PeperoPrewarmGate(bake: PeperoPrewarmGate.liveBake)
+        let work = try #require(gate.arm(after: 0, wornID: Self.id, ownedIDs: [CharacterCatalog.builtInAingID]), "입은 사람의 시작이 굽기를 안 걸었다")
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in work.notify(queue: .main) { done.resume() } }
         #expect(PeperoAingFinish.decorBuildCountForTesting == 1 && PeperoAingFinish.decorBuildsOnMainForTesting == [false],
-                "미리 굽기가 빼빼로 장식을 메인 밖에서 한 번 굽지 않았다 — \(PeperoAingFinish.decorBuildsOnMainForTesting)")
+                "입은 사람의 미리 굽기가 빼빼로 장식을 메인 밖에서 한 번 굽지 않았다 — \(PeperoAingFinish.decorBuildsOnMainForTesting)")
         _ = try V0354GoldAing3DTests.scene(Self.pepero)
         #expect(PeperoAingFinish.decorBuildCountForTesting == 1, "미리 구웠는데 첫 씬이 메인에서 또 구웠다")
     }

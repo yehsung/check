@@ -140,6 +140,72 @@ struct MahjongContractTests {
         #expect(MahjongFuriten.Kind.allCases.map(\.rawValue) == ["discard", "temporary", "riichi"])
     }
 
+    // 없으면: 역 순서 상수가 reference YAKU_ORDER(별칭 적용)와 갈려 해석 고르기 5단(X-02)·역 표시 순서가 서버와 다르다.
+    // 상표: 역 raw 값에 서비스 이름 글자가 하나라도 들어가면 와이어·서버 함수 본문으로 번진다(SPEC §1 · D5).
+    @Test("order = 대조 파일 머리의 별칭 적용 REF YAKU_ORDER · raw 값에 상표 글자 0 · 별칭 표의 바뀐 글자 = heavenly·earthly")
+    func yakuOrderMatchesReference() {
+        let fileOrder = (MahjongCorpus.load("xval-hands.json")["yaku_order"]?.array ?? []).compactMap(\.string)
+        #expect(fileOrder.count == 45)
+        #expect(MahjongYaku.order.map(\.rawValue) == fileOrder)
+        // 패턴은 조각을 이어 만든다(이 파일 자신이 상표 시험에 걸리지 않게 — SPEC §1).
+        let pattern = ["작" + "혼", "雀" + "魂", "mahjong[ _-]?" + "soul", "maj" + "soul", "jan" + "tama", "천" + "봉", "天" + "鳳", "ten" + "hou"]
+            .joined(separator: "|")
+        let raw = MahjongYaku.allCases.map(\.rawValue).joined(separator: " ")
+        #expect(raw.range(of: pattern, options: [.regularExpression, .caseInsensitive]) == nil)
+        // 기준선: 별칭 전 글자(파일에서만 온다)는 같은 패턴에 걸린다.
+        let before = MahjongCorpus.alias.keys.joined(separator: " ")
+        #expect(before.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil)
+        #expect(Set(MahjongCorpus.alias.values) == [MahjongYaku.heavenly.rawValue, MahjongYaku.earthly.rawValue])
+    }
+
+    // 없으면: 형식 오류 손(같은 id 둘·장수·부로 모양·모순 깃발)이 화료/노텐으로 조용히 계산돼 서버의 22023 과 갈린다.
+    @Test("형식 오류 → .failure — 같은 id 둘 · 장수 · 부로 모양 · 모순 깃발 · 기준선: 고친 손은 .success")
+    func malformedInputFails() throws {
+        let ok = try #require(MahjongCorpus.context(.object([
+            "closed": .string("123m456p789s24s99p"), "win": .string("3s"), "tsumo": .bool(true),
+            "seat_wind": .string("S"), "round_wind": .string("E"),
+        ])))
+        #expect(try MahjongScoring.evaluate(ok).get().agari, "기준선: 멘젠쯔모 화료")
+        func reason(_ ctx: MahjongWinContext) -> String? {
+            if case .failure(.invalid(let r)) = MahjongScoring.evaluate(ctx) { return r }
+            return nil
+        }
+        var dup = ok
+        dup.win = ok.closed[0]
+        #expect(reason(dup) == "duplicate_tile")
+        var short = ok
+        short.closed.removeLast()
+        #expect(reason(short) == "tile_count")
+        var badChi = ok
+        badChi.closed = Array(ok.closed.dropFirst(3))
+        badChi.melds = [MahjongMeld(type: .chi, tiles: [Self.tile(0), Self.tile(4), Self.tile(12)], called: Self.tile(0), fromSeat: 3)]
+        #expect(reason(badChi) == "bad_meld", "치는 연속 3장")
+        var goodChi = badChi
+        goodChi.melds = [MahjongMeld(type: .chi, tiles: [Self.tile(0), Self.tile(4), Self.tile(8)], called: Self.tile(0), fromSeat: 3)]
+        #expect(reason(goodChi) == nil, "기준선: 연속이면 형식은 지난다")
+        let contradictions: [(inout MahjongWinContext) -> Void] = [
+            { $0.ippatsu = true },                 // 일발은 리치만
+            { $0.doubleRiichi = true },            // 더블 리치는 리치도
+            { $0.chankan = true },                 // 창깡은 론
+            { $0.houtei = true },                  // 하저는 론
+            { $0.rinshan = true },                 // 영상개화는 깡 뒤
+            { $0.heavenly = true },                // 천화는 친(이 손은 남가)
+            { $0.riichi = true; $0.melds = goodChi.melds; $0.closed = goodChi.closed },   // 리치는 멘젠만
+        ]
+        for flags in contradictions {
+            var bad = ok
+            flags(&bad)
+            #expect(reason(bad) == "flags")
+        }
+        var earthly = ok
+        earthly.earthly = true
+        #expect(reason(earthly) == nil, "기준선: 자·쯔모·울기 없음이면 지화는 형식이 맞다")
+        for id in ["H-INVALID-IPPATSU", "H-INVALID-RINSHAN-HAITEI"] {
+            let c = try #require(MahjongCorpus.byID(id))
+            #expect(reason(try #require(MahjongCorpus.context(c.input))) == "flags", "\(id)")
+        }
+    }
+
     // 없으면: 서버 my_decision(§3.6 DECISION)을 못 읽거나 연습판 엔진이 다른 모양을 내 같은 화면 길이 갈린다.
     @Test("MahjongDecision — 스네이크 와이어(§3.6)를 kind 로 갈라 읽고 같은 모양으로 쓴다")
     func decisionWireShape() throws {

@@ -251,16 +251,33 @@ package nonisolated enum MahjongInputError: Error, Equatable, Sendable {
 /// 손 계산(SQL `mahjong_evaluate` · `mahjong_score_of` 쌍둥이).
 package nonisolated enum MahjongScoring {
     /// 손 하나의 화료 판정·점수(MJ-22~MJ-41). 천화는 MJ-36 대로 14장 중 가장 높은 화료패를 고른다.
-    // R2 가 채운다 — 지금은 형식 검사 일부와 '화료 꼴 아님'만 돌려준다(역·부·점수는 R2).
+    /// 형식 오류(장수·같은 id 둘·부로 모양·모순 깃발 — reference `_validate`)는 `.failure`(= SQL 22023).
+    /// 화료 아님은 `.success(agari: false, reason: "not_complete"|"no_yaku")`.
+    /// honbaBonus = 화료자가 받는 본장 몫 합(론 300 × 본장, 쯔모 100 × 본장 × 3 — 같은 값). reference 의
+    /// `honba_bonus` 사전(`{ron:n}`·`{from_each:n}`)은 쯔모 여부로 갈리므로 정수 하나로 접었다(지불 칸은 settleWin 이 쓴다).
+    /// 역만의 fu 는 0(reference null).
     package static func evaluate(_ ctx: MahjongWinContext) -> Result<MahjongScore, MahjongInputError> {
-        let all = ctx.closed + [ctx.win] + ctx.melds.flatMap(\.tiles)
-        guard Set(all.map(\.id)).count == all.count else { return .failure(.invalid(reason: "duplicate_tile")) }
-        guard ctx.closed.count + 1 + ctx.melds.count * 3 == 14 else { return .failure(.invalid(reason: "tile_count")) }
-        let counts = MahjongTiles.counts34(ctx.closed + [ctx.win])
-        guard MahjongHand.isComplete(counts, melds: ctx.melds.count) else {
-            return .success(MahjongScore(agari: false, reason: "not_complete"))
+        if let error = validate(ctx) { return .failure(error) }
+        if ctx.heavenly {
+            // MJ-36 천화: 14장 가운데 어느 패를 화료패로 봐도 되므로 가장 높은 해석을 고른다(같은 종류·같은 적 여부는 한 번만).
+            let tiles = ctx.closed + [ctx.win]
+            var best: Candidate?
+            for i in tiles.indices {
+                let t = tiles[i]
+                if tiles[..<i].contains(where: { $0.kind == t.kind && $0.isRed == t.isRed }) { continue }
+                var c2 = ctx
+                c2.closed = Array(tiles[..<i]) + Array(tiles[(i + 1)...])
+                c2.win = t
+                if case .agari(let cand) = evaluateOne(c2), best.map({ cand.ranks(before: $0) }) ?? true {
+                    best = cand
+                }
+            }
+            if let best { return .success(finish(best, ctx: ctx)) }
         }
-        return .success(MahjongScore(agari: false, reason: "no_yaku"))
+        switch evaluateOne(ctx) {
+        case .agari(let cand): return .success(finish(cand, ctx: ctx))
+        case .notAgari(let reason): return .success(MahjongScore(agari: false, reason: reason))
+        }
     }
 
     /// MJ-39·MJ-40 점수표 한 칸(본장 제외) = reference `score_of`. yakuman = 역만 배수(0 = 아님). 절상만관 없음.
@@ -297,5 +314,449 @@ package nonisolated enum MahjongScoring {
         if let ron = p.ron { return ron }
         if let each = p.fromEach { return each * 3 }
         return (p.fromDealer ?? 0) + 2 * (p.fromChild ?? 0)
+    }
+}
+
+// MARK: - 손 계산 몸통(reference `_evaluate_one`·`_interpretations`·`_yakuman_checks`·`_normal_yaku`·`_calc_fu`·`_rank_key`)
+
+extension MahjongScoring {
+    /// 몸통 한 묶음. 머리는 따로(pairKind). opened = 밝은 몸통(울기·대명깡·가깡·론으로 완성한 커쯔).
+    struct Group: Equatable {
+        enum Shape { case seq, trip, kan }
+        let shape: Shape
+        /// 순쯔는 첫 종류, 커쯔·깡은 그 종류.
+        let kind: Int
+        let opened: Bool
+    }
+
+    /// 해석 하나 = 꼴 · 몸통(울기 포함) · 머리 종류 · 대기 이름.
+    struct Interpretation {
+        let form: String
+        let groups: [Group]
+        let pairKind: Int?
+        let wait: String
+    }
+
+    /// 해석 하나의 점수 — `_rank_key` 로 견준다.
+    struct Candidate {
+        let yaku: [MahjongYakuHan]
+        let yakuman: Int
+        let han: Int
+        let fu: Int
+        let dora: Int, aka: Int, ura: Int
+        let form: String
+        let wait: String
+        let base: Int
+        let limit: String
+        let points: MahjongPoints
+        let totalBase: Int
+
+        /// MJ-38 해석 고르기(reference `_rank_key` — 작은 쪽이 고른 해석): 지불 총액 큰 쪽 → 역만 역 해석 먼저(X-01) →
+        /// 판 많은 쪽 → 부 많은 쪽 → 역 id 를 `MahjongYaku.order` 순번으로 정렬한 배열의 사전순 작은 쪽 → 대기 이름 순(X-02).
+        func ranks(before other: Candidate) -> Bool {
+            if totalBase != other.totalBase { return totalBase > other.totalBase }
+            if (yakuman > 0) != (other.yakuman > 0) { return yakuman > 0 }
+            if han != other.han { return han > other.han }
+            if fu != other.fu { return fu > other.fu }
+            let mine = yakuOrderKey, theirs = other.yakuOrderKey
+            if mine != theirs { return mine.lexicographicallyPrecedes(theirs) }
+            return MahjongScoring.waitOrder.firstIndex(of: wait) ?? 9 < MahjongScoring.waitOrder.firstIndex(of: other.wait) ?? 9
+        }
+
+        var yakuOrderKey: [Int] {
+            yaku.map { MahjongScoring.orderIndex[$0.yaku] ?? 99 }.sorted()
+        }
+    }
+
+    enum OneResult {
+        case agari(Candidate)
+        case notAgari(String)
+    }
+
+    /// X-02 대기 이름 순.
+    static let waitOrder = ["ryanmen", "shanpon", "kanchan", "penchan", "tanki", "kokushi"]
+
+    static let orderIndex: [MahjongYaku: Int] = {
+        var out: [MahjongYaku: Int] = [:]
+        for (i, y) in MahjongYaku.order.enumerated() { out[y] = i }
+        return out
+    }()
+
+    static let dragons = [31, 32, 33]
+    static let terminals = [0, 8, 9, 17, 18, 26]
+    /// MJ-34 녹일색: 2·3·4·6·8삭 + 발.
+    static let green = [19, 20, 21, 23, 25, 32]
+
+    /// 결과 칸을 채운다(MJ-41 본장 · MJ-28 공탁).
+    static func finish(_ c: Candidate, ctx: MahjongWinContext) -> MahjongScore {
+        let honbaBonus = 300 * ctx.honba
+        let kyoutakuBonus = 1000 * ctx.kyoutaku
+        return MahjongScore(
+            agari: true, reason: nil, yaku: c.yaku, yakuman: c.yakuman, dora: c.dora, aka: c.aka, ura: c.ura,
+            han: c.han, fu: c.fu, limit: c.limit, base: c.base, points: c.points,
+            honbaBonus: honbaBonus, kyoutakuBonus: kyoutakuBonus, total: c.totalBase + honbaBonus + kyoutakuBonus,
+            wait: c.wait, form: c.form
+        )
+    }
+
+    /// 부로 하나 → 몸통. 모양이 틀리면 nil(reference `_parse_meld`).
+    static func meldGroup(_ meld: MahjongMeld) -> Group? {
+        let ks = meld.tiles.map(\.kind).sorted()
+        switch meld.type {
+        case .chi:
+            guard ks.count == 3, ks[0] < 27, ks[1] == ks[0] + 1, ks[2] == ks[0] + 2, ks[0] / 9 == ks[2] / 9 else { return nil }
+            return Group(shape: .seq, kind: ks[0], opened: true)
+        case .pon:
+            guard ks.count == 3, Set(ks).count == 1 else { return nil }
+            return Group(shape: .trip, kind: ks[0], opened: true)
+        case .minkan, .kakan, .ankan:
+            guard ks.count == 4, Set(ks).count == 1 else { return nil }
+            return Group(shape: .kan, kind: ks[0], opened: meld.type != .ankan)
+        }
+    }
+
+    /// 형식 검사(reference `_evaluate_one` 앞부분 + `_validate`). 오류가 없으면 nil.
+    static func validate(_ ctx: MahjongWinContext) -> MahjongInputError? {
+        let all = ctx.closed + [ctx.win] + ctx.melds.flatMap(\.tiles)
+        if Set(all.map(\.id)).count != all.count { return .invalid(reason: "duplicate_tile") }
+        if ctx.melds.count > 4 || ctx.closed.count != 13 - 3 * ctx.melds.count { return .invalid(reason: "tile_count") }
+        var groups: [Group] = []
+        for meld in ctx.melds {
+            guard let g = meldGroup(meld) else { return .invalid(reason: "bad_meld") }
+            groups.append(g)
+        }
+        let menzen = groups.allSatisfy { !$0.opened }
+        let dealer = ctx.seatWind == .east
+        let hasKan = groups.contains { $0.shape == .kan }
+        let contradictions: [Bool] = [
+            ctx.doubleRiichi && !ctx.riichi,                          // 더블 리치는 리치도 켠다
+            (ctx.riichi || ctx.ippatsu) && !menzen,                   // MJ-27 리치는 멘젠만
+            ctx.ippatsu && !ctx.riichi,                               // MJ-30 일발은 리치만
+            ctx.rinshan && (!ctx.tsumo || !hasKan),                   // MJ-21 영상개화는 깡 뒤 쯔모
+            ctx.rinshan && (ctx.ippatsu || ctx.haitei),               // MJ-33 영상개화는 일발·해저와 겹치지 않음
+            ctx.chankan && ctx.tsumo,                                 // MJ-20 창깡은 론
+            ctx.haitei && !ctx.tsumo,                                 // MJ-19 해저는 쯔모
+            ctx.houtei && (ctx.tsumo || ctx.chankan),                 // MJ-19 하저는 타패 론
+            ctx.heavenly && (!dealer || !ctx.tsumo || !ctx.melds.isEmpty),  // MJ-34 천화는 친·쯔모·울기 없음
+            ctx.earthly && (dealer || !ctx.tsumo || !ctx.melds.isEmpty),    // MJ-34 지화는 자·쯔모·울기 없음
+        ]
+        return contradictions.contains(true) ? .invalid(reason: "flags") : nil
+    }
+
+    /// 형식 검사를 지난 손 하나(화료패 고정)의 가장 높은 해석.
+    static func evaluateOne(_ ctx: MahjongWinContext) -> OneResult {
+        let meldGroups = ctx.melds.compactMap(meldGroup)
+        let menzen = meldGroups.allSatisfy { !$0.opened }
+        let noMelds = meldGroups.isEmpty
+        let winKind = ctx.win.kind
+        let c13 = MahjongTiles.counts34(ctx.closed)
+        var c14 = c13
+        c14[winKind] += 1
+        var call14 = c14   // 손 + 울기 전체(역 판정용) — 깡도 종류 판정에는 3장으로 충분
+        for g in meldGroups {
+            if g.shape == .seq {
+                for j in 0..<3 { call14[g.kind + j] += 1 }
+            } else {
+                call14[g.kind] += 3
+            }
+        }
+        let interps = interpretations(c14: c14, meldGroups: meldGroups, winKind: winKind, tsumo: ctx.tsumo, noMelds: noMelds)
+        if interps.isEmpty { return .notAgari("not_complete") }
+
+        let allKinds = (ctx.closed + [ctx.win] + ctx.melds.flatMap(\.tiles)).map(\.kind)
+        func countDora(_ indicators: [MahjongTile]) -> Int {
+            indicators.reduce(0) { sum, ind in
+                let d = MahjongTiles.doraKind(ofIndicator: ind.kind)
+                return sum + allKinds.filter { $0 == d }.count
+            }
+        }
+        let dora = countDora(ctx.doraIndicators)
+        let aka = (ctx.closed + [ctx.win] + ctx.melds.flatMap(\.tiles)).filter(\.isRed).count
+        let ura = ctx.riichi ? countDora(ctx.uraIndicators) : 0
+        let dealer = ctx.seatWind == .east
+        let seatKind = 27 + windIndex(ctx.seatWind)
+        let roundKind = 27 + windIndex(ctx.roundWind)
+
+        var best: Candidate?
+        for interp in interps {
+            let cand: Candidate
+            let ym = yakumanChecks(call14, interp, ctx: ctx, c13: c13, noMelds: noMelds)
+            if !ym.isEmpty {
+                let mult = ym.reduce(0) { $0 + $1.yakumanMultiple }
+                let yaku = ym.sorted { (orderIndex[$0] ?? 0) < (orderIndex[$1] ?? 0) }.map { MahjongYakuHan(yaku: $0, han: $0.yakumanMultiple * 13) }
+                let (base, limit) = limitBase(han: 0, fu: 0, yakuman: mult)
+                let points = payments(base: base, dealer: dealer, tsumo: ctx.tsumo)
+                cand = Candidate(yaku: yaku, yakuman: mult, han: 13 * mult, fu: 0, dora: 0, aka: 0, ura: 0,
+                                 form: interp.form, wait: interp.wait, base: base, limit: limit, points: points, totalBase: total(points))
+            } else {
+                let ys = normalYaku(call14, interp, ctx: ctx, menzen: menzen, seatKind: seatKind, roundKind: roundKind)
+                let yhan = ys.reduce(0) { $0 + $1.han }
+                if yhan == 0 { continue }
+                let fu: Int
+                if interp.form == "chiitoi" {
+                    fu = 25
+                } else {
+                    let pinfu = ys.contains { $0.yaku == .pinfu }
+                    fu = calcFu(interp, tsumo: ctx.tsumo, menzen: menzen, pinfu: pinfu, seatKind: seatKind, roundKind: roundKind)
+                }
+                let han = yhan + dora + aka + ura
+                let (base, limit) = limitBase(han: han, fu: fu, yakuman: 0)
+                let points = payments(base: base, dealer: dealer, tsumo: ctx.tsumo)
+                let sorted = ys.sorted { (orderIndex[$0.yaku] ?? 0) < (orderIndex[$1.yaku] ?? 0) }
+                cand = Candidate(yaku: sorted, yakuman: 0, han: han, fu: fu, dora: dora, aka: aka, ura: ura,
+                                 form: interp.form, wait: interp.wait, base: base, limit: limit, points: points, totalBase: total(points))
+            }
+            if best.map({ cand.ranks(before: $0) }) ?? true { best = cand }
+        }
+        guard let best else { return .notAgari("no_yaku") }
+        return .agari(best)
+    }
+
+    static func windIndex(_ w: MahjongWind) -> Int {
+        switch w {
+        case .east: 0
+        case .south: 1
+        case .west: 2
+        case .north: 3
+        }
+    }
+
+    /// MJ-38 모든 해석 = (몸통 분해 × 화료패 자리). reference `_interpretations`.
+    static func interpretations(c14: [Int], meldGroups: [Group], winKind: Int, tsumo: Bool, noMelds: Bool) -> [Interpretation] {
+        var out: [Interpretation] = []
+        if noMelds && MahjongHand.isKokushi(c14) {
+            out.append(Interpretation(form: "kokushi", groups: [], pairKind: nil, wait: "kokushi"))
+        }
+        if noMelds && MahjongHand.isChiitoi(c14) {
+            out.append(Interpretation(form: "chiitoi", groups: [], pairKind: winKind, wait: "tanki"))
+        }
+        for d in standardDecompositions(c14, melds: meldGroups.count) {
+            guard let pair = d.first(where: { $0.shape == .pair })?.kind else { continue }
+            let body = d.filter { $0.shape != .pair }
+            // 화료패가 들어갈 자리: 머리 · 커쯔 · 순쯔의 몇 번째 칸. 같은 모양(같은 종류·같은 칸)은 한 번만.
+            var places: [(shape: Part.Shape, kind: Int, offset: Int)] = []
+            for part in d {
+                switch part.shape {
+                case .pair where part.kind == winKind: places.append((.pair, part.kind, -1))
+                case .trip where part.kind == winKind: places.append((.trip, part.kind, -1))
+                case .seq where part.kind <= winKind && winKind <= part.kind + 2: places.append((.seq, part.kind, winKind - part.kind))
+                default: break
+                }
+            }
+            var seen: [(Part.Shape, Int, Int)] = []
+            for place in places {
+                if seen.contains(where: { $0.0 == place.shape && $0.1 == place.kind && $0.2 == place.offset }) { continue }
+                seen.append((place.shape, place.kind, place.offset))
+                var groups: [Group] = []
+                var used = false
+                for part in body {
+                    var opened = false
+                    // 론으로 완성한 커쯔는 밝은 커쯔(MJ-33·MJ-37)
+                    if !used && part.shape == .trip && place.shape == .trip && part.kind == place.kind && !tsumo {
+                        opened = true
+                        used = true
+                    }
+                    groups.append(Group(shape: part.shape == .seq ? .seq : .trip, kind: part.kind, opened: opened))
+                }
+                groups += meldGroups
+                out.append(Interpretation(form: "standard", groups: groups, pairKind: pair,
+                                          wait: waitName(place.shape, place.kind, winKind: winKind)))
+            }
+        }
+        return out
+    }
+
+    /// 분해 조각(머리·커쯔·순쯔).
+    struct Part: Equatable, Hashable {
+        enum Shape: Int, Hashable { case pair, seq, trip }   // reference 정렬('pair' < 'seq' < 'trip')과 같은 순서
+        let shape: Shape
+        let kind: Int
+    }
+
+    /// 표준형 분해 전부(겹침 없이). reference `standard_decompositions`.
+    static func standardDecompositions(_ counts: [Int], melds: Int) -> [[Part]] {
+        var c = counts
+        var out: [[Part]] = []
+        var seen = Set<[Part]>()
+        var path: [Part] = []
+        func walk(need: Int, havePair: Bool, start: Int) {
+            var i = start
+            while i < 34 && c[i] == 0 { i += 1 }
+            if i == 34 {
+                if need == 0 && havePair {
+                    let key = path.sorted { ($0.shape.rawValue, $0.kind) < ($1.shape.rawValue, $1.kind) }
+                    if seen.insert(key).inserted { out.append(key) }
+                }
+                return
+            }
+            if !havePair && c[i] >= 2 {
+                c[i] -= 2; path.append(Part(shape: .pair, kind: i))
+                walk(need: need, havePair: true, start: i)
+                path.removeLast(); c[i] += 2
+            }
+            if need > 0 && c[i] >= 3 {
+                c[i] -= 3; path.append(Part(shape: .trip, kind: i))
+                walk(need: need - 1, havePair: havePair, start: i)
+                path.removeLast(); c[i] += 3
+            }
+            if need > 0 && i < 27 && i % 9 <= 6 && c[i + 1] > 0 && c[i + 2] > 0 {
+                c[i] -= 1; c[i + 1] -= 1; c[i + 2] -= 1; path.append(Part(shape: .seq, kind: i))
+                walk(need: need - 1, havePair: havePair, start: i)
+                path.removeLast(); c[i] += 1; c[i + 1] += 1; c[i + 2] += 1
+            }
+        }
+        if (0...4).contains(melds) { walk(need: 4 - melds, havePair: false, start: 0) }
+        return out
+    }
+
+    /// MJ-37-4 화료패가 든 몸통으로 대기 이름을 정한다. reference `_wait_kind`.
+    static func waitName(_ shape: Part.Shape, _ k: Int, winKind: Int) -> String {
+        switch shape {
+        case .pair: return "tanki"
+        case .trip: return "shanpon"
+        case .seq:
+            if winKind == k + 1 { return "kanchan" }
+            if winKind == k { return k % 9 + 1 == 7 ? "penchan" : "ryanmen" }
+            return winKind % 9 + 1 == 3 ? "penchan" : "ryanmen"
+        }
+    }
+
+    /// MJ-34 역만. reference `_yakuman_checks`(c14 = 손 + 울기 전체 장수).
+    static func yakumanChecks(_ c14: [Int], _ it: Interpretation, ctx: MahjongWinContext, c13: [Int], noMelds: Bool) -> [MahjongYaku] {
+        var ym: [MahjongYaku] = []
+        let allKinds = (0..<34).filter { c14[$0] > 0 }
+        if ctx.heavenly { ym.append(.heavenly) }
+        if ctx.earthly { ym.append(.earthly) }
+        if it.form == "kokushi" {
+            ym.append(MahjongTiles.yaochu.allSatisfy { c13[$0] == 1 } ? .kokushi13 : .kokushi)
+        }
+        if it.form == "standard" {
+            let conceal = it.groups.filter { $0.shape != .seq && !$0.opened }.count
+            if conceal == 4 { ym.append(it.wait == "tanki" ? .suuankouTanki : .suuankou) }
+            let trips = it.groups.filter { $0.shape != .seq }.map(\.kind)
+            if dragons.allSatisfy({ trips.contains($0) }) { ym.append(.daisangen) }
+            let windTrips = trips.filter { MahjongTiles.winds.contains($0) }
+            if windTrips.count == 4 {
+                ym.append(.daisuushii)
+            } else if windTrips.count == 3, let pair = it.pairKind, MahjongTiles.winds.contains(pair) {
+                ym.append(.shousuushii)
+            }
+            if it.groups.filter({ $0.shape == .kan }).count == 4 { ym.append(.suukantsu) }
+        }
+        if it.form == "standard" || it.form == "chiitoi" {
+            if allKinds.allSatisfy({ $0 >= 27 }) { ym.append(.tsuuiisou) }
+            if allKinds.allSatisfy({ terminals.contains($0) }) { ym.append(.chinroutou) }
+        }
+        if allKinds.allSatisfy({ green.contains($0) }) { ym.append(.ryuuiisou) }
+        // 구련보등: 멘젠·울기/깡 없음·한 색 1112345678999 + 1
+        if noMelds && it.form == "standard" {
+            let suits = Set(allKinds.map { MahjongSuit.of(kind: $0) })
+            if suits.count == 1, let suit = suits.first, suit != .honor {
+                let s = suit.rawValue
+                let v = Array(c14[(s * 9)..<(s * 9 + 9)])
+                if v[0] >= 3 && v[8] >= 3 && v[1..<8].allSatisfy({ $0 >= 1 }) {
+                    let w13 = Array(c13[(s * 9)..<(s * 9 + 9)])
+                    ym.append(w13 == [3, 1, 1, 1, 1, 1, 1, 1, 3] ? .junseiChuuren : .chuuren)
+                }
+            }
+        }
+        return ym
+    }
+
+    /// 일반 역의 (멘젠 판, 울었을 때 판 | nil = 멘젠만) — reference `YAKU`.
+    static func hanValue(_ y: MahjongYaku) -> (closed: Int, open: Int?) {
+        switch y {
+        case .riichi, .ippatsu, .menzenTsumo, .pinfu, .iipeikou: (1, nil)
+        case .doubleRiichi, .chiitoitsu: (2, nil)
+        case .tanyao, .yakuhaiHaku, .yakuhaiHatsu, .yakuhaiChun, .bakaze, .jikaze, .chankan, .rinshan, .haitei, .houtei: (1, 1)
+        case .sanshoku, .ittsu, .chanta: (2, 1)
+        case .toitoi, .sanankou, .sanshokuDoukou, .sankantsu, .honroutou, .shousangen: (2, 2)
+        case .honitsu, .junchan: (3, 2)
+        case .ryanpeikou: (3, nil)
+        case .chinitsu: (6, 5)
+        default: (0, nil)   // 역만은 여기 오지 않는다
+        }
+    }
+
+    /// MJ-32·MJ-33 일반 역. reference `_normal_yaku`.
+    static func normalYaku(_ c14: [Int], _ it: Interpretation, ctx: MahjongWinContext, menzen: Bool, seatKind: Int, roundKind: Int) -> [MahjongYakuHan] {
+        var ys: [MahjongYakuHan] = []
+        func add(_ y: MahjongYaku) {
+            let v = hanValue(y)
+            guard let h = menzen ? v.closed : v.open else { return }
+            ys.append(MahjongYakuHan(yaku: y, han: h))
+        }
+        let allKinds = (0..<34).filter { c14[$0] > 0 }
+        let yaochu = MahjongTiles.yaochu
+        if ctx.riichi {
+            add(ctx.doubleRiichi ? .doubleRiichi : .riichi)
+            if ctx.ippatsu { add(.ippatsu) }
+        }
+        if menzen && ctx.tsumo { add(.menzenTsumo) }
+        if ctx.chankan { add(.chankan) }
+        if ctx.rinshan { add(.rinshan) }
+        if ctx.haitei { add(.haitei) }
+        if ctx.houtei { add(.houtei) }
+        if allKinds.allSatisfy({ !yaochu.contains($0) }) { add(.tanyao) }
+        let suits = Set(allKinds.map { MahjongSuit.of(kind: $0) })
+        if suits.subtracting([.honor]).count == 1 { add(suits.contains(.honor) ? .honitsu : .chinitsu) }
+        if allKinds.allSatisfy({ yaochu.contains($0) }) && allKinds.contains(where: { $0 >= 27 }) && allKinds.contains(where: { $0 < 27 }) {
+            add(.honroutou)
+        }
+        if it.form == "chiitoi" {
+            add(.chiitoitsu)
+            return ys
+        }
+        let seqs = it.groups.filter { $0.shape == .seq }.map(\.kind)
+        let trips = it.groups.filter { $0.shape != .seq }.map(\.kind)
+        let pair = it.pairKind ?? -1
+        let pairIsValue = dragons.contains(pair) || pair == seatKind || pair == roundKind
+        if menzen && seqs.count == 4 && !pairIsValue && it.wait == "ryanmen" { add(.pinfu) }
+        if menzen {
+            let peikou = Set(seqs).reduce(0) { sum, k in sum + seqs.filter { $0 == k }.count / 2 }
+            if peikou >= 2 { add(.ryanpeikou) } else if peikou == 1 { add(.iipeikou) }
+        }
+        for k in trips {
+            if k == 31 { add(.yakuhaiHaku) } else if k == 32 { add(.yakuhaiHatsu) } else if k == 33 { add(.yakuhaiChun) }
+            if k == roundKind { add(.bakaze) }
+            if k == seatKind { add(.jikaze) }
+        }
+        if (0..<7).contains(where: { n in seqs.contains(n) && seqs.contains(n + 9) && seqs.contains(n + 18) }) { add(.sanshoku) }
+        if (0..<3).contains(where: { s in seqs.contains(s * 9) && seqs.contains(s * 9 + 3) && seqs.contains(s * 9 + 6) }) { add(.ittsu) }
+        func hasYaochu(_ g: Group) -> Bool {
+            g.shape == .seq ? (g.kind % 9 == 0 || g.kind % 9 == 6) : yaochu.contains(g.kind)
+        }
+        if !seqs.isEmpty && yaochu.contains(pair) && it.groups.allSatisfy(hasYaochu) {
+            add(allKinds.contains(where: { $0 >= 27 }) ? .chanta : .junchan)
+        }
+        if trips.count == 4 { add(.toitoi) }
+        if it.groups.filter({ $0.shape != .seq && !$0.opened }).count == 3 { add(.sanankou) }
+        if (0..<9).contains(where: { n in trips.contains(n) && trips.contains(n + 9) && trips.contains(n + 18) }) { add(.sanshokuDoukou) }
+        if it.groups.filter({ $0.shape == .kan }).count == 3 { add(.sankantsu) }
+        if dragons.filter({ trips.contains($0) }).count == 2 && dragons.contains(pair) { add(.shousangen) }
+        return ys
+    }
+
+    /// MJ-37 부(표준형). reference `_calc_fu`.
+    static func calcFu(_ it: Interpretation, tsumo: Bool, menzen: Bool, pinfu: Bool, seatKind: Int, roundKind: Int) -> Int {
+        if pinfu { return tsumo ? 20 : 30 }
+        var fu = 20
+        if menzen && !tsumo { fu += 10 }
+        if tsumo { fu += 2 }
+        if ["kanchan", "penchan", "tanki"].contains(it.wait) { fu += 2 }
+        let pair = it.pairKind ?? -1
+        if dragons.contains(pair) { fu += 2 }
+        if pair == seatKind { fu += 2 }
+        if pair == roundKind { fu += 2 }
+        for g in it.groups where g.shape != .seq {
+            var v = g.shape == .trip ? 2 : 8
+            if MahjongTiles.yaochu.contains(g.kind) { v *= 2 }
+            if !g.opened { v *= 2 }
+            fu += v
+        }
+        let raw = fu
+        fu = (fu + 9) / 10 * 10
+        if !menzen && (raw == 20 || raw == 22) { fu = 30 }   // MJ-37-8 울음 핑후형
+        return fu
     }
 }

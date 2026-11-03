@@ -31,7 +31,7 @@ import com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer
 //    닫히면(또는 이미 닫혀 있었으면 결론 즉시) 10분 문을 건너뛰고 **한 번 더** 묻는다. 술 선물을 받을 수 있는 빌드(번호 5)에서만 —
 //    번호 4 인 빌드(Windows v1)는 서버가 생일만 싣고 (사용자, 종류)당 열린 선물은 하나라 '다음'이 없다(요청 수가 0.3.73 그대로다).
 
-/** 축하 시트 한 장의 상태. 시트는 선물 id 로 선다 — 단계가 바뀌어도 같은 시트다. 그리는 글자는 [copy](선물 종류의 문구 묶음)다. */
+/** 축하 시트 한 장의 상태. 시트는 선물 id 로 선다 — 단계가 바뀌어도 같은 시트다. 그리는 글자는 [texts](선물 종류의 문구 묶음)다. */
 data class MeCakeGiftSheet(
     val gift: CharacterGiftOffer,
     val selection: String? = null,

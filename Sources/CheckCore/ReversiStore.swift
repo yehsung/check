@@ -714,7 +714,8 @@ package final class ReversiStore {
                 lobbyRequestOutgoingRevision = revision
                 applyLobby(response, predatesWrite: writes != writeRevision)
                 // 서버가 진행 중이라 말하는 판을 들고 있지 않다(다른 기기에서 수락 · 재시작) — 그 판을 읽어 세운다.
-                if response.status == .ok, let active = activeMatchID,
+                // 쓰기보다 먼저 나간 응답이라 `activeMatchID` 를 안 덮었어도, 그 순간 판이 서 있었다는 사실은 쓴다(적대 재검증 VR-01).
+                if response.status == .ok, let active = activeMatchID ?? response.me?.activeMatchId?.lowercased(),
                    match?.id != active || match?.isFinished == true {
                     await refreshMatch(id: active)
                 }
@@ -773,6 +774,8 @@ package final class ReversiStore {
 
     /// 로비 `me` 의 신청 둘(받은 것 배열 · 보낸 것 하나)을 화면 값으로 옮긴다.
     private func applyLobbyInvites(_ me: ReversiLobbyMe?) {
+        // 이 응답이 읽힌 순간 서 있던 진행 판 — `predatesWrite` 라 `activeMatchID` 에 안 옮겼어도 "보낸 신청이 판이 됐다"는 판정엔 쓴다(VR-01).
+        let respondedActive = me?.activeMatchId?.lowercased()
         // 받은 신청 — 서버 목록이 권위다(서버가 만료·숨김·차단을 이미 걸렀다). 이 기기가 이미 답한 신청만 뺀다.
         if let rows = me?.incoming {
             var fresh: [ReversiInvite] = []
@@ -802,7 +805,7 @@ package final class ReversiStore {
         let predatesOutgoing = lobbyRequestOutgoingRevision < outgoingRevision
         if let gone = outgoing, serverOutgoing?.id != gone.id, !predatesOutgoing {
             // 판으로 이어졌으면(= 수락) 거절 안내를 하지 않는다 — 진행 중 판이 있으면 서버가 내 다른 신청을 거둔 것이다.
-            let becameMatch = gone.id == activeMatchID || gone.id == match?.id
+            let becameMatch = gone.id == activeMatchID || gone.id == match?.id || gone.id == respondedActive
             if !becameMatch {
                 setNotice(gone.expiresAt > clock() ? ReversiNoticeText.inviteDeclined : ReversiNoticeText.inviteTimedOut)
             }
@@ -1396,6 +1399,7 @@ package final class ReversiStore {
     /// 폴링 한 걸음의 조회를 **폴링 작업의 취소 밖에서** 돌리고 끝날 때까지 기다린다. 창을 닫는(최소화·가림) 순간 `stopPolling` 의
     /// 취소가 날던 조회에 닿으면, 그 조회에 합쳐진 초인종 조회(`stateAgain`·`lobbyAgain`)까지 같이 죽는다 — 창도 폴링도 없는 사람이
     /// 상대 수·수락을 모른 채 30초 자동 착수를 맞는다. 폴링은 멈추고 날던 조회만 끝까지 간다(로그아웃은 세대 가드가 버린다).
+    /// 날던 조회가 끝난 뒤 **남은 걸음**은 걸음 사이 가드(창 보임 · 안 가림 · 폴링 작업 안 취소)가 막는다(적대 재검증 VR-04).
     private func outsidePolling(_ body: @escaping @MainActor (ReversiStore) async -> Void) async {
         await Task { @MainActor [weak self] in
             guard let self else { return }
@@ -1408,7 +1412,7 @@ package final class ReversiStore {
     ///  · 보낸 신청이 있으면 5초마다 그 판의 상태(수락·거절·만료를 한 조회가 다 말한다)
     ///  · 로비를 보고 있으면 30초마다 목록
     ///  · 관전 2초 / 순위 60초(확장이 주 스위치·가림을 본다)
-    /// **분기 사이사이 `isWindowVisible` 을 다시 본다** — await 중에 창이 내려갈 수 있다.
+    /// **분기 사이사이 창 보임 · 가림 · 취소를 다시 본다** — await 중에 창이 내려가거나 가려질 수 있다.
     package func pollTick(at now: Date) async {
         guard isWindowVisible, !isWindowOccluded, host?.session != nil else { return }
         if let current = match, !current.isFinished, !current.isAI {
@@ -1423,16 +1427,16 @@ package final class ReversiStore {
                 }
             }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if let sent = outgoing, now.timeIntervalSince(lastOutgoingRequestAt) >= Self.outgoingPollSeconds {
             let id = sent.id
             await outsidePolling { await $0.refreshMatch(id: id) }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         if phase == .lobby, now.timeIntervalSince(lastLobbyRequestAt) >= Self.lobbyPollSeconds {
             await outsidePolling { await $0.refreshLobby() }
         }
-        guard isWindowVisible else { return }
+        guard isWindowVisible, !isWindowOccluded, !Task.isCancelled else { return }
         await pollSpectatorFeatures(at: now)
     }
 

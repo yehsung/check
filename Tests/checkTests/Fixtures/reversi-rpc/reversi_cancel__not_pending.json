@@ -1,7 +1,7 @@
 {
     "state": {
         "match": {
-            "id": "5ebd9ccb-c04b-43d0-a552-056fde521d0c",
+            "id": "07ab5fab-5a32-4134-9423-70dbd00abcd8",
             "turn": null,
             "black": null,
             "board": "...........................wb......bw...........................",
@@ -24,7 +24,7 @@
             "deadline_ms": null,
             "finished_ms": null,
             "turn_started_ms": null,
-            "invite_expires_ms": 1793670155008
+            "invite_expires_ms": 1793677498489
         },
         "moves": [
         ],
@@ -44,7 +44,7 @@
         ],
         "ruby_balance": 90,
         "turn_seconds": 30,
-        "server_now_ms": 1793670095009,
+        "server_now_ms": 1793677438490,
         "my_auto_streak": null,
         "black_auto_streak": 0,
         "white_auto_streak": 0,

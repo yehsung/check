@@ -257,7 +257,7 @@ struct V03xxMahjongWiringTests {
     /// 말풍선이 겹쳐 뜨거나(가려진 창을 보이는 것으로 친다) 지난 국의 차례 말풍선이 뜬다.
     @Test
     func theOverlayCarriesMahjongBubblesAndJudgesThemOnTheCurrentHand() throws {
-        let raw = try V0317ShopTests.source("CheckOverlayWindow.swift")
+        let raw = try CheckCoreSourceLayout.joinedSplitSource("CheckOverlayWindow.swift")
         #expect(raw.contains("// MARK: - 마작 말풍선"))
         let overlay = mwtCollapsed(V0317ShopTests.stripped(raw))
         #expect(overlay.contains("let alive = Set(store.mahjong.visibleInvites.map(\\.id))"), "큐브형 살아 있음 거르기가 아니다")

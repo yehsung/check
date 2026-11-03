@@ -143,6 +143,38 @@ private func frFocusGETs(_ h: MessagesHarness) -> Int {
         h.expectNoForbiddenCalls()
     }
 
+    @Test("목록을 당겨 새로고침하면 내 집중을 다시 묻는다 — 맥에서 켠 집중은 한 줄이 서고 끈 집중은 60초 틱을 기다리지 않고 사라진다(검토 지적)")
+    func pullToRefreshAsksMyFocus() async {
+        let h = await MessagesHarness.make { server in
+            server.setDirectory(FrFx.directory())
+            server.setMyFocus(FrFx.myFocus(false))
+        }
+        defer { h.tearDown() }
+        h.store.listDidAppear()
+        await h.settle()
+        #expect(frFocusGETs(h) == 1)
+        #expect(MessagesFocusRules.listNotice(myFocus: h.store.myFocusMode) == nil, "기준선: 꺼짐이면 목록 위 한 줄이 없다")
+
+        // 맥에서 켰다 → 목록에 머문 채 당긴다(틱은 꺼짐이라 돌지 않는다 — 당기기가 유일한 길이다).
+        h.server.setMyFocus(FrFx.myFocus(true))
+        h.store.refreshMyFocusModeIfFocused()
+        await h.settle()
+        #expect(frFocusGETs(h) == 1, "기준선: 꺼짐인데 틱이 물었다")
+        await h.store.refreshNow()
+        await h.settle()
+        #expect(frFocusGETs(h) == 2, "당겨도 내 집중을 안 물었다 — 맥에서 켠 집중이 목록 위 한 줄에 안 선다")
+        #expect(MessagesFocusRules.listNotice(myFocus: h.store.myFocusMode) == MessageNoticeText.senderFocused)
+
+        // 맥에서 껐다 → 당기면 바로 사라진다.
+        h.server.setMyFocus(FrFx.myFocus(false))
+        await h.store.refreshNow()
+        await h.settle()
+        #expect(frFocusGETs(h) == 3)
+        #expect(MessagesFocusRules.listNotice(myFocus: h.store.myFocusMode) == nil, "맥에서 끈 집중이 당긴 뒤에도 남았다")
+        #expect(!h.requests.contains { $0.path == "/rest/v1/profiles" && $0.method != "GET" }, "폰이 profiles 를 썼다(R9)")
+        h.expectNoForbiddenCalls()
+    }
+
     @Test("목록에서 돌아올 때마다 묻되 날아가는 중이면 겹쳐 띄우지 않는다(조회 규칙은 refreshMyFocusMode 그대로)")
     func listAppearDoesNotStackFetches() async {
         let h = await MessagesHarness.make { server in

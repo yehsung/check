@@ -464,7 +464,9 @@ struct MessagesBubbleRow: View {
             // "깨진 메시지"로 읽힌다). 평범한 본문은 `preview` 가 **손대지 않고** 그대로 돌려준다.
             // 고른 글 복사는 보이는 글자(꼬리표 대신 실제 주소)이고, 보이스오버 [복사]는 `entry.body` 원문 그대로다 — 이 줄은 **보여 주는 글자**만 바꾼다.
             // 받은 말풍선이면 `onReport` 가 편집 메뉴의 [신고]가 된다(내 말풍선은 nil — 메뉴에 없다).
-            MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine, onReport: onReport)
+            // 그림을 못 읽은 이모티콘은 글 전체를 골라 [복사]하면 원문 토큰을 담는다(`wholeCopyRaw` — 1.0.16 길게 누름 [복사]와 같은 값).
+            MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine, onReport: onReport,
+                               wholeCopyRaw: MessagesBubbleSelection.wholeCopyRaw(body: line.entry.body))
         }
     }
 
@@ -559,9 +561,11 @@ private struct MessagesBubbleText: View {
     var isPending = false
     /// 편집 메뉴의 [신고](받은 말풍선만). 내 말풍선 · 보내는 중 말풍선은 nil — 메뉴에 없다.
     var onReport: (() -> Void)?
+    /// 글 전체를 골라 복사할 때 대신 담을 원문(보이는 글자가 원문과 다른 말풍선 — `MessagesBubbleSelection.wholeCopyRaw`). 평범한 글은 nil.
+    var wholeCopyRaw: String?
 
     var body: some View {
-        MessagesBubbleLabel(text: text, isMine: isMine, onReport: onReport)
+        MessagesBubbleLabel(text: text, isMine: isMine, onReport: onReport, wholeCopyRaw: wholeCopyRaw)
             .background(
                 RoundedRectangle(cornerRadius: Self.cornerRadius, style: .continuous)
                     .fill(isMine ? MobileTheme.accentFill : MobileTheme.bubbleIn)
@@ -605,6 +609,7 @@ private struct MessagesBubbleLabel: UIViewRepresentable {
     let text: String
     let isMine: Bool
     var onReport: (() -> Void)?
+    var wholeCopyRaw: String?
 
     func makeUIView(context: Context) -> MessagesBubbleTextUIView {
         MessagesBubbleTextUIView()
@@ -614,6 +619,7 @@ private struct MessagesBubbleLabel: UIViewRepresentable {
     /// 이 함수를 부르고, 그때마다 글을 박으면 고르던 구간이 날아간다(외관별 색 객체는 매번 새것이라 글 비교로는 못 거른다).
     func updateUIView(_ view: MessagesBubbleTextUIView, context: Context) {
         view.onReport = onReport
+        view.wholeCopyRaw = wholeCopyRaw
         view.show(MessagesBubbleTextUIView.Shown(text: text, isMine: isMine, dynamicTypeSize: context.environment.dynamicTypeSize)) {
             MessagesBubbleMarkdown.attributed(
                 text,
@@ -661,6 +667,8 @@ final class MessagesBubbleTextUIView: UITextView, UITextViewDelegate {
     let measure = MessagesBubbleTextLayout.Engine()
     /// 편집 메뉴의 [이 메시지 신고하기]. nil 이면 메뉴에 신고가 없다(내 말풍선 · 보내는 중).
     var onReport: (() -> Void)?
+    /// 글 전체를 골라 [복사]하면 대신 담을 원문(그림을 못 읽은 이모티콘의 토큰). nil 이면 보이는 글자다(`MessagesBubbleSelection.copyText`).
+    var wholeCopyRaw: String?
 
     private var shown: Shown?
     private let linkTapGate = MessagesBubbleLinkTapGate()
@@ -676,6 +684,9 @@ final class MessagesBubbleTextUIView: UITextView, UITextViewDelegate {
         isEditable = false
         isSelectable = true
         isScrollEnabled = false
+        // 말풍선마다 이 글 칸(UIScrollView)이 있다 — 켜 두면 화면에 scrollsToTop 후보가 여럿이라 상태 막대 누름(맨 위로)이 듣지 않을 수 있다.
+        // 맨 위로 가는 것은 대화의 바깥 스크롤 하나다.
+        scrollsToTop = false
         backgroundColor = .clear
         // 고르기 손잡이가 말풍선 가장자리에서 잘리지 않게(글자는 늘 글 칸 안이다).
         clipsToBounds = false
@@ -690,6 +701,9 @@ final class MessagesBubbleTextUIView: UITextView, UITextViewDelegate {
         // 끌어 놓기는 보이는 글자(꼬리표째 · 서식째)를 싣는다 — 고른 글은 [복사]로만 나간다.
         textDragInteraction?.isEnabled = false
         isAccessibilityElement = false
+        // 하위 요소(글자 줄 · 링크)까지 숨긴다 — `isAccessibilityElement = false` 만으로는 UITextView 의 접근성 컨테이너가 남아, 줄 라벨과 따로
+        // 말풍선 글이 한 번 더 읽힐 수 있다. 줄(`children: .ignore`)이 라벨 · [복사] · [신고] · 링크 열기 동작을 따로 들고 있어 잃는 것이 없다.
+        accessibilityElementsHidden = true
         delegate = self
         // 외관(라이트·다크 · 앱 화면 모드 설정)이 바뀌면 테마 색을 다시 풀어 그린다.
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (view: MessagesBubbleTextUIView, _: UITraitCollection) in
@@ -740,8 +754,15 @@ final class MessagesBubbleTextUIView: UITextView, UITextViewDelegate {
     /// 편집 메뉴 [복사] · 키보드 ⌘C. **고른 글자만**, **서식 없이** 쓴다 — `[글](주소)` 는 꼬리표 대신 실제 주소째(코어 `ChatMarkdownCopy.text` —
     /// 맥 ⌘C 와 한 함수). 서식째 쓰면 내 말풍선의 흰 글자가 흰 문서에 붙는다. 고른 것이 없으면 아무것도 안 쓴다.
     override func copy(_ sender: Any?) {
-        guard let text = MessagesBubbleSelection.copyText(engine.storage, selected: selectedRange) else { return }
+        guard let text = MessagesBubbleSelection.copyText(engine.storage, selected: selectedTextRanges, wholeTextRaw: wholeCopyRaw) else { return }
         UIPasteboard.general.string = text
+    }
+
+    /// 고른 구간들. iOS 26 부터 여러 구간 선택이 있고 `selectedRange` 는 그 **합집합**이다(SDK 27.2 머리말) — 합집합을 담으면 고르지 않은
+    /// 사이 글이 섞인다. iOS 18~25 는 한 구간이다.
+    private var selectedTextRanges: [NSRange] {
+        if #available(iOS 26.0, *) { return selectedRanges }
+        return [selectedRange]
     }
 
     /// 편집 메뉴 밖의 길(키보드 단축키 등)에서도 공유는 거절한다(보이는 글자를 꼬리표째 다른 앱으로 넘긴다).
@@ -761,7 +782,17 @@ final class MessagesBubbleTextUIView: UITextView, UITextViewDelegate {
 
     /// 고른 뒤 뜨는 편집 메뉴. **언제나 메뉴를 돌려준다** — nil 은 "시스템 기본 메뉴"(공유 · 찾아보기 포함)라는 뜻이다.
     func textView(_ textView: UITextView, editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
-        UIMenu(children: MessagesBubbleSelection.menu(suggested: Self.leaves(suggestedActions), report: reportMenuItem()))
+        UIMenu(children: MessagesBubbleSelection.menu(suggested: Self.leaves(suggestedActions), report: reportMenuItem(),
+                                                      fallbackCopy: ownCopyMenuItem(range: range)))
+    }
+
+    /// 보험 [복사] — 제안에서 [복사]를 못 알아봤을 때만 메뉴에 선다(`MessagesBubbleSelection.menu` 의 `fallbackCopy`). 이 글 칸의 `copy(_:)` 를
+    /// 그대로 부르므로 담는 글자 규칙이 같다. 고른 글자가 없으면 세우지 않는다.
+    private func ownCopyMenuItem(range: NSRange) -> UIMenuElement? {
+        guard range.length > 0 else { return nil }
+        return UIAction(title: MessagesBubbleCopy.title, image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
+            self?.copy(nil)
+        }
     }
 
     /// 제안 메뉴를 펼친 낱 항목(이름 · 항목). 묶음 메뉴는 속까지 펼친다. 이름을 모르는 항목(미뤄 짓는 항목 등)은 버린다.
@@ -821,7 +852,8 @@ struct MessagesPendingBubbleRow: View {
                 MessagesStickerBubble(art: drawn.art, isPending: true)
             } else {
                 // 자리 말풍선도 같은 폴백을 쓴다(위 말풍선 주석).
-                MessagesBubbleText(text: AingStickerText.preview(for: item.body), isMine: true, isPending: true)
+                MessagesBubbleText(text: AingStickerText.preview(for: item.body), isMine: true, isPending: true,
+                                   wholeCopyRaw: MessagesBubbleSelection.wholeCopyRaw(body: item.body))
             }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)

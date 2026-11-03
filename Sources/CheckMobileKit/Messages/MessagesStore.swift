@@ -571,6 +571,9 @@ package final class MessagesStore {
         blockNotice = nil
         blockNoticeIsError = false
         guard isSignedIn else { return }
+        // 내 집중도 다시 묻는다(1.0.17 검토 지적) — 맥에서 방금 켜고 끈 집중이 목록 위 한 줄 · 입력줄 잠금에 당기는 순간 따라온다.
+        // 이 함수가 없으면 켠 집중은 화면을 나갔다 와야, 끈 집중은 60초 틱까지 남는다. 날아가는 중이면 겹쳐 띄우지 않는다(조회 규칙 그대로).
+        refreshMyFocusMode()
         runtime.lastListRefreshAt = context.clock.now()
         await requestActivityRefresh(includeHistory: true)?.value
     }

@@ -34,12 +34,18 @@ package enum MessagesBubbleSelection {
 
     /// 편집 메뉴에 세울 항목들: 제안(`suggested` — 이름과 원래 항목, 하위 메뉴는 부르는 쪽이 펼쳐 넘긴다)에서 남길 것만 `MenuItem` 순서로
     /// 하나씩 고르고, `report` 가 있으면(받은 말풍선) 끝에 단다. iOS 가 제안하지 않은 항목은 세우지 않는다(예: 전부 고른 뒤의 [전체 선택]).
-    package static func menu<Element>(suggested: [(name: String, element: Element)], report: Element?) -> [Element] {
+    ///
+    /// ★ `fallbackCopy`: 제안에서 [복사]를 **못 알아봤을 때만** 그 자리에 세우는 글 칸 자체의 [복사](1.0.17 검토 지적). 거르기는 iOS 가
+    ///   [복사]를 선택자 `copy:` 인 `UICommand` 로 준다는 데 기댄다 — iOS 26 부터 편집 메뉴 길이 바뀌는 중이라(SDK 27.2 에서
+    ///   `editMenuForTextInRange` 가 `…InRanges` 로 대체 예고) 다른 식별자의 `UIAction` 으로 오면 [번역] · [신고]만 남아 기능의 핵심이 빠진다.
+    ///   알아봤으면 시스템 것을 그대로 쓴다(이 값은 버린다). 부르는 쪽은 고른 글자가 있을 때만 넘긴다(빈 [복사]가 서지 않게).
+    package static func menu<Element>(suggested: [(name: String, element: Element)], report: Element?, fallbackCopy: Element? = nil) -> [Element] {
         var picked: [MenuItem: Element] = [:]
         for (name, element) in suggested {
             guard let item = menuItem(named: name), picked[item] == nil else { continue }
             picked[item] = element
         }
+        if picked[.copy] == nil, let fallbackCopy { picked[.copy] = fallbackCopy }
         var out = MenuItem.allCases.compactMap { picked[$0] }
         if let report { out.append(report) }
         return out
@@ -52,7 +58,33 @@ package enum MessagesBubbleSelection {
 
     /// 고른 구간 → 붙여넣기판에 쓸 글자(서식 없음 · `[글](주소)` 는 실제 주소째). 아무것도 안 골랐으면 nil(아무것도 안 쓴다).
     package static func copyText(_ drawn: NSAttributedString, selected range: NSRange) -> String? {
-        ChatMarkdownCopy.text(drawn, ranges: [range])
+        copyText(drawn, selected: [range], wholeTextRaw: nil)
+    }
+
+    /// 고른 구간들(iOS 26 여러 구간 선택 `selectedRanges` — 합집합 `selectedRange` 를 담으면 고르지 않은 글이 섞인다) → 붙여넣기판 글자.
+    /// 여러 구간은 코어 규칙대로 줄바꿈으로 잇는다(`ChatMarkdownCopy.text(_:ranges:)`).
+    ///
+    /// `wholeTextRaw`: 보이는 글자가 원문과 다른 말풍선의 원문(`wholeCopyRaw(body:)` — 번들 그림을 못 읽어 "아잉이 기쁨"으로 접힌 이모티콘).
+    /// 고른 것이 **글 전체**면 그 원문(토큰)을 담는다 — 1.0.16 의 길게 누름 [복사]와 같은 값이라 붙여넣어 다시 보내면 그림이 된다(검토 지적).
+    /// 일부만 골랐으면 보이는 글자 그대로다.
+    package static func copyText(_ drawn: NSAttributedString, selected ranges: [NSRange], wholeTextRaw: String?) -> String? {
+        if let wholeTextRaw, coversWholeText(ranges, length: drawn.length) { return wholeTextRaw }
+        return ChatMarkdownCopy.text(drawn, ranges: ranges)
+    }
+
+    /// 말풍선 원문 → 고른 것이 글 전체일 때 대신 담을 원문. 보이는 글자(`AingStickerText.preview`)가 원문과 같으면 nil(평범한 글 — 보이는 대로 담는다).
+    package static func wholeCopyRaw(body: String) -> String? {
+        AingStickerText.preview(for: body) == body ? nil : body
+    }
+
+    /// 구간들의 합이 글 전체(0..<length)를 빈틈없이 덮는가. 빈 글은 덮을 것이 없다(false).
+    static func coversWholeText(_ ranges: [NSRange], length: Int) -> Bool {
+        guard length > 0 else { return false }
+        let covered = NSMutableIndexSet()
+        for range in ranges where range.location != NSNotFound && range.length > 0 {
+            covered.add(in: NSIntersectionRange(range, NSRange(location: 0, length: length)))
+        }
+        return covered.count == length
     }
 
     /// 한 번 누름이 열 링크 — 고른 글자가 있으면(고르는 중) 열지 않는다. 누른 자리가 링크가 아니면 nil.

@@ -137,6 +137,59 @@ struct V1017BubbleSelectionRulesTests {
         }
     }
 
+    /// 보험 [복사](검토 지적): iOS 가 [복사]를 `copy:` 아닌 이름(다른 식별자의 UIAction)으로 주면 거르기가 못 알아봐 [복사]가 빠진다 —
+    /// 그때만 글 칸 자체의 [복사]가 그 자리(첫째)에 선다. 알아봤으면 시스템 것을 그대로 쓰고 보험은 버린다. 보험이 없으면(고른 글 없음) 세우지 않는다.
+    /// 기준선: 보험 없이는 모르는 이름의 복사가 오면 메뉴에 [번역] · [신고]만 남는다.
+    @Test func 복사를_못_알아본_제안에는_글칸_복사가_첫자리에_선다() {
+        let unknownCopy = [(name: "com.apple.menu.standard-edit.copy-v2", element: "낯선복사"), (name: "_translate:", element: "번역"),
+                           (name: "_share:", element: "공유")]
+        #expect(MessagesBubbleSelection.menu(suggested: unknownCopy, report: "신고") == ["번역", "신고"],
+                "기준선: 모르는 이름의 복사가 거르기를 지났다 — 이 시험이 아무것도 안 잰다")
+        #expect(MessagesBubbleSelection.menu(suggested: unknownCopy, report: "신고", fallbackCopy: "글칸복사") == ["글칸복사", "번역", "신고"],
+                "[복사]를 못 알아봤는데 보험 [복사]가 안 섰다 — 메뉴에서 복사가 사라진다")
+        let known = [(name: "selectAll:", element: "전체"), (name: "copy:", element: "시스템복사")]
+        #expect(MessagesBubbleSelection.menu(suggested: known, report: nil, fallbackCopy: "글칸복사") == ["시스템복사", "전체"],
+                "알아본 시스템 [복사]를 보험이 밀어냈다(또는 둘 다 섰다)")
+        #expect(MessagesBubbleSelection.menu(suggested: unknownCopy, report: nil, fallbackCopy: nil) == ["번역"])
+    }
+
+    /// iOS 26 여러 구간 선택: 구간마다 담아 줄바꿈으로 잇는다 — 합집합(`selectedRange`)을 담으면 사이에 고르지 않은 글이 섞인다(검토 지적).
+    @Test func 여러_구간을_고르면_구간만_담고_사이_글은_안_섞인다() throws {
+        let drawn = BS17.drawn("가나다 라마바 사아자")
+        let text = drawn.string as NSString
+        let first = text.range(of: "가나다"), last = text.range(of: "사아자")
+        try #require(first.location != NSNotFound && last.location != NSNotFound)
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: [first, last], wholeTextRaw: nil) == "가나다\n사아자")
+        // 기준선: 합집합 한 구간이면 사이 글("라마바")이 들어간다.
+        let union = NSUnionRange(first, last)
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: union)?.contains("라마바") == true, "기준선: 합집합에 사이 글이 없다")
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: [first, last], wholeTextRaw: nil)?.contains("라마바") == false)
+    }
+
+    /// 그림을 못 읽어 "아잉이 기쁨"으로 접힌 이모티콘: 글 전체를 골라 복사하면 **원문 토큰**(1.0.16 길게 누름 [복사]와 같은 값 — 붙여넣어 보내면 그림),
+    /// 일부만 고르면 보이는 글자다. 평범한 글은 원문 대체가 없다(보이는 그대로 — 꼬리표 대신 실제 주소 규칙 그대로).
+    @Test func 그림을_못_읽은_이모티콘은_전체를_고르면_원문_토큰을_담는다() throws {
+        let token = AingSticker.allCases[0].token
+        let shown = AingStickerText.preview(for: token)
+        try #require(shown != token, "전제: 이모티콘 폴백 글자가 원문과 다르다")
+        #expect(MessagesBubbleSelection.wholeCopyRaw(body: token) == token)
+        #expect(MessagesBubbleSelection.wholeCopyRaw(body: "그냥 글 **굵게**") == nil, "평범한 글에 원문 대체가 붙었다")
+        let drawn = BS17.drawn(shown)
+        let raw = MessagesBubbleSelection.wholeCopyRaw(body: token)
+        let all = NSRange(location: 0, length: drawn.length)
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: [all], wholeTextRaw: raw) == token, "글 전체를 골랐는데 원문 토큰이 아니다")
+        // 두 구간이 빈틈없이 덮어도 전체다.
+        let cut = drawn.length / 2
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: [NSRange(location: 0, length: cut), NSRange(location: cut, length: drawn.length - cut)],
+                                                 wholeTextRaw: raw) == token)
+        // 일부만 — 보이는 글자.
+        let part = NSRange(location: 0, length: drawn.length - 1)
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: [part], wholeTextRaw: raw) == (shown as NSString).substring(with: part))
+        // 기준선: 원문을 안 넘기면 전체를 골라도 보이는 글자다(1.0.17 첫 판의 구멍).
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: all) == shown)
+        #expect(MessagesBubbleSelection.copyText(drawn, selected: [NSRange(location: 0, length: 0)], wholeTextRaw: raw) == nil, "안 골랐는데 썼다")
+    }
+
     /// 고른 구간 → 붙여넣기판 글: 서식 없이, `[글](주소)` 는 꼬리표 대신 실제 주소째(코어 `ChatMarkdownCopy.text` — 맥 ⌘C 와 한 함수).
     /// 기준선: 보이는 글자 그대로면 꼬리표 호스트가 들어가고 실제 주소는 빠진다.
     @Test func 고른_글자는_서식_없이_링크는_실제_주소째_복사한다() throws {
@@ -290,6 +343,8 @@ struct V1017BubbleSelectionContractTests {
             "textDragInteraction?.isEnabled = false", "delegate = self", "contentInsetAdjustmentBehavior = .never",
             "textContainerInset = UIEdgeInsets(top: insets.top, left: insets.horizontal, bottom: insets.bottom, right: insets.horizontal)",
             "isAccessibilityElement = false", "engine.container.lineFragmentPadding = 0",
+            // 검토 지적: 말풍선마다 낀 스크롤 뷰가 상태 막대 '맨 위로' 후보가 되지 않게 · 글 칸 하위 요소가 줄 라벨과 따로 읽히지 않게.
+            "scrollsToTop = false", "accessibilityElementsHidden = true",
         ] {
             #expect(made.contains(needle), "글 칸 설정에 '\(needle)' 가 없다")
         }
@@ -306,7 +361,9 @@ struct V1017BubbleSelectionContractTests {
         // 여백은 글 칸 안 하나다 — 바깥 SwiftUI padding 이 남으면 여백이 두 번 더해진다.
         let bubbleText = try BS17.block(of: "private struct MessagesBubbleText: View", in: code)
         #expect(!bubbleText.contains(".padding("), "말풍선 여백이 글 칸 밖에도 있다")
-        #expect(bubbleText.contains("MessagesBubbleLabel(text: text, isMine: isMine, onReport: onReport)"))
+        #expect(bubbleText.contains("MessagesBubbleLabel(text: text, isMine: isMine, onReport: onReport, wholeCopyRaw: wholeCopyRaw)"))
+        let update = try BS17.block(of: "func updateUIView(_ view: MessagesBubbleTextUIView, context: Context)", in: label)
+        #expect(update.contains("view.wholeCopyRaw = wholeCopyRaw"), "글 칸이 이모티콘 원문을 못 받는다")
         let link = try BS17.block(of: "func link(at point: CGPoint) -> URL?", in: view)
         #expect(link.contains("engine.link(atBubblePoint: point, bubbleWidth: bounds.width)"), "누름 판정이 여백을 안 옮긴다")
     }
@@ -316,7 +373,11 @@ struct V1017BubbleSelectionContractTests {
         let code = try BS17.code(BS17.conversationPath)
         let view = try BS17.textView()
         let menu = try BS17.block(of: "editMenuForTextIn range: NSRange, suggestedActions: [UIMenuElement]) -> UIMenu?", in: view)
-        #expect(menu.contains("UIMenu(children: MessagesBubbleSelection.menu(suggested: Self.leaves(suggestedActions), report: reportMenuItem()))"))
+        #expect(menu.contains("UIMenu(children: MessagesBubbleSelection.menu(suggested: Self.leaves(suggestedActions), report: reportMenuItem(),"))
+        #expect(menu.contains("fallbackCopy: ownCopyMenuItem(range: range)"), "보험 [복사]가 메뉴에 안 이어졌다(검토 지적)")
+        let ownCopy = try BS17.block(of: "private func ownCopyMenuItem(range: NSRange) -> UIMenuElement?", in: view)
+        #expect(ownCopy.contains("guard range.length > 0 else { return nil }"), "고른 글이 없어도 보험 [복사]가 선다")
+        #expect(ownCopy.contains("self?.copy(nil)") && ownCopy.contains("MessagesBubbleCopy.title"), "보험 [복사]가 글 칸의 복사 규칙을 안 지난다")
         #expect(!menu.contains("nil") && !menu.contains("return suggestedActions"), "시스템 기본 메뉴(공유 · 찾아보기)로 빠지는 길이 있다")
         let leaves = try BS17.block(of: "private static func leaves(", in: view)
         #expect(leaves.contains("leaves(menu.children)") && leaves.contains("NSStringFromSelector(command.action)"))
@@ -328,10 +389,13 @@ struct V1017BubbleSelectionContractTests {
         #expect(fromMenu.contains("onReport?()"))
         #expect(code.contains("MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })"))
         let content = try BS17.block(of: "private var bubbleContent: some View", in: code)
-        #expect(content.contains("MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine, onReport: onReport)"),
+        #expect(content.contains("MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine, onReport: onReport,"),
                 "글 말풍선이 신고 문을 못 받는다")
+        #expect(content.contains("wholeCopyRaw: MessagesBubbleSelection.wholeCopyRaw(body: line.entry.body)"),
+                "그림을 못 읽은 이모티콘 말풍선이 원문 토큰 복사를 잃었다(1.0.16 [복사]의 짝 — 검토 지적)")
         let pending = try BS17.block(of: "struct MessagesPendingBubbleRow", in: code)
         #expect(!pending.contains("onReport"), "보내는 중(내) 말풍선에 신고가 붙었다")
+        #expect(pending.contains("wholeCopyRaw: MessagesBubbleSelection.wholeCopyRaw(body: item.body)"))
 
         let can = try BS17.block(of: "override func canPerformAction(", in: view)
         #expect(can.contains("MessagesBubbleSelection.refuses(actionNamed: NSStringFromSelector(action))"))
@@ -347,7 +411,11 @@ struct V1017BubbleSelectionContractTests {
     @Test func 복사는_고른_글을_서식_없이_담는다() throws {
         let view = try BS17.textView()
         let copy = try BS17.block(of: "override func copy(_ sender: Any?)", in: view)
-        #expect(copy.contains("MessagesBubbleSelection.copyText(engine.storage, selected: selectedRange)"))
+        #expect(copy.contains("MessagesBubbleSelection.copyText(engine.storage, selected: selectedTextRanges, wholeTextRaw: wholeCopyRaw)"),
+                "복사가 여러 구간(iOS 26) · 이모티콘 원문을 안 본다")
+        let ranges = try BS17.block(of: "private var selectedTextRanges: [NSRange]", in: view)
+        #expect(ranges.contains("if #available(iOS 26.0, *) { return selectedRanges }") && ranges.contains("return [selectedRange]"),
+                "iOS 26 에서 합집합 구간을 담는다")
         #expect(copy.contains("UIPasteboard.general.string = text"))
         #expect(!copy.contains("super.copy"), "시스템 복사는 보이는 글자(꼬리표째)를 서식째 싣는다")
         #expect(!copy.contains("setItems") && !copy.contains("attributed") && !copy.contains("rtf"), "붙여넣기판에 서식이 실린다")

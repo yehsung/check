@@ -635,10 +635,13 @@ struct MahjongBotFixture {
     // 패를 버려도 모른다(MJ-24). 기준선: 선언 전에 나온 패는 현물이 아니고, 그 자리가 다시 뽑으면 동순 현물이 풀린다.
     @Test func genbutsuIncludesTilesPassedAfterRiichiAndSameTurn() {
         var f = F()
-        let before = f.take("3p")[0], declare = f.take("9m")[0], after = f.take("5s")[0], late = f.take("7z")[0]
-        let open1 = f.take("1m")[0], passed = f.take("2m")[0]
+        let before = f.take("3p")[0], declare = f.take("9m")[0], after = f.take("5s")[0], again = f.take("8p")[0]
+        let open1 = f.take("1m")[0], passed = f.take("2m")[0], late = f.take("7z")[0]
         var s1 = f.seat(1, riichi: true)
-        s1.discards = [MahjongDiscard(tile: declare, tsumogiri: false, riichi: true, taken: false)]
+        s1.discards = [
+            MahjongDiscard(tile: declare, tsumogiri: false, riichi: true, taken: false),
+            MahjongDiscard(tile: again, tsumogiri: true, riichi: false, taken: false),
+        ]
         func ev(_ seq: Int, _ kind: String, _ seat: Int, _ tile: MahjongTile?, riichi: Bool = false) -> MahjongEvent {
             var e = MahjongEvent(seq: seq, kind: kind, seat: seat)
             e.tile = tile
@@ -648,23 +651,25 @@ struct MahjongBotFixture {
         var s3 = f.seat(3)
         s3.discards = [MahjongDiscard(tile: open1, tsumogiri: false, riichi: false, taken: false)]
         var v = F.view(hand: f.take("123456789s1234p"), drawn: nil, decision: nil, seats: [f.seat(0), s1, f.seat(2), s3], dora: [])
+        // 5s 는 리치 선언 뒤 · 자리 1 이 다시 뽑기 전에 나왔다 — 그 뒤 자리 1 이 뽑고 버렸으니 동순으로는 풀렸고 리치 후 후리텐으로만 현물이다.
         v.events = [
             ev(1, "deal", 0, nil), ev(2, "discard", 2, before), ev(3, "discard", 1, declare, riichi: true),
-            ev(4, "discard", 2, after), ev(5, "discard", 3, open1), ev(6, "discard", 0, passed), ev(7, "discard", 2, late),
+            ev(4, "discard", 2, after), ev(5, "draw", 1, nil), ev(6, "discard", 1, again), ev(7, "discard", 3, open1),
+            ev(8, "discard", 0, passed), ev(9, "discard", 2, late),
         ]
         let riichiSafe = MahjongBotRisk.safeKinds(of: 1, in: v)
-        #expect(riichiSafe.isSuperset(of: [declare.kind, after.kind, late.kind, passed.kind, open1.kind]))
+        #expect(riichiSafe.isSuperset(of: [declare.kind, again.kind, after.kind, open1.kind, passed.kind, late.kind]))
         #expect(!riichiSafe.contains(before.kind))
         // 선언이 꼬리보다 옛날: 꼬리의 버림은 모두 선언 뒤다.
         var old = v
-        old.events = [ev(10, "discard", 2, after)]
-        #expect(MahjongBotRisk.safeKinds(of: 1, in: old).contains(after.kind))
+        old.events = [ev(10, "discard", 2, before)]
+        #expect(MahjongBotRisk.safeKinds(of: 1, in: old).contains(before.kind))
         // 동순(리치 아닌 자리 3): 3 이 버린 뒤 나온 2m · 7z 는 현물, 3 이 다시 뽑으면 풀린다.
         #expect(MahjongBotRisk.safeKinds(of: 3, in: v).isSuperset(of: [passed.kind, late.kind]))
         var drew = v
-        drew.events = v.events! + [ev(8, "draw", 3, nil)]
+        drew.events = v.events! + [ev(10, "draw", 3, nil)]
         #expect(!MahjongBotRisk.safeKinds(of: 3, in: drew).contains(passed.kind))
-        #expect(!MahjongBotRisk.safeKinds(of: 3, in: v).contains(before.kind))
+        #expect(!MahjongBotRisk.safeKinds(of: 3, in: v).contains(after.kind))
     }
 
     // 없으면: 내 몫 결정이 없는(남의 차례 · 답한 창) 시야에서 봇이 무언가를 돌려주면 스토어가 엉뚱한 걸음을 보낸다.
@@ -740,7 +745,8 @@ struct MahjongBotFixture {
 @Suite struct MahjongBotSlowTests {
     static var slow: Bool { ProcessInfo.processInfo.environment["MAHJONG_BOT_SLOW"] == "1" }
     static var games: Int { Int(ProcessInfo.processInfo.environment["MAHJONG_BOT_GAMES"] ?? "") ?? 300 }
-    static var duplicateSeeds: Int { Int(ProcessInfo.processInfo.environment["MAHJONG_BOT_DUP"] ?? "") ?? 60 }
+    /// 듀플리케이트 패산 열 수(× 자리 4). 60(240판)은 2.46 으로 2.5 와 표준 오차 안이었다 — 250(1,000판, 11-03 실측 2.391)을 기본으로.
+    static var duplicateSeeds: Int { Int(ProcessInfo.processInfo.environment["MAHJONG_BOT_DUP"] ?? "") ?? 250 }
 
     // 없으면: 봇 넷이 한 판을 끝까지 몰지 못하거나(엔진 거절 · 걸음 상한) 끝 조건(토비·끝 점수·남입·서입·최대 장) 가운데 하나에서
     // 멎어도 기본 게이트의 조각(국 몇 개)으로는 안 보인다. 실제 시계 결정 시간도 여기서 잰다.

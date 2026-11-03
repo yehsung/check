@@ -130,6 +130,13 @@ class ScreenHarness(
     var frozen = false
         private set
 
+    /**
+     * 데모 픽스처보다 먼저 보는 응답(판 7 — 집중 장면처럼 저장소 픽스처에 아직 없는 서버 칸을 한 장면에서만 얹을 때). null 을 돌려주면 픽스처로 간다.
+     * 인자는 (메서드, 경로, 쿼리). 저장소의 공유 픽스처(Sources/CheckMobileKit/Demo/Fixtures)는 고치지 않는다 — iOS 데모와 같은 바이트여야 한다.
+     */
+    @Volatile
+    var override: ((method: String, path: String, query: String) -> Pair<Int, String>?)? = null
+
     private val engine = MockEngine(
         MockEngineConfig().apply {
             dispatcher = this@ScreenHarness.dispatcher
@@ -138,7 +145,8 @@ class ScreenHarness(
                 val path = request.url.encodedPath
                 requests += "${request.method.value} $path"
                 if (frozen) awaitCancellation()
-                val (status, text) = fixtures.response(request.method.value, path, request.url.encodedQuery, body, scenario)
+                val (status, text) = override?.invoke(request.method.value, path, request.url.encodedQuery)
+                    ?: fixtures.response(request.method.value, path, request.url.encodedQuery, body, scenario)
                 respond(text, HttpStatusCode.fromValue(status), headersOf(HttpHeaders.ContentType, "application/json"))
             }
         },

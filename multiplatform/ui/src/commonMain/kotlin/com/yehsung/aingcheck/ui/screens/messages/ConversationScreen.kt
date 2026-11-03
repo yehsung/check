@@ -80,6 +80,7 @@ import com.yehsung.aingcheck.core.stores.messages.MessagesBubbleLine
 import com.yehsung.aingcheck.core.stores.messages.MessagesConversationHeader
 import com.yehsung.aingcheck.core.stores.messages.MessagesConversationItem
 import com.yehsung.aingcheck.core.stores.messages.MessagesConversationRules
+import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import com.yehsung.aingcheck.core.stores.messages.MessagesPeerPresence
 import com.yehsung.aingcheck.core.stores.messages.MessagesPendingOutgoing
 import com.yehsung.aingcheck.core.stores.messages.MessagesPokeLogLine
@@ -92,6 +93,7 @@ import com.yehsung.aingcheck.core.stores.messages.blockPeer
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.screens.session.kit.EmptyStateView
+import com.yehsung.aingcheck.ui.screens.session.kit.FocusChip
 import com.yehsung.aingcheck.ui.screens.session.kit.InlineNotice
 import com.yehsung.aingcheck.ui.screens.session.kit.NoticeKind
 import com.yehsung.aingcheck.ui.screens.session.kit.PersonAvatar
@@ -148,6 +150,9 @@ fun ConversationScreen(
     val board = if (header.avatarName == null) null else store.presenceBoard(now)
     val presence = board?.peers?.get(peerID)
     val statusMessage = board?.statuses?.get(peerID)
+    // 상대가 집중 중인가(판 7 · 대표 요청 5) — 이름표 '집중 중' 칩. 판(board)이 아니라 스토어 판정이다: 입력줄 잠금과 같은 값이어야 하고,
+    // 판은 이름을 알 때만 계산한다(이름 모르는 대화도 잠금은 선다). 내 집중은 칩이 아니라 입력줄 사유 줄이 말한다(칩은 상대의 상태다).
+    val peerFocused = store.isPeerFocused(peerID)
     val peerDisplayName = store.peerName(peerID) ?: MessagesConversationHeader.fallbackTitle
     val stickerArt = rememberStickerArt()
     val scope = rememberCoroutineScope()
@@ -162,7 +167,7 @@ fun ConversationScreen(
             onReport = { reportTarget = MessagesReportTarget(peerID, peerDisplayName) },
             onBlock = { showsBlock = true },
         )
-        Nameplate(header, presence, statusMessage)
+        Nameplate(header, presence, statusMessage, peerFocused)
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
             ConversationList(
                 items = items,
@@ -258,12 +263,17 @@ private fun ConversationTopBar(
     }
 }
 
-/** 유리 이름표: 이름 + "● 근무 중 · 서울" + 상태메시지(있으면 한 줄). 보이스오버는 이 이름표가 읽는다. */
+/**
+ * 유리 이름표: 이름(+ 집중이면 '집중 중' 칩 — 판 7) + "● 근무 중 · 서울" + 상태메시지(있으면 한 줄). TalkBack 은 이 이름표가 읽는다.
+ * 칩은 이름 줄 안에 서고 이름표 높이를 늘리지 않는다 — 폭은 이름이 양보한다(꼬리 줄임).
+ */
 @Composable
-private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeerPresence?, statusMessage: String?) {
+private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeerPresence?, statusMessage: String?, isFocused: Boolean) {
     val colors = AingTheme.colors
     val line = MessagesPresenceRules.headerLine(presence)
-    val label = listOfNotNull(header.accessibilityLabel, line, statusMessage?.let { "상태메시지 $it" }).joinToString(", ")
+    val label = listOfNotNull(
+        header.accessibilityLabel, if (isFocused) MessagesFocusText.accessibility else null, line, statusMessage?.let { "상태메시지 $it" },
+    ).joinToString(", ")
     Box(Modifier.fillMaxWidth().padding(bottom = 8.dp), contentAlignment = Alignment.Center) {
         Column(
             Modifier
@@ -273,7 +283,11 @@ private fun Nameplate(header: MessagesConversationHeader, presence: MessagesPeer
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(1.dp),
         ) {
-            Text(header.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label, maxLines = 1)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(header.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label, maxLines = 1,
+                    overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (isFocused) FocusChip(MessagesFocusText.conversationChip)
+            }
             if (line != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     val status = presence?.status

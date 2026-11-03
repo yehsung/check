@@ -335,6 +335,16 @@ class MessagesChatMarkdownSnapshotTest {
         }
     }
 
+    /** 골라 복사 시트(추천안 A): 말풍선과 같은 서식 · 같은 꼬리표 글을 받은 말풍선 색으로 그린다(시트 바탕 위에서 내 말풍선 흰 글자가 묻히지 않게). */
+    @Test fun selectCopySheetPhoneLight() {
+        val body = "## 회의 자료\n**오늘** [자료](https://a.example/doc) 확인 `코드` 그대로"
+        ScreenSnapshots.check(
+            "screens/messages", "select-copy-sheet-phone-light", ScreenFrame.Phone, art,
+            scene = { ScreenSnapshots.Frame(false, art, characters.directory) { ChatSelectCopySheet(ChatSelectCopyState(body)) } },
+            other = { ScreenSnapshots.Frame(false, art, characters.directory) { ChatSelectCopySheet(ChatSelectCopyState("$body!")) } },
+        )
+    }
+
     /** 시트 글 칸 메뉴는 [복사] · [모두 선택]만 — 공유 · 번역 · 웹 검색(PROCESS_TEXT) · 자동 채움은 꼬리표 글을 넘기므로 걸러 낸다. */
     @Test fun selectSheetMenuKeepsOnlyCopyAndSelectAll() {
         assertTrue(ChatSelectCopyMenu.keeps(TextContextMenuKeys.CopyKey))

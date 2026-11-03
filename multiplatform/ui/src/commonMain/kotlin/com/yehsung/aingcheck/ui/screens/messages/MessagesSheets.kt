@@ -183,7 +183,8 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
             when {
                 store.directoryFailed && store.directory.isEmpty() -> item("failed") {
                     EmptyStateView(sf("exclamationmark.triangle", AppIcon.Warning), NewConversationText.loadFailed, MobileLoadText.checkConnection,
-                        MobileLoadText.retry, { store.loadDirectory(force = true) })
+                        // 명부 둘(메시지 + 지금 탭)을 받는다 — 메시지 명부만 받으면 지금 탭이 쥔 옛 집중 값이 이긴다(refreshPeopleDirectories · 검토 F5).
+                        MobileLoadText.retry, { store.refreshPeopleDirectories() })
                 }
                 !store.directoryLoaded -> item("loading") { Box(Modifier.padding(horizontal = AingDimens.sideMargin)) { LoadingRow() } }
                 people.isEmpty() -> item("empty") {

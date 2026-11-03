@@ -55,7 +55,11 @@ class MessagesFocusGateTest {
     private class FocusServer {
         var reply: Reply = Reply.Json("""[{"focus_mode":false}]""")
         var gate: CompletableDeferred<Unit>? = null
+
+        /** 명부(app_user_directory) 응답을 차례로 하나씩 갈아 끼운다 — 비면 MessagesServer.directory 로 간다(두 명부 중 하나만 실패시키는 시험). */
+        val directoryQueue = ArrayDeque<Reply>()
         fun route(r: RecordedRequest): Reply? {
+            if (r.rpcName == "app_user_directory") return directoryQueue.removeFirstOrNull()
             if (!isMyFocusGet(r)) return null
             return gate?.let { Reply.Gate(it, reply) } ?: reply
         }
@@ -80,6 +84,7 @@ class MessagesFocusGateTest {
             store.nowStore = now
             // 폰 조립(PhoneAppModel)과 같은 줄.
             now.onPeriodicTick = { store.refreshMyFocusModeIfFocused() }
+            now.onDirectoryApplied = { store.settleFocusNotices() }
         }
         return Rig(h, server, store, focus, now, scheduler)
     }
@@ -481,13 +486,108 @@ class MessagesFocusGateTest {
         r.store.setDraft("안녕", focusedInFixture)
         assertTrue(r.store.sendDraft(focusedInFixture, isComposing = false))
         advanceUntilIdle()
-        assertEquals(MessageNoticeText.targetFocused, r.store.sendNotices[focusedInFixture])
         assertEquals("안녕", r.store.draft(focusedInFixture))
         assertEquals(directoryCalls + 2, r.h.count("app_user_directory"), "명부 둘을 다시 받지 않았다")
         assertEquals(nowRefreshes + 1, now.refreshCount, "지금 탭 명부를 다시 받지 않았다")
         assertTrue(r.store.isPeerFocused(focusedInFixture), "다시 받은 명부를 따라오지 않았다")
         assertEquals(MessagesFocusBlock.peer, r.store.focusBlock(focusedInFixture))
+        // 명부가 켜짐을 안 뒤로는 거절 문구가 상태(focusBlock)로 넘어간다 — 줄은 같은 문장이다(검토 F2).
+        assertNull(r.store.sendNotices[focusedInFixture], "명부가 집중을 안 뒤에도 거절 문구를 결과 자리에 남겼다")
+        assertEquals(MessageNoticeText.targetFocused, MessagesComposerRules.noticeLine(r.store.focusBlock(focusedInFixture), r.store.sendNotices[focusedInFixture]))
         r.h.assertClean()
+    }
+
+    /**
+     * 검토 F2: 상대 집중 거절(target_focused) 문구는 상대가 집중을 끄면 사라진다 — 칩도 없고 [보내기]도 켜졌는데 사유 줄만 "집중 중"이라 말하지 않게.
+     * 거절 → 명부 둘이 켜짐을 앎(문구가 상태로 넘어감) → 상대가 끔 → 명부를 다시 받음 → 줄 없음. 기준선: 끄기 전에는 같은 줄이 그 문장이다.
+     */
+    @Test
+    fun targetFocusedSentenceLeavesWhenThePeerTurnsFocusOff() = runTest {
+        val r = rig(withNow = true) { it.received("a1", focusedInFixture, 0, unread = false) }
+        val now = r.now!!
+        r.server.directory = directory7
+        now.appDidBecomeActive()
+        r.store.appDidBecomeActive()
+        r.store.loadDirectory(force = true)
+        r.store.conversationDidAppear(focusedInFixture, "t1")
+        advanceUntilIdle()
+        r.server.sendReply = Reply.Json("""{"status":"target_focused"}""")
+        r.server.directory = directory8
+        r.store.setDraft("안녕", focusedInFixture)
+        assertTrue(r.store.sendDraft(focusedInFixture, isComposing = false))
+        advanceUntilIdle()
+        assertTrue(r.store.isPeerFocused(focusedInFixture))
+        assertEquals(MessageNoticeText.targetFocused, MessagesComposerRules.noticeLine(r.store.focusBlock(focusedInFixture), r.store.sendNotices[focusedInFixture]))
+        // 상대가 집중을 껐다 — 두 명부가 다시 받는다(지금 탭 60초 틱 · 시트 열기 같은 평소 길).
+        r.server.directory = directory8.replace("\"focus_mode\":true", "\"focus_mode\":false")
+        now.refresh()
+        r.store.loadDirectory(force = true)
+        advanceUntilIdle()
+        assertFalse(r.store.isPeerFocused(focusedInFixture))
+        assertNull(r.store.focusBlock(focusedInFixture))
+        assertTrue(r.store.canSend(focusedInFixture))
+        assertNull(
+            MessagesComposerRules.noticeLine(r.store.focusBlock(focusedInFixture), r.store.sendNotices[focusedInFixture]),
+            "상대가 집중을 끈 뒤에도 사유 줄이 '집중 중'이라 말했다",
+        )
+        r.h.assertClean()
+    }
+
+    /**
+     * 검토 F2 의 지금 탭 짝: 거절 뒤 메시지 명부는 실패하고 지금 탭 명부만 켜짐을 알아도 문구가 상태로 넘어간다(폰 조립이 잇는 NowStore.onDirectoryApplied).
+     * 기준선: 두 명부가 다 모르면(아래 targetFocusedDoesNotLock… 시험) 문구는 남는다 — 그동안 유일한 사유다.
+     */
+    @Test
+    fun nowDirectoryAloneSettlesTheTargetFocusedSentence() = runTest {
+        val r = rig(withNow = true) { it.received("a1", focusedInFixture, 0, unread = false) }
+        val now = r.now!!
+        r.server.directory = directory7
+        now.appDidBecomeActive()
+        r.store.appDidBecomeActive()
+        r.store.loadDirectory(force = true)
+        r.store.conversationDidAppear(focusedInFixture, "t1")
+        advanceUntilIdle()
+        r.server.sendReply = Reply.Json("""{"status":"target_focused"}""")
+        r.server.directory = directory8
+        // 거절 뒤 첫 명부 요청(메시지 명부 — performSend 가 먼저 띄운다)만 실패한다.
+        r.focus.directoryQueue.addLast(Reply.serverDown)
+        r.store.setDraft("안녕", focusedInFixture)
+        assertTrue(r.store.sendDraft(focusedInFixture, isComposing = false))
+        advanceUntilIdle()
+        assertTrue(r.store.directoryFailed, "전제: 메시지 명부 재조회가 실패해야 한다")
+        assertTrue(now.hasLoadedDirectory)
+        assertTrue(r.store.isPeerFocused(focusedInFixture), "지금 탭 명부가 켜짐을 알아야 한다")
+        assertNull(r.store.sendNotices[focusedInFixture], "지금 탭 명부가 켜짐을 알았는데 거절 문구가 남았다(NowStore 짝이 없다)")
+        r.h.assertClean()
+    }
+
+    /**
+     * 검토 F5: 새 대화 시트의 [다시 시도]가 부르는 [MessagesStore.refreshPeopleDirectories] 는 명부 **둘**을 받는다 — 지금 탭 명부가 겹치기에서 이기므로
+     * 메시지 명부만 받으면 방금 집중을 끈 사람의 칩·잠금이 다음 60초 틱까지 남는다. 기준선: 게이트가 꺼진 조립(Windows)은 메시지 명부만(지금과 같다).
+     */
+    @Test
+    fun refreshPeopleDirectoriesFetchesBothListsOnlyWhenTheGateIsOn() = runTest {
+        for (gate in listOf(true, false)) {
+            val r = rig(gate = gate, withNow = true)
+            val now = r.now!!
+            r.server.directory = directory8
+            now.appDidBecomeActive()
+            r.store.appDidBecomeActive()
+            advanceUntilIdle()
+            val directoryCalls = r.h.count("app_user_directory")
+            val nowRefreshes = now.refreshCount
+            r.store.refreshPeopleDirectories()
+            advanceUntilIdle()
+            assertEquals(if (gate) nowRefreshes + 1 else nowRefreshes, now.refreshCount, "gate=$gate 지금 탭 명부 재조회 수")
+            assertEquals(directoryCalls + (if (gate) 2 else 1), r.h.count("app_user_directory"), "gate=$gate 명부 요청 수")
+            // 지금 탭이 1분 전에 쥔 '집중'을 끈 값으로 갈아 끼운다(겹치기에서 이기는 쪽).
+            assertEquals(gate, r.store.isPeerFocused(focusedInFixture))
+            r.server.directory = directory8.replace("\"focus_mode\":true", "\"focus_mode\":false")
+            r.store.refreshPeopleDirectories()
+            advanceUntilIdle()
+            assertFalse(r.store.isPeerFocused(focusedInFixture), "gate=$gate 끈 사람이 다시 받은 뒤에도 집중으로 남았다")
+            r.h.assertClean()
+        }
     }
 
     @Test
@@ -503,6 +603,8 @@ class MessagesFocusGateTest {
         r.store.sendDraft(peerA, isComposing = false)
         advanceUntilIdle()
         assertFalse(r.store.isPeerFocused(peerA), "서버 거절 하나로 상대를 로컬에서 집중으로 찍었다")
+        // 명부가 아직 모르면 거절 문구는 남는다 — 그동안 유일한 사유다(settleFocusNotices 의 기준선 · 다음 전송이 지운다).
+        assertEquals(MessageNoticeText.targetFocused, r.store.sendNotices[peerA], "명부가 모르는데 유일한 사유를 걷었다")
         assertTrue(r.store.sendDraft(peerA, isComposing = false), "명부가 아니라는데 다음 누름을 막았다")
         advanceUntilIdle()
         assertEquals(2, r.sends())

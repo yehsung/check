@@ -23,7 +23,11 @@ import com.yehsung.aingcheck.core.stores.messages.MegaphoneBannerStore
 import com.yehsung.aingcheck.core.stores.messages.MessagesFocusBlock
 import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
+import com.yehsung.aingcheck.core.stores.messages.MobileLoadText
 import com.yehsung.aingcheck.core.stores.messages.NaturalKoNameCollation
+import com.yehsung.aingcheck.core.stores.now.NowStore
+import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
+import com.yehsung.aingcheck.core.stores.now.todo.TodoFileSystem
 import com.yehsung.aingcheck.ui.components.AndroidSnapshots
 import com.yehsung.aingcheck.ui.components.CharacterArt
 import com.yehsung.aingcheck.ui.screens.session.kit.ScreenArt
@@ -31,6 +35,7 @@ import com.yehsung.aingcheck.ui.screens.session.kit.ScreenFrame
 import com.yehsung.aingcheck.ui.screens.session.kit.ScreenHarness
 import com.yehsung.aingcheck.ui.screens.session.kit.ScreenSnapshots
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -219,5 +224,52 @@ class MessagesFocusSnapshotTest {
         }
         assertFalse("집중이 막는데 시트를 닫았다", closed)
         assertEquals("집중이 막는데 이모티콘 요청이 나갔다", sentBefore, harness.requests.count { it.endsWith("/rpc/send_message") })
+    }
+
+    /**
+     * 검토 F5 — 새 대화 시트의 [다시 시도]가 명부 **둘**(메시지 + 지금 탭)을 받는가(부르는 자리를 잰다 — 스토어 시험은 refreshPeopleDirectories 만 잰다).
+     * 기준선: 게이트가 꺼진 스토어(Windows 조립)는 같은 단추가 메시지 명부만 받는다(지금과 같다).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun newConversationRetryRefetchesBothDirectories() {
+        val files = object : TodoFileSystem {
+            val contents = HashMap<String, ByteArray>()
+            override fun read(path: String): ByteArray? = contents[path]
+            override fun writeAtomically(path: String, bytes: ByteArray) { contents[path] = bytes }
+            override fun move(from: String, to: String) { contents.remove(from)?.let { contents[to] = it } }
+        }
+        val now = harness.onStore { NowStore(harness.context, harness.scope, NowTodoStorage("/mem/now", files)) }
+        harness.override = { _, path, _ -> if (path == "/rest/v1/rpc/app_user_directory") 500 to """{"message":"down"}""" else null }
+        harness.onStore {
+            for (s in listOf(store, gateOff)) {
+                s.nowStore = now
+                s.appDidBecomeActive()
+                s.loadDirectory(force = true)
+            }
+        }
+        harness.awaitStore("명부 실패") { store.directoryFailed && !store.directoryLoading && gateOff.directoryFailed && !gateOff.directoryLoading }
+        fun directoryRequests() = harness.requests.count { it == "POST /rest/v1/rpc/app_user_directory" }
+        for ((s, gate) in listOf(store to true, gateOff to false)) {
+            runComposeUiTest {
+                setContent { ScreenSnapshots.Frame(false, art, characters.directory) { MessagesNewConversationSheet(s, {}, {}) } }
+                waitForIdle()
+                // 시트가 서며 부르는 loadDirectory()(실패 뒤라 스로틀 없이 한 번)가 끝나기를 기다린다.
+                harness.awaitStore("시트 첫 조회") { !s.directoryLoading && !now.isRefreshing }
+                waitForIdle()
+                val requestsBefore = directoryRequests()
+                val nowBefore = harness.onStore { now.refreshCount }
+                onNodeWithText(MobileLoadText.retry).performClick()
+                waitForIdle()
+                // 기대 수까지 기다리되 시한이 지나도 던지지 않는다 — 모자라면 아래 단언이 무엇이 모자란지 말한다.
+                harness.onStore {
+                    withTimeoutOrNull(3_000) {
+                        while (directoryRequests() < requestsBefore + (if (gate) 2 else 1) || s.directoryLoading || now.isRefreshing) delay(10)
+                    }
+                    delay(100)
+                }
+                assertEquals("gate=$gate 지금 탭 명부 재조회 수", if (gate) nowBefore + 1 else nowBefore, harness.onStore { now.refreshCount })
+                assertEquals("gate=$gate 명부 요청 수", requestsBefore + (if (gate) 2 else 1), directoryRequests())
+            }
+        }
     }
 }

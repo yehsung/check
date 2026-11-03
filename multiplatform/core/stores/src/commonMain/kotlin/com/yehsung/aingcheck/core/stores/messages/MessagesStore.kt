@@ -765,7 +765,6 @@ class MessagesStore(
             var succeeded = false
             var cancelled = false
             var refreshesDirectory = false
-            var refreshesNowDirectory = false
             suspend fun roundTrip(): Result<PokeSendResponse> = try {
                 Result.success(context.withSessionRetry { session -> service.sendMessage(session.accessToken, peerID, body, localID) })
             } catch (error: Throwable) {
@@ -789,12 +788,10 @@ class MessagesStore(
                     }
                     notice = MessagesSendRules.notice(outcome, response.maxLength)
                     succeeded = outcome == MessageSendOutcome.Ok
+                    // ★ 게이트가 켜졌으면 지금 탭 명부도 받는다(겹치기 순서 함정 — [refreshPeopleDirectories]). 상대를 여기서 집중으로 찍지는 않는다
+                    //   ([isPeerFocused] 주석). `target_focused` 문구는 명부가 그 사람을 집중으로 알게 되면 상태로 넘어간다([settleFocusNotices]).
                     refreshesDirectory = outcome == MessageSendOutcome.TargetNotWorking ||
                         (focusSendGate && outcome == MessageSendOutcome.TargetFocused)
-                    // ★ 게이트가 켜졌으면 지금 탭 명부도 받는다(겹치기 순서 함정): 판과 집중 판정은 지금 탭 명부가 메시지 명부를 **덮는다**
-                    //   ([MessagesFocusRules.focusedPeerIDs]). 메시지 명부만 다시 받으면 지금 탭이 쥔 옛 값이 이겨 칩·잠금이 다음 60초 틱까지 안 따라온다.
-                    //   상대를 여기서 집중으로 찍지는 않는다([isPeerFocused] 주석).
-                    refreshesNowDirectory = focusSendGate && refreshesDirectory
                     // 내 집중으로 거절했다 — 이 폰은 몰랐다. 켜짐으로 들인다. 문구는 [sendNotices] 에 적지 않는다: 켜짐을 들인 순간부터 [focusBlock] 이
                     // 같은 문장(MessageNoticeText.senderFocused)을 입력줄에 띄우고, 맥에서 끈 값을 받으면 그 줄과 함께 사라진다. 적어 두면 집중이 풀린 뒤에도
                     // "맥에서 집중을 끄면 보낼 수 있어요"가 켜진 [보내기] 위에 남는다(아이폰 1.0.17 99bd480d · 검토 F1).
@@ -830,8 +827,7 @@ class MessagesStore(
             // 되돌리는 쪽만 입력칸을 만진다. "비어 있을 때만" — 왕복 중에 새로 친 글을 실패한 옛 글이 덮으면 안 된다.
             if (restoresDraftOnFailure && draft(peerID).isEmpty()) drafts = drafts + (peerID to body)
             if (!cancelled && notice != null) sendNotices = sendNotices + (peerID to notice)
-            if (refreshesDirectory) loadDirectory(force = true)
-            if (refreshesNowDirectory) nowStore?.refresh()
+            if (refreshesDirectory) refreshPeopleDirectories()
         }
         return true
     }
@@ -854,6 +850,30 @@ class MessagesStore(
         while (runtime.unconfirmedSends.size > 16) runtime.unconfirmedSends.removeAt(0)
     }
 
+    /**
+     * 사람 명부 **둘**을 지금 다시 받는다 — 메시지 명부([loadDirectory] force)와 (게이트가 켜졌으면) 지금 탭 명부([NowStore.refresh]).
+     * 집중 판정([isPeerFocused] — [MessagesFocusRules.focusedPeerIDs])은 지금 탭 명부가 메시지 명부를 **받은 시각과 상관없이 덮는다** — 메시지 명부만
+     * 다시 받으면 지금 탭이 쥔 최대 60초 낡은 값이 이겨, 방금 집중을 끈 사람의 칩·잠금이 다음 틱까지 남는다(아이폰 1.0.17 99bd480d · 검토 F5).
+     * 부르는 자리: 서버 거절(`target_focused` · `target_not_working` — [performSend]) · 새 대화 시트의 [다시 시도]. 사람이 누를 때만 일어난다.
+     * 게이트가 꺼진 조립(Windows v1 동결)은 지금처럼 메시지 명부만 받는다.
+     */
+    fun refreshPeopleDirectories() {
+        loadDirectory(force = true)
+        if (focusSendGate) nowStore?.refresh()
+    }
+
+    /**
+     * 사람 명부가 새로 섰다(메시지 명부는 [loadDirectory] 끝 · 지금 탭 명부는 폰 조립이 잇는 `NowStore.onDirectoryApplied`). 서버 거절로 세운 상대 집중
+     * 문구(`target_focused`)를 명부가 그 사람을 **집중으로 알게 된 뒤** 걷는다: 그때부터는 [focusBlock] 이 같은 문장을 띄우고, 상대가 끄면 그 줄과 함께
+     * 사라진다(아이폰 1.0.17 `settleFocusNotices` · 검토 F2). 명부가 아직 모르면(옛 7칸 서버 · 조회 실패 · 다른 명부가 더 낡음) 남긴다 — 그동안 유일한
+     * 사유이고, 다음 전송이 지운다. 게이트가 꺼졌으면 [isPeerFocused] 가 언제나 거짓이라 아무것도 걷지 않는다.
+     */
+    fun settleFocusNotices() {
+        if (!focusSendGate) return
+        val settled = sendNotices.filter { (peerID, notice) -> notice == MessageNoticeText.targetFocused && isPeerFocused(peerID) }.keys
+        if (settled.isNotEmpty()) sendNotices = sendNotices - settled
+    }
+
     /** `app_user_directory`(읽기). 새 대화 시트가 설 때 · 이름을 모르는 대화가 설 때. */
     fun loadDirectory(force: Boolean = false) {
         if (!isSignedIn || directoryLoading) return
@@ -874,6 +894,7 @@ class MessagesStore(
                     .sortedForPokeDisplay(unreadPeerIDs = emptySet(), workKnown = true, collation = collation)
                 directoryLoaded = true
                 directoryFailed = false
+                settleFocusNotices()
             } catch (error: Throwable) {
                 if (generation != context.generation) return@launch
                 directoryLoading = false

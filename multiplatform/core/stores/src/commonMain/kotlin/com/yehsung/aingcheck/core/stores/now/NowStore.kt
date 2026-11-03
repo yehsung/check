@@ -110,6 +110,12 @@ class NowStore(
      */
     var onPeriodicTick: () -> Unit = {}
 
+    /**
+     * 전체 명부(`app_user_directory`)를 새로 받아 세운 뒤 한 번(판 7 — iOS 1.0.17 NowStore 의 `context.links.messages?.settleFocusNotices()` 자리).
+     * 메시지의 상대 집중 판정은 이 명부가 이긴다 — 폰 조립이 서버 거절로 세운 '집중 중' 문구를 상태로 넘기는 일을 잇는다. 안 이은 조립(데스크톱 · 시험)은 아무 일도 안 한다.
+     */
+    var onDirectoryApplied: () -> Unit = {}
+
     /** 상태 카드의 연속 근무 칩(읽기만 — 새 서버 호출 없음). 나 탭 미션 조회가 앞에 올 때마다 탭과 무관하게 받아 둔 값이다. */
     val myStreakDays: Long? get() = streakDaysSource()
 
@@ -438,6 +444,7 @@ class NowStore(
             if (!stillCurrent()) return
             directory = rows
             hasLoadedDirectory = true
+            onDirectoryApplied()
         } catch (error: Throwable) {
             if (!stillCurrent()) return
             if (isMissingDeviceFunction(error)) {

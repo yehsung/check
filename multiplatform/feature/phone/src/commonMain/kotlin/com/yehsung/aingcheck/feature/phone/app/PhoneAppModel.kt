@@ -263,6 +263,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         messages.nowStore = now
         // 지금 탭 60초 틱에 내 집중 다시 묻기를 잇는다(켜짐으로 알고 대화가 떠 있을 때만 — 조건은 메시지 스토어가 판정한다).
         now.onPeriodicTick = { messages.refreshMyFocusModeIfFocused() }
+        // 지금 탭 명부가 새로 서면 서버 거절로 세운 '집중 중' 문구를 상태로 넘긴다(집중 판정은 이 명부가 이긴다 — MessagesStore.settleFocusNotices).
+        now.onDirectoryApplied = { messages.settleFocusNotices() }
         messages.router = router
         // 차단은 메시지·찌르기·게임을 **함께** 막는 관계다 — 차단한 사람이 큐브 로비·공개 방·받은 초대에 남지 않게(맥 WorkTimerStore `rummy.setHiddenPeers`). 스토어는 UUID 로 받는다.
         messages.onHiddenBlockedPeersChange = { ids -> rummy.setHiddenPeers(ids.mapNotNull { SwiftUUID.parse(it) }.toSet()) }

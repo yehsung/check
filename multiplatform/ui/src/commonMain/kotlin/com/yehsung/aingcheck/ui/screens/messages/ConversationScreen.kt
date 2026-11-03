@@ -625,7 +625,8 @@ private fun BubbleContent(
             Modifier
                 .background((if (isMine) colors.accentFill else colors.bubbleIn).copy(alpha = if (isPending) 0.6f else 1f), RoundedCornerShape(BUBBLE_RADIUS))
                 // 판 7 고르기 메뉴의 거름 · [신고](받은 말풍선만) — 고르기 칸의 조상에 단다. 꺼진 조립(Windows)은 예전 그대로(아무것도 안 단다).
-                .then(if (formatting) Modifier.chatBubbleSelectionMenu(onReport) else Modifier)
+                // [신고]는 고른 구간을 먼저 지우고 신고를 연다(아이폰 reportFromMenu — 시트 뒤에 강조가 남지 않게 · 검토 F2).
+                .then(if (formatting) Modifier.chatBubbleSelectionMenu(onReport?.let { report -> { hit?.selection?.clear(); report() } }) else Modifier)
                 .padding(start = 13.dp, end = 13.dp, top = 8.dp, bottom = 9.dp),
         ) {
             if (formatting) {

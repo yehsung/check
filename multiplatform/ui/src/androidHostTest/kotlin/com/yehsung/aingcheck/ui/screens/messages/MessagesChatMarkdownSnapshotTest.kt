@@ -544,6 +544,44 @@ class MessagesChatMarkdownSnapshotTest {
         }
     }
 
+    /**
+     * 받은 말풍선 고르기 메뉴의 [이 메시지 신고하기](검토 F2 — 아이폰 0860faf1 reportFromMenu 는 고른 구간을 지우고 신고를 연다): 신고 시트를 열면서
+     * 고른 구간을 지운다 — 시트 뒤에 강조가 남지 않고, 시트를 닫고 돌아와도 말풍선이 고른 채가 아니다.
+     * 잰다: 신고 시트가 떴고 · 그 뒤 고르기 칸의 [복사]가 아무것도 안 쓴다(고른 글이 없으면 고르기 칸은 붙여넣기판을 안 부른다).
+     * 기준선: 같은 고르기에서 신고 없이 [복사]를 누르면 고른 글을 쓴다(이 재기가 고르기를 본다).
+     */
+    @OptIn(ExperimentalTestApi::class)
+    @Test fun reportFromTheSelectionMenuClearsTheSelection() {
+        load(mapOf(id("e00a") to "[자료](https://a.example/doc) 끝 **굵게**"))
+        val menu = RecordingMenu()
+        withTouchSelection {
+            runComposeUiTest {
+                setContent { SelectingScene(menu) }
+                waitForIdle()
+                val bubble = onNodeWithTag(MessagesTags.bubble(id("e00a")))
+                // 기준선: 고른 채 [복사]는 쓴다.
+                bubble.performTouchInput { longClick(Offset(38f, 26f)) }
+                awaitMenu(menu, 1)
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("기준선: 고른 채 [복사]가 안 썼다 — 이 시험이 고르기를 못 본다", "자료 (https://a.example/doc)", clip()?.toString())
+                // 다시 골라 [신고].
+                mainClock.advanceTimeBy(1_000)
+                bubble.performTouchInput { longClick(Offset(38f, 26f)) }
+                awaitMenu(menu, 2)
+                assertEquals(ChatBubbleSelection.ReportKey, menu.keys.last())
+                menu.click(ChatBubbleSelection.ReportKey)
+                waitForIdle()
+                onNodeWithTag(MessagesTags.REPORT_SHEET).assertExistsCompat()
+                systemClipboard.setPrimaryClip(android.content.ClipData.newPlainText("", "전"))
+                menu.click(TextContextMenuKeys.CopyKey)
+                waitForIdle()
+                assertEquals("[신고]가 고른 구간을 안 지웠다 — 시트 뒤에 강조가 남는다", "전", clip()?.toString())
+            }
+        }
+    }
+
     /** 고르는 중이면 링크 위 한 번 누름은 고른 것을 지울 뿐 열지 않는다 — 다음 누름(고르는 중 아님)은 연다. */
     @OptIn(ExperimentalTestApi::class)
     @Test fun aTapWhileSelectingClearsTheSelectionInsteadOfOpeningTheLink() {

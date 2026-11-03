@@ -6,7 +6,6 @@ import { Headline } from "@/components/ui/Headline";
 import { glassButtonClass } from "@/components/glass/GlassButton";
 import { GlassFx } from "@/components/glass/GlassFx";
 import { LINKS, type ReleaseInfo } from "@/data/fixtures";
-import { ANDROID_COPY } from "@/data/install-copy";
 import { OutroStage } from "./OutroStage";
 import { OUTRO } from "./copy";
 
@@ -18,13 +17,14 @@ import { OUTRO } from "./copy";
 // - 버튼 줄은 두 벌을 SSR 하고 폭·플랫폼으로 하나만 보인다(히어로와 같은 규칙 — §9.4.4):
 //   ≥768 · iOS 아님(§8 순서): Mac용 다운로드(DownloadCTA — 클릭하면 설치 선택 창 §11) · brew 알약(복사 → 복사했어요) · App Store 배지.
 //   폰(< 768) · iOS 기기: App Store 배지가 먼저 · Mac용 다운로드(투명 유리 → 설치 절 — 폰에 DMG 는 쓸모없다) 한 줄.
-//   폰 · 안드로이드 기기(<html data-android> — §12): 배지 자리에 안드로이드 베타 받기(보라 유리 주 버튼 48 → #android) — 히어로와 같다.
+//   폰 · 안드로이드 기기(<html data-android> — §12): 배지를 숨기고 Mac용 다운로드(→ 설치 절)가 줄을 채운다 — 히어로와 같다.
+//   [ANDROID-LAUNCH] 정식 출시 때 배지 자리에 Play 스토어 버튼(LINKS.androidStore · 새 탭).
 //   brew 알약은 폰에서 한 줄에 안 들어가 숨긴다(§9.4.3 — 설치 절 터미널이 보여 준다). 배지 사방 여백 = 높이/4(애플 규칙, <a> 패딩) —
 //   가로 줄에서는 위아래 여백만 줄 높이에서 뺀다.
 // - 아잉 폭 --aing-w 를 이 절에서 정한다: phone 132 · tab 156 · desk clamp(160, 22svh, 208).
 //   1440×900: 받침+아잉 ≈ 247 → H2 → 한 줄 → 버튼 줄 → 절 ≈ 680(그 아래 푸터까지 한 화면).
 
-/** 안드로이드 기기(§12): 폰 벌의 Mac용 다운로드는 안드로이드 주 버튼과 함께 늘어나 줄을 채운다(배지의 −12px 짝 ml-3 은 뗀다) */
+/** 안드로이드 기기(§12): 배지를 숨기니 폰 벌의 Mac용 다운로드가 늘어나 줄을 채운다(배지의 −12px 짝 ml-3 은 뗀다) */
 const ANDROID_GROW = "[html[data-android]_&]:ml-0 [html[data-android]_&]:grow";
 
 const SECTION =
@@ -62,14 +62,6 @@ export function Outro({ release }: { release?: ReleaseInfo } = {}) {
       {/* 폰 · iOS: 배지 먼저(히어로와 같은 순서) */}
       <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 tab:hidden desk:hidden [html[data-platform=ios]_&]:flex">
         <AppStoreBadge height={48} placement="outro-phone" className="-m-3 [html[data-android]_&]:hidden" />
-        <a
-          href={LINKS.android}
-          data-cta="outro-android"
-          className={glassButtonClass("primary", "l", "hidden grow [--b-h:48px] [--b-px:22px] [html[data-android]_&]:inline-flex")}
-        >
-          {ANDROID_COPY.phoneCta}
-          <GlassFx specular />
-        </a>
         <a href={LINKS.install} data-cta="outro-install" className={glassButtonClass("glass", "l", `ml-3 [--b-h:48px] [--b-px:22px] ${ANDROID_GROW}`)}>
           {OUTRO.cta}
           <GlassFx specular />

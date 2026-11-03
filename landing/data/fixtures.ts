@@ -83,12 +83,10 @@ export const LINKS = {
   terms: 'https://yehsung.github.io/check/terms', github: 'https://github.com/yehsung/check',
   issues: 'https://github.com/yehsung/check/issues', licenses: '/licenses',
   install: '/#install', // 폰(< 768)·iOS 의 'Mac용 다운로드'·메뉴바 [다운로드] — DMG 대신 설치 절로(docs/v3/brief.md §9.2 · §9.4)
-  // 안드로이드 베타(Play 비공개 테스트 — docs/v3/brief.md §12). 이 순서로만: 구글 그룹 가입 → 웹에서 테스터 되기 → Play 스토어 설치
-  // (스토어 페이지는 1·2 를 마친 계정에서만 보인다). 화면 단계 순서는 ANDROID_COPY.steps(data/install-copy.ts)가 이 키로 가리킨다.
-  androidGroup: 'https://groups.google.com/g/aingcheck-android-beta',
-  androidTesting: 'https://play.google.com/apps/testing/com.yehsung.aingcheck',
+  // 안드로이드(docs/v3/brief.md §12): Play 스토어 출시 준비 중. 베타 세 단계(구글 그룹 · 웹 테스터 등록)는 11-03 에 내렸다.
+  // [ANDROID-LAUNCH] 정식 출시 때 설치 절 카드 버튼이 이 주소로 간다(지금은 화면 어디에도 쓰지 않는다 — 비로그인이면 404).
   androidStore: 'https://play.google.com/store/apps/details?id=com.yehsung.aingcheck',
-  android: '/#android', // 설치 절 안드로이드 카드(폰 첫 화면 '안드로이드 베타 받기' · 선택 창 칩 · 데스크톱 QR)
+  android: '/#android', // 설치 절 안드로이드 카드(옛 QR·공유 링크가 이 자리로 온다)
 } as const;
 export const APP_STORE_ID = '6812768622';
 // upgrade: 앱의 [명령 복사]와 같은 문자열 — 탭이 낡았으면 `brew upgrade` 만으로는 '이미 최신'으로 끝난다(DECISIONS D18).

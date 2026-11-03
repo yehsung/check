@@ -51,10 +51,6 @@ export type SeoLinks = {
   readonly support: string;
   readonly licenses: string;
   readonly install: string;
-  /** 안드로이드 베타 세 단계 주소(ANDROID_COPY.steps[].link — 그룹 가입 · 테스터 되기 · Play 스토어) */
-  readonly androidGroup: string;
-  readonly androidTesting: string;
-  readonly androidStore: string;
 };
 export type SeoChoice = Pick<InstallChoice, "file" | "label" | "version" | "mb">;
 export type SeoFooterLink = { readonly id: string; readonly label: string; readonly href: string };
@@ -269,21 +265,12 @@ export interface LlmsInput {
 }
 
 /**
- * llms.txt 설치 묶음의 안드로이드 한 줄(docs/v3/brief.md §12 — 설치 절 안드로이드 카드 글자 그대로, ANDROID_COPY 에서 조립):
- * '- Android(베타): {한 줄} 1) [구글 그룹 가입](…) 2) [웹에서 테스터 되기](…) 3) [Play 스토어에서 설치](…) — {같은 계정 경고}'.
- * 단계 순서 = 화면 순서(실제로 이 순서여야 한다). 안드로이드 MobileApplication LD 는 싣지 않는다(비공개 테스트 — 스토어 페이지가 테스터에게만 보인다).
+ * llms.txt 설치 묶음의 안드로이드 한 줄(docs/v3/brief.md §12 — 설치 절 안드로이드 카드 글자 그대로): '- Android: {한 줄}'.
+ * Play 스토어 출시 준비 중이라 주소가 없다(10-30 베타 세 단계 주소는 11-03 에 내렸다). 안드로이드 MobileApplication LD 도 싣지 않는다.
+ * [ANDROID-LAUNCH] 정식 출시 때 '- Android: [Play 스토어](LINKS.androidStore) — …' 꼴로 바꾸고 LD 를 다시 본다.
  */
-export function androidLine(links: Pick<SeoLinks, "androidGroup" | "androidTesting" | "androidStore">): string {
-  const steps = ANDROID_COPY.steps.map((s, i) => `${i + 1}) [${s.name}](${links[s.link]})`).join(" ");
-  return `- Android(베타): ${ANDROID_COPY.line} ${steps} — ${ANDROID_COPY.warn}`;
-}
-
-/**
- * llms.txt 안드로이드 줄 아래 문제 해결(§12.6 — 카드의 접는 <details> 글자 그대로): 요약 줄 하나 + 항목 셋(화면 순서) — 들여 쓴 목록.
- * '  - 3단계에서 앱이 안 보이나요?' · '    - Play 스토어 앱 …' …
- */
-export function androidHelpLines(): string[] {
-  return [`  - ${ANDROID_COPY.helpTitle}`, ...ANDROID_COPY.helpItems.map((t) => `    - ${t}`)];
+export function androidLine(): string {
+  return `- Android: ${ANDROID_COPY.line}`;
 }
 
 /** 내비 링크 경로(data/site-links NAV_LINKS) — llms.txt 본문 묶음의 이름표가 이 내비 이름이다. */
@@ -316,8 +303,7 @@ export function llmsTxt({ links, brewInstall, choice, live, publishedAt, footerL
       `- Homebrew: \`${brewInstall}\` — ${INSTALL_COPY.sub}`,
       `- DMG: [${choice.label}](${downloadUrl}) — ${dmgMeta}. ${INSTALL_COPY.dmgLine}`,
       `- iPhone: [App Store](${links.appStore}) — ${INSTALL_COPY.iphoneMeta}`,
-      androidLine(links),
-      ...androidHelpLines(),
+      androidLine(),
       `- [GitHub 릴리스](${links.releases})${releaseNote}`,
     ]),
     ...block(nav(NAV_HREF.features), FEATURE_COPY.map((c) => `- ${c.title.join(" ")}: ${c.body}`)),

@@ -9,14 +9,14 @@
 // 창(role="dialog", 비모달, 접근 이름 CHOOSER_COPY.ariaLabel): thick 유리 판 하나를 document.body 로 포털한다(절의 isolate·overflow 밖).
 //   z: 메뉴바 창(fixed) = 메뉴바(--z-nav 50) 위 60 · 히어로·아웃트로 창(absolute) = 메뉴바 바로 아래 49 — 열어 둔 채 스크롤해도 메뉴바를 덮지 않는다.
 //   내용 순서: Homebrew 제목 + [복사](진짜 복사 — BREW.install) · 한 줄 · 명령(한 줄) / 구분선 / DMG 줄 전체 = /api/download 링크 /
-//   휴대폰 앱 줄(§12 — 칩 [아이폰] = App Store 새 탭 · [안드로이드 베타] = /#android) / 설치 방법 자세히 보기(/#install).
+//   휴대폰 앱 줄(§12 — 칩 [아이폰] = App Store 새 탭 · 안드로이드는 링크 없는 글자 '안드로이드 출시 준비 중') / 설치 방법 자세히 보기(/#install).
 // 자리: computePlacement(chooser-logic.ts — 순수 함수, 값 시험). 열 때 · 창 크기가 바뀔 때 · 메뉴바 창은 스크롤할 때 · 방아쇠(조상)의 등장 애니메이션이
 //   도는 동안 매 프레임 JS 로 잰다(CSS anchor 없음 — Safari 도 같다). 기준은 방아쇠 + CTA 줄([data-chooser-row]) — 폭이 좁아 brew 알약이 아래 줄로
 //   내려가면 창이 알약을 반쯤 덮지 않게 줄 아래에 연다. 메뉴바 방아쇠는 fixed, 나머지는 문서 기준 absolute(스크롤하면 방아쇠와 함께 간다).
 //   위아래 어디에도 다 안 들어가면(낮은 노트북 창의 페이지 끝 아웃트로) 덜 굴리는 쪽으로 열고 모자란 만큼 페이지를 바로 굴린다.
 // 포커스: 열면 첫 행동(복사 버튼)으로 · Tab/Shift+Tab 은 늘 직접 옮겨 창 안에서 돈다(Safari 처럼 링크를 건너뛰는 브라우저도 같다) · 창이 열린 채
 //   포커스가 창 밖(창 안 글자를 클릭해 body 로 빠진 때 등)이면 Tab 이 창 안으로 돌아온다 · Esc = 닫고 방아쇠로 · 바깥 클릭 = 닫기 ·
-//   DMG 줄 · [아이폰](새 탭) = 내려받기/열기 + 닫고 방아쇠로 · '설치 방법 자세히 보기' · [안드로이드 베타] = 닫고 설치 절(그 카드)로
+//   DMG 줄 · [아이폰](새 탭) = 내려받기/열기 + 닫고 방아쇠로 · '설치 방법 자세히 보기' = 닫고 설치 절로
 //   (방아쇠로 되돌리면 스크롤이 히어로로 돌아간다) ·
 //   폭을 폰으로 줄여 방아쇠가 숨으면 닫고, 포커스가 창에 있었으면 같은 자리의 폰 짝 링크(*-install)로 넘긴다. 한 번에 하나만 열린다.
 // 움직임: 열 때 opacity·scale 140–160ms(@starting-style — 미지원 브라우저는 그냥 나타난다), 감속 모션이면 전이 없음. 위치가 고정이라 레이아웃 이동 0.
@@ -392,9 +392,10 @@ export function InstallChooser({ placement, label, ariaLabel, className, meta }:
                 >
                   {CHOOSER_COPY.phoneIphone}
                 </a>
-                <a href={LINKS.android} tabIndex={0} data-cta="chooser-android" className="gbtn gbtn--chip ic-chip" onClick={() => close(false)}>
+                {/* [ANDROID-LAUNCH] 정식 출시 때 [안드로이드] 칩(LINKS.androidStore · 새 탭 · close(true))으로 바꾼다 */}
+                <span data-chooser-android="" className="ic-soon">
                   {CHOOSER_COPY.phoneAndroid}
-                </a>
+                </span>
               </div>
             </div>
             <a href={LINKS.install} tabIndex={0} data-cta="chooser-install" className="ic-more" onClick={() => close(false)}>

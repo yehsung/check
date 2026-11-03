@@ -1515,10 +1515,14 @@ struct InviteCodeInlineRow: View {
 
 // MARK: - Pasteboard helper
 
-/// NSPasteboard 복사 래퍼. 참여코드 공유(복사 버튼)에 쓴다.
+/// NSPasteboard 복사 래퍼. 참여코드 공유(복사 버튼)·말풍선 [복사]에 쓴다. **서식 없는 글자 하나만** 쓴다.
 enum CheckPasteboard {
     static func copy(_ string: String) {
-        let pasteboard = NSPasteboard.general
+        copy(string, to: .general)
+    }
+
+    /// 판을 고르는 갈래 — 시험이 이름 붙인 별도 판을 준다(사용자의 붙여넣기판을 덮지 않게). 앱은 위 `.general` 갈래다.
+    static func copy(_ string: String, to pasteboard: NSPasteboard) {
         pasteboard.clearContents()
         pasteboard.setString(string, forType: .string)
     }

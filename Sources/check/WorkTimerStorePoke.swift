@@ -47,6 +47,10 @@ extension WorkTimerStore {
     /// 대상이 집중 모드일 때의 안내. 몫도 쿨타임도 소모되지 않았다는 사실까지 말해 준다 —
     /// 안 그러면 사용자는 "한 번 날린 건가?" 하고 남은 횟수를 잘못 센다.
     nonisolated static let targetFocusedNotice = "지금 집중 중이에요. 나중에 찔러 주세요"
+    /// **내가** 집중 모드일 때 보내기를 막는 사유(대표 요청 6 원문: "집중모드중인 사람들은 남들 찌르거나 메세지 못보내게 해줘.
+    /// (자기는 못받으면서 남들한텐 할 수 있는게 안맞음)"). 찌르기·울트라·메시지·이모티콘이 **같은 한 문장**을 쓴다 —
+    /// 사정이 하나이므로 설명도 하나여야 한다. 푸는 길(집중 끄기)은 콕찌르기 안내줄과 집중 버튼이 말한다.
+    nonisolated static let myFocusBlocksSendingNotice = "집중 모드에서는 찌르기와 메시지를 보낼 수 없어요"
     /// 대상이 폰으로만 근무 중이라 받아 줄 맥이 없을 때의 안내(0.3.51 — 서버 `target_on_phone`). 찌르기는 맥에서만 뜬다.
     /// 집중 모드 안내와 같은 모양으로 '언제 다시 하면 되는지'까지 말한다 — 몫도 쿨타임도 안 탔으니 그때 그대로 찌르면 된다.
     nonisolated static let targetOnPhoneNotice = "폰으로 근무 중이에요. 맥으로 돌아오면 찔러 주세요"
@@ -70,13 +74,59 @@ extension WorkTimerStore {
         Task { @MainActor in await performLoadPokeDirectory() }
     }
 
-    /// refresh 루프 전용 — **팝오버가 열려 있고** 패널이 노출 중일 때만 재조회.
+    /// refresh 루프 전용 — **팝오버가 열려 있고** 콕찌르기 목록이나 1:1 대화 화면이 노출 중일 때만 재조회.
     /// isPokePanelVisible 은 팝오버를 닫아도 내려가지 않는다('마지막으로 본 패널'을 다음 오픈에 그대로 보여 주기
     /// 위한 값이다). 그래서 이 플래그만 보면 닫힌 팝오버가 app_user_directory(6.4KB/37행)를 30초마다 두드린다
     /// (v0.2.38 Q7 계측). 다시 열리는 순간의 1회 갱신은 setMenuPresented(true) 의 loadPokeDirectory() 가 맡는다.
+    ///
+    /// ★ **대화 화면도 같은 주기다**(2026-11-03 — 대표 요청 5). 대화 머리의 상대 상태메시지·집중 표시와 [보내기] 잠금이 이 명부를 읽는데,
+    ///   대화를 여는 순간 isPokePanelVisible 이 내려가므로(openMessagePanel) 옛 가드로는 대화에 머무는 동안 명부가 영영 낡았다 —
+    ///   상대가 대화 중에 집중을 켜도 화면은 보내기를 열어 둔 채 서버 거절만 받았다. 두 화면은 상호 배타라 30초 틱당 요청은 여전히 한 건이다.
     func refreshPokeDirectoryIfVisible() async {
-        guard isMenuPresented, isPokePanelVisible else { return }
+        guard isMenuPresented, isPokePanelVisible || isMessagePanelVisible else { return }
         await performLoadPokeDirectory()
+        await refreshMyFocusModeIfFocused()
+    }
+
+    /// 서버가 보내기를 **내 집중**으로 거절했다(status `sender_focused` — 2026-11-03 서버 차단, 대표 결정 "지금 서버에서도 막기").
+    /// 이 맥은 그 집중을 몰랐다(알았으면 `focusSendBlock` 이 요청 전에 막았다) — 다른 맥에서 켰거나 로그인 뒤 바뀌었다. 서버값을
+    /// 로그인 때와 같은 문(`applyServerFocusMode`)으로 들인다: 날아가는 PATCH·요청 뒤 이 맥에서 고른 것이 있으면 이 응답이 낡았으니 덮지 않는다.
+    func adoptServerSenderFocused(intentSerialAtRequest: Int) {
+        applyServerFocusMode(true, intentSerialAtRequest: intentSerialAtRequest)
+    }
+
+    /// 내 집중 값을 서버에서 다시 읽는다 — **이 맥이 집중이라고 알고 있을 때만**(2026-11-03 검토 P2).
+    /// 요청 6 게이트(`focusSendBlock` 의 `.myself`)는 이 맥의 `focusMode` 하나를 본다. 그런데 서버값은 로그인 때 한 번만 읽는다
+    /// (`loadTokenUsagePrivacyIfNeeded`). 그래서 같은 계정의 다른 맥에서 끄면(1단 만료 포함) 이 맥은 재시작 전까지 켜짐을 쥐고
+    /// 아무에게도 못 보낸다 — 예전엔 버튼 표시만 틀렸지만 이제는 실제로 막힌다. 대표처럼 맥을 두 대 쓰는 사람이 바로 걸린다.
+    /// 부르는 자리: 팝오버를 여는 순간(`setMenuPresented`) · 콕/대화 화면이 열린 동안의 30초 틱(`refreshPokeDirectoryIfVisible`).
+    /// 꺼진 맥은 묻지 않는다(요청 0) — 반대 방향(다른 맥이 켬)은 막을 것을 못 막는 쪽이라 옛 앱·폰과 같은 클라 게이트의 한계로 둔다.
+    /// 반영은 로그인 때와 같은 `applyServerFocusMode` 다 — 날아가는 PATCH·방금 누른 선택이 있으면 이 응답이 낡았으니 덮지 않는다.
+    /// 서버가 모른다(행·칸 없음 · 실패)면 아무것도 바꾸지 않는다.
+    func refreshMyFocusModeIfFocused() async {
+        guard focusMode, session != nil, focusPatchInFlight == nil else { return }
+        let generation = sessionGeneration
+        let intentAtRequest = focusIntentSerial
+        let fetched = try? await withSessionRetry { activeSession in
+            try await service.fetchMyFocusMode(accessToken: activeSession.accessToken, userID: activeSession.userID)
+        }
+        guard generation == sessionGeneration, let serverOn = fetched ?? nil else { return }
+        applyServerFocusMode(serverOn, intentSerialAtRequest: intentAtRequest)
+    }
+
+    // MARK: 집중 선게이트(2026-11-03 — 대표 요청 5·6)
+
+    /// 그 사람이 지금 집중 중인가 — 명부(app_user_directory) 한 곳에서 읽는다. 명부에 없거나 서버가 칸을 안 보내면 false(모름 = 막지 않는다).
+    /// 원본 `pokeDirectory` 를 본다(차단 숨김을 거른 판이 아니다) — 숨김은 화면 목록의 일이지 이 사람의 상태가 아니다.
+    func isPeerFocused(_ userID: String) -> Bool {
+        pokeDirectory.first { $0.userID == userID }?.isFocused ?? false
+    }
+
+    /// 그 사람에게 **집중 모드 때문에** 지금 못 보내는 사유(nil = 집중은 막지 않는다). 찌르기·울트라·메시지·이모티콘의 스토어 가드와
+    /// 화면 잠금(행의 찌르기 버튼 · [보내기] · Enter · 이모티콘)이 **전부 이 규칙 하나**를 본다(memory client-gates-come-in-pairs —
+    /// 스토어만 막으면 화면이 눌리는 척하고, 화면만 막으면 다른 문이 샌다). 내 집중이 상대 집중보다 앞이다(`FocusSendBlock.of`).
+    func focusSendBlock(to userID: String?) -> FocusSendBlock? {
+        FocusSendBlock.of(myFocus: focusMode, peerFocused: userID.map(isPeerFocused) ?? false)
     }
 
     /// app_user_directory RPC 로 앱 사용자 전체(본인 제외)를 받아 근무중 먼저·이름순으로 반영한다.
@@ -112,7 +162,15 @@ extension WorkTimerStore {
             pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
             return
         }
+        // 집중 선게이트(2026-11-03): 내가 집중이면(요청 6) · 명부가 상대를 집중이라 말하면(요청 5) 요청을 내지 않는다. 짝은 행의 찌르기 버튼
+        // (`PokeDirectoryRowView.pokeBlockedReason`) — 같은 규칙(`focusSendBlock`)에 같은 문장이다. 명부가 모르면 서버가 판정한다(target_focused).
+        if let block = focusSendBlock(to: userID) {
+            pokeNotice = block.pokeText
+            return
+        }
         let generation = sessionGeneration
+        // 보내기 **전의** 집중 선택 번호 — sender_focused 를 받았을 때 그 사이 이 맥에서 고른 것이 있으면 서버값으로 덮지 않는다.
+        let focusIntentAtRequest = focusIntentSerial
         Task { @MainActor in
             do {
                 let response = try await withSessionRetry { activeSession in
@@ -140,10 +198,18 @@ extension WorkTimerStore {
                     loadPokeDirectory()
                 case .targetFocused:
                     pokeNotice = Self.targetFocusedNotice
+                    // 명부가 그 사람을 집중 아님으로 알고 있었다는 뜻이다(알았으면 선게이트가 요청을 막았다) — 다시 받아 '집중' 칩과
+                    // 버튼 잠금을 따라가게 한다(target_not_working 과 같은 처리). 문구는 위 한 줄 그대로 둔다.
+                    loadPokeDirectory()
                 case .targetOnPhone:
                     // 폰으로만 근무 중 — 받는 쪽이 맥뿐이라 서버가 거절했다(쿨타임 기록 없음). 디렉토리는 낡지 않았다:
                     // 그 사람은 정말 근무 중이다. 그래서 재조회하지 않는다.
                     pokeNotice = Self.targetOnPhoneNotice
+                case .senderFocused:
+                    // 서버가 **내** 집중을 이유로 거절했다(2026-11-03 서버 차단). 이 맥은 몰랐다(알았으면 선게이트가 막았다) —
+                    // 다른 맥에서 켰다. 서버값을 이 맥에 들여 찌르기 버튼·[보내기] 잠금이 따라오게 한다(`adoptServerSenderFocused`).
+                    pokeNotice = Self.myFocusBlocksSendingNotice
+                    adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -155,7 +221,7 @@ extension WorkTimerStore {
         }
     }
 
-    /// 울트라 찌르기. 선게이트는 일반 sendPoke 와 **정확히 같다**(로그인 + 근무중). 잔량은 여기서 막지 않는다.
+    /// 울트라 찌르기. 선게이트는 일반 sendPoke 와 **정확히 같다**(로그인 + 근무중 + 집중 — 2026-11-03). 잔량은 여기서 막지 않는다.
     /// 서버 게이트 순서는 invalid → 보낸이근무 → 대상근무 → 집중모드 → 관리자 → 재화 → 쿨타임이고,
     /// 여기 매핑도 그 어휘를 따른다(docs/ultra-economy.md §3 — 그 순서가 계약이다).
     ///
@@ -170,7 +236,15 @@ extension WorkTimerStore {
             pokeNotice = "근무 중일 때만 콕 찌를 수 있어요"
             return
         }
+        // 집중 선게이트 — sendPoke 와 **같은 줄**이다(울트라는 같은 찌르기 버튼을 3초 누르는 것이라 화면 잠금도 하나다).
+        // 재화는 건드리지 않는다: 요청이 안 나갔으니 깎일 것도 없다.
+        if let block = focusSendBlock(to: userID) {
+            pokeNotice = block.pokeText
+            return
+        }
         let generation = sessionGeneration
+        // 보내기 **전의** 집중 선택 번호 — sender_focused 를 받았을 때 그 사이 이 맥에서 고른 것이 있으면 서버값으로 덮지 않는다.
+        let focusIntentAtRequest = focusIntentSerial
         Task { @MainActor in
             do {
                 let response = try await withSessionRetry { activeSession in
@@ -225,9 +299,15 @@ extension WorkTimerStore {
                     // 집중 모드도 재화를 태우지 않는다 — 서버가 재화 차감보다 **앞에서** 거절하므로
                     // 여기서 잔량을 건드리면 안 된다(멀쩡한 재화를 화면에서만 깎게 된다).
                     pokeNotice = Self.targetFocusedNotice
+                    // 낡은 명부를 다시 받는다(sendPoke 의 같은 분기와 같은 이유).
+                    loadPokeDirectory()
                 case .targetOnPhone:
                     // 폰으로만 근무 중 — 서버가 관리자 분기·재화(ultra_wallet_touch)보다 **앞에서** 거절한다. 잔량을 건드리지 않는다.
                     pokeNotice = Self.targetOnPhoneNotice
+                case .senderFocused:
+                    // 내 집중으로 서버가 재화 차감 **앞에서** 거절했다 — 잔량을 건드리지 않는다(sendPoke 의 같은 분기와 같은 처리).
+                    pokeNotice = Self.myFocusBlocksSendingNotice
+                    adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
                 case .invalid:
                     pokeNotice = "지금은 찌를 수 없어요"
                 }
@@ -973,6 +1053,7 @@ extension WorkTimerStore {
     //
     // 켜 두면 남이 나를 찌를 수 없다 — 판정은 여전히 **서버**가 한다(poke_user/ultra_poke_user 게이트). 그래서 구버전 앱을
     // 쓰는 팀원도 내 집중 모드를 존중하고, 이 계층은 화면 표시와 '언제 끌지'만 맡는다.
+    // 2026-11-03(대표 요청 6): 켜 둔 동안은 **나도** 찌르기·메시지를 못 보낸다 — 이쪽은 서버가 아니라 이 맥의 클라 게이트다(`FocusSendBlock`).
     //
     // ★ **만료는 클라가 한다. 서버는 한 줄도 바뀌지 않았다**(같은 날 사용자 결정 — "굳이 서버에서 할 필요가 있을까?
     //   앱이 다시 켜진 시점에 자동으로 풀어지게끔 하면 되는 거 아니야?"). 서버가 아는 것은 여전히 `profiles.focus_mode`
@@ -1224,6 +1305,43 @@ extension WorkTimerStore {
         // ★ 서버 켜짐 + 기록 없음 = **2단(always)**. 요청도 기록 쓰기도 없다 — 기록이 없다는 것 자체가 always 다
         //   (기존 사용자 전환, 2026-09-11 사용자 지시. 근거와 금지 사항은 FocusStagePolicy.stage 주석).
         if !focusMode { focusMode = true }
+    }
+}
+
+/// 집중 모드가 보내기(찌르기 · 울트라 · 메시지 · 이모티콘)를 막는 사유 — **규칙은 여기 한 곳이다**(2026-11-03, 대표 요청 5·6).
+///
+///  · `.myself` — 내가 집중 중. 요청 6 원문 "자기는 못받으면서 남들한텐 할 수 있는게 안맞음" 그대로, 누구에게도 못 보낸다
+///    (이미 열린 대화의 답장 포함). 서버 20261108121000_sender_focus_gate(대표 답 "지금 서버에서도 막기" · "지금 둘 다 올려", 11-03 운영 적용)도
+///    sender_focused 로 거절한다 — 이 게이트가 없는 옛 맥·폰도 서버에서 막힌다(일반 문구로 접힌다).
+///  · `.peer` — 명부가 상대를 집중이라 말한다. 서버도 어차피 target_focused 로 거절한다 — 요청 5 는 그것을 **보내기 전에** 알리라는 것이다.
+///
+/// 내 집중이 앞이다: 내가 풀어야 하는 사정이 있으면 상대 사정은 아직 의미가 없다(상대가 풀어도 나는 못 보낸다).
+/// 문장은 스토어 상수에서 온다 — 서버 거절 문구(`targetFocusedNotice` · `messageTargetFocusedNotice`)와 **같은 문장**이라
+/// 미리 막았을 때와 보낸 뒤 거절됐을 때 사용자가 읽는 말이 같다.
+enum FocusSendBlock: Equatable, Sendable {
+    case myself
+    case peer
+
+    static func of(myFocus: Bool, peerFocused: Bool) -> FocusSendBlock? {
+        if myFocus { return .myself }
+        if peerFocused { return .peer }
+        return nil
+    }
+
+    /// 찌르기·울트라 쪽 문장(행의 찌르기 버튼 툴팁 · pokeNotice).
+    var pokeText: String {
+        switch self {
+        case .myself: WorkTimerStore.myFocusBlocksSendingNotice
+        case .peer: WorkTimerStore.targetFocusedNotice
+        }
+    }
+
+    /// 메시지·이모티콘 쪽 문장([보내기]·이모티콘 툴팁 · 입력칸 위 안내줄 · messageNotice).
+    var messageText: String {
+        switch self {
+        case .myself: WorkTimerStore.myFocusBlocksSendingNotice
+        case .peer: WorkTimerStore.messageTargetFocusedNotice
+        }
     }
 }
 

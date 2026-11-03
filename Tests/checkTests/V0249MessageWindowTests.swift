@@ -972,6 +972,47 @@ func twoHundredCharacterBodiesWrapInsideTheBubbleInsteadOfOverflowing() throws {
 
 @MainActor
 @Test
+func markdownBubblesStayInsideThePopover() throws {
+    // 마크다운 말풍선(대표 요청 2026-11-03 ③④ · 범위는 대표 결정 "제목·굵게·링크만"): 제목·굵게·링크, 기호 그대로 남는
+    // 글머리·인용·코드 울타리·취소선, 그리고 띄어쓰기 없는 긴 주소가 섞여도 팝오버 폭을 밀지 않고 700pt 상한 안에서 푸터까지
+    // 그려진다. 받은 것·보낸 것 둘 다 넣는다(보낸 말풍선은 강조색 바탕이라 링크 색이 다르다 — 스냅샷으로 눈으로 본다).
+    //
+    // 대화가 짧은 사람(u3 — 이력 한 줄)과 두 판으로 나눠 그리고, 판마다 **짧은 한 줄을 맨 끝에** 둔다. 렌더 전용 클립 갈래는
+    // 맨 끝 줄이 여러 줄짜리면 LazyVStack 이 그 높이를 덜 세어 **아래가** 잘린 그림이 나온다 — 마크다운 이전 평문 여러 줄
+    // 말풍선에서도 같다(2026-11-03 실측: 옛 `Text(String)` 말풍선으로 되돌려 그려도 같은 자리가 잘렸다). 앱은 ScrollView 라
+    // 상관없지만, 스냅샷은 사람이 보는 그림이라 끝을 짧게 둔다.
+    let boards: [(String, [MessageHistoryEntry])] = [
+        ("panels-msg-markdown.png", [
+            mwEntry(id: "md1", peer: "u3", name: "박도윤",
+                    body: "## 오늘 할 일\n- **자료** 정리\n- 회의록 `v2` 올리기\n> 3시까지", minutesAgo: 9),
+            mwEntry(id: "md2", peer: "u3", name: "박도윤",
+                    body: "# 공지\n자세한 건 [여기](https://example.com/notice) 와 https://example.com/" + String(repeating: "a", count: 40),
+                    minutesAgo: 7, isMine: true),
+            mwEntry(id: "md5", peer: "u3", name: "박도윤", body: "확인했어요", minutesAgo: 2)
+        ]),
+        ("panels-msg-markdown-code.png", [
+            mwEntry(id: "md3", peer: "u3", name: "박도윤",
+                    body: "```swift\nlet x = 1\n```\n~~취소~~ _기울임_ [나쁜](javascript:x)", minutesAgo: 5),
+            mwEntry(id: "md4", peer: "u3", name: "박도윤", body: "https://example.com/" + String(repeating: "b", count: 70), minutesAgo: 4),
+            mwEntry(id: "md6", peer: "u3", name: "박도윤", body: "좋아요", minutesAgo: 2, isMine: true)
+        ])
+    ]
+    for (name, extra) in boards {
+        let store = mwThreadStore(host: "mw-render-\(name)", extra: extra, peer: "u3")
+        store.messageDraft = "## 답장"
+        let bitmap = try mwBitmap(store)
+        MessagePanelSnapshots.save(bitmap, name: name)
+        #expect(bitmap.pixelsWide == 414 * 2, "마크다운 말풍선이 팝오버 폭을 밀어냈다(\(name))")
+        #expect(Double(bitmap.pixelsHigh) / 2.0 <= mwPopoverHeightCap,
+                "마크다운 대화가 700pt 상한을 넘었다: \(Double(bitmap.pixelsHigh) / 2.0)pt(\(name))")
+        let ink = try #require(mwDiffBounds(bitmap, try mwBlankBitmap(matching: bitmap)))
+        #expect(ink.maxX <= CGFloat(bitmap.pixelsWide) - 2, "긴 주소가 말풍선 밖으로 넘쳤다(\(name))")
+        #expect(ink.maxY > CGFloat(bitmap.pixelsHigh) - 60, "마크다운 대화에서 푸터가 안 그려졌다(\(name))")
+    }
+}
+
+@MainActor
+@Test
 func aLongPeerNameNeverPushesTheHeaderOffScreen() throws {
     let store = mwThreadStore(host: "mw-render-longname", extra: [
         mwEntry(id: "n1", peer: "u9", name: String(repeating: "김수한무", count: 6),

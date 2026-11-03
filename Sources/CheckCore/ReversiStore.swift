@@ -644,9 +644,13 @@ package final class ReversiStore {
 
     /// 창이 실제로 보이기 시작했다. 폴링 시작 · 로비 재조회 · AI 시계 재개.
     package func windowDidShow() {
+        // 열린 채 가려진 창을 다시 부르는 길(판 시작의 `presentWindow`)이면 가림 기록을 **그대로 둔다**. 창이 정말 앞으로 오면
+        // 가림 통지(visible)가 와서 풀고, 못 오면(다른 전체 화면 앱 위로 못 올라옴) 가린 채로 남아야 시작 · 차례 말풍선이 산다
+        // (오목 · 체스 · 테트리스와 같은 수리 — 0.3.74 통합). 숨겼다가 다시 여는 길은 `windowDidHide` 가 이미 지웠으므로
+        // 낡은 가림 기록이 폴링을 막지 않는다.
+        let reshownWhileOccluded = isWindowVisible && isWindowOccluded
         if !isWindowVisible { isWindowVisible = true }
-        // 막 앞으로 올라온 창이다 — 숨기기 전의 가림 기록이 남아 폴링을 영영 막지 않게 지운다.
-        isWindowOccluded = false
+        if !reshownWhileOccluded { isWindowOccluded = false }
         resumeAIClockIfVisible()
         startPolling()
         guard host?.session != nil else { return }

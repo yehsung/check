@@ -84,7 +84,7 @@ private final class OPGomokuServer: @unchecked Sendable {
 }
 
 @MainActor
-@Suite("가려진 창에서 판이 시작될 때 — 창 띄우기가 가림 기록을 지우지 않는다(오목 · 체스 · 테트리스)", .serialized)
+@Suite("가려진 창에서 판이 시작될 때 — 창 띄우기가 가림 기록을 지우지 않는다(오목 · 체스 · 테트리스 · 아잉 뒤집기)", .serialized)
 struct OccludedPresentWindowTests {
 
     /// 신청자: 로비 창을 연 채 다른 전체 화면 앱에 있다 → 수락 초인종 → 판 시작. 앱처럼 presentWindow 가 windowDidShow 를
@@ -218,6 +218,31 @@ struct OccludedPresentWindowTests {
         #expect(!chess.isWindowOccluded)
         #expect(!CheckOverlayController.chessAttentionIsCurrent(attention, in: chess))
         chess.windowDidHide()
+    }
+
+    /// 아잉 뒤집기: 같은 문(windowDidShow)의 단위 판정 — 0.3.74 통합에서 같은 결함을 찾아 같은 수리를 넣었다(한 수 30초라 더 아프다).
+    @Test("아잉 뒤집기 · 열린 채 가려진 창을 다시 띄우면 가림 기록을 지킨다 · 가림 통지 visible 이 푼다")
+    func reversiShowKeepsOcclusion() {
+        let reversi = ReversiStore()
+        let rival = ReversiUser(id: opRival, displayName: "민수", characterID: "fox", isWorking: true)
+        reversi.match = ReversiMatchState(id: "match-r", stake: 5, myColor: .black, opponent: rival, moveCount: 0, turn: .black)
+        let attention = ReversiAttention(kind: .matchStarted, matchID: "match-r", opponentName: "민수", moveCount: 0)
+        reversi.isWindowVisible = true
+        reversi.windowOcclusionDidChange(visible: false)
+        reversi.windowDidShow()                       // presentWindow 의 동기 효과
+        #expect(reversi.isWindowOccluded, "창 띄우기가 가림 기록을 지웠다")
+        #expect(CheckOverlayController.reversiAttentionIsCurrent(attention, in: reversi), "오버레이가 시작 말풍선을 버린다")
+        reversi.windowOcclusionDidChange(visible: true)
+        #expect(!reversi.isWindowOccluded)
+        #expect(!CheckOverlayController.reversiAttentionIsCurrent(attention, in: reversi))
+        reversi.windowDidHide()
+
+        // 대조: 숨겼다 다시 연 창은 가림이 아니다.
+        reversi.windowOcclusionDidChange(visible: false)
+        reversi.windowDidHide()
+        reversi.windowDidShow()
+        #expect(reversi.isWindowVisible && !reversi.isWindowOccluded)
+        reversi.windowDidHide()
     }
 
     /// 대조: 숨겼다가 다시 여는 길은 그대로다 — windowDidHide 가 가림을 지우고, windowDidShow 뒤 가림이 아니다(폴링이 돈다).

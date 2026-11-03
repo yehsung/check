@@ -26,6 +26,11 @@ private let reNewMigration = "20261014120000_ruby_economy_v2.sql"
 private let rePrizeMigration = "20261023131000_minigame_prize_20_10_5.sql"
 private let reShopMigration = "20260913170100_shop.sql"
 private let reRobotMigration = "20261005120000_character_roster_v3_robot.sql"
+/// 가격표에서 **가격이 아닌 칸(gift_kind)만** 쓰는 뒤 파일 — 0.3.74 이슬 아잉이(술 한잔 선물, 운영 번호 20261108122000).
+/// 그 파일의 `update public.character_prices` 는 전부 `set gift_kind = …`(케이크 둘 = birthday · 프로브의 CHECK 이빨)이고, 새 행 aing_isul 은
+/// gacha_only(상점에서 안 판다)라 가입 지급 ≥ (뽑기 전용을 뺀) 최저가 부등식을 바꿀 수 없다 — 그래서 그 파일은 그 부등식을 다시 재지 않는다.
+/// 여기서는 그 대신 "update 가 gift_kind 만 쓴다 · insert 는 뽑기 전용 행뿐"을 잰다(가격을 쓰는 순간 빨갛다).
+private let reGiftKindOnlyLaterFiles: Set<String> = ["20261108122000_isul_aing_drink_gift.sql"]
 
 private struct REError: Error, CustomStringConvertible {
     let description: String
@@ -374,6 +379,21 @@ struct V0351RubyEconomyMigrationTests {
             "insert into public.character_prices (character_id, price, min_protocol, gacha_only) values ('aing_gold', 1000, 2, true) on conflict (character_id) do nothing;")))
         for later in names[(mine + 1)...] {
             let sql = reStripSQL(try reRaw(later)).lowercased()
+            if reGiftKindOnlyLaterFiles.contains(later) {
+                // gift_kind 만 쓰는 파일: update 마다 set 바로 뒤가 gift_kind 하나여야 한다(쉼표로 다른 칸을 이어 쓰면 빨강).
+                let updates = sql.components(separatedBy: "update public.character_prices").dropFirst()
+                #expect(!updates.isEmpty, "기준선: \(later) 에 가격표 update 가 없다 — 이 예외가 필요 없다")
+                for tail in updates {
+                    let clause = String(tail.prefix { $0 != ";" })
+                    let set = clause.range(of: "set ").map { String(clause[$0.upperBound...]) } ?? ""
+                    let assignment = set.components(separatedBy: " where ").first ?? set
+                    #expect(set.hasPrefix("gift_kind =") && !assignment.contains(","),
+                            "\(later) 가 가격표의 gift_kind 밖 칸을 쓴다: update public.character_prices\(clause.prefix(120))")
+                }
+                #expect(reInsertsAreGachaOnly(try rePriceInserts(sql)),
+                        "\(later) 가 파는 캐릭터를 가격표에 더한다 — 이 계약(가입 ≥ 최저가 · 2배)을 그 파일로 옮겨라")
+                continue
+            }
             #expect(!sql.contains("update public.character_prices"),
                     "\(later) 가 이 파일 뒤에서 가격표 값을 다시 쓴다 — 이 계약(가입 ≥ 최저가 · 2배)을 그 파일로 옮겨라")
             guard sql.contains("insert into public.character_prices") else { continue }

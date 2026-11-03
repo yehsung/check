@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.character.CharacterManifest
-import com.yehsung.aingcheck.core.rules.character.gift.CakeGiftText
+import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.core.stores.me.MeCharacterTileStatus
 import com.yehsung.aingcheck.core.stores.me.MeText
 import com.yehsung.aingcheck.ui.components.CharacterExpression
@@ -101,7 +101,7 @@ object MeCharacterTileRules {
         MeCharacterTileStatus.Owned -> "$name, ${MeText.owned}"
         is MeCharacterTileStatus.Price -> "$name, ${RubyPriceRule.accessibilityText(status.price.toLong(), RubyPriceRule.isShort(status.price.toLong(), status.balance))}"
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
-        MeCharacterTileStatus.GiftOnly -> "$name, ${CakeGiftText.lockedCaption}"
+        is MeCharacterTileStatus.GiftOnly -> "$name, ${status.kind.copy.lockedCaption}"
         MeCharacterTileStatus.UnknownPrice -> "$name, 가격 모름"
         MeCharacterTileStatus.Busy -> "$name, ${MeText.loading}"
         MeCharacterTileStatus.None -> name

@@ -10,6 +10,8 @@ import com.yehsung.aingcheck.core.rules.character.CharacterSyncDecision
  * Swift 판은 카드 그림을 HEIC base64 로 **소스에 박았다**(폰 번들 자리가 기반 소유라). Android·Windows 는 그림을 git 에 두지 않는다(A-X18):
  * 카드 그림은 ui 의 Gradle Sync 가 싣는 초상(`CharacterArt.portraitPath`)이 맡고, 여기에는 id · 이름 · 자르기 값만 남긴다
  * (무지개·케이크 카드 자르기 값은 0.3.59·0.3.66 의 Swift 생성물과 같은 수 — 드리프트는 Swift `MeCharacterCardTests` 가 잰다).
+ * 이슬(맥 0.3.74 · Android 판 7)은 Swift 카드 생성물이 아직 없어(아이폰 1.0.17 이 굽는다) 맥 초상 `aing_isul-neutral.png` 의 알파 상자
+ * (x 23–168 · y 20–170, 알파 > 0)를 직접 잰 값이다 — Kotlin 은 이 자르기 값을 그리기에 쓰지 않는다(메타).
  */
 data class MeCharacterCard(
     val id: String,
@@ -37,6 +39,7 @@ object MeCharacterCards {
         MeCharacterCard("aing_rainbow", "무지개 아잉이", false, 180, 179, 180, 179),
         MeCharacterCard("aing_cake_strawberry", "딸기 케이크 아잉이", false, 146, 163, 146, 163),
         MeCharacterCard("aing_cake_choco", "초코 케이크 아잉이", false, 146, 169, 146, 169),
+        MeCharacterCard("aing_isul", "이슬 아잉이", false, 146, 151, 146, 151),
         MeCharacterCard("fox", "여우", false, 444, 512, 187, 216),
         MeCharacterCard("ghost", "유령", false, 504, 512, 213, 216),
         MeCharacterCard("jellyfish", "해파리", false, 444, 512, 187, 216),
@@ -50,7 +53,7 @@ object MeCharacterCards {
     fun displayName(id: String): String = card(id)?.displayName ?: id
 
     /**
-     * 이 빌드가 아는 캐릭터 id — 코어 `CharacterCatalog.allIDs` 와 같은 순서: 내장(아잉 · 황금 · 무지개 · 딸기 케이크 · 초코 케이크)이 그 순서로
+     * 이 빌드가 아는 캐릭터 id — 코어 `CharacterCatalog.allIDs` 와 같은 순서: 내장(아잉 · 황금 · 무지개 · 딸기 케이크 · 초코 케이크 · 이슬)이 그 순서로
      * 먼저, 나머지는 정렬(케이크 둘은 정렬이면 금보다 앞이고 초코가 딸기보다 앞이라 내장 순서로 박는다).
      */
     val knownIDs: List<String>

@@ -77,7 +77,7 @@ class MeTextRulesTest {
     fun tileStatusNeverShowsARubyPriceForGachaOrGiftOnlyCharacters() {
         assertEquals(MeCharacterTileStatus.Content.Acquire("뽑기 · 조각 20"), MeCharacterTileStatus.GachaOnly(20).content)
         assertEquals(MeCharacterTileStatus.Content.Acquire("뽑기 전용"), MeCharacterTileStatus.GachaOnly(null).content)
-        assertEquals(MeCharacterTileStatus.Content.Locked(CakeGiftText.lockedCaption), MeCharacterTileStatus.GiftOnly.content)
+        assertEquals(MeCharacterTileStatus.Content.Locked(CakeGiftText.lockedCaption), MeCharacterTileStatus.GiftOnly().content)
         assertEquals(MeCharacterTileStatus.Content.Ruby(60, 10), MeCharacterTileStatus.Price(60, 10).content)
         assertEquals("무지개 아잉이", MeCharacterName.display("aing_rainbow"))
         assertEquals("future_id", MeCharacterName.display("future_id"), "모르는 캐릭터는 id 그대로(이름을 지어내지 않는다)")
@@ -86,8 +86,9 @@ class MeTextRulesTest {
     @Test
     fun knownIDsFollowTheBuiltInOrderThenSorted() {
         assertEquals(
-            listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"),
+            listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"),
             MeCharacterCards.knownIDs,
+            "내장 여섯(이슬 — 맥 0.3.74 · 판 7 은 케이크 뒤) 다음 이름순",
         )
         assertEquals("aing", MeCharacterCards.equippedID(" "), "빈 착용값 = 아잉")
         assertEquals("aing", MeCharacterCards.equippedID("future_id"), "모르는 착용값 = 아잉(서버 값은 건드리지 않는다)")

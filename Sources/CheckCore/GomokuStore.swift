@@ -824,7 +824,7 @@ package final class GomokuStore {
     @ObservationIgnored package var dismissWindow: (@MainActor () -> Void)?
     /// 판이 막 시작됐다 — 앱이 앞에 없으면 사용자의 주의를 끈다(CheckApp 이 NSApp.requestUserAttention 으로 잇는다).
     @ObservationIgnored package var requestAttention: (@MainActor () -> Void)?
-    /// 창이 안 보이는 동안 차례가 나에게 왔다(같은 판 id·기록 수에 한 번). CheckApp 이 캐릭터 말풍선으로 잇는다.
+    /// 창이 안 보이거나 가려진 동안 차례가 나에게 왔다(같은 판 id·기록 수에 한 번). CheckApp 이 캐릭터 말풍선으로 잇는다.
     @ObservationIgnored package var onAttention: (@MainActor (GomokuAttention) -> Void)?
     /// v0.3.64: 내 1:1 판이 끝난 것을 **처음 본** 순간(결과를 받은 순간) 한 번 부른다 — 같은 판을 다시 받아도(폴링 · 받은함) 또 안 부른다.
     /// 맥은 여기서 일일 미션 진행을 한 번 묻는다(새 타이머 없이 이벤트로 — WorkTimerStoreAchievements.swift). AI 판은 부르지 않는다
@@ -843,7 +843,8 @@ package final class GomokuStore {
     @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored package private(set) var resetGeneration = 0
     /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다(창 컨트롤러의 가림 통지).
-    /// **폴링만** 이 값을 본다 — 시계 잎 뷰·말풍선 판정은 `isWindowVisible` 그대로다(가림 통지가 틀려도 보이는 창의 시계는 돈다).
+    /// **폴링과 말풍선 문**(`applyState` 의 `windowWasVisible`)이 이 값을 본다 — 시계 잎 뷰는 `isWindowVisible` 그대로다
+    /// (가림 통지가 틀려도 보이는 창의 시계는 돈다). 말풍선 문이 보는 까닭: 가려진 창은 화면이 말하지 못하고 폴링도 멈춰 있다.
     @ObservationIgnored package private(set) var isWindowOccluded = false
     /// 지금 조회 중인 판 id 와, 그 사이 다른 판으로 들어온 조회 요청(마지막 것 하나).
     @ObservationIgnored package private(set) var stateInFlightID: String?
@@ -1387,7 +1388,10 @@ package final class GomokuStore {
         )
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 아잉 뒤집기 V2-01 과 같은 결함). 열린 채 가려진 창(다른 전체 화면 앱 ·
+        // 다른 스페이스)은 화면이 말하지 못하고 폴링도 멈춰 있어, 초인종이 세운 내 차례를 알릴 길이 말풍선뿐이다(30초 자동 착수 ·
+        // 세 번이면 판돈 패). 시계 잎 뷰 · AI 시계 · 폴링은 그대로 `isWindowVisible` 을 본다.
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         if match != next { match = next }
         // 내 판을 보고 있는 사람 수(서버 `gomoku__state` 의 한 칸). **`match` 대입 뒤**에 세운다 —
         // 그 didSet 이 판이 바뀌는 길목에서 0 으로 되돌리므로 앞에 두면 방금 받은 값이 지워진다.
@@ -2300,7 +2304,7 @@ package final class GomokuStore {
     ///    들고 있다 — 사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`place`) 그 기기도 연 기기가 된다.
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가 수락한
     ///    순간을 모르면 흑 30초를 흘려 판돈을 잃는다. 내가 수락해 연 판도 같은 문을 지난다(경로마다 따로 두지 않는다).
-    ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문(onAttention)을 연다. 같은 (판 id, 기록 수)에는 한 번뿐이다.
+    ///  · 창이 안 보이거나 가려진 동안 차례가 나에게 오면 말풍선 문(onAttention)을 연다. 같은 (판 id, 기록 수)에는 한 번뿐이다.
     private func noteMatchProgress(previous: GomokuMatchState?, next: GomokuMatchState, windowWasVisible: Bool) {
         guard ownsMatch(next.id) else { return }
         let started = previous == nil || previous?.isFinished == true || previous?.id != next.id

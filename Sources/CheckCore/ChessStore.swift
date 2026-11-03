@@ -808,7 +808,8 @@ package final class ChessStore {
     @ObservationIgnored package private(set) var serverClockOffset: TimeInterval = 0
     @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored package private(set) var resetGeneration = 0
-    /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다. **폴링만** 이 값을 본다.
+    /// 창이 다른 창에 완전히 가려졌거나 다른 Space·잠금 화면에 있다. **폴링과 말풍선 문**(`applyState` 의 `windowWasVisible`)이
+    /// 이 값을 본다 — 시계 잎 뷰는 `isWindowVisible` 그대로다.
     @ObservationIgnored package private(set) var isWindowOccluded = false
     @ObservationIgnored package private(set) var stateInFlightID: String?
     @ObservationIgnored private var pendingStateID: String?
@@ -1232,7 +1233,10 @@ package final class ChessStore {
 
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 오목과 같은 수리). 열린 채 가려진 창(다른 전체 화면 앱 ·
+        // 다른 스페이스)은 화면이 말하지 못하고 폴링도 멈춰 있어, 초인종이 세운 내 차례를 알릴 길이 말풍선뿐이다.
+        // 시계 잎 뷰 · AI 시계 · 날던 수(`beginFlight`)는 이 값과 무관하다.
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
         if incoming?.id == id { incoming = nil }
         if outgoing?.id == id { outgoing = nil }
@@ -2246,7 +2250,7 @@ package final class ChessStore {
     /// 판 진행을 사람에게 알린다(진행 중 판을 옮긴 직후).
     ///  · 판이 없거나 끝난 판에서 **진행 중 판으로 처음 넘어가면** 창을 띄우고 주의를 끈다 — 신청자는 상대가
     ///    수락한 순간을 모르면 10분 시계를 흘린다.
-    ///  · 창이 안 보이는 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, ply) 에는 한 번뿐이다.
+    ///  · 창이 안 보이거나 가려진 동안 차례가 나에게 오면 말풍선 문을 연다. 같은 (판 id, ply) 에는 한 번뿐이다.
     ///  · **이 기기가 연 판에서만**(2026-11-03 — `GameDeviceLedger` 머리말 · 오목과 같은 규칙). 연 기기가 아니면 판 상태만 들고 있다 —
     ///    사람이 그 기기에서 창을 직접 열면 판이 보이고, 거기서 두면(`send`) 그 기기도 연 기기가 된다.
     private func noteMatchProgress(previous: ChessMatchState?, next: ChessMatchState, windowWasVisible: Bool) {

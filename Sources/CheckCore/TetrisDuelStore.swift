@@ -627,7 +627,7 @@ package final class TetrisDuelStore {
     @ObservationIgnored package private(set) var serverClockOffset: TimeInterval = 0
     @ObservationIgnored private var hasServerClockOffset = false
     @ObservationIgnored package private(set) var resetGeneration = 0
-    /// 창이 완전히 가려졌다. **폴링만** 이 값을 본다(판은 계속 흐른다).
+    /// 창이 완전히 가려졌다. **폴링과 시작 말풍선 문**(`applyState` 의 `windowWasVisible`)이 이 값을 본다(판은 계속 흐른다).
     @ObservationIgnored package private(set) var isWindowOccluded = false
     @ObservationIgnored package private(set) var stateInFlightID: String?
     @ObservationIgnored private var pendingStateID: String?
@@ -1030,7 +1030,9 @@ package final class TetrisDuelStore {
 
         let justFinished = isFinished && base?.isFinished == false
         let previous = match
-        let windowWasVisible = isWindowVisible
+        // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 오목 · 체스와 같은 수리). 로비 창을 띄운 채 다른 전체 화면 앱 ·
+        // 다른 스페이스에 있는 사람은 화면이 말하지 못하고 폴링도 멈춰 있어, 판이 열린 것을 알릴 길이 말풍선뿐이다(준비 30초).
+        let windowWasVisible = isWindowVisible && !isWindowOccluded
         // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
         if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
         if outgoing?.id == id { outgoing = nil }
@@ -1549,7 +1551,7 @@ package final class TetrisDuelStore {
         syncStats()
     }
 
-    /// 진행 중 판으로 **처음** 넘어갔다 — 창을 띄우고 주의를 끈다. 창이 안 보였으면 말풍선 문도 연다(판 id 마다 한 번).
+    /// 진행 중 판으로 **처음** 넘어갔다 — 창을 띄우고 주의를 끈다. 창이 안 보였거나 가려졌으면 말풍선 문도 연다(판 id 마다 한 번).
     private func noteMatchStarted(_ next: TetrisDuelMatchState, windowWasVisible: Bool) {
         guard !announcedMatchIDs.contains(next.id) else { return }
         announcedMatchIDs.insert(next.id)

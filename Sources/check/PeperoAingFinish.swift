@@ -21,7 +21,8 @@ import simd
 // ★ 굽기는 비싸다(상자 2048×768 텍스처 · 220×140 메시 + 막대 셋 256×1024 — 생성기 -O 실측 한 벌 0.73초). 그래서 **프로세스당 한 번** 만들고
 //   씬마다 `clone()` 을 붙인다(지오메트리 · 재질을 나눠 쓴다). 원본은 **판 객체**에 묶인다 — 그림 저장소가 새 판을 받으면(`PeperoArt.absorb`)
 //   판 객체가 바뀌어 다음 조회가 다시 굽는다(받은 쪽이 메인 밖에서 미리 굽는다). 시작 뒤 미리 굽기는 케이크 · 이슬과 같은 자리
-//   (`CakeAingFinish.prewarmDecorTemplates` — 메인 밖).
+//   (`CakeAingFinish.prewarmDecorTemplates` — 메인 밖). **메인은 굽지 않는다**(검토 수리 — `apply` ★): 원본이 아직 없으면 상자 없이 세우고
+//   메인 밖에서 구워 붙인다(시작 5초 안에 오버레이가 서도 메인이 0.73초 멎지 않는다).
 // ★ 장식은 몸이 아니다: 얼굴 재질 탐색(상자 텍스처 2048×768 · 막대 256×1024 는 '큰 CGImage 디퓨즈' 조건을 만족한다) · 몸 클릭 hitTest ·
 //   리액션 진폭 · 클릭 프리체크 상자는 케이크 · 이슬과 **같은 자리**에서 `AingDecor`(장식 루트 이름 셋)로 뺀다.
 // ★ 반응 배율(찌부 · 늘이기)은 리액션 wrapper(`CheckCharacter3DScene.reactionWrapperName`)에 걸린다(`ReactionEngine.runReaction` — `reactionNode`).
@@ -30,6 +31,9 @@ import simd
 // ★ 팔 끝이 3/4 에서 상자 아래 선 밖으로 나오는 형상 문제는 **(가) 지금 그대로**다(정면 · 초상 기준 — 대표가 고른 시안 P 의 비례를 지킨다).
 // ★ 프레이밍: 케이크처럼 내려 세우지 않는다. 장식 꼭대기(`PeperoDecor.topY` 1.0951 — 막대 끝)는 초코 불꽃(1.1839)보다 낮아 지금 앱 카메라
 //   (몸만 보고 잡은 40°)로 부유 꼭대기(+0.07)에서도 위 여백이 남는다(생성기 실측 부유 0 → 0.065 · +0.07 → 0.044). 시험이 앱 경로 렌더로 다시 잰다.
+// ★ 울트라 격발(945²)만은 기본 자세가 맞지 않는다(검토 수리): x −12° 끝은 밑에서 보는 구도라 상자 바닥 밑으로 몸이 보이고, z +34° · 올라간 끝은
+//   막대가 프레임 위로 잘린다 — 엔진이 빼빼로에 `ReactionActions.UltraRagePose.pepero`(x 기울기 없음 · z 28° · 내내 extent × 0.11 내림)를 고른다.
+// ★ 근무 시계 캡슐은 상자 아래로 내린다(`CheckOverlayCharacterView.peperoTimerVerticalFraction` — 0.49 는 상자 로고 자리다).
 // ★ 감은 눈 · 울트라 교체: 몸 재질을 안 건드리므로 기본 아잉 갈래 그대로 돈다(감은 눈은 라벤더 원본에서 굽는다 — 무지개 갈래를 안 탄다).
 
 // ── 생성기 사본 시작 ─────────────────────────────────────────────────────────────────────────────────────────────────
@@ -530,6 +534,43 @@ enum PeperoAingFinish {
         }
     }
 
+    /// 메인에서 부르는 길: 원본이 **이미** 이 판으로 구워져 있으면 사본, 아니면 nil — 원본이 없거나 다른 스레드가 굽는 중(자물쇠가 잡혀 있다)이면
+    /// **기다리지 않고** nil 이다. 굽기(release 0.73초 · debug 20초)를 메인이 떠안거나 자물쇠 앞에서 멎지 않게 한다(`apply` 의 ★ 메인 굽기 금지).
+    static func readyDecorNode(sheet: CGImage) -> SCNNode? {
+        let ready = templateState.withLockIfAvailableUnchecked { state -> SCNNode? in
+            guard let template = state.template, state.sheet === sheet else { return nil }
+            return template.clone()
+        }
+        return ready ?? nil
+    }
+
+    /// 메인 밖에서 구운 장식을 메인으로 넘기는 상자(SCNNode 는 Sendable 이 아니다 — 아직 어느 씬에도 안 붙은 새 노드 · 붙일 몸 노드를 한 번 넘길 뿐이다).
+    private struct NodeHandoff: @unchecked Sendable { let node: SCNNode? }
+
+    /// 굽기를 기다리며 장식 없이 선 몸 노드 수(시험 관찰 — 붙이면 준다).
+    private static let pendingAttachState = OSAllocatedUnfairLock(initialState: 0)
+
+    /// 시험 전용: 메인 밖 굽기를 기다리는 장식 붙이기 수.
+    static var pendingAttachCountForTesting: Int { pendingAttachState.withLock { $0 } }
+
+    /// 원본이 아직 없을 때(메인): 메인 밖에서 굽고(다른 스레드가 굽는 중이면 그 끝을 기다린다 — 같은 원본) 메인으로 돌아와 몸 메시 노드에 붙인다.
+    /// 그 사이 씬은 상자 없이 아잉 몸으로 선다(release 0.73초). 이미 붙어 있으면(같은 노드에 두 번 불렸다) 더 안 붙인다.
+    /// 판은 부른 자리의 저장소(`art` — 작업 지역 시험 저장소가 GCD 스레드로 안 따라가므로 잡아 넘긴다)에서 고른다.
+    private static func attachWhenBaked(to bodyNode: SCNNode, art: PeperoArt) {
+        pendingAttachState.withLock { $0 += 1 }
+        let body = NodeHandoff(node: bodyNode)
+        DispatchQueue.global(qos: .userInitiated).async {
+            let decor = NodeHandoff(node: decorNode(sheet: art.boxImage()))
+            DispatchQueue.main.async {
+                defer { pendingAttachState.withLock { $0 -= 1 } }
+                guard let bodyNode = body.node, let decor = decor.node,
+                      bodyNode.childNode(withName: decorNodeName, recursively: false) == nil else { return }
+                bodyNode.addChildNode(decor)
+                logger.notice("pepero decor attached after off-main bake")
+            }
+        }
+    }
+
     /// 시험 전용: 지금까지 원본을 새로 구운 횟수.
     static var decorBuildCountForTesting: Int { templateState.withLockUnchecked { $0.builds } }
 
@@ -545,7 +586,12 @@ enum PeperoAingFinish {
 
     /// 이 캐릭터 노드(아잉 메시)에 빼빼로 마감을 입힌다: 몸 메시 노드(얼굴 재질 — 큰 CGImage 디퓨즈 — 을 가진 장식 밖 첫 노드)에 장식 사본을
     /// 붙이고 표식을 단다. **몸 재질은 한 비트도 안 바꾼다**(원래 아잉). 내려 세우지 않는다(머리말 ★ 프레이밍). 금 · 무지개 · 케이크 · 이슬과
-    /// 같은 순서(unlit 정규화 뒤 · 감은 눈 노드 앞 — 프레이밍 카메라는 몸만 보고 먼저 섰다)로 부른다. 메시 · 판이 없으면 아무것도 안 바꾸고 false.
+    /// 같은 순서(unlit 정규화 뒤 · 감은 눈 노드 앞 — 프레이밍 카메라는 몸만 보고 먼저 섰다)로 부른다. 메시가 없으면(메인 밖에서는 판도) 아무것도
+    /// 안 바꾸고 false.
+    /// ★ 메인 굽기 금지(검토 수리): 메인에서 불렸는데 원본이 아직 없으면(시작 5초 안의 미리 굽기 전 · 그 굽기 도중 · 새 판을 받은 직후) 여기서 굽지
+    ///   않는다 — 예전엔 `makeNSView → makeScene` 이 메인에서 상자 2048×768 을 구웠다(release 0.73초 · debug 20초, 굽는 중이면 같은 자물쇠 앞에서
+    ///   같은 길이로 멎었다). 이제 표식만 먼저 달고 상자 없이 세운 뒤, 메인 밖에서 구워 다 되면 메인으로 와서 붙인다(`attachWhenBaked`).
+    ///   메인 밖에서 불리면(시험 · 미리 굽기 경로) 예전처럼 그 자리에서 굽고 붙인다.
     @discardableResult
     static func apply(to character: SCNNode) -> Bool {
         var bodyNode: SCNNode?
@@ -563,8 +609,17 @@ enum PeperoAingFinish {
             logger.error("pepero finish: 얼굴 재질을 못 찾았다 — 아잉으로 선다")
             return false
         }
-        guard let decor = decorNode() else { return false }
-        bodyNode.addChildNode(decor)
+        if Thread.isMainThread {
+            let art = PeperoArt.current
+            if let sheet = art.boxImageIfDecoded(), let decor = readyDecorNode(sheet: sheet) {
+                bodyNode.addChildNode(decor)
+            } else {
+                attachWhenBaked(to: bodyNode, art: art)
+            }
+        } else {
+            guard let decor = decorNode() else { return false }
+            bodyNode.addChildNode(decor)
+        }
         let marker = SCNNode()
         marker.name = markerName
         character.addChildNode(marker)

@@ -27,6 +27,10 @@ import Testing
 
     typealias Decor = PeperoDecor
 
+    /// 이 묶음의 빼빼로 씬은 메인에서 선다 — 메인은 장식을 굽지 않으므로(검토 수리 — 원본이 없으면 상자 없이 서고 메인 밖에서 구워 뒤에 붙인다)
+    /// 원본을 먼저 구워 둔다(첫 시험에서 한 번 · 그 뒤는 사본이라 싸다). 메인 굽기 금지 자체는 `V0377PeperoReviewFixTests.mainNeverBakesTheDecor`.
+    init() { _ = PeperoAingFinish.decorNode() }
+
     // MARK: 도구
 
     static func decor(_ scene: SCNScene) -> SCNNode? {

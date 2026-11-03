@@ -67,6 +67,8 @@ final class PeperoArt: @unchecked Sendable {
     private var box: CGImage?
     private var boxDecoded = false
     private var refreshStarted = false
+    /// 시험 전용 끼움 자리: `boxImage()` 가 자물쇠를 잡기 **직전**에 부른다(받기와 판 풀기 사이의 경합을 결정적으로 재현하는 자리).
+    var boxImageWillLockForTesting: (@Sendable () -> Void)?
 
     init(cacheDirectory: URL = PeperoArt.defaultCacheDirectory,
          readsCache: Bool = !CheckPanelVisibility.isRunningTests,
@@ -174,12 +176,21 @@ final class PeperoArt: @unchecked Sendable {
 
     /// 상자 인쇄 판(3D 장식이 굽는다). 한 번 풀어 두고 바뀔 때까지 **같은 객체**를 준다(장식 원본이 이 객체에 묶인다 — 바뀌면 다시 굽는다).
     /// 캐시 파일을 못 풀거나 규약 크기가 아니면 번들 폴백으로 한 번 더 푼다. 둘 다 못 풀면 nil(장식 없이 선다).
+    /// ★ 풀 파일은 **자물쇠 안에서** 고른다(검토 수리). 예전엔 자물쇠 밖에서 `url(.box)` 를 읽고 잠갔다 — 그 틈에 `absorb(.box, 200)` 가 끝나면
+    ///   옛 URL(번들)을 풀어 `boxDecoded` 로 굳혀 프로세스 내내 옛 판을 줬다(`url(.box)` 는 새 캐시를 가리키는데). 이제 받기가 자물쇠 안에서
+    ///   `resolved` · `box` 를 비우는 일과 여기 고르기 · 풀기가 한 줄로 선다(`V0377PeperoMac3DTests.boxImageSeesAbsorbBetweenResolveAndLock`).
     func boxImage() -> CGImage? {
-        let url = url(.box)
+        refreshIfNeeded()
+        boxImageWillLockForTesting?()
         lock.lock()
         defer { lock.unlock() }
         if boxDecoded { return box }
         boxDecoded = true
+        var url = resolved[.box]
+        if url == nil {
+            url = resolveLocked(.box)
+            if let url { resolved[.box] = url }
+        }
         var candidates = [URL]()
         if let url { candidates.append(url) }
         if let bundled = bundleURL(.box), bundled != url { candidates.append(bundled) }
@@ -197,6 +208,14 @@ final class PeperoArt: @unchecked Sendable {
         return nil
     }
 
+    /// 이미 풀어 둔 판 — **풀지도 · 자물쇠를 기다리지도 않는다**(메인에서 3D 씬을 세울 때 — 다른 스레드가 푸는 중이면 nil).
+    /// 아직 안 풀었으면 nil(부른 쪽이 메인 밖에서 `boxImage()` 를 부른다 — `PeperoAingFinish.apply`).
+    func boxImageIfDecoded() -> CGImage? {
+        guard lock.try() else { return nil }
+        defer { lock.unlock() }
+        return boxDecoded ? box : nil
+    }
+
     private func resolveLocked(_ kind: Kind) -> URL? {
         if readsCache {
             let file = cacheFile(kind)
@@ -212,7 +231,10 @@ final class PeperoArt: @unchecked Sendable {
         var request = URLRequest(url: Self.remoteURL(kind), cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         let meta = readMeta(kind)
         let hasCache = (try? Data(contentsOf: cacheFile(kind))).map { Self.isAcceptable(data: $0, kind: kind) } ?? false
-        if hasCache, let etag = meta["etag"] { request.setValue(etag, forHTTPHeaderField: "If-None-Match") }
+        // 거절한 판의 ETag(`rejected_etag`)도 같이 단다 — 안 그러면 못 쓰는 그림(투명 화소 하나 · 크기 다름)을 매 실행 최대 8MB 씩 다시 받고
+        // 또 버린다(검토 수리). 304 면 그대로(쓸 만한 캐시 또는 번들)라 맞다 — 거절한 판을 고쳐 올리면 ETag 가 바뀌어 200 으로 다시 잰다.
+        let tags = [hasCache ? meta["etag"] : nil, meta["rejected_etag"]].compactMap { $0 }
+        if !tags.isEmpty { request.setValue(tags.joined(separator: ", "), forHTTPHeaderField: "If-None-Match") }
         if hasCache, let modified = meta["last_modified"] { request.setValue(modified, forHTTPHeaderField: "If-Modified-Since") }
         return request
     }
@@ -225,6 +247,17 @@ final class PeperoArt: @unchecked Sendable {
         let fm = FileManager.default
         switch outcome {
         case .keep:
+            if status == 200 {
+                // 받은 그림을 못 쓴다(판: 1024² 불투명 아님 · 초상: 정사각 128 미만 · 8MB 넘음 · 안 풀림) — 조용히 버리지 않는다(검토 수리).
+                // 올린 사람이 로그로 알 수 있게 남기고, 그 판의 ETag 를 적어 다음 실행부터 같은 판을 다시 받지 않는다(`conditionalRequest`).
+                Self.logger.error("pepero art: 받은 \(kind.rawValue, privacy: .public) 그림을 거절했다(\(data.count, privacy: .public)바이트 — 규격 · 불투명 검사 실패) — 그대로 둔다")
+                if let etag {
+                    var meta = readMeta(kind)
+                    meta["rejected_etag"] = etag
+                    try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+                    if let encoded = try? JSONEncoder().encode(meta) { try? encoded.write(to: metaFile(kind), options: .atomic) }
+                }
+            }
             return outcome
         case .revert:
             let hadCache = fm.fileExists(atPath: cacheFile(kind).path)

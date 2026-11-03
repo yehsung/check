@@ -31,12 +31,28 @@ private let gcCake = "20261026120000_cake_aing_gift.sql"
 /// 자기 프로브 · 하네스가 증명한다(isul-aing/server). 번호는 운영 적용 때 20261108120000 → 20261108122000 으로 **이름만** 옮겼다
 /// (원격 마지막 적용분 20261108121000 보다 뒤여야 db push 가 대기열을 통째로 올리지 않는다 — 안 글자는 그대로).
 private let gcIsul = "20261108122000_isul_aing_drink_gift.sql"
+/// 0.3.77 빼빼로 아잉이(빼빼로 데이 선물 전용 — 서버 초안 pepero-aing/server/20261108230000_pepero_aing_gift.sql)도 이슬 뒤에서 명단(+ aing_pepero) ·
+/// shop_state 를 다시 정의한다. 그 파일의 행동도 자기 프로브 · 하네스가 증명한다. ★ 이 파일은 적용 때 원격 마지막 적용분 바로 뒤 번호로 **이름만**
+/// 옮긴다(이슬 선례) — 그래서 등록은 번호를 뺀 이름으로 찾는다(`gcLaterRedefinerAdds` · 옮겨도 초록).
+private let gcPepero = "20261108230000_pepero_aing_gift.sql"
 /// 이 파일 뒤에서 명단 · shop_state · buy_character 를 다시 정의해도 되는 파일 → 그 파일의 명단이 v4 위에 더한 id.
 private let gcLaterRedefiners: [String: [String]] = [
     gcRainbow: ["aing_rainbow"],
     gcCake: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco"],
     gcIsul: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul"],
+    gcPepero: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero"],
 ]
+
+/// 마이그레이션 이름에서 앞 번호(14자리 + `_`)를 뗀 꼬리.
+private func gcMigrationStem(_ name: String) -> String {
+    guard let underscore = name.firstIndex(of: "_"), name[..<underscore].count == 14, name[..<underscore].allSatisfy(\.isNumber) else { return name }
+    return String(name[name.index(after: underscore)...])
+}
+
+/// 뒤에서 다시 정의해도 되는 파일인가 → 더한 id. 번호를 뺀 이름으로 찾는다(적용 때 번호만 옮긴 파일도 같은 등록을 탄다).
+private func gcLaterRedefinerAdds(_ file: String) -> [String]? {
+    gcLaterRedefiners.first { gcMigrationStem($0.key) == gcMigrationStem(file) }?.value
+}
 
 /// 사용자 확정표(2026-10-15 · 교환가는 같은 날 정정 AMENDMENT 1): (id, 확률, 조각 교환가). 일곱 모두 교환 가능 — 황금 20.
 /// 아잉(무료 기본)은 이 표에 없다(교환 불가).
@@ -307,8 +323,8 @@ struct V0354GachaMigrationTests {
         let mineIndex = try #require(names.firstIndex(of: gcMigration))
         let later = try gcRosterDefinitions().filter { (names.firstIndex(of: $0.file) ?? -1) > mineIndex }
         for definition in later {
-            let adds = gcLaterRedefiners[definition.file]
-            #expect(adds != nil, "허용 명단을 이 파일 뒤에서 다시 정의한 파일이 \(definition.file) 다(허용: 0.3.59 무지개 · 0.3.66 케이크 · 0.3.74 이슬)")
+            let adds = gcLaterRedefinerAdds(definition.file)
+            #expect(adds != nil, "허용 명단을 이 파일 뒤에서 다시 정의한 파일이 \(definition.file) 다(허용: 0.3.59 무지개 · 0.3.66 케이크 · 0.3.74 이슬 · 0.3.77 빼빼로)")
             #expect(definition.ids.sorted() == (v4 + (adds ?? [])).sorted(), "\(definition.file) 의 명단이 \(definition.ids) 다")
         }
         let roster = try gcLatestRoster()
@@ -349,8 +365,8 @@ struct V0354GachaMigrationTests {
             #expect(mineBody == expected, "\(fn) 의 새 본문이 정본 + 치환과 다르다")
             #expect(mineBody != canon, "기준선: 새 본문이 정본과 같다")
             let later = try gcDefiningFiles(fn).filter { (names.firstIndex(of: $0) ?? -1) > mine }
-            #expect(try gcDefiningFiles(fn).contains(gcMigration) && later.allSatisfy { gcLaterRedefiners[$0] != nil },
-                    "\(fn) 을 이 파일 뒤에서 다시 정의한 파일이 \(later) 다(허용: 0.3.59 무지개 · 0.3.66 케이크 · 0.3.74 이슬)")
+            #expect(try gcDefiningFiles(fn).contains(gcMigration) && later.allSatisfy { gcLaterRedefinerAdds($0) != nil },
+                    "\(fn) 을 이 파일 뒤에서 다시 정의한 파일이 \(later) 다(허용: 0.3.59 무지개 · 0.3.66 케이크 · 0.3.74 이슬 · 0.3.77 빼빼로)")
             #expect(pre.contains(gcMD5(canon)), "\(fn): §1 의 정본 md5 가 정본 본문의 md5(\(gcMD5(canon)))가 아니다")
             #expect(post.contains(gcMD5(mineBody)), "\(fn): §8 의 새 본문 md5 가 실제 새 본문의 것이 아니다")
         }

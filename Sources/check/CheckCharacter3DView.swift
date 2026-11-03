@@ -1480,6 +1480,16 @@ struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
     static let timerVerticalFraction: CGFloat = 0.49
 
+    /// 빼빼로 아잉이(v0.3.77 — 검토 수리)의 근무 시간 라벨 자리. 빼빼로는 몸 앞에 빨간 상자가 서서 0.49 가 상자 위 테(크림 입술)와 '빼빼로' 인쇄
+    /// 윗부분이다(앱 구도 280×340 실측: 빨강 띠 0.491–0.659 · 흰 글자 0.503–0.612 — 캡슐 ~19pt 가 글자 윗부분 40% 를 늘 덮었다). 상자 아래
+    /// 빈 자리로 내린다(상자 아래 끝 + 여유 · 패널 안 — `V0377PeperoMac3DTests.timerSitsBelowThePeperoBox` 가 앱 씬과 라벨 크기로 잰다).
+    static let peperoTimerVerticalFraction: CGFloat = 0.75
+
+    /// 착용 캐릭터별 근무 시간 라벨 세로 위치(body 가 이 함수 하나로 고른다).
+    static func timerVerticalFraction(characterID: String) -> CGFloat {
+        CharacterCatalog.isPeperoAing(characterID) ? peperoTimerVerticalFraction : timerVerticalFraction
+    }
+
     /// 울트라 격발 시 캐릭터가 설 정사각형 한 변의 비율(뷰 짧은 변 기준).
     static let ultraSideRatio: CGFloat = 0.98
 
@@ -1548,10 +1558,13 @@ struct CheckOverlayCharacterView: View {
                 // 타이머 라벨은 격발 중 숨긴다 — 전체화면 한복판의 작은 MM:SS 는 정보도 장식도 아니고,
                 // 라벨 위치가 높이의 49%라 거대 캐릭터의 배 한가운데 박힌다. 조건만 바뀌므로 안전하다.
                 if showsTimer && !ultra {
+                    // 착용 캐릭터를 여기서 읽어 관찰을 등록한다(설정에서 빼빼로로 바꾸면 라벨도 곧바로 상자 아래로 간다).
+                    let _ = CharacterSelectionBroadcast.shared.revision
+                    let wornID = CheckCharacter3DScene.selectedCharacter(defaults: characterDefaults).id
                     CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(elapsedSeconds))
                         .position(
                             x: geo.size.width / 2,
-                            y: geo.size.height * Self.timerVerticalFraction
+                            y: geo.size.height * Self.timerVerticalFraction(characterID: wornID)
                         )
                 }
                 if let engine, let greeting = engine.greetingText {

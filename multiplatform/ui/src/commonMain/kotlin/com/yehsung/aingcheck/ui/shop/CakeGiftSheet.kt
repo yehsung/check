@@ -346,7 +346,8 @@ private fun BottomBar(store: MeStore, sheet: MeCakeGiftSheet) {
 /**
  * 고르지 않고 닫은 열린 선물 — 나 탭 무대 카드 바로 아래에 **수령할 때까지** 선다. 자리는 W3-b 나 탭 루트.
  * 글자는 선물 종류의 묶음(생일 "생일 선물이 도착했어요" [고르기] · 술 한잔 "짠! 선물이 왔어요" [받기]). 그림 글자는 그 종류 제목의 끝 글자다
- * (생일 🎂 — iOS MeCakeGiftReopenRow 그대로 · 술 한잔 🥂 — 새 글자를 짓지 않는다).
+ * (생일 🎂 — iOS MeCakeGiftReopenRow 그대로 · 술 한잔 🥂 — 새 글자를 짓지 않는다). 맥 카드는 SF 기호(gift.fill · wineglass.fill)를 쓰지만 폰은
+ * 아이폰 1.0.17 처럼 그림 글자다 — AppIcon.WineBarFill 은 기호 대응표 몫이고 여기서 쓰지 않는다(검토 ISUL-5).
  */
 @Composable
 fun MeCakeGiftReopenRow(store: MeStore, modifier: Modifier = Modifier) {

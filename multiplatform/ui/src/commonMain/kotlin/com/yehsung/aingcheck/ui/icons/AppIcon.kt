@@ -339,7 +339,11 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
     Warning("warning", false),
     WarningFill("warning", true),
     WbTwilightFill("wb_twilight", true),
-    /** 잔(맥 0.3.74 술 한잔 선물 다시 열기 카드 `wineglass.fill` — WorkTimerStoreCakeGift.swift `reopenSymbolName`). */
+    /**
+     * 잔(맥 0.3.74 술 한잔 선물 다시 열기 카드 `wineglass.fill` — WorkTimerStoreCakeGift.swift `reopenSymbolName`).
+     * ★ SF 기호 대응표(SfSymbolCoverageTest — 맥 원문의 기호마다 짝이 있어야 한다) 몫이고 **화면에서는 쓰지 않는다**: 폰의 다시 열기 줄은
+     *   iOS MeCakeGiftReopenRow(아이폰 1.0.17 — 기호 🥂)처럼 제목 끝 그림 글자를 쓴다(ui/shop MeCakeGiftReopenRow). 검토 ISUL-5.
+     */
     WineBarFill("wine_bar", true),
     WorkspacePremium("workspace_premium", false),
     ;

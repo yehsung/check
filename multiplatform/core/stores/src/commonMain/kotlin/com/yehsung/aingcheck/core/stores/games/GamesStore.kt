@@ -1073,7 +1073,7 @@ class GamesStore(val context: GamesContext) {
             if (context.rummy?.isHoldingMatch == true) return true
             // 아잉 뒤집기: 1:1 판은 **어느 화면에 있든** 켠다(한 수 30초 — 자동잠금이 닿으면 소켓이 내려가 상대 수를 모르고, 서버가 대신 둔 수가 연속 3번이면
             // 판돈째 진다). AI 연습은 화면이 보일 때만(떠나면 코어가 사람 시계를 멈춘다 — 체스 로봇과 같다). '이 기기가 연 판' 장부가 없어 같은 계정 다른 기기의
-            // 판에서도 켠다 — Android 체스와 같은 수준(ReversiStore 머리말).
+            // 판에서도 켠다 — Android 오목과 같은 수준(ReversiStore 머리말 · 아이폰 1.0.17 은 `ownsMatch` 로 거른다).
             context.reversi?.match?.let { match ->
                 if (!match.isFinished) {
                     if (match.isAI) {
@@ -1206,18 +1206,20 @@ class GamesStore(val context: GamesContext) {
      * **이 기기가 손댄 판에서만 연다**(iOS GamesStore.swift `presentRummyScreen` @ ios-1017-cube): 다른 기기로 하는 판을 읽기만 한 기기가 보던 탭에서 끌려 나와 가로로 돌면 안 된다.
      * 여기서 보낸 만들기 · 참가 · 시작은 보내기 전에 장부에 적으므로 이 기기의 판은 언제나 열린다. 놀던 기기의 판은 게임 탭 카드로 들어간다.
      */
+    private fun presentRummyScreen() {
+        if (!isAppActive || !context.sessionStore.isSignedIn || isRummyScreenVisible || context.rummy?.isEngagedInCurrentMatch != true) return
+        context.router.present(GamesDestination.Rummy)
+    }
+
     /**
      * 아잉 뒤집기 판이 막 열렸다(내 신청이 수락됨 · 내가 수락함 · 앱을 다시 켜니 진행 중인 판) — 아잉 뒤집기 화면을 연다(게임 탭을 고르고 · 쌓인 화면을
      * 비우고 · 쌓는다). 딥링크·푸시 가지는 없다(결정 "채팅·푸시 없음"). `!isReversiScreenVisible` 가드가 화면을 두 번 쌓는 것을 막는다.
+     * ★ 큐브와 달리 **'이 기기가 손댄 판' 가드가 없다**(장부 미이식 — ReversiStore 머리말): 같은 계정의 다른 기기(맥)가 연 판에서도 이 문이 열린다 —
+     *   Android 오목과 같은 수준이다. 아이폰 1.0.17 은 `ownsMatch` 로 막는다.
      */
     private fun presentReversiScreen() {
         if (!isAppActive || !context.sessionStore.isSignedIn || isReversiScreenVisible || context.reversi == null) return
         context.router.present(GamesDestination.Reversi)
-    }
-
-    private fun presentRummyScreen() {
-        if (!isAppActive || !context.sessionStore.isSignedIn || isRummyScreenVisible || context.rummy?.isEngagedInCurrentMatch != true) return
-        context.router.present(GamesDestination.Rummy)
     }
 }
 

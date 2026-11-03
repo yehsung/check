@@ -41,6 +41,8 @@ struct GoldenExportAppRulesCharacter {
     static let knownIDs: [String?] = [
         "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "robot", "fox", "", " aing_gold",
         "AING_GOLD", "aing_cake", "aing_cake_strawberry ", nil,
+        // v0.3.74 이슬 아잉이('술 한잔' 선물 전용) — 금과 같은 규칙(정확히 aing_isul 만). 기존 id-0…12 번호를 밀지 않게 맨 뒤에 둔다.
+        "aing_isul", "AING_ISUL", "aing_isul ",
     ]
 
     // MARK: gift/catalog
@@ -52,6 +54,7 @@ struct GoldenExportAppRulesCharacter {
         case .rainbow: return "rainbow"
         case .cakeStrawberry: return "cakeStrawberry"
         case .cakeChoco: return "cakeChoco"
+        case .isul: return "isul"
         }
     }
 
@@ -195,6 +198,44 @@ struct GoldenExportAppRulesCharacter {
             "notFound": .string(CakeGiftText.notFound), "invalidChoice": .string(CakeGiftText.invalidChoice),
             "alreadyClaimed": .string(CakeGiftText.alreadyClaimed),
         ])
+        // v0.3.74 '술 한잔' 선물(이슬 아잉이) 문구 — 기존 texts 칸은 그대로 두고 따로 싣는다.
+        cases.append([
+            "id": "texts-drink",
+            "title": .string(DrinkGiftText.title), "body": .string(DrinkGiftText.body), "confirmButton": .string(DrinkGiftText.confirmButton),
+            "wearNowButton": .string(DrinkGiftText.wearNowButton), "closeButton": .string(DrinkGiftText.closeButton),
+            "lockedCaption": .string(DrinkGiftText.lockedCaption), "lockedHint": .string(DrinkGiftText.lockedHint),
+            "reopenTitle": .string(DrinkGiftText.reopenTitle), "reopenButton": .string(DrinkGiftText.reopenButton),
+            "claimFailed": .string(DrinkGiftText.claimFailed),
+            "received": .string(DrinkGiftText.received(name: "이슬 아잉이")),
+        ])
+        // v0.3.74 선물 종류(birthday · drink): 전선 값 · 내장 id · 최소 번호 · 번호별 받을 수 있음 · id → 종류 · 종류별 문구 묶음.
+        cases.append([
+            "id": "kinds",
+            "rows": .array(CharacterGiftKind.allCases.map { kind in
+                let copy = kind.copy
+                return [
+                    "wireValue": .string(kind.wireValue),
+                    "builtInIDs": .array(kind.builtInIDs.map(GoldenJSON.string)),
+                    "minProtocol": .int(kind.minProtocol),
+                    "supported": .array((2...6).map { .bool(kind.isSupported(protocolVersion: $0)) }),
+                    "copy": [
+                        "title": .string(copy.title), "body": .string(copy.body), "confirmButton": .string(copy.confirmButton),
+                        "wearNowButton": .string(copy.wearNowButton), "closeButton": .string(copy.closeButton),
+                        "lockedCaption": .string(copy.lockedCaption), "lockedHint": .string(copy.lockedHint),
+                        "reopenTitle": .string(copy.reopenTitle), "reopenButton": .string(copy.reopenButton),
+                        "claimFailed": .string(copy.claimFailed),
+                    ],
+                ]
+            }),
+            "wireValues": .array(["birthday", "drink", "Drink", "", "beer", nil].map { (raw: String?) -> GoldenJSON in
+                ["raw": Self.s(raw), "kind": Self.s(CharacterGiftKind(wireValue: raw)?.wireValue)]
+            }),
+            "builtInIDs": .array((Self.knownIDs + ["aing_isul"]).map { id -> GoldenJSON in
+                ["characterID": Self.s(id), "kind": Self.s(CharacterGiftKind(builtInID: id)?.wireValue),
+                 "giftKindOfBuiltIn": Self.s(CharacterCatalog.giftKind(ofBuiltIn: id)?.wireValue)]
+            }),
+            "supportedProtocols": .array([2, 3, 4, 5, 6].map(GoldenJSON.int)),
+        ])
         let words = ["딸기 케이크 아잉이", "초코 케이크 아잉이", "황금 아잉이", "곰", "각", "가", "힣", "aing", "", "  ", "아잉이 ", "케이크\n",
                      "여우😀", "닭", "ㄱ", "123", "Kim", "뷁",
                      // 받침 있는 글자 + 꼬리 공백 · 줄바꿈(앞뒤를 걷어야 '을' — 걷지 않으면 마지막 스칼라가 공백이라 '를').
@@ -209,13 +250,15 @@ struct GoldenExportAppRulesCharacter {
         goldenEmit(GoldenFile(
             golden: "gift/claim",
             equivalence: .bit,
-            swiftSources: ["Sources/CheckCore/CharacterGift.swift"],
+            swiftSources: ["Sources/CheckCore/CharacterGift.swift", "Sources/CheckCore/ShopProtocol.swift", "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"],
             platformSensitive: false,
             spec: [
                 "lines": "CharacterGift.swift 의 W1-c 몫(164–217 수령 결과 · 269–326 문구). 전선 모양(요청 · 응답 · choosable)은 W1-d wire",
                 "outcome": "ok → received(서버 id 가 비면 보낸 id) · already_claimed → 받은 id(비면 null) · 대소문자 정확히 · 모르는 status → failed(원문)",
                 "settlesGift": "받음 · 이미 받음 · 없음 → 선물 카드를 거둔다. 그 밖은 열린 채",
                 "particle": "마지막 스칼라(앞뒤 whitespacesAndNewlines trim 뒤)가 받침 있는 한글 음절이면 '을', 그 밖은 '를'",
+                "kinds": "v0.3.74 선물 종류 — birthday(케이크 둘 · 번호 ≥ 4) · drink(이슬 · 번호 ≥ 5). 전선 값은 정확히 소문자만. supported 는 supportedProtocols 순서",
+                "texts-drink": "v0.3.74 술 한잔 선물(이슬 아잉이) 받는 창 · 잠긴 칸 · 다시 열기 문구. 착용 · 닫기 · 실패 · 받음 문구는 케이크와 같다",
             ],
             cases: cases
         ))
@@ -225,7 +268,8 @@ struct GoldenExportAppRulesCharacter {
 
     @Test("gacha/shop-protocol — 그릴 수 있는 id 집합 → 능력 번호(누적) · 문턱 · 플랫폼 그림 집합 → 번호")
     func shopProtocol() {
-        let pool = ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "fox"]
+        // v0.3.74 이슬(aing_isul)은 맨 뒤 — 마스크 0…63 줄(이슬 없음)은 예전 그대로이고 64…127 줄이 이슬을 더한다.
+        let pool = ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "fox", "aing_isul"]
         var cases: [GoldenJSON] = []
         var rows: [GoldenJSON] = []
         for mask in 0..<(1 << pool.count) {
@@ -246,6 +290,15 @@ struct GoldenExportAppRulesCharacter {
                  "supportsCakeGift": .bool(ShopWire.supportsCakeGift(protocolVersion: version))]
             }),
         ])
+        // v0.3.74 이슬 아잉이('술 한잔' 선물 전용): 번호 5 · 이 번호를 요구하는 id · 술 선물 문턱(기존 constants 칸은 그대로 두고 따로 싣는다).
+        cases.append([
+            "id": "constants-isul",
+            "isulProtocol": .int(ShopWire.isulProtocol),
+            "isulCharacterIDs": .array(ShopWire.isulCharacterIDs.map(GoldenJSON.string)),
+            "thresholds": .array((-1...7).map { version in
+                ["protocol": .int(version), "supportsDrinkGift": .bool(ShopWire.supportsDrinkGift(protocolVersion: version))]
+            }),
+        ])
         // 플랫폼 그림 집합 → 번호(G §8-7 ③ "플랫폼별 drawable 집합 → 번호"). 폰(= Android · Windows 첫 판) 은 초상 두 장이 있는 id 가
         // 그릴 수 있는 id 다. 스프라이트 캐릭터는 매니페스트의 초상, 금 · 무지개 · 케이크는 `<id>-neutral` · `<id>-negative`.
         let portraitSets: [(String, [String])] = [
@@ -256,6 +309,9 @@ struct GoldenExportAppRulesCharacter {
             ("rainbow", ["robot", "aing_gold", "aing_rainbow"]),
             ("one-cake", ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry"]),
             ("all", ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "fox", "squirrel"]),
+            // v0.3.74: 이슬 초상까지 있으면 5 · 이슬만 있고 케이크가 하나 빠지면 3 에 머문다.
+            ("isul", ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul"]),
+            ("isul-one-cake", ["robot", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_isul"]),
         ]
         for (name, ids) in portraitSets {
             var files: [String] = []
@@ -286,8 +342,8 @@ struct GoldenExportAppRulesCharacter {
             swiftSources: ["Sources/CheckCore/ShopProtocol.swift", "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"],
             platformSensitive: false,
             spec: [
-                "protocol": "K9 — 번호는 그릴 수 있는 id 에서 파생한다(상수로 박지 않는다). 누적: robot 없으면 0, 금 없으면 1, 무지개 없으면 2, 케이크 둘이 다 있으면 4 아니면 3",
-                "thresholds": "supportsGacha = 번호 ≥ 2 · supportsCakeGift = 번호 ≥ 4",
+                "protocol": "K9 — 번호는 그릴 수 있는 id 에서 파생한다(상수로 박지 않는다). 누적: robot 없으면 0, 금 없으면 1, 무지개 없으면 2, 케이크 둘이 다 없으면 3, 이슬까지 있으면 5 아니면 4",
+                "thresholds": "supportsGacha = 번호 ≥ 2 · supportsCakeGift = 번호 ≥ 4 · supportsDrinkGift = 번호 ≥ 5(v0.3.74 — constants-isul)",
                 "portraits": "G §8-7 ③ — 폰 · Android · Windows 첫 판의 '그릴 수 있다' = 그 id 의 초상 두 장(<id>-neutral · <id>-negative)이 번들에 있다. 그림 자산을 지운 빌드는 번호가 내려간다",
             ],
             cases: cases

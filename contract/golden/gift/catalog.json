@@ -32,6 +32,12 @@
           "finish": "cakeChoco",
           "id": "aing_cake_choco",
           "kind": "scene3D"
+        },
+        {
+          "displayName": "이슬 아잉이",
+          "finish": "isul",
+          "id": "aing_isul",
+          "kind": "scene3D"
         }
       ],
       "cakeChocoAingID": "aing_cake_choco",
@@ -43,7 +49,8 @@
       ],
       "giftOnlyBuiltInIDs": [
         "aing_cake_strawberry",
-        "aing_cake_choco"
+        "aing_cake_choco",
+        "aing_isul"
       ],
       "goldAingID": "aing_gold",
       "id": "builtins",
@@ -219,12 +226,52 @@
       "isRare": false
     },
     {
+      "characterID": "aing_isul",
+      "finish": "isul",
+      "id": "id-13",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": true,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "AING_ISUL",
+      "finish": "standard",
+      "id": "id-14",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_isul ",
+      "finish": "standard",
+      "id": "id-15",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
       "allIDs": [
         "aing",
         "aing_gold",
         "aing_rainbow",
         "aing_cake_strawberry",
-        "aing_cake_choco"
+        "aing_cake_choco",
+        "aing_isul"
       ],
       "bundled": [],
       "displayNames": [
@@ -232,7 +279,8 @@
         "황금 아잉이",
         "무지개 아잉이",
         "딸기 케이크 아잉이",
-        "초코 케이크 아잉이"
+        "초코 케이크 아잉이",
+        "이슬 아잉이"
       ],
       "id": "catalog-0"
     },
@@ -243,6 +291,7 @@
         "aing_rainbow",
         "aing_cake_strawberry",
         "aing_cake_choco",
+        "aing_isul",
         "fox",
         "robot"
       ],
@@ -262,6 +311,7 @@
         "무지개 아잉이",
         "딸기 케이크 아잉이",
         "초코 케이크 아잉이",
+        "이슬 아잉이",
         "여우",
         "로봇"
       ],
@@ -274,6 +324,7 @@
         "aing_rainbow",
         "aing_cake_strawberry",
         "aing_cake_choco",
+        "aing_isul",
         "alpha",
         "zeta"
       ],
@@ -305,6 +356,7 @@
         "무지개 아잉이",
         "딸기 케이크 아잉이",
         "초코 케이크 아잉이",
+        "이슬 아잉이",
         "알파",
         "제타"
       ],

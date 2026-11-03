@@ -34,6 +34,7 @@
       "id": "constants",
       "messageDisplayFreshnessSeconds": 300,
       "messageQueueLimit": 20,
+      "myFocusBlocksSendingNotice": "집중 모드에서는 찌르기와 메시지를 보낼 수 없어요",
       "pokeCooldownSeconds": 60,
       "pokeDisplayFreshnessSeconds": 3600,
       "pokePollIntervalSeconds": 15,
@@ -120,6 +121,11 @@
         {
           "outcome": "invalid",
           "response": "{\"status\":\"weird\"}",
+          "ultraBalanceForDisplay": null
+        },
+        {
+          "outcome": "senderFocused",
+          "response": "{\"status\":\"sender_focused\"}",
           "ultraBalanceForDisplay": null
         }
       ]

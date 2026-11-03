@@ -440,7 +440,7 @@
       ]
     },
     {
-      "cases": 15,
+      "cases": 18,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
       "golden": "gacha/shop-protocol",
@@ -452,7 +452,7 @@
       ]
     },
     {
-      "cases": 20,
+      "cases": 23,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
       "golden": "gift/catalog",
@@ -466,14 +466,16 @@
       ]
     },
     {
-      "cases": 16,
+      "cases": 18,
       "equivalence": "bit",
       "generator": "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift",
       "golden": "gift/claim",
       "path": "contract/golden/gift/claim.json",
       "platformSensitive": false,
       "swiftSources": [
-        "Sources/CheckCore/CharacterGift.swift"
+        "Sources/CheckCore/CharacterGift.swift",
+        "Sources/CheckCore/ShopProtocol.swift",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift"
       ]
     },
     {
@@ -1191,7 +1193,7 @@
       ]
     },
     {
-      "cases": 73,
+      "cases": 130,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-demo-games",
@@ -1217,7 +1219,7 @@
       ]
     },
     {
-      "cases": 42,
+      "cases": 43,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-demo-me",
@@ -1243,7 +1245,7 @@
       ]
     },
     {
-      "cases": 55,
+      "cases": 59,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-demo-other",
@@ -1361,7 +1363,7 @@
       ]
     },
     {
-      "cases": 22,
+      "cases": 26,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift",
       "golden": "wire/decode-synthetic",
@@ -1398,7 +1400,7 @@
       ]
     },
     {
-      "cases": 263,
+      "cases": 277,
       "equivalence": "bit",
       "generator": "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift",
       "golden": "wire/requests",
@@ -1436,7 +1438,8 @@
         "Sources/CheckCore/MegaphoneBanner.swift",
         "Sources/CheckCore/RummyWire.swift",
         "Sources/CheckCore/RummyRules.swift",
-        "Sources/CheckCore/RummyTableLayout.swift"
+        "Sources/CheckCore/RummyTableLayout.swift",
+        "Sources/CheckCore/ReversiWire.swift"
       ]
     },
     {

@@ -129,6 +129,8 @@ struct GoldenExportDesktopPoke {
             "ultraEmptyNotice": .string(WorkTimerStore.ultraEmptyNotice),
             "targetFocusedNotice": .string(WorkTimerStore.targetFocusedNotice),
             "targetOnPhoneNotice": .string(WorkTimerStore.targetOnPhoneNotice),
+            // v0.3.74 서버가 '보낸 사람 집중'(sender_focused)으로 거절했을 때 · 집중 중 보내기 잠금 안내(찌르기와 메시지 공용).
+            "myFocusBlocksSendingNotice": .string(WorkTimerStore.myFocusBlocksSendingNotice),
             "pokePollIntervalSeconds": Self.whole(WorkTimerStore.pokePollIntervalSeconds),
             "pokePollIntervalSecondsWhileSubscribed": Self.whole(WorkTimerStore.pokePollIntervalSecondsWhileSubscribed),
             "pokeDisplayFreshnessSeconds": Self.whole(WorkTimerStore.pokeDisplayFreshnessSeconds),
@@ -148,6 +150,8 @@ struct GoldenExportDesktopPoke {
             #"{"status":"not_working"}"#, #"{"status":"target_not_working"}"#, #"{"status":"target_focused"}"#,
             #"{"status":"target_on_phone"}"#, #"{"status":"ultra_used_today"}"#, #"{"status":"ultra_used_today","reset_after_seconds":120,"ultra_balance":0}"#,
             #"{"status":"invalid"}"#, #"{"status":"weird"}"#,
+            // v0.3.74 보낸 사람 집중 모드 거절(서버 2026-11-03). 기존 줄 순서를 밀지 않게 맨 뒤에 둔다.
+            #"{"status":"sender_focused"}"#,
         ]
         var outcomes: [GoldenJSON] = []
         for text in responses {
@@ -161,6 +165,7 @@ struct GoldenExportDesktopPoke {
             case .ultraUsedToday(let reset): outcome = "ultraUsedToday:\(reset)"
             case .targetFocused: outcome = "targetFocused"
             case .targetOnPhone: outcome = "targetOnPhone"
+            case .senderFocused: outcome = "senderFocused"
             case .invalid: outcome = "invalid"
             }
             outcomes.append(["response": .string(text), "outcome": .string(outcome),

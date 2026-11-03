@@ -1100,6 +1100,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "한결",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "오늘은 회의 많은 날 🙏",
           "userId": "d0000000-0000-4000-8000-0000000000b1"
@@ -1109,6 +1110,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "소라",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "부산에서 커피 한 잔 ☕️",
           "userId": "d0000000-0000-4000-8000-0000000000b2"
@@ -1118,6 +1120,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "하린",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b5"
@@ -1127,6 +1130,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "도윤",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "4시 이후에 답장할게요",
           "userId": "d0000000-0000-4000-8000-0000000000b4"
@@ -1136,6 +1140,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민재",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b3"
@@ -1145,6 +1150,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "은비",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b6"
@@ -1154,6 +1160,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "지우",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-0000000000b9"
@@ -1163,6 +1170,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "태오",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b7"
@@ -1424,6 +1432,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "한결",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "오늘은 회의 많은 날 🙏",
           "userId": "d0000000-0000-4000-8000-0000000000b1"
@@ -1433,6 +1442,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "소라",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "부산에서 커피 한 잔 ☕️",
           "userId": "d0000000-0000-4000-8000-0000000000b2"
@@ -1442,6 +1452,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "하린",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b5"
@@ -1451,6 +1462,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "도윤",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "4시 이후에 답장할게요",
           "userId": "d0000000-0000-4000-8000-0000000000b4"
@@ -1460,6 +1472,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민재",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b3"
@@ -1469,6 +1482,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "은비",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b6"
@@ -1478,6 +1492,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "지우",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-0000000000b9"
@@ -1487,6 +1502,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "태오",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b7"
@@ -1687,6 +1703,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "한결",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "오늘은 회의 많은 날 🙏",
           "userId": "d0000000-0000-4000-8000-0000000000b1"
@@ -1696,6 +1713,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "소라",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "부산에서 커피 한 잔 ☕️",
           "userId": "d0000000-0000-4000-8000-0000000000b2"
@@ -1705,6 +1723,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "하린",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b5"
@@ -1714,6 +1733,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "도윤",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "4시 이후에 답장할게요",
           "userId": "d0000000-0000-4000-8000-0000000000b4"
@@ -1723,6 +1743,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민재",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b3"
@@ -1732,6 +1753,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "은비",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b6"
@@ -1741,6 +1763,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "지우",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-0000000000b9"
@@ -1750,6 +1773,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "태오",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b7"
@@ -3707,6 +3731,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민트",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "3시까지 집중할게요 🎧",
           "userId": "d0000000-0000-4000-8000-000000000102"
@@ -3716,6 +3741,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "라임",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000103"
@@ -3725,6 +3751,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "보리",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-000000000104"
@@ -3734,6 +3761,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "코랄",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "오늘은 재택 중이에요",
           "userId": "d0000000-0000-4000-8000-000000000201"
@@ -3743,6 +3771,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "모래",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000203"
@@ -3752,6 +3781,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "하늘",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000202"
@@ -3761,6 +3791,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "자두",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000105"
@@ -3770,6 +3801,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "구름",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "휴가 중 🌴",
           "userId": "d0000000-0000-4000-8000-000000000204"
@@ -3779,6 +3811,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "바다",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000205"
@@ -4890,6 +4923,48 @@
           "id": null,
           "startedAt": "2026-09-17T00:10:00.000Z",
           "userId": "d0000000-0000-4000-8000-000000000105"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-14T13:00:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-14T00:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000106"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-15T13:00:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-15T00:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000106"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-16T13:00:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-16T00:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000106"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-17T01:40:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-16T23:50:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000106"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-16T08:00:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-16T00:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000108"
+        },
+        {
+          "durationSeconds": null,
+          "endedAt": "2026-09-15T08:30:00.000Z",
+          "id": null,
+          "startedAt": "2026-09-15T00:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000109"
         }
       ],
       "id": "Sources/CheckMobileKit/Demo/Fixtures/now/_now/rest.work_sessions.get@team_id=eq.d0000000-0000-4000-8000-000000007ea1&ended_at=not.is.null.json",
@@ -5223,10 +5298,278 @@
     {
       "dump": [
         {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T05:04:40.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "새벽",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T05:04:40.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T05:04:10.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "민트",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T05:04:10.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000102"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T05:04:55.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "라임",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T05:04:55.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000103"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T04:52:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "보리",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T04:52:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000104"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T02:10:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "자두",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T02:10:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000105"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/now/_now/rest.work_statuses.get@demo-team-all-off.json",
+      "type": "[WorkStatusRow]",
+      "variants": [
+        {
+          "op": "str",
+          "path": "$[0].active_session_id",
+          "result": [
+            [
+              "$[0].activeSessionId",
+              "3"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": [],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/now/_now/rest.work_statuses.get@demo-team-empty.json",
+      "type": "[WorkStatusRow]",
+      "variants": []
+    },
+    {
+      "dump": "$error",
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/now/_now/rest.work_statuses.get@demo-team-failed.json",
+      "type": "[WorkStatusRow]",
+      "variants": [
+        {
+          "op": "remove",
+          "path": "$.__status",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.__status",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.__status",
+          "result": "error"
+        },
+        {
+          "op": "float0",
+          "path": "$.__status",
+          "result": "error"
+        },
+        {
+          "op": "float5",
+          "path": "$.__status",
+          "result": "error"
+        },
+        {
+          "op": "big",
+          "path": "$.__status",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.__body",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.__body",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$.__body",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$.__body.message",
+          "result": "error"
+        },
+        {
+          "op": "null",
+          "path": "$.__body.message",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$.__body.message",
+          "result": "error"
+        },
+        {
+          "op": "enum",
+          "path": "$.__body.message",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a001",
+          "lastSeenAt": "2026-09-17T05:04:40.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "새벽",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T05:04:40.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a002",
+          "lastSeenAt": "2026-09-17T05:04:10.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "민트",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T05:04:10.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000102"
+        },
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a003",
+          "lastSeenAt": "2026-09-17T05:04:55.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "라임",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T05:04:55.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000103"
+        },
+        {
+          "activeSessionId": "d0000000-0000-4000-8000-00000000a004",
+          "lastSeenAt": "2026-09-17T04:52:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "보리",
+            "email": null
+          },
+          "status": "working",
+          "updatedAt": "2026-09-17T04:52:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000104"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T02:10:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "자두",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T02:10:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000105"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-17T01:40:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "도토리",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-17T01:40:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000106"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-16T09:00:00.000Z",
+          "profiles": null,
+          "status": "offWork",
+          "updatedAt": "2026-09-16T09:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000107"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-16T08:00:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "구슬",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-16T08:00:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000108"
+        },
+        {
+          "activeSessionId": null,
+          "lastSeenAt": "2026-09-15T08:30:00.000Z",
+          "profiles": {
+            "avatarUrl": null,
+            "displayName": "별명이아주아주긴팀원",
+            "email": null
+          },
+          "status": "offWork",
+          "updatedAt": "2026-09-15T08:30:00.000Z",
+          "userId": "d0000000-0000-4000-8000-000000000109"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/now/_now/rest.work_statuses.get@demo-team-roster.json",
+      "type": "[WorkStatusRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
           "avatarUrl": null,
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민트",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "3시까지 집중할게요 🎧",
           "userId": "d0000000-0000-4000-8000-000000000102"
@@ -5236,6 +5579,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "라임",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000103"
@@ -5245,6 +5589,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "보리",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-000000000104"
@@ -5254,6 +5599,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "코랄",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": "오늘은 재택 중이에요",
           "userId": "d0000000-0000-4000-8000-000000000201"
@@ -5263,6 +5609,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "모래",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000203"
@@ -5272,6 +5619,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "하늘",
+          "focusMode": null,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000202"
@@ -5281,6 +5629,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "자두",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000105"
@@ -5290,6 +5639,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "구름",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": "휴가 중 🌴",
           "userId": "d0000000-0000-4000-8000-000000000204"
@@ -5299,6 +5649,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "바다",
+          "focusMode": null,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000205"

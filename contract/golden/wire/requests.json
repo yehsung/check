@@ -2858,7 +2858,8 @@
           "reportedClaimableCount": null,
           "reportedClaimableRuby": null,
           "rubyBalance": null,
-          "serverNowMs": null
+          "serverNowMs": null,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -2892,7 +2893,8 @@
           "reportedClaimableCount": null,
           "reportedClaimableRuby": null,
           "rubyBalance": null,
-          "serverNowMs": null
+          "serverNowMs": null,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -2926,7 +2928,8 @@
           "reportedClaimableCount": null,
           "reportedClaimableRuby": null,
           "rubyBalance": null,
-          "serverNowMs": null
+          "serverNowMs": null,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -2960,7 +2963,8 @@
           "reportedClaimableCount": null,
           "reportedClaimableRuby": null,
           "rubyBalance": null,
-          "serverNowMs": null
+          "serverNowMs": null,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -2994,7 +2998,8 @@
           "reportedClaimableCount": null,
           "reportedClaimableRuby": null,
           "rubyBalance": null,
-          "serverNowMs": null
+          "serverNowMs": null,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -10064,7 +10069,7 @@
       ],
       "responses": [
         {
-          "body": "{\n  \"__note\": [\n    \"achievements_status() — 데모 계정(장면 _me · 라우트 `me` 또는 `me/missions`). **받을 것 넷**: 할 일 20 · 콕10 5 · 콕50 20 · 연속14 30 = 75.\",\n    \"★ 콕은 50회까지 채웠는데 10회를 안 받았다 — 계열 줄(AchievementStatus.seriesRows)은 **poke10** 의 [받기]를 세워야 한다. 위 단계(poke50)가 가리면 사용자는 받을 보상을 영영 못 본다(사장님 지시의 핵심).\",\n    \"팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.\",\n    \"claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).\",\n    \"값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).\",\n    \"시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
+          "body": "{\n  \"__note\": [\n    \"achievements_status() — 데모 계정(장면 _me · 라우트 `me` 또는 `me/missions`). **받을 것 넷**: 할 일 20 · 콕10 5 · 콕50 20 · 연속14 30 = 75.\",\n    \"★ 콕은 50회까지 채웠는데 10회를 안 받았다 — 계열 줄(AchievementStatus.seriesRows)은 **poke10** 의 [받기]를 세워야 한다. 위 단계(poke50)가 가리면 사용자는 받을 보상을 영영 못 본다(사장님 지시의 핵심).\",\n    \"팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.\",\n    \"claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).\",\n    \"값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).\",\n    \"시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
           "status": 200
         }
       ],
@@ -10180,6 +10185,24 @@
                   "target": 1,
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
+                }
+              },
+              {
+                "game": "rummy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
                 }
               }
             ],
@@ -10388,7 +10411,8 @@
           "reportedClaimableCount": 4,
           "reportedClaimableRuby": 75,
           "rubyBalance": 120,
-          "serverNowMs": 1789621500000
+          "serverNowMs": 1789621500000,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -10494,7 +10518,8 @@
           "reportedClaimableCount": 1,
           "reportedClaimableRuby": 5,
           "rubyBalance": 120,
-          "serverNowMs": 1789621500000
+          "serverNowMs": 1789621500000,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -10906,7 +10931,8 @@
           "reportedClaimableCount": 3,
           "reportedClaimableRuby": 70,
           "rubyBalance": 125,
-          "serverNowMs": 1789621500000
+          "serverNowMs": 1789621500000,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -11277,7 +11303,8 @@
           "reportedClaimableCount": 0,
           "reportedClaimableRuby": 0,
           "rubyBalance": 195,
-          "serverNowMs": 1789621500000
+          "serverNowMs": 1789621500000,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -11633,7 +11660,8 @@
           "reportedClaimableCount": 4,
           "reportedClaimableRuby": 75,
           "rubyBalance": 125,
-          "serverNowMs": 1789621500000
+          "serverNowMs": 1789621500000,
+          "streakDays": null
         }
       },
       "routes": [],
@@ -12465,6 +12493,666 @@
       },
       "routes": [],
       "unordered": false
+    },
+    {
+      "id": "reversiLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiLobby#data",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_lobby",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n    \"me\": {\n        \"wins\": 0,\n        \"draws\": 0,\n        \"losses\": 0,\n        \"incoming\": [\n            {\n                \"from\": {\n                    \"id\": \"b0000000-0000-4000-8000-000000000001\",\n                    \"character\": null,\n                    \"avatar_url\": null,\n                    \"display_name\": \"비시험01\"\n                },\n                \"stake\": 5,\n                \"match_id\": \"9e39ff11-1b1a-45b2-836a-982b916de122\",\n                \"expires_at_ms\": 1793677498434\n            }\n        ],\n        \"outgoing\": null,\n        \"ruby_balance\": 100,\n        \"active_match_id\": null\n    },\n    \"users\": [\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험01\"\n        },\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000003\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험03\"\n        },\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000004\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험04\"\n        },\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000005\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험05\"\n        },\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000006\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험06\"\n        },\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000007\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험07\"\n        },\n        {\n            \"id\": \"b0000000-0000-4000-8000-000000000008\",\n            \"center\": null,\n            \"capable\": true,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"비시험08\"\n        },\n        {\n            \"id\": \"267a3495-643c-40cc-b1a7-14967166eae1\",\n            \"center\": \"seoul\",\n            \"capable\": false,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"abto.app\"\n        },\n        {\n            \"id\": \"f46dc1d0-4dff-416e-81f0-91d4fb413def\",\n            \"center\": \"seoul\",\n            \"capable\": false,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"거부목록사용자\"\n        },\n        {\n            \"id\": \"785b5732-75fe-4a71-931a-2e3f06e63505\",\n            \"center\": \"seoul\",\n            \"capable\": false,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"씨앗다섯\"\n        },\n        {\n            \"id\": \"3e240c02-8972-478e-a674-014f498a641b\",\n            \"center\": \"seoul\",\n            \"capable\": false,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"코덱스토큰도둑예은\"\n        },\n        {\n            \"id\": \"544e3837-f01c-4560-b82f-4d44c269f044\",\n            \"center\": \"seoul\",\n            \"capable\": false,\n            \"in_match\": false,\n            \"character\": null,\n            \"avatar_url\": null,\n            \"focus_mode\": false,\n            \"is_working\": false,\n            \"display_name\": \"코덱스토큰도둑지유\"\n        }\n    ],\n    \"stakes\": [\n        3,\n        5,\n        10\n    ],\n    \"status\": \"ok\",\n    \"matches\": [\n    ],\n    \"turn_seconds\": 30,\n    \"server_now_ms\": 1793677438435,\n    \"invite_ttl_seconds\": 60,\n    \"turn_grace_seconds\": 2,\n    \"auto_abandon_streak\": 3\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "autoAbandonStreak": 3,
+          "inviteTtlSeconds": 60,
+          "matches": [],
+          "me": {
+            "activeMatchId": null,
+            "draws": 0,
+            "incoming": [
+              {
+                "expiresAtMs": {
+                  "$f64": "427a19f829842000"
+                },
+                "from": {
+                  "avatarUrl": null,
+                  "character": null,
+                  "displayName": "비시험01",
+                  "id": "b0000000-0000-4000-8000-000000000001"
+                },
+                "matchId": "9e39ff11-1b1a-45b2-836a-982b916de122",
+                "stake": 5,
+                "to": null
+              }
+            ],
+            "losses": 0,
+            "outgoing": null,
+            "rubyBalance": 100,
+            "wins": 0
+          },
+          "serverNowMs": {
+            "$f64": "427a19f81ade3000"
+          },
+          "stakes": [
+            3,
+            5,
+            10
+          ],
+          "status": "ok",
+          "turnGraceSeconds": 2,
+          "turnSeconds": 30,
+          "users": [
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험01",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000001",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험03",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000003",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험04",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000004",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험05",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000005",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험06",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000006",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험07",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000007",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": true,
+              "center": null,
+              "character": null,
+              "displayName": "비시험08",
+              "focusMode": false,
+              "id": "b0000000-0000-4000-8000-000000000008",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "center": "seoul",
+              "character": null,
+              "displayName": "abto.app",
+              "focusMode": false,
+              "id": "267a3495-643c-40cc-b1a7-14967166eae1",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "center": "seoul",
+              "character": null,
+              "displayName": "거부목록사용자",
+              "focusMode": false,
+              "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "center": "seoul",
+              "character": null,
+              "displayName": "씨앗다섯",
+              "focusMode": false,
+              "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "center": "seoul",
+              "character": null,
+              "displayName": "코덱스토큰도둑예은",
+              "focusMode": false,
+              "id": "3e240c02-8972-478e-a674-014f498a641b",
+              "inMatch": false,
+              "isWorking": false
+            },
+            {
+              "avatarUrl": null,
+              "capable": false,
+              "center": "seoul",
+              "character": null,
+              "displayName": "코덱스토큰도둑지유",
+              "focusMode": false,
+              "id": "544e3837-f01c-4560-b82f-4d44c269f044",
+              "inMatch": false,
+              "isWorking": false
+            }
+          ]
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiChallenge",
+      "requests": [
+        {
+          "body": {
+            "p_opponent": "bb000000-0000-4000-8000-0000000000b2",
+            "p_protocol": 1,
+            "p_stake": 5
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_challenge",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiCancel",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_cancel",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiRespond",
+      "requests": [
+        {
+          "body": {
+            "p_accept": true,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_respond",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiState#data",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 0
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_state",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\n    \"state\": {\n        \"match\": {\n            \"id\": \"9e39ff11-1b1a-45b2-836a-982b916de122\",\n            \"turn\": \"black\",\n            \"black\": \"b0000000-0000-4000-8000-000000000002\",\n            \"board\": \"...........................wb......bw...........................\",\n            \"discs\": {\n                \"black\": 2,\n                \"empty\": 60,\n                \"white\": 2\n            },\n            \"score\": null,\n            \"stake\": 5,\n            \"white\": \"b0000000-0000-4000-8000-000000000001\",\n            \"result\": null,\n            \"status\": \"active\",\n            \"winner\": null,\n            \"opponent\": \"b0000000-0000-4000-8000-000000000002\",\n            \"challenger\": \"b0000000-0000-4000-8000-000000000001\",\n            \"end_reason\": null,\n            \"move_count\": 0,\n            \"started_ms\": 1793677438445,\n            \"deadline_ms\": 1793677468445,\n            \"finished_ms\": null,\n            \"turn_started_ms\": 1793677438445,\n            \"invite_expires_ms\": 1793677498434\n        },\n        \"moves\": [\n        ],\n        \"grace_ms\": 2000,\n        \"my_color\": \"black\",\n        \"opponent\": {\n            \"center\": null,\n            \"user_id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"character\": null,\n            \"avatar_url\": null,\n            \"display_name\": \"비시험01\"\n        },\n        \"watchers\": 0,\n        \"black_user\": {\n            \"center\": null,\n            \"user_id\": \"b0000000-0000-4000-8000-000000000002\",\n            \"character\": null,\n            \"avatar_url\": null,\n            \"display_name\": \"비시험02\"\n        },\n        \"white_user\": {\n            \"center\": null,\n            \"user_id\": \"b0000000-0000-4000-8000-000000000001\",\n            \"character\": null,\n            \"avatar_url\": null,\n            \"display_name\": \"비시험01\"\n        },\n        \"legal_moves\": [\n            19,\n            26,\n            37,\n            44\n        ],\n        \"ruby_balance\": 95,\n        \"turn_seconds\": 30,\n        \"server_now_ms\": 1793677438447,\n        \"my_auto_streak\": 0,\n        \"black_auto_streak\": 0,\n        \"white_auto_streak\": 0,\n        \"auto_abandon_streak\": 3,\n        \"opponent_auto_streak\": 0\n    },\n    \"status\": \"ok\"\n}\n",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": {
+          "accepted": null,
+          "autoPlacedCount": null,
+          "have": null,
+          "inviteExpiresMs": null,
+          "matchId": null,
+          "need": null,
+          "reason": null,
+          "rubyBalance": null,
+          "serverNowMs": null,
+          "side": null,
+          "stakes": null,
+          "state": {
+            "autoAbandonStreak": 3,
+            "blackAutoStreak": 0,
+            "blackUser": {
+              "avatarUrl": null,
+              "center": null,
+              "character": null,
+              "displayName": "비시험02",
+              "userId": "b0000000-0000-4000-8000-000000000002"
+            },
+            "graceMs": 2000,
+            "legalMoves": [
+              19,
+              26,
+              37,
+              44
+            ],
+            "match": {
+              "black": "b0000000-0000-4000-8000-000000000002",
+              "board": {
+                "black": 34628173824,
+                "white": 68853694464
+              },
+              "challenger": "b0000000-0000-4000-8000-000000000001",
+              "deadlineMs": {
+                "$f64": "427a19f82231d000"
+              },
+              "discs": {
+                "black": 2,
+                "empty": 60,
+                "white": 2
+              },
+              "endReason": null,
+              "finishedMs": null,
+              "id": "9e39ff11-1b1a-45b2-836a-982b916de122",
+              "inviteExpiresMs": {
+                "$f64": "427a19f829842000"
+              },
+              "moveCount": 0,
+              "opponent": "b0000000-0000-4000-8000-000000000002",
+              "result": null,
+              "score": null,
+              "stake": 5,
+              "startedMs": {
+                "$f64": "427a19f81aded000"
+              },
+              "status": "active",
+              "turn": "black",
+              "turnStartedMs": {
+                "$f64": "427a19f81aded000"
+              },
+              "white": "b0000000-0000-4000-8000-000000000001",
+              "winner": null
+            },
+            "moves": [],
+            "myAutoStreak": 0,
+            "myColor": "black",
+            "opponent": {
+              "avatarUrl": null,
+              "center": null,
+              "character": null,
+              "displayName": "비시험01",
+              "userId": "b0000000-0000-4000-8000-000000000001"
+            },
+            "opponentAutoStreak": 0,
+            "rubyBalance": 95,
+            "serverNowMs": {
+              "$f64": "427a19f81adef000"
+            },
+            "turnSeconds": 30,
+            "watchers": 0,
+            "whiteAutoStreak": 0,
+            "whiteUser": {
+              "avatarUrl": null,
+              "center": null,
+              "character": null,
+              "displayName": "비시험01",
+              "userId": "b0000000-0000-4000-8000-000000000001"
+            }
+          },
+          "status": "ok"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiMove",
+      "requests": [
+        {
+          "body": {
+            "p_expected_seq": 4,
+            "p_idx": 19,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_move",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiResign",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_resign",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiWatch",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_watch",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "reversiWatchLive",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 2
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/reversi_watch_live",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyFocusMode",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "focus_mode"
+            ]
+          ]
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "fetchMyFocusMode#data",
+      "requests": [
+        {
+          "body": null,
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>"
+          },
+          "method": "GET",
+          "path": "/rest/v1/profiles",
+          "query": [
+            [
+              "id",
+              "eq.aa000000-0000-4000-8000-0000000000a1"
+            ],
+            [
+              "select",
+              "focus_mode"
+            ]
+          ]
+        }
+      ],
+      "responses": [
+        {
+          "body": "[{\"focus_mode\":true}]",
+          "status": 200
+        }
+      ],
+      "result": {
+        "ok": true
+      },
+      "routes": [],
+      "unordered": false
     }
   ],
   "equivalence": "bit",
@@ -12595,6 +13283,7 @@
     "Sources/CheckCore/MegaphoneBanner.swift",
     "Sources/CheckCore/RummyWire.swift",
     "Sources/CheckCore/RummyRules.swift",
-    "Sources/CheckCore/RummyTableLayout.swift"
+    "Sources/CheckCore/RummyTableLayout.swift",
+    "Sources/CheckCore/ReversiWire.swift"
   ]
 }

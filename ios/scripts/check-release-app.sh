@@ -91,6 +91,7 @@ done
 # 통째로** 쓴다 — 아래 표의 글자는 전부 폰 문구 표(`GamesRummyText` · `GamesMiniGameText` · `NowText` · `MeText` · `RankingsText`)와 코어 `AvatarRemovalText` 의 값과 한 글자까지 같다.
 #
 # ★ **1.0.17 — 아홉 줄을 잰다. 기대 횟수는 build 29 아카이브(디바이스 · Release, 2026-11-04 01:17 KST)로 잰 값 — 아홉 줄 모두 1회**(바이트는 2026-11-04 계산).
+#   제출판 build 30(맥 0.3.76 main 병합 뒤, 2026-11-04 13:25 KST 아카이브)도 아홉 줄 모두 1회 · 금지 0 으로 같았다.
 #   후보는 전부 **1.0.16 소스(e78bb293)에 0회**이고, 지금 소스에서 **다른 리터럴 안에 들어 있지 않다**(주석 · 데모 픽스처 JSON 은 바이너리에 없다)를 확인했다.
 #   사람을 골라 신청하거나 로봇과 연습해 보세요              62B  ReversiPhoneText.idleLine — 게임 탭 다섯째 카드 · 로비
 #   리버시 규칙 · 흑 선공 · 한 수 30초                      47B  ReversiPhoneText.subtitle — 카드 부제

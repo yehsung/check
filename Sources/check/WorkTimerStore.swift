@@ -361,6 +361,8 @@ final class WorkTimerStore {
             // 아잉 뒤집기 받은 신청도 같은 자리에서 본다 — 폴링이 창이 보일 때만 도는 것도 같아서, 창을 안 연 사람에게는
             // 이 한 줄과 소켓 신호가 신청(TTL 60초)을 아는 전부다.
             reversi.refreshLobbyIfStale()
+            // 아잉 마작 받은 초대도 같은 자리에서 본다 — 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 초대(방 TTL 10분)를 아는 전부다.
+            mahjong.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
@@ -1339,6 +1341,10 @@ final class WorkTimerStore {
     /// (`ReversiStoreHost = GomokuStoreHost`). 판정은 서버가 하고 이 스토어는 서버 state 를 그대로 든다(AI 연습 판만 로컬).
     let reversi: ReversiStore
 
+    /// 아잉 마작(4인 리치 마작 — 내부 이름 mahjong) 스토어. 아잉 뒤집기와 **같은 호스트 프로토콜**을 요구한다
+    /// (`MahjongStoreHost = GomokuStoreHost`). 판정은 서버가 하고 이 스토어는 서버 state 를 그대로 든다(혼자 연습판만 로컬).
+    let mahjong: MahjongStore
+
     /// 확성기(📢 v0.3.51) 작성 스토어 — **폰과 같은 코어 스토어**다(`MegaphoneStore`). 이 스토어는 호스트(세션·루비 미러)만
     /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
     let megaphone: MegaphoneStore
@@ -1700,6 +1706,8 @@ final class WorkTimerStore {
             rummy.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
             // 아잉 뒤집기도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선에 남지 않게.
             if reversi.hiddenPeerIDs != blockHiddenPeerIDs { reversi.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 아잉 마작도 같은 관계다 — 차단한 사람이 로비·공개 방·받은 초대·배너에 남지 않게(큐브 꼴, 같음 가드는 스토어 안).
+            mahjong.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
         }
     }
     /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
@@ -2024,6 +2032,8 @@ final class WorkTimerStore {
         self.rummy = RummyStore()
         // 아잉 뒤집기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.reversi = ReversiStore()
+        // 아잉 마작도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.mahjong = MahjongStore()
         // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.megaphone = MegaphoneStore()
         // 확성기 배너도 같다(2026-10-30). 본 것 기록은 이 앱의 defaults 에 둔다(시험은 격리 스위트).
@@ -2088,6 +2098,7 @@ final class WorkTimerStore {
         tetris.attach(host: self)
         rummy.attach(host: self)
         reversi.attach(host: self)
+        mahjong.attach(host: self)
         // v0.3.69: '이 기기가 연 판' 기록(한 판 한 기기 — TetrisDuelStore 머리말 ⑩)을 이 앱의 defaults 에 둔다. 빠지면 기록이
         // 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 침묵 패를 한다.
         tetris.defaults = defaults
@@ -2098,6 +2109,8 @@ final class WorkTimerStore {
         // 2026-11-03: 아잉 뒤집기도 '이 기기가 연 판' 장부를 이 앱의 defaults 에 둔다(오목·체스와 같은 규칙 — 창은 판을 연 기기에서만
         // 저절로 열린다). 빠지면 장부가 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 자기 판의 창을 안 띄워 30초를 흘린다.
         reversi.deviceLedger.defaults = defaults
+        // 아잉 마작도 같은 장부를 이 앱의 defaults 에 둔다(같은 규칙 — 창·주의·말풍선·깨우기·방 확인은 판을 연 기기에서만).
+        mahjong.deviceLedger.defaults = defaults
         // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
         // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
         gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }
@@ -2105,6 +2118,7 @@ final class WorkTimerStore {
         tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         rummy.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "rummy") }
         reversi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "reversi") }
+        mahjong.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "mahjong") }
         megaphone.attach(host: self)
         megaphoneBanner.attach(host: self)
         // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).
@@ -4259,6 +4273,8 @@ extension WorkTimerStore {
         rummy.reset()
         // 아잉 뒤집기도 같은 이유로 내린다. 빠뜨리면 다음 사람이 앞 계정의 판·신청을 보고 앞 계정의 폴링이 새 토큰으로 돈다.
         reversi.reset()
+        // 아잉 마작도 같은 이유로 내린다(방·판·초대·연습판·장부 판).
+        mahjong.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
         // 확성기 배너의 큐·필터 id·스로틀도 계정에 묶인다(2026-10-30). 남기면 앞 사람이 받은 확성기 id 로 다음 사람의 줄을 거른다.
@@ -4405,6 +4421,7 @@ extension WorkTimerStore {
         tetris.reset()
         rummy.reset()
         reversi.reset()
+        mahjong.reset()
         megaphone.reset()
         resetMegaphoneBanner()
         resetGachaState()

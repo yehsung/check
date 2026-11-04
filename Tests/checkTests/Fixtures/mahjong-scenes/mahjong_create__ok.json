@@ -1,0 +1,99 @@
+{
+  "match_id": "7e7e0000-0000-4000-8000-0000000000aa",
+  "state": {
+    "events": [],
+    "last_hand": null,
+    "match": {
+      "backup_at_ms": null,
+      "bank_full_ms": 20000,
+      "base_ms": 5000,
+      "created_ms": 1799999880000,
+      "dealer_seat": null,
+      "dora_indicators": [],
+      "end_reason": null,
+      "extension": false,
+      "finished_ms": null,
+      "format": "tonpuu",
+      "grace_ms": 1000,
+      "hand_index": null,
+      "hand_no": null,
+      "honba": null,
+      "host": {
+        "avatar_url": null,
+        "character": "aing",
+        "display_name": "아잉",
+        "id": "00000000-0000-0000-0000-0000000000a1"
+      },
+      "id": "7e7e0000-0000-4000-8000-0000000000aa",
+      "is_public": false,
+      "kan_count": null,
+      "kyotaku": null,
+      "next_hand_ms": null,
+      "phase": "room",
+      "room_expires_ms": 1800000480000,
+      "round": null,
+      "seq": 0,
+      "stake": 5,
+      "started_ms": null,
+      "status": "forming",
+      "turn_seat": null,
+      "wake_at_ms": null,
+      "wake_seat": null,
+      "wall_remaining": null
+    },
+    "members": [
+      {
+        "is_host": true,
+        "state": "joined",
+        "user": {
+          "avatar_url": null,
+          "character": "aing",
+          "display_name": "아잉",
+          "id": "00000000-0000-0000-0000-0000000000a1"
+        }
+      },
+      {
+        "is_host": false,
+        "state": "invited",
+        "user": {
+          "avatar_url": null,
+          "character": "aing",
+          "display_name": "비비",
+          "id": "00000000-0000-0000-0000-0000000000b2"
+        }
+      },
+      {
+        "is_host": false,
+        "state": "invited",
+        "user": {
+          "avatar_url": null,
+          "character": "aing",
+          "display_name": "씨씨",
+          "id": "00000000-0000-0000-0000-0000000000c3"
+        }
+      },
+      {
+        "is_host": false,
+        "state": "invited",
+        "user": {
+          "avatar_url": null,
+          "character": "aing",
+          "display_name": "디디",
+          "id": "00000000-0000-0000-0000-0000000000d4"
+        }
+      }
+    ],
+    "my_away": null,
+    "my_decision": null,
+    "my_drawn": null,
+    "my_furiten": [],
+    "my_hand": [],
+    "my_seat": null,
+    "my_waits": [],
+    "reactions": [],
+    "ruby_balance": 100,
+    "seats": [],
+    "server_now_ms": 1799999900000
+  },
+  "status": "ok"
+}

@@ -1,0 +1,50 @@
+{
+  "me": {
+    "rank": null,
+    "games": 9,
+    "firsts": 9,
+    "thirds": 0,
+    "fourths": 0,
+    "seconds": 0,
+    "avg_rank": 1.0
+  },
+  "rows": [
+    {
+      "rank": 1,
+      "games": 10,
+      "center": null,
+      "firsts": 3,
+      "user_id": "bc1e57c8-92e1-41cb-a0c1-050b9c52b73e",
+      "avg_rank": 1.9,
+      "character": null,
+      "avatar_url": null,
+      "display_name": "mjt-bc1e57c8-92e1-41cb-a0c1-050b9c52b73e"
+    },
+    {
+      "rank": 2,
+      "games": 20,
+      "center": null,
+      "firsts": 4,
+      "user_id": "4a44ebc9-60df-4341-8bf7-6770ec271701",
+      "avg_rank": 2.1,
+      "character": null,
+      "avatar_url": null,
+      "display_name": "mjt-4a44ebc9-60df-4341-8bf7-6770ec271701"
+    },
+    {
+      "rank": 3,
+      "games": 10,
+      "center": null,
+      "firsts": 2,
+      "user_id": "470cb06c-9279-4fcb-8acd-893f27a2f218",
+      "avg_rank": 2.1,
+      "character": null,
+      "avatar_url": null,
+      "display_name": "mjt-470cb06c-9279-4fcb-8acd-893f27a2f218"
+    }
+  ],
+  "status": "ok",
+  "min_games": 10,
+  "server_now_ms": 1793699188116,
+  "record_since_ms": null
+}

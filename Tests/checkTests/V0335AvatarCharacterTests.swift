@@ -434,7 +434,9 @@ private func avFetches(_ host: String) -> Int {
         // 2026-10-30: 확성기 배너 카드가 한 자리를 더했다(보낸 사람 얼굴). 31 + 7 + 1.
         // 아잉 뒤집기 창이 다섯 자리를 더했다(로비 상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청). 39 + 5 — 아래 `reversi` 필터가
         // 자리마다 그 사람 id 와 착용값을 되묻는다.
-        #expect(avatars.count == 44, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 아잉 마작 창이 다섯 자리를 더했다(로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리 · 판 결과 줄). 44 + 5 — 아래
+        // `mahjong` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다.
+        #expect(avatars.count == 49, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -516,6 +518,21 @@ private func avFetches(_ host: String) -> Int {
                     "ReversiPanelLobby.swift 에 \(id) · \(hint) 짝이 없다")
         }
 
+        // 아잉 마작 다섯 자리: 로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리(나 = 내 얼굴) · 판 결과 줄. 49 만 올리면 한
+        // 자리가 남의 id 나 착용값 없이 그려도 초록이라, 자리마다 **그 사람의** id·착용값을 되묻는다.
+        let mahjong = avatars.filter { $0.file.hasPrefix("Mahjong") }
+        #expect(mahjong.count == 5, "\(mahjong.map(\.text))")
+        let mahjongIDs: [(String, String, String)] = [
+            ("MahjongPanelLobby.swift", "userID: user.id.uuidString.lowercased()", "characterHint: user.character"),
+            ("MahjongPanelLobby.swift", "userID: row.userId,", "characterHint: row.character"),
+            ("MahjongPanelLobby.swift", "userID: room.host?.id,", "characterHint: room.host?.character"),
+            ("MahjongPanelTable.swift", "userID: seat.user?.userId,", "characterHint: me?.characterID ?? seat.user?.character"),
+            ("MahjongPanelResult.swift", "userID: seat.user?.userId,", "characterHint: seat.user?.character"),
+        ]
+        for (file, id, hint) in mahjongIDs {
+            #expect(mahjong.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
+        }
+
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")
         #expect(editable.count == 1 && editable.allSatisfy { $0.text.contains("userID: userID") }, "\(editable)")
@@ -561,9 +578,10 @@ private func avFetches(_ host: String) -> Int {
             let n = V0325TooltipTests.count(".appUserAvatarCharacters(from:", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
+        // 아잉 마작 창(MahjongPanel)이 열째 루트다(MJ/SPEC.md §4.6 #23 — 툴팁 레이어 짝은 V0325).
         #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
-                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1", "RummyPanel.swift:1",
-                          "TetrisDuelPanel.swift:1"],
+                          "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1",
+                          "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
                 "\(roots)")
         // 아잉 뒤집기 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·순위·신청의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["ReversiPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)

@@ -529,6 +529,9 @@ package enum MeText {
             // 맥 `ReversiEntryIcon.symbol`(반은 흑, 반은 백인 원 — 뒤집히는 돌)과 같은 이름이다. 폰 설정의 화면 모드(`.system`)가
             // 이미 쓰는 이름이라 이 앱의 iOS 바닥에서 산다(시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다).
             ("reversi", "circle.lefthalf.filled"),
+            // '아잉 마작'(4인 리치 마작 — 서버 `daily_mahjong`, sort 90 · 20261108221000, 맥 0.3.76). 폰에는 게임이 없어 보조 문장
+            // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). 맥 `MahjongEntryIcon.symbol` 과 같은 이름이다(위 ①).
+            ("mahjong", "square.grid.3x3.square"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }

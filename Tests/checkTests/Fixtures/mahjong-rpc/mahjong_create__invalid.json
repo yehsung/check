@@ -1,0 +1,12 @@
+{
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "invalid",
+  "formats": [
+    "tonpuu",
+    "hanchan"
+  ]
+}

@@ -238,11 +238,14 @@ struct V03xxReversiWiringTests {
     func thePhoneRunnerWiresTheReversiBranchToTheStore() throws {
         let runner = try rwtPhoneRunner()
         #expect(rwtCount("case .reversiSignal", in: runner) == 1, "폰 러너에 아잉 뒤집기 가지가 하나가 아니다")
-        let branch = try #require(rwtBetween(runner, "case .reversiSignal:", "case .megaphoneSignal:"))
+        let branch = try #require(rwtBetween(runner, "case .reversiSignal:", "case .mahjongSignal:"), "다음 가지(아잉 마작 — 맥 0.3.76)가 없다")
         #expect(branch == "case .reversiSignal: reversi?.handleSignal() ", "폰 러너의 아잉 뒤집기 가지가 스토어로 안 간다: \(branch)")
         #expect(!branch.contains("requestDrain") && !branch.contains("requestMessageActivity"), "아잉 뒤집기 초인종이 메시지 조회로 샌다")
         #expect(runner.contains("rummy?.realtimeDidJoin() reversi?.realtimeDidJoin()"), "조인 따라잡기에 아잉 뒤집기가 없다(큐브 바로 뒤)")
         #expect(runner.contains("@ObservationIgnored package weak var reversi: ReversiStore?"), "러너가 스토어를 약한 참조로 들지 않는다")
+        // 아잉 마작 가지(맥 0.3.76)는 폰에서 아직 비어 있다 — `.drain` 으로 떨어지면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
+        let mahjong = try #require(rwtBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:"))
+        #expect(mahjong == "case .mahjongSignal: break ", "폰 러너의 아잉 마작 가지가 비어 있지 않다: \(mahjong)")
         // ★ 기준선: 큐브 가지는 같은 읽기로 '잇는 가지'다 · 체스 가지는 여전히 비어 있다(같은 읽기가 빈 가지를 알아본다).
         let rummy = try #require(rwtBetween(runner, "case .rummySignal:", "case .reversiSignal:"))
         #expect(rummy.contains("rummy?.handleSignal()"))
@@ -313,8 +316,9 @@ struct V03xxReversiWiringTests {
     @Test
     func theAppWiresEveryReversiDoor() throws {
         let app = try rwtMac("CheckApp.swift")
-        #expect(app.contains("wireRummy() wireReversi() wireMegaphoneBanner()"), "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다")
-        let body = try #require(rwtBetween(app, "private func wireReversi() {", "static func closeRummyWindow() {"))
+        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireMegaphoneBanner()"),
+                "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다(사이에 아잉 마작)")
+        let body = try #require(rwtBetween(app, "private func wireReversi() {", "private func wireMahjong() {"))
         let doors: String = [
             "let reversi = store.reversi reversi.rankingEnabled = true reversi.spectatorFeaturesEnabled = true ",
             "reversi.presentWindow = { CheckReversiWindowController.shared.show() } ",
@@ -534,7 +538,7 @@ struct V03xxReversiWiringTests {
     func theMiniGameWindowOpensTheReversiWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.reversi.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckReversiWindowController.frameAutosaveName))
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 8)
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 9, "아잉 마작 창이 더해져 아홉")
 
         #expect(MiniGameReversiEntryButton.title == "아잉 뒤집기")
         #expect(MiniGameReversiEntryButton.help == "리버시 규칙 1:1 대결 창을 열어요")
@@ -549,7 +553,7 @@ struct V03xxReversiWiringTests {
         #expect(panel.contains("let onRummy: () -> Void let onReversi: () -> Void"), "사이드바가 아잉 뒤집기 문을 기본값 없이 받지 않는다")
         #expect(!panel.contains("var onReversi: () -> Void = {}"), "아잉 뒤집기 문에 빈 기본값이 남았다")
         // 점 칸: 명시 init 맨 뒤 기본값(기존 호출 보호) + 창이 부르는 생성자가 메뉴바와 같은 사실을 읽는다.
-        #expect(panel.contains("init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false)"))
+        #expect(panel.contains("init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false,"))
         #expect(panel.contains("rummy: store.rummy.hasIncomingInvite, reversi: store.reversi.visibleIncoming != nil"))
         // 문 struct 는 큐브 문 struct 뒤에 선다(설계 §4.6 #18).
         let rummyDoor = try #require(panel.range(of: "struct MiniGameRummyEntryButton: View {"))
@@ -577,8 +581,8 @@ struct V03xxReversiWiringTests {
         reversi.phase = .playing
         #expect(reversi.defersMegaphoneBanner)
         let src = try rwtMac("WorkTimerStoreMegaphoneBanner.swift")
-        #expect(src.contains("rummyLive: rummy.defersMegaphoneBanner, reversiLive: reversi.defersMegaphoneBanner)"))
-        #expect(src.contains("rummyLive: Bool = false, reversiLive: Bool = false) -> Bool {"))
+        #expect(src.contains("rummyLive: rummy.defersMegaphoneBanner, reversiLive: reversi.defersMegaphoneBanner,"))
+        #expect(src.contains("rummyLive: Bool = false, reversiLive: Bool = false,"))
         #expect(src.contains("if reversiLive { return true }"))
     }
 

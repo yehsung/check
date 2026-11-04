@@ -1,0 +1,78 @@
+{
+  "state": {
+    "match": {
+      "id": "1ec0724f-9880-48c1-a1ca-4af78210d6e4",
+      "seq": 0,
+      "host": {
+        "id": "5e1d6a06-098d-4804-9ae1-8689fbb9517d",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-5e1d6a06-098d-4804-9ae1-8689fbb9517d"
+      },
+      "honba": 0,
+      "phase": "room",
+      "round": 0,
+      "stake": 3,
+      "format": "hanchan",
+      "status": "forming",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 0,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": true,
+      "kan_count": 0,
+      "turn_seat": null,
+      "wake_seat": null,
+      "created_ms": 1793699161555,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": null,
+      "wake_at_ms": null,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": null,
+      "bank_full_ms": 20000,
+      "next_hand_ms": null,
+      "wall_remaining": null,
+      "dora_indicators": [],
+      "room_expires_ms": 1793699761555
+    },
+    "seats": [],
+    "events": [],
+    "members": [
+      {
+        "user": {
+          "id": "5e1d6a06-098d-4804-9ae1-8689fbb9517d",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-5e1d6a06-098d-4804-9ae1-8689fbb9517d"
+        },
+        "state": "joined",
+        "is_host": true
+      },
+      {
+        "user": {
+          "id": "03a713f2-1d88-49bb-abc3-7fe29b4d1dde",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-03a713f2-1d88-49bb-abc3-7fe29b4d1dde"
+        },
+        "state": "joined",
+        "is_host": false
+      }
+    ],
+    "my_away": null,
+    "my_hand": [],
+    "my_seat": null,
+    "my_drawn": null,
+    "my_waits": [],
+    "last_hand": null,
+    "reactions": [],
+    "my_furiten": [],
+    "my_decision": null,
+    "ruby_balance": 100,
+    "server_now_ms": 1793699161569
+  },
+  "status": "already_in_room"
+}

@@ -726,10 +726,11 @@ struct V0325TooltipTests {
         // v0.3.69: 아잉 큐브 창(RummyPanel) 루트가 여덟 번째다. 확성기 배너 창은 [답장] 말풍선을 위해 한때 아홉 번째였으나
         // 2026-10-30 [답장] 을 빼면서 말풍선이 없어져 레이어도 걷었다([닫기] 만 남은 카드).
         // 아잉 뒤집기 창(ReversiPanel) 루트가 아홉 번째다(SPEC §5.1 — 창 루트에 레이어 + 아바타 표 두 줄).
+        // 아잉 마작 창(MahjongPanel) 루트가 열 번째다(MJ/SPEC.md §4.6 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
         // 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
         #expect(layerSites == [
             "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
-            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1",
+            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1",
             "RummyPanel.swift:1", "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")
         // 아잉 큐브 창: 오목·체스와 **같은 자리**(창 고정 프레임·배경·전경색 뒤). 판·랙·목록·덮개 ZStack 은 전부 그 안쪽이라

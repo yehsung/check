@@ -288,6 +288,28 @@ enum ReversiWireJSON {
         await harness.tearDown()
     }
 
+    @Test("아잉 마작 초인종(맥 0.3.76): 빈 가지라 메시지 조회로 새지 않고 아잉 뒤집기 로비도 안 읽는다 · 기준선 'reversi' 는 읽는다")
+    func theMahjongSignalStaysQuiet() async {
+        let harness = ReversiWireHarness(label: "mahjong-signal")
+        harness.serve()
+        await harness.signIn()
+        harness.transport.emit(.joined)
+        await harness.barrier()
+        harness.model.realtime.flushCoalescedSignals()
+        let lobbyBefore = harness.count("reversi_lobby")
+        let activityBefore = harness.model.realtime.activityFlushCount
+        harness.transport.emit(.broadcast(event: "mahjong"))
+        #expect(harness.model.realtime.effectLog.last == .mahjongSignal, "링이 아잉 마작 가지를 안 냈다 — 'mahjong' 이 기본값(.drain)으로 떨어졌다")
+        await harness.barrier()
+        harness.model.realtime.flushCoalescedSignals()
+        #expect(harness.model.realtime.activityFlushCount == activityBefore, "아잉 마작 초인종이 메시지 조회로 샜다")
+        #expect(harness.count("reversi_lobby") == lobbyBefore, "아잉 마작 초인종이 아잉 뒤집기 로비를 읽었다")
+        // ★ 기준선: 같은 하네스에서 'reversi' 는 로비를 한 번 읽는다(이 시험이 조회를 셀 줄 안다).
+        harness.transport.emit(.broadcast(event: "reversi"))
+        #expect(await waits.wait { harness.count("reversi_lobby") == lobbyBefore + 1 }, "기준선이 안 갈린다 — 하네스가 조회를 못 센다")
+        await harness.tearDown()
+    }
+
     @Test("조인 따라잡기: `.catchUp` 이 아잉 뒤집기 로비를 한 번 읽는다 · 칸을 떼면 0건")
     func joinCatchesUp() async {
         let harness = ReversiWireHarness(label: "reversi-join")

@@ -30,6 +30,7 @@ package final class MobileRealtimeRegistration {
 ///  3. `.gomokuSignal` → `GomokuStore.handleSignal()` · `.tetrisSignal` → `TetrisDuelStore.handleSignal()`(1.0.11). · `.rummySignal` → `RummyStore.handleSignal()`(1.0.16).
 ///     · `.reversiSignal` → `ReversiStore.handleSignal()`(1.0.17).
 ///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
+///     `.mahjongSignal` 도 **일부러 빈 가지**다(맥 0.3.76 아잉 마작 — 폰에 스토어가 없다). `.drain` 으로 새면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
 @MainActor

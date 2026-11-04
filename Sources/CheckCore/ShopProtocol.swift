@@ -61,6 +61,16 @@ package nonisolated enum ShopWire {
     /// 이 번호를 요구하는 캐릭터 — 이슬 하나(`CharacterCatalog.drinkGiftBuiltInIDs` 와 같은 값).
     package static let isulCharacterIDs = CharacterCatalog.drinkGiftBuiltInIDs
 
+    /// 빼빼로 아잉이(v0.3.77 빼빼로 데이 기간 선물 전용)가 든 명단과 빼빼로 선물(`character_gift_pending` 의 `kind = 'pepero'` · 그 수령)을
+    /// 받을 수 있는 번호. 서버 `character_prices.min_protocol = 6` 인 행이 빼빼로이고, 6 미만인 클라에게는 그 행이 **아예 안 보이며**(가진
+    /// 사람은 예외 — 기존 규칙), 선물 조회는 그 번호가 받을 수 있는 종류만 싣고(5 = 생일 · 술 — 0.3.74~ 맥의 행동 그대로), 빼빼로 선물 수령은
+    /// `needs_update` 로 거절한다.
+    /// ★ 그림(초상 · 3D 마감)이 붙기 전엔 어느 빌드도 이 번호를 말하지 않는다 — 맥 `drawableCharacterIDs` 에 빼빼로가 없으면 5 에 머문다.
+    package static let peperoProtocol = 6
+
+    /// 이 번호를 요구하는 캐릭터 — 빼빼로 하나(`CharacterCatalog.peperoGiftBuiltInIDs` 와 같은 값).
+    package static let peperoCharacterIDs = CharacterCatalog.peperoGiftBuiltInIDs
+
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
     /// 맥은 `CheckMascotAssets.drawableCharacterIDs`(초상·아틀라스 **파일 실재**)가, 폰은 `AingCharacterArt.knownIDs`
@@ -79,13 +89,16 @@ package nonisolated enum ShopWire {
     ///   케이크 둘이 다 있어도 무지개가 없으면 4 는커녕 3 도 못 보낸다(번호를 건너뛰어 말할 수 없다 — 보수적인 쪽으로 틀린다).
     ///   5(v0.3.74)도 같다: 여기까지 전부 **와** 이슬을 그릴 수 있을 때만. 이슬만 있고 케이크가 하나라도 빠지면 3 에 머문다 —
     ///   5 를 말하면 서버가 케이크 선물도 이슬 선물도 내려 주므로, 그림 없는 캐릭터를 받게 된다.
+    ///   6(v0.3.77)도 같다: 여기까지 전부 **와** 빼빼로를 그릴 수 있을 때만. 빼빼로만 있고 이슬이 빠지면 4 에 머문다 —
+    ///   6 을 말하면 서버가 이슬 선물도 빼빼로 선물도 내려 주므로, 그림 없는 캐릭터를 받게 된다.
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
         let drawable = Set(drawableCharacterIDs)
         guard drawable.contains(robotCharacterID) else { return legacyProtocol }
         guard drawable.contains(goldCharacterID) else { return robotProtocol }
         guard drawable.contains(rainbowCharacterID) else { return goldProtocol }
         guard cakeCharacterIDs.allSatisfy(drawable.contains) else { return rainbowProtocol }
-        return isulCharacterIDs.allSatisfy(drawable.contains) ? isulProtocol : cakeProtocol
+        guard isulCharacterIDs.allSatisfy(drawable.contains) else { return cakeProtocol }
+        return peperoCharacterIDs.allSatisfy(drawable.contains) ? peperoProtocol : isulProtocol
     }
 
     /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의
@@ -98,6 +111,11 @@ package nonisolated enum ShopWire {
     /// 조회 자체의 문은 여전히 `supportsCakeGift`(4)다 — 4 인 빌드는 생일 선물만 받는다.
     package static func supportsDrinkGift(protocolVersion: Int) -> Bool {
         protocolVersion >= isulProtocol
+    }
+
+    /// 이 번호로 빼빼로 선물(빼빼로 아잉이)을 받을 수 있는가(서버 `claim_character_gift` 의 빼빼로 선물 문턱 `p_protocol >= 6` 와 같다).
+    package static func supportsPeperoGift(protocolVersion: Int) -> Bool {
+        protocolVersion >= peperoProtocol
     }
 
     /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).

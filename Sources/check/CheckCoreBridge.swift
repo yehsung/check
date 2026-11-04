@@ -51,6 +51,10 @@ extension CharacterCatalog {
         if CharacterCatalog.isIsulAing(id) {
             return entry(id: id) == nil ? nil : IsulArt.current.portraitURL(mood)
         }
+        // 빼빼로 아잉이(v0.3.77 내장)도 이슬과 같은 길 — 그림 저장소 `PeperoArt`(디스크 캐시 → 번들 폴백 `aing_pepero-*.png`).
+        if CharacterCatalog.isPeperoAing(id) {
+            return entry(id: id) == nil ? nil : PeperoArt.current.portraitURL(mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

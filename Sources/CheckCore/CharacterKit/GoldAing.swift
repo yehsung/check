@@ -26,6 +26,9 @@ extension CharacterManifest {
         /// 이슬 아잉이(v0.3.74 '술 한잔' 선물 전용) — 아잉 메시 + 몸 셰이더(초록 유리 · 라벨) + 런타임 장식 노드(비스듬한 초록 병뚜껑).
         /// 렌더러는 kind 가 아니라 이 값으로 가른다(금과 같은 이유). **희귀가 아니다**(`isRare` 거짓 — 뽑기 화면에 나오지 않는다).
         case isul
+        /// 빼빼로 아잉이(v0.3.77 빼빼로 데이 기간 선물 전용). **희귀가 아니다**(`isRare` 거짓). 그림(몸 셰이더 · 장식)은 시안 결정 뒤 —
+        /// 그 전까지 맥 3D 는 평범 갈래(아잉 그대로)다.
+        case pepero
     }
 
     /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개·케이크는 코드에 박힌 내장 항목뿐이다).
@@ -46,6 +49,8 @@ extension CharacterManifest.Finish {
             self = .cakeChoco
         } else if CharacterCatalog.isIsulAing(characterID) {
             self = .isul
+        } else if CharacterCatalog.isPeperoAing(characterID) {
+            self = .pepero
         } else {
             self = .standard
         }
@@ -57,7 +62,7 @@ extension CharacterManifest.Finish {
     package var isRare: Bool {
         switch self {
         case .gold, .rainbow: return true
-        case .standard, .cakeStrawberry, .cakeChoco, .isul: return false
+        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero: return false
         }
     }
 
@@ -65,7 +70,7 @@ extension CharacterManifest.Finish {
     package var isCake: Bool {
         switch self {
         case .cakeStrawberry, .cakeChoco: return true
-        case .standard, .gold, .rainbow, .isul: return false
+        case .standard, .gold, .rainbow, .isul, .pepero: return false
         }
     }
 }

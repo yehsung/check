@@ -130,6 +130,8 @@ enum GachaPalette {
         case .cakeStrawberry, .cakeChoco: return nil
         // 이슬(v0.3.74)도 희귀가 아니다 — 술 한잔 선물 전용(`Finish.isRare` 거짓).
         case .isul: return nil
+        // 빼빼로(v0.3.77)도 희귀가 아니다 — 빼빼로 데이 선물 전용(`Finish.isRare` 거짓).
+        case .pepero: return nil
         }
     }
 

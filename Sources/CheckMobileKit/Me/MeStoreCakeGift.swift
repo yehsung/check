@@ -226,6 +226,8 @@ extension MeStore {
         switch kind {
         case .birthday: return CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
         case .drink: return DrinkGiftText.notice(for: outcome, name: MeCharacterName.display)
+        // 빼빼로(맥 0.3.77 먼저 · 능력 6): 폰은 능력 5 라 서버가 이 선물을 보이지 않는다(다음 폰 판). 그래도 갈래는 코어 글자로 닫는다.
+        case .pepero: return PeperoGiftText.notice(for: outcome, name: MeCharacterName.display)
         }
     }
 
@@ -382,6 +384,7 @@ extension CharacterGiftKind {
         switch self {
         case .birthday: return "🎂"
         case .drink: return "🥂"
+        case .pepero: return "🍫"
         }
     }
 }

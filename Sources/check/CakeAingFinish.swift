@@ -1080,7 +1080,7 @@ enum CakeAingFinish {
             switch finish {
             case .cakeStrawberry: self = .strawberry
             case .cakeChoco: self = .choco
-            case .standard, .gold, .rainbow, .isul: return nil
+            case .standard, .gold, .rainbow, .isul, .pepero: return nil
             }
         }
 
@@ -1218,6 +1218,8 @@ enum CakeAingFinish {
     /// 조건을 두지 않는다: 케이크를 안 입은 사람도 울트라로 남의 케이크를 맞으면 그 순간 메인에서 굽게 되므로, 누구에게나 한 번 굽는다
     /// (release 합 ~80ms · 메모리는 장식 노드 두 벌). 이미 구웠으면 아무것도 안 한다. 반환 = 끝을 기다리는 손잡이(시험용).
     /// 이슬 아잉이의 병뚜껑(v0.3.74 — 같은 결의 런타임 장식)도 같은 자리 · 같은 방식으로 미리 굽는다(첫 이슬 씬이 메인에서 굽지 않게).
+    /// 빼빼로 상자 · 막대(v0.3.77)는 **여기서 굽지 않는다** — 한 벌 ≈ 13MB · release 0.73초라 입었거나 가진 사람만 굽는다(조정자 결정 11-04 —
+    /// `PeperoPrewarmGate`, 앱 시작이 같은 때 문을 연다).
     @discardableResult
     static func prewarmDecorTemplates(after delay: TimeInterval = 0) -> DispatchWorkItem {
         let work = DispatchWorkItem(qos: .utility) {

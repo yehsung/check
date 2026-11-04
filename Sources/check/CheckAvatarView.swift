@@ -243,6 +243,7 @@ enum AppUserAvatarArt {
     @MainActor
     static func portrait(characterID: String) -> CGImage? {
         IsulArtRevision.observe(characterID: characterID)
+        PeperoArtRevision.observe(characterID: characterID)
         if let hit = cache[characterID] { return hit }
         guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID),
               let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -280,6 +281,12 @@ enum AppUserAvatarArt {
         // 이슬 아잉이(v0.3.74)도 같은 2D 몸(0.88배) 위에 **불투명 병뚜껑**이 머리 위에 섰다 — 케이크와 같은 자르기(몸 상자 + 둘레 8%)로
         // 얼굴을 아잉 변형과 같은 눈금에 세운다(코어 `isCake` 는 케이크 뜻만이라 따로 묻는다 — 설계서 §2 함정).
         if finish.isCake || finish == .isul { return .cakeBodyFramed }
+        // 빼빼로 아잉이(v0.3.77)는 **알파 상자**다(케이크 자르기가 아니다). 같은 2D 몸(0.88배) 앞에 몸보다 넓은 불투명 상자가, 머리 위로 막대가 섰다 —
+        // 케이크 자르기는 불투명 상자 폭을 몸 폭으로 읽어 얼굴이 15% 작아진다(실측 46pt 눈금 0.2469 대 이슬 · 초코 0.2896). 알파 상자(V0336 표
+        // 168×160)는 상자 옆 넘침 · 막대 높이가 케이크의 둘레 8% 와 **비슷해** 얼굴이 이슬 · 케이크보다 **3.6% 작은** 눈금에 선다(실측 0.2793 —
+        // 같은 눈금은 아니다). 막대가 머리 양옆으로 솟아 머리(가운데 띠 첫 잉크)는 한 행 남짓 아래에 선다(V0336 topGap 한도를 빼빼로만 따로 둔
+        // 이유). 눈금은 `V0377PeperoMac3DTests.avatarFaceMatchesTheOtherVariants`(5% 안 · 케이크 자르기 기준선 10% 넘게)가 맞댄다.
+        if finish == .pepero { return .tight }
         return finish.isRare ? .bodyFramed : .tight
     }
 

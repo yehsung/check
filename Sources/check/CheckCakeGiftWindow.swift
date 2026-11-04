@@ -53,7 +53,8 @@ struct CheckCakeGiftWindowView: View {
             CheckTheme.background
             if let received = store.cakeGiftReceivedID {
                 receivedScreen(received)
-            } else if store.cakeGiftPresented?.kind == .drink {
+            } else if store.cakeGiftPresented?.kind.showsInviteScreen == true {
+                // 술 한잔(v0.3.74) · 빼빼로 데이(v0.3.77) — 선택지가 하나라 고르기 없이 초대장 화면.
                 inviteScreen
             } else {
                 choosingScreen
@@ -133,13 +134,13 @@ struct CheckCakeGiftWindowView: View {
         .accessibilityLabel(title)
     }
 
-    // MARK: ①' 술 한잔 초대장 (v0.3.74 — 고르기 없음)
+    // MARK: ①' 술 한잔 초대장 (v0.3.74 — 고르기 없음) · 빼빼로 데이(v0.3.77)도 같은 틀
 
     /// 술 한잔 선물 — 선택지가 이슬 하나라 고르지 않는다(스토어가 미리 골라 둔다 — `presentCakeGiftWindow`). "술 한잔 하자고 초대 보내는 느낌":
     /// 운영자 한 줄(`note`)이 있으면 초대장 카드의 큰 글이고 본문은 그 아래 작게, 없으면 본문(가제)이 큰 글이다.
     private var inviteScreen: some View {
         let copy = store.cakeGiftWindowCopy
-        let id = store.cakeGiftPresented?.options.first ?? CharacterCatalog.isulAingID
+        let id = store.cakeGiftPresented.flatMap { $0.options.first ?? $0.kind.builtInIDs.first } ?? CharacterCatalog.isulAingID
         let name = catalog.manifest(id: id)?.displayName ?? id
         let note = store.cakeGiftPresented?.note
         return VStack(spacing: 10) {
@@ -289,8 +290,16 @@ struct CheckCakeGiftWindowView: View {
 
     @MainActor private static var portraitCache: [String: CGImage] = [:]
 
+    /// 이 캐릭터의 초상 캐시를 버린다 — 그림 저장소(`IsulArt` · `PeperoArt`)가 새 초상을 받았을 때 부른다(v0.3.77 — 안 비우면 받는 창이 옛 그림을
+    /// 프로세스 내내 쥔다). 화면은 관찰 값(`IsulArtRevision` · `PeperoArtRevision`)으로 다시 그린다.
+    @MainActor static func forgetPortrait(characterID: String) {
+        portraitCache[characterID] = nil
+    }
+
     /// 192px 중립 초상 그대로(장식까지 다 보이게 — 조이지 않는다). `Image(nsImage:)` 는 보간을 무시하므로 CGImage 로 내린다.
     @MainActor static func portrait(_ id: String) -> some View {
+        IsulArtRevision.observe(characterID: id)
+        PeperoArtRevision.observe(characterID: id)
         let cg: CGImage? = portraitCache[id] ?? {
             let made = CheckMascotAssets.image(for: .neutral, characterID: id)?
                 .cgImage(forProposedRect: nil, context: nil, hints: nil)

@@ -608,7 +608,16 @@ final class ReactionEngine {
         if let cake = CakeAingFinish.kind(of: character) { return cake.characterID }
         // 이슬 아잉이(v0.3.74)도 같은 메시라 자기 표식(`IsulAingFinish.markerName`)으로 가른다 — 이슬 ↔ 아잉 · 케이크 사이의 울트라도 갈아입는다.
         if IsulAingFinish.isIsul(character) { return CharacterCatalog.isulAingID }
+        // 빼빼로 아잉이(v0.3.77)도 같은 메시 · 같은 몸 재질이라 자기 표식(`PeperoAingFinish.markerName`)으로만 가른다 — 빼빼로 ↔ 아잉 사이의 울트라도 갈아입는다.
+        if PeperoAingFinish.isPepero(character) { return CharacterCatalog.peperoAingID }
         return CharacterCatalog.builtInAingID
+    }
+
+    /// 울트라 격발 자세 — 지금 서 있는 캐릭터로 고른다(격발은 발신자 캐릭터로 갈아입은 **뒤** 요청되므로 그 캐릭터의 자세다).
+    /// 빼빼로만 따로다(`ReactionActions.UltraRagePose.pepero` 주석 — 상자 밑 몸 · 막대 잘림). 재생(`perform`)과 재-attach 되재생
+    /// (`reactionAction(for:)`)이 둘 다 여기서 읽는다.
+    var ultraRagePose: ReactionActions.UltraRagePose {
+        currentCharacterID == CharacterCatalog.peperoAingID ? .pepero : .standard
     }
 
     /// 헤드리스 검증 지점: 지금 몰고 있는 것이 스프라이트인가.
@@ -852,7 +861,7 @@ final class ReactionEngine {
             // ⚠️ 여기만 일부러 안 갈랐다. x ±12° 를 쓰지만 cos(12°)=0.978 이라 세로 단축이 **2.2%** 이고,
             //    같은 연출이 스케일을 ±14% 로 흔들고 있어 묻힌다. 12.5Hz 진동이라 눈에 잡히지도 않는다.
             //    (카드 뒤집기가 되는 y축 회전은 애초에 쓰지 않는다.)
-            return ReactionActions.ultraPoked(extent: modelExtent)
+            return ReactionActions.ultraPoked(extent: modelExtent, pose: ultraRagePose)
         case .goalAchieved:
             let hop = modelExtent * 0.34
             return flat ? ReactionActions.flatGoalAchieved(hop: hop) : ReactionActions.goalAchieved(hop: hop)
@@ -1079,7 +1088,7 @@ final class ReactionEngine {
         case .ultraPoked(let bubbleText):
             // 전체화면 격발. 노드 미연결(캐릭터를 꺼 둔 사용자에게 도착 등)이면 runReaction 은 자연 no-op 이고
             // 말풍선만 뜬다 — peek 와 같은 계약이라 "보낸이의 몫이 무음으로 증발"하는 경로가 없다.
-            runReaction(ReactionActions.ultraPoked(extent: modelExtent))
+            runReaction(ReactionActions.ultraPoked(extent: modelExtent, pose: ultraRagePose))
             showBubble(bubbleText, seconds: Self.ultraPokedBubbleSeconds)
         case .goalAchieved:
             runReaction(ReactionActions.goalAchieved(hop: modelExtent * 0.34))
@@ -1693,21 +1702,25 @@ enum ReactionActions {
     /// 스케일 진동을 키운다. moveBy 쌍이 정확히 상쇄되므로 드리프트가 0 이다(poked 와 같은 규약) —
     /// 안 그러면 5초 뒤 원래 자리로 못 돌아와 작은 패널로 복귀했을 때 캐릭터가 창 밖으로 나가 있다.
     /// 총 0.36 + 4.16 + 0.48 = 5.00s, scale·euler·position 모두 identity 로 끝난다.
-    static func ultraPoked(extent: CGFloat) -> SCNAction {
+    /// 자세(`pose`)는 캐릭터마다 엔진이 고른다(`ReactionEngine.ultraRagePose`) — 기본은 `.standard`, 빼빼로만 `.pepero`.
+    static func ultraPoked(extent: CGFloat, pose: UltraRagePose = .standard) -> SCNAction {
         let identity = SCNVector3(1, 1, 1)
         let jitter = extent * 0.06
-        let z = radians(34), x = radians(12)
+        let z = radians(pose.rollZ), x = radians(pose.tiltX)
+        let drop = extent * pose.drop
         // 진동 양 끝 자세를 상수로 못 박는다. rage 는 반드시 minus 에서 끝나므로 settle 의 from 도 minus 다.
-        let plus  = SCNVector3(1.14, 0.88, 1.14)
-        let minus = SCNVector3(0.86, 1.12, 0.86)
+        let plus  = ultraRagePlusScale
+        let minus = ultraRageMinusScale
 
         // ① 임팩트 0.36s — 크게 찌부 → 크게 스트레치 → minus.
         //    임팩트를 identity 가 아니라 minus 로 끝내 rage 첫 half(minus→plus)와 이음매 없이 붙인다.
-        let impact = SCNAction.sequence([
-            .scaleKeyframe(from: identity, to: SCNVector3(1.36, 0.68, 1.36), duration: 0.10, timing: .easeOut),
-            .scaleKeyframe(from: SCNVector3(1.36, 0.68, 1.36), to: SCNVector3(0.80, 1.32, 0.80), duration: 0.14, timing: .easeOut),
-            .scaleKeyframe(from: SCNVector3(0.80, 1.32, 0.80), to: minus, duration: 0.12, timing: .easeInEaseOut)
+        //    내려 세우기(`pose.drop` — 빼빼로)는 첫 찌부와 같이 내려가 잦아듦에서 돌아온다(moveBy 쌍 — 드리프트 0).
+        let squeeze = SCNAction.sequence([
+            .scaleKeyframe(from: identity, to: ultraImpactSquash, duration: 0.10, timing: .easeOut),
+            .scaleKeyframe(from: ultraImpactSquash, to: ultraImpactStretch, duration: 0.14, timing: .easeOut),
+            .scaleKeyframe(from: ultraImpactStretch, to: minus, duration: 0.12, timing: .easeInEaseOut)
         ])
+        let impact = drop > 0 ? SCNAction.group([squeeze, .moveBy(x: 0, y: -drop, z: 0, duration: 0.10)]) : squeeze
 
         // ② 발광 4.16s — 0.16s 주기 × 26회. 한 group 안에서 rotate/move/scale 은 **서로 다른 프로퍼티**라
         //    충돌하지 않는다(같은 프로퍼티에 두 스트림을 걸면 서로 덮어써 어긋난다 — poked 주석의 그 함정).
@@ -1716,7 +1729,7 @@ enum ReactionActions {
         let half = { (from: SCNVector3, to: SCNVector3, sign: CGFloat) -> SCNAction in
             SCNAction.group([
                 .rotateTo(x: x * sign, y: 0, z: z * sign, duration: 0.08),
-                .moveBy(x: jitter * sign, y: jitter * 0.6 * sign, z: 0, duration: 0.08),
+                .moveBy(x: jitter * sign, y: jitter * pose.lift * sign, z: 0, duration: 0.08),
                 .scaleKeyframe(from: from, to: to, duration: 0.08, timing: .linear)
             ])
         }
@@ -1724,11 +1737,51 @@ enum ReactionActions {
 
         // ③ 잦아듦 0.48s — rage 종료 자세는 결정적으로 minus 다. 여기서 절대각/절대 스케일로 identity 에
         //    복귀해야 어떤 위상에서 창이 접혀도 기울고 찌부러진 잔상이 작은 패널로 따라오지 않는다.
-        let settle = SCNAction.group([
+        var settleParts: [SCNAction] = [
             .rotateTo(x: 0, y: 0, z: 0, duration: 0.48),
             .scaleKeyframe(from: minus, to: identity, duration: 0.48, timing: .easeOut)
-        ])
+        ]
+        if drop > 0 { settleParts.append(.moveBy(x: 0, y: drop, z: 0, duration: 0.48)) }
+        let settle = SCNAction.group(settleParts)
         return .sequence([impact, rage, settle])
+    }
+
+    /// 울트라 발광 양 끝 배율 · 임팩트 찌부 · 스트레치(`ultraPoked` 와 시험이 같은 값을 본다).
+    static let ultraRagePlusScale = SCNVector3(1.14, 0.88, 1.14)
+    static let ultraRageMinusScale = SCNVector3(0.86, 1.12, 0.86)
+    static let ultraImpactSquash = SCNVector3(1.36, 0.68, 1.36)
+    static let ultraImpactStretch = SCNVector3(0.80, 1.32, 0.80)
+
+    /// 울트라 격발 자세 — 발광(rage) 양 끝의 기울기 · 위아래 흔들림 · 연출 내내 내려 세우는 거리.
+    struct UltraRagePose: Equatable, Sendable {
+        /// x축(앞뒤) 기울기 ±도 — 음수 끝은 몸 아래가 카메라 쪽으로 온다(밑에서 보는 구도).
+        var tiltX: CGFloat
+        /// z축(좌우) 기울기 ±도.
+        var rollZ: CGFloat
+        /// 위아래 흔들림 = 좌우 흔들림(extent × 0.06) × lift — plus 끝에서 올라간다.
+        var lift: CGFloat
+        /// 연출 내내 내려 세우는 거리(× extent). 0 이면 이동을 더하지 않는다(기본 연출 그대로).
+        var drop: CGFloat
+
+        /// 아잉 · 모든 다른 캐릭터(v0.2.x 부터 그대로).
+        static let standard = UltraRagePose(tiltX: 12, rollZ: 34, lift: 0.6, drop: 0)
+        /// 빼빼로 아잉이(v0.3.77 — 검토 수리). 몸이 상자 바닥(−0.62)을 뚫고 아래 끝(−0.847)까지 내려가 있고 막대 끝(1.0951)이 머리 위로 솟아,
+        /// 기본 자세면 945² 에서 두 결함이 번갈아 보였다: x −12° 끝은 밑에서 보는 구도라 상자 바닥 밑으로 라벤더 몸이 비어져 나오고(상자가 몸 앞
+        /// 판때기처럼 읽힌다 — 생성기 메모의 경고), x +12° · z +34° · 올라간 끝은 오른쪽 막대가 프레임 위로 잘렸다(같은 자세의 아잉 · 이슬은 위 여백
+        /// 0.11–0.13). 그래서 x 기울기를 없애고(밑에서 보는 구도가 안 생긴다) z 를 28° 로 줄이고 연출 내내 extent × 0.11 내려 세운다 — 실측(앱 씬):
+        /// 위 여백 plus 0.050 · minus 0.047 · 임팩트 스트레치 0.021 · 아래 여백 ≥ 0.18(`V0377PeperoMac3DTests.ultraRageKeepsTheBoxAndSticksInFrame`).
+        static let pepero = UltraRagePose(tiltX: 0, rollZ: 28, lift: 0.6, drop: 0.11)
+    }
+
+    /// 발광 한쪽 끝(sign > 0 = plus · 아니면 minus)에서 wrapper 가 서는 자세 — `ultraPoked` 의 rage 가 실제로 지나는 값이다
+    /// (rage 는 minus 자리 = 임팩트가 끝난 자리에서 시작해 plus 로 moveBy 했다가 되돌아온다 — minus 끝의 이동은 내려 세우기뿐).
+    static func ultraRageEndpoint(sign: CGFloat, pose: UltraRagePose, extent: CGFloat) -> (euler: SCNVector3, scale: SCNVector3, position: SCNVector3) {
+        let jitter = extent * 0.06
+        let drop = extent * pose.drop
+        let isPlus = sign > 0
+        return (SCNVector3(radians(pose.tiltX) * (isPlus ? 1 : -1), 0, radians(pose.rollZ) * (isPlus ? 1 : -1)),
+                isPlus ? ultraRagePlusScale : ultraRageMinusScale,
+                isPlus ? SCNVector3(jitter, jitter * pose.lift - drop, 0) : SCNVector3(0, -drop, 0))
     }
 
     /// 근무 시작: 폴짝 점프(+hop) + y축 360° 스핀.

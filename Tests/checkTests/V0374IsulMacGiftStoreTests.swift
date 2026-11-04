@@ -152,8 +152,10 @@ private func isTokenStore(_ label: String, function: String) -> TokenUsageStore 
 
 /// 그릴 수 있는 캐릭터 — 번호 5(이슬까지) · 4(이슬 뺌). 이 워크트리의 번들은 이슬 3D 마감 전이라 번호를 **주입**한다.
 private func isDrawable(_ protocolVersion: Int) -> [String] {
-    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.isulCharacterIDs.contains($0) }
-    return protocolVersion >= ShopWire.isulProtocol ? base + ShopWire.isulCharacterIDs : base
+    // v0.3.77: 번들이 빼빼로까지 그리면(6) 번호 5 주입이 6 으로 새지 않게 빼빼로도 뺀다.
+    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.isulCharacterIDs.contains($0) && !ShopWire.peperoCharacterIDs.contains($0) }
+    return (protocolVersion >= ShopWire.isulProtocol ? base + ShopWire.isulCharacterIDs : base)
+        + (protocolVersion >= ShopWire.peperoProtocol ? ShopWire.peperoCharacterIDs : [])
 }
 
 /// 로그인 + 팀 확정 상태의 스토어(서버 = 스텁 호스트 · 능력 번호 주입).
@@ -196,18 +198,20 @@ private func isPendingCount(_ host: String) -> Int {
 struct V0374IsulMacGiftStoreTests {
     // MARK: ① 술 선물 — 띄우기 · 받기 · 입기
 
-    @Test("술 선물: 번호 5 로 묻고 · 실행당 한 번 스스로(키 안 잡음) · 고르기 없이 이슬을 미리 골라 둔다 · 카드 · 창 문구는 술 한잔")
-    func drinkGiftShowsOnceWithoutChoosing() async throws {
+    // 번호 6(빼빼로까지 — v0.3.77 의 실제 출하 번호)으로도 돈다(검토 수리 — 5 만 주입하면 출하 번호 핀이 조용히 낡는다).
+    @Test("술 선물: 번호 5 · 6 으로 묻고 · 실행당 한 번 스스로(키 안 잡음) · 고르기 없이 이슬을 미리 골라 둔다 · 카드 · 창 문구는 술 한잔",
+          arguments: [ShopWire.isulProtocol, ShopWire.peperoProtocol])
+    func drinkGiftShowsOnceWithoutChoosing(protocolVersion: Int) async throws {
         let host = isHost("show")
         let server = IsulGiftServer()
         server.grant(id: isDrinkID, kind: "drink", options: [isIsul], note: "오늘 한잔 어때?", createdAt: "2026-11-08T12:00:00+00:00")
         let spy = IsulWindowSpy()
-        let store = isStore(host: host, server: server, spy: spy)
-        #expect(store.shopProtocolVersion == ShopWire.isulProtocol && store.supportsDrinkGift, "전제: 번호 5 주입이 안 먹었다")
+        let store = isStore(host: host, server: server, spy: spy, protocolVersion: protocolVersion)
+        #expect(store.shopProtocolVersion == protocolVersion && store.supportsDrinkGift, "전제: 번호 \(protocolVersion) 주입이 안 먹었다")
         await store.refreshCakeGift(reason: .launch)?.value
 
         let call = try #require(GomokuStubProtocol.calls(host: host, rpc: "character_gift_pending").first, "묻지 않았다")
-        #expect(Set(call.json.keys) == ["p_protocol"] && call.json["p_protocol"] as? Int == ShopWire.isulProtocol, "본문 \(call.json)")
+        #expect(Set(call.json.keys) == ["p_protocol"] && call.json["p_protocol"] as? Int == protocolVersion, "본문 \(call.json)")
         let offer = try #require(store.cakeGiftOffer, "술 선물을 못 읽었다")
         #expect(offer.kind == .drink && offer.id == isDrinkID && offer.options == [isIsul] && offer.note == "오늘 한잔 어때?")
         #expect(spy.shows == [false], "스스로 띄우기가 \(spy.shows) — 한 번 · 키를 안 잡아야 한다")

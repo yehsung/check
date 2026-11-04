@@ -270,6 +270,9 @@ final class IsulArt: @unchecked Sendable {
         CheckMascotAssets.forgetCachedImages(characterID: CharacterCatalog.isulAingID)
         AppUserAvatarArt.forget(characterID: CharacterCatalog.isulAingID)
         CharacterCardArt.forget(characterID: CharacterCatalog.isulAingID)
+        // 받는 창 · 뽑기 창의 초상 캐시도(v0.3.77 검토 수리 — 안 비우면 그 두 창은 옛 이슬 그림을 프로세스 내내 쥔다).
+        CheckCakeGiftWindowView.forgetPortrait(characterID: CharacterCatalog.isulAingID)
+        CheckGachaWindowView.forgetPortrait(characterID: CharacterCatalog.isulAingID)
         IsulArtRevision.shared.bump()
     }
 

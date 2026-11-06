@@ -683,7 +683,9 @@ struct V0325TooltipTests {
             // 글자 그대로("— 보유 중" · "— 뽑기…" · "사기")는 V0366CakeMacShopTests 가 값으로 잰다.
             // v0.3.74: 잠긴 칸의 얻는 길이 선물 종류마다 다르다(생일 · 술 한잔) — 카드가 그 종류의 문구 묶음(`gift:`)을 넘긴다
             // (글자는 V0374IsulMacGiftStoreTests 가 값으로 잰다).
-            ("CheckShopPanel.swift", ".checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy))"),
+            // v0.3.78: 뽑기 전용 칸의 얻는 길이 캐릭터마다 다르다(금 · 무지개 "뽑기나 조각 교환으로…" · 흑우 "조각 교환으로만…") —
+            // 카드가 `GachaText.acquireHint(for:)` 를 넘긴다(글자는 V0378HwooCoreTests 가 값으로 잰다).
+            ("CheckShopPanel.swift", ".checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy, acquireHint: GachaText.acquireHint(for: entry.id)))"),
             ("CheckSettingsView.swift", #".checkTooltip(store.isDisplayNameLocked ? "일주일에 한 번만 바꿀 수 있어요" : "별명 저장")"#),
             ("CheckSettingsView.swift", #".checkTooltip("\(WorkShortcut.default.displayString) 로 되돌려요")"#),
             ("CheckTodoBoardView.swift", ".checkTooltip(item.isDone ? TodoBoardStrings.markUndone : TodoBoardStrings.markDone)"),

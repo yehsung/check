@@ -745,6 +745,31 @@ struct V03xxCrossyDuelStoreTests {
         #expect(same.store.duel?.game.score == 0)
     }
 
+    @Test("판정 기다림(3분 얼림) 중 기권은 보내지 않는다 · 판 중 기권은 보낸다(기준선)")
+    func resignIgnoredWhileWaitingForResult() async {
+        // 없으면: 3분 뒤 유예 2초 동안 [기권] 이 닿아 서버가 아직 안 닫은 판을 기권 패로 닫는다 — 점수로 이긴 판을 넘겨준다.
+        func resignCalls(waiting: Bool) async -> (calls: Int, waiting: Bool) {
+            let rig = CDRig.make(waiting ? "resign-wait" : "resign-play")
+            await rig.startPlaying()
+            if waiting {
+                for _ in 0..<185 {
+                    rig.clock.advance(1)
+                    rig.store.tick()
+                    await rig.settle()
+                }
+            }
+            let isWaiting = rig.store.raceSnapshot()?.waitingForResult ?? false
+            await rig.store.resign()
+            return (rig.count("crossy_duel_resign"), isWaiting)
+        }
+        let waiting = await resignCalls(waiting: true)
+        #expect(waiting.waiting, "3분 넘게 흐른 판이 판정 기다림이 아니다 — 시험 전제가 틀렸다")
+        #expect(waiting.calls == 0)
+        let playing = await resignCalls(waiting: false)
+        #expect(!playing.waiting)
+        #expect(playing.calls == 1, "기준선: 판 중 기권은 서버로 간다")
+    }
+
     @Test("55P03(lock_timeout) 두 번 → connectionTrouble 안 켜짐(실패로 안 셈) · 보통 500 두 번 → 켜짐(기준선)")
     func lockTimeoutIsNotAFailure() async {
         // 없으면: 정산 경합 순간(= 결승선)의 lock_timeout 이 '연결 확인 중'을 띄우고 프레임을 대체 길로 떨군다(CC-21).

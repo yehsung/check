@@ -575,6 +575,9 @@ private struct CrossyDuelMatchSide: View {
         .accessibilityLabel(CrossyDuelText.keysAccessibility)
     }
 
+    /// 판정 기다림(100 도달 · 3분 얼림) — [기권] 을 끈다(스토어 `resign()` 도 같은 조건에서 보내지 않는다).
+    private var waitingForResult: Bool { store.raceSnapshot()?.waitingForResult ?? false }
+
     @ViewBuilder
     private var actionRow: some View {
         if match.isFinished {
@@ -587,7 +590,7 @@ private struct CrossyDuelMatchSide: View {
             HStack(spacing: 8) {
                 TetrisDuelActionButton(title: CrossyDuelText.confirmResign, icon: "flag.fill", tint: CheckTheme.danger,
                                        height: CrossyDuelWindowLayout.actionRowHeight, fullWidth: true,
-                                       isEnabled: !store.isBusy) {
+                                       isEnabled: !store.isBusy && !waitingForResult) {
                     confirmResign = false
                     Task { await store.resign() }
                 }
@@ -603,7 +606,7 @@ private struct CrossyDuelMatchSide: View {
         } else {
             TetrisDuelActionButton(title: CrossyDuelText.resign, tint: CheckTheme.danger, style: .outline,
                                    height: CrossyDuelWindowLayout.actionRowHeight, fullWidth: true,
-                                   isEnabled: !store.isBusy && !store.playingElsewhere) {
+                                   isEnabled: !store.isBusy && !store.playingElsewhere && !waitingForResult) {
                 // 화면이 막 나타난 직후의 누름(로비 [수락] 더블클릭의 두 번째 누름)은 이 화면을 보고 누른 것이 아니다.
                 guard GomokuResignGuard.acceptsTap(shownAt: shownAt, now: GomokuResignGuard.clock()) else { return }
                 confirmResign = true

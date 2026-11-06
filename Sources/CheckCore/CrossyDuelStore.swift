@@ -1020,6 +1020,9 @@ package final class CrossyDuelStore {
     /// 기권(확인은 화면이 받는다). 카운트다운·준비 중에도 된다.
     package func resign() async {
         guard !isBusy, let current = match, !current.isFinished, host?.session != nil else { return }
+        // 판정 기다림(100 도달 · 3분 얼림) 중 기권은 보내지 않는다 — 3분 뒤 유예 2초 동안은 서버가 판을 아직 안 닫아서,
+        // 그 사이 기권이 닿으면 점수로 이긴 판을 상대에게 넘긴다. 결과는 곧 온다(하트비트 유지).
+        if raceSnapshot()?.waitingForResult == true { return }
         let id = current.id
         isBusy = true
         setNotice(nil)

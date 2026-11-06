@@ -351,7 +351,13 @@ enum CheckCharacter3DScene {
     ///
     /// 황금 아잉이(v0.3.54)의 얼굴이면 **라벤더 원본에서 감은 눈을 굽고** 같은 금 합성을 한다(`GoldAingFinish.closedEyesImage`) —
     /// 금 디퓨즈에서 바로 구우면 감은 눈의 색 분류가 금 피부를 피부로 못 알아봐 눈꺼풀이 라벤더 얼룩이 된다.
-    static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
+    ///
+    /// `character` 를 주면 그 캐릭터 몫의 손질을 더한다 — 루비 아잉이(v0.3.78)는 보석 몸 위에서 덮인 눈 자리의 옛 눈 결(둥근 테 · 하이라이트
+    /// 조각)이 드러나 그 자리를 밝기 맵 피부로 다시 채운다(`RubyAingFinish.closedEyesImage`). 다른 캐릭터는 지금 그대로다.
+    static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?, character: SCNNode? = nil) -> CGImage? {
+        if RubyAingFinish.isRuby(character) {
+            return RubyAingFinish.closedEyesImage(faceImage: faceImage, geometry: geometry)
+        }
         if let original = GoldAingFinish.lavenderOriginal(ofGoldFace: faceImage) {
             return GoldAingFinish.closedEyesImage(goldFace: faceImage, original: original) { lavender in
                 lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)

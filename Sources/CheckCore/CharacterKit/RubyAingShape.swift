@@ -20,6 +20,8 @@ import simd
 package nonisolated enum RubyAingShape {
     /// 빛살 중심(물체 좌표).
     package static let center = SIMD3<Float>(0, -0.04, 0)
+    /// 눈 자리(물체 좌표) — 앱 `CheckCharacter3DScene.closedEyeAnchors` 와 같은 값(감은 눈 선 판 자리). 그 둘레는 메시 굴곡을 지운다.
+    package static let eyeAnchors: [SIMD3<Float>] = [SIMD3(-0.277, 0.418, 0.531), SIMD3(0.250, 0.434, 0.526)]
     /// 원래 몸 ↔ 보석 섞기(0 = 원래 아잉 · 1 = 보석 그대로). Y5 = 0.4.
     package static let blend: Float = 0.4
     /// 단면 변의 수(팔각 — 앱 루비 아이콘과 같다). 정면(+z)에 면 하나가 오게 첫 꼭짓점을 22.5° 에 둔다.
@@ -180,10 +182,15 @@ package nonisolated enum RubyAingShape {
         let rb = body.at(p.y)
         let ex = (p.x * p.x + p.z * p.z).squareRoot() - rb
         let w = rb > 0.05 ? smooth(0.004, 0.045, ex) : 0
-        var q = c + u * (r + (h.t - r) * blend)
+        // 몸 정점 = 매끈한 몸 둘레(rs — 높이별 최대 반지름으로 잰 원래 몸매)와 보석 사이 + 원래 메시의 작은 굴곡(r − rs)을 (1 − α) 만큼.
+        // ★ 눈 둘레만은 굴곡을 지운다: 메시의 눈두덩 오목함이 평평한 면 칠(화면 미분 법선)에서 감은 눈 자리의 둥근 테로 보였다(대표 지적
+        //   11-07). 입은 안쪽으로 파인 입속이 있어 지우면 입술과 입속이 겹쳐 깨진다 — 그래서 눈 둘레(`eyeAnchors` 0.14 → 0.34 — 넓게 이어 붙여 경계가 안 보이게)만.
+        let rs = body.reach(c, u)
+        let dEye = eyeAnchors.map { simd_length(p - $0) }.min() ?? 1
+        let keep = (1 - blend) * smooth(0.14, 0.34, dEye)
+        var q = c + u * (rs + (h.t - rs) * blend + (r - rs) * keep)
         if w > 0 {
-            let r0 = body.reach(c, u)
-            let pa = p + u * ((h.t - r0) * blend)
+            let pa = p + u * ((h.t - rs) * blend)
             q = q + (pa - q) * w
         }
         return (q - p, w > 0.5 ? 1 : min(h.edge, 1), w, h.facet)
@@ -316,6 +323,11 @@ package nonisolated enum RubyAingShader {
         float3 ckCc = clamp(ckCol, float3(0.0), float3(1.0));
         float3 ckCe = 255.0 * select(1.055 * pow(ckCc, float3(1.0 / 2.4)) - 0.055, ckCc * 12.92, ckCc <= float3(0.0031308));
         float3 ckOe = clamp((\(faceOff ? "ckSe" : "ckPe") + ckB * (ckCe - ckSe)) / 255.0, float3(0.0), float3(1.0));
+        // ★ 피부 텍셀(디퓨즈 ≈ 밝기 맵 — 차이가 작다)은 보석 색 그대로 둔다. 디퓨즈와 밝기 맵은 표본 방식이 달라(재질 디퓨즈 ↔ 셰이더 인자)
+        //   밝기 맵에 그려진 눈두덩 결이 그 차이(P − S)로 남는다 — 라벤더 몸에선 안 보였지만 분홍 보석 위에서는 감은 눈 자리의 둥근 테로
+        //   드러났다(대표 지적 11-07 · 총괄 #dl_T4VqXHzWytaF). 눈 · 입 · 볼터치처럼 차이가 큰 텍셀은 지금 그대로다.
+        float ckSkinish = (1.0 - smoothstep(10.0, 28.0, length(ckDv))) * ckB;
+        ckOe = mix(ckOe, ckCe / 255.0, ckSkinish);
         float3 ckOut = select(pow((ckOe + 0.055) / 1.055, float3(2.4)), ckOe / 12.92, ckOe <= float3(0.04045));
         _output.color = float4(ckOut, 1.0);
         """

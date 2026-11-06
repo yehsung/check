@@ -177,6 +177,75 @@ import Testing
         }
     }
 
+    /// 초상 눈 두 점(얼굴 위 절반의 눈동자 화소 덩어리 중심 — 좌우).
+    static func portraitEyes(_ image: CGImage) -> (SIMD2<Double>, SIMD2<Double>)? {
+        let px = V0354GoldAingArtTests.rgba(image), w = image.width, h = image.height
+        var sL = SIMD2<Double>(0, 0), nL = 0.0, sR = SIMD2<Double>(0, 0), nR = 0.0
+        for y in (h * 25 / 100)..<(h * 60 / 100) { for x in 0..<w {
+            let i = (y * w + x) * 4
+            guard px[i + 3] > 250 else { continue }
+            let l = (0.299 * Double(px[i]) + 0.587 * Double(px[i + 1]) + 0.114 * Double(px[i + 2])) / 255
+            guard l < 0.12 else { continue }   // 눈동자(아주 어두운 갈색)만 — 눈썹(짙은 보라 · 0.12 보다 밝다)은 안 센다
+            if x < w / 2 { sL += SIMD2(Double(x), Double(y)); nL += 1 } else { sR += SIMD2(Double(x), Double(y)); nR += 1 }
+        } }
+        guard nL > 4, nR > 4 else { return nil }
+        return (sL / nL, sR / nR)
+    }
+
+    @Test("초상: 시무룩도 눈은 기본과 같은 자리(루비 3D 눈 — 대표 지적 11-07 '슬플때 눈이 이상한데? 위치가 이상해') · 입 자리는 바뀐다")
+    func negativePortraitKeepsTheEyes() throws {
+        func load(_ name: String) throws -> CGImage {
+            let url = try #require(RubyAingFinish.resourceURL(name))
+            return try #require(NSImage(contentsOf: url)?.cgImage(forProposedRect: nil, context: nil, hints: nil))
+        }
+        let neutral = try load(RubyAingArt.neutralPortraitResourceName), negative = try load(RubyAingArt.negativePortraitResourceName)
+        let (nl, nr) = try #require(Self.portraitEyes(neutral)), (gl, gr) = try #require(Self.portraitEyes(negative))
+        print(String(format: "[v0378-ruby] 초상 눈 — 기본 (%.1f, %.1f) (%.1f, %.1f) · 시무룩 (%.1f, %.1f) (%.1f, %.1f)", nl.x, nl.y, nr.x, nr.y, gl.x, gl.y, gr.x, gr.y))
+        #expect(simd_length(nl - gl) < 1.5 && simd_length(nr - gr) < 1.5, "시무룩 눈이 기본 눈과 다른 자리에 있다")
+        // 입 자리(두 눈 사이 아래)는 기본(웃는 입)과 시무룩(처진 입)이 달라야 한다.
+        let a = V0354GoldAingArtTests.rgba(neutral), b = V0354GoldAingArtTests.rgba(negative), w = neutral.width
+        let mid = (nl + nr) / 2, e = simd_length(nr - nl)
+        var diff = 0
+        for y in Int(mid.y + 0.1 * e)..<Int(mid.y + 0.7 * e) { for x in Int(mid.x - 0.3 * e)..<Int(mid.x + 0.3 * e) {
+            let i = (y * w + x) * 4
+            if abs(Int(a[i]) - Int(b[i])) + abs(Int(a[i + 1]) - Int(b[i + 1])) + abs(Int(a[i + 2]) - Int(b[i + 2])) > 60 { diff += 1 }
+        } }
+        #expect(diff > 20, "입 자리가 기본과 같다(\(diff) 화소) — 시무룩 입이 안 얹혔다")
+    }
+
+    @Test("감은 눈 텍스처: 루비는 덮인 눈 자리를 밝기 맵 피부로 다시 채운다(볼터치는 남김) · 다른 캐릭터 갈래는 그대로")
+    func closedEyeTextureIsCleaned() throws {
+        let scene = try V0354GoldAing3DTests.scene(Self.ruby)
+        let material = try V0359Rainbow3DTests.faceMaterial(scene)
+        let face = try #require(SleepEyeExplore.cgImage(from: material.diffuse.contents))
+        let g = try Self.bodyGeometry(scene)
+        let generic = try #require(CheckCharacter3DScene.makeClosedEyesImage(faceImage: face, geometry: g))
+        let ruby = try #require(CheckCharacter3DScene.makeClosedEyesImage(faceImage: face, geometry: g, character: try V0354GoldAing3DTests.character(scene)))
+        let w = ruby.width, h = ruby.height
+        let mask = try #require(SleepEyeTexture.eyeUVCoverMask(geometry: g, anchors: CheckCharacter3DScene.closedEyeAnchors.map { $0.position },
+                                                               width: w, height: h, radius: CheckCharacter3DScene.eyeCoverRadius))
+        let shadeImage = try #require(RainbowAingFinish.shadeImage())
+        let shade = try #require(GoldAingFinish.rgbaBytes(shadeImage, width: w, height: h))
+        let r = try #require(GoldAingFinish.rgbaBytes(ruby)), gp = try #require(GoldAingFinish.rgbaBytes(generic))
+        var inside = 0, equalShade = 0, changed = 0
+        for i in 0..<(w * h) where mask[i] {
+            inside += 1
+            if r[i * 4] == shade[i * 4] && r[i * 4 + 1] == shade[i * 4 + 1] && r[i * 4 + 2] == shade[i * 4 + 2] { equalShade += 1 }
+            if r[i * 4] != gp[i * 4] || r[i * 4 + 1] != gp[i * 4 + 1] || r[i * 4 + 2] != gp[i * 4 + 2] { changed += 1 }
+        }
+        print("[v0378-ruby] 감은 눈 마스크 \(inside) 텍셀 · 밝기 맵과 같음 \(equalShade) · 일반 갈래와 다름 \(changed)")
+        #expect(inside > 100 && Double(equalShade) / Double(inside) > 0.85, "덮인 눈 자리가 밝기 맵 피부로 안 채워졌다")
+        #expect(changed > 0, "루비 갈래가 일반 감은 눈과 같다 — 손질이 안 돌았다")
+        // 다른 캐릭터(아잉)는 character 를 줘도 일반 갈래 그대로다.
+        let plain = try V0354GoldAing3DTests.scene(CharacterCatalog.builtInAing)
+        let pm = try V0359Rainbow3DTests.faceMaterial(plain)
+        let pf = try #require(SleepEyeExplore.cgImage(from: pm.diffuse.contents))
+        let pg = try Self.bodyGeometry(plain)
+        let a1 = try #require(CheckCharacter3DScene.makeClosedEyesImage(faceImage: pf, geometry: pg))
+        let a2 = try #require(CheckCharacter3DScene.makeClosedEyesImage(faceImage: pf, geometry: pg, character: try V0354GoldAing3DTests.character(plain)))
+        #expect(GoldAingFinish.rgbaBytes(a1) == GoldAingFinish.rgbaBytes(a2), "아잉 감은 눈이 바뀌었다")
+    }
+
     @Test("엔진은 루비를 가른다 — 아잉 → 루비 교체(울트라 경로)에 셰이더 · 표식이 따라오고 원복하면 사라진다")
     func engineSwapsRuby() throws {
         let engine = ReactionEngine()
@@ -212,6 +281,39 @@ import Testing
         try #require(NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])).write(to: dir.appendingPathComponent(name))
     }
 
+    /// 표정 · 상태 전부를 루비와 아잉 나란히 떨군다(대표 지적 11-07 "슬플때 눈이 이상한데? 위치가 이상해" — 앞뒤 비교용).
+    /// 3D 는 표정이 하나(기본)뿐이고 깜빡임 · 졸기는 감은 눈 텍스처 + 선 판, 울트라는 엔진 교체다. 2D(기본 · 시무룩)는 번들 초상 그대로.
+    @Test("증거: 표정 · 상태 전부(루비 · 아잉 나란히)", .enabled(if: evidenceDirectory != nil))
+    func writeStatesEvidence() throws {
+        let big = CGSize(width: 560, height: 680)
+        for (tag, manifest) in [("ruby", Self.ruby), ("aing", CharacterCatalog.builtInAing)] {
+            let scene = try V0354GoldAing3DTests.scene(manifest)
+            try Self.write(try V0359Rainbow3DTests.render(scene, size: big), "\(tag)-1-default.png")
+            let material = try V0359Rainbow3DTests.faceMaterial(scene)
+            let face = try #require(SleepEyeExplore.cgImage(from: material.diffuse.contents))
+            let g = try Self.bodyGeometry(scene)
+            let closed = try #require(CheckCharacter3DScene.makeClosedEyesImage(faceImage: face, geometry: g,
+                                                                               character: try V0354GoldAing3DTests.character(scene)))
+            material.diffuse.contents = closed
+            try Self.write(try V0359Rainbow3DTests.render(scene, size: big), "\(tag)-2-closed-texture.png")
+            for (name, _) in CheckCharacter3DScene.closedEyeAnchors { scene.rootNode.childNode(withName: name, recursively: true)?.isHidden = false }
+            try Self.write(try V0359Rainbow3DTests.render(scene, size: big), "\(tag)-3-closed-eyes.png")
+            let facing = try V0355GoldHaloYawTests.facing(scene)
+            facing.eulerAngles = SCNVector3(0, CGFloat(35.0 * .pi / 180), 0)
+            try Self.write(try V0359Rainbow3DTests.render(scene, size: big), "\(tag)-3b-closed-eyes-34.png")
+            for (name, _) in CheckCharacter3DScene.closedEyeAnchors { scene.rootNode.childNode(withName: name, recursively: true)?.isHidden = true }
+            material.diffuse.contents = face
+            try Self.write(try V0359Rainbow3DTests.render(scene, size: big), "\(tag)-1b-default-34.png")
+            facing.eulerAngles = SCNVector3(0, 0, 0)
+            // 울트라 갈아입기: 아잉 씬을 엔진이 이 캐릭터로 바꿔 입힌 모습(루비) · 루비 씬을 아잉으로(아잉).
+            let engine = ReactionEngine()
+            let from = try V0354GoldAing3DTests.scene(tag == "ruby" ? CharacterCatalog.builtInAing : Self.ruby)
+            engine.attach(node: try V0354GoldAing3DTests.wrapper(from), sceneRoot: from.rootNode, view: nil)
+            _ = try #require(engine.swapCharacter(to: manifest, in: from))
+            try Self.write(try V0359Rainbow3DTests.render(from, size: big), "\(tag)-4-ultra-swap.png")
+        }
+    }
+
     @Test("증거: 앱 구도 3/4 · 뒤 · 감은 눈", .enabled(if: evidenceDirectory != nil))
     func writeEvidence() throws {
         let scene = try V0354GoldAing3DTests.scene(Self.ruby)
@@ -225,7 +327,9 @@ import Testing
         let material = try V0359Rainbow3DTests.faceMaterial(scene)
         let face = try #require(SleepEyeExplore.cgImage(from: material.diffuse.contents))
         let g = try Self.bodyGeometry(scene)
-        if let closed = CheckCharacter3DScene.makeClosedEyesImage(faceImage: face, geometry: g) { material.diffuse.contents = closed }
+        if let closed = CheckCharacter3DScene.makeClosedEyesImage(faceImage: face, geometry: g, character: try V0354GoldAing3DTests.character(scene)) {
+            material.diffuse.contents = closed
+        }
         for (name, _) in CheckCharacter3DScene.closedEyeAnchors { scene.rootNode.childNode(withName: name, recursively: true)?.isHidden = false }
         try Self.write(try V0359Rainbow3DTests.render(scene, size: Self.appSize), "ruby-closed-eyes.png")
     }

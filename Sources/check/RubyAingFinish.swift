@@ -154,6 +154,54 @@ enum RubyAingFinish {
         return true
     }
 
+    // MARK: - 감은 눈(깜빡임 · 졸기)
+
+    /// 루비 감은 눈 텍스처: 무지개 갈래와 같이 굽고(라벤더 원본에서 감은 눈 → 밝기 맵 합성), **덮인 눈 자리(메시 UV 마스크 + 둘레 3 텍셀)를
+    /// 밝기 맵 피부로 다시 채운다** — 볼터치 텍셀은 남긴다. 라벤더 몸에선 안 보이던 덮개 둘레의 옛 눈 결(둥근 테 · 하이라이트 조각)이 분홍 보석
+    /// 위에서는 드러났다(대표 지적 11-07 · 총괄 #dl_T4VqXHzWytaF). 결과는 (얼굴 이미지 · 지오메트리)마다 한 번 굽는다.
+    static func closedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
+        closedLock.lock(); defer { closedLock.unlock() }
+        if let hit = closedCache, hit.face === faceImage, hit.geometry === geometry { return hit.image }
+        guard let original = RainbowAingFinish.lavenderOriginal(ofRainbowFace: faceImage),
+              let base = RainbowAingFinish.closedEyesImage(rainbowFace: faceImage, original: original, lavenderClosedEyes: { lavender in
+                  CheckCharacter3DScene.lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)
+              }) else { return nil }
+        let made = cleanedClosedEyes(base, geometry: geometry) ?? base
+        closedCache = (faceImage, geometry, made)
+        return made
+    }
+
+    nonisolated(unsafe) private static var closedCache: (face: CGImage, geometry: SCNGeometry?, image: CGImage)?
+    private static let closedLock = NSLock()
+
+    /// 덮인 눈 자리(+ 둘레 `grow` 텍셀)를 밝기 맵 텍셀로 바꾼다 — 볼터치(밝기 맵 → 볼터치 색 선 위의 텍셀, 몸 셰이더 β 판정과 같은 식)는 남긴다.
+    /// 마스크를 못 구하면 nil(원래 감은 눈 그대로 쓴다).
+    static func cleanedClosedEyes(_ closed: CGImage, geometry: SCNGeometry?, grow: Int = 3) -> CGImage? {
+        guard let geometry, let shade = RainbowAingFinish.shadeImage() else { return nil }
+        let w = closed.width, h = closed.height
+        guard let mask = SleepEyeTexture.eyeUVCoverMask(geometry: geometry, anchors: CheckCharacter3DScene.closedEyeAnchors.map { $0.position },
+                                                       width: w, height: h, radius: CheckCharacter3DScene.eyeCoverRadius),
+              var px = GoldAingFinish.rgbaBytes(closed), let skin = GoldAingFinish.rgbaBytes(shade, width: w, height: h) else { return nil }
+        var grown = mask
+        for y in 0..<h { for x in 0..<w where mask[y * w + x] {
+            for dy in -grow...grow { for dx in -grow...grow {
+                let xx = x + dx, yy = y + dy
+                if xx >= 0, yy >= 0, xx < w, yy < h { grown[yy * w + xx] = true }
+            } }
+        } }
+        let blush = RubyAingShader.blushSRGB
+        for i in 0..<(w * h) where grown[i] {
+            let p = SIMD3(Double(px[i * 4]), Double(px[i * 4 + 1]), Double(px[i * 4 + 2]))
+            let s = SIMD3(Double(skin[i * 4]), Double(skin[i * 4 + 1]), Double(skin[i * 4 + 2]))
+            let dv = p - s, ks = blush - s
+            let ak = simd_dot(dv, ks) / max(1e-6, simd_dot(ks, ks))
+            let res = simd_length(dv - min(max(ak, 0), 1) * ks)
+            if res <= 20 && ak > 0.08 { continue }   // 볼터치
+            px[i * 4] = skin[i * 4]; px[i * 4 + 1] = skin[i * 4 + 1]; px[i * 4 + 2] = skin[i * 4 + 2]; px[i * 4 + 3] = 255
+        }
+        return GoldAingFinish.makeImage(px, width: w, height: h)
+    }
+
     /// 이 캐릭터 노드가 루비 아잉이인가(표식).
     static func isRuby(_ character: SCNNode?) -> Bool {
         character?.childNode(withName: markerName, recursively: false) != nil

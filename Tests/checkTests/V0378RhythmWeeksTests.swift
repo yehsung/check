@@ -147,6 +147,49 @@ func sessionsAreFetchedFromTheServiceFirstWeekForTheRhythmHistory() throws {
 
 // MARK: - 렌더
 
+/// 대표 지적(2026-11-07): "아직 안다가온 부분 이런식으로 실선으로 표시하지말고 그냥 저 검정색 박스가 좀 더 흐리게 보이게해줘".
+/// 안 온 칸 = 지난 빈 칸과 **같은 채운 박스**(테두리 없음)를 더 흐리게. 칸 한가운데가 바탕과 같으면(속이 빈 테두리 — 처음 판) 빨강,
+/// 지난 빈 칸과 같으면(안 흐림) 빨강, 칸 가장자리와 한가운데가 다르면(테두리) 빨강.
+@MainActor
+@Test
+func futureCellsAreTheSameFilledBoxOnlyFainter() throws {
+    func grid(_ from: (day: Int, hour: Int)?) throws -> NSBitmapImageRep {
+        try #require(CheckRenderSettle.bitmap(
+            WorkRhythmHeatmapGrid(heatmap: .empty, futureFrom: from).frame(width: 290).background(CheckTheme.panel), scale: 2))
+    }
+    let past = try grid(nil)      // 모두 지난 빈 칸
+    let future = try grid((0, 0)) // 모두 안 온 칸
+    #expect(past.pixelsWide == future.pixelsWide && past.pixelsHigh == future.pixelsHigh)
+    // 바이트로 직접 읽는다(색 변환 없이 — 같은 렌더러 · 같은 바탕끼리 비교).
+    func luma(_ rep: NSBitmapImageRep, _ x: Int, _ y: Int) -> Double {
+        guard let data = rep.bitmapData, rep.samplesPerPixel >= 3 else { return -1 }
+        let o = y * rep.bytesPerRow + x * rep.samplesPerPixel
+        return 0.2126 * Double(data[o]) + 0.7152 * Double(data[o + 1]) + 0.0722 * Double(data[o + 2])
+    }
+    // 칸 (목, 12시)의 한가운데: 지난 빈 칸 그림에서 세로 · 가로로 바탕보다 어두운 띠를 찾아 잡는다(줄 높이는 요일 글자 높이를 따른다).
+    let background = luma(past, 1, 1)
+    let x = Int((WorkRhythmHeatmapGrid.labelWidth + WorkRhythmHeatmapGrid.cellGap + 12 * (WorkRhythmHeatmapGrid.cellSize + WorkRhythmHeatmapGrid.cellGap)
+                 + WorkRhythmHeatmapGrid.cellSize / 2) * 2)
+    var rows: [ClosedRange<Int>] = []
+    var runStart: Int?
+    for y in 0..<past.pixelsHigh {
+        let dark = luma(past, x, y) < background - 3
+        if dark, runStart == nil { runStart = y }
+        if !dark, let a = runStart { rows.append(a...(y - 1)); runStart = nil }
+    }
+    #expect(rows.count == 7, "기준선: 지난 빈 칸 그림에서 칸 줄이 \(rows.count)개다(기대 7) — 칸이 바탕과 안 갈린다")
+    let row = try #require(rows.count > 3 ? rows[3] : nil)
+    let y = (row.lowerBound + row.upperBound) / 2
+    let pastCenter = luma(past, x, y)
+    let futureCenter = luma(future, x, y)
+    let futureEdge = luma(future, x, row.lowerBound + 2)
+    print(String(format: "[v0378-rhythm] 바탕 %.1f · 지난 빈 칸 %.1f · 안 온 칸 한가운데 %.1f · 가장자리 %.1f", background, pastCenter, futureCenter, futureEdge))
+    #expect(futureCenter < background - 1.5, "안 온 칸 한가운데가 바탕과 같다 — 채운 박스가 아니라 테두리다")
+    #expect(futureCenter > pastCenter + 1.5, "안 온 칸이 지난 빈 칸보다 흐리지 않다")
+    #expect(abs(futureEdge - futureCenter) < 1.5, "안 온 칸 가장자리가 한가운데와 다르다 — 테두리가 남았다")
+    #expect(WorkRhythmHeatmapGrid.futureCellOpacity > 0 && WorkRhythmHeatmapGrid.futureCellOpacity < 1)
+}
+
 @MainActor
 private func rhythmPanel(_ weeks: WorkRhythmWeeks, offset: Int, live: Date?) -> some View {
     InsightsPanel(

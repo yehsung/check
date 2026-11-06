@@ -106,6 +106,9 @@ enum DailyMissionCopy {
         case "reversi": return ReversiEntryIcon.resolved
         // 일일 미션 열째 줄(daily_mahjong) — 미니게임 창 사이드바의 [아잉 마작] 문과 같은 기호.
         case "mahjong": return MahjongEntryIcon.resolved
+        // 일일 미션 열한째 줄(daily_crossy_duel) — 미니게임 창 사이드바의 [1:1 길건너] 문 · 폰 MeText 와 같은 기호(flag.checkered).
+        // 키가 혼자 하기 `crossy` 가 아니라 `crossy_duel` 이라 위 `MiniGameKind` 줄에 걸리지 않는다(CD/SPEC.md §1 일일 미션 줄).
+        case "crossy_duel": return CrossyDuelEntryIcon.resolved
         default: return AchievementCopy.fallbackIcon
         }
     }

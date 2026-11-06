@@ -88,7 +88,10 @@ struct CheckApp: App {
             // 받은 **아잉 마작** 초대도 같은 점(큐브와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
             hasMahjongInvite: appDelegate.store.mahjong.hasIncomingInvite,
             // 아잉 마작 **자리 비움**(이 기기가 연 판)도 같은 점 — 판은 자동으로 흐르니 돌아갈 길을 창 밖에서 알린다.
-            hasMahjongAway: appDelegate.store.mahjong.hasAwaySeatHere
+            hasMahjongAway: appDelegate.store.mahjong.hasAwaySeatHere,
+            // 받은 **1:1 길건너** 신청도 같은 점(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
+            // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
+            hasCrossyDuelInvite: appDelegate.store.crossyDuel.visibleIncoming != nil
         )
     }
 }
@@ -217,6 +220,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireReversi()
         // 아잉 마작 — 뒤집기와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireMahjong()
+        // 1:1 길건너 — 마작과 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireCrossyDuel()
         // 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로. **오버레이 컨트롤러를 만든 뒤에** 잇는다: 배너는 캐릭터 패널 한 칸 위에
         // 서고, 대결 미룸(위 세 판의 단계)이 이미 배선돼 있어야 첫 확성기가 제자리에 뜬다.
         wireMegaphoneBanner()
@@ -393,6 +398,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }, safety: store)
         // 아잉 마작 창도 같은 자리에서 배선한다 — 큐브 창의 형제다(닫아도 판은 자동으로 끝까지 — 닫기 ≠ 기권).
         CheckMahjongWindowController.shared.configure(store: store.mahjong, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
+        // 1:1 길건너 창도 같은 자리에서 배선한다 — 테트리스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다).
+        CheckCrossyDuelWindowController.shared.configure(store: store.crossyDuel, me: { [weak self] in
             guard let self else { return ChessPlayerFace.fallback }
             return ChessPlayerFace.me(from: self.store)
         }, safety: store)
@@ -683,6 +693,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.start()
         let mahjongActivity = MahjongActivityHold()
         mahjong.onHoldingActivityChange = { holding in mahjongActivity.set(holding) }
+    }
+
+    /// 1:1 길건너의 문들을 잇는다(실행당 1회). 테트리스·마작과 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V03xxCrossyDuelWiringTests)이 줄마다 되묻는다(CD/SPEC.md §9.5 #13).
+    ///   ① `rankingEnabled` — 순위의 주 스위치(스토어는 폰과 공용이라 기본이 꺼짐). 관전은 없다.
+    ///   ② `presentWindow` · ③ `dismissWindow` — 창을 띄우고 닫는 유일한 문.
+    ///   ④ `requestAttention` — 모양만(메뉴바 앱이라 독 주의는 거의 안 보인다 — 완화책은 말풍선·점·배너).
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 1:1 길건너를 아는 길**(받은 신청 · 판 시작).
+    ///   ⑥ `onOpenCrossyDuel` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑦ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만).
+    ///   ⑧ App Nap — 카운트다운·판 중(이 기기가 연 판) 붙든다. 보고가 밀리면 서버가 15초 침묵 패를 낸다.
+    /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 다른 게임과 같은 자리다.
+    private func wireCrossyDuel() {
+        let crossyDuel = store.crossyDuel
+        crossyDuel.rankingEnabled = true
+        crossyDuel.presentWindow = { CheckCrossyDuelWindowController.shared.show() }
+        crossyDuel.dismissWindow = { CheckCrossyDuelWindowController.shared.close() }
+        CheckCrossyDuelWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.crossyDuel, byUser: byUser)
+        }
+        crossyDuel.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        crossyDuel.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueCrossyDuelInvite(invite)
+        }
+        crossyDuel.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueCrossyDuelAttention(attention)
+        }
+        overlayController?.onOpenCrossyDuel = { [weak self] matchID in
+            self?.store.crossyDuel.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckCrossyDuelWindowController.shared.close()
+            self?.overlayController?.clearCrossyDuelInvites()
+        }.start()
+        let crossyDuelActivity = CrossyDuelActivityHold()
+        crossyDuel.onHoldingActivityChange = { holding in crossyDuelActivity.set(holding) }
     }
 
     /// 아잉 큐브 창을 닫는다(멱등 — 창이 아직 없으면 아무것도 안 한다). 창 컨트롤러의 공개 표면은 `configure`·`show` 뿐이라

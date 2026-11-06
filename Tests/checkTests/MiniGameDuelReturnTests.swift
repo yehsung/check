@@ -38,6 +38,7 @@ private func mdrEnter(_ store: WorkTimerStore, _ door: MiniGameDuelDoor) {
     case .rummy: store.openRummyFromMiniGame()
     case .reversi: store.openReversiFromMiniGame()
     case .mahjong: store.openMahjongFromMiniGame()
+    case .crossyDuel: store.openCrossyDuelFromMiniGame()
     }
 }
 
@@ -62,8 +63,8 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ① 스토어 판정
 
-    @Test("여섯 대결 창 모두: 미니게임 창에서 들어가 사람이 닫으면 미니게임 창이 다시 선다", .gomokuDefaultsCleanup,
-          arguments: [MiniGameDuelDoor.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong])
+    @Test("일곱 대결 창 모두: 미니게임 창에서 들어가 사람이 닫으면 미니게임 창이 다시 선다", .gomokuDefaultsCleanup,
+          arguments: [MiniGameDuelDoor.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel])
     func closingTheDuelWindowReturnsToTheMiniGameWindow(door: MiniGameDuelDoor) {
         // 없으면: 대결 창을 닫으면 화면에 아무것도 안 남는다 — 사용자는 팝오버를 다시 열고 미니게임을 다시 눌러야 한다.
         let store = mdrStore("return")
@@ -200,13 +201,14 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ③ 앱 배선
 
-    @Test("CheckApp 이 여섯 창의 닫힘을 스토어의 duelWindowDidClose 로 잇는다(문마다 자기 이름으로)")
+    @Test("CheckApp 이 일곱 창의 닫힘을 스토어의 duelWindowDidClose 로 잇는다(문마다 자기 이름으로)")
     func theAppWiresAllFourWindows() throws {
         // 없으면: 스토어 판정·컨트롤러 알림이 다 초록인데 둘을 잇는 줄이 없어 실제 앱에서는 아무 일도 안 일어난다.
         let app = mdrCode(try mdrSource("CheckApp.swift"))
         for (controller, door) in [("CheckGomokuWindowController", "gomoku"), ("CheckChessWindowController", "chess"),
                                    ("CheckTetrisDuelWindowController", "tetris"), ("CheckRummyWindowController", "rummy"),
-                                   ("CheckReversiWindowController", "reversi"), ("CheckMahjongWindowController", "mahjong")] {
+                                   ("CheckReversiWindowController", "reversi"), ("CheckMahjongWindowController", "mahjong"),
+                                   ("CheckCrossyDuelWindowController", "crossyDuel")] {
             let hook = try #require(app.range(of: "\(controller).shared.onClosed = {"), "\(controller) 의 닫힘을 안 잇는다")
             let body = String(app[hook.upperBound...].prefix(160))
             #expect(body.contains("duelWindowDidClose(.\(door), byUser: byUser)"), "\(controller) 가 다른 문 이름으로 이어졌다: \(body)")

@@ -50,6 +50,8 @@ struct CheckMenuView: View {
     var previewMahjongInvite: MahjongRoom? = nil
     /// 스냅샷 전용: 아잉 마작 **자리 비움** 배너를 강제로 그린다. 앱에서는 store.mahjong.hasAwaySeatHere 로만 결정.
     var previewMahjongAway: Bool = false
+    /// 스냅샷 전용: 받은 **1:1 길건너** 신청 배너를 강제로 그린다. 앱에서는 store.crossyDuel.visibleIncoming 로만 결정.
+    var previewCrossyDuelInvite: CrossyDuelInvite? = nil
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
@@ -97,6 +99,9 @@ struct CheckMenuView: View {
         /// 아잉 마작 **자리 비움**(이 기기가 연 판 — 창을 닫았거나 [나가기]). 판은 자동으로 흐르고 [돌아가기]가 창을 연다.
         /// 초대 뒤다(같은 사람에게 둘이 함께 뜰 일은 드물다 — 판 중에는 초대를 못 받는다).
         case mahjongAway
+        /// 받은 **1:1 길건너** 신청. 60초짜리 1:1 신청이지만 마작 뒤에 둔다(CD/SPEC.md §9.5 #15 — 마작 앵커를 그대로 두는 자리).
+        /// 둘이 동시에 오면 마작이 이기고 길건너는 다음 팝오버로 밀린다(신청은 서버에 남아 창 로비에서 다시 보인다).
+        case crossyDuelInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -140,6 +145,8 @@ struct CheckMenuView: View {
     static let mahjongInviteBannerHeight: CGFloat = 92
     /// 아잉 마작 자리 비움 배너(`MahjongAwayBanner`) — 초대 배너와 같은 틀이라 높이도 같다.
     static let mahjongAwayBannerHeight: CGFloat = 92
+    /// 받은 1:1 길건너 신청 배너. `CrossyDuelInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
+    static let crossyDuelInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -423,6 +430,46 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 팝오버에 띄울 받은 **1:1 길건너** 신청(없으면 nil). 테트리스와 같은 규약: **스토어가 만료·차단을 걷은 결과만** 읽는다.
+    private var crossyDuelBannerInvite: CrossyDuelInvite? {
+        previewCrossyDuelInvite ?? store.crossyDuel.visibleIncoming
+    }
+
+    /// 배너 [수락]: 서버 수락 → 1:1 길건너 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 테트리스와 같은 순서).
+    private func acceptCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        let crossyDuel = store.crossyDuel
+        Task { @MainActor in
+            await crossyDuel.respond(inviteID: invite.id, accept: true)
+            crossyDuel.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        let crossyDuel = store.crossyDuel
+        Task { @MainActor in
+            await crossyDuel.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        store.crossyDuel.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 1:1 길건너 신청 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var crossyDuelInviteBanner: some View {
+        if topBanner == .crossyDuelInvite, let invite = crossyDuelBannerInvite {
+            CrossyDuelInviteBanner(
+                invite: invite,
+                onAccept: { acceptCrossyDuelInvite(invite) },
+                onDecline: { declineCrossyDuelInvite(invite) },
+                onOpen: { openCrossyDuelInvite(invite) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -447,6 +494,7 @@ struct CheckMenuView: View {
         if store.isSignedIn, reversiBannerInvite != nil { return .reversiInvite }
         if store.isSignedIn, mahjongBannerInvite != nil { return .mahjongInvite }
         if store.isSignedIn, showsMahjongAwayBanner { return .mahjongAway }
+        if store.isSignedIn, crossyDuelBannerInvite != nil { return .crossyDuelInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -470,6 +518,7 @@ struct CheckMenuView: View {
         case .reversiInvite: return Self.reversiInviteBannerHeight
         case .mahjongInvite: return Self.mahjongInviteBannerHeight
         case .mahjongAway: return Self.mahjongAwayBannerHeight
+        case .crossyDuelInvite: return Self.crossyDuelInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -727,6 +776,7 @@ struct CheckMenuView: View {
                     reversiInviteBanner
                     mahjongInviteBanner
                     mahjongAwayBanner
+                    crossyDuelInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -762,6 +812,8 @@ struct CheckMenuView: View {
                     // 받은 아잉 마작 초대 · 자리 비움도 **같은 자리**(큐브와 같은 사정 — 창을 여는 길이 사이드바·이 배너뿐이다).
                     mahjongInviteBanner
                     mahjongAwayBanner
+                    // 받은 1:1 길건너 신청도 **같은 자리**(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창 사이드바 하나뿐이다).
+                    crossyDuelInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -1439,13 +1491,17 @@ struct MenuBarStatusLabel: View {
     /// 아잉 마작 **자리 비움**(이 기기가 연 판)이다. 같은 짝 셋(앱 인자 · 이 칸 · `dotReasons`)이다.
     var hasMahjongAway = false
 
+    /// 받은 **1:1 길건너** 신청이 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxCrossyDuelWiringTests)이 함께 잰다.
+    var hasCrossyDuelInvite = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
             openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite,
             rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite, mahjongInvite: hasMahjongInvite,
-            mahjongAway: hasMahjongAway
+            mahjongAway: hasMahjongAway, crossyDuelInvite: hasCrossyDuelInvite
         )
     }
 
@@ -1584,6 +1640,8 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var mahjongInvite: Bool = false
     /// 아잉 마작 자리 비움(이 기기가 연 판). 같은 이유로 **맨 뒤에 선언**한다.
     var mahjongAway: Bool = false
+    /// 받은 1:1 길건너 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var crossyDuelInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
@@ -1593,11 +1651,12 @@ struct MenuBarDotReasons: Equatable, Sendable {
     static let reversiInviteText = ReversiText.dotReason
     static let mahjongInviteText = MahjongInviteText.dotReason
     static let mahjongAwayText = MahjongInviteText.awayDotReason
+    static let crossyDuelInviteText = CrossyDuelText.dotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
         !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !reversiInvite && !updateAvailable
-            && !openReports && !mahjongInvite && !mahjongAway
+            && !openReports && !mahjongInvite && !mahjongAway && !crossyDuelInvite
     }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
@@ -1616,6 +1675,8 @@ struct MenuBarDotReasons: Equatable, Sendable {
         // 아잉 마작 초대(방 TTL 10분)는 아잉 뒤집기 뒤 · 자리 비움은 그 뒤(팝오버 배너와 같은 순서).
         if mahjongInvite { parts.append(Self.mahjongInviteText) }
         if mahjongAway { parts.append(Self.mahjongAwayText) }
+        // 1:1 길건너 신청은 마작 뒤다(팝오버 배너 · 사이드바와 같은 순서).
+        if crossyDuelInvite { parts.append(Self.crossyDuelInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }

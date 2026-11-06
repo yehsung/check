@@ -231,8 +231,8 @@ func theCharacterBubblesCarryRummyInvitesAndTurns() throws {
 func theMiniGameWindowOpensTheRummyWindow() throws {
     #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.rummy.window"))
     #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckRummyWindowController.frameAutosaveName))
-    // 아잉 뒤집기 창이 더해져 여덟, 아잉 마작 창이 더해져 아홉이다(큐브 창은 그대로 들어 있다 — 위 두 줄).
-    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 9)
+    // 아잉 뒤집기 창이 더해져 여덟, 아잉 마작 창이 더해져 아홉, 1:1 길건너 창이 더해져 열이다(큐브 창은 그대로 들어 있다 — 위 두 줄).
+    #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 10)
 
     // v0.3.69 — 입구가 사이드바 줄이 되며 짧은 이름("큐브")을 떼고 **전체 이름**을 단다(사용자 요구 "좀 더 크게").
     #expect(MiniGameRummyEntryButton.title == "아잉 큐브")

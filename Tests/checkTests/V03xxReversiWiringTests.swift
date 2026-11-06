@@ -316,8 +316,8 @@ struct V03xxReversiWiringTests {
     @Test
     func theAppWiresEveryReversiDoor() throws {
         let app = try rwtMac("CheckApp.swift")
-        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireMegaphoneBanner()"),
-                "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다(사이에 아잉 마작)")
+        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireMegaphoneBanner()"),
+                "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다(사이에 아잉 마작 · 1:1 길건너)")
         let body = try #require(rwtBetween(app, "private func wireReversi() {", "private func wireMahjong() {"))
         let doors: String = [
             "let reversi = store.reversi reversi.rankingEnabled = true reversi.spectatorFeaturesEnabled = true ",
@@ -538,7 +538,7 @@ struct V03xxReversiWiringTests {
     func theMiniGameWindowOpensTheReversiWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.reversi.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckReversiWindowController.frameAutosaveName))
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 9, "아잉 마작 창이 더해져 아홉")
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 10, "아잉 마작 창이 더해져 아홉, 1:1 길건너 창이 더해져 열")
 
         #expect(MiniGameReversiEntryButton.title == "아잉 뒤집기")
         #expect(MiniGameReversiEntryButton.help == "리버시 규칙 1:1 대결 창을 열어요")

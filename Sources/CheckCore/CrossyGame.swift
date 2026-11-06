@@ -290,6 +290,12 @@ package struct CrossyGame: Equatable, Sendable {
     package private(set) var hopCount: Int
     /// 이 판의 시드(새 판마다 바뀐다).
     package private(set) var roundSeed: UInt64
+    /// 규칙 값(혼자 하기 `.solo` · 1:1 `.duel` — 아래 1:1 대결 모드 절). 판 도중 안 바뀐다.
+    package private(set) var rules: Rules
+    /// 죽은 횟수 — `die()` 마다 +1(혼자 하기에도 세지만 의미 없음). 새 판에 0.
+    package private(set) var deaths: Int
+    /// 부활 보호(그 줄 · 판 시계 끝) — 그림 깜빡임용 읽기 전용. 혼자 하기는 언제나 nil.
+    package private(set) var respawnShield: RespawnShield?
 
     private var seedSource: CrossyRandom
     private var generator: CrossyRandom
@@ -303,7 +309,12 @@ package struct CrossyGame: Equatable, Sendable {
     // MARK: 만들기
 
     /// 시드에서 시작 판(준비 상태)을 만든다. 테스트는 시드를 고정하고, 화면은 시각에서 뽑는다.
-    package init(seed: UInt64) {
+    ///
+    /// `rules` 기본값은 혼자 하기(`.solo`) — 기존 호출(맥 · 폰 · 시험)은 한 글자도 안 바뀐다. 1:1 은 `rules: .duel`.
+    package init(seed: UInt64, rules: Rules = .solo) {
+        self.rules = rules
+        deaths = 0
+        respawnShield = nil
         var source = CrossyRandom(seed: seed)
         let first = source.next()
         seedSource = source
@@ -472,6 +483,8 @@ package struct CrossyGame: Equatable, Sendable {
             pathColumn = Self.startColumn
         }
         roundsStarted += 1
+        deaths = 0
+        respawnShield = nil
         player = Player(row: 0, x: Double(Self.startColumn), riding: false, facing: .forward)
         hop = nil
         queued = nil
@@ -617,6 +630,7 @@ package struct CrossyGame: Equatable, Sendable {
 
     private mutating func die(_ cause: DeathCause, push: Int) {
         let spot = occupancy
+        deaths += 1
         death = Death(cause: cause, row: spot.row, x: spot.x, at: elapsed, pushDirection: push)
         player.row = spot.row
         player.x = spot.x
@@ -887,5 +901,85 @@ package struct CrossyRandom: Equatable, Sendable {
     /// [lo, hi] 균등.
     package mutating func uniform(_ lo: Double, _ hi: Double) -> Double {
         lo + (hi - lo) * unit()
+    }
+}
+
+// MARK: - 1:1 대결 모드(길건너 1:1 — 설계서 crossy-duel/SPEC.md §7)
+//
+// 혼자 하기 규칙은 그대로다. 1:1 은 같은 값 타입에 규칙 값(`Rules.duel`)만 바꿔 끼운다 — 100점에 먼저 닿으면 끝,
+// 죽으면 3초 뒤 **그 줄에서** 다시(점수 유지), 카메라 혼자 가기 · 놓침 죽음 없음, 결과에서 다시 하기 없음.
+// 부활 · restore · begin 코드는 이 파일 안이다(판 값이 `private(set)` · 씨앗 줄기가 `private` — 다른 파일 extension 은 못 쓴다).
+
+extension CrossyGame {
+    /// 판 규칙 값. 혼자 하기는 `.solo`(지금 동작 그대로), 1:1 은 `.duel`.
+    package struct Rules: Equatable, Sendable {
+        /// 이 점수에 닿으면 끝(`.result`). nil = 혼자 하기(상한 `maxScore` 만).
+        package var goalScore: Int?
+        /// 죽은 뒤 다시 서기까지(초). nil = 혼자 하기(`deathHold` 뒤 결과).
+        package var respawnDelay: TimeInterval?
+        /// 카메라가 혼자 앞으로 가는가(`creepSpeed`).
+        package var cameraCreeps: Bool
+        /// 놓침 죽음(카메라 2.5줄 뒤처짐 · 9초 정체)이 있는가. 없으면 카메라 2.5줄 뒤로 가는 뛰기가 막힌다.
+        package var leftBehindKills: Bool
+        /// 결과에서 클릭 · 스페이스가 새 판을 여는가.
+        package var allowsRestart: Bool
+
+        package init(goalScore: Int?, respawnDelay: TimeInterval?, cameraCreeps: Bool, leftBehindKills: Bool, allowsRestart: Bool) {
+            self.goalScore = goalScore
+            self.respawnDelay = respawnDelay
+            self.cameraCreeps = cameraCreeps
+            self.leftBehindKills = leftBehindKills
+            self.allowsRestart = allowsRestart
+        }
+
+        package static let solo = Rules(goalScore: nil, respawnDelay: nil, cameraCreeps: true, leftBehindKills: true,
+                                        allowsRestart: true)
+        package static let duel = Rules(goalScore: 100, respawnDelay: CrossyGame.respawnDelaySeconds, cameraCreeps: false,
+                                        leftBehindKills: false, allowsRestart: false)
+    }
+
+    /// 부활 보호 — `row` 줄에 있는 동안(충돌 자리 기준) 판 시계 `until` 전까지 차 · 기차에 안 죽는다.
+    package struct RespawnShield: Equatable, Sendable {
+        package var row: Int
+        package var until: TimeInterval
+
+        package init(row: Int, until: TimeInterval) {
+            self.row = row
+            self.until = until
+        }
+    }
+
+    /// 죽은 뒤 다시 서기까지(1:1, DEC:13 '3초 뒤').
+    package static let respawnDelaySeconds: TimeInterval = 3.0
+    /// 찻길 부활 칸이 안 치여야 하는 시간(미리 돌려 본다).
+    package static let respawnRoadSafeSeconds: TimeInterval = 1.0
+    /// 부활 보호의 최대 길이(기찻길 — 기차가 지나갈 때까지).
+    package static let respawnShieldMaxSeconds: TimeInterval = 2.5
+    /// 줄 생성 버전(SPEC §2 v1.1). **줄 생성 · 난이도를 바꾸면 올리고, 같은 출시에 서버 `crossy_duel_min_build()` 를
+    /// 그 build 로 올리는 한 줄 파일을 짝으로 낸다** — 같은 씨앗이 판 번호가 다른 두 앱에서 다른 맵이 되지 않게.
+    /// 금빛 픽스처(Tests/checkTests/Fixtures/crossy-duel/lanes-golden.json) 머리 값과 시험이 대조한다.
+    package static let laneGeneratorVersion = 1
+
+    /// 카운트다운이 끝나 판을 연다 — `.ready` 에서만 `startRound()`(첫 판 = 같은 씨앗, 뛰지 않는다). 그 밖에선 아무것도 안 한다.
+    package mutating func begin() {
+        guard phase == .ready else { return }
+        startRound()
+    }
+
+    /// 앱 재실행 이어 하기 — 같은 씨앗 판을 줄 `row` 까지 채우고 부활 자리 규칙으로 세운다.
+    /// 끝나면 `phase == .running` · 첫 판이 열렸고 · `cameraRow == Double(row)` · `score`·`deaths` = 인자 값.
+    package mutating func restore(row: Int, score: Int, deaths: Int) {
+        if phase == .ready { startRound() }
+        self.score = score
+        self.deaths = deaths
+        cameraRow = Double(row)
+        player = Player(row: row, x: Double(Self.startColumn), riding: false, facing: .forward)
+        hop = nil
+        queued = nil
+        death = nil
+        sinceProgress = 0
+        respawnShield = nil
+        phase = .running
+        fillLanes()
     }
 }

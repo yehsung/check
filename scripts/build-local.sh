@@ -114,6 +114,15 @@ for PEPERO_PNG in aing_pepero-box aing_pepero-neutral aing_pepero-negative; do
     exit 1
   fi
 done
+# 흑우 · 루비 아잉이 초상이 앱 안에 실렸는가(v0.3.78). 하나라도 빠지면 HwooAingArt/RubyAingArt.isDrawable 이 거짓이라 상점 능력 번호가
+# 6 으로 조용히 내려간다 — 흑우 조각 교환 · 루비 1000 구매가 안 보이고 공증·버전·스탬프 검사는 다 통과한다. 이름은 <id>-<표정> 이다.
+NEW_AING_ART_DIR="$RES_DIR/check_check.bundle/Contents/Resources"
+for NEW_AING_PNG in aing_hwoo-neutral aing_hwoo-negative aing_ruby-neutral aing_ruby-negative; do
+  if [[ ! -s "$NEW_AING_ART_DIR/$NEW_AING_PNG.png" ]]; then
+    echo "error: 흑우·루비 아잉이 그림이 앱에 없다: $NEW_AING_ART_DIR/$NEW_AING_PNG.png" >&2
+    exit 1
+  fi
+done
 
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then
   CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
@@ -142,9 +151,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.77</string>
+  <string>0.3.78</string>
   <key>CFBundleVersion</key>
-  <string>130</string>
+  <string>131</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

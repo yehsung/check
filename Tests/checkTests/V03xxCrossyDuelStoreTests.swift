@@ -698,7 +698,7 @@ struct V03xxCrossyDuelStoreTests {
     @Test("재실행 resume: 시작 뒤 보고가 서버에 있으면 그 점수에서 다시 선다 — 첫 보고 p_score ≥ 37(시작 전 보고만 있으면 0)")
     func relaunchResumesFromServerRow() async {
         // 없으면: 판 중 앱을 다시 켜면 빈 판에서 다시 시작해 다음 보고(점수 0)가 서버 단조 가드에 걸린다.
-        func firstScore(seenAfterStart: Bool) async -> Int? {
+        func scores(seenAfterStart: Bool) async -> (first: Int?, last: Int?) {
             let rig = CDRig.make("resume-\(seenAfterStart)")
             let now = rig.clock.nowMs
             rig.server.edit {
@@ -713,13 +713,16 @@ struct V03xxCrossyDuelStoreTests {
             rig.clock.advance(3)
             rig.store.tick()
             await rig.settle()
-            return rig.reportBodies.last?["p_score"] as? Int
+            let bodies = rig.reportBodies
+            return (bodies.first?["p_score"] as? Int, bodies.last?["p_score"] as? Int)
         }
-        let resumed = await firstScore(seenAfterStart: true)
-        #expect((resumed ?? 0) >= 37)
-        // 기준선: 시작 전 보고(준비)만 있는 행은 빈 판 — 다만 서버 점수가 크면 CC-22 가 그 줄로 세운다(여기선 37 > 0).
-        let fresh = await firstScore(seenAfterStart: false)
-        #expect(fresh == 37)
+        let resumed = await scores(seenAfterStart: true)
+        #expect((resumed.first ?? 0) >= 37)
+        #expect(resumed.last == 37)
+        // 기준선: 시작 전 보고(준비)만 있는 행은 빈 판에서 연다 — 첫 보고 0. 서버 점수(37)가 크니 그 응답 뒤엔 CC-22 가 그 줄로 세운다.
+        let fresh = await scores(seenAfterStart: false)
+        #expect(fresh.first == 0)
+        #expect(fresh.last == 37)
     }
 
     @Test("서버 점수가 로컬보다 크면 엔진을 그 줄로(CC-22 — 서버 48 → 줄 48) · 서버가 같으면 그대로(기준선)")

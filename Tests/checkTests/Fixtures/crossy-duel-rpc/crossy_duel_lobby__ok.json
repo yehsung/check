@@ -6,29 +6,29 @@
     "draws": 0,
     "incoming": [
       {
-        "expires_at_ms": 1793974028017,
+        "expires_at_ms": 1793979242516,
         "from": {
-          "display_name": "T-c8971f75",
-          "id": "c8971f75-6871-420b-a877-df7892d31509"
+          "display_name": "T-8b8f0459",
+          "id": "8b8f0459-b702-4234-9c89-7e25e2d8dbc7"
         },
-        "match_id": "e9cf1344-9e09-4422-a6ae-b6bb4b0df1f2",
+        "match_id": "56dced51-e30d-491a-97e8-1523cb721bb6",
         "stake": 3
       }
     ],
     "losses": 0,
     "outgoing": {
-      "expires_at_ms": 1793974028014,
-      "match_id": "3e5d309c-23f1-4613-bdd6-4f572bc26449",
+      "expires_at_ms": 1793979242514,
+      "match_id": "2c541e9b-9a7e-4d45-8513-076d5752bf2a",
       "stake": 5,
       "to": {
         "display_name": "라마바",
-        "id": "dc8eff76-32be-4cb6-9b19-ef3cd66aa893"
+        "id": "73b739c3-b64d-4d30-9068-b358f413d542"
       }
     },
     "ruby_balance": 100,
     "wins": 0
   },
-  "server_now_ms": 1793973968017,
+  "server_now_ms": 1793979182517,
   "stakes": [
     3,
     5,
@@ -40,9 +40,9 @@
       "avatar_url": null,
       "capable": true,
       "character": null,
-      "display_name": "T-1d04e8dd",
+      "display_name": "T-737001da",
       "focus_mode": false,
-      "id": "1d04e8dd-f4c8-4f68-986c-c87f17c8da48",
+      "id": "737001da-0be0-43bf-b7e6-dd802e65ce69",
       "in_match": false,
       "is_working": false
     },
@@ -50,9 +50,9 @@
       "avatar_url": null,
       "capable": true,
       "character": null,
-      "display_name": "T-5338dd04",
+      "display_name": "T-8b8f0459",
       "focus_mode": false,
-      "id": "5338dd04-05b7-4cee-a521-d30de8a2b5a5",
+      "id": "8b8f0459-b702-4234-9c89-7e25e2d8dbc7",
       "in_match": false,
       "is_working": false
     },
@@ -60,9 +60,9 @@
       "avatar_url": null,
       "capable": true,
       "character": null,
-      "display_name": "T-8909c9a5",
+      "display_name": "T-a06d5361",
       "focus_mode": false,
-      "id": "8909c9a5-8751-452b-af02-c6709fa087fb",
+      "id": "a06d5361-c3fc-42fc-8d24-b71b23e8d943",
       "in_match": false,
       "is_working": false
     },
@@ -70,9 +70,9 @@
       "avatar_url": null,
       "capable": true,
       "character": null,
-      "display_name": "T-a5b99d0c",
+      "display_name": "T-af55a1e5",
       "focus_mode": false,
-      "id": "a5b99d0c-6331-4d3c-a54c-31e9c9ed8428",
+      "id": "af55a1e5-f26e-4fa6-83f0-165f7ca4c0f7",
       "in_match": false,
       "is_working": false
     },
@@ -80,9 +80,9 @@
       "avatar_url": null,
       "capable": true,
       "character": null,
-      "display_name": "T-c8971f75",
+      "display_name": "T-cc967f15",
       "focus_mode": false,
-      "id": "c8971f75-6871-420b-a877-df7892d31509",
+      "id": "cc967f15-daa3-4f82-9285-5cd422a78aa0",
       "in_match": false,
       "is_working": false
     },
@@ -90,9 +90,9 @@
       "avatar_url": null,
       "capable": true,
       "character": null,
-      "display_name": "T-f3a16175",
+      "display_name": "T-dfa8b1d4",
       "focus_mode": false,
-      "id": "f3a16175-574e-4bbd-9c92-79aa047c063f",
+      "id": "dfa8b1d4-02df-44ef-b40d-3d1d86f14fd1",
       "in_match": false,
       "is_working": false
     },
@@ -102,7 +102,7 @@
       "character": null,
       "display_name": "라마바",
       "focus_mode": false,
-      "id": "dc8eff76-32be-4cb6-9b19-ef3cd66aa893",
+      "id": "73b739c3-b64d-4d30-9068-b358f413d542",
       "in_match": false,
       "is_working": false
     },

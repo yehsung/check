@@ -180,7 +180,7 @@ struct V03xxCrossyDuelFixtureContractTests {
             states += 1
             let keys = Set(state.keys)
             #expect(keys.isSubset(of: stateKeys), "\(file) 여분 \(keys.subtracting(stateKeys))")
-            // S2 픽스처(초안 md5 4aa31144)는 frames · checkpoint_ms 를 늘 싣는다 — 1차 픽스처로 되돌리면 여기서 빨갛다.
+            // S2 픽스처(초안 md5 0d88f7b3 — 검토 RV-S 수리 뒤 다시 뜸)는 frames · checkpoint_ms 를 늘 싣는다 — 1차 픽스처로 되돌리면 여기서 빨갛다.
             #expect(stateKeys.subtracting(keys).isEmpty, "\(file) 빠짐 \(stateKeys.subtracting(keys))")
             #expect(state["report_ms"] as? Int == 1000, "\(file) report_ms \(String(describing: state["report_ms"]))")
             #expect(state["checkpoint_ms"] as? Int == 3000, "\(file) checkpoint_ms \(String(describing: state["checkpoint_ms"]))")

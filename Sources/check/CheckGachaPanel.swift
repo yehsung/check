@@ -132,6 +132,8 @@ enum GachaPalette {
         case .isul: return nil
         // 빼빼로(v0.3.77)도 희귀가 아니다 — 빼빼로 데이 선물 전용(`Finish.isRare` 거짓).
         case .pepero: return nil
+        // 흑우(v0.3.78)도 희귀 강조를 안 쓴다 — 조각 교환 전용(확률표에 안 선다 · `Finish.isRare` 거짓).
+        case .hwoo: return nil
         }
     }
 

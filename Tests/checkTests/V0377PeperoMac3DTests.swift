@@ -353,7 +353,7 @@ import Testing
     func drawableAndProtocolSix() throws {
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(Self.id) && drawable.contains(CharacterCatalog.isulAingID), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.peperoProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.peperoProtocol, "v0.3.78 흑우가 얹히면 7(누적)")
         #expect(PeperoAingFinish.isDrawable())
         #expect(PeperoAingFinish.requiredResourceNames() == ["aing_pepero-box", "aing_pepero-neutral", "aing_pepero-negative"])
         for missing in PeperoAingFinish.requiredResourceNames() {
@@ -741,9 +741,10 @@ import Testing
     func bundledPeperoAndProtocolSix() {
         #expect(WorkTimerStore.bundledDrawableCharacterIDs.contains(CharacterCatalog.peperoAingID),
                 "번들 drawable 에 aing_pepero 가 없다 — 그림(판 · 초상 두 장)이 번들에 안 실렸다 \(WorkTimerStore.bundledDrawableCharacterIDs)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == 6)
+        // v0.3.78: 흑우가 얹혀 7 이 된다(누적) — 이 게이트의 뜻은 '빼빼로 선물을 받을 수 있는 6 이상'이다.
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) >= ShopWire.peperoProtocol)
         let store = V0317ShopTests.plainStore()
-        #expect(store.shopProtocolVersion == 6, "스토어 능력 번호 \(store.shopProtocolVersion) — 빼빼로 선물이 안 온다")
+        #expect(store.shopProtocolVersion >= ShopWire.peperoProtocol, "스토어 능력 번호 \(store.shopProtocolVersion) — 빼빼로 선물이 안 온다")
         #expect(ShopWire.supportsPeperoGift(protocolVersion: store.shopProtocolVersion))
         #expect(CharacterGiftKind.pepero.isSupported(protocolVersion: store.shopProtocolVersion))
     }

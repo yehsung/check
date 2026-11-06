@@ -74,6 +74,8 @@ struct V0336PortraitBoxTests {
         // v0.3.77 빼빼로 아잉이: 같은 2D 몸(0.88배) 앞에 몸보다 넓은 불투명 상자 · 머리 위로 막대 — **알파 상자**(`tight`)로 조인다. 상자 옆 넘침 ·
         // 막대 높이가 케이크 자르기의 둘레 8% 와 비슷해 얼굴이 이슬 · 케이크 눈금과 3.6% 안에 선다(케이크 자르기면 190×180 — 15% 작아진다).
         ("aing_pepero", CGSize(width: 168, height: 160)),
+        // v0.3.78 흑우 아잉이: 아잉 초상의 피부색만 바꾸고 알파는 그대로 둔 그림(후광 · 장식 · 몸 축소 없음) — 아잉과 같은 알파 상자(`tight`).
+        ("aing_hwoo", CGSize(width: 164, height: 154)),
     ]
 
     @Test func 높이를_지름에_맞추고_폭은_원본_비대로_따라간다() {
@@ -120,8 +122,9 @@ struct V0336PortraitBoxTests {
             // v0.3.66 케이크 둘도 금과 같은 몸 상자(가로가 세로보다 넓다)라 상한에 걸린다.
             // v0.3.74 이슬도 케이크와 같은 몸 상자라 상한에 걸린다.
             // v0.3.77 빼빼로도 알파 상자가 가로로 넓어(168×160 — 상자가 몸보다 넓다) 상한에 걸린다.
+            // v0.3.78 흑우는 아잉 초상과 알파가 같아(164×154) 아잉처럼 상한에 걸린다.
             #expect(capped == (id == "aing" || id == "aing_gold" || id == "aing_rainbow" || CharacterCatalog.isCakeAing(id)
-                               || CharacterCatalog.isIsulAing(id) || CharacterCatalog.isPeperoAing(id)),
+                               || CharacterCatalog.isIsulAing(id) || CharacterCatalog.isPeperoAing(id) || CharacterCatalog.isHwooAing(id)),
                     "\(id) 가 상한에 \(capped ? "걸렸다" : "안 걸렸다")")
             // 어느 캐릭터든 원보다 크게 넘치지 않는다(레퍼런스는 1.018/0.80 이었다).
             #expect(box.height <= 26 * 1.03 + 1e-9 && box.width <= 26 * 1.02 + 1e-9)
@@ -312,7 +315,9 @@ struct V0336FaceScaleTests {
         let isul = V0374IsulCoreTests.macIsulPortraitsInSourceTree ? 1 : 0
         // v0.3.77: 빼빼로도 같은 기준선(소스 트리의 빼빼로 초상).
         let pepero = V0377PeperoCoreTests.macPeperoPortraitsInSourceTree ? 1 : 0
-        #expect(widths.count == 9 + cakes + isul + pepero, "\(widths.count) 종만 쟀다")
+        // v0.3.78: 흑우도 같은 기준선(소스 트리의 흑우 초상).
+        let hwoo = V0378HwooCoreTests.macHwooPortraitsInSourceTree ? 1 : 0
+        #expect(widths.count == 9 + cakes + isul + pepero + hwoo, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
         #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")

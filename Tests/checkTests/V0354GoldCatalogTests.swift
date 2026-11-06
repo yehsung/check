@@ -18,14 +18,14 @@ struct V0354GoldCatalogTests {
         let empty = CharacterCatalog.load(charactersDirectory: nil)
         // v0.3.59: 무지개 아잉이가 셋째 내장으로 붙는다(V0359RainbowCatalogTests). v0.3.66: 케이크 둘이 넷째 · 다섯째(V0366CakeCoreTests).
         // v0.3.74: 이슬이 여섯째(V0374IsulCoreTests). v0.3.77: 빼빼로가 일곱째(V0377PeperoCoreTests).
-        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero"])
+        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo"])
         let gold = empty.manifest(id: "aing_gold")
         #expect(gold?.displayName == "황금 아잉이")
         #expect(gold?.kind == .scene3D)
         #expect(gold?.atlas == nil && gold?.portrait == nil)
         #expect(empty.entry(id: "aing_gold")?.directory == nil)
         #expect(empty.atlasURL(for: "aing_gold") == nil)
-        #expect(CharacterCatalog.builtIns.map(\.id) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero"])
+        #expect(CharacterCatalog.builtIns.map(\.id) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo"])
         #expect(CharacterCatalog.goldAingID == "aing_gold")
     }
 
@@ -33,8 +33,8 @@ struct V0354GoldCatalogTests {
     @Test("실제 번들: 아잉 → 황금 아잉이 → 나머지(id 정렬) — 스프라이트 6종은 그대로")
     func bundledOrder() {
         let ids = CheckMascotAssets.catalog.allIDs
-        #expect(Array(ids.prefix(7)) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero"])   // v0.3.59 무지개가 셋째 · v0.3.66 케이크 둘이 넷째 · 다섯째 · v0.3.74 이슬이 여섯째 · v0.3.77 빼빼로가 일곱째 내장
-        let rest = Array(ids.dropFirst(7))
+        #expect(Array(ids.prefix(8)) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo"])   // v0.3.59 무지개가 셋째 · v0.3.66 케이크 둘이 넷째 · 다섯째 · v0.3.74 이슬이 여섯째 · v0.3.77 빼빼로가 일곱째 · v0.3.78 흑우가 여덟째 내장
+        let rest = Array(ids.dropFirst(8))
         #expect(rest == rest.sorted())
         #expect(Set(rest) == ["fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"], Comment(rawValue: "\(rest)"))
         // 3D 경로가 쓰는 카탈로그(별도 인스턴스)도 같은 목록이다.
@@ -70,7 +70,7 @@ struct V0354GoldCatalogTests {
         let catalog = CharacterCatalog(manifests: [fake, CharacterManifest(id: "fox", displayName: "여우", kind: .sprite)])
         #expect(catalog.manifest(id: "aing_gold")?.kind == .scene3D)
         #expect(catalog.manifest(id: "aing_gold")?.displayName == "황금 아잉이")
-        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "fox"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "fox"])
     }
 
     /// 선택은 카탈로그가 아는 id 만 저장한다 — 금이 내장이므로 저장된다(모르는 id 는 거절 · 아잉 접기 그대로).

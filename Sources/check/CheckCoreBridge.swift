@@ -55,6 +55,10 @@ extension CharacterCatalog {
         if CharacterCatalog.isPeperoAing(id) {
             return entry(id: id) == nil ? nil : PeperoArt.current.portraitURL(mood)
         }
+        // 흑우 아잉이(v0.3.78 내장)는 금 · 무지개와 같은 자리(번들 루트 `aing_hwoo-*.png`).
+        if CharacterCatalog.isHwooAing(id) {
+            return entry(id: id) == nil ? nil : HwooAingFinish.portraitURL(for: mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

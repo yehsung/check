@@ -153,9 +153,13 @@ private func isTokenStore(_ label: String, function: String) -> TokenUsageStore 
 /// 그릴 수 있는 캐릭터 — 번호 5(이슬까지) · 4(이슬 뺌). 이 워크트리의 번들은 이슬 3D 마감 전이라 번호를 **주입**한다.
 private func isDrawable(_ protocolVersion: Int) -> [String] {
     // v0.3.77: 번들이 빼빼로까지 그리면(6) 번호 5 주입이 6 으로 새지 않게 빼빼로도 뺀다.
-    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.isulCharacterIDs.contains($0) && !ShopWire.peperoCharacterIDs.contains($0) }
+    // v0.3.78: 흑우까지 그리면(7) 번호 5 · 6 주입이 7 로 새지 않게 흑우도 뺀다.
+    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter {
+        !ShopWire.isulCharacterIDs.contains($0) && !ShopWire.peperoCharacterIDs.contains($0) && !ShopWire.hwooCharacterIDs.contains($0)
+    }
     return (protocolVersion >= ShopWire.isulProtocol ? base + ShopWire.isulCharacterIDs : base)
         + (protocolVersion >= ShopWire.peperoProtocol ? ShopWire.peperoCharacterIDs : [])
+        + (protocolVersion >= ShopWire.hwooProtocol ? ShopWire.hwooCharacterIDs : [])
 }
 
 /// 로그인 + 팀 확정 상태의 스토어(서버 = 스텁 호스트 · 능력 번호 주입).

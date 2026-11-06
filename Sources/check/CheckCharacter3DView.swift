@@ -144,6 +144,8 @@ enum CheckCharacter3DScene {
         // 빼빼로(v0.3.77): 몸은 아잉 그대로(재질 안 바꿈) + 상자 · 막대 셋 장식 노드(`check.peperoDecor` — 인쇄 판은 `PeperoArt`) + 표식.
         // 내려 세우지 않는다(막대 끝이 초코 불꽃보다 낮아 지금 구도로 부유 꼭대기까지 안 잘린다 — `PeperoAingFinish` 머리말 ★ 프레이밍).
         case .pepero: PeperoAingFinish.apply(to: character)
+        // 흑우(v0.3.78): 무지개와 같은 디퓨즈 합성 + 네온 몸 셰이더(ckShadeMap) + 표식. 장식 없음 · 내려 세우지 않는다.
+        case .hwoo: HwooAingFinish.apply(to: character)
         }
     }
 

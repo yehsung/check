@@ -688,7 +688,7 @@ extension WorkTimerStore {
             if isGachaAvailable {
                 openGachaPanel()
             } else {
-                shopNotice = GachaText.gachaOnlyHint
+                shopNotice = GachaText.acquireHint(for: id)
             }
             return
         }
@@ -741,7 +741,7 @@ extension WorkTimerStore {
         // 값 확인보다 **먼저** 본다 — 그 캐릭터는 값이 없어(`shopPrice` nil) 아래 갈래가 상점을 다시 읽고 조용히 끝난다.
         if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
             shopSelection = nil
-            shopNotice = GachaText.gachaOnlyHint
+            shopNotice = GachaText.acquireHint(for: id)
             return
         }
         // 선물 전용(v0.3.66 생일 · v0.3.74 술 한잔)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
@@ -801,7 +801,7 @@ extension WorkTimerStore {
                 case "not_for_sale":
                     // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
                     // 케이크 아잉이(v0.3.66) · 이슬 아잉이(v0.3.74)도 같은 갈래로 거절되지만 얻는 길이 다르다(그 선물 종류).
-                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? Self.giftCopy(for: id).lockedHint : GachaText.gachaOnlyHint
+                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? Self.giftCopy(for: id).lockedHint : GachaText.acquireHint(for: id)
                 case "needs_update":
                     // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.
                     // `default:` 의 "구매 실패" 로 떨어지면 사용자는 돈이 빠졌는지, 다시 눌러야 하는지 알 수 없다.

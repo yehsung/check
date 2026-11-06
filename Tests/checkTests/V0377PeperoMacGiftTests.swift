@@ -131,9 +131,13 @@ private final class PeperoGiftServer: @unchecked Sendable {
 
 /// 그릴 수 있는 캐릭터 — 번호 6(빼빼로까지) · 5(이슬까지, 빼빼로 뺌). 번호를 **주입**한다(그림이 붙은 뒤엔 번들 그대로가 6 — 5 는 옛 맥 흉내).
 private func ppDrawable(_ protocolVersion: Int) -> [String] {
-    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.peperoCharacterIDs.contains($0) && !ShopWire.isulCharacterIDs.contains($0) }
+    // v0.3.78: 흑우까지 그리면(7) 번호 6 주입이 7 로 새지 않게 흑우도 뺀다.
+    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter {
+        !ShopWire.peperoCharacterIDs.contains($0) && !ShopWire.isulCharacterIDs.contains($0) && !ShopWire.hwooCharacterIDs.contains($0)
+    }
     switch protocolVersion {
-    case ShopWire.peperoProtocol...: return base + ShopWire.isulCharacterIDs + ShopWire.peperoCharacterIDs
+    case ShopWire.hwooProtocol...: return base + ShopWire.isulCharacterIDs + ShopWire.peperoCharacterIDs + ShopWire.hwooCharacterIDs
+    case ShopWire.peperoProtocol: return base + ShopWire.isulCharacterIDs + ShopWire.peperoCharacterIDs
     case ShopWire.isulProtocol: return base + ShopWire.isulCharacterIDs
     default: return base
     }

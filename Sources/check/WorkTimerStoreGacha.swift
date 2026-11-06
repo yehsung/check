@@ -123,7 +123,7 @@ extension WorkTimerStore {
             return
         }
         guard CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
-        shopNotice = GachaText.gachaOnlyHint
+        shopNotice = GachaText.acquireHint(for: id)
     }
 
     /// 뽑기가 지금 이 캐릭터를 **내는가** — 뽑기가 열려 있고(값 · 완전한 확률표) 그 id 가 확률표나 교환표에 있다.
@@ -205,6 +205,11 @@ extension WorkTimerStore {
         // **입고 있으면 가진 것이다**(서버 `set_character` 는 안 가진 캐릭터를 거절한다) — 상점을 아직 못 읽었거나(시작 직후 · 오프라인)
         // 다른 기기에서 받아 입은 뒤 이 맥의 보유가 낡았어도, 지금 입은 케이크 카드는 선다(금 · 무지개의 '로드 전 관용'과 같은 결).
         if CharacterCatalog.isGiftOnlyBuiltIn(id) { return owned.contains(id) || id == wearing }
+        // 흑우 아잉이(v0.3.78 조각 교환 전용)는 **서버가 흑우를 말할 때만**(상점 목록 · 뽑기 교환 목록) 또는 가졌거나 입었을 때 선다.
+        // 금 · 무지개의 '로드 전' 관용을 주면, 흑우 행을 모르는 서버(마이그레이션 전)에서 시작 직후 아무도 얻을 수 없는 잠긴 카드가 섰다 사라진다.
+        if CharacterCatalog.isShardOnlyBuiltIn(id) {
+            return owned.contains(id) || id == wearing || gachaAvailable || rows.contains { $0.id == id }
+        }
         guard isGachaOnly(id, rows: rows) else { return true }
         return !shopLoaded || gachaAvailable || owned.contains(id) || rows.contains { $0.id == id }
     }

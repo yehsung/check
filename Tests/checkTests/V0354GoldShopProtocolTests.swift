@@ -134,7 +134,10 @@ struct V0354GoldShopProtocolTests {
         let isul = V0374IsulCoreTests.macIsulArtInSourceTree
         // v0.3.77: 빼빼로 그림(판 · 초상)까지 실리면 6 이다(누적 — 빼빼로의 기준선은 V0377PeperoCoreTests.macPeperoArtInSourceTree).
         let pepero = V0377PeperoCoreTests.macPeperoArtInSourceTree
-        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? ShopWire.peperoProtocol : ShopWire.isulProtocol) : ShopWire.cakeProtocol)
+        // v0.3.78: 흑우 그림(초상 두 장 + 무지개 밝기 맵)까지 실리면 7 이다(누적 — 기준선은 V0378HwooCoreTests.macHwooArtInSourceTree).
+        let hwoo = V0378HwooCoreTests.macHwooArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? (hwoo ? ShopWire.hwooProtocol : ShopWire.peperoProtocol) : ShopWire.isulProtocol)
+                                                                  : ShopWire.cakeProtocol)
                                                          : ShopWire.rainbowProtocol)
                                                 : ShopWire.goldProtocol)
                                      : ShopWire.robotProtocol)

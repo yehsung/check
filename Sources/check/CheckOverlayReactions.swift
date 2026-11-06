@@ -610,6 +610,8 @@ final class ReactionEngine {
         if IsulAingFinish.isIsul(character) { return CharacterCatalog.isulAingID }
         // 빼빼로 아잉이(v0.3.77)도 같은 메시 · 같은 몸 재질이라 자기 표식(`PeperoAingFinish.markerName`)으로만 가른다 — 빼빼로 ↔ 아잉 사이의 울트라도 갈아입는다.
         if PeperoAingFinish.isPepero(character) { return CharacterCatalog.peperoAingID }
+        // 흑우 아잉이(v0.3.78)도 같은 메시라 자기 표식(`HwooAingFinish.markerName`)으로 가른다 — 흑우 ↔ 아잉 사이의 울트라도 갈아입는다.
+        if HwooAingFinish.isHwoo(character) { return CharacterCatalog.hwooAingID }
         return CharacterCatalog.builtInAingID
     }
 

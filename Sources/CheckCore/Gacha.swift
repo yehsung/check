@@ -652,7 +652,9 @@ package nonisolated enum GachaRules {
         displayName: (String) -> String?
     ) -> [GachaOddsRow] {
         let rowsByID = Dictionary(shopRows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        return (info.odds ?? []).map { entry in
+        // 확률 0 인 줄(v0.3.78 — 흑우 아잉이: 조각 교환 전용, 서버가 확률표 맨 앞에 0 으로 싣는다)은 **뽑기 확률** 표에 서지 않는다 —
+        // 0% 줄은 "뽑을 수 있는데 안 나온다"로 읽힌다. 교환 목록(`exchangeRows`)은 교환표(`shard_costs`)를 보므로 그대로 선다.
+        return (info.odds ?? []).filter { $0.percent > 0 }.map { entry in
             let id = entry.characterID
             let row = rowsByID[id]
             // 서버 표식이 참이면 뽑기 전용 · 황금·무지개 아잉이는 표식과 무관하게 언제나 뽑기 전용(사장님 규칙 — 루비로 안 판다).
@@ -661,7 +663,10 @@ package nonisolated enum GachaRules {
             // 교환값(아잉은 서버가 실어도 버린다 · 0 이하는 값이 아니다).
             let cost = isNeverExchangeable(id) ? nil : info.shardCosts?[id].flatMap { $0 > 0 ? $0 : nil }
             let priceText: String
-            if gachaOnly {
+            if CharacterCatalog.isShardOnlyBuiltIn(id) {
+                // 조각 교환 전용(흑우): "조각 20개로 교환" — 뽑기에는 안 나온다.
+                priceText = GachaText.shardOnlyPrice(shardCost: cost)
+            } else if gachaOnly {
                 // 루비 값 대신 얻는 길을 말한다: "뽑기 또는 조각 20개"(교환값을 모르면 "뽑기 전용").
                 priceText = GachaText.gachaOnlyPrice(shardCost: cost)
             } else if let price {
@@ -746,6 +751,19 @@ package nonisolated enum GachaText {
     /// AMENDMENT 1 뒤로는 "뽑기로만"도 거짓이다(조각으로도 바꾼다). 서버 `buy_character` 의 `not_for_sale` 도 이 문장으로 말한다
     /// (루비는 안 깎였다).
     package static let gachaOnlyHint = "뽑기나 조각 교환으로 얻을 수 있어요"
+    /// 조각 교환 전용(흑우 아잉이 — v0.3.78)의 얻는 길: "조각 20개로 교환". 교환값을 모르면 "조각 교환 전용".
+    package static func shardOnlyPrice(shardCost: Int?) -> String {
+        guard let shardCost, shardCost > 0 else { return shardOnly }
+        return "\(Self.shardCost(shardCost))로 교환"
+    }
+    /// 조각 교환 전용의 짧은 말(교환값을 모를 때).
+    package static let shardOnly = "조각 교환 전용"
+    /// 조각 교환 전용 캐릭터를 눌렀을 때의 한 줄(뽑기에는 안 나온다 — "뽑기나"는 거짓이다).
+    package static let shardOnlyHint = "조각 교환으로만 얻을 수 있어요"
+    /// 이 캐릭터의 얻는 길 안내(뽑기 전용 · 조각 교환 전용을 가른다 — 잠긴 카드 · 상점 not_for_sale 이 이 한 곳을 묻는다).
+    package static func acquireHint(for characterID: String?) -> String {
+        CharacterCatalog.isShardOnlyBuiltIn(characterID) ? shardOnlyHint : gachaOnlyHint
+    }
     /// 값을 모를 때(상점 카드의 "—" 와 같은 표기).
     package static let unknownValue = "—"
     package static let owned = "보유"

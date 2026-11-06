@@ -160,6 +160,9 @@ enum CheckMascotAssets {
             // 이슬까지 서고 빼빼로도 서야 상점 능력 번호 6 이 나간다(`ShopWire.protocolVersion` — 하나라도 빠지면 5 에 머물고 서버가 빼빼로 행 ·
             // 빼빼로 선물을 안 싣는다). 정의는 `PeperoAingFinish.isDrawable` 한 곳.
             if CharacterCatalog.isPeperoAing(id) { return PeperoAingFinish.isDrawable(fileManager: fileManager) }
+            // 흑우 아잉이(v0.3.78): 초상 두 장 + 무지개와 같이 쓰는 밝기 맵. 빼빼로까지 서고 흑우도 서야 상점 능력 번호 7 이 나간다
+            // (`ShopWire.protocolVersion` — 빠지면 6 에 머물고 서버가 흑우 행 · 교환가를 안 싣는다). 정의는 `HwooAingFinish.isDrawable` 한 곳.
+            if CharacterCatalog.isHwooAing(id) { return HwooAingFinish.isDrawable(fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

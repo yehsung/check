@@ -715,7 +715,10 @@ struct CheckShopPanel: View {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
                     // 문구는 코어 한 벌(`GachaText.gachaOnlyPrice` — 확률표 금 줄 · 폰과 같은 글자): "뽑기 또는 조각 20개", 교환값을 모르면
                     // "뽑기 전용". 숫자는 서버 `shard_costs` 다. 가진 것은 다른 카드처럼 "보유".
-                    Text(owned ? GachaText.owned : GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: entry.id)))
+                    // 조각 교환 전용(흑우 — v0.3.78)은 "조각 20개로 교환"(뽑기에는 안 나온다).
+                    Text(owned ? GachaText.owned
+                         : CharacterCatalog.isShardOnlyBuiltIn(entry.id) ? GachaText.shardOnlyPrice(shardCost: store.gachaShardCost(of: entry.id))
+                         : GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: entry.id)))
                         .font(.caption2.weight(.bold))
                         .monospacedDigit()
                         .foregroundStyle(owned ? AnyShapeStyle(CheckTheme.secondaryText)
@@ -759,8 +762,8 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy))
-        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned, gift: giftCopy))
+        .checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy, acquireHint: GachaText.acquireHint(for: entry.id)))
+        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned, gift: giftCopy, acquireHint: GachaText.acquireHint(for: entry.id)))
     }
 }
 
@@ -780,21 +783,22 @@ enum ShopCardLine: Equatable, Sendable {
     }
 
     /// 말풍선 — 얻는 길을 말한다(잠긴 칸 · 뽑기 전용에 "사기"는 거짓이다). `gift` = 잠긴 칸을 주는 선물 종류의 문구(기본 생일 — 0.3.66).
-    func tooltip(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday) -> String {
+    /// `acquireHint` = 뽑기 전용 칸의 얻는 길(기본 "뽑기나 조각 교환으로…" · 조각 교환 전용 흑우는 "조각 교환으로만…" — `GachaText.acquireHint(for:)`).
+    func tooltip(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday, acquireHint: String = GachaText.gachaOnlyHint) -> String {
         if owned { return "\(name) — 보유 중" }
         switch self {
         case .giftLocked: return "\(name) — \(gift.lockedHint)"
-        case .gachaOnly: return "\(name) — \(GachaText.gachaOnlyHint)"
+        case .gachaOnly: return "\(name) — \(acquireHint)"
         case .price: return "\(name) 사기"
         }
     }
 
     /// 읽기 이름.
-    func accessibilityLabel(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday) -> String {
+    func accessibilityLabel(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday, acquireHint: String = GachaText.gachaOnlyHint) -> String {
         if owned { return "\(name) 보유 중" }
         switch self {
         case .giftLocked: return "\(name) 잠김, \(gift.lockedCaption) — \(gift.lockedHint)"
-        case .gachaOnly: return "\(name), \(GachaText.gachaOnlyHint)"
+        case .gachaOnly: return "\(name), \(acquireHint)"
         case .price: return "\(name) 사기"
         }
     }

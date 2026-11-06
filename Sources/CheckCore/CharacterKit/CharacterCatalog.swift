@@ -105,11 +105,25 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
+    /// 흑우 아잉이(v0.3.78 · **조각 20개로만** 바꾸는 캐릭터)의 고정 id. 서버 CHECK·가격표(`gacha_only = true` · `min_protocol = 7`)·
+    /// `gacha_pool`(확률 **0** · 조각 20 · sort 0 — 추첨에 안 나온다)의 id 와 같다. 매니페스트 파일로 못 싣는 이유는 금 · 무지개와 같다.
+    /// 대표 결정(2026-11-06): 제보 "뽑기말고 조각으로만 교환할 수 있는 흑우 아잉이" → "흑우 아잉이 좋음" · 조각 "20개 (황금·무지개와 같게)" ·
+    /// 그림 "U9 네온"(짙은 남색 몸 + 왼쪽 하늘색 · 오른쪽 분홍 네온 테). 이름은 대표가 정한 그대로다(디자인에는 이름을 반영하지 않는다).
+    package static let hwooAingID = "aing_hwoo"
+
+    /// 코드에 박힌 흑우 아잉이 — 아잉과 **같은 3D 메시**에 네온 마감(`CharacterManifest.Finish.hwoo`)을 입힌 변형이다.
+    /// 루비로도(서버 `gacha_only` → `not_for_sale`) · 뽑기로도(확률 0) 못 얻고 **조각 교환으로만** 얻는다.
+    package static let builtInHwooAing = CharacterManifest(
+        id: hwooAingID,
+        displayName: "흑우 아잉이",
+        kind: .scene3D
+    )
+
     /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이, 이슬 아잉이,
-    /// 빼빼로 아잉이). 번들이 비어도 이 일곱은 늘 있다.
+    /// 빼빼로 아잉이, 흑우 아잉이). 번들이 비어도 이 여덟은 늘 있다.
     package static let builtIns: [CharacterManifest] = [
         builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
-        builtInPeperoAing,
+        builtInPeperoAing, builtInHwooAing,
     ]
 
     /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
@@ -126,11 +140,25 @@ package struct CharacterCatalog: Sendable {
     /// (사용자 결정: 황금 2026-10-15 · 무지개 2026-10-20 "황금처럼 뽑기 전용"). 상점 구매 가능 · 확률표 상점가 칸 · 고르기 잠긴 카드의
     /// 안내가 전부 이 한 곳을 묻는다 — 새 희귀 캐릭터는 여기 하나만 더하면 된다.
     package static func isGachaOnlyBuiltIn(_ id: String?) -> Bool {
-        isGoldAing(id) || isRainbowAing(id)
+        isGoldAing(id) || isRainbowAing(id) || isHwooAing(id)
     }
 
+    /// 이 id 가 흑우 아잉이인가. 금과 같은 규칙(정확히 `aing_hwoo` 만 — 공백 · 대소문자를 봐주지 않는다).
+    package static func isHwooAing(_ id: String?) -> Bool {
+        id == hwooAingID
+    }
+
+    /// **조각 교환으로만** 얻는 내장 캐릭터(흑우 아잉이 — v0.3.78)인가. 뽑기 전용(`isGachaOnlyBuiltIn` — 루비로 안 판다)의 부분집합이고,
+    /// 화면의 얻는 길 문구가 "뽑기 또는 조각 N개"가 아니라 "조각 N개로 교환"이 된다(뽑기에는 안 나온다 — 서버 확률 0).
+    package static func isShardOnlyBuiltIn(_ id: String?) -> Bool {
+        isHwooAing(id)
+    }
+
+    /// 조각 교환 전용 내장 캐릭터 — 흑우 하나(v0.3.78). '흑우' 뜻 자리(능력 번호 7)는 이 목록이다.
+    package static let shardOnlyBuiltInIDs: [String] = [hwooAingID]
+
     /// 희귀 내장 캐릭터의 표시 순서(교환 목록 맨 위 · 확률표가 순서를 안 줄 때) — 황금 먼저, 무지개 다음.
-    package static let gachaOnlyBuiltInIDs: [String] = [goldAingID, rainbowAingID]
+    package static let gachaOnlyBuiltInIDs: [String] = [goldAingID, rainbowAingID, hwooAingID]
 
     /// 이 id 가 케이크 아잉이(딸기 · 초코)인가. 금과 같은 규칙(정확히 그 두 id 만 — 공백 · 대소문자를 봐주지 않는다).
     package static func isCakeAing(_ id: String?) -> Bool {

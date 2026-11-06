@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-06T22:59:54+09:00",
+  "generated_at": "2026-11-06T23:06:08+09:00",
   "source": "CD/server/fixtures/gen.sh — 하네스 CD/harness 55571, 체인 + 20261109150000_crossy_duel.sql 3회 적용 직후, 한 트랜잭션(롤백)",
   "draft": "20261109150000_crossy_duel.sql",
   "draft_md5": "4aa311441016a5552dcd9d6f561f0443",

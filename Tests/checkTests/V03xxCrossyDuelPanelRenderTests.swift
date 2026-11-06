@@ -148,7 +148,7 @@ private func cdFinishedStore(outcome: CrossyDuelOutcome?, reason: CrossyDuelEndR
 
 // MARK: - 그림 도우미
 
-private enum CDError: Error { case render }
+private enum CDPanelRenderError: Error { case render }
 
 /// 3D 판 한 장(344×356pt @2x) — 오프스크린 SCNRenderer. 씬은 한 벌을 돌려 쓴다(모델 읽기가 비싸다).
 @MainActor
@@ -200,7 +200,7 @@ private func cdRender(_ store: CrossyDuelStore, name: String? = nil, tab: Crossy
                                 previewConfirmResign: confirmResign, previewLobbyTab: tab, previewCanvas: canvas,
                                 previewCharacters: cdCharacters)
         .environment(\.colorScheme, .dark)
-    guard let bitmap = CheckRenderSettle.bitmap(panel, scale: 2) else { throw CDError.render }
+    guard let bitmap = CheckRenderSettle.bitmap(panel, scale: 2) else { throw CDPanelRenderError.render }
     if let name { cdSave(bitmap, name) }
     return bitmap
 }

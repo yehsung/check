@@ -6,8 +6,8 @@ import Testing
 //
 //   ① 매니페스트(T/Fixtures/crossy-duel-rpc/_manifest.json — S 가 하네스에서 뜬 실응답 원문)의 케이스 파일이 다 있고, rpc 는
 //      `CrossyDuelWire.RPC.all` 안이며, 모든 status 가 열거 안이다(`.unknown` 0).
-//   ② 봉투 키 = 초안의 `v_*_keys` 배열 상수(C 의 계약 시험이 읽는 줄 — 초안 §12). 픽스처가 1차(frames · checkpoint_ms 없음)여도
-//      그 차이만 허락한다(S2 가 다시 뜬 픽스처는 같아야 한다 — 통합 때 T 가 바꿔 끼운다).
+//   ② 봉투 키 = 초안의 `v_*_keys` 배열 상수(C 의 계약 시험이 읽는 줄 — 초안 §12). 통합(T)이 S2 가 다시 뜬 픽스처(frames ·
+//      checkpoint_ms 포함)로 바꿔 끼웠으므로 1차 차이를 더는 허락하지 않는다 — state 키 집합은 초안과 **같아야** 한다.
 //   ③ 디코더 칸 = 초안 키(디코더가 키 하나를 모르면 그 값이 조용히 nil — 머리말 ①).
 //   ④ 요청 본문 키 = SQL 인자 이름(PostgREST 는 본문 키 집합으로 함수를 고른다 — 이름 하나 어긋나면 PGRST202).
 //   ⑤ 초안이 내는 status 글자 ⊆ `CrossyDuelRPCStatus`.
@@ -163,7 +163,7 @@ struct V03xxCrossyDuelFixtureContractTests {
         #expect(odd.status == .unknown)
     }
 
-    @Test("봉투 키 = 초안 v_*_keys — state(1차 픽스처면 frames·checkpoint_ms 차이만) · side · final · lobby · me · user · invite · ranking",
+    @Test("봉투 키 = 초안 v_*_keys — state(frames·checkpoint_ms 까지 같음) · side · final · lobby · me · user · invite · ranking",
           .enabled(if: cfcMigrationGate))
     func envelopeKeysMatchDraft() throws {
         // 없으면: 서버가 키 이름을 바꾸거나(goal_at → goal_at_ms) 클라 픽스처가 다른 판의 것이어도 손 픽스처 시험은 초록이다.
@@ -173,13 +173,18 @@ struct V03xxCrossyDuelFixtureContractTests {
         let finalKeys = try cfcKeys("final", in: sql)
         #expect(cfcFramesKeys.isSubset(of: stateKeys))                    // 초안은 S2 덧붙임을 담았다(B5)
         var states = 0
+        var framesOn = 0
         for file in try cfcFixtureFiles() {
             let object = try cfcObject(file)
             guard let state = object["state"] as? [String: Any] else { continue }
             states += 1
             let keys = Set(state.keys)
             #expect(keys.isSubset(of: stateKeys), "\(file) 여분 \(keys.subtracting(stateKeys))")
-            #expect(stateKeys.subtracting(keys).isSubset(of: cfcFramesKeys), "\(file) 빠짐 \(stateKeys.subtracting(keys))")
+            // S2 픽스처(초안 md5 4aa31144)는 frames · checkpoint_ms 를 늘 싣는다 — 1차 픽스처로 되돌리면 여기서 빨갛다.
+            #expect(stateKeys.subtracting(keys).isEmpty, "\(file) 빠짐 \(stateKeys.subtracting(keys))")
+            #expect(state["report_ms"] as? Int == 1000, "\(file) report_ms \(String(describing: state["report_ms"]))")
+            #expect(state["checkpoint_ms"] as? Int == 3000, "\(file) checkpoint_ms \(String(describing: state["checkpoint_ms"]))")
+            if (state["frames"] as? [String: Any])?["on"] as? Bool == true { framesOn += 1 }
             for side in ["me", "opponent"] {
                 #expect(Set((state[side] as? [String: Any])?.keys ?? [:].keys) == sideKeys, "\(file) \(side)")
             }
@@ -187,6 +192,8 @@ struct V03xxCrossyDuelFixtureContractTests {
             if let frames = state["frames"] as? [String: Any] { #expect(Set(frames.keys) == ["on", "topic"], "\(file)") }
         }
         #expect(states >= 25)
+        // S2 보고: frames 가 켜진 장 9개(진행 중 판) — 0 이면 1차 픽스처이거나 방송 스위치가 꺼진 하네스에서 뜬 것이다.
+        #expect(framesOn == 9, "frames.on 인 state 픽스처 \(framesOn)장")
         let lobby = try cfcObject("crossy_duel_lobby__ok.json")
         #expect(Set(lobby.keys) == (try cfcKeys("lobby", in: sql)))
         let me = try #require(lobby["me"] as? [String: Any])

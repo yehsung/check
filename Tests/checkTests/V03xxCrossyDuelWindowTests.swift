@@ -37,6 +37,9 @@ private func cwLiveStore(phase: CrossyDuelPhase = .playing) -> CrossyDuelStore {
     game.begin()
     store.duel = CrossyDuelSession(seed: 7, startedGame: game, startAt: 90)
     store.match = cwMatch()
+    // 구동기가 이 판의 것이라고 적는다(통합 T — C2 의 `refreshPhase` 는 `duelMatchID == match.id` 일 때만 구동기 시계로 단계를 낸다.
+    // C1 뼈대에는 이 칸이 일하지 않아 빠져 있었고, 빠지면 창 표시(`windowDidShow` → `tick`)가 판을 `.ready` 로 되돌린다).
+    store.duelMatchID = store.match?.id
     store.phase = phase
     return store
 }

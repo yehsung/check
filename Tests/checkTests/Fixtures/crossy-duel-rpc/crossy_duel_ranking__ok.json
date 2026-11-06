@@ -11,9 +11,9 @@
     {
       "avatar_url": null,
       "character": null,
-      "display_name": "T-439d14d0",
+      "display_name": "T-5338dd04",
       "draws": 1,
-      "id": "439d14d0-1485-4fde-b160-40b135cf87bb",
+      "id": "5338dd04-05b7-4cee-a521-d30de8a2b5a5",
       "losses": 0,
       "points": 3,
       "rank": 1,
@@ -24,7 +24,7 @@
       "character": null,
       "display_name": "라마바",
       "draws": 0,
-      "id": "c9507194-70ce-45b3-9b4e-871adb947ba2",
+      "id": "dc8eff76-32be-4cb6-9b19-ef3cd66aa893",
       "losses": 0,
       "points": 1,
       "rank": 2,
@@ -35,7 +35,7 @@
       "character": "aing",
       "display_name": "가나다",
       "draws": 0,
-      "id": "a6f9ee85-6ded-472a-bf89-2f239dcbdeaa",
+      "id": "8d3dd6a6-a1f3-4cf9-a1b2-d496a63dffc0",
       "losses": 1,
       "points": -1,
       "rank": 3,
@@ -44,15 +44,15 @@
     {
       "avatar_url": null,
       "character": null,
-      "display_name": "T-c641d928",
+      "display_name": "T-f3a16175",
       "draws": 1,
-      "id": "c641d928-b685-4276-b6de-0b247aab9cc7",
+      "id": "f3a16175-574e-4bbd-9c92-79aa047c063f",
       "losses": 3,
       "points": -3,
       "rank": 4,
       "wins": 0
     }
   ],
-  "server_now_ms": 1793973594518,
+  "server_now_ms": 1793973968056,
   "status": "ok"
 }

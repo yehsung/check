@@ -210,6 +210,11 @@ extension WorkTimerStore {
         if CharacterCatalog.isShardOnlyBuiltIn(id) {
             return owned.contains(id) || id == wearing || gachaAvailable || rows.contains { $0.id == id }
         }
+        // 루비 아잉이(v0.3.78 상점 루비 1000)도 **서버가 루비를 말할 때만**(상점 목록) 또는 가졌거나 입었을 때 선다 — 내장 캐릭터라 번들에 늘 있어,
+        // 이 문이 없으면 루비 행을 모르는 서버(마이그레이션 전 · 능력 번호 8 미만으로 읽은 목록)에서 살 수 없는 잠긴 카드가 선다.
+        if CharacterCatalog.isRubyAing(id) {
+            return owned.contains(id) || id == wearing || rows.contains { $0.id == id }
+        }
         guard isGachaOnly(id, rows: rows) else { return true }
         return !shopLoaded || gachaAvailable || owned.contains(id) || rows.contains { $0.id == id }
     }

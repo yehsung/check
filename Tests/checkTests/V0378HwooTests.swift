@@ -24,8 +24,9 @@ import Testing
 
     @Test("카탈로그: 흑우는 내장 여덟째(맨 끝) · id aing_hwoo · 마감 .hwoo · 희귀 아님 · 루비로 안 판다 · 조각 교환 전용")
     func catalog() {
-        #expect(CharacterCatalog.builtIns.last?.id == "aing_hwoo")
-        #expect(CharacterCatalog.builtIns.count == 8)
+        // v0.3.78 루비 아잉이가 아홉째로 붙어 흑우는 여덟째 자리 그대로다(V0378RubyCoreTests).
+        #expect(CharacterCatalog.builtIns.map(\.id).firstIndex(of: "aing_hwoo") == 7)
+        #expect(CharacterCatalog.builtIns.count >= 8)
         #expect(CharacterCatalog.builtInHwooAing.displayName == "흑우 아잉이")
         #expect(CharacterManifest.Finish(characterID: "aing_hwoo") == .hwoo)
         #expect(!CharacterManifest.Finish.hwoo.isRare && !CharacterManifest.Finish.hwoo.isCake)
@@ -178,8 +179,9 @@ import Testing
     func drawableAndProtocolSeven() throws {
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(CharacterCatalog.hwooAingID), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.hwooProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == ShopWire.hwooProtocol)
+        // 루비 아잉이까지 얹히면 8(누적) — 이 게이트의 뜻은 '흑우를 받을 수 있는 7 이상'이다(루비 판 게이트는 V0378RubyMac3DTests).
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.hwooProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) >= ShopWire.hwooProtocol)
         #expect(HwooAingFinish.isDrawable())
         #expect(HwooAingArt.requiredResourceNames(for: .mac) == ["aing_hwoo-neutral", "aing_hwoo-negative", "aing_rainbow-shade"])
         for missing in HwooAingArt.requiredResourceNames(for: .mac) {

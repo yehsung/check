@@ -59,6 +59,10 @@ extension CharacterCatalog {
         if CharacterCatalog.isHwooAing(id) {
             return entry(id: id) == nil ? nil : HwooAingFinish.portraitURL(for: mood)
         }
+        // 루비 아잉이(v0.3.78 내장)도 같은 자리(번들 루트 `aing_ruby-*.png` — 몸 모양이 바뀌어 3D 렌더에서 구운 초상).
+        if CharacterCatalog.isRubyAing(id) {
+            return entry(id: id) == nil ? nil : RubyAingFinish.portraitURL(for: mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

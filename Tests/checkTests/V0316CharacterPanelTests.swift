@@ -292,7 +292,8 @@ func 캐릭터가_늘어도_창이_상한_안에_선다() throws {
     let suite = cpSuite()
     defer { cpDrop(suite) }
     // v0.3.66: 내장이 다섯(아잉 · 황금 · 무지개 · 딸기 · 초코 케이크)이라 filler 8 로 같은 13종을 만든다.
-    let many = CharacterCatalog(manifests: (0..<8).map {
+    // v0.3.78: 내장이 아홉(흑우 · 루비)으로 늘어 filler 를 '15 − 내장 수'로 맞춘다(전제 15종 = 5행 그대로).
+    let many = CharacterCatalog(manifests: (0..<(15 - CharacterCatalog.builtIns.count)).map {
         CharacterManifest(id: "filler-\($0)", displayName: "캐릭터\($0)", kind: .scene3D)
     })
     let panel = CheckCharacterPanel(

@@ -47,7 +47,9 @@ struct V0377PeperoCoreTests {
         // v0.3.78: 흑우 그림까지 있으면 7(누적 — 빼빼로가 없으면 흑우가 있어도 6 을 건너뛰지 않는다).
         V0374IsulCoreTests.macIsulArtInSourceTree
             ? (macPeperoArtInSourceTree
-                ? (V0378HwooCoreTests.macHwooArtInSourceTree ? ShopWire.hwooProtocol : ShopWire.peperoProtocol)
+                ? (V0378HwooCoreTests.macHwooArtInSourceTree
+                    ? (V0378RubyCoreTests.macRubyArtInSourceTree ? ShopWire.rubyProtocol : ShopWire.hwooProtocol)   // v0.3.78 루비까지 8
+                    : ShopWire.peperoProtocol)
                 : ShopWire.isulProtocol)
             : ShopWire.cakeProtocol
     }
@@ -61,7 +63,7 @@ struct V0377PeperoCoreTests {
         #expect(CharacterCatalog.builtInPeperoAing.id == Self.pepero)
         #expect(CharacterCatalog.builtInPeperoAing.displayName == CharacterCatalog.peperoAingDisplayName, "표시 이름이 상수에서 안 온다")
         #expect(CharacterCatalog.builtInPeperoAing.kind == .scene3D)
-        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID]
+        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID]
         #expect(CharacterCatalog.builtIns.map(\.id) == order)
         let empty = CharacterCatalog(entries: [])
         #expect(empty.allIDs == order)
@@ -140,7 +142,7 @@ struct V0377PeperoCoreTests {
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: base + [Self.pepero]) == 4, "이슬 없이 빼빼로만 — 5 도 못 보낸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: ["robot", "aing_gold", "aing_rainbow", Self.choco, Self.isul, Self.pepero]) == 3)
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: [Self.isul, Self.pepero]) == 0)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: CharacterCatalog.builtIns.map(\.id) + ["robot"]) == ShopWire.hwooProtocol, "내장 전부 + robot — v0.3.78 흑우까지 7")
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: CharacterCatalog.builtIns.map(\.id) + ["robot"]) == ShopWire.rubyProtocol, "내장 전부 + robot — v0.3.78 흑우 7 · 루비까지 8")
         #expect(!ShopWire.supportsPeperoGift(protocolVersion: 5))
         #expect(ShopWire.supportsPeperoGift(protocolVersion: 6))
         #expect(ShopWire.supportsDrinkGift(protocolVersion: 6) && ShopWire.supportsCakeGift(protocolVersion: 6), "번호는 누적이다")

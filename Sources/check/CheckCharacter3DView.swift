@@ -146,6 +146,9 @@ enum CheckCharacter3DScene {
         case .pepero: PeperoAingFinish.apply(to: character)
         // 흑우(v0.3.78): 무지개와 같은 디퓨즈 합성 + 네온 몸 셰이더(ckShadeMap) + 표식. 장식 없음 · 내려 세우지 않는다.
         case .hwoo: HwooAingFinish.apply(to: character)
+        // 루비(v0.3.78): 몸 빚기(정점마다 구운 거리를 geometry 셰이더가 옮김) + 무지개와 같은 디퓨즈 합성 + 보석 몸 셰이더 + 표식.
+        // 장식 없음 · 내려 세우지 않는다(카메라는 원래 몸 상자로 이미 섰다 — Y5 는 원래 몸과 가까워 부유 꼭대기까지 안 잘린다).
+        case .ruby: RubyAingFinish.apply(to: character)
         }
     }
 
@@ -388,7 +391,9 @@ enum CheckCharacter3DScene {
             let node = makeClosedEyeNode(image: image)
             node.name = name
             // 표면보다 살짝 앞(+z)에 둬 z-파이팅/가림을 피하고, 눈 세로 중앙에서 하단 경계로 내린다(-y).
-            node.position = SCNVector3(pos.x, pos.y - closedEyeLowering, pos.z + 0.035)
+            // 루비 아잉이(v0.3.78)는 몸 셰이더가 눈 자리를 옮기므로 선 판도 같은 만큼 옮긴다(아니면 0).
+            let shift = RubyAingFinish.closedEyeOffset(for: character, anchor: pos)
+            node.position = SCNVector3(pos.x + shift.x, pos.y - closedEyeLowering + shift.y, pos.z + 0.035 + shift.z)
             node.isHidden = true
             character.addChildNode(node)
         }

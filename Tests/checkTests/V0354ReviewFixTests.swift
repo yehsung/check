@@ -351,8 +351,10 @@ import Testing
             // 흑우(v0.3.78 조각 교환 전용)는 서버 목록에 있을 때만 선다 — 이 픽스처의 어느 서버도 흑우 행을 내지 않는다(V0378HwooCoreTests).
             let plain = { (id: String) in
                 id != Self.gold && !CharacterCatalog.isRainbowAing(id) && !CharacterCatalog.isGiftOnlyBuiltIn(id) && !CharacterCatalog.isShardOnlyBuiltIn(id)
+                    && !CharacterCatalog.isRubyAing(id)   // v0.3.78 루비도 서버 목록에 있을 때만 선다(V0378RubyCoreTests)
             }
             #expect(!ids.contains(CharacterCatalog.hwooAingID), "\(server): 서버가 안 낸 흑우가 고르기에 섰다 \(ids)")
+            #expect(!ids.contains(CharacterCatalog.rubyAingID), "\(server): 서버가 안 낸 루비가 고르기에 섰다 \(ids)")
             #expect(!ids.contains { CharacterCatalog.isGiftOnlyBuiltIn($0) }, "\(server): 안 가진 케이크가 고르기에 섰다 \(ids)")
             #expect(ids.filter(plain) == CheckCharacter3DScene.catalog.allIDs.filter(plain), "\(server)")
             #expect(ids.contains(CharacterCatalog.rainbowAingID) == (server == .notLoaded), "\(server): 무지개 \(ids)")

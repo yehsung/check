@@ -319,6 +319,8 @@ struct GachaWindowPalette {
         case .pepero: return nil
         // 흑우(v0.3.78)도 희귀 강조를 안 쓴다 — 조각 교환 전용(확률표에 안 선다 · `Finish.isRare` 거짓).
         case .hwoo: return nil
+        // 루비 아잉이(v0.3.78)는 보통 상점 캐릭터라 희귀 강조를 안 쓴다(`Finish.isRare` 거짓).
+        case .ruby: return nil
         }
     }
 

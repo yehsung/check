@@ -496,6 +496,11 @@ package final class CrossyScene: ObservableObject {
             }
         }
 
+        // 1:1 부활 보호 — 보호 동안 깜빡인다(초당 6회 0.4↔1.0, 판 시계 — 정지하면 같이 멈춘다). 동작 줄이기면 0.6 고정.
+        if game.death == nil, let shield = game.respawnShield, game.elapsed < shield.until {
+            opacity = reduceMotion ? 0.6 : (Int(game.elapsed * 12) % 2 == 0 ? 1.0 : 0.4)
+        }
+
         aingRoot.simdPosition = SIMD3(x, y + lift, z)
         aingBody.simdScale = SIMD3(scaleXZ, scaleY, scaleXZ)
         // simd 로 쓴다 — `SCNVector3` 의 성분 타입이 맥은 CGFloat, 폰은 Float 라 한 글자로는 둘 다 안 된다(값은 같다).

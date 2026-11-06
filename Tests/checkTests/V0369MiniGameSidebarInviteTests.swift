@@ -104,6 +104,21 @@ func sidebarInviteDotsFollowTheLiveStoreFacts() throws {
     #expect(sidebarInviteWakes(store) { store.reversi.incoming = [] })
     #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
 
+    // ⑦ 1:1 길건너(CD/SPEC.md §9.5 #18) — 메뉴바와 같은 사실(`visibleIncoming` — 차단을 거른 첫 신청).
+    let crossyPeer = CrossyDuelUser(id: "00000000-0000-0000-0000-000000000017", displayName: "하린", characterID: "fox",
+                                    isWorking: true)
+    #expect(sidebarInviteWakes(store) {
+        store.crossyDuel.incoming = [CrossyDuelInvite(id: "c-1", peer: crossyPeer, stake: 5, expiresAt: Date().addingTimeInterval(45))]
+    }, "1:1 길건너 신청이 들어왔는데 창이 안 깨어난다")
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(crossyDuel: true))
+    // 차단으로 걷어낸 사람의 신청은 점을 내린다 — 앱 소유자의 차단 거울(`blockHiddenPeerIDs`)을 지나 스토어까지 닿는다.
+    #expect(sidebarInviteWakes(store) { store.blockHiddenPeerIDs = [crossyPeer.id] })
+    #expect(MiniGameDuelInvites(store: store).crossyDuel == false, "차단한 사람의 1:1 길건너 신청에 점이 남았다")
+    store.blockHiddenPeerIDs = []
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(crossyDuel: true))
+    #expect(sidebarInviteWakes(store) { store.crossyDuel.incoming = [] })
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
+
     // 창 뷰가 실제로 이 생성자를 부른다(스냅샷 전용 previewInvites 가 없을 때) — 위 측정이 창의 길이라는 연결.
     let panel = try String(contentsOf: URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

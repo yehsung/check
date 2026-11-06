@@ -1,0 +1,160 @@
+{
+  "goal": 100,
+  "max_duration_seconds": 180,
+  "me": {
+    "active_match_id": null,
+    "draws": 0,
+    "incoming": [
+      {
+        "expires_at_ms": 1793979242516,
+        "from": {
+          "display_name": "T-8b8f0459",
+          "id": "8b8f0459-b702-4234-9c89-7e25e2d8dbc7"
+        },
+        "match_id": "56dced51-e30d-491a-97e8-1523cb721bb6",
+        "stake": 3
+      }
+    ],
+    "losses": 0,
+    "outgoing": {
+      "expires_at_ms": 1793979242514,
+      "match_id": "2c541e9b-9a7e-4d45-8513-076d5752bf2a",
+      "stake": 5,
+      "to": {
+        "display_name": "라마바",
+        "id": "73b739c3-b64d-4d30-9068-b358f413d542"
+      }
+    },
+    "ruby_balance": 100,
+    "wins": 0
+  },
+  "server_now_ms": 1793979182517,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "users": [
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": null,
+      "display_name": "T-737001da",
+      "focus_mode": false,
+      "id": "737001da-0be0-43bf-b7e6-dd802e65ce69",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": null,
+      "display_name": "T-8b8f0459",
+      "focus_mode": false,
+      "id": "8b8f0459-b702-4234-9c89-7e25e2d8dbc7",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": null,
+      "display_name": "T-a06d5361",
+      "focus_mode": false,
+      "id": "a06d5361-c3fc-42fc-8d24-b71b23e8d943",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": null,
+      "display_name": "T-af55a1e5",
+      "focus_mode": false,
+      "id": "af55a1e5-f26e-4fa6-83f0-165f7ca4c0f7",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": null,
+      "display_name": "T-cc967f15",
+      "focus_mode": false,
+      "id": "cc967f15-daa3-4f82-9285-5cd422a78aa0",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character": null,
+      "display_name": "T-dfa8b1d4",
+      "focus_mode": false,
+      "id": "dfa8b1d4-02df-44ef-b40d-3d1d86f14fd1",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": "https://example.invalid/b.png",
+      "capable": true,
+      "character": null,
+      "display_name": "라마바",
+      "focus_mode": false,
+      "id": "73b739c3-b64d-4d30-9068-b358f413d542",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "abto.app",
+      "focus_mode": false,
+      "id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "거부목록사용자",
+      "focus_mode": false,
+      "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "씨앗다섯",
+      "focus_mode": false,
+      "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "코덱스토큰도둑예은",
+      "focus_mode": false,
+      "id": "3e240c02-8972-478e-a674-014f498a641b",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character": null,
+      "display_name": "코덱스토큰도둑지유",
+      "focus_mode": false,
+      "id": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "in_match": false,
+      "is_working": false
+    }
+  ]
+}

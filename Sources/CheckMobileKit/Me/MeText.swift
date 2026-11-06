@@ -532,6 +532,12 @@ package enum MeText {
             // '아잉 마작'(4인 리치 마작 — 서버 `daily_mahjong`, sort 90 · 20261108221000, 맥 0.3.76). 폰에는 게임이 없어 보조 문장
             // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). 맥 `MahjongEntryIcon.symbol` 과 같은 이름이다(위 ①).
             ("mahjong", "square.grid.3x3.square"),
+            // '1:1 길건너'(서버 `daily_crossy_duel`, sort 100 · 20261109150000, 맥 합본 판). 폰에는 1:1 이 없어 보조 문장
+            // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). **게임 이름은 `crossy_duel`** 이다 — 혼자 하기
+            // `crossy`(위 `MiniGameKind` 가 먼저 거르는 걷는 사람 기호)와 다른 줄이라 접두로 접히면 안 된다. 체크 무늬 깃발은
+            // 맥 `CrossyDuelEntryIcon`(SF `flag.checkered`)과 같은 이름이고, SF Symbols 4(2022 — macOS 13 · iOS 16)에 들어와
+            // 이 앱의 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
+            ("crossy_duel", "flag.checkered"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }

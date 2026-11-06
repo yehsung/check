@@ -278,6 +278,16 @@ final class CheckOverlayController {
     private(set) var pendingMahjongAttention: MahjongAttention?
     private var mahjongAttentionTask: Task<Void, Never>?
     private(set) var shownMahjongAttention: (text: String, matchID: String)?
+    /// 1:1 길건너의 같은 일곱 칸. 테트리스와 형제이고 규약이 글자 그대로 같다(CD/SPEC.md §9.5 #16) — 다른 것은 문구(`CrossyDuelText`)와
+    /// 여는 창이다. 차례가 없어 알림은 "대결이 시작됐어요" 하나뿐이다(창을 못 띄운 사람은 준비하지 못해 판이 무산된다).
+    private(set) var crossyDuelInviteQueue: [CrossyDuelInvite] = []
+    private var crossyDuelDrainTask: Task<Void, Never>?
+    private(set) var shownCrossyDuelInvite: (text: String, matchID: String)?
+    /// 1:1 길건너 말풍선을 눌렀을 때 열 곳(인자 = 판 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenCrossyDuel: ((String) -> Void)?
+    private(set) var pendingCrossyDuelAttention: CrossyDuelAttention?
+    private var crossyDuelAttentionTask: Task<Void, Never>?
+    private(set) var shownCrossyDuelAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -869,6 +879,8 @@ final class CheckOverlayController {
         if let rect = reversiInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 아잉 마작 말풍선도 같은 이유로 몸체로 쳐 준다.
         if let rect = mahjongInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 1:1 길건너 말풍선도 같은 이유로 몸체로 쳐 준다.
+        if let rect = crossyDuelInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -1016,6 +1028,10 @@ final class CheckOverlayController {
         }
         if let rect = mahjongInviteBubbleScreenRect(), rect.contains(location), let matchID = mahjongBubbleMatchID() {
             onOpenMahjong?(matchID)
+            return
+        }
+        if let rect = crossyDuelInviteBubbleScreenRect(), rect.contains(location), let matchID = crossyDuelBubbleMatchID() {
+            onOpenCrossyDuel?(matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -2120,6 +2136,140 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.mahjongAttentionTask = nil
+        }
+    }
+
+    // MARK: - 1:1 길건너 말풍선 (테트리스 네 묶음의 형제 — CD/SPEC.md §9.5 #16)
+    //
+    // ★ 1:1 길건너 폴링도 창이 보일 때만 돌고 창을 여는 길은 미니게임 창 사이드바 문 하나뿐이다. 받은 신청은 TTL 이 짧고
+    //   이번 버전은 푸시가 없다 — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 신청을 아는 세 표면이다.
+
+    /// 1:1 길건너 신청 말풍선 문구(순수). 테트리스 문구와 **같은 접기 규칙**이고, 글자는 화면 문구 한 곳(`CrossyDuelText`)에서 받는다.
+    nonisolated static func crossyDuelInviteBubbleText(name: String, stake: Int) -> String {
+        CrossyDuelText.inviteBubbleText(name: name, stake: stake)
+    }
+
+    /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 판 id 는 한 번만). `CrossyDuelStore.onInviteArrived` 가 부른다.
+    func enqueueCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        guard !crossyDuelInviteQueue.contains(where: { $0.id == invite.id }) else { return }
+        crossyDuelInviteQueue.append(invite)
+        drainCrossyDuelInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearCrossyDuelInvites() {
+        crossyDuelInviteQueue.removeAll()
+        shownCrossyDuelInvite = nil
+        pendingCrossyDuelAttention = nil
+        shownCrossyDuelAttention = nil
+    }
+
+    /// 큐 맨 앞 신청 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 받은 신청은 **여럿**일 수 있다 — 살아 있음은 스토어가 화면에 보이는 받은 신청 전부로 판정한다(테트리스형).
+    @discardableResult
+    func showNextCrossyDuelInviteBubble(now: Date = Date()) -> Bool {
+        let alive = Set(store.crossyDuel.visibleIncomingInvites.map(\.id))
+        crossyDuelInviteQueue.removeAll { $0.expiresAt <= now || !alive.contains($0.id) }
+        guard let invite = crossyDuelInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.crossyDuelInviteBubbleText(name: invite.peer.displayName, stake: invite.stake)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownCrossyDuelInvite = (text, invite.id)
+        crossyDuelInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainCrossyDuelInvitesIfNeeded() {
+        guard crossyDuelDrainTask == nil, !crossyDuelInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        crossyDuelDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.crossyDuelInviteQueue.isEmpty else { break }
+                self.showNextCrossyDuelInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.crossyDuelDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 1:1 길건너 신청 펌프가 돌고 있는가.
+    var isDrainingCrossyDuelInvites: Bool { crossyDuelDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 1:1 길건너 말풍선(신청·시작)의 화면 사각형(아니면 nil).
+    func crossyDuelInviteBubbleScreenRect() -> NSRect? {
+        guard crossyDuelBubbleMatchID() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 1:1 길건너 말풍선이 열 판 id. 문구와 id 를 **함께** 본다.
+    func crossyDuelBubbleMatchID() -> String? {
+        guard onOpenCrossyDuel != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownCrossyDuelAttention, shown.text == text { return shown.matchID }
+        if let shown = shownCrossyDuelInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    /// "대결이 시작됐어요" 말풍선 문구(순수). 차례가 없는 게임이라 알림은 이 하나뿐이다.
+    nonisolated static func crossyDuelAttentionBubbleText(_ attention: CrossyDuelAttention) -> String {
+        switch attention.kind {
+        case .matchStarted:
+            let name = OverlayMessageBubble.clippedName(attention.opponentName)
+            if !name.isEmpty {
+                let full = "\(name)님과 \(CrossyDuelText.gameName) 대결이 시작됐어요"
+                if OverlayMessageBubble.fitsCapsule(full) { return full }
+            }
+            return CrossyDuelText.matchStarted
+        }
+    }
+
+    /// 시작 알림을 넣고 펌프를 돌린다. `CrossyDuelStore.onAttention` 이 부른다.
+    func enqueueCrossyDuelAttention(_ attention: CrossyDuelAttention) {
+        pendingCrossyDuelAttention = attention
+        drainCrossyDuelAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingCrossyDuelAttentionBubble() -> Bool {
+        guard let attention = pendingCrossyDuelAttention else { return false }
+        guard Self.crossyDuelAttentionIsCurrent(attention, in: store.crossyDuel) else {
+            pendingCrossyDuelAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.crossyDuelAttentionBubbleText(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownCrossyDuelAttention = (text, attention.matchID)
+        pendingCrossyDuelAttention = nil
+        return true
+    }
+
+    /// 시작 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 보이고 안 가려졌으면 거짓이다(화면이 이미 말한다).
+    /// 열린 채 가려진 창은 말하지 못하므로 사실로 남긴다 — 스토어 말풍선 문과 같은 기준(`!visible || occluded`).
+    static func crossyDuelAttentionIsCurrent(_ attention: CrossyDuelAttention, in crossyDuel: CrossyDuelStore) -> Bool {
+        guard !crossyDuel.isWindowVisible || crossyDuel.isWindowOccluded, let match = crossyDuel.match else { return false }
+        return match.id == attention.matchID && !match.isFinished
+    }
+
+    func drainCrossyDuelAttentionIfNeeded() {
+        guard crossyDuelAttentionTask == nil, pendingCrossyDuelAttention != nil else { return }
+        let tick = messageBubbleSleep
+        crossyDuelAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingCrossyDuelAttention != nil else { break }
+                self.showPendingCrossyDuelAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.crossyDuelAttentionTask = nil
         }
     }
 

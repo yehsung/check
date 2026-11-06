@@ -524,7 +524,7 @@ struct TetrisDuelPanelRenderTests {
     @Test("미니게임 사이드바: 같이 하기 문(오목·체스·테트리스·큐브) 스틸 — v0.3.69 전에는 머리글 묶음")
     func theMiniGameSidebarEntriesStill() throws {
         let sidebar = MiniGameSidebar(selected: .tetris, isPlaying: false, isFrozen: false, invites: MiniGameDuelInvites(tetris: true),
-                                      onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {},
+                                      onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {}, onCrossyDuel: {},
                                       clipsOverflowInsteadOfScroll: true)
             .frame(width: MiniGameWindowLayout.sidebarWidth, height: MiniGameWindowLayout.contentSize.height)
             .background(CheckTheme.background)

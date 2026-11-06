@@ -215,6 +215,13 @@ extension WorkTimerStore {
         closeMiniGamePanel()
     }
 
+    /// 미니게임 창 사이드바의 **1:1 길건너** 문. 위와 같은 규약이다 — 1:1 길건너 창을 **먼저** 띄우고 이 창은 나중에 내린다.
+    func openCrossyDuelFromMiniGame() {
+        noteMiniGameDuelReturn(.crossyDuel)
+        crossyDuel.openWindow(focusMatchID: nil)
+        closeMiniGamePanel()
+    }
+
     // MARK: 대결 창 → 미니게임 창 되돌아오기 (2026-11-03 대표 요청 ⑧)
     //
     // 원문: "미니게임 화면에서도 사람들이랑 붙은 게임들 누르면 해당 게임 로비로 가지잖아. 거기서 엑스 누르면 다시 기본 미니게임 창이
@@ -998,7 +1005,7 @@ extension WorkTimerStore {
 
 /// 미니게임 창 사이드바에서 들어가는 대결 창(2026-11-03 대표 요청 ⑧ — `WorkTimerStore.miniGameDuelReturn`).
 /// 사이드바 같이 하기 칸(`MiniGamePanel`)도 이 목록을 쓴다 — 선언 순서가 곧 같이 하기 줄 순서이자 저절로 굴리기 자리표 순서다.
-/// 새 문은 **맨 뒤**에 붙인다(아잉 뒤집기는 큐브 뒤 · 마작 가지는 reversi 뒤에 mahjong — MJ/SPEC.md §5.8).
+/// 새 문은 **맨 뒤**에 붙인다(아잉 뒤집기는 큐브 뒤 · 마작 가지는 reversi 뒤에 mahjong — MJ/SPEC.md §5.8 · 1:1 길건너는 mahjong 뒤 — CD/SPEC.md §9.5 #19).
 enum MiniGameDuelDoor: Equatable, Sendable, CaseIterable {
-    case gomoku, chess, tetris, rummy, reversi, mahjong
+    case gomoku, chess, tetris, rummy, reversi, mahjong, crossyDuel
 }

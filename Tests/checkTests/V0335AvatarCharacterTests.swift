@@ -443,7 +443,9 @@ private func avFetches(_ host: String) -> Int {
         // 자리마다 그 사람 id 와 착용값을 되묻는다.
         // 아잉 마작 창이 다섯 자리를 더했다(로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리 · 판 결과 줄). 44 + 5 — 아래
         // `mahjong` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다.
-        #expect(avatars.count == 49, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 1:1 길건너 창이 여섯 자리를 더했다(로비 상대 줄 · 순위 행 · 받은 신청 · 경주 띠 나/상대 · 결과 카드 상대). 49 + 6 — 아래
+        // `crossyDuel` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다(CD/SPEC.md §9.5 #23).
+        #expect(avatars.count == 55, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -539,6 +541,20 @@ private func avFetches(_ host: String) -> Int {
         for (file, id, hint) in mahjongIDs {
             #expect(mahjong.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
         }
+        // 1:1 길건너 여섯 자리 — 자리마다 그 사람 id 와 착용값(내 점은 내 얼굴 값)을 함께 넘긴다.
+        let crossyDuel = avatars.filter { $0.file.hasPrefix("CrossyDuel") }
+        #expect(crossyDuel.count == 6, "\(crossyDuel.map(\.text))")
+        let crossyDuelIDs: [(String, String, String)] = [
+            ("CrossyDuelPanelLobby.swift", "userID: user.id,", "characterHint: user.characterID"),
+            ("CrossyDuelPanelLobby.swift", "userID: entry.user.id,", "characterHint: entry.user.characterID"),
+            ("CrossyDuelPanelLobby.swift", "userID: invite.peer.id,", "characterHint: invite.peer.characterID"),
+            ("CrossyDuelPanelMatch.swift", "userID: myUserID,", "characterHint: me.characterID"),
+            ("CrossyDuelPanelMatch.swift", "userID: opponent.id,", "characterHint: opponent.characterID"),
+            ("CrossyDuelPanelMatch.swift", "userID: match.opponent.id,", "characterHint: match.opponent.characterID"),
+        ]
+        for (file, id, hint) in crossyDuelIDs {
+            #expect(crossyDuel.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
+        }
 
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")
@@ -586,10 +602,15 @@ private func avFetches(_ host: String) -> Int {
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
         // 아잉 마작 창(MahjongPanel)이 열째 루트다(MJ/SPEC.md §4.6 #23 — 툴팁 레이어 짝은 V0325).
+        // 1:1 길건너 창(CrossyDuelPanel)이 열한째 루트다(CD/SPEC.md §9.5 #23).
         #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
-                          "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1",
-                          "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
+                          "CrossyDuelPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1",
+                          "ReversiPanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
                 "\(roots)")
+        // 1:1 길건너 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·경주 띠·신청의 남의 얼굴이 이니셜로 떨어진다).
+        #expect(sources["CrossyDuelPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckCrossyDuelWindow.swift"]?.contains("CrossyDuelPanel(store: crossyDuel, me: me, safety: safety)") == true)
+        #expect(sources["CheckApp.swift"]?.contains("CheckCrossyDuelWindowController.shared.configure(store: store.crossyDuel, me:") == true)
         // 아잉 뒤집기 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·순위·신청의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["ReversiPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
         #expect(sources["CheckReversiWindow.swift"]?.contains("ReversiPanel(store: reversi, me: me, safety: safety)") == true)

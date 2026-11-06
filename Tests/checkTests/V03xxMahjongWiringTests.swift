@@ -173,7 +173,9 @@ struct V03xxMahjongWiringTests {
     @Test
     func theAppWiresEveryMahjongDoor() throws {
         let app = try mwtMac("CheckApp.swift")
-        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireMegaphoneBanner()"), "wireMahjong() 이 리버시 뒤·확성기 앞이 아니다")
+        // 1:1 길건너(CD/SPEC.md §9.5 #13)가 마작 뒤·확성기 앞에 선다 — 마작 자리는 그대로 리버시 바로 뒤다.
+        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireMegaphoneBanner()"),
+                "wireMahjong() 이 리버시 뒤·확성기 앞(길건너 1:1 앞)이 아니다")
         let body = try #require(mwtBetween(app, "private func wireMahjong() {", "static func closeRummyWindow() {"))
         for line in [
             "mahjong.rankingEnabled = true",
@@ -295,7 +297,8 @@ struct V03xxMahjongWiringTests {
     func theMiniGameWindowOpensTheMahjongWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.mahjong.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckMahjongWindowController.frameAutosaveName))
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 9)
+        // 1:1 길건너 창이 더해져 열이다(CD/SPEC.md §9.5 #17).
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 10)
         #expect(MiniGameMahjongEntryButton.title == "아잉 마작")
         #expect(MiniGameMahjongEntryButton.help == "리치 마작 4인 대국 창을 열어요")
         let panel = try mwtMac("MiniGamePanel.swift")
@@ -304,7 +307,8 @@ struct V03xxMahjongWiringTests {
                 + "MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() }"), "여섯째 문이 리버시 뒤에 없다")
         #expect(panel.contains("onReversi: { store.openReversiFromMiniGame() }, onMahjong: { store.openMahjongFromMiniGame() }"))
         #expect(panel.contains("let onReversi: () -> Void let onMahjong: () -> Void"), "문을 기본값 없이 받지 않는다")
-        #expect(panel.contains("reversi: Bool = false, mahjong: Bool = false) {"), "명시 init 맨 뒤 기본값")
+        #expect(panel.contains("reversi: Bool = false, mahjong: Bool = false, crossyDuel: Bool = false) {"),
+                "명시 init 맨 뒤 기본값(마작 뒤에 1:1 길건너 — CD/SPEC.md §9.5 #18)")
         #expect(panel.contains("mahjong: store.mahjong.hasIncomingInvite"))
         #expect(panel.contains("case .reversi: reversi case .mahjong: mahjong"))
         // 결과: 첨자가 제 칸을 읽는다.
@@ -322,7 +326,8 @@ struct V03xxMahjongWiringTests {
         let miniGame = try mwtMac("WorkTimerStoreMiniGame.swift")
         guard miniGame.contains("enum MiniGameDuelDoor") else { return }
         let caseLine = try #require(mwtBetween(miniGame, "enum MiniGameDuelDoor", "}"))
-        #expect(caseLine.hasSuffix("mahjong "), "문 목록이 mahjong 으로 끝나지 않는다: \(caseLine)")
+        // 1:1 길건너(CD/SPEC.md §9.5 #19)가 맨 뒤에 붙어 마작은 끝에서 둘째다 — 마작 바로 뒤가 길건너 하나뿐인지 잰다.
+        #expect(caseLine.hasSuffix("mahjong, crossyDuel "), "문 목록이 mahjong, crossyDuel 로 끝나지 않는다: \(caseLine)")
         let rummy = try #require(caseLine.range(of: "rummy"))
         let mahjong = try #require(caseLine.range(of: "mahjong"))
         #expect(rummy.upperBound <= mahjong.lowerBound, "mahjong 이 rummy 뒤가 아니다")
@@ -330,7 +335,7 @@ struct V03xxMahjongWiringTests {
         let app = try mwtMac("CheckApp.swift")
         let hook = try #require(app.range(of: "CheckMahjongWindowController.shared.onClosed = {"))
         #expect(String(app[hook.upperBound...].prefix(120)).contains("duelWindowDidClose(.mahjong, byUser: byUser)"))
-        #expect(MiniGameDuelDoor.allCases.last == .mahjong)
+        #expect(Array(MiniGameDuelDoor.allCases.suffix(2)) == [.mahjong, .crossyDuel])
     }
 
     // MARK: #21 확성기 · #22 미션 아이콘
@@ -344,8 +349,10 @@ struct V03xxMahjongWiringTests {
         #expect(!MegaphoneBannerDeferral.isDeferred(gomoku: .lobby, chess: .lobby, tetris: .lobby, miniGameRoundLive: false,
                                                     mahjongLive: false))
         let src = try mwtMac("WorkTimerStoreMegaphoneBanner.swift")
-        #expect(src.contains("reversiLive: reversi.defersMegaphoneBanner, mahjongLive: mahjong.defersMegaphoneBanner)"))
-        #expect(src.contains("reversiLive: Bool = false, mahjongLive: Bool = false) -> Bool {"))
+        // 1:1 길건너(CD/SPEC.md §9.5 #21)가 마작 뒤 맨 끝 인자다.
+        #expect(src.contains("reversiLive: reversi.defersMegaphoneBanner, mahjongLive: mahjong.defersMegaphoneBanner, "
+                                + "crossyDuelLive: crossyDuel.defersMegaphoneBanner)"))
+        #expect(src.contains("reversiLive: Bool = false, mahjongLive: Bool = false, crossyDuelLive: Bool = false) -> Bool {"))
         #expect(src.contains("if reversiLive { return true } if mahjongLive { return true }"))
     }
 

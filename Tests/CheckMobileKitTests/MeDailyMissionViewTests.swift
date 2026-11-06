@@ -30,7 +30,7 @@ struct MeDailyMissionViewTests {
 
     /// 서버 `daily_mission_defs()` 의 **첫 여섯 줄**(정본은 `supabase/migrations/20261023130000_daily_missions.sql`) — 합성 응답
     /// (`dailyJSON`)이 쓰는 재료다. 판단 시험(순서 · 상태 셋 · 실패 문장 · 자정 넘김)은 이 여섯으로 충분하고, 줄 수가 늘 때마다
-    /// 그 시험을 다시 쓰지 않으려고 따로 둔다. 서버가 **지금** 내리는 열 줄은 `serverRoster` 이고, 데모 픽스처는 그것과 대조한다(§5).
+    /// 그 시험을 다시 쓰지 않으려고 따로 둔다. 서버가 내리는 열한 줄은 `serverRoster` 이고, 데모 픽스처는 그것과 대조한다(§5).
     nonisolated static let defs: [(key: String, game: String, title: String, reward: Int, target: Int, sort: Int)] = [
         ("daily_timing_bar", "timing_bar", "타이밍 바 한 판 하기", 5, 1, 10),
         ("daily_flappy", "flappy", "플래피 아잉 한 판 하기", 5, 1, 20),
@@ -40,10 +40,11 @@ struct MeDailyMissionViewTests {
         ("daily_tetris_duel", "tetris_duel", "1:1 테트리스 한 판 하기", 5, 1, 60),
     ]
 
-    /// 서버 `daily_mission_defs()` **지금 열 줄** — 20261103120000 §50.3(여덟째 `daily_rummy`) + 20261108200000(아홉째
-    /// `daily_reversi`) + 20261108221000(열째 `daily_mahjong` — 맥 0.3.76)의 글자 그대로다(보조 문장 포함). 모든 플랫폼에 같은
-    /// 열 줄이 내려가므로(1.0.16 폰도) 데모 픽스처도 이 표와 같아야 한다 — 덜 그리면 심사 스크린샷이 운영 화면보다 짧다.
-    /// 서버가 줄을 더하는 날 이 표와 픽스처 열한 장을 같이 고친다.
+    /// 서버 `daily_mission_defs()` **열한 줄** — 20261103120000 §50.3(여덟째 `daily_rummy`) + 20261108200000(아홉째
+    /// `daily_reversi`) + 20261108221000(열째 `daily_mahjong` — 맥 0.3.76) + 20261109150000(열한째 `daily_crossy_duel` — 1:1
+    /// 길건너, 맥 합본 판과 같은 날 서버에 오른다)의 글자 그대로다(보조 문장 포함). 모든 플랫폼에 같은 줄이 내려가므로(1.0.16 폰도)
+    /// 데모 픽스처도 이 표와 같아야 한다 — 덜 그리면 심사 스크린샷이 운영 화면보다 짧다. 서버가 줄을 더하는 날 이 표와 픽스처
+    /// 열한 장을 같이 고친다.
     nonisolated static let serverRoster: [(key: String, game: String, title: String, detail: String, reward: Int, target: Int, sort: Int)] = [
         ("daily_timing_bar", "timing_bar", "타이밍 바 한 판 하기", "", 5, 1, 10),
         ("daily_flappy", "flappy", "플래피 아잉 한 판 하기", "", 5, 1, 20),
@@ -55,6 +56,7 @@ struct MeDailyMissionViewTests {
         ("daily_rummy", "rummy", "아잉 큐브 한 판 하기", "맥에서 할 수 있어요", 5, 1, 70),
         ("daily_reversi", "reversi", "아잉 뒤집기 한 판 하기", "맥에서 할 수 있어요", 5, 1, 80),
         ("daily_mahjong", "mahjong", "아잉 마작 한 판 하기", "맥에서 할 수 있어요", 5, 1, 90),
+        ("daily_crossy_duel", "crossy_duel", "1:1 길건너 한 판 하기", "맥에서 할 수 있어요", 5, 1, 100),
     ]
 
     /// 고정 시계(`MobileClock.demoInstant`) = 2026-09-17 14:05 KST · 그날의 다음 자정(KST).
@@ -218,7 +220,7 @@ struct MeDailyMissionViewTests {
         #expect(MeText.dailyMissionIcon(game: "") == MeText.missionFallbackIcon)
     }
 
-    @Test("아잉 뒤집기 줄(daily_reversi): 별이 아니라 맥과 같은 기호 · 서버 열 줄의 기호가 서로 다르다 · 실재하는 이름이다")
+    @Test("아잉 뒤집기 줄(daily_reversi): 별이 아니라 맥과 같은 기호 · 서버 열한 줄의 기호가 서로 다르다 · 실재하는 이름이다")
     func reversiRowUsesTheMacSymbol() throws {
         // 서버는 1.0.16 폰에도 이 줄을 내린다(20261108200000 — 모든 플랫폼). 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른
         // 그림이 된다(`MeText.dailyMissionIcon` 주석 ① — 사용자는 다른 미션으로 읽는다).
@@ -234,19 +236,19 @@ struct MeDailyMissionViewTests {
         #expect(MeText.dailyMissionIcon(game: "reversi1") == MeText.missionFallbackIcon)
         #expect(MeText.dailyMissionIcon(game: "flip") == MeText.missionFallbackIcon)
 
-        // 서버가 지금 내리는 열 줄 전부: 별이 없고 · 서로 다르다(줄을 눈으로 가른다).
+        // 서버가 내리는 열한 줄 전부: 별이 없고 · 서로 다르다(줄을 눈으로 가른다).
         let icons = Self.serverRoster.map { MeText.dailyMissionIcon(game: $0.game) }
         #expect(!icons.contains(MeText.missionFallbackIcon), "기본 별로 그려지는 줄이 있다: \(zip(Self.serverRoster.map(\.key), icons).filter { $0.1 == MeText.missionFallbackIcon }.map(\.0))")
         #expect(Set(icons).count == Self.serverRoster.count, "같은 기호를 쓰는 줄이 있다: \(icons)")
         #if canImport(AppKit)
-        // 없는 이름은 런타임에 **경고 없이 빈 칸**이 된다 — 열 줄 전부를 되묻는다.
+        // 없는 이름은 런타임에 **경고 없이 빈 칸**이 된다 — 열한 줄 전부를 되묻는다.
         for symbol in Set(icons) {
             #expect(NSImage(systemSymbolName: symbol, accessibilityDescription: nil) != nil, "없는 SF Symbol: \(symbol)")
         }
         #endif
     }
 
-    @Test("아잉 마작 줄(daily_mahjong · 맥 0.3.76): 별이 아니라 맥 입구와 같은 기호 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 게임) · 열 줄 기호가 서로 다르다")
+    @Test("아잉 마작 줄(daily_mahjong · 맥 0.3.76): 별이 아니라 맥 입구와 같은 기호 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 게임) · 줄 기호가 서로 다르다")
     func mahjongRowUsesTheMacSymbolAndKeepsTheMacCaption() throws {
         // 서버는 1.0.16 폰에도 이 줄을 내린다(20261108221000 — 모든 플랫폼). 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른
         // 그림이 된다(`MeText.dailyMissionIcon` 주석 ①).
@@ -277,11 +279,46 @@ struct MeDailyMissionViewTests {
         let failed = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [met]))), "daily_mahjong", failed: true)
         #expect(failed.caption == MeText.claimFailed, "받기 실패를 삼켰다")
 
-        // 서버 열 줄: 마작이 열째(sort 90)이고 · 기호가 서로 다르다(마작 3×3 네모 ↔ 오목 3×3 원 격자 ↔ 테트리스 2×2 격자).
-        #expect(Self.serverRoster.count == 10 && Self.serverRoster.last?.key == "daily_mahjong" && Self.serverRoster.last?.sort == 90)
+        // 서버 줄: 마작이 열째(sort 90)이고 · 기호가 서로 다르다(마작 3×3 네모 ↔ 오목 3×3 원 격자 ↔ 테트리스 2×2 격자).
+        #expect(Self.serverRoster.count >= 10 && Self.serverRoster[9].key == "daily_mahjong" && Self.serverRoster[9].sort == 90)
         let icons = Self.serverRoster.map { MeText.dailyMissionIcon(game: $0.game) }
         #expect(Set(icons).count == icons.count, "같은 기호를 쓰는 줄이 있다: \(icons)")
         #expect(icons.filter { $0 == mahjong }.count == 1, "마작 기호를 다른 줄도 쓴다: \(icons)")
+    }
+
+    @Test("1:1 길건너 줄(daily_crossy_duel · 맥 합본 판): 체크 무늬 깃발 · 혼자 하기 길건너(crossy) 기호로 접히지 않는다 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 1:1)")
+    func crossyDuelRowUsesTheFlagAndKeepsTheMacCaption() throws {
+        // 서버 20261109150000 이 이 줄을 모든 플랫폼에 내린다(폰도). 표에 없으면 기본 별로 그려진다(`MeText.dailyMissionIcon` 주석 ①).
+        let duel = MeText.dailyMissionIcon(game: "crossy_duel")
+        #expect(duel == "flag.checkered", "맥 `CrossyDuelEntryIcon`(SF flag.checkered)과 갈렸다: \(duel)")
+        #expect(duel != MeText.missionFallbackIcon, "기본 별로 떨어졌다")
+        // ★ 혼자 하기 `crossy` 는 `MiniGameKind` 가 먼저 걸러 걷는 사람 기호로 간다 — 1:1 줄이 그쪽으로 접히면 두 줄이 한 그림이 된다
+        //   (기준선: 혼자 하기 줄은 코어 아이콘 그대로).
+        let solo = MeText.dailyMissionIcon(game: "crossy")
+        #expect(MiniGameKind(rawValue: "crossy") != nil && solo == MiniGameKind(rawValue: "crossy")?.icon, "기준선: 혼자 하기 줄은 코어 기호")
+        #expect(MiniGameKind(rawValue: "crossy_duel") == nil, "1:1 길건너가 미니게임 갈래로 접힌다")
+        #expect(duel != solo, "1:1 길건너 줄이 혼자 하기 길건너와 같은 기호다: \(duel)")
+        // 게임 이름은 `crossy_duel` 하나다(1:1 완전 일치 — 접두가 아니다).
+        #expect(MeText.dailyMissionIcon(game: "crossy_duel1") == MeText.missionFallbackIcon)
+        #expect(MeText.dailyMissionIcon(game: "crossy-duel") == MeText.missionFallbackIcon)
+        #if canImport(AppKit)
+        #expect(NSImage(systemSymbolName: duel, accessibilityDescription: nil) != nil, "없는 SF Symbol: \(duel)")
+        #endif
+
+        // 보조 문장: 폰에는 1:1 길건너가 없다 — 서버 글자 '맥에서 할 수 있어요'가 **참**이라 그대로 그린다.
+        #expect(!MeText.phonePlayableMacFirstGames.contains("crossy_duel"), "폰에 없는 게임을 폰에서 할 수 있다고 적었다")
+        let waiting = #"{"key":"daily_crossy_duel","game":"crossy_duel","title":"1:1 길건너 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":0,"achieved":false,"claimed":false,"claimed_at_ms":null,"sort":100}"#
+        let met = #"{"key":"daily_crossy_duel","game":"crossy_duel","title":"1:1 길건너 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":1,"achieved":true,"claimed":false,"claimed_at_ms":null,"sort":100}"#
+        let progressing = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [waiting]))), "daily_crossy_duel")
+        #expect(progressing.caption == "맥에서 할 수 있어요", "어디서 하는지 안 말한다: '\(progressing.caption)'")
+        #expect(progressing.icon == duel && progressing.title == "1:1 길건너 한 판 하기" && progressing.progress == "0/1")
+        let claimable = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [met]))), "daily_crossy_duel")
+        #expect(claimable.claimAmount == 5 && claimable.caption == "맥에서 할 수 있어요")
+
+        // 서버 열한 줄: 1:1 길건너가 마지막(sort 100)이고 · 그 기호를 다른 줄이 안 쓴다.
+        #expect(Self.serverRoster.count == 11 && Self.serverRoster.last?.key == "daily_crossy_duel" && Self.serverRoster.last?.sort == 100)
+        let icons = Self.serverRoster.map { MeText.dailyMissionIcon(game: $0.game) }
+        #expect(icons.filter { $0 == duel }.count == 1, "깃발 기호를 다른 줄도 쓴다: \(icons)")
     }
 
     @Test("받기 실패는 **[받기] 가 선 줄 안**에서만 말한다(받은 줄 · 진행 줄엔 안 남는다)")
@@ -455,7 +492,7 @@ struct MeDailyMissionViewTests {
 
     // MARK: - §5 데모 픽스처(심사 데모 계정 — 숨김 계정이라 실서버에선 [받기] 가 안 선다)
 
-    @Test("데모 픽스처 열한 장: daily 10줄이 서버 정의표 그대로(길건너 · 큐브 · 뒤집기 · 마작 포함) · 칸 이름이 정확히 그 집합 · 하루 경계가 고정 시계와 맞는다")
+    @Test("데모 픽스처 열한 장: daily 11줄이 서버 정의표 그대로(길건너 · 큐브 · 뒤집기 · 마작 · 1:1 길건너 포함) · 칸 이름이 정확히 그 집합 · 하루 경계가 고정 시계와 맞는다")
     func demoFixturesCarryTheServerDailyRoster() throws {
         let dailyKeys: Set<String> = ["kst_day", "reset_at_ms", "missions", "claimable_count", "claimable_ruby"]
         let rowKeys: Set<String> = ["key", "game", "title", "detail", "reward", "target", "progress", "achieved",
@@ -470,7 +507,7 @@ struct MeDailyMissionViewTests {
             #expect(daily["reset_at_ms"] as? Int == Self.resetMs,
                     "\(path): reset_at_ms 가 다음 KST 자정이 아니다 — 데모가 날을 넘긴 것으로 보여 [받기] 가 사라진다")
 
-            // 서버는 모든 플랫폼에 열 줄을 내린다(1.0.16 폰도) — 장면마다 줄 수가 다르면 [받기] 한 번에 줄이 사라지거나 생긴다.
+            // 서버는 모든 플랫폼에 같은 줄을 내린다(1.0.16 폰도) — 장면마다 줄 수가 다르면 [받기] 한 번에 줄이 사라지거나 생긴다.
             let rows = MeAchievementsFixtureContractTests.rows(daily, "missions")
             #expect(rows.count == Self.serverRoster.count, "\(path): 일일 줄이 \(rows.count)개다(서버는 \(Self.serverRoster.count)개)")
             for (row, def) in zip(rows, Self.serverRoster) {
@@ -496,6 +533,8 @@ struct MeDailyMissionViewTests {
             // 마작은 폰에 없다 — 데모에서도 '맥에서 할 수 있어요'를 그대로 그린다.
             #expect(try Self.content(section, "daily_mahjong").caption == "맥에서 할 수 있어요",
                     "\(path): 폰에 없는 아잉 마작 줄이 어디서 하는지 안 말한다")
+            #expect(try Self.content(section, "daily_crossy_duel").caption == "맥에서 할 수 있어요",
+                    "\(path): 폰에 없는 1:1 길건너 줄이 어디서 하는지 안 말한다")
             for (mission, def) in zip(section.rows, Self.serverRoster) {
                 #expect(mission.key == def.key && mission.game == def.game, "\(path): 순서 · 게임 — \(mission.key)")
                 #expect(mission.row.title == def.title, "\(path) \(def.key): 제목")
@@ -520,7 +559,7 @@ struct MeDailyMissionViewTests {
         let table: [(path: String, claimable: Int, ruby: Int, claimed: Int)] = [
             ("me/_me/rpc.achievements_status.json", 2, 10, 1),
             ("me/_me/rpc.achievements_status@demo-progress.json", 0, 0, 0),
-            ("me/_me/rpc.achievements_status@demo-all-claimed.json", 0, 0, 10),
+            ("me/_me/rpc.achievements_status@demo-all-claimed.json", 0, 0, 11),
             ("me/_me-/rpc.achievements_status.json", 0, 0, 0),
         ]
         for row in table {

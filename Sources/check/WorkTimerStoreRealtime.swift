@@ -210,6 +210,11 @@ extension WorkTimerStore {
         if case .didWake = event, !realtime.transportAvailable {
             mahjong.systemDidWake()
         }
+        // 1:1 길건너도 같은 게이트다 — 별도 블록(기존 블록에 끼우면 마작·리버시 깨어남 글자 계약이 빨개진다, CD/SPEC.md §9.5 #7).
+        // 받은 신청은 TTL 이 짧고 진행 중 판은 3분 상한이라 뚜껑을 닫아 둔 사이 정산이 끝나 있을 수 있다.
+        if case .didWake = event, !realtime.transportAvailable {
+            crossyDuel.systemDidWake()
+        }
     }
 
     /// full jitter 의 난수원. 링은 순수해야 하므로 난수는 **주입**이다.
@@ -259,6 +264,8 @@ extension WorkTimerStore {
                 reversi.realtimeDidJoin()
                 // 아잉 마작도 같다 — 소켓이 끊긴 사이 온 초대와 넘어간 차례(5+20 시계)를 이 한 번이 따라잡는다.
                 mahjong.realtimeDidJoin()
+                // 1:1 길건너도 같다 — 소켓이 끊긴 사이 온 신청과 시작·정산을 이 한 번이 따라잡는다.
+                crossyDuel.realtimeDidJoin()
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
@@ -295,6 +302,9 @@ extension WorkTimerStore {
             case .mahjongSignal:
                 // 아잉 마작 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
                 mahjong.handleSignal()
+            case .crossyDuelSignal:
+                // 1:1 길건너 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
+                crossyDuel.handleSignal()
             case .megaphoneSignal:
                 // 확성기 신호(2026-10-30)도 조회뿐이다(소비 아님 — 줄의 소비는 같은 묶음의 `ring` 이 맡는다). 근무 게이트가 없다:
                 // 배너는 근무 밖에서도 뜬다. 스로틀도 없다 — 겹친 호출은 배너 스토어가 하나로 모은다.

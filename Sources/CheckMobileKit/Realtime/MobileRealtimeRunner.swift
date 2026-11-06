@@ -31,6 +31,7 @@ package final class MobileRealtimeRegistration {
 ///     · `.reversiSignal` → `ReversiStore.handleSignal()`(1.0.17).
 ///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
 ///     `.mahjongSignal` 도 **일부러 빈 가지**다(맥 0.3.76 아잉 마작 — 폰에 스토어가 없다). `.drain` 으로 새면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
+///     `.crossyDuelSignal` 도 **일부러 빈 가지**다(맥 먼저 1:1 길건너 — 폰에 스토어가 없다).
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
 @MainActor
@@ -297,6 +298,10 @@ package final class MobileRealtimeRunner {
                 // 배너 목록만 다시 읽는다. `.drain` 으로 떨어뜨리지 않는 까닭은 위 체스 가지 ③과 같다 — 같은 확성기의
                 // `poke_ring` 이 이미 메시지 활동을 깨웠으므로 메시지 조회가 한 번 더 나갈 뿐이다.
                 requestMegaphoneRefresh()
+            case .crossyDuelSignal:
+                // 1:1 길건너(맥 먼저 — CD/SPEC.md §9.5 #4). 폰 판에서 잇는다 — 그때까지 소비할 스토어가 폰에 없다.
+                // `.drain` 으로 떨어뜨리지 않는 까닭은 위 아잉 뒤집기 가지와 같다(판마다 메시지 조회가 한 번씩 더 나간다).
+                break
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

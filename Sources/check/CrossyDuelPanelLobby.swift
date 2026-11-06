@@ -117,7 +117,7 @@ private struct CrossyDuelOpponentList: View {
 
     /// [신청] — 서버가 어차피 거절할 상대(구버전 · 대결 중 · 집중)만 끈다. **근무 여부는 보지 않는다**(선게이트 금지).
     private func canChallenge(_ user: CrossyDuelUser) -> Bool {
-        user.canBeChallenged && !store.isBusy && store.availability == .available && store.outgoing == nil
+        user.canBeChallenged && !store.isBusy && store.availability == .available
     }
 
     private var emptyText: String {

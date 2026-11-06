@@ -54,8 +54,9 @@ func v0377VersionAndChangelog() throws {
         // 같은 단언을 여기에도 직접 둔다 — 정본이 뒤에 약해져도 이 판의 게이트는 그대로다.
         #expect(WorkTimerStore.bundledDrawableCharacterIDs.contains(CharacterCatalog.peperoAingID),
                 "번들 drawable 에 aing_pepero 가 없다 \(WorkTimerStore.bundledDrawableCharacterIDs)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == 6)
-        #expect(V0317ShopTests.plainStore().shopProtocolVersion == 6)
+        // v0.3.78: 흑우가 얹혀 7(누적) — 빼빼로 판 게이트의 뜻은 '6 이상'이다(흑우 판 게이트는 V0378HwooMac3DTests).
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) >= ShopWire.peperoProtocol)
+        #expect(V0317ShopTests.plainStore().shopProtocolVersion >= ShopWire.peperoProtocol)
         #expect(ShopWire.peperoProtocol == 6, "빼빼로 능력 번호가 6 이 아니다(\(ShopWire.peperoProtocol)) — 서버 min_protocol 과 어긋난다")
     }
 

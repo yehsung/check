@@ -29,6 +29,13 @@ extension CharacterManifest {
         /// 빼빼로 아잉이(v0.3.77 빼빼로 데이 기간 선물 전용). **희귀가 아니다**(`isRare` 거짓). 그림(몸 셰이더 · 장식)은 시안 결정 뒤 —
         /// 그 전까지 맥 3D 는 평범 갈래(아잉 그대로)다.
         case pepero
+        /// 흑우 아잉이(v0.3.78 조각 교환 전용) — 아잉 메시 + 무지개와 같은 디퓨즈 합성 + 몸 셰이더(짙은 남색 + 시선 따라 도는 네온 테 —
+        /// 왼쪽 하늘색 · 오른쪽 분홍). 장식 노드 없음. **희귀가 아니다**(`isRare` 거짓 — 확률표 · 결과 연출에 서지 않는다; 교환 목록 순서는
+        /// `CharacterCatalog.gachaOnlyBuiltInIDs` 가 정한다).
+        case hwoo
+        /// 루비 아잉이(v0.3.78 상점 루비 1000) — 아잉 메시를 **보석 모양으로 다시 빚고**(`RubyAingShape` — 다른 마감과 달리 몸 모양이 바뀐다)
+        /// 무지개와 같은 디퓨즈 합성 + 몸 셰이더(면마다 평평한 분홍 보석 · 흰 모서리). 장식 노드 없음. **희귀가 아니다**(`isRare` 거짓).
+        case ruby
     }
 
     /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개·케이크는 코드에 박힌 내장 항목뿐이다).
@@ -51,6 +58,10 @@ extension CharacterManifest.Finish {
             self = .isul
         } else if CharacterCatalog.isPeperoAing(characterID) {
             self = .pepero
+        } else if CharacterCatalog.isHwooAing(characterID) {
+            self = .hwoo
+        } else if CharacterCatalog.isRubyAing(characterID) {
+            self = .ruby
         } else {
             self = .standard
         }
@@ -62,7 +73,7 @@ extension CharacterManifest.Finish {
     package var isRare: Bool {
         switch self {
         case .gold, .rainbow: return true
-        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero: return false
+        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby: return false
         }
     }
 
@@ -70,7 +81,7 @@ extension CharacterManifest.Finish {
     package var isCake: Bool {
         switch self {
         case .cakeStrawberry, .cakeChoco: return true
-        case .standard, .gold, .rainbow, .isul, .pepero: return false
+        case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby: return false
         }
     }
 }

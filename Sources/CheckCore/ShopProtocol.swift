@@ -70,6 +70,20 @@ package nonisolated enum ShopWire {
 
     /// 이 번호를 요구하는 캐릭터 — 빼빼로 하나(`CharacterCatalog.peperoGiftBuiltInIDs` 와 같은 값).
     package static let peperoCharacterIDs = CharacterCatalog.peperoGiftBuiltInIDs
+    /// 흑우 아잉이(v0.3.78 조각 교환 전용)가 든 명단 · 확률표(확률 0 — 클라는 확률표에서 뺀다) · 교환표를 받을 수 있는 번호. 서버
+    /// `character_prices.min_protocol = 7` 인 행이 흑우이고, 7 미만인 클라에게는 그 행이 **아예 안 보인다**(가진 사람에게도 — 서버
+    /// 20261109100000 shop_state 게이트). 교환은 `gacha_exchange` 가 `needs_update` 로 거절한다.
+    /// ★ 그림(초상 · 3D 마감)이 붙기 전엔 어느 빌드도 이 번호를 말하지 않는다 — 맥 `drawableCharacterIDs` 에 흑우가 없으면 6 에 머문다.
+    package static let hwooProtocol = 7
+    /// 이 번호를 요구하는 캐릭터 — 흑우 하나(`CharacterCatalog.shardOnlyBuiltInIDs` 와 같은 값).
+    package static let hwooCharacterIDs = CharacterCatalog.shardOnlyBuiltInIDs
+    /// 루비 아잉이(v0.3.78 상점 루비 1000)가 든 명단을 받고 살 수 있는 번호. 서버 `character_prices.min_protocol = 8` 인 행이 루비이고,
+    /// 8 미만인 클라에게는 그 행이 **아예 안 보인다**(가진 사람에게도 — 서버 20261109110000 shop_state 게이트). 구매는 `buy_character` 가
+    /// `needs_update` 로 거절한다.
+    /// ★ 그림(초상 · 3D 마감 · 몸 빚기)이 붙기 전엔 어느 빌드도 이 번호를 말하지 않는다 — 맥 `drawableCharacterIDs` 에 루비가 없으면 7 에 머문다.
+    package static let rubyProtocol = 8
+    /// 이 번호를 요구하는 캐릭터 — 루비 하나(`CharacterCatalog.shopBuiltInIDs` 와 같은 값).
+    package static let rubyCharacterIDs = CharacterCatalog.shopBuiltInIDs
 
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
@@ -91,6 +105,10 @@ package nonisolated enum ShopWire {
     ///   5 를 말하면 서버가 케이크 선물도 이슬 선물도 내려 주므로, 그림 없는 캐릭터를 받게 된다.
     ///   6(v0.3.77)도 같다: 여기까지 전부 **와** 빼빼로를 그릴 수 있을 때만. 빼빼로만 있고 이슬이 빠지면 4 에 머문다 —
     ///   6 을 말하면 서버가 이슬 선물도 빼빼로 선물도 내려 주므로, 그림 없는 캐릭터를 받게 된다.
+    ///   7(v0.3.78)도 같다: 여기까지 전부 **와** 흑우를 그릴 수 있을 때만. 7 을 말하면 서버가 흑우 행 · 교환가를 내려 주므로, 그림이 없으면
+    ///   조각 20개로 '아잉 그림의 흑우'를 바꾸게 된다.
+    ///   8(v0.3.78 루비 아잉이)도 같다: 여기까지 전부 **와** 루비를 그릴 수 있을 때만. 8 을 말하면 서버가 루비 행을 내려 주므로, 그림이 없으면
+    ///   루비 1000개로 '아잉 그림의 루비 아잉이'를 사게 된다.
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
         let drawable = Set(drawableCharacterIDs)
         guard drawable.contains(robotCharacterID) else { return legacyProtocol }
@@ -98,7 +116,9 @@ package nonisolated enum ShopWire {
         guard drawable.contains(rainbowCharacterID) else { return goldProtocol }
         guard cakeCharacterIDs.allSatisfy(drawable.contains) else { return rainbowProtocol }
         guard isulCharacterIDs.allSatisfy(drawable.contains) else { return cakeProtocol }
-        return peperoCharacterIDs.allSatisfy(drawable.contains) ? peperoProtocol : isulProtocol
+        guard peperoCharacterIDs.allSatisfy(drawable.contains) else { return isulProtocol }
+        guard hwooCharacterIDs.allSatisfy(drawable.contains) else { return peperoProtocol }
+        return rubyCharacterIDs.allSatisfy(drawable.contains) ? rubyProtocol : hwooProtocol
     }
 
     /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의

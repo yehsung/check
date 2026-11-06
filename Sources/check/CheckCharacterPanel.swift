@@ -258,7 +258,7 @@ struct CheckCharacterPanel: View {
     nonisolated static func lockedLabel(_ id: String, name: String) -> String {
         // 선물 전용(케이크 = 생일 · 이슬 = 술 한잔 — v0.3.74)은 종류마다 안내가 다르다(`CharacterGiftKind.copy`).
         if let gift = CharacterCatalog.giftKind(ofBuiltIn: id) { return "\(name) 잠김 — \(gift.copy.lockedHint)" }
-        if CharacterCatalog.isGachaOnlyBuiltIn(id) { return "\(name) 잠김 — \(GachaText.gachaOnlyHint)" }
+        if CharacterCatalog.isGachaOnlyBuiltIn(id) { return "\(name) 잠김 — \(GachaText.acquireHint(for: id))" }
         return "\(name) 잠김 — 상점에서 사기"
     }
 }

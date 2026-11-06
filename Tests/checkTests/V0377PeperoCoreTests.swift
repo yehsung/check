@@ -44,7 +44,14 @@ struct V0377PeperoCoreTests {
 
     /// 맥 빌드의 상점 능력 번호 기대값(누적): 이슬 그림이 있으면 5, 빼빼로 그림까지 있으면 6, 아니면 케이크 4.
     static var expectedMacProtocolFromIsulOn: Int {
-        V0374IsulCoreTests.macIsulArtInSourceTree ? (macPeperoArtInSourceTree ? ShopWire.peperoProtocol : ShopWire.isulProtocol) : ShopWire.cakeProtocol
+        // v0.3.78: 흑우 그림까지 있으면 7(누적 — 빼빼로가 없으면 흑우가 있어도 6 을 건너뛰지 않는다).
+        V0374IsulCoreTests.macIsulArtInSourceTree
+            ? (macPeperoArtInSourceTree
+                ? (V0378HwooCoreTests.macHwooArtInSourceTree
+                    ? (V0378RubyCoreTests.macRubyArtInSourceTree ? ShopWire.rubyProtocol : ShopWire.hwooProtocol)   // v0.3.78 루비까지 8
+                    : ShopWire.peperoProtocol)
+                : ShopWire.isulProtocol)
+            : ShopWire.cakeProtocol
     }
 
     // MARK: - ① 카탈로그
@@ -56,7 +63,7 @@ struct V0377PeperoCoreTests {
         #expect(CharacterCatalog.builtInPeperoAing.id == Self.pepero)
         #expect(CharacterCatalog.builtInPeperoAing.displayName == CharacterCatalog.peperoAingDisplayName, "표시 이름이 상수에서 안 온다")
         #expect(CharacterCatalog.builtInPeperoAing.kind == .scene3D)
-        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero]
+        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID]
         #expect(CharacterCatalog.builtIns.map(\.id) == order)
         let empty = CharacterCatalog(entries: [])
         #expect(empty.allIDs == order)
@@ -135,7 +142,7 @@ struct V0377PeperoCoreTests {
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: base + [Self.pepero]) == 4, "이슬 없이 빼빼로만 — 5 도 못 보낸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: ["robot", "aing_gold", "aing_rainbow", Self.choco, Self.isul, Self.pepero]) == 3)
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: [Self.isul, Self.pepero]) == 0)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: CharacterCatalog.builtIns.map(\.id) + ["robot"]) == 6, "내장 전부 + robot")
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: CharacterCatalog.builtIns.map(\.id) + ["robot"]) == ShopWire.rubyProtocol, "내장 전부 + robot — v0.3.78 흑우 7 · 루비까지 8")
         #expect(!ShopWire.supportsPeperoGift(protocolVersion: 5))
         #expect(ShopWire.supportsPeperoGift(protocolVersion: 6))
         #expect(ShopWire.supportsDrinkGift(protocolVersion: 6) && ShopWire.supportsCakeGift(protocolVersion: 6), "번호는 누적이다")
@@ -158,7 +165,7 @@ struct V0377PeperoCoreTests {
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == expected)
         let store = V0317ShopTests.plainStore()
         #expect(store.shopProtocolVersion == expected, "스토어 번호 \(store.shopProtocolVersion)")
-        #expect(ShopWire.supportsPeperoGift(protocolVersion: store.shopProtocolVersion) == (expected == ShopWire.peperoProtocol))
+        #expect(ShopWire.supportsPeperoGift(protocolVersion: store.shopProtocolVersion) == (expected >= ShopWire.peperoProtocol), "v0.3.78 흑우가 얹히면 7(누적)")
         // 판정은 마감 실재 한 곳 — 그림 셋 중 하나만 빠져도 빼빼로는 빠지고 번호는 5 로 내려간다.
         if art {
             for missing in PeperoAingFinish.requiredResourceNames() {

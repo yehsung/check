@@ -320,7 +320,10 @@ enum V0354GachaStub {
     /// 넣으므로(그 스위트의 픽스처) 여기서는 금을 빼고 서버 모양으로 다시 붙인다.
     static func shopRows(goldOwned: Bool = false) -> [ShopCharacterRow] {
         // v0.3.59: 무지개 아잉이(내장 · 뽑기 전용)는 이 '금 포함 일곱 장' 픽스처에 없다 — 루비 값 30 의 파는 줄로 섞이지 않게 뺀다.
-        V0317ShopTests.rows(ownedIDs: ["squirrel"]).filter { !CharacterCatalog.isGoldAing($0.id) && !CharacterCatalog.isRainbowAing($0.id) }
+        // v0.3.78: 흑우 아잉이(내장 · 조각 교환 전용)도 같은 까닭으로 뺀다.
+        V0317ShopTests.rows(ownedIDs: ["squirrel"]).filter {
+            !CharacterCatalog.isGoldAing($0.id) && !CharacterCatalog.isRainbowAing($0.id) && !CharacterCatalog.isHwooAing($0.id) && !CharacterCatalog.isRubyAing($0.id)
+        }
             + [ShopCharacterRow(id: CharacterCatalog.goldAingID, price: 1000, owned: goldOwned, gachaOnly: true)]
     }
 

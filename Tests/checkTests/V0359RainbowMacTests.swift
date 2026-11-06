@@ -224,7 +224,8 @@ struct V0359RainbowGachaRulesTests {
         for other in ["aing", "fox", "robot", "AING_RAINBOW", " aing_rainbow", "", nil] as [String?] {
             #expect(!CharacterCatalog.isGachaOnlyBuiltIn(other), "\(other ?? "nil")")
         }
-        #expect(CharacterCatalog.gachaOnlyBuiltInIDs == [V0359UI.gold, V0359UI.rainbow])
+        // v0.3.78: 흑우(조각 교환 전용)가 뽑기 전용 목록 끝에 붙는다(루비로 안 판다 — V0378HwooCoreTests).
+        #expect(CharacterCatalog.gachaOnlyBuiltInIDs == [V0359UI.gold, V0359UI.rainbow, CharacterCatalog.hwooAingID])
         #expect(CharacterManifest.Finish(characterID: V0359UI.rainbow) == .rainbow && CharacterManifest.Finish(characterID: nil) == .standard)
         #expect(CharacterManifest.Finish.rainbow.isRare && CharacterManifest.Finish.gold.isRare && !CharacterManifest.Finish.standard.isRare)
     }

@@ -1,0 +1,58 @@
+{
+  "me": {
+    "draws": 1,
+    "losses": 0,
+    "points": 3,
+    "rank": 1,
+    "wins": 3
+  },
+  "record_since_ms": null,
+  "rows": [
+    {
+      "avatar_url": null,
+      "character": null,
+      "display_name": "T-439d14d0",
+      "draws": 1,
+      "id": "439d14d0-1485-4fde-b160-40b135cf87bb",
+      "losses": 0,
+      "points": 3,
+      "rank": 1,
+      "wins": 3
+    },
+    {
+      "avatar_url": "https://example.invalid/b.png",
+      "character": null,
+      "display_name": "라마바",
+      "draws": 0,
+      "id": "c9507194-70ce-45b3-9b4e-871adb947ba2",
+      "losses": 0,
+      "points": 1,
+      "rank": 2,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character": "aing",
+      "display_name": "가나다",
+      "draws": 0,
+      "id": "a6f9ee85-6ded-472a-bf89-2f239dcbdeaa",
+      "losses": 1,
+      "points": -1,
+      "rank": 3,
+      "wins": 0
+    },
+    {
+      "avatar_url": null,
+      "character": null,
+      "display_name": "T-c641d928",
+      "draws": 1,
+      "id": "c641d928-b685-4276-b6de-0b247aab9cc7",
+      "losses": 3,
+      "points": -3,
+      "rank": 4,
+      "wins": 0
+    }
+  ],
+  "server_now_ms": 1793973594518,
+  "status": "ok"
+}

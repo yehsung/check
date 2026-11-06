@@ -1,0 +1,654 @@
+{
+  "generated_at": "2026-11-06T22:59:54+09:00",
+  "source": "CD/server/fixtures/gen.sh — 하네스 CD/harness 55571, 체인 + 20261109150000_crossy_duel.sql 3회 적용 직후, 한 트랜잭션(롤백)",
+  "draft": "20261109150000_crossy_duel.sql",
+  "draft_md5": "4aa311441016a5552dcd9d6f561f0443",
+  "protocol": 1,
+  "keys": {
+    "state_keys": [
+      "match_id",
+      "status",
+      "stake",
+      "seed",
+      "server_now_ms",
+      "accepted_at_ms",
+      "ready_deadline_ms",
+      "start_at_ms",
+      "end_at_ms",
+      "grace_end_ms",
+      "finished_at_ms",
+      "goal",
+      "max_duration_seconds",
+      "report_ms",
+      "heartbeat_ms",
+      "checkpoint_ms",
+      "silence_ms",
+      "countdown_ms",
+      "me",
+      "opponent",
+      "result",
+      "winner",
+      "end_reason",
+      "final",
+      "my_device",
+      "frames",
+      "ruby_balance"
+    ],
+    "side_keys": [
+      "id",
+      "display_name",
+      "avatar_url",
+      "character",
+      "ready",
+      "seq",
+      "score",
+      "deaths",
+      "goal_at_ms",
+      "last_seen_ms"
+    ],
+    "final_keys": [
+      "me",
+      "opponent"
+    ],
+    "lobby_keys": [
+      "status",
+      "server_now_ms",
+      "stakes",
+      "goal",
+      "max_duration_seconds",
+      "me",
+      "users"
+    ],
+    "lobby_me_keys": [
+      "ruby_balance",
+      "wins",
+      "losses",
+      "draws",
+      "active_match_id",
+      "incoming",
+      "outgoing"
+    ],
+    "user_keys": [
+      "id",
+      "display_name",
+      "avatar_url",
+      "character",
+      "is_working",
+      "in_match",
+      "capable",
+      "focus_mode"
+    ],
+    "invite_keys": [
+      "match_id",
+      "from",
+      "stake",
+      "expires_at_ms"
+    ],
+    "invite_out_keys": [
+      "match_id",
+      "to",
+      "stake",
+      "expires_at_ms"
+    ],
+    "invite_peer_keys": [
+      "id",
+      "display_name"
+    ],
+    "ranking_keys": [
+      "status",
+      "server_now_ms",
+      "record_since_ms",
+      "me",
+      "rows"
+    ],
+    "ranking_me_keys": [
+      "rank",
+      "wins",
+      "losses",
+      "draws",
+      "points"
+    ],
+    "ranking_row_keys": [
+      "rank",
+      "id",
+      "display_name",
+      "avatar_url",
+      "character",
+      "wins",
+      "losses",
+      "draws",
+      "points"
+    ]
+  },
+  "statuses_seen": [
+    "already_pending",
+    "blackout",
+    "busy",
+    "expired",
+    "insufficient",
+    "invalid",
+    "not_active",
+    "not_found",
+    "not_pending",
+    "not_signed_in",
+    "ok",
+    "other_device",
+    "stale",
+    "target_busy",
+    "target_focused",
+    "target_outdated",
+    "unsupported_client"
+  ],
+  "cases": [
+    {
+      "file": "crossy_duel_lobby__not_signed_in.json",
+      "rpc": "crossy_duel_lobby",
+      "case": "not_signed_in",
+      "status": "not_signed_in",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_lobby__unsupported_client.json",
+      "rpc": "crossy_duel_lobby",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__ok.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "ok",
+      "status": "ok",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_lobby__ok.json",
+      "rpc": "crossy_duel_lobby",
+      "case": "ok",
+      "status": "ok",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_lobby__light.json",
+      "rpc": "crossy_duel_lobby",
+      "case": "light",
+      "status": "ok",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_state__pending.json",
+      "rpc": "crossy_duel_state",
+      "case": "pending",
+      "status": "ok",
+      "state_status": "pending",
+      "end_reason": null,
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_challenge__already_pending.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "already_pending",
+      "status": "already_pending",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__invalid.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "invalid",
+      "status": "invalid",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__unsupported_client.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__target_outdated.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "target_outdated",
+      "status": "target_outdated",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__blackout.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "blackout",
+      "status": "blackout",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__target_focused.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "target_focused",
+      "status": "target_focused",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__insufficient.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "insufficient",
+      "status": "insufficient",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_cancel__not_found.json",
+      "rpc": "crossy_duel_cancel",
+      "case": "not_found",
+      "status": "not_found",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_cancel__ok.json",
+      "rpc": "crossy_duel_cancel",
+      "case": "ok",
+      "status": "ok",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_cancel__not_pending.json",
+      "rpc": "crossy_duel_cancel",
+      "case": "not_pending",
+      "status": "not_pending",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__invalid.json",
+      "rpc": "crossy_duel_respond",
+      "case": "invalid",
+      "status": "invalid",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__not_found.json",
+      "rpc": "crossy_duel_respond",
+      "case": "not_found",
+      "status": "not_found",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__declined.json",
+      "rpc": "crossy_duel_respond",
+      "case": "declined",
+      "status": "ok",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__not_pending.json",
+      "rpc": "crossy_duel_respond",
+      "case": "not_pending",
+      "status": "not_pending",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__expired.json",
+      "rpc": "crossy_duel_respond",
+      "case": "expired",
+      "status": "expired",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__insufficient_me.json",
+      "rpc": "crossy_duel_respond",
+      "case": "insufficient_me",
+      "status": "insufficient",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__insufficient_challenger.json",
+      "rpc": "crossy_duel_respond",
+      "case": "insufficient_challenger",
+      "status": "insufficient",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_respond__accepted.json",
+      "rpc": "crossy_duel_respond",
+      "case": "accepted",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_report__ready_first.json",
+      "rpc": "crossy_duel_report",
+      "case": "ready_first",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_state__ready_waiting.json",
+      "rpc": "crossy_duel_state",
+      "case": "ready_waiting",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_report__ready_both.json",
+      "rpc": "crossy_duel_report",
+      "case": "ready_both",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_state__countdown.json",
+      "rpc": "crossy_duel_state",
+      "case": "countdown",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_challenge__target_busy.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "target_busy",
+      "status": "target_busy",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_challenge__busy.json",
+      "rpc": "crossy_duel_challenge",
+      "case": "busy",
+      "status": "busy",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_report__playing.json",
+      "rpc": "crossy_duel_report",
+      "case": "playing",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_report__floor.json",
+      "rpc": "crossy_duel_report",
+      "case": "floor",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_report__stale_seq.json",
+      "rpc": "crossy_duel_report",
+      "case": "stale_seq",
+      "status": "stale",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_report__other_device.json",
+      "rpc": "crossy_duel_report",
+      "case": "other_device",
+      "status": "other_device",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_report__invalid.json",
+      "rpc": "crossy_duel_report",
+      "case": "invalid",
+      "status": "invalid",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_report__not_found.json",
+      "rpc": "crossy_duel_report",
+      "case": "not_found",
+      "status": "not_found",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_resign__other_device.json",
+      "rpc": "crossy_duel_resign",
+      "case": "other_device",
+      "status": "other_device",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_resign__not_found.json",
+      "rpc": "crossy_duel_resign",
+      "case": "not_found",
+      "status": "not_found",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    },
+    {
+      "file": "crossy_duel_state__playing.json",
+      "rpc": "crossy_duel_state",
+      "case": "playing",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "on"
+    },
+    {
+      "file": "crossy_duel_state__other_device.json",
+      "rpc": "crossy_duel_state",
+      "case": "other_device",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__frames_off.json",
+      "rpc": "crossy_duel_state",
+      "case": "frames_off",
+      "status": "ok",
+      "state_status": "active",
+      "end_reason": null,
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_report__goal_win.json",
+      "rpc": "crossy_duel_report",
+      "case": "goal_win",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "goal",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_goal_loss.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_goal_loss",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "goal",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_report__stale_finished.json",
+      "rpc": "crossy_duel_report",
+      "case": "stale_finished",
+      "status": "stale",
+      "state_status": "finished",
+      "end_reason": "goal",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_resign__not_active.json",
+      "rpc": "crossy_duel_resign",
+      "case": "not_active",
+      "status": "not_active",
+      "state_status": "finished",
+      "end_reason": "goal",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_time_cap_draw.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_time_cap_draw",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "time_cap",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_time_cap_win.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_time_cap_win",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "time_cap",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_disconnect.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_disconnect",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "disconnect",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_no_show.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_no_show",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "no_show",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_void.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_void",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "void",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_resign__ok.json",
+      "rpc": "crossy_duel_resign",
+      "case": "ok",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "resign",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_state__finished_resign_win.json",
+      "rpc": "crossy_duel_state",
+      "case": "finished_resign_win",
+      "status": "ok",
+      "state_status": "finished",
+      "end_reason": "resign",
+      "frames": "null"
+    },
+    {
+      "file": "crossy_duel_ranking__ok.json",
+      "rpc": "crossy_duel_ranking",
+      "case": "ok",
+      "status": "ok",
+      "state_status": null,
+      "end_reason": null,
+      "frames": null
+    }
+  ],
+  "frames": {
+    "on": [
+      "crossy_duel_report__floor.json",
+      "crossy_duel_report__playing.json",
+      "crossy_duel_report__ready_both.json",
+      "crossy_duel_report__ready_first.json",
+      "crossy_duel_report__stale_seq.json",
+      "crossy_duel_respond__accepted.json",
+      "crossy_duel_state__countdown.json",
+      "crossy_duel_state__playing.json",
+      "crossy_duel_state__ready_waiting.json"
+    ],
+    "null_while_active": [
+      "crossy_duel_report__other_device.json",
+      "crossy_duel_resign__other_device.json",
+      "crossy_duel_state__frames_off.json",
+      "crossy_duel_state__other_device.json"
+    ],
+    "shape": "null | {on: true, topic: 'crossy_duel:' + match_id} — 진행 중 · 서버 스위치 켬 · my_device ≠ other 일 때만 켬(SPEC v1.3 §3.4 B5)"
+  },
+  "intervals": {
+    "report_ms": 1000,
+    "heartbeat_ms": 3000,
+    "checkpoint_ms": 3000
+  },
+  "notes": [
+    "응답은 실제 RPC 원문(가공 없음) — uuid · 시각은 생성한 판의 값이라 다시 뜨면 바뀐다(키 · 모양 · status 만 계약)",
+    "가벼운 로비(crossy_duel_lobby__light): users = [] · me.wins/losses/draws = null(0 이 아니다 — 클라는 덮지 않는다)",
+    "state.final 은 끝난 판만(내 관점 {me, opponent}), 그 밖엔 null",
+    "abandoned 끝 사유는 떠난 계정의 판 행이 cascade 로 사라져 state 픽스처가 없다",
+    "state.frames: 진행 중 판은 {on, topic}, 다른 세션 기기(crossy_duel_state__other_device) · 서버 스위치 꺼짐(crossy_duel_state__frames_off) · 대기 · 끝난 판은 null — null 이면 대체 길(report_ms 1000)",
+    "state.checkpoint_ms 3000: 프레임 확인된 판의 체크포인트 간격(클라 [2000, 5000] 자름) — 모든 state 에 있다"
+  ]
+}

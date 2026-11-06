@@ -169,10 +169,15 @@ extension CrossyDuelStore {
         let reachedGoal = (game?.score ?? 0) >= goal
         let frozen = match.isFinished || (ownDuel?.finished ?? false) || reachedGoal
         let waiting = !match.isFinished && ((ownDuel?.finished ?? false) || reachedGoal)
+        // 판 구동기 시계가 없을 때(준비 단계 — 시작 시각 모름 · 다른 기기로 물러난 쪽): 끝 시각을 알면 기기 시계로 센 남은 시간,
+        // 모르면 판 상한(3:00). "0:00" 은 끝난 판의 굳힌 글자라 진행 중 판에 쓰지 않는다(SPEC §9.2 · 검토 RV-C-3).
+        let cap = TimeInterval(CrossyDuelSession.expectedMaxDurationSeconds)
+        let remaining: TimeInterval = match.isFinished ? 0
+            : ownDuel?.remaining(at: t) ?? match.endAt.map { max(0, min(cap, $0.timeIntervalSince(clock()))) } ?? cap
         return CrossyDuelRaceSnapshot(
             myScore: myScore, opponentScore: opponentScore, goal: goal,
             myDeaths: game?.deaths ?? 0, opponentDeaths: match.opponentDeaths,
-            countdown: countdown, remaining: match.isFinished ? 0 : ownDuel?.remaining(at: t), respawnIn: respawnIn,
+            countdown: countdown, remaining: remaining, respawnIn: respawnIn,
             shielded: shielded && !match.isFinished, frozen: frozen, waitingForResult: waiting,
             opponentQuiet: !match.isFinished && opponentQuiet(at: t))
     }

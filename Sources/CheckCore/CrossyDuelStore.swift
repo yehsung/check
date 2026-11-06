@@ -389,6 +389,8 @@ package final class CrossyDuelStore {
     @ObservationIgnored package var pollStepSeconds: TimeInterval = 0.5
     @ObservationIgnored package private(set) var serverClockOffset: TimeInterval = 0
     @ObservationIgnored private var hasServerClockOffset = false
+    /// 루비 잔액을 마지막으로 옮긴 응답의 `server_now_ms`(늦은 응답 가드 §8.3 — 검토 RV-C-2). 이보다 옛 응답의 잔액은 버린다.
+    @ObservationIgnored private var rubyServerNowMs: Double?
     @ObservationIgnored package private(set) var resetGeneration = 0
     @ObservationIgnored package private(set) var stateInFlightID: String?
     @ObservationIgnored private var pendingStateID: String?
@@ -589,7 +591,7 @@ package final class CrossyDuelStore {
             }
         }
         if let me = response.me {
-            applyRuby(me.rubyBalance)
+            applyRuby(me.rubyBalance, serverNowMs: response.serverNowMs)
             if !light {
                 let fresh = CrossyDuelRecord(wins: me.wins ?? 0, losses: me.losses ?? 0, draws: me.draws ?? 0)
                 if record != fresh { record = fresh }
@@ -711,7 +713,7 @@ package final class CrossyDuelStore {
         guard let id = payload.matchId?.lowercased(), !id.isEmpty else { return .ignored }
         let received = receivedAt ?? uptime()
         noteServerNow(payload.serverNowMs)
-        applyRuby(payload.rubyBalance)
+        applyRuby(payload.rubyBalance, serverNowMs: payload.serverNowMs)
         let status = payload.status ?? ""
         switch status {
         case "pending":
@@ -845,7 +847,14 @@ package final class CrossyDuelStore {
         let previous = match
         // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(규칙 ①).
         let windowWasVisible = isWindowVisible && !isWindowOccluded
-        if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
+        if !isFinished, previous?.id != id || previous?.isFinished == true {
+            // 판이 서는 순간 서버(respond)는 두 사람의 다른 길건너 대기 신청을 전부 닫았다 — 받는 쪽은 respond 가 걷지만 보낸 쪽
+            // 기기(5초 조회 · 초인종이 판을 데려온 쪽)에는 닫힌 받은 신청이 남아 메뉴바 점 · 배너가 선다(검토 RV-C-4). 판 중엔 새 신청이
+            // 올 수 없다(상대가 대국 중이면 서버가 target_busy).
+            if !incoming.isEmpty { incoming = [] }
+        } else if incoming.contains(where: { $0.id == id }) {
+            incoming.removeAll { $0.id == id }
+        }
         if outgoing?.id == id { outgoing = nil }
         if match != next { match = next }
         activeMatchID = isFinished ? nil : id
@@ -1209,6 +1218,7 @@ package final class CrossyDuelStore {
         opponentSilenceReceivedAt = nil
         serverClockOffset = 0
         hasServerClockOffset = false
+        rubyServerNowMs = nil
         activeMatchID = nil
         seenInviteIDs = []
         announcedMatchIDs = []
@@ -1329,8 +1339,15 @@ package final class CrossyDuelStore {
             + "reason=\(new?.endReason?.rawValue ?? "none") sameMatch=\(sameMatch)"
     }
 
-    func applyRuby(_ value: Int?) {
+    /// 서버 잔액을 스토어 · 앱 미러로 옮긴다. 늦은 응답 가드(§8.3, 검토 RV-C-2): 이미 옮긴 잔액보다 **먼저** 서버가 만든 응답
+    /// (정산 뒤 닿은 옛 상태 — 판 값은 `.ignored` 인 그 응답 · 옛 로비)의 잔액은 버린다(105 를 95 로 되감지 않게).
+    /// 서버 시각이 없는 응답은 예전처럼 옮긴다.
+    func applyRuby(_ value: Int?, serverNowMs: Double?) {
         guard let value else { return }
+        if let at = serverNowMs, at.isFinite, at > 0 {
+            if let last = rubyServerNowMs, at < last { return }
+            rubyServerNowMs = at
+        }
         if rubyBalance != value { rubyBalance = value }
         if let host, host.rubyBalance != value { host.rubyBalance = value }
     }

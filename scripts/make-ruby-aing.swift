@@ -10,8 +10,8 @@
 // 입력(읽기만): Sources/check/Resources/aing.scn(메시 · 얼굴 디퓨즈) · aing_rainbow-shade.png(밝기 맵) · aing-neutral.png · aing-negative.png(192² 아잉 초상).
 // 방법:
 //   ① 기본 = 앱 구도 정면 3D 렌더(몸 빚기 + 보석 셰이더 — 앱과 같은 글자)를 아잉 초상(aing-neutral.png)의 몸 상자(폭 · 바닥)에 맞춰 192² 로.
-//   ② 시무룩 = 같은 렌더에서 **바뀌는 자리(눈썹 · 입)만** 아잉 시무룩 초상에서 가져와 얹는다: 두 아잉 초상의 차이로 자리를 잡고, 눈 두 점으로
-//      맞춘 닮음 변환으로 옮기고, 그 자리의 바탕은 '얼굴 없는 몸' 렌더(셰이더 faceOff)로 지운 뒤 시무룩 초상의 비피부 화소를 얹는다.
+//   ② 시무룩 = 같은 렌더에서 **눈 · 볼터치는 루비 3D 그대로**, 웃는 입만 '얼굴 없는 몸' 렌더(셰이더 faceOff)로 지우고, 아잉 시무룩 초상의
+//      눈썹 · 처진 입만 그 초상 자신의 눈 두 점 → 루비 눈 두 점 닮음 변환으로 옮겨 얹는다(11-07 고침 — 눈까지 옮기면 몸과 따로 놀았다).
 //   창을 띄우지 않는다(오프스크린 SCNRenderer). 네트워크를 쓰지 않는다.
 import AppKit
 import CoreGraphics
@@ -218,63 +218,145 @@ enum Portrait {
         return (sL / nL, sR / nR)
     }
 
-    /// 시무룩: 아잉 두 초상이 다른 자리(눈썹 · 입)만 시무룩 초상에서 옮겨 얹는다. 나머지(눈 · 볼터치 · 보석 몸)는 루비 기본 그대로.
-    static func negative(ruby: CGImage, bare: CGImage, aingNeutral: CGImage, aingNegative: CGImage) -> CGImage {
+    /// 시무룩: **루비 3D 의 눈 · 볼터치는 그대로** 두고, 웃는 입만 '얼굴 없는 몸'으로 지운 뒤 아잉 시무룩 초상의 **눈썹 · 처진 입**만 얹는다.
+    /// 자리는 시무룩 초상 자신의 눈 두 점 → 루비 눈 두 점 닮음 변환으로 잡는다(눈에 대한 눈썹 · 입의 자리가 아잉 시무룩과 같다).
+    /// ★ 시무룩 초상의 눈은 기본 초상보다 낮게 그려져 있다 — 눈까지 옮기거나(11-06 첫 판) 기본 초상 눈으로 맞추면 눈이 몸과 따로 논다
+    ///   (대표 지적 11-07 "슬플때 눈이 이상한데? 위치가 이상해").
+    static func negative(ruby: CGImage, bare: CGImage, aingNeutral _: CGImage, aingNegative: CGImage) -> CGImage {
         let W = ruby.width, H = ruby.height
         let rp = Img.bytes(ruby), bp = Img.bytes(bare)
-        let an = Img.bytes(aingNeutral), ag = Img.bytes(aingNegative)
-        let aw = aingNeutral.width, ah = aingNeutral.height
-        let (aL, aR) = eyes(aingNeutral), (rL, rR) = eyes(ruby)
-        let s = simd_length(rR - rL) / simd_length(aR - aL)
-        let aMid = (aL + aR) / 2, rMid = (rL + rR) / 2
-        // 바뀌는 자리(아잉 좌표) — 두 초상의 색이 다르고 **어느 한쪽이 피부가 아닌**(눈썹 · 입) 화소. 둘 다 피부면 음영 차이일 뿐이라 뺀다. 2 화소 넓힘.
-        func skinAt(_ px: [UInt8], _ i: Int) -> Bool { Img.isSkin(Double(px[i * 4]), Double(px[i * 4 + 1]), Double(px[i * 4 + 2])) }
-        var changed = [Bool](repeating: false, count: aw * ah)
-        for i in 0..<(aw * ah) {
-            let d = abs(Int(an[i * 4]) - Int(ag[i * 4])) + abs(Int(an[i * 4 + 1]) - Int(ag[i * 4 + 1])) + abs(Int(an[i * 4 + 2]) - Int(ag[i * 4 + 2]))
-            // 얼굴 자리만(눈 사이 거리 e 로: 가로 ±1.1e · 눈 위 0.7e ~ 눈 아래 1.0e) — 실루엣 가장자리의 차이를 줍지 않는다.
-            let e = simd_length(aR - aL), x = Double(i % aw), y = Double(i / aw)
-            let inFace = abs(x - aMid.x) < 1.1 * e && y > aMid.y - 0.7 * e && y < aMid.y + 1.0 * e
-            changed[i] = inFace && d > 36 && ag[i * 4 + 3] > 250 && (!skinAt(ag, i) || !skinAt(an, i))
+        let ag = Img.bytes(aingNegative)
+        let aw = aingNegative.width, ah = aingNegative.height
+        let (gL, gR) = eyes(aingNegative), (rL, rR) = eyes(ruby)
+        let eA = simd_length(gR - gL), eR = simd_length(rR - rL)
+        let s = eR / eA
+        let gMid = (gL + gR) / 2, rMid = (rL + rR) / 2
+        func skinAt(_ i: Int) -> Bool { Img.isSkin(Double(ag[i * 4]), Double(ag[i * 4 + 1]), Double(ag[i * 4 + 2])) }
+        // ① 시무룩 초상(아잉 좌표)에서 가져올 자리: 눈썹(눈 위 띠) · 입(두 눈 사이 아래, 가운데 좁은 띠). 눈 · 볼은 안 가져온다.
+        func isBrow(_ x: Double, _ y: Double) -> Bool {
+            let dx = (x - gMid.x) / eA, dy = (y - gMid.y) / eA
+            return dy > -0.62 && dy < -0.295 && abs(dx) < 0.85   // −0.27 까지 넣으면 시무룩 눈의 윗눈꺼풀 선이 따라와 눈썹이 두 줄이 됐다
         }
-        var grown = changed
-        for y in 0..<ah { for x in 0..<aw where changed[y * aw + x] {
-            for dy in -2...2 { for dx in -2...2 {
-                let xx = x + dx, yy = y + dy
-                if xx >= 0, yy >= 0, xx < aw, yy < ah { grown[yy * aw + xx] = true }
-            } }
-        } }
-        // 시무룩 초상의 둘레 피부색(반지름 5 안 피부 화소 평균) — 비피부 정도(알파)의 기준.
-        var localSkin = [SIMD3<Double>](repeating: SIMD3(200, 190, 240), count: aw * ah)
-        for y in 0..<ah { for x in 0..<aw where grown[y * aw + x] {
+        func isMouth(_ x: Double, _ y: Double) -> Bool {
+            let dx = (x - gMid.x) / eA, dy = (y - gMid.y) / eA
+            return dy > 0.06 && dy < 0.62 && abs(dx) < 0.30
+        }
+        // 루비 3D 눈은 눈 사이 거리에 비해 아잉 시무룩 그림의 눈보다 크다 — 눈썹을 그만큼(눈 사이 거리의 9 %) 올려 눈 윗선에 붙지 않게 한다.
+        let browLift = 0.09 * eR
+        // 둘레 피부색(반지름 6 안 피부 화소 평균) — 비피부 정도(알파)의 기준.
+        func localSkin(_ x: Int, _ y: Int) -> SIMD3<Double> {
             var sum = SIMD3<Double>(0, 0, 0), n = 0.0
             for dy in -6...6 { for dx in -6...6 {
                 let xx = x + dx, yy = y + dy
                 guard xx >= 0, yy >= 0, xx < aw, yy < ah else { continue }
                 let j = yy * aw + xx
-                if ag[j * 4 + 3] > 250 && skinAt(ag, j) { sum += SIMD3(Double(ag[j * 4]), Double(ag[j * 4 + 1]), Double(ag[j * 4 + 2])); n += 1 }
+                if ag[j * 4 + 3] > 250 && skinAt(j) { sum += SIMD3(Double(ag[j * 4]), Double(ag[j * 4 + 1]), Double(ag[j * 4 + 2])); n += 1 }
             } }
-            if n > 0 { localSkin[y * aw + x] = sum / n }
-        } }
-        func sampleA(_ px: [UInt8], _ x: Double, _ y: Double) -> SIMD4<Double> {
+            return n > 0 ? sum / n : SIMD3(200, 190, 240)
+        }
+        func sampleA(_ x: Double, _ y: Double) -> SIMD4<Double> {
             let fx = min(max(x - 0.5, 0), Double(aw - 1)), fy = min(max(y - 0.5, 0), Double(ah - 1))
             let ix = min(Int(fx), aw - 2), iy = min(Int(fy), ah - 2), tx = fx - Double(ix), ty = fy - Double(iy)
-            func p(_ xx: Int, _ yy: Int) -> SIMD4<Double> { let i = (yy * aw + xx) * 4; return SIMD4(Double(px[i]), Double(px[i + 1]), Double(px[i + 2]), Double(px[i + 3])) }
+            func p(_ xx: Int, _ yy: Int) -> SIMD4<Double> { let i = (yy * aw + xx) * 4; return SIMD4(Double(ag[i]), Double(ag[i + 1]), Double(ag[i + 2]), Double(ag[i + 3])) }
             return (p(ix, iy) * (1 - tx) + p(ix + 1, iy) * tx) * (1 - ty) + (p(ix, iy + 1) * (1 - tx) + p(ix + 1, iy + 1) * tx) * ty
         }
         var out = rp
+        // ② 루비 웃는 입 지우기: 두 눈 사이 아래 가운데 띠에서 기본 렌더가 '얼굴 없는 몸'과 다른 화소(+ 둘레 2)를 몸으로.
+        var erase = [Bool](repeating: false, count: W * H)
         for y in 0..<H { for x in 0..<W {
             let i = (y * W + x) * 4
             guard rp[i + 3] > 250 else { continue }
-            // 루비 좌표 → 아잉 좌표(닮음 변환의 역).
-            let a = aMid + (SIMD2(Double(x) + 0.5, Double(y) + 0.5) - rMid) / s
+            let dx = (Double(x) + 0.5 - rMid.x) / eR, dy = (Double(y) + 0.5 - rMid.y) / eR
+            guard dy > 0.10 && dy < 0.75 && abs(dx) < 0.32 else { continue }
+            let d = abs(Int(rp[i]) - Int(bp[i])) + abs(Int(rp[i + 1]) - Int(bp[i + 1])) + abs(Int(rp[i + 2]) - Int(bp[i + 2]))
+            if d > 30 { erase[y * W + x] = true }
+        } }
+        var grownErase = erase
+        for y in 0..<H { for x in 0..<W where erase[y * W + x] {
+            for dy in -2...2 { for dx in -2...2 {
+                let xx = x + dx, yy = y + dy
+                if xx >= 0, yy >= 0, xx < W, yy < H { grownErase[yy * W + xx] = true }
+            } }
+        } }
+        // 지운 자리는 둘레(기본 렌더의 몸 화소)에서 번져 채운다 — '얼굴 없는 몸' 렌더를 그대로 넣으면 입 둘레의 옅은 라벤더 기운과 달라
+        // 밝은 얼룩이 남았다. 앞면 가운데 한 면 안이라 번지기로 면 결이 깨지지 않는다.
+        var col = (0..<(W * H)).map { k in SIMD3(Double(rp[k * 4]), Double(rp[k * 4 + 1]), Double(rp[k * 4 + 2])) }
+        var known = grownErase.map { !$0 }
+        var todo = (0..<(W * H)).filter { grownErase[$0] }
+        while !todo.isEmpty {
+            var next: [Int] = [], fills: [(Int, SIMD3<Double>)] = []
+            for k in todo {
+                let x = k % W, y = k / W
+                var sum = SIMD3<Double>(0, 0, 0), n = 0.0
+                for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, -1), (1, -1), (-1, 1)] {
+                    let xx = x + dx, yy = y + dy
+                    guard xx >= 0, yy >= 0, xx < W, yy < H, known[yy * W + xx] else { continue }
+                    sum += col[yy * W + xx]; n += 1
+                }
+                if n > 0 { fills.append((k, sum / n)) } else { next.append(k) }
+            }
+            if fills.isEmpty { break }
+            for (k, c) in fills { col[k] = c; known[k] = true }
+            todo = next
+        }
+        for _ in 0..<12 {   // 번진 자리를 몇 번 고르게(가장자리 결 맞춤)
+            var smooth = col
+            for k in 0..<(W * H) where grownErase[k] {
+                let x = k % W, y = k / W
+                var sum = SIMD3<Double>(0, 0, 0), n = 0.0
+                for dy in -1...1 { for dx in -1...1 {
+                    let xx = x + dx, yy = y + dy
+                    guard xx >= 0, yy >= 0, xx < W, yy < H else { continue }
+                    sum += col[yy * W + xx]; n += 1
+                } }
+                smooth[k] = sum / n
+            }
+            col = smooth
+        }
+        for k in 0..<(W * H) where grownErase[k] {
+            out[k * 4] = UInt8(min(max(col[k].x.rounded(), 0), 255)); out[k * 4 + 1] = UInt8(min(max(col[k].y.rounded(), 0), 255))
+            out[k * 4 + 2] = UInt8(min(max(col[k].z.rounded(), 0), 255))
+        }
+        // 획 한가운데 색: 그 자리 화소 중 가장 어두운 4분의 1 평균(눈썹 · 입 따로).
+        func luma(_ c: SIMD3<Double>) -> Double { 0.299 * c.x + 0.587 * c.y + 0.114 * c.z }
+        func coreColor(_ inside: (Double, Double) -> Bool) -> SIMD3<Double> {
+            var px: [SIMD3<Double>] = []
+            for y in 0..<ah { for x in 0..<aw where inside(Double(x) + 0.5, Double(y) + 0.5) {
+                let i = (y * aw + x) * 4
+                guard ag[i + 3] > 250 else { continue }
+                let c = SIMD3(Double(ag[i]), Double(ag[i + 1]), Double(ag[i + 2]))
+                // 눈썹은 짙은 보라라 피부 판정(색상 215–300°)을 넘기도 한다 — 둘레 피부보다 확실히 어두운 화소로 고른다.
+                guard luma(c) < luma(localSkin(x, y)) - 25 else { continue }
+                px.append(c)
+            } }
+            guard !px.isEmpty else { fail("시무룩 초상에서 획을 못 찾았다") }
+            let dark = px.sorted { luma($0) < luma($1) }.prefix(max(1, px.count / 4))
+            return dark.reduce(SIMD3<Double>(0, 0, 0), +) / Double(dark.count)
+        }
+        let browCore = coreColor(isBrow), mouthCore = coreColor(isMouth)
+        // ③ 눈썹 · 처진 입 얹기(시무룩 초상 → 루비, 눈 두 점 닮음 변환의 역으로 표본 · 눈썹만 browLift 만큼 위로).
+        for y in 0..<H { for x in 0..<W {
+            let i = (y * W + x) * 4
+            guard rp[i + 3] > 250 else { continue }
+            let p = SIMD2(Double(x) + 0.5, Double(y) + 0.5)
+            let am = gMid + (p - rMid) / s
+            let ab = gMid + (p + SIMD2(0, browLift) - rMid) / s
+            let a: SIMD2<Double>
+            if isMouth(am.x, am.y) { a = am } else if isBrow(ab.x, ab.y) { a = ab } else { continue }
             let ax = Int(a.x), ay = Int(a.y)
-            guard ax >= 0, ay >= 0, ax < aw, ay < ah, grown[ay * aw + ax] else { continue }
-            let f = sampleA(ag, a.x, a.y)
+            guard ax >= 0, ay >= 0, ax < aw, ay < ah else { continue }
+            let f = sampleA(a.x, a.y)
+            guard f.w > 250 else { continue }
+            // 획 가장자리(피부와 섞인 라벤더 화소)를 그대로 얹으면 분홍 몸 위에 옅은 라벤더 줄이 한 겹 더 보인다(눈썹이 두 줄로).
+            // 그래서 '얼마나 어두운가'만 알파로 쓰고 색은 획 한가운데 색(core)을 얹는다: α = (둘레 피부 밝기 − 화소 밝기) / (피부 − core).
             let feat = SIMD3(f.x, f.y, f.z)
-            let alpha = min(max((simd_length(feat - localSkin[ay * aw + ax]) - 12) / 40, 0), 1)
-            let base = SIMD3(Double(bp[i]), Double(bp[i + 1]), Double(bp[i + 2]))
-            let c = base + (feat - base) * alpha
+            let skinHere = localSkin(ax, ay)
+            let core = isMouth(am.x, am.y) ? mouthCore : browCore
+            let lSkin = luma(skinHere), lCore = luma(core)
+            let alpha = min(max((lSkin - luma(feat)) / max(lSkin - lCore, 1) * 1.15 - 0.08, 0), 1)
+            guard alpha > 0 else { continue }
+            let base = SIMD3(Double(out[i]), Double(out[i + 1]), Double(out[i + 2]))
+            let c = base + (core - base) * alpha
             out[i] = UInt8(min(max(c.x.rounded(), 0), 255)); out[i + 1] = UInt8(min(max(c.y.rounded(), 0), 255)); out[i + 2] = UInt8(min(max(c.z.rounded(), 0), 255))
         } }
         return Img.make(out, W, H)

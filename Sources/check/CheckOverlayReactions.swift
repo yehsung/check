@@ -534,7 +534,7 @@ final class ReactionEngine {
         faceMaterial = material
         awakeDiffuse = cg
         // 메시 기반 눈 커버(색 분류가 놓치는 눈두덩/안구 하이라이트까지 덮어 유령 눈두덩 제거). 1회 생성·캐시.
-        sleepDiffuse = CheckCharacter3DScene.makeClosedEyesImage(faceImage: cg, geometry: geometry)
+        sleepDiffuse = CheckCharacter3DScene.makeClosedEyesImage(faceImage: cg, geometry: geometry, character: character)
     }
 
     /// 지금 쥔 감은눈 자원을 그 캐릭터 노드와 함께 맡겨 둔다(`ParkedEyeCache` 주석). 새로 붙는 노드가 같은 노드면 맡길 게 없다.

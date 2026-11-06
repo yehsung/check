@@ -45,6 +45,9 @@ struct CrossyDuelPanel: View {
     /// 스냅샷 전용: 3D 판 대신 그릴 그림(오프스크린 `SCNRenderer` 로 찍은 344×356 장). **ImageRenderer 는 SCNView 를 빈 칸으로
     /// 그린다**(MC:91) — 이 그림이 있으면 SCNView 를 아예 마운트하지 않는다. 앱은 nil.
     var previewCanvas: CGImage? = nil
+    /// 스냅샷 전용: 사람 아바타 캐릭터 표(스토어 없이 그리는 렌더 시험이 앱과 같은 얼굴을 보게). 앱은 nil — 루트의
+    /// `.appUserAvatarCharacters(from: safety)` 가 표를 건다.
+    var previewCharacters: AppUserCharacterDirectory? = nil
     /// 시험 전용: 캔버스가 실제로 놓인 자리(창 콘텐츠 좌표). 앱은 nil.
     var onCanvasFrame: (@MainActor (CGRect) -> Void)? = nil
     /// 이 창 자기 주사율(v1.1 CC-5 — 컨트롤러가 `.frameRate(_:)` 로 넣는다). nil 이면 공용 값.
@@ -75,6 +78,7 @@ struct CrossyDuelPanel: View {
                            alignment: .topLeading)
             }
             .padding(CrossyDuelWindowLayout.contentPadding)
+            .modifier(CrossyDuelPreviewCharacters(directory: previewCharacters))
             if let target = activeStakeTarget, store.phase == .lobby {
                 CrossyDuelStakePrompt(store: store, target: target, initialSelection: previewStakeSelection,
                                       onClose: { stakeTarget = nil })
@@ -195,6 +199,19 @@ private struct CrossyDuelHeader: View {
 }
 
 // MARK: - 공용 조각
+
+/// 스냅샷 전용 캐릭터 표(nil 이면 아무것도 안 한다 — 루트의 표가 그대로 내려간다).
+private struct CrossyDuelPreviewCharacters: ViewModifier {
+    let directory: AppUserCharacterDirectory?
+
+    func body(content: Content) -> some View {
+        if let directory {
+            content.environment(\.appUserCharacters, directory)
+        } else {
+            content
+        }
+    }
+}
 
 extension View {
     /// 1:1 길건너 창 카드 크롬(테트리스·체스 창 카드와 같은 모양).

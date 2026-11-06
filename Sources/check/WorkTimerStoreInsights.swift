@@ -18,6 +18,17 @@ extension WorkTimerStore {
     /// 개인 기록 조회 창의 시작(KST) = min(회고 비교선인 **그 전주 월요일 00:00**, 잔디의 **12주 전 월요일 00:00**).
     /// 세 계산이 한 번의 조회를 나눠 쓴다 — 어느 한쪽 계산기에서만 얻으면 조회가 다른 소비자의 창보다 짧아져
     /// 그쪽 값이 조용히 0 으로 굳는다(예: 잔디의 앞 10주가 통째로 회색). 그래서 둘 다 물어 더 이른 쪽을 쓴다.
+    /// 주별 근무 리듬(2026-11-06)이 넘겨볼 수 있는 가장 이른 날 = 서비스 첫 주 월요일(2026-06-29 00:00 KST).
+    /// 세션 조회만 이 날까지 넓힌다(토큰 일별 조회는 잔디 창 그대로). 한 사람 완료 세션이 많아야 수백 건(11-06 실측 최대 572)이라
+    /// 응답 상한(5000, 최신부터)에 닿지 않는다 — 닿는 날이 오면 가장 오래된 주부터 빈다(최근 주 · 회고 · 잔디는 그대로).
+    static let rhythmHistoryStart = Date(timeIntervalSince1970: 1_782_658_800)
+
+    /// 보고 있는 주를 바꾼다(◀ = +1, ▶ = −1). 범위 밖은 끝에 붙인다.
+    func setRhythmWeekOffset(_ offset: Int) {
+        let clamped = min(max(0, offset), rhythmWeeks.maxOffset)
+        if rhythmWeekOffset != clamped { rhythmWeekOffset = clamped }
+    }
+
     static func insightsWindowStart(now: Date = Date()) -> Date {
         let fallback = TeamWeeklyGoal.koreanWeekStart(for: now)
         let retroStart = WorkInsightsWeekWindow.lastWeek(now: now)?.previousStart ?? fallback
@@ -82,7 +93,8 @@ extension WorkTimerStore {
                 try await service.fetchMySessions(
                     accessToken: activeSession.accessToken,
                     userID: activeSession.userID,
-                    since: since
+                    // 주별 근무 리듬이 첫 주까지 넘겨보므로 세션만 서비스 첫 주부터 받는다(토큰 일별은 아래에서 since 그대로).
+                    since: min(since, Self.rhythmHistoryStart)
                 )
             }
             guard generation == sessionGeneration else { return }
@@ -154,6 +166,8 @@ extension WorkTimerStore {
             if heatmap != computed.heatmap { heatmap = computed.heatmap }
             if retro != computed.retro { retro = computed.retro }
             if dailyGrid != computed.dailyGrid { dailyGrid = computed.dailyGrid }
+            if rhythmWeeks != computed.rhythmWeeks { rhythmWeeks = computed.rhythmWeeks }
+            if rhythmWeekOffset > rhythmWeeks.maxOffset { rhythmWeekOffset = rhythmWeeks.maxOffset }
             if tokenDailyGrid != tokenGrid { tokenDailyGrid = tokenGrid }
             if !insightsLoaded { insightsLoaded = true }
             if insightsFailed { insightsFailed = false }
@@ -188,6 +202,9 @@ extension WorkTimerStore {
         // 잔디도 계산 시점의 '오늘'에 고정된 값이다(마지막 열 = 그때의 이번 주). 남겨 두면 새 주의 첫 화면에
         // 지난주가 마지막 열인 채로 그려지고, 재계산이 실패하면 그 상태가 '오늘'인 척 굳는다.
         if dailyGrid != .empty { dailyGrid = .empty }
+        // 주별 리듬도 계산 시점의 '이번 주'가 마지막 원소다 — 새 주에 지난주를 '이번 주'로 그리지 않게 버린다.
+        if rhythmWeeks != .empty { rhythmWeeks = .empty }
+        if rhythmWeekOffset != 0 { rhythmWeekOffset = 0 }
         // 토큰 잔디도 같은 이유로 버린다(마지막 열 = 계산 시점의 이번 주). 서버 조회가 실패했을 때 직전 잔디를 물려주는 규칙이
         // 여기 걸려, 새 주에 지난주 기준 잔디를 '오늘'인 척 남기지 못한다.
         if tokenDailyGrid != .empty { tokenDailyGrid = .empty }

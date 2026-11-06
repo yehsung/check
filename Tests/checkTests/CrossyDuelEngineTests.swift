@@ -9,9 +9,12 @@ import Testing
 //   · lanes-golden.json  — 씨앗 셋의 줄 −8…124 모양·물체 비트열. 머리 `laneGeneratorVersion` 이 엔진 상수와 같아야 한다.
 //     **줄 생성(CrossyGame.swift `makeLane` 아래)·난이도를 바꾸는 커밋은 `CrossyGame.laneGeneratorVersion` 을 올리고,
 //     같은 출시에 서버 `crossy_duel_min_build()` 를 그 build 로 올리는 한 줄 파일을 짝으로 낸다**(옛 앱에 신청이 안 가게).
-//     버전을 올렸으면 픽스처를 다시 뜬다: `CROSSY_DUEL_RECORD_FIXTURES=lanes swift test --filter CrossyDuelEngine`.
+//     버전을 올렸으면 픽스처를 다시 뜨고(`CROSSY_DUEL_RECORD_FIXTURES=lanes swift test --filter CrossyDuelEngine` — 머리엔
+//     엔진 상수가 적힌다) **소스 표 `ceLaneDigestByVersion` 에 새 버전 줄을 더한다**. 옛 줄은 고치지 않는다 — 다시 뜨기만으로는
+//     초록이 안 되게(검토 RV-C-2: 버전을 안 올리고 다시 뜨면 초록이던 구멍).
 //   · solo-baseline.json — 혼자 하기(`.solo`) 판의 투영 해시열(봇 판 셋 + 대본 판). 1:1 을 덧붙여도 혼자 하기가 한 비트도
-//     안 바뀌었음을 결과로 잰다(SPEC §7.3, CC-9). 혼자 하기를 **일부러** 바꿀 때만 `=solo` 로 다시 뜬다.
+//     안 바뀌었음을 결과로 잰다(SPEC §7.3, CC-9). 출처는 소스 상수 `ceSoloBaselineDigest` 로 잰다(환경 변수가 아니라).
+//     혼자 하기를 **일부러** 바꿀 때만 `=solo` 로 다시 뜨고 그 상수를 고친다.
 // 창은 띄우지 않는다.
 
 private typealias CE = CrossyGame
@@ -311,6 +314,36 @@ private struct CEGoldenFile: Codable {
 private let ceGoldenSeeds: [UInt64] = [0, 2026, 2_147_483_647]
 private let ceGoldenThrough = 124
 
+// MARK: - 버전 고정 지문(소스 상수 — 픽스처를 다시 떠서는 못 바꾼다)
+
+/// 줄 생성 버전 → 금빛 줄 지문(`ceGoldenDigest` — 씨앗 셋 × 줄 −8…124 의 비트열). **한 번 적은 줄은 고치지 않는다.**
+/// 줄 생성 · 난이도를 바꾸면 `CrossyGame.laneGeneratorVersion` 을 올리고 **이 표에 새 줄을 더한다**(같은 출시에 서버
+/// `crossy_duel_min_build()` 를 올리는 한 줄 파일이 짝). 버전을 안 올리고 `CROSSY_DUEL_RECORD_FIXTURES` 로 픽스처만 다시 뜨면
+/// 엔진 · 픽스처 둘 다 이 표와 달라 빨갛다 — 녹화기가 버전 짝 규칙을 뚫지 못하게(검토 RV-C-2).
+private let ceLaneDigestByVersion: [Int: String] = [
+    1: "f823e1811c5a79d5",
+]
+
+/// 혼자 하기 기준선 지문(`ceSoloDigest` — 갈래 시작 커밋 3d5f1f19 의 엔진으로 뜬 판 아홉의 투영 해시열 전부).
+/// 출처는 환경 변수(`CROSSY_DUEL_FIXTURE_COMMIT`)가 아니라 이 상수로 잰다. 혼자 하기를 **일부러** 바꿀 때만 고친다.
+private let ceSoloBaselineDigest = "80a9ab4439ee304b"
+
+private func ceGoldenDigest(_ seeds: [CEGoldenSeed]) -> String {
+    ceHash(seeds.map { seed in
+        "\(seed.seed)|\(seed.roundSeed)\n" + seed.lanes.map { lane in
+            let movers = lane.movers.map { "\($0.xBits)/\($0.lengthBits)/\($0.variant)/\($0.isTruck)" }.joined(separator: ";")
+            return "\(lane.row):\(lane.kind):\(lane.props.joined(separator: ",")):\(lane.direction):\(lane.speedBits):"
+                + "\(movers):\(lane.trainCountdownBits):\(lane.trainSeed)"
+        }.joined(separator: "\n")
+    }.joined(separator: "\n#\n"))
+}
+
+private func ceSoloDigest(_ records: [CEScenarioRecord]) -> String {
+    ceHash(records.map { record in
+        "\(record.name)|" + record.samples.map { "\($0.step):\($0.hash)" }.joined(separator: ",") + "|\(record.final)"
+    }.joined(separator: "\n"))
+}
+
 private func ceGolden(seed: UInt64, rules: CE.Rules = .solo) -> CEGoldenSeed {
     let game = CE(seed: seed, rules: rules)
     let lanes = game.previewLanes(through: ceGoldenThrough).filter { $0.row >= -8 && $0.row <= ceGoldenThrough }
@@ -379,7 +412,7 @@ struct CrossyDuelEngineFixtureTests {
         try FileManager.default.createDirectory(at: ceFixtureDir, withIntermediateDirectories: true)
         if mode.contains("lanes") {
             let head = CEGoldenHead(
-                laneGeneratorVersion: 1,
+                laneGeneratorVersion: CE.laneGeneratorVersion,
                 source: ceFixtureSource(),
                 note: "CrossyGame(seed:).previewLanes(through: 124) 의 줄 −8…124. 실수는 IEEE 754 비트(16진)와 같은 값의 십진. "
                     + "trainSeed = 줄이 태어날 때 기차 난수 상태. 이식판(안드로이드·윈도우)은 비트 단위로 같아야 한다.",
@@ -471,7 +504,17 @@ extension CrossyDuelEngineFixtureTests {
         let file = try JSONDecoder().decode(CEGoldenFile.self, from: data)
         #expect(file.laneGeneratorVersion == CE.laneGeneratorVersion,
                 "줄 생성 버전(\(CE.laneGeneratorVersion))이 픽스처(\(file.laneGeneratorVersion))와 다르다 — 버전을 올렸으면 픽스처를 다시 뜨고, 같은 출시에 crossy_duel_min_build() 를 올려라")
-        #expect(CE.laneGeneratorVersion == 1)
+        // 버전 짝 규칙(RV-C-2): 지금 버전의 지문은 소스 표에 있고 · 표의 마지막 버전이며 · 픽스처와 엔진이 둘 다 그 지문이다.
+        // 다시 뜨기는 픽스처만 바꾸므로 버전을 안 올린 줄 생성 변경은 여기서 빨갛다.
+        let pinned = ceLaneDigestByVersion[CE.laneGeneratorVersion]
+        #expect(pinned != nil, "줄 생성 버전 \(CE.laneGeneratorVersion) 의 지문이 소스 표 ceLaneDigestByVersion 에 없다 — 새 버전이면 표에 한 줄 더하고 crossy_duel_min_build() 를 올려라")
+        #expect(CE.laneGeneratorVersion == ceLaneDigestByVersion.keys.max(), "엔진 버전이 지문 표의 마지막 버전이 아니다(되돌림?)")
+        #expect(ceGoldenDigest(file.seeds) == pinned,
+                "픽스처 지문 \(ceGoldenDigest(file.seeds)) ≠ 버전 \(CE.laneGeneratorVersion) 고정 지문 \(pinned ?? "없음") — 버전을 안 올리고 픽스처를 다시 떴다")
+        let engineDigest = ceGoldenDigest(ceGoldenSeeds.map { ceGolden(seed: $0) })
+        #expect(engineDigest == pinned,
+                "엔진 줄 지문 \(engineDigest) ≠ 버전 \(CE.laneGeneratorVersion) 고정 지문 \(pinned ?? "없음") — 줄 생성을 바꿨으면 laneGeneratorVersion 을 올려라")
+        #expect(ceGoldenDigest(ceGoldenSeeds.map { ceGolden(seed: $0 &+ 1) }) != engineDigest, "기준선: 다른 씨앗인데 지문이 같다 — 지문이 헛돈다")
         #expect(file.rows == [-8, ceGoldenThrough])
         #expect(file.seeds.map(\.seed) == ceGoldenSeeds)
         var compared = 0
@@ -497,7 +540,9 @@ extension CrossyDuelEngineFixtureTests {
     func soloBaselineUnchanged() throws {
         let data = try Data(contentsOf: ceFixtureDir.appendingPathComponent("solo-baseline.json"))
         let file = try JSONDecoder().decode(CESoloBaselineFile.self, from: data)
-        #expect(file.source.contains("3d5f1f19"), "기준선이 갈래 시작 커밋에서 뜬 것이 아니다(\(file.source))")
+        // 출처는 머리 글자(환경 변수로 적힌다)가 아니라 소스 상수 지문으로 잰다(RV-C-2) — 지금 엔진으로 다시 뜬 기준선은 여기서 빨갛다.
+        #expect(ceSoloDigest(file.scenarios) == ceSoloBaselineDigest,
+                "기준선 지문 \(ceSoloDigest(file.scenarios)) ≠ 갈래 시작 커밋(3d5f1f19) 고정 지문 \(ceSoloBaselineDigest) — 기준선을 다시 떴다(\(file.source))")
         let scenarios = ceScenarios()
         #expect(file.scenarios.map(\.name) == scenarios.map(\.name))
         var samples = 0
@@ -542,7 +587,7 @@ struct CrossyDuelEngineRulesTests {
         #expect(CE.Rules.solo == CE.Rules(goalScore: nil, respawnDelay: nil, cameraCreeps: true, leftBehindKills: true, allowsRestart: true))
         #expect(CE.Rules.duel == CE.Rules(goalScore: 100, respawnDelay: 3.0, cameraCreeps: false, leftBehindKills: false, allowsRestart: false))
         #expect(CE.respawnDelaySeconds == 3.0 && CE.respawnRoadSafeSeconds == 1.5 && CE.respawnShieldMaxSeconds == 2.5)
-        #expect(CE.laneGeneratorVersion == 1)
+        #expect(CE.laneGeneratorVersion == ceLaneDigestByVersion.keys.max(), "줄 생성 버전이 소스 지문 표의 마지막 버전이 아니다")
         #expect(CE(seed: 7).rules == .solo)
         #expect(CE(seed: 7) == CE(seed: 7, rules: .solo), "기본 init 이 .solo 와 다른 판을 만든다")
         #expect(CE(seed: 7, rules: .duel).rules == .duel)

@@ -978,8 +978,9 @@ extension CrossyGame {
 
     /// 죽은 뒤 다시 서기까지(1:1, DEC:13 '3초 뒤').
     package static let respawnDelaySeconds: TimeInterval = 3.0
-    /// 찻길 부활 칸이 안 치여야 하는 시간(미리 돌려 본다).
-    package static let respawnRoadSafeSeconds: TimeInterval = 1.0
+    /// 찻길 부활 칸이 안 치여야 하는 시간(미리 돌려 본다) — 첫 단계. 그런 칸이 없으면 둘째 단계 1초 칸, 그것도 없으면
+    /// 죽은 칸 + 보호 1초(총괄 결정 2026-11-06: 1초만 보면 1.5초 생존이 87.5% 로 그대로 세운 판 84.7% 와 거의 같았다).
+    package static let respawnRoadSafeSeconds: TimeInterval = 1.5
     /// 부활 보호의 최대 길이(기찻길 — 기차가 지나갈 때까지).
     package static let respawnShieldMaxSeconds: TimeInterval = 2.5
     /// 줄 생성 버전(SPEC §2 v1.1). **줄 생성 · 난이도를 바꾸면 올리고, 같은 출시에 서버 `crossy_duel_min_build()` 를
@@ -1020,6 +1021,9 @@ extension CrossyGame {
 
     // MARK: 1:1 — 부활(안 R1, SPEC §7.2)
 
+    /// 찻길 둘째 단계 — 1.5초 안전한 칸이 없을 때 1초 안전한 칸. 그것도 없으면 죽은 칸 + 이 길이의 보호.
+    /// 강도 이 시간 안에 실려 나가는 자리는 '없음'으로 친다.
+    private static let respawnRoadFallbackSafeSeconds: TimeInterval = 1.0
     /// 부활 미리 보기 걸음(초, SPEC §7.2 '1/60초 걸음') — 판 걸음 상한(1/30초)보다 잘다. 차 · 기차가 한 칸을 덮는 시간
     /// (≥ 0.6초)보다 훨씬 짧아 걸음 사이로 빠지는 겹침이 없다.
     private static let respawnProbeStep: TimeInterval = 1.0 / 60
@@ -1052,8 +1056,8 @@ extension CrossyGame {
     }
 
     /// 부활 자리를 정해 세운다. 강에 쓸 통나무가 없고 `canWait` 면 0.25초를 더 기다리기로 하고(`.over(hold: 0.25)`) false.
-    ///   · 찻길 — 막힘 없는 칸을 `referenceX` 에서 가까운 순(같으면 왼쪽 먼저)으로, 그 줄만 사본으로 1초 미리 돌려 안 치이는
-    ///     첫 칸. 없으면 그 칸 + 보호 1초.
+    ///   · 찻길 — 막힘 없는 칸을 `referenceX` 에서 가까운 순(같으면 왼쪽 먼저)으로, 그 줄만 사본으로 1.5초 미리 돌려 안 치이는
+    ///     첫 칸. 없으면 1초 안 안 치이는 첫 칸. 그것도 없으면 그 칸 + 보호 1초.
     ///   · 기찻길 — 그 칸. 1.5초 안에 기차가 겹치면 마지막 겹침 + 0.1초까지 보호(최대 2.5초).
     ///   · 강 — 놀이 칸 안 통나무 위 중 실려 나가기까지 가장 긴 자리에 `riding`. 물 위에는 안 세운다.
     ///   · 풀밭 — 그 칸(막혔으면 가장 가까운 빈칸).
@@ -1069,11 +1073,14 @@ extension CrossyGame {
         case .road:
             let hits = carHitTimes(row: row, horizon: Self.respawnRoadSafeSeconds)
             let order = Self.columnsByDistance(from: referenceX).filter { !lane.isBlocked(column: $0) }
+            let fallback = Self.respawnRoadFallbackSafeSeconds
             if let safe = order.first(where: { hits[$0] == nil }) {
                 stand(row: row, x: Double(safe), riding: false)
+            } else if let fair = order.first(where: { hits[$0].map { $0 > fallback + 1e-9 } ?? true }) {
+                stand(row: row, x: Double(fair), riding: false)
             } else {
                 stand(row: row, x: Double(Self.clampedColumn(referenceX)), riding: false)
-                respawnShield = RespawnShield(row: row, until: elapsed + Self.respawnRoadSafeSeconds)
+                respawnShield = RespawnShield(row: row, until: elapsed + fallback)
             }
         case .rail:
             let column = Self.clampedColumn(referenceX)
@@ -1168,7 +1175,7 @@ extension CrossyGame {
 
     /// 강 줄에서 태울 자리 — 놀이 칸 안 통나무 위 중 실려 나가기까지 가장 긴 자리(흐름 반대쪽 끝에서 반 칸 안 — 몸이
     /// 통나무 밖 · 놀이 칸 밖으로 걸치지 않게). 놀이 칸 안에 한 칸 이상 들어온 통나무만 치고, 그 자리도
-    /// `respawnRoadSafeSeconds` 안에 실려 나가면 '없음'으로 친다(곧바로 또 죽지 않게 — 0.25초 더 기다린다).
+    /// `respawnRoadFallbackSafeSeconds`(1초) 안에 실려 나가면 '없음'으로 친다(곧바로 또 죽지 않게 — 0.25초 더 기다린다).
     private static func bestLogSpot(in lane: Lane) -> Double? {
         guard lane.kind == .river else { return nil }
         var best: (x: Double, exit: TimeInterval)?
@@ -1181,7 +1188,7 @@ extension CrossyGame {
             let exit = lane.speed > 0 ? room / lane.speed : .infinity
             if best.map({ exit > $0.exit }) ?? true { best = (x, exit) }
         }
-        guard let best, best.exit >= respawnRoadSafeSeconds else { return nil }
+        guard let best, best.exit >= respawnRoadFallbackSafeSeconds else { return nil }
         return best.x
     }
 

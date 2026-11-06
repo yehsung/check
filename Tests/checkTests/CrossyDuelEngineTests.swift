@@ -541,7 +541,7 @@ struct CrossyDuelEngineRulesTests {
     func rulesAndConstants() {
         #expect(CE.Rules.solo == CE.Rules(goalScore: nil, respawnDelay: nil, cameraCreeps: true, leftBehindKills: true, allowsRestart: true))
         #expect(CE.Rules.duel == CE.Rules(goalScore: 100, respawnDelay: 3.0, cameraCreeps: false, leftBehindKills: false, allowsRestart: false))
-        #expect(CE.respawnDelaySeconds == 3.0 && CE.respawnRoadSafeSeconds == 1.0 && CE.respawnShieldMaxSeconds == 2.5)
+        #expect(CE.respawnDelaySeconds == 3.0 && CE.respawnRoadSafeSeconds == 1.5 && CE.respawnShieldMaxSeconds == 2.5)
         #expect(CE.laneGeneratorVersion == 1)
         #expect(CE(seed: 7).rules == .solo)
         #expect(CE(seed: 7) == CE(seed: 7, rules: .solo), "기본 init 이 .solo 와 다른 판을 만든다")
@@ -744,11 +744,11 @@ struct CrossyDuelEngineRespawnTests {
         #expect(solo.phase == .result, "기준선: 혼자 하기가 결과로 안 갔다")
     }
 
-    @Test("찻길: 1초 안전한 칸이 없으면 죽은 칸 + 보호 1초 — 보호 동안 차가 지나가도 살고, 끝나면 치인다")
+    @Test("찻길: 1.5초 · 1초 안전한 칸이 다 없으면 죽은 칸 + 보호 1초 — 보호 동안 차가 지나가도 살고, 끝나면 치인다")
     func roadWithoutSafeColumnShieldsOneSecond() throws {
         var game = ceShieldedOnFastRoad()
         let shield = try #require(game.respawnShield, "빠른 찻길인데 보호가 없다")
-        #expect(shield.row == 1 && abs(shield.until - game.elapsed - CE.respawnRoadSafeSeconds) < 1e-9)
+        #expect(shield.row == 1 && abs(shield.until - game.elapsed - 1.0) < 1e-9)
         #expect(game.player.row == 1 && game.player.x == 4, "칸을 고를 수 없으면 죽은 칸이어야 한다(\(game.player.x))")
         var passedThrough = 0
         ceRunFor(&game, seconds: 0.99) { g in
@@ -762,6 +762,39 @@ struct CrossyDuelEngineRespawnTests {
         ceRunFor(&game, seconds: 0.7) { $0.death != nil }
         #expect(game.respawnShield == nil)
         #expect(game.death?.cause == .car && game.deaths == 2, "보호가 끝났는데 안 치였다")
+    }
+
+    @Test("찻길 칸 고르기 단계: 1.5초 안전한 칸이 더 멀어도 먼저(가까운 1초 칸보다) · 1.5초 칸이 없으면 1초 칸(보호 없음)")
+    func roadPrefersOneAndAHalfSecondColumn() throws {
+        /// 빠른 찻길에서 죽고, 다시 서기 0.1초 전에 1줄을 `lane` 으로 바꿔 깐다.
+        func respawn(into lane: CE.Lane) -> CE {
+            var game = ceDuelBoard([ceFastRoad(1)])
+            game.placePlayerForTesting(row: 1, x: 4)
+            ceRunFor(&game, seconds: 2) { $0.death != nil }
+            ceRunFor(&game, seconds: 2.9)
+            game.replaceLane(lane)
+            ceRunFor(&game, seconds: 0.2) { $0.phase == .running }
+            return game
+        }
+        // 첫 단계: 다시 설 때 차 하나가 [−0.04, 1.36](초당 2칸, 오른쪽) — 4칸은 1.2초에 치임(1초만 안전) · 3칸 0.7초 · 5칸 1.7초.
+        // 옛 규칙(1초)이면 죽은 칸 4, 새 규칙이면 1.5초 안전한 가장 가까운 칸 5.
+        let first = respawn(into: ceRoad(1, direction: 1, speed: 2, cars: [-0.24]))
+        #expect(first.phase == .running && first.player.row == 1)
+        #expect(first.player.x == 5, "1.5초 안전한 칸(5)이 아니다(\(first.player.x))")
+        #expect(first.respawnShield == nil)
+        #expect(ceDiesWithin(first, seconds: 1.5) == nil, "고른 칸이 1.5초 안에 치였다")
+        var oldRule = first
+        oldRule.placePlayerForTesting(row: 1, x: 4)
+        let oldHit = try #require(ceDiesWithin(oldRule, seconds: 1.5), "기준선: 4칸이 1.5초 안에 안 치인다 — 대본이 헛돈다")
+        #expect(oldHit > 1.0, "기준선: 4칸은 1초 안전 칸이어야 한다(\(oldHit)초에 치임)")
+
+        // 둘째 단계: 초당 7칸 차 둘(10칸 간격) — 모든 칸이 1.43초 안에 치이고, 3칸만 1초(1.11초) 안전.
+        let second = respawn(into: ceRoad(1, direction: 1, speed: 7, cars: [2.9, -7.1]))
+        #expect(second.phase == .running && second.player.row == 1)
+        #expect(second.player.x == 3, "1초 안전한 칸(3)이 아니다(\(second.player.x))")
+        #expect(second.respawnShield == nil, "1초 칸이 있는데 보호로 갔다")
+        #expect(ceDiesWithin(second, seconds: 1.0) == nil, "둘째 단계 칸이 1초 안에 치였다")
+        #expect(ceDiesWithin(second, seconds: 1.5) != nil, "1.5초 안전한 칸이 있었는데 둘째 단계로 왔다 — 대본이 헛돈다")
     }
 
     @Test("보호는 그 줄 한정: 옆 뛰기(같은 줄)는 유지 · 다른 줄 착지에서 끝 · 돌아와도 다시 무적이 아니다")
@@ -946,7 +979,7 @@ private func ceRecklessDuel(seed: UInt64, seconds: Double,
 
 @Suite("길건너 1:1 엔진 — 실제 줄 실측(R1 · 시간 하한 · 결정성)")
 struct CrossyDuelEngineMeasureTests {
-    @Test("R1 실측: 다시 선 직후 서 있어도 찻길 1초 · 기찻길 1.5초 · 강 1초 안 죽음 0 — 기준선: 죽은 칸 그대로면 찻길이 치인다")
+    @Test("R1 실측: 다시 선 직후 서 있어도 찻길 1초 안 죽음 0 · 1.5초 안 죽음 2% 이하 · 기찻길 1.5초 · 강 1초 0 — 기준선: 죽은 칸 그대로면 찻길이 치인다")
     func respawnSpotsSurviveOnRealLanes() {
         var samples: [CERespawnSample] = []
         var floorViolations: [String] = []
@@ -1003,6 +1036,8 @@ struct CrossyDuelEngineMeasureTests {
         let rivers = samples.filter { $0.kind == .river }
         #expect(roads.count >= 100 && rails.count >= 20 && rivers.count >= 100, "표본이 적다(찻길 \(roads.count) · 기찻길 \(rails.count) · 강 \(rivers.count))")
         #expect(roads.filter(\.diesIn1).isEmpty, "찻길에 다시 서고 1초 안에 치였다(\(roads.filter(\.diesIn1).count)번)")
+        let roadDiesIn15 = roads.filter { $0.diesIn15 }.count
+        #expect(roadDiesIn15 * 50 <= roads.count, "찻길 1.5초 안전 칸을 먼저 고르는데 1.5초 안에 \(roadDiesIn15)/\(roads.count)번 치였다")
         #expect(rails.filter(\.diesIn15).isEmpty, "기찻길에 다시 서고 1.5초 안에 치였다(\(rails.filter(\.diesIn15).count)번)")
         let dryRivers = rivers.filter { !$0.riding }.count
         #expect(dryRivers == 0, "강에 통나무 없이 섰다(\(dryRivers)번)")

@@ -331,6 +331,28 @@ func theOpenStatusChipIsActuallyReadable() {
     #expect(fbContrast(secondaryInk, card) >= 4.5, "채우지 않은 상태 칩 글자가 안 읽힌다")
 }
 
+@MainActor
+@Test
+func inProgressChipIsTellApartFromDoneAndReadable() {
+    // 2026-11-06 제보 "제보 창에서 완료랑 진행 태그 구분이 안되여"(대표 승인 #d_V0mJ363LONEW): 진행 · 완료 · 보류가 모두
+    // 같은 회색 테두리였다. 폰(MeText.feedbackStatusTone)과 같은 세 갈래 — 미해결 앰버 · 진행 파랑 · 완료/보류 회색.
+    #expect(FeedbackStatusChip.style(for: .open) == .filledPending)
+    #expect(FeedbackStatusChip.style(for: .inProgress) == .tintedAccent)
+    #expect(FeedbackStatusChip.style(for: .done) == .outline)
+    #expect(FeedbackStatusChip.style(for: .held) == .outline)
+    #expect(FeedbackStatusChip.style(for: .other("archived")) == .outline)
+    #expect(FeedbackStatusChip.style(for: .inProgress) != FeedbackStatusChip.style(for: .done), "진행과 완료가 다시 같은 칩이 됐다")
+    // 폰(MeText.feedbackStatusTone: open → pending · inProgress → accent · 나머지 → neutral)과 같은 갈림이다 — 이 시험 대상은
+    // 폰 모듈을 못 불러서 값으로 적는다. 폰 쪽을 바꾸면 여기도 같이 바꿔라.
+    // 진행 칩 글자(파랑)가 옅은 파랑 바탕 위에서 읽혀야 한다 — 배경 두 극단에서 잰다.
+    let card = fbComposite(.black, alpha: 0.20, over: NSColor(CheckTheme.panel))
+    for background in [NSColor.black, card, NSColor(CheckTheme.panelElevated)] {
+        let fill = fbComposite(NSColor(CheckTheme.accent), alpha: FeedbackStatusChip.accentFillOpacity, over: background)
+        let ink = NSColor(FeedbackStatusChip.ink(for: .tintedAccent))
+        #expect(fbContrast(ink, fill) >= 4.5, "진행 칩 글자가 안 읽힌다(\(String(format: "%.2f", fbContrast(ink, fill))):1)")
+    }
+}
+
 // MARK: - 순수: 문구가 내부 코드를 흘리지 않는다
 
 @Test

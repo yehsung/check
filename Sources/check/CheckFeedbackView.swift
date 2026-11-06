@@ -1226,8 +1226,34 @@ struct FeedbackKindBadge: View {
 }
 
 /// 상태 칩. 미해결만 채워 그린다 — 눈이 가야 하는 것은 아직 손 안 댄 제보 하나다.
+/// **진행은 파랑 옅은 칩**(2026-11-06 제보 "제보 창에서 완료랑 진행 태그 구분이 안되여" · 대표 승인 #d_V0mJ363LONEW):
+/// 예전엔 진행 · 완료 · 보류가 모두 같은 회색 테두리라 글자를 읽기 전엔 갈리지 않았다. 폰(`MeText.feedbackStatusTone` —
+/// 미해결 앰버 · 진행 파랑 · 완료/보류 회색)과 같은 세 갈래로 맞춘다.
 struct FeedbackStatusChip: View {
     let status: FeedbackStatus
+
+    /// 칩 모양 세 갈래. 폰 `FeedbackStatusTone`(pending · accent · neutral)과 같은 뜻이다.
+    enum Style: Equatable {
+        /// 미해결 — 앰버로 채우고 어두운 글자(`openInk`).
+        case filledPending
+        /// 진행 — 파랑을 옅게 깔고 파랑 테 · 밝은 파랑 글자(`inProgressInk`). 파랑으로 채우고 흰 글자를 쓰면 대비가 약 3:1 이라
+        /// 10pt 글자엔 모자라고, accent 그대로의 글자는 옅은 파랑 바탕 위에서 3.3~4.2:1 이었다(시험이 4.5:1 을 잰다).
+        case tintedAccent
+        /// 완료 · 보류 · 모르는 값 — 회색 테두리.
+        case outline
+    }
+
+    static func style(for status: FeedbackStatus) -> Style {
+        switch status {
+        case .open: return .filledPending
+        case .inProgress: return .tintedAccent
+        case .done, .held, .other: return .outline
+        }
+    }
+
+    /// 진행 칩 바탕의 파랑 불투명도 · 테 불투명도. 시험이 이 값으로 글자 대비를 다시 잰다.
+    static let accentFillOpacity = 0.16
+    static let accentStrokeOpacity = 0.60
 
     /// 채워진 미해결 칩의 글자색. **여기만 흰색이 아니다.**
     ///
@@ -1242,16 +1268,32 @@ struct FeedbackStatusChip: View {
     /// 여기를 흰색으로 되돌리면 목록에서 **가장 중요한 칩 하나만** 안 읽히는 상태로 돌아간다.
     static let openInk = Color(red: 0.10, green: 0.08, blue: 0.03)
 
+    /// 진행 칩 글자색 — accent 를 흰빛 쪽으로 반쯤 민 밝은 파랑.
+    static let inProgressInk = Color(red: 0.66, green: 0.83, blue: 1.0)
+
+    static func ink(for style: Style) -> Color {
+        switch style {
+        case .filledPending: return openInk
+        case .tintedAccent: return inProgressInk
+        case .outline: return CheckTheme.secondaryText
+        }
+    }
+
     var body: some View {
         Text(status.label)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(status.isOpen ? Self.openInk : CheckTheme.secondaryText)
+            .foregroundStyle(Self.ink(for: Self.style(for: status)))
             .padding(.horizontal, 7)
             .padding(.vertical, 2)
             .background {
-                if status.isOpen {
+                switch Self.style(for: status) {
+                case .filledPending:
                     Capsule().fill(CheckTheme.pending.opacity(0.85))
-                } else {
+                case .tintedAccent:
+                    Capsule()
+                        .fill(CheckTheme.accent.opacity(Self.accentFillOpacity))
+                        .overlay(Capsule().stroke(CheckTheme.accent.opacity(Self.accentStrokeOpacity), lineWidth: 1))
+                case .outline:
                     Capsule().stroke(CheckTheme.border, lineWidth: 1)
                 }
             }

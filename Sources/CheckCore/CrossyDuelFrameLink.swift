@@ -9,8 +9,10 @@ import Foundation
 // 불변식(TB §3): 프레임은 **표시 전용**이다 — 승패·루비·판정·재개 어느 것도 프레임 값을 근거로 삼지 않는다.
 // 판정이 모자라면 언제나 **대체 길 쪽으로** 넘어진다.
 //
-// ★ C1 뼈대: 본문 해석(`CrossyDuelFrame.decode`/`payload`)과 판정 어휘는 있고, 장부 판정은 전부 "확인 안 됨"(대체 길)을 낸다
-//   — 소켓을 열지 않고(`socketCommand` = `.none`) 프레임을 받지 않는다. 몸통은 C 의 프레임 걸음이 채운다.
+// 본은 `TetrisFrameLink` 다(소켓 명령 · 재시도 · 멈춤 10초 · 받기 순서 · 3장 히스테리시스 — 같은 규칙). 다른 자리:
+//  · 관전 조건 없음 · 공격 힌트 없음(길건너엔 ring 으로 오는 공격이 없다).
+//  · 프레임 보내기는 "점수·죽음이 바뀌면 직전 프레임 뒤 0.5초 틈, 안 바뀌면 1초"(B3) — 0.5초 틈이 곧 초당 2장 상한이다.
+//  · 표시 병합은 점수 하나: 끝나지 않은 판에서 `max(프레임 sc, DB opponent.score)`(B3 — DB 응답이 표시를 되감지 않는다).
 
 // MARK: - 프레임 본문
 
@@ -228,6 +230,13 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
     package private(set) var finished: Bool
     package private(set) var socket: CrossyDuelFrameSocketPhase
     package private(set) var retriesUsed: Int
+    /// 만료 토큰 재시도를 이미 썼다(판당 1회) · 다음 연결은 토큰을 새로 받은 뒤 연다.
+    package private(set) var expiredRetryUsed: Bool
+    package private(set) var needsFreshToken: Bool
+    /// 지금 연결 시도를 시작한 시각(멈춤 조건의 기준 하나).
+    package private(set) var attemptStartedAt: TimeInterval?
+    /// 조건 ③④ 를 함께 만족한 마지막 프레임을 받은 시각(멈춤 조건의 증거).
+    package private(set) var lastEvidenceAt: TimeInterval?
     /// 마지막으로 받은 상대 프레임.
     package private(set) var lastFrame: CrossyDuelFrame?
     /// 상대 프레임을 받은 단조 시각(`opponentQuiet` 재료 — §8.4).
@@ -251,6 +260,10 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
         self.finished = false
         self.socket = .idle
         self.retriesUsed = 0
+        self.expiredRetryUsed = false
+        self.needsFreshToken = false
+        self.attemptStartedAt = nil
+        self.lastEvidenceAt = nil
         self.lastFrame = nil
         self.opponentHeardAt = nil
         self.steadyStreak = 0
@@ -262,56 +275,162 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
 
     // MARK: 입력
 
-    /// 서버 state 의 `frames` · `report_ms` · `checkpoint_ms`. C1: 값만 적는다(판정은 C 의 프레임 걸음).
+    /// 재시도 지연 — full jitter, 천장 1·2·4초, 바닥 0.25초(테트리스 · 초인종 링과 같은 모양 — `retryDelays` 가 그 천장이다).
+    package static let retryPolicy = BackoffPolicy(base: 1.0, factor: 2.0, cap: 4.0, floor: 0.25)
+
+    /// 서버 state 의 `frames` · `report_ms` · `checkpoint_ms` 를 응답마다 넣는다. 꺼지면(null · on 거짓 · 토픽 이상 — **1차 서버처럼 키가
+    /// 없어도**) 조건 ① 이 곧바로 거짓이고 다음 `socketCommand` 가 닫는다. `checkpoint_ms` 는 [2000, 5000] 으로 자르고 없으면 3000.
     package mutating func noteServerFrames(_ frames: CrossyDuelFramesRow?, reportMs: Int? = nil, checkpointMs: Int? = nil) {
-        topic = frames?.activeTopic
+        let next = frames?.activeTopic
+        if next == nil { steadyStreak = 0 }
+        topic = next
         if let reportMs { self.reportMs = reportMs }
-        if let checkpointMs {
-            self.checkpointMs = min(max(checkpointMs, Self.checkpointRangeMs.lowerBound), Self.checkpointRangeMs.upperBound)
+        let checkpoint = checkpointMs ?? Self.defaultCheckpointMs
+        self.checkpointMs = min(max(checkpoint, Self.checkpointRangeMs.lowerBound), Self.checkpointRangeMs.upperBound)
+    }
+
+    /// 보고 실패 streak 가 바뀔 때마다 넣는다. 0 이 아니면 곧바로 대체 길이고, 0 으로 돌아와도 프레임 3장을 다시 모아야 확인이다.
+    package mutating func noteReportFailureStreak(_ streak: Int) {
+        reportFailureStreak = max(0, streak)
+        if reportFailureStreak > 0 { steadyStreak = 0 }
+    }
+
+    /// 판이 끝났다 — 소켓을 닫고 다시 열지 않는다(끝난 판 가지에서 **이 자리에서** 닫아라 — 닫기 누락 = 연결 누수).
+    package mutating func finish() -> CrossyDuelFrameSocketCommand {
+        let wasOpen = isOpen
+        finished = true
+        steadyStreak = 0
+        socket = .stopped(.finished)
+        return wasOpen ? .disconnect : .none
+    }
+
+    /// 판 루프가 걸음마다 묻는다: 지금 소켓을 열까 · 닫을까.
+    /// - Parameter matchStartedAt: 판 시작의 로컬 단조 시각(`duel.startAt`). nil(카운트다운 전)이면 멈춤 시계가 돌지 않는다.
+    package mutating func socketCommand(at now: TimeInterval, matchStartedAt: TimeInterval?,
+                                       jitter: (Double) -> Double) -> CrossyDuelFrameSocketCommand {
+        if finished { return finish() }
+        guard let topic else {
+            // 서버가 껐다(되돌리기 1단계 스위치 · 1차 서버). 재시도 예산은 그대로 둔다 — 다시 켜지면 새로 연다.
+            let wasOpen = isOpen
+            switch socket {
+            case .connecting, .joined, .retrying: socket = .idle
+            case .idle, .stopped: break
+            }
+            steadyStreak = 0
+            return wasOpen ? .disconnect : .none
+        }
+        switch socket {
+        case .idle:
+            return startAttempt(topic: topic, at: now)
+        case .retrying(let at):
+            guard now >= at else { return .none }
+            return startAttempt(topic: topic, at: now)
+        case .connecting, .joined:
+            guard evidenceTimedOut(at: now, matchStartedAt: matchStartedAt) else { return .none }
+            close(.noEvidence, at: now, jitter: jitter)
+            return .disconnect
+        case .stopped:
+            return .none
         }
     }
 
-    package mutating func noteReportFailureStreak(_ streak: Int) {
-        reportFailureStreak = max(0, streak)
-    }
-
-    /// 판이 끝났다 — 소켓을 닫고 다시 열지 않는다.
-    package mutating func finish() -> CrossyDuelFrameSocketCommand {
-        finished = true
-        socket = .stopped(.finished)
+    /// 소켓 사건. 닫힘이면 사유별로 재시도를 정하고 `.disconnect` 를 돌려준다(이미 처리한 닫힘은 두 번 세지 않는다).
+    package mutating func apply(_ event: RealtimeTransportEvent, at now: TimeInterval,
+                                jitter: (Double) -> Double) -> CrossyDuelFrameSocketCommand {
+        if event == .joined {
+            if socket == .connecting { socket = .joined }
+            return .none
+        }
+        guard let cause = CrossyDuelFrameCloseCause.classify(event), isOpen else { return .none }
+        close(cause, at: now, jitter: jitter)
         return .disconnect
     }
 
-    /// 판 루프가 묻는 소켓 명령(열기 · 닫기 · 재시도). C1: 언제나 `.none`(소켓을 열지 않는다 — 대체 길).
-    package mutating func socketCommand(at now: TimeInterval, matchStartedAt: TimeInterval?,
-                                       jitter: (Double) -> Double) -> CrossyDuelFrameSocketCommand {
-        _ = (now, matchStartedAt, jitter)
-        return .none
+    private var isOpen: Bool { socket == .connecting || socket == .joined }
+
+    private mutating func startAttempt(topic: String, at now: TimeInterval) -> CrossyDuelFrameSocketCommand {
+        socket = .connecting
+        attemptStartedAt = now
+        steadyStreak = 0
+        let refresh = needsFreshToken
+        needsFreshToken = false
+        return .connect(topic: topic, refreshToken: refresh)
     }
 
-    /// 소켓 사건. C1: 아무것도 바꾸지 않는다.
-    package mutating func apply(_ event: RealtimeTransportEvent, at now: TimeInterval,
-                                jitter: (Double) -> Double) -> CrossyDuelFrameSocketCommand {
-        _ = (event, now, jitter)
-        return .none
+    /// 멈춤 조건(B4): 기준 = max(판 시작, 이 연결 시도 시작, 마지막 증거). 기준에서 10초 동안 증거(③④)가 없으면 닫는다.
+    private func evidenceTimedOut(at now: TimeInterval, matchStartedAt: TimeInterval?) -> Bool {
+        guard let start = matchStartedAt, start.isFinite else { return false }
+        var reference = start
+        if let attempt = attemptStartedAt { reference = max(reference, attempt) }
+        if let evidence = lastEvidenceAt { reference = max(reference, evidence) }
+        return now - reference >= Self.evidenceTimeoutSeconds
     }
 
-    /// 상대 프레임 한 장. C1: 모든 프레임을 버린다(표시 전용이라 안전 — 표시는 DB 값 그대로).
+    private mutating func close(_ cause: CrossyDuelFrameCloseCause, at now: TimeInterval, jitter: (Double) -> Double) {
+        steadyStreak = 0
+        switch cause {
+        case .unauthorized:
+            socket = .stopped(.unauthorized)
+            return
+        case .rateLimited:
+            socket = .stopped(.rateLimited)
+            return
+        case .expiredToken:
+            guard !expiredRetryUsed else {
+                socket = .stopped(.exhausted)
+                return
+            }
+            expiredRetryUsed = true
+            needsFreshToken = true
+        case .noEvidence, .lost:
+            break
+        }
+        guard retriesUsed < Self.maxRetries else {
+            socket = .stopped(.exhausted)
+            return
+        }
+        retriesUsed += 1
+        socket = .retrying(at: now + Self.retryPolicy.delay(attempt: retriesUsed, jitter: jitter))
+    }
+
+    /// 상대 프레임 한 장. nil = 받아들였다(표시 · 증거 · 히스테리시스가 바뀐다). 버린 프레임은 아무것도 바꾸지 않는다.
+    /// 순서(B2): `f` 가 마지막보다 크거나 **`s` 가 더 크면** 받는다(재개한 프로세스의 `f` 는 벽시계에서 시작해 옛 장보다 크다).
     @discardableResult
     package mutating func receive(_ frame: CrossyDuelFrame, at now: TimeInterval) -> CrossyDuelFrameRejection? {
-        _ = (frame, now)
-        return finished ? .matchFinished : .stale
+        guard !finished else { return .matchFinished }
+        guard frame.sender.lowercased() == opponent else { return .notOpponent }
+        guard (0...CrossyDuelFrame.maxScore).contains(frame.score), frame.deaths >= 0 else { return .outOfRange }
+        if let last = lastFrame, !(frame.frame > last.frame || frame.seq > last.seq) { return .stale }
+
+        let continuous = opponentHeardAt.map { now - $0 <= Self.heardWithinSeconds } ?? false
+        lastFrame = frame
+        opponentHeardAt = now
+
+        let hearsMe = (0...Self.heardWithinMs).contains(frame.heardAgoMs)
+        if hearsMe { lastEvidenceAt = now }
+        if hearsMe, topic != nil, socket == .joined, reportFailureStreak == 0 {
+            // 앞 프레임과 2.5초 넘게 벌어졌으면 그 사이 조건 ③ 이 거짓이었다 — 1장부터 다시 센다.
+            steadyStreak = continuous ? steadyStreak + 1 : 1
+        } else {
+            steadyStreak = 0
+        }
+        return nil
     }
 
     // MARK: 판정
 
-    /// 지금 조건(B4). C1: 소켓을 안 여니 언제나 확인 안 됨.
+    /// 지금 조건(B4 ①~⑤ + 3장). 순수 판정 — 상태를 바꾸지 않는다.
     package func conditions(at now: TimeInterval) -> CrossyDuelFrameConditions {
-        _ = now
-        return CrossyDuelFrameConditions(serverOn: topic != nil, reportsHealthy: reportFailureStreak == 0)
+        CrossyDuelFrameConditions(
+            serverOn: topic != nil && !finished,
+            joined: socket == .joined,
+            heardRecently: opponentHeardAt.map { now - $0 <= Self.heardWithinSeconds } ?? false,
+            opponentHearsMe: lastFrame.map { (0...Self.heardWithinMs).contains($0.heardAgoMs) } ?? false,
+            reportsHealthy: reportFailureStreak == 0,
+            steady: steadyStreak >= Self.steadyFrameCount)
     }
 
-    /// 보고 간격(초) — 확인됨 = `checkpointMs`, 아니면 `reportMs`(B4).
+    /// 보고 간격(초) — 확인됨 = `checkpointMs`(체크포인트), 아니면 `reportMs`(대체 길의 변화 보고 간격, B4).
     package func reportInterval(at now: TimeInterval) -> TimeInterval {
         TimeInterval(conditions(at: now).allHold ? checkpointMs : reportMs) / 1000
     }
@@ -321,22 +440,39 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
         conditions(at: now).allHold
     }
 
-    /// 지금 프레임을 보낼 때인가(바뀌면 직전 프레임 뒤 0.5초 틈, 안 바뀌면 1초 — B3). C1: 언제나 false.
+    /// 지금 프레임을 보낼 때인가(B3) — 판이 흐르고(`live`) 채널이 join 됐을 때만. 점수·죽음이 바뀌었으면 직전 프레임 뒤 0.5초 틈,
+    /// 안 바뀌었으면 1초.
     package func frameDue(at now: TimeInterval, live: Bool, changed: Bool) -> Bool {
-        _ = (now, live, changed)
-        return false
+        guard live, !finished, topic != nil, socket == .joined else { return false }
+        guard let last = lastSentAt else { return true }
+        let since = now - last
+        if changed, since >= Self.minFrameGapSeconds { return true }
+        return since >= Self.frameIntervalSeconds
+    }
+
+    /// 이 점수·죽음이 직전 프레임과 다른가(처음이면 참).
+    package func changedSinceLastFrame(score: Int, deaths: Int) -> Bool {
+        lastSentScore != score || lastSentDeaths != deaths
     }
 
     /// 보낼 프레임을 만든다(`f` +1 · 보낸 시각 · 값 기록). `h` 는 상대 프레임을 받은 뒤 ms(없으면 −1).
     package mutating func makeFrame(at now: TimeInterval, seq: Int, score: Int, deaths: Int) -> CrossyDuelFrame {
-        let heard = opponentHeardAt.map { Int(((now - $0) * 1000).rounded()) } ?? -1
-        let frame = CrossyDuelFrame(sender: me, seq: seq, frame: nextFrameNumber, score: score, deaths: deaths,
-                                    heardAgoMs: max(-1, heard))
+        let frame = CrossyDuelFrame(sender: me, seq: max(0, seq), frame: nextFrameNumber,
+                                    score: min(max(0, score), CrossyDuelFrame.maxScore), deaths: max(0, deaths),
+                                    heardAgoMs: heardAgoMs(at: now))
         nextFrameNumber += 1
         lastSentAt = now
         lastSentScore = score
         lastSentDeaths = deaths
         return frame
+    }
+
+    /// 상대 프레임을 마지막으로 받은 뒤 흐른 ms(받은 적 없으면 −1). 32비트 안으로 자른다.
+    private func heardAgoMs(at now: TimeInterval) -> Int {
+        guard let at = opponentHeardAt else { return -1 }
+        let ms = (now - at) * 1000
+        guard ms.isFinite else { return -1 }
+        return Int(min(max(0, ms.rounded()), Double(Int32.max)))
     }
 
     /// 상대 트랙 점수 — **끝나지 않은 판에서** `max(프레임 sc, DB opponent.score)`(DB 응답이 표시를 되감지 않는다, B3).

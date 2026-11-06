@@ -1,7 +1,8 @@
 import Foundation
 
 // 1:1 길건너 순위(Q1 기본안 — `crossy_duel_ranking`, 테트리스 `TetrisDuelRank*` 꼴). SPEC v1.3 §8.3 · §6.3.
-// ★ C1 뼈대: 값 타입 · 순수 변환 · 서명. 적재(`refreshRanking`) 몸통은 C2 가 채운다(지금은 네트워크 0).
+// 적재는 테트리스 `loadRanking` 꼴: 주 스위치(`rankingEnabled`) · 도는 중이면 버림(60초 목록이라 합치지 않는다) ·
+// PGRST202 → `rankingUnavailable` · 실패는 안내줄로 새지 않는다(판 상태줄을 가린다) — 들고 있던 목록은 지우지 않는다.
 
 /// 순위표 한 줄. 순위는 **서버가 매긴 값**이다.
 package nonisolated struct CrossyDuelRankEntry: Identifiable, Equatable, Sendable {
@@ -57,9 +58,42 @@ package nonisolated struct CrossyDuelRankingBoard: Equatable, Sendable {
 
 extension CrossyDuelStore {
     /// 순위표 한 번(60초 주기 — `rankingPollSeconds`). `rankingEnabled` 가 꺼져 있으면 아무것도 안 한다.
-    /// C1 빈 몸통 — C2 가 `crossyDuelRanking` 호출 · PGRST202 → `rankingUnavailable` 를 채운다.
     package func refreshRanking() async {
-        guard rankingEnabled, host != nil else { return }
+        guard rankingEnabled, host?.session != nil, !rankingInFlight else { return }
+        rankingInFlight = true
+        let generation = resetGeneration
+        defer { if generation == resetGeneration { rankingInFlight = false } }
+        lastRankingRequestAt = clock()
+        guard let result = await perform({ try await $0.crossyDuelRanking(accessToken: $1) }) else { return }
+        switch result {
+        case .success(let response):
+            applyRanking(response)
+        case .failure(let error):
+            if isSchemaMissing(error) {
+                if !rankingUnavailable { rankingUnavailable = true }
+            } else {
+                Self.logger.notice("ranking request failed")
+            }
+        }
+    }
+
+    /// 순위 응답을 옮긴다(ok 만 — 값이 같으면 쓰지 않는다).
+    package func applyRanking(_ response: CrossyDuelRankingResponse) {
+        guard response.status == .ok else {
+            Self.logger.notice("ranking refused status=\(response.status.rawValue, privacy: .public)")
+            return
+        }
+        noteServerNow(response.serverNowMs)
+        if rankingUnavailable { rankingUnavailable = false }
+        let board = Self.rankingBoard(from: response)
+        if ranking != board { ranking = board }
+    }
+
+    /// 내 판이 끝났다 — 전적이 바뀐 순간 순위도 다시 읽는다(창이 안 보여도 사건에 대한 한 번).
+    func noteOwnMatchFinishedForRanking() {
+        lastRankingRequestAt = .distantPast
+        guard rankingEnabled, host?.session != nil else { return }
+        Task { [weak self] in await self?.refreshRanking() }
     }
 
     /// 응답 → 순위표(순수). **행 순서는 입력 그대로**. id 나 rank 가 빠진 행은 싣지 않는다.

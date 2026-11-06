@@ -461,6 +461,13 @@ package struct CrossyDuelRankingResponse: Decodable, Equatable, Sendable {
 
 // MARK: - 서비스 호출
 
+/// 보고가 서버 `lock_timeout`(SQLSTATE 55P03)으로 끊겼다. **실패가 아니다** — 다음 걸음에 다시 보낸다(§3.1 CC-21).
+package struct CrossyDuelLockNotAvailable: Error, Equatable, Sendable {
+    package static let sqlState = "55P03"
+
+    package init() {}
+}
+
 /// 길건너 1:1 RPC 8개. 몸통은 공용 `duelRPC`(DuelRPC.swift) 하나다.
 /// 교착 재시도는 challenge · cancel · respond · resign · state 에 켠다(SPEC §8.2). 로비·순위는 읽기 전용이라 끄고,
 /// 보고는 뜨거운 길이라 끈다(실패하면 다음 걸음이 누계를 다시 보낸다).
@@ -492,13 +499,27 @@ extension SupabaseWorkService {
             accessToken: accessToken, retriesDeadlockOnce: true)
     }
 
-    /// 판 보고(첫 보고가 준비다).
+    /// 판 보고(첫 보고가 준비다). 서버가 `lock_timeout`(55P03 — §3.2 `set lock_timeout = '2s'`)으로 끊었으면
+    /// `CrossyDuelLockNotAvailable` 을 던진다 — 스토어가 실패로 세지 않고 다음 걸음에 다시 보낸다(§3.1 CC-21).
+    /// 공용 `duelRPC` 는 상태코드만 남기고 SQLSTATE 를 잃으므로(500 → `.invalidResponse`) 이 한 RPC 만 몸통을 따로 둔다.
     package func crossyDuelReport(
         accessToken: String, matchID: String, report: CrossyDuelReportBody
     ) async throws -> CrossyDuelActionResponse {
-        try await duelRPC(
-            CrossyDuelWire.RPC.report, body: CrossyDuelReportRequest(matchID: matchID, report: report),
-            accessToken: accessToken)
+        guard let anonKey else { throw SupabaseWorkServiceError.missingAnonKey }
+        var request = URLRequest(url: try url(path: "/rest/v1/rpc/\(CrossyDuelWire.RPC.report)", queryItems: []))
+        request.httpMethod = "POST"
+        request.setValue(anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(CrossyDuelReportRequest(matchID: matchID, report: report))
+        let (data, response) = try await session.data(for: request)
+        let statusCode = (response as? HTTPURLResponse)?.statusCode ?? -1
+        if 200..<300 ~= statusCode {
+            return try decoder.decode(CrossyDuelActionResponse.self, from: data)
+        }
+        if postgrestErrorCode(in: data) == CrossyDuelLockNotAvailable.sqlState { throw CrossyDuelLockNotAvailable() }
+        throw serviceError(statusCode: statusCode, data: data)
     }
 
     /// 상태(참가자 전용). 읽기처럼 보이지만 서버가 시간 판정을 돌려 판을 닫을 수 있다.

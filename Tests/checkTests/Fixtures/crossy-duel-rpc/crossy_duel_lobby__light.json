@@ -1,0 +1,39 @@
+{
+  "goal": 100,
+  "max_duration_seconds": 180,
+  "me": {
+    "active_match_id": null,
+    "draws": null,
+    "incoming": [
+      {
+        "expires_at_ms": 1793973654386,
+        "from": {
+          "display_name": "T-9bee0702",
+          "id": "9bee0702-2181-4b3c-8955-5476dcf01ff1"
+        },
+        "match_id": "9ff55a04-1b64-4d25-9ac7-1d4a5b30b5c4",
+        "stake": 3
+      }
+    ],
+    "losses": null,
+    "outgoing": {
+      "expires_at_ms": 1793973654378,
+      "match_id": "e2617013-a0a3-4fee-ab9f-c7a75b8cef33",
+      "stake": 5,
+      "to": {
+        "display_name": "라마바",
+        "id": "c9507194-70ce-45b3-9b4e-871adb947ba2"
+      }
+    },
+    "ruby_balance": 100,
+    "wins": null
+  },
+  "server_now_ms": 1793973594396,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "users": []
+}

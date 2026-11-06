@@ -1,0 +1,57 @@
+{
+  "state": {
+    "accepted_at_ms": 1793973594513,
+    "checkpoint_ms": 3000,
+    "countdown_ms": 3000,
+    "end_at_ms": 1793973777515,
+    "end_reason": "resign",
+    "final": {
+      "me": 0,
+      "opponent": 0
+    },
+    "finished_at_ms": 1793973594516,
+    "frames": null,
+    "goal": 100,
+    "grace_end_ms": 1793973779515,
+    "heartbeat_ms": 3000,
+    "match_id": "c456eca3-d70e-4a82-8838-79b08012e218",
+    "max_duration_seconds": 180,
+    "me": {
+      "avatar_url": null,
+      "character": null,
+      "deaths": 0,
+      "display_name": "T-439d14d0",
+      "goal_at_ms": null,
+      "id": "439d14d0-1485-4fde-b160-40b135cf87bb",
+      "last_seen_ms": 1793973594514,
+      "ready": true,
+      "score": 0,
+      "seq": 1
+    },
+    "my_device": "this",
+    "opponent": {
+      "avatar_url": null,
+      "character": null,
+      "deaths": 0,
+      "display_name": "T-c641d928",
+      "goal_at_ms": null,
+      "id": "c641d928-b685-4276-b6de-0b247aab9cc7",
+      "last_seen_ms": 1793973594515,
+      "ready": true,
+      "score": 0,
+      "seq": 1
+    },
+    "ready_deadline_ms": 1793973624513,
+    "report_ms": 1000,
+    "result": "challenger_win",
+    "ruby_balance": 111,
+    "seed": 1360645157,
+    "server_now_ms": 1793973594518,
+    "silence_ms": 15000,
+    "stake": 5,
+    "start_at_ms": 1793973597515,
+    "status": "finished",
+    "winner": "439d14d0-1485-4fde-b160-40b135cf87bb"
+  },
+  "status": "ok"
+}

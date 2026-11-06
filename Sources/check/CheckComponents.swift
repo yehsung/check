@@ -622,6 +622,9 @@ struct InlineActionBanner: View {
 /// 시간 라벨은 0/6/12/18 만 표기한다(24개를 다 쓰면 10pt 칸 위에서 뭉갠다).
 struct WorkRhythmHeatmapGrid: View {
     let heatmap: WorkRhythmHeatmap
+    /// 이번 주를 그릴 때 '아직 오지 않은' 첫 칸(요일, 시간). 그 칸부터 그 주 끝까지는 점선 빈칸으로 그리고 오늘 요일 라벨을 굵게 한다.
+    /// nil 이면 모든 칸이 지난 시간(지난주 · 그 전 주).
+    var futureFrom: (day: Int, hour: Int)? = nil
 
     static let cellSize: CGFloat = 10
     static let cellGap: CGFloat = 1
@@ -648,18 +651,30 @@ struct WorkRhythmHeatmapGrid: View {
             ForEach(0..<WorkRhythmHeatmap.dayCount, id: \.self) { day in
                 HStack(spacing: Self.cellGap) {
                     Text(Self.dayLabels[day])
-                        .font(.system(size: 9))
-                        .foregroundStyle(CheckTheme.secondaryText)
+                        .font(.system(size: 9, weight: futureFrom?.day == day ? .bold : .regular))
+                        .foregroundStyle(futureFrom?.day == day ? CheckTheme.primaryText : CheckTheme.secondaryText)
                         .frame(width: Self.labelWidth, alignment: .trailing)
                     ForEach(0..<WorkRhythmHeatmap.hourCount, id: \.self) { hour in
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(Self.color(seconds: seconds(day: day, hour: hour)))
-                            .frame(width: Self.cellSize, height: Self.cellSize)
+                        if Self.isFuture(day: day, hour: hour, from: futureFrom) {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .stroke(CheckTheme.border, style: StrokeStyle(lineWidth: 0.6, dash: [1.5, 1.5]))
+                                .frame(width: Self.cellSize, height: Self.cellSize)
+                        } else {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(Self.color(seconds: seconds(day: day, hour: hour)))
+                                .frame(width: Self.cellSize, height: Self.cellSize)
+                        }
                     }
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// (요일, 시간) 칸이 아직 오지 않은 시간인지(순수 — 시험 대상).
+    nonisolated static func isFuture(day: Int, hour: Int, from: (day: Int, hour: Int)?) -> Bool {
+        guard let from else { return false }
+        return day > from.day || (day == from.day && hour >= from.hour)
     }
 
     // 형이 어긋난 buckets(빈 배열 등)이 들어와도 인덱스 크래시 없이 0으로 읽는다.
@@ -1745,5 +1760,36 @@ extension View {
     func pagePanelStyle() -> some View {
         frame(maxHeight: .infinity, alignment: .top)
             .panelStyle()
+    }
+}
+
+// MARK: - 근무 리듬 주 넘기기(2026-11-06)
+
+/// 근무 리듬 칸 머리 오른쪽의 ◀ ▶. ◀ = 더 지난 주(offset + 1), ▶ = 이번 주 쪽(offset − 1). 끝이면 흐리게 막는다.
+/// 높이는 머리 줄 글자(caption 굵게) 안에 들어가게 16pt — 머리 줄이 커지면 내 기록 본문 높이 예산이 어긋난다.
+struct RhythmWeekStepper: View {
+    let offset: Int
+    let maxOffset: Int
+    let onChange: (Int) -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            arrow("chevron.left", help: "이전 주", enabled: offset < maxOffset) { onChange(offset + 1) }
+            arrow("chevron.right", help: "다음 주", enabled: offset > 0) { onChange(offset - 1) }
+        }
+    }
+
+    private func arrow(_ icon: String, help: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .bold))
+                .frame(width: 18, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(enabled ? CheckTheme.primaryText : CheckTheme.secondaryText.opacity(0.35))
+        .disabled(!enabled)
+        .checkTooltip(help)
+        .accessibilityLabel(help)
     }
 }

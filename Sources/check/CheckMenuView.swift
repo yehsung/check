@@ -998,6 +998,11 @@ struct CheckMenuView: View {
                             retro: store.retro,
                             dailyGrid: store.dailyGrid,
                             tokenDailyGrid: store.tokenDailyGrid,
+                            // 주별 근무 리듬(2026-11-06): 이번 주는 진행 중 근무(startedAt)를 1분마다 얹어 실시간으로 찬다.
+                            rhythmWeeks: store.rhythmWeeks,
+                            rhythmOffset: store.rhythmWeekOffset,
+                            liveStart: store.startedAt,
+                            onRhythmOffset: { store.setRhythmWeekOffset($0) },
                             // 수집 거부면 섹션을 아예 뺀다(서버에 행이 없고 앞으로도 안 쌓인다 — 빈 잔디는 거짓말이다).
                             showsTokenGrid: store.tokenUsageCollect,
                             hasLoaded: store.insightsLoaded,
@@ -4674,6 +4679,17 @@ struct InsightsPanel: View {
     let dailyGrid: WorkDailyGrid
     // 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 나온다.
     var tokenDailyGrid: TokenDailyGrid = .empty
+    // 주별 근무 리듬(2026-11-06 대표 결정 #d_V0mJ363LONEW — "근무 리듬이 매주 실시간 쌓이고 있는게 보이게끔 … 지난 기록들 누적 주차별로").
+    // 비어 있으면(옛 픽스처 · 아직 계산 전) 옛 '지난주 근무 리듬'(heatmap) 그대로 그린다.
+    var rhythmWeeks: WorkRhythmWeeks = .empty
+    // 보고 있는 주(0 = 이번 주). 범위 밖이면 끝에 붙인다.
+    var rhythmOffset: Int = 0
+    // 지금 진행 중인 내 근무의 시작(없으면 nil). 이번 주 칸에만 1분마다 '지금까지'를 얹는다.
+    var liveStart: Date? = nil
+    // ◀ ▶ 눌림. nil 이면 넘기기 단추를 그리지 않는다(값+클로저 규약).
+    var onRhythmOffset: ((Int) -> Void)? = nil
+    // 시험 전용: 실시간 시계 대신 이 시각으로 그린다(nil 이면 TimelineView 가 1분마다 다시 그린다).
+    var rhythmNow: Date? = nil
     // 토큰 잔디 섹션을 그릴지(= 서버 수집 허용). 수집 거부자는 서버에 일별 행이 없고 앞으로도 안 쌓이므로 빈 잔디를
     // 보여 주면 "내가 안 썼다"는 거짓말이 된다 — 섹션 자체를 뺀다. 본문 높이 예산도 이 값으로 갈린다.
     var showsTokenGrid: Bool = false
@@ -4856,9 +4872,54 @@ struct InsightsPanel: View {
         )
     }
 
-    // (d) 근무 리듬 히트맵 — 지난주 요일×시간대 격자 + 가장 활발했던 시간.
+    // (d) 근무 리듬 히트맵 — 주별(2026-11-06): 기본 이번 주(진행 중 근무까지 1분마다 참) + ◀▶ 로 첫 주까지 넘겨보기.
+    //     주별 자료가 아직 없으면(옛 픽스처 · 계산 전) 옛 '지난주 근무 리듬'(heatmap) 그대로.
     @ViewBuilder
     private var heatmapSection: some View {
+        if rhythmWeeks.weekStarts.isEmpty {
+            lastWeekHeatmapSection
+        } else if let rhythmNow {
+            weeklyRhythmSection(now: rhythmNow)
+        } else {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                weeklyRhythmSection(now: context.date)
+            }
+        }
+    }
+
+    private func weeklyRhythmSection(now: Date) -> some View {
+        let offset = min(max(0, rhythmOffset), rhythmWeeks.maxOffset)
+        let weekStart = rhythmWeeks.weekStart(offset: offset)
+        var map = rhythmWeeks.heatmap(offset: offset) ?? .empty
+        if offset == 0, let weekStart {
+            map = map.addingLive(from: liveStart, now: now, weekStart: weekStart)
+        }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.3x3.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                // 기간이 제목 안에 들어간다(이번 주 · 지난주 · 10월 26일 주) — 옛 규약 그대로(아래 lastWeekHeatmapSection 주석).
+                Text(WorkRhythmWeekText.title(offset: offset, weekStart: weekStart))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if let onRhythmOffset {
+                    RhythmWeekStepper(offset: offset, maxOffset: rhythmWeeks.maxOffset, onChange: onRhythmOffset)
+                }
+            }
+            WorkRhythmHeatmapGrid(heatmap: map, futureFrom: WorkRhythmWeekText.futureFrom(offset: offset, now: now))
+            Text(WorkRhythmWeekText.caption(map, offset: offset))
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+        }
+    }
+
+    // 옛 '지난주 근무 리듬' — 주별 자료가 없을 때만.
+    @ViewBuilder
+    private var lastWeekHeatmapSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "square.grid.3x3.fill")

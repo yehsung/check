@@ -569,6 +569,8 @@ package struct WorkInsightsComputation: Equatable {
     package let retro: WeeklyRetro?
     /// 최근 12주 일별 잔디. 같은 파싱 결과에서 한 번에 계산해 세 결과가 같은 세션 집합을 본다.
     package let dailyGrid: WorkDailyGrid
+    /// 첫 주 ~ 이번 주 주별 리듬(완료 세션만, 2026-11-06). 조회 창이 이른 주까지 닿아야 앞 주들이 찬다.
+    package let rhythmWeeks: WorkRhythmWeeks
 
     /// 순수 계산이라 어느 스레드에서 불러도 결과가 같다(전역 상태·시계 접근 없음 — now 는 인자로 받는다).
     /// - ongoingStart: **지금 진행 중인 내 세션**의 시작 시각(없으면 nil). 서버 조회는 완료 세션(ended_at not null)만
@@ -590,8 +592,160 @@ package struct WorkInsightsComputation: Equatable {
             heatmap: WorkRhythmHeatmap.build(parsed: parsed, now: now),
             retro: WeeklyRetro.build(parsed: parsed, now: now, goalSeconds: goalSeconds),
             // 잔디는 진행 세션을 스스로 얹는다(완료본 + ongoingStart) — 이미 얹은 parsed 를 주면 이중 계상이다.
-            dailyGrid: WorkDailyGrid.build(parsed: completed, now: now, ongoingStart: ongoingStart)
+            dailyGrid: WorkDailyGrid.build(parsed: completed, now: now, ongoingStart: ongoingStart),
+            // 주별 리듬은 **완료분만** 담는다 — 진행 중 세션은 화면이 1분마다 '지금까지'를 얹어 실시간으로 찬다
+            // (WorkRhythmHeatmap.addingLive). 여기서 얹으면 계산 시점에 굳어 열어 둔 동안 자라지 않는다.
+            rhythmWeeks: WorkRhythmWeeks.build(parsed: completed, now: now)
         )
+    }
+}
+
+// MARK: - 주별 근무 리듬(2026-11-06 대표 결정 #d_V0mJ363LONEW)
+//
+// 대표 원문: "근무 리듬이 매주 실시간 쌓이고 있는게 보이게끔 하는식으로 구현하고 지난 기록들 누적 주차별로 볼 수 있게 추가."
+// (제보 10-27 "근무 리듬도 토큰사용량/최근12주근무리듬 처럼 하루씩 바로바로 보이면 좋을거같아요 … 지금까지 근무리듬 싹 다 볼 수 있는 누적화면")
+// → 기본은 **이번 주**(월요일 ~ 지금, 진행 중 근무까지 1분마다 참), ◀ 로 지난주 · 그 전주 … 첫 주까지 넘겨본다.
+// 칸의 뜻(한 칸 = 그 주 그 요일 그 시간에 일한 초, 진하기 분모 3600초 고정)은 옛 '지난주 근무 리듬'과 같다.
+
+/// 첫 주부터 이번 주까지 주마다 하나씩의 리듬 히트맵. 마지막 원소가 이번 주다(완료 세션만).
+package struct WorkRhythmWeeks: Equatable {
+    /// 각 주의 KST 월요일 00:00, 오래된 주 → 이번 주 순.
+    package let weekStarts: [Date]
+    /// weekStarts 와 같은 순서의 히트맵.
+    package let heatmaps: [WorkRhythmHeatmap]
+
+    package static let empty = WorkRhythmWeeks(weekStarts: [], heatmaps: [])
+    /// 한 번에 다루는 주 수 상한(10년). 시계가 크게 틀린 행 하나가 수천 주짜리 배열을 만들지 않게 한다.
+    package static let maxWeeks = 520
+
+    package init(weekStarts: [Date], heatmaps: [WorkRhythmHeatmap]) {
+        self.weekStarts = weekStarts
+        self.heatmaps = heatmaps
+    }
+
+    /// 넘겨볼 수 있는 가장 큰 오프셋(0 = 이번 주). 주가 하나뿐이면 0.
+    package var maxOffset: Int { max(0, weekStarts.count - 1) }
+
+    /// offset 0 = 이번 주, 1 = 지난주 … 범위 밖이면 nil.
+    package func weekStart(offset: Int) -> Date? {
+        let i = weekStarts.count - 1 - offset
+        return weekStarts.indices.contains(i) ? weekStarts[i] : nil
+    }
+
+    package func heatmap(offset: Int) -> WorkRhythmHeatmap? {
+        let i = heatmaps.count - 1 - offset
+        return heatmaps.indices.contains(i) ? heatmaps[i] : nil
+    }
+
+    /// 완료 세션으로 주별 히트맵을 만든다. 첫 주 = 가장 이른 세션이 시작한 주(세션이 없으면 이번 주 하나).
+    /// 세션은 KST 정시 경계로 쪼개 그 시간이 속한 주의 (요일, 시간) 칸에 실제로 머문 초만 넣는다 — 주 경계(일 → 월 자정)를
+    /// 넘긴 세션도 두 주에 나뉘어 들어간다. now 이후 몫은 세지 않는다.
+    package static func build(parsed sessions: [WorkInsightsSession], now: Date) -> WorkRhythmWeeks {
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let thisWeek = TeamWeeklyGoal.koreanWeekStart(for: now)
+        var first = sessions.map(\.start).filter { $0 <= now }.min().map { TeamWeeklyGoal.koreanWeekStart(for: $0) } ?? thisWeek
+        if first > thisWeek { first = thisWeek }
+        var starts: [Date] = []
+        var cursorWeek = first
+        while cursorWeek <= thisWeek {
+            starts.append(cursorWeek)
+            guard let next = calendar.date(byAdding: .weekOfYear, value: 1, to: cursorWeek), next > cursorWeek else { break }
+            cursorWeek = next
+        }
+        if starts.count > maxWeeks { starts = Array(starts.suffix(maxWeeks)) }
+        guard let windowStart = starts.first else { return .empty }
+        var buckets = Array(repeating: Array(repeating: Array(repeating: 0, count: WorkRhythmHeatmap.hourCount),
+                                             count: WorkRhythmHeatmap.dayCount), count: starts.count)
+        var totals = Array(repeating: 0, count: starts.count)
+        for session in sessions {
+            var cursor = max(session.start, windowStart)
+            let end = min(session.end, now)
+            while cursor < end {
+                guard let hourStart = WorkInsightsCalendar.hourStart(for: cursor),
+                      let nextHour = calendar.date(byAdding: .hour, value: 1, to: hourStart),
+                      nextHour > cursor
+                else { break }
+                let sliceEnd = min(nextHour, end)
+                let seconds = Int(sliceEnd.timeIntervalSince(cursor))
+                // 그 정시가 속한 주를 찾는다. KST 는 서머타임이 없어 한 주는 늘 604800초다.
+                let weekIndex = Int(floor(hourStart.timeIntervalSince(windowStart) / 604_800))
+                if seconds > 0, starts.indices.contains(weekIndex) {
+                    buckets[weekIndex][WorkInsightsCalendar.weekdayIndex(for: hourStart)][calendar.component(.hour, from: hourStart)] += seconds
+                    totals[weekIndex] += seconds
+                }
+                cursor = sliceEnd
+            }
+        }
+        let heatmaps = zip(buckets, totals).map { WorkRhythmHeatmap(buckets: $0.0, totalSeconds: $0.1) }
+        return WorkRhythmWeeks(weekStarts: starts, heatmaps: heatmaps)
+    }
+}
+
+extension WorkRhythmHeatmap {
+    /// 진행 중인 근무(liveStart ~ now)를 weekStart 로 시작하는 주의 칸에 얹은 사본. 화면이 1분마다 불러 이번 주가 실시간으로 찬다.
+    /// liveStart 가 nil 이거나 그 주와 겹치지 않으면 그대로 돌려준다. 같은 칸이 3600초를 넘지 않게 자른다(완료분과 겹친 기록 방어).
+    package func addingLive(from liveStart: Date?, now: Date, weekStart: Date) -> WorkRhythmHeatmap {
+        guard let liveStart else { return self }
+        let calendar = TeamWeeklyGoal.kstCalendar
+        let weekEnd = weekStart.addingTimeInterval(604_800)
+        var cursor = max(liveStart, weekStart)
+        let end = min(now, weekEnd)
+        guard cursor < end else { return self }
+        var copy = self
+        if copy.buckets.count != Self.dayCount || copy.buckets.contains(where: { $0.count != Self.hourCount }) { copy = .empty }
+        while cursor < end {
+            guard let hourStart = WorkInsightsCalendar.hourStart(for: cursor),
+                  let nextHour = calendar.date(byAdding: .hour, value: 1, to: hourStart),
+                  nextHour > cursor
+            else { break }
+            let sliceEnd = min(nextHour, end)
+            let seconds = Int(sliceEnd.timeIntervalSince(cursor))
+            if seconds > 0 {
+                let day = WorkInsightsCalendar.weekdayIndex(for: hourStart), hour = calendar.component(.hour, from: hourStart)
+                let room = max(0, 3_600 - copy.buckets[day][hour])
+                let add = min(seconds, room)
+                copy.buckets[day][hour] += add
+                copy.totalSeconds += add
+            }
+            cursor = sliceEnd
+        }
+        return copy
+    }
+}
+
+/// 주별 리듬 칸의 머리 · 위치 문구(순수 — 값으로 시험한다).
+package enum WorkRhythmWeekText {
+    /// 칸 제목. 기간이 **제목 안에** 들어간다(옛 '지난주 근무 리듬'과 같은 규약 — 기간을 오른쪽 꼬리표로 미루면
+    /// 위에 '최근 12주 …' 캡션이 둘이나 있는 화면에서 '12주짜리 셋째 격자'로 읽힌다).
+    package static func title(offset: Int, weekStart: Date?) -> String {
+        switch offset {
+        case 0: return "이번 주 근무 리듬"
+        case 1: return "지난주 근무 리듬"
+        default:
+            guard let weekStart else { return "근무 리듬" }
+            let c = TeamWeeklyGoal.kstCalendar.dateComponents([.month, .day], from: weekStart)
+            return "\(c.month ?? 0)월 \(c.day ?? 0)일 주 근무 리듬"
+        }
+    }
+
+    /// 이번 주 칸 중 '아직 오지 않은' 첫 칸(요일, 시간). 이번 주가 아니면 nil(모든 칸이 지난 시간).
+    package static func futureFrom(offset: Int, now: Date) -> (day: Int, hour: Int)? {
+        guard offset == 0 else { return nil }
+        let day = WorkInsightsCalendar.weekdayIndex(for: now)
+        let hour = TeamWeeklyGoal.kstCalendar.component(.hour, from: now)
+        return (day, hour + 1)
+    }
+
+    /// 칸 아래 한 줄: "12시간 30분 · 가장 활발한 시간: 화요일 15시". 기록이 없으면 그 주에 맞는 빈 문구.
+    package static func caption(_ heatmap: WorkRhythmHeatmap, offset: Int) -> String {
+        let names = ["월", "화", "수", "목", "금", "토", "일"]
+        guard heatmap.totalSeconds > 0 else {
+            return offset == 0 ? "이번 주 기록이 아직 없어요" : "이 주는 기록이 없어요"
+        }
+        let h = heatmap.totalSeconds / 3_600, m = (heatmap.totalSeconds % 3_600) / 60
+        let total = h > 0 ? "\(h)시간 \(m)분" : "\(m)분"
+        guard let peak = heatmap.peakSlot, names.indices.contains(peak.day) else { return total }
+        return "\(total) · 가장 활발한 시간: \(names[peak.day])요일 \(peak.hour)시"
     }
 }
 

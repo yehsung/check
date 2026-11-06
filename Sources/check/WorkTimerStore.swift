@@ -1189,6 +1189,11 @@ final class WorkTimerStore {
     var retro: WeeklyRetro?
     /// 최근 12주 일별 근무 잔디(이슈 #3). heatmap/retro 와 같은 조회·같은 파싱에서 함께 계산되고 함께 비워진다.
     var dailyGrid: WorkDailyGrid = .empty
+    /// 첫 주 ~ 이번 주 주별 근무 리듬(2026-11-06 대표 결정 — 이번 주 실시간 + ◀▶ 주별 넘겨보기). 완료 세션만 담고,
+    /// 이번 주 칸의 진행 중 근무는 화면이 1분마다 얹는다. heatmap/retro 와 같은 조회에서 함께 계산되고 함께 비워진다.
+    var rhythmWeeks: WorkRhythmWeeks = .empty
+    /// 보고 있는 주(0 = 이번 주, 1 = 지난주 …). 내 기록을 열 때마다 이번 주로 돌아간다.
+    var rhythmWeekOffset = 0
     /// 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회 안에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 계산하고
     /// (WorkTimerStoreInsights), 주가 바뀌거나 로그아웃하면 근무 잔디와 함께 비워진다. 토큰 조회는 **독립 실패**다 — 못 받아도
     /// 근무 잔디·회고·히트맵은 그대로 그려진다. 수집 거부(tokenUsageCollect == false)면 항상 empty(패널도 섹션을 숨긴다).
@@ -3099,6 +3104,8 @@ final class WorkTimerStore {
             closePokePanel()
             closeUltraPanelForAnotherScreen()
             closeMissionPanel()
+            // 근무 리듬은 열 때마다 이번 주부터 보여 준다(대표 결정: "매주 실시간 쌓이고 있는게 보이게끔").
+            if rhythmWeekOffset != 0 { rhythmWeekOffset = 0 }
             // 배너 소비 판정은 evaluateRetroBanner 한 곳에만 둔다 — 예전엔 여기서 markRetroBannerSeen() 을
             // 무조건 불러, 아직 회고를 못 받은 상태(첫 조회 실패·오프라인)에서 패널을 열기만 해도 이번 주 키가
             // 소진돼 뒤늦게 회고가 도착해도 그 주 내내 배너가 뜨지 않았다(회귀 지점). 패널이 열려 있으므로
@@ -4378,6 +4385,8 @@ extension WorkTimerStore {
         heatmap = .empty
         retro = nil
         dailyGrid = .empty
+        rhythmWeeks = .empty
+        rhythmWeekOffset = 0
         // 토큰 잔디도 계정의 것이다(서버 일별 행 + 이 계정으로 올린 로컬 맵) — 다음 계정에 물려주지 않는다.
         tokenDailyGrid = .empty
         showsRetroBanner = false

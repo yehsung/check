@@ -1,0 +1,81 @@
+# 아잉체크 스캐너(aing-scan) 리눅스 빌드·시험 — x86_64 · arm64.
+#  - 스캐너는 맥 앱의 토큰 읽기 파일(Sources/CheckCore 의 여섯 개)을 심볼릭 링크로 함께 컴파일한다 — 그 파일이 바뀌어도 돈다.
+#  - 시험은 바깥 망이 없는 컨테이너(--network none)에서만 돈다(운영 서버 0). 의존 받기·빌드만 망이 있는 단계에서 한다.
+#  - 산출물(바이너리)은 올리지 않는다 — 공개 배포는 따로 승인받는 단계다.
+#  - 비밀값 0개. 액션은 SHA 로 고정한다(공개 저장소 공급망).
+name: aing-scan
+
+on:
+  push:
+    branches: ['feat/aing-scan']
+    paths:
+      - 'aing-scan/**'
+      - 'Sources/CheckCore/CheckTokenUsage.swift'
+      - 'Sources/CheckCore/CheckTokenUsageDiagnostics.swift'
+      - 'Sources/CheckCore/CheckAntigravityUsage.swift'
+      - 'Sources/CheckCore/CheckCodexAccountUsage.swift'
+      - 'Sources/CheckCore/CodexEffectiveRule.swift'
+      - 'Sources/CheckCore/TokenUsageUpload.swift'
+      - '.github/workflows/aing-scan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aing-scan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      # 공식 Swift 이미지(여러 아키텍처). 릴리스 단계에서 다이제스트로 고정한다.
+      SWIFT_IMAGE: swift:latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 심볼릭 링크 확인(공유 파일이 맥 앱 원본을 가리킨다)
+        run: |
+          set -euo pipefail
+          for f in aing-scan/Sources/CheckTokenScan/*.swift; do
+            if [ -L "$f" ]; then test -f "$f" || { echo "끊긴 링크: $f"; exit 1; }; fi
+          done
+          ls -l aing-scan/Sources/CheckTokenScan
+      - name: 의존 받기 · 빌드(망 있음 — 시험이 아니다)
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD":/src -w /src/aing-scan "$SWIFT_IMAGE" /bin/bash -c '
+            set -euo pipefail
+            swift --version
+            swift package resolve
+            swift build -c release --static-swift-stdlib
+            swift build --build-tests
+          '
+      - name: 시험 — 바깥 망 없음(--network none)
+        run: |
+          set -euo pipefail
+          docker run --rm --network none -v "$PWD":/src -w /src/aing-scan "$SWIFT_IMAGE" /bin/bash -c '
+            set -euo pipefail
+            # 봉인 확인: 바깥 연결이 실패해야 한다.
+            if timeout 5 bash -c "exec 3<>/dev/tcp/1.1.1.1/443" 2>/dev/null; then echo "봉인이 샜다"; exit 1; fi
+            swift test --skip-build
+          '
+      - name: 실행 확인(연결 전 상태 · 판 번호)
+        run: |
+          set -euo pipefail
+          docker run --rm --network none -v "$PWD":/src -w /src/aing-scan "$SWIFT_IMAGE" /bin/bash -c '
+            set -euo pipefail
+            bin=.build/release/aing-scan
+            file "$bin" || true
+            "$bin" version
+            AING_SCAN_HOME=/tmp/aing-scan-ci "$bin" status
+            # 연결 전 예약 실행은 조용히 0 으로 끝난다.
+            AING_SCAN_HOME=/tmp/aing-scan-ci "$bin" run --quiet
+          '

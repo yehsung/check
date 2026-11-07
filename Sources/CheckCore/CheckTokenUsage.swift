@@ -1,11 +1,19 @@
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+// 리눅스 스캐너(aing-scan): CryptoKit 과 같은 API 의 swift-crypto.
+import Crypto
+#endif
 import Foundation
 #if os(macOS)
 import AppKit
 #endif
+// AING_SCAN: 원격 기계 스캐너(aing-scan)가 이 파일을 함께 컴파일할 때 정의된다 — 아래 스토어(화면·앱 종료 훅)는 빠진다.
+#if !AING_SCAN
 import Observation
 import OSLog
 import SwiftUI
+#endif
 
 // MARK: - 집계 모델 (월 단위)
 
@@ -2091,7 +2099,7 @@ package enum TokenUsageScanner {
 
 // MARK: - 스토어 (@MainActor · 표시/영속/증분 갱신 게이팅)
 
-#if os(macOS)
+#if os(macOS) && !AING_SCAN
 // B3: 로컬 토큰 스캐너 스토어 — 실홈(homeDirectoryForCurrentUser)·앱 종료 알림(NSApplication)에 묶여 있다. 폰은 토큰을 집계하지 않는다.
 /// 토큰 사용량의 표시·영속·증분 갱신을 담당한다. 스캔은 백그라운드(Task.detached)에서 캐시를 이어받아 돌고,
 /// 메인 액터엔 결과만 반영한다. 상시 타이머/앱 전역 루프 없음 — 스캔은 init 이 아니라 팝오버 표시 중 뷰(.task) 루프에서만 시작된다.

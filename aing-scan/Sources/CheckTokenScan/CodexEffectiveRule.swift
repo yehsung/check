@@ -1,0 +1,1 @@
+../../../Sources/CheckCore/CodexEffectiveRule.swift

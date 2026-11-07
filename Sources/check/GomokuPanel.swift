@@ -485,9 +485,9 @@ struct GomokuBoardView: View {
     var preview: GomokuPreviewStone? = nil
     var showsCoordinates: Bool = true
 
-    static let woodLight = Color(red: 0.88, green: 0.73, blue: 0.49)
-    static let woodDark = Color(red: 0.79, green: 0.62, blue: 0.38)
-    static let lineColor = Color(red: 0.30, green: 0.21, blue: 0.12)
+    static let woodLight = BoardGameDrawing.woodLight
+    static let woodDark = BoardGameDrawing.woodDark
+    static let lineColor = BoardGameDrawing.lineColor
     /// 금수 X 색(렌더 테스트가 이 색을 픽셀로 찾는다).
     static let forbiddenColor = Color(red: 0.87, green: 0.16, blue: 0.18)
     static let lastMoveColor = Color(red: 0.95, green: 0.30, blue: 0.26)
@@ -505,36 +505,8 @@ struct GomokuBoardView: View {
     private func drawBoard(in context: inout GraphicsContext) {
         let g = geometry
         let side = g.side
-        let frame = CGRect(x: 0, y: 0, width: side, height: side)
-        context.fill(
-            Path(roundedRect: frame, cornerRadius: side * 0.025, style: .continuous),
-            with: .linearGradient(Gradient(colors: [Self.woodLight, Self.woodDark]),
-                                  startPoint: .zero, endPoint: CGPoint(x: side, y: side))
-        )
-
-        // 줄
-        var grid = Path()
-        let far = g.inset + CGFloat(g.lines - 1) * g.cell
-        for i in 0..<g.lines {
-            let offset = g.inset + CGFloat(i) * g.cell
-            grid.move(to: CGPoint(x: offset, y: g.inset))
-            grid.addLine(to: CGPoint(x: offset, y: far))
-            grid.move(to: CGPoint(x: g.inset, y: offset))
-            grid.addLine(to: CGPoint(x: far, y: offset))
-        }
-        context.stroke(grid, with: .color(Self.lineColor.opacity(0.85)), lineWidth: max(0.8, side / 640))
-        context.stroke(
-            Path(CGRect(x: g.inset, y: g.inset, width: far - g.inset, height: far - g.inset)),
-            with: .color(Self.lineColor), lineWidth: max(1.2, side / 380)
-        )
-
-        // 화점
-        for star in GomokuBoardGeometry.starPoints where g.contains(star) {
-            let c = g.location(of: star)
-            let r = max(2, g.cell * 0.1)
-            context.fill(Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
-                         with: .color(Self.lineColor))
-        }
+        BoardGameDrawing.drawBoard(&context, side: side, inset: g.inset, lines: g.lines,
+                                   stars: GomokuBoardGeometry.starPoints.filter { g.contains($0) }.map { g.location(of: $0) })
 
         // 좌표(A..O 아래 · 1..15 왼쪽)
         if showsCoordinates {
@@ -614,23 +586,8 @@ struct GomokuBoardView: View {
     }
 
     static func drawStone(_ context: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, color: GomokuColor, opacity: Double) {
-        var layer = context
-        layer.opacity = opacity
-        let shadow = Path(ellipseIn: CGRect(x: c.x - r + r * 0.06, y: c.y - r + r * 0.14, width: r * 2, height: r * 2))
-        layer.fill(shadow, with: .color(.black.opacity(0.25)))
-        let circle = Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
-        let highlight = CGPoint(x: c.x - r * 0.35, y: c.y - r * 0.4)
-        switch color {
-        case .black:
-            layer.fill(circle, with: .radialGradient(
-                Gradient(colors: [Color(white: 0.45), Color(white: 0.05)]),
-                center: highlight, startRadius: 0, endRadius: r * 1.5))
-        case .white:
-            layer.fill(circle, with: .radialGradient(
-                Gradient(colors: [Color(white: 1.0), Color(white: 0.80)]),
-                center: highlight, startRadius: 0, endRadius: r * 1.6))
-            layer.stroke(circle, with: .color(.black.opacity(0.2)), lineWidth: 0.8)
-        }
+        BoardGameDrawing.drawStone(&context, at: c, radius: r,
+                                   color: color == .black ? .black : .white, opacity: opacity)
     }
 
     static func drawCross(_ context: inout GraphicsContext, at c: CGPoint, half: CGFloat, width: CGFloat, color: Color) {
@@ -806,9 +763,9 @@ struct GomokuPanel: View {
     private func playing(_ match: GomokuMatchState) -> some View {
         let showsForbidden = !match.isFinished && match.myColor == .black && match.turn == .black
         let forbidden = showsForbidden ? forbiddenMemo.points(for: match.board) : [:]
-        return HStack(alignment: .top, spacing: GomokuWindowLayout.columnSpacing) {
+        return BoardGameMatchLayout {
             GomokuPlayBoard(store: store, match: match, forbidden: forbidden, hovered: $hovered)
-                .frame(width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
+        } sidebar: {
             GomokuMatchSide(
                 store: store, match: match, me: me(),
                 hoveredReason: hovered.flatMap { forbidden[$0] },
@@ -818,9 +775,6 @@ struct GomokuPanel: View {
                 bubbleNow: previewBubbleNow,
                 safety: safety
             )
-            .frame(width: GomokuWindowLayout.sideColumnWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
-            // 안쪽 칸이 예산을 넘겨도 창 아래 여백을 칠하지 않는 보험(로비 오른쪽 열과 같다).
-            .clipped()
         }
     }
 
@@ -1506,18 +1460,20 @@ private struct GomokuMatchSide: View {
     private var isAI: Bool { store.isAIMatch }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
-            GomokuPlayerCard(store: store, face: .of(match.opponent), color: match.myColor.opponent,
-                             isTurn: match.turn == match.myColor.opponent, isMe: false,
-                             bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: false, isMuted: store.isMuted),
-                             bubbleNow: bubbleNow, isAI: isAI)
-                .frame(height: GomokuWindowLayout.playerCardHeight)
-            GomokuPlayerCard(store: store, face: me, color: match.myColor,
-                             isTurn: match.turn == match.myColor, isMe: true,
-                             bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: true, isMuted: store.isMuted),
-                             bubbleNow: bubbleNow)
-                .frame(height: GomokuWindowLayout.playerCardHeight)
-
+        BoardGameMatchSidebar {
+            VStack(spacing: GomokuWindowLayout.matchSideSpacing) {
+                GomokuPlayerCard(store: store, face: .of(match.opponent), color: match.myColor.opponent,
+                                 isTurn: match.turn == match.myColor.opponent, isMe: false,
+                                 bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: false, isMuted: store.isMuted),
+                                 bubbleNow: bubbleNow, isAI: isAI)
+                    .frame(height: GomokuWindowLayout.playerCardHeight)
+                GomokuPlayerCard(store: store, face: me, color: match.myColor,
+                                 isTurn: match.turn == match.myColor, isMe: true,
+                                 bubble: GomokuSpeechBubbleRule.latest(in: store.chat, mine: true, isMuted: store.isMuted),
+                                 bubbleNow: bubbleNow)
+                    .frame(height: GomokuWindowLayout.playerCardHeight)
+            }
+        } status: {
             // 판돈 칩 | 상태 상자 — 한 줄. 상태 상자에 줄이 붙으면(흑 패스 · 자동 착수 · 연속 경고) 이 줄만 아래로 자란다.
             HStack(alignment: .top, spacing: GomokuWindowLayout.matchSideSpacing) {
                 Group {
@@ -1526,19 +1482,15 @@ private struct GomokuMatchSide: View {
                 .frame(width: GomokuWindowLayout.stakeChipWidth)
                 statusBox
             }
-            .fixedSize(horizontal: false, vertical: true)
-
+        } chat: {
             // 채팅 — 카드들과 [기권] 사이의 남는 높이 전부(v0.3.30 사용자 요구). AI 판은 그 자리에 안내 카드.
             if isAI {
                 GomokuAIInfoCard(showsNoRecord: false)
-                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             } else {
                 GomokuChatCard(store: store, rendersPlainText: rendersPlainText, safety: safety)
-                    .frame(maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             }
-
+        } actions: {
             resignArea
-                .fixedSize(horizontal: false, vertical: true)
         }
         .onAppear { shownAt = GomokuResignGuard.clock() }
         .onChange(of: match.id) { _, _ in
@@ -1677,12 +1629,13 @@ private struct GomokuPlayerCard: View {
     /// 관전 중 `store.match` 는 nil 이라 스토어 링은 0초에 빨갛게 선다. 대국 호출부는 nil(기본값)이라 그대로다.
     var deadline: Date? = nil
 
-    static let portraitSize: CGFloat = 60
-    static let nameColumnWidth: CGFloat = 132
-    static let clockSize: CGFloat = 54
+    static let portraitSize = BoardGameLayout.portraitSize
+    static let nameColumnWidth = BoardGameLayout.nameColumnWidth
+    static let clockSize = BoardGameLayout.clockSize
 
     var body: some View {
-        HStack(spacing: 12) {
+        BoardGamePlayerCard(name: face.name, stoneColor: color == .black ? .black : .white,
+                            stoneText: GomokuText.stoneName(color), isTurn: isTurn, isMe: isMe) {
             Group {
                 if isAI {
                     GomokuAIPortrait()
@@ -1696,59 +1649,18 @@ private struct GomokuPlayerCard: View {
                 .overlay(alignment: .bottomTrailing) {
                     if let center = face.center { CenterCornerBadge(label: center, avatarSize: Self.portraitSize) }
                 }
-                .padding(4)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white.opacity(0.06)))
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Text(face.name)
-                        .font(.callout.weight(.bold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                    if isMe {
-                        Text("나")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(CheckTheme.accent)
-                            .padding(.horizontal, 6)
-                            .frame(height: 16)
-                            .background(Capsule().fill(CheckTheme.accent.opacity(0.18)))
-                    }
-                }
-                HStack(spacing: 6) {
-                    GomokuStoneDot(color: color, size: 14)
-                    Text(GomokuText.stoneName(color))
-                        .font(.caption)
-                        .foregroundStyle(CheckTheme.secondaryText)
-                        .lineLimit(1)
-                }
-            }
-            .frame(width: Self.nameColumnWidth, alignment: .leading)
+        } message: {
             GomokuSpeechBubbleSlot(message: bubble, isMine: isMe, previewNow: bubbleNow)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            ZStack {
-                if isTurn {
-                    // AI 차례에는 시계가 없다(마감이 없어 링이 0초로 빨갛게 선다) — "생각 중" 표시가 그 자리에 선다.
-                    if isAI {
-                        GomokuAIThinkingMark()
-                    } else if let deadline {
-                        GomokuWatchClock(deadline: deadline, isLive: store.isWindowVisible)
-                    } else {
-                        GomokuTurnClock(store: store)
-                    }
-                }
+        } clock: {
+            // AI 차례에는 시계가 없다(마감이 없어 링이 0초로 빨갛게 선다) — "생각 중" 표시가 그 자리에 선다.
+            if isAI {
+                GomokuAIThinkingMark()
+            } else if let deadline {
+                GomokuWatchClock(deadline: deadline, isLive: store.isWindowVisible)
+            } else {
+                GomokuTurnClock(store: store)
             }
-            .frame(width: Self.clockSize, height: Self.clockSize)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isTurn ? CheckTheme.accent.opacity(0.12) : CheckTheme.panel.opacity(0.9))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(isTurn ? CheckTheme.accent.opacity(0.6) : CheckTheme.border, lineWidth: isTurn ? 1.5 : 1)
-        )
     }
 }
 
@@ -1854,12 +1766,7 @@ private struct GomokuStoneDot: View {
     let size: CGFloat
 
     var body: some View {
-        Circle()
-            .fill(RadialGradient(
-                colors: color == .black ? [Color(white: 0.45), Color(white: 0.05)] : [Color.white, Color(white: 0.78)],
-                center: UnitPoint(x: 0.35, y: 0.3), startRadius: 0, endRadius: size))
-            .overlay(Circle().stroke(Color.black.opacity(color == .white ? 0.25 : 0), lineWidth: 0.5))
-            .frame(width: size, height: size)
+        BoardGameStoneDot(color: color == .black ? .black : .white, size: size)
     }
 }
 
@@ -1884,23 +1791,10 @@ struct GomokuClockRing: View {
     var overdueTint: Color? = nil
 
     var body: some View {
-        let fraction = min(1, max(0, remaining / GomokuText.turnSeconds))
         let tint = (remaining <= 0 ? overdueTint : nil)
             ?? (remaining <= 5 ? CheckTheme.danger : (remaining <= 10 ? CheckTheme.pending : CheckTheme.working))
-        ZStack {
-            Circle().stroke(Color.white.opacity(0.10), lineWidth: 5)
-            Circle()
-                .trim(from: 0, to: fraction)
-                .stroke(tint, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Text(GomokuText.remaining(remaining))
-                .font(.caption.weight(.bold))
-                .monospacedDigit()
-                .foregroundStyle(tint)
-        }
-        .padding(3)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(GomokuText.clockAccessibility(remaining))
+        BoardGameClockRing(remaining: remaining, duration: GomokuText.turnSeconds, tint: tint)
+            .accessibilityLabel(GomokuText.clockAccessibility(remaining))
     }
 }
 
@@ -2054,7 +1948,7 @@ private struct GomokuChatCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Self.spacing) {
+        BoardGameChatCard {
             header
             log
             GomokuQuickPhraseGrid(store: store)
@@ -2071,8 +1965,6 @@ private struct GomokuChatCard: View {
             GomokuChatComposer(store: store, rendersPlainText: rendersPlainText,
                                isCovered: safety?.blockReportSheet(on: .gomoku) != nil)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .gomokuCard(padding: 12)
     }
 
     private var header: some View {
@@ -2191,22 +2083,8 @@ private struct GomokuChatBubble: View {
     static let oppositeInset: CGFloat = 140
 
     var body: some View {
-        HStack(spacing: 0) {
-            if message.isMine { Spacer(minLength: Self.oppositeInset) }
-            Text(message.body)
-                .font(.caption)
-                .foregroundStyle(message.isMine ? Color.white : CheckTheme.primaryText)
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(message.isMine ? CheckTheme.accent.opacity(0.85) : Color.white.opacity(0.10))
-                )
-            if !message.isMine { Spacer(minLength: Self.oppositeInset) }
-        }
-        .frame(maxWidth: .infinity, alignment: message.isMine ? .trailing : .leading)
+        BoardGameChatBubble(body: message.body, isMine: message.isMine, oppositeInset: Self.oppositeInset,
+                            accent: CheckTheme.accent, primaryText: CheckTheme.primaryText)
     }
 }
 

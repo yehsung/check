@@ -130,23 +130,23 @@ extension WorkTimerStore {
 
 /// [원격 기계 연결] 쪽의 문구(한 곳).
 enum RemoteScannerText {
-    static let entryTitle = "원격 기계 연결"
+    static let entryTitle = "다른 기기 또는 서버 연결"
     static let entryDetail = "집 맥·리눅스 서버에서 쓴 AI 토큰도 내 계정에 합쳐요."
     static let lede = "다른 컴퓨터(집 맥, 리눅스 서버, 켜 둔 클라우드 서버)에서 Claude Code·Codex 를 쓰면, 그 컴퓨터에 작은 스캐너를 깔아 토큰 숫자만 이 계정에 올려요. 대화·코드 내용은 보내지 않아요."
     static let makeCommand = "연결 명령 만들기"
     static let makingCommand = "만드는 중…"
     static let copy = "복사"
-    static let commandHelp = "원격 컴퓨터의 터미널에 붙여넣으세요. 관리자 권한은 필요 없어요."
+    static let commandHelp = "그 기기·서버의 터미널에 붙여넣으세요. 관리자 권한은 필요 없어요."
     static func expiry(_ date: Date?, now: Date) -> String {
         guard let date else { return "10분 동안 한 번만 쓸 수 있어요." }
         let minutes = max(0, Int(ceil(date.timeIntervalSince(now) / 60)))
         return minutes > 0 ? "\(minutes)분 안에 한 번만 쓸 수 있어요." : "만료됐어요. 다시 만들어 주세요."
     }
     static let thisMacNote = "이 맥에는 스캐너가 필요 없어요 — 아잉체크가 이미 집계해요."
-    static let listTitle = "연결된 기계"
-    static let empty = "아직 연결된 기계가 없어요."
+    static let listTitle = "연결된 기기·서버"
+    static let empty = "아직 연결된 기기·서버가 없어요."
     static let failed = "목록을 불러오지 못했어요."
-    static let serverNotReady = "원격 기계 연결은 곧 열려요."
+    static let serverNotReady = "다른 기기·서버 연결은 곧 열려요."
     static let revoke = "끊기"
     static let revokeConfirm = "끊을까요?"
     static let revokeFailed = "끊지 못했어요. 잠시 뒤 다시 해 주세요."

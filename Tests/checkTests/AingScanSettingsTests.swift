@@ -86,7 +86,7 @@ struct AingScanSettingsServiceTests {
         #expect(rows.map(\.id) == ["d1", "d2"])
         #expect(rows[0].kindLabel == "맥" && rows[1].kindLabel == "리눅스")
         #expect(rows[0].monthTotal == 1_234_567 && rows[1].monthTotal == 0)
-        #expect(rows[1].name == "원격 기계")
+        #expect(rows[1].name == "다른 기기")
     }
 
     @Test

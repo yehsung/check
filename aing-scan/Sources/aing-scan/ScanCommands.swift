@@ -95,7 +95,7 @@ struct ScanCommands {
     func link(code rawCode: String, name: String?, force: Bool, schedule: Bool) async -> ScanExit {
         let code = Self.normalizeCode(rawCode)
         guard code.count >= 6 else {
-            env.output("연결 코드가 비었거나 짧습니다. 맥 아잉체크 → 설정 → [원격 기계 연결]에서 명령을 다시 복사해 주세요.")
+            env.output("연결 코드가 비었거나 짧습니다. 맥 아잉체크 → 설정 → [다른 기기 또는 서버 연결]에서 명령을 다시 복사해 주세요.")
             return .usage
         }
         if env.platform == .macOS, env.macAppPresent(), !force {
@@ -163,7 +163,7 @@ struct ScanCommands {
         let paths = env.paths
         guard let config = ScanStorage.load(ScanConfig.self, from: paths.config), config.linked,
               let key = ScanStorage.readKey(paths) else {
-            if !quiet { env.output("아직 연결되지 않았습니다. 맥 아잉체크 → 설정 → [원격 기계 연결]의 명령을 붙여넣어 주세요.") }
+            if !quiet { env.output("아직 연결되지 않았습니다. 맥 아잉체크 → 설정 → [다른 기기 또는 서버 연결]의 명령을 붙여넣어 주세요.") }
             return quiet ? .ok : .refused
         }
         guard let transport = env.transport else {
@@ -235,7 +235,7 @@ struct ScanCommands {
             try? ScanStorage.save(state, to: paths.state)
             disconnectLocally(config: config)
             ScanStorage.appendLog("revoked", paths: paths, now: now)
-            if !quiet { env.output("맥 아잉체크에서 이 기계의 연결을 끊었습니다. 다시 쓰려면 새 연결 명령을 붙여넣어 주세요.") }
+            if !quiet { env.output("맥 아잉체크에서 이 기기의 연결을 끊었습니다. 다시 쓰려면 새 연결 명령을 붙여넣어 주세요.") }
             return .refused
         } catch {
             state.lastResult = "network"
@@ -256,7 +256,7 @@ struct ScanCommands {
         }
         let state = ScanStorage.load(ScanState.self, from: paths.state) ?? ScanState()
         let keyPresent = ScanStorage.readKey(paths) != nil
-        env.output("기계 이름: \(config.name)")
+        env.output("기기 이름: \(config.name)")
         env.output("연결: \(config.linked && keyPresent ? "됨" : "끊김")")
         env.output("자동 실행: \(env.scheduler.isInstalled() ? "켜짐(10분마다)" : "꺼짐")")
         env.output("마지막 집계: \(state.lastRunAt.map(Self.local) ?? "없음")")
@@ -279,7 +279,7 @@ struct ScanCommands {
             try? await ScanServer(transport: transport).unlink(key: key)
         }
         disconnectLocally(config: config)
-        env.output("연결을 끊었습니다. 이 기계에서는 더 이상 집계하지 않습니다.")
+        env.output("연결을 끊었습니다. 이 기기에서는 더 이상 집계하지 않습니다.")
         return .ok
     }
 
@@ -312,7 +312,7 @@ struct ScanCommands {
         switch reason {
         case "expired": return "연결 코드가 만료됐습니다(10분). 맥 아잉체크에서 명령을 다시 복사해 주세요."
         case "used": return "이미 쓴 연결 코드입니다. 맥 아잉체크에서 명령을 다시 복사해 주세요."
-        case "limit": return "연결할 수 있는 기계 수(5대)를 넘었습니다. 맥 아잉체크 설정에서 안 쓰는 기계를 끊어 주세요."
+        case "limit": return "연결할 수 있는 기기 수(5대)를 넘었습니다. 맥 아잉체크 설정에서 안 쓰는 기기를 끊어 주세요."
         default: return "연결 코드를 확인하지 못했습니다. 맥 아잉체크에서 명령을 다시 복사해 주세요."
         }
     }
@@ -330,7 +330,7 @@ struct ScanCommands {
         let month = state.lastMonth ?? "-"
         let claude = TokenNumberFormatter.compactKorean(state.lastClaudeTotal ?? 0)
         let codex = TokenNumberFormatter.compactKorean(state.lastCodexTotal ?? 0)
-        var line = "\(month) 이 기계: Claude \(claude) · Codex \(codex)"
+        var line = "\(month) 이 기기: Claude \(claude) · Codex \(codex)"
         if let ag = state.lastAntigravityTotal, ag > 0 { line += " · 안티그래비티 \(TokenNumberFormatter.compactKorean(ag))" }
         switch sent {
         case true?: line += " — 올렸습니다"

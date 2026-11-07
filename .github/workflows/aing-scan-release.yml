@@ -1,0 +1,91 @@
+# 아잉체크 스캐너 배포(리눅스 판) — 태그 aing-scan-v* 를 밀면 돈다(대표 승인 #d_UxrqtwZedQIS, 2026-11-07).
+#  - 공식 Swift 6.4.2 정적 SDK(musl)로 x86_64·arm64 완전 정적 빌드. 서버 공개 키(anon)는 저장소 비밀값 CHECK_SUPABASE_ANON_KEY 에서
+#    작업 사본의 BuildConfig 에만 넣는다(저장소 파일은 그대로). 키가 비면 멈춘다.
+#  - 옛 배포판에서 띄워 본 뒤 프리릴리스 `aing-scan`(고정 태그 — 설치 주소가 바뀌지 않게)에 묶음과 검사값을 덮어 올린다.
+#    릴리스는 미리 사람이 '프리릴리스 · 최신 아님'으로 만든다 — 맥 앱 업데이트 확인과 랜딩 DMG 가 /releases/latest 를 보기 때문.
+#  - 액션은 SHA 로 고정한다(공개 저장소 공급망).
+name: aing-scan-release
+
+on:
+  push:
+    tags: ['aing-scan-v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aing-scan-release
+  cancel-in-progress: false
+
+jobs:
+  linux:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            sdk: x86_64-swift-linux-musl
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            sdk: aarch64-swift-linux-musl
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    env:
+      SWIFT_IMAGE: swift:6.4.2-noble
+      STATIC_SDK_URL: https://download.swift.org/swift-6.4.2-release/static-sdk/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE_static-linux-0.1.0.artifactbundle.tar.gz
+      STATIC_SDK_SHA256: 3786b179936d9cc9e266dd506bd1654176358d7b25288e243359f4d17cc4dc5a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 서버 공개 키를 작업 사본에 넣기
+        env:
+          KEY: ${{ secrets.CHECK_SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          [ -n "$KEY" ] || { echo "CHECK_SUPABASE_ANON_KEY 비밀값이 없다"; exit 1; }
+          python3 - aing-scan/Sources/aing-scan/BuildConfig.swift <<'PY'
+          import os, sys
+          p = sys.argv[1]
+          t = open(p, encoding="utf-8").read()
+          key = os.environ["KEY"].strip()
+          assert key and '"' not in key and "\\" not in key
+          old = "static let embeddedAnonKey: String? = nil"
+          assert t.count(old) == 1
+          open(p, "w", encoding="utf-8").write(t.replace(old, 'static let embeddedAnonKey: String? = "' + key + '"'))
+          PY
+      - name: 정적 빌드
+        env:
+          SDK: ${{ matrix.sdk }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          docker run --rm -e SDK -e STATIC_SDK_URL -e STATIC_SDK_SHA256 -v "$PWD":/src -w /src/aing-scan "$SWIFT_IMAGE" /bin/bash -c '
+            set -euo pipefail
+            swift sdk install "$STATIC_SDK_URL" --checksum "$STATIC_SDK_SHA256"
+            swift build -c release --swift-sdk "$SDK"
+            cp "$(swift build -c release --swift-sdk "$SDK" --show-bin-path)/aing-scan" /src/dist/aing-scan
+          '
+          file dist/aing-scan
+      - name: 옛 배포판에서 띄우기 · 배포판 표시 확인(망 없음)
+        run: |
+          set -euo pipefail
+          for image in ubuntu:18.04 debian:10 alpine:3.19; do
+            out=$(docker run --rm --network none -v "$PWD/dist":/dist "$image" /dist/aing-scan version)
+            echo "$image: $out"
+            case "$out" in *개발판*) echo "키가 안 들어갔다"; exit 1 ;; esac
+          done
+      - name: 묶음 · 검사값 · 프리릴리스에 올리기
+        env:
+          ARCH: ${{ matrix.arch }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd dist
+          tar -czf "aing-scan-linux-$ARCH.tar.gz" aing-scan
+          sha256sum "aing-scan-linux-$ARCH.tar.gz" > "aing-scan-linux-$ARCH.tar.gz.sha256"
+          gh release view aing-scan --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq '.isPrerelease' | grep -qx true \
+            || { echo "릴리스 aing-scan 이 없거나 프리릴리스가 아니다 — 멈춘다"; exit 1; }
+          gh release upload aing-scan "aing-scan-linux-$ARCH.tar.gz" "aing-scan-linux-$ARCH.tar.gz.sha256" \
+            --repo "$GITHUB_REPOSITORY" --clobber

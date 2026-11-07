@@ -42,7 +42,8 @@ struct AingScanMain {
         case "unlink":
             code = await commands.unlink()
         case "version", "--version", "-v":
-            print("aing-scan \(AingScanBuild.version)")
+            // 배포판은 서버 키가 들어 있다 — 개발판이면 그렇다고 밝힌다(릴리스 확인이 이 줄을 본다).
+            print("aing-scan \(AingScanBuild.version)" + (AingScanBuild.embeddedAnonKey == nil ? " (개발판)" : ""))
             code = .ok
         default:
             printUsage()
@@ -53,9 +54,9 @@ struct AingScanMain {
 
     static func printUsage() {
         print("""
-        아잉체크 스캐너 \(AingScanBuild.version) — 이 기계의 AI 토큰 사용량(숫자만)을 아잉체크 계정에 올립니다.
+        아잉체크 스캐너 \(AingScanBuild.version) — 이 기기의 AI 토큰 사용량(숫자만)을 아잉체크 계정에 올립니다.
 
-          aing-scan link <연결코드>   맥 아잉체크 → 설정 → [원격 기계 연결]에서 받은 코드로 연결
+          aing-scan link <연결코드>   맥 아잉체크 → 설정 → [다른 기기 또는 서버 연결]에서 받은 코드로 연결
           aing-scan run              지금 한 번 집계해 올리기(평소엔 10분마다 저절로)
           aing-scan status           연결·마지막 집계 보기
           aing-scan unlink           연결 끊기(자동 실행도 꺼짐)

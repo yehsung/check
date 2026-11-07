@@ -76,7 +76,7 @@ package struct ScannerDevice: Equatable, Sendable, Identifiable {
     package var kindLabel: String {
         if os.hasPrefix("macos") { return "맥" }
         if os.hasPrefix("linux") { return "리눅스" }
-        return os.isEmpty ? "기계" : os
+        return os.isEmpty ? "기기" : os
     }
 }
 
@@ -132,7 +132,7 @@ extension SupabaseWorkService {
             guard let id = scannerRow.deviceId, !id.isEmpty else { return nil }
             return ScannerDevice(
                 id: id,
-                name: scannerRow.name.flatMap { $0.isEmpty ? nil : $0 } ?? "원격 기계",
+                name: scannerRow.name.flatMap { $0.isEmpty ? nil : $0 } ?? "다른 기기",
                 os: scannerRow.os ?? "",
                 version: scannerRow.version ?? "",
                 linkedAt: scannerRow.linkedAt.flatMap { parseDate($0) },

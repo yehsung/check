@@ -79,3 +79,82 @@ jobs:
             # 연결 전 예약 실행은 조용히 0 으로 끝난다.
             AING_SCAN_HOME=/tmp/aing-scan-ci "$bin" run --quiet
           '
+
+  # 배포용 리눅스 판: 공식 정적 SDK(musl)로 **완전 정적** 바이너리 — glibc 판이 달라도(옛 서버) 돈다.
+  # 만든 묶음은 올리지 않는다(공개 배포는 따로 승인). 옛 배포판 컨테이너 셋에서 망 없이 띄워 보고,
+  # install.sh 를 file:// 주소로 끝까지 돌려 설치·검사값·연결 단계 진입까지 확인한다(서버 키가 없는 개발판이라 연결은 정중히 멈춘다).
+  linux-static:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            sdk: x86_64-swift-linux-musl
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            sdk: aarch64-swift-linux-musl
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 40
+    env:
+      SWIFT_IMAGE: swift:6.4.2-noble
+      STATIC_SDK_URL: https://download.swift.org/swift-6.4.2-release/static-sdk/swift-6.4.2-RELEASE/swift-6.4.2-RELEASE_static-linux-0.1.0.artifactbundle.tar.gz
+      STATIC_SDK_SHA256: 3786b179936d9cc9e266dd506bd1654176358d7b25288e243359f4d17cc4dc5a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 정적 빌드(망 있음 — SDK·의존 받기)
+        env:
+          SDK: ${{ matrix.sdk }}
+        run: |
+          set -euo pipefail
+          docker run --rm -e SDK -e STATIC_SDK_URL -e STATIC_SDK_SHA256 -v "$PWD":/src -w /src/aing-scan "$SWIFT_IMAGE" /bin/bash -c '
+            set -euo pipefail
+            swift --version
+            swift sdk install "$STATIC_SDK_URL" --checksum "$STATIC_SDK_SHA256"
+            swift build -c release --swift-sdk "$SDK"
+            mkdir -p /src/dist
+            cp ".build/$SDK/release/aing-scan" /src/dist/aing-scan
+          '
+          file dist/aing-scan
+      - name: 묶음 만들기(tar.gz + sha256 — 배포 자리와 같은 이름)
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          cd dist
+          tar -czf "aing-scan-linux-$ARCH.tar.gz" aing-scan
+          sha256sum "aing-scan-linux-$ARCH.tar.gz" > "aing-scan-linux-$ARCH.tar.gz.sha256"
+          ls -l
+      - name: 옛 배포판에서 띄우기(망 없음)
+        run: |
+          set -euo pipefail
+          for image in ubuntu:18.04 debian:10 alpine:3.19; do
+            echo "== $image"
+            docker run --rm --network none -v "$PWD/dist":/dist "$image" /bin/sh -c '
+              /dist/aing-scan version
+              AING_SCAN_HOME=/tmp/s /dist/aing-scan status
+              AING_SCAN_HOME=/tmp/s /dist/aing-scan run --quiet
+            '
+          done
+      - name: install.sh 끝까지(file:// 주소 · 망 없음)
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          docker run --rm --network none -e ARCH -v "$PWD/dist":/dist -v "$PWD/aing-scan/install.sh":/install.sh:ro --entrypoint /bin/sh curlimages/curl:8.11.1 -c '
+            set -eu
+            command -v curl >/dev/null || { echo "curl 없음"; exit 1; }
+            export HOME=/tmp/h; mkdir -p "$HOME"
+            out=$(AING_SCAN_BASE=file:///dist sh /install.sh ABCD2345EFGH 2>&1) && rc=0 || rc=$?
+            echo "$out"
+            test -x "$HOME/.aing-scan/bin/aing-scan"
+            echo "$out" | grep -q "스캐너를 설치했습니다"
+            echo "$out" | grep -q "서버 연결 설정이 빠진 스캐너"
+            # 검사값이 틀리면 설치하지 않는다
+            cp /dist/aing-scan-linux-$ARCH.tar.gz /tmp/x.tar.gz; mkdir -p /tmp/bad; cp /tmp/x.tar.gz /tmp/bad/aing-scan-linux-$ARCH.tar.gz
+            echo "0000000000000000000000000000000000000000000000000000000000000000  x" > /tmp/bad/aing-scan-linux-$ARCH.tar.gz.sha256
+            if HOME=/tmp/h2 AING_SCAN_BASE=file:///tmp/bad sh /install.sh ABCD2345EFGH; then echo "검사값 틀린데 설치됐다"; exit 1; fi
+            test ! -e /tmp/h2/.aing-scan/bin/aing-scan
+          '

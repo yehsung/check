@@ -1,6 +1,6 @@
 import Foundation
 
-package struct AlkkagiVector: Equatable, Sendable {
+package struct AlkkagiVector: Codable, Equatable, Sendable {
     package var x: Double
     package var y: Double
 
@@ -26,13 +26,13 @@ package struct AlkkagiVector: Equatable, Sendable {
 
 /// Local, fixed-step alkkagi rules in a 600-point board coordinate space.
 package struct AlkkagiGame: Equatable, Sendable {
-    package enum Player: String, CaseIterable, Sendable {
+    package enum Player: String, Codable, CaseIterable, Sendable {
         case black, white
 
         package var opponent: Player { self == .black ? .white : .black }
     }
 
-    package struct Stone: Identifiable, Equatable, Sendable {
+    package struct Stone: Codable, Identifiable, Equatable, Sendable {
         package let id: Int
         package let owner: Player
         package var position: AlkkagiVector
@@ -97,6 +97,37 @@ package struct AlkkagiGame: Equatable, Sendable {
                       isPlaced: false)
             }
         }
+    }
+
+    /// Restores a server snapshot without advancing clocks, placing stones, or settling a shot.
+    package static func restore(
+        stones: [Stone], currentPlayer: Player, phase: Phase,
+        placementRemaining: Double = placementDuration,
+        turnRemaining: Double = turnDuration, result: Result? = nil, shotCount: Int = 0
+    ) -> Self? {
+        guard stones.count <= 10, Set(stones.map(\.id)).count == stones.count,
+              shotCount >= 0, shotCount < Int.max,
+              placementRemaining.isFinite, (0...placementDuration).contains(placementRemaining),
+              turnRemaining.isFinite, (0...turnDuration).contains(turnRemaining),
+              (phase == .finished) == (result != nil),
+              stones.allSatisfy({ stone in
+                  (0..<10).contains(stone.id)
+                      && stone.owner == (stone.id < 5 ? .black : .white)
+                      && stone.position.x.isFinite && stone.position.y.isFinite
+                      && stone.velocity.x.isFinite && stone.velocity.y.isFinite
+                      && stone.velocity.length.isFinite
+                      && (stone.isOut || Self.isOnBoard(stone.position))
+                      && (stone.isPlaced || (!stone.isOut && stone.velocity.length == 0))
+              }) else { return nil }
+        var game = Self()
+        game.stones = stones
+        game.currentPlayer = currentPlayer
+        game.phase = phase
+        game.placementRemaining = placementRemaining
+        game.turnRemaining = turnRemaining
+        game.result = result
+        game.shotCount = shotCount
+        return game
     }
 
     package func placedCount(_ player: Player) -> Int {

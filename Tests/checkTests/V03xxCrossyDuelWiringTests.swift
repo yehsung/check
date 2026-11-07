@@ -430,10 +430,11 @@ struct V03xxCrossyDuelWiringTests {
     func theMiniGameWindowOpensTheCrossyDuelWindow() throws {
         // ★ 기준선: 이웃 문(마작)은 있다 — 목록을 읽는 길이 살아 있다.
         #expect(MiniGameDuelDoor.allCases.contains(.mahjong))
-        #expect(MiniGameDuelDoor.allCases.count == 7 && MiniGameDuelDoor.allCases.last == .crossyDuel)
+        #expect(MiniGameDuelDoor.allCases.count == 8 && MiniGameDuelDoor.allCases[6] == .crossyDuel)
+        #expect(MiniGameDuelDoor.allCases.last == .alkkagi)
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.crossy-duel.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckCrossyDuelWindowController.frameAutosaveName))
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 10)
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 11)
         #expect(MiniGameCrossyDuelEntryButton.title == "1:1 길건너")
         #expect(MiniGameCrossyDuelEntryButton.help == "100점에 먼저 닿으면 이기는 1:1 길건너 대결 창을 열어요")
         let panel = try cdwMac("MiniGamePanel.swift")

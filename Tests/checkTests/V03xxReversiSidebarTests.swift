@@ -54,7 +54,7 @@ private enum RSB {
 
     static func sidebar(invites: MiniGameDuelInvites = MiniGameDuelInvites(), clips: Bool) -> some View {
         MiniGameSidebar(selected: .flappy, isPlaying: false, isFrozen: false, invites: invites,
-                        onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {}, onCrossyDuel: {},
+                        onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {}, onCrossyDuel: {}, onAlkkagi: {},
                         clipsOverflowInsteadOfScroll: clips)
             .frame(width: layout.sidebarWidth, height: windowHeight, alignment: .top)
             .background(CheckTheme.background)
@@ -224,15 +224,15 @@ struct V03xxReversiSidebarTests {
         #expect(RSB.layout.sidebarIconSize == 30)
         #expect(RSB.layout.contentSize == CGSize(width: 888, height: 470))
         #expect(RSB.layout.gameAreaSize == CGSize(width: 700, height: 470))
-        // 문 수는 문 목록 하나에서 온다(아잉 마작이 여섯째 — MJ/SPEC.md §5.8, 1:1 길건너가 일곱째 — CD/SPEC.md §9.5 #18).
-        #expect(RSB.layout.sidebarDuelRows == 7)
-        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel])
+        // 알까기는 맨 아래 여덟째다. 기존 문 순서는 그대로다.
+        #expect(RSB.layout.sidebarDuelRows == 8)
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel, .alkkagi])
 
         let inner = RSB.windowHeight - RSB.layout.contentPadding * 2
         #expect(inner == 442 && RSB.layout.sidebarInnerHeight == inner)
-        // 같이 하기 칸 = 남은 자리(202), 줄 일곱(318)은 그보다 길어 칸 안에서 스크롤된다.
+        // 같이 하기 칸 = 남은 자리(202), 줄 여덟(364)은 그보다 길어 칸 안에서 스크롤된다.
         #expect(RSB.layout.sidebarDuelViewportHeight == 202)
-        #expect(RSB.layout.sidebarDuelRowsHeight == 318)
+        #expect(RSB.layout.sidebarDuelRowsHeight == 364)
         #expect(RSB.layout.sidebarDuelScrolls)
         #expect(RSB.layout.sidebarContentHeight == inner, "사이드바 합 \(RSB.layout.sidebarContentHeight) 이 안쪽 높이와 다르다")
         #expect(RSB.viewportBottom == RSB.innerBottom)
@@ -240,9 +240,9 @@ struct V03xxReversiSidebarTests {
         #expect(RSB.duelTile(3).maxY <= RSB.viewportBottom - RSB.layout.sidebarDuelFadeHeight)
         let fifthRowTop = RSB.duelRowsTop + 4 * (RSB.layout.sidebarRowHeight + RSB.layout.sidebarRowSpacing)
         #expect(fifthRowTop < RSB.viewportBottom && fifthRowTop + RSB.layout.sidebarRowHeight > RSB.viewportBottom)
-        // 끝까지 내리면(꼬리 = 흐림 높이) 마지막(일곱째) 문 전체가 흐림 위에 선다. 다섯째(아잉 뒤집기)는 그보다 92 위다.
-        #expect(RSB.maxScroll == 132)
-        let lastRowTop = fifthRowTop + 2 * (RSB.layout.sidebarRowHeight + RSB.layout.sidebarRowSpacing)
+        // 끝까지 내리면 마지막(여덟째) 문 전체가 흐림 위에 선다. 다섯째는 그보다 138 위다.
+        #expect(RSB.maxScroll == 178)
+        let lastRowTop = fifthRowTop + 3 * (RSB.layout.sidebarRowHeight + RSB.layout.sidebarRowSpacing)
         #expect(lastRowTop - RSB.maxScroll + RSB.layout.sidebarRowHeight == RSB.viewportBottom - RSB.layout.sidebarDuelFadeHeight)
         // 아잉 뒤집기 신청이면 그 줄만 칸 바닥까지 최소로 굴린다(마지막 문이 아니라 꼬리까지 내리지 않는다).
         #expect(RSB.reversiRevealScroll == 24)
@@ -384,6 +384,10 @@ struct V03xxReversiSidebarTests {
             case .reversi: invites.reversi = true
             case .mahjong: invites.mahjong = true
             case .crossyDuel: invites.crossyDuel = true
+            case .alkkagi:
+                #expect(!invites[door])
+                #expect(MiniGameDuelInvites.scrollTarget(from: none, to: invites) == nil)
+                continue
             }
             #expect(MiniGameDuelInvites.scrollTarget(from: none, to: invites) == door)
             #expect(MiniGameDuelDoor.allCases.filter { invites[$0] } == [door])
@@ -403,11 +407,12 @@ struct V03xxReversiSidebarTests {
             "MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() } ",
             "MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() } ",
             "MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() } ",
-            "MiniGameCrossyDuelEntryButton(hasInvite: invites.crossyDuel) { onCrossyDuel() } }",
+            "MiniGameCrossyDuelEntryButton(hasInvite: invites.crossyDuel) { onCrossyDuel() } ",
+            "MiniGameAlkkagiEntryButton { onAlkkagi() } }",
         ].joined()
-        #expect(panel.contains(order), "같이 하기 묶음이 오목 · 체스 · 테트리스 · 큐브 · 아잉 뒤집기 · 아잉 마작 · 1:1 길건너 순이 아니다")
+        #expect(panel.contains(order), "기존 같이 하기 문 뒤에 알까기가 마지막으로 서지 않았다")
         // 줄 순서와 저절로 굴리기의 자리표 순서가 같은 목록이다(선언은 합칠 때 다른 파일로 옮겨 가므로 글자가 아니라 값으로 잰다).
-        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel],
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel, .alkkagi],
                 "문 목록 순서가 줄 순서와 다르다")
 
         let alone = CGRect(x: 6, y: (RSB.layout.sidebarRowHeight - RSB.layout.sidebarIconSize) / 2,

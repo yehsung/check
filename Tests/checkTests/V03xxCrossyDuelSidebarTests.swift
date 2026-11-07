@@ -6,8 +6,8 @@ import Testing
 @testable import CheckCore
 
 // 1:1 길건너 — 미니게임 창 사이드바 **일곱째 문**(CD/SPEC.md §9.5 #18 · §10.2 T `V03xxCrossyDuelSidebarTests`).
-// 같이 하기 칸 202pt 그대로(11-03 확정 C — 줄 42/4 · 창 888×470), 스크롤 내용만 272 → 318(+꼬리 16), 끝까지 내린 거리 86 → 132.
-// 1:1 길건너 문이 **마지막**이라 그 신청은 칸을 끝(꼬리)까지 굴린다 — 마작은 이제 그 줄만 최소로 굴린다(V03xxMahjongSidebarTests).
+// 같이 하기 칸 202pt 그대로(줄 42/4, 창 888×470), 로컬 알까기가 여덟째로 붙어 줄 364(+꼬리 16), 끝 거리 178이다.
+// 길건너 신청은 일곱째 줄까지만 최소로 굴린다. 마지막 알까기에는 초대가 없다.
 // ImageRenderer 는 ScrollView 안을 못 그리므로(MC:91) 굴림은 그림이 아니라 **스크롤 목표 id · 실제 NSScrollView 오프셋 값**으로 재고,
 // 점은 테두리 없는 창에 붙인 실제 칸을 cacheDisplay 로 읽는다(orderFront 없음 — 화면에 안 뜨고 클릭을 가로채지 않는다).
 //
@@ -34,7 +34,7 @@ private enum CSB {
     static func sidebar(invites: MiniGameDuelInvites = MiniGameDuelInvites()) -> some View {
         MiniGameSidebar(selected: .flappy, isPlaying: false, isFrozen: false, invites: invites,
                         onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {},
-                        onCrossyDuel: {}, clipsOverflowInsteadOfScroll: false)
+                        onCrossyDuel: {}, onAlkkagi: {}, clipsOverflowInsteadOfScroll: false)
             .frame(width: layout.sidebarWidth, height: windowHeight, alignment: .top)
             .background(CheckTheme.background)
     }
@@ -121,16 +121,16 @@ struct V03xxCrossyDuelSidebarTests {
         #expect(CSB.layout.sidebarRowHeight == 42 && CSB.layout.sidebarRowSpacing == 4)
         #expect(CSB.layout.contentSize == CGSize(width: 888, height: 470))
         #expect(CSB.layout.gameAreaSize == CGSize(width: 700, height: 470))
-        #expect(CSB.layout.sidebarDuelRows == 7)
-        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel])
+        #expect(CSB.layout.sidebarDuelRows == 8)
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel, .alkkagi])
         #expect(CSB.layout.sidebarDuelViewportHeight == 202, "같이 하기 칸은 그대로")
-        #expect(CSB.layout.sidebarDuelRowsHeight == 318, "줄 일곱 = 7×42 + 6×4")
-        #expect(CSB.maxScroll == 132)
-        let seventhRowTop = CSB.duelRowsTop + 6 * (CSB.layout.sidebarRowHeight + CSB.layout.sidebarRowSpacing)
-        #expect(seventhRowTop - CSB.maxScroll + CSB.layout.sidebarRowHeight == CSB.viewportBottom - CSB.layout.sidebarDuelFadeHeight,
-                "끝까지 내리면 일곱째 문 바닥이 흐림 위에 딱 선다")
-        // ★ 기준선: 여섯 문일 때의 끝 거리(86)와 갈린다 — 같은 산식이 문 수를 따라간다.
-        #expect(CSB.maxScroll - (CSB.layout.sidebarRowHeight + CSB.layout.sidebarRowSpacing) == 86)
+        #expect(CSB.layout.sidebarDuelRowsHeight == 364, "줄 여덟 = 8×42 + 7×4")
+        #expect(CSB.maxScroll == 178)
+        let lastRowTop = CSB.duelRowsTop + 7 * (CSB.layout.sidebarRowHeight + CSB.layout.sidebarRowSpacing)
+        #expect(lastRowTop - CSB.maxScroll + CSB.layout.sidebarRowHeight == CSB.viewportBottom - CSB.layout.sidebarDuelFadeHeight,
+                "끝까지 내리면 여덟째 알까기 문 바닥이 흐림 위에 딱 선다")
+        // ★ 기준선: 일곱 문일 때의 끝 거리(132)와 갈린다.
+        #expect(CSB.maxScroll - (CSB.layout.sidebarRowHeight + CSB.layout.sidebarRowSpacing) == 132)
     }
 
     /// 없으면: 1:1 길건너 신청이 와도 칸이 굴러갈 목표가 없거나(첨자가 다른 칸을 읽는다) 위쪽 문으로 굴러 일곱째 문 점을 못 본다.
@@ -145,6 +145,7 @@ struct V03xxCrossyDuelSidebarTests {
         #expect(MiniGameDuelInvites.scrollTarget(from: crossyOnly, to: MiniGameDuelInvites(mahjong: true, crossyDuel: true)) == .mahjong)
         #expect(MiniGameDuelInvites.scrollTarget(from: crossyOnly, to: crossyOnly) == nil)
         #expect(MiniGameDuelDoor.allCases.filter { crossyOnly[$0] } == [.crossyDuel])
+        #expect(!crossyOnly[.alkkagi], "로컬 알까기에 초대 점이 섰다")
     }
 
     /// 없으면(결과): 칸 안 실제 ScrollView 의 내용이 일곱 줄 + 꼬리가 아니거나, 1:1 길건너 신청이 와도 일곱째 문이 접힘 아래에 남아 점을
@@ -155,7 +156,7 @@ struct V03xxCrossyDuelSidebarTests {
         defer { window.contentView = nil; window.close() }
         let scrollView = try #require(csbFirstSubview(of: host, NSScrollView.self), "같이 하기 칸에 스크롤 뷰가 없다")
         let document = try #require(scrollView.documentView)
-        #expect(abs(document.frame.height - (318 + 16)) < 0.5, "스크롤 내용이 \(document.frame.height) 다 — 줄 일곱 + 꼬리가 아니다")
+        #expect(abs(document.frame.height - (364 + 16)) < 0.5, "스크롤 내용이 \(document.frame.height) 다 — 줄 여덟 + 꼬리가 아니다")
         #expect(csbScrolled(scrollView) < 0.5, "신청이 없는데 처음부터 굴러가 있다")
         // ★ 기준선: 맨 위에서는 일곱째 문 자리가 칸 바닥 아래(보이지 않음)다.
         #expect(CSB.duelTile(6).minY >= CSB.viewportBottom, "일곱째 문이 맨 위에서 이미 칸 안에 있다 — 스크롤할 까닭이 없다")
@@ -171,11 +172,11 @@ struct V03xxCrossyDuelSidebarTests {
         #expect(abs(csbScrolled(scrollView) - CSB.revealScroll(5)) < 0.5,
                 "마작 신청이 마작 줄까지(\(CSB.revealScroll(5)))가 아니라 \(csbScrolled(scrollView)) 굴렀다")
         deliver(MiniGameDuelInvites(gomoku: true, mahjong: true, crossyDuel: true))
-        #expect(abs(csbScrolled(scrollView) - CSB.maxScroll) < 0.5,
-                "1:1 길건너 신청이 왔는데 칸이 끝(\(CSB.maxScroll))까지 안 굴렀다(\(csbScrolled(scrollView)))")
+        #expect(abs(csbScrolled(scrollView) - CSB.revealScroll(6)) < 0.5,
+                "1:1 길건너 신청이 일곱째 줄까지(\(CSB.revealScroll(6))) 굴러가지 않았다(\(csbScrolled(scrollView)))")
         let lit = try csbHostBitmap(host)
-        let seventh = CSB.duelTile(6, scrolled: CSB.maxScroll).insetBy(dx: -6, dy: -6)
-        let sixth = CSB.duelTile(5, scrolled: CSB.maxScroll).insetBy(dx: -6, dy: -6)
+        let seventh = CSB.duelTile(6, scrolled: CSB.revealScroll(6)).insetBy(dx: -6, dy: -6)
+        let sixth = CSB.duelTile(5, scrolled: CSB.revealScroll(6)).insetBy(dx: -6, dy: -6)
         #expect(seventh.maxY <= CSB.viewportBottom, "일곱째 문 자리가 칸 밖이다")
         let litSeventh = csbInk(lit, in: seventh, csbRed)
         print("[사이드바] 일곱째 문 점 \(litSeventh)px")

@@ -297,8 +297,8 @@ struct V03xxMahjongWiringTests {
     func theMiniGameWindowOpensTheMahjongWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.mahjong.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckMahjongWindowController.frameAutosaveName))
-        // 1:1 길건너 창이 더해져 열이다(CD/SPEC.md §9.5 #17).
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 10)
+        // 로컬 알까기 창까지 열하나다.
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 11)
         #expect(MiniGameMahjongEntryButton.title == "아잉 마작")
         #expect(MiniGameMahjongEntryButton.help == "리치 마작 4인 대국 창을 열어요")
         let panel = try mwtMac("MiniGamePanel.swift")
@@ -326,8 +326,8 @@ struct V03xxMahjongWiringTests {
         let miniGame = try mwtMac("WorkTimerStoreMiniGame.swift")
         guard miniGame.contains("enum MiniGameDuelDoor") else { return }
         let caseLine = try #require(mwtBetween(miniGame, "enum MiniGameDuelDoor", "}"))
-        // 1:1 길건너(CD/SPEC.md §9.5 #19)가 맨 뒤에 붙어 마작은 끝에서 둘째다 — 마작 바로 뒤가 길건너 하나뿐인지 잰다.
-        #expect(caseLine.hasSuffix("mahjong, crossyDuel "), "문 목록이 mahjong, crossyDuel 로 끝나지 않는다: \(caseLine)")
+        // 기존 마작과 길건너 뒤에 로컬 알까기만 덧붙인다.
+        #expect(caseLine.hasSuffix("mahjong, crossyDuel, alkkagi "), "문 목록 끝 순서가 다르다: \(caseLine)")
         let rummy = try #require(caseLine.range(of: "rummy"))
         let mahjong = try #require(caseLine.range(of: "mahjong"))
         #expect(rummy.upperBound <= mahjong.lowerBound, "mahjong 이 rummy 뒤가 아니다")
@@ -335,7 +335,7 @@ struct V03xxMahjongWiringTests {
         let app = try mwtMac("CheckApp.swift")
         let hook = try #require(app.range(of: "CheckMahjongWindowController.shared.onClosed = {"))
         #expect(String(app[hook.upperBound...].prefix(120)).contains("duelWindowDidClose(.mahjong, byUser: byUser)"))
-        #expect(Array(MiniGameDuelDoor.allCases.suffix(2)) == [.mahjong, .crossyDuel])
+        #expect(Array(MiniGameDuelDoor.allCases.suffix(3)) == [.mahjong, .crossyDuel, .alkkagi])
     }
 
     // MARK: #21 확성기 · #22 미션 아이콘

@@ -8,8 +8,8 @@ import Testing
 // 아잉 마작 — 미니게임 창 사이드바 **여섯째 문**(MJ/SPEC.md §5.8 확정 C — 리버시 카드 답 "C 스크롤로": 줄 42/4 · 창 888×470 ·
 // 같이 하기 칸 202pt 그대로, 스크롤 내용만 226 → 272(+꼬리 16), 끝까지 내린 거리 40 → 86).
 // 리버시 `V03xxReversiSidebarTests` 틀(산식 · 화면에 올리지 않는 창의 실제 ScrollView)을 여섯 문으로 늘린다.
-// 1:1 길건너 통합(CD/SPEC.md §9.5 #18)에서 일곱째 문이 마작 뒤에 붙었다 — 스크롤 내용 318(+꼬리 16) · 끝 거리 132. 마작은 이제
-// 마지막 문이 아니라 신청이 오면 리버시처럼 **그 줄만 최소로** 굴린다(끝까지는 일곱째 문 몫 — V03xxCrossyDuelSidebarTests).
+// 1:1 길건너와 로컬 알까기가 마작 뒤에 붙었다. 여덟 줄 364(+꼬리 16), 끝 거리 178이다.
+// 마작 신청은 리버시처럼 그 줄만 최소로 굴린다.
 // 화면에 올리지 않는다 — 테두리 없는 창에 붙이기만 한다(orderFront 없음).
 //
 // 각 시험의 첫 줄 주석은 **"없으면 어떤 결함이 초록으로 통과하는가"** 다(관례).
@@ -36,7 +36,7 @@ private enum MSB {
 
     static func sidebar(invites: MiniGameDuelInvites = MiniGameDuelInvites()) -> some View {
         MiniGameSidebar(selected: .flappy, isPlaying: false, isFrozen: false, invites: invites,
-                        onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {}, onCrossyDuel: {},
+                        onSelect: { _ in }, onGomoku: {}, onChess: {}, onTetrisDuel: {}, onRummy: {}, onReversi: {}, onMahjong: {}, onCrossyDuel: {}, onAlkkagi: {},
                         clipsOverflowInsteadOfScroll: false)
             .frame(width: layout.sidebarWidth, height: windowHeight, alignment: .top)
             .background(CheckTheme.background)
@@ -141,21 +141,21 @@ struct V03xxMahjongSidebarTests {
         #expect(MSB.layout.contentSize == CGSize(width: 888, height: 470))
         #expect(MSB.layout.gameAreaSize == CGSize(width: 700, height: 470))
         // 1:1 길건너가 일곱째(CD/SPEC.md §9.5 #18) — 마작은 여섯째 그대로다.
-        #expect(MSB.layout.sidebarDuelRows == 7)
-        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel])
+        #expect(MSB.layout.sidebarDuelRows == 8)
+        #expect(MiniGameDuelDoor.allCases == [.gomoku, .chess, .tetris, .rummy, .reversi, .mahjong, .crossyDuel, .alkkagi])
         #expect(MiniGameDuelDoor.allCases.firstIndex(of: .mahjong) == 5, "마작이 여섯째 자리가 아니다")
         #expect(MSB.layout.sidebarDuelViewportHeight == 202, "같이 하기 칸은 그대로")
-        #expect(MSB.layout.sidebarDuelRowsHeight == 318, "줄 일곱 = 7×42 + 6×4")
+        #expect(MSB.layout.sidebarDuelRowsHeight == 364, "줄 여덟 = 8×42 + 7×4")
         #expect(MSB.layout.sidebarDuelFadeHeight == 16)
-        #expect(MSB.maxScroll == 132)
+        #expect(MSB.maxScroll == 178)
         let sixthRowTop = MSB.duelRowsTop + 5 * (MSB.layout.sidebarRowHeight + MSB.layout.sidebarRowSpacing)
         // 마작 초대는 그 줄 바닥이 칸 바닥에 닿을 만큼만 굴린다(70) — 끝까지 내리면 여섯째 문은 흐림 위에 온전히 선다.
         #expect(MSB.mahjongRevealScroll == 70)
         #expect(sixthRowTop - MSB.mahjongRevealScroll + MSB.layout.sidebarRowHeight == MSB.viewportBottom)
         #expect(sixthRowTop - MSB.maxScroll + MSB.layout.sidebarRowHeight <= MSB.viewportBottom - MSB.layout.sidebarDuelFadeHeight,
                 "끝까지 내리면 여섯째 문 바닥이 흐림 위에 선다")
-        // ★ 기준선: 여섯 문일 때의 끝 거리(86)와 갈린다 — 같은 산식이 문 수를 따라간다.
-        #expect(MSB.maxScroll - (MSB.layout.sidebarRowHeight + MSB.layout.sidebarRowSpacing) == 86)
+        // ★ 기준선: 일곱 문일 때의 끝 거리(132)와 갈린다.
+        #expect(MSB.maxScroll - (MSB.layout.sidebarRowHeight + MSB.layout.sidebarRowSpacing) == 132)
     }
 
     /// 없으면(결과): 칸 안 실제 ScrollView 의 내용이 여섯 줄 + 꼬리가 아니라 끝까지 내려도 여섯째 문(아잉 마작)이 안 보이거나 흐림 밑에 깔린다.
@@ -165,7 +165,7 @@ struct V03xxMahjongSidebarTests {
         defer { window.contentView = nil; window.close() }
         let scrollView = try #require(msbFirstSubview(of: host, NSScrollView.self), "같이 하기 칸에 스크롤 뷰가 없다")
         let document = try #require(scrollView.documentView)
-        #expect(abs(document.frame.height - (318 + 16)) < 0.5, "스크롤 내용이 \(document.frame.height) 다 — 줄 일곱 + 꼬리가 아니다")
+        #expect(abs(document.frame.height - (364 + 16)) < 0.5, "스크롤 내용이 \(document.frame.height) 다 — 줄 여덟 + 꼬리가 아니다")
         #expect(msbScrolled(scrollView) < 0.5, "초대가 없는데 처음부터 굴러가 있다")
         let top = try msbHostBitmap(host)
         // ★ 기준선: 맨 위에서는 여섯째 문 자리가 칸 바닥 아래(보이지 않음)다.
@@ -196,7 +196,7 @@ struct V03xxMahjongSidebarTests {
         deliver(MiniGameDuelInvites(gomoku: true))
         #expect(msbScrolled(scrollView) < 0.5, "보이는 문의 신청에 칸이 굴렀다(\(msbScrolled(scrollView)))")
         deliver(MiniGameDuelInvites(gomoku: true, mahjong: true))
-        // 1:1 길건너 일곱째 문이 뒤에 있어 끝(132)까지가 아니라 마작 줄이 칸 안에 들어올 만큼(70)만 구른다.
+        // 뒤에 두 문이 있어 끝(178)까지가 아니라 마작 줄이 칸 안에 들어올 만큼(70)만 구른다.
         #expect(abs(msbScrolled(scrollView) - MSB.mahjongRevealScroll) < 0.5,
                 "아잉 마작 초대가 왔는데 칸이 여섯째 문까지(70) 안 굴렀다(\(msbScrolled(scrollView)))")
         let lit = try msbHostBitmap(host)

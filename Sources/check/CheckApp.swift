@@ -222,6 +222,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireMahjong()
         // 1:1 길건너 — 마작과 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireCrossyDuel()
+        // 로컬 2인 알까기 — 창 닫힘과 계정 전환 정리만 잇는다.
+        wireAlkkagi()
         // 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로. **오버레이 컨트롤러를 만든 뒤에** 잇는다: 배너는 캐릭터 패널 한 칸 위에
         // 서고, 대결 미룸(위 세 판의 단계)이 이미 배선돼 있어야 첫 확성기가 제자리에 뜬다.
         wireMegaphoneBanner()
@@ -731,6 +733,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }.start()
         let crossyDuelActivity = CrossyDuelActivityHold()
         crossyDuel.onHoldingActivityChange = { holding in crossyDuelActivity.set(holding) }
+    }
+
+    private func wireAlkkagi() {
+        CheckAlkkagiWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.alkkagi, byUser: byUser)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) {
+            CheckAlkkagiWindowController.shared.close()
+        }.start()
     }
 
     /// 아잉 큐브 창을 닫는다(멱등 — 창이 아직 없으면 아무것도 안 한다). 창 컨트롤러의 공개 표면은 `configure`·`show` 뿐이라

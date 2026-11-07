@@ -538,7 +538,7 @@ struct V03xxReversiWiringTests {
     func theMiniGameWindowOpensTheReversiWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.reversi.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckReversiWindowController.frameAutosaveName))
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 10, "아잉 마작 창이 더해져 아홉, 1:1 길건너 창이 더해져 열")
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 11, "로컬 알까기 창까지 열하나")
 
         #expect(MiniGameReversiEntryButton.title == "아잉 뒤집기")
         #expect(MiniGameReversiEntryButton.help == "리버시 규칙 1:1 대결 창을 열어요")

@@ -11,9 +11,12 @@ final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
     static let fixedContentSize = BoardGameLayout.contentSize
 
     private var windowStorage: NSWindow?
+    private var onlineStore: AlkkagiOnlineStore?
     private(set) var isOpen = false
     var currentWindow: NSWindow? { windowStorage }
     var onClosed: (@MainActor (_ byUser: Bool) -> Void)?
+
+    func configure(store: AlkkagiOnlineStore) { onlineStore = store }
 
     func show(me: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 1")) {
         let window: NSWindow
@@ -27,17 +30,26 @@ final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
             windowStorage = window
         }
         if !isOpen {
-            let hosting = NSHostingView(rootView: AlkkagiGameView(onReturn: { [weak self] in
-                self?.closeFromUser()
-            }, me: me))
-            hosting.autoresizingMask = [.width, .height]
-            window.contentView = hosting
+            if let onlineStore {
+                let hosting = NSHostingView(rootView: AlkkagiOnlinePanel(store: onlineStore, onReturn: { [weak self] in
+                    self?.closeFromUser()
+                }))
+                hosting.autoresizingMask = [.width, .height]
+                window.contentView = hosting
+            } else {
+                let hosting = NSHostingView(rootView: AlkkagiGameView(onReturn: { [weak self] in
+                    self?.closeFromUser()
+                }, me: me))
+                hosting.autoresizingMask = [.width, .height]
+                window.contentView = hosting
+            }
         }
         window.setContentSize(Self.fixedContentSize)
         if !CheckPanelVisibility.isRunningTests { NSApp.activate() }
         if window.isMiniaturized { window.deminiaturize(nil) }
         isOpen = true
         window.makeKeyAndOrderFront(nil)
+        onlineStore?.windowDidShow()
     }
 
     /// 로그아웃과 계정 전환은 목록을 다시 열지 않는다. 숨은 게임의 타이머도 함께 거둔다.
@@ -46,6 +58,7 @@ final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
         windowStorage?.orderOut(nil)
         isOpen = false
         windowStorage?.contentView = nil
+        onlineStore?.windowDidHide()
         onClosed?(false)
     }
 
@@ -59,7 +72,15 @@ final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
         guard (notification.object as AnyObject?) === windowStorage, isOpen else { return }
         isOpen = false
         windowStorage?.contentView = nil
+        onlineStore?.windowDidClose()
         onClosed?(true)
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) { onlineStore?.windowDidHide() }
+    func windowDidDeminiaturize(_ notification: Notification) { onlineStore?.windowDidShow() }
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        guard isOpen, let window = windowStorage else { return }
+        onlineStore?.windowOcclusionDidChange(visible: window.occlusionState.contains(.visible))
     }
 
     static func makeWindow() -> NSWindow {

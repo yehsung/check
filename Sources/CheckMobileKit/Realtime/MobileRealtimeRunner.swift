@@ -214,6 +214,9 @@ package final class MobileRealtimeRunner {
             effectLog.append(effect)
             if effectLog.count > 50 { effectLog.removeFirst(effectLog.count - 50) }
             switch effect {
+            case .alkkagiSignal:
+                // 알까기 화면은 맥에 있다. 알림을 메시지 소비로 보내지 않는다.
+                break
             case .connect(let linkToken):
                 performConnect(linkToken: linkToken)
             case .disconnect:

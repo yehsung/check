@@ -215,6 +215,9 @@ extension WorkTimerStore {
         if case .didWake = event, !realtime.transportAvailable {
             crossyDuel.systemDidWake()
         }
+        if case .didWake = event, !realtime.transportAvailable {
+            alkkagi.systemDidWake()
+        }
     }
 
     /// full jitter 의 난수원. 링은 순수해야 하므로 난수는 **주입**이다.
@@ -266,6 +269,7 @@ extension WorkTimerStore {
                 mahjong.realtimeDidJoin()
                 // 1:1 길건너도 같다 — 소켓이 끊긴 사이 온 신청과 시작·정산을 이 한 번이 따라잡는다.
                 crossyDuel.realtimeDidJoin()
+                alkkagi.realtimeDidJoin()
             case .drain:
                 // 근무중 게이트를 지난 뒤에만 소비한다. 여기서 requestDrain 을 무조건 부르면
                 // 집 맥이 회사 맥의 찌르기를 훔친다(위 realtimeMayConsumePokes 주석).
@@ -305,6 +309,8 @@ extension WorkTimerStore {
             case .crossyDuelSignal:
                 // 1:1 길건너 신호도 조회뿐이다(소비 아님) — 두 맥이 모두 받아도 누구의 것을 훔치지 않아 게이트가 없다.
                 crossyDuel.handleSignal()
+            case .alkkagiSignal:
+                alkkagi.handleSignal()
             case .megaphoneSignal:
                 // 확성기 신호(2026-10-30)도 조회뿐이다(소비 아님 — 줄의 소비는 같은 묶음의 `ring` 이 맡는다). 근무 게이트가 없다:
                 // 배너는 근무 밖에서도 뜬다. 스로틀도 없다 — 겹친 호출은 배너 스토어가 하나로 모은다.

@@ -222,13 +222,10 @@ extension WorkTimerStore {
         closeMiniGamePanel()
     }
 
-    /// 로컬 2인 알까기 창을 먼저 띄우고 미니게임 창을 내린다.
+    /// 알까기 로비 또는 진행 중인 온라인 판을 열고 미니게임 창을 내린다.
     func openAlkkagiFromMiniGame() {
         noteMiniGameDuelReturn(.alkkagi)
-        let face = GomokuPlayerFace.me(from: self)
-        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        CheckAlkkagiWindowController.shared.show(me: AlkkagiPlayerProfile(
-            name: name.isEmpty ? face.name : name, characterID: face.characterID))
+        alkkagi.openWindow(focusMatchID: nil)
         closeMiniGamePanel()
     }
 

@@ -20,7 +20,9 @@ struct AlkkagiGameView: View {
     var onReturn: (() -> Void)? = nil
     var me = AlkkagiPlayerProfile(name: "플레이어 1")
     var opponent = AlkkagiPlayerProfile(name: "플레이어 2")
+    var onlineStore: AlkkagiOnlineStore? = nil
     @State private var model = AlkkagiLocalModel()
+    @State private var confirmsResign = false
     @GestureState private var dragIsActive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private let timer = Timer.publish(every: 1.0 / 120, on: .main, in: .common).autoconnect()
@@ -34,15 +36,15 @@ struct AlkkagiGameView: View {
             } sidebar: {
                 BoardGameMatchSidebar {
                     VStack(spacing: BoardGameLayout.matchSideSpacing) {
-                        playerCard(.white)
-                        playerCard(.black)
+                        playerCard(model.myColor.opponent)
+                        playerCard(model.myColor)
                     }
                 } status: {
                     statusCard
                 } chat: {
                     AlkkagiChatPanel(model: model)
                 } actions: {
-                    EmptyView()
+                    onlineActions
                 }
             }
         }
@@ -51,6 +53,7 @@ struct AlkkagiGameView: View {
         .background(CheckTheme.background)
         .foregroundStyle(CheckTheme.primaryText)
         .preferredColorScheme(.dark)
+        .onAppear { model.attachOnline(onlineStore) }
         .onReceive(timer) { _ in model.tick() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in model.cancelAim() }
         .onExitCommand { model.cancelAim() }
@@ -63,7 +66,7 @@ struct AlkkagiGameView: View {
         HStack(spacing: 10) {
             Image(systemName: "circle.lefthalf.filled").foregroundStyle(CheckTheme.accent)
             Text("알까기").font(.title2.weight(.bold))
-            Text("로컬 2인").font(.caption).foregroundStyle(CheckTheme.secondaryText)
+            Text(onlineStore == nil ? "로컬 2인" : "온라인 1:1").font(.caption).foregroundStyle(CheckTheme.secondaryText)
             Spacer()
             if let onReturn {
                 Button(action: onReturn) { Label("게임 목록", systemImage: "chevron.left") }.buttonStyle(.bordered)
@@ -71,17 +74,23 @@ struct AlkkagiGameView: View {
             Button { model.soundEnabled.toggle() } label: {
                 Image(systemName: model.soundEnabled ? "speaker.wave.2" : "speaker.slash").frame(width: 22, height: 22)
             }.buttonStyle(.plain).accessibilityLabel(model.soundEnabled ? "소리 끄기" : "소리 켜기")
-            Button { model.restart() } label: { Label("새 판", systemImage: "arrow.clockwise") }
-                .buttonStyle(.bordered).keyboardShortcut("r", modifiers: .command).help("새 판 시작 (⌘R)")
+            if onlineStore == nil {
+                Button { model.restart() } label: { Label("새 판", systemImage: "arrow.clockwise") }
+                    .buttonStyle(.bordered).keyboardShortcut("r", modifiers: .command).help("새 판 시작 (⌘R)")
+            }
         }.frame(height: BoardGameLayout.headerHeight)
     }
 
     private func playerCard(_ player: AlkkagiGame.Player) -> some View {
-        let active = model.game.currentPlayer == player && model.game.phase != .finished
-        let profile = player == .black ? me : opponent
+        let currentPlayer = onlineStore?.state?.currentPlayer ?? model.game.currentPlayer
+        let finished = onlineStore.map { $0.state?.phase == .finished } ?? (model.game.phase == .finished)
+        let active = currentPlayer == player && !finished
+        let peer = player == .black ? onlineStore?.state?.black : onlineStore?.state?.white
+        let profile = peer.map { AlkkagiPlayerProfile(name: $0.displayName, characterID: $0.characterID) }
+            ?? (player == .black ? me : opponent)
         let detail = model.game.phase == .placing ? "\(player.title) 배치 \(model.game.placedCount(player))/5" : "\(player.title) \(model.game.remaining(player))개"
         return BoardGamePlayerCard(name: profile.name, stoneColor: player == .black ? .black : .white,
-                                   stoneText: detail, isTurn: active, isMe: player == .black) {
+                                   stoneText: detail, isTurn: active, isMe: player == model.myColor) {
             playerPortrait(profile)
         } message: {
             Text(active ? (model.game.phase == .placing ? "돌을 배치해 주세요" : "내 차례예요") : "기다리는 중")
@@ -177,12 +186,13 @@ struct AlkkagiGameView: View {
 
     @ViewBuilder
     private var resultOverlay: some View {
-        if model.game.phase == .finished {
+        if model.game.phase == .finished && (onlineStore == nil || onlineStore?.state?.phase == .finished) {
             VStack(spacing: 12) {
                 Image(systemName: "flag.checkered").font(.title2).foregroundStyle(CheckTheme.accent)
                 Text(model.resultTitle).font(.title.weight(.bold))
                 Text("총 \(model.game.shotCount)번의 한 수").font(.caption).foregroundStyle(CheckTheme.secondaryText)
-                Button("다시 한 판") { model.restart() }.buttonStyle(.borderedProminent).controlSize(.large)
+                Button(onlineStore == nil ? "다시 한 판" : "로비로") { model.restart() }
+                    .buttonStyle(.borderedProminent).controlSize(.large)
             }
             .padding(28).background(CheckTheme.panelElevated, in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).stroke(CheckTheme.border))
@@ -200,12 +210,13 @@ struct AlkkagiGameView: View {
                                 .opacity(stone.isPlaced ? 0.4 : 1)
                                 .padding(3)
                                 .overlay(Circle().stroke(model.placementID == stone.id ? CheckTheme.accent : .clear, lineWidth: 2))
-                        }.buttonStyle(.plain).accessibilityLabel("\(stone.owner.title) \(stone.id % 5 + 1)번 돌 선택")
+                        }.buttonStyle(.plain).disabled(!model.canInteract)
+                            .accessibilityLabel("\(stone.owner.title) \(stone.id % 5 + 1)번 돌 선택")
                     }
                     Spacer()
                     Button("배치 완료 (\(model.game.placedCount(model.game.currentPlayer))/5)") { model.confirmPlacement() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(model.game.placedCount(model.game.currentPlayer) < 5)
+                        .disabled(model.game.placedCount(model.game.currentPlayer) < 5 || !model.canInteract)
                 }
                 Text("내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동 배치해요.")
                     .font(.caption2).foregroundStyle(CheckTheme.secondaryText)
@@ -217,7 +228,8 @@ struct AlkkagiGameView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Text(model.notice ?? model.status).font(.caption).foregroundStyle(model.notice == nil ? CheckTheme.secondaryText : CheckTheme.pending)
+            Text(onlineStore?.notice ?? model.notice ?? model.status).font(.caption)
+                .foregroundStyle(onlineStore?.notice == nil && model.notice == nil ? CheckTheme.secondaryText : CheckTheme.pending)
             Spacer()
             if model.selectedID != nil {
                 Text("힘 \(Int(model.power * 100))%")
@@ -226,6 +238,29 @@ struct AlkkagiGameView: View {
                 Text("\(model.game.shotCount)수").font(.caption.monospacedDigit()).foregroundStyle(CheckTheme.secondaryText)
             }
         }.frame(minHeight: 20)
+    }
+
+    @ViewBuilder
+    private var onlineActions: some View {
+        if let onlineStore {
+            HStack(spacing: 10) {
+                if onlineStore.state?.phase == .finished {
+                    Button("로비로") { Task { await onlineStore.leaveFinishedMatch() } }
+                        .buttonStyle(.borderedProminent)
+                } else if confirmsResign {
+                    Text("기권하면 상대가 승리해요").font(.caption).foregroundStyle(CheckTheme.pending)
+                    Spacer()
+                    Button("계속하기") { confirmsResign = false }.buttonStyle(.bordered)
+                    Button("기권하기") { Task { await onlineStore.resign(); confirmsResign = false } }
+                        .buttonStyle(.borderedProminent).tint(CheckTheme.danger).disabled(onlineStore.isBusy)
+                } else {
+                    Button("기권") { confirmsResign = true }.buttonStyle(.bordered).disabled(onlineStore.isBusy)
+                    Spacer()
+                    Text(onlineStore.isBusy ? "동기화 중" : "창을 닫아도 대전은 계속돼요")
+                        .font(.caption).foregroundStyle(CheckTheme.secondaryText)
+                }
+            }.frame(minHeight: 32)
+        }
     }
 }
 
@@ -249,15 +284,17 @@ private struct AlkkagiChatPanel: View {
             HStack {
                 Text("대화").font(.subheadline.weight(.bold))
                 Spacer()
-                Text("로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
-                Button { model.chatMuted.toggle() } label: {
+                Text(model.isOnline ? "대전 대화" : "로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+                Button { model.toggleChatMute() } label: {
                     Image(systemName: model.chatMuted ? "bell.slash.fill" : "bell.fill")
                 }.buttonStyle(.plain).help("상대 말 숨기기")
             }
-            Picker("지금 말하는 돌", selection: $model.chatSender) {
-                Text("흑돌").tag(AlkkagiGame.Player.black)
-                Text("백돌").tag(AlkkagiGame.Player.white)
-            }.pickerStyle(.segmented)
+            if !model.isOnline {
+                Picker("지금 말하는 돌", selection: $model.chatSender) {
+                    Text("흑돌").tag(AlkkagiGame.Player.black)
+                    Text("백돌").tag(AlkkagiGame.Player.white)
+                }.pickerStyle(.segmented)
+            }
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 8) {
@@ -313,8 +350,8 @@ private struct AlkkagiChatPanel: View {
                     .buttonStyle(.plain).background(CheckTheme.accent.opacity(model.canSendChat ? 1 : 0.35), in: RoundedRectangle(cornerRadius: 10))
                     .disabled(!model.canSendChat).keyboardShortcut(.return, modifiers: .command).accessibilityLabel("보내기")
             }
-            if model.chatDraft.count >= 80 {
-                Text("\(model.chatDraft.count)/100").font(.caption2).foregroundStyle(model.chatDraft.count > 100 ? CheckTheme.danger : CheckTheme.secondaryText)
+            if model.chatLength >= 80 {
+                Text("\(model.chatLength)/100").font(.caption2).foregroundStyle(model.chatLength > 100 ? CheckTheme.danger : CheckTheme.secondaryText)
             }
         }
     }
@@ -340,6 +377,7 @@ final class AlkkagiLocalModel {
     var chatDraft = ""
     var chatSender: AlkkagiGame.Player = .black
     var chatMuted = false
+    var onlineStore: AlkkagiOnlineStore?
     fileprivate var messages: [AlkkagiLocalMessage] = []
     @ObservationIgnored private var lastTime: TimeInterval?
     @ObservationIgnored private var clockTime = 0.0
@@ -348,17 +386,36 @@ final class AlkkagiLocalModel {
     @ObservationIgnored private var messageSequence = 0
     @ObservationIgnored private var gestureIsActive = false
     @ObservationIgnored private var ignoresCurrentGesture = false
+    @ObservationIgnored private var onlineRevision = -1
+    @ObservationIgnored private var onlineMatchID: String?
+    @ObservationIgnored private var onlineChatSeq = -1
+    @ObservationIgnored private var onlineReplayElapsed = 0.0
+    @ObservationIgnored private var predictedShotID: UUID?
 
+    var isOnline: Bool { onlineStore != nil }
+    var myColor: AlkkagiGame.Player { onlineStore?.state?.myColor ?? .black }
+    var canInteract: Bool { onlineStore.map { $0.canPlace || $0.canShoot } ?? true }
     var selectedStone: AlkkagiGame.Stone? { game.stones.first { $0.id == selectedID && $0.isPlaced && !$0.isOut } }
     var power: Double { min(1, pull.length / AlkkagiGame.maxPull) }
-    var remainingSeconds: Double { game.phase == .placing ? game.placementRemaining : game.turnRemaining }
+    var remainingSeconds: Double {
+        onlineStore?.remainingSeconds ?? (game.phase == .placing ? game.placementRemaining : game.turnRemaining)
+    }
     var clockTint: Color { remainingSeconds <= 5 ? CheckTheme.danger : (remainingSeconds <= 10 ? CheckTheme.pending : CheckTheme.working) }
     var launchRecoil: AlkkagiVector {
         guard let launch else { return AlkkagiVector(x: 0, y: 0) }
         return launch.direction * (-sin(launch.age * 38) * exp(-launch.age * 17) * launch.power * 6)
     }
     var status: String {
-        switch game.phase {
+        if let onlineStore, let state = onlineStore.state {
+            if onlineStore.isBusy { return "서버와 동기화하고 있어요" }
+            if state.phase == .finished { return resultTitle }
+            if state.phase == .rolling { return "돌이 멈추면 차례가 바뀌어요" }
+            if !onlineStore.isMyTurn {
+                let peer = state.currentPlayer == .black ? state.black : state.white
+                return state.phase == .aiming ? "\(peer.displayName)님 차례예요" : "\(peer.displayName)님이 돌을 배치하고 있어요"
+            }
+        }
+        return switch game.phase {
         case .placing: "\(game.currentPlayer.title) 배치 중 · 내 영역을 눌러 돌을 놓으세요"
         case .aiming: selectedID == nil ? "\(game.currentPlayer.title) 차례 — 돌을 뒤로 당겨 보세요" : "놓으면 발사해요 · Esc로 취소"
         case .rolling: "돌이 멈추면 차례가 바뀌어요"
@@ -374,14 +431,43 @@ final class AlkkagiLocalModel {
     }
     var canSendChat: Bool {
         let text = chatDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !text.isEmpty && text.count <= 100
+        return !text.isEmpty && text.unicodeScalars.count <= 100 && !(onlineStore?.isSendingChat ?? false)
     }
+    var chatLength: Int { chatDraft.unicodeScalars.count }
     func sendChat() {
         guard canSendChat else { return }
+        if let onlineStore {
+            let draft = chatDraft
+            let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            let previous = onlineStore.chat.last?.seq ?? 0
+            let myID = myColor == .black ? onlineStore.state?.black.id : onlineStore.state?.white.id
+            Task { [weak self] in
+                await onlineStore.sendChat(body: body)
+                guard let self else { return }
+                if self.chatDraft == draft,
+                   onlineStore.chat.contains(where: { $0.seq > previous && $0.body == body && $0.senderID == myID }) {
+                    self.chatDraft = ""
+                }
+                self.synchronizeOnline()
+            }
+            return
+        }
         appendMessage(chatDraft.trimmingCharacters(in: .whitespacesAndNewlines), sender: chatSender)
         chatDraft = ""
     }
-    func sendQuick(_ phrase: GomokuQuickPhrase) { appendMessage(phrase.text, sender: chatSender) }
+    func sendQuick(_ phrase: GomokuQuickPhrase) {
+        if let onlineStore {
+            Task { [weak self] in await onlineStore.sendChat(body: phrase.text); self?.synchronizeOnline() }
+        } else {
+            appendMessage(phrase.text, sender: chatSender)
+        }
+    }
+    func toggleChatMute() {
+        if let onlineStore {
+            let muted = !chatMuted
+            Task { [weak self] in await onlineStore.setMuted(muted); self?.synchronizeOnline() }
+        } else { chatMuted.toggle() }
+    }
     private func appendMessage(_ body: String, sender: AlkkagiGame.Player?) {
         messageSequence += 1
         messages.append(AlkkagiLocalMessage(id: messageSequence, sender: sender, body: body))
@@ -390,7 +476,7 @@ final class AlkkagiLocalModel {
 
     func aim(start: AlkkagiVector, translation: AlkkagiVector) {
         gestureIsActive = true
-        guard !ignoresCurrentGesture else { return }
+        guard !ignoresCurrentGesture, canInteract else { return }
         if game.phase == .placing {
             if dragPlacementID == nil {
                 dragPlacementID = game.stones.first {
@@ -417,9 +503,17 @@ final class AlkkagiLocalModel {
     }
     func release() {
         defer { finishGesture() }
-        guard !ignoresCurrentGesture else { return }
+        guard !ignoresCurrentGesture, canInteract else { return }
         if game.phase == .placing {
             guard let id = dragPlacementID, let at = placementPoint else { return }
+            if let onlineStore {
+                guard game.canPlace(stoneID: id, at: at) else {
+                    notice = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
+                    return
+                }
+                Task { [weak self] in await onlineStore.place(stoneID: id, at: at); self?.synchronizeOnline(force: true) }
+                return
+            }
             if game.placeStone(stoneID: id, at: at) {
                 placementID = game.stones.first { $0.owner == game.currentPlayer && !$0.isPlaced }?.id
                 notice = nil
@@ -430,10 +524,21 @@ final class AlkkagiLocalModel {
             return
         }
         guard let id = selectedID, let stone = selectedStone else { return }
+        let shotPull = pull
+        let actionID = UUID()
         if game.shoot(stoneID: id, pull: pull) {
             launch = AlkkagiLaunch(stoneID: id, direction: pull * (-1 / pull.length), power: power)
             if soundEnabled { feedback.play(strength: 0.3 + power * 0.6, ringOut: false, horizontal: stone.position.x) }
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            if let onlineStore {
+                predictedShotID = actionID
+                onlineReplayElapsed = 0
+                Task { [weak self] in
+                    await onlineStore.shoot(stoneID: id, pull: shotPull, actionID: actionID)
+                    self?.synchronizeOnline(force: true)
+                    self?.predictedShotID = nil
+                }
+            }
         }
     }
     func cancelAim() {
@@ -447,15 +552,24 @@ final class AlkkagiLocalModel {
         ignoresCurrentGesture = false
     }
     func confirmPlacement() {
+        if let onlineStore {
+            Task { [weak self] in await onlineStore.confirmPlacement(); self?.synchronizeOnline(force: true) }
+            return
+        }
         let old = game
         if game.confirmPlacement() { changed(from: old) }
     }
     func restart() {
+        if let onlineStore {
+            Task { await onlineStore.leaveFinishedMatch() }
+            return
+        }
         game.reset(); cancelAim(); placementID = 0; notice = nil
         hits = []; falls = []; launch = nil; jolt = 0; lastTime = nil; clockTime = 0
         messages = []; chatDraft = ""; chatSender = .black; messageSequence = 0
     }
     private func changed(from old: AlkkagiGame) {
+        guard onlineStore == nil else { return }
         guard old.phase != game.phase || old.currentPlayer != game.currentPlayer else { return }
         cancelAim(); notice = nil; clockTime = 0
         chatSender = game.currentPlayer
@@ -477,7 +591,22 @@ final class AlkkagiLocalModel {
         let dt = min(1.0 / 20, elapsed)
         var impacts: [AlkkagiGame.Impact] = []
         let old = game
-        if game.phase == .placing || game.phase == .aiming {
+        if let onlineStore {
+            synchronizeOnline()
+            if onlineStore.state?.phase == .rolling, let shot = onlineStore.state?.shot {
+                let target = min(shot.duration, max(0, (onlineStore.estimatedServerNowMs - shot.startedAtMs) / 1_000))
+                var remaining = max(0, target - onlineReplayElapsed)
+                while remaining > 1e-9 && game.phase == .rolling {
+                    let slice = min(0.25, remaining)
+                    impacts += game.advance(dt: slice)
+                    remaining -= slice
+                    onlineReplayElapsed += slice
+                }
+            } else if predictedShotID != nil && game.phase == .rolling {
+                impacts = game.advance(dt: dt)
+                onlineReplayElapsed += dt
+            }
+        } else if game.phase == .placing || game.phase == .aiming {
             // 초 단위 UI는 오목과 같이 5Hz로만 갱신한다. 창 밖을 눌러도 제한 시간은 흐른다.
             clockTime += elapsed
             if clockTime >= 0.2 {
@@ -511,6 +640,40 @@ final class AlkkagiLocalModel {
             if soundEnabled { feedback.play(strength: impact.strength, ringOut: impact.isRingOut, horizontal: impact.position.x) }
             if impact.strength > 0.35 { NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now) }
         }
+    }
+
+    func attachOnline(_ store: AlkkagiOnlineStore?) {
+        guard let store else { return }
+        onlineStore = store
+        synchronizeOnline(force: true)
+    }
+
+    private func synchronizeOnline(force: Bool = false) {
+        guard let onlineStore, let state = onlineStore.state else { return }
+        chatSender = state.myColor
+        chatMuted = state.muted
+        if onlineMatchID != state.id || onlineChatSeq != state.chatSeq {
+            messages = onlineStore.chat.map { message in
+                AlkkagiLocalMessage(id: message.seq, sender: message.senderID == state.black.id ? .black : .white, body: message.body)
+            }
+            onlineChatSeq = state.chatSeq
+        }
+        guard force || onlineMatchID != state.id || onlineRevision != state.revision else { return }
+        cancelAim()
+        notice = nil
+        let keepsPrediction = state.phase == .rolling
+            && predictedShotID?.uuidString.caseInsensitiveCompare(state.shot?.id ?? "") == .orderedSame
+            && game.shotCount == state.shotCount
+        if state.phase == .rolling, !keepsPrediction, let replay = state.shotReplayGame {
+            game = replay
+            onlineReplayElapsed = 0
+        } else if !keepsPrediction, let canonical = state.canonicalGame(serverNowMs: onlineStore.estimatedServerNowMs) {
+            game = canonical
+            onlineReplayElapsed = 0
+        }
+        onlineMatchID = state.id
+        onlineRevision = state.revision
+        placementID = game.stones.first { $0.owner == state.myColor && !$0.isPlaced }?.id
     }
 }
 

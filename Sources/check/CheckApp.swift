@@ -91,7 +91,8 @@ struct CheckApp: App {
             hasMahjongAway: appDelegate.store.mahjong.hasAwaySeatHere,
             // 받은 **1:1 길건너** 신청도 같은 점(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
             // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
-            hasCrossyDuelInvite: appDelegate.store.crossyDuel.visibleIncoming != nil
+            hasCrossyDuelInvite: appDelegate.store.crossyDuel.visibleIncoming != nil,
+            hasAlkkagiInvite: !appDelegate.store.alkkagi.incoming.isEmpty
         )
     }
 }
@@ -736,6 +737,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func wireAlkkagi() {
+        let alkkagi = store.alkkagi
+        CheckAlkkagiWindowController.shared.configure(store: alkkagi)
+        alkkagi.presentWindow = { CheckAlkkagiWindowController.shared.show() }
+        alkkagi.dismissWindow = { CheckAlkkagiWindowController.shared.close() }
+        alkkagi.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
         CheckAlkkagiWindowController.shared.onClosed = { [weak self] byUser in
             self?.store.duelWindowDidClose(.alkkagi, byUser: byUser)
         }

@@ -1540,10 +1540,11 @@ struct MiniGameDuelInvites: Equatable {
     var reversi = false
     var mahjong = false
     var crossyDuel = false
+    var alkkagi = false
 
     /// 새 문의 칸은 **맨 뒤**에 기본값과 함께 붙인다 — 기존 호출(`MiniGameDuelInvites(tetris: true)` 등)이 한 글자도 안 바뀐다.
     init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false,
-         mahjong: Bool = false, crossyDuel: Bool = false) {
+         mahjong: Bool = false, crossyDuel: Bool = false, alkkagi: Bool = false) {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
@@ -1551,6 +1552,7 @@ struct MiniGameDuelInvites: Equatable {
         self.reversi = reversi
         self.mahjong = mahjong
         self.crossyDuel = crossyDuel
+        self.alkkagi = alkkagi
     }
 
     @MainActor
@@ -1562,7 +1564,8 @@ struct MiniGameDuelInvites: Equatable {
             rummy: store.rummy.hasIncomingInvite,
             reversi: store.reversi.visibleIncoming != nil,
             mahjong: store.mahjong.hasIncomingInvite,
-            crossyDuel: store.crossyDuel.visibleIncoming != nil
+            crossyDuel: store.crossyDuel.visibleIncoming != nil,
+            alkkagi: !store.alkkagi.incoming.isEmpty
         )
     }
 }
@@ -1577,7 +1580,7 @@ extension MiniGameDuelInvites {
         case .reversi: reversi
         case .mahjong: mahjong
         case .crossyDuel: crossyDuel
-        case .alkkagi: false
+        case .alkkagi: alkkagi
         }
     }
 
@@ -1733,7 +1736,7 @@ struct MiniGameSidebar: View {
                     MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() }
                     MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() }
                     MiniGameCrossyDuelEntryButton(hasInvite: invites.crossyDuel) { onCrossyDuel() }
-                    MiniGameAlkkagiEntryButton { onAlkkagi() }
+                    MiniGameAlkkagiEntryButton(hasInvite: invites.alkkagi) { onAlkkagi() }
                 }
             }
             .disabled(!doorsOpen)
@@ -1961,17 +1964,18 @@ struct MiniGameReversiEntryButton: View {
     }
 }
 
-/// 사이드바의 로컬 2인 알까기 문. 기존 같이 하기 줄을 그대로 쓴다.
+/// 알까기 온라인 대전 입구와 받은 신청 표시.
 struct MiniGameAlkkagiEntryButton: View {
     static let title = "알까기"
     static let icon = "circle.hexagongrid.fill"
-    static let help = "한 맥에서 둘이 하는 알까기 창을 열어요"
+    static let help = "상대를 초대하거나 진행 중인 알까기 대전을 열어요"
 
+    var hasInvite = false
     let action: () -> Void
 
     var body: some View {
         MiniGameSidebarRow(title: Self.title, icon: Self.icon, tint: CheckTheme.working, opensWindow: true,
-                           help: Self.help, action: action)
+                           hasInvite: hasInvite, help: Self.help, action: action)
     }
 }
 

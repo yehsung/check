@@ -55,6 +55,8 @@ struct CheckMenuView: View {
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
+    /// 스냅샷 전용: 받은 알까기 신청 배너를 강제로 그린다. 앱에서는 store.alkkagi.incoming.first 만 읽는다.
+    var previewAlkkagiInvite: AlkkagiInvite? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -102,6 +104,8 @@ struct CheckMenuView: View {
         /// 받은 **1:1 길건너** 신청. 60초짜리 1:1 신청이지만 마작 뒤에 둔다(CD/SPEC.md §9.5 #15 — 마작 앵커를 그대로 두는 자리).
         /// 둘이 동시에 오면 마작이 이기고 길건너는 다음 팝오버로 밀린다(신청은 서버에 남아 창 로비에서 다시 보인다).
         case crossyDuelInvite
+        /// 받은 알까기 신청. 기존 신청 배너 순서를 유지하고 길건너 바로 뒤에 둔다.
+        case alkkagiInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -147,6 +151,8 @@ struct CheckMenuView: View {
     static let mahjongAwayBannerHeight: CGFloat = 92
     /// 받은 1:1 길건너 신청 배너. `CrossyDuelInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
     static let crossyDuelInviteBannerHeight: CGFloat = 92
+    /// 받은 알까기 신청 배너. 기존 대결 배너와 같은 두 줄과 28pt 버튼 행을 쓴다.
+    static let alkkagiInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -470,6 +476,49 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 받은 알까기 신청은 스토어 목록만 읽는다. 시각 판정과 로비 갱신은 메뉴 본문에서 하지 않는다.
+    private var alkkagiBannerInvite: AlkkagiInvite? {
+        previewAlkkagiInvite ?? store.alkkagi.incoming.first
+    }
+
+    private func acceptAlkkagiInvite(_ invite: AlkkagiInvite) {
+        let alkkagi = store.alkkagi
+        Task { @MainActor in
+            guard !Task.isCancelled, !alkkagi.isBusy else { return }
+            await alkkagi.respond(inviteID: invite.id, accept: true)
+            guard !Task.isCancelled else { return }
+            alkkagi.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineAlkkagiInvite(_ invite: AlkkagiInvite) {
+        let alkkagi = store.alkkagi
+        Task { @MainActor in
+            guard !Task.isCancelled, !alkkagi.isBusy else { return }
+            await alkkagi.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openAlkkagiInvite(_ invite: AlkkagiInvite) {
+        store.alkkagi.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    @ViewBuilder
+    private var alkkagiInviteBanner: some View {
+        if topBanner == .alkkagiInvite, let invite = alkkagiBannerInvite {
+            AlkkagiInviteBanner(
+                invite: invite,
+                isBusy: store.alkkagi.isBusy,
+                serverNowMs: { store.alkkagi.estimatedServerNowMs },
+                onAccept: { acceptAlkkagiInvite(invite) },
+                onDecline: { declineAlkkagiInvite(invite) },
+                onOpen: { openAlkkagiInvite(invite) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -495,6 +544,7 @@ struct CheckMenuView: View {
         if store.isSignedIn, mahjongBannerInvite != nil { return .mahjongInvite }
         if store.isSignedIn, showsMahjongAwayBanner { return .mahjongAway }
         if store.isSignedIn, crossyDuelBannerInvite != nil { return .crossyDuelInvite }
+        if store.isSignedIn, alkkagiBannerInvite != nil { return .alkkagiInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -519,6 +569,7 @@ struct CheckMenuView: View {
         case .mahjongInvite: return Self.mahjongInviteBannerHeight
         case .mahjongAway: return Self.mahjongAwayBannerHeight
         case .crossyDuelInvite: return Self.crossyDuelInviteBannerHeight
+        case .alkkagiInvite: return Self.alkkagiInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -777,6 +828,7 @@ struct CheckMenuView: View {
                     mahjongInviteBanner
                     mahjongAwayBanner
                     crossyDuelInviteBanner
+                    alkkagiInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -814,6 +866,7 @@ struct CheckMenuView: View {
                     mahjongAwayBanner
                     // 받은 1:1 길건너 신청도 **같은 자리**(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창 사이드바 하나뿐이다).
                     crossyDuelInviteBanner
+                    alkkagiInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -1500,13 +1553,16 @@ struct MenuBarStatusLabel: View {
     /// 소스 계약 시험(V03xxCrossyDuelWiringTests)이 함께 잰다.
     var hasCrossyDuelInvite = false
 
+    /// 받은 알까기 신청이 있다. 기존 멤버와이즈 호출을 지키도록 맨 뒤에 둔다.
+    var hasAlkkagiInvite: Bool = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
             openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite,
             rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite, mahjongInvite: hasMahjongInvite,
-            mahjongAway: hasMahjongAway, crossyDuelInvite: hasCrossyDuelInvite
+            mahjongAway: hasMahjongAway, crossyDuelInvite: hasCrossyDuelInvite, alkkagiInvite: hasAlkkagiInvite
         )
     }
 
@@ -1647,6 +1703,8 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var mahjongAway: Bool = false
     /// 받은 1:1 길건너 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var crossyDuelInvite: Bool = false
+    /// 받은 알까기 신청이 있다. 기존 멤버와이즈 호출을 지키도록 맨 뒤에 둔다.
+    var alkkagiInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
@@ -1657,11 +1715,12 @@ struct MenuBarDotReasons: Equatable, Sendable {
     static let mahjongInviteText = MahjongInviteText.dotReason
     static let mahjongAwayText = MahjongInviteText.awayDotReason
     static let crossyDuelInviteText = CrossyDuelText.dotReason
+    static let alkkagiInviteText = AlkkagiInviteText.dotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
         !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !reversiInvite && !updateAvailable
-            && !openReports && !mahjongInvite && !mahjongAway && !crossyDuelInvite
+            && !openReports && !mahjongInvite && !mahjongAway && !crossyDuelInvite && !alkkagiInvite
     }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
@@ -1682,6 +1741,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if mahjongAway { parts.append(Self.mahjongAwayText) }
         // 1:1 길건너 신청은 마작 뒤다(팝오버 배너 · 사이드바와 같은 순서).
         if crossyDuelInvite { parts.append(Self.crossyDuelInviteText) }
+        if alkkagiInvite { parts.append(Self.alkkagiInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }

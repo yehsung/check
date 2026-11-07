@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
+#if ALKKAGI_PLAYGROUND
+import AlkkagiCore
+#else
 import CheckCore
+#endif
 
 // MARK: - 공용 여러 줄 입력칸 (v0.2.51)
 //

@@ -16,14 +16,10 @@ import Testing
 // 골라 돌리는 릴리스 게이트(전체 스위트 대신 돌릴 때)의 필터 — 자유 함수는 스위트 이름으로 안 잡혀 이름으로 따로 고른다:
 //   --filter 'checkTests\.(V0378ReleaseTests|V0377ReleaseTests|V0378HwooCoreTests|V0378RubyCoreTests)/'
 //   --filter 'checkTests\.(v0378VersionAndChangelog|v0377VersionAndChangelog)\('
-@Test("버전 0.3.78 / 131 · CHANGELOG 0.3.78 가 맨 위(세 줄 · 배너 폭 안 · 내부 어휘 없음)")
+@Test("CHANGELOG 0.3.78 (세 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0378VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.78</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>131</string>"),
-            "길건너 맥 문 열기(make_open_mac.sh 131)가 이 build 와 같아야 한다")
+    // 버전 고정과 맨 위 섹션 단언은 0.3.79 로 옮겼다(V0379ReleaseTests).
 
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.78\n") })
@@ -41,8 +37,6 @@ func v0378VersionAndChangelog() throws {
     #expect(items.contains { $0.contains("길건너") && $0.contains("1:1") }, "길건너 1:1 줄이 없다(feat/crossy-duel)")
     #expect(items.contains { $0.contains("흑우") && $0.contains("루비") }, "새 아잉이 둘 줄이 없다(feat/hwoo-aing · feat/ruby-aing)")
     #expect(items.contains { $0.contains("근무 리듬") }, "근무 리듬 주별 줄이 없다(fix/feedback-1106)")
-    #expect(changelog.range(of: "## 0.3.78")!.lowerBound < changelog.range(of: "## 0.3.77")!.lowerBound,
-            "0.3.78 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }
 
 /// 흑우 · 루비 그림 묶음 게이트. 번들만으로 둘 다 그릴 수 있어야 맥이 상점 능력 번호 8 을 말한다 — 그림이 빠지면 맥은

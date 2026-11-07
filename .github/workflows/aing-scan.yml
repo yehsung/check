@@ -115,7 +115,9 @@ jobs:
             swift sdk install "$STATIC_SDK_URL" --checksum "$STATIC_SDK_SHA256"
             swift build -c release --swift-sdk "$SDK"
             mkdir -p /src/dist
-            cp ".build/$SDK/release/aing-scan" /src/dist/aing-scan
+            bin="$(swift build -c release --swift-sdk "$SDK" --show-bin-path)/aing-scan"
+            echo "bin=$bin"
+            cp "$bin" /src/dist/aing-scan
           '
           file dist/aing-scan
       - name: 묶음 만들기(tar.gz + sha256 — 배포 자리와 같은 이름)

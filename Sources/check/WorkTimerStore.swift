@@ -1744,6 +1744,23 @@ final class WorkTimerStore {
     /// 그 규약(`CheckMenuView.subPanelFlagNames` 와 대조하는 테스트가 세는 모양)을 따르지 않는다.
     var showsBlockedPeopleInSettings = false
 
+    // ── 원격 기계 연결(aing-scan, 2026-11) ── 로직은 `WorkTimerStoreScanner.swift`. 계정에 묶인다 — clearPersistedSession 이 비운다.
+
+    /// 설정 창이 [원격 기계 연결] 쪽을 보고 있는가(차단 목록과 같은 쪽 전환 — 설정 본문 높이 계약을 먹지 않는다).
+    var showsRemoteScannerInSettings = false
+    var remoteScannerDevices: [ScannerDevice] = []
+    var remoteScannerLoaded = false
+    var remoteScannerLoading = false
+    var remoteScannerFailed = false
+    /// 서버에 스캐너 함수가 아직 없다(앱이 db push 보다 먼저 나간 경우) — 화면이 "준비 중"이라고 말한다.
+    var remoteScannerServerNotReady = false
+    /// 방금 만든 연결 코드(화면에만 · 저장하지 않는다). 만료 시각이 지나면 화면이 지운다.
+    var remoteScannerLinkCode: ScannerLinkCode?
+    var remoteScannerMakingCode = false
+    /// 목록 위 한 줄(코드 만들기·끊기 실패 등).
+    var remoteScannerNotice: String?
+    var revokingScannerDeviceIDs: Set<String> = []
+
     // ── 기본 아바타 = 착용 캐릭터 (2026-09-20 — 맥) ──
     //
     // 로직은 `WorkTimerStoreAvatars.swift`, 판정 규칙은 코어 `AppUserCharacterDirectory`(폰과 한 벌)에 있다(저장 프로퍼티만 언어 제약으로
@@ -4206,6 +4223,7 @@ extension WorkTimerStore {
         // 차단·신고(v0.3.34)도 계정에 묶인다. 숨김을 남기면 다음 사람 화면에서 앞 사람이 차단한 이가 사라져 있고,
         // 신고 초안을 남기면 앞 사람이 쓰던 글이 새 계정 이름으로 나갈 수 있다(메시지 초안과 같은 판단).
         clearBlockReportState()
+        clearRemoteScannerState()
         // 캐릭터 한 표도 계정에 묶인다(2026-09-20). 남기면 다음 계정 화면에 앞 계정의 표(숨김 격리 쪽이 다를 수 있다)와
         // 앞 계정의 내 칸이 남고, 떠 있던 조회가 늦게 와 다시 채운다 — 순번을 올려 그 응답을 버린다.
         clearAppUserCharacters()

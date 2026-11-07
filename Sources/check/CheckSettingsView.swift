@@ -1368,7 +1368,8 @@ struct CheckSettingsView: View {
     /// v0.3.51: '내 정보'의 별명 아래 [상태메시지] 행(`StatusMessageSettingsRow`)이 붙어 전체 렌더가 일반 962 / 관리자 1051
     /// (둘 다 **+96** = 구분선 1 + 간격 12×2 + 행 71, 실측 2026-10-14 폭 380). 행은 누르거나 결과가 떠도 자라지 않는다(안내 한 줄 고정) —
     /// 최악값은 되돌리기 확인의 +13 그대로라 1051 + 13 = **1064**. 창 계약은 980 이고, 화면이 그보다 작으면 창이 화면에서 멈추고 본문이 스크롤된다.
-    static let adminContentHeight: CGFloat = 1064
+    // 2026-11(aing-scan): [원격 기계 연결] 행 +55 → 1106 + 13 = 1119(실측 2026-11-07 폭 380).
+    static let adminContentHeight: CGFloat = 1119
 
     var body: some View {
         Group {
@@ -1376,6 +1377,9 @@ struct CheckSettingsView: View {
                 // 설정 → 차단한 사람(v0.3.34). 설정 본문과 **자리를 바꾼다** — 사람 수만큼 자라는 목록을 본문에 펼치면
                 // 이 창의 높이 계약(맨 아래 항목이 안 잘린다)이 사람 수에 묶인다.
                 CheckBlockedPeopleSettingsPage(store: store)
+            } else if store.showsRemoteScannerInSettings {
+                // 설정 → 원격 기계 연결(aing-scan, 2026-11). [차단한 사람]과 같은 자리 바꿈 — 기계 목록·명령이 본문 높이를 먹지 않게.
+                CheckRemoteScannerSettingsPage(store: store)
             } else if store.showsAccountDeletionInSettings {
                 // 설정 → 계정 삭제(v0.3.51 — 심사 지침 5.1.1(v)). [차단한 사람]과 같은 자리 바꿈이다: 지워지는 것의 목록 ·
                 // 비밀번호 · 2단 확인을 본문에 펼치면 본문 높이 계약(창 여유 5pt)이 그만큼 흔들린다. 들어가는 문은 '내 정보'
@@ -1519,6 +1523,13 @@ struct CheckSettingsView: View {
                     isOn: tokenUsagePublicBinding
                 )
                 PanelDivider()
+                // 원격 기계 연결(aing-scan, 2026-11 — 대표 결정: "스캐너만 설치해서 계정과 연결"). 토큰 공개 바로 아래 —
+                // 둘 다 'AI 토큰'에 관한 행이다. 누르면 이 창 본문 자리에 명령·목록이 선다(차단한 사람과 같은 쪽 전환).
+                // 앱스토어 판(AI 도구 읽기 동의를 묻는 판)에는 두지 않는다 — 원격 집계는 Developer ID 판의 기능이다.
+                if !store.macEdition.asksBeforeReadingAITools {
+                    RemoteScannerSettingsEntryRow(store: store)
+                    PanelDivider()
+                }
                 CheckSettingsToggleRow(
                     title: "미니게임 순위 공개",
                     detail: "끄면 내 최고기록이 순위표에 안 보이고 올라가지도 않아요.",

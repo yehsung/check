@@ -24,3 +24,12 @@ package struct WorkDailyGrid {
         return kstCalendar.date(byAdding: .weekOfYear, value: -(max(1, weeks) - 1), to: thisWeekStart)
     }
 }
+
+#if !canImport(ObjectiveC)
+/// 리눅스에는 오토릴리스 풀이 없다(Objective-C 런타임이 없다) — 공유 스캔 코드의 `autoreleasepool { }` 를 그대로 돌린다.
+/// 맥에서는 이 정의가 빠지고 Foundation 의 진짜 풀을 쓴다.
+@inline(__always)
+func autoreleasepool<Result>(invoking body: () throws -> Result) rethrows -> Result {
+    try body()
+}
+#endif

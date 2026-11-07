@@ -368,7 +368,12 @@ package enum AntigravityConversationReader {
     private static func fence(_ path: String) -> Fence? {
         var st = stat()
         guard path.withCString({ stat($0, &st) }) == 0 else { return nil }
+        #if os(Linux)
+        // 리눅스 스캐너(aing-scan): glibc 의 stat 은 수정 시각 칸 이름이 st_mtim 이다.
+        return Fence(size: Int64(st.st_size), seconds: Int(st.st_mtim.tv_sec), nanoseconds: Int(st.st_mtim.tv_nsec))
+        #else
         return Fence(size: Int64(st.st_size), seconds: st.st_mtimespec.tv_sec, nanoseconds: st.st_mtimespec.tv_nsec)
+        #endif
     }
 
     /// sqlite URI 파일명에서 그대로 둬도 되는 문자 — **ASCII 비예약 문자 + `/`** 뿐이다.

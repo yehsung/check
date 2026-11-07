@@ -109,6 +109,8 @@ jobs:
           SDK: ${{ matrix.sdk }}
         run: |
           set -euo pipefail
+          # 묶음 폴더는 러너 사용자가 먼저 만든다(컨테이너가 만들면 root 소유라 다음 단계가 못 쓴다).
+          mkdir -p dist
           docker run --rm -e SDK -e STATIC_SDK_URL -e STATIC_SDK_SHA256 -v "$PWD":/src -w /src/aing-scan "$SWIFT_IMAGE" /bin/bash -c '
             set -euo pipefail
             swift --version

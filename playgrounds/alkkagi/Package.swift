@@ -13,6 +13,9 @@ let package = Package(
             name: "AlkkagiPlayground", dependencies: ["AlkkagiCore"],
             swiftSettings: [.define("ALKKAGI_PLAYGROUND")]
         ),
-
+        .testTarget(
+            name: "AlkkagiTests", dependencies: ["AlkkagiCore", "AlkkagiPlayground"], path: "Tests/AlkkagiTests",
+            swiftSettings: [.define("ALKKAGI_PLAYGROUND")]
+        )
     ]
 )

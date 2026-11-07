@@ -4223,10 +4223,11 @@ extension WorkTimerStore {
         // 차단·신고(v0.3.34)도 계정에 묶인다. 숨김을 남기면 다음 사람 화면에서 앞 사람이 차단한 이가 사라져 있고,
         // 신고 초안을 남기면 앞 사람이 쓰던 글이 새 계정 이름으로 나갈 수 있다(메시지 초안과 같은 판단).
         clearBlockReportState()
-        clearRemoteScannerState()
         // 캐릭터 한 표도 계정에 묶인다(2026-09-20). 남기면 다음 계정 화면에 앞 계정의 표(숨김 격리 쪽이 다를 수 있다)와
         // 앞 계정의 내 칸이 남고, 떠 있던 조회가 늦게 와 다시 채운다 — 순번을 올려 그 응답을 버린다.
         clearAppUserCharacters()
+        // 원격 토큰 스캐너(다른 기기 또는 서버 연결) 쪽 상태도 계정에 묶인다.
+        clearRemoteScannerState()
         // 버전 보고 도장도 계정에 묶인다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
         // 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
         reportedAppVersionStamp = nil

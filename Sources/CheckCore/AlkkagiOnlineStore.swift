@@ -77,17 +77,16 @@ package final class AlkkagiOnlineStore {
     }
 
     package var isMyTurn: Bool {
-        guard let state, state.currentPlayer == state.myColor else { return false }
+        guard let state else { return false }
         switch state.phase {
-        case .placingBlack: return state.myColor == .black
-        case .placingWhite: return state.myColor == .white
-        case .aiming: return true
+        case .placing: return !state.myReady
+        case .aiming: return state.currentPlayer == state.myColor
         case .rolling, .finished, .unknown: return false
         }
     }
 
     package var canPlace: Bool {
-        canAct && isMyTurn && (state?.phase == .placingBlack || state?.phase == .placingWhite)
+        canAct && isMyTurn && state?.phase == .placing
     }
 
     package var canShoot: Bool {
@@ -133,7 +132,7 @@ package final class AlkkagiOnlineStore {
     package func place(stoneID: Int, at position: AlkkagiVector) async {
         guard canPlace, let state, let id = UUID(uuidString: state.id),
               state.canonicalGame?.canPlace(stoneID: stoneID, at: position) == true else { return }
-        await act(.place(matchID: id, expectedRevision: state.revision, stoneID: stoneID,
+        await act(.place(matchID: id, expectedPlacementRevision: state.placementRevision, stoneID: stoneID,
                          position: position, actionID: UUID()))
     }
 
@@ -141,7 +140,7 @@ package final class AlkkagiOnlineStore {
         guard canPlace, let state, let id = UUID(uuidString: state.id) else { return }
         let ownStones = state.stones.filter { $0.owner == state.myColor }
         guard ownStones.count == 5, ownStones.allSatisfy({ $0.isPlaced && !$0.isOut }) else { return }
-        await act(.ready(matchID: id, expectedRevision: state.revision, actionID: UUID()))
+        await act(.ready(matchID: id, expectedPlacementRevision: state.placementRevision, actionID: UUID()))
     }
 
     package func shoot(stoneID: Int, pull: AlkkagiVector, actionID: UUID? = nil) async {

@@ -84,16 +84,30 @@ struct AlkkagiGameView: View {
     private func playerCard(_ player: AlkkagiGame.Player) -> some View {
         let currentPlayer = onlineStore?.state?.currentPlayer ?? model.game.currentPlayer
         let finished = onlineStore.map { $0.state?.phase == .finished } ?? (model.game.phase == .finished)
-        let active = currentPlayer == player && !finished
+        let simultaneousPlacement = onlineStore?.state?.phase == .placing
+        let concealedLayout = simultaneousPlacement || (onlineStore?.state.map {
+            $0.phase == .finished && (!$0.myReady || !$0.opponentReady)
+        } ?? false)
+        let isMe = player == model.myColor
+        let ready = isMe ? onlineStore?.state?.myReady == true : onlineStore?.state?.opponentReady == true
+        let active = simultaneousPlacement ? !ready : (currentPlayer == player && !finished)
         let peer = player == .black ? onlineStore?.state?.black : onlineStore?.state?.white
         let profile = peer.map { AlkkagiPlayerProfile(name: $0.displayName, characterID: $0.characterID) }
             ?? (player == .black ? me : opponent)
-        let detail = model.game.phase == .placing ? "\(player.title) 배치 \(model.game.placedCount(player))/5" : "\(player.title) \(model.game.remaining(player))개"
+        let detail: String
+        if concealedLayout && !isMe {
+            detail = "\(player.title) 배치 비공개"
+        } else {
+            detail = model.game.phase == .placing ? "\(player.title) 배치 \(model.game.placedCount(player))/5" : "\(player.title) \(model.game.remaining(player))개"
+        }
+        let message = simultaneousPlacement
+            ? (ready ? "준비 완료" : (isMe ? "돌을 배치해 주세요" : "배치 중"))
+            : (active ? (model.game.phase == .placing ? "돌을 배치해 주세요" : "내 차례예요") : "기다리는 중")
         return BoardGamePlayerCard(name: profile.name, stoneColor: player == .black ? .black : .white,
                                    stoneText: detail, isTurn: active, isMe: player == model.myColor) {
             playerPortrait(profile)
         } message: {
-            Text(active ? (model.game.phase == .placing ? "돌을 배치해 주세요" : "내 차례예요") : "기다리는 중")
+            Text(message)
                 .font(.caption).foregroundStyle(active ? CheckTheme.working : CheckTheme.secondaryText)
         } clock: {
             if active {
@@ -214,11 +228,12 @@ struct AlkkagiGameView: View {
                             .accessibilityLabel("\(stone.owner.title) \(stone.id % 5 + 1)번 돌 선택")
                     }
                     Spacer()
-                    Button("배치 완료 (\(model.game.placedCount(model.game.currentPlayer))/5)") { model.confirmPlacement() }
+                    Button(onlineStore?.state?.myReady == true ? "준비 완료" : "배치 완료 (\(model.game.placedCount(model.game.currentPlayer))/5)") { model.confirmPlacement() }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.game.placedCount(model.game.currentPlayer) < 5 || !model.canInteract)
                 }
-                Text("내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동 배치해요.")
+                Text(onlineStore == nil ? "내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동 배치해요."
+                     : "30초 동안 동시에 배치해요. 둘 다 준비하거나 시간이 끝날 때까지 상대 배치는 보이지 않아요.")
                     .font(.caption2).foregroundStyle(CheckTheme.secondaryText)
             }
         }
@@ -410,9 +425,12 @@ final class AlkkagiLocalModel {
             if onlineStore.isBusy { return "서버와 동기화하고 있어요" }
             if state.phase == .finished { return resultTitle }
             if state.phase == .rolling { return "돌이 멈추면 차례가 바뀌어요" }
+            if state.phase == .placing {
+                return state.myReady ? "준비 완료 · 상대를 기다리고 있어요" : "\(state.myColor.title) 비공개 배치 중 · 내 영역을 눌러 주세요"
+            }
             if !onlineStore.isMyTurn {
                 let peer = state.currentPlayer == .black ? state.black : state.white
-                return state.phase == .aiming ? "\(peer.displayName)님 차례예요" : "\(peer.displayName)님이 돌을 배치하고 있어요"
+                return "\(peer.displayName)님 차례예요"
             }
         }
         return switch game.phase {
@@ -659,6 +677,12 @@ final class AlkkagiLocalModel {
             onlineChatSeq = state.chatSeq
         }
         guard force || onlineMatchID != state.id || onlineRevision != state.revision else { return }
+        // The other player's concealed placement must not interrupt my drag.
+        if !force, onlineMatchID == state.id, state.phase == .placing, !state.myReady,
+           game.phase == .placing, game.currentPlayer == state.myColor, game.stones == state.stones {
+            onlineRevision = state.revision
+            return
+        }
         cancelAim()
         notice = nil
         let keepsPrediction = state.phase == .rolling

@@ -16,8 +16,8 @@ package enum AlkkagiCall: Equatable, Sendable {
     case cancel(matchID: UUID, actionID: UUID)
     case respond(matchID: UUID, accept: Bool, actionID: UUID)
     case state(matchID: UUID, sinceChatSeq: Int = 0)
-    case place(matchID: UUID, expectedRevision: Int, stoneID: Int, position: AlkkagiVector, actionID: UUID)
-    case ready(matchID: UUID, expectedRevision: Int, actionID: UUID)
+    case place(matchID: UUID, expectedPlacementRevision: Int, stoneID: Int, position: AlkkagiVector, actionID: UUID)
+    case ready(matchID: UUID, expectedPlacementRevision: Int, actionID: UUID)
     case shoot(matchID: UUID, expectedRevision: Int, stoneID: Int, pull: AlkkagiVector, actionID: UUID)
     case resign(matchID: UUID, expectedRevision: Int, actionID: UUID)
     case chatSend(matchID: UUID, body: String, actionID: UUID)
@@ -60,12 +60,16 @@ package enum AlkkagiCall: Equatable, Sendable {
             parameters.pSinceChatSeq = sinceChatSeq
         case let .place(matchID, revision, stoneID, position, actionID):
             parameters.pMatchID = matchID
-            parameters.pExpectedRevision = revision
+            parameters.pExpectedPlacementRevision = revision
             parameters.pStoneID = stoneID
             parameters.pX = position.x
             parameters.pY = position.y
             parameters.pActionID = actionID
-        case let .ready(matchID, revision, actionID), let .resign(matchID, revision, actionID),
+        case let .ready(matchID, revision, actionID):
+            parameters.pMatchID = matchID
+            parameters.pExpectedPlacementRevision = revision
+            parameters.pActionID = actionID
+        case let .resign(matchID, revision, actionID),
              let .leave(matchID, revision, actionID):
             parameters.pMatchID = matchID
             parameters.pExpectedRevision = revision
@@ -97,6 +101,7 @@ package struct AlkkagiParameters: Encodable, Equatable, Sendable {
     package var pMatchID: UUID?
     package var pActionID: UUID?
     package var pExpectedRevision: Int?
+    package var pExpectedPlacementRevision: Int?
     package var pAccept: Bool?
     package var pSinceChatSeq: Int?
     package var pStoneID: Int?
@@ -111,6 +116,7 @@ package struct AlkkagiParameters: Encodable, Equatable, Sendable {
         case pProtocol = "p_protocol", pUsers = "p_users", pOpponent = "p_opponent"
         case pMatchID = "p_match_id", pActionID = "p_action_id"
         case pExpectedRevision = "p_expected_revision", pAccept = "p_accept"
+        case pExpectedPlacementRevision = "p_expected_placement_revision"
         case pSinceChatSeq = "p_since_chat_seq", pStoneID = "p_stone_id"
         case pX = "p_x", pY = "p_y", pPullX = "p_pull_x", pPullY = "p_pull_y"
         case pBody = "p_body", pMuted = "p_muted"
@@ -134,8 +140,7 @@ package enum AlkkagiRPCStatus: String, Codable, Equatable, Sendable {
 }
 
 package enum AlkkagiMatchPhase: String, Codable, Equatable, Sendable {
-    case placingBlack = "placing_black", placingWhite = "placing_white"
-    case aiming, rolling, finished, unknown
+    case placing, aiming, rolling, finished, unknown
 
     package init(from decoder: any Decoder) throws {
         self = Self(rawValue: try decoder.singleValueContainer().decode(String.self)) ?? .unknown
@@ -280,13 +285,17 @@ package struct AlkkagiMatch: Codable, Identifiable, Equatable, Sendable {
     package var chatSeq: Int
     package var chat: [AlkkagiChatMessage]
     package var muted: Bool
+    package var placementRevision: Int
+    package var myReady: Bool
+    package var opponentReady: Bool
 
     package init(id: String, revision: Int, phase: AlkkagiMatchPhase,
                  currentPlayer: AlkkagiGame.Player, myColor: AlkkagiGame.Player,
                  black: AlkkagiPeer, white: AlkkagiPeer, stones: [AlkkagiGame.Stone],
                  deadlineMs: Double? = nil, shotCount: Int = 0, result: AlkkagiMatchResult? = nil,
                  finishReason: String? = nil, shot: AlkkagiShot? = nil, chatSeq: Int = 0,
-                 chat: [AlkkagiChatMessage] = [], muted: Bool = false) {
+                 chat: [AlkkagiChatMessage] = [], muted: Bool = false,
+                 placementRevision: Int = 1, myReady: Bool = false, opponentReady: Bool = false) {
         self.id = id
         self.revision = revision
         self.phase = phase
@@ -303,12 +312,16 @@ package struct AlkkagiMatch: Codable, Identifiable, Equatable, Sendable {
         self.chatSeq = chatSeq
         self.chat = chat
         self.muted = muted
+        self.placementRevision = placementRevision
+        self.myReady = myReady
+        self.opponentReady = opponentReady
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, revision, phase, currentPlayer = "current_player", myColor = "my_color"
         case black, white, stones, deadlineMs = "deadline_ms", shotCount = "shot_count"
         case result, finishReason = "finish_reason", shot, chatSeq = "chat_seq", chat, muted
+        case placementRevision = "placement_revision", myReady = "my_ready", opponentReady = "opponent_ready"
     }
 
     package init(from decoder: any Decoder) throws {
@@ -329,6 +342,15 @@ package struct AlkkagiMatch: Codable, Identifiable, Equatable, Sendable {
         chatSeq = try values.required(Int.self, "chat_seq")
         chat = try values.required([AlkkagiChatMessage].self, "chat")
         muted = try values.required(Bool.self, "muted")
+        if phase == .placing {
+            placementRevision = try values.required(Int.self, "placement_revision")
+            myReady = try values.required(Bool.self, "my_ready")
+            opponentReady = try values.required(Bool.self, "opponent_ready")
+        } else {
+            placementRevision = try values.optional(Int.self, "placement_revision") ?? 1
+            myReady = try values.optional(Bool.self, "my_ready") ?? false
+            opponentReady = try values.optional(Bool.self, "opponent_ready") ?? false
+        }
     }
 
     package var canonicalGame: AlkkagiGame? { canonicalGame(serverNowMs: nil) }
@@ -337,11 +359,11 @@ package struct AlkkagiMatch: Codable, Identifiable, Equatable, Sendable {
         guard revision >= 0, chatSeq >= 0, deadlineMs == nil || deadlineMs!.isFinite else { return nil }
         let gamePhase: AlkkagiGame.Phase
         switch phase {
-        case .placingBlack:
-            guard currentPlayer == .black else { return nil }
-            gamePhase = .placing
-        case .placingWhite:
-            guard currentPlayer == .white else { return nil }
+        case .placing:
+            guard placementRevision >= 1, stones.count == 5,
+                  stones.allSatisfy({ $0.owner == myColor && !$0.isOut }),
+                  !myReady || stones.allSatisfy(\.isPlaced),
+                  shot == nil, result == nil else { return nil }
             gamePhase = .placing
         case .aiming: gamePhase = .aiming
         case .rolling: gamePhase = .rolling
@@ -362,7 +384,7 @@ package struct AlkkagiMatch: Codable, Identifiable, Equatable, Sendable {
             guard referenceMs.isFinite else { return nil }
             if let deadlineMs { remaining = max(0, min(remaining, (deadlineMs - referenceMs) / 1000)) }
         }
-        return AlkkagiGame.restore(stones: stones, currentPlayer: currentPlayer, phase: gamePhase,
+        return AlkkagiGame.restore(stones: stones, currentPlayer: phase == .placing ? myColor : currentPlayer, phase: gamePhase,
                                    placementRemaining: remaining, turnRemaining: remaining,
                                    result: gameResult, shotCount: shotCount)
     }

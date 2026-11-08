@@ -30,7 +30,7 @@ struct AlkkagiOnlinePanel: View {
             HStack(spacing: 10) {
                 Image(systemName: "circle.lefthalf.filled").foregroundStyle(CheckTheme.accent)
                 Text("1:1 알까기").font(.title2.weight(.bold))
-                Text("흑백 돌 5개씩, 배치와 한 수 30초").font(.caption).foregroundStyle(CheckTheme.secondaryText)
+                Text("비공개 동시 배치 30초, 한 수 30초").font(.caption).foregroundStyle(CheckTheme.secondaryText)
                 Spacer()
                 Button("로컬 연습") { showsPractice = true }.buttonStyle(.bordered)
                 Button { Task { await store.refreshLobby() } } label: {

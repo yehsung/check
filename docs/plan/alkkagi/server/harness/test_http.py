@@ -125,11 +125,22 @@ class HTTPContracts(unittest.TestCase):
         self.assertTrue(math.isfinite(body["server_now_ms"]))
         self.assertGreater(body["server_now_ms"], 0)
         self.assertEqual(body["me"]["id"], stack.USERS[user])
+        state = body.get("state")
+        if state is not None:
+            self.assertIs(type(state["placement_revision"]), int)
+            self.assertGreaterEqual(state["placement_revision"], 1)
+            for field in ("my_ready", "opponent_ready"):
+                self.assertIs(type(state[field]), bool)
+            if state["phase"] == "placing" or not (state["my_ready"] and state["opponent_ready"]):
+                self.assert_hidden_arrangement(state)
         return body
 
-    def write(self, user, operation, match_id, *, revision=None, action=None, expected="ok", **parameters):
+    def write(self, user, operation, match_id, *, revision=None, placement_revision=None,
+              action=None, expected="ok", **parameters):
         if revision is not None:
             parameters["p_expected_revision"] = revision
+        if placement_revision is not None:
+            parameters["p_expected_placement_revision"] = placement_revision
         return self.rpc(user, operation, expected, p_match_id=match_id,
                         p_action_id=action or action_id(), **parameters)
 
@@ -148,12 +159,17 @@ class HTTPContracts(unittest.TestCase):
 
     def active(self):
         match_id = self.invite()
-        state = self.write("b", "respond", match_id, p_accept=True)["state"]
+        response = self.write("b", "respond", match_id, p_accept=True)
+        state = response["state"]
         self.assertEqual(state["id"], match_id)
-        self.assertEqual(state["phase"], "placing_black")
+        self.assertEqual(state["phase"], "placing")
         self.assertEqual(state["current_player"], "black")
         self.assertEqual(state["my_color"], "white")
-        return state
+        self.assertEqual(state["placement_revision"], 1)
+        self.assertFalse(state["my_ready"])
+        self.assertFalse(state["opponent_ready"])
+        self.assertAlmostEqual(state["deadline_ms"], response["server_now_ms"] + 30_000, delta=1000)
+        return self.state("a", match_id)
 
     def state(self, user, match_id, cursor=0):
         return self.rpc(user, "state", p_match_id=match_id, p_since_chat_seq=cursor)["state"]
@@ -183,6 +199,23 @@ class HTTPContracts(unittest.TestCase):
     def assert_board_unchanged(self, before, after):
         for field in ("revision", "phase", "current_player", "stones", "shot_count", "shot", "result"):
             self.assertEqual(after[field], before[field], field)
+        if before["my_color"] == after["my_color"]:
+            for field in ("placement_revision", "my_ready", "opponent_ready"):
+                self.assertEqual(after[field], before[field], field)
+
+    def assert_hidden_arrangement(self, state):
+        # Check every RPC snapshot, including error, retry, chat and lobby paths.
+        # An allowlist also rejects opponent counters or alternate board payloads.
+        self.assertEqual(set(state), {
+            "id", "revision", "phase", "placement_revision", "my_ready", "opponent_ready",
+            "current_player", "my_color", "black", "white", "stones", "deadline_ms",
+            "shot_count", "result", "finish_reason", "shot", "chat_seq", "chat", "muted",
+        })
+        first_id = 0 if state["my_color"] == "black" else 5
+        self.assertEqual([stone["id"] for stone in state["stones"]], list(range(first_id, first_id + 5)))
+        self.assertTrue(all(stone["owner"] == state["my_color"] for stone in state["stones"]))
+        self.assertEqual(state["shot_count"], 0)
+        self.assertIsNone(state["shot"])
 
     def test_invitation_retries_and_acceptance(self):
         challenge_action = action_id()
@@ -204,13 +237,16 @@ class HTTPContracts(unittest.TestCase):
         accepted = self.write("b", "respond", match_id, action=accept_action, p_accept=True)["state"]
         retried = self.write("b", "respond", match_id, action=accept_action, p_accept=True)["state"]
         self.assert_board_unchanged(accepted, retried)
-        self.assertEqual(accepted["phase"], "placing_black")
+        self.assertEqual(accepted["phase"], "placing")
         self.assertEqual(accepted["my_color"], "white")
         self.assertEqual(accepted["black"]["id"], stack.USERS["a"])
         self.assertEqual(accepted["white"]["id"], stack.USERS["b"])
-        self.assertEqual(len(accepted["stones"]), 10)
+        self.assertEqual(len(accepted["stones"]), 5)
         self.assertFalse(any(stone["isPlaced"] for stone in accepted["stones"]))
-        self.assert_board_unchanged(accepted, self.challenge(action=challenge_action)["state"])
+        self.assertEqual(accepted["placement_revision"], 1)
+        self.assertFalse(accepted["my_ready"])
+        self.assertFalse(accepted["opponent_ready"])
+        self.assert_board_unchanged(self.state("a", match_id), self.challenge(action=challenge_action)["state"])
         for user, color in (("a", "black"), ("b", "white")):
             lobby = self.rpc(user, "lobby", p_users=False)
             self.assertIsNone(lobby["outgoing"])
@@ -224,34 +260,47 @@ class HTTPContracts(unittest.TestCase):
     def test_place_ready_shoot_and_retries(self):
         state = self.active()
         match_id = state["id"]
-        self.write("a", "ready", match_id, revision=state["revision"], expected="invalid")
+        placement_deadline = state["deadline_ms"]
+        self.write("a", "ready", match_id, placement_revision=state["placement_revision"], expected="invalid")
         for user, color, first_id, y in (("a", "black", 0, 470), ("b", "white", 5, 130)):
+            state = self.state(user, match_id)
             for offset in range(5):
                 with self.subTest(color=color, stone=first_id + offset):
                     before = state
                     parameters = {"p_stone_id": first_id + offset, "p_x": 90 + 100 * offset, "p_y": y}
                     placement = action_id()
-                    state = self.write(user, "place", match_id, revision=before["revision"],
+                    state = self.write(user, "place", match_id, placement_revision=before["placement_revision"],
                                        action=placement, **parameters)["state"]
                     self.assertEqual(state["revision"], before["revision"] + 1)
+                    self.assertEqual(state["placement_revision"], before["placement_revision"] + 1)
+                    self.assertEqual(state["deadline_ms"], placement_deadline)
                     stone = next(s for s in state["stones"] if s["id"] == first_id + offset)
                     self.assertEqual(stone["owner"], color)
                     self.assertTrue(stone["isPlaced"])
                     self.assertEqual(stone["position"], {"x": parameters["p_x"], "y": y})
                     if offset == 0:
-                        retry = self.write(user, "place", match_id, revision=before["revision"],
+                        retry = self.write(user, "place", match_id, placement_revision=before["placement_revision"],
                                            action=placement, **parameters)["state"]
                         self.assert_board_unchanged(state, retry)
-                        stale = self.write(user, "place", match_id, revision=before["revision"],
+                        stale = self.write(user, "place", match_id, placement_revision=before["placement_revision"],
                                            expected="stale", **parameters)["state"]
                         self.assert_board_unchanged(state, stale)
             ready = action_id()
-            revision = state["revision"]
-            state = self.write(user, "ready", match_id, revision=revision, action=ready)["state"]
-            self.assertEqual(state["phase"], "placing_white" if user == "a" else "aiming")
-            self.assertEqual(state["current_player"], "white" if user == "a" else "black")
+            revision = state["placement_revision"]
+            readied = self.write(user, "ready", match_id, placement_revision=revision, action=ready)
+            state = readied["state"]
+            self.assertEqual(state["placement_revision"], revision + 1)
+            self.assertTrue(state["my_ready"])
+            self.assertEqual(state["opponent_ready"], user == "b")
+            self.assertEqual(state["phase"], "placing" if user == "a" else "aiming")
+            self.assertEqual(state["current_player"], "black")
+            if user == "a":
+                self.assertEqual(state["deadline_ms"], placement_deadline)
+            else:
+                self.assertAlmostEqual(state["deadline_ms"], readied["server_now_ms"] + 30_000, delta=1000)
             self.assert_board_unchanged(state, self.write(
-                user, "ready", match_id, revision=revision, action=ready)["state"])
+                user, "ready", match_id, placement_revision=revision, action=ready)["state"])
+        self.assertEqual(len(state["stones"]), 10)
         self.assertTrue(all(stone["isPlaced"] for stone in state["stones"]))
         for user, stone, expected in (("b", 5, "forbidden"), ("a", 5, "invalid")):
             rejected = self.write(user, "shoot", match_id, revision=state["revision"],
@@ -290,10 +339,191 @@ class HTTPContracts(unittest.TestCase):
             "a", "shoot", match_id, revision=revision, action=shot_action,
             p_stone_id=0, p_pull_x=0, p_pull_y=60)["state"])
 
+    def test_both_members_place_and_ready_concurrently_at_own_revisions(self):
+        black = self.active()
+        match_id = black["id"]
+        states = {"a": black, "b": self.state("b", match_id)}
+        revision = black["revision"]
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            for offset in range(5):
+                def place(user):
+                    return self.write(user, "place", match_id,
+                                      placement_revision=states[user]["placement_revision"],
+                                      p_stone_id=offset + (0 if user == "a" else 5),
+                                      p_x=90 + 100 * offset, p_y=470 if user == "a" else 130)["state"]
+
+                results = list(pool.map(place, "ab"))
+                self.assertEqual(sorted(s["revision"] for s in results), [revision + 1, revision + 2])
+                revision += 2
+                for user, after in zip("ab", results):
+                    self.assertEqual(after["placement_revision"], offset + 2)
+                    self.assertEqual(after["phase"], "placing")
+                    self.assertEqual(after["deadline_ms"], black["deadline_ms"])
+                    self.assertEqual(sum(s["isPlaced"] for s in after["stones"]), offset + 1)
+                    self.assertFalse(after["my_ready"] or after["opponent_ready"])
+                    states[user] = after
+
+            def ready(user):
+                return self.write(user, "ready", match_id,
+                                  placement_revision=states[user]["placement_revision"])
+
+            responses = list(pool.map(ready, "ab"))
+        self.assertEqual(sorted(r["state"]["phase"] for r in responses), ["aiming", "placing"])
+        self.assertEqual(sorted(r["state"]["revision"] for r in responses), [revision + 1, revision + 2])
+        for response in responses:
+            after = response["state"]
+            self.assertEqual(after["placement_revision"], 7)
+            self.assertTrue(after["my_ready"])
+            self.assertEqual(after["current_player"], "black")
+            if after["phase"] == "placing":
+                self.assertFalse(after["opponent_ready"])
+                self.assertEqual(after["deadline_ms"], black["deadline_ms"])
+            else:
+                self.assertTrue(after["opponent_ready"])
+                self.assertEqual(len(after["stones"]), 10)
+                self.assertAlmostEqual(after["deadline_ms"], response["server_now_ms"] + 30_000, delta=1000)
+        for user in "ab":
+            after = self.state(user, match_id)
+            self.assertEqual(after["phase"], "aiming")
+            self.assertEqual(after["placement_revision"], 7)
+            self.assertEqual(len(after["stones"]), 10)
+
+    def test_white_can_ready_first_and_arrangement_freezes_until_shared_timeout(self):
+        black = self.active()
+        match_id = black["id"]
+        white = self.state("b", match_id)
+        for offset in range(5):
+            white = self.write("b", "place", match_id, placement_revision=white["placement_revision"],
+                               p_stone_id=5 + offset, p_x=90 + 100 * offset, p_y=130)["state"]
+        ready_action = action_id()
+        expected_revision = white["placement_revision"]
+        white = self.write("b", "ready", match_id, action=ready_action,
+                           placement_revision=expected_revision)["state"]
+        self.assertEqual(white["phase"], "placing")
+        self.assertEqual(white["deadline_ms"], black["deadline_ms"])
+        self.assertEqual(white["placement_revision"], 7)
+        self.assertTrue(white["my_ready"])
+        self.assertFalse(white["opponent_ready"])
+        for operation, parameters in (("ready", {}), ("place", {"p_stone_id": 5, "p_x": 95, "p_y": 135})):
+            rejected = self.write("b", operation, match_id, placement_revision=7,
+                                  expected="not_active", **parameters)["state"]
+            self.assert_board_unchanged(white, rejected)
+        self.assert_board_unchanged(white, self.write(
+            "b", "ready", match_id, action=ready_action, placement_revision=expected_revision)["state"])
+        black = self.state("a", match_id)
+        self.assertEqual(black["placement_revision"], 1)
+        self.assertFalse(black["my_ready"])
+        self.assertTrue(black["opponent_ready"])
+        black = self.write("a", "place", match_id, placement_revision=1,
+                           p_stone_id=0, p_x=90, p_y=470)["state"]
+        self.assertEqual(black["placement_revision"], 2)
+        self.assertEqual(black["deadline_ms"], white["deadline_ms"])
+        expired_at = self.set_time(match_id, "deadline_at")
+        revealed = self.state("b", match_id)
+        self.assertEqual(revealed["phase"], "aiming")
+        self.assertEqual(revealed["current_player"], "black")
+        self.assertEqual(revealed["revision"], black["revision"] + 1)
+        self.assertEqual(revealed["placement_revision"], 7)
+        self.assertTrue(revealed["my_ready"] and revealed["opponent_ready"])
+        self.assertAlmostEqual(revealed["deadline_ms"], expired_at + 30_000, delta=0.1)
+        self.assertEqual(revealed["stones"][5:], white["stones"])
+        self.assertEqual(revealed["stones"][0], black["stones"][0])
+        self.assertEqual(self.state("a", match_id)["placement_revision"], 2)
+        for user, revision in (("a", 2), ("b", 7)):
+            for operation, parameters in (("ready", {}), ("place", {
+                    "p_stone_id": 0 if user == "a" else 5, "p_x": 95, "p_y": 470 if user == "a" else 130})):
+                after = self.write(user, operation, match_id, placement_revision=revision,
+                                   expected="not_active", **parameters)["state"]
+                self.assertEqual(after["placement_revision"], revision)
+                self.assertEqual(after["stones"], revealed["stones"])
+
+    def test_all_responses_hide_opponent_arrangements_including_early_resignation(self):
+        challenge_action, accept_action = action_id(), action_id()
+        match_id = self.challenge(action=challenge_action)["outgoing"]["id"]
+        self.write("b", "respond", match_id, action=accept_action, p_accept=True)
+        placements = {}
+        for user, stone_id, y in (("a", 0, 329), ("b", 5, 271)):
+            placements[user] = action_id()
+            self.write(user, "place", match_id, placement_revision=1, action=placements[user],
+                       p_stone_id=stone_id, p_x=333, p_y=y)
+        self.assertEqual(stack.sql(f"select jsonb_array_length(stones) from public.alk_matches "
+                                   f"where id = {uuid_sql(match_id)};"), "10")
+        self.challenge(action=challenge_action)
+        self.write("b", "respond", match_id, action=accept_action, p_accept=True)
+        self.write("b", "respond", match_id, p_accept=True, expected="not_pending")
+        self.write("a", "cancel", match_id, expected="not_pending")
+        for user, own_id, opponent_id in (("a", 0, 5), ("b", 5, 0)):
+            state = self.state(user, match_id)
+            self.assertEqual(state["placement_revision"], 2)
+            for users in (False, True):
+                self.rpc(user, "lobby", p_users=users)
+            self.write(user, "place", match_id, placement_revision=1, action=placements[user],
+                       p_stone_id=opponent_id, p_x=-1, p_y=-1)  # UUID retry precedes payload validation.
+            self.write(user, "place", match_id, placement_revision=1, expected="stale",
+                       p_stone_id=own_id, p_x=333, p_y=329 if user == "a" else 271)
+            self.write(user, "place", match_id, placement_revision=2, expected="invalid",
+                       p_stone_id=opponent_id, p_x=333, p_y=329 if user == "a" else 271)
+            for operation, parameters in (("place", {"p_stone_id": own_id, "p_x": 333, "p_y": 329}), ("ready", {})):
+                self.write(user, operation, match_id, p_expected_placement_revision=None,
+                           expected="invalid", **parameters)
+                status, error = self.request(user, "POST", "/rpc/alkkagi_" + operation, {
+                    "p_protocol": 1, "p_match_id": match_id, "p_action_id": action_id(),
+                    "p_expected_revision": state["revision"], **parameters,
+                })
+                self.assertEqual(status, 404, "Placement endpoints require the member revision wire key")
+                self.assertEqual(error["code"], "PGRST202")
+            self.write(user, "ready", match_id, placement_revision=1, expected="stale")
+            self.write(user, "ready", match_id, placement_revision=2, expected="invalid")
+            self.write(user, "shoot", match_id, revision=state["revision"], expected="not_active",
+                       p_stone_id=own_id, p_pull_x=0, p_pull_y=60)
+            self.write(user, "leave", match_id, revision=state["revision"], expected="not_active")
+            self.write(user, "chat_mute", match_id, p_muted=True)
+            self.write(user, "chat_send", match_id, p_body=" ", expected="invalid")
+            chat_action = action_id()
+            self.write(user, "chat_send", match_id, action=chat_action, p_body="hidden board")
+            self.write(user, "chat_send", match_id, action=chat_action, p_body="retry")
+            stack.sql(f"update public.alk_match_members set last_chat_at = clock_timestamp() + interval '1 hour' "
+                      f"where match_id = {uuid_sql(match_id)} and user_id = {uuid_sql(stack.USERS[user])};")
+            self.write(user, "chat_send", match_id, p_body="too soon", expected="rate_limited")
+            self.assert_board_unchanged(state, self.state(user, match_id))
+        finished = self.write("b", "resign", match_id)["state"]
+        self.assertEqual(finished["phase"], "finished")
+        self.assertEqual(len(finished["stones"]), 5)
+        for user in "ab":
+            self.assert_hidden_arrangement(self.state(user, match_id))
+            self.assert_hidden_arrangement(self.rpc(user, "lobby", p_users=False)["state"])
+
+    def test_cross_half_boundary_does_not_leak_hidden_collisions(self):
+        state = self.active()
+        match_id = state["id"]
+        black = self.write("a", "place", match_id, placement_revision=1,
+                           p_stone_id=0, p_x=300, p_y=320)["state"]
+        white = self.write("b", "place", match_id, placement_revision=1,
+                           p_stone_id=5, p_x=300, p_y=280)["state"]
+        # Opposite edge stones touch at distance 40; own stones need clearance 42.
+        for user, stone_id, y, before in (("a", 1, 320, black), ("b", 6, 280, white)):
+            rejected = self.write(user, "place", match_id, placement_revision=2, expected="invalid",
+                                  p_stone_id=stone_id, p_x=341, p_y=y)["state"]
+            self.assertEqual(rejected["placement_revision"], 2)
+            self.assertEqual(rejected["stones"], before["stones"])
+            accepted = self.write(user, "place", match_id, placement_revision=2,
+                                  p_stone_id=stone_id, p_x=342, p_y=y)["state"]
+            self.assertEqual(accepted["placement_revision"], 3)
+        # Reverse arrival order too, without any opponent position in the wire.
+        self.write("b", "place", match_id, placement_revision=3, p_stone_id=7, p_x=450, p_y=280)
+        self.write("a", "place", match_id, placement_revision=3, p_stone_id=2, p_x=450, p_y=320)
+        self.set_time(match_id, "deadline_at")
+        revealed = self.state("a", match_id)
+        self.assertEqual(revealed["phase"], "aiming")
+        self.assertEqual(len(revealed["stones"]), 10)
+        for first, second in ((0, 5), (1, 6), (2, 7)):
+            a, b = (revealed["stones"][stone]["position"] for stone in (first, second))
+            self.assertEqual(math.hypot(a["x"] - b["x"], a["y"] - b["y"]), 40)
+
     def test_concurrent_shot_retries_apply_once(self):
         state = self.active()
         match_id = state["id"]
-        self.set_time(match_id, "deadline_at", seconds_ago=31)
+        self.set_time(match_id, "deadline_at")
         state = self.state("a", match_id)
         self.assertEqual((state["phase"], state["current_player"]), ("aiming", "black"))
         action = action_id()
@@ -325,8 +555,9 @@ class HTTPContracts(unittest.TestCase):
         )
         for operation, parameters in operations:
             with self.subTest(operation=operation):
-                revision = state["revision"] if operation in ("cancel", "place", "ready", "shoot", "resign", "leave") else None
-                response = self.write("c", operation, match_id, revision=revision,
+                revision = state["revision"] if operation in ("cancel", "shoot", "resign", "leave") else None
+                placement_revision = state["placement_revision"] if operation in ("place", "ready") else None
+                response = self.write("c", operation, match_id, revision=revision, placement_revision=placement_revision,
                                       expected="not_found", **parameters)
                 self.assertIsNone(response["state"])
                 self.assertNotIn("incoming", response)
@@ -342,9 +573,10 @@ class HTTPContracts(unittest.TestCase):
         for body in (" \t\n", "한" * 101):
             self.write("a", "chat_send", match_id, p_body=body, expected="invalid")
         mute = action_id()
+        white_state = self.state("b", match_id)
         muted = self.write("b", "chat_mute", match_id, action=mute, p_muted=True)["state"]
         self.assertTrue(muted["muted"])
-        self.assert_board_unchanged(state, muted)
+        self.assert_board_unchanged(white_state, muted)
         self.assertFalse(self.state("a", match_id)["muted"])
         first_action = action_id()
         text = "한" * 99 + "🙂"  # 100 Unicode codepoints, more than 100 UTF-8 bytes.
@@ -356,7 +588,7 @@ class HTTPContracts(unittest.TestCase):
         second = self.write("b", "chat_send", match_id, p_body="답장 ' $(never-a-shell)")["state"]
         self.assertEqual(second["chat_seq"], 2)
         self.assertTrue(second["muted"])
-        self.assert_board_unchanged(state, second)
+        self.assert_board_unchanged(white_state, second)
         retried = self.write("a", "chat_send", match_id, action=first_action, p_body="  " + text + " \n")["state"]
         self.assertEqual(retried["chat_seq"], 2)
         self.assertEqual([row["seq"] for row in retried["chat"]], [1, 2])
@@ -371,25 +603,34 @@ class HTTPContracts(unittest.TestCase):
     def test_placement_deadlines_autofill_and_preserve_placed_stones(self):
         state = self.active()
         match_id = state["id"]
-        # Occupy a different stone's default spot, forcing collision-safe autofill.
-        placed = self.write("a", "place", match_id, revision=state["revision"],
-                            p_stone_id=0, p_x=190, p_y=460)["state"]
-        expired_at = self.set_time(match_id, "deadline_at")
-        black_filled = self.state("b", match_id)
-        self.assertEqual(black_filled["phase"], "placing_white")
-        self.assertEqual(black_filled["current_player"], "white")
-        self.assertEqual(black_filled["revision"], placed["revision"] + 1)
-        self.assertAlmostEqual(black_filled["deadline_ms"], expired_at + 30_000, delta=0.1)
-        self.assertEqual(black_filled["stones"][0], placed["stones"][0])
-        self.assertEqual(sum(s["isPlaced"] for s in black_filled["stones"] if s["owner"] == "black"), 5)
-        self.assertFalse(any(s["isPlaced"] for s in black_filled["stones"] if s["owner"] == "white"))
+        # Occupy another own stone's default spot on BOTH halves before one expiry.
+        placed = {}
+        for user, stone_id, y in (("a", 0, 460), ("b", 5, 140)):
+            before = self.state(user, match_id)
+            after = self.write(user, "place", match_id, placement_revision=before["placement_revision"],
+                               p_stone_id=stone_id, p_x=190, p_y=y)["state"]
+            self.assertEqual(after["phase"], "placing")
+            self.assertEqual(after["deadline_ms"], state["deadline_ms"])
+            placed[stone_id] = next(s for s in after["stones"] if s["id"] == stone_id)
+        before = self.state("a", match_id)
+        self.assertEqual(before["deadline_ms"], self.state("b", match_id)["deadline_ms"])
         expired_at = self.set_time(match_id, "deadline_at")
         aiming = self.state("a", match_id)
         self.assertEqual(aiming["phase"], "aiming")
         self.assertEqual(aiming["current_player"], "black")
-        self.assertEqual(aiming["revision"], black_filled["revision"] + 1)
+        self.assertEqual(aiming["revision"], before["revision"] + 1)
+        self.assertEqual(aiming["placement_revision"], 2)
+        self.assertTrue(aiming["my_ready"])
+        self.assertTrue(aiming["opponent_ready"])
+        self.assertEqual(len(aiming["stones"]), 10)
         self.assertAlmostEqual(aiming["deadline_ms"], expired_at + 30_000, delta=0.1)
-        self.assertEqual(aiming["stones"][0], placed["stones"][0])
+        for stone_id, stone in placed.items():
+            self.assertEqual(aiming["stones"][stone_id], stone)
+        white = self.state("b", match_id)
+        self.assertEqual(white["placement_revision"], 2)
+        self.assert_board_unchanged(aiming, white)
+        self.assertEqual(stack.sql(f"select jsonb_array_length(stones) from public.alk_matches "
+                                   f"where id = {uuid_sql(match_id)};"), "10")
         for index, stone in enumerate(aiming["stones"]):
             self.assertTrue(stone["isPlaced"])
             self.assertFalse(stone["isOut"])
@@ -397,7 +638,8 @@ class HTTPContracts(unittest.TestCase):
             self.assertTrue(20 <= x <= 580)
             self.assertTrue(320 <= y <= 580 if stone["owner"] == "black" else 20 <= y <= 280)
             for other in aiming["stones"][:index]:
-                self.assertGreaterEqual(math.hypot(x - other["position"]["x"], y - other["position"]["y"]), 42)
+                clearance = 42 if other["owner"] == stone["owner"] else 40
+                self.assertGreaterEqual(math.hypot(x - other["position"]["x"], y - other["position"]["y"]), clearance)
 
     def test_overdue_turns_pass_from_original_deadlines(self):
         state = self.active()
@@ -405,10 +647,12 @@ class HTTPContracts(unittest.TestCase):
         self.set_time(match_id, "deadline_at", 31)
         aiming = self.state("a", match_id)
         self.assertEqual(aiming["phase"], "aiming")
-        self.assertEqual(aiming["current_player"], "black")
+        self.assertEqual(aiming["current_player"], "white")
         self.assertEqual(aiming["revision"], state["revision"] + 2)
+        self.assertEqual(aiming["placement_revision"], 1)
+        self.assertTrue(aiming["my_ready"] and aiming["opponent_ready"])
         self.assertTrue(all(s["isPlaced"] for s in aiming["stones"]))
-        for seconds, passes, player in ((1, 1, "white"), (31, 2, "white"), (61, 3, "black")):
+        for seconds, passes, player in ((1, 1, "black"), (31, 2, "black"), (61, 3, "white")):
             with self.subTest(missed_turns=passes):
                 expired_at = self.set_time(match_id, "deadline_at", seconds)
                 response = self.rpc("b", "state", p_match_id=match_id)

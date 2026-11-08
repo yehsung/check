@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 @testable import AlkkagiCore
+@testable import AlkkagiPlayground
 
 @Suite("Alkkagi online", .serialized)
 @MainActor
@@ -21,12 +22,12 @@ struct AlkkagiOnlineTests {
              ["p_match_id": match, "p_accept": false, "p_action_id": action]),
             (.state(matchID: matchID, sinceChatSeq: 41), "alkkagi_state",
              ["p_match_id": match, "p_since_chat_seq": 41]),
-            (.place(matchID: matchID, expectedRevision: 7, stoneID: 2,
+            (.place(matchID: matchID, expectedPlacementRevision: 7, stoneID: 2,
                     position: OnlineFixture.vector(120, 420), actionID: nonce), "alkkagi_place",
-             ["p_match_id": match, "p_expected_revision": 7, "p_stone_id": 2,
+             ["p_match_id": match, "p_expected_placement_revision": 7, "p_stone_id": 2,
               "p_x": 120, "p_y": 420, "p_action_id": action]),
-            (.ready(matchID: matchID, expectedRevision: 7, actionID: nonce), "alkkagi_ready",
-             ["p_match_id": match, "p_expected_revision": 7, "p_action_id": action]),
+            (.ready(matchID: matchID, expectedPlacementRevision: 7, actionID: nonce), "alkkagi_ready",
+             ["p_match_id": match, "p_expected_placement_revision": 7, "p_action_id": action]),
             (.shoot(matchID: matchID, expectedRevision: 8, stoneID: 5,
                     pull: OnlineFixture.vector(-12, 75), actionID: nonce), "alkkagi_shoot",
              ["p_match_id": match, "p_expected_revision": 8, "p_stone_id": 5,
@@ -76,54 +77,136 @@ struct AlkkagiOnlineTests {
         }
     }
 
-    @Test func onlyThePlacingPeerCanPlaceAndReadyRequiresFivePlacedStones() async throws {
-        for placingPlayer in AlkkagiGame.Player.allCases {
-            var peers: [(AlkkagiOnlineStore, OnlineScript)] = []
-            defer { for (store, service) in peers { store.reset(); service.finish() } }
-            for color in AlkkagiGame.Player.allCases {
-                let phase: AlkkagiMatchPhase = placingPlayer == .black ? .placingBlack : .placingWhite
-                let snapshot = OnlineFixture.match(myColor: color, phase: phase)
-                let service = OnlineScript([.response(OnlineFixture.response(snapshot))],
-                                           fallback: OnlineFixture.response())
-                let store = makeStore(service)
-                peers.append((store, service))
-                await store.refreshLobby()
-                let ownsTurn = color == placingPlayer
-                #expect(store.isMyTurn == ownsTurn && store.canPlace == ownsTurn)
-                #expect(!store.canShoot)
-                await store.confirmPlacement()
-                await store.place(stoneID: color == .black ? 5 : 0, at: OnlineFixture.vector(300, 400))
-                await store.place(stoneID: color == .black ? 0 : 5, at: OnlineFixture.vector(.nan, 400))
-                #expect(service.calls.count == 1)
-                let ownID = color == .black ? 0 : 5
-                let position = OnlineFixture.vector(100, color == .black ? 440 : 160)
-                await store.place(stoneID: ownID, at: position)
-                #expect(service.calls.count == (ownsTurn ? 2 : 1))
-                #expect(store.state == snapshot, "Placement is not applied before a server snapshot")
-                if ownsTurn {
-                    guard case let .place(id, revision, stoneID, sentPosition, _) = service.calls.last else {
-                        Issue.record("Expected the owning peer's place request")
-                        continue
-                    }
-                    #expect(id == OnlineFixture.matchID && revision == snapshot.revision)
-                    #expect(stoneID == ownID && sentPosition == position)
-                    var placed = snapshot
-                    for index in placed.stones.indices where placed.stones[index].owner == color {
-                        placed.stones[index].isPlaced = true
-                    }
-                    service.enqueue(.response(OnlineFixture.response(placed)))
-                    await store.refreshLobby()
-                    await store.confirmPlacement()
-                    guard case let .ready(id, revision, _) = service.calls.last else {
-                        Issue.record("Five placed stones must allow a ready request")
-                        continue
-                    }
-                    #expect(id == OnlineFixture.matchID && revision == placed.revision)
-                    #expect(store.state?.currentPlayer == placingPlayer)
-                }
+    @Test func bothPeersPlaceUsingTheirOwnRevisionAndReadyLocksTheirLayout() async throws {
+        for color in AlkkagiGame.Player.allCases {
+            var snapshot = OnlineFixture.match(myColor: color, phase: .placing)
+            snapshot.placementRevision = 3
+            let service = OnlineScript([.response(OnlineFixture.response(snapshot))],
+                                       fallback: OnlineFixture.response())
+            let store = makeStore(service)
+            defer { store.reset(); service.finish() }
+            await store.refreshLobby()
+            #expect(store.isMyTurn && store.canPlace && !store.canShoot)
+            #expect(store.state?.stones.count == 5 && store.state?.stones.allSatisfy { $0.owner == color } == true)
+            await store.confirmPlacement()
+            await store.place(stoneID: color == .black ? 5 : 0, at: OnlineFixture.vector(300, 400))
+            await store.place(stoneID: color == .black ? 0 : 5, at: OnlineFixture.vector(.nan, 400))
+            #expect(service.calls.count == 1)
+            let ownID = color == .black ? 0 : 5
+            let position = OnlineFixture.vector(100, color == .black ? 440 : 160)
+            // The other player changes the public revision, without invalidating my pending placement.
+            snapshot.revision += 4
+            snapshot.opponentReady = true
+            service.enqueue(.response(OnlineFixture.response(snapshot)))
+            await store.refreshLobby()
+            await store.place(stoneID: ownID, at: position)
+            guard case let .place(id, revision, stoneID, sentPosition, _) = service.calls.last else {
+                Issue.record("Both colors must be allowed to place during the same phase")
+                continue
             }
-            #expect(peers.filter { $0.0.canPlace }.count == 1)
+            #expect(id == OnlineFixture.matchID && revision == 3 && revision != snapshot.revision)
+            #expect(stoneID == ownID && sentPosition == position)
+            #expect(store.state == snapshot, "Only a server snapshot commits a placement")
+            for index in snapshot.stones.indices { snapshot.stones[index].isPlaced = true }
+            snapshot.revision += 1
+            snapshot.placementRevision += 1
+            service.enqueue(.response(OnlineFixture.response(snapshot)))
+            await store.refreshLobby()
+            await store.confirmPlacement()
+            guard case let .ready(id, revision, _) = service.calls.last else {
+                Issue.record("Five own stones allow ready")
+                continue
+            }
+            #expect(id == OnlineFixture.matchID && revision == snapshot.placementRevision)
+            snapshot.myReady = true
+            snapshot.revision += 1
+            snapshot.placementRevision += 1
+            service.enqueue(.response(OnlineFixture.response(snapshot)))
+            await store.refreshLobby()
+            let before = service.calls.count
+            await store.place(stoneID: ownID, at: position)
+            await store.confirmPlacement()
+            #expect(!store.canPlace && !store.canShoot && !store.isMyTurn)
+            #expect(service.calls.count == before, "Ready locks this player's layout")
         }
+    }
+
+    @Test func opponentPlacementDoesNotInterruptMyPlacementDrag() async throws {
+        var snapshot = OnlineFixture.match(phase: .placing)
+        let service = OnlineScript([.response(OnlineFixture.response(snapshot))])
+        let store = makeStore(service)
+        defer { store.reset(); service.finish() }
+        await store.refreshLobby()
+        let model = AlkkagiLocalModel()
+        model.attachOnline(store)
+        let point = OnlineFixture.vector(100, 440)
+        model.aim(start: point, translation: OnlineFixture.vector(20, 10))
+        let dragged = model.dragPlacementID
+        let target = model.placementPoint
+        #expect(dragged != nil && target != nil)
+        snapshot.revision += 1
+        snapshot.opponentReady = true
+        service.enqueue(.response(OnlineFixture.response(snapshot)))
+        await store.refreshLobby()
+        model.tick(now: 0)
+        model.tick(now: 0.01)
+        #expect(model.dragPlacementID == dragged && model.placementPoint == target)
+        var revealed = OnlineFixture.match(revision: snapshot.revision + 1)
+        revealed.myReady = true
+        revealed.opponentReady = true
+        service.enqueue(.response(OnlineFixture.response(revealed)))
+        await store.refreshLobby()
+        model.tick(now: 0.02)
+        #expect(model.dragPlacementID == nil && model.placementPoint == nil)
+    }
+
+    @Test func onlyTheFirstAuthoritativeFinishRefreshesMissions() async throws {
+        let active = OnlineFixture.match()
+        var finished = active
+        finished.phase = .finished
+        finished.result = .black
+        finished.deadlineMs = nil
+        finished.revision += 1
+        let service = OnlineScript([.response(OnlineFixture.response(active)),
+                                    .response(OnlineFixture.response(finished)),
+                                    .response(OnlineFixture.response(finished)),
+                                    .response(OnlineFixture.response(active))])
+        let store = makeStore(service)
+        var finishes = 0
+        store.onMatchFinished = { finishes += 1 }
+        defer { store.reset(); service.finish() }
+        await store.refreshLobby()
+        #expect(finishes == 0)
+        await store.refreshMatch()
+        #expect(finishes == 1)
+        await store.refreshMatch()
+        await store.refreshMatch()
+        #expect(finishes == 1 && store.state?.phase == .finished)
+        store.reset()
+        service.enqueue(.response(OnlineFixture.response(active)))
+        await store.refreshLobby()
+        #expect(finishes == 1, "Resetting the account is not a game result")
+        service.enqueue(.response(OnlineFixture.response(finished)))
+        await store.refreshMatch()
+        #expect(finishes == 2, "The next account/session keeps its own finish observations")
+    }
+
+    @Test func blockedPeersNeverBecomeVisibleOrTriggerAnInvitationNotification() async throws {
+        var lobby = OnlineFixture.response()
+        lobby.me = OnlineFixture.black
+        lobby.users = [OnlineFixture.white]
+        lobby.incoming = [OnlineFixture.invite()]
+        lobby.outgoing = OnlineFixture.invite()
+        let service = OnlineScript([.response(lobby)])
+        let store = makeStore(service)
+        store.hiddenPeerIDs = [OnlineFixture.white.id.uppercased()]
+        var notifications = 0
+        store.onInviteArrived = { _ in notifications += 1 }
+        defer { store.reset(); service.finish() }
+        await store.refreshLobby()
+        #expect(store.users.isEmpty && store.incoming.isEmpty && store.outgoing == nil)
+        await store.challenge(opponentID: OnlineFixture.white.id)
+        #expect(service.calls.count == 1 && notifications == 0)
     }
 
     @Test func aimingGatesBothPeersAndSendsOneShotWithTheSuppliedNonce() async throws {
@@ -462,7 +545,7 @@ struct AlkkagiOnlineTests {
             ("negative revision", { $0.revision = -1 }),
             ("negative chat cursor", { $0.chatSeq = -1 }),
             ("nonfinite deadline", { $0.deadlineMs = .infinity }),
-            ("wrong placing player", { $0.phase = .placingWhite; $0.currentPlayer = .black }),
+            ("placement exposes opponent stones", { $0.phase = .placing }),
             ("unfinished result", { $0.result = .black }),
             ("missing finished result", { $0.phase = .finished }),
             ("duplicate stone IDs", { $0.stones[1] = $0.stones[0] }),
@@ -666,11 +749,12 @@ private enum OnlineFixture {
     static func match(myColor: AlkkagiGame.Player = .black, phase: AlkkagiMatchPhase = .aiming,
                       revision: Int = 7, id: UUID = matchID) -> AlkkagiMatch {
         var stones = AlkkagiGame().stones
-        if phase != .placingBlack && phase != .placingWhite {
+        if phase != .placing {
             for index in stones.indices { stones[index].isPlaced = true }
         }
+        if phase == .placing { stones.removeAll { $0.owner != myColor } }
         return AlkkagiMatch(id: id.uuidString.lowercased(), revision: revision, phase: phase,
-                            currentPlayer: phase == .placingWhite ? .white : .black, myColor: myColor,
+                            currentPlayer: .black, myColor: myColor,
                             black: black, white: white, stones: stones, deadlineMs: nowMs + 30_000)
     }
 

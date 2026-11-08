@@ -45,6 +45,18 @@
 -- During rolling, deadline_ms retains the shooter's original aiming deadline;
 -- the client freezes remaining time at max(0, (deadline_ms-started_at_ms)/1000).
 -- rolling_result stays private: wire result is null until phase = finished.
+-- Both members place privately against ONE 30-second deadline from acceptance.
+-- Placement/ready compare the caller's member revision, never the global revision.
+-- Snapshots reveal only the caller's five stones until both are ready or timeout
+-- seals both autofilled arrangements; an early resignation does not reveal them.
+-- Wire contract: state.revision remains global for response ordering. Every state
+-- adds placement_revision (own integer >= 1), my_ready and opponent_ready booleans.
+-- Both alkkagi_place and alkkagi_ready REQUIRE p_expected_placement_revision;
+-- p_expected_revision remains the shooting/other revision guard, never placement.
+-- A successful own place/ready increments only that member's placement_revision;
+-- ready locks further placement. Timeout marks both ready without incrementing
+-- member revisions. Early mutual ready starts black's 30 seconds from now;
+-- timeout starts it from the original shared deadline, including overdue passes.
 
 set local lock_timeout = '3s';
 
@@ -136,7 +148,7 @@ create table public.alk_matches (
   status text not null default 'pending'
     check (status in ('pending', 'active', 'finished', 'cancelled', 'declined', 'expired')),
   revision integer not null default 1 check (revision > 0),
-  phase text check (phase in ('placing_black', 'placing_white', 'aiming', 'rolling', 'finished')),
+  phase text check (phase in ('placing', 'aiming', 'rolling', 'finished')),
   current_player text not null default 'black' check (current_player in ('black', 'white')),
   stones jsonb not null check (jsonb_typeof(stones) = 'array' and jsonb_array_length(stones) = 10),
   invite_expires_at timestamptz not null,
@@ -155,7 +167,7 @@ create table public.alk_matches (
   check (black_id <> white_id),
   check (
     (status in ('pending', 'cancelled', 'declined', 'expired') and phase is null and result is null)
-    or (status = 'active' and phase is not null and phase in ('placing_black', 'placing_white', 'aiming', 'rolling')
+    or (status = 'active' and phase is not null and phase in ('placing', 'aiming', 'rolling')
         and result is null and finished_at is null)
     or (status = 'finished' and phase is not null and phase = 'finished' and result is not null and finished_at is not null)
   ),
@@ -179,6 +191,8 @@ create table public.alk_match_members (
   match_id uuid not null references public.alk_matches(id) on delete cascade,
   user_id uuid not null references public.profiles(id) on delete cascade,
   color text not null check (color in ('black', 'white')),
+  placement_revision integer not null default 1 check (placement_revision >= 1),
+  is_ready boolean not null default false,
   is_active boolean not null default true,
   muted boolean not null default false,
   left_at timestamptz,
@@ -270,6 +284,9 @@ as $fn$
     and not exists (
       select 1 from jsonb_array_elements(p_stones) as s(stone)
       where (s.stone ->> 'id')::integer <> p_stone_id
+        -- The opposite half is at least one diameter away. Inspecting its hidden
+        -- arrangement here would turn validation into a placement oracle.
+        and s.stone ->> 'owner' = p_color
         and (s.stone ->> 'isPlaced')::boolean and not (s.stone ->> 'isOut')::boolean
         and point(p_x, p_y) <-> point((s.stone #>> '{position,x}')::double precision,
                                       (s.stone #>> '{position,y}')::double precision) < 42
@@ -387,14 +404,13 @@ begin
   end if;
   if m.status = 'active' then
     -- Each stage runs at most once. Advance from OLD deadlines, not poll time.
-    if m.phase = 'placing_black' and m.deadline_at <= p_now then
+    if m.phase = 'placing' and m.deadline_at <= p_now then
       m.stones := public.alk_autofill(m.stones, 'black');
-      m.phase := 'placing_white'; m.current_player := 'white';
-      m.deadline_at := m.deadline_at + interval '30 seconds';
-      m.revision := m.revision + 1;
-    end if;
-    if m.phase = 'placing_white' and m.deadline_at <= p_now then
       m.stones := public.alk_autofill(m.stones, 'white');
+      -- Timeout seals both boards without inventing another player action.
+      -- Per-member revisions change only on that member's successful place/ready.
+      update public.alk_match_members a set is_ready = true
+        where a.match_id = m.id and not a.is_ready;
       m.phase := 'aiming'; m.current_player := 'black';
       m.deadline_at := m.deadline_at + interval '30 seconds';
       m.revision := m.revision + 1;
@@ -446,12 +462,26 @@ declare
   m public.alk_matches%rowtype;
   a public.alk_match_members%rowtype;
   v_chat jsonb := '[]'::jsonb;
+  v_opponent_ready boolean;
+  v_hidden boolean;
+  v_stones jsonb;
 begin
   select g.* into m from public.alk_matches g
     where g.id = p_match_id and p_user_id in (g.black_id, g.white_id) and g.phase is not null;
   if not found then return null; end if;
   select g.* into a from public.alk_match_members g where g.match_id = m.id and g.user_id = p_user_id;
   if not found then return null; end if;
+  select coalesce(bool_and(g.is_ready), false) into v_opponent_ready
+    from public.alk_match_members g where g.match_id = m.id and g.user_id <> p_user_id;
+  -- This projection is shared by EVERY response, including retries, errors,
+  -- chat and lobby. Keep an unfinished arrangement private after resignation too.
+  v_hidden := m.phase = 'placing' or not (a.is_ready and v_opponent_ready);
+  if v_hidden then
+    select jsonb_agg(s.stone order by (s.stone ->> 'id')::integer) into v_stones
+      from jsonb_array_elements(m.stones) as s(stone) where s.stone ->> 'owner' = a.color;
+  else
+    v_stones := m.stones;
+  end if;
   if a.left_at is null and (m.status = 'active' or
       (m.status = 'finished' and clock_timestamp() < m.finished_at + interval '120 seconds')) then
     select coalesce(jsonb_agg(jsonb_build_object(
@@ -462,11 +492,13 @@ begin
   end if;
   return jsonb_build_object(
     'id', m.id, 'revision', m.revision, 'phase', m.phase,
+    'placement_revision', a.placement_revision, 'my_ready', a.is_ready, 'opponent_ready', v_opponent_ready,
     'current_player', m.current_player, 'my_color', a.color,
     'black', public.alk_peer(m.black_id), 'white', public.alk_peer(m.white_id),
-    'stones', m.stones, 'deadline_ms', public.alk_ms(m.deadline_at),
+    'stones', v_stones, 'deadline_ms', public.alk_ms(m.deadline_at),
     'shot_count', m.shot_count, 'result', m.result, 'finish_reason', m.finish_reason,
-    'shot', m.shot, 'chat_seq', m.chat_seq, 'chat', v_chat, 'muted', a.muted
+    'shot', case when v_hidden then null else m.shot end,
+    'chat_seq', m.chat_seq, 'chat', v_chat, 'muted', a.muted
   );
 end
 $fn$;
@@ -505,6 +537,8 @@ $fn$;
 
 -- One guarded dispatcher keeps membership, clocks, revisions and retries identical
 -- across thin wire wrappers. It is owner-only, never itself an API entry point.
+-- For place/ready, its positional expected-revision argument is a MEMBER counter;
+-- their public wrappers explicitly name it p_expected_placement_revision.
 create function public.alk_match_call(
   p_operation text, p_match_id uuid, p_action_id uuid, p_expected_revision integer,
   p_payload jsonb, p_protocol integer
@@ -564,10 +598,11 @@ begin
   -- In particular this is BEFORE expected-revision, role, payload and phase checks.
   if v_duplicate then return public.alk_response('ok', v_uid, m.id, v_since); end if;
   if p_operation = 'state' then return public.alk_response('ok', v_uid, m.id, v_since); end if;
-  if p_operation in ('place', 'shoot') and p_expected_revision is null then
+  if p_operation in ('place', 'ready', 'shoot') and p_expected_revision is null then
     return public.alk_response('invalid', v_uid, m.id, 0);
   end if;
-  if p_expected_revision is not null and p_expected_revision <> m.revision then
+  if p_operation not in ('place', 'ready')
+     and p_expected_revision is not null and p_expected_revision <> m.revision then
     return public.alk_response('stale', v_uid, m.id, 0);
   end if;
   if m.action_count >= 16384 and p_operation not in ('cancel', 'respond', 'resign', 'leave') then
@@ -596,7 +631,7 @@ begin
         end if;
         if public.alk_busy(v_uid) then return public.alk_response('busy', v_uid, m.id, 0); end if;
         if public.alk_busy(m.black_id) then return public.alk_response('target_busy', v_uid, m.id, 0); end if;
-        m.status := 'active'; m.phase := 'placing_black'; m.current_player := 'black';
+        m.status := 'active'; m.phase := 'placing'; m.current_player := 'black';
         m.deadline_at := v_now + interval '30 seconds';
         insert into public.alk_match_members(match_id, user_id, color, joined_at) values
           (m.id, m.black_id, 'black', v_now), (m.id, m.white_id, 'white', v_now);
@@ -605,6 +640,9 @@ begin
   else
     select g.* into a from public.alk_match_members g where g.match_id = m.id and g.user_id = v_uid;
     if not found then return public.alk_response('not_active', v_uid, m.id, 0); end if;
+    if p_operation in ('place', 'ready') and p_expected_revision <> a.placement_revision then
+      return public.alk_response('stale', v_uid, m.id, 0);
+    end if;
     v_color := a.color;
     if p_operation = 'leave' then
       if m.status <> 'finished' then return public.alk_response('not_active', v_uid, m.id, 0); end if;
@@ -654,9 +692,8 @@ begin
         m.finish_reason := 'resign'; m.finished_at := v_now;
         m.deadline_at := null; m.roll_until := null; m.rolling_result := null;
       else
-        if v_color <> m.current_player then return public.alk_response('forbidden', v_uid, m.id, 0); end if;
         if p_operation in ('place', 'ready') then
-          if m.phase <> (case when v_color = 'black' then 'placing_black' else 'placing_white' end) then
+          if m.phase <> 'placing' or a.is_ready then
             return public.alk_response('not_active', v_uid, m.id, 0);
           end if;
           if p_operation = 'ready' then
@@ -665,9 +702,11 @@ begin
                   and not (s.stone ->> 'isOut')::boolean) <> 5 then
               return public.alk_response('invalid', v_uid, m.id, 0);
             end if;
-            m.phase := case when v_color = 'black' then 'placing_white' else 'aiming' end;
-            m.current_player := case when v_color = 'black' then 'white' else 'black' end;
-            m.deadline_at := v_now + interval '30 seconds';
+            if exists (select 1 from public.alk_match_members g
+                       where g.match_id = m.id and g.user_id <> v_uid and g.is_ready) then
+              m.phase := 'aiming'; m.current_player := 'black';
+              m.deadline_at := v_now + interval '30 seconds';
+            end if;
           else
             v_stone_id := (p_payload ->> 'stone_id')::integer;
             v_x := (p_payload ->> 'x')::double precision; v_y := (p_payload ->> 'y')::double precision;
@@ -678,10 +717,14 @@ begin
               'position', jsonb_build_object('x', v_x, 'y', v_y),
               'velocity', jsonb_build_object('x', 0, 'y', 0), 'isPlaced', true));
           end if;
+          update public.alk_match_members g
+            set placement_revision = g.placement_revision + 1, is_ready = (p_operation = 'ready')
+            where g.match_id = m.id and g.user_id = v_uid;
         elsif p_operation = 'shoot' then
           if m.phase <> 'aiming' or m.deadline_at <= v_now then
             return public.alk_response('not_active', v_uid, m.id, 0);
           end if;
+          if v_color <> m.current_player then return public.alk_response('forbidden', v_uid, m.id, 0); end if;
           v_stone_id := (p_payload ->> 'stone_id')::integer;
           v_x := (p_payload ->> 'pull_x')::double precision; v_y := (p_payload ->> 'pull_y')::double precision;
           if v_stone_id is null or v_stone_id not between 0 and 9 or v_x is null or v_y is null
@@ -868,22 +911,22 @@ set search_path = pg_catalog
 as $fn$ select public.alk_match_call('state', p_match_id, null, null, jsonb_build_object('since_chat_seq', p_since_chat_seq), p_protocol) $fn$;
 
 create function public.alkkagi_place(
-  p_match_id uuid, p_expected_revision integer, p_stone_id integer,
+  p_match_id uuid, p_expected_placement_revision integer, p_stone_id integer,
   p_x double precision, p_y double precision, p_action_id uuid, p_protocol integer default 1
 )
 returns jsonb language sql volatile security definer
 set search_path = pg_catalog
 as $fn$
-  select public.alk_match_call('place', p_match_id, p_action_id, p_expected_revision,
+  select public.alk_match_call('place', p_match_id, p_action_id, p_expected_placement_revision,
     jsonb_build_object('stone_id', p_stone_id, 'x', p_x, 'y', p_y), p_protocol)
 $fn$;
 
 create function public.alkkagi_ready(
-  p_match_id uuid, p_action_id uuid, p_expected_revision integer default null, p_protocol integer default 1
+  p_match_id uuid, p_action_id uuid, p_expected_placement_revision integer, p_protocol integer default 1
 )
 returns jsonb language sql volatile security definer
 set search_path = pg_catalog
-as $fn$ select public.alk_match_call('ready', p_match_id, p_action_id, p_expected_revision, '{}'::jsonb, p_protocol) $fn$;
+as $fn$ select public.alk_match_call('ready', p_match_id, p_action_id, p_expected_placement_revision, '{}'::jsonb, p_protocol) $fn$;
 
 create function public.alkkagi_shoot(
   p_match_id uuid, p_expected_revision integer, p_stone_id integer,
@@ -1009,8 +1052,8 @@ begin
     ('alkkagi_cancel', 'public.alkkagi_cancel(uuid,uuid,integer,integer)', array['p_match_id','p_action_id','p_expected_revision','p_protocol'], 2),
     ('alkkagi_respond', 'public.alkkagi_respond(uuid,boolean,uuid,integer)', array['p_match_id','p_accept','p_action_id','p_protocol'], 1),
     ('alkkagi_state', 'public.alkkagi_state(uuid,integer,integer)', array['p_match_id','p_since_chat_seq','p_protocol'], 2),
-    ('alkkagi_place', 'public.alkkagi_place(uuid,integer,integer,double precision,double precision,uuid,integer)', array['p_match_id','p_expected_revision','p_stone_id','p_x','p_y','p_action_id','p_protocol'], 1),
-    ('alkkagi_ready', 'public.alkkagi_ready(uuid,uuid,integer,integer)', array['p_match_id','p_action_id','p_expected_revision','p_protocol'], 2),
+    ('alkkagi_place', 'public.alkkagi_place(uuid,integer,integer,double precision,double precision,uuid,integer)', array['p_match_id','p_expected_placement_revision','p_stone_id','p_x','p_y','p_action_id','p_protocol'], 1),
+    ('alkkagi_ready', 'public.alkkagi_ready(uuid,uuid,integer,integer)', array['p_match_id','p_action_id','p_expected_placement_revision','p_protocol'], 1),
     ('alkkagi_shoot', 'public.alkkagi_shoot(uuid,integer,integer,double precision,double precision,uuid,integer)', array['p_match_id','p_expected_revision','p_stone_id','p_pull_x','p_pull_y','p_action_id','p_protocol'], 1),
     ('alkkagi_resign', 'public.alkkagi_resign(uuid,uuid,integer,integer)', array['p_match_id','p_action_id','p_expected_revision','p_protocol'], 2),
     ('alkkagi_leave', 'public.alkkagi_leave(uuid,uuid,integer,integer)', array['p_match_id','p_action_id','p_expected_revision','p_protocol'], 2),

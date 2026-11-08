@@ -100,7 +100,8 @@ def start():
     wait_until(lambda: "accepting connections" in run(
         ["docker", "exec", NAMES["db"], "pg_isready", "-U", "postgres"]), "PostgreSQL")
     for path in [HERE / "bootstrap.sql", HERE.parent / "20261108160000_alkkagi_physics.sql",
-                 HERE.parent / "20261108161000_alkkagi_matches.sql"]:
+                 HERE.parent / "20261108161000_alkkagi_matches.sql",
+                 HERE.parent / "20261108162000_alkkagi_progress.sql"]:
         # Migration files run atomically, matching the documented deployment transaction.
         run(["docker", "exec", "-i", NAMES["db"], "psql", "-X", "-1", "-v", "ON_ERROR_STOP=1", "-U", "postgres"],
             data=path.read_text())

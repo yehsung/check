@@ -762,6 +762,17 @@ class HTTPContracts(unittest.TestCase):
         self.assert_denied(None, "POST", "/rpc/alkkagi_lobby", {"p_protocol": 1}, missing_code="PGRST202")
         self.assert_board_unchanged(state, self.state("a", match_id))
 
+    def test_finished_peers_can_leave_with_the_same_observed_revision(self):
+        state = self.active()
+        match_id = state["id"]
+        state = self.write("a", "resign", match_id)["state"]
+        observed = state["revision"]
+        self.write("a", "leave", match_id, revision=observed)
+        self.write("b", "leave", match_id, revision=observed)
+        left = stack.sql(f"select count(*) from public.alk_match_members where match_id = {uuid_sql(match_id)} "
+                         "and left_at is not null;")
+        self.assertEqual(left, "2", "One peer leaving cannot prevent the other peer returning to the lobby")
+
     def test_finished_leave_is_idempotent_and_clears_chat_after_both_leave(self):
         state = self.active()
         match_id = state["id"]

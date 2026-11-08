@@ -1,10 +1,13 @@
 # 알까기 온라인 대전
 
 오목과 같은 미니게임 입구, 받은 초대 배너와 메뉴바 점, 독립 게임 창을 사용한다.
-초대를 수락하면 흑돌부터 각자 30초 안에 5개를 배치하고, 이후 30초씩 번갈아 발사한다.
+초대를 수락하면 같은 30초 동안 각자 자기 영역에 5개를 동시에 배치하고, 이후 흑돌부터 30초씩 번갈아 발사한다.
+둘 다 준비하거나 공통 제한시간이 끝날 때까지 상대 배치는 보이지 않는다. 서버 응답도 본인 돌 5개만 포함한다.
+먼저 준비한 사람은 배치를 바꿀 수 없다. 둘 다 준비하면 두 배치를 공개하고 첫 발사 차례를 시작한다.
 배치 시간이 끝나면 빈 돌을 자동으로 놓고, 발사 시간이 끝나면 차례를 넘긴다.
 돌이 굴러가는 동안 시계는 멈춘다. 창을 닫아도 기권하지 않으며 다시 열면 서버의 판을 받는다.
-재화, 내기, 순위와 미션 보상은 추가하지 않는다.
+경기 종료 후 미션 갱신은 오목과 같은 조회 경로에 연결한다. 누적 업적과 일일 미션의 목표와 보상은
+기존 서버의 메타데이터 및 수령 API가 정한다. PR의 서버 통합 범위는 [서버 변경 안내](server/README.md)에 정리한다.
 
 ## 로컬에서 두 계정으로 실행
 
@@ -15,6 +18,7 @@ macOS 14 이상과 Swift 6, 이미 실행 중인 Docker가 필요하다. 저장�
 ```sh
 python3 docs/plan/alkkagi/server/harness/local_stack.py start
 python3 docs/plan/alkkagi/server/harness/test_http.py
+python3 docs/plan/alkkagi/server/harness/test_progress.py
 python3 docs/plan/alkkagi/server/harness/local_stack.py apps
 ```
 
@@ -57,7 +61,8 @@ python3 docs/plan/alkkagi/server/harness/test_physics.py playgrounds/alkkagi/.bu
   본앱은 기존 `duelRPC`와 세션 갱신 경로를 사용한다. 계정 전환 뒤 늦게 도착한 응답은 폐기한다.
 - 서버가 참여자, 현재 차례, 배치 영역, 제한시간과 revision을 검사하고 고정 간격 물리 계산을 수행한다.
   클라이언트는 발사 직전의 상태를 재생해 손맛을 표현한 뒤 서버 상태에 맞춘다.
-- 변경 요청은 action UUID로 중복을 제거한다. 돌 배치와 발사는 expected revision도 검사한다.
+- 변경 요청은 action UUID로 중복을 제거한다. 배치와 준비는 본인의 `placement_revision`, 발사는 판의 `revision`을 검사한다.
+  상대가 돌을 옮겨도 내 배치 요청이나 진행 중인 드래그는 취소되지 않는다.
   서버 시간이 기준이며 클라이언트가 단독으로 차례나 승패를 확정하지 않는다.
 - 채팅은 판 revision과 독립된 순번으로 병합한다. 한 메시지는 Unicode codepoint 100자까지이며
   송신 간격은 0.5초다. 알림 끄기는 개인 표시 설정이고 상대 메시지 전송을 차단하지 않는다.
@@ -77,8 +82,8 @@ python3 docs/plan/alkkagi/server/harness/test_physics.py playgrounds/alkkagi/.bu
 | `alkkagi_respond` | `p_match_id`, `p_accept`, `p_action_id` | 수락 또는 거절 |
 | `alkkagi_cancel` | `p_match_id`, `p_action_id`, `p_expected_revision?` | 보낸 초대 취소 |
 | `alkkagi_state` | `p_match_id`, `p_since_chat_seq` | 판과 이후 채팅 조회 |
-| `alkkagi_place` | `p_match_id`, `p_expected_revision`, `p_stone_id`, `p_x`, `p_y`, `p_action_id` | 내 돌 배치 |
-| `alkkagi_ready` | `p_match_id`, `p_expected_revision?`, `p_action_id` | 5개 배치 완료 |
+| `alkkagi_place` | `p_match_id`, `p_expected_placement_revision`, `p_stone_id`, `p_x`, `p_y`, `p_action_id` | 내 돌 배치 |
+| `alkkagi_ready` | `p_match_id`, `p_expected_placement_revision`, `p_action_id` | 내 배치 잠그기 |
 | `alkkagi_shoot` | `p_match_id`, `p_expected_revision`, `p_stone_id`, `p_pull_x`, `p_pull_y`, `p_action_id` | 뒤로 당긴 벡터로 발사 |
 | `alkkagi_resign` | `p_match_id`, `p_expected_revision?`, `p_action_id` | 기권 |
 | `alkkagi_chat_send` | `p_match_id`, `p_body`, `p_action_id` | 대화 보내기 |
@@ -89,14 +94,31 @@ python3 docs/plan/alkkagi/server/harness/test_physics.py playgrounds/alkkagi/.bu
 로비는 `incoming`, `outgoing`, 선택적인 `users`를, 진행 중인 판은 `state`를 포함한다.
 `state`에는 두 참여자, `my_color`, `revision`, `phase`, `current_player`, `stones`,
 `deadline_ms`, `shot_count`, `result`, 최근 `shot`, `chat_seq`, `chat`, `muted`가 있다.
+`placement_revision`은 본인의 배치 수정 번호이고, `my_ready`, `opponent_ready`는 준비 여부다.
 돌 ID 0~4는 흑돌, 5~9는 백돌이며 좌표는 600×600이다.
 
-단계는 `placing_black`, `placing_white`, `aiming`, `rolling`, `finished`다.
+단계는 `placing`, `aiming`, `rolling`, `finished`다. `placing`에는 차례가 없으며 두 사람의 `deadline_ms`가 같다.
+이때 `stones`에는 본인 돌 5개만 있고 상대 좌표나 배치 개수는 포함하지 않는다. `shot`도 없다.
+배치 중에 기권해도 상대의 비공개 배치를 공개하지 않는다. 준비가 끝나거나 공통 마감이 지나면 전체 돌 10개를 받는다.
 `rolling` 중 `deadline_ms`는 발사자의 원래 제한시간이고 남은 시간은 `shot.started_at_ms`에서 고정한다.
 굴러가는 결과는 서버 내부에서 보관하며 단계가 `finished`가 되기 전에는 `result`를 공개하지 않는다.
 `stale` 응답은 최신 판을 포함하며 오래된 입력을 자동으로 다시 실행하지 않는다.
 참여하지 않은 사람에게는 `not_found`를 돌려준다. 알 수 없는 프로토콜과 단계는 클라이언트가 동작을 막는다.
 세부 status와 nullable 필드의 기준은 `Sources/CheckCore/AlkkagiOnlineWire.swift`다.
+
+## 도전과제와 일일 미션
+
+`AlkkagiOnlineStore`는 서버가 확정한 `finished`를 판마다 처음 관측했을 때만 `onMatchFinished`를 호출한다.
+본앱은 오목과 동일하게 `refreshAchievementsAfterGameResult(game: "alkkagi")`로 기존 `achievements_status`를 재조회한다.
+로컬 물리 연출이 끝난 순간이나 연습 판은 이 경로를 호출하지 않는다. 계정 초기화와 오래된 응답도 보상 계기로 쓰지 않는다.
+
+관리자는 누적 업적의 키를 `alkkagi` 계열로, 일일 미션은 `daily_alkkagi`, `game: "alkkagi"`로 기존 서버에 등록한다.
+미션 화면은 기존 공통 행과 알까기 아이콘을 사용하고 `achievement_claim`, `daily_mission_claim`으로 수령한다.
+오목의 실제 목표, 보상액, 보상 대상 경기 조건은 비공개 운영 정의를 확인한 뒤 동일하게 반영해야 한다.
+
+`20261108162000_alkkagi_progress.sql`은 서버가 확정한 경기 완료를 집계하는 영구 카운터와 KST 일일 집계를 추가한다.
+같은 판의 재조회와 재시도는 한 번만 반영하고, 끝난 경기 행을 보관 기간 후 지워도 누적 집계가 사라지지 않게 한다.
+집계 함수는 서버 소유자 전용이다. 이 SQL 자체가 기존 미션 메타데이터나 지급 함수를 변경하지는 않는다.
 
 ## 운영 반영 전 필요한 작업
 
@@ -107,11 +129,12 @@ python3 docs/plan/alkkagi/server/harness/test_physics.py playgrounds/alkkagi/.bu
 1. 실제 프로젝트의 `profiles`와 `auth.uid()`, `same_visibility(uuid,uuid)`,
    `blocked_between(uuid,uuid)`, `realtime.send(jsonb,text,text,boolean)` 계약을 확인한다.
    제안본은 의존성이 없거나 소유권이 부적합하면 적용을 거부한다.
-2. 신뢰하는 비 API 마이그레이션 계정으로 물리 SQL, 대전 SQL 순서로 적용한다.
-   두 파일을 하나의 마이그레이션 트랜잭션으로 실행하고 기존 객체 이름과 충돌하지 않는지 확인한다.
+2. 신뢰하는 비 API 마이그레이션 계정으로 물리 SQL, 대전 SQL, 집계 SQL 순서로 적용한다.
+   세 파일을 하나의 마이그레이션 트랜잭션으로 실행하고 기존 객체 이름과 충돌하지 않는지 확인한다.
    `server/harness/bootstrap.sql`은 가짜 사용자와 테스트 역할을 만드는 로컬 전용 파일이므로 적용하지 않는다.
 3. owner 전용 `alk_busy(uuid)`를 기존 `game__busy_users()` 등 공용 대전 중 판정에 통합한다.
-   현재 제안본의 중복 대전 제한은 알까기 내부만 보장한다. 다른 게임과의 배타성은 이 통합 전까지 보장하지 않는다.
+   알까기의 초대와 수락도 기존 다른 게임의 진행 상태를 확인하도록 실제 공용 함수 계약에 연결한다.
+   현재 제안본의 중복 대전 제한은 알까기 내부만 보장한다. 양방향 통합 전까지 다른 게임과의 배타성은 보장하지 않는다.
 4. 운영 정리 작업에 종료된 초대 1일, 끝난 판 30일 보관 정책을 통합한다. 진행 중인 판과
    action ID는 시간만으로 삭제하지 않는다. 마지막 채팅 200개와 성공 action 16,384개 제한은 SQL에 있다.
    계정 삭제 시 profiles 외래 키의 cascade가 작동하는지 실제 삭제 경로와 함께 검증한다.

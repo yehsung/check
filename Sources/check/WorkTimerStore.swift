@@ -1724,6 +1724,7 @@ final class WorkTimerStore {
             mahjong.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
             // 1:1 길건너도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선에 남지 않게(리버시 꼴).
             if crossyDuel.hiddenPeerIDs != blockHiddenPeerIDs { crossyDuel.hiddenPeerIDs = blockHiddenPeerIDs }
+            if alkkagi.hiddenPeerIDs != blockHiddenPeerIDs { alkkagi.hiddenPeerIDs = blockHiddenPeerIDs }
         }
     }
     /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
@@ -2161,6 +2162,7 @@ final class WorkTimerStore {
         reversi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "reversi") }
         mahjong.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "mahjong") }
         crossyDuel.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "crossy_duel") }
+        alkkagi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "alkkagi") }
         megaphone.attach(host: self)
         megaphoneBanner.attach(host: self)
         // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).

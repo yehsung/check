@@ -17,10 +17,21 @@ package final class AlkkagiOnlineStore {
     package private(set) var serverMissing = false
     package private(set) var isWindowVisible = false
     package private(set) var isWindowOccluded = false
+    package var hiddenPeerIDs: Set<String> = [] {
+        didSet {
+            guard hiddenPeerIDs != oldValue else { return }
+            users = users.filter { !isPeerHidden($0.id) }
+            incoming = incoming.filter { !isPeerHidden($0.opponent.id) }
+            if let outgoing, isPeerHidden(outgoing.opponent.id) { self.outgoing = nil }
+            scheduleInviteExpiry()
+            if isAvailable { requestSync() }
+        }
+    }
 
     @ObservationIgnored package var presentWindow: (@MainActor () -> Void)?
     @ObservationIgnored package var dismissWindow: (@MainActor () -> Void)?
     @ObservationIgnored package var onInviteArrived: (@MainActor (AlkkagiInvite) -> Void)?
+    @ObservationIgnored package var onMatchFinished: (@MainActor () -> Void)?
     @ObservationIgnored package var requestAttention: (@MainActor () -> Void)?
 
     @ObservationIgnored var service: (any AlkkagiServing)?
@@ -42,6 +53,7 @@ package final class AlkkagiOnlineStore {
     @ObservationIgnored private var lobbySequence = 0
     @ObservationIgnored private var clockSequence = 0
     @ObservationIgnored private var seenInviteIDs: Set<String> = []
+    @ObservationIgnored private var seenFinishedMatchIDs: Set<String> = []
     @ObservationIgnored private var dismissedMatchIDs: Set<String> = []
     @ObservationIgnored private var refreshedDeadline: String?
     private var serverClockOffsetMs: Double?
@@ -101,6 +113,7 @@ package final class AlkkagiOnlineStore {
 
     package func challenge(opponentID: String) async {
         guard !isBusy, isAvailable, state == nil, outgoing == nil,
+              !isPeerHidden(opponentID),
               let opponent = UUID(uuidString: opponentID),
               opponent != me.flatMap({ UUID(uuidString: $0.id) }),
               users.first(where: { UUID(uuidString: $0.id) == opponent })?.busy != true else { return }
@@ -279,10 +292,12 @@ package final class AlkkagiOnlineStore {
         isSendingChat = false
         serverMissing = false
         isAvailable = false
+        hiddenPeerIDs = []
         isWindowVisible = false
         isWindowOccluded = false
         serverClockOffsetMs = nil
         seenInviteIDs = []
+        seenFinishedMatchIDs = []
         dismissedMatchIDs = []
         refreshedDeadline = nil
         requestSequence = 0
@@ -375,10 +390,10 @@ package final class AlkkagiOnlineStore {
     private func apply(_ response: AlkkagiResponse, for call: AlkkagiCall, context: RequestContext) {
         if context.sequence >= lobbySequence {
             if let me = response.me { self.me = me }
-            if let users = response.users { self.users = users }
+            if let users = response.users { self.users = users.filter { !isPeerHidden($0.id) } }
             if let incoming = response.incoming {
-                self.incoming = incoming
-                for invite in incoming where seenInviteIDs.insert(invite.id.lowercased()).inserted {
+                self.incoming = incoming.filter { !isPeerHidden($0.opponent.id) }
+                for invite in self.incoming where seenInviteIDs.insert(invite.id.lowercased()).inserted {
                     if invite.expiresAtMs > estimatedServerNowMs { onInviteArrived?(invite) }
                     guard context.generation == resetGeneration else { return }
                 }
@@ -390,6 +405,7 @@ package final class AlkkagiOnlineStore {
                 outgoing = response.outgoing
             }
             lobbySequence = context.sequence
+            if let outgoing, isPeerHidden(outgoing.opponent.id) { self.outgoing = nil }
             scheduleInviteExpiry()
         }
         guard var next = response.state, let id = UUID(uuidString: next.id),
@@ -417,6 +433,10 @@ package final class AlkkagiOnlineStore {
         if !sameMatch { matchGeneration &+= 1 }
         state = next
         focusMatchID = nil
+        if next.phase == .finished, seenFinishedMatchIDs.insert(id.uuidString.lowercased()).inserted {
+            onMatchFinished?()
+            guard context.generation == resetGeneration else { return }
+        }
         if !sameMatch, !(isWindowVisible && !isWindowOccluded) {
             presentWindow?()
             guard context.generation == resetGeneration else { return }
@@ -438,6 +458,10 @@ package final class AlkkagiOnlineStore {
         case .unsupportedClient, .unknown: "앱을 업데이트한 뒤 다시 시도해 주세요."
         case .invalid, .forbidden: "지금은 할 수 없는 동작이에요."
         }
+    }
+
+    private func isPeerHidden(_ id: String) -> Bool {
+        hiddenPeerIDs.contains { $0.caseInsensitiveCompare(id) == .orderedSame }
     }
 
     private func requestSync() {

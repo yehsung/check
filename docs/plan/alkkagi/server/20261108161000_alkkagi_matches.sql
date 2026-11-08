@@ -601,7 +601,9 @@ begin
   if p_operation in ('place', 'ready', 'shoot') and p_expected_revision is null then
     return public.alk_response('invalid', v_uid, m.id, 0);
   end if;
-  if p_operation not in ('place', 'ready')
+  -- Leaving a finished match changes only this member's presence. The other
+  -- member leaving must not invalidate the revision both clients observed.
+  if p_operation not in ('place', 'ready', 'leave')
      and p_expected_revision is not null and p_expected_revision <> m.revision then
     return public.alk_response('stale', v_uid, m.id, 0);
   end if;

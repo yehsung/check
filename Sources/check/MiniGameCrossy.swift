@@ -189,6 +189,8 @@ struct CrossySceneView: NSViewRepresentable {
     let reduceMotion: Bool
     /// SCNView 의 그리기 상한 — 판 루프와 같은 주사율의 약수(`MiniGameFrameRate`, 리터럴 60 금지).
     var framesPerSecond: Int = MiniGameFrameRate.baselineFPS
+    /// 1:1 상대 반투명 그림자(혼자 판은 nil).
+    var ghost: CrossyDuelGhost? = nil
 
     func makeNSView(context: Context) -> CrossySCNView {
         let view = CrossySCNView(frame: .zero, options: [
@@ -213,6 +215,7 @@ struct CrossySceneView: NSViewRepresentable {
         view.preferredFramesPerSecond = framesPerSecond
         // 모양을 GPU 에 미리 올린다(백그라운드 — 판 도중 첫 등장에서 올리지 않게). 모양 자체는 `CrossyScene.init` 이 이미 만들었다.
         view.prepare(scene.prewarmShapes, completionHandler: nil)
+        scene.ghostTarget = ghost
         scene.apply(game, reduceMotion: reduceMotion)
         return view
     }
@@ -230,6 +233,7 @@ struct CrossySceneView: NSViewRepresentable {
         // 다시 보이는 순간 `CrossySCNView` 가 마지막 판을 한 번 옮긴다(아래 occlusion 처리).
         view.pending = (game, reduceMotion)
         if view.preferredFramesPerSecond != framesPerSecond { view.preferredFramesPerSecond = framesPerSecond }
+        scene.ghostTarget = ghost
         guard view.isOnScreen else { return }
         scene.apply(game, reduceMotion: reduceMotion)
     }

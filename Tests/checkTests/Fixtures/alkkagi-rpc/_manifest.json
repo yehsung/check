@@ -1,0 +1,122 @@
+{
+  "source": "손 픽스처 — 갈래 C(alkkagi2/c)가 SPEC v1.1 §3.7 모양으로 적었다. S 하네스 원문(V2/server/fixtures)이 오면 통합(T)이 같은 이름으로 바꿔 끼운다.",
+  "draft": "20261110160000_alkkagi_v2.sql",
+  "protocol": 2,
+  "server_now_ms": 1800000000000,
+  "cases": [
+    {
+      "file": "alkkagi_challenge__already_pending.json",
+      "rpc": "alkkagi_challenge",
+      "case": "already_pending",
+      "status": "already_pending"
+    },
+    {
+      "file": "alkkagi_challenge__insufficient.json",
+      "rpc": "alkkagi_challenge",
+      "case": "insufficient",
+      "status": "insufficient"
+    },
+    {
+      "file": "alkkagi_challenge__ok.json",
+      "rpc": "alkkagi_challenge",
+      "case": "ok",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_challenge__target_outdated.json",
+      "rpc": "alkkagi_challenge",
+      "case": "target_outdated",
+      "status": "target_outdated"
+    },
+    {
+      "file": "alkkagi_challenge__unsupported_client.json",
+      "rpc": "alkkagi_challenge",
+      "case": "unsupported_client",
+      "status": "unsupported_client"
+    },
+    {
+      "file": "alkkagi_leave__ok.json",
+      "rpc": "alkkagi_leave",
+      "case": "ok",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_lobby__after_win.json",
+      "rpc": "alkkagi_lobby",
+      "case": "after_win",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_lobby__door_closed.json",
+      "rpc": "alkkagi_lobby",
+      "case": "door_closed",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_lobby__ok_full.json",
+      "rpc": "alkkagi_lobby",
+      "case": "ok_full",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_lobby__ok_light.json",
+      "rpc": "alkkagi_lobby",
+      "case": "ok_light",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_ranking__ok.json",
+      "rpc": "alkkagi_ranking",
+      "case": "ok",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_respond__insufficient_challenger.json",
+      "rpc": "alkkagi_respond",
+      "case": "insufficient_challenger",
+      "status": "insufficient"
+    },
+    {
+      "file": "alkkagi_state__aiming.json",
+      "rpc": "alkkagi_state",
+      "case": "aiming",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_state__finished_win.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_win",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_state__not_found.json",
+      "rpc": "alkkagi_state",
+      "case": "not_found",
+      "status": "not_found"
+    },
+    {
+      "file": "alkkagi_state__placing.json",
+      "rpc": "alkkagi_state",
+      "case": "placing",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_watch__not_found.json",
+      "rpc": "alkkagi_watch",
+      "case": "not_found",
+      "status": "not_found"
+    },
+    {
+      "file": "alkkagi_watch_live__finished.json",
+      "rpc": "alkkagi_watch_live",
+      "case": "finished",
+      "status": "ok"
+    },
+    {
+      "file": "alkkagi_watch_live__placing.json",
+      "rpc": "alkkagi_watch_live",
+      "case": "placing",
+      "status": "ok"
+    }
+  ]
+}

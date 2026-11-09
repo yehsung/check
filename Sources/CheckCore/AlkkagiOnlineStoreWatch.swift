@@ -4,8 +4,9 @@ import Foundation
 // `watch(matchID:)` → `alkkagi_watch_live` 2초 → `watched` · 끝난 판은 꼬리(180초) 동안 결과까지 · `stopWatching()` ·
 // 주 스위치 `spectatorFeaturesEnabled`. 관전자는 대화를 안 받는다(설계 결정 D10). 숨긴 배치 중에는 돌이 [] 다.
 // 와이어 디코딩은 `AlkkagiOnlineWire.swift`.
-//
-// C1 뼈대: 첫 조회 한 번 + 창이 보이는 동안 2초 걸음. 취소 밖 조회(규칙 ④) · 연속 실패 내리기 · 내 판이 서면 관전 내리기는 C 다음 걸음.
+// 걸음: [관전] 누름과 함께 첫 조회 한 번 → 창이 보이고 안 가려진 동안 2초(가려지면 쉰다 — 조회 0). 내 판이 서면 관전을 내린다
+// (스토어 `apply`) · 진행 중인 내 판이 있으면 관전을 시작하지 않는다 · 서버에 관전 함수가 없으면(PGRST202) 내린다 ·
+// 창을 닫으면 내린다(`windowDidClose`).
 
 /// 지금 보고 있는 남의 판(WATCH 모양 그대로). 흑이 아래(화면) — 판 그림 좌표는 판 화면과 같다.
 package nonisolated struct AlkkagiWatchState: Identifiable, Equatable, Sendable {
@@ -75,7 +76,8 @@ extension AlkkagiOnlineStore {
 
     /// 남의 판을 본다. 스위치가 꺼졌거나 id 가 uuid 가 아니면 아무것도 안 한다. 다른 판을 보던 중이면 그 판을 내린다.
     package func watch(matchID: String) {
-        guard spectatorFeaturesEnabled, let id = UUID(uuidString: matchID) else { return }
+        guard spectatorFeaturesEnabled, let id = UUID(uuidString: matchID),
+              !(state.map { $0.phase != .finished } ?? false) else { return }
         if watchMatchID != id {
             watchGeneration &+= 1
             watchTask?.cancel()
@@ -128,7 +130,16 @@ extension AlkkagiOnlineStore {
                 isFirst = false
                 if rests { continue }
                 let response: AlkkagiResponse
-                do { response = try await service.call(.watchLive(matchID: matchID)) } catch { continue }
+                do {
+                    response = try await service.call(.watchLive(matchID: matchID))
+                } catch AlkkagiServiceError.serverMissing {
+                    // 서버에 관전 함수가 아직 없다 — 2초마다 두드리지 않고 내린다.
+                    guard reset == self.resetGeneration, generation == self.watchGeneration else { return }
+                    self.stopWatching()
+                    return
+                } catch {
+                    continue
+                }
                 guard reset == self.resetGeneration else { return }
                 self.applyWatch(response, matchID: matchID, generation: generation)
             }

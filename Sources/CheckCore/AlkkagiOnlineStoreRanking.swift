@@ -4,8 +4,8 @@ import Foundation
 // 주 스위치(`rankingEnabled`) · 도는 중이면 버림(60초 목록이라 합치지 않는다) · PGRST202 → `rankingUnavailable` ·
 // 실패는 안내 줄로 새지 않는다(판 상태 줄을 가린다) — 들고 있던 목록은 지우지 않는다.
 // 와이어 디코딩은 `AlkkagiOnlineWire.swift`(키 도우미가 그 파일 안에만 있다).
-//
-// C1 뼈대: 표면만 길건너와 같게 섰다. 60초 주기 · 창 보일 때만 · 로비로 돌아올 때 다시는 C 다음 걸음.
+// 부르는 곳: 창이 보일 때(`windowDidShow`) · 폴링 걸음 60초(`pollTick` — 창이 보이고 안 가려졌을 때만) · [로비로](`backToLobby`) ·
+// 내 판이 끝나는 것을 지켜봤을 때(전적이 바뀐 순간 — 창이 안 보여도 사건에 대한 한 번).
 
 /// 순위표 한 줄. 순위는 **서버가 매긴 값**이다(`rank() over (points desc, wins desc, draws desc)`).
 package nonisolated struct AlkkagiRankEntry: Identifiable, Equatable, Sendable {
@@ -79,6 +79,7 @@ extension AlkkagiOnlineStore {
         rankingInFlight = true
         let generation = resetGeneration
         defer { if generation == resetGeneration { rankingInFlight = false } }
+        lastRankingRequestAt = clock()
         do {
             let response = try await service.call(.ranking)
             guard generation == resetGeneration, !Task.isCancelled else { return }

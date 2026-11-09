@@ -2,14 +2,14 @@
   "door_open": true,
   "incoming": [
     {
-      "expires_at_ms": 1794252955131.372,
-      "id": "89c178e4-6a47-4ade-a9ad-e9f499b837d0",
+      "expires_at_ms": 1794260844947.892,
+      "id": "7956669c-90aa-4ff1-add8-8c5bafc6c0a9",
       "opponent": {
         "avatar_url": null,
         "busy": false,
         "character_id": null,
-        "display_name": "T-e3517e44",
-        "id": "e3517e44-b5d2-4604-b70e-977b74df41ca"
+        "display_name": "T-a89f49b3",
+        "id": "a89f49b3-54d6-4afa-b555-8902f1a627d7"
       },
       "stake": 3
     }
@@ -20,24 +20,24 @@
     "busy": false,
     "character_id": "aing",
     "display_name": "가나다",
-    "id": "658ad34a-2d60-42c5-ad5d-11fb38c5847f"
+    "id": "e81c4064-67bc-44c3-b0eb-99a98f7783c9"
   },
   "outgoing": {
-    "expires_at_ms": 1794252955128.659,
-    "id": "7dbaca46-f1c2-41e6-931e-027f6b5281b7",
+    "expires_at_ms": 1794260844944.752,
+    "id": "bff5419c-a0f8-4a4f-b9b1-da727fda6fae",
     "opponent": {
       "avatar_url": "https://example.invalid/b.png",
       "busy": false,
       "character_id": null,
       "display_name": "라마바",
-      "id": "a13af4f5-8b2e-45d3-812e-b051be6cf95e"
+      "id": "3d1bca91-0bd9-44a3-8522-6c3e7071bde5"
     },
     "stake": 5
   },
   "protocol": 2,
   "record": null,
   "ruby_balance": 100,
-  "server_now_ms": 1794252895146.078,
+  "server_now_ms": 1794260784960.252,
   "stakes": [
     3,
     5,

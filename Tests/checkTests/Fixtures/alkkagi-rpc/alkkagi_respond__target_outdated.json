@@ -1,14 +1,14 @@
 {
   "incoming": [
     {
-      "expires_at_ms": 1794252955178.892,
-      "id": "ed777292-32d6-4a3a-80d7-b88211b6628a",
+      "expires_at_ms": 1794260844987.929,
+      "id": "f64fdec9-1894-479f-8165-a2705499ee9e",
       "opponent": {
         "avatar_url": null,
         "busy": false,
         "character_id": null,
-        "display_name": "T-8ea05b45",
-        "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+        "display_name": "T-8b97c765",
+        "id": "8b97c765-141d-4681-bb7f-2121db2356d8"
       },
       "stake": 10
     }
@@ -17,11 +17,11 @@
     "avatar_url": null,
     "busy": false,
     "character_id": null,
-    "display_name": "T-6c466d04",
-    "id": "6c466d04-7227-4fe2-9845-75a722dabd91"
+    "display_name": "T-c34d2886",
+    "id": "c34d2886-0936-4721-9845-44d49e993a7c"
   },
   "protocol": 2,
-  "server_now_ms": 1794252895183.086,
+  "server_now_ms": 1794260784991.913,
   "state": null,
   "status": "target_outdated"
 }

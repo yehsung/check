@@ -11,10 +11,10 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct V03xxAlkkagiWatchTests {
-    /// 원문 진행 판(`alkkagi_watch_live__ok` · 판돈 10 · 관전자 1)의 id.
-    private static let liveID = "ed777292-32d6-4a3a-80d7-b88211b6628a"
+    /// 원문 진행 판(`alkkagi_watch_live__ok` · 판돈 10 · 관전자 1)의 id — 픽스처에서 읽는다(하네스가 다시 뽑을 때마다 id 가 바뀐다).
+    private static var liveID: String { (try? akFixture("alkkagi_watch_live__ok").watch?.id) ?? "" }
     /// 원문 배치 중 판(`alkkagi_watch__placing` · 판돈 3 · 돌 [])의 id.
-    private static let placingID = "8debd702-8a60-4707-9216-5f9fb91f4fc6"
+    private static var placingID: String { (try? akFixture("alkkagi_watch__placing").watch?.id) ?? "" }
 
     /// 진행 판 원문을 끝난 꼴로(흑 승 · 판 밖 · 끝난 시각) — revision 은 하나 올린다.
     private static func finishedWatch() throws -> AlkkagiResponse {

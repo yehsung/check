@@ -63,7 +63,7 @@ struct AlkkagiGameView: View {
     #else
     private var frameInterval: Double { 1.0 / 60 }
     #endif
-    private var boardSide: CGFloat { BoardGameLayout.boardSide - 48 }
+    private var boardSide: CGFloat { AlkkagiDrawing.boardSide }
 
     /// 온라인 판에서 판 화면이 읽는 사실(평범한 값). 독립 실행기에는 온라인이 없어 늘 nil 이다.
     private struct OnlineFacts {
@@ -286,20 +286,27 @@ struct AlkkagiGameView: View {
 
     // MARK: 판(§5.9 — 그림은 그대로)
 
+    /// 판은 다른 1:1 판 게임과 같은 칸을 꽉 채운다(제보 #12 '판을 더 크게' — 0.3.80 은 사방 24pt 를 남겨 560pt).
+    /// 판 두께(아래 12pt)와 떨어지는 돌은 칸 밖 여백(창 안쪽 20pt)에 그린다.
     private var board: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.25))
-                .frame(width: boardSide, height: boardSide + 12).offset(y: -6)
-            Canvas { context, _ in
-                AlkkagiDrawing.falling(model.falls, context: context, scale: boardSide / AlkkagiGame.boardSize,
-                                       origin: CGPoint(x: 24, y: 12), reduced: reduceMotion)
-            }.allowsHitTesting(false)
-            playSurface.offset(y: -12)
-        }
-        .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide)
-        .clipped()
-        .offset(shakeOffset)
-        .overlay(alignment: .top) { resultBand }
+        playSurface
+            .background(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.25))
+                        .frame(width: boardSide, height: boardSide + 12)
+                    Canvas { context, _ in
+                        AlkkagiDrawing.falling(model.falls, context: context, scale: boardSide / AlkkagiGame.boardSize,
+                                               origin: CGPoint(x: AlkkagiDrawing.fallMargin, y: AlkkagiDrawing.fallMargin),
+                                               reduced: reduceMotion)
+                    }
+                    .frame(width: boardSide + AlkkagiDrawing.fallMargin * 2, height: boardSide + AlkkagiDrawing.fallMargin * 2)
+                    .offset(x: -AlkkagiDrawing.fallMargin, y: -AlkkagiDrawing.fallMargin)
+                    .allowsHitTesting(false)
+                }
+            }
+            .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide, alignment: .topLeading)
+            .offset(shakeOffset)
+            .overlay(alignment: .top) { resultBand }
     }
 
     private var shakeOffset: CGSize {
@@ -798,16 +805,27 @@ final class AlkkagiLocalModel {
     @ObservationIgnored private var onlineMatchID: String?
     @ObservationIgnored private var onlineChatSeq = -1
     @ObservationIgnored private var onlineReplayElapsed = 0.0
-    @ObservationIgnored private var predictedShotID: UUID?
+    /// 온라인 굴림 재생(제보 #9 '버벅임'): 이 판에서 **화면 시계로** 되살리는 쏘기 id(쏜 사람은 내 예측 id = 서버 shot id).
+    /// 굴림은 매 프레임 화면 걸음(dt)으로 나아간다 — 0.3.80 은 프레임마다 서버 시각(응답마다 다시 잰 시계 차)에 맞춰 그려,
+    /// 받는 사람은 쏜 순간 0.2~0.5초를 건너뛰고(순간이동), 시계 차가 흔들리면 멈칫 · 건너뜀이 났다.
+    /// 서버 시각은 **뒤처짐**만 잰다 — 뒤처졌으면 최대 1.5배로 따라잡고(앞서면 그대로), 끝난 판이 먼저 와도 남은 굴림을
+    /// 2배로 마저 굴린 뒤 받는다. 결과 자리는 서버와 같은 물리라 그대로 이어진다.
+    @ObservationIgnored private var replayShotID: String?
+    /// 굴림이 끝나기 전에 온 '굴림 뒤' 판(revision) — 남은 굴림을 마저 굴린 뒤 받는다.
+    @ObservationIgnored private var deferredRevision: Int?
     /// 멈칫(히트스톱): 세게 부딪힌 순간 시뮬레이션을 아주 잠깐 세운다. 남은 멈춤 초.
     @ObservationIgnored private var hitStop = 0.0
     /// 이번 한 수에 쓴 멈춤 합(상한 `maxHitStopPerShot` — 연쇄 충돌이 판을 끌지 않게).
     @ObservationIgnored private var hitStopSpent = 0.0
-    /// 온라인: 멈춘 만큼 서버 시각보다 늦게 그린다. 멈춤이 끝나면 조금 빨리(1.35배) 돌아 갚는다 — 서버가 다음 차례로
-    /// 넘길 때 돌이 순간이동하지 않게.
-    @ObservationIgnored private var replayDebt = 0.0
     var hitStopEnabled = true
     static let maxHitStopPerShot = 0.16
+    /// 서버보다 이만큼(초)까지 뒤처진 굴림은 처음부터 보여 주며 따라잡는다. 넘는 만큼만 소리 없이 건너뛴다(신호를 놓쳐 늦게 안 판).
+    static let maxReplayLag = 0.6
+    /// 뒤처졌을 때 더 도는 비율(0.5 = 1.5배).
+    static let replayCatchUpRate = 0.5
+    /// 끝난 판이 먼저 왔을 때 마저 굴리는 비율(1.0 = 2배)과 그렇게 기다려 줄 남은 굴림 상한(초).
+    static let replayDrainRate = 1.0
+    static let maxReplayDrain = 1.2
 
     #if ALKKAGI_PLAYGROUND
     var isOnline: Bool { false }
@@ -978,12 +996,12 @@ final class AlkkagiLocalModel {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
             #if !ALKKAGI_PLAYGROUND
             if let onlineStore {
-                predictedShotID = actionID
+                replayShotID = actionID.uuidString
+                deferredRevision = nil
                 onlineReplayElapsed = 0
                 Task { [weak self] in
                     await onlineStore.shoot(stoneID: id, pull: shotPull, actionID: actionID)
                     self?.synchronizeOnline(force: true)
-                    self?.predictedShotID = nil
                 }
             }
             #endif
@@ -1042,19 +1060,14 @@ final class AlkkagiLocalModel {
         guard let lastTime else { return }
         let elapsed = max(0, now - lastTime)
         let dt = min(1.0 / 20, elapsed)
-        // 멈칫 중이면 굴림 시간이 흐르지 않는다(효과 나이도 멈춘다 — 흔들림만 계속). 온라인은 멈춘 만큼을 빚으로 적고
-        // 멈춤이 끝나면 걸음마다 35% 더 돌려 갚는다.
+        // 멈칫 중이면 굴림 시간이 흐르지 않는다(효과 나이도 멈춘다 — 흔들림만 계속). 온라인은 멈춘 만큼 서버보다 뒤처지고,
+        // 멈춤이 끝나면 뒤처짐 따라잡기(1.5배)가 갚는다.
         var rollDt = dt
         let frozen = hitStop > 0
         if frozen {
             let used = min(hitStop, dt)
             hitStop -= used
             rollDt = dt - used
-            if isOnline { replayDebt += used }
-        } else if replayDebt > 0 {
-            let repay = min(replayDebt, dt * 0.35)
-            replayDebt -= repay
-            rollDt = dt + repay
         }
         var impacts: [AlkkagiGame.Impact] = []
         let old = game
@@ -1065,19 +1078,24 @@ final class AlkkagiLocalModel {
             #if !ALKKAGI_PLAYGROUND
             guard let onlineStore else { return }
             synchronizeOnline()
-            if onlineStore.state?.phase == .rolling, let shot = onlineStore.state?.shot {
-                let target = min(shot.duration,
-                                 max(0, (onlineStore.estimatedServerNowMs - shot.startedAtMs) / 1_000 - replayDebt))
-                var remaining = max(0, target - onlineReplayElapsed)
-                while remaining > 1e-9 && game.phase == .rolling {
-                    let slice = min(0.25, remaining)
-                    impacts += game.advance(dt: slice)
-                    remaining -= slice
-                    onlineReplayElapsed += slice
+            if game.phase == .rolling, replayShotID != nil {
+                var step = rollDt
+                if !frozen {
+                    if let behind = replayLag(onlineStore) {
+                        if behind > Self.maxReplayLag {
+                            // 신호를 놓쳐 아주 늦게 안 판 — 넘는 만큼만 소리 · 효과 없이 건너뛴다.
+                            _ = advanceReplay(by: behind - Self.maxReplayLag)
+                        }
+                        if behind > 0.001 { step += min(behind, dt * Self.replayCatchUpRate) }
+                    } else if deferredRevision != nil {
+                        step += dt * Self.replayDrainRate
+                    }
                 }
-            } else if predictedShotID != nil && game.phase == .rolling, rollDt > 0 {
-                impacts = game.advance(dt: rollDt)
-                onlineReplayElapsed += rollDt
+                if step > 0 { impacts = advanceReplay(by: step) }
+                if game.phase != .rolling, deferredRevision != nil {
+                    deferredRevision = nil
+                    synchronizeOnline(force: true)
+                }
             }
             #endif
         } else if game.phase == .placing || game.phase == .aiming {
@@ -1092,7 +1110,6 @@ final class AlkkagiLocalModel {
         } else if game.phase == .rolling, rollDt > 0 {
             impacts = game.advance(dt: rollDt)
         }
-        if game.phase != .rolling { replayDebt = 0 }
         changed(from: old)
         guard !hits.isEmpty || !falls.isEmpty || launch != nil || !impacts.isEmpty || jolt > 0 else { return }
         time += dt
@@ -1126,6 +1143,28 @@ final class AlkkagiLocalModel {
     }
 
     #if !ALKKAGI_PLAYGROUND
+    /// 서버 굴림 시각보다 내 화면 굴림이 뒤처진 초(앞서면 음수). 서버가 같은 쏘기를 굴리는 중일 때만 — 아니면 nil.
+    private func replayLag(_ store: AlkkagiOnlineStore) -> Double? {
+        guard let state = store.state, state.phase == .rolling, let shot = state.shot,
+              replayShotID?.caseInsensitiveCompare(shot.id) == .orderedSame, shot.startedAtMs.isFinite else { return nil }
+        let serverElapsed = min(shot.duration, max(0, (store.estimatedServerNowMs - shot.startedAtMs) / 1_000))
+        let lag = serverElapsed - onlineReplayElapsed
+        return lag.isFinite ? lag : nil
+    }
+
+    /// 화면 굴림을 `seconds` 만큼 나아가게 한다(0.25초 조각 — 판 진행의 한 번 상한).
+    private func advanceReplay(by seconds: Double) -> [AlkkagiGame.Impact] {
+        var impacts: [AlkkagiGame.Impact] = []
+        var remaining = seconds
+        while remaining > 1e-9 && game.phase == .rolling {
+            let slice = min(0.25, remaining)
+            impacts += game.advance(dt: slice)
+            remaining -= slice
+            onlineReplayElapsed += slice
+        }
+        return impacts
+    }
+
     func attachOnline(_ store: AlkkagiOnlineStore?) {
         guard let store else { return }
         onlineStore = store
@@ -1143,6 +1182,20 @@ final class AlkkagiLocalModel {
             onlineChatSeq = state.chatSeq
         }
         guard force || onlineMatchID != state.id || onlineRevision != state.revision else { return }
+        // 굴림 뒤 판이 내 굴림보다 먼저 왔다(받는 사람이 따라잡는 중 · 쏜 사람 응답이 늦음) — 같은 쏘기를 마저 굴린 뒤 받는다.
+        // 남은 굴림이 길면(`maxReplayDrain` 초 넘게) 기다리지 않고 바로 받는다.
+        if state.phase != .rolling, onlineMatchID == state.id, game.phase == .rolling, replayShotID != nil,
+           game.shotCount == state.shotCount {
+            if deferredRevision == state.revision { return }
+            var probe = game
+            var left = Self.maxReplayDrain
+            while probe.phase == .rolling && left > 0 { _ = probe.advance(dt: 0.25); left -= 0.25 }
+            if probe.phase != .rolling {
+                deferredRevision = state.revision
+                return
+            }
+        }
+        deferredRevision = nil
         // The other player's concealed placement must not interrupt my drag.
         if !force, onlineMatchID == state.id, state.phase == .placing, !state.myReady,
            game.phase == .placing, game.currentPlayer == state.myColor, game.stones == state.stones {
@@ -1151,14 +1204,17 @@ final class AlkkagiLocalModel {
         }
         cancelAim()
         notice = nil
-        let keepsPrediction = state.phase == .rolling
-            && predictedShotID?.uuidString.caseInsensitiveCompare(state.shot?.id ?? "") == .orderedSame
+        // 같은 쏘기를 이미 되살리는 중이면(쏜 사람의 예측 · 굴림 중 revision 만 바뀜) 처음부터 다시 굴리지 않는다.
+        let keepsReplay = state.phase == .rolling
+            && replayShotID?.caseInsensitiveCompare(state.shot?.id ?? "") == .orderedSame
             && game.shotCount == state.shotCount
-        if state.phase == .rolling, !keepsPrediction, let replay = state.shotReplayGame {
+        if state.phase == .rolling, !keepsReplay, let replay = state.shotReplayGame {
             game = replay
+            replayShotID = state.shot?.id
             onlineReplayElapsed = 0
-        } else if !keepsPrediction, let canonical = state.canonicalGame(serverNowMs: onlineStore.estimatedServerNowMs) {
+        } else if !keepsReplay, let canonical = state.canonicalGame(serverNowMs: onlineStore.estimatedServerNowMs) {
             game = canonical
+            if state.phase != .rolling { replayShotID = nil }
             onlineReplayElapsed = 0
         }
         onlineMatchID = state.id
@@ -1175,6 +1231,11 @@ struct AlkkagiLaunch { let stoneID: Int; let direction: AlkkagiVector; let power
 
 /// 판 그림(§5.9 — 그대로). 관전 화면(`AlkkagiSpectateView`)도 같은 그림을 쓴다.
 enum AlkkagiDrawing {
+    /// 판 한 변(pt) — 판 게임 칸 그대로(뒤집기 · 오목과 같은 608). 0.3.80 은 칸 − 48(560).
+    static var boardSide: CGFloat { BoardGameLayout.boardSide }
+    /// 떨어지는 돌을 판 밖으로 그릴 여백(창 안쪽 여백 20pt 안).
+    static let fallMargin: CGFloat = 20
+
     static func board(context: GraphicsContext, size: CGSize) {
         var layer = context
         let inset = size.width * 0.06

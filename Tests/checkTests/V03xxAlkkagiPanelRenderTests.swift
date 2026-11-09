@@ -300,38 +300,21 @@ private func arMaxDifference(_ lhs: NSBitmapImageRep, _ rhs: NSBitmapImageRep, r
     return worst
 }
 
-/// 판 지문 — 판 사각형을 16×16 칸으로 나눠 칸마다 평균 RGB(0~255). 0.3.80 그림과 같은지 재는 짧은 값이다.
-private func arBoardFingerprint(_ bitmap: NSBitmapImageRep, rect: CGRect = arBoardRect) -> [Int] {
-    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3 else { return [] }
+/// 한 줄(2x 픽셀 행)에서 나무 빛(바둑판 woodLight · woodDark 사이) 띠의 가장 긴 길이 — 줄 · 그림자 틈은 6px 까지 잇는다.
+private func arWoodSpan(_ bitmap: NSBitmapImageRep, row: Int) -> Int {
+    guard let data = bitmap.bitmapData, bitmap.samplesPerPixel >= 3, (0..<bitmap.pixelsHigh).contains(row) else { return 0 }
     let bpr = bitmap.bytesPerRow, spp = bitmap.samplesPerPixel
-    let cells = 16
-    let cellW = rect.width * 2 / CGFloat(cells), cellH = rect.height * 2 / CGFloat(cells)
-    var out: [Int] = []
-    for row in 0..<cells {
-        for column in 0..<cells {
-            let x0 = Int(rect.minX * 2 + CGFloat(column) * cellW), x1 = Int(rect.minX * 2 + CGFloat(column + 1) * cellW)
-            let y0 = Int(rect.minY * 2 + CGFloat(row) * cellH), y1 = Int(rect.minY * 2 + CGFloat(row + 1) * cellH)
-            var sum = [0, 0, 0], n = 0
-            for y in y0..<min(y1, bitmap.pixelsHigh) {
-                for x in x0..<min(x1, bitmap.pixelsWide) {
-                    let o = y * bpr + x * spp
-                    sum[0] += Int(data[o]); sum[1] += Int(data[o + 1]); sum[2] += Int(data[o + 2]); n += 1
-                }
-            }
-            out += sum.map { n > 0 ? $0 / n : 0 }
-        }
+    var best = 0, start = 0, lastWood = -100
+    for x in 0..<bitmap.pixelsWide {
+        let o = row * bpr + x * spp
+        let r = Int(data[o]), g = Int(data[o + 1]), b = Int(data[o + 2])
+        guard r > 170 && g > 130 && b < 160 && r - b > 50 else { continue }
+        if x - lastWood > 6 { start = x }
+        lastWood = x
+        best = max(best, x - start + 1)
     }
-    return out
+    return best
 }
-
-private func arWorst(_ a: [Int], _ b: [Int]) -> Int {
-    guard a.count == b.count, !a.isEmpty else { return 255 }
-    return zip(a, b).map { abs($0 - $1) }.max() ?? 255
-}
-
-/// 0.3.80 판 지문(`REPO/.claude/alkkagi-compare-render/alkkagi-2-play.png` — 같은 돌 자리 · ImageRenderer scale 2 · 굳힌 뒤).
-/// `ALKKAGI_BOARD_0380_PNG` 에 그 그림을 주면 이 표 대신 그림에서 직접 뽑는다(표를 새로 적을 때).
-private let arBoardFingerprint0380: [Int] = AR0380.fingerprint
 
 // MARK: - 소스 도구
 
@@ -518,27 +501,26 @@ struct V03xxAlkkagiPanelRenderTests {
         #expect(arMaxDifference(placing, play, rect: arSideMiddleRect) > 60)
     }
 
-    @Test("판 그림은 0.3.80 과 같다 — 같은 돌 자리 지문(기준선: 돌 하나를 옮기면 갈린다)")
-    func boardPixelsMatch0380() throws {
-        // 없으면: 오른쪽 열 · 머리를 바꾸다 판 그림(돌 · 바둑판 · 그림자 · 크기 · 자리)이 바뀌어도 초록이다(§5.9 — 손맛은 그대로).
+    @Test("판은 다른 판 게임과 같은 칸을 꽉 채운다(608pt — 0.3.80 은 560pt · 제보 #12) · 돌 자리는 같은 비율")
+    func boardFillsTheSharedSlot() throws {
+        // 없으면: 판이 다시 사방 24pt 를 남겨(0.3.80 — 560pt) 작아지거나, 판만 커지고 돌 자리 비율이 어긋나도 초록이다.
         let (store, model) = arMatchStore(arAiming())
         let now = try arBitmap(AlkkagiGameView(onlineStore: store, model: model).environment(\.colorScheme, .dark))
-        let mine = arBoardFingerprint(now)
-        var reference = arBoardFingerprint0380
-        if let path = ProcessInfo.processInfo.environment["ALKKAGI_BOARD_0380_PNG"],
-           let data = FileManager.default.contents(atPath: path), let old = NSBitmapImageRep(data: data) {
-            reference = arBoardFingerprint(old)
-            print("[판 지문] 0.3.80 그림에서 뽑음: \(reference.map(String.init).joined(separator: ","))")
-        }
-        let worst = arWorst(mine, reference)
-        print("[판 지문] 0.3.80 과 칸 평균 최대 차 \(worst)")
-        #expect(worst <= 3, "판 그림이 0.3.80 과 달라졌다(칸 평균 최대 차 \(worst))")
-        // 기준선: 백돌 하나를 옮긴 같은 판은 지문이 갈린다.
-        var moved = arAiming()
-        moved.stones[8].position = AlkkagiVector(x: 150, y: 120)
-        let (movedStore, movedModel) = arMatchStore(moved)
-        let other = try arBitmap(AlkkagiGameView(onlineStore: movedStore, model: movedModel).environment(\.colorScheme, .dark))
-        #expect(arWorst(arBoardFingerprint(other), reference) > 12, "돌을 옮겼는데 지문이 같다 — 이 시험은 아무것도 안 잰다")
+        // 판 위 테두리(바둑판 줄 바깥 · 돌 없음) 한 줄에서 나무 빛 띠의 길이(2x 픽셀, 줄 · 그림자 틈 6px 까지 이음).
+        let row = Int((arBoardRect.minY + 12) * 2)
+        let span = arWoodSpan(now, row: row)
+        print("[판 크기] 나무 띠 \(span)px(2x) — 칸 \(Int(BoardGameLayout.boardSide * 2))px")
+        #expect(abs(Double(span) - BoardGameLayout.boardSide * 2) <= 8, "판 너비가 칸(\(BoardGameLayout.boardSide)pt)과 다르다: \(span)px")
+        #expect(Double(span) > (BoardGameLayout.boardSide - 48) * 2 + 40, "0.3.80 크기(560pt) 그대로다")
+        // 돌 자리 비율: 흑 2번(300, 330)의 가운데 픽셀이 흑돌 빛이다(판 원점 + 자리 × 608/600).
+        let scale = AlkkagiDrawing.boardSide / AlkkagiGame.boardSize
+        let center = CGPoint(x: arBoardRect.minX + 300 * scale, y: arBoardRect.minY + 330 * scale)
+        #expect(arCount(now, rect: CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)) { r, g, b in
+            r < 70 && g < 70 && b < 70
+        } > 40, "흑돌이 판 비율 자리에 없다")
+        // 기준선: 판이 없는 로비 그림의 같은 줄은 나무 띠가 짧다(측정이 판을 잰다).
+        let lobby = try arBitmap(arPanel(arStore()))
+        #expect(arWoodSpan(lobby, row: row) < 200, "판 없는 그림에서 나무 띠가 잡힌다 — 측정이 아무것도 안 잰다")
     }
 
     @Test("결과 승·패·무·무효 — 오른쪽 결과 카드(루비 +5 / −5 / 0 · 돌려받음) · 판 위 띠 · 옛 판은 루비 줄 없음")
@@ -683,28 +665,4 @@ struct V03xxAlkkagiPanelRenderTests {
         arSave(chat, "6b-side-chat-card-0380")
         #expect(arInk(chat, rect: CGRect(origin: .zero, size: chatSize)) > 2_000, "대화 카드가 비었다")
     }
-}
-
-// MARK: - 0.3.80 판 지문 표
-
-/// `ALKKAGI_BOARD_0380_PNG=<REPO>/.claude/alkkagi-compare-render/alkkagi-2-play.png` 로 한 번 돌려 찍은 16×16 칸 평균 RGB.
-private enum AR0380 {
-    static let fingerprint: [Int] = [
-        69, 63, 57, 160, 135, 96, 160, 134, 96, 160, 134, 95, 159, 133, 95, 159, 133, 94, 158, 132, 94, 158, 132, 93, 157, 131, 92, 157, 130, 92, 156, 130, 91, 156, 129, 91, 155, 129, 90, 155, 128, 90, 155, 127, 89, 69, 62, 57,
-        98, 85, 69, 215, 177, 118, 214, 176, 117, 213, 175, 116, 212, 174, 115, 211, 173, 114, 211, 172, 113, 209, 170, 111, 208, 169, 111, 209, 169, 110, 208, 169, 109, 207, 168, 109, 206, 167, 107, 206, 166, 107, 205, 165, 106, 96, 82, 66,
-        97, 85, 68, 215, 177, 117, 215, 177, 117, 214, 176, 116, 214, 175, 115, 213, 174, 114, 212, 173, 113, 210, 171, 112, 210, 170, 111, 210, 171, 111, 209, 170, 110, 209, 169, 109, 208, 168, 108, 207, 167, 107, 205, 165, 105, 95, 82, 66,
-        97, 84, 68, 213, 174, 115, 222, 206, 182, 209, 172, 116, 209, 170, 112, 209, 171, 112, 209, 170, 111, 207, 168, 109, 206, 167, 108, 206, 167, 108, 206, 166, 107, 203, 164, 105, 204, 166, 109, 217, 201, 176, 203, 163, 104, 95, 82, 66,
-        97, 84, 68, 213, 175, 115, 210, 178, 128, 212, 174, 114, 211, 172, 113, 211, 172, 112, 211, 171, 112, 208, 169, 110, 208, 168, 109, 208, 169, 109, 213, 180, 130, 214, 192, 161, 206, 166, 106, 203, 169, 119, 203, 163, 104, 95, 81, 66,
-        97, 84, 68, 212, 174, 114, 213, 174, 114, 212, 173, 113, 212, 172, 113, 211, 171, 112, 210, 170, 111, 216, 208, 195, 207, 167, 108, 208, 168, 108, 206, 167, 109, 203, 168, 116, 205, 165, 105, 205, 164, 104, 203, 162, 103, 95, 81, 65,
-        97, 84, 67, 212, 173, 114, 213, 173, 114, 211, 172, 112, 211, 172, 112, 210, 171, 111, 209, 170, 110, 207, 167, 108, 207, 167, 107, 207, 167, 107, 206, 166, 106, 206, 165, 105, 205, 164, 104, 204, 163, 104, 202, 161, 102, 95, 81, 65,
-        96, 83, 67, 211, 172, 113, 211, 172, 112, 210, 171, 111, 210, 170, 111, 209, 169, 110, 208, 168, 109, 203, 164, 106, 202, 163, 105, 206, 166, 106, 205, 165, 105, 205, 164, 104, 203, 163, 103, 203, 162, 102, 201, 160, 101, 94, 81, 65,
-        96, 83, 67, 210, 171, 112, 211, 172, 112, 210, 170, 111, 209, 170, 110, 209, 169, 109, 208, 168, 108, 156, 131, 93, 144, 119, 82, 206, 165, 105, 205, 164, 104, 204, 163, 104, 203, 162, 102, 203, 161, 102, 201, 159, 100, 94, 80, 65,
-        96, 83, 67, 209, 170, 111, 210, 171, 111, 209, 169, 110, 209, 169, 109, 208, 168, 108, 207, 167, 107, 205, 165, 105, 204, 164, 104, 205, 164, 104, 204, 163, 103, 203, 162, 103, 202, 161, 101, 202, 160, 101, 200, 158, 99, 94, 80, 64,
-        96, 83, 66, 209, 169, 110, 209, 170, 110, 111, 98, 79, 202, 164, 105, 207, 167, 107, 206, 166, 106, 204, 164, 104, 203, 163, 104, 204, 163, 103, 203, 162, 102, 203, 161, 102, 201, 160, 100, 201, 159, 100, 199, 158, 98, 94, 80, 64,
-        96, 82, 66, 208, 168, 109, 209, 169, 109, 195, 158, 102, 190, 154, 101, 117, 101, 78, 206, 165, 105, 204, 163, 104, 203, 162, 103, 203, 162, 103, 121, 105, 81, 180, 143, 91, 196, 156, 98, 105, 92, 73, 198, 157, 97, 94, 79, 64,
-        95, 82, 66, 207, 167, 108, 208, 168, 108, 206, 166, 107, 206, 166, 106, 195, 157, 100, 204, 164, 104, 202, 162, 103, 202, 161, 102, 202, 161, 101, 192, 152, 96, 201, 159, 99, 200, 158, 99, 189, 150, 93, 197, 156, 96, 93, 79, 64,
-        95, 82, 66, 207, 167, 107, 207, 167, 107, 206, 166, 106, 206, 165, 105, 205, 164, 104, 204, 163, 103, 202, 161, 102, 201, 160, 101, 202, 160, 101, 201, 159, 100, 200, 159, 99, 199, 158, 98, 199, 157, 97, 197, 155, 95, 93, 79, 63,
-        92, 79, 64, 209, 168, 108, 206, 166, 106, 205, 165, 105, 204, 164, 104, 204, 163, 103, 203, 162, 102, 202, 161, 101, 201, 160, 100, 201, 159, 99, 200, 158, 99, 199, 157, 98, 198, 156, 97, 198, 155, 96, 199, 156, 96, 90, 76, 62,
-        27, 30, 40, 34, 34, 39, 34, 34, 40, 34, 34, 40, 34, 34, 40, 34, 34, 40, 35, 34, 40, 35, 34, 40, 35, 35, 41, 35, 35, 41, 35, 35, 41, 35, 35, 41, 35, 35, 41, 36, 35, 42, 36, 35, 42, 31, 33, 44,
-    ]
 }

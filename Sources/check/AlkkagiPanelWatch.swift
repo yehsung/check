@@ -150,13 +150,13 @@ private struct AlkkagiSpectateBoard: View {
     let store: AlkkagiOnlineStore
     let watch: AlkkagiWatchState
 
-    private var boardSide: CGFloat { BoardGameLayout.boardSide - 48 }
+    private var boardSide: CGFloat { AlkkagiDrawing.boardSide }
     private var isRolling: Bool { watch.phase == .rolling && watch.shot != nil }
 
     var body: some View {
-        ZStack {
+        ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.25))
-                .frame(width: boardSide, height: boardSide + 12).offset(y: -6)
+                .frame(width: boardSide, height: boardSide + 12)
             TimelineView(.animation(minimumInterval: 1.0 / 60, paused: !(isRolling && store.isWindowVisible))) { _ in
                 let stones = Self.stones(watch, serverNowMs: store.estimatedServerNowMs)
                 Canvas { context, size in
@@ -171,10 +171,8 @@ private struct AlkkagiSpectateBoard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 7)
             }
-            .offset(y: -12)
         }
-        .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide)
-        .clipped()
+        .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide, alignment: .topLeading)
         .allowsHitTesting(false)
         .accessibilityLabel("알까기 바둑판(관전)")
     }

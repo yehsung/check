@@ -1,8 +1,8 @@
 {
-  "generated_at": "2026-11-10T04:34:55+09:00",
+  "generated_at": "2026-11-10T06:46:25+09:00",
   "source": "V2/server/fixtures/gen.sh — 하네스 AK/harness 55582, 체인 182 + 20261111150000_alkkagi_v2.sql 3회 적용 직후, 한 트랜잭션(롤백)",
   "draft": "20261111150000_alkkagi_v2.sql",
-  "draft_md5": "b98c699f80e6ff1d6f4f394d30426b65",
+  "draft_md5": "25626514b597a435ed39cdebba646956",
   "protocol": 2,
   "keys": {
     "lobby_keys": [

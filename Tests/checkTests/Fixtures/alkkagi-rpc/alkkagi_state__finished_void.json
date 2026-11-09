@@ -3,19 +3,19 @@
     "avatar_url": null,
     "busy": false,
     "character_id": null,
-    "display_name": "T-1d4ebc6d",
-    "id": "1d4ebc6d-b40f-4fe3-b079-d5d9bccbc8b8"
+    "display_name": "T-73548af6",
+    "id": "73548af6-1eda-4a14-9d81-a6edb92969d1"
   },
   "protocol": 2,
-  "server_now_ms": 1794252895299.609,
+  "server_now_ms": 1794260785095.587,
   "state": {
-    "accepted_at_ms": 1794252895297.392,
+    "accepted_at_ms": 1794260785093.374,
     "black": {
       "avatar_url": null,
       "busy": false,
       "character_id": null,
-      "display_name": "T-1d4ebc6d",
-      "id": "1d4ebc6d-b40f-4fe3-b079-d5d9bccbc8b8"
+      "display_name": "T-73548af6",
+      "id": "73548af6-1eda-4a14-9d81-a6edb92969d1"
     },
     "chat": [],
     "chat_seq": 0,
@@ -24,7 +24,7 @@
     "finish_reason": "void",
     "forfeit_after": 3,
     "grace_ms": 2000,
-    "id": "072708f5-aaae-40ed-b7c5-8a53d00b142b",
+    "id": "986a52a6-d329-4c56-a92f-afefb3c64ff4",
     "muted": false,
     "my_color": "black",
     "my_missed_turns": 0,
@@ -117,8 +117,8 @@
       "avatar_url": null,
       "busy": false,
       "character_id": null,
-      "display_name": "T-d601f4ed",
-      "id": "d601f4ed-f3cf-40e0-ab51-169b433dfb27"
+      "display_name": "T-cbc374cd",
+      "id": "cbc374cd-84c6-4f3e-a6cc-6fa05e6c32f6"
     }
   },
   "status": "ok"

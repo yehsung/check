@@ -3,28 +3,28 @@
     "avatar_url": null,
     "busy": true,
     "character_id": null,
-    "display_name": "T-8ea05b45",
-    "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+    "display_name": "T-8b97c765",
+    "id": "8b97c765-141d-4681-bb7f-2121db2356d8"
   },
   "protocol": 2,
-  "server_now_ms": 1794252895201.027,
+  "server_now_ms": 1794260785007.143,
   "state": {
-    "accepted_at_ms": 1794252895186.268,
+    "accepted_at_ms": 1794260784994.766,
     "black": {
       "avatar_url": null,
       "busy": true,
       "character_id": null,
-      "display_name": "T-8ea05b45",
-      "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+      "display_name": "T-8b97c765",
+      "id": "8b97c765-141d-4681-bb7f-2121db2356d8"
     },
     "chat": [],
     "chat_seq": 0,
     "current_player": "black",
-    "deadline_ms": 1794252925186.268,
+    "deadline_ms": 1794260814994.766,
     "finish_reason": null,
     "forfeit_after": 3,
     "grace_ms": 2000,
-    "id": "ed777292-32d6-4a3a-80d7-b88211b6628a",
+    "id": "f64fdec9-1894-479f-8165-a2705499ee9e",
     "muted": false,
     "my_color": "black",
     "my_missed_turns": 0,
@@ -117,8 +117,8 @@
       "avatar_url": null,
       "busy": true,
       "character_id": null,
-      "display_name": "T-6c466d04",
-      "id": "6c466d04-7227-4fe2-9845-75a722dabd91"
+      "display_name": "T-c34d2886",
+      "id": "c34d2886-0936-4721-9845-44d49e993a7c"
     }
   },
   "status": "ok"

@@ -3,18 +3,18 @@
     "avatar_url": null,
     "busy": false,
     "character_id": null,
-    "display_name": "T-c75f7fe3",
-    "id": "c75f7fe3-7e1b-42ff-b97e-fa4a4a6f63c5"
+    "display_name": "T-aa3fefd9",
+    "id": "aa3fefd9-9f91-4422-afe0-0a491f436ad7"
   },
   "protocol": 1,
-  "server_now_ms": 1794252895301.787,
+  "server_now_ms": 1794260785097.796,
   "state": {
     "black": {
       "avatar_url": null,
       "busy": false,
       "character_id": null,
-      "display_name": "T-c75f7fe3",
-      "id": "c75f7fe3-7e1b-42ff-b97e-fa4a4a6f63c5"
+      "display_name": "T-aa3fefd9",
+      "id": "aa3fefd9-9f91-4422-afe0-0a491f436ad7"
     },
     "chat": [],
     "chat_seq": 0,
@@ -178,8 +178,8 @@
       "avatar_url": null,
       "busy": true,
       "character_id": null,
-      "display_name": "T-8e9ca5b4",
-      "id": "8e9ca5b4-b3b6-4721-8ca3-78dd6ca34407"
+      "display_name": "T-2ebb8b4a",
+      "id": "2ebb8b4a-d1e1-406d-af0f-75a8d765add9"
     }
   },
   "status": "ok"

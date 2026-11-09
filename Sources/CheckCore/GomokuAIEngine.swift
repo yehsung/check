@@ -234,6 +234,11 @@ nonisolated final class GomokuAIEngine {
     private var vcfBudgetHit = false
     /// 탐색이 끝까지 마친 가장 깊은 반복 심화 깊이(측정·보고용).
     private(set) var completedDepth = 0
+    /// 난이도 손잡이(몇 수 앞까지) — GomokuAISearchLimits 에서 온다. 기본값은 예전 단일 난이도와 같다.
+    private let plyCap: Int
+    private let vcfDepth: Int
+    private let defenseVcfDepth: Int
+    private let leafVcfDepth: Int
 
     struct TTEntry {
         var key: UInt64 = 0
@@ -243,7 +248,12 @@ nonisolated final class GomokuAIEngine {
         var move: Int16 = -1
     }
 
-    init(board: GomokuBoard, budget: Duration, isCancelled: @escaping @Sendable () -> Bool) {
+    init(board: GomokuBoard, budget: Duration, isCancelled: @escaping @Sendable () -> Bool,
+         limits: GomokuAISearchLimits = GomokuAISearchLimits()) {
+        plyCap = min(Self.maxPly - 1, max(1, limits.lookahead ?? Self.maxPly))
+        vcfDepth = max(0, limits.vcfDepth)
+        defenseVcfDepth = max(0, limits.defenseVcfDepth)
+        leafVcfDepth = max(0, limits.leafVcfDepth)
         cells = .allocate(capacity: Self.cellCount)
         shapes = .allocate(capacity: Self.cellCount * 8)
         categories = .allocate(capacity: Self.cellCount * 2)
@@ -627,10 +637,10 @@ nonisolated final class GomokuAIEngine {
             if makesFour(p, side) { hasFour = true; return false }
             return true
         }
-        if hasFour {
+        if hasFour, leafVcfDepth > 0 {
             vcfBudget = 120
             vcfBudgetHit = false
-            if vcfMove(attacker: side, depth: 8, lastDefenderMove: nil) != nil { return Self.win - (ply + 20) }
+            if vcfMove(attacker: side, depth: leafVcfDepth, lastDefenderMove: nil) != nil { return Self.win - (ply + 20) }
         }
         let mine = (side == 1 ? sums.0 : sums.1) + Self.centralityWeight * (side == 1 ? centrality.0 : centrality.1)
         let theirs = (opponent == 1 ? sums.0 : sums.1) + Self.centralityWeight * (opponent == 1 ? centrality.0 : centrality.1)
@@ -722,7 +732,7 @@ nonisolated final class GomokuAIEngine {
     func negamax(_ depth: Int, _ alphaIn: Int, _ betaIn: Int, ply: Int, side: Int) -> Int {
         tick()
         if aborted { return 0 }
-        if ply >= Self.maxPly - 1 { return evaluate(side, ply: ply) }
+        if ply >= Self.maxPly - 1 || ply >= plyCap { return evaluate(side, ply: ply) }
         var alpha = alphaIn
         var beta = betaIn
         let key = hash ^ (side == 2 ? zobrist[625 * 2] : 0)
@@ -815,16 +825,16 @@ nonisolated final class GomokuAIEngine {
         if checkAbortNow() { return fallback }
 
         // 4) 내 VCF.
-        if opponentFives.isEmpty {
+        if opponentFives.isEmpty, vcfDepth > 0 {
             vcfBudget = 30_000
             vcfBudgetHit = false
-            if let move = vcfMove(attacker: side, depth: 16, lastDefenderMove: nil), isLegal(move, side) { return move }
+            if let move = vcfMove(attacker: side, depth: vcfDepth, lastDefenderMove: nil), isLegal(move, side) { return move }
             if checkAbortNow() { return fallback }
         }
 
         // 5) 상대 VCF 가 있으면 그것을 끊는 수로 좁힌다.
         var rootMoves: [Int] = []
-        if opponentFives.isEmpty, hasVCF(attacker: opponent, depth: 16, budget: 20_000) {
+        if opponentFives.isEmpty, defenseVcfDepth > 0, hasVCF(attacker: opponent, depth: defenseVcfDepth, budget: 20_000) {
             var defenses: [Int] = []
             var pool = legalNear.sorted { value($0, side) + value($0, opponent) > value($1, side) + value($1, opponent) }
             if pool.count > 40 {
@@ -835,7 +845,7 @@ nonisolated final class GomokuAIEngine {
             var uncertain: [Int] = []
             for m in pool {
                 make(m, side)
-                let stillLost = hasVCF(attacker: opponent, depth: 16, budget: 4_000)
+                let stillLost = hasVCF(attacker: opponent, depth: defenseVcfDepth, budget: 4_000)
                 let unknown = vcfBudgetHit
                 unmake(m)
                 if checkAbortNow() { break }

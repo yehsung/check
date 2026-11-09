@@ -50,7 +50,7 @@ import Testing
     @Test("난이도 고르기는 기억되고 새 판 · [다시 두기]가 그 난이도로 선다")
     @MainActor
     func storeRemembersAndUsesTheDifficulty() throws {
-        let suite = "check.tests.gomoku-ai-difficulty.\(UUID().uuidString)"
+        let suite = CheckTestScratch.uniqueSuitePath()   // ~/Library/Preferences 에 남지 않게(PreferencesLeakGateTests)
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         #expect(GomokuStore.storedAIDifficulty(defaults) == .normal, "기억이 없으면 보통")

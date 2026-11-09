@@ -99,8 +99,8 @@ struct AlkkagiGameView: View {
             }.buttonStyle(.plain).accessibilityLabel(model.soundEnabled ? "소리 끄기" : "소리 켜기")
             #if ALKKAGI_PLAYGROUND
             Picker("감속", selection: Binding(get: { model.game.physics }, set: { model.game.physics = $0 })) {
-                Text("A 지금").tag(AlkkagiGame.Physics.ice)
-                Text("B 바둑판 마찰").tag(AlkkagiGame.Physics.board)
+                Text("A 원래").tag(AlkkagiGame.Physics.ice)
+                Text("B 바둑판(정함)").tag(AlkkagiGame.Physics.board)
                 Text("C 무겁게").tag(AlkkagiGame.Physics.heavy)
             }.pickerStyle(.segmented).frame(width: 300).help("감속 시안 — 바꾸면 다음 발사부터")
             Toggle("멈칫", isOn: Binding(get: { model.hitStopEnabled }, set: { model.hitStopEnabled = $0 }))

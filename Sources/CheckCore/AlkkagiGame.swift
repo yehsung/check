@@ -75,7 +75,7 @@ package struct AlkkagiGame: Equatable, Sendable {
         package var drag: Double
         package var friction: Double
         package init(drag: Double, friction: Double) { self.drag = drag; self.friction = friction }
-        /// A 지금(기여 원본): 지수 감속만 — 빠르게 출발해 끝에서 길게 미끄러진다. 끝까지 약 2.8초 · 최대 약 740.
+        /// A 원래(기여 원본): 지수 감속만 — 빠르게 출발해 끝에서 길게 미끄러진다. 끝까지 약 2.8초 · 최대 약 740.
         package static let ice = Physics(drag: 2, friction: 0)
         /// B 바둑판 마찰: 감속 + 일정 마찰 — 사거리는 비슷하고(약 710) 끝에서 또렷이 선다. 끝까지 약 1.4초.
         package static let board = Physics(drag: 1.5, friction: 300)

@@ -10,10 +10,10 @@ import Testing
 // 대표 결정: 알까기 맞춤 11-10 "기존 게임들이랑 … 우리 프로그램에 형식이나 여러가지 맞게끔 … 개선할 포인트들 다 개선해" ·
 //   제보 #9 "ㅇㅇ 이거 한번 개선해봐" · 오목 AI 난이도 "나머지는 0.3.82" · 길건너 반투명 #d_9L74XmAyPL4t "다음 맥 판에 같이 넣기" ·
 //   출시 #194AF488 "이미 산사람혹시라도 있으면 루비 돌려주면 돼. 만들어지면 바로 출시까지 다 해".
-// 서버: 알까기 20261111145500 닫기 · 20261111150000 v2(출시 직전 운영 적용) · 열기 135(출시 뒤).
+// 서버(번호 순 · 출시 직전 운영 적용): 20261111140000 오목알 스킨 셋 내림 · 20261111145500 알까기 문 닫기 · 20261111150000 알까기 v2 · 열기 135(출시 뒤).
 //
 // 골라 돌리는 필터:
-//   --filter 'checkTests\.(v0382VersionAndChangelog|v0381VersionAndChangelog|v0382AlkkagiGate)\('
+//   --filter 'checkTests\.(v0382VersionAndChangelog|v0381VersionAndChangelog|v0382AlkkagiGate|v0382OmokSkinTrimGate|v0381BundleGate)\('
 @Test("버전 0.3.82 / 135 · CHANGELOG 0.3.82 가 맨 위(세 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0382VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
@@ -48,4 +48,11 @@ func v0382AlkkagiGate() {
     #expect(AlkkagiOnlineWire.protocolVersion == 2, "앱 protocol 이 서버 v2(alk_protocol() = 2)와 어긋난다")
     #expect(AlkkagiGame.Physics.current == .board, "감속이 대표가 고른 B(바둑판 마찰)가 아니다")
     #expect(AlkkagiDrawing.boardSide == BoardGameLayout.boardSide, "판이 칸을 꽉 채우지 않는다(제보 #12)")
+}
+
+@Test("릴리스 게이트: 오목알 스킨은 주사위 · 고양이 · 픽셀 셋(네온 · 흑백 아잉이 · 다이아 컷 내림 — 서버 20261111140000 정의표와 같은 순서)")
+func v0382OmokSkinTrimGate() {
+    // 대표 11-10 06:38 "네온 흑백 다이아 이렇게 3개 빼 … 다음버전 업데이트때 빼버려" · #d_M4Lij2kty3Sk "안 넣기(3종 그대로)".
+    #expect(OmokStoneSkin.allCases.map(\.rawValue) == ["dice", "cat", "pixel"])
+    #expect(OmokStoneSkin.protocolVersion == 1)
 }

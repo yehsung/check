@@ -15,7 +15,7 @@ struct V03xxAlkkagiReviewTests {
     // MARK: RV2-C-1 — 떠나지 않은 끝난 판이 받은 신청 응답을 조용히 삼킨다
 
     /// 창을 닫은 채 판이 끝나면(시간패 · 상대 판 밖 승) 스토어는 그 끝난 판을 `state` 로 계속 든다(서버 로비도 left_at null 인 끝난 판을
-    /// 다시 싣는다 — 20261110160000 §8 lobby 의 `a.is_active or g.status = 'finished'`). 그 사이 온 신청은 배너 · 말풍선 · 메뉴바 점으로
+    /// 다시 싣는다 — 20261111150000 §8 lobby 의 `a.is_active or g.status = 'finished'`). 그 사이 온 신청은 배너 · 말풍선 · 메뉴바 점으로
     /// 보이는데, [수락]·[거절] 이 `respond` 의 `state == nil` 가드에 걸려 **서버를 부르지 않고 안내도 없이** 돌아간다(배너 [수락]은
     /// 창만 연다 — 결과 카드). 길건너 · 뒤집기 `respond` 는 판 유무를 보지 않는다(CC/CrossyDuelStore.swift:969-970 ·
     /// CC/ReversiStore.swift:1144-1145). 기준선: 끝난 판이 없으면 같은 누름이 서버를 1번 부른다.
@@ -56,7 +56,7 @@ struct V03xxAlkkagiReviewTests {
 
     // MARK: RV2-C-2 — 상대가 쏴서 넘어온 차례 말풍선에서 이름이 빠진다
 
-    /// 서버는 쏘는 순간 `shot_count` 를 올리고 `rolling` 을 낸다(20261110160000:1006 · 픽스처 alkkagi_state__rolling = shot_count 1).
+    /// 서버는 쏘는 순간 `shot_count` 를 올리고 `rolling` 을 낸다(20261111150000:1006 · 픽스처 alkkagi_state__rolling = shot_count 1).
     /// 받는 쪽은 신호로 그 `rolling` 을 먼저 보고, 굴림이 끝난 뒤 `aiming`(같은 shot_count · 같은 shot)을 본다. 스토어는 '상대가 쐈다'를
     /// `next.shotCount > old.shotCount` 로 재므로 직전 상태(rolling)와 수가 같아 이름 없는 꼴("알까기 내 차례예요")로 운다 — SPEC §5.8 의
     /// "{이름}님이 쐈어요 · 알까기 내 차례예요" 는 rolling 을 건너뛴 때만 나온다(기존 시험 myTurnAttentionOnEveryEntry 가 그 길만 잰다).
@@ -92,7 +92,7 @@ struct V03xxAlkkagiReviewTests {
     /// 알까기는 차례제 다섯 중 유일하게 **굴림이 끝나야** 다음 차례가 열린다 — 그 전이는 누군가 state · 로비를 불러야(`alk_advance`)
     /// 일어난다. 쏜 사람이 쏘자마자 창을 가리거나(굴림 약 1.4초 안) 닫으면 그쪽 마감 새로고침이 취소되고(`stopPolling`), 받는 쪽은 창이
     /// 숨어 있어 `scheduleDeadlineRefresh` 가 아예 서지 않는다 → 매분 훑기(`alk_sweep` 자리 36, 0~60초 늦음)가 굴림을 끝낸다. 그때 다음 마감은
-    /// `roll_until + 30초`(20261110160000:621)라 훑기가 32초 넘게 늦으면 같은 고리(:626-640)가 받는 사람의 놓친 차례를 바로 센다 —
+    /// `roll_until + 30초`(20261111150000:621)라 훑기가 32초 넘게 늦으면 같은 고리(:626-640)가 받는 사람의 놓친 차례를 바로 센다 —
     /// 말풍선 한 번 없이(VC-20 의 목적 '가려진 창에서 놓친 차례 셋 = 판돈 잃음'을 정면으로 친다).
     /// 기준선: 보이는 창은 굴림 끝에 한 번 부른다.
     @Test("RV2-C-3 숨은 창도 굴림 끝에 한 번 판 상태를 부른다(다음 차례를 서버가 연다)")

@@ -18,11 +18,11 @@ import Testing
 //      그래서 체인 파일의 조각 행(5칸 · 마작 6칸 두 꼴)을 이름 순서대로 다시 적용한 뒤(표지가 이미 있으면 건너뜀 — 운영 가드 ①과 같은
 //      멱등) 그 위에 알까기 조각을 얹는다.
 //
-// 초안 위치: `ALKKAGI_MIGRATION_SQL=<파일>` → 없으면 조상의 `supabase/migrations/20261110160000_alkkagi_v2.sql`.
+// 초안 위치: `ALKKAGI_MIGRATION_SQL=<파일>` → 없으면 조상의 `supabase/migrations/20261111150000_alkkagi_v2.sql`.
 // `ALKKAGI_REQUIRE_MIGRATION=1` 이면 없을 때 건너뛰지 않고 빨갛다(SPEC §1 계약 시험 변수). 체인은 다른 마이그레이션 시험과 같은 길
 // (`CHECK_MIGRATIONS_DIR` → 조상의 `supabase/migrations`) — 이 초안 **앞** 이름의 파일만 본다.
 
-private let amcDraftName = "20261110160000_alkkagi_v2.sql"
+private let amcDraftName = "20261111150000_alkkagi_v2.sql"
 private let amcV1Name = "20261110130000_alkkagi.sql"
 
 private struct AMCError: Error, CustomStringConvertible {

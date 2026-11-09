@@ -720,7 +720,7 @@ package final class AlkkagiOnlineStore {
         do {
             let response = try await service.call(call)
             guard context.generation == resetGeneration, !Task.isCancelled else { return nil }
-            // 응답 protocol 이 요청보다 낮으면 서버가 옛판이다(0.3.81 이 v1 서버를 만남) — '곧 열려요'(VC-8 ①).
+            // 응답 protocol 이 요청보다 낮으면 서버가 옛판이다(0.3.82 가 v1 서버를 만남) — '곧 열려요'(VC-8 ①).
             guard response.protocolVersion >= AlkkagiOnlineWire.protocolVersion, response.serverNowMs.isFinite else {
                 isAvailable = false
                 availability = .serverMissing

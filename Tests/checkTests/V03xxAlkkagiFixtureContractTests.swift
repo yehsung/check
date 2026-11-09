@@ -14,10 +14,10 @@ import Testing
 //   ⑤ 초안이 내는 status 글자 ⊆ `AlkkagiRPCStatus` · 실행권 목록 = `RPC.all` · `alk_protocol()` = `protocolVersion` · 판돈 = `AlkkagiStake`.
 //   ⑥ 운영 어댑터 왕복(`attach(host:)` → 공용 `duelRPC` → snake 접기 디코더)으로 픽스처가 스토어에 선다 · PGRST202 → '곧 열려요'.
 //
-// 초안 위치: `ALKKAGI_MIGRATION_SQL=<파일>` → 없으면 조상의 `supabase/migrations/20261110160000_alkkagi_v2.sql`.
+// 초안 위치: `ALKKAGI_MIGRATION_SQL=<파일>` → 없으면 조상의 `supabase/migrations/20261111150000_alkkagi_v2.sql`.
 // `ALKKAGI_REQUIRE_MIGRATION=1` 이면 없을 때 건너뛰지 않고 빨갛다(SPEC §1 계약 시험 변수). v1 정본은 조상의 `supabase/migrations`.
 
-private let afcDraftName = "20261110160000_alkkagi_v2.sql"
+private let afcDraftName = "20261111150000_alkkagi_v2.sql"
 private let afcV1Name = "20261110130000_alkkagi.sql"
 
 private struct AFCError: Error, CustomStringConvertible {

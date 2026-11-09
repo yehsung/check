@@ -42,7 +42,7 @@ struct MeDailyMissionViewTests {
 
     /// 서버 `daily_mission_defs()` **열두 줄** — 20261103120000 §50.3(여덟째 `daily_rummy`) + 20261108200000(아홉째
     /// `daily_reversi`) + 20261108221000(열째 `daily_mahjong` — 맥 0.3.76) + 20261109150000(열한째 `daily_crossy_duel` — 1:1
-    /// 길건너, 맥 합본 판과 같은 날 서버에 오른다) + alkkagi/v2 20261110160000(열두째 `daily_alkkagi` — 1:1 알까기, 맥 0.3.81)의
+    /// 길건너, 맥 합본 판과 같은 날 서버에 오른다) + alkkagi/v2 20261111150000(열두째 `daily_alkkagi` — 1:1 알까기, 맥 0.3.82)의
     /// 글자 그대로다(보조 문장 포함). 모든 플랫폼에 같은 줄이 내려가므로(1.0.16 폰도) 데모 픽스처도 이 표와 같아야 한다 — 덜 그리면
     /// 심사 스크린샷이 운영 화면보다 짧다. 서버가 줄을 더하는 날 이 표와 픽스처 열한 장을 같이 고친다.
     nonisolated static let serverRoster: [(key: String, game: String, title: String, detail: String, reward: Int, target: Int, sort: Int)] = [
@@ -322,9 +322,9 @@ struct MeDailyMissionViewTests {
         #expect(icons.filter { $0 == duel }.count == 1, "깃발 기호를 다른 줄도 쓴다: \(icons)")
     }
 
-    @Test("1:1 알까기 줄(daily_alkkagi · 맥 0.3.81): 맥 입구와 같은 기호(circle.hexagongrid.fill) · 별이 아니다 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 1:1) · 서버 열두째 줄")
+    @Test("1:1 알까기 줄(daily_alkkagi · 맥 0.3.82): 맥 입구와 같은 기호(circle.hexagongrid.fill) · 별이 아니다 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 1:1) · 서버 열두째 줄")
     func alkkagiRowUsesTheMacSymbolAndKeepsTheMacCaption() throws {
-        // 서버 alkkagi/v2(20261110160000)가 이 줄을 모든 플랫폼에 내린다(폰 1.0.17 도). 표에 없으면 기본 별로 그려진다(주석 ①).
+        // 서버 alkkagi/v2(20261111150000)가 이 줄을 모든 플랫폼에 내린다(폰 1.0.17 도). 표에 없으면 기본 별로 그려진다(주석 ①).
         let alkkagi = MeText.dailyMissionIcon(game: "alkkagi")
         #expect(alkkagi == "circle.hexagongrid.fill", "맥 `AlkkagiEntryIcon.symbol` 과 갈렸다: \(alkkagi)")
         #expect(alkkagi != MeText.missionFallbackIcon, "기본 별로 떨어졌다")

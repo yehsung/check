@@ -31,13 +31,30 @@ enum MegaphoneBannerLayout {
     static let horizontalInset: CGFloat = 48
     /// 카드 최대 폭.
     static let maxWidth: CGFloat = 520
-    /// 본문 최대 줄 수. **확성기 최대 글자 수(서버 max_length 198)가 언제나 다 보이는 줄 수**다.
-    /// 제보(11-08) "열심히 198자 써서 확성기 썼는데 잘렸어요" — 4줄이던 때 본문 폭(520 − 14×2 − 아바타 36 − 간격 12 = 444pt) ·
-    /// 17pt 굵은 글씨로 한글 띄어쓰기 글이 약 139자에서 '…'로 잘렸다. 198자의 가장 넓은 경우(영문 대문자)가 7.6줄이라 8줄.
-    /// 카드 높이는 `measureCardHeight` 가 글에 맞춰 재므로 짧은 글은 그대로 낮다.
-    static let bodyLineLimit = 8
-    /// 본문 폭(카드 최대 폭에서 안쪽 여백 · 아바타 · 간격을 뺀 값) — 시험이 198자가 이 폭에서 줄 수 안에 드는지 잰다.
+    /// 본문 최대 줄 수(접힌 배너). 넘치면 [더 보기] 가 서고, 누르면 전체 글로 펼쳐진다.
+    /// 대표 결정(2026-11-10, 제보 "열심히 198자 써서 확성기 썼는데 잘렸어요"): "확성기가 한번에 나타낼 수 있는 글자수 넘어가면 표시를 안하는게
+    /// 아니라 뒤에 내용들 볼 수 있는 버튼을 둬서 그거 누르면 전체 내용으로 뜨게끔 팝업창에 추가하자." — 4줄이면 한글 띄어쓰기 글 약 139자에서 접힌다.
+    static let bodyLineLimit = 4
+    /// 본문 폭(카드 최대 폭에서 안쪽 여백 14×2 · 아바타 36 · 간격 12 를 뺀 값).
     static let bodyMaxWidth: CGFloat = maxWidth - 14 * 2 - 36 - 12
+    /// 카드 폭에서 본문 폭.
+    static func bodyWidth(cardWidth: CGFloat) -> CGFloat { cardWidth - 14 * 2 - 36 - 12 }
+    /// 본문 글꼴(배너 카드의 본문 Text 와 같은 값 — 넘침 판정이 같은 글꼴로 잰다).
+    static func bodyFont() -> NSFont { NSFont.systemFont(ofSize: 17, weight: .semibold) }
+    /// 넘침 판정의 여유 폭. 판정은 실제보다 **4pt 좁게** 잰다 — 넘치는데 [더 보기] 가 안 서는 쪽(글을 못 읽는다)을 막고,
+    /// 경계에서 다 보이는데 단추가 서는 쪽(눌러도 같은 글)은 받아들인다.
+    static let overflowSlack: CGFloat = 4
+
+    /// 이 글이 접힌 배너(`bodyLineLimit` 줄)에 다 안 들어가는가 — [더 보기] 를 세울지. 배너에 실제로 그리는 글(마크다운 기호를 벗긴 것)로 잰다.
+    static func needsMore(_ body: String, cardWidth: CGFloat) -> Bool {
+        let text = ChatMarkdown.plainPreview(body)
+        let font = bodyFont()
+        let lineHeight = ceil(font.ascender - font.descender + font.leading)
+        let width = max(40, bodyWidth(cardWidth: cardWidth) - overflowSlack)
+        let rect = (text as NSString).boundingRect(with: NSSize(width: width, height: 100_000),
+                                                   options: [.usesLineFragmentOrigin], attributes: [.font: font])
+        return (rect.height / lineHeight).rounded() > CGFloat(bodyLineLimit)
+    }
     /// 미끄러져 내려오는 시간 · 올라가는 시간.
     static let enterDuration: TimeInterval = 0.25
     static let exitDuration: TimeInterval = 0.2
@@ -143,12 +160,18 @@ final class MegaphoneBannerPresentation {
     var width: CGFloat = MegaphoneBannerLayout.maxWidth
     /// 잰 카드 높이(숨은 자리 = 이만큼 + 12pt 위).
     var cardHeight: CGFloat = 120
+    /// 글이 접힌 배너에 다 안 들어간다 — [더 보기] 를 세운다(`MegaphoneBannerLayout.needsMore`).
+    var canExpand = false
+    /// [더 보기] 를 눌러 전체 글로 펼쳤다(배너가 바뀌면 다시 접힌다).
+    var isExpanded = false
 }
 
 struct MegaphoneBannerView: View {
     let presentation: MegaphoneBannerPresentation
     let store: WorkTimerStore?
     let onClose: () -> Void
+    /// [더 보기] — 컨트롤러가 펼치고 창 높이를 다시 잰다.
+    var onExpand: () -> Void = {}
 
     var body: some View {
         VStack(spacing: 0) {
@@ -195,11 +218,15 @@ struct MegaphoneBannerView: View {
                 Text(ChatMarkdown.plainPreview(banner.body))
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(CheckTheme.primaryText)
-                    .lineLimit(MegaphoneBannerLayout.bodyLineLimit)
+                    .lineLimit(presentation.isExpanded ? nil : MegaphoneBannerLayout.bodyLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
+                    // 넘칠 때만 선다 · 펼친 뒤엔 사라진다(같은 줄이라 카드 높이를 바꾸지 않는다).
+                    if presentation.canExpand && !presentation.isExpanded {
+                        bannerButton("더 보기", action: onExpand)
+                    }
                     bannerButton("닫기", action: onClose)
                 }
             }
@@ -263,6 +290,8 @@ final class MegaphoneBannerWindowController {
     private(set) var isOpen = false
     /// 마지막으로 계산한 카드 틀(시험 실행에서는 창이 화면 밖에 서므로 이것이 "어디에 떴을까"의 답이다).
     private(set) var lastCardFrame: CGRect?
+    /// 마지막으로 띄운 화면의 보이는 틀([더 보기] 로 펼칠 때 같은 자리를 다시 계산한다).
+    private var lastVisibleFrame: CGRect?
     private var shownBannerID: String?
     private var started = false
     private var generation = 0
@@ -322,6 +351,22 @@ final class MegaphoneBannerWindowController {
         store.megaphoneBanner.dismissCurrent()
     }
 
+    /// [더 보기] — 같은 자리(위 끝 고정)에서 전체 글 높이로 펼친다. 넘치지 않는 배너 · 이미 펼친 배너에서는 아무것도 안 한다.
+    func expand() {
+        guard isOpen, let banner = presentation.banner, presentation.canExpand, !presentation.isExpanded,
+              let visible = lastVisibleFrame, let panel else { return }
+        presentation.isExpanded = true
+        let cardHeight = Self.measureCardHeight(banner: banner, width: presentation.width, expanded: true)
+        presentation.cardHeight = cardHeight
+        let frame = MegaphoneBannerLayout.windowFrame(visibleFrame: visible, cardHeight: cardHeight)
+        lastCardFrame = MegaphoneBannerLayout.cardFrame(visibleFrame: visible, cardHeight: cardHeight)
+        if CheckPanelVisibility.isRunningTests {
+            panel.setFrame(NSRect(origin: MegaphoneBannerLayout.testParkingOrigin, size: frame.size), display: false)
+        } else {
+            panel.setFrame(frame, display: true)
+        }
+    }
+
     /// 마우스가 배너에 들어왔다/떠났다 — 멈춤 · 다시 세기(남은 시간과 3초 중 긴 쪽)는 스토어가 정한다.
     func hoverChanged(_ inside: Bool) {
         if inside {
@@ -349,6 +394,9 @@ final class MegaphoneBannerWindowController {
         presentation.isShown = false
         presentation.width = MegaphoneBannerLayout.width(screenWidth: visible.width)
         presentation.banner = banner
+        presentation.isExpanded = false
+        presentation.canExpand = MegaphoneBannerLayout.needsMore(banner.body, cardWidth: presentation.width)
+        lastVisibleFrame = visible
         let cardHeight = Self.measureCardHeight(banner: banner, width: presentation.width)
         presentation.cardHeight = cardHeight
         let frame = MegaphoneBannerLayout.windowFrame(visibleFrame: visible, cardHeight: cardHeight)
@@ -405,11 +453,13 @@ final class MegaphoneBannerWindowController {
 
     /// 카드 높이를 잰다(폭 고정 — 본문 줄 수만큼 자란다). 떠 있는 호스팅 뷰는 관찰 갱신이 다음 틱에 와서 방금 바꾼 값을 못 잰다 —
     /// 그 값으로 처음부터 그리는 잼 전용 호스팅 뷰를 하나 세워 잰다.
-    static func measureCardHeight(banner: MegaphoneBanner, width: CGFloat) -> CGFloat {
+    static func measureCardHeight(banner: MegaphoneBanner, width: CGFloat, expanded: Bool = false) -> CGFloat {
         let probe = MegaphoneBannerPresentation()
         probe.banner = banner
         probe.width = width
         probe.isShown = true
+        probe.canExpand = MegaphoneBannerLayout.needsMore(banner.body, cardWidth: width)
+        probe.isExpanded = expanded
         let view = NSHostingView(rootView: MegaphoneBannerView(presentation: probe, store: nil, onClose: {}))
         let total = view.fittingSize.height
         return max(60, (total - MegaphoneBannerLayout.topGap).rounded(.up))
@@ -423,7 +473,8 @@ final class MegaphoneBannerWindowController {
         hover.onHoverChanged = { [weak self] inside in self?.hoverChanged(inside) }
         let hosting = MegaphoneBannerHostingView(rootView: MegaphoneBannerView(
             presentation: presentation, store: store,
-            onClose: { [weak self] in self?.close() }
+            onClose: { [weak self] in self?.close() },
+            onExpand: { [weak self] in self?.expand() }
         ))
         // 고유 크기만 알린다 — 최소·최대 크기 제약을 걸면 창 틀(자리 계산이 정한다)과 다툰다.
         hosting.sizingOptions = [.intrinsicContentSize]

@@ -334,7 +334,7 @@ struct MegaphoneBannerPanelTests {
         let view = try #require(mbpBody(window, after: "struct MegaphoneBannerView: View"))
         // 말풍선이 없는 창이라 레이어를 걸지 않는다 · 보낸 사람 얼굴은 캐릭터 표가 그린다.
         #expect(!view.contains(".checkTooltipLayer()") && view.contains(".appUserAvatarCharacters(from: store)"), "배너 루트 짝이 어긋났다")
-        #expect(view.contains(".lineLimit(MegaphoneBannerLayout.bodyLineLimit)") && MegaphoneBannerLayout.bodyLineLimit == 4)
+        #expect(view.contains(".lineLimit(MegaphoneBannerLayout.bodyLineLimit)") && MegaphoneBannerLayout.bodyLineLimit == 8)
         let ensure = try #require(mbpBody(window, after: "private func ensurePanel()"))
         #expect(ensure.contains("self?.close()") && ensure.contains("self?.hoverChanged(inside)"),
                 "카드의 [닫기] · 호버가 컨트롤러 문에 안 닿는다")

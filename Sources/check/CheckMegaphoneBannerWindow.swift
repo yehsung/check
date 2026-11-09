@@ -31,8 +31,13 @@ enum MegaphoneBannerLayout {
     static let horizontalInset: CGFloat = 48
     /// 카드 최대 폭.
     static let maxWidth: CGFloat = 520
-    /// 본문 최대 줄 수.
-    static let bodyLineLimit = 4
+    /// 본문 최대 줄 수. **확성기 최대 글자 수(서버 max_length 198)가 언제나 다 보이는 줄 수**다.
+    /// 제보(11-08) "열심히 198자 써서 확성기 썼는데 잘렸어요" — 4줄이던 때 본문 폭(520 − 14×2 − 아바타 36 − 간격 12 = 444pt) ·
+    /// 17pt 굵은 글씨로 한글 띄어쓰기 글이 약 139자에서 '…'로 잘렸다. 198자의 가장 넓은 경우(영문 대문자)가 7.6줄이라 8줄.
+    /// 카드 높이는 `measureCardHeight` 가 글에 맞춰 재므로 짧은 글은 그대로 낮다.
+    static let bodyLineLimit = 8
+    /// 본문 폭(카드 최대 폭에서 안쪽 여백 · 아바타 · 간격을 뺀 값) — 시험이 198자가 이 폭에서 줄 수 안에 드는지 잰다.
+    static let bodyMaxWidth: CGFloat = maxWidth - 14 * 2 - 36 - 12
     /// 미끄러져 내려오는 시간 · 올라가는 시간.
     static let enterDuration: TimeInterval = 0.25
     static let exitDuration: TimeInterval = 0.2

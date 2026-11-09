@@ -323,6 +323,7 @@ enum V0354GachaStub {
         // v0.3.78: 흑우 아잉이(내장 · 조각 교환 전용)도 같은 까닭으로 뺀다.
         V0317ShopTests.rows(ownedIDs: ["squirrel"]).filter {
             !CharacterCatalog.isGoldAing($0.id) && !CharacterCatalog.isRainbowAing($0.id) && !CharacterCatalog.isHwooAing($0.id) && !CharacterCatalog.isRubyAing($0.id)
+                && !CharacterCatalog.isDevAing($0.id)
         }
             + [ShopCharacterRow(id: CharacterCatalog.goldAingID, price: 1000, owned: goldOwned, gachaOnly: true)]
     }

@@ -352,6 +352,7 @@ import Testing
             let plain = { (id: String) in
                 id != Self.gold && !CharacterCatalog.isRainbowAing(id) && !CharacterCatalog.isGiftOnlyBuiltIn(id) && !CharacterCatalog.isShardOnlyBuiltIn(id)
                     && !CharacterCatalog.isRubyAing(id)   // v0.3.78 루비도 서버 목록에 있을 때만 선다(V0378RubyCoreTests)
+                    && !CharacterCatalog.isDevAing(id)    // v0.3.81 개발 아잉이도 같다(V0381DevAingCoreTests)
             }
             #expect(!ids.contains(CharacterCatalog.hwooAingID), "\(server): 서버가 안 낸 흑우가 고르기에 섰다 \(ids)")
             #expect(!ids.contains(CharacterCatalog.rubyAingID), "\(server): 서버가 안 낸 루비가 고르기에 섰다 \(ids)")

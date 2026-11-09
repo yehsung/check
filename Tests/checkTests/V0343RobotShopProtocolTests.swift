@@ -375,8 +375,11 @@ struct V0343RobotShopProtocolTests {
         // v0.3.78: 루비 아잉이(초상 두 장 + 무지개 밝기 맵 — 몸 모양은 코드)까지 실린 빌드는 누적으로 8 이다.
         let rubyDrawable = fullDrawable.contains(CharacterCatalog.rubyAingID)
         #expect(rubyDrawable == V0378RubyCoreTests.macRubyArtInSourceTree, "루비 그림 판정이 소스 트리와 갈렸다")
+        // v0.3.81: 개발에 찌든 아잉이(초상 두 장 + 무지개 밝기 맵)까지 실린 빌드는 누적으로 9 다.
+        let devDrawable = fullDrawable.contains(CharacterCatalog.devAingID)
+        #expect(devDrawable == V0381DevAingCoreTests.macDevArtInSourceTree, "개발 아잉이 그림 판정이 소스 트리와 갈렸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable)
-                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? (peperoDrawable ? (hwooDrawable ? (rubyDrawable ? ShopWire.rubyProtocol : ShopWire.hwooProtocol) : ShopWire.peperoProtocol)
+                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? (peperoDrawable ? (hwooDrawable ? (rubyDrawable ? (devDrawable ? ShopWire.devProtocol : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol)
                                                                                                       : ShopWire.isulProtocol)
                                                                                      : ShopWire.cakeProtocol)
                                                                      : ShopWire.rainbowProtocol)

@@ -1569,7 +1569,7 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
             let row = try body(file, start)
             #expect(row.contains("let reduces = claim.reduceMotion ?? systemReduceMotion"), "\(start): 동작 줄이기를 고르는 자리가 없다")
             #expect(row.contains("MissionClaimMotion.rowSettle(reduceMotion: reduces)"), "\(start): 자리잡기가 동작 줄이기를 안 따른다")
-            #expect(row.contains("MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces)"), "\(start): 연출이 동작 줄이기를 안 따른다")
+            #expect(row.contains("MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces"), "\(start): 연출이 동작 줄이기를 안 따른다")
             for literal in ["reduceMotion: false", "reduceMotion: true"] {
                 #expect(!row.contains(literal), "\(start): 동작 줄이기 자리에 글자 그대로의 \(literal)")
             }

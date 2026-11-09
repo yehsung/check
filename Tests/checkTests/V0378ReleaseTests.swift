@@ -50,8 +50,9 @@ func v0378VersionAndChangelog() throws {
         #expect(drawable.contains(CharacterCatalog.rubyAingID), "번들 drawable 에 aing_ruby 가 없다 \(drawable)")
         #expect(ShopWire.hwooProtocol == 7 && ShopWire.rubyProtocol == 8,
                 "능력 번호가 서버 초안(흑우 min 7 · 루비 min 8)과 어긋난다 — hwoo \(ShopWire.hwooProtocol) · ruby \(ShopWire.rubyProtocol)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.rubyProtocol)
-        #expect(V0317ShopTests.plainStore().shopProtocolVersion == ShopWire.rubyProtocol)
+        // v0.3.81: 번호는 누적이다 — 개발에 찌든 아잉이까지 실린 뒤로는 9(루비 8 위). 이 게이트는 "8 이상"을 잰다.
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.rubyProtocol)
+        #expect(V0317ShopTests.plainStore().shopProtocolVersion >= ShopWire.rubyProtocol)
     }
 
     @Test("릴리스 게이트: 초상 네 장이 소스 트리에 있고 패키징 대본이 같은 넷을 센다")

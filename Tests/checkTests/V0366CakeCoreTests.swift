@@ -17,7 +17,7 @@ struct V0366CakeCoreTests {
     static let choco = "aing_cake_choco"
     /// 내장 전부(표시 순서). v0.3.66 에 케이크 둘로 다섯, v0.3.74 에 이슬이 여섯째로(V0374IsulCoreTests), v0.3.77 에 빼빼로가 일곱째로
     /// 붙었다(V0377PeperoCoreTests).
-    static let builtInIDs = ["aing", "aing_gold", "aing_rainbow", strawberry, choco, "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby"]
+    static let builtInIDs = ["aing", "aing_gold", "aing_rainbow", strawberry, choco, "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"]
 
     /// 맥 케이크 초상 두 장(`<id>-neutral` · `<id>-negative`)이 소스 트리(`Sources/check/Resources/`)에 있는가 — 금 · 무지개와 같은 기준선.
     /// 이 단계(코어)에는 없다. 그림 단계가 넣는 순간 아바타 · 고르기 시험이 그 초상을 찾아야 초록이다(못 찾으면 배선이 빠졌다).

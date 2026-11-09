@@ -12,13 +12,10 @@ import Testing
 //
 // 골라 돌리는 필터:
 //   --filter 'checkTests\.(v0379VersionAndChangelog|v0378VersionAndChangelog)\('
-@Test("버전 0.3.79 / 132 · CHANGELOG 0.3.79 가 맨 위(한 줄 · 배너 폭 안 · 내부 어휘 없음)")
+@Test("CHANGELOG 0.3.79 (한 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0379VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.79</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>132</string>"))
+    // 버전 고정과 맨 위 섹션 단언은 0.3.80 으로 옮겼다(V0380ReleaseTests).
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.79\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -33,8 +30,6 @@ func v0379VersionAndChangelog() throws {
         #expect(!section.contains(banned), "사용자 문구에 내부 어휘('\(banned)')가 있다")
     }
     #expect(items.contains { $0.contains("다른 기기") && $0.contains("서버") }, "대표 메모의 이름('다른 기기 또는 서버')이 없다")
-    #expect(changelog.range(of: "## 0.3.79")!.lowerBound < changelog.range(of: "## 0.3.78")!.lowerBound,
-            "0.3.79 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }
 
 @Test("릴리스 게이트: 설정 행 이름은 '다른 기기 또는 서버 연결'(대표 메모) · 앱스토어 판에는 없다")

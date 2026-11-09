@@ -5,8 +5,8 @@ import Testing
 // 1:1 알까기 v2 와이어 ↔ 서버 초안 계약(SPEC v1.1 §3.5~3.7 · §4.1 · §7.2 C 줄 FixtureContract). **모양을 서버 원문에서 읽는다.**
 //
 //   ① 매니페스트(T/Fixtures/alkkagi-rpc/_manifest.json)의 케이스 파일이 다 있고 남는 파일이 없으며, rpc 는 `AlkkagiOnlineWire.RPC.all`
-//      안이고 모든 status 가 열거 안이다(`.unknown` 0). 지금 픽스처는 C 의 손 픽스처(§3.7 모양) — S 하네스 원문이 오면 통합(T)이 같은
-//      이름으로 바꿔 끼우고 이 시험이 원문으로 다시 잰다.
+//      안이고 모든 status 가 열거 안이다(`.unknown` 0). 픽스처는 **S 하네스 원문**(V2/server/fixtures — gen.sh 가 체인 182 + 초안 3회
+//      적용 위에서 실제 RPC 응답을 그대로 적은 68장, 통합 T 가 C 의 손 픽스처를 바꿔 끼웠다). 매니페스트의 `draft_md5` 가 초안과 같다.
 //   ② 봉투 키 = 초안의 `v_*_keys` 배열 상수(초안 §13 흐름 프로브가 실제 응답과 대조하는 그 줄).
 //   ③ 디코더 칸 = 초안 키(STATE 28 · WATCH 20) · 픽스처 값이 디코딩 뒤 그대로 산다(디코더가 키 하나를 모르면 그 값이 조용히 nil).
 //   ④ 요청 본문 키 = SQL 인자 이름 · DEFAULT 없는 인자는 다 싣는다(PostgREST 는 본문 키 집합으로 함수를 고른다 — 이름 하나가
@@ -155,7 +155,7 @@ struct V03xxAlkkagiFixtureContractTests {
     func manifestIsCompleteAndKnown() throws {
         let manifest = try afcManifest()
         #expect(manifest.protocolVersion == AlkkagiOnlineWire.protocolVersion)
-        #expect(manifest.cases.count >= 19)
+        #expect(manifest.cases.count >= 60, "S 원문 68장이 아니다(손 픽스처로 되돌아갔나): \(manifest.cases.count)")
         let listed = Set(manifest.cases.map(\.file))
         let onDisk = Set(try FileManager.default.contentsOfDirectory(atPath: afcFixtureDirectory.path)
             .filter { $0.hasPrefix("alkkagi_") && $0.hasSuffix(".json") })
@@ -182,7 +182,7 @@ struct V03xxAlkkagiFixtureContractTests {
         let rankingMeKeys = try afcKeys("ranking_me", in: sql), rankingRowKeys = try afcKeys("ranking_row", in: sql)
         #expect(stateKeys.count == 28 && watchKeys.count == 20 && lobbyKeys.count == 13)
 
-        for name in ["alkkagi_lobby__ok_full.json", "alkkagi_lobby__ok_light.json", "alkkagi_lobby__door_closed.json"] {
+        for name in ["alkkagi_lobby__ok.json", "alkkagi_lobby__light.json", "alkkagi_lobby__door_closed.json"] {
             let lobby = try afcObject(name)
             #expect(Set(lobby.keys) == lobbyKeys, "\(name) 최상위")
             #expect(afcKeySet(lobby["me"]) == peerKeys, "\(name) me")
@@ -204,8 +204,15 @@ struct V03xxAlkkagiFixtureContractTests {
             #expect(base.isSubset(of: keys) && keys.subtracting(base).isSubset(of: gateExtras), "\(entry.file) 봉투 \(keys.sorted())")
             if let outgoing = envelope["outgoing"] as? [String: Any] { #expect(Set(outgoing.keys) == inviteKeys) }
             guard let state = envelope["state"] as? [String: Any] else { continue }
+            // protocol 1 응답(옛 판 · 0.3.80)은 v1 STATE 19키 그대로다 — v2 28키의 앞 19키(SPEC §3.3 · 초안 v_state_keys 순서).
+            let legacy = (envelope["protocol"] as? Int) == 1
+            #expect(!legacy || envelope["door_open"] == nil, "\(entry.file): protocol 1 응답에 door_open 이 실렸다")
             let expected = entry.rpc.hasPrefix("alkkagi_watch") ? watchKeys : stateKeys
-            #expect(Set(state.keys) == expected, "\(entry.file) state")
+            if legacy {
+                #expect(Set(state.keys).isSubset(of: stateKeys) && state.count == 19, "\(entry.file) 옛 state \(state.count)키")
+            } else {
+                #expect(Set(state.keys) == expected, "\(entry.file) state")
+            }
             #expect(afcKeySet(state["black"]) == peerKeys && afcKeySet(state["white"]) == peerKeys)
         }
         let ranking = try afcObject("alkkagi_ranking__ok.json")
@@ -217,41 +224,60 @@ struct V03xxAlkkagiFixtureContractTests {
     @Test("③ 디코더 칸 = 초안 STATE 28 · WATCH 20 · 픽스처 값이 디코딩 뒤 그대로", .enabled(if: afcGate))
     func decoderFieldsMatchTheDraftAndCarryValues() throws {
         let sql = try afcDraft()
-        let aiming = try #require(try akFixture("alkkagi_state__aiming").state)
+        // 관전자가 붙은 조준 판(S `state__watched` — watchers 1 · 놓친 차례 상대 1)이라 0 이 아닌 v2 값이 디코딩 뒤 사는지 잰다.
+        let aiming = try #require(try akFixture("alkkagi_state__watched").state)
         #expect(afcFields(aiming) == (try afcKeys("state", in: sql)), "STATE 디코더 칸 ≠ 초안 v_state_keys")
-        let watching = try #require(try akFixture("alkkagi_watch_live__finished").watch)
+        let watching = try #require(try akFixture("alkkagi_watch_live__ok").watch)
         #expect(afcFields(watching) == (try afcKeys("watch", in: sql)), "WATCH 디코더 칸 ≠ 초안 v_watch_keys")
 
-        let raw = try afcObject("alkkagi_state__aiming.json")["state"] as? [String: Any] ?? [:]
+        let raw = try afcObject("alkkagi_state__watched.json")["state"] as? [String: Any] ?? [:]
         #expect(aiming.stake == raw["stake"] as? Int && aiming.acceptedAtMs == raw["accepted_at_ms"] as? Double)
         #expect(aiming.myMissedTurns == raw["my_missed_turns"] as? Int && aiming.forfeitAfter == raw["forfeit_after"] as? Int)
         #expect(aiming.settled == raw["settled"] as? Bool && aiming.rubyBalance == raw["ruby_balance"] as? Int)
         #expect(aiming.watchers == raw["watchers"] as? Int && aiming.graceMs == raw["grace_ms"] as? Double)
-        #expect(aiming.watchers == 2 && aiming.graceMs == 2000, "기준선: 픽스처가 0 이 아닌 값을 싣는다")
+        #expect(aiming.watchers == 1 && aiming.graceMs == 2000 && aiming.opponentMissedTurns == 1, "기준선: 픽스처가 0 이 아닌 값을 싣는다")
+        #expect(try #require(try akFixture("alkkagi_state__aiming").state).watchers == 0, "기준선: 관전자 없는 같은 판은 0")
 
-        let lobby = try akFixture("alkkagi_lobby__ok_full")
+        // 값은 S 원문 그대로다(uuid · 시각은 생성한 판 값 — 매니페스트 notes). 사람 줄 칸 넷이 줄마다 디코딩 뒤 산다.
+        let rawLobby = try afcObject("alkkagi_lobby__ok.json")
+        let lobby = try akFixture("alkkagi_lobby__ok")
         #expect(lobby.doorOpen == true && lobby.stakes == AlkkagiStake.allCases.map(\.rawValue) && lobby.rubyBalance == 100)
-        #expect(lobby.record == AlkkagiRecord(wins: 3, losses: 1, draws: 2))
+        #expect(lobby.record == AlkkagiRecord(wins: 0, losses: 0, draws: 0), "전체 로비 record 는 null 이 아니라 0 이다")
         let users = try #require(lobby.users)
-        #expect(users.map(\.isWorking) == [true, false, false, true] && users.map(\.inMatch) == [false, true, false, false])
-        #expect(users.map(\.isCapable) == [true, true, false, true] && users.map(\.isFocused) == [false, false, false, true])
-        #expect(users.allSatisfy { $0.characterID == "aing" })
+        let rawUsers = rawLobby["users"] as? [[String: Any]] ?? []
+        #expect(users.count == rawUsers.count && users.count >= 10)
+        #expect(users.map(\.isWorking) == rawUsers.map { $0["is_working"] as? Bool ?? false })
+        #expect(users.map(\.inMatch) == rawUsers.map { $0["in_match"] as? Bool ?? false })
+        #expect(users.map(\.isCapable) == rawUsers.map { $0["capable"] as? Bool ?? false })
+        #expect(users.map(\.isFocused) == rawUsers.map { $0["focus_mode"] as? Bool ?? false })
+        // 기준선: 원문이 네 칸 모두 참 · 거짓을 섞어 싣는다(전부 같은 값이면 위 대조가 디코더 결함을 못 가른다).
+        #expect(Set(users.map(\.isWorking)) == [true, false] && Set(users.map(\.inMatch)) == [true, false])
+        #expect(Set(users.map(\.isCapable)) == [true, false])
         let live = try #require(lobby.matches?.first)
-        #expect(live.stake == 5 && live.shotCount == 4 && live.watchers == 2 && live.acceptedAt != nil)
-        #expect(lobby.incoming?.first?.stake == 5)
-        let light = try akFixture("alkkagi_lobby__ok_light")
+        #expect(live.stake == 3 && live.shotCount == 0 && live.watchers == 0 && live.acceptedAt != nil)
+        #expect(lobby.incoming?.first?.stake == 3 && lobby.outgoing?.stake == 5)
+        let light = try akFixture("alkkagi_lobby__light")
         #expect(light.record == nil && light.users == [] && light.matches == [])
+        #expect(try akFixture("alkkagi_lobby__door_closed").doorOpen == false)
 
         let insufficient = try akFixture("alkkagi_challenge__insufficient")
-        #expect(insufficient.need == 10 && insufficient.have == 7 && insufficient.rubyBalance == 7)
+        #expect(insufficient.need == 3 && insufficient.have == 2 && insufficient.rubyBalance == 2)
         let challenger = try akFixture("alkkagi_respond__insufficient_challenger")
-        #expect(challenger.side == "challenger" && challenger.have == nil && challenger.rubyBalance == 100)
-        #expect(try akFixture("alkkagi_challenge__already_pending").matchID == "00000000-0000-4000-8000-0000000000aa")
-        #expect(try akFixture("alkkagi_challenge__unsupported_client").doorOpen == false)
+        #expect(challenger.side == "challenger" && challenger.have == nil && challenger.need == 10 && challenger.rubyBalance == 100)
+        let mine = try akFixture("alkkagi_respond__insufficient_me")
+        #expect(mine.side == "me" && mine.have == 4 && mine.need == 10 && mine.rubyBalance == 4)
+        let pending = try akFixture("alkkagi_challenge__already_pending")
+        #expect(pending.matchID != nil && pending.matchID == pending.outgoing?.id)
+        // 문 닫힘 ↔ 문 열림(내 build 모자람)이 같은 status 안에서 door_open 으로 갈린다(VC-8).
+        #expect(try akFixture("alkkagi_challenge__unsupported_client_door_closed").doorOpen == false)
+        #expect(try akFixture("alkkagi_challenge__unsupported_client").doorOpen == true)
+        #expect(try akFixture("alkkagi_challenge__unsupported_client_v1").doorOpen == nil)
         let board = try #require(try akFixture("alkkagi_ranking__ok").ranking)
-        #expect(board.me == AlkkagiMyRank(rank: 2, wins: 4, losses: 1, draws: 2, points: 3) && board.entries.map(\.rank) == [1, 2])
-        let placing = try #require(try akFixture("alkkagi_watch_live__placing").watch)
-        #expect(placing.stones.isEmpty && placing.phase == .placing && placing.watchers == 1 && placing.whiteMissedTurns == 1)
+        #expect(board.me == AlkkagiMyRank(rank: 3, wins: 1, losses: 1, draws: 1, points: 0))
+        #expect(board.entries.map(\.rank) == [1, 1, 3, 3, 5, 5] && board.entries.allSatisfy { $0.points == $0.wins - $0.losses })
+        let placing = try #require(try akFixture("alkkagi_watch__placing").watch)
+        #expect(placing.stones.isEmpty && placing.phase == .placing && placing.stake == 3 && !placing.blackReady)
+        #expect(watching.stones.count == 10 && watching.watchers == 1 && watching.whiteMissedTurns == 1, "기준선: 진행 판은 돌이 실린다")
     }
 
     /// 없으면(④): 앱 요청 본문 키가 SQL 인자 이름과 갈려(예: `p_stake` 누락 · 오타) 운영에서만 PGRST202 가 나도 초록이다.
@@ -320,7 +346,7 @@ struct V03xxAlkkagiFixtureContractTests {
     @Test("⑥ 운영 어댑터 왕복 — 픽스처가 스토어에 선다 · 본문에 p_protocol 2 · p_stake · PGRST202 → 곧 열려요")
     func liveAdapterRoundTrip() async throws {
         let hostName = "v03xx-alkkagi-fc-\(UUID().uuidString.prefix(8))".lowercased()
-        let lobby = try afcText("alkkagi_lobby__ok_full.json")
+        let lobby = try afcText("alkkagi_lobby__ok.json")
         let insufficient = try afcText("alkkagi_challenge__insufficient.json")
         GomokuStubProtocol.register(host: hostName) { rpc, _, index in
             switch rpc {
@@ -338,15 +364,17 @@ struct V03xxAlkkagiFixtureContractTests {
         store.attach(host: host)
         defer { store.reset() }
         await store.refreshLobby()
-        #expect(store.availability == .available && store.users.count == 4 && store.liveMatches.count == 1)
-        #expect(host.rubyBalance == 100 && store.record == AlkkagiRecord(wins: 3, losses: 1, draws: 2))
-        let minsu = try #require(store.visibleUsers.first?.id)
-        await store.challenge(opponentID: minsu, stake: .ten)
-        #expect(host.rubyBalance == 7 && store.notice == "루비 3개 더 필요해요")
+        let rawUsers = (try afcObject("alkkagi_lobby__ok.json")["users"] as? [[String: Any]] ?? []).count
+        #expect(store.availability == .available && store.users.count == rawUsers && store.liveMatches.count == 1)
+        #expect(host.rubyBalance == 100 && store.record == AlkkagiRecord(wins: 0, losses: 0, draws: 0))
+        let first = try #require(store.visibleUsers.first)
+        #expect(first.canBeChallenged && first.isWorking, "정렬 첫 줄이 '가능 · 근무 · 대결 아님'이 아니다: \(first.displayName)")
+        await store.challenge(opponentID: first.id, stake: .three)
+        #expect(host.rubyBalance == 2 && store.notice == "루비 1개 더 필요해요")
         let calls = GomokuStubProtocol.calls(host: hostName)
         #expect(calls.map(\.rpc) == ["alkkagi_lobby", "alkkagi_challenge"])
         #expect(calls[0].json["p_protocol"] as? Int == 2 && calls[0].json["p_users"] as? Bool == true)
-        #expect(calls[1].json["p_stake"] as? Int == 10 && calls[1].json["p_protocol"] as? Int == 2)
+        #expect(calls[1].json["p_stake"] as? Int == 3 && calls[1].json["p_protocol"] as? Int == 2)
         await store.refreshLobby()
         #expect(store.availability == .serverMissing && store.notice == AlkkagiNoticeText.unavailable)
     }

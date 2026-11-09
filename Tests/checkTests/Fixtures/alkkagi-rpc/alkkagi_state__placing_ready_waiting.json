@@ -1,0 +1,125 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": true,
+    "character_id": null,
+    "display_name": "T-8ea05b45",
+    "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+  },
+  "protocol": 2,
+  "server_now_ms": 1794252895201.027,
+  "state": {
+    "accepted_at_ms": 1794252895186.268,
+    "black": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": null,
+      "display_name": "T-8ea05b45",
+      "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+    },
+    "chat": [],
+    "chat_seq": 0,
+    "current_player": "black",
+    "deadline_ms": 1794252925186.268,
+    "finish_reason": null,
+    "forfeit_after": 3,
+    "grace_ms": 2000,
+    "id": "ed777292-32d6-4a3a-80d7-b88211b6628a",
+    "muted": false,
+    "my_color": "black",
+    "my_missed_turns": 0,
+    "my_ready": true,
+    "opponent_missed_turns": 0,
+    "opponent_ready": false,
+    "phase": "placing",
+    "placement_revision": 8,
+    "result": null,
+    "revision": 9,
+    "ruby_balance": 90,
+    "settled": false,
+    "shot": null,
+    "shot_count": 0,
+    "stake": 10,
+    "stones": [
+      {
+        "id": 0,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 80,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 1,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 190,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 300,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 410,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 520,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "watchers": 0,
+    "white": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": null,
+      "display_name": "T-6c466d04",
+      "id": "6c466d04-7227-4fe2-9845-75a722dabd91"
+    }
+  },
+  "status": "ok"
+}

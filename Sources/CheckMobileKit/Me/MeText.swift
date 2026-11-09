@@ -538,6 +538,11 @@ package enum MeText {
             // 맥 `CrossyDuelEntryIcon`(SF `flag.checkered`)과 같은 이름이고, SF Symbols 4(2022 — macOS 13 · iOS 16)에 들어와
             // 이 앱의 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
             ("crossy_duel", "flag.checkered"),
+            // '1:1 알까기'(서버 `daily_alkkagi`, sort 110 · alkkagi/v2 20261110160000, 맥 0.3.81). 폰에는 게임이 없어 보조 문장
+            // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). 맥 `AlkkagiEntryIcon.symbol`(SF `circle.hexagongrid.fill`)과
+            // 같은 이름이다(위 ① — 맥 사이드바 문 · 미션 줄이 이미 쓰는 기호). SF Symbols 1(2019 — macOS 10.15 · iOS 13)에 들어와 이 앱의
+            // 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
+            ("alkkagi", "circle.hexagongrid.fill"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }

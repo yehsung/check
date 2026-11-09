@@ -2,12 +2,12 @@
   "me": {
     "avatar_url": null,
     "busy": false,
-    "character_id": "aing",
-    "display_name": "나",
-    "id": "00000000-0000-4000-8000-000000000001"
+    "character_id": null,
+    "display_name": "T-c75f7fe3",
+    "id": "c75f7fe3-7e1b-42ff-b97e-fa4a4a6f63c5"
   },
   "protocol": 2,
-  "server_now_ms": 1800000000000,
+  "server_now_ms": 1794252895300.581,
   "state": null,
   "status": "not_found"
 }

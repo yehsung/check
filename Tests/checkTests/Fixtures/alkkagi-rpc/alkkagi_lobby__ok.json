@@ -1,0 +1,216 @@
+{
+  "door_open": true,
+  "incoming": [
+    {
+      "expires_at_ms": 1794252955131.372,
+      "id": "89c178e4-6a47-4ade-a9ad-e9f499b837d0",
+      "opponent": {
+        "avatar_url": null,
+        "busy": false,
+        "character_id": null,
+        "display_name": "T-e3517e44",
+        "id": "e3517e44-b5d2-4604-b70e-977b74df41ca"
+      },
+      "stake": 3
+    }
+  ],
+  "matches": [
+    {
+      "accepted_at_ms": 1794252895136.999,
+      "black": {
+        "avatar_url": null,
+        "busy": true,
+        "character_id": null,
+        "display_name": "T-8e9ca5b4",
+        "id": "8e9ca5b4-b3b6-4721-8ca3-78dd6ca34407"
+      },
+      "id": "8debd702-8a60-4707-9216-5f9fb91f4fc6",
+      "shot_count": 0,
+      "stake": 3,
+      "watchers": 0,
+      "white": {
+        "avatar_url": null,
+        "busy": true,
+        "character_id": null,
+        "display_name": "T-59372519",
+        "id": "59372519-e339-448a-ac72-b383a0597191"
+      }
+    }
+  ],
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": "aing",
+    "display_name": "가나다",
+    "id": "658ad34a-2d60-42c5-ad5d-11fb38c5847f"
+  },
+  "outgoing": {
+    "expires_at_ms": 1794252955128.659,
+    "id": "7dbaca46-f1c2-41e6-931e-027f6b5281b7",
+    "opponent": {
+      "avatar_url": "https://example.invalid/b.png",
+      "busy": false,
+      "character_id": null,
+      "display_name": "라마바",
+      "id": "a13af4f5-8b2e-45d3-812e-b051be6cf95e"
+    },
+    "stake": 5
+  },
+  "protocol": 2,
+  "record": {
+    "draws": 0,
+    "losses": 0,
+    "wins": 0
+  },
+  "ruby_balance": 100,
+  "server_now_ms": 1794252895140.272,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "state": null,
+  "status": "ok",
+  "users": [
+    {
+      "avatar_url": "https://example.invalid/b.png",
+      "capable": true,
+      "character_id": null,
+      "display_name": "라마바",
+      "focus_mode": false,
+      "id": "a13af4f5-8b2e-45d3-812e-b051be6cf95e",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-1d4ebc6d",
+      "focus_mode": false,
+      "id": "1d4ebc6d-b40f-4fe3-b079-d5d9bccbc8b8",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-59372519",
+      "focus_mode": false,
+      "id": "59372519-e339-448a-ac72-b383a0597191",
+      "in_match": true,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-6c466d04",
+      "focus_mode": false,
+      "id": "6c466d04-7227-4fe2-9845-75a722dabd91",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-8e9ca5b4",
+      "focus_mode": false,
+      "id": "8e9ca5b4-b3b6-4721-8ca3-78dd6ca34407",
+      "in_match": true,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-8ea05b45",
+      "focus_mode": false,
+      "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-c75f7fe3",
+      "focus_mode": false,
+      "id": "c75f7fe3-7e1b-42ff-b97e-fa4a4a6f63c5",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-d601f4ed",
+      "focus_mode": false,
+      "id": "d601f4ed-f3cf-40e0-ab51-169b433dfb27",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "character_id": null,
+      "display_name": "T-e3517e44",
+      "focus_mode": false,
+      "id": "e3517e44-b5d2-4604-b70e-977b74df41ca",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character_id": null,
+      "display_name": "abto.app",
+      "focus_mode": false,
+      "id": "267a3495-643c-40cc-b1a7-14967166eae1",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character_id": null,
+      "display_name": "거부목록사용자",
+      "focus_mode": false,
+      "id": "f46dc1d0-4dff-416e-81f0-91d4fb413def",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character_id": null,
+      "display_name": "씨앗다섯",
+      "focus_mode": false,
+      "id": "785b5732-75fe-4a71-931a-2e3f06e63505",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character_id": null,
+      "display_name": "코덱스토큰도둑예은",
+      "focus_mode": false,
+      "id": "3e240c02-8972-478e-a674-014f498a641b",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "character_id": null,
+      "display_name": "코덱스토큰도둑지유",
+      "focus_mode": false,
+      "id": "544e3837-f01c-4560-b82f-4d44c269f044",
+      "in_match": false,
+      "is_working": false
+    }
+  ]
+}

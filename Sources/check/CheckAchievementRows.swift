@@ -72,7 +72,7 @@ enum AchievementCopy {
             ("phone", "iphone"),
             ("todo", "checklist"),
             ("gomoku", "circle.grid.3x3.fill"),
-            ("alkkagi", "circle.hexagongrid.fill"),
+            ("alkkagi", AlkkagiEntryIcon.symbol),
             ("chess", ChessEntryIcon.symbol),
             ("minigame", "gamecontroller.fill"),
             ("team", "person.3.fill"),
@@ -99,7 +99,8 @@ enum DailyMissionCopy {
         if let kind = MiniGameKind(rawValue: game) { return kind.icon }
         switch game {
         case "gomoku": return MiniGameGomokuEntryButton.icon
-        case "alkkagi": return MiniGameAlkkagiEntryButton.icon
+        // 일일 미션 열둘째 줄(daily_alkkagi) — 미니게임 창 사이드바의 [1:1 알까기] 문과 같은 기호(한 출처 `AlkkagiEntryIcon`).
+        case "alkkagi": return AlkkagiEntryIcon.resolved
         case "chess": return ChessEntryIcon.resolved
         case "tetris_duel": return TetrisDuelEntryIcon.resolved
         // v0.3.69 일일 미션 여덟째 줄(daily_rummy) — 미니게임 창 머리글의 [큐브] 입구와 같은 기호.

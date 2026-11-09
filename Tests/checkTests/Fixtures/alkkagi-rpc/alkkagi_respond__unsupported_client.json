@@ -1,0 +1,28 @@
+{
+  "door_open": true,
+  "incoming": [
+    {
+      "expires_at_ms": 1794252955178.892,
+      "id": "ed777292-32d6-4a3a-80d7-b88211b6628a",
+      "opponent": {
+        "avatar_url": null,
+        "busy": false,
+        "character_id": null,
+        "display_name": "T-8ea05b45",
+        "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+      },
+      "stake": 10
+    }
+  ],
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": null,
+    "display_name": "T-6c466d04",
+    "id": "6c466d04-7227-4fe2-9845-75a722dabd91"
+  },
+  "protocol": 2,
+  "server_now_ms": 1794252895184.164,
+  "state": null,
+  "status": "unsupported_client"
+}

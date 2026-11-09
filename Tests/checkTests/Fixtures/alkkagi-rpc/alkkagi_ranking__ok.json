@@ -1,36 +1,80 @@
 {
   "me": {
-    "draws": 2,
+    "draws": 1,
     "losses": 1,
-    "points": 3,
-    "rank": 2,
-    "wins": 4
+    "points": 0,
+    "rank": 3,
+    "wins": 1
   },
   "record_since_ms": null,
   "rows": [
     {
       "avatar_url": null,
-      "character_id": "aing",
-      "display_name": "지우",
+      "character_id": null,
+      "display_name": "T-8ea05b45",
       "draws": 0,
-      "id": "00000000-0000-4000-8000-000000000003",
-      "losses": 1,
-      "points": 5,
+      "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc",
+      "losses": 0,
+      "points": 1,
       "rank": 1,
-      "wins": 6
+      "wins": 1
     },
     {
       "avatar_url": null,
-      "character_id": "aing",
-      "display_name": "나",
-      "draws": 2,
-      "id": "00000000-0000-4000-8000-000000000001",
+      "character_id": null,
+      "display_name": "T-c75f7fe3",
+      "draws": 0,
+      "id": "c75f7fe3-7e1b-42ff-b97e-fa4a4a6f63c5",
+      "losses": 0,
+      "points": 1,
+      "rank": 1,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-1d4ebc6d",
+      "draws": 1,
+      "id": "1d4ebc6d-b40f-4fe3-b079-d5d9bccbc8b8",
       "losses": 1,
-      "points": 3,
-      "rank": 2,
-      "wins": 4
+      "points": 0,
+      "rank": 3,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-d601f4ed",
+      "draws": 1,
+      "id": "d601f4ed-f3cf-40e0-ab51-169b433dfb27",
+      "losses": 1,
+      "points": 0,
+      "rank": 3,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-6c466d04",
+      "draws": 0,
+      "id": "6c466d04-7227-4fe2-9845-75a722dabd91",
+      "losses": 1,
+      "points": -1,
+      "rank": 5,
+      "wins": 0
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-8e9ca5b4",
+      "draws": 0,
+      "id": "8e9ca5b4-b3b6-4721-8ca3-78dd6ca34407",
+      "losses": 1,
+      "points": -1,
+      "rank": 5,
+      "wins": 0
     }
   ],
-  "server_now_ms": 1800000000000,
+  "server_now_ms": 1794252895306.269,
   "status": "ok"
 }

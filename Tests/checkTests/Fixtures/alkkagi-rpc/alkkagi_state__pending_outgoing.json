@@ -1,0 +1,25 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": "aing",
+    "display_name": "가나다",
+    "id": "658ad34a-2d60-42c5-ad5d-11fb38c5847f"
+  },
+  "outgoing": {
+    "expires_at_ms": 1794252955128.659,
+    "id": "7dbaca46-f1c2-41e6-931e-027f6b5281b7",
+    "opponent": {
+      "avatar_url": "https://example.invalid/b.png",
+      "busy": false,
+      "character_id": null,
+      "display_name": "라마바",
+      "id": "a13af4f5-8b2e-45d3-812e-b051be6cf95e"
+    },
+    "stake": 5
+  },
+  "protocol": 2,
+  "server_now_ms": 1794252895147.918,
+  "state": null,
+  "status": "ok"
+}

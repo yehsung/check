@@ -5,9 +5,10 @@ import Testing
 
 // 1:1 알까기 v2 코어 — 와이어 · 스토어 표면 · 문구 표 · 몸통(SPEC v1.1 §3.7 · §4 · §7.2 C 줄). **모양이 아니라 결과를 잰다.**
 //
-// 서버는 스텁 `AlkkagiServing`(호출을 기록하고 정해 둔 응답을 돌려준다 — host 가 없어 네트워크 0). 응답 JSON 은 SPEC §3.7 모양을 손으로 적은
-// 픽스처다(T/Fixtures/alkkagi-rpc) — S 하네스 원문이 오면 통합(T)이 같은 이름으로 바꿔 끼우고 계약 시험(V03xxAlkkagiFixtureContractTests)이
-// 원문으로 다시 잰다. 각 시험 첫 줄 주석은 "없으면 어떤 결함이 초록으로 통과하는가"이고, 단언마다 결함 변이에서 갈리는 기준선 짝을 둔다.
+// 서버는 스텁 `AlkkagiServing`(호출을 기록하고 정해 둔 응답을 돌려준다 — host 가 없어 네트워크 0). 픽스처(T/Fixtures/alkkagi-rpc)는
+// **S 하네스 원문**(V2/server/fixtures — 실제 RPC 응답 68장, 통합 T 가 손 픽스처를 바꿔 끼웠다)이고 계약 시험
+// (V03xxAlkkagiFixtureContractTests)이 초안과 대조한다. 원문은 판마다 다른 합성 계정이 떠서, 한 판을 잇는 시험만 `akFixturePatched` 로
+// id · 나(`me`)를 한 사람에게 맞춘다(고친 칸을 시험 안에 적는다). 각 시험 첫 줄 주석은 "없으면 어떤 결함이 초록으로 통과하는가"이고, 단언마다 결함 변이에서 갈리는 기준선 짝을 둔다.
 // 다섯 규칙(§4.3)은 규칙마다 '기준선(창 닫힘) · 결함 자리(보임+가림) · 대조(보임+안 가림)' 또는 '합쳐짐 · 없음' 짝으로 잰다.
 // 맨 끝 묶음은 0.3.80 독립 실행기 온라인 시험 23개를 v2 이름으로 옮긴 판 진행 보존 그물이다(§4.6).
 
@@ -279,13 +280,33 @@ func akEventually(timeout: Duration = .milliseconds(800), _ predicate: () -> Boo
     try #require(predicate(), "기다린 상태가 \(timeout) 안에 오지 않았다")
 }
 
-/// 손 픽스처(T/Fixtures/alkkagi-rpc — S 원문이 오면 같은 이름으로 바뀐다)를 운영 디코더(snake 접기)로 읽는다.
+/// S 하네스 원문 픽스처(T/Fixtures/alkkagi-rpc)를 운영 디코더(snake 접기)로 읽는다.
 func akFixture(_ name: String) throws -> AlkkagiResponse {
-    let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
-        .appendingPathComponent("Fixtures/alkkagi-rpc/\(name).json")
     let decoder = JSONDecoder()
     decoder.keyDecodingStrategy = .convertFromSnakeCase
-    return try decoder.decode(AlkkagiResponse.self, from: Data(contentsOf: url))
+    return try decoder.decode(AlkkagiResponse.self, from: Data(contentsOf: akFixtureURL(name)))
+}
+
+private func akFixtureURL(_ name: String) -> URL {
+    URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/alkkagi-rpc/\(name).json")
+}
+
+/// 원문 JSON 객체(고치기 전).
+func akFixtureRaw(_ name: String) throws -> [String: Any] {
+    guard let object = try JSONSerialization.jsonObject(with: Data(contentsOf: akFixtureURL(name))) as? [String: Any] else {
+        throw CocoaError(.coderReadCorrupt)
+    }
+    return object
+}
+
+/// 원문을 읽어 칸 몇 개만 고친 뒤 운영 디코더로 읽는다 — S 원문은 판마다 다른 합성 계정이 떠서, 한 판을 잇는 시험만 id · `me` 를
+/// 한 사람에게 맞춘다(고친 칸은 부르는 자리에 적는다). 나머지 칸 · 키 집합은 원문 그대로다.
+func akFixturePatched(_ name: String, _ patch: (inout [String: Any]) throws -> Void) throws -> AlkkagiResponse {
+    var object = try akFixtureRaw(name)
+    try patch(&object)
+    let decoder = JSONDecoder()
+    decoder.keyDecodingStrategy = .convertFromSnakeCase
+    return try decoder.decode(AlkkagiResponse.self, from: JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
 }
 
 // MARK: - 시험
@@ -1090,9 +1111,9 @@ extension V03xxAlkkagiStoreTests {
         on.rankingEnabled = true
         on.windowDidShow()
         try await akEventually { on.ranking != nil && !on.isLoading }
-        #expect(onScript.count("alkkagi_ranking") == 1 && on.ranking?.entries.count == 2)
-        #expect(board.me?.matches(AlkkagiRecord(wins: 4, losses: 1, draws: 2)) == true)
-        #expect(board.me?.matches(AlkkagiRecord(wins: 4, losses: 1, draws: 1)) == false)
+        #expect(onScript.count("alkkagi_ranking") == 1 && on.ranking?.entries.count == 6)
+        #expect(board.me?.matches(AlkkagiRecord(wins: 1, losses: 1, draws: 1)) == true)
+        #expect(board.me?.matches(AlkkagiRecord(wins: 1, losses: 1, draws: 0)) == false)
         #expect(board.me?.matches(nil) == false)
 
         let missing = AKScript([.failure(.serverMissing)])
@@ -1103,56 +1124,88 @@ extension V03xxAlkkagiStoreTests {
         #expect(gone.rankingUnavailable && gone.ranking == nil && gone.notice == nil)
     }
 
-    /// 없으면: 손 픽스처(§3.7 모양 — S 원문이 오면 바뀐다)로 로비 → 판돈 신청 → 모자람 → 보냄 → 판 → 끝 → [로비로] 를 이으면 어느 칸이
-    /// 비거나 갈래가 틀려도 초록이다.
-    @Test("픽스처 한 판 — 로비 · 판돈 · insufficient · 보낸 신청 → 배치 · 조준 · 승 · rubyDelta · [로비로]")
+    /// 없으면: S 원문으로 로비 → 판돈 신청 → 모자람 → 보냄 → 판 → 끝 → [로비로] 를 이으면 어느 칸이 비거나 갈래가 틀려도 초록이다.
+    /// 원문의 판 이야기(흑 T-8ea05b45 · 판 ed777292 · 판돈 10 — 배치 → 조준(관전자 1) → 상대 기권 → 나가기)는 그대로 쓰고, 로비 ·
+    /// 신청 응답만 그 사람(`me`)과 그 판 id 로 맞춘다(원문 로비 · 신청은 다른 합성 계정 '가나다'의 것이다).
+    @Test("픽스처 한 판(S 원문) — 로비 · 판돈 · insufficient · 보낸 신청 → 배치 · 조준 · 기권승 · rubyDelta · [로비로]")
     func fixtureFlowFromLobbyToResult() async throws {
+        let placingRaw = try akFixtureRaw("alkkagi_state__placing")
+        let story = try #require(placingRaw["state"] as? [String: Any])
+        let me = try #require(story["black"] as? [String: Any])           // 원문 판의 흑(= 나)
+        let matchID = try #require(story["id"] as? String)
+        let finishedRaw = try akFixtureRaw("alkkagi_state__finished_resign_win")
+        let finishedAt = try #require(finishedRaw["server_now_ms"] as? Double)
+        let rawUserCount = (try akFixtureRaw("alkkagi_lobby__ok")["users"] as? [[String: Any]] ?? []).count
+        func asMe(_ name: String) throws -> AlkkagiResponse { try akFixturePatched(name) { $0["me"] = me } }
+        let challengeOK = try akFixturePatched("alkkagi_challenge__ok") { object in
+            object["me"] = me
+            var outgoing = try #require(object["outgoing"] as? [String: Any])
+            outgoing["id"] = matchID                                          // 받아들여지면 이 신청이 그 판이 된다
+            outgoing["stake"] = 10
+            object["outgoing"] = outgoing
+        }
+        // 끝난 판을 지켜본 뒤 다시 읽는 로비 — 정산이 반영된 전적 · 잔액(원문 로비의 서버 시각은 정산보다 앞서 잔액이 버려진다).
+        let afterWin = try akFixturePatched("alkkagi_lobby__ok") { object in
+            object["me"] = me
+            object["record"] = ["wins": 1, "losses": 0, "draws": 0]
+            object["ruby_balance"] = 110
+            object["server_now_ms"] = finishedAt + 5
+            object["outgoing"] = NSNull()
+        }
         let host = AKHost()
-        let clock = AKClock(milliseconds: 1_800_000_000_000)
+        let clock = AKClock(milliseconds: 1_794_252_895_000)
         let script = AKScript([
-            .response(try akFixture("alkkagi_lobby__ok_full")),
-            .response(try akFixture("alkkagi_challenge__insufficient")),
-            .response(try akFixture("alkkagi_challenge__ok")),
+            .response(try asMe("alkkagi_lobby__ok")),
+            .response(try akFixture("alkkagi_challenge__insufficient")),        // 원문 그대로(나 = T-8ea05b45)
+            .response(challengeOK),
             .response(try akFixture("alkkagi_state__placing")),               // 보낸 신청 확인 → 상대가 받았다
-            .response(try akFixture("alkkagi_state__aiming")),
-            .response(try akFixture("alkkagi_state__finished_win")),
-            .response(try akFixture("alkkagi_lobby__after_win")),             // 끝난 뒤 전적 다시(정산 반영)
+            .response(try akFixture("alkkagi_state__watched")),               // 조준 · 관전자 1 · 상대 놓친 차례 1
+            .response(try akFixture("alkkagi_state__finished_resign_win")),
+            .response(afterWin),                                              // 끝난 뒤 전적 다시(정산 반영)
             .response(try akFixture("alkkagi_leave__ok")),
-            .response(try akFixture("alkkagi_lobby__after_win")),
-        ], fallback: { _ in try? akFixture("alkkagi_lobby__ok_light") })
+            .response(afterWin),
+        ], fallback: { _ in try? asMe("alkkagi_lobby__light") })
         let store = AK.store(script, clock: clock)
         store.host = host
         defer { store.reset(); script.finish() }
         var finishes = 0
         store.onMatchFinished = { finishes += 1 }
         await store.refreshLobby()
-        #expect(store.availability == .available && store.visibleUsers.count == 4 && store.liveMatches.count == 1)
-        #expect(store.visibleUsers.map(\.displayName) == ["민수", "지우", "구버전", "집중"])
-        #expect(store.record == AlkkagiRecord(wins: 3, losses: 1, draws: 2) && host.rubyBalance == 100)
-        #expect(store.visibleIncoming?.stake == 5)
+        #expect(store.availability == .available && store.visibleUsers.count == rawUserCount && store.liveMatches.count == 1)
+        let first = try #require(store.visibleUsers.first)
+        #expect(first.canBeChallenged && first.isWorking, "정렬 첫 줄이 '가능 · 근무 · 대결 아님'이 아니다: \(first.displayName)")
+        #expect(store.visibleUsers.last.map { !$0.isCapable } == true, "구버전(앱 업데이트 필요) 줄이 맨 뒤가 아니다")
+        #expect(store.record == AlkkagiRecord(wins: 0, losses: 0, draws: 0) && host.rubyBalance == 100)
+        #expect(store.visibleIncoming?.stake == 3)
 
-        let minsu = try #require(store.visibleUsers.first?.id)
-        await store.challenge(opponentID: minsu, stake: .ten)
-        #expect(store.notice == "루비 3개 더 필요해요" && host.rubyBalance == 7)
-        await store.challenge(opponentID: minsu, stake: .ten)
+        await store.challenge(opponentID: first.id, stake: .three)
+        #expect(store.notice == "루비 1개 더 필요해요" && host.rubyBalance == 2)
+        await store.challenge(opponentID: first.id, stake: .ten)
         #expect(store.outgoing?.stake == 10 && store.notice == "신청을 보냈어요")
+        let sent = script.calls.compactMap { call -> Int? in
+            if case let .challenge(_, stake, _) = call { return stake }
+            return nil
+        }
+        #expect(sent == [3, 10], "신청 본문 판돈이 고른 값이 아니다: \(sent)")
 
         store.isWindowVisible = true
         clock.advance(5)
         await store.pollTick(at: clock.date)                                 // 보낸 신청 확인 → 판(배치)
         #expect(store.state?.phase == .placing && store.outgoing == nil && store.incoming.isEmpty)
         #expect(store.notice == nil, "판이 된 신청에 거절 안내가 섰거나 판 시작이 앞 안내를 안 지웠다")
+        #expect(host.rubyBalance == 90, "수락 차감(원문 STATE ruby_balance 90)이 앱 전체 잔액에 안 옮겨졌다")
         await store.pollTick(at: clock.date)                                 // 판 중 걸음 → 조준
-        #expect(store.state?.phase == .aiming && store.spectatorCount == 2 && store.isMyTurn)
-        await store.pollTick(at: clock.date)                                 // → 승
+        #expect(store.state?.phase == .aiming && store.spectatorCount == 1 && store.isMyTurn)
+        #expect(store.missedTurnWarning == nil, "놓친 것은 상대인데 내 경고가 섰다")
+        await store.pollTick(at: clock.date)                                 // → 상대 기권
         try await akEventually { !store.isLoading }
-        #expect(store.outcome == .win && store.endReason == .ringOut && store.rubyDelta == DuelFee.winnerNet(stake: 10))
-        #expect(AlkkagiNoticeText.endReason(store.endReason, outcome: store.outcome) == "상대 돌을 모두 판 밖으로 밀어냈어요")
+        #expect(store.outcome == .win && store.endReason == .resign && store.rubyDelta == DuelFee.winnerNet(stake: 10))
+        #expect(AlkkagiNoticeText.endReason(store.endReason, outcome: store.outcome) == "상대가 기권했어요")
         #expect(host.rubyBalance == 110 && finishes == 1)
-        #expect(store.record == AlkkagiRecord(wins: 4, losses: 1, draws: 2), "끝난 판을 지켜본 뒤 전적 로비를 다시 읽지 않았다")
+        #expect(store.record == AlkkagiRecord(wins: 1, losses: 0, draws: 0), "끝난 판을 지켜본 뒤 전적 로비를 다시 읽지 않았다")
         store.backToLobby()
         try await akEventually { store.state == nil && !store.isLoading && script.calls.count >= 9 }
-        #expect(store.hasLoadedLobby && store.users.count == 4 && host.rubyBalance == 110 && store.outcome == nil)
+        #expect(store.hasLoadedLobby && store.users.count == rawUserCount && host.rubyBalance == 110 && store.outcome == nil)
     }
 }
 

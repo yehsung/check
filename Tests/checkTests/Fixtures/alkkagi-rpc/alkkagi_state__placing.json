@@ -1,30 +1,30 @@
 {
   "me": {
     "avatar_url": null,
-    "busy": false,
-    "character_id": "aing",
-    "display_name": "나",
-    "id": "00000000-0000-4000-8000-000000000001"
+    "busy": true,
+    "character_id": null,
+    "display_name": "T-8ea05b45",
+    "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
   },
   "protocol": 2,
-  "server_now_ms": 1800000000000,
+  "server_now_ms": 1794252895188.418,
   "state": {
-    "accepted_at_ms": 1799999960000,
+    "accepted_at_ms": 1794252895186.268,
     "black": {
       "avatar_url": null,
       "busy": true,
-      "character_id": "aing",
-      "display_name": "나",
-      "id": "00000000-0000-4000-8000-000000000001"
+      "character_id": null,
+      "display_name": "T-8ea05b45",
+      "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
     },
     "chat": [],
     "chat_seq": 0,
     "current_player": "black",
-    "deadline_ms": 1800000030000,
+    "deadline_ms": 1794252925186.268,
     "finish_reason": null,
     "forfeit_after": 3,
     "grace_ms": 2000,
-    "id": "00000000-0000-4000-8000-0000000000aa",
+    "id": "ed777292-32d6-4a3a-80d7-b88211b6628a",
     "muted": false,
     "my_color": "black",
     "my_missed_turns": 0,
@@ -34,7 +34,7 @@
     "phase": "placing",
     "placement_revision": 1,
     "result": null,
-    "revision": 1,
+    "revision": 2,
     "ruby_balance": 90,
     "settled": false,
     "shot": null,
@@ -116,9 +116,9 @@
     "white": {
       "avatar_url": null,
       "busy": true,
-      "character_id": "aing",
-      "display_name": "민수",
-      "id": "00000000-0000-4000-8000-000000000002"
+      "character_id": null,
+      "display_name": "T-6c466d04",
+      "id": "6c466d04-7227-4fe2-9845-75a722dabd91"
     }
   },
   "status": "ok"

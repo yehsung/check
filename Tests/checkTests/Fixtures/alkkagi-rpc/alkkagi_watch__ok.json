@@ -1,0 +1,338 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": null,
+    "display_name": "T-1d4ebc6d",
+    "id": "1d4ebc6d-b40f-4fe3-b079-d5d9bccbc8b8"
+  },
+  "protocol": 2,
+  "server_now_ms": 1794252895226.632,
+  "state": {
+    "black": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": null,
+      "display_name": "T-8ea05b45",
+      "id": "8ea05b45-48bb-4ec9-8bb7-03660ff756fc"
+    },
+    "black_missed_turns": 0,
+    "black_ready": true,
+    "current_player": "black",
+    "deadline_ms": 1794252922223.852,
+    "finish_reason": null,
+    "finished_at_ms": null,
+    "forfeit_after": 3,
+    "id": "ed777292-32d6-4a3a-80d7-b88211b6628a",
+    "phase": "aiming",
+    "result": null,
+    "revision": 18,
+    "shot": {
+      "id": "56208513-5eea-4cb9-9166-d8acfb477f2d",
+      "initial_stones": [
+        {
+          "id": 0,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "black",
+          "position": {
+            "x": 80,
+            "y": 460
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 1,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "black",
+          "position": {
+            "x": 190,
+            "y": 460
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 2,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "black",
+          "position": {
+            "x": 300,
+            "y": 460
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 3,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "black",
+          "position": {
+            "x": 410,
+            "y": 460
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 4,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "black",
+          "position": {
+            "x": 520,
+            "y": 460
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 5,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "white",
+          "position": {
+            "x": 80,
+            "y": 140
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 6,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "white",
+          "position": {
+            "x": 190,
+            "y": 140
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 7,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "white",
+          "position": {
+            "x": 300,
+            "y": 140
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 8,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "white",
+          "position": {
+            "x": 410,
+            "y": 140
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "id": 9,
+          "isOut": false,
+          "isPlaced": true,
+          "owner": "white",
+          "position": {
+            "x": 520,
+            "y": 140
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ],
+      "pull": {
+        "x": 0,
+        "y": 40
+      },
+      "started_at_ms": 1794252895211.16,
+      "steps": 182,
+      "stone_id": 2
+    },
+    "shot_count": 1,
+    "stake": 10,
+    "stones": [
+      {
+        "id": 0,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 80,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 1,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 190,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 300,
+          "y": 321.0810944253751
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 410,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 520,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 80,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 6,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 190,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 7,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 300,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 8,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 410,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 9,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 520,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "watchers": 0,
+    "white": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": null,
+      "display_name": "T-6c466d04",
+      "id": "6c466d04-7227-4fe2-9845-75a722dabd91"
+    },
+    "white_missed_turns": 1,
+    "white_ready": true
+  },
+  "status": "ok"
+}

@@ -142,6 +142,12 @@ extension AlkkagiOnlineStore {
                 }
                 guard reset == self.resetGeneration else { return }
                 self.applyWatch(response, matchID: matchID, generation: generation)
+                // 끝난 판이면 걸음을 멈추고 결과를 [나가기]까지 둔다(RV2-C-4 — 뒤집기 관전 꼴). 꼬리 180초 내내 2초마다
+                // 관전 신호를 쓰다가 not_found 로 결과를 말없이 걷지 않게.
+                if generation == self.watchGeneration, self.watched?.isFinished == true {
+                    self.watchTask = nil
+                    return
+                }
             }
         }
     }

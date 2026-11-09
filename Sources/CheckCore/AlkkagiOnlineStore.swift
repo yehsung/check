@@ -441,14 +441,23 @@ package final class AlkkagiOnlineStore {
         if let host, host.rubyBalance != value { host.rubyBalance = value }
     }
 
+    /// 받은 신청에 응답한다. **떠나지 않은 끝난 판은 응답을 막지 않는다**(RV2-C-1 — 창을 닫은 채 끝난 판은 스토어와 서버 로비에
+    /// 남는다. 그 사이 온 신청의 배너 [수락]·[거절]이 서버에 닿지 않고 조용히 사라지면 안 된다 — 다른 1:1 게임도 판 유무를 보지 않는다).
+    /// 수락이면 그 끝난 판을 먼저 떠난다(남겨 두면 새 판이 끝난 뒤 서버 로비가 옛 결과를 다시 싣는다). 거절은 결과 카드를 그대로 둔다.
     package func respond(inviteID: String, accept: Bool) async {
-        guard !isBusy, isAvailable, availability == .available, state == nil, let id = UUID(uuidString: inviteID),
-              let invite = incoming.first(where: { UUID(uuidString: $0.id) == id }) else { return }
+        guard !isBusy, isAvailable, availability == .available, state.map({ $0.phase == .finished }) ?? true,
+              let id = UUID(uuidString: inviteID),
+              incoming.contains(where: { UUID(uuidString: $0.id) == id }) else { return }
+        let generation = resetGeneration
+        if accept, state?.phase == .finished {
+            await leaveFinishedMatch()            // 실패해도 응답은 보낸다 — 새 판 응답이 끝난 판을 갈아 끼운다
+            guard generation == resetGeneration, !isBusy else { return }
+        }
+        guard let invite = incoming.first(where: { UUID(uuidString: $0.id) == id }) else { return }
         guard invite.expiresAtMs > estimatedServerNowMs else {
             await refreshLobby()
             return
         }
-        let generation = resetGeneration
         let response = await act(.respond(matchID: id, accept: accept, actionID: UUID()))
         guard generation == resetGeneration, let status = response?.status else { return }
         switch status {
@@ -594,6 +603,7 @@ package final class AlkkagiOnlineStore {
         isWindowVisible = false
         isWindowOccluded = false
         stopPolling()
+        scheduleDeadlineRefresh()          // 굴림 중이면 끝에 한 번(RV2-C-3) — 그 밖은 서지 않는다
     }
 
     package func windowDidClose() {
@@ -617,6 +627,7 @@ package final class AlkkagiOnlineStore {
             requestSync()
         } else {
             stopPolling()
+            scheduleDeadlineRefresh()      // 굴림 중이면 끝에 한 번(RV2-C-3)
         }
     }
 
@@ -892,7 +903,9 @@ package final class AlkkagiOnlineStore {
             // **들어설 때** 한 번. 이름은 상대가 쏴서 넘어왔을 때만 싣는다(그 밖은 이름 없는 꼴 — §5.8).
             let opponent = next.myColor == .black ? next.white : next.black
             let shooter = next.shot.flatMap { shot in shot.initialStones.first { $0.id == shot.stoneID }?.owner }
-            let byOpponentShot = next.shotCount > (old?.shotCount ?? next.shotCount) && shooter != next.myColor
+            // 서버는 쏘는 순간 shot_count 를 올린 굴림(rolling)을 먼저 낸다 — 그 굴림을 봤으면 수가 같아도 상대가 쏜 것이다(RV2-C-2).
+            let byOpponentShot = shooter == next.myColor.opponent
+                && (next.shotCount > (old?.shotCount ?? next.shotCount) || old?.phase == .rolling)
             onAttention?(AlkkagiAttention(kind: .myTurn, matchID: next.id,
                                           opponentName: byOpponentShot ? opponent.displayName : ""))
             guard context.generation == resetGeneration else { return }
@@ -1174,8 +1187,13 @@ package final class AlkkagiOnlineStore {
         return deadline
     }
 
+    /// 굴림 끝 새로고침은 **창이 숨거나 가려져도 한 번** 한다(RV2-C-3). 알까기는 굴림이 끝난 뒤 누군가 서버를 불러야 다음 차례가
+    /// 열린다 — 두 창이 모두 숨으면 매분 훑기(0~60초 늦음)까지 차례가 안 열리고, 32초 넘게 늦으면 받는 사람의 놓친 차례가 말풍선
+    /// 없이 셈해진다. 조준 · 배치 마감은 그대로 창이 보일 때만(서버 훑기가 옛 마감 기준으로 판정한다).
+    private var refreshesWhileHidden: Bool { state?.phase == .rolling }
+
     private func refreshExpiredDeadline() {
-        guard isWindowVisible, !isWindowOccluded, let key = deadlineKey,
+        guard (isWindowVisible && !isWindowOccluded) || refreshesWhileHidden, let key = deadlineKey,
               key != refreshedDeadline else { return }
         refreshedDeadline = key
         requestSync()
@@ -1184,7 +1202,7 @@ package final class AlkkagiOnlineStore {
     private func scheduleDeadlineRefresh() {
         deadlineTask?.cancel()
         deadlineTask = nil
-        guard isWindowVisible, !isWindowOccluded, let deadline = refreshDeadlineMs,
+        guard (isWindowVisible && !isWindowOccluded) || refreshesWhileHidden, let deadline = refreshDeadlineMs,
               deadline.isFinite, let key = deadlineKey, key != refreshedDeadline else { return }
         let seconds = max(0, (deadline - estimatedServerNowMs) / 1000)
         guard seconds.isFinite, seconds < Double(UInt64.max / 1_000_000_000) else { return }

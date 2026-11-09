@@ -408,7 +408,7 @@ struct V03xxReversiSidebarTests {
             "MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() } ",
             "MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() } ",
             "MiniGameCrossyDuelEntryButton(hasInvite: invites.crossyDuel) { onCrossyDuel() } ",
-            "MiniGameAlkkagiEntryButton { onAlkkagi() } }",
+            "MiniGameAlkkagiEntryButton(hasInvite: invites.alkkagi) { onAlkkagi() } }",
         ].joined()
         #expect(panel.contains(order), "기존 같이 하기 문 뒤에 알까기가 마지막으로 서지 않았다")
         // 줄 순서와 저절로 굴리기의 자리표 순서가 같은 목록이다(선언은 합칠 때 다른 파일로 옮겨 가므로 글자가 아니라 값으로 잰다).

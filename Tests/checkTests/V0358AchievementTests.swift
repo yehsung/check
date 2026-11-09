@@ -1087,8 +1087,9 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         // 아잉 뒤집기 판 끝남이 다섯째다(일일 미션 키 `daily_reversi`). 새 타이머가 아니라 같은 이벤트 문이다.
         // 아잉 마작 판 끝남이 여섯째다(일일 미션 키 `daily_mahjong` — MJ/SPEC.md §4.6 #12).
         // 1:1 길건너 판 끝남이 일곱째다(일일 미션 키 `daily_crossy_duel` — CD/SPEC.md §9.5 #12).
-        #expect(count("refreshAchievementsAfterGameResult(game:") == 9,
-                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 판 끝남 7(오목·체스·테트리스·아잉 큐브·아잉 뒤집기·아잉 마작·1:1 길건너) 가 아니다")
+        // 1:1 알까기 판 끝남이 여덟째다(외부 기여 PR #9 — 일일 미션 줄은 아직 없다. 박자는 업적 조회만 다시 한다).
+        #expect(count("refreshAchievementsAfterGameResult(game:") == 10,
+                "게임 결과 박자를 부르는 자리가 정의 1 + 미니게임 제출 1 + 판 끝남 8(오목·체스·테트리스·아잉 큐브·아잉 뒤집기·아잉 마작·1:1 길건너·1:1 알까기) 가 아니다")
         #expect(count("crossyDuel.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: \"crossy_duel\") }") == 1,
                 "1:1 길건너 판 끝남 자리가 다른 1:1 게임과 같은 모양(약한 self · 게임 이름 crossy_duel)이 아니다")
         // 게임 이름이 일일 미션 키의 꼬리다 — 혼자 하기 `crossy` 와 갈린다(서버 `daily_crossy_duel`).

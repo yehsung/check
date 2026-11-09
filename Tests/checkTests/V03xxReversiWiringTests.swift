@@ -316,7 +316,7 @@ struct V03xxReversiWiringTests {
     @Test
     func theAppWiresEveryReversiDoor() throws {
         let app = try rwtMac("CheckApp.swift")
-        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireMegaphoneBanner()"),
+        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireAlkkagi() wireMegaphoneBanner()"),
                 "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다(사이에 아잉 마작 · 1:1 길건너)")
         let body = try #require(rwtBetween(app, "private func wireReversi() {", "private func wireMahjong() {"))
         let doors: String = [

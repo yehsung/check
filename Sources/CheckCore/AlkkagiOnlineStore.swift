@@ -43,6 +43,7 @@ package final class AlkkagiOnlineStore {
     @ObservationIgnored private var deadlineTask: Task<Void, Never>?
     @ObservationIgnored private var inviteExpiryTask: Task<Void, Never>?
     @ObservationIgnored private var lastLobbyRefresh: Date?
+    @ObservationIgnored private var lastUsersRefresh: Date?
     @ObservationIgnored private var pendingLobby = false
     @ObservationIgnored private var pendingUsers = false
     @ObservationIgnored private var pendingMatch = false
@@ -276,6 +277,7 @@ package final class AlkkagiOnlineStore {
         inviteExpiryTask?.cancel()
         inviteExpiryTask = nil
         lastLobbyRefresh = nil
+        lastUsersRefresh = nil
         pendingLobby = false
         pendingUsers = false
         pendingMatch = false
@@ -398,9 +400,10 @@ package final class AlkkagiOnlineStore {
                     guard context.generation == resetGeneration else { return }
                 }
             }
-            if case .lobby = call {
+            if case let .lobby(users) = call {
                 outgoing = response.outgoing
                 lastLobbyRefresh = clock()
+                if users { lastUsersRefresh = clock() }
             } else if response.incoming != nil || response.outgoing != nil {
                 outgoing = response.outgoing
             }
@@ -462,6 +465,21 @@ package final class AlkkagiOnlineStore {
 
     private func isPeerHidden(_ id: String) -> Bool {
         hiddenPeerIDs.contains { $0.caseInsensitiveCompare(id) == .orderedSame }
+    }
+
+    /// 창이 보이는 동안의 걸음(check 통합 — 외부 기여 PR #9 를 받으며). 진행 중인 판이 있으면 **판 상태만** 읽는다 —
+    /// 로비(사람 목록)를 걸음마다 부르면 판마다 서버에 사람 목록 조회가 3초에 하나씩 쌓인다. 판이 없거나 끝났으면 로비를 읽되
+    /// 사람 목록은 30초에 한 번이다(받은 · 보낸 초대는 가벼운 로비가 걸음마다 싣는다). 신호 · 창 열기 · 깨어남은 `requestSync` 그대로.
+    private func pollStep() {
+        guard service != nil else { return }
+        if let state, state.phase != .finished {
+            pendingMatch = true
+        } else {
+            pendingLobby = true
+            pendingUsers = pendingUsers || (lastUsersRefresh.map { clock().timeIntervalSince($0) >= 30 } ?? true)
+            pendingMatch = true
+        }
+        startSyncIfNeeded()
     }
 
     private func requestSync() {
@@ -529,7 +547,7 @@ package final class AlkkagiOnlineStore {
                 do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
                 guard let self, generation == self.resetGeneration,
                       self.isWindowVisible, !self.isWindowOccluded else { return }
-                self.requestSync()
+                self.pollStep()
             }
         }
     }

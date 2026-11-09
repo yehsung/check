@@ -174,7 +174,7 @@ struct V03xxMahjongWiringTests {
     func theAppWiresEveryMahjongDoor() throws {
         let app = try mwtMac("CheckApp.swift")
         // 1:1 길건너(CD/SPEC.md §9.5 #13)가 마작 뒤·확성기 앞에 선다 — 마작 자리는 그대로 리버시 바로 뒤다.
-        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireMegaphoneBanner()"),
+        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireAlkkagi() wireMegaphoneBanner()"),
                 "wireMahjong() 이 리버시 뒤·확성기 앞(길건너 1:1 앞)이 아니다")
         let body = try #require(mwtBetween(app, "private func wireMahjong() {", "static func closeRummyWindow() {"))
         for line in [
@@ -307,7 +307,7 @@ struct V03xxMahjongWiringTests {
                 + "MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() }"), "여섯째 문이 리버시 뒤에 없다")
         #expect(panel.contains("onReversi: { store.openReversiFromMiniGame() }, onMahjong: { store.openMahjongFromMiniGame() }"))
         #expect(panel.contains("let onReversi: () -> Void let onMahjong: () -> Void"), "문을 기본값 없이 받지 않는다")
-        #expect(panel.contains("reversi: Bool = false, mahjong: Bool = false, crossyDuel: Bool = false) {"),
+        #expect(panel.contains("reversi: Bool = false, mahjong: Bool = false, crossyDuel: Bool = false, alkkagi: Bool = false) {"),
                 "명시 init 맨 뒤 기본값(마작 뒤에 1:1 길건너 — CD/SPEC.md §9.5 #18)")
         #expect(panel.contains("mahjong: store.mahjong.hasIncomingInvite"))
         #expect(panel.contains("case .reversi: reversi case .mahjong: mahjong"))

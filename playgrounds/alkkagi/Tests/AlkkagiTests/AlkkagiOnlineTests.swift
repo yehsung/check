@@ -461,6 +461,37 @@ struct AlkkagiOnlineTests {
         #expect(store.state == snapshot, "Only a later authoritative snapshot may change turns")
     }
 
+    // check 통합(PR #9 를 받으며): 판 중 걸음은 판 상태만 — 로비(사람 목록)를 걸음마다 부르지 않는다.
+    @Test func pollingDuringAMatchReadsOnlyTheMatch() async throws {
+        let service = OnlineScript(fallback: OnlineFixture.response(OnlineFixture.match()))
+        let store = makeStore(service, pollSeconds: 0.01)
+        defer { store.reset(); service.finish() }
+        store.windowDidShow()
+        try await eventually { service.calls.count >= 8 && !store.isLoading }
+        store.windowDidHide()
+        try await eventually { !store.isLoading }
+        let lobbies = service.calls.filter { if case .lobby = $0 { true } else { false } }.count
+        let states = service.calls.filter { if case .state = $0 { true } else { false } }.count
+        #expect(lobbies == 1, "창을 열 때 한 번만 — 판 중 걸음은 로비를 부르지 않는다(실제 \(lobbies))")
+        #expect(states >= 6)
+    }
+
+    // 판이 없으면 걸음마다 로비를 읽되 사람 목록은 30초에 한 번(시계를 멈춘 채라 처음 한 번뿐).
+    @Test func pollingWithoutAMatchRefreshesPeopleAtMostEveryThirtySeconds() async throws {
+        let clock = OnlineClock()
+        let service = OnlineScript(fallback: OnlineFixture.response())
+        let store = makeStore(service, clock: clock, pollSeconds: 0.01)
+        defer { store.reset(); service.finish() }
+        store.windowDidShow()
+        try await eventually { service.calls.count >= 6 && !store.isLoading }
+        store.windowDidHide()
+        try await eventually { !store.isLoading }
+        let withPeople = service.calls.filter { $0 == .lobby(users: true) }.count
+        let light = service.calls.filter { $0 == .lobby(users: false) }.count
+        #expect(withPeople == 1, "사람 목록 로비는 창을 열 때 한 번(실제 \(withPeople))")
+        #expect(light >= 2, "초대는 가벼운 로비가 걸음마다 싣는다")
+    }
+
     @Test func hidingAndClosingStopPollsAndShowingTwiceDoesNotDuplicateThem() async throws {
         let service = OnlineScript(fallback: OnlineFixture.response())
         let store = makeStore(service, pollSeconds: 0.01)

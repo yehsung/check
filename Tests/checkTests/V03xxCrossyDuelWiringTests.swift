@@ -215,7 +215,7 @@ struct V03xxCrossyDuelWiringTests {
     @Test
     func theAppWiresEveryCrossyDuelDoor() throws {
         let app = try cdwMac("CheckApp.swift")
-        #expect(app.contains("wireReversi() wireMahjong() wireCrossyDuel() wireMegaphoneBanner()"), "wireCrossyDuel() 이 마작 뒤·확성기 앞이 아니다")
+        #expect(app.contains("wireReversi() wireMahjong() wireCrossyDuel() wireAlkkagi() wireMegaphoneBanner()"), "wireCrossyDuel() 이 마작 뒤·(알까기)·확성기 앞이 아니다")
         let body = try #require(cdwBetween(app, "private func wireCrossyDuel() {", "static func closeRummyWindow() {"))
         for line in [
             "let crossyDuel = store.crossyDuel crossyDuel.rankingEnabled = true",
@@ -442,7 +442,7 @@ struct V03xxCrossyDuelWiringTests {
                                 + "MiniGameCrossyDuelEntryButton(hasInvite: invites.crossyDuel) { onCrossyDuel() }"), "일곱째 문이 마작 뒤에 없다")
         #expect(panel.contains("onMahjong: { store.openMahjongFromMiniGame() }, onCrossyDuel: { store.openCrossyDuelFromMiniGame() }"))
         #expect(panel.contains("let onMahjong: () -> Void let onCrossyDuel: () -> Void"), "문을 기본값 없이 받지 않는다")
-        #expect(panel.contains("mahjong: Bool = false, crossyDuel: Bool = false) {"), "명시 init 맨 뒤 기본값")
+        #expect(panel.contains("mahjong: Bool = false, crossyDuel: Bool = false, alkkagi: Bool = false) {"), "명시 init 맨 뒤 기본값(길건너 뒤 알까기)")
         #expect(panel.contains("crossyDuel: store.crossyDuel.visibleIncoming != nil"))
         #expect(panel.contains("case .mahjong: mahjong case .crossyDuel: crossyDuel"))
         // 결과: 첨자가 제 칸을 읽는다.
@@ -451,7 +451,7 @@ struct V03xxCrossyDuelWiringTests {
         #expect(miniGame.contains("func openCrossyDuelFromMiniGame() { noteMiniGameDuelReturn(.crossyDuel) "
                                     + "crossyDuel.openWindow(focusMatchID: nil) closeMiniGamePanel() }"),
                 "1:1 길건너 창을 먼저 띄우고 미니게임 창을 내려야 한다")
-        #expect(miniGame.contains("case gomoku, chess, tetris, rummy, reversi, mahjong, crossyDuel }"))
+        #expect(miniGame.contains("case gomoku, chess, tetris, rummy, reversi, mahjong, crossyDuel, alkkagi }"))
     }
 
     /// 없으면(결과): 문을 눌러도 1:1 길건너 창이 안 뜨거나(presentWindow 를 안 부름) 미니게임 창이 남는다 — 실제 `WorkTimerStore` 에서.

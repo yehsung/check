@@ -1553,7 +1553,8 @@ struct MenuBarStatusLabel: View {
     /// 소스 계약 시험(V03xxCrossyDuelWiringTests)이 함께 잰다.
     var hasCrossyDuelInvite = false
 
-    /// 받은 알까기 신청이 있다. 기존 멤버와이즈 호출을 지키도록 맨 뒤에 둔다.
+    /// 받은 **1:1 알까기** 신청이 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxAlkkagiWiringTests)이 함께 잰다.
     var hasAlkkagiInvite: Bool = false
 
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
@@ -1703,7 +1704,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var mahjongAway: Bool = false
     /// 받은 1:1 길건너 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var crossyDuelInvite: Bool = false
-    /// 받은 알까기 신청이 있다. 기존 멤버와이즈 호출을 지키도록 맨 뒤에 둔다.
+    /// 받은 1:1 알까기 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var alkkagiInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
@@ -1741,6 +1742,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if mahjongAway { parts.append(Self.mahjongAwayText) }
         // 1:1 길건너 신청은 마작 뒤다(팝오버 배너 · 사이드바와 같은 순서).
         if crossyDuelInvite { parts.append(Self.crossyDuelInviteText) }
+        // 1:1 알까기 신청은 길건너 뒤다(팝오버 배너 · 사이드바와 같은 순서).
         if alkkagiInvite { parts.append(Self.alkkagiInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }

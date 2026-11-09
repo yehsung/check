@@ -484,8 +484,10 @@ struct V03xxCrossyDuelWiringTests {
         #expect(!MegaphoneBannerDeferral.isDeferred(gomoku: .lobby, chess: .lobby, tetris: .lobby, miniGameRoundLive: false,
                                                     crossyDuelLive: false))
         let src = try cdwMac("WorkTimerStoreMegaphoneBanner.swift")
-        #expect(src.contains("mahjongLive: mahjong.defersMegaphoneBanner, crossyDuelLive: crossyDuel.defersMegaphoneBanner)"))
-        #expect(src.contains("mahjongLive: Bool = false, crossyDuelLive: Bool = false) -> Bool {"))
+        // 1:1 알까기(alkkagi/v2 SPEC §6 #5)가 길건너 뒤 맨 끝 인자다.
+        #expect(src.contains("mahjongLive: mahjong.defersMegaphoneBanner, crossyDuelLive: crossyDuel.defersMegaphoneBanner, "
+                                + "alkkagiLive: alkkagi.defersMegaphoneBanner)"))
+        #expect(src.contains("mahjongLive: Bool = false, crossyDuelLive: Bool = false, alkkagiLive: Bool = false) -> Bool {"))
         #expect(src.contains("if mahjongLive { return true } if crossyDuelLive { return true }"))
     }
 

@@ -1,0 +1,36 @@
+{
+  "me": {
+    "draws": 2,
+    "losses": 1,
+    "points": 3,
+    "rank": 2,
+    "wins": 4
+  },
+  "record_since_ms": null,
+  "rows": [
+    {
+      "avatar_url": null,
+      "character_id": "aing",
+      "display_name": "지우",
+      "draws": 0,
+      "id": "00000000-0000-4000-8000-000000000003",
+      "losses": 1,
+      "points": 5,
+      "rank": 1,
+      "wins": 6
+    },
+    {
+      "avatar_url": null,
+      "character_id": "aing",
+      "display_name": "나",
+      "draws": 2,
+      "id": "00000000-0000-4000-8000-000000000001",
+      "losses": 1,
+      "points": 3,
+      "rank": 2,
+      "wins": 4
+    }
+  ],
+  "server_now_ms": 1800000000000,
+  "status": "ok"
+}

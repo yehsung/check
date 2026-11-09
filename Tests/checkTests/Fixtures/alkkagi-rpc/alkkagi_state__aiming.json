@@ -1,0 +1,195 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": "aing",
+    "display_name": "나",
+    "id": "00000000-0000-4000-8000-000000000001"
+  },
+  "protocol": 2,
+  "server_now_ms": 1800000000000,
+  "state": {
+    "accepted_at_ms": 1799999960000,
+    "black": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": "aing",
+      "display_name": "나",
+      "id": "00000000-0000-4000-8000-000000000001"
+    },
+    "chat": [],
+    "chat_seq": 0,
+    "current_player": "black",
+    "deadline_ms": 1800000030000,
+    "finish_reason": null,
+    "forfeit_after": 3,
+    "grace_ms": 2000,
+    "id": "00000000-0000-4000-8000-0000000000aa",
+    "muted": false,
+    "my_color": "black",
+    "my_missed_turns": 0,
+    "my_ready": true,
+    "opponent_missed_turns": 0,
+    "opponent_ready": true,
+    "phase": "aiming",
+    "placement_revision": 2,
+    "result": null,
+    "revision": 3,
+    "ruby_balance": 90,
+    "settled": false,
+    "shot": null,
+    "shot_count": 0,
+    "stake": 10,
+    "stones": [
+      {
+        "id": 0,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 80,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 1,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 190,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 300,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 410,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 520,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 80,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 6,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 190,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 7,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 300,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 8,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 410,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 9,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 520,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "watchers": 2,
+    "white": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": "aing",
+      "display_name": "민수",
+      "id": "00000000-0000-4000-8000-000000000002"
+    }
+  },
+  "status": "ok"
+}

@@ -1,0 +1,38 @@
+{
+  "door_open": true,
+  "incoming": [
+    {
+      "expires_at_ms": 1800000060000,
+      "id": "00000000-0000-4000-8000-0000000000cc",
+      "opponent": {
+        "avatar_url": null,
+        "busy": false,
+        "character_id": "aing",
+        "display_name": "민수",
+        "id": "00000000-0000-4000-8000-000000000002"
+      },
+      "stake": 5
+    }
+  ],
+  "matches": [],
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": "aing",
+    "display_name": "나",
+    "id": "00000000-0000-4000-8000-000000000001"
+  },
+  "outgoing": null,
+  "protocol": 2,
+  "record": null,
+  "ruby_balance": 100,
+  "server_now_ms": 1800000000000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "state": null,
+  "status": "ok",
+  "users": []
+}

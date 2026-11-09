@@ -76,9 +76,9 @@ struct AlkkagiOnlinePanel: View {
                                         portrait(peer.characterID).frame(width: 42, height: 42)
                                         Text(peer.displayName).font(.callout.weight(.semibold)).lineLimit(1)
                                         Spacer()
-                                        Button("도전") { Task { await store.challenge(opponentID: peer.id) } }
+                                        Button("도전") { Task { await store.challenge(opponentID: peer.id, stake: store.selectedStake) } }
                                             .buttonStyle(.borderedProminent)
-                                            .disabled(peer.busy == true || store.isBusy || store.outgoing != nil)
+                                            .disabled(!peer.canBeChallenged || store.isBusy || store.outgoing != nil)
                                             .accessibilityLabel("\(peer.displayName)님에게 알까기 도전")
                                     }
                                     .padding(10).background(.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 10))

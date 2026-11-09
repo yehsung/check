@@ -21,19 +21,28 @@ package typealias GomokuAIMoveChooser = @Sendable (GomokuBoard, GomokuColor) asy
 /// AI 갈래의 관찰 대상이 아닌 장부(스토어 본문에 한 줄로 붙는다 — 저장 프로퍼티는 확장에 못 둔다).
 @MainActor
 package final class GomokuAIRuntime {
-    /// 기본 선택기: 엔진을 백그라운드에서 돌리고, 기다리던 쪽이 취소되면 엔진에도 취소를 전한다.
-    package nonisolated static let engineChooser: GomokuAIMoveChooser = { board, color in
-        let search = Task.detached(priority: .userInitiated) {
-            GomokuAI.bestMove(board: board, toMove: color, isCancelled: { Task.isCancelled })
-        }
-        return await withTaskCancellationHandler {
-            await search.value
-        } onCancel: {
-            search.cancel()
+    /// 기본 선택기: 엔진을 백그라운드에서 돌리고, 기다리던 쪽이 취소되면 엔진에도 취소를 전한다(가장 깊이 — 어려움).
+    package nonisolated static let engineChooser: GomokuAIMoveChooser = engineChooser(limits: GomokuAISearchLimits())
+
+    /// 한도를 정한 엔진 선택기(난이도마다).
+    package nonisolated static func engineChooser(limits: GomokuAISearchLimits) -> GomokuAIMoveChooser {
+        { board, color in
+            let search = Task.detached(priority: .userInitiated) {
+                GomokuAI.bestMove(board: board, toMove: color, limits: limits, isCancelled: { Task.isCancelled })
+            }
+            return await withTaskCancellationHandler {
+                await search.value
+            } onCancel: {
+                search.cancel()
+            }
         }
     }
 
-    package var chooser: GomokuAIMoveChooser = GomokuAIRuntime.engineChooser
+    /// 선택기를 갈아 끼우면(폰 · 시험) 그 선택기가 판의 난이도보다 우선한다. 갈아 끼우지 않았으면 판의 난이도로 엔진을 부른다.
+    package var chooser: GomokuAIMoveChooser = GomokuAIRuntime.engineChooser {
+        didSet { chooserReplaced = true }
+    }
+    package private(set) var chooserReplaced = false
     /// AI 가 즉답해도 화면에 "생각 중"을 이만큼은 보여 준다(초). 테스트는 0.
     package var minimumThinkSeconds: TimeInterval = 0.6
     /// 0..<n 중 하나. 대리 착수·엔진 대타가 쓴다(테스트는 고정한다).
@@ -98,13 +107,26 @@ extension GomokuStore {
             if match != nil || activeMatchID != nil { setAINotice(GomokuNoticeText.busy) }
             return
         }
-        beginAIGame(humanColor: humanColor)
+        beginAIGame(humanColor: humanColor, difficulty: aiDifficulty)
     }
 
-    /// 결과 화면 [다시 두기] — 같은 색으로 새 판.
+    /// 결과 화면 [다시 두기] — 같은 색 · 같은 난이도로 새 판.
     package func restartAIMatch() {
         guard isAIMatch, let game = aiGame, game.isFinished else { return }
-        beginAIGame(humanColor: game.humanColor)
+        beginAIGame(humanColor: game.humanColor, difficulty: game.difficulty)
+    }
+
+    /// AI 와 두기 창의 난이도 고르기. 다음 판부터 쓰고, 이 기기에 기억한다.
+    package func setAIDifficulty(_ difficulty: GomokuAIDifficulty) {
+        if aiDifficulty != difficulty { aiDifficulty = difficulty }
+        aiDifficultyDefaults?.set(difficulty.rawValue, forKey: GomokuStore.aiDifficultyKey)
+    }
+
+    package nonisolated static let aiDifficultyKey = "gomoku.aiDifficulty"
+
+    /// 기억해 둔 난이도(없으면 보통).
+    package nonisolated static func storedAIDifficulty(_ defaults: UserDefaults?) -> GomokuAIDifficulty {
+        defaults?.string(forKey: aiDifficultyKey).flatMap(GomokuAIDifficulty.init(rawValue:)) ?? .normal
     }
 
     /// 사람 시계가 다 됐으면 대신 둔다(시계 작업이 깨어나 부른다 — 테스트는 `now` 를 넣어 직접 부른다).
@@ -171,12 +193,12 @@ extension GomokuStore {
 
     // MARK: 내부
 
-    private func beginAIGame(humanColor: GomokuColor) {
+    private func beginAIGame(humanColor: GomokuColor, difficulty: GomokuAIDifficulty) {
         aiRuntime.cancelTasks()
         _ = aiRuntime.bump()
         let game = GomokuAIGame(
             humanColor: humanColor, turnSeconds: TimeInterval(turnSeconds),
-            autoLossStreak: autoAbandonStreak, now: clock()
+            autoLossStreak: autoAbandonStreak, difficulty: difficulty, now: clock()
         )
         // 순서가 계약이다: 판을 먼저 세우고 화면 값을 옮긴다(`match` 관찰자는 id 가 같으면 버리지 않는다).
         aiGame = game
@@ -211,7 +233,7 @@ extension GomokuStore {
         let expectedCount = game.moveCount
         let color = game.aiColor
         let board = game.board
-        let chooser = aiRuntime.chooser
+        let chooser = aiRuntime.chooserReplaced ? aiRuntime.chooser : GomokuAIRuntime.engineChooser(limits: game.difficulty.limits)
         let minimum = aiRuntime.minimumThinkSeconds
         aiRuntime.noteChooserCall()
         aiRuntime.moveTask = Task { @MainActor [weak self] in

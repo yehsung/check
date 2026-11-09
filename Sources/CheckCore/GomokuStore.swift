@@ -617,6 +617,9 @@ package final class GomokuStore {
     package internal(set) var aiGame: GomokuAIGame?
     /// AI 갈래 장부(선택기·작업·세대). 관찰 대상이 아니다.
     @ObservationIgnored package let aiRuntime = GomokuAIRuntime()
+    /// AI 와 두기 난이도(몇 수 앞까지). 다음 판부터 쓴다. 기억하는 곳은 `aiDifficultyDefaults`(시험은 nil 또는 시험 전용 스위트).
+    package internal(set) var aiDifficulty: GomokuAIDifficulty = GomokuStore.storedAIDifficulty(.standard)
+    @ObservationIgnored package var aiDifficultyDefaults: UserDefaults? = .standard
     /// 탭 순간 화면이 본 판과 스토어 판이 달랐던 횟수(진단·테스트 지점). 화면을 다시 그리게 하지 않도록 관찰에서 뺀다.
     @ObservationIgnored package private(set) var tapDivergenceCount = 0
     /// 사용자 어휘 안내 한 줄.

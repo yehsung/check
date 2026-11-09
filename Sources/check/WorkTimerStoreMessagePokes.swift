@@ -44,6 +44,49 @@ extension WorkTimerStore {
         return messagePokeLog.filter { $0.peerUserID == peer }
     }
 
+    // MARK: 모두 읽음(2026-11-10)
+
+    /// 메시지 · 찌르기를 **한 번에** 읽음으로 올린다 — 콕 찌르기 화면 머리의 [모두 읽음].
+    /// 대표 결정(2026-11-10, 제보 "메세지 전체읽기 만들어주세요"): "메시지 전체읽기 버튼 눌러서 읽음처리 해버릴 수 있게 해줘. 지금 찌르기
+    /// 조차도 다 안읽은메시지로 쌓이다 보니까 안읽었다고 뜨는게 너무 많아. 버튼 한번으로 전체 읽음 처리 해버릴 수 있으면 좋을듯".
+    ///
+    /// 서버 함수를 새로 만들지 않는다 — 대화를 열 때 쓰는 읽음 처리(`markConversationRead` · 낙관 읽음 · 합치기 새로고침)를 안 읽은
+    /// 대화마다 그대로 부른다. 경계를 고르려면 그 대화의 마지막 받은 메시지 · 찌르기가 이력에 있어야 하므로 **이력을 한 번 새로 받은 뒤**
+    /// 고른다(찌르기는 사람마다 가장 최근 받은 것이 언제나 실려 온다 — 계약 20261023200000). 한계: 24시간 메시지가 이력 상한(200)을
+    /// 넘으면 그 밖의 오래된 대화는 이력에 없어 남을 수 있다(그 대화를 열면 꺼진다).
+    func markAllConversationsRead() {
+        guard session != nil, !messageMarkAllReadInFlight else { return }
+        messageMarkAllReadInFlight = true
+        let generation = sessionGeneration
+        Task { @MainActor in
+            await performLoadMessageHistory()
+            messageMarkAllReadInFlight = false
+            // 로그아웃 · 계정 전환 뒤 도착한 이력으로 새 계정의 대화를 읽음으로 올리지 않는다.
+            guard generation == sessionGeneration else { return }
+            markAllConversationsReadFromLoaded()
+        }
+    }
+
+    /// 지금 들고 있는 이력 · 찌르기 기록으로 안 읽은 대화마다 경계를 올린다. 올린 대화 수를 돌려준다(시험이 왕복 없이 부른다).
+    @discardableResult
+    func markAllConversationsReadFromLoaded() -> Int {
+        var marked = 0
+        for peer in unreadConversationPeerIDs.sorted() {
+            let messageThrough = messageHistoryReadSnapshot.flatMap { snapshot in
+                MessageUnreadRules.markTarget(peer: peer, history: messageHistory, snapshot: snapshot,
+                                              optimistic: messageOptimisticReads[peer])
+            }
+            let pokeThrough = messagePokeLogSnapshot.flatMap { snapshot in
+                MessagePokeLogRules.markTarget(peer: peer, log: messagePokeLog, snapshot: snapshot,
+                                               optimistic: messagePokeOptimisticReads[peer])
+            }
+            guard messageThrough != nil || pokeThrough != nil else { continue }
+            markConversationRead(peer: peer, throughMessageID: messageThrough, throughPokeID: pokeThrough)
+            marked += 1
+        }
+        return marked
+    }
+
     // MARK: 조회
 
     /// 이력 한 번 — 찌르기 기록까지 실어 오는 새 조회를 먼저, **그 함수가 없는 서버**면 예전 조회(읽음 칸 → 옛 이력)로 접는다.

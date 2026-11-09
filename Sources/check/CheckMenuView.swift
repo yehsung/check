@@ -1036,6 +1036,8 @@ struct CheckMenuView: View {
                             // 안 본 찌르기가 있는 상대들(v0.3.65 — 사용자 결정 "찌르기도 친다"). 목록 순서와 행의 점이 메시지와 **합쳐** 읽는다.
                             // 메뉴바 빨간 점은 이 값을 읽지 않는다(메시지만 — `hasUnreadMessages`).
                             unreadPokePeerIDs: store.unreadPokePeerIDs,
+                            // [모두 읽음] — 이력을 한 번 새로 받고 안 읽은 대화마다 읽음 경계를 올린다(`markAllConversationsRead`).
+                            onMarkAllRead: { store.markAllConversationsRead() },
                             messageNotice: store.messageNotice,
                             // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
                             // ⚠︎ 말풍선(오버레이 담당)이 consumeCurrentMessage 로 큐를 밀면 이 자리도 함께 비워진다.
@@ -3502,6 +3504,9 @@ enum PokeTitleRowWidthBudget {
     /// 실제로 쓰는 가장 긴 힌트("3초 꾹 = 울트라")의 실측 폭. 한글 3자 + 라틴/기호/공백 7이라
     /// 글자수(10)로 재면 과대평가된다.
     static let longestHintWidth: CGFloat = 71
+    /// [모두 읽음](caption2 bold "모두 읽음" + 캡슐 좌우 7×2)의 폭 — 안내 글자 자리를 빌리므로 `longestHintWidth` 이하여야 한다.
+    /// 실측은 시험(V0381MarkAllReadTests)이 같은 글꼴로 다시 잰다.
+    static let markAllReadWidth: CGFloat = 60
 
     /// 배지가 숫자로 그릴 수 있는 **최대 자릿수**.
     ///
@@ -3968,6 +3973,8 @@ private struct PokePanel: View {
     // 안 본 찌르기가 있는 상대들(v0.3.65). 위 메시지 집합과 **합집합**이 목록 순서와 행의 점이다(`PokePanelOrder`).
     // 따로 받는 이유는 행의 보이스오버 문구 하나다 — 찌르기만 있는 사람에게 "안 읽은 메시지가 있어요"라고 말하면 거짓이다.
     var unreadPokePeerIDs: Set<String> = []
+    // [모두 읽음](2026-11-10 대표 결정) — 안 읽은 대화(메시지 ∪ 찌르기)가 있을 때만 머리 줄의 안내 글자 자리에 선다.
+    var onMarkAllRead: () -> Void = {}
     // 메시지 전송 결과 1줄 안내. 찌르기 notice 와 **다른 칸**이라 따로 받는다(스토어가 상태를 나눠 둔 이유와 같다).
     // 창에서 보낸 결과지만 이 줄도 함께 읽는다 — 같은 계정의 같은 사실이라 두 화면이 다른 말을 하면 안 된다.
     var messageNotice: String? = nil
@@ -4045,15 +4052,21 @@ private struct PokePanel: View {
                     isUnlimited: ultraUnlimited,
                     action: onOpenUltraPanel
                 )
-                // 발견성 문구는 그대로 산다. 0일 때만 "상점에서 사기"로 갈아 끼워 **획득 경로**를 말한다.
-                // 무제한인 사람에겐 그 갈아 끼움이 없다(채울 것이 없다).
-                Text(UltraBalanceText.hint(balance: ultraBalance, unlimited: ultraUnlimited))
-                    .font(.caption2)
-                    .foregroundStyle(
-                        CheckTheme.secondaryText
-                            .opacity(ultraUnlimited || (ultraBalance ?? 1) > 0 ? 1.0 : 0.65)
-                    )
-                    .fixedSize()
+                // 안 읽은 대화가 있으면 안내 글자 자리에 [모두 읽음](2026-11-10 대표 결정 — 찌르기까지 한 번에). **같은 자리 · 더 좁다**
+                // (`PokeTitleRowWidthBudget.markAllReadWidth` ≤ 가장 긴 안내 글자) — 머리 줄 폭 · 패널 높이가 그대로다.
+                if !unreadMessagePeerIDs.isEmpty || !unreadPokePeerIDs.isEmpty {
+                    PokeMarkAllReadButton(action: onMarkAllRead)
+                } else {
+                    // 발견성 문구는 그대로 산다. 0일 때만 "상점에서 사기"로 갈아 끼워 **획득 경로**를 말한다.
+                    // 무제한인 사람에겐 그 갈아 끼움이 없다(채울 것이 없다).
+                    Text(UltraBalanceText.hint(balance: ultraBalance, unlimited: ultraUnlimited))
+                        .font(.caption2)
+                        .foregroundStyle(
+                            CheckTheme.secondaryText
+                                .opacity(ultraUnlimited || (ultraBalance ?? 1) > 0 ? 1.0 : 0.65)
+                        )
+                        .fixedSize()
+                }
             }
             PanelDivider()
             // 최근 받은 메시지 1건. 목록 위·안내줄 위다 — 남이 나에게 한 말이 내가 하려던 일보다 먼저 눈에 든다.
@@ -4194,6 +4207,29 @@ enum MessageAnytimeNotice {
 /// 패널이 매초 무효화된다 — PokeEntryIconButton/FooterSyncStatus 가 같은 이유로 잎이다. 줄이 **뜨는지 자체**도
 /// 그 판정에 달려 있으므로 `if let` 까지 이 안에 있다(없으면 빈 뷰라 VStack 간격을 먹지 않는다).
 /// (`line` 순서를 시험이 값으로 되묻도록 private 이 아니다 — 앱에서 이 줄을 세우는 곳은 여전히 PokePanel 하나다.)
+/// 콕 찌르기 머리 줄의 [모두 읽음](2026-11-10). 안내 글자 자리를 빌려 서므로 그보다 좁아야 한다(`PokeTitleRowWidthBudget.markAllReadWidth`).
+struct PokeMarkAllReadButton: View {
+    static let title = "모두 읽음"
+    static let help = "메시지 · 찌르기를 모두 읽음으로 바꿔요"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(Self.title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.accent)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(CheckTheme.accent.opacity(0.14)))
+                .contentShape(Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .checkTooltip(Self.help)
+        .accessibilityLabel(Self.help)
+    }
+}
+
 struct PokePanelNoticeLine: View {
     let isPokeDisconnected: () -> Bool
     let messageNotice: String?

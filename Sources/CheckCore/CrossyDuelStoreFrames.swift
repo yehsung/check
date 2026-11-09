@@ -123,6 +123,13 @@ extension CrossyDuelStore {
         withFrameLink { $0.noteReportFailureStreak(streak) }
     }
 
+    /// 판 화면이 그릴 상대 반투명 그림자 — 프레임이 켜진 판에서 최근에 받은 위치만(11-10). 표시 전용이다(B0).
+    package var opponentGhost: CrossyDuelGhost? {
+        guard let frameLink, let current = match, !current.isFinished, frameLinkMatchID == current.id, phase == .playing
+        else { return nil }
+        return frameLink.opponentGhost(at: uptime())
+    }
+
     // MARK: - 판 루프에서
 
     /// 판 루프 한 걸음: ① 소켓 열기·닫기(멈춤 10초 · 재시도) ② 바뀐 세션 토큰 밀어 넣기 ③ 프레임 보내기(B3).
@@ -135,9 +142,11 @@ extension CrossyDuelStore {
         guard frameSocketOpen, phase == .playing, let channel = frameChannel, let link = frameLink else { return }
         let score = duel.game.score
         let deaths = duel.game.deaths
+        let ghost = CrossyDuelGhost(game: duel.game)
         guard link.frameDue(at: now, live: duel.isLive,
-                            changed: link.changedSinceLastFrame(score: score, deaths: deaths)),
-              let frame = withFrameLink({ $0.makeFrame(at: now, seq: duel.seq, score: score, deaths: deaths) })
+                            changed: link.changedSinceLastFrame(score: score, deaths: deaths),
+                            moved: link.movedSinceLastFrame(ghost)),
+              let frame = withFrameLink({ $0.makeFrame(at: now, seq: duel.seq, score: score, deaths: deaths, ghost: ghost) })
         else { return }
         channel.send(event: CrossyDuelFrame.event, payload: frame.payload)
     }

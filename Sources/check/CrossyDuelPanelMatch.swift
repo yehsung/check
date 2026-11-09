@@ -326,7 +326,8 @@ struct CrossyDuelCanvasLeaf: View {
                 .interpolation(.high)
                 .frame(width: CrossyDuelWindowLayout.canvasSize.width, height: CrossyDuelWindowLayout.canvasSize.height)
         } else if Self.mountsScene(phase) {
-            CrossyDuelSceneLeaf(game: store.duel?.game ?? Self.placeholder(match), framesPerSecond: fps)
+            CrossyDuelSceneLeaf(game: store.duel?.game ?? Self.placeholder(match), framesPerSecond: fps,
+                                ghost: store.opponentGhost)
         } else {
             CrossyDuelWaitingBoard()
         }
@@ -357,12 +358,14 @@ struct CrossyDuelCanvasLeaf: View {
 private struct CrossyDuelSceneLeaf: View {
     let game: CrossyGame
     let framesPerSecond: Int
+    /// 상대 반투명 그림자(11-10 — 상대 프레임에 위치가 실려 올 때만).
+    var ghost: CrossyDuelGhost? = nil
 
     @StateObject private var scene = CrossyScene.mac()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        CrossySceneView(scene: scene, game: game, reduceMotion: reduceMotion, framesPerSecond: framesPerSecond)
+        CrossySceneView(scene: scene, game: game, reduceMotion: reduceMotion, framesPerSecond: framesPerSecond, ghost: ghost)
     }
 }
 

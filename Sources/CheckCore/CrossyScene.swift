@@ -118,6 +118,13 @@ package final class CrossyScene: ObservableObject {
     private let sunNode = SCNNode()
     private let aingRoot = SCNNode()
     private let aingBody = SCNNode()
+    /// 1:1 상대 반투명 그림자(11-10) — 내 아잉이 모양을 나눠 쓰는 복제. `ghostTarget` 이 nil 이면 숨는다.
+    private let ghostRoot = SCNNode()
+    private var ghostShown: SIMD3<Float>?
+    /// 그릴 상대 그림자 위치(판 화면이 매 프레임 넣는다 — 혼자 판은 언제나 nil).
+    package var ghostTarget: CrossyDuelGhost?
+    /// 그림자 불투명도(반투명 — 내 아잉이와 겹쳐도 내 쪽이 또렷하다).
+    package static let ghostOpacity: CGFloat = 0.38
     private let blobNode: SCNNode
     private let splashNode: SCNNode
     /// 아잉이 모델을 읽었는가(못 읽으면 보라 공으로 대신한다 — 판은 그대로 돈다).
@@ -198,6 +205,12 @@ package final class CrossyScene: ObservableObject {
         aingRoot.addChildNode(aingBody)
         world.addChildNode(aingRoot)
         loadAing(aingLoader)
+        // 그림자는 모델을 읽은 **뒤** 복제한다(모양은 나눠 쓴다 — 메모리 · GPU 추가 없음). 처음엔 숨긴다.
+        ghostRoot.addChildNode(aingBody.clone())
+        ghostRoot.opacity = Self.ghostOpacity
+        ghostRoot.isHidden = true
+        ghostRoot.enumerateHierarchy { node, _ in node.castsShadow = false }
+        world.addChildNode(ghostRoot)
         // 판이 쓸 모든 모양을 **지금** 만든다(v0.3.67 검토 지적) — 첫 기찻길 · 첫 트럭 색 · 첫 4칸 통나무가 판 **도중**에 처음
         // 나타나는 순간 메인 스레드에서 상자 수십 개를 굳히던(flattenedClone) 것을 판 밖(뷰가 처음 설 때)으로 옮겼다.
         // 팔레트는 앱 전체가 나눠 쓰므로 두 번째 판부터는 이미 다 있다(사전 조회뿐이다).
@@ -270,8 +283,34 @@ package final class CrossyScene: ObservableObject {
         }
 
         updateAing(game, reduceMotion: reduceMotion)
+        updateGhost(game, rows: wanted, dt: dt)
         updateCamera(game, dt: dt)
     }
+
+    /// 상대 그림자: 받은 위치로 부드럽게 따라간다(받는 틈 0.2~1초를 메운다). 그려진 줄 밖 · 죽음 · 없음이면 숨긴다.
+    private func updateGhost(_ game: CrossyGame, rows: ClosedRange<Int>, dt: TimeInterval) {
+        guard let ghost = ghostTarget, !ghost.dead, rows.contains(ghost.row) else {
+            ghostRoot.isHidden = true
+            ghostShown = nil
+            return
+        }
+        let kind = game.lane(at: ghost.row)?.kind
+        let target = SIMD3(Float(ghost.x) - 4, Self.standHeight(kind), -Float(ghost.row))
+        var shown = ghostShown ?? target
+        // 부활 · 큰 순간 이동(2칸 넘게)은 곧바로 옮기고, 그 밖은 지수로 따라간다(초당 약 14배).
+        if simd_distance(shown, target) > 2 {
+            shown = target
+        } else {
+            shown += (target - shown) * Float(min(1, dt * 14))
+        }
+        ghostShown = shown
+        ghostRoot.simdPosition = shown
+        ghostRoot.simdEulerAngles = SIMD3(0, Self.facingYaw(ghost.facing), 0)
+        ghostRoot.isHidden = false
+    }
+
+    /// 시험 지점: 그림자가 지금 보이는가 · 그려진 자리.
+    package var ghostStateForTesting: (hidden: Bool, position: SIMD3<Float>) { (ghostRoot.isHidden, ghostRoot.simdPosition) }
 
     // MARK: 줄 풀
 

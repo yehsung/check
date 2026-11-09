@@ -192,11 +192,7 @@ enum PeperoDecor {
         }
         c += look.tint * (pow(max(simd_dot(n, flat(simd_normalize(keyLight + viewLight))), 0), look.gloss) * look.spec)
         c += look.tint * (pow(max(simd_dot(n, flat(simd_normalize(fillLight + viewLight))), 0), look.gloss * 1.4) * look.spec * 0.35)
-        if look.rim > 0 {
-            let rimColor = albedo * 1.8 + look.tint * 0.15
-            let rimStrength = pow(1 - max(simd_dot(n, viewLight), 0), 3) * look.rim
-            c += rimColor * rimStrength
-        }
+        if look.rim > 0 { c += (albedo * 1.8 + look.tint * 0.15) * (pow(1 - max(simd_dot(n, viewLight), 0), 3) * look.rim) }
         return simd_clamp(c, .zero, SIMD3(repeating: 1))
     }
 

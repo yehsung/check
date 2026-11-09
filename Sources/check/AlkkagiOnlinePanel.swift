@@ -30,6 +30,8 @@ struct AlkkagiOnlinePanel: View {
     var previewConfirmResign: Bool = false
     /// 스냅샷 전용: 판 화면 모델(렌더 시험이 `attachOnline` 을 미리 붙여 넣는다 — ImageRenderer 는 onAppear 를 믿을 수 없다).
     var previewModel: AlkkagiLocalModel? = nil
+    /// 스냅샷 전용: 사람 아바타 캐릭터 표(길건너 `previewCharacters` 꼴). 앱은 nil — `.appUserAvatarCharacters(from: safety)` 가 표를 건다.
+    var previewCharacters: AppUserCharacterDirectory? = nil
 
     @State private var showsPractice = false
     @State private var rulesVisible = false
@@ -41,6 +43,7 @@ struct AlkkagiOnlinePanel: View {
     var body: some View {
         ZStack(alignment: .topLeading) {
             content
+                .modifier(AlkkagiPreviewCharacters(directory: previewCharacters))
             // 덮개는 **한 번에 하나**다 — 규칙 → 판돈 순(판·연습 화면에선 판돈 창이 서지 않는다).
             if rulesVisible || previewRules {
                 AlkkagiRulesPrompt(onClose: { rulesVisible = false })
@@ -118,6 +121,19 @@ struct AlkkagiOnlinePanel: View {
                 .frame(width: ReversiWindowLayout.lobbySideWidth, height: ReversiWindowLayout.bodyHeight,
                        alignment: .top)
                 .clipped()
+        }
+    }
+}
+
+/// 스냅샷 전용 캐릭터 표(있을 때만 — 안쪽 환경이 창 루트의 표를 덮는다).
+private struct AlkkagiPreviewCharacters: ViewModifier {
+    let directory: AppUserCharacterDirectory?
+
+    func body(content: Content) -> some View {
+        if let directory {
+            content.environment(\.appUserCharacters, directory)
+        } else {
+            content
         }
     }
 }

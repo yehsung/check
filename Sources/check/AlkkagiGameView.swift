@@ -687,7 +687,7 @@ struct AlkkagiChatPanel: View {
             HStack {
                 Text("대화").font(.subheadline.weight(.bold))
                 Spacer()
-                Text(model.isOnline ? "대전 대화" : "로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+                Text(model.isOnline ? "대결 대화" : "로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
                 Button { model.toggleChatMute() } label: {
                     Image(systemName: model.chatMuted ? "bell.slash.fill" : "bell.fill")
                 }.buttonStyle(.plain).alkkagiTooltip("상대 말 숨기기")

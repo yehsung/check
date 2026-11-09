@@ -196,6 +196,8 @@ struct AlkkagiGameTests {
 
     @Test func rollingPausesTheClockAndSettlingGivesTheNextPlayerAFullTurn() {
         var game = readyGame()
+        // 약한 한 수가 1초 넘게 굴러야 시계 멈춤을 잴 수 있다 — 기본 감속(B 바둑판 마찰)은 0.24초에 서므로 원래 감속(A)으로 잰다.
+        game.physics = .ice
         #expect(game.advance(dt: 29.5).isEmpty)
         #expect(game.shoot(stoneID: 0, pull: vector(8, 0)) == true)
         for _ in 0..<4 { #expect(game.advance(dt: 0.25).isEmpty) }

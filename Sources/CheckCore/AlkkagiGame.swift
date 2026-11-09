@@ -81,8 +81,8 @@ package struct AlkkagiGame: Equatable, Sendable {
         package static let board = Physics(drag: 1.5, friction: 300)
         /// C 무겁게: 마찰을 키워 사거리가 짧다(약 470) — 멀리서 밀어내기 어렵다. 끝까지 약 0.9초.
         package static let heavy = Physics(drag: 2.2, friction: 500)
-        /// 지금 앱 · 서버가 쓰는 값. 대표 선택 전에는 서버와 같은 A.
-        package static let current = ice
+        /// 지금 앱 · 서버가 쓰는 값 — 대표 답 (B) 바둑판 마찰(#d_eeuXIRdSJWxL, 11-09). 서버 alkkagi_simulate 도 같은 값.
+        package static let current = board
     }
 
     package static let boardSize: Double = 600

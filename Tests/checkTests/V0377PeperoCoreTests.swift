@@ -63,7 +63,7 @@ struct V0377PeperoCoreTests {
         #expect(CharacterCatalog.builtInPeperoAing.id == Self.pepero)
         #expect(CharacterCatalog.builtInPeperoAing.displayName == CharacterCatalog.peperoAingDisplayName, "표시 이름이 상수에서 안 온다")
         #expect(CharacterCatalog.builtInPeperoAing.kind == .scene3D)
-        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID]
+        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID]
         #expect(CharacterCatalog.builtIns.map(\.id) == order)
         let empty = CharacterCatalog(entries: [])
         #expect(empty.allIDs == order)

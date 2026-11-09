@@ -21,10 +21,11 @@ import Testing
         RubyAingArt.requiredResourceNames(for: .mac).allSatisfy(V0354CoreArtBaseline.macResourceExists)
     }
 
-    @Test("카탈로그: 루비는 내장 아홉째(맨 끝) · id aing_ruby · 마감 .ruby · 희귀 · 케이크 아님 · 뽑기 전용 · 선물 전용 · 조각 전용 아님")
+    @Test("카탈로그: 루비는 내장 아홉째(v0.3.81 부터 개발 아잉이 앞) · id aing_ruby · 마감 .ruby · 희귀 · 케이크 아님 · 뽑기 전용 · 선물 전용 · 조각 전용 아님")
     func catalog() {
-        #expect(CharacterCatalog.builtIns.last?.id == "aing_ruby")
-        #expect(CharacterCatalog.builtIns.count == 9)
+        // v0.3.81: 개발에 찌든 아잉이가 열째로 뒤에 붙었다 — 루비의 자리(아홉째)는 그대로다.
+        #expect(CharacterCatalog.builtIns.map(\.id).firstIndex(of: "aing_ruby") == 8)
+        #expect(CharacterCatalog.builtIns.count == 10)
         #expect(CharacterCatalog.builtInRubyAing.displayName == "루비 아잉이")
         #expect(CharacterManifest.Finish(characterID: "aing_ruby") == .ruby)
         #expect(!CharacterManifest.Finish.ruby.isRare && !CharacterManifest.Finish.ruby.isCake)
@@ -262,8 +263,9 @@ import Testing
     func drawableAndProtocolEight() throws {
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(CharacterCatalog.rubyAingID), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.rubyProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == ShopWire.rubyProtocol)
+        // v0.3.81: 번호는 누적 — 개발 아잉이까지 실리면 9(루비의 몫은 "8 이상").
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.rubyProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) >= ShopWire.rubyProtocol)
         #expect(RubyAingFinish.isDrawable())
         #expect(RubyAingArt.requiredResourceNames(for: .mac) == ["aing_ruby-neutral", "aing_ruby-negative", "aing_rainbow-shade"])
         for missing in RubyAingArt.requiredResourceNames(for: .mac) {

@@ -4,10 +4,10 @@ import Foundation
 // MARK: - 오목알 스킨 — 맥 상점 배선(v0.3.81)
 //
 // 대표 결정: 받는 방식 #d_UVBJ8vJua1jD "상점 루비 (스킨마다 100)" · 보이는 범위 #d_RR2dyBIHDMW5 "상대에게도 보임" ·
-// 3차 #d_TFKnfZL40Ax6 "2, 4, 5, 7, 6 채택"(네온 · 주사위 · 고양이 · 흑백 아잉이 · 다이아 컷 + 픽셀).
+// 3차 #d_TFKnfZL40Ax6 "2, 4, 5, 7, 6 채택"(0.3.81 은 6종) → 대표 11-10 "네온 흑백 다이아 이렇게 3개 빼." → 주사위 · 고양이 · 픽셀.
 // 서버 정본 20261111130000_omok_skins.sql: omok_skins_state(p_protocol) · buy_omok_skin(p_skin, p_protocol) · set_omok_skin(p_skin).
 //
-//  ① 상점 '오목알' 탭(`ShopTab.omokSkins`) — 첫 칸 '일반 돌' + 스킨 6칸. 안 가진 칸을 누르면 하단 바에 [구매하기 💎100](캐릭터와 같은
+//  ① 상점 '오목알' 탭(`ShopTab.omokSkins`) — 첫 칸 '일반 돌' + 서버가 말한 스킨 칸(지금 셋). 안 가진 칸을 누르면 하단 바에 [구매하기 💎100](캐릭터와 같은
 //     `confirmShopPurchase` 한 길 — 카드 탭으로는 사지 않는다). 가진 칸을 누르면 바로 낀다(서버 `set_omok_skin`). 사면 서버가 바로 끼운다.
 //  ② 낀 스킨은 서버 대국 · 관전 응답(match.black_skin · white_skin)으로 상대 · 관전자 화면에도 그려진다 — 이 파일은 상점만 한다.
 //     AI 판만 로컬이라 낀 스킨을 `gomoku.aiStoneSkin` 에 맞춘다(사람 쪽 돌에만).

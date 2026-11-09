@@ -6,7 +6,9 @@ import Foundation
 // 대표 결정(결재함 원문 — 되묻지 않는다):
 //   원문(서버 확인) "2. 이거 오목알 스킨 추가하자. 다만 꾸미더라도 이게 흑돌인지 백돌인지는 명확하게 알 수 있게 해야할듯"
 //   받는 방식 #d_UVBJ8vJua1jD "상점 루비 (스킨마다 100)" · 보이는 범위 #d_RR2dyBIHDMW5 "상대에게도 보임"
-//   3차 #d_TFKnfZL40Ax6 "2, 4, 5, 7, 6 채택" → 네온 · 주사위 · 고양이 · 흑백 아잉이 · 다이아 컷 + 픽셀(1차부터 통과).
+//   3차 #d_TFKnfZL40Ax6 "2, 4, 5, 7, 6 채택" → 0.3.81 에 네온 · 주사위 · 고양이 · 흑백 아잉이 · 다이아 컷 + 픽셀로 나갔다.
+//   대표 11-10(서버 확인) "네온 흑백 다이아 이렇게 3개 빼. … 다음버전 업데이트때 빼버려" → 주사위 · 고양이 · 픽셀만 남긴다
+//   (서버 20261111140000_omok_skins_trim — 정의표에서 세 줄을 빼고 산 사람에게 루비를 돌려준다).
 //   3차 원칙(대표 "픽셀은 딱 내가 말하는 조건에 만족하는 디자인"): 돌 **생김새 전체**를 한 화풍으로 바꾸되 몸 바탕은
 //   흑 = 짙은 무채색 · 백 = 밝은 무채색만. 색은 눈 · 테처럼 작은 곳만 — 일반 돌 · 다른 스킨과 섞여도 흑백이 갈린다.
 //
@@ -16,10 +18,10 @@ import Foundation
 
 /// 오목알 스킨 하나. `rawValue` = 서버 id(정의표 `omok_skin_defs().id` 와 같은 글자). 모르는 id 는 nil — 일반 돌로 그린다.
 package nonisolated enum OmokStoneSkin: String, CaseIterable, Sendable, Equatable {
-    case neon, dice, cat, aing, diamond, pixel
+    case dice, cat, pixel
 
     /// 이 빌드가 그릴 수 있는 스킨의 능력 번호(서버 `omok_skin_defs().min_protocol` ≤ 이 값인 스킨만 상점에 온다).
-    /// 새 스킨을 더하면 그 스킨의 min_protocol 과 함께 올린다(번호는 누적 — 1 은 이 여섯).
+    /// 새 스킨을 더하면 그 스킨의 min_protocol 과 함께 올린다(번호는 누적 — 1 은 주사위 · 고양이 · 픽셀).
     package static let protocolVersion = 1
 
     /// 서버 id → 스킨. 정확히 그 글자만(공백 · 대소문자 봐주지 않는다). 그 밖 · nil 은 nil(= 일반 돌).
@@ -31,26 +33,20 @@ package nonisolated enum OmokStoneSkin: String, CaseIterable, Sendable, Equatabl
     /// 화면 이름(서버 정의표의 name 과 같은 글자 — 서버가 이름을 안 실어도 이 값으로 선다).
     package var displayName: String {
         switch self {
-        case .neon: return "네온"
         case .dice: return "주사위"
         case .cat: return "고양이"
-        case .aing: return "흑백 아잉이"
-        case .diamond: return "다이아 컷"
         case .pixel: return "픽셀"
         }
     }
 
     /// 돌 하나를 그린다(그림자 포함). `center` · `radius` 는 판 좌표(돌 반지름 = 칸 × 0.46), `seed` 는 돌마다 다른 모양
-    /// (주사위 눈 · 아잉이 표정)을 고르는 값 — 같은 자리 같은 값이면 언제나 같은 모양이다(판을 다시 그려도 안 흔들린다).
+    /// (주사위 눈)을 고르는 값 — 같은 자리 같은 값이면 언제나 같은 모양이다(판을 다시 그려도 안 흔들린다).
     package func draw(in ctx: CGContext, center: CGPoint, radius: CGFloat, black: Bool, seed: Int) {
         ctx.saveGState()
         defer { ctx.restoreGState() }
         switch self {
-        case .neon: OmokStoneArt.neon(ctx, center, radius, black, seed)
         case .dice: OmokStoneArt.dice(ctx, center, radius, black, seed)
         case .cat: OmokStoneArt.cat(ctx, center, radius, black, seed)
-        case .aing: OmokStoneArt.aingMono(ctx, center, radius, black, seed)
-        case .diamond: OmokStoneArt.diamondCut(ctx, center, radius, black, seed)
         case .pixel: OmokStoneArt.pixel(ctx, center, radius, black, seed)
         }
     }
@@ -114,28 +110,6 @@ package nonisolated enum OmokStoneArt {
 
     static func ellipse(_ c: CGPoint, _ rx: CGFloat, _ ry: CGFloat) -> CGRect { CGRect(x: c.x - rx, y: c.y - ry, width: 2 * rx, height: 2 * ry) }
 
-    static func neon(_ ctx: CGContext, _ c: CGPoint, _ r: CGFloat, _ black: Bool, _: Int) {
-        let tube = H(0x3CEBFF)
-        for (w, a) in [(0.40, 0.08), (0.26, 0.13), (0.14, 0.22)] as [(CGFloat, Double)] {
-            ctx.setStrokeColor(H(0x3CEBFF, a)); ctx.setLineWidth(r * w); ctx.strokeEllipse(in: ellipse(c, r * 0.96, r * 0.96))
-        }
-        let body = circlePath(c, r)
-        if black {
-            gradientIn(ctx, body, [(0, W(0.13)), (1, W(0.01))], from: CGPoint(x: c.x - r * 0.3, y: c.y - r * 0.35), end: r * 1.4)
-            ctx.saveGState(); ctx.addPath(body); ctx.clip()
-            ctx.setStrokeColor(H(0x3CEBFF, 0.16)); ctx.setLineWidth(r * 0.22); ctx.strokeEllipse(in: ellipse(c, r * 0.84, r * 0.84))
-            ctx.restoreGState()
-            ctx.setStrokeColor(tube); ctx.setLineWidth(r * 0.075); ctx.strokeEllipse(in: ellipse(c, r * 0.84, r * 0.84))
-            ctx.setStrokeColor(W(1, 0.9)); ctx.setLineWidth(r * 0.022); ctx.strokeEllipse(in: ellipse(c, r * 0.84, r * 0.84))
-            // 관에 비친 작은 반짝
-            ctx.setFillColor(W(1, 0.55)); ctx.fillEllipse(in: ellipse(CGPoint(x: c.x - r * 0.30, y: c.y - r * 0.34), r * 0.10, r * 0.06))
-        } else {
-            gradientIn(ctx, body, [(0, W(1.0)), (0.6, W(0.99)), (1, H(0xD4F8FF))], from: CGPoint(x: c.x - r * 0.2, y: c.y - r * 0.25), end: r * 1.25)
-            ctx.setStrokeColor(tube); ctx.setLineWidth(r * 0.075); ctx.strokeEllipse(in: ellipse(c, r * 0.93, r * 0.93))
-            ctx.setStrokeColor(W(1, 0.95)); ctx.setLineWidth(r * 0.022); ctx.strokeEllipse(in: ellipse(c, r * 0.93, r * 0.93))
-        }
-    }
-
     static func dice(_ ctx: CGContext, _ c: CGPoint, _ r: CGFloat, _ black: Bool, _ i: Int) {
         let h = r * 0.86, cr = r * 0.30
         let p = CGPath(roundedRect: ellipse(c, h, h), cornerWidth: cr, cornerHeight: cr, transform: nil)
@@ -196,118 +170,6 @@ package nonisolated enum OmokStoneArt {
         ctx.setStrokeColor(black ? W(0.75) : W(0.25)); ctx.setLineWidth(r * 0.035); ctx.setLineCap(.round)
         ctx.addArc(center: CGPoint(x: n.x - r * 0.07, y: n.y + r * 0.08), radius: r * 0.07, startAngle: 0, endAngle: .pi, clockwise: false); ctx.strokePath()
         ctx.addArc(center: CGPoint(x: n.x + r * 0.07, y: n.y + r * 0.08), radius: r * 0.07, startAngle: 0, endAngle: .pi, clockwise: false); ctx.strokePath()
-    }
-
-    static func aingShape(_ c: CGPoint, _ r: CGFloat) -> CGPath {
-        let body = CGMutablePath(), n = 96
-        let o = CGPoint(x: c.x, y: c.y + r * 0.05)
-        for k in 0...n {
-            let t = CGFloat(k) / CGFloat(n) * 2 * .pi
-            let q = CGPoint(x: o.x + cos(t) * r * 0.86 * (1 + 0.10 * sin(t)), y: o.y + sin(t) * r * 0.90)   // sin>0 = 아래 → 아래가 넓은 달걀
-            k == 0 ? body.move(to: q) : body.addLine(to: q)
-        }
-        body.closeSubpath()
-        var shape: CGPath = body
-        for s in [-1.0, 1.0] as [CGFloat] {
-            var tr = CGAffineTransform(translationX: o.x + s * r * 0.86, y: o.y + r * 0.30).rotated(by: s * 0.5)
-            let arm = CGPath(ellipseIn: ellipse(.zero, r * 0.13, r * 0.22), transform: &tr)
-            shape = shape.union(arm)
-        }
-        return shape
-    }
-
-    static func aingMono(_ ctx: CGContext, _ c: CGPoint, _ r: CGFloat, _ black: Bool, _ i: Int) {
-        let p = aingShape(c, r)
-        dropShadow(ctx, p, r * 0.06, r * 0.14, 0.25)
-        glossBody(ctx, p, c, r, black)
-        let mood = Int(hash(i, 9) * 5) % 5          // 0 기본 · 1 웃음 · 2 윙크 · 3 놀람 · 4 졸림
-        let ey = c.y - r * 0.06, ex = r * 0.34
-        let line = black ? W(0.96) : H(0x2A1C26)
-        func roundEye(_ e: CGPoint) {
-            if black {   // 까만 몸엔 흰자 + 검은 눈동자
-                ctx.setFillColor(W(0.97)); ctx.fillEllipse(in: ellipse(e, r * 0.16, r * 0.19))
-                ctx.setFillColor(W(0.05)); ctx.fillEllipse(in: ellipse(CGPoint(x: e.x, y: e.y + r * 0.02), r * 0.10, r * 0.13))
-            } else {
-                ctx.setFillColor(H(0x2A1C26)); ctx.fillEllipse(in: ellipse(e, r * 0.14, r * 0.17))
-            }
-            ctx.setFillColor(W(1, 0.95)); ctx.fillEllipse(in: ellipse(CGPoint(x: e.x - r * 0.04, y: e.y - r * 0.06), r * 0.05, r * 0.05))
-        }
-        func arcEye(_ e: CGPoint) {   // ^ 웃는 눈
-            ctx.setStrokeColor(line); ctx.setLineWidth(r * 0.075); ctx.setLineCap(.round)
-            ctx.addArc(center: CGPoint(x: e.x, y: e.y + r * 0.06), radius: r * 0.12, startAngle: .pi * 1.15, endAngle: .pi * 1.85, clockwise: false); ctx.strokePath()
-        }
-        func flatEye(_ e: CGPoint) {
-            ctx.setStrokeColor(line); ctx.setLineWidth(r * 0.07); ctx.setLineCap(.round)
-            ctx.move(to: CGPoint(x: e.x - r * 0.12, y: e.y + r * 0.02)); ctx.addLine(to: CGPoint(x: e.x + r * 0.12, y: e.y + r * 0.02)); ctx.strokePath()
-        }
-        let L = CGPoint(x: c.x - ex, y: ey), Rr = CGPoint(x: c.x + ex, y: ey)
-        switch mood {
-        case 1: arcEye(L); arcEye(Rr)
-        case 2: roundEye(L); arcEye(Rr)
-        case 4: flatEye(L); flatEye(Rr)
-        default: roundEye(L); roundEye(Rr)
-        }
-        // 볼터치
-        ctx.setFillColor(black ? H(0xD9779E, 0.55) : H(0xFF9BB5, 0.60))
-        for s in [-1.0, 1.0] as [CGFloat] { ctx.fillEllipse(in: ellipse(CGPoint(x: c.x + s * r * 0.55, y: c.y + r * 0.16), r * 0.14, r * 0.08)) }
-        // 입 — 가운데(판 표시 자리)는 비우고 조금 아래
-        let m = CGPoint(x: c.x, y: c.y + r * 0.30)
-        switch mood {
-        case 3:
-            ctx.setFillColor(black ? W(0.96) : H(0x2A1C26)); ctx.fillEllipse(in: ellipse(m, r * 0.08, r * 0.10))
-        case 4:
-            ctx.setStrokeColor(line); ctx.setLineWidth(r * 0.06); ctx.setLineCap(.round)
-            ctx.move(to: CGPoint(x: m.x - r * 0.06, y: m.y)); ctx.addLine(to: CGPoint(x: m.x + r * 0.06, y: m.y)); ctx.strokePath()
-        default:   // 벌린 웃음(반달 + 혀)
-            ctx.saveGState()
-            ctx.beginPath(); ctx.move(to: CGPoint(x: m.x - r * 0.15, y: m.y - r * 0.05))
-            ctx.addArc(center: CGPoint(x: m.x, y: m.y - r * 0.05), radius: r * 0.15, startAngle: .pi, endAngle: 0, clockwise: true); ctx.closePath()
-            ctx.setFillColor(black ? W(0.96) : H(0x4A2433)); ctx.fillPath()
-            ctx.restoreGState()
-            ctx.setFillColor(H(0xF07A8E)); ctx.fillEllipse(in: ellipse(CGPoint(x: m.x, y: m.y + r * 0.055), r * 0.075, r * 0.04))
-        }
-    }
-
-    static func diamondCut(_ ctx: CGContext, _ c: CGPoint, _ r: CGFloat, _ black: Bool, _ i: Int) {
-        let n = 8
-        func v(_ k: Int, _ rad: CGFloat, _ rot: CGFloat) -> CGPoint {
-            let a = CGFloat(k) / CGFloat(n) * 2 * .pi + rot
-            return CGPoint(x: c.x + cos(a) * rad, y: c.y + sin(a) * rad)
-        }
-        let outer = CGMutablePath()
-        for k in 0..<n { k == 0 ? outer.move(to: v(k, r * 1.0, .pi / 8)) : outer.addLine(to: v(k, r * 1.0, .pi / 8)) }
-        outer.closeSubpath()
-        dropShadow(ctx, outer, r * 0.06, r * 0.14, 0.25)
-        let light = CGPoint(x: -0.62, y: -0.78)
-        func shadeFacet(_ pts: [CGPoint], _ bias: CGFloat) {
-            let cx = pts.map { $0.x }.reduce(0, +) / CGFloat(pts.count), cy = pts.map { $0.y }.reduce(0, +) / CGFloat(pts.count)
-            let dx = cx - c.x, dy = cy - c.y, d = max(0.001, hypot(dx, dy))
-            let lam = (dx / d * light.x + dy / d * light.y) * min(1, d / (r * 0.5))   // 빛 쪽 면이 밝다
-            let v = black ? 0.13 + 0.12 * Double(lam) + Double(bias) : 0.90 + 0.09 * Double(lam) + Double(bias)
-            let fp = CGMutablePath(); fp.addLines(between: pts); fp.closeSubpath()
-            fill(ctx, fp, W(min(1, max(0, v))))
-            stroke(ctx, fp, black ? W(0.55, 0.35) : W(0.55, 0.30), r * 0.025)
-        }
-        for k in 0..<n {
-            let o0 = v(k, r, .pi / 8), o1 = v(k + 1, r, .pi / 8), m = v(k + 1, r * 0.66, 0), m0 = v(k, r * 0.66, 0)
-            shadeFacet([o0, o1, m], k % 2 == 0 ? 0.03 : -0.02)
-            shadeFacet([o0, m, m0], k % 2 == 0 ? -0.03 : 0.01)
-            let t0 = v(k, r * 0.40, .pi / 8), t1 = v(k + 1, r * 0.40, .pi / 8)
-            shadeFacet([m0, m, t0], 0.0)
-            shadeFacet([m, t1, t0], 0.02)
-        }
-        // 가운데 판(table)
-        let table = CGMutablePath()
-        for k in 0..<n { k == 0 ? table.move(to: v(k, r * 0.40, .pi / 8)) : table.addLine(to: v(k, r * 0.40, .pi / 8)) }
-        table.closeSubpath()
-        gradientIn(ctx, table, black ? [(0, W(0.30)), (1, W(0.10))] : [(0, W(1.0)), (1, W(0.88))], from: CGPoint(x: c.x - r * 0.2, y: c.y - r * 0.25), end: r * 0.6)
-        stroke(ctx, table, black ? W(0.6, 0.35) : W(0.5, 0.3), r * 0.025)
-        stroke(ctx, outer, black ? W(0, 0.6) : W(0, 0.28), 0.9)
-        // 반짝(마름모 — 판의 십자 표시와 헷갈리지 않게)
-        let s = CGPoint(x: c.x - r * 0.48, y: c.y - r * 0.50), Ls = r * 0.17
-        ctx.setFillColor(W(1, 0.95)); ctx.beginPath()
-        ctx.move(to: CGPoint(x: s.x, y: s.y - Ls)); ctx.addLine(to: CGPoint(x: s.x + Ls * 0.5, y: s.y)); ctx.addLine(to: CGPoint(x: s.x, y: s.y + Ls)); ctx.addLine(to: CGPoint(x: s.x - Ls * 0.5, y: s.y)); ctx.closePath(); ctx.fillPath()
-        _ = i
     }
 
     static func C(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1) -> CGColor { CGColor(srgbRed: r, green: g, blue: b, alpha: a) }

@@ -1629,6 +1629,8 @@ final class WorkTimerStore {
     var messageReadReceiptsAvailable = false
     /// 마지막으로 받은 안 읽음 요약(서버 판정)과 그 요청의 일련번호. nil = 아직 못 받았다(옛 서버 포함).
     var messageUnreadSummary: MessageUnreadSummarySnapshot?
+    /// [모두 읽음]이 이력을 다시 받는 중인가(두 번 눌러도 한 번만 돈다 — `markAllConversationsRead`).
+    var messageMarkAllReadInFlight = false
     /// 마지막 이력이 읽음 칸을 실어 왔을 때의 일련번호와 **서버 순서**. nil = 이력이 읽음을 모른다(옛 서버·아직 안 받음).
     var messageHistoryReadSnapshot: MessageHistoryReadSnapshot?
     /// 상대별 낙관 읽음 — 읽음 처리를 보낸 순간 점을 바로 끄기 위한 기록. 서버 스냅샷이 이 기록보다 **나중에**

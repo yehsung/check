@@ -5,6 +5,10 @@ import CheckCore
 /// 로컬 2인 알까기 창 하나를 재사용한다. 네트워크 게임 스토어는 필요하지 않다.
 @MainActor
 final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
+    /// 이 창이 선 화면의 주사율 — 판 걸음 간격의 재료(길건너 1:1 과 같은 꼴: 창마다 자기 감시, 공용 값을 덮지 않는다).
+    let frameRateMonitor = MiniGameFrameRateMonitor()
+    /// 디스플레이 설정이 바뀌면(주사율 변경) 다시 읽는다 — 창 이동(`windowDidChangeScreen`)만 보면 절반을 놓친다.
+    private var screenParametersObserver: NSObjectProtocol?
     static let shared = CheckAlkkagiWindowController()
     static let windowTitle = "알까기"
     static let frameAutosaveName = "check.alkkagi.window"
@@ -31,20 +35,32 @@ final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
         }
         if !isOpen {
             if let onlineStore {
-                let hosting = NSHostingView(rootView: AlkkagiOnlinePanel(store: onlineStore, onReturn: { [weak self] in
+                var panel = AlkkagiOnlinePanel(store: onlineStore, onReturn: { [weak self] in
                     self?.closeFromUser()
-                }))
+                })
+                panel.frameRateMonitor = frameRateMonitor
+                let hosting = NSHostingView(rootView: panel)
                 hosting.autoresizingMask = [.width, .height]
                 window.contentView = hosting
             } else {
-                let hosting = NSHostingView(rootView: AlkkagiGameView(onReturn: { [weak self] in
+                var game = AlkkagiGameView(onReturn: { [weak self] in
                     self?.closeFromUser()
-                }, me: me))
+                }, me: me)
+                game.frameRateMonitor = frameRateMonitor
+                let hosting = NSHostingView(rootView: game)
                 hosting.autoresizingMask = [.width, .height]
                 window.contentView = hosting
             }
         }
         window.setContentSize(Self.fixedContentSize)
+        frameRateMonitor.update(for: window)
+        if screenParametersObserver == nil {
+            screenParametersObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.frameRateMonitor.update(for: self?.windowStorage) }
+            }
+        }
         if !CheckPanelVisibility.isRunningTests { NSApp.activate() }
         if window.isMiniaturized { window.deminiaturize(nil) }
         isOpen = true
@@ -77,6 +93,7 @@ final class CheckAlkkagiWindowController: NSObject, NSWindowDelegate {
     }
 
     func windowDidMiniaturize(_ notification: Notification) { onlineStore?.windowDidHide() }
+    func windowDidChangeScreen(_ notification: Notification) { frameRateMonitor.update(for: windowStorage) }
     func windowDidDeminiaturize(_ notification: Notification) { onlineStore?.windowDidShow() }
     func windowDidChangeOcclusionState(_ notification: Notification) {
         guard isOpen, let window = windowStorage else { return }

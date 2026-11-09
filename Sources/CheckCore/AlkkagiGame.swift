@@ -68,6 +68,23 @@ package struct AlkkagiGame: Equatable, Sendable {
         package let isRingOut: Bool
     }
 
+    /// 감속 성질. 1/240초 걸음마다 속도에 `exp(-drag·dt)` 를 곱하고(공기 저항꼴), `friction·dt` 만큼 속력을 깎는다(바둑판 마찰꼴).
+    /// **서버 `alkkagi_simulate` 와 같은 값이어야 한다** — 서버가 판정하고 앱은 같은 계산으로 다시 그린다. 바꾸면 서버 SQL 도 같이.
+    /// friction 0 이면 원래(PR #9) 식과 비트 단위로 같다(곱 하나만 한다).
+    package struct Physics: Hashable, Sendable {
+        package var drag: Double
+        package var friction: Double
+        package init(drag: Double, friction: Double) { self.drag = drag; self.friction = friction }
+        /// A 지금(기여 원본): 지수 감속만 — 빠르게 출발해 끝에서 길게 미끄러진다. 끝까지 약 2.8초 · 최대 약 740.
+        package static let ice = Physics(drag: 2, friction: 0)
+        /// B 바둑판 마찰: 감속 + 일정 마찰 — 사거리는 비슷하고(약 710) 끝에서 또렷이 선다. 끝까지 약 1.4초.
+        package static let board = Physics(drag: 1.5, friction: 300)
+        /// C 무겁게: 마찰을 키워 사거리가 짧다(약 470) — 멀리서 밀어내기 어렵다. 끝까지 약 0.9초.
+        package static let heavy = Physics(drag: 2.2, friction: 500)
+        /// 지금 앱 · 서버가 쓰는 값. 대표 선택 전에는 서버와 같은 A.
+        package static let current = ice
+    }
+
     package static let boardSize: Double = 600
     package static let stoneRadius: Double = 20
     package static let maxPull: Double = 135
@@ -81,6 +98,8 @@ package struct AlkkagiGame: Equatable, Sendable {
     package private(set) var turnRemaining: Double = turnDuration
     package private(set) var result: Result?
     package private(set) var shotCount = 0
+    /// 감속 성질(시안 영상 · 시험판이 바꿔 본다). 온라인 판은 늘 `Physics.current`(서버와 같은 값).
+    package var physics: Physics = .current
 
     private static let fixedStep = 1.0 / 240.0
     private static let clockTolerance = 1e-9
@@ -287,9 +306,14 @@ package struct AlkkagiGame: Equatable, Sendable {
             if timeLeft <= 1e-12 { break }
         }
 
-        let damping = exp(-2.0 * Self.fixedStep)
+        let damping = exp(-physics.drag * Self.fixedStep)
+        let friction = physics.friction * Self.fixedStep
         for index in stones.indices where stones[index].isPlaced && !stones[index].isOut {
-            let velocity = stones[index].velocity * damping
+            var velocity = stones[index].velocity * damping
+            if friction > 0 {
+                let speed = velocity.length
+                velocity = speed > friction ? velocity * ((speed - friction) / speed) : AlkkagiVector(x: 0, y: 0)
+            }
             stones[index].velocity = velocity.length < Self.restSpeed
                 ? AlkkagiVector(x: 0, y: 0) : velocity
         }

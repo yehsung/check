@@ -9,20 +9,32 @@ import CheckCore
 struct AlkkagiOnlinePanel: View {
     @Bindable var store: AlkkagiOnlineStore
     var onReturn: (() -> Void)? = nil
+    #if !ALKKAGI_PLAYGROUND
+    /// 창 컨트롤러가 넣는 주사율 감시 — 판 화면(`AlkkagiGameView`)에 그대로 넘긴다.
+    var frameRateMonitor: MiniGameFrameRateMonitor?
+    #endif
     @State private var showsPractice = false
 
     var body: some View {
         Group {
             if showsPractice {
-                AlkkagiGameView(onReturn: { showsPractice = false })
+                paced(AlkkagiGameView(onReturn: { showsPractice = false }))
             } else if store.state != nil {
-                AlkkagiGameView(onReturn: onReturn, onlineStore: store)
+                paced(AlkkagiGameView(onReturn: onReturn, onlineStore: store))
             } else {
                 lobby
             }
         }
         .onAppear { store.windowDidShow() }
         .onDisappear { store.windowDidHide() }
+    }
+
+    private func paced(_ view: AlkkagiGameView) -> AlkkagiGameView {
+        var view = view
+        #if !ALKKAGI_PLAYGROUND
+        view.frameRateMonitor = frameRateMonitor
+        #endif
+        return view
     }
 
     private var lobby: some View {

@@ -21,11 +21,30 @@ struct AlkkagiGameView: View {
     var me = AlkkagiPlayerProfile(name: "플레이어 1")
     var opponent = AlkkagiPlayerProfile(name: "플레이어 2")
     var onlineStore: AlkkagiOnlineStore? = nil
-    @State private var model = AlkkagiLocalModel()
+    @State private var model: AlkkagiLocalModel
+
+    /// `model` 은 렌더 시험이 판 값을 넣는 입구다(앱은 기본값 — 창마다 새 모델).
+    init(onReturn: (() -> Void)? = nil, me: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 1"),
+         opponent: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 2"),
+         onlineStore: AlkkagiOnlineStore? = nil, model: AlkkagiLocalModel = AlkkagiLocalModel()) {
+        self.onReturn = onReturn
+        self.me = me
+        self.opponent = opponent
+        self.onlineStore = onlineStore
+        _model = State(initialValue: model)
+    }
     @State private var confirmsResign = false
     @GestureState private var dragIsActive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private let timer = Timer.publish(every: 1.0 / 120, on: .main, in: .common).autoconnect()
+    /// 판 걸음은 화면 주사율에 맞춘다(120Hz 타이머는 60 · 75 · 144Hz 화면과 박자가 어긋나 규칙적으로 끊긴다 —
+    /// 메모 game-frame-rate-judder). 창 컨트롤러가 주사율 감시를 환경으로 준다. 없으면(독립 실행기 · 시험) 60.
+    #if !ALKKAGI_PLAYGROUND
+    /// 창 컨트롤러가 넣는다(창마다 자기 감시). 뷰 타입을 바꾸지 않으려고 환경이 아니라 속성이다.
+    var frameRateMonitor: MiniGameFrameRateMonitor?
+    private var frameInterval: Double { MiniGameFrameRate.minimumInterval(forRefreshRate: frameRateMonitor?.refreshHz ?? MiniGameFrameRate.baselineFPS) }
+    #else
+    private var frameInterval: Double { 1.0 / 60 }
+    #endif
     private var boardSide: CGFloat { BoardGameLayout.boardSide - 48 }
 
     var body: some View {
@@ -54,7 +73,11 @@ struct AlkkagiGameView: View {
         .foregroundStyle(CheckTheme.primaryText)
         .preferredColorScheme(.dark)
         .onAppear { model.attachOnline(onlineStore) }
-        .onReceive(timer) { _ in model.tick() }
+        .background {
+            TimelineView(.animation(minimumInterval: frameInterval)) { context in
+                Color.clear.onChange(of: context.date) { _, _ in model.tick() }
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in model.cancelAim() }
         .onExitCommand { model.cancelAim() }
         .onChange(of: dragIsActive) { _, active in
@@ -74,6 +97,15 @@ struct AlkkagiGameView: View {
             Button { model.soundEnabled.toggle() } label: {
                 Image(systemName: model.soundEnabled ? "speaker.wave.2" : "speaker.slash").frame(width: 22, height: 22)
             }.buttonStyle(.plain).accessibilityLabel(model.soundEnabled ? "소리 끄기" : "소리 켜기")
+            #if ALKKAGI_PLAYGROUND
+            Picker("감속", selection: Binding(get: { model.game.physics }, set: { model.game.physics = $0 })) {
+                Text("A 지금").tag(AlkkagiGame.Physics.ice)
+                Text("B 바둑판 마찰").tag(AlkkagiGame.Physics.board)
+                Text("C 무겁게").tag(AlkkagiGame.Physics.heavy)
+            }.pickerStyle(.segmented).frame(width: 300).help("감속 시안 — 바꾸면 다음 발사부터")
+            Toggle("멈칫", isOn: Binding(get: { model.hitStopEnabled }, set: { model.hitStopEnabled = $0 }))
+                .toggleStyle(.checkbox).help("세게 부딪힐 때 아주 잠깐 멈춤")
+            #endif
             if onlineStore == nil {
                 Button { model.restart() } label: { Label("새 판", systemImage: "arrow.clockwise") }
                     .buttonStyle(.bordered).keyboardShortcut("r", modifiers: .command).help("새 판 시작 (⌘R)")
@@ -397,6 +429,8 @@ final class AlkkagiLocalModel {
     @ObservationIgnored private var lastTime: TimeInterval?
     @ObservationIgnored private var clockTime = 0.0
     @ObservationIgnored private let feedback = AlkkagiFeedback()
+    /// 렌더 시험 전용 — 울린 소리(세기 · 판 밖 · 가로 위치)를 엿듣는다. 앱은 nil.
+    @ObservationIgnored var soundTap: ((Double, AlkkagiFeedback.Kind, Double) -> Void)?
     @ObservationIgnored private var powerBand = 0
     @ObservationIgnored private var messageSequence = 0
     @ObservationIgnored private var gestureIsActive = false
@@ -406,6 +440,15 @@ final class AlkkagiLocalModel {
     @ObservationIgnored private var onlineChatSeq = -1
     @ObservationIgnored private var onlineReplayElapsed = 0.0
     @ObservationIgnored private var predictedShotID: UUID?
+    /// 멈칫(히트스톱): 세게 부딪힌 순간 시뮬레이션을 아주 잠깐 세운다. 남은 멈춤 초.
+    @ObservationIgnored private var hitStop = 0.0
+    /// 이번 한 수에 쓴 멈춤 합(상한 `maxHitStopPerShot` — 연쇄 충돌이 판을 끌지 않게).
+    @ObservationIgnored private var hitStopSpent = 0.0
+    /// 온라인: 멈춘 만큼 서버 시각보다 늦게 그린다. 멈춤이 끝나면 조금 빨리(1.35배) 돌아 갚는다 — 서버가 다음 차례로
+    /// 넘길 때 돌이 순간이동하지 않게.
+    @ObservationIgnored private var replayDebt = 0.0
+    var hitStopEnabled = true
+    static let maxHitStopPerShot = 0.16
 
     var isOnline: Bool { onlineStore != nil }
     var myColor: AlkkagiGame.Player { onlineStore?.state?.myColor ?? .black }
@@ -546,7 +589,9 @@ final class AlkkagiLocalModel {
         let actionID = UUID()
         if game.shoot(stoneID: id, pull: pull) {
             launch = AlkkagiLaunch(stoneID: id, direction: pull * (-1 / pull.length), power: power)
-            if soundEnabled { feedback.play(strength: 0.3 + power * 0.6, ringOut: false, horizontal: stone.position.x) }
+            hitStop = 0; hitStopSpent = 0
+            if soundEnabled { feedback.play(strength: 0.3 + power * 0.6, kind: .flick, horizontal: stone.position.x) }
+            soundTap?(0.3 + power * 0.6, .flick, stone.position.x)
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
             if let onlineStore {
                 predictedShotID = actionID
@@ -582,7 +627,8 @@ final class AlkkagiLocalModel {
             Task { await onlineStore.leaveFinishedMatch() }
             return
         }
-        game.reset(); cancelAim(); placementID = 0; notice = nil
+        let physics = game.physics   // 새 판도 고른 감속 그대로(독립 실행기의 시안 고르기)
+        game.reset(); game.physics = physics; cancelAim(); placementID = 0; notice = nil
         hits = []; falls = []; launch = nil; jolt = 0; lastTime = nil; clockTime = 0
         messages = []; chatDraft = ""; chatSender = .black; messageSequence = 0
     }
@@ -607,12 +653,27 @@ final class AlkkagiLocalModel {
         guard let lastTime else { return }
         let elapsed = max(0, now - lastTime)
         let dt = min(1.0 / 20, elapsed)
+        // 멈칫 중이면 굴림 시간이 흐르지 않는다(효과 나이도 멈춘다 — 흔들림만 계속). 온라인은 멈춘 만큼을 빚으로 적고
+        // 멈춤이 끝나면 걸음마다 35% 더 돌려 갚는다.
+        var rollDt = dt
+        let frozen = hitStop > 0
+        if frozen {
+            let used = min(hitStop, dt)
+            hitStop -= used
+            rollDt = dt - used
+            if onlineStore != nil { replayDebt += used }
+        } else if replayDebt > 0 {
+            let repay = min(replayDebt, dt * 0.35)
+            replayDebt -= repay
+            rollDt = dt + repay
+        }
         var impacts: [AlkkagiGame.Impact] = []
         let old = game
         if let onlineStore {
             synchronizeOnline()
             if onlineStore.state?.phase == .rolling, let shot = onlineStore.state?.shot {
-                let target = min(shot.duration, max(0, (onlineStore.estimatedServerNowMs - shot.startedAtMs) / 1_000))
+                let target = min(shot.duration,
+                                 max(0, (onlineStore.estimatedServerNowMs - shot.startedAtMs) / 1_000 - replayDebt))
                 var remaining = max(0, target - onlineReplayElapsed)
                 while remaining > 1e-9 && game.phase == .rolling {
                     let slice = min(0.25, remaining)
@@ -620,9 +681,9 @@ final class AlkkagiLocalModel {
                     remaining -= slice
                     onlineReplayElapsed += slice
                 }
-            } else if predictedShotID != nil && game.phase == .rolling {
-                impacts = game.advance(dt: dt)
-                onlineReplayElapsed += dt
+            } else if predictedShotID != nil && game.phase == .rolling, rollDt > 0 {
+                impacts = game.advance(dt: rollDt)
+                onlineReplayElapsed += rollDt
             }
         } else if game.phase == .placing || game.phase == .aiming {
             // 초 단위 UI는 오목과 같이 5Hz로만 갱신한다. 창 밖을 눌러도 제한 시간은 흐른다.
@@ -633,15 +694,17 @@ final class AlkkagiLocalModel {
                 clockTime = 0
                 if deadlineExpired { cancelAim() }
             }
-        } else if game.phase == .rolling {
-            impacts = game.advance(dt: dt)
+        } else if game.phase == .rolling, rollDt > 0 {
+            impacts = game.advance(dt: rollDt)
         }
+        if game.phase != .rolling { replayDebt = 0 }
         changed(from: old)
         guard !hits.isEmpty || !falls.isEmpty || launch != nil || !impacts.isEmpty || jolt > 0 else { return }
         time += dt
-        if var released = launch { released.age += dt; launch = released.age < 0.3 ? released : nil }
-        hits = hits.compactMap { var h = $0; h.age += dt; return h.age < 0.32 ? h : nil }
-        falls = falls.compactMap { var f = $0; f.age += dt; return f.age < 0.9 ? f : nil }
+        let ageDt = frozen ? 0 : dt
+        if var released = launch { released.age += ageDt; launch = released.age < 0.3 ? released : nil }
+        hits = hits.compactMap { var h = $0; h.age += ageDt; return h.age < 0.32 ? h : nil }
+        falls = falls.compactMap { var f = $0; f.age += ageDt; return f.age < 0.9 ? f : nil }
         jolt = max(0, jolt - dt * 9)
         for impact in impacts where impact.strength > 0.08 {
             hits.append(AlkkagiHit(position: impact.position, strength: impact.strength, ringOut: impact.isRingOut))
@@ -655,7 +718,14 @@ final class AlkkagiLocalModel {
         }
         if let impact = impacts.max(by: { $0.strength < $1.strength }), impact.strength > 0.12 {
             jolt = max(jolt, pow(impact.strength, 1.3))
-            if soundEnabled { feedback.play(strength: impact.strength, ringOut: impact.isRingOut, horizontal: impact.position.x) }
+            // 멈칫: 돌끼리 세게(0.3 넘게) 맞은 순간만 — 판 밖으로 나가는 순간 · 약한 스침은 멈추지 않는다. 세기에 비례(30~75ms).
+            if hitStopEnabled, !impact.isRingOut, impact.strength > 0.3, hitStopSpent < Self.maxHitStopPerShot {
+                let stop = min(Self.maxHitStopPerShot - hitStopSpent, 0.03 + 0.05 * min(1, impact.strength))
+                hitStop = max(hitStop, stop)
+                hitStopSpent += stop
+            }
+            if soundEnabled { feedback.play(strength: impact.strength, kind: impact.isRingOut ? .ringOut : .hit, horizontal: impact.position.x) }
+            soundTap?(impact.strength, impact.isRingOut ? .ringOut : .hit, impact.position.x)
             if impact.strength > 0.35 { NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now) }
         }
     }
@@ -774,6 +844,20 @@ private enum AlkkagiDrawing {
         context.stroke(band, with: .color(.white.opacity(0.65 + power * 0.35)), style: StrokeStyle(lineWidth: 1.5 + power, lineCap: .round, lineJoin: .round))
         let gripRadius = 5 + power * 2
         context.stroke(Path(ellipseIn: CGRect(x: grip.x - gripRadius, y: grip.y - gripRadius, width: gripRadius * 2, height: gripRadius * 2)), with: .color(.white), lineWidth: 1.5)
+        // 날아갈 방향 — 돌 앞으로 점선 화살. 길이 = 힘(어디서 멈출지는 보여 주지 않는다), 색 = 흰 → 주황 → 빨강.
+        let radius = AlkkagiGame.stoneRadius * scale
+        let length = (36 + 150 * power) * scale
+        let from = CGPoint(x: center.x + direction.x * (radius + 4), y: center.y + direction.y * (radius + 4))
+        let to = CGPoint(x: from.x + direction.x * length, y: from.y + direction.y * length)
+        let tint: Color = power < 0.6 ? .white : (power < 0.9 ? Color(red: 1, green: 0.72, blue: 0.3) : Color(red: 1, green: 0.38, blue: 0.3))
+        var guide = Path(); guide.move(to: from); guide.addLine(to: to)
+        context.stroke(guide, with: .color(tint.opacity(0.85)), style: StrokeStyle(lineWidth: 2 + power * 1.5, lineCap: .round, dash: [6, 6]))
+        let head = 7 + power * 4
+        var arrow = Path()
+        arrow.move(to: CGPoint(x: to.x - direction.x * head - direction.y * head * 0.6, y: to.y - direction.y * head + direction.x * head * 0.6))
+        arrow.addLine(to: to)
+        arrow.addLine(to: CGPoint(x: to.x - direction.x * head + direction.y * head * 0.6, y: to.y - direction.y * head - direction.x * head * 0.6))
+        context.stroke(arrow, with: .color(tint.opacity(0.9)), style: StrokeStyle(lineWidth: 2 + power, lineCap: .round, lineJoin: .round))
     }
 
     static func effects(_ hits: [AlkkagiHit], context: GraphicsContext, scale: Double, reduced: Bool) {
@@ -783,9 +867,16 @@ private enum AlkkagiDrawing {
             let p = CGPoint(x: hit.position.x * scale, y: hit.position.y * scale)
             context.stroke(Path(ellipseIn: CGRect(x: p.x - radius, y: p.y - radius, width: radius * 2, height: radius * 2)),
                            with: .color(.white.opacity((1 - t) * 0.8)), lineWidth: (1 - t) * 2 + 0.5)
+            if !reduced, !hit.ringOut, t < 0.35 {
+                // 맞은 순간 번쩍 — 세기만큼 크고 밝게, 0.1초 안에 꺼진다.
+                let flash = (6 + hit.strength * 14) * scale * (1 + t)
+                context.fill(Path(ellipseIn: CGRect(x: p.x - flash, y: p.y - flash, width: flash * 2, height: flash * 2)),
+                             with: .color(.white.opacity((1 - t / 0.35) * (0.25 + 0.5 * hit.strength))))
+            }
             if !reduced {
-                for i in 0..<7 {
-                    let a = Double(i) / 7 * .pi * 2
+                let sparks = 5 + Int(hit.strength * 6)
+                for i in 0..<sparks {
+                    let a = Double(i) / Double(sparks) * .pi * 2
                     let d = radius * 1.3
                     context.fill(Path(ellipseIn: CGRect(x: p.x + cos(a) * d - 1.5, y: p.y + sin(a) * d - 1.5, width: 3, height: 3)),
                                  with: .color(.white.opacity((1 - t) * 0.7)))
@@ -820,13 +911,54 @@ private enum AlkkagiDrawing {
 }
 
 @MainActor
-private final class AlkkagiFeedback {
+final class AlkkagiFeedback {
+    /// 한 번 울릴 소리의 표본(44.1kHz 단음). 렌더 시험이 영상 소리를 만들 때도 이 함수를 쓴다.
+    nonisolated static func samples(strength: Double, kind: Kind) -> [Float] {
+        let s = min(1, max(0.1, strength))
+        var seed: UInt32 = 0x9E37_79B9 ^ UInt32(s * 1_000)
+        func noise() -> Double {   // 결정적 잡음(같은 세기 = 같은 소리)
+            seed = seed &* 1_664_525 &+ 1_013_904_223
+            return Double(seed >> 8) / Double(1 << 24) * 2 - 1
+        }
+        switch kind {
+        case .hit:
+            // 돌끼리 '딱': 2ms 잡음 딸깍 + 어긋난 두 배음(돌 울림) + 세기만큼 낮은 몸통 울림.
+            let f1 = 1_750 + 950 * s
+            return (0..<5_300).map { i in
+                let t = Double(i) / 44_100
+                let click = noise() * exp(-t * 1_400) * 0.9
+                let ring = sin(2 * .pi * f1 * t) * exp(-t * 60) + 0.55 * sin(2 * .pi * f1 * 2.41 * t) * exp(-t * 95)
+                let body = sin(2 * .pi * (150 + 60 * s) * t) * exp(-t * 32) * s * 0.8
+                return Float((click + ring * 0.7 + body) * pow(s, 0.8) * 0.2)
+            }
+        case .flick:
+            // 손가락 튕김 '톡': 짧고 낮게.
+            return (0..<3_000).map { i in
+                let t = Double(i) / 44_100
+                let click = noise() * exp(-t * 2_000) * 0.7
+                let tone = sin(2 * .pi * (900 + 300 * s) * t) * exp(-t * 110)
+                return Float((click + tone * 0.6) * s * 0.18)
+            }
+        case .ringOut:
+            // 판 밖 '또르르 툭': 내려가는 미끄럼 + 0.13초 뒤 아래 판에 떨어지는 둔한 소리.
+            return (0..<9_000).map { i in
+                let t = Double(i) / 44_100
+                let slide = sin(2 * .pi * (620 * t - 1_100 * t * t)) * exp(-t * 26) * 0.6
+                let lt = t - 0.13
+                let thud = lt > 0 ? (sin(2 * .pi * 110 * lt) * 0.9 + noise() * 0.35) * exp(-lt * 38) : 0
+                return Float((slide + thud) * 0.2)
+            }
+        }
+    }
+
     private var engine: AVAudioEngine?
     private var voices: [AVAudioPlayerNode] = []
     private var voice = 0
     private var lastSound = 0.0
 
-    func play(strength: Double, ringOut: Bool, horizontal: Double) {
+    enum Kind: Sendable { case flick, hit, ringOut }
+
+    func play(strength: Double, kind: Kind, horizontal: Double) {
         let now = ProcessInfo.processInfo.systemUptime
         guard now - lastSound > 0.035 else { return }
         lastSound = now
@@ -839,16 +971,12 @@ private final class AlkkagiFeedback {
             }
             do { try audio.start(); engine = audio } catch { voices = []; return }
         }
+        let wave = Self.samples(strength: strength, kind: kind)
         guard !voices.isEmpty, let format = AVAudioFormat(standardFormatWithSampleRate: 44_100, channels: 1),
-              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: ringOut ? 7_000 : 3_100),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(wave.count)),
               let samples = buffer.floatChannelData?[0] else { return }
         buffer.frameLength = buffer.frameCapacity
-        for i in 0..<Int(buffer.frameLength) {
-            let t = Double(i) / 44_100
-            let tone = ringOut ? sin(2 * .pi * (500 * t - 900 * t * t)) * exp(-t * 23)
-                              : (sin(2 * .pi * (820 + strength * 280) * t) + 0.5 * sin(2 * .pi * 240 * t)) * exp(-t * 70)
-            samples[i] = Float(tone * min(1, max(0.1, strength)) * 0.19)
-        }
+        for i in wave.indices { samples[i] = wave[i] }
         let node = voices[voice % voices.count]; voice += 1
         node.pan = Float((horizontal / AlkkagiGame.boardSize - 0.5) * 1.4)
         node.scheduleBuffer(buffer, at: nil, options: .interrupts); node.play()

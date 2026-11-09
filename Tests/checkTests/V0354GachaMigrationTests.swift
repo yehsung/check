@@ -40,6 +40,8 @@ private let gcPepero = "20261108230000_pepero_aing_gift.sql"
 /// 두 파일의 행동은 자기 사전 · 사후 단언과 하네스 시험이 증명한다. 빼빼로처럼 적용 때 번호만 옮길 수 있어 번호를 뺀 이름으로 찾는다.
 private let gcHwoo = "20261109100000_aing_hwoo_shard_only.sql"
 private let gcRuby = "20261109110000_aing_ruby_shop.sql"
+/// v0.3.81 개발에 찌든 아잉이(도전 미션 보상 — gacha_only 표식은 판매를 막으려는 것, 뽑기 표에는 없다).
+private let gcDev = "20261111120000_aing_dev_mission.sql"
 /// 이 파일 뒤에서 명단 · shop_state · buy_character 를 다시 정의해도 되는 파일 → 그 파일의 명단이 v4 위에 더한 id.
 private let gcLaterRedefiners: [String: [String]] = [
     gcRainbow: ["aing_rainbow"],
@@ -48,6 +50,7 @@ private let gcLaterRedefiners: [String: [String]] = [
     gcPepero: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero"],
     gcHwoo: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo"],
     gcRuby: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby"],
+    gcDev: ["aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"],
 ]
 
 /// 마이그레이션 이름에서 앞 번호(14자리 + `_`)를 뗀 꼬리.

@@ -149,6 +149,8 @@ enum CheckCharacter3DScene {
         // 루비(v0.3.78): 몸 빚기(정점마다 구운 거리를 geometry 셰이더가 옮김) + 무지개와 같은 디퓨즈 합성 + 보석 몸 셰이더 + 표식.
         // 장식 없음 · 내려 세우지 않는다(카메라는 원래 몸 상자로 이미 섰다 — Y5 는 원래 몸과 가까워 부유 꼭대기까지 안 잘린다).
         case .ruby: RubyAingFinish.apply(to: character)
+        // 개발에 찌든 아잉이: 무지개와 같은 디퓨즈 합성 + 후드 몸 셰이더(눈꺼풀 덮개) + 끈 장식(`check.devDecor`) + 표식. 내려 세우지 않는다.
+        case .dev: DevAingFinish.apply(to: character)
         }
     }
 

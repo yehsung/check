@@ -614,6 +614,8 @@ final class ReactionEngine {
         if HwooAingFinish.isHwoo(character) { return CharacterCatalog.hwooAingID }
         // 루비 아잉이(v0.3.78)도 같은 메시(몸 모양은 셰이더가 빚는다)라 자기 표식(`RubyAingFinish.markerName`)으로 가른다.
         if RubyAingFinish.isRuby(character) { return CharacterCatalog.rubyAingID }
+        // 개발에 찌든 아잉이도 같은 메시라 자기 표식(`DevAingFinish.markerName`)으로 가른다.
+        if DevAingFinish.isDev(character) { return CharacterCatalog.devAingID }
         return CharacterCatalog.builtInAingID
     }
 

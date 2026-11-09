@@ -1397,7 +1397,13 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     package var isPurchasable: Bool {
         gachaOnly != true && !CharacterCatalog.isGachaOnlyBuiltIn(id)
             && giftOnly != true && !CharacterCatalog.isGiftOnlyBuiltIn(id)
+            && !CharacterCatalog.isMissionRewardBuiltIn(id)
             && price != nil
+    }
+
+    /// 도전 미션 보상 줄인가(v0.3.81 개발에 찌든 아잉이 — id 로 안다). 상점의 잠긴 칸 '미션 보상'이 이 값으로 선다.
+    package var isMissionReward: Bool {
+        CharacterCatalog.isMissionRewardBuiltIn(id)
     }
 
     /// 생일 선물 전용 줄인가(서버 표식 **또는** 케이크 id). 상점의 잠긴 칸 '생일 선물 전용'이 이 값으로 선다.
@@ -1409,7 +1415,8 @@ package struct ShopCharacterRow: Decodable, Equatable, Identifiable {
     /// ★ 선물 전용이 **먼저 이긴다**: 서버는 케이크 행에 not_for_sale 갈래를 타려고 `gacha_only = true` 도 싣는데, 그 표식만 보면
     ///   케이크가 '뽑기 전용'으로 읽혀 뽑기 창을 열거나 "뽑기나 조각 교환으로…"라고 거짓말한다(케이크는 뽑기에 없다).
     package var isGachaOnly: Bool {
-        !isGiftOnly && (gachaOnly == true || CharacterCatalog.isGachaOnlyBuiltIn(id))
+        // 미션 보상(v0.3.81 개발 아잉이)도 서버가 판매를 막으려고 `gacha_only = true` 를 싣는다 — 뽑기에는 없다(케이크와 같은 사정).
+        !isGiftOnly && !isMissionReward && (gachaOnly == true || CharacterCatalog.isGachaOnlyBuiltIn(id))
     }
 }
 

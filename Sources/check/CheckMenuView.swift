@@ -1086,7 +1086,9 @@ struct CheckMenuView: View {
                                 // 일일 미션 받기(v0.3.64 — `daily_mission_claim`). 떠 있음 · 실패는 누적과 따로 센다.
                                 claimDaily: { store.claimDailyMission(key: $0) },
                                 dailyInFlightKeys: store.dailyMissionClaimsInFlight,
-                                dailyFailedKeys: store.dailyMissionClaimFailedKeys
+                                dailyFailedKeys: store.dailyMissionClaimFailedKeys,
+                                // 캐릭터 보상 미션 받기(v0.3.81 — 개발에 찌든 아잉이 · `achievement_character_claim`).
+                                claimCharacter: { store.claimCharacterMission(key: $0) }
                             ),
                             // 미션 화면이 떠 있으니 이 sync 가 도전 미션도 다시 묻는다(`achievementsReason(forWallet:)`).
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },

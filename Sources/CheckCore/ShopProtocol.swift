@@ -84,6 +84,11 @@ package nonisolated enum ShopWire {
     package static let rubyProtocol = 8
     /// 이 번호를 요구하는 캐릭터 — 루비 하나(`CharacterCatalog.shopBuiltInIDs` 와 같은 값).
     package static let rubyCharacterIDs = CharacterCatalog.shopBuiltInIDs
+    /// 개발에 찌든 아잉이가 든 명단 · 얻는 길을 받을 수 있는 번호. 서버 `character_prices.min_protocol = 9` 인 행이 개발 아잉이이고,
+    /// 9 미만 클라에게는 그 행이 **아예 안 보인다**(가진 사람에게도). ★ 그림이 붙기 전엔 어느 빌드도 이 번호를 말하지 않는다.
+    package static let devProtocol = 9
+    /// 이 번호를 요구하는 캐릭터 — 개발 아잉이 하나(`CharacterCatalog.devBuiltInIDs`).
+    package static let devCharacterIDs = CharacterCatalog.devBuiltInIDs
 
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
@@ -118,7 +123,8 @@ package nonisolated enum ShopWire {
         guard isulCharacterIDs.allSatisfy(drawable.contains) else { return cakeProtocol }
         guard peperoCharacterIDs.allSatisfy(drawable.contains) else { return isulProtocol }
         guard hwooCharacterIDs.allSatisfy(drawable.contains) else { return peperoProtocol }
-        return rubyCharacterIDs.allSatisfy(drawable.contains) ? rubyProtocol : hwooProtocol
+        guard rubyCharacterIDs.allSatisfy(drawable.contains) else { return hwooProtocol }
+        return devCharacterIDs.allSatisfy(drawable.contains) ? devProtocol : rubyProtocol
     }
 
     /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의

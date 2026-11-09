@@ -675,6 +675,12 @@ extension WorkTimerStore {
             shopNotice = Self.alreadyOwnedNotice
             return
         }
+        // 미션 보상(개발에 찌든 아잉이 — v0.3.81)도 **고르지 않는다** — 얻는 길(도전 미션)만 말한다.
+        if case .character(let id) = selection, CharacterCatalog.isMissionRewardBuiltIn(id) {
+            shopSelection = nil
+            shopNotice = DevAingMission.lockedHint
+            return
+        }
         // 선물 전용(케이크 아잉이 — v0.3.66 · 이슬 아잉이 — v0.3.74)은 **고르지 않는다** — 가격도 [구매하기]도 없는 잠긴 칸이다.
         // 얻는 길만 말한다(그 선물 종류의 문구 — `giftCopy(for:)`).
         if case .character(let id) = selection, Self.isGiftOnly(id, rows: shopCharacters) {
@@ -701,6 +707,8 @@ extension WorkTimerStore {
     /// (`ShopCharacterRow.isPurchasable` 과 같은 규칙 — 목록에 아직 없는 id 도 금 · 무지개면 참).
     nonisolated static func isGachaOnly(_ id: String, rows: [ShopCharacterRow]) -> Bool {
         if CharacterCatalog.isGachaOnlyBuiltIn(id) { return true }
+        // 미션 보상(v0.3.81 개발 아잉이)은 서버가 `gacha_only = true` 를 실어도 뽑기 전용이 아니다(`ShopCharacterRow.isGachaOnly`).
+        if CharacterCatalog.isMissionRewardBuiltIn(id) { return false }
         // 케이크(v0.3.66 생일 선물 전용)는 서버가 `gacha_only = true` 를 함께 실어도 뽑기 전용이 아니다(`ShopCharacterRow.isGachaOnly`).
         if CharacterCatalog.isGiftOnlyBuiltIn(id) { return false }
         return rows.first { $0.id == id }?.isGachaOnly == true
@@ -742,6 +750,12 @@ extension WorkTimerStore {
         if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
             shopSelection = nil
             shopNotice = GachaText.acquireHint(for: id)
+            return
+        }
+        // 미션 보상(v0.3.81 개발 아잉이)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
+        if case .character(let id) = selection, CharacterCatalog.isMissionRewardBuiltIn(id) {
+            shopSelection = nil
+            shopNotice = DevAingMission.lockedHint
             return
         }
         // 선물 전용(v0.3.66 생일 · v0.3.74 술 한잔)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).

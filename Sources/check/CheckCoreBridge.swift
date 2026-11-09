@@ -63,6 +63,10 @@ extension CharacterCatalog {
         if CharacterCatalog.isRubyAing(id) {
             return entry(id: id) == nil ? nil : RubyAingFinish.portraitURL(for: mood)
         }
+        // 개발에 찌든 아잉이도 같은 자리(번들 루트 `aing_dev-*.png` — 3D 렌더에서 구운 초상).
+        if CharacterCatalog.isDevAing(id) {
+            return entry(id: id) == nil ? nil : DevAingFinish.portraitURL(for: mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

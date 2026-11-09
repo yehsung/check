@@ -136,6 +136,7 @@ enum GachaPalette {
         case .hwoo: return nil
         // 루비 아잉이(v0.3.78)는 보통 상점 캐릭터라 희귀 강조를 안 쓴다(`Finish.isRare` 거짓).
         case .ruby: return nil
+        case .dev: return nil
         }
     }
 

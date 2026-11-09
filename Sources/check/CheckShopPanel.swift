@@ -690,9 +690,11 @@ struct CheckShopPanel: View {
         let line = ShopCardLine.of(id: entry.id, owned: owned, rows: store.shopCharacters)
         let gachaOnly = line == .gachaOnly
         let giftLocked = line == .giftLocked
+        // 미션 보상 잠긴 칸(v0.3.81 개발에 찌든 아잉이 — 안 가진 사람): 자물쇠 + '미션 보상', 흐리게. 누르면 얻는 길을 말한다.
+        let missionLocked = line == .missionLocked
         // 잠긴 칸의 글자는 그 캐릭터를 주는 선물 종류의 묶음(케이크 → 생일 · 이슬 → 술 한잔 — v0.3.74).
         let giftCopy = WorkTimerStore.giftCopy(for: entry.id)
-        let affordable = !giftLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
+        let affordable = !giftLocked && !missionLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
         Button {
@@ -709,7 +711,9 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if giftLocked {
+                if missionLocked {
+                    ShopMissionLockedCaption()
+                } else if giftLocked {
                     ShopGiftLockedCaption(copy: giftCopy)
                 } else if gachaOnly {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
@@ -773,10 +777,14 @@ enum ShopCardLine: Equatable, Sendable {
     case giftLocked
     /// 뽑기 전용(황금 · 무지개 아잉이 — 서버 표식 포함): "뽑기 또는 조각 20개" / 보유.
     case gachaOnly
+    /// 미션 보상 잠긴 칸(v0.3.81 개발에 찌든 아잉이 — 안 가진 사람): 자물쇠 + '미션 보상'. 서버 행은 판매를 막으려 `gacha_only` 를 싣지만
+    /// 뽑기에는 없다 — 그래서 뽑기 갈래보다 **먼저** 가른다(id 로 안다).
+    case missionLocked
     /// 루비 가격 / 보유. 가진 케이크도 여기다(보통 보유 칸).
     case price
 
     static func of(id: String, owned: Bool, rows: [ShopCharacterRow]) -> ShopCardLine {
+        if !owned, CharacterCatalog.isMissionRewardBuiltIn(id) { return .missionLocked }
         if !owned, WorkTimerStore.isGiftOnly(id, rows: rows) { return .giftLocked }
         if WorkTimerStore.isGachaOnly(id, rows: rows) { return .gachaOnly }
         return .price
@@ -789,6 +797,7 @@ enum ShopCardLine: Equatable, Sendable {
         switch self {
         case .giftLocked: return "\(name) — \(gift.lockedHint)"
         case .gachaOnly: return "\(name) — \(acquireHint)"
+        case .missionLocked: return "\(name) — \(DevAingMission.lockedHint)"
         case .price: return "\(name) 사기"
         }
     }
@@ -799,6 +808,7 @@ enum ShopCardLine: Equatable, Sendable {
         switch self {
         case .giftLocked: return "\(name) 잠김, \(gift.lockedCaption) — \(gift.lockedHint)"
         case .gachaOnly: return "\(name), \(acquireHint)"
+        case .missionLocked: return "\(name) 잠김, \(DevAingMission.lockedCaption) — \(DevAingMission.lockedHint)"
         case .price: return "\(name) 사기"
         }
     }
@@ -814,6 +824,21 @@ struct ShopGiftLockedCaption: View {
             Image(systemName: "lock.fill")
                 .font(.system(size: 8, weight: .bold))
             Text(copy.lockedCaption)
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(CheckTheme.secondaryText)
+    }
+}
+
+/// 상점 잠긴 칸(미션 보상 — v0.3.81 개발에 찌든 아잉이)의 아래 줄: 자물쇠 + '미션 보상'. 선물 잠긴 칸과 같은 모양 · 같은 자리.
+struct ShopMissionLockedCaption: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(DevAingMission.lockedCaption)
                 .font(.caption2.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

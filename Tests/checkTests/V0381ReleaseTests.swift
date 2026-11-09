@@ -47,5 +47,6 @@ func v0381BundleGate() {
     #expect(V0317ShopTests.plainStore().shopProtocolVersion == ShopWire.devProtocol)
     #expect(DevAingMission.key == "work100")
     #expect(OmokStoneSkin.protocolVersion == 1)
-    #expect(OmokStoneSkin.allCases.map(\.rawValue) == ["neon", "dice", "cat", "aing", "diamond", "pixel"])
+    // 0.3.81 은 6종으로 나갔다. 다음 판에서 대표 11-10 "네온 흑백 다이아 이렇게 3개 빼." → 주사위 · 고양이 · 픽셀(20261111140000).
+    #expect(OmokStoneSkin.allCases.map(\.rawValue) == ["dice", "cat", "pixel"])
 }

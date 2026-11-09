@@ -7,6 +7,7 @@ import Testing
 @testable import CheckCore
 
 // 오목알 스킨(v0.3.81 — 대표 #d_UVBJ8vJua1jD 상점 루비 100 · #d_RR2dyBIHDMW5 상대에게도 보임 · #d_TFKnfZL40Ax6 6종).
+// 다음 판: 대표 11-10 "네온 흑백 다이아 이렇게 3개 빼." → 주사위 · 고양이 · 픽셀(서버 20261111140000_omok_skins_trim).
 //  ① 코어: 스킨 id = 서버 정의표 · 흑백 규칙(대표 "흑돌인지 백돌인지는 명확하게") — 일반 돌과 섞인 판의 밝기 대비 ≥ 4.5 ·
 //     서버 선(상태 · 사기 · 끼기 · 대국 match.black_skin/white_skin) 해석.
 //  ② 맥: 상점 칸 줄 · 문구(조사) · 스토어 사기 → 바로 낌 · 가진 칸 = 끼기 · 판 렌더(스킨이 그려진다).
@@ -39,10 +40,12 @@ private func omokMeanLuma(_ skin: OmokStoneSkin?, black: Bool) -> Double {
 @Suite struct V0381OmokSkinCoreTests {
     @Test("스킨 id = 서버 정의표(omok_skin_defs) 순서 · 능력 번호 1 · 모르는 id 는 일반 돌")
     func ids() {
-        #expect(OmokStoneSkin.allCases.map(\.rawValue) == ["neon", "dice", "cat", "aing", "diamond", "pixel"])
-        #expect(OmokStoneSkin.allCases.map(\.displayName) == ["네온", "주사위", "고양이", "흑백 아잉이", "다이아 컷", "픽셀"])
+        #expect(OmokStoneSkin.allCases.map(\.rawValue) == ["dice", "cat", "pixel"])
+        #expect(OmokStoneSkin.allCases.map(\.displayName) == ["주사위", "고양이", "픽셀"])
         #expect(OmokStoneSkin.protocolVersion == 1)
-        #expect(OmokStoneSkin(wireValue: "neon") == .neon && OmokStoneSkin(wireValue: "Neon") == nil && OmokStoneSkin(wireValue: nil) == nil)
+        #expect(OmokStoneSkin(wireValue: "dice") == .dice && OmokStoneSkin(wireValue: "Dice") == nil && OmokStoneSkin(wireValue: nil) == nil)
+        // 내린 셋(0.3.81 에만 있던 id)은 모르는 id — 일반 돌로 접는다.
+        #expect(["neon", "aing", "diamond"].allSatisfy { OmokStoneSkin(wireValue: $0) == nil })
         #expect(OmokStoneSkins(blackWire: "cat", whiteWire: "zzz") == OmokStoneSkins(black: .cat, white: nil))
         #expect(OmokStoneSkins(color: true, skin: .dice) == OmokStoneSkins(black: .dice) && OmokStoneSkins(color: false, skin: .dice) == OmokStoneSkins(white: .dice))
     }
@@ -69,10 +72,10 @@ private func omokMeanLuma(_ skin: OmokStoneSkin?, black: Bool) -> Double {
     func wire() throws {
         let decoder = JSONDecoder()
         decoder.keyDecodingStrategy = .convertFromSnakeCase
-        let json = #"{"status":"ok","ruby_balance":150,"equipped":"neon","skins":[{"id":"neon","name":"네온","price":100,"owned":true,"equipped":true},{"id":"dice","price":100,"owned":false,"equipped":false},{"id":"future","name":"미래","price":100,"owned":false,"equipped":false}]}"#
+        let json = #"{"status":"ok","ruby_balance":150,"equipped":"cat","skins":[{"id":"cat","name":"고양이","price":100,"owned":true,"equipped":true},{"id":"dice","price":100,"owned":false,"equipped":false},{"id":"neon","name":"네온","price":100,"owned":false,"equipped":false}]}"#
         let state = try decoder.decode(OmokSkinsState.self, from: Data(json.utf8))
-        #expect(state.isOK && state.rubyBalance == 150 && state.equipped == .neon)
-        #expect(state.rows.map(\.skin) == [.neon, .dice] && state.rows[1].name == "주사위")
+        #expect(state.isOK && state.rubyBalance == 150 && state.equipped == .cat)
+        #expect(state.rows.map(\.skin) == [.cat, .dice] && state.rows[1].name == "주사위", "내린 id(neon)는 버린다")
         let bought = state.applying(owned: .dice, equipped: .dice, rubyBalance: 50)
         #expect(bought.equipped == .dice && bought.rubyBalance == 50)
         #expect(bought.rows.map(\.owned) == [true, true] && bought.rows.map(\.equipped) == [false, true])
@@ -84,8 +87,10 @@ private func omokMeanLuma(_ skin: OmokStoneSkin?, black: Bool) -> Double {
         #expect(try text(OmokSkinBuyRequest(skin: .cat)) == #"{"p_protocol":1,"p_skin":"cat"}"#)
         #expect(try text(OmokSkinSetRequest(skin: nil)) == #"{"p_skin":null}"#)
         #expect(try text(OmokSkinSetRequest(skin: .pixel)) == #"{"p_skin":"pixel"}"#)
-        let row = try decoder.decode(GomokuMatchRow.self, from: Data(#"{"id":"m","black_skin":"aing","white_skin":null}"#.utf8))
-        #expect(OmokStoneSkins(blackWire: row.blackSkin, whiteWire: row.whiteSkin) == OmokStoneSkins(black: .aing))
+        let row = try decoder.decode(GomokuMatchRow.self, from: Data(#"{"id":"m","black_skin":"cat","white_skin":null}"#.utf8))
+        #expect(OmokStoneSkins(blackWire: row.blackSkin, whiteWire: row.whiteSkin) == OmokStoneSkins(black: .cat))
+        let gone = try decoder.decode(GomokuMatchRow.self, from: Data(#"{"id":"m","black_skin":"neon","white_skin":"diamond"}"#.utf8))
+        #expect(OmokStoneSkins(blackWire: gone.blackSkin, whiteWire: gone.whiteSkin) == .plain, "내린 스킨은 일반 돌")
         let old = try decoder.decode(GomokuMatchRow.self, from: Data(#"{"id":"m"}"#.utf8))
         #expect(OmokStoneSkins(blackWire: old.blackSkin, whiteWire: old.whiteSkin) == .plain, "옛 서버는 일반 돌")
     }
@@ -98,13 +103,12 @@ private func omokMeanLuma(_ skin: OmokStoneSkin?, black: Bool) -> Double {
         #expect(OmokSkinCardLine.of(owned: true, equipped: true, price: 100) == .equipped)
         #expect(OmokSkinCardLine.of(owned: true, equipped: false, price: 100) == .owned)
         #expect(OmokSkinCardLine.of(owned: false, equipped: false, price: 100) == .price(100))
-        #expect(OmokSkinShopText.equipped(.neon) == "내 돌을 네온으로 바꿨어요")
         #expect(OmokSkinShopText.equipped(.pixel) == "내 돌을 픽셀로 바꿨어요")
         #expect(OmokSkinShopText.equipped(.dice) == "내 돌을 주사위로 바꿨어요")
-        #expect(OmokSkinShopText.equipped(.diamond) == "내 돌을 다이아 컷으로 바꿨어요")
+        #expect(OmokSkinShopText.equipped(.cat) == "내 돌을 고양이로 바꿨어요")
         #expect(OmokSkinShopText.equipped(nil) == "내 돌을 일반 돌로 바꿨어요")
         #expect(OmokSkinShopText.alreadyEquipped(.dice) == "이미 주사위를 쓰고 있어요")
-        #expect(OmokSkinShopText.alreadyEquipped(.neon) == "이미 네온을 쓰고 있어요")
+        #expect(OmokSkinShopText.alreadyEquipped(.pixel) == "이미 픽셀을 쓰고 있어요")
         #expect(ShopText.barTitle(selection: .omokSkin(.cat), catalog: CharacterCatalog(manifests: [])) == "오목알 스킨 · 고양이")
     }
 }
@@ -174,7 +178,7 @@ private func omokWait(_ condition: () -> Bool) async {
         let server = OmokSkinServer()
         let store = omokStore(host: host, server: server)
         await store.loadOmokSkins()?.value
-        #expect(store.omokSkins?.rows.count == 6 && store.omokSkins?.equipped == nil)
+        #expect(store.omokSkins?.rows.count == 3 && store.omokSkins?.equipped == nil)
         store.selectOmokSkin(.cat)
         #expect(store.shopSelection == .omokSkin(.cat) && store.shopSelectionPrice == 100 && store.canConfirmShopPurchase)
         #expect(GomokuStubProtocol.count(host: host, rpc: "buy_omok_skin") == 0, "카드 탭으로 사면 안 된다")
@@ -226,18 +230,18 @@ private func omokWait(_ condition: () -> Bool) async {
         let plain = try render(.plain)
         let mixA = try render(OmokStoneSkins(black: .cat))
         let mixB = try render(OmokStoneSkins(white: .pixel))
-        let both = try render(OmokStoneSkins(black: .aing, white: .neon))
+        let both = try render(OmokStoneSkins(black: .dice, white: .cat))
         #expect(plain != mixA && plain != mixB && mixA != mixB && both != mixA)
         if let dir = Self.evidenceDirectory {
             try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
             try plain.write(to: URL(fileURLWithPath: "\(dir)/board-plain.png"))
             try mixA.write(to: URL(fileURLWithPath: "\(dir)/board-cat-black.png"))
             try mixB.write(to: URL(fileURLWithPath: "\(dir)/board-pixel-white.png"))
-            try both.write(to: URL(fileURLWithPath: "\(dir)/board-aing-vs-neon.png"))
+            try both.write(to: URL(fileURLWithPath: "\(dir)/board-dice-vs-cat.png"))
         }
     }
 
-    @Test("상점 칸 그림: 일반 돌 + 스킨 여섯 — 서로 다른 그림")
+    @Test("상점 칸 그림: 일반 돌 + 스킨 셋 — 서로 다른 그림")
     func previews() throws {
         let cells: [OmokStoneSkin?] = [nil] + OmokStoneSkin.allCases
         let images = try cells.map { try Self.png(OmokSkinPreview(skin: $0).frame(width: 80, height: 56)) }
@@ -274,10 +278,10 @@ private func omokWait(_ condition: () -> Bool) async {
             return try #require(V0317ShopTests.bitmap(CheckShopPanel(store: store, clipsOverflowInsteadOfScroll: true, onBack: {}).environment(\.colorScheme, .dark), width: 340))
         }
         let characters = try panel(.characters)
-        let skins = try panel(.omokSkins, pick: .neon)
+        let skins = try panel(.omokSkins, pick: .dice)
         let legacy = try panel(.characters, unavailable: true)
         let skinsNoPick = try panel(.omokSkins)
-        let charsPick = try panel(.characters, pick: .neon)
+        let charsPick = try panel(.characters, pick: .dice)
         print("[v0381 shop] 오목알(고름 없음) \(skinsNoPick.pixelsHigh / 2) · 캐릭터 탭에서 스킨 고름 \(charsPick.pixelsHigh / 2)")
         print("[v0381 shop] 높이 캐릭터 \(characters.pixelsHigh / 2) · 오목알 \(skins.pixelsHigh / 2) · 탭 없음 \(legacy.pixelsHigh / 2)")
         #expect(characters.pixelsHigh == skins.pixelsHigh, "오목알 탭이 패널 높이를 흔든다")

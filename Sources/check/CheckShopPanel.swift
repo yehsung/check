@@ -696,7 +696,7 @@ struct CheckShopPanel: View {
 
     // MARK: 오목알 스킨 격자(v0.3.81)
 
-    /// '일반 돌' + 서버가 말한 스킨들(못 읽었으면 번들 여섯을 자리만 — 값 없음). 캐릭터 격자와 같은 상자 · 같은 칸 크기.
+    /// '일반 돌' + 서버가 말한 스킨들(못 읽었으면 번들 스킨을 자리만 — 값 없음). 캐릭터 격자와 같은 상자 · 같은 칸 크기.
     private var omokSkinCells: [OmokSkinCell] {
         let rows = store.omokSkins?.rows ?? OmokStoneSkin.allCases.map { OmokSkinsState.Row(skin: $0) }
         return [OmokSkinCell(skin: nil, row: nil)] + rows.map { OmokSkinCell(skin: $0.skin, row: $0) }
@@ -709,6 +709,9 @@ struct CheckShopPanel: View {
         let cap = ShopPanelGridBudget.capHeight(
             extraChromeHeight: extraChromeHeight + ShopPanelGridBudget.gachaChrome(gachaShown: store.isGachaAvailable,
                                                                                   extraChromeHeight: extraChromeHeight))
+        // 탭을 오가도 패널 높이가 안 흔들리게 캐릭터 격자가 차지할 높이만큼은 자리를 지킨다(스킨이 셋으로 줄어 한 줄이 된 뒤 — 대표 11-10
+        // "네온 흑백 다이아 이렇게 3개 빼."). 넘치는 쪽은 예전처럼 상한에서 스크롤한다.
+        let charactersHeight = min(ShopPanelGridBudget.naturalHeight(rowCount: rows.count), cap)
         return FeedbackListBox(contentHeight: natural, capHeight: cap, clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll) {
             VStack(spacing: ShopPanelGridBudget.cardSpacing) {
                 ForEach(0..<rowCount, id: \.self) { r in
@@ -725,6 +728,7 @@ struct CheckShopPanel: View {
                 }
             }
         }
+        .frame(minHeight: charactersHeight, alignment: .top)
     }
 
     private func omokSkinCard(_ cell: OmokSkinCell) -> some View {

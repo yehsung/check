@@ -190,7 +190,9 @@ extension GomokuStore {
         var game = value
         if !(isWindowVisible && !isWindowOccluded), game.deadline != nil { game.pause(now: clock()) }
         if aiGame != game { aiGame = game }
-        let next = game.matchState()
+        var next = game.matchState()
+        // 0.3.81 오목알 스킨 — AI 판은 사람 쪽 돌에만 내 스킨(AI 는 일반 돌).
+        next.stoneSkins = OmokStoneSkins(color: next.myColor == .black, skin: aiStoneSkin)
         if match != next { match = next }
         let nextPhase: GomokuPhase = game.isFinished ? .result : .playing
         if phase != nextPhase { phase = nextPhase }

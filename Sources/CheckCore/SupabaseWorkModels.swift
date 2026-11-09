@@ -3693,6 +3693,10 @@ package struct GomokuMatchRow: Decodable, Equatable, Sendable {
     package var startedMs: Double?
     /// 끝난 서버 시각. finished 가 아니면 null.
     package var finishedMs: Double?
+    /// 0.3.81 — 오목알 스킨(서버 20261111130000): 흑 · 백 두 사람이 **지금 낀** 스킨 id. 안 싣는 옛 서버 · 일반 돌이면 nil.
+    /// 대국(gomoku_state · 쓰기 응답) · 관전(gomoku_watch) 둘 다 같은 칸이다. 맨 끝에 Optional 로만 더한다(머리말 ①).
+    package var blackSkin: String?
+    package var whiteSkin: String?
 }
 
 /// 수 기록 한 줄. 패스는 x·y 가 null 이다(kind 'pass' 가 함께 오면 그것도 본다).

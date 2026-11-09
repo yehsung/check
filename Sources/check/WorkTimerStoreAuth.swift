@@ -78,6 +78,8 @@ extension WorkTimerStore {
         refreshAppUserCharacters()
         // 생일 선물(v0.3.66) — 앱 시작에 한 번 묻는다. 열린 선물이 있으면 축하 창이 이 실행에 한 번 스스로 뜬다(WorkTimerStoreCakeGift.swift).
         refreshCakeGift(reason: .launch)
+        // 오목알 스킨(v0.3.81) — AI 판의 내 돌이 낀 스킨으로 서게 한 번 읽는다(서버 판은 대국 응답이 말한다).
+        loadOmokSkins()
     }
 
     func signIn(email: String, password: String) async {
@@ -123,6 +125,8 @@ extension WorkTimerStore {
         refreshAppUserCharacters()
         // 생일 선물(v0.3.66) — 로그인 직후 한 번 묻는다(시작 경로와 같은 이유).
         refreshCakeGift(reason: .signIn)
+        // 오목알 스킨(v0.3.81) — 시작 경로와 같은 이유.
+        loadOmokSkins()
     }
 
     func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
@@ -730,6 +734,7 @@ extension WorkTimerStore {
         switch shopSelection {
         case .character(let id): return shopPrice(of: id)
         case .ultra: return ultraPrice
+        case .omokSkin(let skin): return omokSkinPrice(skin)
         case nil: return nil
         }
     }
@@ -780,6 +785,7 @@ extension WorkTimerStore {
         switch selection {
         case .character(let id): buyCharacter(id)
         case .ultra: buyUltra(count: 1)
+        case .omokSkin(let skin): buyOmokSkin(skin)
         }
     }
 

@@ -885,6 +885,15 @@ final class WorkTimerStore {
     ///   상품 종류마다 구매 방법이 다르면 그게 곧 실수의 자리라, 울트라도 같은 길을 지난다.
     var shopSelection: ShopSelection?
 
+    /// 상점 아래 칸의 탭(v0.3.81 — 캐릭터 | 오목알). 상점을 닫아도 남는다(다시 열면 보던 탭).
+    var shopTab: ShopTab = .characters
+    /// 오목알 스킨 상점 상태(v0.3.81 — `omok_skins_state`). nil = 아직 못 읽음. 상점을 열 때 · 사기 · 끼기 뒤에 맞춘다.
+    var omokSkins: OmokSkinsState?
+    /// 이 서버엔 스킨 상점이 없다(함수 없음 — db push 전). '오목알' 탭을 감춘다.
+    var omokSkinsUnavailable = false
+    /// 끼기 요청이 떠 있다(두 번 눌러도 한 번).
+    var omokSkinEquipInFlight = false
+
     /// 지금 사고 있는 것의 id(`WorkTimerStore.ultraPurchaseID` 면 울트라). nil 이면 구매 중이 아니다.
     /// 하나만 두는 이유: 동시에 둘을 사면 잔량 응답 둘이 뒤섞여 어느 쪽이 최신인지 알 수 없다.
     var purchasingID: String?
@@ -3196,6 +3205,8 @@ final class WorkTimerStore {
         closeMissionPanel()
         isInsightsPanelVisible = false
         loadShopState()
+        // 오목알 스킨 상태(v0.3.81)도 상점 진입에 묻는다 — 가짐 · 낌 · 값은 다른 기기에서도 바뀐다.
+        loadOmokSkins()
         // 확성기 카드의 가격(💎50)도 서버가 말한다 — 작성기를 열기 전부터 보이게 같이 읽는다(v0.3.51).
         prefetchMegaphoneInfo()
         // 생일 선물(v0.3.66)도 상점 진입에 묻는다 — 잠긴 케이크 칸을 본 사람이 받을 선물이 있으면 축하 창 · 다시 열기 카드가 선다.

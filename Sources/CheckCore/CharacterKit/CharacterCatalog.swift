@@ -133,11 +133,22 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
+    /// 개발에 찌든 아잉이(제보 11-08 · 시안 D2 '후드티 개발자')의 고정 id. 서버 CHECK · 가격표의 id 와 같다. 매니페스트 파일로 못 싣는 이유는
+    /// 금 · 무지개와 같다. 대표 결정(2026-11-10): "개발에 찌든 아잉이 에셋 시안 여러개 뽑아보자. 이거 구현해야겠어" → #d_NuLS5imieQds "D2 후드티 개발자".
+    package static let devAingID = DevAingArt.characterID
+
+    /// 코드에 박힌 개발에 찌든 아잉이 — 아잉과 **같은 3D 메시**에 후드티 마감(`CharacterManifest.Finish.dev`)을 입힌 변형이다.
+    package static let builtInDevAing = CharacterManifest(
+        id: devAingID,
+        displayName: "개발에 찌든 아잉이",
+        kind: .scene3D
+    )
+
     /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이, 이슬 아잉이,
-    /// 빼빼로 아잉이, 흑우 아잉이, 루비 아잉이). 번들이 비어도 이 아홉은 늘 있다.
+    /// 빼빼로 아잉이, 흑우 아잉이, 루비 아잉이, 개발에 찌든 아잉이). 번들이 비어도 이 열은 늘 있다.
     package static let builtIns: [CharacterManifest] = [
         builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
-        builtInPeperoAing, builtInHwooAing, builtInRubyAing,
+        builtInPeperoAing, builtInHwooAing, builtInRubyAing, builtInDevAing,
     ]
 
     /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
@@ -171,6 +182,21 @@ package struct CharacterCatalog: Sendable {
     /// 이 id 가 루비 아잉이인가. 금과 같은 규칙(정확히 `aing_ruby` 만 — 공백 · 대소문자를 봐주지 않는다).
     package static func isRubyAing(_ id: String?) -> Bool {
         id == rubyAingID
+    }
+
+    /// 이 id 가 개발에 찌든 아잉이인가. 금과 같은 규칙(정확히 `aing_dev` 만).
+    package static func isDevAing(_ id: String?) -> Bool {
+        id == devAingID
+    }
+
+    /// 개발에 찌든 아잉이 — '개발' 뜻 자리(능력 번호 9)는 이 목록이다.
+    package static let devBuiltInIDs: [String] = [devAingID]
+
+    /// 도전 미션 보상으로만 얻는 내장 캐릭터인가(v0.3.81 개발에 찌든 아잉이 — 대표 #d_OwYy6Avg5alV "미션보상으로 가자. 총 누적근무시간
+    /// 100시간 이상달성"). 상점에서 못 사고 뽑기 · 조각 · 선물에도 없다. 서버 가격표 행은 판매를 막으려고 `gacha_only = true` 를 싣지만
+    /// **뽑기 전용이 아니다**(`ShopCharacterRow.isGachaOnly` 가 이 판정으로 거른다 — 케이크의 `gacha_only` 와 같은 사정).
+    package static func isMissionRewardBuiltIn(_ id: String?) -> Bool {
+        isDevAing(id)
     }
 
     /// 루비로 사는 내장 캐릭터 — 루비 아잉이 하나(v0.3.78). '루비' 뜻 자리(능력 번호 8)는 이 목록이다.

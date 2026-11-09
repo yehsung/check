@@ -166,6 +166,8 @@ enum CheckMascotAssets {
             // 루비 아잉이(v0.3.78): 초상 두 장 + 무지개와 같이 쓰는 밝기 맵(몸 모양은 코드가 빚는다). 흑우까지 서고 루비도 서야 상점 능력 번호 8 이
             // 나간다(`ShopWire.protocolVersion` — 빠지면 7 에 머물고 서버가 루비 행을 안 싣는다). 정의는 `RubyAingFinish.isDrawable` 한 곳.
             if CharacterCatalog.isRubyAing(id) { return RubyAingFinish.isDrawable(fileManager: fileManager) }
+            // 개발에 찌든 아잉이: 초상 두 장 + 밝기 맵. 루비까지 서고 개발 아잉이도 서야 능력 번호 9 가 나간다.
+            if CharacterCatalog.isDevAing(id) { return DevAingFinish.isDrawable(fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

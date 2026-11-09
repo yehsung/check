@@ -484,6 +484,8 @@ struct GomokuBoardView: View {
     var marks: [GomokuPoint: GomokuBoardMark] = [:]
     var preview: GomokuPreviewStone? = nil
     var showsCoordinates: Bool = true
+    /// 0.3.81 — 흑 · 백 오목알 스킨(서버 match.black_skin · white_skin — 상대에게도 보임). 기본 일반 돌(규칙 예시 판 · 옛 서버).
+    var stoneSkins: OmokStoneSkins = .plain
 
     static let woodLight = BoardGameDrawing.woodLight
     static let woodDark = BoardGameDrawing.woodDark
@@ -534,7 +536,8 @@ struct GomokuBoardView: View {
         for y in g.originY..<(g.originY + g.lines) {
             for x in g.originX..<(g.originX + g.lines) {
                 guard let point = GomokuPoint(x: x, y: y), let color = board[point] else { continue }
-                Self.drawStone(&context, at: g.location(of: point), radius: radius, color: color, opacity: 1)
+                Self.drawStone(&context, at: g.location(of: point), radius: radius, color: color, opacity: 1,
+                               skin: stoneSkins.skin(black: color == .black), seed: OmokStoneSkins.seed(x: x, y: y))
             }
         }
 
@@ -558,7 +561,9 @@ struct GomokuBoardView: View {
 
         // 호버 미리보기
         if let preview, g.contains(preview.point), board[preview.point] == nil {
-            Self.drawStone(&context, at: g.location(of: preview.point), radius: radius, color: preview.color, opacity: 0.45)
+            Self.drawStone(&context, at: g.location(of: preview.point), radius: radius, color: preview.color, opacity: 0.45,
+                           skin: stoneSkins.skin(black: preview.color == .black),
+                           seed: OmokStoneSkins.seed(x: preview.point.x, y: preview.point.y))
         }
 
         // 금수 X
@@ -585,9 +590,24 @@ struct GomokuBoardView: View {
         }
     }
 
-    static func drawStone(_ context: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, color: GomokuColor, opacity: Double) {
-        BoardGameDrawing.drawStone(&context, at: c, radius: r,
-                                   color: color == .black ? .black : .white, opacity: opacity)
+    /// 돌 하나. 스킨이 없으면 일반 돌(`BoardGameDrawing.drawStone`), 있으면 그 스킨의 CoreGraphics 식(코어 `OmokStoneSkin.draw` —
+    /// 시안 도구와 같은 식)을 같은 자리 · 같은 반지름에 그린다. 반투명(미리보기 0.45)은 투명 층 하나로 묶어 그림자 · 몸이 겹쳐
+    /// 진해지지 않게 한다.
+    static func drawStone(_ context: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, color: GomokuColor, opacity: Double,
+                          skin: OmokStoneSkin? = nil, seed: Int = 0) {
+        guard let skin else {
+            BoardGameDrawing.drawStone(&context, at: c, radius: r,
+                                       color: color == .black ? .black : .white, opacity: opacity)
+            return
+        }
+        context.withCGContext { cg in
+            cg.saveGState()
+            cg.setAlpha(CGFloat(opacity))
+            cg.beginTransparencyLayer(auxiliaryInfo: nil)
+            skin.draw(in: cg, center: c, radius: r, black: color == .black, seed: seed)
+            cg.endTransparencyLayer()
+            cg.restoreGState()
+        }
     }
 
     static func drawCross(_ context: inout GraphicsContext, at c: CGPoint, half: CGFloat, width: CGFloat, color: Color) {
@@ -744,7 +764,8 @@ struct GomokuPanel: View {
                 board: watch.board,
                 geometry: GomokuBoardGeometry(side: GomokuWindowLayout.boardSide),
                 lastMove: watch.lastMove,
-                autoPoints: watch.autoPoints
+                autoPoints: watch.autoPoints,
+                stoneSkins: watch.stoneSkins
             )
             .frame(width: GomokuWindowLayout.boardSide, height: GomokuWindowLayout.boardSide)
             // 보이스오버: 대국 판과 같은 한 요소(돌 수 · 마지막 수 · 누구 차례).
@@ -786,7 +807,8 @@ struct GomokuPanel: View {
             GomokuBoardView(
                 board: match.board,
                 geometry: GomokuBoardGeometry(side: GomokuWindowLayout.boardSide),
-                lastMove: match.lastMove
+                lastMove: match.lastMove,
+                stoneSkins: match.stoneSkins
             )
             VStack(alignment: .leading, spacing: GomokuWindowLayout.matchSideSpacing) {
                 GomokuResultCard(store: store, match: match)
@@ -1301,7 +1323,7 @@ private struct GomokuPlayBoard: View {
     var body: some View {
         let g = geometry
         GomokuBoardView(board: match.board, geometry: g, lastMove: match.lastMove, forbidden: forbidden,
-                        autoPoints: match.autoPoints, preview: preview)
+                        autoPoints: match.autoPoints, preview: preview, stoneSkins: match.stoneSkins)
             // 내 차례 마지막 3초 — 판 안쪽 가장자리가 빨갛게 빛난다(0.3.51). 시계는 이 잎만 읽는다(판 그림·이 판 뷰는 5Hz 로 안 다시 그려진다).
             // 툴팁 자리들보다 **먼저**(아래 겹에) 깐다. 입력을 안 받고(allowsHitTesting false) 보이스오버에도 없다 — 호버·탭·툴팁은 그대로다.
             .overlay { GomokuBoardTimeWarning(store: store) }

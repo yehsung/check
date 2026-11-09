@@ -138,7 +138,9 @@ struct V0354GoldShopProtocolTests {
         let hwoo = V0378HwooCoreTests.macHwooArtInSourceTree
         // v0.3.78: 루비 그림까지 실리면 8 이다(누적 — 기준선은 V0378RubyCoreTests.macRubyArtInSourceTree).
         let ruby = V0378RubyCoreTests.macRubyArtInSourceTree
-        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? (hwoo ? (ruby ? ShopWire.rubyProtocol : ShopWire.hwooProtocol) : ShopWire.peperoProtocol) : ShopWire.isulProtocol)
+        // v0.3.81: 개발에 찌든 아잉이 그림까지 실리면 9 다(누적 — 기준선은 V0381DevAingCoreTests.macDevArtInSourceTree).
+        let dev = V0381DevAingCoreTests.macDevArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? (hwoo ? (ruby ? (dev ? ShopWire.devProtocol : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol) : ShopWire.isulProtocol)
                                                                   : ShopWire.cakeProtocol)
                                                          : ShopWire.rainbowProtocol)
                                                 : ShopWire.goldProtocol)

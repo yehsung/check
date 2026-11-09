@@ -57,6 +57,8 @@ struct MissionClaimBurst: Equatable, Sendable {
     let serial: Int
     let target: String
     let amount: Int
+    /// 캐릭터 보상 받기(v0.3.81)면 그 캐릭터 — 연출이 루비 "+N" 대신 그 캐릭터의 작은 초상을 띄운다. nil = 루비.
+    var characterID: String? = nil
 
     /// 도전 미션 줄의 자리(계열 — 콕 10 을 받으면 같은 줄이 콕 50 으로 바뀌어도 연출은 그 줄 위에 남는다).
     static func achievementTarget(series: String) -> String { "achievement:\(series)" }
@@ -270,6 +272,54 @@ extension WorkTimerStore {
         onRewardTrigger?(.rubyReward(amount: status.claimedNowRuby))
     }
 
+    // MARK: 캐릭터 보상 미션 받기(v0.3.81 — 개발에 찌든 아잉이 · 누적 근무 100시간)
+
+    /// 캐릭터 보상 미션 받기 — `achievement_character_claim(p_key, p_protocol)`. 누적 받기와 **같은 규약**(같은 키는 한 번에 하나 ·
+    /// 실패는 그 줄 · 응답이 상태를 옮김)이되 루비가 아니라 캐릭터가 온다: 받으면 상점 상태를 다시 읽어 보유를 맞추고(고르기 · 상점이
+    /// 서버 보유로 선다), 그 줄에 캐릭터 연출 · 미션 화면 안내줄 한 줄("[캐릭터]에서 입어 보세요")을 띄운다.
+    /// 떠 있음 · 실패 표시는 누적 집합(`achievementClaimsInFlight` · `achievementClaimFailedKeys`)을 같이 쓴다 — 키가 겹치지 않는다
+    /// (서버가 루비 정의표에 같은 키가 있으면 배포를 멈춘다).
+    @discardableResult
+    func claimCharacterMission(key: String) -> Task<Void, Never>? {
+        guard session != nil, !achievementsUnavailable else { return nil }
+        guard !achievementClaimsInFlight.contains(key) else { return nil }
+        achievementClaimsInFlight.insert(key)
+        let generation = sessionGeneration
+        let protocolNumber = shopProtocolVersion
+        return Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if generation == self.sessionGeneration { self.achievementClaimsInFlight.remove(key) }
+            }
+            do {
+                let response = try await self.withSessionRetry { activeSession in
+                    try await self.service.achievementCharacterClaim(accessToken: activeSession.accessToken, key: key,
+                                                                     protocolNumber: protocolNumber)
+                }
+                guard generation == self.sessionGeneration else { return }
+                self.applyAchievements(response.status)
+                switch response.outcome {
+                case .ok?, .already?, .notMet?, .hidden?:
+                    // 받음 · 이미 받음 · 아직 · 숨김 — 줄은 응답 모양 그대로 맞춰졌다. 실패 문장은 내린다.
+                    self.markAchievementClaim(key, failed: false)
+                default:
+                    // 모르는 키 · 업데이트 필요 · 어휘 없음 — 이 버튼은 아무것도 못 받았다. 그 줄이 말한다(다시 눌러도 같으면 같은 문장).
+                    self.markAchievementClaim(key, failed: true)
+                }
+                guard response.outcome == .ok, let characterID = response.claimedCharacterIDs.first else { return }
+                self.startClaimBurst(target: MissionClaimBurst.achievementTarget(series: key), amount: 0, characterID: characterID)
+                let name = CheckCharacter3DScene.catalog.manifest(id: characterID)?.displayName ?? characterID
+                self.missionNotice = DevAingMission.received(name: name)
+                // 보유는 서버가 말한다 — 상점 상태를 다시 읽어 고르기 · 상점 칸을 '보유'로 세운다.
+                self.loadShopState()
+            } catch {
+                if case .cancelled = self.classifyAuthError(error) { return }
+                guard generation == self.sessionGeneration else { return }
+                self.markAchievementClaim(key, failed: true)
+            }
+        }
+    }
+
     // MARK: 일일 미션 받기(v0.3.64)
 
     /// 서버 시각의 추정(밀리초) — 이 맥 시계 + 마지막 응답이 잰 시계 차. 일일 줄의 날짜 넘김 판정에만 쓴다.
@@ -425,9 +475,10 @@ extension WorkTimerStore {
         if weeklyClaimFailed { weeklyClaimFailed = false }
     }
 
-    private func startClaimBurst(target: String, amount: Int) {
+    private func startClaimBurst(target: String, amount: Int, characterID: String? = nil) {
         missionClaimBurstSerial &+= 1
-        missionClaimBursts[target] = MissionClaimBurst(serial: missionClaimBurstSerial, target: target, amount: amount)
+        missionClaimBursts[target] = MissionClaimBurst(serial: missionClaimBurstSerial, target: target, amount: amount,
+                                                       characterID: characterID)
     }
 
     /// 받기 연출을 비운다(미션 화면 · 팝오버를 닫을 때). 비어 있으면 대입하지 않는다(관찰 무효화를 만들지 않게).

@@ -78,7 +78,8 @@ import Testing
         #expect(Body.labelMapKey == "ckLabelMap")
         #expect(IsulAingFinish.decorNodeName == "check.isulDecor" && Cap.capNodeName == "check.isul.cap")
         // v0.3.77: 빼빼로 상자 · 막대도 같은 판정에 들었다(장식 루트 셋 — V0377PeperoMac3DTests 가 빼빼로 쪽을 잰다).
-        #expect(AingDecor.rootNames == [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.decorNodeName, PeperoAingFinish.decorNodeName])
+        #expect(AingDecor.rootNames == [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.decorNodeName, PeperoAingFinish.decorNodeName,
+                                       DevAingFinish.decorNodeName])   // v0.3.81 개발 아잉이 끈
         // 뚜껑 꼭대기: 앱이 만든 뚜껑으로 다시 잰다(생성기가 실행 때 맞대는 상수와 같다).
         let decor = try #require(IsulAingFinish.decorNode())
         #expect(abs(Double(Cap.topY(decor)) - Cap.capTopY) < 5e-4, "뚜껑 꼭대기 \(Cap.topY(decor)) ≠ 상수 \(Cap.capTopY)")

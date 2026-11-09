@@ -78,7 +78,8 @@ import Testing
     func decorShapeMatchesTheGenerator() throws {
         #expect(PeperoAingFinish.decorNodeName == "check.peperoDecor" && Decor.boxNodeName == "check.pepero.box")
         #expect(Decor.sticks.map(\.name) == ["check.pepero.stickL", "check.pepero.stickR1", "check.pepero.stickR2"])
-        #expect(AingDecor.rootNames == [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.decorNodeName, PeperoAingFinish.decorNodeName])
+        #expect(AingDecor.rootNames == [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.decorNodeName, PeperoAingFinish.decorNodeName,
+                                       DevAingFinish.decorNodeName])   // v0.3.81 개발 아잉이 끈
         #expect(Decor.sheetWidth == 1024 && Decor.sheetHeight == 1024)
         #expect(Decor.frontRows == 0..<396 && Decor.backRows == 412..<808 && Decor.sideRows == 824..<1024)
         let decor = try #require(PeperoAingFinish.decorNode())

@@ -227,16 +227,58 @@ struct MegaphoneBannerPanelTests {
         #expect(!store.isMessagePanelVisible, "[닫기] 가 대화를 열었다")
         #expect(await mbpWait { !controller.isOpen })
 
-        // 카드 소스: 단추는 [닫기] 하나이고 답장 문이 어디에도 없다(주석은 걷고 잰다).
+        // 카드 소스: 단추는 [닫기]와, 글이 넘칠 때만 서는 [더 보기] 둘이다(2026-11-10 대표 결정 — 긴 확성기를 펼쳐 보기).
+        // 답장 문은 어디에도 없다(주석은 걷고 잰다).
         let window = try mbpSource("Sources/check/CheckMegaphoneBannerWindow.swift")
         let view = try #require(mbpBody(window, after: "struct MegaphoneBannerView: View"))
-        #expect(view.components(separatedBy: "bannerButton(\"").count - 1 == 1, "카드 단추가 하나가 아니다")
+        #expect(view.components(separatedBy: "bannerButton(\"").count - 1 == 2, "카드 단추가 [닫기] · [더 보기] 둘이 아니다")
         #expect(view.contains("bannerButton(\"닫기\", action: onClose)"), "기준선: [닫기] 단추를 못 찾았다")
+        #expect(view.contains("if presentation.canExpand && !presentation.isExpanded {")
+                && view.contains("bannerButton(\"더 보기\", action: onExpand)"), "[더 보기] 가 넘칠 때만 서지 않는다")
         for word in ["답장", "onReply", "reply()", "openMegaphoneReply", "canReply"] {
             #expect(!window.contains(word), "배너 창에 답장 흔적('\(word)')이 남았다")
         }
         let banner = try mbpSource("Sources/check/WorkTimerStoreMegaphoneBanner.swift")
         #expect(!banner.contains("openMegaphoneReply") && !banner.contains("MessagePeerHint"), "답장 배선이 남았다")
+    }
+
+    // MARK: [더 보기]
+
+    @Test("[더 보기](2026-11-10 대표 결정): 넘치는 확성기만 단추가 서고, 누르면 위 끝은 그대로 · 전체 글 높이로 펼친다 · 짧은 글은 단추도 펼침도 없다")
+    func expandShowsTheWholeMegaphone() async throws {
+        let timers = MbpTimers()
+        let store = mbpStore("expand", timers: timers)
+        let world = MbpWorld()
+        world.mouse = CGPoint(x: 300, y: 300)               // 첫째 화면(폭 520)
+        let controller = MegaphoneBannerWindowController(store: store, hooks: world.hooks)
+        controller.start()
+        defer { controller.stop() }
+        var long = ""
+        while long.count < 198 { long += "열심히 확성기 썼는데 잘렸어요 지난 확성기도 보고 싶어요 " }
+        long = String(long.prefix(198))
+        store.megaphoneBanner.presentOwn(body: long, senderName: "나")
+        #expect(await mbpWait { controller.isOpen })
+        #expect(controller.presentation.canExpand && !controller.presentation.isExpanded, "198자 배너에 [더 보기] 가 안 섰다")
+        let folded = try #require(controller.lastCardFrame)
+        controller.expand()
+        let opened = try #require(controller.lastCardFrame)
+        #expect(controller.presentation.isExpanded)
+        #expect(opened.maxY == folded.maxY, "펼칠 때 위 끝이 움직였다: \(folded) → \(opened)")
+        #expect(opened.height >= folded.height + 2 * 19, "펼친 높이가 4줄 배너보다 2줄 넘게 크지 않다: \(folded.height) → \(opened.height)")
+        #expect(controller.presentation.cardHeight == opened.height)
+        controller.expand()                                  // 두 번 눌러도 같다
+        #expect(controller.lastCardFrame == opened)
+
+        // 기준선: 짧은 글은 단추가 없고 expand() 가 아무것도 안 한다 · 다음 배너는 접힌 채로 시작한다.
+        store.megaphoneBanner.dismissCurrent()
+        #expect(await mbpWait { !controller.isOpen })
+        timers.scheduled.last?.fire()
+        store.megaphoneBanner.presentOwn(body: "라운지에 간식 있어요", senderName: "나")
+        #expect(await mbpWait { controller.isOpen && controller.presentation.banner?.body == "라운지에 간식 있어요" })
+        #expect(!controller.presentation.canExpand && !controller.presentation.isExpanded)
+        let short = try #require(controller.lastCardFrame)
+        controller.expand()
+        #expect(controller.lastCardFrame == short && !controller.presentation.isExpanded, "짧은 배너가 펼쳐졌다")
     }
 
     // MARK: 미룸
@@ -334,7 +376,8 @@ struct MegaphoneBannerPanelTests {
         let view = try #require(mbpBody(window, after: "struct MegaphoneBannerView: View"))
         // 말풍선이 없는 창이라 레이어를 걸지 않는다 · 보낸 사람 얼굴은 캐릭터 표가 그린다.
         #expect(!view.contains(".checkTooltipLayer()") && view.contains(".appUserAvatarCharacters(from: store)"), "배너 루트 짝이 어긋났다")
-        #expect(view.contains(".lineLimit(MegaphoneBannerLayout.bodyLineLimit)") && MegaphoneBannerLayout.bodyLineLimit == 4)
+        #expect(view.contains(".lineLimit(presentation.isExpanded ? nil : MegaphoneBannerLayout.bodyLineLimit)")
+                && MegaphoneBannerLayout.bodyLineLimit == 4)
         let ensure = try #require(mbpBody(window, after: "private func ensurePanel()"))
         #expect(ensure.contains("self?.close()") && ensure.contains("self?.hoverChanged(inside)"),
                 "카드의 [닫기] · 호버가 컨트롤러 문에 안 닿는다")

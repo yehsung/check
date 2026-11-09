@@ -45,6 +45,7 @@ private let reGiftKindOnlyLaterStems: Set<String> = ["isul_aing_drink_gift.sql",
 private let reNewCharacterLaterStems: [String: String] = [
     "aing_hwoo_shard_only.sql": "aing_hwoo",
     "aing_ruby_shop.sql": "aing_ruby",
+    "aing_dev_mission.sql": "aing_dev",
 ]
 
 /// 마이그레이션 이름에서 앞 번호(14자리 + `_`)를 뗀 꼬리.
@@ -387,13 +388,14 @@ struct V0351RubyEconomyMigrationTests {
         // v0.3.78: 흑우 아잉이(20261109100000 — 조각 20개 교환 전용)도 `gacha_only = true` 로 들어간다(not_for_sale 갈래). 그 파일이
         //   대기열에 들어온 뒤에도 이 명단이 빨개지지 않게 허락한다(루비로 안 판다 — 카탈로그 내장 · `isShardOnlyBuiltIn`).
         #expect(gachaOnly.contains("aing_gold")
-                && gachaOnly.isSubset(of: Set(["aing_gold", "aing_rainbow", CharacterCatalog.hwooAingID] + CharacterCatalog.giftOnlyBuiltInIDs)),
+                && gachaOnly.isSubset(of: Set(["aing_gold", "aing_rainbow", CharacterCatalog.hwooAingID, CharacterCatalog.devAingID] + CharacterCatalog.giftOnlyBuiltInIDs)),
                 "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow, 케이크 둘, aing_hwoo)]")
         // v0.3.78: 흑우(조각 교환 전용 — 루비로 안 판다)와 루비 아잉이(제 서버 파일 20261109110000 이 처음부터 1000 으로 넣는다 — 2배 표가
         //   생긴 **뒤**의 캐릭터라 '옛 값의 2배'가 없다)는 이 2배 표의 대상이 아니다. 두 파일이 대기열 밖이어도 안이어도 같게 카탈로그로 뺀다.
         let paid = Set(CheckMascotAssets.catalog.allIDs.filter {
             $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0) && !CharacterCatalog.isGiftOnlyBuiltIn($0)
                 && !CharacterCatalog.isShardOnlyBuiltIn($0) && !CharacterCatalog.isRubyAing($0)
+                && !CharacterCatalog.isMissionRewardBuiltIn($0)
         }).subtracting(gachaOnly)
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }

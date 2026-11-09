@@ -122,6 +122,11 @@ extension WorkTimerStore {
             shopNotice = gift.copy.lockedHint
             return
         }
+        // 미션 보상(개발에 찌든 아잉이 — v0.3.81): 상점을 열고 얻는 길(도전 미션 '누적 근무 100시간')을 말한다.
+        if CharacterCatalog.isMissionRewardBuiltIn(id) {
+            shopNotice = DevAingMission.lockedHint
+            return
+        }
         guard CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
         shopNotice = GachaText.acquireHint(for: id)
     }
@@ -212,7 +217,7 @@ extension WorkTimerStore {
         }
         // 루비 아잉이(v0.3.78 상점 루비 1000)도 **서버가 루비를 말할 때만**(상점 목록) 또는 가졌거나 입었을 때 선다 — 내장 캐릭터라 번들에 늘 있어,
         // 이 문이 없으면 루비 행을 모르는 서버(마이그레이션 전 · 능력 번호 8 미만으로 읽은 목록)에서 살 수 없는 잠긴 카드가 선다.
-        if CharacterCatalog.isRubyAing(id) {
+        if CharacterCatalog.isRubyAing(id) || CharacterCatalog.isDevAing(id) {
             return owned.contains(id) || id == wearing || rows.contains { $0.id == id }
         }
         guard isGachaOnly(id, rows: rows) else { return true }

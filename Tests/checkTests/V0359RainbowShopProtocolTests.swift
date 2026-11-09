@@ -123,8 +123,10 @@ struct V0359RainbowShopProtocolTests {
         let hwoo = V0378HwooCoreTests.macHwooArtInSourceTree ? [CharacterCatalog.hwooAingID] : []
         // v0.3.78: 루비 그림까지 실리면 8 이다(누적 — 기준선은 V0378RubyCoreTests.macRubyArtInSourceTree).
         let ruby = V0378RubyCoreTests.macRubyArtInSourceTree ? [CharacterCatalog.rubyAingID] : []
+        // v0.3.81: 개발에 찌든 아잉이 그림까지 실리면 9 다(누적).
+        let dev = V0381DevAingCoreTests.macDevArtInSourceTree ? [CharacterCatalog.devAingID] : []
         let expected = ShopWire.protocolVersion(drawableCharacterIDs:
-            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul + pepero + hwoo + ruby)
+            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul + pepero + hwoo + ruby + dev)
         #expect(rainbow, "무지개 그림 네 장이 소스 트리에 없다 — scripts/make-rainbow-aing.swift 를 돌려라")
 
         let host = "v0359-rainbow-bundle-\(UUID().uuidString.prefix(8))".lowercased()

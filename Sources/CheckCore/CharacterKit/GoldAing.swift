@@ -36,6 +36,9 @@ extension CharacterManifest {
         /// 루비 아잉이(v0.3.78 상점 루비 1000) — 아잉 메시를 **보석 모양으로 다시 빚고**(`RubyAingShape` — 다른 마감과 달리 몸 모양이 바뀐다)
         /// 무지개와 같은 디퓨즈 합성 + 몸 셰이더(면마다 평평한 분홍 보석 · 흰 모서리). 장식 노드 없음. **희귀가 아니다**(`isRare` 거짓).
         case ruby
+        /// 개발에 찌든 아잉이(시안 D2) — 아잉 메시 + 무지개와 같은 디퓨즈 합성 + 몸 셰이더(회색 후드 · 다크서클 · 졸린 눈꺼풀) + 끈 장식.
+        /// **희귀가 아니다**(`isRare` 거짓).
+        case dev
     }
 
     /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개·케이크는 코드에 박힌 내장 항목뿐이다).
@@ -62,6 +65,8 @@ extension CharacterManifest.Finish {
             self = .hwoo
         } else if CharacterCatalog.isRubyAing(characterID) {
             self = .ruby
+        } else if CharacterCatalog.isDevAing(characterID) {
+            self = .dev
         } else {
             self = .standard
         }
@@ -73,7 +78,7 @@ extension CharacterManifest.Finish {
     package var isRare: Bool {
         switch self {
         case .gold, .rainbow: return true
-        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby: return false
+        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev: return false
         }
     }
 
@@ -81,7 +86,7 @@ extension CharacterManifest.Finish {
     package var isCake: Bool {
         switch self {
         case .cakeStrawberry, .cakeChoco: return true
-        case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby: return false
+        case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby, .dev: return false
         }
     }
 }

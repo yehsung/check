@@ -42,10 +42,10 @@ struct V0374IsulCoreTests {
         #expect(CharacterCatalog.builtInIsulAing.kind == .scene3D)
         // v0.3.77: 빼빼로가 일곱째로 이슬 뒤에 붙는다(V0377PeperoCoreTests) — 이슬의 자리(여섯째)는 그대로다.
         #expect(CharacterCatalog.builtIns.map(\.id)
-            == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID])
+            == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID])
         // 번들이 비어도 내장 순서 그대로 · 나머지는 그 뒤.
         let empty = CharacterCatalog(entries: [])
-        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID])
+        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID])
         #expect(empty.manifest(id: Self.isul)?.displayName == "이슬 아잉이")
         #expect(CharacterCatalog.isIsulAing(Self.isul))
         for near in ["aing_isul ", "AING_ISUL", "aing_isul2", "isul", "", nil] as [String?] {

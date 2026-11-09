@@ -102,13 +102,13 @@ struct AlkkagiGameView: View {
                 Text("A 원래").tag(AlkkagiGame.Physics.ice)
                 Text("B 바둑판(정함)").tag(AlkkagiGame.Physics.board)
                 Text("C 무겁게").tag(AlkkagiGame.Physics.heavy)
-            }.pickerStyle(.segmented).frame(width: 300).help("감속 시안 — 바꾸면 다음 발사부터")
+            }.pickerStyle(.segmented).frame(width: 300)
             Toggle("멈칫", isOn: Binding(get: { model.hitStopEnabled }, set: { model.hitStopEnabled = $0 }))
-                .toggleStyle(.checkbox).help("세게 부딪힐 때 아주 잠깐 멈춤")
+                .toggleStyle(.checkbox)
             #endif
             if onlineStore == nil {
                 Button { model.restart() } label: { Label("새 판", systemImage: "arrow.clockwise") }
-                    .buttonStyle(.bordered).keyboardShortcut("r", modifiers: .command).help("새 판 시작 (⌘R)")
+                    .buttonStyle(.bordered).keyboardShortcut("r", modifiers: .command).alkkagiTooltip("새 판 시작 (⌘R)")
             }
         }.frame(height: BoardGameLayout.headerHeight)
     }
@@ -334,7 +334,7 @@ private struct AlkkagiChatPanel: View {
                 Text(model.isOnline ? "대전 대화" : "로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
                 Button { model.toggleChatMute() } label: {
                     Image(systemName: model.chatMuted ? "bell.slash.fill" : "bell.fill")
-                }.buttonStyle(.plain).help("상대 말 숨기기")
+                }.buttonStyle(.plain).alkkagiTooltip("상대 말 숨기기")
             }
             if !model.isOnline {
                 Picker("지금 말하는 돌", selection: $model.chatSender) {
@@ -941,7 +941,7 @@ final class AlkkagiFeedback {
             }
         case .ringOut:
             // 판 밖 '또르르 툭': 내려가는 미끄럼 + 0.13초 뒤 아래 판에 떨어지는 둔한 소리.
-            return (0..<9_000).map { i in
+            return (0..<9_100).map { i in
                 let t = Double(i) / 44_100
                 let slide = sin(2 * .pi * (620 * t - 1_100 * t * t)) * exp(-t * 26) * 0.6
                 let lt = t - 0.13
@@ -987,4 +987,24 @@ private extension AlkkagiGame.Player {
     var title: String { self == .black ? "흑돌" : "백돌" }
     var color: Color { self == .black ? Color(white: 0.15) : Color(white: 0.95) }
     var darkColor: Color { Color(red: 0.19, green: 0.17, blue: 0.14) }
+}
+
+extension View {
+    /// 말풍선 — 앱은 우리 말풍선(`checkTooltip`), 독립 실행기는 없음. 시스템 말풍선은 쓰지 않는다(V0325 계약).
+    @ViewBuilder func alkkagiTooltip(_ text: String) -> some View {
+        #if ALKKAGI_PLAYGROUND
+        self
+        #else
+        self.checkTooltip(text)
+        #endif
+    }
+
+    /// 창 루트의 말풍선 층(앱만). 알까기 창 루트 `AlkkagiOnlinePanel` 이 단다 — 판 화면(클립된 바둑판)보다 바깥.
+    @ViewBuilder func alkkagiTooltipLayer() -> some View {
+        #if ALKKAGI_PLAYGROUND
+        self
+        #else
+        self.checkTooltipLayer()
+        #endif
+    }
 }

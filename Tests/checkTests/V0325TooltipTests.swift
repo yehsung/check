@@ -730,9 +730,11 @@ struct V0325TooltipTests {
         // 아잉 뒤집기 창(ReversiPanel) 루트가 아홉 번째다(SPEC §5.1 — 창 루트에 레이어 + 아바타 표 두 줄).
         // 아잉 마작 창(MahjongPanel) 루트가 열 번째다(MJ/SPEC.md §4.6 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
         // 1:1 길건너 창(CrossyDuelPanel) 루트가 열한 번째다(CD/SPEC.md §9.5 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
+        // 1:1 알까기 창(AlkkagiOnlinePanel)은 열두 번째다 — 레이어 호출은 독립 실행기와 함께 쓰는 도우미
+        // `alkkagiTooltipLayer()`(AlkkagiGameView.swift, 앱 빌드에서만 `.checkTooltipLayer()`)에 있다.
         // 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
         #expect(layerSites == [
-            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
+            "AlkkagiGameView.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
             "ChessPanel.swift:1", "CrossyDuelPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1",
             "ReversiPanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")

@@ -27,6 +27,8 @@ struct AlkkagiOnlinePanel: View {
         }
         .onAppear { store.windowDidShow() }
         .onDisappear { store.windowDidHide() }
+        // 창 루트의 말풍선 층(판 화면 · 연습 화면 · 로비 모두 이 안쪽) — 앱만, 독립 실행기는 없음.
+        .alkkagiTooltipLayer()
     }
 
     private func paced(_ view: AlkkagiGameView) -> AlkkagiGameView {

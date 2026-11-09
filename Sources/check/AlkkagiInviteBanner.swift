@@ -212,10 +212,6 @@ enum AlkkagiText {
     ]
 }
 
-/// 옛 이름(0.3.80 배너 문구 표). 통합 갈래(T)의 메뉴 배선이 `AlkkagiText` 로 옮겨 갈 때까지 컴파일을 잇는 별칭 —
-/// 글자는 `AlkkagiText` 한 곳이다(흡수 — SPEC §5.8).
-typealias AlkkagiInviteText = AlkkagiText
-
 // MARK: - 아이콘 한 출처
 
 /// 1:1 알까기 입구·배너·머리글·판 머리·미션 줄 아이콘(DF#3 — 뒤집기 `circle.lefthalf.filled` 와 겹치지 않는다).

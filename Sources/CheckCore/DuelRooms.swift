@@ -10,6 +10,9 @@
 //  ② 숨이 '시작됨 + 판 id' 를 돌려주면 그 방마다 **한 번** `onRoomStarted` — 앱이 그 판을 이 기기가 연 판으로 받아 창을 연다
 //     (게임 스토어의 '이 기기가 연 판' 장부 · GameDeviceLedger). 참가자는 `join` 이 ok 면 `onJoined`.
 //  ③ 응답 상태는 모르는 값이 와도 죽지 않는다(.unknown). 문이 닫혀 있으면(unsupported_client · door_open 거짓) 방 칸을 감춘다.
+//  ④ 응답 키는 두 디코더에서 다 맞는다(`DuelRoomWireKey`) — 운영(`duelRPC` → 서비스 디코더 `.convertFromSnakeCase`)은 키를 먼저
+//     카멜로 바꾸고(`created_ms` → `createdMs`), 하네스 픽스처를 읽는 평범한 JSONDecoder 는 원문 그대로다. 0.3.83 은 스네이크
+//     원문만 CodingKeys 에 적어 운영에서 방 줄 · 내 방 · 판 id · 서버 시각이 전부 빠졌다(방 90 열림 · 참가 0 · 방장 방 'replaced' 되풀이).
 import Foundation
 import Observation
 
@@ -43,8 +46,12 @@ package struct DuelRoomHost: Decodable, Equatable, Sendable {
         self.character = character
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case userID = "user_id", displayName = "display_name", avatarURL = "avatar_url", character
+    package init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: DuelRoomWireKey.self)
+        userID = try c.required(String.self, "user_id")
+        displayName = try c.required(String.self, "display_name")
+        avatarURL = try c.optional(String.self, "avatar_url")
+        character = try c.optional(String.self, "character")
     }
 }
 
@@ -79,9 +86,19 @@ package struct DuelRoom: Decodable, Equatable, Identifiable, Sendable {
         self.host = host
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case id, gameRaw = "game", stake, status, createdMs = "created_ms", seenMs = "seen_ms", expiresMs = "expires_ms"
-        case matchID = "match_id", closeReason = "close_reason", host
+    /// 서버 `duel__room_json` 의 키(스네이크 원문). 운영 디코더에서도 맞게 `DuelRoomWireKey` 로 찾는다.
+    package init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: DuelRoomWireKey.self)
+        id = try c.required(String.self, "id")
+        gameRaw = try c.required(String.self, "game")
+        stake = try c.required(Int.self, "stake")
+        status = try c.required(String.self, "status")
+        createdMs = try c.required(Double.self, "created_ms")
+        seenMs = try c.optional(Double.self, "seen_ms")
+        expiresMs = try c.optional(Double.self, "expires_ms")
+        matchID = try c.optional(String.self, "match_id")
+        closeReason = try c.optional(String.self, "close_reason")
+        host = try c.optional(DuelRoomHost.self, "host")
     }
 }
 
@@ -127,34 +144,57 @@ package struct DuelRoomsResponse: Decodable, Sendable {
         self.rubyBalance = rubyBalance
     }
 
-    private enum CodingKeys: String, CodingKey {
-        case status, serverNowMs = "server_now_ms", stakes, doorOpen = "door_open", rooms, myRoom = "my_room", room
-        case need, have, reason, matchID = "match_id", gameRaw = "game", rubyBalance = "ruby_balance"
-    }
-
     package init(from decoder: any Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        status = DuelRoomStatus(rawValue: (try? c.decode(String.self, forKey: .status)) ?? "") ?? .unknown
-        serverNowMs = try? c.decodeIfPresent(Double.self, forKey: .serverNowMs)
-        stakes = try? c.decodeIfPresent([Int].self, forKey: .stakes)
-        doorOpen = try? c.decodeIfPresent(Bool.self, forKey: .doorOpen)
+        let c = try decoder.container(keyedBy: DuelRoomWireKey.self)
+        status = DuelRoomStatus(rawValue: (try? c.required(String.self, "status")) ?? "") ?? .unknown
+        serverNowMs = try? c.optional(Double.self, "server_now_ms")
+        stakes = try? c.optional([Int].self, "stakes")
+        doorOpen = try? c.optional(Bool.self, "door_open")
         // 방 줄 하나가 깨져도 나머지는 산다.
-        if let raw = try? c.decodeIfPresent([FailableRoom].self, forKey: .rooms) {
+        if let raw = try? c.optional([FailableRoom].self, "rooms") {
             rooms = raw.compactMap(\.room)
         }
-        myRoom = try? c.decodeIfPresent(DuelRoom.self, forKey: .myRoom)
-        room = try? c.decodeIfPresent(DuelRoom.self, forKey: .room)
-        need = try? c.decodeIfPresent(Int.self, forKey: .need)
-        have = try? c.decodeIfPresent(Int.self, forKey: .have)
-        reason = try? c.decodeIfPresent(String.self, forKey: .reason)
-        matchID = try? c.decodeIfPresent(String.self, forKey: .matchID)
-        gameRaw = try? c.decodeIfPresent(String.self, forKey: .gameRaw)
-        rubyBalance = try? c.decodeIfPresent(Int.self, forKey: .rubyBalance)
+        myRoom = try? c.optional(DuelRoom.self, "my_room")
+        room = try? c.optional(DuelRoom.self, "room")
+        need = try? c.optional(Int.self, "need")
+        have = try? c.optional(Int.self, "have")
+        reason = try? c.optional(String.self, "reason")
+        matchID = try? c.optional(String.self, "match_id")
+        gameRaw = try? c.optional(String.self, "game")
+        rubyBalance = try? c.optional(Int.self, "ruby_balance")
     }
 
     private struct FailableRoom: Decodable {
         let room: DuelRoom?
         init(from decoder: any Decoder) throws { room = try? DuelRoom(from: decoder) }
+    }
+}
+
+/// 서버 키(스네이크 원문)를 **두 디코더 모두에서** 찾는 열쇠(`AlkkagiWireKey` 와 같은 규약).
+/// 운영 길(`DuelRoomLiveService` → `duelRPC` → `SupabaseWorkService.decoder`)은 `.convertFromSnakeCase` 라 키를 먼저 카멜로
+/// 바꾼 뒤 맞춘다(`server_now_ms` → `serverNowMs` · `match_id` → `matchId`). 평범한 JSONDecoder 는 원문 그대로다.
+/// 원문 키가 있으면 그것을, 없으면 같은 규칙으로 바꾼 카멜 키를 쓴다.
+private struct DuelRoomWireKey: CodingKey {
+    let stringValue: String
+    var intValue: Int? { nil }
+    init(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { nil }
+}
+
+private extension KeyedDecodingContainer where Key == DuelRoomWireKey {
+    func wireKey(_ snake: String) -> Key {
+        let exact = Key(stringValue: snake)
+        if contains(exact) { return exact }
+        let parts = snake.split(separator: "_")
+        return Key(stringValue: String(parts.first ?? "") + parts.dropFirst().map { $0.capitalized }.joined())
+    }
+
+    func required<T: Decodable>(_ type: T.Type, _ snake: String) throws -> T {
+        try decode(type, forKey: wireKey(snake))
+    }
+
+    func optional<T: Decodable>(_ type: T.Type, _ snake: String) throws -> T? {
+        try decodeIfPresent(type, forKey: wireKey(snake))
     }
 }
 

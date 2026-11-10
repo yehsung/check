@@ -413,7 +413,9 @@ package enum MeText {
     /// 진행 숫자 "23/50". 받은 줄은 이 자리에 `claimedMark` 를 그린다(연속 근무는 받은 뒤 지금 연속이 다시 낮아질 수 있어
     /// 숫자가 거짓이 된다 — 달성은 끈적하다).
     package static func missionProgress(_ mission: AchievementStatus.Mission) -> String {
-        "\(mission.progress)/\(mission.target)"
+        // 캐릭터 보상 줄(개발에 찌든 아잉이 — 누적 근무 시간)은 단위까지 "37/100시간"(맥과 같은 글자).
+        if mission.characterID != nil { return DevAingMission.count(progress: mission.progress, target: mission.target) }
+        return "\(mission.progress)/\(mission.target)"
     }
 
     /// 보상 숫자 "+50"(루비 보석은 화면이 `RubyIcon` 으로 그린다 — 폰은 💎 이모지를 쓰지 않는다). 0 이면 nil(칩 없음).
@@ -447,6 +449,7 @@ package enum MeText {
         switch mission.state {
         case .inProgress:
             let progress = "\(mission.title), \(missionProgress(mission))"
+            if let id = mission.characterID { return "\(progress), 달성하면 \(MeCharacterCards.displayName(for: id))" }
             return mission.reward > 0 ? "\(progress), 달성하면 루비 \(mission.reward)개" : progress
         case .claimable:
             return "\(mission.title), 달성했어요"

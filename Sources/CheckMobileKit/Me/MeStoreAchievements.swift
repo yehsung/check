@@ -99,7 +99,8 @@ extension MeStore {
         guard achievementsAvailable, context.session.isSignedIn else { return .hidden }
         if let achievements {
             // 받아 둔 값이 있으면 실패해도 그 값을 그린다(알던 줄을 지우지 않는다 — 주간 카드와 같은 규약).
-            let rows = achievements.seriesRows
+            // 누적 루비 계열 줄 뒤에 캐릭터 보상 줄(개발에 찌든 아잉이 — 누적 근무 100시간, 맥 0.3.81 · 폰 1.0.18)을 잇는다(코어 `sectionRows`).
+            let rows = achievements.sectionRows
             return rows.isEmpty ? .hidden : .loaded(rows: rows, claimableCount: achievements.claimableCount)
         }
         return achievementsState.hasFailed ? .failed : .loading
@@ -309,6 +310,43 @@ extension MeStore {
                     return
                 }
                 // 실패는 그 줄이 말한다(안내줄로 절을 밀지 않는다). 버튼은 그대로 남아 다시 누르는 것이 재시도다.
+                self.markAchievementClaim(key, failed: true)
+            }
+        }
+    }
+
+    /// 캐릭터 보상 미션 받기(폰 1.0.18 — 개발에 찌든 아잉이 · `achievement_character_claim(p_key, p_protocol)`). 맥 `claimCharacterMission` 과
+    /// 같은 규약: 같은 키는 한 번에 하나 · 실패는 그 줄 · 응답이 상태를 옮긴다. 루비가 아니라 캐릭터가 오므로 받으면 상점을 다시 읽어
+    /// 보유를 맞춘다(고르기 · 상점 칸이 서버 보유로 선다).
+    package func claimCharacterMission(key: String) {
+        guard context.session.isSignedIn, achievementsAvailable else { return }
+        guard !achievementClaimsInFlight.contains(key) else { return }
+        achievementClaimsInFlight.insert(key)
+        let generation = context.generation
+        let rubyWriteAtDeparture = context.gomokuHost.rubyWriteSerial
+        let protocolNumber = shopProtocolVersion
+        let service = context.service
+        launch { [weak self] in
+            guard let self else { return }
+            defer { if generation == self.context.generation { self.achievementClaimsInFlight.remove(key) } }
+            do {
+                let response = try await self.context.withMobileSessionRetry { session in
+                    try await service.achievementCharacterClaim(accessToken: session.accessToken, key: key, protocolNumber: protocolNumber)
+                }
+                guard generation == self.context.generation else { return }
+                self.noteLocalWrite(Self.achievementClaimWriteKey)
+                self.applyAchievementStatus(response.status, rubyWriteSerialAtDeparture: rubyWriteAtDeparture)
+                switch response.outcome {
+                case .ok?, .already?, .notMet?, .hidden?:
+                    self.markAchievementClaim(key, failed: false)
+                default:
+                    self.markAchievementClaim(key, failed: true)
+                }
+                guard response.outcome == .ok, !response.claimedCharacterIDs.isEmpty else { return }
+                await self.loadShop()
+            } catch {
+                guard generation == self.context.generation else { return }
+                if AuthErrorRules.classify(error) == .cancelled { return }
                 self.markAchievementClaim(key, failed: true)
             }
         }

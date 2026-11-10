@@ -56,4 +56,31 @@ struct V1018CharacterShopTests {
         let birthday = MeCakeGiftSheet(gift: CharacterGiftOffer(id: "b", options: [CharacterCatalog.cakeStrawberryAingID]))
         #expect(birthday.selection == nil)
     }
+    @Test("개발 미션 줄: 진행은 '37/100시간' · 보이스오버는 받을 캐릭터 이름 · 루비 미션 줄은 그대로")
+    func devMissionRowText() {
+        let dev = AchievementStatus.Mission(key: DevAingMission.key, series: "work100", tier: 1, title: "누적 근무 100시간", detail: "",
+                                            reward: 0, target: 100, progress: 37, achieved: false, claimed: false,
+                                            characterID: CharacterCatalog.devAingID)
+        #expect(MeText.missionProgress(dev) == "37/100시간")
+        #expect(MeText.missionAccessibility(dev).hasSuffix("달성하면 개발에 찌든 아잉이"))
+        let ruby = AchievementStatus.Mission(key: "poke10", series: "poke", tier: 1, title: "콕 10번", detail: "",
+                                             reward: 5, target: 10, progress: 3, achieved: false, claimed: false)
+        #expect(MeText.missionProgress(ruby) == "3/10")
+    }
+    @Test("개발 미션 받기: achievement_character_claim 에 키 · 번호 9 를 싣는다 · 떠 있는 동안 다시 눌러도 요청 하나")
+    @MainActor
+    func devMissionClaimRequest() async throws {
+        let harness = await RankMeHarness(label: "v1018-dev-claim") { request in
+            request.rpcName == "achievement_character_claim" ? .json(#"{"status":"ok"}"#) : nil
+        }
+        defer { harness.tearDown() }
+        let store = harness.me
+        store.claimCharacterMission(key: DevAingMission.key)
+        store.claimCharacterMission(key: DevAingMission.key)
+        await harness.quiesceMe()
+        let sent = harness.requests(rpc: "achievement_character_claim")
+        #expect(sent.count == 1, "떠 있는 동안 두 번째 누름이 또 보냈다: \(sent.count)")
+        let body = try #require(sent.first?.jsonBody)
+        #expect(body["p_key"] as? String == DevAingMission.key && body["p_protocol"] as? Int == ShopWire.devProtocol, "\(body)")
+    }
 }

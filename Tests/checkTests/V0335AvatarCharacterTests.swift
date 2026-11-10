@@ -455,7 +455,9 @@ private func avFetches(_ host: String) -> Int {
         // alkkagi/v2 SPEC §5.3). 55 + 5 — 판 · 결과 · 관전 카드는 공용 `BoardGamePlayerCard` 를 쓴다.
         // 1:1 대기방 로비(여섯 게임 공용 부품)가 한 자리를 더했다(방 줄의 방장 얼굴 — DuelRoomsLobby.swift). 60 + 1 — 아래
         // `duelRooms` 필터가 방장 id 와 착용값을 되묻는다(방 id 로 대신 그리면 남의 캐릭터가 선다).
-        #expect(avatars.count == 61, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 지난 확성기 페이지(2026-11-11)가 한 자리를 더했다(줄마다 보낸 사람 얼굴 — CheckMegaphoneFeedPanel.swift). 61 + 1 — 아래
+        // `megaphoneFeed` 필터가 보낸 사람 id · 사진을 되묻는다(서버 줄에 착용값이 없어 캐릭터는 팝오버 루트의 표가 정한다).
+        #expect(avatars.count == 62, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -570,6 +572,11 @@ private func avFetches(_ host: String) -> Int {
         #expect(duelRooms.count == 1, "\(duelRooms.map(\.text))")
         #expect(duelRooms.allSatisfy { $0.text.contains("userID: room.host?.userID,") && $0.text.contains("characterHint: room.host?.character")
             && !$0.text.contains("room.id") }, "\(duelRooms.map(\.text))")
+        // 지난 확성기 한 자리: 줄의 보낸 사람 — 그 사람 id · 사진(서버 `sender_id` · `sender_avatar_url`. 착용값 칸은 서버에 없다).
+        let megaphoneFeed = avatars.filter { $0.file == "CheckMegaphoneFeedPanel.swift" }
+        #expect(megaphoneFeed.count == 1, "\(megaphoneFeed.map(\.text))")
+        #expect(megaphoneFeed.allSatisfy { $0.text.contains("userID: item.senderID,") && $0.text.contains("avatarURL: item.senderAvatarURL,") },
+                "\(megaphoneFeed.map(\.text))")
 
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")

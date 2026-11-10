@@ -28,12 +28,18 @@ struct MegaphoneComposer: View {
         let mega = store.megaphone
         VStack(alignment: .leading, spacing: 6) {
             // 제목(📢 확성기)은 바로 위 카드가 이미 말한다 — 여기서는 무엇이 일어나는지만 한 줄로.
-            Text(MegaphoneText.explainer)
-                .font(.caption2)
-                .foregroundStyle(CheckTheme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // 끝에는 지난 확성기 페이지의 문(2026-11-11 — 서버에 함수가 없다고 들었을 때만 숨는다 · 같은 글자 크기라 높이는 그대로).
+            HStack(spacing: 6) {
+                Text(MegaphoneText.explainer)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if store.showsMegaphoneFeedEntry {
+                    MegaphoneFeedEntryLink { store.openMegaphoneFeed() }
+                }
+            }
             field(mega)
             HStack(spacing: 6) {
                 Text(mega.infoLine(now: mega.clock()))

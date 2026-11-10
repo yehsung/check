@@ -31,6 +31,8 @@ enum BlockReportSurface: Equatable, Sendable {
     case message
     /// 오목 창의 대국 채팅.
     case gomoku
+    /// 상점 자리의 지난 확성기 페이지(2026-11-11 — 남의 글 ··· → 신고 · 차단).
+    case megaphoneFeed
 }
 
 /// 신고·차단 대상. 사람 하나 · 또는 그 사람이 보낸 **1:1 메시지** 한 건(오목 채팅 줄은 다른 표라 id 를 싣지 않는다).

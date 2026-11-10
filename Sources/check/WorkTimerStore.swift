@@ -1381,6 +1381,9 @@ final class WorkTimerStore {
     /// 폰과 같은 코어 스토어다(`MegaphoneBannerStore`). 소유 규약은 `megaphone` 과 같다(약참조 호스트 · 로그아웃에 reset).
     /// 맥 배선(필터 자리 · 실시간 · 예비 새로고침 · 본인 배너)은 `WorkTimerStoreMegaphoneBanner.swift`.
     let megaphoneBanner: MegaphoneBannerStore
+    /// 지난 확성기(2026-11-11 — 최근 30일 모아 보기). 폰과 같은 코어 스토어다(`MegaphoneFeedStore`). 소유 규약은 `megaphone` 과 같다
+    /// (약참조 호스트 · 로그아웃에 reset). 줄은 배너 스토어와 **다른 타입**이라 배너로 다시 뜨지 않는다. 맥 배선은 `WorkTimerStoreMegaphoneFeed.swift`.
+    let megaphoneFeed: MegaphoneFeedStore
     /// 배너 예비 새로고침(팝오버 열기 · 폴링 틱)의 60초 스로틀 장부. 실시간 신호·판정 보류는 이 스로틀을 지나지 않는다.
     @ObservationIgnored var megaphoneBannerLastRefreshAt: Date = .distantPast
     /// 배너 미룸의 마지막 값(바뀐 때만 `deferralChanged()` 를 부른다 — `megaphoneBannerDeferralMayHaveChanged`).
@@ -2092,6 +2095,8 @@ final class WorkTimerStore {
         self.megaphone = MegaphoneStore()
         // 확성기 배너도 같다(2026-10-30). 본 것 기록은 이 앱의 defaults 에 둔다(시험은 격리 스위트).
         self.megaphoneBanner = MegaphoneBannerStore(defaults: defaults)
+        // 지난 확성기도 같다(2026-11-11) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.megaphoneFeed = MegaphoneFeedStore()
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -2188,6 +2193,7 @@ final class WorkTimerStore {
         alkkagi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "alkkagi") }
         megaphone.attach(host: self)
         megaphoneBanner.attach(host: self)
+        megaphoneFeed.attach(host: self)
         // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).
         megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
         // 보낸 사람 본인에게도 보낸 직후 자기 배너를 한 번(서버 fan-out 에는 본인이 없다 — 계약 C2).
@@ -3194,6 +3200,8 @@ final class WorkTimerStore {
         shopNotice = nil
         // 확성기 작성기는 상점 패널 안에 산다 — 패널을 닫으면 같이 접는다(쓰던 글은 남는다).
         megaphone.close()
+        // 지난 확성기 페이지(2026-11-11)도 상점 자리에 선다 — 같이 닫는다(받아 둔 줄은 남는다).
+        closeMegaphoneFeed()
         // 뽑기 패널(v0.3.54)도 상점 안에 산다. 결과는 남긴다(다시 열면 방금 무엇이 나왔는지 보인다).
         closeGachaPanel()
     }
@@ -3212,6 +3220,8 @@ final class WorkTimerStore {
         closeFeedbackPanel()
         closeCharacterPanel()
         isShopPanelVisible = true
+        // 상점은 언제나 상점 첫 화면으로 열린다 — 지난 확성기 페이지(2026-11-11)가 남아 있으면 내린다.
+        closeMegaphoneFeed()
         isLeaderboardVisible = false
         closeTokenBoard()
         closePokePanel()
@@ -4355,6 +4365,8 @@ extension WorkTimerStore {
         megaphone.reset()
         // 확성기 배너의 큐·필터 id·스로틀도 계정에 묶인다(2026-10-30). 남기면 앞 사람이 받은 확성기 id 로 다음 사람의 줄을 거른다.
         resetMegaphoneBanner()
+        // 지난 확성기 목록·문도 계정에 묶인다(2026-11-11). 남기면 다음 사람이 앞 사람의 목록('내가 보낸' 표시 포함)을 본다.
+        megaphoneFeed.reset()
         // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
         resetGachaState()
         // 생일 선물(v0.3.66)도 계정에 묶인다 — 앞 사람의 선물 창 · 다시 열기 카드를 다음 사람이 보지 않게.
@@ -4504,6 +4516,7 @@ extension WorkTimerStore {
         alkkagi.reset()
         megaphone.reset()
         resetMegaphoneBanner()
+        megaphoneFeed.reset()
         resetGachaState()
         resetCakeGiftState()
         startedAt = nil

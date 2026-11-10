@@ -16,6 +16,8 @@ extension WorkTimerStore {
     func toggleMegaphoneComposer() {
         if megaphone.isComposerOpen {
             megaphone.close()
+            // 지난 확성기 페이지(2026-11-11)의 문은 작성기 안에 있다 — 작성기를 접으면 같이 내린다.
+            closeMegaphoneFeed()
             return
         }
         // 구매 왕복 중에는 열지 않는다(그 결과 한 줄이 곧 도착한다 — 카드들이 잠겨 있는 것과 같은 규약).
@@ -25,6 +27,10 @@ extension WorkTimerStore {
         // 뽑기 패널(v0.3.54)과 같은 자리를 빌린다 — 둘은 서로 배타다.
         if isGachaPanelOpen { closeGachaPanel() }
         megaphone.open()
+        // 작성기는 언제나 작성 화면으로 열린다(지난 확성기 페이지가 남아 있으면 내린다). 그리고 닫혔던 '지난 확성기 ›' 문을
+        // 다시 세운다(다음 자연스러운 진입 — 요청은 없다. 누르면 그때 묻는다).
+        closeMegaphoneFeed()
+        rearmMegaphoneFeedEntry()
     }
 
     /// 상점을 여는 순간(`toggleShopPanel`) 확성기 값을 **미리** 읽는다 — 카드가 처음부터 "📢 확성기 · 💎50" 으로 서게

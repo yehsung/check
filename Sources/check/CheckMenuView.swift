@@ -1129,14 +1129,26 @@ struct CheckMenuView: View {
                             onBack: { store.toggleInsightsPanel() }
                         )
                     } else if store.isShopPanelVisible {
-                        // 상점(v0.3.17). 들어오는 문은 헤더의 루비 잔량 칩 하나뿐이라 [뒤로]가 돌아갈
-                        // 곳은 언제나 홈이다(캐릭터 패널과 같은 규약 — origin 을 물을 이유가 없다).
-                        CheckShopPanel(
-                            store: store,
-                            extraChromeHeight: listExtraChromeHeight,
-                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
-                            onBack: { store.closeShopPanel() }
-                        )
+                        if store.isMegaphoneFeedShowing {
+                            // 지난 확성기(2026-11-11)는 상점 **안의 보기**다 — 문이 작성기 설명 줄 끝에 있고, [뒤로]는 작성기가 열린
+                            // 상점으로 간다. 하위 패널 깃발이 아니라서 토큰 행 게이트는 상점 깃발이 이미 센다.
+                            CheckMegaphoneFeedPanel(
+                                store: store,
+                                rendersPlainTextEditor: previewPlainTextEditors,
+                                clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                                extraChromeHeight: listExtraChromeHeight,
+                                onBack: { store.closeMegaphoneFeed() }
+                            )
+                        } else {
+                            // 상점(v0.3.17). 들어오는 문은 헤더의 루비 잔량 칩 하나뿐이라 [뒤로]가 돌아갈
+                            // 곳은 언제나 홈이다(캐릭터 패널과 같은 규약 — origin 을 물을 이유가 없다).
+                            CheckShopPanel(
+                                store: store,
+                                extraChromeHeight: listExtraChromeHeight,
+                                clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                                onBack: { store.closeShopPanel() }
+                            )
+                        }
                     } else if store.isCharacterPanelVisible {
                         // 캐릭터 선택(v0.3.15). 들어오는 문은 헤더 카드의 마스코트 하나뿐이라 [뒤로]가
                         // 돌아갈 곳은 언제나 홈(팀 목록)이다 — origin 을 물을 이유가 없다(제보와 같은 규약).

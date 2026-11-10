@@ -28,12 +28,20 @@ struct MegaphoneComposer: View {
         let mega = store.megaphone
         VStack(alignment: .leading, spacing: 6) {
             // 제목(📢 확성기)은 바로 위 카드가 이미 말한다 — 여기서는 무엇이 일어나는지만 한 줄로.
-            Text(MegaphoneText.explainer)
-                .font(.caption2)
-                .foregroundStyle(CheckTheme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // 끝에는 지난 확성기 페이지의 문(2026-11-11 — 서버에 함수가 없다고 들었을 때만 숨는다 · 같은 글자 크기라 높이는 그대로).
+            // 문을 누르면 입력칸이 화면에서 내려간다 — 조합 중인 한글 마지막 음절을 **먼저 확정**한다(두 버튼과 같은 문).
+            // 안 그러면 [뒤로]로 돌아왔을 때 쓰던 글의 마지막 글자가 빠져 있다.
+            HStack(spacing: 6) {
+                Text(MegaphoneText.explainer)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if store.showsMegaphoneFeedEntry {
+                    MegaphoneFeedEntryLink { FeedbackReplySend.commitThenSend(slot: .megaphone) { store.openMegaphoneFeed() } }
+                }
+            }
             field(mega)
             HStack(spacing: 6) {
                 Text(mega.infoLine(now: mega.clock()))

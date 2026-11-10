@@ -318,6 +318,8 @@ extension WorkTimerStore {
                 // 확성기 신호(2026-10-30)도 조회뿐이다(소비 아님 — 줄의 소비는 같은 묶음의 `ring` 이 맡는다). 근무 게이트가 없다:
                 // 배너는 근무 밖에서도 뜬다. 스로틀도 없다 — 겹친 호출은 배너 스토어가 하나로 모은다.
                 requestMegaphoneBannerRefresh()
+                // 지난 확성기 페이지(2026-11-11)가 떠 있으면 그 목록도 새로 읽는다(안 떠 있으면 0건 — 배너 스토어와는 따로다).
+                refreshMegaphoneFeedIfShowing()
             case .pushAccessToken(let token):
                 realtime.transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

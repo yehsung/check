@@ -265,7 +265,7 @@ struct AlkkagiGameView: View {
                 .font(.caption).foregroundStyle(active ? CheckTheme.working : CheckTheme.secondaryText)
         } clock: {
             if active {
-                BoardGameClockRing(remaining: model.remainingSeconds, duration: 30, tint: model.clockTint)
+                AlkkagiTurnClock(model: model)
             }
         }
         .frame(height: BoardGameLayout.playerCardHeight)
@@ -464,6 +464,23 @@ struct AlkkagiGameView: View {
         }
         #endif
         return (model.status, CheckTheme.secondaryText)
+    }
+}
+
+// MARK: - 차례 시계(잎)
+
+/// 차례 시계 — **잎 뷰**. 남은 초는 이 안의 TimelineView 틱에서만 읽는다(오목 `GomokuTurnClock` 과 같은 꼴).
+/// 온라인 판의 남은 초는 `서버 마감 − 서버 보정 시각`이라 관찰 값이 아니다 — 판 화면 본문에서 읽으면 링은 관찰 값이 바뀔 때
+/// (판 조회 3초 박자 + 왕복)만 다시 그려져, 초가 3~4초씩 끊겨 줄었다(대표 11-10 "초 줄어드는게 막 3~4초 단위로 끊기면서").
+/// 연습 판은 모델이 5Hz 로 판을 나아가게 해(관찰 값) 원래도 매끄럽다 — 같은 잎이 그대로 그린다.
+struct AlkkagiTurnClock: View {
+    let model: AlkkagiLocalModel
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 0.2, paused: !model.clockTicks)) { _ in
+            let remaining = model.remainingSeconds
+            BoardGameClockRing(remaining: remaining, duration: 30, tint: AlkkagiLocalModel.clockTint(remaining))
+        }
     }
 }
 
@@ -844,7 +861,17 @@ final class AlkkagiLocalModel {
         #endif
         return game.phase == .placing ? game.placementRemaining : game.turnRemaining
     }
-    var clockTint: Color { remainingSeconds <= 5 ? CheckTheme.danger : (remainingSeconds <= 10 ? CheckTheme.pending : CheckTheme.working) }
+    static func clockTint(_ remaining: Double) -> Color {
+        remaining <= 5 ? CheckTheme.danger : (remaining <= 10 ? CheckTheme.pending : CheckTheme.working)
+    }
+    /// 차례 시계(`AlkkagiTurnClock`)의 TimelineView 를 돌릴지 — 온라인 판은 서버 시각으로 흐르니 창이 보일 때만 돈다.
+    /// 연습 판은 모델 틱(5Hz)이 판을 바꿔 다시 그리니 돌릴 필요가 없다.
+    var clockTicks: Bool {
+        #if !ALKKAGI_PLAYGROUND
+        if let onlineStore { return onlineStore.isWindowVisible }
+        #endif
+        return false
+    }
     var launchRecoil: AlkkagiVector {
         guard let launch else { return AlkkagiVector(x: 0, y: 0) }
         return launch.direction * (-sin(launch.age * 38) * exp(-launch.age * 17) * launch.power * 6)

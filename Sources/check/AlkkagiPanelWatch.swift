@@ -137,7 +137,8 @@ private struct AlkkagiWatchClock: View {
     let deadlineMs: Double
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1, paused: !store.isWindowVisible)) { _ in
+        // 0.2초(오목 · 대국 시계와 같은 박자) — 1초 틱은 화면 프레임에 맞춰 1.0x초마다라 올림 숫자가 가끔 2씩 건너뛰었다.
+        TimelineView(.animation(minimumInterval: 0.2, paused: !store.isWindowVisible)) { _ in
             let remaining = max(0, (deadlineMs - store.estimatedServerNowMs) / 1_000)
             BoardGameClockRing(remaining: remaining, duration: 30,
                                tint: remaining <= 5 ? CheckTheme.danger : (remaining <= 10 ? CheckTheme.pending : CheckTheme.working))

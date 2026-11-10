@@ -58,7 +58,8 @@ final class MegaphoneTimerLog {
         #expect(!overlayCode.contains("ignoresSafeArea"), "배너가 세이프에어리어를 무시한다 — 상태바·다이내믹 아일랜드를 덮는다")
         #expect(overlayCode.contains(".padding(.horizontal,MobileTheme.sideMargin)"))
         #expect(overlayCode.contains(".background(GlassBackground(shape:RoundedRectangle(cornerRadius:MegaphoneBannerPhoneRules.cornerRadius"))
-        #expect(overlayCode.contains(".lineLimit(MegaphoneBannerPhoneRules.bodyLineLimit)"))
+        // 폰 1.0.18: 접힌 배너는 4줄 · [더 보기]로 펼치면 줄 제한을 푼다(`V1018MegaphoneMoreTests`).
+        #expect(overlayCode.contains(".lineLimit(isExpanded?nil:MegaphoneBannerPhoneRules.bodyLineLimit)"))
         #expect(MegaphoneBannerPhoneRules.bodyLineLimit == 4)
         #expect(overlayCode.contains("Text(MegaphoneText.icon)") && overlayCode.contains("PersonAvatar(name:banner.senderName"))
     }
@@ -72,8 +73,10 @@ final class MegaphoneTimerLog {
         for blocker in ["Color.clear", "Rectangle().fill", ".highPriorityGesture(", ".gesture(", ".allowsHitTesting(true)"] {
             #expect(!code.contains(blocker), "카드 밖까지 손을 받거나 버튼 탭을 막는다: \(blocker)")
         }
-        // 기준선: `.frame(` 은 본문 줄 폭 하나뿐이다(가로만 · 세로 무한 없음). 두 번째가 생기면 그것이 틀을 키운다.
-        #expect(code.components(separatedBy: ".frame(").count - 1 == 1)
+        // 기준선: `.frame(` 은 본문 줄 폭 둘뿐이다(보이는 본문 + 넘침을 재는 숨긴 본문 — 폰 1.0.18 [더 보기]) · 둘 다 가로만, 세로 무한 없음.
+        // 셋째가 생기면 그것이 틀을 키운다.
+        #expect(code.components(separatedBy: ".frame(").count - 1 == 2)
+        #expect(code.components(separatedBy: ".frame(maxWidth:.infinity,alignment:.leading)").count - 1 == 2)
         #expect(code.contains(".frame(maxWidth:.infinity,alignment:.leading)"))
         // 손짓은 카드 모양 위에, 끌림 오프셋 **안쪽**에 붙는다 — 카드가 움직이면 손 받는 자리도 같이 움직인다.
         let shape = try Self.offset(of: ".contentShape(RoundedRectangle(cornerRadius:MegaphoneBannerPhoneRules.cornerRadius", in: code)
@@ -175,13 +178,15 @@ final class MegaphoneTimerLog {
     nonisolated static let rulesPath = "Sources/CheckMobileKit/Messages/MegaphoneBannerPhoneRules.swift"
     nonisolated static let messagesStorePath = "Sources/CheckMobileKit/Messages/MessagesStore.swift"
 
-    @Test("카드 단추는 [닫기] 하나: 주석 걷은 소스에 답장·reply 없음 · 단추 하나가 닫기를 부른다 · 기준선: 닫기 단추는 있다")
+    @Test("카드 단추는 [닫기]와 (넘칠 때만) [더 보기]: 주석 걷은 소스에 답장·reply 없음 · 단추가 닫기를 부른다 · 기준선: 닫기 단추는 있다")
     func cardHasOnlyCloseButton() throws {
         let overlay = Self.squashed(try IntegrationContractTests.code(Self.overlayPath))
         // 기준선: 같은 소스에서 [닫기] 단추와 그 배선은 찾힌다 — 아래 '없다'가 빈 파일·잘못 읽은 경로로 초록이 되지 않게.
         #expect(overlay.contains("AingButton(MegaphoneBannerPhoneText.close,kind:.gray,size:.md){onClose()}"), "카드에 [닫기]가 없다")
         #expect(overlay.contains("onClose:{store.dismissCurrent()}"), "[닫기]가 배너를 안 닫는다")
-        #expect(overlay.components(separatedBy: "AingButton(").count - 1 == 1, "카드 단추가 [닫기] 하나가 아니다")
+        // 폰 1.0.18: [더 보기](넘칠 때만 · 대표 결정 11-10)가 더해져 단추 자리는 둘이다 — 셋째(답장 등)가 생기면 빨강.
+        #expect(overlay.components(separatedBy: "AingButton(").count - 1 == 2, "카드 단추가 [더 보기] · [닫기] 둘이 아니다")
+        #expect(overlay.contains("AingButton(MegaphoneBannerPhoneText.more,kind:.tinted,size:.md)"))
         for word in ["reply", "답장", "canReply"] {
             #expect(overlay.range(of: word, options: .caseInsensitive) == nil, "배너 카드에 [답장]이 남았다: \(word)")
         }

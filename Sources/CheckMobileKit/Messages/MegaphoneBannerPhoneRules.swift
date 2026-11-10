@@ -57,6 +57,12 @@ package enum MegaphoneBannerPhoneRules {
     }
 
     /// 다시 보기 고리의 열쇠. 떠 있는 것도 기다리는 것도 없으면 nil(고리를 돌리지 않는다).
+    /// 본문이 접힌 배너(`bodyLineLimit` 줄)에 다 안 들어가는가 — [더 보기] 를 세울지(폰 1.0.18 · 맥 0.3.81 과 같은 결정).
+    /// 같은 폭 · 같은 글꼴로 잰 **전체 글 높이**가 접힌 높이보다 반 pt 넘게 크면 넘친다(잰 값이 0 이면 아직 모른다 — 단추 없음).
+    package static func needsMore(fullHeight: CGFloat, foldedHeight: CGFloat) -> Bool {
+        foldedHeight > 0 && fullHeight > foldedHeight + 0.5
+    }
+
     package static func deferralPollKey(currentID: String?, queueCount: Int) -> String? {
         guard currentID != nil || queueCount > 0 else { return nil }
         return "\(currentID ?? "-")#\(queueCount)"
@@ -66,6 +72,8 @@ package enum MegaphoneBannerPhoneRules {
 /// 배너에 보이는 글자.
 package enum MegaphoneBannerPhoneText {
     package static let close = "닫기"
+    /// 긴 확성기(4줄을 넘는 글)를 같은 자리에서 전체 글로 펼치는 단추(대표 결정 11-10 — 맥 0.3.81 과 같은 글자).
+    package static let more = "더 보기"
 
     /// 배너 카드에 보일 본문 — 서식 기호(`## ` · `**` · `[글](주소)`)와 이모티콘 토큰(`[아잉:기쁨]` → "아잉이 기쁨")을 벗긴 한 줄 글.
     /// 맥 배너와 같은 함수다(`ChatMarkdown.plainPreview` — 이모티콘 규칙을 먼저 거친다). 1.0.16 까지는 원문 그대로 그려 토큰까지 날것이었다.

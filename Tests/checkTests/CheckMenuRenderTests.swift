@@ -4730,23 +4730,40 @@ private func makeMessagePanelStore(
     return store
 }
 
-// MARK: 진입점 — 팝오버에는 입력칸이 하나도 없다
+// MARK: 진입점 — 팝오버에는 보내는 입력칸이 없다(이름 찾기 칸 하나만)
 
 @MainActor
 @Test
 func pokePanelHasNoInlineComposerAnymore() throws {
     // ImageRenderer 는 TextField/TextEditor 를 못 그려 **샛노란 상자**를 박는다. 그래서 상자 수 = 입력칸 수다.
     // v0.2.48 까지는 말풍선 버튼을 누르면 행 아래로 입력칸이 하나 열렸다(그때 이 수가 1이었다).
-    // **지금은 어떤 상태에서도 0이어야 한다** — 팝오버에서 보내는 길이 남아 있으면 이력이 두 곳으로 갈린다.
+    // **보내는 칸은 어떤 상태에서도 0이어야 한다** — 팝오버에서 보내는 길이 남아 있으면 이력이 두 곳으로 갈린다.
+    // ★ 2026-11-10 부터 상자가 **딱 하나** 있다: 목록 위 '이름으로 찾기' 칸(`PokeSearchBox` — 아무것도 보내지 않는다).
+    //   그 하나는 검색 칸 높이(26pt) 안이고 **첫 행보다 위**다. 상자가 둘이 되거나 행 사이에 생기면 작성기가 되살아난 것이다.
     let now = Date()
     let panel = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now)))
-    #expect(unavailablePlaceholderRowRuns(panel, top: 0, bottom: panel.pixelsHigh - 1).isEmpty)
+    try expectOnlyTheSearchBox(panel)
     saveMessageSnapshot(try #require(panel.representation(using: .png, properties: [:])), "msg-panel")
 
     // 26명(실제 팀 규모)에서도 마찬가지고, 창 높이 상한(700pt)도 그대로다.
     let big = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 26, now: now)))
-    #expect(unavailablePlaceholderRowRuns(big, top: 0, bottom: big.pixelsHigh - 1).isEmpty)
+    try expectOnlyTheSearchBox(big)
     #expect(Double(big.pixelsHigh) / 2.0 <= 700.0)
+
+    // 대조군: 검색 칸을 글자로 그리면(스냅샷 경로) 상자가 0 이다 — 위의 하나가 정말 검색 칸이라는 뜻이다.
+    let plain = try renderBitmap(CheckMenuView(store: makeMessagePanelStore(memberCount: 5, now: now), previewPlainTextEditors: true))
+    #expect(unavailablePlaceholderRowRuns(plain, top: 0, bottom: plain.pixelsHigh - 1).isEmpty,
+            "검색 칸을 글자로 그렸는데도 입력칸 상자가 남았다 — 보내는 칸이 있다")
+}
+
+/// 노란 상자가 하나뿐이고 검색 칸 높이 안이다.
+@MainActor
+private func expectOnlyTheSearchBox(_ bitmap: NSBitmapImageRep) throws {
+    let runs = unavailablePlaceholderRowRuns(bitmap, top: 0, bottom: bitmap.pixelsHigh - 1)
+    #expect(runs.count == 1, "입력칸 상자가 \(runs.count)개다(검색 칸 하나여야 한다): \(runs)")
+    let run = try #require(runs.first)
+    let heightPt = Double(run.end - run.start + 1) / 2
+    #expect(heightPt <= Double(PokeSearchBox.height), "상자가 검색 칸(\(PokeSearchBox.height)pt)보다 크다: \(heightPt)pt")
 }
 
 @MainActor

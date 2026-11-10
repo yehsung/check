@@ -57,6 +57,8 @@ struct CheckMenuView: View {
     var previewFullMissionList: Bool = false
     /// 스냅샷 전용: 받은 1:1 알까기 신청 배너를 강제로 그린다. 앱에서는 store.alkkagi.visibleIncoming 만 읽는다.
     var previewAlkkagiInvite: AlkkagiInvite? = nil
+    /// 스냅샷 전용(2026-11-10): 콕 찌르기 검색 칸에 이 글자를 넣은 채 그린다. 앱에서는 언제나 nil(빈 칸으로 열린다).
+    var previewPokeSearchQuery: String? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -1045,7 +1047,10 @@ struct CheckMenuView: View {
                             waitingMessageCount: store.waitingMessageCount,
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,
-                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            plainTextEditors: previewPlainTextEditors,
+                            // 이름 찾기 칸의 처음 글자. 앱은 늘 빈 칸으로 연다(패널을 닫으면 검색어도 사라진다).
+                            searchDraft: previewPokeSearchQuery ?? ""
                         )
                     } else if store.isUltraPanelVisible {
                         // 울트라 화면 — **보유 수량만**(v0.3.56). 리그/토큰/찌르기/내 기록과 **같은 뼈대**다.
@@ -3989,6 +3994,15 @@ private struct PokePanel: View {
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+    // 스냅샷 전용: 이름 찾기 칸을 AppKit 칸 대신 글자로 그린다(`CheckMenuView.previewPlainTextEditors`). 앱은 false.
+    var plainTextEditors: Bool = false
+
+    // 이름 찾기(2026-11-10 제보 "콕 찌르기에서 검색기능있으면 좋겠어요"). 패널이 내려가면 함께 사라진다 — 다시 열면 빈 칸.
+    // ★ `private` 을 붙이지 마라: 이 둘이 private 이면 멤버와이즈 init 이 private 이 되어 CheckMenuView 가 이 패널을 못 만든다.
+    /// 확정된 검색 글자(편집기 바인딩). 처음 값은 스냅샷만 넣는다.
+    @State var searchDraft: String = ""
+    /// 뷰에 그려진 검색 글자(치는 중인 음절 포함 — `PokeSearchBox`). 있으면 거르기는 이 값을 먼저 본다.
+    @State var searchRendered: String? = nil
 
     // v0.2.34: `@State isChargingUltra` 를 지웠다. 잔량이 배지로 **상시** 보이므로 "꾹 누르는 동안에만
     // 숫자를 말하는" 분기가 필요 없어졌고, 그 한 비트가 3초 홀드마다 이 패널(목록 26행 포함)을
@@ -4017,9 +4031,18 @@ private struct PokePanel: View {
             maxVisibleRows: Self.maxVisibleRows,
             rowHeight: Self.rowHeight,
             rowSpacing: Self.rowSpacing,
-            extraChromeHeight: extraChromeHeight + receiptStripHeight
+            extraChromeHeight: extraChromeHeight + receiptStripHeight + searchRowHeight
         )
     }
+
+    /// 이름 찾기 칸이 먹는 높이(칸 + 바깥 VStack 간격 12). 목록이 비면 칸을 세우지 않으므로 0 이다.
+    /// 받은 메시지 줄과 같은 이유로 목록 예산에 넣는다 — 안 넣으면 칸 높이만큼 창이 700pt 상한을 넘는다.
+    private var searchRowHeight: CGFloat {
+        entries.isEmpty ? 0 : PokeSearchBox.height + 12
+    }
+
+    /// 지금 거르는 글자. 그려진 글자(치는 중 음절 포함)가 있으면 그것, 아직 못 들었으면 확정 글자.
+    private var searchQuery: String { searchRendered ?? searchDraft }
 
     private var receiptStripHeight: CGFloat {
         latestMessage == nil ? 0 : PokeMessageReceiptStrip.height + 12   // 바깥 VStack(spacing: 12) 포함
@@ -4095,7 +4118,14 @@ private struct PokePanel: View {
                 isFocusMode: isFocusMode,
                 focusStage: focusStage
             )
-            entryList(sorted)
+            // 이름 찾기(2026-11-10). 목록 바로 위 · 사람이 있을 때만. 거르기는 **정렬한 뒤** 빼기만 한다 — 순서는 그대로다.
+            if !sorted.isEmpty {
+                PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)
+            }
+            let query = searchQuery
+            // 사람이 없으면 칸이 없으니 찾는 중도 아니다 — 빈 목록 문구('아직 다른 사용자가 없어요')를 그대로 둔다.
+            let isSearching = !sorted.isEmpty && !PokeDirectorySearch.SearchKey(query).isEmpty
+            entryList(isSearching ? PokeDirectorySearch.filter(sorted, query: query) : sorted, all: sorted, isSearching: isSearching)
         }
         .padding(12)
         .pagePanelStyle()
@@ -4117,32 +4147,42 @@ private struct PokePanel: View {
     // 상한은 행 수가 아니라 높이다 — `visibleRows` 개의 48pt 행이 차지하던 높이 그대로라, 상태메시지 행(62pt)이 섞여도
     // 어떤 조합에서도 창 높이는 v0.3.50 의 '접힌 7행'을 넘지 않는다(상태 행이 많을수록 보이는 사람이 줄고 나머지는 스크롤로 밀린다).
     @ViewBuilder
-    private func entryList(_ sorted: [PokeDirectoryEntry]) -> some View {
+    private func entryList(_ sorted: [PokeDirectoryEntry], all: [PokeDirectoryEntry], isSearching: Bool) -> some View {
         let capHeight = Self.listCapHeight(visibleRows: visibleRows)
         let contentHeight = Self.listContentHeight(entries: sorted)
         if contentHeight <= capHeight {
-            rows(sorted).frame(maxWidth: .infinity, alignment: .top)
+            // 찾는 동안은 목록 자리를 **찾기 전 높이로 붙든다**(`PokeSearchListHeight`) — 한 글자 칠 때마다 팝오버가 줄었다 늘었다 하지 않게.
+            rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity, alignment: .top)
+                .frame(
+                    height: PokeSearchListHeight.held(
+                        isSearching: isSearching, shown: contentHeight,
+                        unfiltered: Self.listContentHeight(entries: all), cap: capHeight
+                    ),
+                    alignment: .top
+                )
         } else if clipsOverflowInsteadOfScroll {
             // 스냅샷 전용: 보이는 첫 부분만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
-            rows(sorted).frame(maxWidth: .infinity, alignment: .top)
+            rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
         } else {
             // ★ `ScrollViewReader` 가 사라졌다(v0.2.49). 그것이 있던 유일한 이유는 "펼친 작성기를
             //   스스로 끌어올리기"였는데, 펼칠 것이 없어졌다 — 말풍선 버튼은 이제 **별도 창**을 연다.
             ScrollView(.vertical, showsIndicators: true) {
-                rows(sorted).frame(maxWidth: .infinity)
+                rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity)
             }
             .frame(height: capHeight)
         }
     }
 
     @ViewBuilder
-    private func rows(_ sorted: [PokeDirectoryEntry]) -> some View {
+    private func rows(_ sorted: [PokeDirectoryEntry], isSearching: Bool) -> some View {
         VStack(spacing: Self.rowSpacing) {
             if sorted.isEmpty {
-                // 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus(동기화 상태 문구).
-                Text(PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
+                // 찾다가 비면 '맞는 이름이 없어요'. 아니면 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus.
+                Text(isSearching
+                     ? PokeDirectorySearch.noMatch
+                     : PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)

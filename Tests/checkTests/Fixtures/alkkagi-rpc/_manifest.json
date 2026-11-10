@@ -1,0 +1,939 @@
+{
+  "generated_at": "2026-11-10T06:46:25+09:00",
+  "source": "V2/server/fixtures/gen.sh — 하네스 AK/harness 55582, 체인 182 + 20261111150000_alkkagi_v2.sql 3회 적용 직후, 한 트랜잭션(롤백)",
+  "draft": "20261111150000_alkkagi_v2.sql",
+  "draft_md5": "25626514b597a435ed39cdebba646956",
+  "protocol": 2,
+  "keys": {
+    "lobby_keys": [
+      "status",
+      "protocol",
+      "server_now_ms",
+      "me",
+      "state",
+      "incoming",
+      "outgoing",
+      "ruby_balance",
+      "stakes",
+      "door_open",
+      "record",
+      "users",
+      "matches"
+    ],
+    "peer_keys": [
+      "id",
+      "display_name",
+      "avatar_url",
+      "character_id",
+      "busy"
+    ],
+    "user_keys": [
+      "id",
+      "display_name",
+      "avatar_url",
+      "character_id",
+      "is_working",
+      "in_match",
+      "capable",
+      "focus_mode"
+    ],
+    "invite_keys": [
+      "id",
+      "opponent",
+      "stake",
+      "expires_at_ms"
+    ],
+    "live_keys": [
+      "id",
+      "black",
+      "white",
+      "stake",
+      "shot_count",
+      "watchers",
+      "accepted_at_ms"
+    ],
+    "state_keys": [
+      "id",
+      "revision",
+      "phase",
+      "placement_revision",
+      "my_ready",
+      "opponent_ready",
+      "current_player",
+      "my_color",
+      "black",
+      "white",
+      "stones",
+      "deadline_ms",
+      "shot_count",
+      "result",
+      "finish_reason",
+      "shot",
+      "chat_seq",
+      "chat",
+      "muted",
+      "stake",
+      "accepted_at_ms",
+      "my_missed_turns",
+      "opponent_missed_turns",
+      "forfeit_after",
+      "settled",
+      "ruby_balance",
+      "watchers",
+      "grace_ms"
+    ],
+    "watch_keys": [
+      "id",
+      "revision",
+      "phase",
+      "current_player",
+      "black",
+      "white",
+      "black_ready",
+      "white_ready",
+      "stones",
+      "deadline_ms",
+      "shot_count",
+      "result",
+      "finish_reason",
+      "shot",
+      "stake",
+      "black_missed_turns",
+      "white_missed_turns",
+      "forfeit_after",
+      "finished_at_ms",
+      "watchers"
+    ],
+    "ranking_keys": [
+      "status",
+      "server_now_ms",
+      "record_since_ms",
+      "me",
+      "rows"
+    ],
+    "ranking_me_keys": [
+      "rank",
+      "wins",
+      "losses",
+      "draws",
+      "points"
+    ],
+    "ranking_row_keys": [
+      "rank",
+      "id",
+      "display_name",
+      "avatar_url",
+      "character_id",
+      "wins",
+      "losses",
+      "draws",
+      "points"
+    ]
+  },
+  "envelope_keys": [
+    "status",
+    "protocol",
+    "server_now_ms",
+    "me",
+    "state"
+  ],
+  "gate_extra_keys": {
+    "invalid": [
+      "stakes"
+    ],
+    "already_pending": [
+      "match_id"
+    ],
+    "insufficient": [
+      "need",
+      "have",
+      "ruby_balance",
+      "side(수락만)"
+    ],
+    "unsupported_client": [
+      "door_open(protocol 2 요청의 신청 ⑦ · 수락만)"
+    ]
+  },
+  "statuses_seen": [
+    "already_pending",
+    "blackout",
+    "busy",
+    "expired",
+    "forbidden",
+    "insufficient",
+    "invalid",
+    "not_active",
+    "not_found",
+    "not_pending",
+    "not_signed_in",
+    "ok",
+    "stale",
+    "target_busy",
+    "target_focused",
+    "target_outdated",
+    "unsupported_client"
+  ],
+  "cases": [
+    {
+      "file": "alkkagi_lobby__not_signed_in.json",
+      "rpc": "alkkagi_lobby",
+      "case": "not_signed_in",
+      "status": "not_signed_in",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_lobby__unsupported_client.json",
+      "rpc": "alkkagi_lobby",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "protocol": 1,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__ok.json",
+      "rpc": "alkkagi_challenge",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "outgoing"
+      ]
+    },
+    {
+      "file": "alkkagi_lobby__ok.json",
+      "rpc": "alkkagi_lobby",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "door_open",
+        "incoming",
+        "matches",
+        "outgoing",
+        "record",
+        "ruby_balance",
+        "stakes",
+        "users"
+      ]
+    },
+    {
+      "file": "alkkagi_lobby__light.json",
+      "rpc": "alkkagi_lobby",
+      "case": "light",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "door_open",
+        "incoming",
+        "matches",
+        "outgoing",
+        "record",
+        "ruby_balance",
+        "stakes",
+        "users"
+      ]
+    },
+    {
+      "file": "alkkagi_state__pending_outgoing.json",
+      "rpc": "alkkagi_state",
+      "case": "pending_outgoing",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "outgoing"
+      ]
+    },
+    {
+      "file": "alkkagi_challenge__already_pending.json",
+      "rpc": "alkkagi_challenge",
+      "case": "already_pending",
+      "status": "already_pending",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "match_id",
+        "outgoing"
+      ]
+    },
+    {
+      "file": "alkkagi_challenge__invalid.json",
+      "rpc": "alkkagi_challenge",
+      "case": "invalid",
+      "status": "invalid",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "stakes"
+      ]
+    },
+    {
+      "file": "alkkagi_challenge__invalid_no_stake.json",
+      "rpc": "alkkagi_challenge",
+      "case": "invalid_no_stake",
+      "status": "invalid",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "stakes"
+      ]
+    },
+    {
+      "file": "alkkagi_challenge__unsupported_client_v1.json",
+      "rpc": "alkkagi_challenge",
+      "case": "unsupported_client_v1",
+      "status": "unsupported_client",
+      "protocol": 1,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__unsupported_client.json",
+      "rpc": "alkkagi_challenge",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "door_open"
+      ]
+    },
+    {
+      "file": "alkkagi_challenge__target_outdated.json",
+      "rpc": "alkkagi_challenge",
+      "case": "target_outdated",
+      "status": "target_outdated",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__blackout.json",
+      "rpc": "alkkagi_challenge",
+      "case": "blackout",
+      "status": "blackout",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__target_focused.json",
+      "rpc": "alkkagi_challenge",
+      "case": "target_focused",
+      "status": "target_focused",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__busy.json",
+      "rpc": "alkkagi_challenge",
+      "case": "busy",
+      "status": "busy",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__target_busy.json",
+      "rpc": "alkkagi_challenge",
+      "case": "target_busy",
+      "status": "target_busy",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_challenge__insufficient.json",
+      "rpc": "alkkagi_challenge",
+      "case": "insufficient",
+      "status": "insufficient",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "have",
+        "need",
+        "ruby_balance"
+      ]
+    },
+    {
+      "file": "alkkagi_lobby__door_closed.json",
+      "rpc": "alkkagi_lobby",
+      "case": "door_closed",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "door_open",
+        "incoming",
+        "matches",
+        "outgoing",
+        "record",
+        "ruby_balance",
+        "stakes",
+        "users"
+      ]
+    },
+    {
+      "file": "alkkagi_challenge__unsupported_client_door_closed.json",
+      "rpc": "alkkagi_challenge",
+      "case": "unsupported_client_door_closed",
+      "status": "unsupported_client",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "door_open"
+      ]
+    },
+    {
+      "file": "alkkagi_cancel__forbidden.json",
+      "rpc": "alkkagi_cancel",
+      "case": "forbidden",
+      "status": "forbidden",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "incoming"
+      ]
+    },
+    {
+      "file": "alkkagi_cancel__not_found.json",
+      "rpc": "alkkagi_cancel",
+      "case": "not_found",
+      "status": "not_found",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_cancel__ok.json",
+      "rpc": "alkkagi_cancel",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_cancel__not_pending.json",
+      "rpc": "alkkagi_cancel",
+      "case": "not_pending",
+      "status": "not_pending",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_cancel__expired.json",
+      "rpc": "alkkagi_cancel",
+      "case": "expired",
+      "status": "expired",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_respond__forbidden.json",
+      "rpc": "alkkagi_respond",
+      "case": "forbidden",
+      "status": "forbidden",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "outgoing"
+      ]
+    },
+    {
+      "file": "alkkagi_respond__unsupported_client_v1.json",
+      "rpc": "alkkagi_respond",
+      "case": "unsupported_client_v1",
+      "status": "unsupported_client",
+      "protocol": 1,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_respond__declined.json",
+      "rpc": "alkkagi_respond",
+      "case": "declined",
+      "status": "ok",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_respond__not_pending.json",
+      "rpc": "alkkagi_respond",
+      "case": "not_pending",
+      "status": "not_pending",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_respond__expired.json",
+      "rpc": "alkkagi_respond",
+      "case": "expired",
+      "status": "expired",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_respond__insufficient_me.json",
+      "rpc": "alkkagi_respond",
+      "case": "insufficient_me",
+      "status": "insufficient",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "have",
+        "incoming",
+        "need",
+        "ruby_balance",
+        "side"
+      ]
+    },
+    {
+      "file": "alkkagi_respond__insufficient_challenger.json",
+      "rpc": "alkkagi_respond",
+      "case": "insufficient_challenger",
+      "status": "insufficient",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "have",
+        "incoming",
+        "need",
+        "ruby_balance",
+        "side"
+      ]
+    },
+    {
+      "file": "alkkagi_respond__target_outdated.json",
+      "rpc": "alkkagi_respond",
+      "case": "target_outdated",
+      "status": "target_outdated",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "incoming"
+      ]
+    },
+    {
+      "file": "alkkagi_respond__unsupported_client.json",
+      "rpc": "alkkagi_respond",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "door_open",
+        "incoming"
+      ]
+    },
+    {
+      "file": "alkkagi_respond__accepted.json",
+      "rpc": "alkkagi_respond",
+      "case": "accepted",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__placing.json",
+      "rpc": "alkkagi_state",
+      "case": "placing",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_place__ok.json",
+      "rpc": "alkkagi_place",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_place__stale.json",
+      "rpc": "alkkagi_place",
+      "case": "stale",
+      "status": "stale",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_place__invalid.json",
+      "rpc": "alkkagi_place",
+      "case": "invalid",
+      "status": "invalid",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__placing_ready_waiting.json",
+      "rpc": "alkkagi_state",
+      "case": "placing_ready_waiting",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_ready__ok.json",
+      "rpc": "alkkagi_ready",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__aiming.json",
+      "rpc": "alkkagi_state",
+      "case": "aiming",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_shoot__forbidden.json",
+      "rpc": "alkkagi_shoot",
+      "case": "forbidden",
+      "status": "forbidden",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_shoot__stale.json",
+      "rpc": "alkkagi_shoot",
+      "case": "stale",
+      "status": "stale",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_shoot__ok.json",
+      "rpc": "alkkagi_shoot",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "rolling",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__rolling.json",
+      "rpc": "alkkagi_state",
+      "case": "rolling",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "rolling",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_chat_send__ok.json",
+      "rpc": "alkkagi_chat_send",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "rolling",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__missed_turn.json",
+      "rpc": "alkkagi_state",
+      "case": "missed_turn",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_watch__ok.json",
+      "rpc": "alkkagi_watch",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_watch_live__ok.json",
+      "rpc": "alkkagi_watch_live",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__watched.json",
+      "rpc": "alkkagi_state",
+      "case": "watched",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "aiming",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_watch__placing.json",
+      "rpc": "alkkagi_watch",
+      "case": "placing",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "placing",
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_watch__not_found.json",
+      "rpc": "alkkagi_watch",
+      "case": "not_found",
+      "status": "not_found",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_watch__unsupported_client.json",
+      "rpc": "alkkagi_watch",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "protocol": 1,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_resign__ok.json",
+      "rpc": "alkkagi_resign",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "resign",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_resign__not_active.json",
+      "rpc": "alkkagi_resign",
+      "case": "not_active",
+      "status": "not_active",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "resign",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__finished_resign_win.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_resign_win",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "resign",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__finished_resign_loss.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_resign_loss",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "resign",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_leave__ok.json",
+      "rpc": "alkkagi_leave",
+      "case": "ok",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "resign",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__finished_ring_out_win.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_ring_out_win",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "ring_out",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__finished_draw.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_draw",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "ring_out",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__finished_timeout_loss.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_timeout_loss",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "timeout",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__finished_void.json",
+      "rpc": "alkkagi_state",
+      "case": "finished_void",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "void",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__not_found.json",
+      "rpc": "alkkagi_state",
+      "case": "not_found",
+      "status": "not_found",
+      "protocol": 2,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__unsupported_client_v1.json",
+      "rpc": "alkkagi_state",
+      "case": "unsupported_client_v1",
+      "status": "unsupported_client",
+      "protocol": 1,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__legacy_v1.json",
+      "rpc": "alkkagi_state",
+      "case": "legacy_v1",
+      "status": "ok",
+      "protocol": 1,
+      "phase": "finished",
+      "finish_reason": "ring_out",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_state__legacy_v2.json",
+      "rpc": "alkkagi_state",
+      "case": "legacy_v2",
+      "status": "ok",
+      "protocol": 2,
+      "phase": "finished",
+      "finish_reason": "ring_out",
+      "extra_keys": []
+    },
+    {
+      "file": "alkkagi_ranking__ok.json",
+      "rpc": "alkkagi_ranking",
+      "case": "ok",
+      "status": "ok",
+      "protocol": null,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": [
+        "record_since_ms",
+        "rows"
+      ]
+    },
+    {
+      "file": "alkkagi_ranking__unsupported_client.json",
+      "rpc": "alkkagi_ranking",
+      "case": "unsupported_client",
+      "status": "unsupported_client",
+      "protocol": 1,
+      "phase": null,
+      "finish_reason": null,
+      "extra_keys": []
+    }
+  ],
+  "notes": [
+    "응답은 실제 RPC 원문(가공 없음) — uuid · 시각은 생성한 판의 값이라 다시 뜨면 바뀐다(키 · 모양 · status 만 계약)",
+    "봉투 = {status, protocol, server_now_ms, me(PEER|null), state(STATE|WATCH|null)} + 게이트 덧키 · 대기 신청이면 outgoing|incoming",
+    "RANKING 은 봉투가 아니다: {status, server_now_ms, record_since_ms, me, rows}(ok) — 게이트(unsupported_client 등)는 봉투",
+    "가벼운 로비(alkkagi_lobby__light): users = [] · matches = [] · record = null(0 이 아니다 — 클라는 덮지 않는다)",
+    "protocol 1 요청(…_v1 · …unsupported_client_v1)의 응답 protocol 은 1 이고 door_open 키가 없다(0.3.80 이 업데이트 안내를 띄운다)",
+    "alkkagi_state__legacy_v1: 판돈 없는 끝난 옛 판을 protocol 1 로 — v1 STATE 19키 그대로 · legacy_v2 는 같은 판 protocol 2(28키, stake null)",
+    "WATCH.watchers 는 alkkagi_watch 에서도 실린다(지금 관전자 수 — 읽기만) · alkkagi_watch_live 는 ping 값으로 덮는다(SPEC '(live 만)' 해석 — NOTES §4)",
+    "abandoned 끝 사유는 떠난 계정의 판 행이 cascade 로 사라져 state 픽스처가 없다(SPEC §3.6 VC-16)",
+    "흑백 추첨은 setseed 로 '신청자 = 흑'에 고정해 떴다 — 실제로는 수락 순간 50%"
+  ]
+}

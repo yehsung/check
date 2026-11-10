@@ -2,24 +2,17 @@ import AppKit
 import SwiftUI
 import AlkkagiCore
 
+/// 로그인 없는 한 창 연습(로컬 2인) 실행기. 온라인 1:1 은 본앱에서만 연다(SPEC v1.1 §5.10 · 설계 결정 D15).
 @main
 struct AlkkagiPlaygroundApp: App {
     @NSApplicationDelegateAdaptor(AlkkagiAppDelegate.self) private var delegate
-    private let configuration: AlkkagiPreviewConfiguration?
-    private let online: AlkkagiOnlineStore?
     init() {
         NSApplication.shared.setActivationPolicy(.regular)
-        let configuration = AlkkagiPreviewConfiguration.load()
-        self.configuration = configuration
-        self.online = configuration.map { AlkkagiOnlineStore(service: AlkkagiPreviewService(configuration: $0), pollSeconds: 0.35) }
     }
 
     var body: some Scene {
-        WindowGroup(configuration?.title ?? "알까기 · 로컬 테스트") {
-            Group {
-                if let online { AlkkagiOnlinePanel(store: online) }
-                else { AlkkagiGameView() }
-            }
+        WindowGroup("알까기 · 로컬 연습") {
+            AlkkagiGameView()
                 .onAppear { NSApplication.shared.activate(ignoringOtherApps: true) }
         }
         .windowResizability(.contentSize)

@@ -92,7 +92,8 @@ struct CheckApp: App {
             // 받은 **1:1 길건너** 신청도 같은 점(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
             // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
             hasCrossyDuelInvite: appDelegate.store.crossyDuel.visibleIncoming != nil,
-            hasAlkkagiInvite: !appDelegate.store.alkkagi.incoming.isEmpty
+            // 받은 **1:1 알까기** 신청도 같은 점(길건너와 같은 사정). 만료·차단·내 판은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
+            hasAlkkagiInvite: appDelegate.store.alkkagi.visibleIncoming != nil
         )
     }
 }
@@ -736,19 +737,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         crossyDuel.onHoldingActivityChange = { holding in crossyDuelActivity.set(holding) }
     }
 
+    /// 1:1 알까기의 문들을 잇는다(실행당 1회 — 길건너 꼴, alkkagi/v2 SPEC §6 #1). 스토어 쪽 문이 옵셔널이라 **전부 빠져도 조용히
+    /// 초록이다** — 그래서 소스 계약 시험(V03xxAlkkagiWiringTests)이 줄마다 되묻는다.
+    ///   ① `rankingEnabled` · `spectatorFeaturesEnabled` — 순위 · 관전의 주 스위치(스토어 기본은 꺼짐 — 시험 · 미리보기 조립).
+    ///   ② 창 `configure(store:safety:)` — `safety` 는 창 루트의 아바타 캐릭터 표(`appUserAvatarCharacters(from:)`)를 흘린다.
+    ///   ③ `presentWindow` · ④ `dismissWindow` — 창을 띄우고 닫는 유일한 문.
+    ///   ⑤ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만).
+    ///   ⑥ `requestAttention` — 모양만(메뉴바 앱이라 독 주의는 거의 안 보인다 — 완화책은 말풍선·점·배너).
+    ///   ⑦ `onInviteArrived` · `onAttention` — **창 밖에서 1:1 알까기를 아는 길**(받은 신청 · 판 시작 · 내 차례). 한 수 30초라 창을
+    ///      닫아 둔 사람에게 차례 말풍선이 없으면 세 번 넘겨 판돈을 잃는다.
+    ///   ⑧ `onOpenAlkkagi` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑨ 계정 감시자 — 로그아웃 · 계정 전환에 창을 닫고 말풍선 큐를 비운다.
+    /// App Nap 붙들기는 없다(차례제 다수 — SPEC §2.2). `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다.
     private func wireAlkkagi() {
         let alkkagi = store.alkkagi
-        CheckAlkkagiWindowController.shared.configure(store: alkkagi)
+        alkkagi.rankingEnabled = true
+        alkkagi.spectatorFeaturesEnabled = true
+        CheckAlkkagiWindowController.shared.configure(store: alkkagi, safety: store)
         alkkagi.presentWindow = { CheckAlkkagiWindowController.shared.show() }
         alkkagi.dismissWindow = { CheckAlkkagiWindowController.shared.close() }
-        alkkagi.requestAttention = {
-            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
-        }
         CheckAlkkagiWindowController.shared.onClosed = { [weak self] byUser in
             self?.store.duelWindowDidClose(.alkkagi, byUser: byUser)
         }
-        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) {
+        alkkagi.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        alkkagi.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueAlkkagiInvite(invite)
+        }
+        alkkagi.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueAlkkagiAttention(attention)
+        }
+        overlayController?.onOpenAlkkagi = { [weak self] matchID in
+            self?.store.alkkagi.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
             CheckAlkkagiWindowController.shared.close()
+            self?.overlayController?.clearAlkkagiInvites()
         }.start()
     }
 

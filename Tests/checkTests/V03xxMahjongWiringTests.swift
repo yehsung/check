@@ -297,7 +297,7 @@ struct V03xxMahjongWiringTests {
     func theMiniGameWindowOpensTheMahjongWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.mahjong.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckMahjongWindowController.frameAutosaveName))
-        // 로컬 알까기 창까지 열하나다.
+        // 1:1 알까기 창까지 열하나다.
         #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 11)
         #expect(MiniGameMahjongEntryButton.title == "아잉 마작")
         #expect(MiniGameMahjongEntryButton.help == "리치 마작 4인 대국 창을 열어요")
@@ -326,7 +326,7 @@ struct V03xxMahjongWiringTests {
         let miniGame = try mwtMac("WorkTimerStoreMiniGame.swift")
         guard miniGame.contains("enum MiniGameDuelDoor") else { return }
         let caseLine = try #require(mwtBetween(miniGame, "enum MiniGameDuelDoor", "}"))
-        // 기존 마작과 길건너 뒤에 로컬 알까기만 덧붙인다.
+        // 기존 마작과 길건너 뒤에 1:1 알까기만 덧붙인다.
         #expect(caseLine.hasSuffix("mahjong, crossyDuel, alkkagi "), "문 목록 끝 순서가 다르다: \(caseLine)")
         let rummy = try #require(caseLine.range(of: "rummy"))
         let mahjong = try #require(caseLine.range(of: "mahjong"))
@@ -349,10 +349,10 @@ struct V03xxMahjongWiringTests {
         #expect(!MegaphoneBannerDeferral.isDeferred(gomoku: .lobby, chess: .lobby, tetris: .lobby, miniGameRoundLive: false,
                                                     mahjongLive: false))
         let src = try mwtMac("WorkTimerStoreMegaphoneBanner.swift")
-        // 1:1 길건너(CD/SPEC.md §9.5 #21)가 마작 뒤 맨 끝 인자다.
+        // 1:1 길건너(CD/SPEC.md §9.5 #21)가 마작 뒤, 1:1 알까기(alkkagi/v2 SPEC §6 #5)가 그 뒤 맨 끝 인자다.
         #expect(src.contains("reversiLive: reversi.defersMegaphoneBanner, mahjongLive: mahjong.defersMegaphoneBanner, "
-                                + "crossyDuelLive: crossyDuel.defersMegaphoneBanner)"))
-        #expect(src.contains("reversiLive: Bool = false, mahjongLive: Bool = false, crossyDuelLive: Bool = false) -> Bool {"))
+                                + "crossyDuelLive: crossyDuel.defersMegaphoneBanner, alkkagiLive: alkkagi.defersMegaphoneBanner)"))
+        #expect(src.contains("reversiLive: Bool = false, mahjongLive: Bool = false, crossyDuelLive: Bool = false, alkkagiLive: Bool = false) -> Bool {"))
         #expect(src.contains("if reversiLive { return true } if mahjongLive { return true }"))
     }
 

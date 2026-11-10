@@ -258,7 +258,7 @@ struct MiniGameDuelReturnTests {
         #expect(app.contains("wireCrossyDuel() wireAlkkagi()"))
         let hook = try #require(app.range(of: "private func wireAlkkagi()"))
         let wiring = String(app[hook.lowerBound...].prefix(1000))
-        #expect(wiring.contains("configure(store: alkkagi)"))
+        #expect(wiring.contains("configure(store: alkkagi, safety: store)"))
         #expect(wiring.contains("alkkagi.presentWindow ="))
         #expect(wiring.contains("alkkagi.dismissWindow ="))
         #expect(wiring.contains("ChessAccountWatcher(userID:"))

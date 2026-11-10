@@ -355,6 +355,19 @@
         "claimed": true,
         "claimed_at_ms": 1789609200000,
         "sort": 100
+      },
+      {
+        "key": "daily_alkkagi",
+        "game": "alkkagi",
+        "title": "1:1 알까기 한 판 하기",
+        "detail": "맥에서 할 수 있어요",
+        "reward": 5,
+        "target": 1,
+        "progress": 1,
+        "achieved": true,
+        "claimed": true,
+        "claimed_at_ms": 1789609200000,
+        "sort": 110
       }
     ],
     "claimable_count": 0,

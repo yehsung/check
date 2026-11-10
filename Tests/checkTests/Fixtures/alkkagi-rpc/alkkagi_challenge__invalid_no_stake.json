@@ -1,0 +1,18 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": null,
+    "display_name": "T-8b97c765",
+    "id": "8b97c765-141d-4681-bb7f-2121db2356d8"
+  },
+  "protocol": 2,
+  "server_now_ms": 1794260784964.184,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "state": null,
+  "status": "invalid"
+}

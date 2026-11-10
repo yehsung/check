@@ -52,8 +52,10 @@ private final class AlkkagiLiveService: AlkkagiServing {
 }
 
 extension AlkkagiOnlineStore {
+    /// 운영 배선 — 세션 복구 · 공용 `duelRPC` 서비스를 물리고 루비 미러(`host.rubyBalance`)를 빌린다.
     package func attach(host: any GomokuStoreHost) {
         reset()
+        self.host = host
         service = AlkkagiLiveService(host: host, store: self)
     }
 }

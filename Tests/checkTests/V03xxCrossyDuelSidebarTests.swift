@@ -6,8 +6,8 @@ import Testing
 @testable import CheckCore
 
 // 1:1 길건너 — 미니게임 창 사이드바 **일곱째 문**(CD/SPEC.md §9.5 #18 · §10.2 T `V03xxCrossyDuelSidebarTests`).
-// 같이 하기 칸 202pt 그대로(줄 42/4, 창 888×470), 로컬 알까기가 여덟째로 붙어 줄 364(+꼬리 16), 끝 거리 178이다.
-// 길건너 신청은 일곱째 줄까지만 최소로 굴린다. 마지막 알까기에는 초대가 없다.
+// 같이 하기 칸 202pt 그대로(줄 42/4, 창 888×470), 1:1 알까기가 여덟째로 붙어 줄 364(+꼬리 16), 끝 거리 178이다.
+// 길건너 신청은 일곱째 줄까지만 최소로 굴린다. 마지막 알까기 문의 신청 굴림은 V03xxAlkkagiSidebarTests 가 잰다.
 // ImageRenderer 는 ScrollView 안을 못 그리므로(MC:91) 굴림은 그림이 아니라 **스크롤 목표 id · 실제 NSScrollView 오프셋 값**으로 재고,
 // 점은 테두리 없는 창에 붙인 실제 칸을 cacheDisplay 로 읽는다(orderFront 없음 — 화면에 안 뜨고 클릭을 가로채지 않는다).
 //
@@ -145,7 +145,7 @@ struct V03xxCrossyDuelSidebarTests {
         #expect(MiniGameDuelInvites.scrollTarget(from: crossyOnly, to: MiniGameDuelInvites(mahjong: true, crossyDuel: true)) == .mahjong)
         #expect(MiniGameDuelInvites.scrollTarget(from: crossyOnly, to: crossyOnly) == nil)
         #expect(MiniGameDuelDoor.allCases.filter { crossyOnly[$0] } == [.crossyDuel])
-        #expect(!crossyOnly[.alkkagi], "로컬 알까기에 초대 점이 섰다")
+        #expect(!crossyOnly[.alkkagi], "길건너 신청 점이 1:1 알까기 문에도 섰다")
     }
 
     /// 없으면(결과): 칸 안 실제 ScrollView 의 내용이 일곱 줄 + 꼬리가 아니거나, 1:1 길건너 신청이 와도 일곱째 문이 접힘 아래에 남아 점을

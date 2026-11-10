@@ -16,6 +16,37 @@ import Foundation
 
 // MARK: - 프레임 본문
 
+/// 상대 반투명 그림자 한 점(11-10 대표 "부하 엄청 심하지 않다면 구현하자" — 제보 테트리스장인). 두 사람은 같은 씨앗의 같은 길을
+/// 달리므로 이 위치를 **내 판에 그대로** 겹쳐 그린다. 프레임의 선택 칸이라 옛 앱은 모르는 키로 무시한다(받는 쪽 `decode` 도 없으면 nil).
+package struct CrossyDuelGhost: Equatable, Sendable {
+    /// 가로 자리(칸 단위, 통나무 위면 소수 — 0.01 칸으로 실어 보낸다).
+    package var x: Double
+    /// 몇째 줄(앞이 +).
+    package var row: Int
+    package var facing: CrossyGame.Direction
+    /// 죽어 있는 동안(부활 전) — 그림자를 숨긴다.
+    package var dead: Bool
+
+    package init(x: Double, row: Int, facing: CrossyGame.Direction, dead: Bool) {
+        self.x = x
+        self.row = row
+        self.facing = facing
+        self.dead = dead
+    }
+
+    /// 판 값에서 지금 내 그림자(뛰는 중이면 그 순간의 자리).
+    package init(game: CrossyGame) {
+        let visual = game.playerVisual
+        self.init(x: visual.x, row: Int(visual.row.rounded()), facing: game.player.facing, dead: game.death != nil)
+    }
+
+    /// 보낼 만큼 움직였는가(0.05 칸 · 줄 · 방향 · 생사).
+    package func moved(from other: CrossyDuelGhost?) -> Bool {
+        guard let other else { return true }
+        return other.row != row || other.facing != facing || other.dead != dead || abs(other.x - x) >= 0.05
+    }
+}
+
 /// 프레임 한 장(이벤트 `frame`, 형식 버전 1 — B2 표 그대로). 한 장이 그 순간의 전체 표시 상태다(누계).
 package struct CrossyDuelFrame: Equatable, Sendable {
     /// Broadcast 이벤트 이름.
@@ -38,9 +69,11 @@ package struct CrossyDuelFrame: Equatable, Sendable {
     package var deaths: Int
     /// `h` — 상대 프레임을 마지막으로 받은 뒤 ms, 없으면 −1(양방향 확인).
     package var heardAgoMs: Int
+    /// `gx` · `gr` · `gf` · `gd` — 반투명 그림자 위치(선택 칸, 없으면 nil — 0.3.80 이하 앱).
+    package var ghost: CrossyDuelGhost?
 
     package init(sender: String, seq: Int, frame: Int, score: Int, deaths: Int, heardAgoMs: Int,
-                 version: Int = CrossyDuelFrame.formatVersion) {
+                 version: Int = CrossyDuelFrame.formatVersion, ghost: CrossyDuelGhost? = nil) {
         self.version = version
         self.sender = sender
         self.seq = seq
@@ -48,11 +81,19 @@ package struct CrossyDuelFrame: Equatable, Sendable {
         self.score = score
         self.deaths = deaths
         self.heardAgoMs = heardAgoMs
+        self.ghost = ghost
     }
 
     /// 송신 본문. **키 이름을 바꾸지 마라** — 받는 쪽 `decode` 와 한 짝이다.
     package var payload: [String: Any] {
-        ["v": version, "u": sender, "s": seq, "f": frame, "sc": score, "d": deaths, "h": heardAgoMs]
+        var body: [String: Any] = ["v": version, "u": sender, "s": seq, "f": frame, "sc": score, "d": deaths, "h": heardAgoMs]
+        if let ghost {
+            body["gx"] = Int((ghost.x * 100).rounded())
+            body["gr"] = ghost.row
+            body["gf"] = ghost.facing.rawValue
+            body["gd"] = ghost.dead ? 1 : 0
+        }
+        return body
     }
 
     /// 받은 본문 → 프레임. 모양만 본다(누가 보냈는지 · 순서는 `CrossyDuelFrameLink.receive` 몫).
@@ -68,8 +109,14 @@ package struct CrossyDuelFrame: Equatable, Sendable {
               let heardAgoMs = integer(payload["h"]), heardAgoMs >= -1
         else { return .failure(.malformed) }
         guard (0...maxScore).contains(score), deaths >= 0 else { return .failure(.outOfRange) }
+        // 그림자는 선택 칸 — 모양이 어긋나면 그림자만 버리고 프레임(점수 표시)은 받는다.
+        var ghost: CrossyDuelGhost?
+        if let gx = integer(payload["gx"]), let gr = integer(payload["gr"]), abs(gx) <= 100_000, abs(gr) <= 100_000,
+           let gf = (payload["gf"] as? String).flatMap(CrossyGame.Direction.init(rawValue:)) {
+            ghost = CrossyDuelGhost(x: Double(gx) / 100, row: gr, facing: gf, dead: integer(payload["gd"]) == 1)
+        }
         return .success(CrossyDuelFrame(sender: sender, seq: seq, frame: frame, score: score, deaths: deaths,
-                                        heardAgoMs: heardAgoMs, version: version))
+                                        heardAgoMs: heardAgoMs, version: version, ghost: ghost))
     }
 
     /// JSON **정수**만 읽는다(불리언 · 소수 · 문자열은 nil).
@@ -203,6 +250,8 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
     package static let frameIntervalSeconds: TimeInterval = 1.0
     /// 변화가 있을 때 직전 프레임과의 최소 틈(초당 2장 상한).
     package static let minFrameGapSeconds: TimeInterval = 0.5
+    /// 내 그림자가 움직였을 때 직전 프레임과의 최소 틈(초당 5장 상한 — 반투명 상대, 11-10).
+    package static let ghostFrameGapSeconds: TimeInterval = 0.2
     /// 멈춤 문턱(판 시작 뒤 증거 0 · 끊긴 지).
     package static let evidenceTimeoutSeconds: TimeInterval = 10
     /// 재시도 1·2·4초 최대 3회.
@@ -248,6 +297,8 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
     /// 직전 프레임에 실은 점수·죽음(변화 판정).
     package private(set) var lastSentScore: Int?
     package private(set) var lastSentDeaths: Int?
+    /// 직전 프레임에 실은 내 그림자(움직임 판정).
+    package private(set) var lastSentGhost: CrossyDuelGhost?
 
     /// - Parameter frameBase: `f` 시작값 — 프로세스 시작 벽시계 ms(프로세스당 한 번 정한 값, 스토어가 넘긴다).
     package init(me: String, opponent: String, frameBase: Int) {
@@ -442,12 +493,24 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
 
     /// 지금 프레임을 보낼 때인가(B3) — 판이 흐르고(`live`) 채널이 join 됐을 때만. 점수·죽음이 바뀌었으면 직전 프레임 뒤 0.5초 틈,
     /// 안 바뀌었으면 1초.
-    package func frameDue(at now: TimeInterval, live: Bool, changed: Bool) -> Bool {
+    /// 그림자가 움직였으면(`moved`) 0.2초 틈(초당 5장 상한 — 11-10).
+    package func frameDue(at now: TimeInterval, live: Bool, changed: Bool, moved: Bool = false) -> Bool {
         guard live, !finished, topic != nil, socket == .joined else { return false }
         guard let last = lastSentAt else { return true }
         let since = now - last
         if changed, since >= Self.minFrameGapSeconds { return true }
+        if moved, since >= Self.ghostFrameGapSeconds { return true }
         return since >= Self.frameIntervalSeconds
+    }
+
+    /// 내 그림자가 직전 프레임 뒤로 움직였는가(처음이면 참).
+    package func movedSinceLastFrame(_ ghost: CrossyDuelGhost) -> Bool { ghost.moved(from: lastSentGhost) }
+
+    /// 지금 그릴 상대 그림자 — 끝나지 않은 판에서 최근(2.5초 안) 받은 프레임에 실렸을 때만. 죽어 있으면 nil.
+    package func opponentGhost(at now: TimeInterval) -> CrossyDuelGhost? {
+        guard !finished, let ghost = lastFrame?.ghost, !ghost.dead, let heard = opponentHeardAt,
+              now - heard <= Self.heardWithinSeconds else { return nil }
+        return ghost
     }
 
     /// 이 점수·죽음이 직전 프레임과 다른가(처음이면 참).
@@ -456,14 +519,16 @@ package struct CrossyDuelFrameLink: Equatable, Sendable {
     }
 
     /// 보낼 프레임을 만든다(`f` +1 · 보낸 시각 · 값 기록). `h` 는 상대 프레임을 받은 뒤 ms(없으면 −1).
-    package mutating func makeFrame(at now: TimeInterval, seq: Int, score: Int, deaths: Int) -> CrossyDuelFrame {
+    package mutating func makeFrame(at now: TimeInterval, seq: Int, score: Int, deaths: Int,
+                                    ghost: CrossyDuelGhost? = nil) -> CrossyDuelFrame {
         let frame = CrossyDuelFrame(sender: me, seq: max(0, seq), frame: nextFrameNumber,
                                     score: min(max(0, score), CrossyDuelFrame.maxScore), deaths: max(0, deaths),
-                                    heardAgoMs: heardAgoMs(at: now))
+                                    heardAgoMs: heardAgoMs(at: now), ghost: ghost)
         nextFrameNumber += 1
         lastSentAt = now
         lastSentScore = score
         lastSentDeaths = deaths
+        if let ghost { lastSentGhost = ghost }
         return frame
     }
 

@@ -293,6 +293,21 @@ enum GomokuText {
     static let aiThinking = "AI가 생각 중이에요"
     static let aiThinkingShort = "생각 중"
     static let aiStakeChip = "AI 대국 · 기록 없음"
+    /// 판 머리 칩: 난이도까지(예 "AI 대국 · 보통 · 기록 없음").
+    static func aiStakeChip(_ difficulty: GomokuAIDifficulty) -> String { "AI 대국 · \(aiDifficultyName(difficulty)) · 기록 없음" }
+    static let aiDifficultyTitle = "난이도 · AI가 몇 수 앞까지 계산할지"
+    static func aiDifficultyName(_ difficulty: GomokuAIDifficulty) -> String {
+        switch difficulty {
+        case .easy: return "쉬움"
+        case .normal: return "보통"
+        case .hard: return "어려움"
+        }
+    }
+    /// "2수 앞" · "4수 앞" · "끝까지"(어려움은 생각 시간이 허락하는 데까지).
+    static func aiDifficultyDepth(_ difficulty: GomokuAIDifficulty) -> String {
+        if let plies = difficulty.lookahead { return "\(plies)수 앞까지" }
+        return "끝까지 계산"
+    }
     static let aiInfoTitle = "AI 대국"
     /// 창을 닫거나 가리면 내 시계가 멈춘다(기다리는 상대가 없다) — 1:1 과 달라 글자로 말한다.
     static let aiInfoClock = "창을 닫거나 가리면 내 시계가 멈춰요 · 한 수 30초가 지나면 자동으로 놓여요"
@@ -1540,7 +1555,7 @@ private struct GomokuMatchSide: View {
         HStack(spacing: 6) {
             Image(systemName: "cpu")
                 .foregroundStyle(CheckTheme.accent)
-            Text(GomokuText.aiStakeChip)
+            Text(GomokuText.aiStakeChip(store.aiGame?.difficulty ?? store.aiDifficulty))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
@@ -3514,6 +3529,18 @@ private struct GomokuAIPrompt: View {
                 Text(GomokuText.aiPromptCaption)
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(GomokuText.aiDifficultyTitle)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CheckTheme.secondaryText)
+                    HStack(spacing: 6) {
+                        ForEach(GomokuAIDifficulty.allCases, id: \.self) { difficulty in
+                            GomokuAIDifficultyButton(difficulty: difficulty, isSelected: store.aiDifficulty == difficulty) {
+                                store.setAIDifficulty(difficulty)
+                            }
+                        }
+                    }
+                }
                 HStack(spacing: 8) {
                     GomokuAIColorButton(color: .black, title: GomokuText.aiPlayBlack, isEnabled: store.canStartAIMatch) {
                         start(.black)
@@ -3548,6 +3575,38 @@ private struct GomokuAIPrompt: View {
     private func start(_ color: GomokuColor) {
         onClose()
         store.startAIMatch(humanColor: color)
+    }
+}
+
+/// 난이도 버튼 한 개(이름 + 몇 수 앞). 고른 것은 강조색 테두리와 옅은 바탕.
+private struct GomokuAIDifficultyButton: View {
+    let difficulty: GomokuAIDifficulty
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 2) {
+                Text(GomokuText.aiDifficultyName(difficulty))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(isSelected ? CheckTheme.accent : CheckTheme.primaryText)
+                Text(GomokuText.aiDifficultyDepth(difficulty))
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? CheckTheme.accent.opacity(0.14) : Color.white.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(isSelected ? CheckTheme.accent : CheckTheme.border, lineWidth: isSelected ? 1.5 : 1))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(GomokuText.aiDifficultyName(difficulty)), \(GomokuText.aiDifficultyDepth(difficulty))")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 

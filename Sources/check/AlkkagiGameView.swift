@@ -14,15 +14,33 @@ struct AlkkagiPlayerProfile: Equatable {
     var characterID: String? = nil
 }
 
-// 오목과 같은 판/오른쪽 상태·대화 열을 쓴다. 실행기와 본앱은 이 화면을 공유한다.
+// 판 화면(왼쪽 판 · 오른쪽 열). 판 그림 · 감속 · 방향 화살 · 멈칫 · 소리 · 주사율 걸음 · 조준 입력은 손대지 않는다(SPEC v1.1 §5.9).
+// 오른쪽 열은 기존 1:1 판 게임 꼴(§5.5 — 뒤집기 `ReversiMatchSide`): 상대 카드 · 내 카드 · 상태 카드(관전자 수 칩) · 돌 수 카드 ·
+// [기권](빨간 띠 + `GomokuResignGuard`). 판 중 대화 카드는 판 화면에서 뺐다(§0 #11 · VC-10 · D23 — `AlkkagiChatPanel` 은
+// 되살리기용으로 남긴다: 돌 수 카드 아래에 다시 넣으면 된다). 끝나면 오른쪽 열에 결과 카드(§5.6), 판 위엔 돌을 덜 가리는
+// 얇은 띠(D21 — 옛 겹 카드 · 아래 [로비로] 는 없다). 독립 실행기(§5.10)는 로컬 연습만 — 온라인 부분은 앱 빌드에서만 컴파일된다.
 @MainActor
 struct AlkkagiGameView: View {
     var onReturn: (() -> Void)? = nil
     var me = AlkkagiPlayerProfile(name: "플레이어 1")
     var opponent = AlkkagiPlayerProfile(name: "플레이어 2")
+    #if !ALKKAGI_PLAYGROUND
     var onlineStore: AlkkagiOnlineStore? = nil
+    /// 스냅샷 전용: [기권] 자리를 확인 상태로 그린다. 앱은 false.
+    var previewConfirmResign = false
+    #endif
     @State private var model: AlkkagiLocalModel
 
+    #if ALKKAGI_PLAYGROUND
+    init(onReturn: (() -> Void)? = nil, me: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 1"),
+         opponent: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 2"),
+         model: AlkkagiLocalModel = AlkkagiLocalModel()) {
+        self.onReturn = onReturn
+        self.me = me
+        self.opponent = opponent
+        _model = State(initialValue: model)
+    }
+    #else
     /// `model` 은 렌더 시험이 판 값을 넣는 입구다(앱은 기본값 — 창마다 새 모델).
     init(onReturn: (() -> Void)? = nil, me: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 1"),
          opponent: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 2"),
@@ -33,7 +51,7 @@ struct AlkkagiGameView: View {
         self.onlineStore = onlineStore
         _model = State(initialValue: model)
     }
-    @State private var confirmsResign = false
+    #endif
     @GestureState private var dragIsActive = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 판 걸음은 화면 주사율에 맞춘다(120Hz 타이머는 60 · 75 · 144Hz 화면과 박자가 어긋나 규칙적으로 끊긴다 —
@@ -45,26 +63,50 @@ struct AlkkagiGameView: View {
     #else
     private var frameInterval: Double { 1.0 / 60 }
     #endif
-    private var boardSide: CGFloat { BoardGameLayout.boardSide - 48 }
+    private var boardSide: CGFloat { AlkkagiDrawing.boardSide }
+
+    /// 온라인 판에서 판 화면이 읽는 사실(평범한 값). 독립 실행기에는 온라인이 없어 늘 nil 이다.
+    private struct OnlineFacts {
+        var isPlacing: Bool
+        var isFinished: Bool
+        var concealed: Bool
+        var currentPlayer: AlkkagiGame.Player
+        var myReady: Bool
+        var opponentReady: Bool
+        var black: AlkkagiPlayerProfile
+        var white: AlkkagiPlayerProfile
+    }
+
+    private var online: OnlineFacts? {
+        #if ALKKAGI_PLAYGROUND
+        return nil
+        #else
+        guard let state = onlineStore?.state else { return nil }
+        return OnlineFacts(
+            isPlacing: state.phase == .placing,
+            isFinished: state.phase == .finished,
+            concealed: state.phase == .placing || (state.phase == .finished && (!state.myReady || !state.opponentReady)),
+            currentPlayer: state.currentPlayer, myReady: state.myReady, opponentReady: state.opponentReady,
+            black: AlkkagiPlayerProfile(name: state.black.displayName, characterID: state.black.characterID),
+            white: AlkkagiPlayerProfile(name: state.white.displayName, characterID: state.white.characterID))
+        #endif
+    }
+
+    private var isOnline: Bool {
+        #if ALKKAGI_PLAYGROUND
+        false
+        #else
+        onlineStore != nil
+        #endif
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: BoardGameLayout.headerSpacing) {
-            header
+            header.frame(height: BoardGameLayout.headerHeight)
             BoardGameMatchLayout {
                 board
             } sidebar: {
-                BoardGameMatchSidebar {
-                    VStack(spacing: BoardGameLayout.matchSideSpacing) {
-                        playerCard(model.myColor.opponent)
-                        playerCard(model.myColor)
-                    }
-                } status: {
-                    statusCard
-                } chat: {
-                    AlkkagiChatPanel(model: model)
-                } actions: {
-                    onlineActions
-                }
+                sidebar
             }
         }
         .padding(BoardGameLayout.contentPadding)
@@ -72,7 +114,9 @@ struct AlkkagiGameView: View {
         .background(CheckTheme.background)
         .foregroundStyle(CheckTheme.primaryText)
         .preferredColorScheme(.dark)
+        #if !ALKKAGI_PLAYGROUND
         .onAppear { model.attachOnline(onlineStore) }
+        #endif
         .background {
             TimelineView(.animation(minimumInterval: frameInterval)) { context in
                 Color.clear.onChange(of: context.date) { _, _ in model.tick() }
@@ -85,15 +129,48 @@ struct AlkkagiGameView: View {
         }
     }
 
+    // MARK: 머리글(§5.2 — 뒤집기 `ReversiHeader` 꼴, 높이 40)
+
+    #if ALKKAGI_PLAYGROUND
+    private static let headerIcon = "circle.hexagongrid.fill"
+    private static let headerTitle = "1:1 알까기"
+    private static let headerSubtitle = "연습 판"
+    #else
+    private static var headerIcon: String { AlkkagiEntryIcon.resolved }
+    private static let headerTitle = AlkkagiText.title
+    #endif
+
+    private var headerSubtitle: String {
+        #if ALKKAGI_PLAYGROUND
+        Self.headerSubtitle
+        #else
+        isOnline ? AlkkagiText.subtitle : AlkkagiText.practiceSubtitle
+        #endif
+    }
+
     private var header: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "circle.lefthalf.filled").foregroundStyle(CheckTheme.accent)
-            Text("알까기").font(.title2.weight(.bold))
-            Text(onlineStore == nil ? "로컬 2인" : "온라인 1:1").font(.caption).foregroundStyle(CheckTheme.secondaryText)
-            Spacer()
-            if let onReturn {
-                Button(action: onReturn) { Label("게임 목록", systemImage: "chevron.left") }.buttonStyle(.bordered)
+        HStack(spacing: 12) {
+            ZStack {
+                Circle().fill(CheckTheme.accent.opacity(0.18))
+                Image(systemName: Self.headerIcon)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(CheckTheme.accent)
             }
+            .frame(width: 38, height: 38)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(Self.headerTitle).font(.title3.weight(.bold))
+                Text(headerSubtitle)
+                    .font(.caption)
+                    .foregroundStyle(CheckTheme.secondaryText)
+            }
+            Spacer(minLength: 12)
+            #if !ALKKAGI_PLAYGROUND
+            // 판 중: 판돈 칩(옛 판 — 판돈 없음 — 이면 없음). [게임 목록] 은 없다(닫기는 빨간 점 — DF#48).
+            if let stake = onlineStore?.state?.stake {
+                ChessStakeChip(stake: stake)
+            }
+            #endif
+            // 소리 단추는 손맛이라 남긴다.
             Button { model.soundEnabled.toggle() } label: {
                 Image(systemName: model.soundEnabled ? "speaker.wave.2" : "speaker.slash").frame(width: 22, height: 22)
             }.buttonStyle(.plain).accessibilityLabel(model.soundEnabled ? "소리 끄기" : "소리 켜기")
@@ -106,26 +183,71 @@ struct AlkkagiGameView: View {
             Toggle("멈칫", isOn: Binding(get: { model.hitStopEnabled }, set: { model.hitStopEnabled = $0 }))
                 .toggleStyle(.checkbox)
             #endif
-            if onlineStore == nil {
+            if !isOnline {
                 Button { model.restart() } label: { Label("새 판", systemImage: "arrow.clockwise") }
                     .buttonStyle(.bordered).keyboardShortcut("r", modifiers: .command).alkkagiTooltip("새 판 시작 (⌘R)")
+                // 연습 판 머리의 돌아오는 단추(§5.2 — 옛 [게임 목록]).
+                if let onReturn {
+                    #if ALKKAGI_PLAYGROUND
+                    Button(action: onReturn) { Label("로비로", systemImage: "chevron.left") }.buttonStyle(.bordered)
+                    #else
+                    ChessActionButton(title: AlkkagiText.backToLobby, icon: "chevron.left", style: .outline, height: 30,
+                                      action: onReturn)
+                    #endif
+                }
             }
-        }.frame(height: BoardGameLayout.headerHeight)
+        }
+    }
+
+    // MARK: 오른쪽 열
+
+    @ViewBuilder
+    private var sidebar: some View {
+        #if ALKKAGI_PLAYGROUND
+        localSide
+        #else
+        if let onlineStore, let state = onlineStore.state {
+            AlkkagiMatchSide(store: onlineStore, match: state, showsConfirmPreview: previewConfirmResign) {
+                VStack(spacing: BoardGameLayout.matchSideSpacing) {
+                    playerCard(model.myColor.opponent)
+                    playerCard(model.myColor)
+                }
+            } status: {
+                statusCard
+            }
+        } else {
+            localSide
+        }
+        #endif
+    }
+
+    /// 로컬 연습(한 맥 둘이) 오른쪽 열 — 두 카드 · 상태 카드 · 돌 수 카드(대화 카드 자리, D23).
+    private var localSide: some View {
+        VStack(alignment: .leading, spacing: BoardGameLayout.matchSideSpacing) {
+            VStack(spacing: BoardGameLayout.matchSideSpacing) {
+                playerCard(model.myColor.opponent)
+                playerCard(model.myColor)
+            }
+            statusCard
+                .fixedSize(horizontal: false, vertical: true)
+            AlkkagiStoneCountCard(black: model.game.remaining(.black), white: model.game.remaining(.white),
+                                  shots: model.game.shotCount)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private func playerCard(_ player: AlkkagiGame.Player) -> some View {
-        let currentPlayer = onlineStore?.state?.currentPlayer ?? model.game.currentPlayer
-        let finished = onlineStore.map { $0.state?.phase == .finished } ?? (model.game.phase == .finished)
-        let simultaneousPlacement = onlineStore?.state?.phase == .placing
-        let concealedLayout = simultaneousPlacement || (onlineStore?.state.map {
-            $0.phase == .finished && (!$0.myReady || !$0.opponentReady)
-        } ?? false)
+        let facts = online
+        let currentPlayer = facts?.currentPlayer ?? model.game.currentPlayer
+        let finished = facts.map(\.isFinished) ?? (model.game.phase == .finished)
+        let simultaneousPlacement = facts?.isPlacing == true
+        let concealedLayout = facts?.concealed == true
         let isMe = player == model.myColor
-        let ready = isMe ? onlineStore?.state?.myReady == true : onlineStore?.state?.opponentReady == true
+        let ready = isMe ? facts?.myReady == true : facts?.opponentReady == true
         let active = simultaneousPlacement ? !ready : (currentPlayer == player && !finished)
-        let peer = player == .black ? onlineStore?.state?.black : onlineStore?.state?.white
-        let profile = peer.map { AlkkagiPlayerProfile(name: $0.displayName, characterID: $0.characterID) }
-            ?? (player == .black ? me : opponent)
+        let peer = player == .black ? facts?.black : facts?.white
+        let profile = peer ?? (player == .black ? me : opponent)
         let detail: String
         if concealedLayout && !isMe {
             detail = "\(player.title) 배치 비공개"
@@ -162,20 +284,29 @@ struct AlkkagiGameView: View {
 #endif
     }
 
+    // MARK: 판(§5.9 — 그림은 그대로)
+
+    /// 판은 다른 1:1 판 게임과 같은 칸을 꽉 채운다(제보 #12 '판을 더 크게' — 0.3.80 은 사방 24pt 를 남겨 560pt).
+    /// 판 두께(아래 12pt)와 떨어지는 돌은 칸 밖 여백(창 안쪽 20pt)에 그린다.
     private var board: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.25))
-                .frame(width: boardSide, height: boardSide + 12).offset(y: -6)
-            Canvas { context, _ in
-                AlkkagiDrawing.falling(model.falls, context: context, scale: boardSide / AlkkagiGame.boardSize,
-                                       origin: CGPoint(x: 24, y: 12), reduced: reduceMotion)
-            }.allowsHitTesting(false)
-            playSurface.offset(y: -12)
-        }
-        .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide)
-        .clipped()
-        .offset(shakeOffset)
-        .overlay { resultOverlay }
+        playSurface
+            .background(alignment: .topLeading) {
+                ZStack(alignment: .topLeading) {
+                    RoundedRectangle(cornerRadius: 14).fill(.black.opacity(0.25))
+                        .frame(width: boardSide, height: boardSide + 12)
+                    Canvas { context, _ in
+                        AlkkagiDrawing.falling(model.falls, context: context, scale: boardSide / AlkkagiGame.boardSize,
+                                               origin: CGPoint(x: AlkkagiDrawing.fallMargin, y: AlkkagiDrawing.fallMargin),
+                                               reduced: reduceMotion)
+                    }
+                    .frame(width: boardSide + AlkkagiDrawing.fallMargin * 2, height: boardSide + AlkkagiDrawing.fallMargin * 2)
+                    .offset(x: -AlkkagiDrawing.fallMargin, y: -AlkkagiDrawing.fallMargin)
+                    .allowsHitTesting(false)
+                }
+            }
+            .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide, alignment: .topLeading)
+            .offset(shakeOffset)
+            .overlay(alignment: .top) { resultBand }
     }
 
     private var shakeOffset: CGSize {
@@ -230,24 +361,60 @@ struct AlkkagiGameView: View {
         .accessibilityValue(model.status)
     }
 
+    /// 끝난 판 위의 얇은 띠(높이 44 · 판 위쪽 · 반투명 · 입력을 막지 않는다 — D21). 온라인은 내 기준 결과, 연습은 승리한 돌.
     @ViewBuilder
-    private var resultOverlay: some View {
-        if model.game.phase == .finished && (onlineStore == nil || onlineStore?.state?.phase == .finished) {
-            VStack(spacing: 12) {
-                Image(systemName: "flag.checkered").font(.title2).foregroundStyle(CheckTheme.accent)
-                Text(model.resultTitle).font(.title.weight(.bold))
-                Text("총 \(model.game.shotCount)번의 한 수").font(.caption).foregroundStyle(CheckTheme.secondaryText)
-                Button(onlineStore == nil ? "다시 한 판" : "로비로") { model.restart() }
-                    .buttonStyle(.borderedProminent).controlSize(.large)
-            }
-            .padding(28).background(CheckTheme.panelElevated, in: RoundedRectangle(cornerRadius: 16))
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(CheckTheme.border))
+    private var resultBand: some View {
+        if let band = resultBandText {
+            Text(band.title)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(band.tint)
+                .padding(.horizontal, 22)
+                .frame(height: 44)
+                .background(Capsule().fill(CheckTheme.panelElevated.opacity(0.82)))
+                .overlay(Capsule().stroke(band.tint.opacity(0.55), lineWidth: 1))
+                .allowsHitTesting(false)
+                .accessibilityElement(children: .combine)
         }
     }
 
+    private var resultBandText: (title: String, tint: Color)? {
+        #if !ALKKAGI_PLAYGROUND
+        if let onlineStore {
+            guard onlineStore.state?.phase == .finished else { return nil }
+            let tint: Color = switch onlineStore.outcome {
+            case .win?: CheckTheme.working
+            case .loss?: CheckTheme.danger
+            default: CheckTheme.offWork
+            }
+            return (AlkkagiText.outcomeTitle(onlineStore.outcome), tint)
+        }
+        #endif
+        guard model.game.phase == .finished else { return nil }
+        return (model.resultTitle, CheckTheme.accent)
+    }
+
+    // MARK: 상태 카드
+
+    /// 상태 카드: 안내 줄 > 놓친 차례 경고(주황) > 배치/차례 안내(§5.5) · 오른쪽 위 관전자 수 칩(관전 스위치가 꺼지면 숨김 — VC-6).
+    /// 배치 중엔 돌 고르기 · [배치 완료] 를 같이 둔다(판 진행 — 그대로).
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 8) {
-            footer
+            HStack(spacing: 10) {
+                Text(statusHeadline.text).font(.caption.weight(.semibold))
+                    .foregroundStyle(statusHeadline.tint)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 4)
+                if model.selectedID != nil {
+                    Text("힘 \(Int(model.power * 100))%")
+                        .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(CheckTheme.accent)
+                }
+                #if !ALKKAGI_PLAYGROUND
+                if let onlineStore, onlineStore.spectatorFeaturesEnabled {
+                    WatcherCountChip(count: onlineStore.spectatorCount, height: 16)
+                }
+                #endif
+            }.frame(minHeight: 20)
             if model.game.phase == .placing {
                 HStack(spacing: 12) {
                     ForEach(model.game.stones.filter { $0.owner == model.game.currentPlayer }) { stone in
@@ -260,12 +427,12 @@ struct AlkkagiGameView: View {
                             .accessibilityLabel("\(stone.owner.title) \(stone.id % 5 + 1)번 돌 선택")
                     }
                     Spacer()
-                    Button(onlineStore?.state?.myReady == true ? "준비 완료" : "배치 완료 (\(model.game.placedCount(model.game.currentPlayer))/5)") { model.confirmPlacement() }
+                    Button(placementButtonTitle) { model.confirmPlacement() }
                         .buttonStyle(.borderedProminent)
                         .disabled(model.game.placedCount(model.game.currentPlayer) < 5 || !model.canInteract)
                 }
-                Text(onlineStore == nil ? "내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동 배치해요."
-                     : "30초 동안 동시에 배치해요. 둘 다 준비하거나 시간이 끝날 때까지 상대 배치는 보이지 않아요.")
+                Text(isOnline ? "30초 동안 동시에 배치해요. 둘 다 준비하거나 시간이 끝날 때까지 상대 배치는 보이지 않아요."
+                     : "내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동 배치해요.")
                     .font(.caption2).foregroundStyle(CheckTheme.secondaryText)
             }
         }
@@ -273,43 +440,237 @@ struct AlkkagiGameView: View {
         .overlay(RoundedRectangle(cornerRadius: 16).stroke(CheckTheme.border))
     }
 
-    private var footer: some View {
-        HStack(spacing: 10) {
-            Text(onlineStore?.notice ?? model.notice ?? model.status).font(.caption)
-                .foregroundStyle(onlineStore?.notice == nil && model.notice == nil ? CheckTheme.secondaryText : CheckTheme.pending)
-            Spacer()
-            if model.selectedID != nil {
-                Text("힘 \(Int(model.power * 100))%")
-                    .font(.subheadline.weight(.semibold)).monospacedDigit().foregroundStyle(CheckTheme.accent)
-            } else {
-                Text("\(model.game.shotCount)수").font(.caption.monospacedDigit()).foregroundStyle(CheckTheme.secondaryText)
-            }
-        }.frame(minHeight: 20)
+    private var placementButtonTitle: String {
+        #if !ALKKAGI_PLAYGROUND
+        if onlineStore?.state?.myReady == true { return "준비 완료" }
+        #endif
+        return "배치 완료 (\(model.game.placedCount(model.game.currentPlayer))/5)"
     }
 
-    @ViewBuilder
-    private var onlineActions: some View {
+    private var statusHeadline: (text: String, tint: Color) {
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore {
-            HStack(spacing: 10) {
-                if onlineStore.state?.phase == .finished {
-                    Button("로비로") { Task { await onlineStore.leaveFinishedMatch() } }
-                        .buttonStyle(.borderedProminent)
-                } else if confirmsResign {
-                    Text("기권하면 상대가 승리해요").font(.caption).foregroundStyle(CheckTheme.pending)
-                    Spacer()
-                    Button("계속하기") { confirmsResign = false }.buttonStyle(.bordered)
-                    Button("기권하기") { Task { await onlineStore.resign(); confirmsResign = false } }
-                        .buttonStyle(.borderedProminent).tint(CheckTheme.danger).disabled(onlineStore.isBusy)
-                } else {
-                    Button("기권") { confirmsResign = true }.buttonStyle(.bordered).disabled(onlineStore.isBusy)
-                    Spacer()
-                    Text(onlineStore.isBusy ? "동기화 중" : "창을 닫아도 대전은 계속돼요")
-                        .font(.caption).foregroundStyle(CheckTheme.secondaryText)
+            if let notice = onlineStore.notice { return (notice, CheckTheme.pending) }
+            if let warning = onlineStore.missedTurnWarning,
+               let text = AlkkagiNoticeText.missedTurn(mine: warning.mine, forfeitAfter: warning.forfeitAfter) {
+                return (text, CheckTheme.pending)
+            }
+        }
+        #endif
+        if let notice = model.notice { return (notice, CheckTheme.pending) }
+        #if !ALKKAGI_PLAYGROUND
+        if let onlineStore, onlineStore.isMyTurn, onlineStore.state?.phase != .finished {
+            return (model.status, CheckTheme.working)
+        }
+        #endif
+        return (model.status, CheckTheme.secondaryText)
+    }
+}
+
+// MARK: - 돌 수 카드(§5.5 — 대화 카드 자리 · D23)
+
+/// 판 위에 남은 돌 수와 쏜 횟수(뒤집기 '돌 수 · 수 기록' 카드의 제목 줄 꼴). 온라인은 STATE 값만 쓴다(서버 칸을 더하지 않는다).
+struct AlkkagiStoneCountCard: View {
+    let black: Int
+    let white: Int
+    let shots: Int
+
+    static let title = "돌 수"
+    static func countsLine(black: Int, white: Int) -> String { "흑 \(black) · 백 \(white)" }
+    static func shotsLine(_ shots: Int) -> String { "쏜 횟수 \(shots)번" }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 6) {
+                Text(Self.title).font(.headline)
+                Spacer(minLength: 4)
+                BoardGameStoneDot(color: .black, size: 11)
+                BoardGameStoneDot(color: .white, size: 11)
+                Text(Self.countsLine(black: black, white: white))
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+            }
+            Text(Self.shotsLine(shots))
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundStyle(CheckTheme.secondaryText)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(CheckTheme.panel.opacity(0.85)))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(CheckTheme.border, lineWidth: 1))
+    }
+}
+
+#if !ALKKAGI_PLAYGROUND
+// MARK: - 판 중 오른쪽 열(§5.5) · 결과 카드(§5.6)
+
+/// 온라인 판의 오른쪽 열. 진행 중: 두 카드 · 상태 카드 · 돌 수 카드 · [기권] 줄. 끝남: 두 카드 · 결과 카드 · 돌 수 카드.
+/// 기권 가드는 뒤집기·길건너와 같다(`GomokuResignGuard` — 화면이 막 나타난 1초 안의 누름 무시 · 확인 6초 뒤 접힘 ·
+/// `.focusable(false)` · 판 id · 창 보임이 바뀌면 다시 잼).
+struct AlkkagiMatchSide<Players: View, Status: View>: View {
+    let store: AlkkagiOnlineStore
+    let match: AlkkagiMatch
+    /// 스냅샷 전용 확인 상태. 앱은 false.
+    var showsConfirmPreview = false
+    @ViewBuilder let players: Players
+    @ViewBuilder let status: Status
+
+    @State private var confirmResign = false
+    /// 이 화면(이 판)이 나타난 시각 — [기권] 누름 판정의 기준.
+    @State private var shownAt: Date?
+
+    private var showsConfirm: Bool { confirmResign || showsConfirmPreview }
+
+    /// 판 위에 남은 돌 수(STATE 값만 — 숨긴 배치 중에도 다섯에서 나간 돌만 뺀다).
+    static func remaining(_ match: AlkkagiMatch, _ player: AlkkagiGame.Player) -> Int {
+        max(0, 5 - match.stones.filter { $0.owner == player && $0.isOut }.count)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: BoardGameLayout.matchSideSpacing) {
+            players
+            if match.phase == .finished {
+                AlkkagiResultCard(store: store, match: match)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                status
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            AlkkagiStoneCountCard(black: Self.remaining(match, .black), white: Self.remaining(match, .white),
+                                  shots: match.shotCount)
+            Spacer(minLength: 0)
+            if match.phase != .finished {
+                actionRow
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .onAppear { shownAt = GomokuResignGuard.clock() }
+        .onChange(of: match.id) { _, _ in
+            shownAt = GomokuResignGuard.clock()
+            confirmResign = false
+        }
+        .onChange(of: match.phase) { _, _ in confirmResign = false }
+        .onChange(of: store.isWindowVisible) { _, visible in
+            confirmResign = false
+            if visible { shownAt = GomokuResignGuard.clock() }
+        }
+        // 확인이 아무 선택 없이 오래 서 있으면 스스로 접는다(다음 누름 하나가 곧 기권이 되지 않게).
+        .task(id: confirmResign) {
+            guard confirmResign else { return }
+            try? await Task.sleep(for: .seconds(GomokuResignGuard.confirmTimeout))
+            guard !Task.isCancelled else { return }
+            confirmResign = false
+        }
+    }
+
+    /// 확인 단계 경고 줄(판돈 판 "기권하면 판돈을 잃어요" · 옛 판 "기권하면 이번 판은 져요" — VC-17).
+    static func resignWarning(stake: Int?) -> String {
+        stake == nil ? AlkkagiNoticeText.resignHelp : AlkkagiNoticeText.resignWarning
+    }
+
+    private var actionRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(showsConfirm ? Self.resignWarning(stake: match.stake) : AlkkagiText.closeKeepsMatch)
+                .font(.caption.weight(showsConfirm ? .bold : .regular))
+                .foregroundStyle(showsConfirm ? CheckTheme.danger : CheckTheme.secondaryText)
+                .lineLimit(1)
+            if showsConfirm {
+                HStack(spacing: 8) {
+                    ChessActionButton(title: AlkkagiNoticeText.confirmResign, icon: "flag.fill", tint: CheckTheme.danger,
+                                      height: 34, fullWidth: true, isEnabled: !store.isBusy) {
+                        confirmResign = false
+                        Task { await store.resign() }
+                    }
+                    // 스페이스·↩ 로 눌리지 않는다 — 키보드 탐색이 켜진 맥에서 다른 키가 기권이 되면 안 된다.
+                    .focusable(false)
+                    ChessActionButton(title: AlkkagiNoticeText.keepPlaying, tint: CheckTheme.offWork, style: .outline,
+                                      height: 34, fullWidth: true) {
+                        confirmResign = false
+                    }
+                    .focusable(false)
                 }
-            }.frame(minHeight: 32)
+            } else {
+                ChessActionButton(title: AlkkagiNoticeText.resign, icon: "flag", tint: CheckTheme.danger, style: .outline,
+                                  height: 34, fullWidth: true, isEnabled: !store.isBusy) {
+                    // 화면이 막 나타난 직후의 누름(로비 [수락] 더블클릭의 두 번째 누름)은 이 화면을 보고 누른 것이 아니다.
+                    guard GomokuResignGuard.acceptsTap(shownAt: shownAt, now: GomokuResignGuard.clock()) else { return }
+                    confirmResign = true
+                }
+                .focusable(false)
+                .checkTooltip(Self.resignWarning(stake: match.stake))
+            }
         }
     }
 }
+
+/// 결과 카드(= `ReversiResultCard` 꼴 — §5.6): 아이콘(승 trophy 초록 · 패 xmark 빨강 · 무 equal 회색) · 제목 · 사유 ·
+/// "쏜 횟수 N번" · 루비 줄("+N"/"−N"/"0 · 판돈을 돌려받았어요" — 옛 판이면 없음) · 카드 안 [로비로] **한 번**.
+struct AlkkagiResultCard: View {
+    let store: AlkkagiOnlineStore
+    let match: AlkkagiMatch
+
+    private var outcome: AlkkagiOutcome? { store.outcome }
+
+    private var tint: Color {
+        switch outcome {
+        case .win?: return CheckTheme.working
+        case .loss?: return CheckTheme.danger
+        default: return CheckTheme.offWork
+        }
+    }
+
+    private var icon: String {
+        switch outcome {
+        case .win?: return "trophy.fill"
+        case .loss?: return "xmark.circle.fill"
+        default: return "equal.circle.fill"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(AlkkagiText.outcomeTitle(outcome))
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(tint)
+                    Text(AlkkagiNoticeText.endReason(store.endReason, outcome: outcome))
+                        .font(.caption)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 4)
+                if let delta = store.rubyDelta {
+                    HStack(spacing: 4) {
+                        RubyIcon(size: 18)
+                        Text(AlkkagiText.rubyLine(delta))
+                            .font(delta == 0 ? .callout.weight(.bold) : .title3.weight(.bold))
+                            .monospacedDigit()
+                            .foregroundStyle(delta > 0 ? CheckTheme.working
+                                             : (delta < 0 ? CheckTheme.danger : CheckTheme.secondaryText))
+                            .lineLimit(1)
+                    }
+                }
+            }
+            Text(AlkkagiStoneCountCard.shotsLine(match.shotCount))
+                .font(.callout.weight(.semibold))
+                .monospacedDigit()
+            ChessActionButton(title: AlkkagiText.backToLobby, icon: "chevron.left", style: .outline,
+                              height: 32, fullWidth: true) { store.backToLobby() }
+                .focusable(false)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .chessCard()
+    }
+}
+#endif
 
 private struct AlkkagiStoneSymbol: View {
     let player: AlkkagiGame.Player
@@ -321,8 +682,10 @@ private struct AlkkagiStoneSymbol: View {
     }
 }
 
+/// 판 중 대화 카드(0.3.80 모양). 판 화면에서는 뺐다(§0 #11 · VC-10 · D23) — 되살릴 때 돌 수 카드 아래에 다시 넣는다.
+/// 결재 카드 '알림' 렌더(0.3.80 모양)가 이 부품을 그대로 그린다.
 @MainActor
-private struct AlkkagiChatPanel: View {
+struct AlkkagiChatPanel: View {
     @Bindable var model: AlkkagiLocalModel
     @State private var editorRenderedEmpty: Bool?
 
@@ -331,7 +694,7 @@ private struct AlkkagiChatPanel: View {
             HStack {
                 Text("대화").font(.subheadline.weight(.bold))
                 Spacer()
-                Text(model.isOnline ? "대전 대화" : "로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
+                Text(model.isOnline ? "대결 대화" : "로컬 대화").font(.caption2).foregroundStyle(CheckTheme.secondaryText)
                 Button { model.toggleChatMute() } label: {
                     Image(systemName: model.chatMuted ? "bell.slash.fill" : "bell.fill")
                 }.buttonStyle(.plain).alkkagiTooltip("상대 말 숨기기")
@@ -424,7 +787,10 @@ final class AlkkagiLocalModel {
     var chatDraft = ""
     var chatSender: AlkkagiGame.Player = .black
     var chatMuted = false
+    #if !ALKKAGI_PLAYGROUND
+    /// 온라인 판(앱만 — 독립 실행기는 로컬 연습만, SPEC §5.10).
     var onlineStore: AlkkagiOnlineStore?
+    #endif
     fileprivate var messages: [AlkkagiLocalMessage] = []
     @ObservationIgnored private var lastTime: TimeInterval?
     @ObservationIgnored private var clockTime = 0.0
@@ -439,24 +805,44 @@ final class AlkkagiLocalModel {
     @ObservationIgnored private var onlineMatchID: String?
     @ObservationIgnored private var onlineChatSeq = -1
     @ObservationIgnored private var onlineReplayElapsed = 0.0
-    @ObservationIgnored private var predictedShotID: UUID?
+    /// 온라인 굴림 재생(제보 #9 '버벅임'): 이 판에서 **화면 시계로** 되살리는 쏘기 id(쏜 사람은 내 예측 id = 서버 shot id).
+    /// 굴림은 매 프레임 화면 걸음(dt)으로 나아간다 — 0.3.80 은 프레임마다 서버 시각(응답마다 다시 잰 시계 차)에 맞춰 그려,
+    /// 받는 사람은 쏜 순간 0.2~0.5초를 건너뛰고(순간이동), 시계 차가 흔들리면 멈칫 · 건너뜀이 났다.
+    /// 서버 시각은 **뒤처짐**만 잰다 — 뒤처졌으면 최대 1.5배로 따라잡고(앞서면 그대로), 끝난 판이 먼저 와도 남은 굴림을
+    /// 2배로 마저 굴린 뒤 받는다. 결과 자리는 서버와 같은 물리라 그대로 이어진다.
+    @ObservationIgnored private var replayShotID: String?
+    /// 굴림이 끝나기 전에 온 '굴림 뒤' 판(revision) — 남은 굴림을 마저 굴린 뒤 받는다.
+    @ObservationIgnored private var deferredRevision: Int?
     /// 멈칫(히트스톱): 세게 부딪힌 순간 시뮬레이션을 아주 잠깐 세운다. 남은 멈춤 초.
     @ObservationIgnored private var hitStop = 0.0
     /// 이번 한 수에 쓴 멈춤 합(상한 `maxHitStopPerShot` — 연쇄 충돌이 판을 끌지 않게).
     @ObservationIgnored private var hitStopSpent = 0.0
-    /// 온라인: 멈춘 만큼 서버 시각보다 늦게 그린다. 멈춤이 끝나면 조금 빨리(1.35배) 돌아 갚는다 — 서버가 다음 차례로
-    /// 넘길 때 돌이 순간이동하지 않게.
-    @ObservationIgnored private var replayDebt = 0.0
     var hitStopEnabled = true
     static let maxHitStopPerShot = 0.16
+    /// 서버보다 이만큼(초)까지 뒤처진 굴림은 처음부터 보여 주며 따라잡는다. 넘는 만큼만 소리 없이 건너뛴다(신호를 놓쳐 늦게 안 판).
+    static let maxReplayLag = 0.6
+    /// 뒤처졌을 때 더 도는 비율(0.5 = 1.5배).
+    static let replayCatchUpRate = 0.5
+    /// 끝난 판이 먼저 왔을 때 마저 굴리는 비율(1.0 = 2배)과 그렇게 기다려 줄 남은 굴림 상한(초).
+    static let replayDrainRate = 1.0
+    static let maxReplayDrain = 1.2
 
+    #if ALKKAGI_PLAYGROUND
+    var isOnline: Bool { false }
+    var myColor: AlkkagiGame.Player { .black }
+    var canInteract: Bool { true }
+    #else
     var isOnline: Bool { onlineStore != nil }
     var myColor: AlkkagiGame.Player { onlineStore?.state?.myColor ?? .black }
     var canInteract: Bool { onlineStore.map { $0.canPlace || $0.canShoot } ?? true }
+    #endif
     var selectedStone: AlkkagiGame.Stone? { game.stones.first { $0.id == selectedID && $0.isPlaced && !$0.isOut } }
     var power: Double { min(1, pull.length / AlkkagiGame.maxPull) }
     var remainingSeconds: Double {
-        onlineStore?.remainingSeconds ?? (game.phase == .placing ? game.placementRemaining : game.turnRemaining)
+        #if !ALKKAGI_PLAYGROUND
+        if let onlineStore { return onlineStore.remainingSeconds }
+        #endif
+        return game.phase == .placing ? game.placementRemaining : game.turnRemaining
     }
     var clockTint: Color { remainingSeconds <= 5 ? CheckTheme.danger : (remainingSeconds <= 10 ? CheckTheme.pending : CheckTheme.working) }
     var launchRecoil: AlkkagiVector {
@@ -464,9 +850,10 @@ final class AlkkagiLocalModel {
         return launch.direction * (-sin(launch.age * 38) * exp(-launch.age * 17) * launch.power * 6)
     }
     var status: String {
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore, let state = onlineStore.state {
-            if onlineStore.isBusy { return "서버와 동기화하고 있어요" }
-            if state.phase == .finished { return resultTitle }
+            if onlineStore.isBusy { return "잠시만 기다려 주세요" }
+            if state.phase == .finished { return AlkkagiText.outcomeTitle(onlineStore.outcome) }
             if state.phase == .rolling { return "돌이 멈추면 차례가 바뀌어요" }
             if state.phase == .placing {
                 return state.myReady ? "준비 완료 · 상대를 기다리고 있어요" : "\(state.myColor.title) 비공개 배치 중 · 내 영역을 눌러 주세요"
@@ -476,6 +863,7 @@ final class AlkkagiLocalModel {
                 return "\(peer.displayName)님 차례예요"
             }
         }
+        #endif
         return switch game.phase {
         case .placing: "\(game.currentPlayer.title) 배치 중 · 내 영역을 눌러 돌을 놓으세요"
         case .aiming: selectedID == nil ? "\(game.currentPlayer.title) 차례 — 돌을 뒤로 당겨 보세요" : "놓으면 발사해요 · Esc로 취소"
@@ -492,11 +880,15 @@ final class AlkkagiLocalModel {
     }
     var canSendChat: Bool {
         let text = chatDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        return !text.isEmpty && text.unicodeScalars.count <= 100 && !(onlineStore?.isSendingChat ?? false)
+        #if !ALKKAGI_PLAYGROUND
+        if onlineStore?.isSendingChat == true { return false }
+        #endif
+        return !text.isEmpty && text.unicodeScalars.count <= 100
     }
     var chatLength: Int { chatDraft.unicodeScalars.count }
     func sendChat() {
         guard canSendChat else { return }
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore {
             let draft = chatDraft
             let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -513,21 +905,28 @@ final class AlkkagiLocalModel {
             }
             return
         }
+        #endif
         appendMessage(chatDraft.trimmingCharacters(in: .whitespacesAndNewlines), sender: chatSender)
         chatDraft = ""
     }
     func sendQuick(_ phrase: GomokuQuickPhrase) {
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore {
             Task { [weak self] in await onlineStore.sendChat(body: phrase.text); self?.synchronizeOnline() }
-        } else {
-            appendMessage(phrase.text, sender: chatSender)
+            return
         }
+        #endif
+        appendMessage(phrase.text, sender: chatSender)
     }
     func toggleChatMute() {
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore {
             let muted = !chatMuted
             Task { [weak self] in await onlineStore.setMuted(muted); self?.synchronizeOnline() }
-        } else { chatMuted.toggle() }
+            return
+        }
+        #endif
+        chatMuted.toggle()
     }
     private func appendMessage(_ body: String, sender: AlkkagiGame.Player?) {
         messageSequence += 1
@@ -567,6 +966,7 @@ final class AlkkagiLocalModel {
         guard !ignoresCurrentGesture, canInteract else { return }
         if game.phase == .placing {
             guard let id = dragPlacementID, let at = placementPoint else { return }
+            #if !ALKKAGI_PLAYGROUND
             if let onlineStore {
                 guard game.canPlace(stoneID: id, at: at) else {
                     notice = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
@@ -575,6 +975,7 @@ final class AlkkagiLocalModel {
                 Task { [weak self] in await onlineStore.place(stoneID: id, at: at); self?.synchronizeOnline(force: true) }
                 return
             }
+            #endif
             if game.placeStone(stoneID: id, at: at) {
                 placementID = game.stones.first { $0.owner == game.currentPlayer && !$0.isPlaced }?.id
                 notice = nil
@@ -593,15 +994,17 @@ final class AlkkagiLocalModel {
             if soundEnabled { feedback.play(strength: 0.3 + power * 0.6, kind: .flick, horizontal: stone.position.x) }
             soundTap?(0.3 + power * 0.6, .flick, stone.position.x)
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            #if !ALKKAGI_PLAYGROUND
             if let onlineStore {
-                predictedShotID = actionID
+                replayShotID = actionID.uuidString
+                deferredRevision = nil
                 onlineReplayElapsed = 0
                 Task { [weak self] in
                     await onlineStore.shoot(stoneID: id, pull: shotPull, actionID: actionID)
                     self?.synchronizeOnline(force: true)
-                    self?.predictedShotID = nil
                 }
             }
+            #endif
         }
     }
     func cancelAim() {
@@ -615,25 +1018,29 @@ final class AlkkagiLocalModel {
         ignoresCurrentGesture = false
     }
     func confirmPlacement() {
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore {
             Task { [weak self] in await onlineStore.confirmPlacement(); self?.synchronizeOnline(force: true) }
             return
         }
+        #endif
         let old = game
         if game.confirmPlacement() { changed(from: old) }
     }
     func restart() {
+        #if !ALKKAGI_PLAYGROUND
         if let onlineStore {
             Task { await onlineStore.leaveFinishedMatch() }
             return
         }
+        #endif
         let physics = game.physics   // 새 판도 고른 감속 그대로(독립 실행기의 시안 고르기)
         game.reset(); game.physics = physics; cancelAim(); placementID = 0; notice = nil
         hits = []; falls = []; launch = nil; jolt = 0; lastTime = nil; clockTime = 0
         messages = []; chatDraft = ""; chatSender = .black; messageSequence = 0
     }
     private func changed(from old: AlkkagiGame) {
-        guard onlineStore == nil else { return }
+        guard !isOnline else { return }
         guard old.phase != game.phase || old.currentPlayer != game.currentPlayer else { return }
         cancelAim(); notice = nil; clockTime = 0
         chatSender = game.currentPlayer
@@ -653,38 +1060,44 @@ final class AlkkagiLocalModel {
         guard let lastTime else { return }
         let elapsed = max(0, now - lastTime)
         let dt = min(1.0 / 20, elapsed)
-        // 멈칫 중이면 굴림 시간이 흐르지 않는다(효과 나이도 멈춘다 — 흔들림만 계속). 온라인은 멈춘 만큼을 빚으로 적고
-        // 멈춤이 끝나면 걸음마다 35% 더 돌려 갚는다.
+        // 멈칫 중이면 굴림 시간이 흐르지 않는다(효과 나이도 멈춘다 — 흔들림만 계속). 온라인은 멈춘 만큼 서버보다 뒤처지고,
+        // 멈춤이 끝나면 뒤처짐 따라잡기(1.5배)가 갚는다.
         var rollDt = dt
         let frozen = hitStop > 0
         if frozen {
             let used = min(hitStop, dt)
             hitStop -= used
             rollDt = dt - used
-            if onlineStore != nil { replayDebt += used }
-        } else if replayDebt > 0 {
-            let repay = min(replayDebt, dt * 0.35)
-            replayDebt -= repay
-            rollDt = dt + repay
         }
         var impacts: [AlkkagiGame.Impact] = []
         let old = game
-        if let onlineStore {
+        #if !ALKKAGI_PLAYGROUND
+        let onlineStore = self.onlineStore
+        #endif
+        if isOnline {
+            #if !ALKKAGI_PLAYGROUND
+            guard let onlineStore else { return }
             synchronizeOnline()
-            if onlineStore.state?.phase == .rolling, let shot = onlineStore.state?.shot {
-                let target = min(shot.duration,
-                                 max(0, (onlineStore.estimatedServerNowMs - shot.startedAtMs) / 1_000 - replayDebt))
-                var remaining = max(0, target - onlineReplayElapsed)
-                while remaining > 1e-9 && game.phase == .rolling {
-                    let slice = min(0.25, remaining)
-                    impacts += game.advance(dt: slice)
-                    remaining -= slice
-                    onlineReplayElapsed += slice
+            if game.phase == .rolling, replayShotID != nil {
+                var step = rollDt
+                if !frozen {
+                    if let behind = replayLag(onlineStore) {
+                        if behind > Self.maxReplayLag {
+                            // 신호를 놓쳐 아주 늦게 안 판 — 넘는 만큼만 소리 · 효과 없이 건너뛴다.
+                            _ = advanceReplay(by: behind - Self.maxReplayLag)
+                        }
+                        if behind > 0.001 { step += min(behind, dt * Self.replayCatchUpRate) }
+                    } else if deferredRevision != nil {
+                        step += dt * Self.replayDrainRate
+                    }
                 }
-            } else if predictedShotID != nil && game.phase == .rolling, rollDt > 0 {
-                impacts = game.advance(dt: rollDt)
-                onlineReplayElapsed += rollDt
+                if step > 0 { impacts = advanceReplay(by: step) }
+                if game.phase != .rolling, deferredRevision != nil {
+                    deferredRevision = nil
+                    synchronizeOnline(force: true)
+                }
             }
+            #endif
         } else if game.phase == .placing || game.phase == .aiming {
             // 초 단위 UI는 오목과 같이 5Hz로만 갱신한다. 창 밖을 눌러도 제한 시간은 흐른다.
             clockTime += elapsed
@@ -697,7 +1110,6 @@ final class AlkkagiLocalModel {
         } else if game.phase == .rolling, rollDt > 0 {
             impacts = game.advance(dt: rollDt)
         }
-        if game.phase != .rolling { replayDebt = 0 }
         changed(from: old)
         guard !hits.isEmpty || !falls.isEmpty || launch != nil || !impacts.isEmpty || jolt > 0 else { return }
         time += dt
@@ -730,6 +1142,29 @@ final class AlkkagiLocalModel {
         }
     }
 
+    #if !ALKKAGI_PLAYGROUND
+    /// 서버 굴림 시각보다 내 화면 굴림이 뒤처진 초(앞서면 음수). 서버가 같은 쏘기를 굴리는 중일 때만 — 아니면 nil.
+    private func replayLag(_ store: AlkkagiOnlineStore) -> Double? {
+        guard let state = store.state, state.phase == .rolling, let shot = state.shot,
+              replayShotID?.caseInsensitiveCompare(shot.id) == .orderedSame, shot.startedAtMs.isFinite else { return nil }
+        let serverElapsed = min(shot.duration, max(0, (store.estimatedServerNowMs - shot.startedAtMs) / 1_000))
+        let lag = serverElapsed - onlineReplayElapsed
+        return lag.isFinite ? lag : nil
+    }
+
+    /// 화면 굴림을 `seconds` 만큼 나아가게 한다(0.25초 조각 — 판 진행의 한 번 상한).
+    private func advanceReplay(by seconds: Double) -> [AlkkagiGame.Impact] {
+        var impacts: [AlkkagiGame.Impact] = []
+        var remaining = seconds
+        while remaining > 1e-9 && game.phase == .rolling {
+            let slice = min(0.25, remaining)
+            impacts += game.advance(dt: slice)
+            remaining -= slice
+            onlineReplayElapsed += slice
+        }
+        return impacts
+    }
+
     func attachOnline(_ store: AlkkagiOnlineStore?) {
         guard let store else { return }
         onlineStore = store
@@ -747,6 +1182,20 @@ final class AlkkagiLocalModel {
             onlineChatSeq = state.chatSeq
         }
         guard force || onlineMatchID != state.id || onlineRevision != state.revision else { return }
+        // 굴림 뒤 판이 내 굴림보다 먼저 왔다(받는 사람이 따라잡는 중 · 쏜 사람 응답이 늦음) — 같은 쏘기를 마저 굴린 뒤 받는다.
+        // 남은 굴림이 길면(`maxReplayDrain` 초 넘게) 기다리지 않고 바로 받는다.
+        if state.phase != .rolling, onlineMatchID == state.id, game.phase == .rolling, replayShotID != nil,
+           game.shotCount == state.shotCount {
+            if deferredRevision == state.revision { return }
+            var probe = game
+            var left = Self.maxReplayDrain
+            while probe.phase == .rolling && left > 0 { _ = probe.advance(dt: 0.25); left -= 0.25 }
+            if probe.phase != .rolling {
+                deferredRevision = state.revision
+                return
+            }
+        }
+        deferredRevision = nil
         // The other player's concealed placement must not interrupt my drag.
         if !force, onlineMatchID == state.id, state.phase == .placing, !state.myReady,
            game.phase == .placing, game.currentPlayer == state.myColor, game.stones == state.stones {
@@ -755,28 +1204,38 @@ final class AlkkagiLocalModel {
         }
         cancelAim()
         notice = nil
-        let keepsPrediction = state.phase == .rolling
-            && predictedShotID?.uuidString.caseInsensitiveCompare(state.shot?.id ?? "") == .orderedSame
+        // 같은 쏘기를 이미 되살리는 중이면(쏜 사람의 예측 · 굴림 중 revision 만 바뀜) 처음부터 다시 굴리지 않는다.
+        let keepsReplay = state.phase == .rolling
+            && replayShotID?.caseInsensitiveCompare(state.shot?.id ?? "") == .orderedSame
             && game.shotCount == state.shotCount
-        if state.phase == .rolling, !keepsPrediction, let replay = state.shotReplayGame {
+        if state.phase == .rolling, !keepsReplay, let replay = state.shotReplayGame {
             game = replay
+            replayShotID = state.shot?.id
             onlineReplayElapsed = 0
-        } else if !keepsPrediction, let canonical = state.canonicalGame(serverNowMs: onlineStore.estimatedServerNowMs) {
+        } else if !keepsReplay, let canonical = state.canonicalGame(serverNowMs: onlineStore.estimatedServerNowMs) {
             game = canonical
+            if state.phase != .rolling { replayShotID = nil }
             onlineReplayElapsed = 0
         }
         onlineMatchID = state.id
         onlineRevision = state.revision
         placementID = game.stones.first { $0.owner == state.myColor && !$0.isPlaced }?.id
     }
+    #endif
 }
 
 private struct AlkkagiLocalMessage: Identifiable { let id: Int; let sender: AlkkagiGame.Player?; let body: String }
-private struct AlkkagiHit { let position: AlkkagiVector; let strength: Double; let ringOut: Bool; var age = 0.0 }
-private struct AlkkagiFall { let position: AlkkagiVector; let owner: AlkkagiGame.Player; let outward: AlkkagiVector; var age = 0.0 }
-private struct AlkkagiLaunch { let stoneID: Int; let direction: AlkkagiVector; let power: Double; var age = 0.0 }
+struct AlkkagiHit { let position: AlkkagiVector; let strength: Double; let ringOut: Bool; var age = 0.0 }
+struct AlkkagiFall { let position: AlkkagiVector; let owner: AlkkagiGame.Player; let outward: AlkkagiVector; var age = 0.0 }
+struct AlkkagiLaunch { let stoneID: Int; let direction: AlkkagiVector; let power: Double; var age = 0.0 }
 
-private enum AlkkagiDrawing {
+/// 판 그림(§5.9 — 그대로). 관전 화면(`AlkkagiSpectateView`)도 같은 그림을 쓴다.
+enum AlkkagiDrawing {
+    /// 판 한 변(pt) — 판 게임 칸 그대로(뒤집기 · 오목과 같은 608). 0.3.80 은 칸 − 48(560).
+    static var boardSide: CGFloat { BoardGameLayout.boardSide }
+    /// 떨어지는 돌을 판 밖으로 그릴 여백(창 안쪽 여백 20pt 안).
+    static let fallMargin: CGFloat = 20
+
     static func board(context: GraphicsContext, size: CGSize) {
         var layer = context
         let inset = size.width * 0.06
@@ -996,15 +1455,6 @@ extension View {
         self
         #else
         self.checkTooltip(text)
-        #endif
-    }
-
-    /// 창 루트의 말풍선 층(앱만). 알까기 창 루트 `AlkkagiOnlinePanel` 이 단다 — 판 화면(클립된 바둑판)보다 바깥.
-    @ViewBuilder func alkkagiTooltipLayer() -> some View {
-        #if ALKKAGI_PLAYGROUND
-        self
-        #else
-        self.checkTooltipLayer()
         #endif
     }
 }

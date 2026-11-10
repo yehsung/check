@@ -288,6 +288,17 @@ final class CheckOverlayController {
     private(set) var pendingCrossyDuelAttention: CrossyDuelAttention?
     private var crossyDuelAttentionTask: Task<Void, Never>?
     private(set) var shownCrossyDuelAttention: (text: String, matchID: String)?
+    /// 1:1 알까기의 같은 일곱 칸. 길건너와 형제이고 규약이 글자 그대로 같다(alkkagi/v2 SPEC §6 #2) — 다른 것은 문구(`AlkkagiText`)와
+    /// 여는 창, 그리고 알림이 **둘**(판 시작 · 내 차례)이라는 것이다. 한 수 30초라 창을 닫아 둔 사람에게 "내 차례" 말풍선이 없으면
+    /// 세 번 넘겨 **판돈을 잃는다**.
+    private(set) var alkkagiInviteQueue: [AlkkagiInvite] = []
+    private var alkkagiDrainTask: Task<Void, Never>?
+    private(set) var shownAlkkagiInvite: (text: String, matchID: String)?
+    /// 1:1 알까기 말풍선을 눌렀을 때 열 곳(인자 = 판 id). nil 이면 클릭 자리를 만들지 않는다(배선은 CheckApp).
+    var onOpenAlkkagi: ((String) -> Void)?
+    private(set) var pendingAlkkagiAttention: AlkkagiAttention?
+    private var alkkagiAttentionTask: Task<Void, Never>?
+    private(set) var shownAlkkagiAttention: (text: String, matchID: String)?
 
     // MARK: - 할 일 보드 훅
     //
@@ -881,6 +892,8 @@ final class CheckOverlayController {
         if let rect = mahjongInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         // 1:1 길건너 말풍선도 같은 이유로 몸체로 쳐 준다.
         if let rect = crossyDuelInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
+        // 1:1 알까기 말풍선도 같은 이유로 몸체로 쳐 준다.
+        if let rect = alkkagiInviteBubbleScreenRect(), rect.contains(screenPoint) { return true }
         return engine.hasAttachedView
             ? isBodyAtScreenPointFresh(screenPoint)
             : panel.frame.contains(screenPoint)
@@ -1032,6 +1045,10 @@ final class CheckOverlayController {
         }
         if let rect = crossyDuelInviteBubbleScreenRect(), rect.contains(location), let matchID = crossyDuelBubbleMatchID() {
             onOpenCrossyDuel?(matchID)
+            return
+        }
+        if let rect = alkkagiInviteBubbleScreenRect(), rect.contains(location), let matchID = alkkagiBubbleMatchID() {
+            onOpenAlkkagi?(matchID)
             return
         }
         if let rect = messageArrivalBubbleScreenRect(), rect.contains(location) {
@@ -2270,6 +2287,140 @@ final class CheckOverlayController {
                 await tick(Self.messageBubbleTickSeconds)
             }
             self?.crossyDuelAttentionTask = nil
+        }
+    }
+
+    // MARK: - 1:1 알까기 말풍선 (길건너 묶음의 형제 — alkkagi/v2 SPEC §6 #2)
+    //
+    // ★ 1:1 알까기 폴링도 창이 보일 때만 돌고 창을 여는 길은 미니게임 창 사이드바 문 하나뿐이다. 받은 신청의 TTL 은 60초이고
+    //   푸시가 없다 — 이 말풍선 · 팝오버 배너 · 메뉴바 점이 신청을 아는 세 표면이다. 한 수 30초라 차례 말풍선이 없으면 창을 닫아 둔
+    //   사람은 세 번 넘겨 판돈을 잃는다.
+    // 문구 글자는 여기 쓰지 않는다 — 맥 문구 집 `AlkkagiText`(AlkkagiInviteBanner.swift) 한 곳이다. 판돈은 늘 "루비 N"(💎 금지 — VC-7).
+
+    /// 새 받은 신청을 큐에 넣고 펌프를 돌린다(같은 판 id 는 한 번만). `AlkkagiOnlineStore.onInviteArrived` 가 부른다.
+    func enqueueAlkkagiInvite(_ invite: AlkkagiInvite) {
+        guard !alkkagiInviteQueue.contains(where: { $0.id == invite.id }) else { return }
+        alkkagiInviteQueue.append(invite)
+        drainAlkkagiInvitesIfNeeded()
+    }
+
+    /// 큐를 비운다(로그아웃·계정 전환).
+    func clearAlkkagiInvites() {
+        alkkagiInviteQueue.removeAll()
+        shownAlkkagiInvite = nil
+        pendingAlkkagiAttention = nil
+        shownAlkkagiAttention = nil
+    }
+
+    /// 큐 맨 앞 신청 1건을 말풍선으로 띄우고 큐에서 뺀다(띄웠으면 true). **못 띄우면 큐를 건드리지 않는다.**
+    /// 받은 신청은 **여럿**일 수 있다 — 살아 있음은 스토어가 화면에 보이는 받은 신청 전부로 판정한다(테트리스형).
+    /// 만료는 서버 시각(`expires_at_ms`)과 이 기기 시계로 본다 — 스토어 타이머가 목록에서 걷기 전의 틈만 메운다.
+    @discardableResult
+    func showNextAlkkagiInviteBubble(now: Date = Date()) -> Bool {
+        let alive = Set(store.alkkagi.visibleIncomingInvites.map(\.id))
+        let nowMs = now.timeIntervalSince1970 * 1_000
+        alkkagiInviteQueue.removeAll { $0.expiresAtMs <= nowMs || !alive.contains($0.id) }
+        guard let invite = alkkagiInviteQueue.first else { return false }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = AlkkagiText.inviteBubbleText(name: invite.opponent.displayName, stake: invite.stake)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownAlkkagiInvite = (text, invite.id)
+        alkkagiInviteQueue.removeFirst()
+        return true
+    }
+
+    func drainAlkkagiInvitesIfNeeded() {
+        guard alkkagiDrainTask == nil, !alkkagiInviteQueue.isEmpty else { return }
+        let tick = messageBubbleSleep
+        alkkagiDrainTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, !self.alkkagiInviteQueue.isEmpty else { break }
+                self.showNextAlkkagiInviteBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.alkkagiDrainTask = nil
+        }
+    }
+
+    /// 헤드리스 검증 지점: 1:1 알까기 신청 펌프가 돌고 있는가.
+    var isDrainingAlkkagiInvites: Bool { alkkagiDrainTask != nil }
+
+    /// 지금 **누를 수 있는** 1:1 알까기 말풍선(신청·시작·차례)의 화면 사각형(아니면 nil).
+    func alkkagiInviteBubbleScreenRect() -> NSRect? {
+        guard alkkagiBubbleMatchID() != nil else { return nil }
+        return OverlayMessageBubble.screenRect(inPanelFrame: panel.frame)
+    }
+
+    /// 지금 떠 있는 1:1 알까기 말풍선이 열 판 id. 문구와 id 를 **함께** 본다.
+    func alkkagiBubbleMatchID() -> String? {
+        guard onOpenAlkkagi != nil, !isUltraActive, let text = engine.greetingText else { return nil }
+        if let shown = shownAlkkagiAttention, shown.text == text { return shown.matchID }
+        if let shown = shownAlkkagiInvite, shown.text == text { return shown.matchID }
+        return nil
+    }
+
+    /// 시작 · 내 차례 말풍선 문구(순수). 글자는 맥 문구 집 `AlkkagiText` 한 곳이다 — 차례 말풍선은 상대가 쏴서 넘어왔을 때만
+    /// 이름을 싣는다(스토어가 그 밖은 빈 이름으로 보낸다 — VC-20).
+    nonisolated static func alkkagiAttentionBubbleText(_ attention: AlkkagiAttention) -> String {
+        switch attention.kind {
+        case .matchStarted: return AlkkagiText.matchStartedText(name: attention.opponentName)
+        case .myTurn: return AlkkagiText.myTurnText(shooterName: attention.opponentName)
+        }
+    }
+
+    /// 시작 · 차례 알림을 넣고 펌프를 돌린다. `AlkkagiOnlineStore.onAttention` 이 부른다.
+    func enqueueAlkkagiAttention(_ attention: AlkkagiAttention) {
+        pendingAlkkagiAttention = attention
+        drainAlkkagiAttentionIfNeeded()
+    }
+
+    @discardableResult
+    func showPendingAlkkagiAttentionBubble() -> Bool {
+        guard let attention = pendingAlkkagiAttention else { return false }
+        guard Self.alkkagiAttentionIsCurrent(attention, in: store.alkkagi) else {
+            pendingAlkkagiAttention = nil
+            return false
+        }
+        guard !isUltraActive, engine.greetingText == nil else { return false }
+        if case .playing = engine.state { return false }
+        let text = Self.alkkagiAttentionBubbleText(attention)
+        if shouldBeVisible && panel.isVisible {
+            guard engine.request(.poked(bubbleText: text)) else { return false }
+        } else {
+            guard beginPeek(.poked(bubbleText: text)) else { return false }
+        }
+        shownAlkkagiAttention = (text, attention.matchID)
+        pendingAlkkagiAttention = nil
+        return true
+    }
+
+    /// 알림이 아직 사실인가(순수 판정 — 스토어 상태만 읽는다). 창이 보이고 안 가려졌으면 거짓이다(화면이 이미 말한다 — 열린 채 가려진
+    /// 창은 말하지 못하므로 사실로 남긴다, 스토어 말풍선 문과 같은 기준 `!visible || occluded`). 같은 판이 진행 중이어야 하고, 차례
+    /// 알림은 아직 '조준 · 내 차례'여야 한다 — **넘어온 원인은 묻지 않는다**(상대 쏘기 · 상대 시간 넘김 · 배치 끝, VC-20).
+    static func alkkagiAttentionIsCurrent(_ attention: AlkkagiAttention, in alkkagi: AlkkagiOnlineStore) -> Bool {
+        guard !alkkagi.isWindowVisible || alkkagi.isWindowOccluded, let match = alkkagi.match,
+              match.id == attention.matchID, match.phase != .finished else { return false }
+        switch attention.kind {
+        case .matchStarted: return true
+        case .myTurn: return AlkkagiOnlineStore.isMyAim(match)
+        }
+    }
+
+    func drainAlkkagiAttentionIfNeeded() {
+        guard alkkagiAttentionTask == nil, pendingAlkkagiAttention != nil else { return }
+        let tick = messageBubbleSleep
+        alkkagiAttentionTask = Task { @MainActor [weak self] in
+            while true {
+                guard let self, !Task.isCancelled, self.pendingAlkkagiAttention != nil else { break }
+                self.showPendingAlkkagiAttentionBubble()
+                await tick(Self.messageBubbleTickSeconds)
+            }
+            self?.alkkagiAttentionTask = nil
         }
     }
 

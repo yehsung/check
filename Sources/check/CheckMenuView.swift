@@ -55,7 +55,7 @@ struct CheckMenuView: View {
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
-    /// 스냅샷 전용: 받은 알까기 신청 배너를 강제로 그린다. 앱에서는 store.alkkagi.incoming.first 만 읽는다.
+    /// 스냅샷 전용: 받은 1:1 알까기 신청 배너를 강제로 그린다. 앱에서는 store.alkkagi.visibleIncoming 만 읽는다.
     var previewAlkkagiInvite: AlkkagiInvite? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
@@ -476,17 +476,18 @@ struct CheckMenuView: View {
         }
     }
 
-    /// 받은 알까기 신청은 스토어 목록만 읽는다. 시각 판정과 로비 갱신은 메뉴 본문에서 하지 않는다.
+    /// 팝오버에 띄울 받은 **1:1 알까기** 신청(없으면 nil). 길건너와 같은 규약: **스토어가 만료·차단·내 판을 걷은 결과만** 읽는다
+    /// (시계를 읽지 않는다 — 만료는 스토어 타이머가 걷는다).
     private var alkkagiBannerInvite: AlkkagiInvite? {
-        previewAlkkagiInvite ?? store.alkkagi.incoming.first
+        previewAlkkagiInvite ?? store.alkkagi.visibleIncoming
     }
 
+    /// 배너 [수락]: 서버 수락 → 1:1 알까기 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 다섯 게임과 같은 순서). **결과와 상관없이** 창을 연다
+    /// (다섯 게임 5/5 — 실패 까닭은 창 안내 줄이 말한다, SPEC §0 #12 · VC-4). 겹친 누름은 스토어 `respond` 가 `isBusy` 로 막는다.
     private func acceptAlkkagiInvite(_ invite: AlkkagiInvite) {
         let alkkagi = store.alkkagi
         Task { @MainActor in
-            guard !Task.isCancelled, !alkkagi.isBusy else { return }
             await alkkagi.respond(inviteID: invite.id, accept: true)
-            guard !Task.isCancelled else { return }
             alkkagi.openWindow(focusMatchID: invite.id)
             WindowTopAnchor.dismissMenuPopover()
         }
@@ -495,7 +496,6 @@ struct CheckMenuView: View {
     private func declineAlkkagiInvite(_ invite: AlkkagiInvite) {
         let alkkagi = store.alkkagi
         Task { @MainActor in
-            guard !Task.isCancelled, !alkkagi.isBusy else { return }
             await alkkagi.respond(inviteID: invite.id, accept: false)
         }
     }
@@ -1557,7 +1557,8 @@ struct MenuBarStatusLabel: View {
     /// 소스 계약 시험(V03xxCrossyDuelWiringTests)이 함께 잰다.
     var hasCrossyDuelInvite = false
 
-    /// 받은 알까기 신청이 있다. 기존 멤버와이즈 호출을 지키도록 맨 뒤에 둔다.
+    /// 받은 **1:1 알까기** 신청이 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxAlkkagiWiringTests)이 함께 잰다.
     var hasAlkkagiInvite: Bool = false
 
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
@@ -1707,7 +1708,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var mahjongAway: Bool = false
     /// 받은 1:1 길건너 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var crossyDuelInvite: Bool = false
-    /// 받은 알까기 신청이 있다. 기존 멤버와이즈 호출을 지키도록 맨 뒤에 둔다.
+    /// 받은 1:1 알까기 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var alkkagiInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
@@ -1719,7 +1720,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
     static let mahjongInviteText = MahjongInviteText.dotReason
     static let mahjongAwayText = MahjongInviteText.awayDotReason
     static let crossyDuelInviteText = CrossyDuelText.dotReason
-    static let alkkagiInviteText = AlkkagiInviteText.dotReason
+    static let alkkagiInviteText = AlkkagiText.dotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
@@ -1745,6 +1746,7 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if mahjongAway { parts.append(Self.mahjongAwayText) }
         // 1:1 길건너 신청은 마작 뒤다(팝오버 배너 · 사이드바와 같은 순서).
         if crossyDuelInvite { parts.append(Self.crossyDuelInviteText) }
+        // 1:1 알까기 신청은 길건너 뒤다(팝오버 배너 · 사이드바와 같은 순서).
         if alkkagiInvite { parts.append(Self.alkkagiInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }

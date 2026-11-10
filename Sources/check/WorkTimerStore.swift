@@ -366,6 +366,7 @@ final class WorkTimerStore {
             // 1:1 길건너 받은 신청도 같은 자리에서 본다 — 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
             // 팝오버 열기는 **가벼운 로비**(`p_users` false — 사람 목록·전적 없이 받은 신청·진행 판만, CD/SPEC.md §6.3 CS-4)다.
             crossyDuel.refreshLobbyIfStale()
+            // 1:1 알까기 받은 신청도 같은 자리 · 같은 가벼운 로비(`p_users` false — alkkagi/v2 SPEC §4.3 메뉴 스로틀 30초)다.
             alkkagi.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
@@ -1735,6 +1736,7 @@ final class WorkTimerStore {
             mahjong.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
             // 1:1 길건너도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선에 남지 않게(리버시 꼴).
             if crossyDuel.hiddenPeerIDs != blockHiddenPeerIDs { crossyDuel.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 1:1 알까기도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선·메뉴바 점에 남지 않게(길건너 꼴).
             if alkkagi.hiddenPeerIDs != blockHiddenPeerIDs { alkkagi.hiddenPeerIDs = blockHiddenPeerIDs }
         }
     }

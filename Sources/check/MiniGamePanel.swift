@@ -1565,7 +1565,7 @@ struct MiniGameDuelInvites: Equatable {
             reversi: store.reversi.visibleIncoming != nil,
             mahjong: store.mahjong.hasIncomingInvite,
             crossyDuel: store.crossyDuel.visibleIncoming != nil,
-            alkkagi: !store.alkkagi.incoming.isEmpty
+            alkkagi: store.alkkagi.visibleIncoming != nil
         )
     }
 }
@@ -1703,7 +1703,7 @@ struct MiniGameSidebar: View {
     let onMahjong: () -> Void
     /// 1:1 길건너 문(일곱째 — 기본값 없음: 호출부가 빠뜨리면 컴파일이 막는다).
     let onCrossyDuel: () -> Void
-    /// 로컬 2인 알까기 문(여덟째).
+    /// 1:1 알까기 문(여덟째).
     let onAlkkagi: () -> Void
     /// 스냅샷 전용: 같이 하기 칸을 ScrollView 대신 클립으로 그린다(ImageRenderer 는 ScrollView 안쪽을 못 그린다). 앱은 언제나 false.
     var clipsOverflowInsteadOfScroll: Bool = false
@@ -1964,17 +1964,17 @@ struct MiniGameReversiEntryButton: View {
     }
 }
 
-/// 알까기 온라인 대전 입구와 받은 신청 표시.
+/// 사이드바의 [1:1 알까기] 문(여덟째). 이름·도움말 글자는 맥 문구 집 `AlkkagiText` 한 곳에서, 아이콘은 `AlkkagiEntryIcon` 한 출처에서
+/// 온다(뒤집기 문이 `ReversiText` · `ReversiEntryIcon` 을 쓰는 것과 같은 방식 — SPEC §6 #4). 렌더 테스트가 단독으로 그린다(internal).
 struct MiniGameAlkkagiEntryButton: View {
-    static let title = "알까기"
-    static let icon = "circle.hexagongrid.fill"
-    static let help = "상대를 초대하거나 진행 중인 알까기 대전을 열어요"
+    static let title = AlkkagiText.gameName
+    static let help = AlkkagiText.sidebarHelp
 
     var hasInvite = false
     let action: () -> Void
 
     var body: some View {
-        MiniGameSidebarRow(title: Self.title, icon: Self.icon, tint: CheckTheme.working, opensWindow: true,
+        MiniGameSidebarRow(title: Self.title, icon: AlkkagiEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
                            hasInvite: hasInvite, help: Self.help, action: action)
     }
 }

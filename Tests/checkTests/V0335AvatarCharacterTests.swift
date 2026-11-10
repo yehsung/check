@@ -447,7 +447,9 @@ private func avFetches(_ host: String) -> Int {
         // `mahjong` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다.
         // 1:1 길건너 창이 여섯 자리를 더했다(로비 상대 줄 · 순위 행 · 받은 신청 · 경주 띠 나/상대 · 결과 카드 상대). 49 + 6 — 아래
         // `crossyDuel` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다(CD/SPEC.md §9.5 #23).
-        #expect(avatars.count == 55, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 1:1 알까기 v2 로비가 다섯 자리를 더했다(상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청 — AlkkagiPanelLobby.swift,
+        // alkkagi/v2 SPEC §5.3). 55 + 5 — 판 · 결과 · 관전 카드는 공용 `BoardGamePlayerCard` 를 쓴다.
+        #expect(avatars.count == 60, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -605,13 +607,18 @@ private func avFetches(_ host: String) -> Int {
         }.sorted()
         // 아잉 마작 창(MahjongPanel)이 열째 루트다(MJ/SPEC.md §4.6 #23 — 툴팁 레이어 짝은 V0325).
         // 1:1 길건너 창(CrossyDuelPanel)이 열한째 루트다(CD/SPEC.md §9.5 #23).
-        #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
+        // 1:1 알까기 창(AlkkagiOnlinePanel)이 열두째 루트다(alkkagi/v2 SPEC §5.1 — 툴팁 레이어 짝은 V0325).
+        #expect(roots == ["AlkkagiOnlinePanel.swift:1", "CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
                           "CrossyDuelPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1",
                           "ReversiPanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
                 "\(roots)")
         // 1:1 길건너 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·경주 띠·신청의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["CrossyDuelPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
         #expect(sources["CheckCrossyDuelWindow.swift"]?.contains("CrossyDuelPanel(store: crossyDuel, me: me, safety: safety)") == true)
+        // 1:1 알까기 창도 같은 짝 · 창이 패널을 safety 배선으로 담고 앱이 소유자를 safety 로 넘긴다(빠지면 로비 얼굴이 이니셜로 떨어진다).
+        #expect(sources["AlkkagiOnlinePanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckAlkkagiWindow.swift"]?.contains("AlkkagiOnlinePanel(store: onlineStore, safety: safety)") == true)
+        #expect(sources["CheckApp.swift"]?.contains("CheckAlkkagiWindowController.shared.configure(store: alkkagi, safety: store)") == true)
         #expect(sources["CheckApp.swift"]?.contains("CheckCrossyDuelWindowController.shared.configure(store: store.crossyDuel, me:") == true)
         // 아잉 뒤집기 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·순위·신청의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["ReversiPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)

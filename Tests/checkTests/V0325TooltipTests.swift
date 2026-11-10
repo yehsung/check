@@ -730,11 +730,11 @@ struct V0325TooltipTests {
         // 아잉 뒤집기 창(ReversiPanel) 루트가 아홉 번째다(SPEC §5.1 — 창 루트에 레이어 + 아바타 표 두 줄).
         // 아잉 마작 창(MahjongPanel) 루트가 열 번째다(MJ/SPEC.md §4.6 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
         // 1:1 길건너 창(CrossyDuelPanel) 루트가 열한 번째다(CD/SPEC.md §9.5 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
-        // 1:1 알까기 창(AlkkagiOnlinePanel)은 열두 번째다 — 레이어 호출은 독립 실행기와 함께 쓰는 도우미
-        // `alkkagiTooltipLayer()`(AlkkagiGameView.swift, 앱 빌드에서만 `.checkTooltipLayer()`)에 있다.
+        // 1:1 알까기 창(AlkkagiOnlinePanel)은 열두 번째다 — v2(alkkagi/v2 SPEC §5.1)에서 레이어가 독립 실행기 도우미
+        // (`alkkagiTooltipLayer()`, AlkkagiGameView.swift)에서 창 루트 패널로 옮겨 왔다(독립 실행기는 로컬 연습만 — §5.10).
         // 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
         #expect(layerSites == [
-            "AlkkagiGameView.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
+            "AlkkagiOnlinePanel.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
             "ChessPanel.swift:1", "CrossyDuelPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1",
             "ReversiPanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")
@@ -760,6 +760,13 @@ struct V0325TooltipTests {
         let reversiLayer = try #require(reversi.range(of: ".checkTooltipLayer()"))
         let reversiOverlay = try #require(reversi.range(of: "ReversiRulesOverlay("))
         #expect(reversiOverlay.upperBound <= reversiLayer.lowerBound, "규칙 덮개가 툴팁 레이어 바깥에 붙었다")
+        // 1:1 알까기 창도 같은 자리다: 창 고정 프레임·배경·전경색 뒤. 판돈 · 규칙 덮개와 판 · 로비는 전부 그 안쪽 ZStack 이다.
+        let alkkagi = try #require(Self.between(sources["AlkkagiOnlinePanel.swift"] ?? "",
+                                                "struct AlkkagiOnlinePanel: View {", ".onChange(of: store.state?.id)"))
+        #expect(alkkagi.contains("height: BoardGameLayout.contentSize.height, alignment: .topLeading) .background(CheckTheme.background) .foregroundStyle(CheckTheme.primaryText) .checkTooltipLayer()"))
+        let alkkagiLayer = try #require(alkkagi.range(of: ".checkTooltipLayer()"))
+        let alkkagiStake = try #require(alkkagi.range(of: "AlkkagiStakePrompt("))
+        #expect(alkkagiStake.upperBound <= alkkagiLayer.lowerBound, "판돈 덮개가 툴팁 레이어 바깥에 붙었다")
         // 오목 창: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
         let gomoku = try #require(Self.between(sources["GomokuPanel.swift"] ?? "",
                                                "struct GomokuPanel: View {", "private var content: some View {"))

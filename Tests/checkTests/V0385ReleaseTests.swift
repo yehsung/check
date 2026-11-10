@@ -14,13 +14,10 @@ import Testing
 //
 // 골라 돌리는 필터:
 //   --filter 'checkTests\.(v0385VersionAndChangelog|v0384VersionAndChangelog|v0385RegionAingGate)\('
-@Test("버전 0.3.85 / 138 · CHANGELOG 0.3.85 가 맨 위(세 줄 · 배너 폭 안 · 내부 어휘 없음)")
+@Test("CHANGELOG 0.3.85 (세 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0385VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.85</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>138</string>"))
+    // 버전 고정과 맨 위 섹션 단언은 0.3.86 으로 옮겼다(V0386ReleaseTests).
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.85\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -36,8 +33,6 @@ func v0385VersionAndChangelog() throws {
     }
     #expect(items.contains { $0.contains("부산") && $0.contains("서울") }, "지역 아잉이 줄이 없다")
     #expect(items.contains { $0.contains("콕 찌르기") && $0.contains("찾") }, "이름 찾기 줄이 없다")
-    #expect(changelog.range(of: "## 0.3.85")!.lowerBound < changelog.range(of: "## 0.3.84")!.lowerBound,
-            "0.3.85 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }
 
 @Test("릴리스 게이트: 지역 아잉이 — 이 빌드가 두 센터를 다 그려 능력 번호 10 · 선물 종류 region 문턱 10 · 받는 창 제목은 센터 이름")

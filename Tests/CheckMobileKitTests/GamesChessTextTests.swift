@@ -171,7 +171,10 @@ struct GamesChessTextTests {
 
     @Test("막힌 입구는 세 방향 모두 말한다 — 두는 판과 **막힌 입구**를 둘 다 이름으로")
     func oneMatchPerPersonIsSaidInEveryDirection() {
-        #expect(ChessPhoneText.BusyGame.allCases.count == 7, "게임이 일곱이다(오목·체스·테트리스·아잉 큐브·아잉 뒤집기·1:1 길건너·1:1 알까기 — 1.0.18) — 늘면 문구를 더해라")
+        #expect(ChessPhoneText.BusyGame.allCases.count == 8, "게임이 여덟이다(오목·체스·테트리스·아잉 큐브·아잉 뒤집기·1:1 길건너·1:1 알까기·아잉 마작 — 1.0.18) — 늘면 문구를 더해라")
+        // 아잉 마작은 큐브처럼 '하는' 판이다(타일 게임 · 방에 앉아 기다리는 동안도) · 조사는 '마작'의 받침을 따라 '을'.
+        #expect(ChessPhoneText.busyTitle(.mahjong) == "아잉 마작을 하는 중이에요")
+        #expect(ChessPhoneText.BusyGame.mahjong.gameName == MahjongNoticeText.gameName)
         // 1:1 알까기도 '둔다'가 아니라 겨룬다(테트리스 · 길건너와 같은 말) · 이름은 코어 한 곳 · 판은 '판'.
         #expect(ChessPhoneText.busyTitle(.alkkagi) == "1:1 알까기 대결 중이에요")
         #expect(ChessPhoneText.BusyGame.alkkagi.gameName == AlkkagiNoticeText.gameName)
@@ -214,8 +217,8 @@ struct GamesChessTextTests {
                 hints.insert(hint)
             }
         }
-        // 마흔두 쌍(게임 일곱 — 1.0.18 1:1 길건너 · 1:1 알까기)이 **마흔두 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
-        #expect(hints.count == 42, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
+        // 쉰여섯 쌍(게임 여덟 — 1.0.18 1:1 길건너 · 1:1 알까기 · 아잉 마작)이 **쉰여섯 문장**이다(한 벌로 접히면 어느 방향은 남의 이름을 말한다).
+        #expect(hints.count == 56, "막힌 입구 안내가 쌍마다 다르지 않다: \(hints.sorted())")
         #expect(ChessPhoneText.entryBlock(playing: nil) == nil)
         #expect(ChessPhoneText.entryBlockHint(playing: nil, blocked: .chess) == nil)
     }

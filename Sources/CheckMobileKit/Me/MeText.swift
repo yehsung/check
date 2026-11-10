@@ -504,7 +504,7 @@ package enum MeText {
     }
 
     /// 서버가 '맥에서 할 수 있어요'를 싣는 게임 중 **이 폰이 할 수 있는 것**(위 `dailyMissionCaption`). 폰에 게임을 넣는 판에서 여기에 더한다.
-    package static let phonePlayableMacFirstGames: Set<String> = ["rummy", "reversi", "crossy_duel", "alkkagi"]
+    package static let phonePlayableMacFirstGames: Set<String> = ["rummy", "reversi", "crossy_duel", "alkkagi", "mahjong"]
 
     /// 일일 줄 아이콘(SF Symbol) — **게임 이름으로 고른다**(키가 아니다: 누적 미션의 `gomoku1` 과 일일 `daily_gomoku` 가
     /// 같은 기호를 쓰게). 미니게임 셋은 코어 `MiniGameKind.icon`(게임 화면 · 순위표가 쓰는 그 기호)이고, 1:1 셋은 맥 입구

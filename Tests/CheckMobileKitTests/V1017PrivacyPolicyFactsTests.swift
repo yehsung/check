@@ -161,9 +161,12 @@ struct V1017PrivacyPolicyFactsTests {
 
         let also = try Self.block(lines, start: "같이 처리되는 것:")
         let duel = try #require(also.first { $0.contains("내가 진 것으로") }, "1:1 진행 중 판 정리 줄이 없다")
-        for name in names where name != GamesRummyText.title {
+        // 여럿이 하는 판(아잉 큐브 · 아잉 마작 — 1.0.18)은 '진 것으로'가 아니라 제 줄이 따로 있다.
+        for name in names where name != GamesRummyText.title && name != MahjongNoticeText.gameName {
             #expect(duel.contains(name), "1:1 진행 중 판 정리 줄에 '\(name)' 이 없다: \(duel)")
         }
+        #expect(also.contains { $0.contains(MahjongNoticeText.gameName) && $0.contains("자리 비움") && $0.contains("1위") },
+                "아잉 마작 진행 중 판 정리(자리 비움 · 몫은 1위) 줄이 없다")
         #expect(also.contains { $0.contains(GamesRummyText.title) && $0.contains("기권") }, "아잉 큐브 진행 중 판 정리(기권) 줄이 없다")
         #expect(also.contains { $0.hasPrefix("- **끝난 대국**") && $0.contains("상대의 전적") },
                 "끝난 1:1 판이 함께 지워져 상대 전적에서도 빠진다는 줄이 없다")

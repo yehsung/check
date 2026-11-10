@@ -38,6 +38,8 @@ struct GamesTab: View {
                         .padding(.top, 12)
                     alkkagiCard
                         .padding(.top, 12)
+                    mahjongCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -98,6 +100,9 @@ struct GamesTab: View {
                 case .alkkagi:
                     // 관전 값 · 판 값을 여기서 읽지 않는다(뒤집기와 같은 까닭 — 목적지가 다시 세워지면 화면이 사라졌다 다시 선다).
                     GamesAlkkagiScreen(store: store)
+                case .mahjong:
+                    // 판 값을 여기서 읽지 않는다(위와 같은 까닭 — 다시 세워지면 `mahjongScreenDidDisappear()` 가 돈다).
+                    GamesMahjongScreen(store: store)
                 }
             }
         }
@@ -481,6 +486,14 @@ struct GamesTab: View {
                  incoming: store.alkkagi.visibleIncomingInvites.count, incomingTitle: AlkkagiPhoneText.incomingTitle,
                  blockedBy: store.alkkagiEntryBlock, blocked: .alkkagi, openHint: AlkkagiPhoneText.cardOpenHint,
                  destination: .alkkagi)
+    }
+
+    /// 아잉 마작 카드(맥 `MahjongEntryIcon.symbol` 과 같은 그림). 받은 초대가 있으면 칩이 그 수를 말한다.
+    private var mahjongCard: some View {
+        duelCard(symbol: GamesMahjongPhoneText.entrySymbol, title: GamesMahjongText.title, subtitle: GamesMahjongPhoneText.cardSubtitle,
+                 incoming: store.mahjong.visibleInvites.count, incomingTitle: GamesMahjongText.invitesTitle,
+                 blockedBy: store.mahjongEntryBlock, blocked: .mahjong, openHint: GamesMahjongPhoneText.cardOpenHint,
+                 destination: .mahjong)
     }
 
     /// 아이콘 · 제목 · 부제 · 받은 신청 칩 · 꺾쇠 한 줄 카드(길건너 · 알까기가 같은 꼴). 막히면 흐리게 + 언제 풀리는지 힌트.

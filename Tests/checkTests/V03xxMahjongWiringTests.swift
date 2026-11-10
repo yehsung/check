@@ -105,17 +105,17 @@ struct V03xxMahjongWiringTests {
     }
 
     /// 없으면: 폰 러너에 마작 가지가 없어 switch 가 컴파일되지 않거나(맥 시험은 모바일 타깃을 안 짓는다), 가지가 `.drain` 으로 새
-    /// 같은 계정의 맥이 판을 하는 동안 폰이 버림마다 메시지 조회를 한 번씩 더 한다.
+    /// 같은 계정의 맥이 판을 하는 동안 폰이 버림마다 메시지 조회를 한 번씩 더 한다. 폰 1.0.18(대표 "한 판에 전부" #d_xB6BJcn2nsCq)부터
+    /// 폰에도 아잉 마작이 있어 가지가 스토어를 잇는다 — 초대 · 시작 · 울기 창이 다음 계기까지 안 서지 않게.
     @Test
-    func thePhoneRunnerKeepsAnEmptyMahjongBranch() throws {
+    func thePhoneRunnerWiresTheMahjongBranchToTheStore() throws {
         let runner = try mwtPhoneRunner()
         #expect(mwtCount("case .mahjongSignal", in: runner) == 1, "폰 러너에 아잉 마작 가지가 하나가 아니다")
         let branch = try #require(mwtBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:"))
-        #expect(branch == "case .mahjongSignal: break ", "폰 러너의 아잉 마작 가지가 비어 있지 않다: \(branch)")
-        #expect(!branch.contains("?.handleSignal()"))
-        // ★ 기준선: 리버시 가지가 바로 앞이다(같은 읽기가 이웃 가지를 알아본다). 폰 1.0.17(대표 답 #d_DdwzmxPClGqk)부터 리버시 가지는
-        //   스토어로 잇는다 — 빈 가지가 아니다. 그 가지의 모양은 `V03xxReversiWiringTests.thePhoneRunnerWiresTheReversiBranchToTheStore` 가 잰다.
-        #expect(runner.contains("case .reversiSignal: reversi?.handleSignal() case .mahjongSignal: break"))
+        #expect(branch == "case .mahjongSignal: mahjong?.handleSignal() ", "폰 러너의 아잉 마작 가지가 스토어를 잇지 않는다: \(branch)")
+        #expect(runner.contains("mahjong?.realtimeDidJoin()"), "조인 따라잡기가 마작을 모른다")
+        // ★ 기준선: 리버시 가지가 바로 앞이다(같은 읽기가 이웃 가지를 알아본다).
+        #expect(runner.contains("case .reversiSignal: reversi?.handleSignal() case .mahjongSignal: mahjong?.handleSignal()"))
     }
 
     // MARK: #5~#12 · #8b 맥 소유 배선

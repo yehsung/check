@@ -155,8 +155,8 @@ struct V03xxCrossyDuelWiringTests {
         // ★ 기준선: 확성기 가지가 바로 앞이다(마작·리버시 앵커 묶음 밖 — 같은 읽기가 이웃 가지를 알아본다).
         #expect(runner.contains("requestMegaphoneRefresh() case .crossyDuelSignal: crossyDuel?.handleSignal() case .pushAccessToken"))
         #expect(runner.contains("reversi?.realtimeDidJoin() crossyDuel?.realtimeDidJoin()"), "조인 따라잡기에 1:1 길건너가 없다")
-        // 마작 계약의 앵커(마작 가지 ~ 확성기 가지 사이)는 그대로다.
-        #expect(cdwBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:") == "case .mahjongSignal: break ")
+        // 마작 계약의 앵커(마작 가지 ~ 확성기 가지 사이)는 그대로 한 가지다(폰 1.0.18 부터 마작도 스토어로 잇는다).
+        #expect(cdwBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:") == "case .mahjongSignal: mahjong?.handleSignal() ")
     }
 
     // MARK: #5~#12 · #8b 맥 소유 배선

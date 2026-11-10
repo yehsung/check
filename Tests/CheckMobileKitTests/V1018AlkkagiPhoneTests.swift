@@ -136,8 +136,10 @@ struct V1018AlkkagiPhoneTests {
         let runner = try code("Sources/CheckMobileKit/Realtime/MobileRealtimeRunner.swift")
         #expect(runner.contains("case.alkkagiSignal:alkkagi?.handleSignal()") && runner.contains("alkkagi?.realtimeDidJoin()"))
         let games = try code("Sources/CheckMobileKit/Games/GamesStore.swift")
-        // 다른 여섯 입구(오목 · 체스 · 테트리스 · 큐브 · 뒤집기 · 길건너)가 모두 알까기 판을 본다.
-        #expect(games.components(separatedBy: "returnhasLiveAlkkagiMatch?.alkkagi:nil").count - 1 == 6, "여섯 입구 중 알까기를 안 막는 곳이 있다")
+        // 다른 일곱 입구(오목 · 체스 · 테트리스 · 큐브 · 뒤집기 · 길건너 · 마작)가 모두 알까기 판을 본다(마작 입구는 마지막 줄 꼴).
+        let ifForm = games.components(separatedBy: "ifhasLiveAlkkagiMatch{return.alkkagi}").count - 1
+        let returnForm = games.components(separatedBy: "returnhasLiveAlkkagiMatch?.alkkagi:nil").count - 1
+        #expect(ifForm + returnForm == 7, "일곱 입구 중 알까기를 안 막는 곳이 있다(\(ifForm) + \(returnForm))")
         #expect(games.contains("+context.alkkagi.visibleIncomingInvites.count"), "탭 배지가 알까기 받은 신청을 안 센다")
         #expect(games.contains("ifisAlkkagiScreenVisible,hasLiveAlkkagiMatch{returntrue}"), "판 중 화면 꺼짐 방지가 알까기를 모른다")
         #expect(games.contains("context.alkkagi.presentWindow={[weakself]inself?.presentAlkkagiScreen()}"))

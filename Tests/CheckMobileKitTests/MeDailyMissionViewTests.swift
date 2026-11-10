@@ -166,10 +166,11 @@ struct MeDailyMissionViewTests {
         #expect(progressing.caption.isEmpty && progressing.progress == "0/1" && progressing.showsCaptionLine, "진행 숫자가 사라졌다")
         // 기준선: 같은 서버 글자도 **다른 게임 이름**이면 그대로 그린다(이름으로 가른다 — 글자로 가르지 않는다).
         #expect(MeText.dailyMissionCaption(game: "reversi", detail: "맥에서 할 수 있어요").isEmpty)
-        #expect(MeText.dailyMissionCaption(game: "mahjong", detail: "맥에서 할 수 있어요") == "맥에서 할 수 있어요",
+        // (1.0.18 부터 맥 먼저 게임이 모두 폰에 있다 — 기준선은 표에 없는 이름으로 잰다.)
+        #expect(MeText.dailyMissionCaption(game: "future_game", detail: "맥에서 할 수 있어요") == "맥에서 할 수 있어요",
                 "폰에 없는 게임의 '맥에서' 글자까지 지웠다")
-        #expect(MeText.phonePlayableMacFirstGames == ["rummy", "reversi", "crossy_duel", "alkkagi"],
-                "표가 바뀌었다 — 폰에 없는 게임을 넣으면 어디서 하는지 안 말한다(1.0.18 에 1:1 길건너 · 1:1 알까기)")
+        #expect(MeText.phonePlayableMacFirstGames == ["rummy", "reversi", "crossy_duel", "alkkagi", "mahjong"],
+                "표가 바뀌었다 — 폰에 없는 게임을 넣으면 어디서 하는지 안 말한다(1.0.18 에 1:1 길건너 · 1:1 알까기 · 아잉 마작)")
     }
 
     @Test("줄 셋의 그림: 진행 중(칩 +5 · '0/1') · [받기] 캡슐(칩 없음) · '✓ 받음'(진행 숫자 없음)")
@@ -250,8 +251,8 @@ struct MeDailyMissionViewTests {
         #endif
     }
 
-    @Test("아잉 마작 줄(daily_mahjong · 맥 0.3.76): 별이 아니라 맥 입구와 같은 기호 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 게임) · 줄 기호가 서로 다르다")
-    func mahjongRowUsesTheMacSymbolAndKeepsTheMacCaption() throws {
+    @Test("아잉 마작 줄(daily_mahjong · 맥 0.3.76): 별이 아니라 맥 입구와 같은 기호 · 실재하는 이름 · 폰 1.0.18 부터 '맥에서' 꼬리를 뗀다 · 줄 기호가 서로 다르다")
+    func mahjongRowUsesTheMacSymbolAndDropsTheMacCaption() throws {
         // 서버는 1.0.16 폰에도 이 줄을 내린다(20261108221000 — 모든 플랫폼). 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른
         // 그림이 된다(`MeText.dailyMissionIcon` 주석 ①).
         let mahjong = MeText.dailyMissionIcon(game: "mahjong")
@@ -268,16 +269,16 @@ struct MeDailyMissionViewTests {
         #expect(NSImage(systemSymbolName: mahjong, accessibilityDescription: nil) != nil, "없는 SF Symbol: \(mahjong)")
         #endif
 
-        // 보조 문장: 폰에는 마작이 없다 — 서버 글자 '맥에서 할 수 있어요'가 **참**이라 그대로 그린다(큐브 · 뒤집기와 갈린다).
-        #expect(!MeText.phonePlayableMacFirstGames.contains("mahjong"), "폰에 없는 게임을 폰에서 할 수 있다고 적었다")
+        // 보조 문장: 폰 1.0.18 부터 마작이 폰에도 있다 — 서버 글자 '맥에서 할 수 있어요'는 이 폰에서 거짓이라 비운다(큐브 · 뒤집기와 같다).
+        #expect(MeText.phonePlayableMacFirstGames.contains("mahjong"), "폰에서 할 수 있는데 맥에서 하라고 한다")
         let waiting = #"{"key":"daily_mahjong","game":"mahjong","title":"아잉 마작 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":0,"achieved":false,"claimed":false,"claimed_at_ms":null,"sort":90}"#
         let met = #"{"key":"daily_mahjong","game":"mahjong","title":"아잉 마작 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":1,"achieved":true,"claimed":false,"claimed_at_ms":null,"sort":90}"#
         let progressing = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [waiting]))), "daily_mahjong")
-        #expect(progressing.caption == "맥에서 할 수 있어요", "어디서 하는지 안 말한다: '\(progressing.caption)'")
+        #expect(progressing.caption.isEmpty, "폰에서 할 수 있는데 맥에서 하라고 한다: '\(progressing.caption)'")
         #expect(progressing.icon == mahjong && progressing.title == "아잉 마작 한 판 하기" && progressing.progress == "0/1")
-        // 맥에서 하고 온 날: 폰에서 [받기] 를 누를 수 있고 보조 문장도 그대로다 · 실패하면 실패 문장이 그 자리를 덮는다.
+        // 채운 날: [받기] 를 누를 수 있고 보조 문장은 없다 · 실패하면 실패 문장이 그 자리를 덮는다.
         let claimable = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [met]))), "daily_mahjong")
-        #expect(claimable.claimAmount == 5 && claimable.caption == "맥에서 할 수 있어요")
+        #expect(claimable.claimAmount == 5 && claimable.caption.isEmpty)
         let failed = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [met]))), "daily_mahjong", failed: true)
         #expect(failed.caption == MeText.claimFailed, "받기 실패를 삼켰다")
 
@@ -567,9 +568,9 @@ struct MeDailyMissionViewTests {
             #expect(try Self.content(section, "daily_reversi").caption.isEmpty,
                     "\(path): 폰에서 아잉 뒤집기를 할 수 있는데 맥에서 하라고 한다")
             #expect(try Self.content(section, "daily_rummy").caption.isEmpty)
-            // 마작은 폰에 없다 — 데모에서도 '맥에서 할 수 있어요'를 그대로 그린다.
-            #expect(try Self.content(section, "daily_mahjong").caption == "맥에서 할 수 있어요",
-                    "\(path): 폰에 없는 아잉 마작 줄이 어디서 하는지 안 말한다")
+            // 마작도 폰 1.0.18 부터 있다 — 데모에서도 '맥에서'를 지운다.
+            #expect(try Self.content(section, "daily_mahjong").caption.isEmpty,
+                    "\(path): 폰 1.0.18 에 있는 아잉 마작 줄이 맥에서 하라고 한다")
             #expect(try Self.content(section, "daily_crossy_duel").caption.isEmpty,
                     "\(path): 폰 1.0.18 에 있는 1:1 길건너 줄이 맥에서 하라고 한다")
             #expect(try Self.content(section, "daily_alkkagi").caption.isEmpty,

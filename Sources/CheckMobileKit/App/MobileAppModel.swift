@@ -26,6 +26,7 @@ public final class MobileAppModel {
     package let reversi: ReversiStore
     package let crossyDuel: CrossyDuelStore
     package let alkkagi: AlkkagiOnlineStore
+    package let mahjong: MahjongStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -194,6 +195,16 @@ public final class MobileAppModel {
         alkkagi.rankingEnabled = true
         alkkagi.spectatorFeaturesEnabled = true
         realtime.alkkagi = alkkagi
+        // 아잉 마작(맥 0.3.76 · 폰 1.0.18 — 같은 서버 · 같은 코어 스토어). 호스트 · 시계 · '이 기기가 연 판' 장부 · 보조 설정 · 순위 · 초인종 자리는
+        // 위 1:1 들과 같은 꼴이다. 장부가 빠지면 판 중에 앱을 다시 켠 폰이 자기 판을 놀던 기기로 읽어 자동 보내기 · 방 확인이 멎는다.
+        let mahjong = MahjongStore(clock: { clock.now() })
+        mahjong.attach(host: host)
+        mahjong.deviceLedger.defaults = env.storage.defaults
+        mahjong.aidsDefaults = env.storage.defaults
+        // 폰은 '두 번 눌러 버리기'를 켠 채로 시작한다(호버가 없다 — 잘못 누른 한 번이 곧 버림이 되지 않게). 처음 한 번만 심는다.
+        GamesMahjongPhoneAids.seedIfNeeded(mahjong, defaults: env.storage.defaults)
+        mahjong.rankingEnabled = true
+        realtime.mahjong = mahjong
         let links = MobileStoreLinks()
         // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
         let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
@@ -215,6 +226,7 @@ public final class MobileAppModel {
             reversi: reversi,
             crossyDuel: crossyDuel,
             alkkagi: alkkagi,
+            mahjong: mahjong,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -236,6 +248,7 @@ public final class MobileAppModel {
         self.reversi = reversi
         self.crossyDuel = crossyDuel
         self.alkkagi = alkkagi
+        self.mahjong = mahjong
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -277,6 +290,8 @@ public final class MobileAppModel {
         crossyDuel.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "crossy_duel") }
         // 1:1 알까기 — 서버 `daily_alkkagi` 의 game 값(맥 `WorkTimerStore` 의 `refreshAchievementsAfterGameResult(game: "alkkagi")` 와 같다).
         alkkagi.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "alkkagi") }
+        // 아잉 마작 — 서버 `daily_mahjong` 의 game 값(맥 `refreshAchievementsAfterGameResult(game: "mahjong")` 과 같다). 연습판은 코어가 부르지 않는다.
+        mahjong.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "mahjong") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -403,6 +418,8 @@ public final class MobileAppModel {
         crossyDuel.reset()
         // 1:1 알까기도 같은 사슬이다(앞 사람의 판 · 신청 · 순위 · 관전이 다음 사람 화면에 남지 않게). `reset()` 은 스위치 · 시계를 건드리지 않는다.
         alkkagi.reset()
+        // 아잉 마작도 같은 사슬이다(앞 사람의 방 · 판 · 초대 · 연습판이 다음 사람 화면에 남지 않게). 장부 · 보조 설정은 사용자별 · 기기 값이라 둔다.
+        mahjong.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

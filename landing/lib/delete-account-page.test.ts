@@ -78,7 +78,7 @@ test('②-1 고지 문장 — 지워지는 것(앱 MeText.deleteAccountItems · 
  * 새 대국 게임이 그 함수에 들어오면(예: 출시 전인 게임) 이 목록 · 처리방침 · 이 페이지를 같은 커밋에서 함께 고친다.
  */
 const DUEL_GAMES = ['오목', '체스', '테트리스', '아잉 뒤집기', '1:1 길건너', '1:1 알까기'] as const;
-const GROUP_GAMES = ['아잉 큐브'] as const;
+const GROUP_GAMES = ['아잉 큐브', '아잉 마작'] as const;
 
 /** 처리방침 계정 삭제 절의 한 덩이 — `start` 줄부터 다음 빈 줄(또는 끝)까지. */
 function privacyBlock(start: string): string {
@@ -109,6 +109,9 @@ test('②-3 대국 게임 이름 — 처리방침과 이 페이지가 같은 게
   const policyDuel = policyAlso.split('\n').find((l) => l.includes('내가 진 것으로')) ?? '';
   for (const g of DUEL_GAMES) assert.ok(policyDuel.includes(g), `처리방침 1:1 정산 줄에 '${g}'`);
   assert.ok(policyAlso.split('\n').some((l) => l.includes('아잉 큐브') && l.includes('기권')), '처리방침 아잉 큐브 기권 줄');
+  // 아잉 마작(폰 1.0.18)은 '자리 비움'으로 남은 셋이 끝까지 둔다 — 두 문서가 같은 갈래로 말한다.
+  assert.ok(also.split('\n').some((l) => l.includes('아잉 마작') && l.includes('자리 비움')), '페이지 아잉 마작 자리 비움 줄');
+  assert.ok(policyAlso.split('\n').some((l) => l.includes('아잉 마작') && l.includes('자리 비움')), '처리방침 아잉 마작 자리 비움 줄');
   // 아잉 큐브의 남는 것(같은 판 다른 사람 기록 · 진행 기록)은 페이지 '남는 것'에도 있다.
   assert.ok(listBlock('KEPT').includes('아잉 큐브'), '페이지 남는 것에 아잉 큐브');
 });

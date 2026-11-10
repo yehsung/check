@@ -537,7 +537,7 @@ struct V03xxAlkkagiWiringTests {
         let meText = akwCollapsed(V0317ShopTests.stripped(try String(contentsOf: phone, encoding: .utf8)))
         #expect(meText.contains("(\"alkkagi\", \"\(icon)\"),"), "폰 MeText 와 맥 미션 줄 기호가 갈렸다")
         // 폰 1.0.18 부터 알까기가 있다 — 일일 줄에서 '맥에서' 꼬리를 뗀다(1:1 길건너 다음).
-        #expect(meText.contains("phonePlayableMacFirstGames: Set<String> = [\"rummy\", \"reversi\", \"crossy_duel\", \"alkkagi\"]"),
+        #expect(meText.contains("phonePlayableMacFirstGames: Set<String> = [\"rummy\", \"reversi\", \"crossy_duel\", \"alkkagi\", \"mahjong\"]"),
                 "폰에서 할 수 있는 알까기를 맥에서 하라고 적었다")
         #expect(AchievementCopy.icon("alkkagi_first_win") == AlkkagiEntryIcon.symbol)
         #expect(DailyMissionCopy.icon(game: "alkkagi_typo") == AchievementCopy.fallbackIcon)

@@ -43,6 +43,8 @@ package struct MobileContext {
     package let crossyDuel: CrossyDuelStore
     /// 코어 1:1 알까기 스토어(host = 같은 `MobileGomokuHost` — `AlkkagiOnlineStore.attach(host:)` 가 `GomokuStoreHost` 를 받는다). 폰 1.0.18 부터.
     package let alkkagi: AlkkagiOnlineStore
+    /// 코어 아잉 마작 스토어(host = 같은 `MobileGomokuHost` — `MahjongStoreHost` 도 `GomokuStoreHost` 의 별명이다). 폰 1.0.18 부터.
+    package let mahjong: MahjongStore
     /// 오목·체스·테트리스 스토어의 호스트(루비 미러 `rubyBalance` 를 나 탭·게임 탭이 함께 읽는다).
     package let gomokuHost: MobileGomokuHost
     /// App Group 저장소(할 일 파일 `storage.todoFileURL(userID:)` · 공용 suite).
@@ -71,6 +73,7 @@ package struct MobileContext {
         reversi: ReversiStore,
         crossyDuel: CrossyDuelStore,
         alkkagi: AlkkagiOnlineStore,
+        mahjong: MahjongStore,
         gomokuHost: MobileGomokuHost,
         storage: AingSharedStorage,
         appInfo: MobileAppInfo,
@@ -92,6 +95,7 @@ package struct MobileContext {
         self.reversi = reversi
         self.crossyDuel = crossyDuel
         self.alkkagi = alkkagi
+        self.mahjong = mahjong
         self.gomokuHost = gomokuHost
         self.storage = storage
         self.appInfo = appInfo

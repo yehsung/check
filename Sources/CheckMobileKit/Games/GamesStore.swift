@@ -24,6 +24,8 @@ package enum GamesDestination: Hashable, Sendable {
     case crossyDuel
     /// 1:1 알까기(폰 1.0.18) — 로비 · 판 · 결과 · 관전 · 순위 · 연습을 **입구 하나**로 연다(화면이 판 유무로 갈아 끼운다).
     case alkkagi
+    /// 아잉 마작(폰 1.0.18) — 로비 · 방 · 혼자 연습 · 판(가로) · 결과 · 순위를 **입구 하나**로 연다(아잉 큐브와 같은 구조).
+    case mahjong
 }
 
 /// 지금 **사람과의** 판을 들고 있는 게임 — 한 사람 한 판(B8)의 까닭을 화면이 말할 수 있게 하는 값.
@@ -51,6 +53,8 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     case crossyDuel
     /// 1:1 알까기(1.0.18). 서버 `game__busy_users()` 가 알까기 판까지 본다(20261110130000 §8 조각 치환) — 클라는 일곱 방향을 막는다.
     case alkkagi
+    /// 아잉 마작(1.0.18). 서버 `game__busy_users()` 가 마작 방 · 판(joined · playing)까지 본다(20261108221000) — 클라는 여덟 방향을 막는다.
+    case mahjong
 
     /// 문구 표가 쓰는 짝(`ChessPhoneText.BusyGame`). 두 열거가 따로 있는 까닭: 이쪽은 **스토어 판정**이고
     /// 그쪽은 **문구 표**다(문구 표는 뷰·스토어를 모르는 자리라야 맥 스위트가 값으로 잰다). 옮기는 자리를
@@ -66,6 +70,7 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
         case .reversi: return .reversi
         case .crossyDuel: return .crossyDuel
         case .alkkagi: return .alkkagi
+        case .mahjong: return .mahjong
         }
     }
 }
@@ -139,6 +144,8 @@ package final class GamesStore {
     package private(set) var isCrossyDuelScreenVisible = false
     /// 1:1 알까기 화면(로비 · 판 · 결과 · 관전 · 연습)이 떠 있다(폰 1.0.18).
     package private(set) var isAlkkagiScreenVisible = false
+    /// 아잉 마작 화면(로비 · 방 · 판 · 연습)이 떠 있다(폰 1.0.18).
+    package private(set) var isMahjongScreenVisible = false
     /// 방장이 방을 떠나려 한다 — 화면이 띄울 "방이 닫혀요" 확인(`rummyDepartureAllowed`).
     package private(set) var rummyDeparturePrompt: RummyCloseDecision?
     /// 수락하면 원래 가려던 곳으로 가는 일.
@@ -170,7 +177,9 @@ package final class GamesStore {
     /// 폰의 확성기·생일 선물이 통째로 멎는다. 내 판이 흐르는 동안 다른 탭에 있으면 배너를 보는 것이 맞다(체스와 같은 대접).
     package var isAnyMatchScreenVisible: Bool {
         if isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible || isCrossyDuelScreenVisible
-            || isAlkkagiScreenVisible { return true }
+            || isAlkkagiScreenVisible || isMahjongScreenVisible { return true }
+        // 아잉 마작: 이 기기가 연 판을 두는 중이면 다른 탭에서도 미룬다(코어 `defersMegaphoneBanner` — 연습판 · 이 기기 판만, 큐브와 같은 대접).
+        if context.mahjong.defersMegaphoneBanner { return true }
         let rummy = context.rummy
         if rummy.defersMegaphoneBanner { return true }
         return isRummyScreenVisible && rummy.phase != .playing
@@ -188,10 +197,20 @@ package final class GamesStore {
 
     /// 화면 방향 — 앱에서 단 하나의 답(`GamesRummyOrientation.swift` 머리말). 저장하지 않고 지금 상태에서 계산한다. 이 기기가 큐브를 못 하는 안내가 서 있으면 판을 그리지 않으니 세로다.
     package var rummyInterfaceOrientation: GamesRummyInterfaceOrientation {
+        // 아잉 마작 판(루비 판 · 연습판)도 가로다(1.0.18 — 큐브와 같은 4인 패 게임 · 같은 '이 화면만 가로'). 로비 · 방은 세로.
+        if mahjongWantsLandscape { return .landscape }
         let rummy = context.rummy
         return GamesRummyOrientationRule.orientation(phase: rummy.phase,
                                                      isScreenVisible: isRummyScreenVisible && rummy.availability == .available,
                                                      finalBoardShown: isRummyFinalBoardShown)
+    }
+
+    /// 아잉 마작 판 결과에서 [로비로]를 누른 판 id(코어가 그 판을 finished 로 들고 있어도 화면은 로비 — 맥 `dismissedMatchID` 와 같다).
+    package var mahjongDismissedMatchID: String?
+
+    /// 아잉 마작 화면이 판을 그리는가(= 가로). 화면 고르기는 `GamesMahjongScreenRule` 한 곳.
+    package var mahjongWantsLandscape: Bool {
+        isMahjongScreenVisible && GamesMahjongScreenRule.of(context.mahjong, dismissedMatchID: mahjongDismissedMatchID) == .table
     }
 
     /// 앱이 active 다(로그인 상태에서 appDidBecomeActive ~ appDidEnterBackground).
@@ -290,6 +309,8 @@ package final class GamesStore {
         context.crossyDuel.presentWindow = { [weak self] in self?.presentCrossyDuelScreen() }
         // 1:1 알까기: 판이 처음 서면(이 기기든 같은 계정 맥이든) 코어가 부른다 — 맥 창 열기와 같은 자리. 앱이 앞에 있을 때만 화면을 쌓는다.
         context.alkkagi.presentWindow = { [weak self] in self?.presentAlkkagiScreen() }
+        // 아잉 마작: 이 기기가 연 판이 시작되면 코어가 부른다(`MahjongStoreGame` — 장부 판만). 앱이 앞에 있을 때만 화면을 쌓는다.
+        context.mahjong.presentWindow = { [weak self] in self?.presentMahjongScreen() }
         // 방 화면을 떠나는 길은 이 문 하나를 지난다(탭 막대 · 푸시 · 딥링크 · 위젯 · 탭 재선택).
         context.router.departureGuard = { [weak self] resume in self?.rummyDepartureAllowed(resume: resume) ?? true }
         // 방 화면이 설 때만 방 하트비트를 돌린다(`rummyScreenDidAppear`) — 어느 길로 화면 밖에 앉게 됐든(앱을 다시 켬 · 다른 게임 화면이 덮음) 모르는 사이 판돈이 걷히지 않는다.
@@ -414,6 +435,17 @@ package final class GamesStore {
         } else {
             alkkagi.refreshLobbyIfStale()
         }
+        let mahjong = context.mahjong
+        if isMahjongScreenVisible {
+            if mahjong.isWindowVisible {
+                mahjong.windowOcclusionDidChange(visible: true)
+            } else {
+                mahjong.windowDidShow()
+            }
+            mahjong.handleSignal()
+        } else {
+            mahjong.refreshLobbyIfStale()
+        }
     }
 
     /// 장면이 앞에서 물러난다(`.inactive` — 전화 수신 · 제어 센터 · 앱 전환기). 도는 미니게임을 얼린다.
@@ -471,6 +503,10 @@ package final class GamesStore {
         if isAlkkagiScreenVisible, context.alkkagi.isWindowVisible {
             context.alkkagi.windowOcclusionDidChange(visible: false)
         }
+        // 아잉 마작도 가림이다(폴링 · 연습판만 멈춘다 — 루비 판은 서버 시계로 흐른다).
+        if isMahjongScreenVisible, context.mahjong.isWindowVisible {
+            context.mahjong.windowOcclusionDidChange(visible: false)
+        }
     }
 
     package func reset() {
@@ -482,6 +518,8 @@ package final class GamesStore {
         isReversiScreenVisible = false
         isCrossyDuelScreenVisible = false
         isAlkkagiScreenVisible = false
+        isMahjongScreenVisible = false
+        mahjongDismissedMatchID = nil
         rummyFinalBoardMatchID = nil
         rummyDeparturePrompt = nil
         rummyDepartureResume = nil
@@ -568,6 +606,7 @@ package final class GamesStore {
     package var badgeCount: Int {
         gomokuIncomingCount + context.rummy.incomingInvites.count + context.reversi.visibleIncomingInvites.count
             + context.crossyDuel.visibleIncomingInvites.count + context.alkkagi.visibleIncomingInvites.count
+            + context.mahjong.visibleInvites.count
     }
 
     /// 만료 안 된 받은 오목 신청 수(오목 카드의 재료).
@@ -690,6 +729,15 @@ package final class GamesStore {
         return state.phase != .finished
     }
 
+    /// 아잉 마작 자리(서버 방에 앉았거나 판을 두는 중 — 서버 `game__busy_users` 의 joined · playing 과 같은 뜻). 연습판은 서버 자리가 아니다.
+    package var hasLiveMahjongSeat: Bool {
+        let mahjong = context.mahjong
+        if let header = mahjong.match?.match, mahjong.match?.mySeat != nil || header.matchStatus == .forming {
+            return header.matchStatus == .forming || header.matchStatus == .active
+        }
+        return mahjong.lobbyRoom != nil
+    }
+
     /// **AI 연습 판**이 지금 진행 중인가(끝난 판은 아니다). 서버는 이 판을 볼 수 없다(행이 없다 — `game__busy_users` 가 모른다).
     /// 코어 `challenge`·`respond` 에는 AI 가드가 없어 1:1 판이 서는 순간 `match` 관찰자가 AI 판을 **문구 없이 버린다**(1:1 이 이긴다) —
     /// 신청은 `GamesReversiChallengeGate`(내 판이 있으면 닫힘)가 막고, 받은 신청 수락은 화면이 먼저 묻는다(체스 로봇 판과 같은 규약).
@@ -707,7 +755,8 @@ package final class GamesStore {
         if hasLiveRummyMatch { return .rummy }
         if hasLiveReversiMatch { return .reversi }
         if hasLiveCrossyDuelMatch { return .crossyDuel }
-        return hasLiveAlkkagiMatch ? .alkkagi : nil
+        if hasLiveAlkkagiMatch { return .alkkagi }
+        return hasLiveMahjongSeat ? .mahjong : nil
     }
 
     /// 오목 입구를 막는 까닭(없으면 nil). 서버도 막는다 — 오목 신청·수락이 `chess__busy` 를 본다(`GamesBusyGame` 머리말).
@@ -719,7 +768,8 @@ package final class GamesStore {
         if hasLiveRummyMatch { return .rummy }
         if hasLiveReversiMatch { return .reversi }
         if hasLiveCrossyDuelMatch { return .crossyDuel }
-        return hasLiveAlkkagiMatch ? .alkkagi : nil
+        if hasLiveAlkkagiMatch { return .alkkagi }
+        return hasLiveMahjongSeat ? .mahjong : nil
     }
 
     /// 테트리스 입구를 막는 까닭(없으면 nil). 테트리스는 **판돈이 걸린 실시간 판**이라 막는 쪽이 더 무겁다 —
@@ -730,7 +780,8 @@ package final class GamesStore {
         if hasLiveRummyMatch { return .rummy }
         if hasLiveReversiMatch { return .reversi }
         if hasLiveCrossyDuelMatch { return .crossyDuel }
-        return hasLiveAlkkagiMatch ? .alkkagi : nil
+        if hasLiveAlkkagiMatch { return .alkkagi }
+        return hasLiveMahjongSeat ? .mahjong : nil
     }
 
     /// 아잉 큐브 입구를 막는 까닭(없으면 nil) — 네 방향의 마지막 하나. 시작 검사가 세 게임의 진행 판을 보지만(서버), 판돈 걸린 판을 두는 중에
@@ -741,7 +792,8 @@ package final class GamesStore {
         if hasLiveTetrisMatch { return .tetris }
         if hasLiveReversiMatch { return .reversi }
         if hasLiveCrossyDuelMatch { return .crossyDuel }
-        return hasLiveAlkkagiMatch ? .alkkagi : nil
+        if hasLiveAlkkagiMatch { return .alkkagi }
+        return hasLiveMahjongSeat ? .mahjong : nil
     }
 
     /// 아잉 뒤집기 입구를 막는 까닭(없으면 nil) — 다섯 방향의 마지막 하나. 서버도 막는다(`reversi_challenge`·`reversi_respond` 가 `game__busy_users` 를 본다) —
@@ -752,7 +804,8 @@ package final class GamesStore {
         if hasLiveTetrisMatch { return .tetris }
         if hasLiveRummyMatch { return .rummy }
         if hasLiveCrossyDuelMatch { return .crossyDuel }
-        return hasLiveAlkkagiMatch ? .alkkagi : nil
+        if hasLiveAlkkagiMatch { return .alkkagi }
+        return hasLiveMahjongSeat ? .mahjong : nil
     }
 
     /// 1:1 길건너 입구 막기(폰 1.0.18) — 다른 다섯 1:1 중 하나가 흐르면 그 까닭을 먼저 말한다.
@@ -762,7 +815,8 @@ package final class GamesStore {
         if hasLiveTetrisMatch { return .tetris }
         if hasLiveRummyMatch { return .rummy }
         if hasLiveReversiMatch { return .reversi }
-        return hasLiveAlkkagiMatch ? .alkkagi : nil
+        if hasLiveAlkkagiMatch { return .alkkagi }
+        return hasLiveMahjongSeat ? .mahjong : nil
     }
 
     /// 1:1 알까기 입구 막기(폰 1.0.18) — 다른 여섯 1:1 중 하나가 흐르면 그 까닭을 먼저 말한다(서버도 `chess__busy` 로 막는다).
@@ -772,7 +826,19 @@ package final class GamesStore {
         if hasLiveTetrisMatch { return .tetris }
         if hasLiveRummyMatch { return .rummy }
         if hasLiveReversiMatch { return .reversi }
-        return hasLiveCrossyDuelMatch ? .crossyDuel : nil
+        if hasLiveCrossyDuelMatch { return .crossyDuel }
+        return hasLiveMahjongSeat ? .mahjong : nil
+    }
+
+    /// 아잉 마작 입구 막기(폰 1.0.18) — 다른 일곱 판 중 하나가 흐르면 그 까닭을 먼저 말한다(서버도 시작 · 참가에서 막는다).
+    package var mahjongEntryBlock: GamesBusyGame? {
+        if hasLiveGomokuMatch { return .gomoku }
+        if hasLiveChessMatch { return .chess }
+        if hasLiveTetrisMatch { return .tetris }
+        if hasLiveRummyMatch { return .rummy }
+        if hasLiveReversiMatch { return .reversi }
+        if hasLiveCrossyDuelMatch { return .crossyDuel }
+        return hasLiveAlkkagiMatch ? .alkkagi : nil
     }
 
     /// 지금 아잉 큐브 자리가 있는가 — 다른 게임 입구를 막는 값.
@@ -845,6 +911,9 @@ package final class GamesStore {
         // 1:1 알까기도 받은함 RPC 가 없다 — 받은 신청 · 진행 판이 가벼운 `alkkagi_lobby`(`p_users` 거짓)로 온다(30초 스로틀 — 맥 팝오버와 같은 문).
         syncAlkkagiHiddenPeers()
         context.alkkagi.refreshLobbyIfStale()
+        // 아잉 마작도 받은 초대 · 내 방 · 진행 판 id 가 `mahjong_lobby` 로 온다(코어 스로틀 — 맥 팝오버와 같은 문).
+        syncMahjongHiddenPeers()
+        context.mahjong.refreshLobbyIfStale()
     }
 
     /// 차단 거울: 메시지 탭의 차단 목록을 코어에 넘긴다(로비 사람 · 초대 · 공개 방이 코어에서 걸러진다 — 맥 `WorkTimerStore` 와 같은 길).
@@ -1189,6 +1258,41 @@ package final class GamesStore {
         router.push(GamesDestination.crossyDuel, on: .games)
     }
 
+    // MARK: 아잉 마작(폰 1.0.18)
+
+    package var mahjong: MahjongStore { context.mahjong }
+
+    /// 차단 거울(맥 `WorkTimerStore` 의 `mahjong.setHiddenPeers(…)` 와 같은 길).
+    package func syncMahjongHiddenPeers() {
+        let hidden = Set((context.links.messages?.hiddenBlockedPeerIDs ?? []).compactMap { UUID(uuidString: $0) })
+        if context.mahjong.hiddenPeerIDs != hidden { context.mahjong.setHiddenPeers(hidden) }
+    }
+
+    /// `isMahjongScreenVisible` 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를 봐야 화면을 또 쌓지 않는다.
+    package func mahjongScreenDidAppear() {
+        let store = context.mahjong
+        isMahjongScreenVisible = true
+        syncMahjongHiddenPeers()
+        store.openWindow(focusMatchID: nil)
+        if isAppActive { store.windowDidShow() }
+    }
+
+    /// 화면을 떠났다(뒤로 · 다른 탭 · 로그아웃). 닫기는 기권이 아니다 — 판은 서버 시계로 계속된다(맥 창 닫기와 같다). 연습판은 멈춘다.
+    package func mahjongScreenDidDisappear() {
+        guard isMahjongScreenVisible else { return }
+        isMahjongScreenVisible = false
+        context.mahjong.windowDidHide()
+        context.mahjong.windowDidClose(byUser: true)
+    }
+
+    private func presentMahjongScreen() {
+        guard isAppActive, context.session.isSignedIn, !isMahjongScreenVisible else { return }
+        let router = context.router
+        router.selectedTab = .games
+        router.popToRoot(.games)
+        router.push(GamesDestination.mahjong, on: .games)
+    }
+
     // MARK: 1:1 알까기(폰 1.0.18)
 
     package var alkkagi: AlkkagiOnlineStore { context.alkkagi }
@@ -1491,6 +1595,8 @@ package final class GamesStore {
         if context.crossyDuel.holdsActivity { return true }
         // 1:1 알까기: 화면이 떠 있고 내 판이 흐르면 켠다(한 수 30초 — 화면이 꺼지면 차례를 넘겨 세 번이면 진다).
         if isAlkkagiScreenVisible, hasLiveAlkkagiMatch { return true }
+        // 아잉 마작: 화면이 떠 있고 판(연습판 포함)이 도는 동안 켠다(한 수 5초 + 예비 — 화면이 꺼지면 자리 비움이 된다).
+        if isMahjongScreenVisible, context.mahjong.phase == .playing { return true }
         guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished

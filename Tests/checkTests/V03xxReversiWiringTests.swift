@@ -243,9 +243,9 @@ struct V03xxReversiWiringTests {
         #expect(!branch.contains("requestDrain") && !branch.contains("requestMessageActivity"), "아잉 뒤집기 초인종이 메시지 조회로 샌다")
         #expect(runner.contains("rummy?.realtimeDidJoin() reversi?.realtimeDidJoin()"), "조인 따라잡기에 아잉 뒤집기가 없다(큐브 바로 뒤)")
         #expect(runner.contains("@ObservationIgnored package weak var reversi: ReversiStore?"), "러너가 스토어를 약한 참조로 들지 않는다")
-        // 아잉 마작 가지(맥 0.3.76)는 폰에서 아직 비어 있다 — `.drain` 으로 떨어지면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
+        // 아잉 마작 가지(맥 0.3.76)는 폰 1.0.18 부터 스토어로 잇는다 — `.drain` 으로 떨어지면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
         let mahjong = try #require(rwtBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:"))
-        #expect(mahjong == "case .mahjongSignal: break ", "폰 러너의 아잉 마작 가지가 비어 있지 않다: \(mahjong)")
+        #expect(mahjong == "case .mahjongSignal: mahjong?.handleSignal() ", "폰 러너의 아잉 마작 가지가 스토어로 안 간다: \(mahjong)")
         // ★ 기준선: 큐브 가지는 같은 읽기로 '잇는 가지'다 · 체스 가지는 여전히 비어 있다(같은 읽기가 빈 가지를 알아본다).
         let rummy = try #require(rwtBetween(runner, "case .rummySignal:", "case .reversiSignal:"))
         #expect(rummy.contains("rummy?.handleSignal()"))

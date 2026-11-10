@@ -347,10 +347,11 @@ final class CheckCakeGiftWindowController: NSObject, NSWindowDelegate {
         kind?.copy.title ?? windowTitle
     }
 
-    /// `show()` 가 창 제목으로 쓰는 값 — **창이 그리는 선물**(`cakeGiftPresented`)의 종류 제목. 그리는 선물이 없으면 생일 제목(순수 —
+    /// `show()` 가 창 제목으로 쓰는 값 — **창이 그리는 선물**(`cakeGiftPresented`) 한 장의 제목(종류의 제목 · 우리 센터 선물은 "부산센터 선물 도착!"
+    /// 처럼 센터 이름이 든다 — `CharacterGiftOffer.copy`). 그리는 선물이 없으면 생일 제목(순수 —
     /// 시험이 값으로 재고, `show()` 가 이 함수를 부르는지는 소스 계약으로 잰다).
     static func title(presenting offer: CharacterGiftOffer?) -> String {
-        title(for: offer?.kind)
+        offer?.copy.title ?? windowTitle
     }
 
     /// 창 위치를 기억하는 키 = 창 식별자. 다른 창과 겹치면 안 된다(`MiniGameSpaceKey.standaloneWindowIDs` 가 이 문자열로 이 창을 알아본다).

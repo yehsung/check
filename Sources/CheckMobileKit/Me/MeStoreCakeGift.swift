@@ -62,7 +62,7 @@ package struct MeCakeGiftSheet: Equatable, Identifiable, Sendable {
     }
 
     /// 이 선물 종류의 문구 묶음(제목 · 본문 · 단추 · 다시 열기). 시트가 이것으로만 글자를 그린다.
-    package var copy: CharacterGiftCopy { gift.kind.copy }
+    package var copy: CharacterGiftCopy { gift.copy }
 
     /// 이 시트의 선물이 **결론 났는가**(받았다 · 끝났다) — 내려간 뒤 다음 선물을 묻는 조건(`cakeGiftSheetDidDisappear`).
     package var isSettled: Bool {

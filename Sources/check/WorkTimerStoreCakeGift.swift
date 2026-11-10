@@ -88,14 +88,14 @@ extension WorkTimerStore {
         cakeGiftOffer != nil
     }
 
-    /// '다시 열기' 카드의 문구 묶음 — 열린 선물의 종류(생일 · 술 한잔). 선물이 없으면 생일(카드가 안 서므로 읽히지 않는다).
+    /// '다시 열기' 카드의 문구 묶음 — 열린 선물 한 장의 묶음(종류 · 우리 센터 선물은 센터 이름). 선물이 없으면 생일(카드가 안 서므로 읽히지 않는다).
     var cakeGiftCardCopy: CharacterGiftCopy {
-        (cakeGiftOffer?.kind ?? .birthday).copy
+        cakeGiftOffer?.copy ?? .birthday
     }
 
-    /// 받는 창의 문구 묶음 — 창이 그리는 선물의 종류. 창이 그리는 선물이 없으면 생일.
+    /// 받는 창의 문구 묶음 — 창이 그리는 선물 한 장의 묶음("부산센터 선물 도착!"). 창이 그리는 선물이 없으면 생일.
     var cakeGiftWindowCopy: CharacterGiftCopy {
-        (cakeGiftPresented?.kind ?? .birthday).copy
+        cakeGiftPresented?.copy ?? .birthday
     }
 
     // MARK: 박자

@@ -166,6 +166,28 @@ import Testing
         #expect(seoul.offer?.options == ["aing_seoul"])
     }
 
+    @Test("받는 창 말투(대표 #d_vxeOaE7gAxzt \"부산센터 선물 도착!\"): 선물 한 장의 제목 · 본문 · 다시 열기에 그 센터 이름 · 모르면 '우리 센터'")
+    func perCenterCopy() {
+        let busan = CharacterGiftOffer(id: "g-b", options: ["aing_busan"], kind: .region)
+        let seoul = CharacterGiftOffer(id: "g-s", options: ["aing_seoul"], kind: .region)
+        #expect(busan.copy.title == "부산센터 선물 도착!")
+        #expect(seoul.copy.title == "서울센터 선물 도착!")
+        #expect(busan.copy.body == "부산센터 사람에게만 주는 아잉이예요. 지금 받아 가세요!")
+        #expect(seoul.copy.body == "서울센터 사람에게만 주는 아잉이예요. 지금 받아 가세요!")
+        #expect(busan.copy.reopenTitle == "부산센터 선물이 기다려요" && seoul.copy.reopenTitle == "서울센터 선물이 기다려요")
+        // 단추 · 잠긴 칸 줄 · 실패 줄은 센터와 무관하게 같다.
+        for offer in [busan, seoul] {
+            #expect(offer.copy.confirmButton == "받기" && offer.copy.lockedCaption == RegionGiftText.lockedCaption
+                    && offer.copy.lockedHint == RegionGiftText.lockedHint && offer.copy.claimFailed == RegionGiftText.claimFailed)
+        }
+        // 센터를 모르는 판(종류만 알 때) — "우리 센터".
+        #expect(RegionGiftText.title == "우리 센터 선물 도착!" && CharacterGiftCopy.region.reopenTitle == "우리 센터 선물이 기다려요")
+        #expect(CharacterGiftKind.region.copy(for: nil) == .region && CharacterGiftKind.region.copy(for: "aing_busan") == busan.copy)
+        // 다른 종류는 선물 한 장의 묶음 = 종류의 묶음 그대로.
+        #expect(CharacterGiftOffer(id: "g-d", options: ["aing_isul"], kind: .drink).copy == .drink)
+        #expect(CharacterGiftKind.pepero.copy(for: "aing_pepero") == .pepero)
+    }
+
     @Test("문구: 잠긴 칸 캡션 · 안내는 다른 선물과 다르다 · 받는 창 단추는 '받기'")
     func copyText() {
         let others: [CharacterGiftCopy] = [.birthday, .drink, .pepero]

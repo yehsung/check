@@ -116,6 +116,8 @@ private func avFetches(_ host: String) -> Int {
                 // v0.3.78: 루비(내장)도 같은 규칙 — 기준선은 소스 트리의 루비 초상(생성기 결과를 커밋한다).
                 && (!CharacterCatalog.isRubyAing($0) || V0378RubyCoreTests.macRubyPortraitsInSourceTree)
                 && (!CharacterCatalog.isDevAing($0) || V0381DevAingCoreTests.macDevPortraitsInSourceTree)
+                && (!CharacterCatalog.isBusanAing($0) || RegionAingCoreTests.macBusanPortraitsInSourceTree)
+                && (!CharacterCatalog.isSeoulAing($0) || RegionAingCoreTests.macSeoulPortraitsInSourceTree)
         }
         #expect(Set(AppUserAvatarArt.knownIDs) == Set(drawableCatalog), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
         #expect(directory.knownIDs == Set(AppUserAvatarArt.knownIDs))
@@ -127,8 +129,10 @@ private func avFetches(_ host: String) -> Int {
         let hwooPortraits = V0378HwooCoreTests.macHwooPortraitsInSourceTree ? 1 : 0
         let rubyPortraits = V0378RubyCoreTests.macRubyPortraitsInSourceTree ? 1 : 0
         let devPortraits = V0381DevAingCoreTests.macDevPortraitsInSourceTree ? 1 : 0
+        let busanPortraits = RegionAingCoreTests.macBusanPortraitsInSourceTree ? 1 : 0
+        let seoulPortraits = RegionAingCoreTests.macSeoulPortraitsInSourceTree ? 1 : 0
         #expect(AppUserAvatarArt.knownIDs.count == 7 + (goldPortraits ? 1 : 0) + (rainbowPortraits ? 1 : 0) + cakePortraits + isulPortraits
-                    + peperoPortraits + hwooPortraits + rubyPortraits + devPortraits
+                    + peperoPortraits + hwooPortraits + rubyPortraits + devPortraits + busanPortraits + seoulPortraits
                     && AppUserAvatarArt.knownIDs.contains("aing"),
                 Comment(rawValue: "아는 캐릭터 \(AppUserAvatarArt.knownIDs) · 금 초상 \(goldPortraits) · 무지개 초상 \(rainbowPortraits)"))
         // 로봇(2026-10-05)은 **폴더만 넣어** 들어온 일곱 번째다 — 카탈로그가 번들 폴더를 실제로 훑는다는 증거다.

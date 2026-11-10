@@ -13,14 +13,10 @@ import Testing
 //
 // 골라 돌리는 필터:
 //   --filter 'checkTests\.(v0384VersionAndChangelog|v0383VersionAndChangelog|v0384AlkkagiFirstShotGate)\('
-@Test("버전 0.3.84 / 137 · CHANGELOG 0.3.84 가 맨 위(두 줄 · 배너 폭 안 · 내부 어휘 없음)")
+@Test("CHANGELOG 0.3.84 (두 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0384VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.84</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>137</string>"),
-            "알까기 문 올리기(137)가 이 build 와 같아야 한다")
+    // 버전 고정과 맨 위 섹션 단언은 0.3.85 로 옮겼다(V0385ReleaseTests).
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.84\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -35,8 +31,6 @@ func v0384VersionAndChangelog() throws {
         #expect(!section.contains(banned), "사용자 문구에 내부 어휘('\(banned)')가 있다")
     }
     #expect(items.contains { $0.contains("알까기") && $0.contains("첫 수") && $0.contains("60%") }, "첫 수 60% 줄이 없다")
-    #expect(changelog.range(of: "## 0.3.84")!.lowerBound < changelog.range(of: "## 0.3.83")!.lowerBound,
-            "0.3.84 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }
 
 @Test("릴리스 게이트: 알까기 첫 수 상한 81(최대 135 의 60%) · protocol 2 그대로 · 감속 B 그대로")

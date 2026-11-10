@@ -339,7 +339,7 @@ private func v0316TempRoot(_ label: String = "", function: String = #function) -
         let catalog = CharacterCatalog.load(charactersDirectory: nil)
         // v0.3.54: 내장 항목이 둘이다(아잉 · 황금 아잉이 — 둘 다 같은 3D 메시라 번들 폴더가 없어도 선다). v0.3.59: 무지개 아잉이까지 셋.
         // v0.3.66: 딸기 · 초코 케이크 아잉이까지 다섯. v0.3.74: 이슬 아잉이까지 여섯.
-        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul"])
         #expect(catalog.manifest(id: "aing")?.kind == .scene3D)
         #expect(catalog.manifest(id: "aing")?.displayName == "아잉")
         #expect(catalog.manifest(id: "aing")?.atlas == nil)
@@ -363,7 +363,7 @@ private func v0316TempRoot(_ label: String = "", function: String = #function) -
         try Data("noise".utf8).write(to: root.appendingPathComponent("README.txt"))      // 폴더가 아닌 파일
 
         let catalog = CharacterCatalog.load(charactersDirectory: root)
-        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "fox"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul", "fox"])
         #expect(catalog.manifest(id: "bot") == nil)
         #expect(catalog.manifest(id: "cat") == nil)
         #expect(catalog.manifest(id: "wolf") == nil)
@@ -386,7 +386,7 @@ private func v0316TempRoot(_ label: String = "", function: String = #function) -
             v0316SpriteManifest(id: "zebra"), v0316SpriteManifest(id: "bot"), v0316SpriteManifest(id: "fox")
         ])
         // v0.3.54: 내장(아잉 · 황금 아잉이 · v0.3.59 무지개 아잉이 · v0.3.66 딸기 · 초코 케이크 아잉이 · v0.3.74 이슬 아잉이)이 앞, 나머지는 id 정렬.
-        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "bot", "fox", "zebra"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul", "bot", "fox", "zebra"])
     }
 
     @Test func 카탈로그_에셋_URL_은_캐릭터_폴더_안을_가리킨다() throws {

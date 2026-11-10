@@ -88,14 +88,14 @@ extension WorkTimerStore {
         cakeGiftOffer != nil
     }
 
-    /// '다시 열기' 카드의 문구 묶음 — 열린 선물의 종류(생일 · 술 한잔). 선물이 없으면 생일(카드가 안 서므로 읽히지 않는다).
+    /// '다시 열기' 카드의 문구 묶음 — 열린 선물 한 장의 묶음(종류 · 우리 센터 선물은 센터 이름). 선물이 없으면 생일(카드가 안 서므로 읽히지 않는다).
     var cakeGiftCardCopy: CharacterGiftCopy {
-        (cakeGiftOffer?.kind ?? .birthday).copy
+        cakeGiftOffer?.copy ?? .birthday
     }
 
-    /// 받는 창의 문구 묶음 — 창이 그리는 선물의 종류. 창이 그리는 선물이 없으면 생일.
+    /// 받는 창의 문구 묶음 — 창이 그리는 선물 한 장의 묶음("부산센터 선물 도착!"). 창이 그리는 선물이 없으면 생일.
     var cakeGiftWindowCopy: CharacterGiftCopy {
-        (cakeGiftPresented?.kind ?? .birthday).copy
+        cakeGiftPresented?.copy ?? .birthday
     }
 
     // MARK: 박자
@@ -136,6 +136,14 @@ extension WorkTimerStore {
                         self.refreshCakeGift(reason: .followUp)
                     }
                 }
+            }
+            // 우리 센터 선물(지역 아잉이 — 능력 번호 10): 조회 **전에** 서버에 마련해 달라고 한다(세대당 한 번 · 멱등 — 센터가 없거나 이미
+            // 받았으면 아무것도 안 바뀐다). 실패해도 조회는 그대로 한다(다음 조회 박자에 다시 말한다).
+            if ShopWire.supportsRegionGift(protocolVersion: protocolVersion), self.regionGiftEnsuredGeneration != generation {
+                let ensured = try? await self.withSessionRetry { activeSession in
+                    try await self.service.ensureRegionGift(accessToken: activeSession.accessToken, protocolVersion: protocolVersion)
+                }
+                if ensured != nil, generation == self.sessionGeneration { self.regionGiftEnsuredGeneration = generation }
             }
             do {
                 let offer = try await self.withSessionRetry { activeSession in
@@ -276,6 +284,8 @@ extension WorkTimerStore {
             case .birthday: cakeGiftNotice = CakeGiftText.notice(for: outcome, name: name)
             case .drink: cakeGiftNotice = DrinkGiftText.notice(for: outcome, name: name)
             case .pepero: cakeGiftNotice = PeperoGiftText.notice(for: outcome, name: name)
+            // 우리 센터 선물(지역 아잉이): 실패 · 거절 줄은 생일과 한 벌이다.
+            case .region: cakeGiftNotice = CakeGiftText.notice(for: outcome, name: name)
             }
         }
         if outcome.settlesGift {
@@ -386,6 +396,8 @@ extension CharacterGiftKind {
         case .birthday: return "gift.fill"
         case .drink: return "wineglass.fill"
         case .pepero: return "heart.fill"
+        // 우리 센터 선물(지역 아잉이) — 지도 핀(받는 창 제목 "📍" 과 같은 뜻).
+        case .region: return "mappin.circle.fill"
         }
     }
 
@@ -394,7 +406,7 @@ extension CharacterGiftKind {
     var showsInviteScreen: Bool {
         switch self {
         case .birthday: return false
-        case .drink, .pepero: return true
+        case .drink, .pepero, .region: return true
         }
     }
 }

@@ -17,14 +17,14 @@ struct V0359RainbowCatalogTests {
     func rainbowIsBuiltIn() {
         let empty = CharacterCatalog.load(charactersDirectory: nil)
         // v0.3.66: 케이크 둘이 넷째 · 다섯째 내장으로 붙는다(V0366CakeCoreTests). v0.3.74: 이슬이 여섯째(V0374IsulCoreTests).
-        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"])
+        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul"])
         let rainbow = empty.manifest(id: "aing_rainbow")
         #expect(rainbow?.displayName == "무지개 아잉이")
         #expect(rainbow?.kind == .scene3D)
         #expect(rainbow?.atlas == nil && rainbow?.portrait == nil)
         #expect(empty.entry(id: "aing_rainbow")?.directory == nil)
         #expect(empty.atlasURL(for: "aing_rainbow") == nil)
-        #expect(CharacterCatalog.builtIns.map(\.id) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"])
+        #expect(CharacterCatalog.builtIns.map(\.id) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul"])
         #expect(CharacterCatalog.rainbowAingID == "aing_rainbow")
         #expect(CharacterCatalog.builtInRainbowAing.id == CharacterCatalog.rainbowAingID)
     }
@@ -33,8 +33,8 @@ struct V0359RainbowCatalogTests {
     @Test("실제 번들: 아잉 → 황금 → 무지개 → 나머지(id 정렬) — 스프라이트 6종은 그대로 · 3D 경로 카탈로그도 같은 목록")
     func bundledOrder() {
         let ids = CheckMascotAssets.catalog.allIDs
-        #expect(Array(ids.prefix(10)) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"])   // v0.3.66 케이크 둘이 넷째 · 다섯째 · v0.3.74 이슬이 여섯째 · v0.3.77 빼빼로가 일곱째 · v0.3.78 흑우가 여덟째 · 루비가 아홉째
-        let rest = Array(ids.dropFirst(10))
+        #expect(Array(ids.prefix(12)) == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul"])   // v0.3.66 케이크 둘이 넷째 · 다섯째 · v0.3.74 이슬이 여섯째 · v0.3.77 빼빼로가 일곱째 · v0.3.78 흑우가 여덟째 · 루비가 아홉째
+        let rest = Array(ids.dropFirst(12))
         #expect(rest == rest.sorted())
         #expect(Set(rest) == ["fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"], Comment(rawValue: "\(rest)"))
         #expect(CheckCharacter3DScene.catalog.allIDs == ids)
@@ -70,7 +70,7 @@ struct V0359RainbowCatalogTests {
         let catalog = CharacterCatalog(manifests: [fake, CharacterManifest(id: "fox", displayName: "여우", kind: .sprite)])
         #expect(catalog.manifest(id: "aing_rainbow")?.kind == .scene3D)
         #expect(catalog.manifest(id: "aing_rainbow")?.displayName == "무지개 아잉이")
-        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "fox"])
+        #expect(catalog.allIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul", "fox"])
     }
 
     @MainActor

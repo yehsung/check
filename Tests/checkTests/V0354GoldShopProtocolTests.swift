@@ -140,7 +140,9 @@ struct V0354GoldShopProtocolTests {
         let ruby = V0378RubyCoreTests.macRubyArtInSourceTree
         // v0.3.81: 개발에 찌든 아잉이 그림까지 실리면 9 다(누적 — 기준선은 V0381DevAingCoreTests.macDevArtInSourceTree).
         let dev = V0381DevAingCoreTests.macDevArtInSourceTree
-        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? (hwoo ? (ruby ? (dev ? ShopWire.devProtocol : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol) : ShopWire.isulProtocol)
+        // 지역 아잉이(두 센터) 그림까지 실리면 10 이다(누적 — 기준선은 RegionAingCoreTests.macRegionArtInSourceTree).
+        let region = RegionAingCoreTests.macRegionArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? (hwoo ? (ruby ? (dev ? (region ? ShopWire.regionProtocol : ShopWire.devProtocol) : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol) : ShopWire.isulProtocol)
                                                                   : ShopWire.cakeProtocol)
                                                          : ShopWire.rainbowProtocol)
                                                 : ShopWire.goldProtocol)

@@ -168,6 +168,8 @@ enum CheckMascotAssets {
             if CharacterCatalog.isRubyAing(id) { return RubyAingFinish.isDrawable(fileManager: fileManager) }
             // 개발에 찌든 아잉이: 초상 두 장 + 밝기 맵. 루비까지 서고 개발 아잉이도 서야 능력 번호 9 가 나간다.
             if CharacterCatalog.isDevAing(id) { return DevAingFinish.isDrawable(fileManager: fileManager) }
+            // 지역 아잉이(부산 · 서울): 초상 두 장 + 밝기 맵. 개발까지 서고 **두 센터가 다** 서야 능력 번호 10 이 나간다(서울 그림 전엔 9).
+            if CharacterCatalog.isRegionAing(id) { return RegionAingFinish.isDrawable(id, fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

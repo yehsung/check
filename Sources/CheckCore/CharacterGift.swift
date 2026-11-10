@@ -53,6 +53,8 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
     case drink
     /// 빼빼로 데이 선물(v0.3.77 · 11-11 기간 선물) — 빼빼로 아잉이 하나, 고를 것 없이 받는다.
     case pepero
+    /// 우리 센터 선물(지역 아잉이) — 그 사람 센터의 아잉이 하나(부산 → 갈매기 · 서울 → 서울 아잉이), 고를 것 없이 받는다. 기한 없음.
+    case region
 
     /// 서버 원문 값("birthday" · "drink" · "pepero"). 문자열을 적는 곳은 여기(`rawValue`) 하나다.
     package var wireValue: String { rawValue }
@@ -69,6 +71,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .birthday: return CharacterCatalog.birthdayGiftBuiltInIDs
         case .drink: return CharacterCatalog.drinkGiftBuiltInIDs
         case .pepero: return CharacterCatalog.peperoGiftBuiltInIDs
+        case .region: return CharacterCatalog.regionGiftBuiltInIDs
         }
     }
 
@@ -78,6 +81,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .birthday: return ShopWire.cakeProtocol
         case .drink: return ShopWire.isulProtocol
         case .pepero: return ShopWire.peperoProtocol
+        case .region: return ShopWire.regionProtocol
         }
     }
 
@@ -98,6 +102,16 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .birthday: return .birthday
         case .drink: return .drink
         case .pepero: return .pepero
+        case .region: return .region
+        }
+    }
+
+    /// 이 종류에서 캐릭터 `id` 를 주는 선물의 문구 묶음 — 우리 센터 선물은 그 아잉이의 센터 이름이 든 판(`CharacterGiftCopy.region(center:)`),
+    /// 나머지는 `copy` 그대로다.
+    package func copy(for id: String?) -> CharacterGiftCopy {
+        switch self {
+        case .region: return .region(center: RegionAingArt.centerName(of: id))
+        case .birthday, .drink, .pepero: return copy
         }
     }
 }
@@ -157,6 +171,11 @@ package struct CharacterGiftOffer: Decodable, Equatable, Sendable, Identifiable 
         let note = container.giftLossy(String.self, forKey: .note)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.note = (note?.isEmpty ?? true) ? nil : note
         self.createdAt = container.giftLossy(String.self, forKey: .createdAt)
+    }
+
+    /// 이 선물 한 장의 문구 묶음(받는 창 · 다시 열기 카드) — 종류의 묶음이고, 우리 센터 선물은 선택지(그 사람 센터의 아잉이 하나)의 센터 이름이 든다.
+    package var copy: CharacterGiftCopy {
+        kind.copy(for: options.first)
     }
 
     /// 서버 선택지 → 화면 선택지: 이 빌드가 아는 **그 종류의** 내장 캐릭터만, `CharacterGiftKind.builtInIDs` 순서로
@@ -530,6 +549,20 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         reopenTitle: PeperoGiftText.reopenTitle, reopenButton: PeperoGiftText.reopenButton,
         claimFailed: PeperoGiftText.claimFailed
     )
+
+    /// 우리 센터 선물(지역 아잉이 — 센터를 모를 때의 "우리 센터" 판). 선물 한 장의 글자는 `region(center:)`(`CharacterGiftOffer.copy`).
+    package static let region = region(center: nil)
+
+    /// 우리 센터 선물 — 그 센터 이름이 든 판("부산센터 선물 도착!" — 대표 #d_vxeOaE7gAxzt). 잠긴 칸 줄은 센터와 무관하게 같다.
+    package static func region(center: String?) -> CharacterGiftCopy {
+        CharacterGiftCopy(
+            title: RegionGiftText.title(center: center), body: RegionGiftText.body(center: center), confirmButton: RegionGiftText.confirmButton,
+            wearNowButton: RegionGiftText.wearNowButton, closeButton: RegionGiftText.closeButton,
+            lockedCaption: RegionGiftText.lockedCaption, lockedHint: RegionGiftText.lockedHint,
+            reopenTitle: RegionGiftText.reopenTitle(center: center), reopenButton: RegionGiftText.reopenButton,
+            claimFailed: RegionGiftText.claimFailed
+        )
+    }
 
     /// 받은 뒤 한 줄(종류와 무관하게 한 규칙 — "○○를 받았어요!").
     package func received(name: String) -> String {

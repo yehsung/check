@@ -431,7 +431,7 @@ extension WorkTimerStore {
     /// 선물 전용 캐릭터의 문구 묶음(순수) — 내장 id 면 그 선물 종류(케이크 → 생일 · 이슬 → 술 한잔), 서버 표식으로만 선물 전용인
     /// 모르는 id 는 생일(0.3.66 선례 — 그때는 선물이 생일뿐이었다). 상점 잠긴 칸 · 안내 · 되돌림이 이 한 곳을 묻는다.
     nonisolated static func giftCopy(for id: String) -> CharacterGiftCopy {
-        (CharacterCatalog.giftKind(ofBuiltIn: id) ?? .birthday).copy
+        (CharacterCatalog.giftKind(ofBuiltIn: id) ?? .birthday).copy(for: id)
     }
 
     /// 되돌린 캐릭터에 맞는 안내(순수).

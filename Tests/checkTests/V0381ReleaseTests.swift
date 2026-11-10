@@ -43,8 +43,9 @@ func v0381BundleGate() {
     let drawable = WorkTimerStore.bundledDrawableCharacterIDs
     #expect(drawable.contains(CharacterCatalog.devAingID), "번들 drawable 에 aing_dev 가 없다 \(drawable)")
     #expect(ShopWire.devProtocol == 9, "능력 번호가 서버 초안(aing_dev min 9)과 어긋난다")
-    #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.devProtocol)
-    #expect(V0317ShopTests.plainStore().shopProtocolVersion == ShopWire.devProtocol)
+    // 옛 판 게이트 — 번호는 누적이라 '9 이상'(지역 아잉이 판은 10).
+    #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.devProtocol)
+    #expect(V0317ShopTests.plainStore().shopProtocolVersion >= ShopWire.devProtocol)
     #expect(DevAingMission.key == "work100")
     #expect(OmokStoneSkin.protocolVersion == 1)
     // 0.3.81 은 6종으로 나갔다. 다음 판에서 대표 11-10 "네온 흑백 다이아 이렇게 3개 빼." → 주사위 · 고양이 · 픽셀(20261111140000).

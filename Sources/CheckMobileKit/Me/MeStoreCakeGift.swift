@@ -63,7 +63,7 @@ package struct MeCakeGiftSheet: Equatable, Identifiable, Sendable {
     }
 
     /// 이 선물 종류의 문구 묶음(제목 · 본문 · 단추 · 다시 열기). 시트가 이것으로만 글자를 그린다.
-    package var copy: CharacterGiftCopy { gift.kind.copy }
+    package var copy: CharacterGiftCopy { gift.copy }
 
     /// 이 시트의 선물이 **결론 났는가**(받았다 · 끝났다) — 내려간 뒤 다음 선물을 묻는 조건(`cakeGiftSheetDidDisappear`).
     package var isSettled: Bool {
@@ -229,6 +229,8 @@ extension MeStore {
         case .drink: return DrinkGiftText.notice(for: outcome, name: MeCharacterName.display)
         // 빼빼로(맥 0.3.77 먼저 · 능력 6): 폰은 능력 5 라 서버가 이 선물을 보이지 않는다(다음 폰 판). 그래도 갈래는 코어 글자로 닫는다.
         case .pepero: return PeperoGiftText.notice(for: outcome, name: MeCharacterName.display)
+        // 우리 센터 선물(지역 아잉이 — 맥 먼저 · 능력 10): 폰은 서버가 이 선물을 안 보인다. 실패 줄은 생일과 한 벌.
+        case .region: return CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
         }
     }
 
@@ -386,6 +388,7 @@ extension CharacterGiftKind {
         case .birthday: return "🎂"
         case .drink: return "🥂"
         case .pepero: return "🍫"
+        case .region: return "📍"
         }
     }
 }

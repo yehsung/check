@@ -137,6 +137,8 @@ enum GachaPalette {
         // 루비 아잉이(v0.3.78)는 보통 상점 캐릭터라 희귀 강조를 안 쓴다(`Finish.isRare` 거짓).
         case .ruby: return nil
         case .dev: return nil
+        // 부산 갈매기 아잉이(지역 아잉이 — 센터 선물 전용)도 희귀가 아니다(`Finish.isRare` 거짓).
+        case .busan, .seoul: return nil
         }
     }
 

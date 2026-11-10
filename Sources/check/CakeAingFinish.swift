@@ -1080,7 +1080,7 @@ enum CakeAingFinish {
             switch finish {
             case .cakeStrawberry: self = .strawberry
             case .cakeChoco: self = .choco
-            case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby, .dev: return nil
+            case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby, .dev, .busan, .seoul: return nil
             }
         }
 

@@ -80,7 +80,7 @@ package enum MobileTheme {
         case .rainbow: return AnyShapeStyle(rainbow)
         case .standard: return nil
         // 케이크(v0.3.66)는 희귀가 아니다 — 생일 선물 전용이라 뽑기 화면에 서지 않는다(`Finish.isRare` 거짓). 이슬(v0.3.74 맥 먼저)도 같다.
-        case .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev: return nil
+        case .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev, .busan, .seoul: return nil
         }
     }
 
@@ -106,7 +106,7 @@ package enum MobileTheme {
         case .rainbow: return colorScheme == .light ? AnyShapeStyle(rainbowSolid) : AnyShapeStyle(rainbow)
         case .gold, .standard: return AnyShapeStyle(gold)
         // 케이크(v0.3.66)는 당분간 평범과 같은 갈래(진짜 그림은 다음 단계 — 케이크는 뽑기 전용 타일이 아니다).
-        case .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev: return AnyShapeStyle(gold)
+        case .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev, .busan, .seoul: return AnyShapeStyle(gold)
         }
     }
 
@@ -117,7 +117,7 @@ package enum MobileTheme {
         case .rainbow: return AnyShapeStyle(rainbowTint)
         case .standard: return nil
         // 케이크(v0.3.66)는 희귀가 아니다 — 생일 선물 전용이라 뽑기 화면에 서지 않는다(`Finish.isRare` 거짓). 이슬(v0.3.74 맥 먼저)도 같다.
-        case .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev: return nil
+        case .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev, .busan, .seoul: return nil
         }
     }
 

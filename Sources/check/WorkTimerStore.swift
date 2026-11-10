@@ -985,6 +985,8 @@ final class WorkTimerStore {
     @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
     /// 조회가 떠 있는 동안 선물이 결론 났다 — 그 조회가 끝나면 다음 선물을 한 번 더 묻는다(v0.3.74 `followUpCakeGiftIfNeeded`). 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftFollowUpQueued = false
+    /// 우리 센터 선물(지역 아잉이)을 서버에 마련해 달라고 이미 말한 세션 세대(`region_gift_ensure` — 세대당 한 번, 성공했을 때만 적는다).
+    @ObservationIgnored var regionGiftEnsuredGeneration: Int?
     /// 상점이 안 가진 사람에게 이슬 아잉이(술 한잔 선물 전용)의 잠긴 칸을 세우는가(v0.3.74). 정본은 상수 하나
     /// (`WorkTimerStore.drinkGiftLockedCellPolicy`)이고, 이 칸은 시험이 두 값을 다 재려고 갈아 끼우는 이음새다. 격자가 읽는다.
     var drinkGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.drinkGiftLockedCellPolicy

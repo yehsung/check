@@ -573,7 +573,7 @@ enum AingDecor {
     /// 빼빼로 상자 · 막대(`check.peperoDecor` — v0.3.77)도 여기 하나에 더했다(얼굴 탐색 · 몸 클릭 · 진폭 · 클릭 상자가 같이 뺀다).
     /// 개발에 찌든 아잉이 끈(`check.devDecor`)도 여기 하나에 더했다.
     static let rootNames: Set<String> = [CakeAingFinish.cakeDecorNodeName, IsulAingFinish.IsulCap.decorNodeName, PeperoDecor.decorNodeName,
-                                         DevAingFinish.decorNodeName]
+                                         DevAingFinish.decorNodeName, RegionAingFinish.decorNodeName]
 
     /// 이 노드가 장식인가 — 자기나 조상 중에 장식 루트가 있다.
     static func isDecor(_ node: SCNNode) -> Bool {

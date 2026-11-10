@@ -48,7 +48,7 @@ struct V0377PeperoCoreTests {
         V0374IsulCoreTests.macIsulArtInSourceTree
             ? (macPeperoArtInSourceTree
                 ? (V0378HwooCoreTests.macHwooArtInSourceTree
-                    ? (V0378RubyCoreTests.macRubyArtInSourceTree ? (V0381DevAingCoreTests.macDevArtInSourceTree ? ShopWire.devProtocol : ShopWire.rubyProtocol) : ShopWire.hwooProtocol)   // v0.3.78 루비까지 8
+                    ? (V0378RubyCoreTests.macRubyArtInSourceTree ? (V0381DevAingCoreTests.macDevArtInSourceTree ? (RegionAingCoreTests.macRegionArtInSourceTree ? ShopWire.regionProtocol : ShopWire.devProtocol) : ShopWire.rubyProtocol) : ShopWire.hwooProtocol)   // v0.3.78 루비까지 8
                     : ShopWire.peperoProtocol)
                 : ShopWire.isulProtocol)
             : ShopWire.cakeProtocol
@@ -63,7 +63,7 @@ struct V0377PeperoCoreTests {
         #expect(CharacterCatalog.builtInPeperoAing.id == Self.pepero)
         #expect(CharacterCatalog.builtInPeperoAing.displayName == CharacterCatalog.peperoAingDisplayName, "표시 이름이 상수에서 안 온다")
         #expect(CharacterCatalog.builtInPeperoAing.kind == .scene3D)
-        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID]
+        let order = ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID, CharacterCatalog.busanAingID, CharacterCatalog.seoulAingID]
         #expect(CharacterCatalog.builtIns.map(\.id) == order)
         let empty = CharacterCatalog(entries: [])
         #expect(empty.allIDs == order)
@@ -89,7 +89,7 @@ struct V0377PeperoCoreTests {
         #expect(!CharacterCatalog.isIsulAing(Self.pepero))
         #expect(!CharacterCatalog.isGachaOnlyBuiltIn(Self.pepero))
         #expect(CharacterCatalog.peperoGiftBuiltInIDs == [Self.pepero])
-        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, Self.isul, Self.pepero])
+        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, Self.isul, Self.pepero, CharacterCatalog.busanAingID, CharacterCatalog.seoulAingID])
         #expect(Set(CharacterCatalog.giftOnlyBuiltInIDs) == Set(CharacterCatalog.builtIns.map(\.id).filter(CharacterCatalog.isGiftOnlyBuiltIn)))
         #expect(CharacterCatalog.giftKind(ofBuiltIn: Self.pepero) == .pepero)
         #expect(CharacterCatalog.giftKind(ofBuiltIn: Self.isul) == .drink, "이슬 종류가 빼빼로에 먹혔다")
@@ -142,7 +142,7 @@ struct V0377PeperoCoreTests {
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: base + [Self.pepero]) == 4, "이슬 없이 빼빼로만 — 5 도 못 보낸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: ["robot", "aing_gold", "aing_rainbow", Self.choco, Self.isul, Self.pepero]) == 3)
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: [Self.isul, Self.pepero]) == 0)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: CharacterCatalog.builtIns.map(\.id) + ["robot"]) == ShopWire.devProtocol, "내장 전부 + robot — v0.3.78 흑우 7 · 루비까지 8 · v0.3.81 개발 아잉이까지 9")
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: CharacterCatalog.builtIns.map(\.id) + ["robot"]) == ShopWire.regionProtocol, "내장 전부 + robot — v0.3.78 흑우 7 · 루비까지 8 · v0.3.81 개발 아잉이까지 9 · 지역 아잉이 둘까지 10")
         #expect(!ShopWire.supportsPeperoGift(protocolVersion: 5))
         #expect(ShopWire.supportsPeperoGift(protocolVersion: 6))
         #expect(ShopWire.supportsDrinkGift(protocolVersion: 6) && ShopWire.supportsCakeGift(protocolVersion: 6), "번호는 누적이다")
@@ -180,7 +180,7 @@ struct V0377PeperoCoreTests {
 
     @Test("종류: 원문 값 셋 · 'pepero' 정확히 · 내장 → 종류")
     func giftKind() {
-        #expect(CharacterGiftKind.allCases == [.birthday, .drink, .pepero])
+        #expect(CharacterGiftKind.allCases == [.birthday, .drink, .pepero, .region])   // 지역 아잉이(우리 센터 선물)가 넷째
         #expect(CharacterGiftKind.pepero.wireValue == "pepero")
         #expect(CharacterGiftKind(wireValue: "pepero") == .pepero)
         for odd in ["Pepero", " pepero", "pepero ", "peppero", "빼빼로", "", nil] as [String?] {
@@ -275,8 +275,8 @@ struct V0377PeperoCoreTests {
         #expect(CharacterGiftCopy.pepero.reopenTitle == PeperoGiftText.reopenTitle)
         #expect(CharacterGiftCopy.pepero != .drink && CharacterGiftCopy.pepero != .birthday)
         // 상점 잠긴 칸 안내 · 캡션은 종류마다 달라야 바가 어느 선물의 얻는 길인지 가린다(`ShopText.isGiftLockedHint`).
-        #expect(Set(CharacterGiftKind.allCases.map(\.copy.lockedHint)).count == 3)
-        #expect(Set(CharacterGiftKind.allCases.map(\.copy.lockedCaption)).count == 3)
+        #expect(Set(CharacterGiftKind.allCases.map(\.copy.lockedHint)).count == CharacterGiftKind.allCases.count)
+        #expect(Set(CharacterGiftKind.allCases.map(\.copy.lockedCaption)).count == CharacterGiftKind.allCases.count)
         // 이슬 확정 문구(대표 결정 C)는 그대로다.
         #expect(DrinkGiftText.title == "짠! 🥂" && DrinkGiftText.confirmButton == "짠 받기")
     }

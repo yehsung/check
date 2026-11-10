@@ -183,7 +183,8 @@ struct GamesGomokuWatch: View {
             preview: nil,
             winLine: watch.isFinished && watch.endReason == .five
                 ? GomokuPhoneWinLine.ends(board: watch.board, lastMove: watch.lastMove)
-                : nil
+                : nil,
+            stoneSkins: watch.stoneSkins
         )
         .frame(width: side, height: side)
         .shadow(color: colorScheme == .dark ? .black.opacity(0.35) : Color(red: 80 / 255, green: 50 / 255, blue: 10 / 255).opacity(0.18),

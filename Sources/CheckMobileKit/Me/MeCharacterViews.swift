@@ -128,6 +128,10 @@ struct MeShopView: View {
                     if let previewID {
                         MeCharacterPreviewCard(id: previewID)
                     }
+                    // 오목알 스킨(폰 1.0.18) — 서버가 스킨 줄을 말할 때만.
+                    if store.showsOmokSkins {
+                        MeOmokSkinSection(store: store)
+                    }
                 }
                 .padding(.horizontal, MobileTheme.sideMargin)
                 .padding(.vertical, MobileTheme.rowSpacing)

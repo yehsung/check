@@ -406,12 +406,15 @@ extension MeStore {
         guard context.session.isSignedIn else { return }
         if !shopState.isLoading { launch { [weak self] in await self?.loadShop() } }
         launch { [weak self] in await self?.loadEquippedCharacter() }
+        // 상점이 뜰 때마다 오목알 상태도 다시 읽는다(다른 기기에서 산 · 낀 것을 따라온다).
+        if !omokSkinsLoading { launch { [weak self] in await self?.loadOmokSkins() } }
     }
 
     package func shopDidDisappear() {
         shopNotice = nil
         shopGachaHintID = nil
         shopGiftHintID = nil
+        omokSkinNotice = nil
         if purchasingID == nil { shopSelection = nil }
         gachaDidDisappear()
     }

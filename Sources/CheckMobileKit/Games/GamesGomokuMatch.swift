@@ -406,7 +406,8 @@ struct GamesGomokuResult: View {
                         GeometryReader { geo in
                             GamesGomokuBoardCanvas(board: match.board, geometry: GomokuPhoneBoardGeometry(side: geo.size.width),
                                                    lastMove: match.lastMove, autoPoints: match.autoPoints,
-                                                   winLine: match.endReason == .five ? GomokuPhoneWinLine.ends(board: match.board, lastMove: match.lastMove) : nil)
+                                                   winLine: match.endReason == .five ? GomokuPhoneWinLine.ends(board: match.board, lastMove: match.lastMove) : nil,
+                                                   stoneSkins: match.stoneSkins)
                                 .accessibilityElement(children: .ignore)
                                 .accessibilityLabel(GomokuPhoneText.boardAccessibility(match, forbiddenCount: 0))
                         }

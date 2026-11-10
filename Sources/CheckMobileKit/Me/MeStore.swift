@@ -57,6 +57,16 @@ package final class MeStore {
     package internal(set) var centerLoadFailed = false
     package internal(set) var headerState = MeLoadState()
 
+    // MARK: 오목알 스킨(폰 1.0.18 — 맥 0.3.81 · 0.3.82 셋: 주사위 · 고양이 · 픽셀)
+    package internal(set) var omokSkins: OmokSkinsState?
+    /// 서버에 스킨 함수가 없다(옛 서버) — 상점 '오목알' 절을 감춘다.
+    package internal(set) var omokSkinsUnavailable = false
+    /// 떠 있는 스킨 쓰기("equip" 또는 사는 스킨 id). 떠 있는 동안 칸 탭은 요청을 안 보낸다.
+    package internal(set) var omokSkinBusy: String?
+    /// 오목알 절 아래 한 줄(샀어요 · 바꿨어요 · 모자라요 · 실패).
+    package internal(set) var omokSkinNotice: String?
+    @ObservationIgnored var omokSkinsLoading = false
+
     // MARK: 기록
     package internal(set) var heatmap: WorkRhythmHeatmap = .empty
     /// 주별 근무 리듬(폰 1.0.18 — 맥 0.3.78 과 같은 결정 #d_V0mJ363LONEW): 서비스 첫 주 ~ 이번 주(마지막 원소가 이번 주). 비면 옛 '지난주' 칸.
@@ -311,6 +321,8 @@ package final class MeStore {
         // 사용자의 리밋 위젯이 영원히 비는 것을 막는다(GET 하나다). 로그인 직후에도 여기로 들어온다
         // (`MobileAppModel.sessionDidSignIn` → scene 이 active 면 `activateStores()`).
         aiLimits.refreshIfStale()
+        // 오목알 스킨: 세션마다 한 번(이 값의 소비자에 AI 오목 판이 있다 — 낀 스킨을 내 돌에 그린다 · GET 하나).
+        refreshOmokSkinsIfNeeded()
         // 주간 보상도 탭이 안 보여도 받는다(앞에 올 때마다 · 60초 스로틀) — 정산 결과의 루비가 게임 탭·상점 알약에도 바로 선다.
         refreshWeeklyWorkIfStale()
         // 도전 미션도 주간 보상과 **똑같이** 탭이 안 보여도 받는다(앞에 올 때마다 · 같은 60초 스로틀) — 이제 이 값이
@@ -346,6 +358,10 @@ package final class MeStore {
         centerLoaded = false
         centerLoadFailed = false
         headerState = MeLoadState()
+        omokSkins = nil
+        omokSkinsUnavailable = false
+        omokSkinBusy = nil
+        omokSkinNotice = nil
         heatmap = .empty
         rhythmWeeks = .empty
         rhythmWeekOffset = 0

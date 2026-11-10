@@ -605,14 +605,19 @@ struct AppStoreDocContractTests {
         #expect(me[1].contains("1.0.17") && me[1].contains(DrinkGiftText.lockedCaption) && me[1].contains(DrinkGiftText.title), "나 줄에 이슬 잠긴 칸 · 받는 창이 없다")
         #expect(me[2].contains("`claim_character_gift`"), "나 쓰기 칸에 선물 받기가 없다")
 
-        // ── ② §1.4 설명문(ASC 초안): 1:1 넷 · 서식 · 4,000 바이트 · 금지 낱말 · 상표.
+        // ── ② §1.4 설명문(ASC 초안): 1:1 여섯 · 마작 · 서식 · 4,000 바이트 · 금지 낱말 · 상표.
+        // 1.0.18 초안으로 넘어갔다 — 1:1 수는 1.0.17 의 넷(오목·체스·테트리스·뒤집기)에 길건너 · 알까기를 더한 여섯이고 아잉 마작이 붙는다.
+        // 게임 이름의 '1:1 ' 머리는 설명문의 '1:1 대결은 … 여섯 가지' 안에서 떼어 쓴다(같은 줄에 1:1 을 두 번 쓰지 않게).
         let copy = try Self.section(of: doc, heading: "### 1.4 설명")
         let quoted = copy.split(separator: "\n").filter { $0.hasPrefix(">") }
             .map { $0.dropFirst().trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
         #expect(quoted.utf8.count <= 4_000, "설명문이 4,000 바이트를 넘는다: \(quoted.utf8.count)")
-        #expect(quoted.contains("오목·체스·테트리스·\(ReversiPhoneText.title) 네 가지"), "「■ 게임」 의 1:1 수가 앱과 다르다")
+        let crossy = CrossyDuelPhoneText.title.replacingOccurrences(of: "1:1 ", with: "")
+        let alkkagi = AlkkagiPhoneText.title.replacingOccurrences(of: "1:1 ", with: "")
+        #expect(quoted.contains("오목·체스·테트리스·\(ReversiPhoneText.title)·\(crossy)·\(alkkagi) 여섯 가지"), "「■ 게임」 의 1:1 수가 앱과 다르다")
+        #expect(quoted.contains("\(GamesMahjongText.title)은 4명이 리치 마작 규칙으로"), "「■ 게임」 에 아잉 마작이 없다")
         #expect(quoted.contains("제목·굵게·링크"), "「■ 메시지」 에 서식이 없다")
-        #expect(copy.contains("이 절은 **1.0.17 제출 초안**이다(\(quoted.count)자 · \(quoted.utf8.count)바이트)"), "머리 줄의 글자 수가 설명문과 다르다")
+        #expect(copy.contains("이 절은 **1.0.18 제출 초안**이다(\(quoted.count)자 · \(quoted.utf8.count)바이트)"), "머리 줄의 글자 수가 설명문과 다르다")
         for word in ["판돈", "베팅", "도박", "내기", "러미", "Supabase"] + trademarks {
             #expect(!quoted.contains(word), "스토어 설명문에 금지 낱말 '\(word)' 가 있다")
         }

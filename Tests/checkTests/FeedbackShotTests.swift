@@ -357,6 +357,11 @@ func fbShotTextOnlySendKeepsTheOldFourKeysAndNeverTouchesStorage() async throws 
         let payload = try #require(log.first?.json)
         #expect(Set(payload.keys) == ["p_kind", "p_body", "p_app_version", "p_os_version"], "\(label): \(payload.keys.sorted())")
         #expect(store.feedbackNotice == FeedbackText.sendSuccess)
+        // 숨어서 안 실린 캡처도 이 제보의 것이었다 — 글과 함께 내린다. 남으면 패널을 다시 열어 줄이 돌아올 때 다음 제보에 실린다.
+        #expect(store.feedbackShots.isEmpty, "\(label): 글만 나갔는데 숨은 캡처가 남았다 — 다음(다른) 제보에 따라 나간다")
+        store.closeFeedbackPanel()
+        store.openFeedbackPanel()
+        #expect(store.feedbackShotsForSend.isEmpty, "\(label): 패널을 다시 열자 앞 제보의 캡처가 다시 붙었다")
     }
 }
 
@@ -424,9 +429,16 @@ func fbShotDoorClosedSaysSoAndStopsUploading() async throws {
     #expect(probe["p_path"] as? String == fsShotPath(1))
     #expect(log.filter { $0.path == fsSubmitPath }.count == 1)
     #expect(store.feedbackDraft.isEmpty && store.feedbackShots.isEmpty)
-    #expect(store.feedbackShotsShown, "문 닫힘은 서버에 기능이 없다는 뜻이 아니다 — 입구를 숨기지 마라")
+    #expect(store.feedbackShotsShown, "문 닫힘은 서버에 기능이 없다는 뜻이 아니다 — 칩 · 받은 캡처까지 숨기지 마라")
+    // 붙이기 줄은 이 패널에서 내린다 — 다음 제보에 또 붙이면 같은 답을 듣고 캡처를 줄이고 올렸다 버린다.
+    #expect(!store.feedbackShotAttachShown, "문이 닫혔다는 답을 듣고도 붙이기 줄을 그대로 둔다")
+    #expect(!store.canAddFeedbackShot)
+    store.closeFeedbackPanel()
+    store.openFeedbackPanel()
+    #expect(store.feedbackShotAttachShown, "패널을 다시 열었는데 문을 다시 묻지 않는다 — 한 번의 답을 영구히 기억했다")
 
-    // (나) 올리기는 됐는데 붙이기가 unsupported_client.
+    // (나) 올리기는 됐는데 붙이기가 unsupported_client · door_open 참 — 문은 열렸고 이 앱 판을 안 받았다(서버가 아는 판이 옛것).
+    //      "아직 준비 중"이 아니라 최신 앱을 다시 켜라고 말한다.
     let attach = "fs-door-attach"
     let other = fsStore(host: attach)
     other.feedbackShots = [try fsDraft()]
@@ -435,7 +447,8 @@ func fbShotDoorClosedSaysSoAndStopsUploading() async throws {
     FeedbackShotURLProtocol.set(status: 200, body: #"{"status":"unsupported_client","door_open":true}"#, host: attach, path: fsAttachPath)
     other.feedbackDraft = "샘플 본문 문 닫힘 둘"
     await fsSendAndWait(other)
-    #expect(other.feedbackNotice == FeedbackShotText.sentShotsDoorClosed)
+    #expect(other.feedbackNotice == FeedbackShotText.sentShotsAppOutdated, "문이 열렸는데 '아직 준비 중'이라고 말한다")
+    #expect(!other.feedbackShotAttachShown && other.feedbackShotsShown)
 
     // (다) 저장소 거절인데 까닭이 문도 상한도 아니다(한 시간 지남 등) → 멈추고 "못 붙였어요".
     let late = "fs-refused-late"
@@ -688,11 +701,51 @@ func fbShotImagesLoadOnlyWhenAskedThroughASignedURLAndStayCached() async throws 
 
 @MainActor
 @Test
+func fbShotAFullCacheKeepsTheCapturesOnScreen() async throws {
+    // 상한에 닿은 캐시를 통째로 비우면 방금 받은 같은 행의 첫 장까지 지워져 칸이 빈 채로 남는다(다시 받는 길은 사람이 누를 때뿐).
+    let host = "fs-cache-full"
+    let store = fsStore(host: host, admin: true)
+    store.isFeedbackPanelVisible = true
+    let r1 = "45454545-0000-0000-0000-000000000001"
+    store.feedbackList = [fsReport(id: r1, owner: fsOther)]
+    store.feedbackLoaded = true
+    let shots = (1...FeedbackShotRules.maxDraft).map { fsShot(report: r1, number: $0, owner: fsOther) }
+    store.feedbackShotsByReport = [r1: shots]
+    let picture = try fsPicture()
+    // 앞서 펼쳐 본 다른 제보들의 그림으로 상한 한 장 앞까지 채운다.
+    for index in 0..<(FeedbackShotRules.cacheLimit - 1) {
+        store.feedbackShotImages["\(fsOther)/old-\(index)/x.jpg"] = picture.image
+    }
+    for shot in shots {
+        let signPath = "/storage/v1/object/sign/feedback-shots/\(shot.path)"
+        FeedbackShotURLProtocol.set(status: 200, body: #"{"signedURL":"/object/sign/feedback-shots/\#(shot.path)?token=synthetic"}"#,
+                                    host: host, path: signPath, method: "POST")
+        FeedbackShotURLProtocol.set(status: 200, data: picture.jpeg, host: host, path: signPath, method: "GET")
+    }
+
+    store.toggleFeedbackExpansion(r1)
+    await fsWait {
+        store.feedbackShotLoading.isEmpty
+            && FeedbackShotURLProtocol.log(host: host).filter { $0.method == "GET" }.count == shots.count
+    }
+
+    for (index, shot) in shots.enumerated() {
+        if case .image = store.feedbackShotCell(for: shot.path) {} else {
+            Issue.record("상한에서 캐시를 비우며 펼친 행의 \(index + 1)번째 캡처를 지웠다 — 칸이 빈 채로 남는다")
+        }
+    }
+    #expect(!store.feedbackShotImages.keys.contains { $0.contains("/old-") }, "화면 밖 옛 그림을 하나도 안 비웠다 — 상한이 뜻이 없다")
+    #expect(store.feedbackShotImages.count <= FeedbackShotRules.cacheLimit)
+}
+
+@MainActor
+@Test
 func fbShotSigningOutForgetsCapturesImagesAndTheMissingFlag() throws {
     let store = fsStore(host: "fs-signout")
     store.feedbackShots = [try fsDraft()]
     store.feedbackShotPreparing = true
     store.feedbackShotServerMissing = true
+    store.feedbackShotDoorClosed = true
     store.feedbackShotsByReport = ["r": [fsShot(report: "r", number: 1, owner: fsOther)]]
     store.feedbackShotImages = ["\(fsOther)/r/x.jpg": try fsPicture().image]
     store.feedbackShotLoading = ["\(fsOther)/r/y.jpg"]
@@ -702,7 +755,7 @@ func fbShotSigningOutForgetsCapturesImagesAndTheMissingFlag() throws {
     store.signOut()
 
     #expect(store.feedbackShots.isEmpty, "로그아웃했는데 앞 사람의 캡처가 남았다")
-    #expect(!store.feedbackShotPreparing && !store.feedbackShotServerMissing)
+    #expect(!store.feedbackShotPreparing && !store.feedbackShotServerMissing && !store.feedbackShotDoorClosed)
     #expect(store.feedbackShotsByReport.isEmpty)
     #expect(store.feedbackShotImages.isEmpty, "받아 둔 남의 캡처가 다음 계정에 남았다")
     #expect(store.feedbackShotLoading.isEmpty && store.feedbackShotFailures.isEmpty)
@@ -759,6 +812,9 @@ func fbShotTallyPicksTheRightLine() {
     #expect(notice([.refused], total: 3) == FeedbackShotText.sentShotsFailed, "멈춘 뒤 남은 것도 못 붙인 것이다")
     #expect(notice([.attached, .refused], total: 3) == FeedbackShotText.sentSomeShotsFailed(2))
     #expect(notice([.doorClosed], total: 2) == FeedbackShotText.sentShotsDoorClosed)
+    #expect(notice([.attached, .outdated], total: 2) == FeedbackShotText.sentShotsAppOutdated)
+    #expect(FeedbackShotStep.outdated.stops && FeedbackShotStep.outdated.closesTheDoor && FeedbackShotStep.doorClosed.closesTheDoor)
+    #expect(!FeedbackShotStep.missing.closesTheDoor && !FeedbackShotStep.refused.closesTheDoor, "문 닫힘이 아닌데 붙이기 줄을 내린다")
     #expect(notice([.missing], total: 1) == FeedbackShotText.sentShotsDoorClosed)
     #expect(notice([.attached, .tooMany(3)], total: 2) == FeedbackShotText.sentShotsTooMany(3))
     #expect(FeedbackShotText.sentShotsTooMany(FeedbackShotWire.maxPerReport).contains("\(FeedbackShotWire.maxPerReport)장"))
@@ -838,6 +894,76 @@ func fbShotPasteAddsUpToTheLimitAndSaysWhenEmpty() async throws {
     #expect(store.canAddFeedbackShot)
 }
 
+/// 시험이 쓰는 합성 PNG 파일 자리. 이름이 고정이라 돌릴 때마다 덮어쓴다(쌓이지 않는다).
+private func fsSyntheticFile(_ name: String, png: Data) throws -> URL {
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("check-fbshot-tests", isDirectory: true)
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    let file = folder.appendingPathComponent(name)
+    try png.write(to: file, options: .atomic)
+    return file
+}
+
+@MainActor
+@Test
+func fbShotPastingACopiedFileAttachesTheFileNotItsIcon() async throws {
+    // Finder 에서 파일을 ⌘C 하면 클립보드에 파일 URL 과 함께 **그 파일의 아이콘 그림**(TIFF)이 실린다. 붙는 것은 파일이어야 한다.
+    let store = fsStore(host: "fs-paste-file")
+    let file = try fsSyntheticFile("synthetic-capture.png", png: fsSyntheticPNG(width: 2400, height: 1500))
+    let icon = try #require(NSImage(data: fsSyntheticPNG(width: 64, height: 64, tint: .systemGray))?.tiffRepresentation)
+    let board = NSPasteboard(name: NSPasteboard.Name("check.test.feedbackshot.file.\(UUID().uuidString)"))
+    defer { board.releaseGlobally() }
+    board.clearContents()
+    let item = NSPasteboardItem()
+    item.setString(file.absoluteString, forType: .fileURL)
+    item.setData(icon, forType: .tiff)
+    board.writeObjects([item])
+    try #require(board.data(forType: .tiff) != nil, "전제: 판에 아이콘 바이트도 있다(없으면 이 시험은 늘 초록이다)")
+
+    guard case .file(let url)? = FeedbackShotImage.source(in: board) else {
+        Issue.record("파일 URL 이 있는데 아이콘 바이트를 골랐다")
+        return
+    }
+    #expect(url.standardizedFileURL == file.standardizedFileURL)
+
+    store.attachFeedbackShotFromPasteboard(board)
+    await fsWait { store.feedbackShots.count == 1 && !store.feedbackShotPreparing }
+    #expect(store.feedbackShots.first?.pixelSize == CGSize(width: 1600, height: 1000), "캡처 파일 대신 아이콘(64×64)이 붙었다")
+
+    // 파일 URL 이 없으면(⌘⌃⇧4 · 브라우저 이미지 복사) 예전처럼 바이트다.
+    board.clearContents()
+    board.setData(icon, forType: .tiff)
+    guard case .data? = FeedbackShotImage.source(in: board) else {
+        Issue.record("파일이 없는 클립보드 그림을 못 읽었다")
+        return
+    }
+}
+
+@MainActor
+@Test
+func fbShotPickingMoreThanTheRoomAttachesWhatFitsAndSaysSo() async throws {
+    let files = try (1...FeedbackShotRules.maxDraft).map {
+        try fsSyntheticFile("synthetic-pick-\($0).png", png: fsSyntheticPNG(width: 800, height: 500))
+    }
+    // 한 장 붙인 뒤 상한만큼 골랐다 — 자리는 하나 모자란다.
+    let store = fsStore(host: "fs-pick-overflow")
+    store.feedbackShots = [try fsDraft()]
+    store.attachFeedbackShots(fromFiles: files)
+    await fsWait { !store.feedbackShotPreparing }
+    #expect(store.feedbackShots.count == FeedbackShotRules.maxDraft)
+    #expect(store.feedbackNotice == FeedbackShotText.full, "자리보다 많이 고른 것을 조용히 버렸다 — 사람은 다 붙은 줄 안다")
+
+    // 자리 안이면 말하지 않는다.
+    let fits = fsStore(host: "fs-pick-fits")
+    fits.attachFeedbackShots(fromFiles: Array(files.prefix(2)))
+    await fsWait { !fits.feedbackShotPreparing }
+    #expect(fits.feedbackShots.count == 2)
+    #expect(fits.feedbackNotice == nil)
+
+    // 고르기 창의 안내는 상한이 아니라 **남은 자리**를 말한다(상수에서 나온 수).
+    let remaining = FeedbackShotRules.maxDraft - 1
+    #expect(FeedbackShotText.pickerMessage(remaining: remaining).contains("\(remaining)장"))
+}
+
 // MARK: - 높이 추정 · 소스 계약
 
 @MainActor
@@ -867,6 +993,90 @@ func fbShotLayoutEstimatesCountTheRowAndRoundUp() {
     #expect(FeedbackInboxView.estimatedHeight(rows, expandedID: "a", shotCount: { counts[$0.id] ?? 0 })
             == FeedbackInboxView.estimatedHeight(rows, expandedID: "a") + FeedbackShotLayout.inboxExpandedExtra(shotCount: 2))
     #expect(FeedbackShotLayout.inboxExpandedExtra(shotCount: 1) >= FeedbackShotLayout.inboxThumbHeight + 13 + 3 + 6)
+}
+
+@MainActor
+private func fsSpin(_ seconds: Double = 0.05) {
+    RunLoop.current.run(until: Date().addingTimeInterval(seconds))
+}
+
+@MainActor
+private func fsEditors(in root: NSView) -> [CheckEditorTextView] {
+    var found: [CheckEditorTextView] = []
+    if let match = root as? CheckEditorTextView { found.append(match) }
+    for child in root.subviews { found += fsEditors(in: child) }
+    return found
+}
+
+@MainActor
+@Test
+func fbShotAttachingWhileTypingKeepsTheSameEditorAndFocus() throws {
+    // 붙이기 줄이 미리보기로 바뀌면(+23pt) 본문 추정이 상한을 넘나든다. 상자가 그대로 ↔ 스크롤로 갈리면 본문 칸이 새 NSTextView 가
+    // 되어 포커스와 조합 중인 음절을 잃는다(신고 시트 v0.3.34 와 같은 결함 — `FeedbackListBox.keepsOneBranch`).
+    CheckTextEditor.resetPoolForTesting()
+    defer { CheckTextEditor.resetPoolForTesting() }
+    let extra: CGFloat = 160
+    let cap = FeedbackPanelLayout.budget(
+        base: FeedbackPanelLayout.sendBodyHeight, floor: FeedbackPanelLayout.minSendBodyHeight, extraChromeHeight: extra
+    )
+    func estimate(_ count: Int) -> CGFloat {
+        FeedbackPanelLayout.sendBodyContentHeight(
+            rows: [], hasNotice: false, shotRowHeight: FeedbackShotLayout.sendRowHeight(shown: true, count: count)
+        )
+    }
+    try #require(estimate(0) <= cap && estimate(1) > cap,
+                 "전제가 깨졌다(추정 \(estimate(0)) → \(estimate(1)) · 상한 \(cap)) — 붙일 때 상한을 넘는 경계를 다시 골라라")
+
+    let store = fsStore(host: "fs-editor-stable")
+    store.isFeedbackPanelVisible = true
+    store.feedbackLoaded = true
+    store.feedbackDraft = "샘플 본문"
+    let size = NSRect(x: 0, y: 0, width: FeedbackPanelLayout.contentWidth, height: 420)
+    let host = NSHostingView(rootView: FeedbackSendView(store: store, extraChromeHeight: extra)
+        .frame(width: size.width, height: size.height))
+    host.frame = size
+    let window = NSWindow(contentRect: size, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.contentView = host
+    host.layoutSubtreeIfNeeded()
+    fsSpin()
+    let first = try #require(fsEditors(in: host).first, "본문 칸이 안 섰다")
+    try #require(window.makeFirstResponder(first))
+
+    store.feedbackShots = [try fsDraft()]
+    fsSpin()
+    #expect(fsEditors(in: host).first === first, "캡처를 붙이는 순간 본문 칸이 새 NSTextView 로 바뀌었다 — 조합 중인 음절을 잃는다")
+    #expect(window.firstResponder === first, "캡처를 붙이는 순간 치던 칸이 포커스를 잃었다")
+
+    store.feedbackShots = []
+    fsSpin()
+    #expect(fsEditors(in: host).first === first, "캡처를 빼는 순간 본문 칸이 새로 만들어졌다")
+    #expect(window.firstResponder === first, "캡처를 빼는 순간 포커스를 잃었다")
+    withExtendedLifetime(window) {}
+}
+
+@MainActor
+@Test
+func fbShotTheSendTabFollowsItsContentUpToTheBudget() throws {
+    // 갈래를 하나로 묶어도 높이 규칙은 그대로다: 짧으면 자연 높이(빈 자리 없음), 길면 예산에서 스크롤(팝오버 700pt 를 지킨다).
+    // 렌더 시험은 스냅샷 갈래(잘라 그리기)라 앱의 스크롤 상자를 못 본다 — 그 높이를 여기서 잰다.
+    for (label, extra, rows) in [("short", CGFloat(0), 0), ("long", CGFloat(0), 8), ("long-tallest-chrome", CGFloat(241), 8)] {
+        let store = fsStore(host: "fs-send-height-\(label)")
+        store.feedbackLoaded = true
+        store.feedbackList = (0..<rows).map { fsReport(id: String(format: "99999999-0000-0000-0000-%012d", $0)) }
+        let cap = FeedbackPanelLayout.budget(
+            base: FeedbackPanelLayout.sendBodyHeight, floor: FeedbackPanelLayout.minSendBodyHeight, extraChromeHeight: extra
+        )
+        let host = NSHostingView(rootView: FeedbackSendView(store: store, extraChromeHeight: extra)
+            .frame(width: FeedbackPanelLayout.contentWidth))
+        host.layoutSubtreeIfNeeded()
+        let height = host.fittingSize.height
+        #expect(height <= cap + 1, "\(label): 본문이 예산 \(cap)pt 를 넘었다: \(height)pt")
+        if rows == 0 {
+            #expect(height < cap - 40, "\(label): 짧은 본문인데 상한까지 늘어 빈 자리가 생겼다: \(height)pt · 상한 \(cap)pt")
+        } else {
+            #expect(abs(height - cap) <= 1, "\(label): 긴 본문이 예산을 다 쓰지 않는다: \(height)pt · 상한 \(cap)pt")
+        }
+    }
 }
 
 /// 주석을 걷어낸 소스(하우스 규칙 — 설명을 지워야 초록이 되는 계약을 만들지 않는다). 문자열 안의 `//` 는 남긴다.
@@ -905,10 +1115,11 @@ private func fsCode(_ name: String) throws -> String {
 func fbShotSourceContractsGateTheRowAndKeepViewsOffTheNetwork() throws {
     let panel = try fsCode("CheckFeedbackView.swift")
     // 게이트 짝의 뷰 반쪽: 붙이기 줄은 입구가 **보일 때만** 만든다.
-    let gate = try #require(panel.range(of: "if store.feedbackShotsShown {"), "붙이기 줄 앞의 입구 검사가 없다")
+    let gate = try #require(panel.range(of: "if store.feedbackShotAttachShown {"), "붙이기 줄 앞의 입구 검사가 없다")
     let row = try #require(panel.range(of: "FeedbackShotAttachRow(store: store, acceptsDrops: !rendersPlainTextEditor)"),
                            "붙이기 줄을 안 부른다(또는 앱에서 놓기 판을 끈다)")
     #expect(gate.upperBound <= row.lowerBound)
+    #expect(panel.contains("shown: store.feedbackShotAttachShown"), "높이 추정이 붙이기 줄과 다른 값을 본다 — 숨은 줄의 몫을 센다")
     #expect(panel.components(separatedBy: "FeedbackShotAttachRow(").count - 1 == 1, "붙이기 줄이 두 자리에 있다")
     // 기존 계약은 그대로다(전송 문 하나 · 답장 판 둘).
     #expect(panel.components(separatedBy: "store.sendFeedback()").count - 1 == 1)

@@ -365,6 +365,8 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             feedbackDraft = ""
             if shots.isEmpty {
+                // 붙이기 줄이 숨어 안 실린 캡처도 이 제보의 것이었다 — 글과 함께 내린다(다음 제보로 넘기지 않는다).
+                discardUnsentFeedbackShots()
                 feedbackNotice = FeedbackText.sendSuccess
             } else {
                 // 글은 갔다 — 캡처는 이 잠금 안에서 하나씩 올리고 붙인다. 실패해도 글을 다시 보내지 않는다

@@ -12,7 +12,7 @@ import CheckCore
 //    자리(행 펼침 · 칩 · 썸네일)에서 스토어가 한다 — 렌더 시험은 네트워크가 막혀 있고, 뷰가 받으면 그림이 비어 보인다.
 // ② **높이 추정은 올림이다**(`FeedbackShotLayout`). 이 값이 `FeedbackPanelLayout` 의 스크롤 판정에 들어간다 — 낮게 잡으면
 //    스냅샷 갈래에서 아래가 잘리고, 높게 잡으면 스크롤이 조금 일찍 붙을 뿐이다.
-// ③ 붙이기 줄은 **입구가 보일 때만** 부른다(부르는 자리 `CheckFeedbackView.swift` 가 `store.feedbackShotsShown` 을 본다).
+// ③ 붙이기 줄은 **입구가 보일 때만** 부른다(부르는 자리 `CheckFeedbackView.swift` 가 `store.feedbackShotAttachShown` 을 본다).
 // ④ 화면을 스스로 찍는 버튼은 없다 — 고르기 · 붙여넣기 · 끌어다 놓기뿐이다.
 
 /// 캡처 조각의 치수와 높이 추정(pt).
@@ -50,6 +50,8 @@ enum FeedbackShotLayout {
 /// 렌더 시험에서는 부르지 않는다(창을 띄운다).
 @MainActor
 enum FeedbackShotPicker {
+    /// 고른 파일을 **전부** 돌려준다 — 남은 자리보다 많으면 스토어가 앞에서부터 자리만큼 붙이고 "N장까지" 를 말한다
+    /// (여기서 조용히 자르면 사람은 다 붙은 줄 안다).
     static func chooseImageFiles(limit: Int) -> [URL] {
         guard limit > 0 else { return [] }
         let panel = NSOpenPanel()
@@ -58,9 +60,9 @@ enum FeedbackShotPicker {
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
         panel.prompt = "붙이기"
-        panel.message = "제보에 붙일 화면 캡처를 골라 주세요(\(FeedbackShotText.limitHint))"
+        panel.message = FeedbackShotText.pickerMessage(remaining: limit)
         guard panel.runModal() == .OK else { return [] }
-        return Array(panel.urls.prefix(limit))
+        return panel.urls
     }
 }
 

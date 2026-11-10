@@ -236,6 +236,11 @@ package enum FeedbackShotText {
     package static let noticeTerm = "화면 캡처"
     package static let rowTitle = "화면 캡처"
     package static var limitHint: String { "최대 \(FeedbackShotWire.maxPerReport)장" }
+    /// 파일 고르기 창의 안내 — **남은 자리**를 말한다(이미 붙인 것이 있으면 상한보다 적다). 넘게 고르면 앞에서부터 그만큼만 붙고
+    /// `full` 이 선다.
+    package static func pickerMessage(remaining: Int) -> String {
+        "제보에 붙일 화면 캡처를 골라 주세요(\(max(0, remaining))장 더 붙일 수 있어요)"
+    }
     package static let pickAction = "이미지 고르기"
     package static let pasteAction = "붙여넣기"
     package static let removeAction = "빼기"
@@ -256,8 +261,11 @@ package enum FeedbackShotText {
     package static let sentShotsFailed = "제보는 보냈어요 · 캡처는 못 붙였어요"
     /// 일부만 못 붙였다.
     package static func sentSomeShotsFailed(_ failed: Int) -> String { "제보는 보냈어요 · 캡처 \(failed)장은 못 붙였어요" }
-    /// 서버 문이 닫혔다(`unsupported_client`).
+    /// 서버 문이 닫혔다(`unsupported_client` · `door_open` 거짓) — 내 앱 탓이 아니다.
     package static let sentShotsDoorClosed = "제보는 보냈어요 · 캡처 붙이기는 아직 준비 중이에요"
+    /// 서버 문은 열렸는데 이 앱 판을 받지 않았다(`unsupported_client` · `door_open` 참) — 서버가 아는 이 기기의 판이 아직 옛것이거나
+    /// (판 알리기 전) 문턱이 이 판보다 높다. 둘 다 최신 앱을 다시 켜면 풀린다.
+    package static let sentShotsAppOutdated = "제보는 보냈어요 · 캡처는 앱을 최신으로 다시 켜면 붙어요"
     /// 상한을 넘었다(`too_many`).
     package static func sentShotsTooMany(_ max: Int) -> String { "제보는 보냈어요 · 캡처는 \(max)장까지만 붙어요" }
 

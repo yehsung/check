@@ -69,10 +69,14 @@ enum FeedbackShotStep: Equatable {
     case attached
     /// 일시 실패(5xx · 네트워크 · 모르는 status) — 다음 캡처는 계속한다.
     case failed
-    /// 저장소가 정책으로 거절했고(한 시간 지남 · 폴더 가득 등) 서버도 문 닫힘/상한을 말하지 않았다 — 다음 것도 같은 벽이라 멈춘다.
+    /// 저장소가 정책으로 거절했고(한 시간 지남 · 폴더 가득 등) 서버도 문 닫힘을 말하지 않았다 — 다음 것도 같은 벽이라 멈춘다.
+    /// (폴더 가득이어도 여기로 온다 — 거절 뒤 물음은 상한을 못 듣는다. `uploadAndAttachFeedbackShot` 주석.)
     case refused
-    /// 서버 문이 닫혔다(`unsupported_client`). 멈춘다.
+    /// 서버 문이 닫혔다(`unsupported_client` · `door_open` 거짓). 멈추고, 패널을 다시 열 때까지 붙이기 줄을 내린다.
     case doorClosed
+    /// 문은 열렸는데 이 앱 판을 받지 않았다(`unsupported_client` · `door_open` 참). 멈추고 붙이기 줄을 내린다(문 닫힘과 같다) —
+    /// 안내만 다르다(내 앱을 최신으로 다시 켜면 풀린다).
+    case outdated
     /// 제보 하나의 상한을 넘었다. 멈춘다.
     case tooMany(Int)
     /// 서버에 그 함수 · 버킷이 없다(배포 전). 멈추고 입구를 숨긴다.
@@ -81,7 +85,15 @@ enum FeedbackShotStep: Equatable {
     var stops: Bool {
         switch self {
         case .attached, .failed: return false
-        case .refused, .doorClosed, .tooMany, .missing: return true
+        case .refused, .doorClosed, .outdated, .tooMany, .missing: return true
+        }
+    }
+
+    /// 서버가 이 앱의 캡처를 받지 않는다고 답했다(문 닫힘 · 옛 판) — 같은 패널에서 또 붙여 봐야 같은 답이다.
+    var closesTheDoor: Bool {
+        switch self {
+        case .doorClosed, .outdated: return true
+        default: return false
         }
     }
 }
@@ -109,6 +121,8 @@ struct FeedbackShotTally: Equatable {
         switch stop {
         case .doorClosed?, .missing?:
             return FeedbackShotText.sentShotsDoorClosed
+        case .outdated?:
+            return FeedbackShotText.sentShotsAppOutdated
         case .tooMany(let max)?:
             return FeedbackShotText.sentShotsTooMany(max)
         default:
@@ -190,19 +204,23 @@ enum FeedbackShotImage {
         return CGSize(width: width, height: height)
     }
 
-    /// 클립보드에서 이미지를 찾는다. 바이트(PNG → TIFF → JPEG)를 먼저, 없으면 이미지 파일을 본다. 없으면 nil.
+    /// 클립보드에서 이미지를 찾는다. **이미지 파일을 먼저**, 없으면 바이트(PNG → TIFF → JPEG)를 본다. 없으면 nil.
+    ///
+    /// ★ 순서가 뜻이다: Finder 에서 파일을 ⌘C 하면 클립보드에 파일 URL 과 함께 **그 파일의 아이콘 그림**(TIFF)이 실린다.
+    ///   바이트를 먼저 보면 바탕화면의 "스크린샷 ….png" 를 복사해 붙인 사람에게 캡처 대신 아이콘이 붙는다.
+    ///   클립보드로 바로 찍은 것(⌘⌃⇧4) · 브라우저 "이미지 복사"에는 파일 URL 이 없어 바이트 갈래로 간다.
     @MainActor
     static func source(in pasteboard: NSPasteboard) -> Source? {
-        let types: [NSPasteboard.PasteboardType] = [.png, .tiff, NSPasteboard.PasteboardType(UTType.jpeg.identifier)]
-        for type in types {
-            if let data = pasteboard.data(forType: type), !data.isEmpty { return .data(data) }
-        }
         let options: [NSPasteboard.ReadingOptionKey: Any] = [
             .urlReadingFileURLsOnly: true,
             .urlReadingContentsConformToTypes: [UTType.image.identifier],
         ]
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL], let url = urls.first {
             return .file(url)
+        }
+        let types: [NSPasteboard.PasteboardType] = [.png, .tiff, NSPasteboard.PasteboardType(UTType.jpeg.identifier)]
+        for type in types {
+            if let data = pasteboard.data(forType: type), !data.isEmpty { return .data(data) }
         }
         return nil
     }

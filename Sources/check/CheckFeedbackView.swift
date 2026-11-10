@@ -285,7 +285,7 @@ struct FeedbackSendView: View {
                 rows: store.myFeedback,
                 hasNotice: store.feedbackNotice != nil,
                 shotRowHeight: FeedbackShotLayout.sendRowHeight(
-                    shown: store.feedbackShotsShown,
+                    shown: store.feedbackShotAttachShown,
                     count: store.feedbackShots.count
                 ),
                 shotCount: { store.feedbackShots(forReport: $0.id).count }
@@ -295,7 +295,11 @@ struct FeedbackSendView: View {
                 floor: FeedbackPanelLayout.minSendBodyHeight,
                 extraChromeHeight: extraChromeHeight
             ),
-            clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll
+            clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll,
+            // **갈래 하나**(11-11 — 신고 시트와 같은 수리): 쓰는 도중 캡처를 붙이거나 빼면(붙이기 줄 +23pt) · 안내 줄이 서고 지면
+            // 추정 높이가 상한을 넘나든다. 두 갈래(그대로 ↔ 스크롤)면 그 순간 본문 칸이 새 NSTextView 가 되어 포커스와 조합 중인
+            // 음절을 잃는다(`keepsOneBranch` 주석). 스냅샷 갈래는 예전 그대로다.
+            keepsOneBranch: true
         ) {
             VStack(alignment: .leading, spacing: FeedbackPanelLayout.sectionSpacing) {
                 kindPicker
@@ -304,8 +308,9 @@ struct FeedbackSendView: View {
                     height: FeedbackPanelLayout.editorHeight,
                     rendersPlainText: rendersPlainTextEditor
                 )
-                // 화면 캡처 붙이기(11-11). **입구가 보일 때만** 이 줄이 있다 — 서버에 기능이 없으면(404) 자리도 안 먹는다.
-                if store.feedbackShotsShown {
+                // 화면 캡처 붙이기(11-11). **입구가 보일 때만** 이 줄이 있다 — 서버에 기능이 없으면(404) · 이 패널에서 문 닫힘을
+                // 들었으면 자리도 안 먹는다.
+                if store.feedbackShotAttachShown {
                     FeedbackShotAttachRow(store: store, acceptsDrops: !rendersPlainTextEditor)
                 }
                 actionRow
@@ -807,7 +812,8 @@ struct FeedbackListBox<Content: View>: View {
     let contentHeight: CGFloat
     let capHeight: CGFloat
     let clipsInsteadOfScrolling: Bool
-    /// **갈래를 하나로 묶는다**(v0.3.34 수리 — 팝오버 신고 시트만 켠다. 기본 false 라 제보·상점·캐릭터·신고함은 예전 그대로다).
+    /// **갈래를 하나로 묶는다**(v0.3.34 수리 — 팝오버 신고 시트가 켠다. 11-11 부터 제보 보내기 탭도 켠다(캡처 붙이기).
+    /// 기본 false 라 받은 제보·상점·캐릭터·신고함은 예전 그대로다).
     ///
     /// **왜**(적대적 검토 2026-09-20): 아래 두 갈래(그대로 · 스크롤)는 SwiftUI 에게 **다른 뷰**라, 갈래가 바뀌는 순간 그 아래를 통째로
     /// 다시 만든다. 안에 입력칸이 있으면 그 칸은 **새 NSTextView** 가 되고 치던 포커스를 잃는다 — 새 칸은 한글 조합을 못 받는다

@@ -1049,6 +1049,9 @@ final class WorkTimerStore {
     var feedbackShotPreparing = false
     /// 서버에 캡처 함수·버킷이 없다(404 · PGRST202). 붙이기 줄과 칩을 숨긴다. **영구히 기억하지 않는다** — 패널을 열 때 다시 묻는다.
     var feedbackShotServerMissing = false
+    /// 이 패널에서 붙이기가 문 닫힘(`unsupported_client`)을 들었다. 붙이기 줄만 숨긴다(칩 · 받은 캡처는 그대로 — 목록은 문과 무관하다).
+    /// **영구히 기억하지 않는다** — 패널을 열 때 다시 묻는다(`rearmFeedbackShots`).
+    var feedbackShotDoorClosed = false
     /// 목록 뒤 한 번에 받은 캡처 행(제보 id 소문자 → 캡처들). 그림은 아니다 — 그림은 아래 칸에 필요할 때만 받는다.
     var feedbackShotsByReport: [String: [FeedbackShot]] = [:]
     /// 받아 둔 캡처 그림(경로 → 그림, 메모리만). **필요할 때만** 받는다(행을 펼치거나 칩을 눌렀을 때).

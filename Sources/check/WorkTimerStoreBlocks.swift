@@ -250,6 +250,8 @@ extension WorkTimerStore {
                 blockingPeerID = nil
                 // 차단 목록은 다음에 설 때 서버에서 다시 받는다(여기서 지어내 넣지 않는다 — 별명·시각을 모른다).
                 blocksLoaded = false
+                // 지난 확성기 페이지에서 건 차단이면 그 목록을 다시 읽는다(2026-11-11 — 서버가 차단한 사이를 뺀 첫 쪽으로 다시 찬다).
+                refreshMegaphoneFeedAfterBlock(from: surface)
             } catch {
                 guard generation == sessionGeneration else { return }
                 blockingPeerID = nil
@@ -328,6 +330,7 @@ extension WorkTimerStore {
                     // 서버가 이미 차단했다 — 화면도 같은 순간에 걷어낸다(되돌릴 실패가 없다).
                     hideBlockedPeer(target.peerID, from: sheet.surface)
                     blocksLoaded = false
+                    refreshMegaphoneFeedAfterBlock(from: sheet.surface)
                 }
                 blockReportNotice = BlockReportNotice(text: BlockReportText.reportSentNotice, isError: false, surface: sheet.surface)
                 return true

@@ -373,6 +373,8 @@ final class WorkTimerStore {
             refreshMessageActivityOnMenuOpen()
             // 확성기 배너의 예비 경로(2026-10-30) — 소켓이 끊겨 'megaphone' 신호를 놓쳐도 여는 순간 5분 스로틀로 한 번 맞춘다.
             refreshMegaphoneBannerIfStale()
+            // 지난 확성기 페이지(2026-11-11)를 연 채 닫았고 그동안 신호를 놓쳤으면 한 번 읽는다(놓친 신호가 없으면 0건).
+            refreshMegaphoneFeedIfSignalMissed()
             // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
             // 도착하면 그 응답 자리에서 한 번 더 판정한다).
             evaluateMessageReadMarking()

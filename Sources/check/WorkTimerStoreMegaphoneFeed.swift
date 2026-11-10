@@ -10,8 +10,9 @@ import Foundation
 //   · 자리: 상점 패널 자리(`CheckMenuView` 의 상점 갈래가 이 페이지를 대신 그린다). 하위 패널 깃발이 아니다 — 상점 안의 보기라
 //     토큰 행 게이트(`isSubPanelOpen`)는 상점 깃발이 이미 센다. [뒤로]는 작성기가 열린 상점으로 돌아간다.
 //
-// 부르는 자리(코어 머리말 ③): 페이지 열기 · [이전 확성기 더 보기] · [다시 시도] · 페이지가 떠 있는 동안의 실시간 신호 · 운영자 [내리기].
-// 팝오버 열기 · 폴링 틱 · 작성기 열기에서는 부르지 않는다(작성기 열기는 닫힌 문을 **요청 없이** 다시 모름으로 돌릴 뿐이다).
+// 부르는 자리(코어 머리말 ③): 페이지 열기 · [이전 확성기 더 보기] · [다시 시도] · 페이지가 떠 있는 동안의 실시간 신호 · 운영자 [내리기] ·
+// 이 페이지에서 건 차단이 서버에 닿은 뒤. 팝오버 열기 · 폴링 틱 · 작성기 열기에서는 부르지 않는다(작성기 열기는 닫힌 문을 **요청 없이**
+// 다시 모름으로 돌릴 뿐이다). 팝오버 열기는 **닫혀 있는 동안 신호를 놓친 페이지만** 한 번 읽는다(놓친 신호 몫 — 새 호출이 아니다).
 
 @MainActor
 extension WorkTimerStore {
@@ -69,9 +70,28 @@ extension WorkTimerStore {
     }
 
     /// 실시간 'megaphone' 신호. 페이지가 떠 있을 때만 첫 쪽을 다시 읽는다(배너 새로고침과 따로 — 배너 스토어에는 넣지 않는다).
+    /// 팝오버가 닫혀 있으면 묻지 않는다 — 패널은 팝오버가 닫혀도 제자리라(`setMenuPresented(false)` 는 상점·작성기·이 페이지를
+    /// 닫지 않는다) 안 그러면 숨은 페이지가 남이 보내는 확성기마다 한 건씩 묻는다. 표시만 남기고 다시 열 때 한 번 읽는다.
     func refreshMegaphoneFeedIfShowing() {
         guard isMegaphoneFeedShowing else { return }
+        guard isMenuPresented else {
+            megaphoneFeed.noteMissedSignal()
+            return
+        }
         megaphoneFeed.refresh()
+    }
+
+    /// 팝오버를 다시 여는 순간 — 닫혀 있는 동안 신호를 놓친 페이지만 한 번 읽는다(놓친 신호가 없으면 0건 · 새 자동 호출이 아니다).
+    func refreshMegaphoneFeedIfSignalMissed() {
+        guard isMenuPresented, isMegaphoneFeedShowing else { return }
+        megaphoneFeed.refreshIfMissedSignal()
+    }
+
+    /// 이 페이지에서 건 차단이 서버에 닿은 뒤(확인 시트의 차단 · 신고하면서 차단) — 첫 쪽을 다시 읽는다. 서버는 차단한 사이를
+    /// 빼므로, 받아 둔 줄이 전부 그 사람 글이었어도 다른 사람의 글로 다시 찬다(빈 목록이 "없어요"라고 거짓말하지 않게).
+    func refreshMegaphoneFeedAfterBlock(from surface: BlockReportSurface) {
+        guard surface == .megaphoneFeed else { return }
+        refreshMegaphoneFeedIfShowing()
     }
 
     /// 운영자 [내리기]. 운영자 깃발이 없으면 0건(서버도 `forbidden` 으로 막는다 — 두 겹).

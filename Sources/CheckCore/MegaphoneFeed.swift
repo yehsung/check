@@ -20,9 +20,13 @@ import Observation
 //    화면은 닫힘(false)일 때만 문('지난 확성기 ›')을 숨긴다. 닫힘은 **영구히 기억하지 않는다** — 다음 자연스러운 진입에서 `rearm()` 으로 다시 모름이 된다.
 // ③ **자동 호출이 없다.** 팝오버 열기 · 폴링 틱 · 앱 시작 · 작성기 열기에서는 부르지 않는다. 부르는 곳은 사람이 누른 자리뿐이다:
 //    페이지 열기 · [이전 확성기 더 보기] · [다시 시도] · 페이지가 떠 있는 동안의 실시간 'megaphone' 신호 · 운영자 [내리기].
+//    실시간 신호는 화면이 실제로 보일 때만 읽는다 — 팝오버가 닫혀 있으면 표시만 남기고(`noteMissedSignal`) 다시 열 때 **한 번** 읽는다.
 // ④ **세대 가드.** 로그아웃·계정 전환(`reset`) 뒤 도착한 응답은 다음 계정의 목록을 건드리지 않는다. 더 보기 응답은 그 사이 목록 꼬리가
 //    바뀌었으면(새로고침이 목록을 갈았다) 버린다 — 엉뚱한 자리에 이어 붙이지 않는다.
 // ⑤ 본문은 사람이 쓴 문장이다 — 로그로 흘리지 않는다.
+// ⑥ **꼬리 지키기는 떠 있는 동안만.** 페이지가 떠 있는 동안의 새로고침(실시간 신호)은 더 보기로 받은 꼬리를 살린다(읽던 자리).
+//    페이지를 **새로 열면** 목록을 첫 쪽으로 갈아 끼운다 — 그 사이 운영자가 내린 글 · 차단한 사이 · 숨김 계정이 꼬리에 남지 않게
+//    (서버가 빼는 줄을 클라가 앱이 도는 내내 들고 있지 않는다).
 
 // MARK: 숫자 · 문구(맥·폰 한 벌)
 
@@ -368,9 +372,15 @@ package final class MegaphoneFeedStore {
     /// 결과 한 줄(운영자 [내리기]).
     package private(set) var notice: MegaphoneFeedNotice?
 
+    /// 페이지가 열린 채 화면이 안 보이는 동안(맥: 팝오버 닫힘) 실시간 신호가 왔다 — 다시 보일 때 한 번 읽는다(머리말 ③).
+    @ObservationIgnored package private(set) var missedSignal = false
+
     @ObservationIgnored private var resetGeneration = 0
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var rerunRequested = false
+    /// 다음에 도착하는 첫 쪽은 목록을 **갈아 끼운다**(꼬리를 살리지 않는다 — 머리말 ⑥). 페이지 열기가 켜고, 첫 쪽 반영이 끈다
+    /// (실패하면 남아 있다 — [다시 시도]·다음 신호의 첫 쪽이 갈아 끼운다).
+    @ObservationIgnored private var replacesLoadedTail = false
 
     package init(host: (any GomokuStoreHost)? = nil) {
         self.host = host
@@ -383,11 +393,14 @@ package final class MegaphoneFeedStore {
 
     // MARK: 화면 사건
 
-    /// 페이지를 연다 — 언제나 첫 쪽을 다시 읽는다(그 사이 새 확성기가 왔을 수 있다). 받아 둔 줄은 읽는 동안 그대로 보인다.
+    /// 페이지를 연다 — 언제나 첫 쪽을 다시 읽는다(그 사이 새 확성기가 왔을 수 있다). 받아 둔 줄은 읽는 동안 그대로 보이고,
+    /// 첫 쪽이 도착하면 목록을 **그 쪽으로 갈아 끼운다**(머리말 ⑥ — 더 보기로 받았던 꼬리는 서버에 다시 물어 받는다).
     @discardableResult
     package func open() -> Task<Void, Never>? {
         isOpen = true
         if notice != nil { notice = nil }
+        missedSignal = false
+        replacesLoadedTail = true
         return refresh()
     }
 
@@ -395,6 +408,20 @@ package final class MegaphoneFeedStore {
     package func close() {
         if isOpen { isOpen = false }
         if notice != nil { notice = nil }
+        missedSignal = false
+    }
+
+    /// 페이지가 열려 있지만 화면이 안 보일 때 실시간 신호가 왔다 — 요청 없이 표시만 남긴다(머리말 ③).
+    package func noteMissedSignal() {
+        if isOpen { missedSignal = true }
+    }
+
+    /// 화면이 다시 보이는 순간(맥: 팝오버 열기) — 놓친 신호가 있었을 때만 첫 쪽을 **한 번** 읽는다. 없으면 0건.
+    @discardableResult
+    package func refreshIfMissedSignal() -> Task<Void, Never>? {
+        guard missedSignal, isOpen else { return nil }
+        missedSignal = false
+        return refresh()
     }
 
     /// 다음 자연스러운 진입(맥: 작성기 열기)에서 닫힘을 **모름으로** 되돌린다(머리말 ②). 요청은 없다 — 문이 다시 서고,
@@ -520,6 +547,8 @@ package final class MegaphoneFeedStore {
         hasMore = false
         hidingID = nil
         notice = nil
+        missedSignal = false
+        replacesLoadedTail = false
     }
 
     // MARK: 내부
@@ -534,7 +563,10 @@ package final class MegaphoneFeedStore {
                 try await service.fetchMegaphoneFeed(accessToken: session.accessToken, beforeUs: nil, limit: limit, me: me)
             }
             guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return }
-            applyFirstPage(page)
+            // 페이지 열기 뒤의 첫 쪽이면 갈아 끼운다(머리말 ⑥). 표시는 **반영하는 순간** 쓴다 — 실패하면 다음 첫 쪽이 갈아 끼운다.
+            let keepsLoadedTail = !replacesLoadedTail
+            replacesLoadedTail = false
+            applyFirstPage(page, keepsLoadedTail: keepsLoadedTail)
         } catch {
             guard host.sessionGeneration == sessionGeneration, generation == resetGeneration else { return }
             if case .cancelled = host.classifyAuthError(error) { return }
@@ -546,15 +578,16 @@ package final class MegaphoneFeedStore {
         }
     }
 
-    /// 첫 쪽 반영(네트워크 없음). 새 머리의 가장 오래된 줄이 지금 목록에 있으면 그 아래 꼬리(이미 더 보기로 받은 줄)를 살린다 —
-    /// 실시간 새로고침이 사용자가 내려 읽던 자리를 날리지 않게. 없으면(그 사이 한 쪽보다 많이 왔다) 새 머리로 갈아 끼운다.
-    package func applyFirstPage(_ page: MegaphoneFeedPage) {
+    /// 첫 쪽 반영(네트워크 없음). `keepsLoadedTail`(페이지가 떠 있는 동안의 새로고침)이면, 새 머리의 가장 오래된 줄이 지금 목록에
+    /// 있을 때 그 아래 꼬리(이미 더 보기로 받은 줄)를 살린다 — 실시간 새로고침이 사용자가 내려 읽던 자리를 날리지 않게.
+    /// 없으면(그 사이 한 쪽보다 많이 왔다) · 페이지를 새로 연 첫 쪽이면(머리말 ⑥) 새 머리로 갈아 끼운다.
+    package func applyFirstPage(_ page: MegaphoneFeedPage, keepsLoadedTail: Bool = true) {
         if isAvailable != true { isAvailable = true }
         let fresh = page.items
         let pageHasMore = page.hasMore && !fresh.isEmpty
         loadFailed = false
         hasLoaded = true
-        if let oldest = fresh.last, let index = items.firstIndex(where: { $0.id == oldest.id }) {
+        if keepsLoadedTail, let oldest = fresh.last, let index = items.firstIndex(where: { $0.id == oldest.id }) {
             let freshIDs = Set(fresh.map(\.id))
             let tail = items[items.index(after: index)...].filter { !freshIDs.contains($0.id) }
             items = fresh + tail

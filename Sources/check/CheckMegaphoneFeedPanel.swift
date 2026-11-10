@@ -92,6 +92,9 @@ struct CheckMegaphoneFeedPanel: View {
     let onBack: () -> Void
 
     @State private var expandedIDs: Set<String> = []
+    /// 본문이 실제로 받은 폭(pt). 목록 상자의 스크롤 막대(마우스를 꽂은 맥의 늘 보이는 막대 ≈15pt)가 폭을 먹으면 계산값
+    /// `Layout.bodyWidth` 보다 좁다 — 넘침 판정이 이 값으로 재야 잘린 글에 [더 보기]가 선다. 재기 전(스냅샷 포함)은 계산값.
+    @State private var measuredBodyWidth: CGFloat?
 
     private typealias Layout = MegaphoneFeedLayout
 
@@ -215,7 +218,7 @@ struct CheckMegaphoneFeedPanel: View {
 
     private func row(_ item: MegaphoneFeedItem) -> some View {
         let expanded = expandedIDs.contains(item.id) || previewExpandedIDs.contains(item.id)
-        let canExpand = Layout.needsMore(item.body)
+        let canExpand = Layout.needsMore(item.body, width: measuredBodyWidth ?? Layout.bodyWidth)
         let actions = MegaphoneFeedSafetyRule.actions(for: item, me: store.session?.userID, isAdmin: store.canHideMegaphonePosts)
         let hiding = store.megaphoneFeed.hidingID == item.id
         return HStack(alignment: .top, spacing: Layout.avatarGap) {
@@ -255,6 +258,10 @@ struct CheckMegaphoneFeedPanel: View {
                     .lineLimit(expanded ? nil : MegaphoneFeedRules.collapsedLineLimit)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    // 글이 실제로 받은 폭을 잰다(줄마다 같은 값 — 바뀐 때만 적는다). [더 보기]는 글 아래라 이 폭을 바꾸지 않는다(고리 없음).
+                    .onGeometryChange(for: CGFloat.self) { proxy in proxy.size.width } action: { width in
+                        if width > 0, measuredBodyWidth != width { measuredBodyWidth = width }
+                    }
                 if canExpand {
                     Button {
                         if expandedIDs.contains(item.id) { expandedIDs.remove(item.id) } else { expandedIDs.insert(item.id) }

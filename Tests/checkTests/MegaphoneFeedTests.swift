@@ -332,7 +332,8 @@ struct MegaphoneFeedCoreTests {
     }
 
     // 없으면: 실시간 새로고침이 더 보기로 받아 둔 꼬리를 날려 읽던 자리가 사라지는 결함이 초록.
-    @Test("새로고침은 새 머리를 얹고 더 보기로 받은 꼬리를 지킨다 · 겹치지 않으면 갈아 끼운다")
+    // 페이지가 **떠 있는 동안의** 새로고침(`refresh` — 실시간 신호의 길)만 잰다. 페이지를 새로 여는 길(`open`)은 아래 시험이 잰다.
+    @Test("떠 있는 동안의 새로고침은 새 머리를 얹고 더 보기로 받은 꼬리를 지킨다 · 겹치지 않으면 갈아 끼운다")
     func refreshKeepsTheLoadedTail() async {
         let rig = mfMake("tail", pageSize: 2) { rpc, _, index in
             guard rpc == "megaphone_feed" else { return nil }
@@ -351,6 +352,67 @@ struct MegaphoneFeedCoreTests {
         #expect(rig.store.hasMore, "꼬리를 지켰으면 꼬리의 '더 있음'도 지켜야 한다")
         await rig.store.refresh()?.value
         #expect(mfIDs(rig.store) == ["m9", "m8"])
+    }
+
+    // 없으면: 더 보기로 받은 꼬리가 앱이 도는 내내 다시 안 물어져, 운영자가 내린 글 · 내가 폰에서(또는 상대가) 차단한 사람의 글이
+    // 페이지를 다시 열어도 계속 보이는 결함이 초록(검토 #1).
+    @Test("페이지를 다시 열면 첫 쪽으로 갈아 끼운다 — 서버가 뺀 꼬리 줄(운영자가 내림 · 차단)이 남지 않는다")
+    func reopenReplacesTheLoadedTail() async {
+        let rig = mfMake("reopen", pageSize: 2) { rpc, _, index in
+            guard rpc == "megaphone_feed" else { return nil }
+            switch index {
+            case 0: return mfArray([mfRow("m4", ago: 40), mfRow("m3", ago: 50)])
+            case 1: return mfArray([mfRow("m2", ago: 60), mfRow("m1", ago: 70)])
+            // 다시 연 첫 쪽은 같다 — 그 사이 꼬리의 m2 를 운영자가 내렸다(서버가 뺀다).
+            case 2: return mfArray([mfRow("m4", ago: 40), mfRow("m3", ago: 50)])
+            case 3: return mfArray([mfRow("m1", ago: 70)])
+            // 실패한 열기 뒤의 새로고침도 갈아 끼운다(표시는 반영하는 순간 쓴다).
+            case 4: return GomokuStubProtocol.Reply(status: 503, body: #"{"message":"busy"}"#)
+            default: return mfArray([mfRow("m4", ago: 40), mfRow("m3", ago: 50)])
+            }
+        }
+        await rig.store.open()?.value
+        await rig.store.loadMore()?.value
+        #expect(mfIDs(rig.store) == ["m4", "m3", "m2", "m1"])
+        rig.store.close()
+        await rig.store.open()?.value
+        #expect(mfIDs(rig.store) == ["m4", "m3"], "다시 연 페이지가 옛 꼬리를 살렸다: \(mfIDs(rig.store))")
+        #expect(rig.store.hasMore, "꽉 찬 첫 쪽이면 더 있다")
+        await rig.store.loadMore()?.value
+        #expect(mfIDs(rig.store) == ["m4", "m3", "m1"], "서버가 뺀 줄이 남았다: \(mfIDs(rig.store))")
+        #expect((rig.calls[3].json["p_before_us"] as? NSNumber)?.int64Value == mfMicros(50), "다시 받은 꼬리의 커서가 첫 쪽 끝이 아니다")
+
+        rig.store.close()
+        await rig.store.open()?.value
+        #expect(rig.store.loadFailed && mfIDs(rig.store) == ["m4", "m3", "m1"], "실패한 열기가 목록을 지웠다")
+        await rig.store.refresh()?.value
+        #expect(mfIDs(rig.store) == ["m4", "m3"], "실패한 열기 뒤의 첫 쪽이 옛 꼬리를 살렸다: \(mfIDs(rig.store))")
+        #expect(rig.calls.count == 6)
+    }
+
+    // 없으면: 팝오버가 닫혀 숨은 페이지가 남의 확성기마다 묻거나, 다시 열어도 놓친 확성기가 안 보이는 결함이 초록(검토 #2).
+    @Test("놓친 신호: 열린 페이지에서만 표시가 서고 · 다시 보일 때 한 번만 읽고 · 닫기 · reset 은 표시를 지운다")
+    func missedSignalRefreshesOnceOnReturn() async {
+        let rig = mfMake("missed") { rpc, _, _ in rpc == "megaphone_feed" ? mfArray([mfRow("m1")]) : nil }
+        rig.store.noteMissedSignal()
+        #expect(!rig.store.missedSignal, "닫힌 페이지에 표시가 섰다")
+        #expect(rig.store.refreshIfMissedSignal() == nil)
+        await rig.store.open()?.value
+        #expect(rig.calls.count == 1)
+        rig.store.noteMissedSignal()
+        #expect(rig.store.missedSignal)
+        #expect(rig.calls.count == 1, "표시만 남겨야 하는데 물었다")
+        await rig.store.refreshIfMissedSignal()?.value
+        #expect(rig.calls.count == 2 && !rig.store.missedSignal)
+        #expect(rig.store.refreshIfMissedSignal() == nil, "놓친 신호 하나에 두 번 읽었다")
+        rig.store.noteMissedSignal()
+        rig.store.close()
+        #expect(!rig.store.missedSignal, "닫은 페이지의 표시가 남았다")
+        await rig.store.open()?.value
+        rig.store.noteMissedSignal()
+        rig.store.reset()
+        #expect(!rig.store.missedSignal)
+        #expect(rig.calls.count == 3)
     }
 
     @Test("더 보기 응답은 그 사이 꼬리가 바뀌었으면 버린다(엉뚱한 자리에 안 붙인다)")
@@ -551,7 +613,8 @@ struct MegaphoneFeedMacTests {
         try? await Task.sleep(for: .milliseconds(50))
         #expect(inbox() == inbox0 + 1, "기준선: 신호가 배너 목록을 안 받았다")
         #expect(feed() == 0, "페이지가 안 떠 있는데 지난 확성기를 읽었다")
-        // ② 페이지를 연다(작성기 열기 0 + 페이지 열기 1).
+        // ② 팝오버를 연 채 페이지를 연다(작성기 열기 0 + 페이지 열기 1). 팝오버 열기의 부수 호출을 피하려고 깃발만 세운다.
+        store.isMenuPresented = true
         store.isShopPanelVisible = true
         store.toggleMegaphoneComposer()
         store.openMegaphoneFeed()
@@ -560,13 +623,66 @@ struct MegaphoneFeedMacTests {
         transport.emit(.broadcast(event: "megaphone"))
         await messageReadWait { feed() > 1 && !store.megaphoneFeed.isLoading }
         #expect(feed() == 2, "페이지가 떠 있는데 신호가 목록을 다시 안 읽었다")
-        // ③ 닫으면 다시 0건.
+        // ③ 팝오버만 닫는다(패널은 제자리) — 신호는 0건, 다시 열 때 한 번, 놓친 신호가 없으면 다시 열어도 0건(검토 #2).
+        store.setMenuPresented(false)
+        #expect(store.isMegaphoneFeedShowing, "기준선: 팝오버를 닫아도 페이지는 제자리다")
+        let inboxHidden = inbox()
+        transport.emit(.broadcast(event: "megaphone"))
+        transport.emit(.broadcast(event: "megaphone"))
+        await messageReadWait { inbox() > inboxHidden }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(feed() == 2, "팝오버가 닫혀 숨은 페이지가 신호마다 물었다")
+        store.setMenuPresented(true)
+        await messageReadWait { feed() > 2 && !store.megaphoneFeed.isLoading }
+        #expect(feed() == 3, "놓친 신호 둘을 다시 열 때 한 번으로 안 읽었다")
+        store.setMenuPresented(false)
+        store.setMenuPresented(true)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(feed() == 3, "놓친 신호가 없는데 팝오버 열기가 물었다")
+        // ④ 페이지를 닫으면 다시 0건.
         store.closeMegaphoneFeed()
         let inbox1 = inbox()
         transport.emit(.broadcast(event: "megaphone"))
         await messageReadWait { inbox() > inbox1 }
         try? await Task.sleep(for: .milliseconds(50))
-        #expect(feed() == 2, "페이지를 닫았는데 신호가 목록을 읽었다")
+        #expect(feed() == 3, "페이지를 닫았는데 신호가 목록을 읽었다")
+    }
+
+    // 없으면: 받아 둔 줄이 전부 방금 차단한 사람 글일 때 페이지가 "울린 확성기가 없어요"라고 말하고 더 볼 길도 없는 결함이 초록(검토 #3).
+    @Test("이 페이지에서 건 차단이 서버에 닿으면 첫 쪽을 다시 읽어 다른 사람의 글로 찬다 · 다른 자리의 차단은 안 읽는다")
+    func blockFromTheFeedRefillsThePage() async throws {
+        let (store, host) = mfMacStore("block-refill") { rpc, _, index in
+            switch rpc {
+            case "megaphone_info": return GomokuStubProtocol.Reply(body: mfInfoJSON)
+            case "megaphone_feed":
+                // 첫 쪽은 한 사람이 다 채웠다 · 차단 뒤의 첫 쪽은 서버가 그 사이를 뺐다.
+                return index == 0
+                    ? mfArray([mfRow("m4", ago: 10, sender: mfOther), mfRow("m3", ago: 20, sender: mfOther)])
+                    : mfArray([mfRow("m2", ago: 30, sender: mfThird), mfRow("m1", ago: 40, sender: mfThird)])
+            default: return nil
+            }
+        }
+        store.megaphoneFeed.pageSize = 2
+        store.isMenuPresented = true
+        await mfOpenComposer(store)
+        await mfOpenPage(store)
+        #expect(store.visibleMegaphoneFeed.map(\.megaphoneID) == ["m4", "m3"] && store.megaphoneFeed.hasMore)
+        let target = try #require(MegaphoneFeedSafetyRule.blockTarget(for: store.megaphoneFeed.items[0], me: mfMe))
+        store.openBlockConfirm(target, surface: .megaphoneFeed)
+        store.confirmBlockFromSheet()
+        #expect(store.visibleMegaphoneFeed.isEmpty, "기준선: 차단한 사람의 글이 곧바로 빠진다")
+        _ = await mfWait { store.blockingPeerID == nil && mfCount(host) == 2 && !store.megaphoneFeed.isLoading }
+        #expect(GomokuStubProtocol.count(host: host, rpc: "block_user") == 1)
+        #expect(mfCount(host) == 2, "차단이 닿았는데 지난 확성기를 다시 안 읽었다")
+        #expect(store.visibleMegaphoneFeed.map(\.megaphoneID) == ["m2", "m1"], "빈 목록이 남았다: \(store.visibleMegaphoneFeed.map(\.megaphoneID))")
+
+        // 다른 자리(대화)에서 건 차단은 이 목록을 안 읽는다.
+        store.openBlockConfirm(BlockReportTarget(peerID: mfThird, peerName: "도윤"), surface: .message)
+        store.confirmBlockFromSheet()
+        _ = await mfWait { store.blockingPeerID == nil }
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(GomokuStubProtocol.count(host: host, rpc: "block_user") == 2)
+        #expect(mfCount(host) == 2, "다른 자리의 차단이 지난 확성기를 읽었다")
     }
 
     // 없으면: 차단한 사람의 글이 서버 응답을 기다리는 동안 남거나, 메시지 id 를 지어내 신고가 엉뚱한 줄을 가리키는 결함이 초록.
@@ -697,8 +813,10 @@ struct MegaphoneFeedSourceTests {
     @Test("문 짝: 화면은 닫힘(false)에서만 문을 숨기고, 작성기 열기는 요청 없이 다시 세운다 · 디스패치와 실시간은 같은 술어")
     func gatePairsAndSingleShowingPredicate() throws {
         let composer = try Self.code("CheckMegaphoneComposer.swift")
-        #expect(composer.contains("if store.showsMegaphoneFeedEntry { MegaphoneFeedEntryLink { store.openMegaphoneFeed() } }"),
-                "작성기의 문이 문 술어를 안 읽는다")
+        // 문은 문 술어를 읽고, 입력칸이 내려가기 전에 조합 중인 한글을 먼저 확정한다(두 버튼과 같은 문 — 검토 #4).
+        #expect(composer.contains(
+            "if store.showsMegaphoneFeedEntry { MegaphoneFeedEntryLink { FeedbackReplySend.commitThenSend(slot: .megaphone) { store.openMegaphoneFeed() } } }"),
+                "작성기의 문이 문 술어를 안 읽거나 조합 확정 문을 안 지난다")
         let wiring = try Self.code("WorkTimerStoreMegaphoneFeed.swift")
         #expect(wiring.contains("megaphoneFeed.isAvailable != false"), "문 술어가 닫힘만 숨기지 않는다")
         let toggle = try Self.code("WorkTimerStoreMegaphone.swift")
@@ -717,7 +835,22 @@ struct MegaphoneFeedSourceTests {
         let branch = String(realtime[signal.upperBound..<next.lowerBound])
         #expect(branch.contains("requestMegaphoneBannerRefresh()") && branch.contains("refreshMegaphoneFeedIfShowing()"))
         #expect(wiring.contains("guard isMegaphoneFeedShowing else { return }"), "실시간 새로고침이 화면 술어를 안 본다")
+        #expect(wiring.contains("guard isMenuPresented else { megaphoneFeed.noteMissedSignal() return }"),
+                "팝오버가 닫혀 숨은 페이지가 신호마다 묻는다")
         #expect(wiring.contains("guard canHideMegaphonePosts, isMegaphoneFeedShowing else { return nil }"), "내리기가 운영자 깃발을 안 본다")
+        // 놓친 신호의 한 번은 팝오버 열기 자리에 · 차단 뒤 다시 읽기는 차단이 닿는 두 자리(확인 시트 · 신고하면서 차단)에.
+        let store = try Self.code("WorkTimerStore.swift")
+        let menuOpen = try #require(store.range(of: "func setMenuPresented("))
+        let menuEnd = try #require(store.range(of: "var needsInsightsReload", range: menuOpen.upperBound..<store.endIndex))
+        #expect(store[menuOpen.upperBound..<menuEnd.lowerBound].contains("refreshMegaphoneFeedIfSignalMissed()"),
+                "팝오버를 다시 열어도 놓친 확성기를 안 읽는다")
+        let blocks = try Self.code("WorkTimerStoreBlocks.swift")
+        #expect(blocks.components(separatedBy: "refreshMegaphoneFeedAfterBlock(from:").count - 1 == 2,
+                "차단이 닿는 두 자리 중 하나가 지난 확성기를 다시 안 읽는다")
+        // 넘침 판정은 글이 실제로 받은 폭으로 잰다(스크롤 막대 — 검토 #5).
+        let panel = try Self.code("CheckMegaphoneFeedPanel.swift")
+        #expect(panel.contains("Layout.needsMore(item.body, width: measuredBodyWidth ?? Layout.bodyWidth)"))
+        #expect(panel.contains(".onGeometryChange(for: CGFloat.self) { proxy in proxy.size.width }"), "본문 폭을 안 잰다")
     }
 
     @Test("배너 스토어로 가는 길이 없다 · 로그아웃 두 자리 모두 비운다 · 레일 · 배너 카드는 그대로")
@@ -824,6 +957,27 @@ struct MegaphoneFeedRenderTests {
         #expect(!MegaphoneFeedLayout.needsMore("3층 라운지에 귤 한 상자 있어요"))
         #expect(!MegaphoneFeedLayout.needsMore(String(repeating: "가", count: 20)))
         #expect(MegaphoneFeedLayout.bodyWidth == 258)
+    }
+
+    // 없으면: 마우스를 꽂은 맥(늘 보이는 스크롤 막대 ≈15pt)에서 계산 폭엔 3줄이라 [더 보기]가 안 서는데 실제 폭에선 4줄이라
+    // '…'로 잘려 끝까지 못 읽는 결함이 초록(검토 #5). 판정은 뷰가 잰 폭(`measuredBodyWidth`)을 받는다 — 소스 계약이 그 자리를 본다.
+    @Test("넘침 판정은 받은 폭으로 잰다 — 스크롤 막대만큼 좁아지면 계산 폭에선 안 넘치던 글에도 [더 보기]가 선다")
+    func needsMoreFollowsTheMeasuredWidth() throws {
+        let narrow = MegaphoneFeedLayout.bodyWidth - NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+        #expect(narrow < MegaphoneFeedLayout.bodyWidth - 10, "기준선: 늘 보이는 막대가 폭을 먹는다")
+        // 좁은 폭에서 처음 넘치는 길이를 찾는다(글자를 하나씩 늘린다). 그 글은 계산 폭에선 아직 3줄 안이어야 한다.
+        let words = Array(String(repeating: "오늘 라운지에서 귤 나눠요 모두 와서 가져가세요 3층 창가 자리예요 ", count: 6))
+        var flip: String?
+        for count in 20...words.count {
+            let body = String(words.prefix(count))
+            if MegaphoneFeedLayout.needsMore(body, width: narrow) {
+                flip = body
+                break
+            }
+        }
+        let body = try #require(flip, "좁은 폭에서도 끝까지 안 넘쳤다")
+        #expect(!MegaphoneFeedLayout.needsMore(body), "계산 폭에서도 넘친다 — 좁은 폭의 차이를 못 잰다")
+        #expect(MegaphoneFeedLayout.needsMore(body, width: narrow), "좁아진 폭에서 넘치는데 [더 보기]가 안 선다")
     }
 
     @Test("머리 줄 작은 글씨: 시각 · 받은 사람 수(모르면 시각만)")

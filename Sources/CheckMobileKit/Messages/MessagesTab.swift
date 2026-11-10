@@ -128,6 +128,8 @@ private struct MessagesMegaphoneToolbarButton: View {
 enum MessagesListText {
     static let newConversation = "새 대화"
     static let megaphone = "확성기"
+    /// 안 읽은 대화(메시지 · 찌르기)를 한 번에 읽음으로(폰 1.0.18 — 맥 0.3.81 과 같은 글자).
+    static let markAllRead = "모두 읽음"
     static let workingTitle = "지금 근무 중"
     static let workingTrailing = "바로 말 걸기"
     static let nobodyWorking = "지금 근무 중인 사람이 없어요"
@@ -186,6 +188,16 @@ struct MessagesListView: View {
                 emptyContent
                     .cardListPlainRow()
             } else {
+                // [모두 읽음] — 안 읽은 대화(메시지 ∪ 찌르기)가 있을 때만(대표 결정 11-10). 목록 머리 오른쪽 작은 단추.
+                if !store.sortUnreadPeerIDs.isEmpty {
+                    HStack {
+                        Spacer(minLength: 0)
+                        AingButton(MessagesListText.markAllRead, kind: .tinted, size: .sm) {
+                            store.markAllConversationsRead()
+                        }
+                    }
+                    .cardListPlainRow(top: 0, bottom: 4)
+                }
                 Section {
                     ForEach(Array(rows.enumerated()), id: \.element.id) { offset, row in
                         Button {

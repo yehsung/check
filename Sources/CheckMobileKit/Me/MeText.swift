@@ -662,6 +662,29 @@ package enum MeText {
         return "뽑기 또는 \(GachaText.shardCost(shardCost))로 얻을 수 있어요"
     }
 
+    /// 조각 교환 전용(흑우 아잉이 — 맥 0.3.78 · 폰 1.0.18)을 얻는 길 — 뽑기에서는 안 나온다. 교환값을 알면 "조각 20개 교환으로만 …".
+    package static func shardOnlyAcquirePhrase(shardCost: Int?) -> String {
+        guard let shardCost, shardCost > 0 else { return GachaText.shardOnlyHint }
+        return "\(GachaText.shardCost(shardCost)) 교환으로만 얻을 수 있어요"
+    }
+
+    /// 뽑기 전용 · 조각 교환 전용을 id 로 가른 얻는 길(타일 · 안내 · 보이스오버가 이 한 곳을 묻는다).
+    package static func acquirePhrase(id: String, shardCost: Int?) -> String {
+        CharacterCatalog.isShardOnlyBuiltIn(id) ? shardOnlyAcquirePhrase(shardCost: shardCost) : gachaAcquirePhrase(shardCost: shardCost)
+    }
+
+    /// 상점에서 얻는 길 타일을 눌렀을 때 — "흑우 아잉이는 조각 20개 교환으로만 얻을 수 있어요" · 뽑기 전용은 `gachaOnlyNotice` 와 같다.
+    package static func acquireNotice(id: String, shardCost: Int?) -> String {
+        let name = MeCharacterCards.displayName(for: id)
+        return "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) \(acquirePhrase(id: id, shardCost: shardCost))"
+    }
+
+    /// 고르기에서 안 가진 얻는 길 캐릭터를 눌렀을 때(뽑기 전용 · 조각 교환 전용).
+    package static func lockedAcquireCharacter(id: String, shardCost: Int?) -> String {
+        let name = MeCharacterCards.displayName(for: id)
+        return "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) 아직 없어요 — \(acquirePhrase(id: id, shardCost: shardCost))"
+    }
+
     /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요"(무지개 아잉이도 같은 말 —
     /// 이름·교환값을 받으므로 희귀가 늘어도 문구는 그대로다).
     package static func gachaOnlyNotice(_ name: String, shardCost: Int?) -> String {

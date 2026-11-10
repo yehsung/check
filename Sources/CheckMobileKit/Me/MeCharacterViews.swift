@@ -27,6 +27,10 @@ package enum MeCharacterTileStatus: Equatable, Sendable {
     /// 선물로만 얻는다 — **안 가진 사람의 잠긴 칸**. 가격 · 사기 단추 없이 그 선물 종류의 캡션(케이크 아잉이 둘 — v0.3.66
     /// "생일 선물 전용" · 이슬 아잉이 — 폰 1.0.17 "술 한잔 선물 전용"). 종류는 `MeStore.giftKind(of:)` 가 정한다(맥 `giftCopy(for:)` 와 같은 규칙).
     case giftOnly(CharacterGiftKind)
+    /// 조각 교환으로만 얻는다(흑우 아잉이 — 폰 1.0.18) — "조각 교환 전용 · 20". 뽑기에서는 안 나와 '뽑기 ·' 를 말하면 거짓이다.
+    case shardOnly(shardCost: Int?)
+    /// 미션 보상으로만 얻는다(개발에 찌든 아잉이 — 폰 1.0.18) — 잠긴 칸 "미션 보상"(맥 `.missionLocked` 와 같은 글자).
+    case missionLocked
     case unknownPrice
     case busy
     case none
@@ -55,6 +59,8 @@ package enum MeCharacterTileStatus: Equatable, Sendable {
         case .price(let price, let balance): return .ruby(price: price, balance: balance)
         case .gachaOnly(let shardCost): return .acquire(MeText.gachaTileStatus(shardCost: shardCost))
         case .giftOnly(let kind): return .locked(kind.copy.lockedCaption)
+        case .shardOnly(let shardCost): return .acquire(GachaText.shardOnlyPrice(shardCost: shardCost))
+        case .missionLocked: return .locked(DevAingMission.lockedCaption)
         case .unknownPrice: return .text("—", emphasized: false)
         case .busy: return .spinner
         case .none: return .text(" ", emphasized: false)
@@ -211,9 +217,13 @@ struct MeShopView: View {
             status = .equipped
         } else if owned {
             status = .owned
+        } else if store.isMissionLocked(id) {
+            status = .missionLocked
         } else if store.isGiftOnly(id) {
             // 선물 전용(케이크 · 이슬 아잉이) — 잠긴 칸. 장식값(2000 · 2002)도 사기 단추도 없다. 누르면 아래 막대가 얻는 길을 말한다.
             status = .giftOnly(store.giftKind(of: id))
+        } else if store.isShardOnly(id) {
+            status = .shardOnly(shardCost: store.gachaShardCost(of: id))
         } else if store.isGachaOnly(id) {
             // 뽑기 전용(황금 · 무지개 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
             status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
@@ -478,9 +488,13 @@ struct MeCharacterPickerView: View {
             status = .equipped
         } else if store.isOwned(id) {
             status = .owned
+        } else if store.isMissionLocked(id) {
+            status = .missionLocked
         } else if store.isGiftOnly(id) {
             // 고르기에는 가진 사람에게만 서므로(`pickerIDs`) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
             status = .giftOnly(store.giftKind(of: id))
+        } else if store.isShardOnly(id) {
+            status = .shardOnly(shardCost: store.gachaShardCost(of: id))
         } else if store.isGachaOnly(id) {
             status = .gachaOnly(shardCost: store.gachaShardCost(of: id))
         } else if let price = store.price(of: id) {
@@ -489,10 +503,12 @@ struct MeCharacterPickerView: View {
             status = unlocked ? .none : .unknownPrice
         }
         let lockedLabel: String
-        if store.isGiftOnly(id) {
+        if store.isMissionLocked(id) {
+            lockedLabel = "\(name), 잠김 — \(DevAingMission.lockedHint)"
+        } else if store.isGiftOnly(id) {
             lockedLabel = "\(name), 잠김 — \(store.giftCopy(for: id).lockedCaption)"
         } else if store.isGachaOnly(id) {
-            lockedLabel = "\(name), 잠김 — \(MeText.gachaAcquirePhrase(shardCost: store.gachaShardCost(of: id)))"
+            lockedLabel = "\(name), 잠김 — \(MeText.acquirePhrase(id: id, shardCost: store.gachaShardCost(of: id)))"
         } else {
             lockedLabel = "\(name), 잠김 — 상점에서 사기"
         }
@@ -563,6 +579,8 @@ struct MeCharacterTile: View {
         case .price(let price, let balance): return "\(name), \(RubyPriceRule.accessibilityText(price: price, isShort: RubyPriceRule.isShort(price: price, balance: balance)))"
         case .gachaOnly(let shardCost): return MeText.gachaTileAccessibility(name: name, shardCost: shardCost)
         case .giftOnly(let kind): return "\(name), \(kind.copy.lockedCaption)"
+        case .shardOnly(let shardCost): return "\(name), \(MeText.shardOnlyAcquirePhrase(shardCost: shardCost))"
+        case .missionLocked: return "\(name), \(DevAingMission.lockedCaption) — \(DevAingMission.lockedHint)"
         case .unknownPrice: return "\(name), 가격 모름"
         case .busy: return "\(name), \(MeText.loading)"
         case .none: return name

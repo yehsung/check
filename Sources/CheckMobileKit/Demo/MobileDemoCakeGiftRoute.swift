@@ -118,7 +118,7 @@ package struct MobileDemoCakeGiftRoute: Hashable, Sendable {
     package var openRoute: String { Self.openRoute }
     package var scene: String { Self.scene }
     /// 받기 전 바늘(종류별).
-    package var needle: String { kind == .drink ? Self.drinkNeedle : Self.needle }
+    package var needle: String { kind != .birthday ? Self.drinkNeedle : Self.needle }
 
     /// 이 장면의 수령 기록(데모 한 실행에 하나).
     package func makeLedger() -> Ledger {

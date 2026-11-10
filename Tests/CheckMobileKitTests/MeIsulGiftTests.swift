@@ -260,7 +260,8 @@ import Testing
         let sheet = try IntegrationContractTests.code("Sources/CheckMobileKit/Me/MeCakeGiftViews.swift")
         #expect(!sheet.contains("CakeGiftText."), "시트가 생일 글자를 박았다 — 술 선물에 '생일 축하해요! 🎂'가 선다")
         #expect(!sheet.contains("Text(\"🎂\")"), "다시 열기 줄 기호가 케이크로 박혔다")
-        #expect(sheet.contains("if sheet.gift.kind == .drink {") && sheet.contains("invite(sheet)"), "술 선물 초대장 갈래가 없다")
+        // 폰 1.0.18: 고를 것 없는 한 개 선물(술 한잔 · 빼빼로)이 초대장 갈래다 — 생일만 고르기.
+        #expect(sheet.contains("if sheet.gift.kind != .birthday {") && sheet.contains("invite(sheet)"), "한 개 선물(술 · 빼빼로) 초대장 갈래가 없다")
         #expect(sheet.contains("store.cakeGiftReopenKind.copy.reopenTitle") && sheet.contains("store.cakeGiftReopenKind.phoneReopenEmoji"))
         #expect(sheet.contains("sheet.copy.confirmButton"), "확인 단추가 종류의 글자를 안 쓴다(술 = [짠 받기])")
     }

@@ -152,6 +152,17 @@ extension MeStore {
         equippedLoaded && equippedCharacterID == id
     }
 
+    /// 미션 보상으로만 얻는 캐릭터인가(개발에 찌든 아잉이 — 누적 근무 100시간, 맥 0.3.81 · 폰 1.0.18). 서버는 이 행을 `gacha_only` 로 싣지만
+    /// 뽑기에서도 교환에서도 안 나온다 — 잠긴 칸 "미션 보상"(맥 `.missionLocked` 와 같은 글자 · `DevAingMission`).
+    package func isMissionLocked(_ id: String) -> Bool {
+        CharacterCatalog.isDevAing(id)
+    }
+
+    /// 조각 교환으로만 얻는 캐릭터인가(흑우 아잉이 — 맥 0.3.78 · 폰 1.0.18). 뽑기 전용 줄에 서되 얻는 길은 "조각 교환 전용".
+    package func isShardOnly(_ id: String) -> Bool {
+        CharacterCatalog.isShardOnlyBuiltIn(id)
+    }
+
     /// 생일 선물로만 얻는 캐릭터인가(케이크 아잉이 둘 — **내장 id 는 표식과 무관하게 언제나**, 그 밖은 서버 `gift_only` 표식).
     /// 판정은 코어 한 곳(`CharacterCatalog.isGiftOnlyBuiltIn` · `ShopCharacterRow.isGiftOnly`)에서 가져온다.
     package func isGiftOnly(_ id: String) -> Bool {
@@ -221,6 +232,13 @@ extension MeStore {
             shopGiftHintID = id
             return
         }
+        // 미션 보상(개발에 찌든 아잉이)도 사는 줄 · 뽑는 줄이 아니다 — 선물 칸과 같은 막대(이름 + 얻는 길 · 사기 단추 없음).
+        if isMissionLocked(id) {
+            shopSelection = nil
+            shopNotice = DevAingMission.lockedHint
+            shopGiftHintID = id
+            return
+        }
         // 뽑기 전용은 사는 줄이 아니다 — 고르지 않고 얻는 길(뽑기 · 조각 교환)을 말한다. 화면은 이 안내와 함께 뽑기 카드로 올라간다.
         if isGachaOnly(id) {
             shopSelection = nil
@@ -247,7 +265,7 @@ extension MeStore {
     package var shopBarDetail: String? {
         if let shopNotice { return shopNotice }
         if let id = shopGachaHintID {
-            return MeText.gachaOnlyNotice(MeCharacterCards.displayName(for: id), shardCost: gachaShardCost(of: id))
+            return MeText.acquireNotice(id: id, shardCost: gachaShardCost(of: id))
         }
         guard shopSelection != nil, let price = shopSelectionPrice, let have = rubyBalance, have < price else { return nil }
         return CheckCoreShared.shortfallNotice(need: price, have: have)
@@ -317,11 +335,13 @@ extension MeStore {
             // 뽑기 전용(황금 · 무지개 아잉이)에게 "상점에서 살 수 있어요"는 거짓이다 — 얻는 길을 그대로 말한다.
             // 선물 전용(케이크 · 이슬)에게는 둘 다 거짓이다 — 그 선물 종류의 잠긴 칸 안내 그대로.
             let name = MeCharacterCards.displayName(for: id)
-            if isGiftOnly(id) {
+            if isMissionLocked(id) {
+                characterNotice = DevAingMission.lockedHint
+            } else if isGiftOnly(id) {
                 characterNotice = giftCopy(for: id).lockedHint
             } else {
                 characterNotice = isGachaOnly(id)
-                    ? MeText.lockedGachaCharacter(name, shardCost: gachaShardCost(of: id))
+                    ? MeText.lockedAcquireCharacter(id: id, shardCost: gachaShardCost(of: id))
                     : MeText.lockedCharacter(name)
             }
             isCharacterNoticeError = false

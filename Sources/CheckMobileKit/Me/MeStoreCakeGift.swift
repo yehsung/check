@@ -56,7 +56,8 @@ package struct MeCakeGiftSheet: Equatable, Identifiable, Sendable {
     /// 와 같은 결). 생일 선물은 넘겨준 값 그대로다(하나 남아도 고르게 한다 — 1.0.14 동작).
     package init(gift: CharacterGiftOffer, selection: String? = nil, phase: Phase = .choosing, notice: String? = nil) {
         self.gift = gift
-        self.selection = selection ?? (gift.kind == .drink ? gift.options.first : nil)
+        // 고를 것 없는 한 개 선물(술 한잔 · 빼빼로 — 폰 1.0.18)은 처음부터 그 하나를 고른 채로 선다. 생일만 둘 중 고른다.
+        self.selection = selection ?? (gift.kind != .birthday ? gift.options.first : nil)
         self.phase = phase
         self.notice = notice
     }

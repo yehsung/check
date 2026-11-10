@@ -39,7 +39,8 @@ struct MeCakeGiftSheetView: View {
                     VStack(spacing: MobileTheme.space4) {
                         switch sheet.phase {
                         case .choosing, .claiming:
-                            if sheet.gift.kind == .drink {
+                            // 고를 것 없는 한 개 선물(술 한잔 · 빼빼로)은 초대장 꼴 — 생일만 고르기 꼴.
+                            if sheet.gift.kind != .birthday {
                                 invite(sheet)
                             } else {
                                 choosing(sheet)

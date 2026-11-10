@@ -258,6 +258,16 @@ class CheckEditorTextView: NSTextView {
     /// 마지막으로 알린 글자. 같은 글자를 다시 알리지 않는다.
     private var lastReportedRenderedText: String?
 
+    /// 붙여넣기 갈고리(2026-11-11 — 메시지 사진). 붙여넣기판이 그림(또는 그림 파일)이면 받아 가고 true 를 돌려준다 — 그때는 글 붙여넣기를
+    /// 건너뛴다(이 칸은 `importsGraphics` 가 꺼져 있어 그림을 그대로 넘기면 파일 이름 글자가 들어온다). nil 이거나 false 면 평소 붙여넣기다.
+    /// 대화 입력칸만 준다(제보 · 오목 칸은 nil). ⌘V(`performKeyEquivalent` 의 `paste(nil)`)와 편집 메뉴가 같은 문을 지난다.
+    var onPasteImage: ((NSPasteboard) -> Bool)?
+
+    override func paste(_ sender: Any?) {
+        if let onPasteImage, onPasteImage(NSPasteboard.general) { return }
+        super.paste(sender)
+    }
+
     /// 조합 확정 도중에는 그려진 글자를 알리지 않는다(`commitComposition`). 확정은 입력기를 거치며 글자가 잠깐 비었다가
     /// 돌아오는 구간이 있어(시험 실측: "부" → "" → "부"), 그대로 알리면 검색 목록이 한 번 풀렸다가 다시 걸러진다.
     private var suppressesRenderedTextReports = false
@@ -834,6 +844,8 @@ struct CheckTextEditor: View {
     /// 뷰에 그려진 글자(조합 중 표시 글자 포함)를 그대로 알려 준다. 치는 대로 걸러지는 검색 칸용 —
     /// `CheckEditorTextView.onRenderedTextChange` 주석. 기본 nil(대화 · 제보 · 오목 칸은 안 쓴다).
     var onRenderedTextChange: ((String) -> Void)?
+    /// 붙여넣기 갈고리(2026-11-11 — 메시지 사진) — `CheckEditorTextView.onPasteImage` 주석. 기본 nil(대화 칸만 준다).
+    var onPasteImage: ((NSPasteboard) -> Bool)?
 
     /// 이 칸이 쓰는 재사용 자리. 기본값은 **이 뷰를 세운 소스 위치**다(아래 `init` 의 `#fileID`/`#line`) —
     /// 그래서 호출부는 **한 글자도 안 바뀌고도** 각자 자기 자리를 갖는다.
@@ -854,6 +866,7 @@ struct CheckTextEditor: View {
         onRenderedEmptyChange: ((Bool) -> Void)? = nil,
         acceptsInput: Bool = true,
         onRenderedTextChange: ((String) -> Void)? = nil,
+        onPasteImage: ((NSPasteboard) -> Bool)? = nil,
         file: String = #fileID,
         line: Int = #line
     ) {
@@ -865,6 +878,7 @@ struct CheckTextEditor: View {
         self.onRenderedEmptyChange = onRenderedEmptyChange
         self.acceptsInput = acceptsInput
         self.onRenderedTextChange = onRenderedTextChange
+        self.onPasteImage = onPasteImage
         self.slot = CheckEditorSlot(id: "\(file):\(line)")
     }
 
@@ -878,6 +892,7 @@ struct CheckTextEditor: View {
             onRenderedEmptyChange: onRenderedEmptyChange,
             acceptsInput: acceptsInput,
             onRenderedTextChange: onRenderedTextChange,
+            onPasteImage: onPasteImage,
             slot: slot
         )
             // ★ 스크롤 뷰를 테두리 안쪽으로 물린다. 이 줄을 지우면 넘친 글이 빨간 테두리를 덮고,
@@ -906,6 +921,7 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     var onRenderedEmptyChange: ((Bool) -> Void)?
     var acceptsInput: Bool
     var onRenderedTextChange: ((String) -> Void)?
+    var onPasteImage: ((NSPasteboard) -> Bool)?
     /// 이 칸의 재사용 자리(호출 자리 하나 = 자리 하나 — `CheckEditorSlot`).
     var slot: CheckEditorSlot
 
@@ -929,6 +945,8 @@ private struct CheckEditorScrollView: NSViewRepresentable {
             text.delegate = nil
             // 내려간 칸이 옛 화면의 상태로 글자를 흘리지 않게 끊는다(다음 마운트의 `apply()` 가 다시 잇는다).
             text.onRenderedTextChange = nil
+            // 붙여넣기 갈고리도 끊는다 — 다음에 이 칸을 받은 자리(같은 자리뿐이지만)가 옛 대화로 사진을 보내지 않게.
+            text.onPasteImage = nil
             // 다음 사람이 옛 글을 물려받지 않게 비운다(내용은 `updateNSView` 가 다시 채운다).
             text.string = ""
             // 내려간 칸이 전송 문의 대상으로 남지 않게 한다(`focusedEditor` 의 마지막 갈래).
@@ -1051,6 +1069,7 @@ private struct CheckEditorScrollView: NSViewRepresentable {
         textView.onSend = onSend
         textView.onRenderedEmptyChange = onRenderedEmptyChange
         textView.onRenderedTextChange = onRenderedTextChange
+        textView.onPasteImage = onPasteImage
         // 바뀔 때만 움직인다(포커스 놓기 · 되찾기는 다음 턴 — 그 프로퍼티 주석).
         textView.acceptsInput = acceptsInput
         // 첫 보고는 **다음 턴**에 넘긴다. 이 함수는 `updateNSView` 안에서도 불리므로 여기서 바로 알리면

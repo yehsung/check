@@ -164,6 +164,8 @@ extension WorkTimerStore {
                 expandedReportID = nil
                 reportNoteDraft = ""
             }
+            // 신고된 사진(2026-11-11 — 맥 0.3.86): 목록을 받은 **뒤에** 처음 보는 id 만 한 번에 묻는다(빈 목록 · 운영자 아님이면 안 묻는다).
+            loadReportAdminPhotoPaths(for: sorted, generation: generation)
         } catch {
             if case .cancelled = classifyAuthError(error) { return }
             guard generation == sessionGeneration, serial == reportAdminLoadSerial else { return }
@@ -303,6 +305,10 @@ extension WorkTimerStore {
         reportAdminLoadSerial += 1
         // 다음 계정이 운영자면 첫 tick 에서 곧바로 묻는다(앞 계정의 스탬프가 5분을 막지 않게).
         lastReportOpenCountPollAt = nil
+        // 신고된 사진 경로(2026-11-11)도 앞 계정의 것이다.
+        reportAdminPhotoPaths = [:]
+        reportAdminPhotoEnlargedID = nil
+        reportAdminPhotoChecked = []
     }
 }
 

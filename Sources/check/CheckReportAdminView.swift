@@ -49,8 +49,10 @@ enum ReportAdminLayout {
     }
 
     /// 한 행의 **추정** 높이(스크롤을 걸지 말지 정하는 데만 쓴다 — 그리기는 자연 높이다).
-    static func rowHeight(_ report: ContentReportAdminItem, expanded: Bool) -> CGFloat {
+    /// `photo` 는 신고된 사진 조각(2026-11-11): nil 없음 · false 작게 · true 크게(`ReportAdminPhotoBlock.height` 와 같은 값 + 간격 6).
+    static func rowHeight(_ report: ContentReportAdminItem, expanded: Bool, photo: Bool? = nil) -> CGFloat {
         var total = rowBase
+        if let photo { total += 6 + ReportAdminPhotoBlock.height(enlarged: photo) }
         let detailLines = lines(report.detail, cap: expanded ? nil : detailCollapsedLines)
         if detailLines > 0 { total += 5 + CGFloat(detailLines) * lineHeight }
         let quoteLines = lines(report.messageBody, cap: expanded ? nil : quoteCollapsedLines)
@@ -62,9 +64,14 @@ enum ReportAdminLayout {
         return total
     }
 
-    static func estimatedHeight(_ rows: [ContentReportAdminItem], expandedID: String?) -> CGFloat {
+    static func estimatedHeight(
+        _ rows: [ContentReportAdminItem], expandedID: String?,
+        photoPaths: [String: String] = [:], enlargedPhotoID: String? = nil
+    ) -> CGFloat {
         guard !rows.isEmpty else { return 0 }
-        return rows.reduce(0) { $0 + rowHeight($1, expanded: $1.id == expandedID) }
+        return rows.reduce(0) { total, row in
+            total + rowHeight(row, expanded: row.id == expandedID, photo: photoPaths[row.id].map { _ in row.id == enlargedPhotoID })
+        }
             + CGFloat(rows.count - 1) * FeedbackPanelLayout.rowSpacing
     }
 }
@@ -122,7 +129,10 @@ struct ReportAdminInboxView: View {
             } else {
                 // 목록 예산은 받은 제보 목록과 **같은 값**이다(`ReportAdminLayout.segmentRowHeight` 의 두 부등식).
                 FeedbackListBox(
-                    contentHeight: ReportAdminLayout.estimatedHeight(rows, expandedID: store.expandedReportID),
+                    contentHeight: ReportAdminLayout.estimatedHeight(
+                        rows, expandedID: store.expandedReportID,
+                        photoPaths: store.reportAdminPhotoPaths, enlargedPhotoID: store.reportAdminPhotoEnlargedID
+                    ),
                     capHeight: FeedbackPanelLayout.budget(
                         base: FeedbackPanelLayout.inboxListHeight,
                         floor: FeedbackPanelLayout.minInboxListHeight,
@@ -141,7 +151,12 @@ struct ReportAdminInboxView: View {
                                 canUpdate: store.canUpdateReport,
                                 isUpdating: store.reportUpdatingID == report.id,
                                 onToggle: { store.toggleReportExpansion(report.id) },
-                                onStatus: { statusTapped(report, $0) }
+                                onStatus: { statusTapped(report, $0) },
+                                // 신고된 사진(2026-11-11) — 목록을 받은 뒤 한 번에 물어 둔 경로. 누르면 행 안에서 크게.
+                                photoPath: store.reportAdminPhotoPaths[report.id],
+                                photoEnlarged: store.reportAdminPhotoEnlargedID == report.id,
+                                photoContext: store.messagePhotoContext,
+                                onPhoto: { store.toggleReportAdminPhoto(report.id) }
                             )
                         }
                     }
@@ -209,6 +224,12 @@ struct ReportAdminRow: View {
     let onToggle: () -> Void
     /// 기본값이 없다 — 빈 클로저 기본값은 배선을 빠뜨린 호출부를 컴파일시켜 버튼이 아무 일도 안 하게 만든다(`FeedbackInboxRow.onReply` 와 같은 이유).
     let onStatus: (ContentReportStatus) -> Void
+    /// 신고된 사진의 경로(2026-11-11 — `report_admin_photo_paths`). nil 이면 사진 조각이 없다.
+    var photoPath: String? = nil
+    /// 사진을 크게 펼쳤는가.
+    var photoEnlarged: Bool = false
+    var photoContext: MessagePhotoBubbleContext? = nil
+    var onPhoto: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -234,6 +255,12 @@ struct ReportAdminRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(Self.accessibilitySummary(report))
+
+            // 신고된 사진(2026-11-11 — 맥 0.3.86). 행 버튼 **밖**이다(누르면 행을 펼치는 대신 사진을 크게 · 작게).
+            // 운영자 사진 지우기는 서버에 없다 — 보고 상태만 바꾼다(서버 목록 §2).
+            if let photoPath {
+                ReportAdminPhotoBlock(path: photoPath, context: photoContext, enlarged: photoEnlarged, onToggle: onPhoto)
+            }
 
             // 처리 메모는 **접힌 행에도** 그린다 — "이 신고는 누가 손댔다"는 목록 차원의 사실이다(제보 답장 판과 같은 판단).
             if let memo = report.adminNote {

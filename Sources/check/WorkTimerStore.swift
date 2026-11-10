@@ -1669,6 +1669,61 @@ final class WorkTimerStore {
     var messagePokeChronology: [String: Int] = [:]
     /// 상대별 찌르기 낙관 읽음(메시지의 `messageOptimisticReads` 와 같은 규칙).
     var messagePokeOptimisticReads: [String: MessageOptimisticRead] = [:]
+
+    // ── 이전 대화 더 보기(2026-11-11 — 메시지 30일 보관) — 로직은 `WorkTimerStoreMessageOlder.swift` ──
+    // 24시간 머리(`messageHistory`)와 **따로** 든다: 지난 쪽이 머리에 섞이면 읽음 경계(`markTarget`)가 옛 줄을 "마지막 받은 말"로
+    // 고르거나 24시간 너머의 받은 말이 메뉴바 점을 켠다. 전부 계정에 묶인다 — clearPersistedSession 이 지운다.
+
+    /// 상대별 지난 쪽(오래된 것 → 최신). 머리보다 앞에 그려진다. 패널을 닫거나 상대를 바꾸면 비운다(가장 사적인 표면).
+    var messageOlderPages: [String: [MessageHistoryEntry]] = [:]
+    /// 상대별 다음 쪽 커서(서버가 준 가장 오래된 줄의 µs · id). 없으면 다음 누름은 커서 없이 최신부터 묻는다. 화면이 안 읽는다.
+    @ObservationIgnored var messageOlderCursors: [String: MessagePageCursor] = [:]
+    /// 상대별 "더 이전 쪽이 있는가"(서버 답). 모르면 nil(아직 안 눌렀다).
+    var messageOlderHasMore: [String: Bool] = [:]
+    var messageOlderLoading = false
+    /// 마지막 지난 쪽 조회가 실패했는가(함수 없음이 아니다 — 다시 누르면 다시 묻는다).
+    var messageOlderFailed = false
+    /// `message_page` 를 쓸 수 있는가(세 갈래 — 문은 없다): nil = 모름(버튼을 보인다) · false = 함수 없는 서버(버튼을 숨긴다)
+    /// · true = 한 번이라도 성공했다(입력칸 안내가 30일 문장이 된다). false 는 **영구히 들지 않는다** — 다음 패널 열기에서 nil 로
+    /// 되돌린다(db push 는 앱이 떠 있는 동안 끝난다).
+    var messageOlderAvailable: Bool?
+    /// 지난 쪽을 붙인 직후 대화가 제자리를 지키게 하는 표(뷰가 이 id 를 위에 맞춘다). 번호가 바뀔 때만 움직인다.
+    var messageOlderScrollAnchor: MessageOlderScrollAnchor?
+    /// 지난 쪽 조회의 순번 — 비울 때마다 올려 날아가던 응답을 버린다(닫기 · 상대 바꾸기 · 차단 · 로그아웃).
+    @ObservationIgnored var messageOlderRequestToken = 0
+
+    // ── 메시지 사진(2026-11-11 — 맥 0.3.86) — 로직은 `WorkTimerStoreMessagePhotos.swift`, 전선은 코어 `MessagePhotoWire.swift` ──
+    // 24시간 머리(`messageHistory`)에는 사진 칸이 없다 — 사진은 **따로 든 표**(`messagePhotoMeta`)로 배우고 그릴 때만 얹는다(머리 · 안 읽음 ·
+    // 읽음 경계는 한 글자도 안 바뀐다). 전부 계정에 묶인다 — clearPersistedSession 이 지운다(그림 캐시까지).
+
+    /// 상대별 사진 칸(메시지 id → 사진 · 설명). 대화를 열 때 · 열린 대화에 받은 말이 올 때 `message_page` 로 배운다(지난 쪽 줄도 든다).
+    var messagePhotoMeta: [String: [String: MessagePhotoMeta]] = [:]
+    /// 사진 칸을 `message_page` 로 받을 수 있는가: nil 모름 · false 함수 없는 서버(다음 패널 열기까지 안 묻는다) · true 받아 봤다.
+    @ObservationIgnored var messagePhotoMetaAvailable: Bool?
+    /// 고른 사진(미리 보기 덮개 · 보내기 전). nil = 고른 사진이 없다. 실패해도 남는다(다시 [보내기]).
+    var messagePhotoDraft: MessagePhotoDraft?
+    /// 고른 사진을 줄이는 중(떼어 낸 작업).
+    var messagePhotoPreparing = false
+    /// 이 세션에 사진 문이 닫혀 있음을 배웠다(서버 `unsupported_client` · 함수/버킷 없음) — 다음 패널 열기까지 [사진] 버튼을 숨긴다.
+    var messagePhotoSendClosed = false
+    /// 크게 보기(대화 자리 덮개). nil = 안 띄웠다.
+    var messagePhotoViewer: MessagePhotoViewerItem?
+    /// 사진 그림 메모리 캐시(저장소 **경로**가 열쇠 — 서명 URL 은 바뀐다). 디스크에 남기지 않는다.
+    let messagePhotoImages = MessagePhotoImageCache()
+    /// 사진 칸 조회의 비관찰 장부(연 상대 · 덮은 id · 날아가는 조회 · 뒤따를 한 번 · 순번).
+    @ObservationIgnored var messagePhotoRuntime = MessagePhotoRuntime()
+    /// 사진 바이트 받기(주입 — 시험 전용). nil 이면 서명 URL 로 받는다(시험 프로세스에서는 주입 없이 네트워크로 안 나간다).
+    @ObservationIgnored var messagePhotoDataLoader: (@Sendable @MainActor (String) async throws -> Data)?
+    /// 머리 변화 뒤 사진 칸 조회를 모으는 잠(주입 — 프로덕션은 실제 수면 `messagePhotoMetaDebounceSeconds`).
+    @ObservationIgnored var messagePhotoMetaDebounceSleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
+    /// 운영자 신고함: 신고 id → 신고된 사진 경로(`report_admin_photo_paths`). `ContentReportAdminRow` 에 칸을 더하지 않는다(V0334 계약).
+    var reportAdminPhotoPaths: [String: String] = [:]
+    /// 운영자 신고함에서 크게 펼친 사진의 신고 id.
+    var reportAdminPhotoEnlargedID: String?
+    /// 사진 경로를 이미 물어본 신고 id(사진이 없다는 답도 든다) — 목록을 다시 받아도 새 id 만 묻는다.
+    @ObservationIgnored var reportAdminPhotoChecked: Set<String> = []
     /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
     /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
     @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
@@ -4259,6 +4314,12 @@ extension WorkTimerStore {
         messagePokeLogSnapshot = nil
         messagePokeChronology = [:]
         messagePokeOptimisticReads = [:]
+        // 이전 대화(2026-11-11)도 계정에 묶인다 — 지난 쪽 · 커서를 남기면 다음 사람이 앞 사람의 30일 대화를 읽는다.
+        // 쓸 수 있는가도 모름으로 되돌린다(메시지 상태는 계정마다 처음부터 — 입력칸 안내도 다음 성공 전까지 24시간 문장이다).
+        clearOlderMessages()
+        messageOlderAvailable = nil
+        // 메시지 사진(2026-11-11)도 계정에 묶인다 — 사진 칸 · 고른 사진 · 크게 보기 · **그림 캐시**(남의 비공개 사진)를 다 걷는다.
+        resetMessagePhotoState()
         // 장부는 **통째로 새것**으로 바꾼다 — 앞 계정의 늦은 Task 는 옛 장부를 붙잡고 있으므로 새 장부의 직렬화·스로틀을
         // 건드릴 수 없다(세대 가드와 이중 안전).
         messageReadRuntime.cancelAll()

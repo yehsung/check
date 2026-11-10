@@ -5,6 +5,8 @@ import Foundation
 // 제보 화면 캡처(`feedback-shots`)와 메시지 사진(`message-photos`, 다음 판)이 **같이 쓰는** 저장소 왕복 넷이다:
 // 올리기 · 로그인 토큰으로 받기 · 서명 URL 만들기 · 지우기(최선 노력). 지금까지 저장소 코드는 공개 버킷(avatars)
 // 하나뿐이라 서명 URL·인증 받기 경로가 없었다.
+// 계약 v2(11-11 서버 목록): **보기는 서명 URL** 이다 — `{"signedURL":"/object/sign/…?token=…"}` 를 `<project>/storage/v1`
+// 아래에 붙여 GET 한다(`downloadPrivateObjectViaSignedURL`). 인증 받기(`/object/authenticated/`)는 남겨 둔다.
 //
 // ── 이 파일이 지키는 것 ──
 // ① **공용 오류 매핑(`serviceError`)을 지나지 않는다.** 그 함수는 사람 로그인 응답을 위해 짜여 있어서
@@ -46,8 +48,15 @@ package enum PrivateStorage {
         "\(owner.lowercased())/\(name.lowercased()).\(ext.lowercased())"
     }
 
+    /// 폴더가 둘 이상인 경로 — `<폴더1>/<폴더2>/…/<이름>.<확장자>`, **조각마다 소문자**다.
+    /// 제보 캡처는 `<내 uid>/<제보 id>/<새 uuid>.jpg` 이고, 서버 정책이 첫 폴더(uid)와 둘째 폴더(제보 id)를 둘 다
+    /// 글자 그대로 견준다 — 하나라도 대문자면 자기 제보에 못 올린다(403).
+    package static func objectPath(folders: [String], name: String, ext: String = "jpg") -> String {
+        (folders.map { $0.lowercased() } + ["\(name.lowercased()).\(ext.lowercased())"]).joined(separator: "/")
+    }
+
     /// 요청에 실어도 되는 경로인가. 빈 조각 · `.`/`..` · 앞뒤 `/` · 소문자 영숫자와 `-_.` 밖의 글자를 막는다.
-    /// 서버가 준 경로(목록 행의 `shot_path`)도 이 문을 지난다 — 이상한 값이 URL 을 엉뚱한 곳으로 돌리지 못하게.
+    /// 서버가 준 경로(목록 행의 `path`)도 이 문을 지난다 — 이상한 값이 URL 을 엉뚱한 곳으로 돌리지 못하게.
     package static func isSafeObjectPath(_ path: String) -> Bool {
         guard !path.isEmpty, path.count <= 512 else { return false }
         let allowed = Set("abcdefghijklmnopqrstuvwxyz0123456789-_.")
@@ -133,6 +142,37 @@ extension SupabaseWorkService {
             throw SupabaseWorkServiceError.invalidResponse(200)
         }
         return url
+    }
+
+    /// 서명 URL 로 받는다. `GET <project>/storage/v1/object/sign/<bucket>/<path>?token=…` — 서명이 곧 허락이라
+    /// **로그인 토큰도 apikey 도 싣지 않는다**(서명 응답이 절대 URL 로 다른 호스트를 가리켜도 토큰이 새지 않게).
+    /// 실패 갈래는 받기(`.read`)와 같다: 개체 없음 → `.objectMissing` · 만료된 서명(`jwt expired`) → `.sessionExpired`
+    /// (세션 재시도로 감싸면 **새로 서명**한다 — 아래 `downloadPrivateObjectViaSignedURL`).
+    package func downloadSignedObject(from url: URL) async throws -> Data {
+        guard let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http" else {
+            throw PrivateStorageError.invalidPath
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard 200..<300 ~= status else {
+            throw Self.privateStorageError(statusCode: status, data: data, operation: .read)
+        }
+        return data
+    }
+
+    /// 서명 → 받기 한 번에. 비공개 개체를 **보는** 길(계약 v2: 보기는 서명 URL). 두 왕복이 한 함수라
+    /// `withSessionRetry` 로 감싸면 서명이 만료된 재시도도 새 서명부터 다시 한다.
+    package func downloadPrivateObjectViaSignedURL(
+        bucket: String,
+        path: String,
+        expiresIn: Int,
+        accessToken: String
+    ) async throws -> Data {
+        let url = try await createSignedObjectURL(bucket: bucket, path: path, expiresIn: expiresIn, accessToken: accessToken)
+        return try await downloadSignedObject(from: url)
     }
 
     /// 지운다(최선 노력). `DELETE /storage/v1/object/<bucket>/<path>`. **던지지 않는다** — 고아 정리(올렸는데 제출이

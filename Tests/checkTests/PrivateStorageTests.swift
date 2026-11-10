@@ -13,6 +13,8 @@ import Testing
 //  ⑤ 만료 토큰은 문장이 달라도 `.sessionExpired`(세션 갱신이 도는 유일한 갈래) · 버킷 없음은 "아직 안 열림" ·
 //     개체 없음은 그와 다른 값.
 //  ⑥ 지우기는 던지지 않고 "더는 없나"만 돌려준다.
+//  ⑦ 보기(계약 v2)는 서명 → `<project>/storage/v1<signedURL>` GET 이고, 그 GET 에는 로그인 토큰을 싣지 않는다.
+//     폴더가 둘인 경로(제보 캡처)도 조각마다 소문자다.
 //
 // 네트워크는 아래 스텁(테스트별 고유 호스트)으로 막는다. 픽스처 바이트는 전부 합성이다.
 
@@ -39,6 +41,17 @@ final class PrivateStorageURLProtocol: URLProtocol {
     static func set(status: Int, data: Data, host: String, path: String) {
         lock.lock(); defer { lock.unlock() }
         replies[host, default: [:]][path] = (status, data)
+    }
+
+    /// 같은 경로라도 메서드마다 다른 답(서명 POST 와 서명 URL GET 은 경로가 같다). 메서드 답이 경로 답보다 먼저다.
+    static func set(status: Int, body: String, host: String, method: String, path: String) {
+        lock.lock(); defer { lock.unlock() }
+        replies[host, default: [:]]["\(method) \(path)"] = (status, Data(body.utf8))
+    }
+
+    static func set(status: Int, data: Data, host: String, method: String, path: String) {
+        lock.lock(); defer { lock.unlock() }
+        replies[host, default: [:]]["\(method) \(path)"] = (status, data)
     }
 
     static func requests(host: String) -> [Sent] {
@@ -91,7 +104,7 @@ final class PrivateStorageURLProtocol: URLProtocol {
         )
         Self.lock.lock()
         Self.sent[host, default: []].append(entry)
-        let reply = Self.replies[host]?[path] ?? (200, Data("{}".utf8))
+        let reply = Self.replies[host]?["\(entry.method) \(path)"] ?? Self.replies[host]?[path] ?? (200, Data("{}".utf8))
         Self.lock.unlock()
 
         let response = HTTPURLResponse(
@@ -246,6 +259,83 @@ func signedURLAcceptsTheOtherSpellingsOfTheAnswer() {
             == "https://project.example/storage/v1/object/sign/b/u/x.jpg?token=t")
     #expect(SupabaseWorkService.signedURL(from: Data("{}".utf8), projectURL: base) == nil)
     #expect(SupabaseWorkService.signedURL(from: Data("not json".utf8), projectURL: base) == nil)
+}
+
+@Test
+func privateStorageNestedPathLowercasesEveryFolder() {
+    // 제보 캡처: <내 uid>/<제보 id>/<새 uuid>.jpg — 서버 정책이 첫 폴더와 둘째 폴더를 둘 다 글자 그대로 견준다.
+    let path = PrivateStorage.objectPath(
+        folders: ["ABCDEF00-0000-0000-0000-00000000000A", "1111AAAA-0000-0000-0000-0000000000BB"],
+        name: "2222CCCC-0000-0000-0000-0000000000DD"
+    )
+    #expect(path == "abcdef00-0000-0000-0000-00000000000a/1111aaaa-0000-0000-0000-0000000000bb/2222cccc-0000-0000-0000-0000000000dd.jpg")
+    #expect(PrivateStorage.isSafeObjectPath(path))
+    // 폴더 하나면 예전 모양과 같다.
+    #expect(PrivateStorage.objectPath(folders: ["A"], name: "B") == PrivateStorage.objectPath(owner: "A", name: "B"))
+}
+
+@Test
+func viewingSignsFirstThenGetsTheSignedPathWithoutTheBearer() async throws {
+    // 계약 v2: POST /storage/v1/object/sign/<bucket>/<path> {"expiresIn":3600} → {"signedURL":"/object/sign/…?token=…"}
+    // → GET <project>/storage/v1<signedURL>. 서명이 허락이라 GET 에는 로그인 토큰을 싣지 않는다.
+    let host = "ps-signed-get"
+    let service = PrivateStorageURLProtocol.service(host: host)
+    let path = "\(psUser)/aaaaaaaa-0000-0000-0000-000000000009/bbbbbbbb-0000-0000-0000-000000000009.jpg"
+    let signPath = "/storage/v1/object/sign/feedback-shots/\(path)"
+    PrivateStorageURLProtocol.set(status: 200, body: #"{"signedURL":"/object/sign/feedback-shots/\#(path)?token=synthetic-token"}"#,
+                                  host: host, method: "POST", path: signPath)
+    let bytes = Data([0xFF, 0xD8, 0xFF, 0x09, 0x08, 0x07])
+    PrivateStorageURLProtocol.set(status: 200, data: bytes, host: host, method: "GET", path: signPath)
+
+    let data = try await service.downloadPrivateObjectViaSignedURL(
+        bucket: "feedback-shots", path: path, expiresIn: 3600, accessToken: "access-token"
+    )
+
+    #expect(data == bytes, "서명 URL 로 받은 바이트가 다르다")
+    let sent = PrivateStorageURLProtocol.requests(host: host)
+    #expect(sent.map(\.method) == ["POST", "GET"], "서명 → 받기 순서가 아니다: \(sent.map(\.method))")
+    let sign = try #require(sent.first)
+    #expect(sign.path == signPath)
+    #expect(psHeader(sign, "Authorization") == "Bearer access-token")
+    let signBody = try #require(try JSONSerialization.jsonObject(with: sign.body) as? [String: Any])
+    #expect(signBody["expiresIn"] as? Int == 3600)
+    let get = try #require(sent.last)
+    #expect(get.path == signPath, "서명 응답을 /storage/v1 아래에 붙이지 않았다: \(get.path)")
+    #expect(psHeader(get, "Authorization") == nil, "서명 URL 받기에 로그인 토큰을 실었다")
+    #expect(psHeader(get, "apikey") == nil)
+}
+
+@Test
+func aSignedDownloadOfAGoneObjectIsObjectMissingAndAStaleSignatureRefreshes() async throws {
+    let path = "\(psUser)/aaaaaaaa-0000-0000-0000-00000000000a/bbbbbbbb-0000-0000-0000-00000000000a.jpg"
+    let signPath = "/storage/v1/object/sign/feedback-shots/\(path)"
+    let signed = #"{"signedURL":"/object/sign/feedback-shots/\#(path)?token=synthetic-token"}"#
+
+    let gone = "ps-signed-gone"
+    let goneService = PrivateStorageURLProtocol.service(host: gone)
+    PrivateStorageURLProtocol.set(status: 200, body: signed, host: gone, method: "POST", path: signPath)
+    PrivateStorageURLProtocol.set(status: 400, body: #"{"statusCode":"404","error":"not_found","message":"Object not found"}"#,
+                                  host: gone, method: "GET", path: signPath)
+    await #expect(throws: PrivateStorageError.objectMissing) {
+        try await goneService.downloadPrivateObjectViaSignedURL(bucket: "feedback-shots", path: path, expiresIn: 3600, accessToken: "t")
+    }
+
+    let stale = "ps-signed-stale"
+    let staleService = PrivateStorageURLProtocol.service(host: stale)
+    PrivateStorageURLProtocol.set(status: 200, body: signed, host: stale, method: "POST", path: signPath)
+    PrivateStorageURLProtocol.set(status: 400, body: #"{"statusCode":"400","error":"InvalidJWT","message":"jwt expired"}"#,
+                                  host: stale, method: "GET", path: signPath)
+    await #expect(throws: SupabaseWorkServiceError.sessionExpired) {
+        try await staleService.downloadPrivateObjectViaSignedURL(bucket: "feedback-shots", path: path, expiresIn: 3600, accessToken: "t")
+    }
+
+    // 서명 URL 이 http(s) 가 아니면 요청 없이 막는다.
+    let odd = "ps-signed-odd"
+    let oddService = PrivateStorageURLProtocol.service(host: odd)
+    await #expect(throws: PrivateStorageError.invalidPath) {
+        try await oddService.downloadSignedObject(from: URL(string: "file:///etc/hosts")!)
+    }
+    #expect(PrivateStorageURLProtocol.requests(host: odd).isEmpty)
 }
 
 // MARK: - 지우기(최선 노력)

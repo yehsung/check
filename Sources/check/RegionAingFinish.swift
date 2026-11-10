@@ -95,13 +95,13 @@ enum RegionAingFinish {
     /// **unlit 정규화 뒤 · 감은 눈 노드 앞에** 불러야 한다(개발 아잉이와 같은 순서). 그림 · 메시가 없으면 아무것도 안 바꾸고 false.
     @discardableResult
     static func applyBusan(to character: SCNNode) -> Bool {
-        apply(to: character, tag: "busan", modifiers: busanShaderModifiers, marker: busanMarkerName, withGullDecor: true)
+        apply(to: character, tag: "region.busan", modifiers: busanShaderModifiers, marker: busanMarkerName, withGullDecor: true)
     }
 
     /// 서울의 밤 마감: 디퓨즈 합성 · 밤하늘 몸 셰이더 · ckShadeMap · 표식(장식 없음).
     @discardableResult
     static func applySeoul(to character: SCNNode) -> Bool {
-        apply(to: character, tag: "seoul", modifiers: seoulShaderModifiers, marker: seoulMarkerName, withGullDecor: false)
+        apply(to: character, tag: "region.seoul", modifiers: seoulShaderModifiers, marker: seoulMarkerName, withGullDecor: false)
     }
 
     private static func apply(to character: SCNNode, tag: String, modifiers: [SCNShaderModifierEntryPoint: String], marker markerName: String,

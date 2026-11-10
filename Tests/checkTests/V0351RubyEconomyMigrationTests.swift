@@ -42,10 +42,12 @@ private let reGiftKindOnlyLaterStems: Set<String> = ["isul_aing_drink_gift.sql",
 /// 흑우(조각 교환 전용 — `gacha_only = true`)는 파는 행이 아니라 최저가에 들지 않고, 루비(루비 1000 으로 파는 행)는 값이 최저가 이상이라
 /// 최저가를 내리지 못한다 — 둘 다 '가입 지급 ≥ 최저가'를 깰 수 없다. 그래서 이 둘은 '뽑기 전용 insert + 사후 단언' 대신
 /// update 0 · insert 한 행 · 그 id 가 등록과 같다 · 파는 행이면 값 ≥ 이 파일의 최저가 를 잰다(운영 적용 때 번호만 옮겨도 같은 등록을 탄다).
-private let reNewCharacterLaterStems: [String: String] = [
-    "aing_hwoo_shard_only.sql": "aing_hwoo",
-    "aing_ruby_shop.sql": "aing_ruby",
-    "aing_dev_mission.sql": "aing_dev",
+private let reNewCharacterLaterStems: [String: [String]] = [
+    "aing_hwoo_shard_only.sql": ["aing_hwoo"],
+    "aing_ruby_shop.sql": ["aing_ruby"],
+    "aing_dev_mission.sql": ["aing_dev"],
+    // v0.3.85 지역 아잉이 — 센터 둘이라 행이 둘(둘 다 gacha_only · gift_only 'region' — 파는 행이 아니다).
+    "region_aing_gift.sql": ["aing_busan", "aing_seoul"],
 ]
 
 /// 마이그레이션 이름에서 앞 번호(14자리 + `_`)를 뗀 꼬리.
@@ -424,16 +426,16 @@ struct V0351RubyEconomyMigrationTests {
         #expect(reMigrationStem("20261109010000_pepero_aing_gift.sql") == "pepero_aing_gift.sql" && reMigrationStem("x_pepero_aing_gift.sql") == "x_pepero_aing_gift.sql")
         for later in names[(mine + 1)...] {
             let sql = reStripSQL(try reRaw(later)).lowercased()
-            if let id = reNewCharacterLaterStems[reMigrationStem(later)] {
-                #expect(!sql.contains("update public.character_prices"), "\(later) 가 가격표 값을 다시 쓴다 — 새 캐릭터 행 하나만 더해야 한다")
+            if let ids = reNewCharacterLaterStems[reMigrationStem(later)] {
+                #expect(!sql.contains("update public.character_prices"), "\(later) 가 가격표 값을 다시 쓴다 — 새 캐릭터 행만 더해야 한다")
                 let rows = try rePriceInserts(sql).flatMap { insert in insert.rows.map { (insert.columns, $0) } }
-                #expect(rows.count == 1, "\(later) 의 가격표 insert 행이 \(rows.count)개다(기대 1 — \(id))")
+                #expect(rows.count == ids.count, "\(later) 의 가격표 insert 행이 \(rows.count)개다(기대 \(ids.count) — \(ids))")
                 for (columns, row) in rows {
                     let value = { (name: String) -> String? in columns.firstIndex(of: name).flatMap { $0 < row.count ? row[$0] : nil } }
-                    #expect(value("character_id") == "'\(id)'", "\(later) 가 \(id) 아닌 행을 더한다: \(row)")
+                    #expect(ids.map { "'\($0)'" }.contains(value("character_id") ?? ""), "\(later) 가 \(ids) 아닌 행을 더한다: \(row)")
                     if value("gacha_only") != "true" {
                         let price = value("price").flatMap(Int.init) ?? -1
-                        #expect(price >= cheapest, "\(later) 의 파는 행 \(id) 값 \(price) 이 최저가 \(cheapest) 아래다 — 가입 지급 ≥ 최저가가 깨진다")
+                        #expect(price >= cheapest, "\(later) 의 파는 행 \(row) 값 \(price) 이 최저가 \(cheapest) 아래다 — 가입 지급 ≥ 최저가가 깨진다")
                     }
                 }
                 continue

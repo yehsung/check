@@ -25,7 +25,7 @@ import Testing
     func catalog() {
         // v0.3.81: 개발에 찌든 아잉이가 열째로 뒤에 붙었다 — 루비의 자리(아홉째)는 그대로다.
         #expect(CharacterCatalog.builtIns.map(\.id).firstIndex(of: "aing_ruby") == 8)
-        #expect(CharacterCatalog.builtIns.count == 11)   // 부산 갈매기 아잉이가 열한째
+        #expect(CharacterCatalog.builtIns.count == 12)   // 부산 갈매기 · 서울의 밤 아잉이가 열한째 · 열두째
         #expect(CharacterCatalog.builtInRubyAing.displayName == "루비 아잉이")
         #expect(CharacterManifest.Finish(characterID: "aing_ruby") == .ruby)
         #expect(!CharacterManifest.Finish.ruby.isRare && !CharacterManifest.Finish.ruby.isCake)

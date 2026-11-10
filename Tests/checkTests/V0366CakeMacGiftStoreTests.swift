@@ -134,7 +134,7 @@ private func gcStore(host: String, server: GiftServer, spy: GiftWindowSpy, signe
     // v0.3.78: 흑우까지 실린 번들(7)에서도 같은 주입 — 흑우도 빼고 7 이상일 때만 다시 더한다.
     let base = WorkTimerStore.bundledDrawableCharacterIDs.filter {
         !ShopWire.isulCharacterIDs.contains($0) && !ShopWire.peperoCharacterIDs.contains($0) && !ShopWire.hwooCharacterIDs.contains($0) && !ShopWire.rubyCharacterIDs.contains($0)
-            && !ShopWire.devCharacterIDs.contains($0)
+            && !ShopWire.devCharacterIDs.contains($0) && !ShopWire.regionCharacterIDs.contains($0)
     }
     // 출하 번호 6(빼빼로까지 — 이 빌드의 실제 번호)도 핵심 시나리오에서 돈다(`gcProtocols` — 검토 수리: 4 · 5 만 주입하면 '실제 출하 번호로
     // 핀'이 조용히 낡는다).
@@ -143,6 +143,7 @@ private func gcStore(host: String, server: GiftServer, spy: GiftWindowSpy, signe
         + (protocolVersion >= ShopWire.hwooProtocol ? ShopWire.hwooCharacterIDs : [])
         + (protocolVersion >= ShopWire.rubyProtocol ? ShopWire.rubyCharacterIDs : [])
         + (protocolVersion >= ShopWire.devProtocol ? ShopWire.devCharacterIDs : [])
+        + (protocolVersion >= ShopWire.regionProtocol ? ShopWire.regionCharacterIDs : [])
     V0354CoreStub.retain(store)
     return store
 }

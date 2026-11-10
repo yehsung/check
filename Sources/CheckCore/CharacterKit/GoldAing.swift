@@ -42,6 +42,8 @@ extension CharacterManifest {
         /// 부산 갈매기 아잉이(지역 아잉이 · 시안 G1) — 아잉 메시 + 무지개와 같은 디퓨즈 합성 + 갈매기 몸 셰이더(흰 몸 · 등 회색 · 날개 팔) +
         /// 부리 · 물갈퀴 발 · 꼬리깃 장식. **희귀가 아니다**(`isRare` 거짓).
         case busan
+        /// 서울의 밤 아잉이(지역 아잉이 · 시안 H5 손질) — 아잉 메시 + 무지개와 같은 디퓨즈 합성 + 밤하늘 몸 셰이더. 장식 없음. **희귀가 아니다**.
+        case seoul
     }
 
     /// 이 캐릭터의 마감. **id 에서 파생한다**(매니페스트 파일에 칸을 더하지 않는다 — 금·무지개·케이크는 코드에 박힌 내장 항목뿐이다).
@@ -72,6 +74,8 @@ extension CharacterManifest.Finish {
             self = .dev
         } else if CharacterCatalog.isBusanAing(characterID) {
             self = .busan
+        } else if CharacterCatalog.isSeoulAing(characterID) {
+            self = .seoul
         } else {
             self = .standard
         }
@@ -83,7 +87,7 @@ extension CharacterManifest.Finish {
     package var isRare: Bool {
         switch self {
         case .gold, .rainbow: return true
-        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev, .busan: return false
+        case .standard, .cakeStrawberry, .cakeChoco, .isul, .pepero, .hwoo, .ruby, .dev, .busan, .seoul: return false
         }
     }
 
@@ -91,7 +95,7 @@ extension CharacterManifest.Finish {
     package var isCake: Bool {
         switch self {
         case .cakeStrawberry, .cakeChoco: return true
-        case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby, .dev, .busan: return false
+        case .standard, .gold, .rainbow, .isul, .pepero, .hwoo, .ruby, .dev, .busan, .seoul: return false
         }
     }
 }

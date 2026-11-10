@@ -19,7 +19,7 @@ import Testing
     func catalog() {
         // 부산 갈매기 아잉이(지역 아잉이)가 열한째로 뒤에 붙었다 — 개발 아잉이의 자리(열째)는 그대로다.
         #expect(CharacterCatalog.builtIns.map(\.id).firstIndex(of: "aing_dev") == 9)
-        #expect(CharacterCatalog.builtIns.count == 11)
+        #expect(CharacterCatalog.builtIns.count == 12)
         #expect(CharacterCatalog.builtInDevAing.displayName == "개발에 찌든 아잉이")
         #expect(CharacterManifest.Finish(characterID: "aing_dev") == .dev)
         #expect(!CharacterManifest.Finish.dev.isRare && !CharacterManifest.Finish.dev.isCake)
@@ -139,8 +139,9 @@ import Testing
     func drawableAndProtocolNine() throws {
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(CharacterCatalog.devAingID), "\(drawable)")
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.devProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == ShopWire.devProtocol)
+        // 번호는 누적 — 지역 아잉이까지 실린 번들은 10(RegionAingMac3DTests). 개발 아잉이 몫은 '9 이상'.
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.devProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) >= ShopWire.devProtocol)
         #expect(DevAingFinish.isDrawable())
         #expect(DevAingArt.requiredResourceNames(for: .mac) == ["aing_dev-neutral", "aing_dev-negative", "aing_rainbow-shade"])
         for missing in DevAingArt.requiredResourceNames(for: .mac) {

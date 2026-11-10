@@ -618,6 +618,7 @@ final class ReactionEngine {
         if DevAingFinish.isDev(character) { return CharacterCatalog.devAingID }
         // 부산 갈매기 아잉이도 같은 메시라 자기 표식(`RegionAingFinish.busanMarkerName`)으로 가른다.
         if RegionAingFinish.isBusan(character) { return CharacterCatalog.busanAingID }
+        if RegionAingFinish.isSeoul(character) { return CharacterCatalog.seoulAingID }
         return CharacterCatalog.builtInAingID
     }
 

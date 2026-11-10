@@ -16,11 +16,12 @@ import simd
 package nonisolated enum RegionAingArt {
     /// 부산 센터 아잉이(갈매기). 서버 CHECK · 가격표 · `character_gifts.options` 의 id 와 같다.
     package static let busanID = "aing_busan"
-    /// 서울 센터 아잉이. 그림을 고르는 중이다 — 카탈로그에는 아직 안 세운다(그림이 없으니 어느 빌드도 그릴 수 있다고 말하지 않는다).
+    /// 서울 센터 아잉이(시안 H5 '서울의 밤' — 대표 #d_MOlCB5s8cPsm). 서버 CHECK · 가격표 · 선물 선택지의 id 와 같다.
     package static let seoulID = "aing_seoul"
 
-    /// 부산 아잉이의 표시 이름 — 한 곳.
+    /// 표시 이름 — 한 곳.
     package static let busanDisplayName = "부산 갈매기 아잉이"
+    package static let seoulDisplayName = "서울의 밤 아잉이"
 
     /// 서버 `profiles.center` 값(정확히 'busan' · 'seoul' — 서버 CHECK 가 그 둘만 허락한다).
     package static let busanCenter = "busan"
@@ -76,7 +77,7 @@ package nonisolated enum RegionAingArt {
     }
 
     /// 이 빌드가 이 지역 아잉이를 그릴 수 있는가 — 필요한 그림이 **전부** 있을 때만(목록이 비면 거짓).
-    /// 서울은 그림(초상)이 아직 없어 언제나 거짓이다 → 능력 번호 10(`ShopWire.regionProtocol`)을 어느 빌드도 말하지 않는다.
+    /// 능력 번호 10(`ShopWire.regionProtocol`)은 두 센터가 **다** 그려질 때만 나간다.
     package static func isDrawable(_ id: String, on platform: Platform, resourceExists: (String) -> Bool) -> Bool {
         let names = requiredResourceNames(id, for: platform)
         return !names.isEmpty && names.allSatisfy(resourceExists)
@@ -176,6 +177,19 @@ package nonisolated enum GullAingShader {
     }
 
     package static func fragment(faceOff: Bool = false) -> String {
+        RegionAingShaderKit.fragment(pattern: pattern, faceOff: faceOff)
+    }
+}
+
+/// 지역 아잉이 몸 셰이더의 공통 틀(β 얼굴 지키기 · 타원체 법선 · sRGB 섞기 · 높이 t · 둘레 각 θ · 반지름 r). 무늬만 갈매기 · 서울의 밤이 다르다.
+package nonisolated enum RegionAingShaderKit {
+    static let bodyTop = GullAingShader.bodyTop
+    static let bodyHeight = GullAingShader.bodyHeight
+    static let skinYRef = GullAingShader.skinYRef
+    static let blushSRGB = GullAingShader.blushSRGB
+    static func f5(_ v: Double) -> String { String(format: "%.5f", v) }
+
+    package static func fragment(pattern: String, faceOff: Bool = false) -> String {
         """
         #pragma arguments
         texture2d<float> ckShadeMap;
@@ -212,6 +226,7 @@ package nonisolated enum GullAingShader {
         float ckT = (\(f5(bodyTop)) - ckP.y) / \(f5(bodyHeight));
         float ckTh = atan2(ckP.x, ckP.z);
         float ckR = length(ckP.xz);
+        float ckAAT = max(fwidth(ckT), 1e-5);
         float ckFx = ckP.x / 0.60;
         float ckFy = (ckP.y - 0.34) / 0.30;
         float ckFace = (1.0 - smoothstep(0.85, 1.15, ckFx * ckFx + ckFy * ckFy)) * smoothstep(0.05, 0.25, ckP.z);
@@ -219,8 +234,117 @@ package nonisolated enum GullAingShader {
         float3 ckAdd = float3(0.0);
         float ckShadeMix = 1.0;
         \(pattern)
-        \(bodyOutput(faceOff: faceOff))
+        \(GullAingShader.bodyOutput(faceOff: faceOff))
         """
+    }
+}
+
+// MARK: - 서울의 밤 아잉이 — 몸 셰이더(시안 H5 + 대표 메모 손질 N1)
+
+/// 서울의 밤 몸 셰이더 — 남색 밤하늘 몸 + 별 여덟(네 갈래 반짝이 · 크게) + 초승달 + 아래 둘레 빌딩 그림자(짧은 불빛 줄 — 둘 중 하나) +
+/// 앞 오른쪽 남산 타워 그림자(전망대 불빛 띠 · 빨간 꼭대기). 대표 메모(11-10 "몸에 점이 너무 많아서 환공포증 있는사람들은 무서워할거
+/// 같은데")로 2차 H5 의 촘촘한 별 · 창문 점 격자를 뺐다(시안 렌더러 `rgSeoulNight2(windows: 1)`). 장식 노드는 없다.
+package nonisolated enum SeoulAingShader {
+    package static let shadeMapKey = GullAingShader.shadeMapKey
+    package static let geometry = GullAingShader.geometry
+
+    package static let skyTop = 0x27306A
+    package static let skyBottom = 0x161B44
+    package static let rimColor = 0x6F7CE0
+    package static let starColor = 0xFFF4C8
+    package static let moonColor = 0xFFE9A8
+    package static let buildingColor = 0x0E1230
+    package static let lightColor = 0xFFD27A
+    package static let towerTipColor = 0xFF5A4E
+
+    /// 별 자리(둘레 각 θ · 높이 t · 크기) — 얼굴 상자(앞 · y 0.08…0.62)를 피해 정수리 · 옆 · 뒤에.
+    package static let stars: [(theta: Double, t: Double, size: Double)] = [
+        (-0.55, 0.08, 1.0), (0.35, 0.05, 0.8), (1.10, 0.20, 1.1), (-1.25, 0.28, 0.9), (2.30, 0.15, 1.0),
+        (-2.40, 0.30, 0.8), (2.90, 0.40, 0.9), (1.55, 0.42, 0.7),
+    ]
+
+    static func f1(_ v: Double) -> String { String(format: "%.5f", v) }
+    static func f3(_ hex: Int) -> String { GullAingShader.f5hex(hex) }
+
+    package static var pattern: String {
+        var s = """
+        ckBase = mix(\(f3(skyTop)), \(f3(skyBottom)), smoothstep(0.0, 0.9, ckT));
+        ckShadeMix = 0.9;
+        {
+            float3 L = normalize(float3(-0.38, 0.55, 0.74));
+            float s1 = pow(max(dot(ckVn, L), 0.0), 80.0);
+            float s2 = pow(max(dot(ckVn, L), 0.0), 8.0);
+            float hiF = 1.0 - 0.85 * ckFace;
+            ckAdd += float3(0.95, 0.95, 1.0) * (s1 * 0.55 + s2 * 0.06) * hiF;
+            ckAdd += \(f3(rimColor)) * pow(1.0 - ckNV, 3.0) * 0.25;
+        }
+        {
+            float aa = ckAAT;
+            float sp = 0.0;
+
+        """
+        for star in stars {
+            s += """
+                {
+                    float dth = ckTh - (\(f1(star.theta)));
+                    dth = dth - 6.28319 * floor((dth + 3.14159) / 6.28319);
+                    float dx = dth * max(ckR, 0.2), dy = (ckT - (\(f1(star.t)))) * 1.69574;
+                    float L = 0.060 * \(f1(star.size)), W = 0.010 * \(f1(star.size));
+                    float arm = max((1.0 - smoothstep(0.0, W, abs(dy))) * (1.0 - smoothstep(0.0, L, abs(dx))),
+                                    (1.0 - smoothstep(0.0, W, abs(dx))) * (1.0 - smoothstep(0.0, L, abs(dy))));
+                    float core = 1.0 - smoothstep(0.012 * \(f1(star.size)), 0.022 * \(f1(star.size)), length(float2(dx, dy)));
+                    sp = max(sp, max(arm, core));
+                }
+
+            """
+        }
+        s += """
+            ckBase = mix(ckBase, \(f3(starColor)), sp);
+            ckAdd += \(f3(starColor)) * sp * 0.25;
+            {
+                float dth = ckTh - (-0.95);
+                float dx = dth * max(ckR, 0.2), dy = (ckT - 0.14) * 1.69574;
+                float d1 = length(float2(dx, dy)), d2 = length(float2(dx - 0.035, dy + 0.025));
+                float aaM = max(fwidth(d1), 1e-4);
+                float m = (1.0 - smoothstep(0.075 - aaM, 0.075 + aaM, d1)) * smoothstep(0.070 - aaM, 0.070 + aaM, d2);
+                ckBase = mix(ckBase, \(f3(moonColor)), m);
+                ckAdd += \(f3(moonColor)) * m * 0.2;
+            }
+            float colF = ckTh * 3.18310 * 2.0;
+            float col = floor(colF);
+            float hb = fract(sin(col * 91.7) * 4375.85);
+            float top = 0.70 - 0.11 * hb;
+            float bld = smoothstep(top - aa, top + aa, ckT);
+            float fx = fract(colF);
+            float3 bc = \(f3(buildingColor));
+            float lit = 0.0;
+            {
+                float on = step(0.45, fract(sin(col * 17.3) * 9137.1));
+                float ly = top + 0.045;
+                float band = (1.0 - smoothstep(0.006 - aa, 0.006 + aa, abs(ckT - ly))) * step(0.20, fx) * step(fx, 0.80);
+                lit = band * on;
+            }
+            bc = mix(bc, \(f3(lightColor)), lit * bld);
+            ckBase = mix(ckBase, bc, bld);
+            float th0 = 0.62;
+            float tdx = abs(ckTh - th0);
+            float tw = step(tdx, 0.030) * smoothstep(0.45, 0.46, ckT);
+            float pod = step(tdx, 0.095) * smoothstep(0.475, 0.48, ckT) * (1.0 - smoothstep(0.525, 0.53, ckT));
+            float ant = step(tdx, 0.011) * smoothstep(0.37, 0.38, ckT);
+            ckBase = mix(ckBase, \(f3(buildingColor)), max(max(tw, pod), ant));
+            float podLit = step(tdx, 0.080) * smoothstep(0.494, 0.496, ckT) * (1.0 - smoothstep(0.510, 0.512, ckT));
+            ckBase = mix(ckBase, \(f3(lightColor)), podLit);
+            float tip = 1.0 - smoothstep(0.012, 0.017, length(float2(ckTh - th0, (ckT - 0.372) * 0.6)));
+            ckBase = mix(ckBase, \(f3(towerTipColor)), tip);
+            ckAdd *= 1.0 - 0.6 * bld;
+        }
+
+        """
+        return s
+    }
+
+    package static func fragment(faceOff: Bool = false) -> String {
+        RegionAingShaderKit.fragment(pattern: pattern, faceOff: faceOff)
     }
 }
 

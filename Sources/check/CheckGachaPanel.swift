@@ -138,7 +138,7 @@ enum GachaPalette {
         case .ruby: return nil
         case .dev: return nil
         // 부산 갈매기 아잉이(지역 아잉이 — 센터 선물 전용)도 희귀가 아니다(`Finish.isRare` 거짓).
-        case .busan: return nil
+        case .busan, .seoul: return nil
         }
     }
 

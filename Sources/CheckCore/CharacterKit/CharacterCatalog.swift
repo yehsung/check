@@ -149,7 +149,7 @@ package struct CharacterCatalog: Sendable {
     /// 얻는 길 #d_RyTlg0ZZED04 "가. 우리 센터 선물" · 그림 #d_afa6DRyExPLp "G1 갈매기가 된 아잉이". 정본은 `RegionAingArt`.
     package static let busanAingID = RegionAingArt.busanID
 
-    /// 서울 센터 아잉이의 고정 id(그림을 고르는 중 — 카탈로그 항목은 그림이 정해지면 더한다). 지역 선물 선택지 · 능력 번호 10 의 재료.
+    /// 서울의 밤 아잉이(지역 아잉이 — 서울 센터 선물)의 고정 id. 그림 #d_MOlCB5s8cPsm "H5 서울의 밤"(+ 메모: 점 줄이기).
     package static let seoulAingID = RegionAingArt.seoulID
 
     /// 코드에 박힌 부산 갈매기 아잉이 — 아잉과 **같은 3D 메시**에 갈매기 마감(`CharacterManifest.Finish.busan` — 흰 몸 · 날개 팔 · 부리 ·
@@ -160,11 +160,19 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
+    /// 코드에 박힌 서울의 밤 아잉이 — 아잉과 **같은 3D 메시**에 밤하늘 마감(`CharacterManifest.Finish.seoul` — 남색 몸 · 별 · 초승달 ·
+    /// 빌딩 그림자 · 남산 타워 그림자)을 입힌 변형이다. **서울 센터 선물 전용**(부산과 같은 길).
+    package static let builtInSeoulAing = CharacterManifest(
+        id: seoulAingID,
+        displayName: RegionAingArt.seoulDisplayName,
+        kind: .scene3D
+    )
+
     /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이, 이슬 아잉이,
-    /// 빼빼로 아잉이, 흑우 아잉이, 루비 아잉이, 개발에 찌든 아잉이, 부산 갈매기 아잉이). 번들이 비어도 이 열은 늘 있다.
+    /// 빼빼로 아잉이, 흑우 아잉이, 루비 아잉이, 개발에 찌든 아잉이, 부산 갈매기 아잉이, 서울의 밤 아잉이). 번들이 비어도 이 열은 늘 있다.
     package static let builtIns: [CharacterManifest] = [
         builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
-        builtInPeperoAing, builtInHwooAing, builtInRubyAing, builtInDevAing, builtInBusanAing,
+        builtInPeperoAing, builtInHwooAing, builtInRubyAing, builtInDevAing, builtInBusanAing, builtInSeoulAing,
     ]
 
     /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
@@ -244,6 +252,11 @@ package struct CharacterCatalog: Sendable {
         id == busanAingID
     }
 
+    /// 이 id 가 서울의 밤 아잉이인가. 금과 같은 규칙(정확히 `aing_seoul` 만).
+    package static func isSeoulAing(_ id: String?) -> Bool {
+        id == seoulAingID
+    }
+
     /// 이 id 가 지역 아잉이(부산 · 서울)인가 — 센터 선물 전용.
     package static func isRegionAing(_ id: String?) -> Bool {
         id == busanAingID || id == seoulAingID
@@ -277,14 +290,13 @@ package struct CharacterCatalog: Sendable {
     package static let peperoGiftBuiltInIDs: [String] = [peperoAingID]
 
     /// 우리 센터 선물(지역 아잉이) 내장 캐릭터 — 부산 → 서울(표시 순서). 한 사람의 선물 선택지는 **그 사람 센터의 것 하나**다(서버가 고른다).
-    /// '지역' 뜻 자리(능력 번호 10 · 지역 선물 선택지)는 이 목록이다 — 서울 그림이 붙기 전엔 어느 빌드도 10 을 말하지 않는다.
+    /// '지역' 뜻 자리(능력 번호 10 · 지역 선물 선택지)는 이 목록이다 — 두 센터 그림이 다 붙어야 10 을 말한다.
     package static let regionGiftBuiltInIDs: [String] = [busanAingID, seoulAingID]
 
     /// 선물 전용 내장 캐릭터 **전부**(생일 → 술 → 빼빼로, 표시 순서) — '루비로 못 산다 · 잠긴 칸' 뜻으로만 쓴다(`isGiftOnlyBuiltIn` 과 같은 집합).
     /// ★ 케이크 뜻(생일 선물 선택지 · `ShopWire.cakeCharacterIDs`)에 쓰지 마라 — `birthdayGiftBuiltInIDs` 다. 술 뜻 · 빼빼로 뜻도 각자 목록이다.
-    /// ★ 지역 아잉이는 **카탈로그에 선 것만**(지금은 부산 — 서울은 그림이 정해져 내장에 서면 `regionGiftBuiltInIDs` 로 바꾼다). 이 목록은
-    ///   내장 열을 '선물 전용'으로 거른 것과 같아야 한다(시험이 잰다).
-    package static let giftOnlyBuiltInIDs: [String] = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs + peperoGiftBuiltInIDs + [busanAingID]
+    /// 이 목록은 내장 열을 '선물 전용'으로 거른 것과 같아야 한다(시험이 잰다).
+    package static let giftOnlyBuiltInIDs: [String] = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs + peperoGiftBuiltInIDs + regionGiftBuiltInIDs
 
     /// 이 내장 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술 한잔 · 빼빼로 → 빼빼로 데이). 선물 전용 내장이 아니면 nil.
     /// 잠긴 칸 · 잠긴 카드의 안내처럼 **종류마다 말이 다른** 자리가 이 한 곳을 묻는다(`CharacterGiftKind.copy`).

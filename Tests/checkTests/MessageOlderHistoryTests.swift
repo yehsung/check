@@ -1073,7 +1073,8 @@ func 이전대화_전선_이름은_코어_한_파일에만_있고_부르는_자�
     var tappers: [String] = []
     for file in files {
         let code = moSource(file)
-        if code.contains("message_page") || code.contains("p_before_us") { wire.append(file) }
+        // `p_before_us` 는 지난 확성기(megaphone_feed)도 쓰는 키라 이 함수만의 표지가 아니다 — `p_before_id` 로 가린다(0.3.86 합본).
+        if code.contains("message_page") || code.contains("p_before_id") { wire.append(file) }
         if code.contains("fetchMessagePage(") { fetchers.append(file) }
         if code.contains("performLoadOlderMessages(") { performers.append(file) }
         if code.contains("loadOlderMessages()") { tappers.append(file) }

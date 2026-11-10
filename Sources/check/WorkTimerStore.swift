@@ -1368,6 +1368,8 @@ final class WorkTimerStore {
     /// (`CrossyDuelStoreHost = GomokuStoreHost`). 판정·정산은 서버가 하고 판 구동기(`CrossyGame`)만 이 기기에서 돈다.
     let crossyDuel: CrossyDuelStore
     let alkkagi: AlkkagiOnlineStore
+    /// 1:1 대기방(맥 1:1 여섯 게임 공용 — 방 = 상대 없는 신청). 창 여섯이 `DuelRoomsHub.store` 로 같은 스토어를 본다.
+    let duelRooms = DuelRoomStore()
 
     /// 확성기(📢 v0.3.51) 작성 스토어 — **폰과 같은 코어 스토어**다(`MegaphoneStore`). 이 스토어는 호스트(세션·루비 미러)만
     /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
@@ -2151,6 +2153,12 @@ final class WorkTimerStore {
         mahjong.attach(host: self)
         crossyDuel.attach(host: self)
         alkkagi.attach(host: self)
+        duelRooms.attach(host: self)
+        DuelRoomsHub.store = duelRooms
+        duelRooms.rubyBalanceSource = { [weak self] in self?.rubyBalance }
+        // 방에서 선 판은 이 기기가 연 판이다 — 방장(숨이 '시작됨')과 참가자(참가 ok) 모두 그 게임 스토어가 받아 창을 연다.
+        duelRooms.onRoomStarted = { [weak self] game, matchID in self?.adoptDuelRoomMatch(game, matchID: matchID) }
+        duelRooms.onJoined = { [weak self] game, matchID in self?.adoptDuelRoomMatch(game, matchID: matchID) }
         // v0.3.69: '이 기기가 연 판' 기록(한 판 한 기기 — TetrisDuelStore 머리말 ⑩)을 이 앱의 defaults 에 둔다. 빠지면 기록이
         // 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 침묵 패를 한다.
         tetris.defaults = defaults
@@ -4735,4 +4743,21 @@ struct PendingSleepClose: Codable, Equatable {
     let sessionStartedAt: Date
     let sleepBeganAt: Date
     let lastInputAt: Date?
+}
+
+extension WorkTimerStore {
+    /// 1:1 대기방에서 선 판을 그 게임 스토어에 넘긴다(이 기기가 연 판 장부에 적고 판을 다시 읽는다 → 원래 길이 창을 띄운다).
+    func adoptDuelRoomMatch(_ game: DuelRoomGame, matchID: String) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            switch game {
+            case .gomoku: await self.gomoku.adoptRoomMatch(matchID)
+            case .chess: await self.chess.adoptRoomMatch(matchID)
+            case .tetris: await self.tetris.adoptRoomMatch(matchID)
+            case .reversi: await self.reversi.adoptRoomMatch(matchID)
+            case .crossyDuel: await self.crossyDuel.adoptRoomMatch(matchID)
+            case .alkkagi: await self.alkkagi.adoptRoomMatch(matchID)
+            }
+        }
+    }
 }

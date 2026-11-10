@@ -24,6 +24,9 @@ struct AlkkagiFeelReelTests {
                 _ = model.game.placeStone(stoneID: 5 + i, at: AlkkagiVector(x: p.0, y: p.1))
             }
             _ = model.game.confirmPlacement()
+            // 판의 첫 수(흑)는 힘이 60%까지라(선후 맞춤) 세게 맞히는 장면은 두 번째 수로 둔다(흑 차례 · 이미 1수).
+            model.game = AlkkagiGame.restore(stones: model.game.stones, currentPlayer: .black, phase: .aiming,
+                                             placementRemaining: 0, shotCount: 1)!
             var now = 1_000.0
             model.tick(now: now)
             model.aim(start: AlkkagiVector(x: 300, y: 470), translation: AlkkagiVector(x: 0, y: AlkkagiGame.maxPull))

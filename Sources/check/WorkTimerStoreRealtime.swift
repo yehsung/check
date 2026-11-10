@@ -241,6 +241,9 @@ extension WorkTimerStore {
 
     private func run(_ effects: [RealtimeEffect], now: Date) {
         for effect in effects {
+            // 1:1 대기방: 1:1 여섯 게임 초인종은 내 방에 사람이 들어온 신호일 수 있다 — 열린 방이 있으면 방 숨을 바로 쉰다(방장 기기가
+            // 판을 이 기기의 판으로 받아 창을 연다). 방이 없으면 아무것도 안 한다.
+            if Self.isDuelRoomGameSignal(effect) { duelRooms.handleGameSignal() }
             switch effect {
             case .connect(let linkToken):
                 performRealtimeConnect(linkToken: linkToken)
@@ -552,6 +555,16 @@ extension WorkTimerStore {
             case .heartbeatTimedOut: return "heartbeatTimedOut"
             case .closed(let code): return "closed(\(code.map(String.init) ?? "-"))"
             }
+        }
+    }
+}
+
+extension WorkTimerStore {
+    /// 방을 여는 1:1 여섯 게임의 초인종인가(1:1 대기방 — 방장 기기의 빠른 숨).
+    nonisolated static func isDuelRoomGameSignal(_ effect: RealtimeEffect) -> Bool {
+        switch effect {
+        case .gomokuSignal, .chessSignal, .tetrisSignal, .reversiSignal, .crossyDuelSignal, .alkkagiSignal: true
+        default: false
         }
     }
 }

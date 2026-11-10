@@ -23,6 +23,8 @@ struct CrossyDuelLobbyView: View {
                 CrossyDuelLobbyTabs(selected: tab, onSelect: onSelectTab)
                     .frame(height: CrossyDuelWindowLayout.lobbyTabHeight)
                 switch tab {
+                case .rooms:
+                    if let rooms = DuelRoomsHub.store { DuelRoomsTab(store: rooms, game: .crossyDuel) }
                 case .users:
                     CrossyDuelOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
                                            onChallenge: onChallenge)
@@ -34,6 +36,10 @@ struct CrossyDuelLobbyView: View {
             .frame(width: CrossyDuelWindowLayout.lobbyListWidth, height: CrossyDuelWindowLayout.bodyHeight,
                    alignment: .top)
             .clipped()
+            .task {
+                // 1:1 대기방 문을 아직 모르면 한 번 묻는다(열려 있으면 '방' 탭이 선다).
+                if let rooms = DuelRoomsHub.store, rooms.doorOpen == nil { await rooms.refresh(.crossyDuel) }
+            }
             CrossyDuelLobbySide(store: store, me: me)
                 .frame(width: CrossyDuelWindowLayout.lobbySideWidth, height: CrossyDuelWindowLayout.bodyHeight,
                        alignment: .top)
@@ -50,6 +56,10 @@ private struct CrossyDuelLobbyTabs: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if duelRoomsTabAvailable() {
+                let count = DuelRoomsHub.store?.rooms(for: .crossyDuel).count ?? 0
+                tab(.rooms, title: count > 0 ? "\(DuelRoomText.tabRooms) \(count)" : DuelRoomText.tabRooms, icon: "door.left.hand.open")
+            }
             tab(.users, title: CrossyDuelText.usersTab, icon: "person.2.fill")
             tab(.ranking, title: CrossyDuelText.rankTab, icon: "trophy.fill")
             Spacer(minLength: 4)

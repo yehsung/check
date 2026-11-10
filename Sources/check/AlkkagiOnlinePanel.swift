@@ -108,8 +108,10 @@ struct AlkkagiOnlinePanel: View {
     /// 로비는 **세 열**이다: 상대 목록 420 · 순위 340 · 오른쪽 400(뒤집기 상수 그대로 — §5.3).
     private var lobby: some View {
         HStack(alignment: .top, spacing: ReversiWindowLayout.columnSpacing) {
-            AlkkagiOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
-                                onChallenge: { stakeTarget = $0 })
+            DuelRoomsLobbyColumn(game: .alkkagi) {
+                AlkkagiOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
+                                    onChallenge: { stakeTarget = $0 })
+            }
                 .frame(width: ReversiWindowLayout.lobbyUsersWidth, height: ReversiWindowLayout.bodyHeight,
                        alignment: .top)
                 .clipped()

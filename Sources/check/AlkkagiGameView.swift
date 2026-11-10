@@ -866,6 +866,9 @@ final class AlkkagiLocalModel {
         #endif
         return switch game.phase {
         case .placing: "\(game.currentPlayer.title) 배치 중 · 내 영역을 눌러 돌을 놓으세요"
+        // 판의 첫 수(흑)는 힘이 60%까지(선후 맞춤) — 연습 판 · 온라인 판 같은 안내.
+        case .aiming where game.isFirstShotLimited:
+            selectedID == nil ? "첫 수는 힘이 60%까지예요 — 돌을 뒤로 당겨 보세요" : "첫 수는 힘 60%까지 · 놓으면 발사해요 · Esc로 취소"
         case .aiming: selectedID == nil ? "\(game.currentPlayer.title) 차례 — 돌을 뒤로 당겨 보세요" : "놓으면 발사해요 · Esc로 취소"
         case .rolling: "돌이 멈추면 차례가 바뀌어요"
         case .finished: resultTitle
@@ -956,7 +959,9 @@ final class AlkkagiLocalModel {
             if selectedID != nil { NSHapticFeedbackManager.defaultPerformer.perform(.generic, performanceTime: .now) }
         }
         guard selectedID != nil else { return }
-        pull = translation.length > AlkkagiGame.maxPull ? translation * (AlkkagiGame.maxPull / translation.length) : translation
+        // 판의 첫 수(흑)는 화살이 60%(당김 81)에서 멈춘다 — 서버도 같은 값으로 줄여 저장한다.
+        let limit = game.shotPullLimit
+        pull = translation.length > limit ? translation * (limit / translation.length) : translation
         let band = Int(power * 4)
         if band > powerBand { NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now) }
         powerBand = band

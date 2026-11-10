@@ -14,14 +14,10 @@ import Testing
 //
 // 골라 돌리는 필터:
 //   --filter 'checkTests\.(v0382VersionAndChangelog|v0381VersionAndChangelog|v0382AlkkagiGate|v0382OmokSkinTrimGate|v0381BundleGate)\('
-@Test("버전 0.3.82 / 135 · CHANGELOG 0.3.82 가 맨 위(세 줄 · 배너 폭 안 · 내부 어휘 없음)")
+@Test("CHANGELOG 0.3.82 (세 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0382VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.82</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>135</string>"),
-            "알까기 v2 문 열기(make_open_mac.sh 135)가 이 build 와 같아야 한다")
+    // 버전 고정과 맨 위 섹션 단언은 0.3.83 으로 옮겼다(V0383ReleaseTests).
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.82\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -38,8 +34,6 @@ func v0382VersionAndChangelog() throws {
     #expect(items.contains { $0.contains("알까기") && $0.contains("판돈") }, "알까기 판돈 줄이 없다")
     #expect(items.contains { $0.contains("오목") && $0.contains("난이도") }, "오목 AI 난이도 줄이 없다")
     #expect(items.contains { $0.contains("길건너") && $0.contains("반투명") }, "길건너 반투명 줄이 없다")
-    #expect(changelog.range(of: "## 0.3.82")!.lowerBound < changelog.range(of: "## 0.3.81")!.lowerBound,
-            "0.3.82 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }
 
 @Test("릴리스 게이트: 알까기 protocol 2(서버 v2 alk_protocol) · 판 감속 B · 판이 판 게임 칸을 꽉 채움")

@@ -187,19 +187,21 @@ struct GamesAlkkagiBoardView: View {
     var body: some View {
         GeometryReader { proxy in
             let side = min(proxy.size.width, proxy.size.height)
-            ZStack(alignment: .topLeading) {
-                surface(side: side)
-                // 떨어지는 돌은 판 칸 밖(여백)까지 그린다 — 판보다 사방 `fallMargin` 큰 캔버스를 그만큼 당겨 둔다(맥과 같은 꼴).
-                Canvas { context, _ in
-                    GamesAlkkagiDrawing.falling(model.falls, context: context, scale: side / AlkkagiGame.boardSize,
-                                                origin: CGPoint(x: Self.fallMargin, y: Self.fallMargin), reduced: reduceMotion)
+            surface(side: side)
+                .frame(width: side, height: side)
+                // 떨어지는 돌은 판 칸 밖(여백)까지 그린다 — 판보다 사방 `fallMargin` 큰 캔버스를 그만큼 당겨 둔다.
+                // ★ 겹쳐 그리기(overlay)여야 한다: ZStack 형제로 두면 큰 캔버스가 묶음 크기를 키워 판 전체가 왼쪽 · 위로
+                //   `fallMargin` 만큼 밀린다(11-10 캡처 — 판 왼쪽이 화면 끝에 붙었다). 맥 `AlkkagiGameView.board` 도 겹쳐 그린다(background).
+                .overlay(alignment: .topLeading) {
+                    Canvas { context, _ in
+                        GamesAlkkagiDrawing.falling(model.falls, context: context, scale: side / AlkkagiGame.boardSize,
+                                                    origin: CGPoint(x: Self.fallMargin, y: Self.fallMargin), reduced: reduceMotion)
+                    }
+                    .frame(width: side + Self.fallMargin * 2, height: side + Self.fallMargin * 2)
+                    .offset(x: -Self.fallMargin, y: -Self.fallMargin)
+                    .allowsHitTesting(false)
                 }
-                .frame(width: side + Self.fallMargin * 2, height: side + Self.fallMargin * 2)
-                .offset(x: -Self.fallMargin, y: -Self.fallMargin)
-                .allowsHitTesting(false)
-            }
-            .frame(width: side, height: side)
-            .offset(shakeOffset)
+                .offset(shakeOffset)
         }
         .aspectRatio(1, contentMode: .fit)
         .background {

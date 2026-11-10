@@ -27,12 +27,27 @@ struct GamesAlkkagiScreen: View {
         .background(MobileTheme.background.ignoresSafeArea())
         .navigationTitle(AlkkagiPhoneText.title)
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { store.alkkagiScreenDidAppear() }
+        .onAppear {
+            store.alkkagiScreenDidAppear()
+            #if DEBUG
+            // 데모 `games/alkkagi/practice`: 한 폰 연습 판으로 시작한다(서버 없이 서는 판 — `MobileDemoPhone1018Route`).
+            if store.demoPhone1018Route?.opensAlkkagiPractice == true, alkkagi.state == nil { practicing = true }
+            #endif
+        }
         .onDisappear { store.alkkagiScreenDidDisappear() }
         // 서버 판이 서면 연습은 접는다(판이 이긴다 — 맥 창도 판으로 갈아 끼운다).
         .onChange(of: alkkagi.state?.id) { _, id in if id != nil { practicing = false } }
         .sheet(item: $stakeTarget) { user in
             GamesAlkkagiStakeSheet(store: store, target: user)
+        }
+    }
+
+    /// 상태 줄의 글(없으면 nil) — 알림 칸이 같은 글이면 알림 칸을 접는다.
+    static func availabilityLine(_ availability: AlkkagiAvailability) -> String? {
+        switch availability {
+        case .available: nil
+        case .updateRequired: AlkkagiNoticeText.updateMine
+        case .serverMissing: AlkkagiPhoneText.unavailable
         }
     }
 
@@ -45,7 +60,9 @@ struct GamesAlkkagiScreen: View {
                     .font(.footnote)
                     .foregroundStyle(MobileTheme.label2)
                     .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
-                if let notice = alkkagi.notice {
+                // 문이 닫혔을 때 코어는 같은 글('곧 열려요' · '업데이트')을 알림 칸에도 싣는다 — 아래 상태 줄과 겹치면 한 번만 보인다
+                // (11-10 시뮬레이터 캡처에서 두 줄로 겹쳐 보였다).
+                if let notice = alkkagi.notice, notice != Self.availabilityLine(alkkagi.availability) {
                     InlineNotice(text: notice, kind: .info)
                 }
                 if let blockedBy, let line = ChessPhoneText.entryBlockHint(playing: blockedBy.text, blocked: .alkkagi) {

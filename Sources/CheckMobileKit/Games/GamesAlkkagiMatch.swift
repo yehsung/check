@@ -142,10 +142,7 @@ struct GamesAlkkagiPracticeView: View {
     var body: some View {
         let game = model.game
         VStack(spacing: MobileTheme.space2) {
-            Text(AlkkagiPhoneText.practiceSubtitle)
-                .font(.caption)
-                .foregroundStyle(MobileTheme.label2)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // 부제('연습 판 · 루비·전적에 남지 않아요')는 머리 제목 아래 한 번만 둔다(11-10 캡처에서 두 번 보였다).
             practiceRow(.white, game: game)
             GamesAlkkagiBoardView(model: model, placingPlayer: game.phase == .placing ? game.currentPlayer : nil)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

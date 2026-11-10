@@ -503,6 +503,14 @@ public final class MobileAppModel {
             router.open(.games)
             return
         }
+        // 아잉 마작 · 1:1 알까기 장면(`games/mahjong…` · `games/alkkagi…` — 폰 1.0.18)도 같은 꼴. 두 토막 모두 미니게임 이름이 아니라
+        // `AingRoute` 가 nil 이다 — 가로채도 잃는 라우트가 없다. 푸는 자리는 `MobileDemoPhone1018Route(demoRoute:)` 하나다.
+        if let phone1018 = MobileDemoPhone1018Route(demoRoute: raw) {
+            games.pendingDemoPhone1018Screen = true
+            games.demoPhone1018Route = phone1018
+            router.open(.games)
+            return
+        }
         #endif
         guard let route = AingRoute(path: raw) ?? Self.demoOnlyRoute(raw) else { return }
         router.open(route)

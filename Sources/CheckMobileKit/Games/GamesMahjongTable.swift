@@ -60,11 +60,16 @@ struct GamesMahjongTableView: View {
         ZStack(alignment: .topLeading) {
             place(layout.info) { infoBox(payload) }
             place(layout.chrome) {
-                HStack(spacing: 6) {
+                // 4:6 으로 나눈다 — 반반이면 '연습 끝내기'(여섯 글자)가 테두리에 잘린다(11-10 캡처). '규칙'은 두 글자라 40% 로 넉넉하다.
+                let gap: CGFloat = 6
+                let usable = max(0, layout.chrome.width - gap)
+                HStack(spacing: gap) {
                     smallButton(GamesMahjongText.rules, tint: MobileTheme.label2, action: onRules)
+                        .frame(width: usable * 0.4)
                     smallButton(mahjong.isPractice ? GamesMahjongText.practiceEnd : GamesMahjongText.leave, tint: MobileTheme.danger) {
                         if mahjong.isPractice { mahjong.endPractice() } else { confirmingLeave = true }
                     }
+                    .frame(width: usable * 0.6)
                 }
             }
             if let left = seat(.left) {
@@ -140,7 +145,8 @@ struct GamesMahjongTableView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(tint)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .minimumScaleFactor(0.6)
+                .padding(.horizontal, 6)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Capsule().strokeBorder(tint.opacity(0.7), lineWidth: 1))
                 .contentShape(Capsule())
@@ -609,9 +615,17 @@ struct GamesMahjongStatusLine: View {
         return nil
     }
 
+    /// 판 위 알림 줄에 올릴 코어 알림. 연습판은 서버 문과 상관없다 — 로비가 남긴 '곧 열려요'는 판 위에 띄우지 않는다
+    /// (11-10 시뮬레이터 캡처: 서버 없이 연 연습판 손패 위에 '아잉 마작은 곧 열려요'가 떴다).
+    private var tableNotice: String? {
+        guard let notice = store.notice, notice != MahjongNoticeText.practiceIdleCallHint else { return nil }
+        if store.isPractice, notice == MahjongNoticeText.unavailable { return nil }
+        return notice
+    }
+
     private var line: String {
         if payload.myAway != nil || payload.mySeatRow?.away == true { return MahjongNoticeText.away }
-        if let notice = store.notice, notice != MahjongNoticeText.practiceIdleCallHint { return notice }
+        if let notice = tableNotice { return notice }
         if store.riichiArmed { return GamesMahjongText.riichiArmedHint }
         if let preview, let turn, turn.discard.contains(preview) { return previewLine(discarding: preview) }
         if let turn, payload.mySeatRow?.riichi != true, payload.mySeatRow?.melds?.isEmpty == false {
@@ -629,7 +643,7 @@ struct GamesMahjongStatusLine: View {
 
     private var color: Color {
         if payload.myAway != nil { return MobileTheme.pending }
-        if let notice = store.notice, notice != MahjongNoticeText.practiceIdleCallHint { return MobileTheme.pending }
+        if tableNotice != nil { return MobileTheme.pending }
         if store.riichiArmed { return GamesMahjongPalette.accent }
         return .white
     }

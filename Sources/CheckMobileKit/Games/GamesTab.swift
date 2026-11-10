@@ -114,6 +114,7 @@ struct GamesTab: View {
             applyDemoTetrisRoute()
             applyDemoRummyRoute()
             applyDemoReversiRoute()
+            applyDemoPhone1018Route()
             applyDemoSeed()
         }
         // 라우트 계기에서도 꺼낸다 — 탭 막대가 이 탭을 **먼저** 마운트했으면 깃발이 서기 전에 onAppear 가 끝난다.
@@ -123,6 +124,7 @@ struct GamesTab: View {
             applyDemoTetrisRoute()
             applyDemoRummyRoute()
             applyDemoReversiRoute()
+            applyDemoPhone1018Route()
         }
     }
 
@@ -658,6 +660,16 @@ struct GamesTab: View {
     private func applyDemoReversiRoute() {
         guard store.consumePendingDemoReversiScreen() else { return }
         store.context.router.push(GamesDestination.reversi, on: .games)
+    }
+
+    /// 데모 스크린샷 전용: 시작 라우트가 아잉 마작 · 1:1 알까기 장면이면 그 화면을 쌓는다(같은 규약 · 폰 1.0.18).
+    /// 연습을 여는 꼬리는 화면이 읽는다(마작 `mahjongScreenDidAppear` · 알까기 `GamesAlkkagiScreen.onAppear`).
+    private func applyDemoPhone1018Route() {
+        guard store.consumePendingDemoPhone1018Screen() else { return }
+        #if DEBUG
+        guard let route = store.demoPhone1018Route else { return }
+        store.context.router.push(route.scene.destination, on: .games)
+        #endif
     }
 
     /// 데모 스크린샷 전용: 로비를 다녀온 상태(`visited`) — 허브 자체는 로비를 부르지 않는다(새 조회 없음).

@@ -277,6 +277,15 @@ package final class GamesStore {
     package var demoReversiRoute: MobileDemoReversiRoute?
     #endif
 
+    /// 데모 전용: 시작 라우트가 아잉 마작 · 1:1 알까기 장면(`games/mahjong…` · `games/alkkagi…` — 폰 1.0.18)이다. 위 깃발들과 같은 규약
+    /// (Bool 한 칸이라 `#if DEBUG` 밖 · 세우는 자리가 데모뿐이라 Release 에서는 영원히 false).
+    package var pendingDemoPhone1018Screen = false
+
+    /// 데모 전용: 그 라우트를 푼 값(쌓을 화면 · 연습을 열지 — `MobileDemoPhone1018Route`). 꺼내 비우지 않는다 · 로그아웃 `reset()` 이 비운다.
+    #if DEBUG
+    package var demoPhone1018Route: MobileDemoPhone1018Route?
+    #endif
+
     /// AI 대국의 수 선택기(코어 `aiMoveChooser` 에 끼운다). 사람 대국은 이것을 한 번도 부르지 않는다.
     @ObservationIgnored package let aiThinker = GamesGomokuAIThinker()
 
@@ -535,11 +544,13 @@ package final class GamesStore {
         pendingDemoTetrisScreen = false
         pendingDemoRummyScreen = false
         pendingDemoReversiScreen = false
+        pendingDemoPhone1018Screen = false
         #if DEBUG
         demoChessRoute = nil
         demoTetrisRoute = nil
         demoRummyRoute = nil
         demoReversiRoute = nil
+        demoPhone1018Route = nil
         #endif
         syncAIThinker()
     }
@@ -555,6 +566,13 @@ package final class GamesStore {
     package func consumePendingDemoReversiScreen() -> Bool {
         guard pendingDemoReversiScreen else { return false }
         pendingDemoReversiScreen = false
+        return true
+    }
+
+    /// 데모 아잉 마작 · 1:1 알까기 장면 깃발을 **한 번** 꺼낸다(같은 규약).
+    package func consumePendingDemoPhone1018Screen() -> Bool {
+        guard pendingDemoPhone1018Screen else { return false }
+        pendingDemoPhone1018Screen = false
         return true
     }
 
@@ -1275,6 +1293,12 @@ package final class GamesStore {
         syncMahjongHiddenPeers()
         store.openWindow(focusMatchID: nil)
         if isAppActive { store.windowDidShow() }
+        #if DEBUG
+        // 데모 `games/mahjong/practice`: 봇 셋과 동풍전 · 시간 제한 없음(서버 없이 서는 가로 판 — `MobileDemoPhone1018Route`).
+        if demoPhone1018Route?.opensMahjongPractice == true, store.practice == nil {
+            store.startPractice(format: .tonpuu, timed: false)
+        }
+        #endif
     }
 
     /// 화면을 떠났다(뒤로 · 다른 탭 · 로그아웃). 닫기는 기권이 아니다 — 판은 서버 시계로 계속된다(맥 창 닫기와 같다). 연습판은 멈춘다.

@@ -512,9 +512,10 @@ struct V03xxAlkkagiPanelRenderTests {
         print("[판 크기] 나무 띠 \(span)px(2x) — 칸 \(Int(BoardGameLayout.boardSide * 2))px")
         #expect(abs(Double(span) - BoardGameLayout.boardSide * 2) <= 8, "판 너비가 칸(\(BoardGameLayout.boardSide)pt)과 다르다: \(span)px")
         #expect(Double(span) > (BoardGameLayout.boardSide - 48) * 2 + 40, "0.3.80 크기(560pt) 그대로다")
-        // 돌 자리 비율: 흑 2번(300, 330)의 가운데 픽셀이 흑돌 빛이다(판 원점 + 자리 × 608/600).
+        // 돌 자리 비율: 흑 0번(120, 420)의 가운데 픽셀이 흑돌 빛이다(판 원점 + 자리 × 608/600).
+        // (흑 2번(300, 330)은 내 차례 손 안내가 그 위에 그려진다 — 판 가운데에 가장 가까운 돌, #d_cjxnVZpLHWw5.)
         let scale = AlkkagiDrawing.boardSide / AlkkagiGame.boardSize
-        let center = CGPoint(x: arBoardRect.minX + 300 * scale, y: arBoardRect.minY + 330 * scale)
+        let center = CGPoint(x: arBoardRect.minX + 120 * scale, y: arBoardRect.minY + 420 * scale)
         #expect(arCount(now, rect: CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)) { r, g, b in
             r < 70 && g < 70 && b < 70
         } > 40, "흑돌이 판 비율 자리에 없다")

@@ -30,6 +30,8 @@ struct AlkkagiGameView: View {
     var previewConfirmResign = false
     #endif
     @State private var model: AlkkagiLocalModel
+    /// 손 안내 횟수를 기억할 곳(창 루트가 `.standard` 를 넣는다 — 시험 · 스냅숏은 nil 이라 표준 스위트에 쓰지 않는다).
+    var guideDefaults: UserDefaults? = nil
 
     #if ALKKAGI_PLAYGROUND
     init(onReturn: (() -> Void)? = nil, me: AlkkagiPlayerProfile = AlkkagiPlayerProfile(name: "플레이어 1"),
@@ -117,6 +119,7 @@ struct AlkkagiGameView: View {
         #if !ALKKAGI_PLAYGROUND
         .onAppear { model.attachOnline(onlineStore) }
         #endif
+        .onAppear { if let guideDefaults, model.guideDefaults == nil { model.guideDefaults = guideDefaults } }
         .background {
             TimelineView(.animation(minimumInterval: frameInterval)) { context in
                 Color.clear.onChange(of: context.date) { _, _ in model.tick() }
@@ -254,9 +257,9 @@ struct AlkkagiGameView: View {
         } else {
             detail = model.game.phase == .placing ? "\(player.title) 배치 \(model.game.placedCount(player))/5" : "\(player.title) \(model.game.remaining(player))개"
         }
-        let message = simultaneousPlacement
-            ? (ready ? "준비 완료" : (isMe ? "돌을 배치해 주세요" : "배치 중"))
-            : (active ? (model.game.phase == .placing ? "돌을 배치해 주세요" : "내 차례예요") : "기다리는 중")
+        let message = AlkkagiGuideText.cardMessage(simultaneousPlacement: simultaneousPlacement, ready: ready, isMe: isMe,
+                                                   isOnline: isOnline, active: active,
+                                                   placing: model.game.phase == .placing)
         return BoardGamePlayerCard(name: profile.name, stoneColor: player == .black ? .black : .white,
                                    stoneText: detail, isTurn: active, isMe: player == model.myColor) {
             playerPortrait(profile)
@@ -307,6 +310,30 @@ struct AlkkagiGameView: View {
             .frame(width: BoardGameLayout.boardSide, height: BoardGameLayout.boardSide, alignment: .topLeading)
             .offset(shakeOffset)
             .overlay(alignment: .top) { resultBand }
+            .overlay { guideOverlay }
+    }
+
+    // MARK: 판 위 안내(대표 #d_cjxnVZpLHWw5 C안 — "뭘 하라는건지 모르겠어")
+
+    /// 숨겨 놓기: 판 **가운데 빈 띠**(두 진영 사이 — 돌이 못 오는 곳)에 큰 안내 한 줄.
+    /// 쏘기 차례: 손이 내 돌을 뒤로 당기고 날아갈 쪽을 화살로 보여 준다(돌을 잡으면 사라지고, 몇 번 쏘고 나면 더 안 나온다).
+    @ViewBuilder
+    private var guideOverlay: some View {
+        if let hint = model.pullHintStone {
+            AlkkagiPullHint(stone: hint, mine: model.guideSide, reduced: reduceMotion)
+                .frame(width: boardSide, height: boardSide)
+                .allowsHitTesting(false)
+        }
+        if let text = model.guideBandText {
+            Text(text)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 22)
+                .frame(height: 40)
+                .background(Capsule().fill(CheckTheme.accent.opacity(0.92)))
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                .allowsHitTesting(false)
+        }
     }
 
     private var shakeOffset: CGSize {
@@ -321,9 +348,7 @@ struct AlkkagiGameView: View {
             AlkkagiDrawing.board(context: context, size: size)
             let scale = size.width / AlkkagiGame.boardSize
             if model.game.phase == .placing {
-                let y: CGFloat = model.game.currentPlayer == .black ? size.height / 2 : 0
-                context.fill(Path(CGRect(x: 0, y: y, width: size.width, height: size.height / 2)),
-                             with: .color(CheckTheme.accent.opacity(0.10)))
+                AlkkagiGuideDrawing.zones(context: context, size: size, mine: model.game.currentPlayer)
             }
             for stone in model.game.stones where stone.isPlaced && !stone.isOut {
                 AlkkagiDrawing.stone(stone, context: context, scale: scale,
@@ -332,6 +357,9 @@ struct AlkkagiGameView: View {
             }
             if let selected = model.selectedStone, model.game.phase == .aiming {
                 AlkkagiDrawing.aim(stone: selected, pull: model.pull, context: context, scale: scale)
+            }
+            if model.guideIsMyAim {
+                AlkkagiGuideDrawing.myStones(context: context, scale: scale, stones: model.game.stones, mine: model.guideSide)
             }
             if let preview = model.placementPoint, let id = model.dragPlacementID,
                let stone = model.game.stones.first(where: { $0.id == id }) {
@@ -400,7 +428,7 @@ struct AlkkagiGameView: View {
     private var statusCard: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Text(statusHeadline.text).font(.caption.weight(.semibold))
+                Text(statusHeadline.text).font(.headline)
                     .foregroundStyle(statusHeadline.tint)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -436,8 +464,15 @@ struct AlkkagiGameView: View {
                     .font(.caption2).foregroundStyle(CheckTheme.secondaryText)
             }
         }
-        .padding(12).background(CheckTheme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(CheckTheme.border))
+        .padding(12)
+        // 오목 상태 상자처럼 지금 상태 색으로 칠한다(내 차례 초록 · 기다림 회색 · 경고 주황 — 대표 #d_cjxnVZpLHWw5).
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16).fill(CheckTheme.panel.opacity(0.85))
+                RoundedRectangle(cornerRadius: 16).fill(statusHeadline.tint.opacity(0.12))
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(statusHeadline.tint.opacity(0.45), lineWidth: 1.5))
     }
 
     private var placementButtonTitle: String {
@@ -876,6 +911,58 @@ final class AlkkagiLocalModel {
         guard let launch else { return AlkkagiVector(x: 0, y: 0) }
         return launch.direction * (-sin(launch.age * 38) * exp(-launch.age * 17) * launch.power * 6)
     }
+    // MARK: 안내(대표 #d_cjxnVZpLHWw5 C안)
+
+    /// 손 안내를 몇 번 쏠 때까지 보여 주나(이 기기에서 쏜 횟수 — 익숙해지면 사라진다).
+    static let pullHintShotLimit = 3
+    static let pullHintShotsKey = "check.alkkagi.pullHintShots"
+    /// 손 안내 횟수를 기억할 곳. 앱은 창이 `.standard` 를 넣고(`AlkkagiGameView.guideDefaults`), 시험은 시험 전용 스위트를 넣는다.
+    /// nil 이면 이 판에서만 센다(표준 스위트에 쓰지 않는다 — 시험 잔재 사고, PreferencesLeakGateTests).
+    @ObservationIgnored var guideDefaults: UserDefaults? {
+        didSet { pullHintShots = guideDefaults?.integer(forKey: Self.pullHintShotsKey) ?? pullHintShots }
+    }
+    /// 손 안내를 본 채로 쏜 횟수.
+    private(set) var pullHintShots = 0
+
+    /// 숨겨 놓기에서 내가 아직 준비 전인가.
+    var guideIsMyPlacing: Bool {
+        guard game.phase == .placing else { return false }
+        #if !ALKKAGI_PLAYGROUND
+        if let onlineStore { return onlineStore.state?.myReady == false }
+        #endif
+        return true
+    }
+
+    /// 쏘기 차례가 나고 아직 돌을 안 잡았는가.
+    var guideIsMyAim: Bool {
+        guard game.phase == .aiming, selectedID == nil else { return false }
+        #if !ALKKAGI_PLAYGROUND
+        if let onlineStore { return onlineStore.isMyTurn }
+        #endif
+        return true
+    }
+
+    /// 손 안내를 붙일 내 돌(판 가운데에 가장 가까운 돌) — 안내가 필요 없으면 nil.
+    var pullHintStone: AlkkagiGame.Stone? {
+        guard guideIsMyAim, pullHintShots < Self.pullHintShotLimit else { return nil }
+        return AlkkagiGuideDrawing.hintStone(game.stones, mine: guideSide)
+    }
+
+    /// 안내가 가리키는 쪽 — 온라인은 나, 연습 판(한 맥 둘이)은 지금 차례인 쪽.
+    var guideSide: AlkkagiGame.Player { isOnline ? myColor : game.currentPlayer }
+
+    var guideBandText: String? {
+        guard guideIsMyPlacing else { return nil }
+        return AlkkagiGuideText.band(side: game.currentPlayer, placed: game.placedCount(game.currentPlayer))
+    }
+
+    /// 쐈다 — 손 안내를 보던 중이면 한 번 센다.
+    private func countPullHintShot(hinted: Bool) {
+        guard hinted, pullHintShots < Self.pullHintShotLimit else { return }
+        pullHintShots += 1
+        guideDefaults?.set(pullHintShots, forKey: Self.pullHintShotsKey)
+    }
+
     var status: String {
         #if !ALKKAGI_PLAYGROUND
         if let onlineStore, let state = onlineStore.state {
@@ -883,20 +970,21 @@ final class AlkkagiLocalModel {
             if state.phase == .finished { return AlkkagiText.outcomeTitle(onlineStore.outcome) }
             if state.phase == .rolling { return "돌이 멈추면 차례가 바뀌어요" }
             if state.phase == .placing {
-                return state.myReady ? "준비 완료 · 상대를 기다리고 있어요" : "\(state.myColor.title) 비공개 배치 중 · 내 영역을 눌러 주세요"
+                return state.myReady ? AlkkagiGuideText.placedWaiting
+                    : AlkkagiGuideText.placing(side: state.myColor, placed: game.placedCount(state.myColor), player: nil)
             }
             if !onlineStore.isMyTurn {
                 let peer = state.currentPlayer == .black ? state.black : state.white
-                return "\(peer.displayName)님 차례예요"
+                return AlkkagiGuideText.opponentTurn(peer.displayName)
             }
         }
         #endif
+        // 연습 판(한 맥 둘이)은 흑 · 백을 글에 넣는다. 온라인은 늘 '나'.
+        let player: AlkkagiGame.Player? = isOnline ? nil : game.currentPlayer
         return switch game.phase {
-        case .placing: "\(game.currentPlayer.title) 배치 중 · 내 영역을 눌러 돌을 놓으세요"
+        case .placing: AlkkagiGuideText.placing(side: game.currentPlayer, placed: game.placedCount(game.currentPlayer), player: player)
         // 판의 첫 수(흑)는 힘이 60%까지(선후 맞춤) — 연습 판 · 온라인 판 같은 안내.
-        case .aiming where game.isFirstShotLimited:
-            selectedID == nil ? "첫 수는 힘이 60%까지예요 — 돌을 뒤로 당겨 보세요" : "첫 수는 힘 60%까지 · 놓으면 발사해요 · Esc로 취소"
-        case .aiming: selectedID == nil ? "\(game.currentPlayer.title) 차례 — 돌을 뒤로 당겨 보세요" : "놓으면 발사해요 · Esc로 취소"
+        case .aiming: AlkkagiGuideText.aiming(player: player, holding: selectedID != nil, firstShotLimited: game.isFirstShotLimited)
         case .rolling: "돌이 멈추면 차례가 바뀌어요"
         case .finished: resultTitle
         }
@@ -1001,7 +1089,7 @@ final class AlkkagiLocalModel {
             #if !ALKKAGI_PLAYGROUND
             if let onlineStore {
                 guard game.canPlace(stoneID: id, at: at) else {
-                    notice = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
+                    notice = AlkkagiGuideText.placeRejected
                     return
                 }
                 Task { [weak self] in await onlineStore.place(stoneID: id, at: at); self?.synchronizeOnline(force: true) }
@@ -1013,14 +1101,17 @@ final class AlkkagiLocalModel {
                 notice = nil
                 NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
             } else {
-                notice = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
+                notice = AlkkagiGuideText.placeRejected
             }
             return
         }
         guard let id = selectedID, let stone = selectedStone else { return }
         let shotPull = pull
         let actionID = UUID()
+        // 손 안내를 보던 차례였나(돌을 잡기 전 — 잡으면 안내는 사라진다). 쏜 뒤 한 번 센다.
+        let hinted = pullHintShots < Self.pullHintShotLimit
         if game.shoot(stoneID: id, pull: pull) {
+            countPullHintShot(hinted: hinted)
             launch = AlkkagiLaunch(stoneID: id, direction: pull * (-1 / pull.length), power: power)
             hitStop = 0; hitStopSpent = 0
             if soundEnabled { feedback.play(strength: 0.3 + power * 0.6, kind: .flick, horizontal: stone.position.x) }
@@ -1488,5 +1579,252 @@ extension View {
         #else
         self.checkTooltip(text)
         #endif
+    }
+}
+
+// MARK: - 안내(대표 11-10 "어디다 돌 둬야되는지 판 구분도 별로 안되어있고 … 뭘 하라는건지 모르겠어" · #d_cjxnVZpLHWw5 C안)
+//
+//  · 숨겨 놓기: 돌을 둘 수 있는 **실제** 칸만 파랗게 + 점선(나머지는 어둡게) · 판 가운데 큰 안내 한 줄 · 오른쪽 상자는 오목처럼 큰 글 · 색.
+//  · 쏘기 차례: 쏠 수 있는 내 돌마다 초록 고리 · 손이 뒤로 당기고 날아갈 쪽 화살(처음 세 번 쏠 때까지).
+//  · 상대 차례: 상대 카드는 '쏘는 중'(옛 '내 차례예요'는 상대 카드에도 떠 헷갈렸다).
+//  · 처음 한 번 따라 하기는 로비(`AlkkagiFirstTimeCoach` — 시간이 흐르지 않는 곳).
+
+enum AlkkagiGuideText {
+    /// 판 위 '아래 · 위' — 판은 돌리지 않는다(흑은 아래, 백은 위).
+    static func sideWord(_ side: AlkkagiGame.Player) -> String { side == .black ? "아래" : "위" }
+
+    /// 숨겨 놓기 · 판 가운데 띠.
+    static func band(side: AlkkagiGame.Player, placed: Int) -> String {
+        "내 진영(\(sideWord(side)) 파란 칸)에 돌 5개를 놓으세요 · \(placed)/5"
+    }
+
+    /// 숨겨 놓기 · 오른쪽 상자. `player` 는 연습 판(한 맥 둘이)에서만 — 흑 · 백 차례를 글에 넣는다.
+    static func placing(side: AlkkagiGame.Player, placed: Int, player: AlkkagiGame.Player?) -> String {
+        let body = "\(sideWord(side)) 파란 칸에 \(player == nil ? "내 " : "")돌 5개를 놓으세요 (\(placed)/5)"
+        return player.map { "\($0.title) 차례 — \(body)" } ?? body
+    }
+
+    static let placedWaiting = "준비 완료 — 상대가 놓기를 기다려요"
+    static let placeRejected = "파란 칸 안에, 다른 돌과 겹치지 않게 놓아 주세요"
+
+    static func opponentTurn(_ name: String) -> String { "\(name)님이 쏠 차례예요 — 기다려 주세요" }
+
+    /// 쏘기 차례 · 오른쪽 상자. 첫 수(흑)는 힘 60% 를 함께 말한다(선후 맞춤).
+    static func aiming(player: AlkkagiGame.Player?, holding: Bool, firstShotLimited: Bool) -> String {
+        if holding {
+            return firstShotLimited ? "첫 수는 힘 60%까지 · 놓으면 반대쪽으로 날아가요 · Esc로 취소"
+                : "놓으면 반대쪽으로 날아가요 · Esc로 취소"
+        }
+        let who = player.map { "\($0.title) 차례" } ?? "내 차례"
+        return "\(who) — \(player == nil ? "내 " : "")돌을 뒤로 당겼다 놓으세요\(firstShotLimited ? " (첫 수는 힘 60%까지)" : "")"
+    }
+
+    /// 선수 카드 한 줄. 온라인 상대 카드가 차례이면 '쏘는 중'(내 카드만 '내 차례예요').
+    static func cardMessage(simultaneousPlacement: Bool, ready: Bool, isMe: Bool, isOnline: Bool, active: Bool,
+                            placing: Bool) -> String {
+        if simultaneousPlacement { return ready ? "준비 완료" : (isMe ? "돌을 배치해 주세요" : "배치 중") }
+        guard active else { return "기다리는 중" }
+        if placing { return "돌을 배치해 주세요" }
+        return isOnline && !isMe ? "쏘는 중" : "내 차례예요"
+    }
+
+    static let handHint = "뒤로 당겼다 놓기"
+}
+
+enum AlkkagiGuideDrawing {
+    /// 숨겨 놓기에서 돌을 둘 수 있는 칸의 경계(판 좌표) — `AlkkagiGame.canPlace` 와 같은 값(시험이 둘을 맞춰 본다).
+    static let blackZoneTop: Double = 320
+    static let whiteZoneBottom: Double = 280
+
+    /// 숨겨 놓기: 내 칸만 파랗게 + 점선 테두리 + '내 진영' 이름표, 그 밖(상대 칸 + 가운데 빈 띠)은 어둡게.
+    static func zones(context: GraphicsContext, size: CGSize, mine: AlkkagiGame.Player) {
+        let s = size.width / AlkkagiGame.boardSize
+        let blackTop = blackZoneTop * s, whiteBottom = whiteZoneBottom * s
+        let lower = CGRect(x: 0, y: blackTop, width: size.width, height: size.height - blackTop)
+        let upper = CGRect(x: 0, y: 0, width: size.width, height: whiteBottom)
+        let mineRect = mine == .black ? lower : upper
+        let theirRect = mine == .black ? upper : lower
+        let outside = mine == .black ? CGRect(x: 0, y: 0, width: size.width, height: blackTop)
+                                     : CGRect(x: 0, y: whiteBottom, width: size.width, height: size.height - whiteBottom)
+        context.fill(Path(outside), with: .color(.black.opacity(0.48)))
+        context.fill(Path(mineRect), with: .color(CheckTheme.accent.opacity(0.55)))
+        context.stroke(Path(roundedRect: mineRect.insetBy(dx: 4, dy: 4), cornerRadius: 10),
+                       with: .color(CheckTheme.accent), style: StrokeStyle(lineWidth: 3, dash: [12, 6]))
+        let mineLabel = context.resolve(Text("내 진영").font(.subheadline.weight(.heavy)).foregroundStyle(.white))
+        let labelSize = mineLabel.measure(in: CGSize(width: 200, height: 40))
+        let labelY = mine == .black ? mineRect.maxY - 22 : mineRect.minY + 22
+        let pill = CGRect(x: mineRect.midX - labelSize.width / 2 - 14, y: labelY - labelSize.height / 2 - 5,
+                          width: labelSize.width + 28, height: labelSize.height + 10)
+        context.fill(Path(roundedRect: pill, cornerRadius: pill.height / 2), with: .color(CheckTheme.accent))
+        context.draw(mineLabel, at: CGPoint(x: mineRect.midX, y: labelY))
+        let theirLabel = context.resolve(Text("상대 진영").font(.headline.weight(.semibold)).foregroundStyle(.white.opacity(0.6)))
+        context.draw(theirLabel, at: CGPoint(x: theirRect.midX, y: theirRect.midY))
+    }
+
+    /// 쏘기 차례: 쏠 수 있는 내 돌마다 초록 고리(뒤집기의 '둘 수 있는 곳' 점처럼).
+    static func myStones(context: GraphicsContext, scale: Double, stones: [AlkkagiGame.Stone], mine: AlkkagiGame.Player) {
+        let r = AlkkagiGame.stoneRadius * scale + 5
+        for stone in stones where stone.owner == mine && stone.isPlaced && !stone.isOut {
+            let p = CGPoint(x: stone.position.x * scale, y: stone.position.y * scale)
+            context.stroke(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
+                           with: .color(CheckTheme.working.opacity(0.9)), lineWidth: 2.5)
+        }
+    }
+
+    /// 손 안내를 붙일 돌: 판 가운데(가로)에 가장 가까운 내 돌.
+    static func hintStone(_ stones: [AlkkagiGame.Stone], mine: AlkkagiGame.Player) -> AlkkagiGame.Stone? {
+        stones.filter { $0.owner == mine && $0.isPlaced && !$0.isOut }
+            .min { abs($0.position.x - AlkkagiGame.boardSize / 2) < abs($1.position.x - AlkkagiGame.boardSize / 2) }
+    }
+
+    /// 손 안내 한 장면. `pullFraction` 0…1 = 손이 당긴 정도(1 = 끝까지), `release` 0…1 = 놓은 뒤 화살이 밝아지는 정도.
+    static func pullHint(context: GraphicsContext, scale: Double, stone: AlkkagiGame.Stone, mine: AlkkagiGame.Player,
+                         pullFraction: Double, release: Double) {
+        // 흑(아래)은 아래로 당겨 위로, 백(위)은 위로 당겨 아래로 쏜다. 판 밖으로 손이 나가지 않게 당김 길이를 줄인다.
+        let back: Double = mine == .black ? 1 : -1
+        let p = CGPoint(x: stone.position.x * scale, y: stone.position.y * scale)
+        let r = AlkkagiGame.stoneRadius * scale
+        let room = mine == .black ? (AlkkagiGame.boardSize - stone.position.y) : stone.position.y
+        let fullReach = max(24, min(62, room - 18))
+        let pullEnd = CGPoint(x: p.x + 18 * scale * pullFraction, y: p.y + back * fullReach * pullFraction * scale)
+        // 말풍선은 끝까지 당긴 자리에 고정(손만 움직인다 — 돌 줄 아래라 이웃 돌을 가리지 않는다).
+        let fullEnd = CGPoint(x: p.x + 18 * scale, y: p.y + back * fullReach * scale)
+        if pullFraction > 0.02 {
+            var pullPath = Path()
+            pullPath.move(to: p)
+            pullPath.addLine(to: pullEnd)
+            context.stroke(pullPath, with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [6, 5]))
+        }
+        // 날아갈 쪽(반대) 화살 — 당긴 반대 방향. 당기기 전에는 기본 방향(상대 쪽 · 조금 비스듬히).
+        let dx = pullFraction > 0.02 ? p.x - pullEnd.x : -18 * scale
+        let dy = pullFraction > 0.02 ? p.y - pullEnd.y : -back * 62 * scale
+        let len = max(1, (dx * dx + dy * dy).squareRoot())
+        let ux = dx / len, uy = dy / len
+        let start = CGPoint(x: p.x + ux * (r + 6), y: p.y + uy * (r + 6))
+        let tip = CGPoint(x: p.x + ux * (r + 78 * scale), y: p.y + uy * (r + 78 * scale))
+        let arrow = CheckTheme.working.opacity(0.55 + 0.4 * max(pullFraction, release))
+        var flyPath = Path()
+        flyPath.move(to: start)
+        flyPath.addLine(to: tip)
+        context.stroke(flyPath, with: .color(arrow), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        var head = Path()
+        head.move(to: tip)
+        head.addLine(to: CGPoint(x: tip.x - ux * 14 - uy * 9, y: tip.y - uy * 14 + ux * 9))
+        head.addLine(to: CGPoint(x: tip.x - ux * 14 + uy * 9, y: tip.y - uy * 14 - ux * 9))
+        head.closeSubpath()
+        context.fill(head, with: .color(arrow))
+        // 손 · 말풍선(손 옆, 판 안쪽으로)
+        let hand = context.resolve(Text(Image(systemName: "hand.point.up.left.fill")).font(.system(size: 30)).foregroundStyle(.white))
+        let handAt = CGPoint(x: pullEnd.x + 10, y: pullEnd.y + back * 8)
+        context.draw(hand, at: handAt)
+        let label = context.resolve(Text(AlkkagiGuideText.handHint).font(.callout.weight(.bold)).foregroundStyle(.black))
+        let size = label.measure(in: CGSize(width: 300, height: 40))
+        let bubbleAt = CGPoint(x: fullEnd.x + 10, y: fullEnd.y + back * 8)
+        let toLeft = bubbleAt.x + 34 + size.width + 20 > AlkkagiGame.boardSize * scale
+        let anchor = CGPoint(x: toLeft ? bubbleAt.x - 34 - size.width / 2 - 10 : bubbleAt.x + 34 + size.width / 2 + 10,
+                             y: bubbleAt.y)
+        let bubble = CGRect(x: anchor.x - size.width / 2 - 10, y: anchor.y - size.height / 2 - 6,
+                            width: size.width + 20, height: size.height + 12)
+        context.fill(Path(roundedRect: bubble, cornerRadius: bubble.height / 2), with: .color(.white.opacity(0.95)))
+        context.draw(label, at: anchor)
+    }
+
+    /// 손 안내 움직임(2초 한 바퀴): 0~0.9초 당김 → 1.2초까지 버팀 → 놓음(화살이 밝아지고 손이 돌아간다).
+    static func pullHintPhase(_ t: Double) -> (pull: Double, release: Double) {
+        let cycle = t.truncatingRemainder(dividingBy: 2.0)
+        if cycle < 0.9 {
+            let x = cycle / 0.9
+            return (x * x * (3 - 2 * x), 0)
+        }
+        if cycle < 1.2 { return (1, 0) }
+        let x = min(1, (cycle - 1.2) / 0.8)
+        return (0, 1 - x)
+    }
+}
+
+/// 손 안내 — 판 위 덮개(입력을 막지 않는다). 동작 줄이기를 켜면 끝까지 당긴 한 장면으로 멈춘다.
+struct AlkkagiPullHint: View {
+    let stone: AlkkagiGame.Stone
+    let mine: AlkkagiGame.Player
+    let reduced: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduced)) { context in
+            let phase = reduced ? (pull: 1.0, release: 0.0)
+                : AlkkagiGuideDrawing.pullHintPhase(context.date.timeIntervalSinceReferenceDate)
+            Canvas { canvas, size in
+                AlkkagiGuideDrawing.pullHint(context: canvas, scale: size.width / AlkkagiGame.boardSize, stone: stone, mine: mine,
+                                             pullFraction: phase.pull, release: phase.release)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// 처음 한 번 따라 하기 — 알까기 창을 처음 열 때 로비 위에 한 번(시간이 흐르지 않는 곳). [알겠어요]로 닫으면 다시 저절로 안 뜬다.
+/// '봤음'은 UserDefaults 한 키 — 시험은 시험 전용 스위트를 넘긴다(`AlkkagiOnlinePanel.guideDefaults`).
+enum AlkkagiFirstTimeCoach {
+    static let seenKey = "check.alkkagi.firstTimeCoachSeen"
+    static let title = "처음 하는 알까기"
+    static let done = "알겠어요"
+    static let steps: [(icon: String, title: String, detail: String)] = [
+        ("hand.tap.fill", "파란 칸(내 진영)에 내 돌 5개를 숨겨 놓아요", "상대는 둘 다 놓을 때까지 못 봐요 · 30초"),
+        ("hand.draw.fill", "내 차례가 오면 내 돌을 뒤로 당겼다 놓아요", "당긴 반대쪽으로 날아가요 · 한 수 30초"),
+        ("arrow.up.right.circle.fill", "상대 돌을 판 밖으로 모두 밀어내면 이겨요", "내 돌도 밖으로 나가면 빠져요"),
+    ]
+
+    static func hasSeen(_ defaults: UserDefaults) -> Bool { defaults.bool(forKey: seenKey) }
+    static func markSeen(_ defaults: UserDefaults) { defaults.set(true, forKey: seenKey) }
+
+    /// 띄울까: 로비가 보일 때만(판 · 연습 · 관전 중엔 시간이 흐른다) · 스냅숏은 `preview` 로만 · 이 창에서 닫았거나 본 적 있으면 안 띄운다.
+    static func shows(lobbyVisible: Bool, preview: Bool?, snapshot: Bool, dismissed: Bool, defaults: UserDefaults?) -> Bool {
+        guard lobbyVisible else { return false }
+        if let preview { return preview }
+        guard !snapshot, !dismissed, let defaults else { return false }
+        return !hasSeen(defaults)
+    }
+}
+
+struct AlkkagiFirstTimeCoachCard: View {
+    let onDone: () -> Void
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .contentShape(Rectangle())
+                .onTapGesture(perform: onDone)
+            VStack(alignment: .leading, spacing: 12) {
+                Text(AlkkagiFirstTimeCoach.title).font(.title3.weight(.bold))
+                ForEach(Array(AlkkagiFirstTimeCoach.steps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: 12) {
+                        ZStack {
+                            Circle().fill(CheckTheme.accent.opacity(0.2))
+                            Image(systemName: step.icon).font(.system(size: 16, weight: .bold)).foregroundStyle(CheckTheme.accent)
+                        }.frame(width: 34, height: 34)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(index + 1). \(step.title)").font(.subheadline.weight(.semibold))
+                            Text(step.detail).font(.caption).foregroundStyle(CheckTheme.secondaryText)
+                        }
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button(action: onDone) {
+                        Text(AlkkagiFirstTimeCoach.done)
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 22).padding(.vertical, 8)
+                            .background(Capsule().fill(CheckTheme.accent))
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut(.defaultAction)
+                }
+            }
+            .padding(20)
+            .frame(width: 420)
+            .background(RoundedRectangle(cornerRadius: 18).fill(CheckTheme.panelElevated.opacity(0.97)))
+            .overlay(RoundedRectangle(cornerRadius: 18).stroke(CheckTheme.accent.opacity(0.6), lineWidth: 1.5))
+            .shadow(color: .black.opacity(0.45), radius: 14, y: 8)
+        }
     }
 }

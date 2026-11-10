@@ -42,10 +42,10 @@ struct V0374IsulCoreTests {
         #expect(CharacterCatalog.builtInIsulAing.kind == .scene3D)
         // v0.3.77: 빼빼로가 일곱째로 이슬 뒤에 붙는다(V0377PeperoCoreTests) — 이슬의 자리(여섯째)는 그대로다.
         #expect(CharacterCatalog.builtIns.map(\.id)
-            == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID])
+            == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID, CharacterCatalog.busanAingID])
         // 번들이 비어도 내장 순서 그대로 · 나머지는 그 뒤.
         let empty = CharacterCatalog(entries: [])
-        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID])
+        #expect(empty.allIDs == ["aing", "aing_gold", "aing_rainbow", Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID, CharacterCatalog.busanAingID])
         #expect(empty.manifest(id: Self.isul)?.displayName == "이슬 아잉이")
         #expect(CharacterCatalog.isIsulAing(Self.isul))
         for near in ["aing_isul ", "AING_ISUL", "aing_isul2", "isul", "", nil] as [String?] {
@@ -60,7 +60,7 @@ struct V0374IsulCoreTests {
         #expect(!CharacterCatalog.isGachaOnlyBuiltIn(Self.isul))
         #expect(CharacterCatalog.birthdayGiftBuiltInIDs == [Self.strawberry, Self.choco])
         #expect(CharacterCatalog.drinkGiftBuiltInIDs == [Self.isul])
-        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID])
+        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, Self.isul, CharacterCatalog.peperoAingID, CharacterCatalog.busanAingID])
         #expect(Set(CharacterCatalog.giftOnlyBuiltInIDs) == Set(CharacterCatalog.builtIns.map(\.id).filter(CharacterCatalog.isGiftOnlyBuiltIn)))
         #expect(CharacterCatalog.giftKind(ofBuiltIn: Self.strawberry) == .birthday)
         #expect(CharacterCatalog.giftKind(ofBuiltIn: Self.choco) == .birthday)
@@ -154,7 +154,7 @@ struct V0374IsulCoreTests {
 
     @Test("종류: 원문 값 두 개만 · 내장 id · 내장 → 종류")
     func giftKind() {
-        #expect(CharacterGiftKind.allCases == [.birthday, .drink, .pepero], "v0.3.77 빼빼로가 셋째 종류")
+        #expect(CharacterGiftKind.allCases == [.birthday, .drink, .pepero, .region], "v0.3.77 빼빼로가 셋째 · 지역 아잉이가 넷째 종류")
         #expect(CharacterGiftKind.birthday.wireValue == "birthday")
         #expect(CharacterGiftKind.drink.wireValue == "drink")
         #expect(CharacterGiftKind(wireValue: "birthday") == .birthday)

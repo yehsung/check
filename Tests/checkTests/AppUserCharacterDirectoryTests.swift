@@ -164,7 +164,7 @@ func 캐릭터표_카탈로그로_만들면_카탈로그가_아는_것만_안다
     // v0.3.77 빼빼로 아잉이 · v0.3.78 흑우 · 루비 · v0.3.81 개발에 찌든 아잉이)은 늘 안다.
     // 맥 실사용 표는 이 생성자가 아니라 초상이 **실재하는** id(`AppUserAvatarArt.knownIDs`)로 만든다 — 금 · 무지개 · 케이크 초상이
     // 없는 빌드에서 그 착용자는 이니셜이다(V0335).
-    #expect(directory.knownIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "fox"])
+    #expect(directory.knownIDs == ["aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "fox"])
     #expect(directory.characterID(for: aucMe) == "fox")
     #expect(directory.characterID(for: aucPeer) == nil, "카탈로그(=그릴 수 있는 초상)에 없는 id 를 안다고 했다")
     #expect(directory.characterID(for: aucOther) == "aing")

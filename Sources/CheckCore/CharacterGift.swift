@@ -53,6 +53,8 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
     case drink
     /// 빼빼로 데이 선물(v0.3.77 · 11-11 기간 선물) — 빼빼로 아잉이 하나, 고를 것 없이 받는다.
     case pepero
+    /// 우리 센터 선물(지역 아잉이) — 그 사람 센터의 아잉이 하나(부산 → 갈매기 · 서울 → 서울 아잉이), 고를 것 없이 받는다. 기한 없음.
+    case region
 
     /// 서버 원문 값("birthday" · "drink" · "pepero"). 문자열을 적는 곳은 여기(`rawValue`) 하나다.
     package var wireValue: String { rawValue }
@@ -69,6 +71,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .birthday: return CharacterCatalog.birthdayGiftBuiltInIDs
         case .drink: return CharacterCatalog.drinkGiftBuiltInIDs
         case .pepero: return CharacterCatalog.peperoGiftBuiltInIDs
+        case .region: return CharacterCatalog.regionGiftBuiltInIDs
         }
     }
 
@@ -78,6 +81,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .birthday: return ShopWire.cakeProtocol
         case .drink: return ShopWire.isulProtocol
         case .pepero: return ShopWire.peperoProtocol
+        case .region: return ShopWire.regionProtocol
         }
     }
 
@@ -98,6 +102,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .birthday: return .birthday
         case .drink: return .drink
         case .pepero: return .pepero
+        case .region: return .region
         }
     }
 }
@@ -529,6 +534,15 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         lockedCaption: PeperoGiftText.lockedCaption, lockedHint: PeperoGiftText.lockedHint,
         reopenTitle: PeperoGiftText.reopenTitle, reopenButton: PeperoGiftText.reopenButton,
         claimFailed: PeperoGiftText.claimFailed
+    )
+
+    /// 우리 센터 선물(지역 아잉이 — 문구 가안, `RegionGiftText`).
+    package static let region = CharacterGiftCopy(
+        title: RegionGiftText.title, body: RegionGiftText.body, confirmButton: RegionGiftText.confirmButton,
+        wearNowButton: RegionGiftText.wearNowButton, closeButton: RegionGiftText.closeButton,
+        lockedCaption: RegionGiftText.lockedCaption, lockedHint: RegionGiftText.lockedHint,
+        reopenTitle: RegionGiftText.reopenTitle, reopenButton: RegionGiftText.reopenButton,
+        claimFailed: RegionGiftText.claimFailed
     )
 
     /// 받은 뒤 한 줄(종류와 무관하게 한 규칙 — "○○를 받았어요!").

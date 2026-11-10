@@ -151,6 +151,9 @@ enum CheckCharacter3DScene {
         case .ruby: RubyAingFinish.apply(to: character)
         // 개발에 찌든 아잉이: 무지개와 같은 디퓨즈 합성 + 후드 몸 셰이더(눈꺼풀 덮개) + 끈 장식(`check.devDecor`) + 표식. 내려 세우지 않는다.
         case .dev: DevAingFinish.apply(to: character)
+        // 부산 갈매기 아잉이(지역 아잉이): 무지개와 같은 디퓨즈 합성 + 갈매기 몸 셰이더 + 부리 · 발 · 꼬리깃 장식(`check.busanDecor`) + 표식.
+        // 내려 세우지 않는다(장식이 몸 상자 밖으로 거의 안 나온다 — `RegionAingFinish` 머리말 ★ 프레이밍).
+        case .busan: RegionAingFinish.applyBusan(to: character)
         }
     }
 

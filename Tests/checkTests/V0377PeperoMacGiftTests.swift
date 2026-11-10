@@ -329,7 +329,8 @@ struct V0377PeperoMacGiftTests {
         // 초대장 화면(고르기 없음)은 선택지가 하나인 종류 — 술 · 빼빼로. 생일은 고르기.
         #expect(!CharacterGiftKind.birthday.showsInviteScreen)
         #expect(CharacterGiftKind.drink.showsInviteScreen && CharacterGiftKind.pepero.showsInviteScreen)
-        #expect(CharacterGiftKind.allCases.allSatisfy { $0.showsInviteScreen == ($0.builtInIDs.count == 1) })
+        // 지역 아잉이(우리 센터 선물)는 내장이 둘(부산 · 서울)이지만 **한 사람의 선택지는 자기 센터 것 하나**다(서버가 고른다) — 초대장 화면.
+        #expect(CharacterGiftKind.allCases.allSatisfy { $0.showsInviteScreen == ($0.builtInIDs.count == 1 || $0 == .region) })
     }
 
     @Test("받는 창(빼빼로): 초대장 화면 · 술 · 생일 화면과 다른 그림 · 긴 note + 실패 한 줄도 창 높이 안 · 제목은 빼빼로 · 화면 판정은 한 곳")

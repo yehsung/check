@@ -89,6 +89,13 @@ package nonisolated enum ShopWire {
     package static let devProtocol = 9
     /// 이 번호를 요구하는 캐릭터 — 개발 아잉이 하나(`CharacterCatalog.devBuiltInIDs`).
     package static let devCharacterIDs = CharacterCatalog.devBuiltInIDs
+    /// 지역 아잉이(부산 · 서울 — 우리 센터 선물)가 든 명단과 우리 센터 선물(`region_gift_ensure` · `character_gift_pending` 의 `kind = 'region'` ·
+    /// 그 수령)을 받을 수 있는 번호. 서버 `character_prices.min_protocol = 10` 인 행이 두 지역 아잉이이고, 10 미만인 클라에게는 그 행이 **아예
+    /// 안 보이며**(가진 사람에게도), 지역 선물은 조회에 안 실리고 수령은 `needs_update` 다.
+    /// ★ **두 센터를 다** 그릴 수 있을 때만 말한다 — 부산만 그리는 빌드가 10 을 말하면 서울 사람이 아잉 그림의 '서울 아잉이'를 받는다.
+    package static let regionProtocol = 10
+    /// 이 번호를 요구하는 캐릭터 — 지역 아잉이 둘(`CharacterCatalog.regionGiftBuiltInIDs`).
+    package static let regionCharacterIDs = CharacterCatalog.regionGiftBuiltInIDs
 
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
@@ -124,7 +131,8 @@ package nonisolated enum ShopWire {
         guard peperoCharacterIDs.allSatisfy(drawable.contains) else { return isulProtocol }
         guard hwooCharacterIDs.allSatisfy(drawable.contains) else { return peperoProtocol }
         guard rubyCharacterIDs.allSatisfy(drawable.contains) else { return hwooProtocol }
-        return devCharacterIDs.allSatisfy(drawable.contains) ? devProtocol : rubyProtocol
+        guard devCharacterIDs.allSatisfy(drawable.contains) else { return rubyProtocol }
+        return regionCharacterIDs.allSatisfy(drawable.contains) ? regionProtocol : devProtocol
     }
 
     /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의
@@ -142,6 +150,11 @@ package nonisolated enum ShopWire {
     /// 이 번호로 빼빼로 선물(빼빼로 아잉이)을 받을 수 있는가(서버 `claim_character_gift` 의 빼빼로 선물 문턱 `p_protocol >= 6` 와 같다).
     package static func supportsPeperoGift(protocolVersion: Int) -> Bool {
         protocolVersion >= peperoProtocol
+    }
+
+    /// 이 번호로 우리 센터 선물(지역 아잉이)을 마련 · 조회 · 수령할 수 있는가(서버 `region_gift_ensure` · `claim_character_gift` 의 문턱 10).
+    package static func supportsRegionGift(protocolVersion: Int) -> Bool {
+        protocolVersion >= regionProtocol
     }
 
     /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).

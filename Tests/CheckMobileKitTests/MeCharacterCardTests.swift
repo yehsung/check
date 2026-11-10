@@ -153,7 +153,7 @@ struct MeCharacterCardTests {
         let sources = try Self.sources()
         // 빼빼로 아잉이(맥 0.3.77 먼저) · 흑우 아잉이(맥 0.3.78 먼저)는 폰 카드가 아직 없다(다음 폰 판) — 폰이 싣는 내장만 잰다.
         let builtIns = [CharacterCatalog.builtInAingID] + CharacterCatalog.builtIns.map(\.id)
-            .filter { $0 != CharacterCatalog.builtInAingID && $0 != CharacterCatalog.peperoAingID && $0 != CharacterCatalog.hwooAingID && $0 != CharacterCatalog.rubyAingID && $0 != CharacterCatalog.devAingID }
+            .filter { $0 != CharacterCatalog.builtInAingID && $0 != CharacterCatalog.peperoAingID && $0 != CharacterCatalog.hwooAingID && $0 != CharacterCatalog.rubyAingID && $0 != CharacterCatalog.devAingID && $0 != CharacterCatalog.busanAingID }
         for id in builtIns {
             let source = try #require(sources.first { $0.id == id }, "\(id) 카드 원천이 없다")
             let phone = try Self.builtInPortraitURL(id)
@@ -207,7 +207,7 @@ struct MeCharacterCardTests {
         // 빼빼로 아잉이(맥 0.3.77 먼저 — 코어 내장 일곱째)는 폰 카드가 아직 없다(다음 폰 판): 폰 목록에 없고, 착용값은 아잉으로 접힌다.
         // 흑우 아잉이(맥 0.3.78 먼저 — 코어 내장 여덟째)도 폰 카드가 아직 없다: 빼빼로와 같이 빼고 잰다.
         #expect(Array(MeCharacterCards.knownIDs.prefix(6))
-                == CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.peperoAingID && $0 != CharacterCatalog.hwooAingID && $0 != CharacterCatalog.rubyAingID && $0 != CharacterCatalog.devAingID })
+                == CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.peperoAingID && $0 != CharacterCatalog.hwooAingID && $0 != CharacterCatalog.rubyAingID && $0 != CharacterCatalog.devAingID && $0 != CharacterCatalog.busanAingID })
         #expect(MeCharacterCards.knownIDs.contains(CharacterCatalog.isulAingID))
         #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.isulAingID) == CharacterCatalog.isulAingID)
         #expect(MeCharacterCards.equippedID(fromServer: " aing_isul ") == CharacterCatalog.isulAingID)

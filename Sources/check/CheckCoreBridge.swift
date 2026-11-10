@@ -67,6 +67,10 @@ extension CharacterCatalog {
         if CharacterCatalog.isDevAing(id) {
             return entry(id: id) == nil ? nil : DevAingFinish.portraitURL(for: mood)
         }
+        // 지역 아잉이(부산 갈매기)도 같은 자리(번들 루트 `aing_busan-*.png` — 3D 렌더에서 구운 초상).
+        if CharacterCatalog.isRegionAing(id) {
+            return entry(id: id) == nil ? nil : RegionAingFinish.portraitURL(for: id, mood: mood)
+        }
         guard let entry = entry(id: id), let directory = entry.directory,
               let portrait = entry.manifest.portrait else { return nil }
         let file = mood == .neutral ? portrait.neutral : portrait.negative

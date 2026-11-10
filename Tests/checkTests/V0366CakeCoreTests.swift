@@ -17,7 +17,7 @@ struct V0366CakeCoreTests {
     static let choco = "aing_cake_choco"
     /// 내장 전부(표시 순서). v0.3.66 에 케이크 둘로 다섯, v0.3.74 에 이슬이 여섯째로(V0374IsulCoreTests), v0.3.77 에 빼빼로가 일곱째로
     /// 붙었다(V0377PeperoCoreTests).
-    static let builtInIDs = ["aing", "aing_gold", "aing_rainbow", strawberry, choco, "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"]
+    static let builtInIDs = ["aing", "aing_gold", "aing_rainbow", strawberry, choco, "aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan"]
 
     /// 맥 케이크 초상 두 장(`<id>-neutral` · `<id>-negative`)이 소스 트리(`Sources/check/Resources/`)에 있는가 — 금 · 무지개와 같은 기준선.
     /// 이 단계(코어)에는 없다. 그림 단계가 넣는 순간 아바타 · 고르기 시험이 그 초상을 찾아야 초록이다(못 찾으면 배선이 빠졌다).
@@ -52,7 +52,8 @@ struct V0366CakeCoreTests {
     @Test("표시 순서: 케이크는 정렬로는 금보다 앞(`aing_cake_*` < `aing_gold`)이라도 내장 순서 그대로 · 나머지는 id 정렬")
     func orderIsBuiltInNotSorted() {
         // 기준선: 정렬만 하면 케이크가 금 앞에 선다 — 내장 순서가 실제로 일을 한다.
-        #expect(Self.builtInIDs.sorted().prefix(3) == ["aing", "aing_cake_choco", "aing_cake_strawberry"])
+        // (지역 아잉이 aing_busan 은 정렬로 케이크보다도 앞이다 — 내장 순서로는 맨 끝.)
+        #expect(Self.builtInIDs.sorted().prefix(4) == ["aing", "aing_busan", "aing_cake_choco", "aing_cake_strawberry"])
         let catalog = CharacterCatalog(manifests: [
             CharacterManifest(id: "zebra", displayName: "얼룩말", kind: .sprite),
             CharacterManifest(id: "aardvark", displayName: "땅돼지", kind: .sprite),
@@ -79,7 +80,7 @@ struct V0366CakeCoreTests {
     func predicatesAreDisjoint() {
         // v0.3.74: 케이크 뜻 목록은 생일 목록이다 — 선물 전용 전부(`giftOnlyBuiltInIDs`)에는 이슬이 뒤에 붙는다(V0374IsulCoreTests).
         #expect(CharacterCatalog.birthdayGiftBuiltInIDs == [Self.strawberry, Self.choco])
-        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, "aing_isul", "aing_pepero"])
+        #expect(CharacterCatalog.giftOnlyBuiltInIDs == [Self.strawberry, Self.choco, "aing_isul", "aing_pepero", "aing_busan"])
         // v0.3.78: 흑우(조각 교환 전용)는 뽑기 전용 쪽이다 — 케이크로 넓어진 것이 아니다.
         #expect(CharacterCatalog.gachaOnlyBuiltInIDs == ["aing_gold", "aing_rainbow", "aing_hwoo"], "뽑기 전용 목록이 케이크로 넓어졌다")
         for id in [Self.strawberry, Self.choco] {

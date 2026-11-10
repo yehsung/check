@@ -46,7 +46,10 @@ struct V1018CrossyDuelPhoneTests {
         let runner = try code("Sources/CheckMobileKit/Realtime/MobileRealtimeRunner.swift")
         #expect(runner.contains("case.crossyDuelSignal:crossyDuel?.handleSignal()") && runner.contains("crossyDuel?.realtimeDidJoin()"))
         let games = try code("Sources/CheckMobileKit/Games/GamesStore.swift")
-        #expect(games.components(separatedBy: "returnhasLiveCrossyDuelMatch?.crossyDuel:nil").count - 1 == 5, "다섯 입구 중 길건너를 안 막는 곳이 있다")
+        // 다른 여섯 입구(오목 · 체스 · 테트리스 · 큐브 · 뒤집기 · 알까기)가 모두 길건너 판을 본다(알까기 입구는 마지막 줄 꼴).
+        let ifForm = games.components(separatedBy: "ifhasLiveCrossyDuelMatch{return.crossyDuel}").count - 1
+        let returnForm = games.components(separatedBy: "returnhasLiveCrossyDuelMatch?.crossyDuel:nil").count - 1
+        #expect(ifForm + returnForm == 6, "여섯 입구 중 길건너를 안 막는 곳이 있다(\(ifForm) + \(returnForm))")
         #expect(games.contains("+context.crossyDuel.visibleIncomingInvites.count"), "탭 배지가 길건너 받은 신청을 안 센다")
         #expect(games.contains("ifcontext.crossyDuel.holdsActivity{returntrue}"), "판 중 화면 꺼짐 방지가 길건너를 모른다")
         #expect(GamesBusyGame.crossyDuel.text == .crossyDuel && ChessPhoneText.BusyGame.crossyDuel.gameName == "1:1 길건너")

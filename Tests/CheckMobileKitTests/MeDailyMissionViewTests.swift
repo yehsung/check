@@ -168,7 +168,8 @@ struct MeDailyMissionViewTests {
         #expect(MeText.dailyMissionCaption(game: "reversi", detail: "맥에서 할 수 있어요").isEmpty)
         #expect(MeText.dailyMissionCaption(game: "mahjong", detail: "맥에서 할 수 있어요") == "맥에서 할 수 있어요",
                 "폰에 없는 게임의 '맥에서' 글자까지 지웠다")
-        #expect(MeText.phonePlayableMacFirstGames == ["rummy", "reversi", "crossy_duel"], "표가 바뀌었다 — 폰에 없는 게임을 넣으면 어디서 하는지 안 말한다(1.0.18 에 1:1 길건너)")
+        #expect(MeText.phonePlayableMacFirstGames == ["rummy", "reversi", "crossy_duel", "alkkagi"],
+                "표가 바뀌었다 — 폰에 없는 게임을 넣으면 어디서 하는지 안 말한다(1.0.18 에 1:1 길건너 · 1:1 알까기)")
     }
 
     @Test("줄 셋의 그림: 진행 중(칩 +5 · '0/1') · [받기] 캡슐(칩 없음) · '✓ 받음'(진행 숫자 없음)")
@@ -322,8 +323,8 @@ struct MeDailyMissionViewTests {
         #expect(icons.filter { $0 == duel }.count == 1, "깃발 기호를 다른 줄도 쓴다: \(icons)")
     }
 
-    @Test("1:1 알까기 줄(daily_alkkagi · 맥 0.3.82): 맥 입구와 같은 기호(circle.hexagongrid.fill) · 별이 아니다 · 실재하는 이름 · 보조 문장 '맥에서 할 수 있어요'는 남는다(폰에 없는 1:1) · 서버 열두째 줄")
-    func alkkagiRowUsesTheMacSymbolAndKeepsTheMacCaption() throws {
+    @Test("1:1 알까기 줄(daily_alkkagi · 맥 0.3.82): 맥 입구와 같은 기호(circle.hexagongrid.fill) · 별이 아니다 · 실재하는 이름 · 폰 1.0.18 부터 '맥에서' 꼬리를 뗀다 · 서버 열두째 줄")
+    func alkkagiRowUsesTheMacSymbolAndDropsTheMacCaption() throws {
         // 서버 alkkagi/v2(20261111150000)가 이 줄을 모든 플랫폼에 내린다(폰 1.0.17 도). 표에 없으면 기본 별로 그려진다(주석 ①).
         let alkkagi = MeText.dailyMissionIcon(game: "alkkagi")
         #expect(alkkagi == "circle.hexagongrid.fill", "맥 `AlkkagiEntryIcon.symbol` 과 갈렸다: \(alkkagi)")
@@ -341,15 +342,15 @@ struct MeDailyMissionViewTests {
         #expect(NSImage(systemSymbolName: alkkagi, accessibilityDescription: nil) != nil, "없는 SF Symbol: \(alkkagi)")
         #endif
 
-        // 보조 문장: 폰에는 1:1 알까기가 없다 — 서버 글자 '맥에서 할 수 있어요'가 **참**이라 그대로 그린다(SPEC §6 #8).
-        #expect(!MeText.phonePlayableMacFirstGames.contains("alkkagi"), "폰에 없는 게임을 폰에서 할 수 있다고 적었다")
+        // 보조 문장: 폰 1.0.18 부터 1:1 알까기가 폰에도 있다 — 서버 글자 '맥에서 할 수 있어요'는 이 폰에서 거짓이라 비운다(길건너와 같다).
+        #expect(MeText.phonePlayableMacFirstGames.contains("alkkagi"), "폰에서 할 수 있는데 맥에서 하라고 한다")
         let waiting = #"{"key":"daily_alkkagi","game":"alkkagi","title":"1:1 알까기 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":0,"achieved":false,"claimed":false,"claimed_at_ms":null,"sort":110}"#
         let met = #"{"key":"daily_alkkagi","game":"alkkagi","title":"1:1 알까기 한 판 하기","detail":"맥에서 할 수 있어요","reward":5,"target":1,"progress":1,"achieved":true,"claimed":false,"claimed_at_ms":null,"sort":110}"#
         let progressing = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [waiting]))), "daily_alkkagi")
-        #expect(progressing.caption == "맥에서 할 수 있어요", "어디서 하는지 안 말한다: '\(progressing.caption)'")
+        #expect(progressing.caption.isEmpty, "폰에서 할 수 있는데 맥에서 하라고 한다: '\(progressing.caption)'")
         #expect(progressing.icon == alkkagi && progressing.title == "1:1 알까기 한 판 하기" && progressing.progress == "0/1")
         let claimable = try Self.content(Self.section(Self.response(daily: Self.dailyJSON(extraRows: [met]))), "daily_alkkagi")
-        #expect(claimable.claimAmount == 5 && claimable.caption == "맥에서 할 수 있어요")
+        #expect(claimable.claimAmount == 5 && claimable.caption.isEmpty)
 
         // 서버 열두 줄: 1:1 알까기가 마지막(sort 110 — 길건너 100 뒤)이고 · 그 기호를 다른 줄이 안 쓴다.
         #expect(Self.serverRoster.count == 12 && Self.serverRoster.last?.key == "daily_alkkagi" && Self.serverRoster.last?.sort == 110)
@@ -571,8 +572,8 @@ struct MeDailyMissionViewTests {
                     "\(path): 폰에 없는 아잉 마작 줄이 어디서 하는지 안 말한다")
             #expect(try Self.content(section, "daily_crossy_duel").caption.isEmpty,
                     "\(path): 폰 1.0.18 에 있는 1:1 길건너 줄이 맥에서 하라고 한다")
-            #expect(try Self.content(section, "daily_alkkagi").caption == "맥에서 할 수 있어요",
-                    "\(path): 폰에 없는 1:1 알까기 줄이 어디서 하는지 안 말한다")
+            #expect(try Self.content(section, "daily_alkkagi").caption.isEmpty,
+                    "\(path): 폰 1.0.18 에 있는 1:1 알까기 줄이 맥에서 하라고 한다")
             for (mission, def) in zip(section.rows, Self.serverRoster) {
                 #expect(mission.key == def.key && mission.game == def.game, "\(path): 순서 · 게임 — \(mission.key)")
                 #expect(mission.row.title == def.title, "\(path) \(def.key): 제목")

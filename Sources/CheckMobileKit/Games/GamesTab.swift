@@ -36,6 +36,8 @@ struct GamesTab: View {
                         .padding(.top, 12)
                     crossyDuelCard
                         .padding(.top, 12)
+                    alkkagiCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -93,6 +95,9 @@ struct GamesTab: View {
                     GamesReversiScreen(store: store)
                 case .crossyDuel:
                     GamesCrossyDuelScreen(store: store)
+                case .alkkagi:
+                    // 관전 값 · 판 값을 여기서 읽지 않는다(뒤집기와 같은 까닭 — 목적지가 다시 세워지면 화면이 사라졌다 다시 선다).
+                    GamesAlkkagiScreen(store: store)
                 }
             }
         }
@@ -416,54 +421,6 @@ struct GamesTab: View {
     /// 입구 하나로 로비·판·AI 연습·결과·관전·순위를 다 연다(화면이 단계를 갈아 끼운다).
     /// ★ 칩과 보조 줄의 서열은 `GamesReversiCard` 한 곳이다(여기서 삼항으로 다시 고르면 두 벌이 된다 — 그 판정은 맥 스위트가 값으로 잰다).
     /// ★ 막는 방향은 **다섯이다**: 다른 넷 중 하나의 판이 흐르면 이 카드가 막히고(`reversiEntryBlock`), 리버시 판이 흐르면 위 네 카드가 막힌다.
-    /// 1:1 길건너 카드(폰 1.0.18). 받은 신청이 있으면 칩이 그 수를 말한다.
-    private var crossyDuelCard: some View {
-        let blockedBy = store.crossyDuelEntryBlock
-        let incoming = store.crossyDuel.visibleIncomingInvites.count
-        return Button {
-            store.context.router.push(GamesDestination.crossyDuel, on: .games)
-        } label: {
-            InsetGroup {
-                HStack(spacing: 14) {
-                    Image(systemName: "flag.checkered")
-                        .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(MobileTheme.accent)
-                        .frame(width: 44, height: 44)
-                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.accentTint))
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(CrossyDuelPhoneText.title)
-                            .font(MobileTheme.rowTitle)
-                            .foregroundStyle(MobileTheme.label)
-                        Text(CrossyDuelPhoneText.cardSubtitle)
-                            .font(MobileTheme.rowSubtitle)
-                            .foregroundStyle(MobileTheme.label2)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if incoming > 0 {
-                            gomokuChip("\(CrossyDuelPhoneText.incomingTitle) \(incoming)")
-                                .padding(.top, 3)
-                        }
-                    }
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(MobileTheme.label3)
-                        .accessibilityHidden(true)
-                }
-                .padding(.horizontal, MobileTheme.cardPadding)
-                .padding(.vertical, 14)
-            }
-            .opacity(blockedBy == nil ? 1 : 0.55)
-            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
-            .accessibilityElement(children: .combine)
-        }
-        .buttonStyle(.plain)
-        .disabled(blockedBy != nil)
-        .accessibilityHint(blockedBy == nil
-                           ? CrossyDuelPhoneText.cardOpenHint
-                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .crossyDuel) ?? ""))
-    }
-
     private var reversiCard: some View {
         let blockedBy = store.reversiEntryBlock
         let chip = GamesReversiCard.chip(store)
@@ -506,6 +463,72 @@ struct GamesTab: View {
         .accessibilityHint(blockedBy == nil
                            ? ReversiPhoneText.cardOpenHint
                            : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .reversi) ?? ""))
+    }
+
+    // MARK: 1:1 길건너 · 1:1 알까기 카드(폰 1.0.18)
+
+    /// 1:1 길건너 카드. 받은 신청이 있으면 칩이 그 수를 말한다.
+    private var crossyDuelCard: some View {
+        duelCard(symbol: "flag.checkered", title: CrossyDuelPhoneText.title, subtitle: CrossyDuelPhoneText.cardSubtitle,
+                 incoming: store.crossyDuel.visibleIncomingInvites.count, incomingTitle: CrossyDuelPhoneText.incomingTitle,
+                 blockedBy: store.crossyDuelEntryBlock, blocked: .crossyDuel, openHint: CrossyDuelPhoneText.cardOpenHint,
+                 destination: .crossyDuel)
+    }
+
+    /// 1:1 알까기 카드(맥 `AlkkagiEntryIcon` 과 같은 그림 — 뒤집기 `circle.lefthalf.filled` 와 겹치지 않는다).
+    private var alkkagiCard: some View {
+        duelCard(symbol: AlkkagiPhoneText.entrySymbol, title: AlkkagiPhoneText.title, subtitle: AlkkagiPhoneText.cardSubtitle,
+                 incoming: store.alkkagi.visibleIncomingInvites.count, incomingTitle: AlkkagiPhoneText.incomingTitle,
+                 blockedBy: store.alkkagiEntryBlock, blocked: .alkkagi, openHint: AlkkagiPhoneText.cardOpenHint,
+                 destination: .alkkagi)
+    }
+
+    /// 아이콘 · 제목 · 부제 · 받은 신청 칩 · 꺾쇠 한 줄 카드(길건너 · 알까기가 같은 꼴). 막히면 흐리게 + 언제 풀리는지 힌트.
+    private func duelCard(symbol: String, title: String, subtitle: String, incoming: Int, incomingTitle: String,
+                          blockedBy: GamesBusyGame?, blocked: ChessPhoneText.BusyGame, openHint: String,
+                          destination: GamesDestination) -> some View {
+        Button {
+            store.context.router.push(destination, on: .games)
+        } label: {
+            InsetGroup {
+                HStack(spacing: 14) {
+                    Image(systemName: symbol)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(MobileTheme.accent)
+                        .frame(width: 44, height: 44)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.accentTint))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(MobileTheme.rowTitle)
+                            .foregroundStyle(MobileTheme.label)
+                        Text(subtitle)
+                            .font(MobileTheme.rowSubtitle)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if incoming > 0 {
+                            gomokuChip("\(incomingTitle) \(incoming)")
+                                .padding(.top, 3)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MobileTheme.cardPadding)
+                .padding(.vertical, 14)
+            }
+            .opacity(blockedBy == nil ? 1 : 0.55)
+            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil
+                           ? openHint
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: blocked) ?? ""))
     }
 
     @ViewBuilder

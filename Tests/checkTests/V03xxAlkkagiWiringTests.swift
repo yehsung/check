@@ -138,9 +138,11 @@ struct V03xxAlkkagiWiringTests {
         let realtime = try akwMac("WorkTimerStoreRealtime.swift")
         #expect(realtime.contains("case .alkkagiSignal: alkkagi.handleSignal()"), "신호 가지가 없다 — 초인종마다 take_pokes 가 샌다")
         #expect(realtime.contains("alkkagi.realtimeDidJoin()") && realtime.contains("alkkagi.systemDidWake()"))
-        // 폰은 알까기가 없다 — 러너 가지는 버린다(SPEC §6 #10 그대로).
+        // 폰 1.0.18 부터 알까기가 있다 — 러너 가지는 폰 스토어를 잇는다(맥과 같은 재조회 한 번 · 조인 따라잡기).
         let runner = try akwPhoneRunner()
         #expect(akwCount("case .alkkagiSignal", in: runner) == 1, "폰 러너에 알까기 가지가 하나가 아니다")
+        #expect(runner.contains("alkkagi?.handleSignal()") && runner.contains("alkkagi?.realtimeDidJoin()"),
+                "폰 러너의 알까기 가지가 스토어를 잇지 않는다 — 신청 · 차례가 다음 계기까지 안 선다")
     }
 
     // MARK: #7 맥 소유 배선
@@ -534,8 +536,9 @@ struct V03xxAlkkagiWiringTests {
             .appendingPathComponent("Sources/CheckMobileKit/Me/MeText.swift")
         let meText = akwCollapsed(V0317ShopTests.stripped(try String(contentsOf: phone, encoding: .utf8)))
         #expect(meText.contains("(\"alkkagi\", \"\(icon)\"),"), "폰 MeText 와 맥 미션 줄 기호가 갈렸다")
-        #expect(!meText.contains("phonePlayableMacFirstGames: Set<String> = [\"rummy\", \"reversi\", \"alkkagi\""),
-                "폰에 없는 알까기를 폰에서 할 수 있다고 적었다")
+        // 폰 1.0.18 부터 알까기가 있다 — 일일 줄에서 '맥에서' 꼬리를 뗀다(1:1 길건너 다음).
+        #expect(meText.contains("phonePlayableMacFirstGames: Set<String> = [\"rummy\", \"reversi\", \"crossy_duel\", \"alkkagi\"]"),
+                "폰에서 할 수 있는 알까기를 맥에서 하라고 적었다")
         #expect(AchievementCopy.icon("alkkagi_first_win") == AlkkagiEntryIcon.symbol)
         #expect(DailyMissionCopy.icon(game: "alkkagi_typo") == AchievementCopy.fallbackIcon)
         let rows = try akwMac("CheckAchievementRows.swift")

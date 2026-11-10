@@ -31,7 +31,7 @@ package final class MobileRealtimeRegistration {
 ///     · `.reversiSignal` → `ReversiStore.handleSignal()`(1.0.17).
 ///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
 ///     `.mahjongSignal` 도 **일부러 빈 가지**다(맥 0.3.76 아잉 마작 — 폰에 스토어가 없다). `.drain` 으로 새면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
-///     · `.crossyDuelSignal` → `CrossyDuelStore.handleSignal()`(1.0.18).
+///     · `.crossyDuelSignal` → `CrossyDuelStore.handleSignal()`(1.0.18). · `.alkkagiSignal` → `AlkkagiOnlineStore.handleSignal()`(1.0.18).
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
 @MainActor
@@ -56,6 +56,8 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var reversi: ReversiStore?
     /// 1:1 길건너 신호를 받을 스토어(앱 모델이 붙인다 — 폰 1.0.18).
     @ObservationIgnored package weak var crossyDuel: CrossyDuelStore?
+    /// 1:1 알까기 신호를 받을 스토어(앱 모델이 붙인다 — 폰 1.0.18).
+    @ObservationIgnored package weak var alkkagi: AlkkagiOnlineStore?
     /// 확성기 배너 신호(`megaphone`)를 받을 스토어(앱 모델이 붙인다 — 오목·테트리스 칸과 같은 꼴).
     @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
 
@@ -217,8 +219,9 @@ package final class MobileRealtimeRunner {
             if effectLog.count > 50 { effectLog.removeFirst(effectLog.count - 50) }
             switch effect {
             case .alkkagiSignal:
-                // 알까기 화면은 맥에 있다. 알림을 메시지 소비로 보내지 않는다.
-                break
+                // 1:1 알까기(맥 0.3.80 · 폰 1.0.18). 신청 · 수락 · 배치 · 쏘기 · 정산이 이 초인종으로 온다 — 직렬화된 재조회 한 번.
+                // `.drain` 으로 떨어뜨리지 않는 까닭은 아래 아잉 뒤집기 가지와 같다(수마다 메시지 조회가 한 번씩 더 나간다).
+                alkkagi?.handleSignal()
             case .connect(let linkToken):
                 performConnect(linkToken: linkToken)
             case .disconnect:
@@ -243,6 +246,8 @@ package final class MobileRealtimeRunner {
                 reversi?.realtimeDidJoin()
                 // 1:1 길건너도 같은 자리다(신청 60초 · 준비 · 판 시작이 이 초인종으로 온다).
                 crossyDuel?.realtimeDidJoin()
+                // 1:1 알까기도 같은 자리다(신청 60초 · 숨긴 배치 30초 · 한 수 30초 — 다음 계기까지 기다리면 늦다).
+                alkkagi?.realtimeDidJoin()
             case .drain:
                 // ★ take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다.
                 requestMessageActivity(now: now)

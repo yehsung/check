@@ -222,7 +222,8 @@ import Testing
         // chessMatch 는 폰 체스(1.0.5)에 늘었다 — 오목 대국과 같은 몰입 화면이고, 그 갈래가 없으면 체스 대국 화면이
         // 탭 막대를 **숨길 수단이 없다**(직접 `toolbar(.hidden, for: .tabBar)` 를 쓰는 길은 게임 폴더 계약이 막는다).
         #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue })
-                == ["conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "reversiMatch", "shop", "miniGamePlay", "grassDetail"])
+                == ["conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "reversiMatch", "alkkagiMatch", "shop", "miniGamePlay",
+                   "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
         // d7701ab 부터 숨김은 정책 표(`TabBarPolicy.hidesTabBar(on:)`)를 거쳐 `.hidden`/`.automatic` 중 하나를 고른다 — 리터럴
         // `toolbar(.hidden, for: .tabBar)` 는 주석에만 남아 이 대조가 주석을 걷어낸 소스에서 늘 빨갰다(1.0.6 이후).

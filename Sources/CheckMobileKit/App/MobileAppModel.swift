@@ -25,6 +25,7 @@ public final class MobileAppModel {
     package let rummy: RummyStore
     package let reversi: ReversiStore
     package let crossyDuel: CrossyDuelStore
+    package let alkkagi: AlkkagiOnlineStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -185,6 +186,14 @@ public final class MobileAppModel {
         crossyDuel.deviceLedger.defaults = env.storage.defaults
         crossyDuel.rankingEnabled = true
         realtime.crossyDuel = crossyDuel
+        // 1:1 알까기(맥 0.3.80 · v2 0.3.82 · 폰 1.0.18 — 대표 판 나누기 답 "한 판에 전부" #d_xB6BJcn2nsCq · 루비 판돈 그대로 #d_t103CxfPGinB).
+        // 코어 `AlkkagiOnlineStore` 의 시계는 init 에서만 받는다(`let clock`). 호스트 · 순위 · 관전 스위치 · 초인종 자리는 위 아잉 뒤집기와 같은 꼴이다 —
+        // 스위치 둘이 꺼져 있으면 `alkkagi_ranking` · `alkkagi_watch` 가 한 번도 안 나간다(같은 까닭으로 지우지 마라).
+        let alkkagi = AlkkagiOnlineStore(clock: { clock.now() })
+        alkkagi.attach(host: host)
+        alkkagi.rankingEnabled = true
+        alkkagi.spectatorFeaturesEnabled = true
+        realtime.alkkagi = alkkagi
         let links = MobileStoreLinks()
         // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
         let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
@@ -205,6 +214,7 @@ public final class MobileAppModel {
             rummy: rummy,
             reversi: reversi,
             crossyDuel: crossyDuel,
+            alkkagi: alkkagi,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -225,6 +235,7 @@ public final class MobileAppModel {
         self.rummy = rummy
         self.reversi = reversi
         self.crossyDuel = crossyDuel
+        self.alkkagi = alkkagi
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -264,6 +275,8 @@ public final class MobileAppModel {
         reversi.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "reversi") }
         // 1:1 길건너 — 서버 `daily_crossy_duel` 의 game 값(맥 `refreshAchievementsAfterGameResult(game: "crossy_duel")` 과 같다).
         crossyDuel.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "crossy_duel") }
+        // 1:1 알까기 — 서버 `daily_alkkagi` 의 game 값(맥 `WorkTimerStore` 의 `refreshAchievementsAfterGameResult(game: "alkkagi")` 와 같다).
+        alkkagi.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "alkkagi") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -388,6 +401,8 @@ public final class MobileAppModel {
         // 건드리지 않는다. '이 기기가 연 판' 장부는 사용자별 키라 비우지 않는다(같은 사람이 돌아오면 자기 판을 알아본다).
         reversi.reset()
         crossyDuel.reset()
+        // 1:1 알까기도 같은 사슬이다(앞 사람의 판 · 신청 · 순위 · 관전이 다음 사람 화면에 남지 않게). `reset()` 은 스위치 · 시계를 건드리지 않는다.
+        alkkagi.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

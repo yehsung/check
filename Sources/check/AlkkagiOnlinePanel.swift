@@ -32,13 +32,32 @@ struct AlkkagiOnlinePanel: View {
     var previewModel: AlkkagiLocalModel? = nil
     /// 스냅샷 전용: 사람 아바타 캐릭터 표(길건너 `previewCharacters` 꼴). 앱은 nil — `.appUserAvatarCharacters(from: safety)` 가 표를 건다.
     var previewCharacters: AppUserCharacterDirectory? = nil
+    /// 처음 한 번 따라 하기 · 손 안내 횟수를 기억할 곳(앱 = `.standard`). 시험은 시험 전용 스위트를 넣는다.
+    var guideDefaults: UserDefaults? = .standard
+    /// 스냅샷 전용: 따라 하기 카드를 띄운 채(true) · 안 띄운 채(false)로 그린다. nil = 앱 규칙(처음 한 번).
+    /// 스냅숏(`clipsOverflowInsteadOfScroll`)은 nil 이어도 띄우지 않는다 — 기존 로비 렌더가 카드에 가리지 않게.
+    var previewCoach: Bool? = nil
 
     @State private var showsPractice = false
     @State private var rulesVisible = false
+    /// 따라 하기를 이 창에서 닫았다(저장은 `guideDefaults` 에도 — 다음 창부터는 안 뜬다).
+    @State private var coachDismissed = false
     /// [도전]을 누른 상대 — 판돈 창이 이 값으로 열린다. nil 이면 닫혀 있다.
     @State private var stakeTarget: AlkkagiLobbyUser?
 
     private var activeStakeTarget: AlkkagiLobbyUser? { stakeTarget ?? previewStakeTarget }
+
+    /// 처음 한 번 따라 하기(대표 #d_cjxnVZpLHWw5 C안): 로비가 보일 때만(판 · 연습 · 관전 중엔 시간이 흐르니 안 띄운다).
+    private var showsCoach: Bool {
+        AlkkagiFirstTimeCoach.shows(lobbyVisible: store.state == nil && !showsPractice && store.watched == nil,
+                                    preview: previewCoach, snapshot: clipsOverflowInsteadOfScroll,
+                                    dismissed: coachDismissed, defaults: guideDefaults)
+    }
+
+    private func dismissCoach() {
+        coachDismissed = true
+        if let guideDefaults { AlkkagiFirstTimeCoach.markSeen(guideDefaults) }
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -47,6 +66,8 @@ struct AlkkagiOnlinePanel: View {
             // 덮개는 **한 번에 하나**다 — 규칙 → 판돈 순(판·연습 화면에선 판돈 창이 서지 않는다).
             if rulesVisible || previewRules {
                 AlkkagiRulesPrompt(onClose: { rulesVisible = false })
+            } else if showsCoach {
+                AlkkagiFirstTimeCoachCard(onDone: dismissCoach)
             } else if store.state == nil, !showsPractice, let target = activeStakeTarget {
                 AlkkagiStakePrompt(store: store, target: target, onClose: { stakeTarget = nil })
             }
@@ -102,6 +123,8 @@ struct AlkkagiOnlinePanel: View {
     private func paced(_ view: AlkkagiGameView) -> AlkkagiGameView {
         var view = view
         view.frameRateMonitor = frameRateMonitor
+        // 손 안내 횟수 — 앱만(스냅숏은 표준 스위트를 읽지도 쓰지도 않는다).
+        if !clipsOverflowInsteadOfScroll { view.guideDefaults = guideDefaults }
         return view
     }
 

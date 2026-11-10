@@ -62,15 +62,17 @@ struct V1018AlkkagiPhoneTests {
         for x in [80.0, 190, 300, 410, 520] { place(x, 130) }
         model.confirmPlacement()
         #expect(model.game.phase == .aiming && model.game.currentPlayer == .black)
-        #expect(model.status == AlkkagiPhoneText.aimHint(.black))
+        // 판의 첫 수(흑)는 힘 60%까지(맥 0.3.84 · 서버 20261112150000) — 안내가 먼저 그 말을 한다.
+        #expect(model.status == AlkkagiPhoneText.firstShotHint)
 
         // 손가락 잡기 반경: 돌 중심에서 30(반지름 20 의 1.5배) 떨어져도 잡는다(맥 마우스보다 넓다).
         haptics = []
         model.aim(start: AlkkagiVector(x: 300 + 30, y: 470), translation: AlkkagiVector(x: 0, y: 60))
-        #expect(model.selectedID != nil && model.status == AlkkagiPhoneText.aimRelease)
+        #expect(model.selectedID != nil && model.status == AlkkagiPhoneText.firstShotRelease)
         #expect(model.power > 0.4 && model.power < 0.5)
         model.aim(start: AlkkagiVector(x: 330, y: 470), translation: AlkkagiVector(x: 0, y: 200))
-        #expect(model.power == 1, "당김은 maxPull 에서 멈춘다")
+        #expect(abs(model.pull.length - AlkkagiGame.firstShotMaxPull) < 1e-9 && abs(model.power - 0.6) < 1e-9,
+                "판의 첫 수는 당김 81(60%)에서 멈춘다 — 서버가 줄여 저장하는 값과 같다: \(model.pull.length)")
         model.release()
         #expect(model.game.phase == .rolling && model.game.shotCount == 1 && model.selectedID == nil)
         #expect(haptics.first == .select && haptics.contains(.power) && haptics.contains { if case .launch = $0 { return true }; return false })
@@ -82,6 +84,11 @@ struct V1018AlkkagiPhoneTests {
             model.tick(now: now)
         }
         #expect(model.game.phase == .aiming && model.game.currentPlayer == .white, "굴림이 멈추면 백 차례다: \(model.game.phase)")
+        #expect(model.status == AlkkagiPhoneText.aimHint(.white), "둘째 수부터는 보통 안내")
+        let firstWhite = model.game.stones.first { $0.owner == .white && !$0.isOut }!
+        model.aim(start: firstWhite.position, translation: AlkkagiVector(x: 0, y: -200))
+        #expect(model.power == 1, "둘째 수부터는 maxPull 에서 멈춘다")
+        model.cancelAim()
 
         // 너무 짧게 당겼다 놓으면(6 미만) 쏘지 않는다 — 돌 위로 되돌리면 취소.
         let white = model.game.stones.first { $0.owner == .white && !$0.isOut }!

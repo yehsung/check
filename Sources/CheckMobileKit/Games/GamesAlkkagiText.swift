@@ -108,6 +108,10 @@ package enum AlkkagiPhoneText {
     package static func aimHint(_ player: AlkkagiGame.Player) -> String { "\(stoneTitle(player)) 차례 — 내 돌을 눌러 뒤로 당겨 보세요" }
     /// 폰 손짓 안내(맥 "놓으면 발사해요 · Esc로 취소" 의 폰 꼴 — Esc 가 없다. 돌 위로 되돌려 놓으면 힘이 0 이라 쏘지 않는다).
     package static let aimRelease = "놓으면 날아가요 · 돌 위로 되돌리면 취소"
+    /// 판의 첫 수(흑)는 힘이 60%(당김 81)까지 — 선후 맞춤(대표 #d_5KuZ3DGTw6BY · 맥 0.3.84 · 서버 20261112150000 이 저장 전에 같은 값으로 줄인다).
+    /// 앞 줄은 맥 `AlkkagiLocalModel.status` 와 같은 글이다.
+    package static let firstShotHint = "첫 수는 힘이 60%까지예요 — 돌을 뒤로 당겨 보세요"
+    package static let firstShotRelease = "첫 수는 힘 60%까지 · 놓으면 날아가요 · 돌 위로 되돌리면 취소"
     package static let placementInvalid = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
     package static func placementDone(_ placed: Int) -> String { "배치 완료 (\(placed)/5)" }
     package static let readyDone = "준비 완료"

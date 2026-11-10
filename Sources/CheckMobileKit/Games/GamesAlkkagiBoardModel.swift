@@ -120,6 +120,8 @@ package final class GamesAlkkagiBoardModel {
         }
         switch game.phase {
         case .placing: return AlkkagiPhoneText.placingPractice(game.currentPlayer)
+        case .aiming where game.isFirstShotLimited:
+            return selectedID == nil ? AlkkagiPhoneText.firstShotHint : AlkkagiPhoneText.firstShotRelease
         case .aiming: return selectedID == nil ? AlkkagiPhoneText.aimHint(game.currentPlayer) : AlkkagiPhoneText.aimRelease
         case .rolling: return AlkkagiPhoneText.rolling
         case .finished: return AlkkagiPhoneText.practiceResult(game.result)
@@ -151,7 +153,10 @@ package final class GamesAlkkagiBoardModel {
             if selectedID != nil { haptic?(.select) }
         }
         guard selectedID != nil else { return }
-        pull = translation.length > AlkkagiGame.maxPull ? translation * (AlkkagiGame.maxPull / translation.length) : translation
+        // 판의 첫 수(흑)는 화살이 60%(당김 81)에서 멈춘다 — 서버가 저장 전에 같은 값으로 줄인다(20261112150000). 여기서 안 줄이면
+        // 쏜 폰만 센 굴림을 그리다가 멈춘 뒤 서버 자리로 돌이 튄다(빌드 33 — 승부는 서버 값이라 두 화면이 같다).
+        let limit = game.shotPullLimit
+        pull = translation.length > limit ? translation * (limit / translation.length) : translation
         let band = Int(power * 4)
         if band > powerBand { haptic?(.power) }
         powerBand = band

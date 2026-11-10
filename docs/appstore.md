@@ -14,7 +14,7 @@
 | 번들 ID | `com.yehsung.aingcheck` | `ios/project.yml:100`, `Sources/CheckMobileShared/CheckMobileIdentifiers.swift:10` |
 | 위젯 확장 번들 ID | `com.yehsung.aingcheck.widgets` | `ios/project.yml:181`, `CheckMobileIdentifiers.swift:12` |
 | 표시 이름 | `아잉체크` | `ios/project.yml:71, 167`, `ios/App/Info.plist`·`ios/Widgets/Info.plist`(CFBundleDisplayName), `Sources/CheckMobileShared/CheckMobileIdentifiers.swift`(`appDisplayName` — 앱 안 문구가 읽는 한 벌) |
-| 버전 · 빌드 | `1.0.18` · `31` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
+| 버전 · 빌드 | `1.0.18` · `32` | `ios/project.yml:30-31`, `Sources/CheckMobileKit/App/MobileAppInfo.swift:5-8` |
 | 팀 ID | `MQ2KQK37WD` | `ios/project.yml:23` |
 | 지원 기기 · OS | iPhone 전용(`TARGETED_DEVICE_FAMILY: "1"`) · iOS 18.0 이상 · 세로 방향(**아잉 큐브 판 화면만 가로** — 1.0.16 부터 Info.plist 가 가로 둘을 선언하고 그 화면만 돌린다, `GamesRummyOrientationRule`) | `ios/project.yml:26, 104`, `:15-16, 27`, `:75-76`; `Package.swift:9` |
 | 백그라운드 모드 | `remote-notification` 하나 | `ios/project.yml:78-79` |
@@ -405,6 +405,15 @@ ASC 에 올라가 있는 값(2026-10-23 읽음, 32자): `근무,팀,타이머,�
 > - **Focus label.** When someone turns on focus mode in the Mac app, a 「집중」 label appears next to their name in the message lists and on the 지금 tab, and the phone does not send them messages until it ends. If your own Mac is in focus mode, one line above the message list says so. The phone has no switch for focus mode.
 > - **A gift-only character.** 이슬 아잉이 is a character the operator gives only as a "drink" gift (술 한잔); in the shop it is a locked tile labelled 「술 한잔 선물 전용」 for everyone, and it cannot be bought, drawn or exchanged. Because this character is a green bottle and its gift window says 「짠! 🥂」 (cheers), **the age-rating answer for alcohol references is now Infrequent/Mild; the rating stays 13+.** The other age-rating answers are the same as the previous version's.
 > - No new permission.
+>
+> **New in 1.0.18 — features from the Mac app: 1:1 길건너 (crossy race), 1:1 알까기 (stone flicking), 아잉 마작 (4-player riichi mahjong), Gomoku stone skins and AI difficulty, four characters**
+> All three games use the same server the Mac app has used since its versions 0.3.78 (crossy race), 0.3.82 (stone flicking) and 0.3.76 (mahjong). Head-to-head games use the same lobby, challenge and accept flow as 1:1 오목 / 체스 / 테트리스 / 아잉 뒤집기.
+> - **1:1 길건너.** Games tab → 「1:1 길건너」. Both players run the same road for up to 3 minutes; the first to 100 points wins, otherwise the higher score. Swipe to hop in that direction, tap to hop forward; the opponent is drawn translucent on your road. **Needs two devices and two demo accounts**: device A picks the other account under 「상대 고르기」, chooses 3, 5 or 10 rubies and sends the challenge; device B taps 「수락」 within 60 seconds.
+> - **1:1 알까기.** Games tab → 「1:1 알까기」. Each player hides five stones on their half for 30 seconds, then the players take turns (30 seconds each): press one of your stones, pull back and release to flick it; stones pushed off the board are out, and pushing all of the opponent's stones off wins. **「연습하기」 (practice) works on one device** — two people take turns on one phone, with no rubies, no record and nothing sent to the server. A ruby match needs two devices, in the same order as above. Others can watch a live match (「지금 대결 중」 → 「관전」).
+> - **아잉 마작.** Games tab → 「아잉 마작」 → **「혼자 연습」 runs entirely on the device against three built-in bots** (no rubies, no record) — one device is enough to see the whole game screen, which turns landscape like 아잉 큐브. A ruby match needs four accounts: one opens a room (3, 5 or 10 rubies), invites three others (or makes it public), and taps 「시작」 when four have joined. The stake is collected from all four at the start and split by rank: 1st +2N, 2nd even, 3rd and 4th −N — no new rubies are created.
+> - **In-app points.** The same as the head-to-head games that completed review: **rubies cannot be bought with money or cashed out, and there are no in-app purchases.** The age-rating answers are the same as the previous version's.
+> - **Shop and characters.** Four characters already in the Mac app: one exchanged only for 20 shards, one sold for 1000 rubies, one given as the reward of the cumulative mission 「누적 근무 100시간」 (claimed with a 「받기」 button), and a seasonal gift-only character shown to everyone as a locked tile. Gomoku stone skins (three designs, 100 rubies each) change how your stones look on both players' boards.
+> - **Smaller changes, no new permission.** Gomoku AI difficulty (easy / normal / hard), 「모두 읽음」 (mark all conversations read), 「더 보기」 on a long megaphone banner, and the work-rhythm chart by week.
 >
 > **Screens that will look empty for a solo account**
 > "지금 근무 중" and the team league only show data when teammates record work in the Mac app. Demo accounts have seeded records.

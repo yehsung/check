@@ -195,7 +195,7 @@ struct DuelRoomRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            CheckAvatarView(name: room.host?.displayName ?? "사용자", userID: room.host?.userID ?? room.id,
+            CheckAvatarView(name: room.host?.displayName ?? "사용자", userID: room.host?.userID,
                             avatarURL: room.host?.avatarURL.flatMap(URL.init(string:)), size: 34,
                             characterHint: room.host?.character)
             VStack(alignment: .leading, spacing: 2) {

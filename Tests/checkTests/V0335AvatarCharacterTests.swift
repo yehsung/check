@@ -449,7 +449,9 @@ private func avFetches(_ host: String) -> Int {
         // `crossyDuel` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다(CD/SPEC.md §9.5 #23).
         // 1:1 알까기 v2 로비가 다섯 자리를 더했다(상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청 — AlkkagiPanelLobby.swift,
         // alkkagi/v2 SPEC §5.3). 55 + 5 — 판 · 결과 · 관전 카드는 공용 `BoardGamePlayerCard` 를 쓴다.
-        #expect(avatars.count == 60, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 1:1 대기방 로비(여섯 게임 공용 부품)가 한 자리를 더했다(방 줄의 방장 얼굴 — DuelRoomsLobby.swift). 60 + 1 — 아래
+        // `duelRooms` 필터가 방장 id 와 착용값을 되묻는다(방 id 로 대신 그리면 남의 캐릭터가 선다).
+        #expect(avatars.count == 61, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -559,6 +561,11 @@ private func avFetches(_ host: String) -> Int {
         for (file, id, hint) in crossyDuelIDs {
             #expect(crossyDuel.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
         }
+        // 1:1 대기방 한 자리: 방 줄의 방장 얼굴 — 방장 id · 방장 착용값(방 id 로 대신하지 않는다).
+        let duelRooms = avatars.filter { $0.file == "DuelRoomsLobby.swift" }
+        #expect(duelRooms.count == 1, "\(duelRooms.map(\.text))")
+        #expect(duelRooms.allSatisfy { $0.text.contains("userID: room.host?.userID,") && $0.text.contains("characterHint: room.host?.character")
+            && !$0.text.contains("room.id") }, "\(duelRooms.map(\.text))")
 
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")

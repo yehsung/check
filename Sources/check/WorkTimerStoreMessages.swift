@@ -436,7 +436,7 @@ extension WorkTimerStore {
             // 지난 쪽으로 옮겨져 메시지 말풍선으로 선다(확성기는 메시지함 밖이다).
             carryOlderMessagesAcrossHeadSlide(previousHead: visibleMessageHistory, nextHead: sorted)
             if messageHistory != sorted { messageHistory = sorted }
-            // 열린 대화의 머리에 사진 칸을 모르는 받은 줄이 생겼으면 한 번 묻는다(2026-11-11 — 합쳐서 · 하나씩만 · 받은 말만).
+            // 열린 대화의 머리에 사진 칸을 모르는 줄이 생겼으면 한 번 묻는다(2026-11-11 — 합쳐서 · 하나씩만 · 이 맥이 보낸 말은 빼고).
             noteMessageHeadChangedForPhotos()
             // 📢 로 시작하는데 아직 판정 못 한 줄(2026-10-30 — 계약 C3 경합)은 배너 목록을 한 번 받아 본 뒤 거른다. 그동안은 붙든다
             // (`visibleMessageHistory`) — 접두만 보고 숨기지 않고, 확인이 실패하면 메시지로 돌아온다.
@@ -730,6 +730,8 @@ extension WorkTimerStore {
             if let entry = confirmedSentMessageEntry(response, to: userID, sentBody: body, createdAt: confirmedAt) {
                 insertConfirmedSentMessage(entry)
             }
+            // 이 맥이 보낸 말은 사진 칸을 물을 것이 없다(2026-11-11 — 다른 기기가 보낸 내 말만 묻게). 아래 이력 재조회 **앞**이어야 한다.
+            noteMessageSentForPhotos(messageID: response.messageId, peer: userID)
             // 이력은 그대로 다시 받는다 — 읽음(1)·같은 초 서버 순서·상대 이름을 서버 판으로 맞춘다.
             loadMessageHistory()
         case .notWorking:

@@ -12,7 +12,10 @@ import CheckCore
 //     계약(V0334 — `.contextMenu {` 정확히 하나)이 깨진다. 행은 사진을 **먼저** 고르고(설명이 있으면 그 아래 글 말풍선), 여기는 사진 한 장만 그린다.
 //  ② 크기는 코어 규칙 하나다(`MessagePhotoLayout.bubbleSize`) — 틀 높이 추정이 같은 함수를 부른다(빈 회색 판 · 갇힌 사진 방지).
 //  ③ 덮개(미리 보기 · 크게 보기 · 준비 중)는 **대화 자리**를 덮는다 — 이모티콘 그리드와 같은 규약이다(패널 높이를 1pt 도 늘리지 않는다 ·
-//     밑의 대화는 보이스오버에서 내려가고 덮개는 `.isModal`).
+//     밑의 대화는 보이스오버에서 내려간다). 크게 보기 · 준비 중은 `.isModal` 이다. **미리 보기는 모달이 아니다** — 입력칸의 글이 설명으로
+//     같이 가므로(안내 한 줄이 그렇게 말한다) 보이스오버도 입력칸에 닿아야 한다(`.isModal` 은 작성기까지 트리에서 걷어 낸다 — V0362 실측).
+//  ⑥ 그림은 `Image(decorative:)` 라 그 자체로는 보이스오버 요소가 아니다 — 라벨은 **요소를 만든 뒤에** 붙인다(`MessagePhotoSurface` ·
+//     미리 보기). 장식 그림에 바로 붙인 라벨은 버려진다(V0362 실측).
 //  ④ 사진을 얻는 길은 사람이 고른 파일 · 붙여넣기(⌘V)뿐이다. **화면을 찍는 코드는 없다**(처리방침 — 화면 기록 권한을 안 묻는다).
 //  ⑤ 그림은 `CGImage` 로 든다(ImageRenderer 스냅샷이 그린다). 사진 · 경로는 로그로 흘리지 않는다.
 
@@ -107,7 +110,17 @@ struct MessagePhotoSurface: View {
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+        // 한 요소로 읽는다(⑥) — 부르는 쪽의 `.accessibilityLabel` 이 이 라벨을 바꾼다(말풍선 · 신고 시트 · 신고함).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityAddTraits(.isImage)
         .task(id: path) { context?.request(path) }
+    }
+
+    /// 받기 상태별 낭독 — 그림이 있으면 '사진', 못 받았으면 "사진을 볼 수 없어요", 받는 중이면 "사진을 불러오는 중".
+    private var accessibilityText: String {
+        if context?.image(for: path) != nil { return MessagePhotoText.photoAccessibility }
+        return context?.state(for: path) == .failed ? MessagePhotoText.unavailable : MessagePhotoText.loadingLabel
     }
 
     private func placeholder(failed: Bool) -> some View {
@@ -218,6 +231,21 @@ enum MessagePhotoOverlayLayout {
         let height = availableHeight - padding * 2 - buttonHeight - spacing
         return CGSize(width: MessagePanelLayout.contentWidth - padding * 2, height: max(24, height))
     }
+
+    /// 준비 중 덮개의 아이콘 줄 · 글 줄 높이.
+    static let preparingSymbolHeight: CGFloat = 24
+    static let preparingTextHeight: CGFloat = 15
+
+    /// 준비 중 덮개가 아이콘을 세우는가 — 아이콘까지 다 들어갈 때만(가장 좁은 자리에서는 글과 [취소]가 먼저다).
+    static func preparingShowsSymbol(availableHeight: CGFloat) -> Bool {
+        availableHeight >= padding * 2 + preparingSymbolHeight + spacing + preparingTextHeight + spacing + buttonHeight
+    }
+
+    /// 준비 중 덮개 내용의 높이(바깥 여백 제외).
+    static func preparingHeight(availableHeight: CGFloat) -> CGFloat {
+        let symbol = preparingShowsSymbol(availableHeight: availableHeight) ? preparingSymbolHeight + spacing : 0
+        return symbol + preparingTextHeight + spacing + buttonHeight
+    }
 }
 
 /// 고른 사진 미리 보기 — [취소] · [보내기]. 입력칸에 글이 있으면 그 글이 설명으로 같이 간다는 한 줄.
@@ -253,7 +281,10 @@ struct MessagePhotoPreviewOverlay: View {
                 .frame(width: fitted.width, height: fitted.height)
                 .clipShape(RoundedRectangle(cornerRadius: MessagePhotoLayout.corner, style: .continuous))
                 .frame(width: box.width, height: box.height)
+                // 요소를 만든 뒤에 라벨(⑥ — 장식 그림에 바로 붙이면 버려진다).
+                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(MessagePhotoText.photoAccessibility)
+                .accessibilityAddTraits(.isImage)
             if Layout.showsNote(availableHeight: availableHeight, hasNote: hasCaption) {
                 Text(MessagePhotoText.captionNote)
                     .font(.caption2)
@@ -264,7 +295,9 @@ struct MessagePhotoPreviewOverlay: View {
             }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
-                MessagePhotoOverlayButton(title: MessagePhotoText.previewCancel, prominent: false, enabled: true, action: onCancel)
+                // 보내는 중에는 [취소]가 흐려진다 — 날고 있는 전송은 멈출 수 없다(덮개만 내리면 잠시 뒤 사진이 나간다).
+                // 스토어 쪽 짝: `cancelMessagePhotoDraftFromPreview` 가 같은 판정으로 무시한다.
+                MessagePhotoOverlayButton(title: MessagePhotoText.previewCancel, prominent: false, enabled: !isSending, action: onCancel)
                 MessagePhotoOverlayButton(
                     title: isSending ? MessagePhotoText.sending : MessagePhotoText.previewSend,
                     prominent: true,
@@ -276,7 +309,7 @@ struct MessagePhotoPreviewOverlay: View {
         }
         .padding(Layout.padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .accessibilityAddTraits(.isModal)
+        // `.isModal` 을 일부러 안 건다(③ — 입력칸의 글이 설명이라 보이스오버가 작성기에 닿아야 한다). 밑의 대화는 부모가 내린다.
     }
 }
 
@@ -295,9 +328,9 @@ struct MessagePhotoViewerOverlay: View {
         let box = Layout.viewerBox(availableHeight: availableHeight)
         let fitted = MessagePhotoLayout.fitted(width: item.photo.width, height: item.photo.height, in: box)
         VStack(spacing: Layout.spacing) {
+            // 낭독은 그림 조각이 받기 상태대로 한다(⑥ — '사진' / "사진을 볼 수 없어요" / 불러오는 중).
             MessagePhotoSurface(path: item.photo.path, context: context, size: fitted, fills: false)
                 .frame(width: box.width, height: box.height)
-                .accessibilityLabel(MessagePhotoText.photoAccessibility)
             HStack(spacing: 8) {
                 MessagePhotoOverlayButton(title: MessagePhotoText.viewerSave, prominent: false, enabled: canSave, action: onSave)
                 Spacer(minLength: 0)
@@ -311,22 +344,31 @@ struct MessagePhotoViewerOverlay: View {
     }
 }
 
-/// 고른 사진을 줄이는 동안의 덮개(한 줄).
+/// 고른 사진을 줄이는 동안의 덮개(한 줄). 높이는 `MessagePhotoOverlayLayout.preparingHeight` 하나다 — 가장 좁은 대화 자리(76pt)에서는
+/// 아이콘을 접는다(덮개는 `.overlay` 라 넘치면 머리 구분선과 작성기 위로 번진다).
 struct MessagePhotoPreparingOverlay: View {
+    let availableHeight: CGFloat
     let onCancel: () -> Void
 
+    private typealias Layout = MessagePhotoOverlayLayout
+
     var body: some View {
-        VStack(spacing: 8) {
-            Spacer(minLength: 0)
-            Image(systemName: "photo")
-                .font(.system(size: 20, weight: .light))
-                .foregroundStyle(CheckTheme.secondaryText.opacity(0.7))
+        VStack(spacing: Layout.spacing) {
+            if Layout.preparingShowsSymbol(availableHeight: availableHeight) {
+                Image(systemName: "photo")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(CheckTheme.secondaryText.opacity(0.7))
+                    .frame(height: Layout.preparingSymbolHeight)
+            }
             Text(MessagePhotoText.preparing)
                 .font(.caption)
                 .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+                .frame(height: Layout.preparingTextHeight)
             MessagePhotoOverlayButton(title: MessagePhotoText.previewCancel, prominent: false, enabled: true, action: onCancel)
-            Spacer(minLength: 0)
+                .frame(height: Layout.buttonHeight)
         }
+        .padding(Layout.padding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityAddTraits(.isModal)
     }

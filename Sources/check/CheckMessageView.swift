@@ -357,9 +357,10 @@ struct CheckMessageView: View {
             //   떠 있는 팝오버에서 그 칸이 false 로 남으면 [뒤로] 뒤 다시 들어가야 새 말이 떴다. 이 두 줄을 지우면 판정이 그 한 칸으로 돌아간다.
             .onAppear { store.messageConversationViewDidAppear(viewToken) }
             .onDisappear { store.messageConversationViewDidDisappear(viewToken) }
-            // 사진을 고르면 이모티콘 그리드는 접는다(덮개가 둘이면 보낸 뒤 그리드가 다시 솟는다).
-            .onChange(of: store.selectedMessagePhotoDraft?.id) { _, id in
-                if id != nil { stickerGridOpen = false }
+            // 사진 덮개(준비 중 · 미리 보기 · 크게 보기)가 서면 이모티콘 그리드는 접는다 — 펼친 채 남겨 두면 덮개가 내려가는 순간
+            // 그리드가 다시 솟는다(⌘V 로 붙인 그림이 못 읽혀도 같다). 덮개가 서 있는 동안에는 버튼도 안 눌린다(`stickerCanToggle`).
+            .onChange(of: showsPhotoOverlay) { _, shown in
+                if shown { stickerGridOpen = false }
             }
         }
     }
@@ -498,7 +499,8 @@ struct CheckMessageView: View {
                 canSend: store.canSendPhotoNow,
                 isSending: store.isSendingMessage,
                 onSend: { CheckEditorSend.commitThenSend { store.sendMessagePhotoDraft() } },
-                onCancel: { store.cancelMessagePhotoDraft() }
+                // 보내는 중이면 스토어가 무시한다(버튼도 흐려진다 — 두 겹 게이트).
+                onCancel: { store.cancelMessagePhotoDraftFromPreview() }
             )
         } else if let viewer = store.selectedMessagePhotoViewer {
             MessagePhotoViewerOverlay(
@@ -510,7 +512,7 @@ struct CheckMessageView: View {
                 onClose: { store.closeMessagePhotoViewer() }
             )
         } else {
-            MessagePhotoPreparingOverlay(onCancel: { store.cancelMessagePhotoDraft() })
+            MessagePhotoPreparingOverlay(availableHeight: cap, onCancel: { store.cancelMessagePhotoDraft() })
         }
     }
 
@@ -629,7 +631,8 @@ struct CheckMessageView: View {
             rendersPlainText: rendersPlainTextEditor,
             // 못 박기(`pinsStickerGridOpen`)까지 함께 보는 묶음이다 — 작성기 버튼과 대화 자리가 다른 값을
             // 보면 프로브가 "버튼은 닫기인데 그리드는 없는" 화면을 재게 된다.
-            stickerGridShown: Binding(get: { showsStickerGrid }, set: { stickerGridOpen = $0 })
+            // 사진 덮개가 서 있는 동안에는 펼치기를 받지 않는다(그리드는 덮개 밑이라 안 보인다 — 덮개가 내려가는 순간 솟는다).
+            stickerGridShown: Binding(get: { showsStickerGrid }, set: { stickerGridOpen = $0 && !showsPhotoOverlay })
         )
     }
 }
@@ -737,6 +740,15 @@ struct MessageConversationView: View {
                         scrollToBottom(proxy, animated: false)
                     }
                 }
+                // 마지막 말풍선이 사진을 **늦게** 배웠다(2026-11-11 사진 — 사진 칸은 도착 뒤 따로 묻고 온다: 글 '📷 사진' 한 줄이 사진 말풍선으로
+                // 자란다). 줄 id 는 그대로라 위 트리거가 안 돈다 — 바닥에서 보던 중이면 바닥에 남긴다(macOS 14 에는 `.sizeChanges` 앵커가 없다).
+                // 같은 갱신 안에서 한 번, 배치가 끝난 다음 차례에 한 번 더(게으른 더미가 자란 줄을 아직 안 쟀을 수 있다). **마지막 줄만** 본다 —
+                // [이전 대화 더 보기]가 위에 붙이는 줄은 마지막 줄을 안 바꾼다(아래 위 맞추기와 다투지 않는다).
+                .onChange(of: tailPhotoKey) { _, key in
+                    guard key != nil, follow.isNearBottom else { return }
+                    scrollToBottom(proxy, animated: false)
+                    DispatchQueue.main.async { scrollToBottom(proxy, animated: false) }
+                }
                 .onChange(of: follow) { _, next in onFollowChange?(next) }
                 // 지난 쪽이 위에 붙었다(2026-11-11) — 붙기 전 맨 위 메시지를 **애니메이션 없이** 위에 맞춘다. macOS 14 대상이라
                 // `defaultScrollAnchor(_:for: .sizeChanges)` 가 없다 — 직접 맞춘다. 같은 갱신 안에서 한 번, 배치가 끝난 다음 차례에 한 번 더
@@ -748,6 +760,12 @@ struct MessageConversationView: View {
                 }
             }
         }
+    }
+
+    /// 마지막 줄이 사진 말풍선이면 그 줄과 사진의 열쇠(아니면 nil). 사진 칸이 늦게 와서 같은 줄이 자랄 때만 바뀐다.
+    private var tailPhotoKey: String? {
+        guard case .bubble(let entry)? = lines.last, let photo = entry.photo else { return nil }
+        return entry.id + "|" + photo.path
     }
 
     private func scrollToBottom(_ proxy: ScrollViewProxy, animated: Bool) {
@@ -1397,7 +1415,11 @@ struct MessageComposerView: View {
     }
 
     /// 이 버튼이 눌리는가. 펼친 상태면 **언제나** 눌린다(= 닫기), 접힌 상태면 보낼 수 있을 때만 눌린다(= 펼치기).
-    var stickerCanToggle: Bool { stickerGridShown.wrappedValue || store.canSendStickerNow }
+    /// 사진 덮개(미리 보기 · 크게 보기 · 준비 중 — 2026-11-11)가 대화 자리를 쓰는 동안에는 펼치지 않는다 — 그리드는 덮개 밑이라
+    /// 누른 표시가 안 보이고, 덮개가 내려가는 순간 혼자 솟는다.
+    var stickerCanToggle: Bool {
+        stickerGridShown.wrappedValue || (store.canSendStickerNow && !store.messagePhotoOverlayShown)
+    }
 
     /// [사진] 버튼(2026-11-11) — 열기 창에서 **사람이 고른 파일**만 받는다(화면을 찍지 않는다). 이모티콘 그리드는 접는다.
     @MainActor

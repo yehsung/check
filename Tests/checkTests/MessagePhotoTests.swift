@@ -276,7 +276,17 @@ func 사진_덮개는_가장_좁은_대화_자리에도_넘치지_않는다() {
         let viewerUsed: CGFloat = pad + viewer.height + gap + buttons
         #expect(viewerUsed <= available, "크게 보기가 \(available)pt 자리를 넘친다")
         #expect(viewer.width <= MessagePanelLayout.contentWidth)
+        // 준비 중 덮개(2026-11-11 검토) — 산식과 **그려진 크기**(호스팅 뷰의 이상 높이) 둘 다 자리 안이다.
+        let preparingUsed: CGFloat = pad + MessagePhotoOverlayLayout.preparingHeight(availableHeight: available)
+        #expect(preparingUsed <= available, "준비 중 덮개가 \(available)pt 자리를 넘친다(\(preparingUsed)pt)")
+        let host = NSHostingView(rootView: MessagePhotoPreparingOverlay(availableHeight: available, onCancel: {})
+            .frame(width: MessagePanelLayout.contentWidth).fixedSize(horizontal: false, vertical: true))
+        let measured: CGFloat = host.fittingSize.height
+        #expect(measured > 0 && measured <= available, "그려진 준비 중 덮개 \(measured)pt 가 \(available)pt 자리를 넘친다")
     }
+    #expect(!MessagePhotoOverlayLayout.preparingShowsSymbol(availableHeight: MessagePanelLayout.minConversationHeight),
+            "가장 좁은 자리에서 아이콘까지 세운다")
+    #expect(MessagePhotoOverlayLayout.preparingShowsSymbol(availableHeight: MessagePanelLayout.conversationHeight))
 }
 
 @Test
@@ -636,6 +646,123 @@ func 사진_왕복_중이나_집중이면_고르지_않고_사유를_말한다()
     #expect(!store.showsMessagePhotoButton && !store.canSendPhotoNow)
 }
 
+// MARK: - ② 스토어 — 보내기(2026-11-11 검토 반영)
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 사진_문은_열렸는데_판_번호가_안_닿았으면_고른_사진과_버튼을_남긴다() async throws {
+    let state = PhBox()
+    let (store, host) = makeMessageReadStore("photo-door-open") { call, _ in
+        if call.path.hasPrefix("/storage/v1/object/message-photos/") { return state.has("ready") ? Reply(body: "{}") : phRefused() }
+        if call.rpc == "send_photo_message" {
+            return state.has("ready")
+                ? PhFx.okReply(for: call, messageID: "m-door-open")
+                : Reply(body: #"{"status":"unsupported_client","door_open":true}"#)
+        }
+        return nil
+    }
+    phOpen(store)
+    store.messageDraft = "쓰던 설명"
+    let draft = try phDraft()
+    store.messagePhotoDraft = draft
+    store.sendMessagePhotoDraft()
+    await messageReadWait { !store.isSendingMessage && MessageReadStubProtocol.count(host: host, rpc: "send_photo_message") == 1 }
+    // 잠깐인 상태다 — 안내 한 줄만. 고른 사진 · [사진] 버튼 · 입력칸 글이 그대로라 "잠시 후 다시"가 할 수 있는 말이다.
+    #expect(store.messageNotice == MessagePhotoText.doorOpenNotice)
+    #expect(store.messagePhotoDraft?.id == draft.id, "문이 열렸는데 고른 사진을 버렸다 — 다시 시도할 것이 없다")
+    #expect(!store.messagePhotoSendClosed && store.showsMessagePhotoButton && store.canSendPhotoNow, "열린 문에서 [사진]을 숨겼다")
+    #expect(store.messageDraft == "쓰던 설명")
+
+    // 서버가 판 번호를 알게 됐다 — 같은 [보내기]가 같은 이름으로 나간다.
+    state.set("ready")
+    store.sendMessagePhotoDraft()
+    await messageReadWait { !store.isSendingMessage && MessageReadStubProtocol.count(host: host, rpc: "send_photo_message") == 2 }
+    #expect(store.messageNotice == WorkTimerStore.messageSentNotice)
+    #expect(Set(phStorageCalls(host).map(\.path)).count == 1, "다시 보내기가 다른 이름으로 올렸다")
+    #expect(store.messagePhotoDraft == nil && store.messageDraft.isEmpty)
+    await messageReadWait { messageReadIdle(store) }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 사진_보낸_사진의_설명은_서버가_저장한_본문을_따른다() async throws {
+    // 순수 규칙: 서버 본문이 진실 · '📷 사진'은 사진만 · 본문이 없는 옛 답만 보낸 글.
+    #expect(WorkTimerStore.sentMessagePhotoCaption(serverBody: "처음 설명", sent: "고친 설명") == "처음 설명")
+    #expect(WorkTimerStore.sentMessagePhotoCaption(serverBody: MessageNoticeText.photoFallbackBody, sent: nil) == nil)
+    #expect(WorkTimerStore.sentMessagePhotoCaption(serverBody: nil, sent: "보낸 글") == "보낸 글")
+    #expect(WorkTimerStore.sentMessagePhotoCaption(serverBody: "  ", sent: "보낸 글") == nil)
+
+    // 답을 못 받은 첫 시도가 사실은 저장됐다 → 설명을 고쳐 다시 [보내기] → 서버는 duplicate 로 **처음 본문**을 돌려준다.
+    let (store, host) = makeMessageReadStore("photo-caption-dup") { call, _ in
+        guard call.rpc == "send_photo_message" else { return nil }
+        let json = call.json
+        return Reply(body: Fx.json([
+            "status": "ok", "ring": "duplicate", "message_id": "m-dup", "created_at": "2026-09-21T12:00:00+00:00", "duplicate": true,
+            "body": "처음 설명", "photo_path": json["p_path"] as Any, "photo_width": json["p_width"] as Any,
+            "photo_height": json["p_height"] as Any
+        ]))
+    }
+    phOpen(store)
+    store.messagePhotoDraft = try phDraft()
+    store.messageDraft = "고친 설명"
+    store.sendMessagePhotoDraft()
+    await messageReadWait { !store.isSendingMessage && MessageReadStubProtocol.count(host: host, rpc: "send_photo_message") == 1 }
+    #expect(MessageReadStubProtocol.calls(host: host, rpc: "send_photo_message").first?.json["p_caption"] as? String == "고친 설명")
+    let shown = try #require(store.messagePhotoDisplayed(store.selectedConversationMessages).first { $0.id == "m-dup" })
+    #expect(shown.photo != nil)
+    #expect(shown.body == "처음 설명", "보낸 사람 화면만 고친 설명이다 — 받은 사람 · 서버와 다르다: \(shown.body)")
+    await messageReadWait { messageReadIdle(store) }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 사진_보내는_중에는_미리_보기의_취소가_전송을_숨기지_않는다() throws {
+    let (store, _) = makeMessageReadStore("photo-cancel-sending")
+    phOpen(store)
+    let draft = try phDraft()
+    store.messagePhotoDraft = draft
+    // 왕복 중(올리기 · RPC 가 날고 있다) — [취소]는 덮개만 내리고 전송은 그대로 간다. 스토어가 무시한다(뷰는 버튼을 흐린다).
+    store.isSendingMessage = true
+    store.cancelMessagePhotoDraftFromPreview()
+    #expect(store.messagePhotoDraft?.id == draft.id, "보내는 중에 [취소]가 덮개를 내렸다 — 잠시 뒤 사진이 나가고 입력칸 글이 지워진다")
+    // 대조: 왕복이 끝나면 [취소]가 고른 사진을 버린다.
+    store.isSendingMessage = false
+    store.cancelMessagePhotoDraftFromPreview()
+    #expect(store.messagePhotoDraft == nil)
+    // 대화 닫기 · 상대 바꾸기의 걷기는 왕복과 상관없이 걷는다(그 문은 따로다).
+    store.messagePhotoDraft = draft
+    store.isSendingMessage = true
+    store.clearMessagePhotoConversation()
+    #expect(store.messagePhotoDraft == nil)
+    store.isSendingMessage = false
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 사진_덮개가_서_있으면_이모티콘_버튼이_안_눌린다() throws {
+    let (store, _) = makeMessageReadStore("photo-sticker-gate")
+    phOpen(store)
+    #expect(store.canSendStickerNow, "전제: 이모티콘을 보낼 수 있다")
+    let composer = { MessageComposerView(store: store, rendersPlainText: true, stickerGridShown: .constant(false)) }
+    #expect(composer().stickerCanToggle, "대조: 덮개가 없으면 눌린다")
+
+    // 미리 보기 · 크게 보기 · 준비 중 — 그리드는 덮개 밑이라 안 보인다(누르면 덮개가 내려가는 순간 혼자 솟는다).
+    store.messagePhotoDraft = try phDraft()
+    #expect(!composer().stickerCanToggle, "미리 보기가 서 있는데 이모티콘 버튼이 눌린다")
+    store.messagePhotoDraft = nil
+    store.messagePhotoViewer = MessagePhotoViewerItem(
+        photo: try #require(MessagePhotoAttachment(path: PhFx.peerPhotoPath, width: 4, height: 3)), messageID: "a1", peerID: Fx.peerA, isMine: false
+    )
+    #expect(!composer().stickerCanToggle, "크게 보기가 서 있는데 이모티콘 버튼이 눌린다")
+    store.messagePhotoViewer = nil
+    store.messagePhotoPreparing = true
+    #expect(!composer().stickerCanToggle, "사진을 준비하는 중인데 이모티콘 버튼이 눌린다")
+    store.messagePhotoPreparing = false
+    // 펼친 그리드는 언제나 닫을 수 있다(탈출구 — V0362 계약 그대로).
+    store.messagePhotoDraft = try phDraft()
+    #expect(MessageComposerView(store: store, rendersPlainText: true, stickerGridShown: .constant(true)).stickerCanToggle)
+}
+
 // MARK: - ② 스토어 — 사진 칸
 
 @MainActor
@@ -655,16 +782,28 @@ func 사진_칸은_대화를_열_때와_새로_받은_줄에서만_묻고_팝오
             if state.has("mine") {
                 rows.append(PhFx.head("a4", isMine: true, secondsAgo: 10, body: "고마워요"))
             }
+            if state.has("otherDevice") {
+                rows.append(PhFx.head("a5", isMine: true, secondsAgo: 8, body: MessageNoticeText.photoFallbackBody))
+            }
             return Fx.historyReply(rows)
         case "message_page":
             var rows: [Any] = [
                 PhFx.pageRow(id: "a2", isMine: true, secondsAgo: 300, caption: "잘 봤어요", photoPath: nil),
                 PhFx.pageRow(id: "a1", isMine: false, secondsAgo: 600, caption: nil, photoPath: PhFx.peerPhotoPath)
             ]
+            if state.has("otherDevice") {
+                rows.insert(PhFx.pageRow(id: "a5", isMine: true, secondsAgo: 8, caption: nil, photoPath: PhFx.minePhotoPath), at: 0)
+            }
             if state.has("arrival") {
                 rows.insert(PhFx.pageRow(id: "a3", isMine: false, secondsAgo: 30, caption: "이것도 보세요", photoPath: PhFx.otherPhotoPath), at: 0)
             }
             return Reply(body: Fx.json(rows))
+        case "send_message":
+            // 이 맥이 보낸 글(서버가 저장한 행의 id · 시각을 싣는다).
+            return Reply(body: Fx.json([
+                "status": "ok", "ring": "sent", "message_id": "a4", "created_at": "2026-09-21T12:00:00+00:00",
+                "duplicate": false, "body": "고마워요"
+            ]))
         case "message_unread_summary": return Fx.summaryReply([])
         default: return nil
         }
@@ -698,29 +837,44 @@ func 사진_칸은_대화를_열_때와_새로_받은_줄에서만_묻고_팝오
     await messageReadWait { messageReadIdle(store) && store.messagePhotoMetaIdle }
     #expect(phMetaCalls(host).count == 1, "팝오버 열기 · 새로고침이 사진 칸을 물었다(기존 요청 수가 바뀐다)")
 
-    // 내 말이 새로 와도(이 맥이 보낸 것이면 이미 안다) 묻지 않는다.
+    // **이 맥이 보낸** 글은 묻지 않는다(보낸 자리에서 물어본 것으로 친다 — 글 하나마다 묻지 않게).
     state.set("mine")
+    store.messageDraft = "고마워요"
+    store.sendDraftMessage()
+    await messageReadWait {
+        MessageReadStubProtocol.count(host: host, rpc: "send_message") == 1 && !store.isSendingMessage
+            && store.messageHistory.contains { $0.id == "a4" }
+    }
     await store.performLoadMessageHistory()
     await messageReadWait { messageReadIdle(store) && store.messagePhotoMetaIdle }
-    #expect(phMetaCalls(host).count == 1, "내 말 때문에 사진 칸을 물었다")
+    #expect(store.messageNotice == WorkTimerStore.messageSentNotice, "전제: 글이 나갔다")
+    #expect(phMetaCalls(host).count == 1, "이 맥이 보낸 글 때문에 사진 칸을 물었다")
+
+    // 같은 계정의 **다른 기기**가 보낸 내 사진은 이 맥이 모른다 — 한 번 묻는다(2026-11-11 검토: 안 물으면 다시 열 때까지 글 '📷 사진').
+    state.set("otherDevice")
+    await store.performLoadMessageHistory()
+    await messageReadWait { messageReadIdle(store) && store.messagePhotoMetaIdle }
+    #expect(phMetaCalls(host).count == 2, "다른 기기가 보낸 내 사진의 사진 칸을 안 물었다")
+    let a5 = try #require(store.messagePhotoDisplayed(store.selectedConversationMessages).first { $0.id == "a5" })
+    #expect(a5.photo?.path == PhFx.minePhotoPath && a5.body.isEmpty)
 
     // 받은 말이 새로 오면 한 번 묻는다(합쳐서).
     state.set("arrival")
     await store.performLoadMessageHistory()
     await messageReadWait { messageReadIdle(store) && store.messagePhotoMetaIdle }
-    #expect(phMetaCalls(host).count == 2, "새로 받은 줄의 사진 칸을 안 물었다")
+    #expect(phMetaCalls(host).count == 3, "새로 받은 줄의 사진 칸을 안 물었다")
     #expect(store.messagePhotoDisplayed(store.selectedConversationMessages).first { $0.id == "a3" }?.photo?.path == PhFx.otherPhotoPath)
     // 다시 받아도 같은 줄이면 더 묻지 않는다.
     await store.performLoadMessageHistory()
     await messageReadWait { messageReadIdle(store) && store.messagePhotoMetaIdle }
-    #expect(phMetaCalls(host).count == 2)
+    #expect(phMetaCalls(host).count == 3)
 
     // 닫으면 사진 칸을 걷는다(가장 사적인 표면). 다시 열면 다시 묻는다.
     store.closeMessagePanel()
     #expect(store.messagePhotoMeta.isEmpty)
     store.openMessagePanel(peer: Fx.peerA)
     await messageReadWait { store.messagePhotoMetaIdle && messageReadIdle(store) }
-    #expect(phMetaCalls(host).count == 3)
+    #expect(phMetaCalls(host).count == 4)
 }
 
 @MainActor
@@ -957,21 +1111,31 @@ func 사진_운영자_신고함은_목록을_받은_뒤_한_번에_묻고_처음
     try? await Task.sleep(for: .milliseconds(30))
     #expect(store.reportAdminPhotoPaths.isEmpty)
 
-    // 사진이 있는 서버 — 새 id 만 묻는다(r1 은 이미 물었다).
-    ReportAdminURLProtocol.set(.init(body: Fx.json([["report_id": "r2", "photo_path": PhFx.peerPhotoPath]])), host: host, path: photosPath)
+    // 서버가 열렸다(같은 세션) — 다음 목록 조회가 **404 때 물었던 r1 까지** 다시 묻는다(없음을 세션 내내 들지 않는다 — 2026-11-11 검토).
+    ReportAdminURLProtocol.set(
+        .init(body: Fx.json([["report_id": "r1", "photo_path": PhFx.otherPhotoPath], ["report_id": "r2", "photo_path": PhFx.peerPhotoPath]])),
+        host: host, path: photosPath
+    )
     ReportAdminURLProtocol.set(.init(body: "[" + row("r1") + "," + row("r2") + "]"), host: host, path: listPath)
     await store.performLoadReportAdmin()
-    await messageReadWait { !store.reportAdminPhotoPaths.isEmpty }
+    await messageReadWait { store.reportAdminPhotoPaths.count == 2 }
     #expect(ReportAdminURLProtocol.count(host: host, path: photosPath) == 2)
     let sent = try #require(ReportAdminURLProtocol.sentBodies(host: host, path: photosPath).last)
     let json = try #require(try JSONSerialization.jsonObject(with: Data(sent.utf8)) as? [String: Any])
-    #expect(json["p_ids"] as? [String] == ["r2"], "이미 물어본 id 를 다시 물었다: \(sent)")
-    #expect(store.reportAdminPhotoPaths == ["r2": PhFx.peerPhotoPath])
+    #expect(Set(json["p_ids"] as? [String] ?? []) == ["r1", "r2"], "404 때 물었던 신고를 다시 안 물었다: \(sent)")
+    #expect(store.reportAdminPhotoPaths == ["r1": PhFx.otherPhotoPath, "r2": PhFx.peerPhotoPath])
 
-    // 같은 목록을 다시 받으면 묻지 않는다.
+    // 답을 받은 id 는 같은 목록을 다시 받아도 묻지 않는다 — 새 id 만 묻는다.
     await store.performLoadReportAdmin()
     try? await Task.sleep(for: .milliseconds(30))
     #expect(ReportAdminURLProtocol.count(host: host, path: photosPath) == 2, "목록을 다시 받을 때마다 사진 경로를 물었다")
+    ReportAdminURLProtocol.set(.init(body: Fx.json([] as [Any])), host: host, path: photosPath)
+    ReportAdminURLProtocol.set(.init(body: "[" + row("r1") + "," + row("r2") + "," + row("r3") + "]"), host: host, path: listPath)
+    await store.performLoadReportAdmin()
+    await messageReadWait { ReportAdminURLProtocol.count(host: host, path: photosPath) == 3 }
+    let third = try #require(ReportAdminURLProtocol.sentBodies(host: host, path: photosPath).last)
+    let thirdJSON = try #require(try JSONSerialization.jsonObject(with: Data(third.utf8)) as? [String: Any])
+    #expect(thirdJSON["p_ids"] as? [String] == ["r3"], "이미 답을 받은 id 를 다시 물었다: \(third)")
 
     // 행 높이 추정이 사진 조각을 센다(작게 < 크게).
     let item = try #require(store.reportAdminList.first { $0.id == "r2" })
@@ -989,7 +1153,7 @@ func 사진_운영자_신고함은_목록을_받은_뒤_한_번에_묻고_처음
     store.reportAdminPhotoChecked = []
     store.loadReportAdminPhotoPaths(for: store.reportAdminList, generation: store.sessionGeneration)
     try? await Task.sleep(for: .milliseconds(30))
-    #expect(ReportAdminURLProtocol.count(host: host, path: photosPath) == 2)
+    #expect(ReportAdminURLProtocol.count(host: host, path: photosPath) == 3)
 }
 
 // MARK: - ③ 인코더
@@ -1219,6 +1383,107 @@ func 사진_미리_보기_덮개는_밑의_대화를_보이스오버에서_내�
     let open = try labels(withDraft: true)
     #expect(!open.contains("다시 시도"), "가려진 대화가 보이스오버에 남았다: \(open)")
     #expect(open.contains(MessagePhotoText.previewCancel), "미리 보기 덮개의 [취소]가 안 읽힌다: \(open)")
+    // 2026-11-11 검토: 미리 보기는 **모달이 아니다** — 입력칸의 글이 설명으로 같이 가므로 작성기가 읽혀야 한다(`.isModal` 이면 걷힌다).
+    #expect(open.contains(AingStickerText.buttonLabel) || open.contains(MessagePhotoText.buttonLabel),
+            "미리 보기 중에 작성기가 보이스오버에서 사라졌다 — 설명을 쓸 길이 없다: \(open)")
+    // 사진 자체가 '사진'으로 읽힌다(장식 그림에 바로 붙인 라벨은 버려진다 — 요소를 만든 뒤에 붙인다).
+    #expect(open.contains(MessagePhotoText.photoAccessibility), "미리 보기의 사진이 안 읽힌다: \(open)")
+
+    // 크게 보기 — 받은 그림이 '사진'으로 읽힌다(대조: 미리 보기와 다른 조각 `MessagePhotoSurface`).
+    let (store, _) = makeMessageReadStore("photo-ax-viewer")
+    store.openMessagePanel(peer: Fx.peerA)
+    store.messageHistoryFailed = true
+    let photo = try #require(MessagePhotoAttachment(path: PhFx.peerPhotoPath, width: 1_600, height: 1_200))
+    phSeedImage(store, path: photo.path)
+    store.messagePhotoViewer = MessagePhotoViewerItem(photo: photo, messageID: "a1", peerID: Fx.peerA, isMine: false)
+    let viewer = phAccessibilityLabels(
+        CheckMessageView(store: store, rendersPlainTextEditor: true, clipsOverflowInsteadOfScroll: true, now: Fx.now, onBack: {}),
+        width: 316, height: 700
+    )
+    #expect(viewer.contains(MessagePhotoText.photoAccessibility), "크게 보기의 사진이 안 읽힌다: \(viewer)")
+    #expect(viewer.contains(MessagePhotoText.viewerClose) && !viewer.contains("다시 시도"), "크게 보기 덮개: \(viewer)")
+}
+
+/// 화면에 올리지 않는 창에 붙인 대화(호스팅 — 스크롤 갈래). V0331 의 따라가기 측정과 같은 수법이다(orderFront 없음).
+@MainActor
+private func phMountConversation(_ entries: [MessageHistoryEntry], width: CGFloat, height: CGFloat) -> (NSWindow, NSHostingView<AnyView>) {
+    let host = NSHostingView(rootView: phScrollingConversation(entries, width: width, height: height))
+    host.frame = NSRect(x: 0, y: 0, width: width, height: height)
+    let window = NSWindow(contentRect: host.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    window.contentView = host
+    host.layoutSubtreeIfNeeded()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+    host.layoutSubtreeIfNeeded()
+    return (window, host)
+}
+
+@MainActor
+private func phScrollingConversation(_ entries: [MessageHistoryEntry], width: CGFloat, height: CGFloat) -> AnyView {
+    AnyView(
+        MessageConversationView(
+            items: MessageThreadBuilder.timeline(entries, now: Fx.now),
+            peerUserID: Fx.peerA,
+            lastMessageID: entries.last?.id,
+            lastMessageIsMine: entries.last?.isMine ?? false,
+            readReceiptsAvailable: true
+        )
+        .frame(width: width, height: height, alignment: .top)
+        .background(CheckTheme.background)
+    )
+}
+
+@MainActor
+private func phScrollView(in root: NSView) -> NSScrollView? {
+    if let match = root as? NSScrollView { return match }
+    for child in root.subviews {
+        if let match = phScrollView(in: child) { return match }
+    }
+    return nil
+}
+
+/// 바닥까지 남은 거리(pt).
+@MainActor
+private func phDistanceFromBottom(_ scrollView: NSScrollView) -> CGFloat {
+    let clip = scrollView.contentView
+    guard let document = scrollView.documentView else { return 0 }
+    return document.isFlipped ? document.frame.height - clip.bounds.maxY : clip.bounds.minY
+}
+
+@MainActor
+@Test
+func 사진_칸이_늦게_와서_마지막_줄이_자라도_바닥에서_보던_대화는_바닥에_남는다() throws {
+    // 받은 사진은 먼저 글 '📷 사진' 한 줄로 서고, 사진 칸이 오면 **같은 줄**(같은 id)이 사진 말풍선(세로 200pt)으로 자란다.
+    //
+    // ★ 무엇을 재는가(2026-11-11 변이 실측): 이 맥(macOS 26+)에서는 `.defaultScrollAnchor(.bottom)` 만으로도 바닥에 남는다(따라가기
+    //   트리거를 죽여도 초록). macOS 14 에는 크기 변화 앵커가 없어서 트리거(`onChange(of: tailPhotoKey)`)가 있는 것이다 — 앵커를 걷어
+    //   macOS 14 처럼 만든 판에서 트리거만으로 초록, 둘 다 걷으면 빨강이었다. 이 시험은 그 **결과**(바닥에 남는다)를 지킨다.
+    let width = MessagePanelLayout.contentWidth
+    let height: CGFloat = 220
+    var entries: [MessageHistoryEntry] = []
+    for index in 0..<24 {
+        let secondsAgo: Int = 3_000 - index * 60
+        let at: Date = Fx.now.addingTimeInterval(TimeInterval(-secondsAgo))
+        entries.append(PhFx.entry("t\(index)", body: "이전 대화 \(index) 번째 줄입니다", isMine: index % 2 == 0, at: at))
+    }
+    let arrivedAt = Fx.now.addingTimeInterval(-20)
+    entries.append(PhFx.entry("p1", body: MessageNoticeText.photoFallbackBody, isMine: false, at: arrivedAt))
+    let (window, host) = phMountConversation(entries, width: width, height: height)
+    defer { window.contentView = nil; window.close() }
+    let scrollView = try #require(phScrollView(in: host), "대화 안에 스크롤 뷰가 없다")
+    #expect(phDistanceFromBottom(scrollView) <= MessageScrollFollow.nearBottomThreshold, "전제: 처음 열면 바닥이다")
+    let before = scrollView.documentView?.frame.height ?? 0
+
+    let photo = try #require(MessagePhotoAttachment(path: PhFx.peerPhotoPath, width: 900, height: 1_600))
+    entries[entries.count - 1] = PhFx.entry("p1", body: "", isMine: false, photo: photo, at: arrivedAt)
+    host.rootView = phScrollingConversation(entries, width: width, height: height)
+    host.layoutSubtreeIfNeeded()
+    RunLoop.current.run(until: Date().addingTimeInterval(0.45))
+    host.layoutSubtreeIfNeeded()
+    let grown = (scrollView.documentView?.frame.height ?? 0) - before
+    #expect(grown > MessageScrollFollow.nearBottomThreshold, "전제: 마지막 줄이 따라가기 폭보다 크게 자랐다(\(grown)pt)")
+    #expect(phDistanceFromBottom(scrollView) <= MessageScrollFollow.nearBottomThreshold,
+            "사진 칸이 늦게 와 자란 마지막 사진이 화면 밖으로 밀렸다(바닥까지 \(phDistanceFromBottom(scrollView))pt)")
 }
 
 // MARK: - ④ 스냅숏 (FEATURE_SHOTS_DIR)

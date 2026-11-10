@@ -11,8 +11,9 @@ import UniformTypeIdentifiers
 // ① **24시간 머리(`messageHistory`)는 한 글자도 안 바뀐다.** 머리 줄에는 사진 칸이 없어서 사진은 따로 든 표(`messagePhotoMeta`)로
 //    배우고, **그릴 때만** 얹는다(`messagePhotoDisplayed`). 그래서 안 읽음 점 · 읽음 경계 · 확성기 판정은 사진을 모른다.
 // ② **사진 칸을 묻는 자리는 둘뿐이다**: 사람이 대화를 열 때(`openMessagePanel` → `armMessagePhotoMeta`) 한 번, 그리고 열린 대화의
-//    머리에 사진 칸을 모르는 **받은** 말이 생겼을 때(합쳐서 · 상대마다 하나씩만 — `noteMessageHeadChangedForPhotos`). 팝오버 열기 ·
-//    폴링 tick · 앱 시작 · 내 글 보내기는 묻지 않는다(내 말은 이 맥이 보낸 것이면 이미 안다).
+//    머리에 사진 칸을 모르는 말(받은 말 · 같은 계정의 다른 기기가 보낸 내 말)이 생겼을 때(합쳐서 · 상대마다 하나씩만 —
+//    `noteMessageHeadChangedForPhotos`). 팝오버 열기 · 폴링 tick · 앱 시작 · 이 맥의 보내기는 묻지 않는다(이 맥이 보낸 말은 보낸
+//    자리에서 물어본 것으로 친다 — `noteMessageSentForPhotos`).
 //    함수가 없는 서버(404 · PGRST202)면 다음 패널 열기까지 안 묻는다(사진 줄은 글 '📷 사진'으로 그린다).
 // ③ **보내기는 올리기 → `send_photo_message`** 이고, 같은 소문자 uuid 가 파일 이름과 `p_client_message_id` 를 겸한다. 답을 못 받은 실패는
 //    **같은 이름 · 같은 키로** 한 번 더 보낸다(서버가 `duplicate` 로 한 줄에 접는다). 올리기 409 는 우리 앞 시도가 올린 우리 파일이다(성공).
@@ -348,7 +349,7 @@ extension WorkTimerStore {
         messagePhotoImages.wipe()
     }
 
-    /// 열린 대화의 머리가 바뀌었다(이력 응답 · 즉시 도착). 사진 칸을 모르는 **받은** 줄이 있으면 합쳐서 한 번 묻는다.
+    /// 열린 대화의 머리가 바뀌었다(이력 응답 · 즉시 도착). 사진 칸을 모르는 줄(이 맥이 안 보낸 줄)이 있으면 합쳐서 한 번 묻는다.
     func noteMessageHeadChangedForPhotos() {
         guard session != nil, isMessagePanelVisible, let peer = messagePhotoRuntime.armedPeer,
               peer == selectedMessagePeerID, messagePhotoMetaAvailable != false
@@ -361,15 +362,25 @@ extension WorkTimerStore {
         scheduleMessagePhotoMetaFetch(peer: peer)
     }
 
-    /// 머리의 받은 줄 중 아직 안 물어본 것(덮은 창 안의 것만 — 창보다 옛 줄은 [이전 대화 더 보기]가 사진을 싣는다).
+    /// 머리 줄 중 아직 안 물어본 것(덮은 창 안의 것만 — 창보다 옛 줄은 [이전 대화 더 보기]가 사진을 싣는다).
+    ///
+    /// **내 말도 센다**(2026-11-11 검토): 같은 계정의 다른 맥 · 폰이 보낸 사진은 이 맥이 모른다. 이 맥이 보낸 말(글 · 이모티콘 · 사진)은
+    /// 보낸 그 자리에서 물어본 것으로 친다(`noteMessageSentForPhotos`) — 그래서 내 글 하나 보낼 때마다 묻지 않는다.
     func uncoveredMessagePhotoCandidates(peer: String) -> [String] {
         let covered = messagePhotoRuntime.coveredIDs[peer] ?? []
         let floor = messagePhotoRuntime.coveredFloor[peer]?.addingTimeInterval(-Self.messagePhotoCoverSlack)
         return messageHistory.compactMap { entry in
-            guard entry.peerUserID == peer, !entry.isMine, !covered.contains(entry.id) else { return nil }
+            guard entry.peerUserID == peer, !covered.contains(entry.id) else { return nil }
             if let floor, entry.createdAt < floor { return nil }
             return entry.id
         }
+    }
+
+    /// 이 맥이 보낸 말의 서버 id(전송 ok — `applyMessageSendOutcome` 이 부른다). 열린 대화의 것이면 물어본 것으로 친다:
+    /// 사진이면 보낸 자리에서 이미 사진 칸에 넣었고(`recordSentMessagePhoto`), 글이면 물을 것이 없다.
+    func noteMessageSentForPhotos(messageID: String?, peer: String) {
+        guard let messageID, !messageID.isEmpty, messagePhotoRuntime.armedPeer == peer else { return }
+        messagePhotoRuntime.coveredIDs[peer, default: []].insert(messageID)
     }
 
     /// 합치기 잠 뒤에 묻는다(하나만 잔다).
@@ -531,7 +542,14 @@ extension WorkTimerStore {
         }
     }
 
-    /// [취소] — 고른 사진을 버린다(줄이던 작업의 결과도 버린다).
+    /// 미리 보기의 [취소](사람이 누름). **보내는 중이면 아무것도 안 한다** — 날고 있는 올리기 · RPC 는 멈출 수 없어서, 덮개만 내리면
+    /// 잠시 뒤 사진이 나가고 설명으로 간 입력칸 글까지 지워진다(사람은 취소한 줄 안다). 뷰는 같은 판정(`isSendingMessage`)으로 버튼을 흐린다.
+    func cancelMessagePhotoDraftFromPreview() {
+        guard !isSendingMessage else { return }
+        cancelMessagePhotoDraft()
+    }
+
+    /// [취소] — 고른 사진을 버린다(줄이던 작업의 결과도 버린다). 대화 닫기 · 상대 바꾸기 · 문 닫힘도 이 문을 지난다.
     func cancelMessagePhotoDraft() {
         messagePhotoRuntime.prepareToken += 1
         if messagePhotoPreparing { messagePhotoPreparing = false }
@@ -584,7 +602,13 @@ extension WorkTimerStore {
                     focusIntentAtRequest: focusIntentAtRequest
                 )
             case .unsupportedClient(let doorOpen):
-                closeMessagePhotoDoor(notice: doorOpen == true ? MessagePhotoText.doorOpenNotice : MessagePhotoText.doorClosedNotice)
+                if doorOpen == true {
+                    // 문은 열렸는데 이 기기의 판 번호가 아직 서버에 안 닿았다(잠깐이다) — 고른 사진과 [사진] 버튼을 남긴다.
+                    // 다시 [보내기]면 된다(올리기가 이미 됐으면 같은 이름이라 건너뛴다 · 안 됐으면 같은 이름으로 다시 올린다).
+                    messageNotice = MessagePhotoText.doorOpenNotice
+                } else {
+                    closeMessagePhotoDoor(notice: MessagePhotoText.doorClosedNotice)
+                }
             case .invalidPhoto:
                 // 그 이름은 서버가 안 받는다 — 같은 사진을 **새 이름**으로 다시 올리게 둔다(사진은 남는다).
                 renewMessagePhotoDraft(draft)
@@ -697,12 +721,24 @@ extension WorkTimerStore {
             messagePhotoImages.insert(draft.preview, data: draft.encoded.data, path: attachment.path, owner: owner)
             if let id = response.send.messageId, !id.isEmpty {
                 var map = messagePhotoMeta[draft.peer] ?? [:]
-                map[id] = MessagePhotoMeta(attachment: attachment, caption: caption)
+                map[id] = MessagePhotoMeta(
+                    attachment: attachment, caption: Self.sentMessagePhotoCaption(serverBody: response.send.body, sent: caption)
+                )
                 messagePhotoMeta[draft.peer] = map
                 messagePhotoRuntime.coveredIDs[draft.peer, default: []].insert(id)
             }
         }
         if messagePhotoDraft?.id == draft.id { messagePhotoDraft = nil }
+    }
+
+    /// 보낸 사진의 설명 — **서버가 저장한 본문**이 진실이다(글 보내기의 확정 줄과 같은 규칙). `duplicate` 답은 처음 저장한 본문을
+    /// 돌려주므로, 답을 못 받은 뒤 설명을 고쳐 다시 보내도 받은 사람과 같은 글이 선다. 본문이 '📷 사진'이면 사진만 보낸 줄이다.
+    /// 본문이 없는 답(옛 모양)만 보낸 글을 쓴다.
+    nonisolated static func sentMessagePhotoCaption(serverBody: String?, sent: String?) -> String? {
+        guard let serverBody else { return sent }
+        let body = MessageBody.sanitized(serverBody)
+        guard MessageBody.hasVisibleContent(body), body != MessageNoticeText.photoFallbackBody else { return nil }
+        return body
     }
 
     /// 문이 닫혀 있다(또는 함수 · 버킷이 없다) — 문구 한 줄, 고른 사진을 내리고 [사진] 버튼을 다음 패널 열기까지 숨긴다. 글 초안은 남는다.
@@ -793,8 +829,8 @@ extension WorkTimerStore {
                 if merged != reportAdminPhotoPaths { reportAdminPhotoPaths = merged }
             } catch {
                 guard generation == sessionGeneration else { return }
-                if let serviceError = error as? SupabaseWorkServiceError, Self.isMissingMessageReadFunction(serviceError) { return }
-                // 일시 실패 — 다음 목록 조회가 다시 묻게 물어본 표에서 뺀다.
+                // 함수가 없는 서버(404 · PGRST202)도 일시 실패도 물어본 표에서 뺀다 — 다음 목록 조회(신고함 열기 · 다시 받기 · 처리 뒤)가
+                // 다시 묻는다. 없음을 이 세션 내내 들고 있으면 서버가 열린 뒤에도 이미 본 신고의 사진이 앱을 다시 켤 때까지 안 선다.
                 reportAdminPhotoChecked.subtract(ids)
             }
         }

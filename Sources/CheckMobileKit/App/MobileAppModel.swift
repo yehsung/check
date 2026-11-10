@@ -24,6 +24,7 @@ public final class MobileAppModel {
     package let tetris: TetrisDuelStore
     package let rummy: RummyStore
     package let reversi: ReversiStore
+    package let crossyDuel: CrossyDuelStore
     @ObservationIgnored package let links: MobileStoreLinks
     @ObservationIgnored package let context: MobileContext
     package let push: PushCoordinator
@@ -176,6 +177,14 @@ public final class MobileAppModel {
         // 실시간 'reversi' 초인종을 받을 자리(위 큐브 칸과 같은 꼴 · 약한 참조). 빠지면 러너의 `.reversiSignal` 가지가 nil 에 말을 건다 —
         // 받은 신청이 다음 허브 진입(30초 스로틀)까지 안 서고, 조인 따라잡기(`.catchUp` → `realtimeDidJoin`)도 안 돈다.
         realtime.reversi = reversi
+        // 1:1 길건너(맥 0.3.78 · 폰 1.0.18 — 대표 지시 11-10 "맥만 구현해놓고 폰 구현 안된거 … 다 구현해서 넣자" · 루비 판돈 그대로 #d_t103CxfPGinB).
+        // 호스트 · 시계 · 장부 · 순위 스위치 · 초인종 자리는 위 아잉 뒤집기와 같은 꼴이다(관전은 없다 — SPEC Q1 '구경 없음').
+        let crossyDuel = CrossyDuelStore()
+        crossyDuel.attach(host: host)
+        crossyDuel.clock = { clock.now() }
+        crossyDuel.deviceLedger.defaults = env.storage.defaults
+        crossyDuel.rankingEnabled = true
+        realtime.crossyDuel = crossyDuel
         let links = MobileStoreLinks()
         // 본 것 기록(계정별 최근 100개)은 앱 기본값 저장소에 — 재실행해도 같은 확성기를 두 번 안 띄운다(코어 머리말 ⑤).
         let megaphoneBanner = MegaphoneBannerStore(host: host, defaults: env.storage.defaults, clock: { clock.now() })
@@ -195,6 +204,7 @@ public final class MobileAppModel {
             tetris: tetris,
             rummy: rummy,
             reversi: reversi,
+            crossyDuel: crossyDuel,
             gomokuHost: host,
             storage: env.storage,
             appInfo: env.appInfo,
@@ -214,6 +224,7 @@ public final class MobileAppModel {
         self.tetris = tetris
         self.rummy = rummy
         self.reversi = reversi
+        self.crossyDuel = crossyDuel
         self.links = links
         self.appearance = appearance
         self.characters = characters
@@ -251,6 +262,8 @@ public final class MobileAppModel {
         rummy.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "rummy") }
         // 아잉 뒤집기 — 서버 `daily_reversi` 의 game 값. 코어는 **1:1 판에서만** 부른다(AI 연습은 미션을 채우지 않는다 — 서버가 안 센다).
         reversi.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "reversi") }
+        // 1:1 길건너 — 서버 `daily_crossy_duel` 의 game 값(맥 `refreshAchievementsAfterGameResult(game: "crossy_duel")` 과 같다).
+        crossyDuel.onMatchFinished = { [weak me] in me?.refreshAchievementsAfterGameResult(game: "crossy_duel") }
 
         session.onSignedIn = { [weak self] in self?.sessionDidSignIn() }
         session.onSignedOut = { [weak self] in self?.sessionDidSignOut() }
@@ -374,6 +387,7 @@ public final class MobileAppModel {
         // 다음 사람의 화면에 신청을 세운다. `reset()` 은 배선 값(`rankingEnabled`·`spectatorFeaturesEnabled`·`clock`·`presentWindow`·장부 저장소)을
         // 건드리지 않는다. '이 기기가 연 판' 장부는 사용자별 키라 비우지 않는다(같은 사람이 돌아오면 자기 판을 알아본다).
         reversi.reset()
+        crossyDuel.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

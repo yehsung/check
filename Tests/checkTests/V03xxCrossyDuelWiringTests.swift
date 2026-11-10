@@ -149,9 +149,12 @@ struct V03xxCrossyDuelWiringTests {
         let runner = try cdwPhoneRunner()
         #expect(cdwCount("case .crossyDuelSignal", in: runner) == 1, "폰 러너에 1:1 길건너 가지가 하나가 아니다")
         let branch = try #require(cdwBetween(runner, "case .crossyDuelSignal:", "case .pushAccessToken"))
-        #expect(branch == "case .crossyDuelSignal: break ", "폰 러너의 1:1 길건너 가지가 비어 있지 않다: \(branch)")
+        // 폰 1.0.18 부터 스토어로 잇는다(대표 지시 11-10 · #d_t103CxfPGinB) — `.drain` 으로 새지 않는다.
+        #expect(branch == "case .crossyDuelSignal: crossyDuel?.handleSignal() ", "폰 러너의 1:1 길건너 가지가 스토어로 안 간다: \(branch)")
+        #expect(!branch.contains("requestDrain") && !branch.contains("requestMessageActivity"))
         // ★ 기준선: 확성기 가지가 바로 앞이다(마작·리버시 앵커 묶음 밖 — 같은 읽기가 이웃 가지를 알아본다).
-        #expect(runner.contains("requestMegaphoneRefresh() case .crossyDuelSignal: break case .pushAccessToken"))
+        #expect(runner.contains("requestMegaphoneRefresh() case .crossyDuelSignal: crossyDuel?.handleSignal() case .pushAccessToken"))
+        #expect(runner.contains("reversi?.realtimeDidJoin() crossyDuel?.realtimeDidJoin()"), "조인 따라잡기에 1:1 길건너가 없다")
         // 마작 계약의 앵커(마작 가지 ~ 확성기 가지 사이)는 그대로다.
         #expect(cdwBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:") == "case .mahjongSignal: break ")
     }

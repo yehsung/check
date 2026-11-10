@@ -39,6 +39,8 @@ package struct MobileContext {
     /// 코어 아잉 뒤집기 스토어(host = **같은** `MobileGomokuHost` — `ReversiStoreHost` 도 `GomokuStoreHost` 의 별명이다,
     /// `ReversiStore.swift:37`). 폰 1.0.17 부터. 루비 미러를 다섯이 한 칸으로 읽는다(위 테트리스 주석과 같은 까닭).
     package let reversi: ReversiStore
+    /// 코어 1:1 길건너 스토어(host = 같은 `MobileGomokuHost` — `CrossyDuelStoreHost` 도 `GomokuStoreHost` 의 별명이다). 폰 1.0.18 부터.
+    package let crossyDuel: CrossyDuelStore
     /// 오목·체스·테트리스 스토어의 호스트(루비 미러 `rubyBalance` 를 나 탭·게임 탭이 함께 읽는다).
     package let gomokuHost: MobileGomokuHost
     /// App Group 저장소(할 일 파일 `storage.todoFileURL(userID:)` · 공용 suite).
@@ -65,6 +67,7 @@ package struct MobileContext {
         tetris: TetrisDuelStore,
         rummy: RummyStore,
         reversi: ReversiStore,
+        crossyDuel: CrossyDuelStore,
         gomokuHost: MobileGomokuHost,
         storage: AingSharedStorage,
         appInfo: MobileAppInfo,
@@ -84,6 +87,7 @@ package struct MobileContext {
         self.tetris = tetris
         self.rummy = rummy
         self.reversi = reversi
+        self.crossyDuel = crossyDuel
         self.gomokuHost = gomokuHost
         self.storage = storage
         self.appInfo = appInfo

@@ -31,7 +31,7 @@ package final class MobileRealtimeRegistration {
 ///     · `.reversiSignal` → `ReversiStore.handleSignal()`(1.0.17).
 ///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
 ///     `.mahjongSignal` 도 **일부러 빈 가지**다(맥 0.3.76 아잉 마작 — 폰에 스토어가 없다). `.drain` 으로 새면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
-///     `.crossyDuelSignal` 도 **일부러 빈 가지**다(맥 먼저 1:1 길건너 — 폰에 스토어가 없다).
+///     · `.crossyDuelSignal` → `CrossyDuelStore.handleSignal()`(1.0.18).
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
 @MainActor
@@ -54,6 +54,8 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var rummy: RummyStore?
     /// 아잉 뒤집기 신호를 받을 스토어(앱 모델이 붙인다 — 위 세 칸과 같은 꼴 · 폰 1.0.17).
     @ObservationIgnored package weak var reversi: ReversiStore?
+    /// 1:1 길건너 신호를 받을 스토어(앱 모델이 붙인다 — 폰 1.0.18).
+    @ObservationIgnored package weak var crossyDuel: CrossyDuelStore?
     /// 확성기 배너 신호(`megaphone`)를 받을 스토어(앱 모델이 붙인다 — 오목·테트리스 칸과 같은 꼴).
     @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
 
@@ -239,6 +241,8 @@ package final class MobileRealtimeRunner {
                 // 아잉 뒤집기도 같은 자리다(로비 한 번 + 그 응답이 가리키는 판). 소켓이 내려가 있던 사이의 신청·수락·상대 수는 재생되지 않는다 —
                 // 받은 신청은 60초를 살고 내 차례는 30초 뒤 서버가 대신 두므로(연속 3번이면 패) 다음 계기까지 기다리면 늦다.
                 reversi?.realtimeDidJoin()
+                // 1:1 길건너도 같은 자리다(신청 60초 · 준비 · 판 시작이 이 초인종으로 온다).
+                crossyDuel?.realtimeDidJoin()
             case .drain:
                 // ★ take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다.
                 requestMessageActivity(now: now)
@@ -302,9 +306,9 @@ package final class MobileRealtimeRunner {
                 // `poke_ring` 이 이미 메시지 활동을 깨웠으므로 메시지 조회가 한 번 더 나갈 뿐이다.
                 requestMegaphoneRefresh()
             case .crossyDuelSignal:
-                // 1:1 길건너(맥 먼저 — CD/SPEC.md §9.5 #4). 폰 판에서 잇는다 — 그때까지 소비할 스토어가 폰에 없다.
-                // `.drain` 으로 떨어뜨리지 않는 까닭은 위 아잉 뒤집기 가지와 같다(판마다 메시지 조회가 한 번씩 더 나간다).
-                break
+                // 1:1 길건너(맥 0.3.78 · 폰 1.0.18). 신청 · 수락 · 준비 · 판 시작 · 정산이 이 초인종으로 온다 — 직렬화된 재조회 한 번.
+                // `.drain` 으로 떨어뜨리면 안 되는 까닭은 위 아잉 뒤집기 가지와 같다(판마다 메시지 조회가 한 번씩 더 나간다).
+                crossyDuel?.handleSignal()
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

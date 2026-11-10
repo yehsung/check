@@ -34,6 +34,8 @@ struct GamesTab: View {
                         .padding(.top, 12)
                     reversiCard
                         .padding(.top, 12)
+                    crossyDuelCard
+                        .padding(.top, 12)
                     todayRanks
                     liveMatches
                 }
@@ -89,6 +91,8 @@ struct GamesTab: View {
                     // ★ 위 셋과 같은 까닭으로 **데모 닻·관전 값을 여기서 읽지 않는다**: 이 클로저에서 읽는 값이 바뀌면 목적지가 다시 세워져
                     //   `reversiScreenDidDisappear()` → `stopWatching()` 이 돌고, 보던 관전이 내려가며 끝난 판이 접힌다.
                     GamesReversiScreen(store: store)
+                case .crossyDuel:
+                    GamesCrossyDuelScreen(store: store)
                 }
             }
         }
@@ -412,6 +416,54 @@ struct GamesTab: View {
     /// 입구 하나로 로비·판·AI 연습·결과·관전·순위를 다 연다(화면이 단계를 갈아 끼운다).
     /// ★ 칩과 보조 줄의 서열은 `GamesReversiCard` 한 곳이다(여기서 삼항으로 다시 고르면 두 벌이 된다 — 그 판정은 맥 스위트가 값으로 잰다).
     /// ★ 막는 방향은 **다섯이다**: 다른 넷 중 하나의 판이 흐르면 이 카드가 막히고(`reversiEntryBlock`), 리버시 판이 흐르면 위 네 카드가 막힌다.
+    /// 1:1 길건너 카드(폰 1.0.18). 받은 신청이 있으면 칩이 그 수를 말한다.
+    private var crossyDuelCard: some View {
+        let blockedBy = store.crossyDuelEntryBlock
+        let incoming = store.crossyDuel.visibleIncomingInvites.count
+        return Button {
+            store.context.router.push(GamesDestination.crossyDuel, on: .games)
+        } label: {
+            InsetGroup {
+                HStack(spacing: 14) {
+                    Image(systemName: "flag.checkered")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(MobileTheme.accent)
+                        .frame(width: 44, height: 44)
+                        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(MobileTheme.accentTint))
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(CrossyDuelPhoneText.title)
+                            .font(MobileTheme.rowTitle)
+                            .foregroundStyle(MobileTheme.label)
+                        Text(CrossyDuelPhoneText.cardSubtitle)
+                            .font(MobileTheme.rowSubtitle)
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if incoming > 0 {
+                            gomokuChip("\(CrossyDuelPhoneText.incomingTitle) \(incoming)")
+                                .padding(.top, 3)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MobileTheme.label3)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, MobileTheme.cardPadding)
+                .padding(.vertical, 14)
+            }
+            .opacity(blockedBy == nil ? 1 : 0.55)
+            .contentShape(RoundedRectangle(cornerRadius: MobileTheme.groupRadius, style: .continuous))
+            .accessibilityElement(children: .combine)
+        }
+        .buttonStyle(.plain)
+        .disabled(blockedBy != nil)
+        .accessibilityHint(blockedBy == nil
+                           ? CrossyDuelPhoneText.cardOpenHint
+                           : (ChessPhoneText.entryBlockHint(playing: blockedBy?.text, blocked: .crossyDuel) ?? ""))
+    }
+
     private var reversiCard: some View {
         let blockedBy = store.reversiEntryBlock
         let chip = GamesReversiCard.chip(store)

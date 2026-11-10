@@ -515,7 +515,7 @@ enum ReversiWireJSON {
         #expect(harness.reversi.match == nil, "전제: 판은 못 읽었다")
         #expect(games.gomokuEntryBlock == .reversi, "그 틈에 오목 입구가 열려 있다 — 오목을 수락하면 리버시가 자동 착수 3번으로 진다")
         #expect(GamesBusyGame.reversi.text == .reversi)
-        #expect(GamesBusyGame.allCases.count == 5)
+        #expect(GamesBusyGame.allCases.count == 6, "1.0.18 에 1:1 길건너가 여섯째 방향이다")
         await harness.tearDown()
     }
 

@@ -62,7 +62,7 @@ test('②-1 고지 문장 — 지워지는 것(앱 MeText.deleteAccountItems · 
   for (const item of ['근무 기록', '메시지', '할 일', '캐릭터와 루비', '순위 기록']) assert.ok(deleted.includes(item), `지워지는 것 '${item}'`);
   // 처리방침 계정 삭제 절의 '같이 처리되는 것'(진행 중 대국 기권 마감 · 혼자 남은 팀 · 차단 기록 · 내가 보낸 메시지).
   const also = listBlock('ALSO');
-  assert.ok(also.includes('진행 중이던 오목·체스·테트리스·아잉 뒤집기 대국은 지우기 전에 내가 진 것으로 끝내요'), '1:1 대국 정산');
+  assert.ok(also.includes('진행 중이던 오목·체스·테트리스·아잉 뒤집기·1:1 길건너 대국은 지우기 전에 내가 진 것으로 끝내요'), '1:1 대국 정산(폰 1.0.18 — 1:1 길건너 포함)');
   assert.ok(also.includes('진행 중이던 아잉 큐브 판은 내가 기권한 것으로 끝내고'), '아잉 큐브 기권 정리(delete_my_account 의 rummy 절)');
   assert.ok(also.includes('나 혼자 남아 있던 팀은 함께 지워져요'), '혼자 남은 팀');
   assert.ok(also.includes('차단 기록은 내가 한 것도, 남이 나를 차단한 것도 함께 지워져요'), '차단 기록');
@@ -77,7 +77,7 @@ test('②-1 고지 문장 — 지워지는 것(앱 MeText.deleteAccountItems · 
  * 대국 게임 이름 — 서버 delete_my_account 가 지우기 전에 정리하는 판(gomoku·chess·tetris·reversi_matches · rummy_seats)의 화면 이름.
  * 새 대국 게임이 그 함수에 들어오면(예: 출시 전인 게임) 이 목록 · 처리방침 · 이 페이지를 같은 커밋에서 함께 고친다.
  */
-const DUEL_GAMES = ['오목', '체스', '테트리스', '아잉 뒤집기'] as const;
+const DUEL_GAMES = ['오목', '체스', '테트리스', '아잉 뒤집기', '1:1 길건너'] as const;
 const GROUP_GAMES = ['아잉 큐브'] as const;
 
 /** 처리방침 계정 삭제 절의 한 덩이 — `start` 줄부터 다음 빈 줄(또는 끝)까지. */

@@ -20,6 +20,8 @@ package enum GamesDestination: Hashable, Sendable {
     case rummy
     /// 아잉 뒤집기(1.0.17) — 로비·판·AI 연습·결과·관전·순위를 **입구 하나**로 연다(체스와 같은 구조 — 화면이 `phase` 로 갈아 끼운다).
     case reversi
+    /// 1:1 길건너(폰 1.0.18).
+    case crossyDuel
 }
 
 /// 지금 **사람과의** 판을 들고 있는 게임 — 한 사람 한 판(B8)의 까닭을 화면이 말할 수 있게 하는 값.
@@ -43,6 +45,8 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
     /// 20261108200000_reversi.sql 이 조각 치환으로 더했다 — 맥 0.3.74 와 함께 운영 적용) —
     /// 클라는 **다섯 방향**을 막아 까닭을 먼저 그린다.
     case reversi
+    /// 1:1 길건너(1.0.18). 서버 `game__busy_users()` 가 길건너 active 판까지 본다(20261109150000 — 맥 0.3.78) — 클라는 여섯 방향을 막는다.
+    case crossyDuel
 
     /// 문구 표가 쓰는 짝(`ChessPhoneText.BusyGame`). 두 열거가 따로 있는 까닭: 이쪽은 **스토어 판정**이고
     /// 그쪽은 **문구 표**다(문구 표는 뷰·스토어를 모르는 자리라야 맥 스위트가 값으로 잰다). 옮기는 자리를
@@ -56,6 +60,7 @@ package enum GamesBusyGame: String, Equatable, Sendable, CaseIterable {
         case .tetris: return .tetris
         case .rummy: return .rummy
         case .reversi: return .reversi
+        case .crossyDuel: return .crossyDuel
         }
     }
 }
@@ -125,6 +130,8 @@ package final class GamesStore {
     /// 아잉 뒤집기 화면이 지금 떠 있다(위 넷과 같은 뜻 — 코어의 '창 표시'를 폰 화면 수명으로 옮긴 값). `appDidBecomeActive` 가 이 값으로 갈린다 —
     /// 거짓인데 `windowDidShow()` 를 부르면 보이지도 않는 판에 폴링이 돌고 AI 연습 판의 사람 시계가 흐른다.
     package private(set) var isReversiScreenVisible = false
+    /// 1:1 길건너 화면(로비 · 판 · 결과)이 떠 있다(폰 1.0.18).
+    package private(set) var isCrossyDuelScreenVisible = false
     /// 방장이 방을 떠나려 한다 — 화면이 띄울 "방이 닫혀요" 확인(`rummyDepartureAllowed`).
     package private(set) var rummyDeparturePrompt: RummyCloseDecision?
     /// 수락하면 원래 가려던 곳으로 가는 일.
@@ -155,7 +162,7 @@ package final class GamesStore {
     /// 폰 스토어는 같은 계정 **맥이 두는 판**도 로비 `active_match_id` 로 읽어 들고 있어(`playing`), 그 값을 쓰면 맥이 한 판 두는 동안
     /// 폰의 확성기·생일 선물이 통째로 멎는다. 내 판이 흐르는 동안 다른 탭에 있으면 배너를 보는 것이 맞다(체스와 같은 대접).
     package var isAnyMatchScreenVisible: Bool {
-        if isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible { return true }
+        if isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible || isCrossyDuelScreenVisible { return true }
         let rummy = context.rummy
         if rummy.defersMegaphoneBanner { return true }
         return isRummyScreenVisible && rummy.phase != .playing
@@ -272,6 +279,7 @@ package final class GamesStore {
         // (연속 3번이면 판돈째 진다). 코어가 부르는 자리 셋: `openWindow` · 수락 응답(`respond`) · 이 기기가 연 판으로 처음 넘어갈 때(`noteMatchProgress`).
         // 로그아웃 `reset()` 이 부르는 `dismissWindow` 는 달지 않는다 — 폰은 `sessionDidSignOut` 의 `router.reset()` 이 경로를 비운다.
         context.reversi.presentWindow = { [weak self] in self?.presentReversiScreen() }
+        context.crossyDuel.presentWindow = { [weak self] in self?.presentCrossyDuelScreen() }
         // 방 화면을 떠나는 길은 이 문 하나를 지난다(탭 막대 · 푸시 · 딥링크 · 위젯 · 탭 재선택).
         context.router.departureGuard = { [weak self] resume in self?.rummyDepartureAllowed(resume: resume) ?? true }
         // 방 화면이 설 때만 방 하트비트를 돌린다(`rummyScreenDidAppear`) — 어느 길로 화면 밖에 앉게 됐든(앱을 다시 켬 · 다른 게임 화면이 덮음) 모르는 사이 판돈이 걷히지 않는다.
@@ -374,6 +382,17 @@ package final class GamesStore {
         } else {
             reversi.refreshLobbyIfStale()
         }
+        let crossyDuel = context.crossyDuel
+        if isCrossyDuelScreenVisible {
+            if crossyDuel.isWindowVisible {
+                crossyDuel.windowOcclusionDidChange(visible: true)
+            } else {
+                crossyDuel.windowDidShow()
+            }
+            crossyDuel.requestSync()
+        } else {
+            crossyDuel.refreshLobbyIfStale()
+        }
     }
 
     /// 장면이 앞에서 물러난다(`.inactive` — 전화 수신 · 제어 센터 · 앱 전환기). 도는 미니게임을 얼린다.
@@ -424,6 +443,9 @@ package final class GamesStore {
         if isReversiScreenVisible, context.reversi.isWindowVisible {
             context.reversi.windowOcclusionDidChange(visible: false)
         }
+        if isCrossyDuelScreenVisible, context.crossyDuel.isWindowVisible {
+            context.crossyDuel.windowOcclusionDidChange(visible: false)
+        }
     }
 
     package func reset() {
@@ -433,6 +455,7 @@ package final class GamesStore {
         isTetrisScreenVisible = false
         isRummyScreenVisible = false
         isReversiScreenVisible = false
+        isCrossyDuelScreenVisible = false
         rummyFinalBoardMatchID = nil
         rummyDeparturePrompt = nil
         rummyDepartureResume = nil
@@ -518,6 +541,7 @@ package final class GamesStore {
     /// 차단 거울을 거친 값(`visibleIncomingInvites`)을 센다 — 거울은 허브·화면이 설 때 맞춘다(`syncReversiHiddenPeers`).
     package var badgeCount: Int {
         gomokuIncomingCount + context.rummy.incomingInvites.count + context.reversi.visibleIncomingInvites.count
+            + context.crossyDuel.visibleIncomingInvites.count
     }
 
     /// 만료 안 된 받은 오목 신청 수(오목 카드의 재료).
@@ -629,6 +653,14 @@ package final class GamesStore {
     /// **AI 연습 판**이 지금 진행 중인가(끝난 판은 아니다). 서버는 이 판을 볼 수 없다(행이 없다 — `game__busy_users` 가 모른다).
     /// 코어 `challenge`·`respond` 에는 AI 가드가 없어 1:1 판이 서는 순간 `match` 관찰자가 AI 판을 **문구 없이 버린다**(1:1 이 이긴다) —
     /// 신청은 `GamesReversiChallengeGate`(내 판이 있으면 닫힘)가 막고, 받은 신청 수락은 화면이 먼저 묻는다(체스 로봇 판과 같은 규약).
+    /// 1:1 길건너 진행 판(사람끼리뿐 — 로봇 연습이 없다). 서버가 말한 id 또는 들고 있는 안 끝난 판.
+    package var hasLiveCrossyDuelMatch: Bool {
+        let duel = context.crossyDuel
+        if duel.activeMatchID != nil { return true }
+        guard let match = duel.match else { return false }
+        return !match.isFinished
+    }
+
     package var hasLiveReversiAIGame: Bool {
         let reversi = context.reversi
         guard reversi.isAIMatch, let match = reversi.match, !match.isFinished else { return false }
@@ -641,7 +673,8 @@ package final class GamesStore {
         if hasLiveGomokuMatch { return .gomoku }
         if hasLiveTetrisMatch { return .tetris }
         if hasLiveRummyMatch { return .rummy }
-        return hasLiveReversiMatch ? .reversi : nil
+        if hasLiveReversiMatch { return .reversi }
+        return hasLiveCrossyDuelMatch ? .crossyDuel : nil
     }
 
     /// 오목 입구를 막는 까닭(없으면 nil). 서버도 막는다 — 오목 신청·수락이 `chess__busy` 를 본다(`GamesBusyGame` 머리말).
@@ -651,7 +684,8 @@ package final class GamesStore {
         if hasLiveChessMatch { return .chess }
         if hasLiveTetrisMatch { return .tetris }
         if hasLiveRummyMatch { return .rummy }
-        return hasLiveReversiMatch ? .reversi : nil
+        if hasLiveReversiMatch { return .reversi }
+        return hasLiveCrossyDuelMatch ? .crossyDuel : nil
     }
 
     /// 테트리스 입구를 막는 까닭(없으면 nil). 테트리스는 **판돈이 걸린 실시간 판**이라 막는 쪽이 더 무겁다 —
@@ -660,7 +694,8 @@ package final class GamesStore {
         if hasLiveGomokuMatch { return .gomoku }
         if hasLiveChessMatch { return .chess }
         if hasLiveRummyMatch { return .rummy }
-        return hasLiveReversiMatch ? .reversi : nil
+        if hasLiveReversiMatch { return .reversi }
+        return hasLiveCrossyDuelMatch ? .crossyDuel : nil
     }
 
     /// 아잉 큐브 입구를 막는 까닭(없으면 nil) — 네 방향의 마지막 하나. 시작 검사가 세 게임의 진행 판을 보지만(서버), 판돈 걸린 판을 두는 중에
@@ -669,7 +704,8 @@ package final class GamesStore {
         if hasLiveGomokuMatch { return .gomoku }
         if hasLiveChessMatch { return .chess }
         if hasLiveTetrisMatch { return .tetris }
-        return hasLiveReversiMatch ? .reversi : nil
+        if hasLiveReversiMatch { return .reversi }
+        return hasLiveCrossyDuelMatch ? .crossyDuel : nil
     }
 
     /// 아잉 뒤집기 입구를 막는 까닭(없으면 nil) — 다섯 방향의 마지막 하나. 서버도 막는다(`reversi_challenge`·`reversi_respond` 가 `game__busy_users` 를 본다) —
@@ -678,7 +714,17 @@ package final class GamesStore {
         if hasLiveGomokuMatch { return .gomoku }
         if hasLiveChessMatch { return .chess }
         if hasLiveTetrisMatch { return .tetris }
-        return hasLiveRummyMatch ? .rummy : nil
+        if hasLiveRummyMatch { return .rummy }
+        return hasLiveCrossyDuelMatch ? .crossyDuel : nil
+    }
+
+    /// 1:1 길건너 입구 막기(폰 1.0.18) — 다른 다섯 1:1 중 하나가 흐르면 그 까닭을 먼저 말한다.
+    package var crossyDuelEntryBlock: GamesBusyGame? {
+        if hasLiveGomokuMatch { return .gomoku }
+        if hasLiveChessMatch { return .chess }
+        if hasLiveTetrisMatch { return .tetris }
+        if hasLiveRummyMatch { return .rummy }
+        return hasLiveReversiMatch ? .reversi : nil
     }
 
     /// 지금 아잉 큐브 자리가 있는가 — 다른 게임 입구를 막는 값.
@@ -745,6 +791,9 @@ package final class GamesStore {
         //   `activeMatchID` 가 nil 이라 리버시 판(같은 계정 맥의 판 포함)이 흐르는 중에도 다른 카드가 열려 있다.
         syncReversiHiddenPeers()
         context.reversi.refreshLobbyIfStale()
+        // 1:1 길건너도 받은함 RPC 가 없다 — 받은 신청 · 진행 판 id 가 `crossy_duel_lobby` 로 온다(30초 스로틀).
+        syncCrossyDuelHiddenPeers()
+        context.crossyDuel.refreshLobbyIfStale()
     }
 
     /// 차단 거울: 메시지 탭의 차단 목록을 코어에 넘긴다(로비 사람 · 초대 · 공개 방이 코어에서 걸러진다 — 맥 `WorkTimerStore` 와 같은 길).
@@ -1068,6 +1117,39 @@ package final class GamesStore {
     /// ★★ **`windowDidClose()` 가 마지막이다** — 폰에서 화면을 떠나는 것은 '창을 정말 닫았다'다. 빼면 끝난 내 판(결과 카드)이 남아 다시 누를 때
     ///   로비가 아니라 결과가 다시 선다. **진행 중인 판은 남는다** — 코어 `foldFinishedMatch` 가 `isFinished` 를 먼저 본다(1:1 은 서버 시계로 계속 흐르고,
     ///   AI 연습은 숨김이 사람 시계를 멈춘다). 이 길로는 요청이 한 건도 나가지 않는다(리버시에는 `leave` RPC 가 없다).
+    // MARK: 1:1 길건너(폰 1.0.18)
+
+    package var crossyDuel: CrossyDuelStore { context.crossyDuel }
+
+    package func syncCrossyDuelHiddenPeers() {
+        let hidden = Set((context.links.messages?.hiddenBlockedPeerIDs ?? []).map { $0.lowercased() })
+        if context.crossyDuel.hiddenPeerIDs != hidden { context.crossyDuel.hiddenPeerIDs = hidden }
+    }
+
+    /// `isCrossyDuelScreenVisible` 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를 봐야 화면을 또 열지 않는다.
+    package func crossyDuelScreenDidAppear() {
+        let duel = context.crossyDuel
+        isCrossyDuelScreenVisible = true
+        syncCrossyDuelHiddenPeers()
+        duel.openWindow(focusMatchID: nil)
+        if isAppActive { duel.windowDidShow() }
+    }
+
+    package func crossyDuelScreenDidDisappear() {
+        guard isCrossyDuelScreenVisible else { return }
+        isCrossyDuelScreenVisible = false
+        context.crossyDuel.windowDidHide()
+        context.crossyDuel.windowDidClose()
+    }
+
+    private func presentCrossyDuelScreen() {
+        guard isAppActive, context.session.isSignedIn, !isCrossyDuelScreenVisible else { return }
+        let router = context.router
+        router.selectedTab = .games
+        router.popToRoot(.games)
+        router.push(GamesDestination.crossyDuel, on: .games)
+    }
+
     package func reversiScreenDidDisappear() {
         guard isReversiScreenVisible else { return }
         isReversiScreenVisible = false
@@ -1317,6 +1399,8 @@ package final class GamesStore {
                 return true
             }
         }
+        // 1:1 길건너: 이 기기가 두는 판이면 켠다(테트리스처럼 실시간 판 — 자동잠금이면 판 루프가 잔다).
+        if context.crossyDuel.holdsActivity { return true }
         guard let match = context.gomoku.match else { return false }
         if context.gomoku.isAIMatch { return !match.isFinished && isGomokuScreenVisible }
         return !match.isFinished

@@ -152,6 +152,8 @@ package enum ChessPhoneText {
         case gomoku, chess, tetris, rummy
         /// 아잉 뒤집기(폰 1.0.17). 이름 글자는 코어 `ReversiNoticeText.gameName` 한 곳에서 받는다(맥 `ReversiText.gameName` 과 같은 출처).
         case reversi
+        /// 1:1 길건너(폰 1.0.18). 이름 글자는 코어 `CrossyDuelNoticeText.gameName` 한 곳(맥과 같은 출처).
+        case crossyDuel
 
         /// 게임 이름("오목" · "체스" · "1:1 테트리스" · "아잉 큐브" · "아잉 뒤집기").
         package var gameName: String {
@@ -161,6 +163,7 @@ package enum ChessPhoneText {
             case .tetris: return "1:1 테트리스"
             case .rummy: return "아잉 큐브"
             case .reversi: return ReversiNoticeText.gameName
+            case .crossyDuel: return CrossyDuelNoticeText.gameName
             }
         }
 
@@ -172,6 +175,7 @@ package enum ChessPhoneText {
             case .tetris: return "테트리스 대결"
             case .rummy: return "아잉 큐브 판"
             case .reversi: return "\(ReversiNoticeText.gameName) 판"
+            case .crossyDuel: return "\(CrossyDuelNoticeText.gameName) 대결"
             }
         }
     }
@@ -183,7 +187,8 @@ package enum ChessPhoneText {
         case .gomoku, .chess, .reversi:
             // 아잉 뒤집기도 돌을 **둔다**(맥 `ReversiText` 의 "두기" 낱말과 같다).
             return "\(playing.gameName)\(objectParticle(playing.gameName)) 두는 중이에요"
-        case .tetris:
+        case .tetris, .crossyDuel:
+            // 1:1 길건너도 '둔다'가 아니라 겨룬다(테트리스와 같은 말).
             return "\(playing.gameName) 대결 중이에요"
         case .rummy:
             // 타일 게임이라 '둔다'가 아니다. 방에 앉아 시작을 기다리는 동안도 이 말이다(서버 `chess__busy` 가 joined 도 본다).
@@ -837,7 +842,8 @@ package struct ChessPhoneRuleLine: Identifiable, Equatable, Sendable {
                 title: "한 사람 한 판",
                 // ★ 게임이 다섯이다(1.0.11 1:1 테트리스 · 1.0.16 아잉 큐브 · 1.0.17 아잉 뒤집기). 다섯을 다 말해야 한다: 이름이 빠진 게임은
                 //   사용자가 "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
-                detail: "체스·오목·1:1 테트리스·아잉 큐브·\(ReversiNoticeText.gameName)는 한 번에 한 판만 할 수 있어요. "
+                // 1.0.18: 1:1 길건너가 여섯째다.
+                detail: "체스·오목·1:1 테트리스·아잉 큐브·\(ReversiNoticeText.gameName)·\(CrossyDuelNoticeText.gameName)는 한 번에 한 판만 할 수 있어요. "
                       + "한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.")
         ]
     }

@@ -113,9 +113,13 @@ private struct MoPageServer: Sendable {
     }
 }
 
+/// [이전 대화 더 보기]가 낸 `message_page` 호출. 2026-11-11(사진 — `MessagePhotoTests`): 대화를 **열 때** 사진 칸을 배우는 조회
+/// (`p_limit` = `MessagePhotoText.metaPageLimit`)도 같은 함수를 부른다 — 그 호출은 이 기능의 것이 아니라 뺀다(지난 쪽은 `olderPageLimit`).
 @MainActor
 private func moPage(_ host: String) -> [MessageReadStubProtocol.Call] {
-    MessageReadStubProtocol.calls(host: host, rpc: "message_page")
+    MessageReadStubProtocol.calls(host: host, rpc: "message_page").filter {
+        ($0.json["p_limit"] as? NSNumber)?.intValue != MessagePhotoText.metaPageLimit
+    }
 }
 
 /// 대화가 열린 상태(패널 · 상대). 팝오버 표시는 읽음 시험만 따로 켠다.
@@ -1075,7 +1079,9 @@ func 이전대화_전선_이름은_코어_한_파일에만_있고_부르는_자�
         if code.contains("loadOlderMessages()") { tappers.append(file) }
     }
     #expect(wire == ["MessageHistoryPaging.swift"], "전선 이름이 여러 곳에 있다: \(wire)")
-    #expect(Set(fetchers) == ["MessageHistoryPaging.swift", "WorkTimerStoreMessageOlder.swift"], "서비스를 부르는 자리: \(fetchers)")
+    // 2026-11-11(사진): 사진 칸 조회(`WorkTimerStoreMessagePhotos` — 대화를 열 때 · 열린 대화에 받은 말이 올 때)가 같은 함수의 둘째 자리다.
+    #expect(Set(fetchers) == ["MessageHistoryPaging.swift", "WorkTimerStoreMessageOlder.swift", "WorkTimerStoreMessagePhotos.swift"],
+            "서비스를 부르는 자리: \(fetchers)")
     #expect(Set(performers) == ["WorkTimerStoreMessageOlder.swift"], "이전 대화 조회를 부르는 자리: \(performers)")
     #expect(Set(tappers) == ["CheckMessageView.swift", "WorkTimerStoreMessageOlder.swift"], "버튼 문을 부르는 자리: \(tappers)")
     // 새 요약(v3) · 대화 목록(message_threads)은 이번 판에 안 쓴다(오케스트레이터: "안 읽음 점과 읽음 처리는 지금처럼").

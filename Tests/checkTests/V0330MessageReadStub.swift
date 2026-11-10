@@ -26,6 +26,10 @@ final class MessageReadStubProtocol: URLProtocol {
         let url: URL
         let method: String
         let body: String
+        /// 요청 머리(2026-11-11 사진 — 저장소 올리기의 Content-Type · x-upsert 없음을 잰다). 기존 단언은 안 읽는다.
+        var headers: [String: String] = [:]
+        /// 보낸 바이트 크기(올리기 본문은 글이 아니다).
+        var byteCount: Int = 0
 
         var path: String { url.path }
         /// `/rest/v1/rpc/<name>` 이면 name, 아니면 경로 그대로.
@@ -83,9 +87,12 @@ final class MessageReadStubProtocol: URLProtocol {
         // 켜져 요약이 v2 로 옮겨 가고, `message_unread_summary` 를 스크립트한 이 스위트들이 조용히 요약을 잃는다(새 경로는 MegaphoneBanner* 가 잰다).
         // 2026-11-11: [이전 대화 더 보기]의 `message_page` 도 **없는 서버**가 기본이다 — 버튼을 눌러야만 부르지만, `[]` 로 답하면
         // "함수가 있는 빈 서버"로 읽혀 기존 스위트가 모르는 새 경로를 탄다(새 경로는 MessageOlderHistoryTests 가 잰다).
+        // 2026-11-11(사진): `send_photo_message` · `report_admin_photo_paths` 도 **없는 서버**가 기본이다 — 사진은 고른 사람만 보내지만,
+        // `[]` 로 답하면 "함수가 있는 서버"로 읽혀 기존 스위트가 모르는 새 경로를 탄다(새 경로는 MessagePhotoTests 가 잰다).
         case "message_history_with_pokes", "mark_conversation_read",
              "message_history_with_reads", "message_unread_summary", "mark_messages_read",
-             "megaphone_inbox", "message_unread_summary_v2", "message_page":
+             "megaphone_inbox", "message_unread_summary_v2", "message_page",
+             "send_photo_message", "report_admin_photo_paths":
             return MessageReadFixture.missingFunction(call.rpc)
         default:
             return Reply(body: "[]")
@@ -97,7 +104,11 @@ final class MessageReadStubProtocol: URLProtocol {
 
     override func startLoading() {
         let host = request.url?.host ?? ""
-        let call = Call(url: request.url!, method: request.httpMethod ?? "GET", body: Self.bodyText(from: request))
+        let bodyData = Self.bodyData(from: request)
+        let call = Call(
+            url: request.url!, method: request.httpMethod ?? "GET", body: String(decoding: bodyData, as: UTF8.self),
+            headers: request.allHTTPHeaderFields ?? [:], byteCount: bodyData.count
+        )
         Self.lock.lock()
         let index = (Self.callsByHost[host] ?? []).filter { $0.rpc == call.rpc }.count
         Self.callsByHost[host, default: []].append(call)
@@ -121,9 +132,9 @@ final class MessageReadStubProtocol: URLProtocol {
 
     override func stopLoading() {}
 
-    private static func bodyText(from request: URLRequest) -> String {
-        if let body = request.httpBody { return String(decoding: body, as: UTF8.self) }
-        guard let stream = request.httpBodyStream else { return "" }
+    private static func bodyData(from request: URLRequest) -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { return Data() }
         stream.open()
         defer { stream.close() }
         var data = Data()
@@ -135,7 +146,7 @@ final class MessageReadStubProtocol: URLProtocol {
             if count <= 0 { break }
             data.append(buffer, count: count)
         }
-        return String(decoding: data, as: UTF8.self)
+        return data
     }
 }
 

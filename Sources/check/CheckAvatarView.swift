@@ -545,40 +545,12 @@ extension CheckAvatarView {
     }
 
     /// 두 진입로의 공통 몸통. 이미지가 없는 파일(비이미지·깨진 바이트)이면 nil.
+    ///
+    /// 2026-11-11: ImageIO 몸통(축소 · EXIF 방향 · 흰 바탕 · JPEG)은 코어 `ImageDownscale` 로 옮겼다 — 메시지 사진(1600px)이 **같은 몸통**을
+    /// 쓴다(두 벌로 두면 한쪽만 고쳐지는 날이 온다). 규칙과 옵션은 위 주석 그대로다(옮기면서 한 글자도 안 바꿨다).
     private nonisolated static func downscaledJPEGData(
         from source: CGImageSource, maxDimension: CGFloat, compression: CGFloat
     ) -> Data? {
-        guard CGImageSourceGetCount(source) > 0 else { return nil }
-        let options: [CFString: Any] = [
-            // 박혀 있는 EXIF 썸네일(작고 거칠다)을 쓰지 않고 본 이미지에서 만든다.
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension.rounded()),
-            kCGImageSourceShouldCacheImmediately: true
-        ]
-        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        let flattened = flattenedOnWhite(thumbnail) ?? thumbnail
-        let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(
-            destination, flattened, [kCGImageDestinationLossyCompressionQuality: compression] as CFDictionary
-        )
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return output as Data
-    }
-
-    /// 투명 PNG 가 검게 올라가지 않게 흰 바탕에 한 번 그린다(폰 `MeAvatarImage.flattenedOnWhite` 와 같은 처방).
-    /// 썸네일 크기(≤ maxDimension)에서만 도는 그리기라 비용이 작다.
-    private nonisolated static func flattenedOnWhite(_ image: CGImage) -> CGImage? {
-        guard let context = CGContext(
-            data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
-        ) else { return nil }
-        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        return context.makeImage()
+        ImageDownscale.downscaledJPEG(from: source, maxPixelSize: Int(maxDimension.rounded()), quality: compression)
     }
 }

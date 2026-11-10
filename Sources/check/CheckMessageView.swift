@@ -125,6 +125,16 @@ enum MessagePanelLayout {
             case .day:
                 total += 18
             case .bubble(let entry):
+                // 사진(2026-11-11 — 맥 0.3.86)은 **말풍선과 같은 크기 규칙**(`MessagePhotoLayout.bubbleSize`)으로 센다. 이모티콘 판정보다
+                // **먼저**다 — 말풍선 행도 사진을 먼저 고른다(사진 줄의 글은 설명이라 그림 판정을 거치지 않는다). 설명이 있으면 그 아래 글
+                // 말풍선 한 장을 같은 산식으로 더한다.
+                if let photo = entry.photo {
+                    total += MessagePhotoLayout.bubbleSize(for: photo, isMine: entry.isMine).height
+                    if MessageBody.hasVisibleContent(entry.body) {
+                        total += MessagePhotoLayout.captionSpacing + textBubbleHeight(AingStickerText.preview(for: entry.body))
+                    }
+                    continue
+                }
                 // 아잉이 이모티콘(v0.3.62)은 **글자가 아니라 그림 한 장**이라 줄 수로 세면 7글자 = 한 줄 =
                 // 25pt 로 센다. 실제로는 120pt 를 쓰므로 틀의 높이가 그림의 1/5 로 잡혀, 이모티콘 하나뿐인
                 // 대화가 통째로 스크롤 안에 갇힌다(스크롤이 붙긴 하지만 보이는 것이 그림의 윗동만이다).
@@ -310,8 +320,11 @@ struct CheckMessageView: View {
     /// 옮겨도(그리드까지 보이스오버에서 사라진다 — 고치려던 것보다 나쁘다) 그대로 초록이다.
     var pinsStickerGridOpen: Bool = false
 
-    /// 읽는 자리는 전부 이것을 본다(상태 ∨ 못 박기).
-    private var showsStickerGrid: Bool { stickerGridOpen || pinsStickerGridOpen }
+    /// 읽는 자리는 전부 이것을 본다(상태 ∨ 못 박기). 사진 덮개(2026-11-11)가 서 있으면 그리드는 안 선다 — 덮개가 둘이면 아래 것이 가려진다.
+    private var showsStickerGrid: Bool { (stickerGridOpen || pinsStickerGridOpen) && !showsPhotoOverlay }
+
+    /// 사진 덮개(미리 보기 · 크게 보기 · 준비 중 — 2026-11-11)가 대화 자리를 쓰는가. 판정은 스토어 하나다(`messagePhotoOverlayShown`).
+    private var showsPhotoOverlay: Bool { store.messagePhotoOverlayShown }
 
     private var hasPeer: Bool { store.selectedMessagePeerID != nil }
 
@@ -344,6 +357,10 @@ struct CheckMessageView: View {
             //   떠 있는 팝오버에서 그 칸이 false 로 남으면 [뒤로] 뒤 다시 들어가야 새 말이 떴다. 이 두 줄을 지우면 판정이 그 한 칸으로 돌아간다.
             .onAppear { store.messageConversationViewDidAppear(viewToken) }
             .onDisappear { store.messageConversationViewDidDisappear(viewToken) }
+            // 사진을 고르면 이모티콘 그리드는 접는다(덮개가 둘이면 보낸 뒤 그리드가 다시 솟는다).
+            .onChange(of: store.selectedMessagePhotoDraft?.id) { _, id in
+                if id != nil { stickerGridOpen = false }
+            }
         }
     }
 
@@ -424,13 +441,18 @@ struct CheckMessageView: View {
         // 상한은 크롬 예산이 정하고, 그 안에서 **내용만큼만** 쓴다(짧은 대화가 긴 대화만큼 자리를 먹지 않게).
         let cap = MessagePanelLayout.conversationHeight(extraChromeHeight: extraChromeHeight)
         conversationBody(cap: cap)
-            .frame(height: showsStickerGrid ? cap : nil)
+            .frame(height: showsStickerGrid || showsPhotoOverlay ? cap : nil)
             // 덮개는 **눈만** 가린다 — 보이스오버에는 가려진 말풍선이 그대로 남아, 훑으면 안 보이는 본문·
             // 시각·'안 읽음'이 계속 읽히고 여섯 칸이 어디서 시작하는지 알 수 없다(신고·차단 시트는 대화를
             // **교체**해서 이 문제가 없었다 — 이 그리드가 이 패널의 첫 겹침 덮개다).
             .accessibilityHidden(showsStickerGrid)
+            // 사진 덮개(2026-11-11)도 같은 규약이다 — 밑의 대화를 보이스오버에서 내리고 덮개 자신은 `.isModal` 이다.
+            .accessibilityHidden(showsPhotoOverlay)
             .overlay {
-                if showsStickerGrid {
+                if showsPhotoOverlay {
+                    photoOverlay(cap: cap)
+                        .background(MessagePhotoOverlayBackground())
+                } else if showsStickerGrid {
                     AingStickerGridView(
                         availableHeight: cap,
                         // 칸도 버튼과 **같은 판정**을 본다. 펼쳐 둔 뒤에 못 보내는 상태가 되면(글을 보낸
@@ -457,6 +479,45 @@ struct CheckMessageView: View {
                     )
                 }
             }
+            // ★ 사진 끌어 놓기(`.onDrop`)는 **일부러 없다**(2026-11-11). 이 팝오버(MenuBarExtra `.window`)는 앱이 활성을 잃으면 닫혀서
+            //   Finder 에서 끌어 오는 순간 사라진다 — 놓을 자리가 없다. 사진을 얻는 길은 [사진] 버튼(열기 창)과 ⌘V 둘이다.
+            //   (덤으로 붙이면 ImageRenderer 스냅숏에 그릴 수 없는 판이 생기고, 말풍선 글자 끌어 고르기와 같은 판 위에서 다툰다.)
+    }
+
+    /// 사진 덮개 셋(2026-11-11): 줄이는 중 → 미리 보기([취소] · [보내기]) → 크게 보기([저장…] · [닫기]). 판정은 스토어다.
+    @ViewBuilder
+    private func photoOverlay(cap: CGFloat) -> some View {
+        if let draft = store.selectedMessagePhotoDraft {
+            MessagePhotoPreviewOverlay(
+                image: draft.preview.image,
+                pixelWidth: draft.encoded.pixelWidth,
+                pixelHeight: draft.encoded.pixelHeight,
+                availableHeight: cap,
+                hasCaption: MessageBody.hasVisibleContent(store.messageDraft),
+                // [보내기]도 버튼 · 이모티콘과 **같은 판정**을 본다(두 겹 게이트의 뷰 쪽 짝).
+                canSend: store.canSendPhotoNow,
+                isSending: store.isSendingMessage,
+                onSend: { CheckEditorSend.commitThenSend { store.sendMessagePhotoDraft() } },
+                onCancel: { store.cancelMessagePhotoDraft() }
+            )
+        } else if let viewer = store.selectedMessagePhotoViewer {
+            MessagePhotoViewerOverlay(
+                item: viewer,
+                context: store.messagePhotoContext,
+                availableHeight: cap,
+                canSave: store.messagePhotoImage(for: viewer.photo.path) != nil,
+                onSave: { savePhoto(viewer.photo.path) },
+                onClose: { store.closeMessagePhotoViewer() }
+            )
+        } else {
+            MessagePhotoPreparingOverlay(onCancel: { store.cancelMessagePhotoDraft() })
+        }
+    }
+
+    /// [저장…] — 사람이 고른 자리에만 쓴다(저장 창). 실패만 한 줄로 알린다.
+    private func savePhoto(_ path: String) {
+        guard let data = store.messagePhotoSaveData(path: path) else { return }
+        if !MessagePhotoPanels.save(data) { store.messageNotice = MessagePhotoText.viewerSaveFailed }
     }
 
     @ViewBuilder
@@ -469,8 +530,9 @@ struct CheckMessageView: View {
         let pokes = store.selectedMessagePokeLog
         let olderRow = store.messageOlderRowState
         if let peer = store.selectedMessagePeerID, !messages.isEmpty || !pokes.isEmpty {
+            // 사진(2026-11-11): 24시간 머리 줄에는 사진 칸이 없다 — 스토어가 배운 사진을 **그릴 때만** 얹는다(머리 · 읽음은 그대로다).
             let lines = MessageConversationTimeline.lines(
-                messages: messages, pokes: pokes, chronology: store.messagePokeChronology, now: now
+                messages: store.messagePhotoDisplayed(messages), pokes: pokes, chronology: store.messagePokeChronology, now: now
             )
             // 맨 위 줄([이전 대화 더 보기])은 스크롤 **안의** 첫 줄이라 그 높이를 틀 추정에 더한다(간격 6 포함). 말풍선 산식
             // (`conversationContentHeight(lines:)`)에 섞지 않는다 — 그 산식은 줄만 센다.
@@ -501,7 +563,9 @@ struct CheckMessageView: View {
                 // [이전 대화 더 보기](2026-11-11) — 모양은 스토어 판정 하나(nil = 함수 없는 서버 · 줄 없음), 누름은 스토어 문 하나.
                 olderRow: olderRow,
                 onLoadOlder: { store.loadOlderMessages() },
-                olderAnchor: store.messageOlderScrollAnchor
+                olderAnchor: store.messageOlderScrollAnchor,
+                // 사진 말풍선(2026-11-11)이 그림을 받고 크게 보기를 여는 문.
+                photoContext: store.messagePhotoContext
             )
             .frame(height: min(cap, natural))
             .frame(maxWidth: .infinity)
@@ -602,6 +666,8 @@ struct MessageConversationView: View {
     /// 지난 쪽을 붙인 직후 위에 맞출 메시지(번호가 바뀔 때만 움직인다). 붙기 전 맨 위 메시지가 그 자리에 남는다 —
     /// 안 맞추면 내용이 위로 자라는 만큼 화면이 밀리거나(바닥 앵커) 맨 위로 튀어, 읽던 자리를 잃는다.
     var olderAnchor: MessageOlderScrollAnchor? = nil
+    /// 사진 말풍선(2026-11-11)이 그림을 받고 크게 보기를 여는 묶음. nil 이면 사진 자리표만 그린다(스냅샷 · 옛 호출부 — 기본값).
+    var photoContext: MessagePhotoBubbleContext? = nil
 
     /// 맨 아래로 보낼 앵커. 마지막 말풍선 id 를 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
     private static let bottomAnchorID = "message-thread-bottom"
@@ -695,7 +761,7 @@ struct MessageConversationView: View {
     }
 
     private var content: some View {
-        LazyVStack(alignment: .leading, spacing: 6) {
+        stacked {
             // [이전 대화 더 보기](2026-11-11)는 스크롤 **안의 첫 줄**이다 — 위로 올려 옛 말 끝에 닿으면 보이고, 고정 크롬이 아니라
             // 패널 높이 예산을 안 먹는다. 스냅샷 클립 갈래도 같은 내용을 그린다(짧은 대화면 보인다).
             if let olderRow {
@@ -712,7 +778,8 @@ struct MessageConversationView: View {
                             for: entry, receiptsAvailable: readReceiptsAvailable
                         ),
                         onReport: MessageBubbleReportRule.offersReport(for: entry) ? onReport.map { report in { report(entry) } } : nil,
-                        rendersPlainText: rendersPlainText
+                        rendersPlainText: rendersPlainText,
+                        photoContext: photoContext
                     )
                 case .poke(let entry):
                     // 말풍선이 아니다 — 답장·읽음 1·신고 메뉴 대상이 아니다(v0.3.65).
@@ -723,6 +790,21 @@ struct MessageConversationView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 줄 더미. 앱(스크롤)은 게으른 더미이고, **스냅샷 클립 갈래는 보통 더미**다(2026-11-11 사진).
+    ///
+    /// ★ 왜 갈래가 둘인가(실측): 클립 갈래는 내용을 `fixedSize(vertical:)` 로 재서 아래에 붙이는데, `ImageRenderer` 안의 게으른 더미는
+    ///   줄 높이가 크게 다른 대화(글 25pt 사이의 사진 200pt)에서 **자기 높이를 틀리게 알린다** — 글 · 사진 · 사진+설명 세 줄에서 마지막
+    ///   사진의 아래 105pt 가 틀 밖으로 밀려 잘렸다(같은 줄을 호스팅 뷰의 스크롤 갈래로 재면 문서 높이 440 = 추정 434 + 바닥 앵커로 맞았다).
+    ///   클립 갈래는 렌더 시험 전용이고 줄 수가 적어 게으를 이유가 없다 — 앱 갈래는 그대로 게으르다.
+    @ViewBuilder
+    private func stacked<Rows: View>(@ViewBuilder _ rows: () -> Rows) -> some View {
+        if clipsInsteadOfScrolling {
+            VStack(alignment: .leading, spacing: 6, content: rows)
+        } else {
+            LazyVStack(alignment: .leading, spacing: 6, content: rows)
+        }
     }
 }
 
@@ -740,7 +822,8 @@ extension MessageConversationView {
         rendersPlainText: Bool = false,
         olderRow: MessageOlderRowState? = nil,
         onLoadOlder: (() -> Void)? = nil,
-        olderAnchor: MessageOlderScrollAnchor? = nil
+        olderAnchor: MessageOlderScrollAnchor? = nil,
+        photoContext: MessagePhotoBubbleContext? = nil
     ) {
         self.init(
             lines: items.map { item in
@@ -759,7 +842,8 @@ extension MessageConversationView {
             rendersPlainText: rendersPlainText,
             olderRow: olderRow,
             onLoadOlder: onLoadOlder,
-            olderAnchor: olderAnchor
+            olderAnchor: olderAnchor,
+            photoContext: photoContext
         )
     }
 }
@@ -995,6 +1079,8 @@ private struct MessageBubbleRow: View {
     var onReport: (() -> Void)? = nil
     /// 렌더 시험·스냅샷 전용: 글자 본문을 SwiftUI `Text` 로 그린다(`MessageConversationView.rendersPlainText`). 앱은 언제나 false.
     var rendersPlainText: Bool = false
+    /// 사진 말풍선(2026-11-11)의 그림 · 크게 보기 문. nil 이면 사진 자리표만 그린다.
+    var photoContext: MessagePhotoBubbleContext? = nil
 
     private var clockText: String { MessageThreadBuilder.clockText(entry.createdAt) }
 
@@ -1064,7 +1150,11 @@ private struct MessageBubbleRow: View {
     ///   · 그림 말풍선은 고를 글자가 없다 — 받은 그림에만 SwiftUI 메뉴([복사] 원문 토큰 · [신고])가 예전 그대로 선다.
     @ViewBuilder
     private var bubble: some View {
-        if let drawn = AingStickerArt.drawable(for: entry.body) {
+        if let photo = entry.photo {
+            // 사진(2026-11-11 — 맥 0.3.86)이 **먼저**다. 사진 줄의 글은 설명이다(사진만 보냈으면 빈 글 — 사진만 그린다).
+            // 사진의 우클릭 메뉴는 **사진 구조체가 든다**(`MessagePhotoBubble`) — 이 행의 메뉴 하나 계약(V0334)을 지킨다.
+            photoBubble(photo)
+        } else if let drawn = AingStickerArt.drawable(for: entry.body) {
             if let onReport {
                 stickerBubble(drawn.art)
                     .contextMenu {
@@ -1082,6 +1172,16 @@ private struct MessageBubbleRow: View {
             }
         } else {
             textBubble
+        }
+    }
+
+    /// 사진 한 장 + (있으면) 설명 글 말풍선. 크기는 틀 높이 추정과 같은 규칙이다(`MessagePhotoLayout.bubbleSize`).
+    private func photoBubble(_ photo: MessagePhotoAttachment) -> some View {
+        VStack(alignment: entry.isMine ? .trailing : .leading, spacing: MessagePhotoLayout.captionSpacing) {
+            MessagePhotoBubble(entry: entry, photo: photo, context: photoContext, onReport: onReport)
+            if MessageBody.hasVisibleContent(entry.body) {
+                textBubble
+            }
         }
     }
 
@@ -1219,8 +1319,14 @@ struct MessageComposerView: View {
                     // ★ 판정도 문도 **버튼과 같은 것**을 넘긴다. 여기서 조건을 다시 세면 Enter 와 버튼이
                     //   서로 다른 날 갈린다(그리고 갈린 쪽은 아무 화면에도 안 보인다).
                     canSendNow: { store.canSendMessageNow },
-                    onSend: send
+                    onSend: send,
+                    // ⌘V 로 그림 · 그림 파일을 붙이면 사진이 된다(2026-11-11). 글이면 평소 붙여넣기다(`MessagePhotoPasteboard`).
+                    onPasteImage: { pasteboard in store.pasteMessagePhoto(from: pasteboard) }
                 )
+                // [사진](2026-11-11)은 이모티콘 버튼 **옆 같은 줄**이다 — 작성기 높이가 그대로다. 문이 닫힌 세션에는 안 선다.
+                if store.showsMessagePhotoButton {
+                    MessagePhotoButton(enabled: store.canSendPhotoNow, help: photoHelp, action: pickPhoto)
+                }
                 stickerButton
             }
             HStack(spacing: 8) {
@@ -1292,6 +1398,24 @@ struct MessageComposerView: View {
 
     /// 이 버튼이 눌리는가. 펼친 상태면 **언제나** 눌린다(= 닫기), 접힌 상태면 보낼 수 있을 때만 눌린다(= 펼치기).
     var stickerCanToggle: Bool { stickerGridShown.wrappedValue || store.canSendStickerNow }
+
+    /// [사진] 버튼(2026-11-11) — 열기 창에서 **사람이 고른 파일**만 받는다(화면을 찍지 않는다). 이모티콘 그리드는 접는다.
+    @MainActor
+    func pickPhoto() {
+        guard store.canSendPhotoNow else { return }
+        stickerGridShown.wrappedValue = false
+        guard let url = MessagePhotoPanels.pickFile() else { return }
+        store.pickMessagePhoto(fileURL: url)
+    }
+
+    /// [사진] 버튼 툴팁 — 못 누르는 사유는 [보내기] · 이모티콘과 **같은 어휘**다.
+    var photoHelp: String {
+        if store.isSendingMessage { return "보내는 중이에요" }
+        if store.selectedMessagePeerID == nil { return "콕 찌르기에서 대화 상대를 골라 주세요" }
+        if let block = store.messageFocusBlock { return block.messageText }
+        if store.messagePhotoPreparing { return MessagePhotoText.preparing }
+        return MessagePhotoText.buttonHelp
+    }
 
     /// 이모티콘 버튼의 툴팁. 못 누르는 사유는 [보내기]와 **같은 어휘**로 말한다(사유가 두 어휘면 한쪽이 낡는다).
     ///
@@ -1382,6 +1506,8 @@ struct MessageDraftEditor: View {
     var canSendNow: () -> Bool = { false }
     /// Enter 가 지나는 문. 버튼·⌘↩ 과 **같은 문**이어야 한다.
     var onSend: () -> Void = {}
+    /// ⌘V 갈고리(2026-11-11 — 메시지 사진). 그림이면 받아 가고 true, 아니면 false(평소 붙여넣기). nil 이면 평소 그대로다.
+    var onPasteImage: ((NSPasteboard) -> Bool)? = nil
 
     /// 텍스트 뷰가 마지막으로 알린 "그려진 것이 비었나". **nil = 아직 못 들었다**(첫 그림 · 스냅샷 경로).
     /// 판정은 `CheckEditorPlaceholder.isVisible` 하나가 한다 — 규칙을 이 파일에 다시 적지 마라.
@@ -1435,7 +1561,8 @@ struct MessageDraftEditor: View {
                     canSendNow: canSendNow,
                     onSend: onSend,
                     // 조합 중 표시 글자까지 세어 알려 준다 — 위 placeholder 판정의 유일한 재료다.
-                    onRenderedEmptyChange: { editorRenderedEmpty = $0 }
+                    onRenderedEmptyChange: { editorRenderedEmpty = $0 },
+                    onPasteImage: onPasteImage
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }

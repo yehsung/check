@@ -137,6 +137,8 @@ extension WorkTimerStore {
                 }
                 guard isCurrentOlderRequest(generation: generation, token: token, peer: peer) else { return }
                 if messageOlderAvailable != true { messageOlderAvailable = true }
+                // 사진 칸(2026-11-11 — 맥 0.3.86)도 배운다: 이 쪽이 머리와 겹친 줄(머리가 이겨 지난 쪽에서 빠진다)의 사진도 그려지게.
+                absorbMessagePhotoMeta(page.entries, peer: peer)
                 // 붙인 뒤 위에 맞출 줄 — 붙이기 **직전** 화면 맨 위의 메시지(그 사이 머리가 바뀌었을 수 있다).
                 let anchorID = selectedConversationMessages.first?.id
                 let older = messageOlderPages[peer] ?? []

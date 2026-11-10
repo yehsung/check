@@ -128,6 +128,10 @@ enum BlockReportSheetLayout {
     /// 신고 본문의 **추정** 자연 높이(pt).
     static func reportBodyHeight(target: BlockReportTarget, detail: String) -> CGFloat {
         var total: CGFloat = CGFloat(lines(BlockReportText.reportLede(target.peerName))) * 15
+        // 신고하는 사진(2026-11-11)이 있으면 작은 사진 한 장(+ 간격)을 센다 — 그리는 쪽과 같은 크기 규칙이다.
+        if let photo = target.photo {
+            total += MessagePhotoThumbnailLayout.reportSize(photo).height + spacing
+        }
         if let body = target.messageBody {
             total += CGFloat(min(3, lines(body))) * 15 + 16 + spacing
         }
@@ -292,6 +296,19 @@ struct BlockReportSheetView: View {
                 .font(.caption)
                 .foregroundStyle(CheckTheme.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
+            if let photo = sheet.target.photo {
+                // 신고하는 사진 한 장(2026-11-11 — 맥 0.3.86). 사람은 그림을 우클릭해 신고한다 — 글 '📷 사진' 대신 그 그림을 보여 준다
+                // (설명이 있으면 그 글이 아래 인용 판에 선다). 서버에는 여전히 메시지 id 만 간다(사진 경로는 서버가 스스로 남긴다).
+                MessagePhotoSurface(
+                    path: photo.path,
+                    context: store.messagePhotoContext,
+                    size: MessagePhotoThumbnailLayout.reportSize(photo),
+                    fills: false,
+                    corner: 8
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityLabel(MessagePhotoText.reportPhotoTitle)
+            }
             if let quoted = sheet.target.messageBody {
                 // 신고하는 메시지 한 장(읽기 전용 · 세 줄까지) — 무엇을 신고하는지 눈으로 확인하는 자리다.
                 //

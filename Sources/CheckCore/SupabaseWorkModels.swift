@@ -2335,9 +2335,13 @@ package struct MessageHistoryEntry: Identifiable, Equatable, Sendable {
     /// v0.3.30 — **받은 것에만** 값이 있다: 서버 기준 내가 아직 안 읽었으면 true. 보낸 것·옛 서버는 nil.
     /// 서버가 마이크로초로 비교한 결과다 — 클라가 `createdAt`(초 단위)으로 다시 판정하지 마라.
     package var isUnread: Bool? = nil
+    /// 2026-11-11(맥 0.3.86) — 이 줄에 붙은 사진(`MessagePhotoWire`). **`message_page` 행에만** 서버 칸이 있다(24시간 머리 줄은 nil —
+    /// 맥 스토어가 표시할 때 따로 배운 사진을 얹는다). 사진이 있는 줄의 `body` 는 **설명**이고, 사진만 보낸 줄은 빈 글이다.
+    /// 폰과 나눠 쓰는 모델이라 **맨 끝에 기본값 nil** 로 둔다(기존 호출부 · 폰 화면이 그대로 컴파일된다).
+    package var photo: MessagePhotoAttachment? = nil
 
     /// B3: 모듈 밖(맥 타깃)에서 쓰는 memberwise init — 합성 init 은 internal 이라 명시했다(모양 동일).
-    package init(id: String, peerUserID: String, peerName: String, peerAvatarURL: URL?, body: String, createdAt: Date, isMine: Bool, readByPeer: Bool? = nil, isUnread: Bool? = nil) {
+    package init(id: String, peerUserID: String, peerName: String, peerAvatarURL: URL?, body: String, createdAt: Date, isMine: Bool, readByPeer: Bool? = nil, isUnread: Bool? = nil, photo: MessagePhotoAttachment? = nil) {
         self.id = id
         self.peerUserID = peerUserID
         self.peerName = peerName
@@ -2347,6 +2351,16 @@ package struct MessageHistoryEntry: Identifiable, Equatable, Sendable {
         self.isMine = isMine
         self.readByPeer = readByPeer
         self.isUnread = isUnread
+        self.photo = photo
+    }
+
+    /// 글과 사진만 바꾼 사본(나머지 칸 — 읽음 · 안 읽음 · 시각 — 은 그대로). 맥이 24시간 머리 줄에 따로 배운 사진을 **그릴 때만** 얹는
+    /// 자리(`withPhoto` — MessagePhotoWire)가 쓴다. 안 읽음 칸을 이 파일 밖에서 이름으로 만지지 않게 여기 둔다(V0331 재료 계약).
+    package func replacingBody(_ body: String, photo: MessagePhotoAttachment?) -> MessageHistoryEntry {
+        MessageHistoryEntry(
+            id: id, peerUserID: peerUserID, peerName: peerName, peerAvatarURL: peerAvatarURL, body: body,
+            createdAt: createdAt, isMine: isMine, readByPeer: readByPeer, isUnread: isUnread, photo: photo
+        )
     }
 }
 

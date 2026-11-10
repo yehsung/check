@@ -52,7 +52,8 @@ extension MessageNoticeText {
         "\(storeDays)일이 지난 메시지는 사라져요"
     }
 
-    /// 사진만 보낸 줄의 대체 글(서버 `message_photo_fallback_body()` 와 같은 글). 사진 그리기는 다음 판이다 — 지금은 글만 그린다.
+    /// 사진만 보낸 줄의 대체 글(서버 `message_photo_fallback_body()` 와 같은 글). 사진을 못 그리는 자리(메뉴 줄 · 도착 말풍선 · 옛 앱)와
+    /// 사진이 깨진 줄은 이 글을 그린다 — 사진 그리기는 `MessagePhotoWire` 다.
     package static let photoFallbackBody = "📷 사진"
 }
 
@@ -211,12 +212,15 @@ package struct MessagePage: Equatable, Sendable {
     package let oldestCursor: MessagePageCursor?
     /// 요청 상한.
     package let limit: Int
+    /// 서버가 준 줄의 id 전부(버린 줄 포함 · 서버 순서). 사진 칸을 "이 줄까지는 물어봤다"로 덮는 재료다(맥 `WorkTimerStoreMessagePhotos`).
+    package var rowIDs: [String] = []
 
-    package init(entries: [MessageHistoryEntry], rowCount: Int, oldestCursor: MessagePageCursor?, limit: Int) {
+    package init(entries: [MessageHistoryEntry], rowCount: Int, oldestCursor: MessagePageCursor?, limit: Int, rowIDs: [String] = []) {
         self.entries = entries
         self.rowCount = rowCount
         self.oldestCursor = oldestCursor
         self.limit = limit
+        self.rowIDs = rowIDs
     }
 
     /// 더 이전 쪽이 있는가: 꽉 찬 쪽(받은 줄 수 == 상한)이고 다음 커서를 얻었다. 상한보다 적으면 끝이다(서버 계약).
@@ -275,11 +279,15 @@ extension SupabaseWorkService {
             row.flatMap { messagePageEntry($0, peer: peer, me: me, peerName: peerName, peerAvatarURL: peerAvatarURL) }
         }
         // 서버는 최신부터 준다 — 오래된 것부터로 뒤집는다(같은 µs 의 선후도 서버 순서 그대로 뒤집힌다).
-        return MessagePage(entries: entries.reversed(), rowCount: rows.count, oldestCursor: oldest, limit: limit)
+        return MessagePage(
+            entries: entries.reversed(), rowCount: rows.count, oldestCursor: oldest, limit: limit,
+            rowIDs: rows.compactMap { $0?.id }.filter { !$0.isEmpty }
+        )
     }
 
     /// 행 → 표시용 한 건. 버리는 줄: id 없음 · 확성기 줄 · 다른 대화 · 내 말인지 모름 · 보이는 글자 없음 · 시각 없음.
-    /// 글은 `caption` 이 있으면 그것, 없으면 `body`(사진만 보낸 줄은 '📷 사진')다 — 사진은 다음 판에 그린다.
+    /// 글은 `caption` 이 있으면 그것, 없으면 `body`(사진만 보낸 줄은 '📷 사진')다. 사진이 붙은 줄(모양 규칙을 지난 사진)은 사진을 싣고
+    /// 글은 설명만이다(사진만 보낸 줄은 빈 글 — 2026-11-11 맥 0.3.86, `MessagePhotoWire`).
     /// 받은 쪽 안 읽음(`unread_for_me`)은 **싣지 않는다**(머리 ②). 내가 보낸 말의 읽음(1)은 싣는다.
     package func messagePageEntry(
         _ row: MessagePageRow,
@@ -307,9 +315,14 @@ extension SupabaseWorkService {
             return nil
         }
         let caption = row.caption.flatMap { MessageBody.hasVisibleContent($0) ? $0 : nil }
-        let text = caption ?? row.body ?? (row.photoPath == nil ? "" : MessageNoticeText.photoFallbackBody)
+        // 사진 줄(2026-11-11 — 맥 0.3.86, `MessagePhotoWire`): 사진이 모양 규칙을 지나면 **사진을 싣고** 글은 설명이다(사진만 보낸 줄은
+        // 빈 글 — 화면은 사진만 그린다). 사진이 깨졌으면(경로 모양 · 크기 범위 밖) 예전처럼 글('📷 사진' 또는 설명)로 그린다.
+        let photo = MessagePhotoAttachment(path: row.photoPath, width: row.photoWidth, height: row.photoHeight)
+        let text = photo != nil
+            ? (caption ?? "")
+            : caption ?? row.body ?? (row.photoPath == nil ? "" : MessageNoticeText.photoFallbackBody)
         let body = MessageBody.sanitized(text)
-        guard MessageBody.hasVisibleContent(body) else { return nil }
+        guard photo != nil || MessageBody.hasVisibleContent(body) else { return nil }
         let createdAt: Date
         if let ms = row.createdEpochMs {
             createdAt = Date(timeIntervalSince1970: TimeInterval(ms) / 1_000)
@@ -326,7 +339,8 @@ extension SupabaseWorkService {
             body: body,
             createdAt: createdAt,
             isMine: isMine,
-            readByPeer: isMine ? row.readByPeer : nil
+            readByPeer: isMine ? row.readByPeer : nil,
+            photo: photo
         )
     }
 }
@@ -435,7 +449,9 @@ package enum MessageOlderHistoryRules {
             body: entry.body,
             createdAt: entry.createdAt,
             isMine: entry.isMine,
-            readByPeer: entry.readByPeer
+            readByPeer: entry.readByPeer,
+            // 사진 칸은 그대로 싣는다(2026-11-11 — 지난 쪽에서도 사진을 그린다). 안 읽음 칸만 비운다.
+            photo: entry.photo
         )
     }
 }

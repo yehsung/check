@@ -267,6 +267,9 @@ extension WorkTimerStore {
         // 상대를 정하는 자리는 **앱 전체에서 이 한 줄뿐이다.** 이후 어떤 응답·수신 폴링·전송 성공도 이 값을
         // 바꾸지 않는다(performLoadMessageHistory 의 "다시 넣지 마라" 주석, V0251MessagePeerTests 의 소스 계약).
         selectMessagePeer(peer)
+        // 사진(2026-11-11 — 맥 0.3.86): 대화를 **사람이 열었을 때** 그 대화의 사진 칸을 한 번 묻는다(24시간 머리 줄에는 사진 칸이 없다).
+        // 닫힌 문 · 함수 없음 숨김도 여기서 되돌린다. 팝오버 열기 · 폴링 · 전송은 이 문을 안 지난다(WorkTimerStoreMessagePhotos 머리 ②).
+        armMessagePhotoMeta(for: peer)
         // 앞서 다른 사람에 대해 선 차단·신고 결과 한 줄은 이 대화의 것이 아니다(v0.3.34 — 메시지 결과 문구와 같은 규약).
         clearBlockReportNotice(on: .message)
         // 첫 프레임부터 빈 자리에 "불러오는 중…"이 뜨게 한다(제보 목록과 같은 규약).
@@ -320,6 +323,8 @@ extension WorkTimerStore {
         if messageNotice != nil { messageNotice = nil }
         // 이전 대화(2026-11-11 — 30일)는 이 화면을 떠나면 비운다. 가장 사적인 표면이고, 차단(`hideBlockedPeer`)도 이 문을 지난다.
         clearOlderMessages()
+        // 사진(2026-11-11)도 이 화면의 것이다 — 사진 칸 · 고른 사진 · 크게 보기를 걷는다(그림 캐시는 경로 열쇠라 남는다 — 로그아웃이 지운다).
+        clearMessagePhotoConversation()
         // 신고·차단 시트(v0.3.34)도 이 화면의 것이다 — 떠나면 걷는다(레일 · [뒤로] · 다른 패널이 전부 이 문을 지난다).
         // 남기면 다음에 연 **다른 사람의 대화** 자리에 앞사람 시트가 선다(수리 전 실측). 보내던 신고는 결과 한 줄로 돌아온다.
         dismissBlockReportSheet(on: .message)
@@ -431,6 +436,8 @@ extension WorkTimerStore {
             // 지난 쪽으로 옮겨져 메시지 말풍선으로 선다(확성기는 메시지함 밖이다).
             carryOlderMessagesAcrossHeadSlide(previousHead: visibleMessageHistory, nextHead: sorted)
             if messageHistory != sorted { messageHistory = sorted }
+            // 열린 대화의 머리에 사진 칸을 모르는 받은 줄이 생겼으면 한 번 묻는다(2026-11-11 — 합쳐서 · 하나씩만 · 받은 말만).
+            noteMessageHeadChangedForPhotos()
             // 📢 로 시작하는데 아직 판정 못 한 줄(2026-10-30 — 계약 C3 경합)은 배너 목록을 한 번 받아 본 뒤 거른다. 그동안은 붙든다
             // (`visibleMessageHistory`) — 접두만 보고 숨기지 않고, 확인이 실패하면 메시지로 돌아온다.
             verifyMegaphoneCandidatesIfNeeded()
@@ -552,6 +559,12 @@ extension WorkTimerStore {
     /// 창의 [보내기] 버튼(과 ⌘Enter)이 부르는 문. 판정은 `canSendMessageNow` 하나이고 여기서 다시 세지 않는다.
     func sendDraftMessage() {
         guard canSendMessageNow, let peer = selectedMessagePeerID else { return }
+        // 사진 미리 보기가 떠 있으면(2026-11-11) 입력칸의 글은 **그 사진의 설명**이다 — 덮개가 "입력칸의 글도 함께 보내요"라고 말한다.
+        // ↩ · ⌘↩ · [보내기]가 글만 따로 보내면 사진이 덮개에 남고 설명이 따로 간다. 그래서 사진 문으로 넘긴다(조합 확정은 이미 지났다).
+        if selectedMessagePhotoDraft != nil {
+            sendMessagePhotoDraft()
+            return
+        }
         // 신고 결과 한 줄(v0.3.34)은 입력칸 위 같은 자리를 쓴다 — 새로 보낸 말의 결과가 그 자리를 이어받는다.
         clearBlockReportNotice(on: .message)
         // **이 전송이 초안에서 나왔다**고 알린다 — 성공하면 입력칸을 비우는 쪽이다(`sendMessage` 의 그 인자).
@@ -669,60 +682,84 @@ extension WorkTimerStore {
             guard generation == sessionGeneration else { return }
             // 서버가 답했다(ok 든 거절 status 든) — 이 키의 일은 끝났다. 같은 말을 또 보내면 그건 새 전송이다.
             messageReadRuntime.sendLedger.settle(key: clientMessageID)
-            switch MessageSendOutcome(response: response) {
-            case .ok:
-                messageNotice = Self.messageSentNotice
-                // 보낸 값을 비운다 — 남아 있으면 다음 Enter 에 같은 말이 또 나간다.
-                // **비우는 자리는 여기 하나뿐이다**: 창을 닫아도, 실패해도 글은 남는다.
-                //
-                // ★ **초안에서 나온 전송만** 비운다(v0.3.62 — 위 `clearsDraftOnSuccess` 주석).
-                //   아잉이 이모티콘은 입력칸을 거치지 않고 상수 토큰으로 나가는데(`sendSticker`),
-                //   조건이 "상대가 같다" 하나면 이모티콘 한 장이 **사용자가 쓰던 글을 지운다**
-                //   — 왕복이 끝난 뒤라 되돌릴 수도 없다. 상대 비교는 그대로 남는다(왕복 중에 다른
-                //   대화로 옮겨 갔으면 그쪽 입력칸을 비울 이유가 없다).
-                if clearsDraftOnSuccess, selectedMessagePeerID == userID { messageDraft = "" }
-                // 이 서버는 키로 중복을 거른다는 증거다(키를 모르는 옛 서버는 message_id 를 안 싣는다) — 이 실행에서
-                // 처음 본 뒤로 응답 유실 재시도가 열린다(`deliverMessage`). 로그아웃이 장부째 바꿔 지운다.
-                if response.messageId != nil { messageReadRuntime.sendLedger.serverConfirmsRows = true }
-                // 방금 보낸 말이 그 자리에서 대화에 나타나야 "메신저"다. 예전엔 낙관 삽입 대신 이력을 다시 받기만 했다 —
-                // **서버가 본문을 정규화하고 시각을 정하기 때문**이다(내가 만든 가짜 행과 다음 갱신의 진짜 행이 다르면
-                // 말풍선이 순간 두 개로 보이거나 순서가 튄다). 이제 서버가 ok 에 **저장한 행의 id 와 시각**을 실어 주므로
-                // 그 행을 그 자리에 세운다(2026-10-30 안정화 — 이력 왕복 하나를 기다리지 않는다). id 가 서버 것이라 다음 이력의
-                // 진짜 행과 **같은 줄**이고(둘이 되지 않는다), 시각과 본문도 서버 것이다. 키가 없는 옛 서버 응답이면 nil → 예전 그대로.
-                if let entry = confirmedSentMessageEntry(response, to: userID, sentBody: body, createdAt: confirmedAt) {
-                    insertConfirmedSentMessage(entry)
-                }
-                // 이력은 그대로 다시 받는다 — 읽음(1)·같은 초 서버 순서·상대 이름을 서버 판으로 맞춘다.
-                loadMessageHistory()
-            case .notWorking:
-                messageNotice = Self.messageNotWorkingNotice
-            case .targetNotWorking:
-                // 대상 자리비움. 디렉토리의 '근무중' 배지가 낡았다는 뜻이므로 즉시 재조회한다 — 안 그러면
-                // 화면은 계속 "근무중"이라 말하는데 전송만 거절돼, 사용자는 왜 안 되는지 알 방법이 없다
-                // (sendPoke/sendUltraPoke 의 같은 분기와 같은 처리다).
-                messageNotice = Self.messageTargetNotWorkingNotice
-                loadPokeDirectory()
-            case .targetFocused:
-                messageNotice = Self.messageTargetFocusedNotice
-                // 명부가 그 사람을 집중 아님으로 알고 있었다(알았으면 위 선게이트가 막았다) — 대화 중에 상대가 켠 경우다.
-                // 다시 받아 머리의 '집중 중' 표시와 [보내기] 잠금이 따라오게 한다(target_not_working 과 같은 처리). 문구는 그대로다.
-                loadPokeDirectory()
-            case .senderFocused:
-                // 서버가 **내** 집중으로 거절했다(2026-11-03 서버 차단). 이 맥은 몰랐다 — 서버값을 들여 [보내기] 잠금이 따라오게 한다.
-                messageNotice = Self.myFocusBlocksSendingNotice
-                adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
-            case .tooLong:
-                // 서버가 숫자를 알려 줬으면 그 숫자를 말한다(클라 상수와 갈리는 날 진실은 거절한 쪽에 있다).
-                messageNotice = Self.messageTooLongNotice(maxLength: response.maxLength)
-            case .notText:
-                messageNotice = Self.messageNotTextNotice
-            case .blackout:
-                messageNotice = Self.messageBlackoutNotice
-            case .flood, .invalid:
-                // ★ flood 를 여기 접어 두는 것이 계약이다(머리 주석 ③). 남은 초를 세거나 버튼을 잠그면
-                //   그건 이름만 다른 쿨타임이고, 사장님이 없애라고 한 바로 그것이다.
-                messageNotice = Self.messageInvalidNotice
+            // 결과 처리는 **한 함수**다(2026-11-11 — 사진 보내기 `sendMessagePhotoDraft` 가 같은 처리를 지난다). 여기 다시 적지 마라.
+            applyMessageSendOutcome(
+                MessageSendOutcome(response: response),
+                response: response,
+                to: userID,
+                sentBody: body,
+                confirmedAt: confirmedAt,
+                clearsDraftOnSuccess: clearsDraftOnSuccess,
+                focusIntentAtRequest: focusIntentAtRequest
+            )
+        }
+    }
+
+    /// 서버가 답한 전송 결과를 화면에 반영한다(문구 · 초안 비우기 · 확정 줄 · 명부 · 집중) — **글 · 이모티콘 · 사진이 같은 하나를 지난다**
+    /// (2026-11-11 사진 보내기에서 `sendMessage` 의 switch 를 그대로 옮겨 왔다 — 두 벌로 두면 실패한 날에만 갈린다).
+    /// 부르는 쪽이 세대 가드를 이미 지났다. `sentBody` 는 서버가 저장 본문을 안 실었을 때 확정 줄에 쓸 글이다(사진은 설명 또는 '📷 사진').
+    func applyMessageSendOutcome(
+        _ outcome: MessageSendOutcome,
+        response: PokeSendResponse,
+        to userID: String,
+        sentBody body: String,
+        confirmedAt: Date?,
+        clearsDraftOnSuccess: Bool,
+        focusIntentAtRequest: Int
+    ) {
+        switch outcome {
+        case .ok:
+            messageNotice = Self.messageSentNotice
+            // 보낸 값을 비운다 — 남아 있으면 다음 Enter 에 같은 말이 또 나간다.
+            // **비우는 자리는 여기 하나뿐이다**: 창을 닫아도, 실패해도 글은 남는다.
+            //
+            // ★ **초안에서 나온 전송만** 비운다(v0.3.62 — 위 `clearsDraftOnSuccess` 주석).
+            //   아잉이 이모티콘은 입력칸을 거치지 않고 상수 토큰으로 나가는데(`sendSticker`),
+            //   조건이 "상대가 같다" 하나면 이모티콘 한 장이 **사용자가 쓰던 글을 지운다**
+            //   — 왕복이 끝난 뒤라 되돌릴 수도 없다. 상대 비교는 그대로 남는다(왕복 중에 다른
+            //   대화로 옮겨 갔으면 그쪽 입력칸을 비울 이유가 없다).
+            if clearsDraftOnSuccess, selectedMessagePeerID == userID { messageDraft = "" }
+            // 이 서버는 키로 중복을 거른다는 증거다(키를 모르는 옛 서버는 message_id 를 안 싣는다) — 이 실행에서
+            // 처음 본 뒤로 응답 유실 재시도가 열린다(`deliverMessage`). 로그아웃이 장부째 바꿔 지운다.
+            if response.messageId != nil { messageReadRuntime.sendLedger.serverConfirmsRows = true }
+            // 방금 보낸 말이 그 자리에서 대화에 나타나야 "메신저"다. 예전엔 낙관 삽입 대신 이력을 다시 받기만 했다 —
+            // **서버가 본문을 정규화하고 시각을 정하기 때문**이다(내가 만든 가짜 행과 다음 갱신의 진짜 행이 다르면
+            // 말풍선이 순간 두 개로 보이거나 순서가 튄다). 이제 서버가 ok 에 **저장한 행의 id 와 시각**을 실어 주므로
+            // 그 행을 그 자리에 세운다(2026-10-30 안정화 — 이력 왕복 하나를 기다리지 않는다). id 가 서버 것이라 다음 이력의
+            // 진짜 행과 **같은 줄**이고(둘이 되지 않는다), 시각과 본문도 서버 것이다. 키가 없는 옛 서버 응답이면 nil → 예전 그대로.
+            if let entry = confirmedSentMessageEntry(response, to: userID, sentBody: body, createdAt: confirmedAt) {
+                insertConfirmedSentMessage(entry)
             }
+            // 이력은 그대로 다시 받는다 — 읽음(1)·같은 초 서버 순서·상대 이름을 서버 판으로 맞춘다.
+            loadMessageHistory()
+        case .notWorking:
+            messageNotice = Self.messageNotWorkingNotice
+        case .targetNotWorking:
+            // 대상 자리비움. 디렉토리의 '근무중' 배지가 낡았다는 뜻이므로 즉시 재조회한다 — 안 그러면
+            // 화면은 계속 "근무중"이라 말하는데 전송만 거절돼, 사용자는 왜 안 되는지 알 방법이 없다
+            // (sendPoke/sendUltraPoke 의 같은 분기와 같은 처리다).
+            messageNotice = Self.messageTargetNotWorkingNotice
+            loadPokeDirectory()
+        case .targetFocused:
+            messageNotice = Self.messageTargetFocusedNotice
+            // 명부가 그 사람을 집중 아님으로 알고 있었다(알았으면 위 선게이트가 막았다) — 대화 중에 상대가 켠 경우다.
+            // 다시 받아 머리의 '집중 중' 표시와 [보내기] 잠금이 따라오게 한다(target_not_working 과 같은 처리). 문구는 그대로다.
+            loadPokeDirectory()
+        case .senderFocused:
+            // 서버가 **내** 집중으로 거절했다(2026-11-03 서버 차단). 이 맥은 몰랐다 — 서버값을 들여 [보내기] 잠금이 따라오게 한다.
+            messageNotice = Self.myFocusBlocksSendingNotice
+            adoptServerSenderFocused(intentSerialAtRequest: focusIntentAtRequest)
+        case .tooLong:
+            // 서버가 숫자를 알려 줬으면 그 숫자를 말한다(클라 상수와 갈리는 날 진실은 거절한 쪽에 있다).
+            messageNotice = Self.messageTooLongNotice(maxLength: response.maxLength)
+        case .notText:
+            messageNotice = Self.messageNotTextNotice
+        case .blackout:
+            messageNotice = Self.messageBlackoutNotice
+        case .flood, .invalid:
+            // ★ flood 를 여기 접어 두는 것이 계약이다(머리 주석 ③). 남은 초를 세거나 버튼을 잠그면
+            //   그건 이름만 다른 쿨타임이고, 사장님이 없애라고 한 바로 그것이다.
+            messageNotice = Self.messageInvalidNotice
         }
     }
 
@@ -1324,6 +1361,8 @@ extension WorkTimerStore {
         )
         if messageHistory != merged { messageHistory = merged }
         evaluateMessageReadMarking()
+        // 방금 받은 말이 사진일 수 있다(도착 줄에는 사진 칸이 없다 — 본문 '📷 사진') — 열린 대화면 사진 칸을 한 번 묻는다(2026-11-11).
+        noteMessageHeadChangedForPhotos()
         return additions.count
     }
 }

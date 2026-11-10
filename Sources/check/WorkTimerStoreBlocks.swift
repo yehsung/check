@@ -44,6 +44,9 @@ struct BlockReportTarget: Equatable, Sendable {
     /// 오목 채팅에서 연 시트가 묶인 **판 id**(서버에는 안 간다 — 대국 채팅 줄은 신고 표와 다른 표다). 그 판이 내려가면
     /// (다음 판 · 로비) 시트는 서지 않는다(`blockReportSheet(on:)` — v0.3.34 수리: 앞 판의 시트가 다음 판을 덮었다).
     var matchID: String? = nil
+    /// 신고하는 메시지의 사진(2026-11-11 — 맥 0.3.86). 시트가 글 인용 대신(설명이 있으면 그 위에) 작은 사진을 보여 준다.
+    /// **서버에는 안 간다** — `report_content` 는 메시지 id 만 받고 사진 경로는 서버가 스스로 남긴다.
+    var photo: MessagePhotoAttachment? = nil
 }
 
 /// 지금 떠 있는 시트.
@@ -96,11 +99,13 @@ enum MessageBubbleReportRule {
     /// 그 말풍선을 신고할 대상(받은 말풍선이 아니면 nil).
     static func target(for entry: MessageHistoryEntry) -> BlockReportTarget? {
         guard offersReport(for: entry) else { return nil }
+        // 사진 줄(2026-11-11)의 글은 설명이다 — 사진만 보낸 줄은 글 인용 없이 사진만 보여 준다(빈 인용 판을 세우지 않는다).
         return BlockReportTarget(
             peerID: entry.peerUserID,
             peerName: entry.peerName,
             messageID: entry.id,
-            messageBody: entry.body
+            messageBody: entry.photo == nil || MessageBody.hasVisibleContent(entry.body) ? entry.body : nil,
+            photo: entry.photo
         )
     }
 }

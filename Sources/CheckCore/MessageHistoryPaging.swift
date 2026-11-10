@@ -338,14 +338,35 @@ extension SupabaseWorkService {
 package enum MessageOlderHistoryRules {
     /// 머리 시각은 초 단위로 반올림된 값이다(옛 함수의 `created_epoch`). 그보다 "새 줄"을 가를 때 이만큼 너그럽게 본다.
     package static let headClockSlack: TimeInterval = 1
+    /// 머리 미끄러짐에서 24시간 경계를 이만큼 너그럽게 본다(서버 `now()` 와 맥 시계의 차이). 시계가 늦은 맥에서 경계를 빡빡하게
+    /// 재면 정말 미끄러진 줄을 못 옮겨 대화 가운데가 빈다 — 너그러워서 잃는 것은 "곧 사라질 줄"이 몇 분 더 남는 것뿐이다.
+    package static let headWindowSlack: TimeInterval = 600
 
     /// 화면이 그릴 한 줄: 지난 쪽(머리에 있는 id 는 뺀다 — **머리가 이긴다**) + 머리. 다시 정렬하지 않는다.
+    /// 머리가 이기는 것은 읽음도 같다(`readFollowingHead` — 지난 쪽의 내 말 "1"이 머리보다 낡지 않게).
     package static func merged(older: [MessageHistoryEntry], head: [MessageHistoryEntry]) -> [MessageHistoryEntry] {
         guard !older.isEmpty else { return head }
         let headIDs = Set(head.map(\.id))
         var seen: Set<String> = []
         let kept = older.filter { !headIDs.contains($0.id) && seen.insert($0.id).inserted }
-        return kept + head
+        return readFollowingHead(older: kept, head: head) + head
+    }
+
+    /// 지난 쪽의 내 말 읽음(1)을 머리에 맞춘다. 지난 쪽 줄은 받은 그때의 값을 들고 있고 다시 안 받는다 — 상대가 그 뒤에 읽어도
+    /// 머리(다시 받는다)만 1이 지워져, 새 말은 읽었는데 옛 말은 안 읽었다고 그린다.
+    /// 머리에 **상대가 읽은 내 말이 하나라도 있으면** 지난 쪽의 내 말은 전부 읽은 것이다: 지난 쪽 줄은 서버 순서에서 머리의 모든 줄보다
+    /// 앞이고(머리보다 새 줄은 안 붙인다 — `prepending`), 읽음 경계(`read_until`)는 앞으로만 간다. 그래서 **시각을 비교하지 않는다**
+    /// (초 단위 `createdAt` 으로 다시 세지 않는다 — `MessageReadReceiptMark` 주석). false → true 만 바꾼다(모름 nil 은 그대로).
+    package static func readFollowingHead(older: [MessageHistoryEntry], head: [MessageHistoryEntry]) -> [MessageHistoryEntry] {
+        guard head.contains(where: { $0.isMine && $0.readByPeer == true }),
+              older.contains(where: { $0.isMine && $0.readByPeer == false })
+        else { return older }
+        return older.map { entry in
+            guard entry.isMine, entry.readByPeer == false else { return entry }
+            var read = entry
+            read.readByPeer = true
+            return read
+        }
     }
 
     /// 받은 쪽(오래된 것 → 최신)을 기존 지난 쪽 **앞에** 붙인다. 빼는 줄:
@@ -371,19 +392,33 @@ package enum MessageOlderHistoryRules {
     /// 24시간 머리가 미끄러졌다(대화를 오래 열어 둔 채 이력을 다시 받았다). 앞 머리에 있었는데 새 머리에서 빠진 **그 상대의** 줄
     /// (새 머리의 그 상대 맨 앞보다 오래된 것)을 지난 쪽 끝으로 옮긴다 — 안 옮기면 지난 쪽(또는 커서)과 새 머리 맨 앞 사이의 말이
     /// 두 판 어디에도 없어 대화 가운데가 빈다. **언제 부를지는 스토어가 정한다**(그 상대의 쪽을 한 번이라도 받았을 때만 —
-    /// 안 받았으면 다음 누름이 커서 없이 최신부터 받아 그 줄을 되찾는다).
+    /// 안 받았으면 다음 누름이 커서 없이 최신부터 받아 그 줄을 되찾는다). `previousHead` 는 **화면이 보던 판**이다(확성기 줄을 뺀 판 —
+    /// 날것의 이력을 넘기면 받은 확성기 줄이 24시간을 넘는 순간 지난 쪽으로 옮겨져 메시지 말풍선으로 선다).
+    ///
+    /// **창 경계로도 자른다.** 미끄러짐은 창이 움직여서만 생긴다: 24시간이 지났거나(`now` − `windowHours`, 시계 차이만큼 너그럽게),
+    /// 새 머리가 상한(`headLimit`)까지 차서 그 맨 앞보다 옛 줄이 밀려났다. 그보다 **새** 줄이 빠졌으면 서버가 다른 이유로 뺀 것이다
+    /// (상대가 나를 차단 · 숨긴 계정 · 운영자 삭제) — 옮기지 않는다. 그 상대의 줄이 새 머리에 하나도 없을 때(상대 맨 앞이 없다)도
+    /// 이 경계가 막는다 — 그때 다 옮기면 서버가 감춘 24시간 대화가 "지난 말"로 남는다.
     package static func carriedAcrossHeadSlide(
         peer: String,
         previousHead: [MessageHistoryEntry],
         nextHead: [MessageHistoryEntry],
-        older: [MessageHistoryEntry]
+        older: [MessageHistoryEntry],
+        now: Date,
+        windowHours: Int = MessageNoticeText.historyHours,
+        headLimit: Int = MessageNoticeText.historyLimit
     ) -> [MessageHistoryEntry] {
         let nextIDs = Set(nextHead.map(\.id))
         let edge = nextHead.first(where: { $0.peerUserID == peer })?.createdAt
+        var windowEdge = now.addingTimeInterval(-TimeInterval(windowHours) * 3_600 + headWindowSlack)
+        if nextHead.count >= headLimit, let oldest = nextHead.map(\.createdAt).min() {
+            windowEdge = max(windowEdge, oldest.addingTimeInterval(headClockSlack))
+        }
         var known = Set(older.map(\.id))
         var slid: [MessageHistoryEntry] = []
         for entry in previousHead where entry.peerUserID == peer && !nextIDs.contains(entry.id) {
             if let edge, entry.createdAt > edge { continue }
+            if entry.createdAt > windowEdge { continue }
             guard known.insert(entry.id).inserted else { continue }
             slid.append(pageEntry(entry))
         }

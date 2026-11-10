@@ -688,8 +688,9 @@ func 이전대화_차단과_응답_경로는_선택을_안_쓴다_소스계약()
     #expect(open.contains("rearmOlderMessagesAvailability()"), "패널 열기가 숨긴 버튼을 다시 세우지 않는다")
     #expect(!open.contains("loadOlderMessages"), "패널 열기가 이전 대화를 묻는다")
     let headLoad = try #require(moRegion(messages, from: "func performLoadMessageHistory() async {", to: "\n    }\n\n"))
-    #expect(headLoad.contains("carryOlderMessagesAcrossHeadSlide(previousHead: messageHistory, nextHead: sorted)"),
-            "머리 미끄러짐의 틈 메우기가 머리를 세우기 전에 없다")
+    // 앞 판은 화면이 보던 판(확성기 줄을 뺀 판)이다 — 날것(`messageHistory`)을 넘기면 받은 확성기 줄이 24시간 뒤 말풍선으로 선다.
+    #expect(headLoad.contains("carryOlderMessagesAcrossHeadSlide(previousHead: visibleMessageHistory, nextHead: sorted)"),
+            "머리 미끄러짐의 틈 메우기가 머리를 세우기 전에 없다(또는 확성기 줄을 뺀 판이 아니다)")
 }
 
 /// 주석을 걷은 소스(V0331 의 공용 도우미 — 코어로 간 파일도 찾는다). 못 읽으면 빈 글자(단언이 빨개진다).
@@ -736,18 +737,66 @@ func 이전대화_잇기는_다시_정렬하지_않고_머리가_이기며_머�
 @Test
 func 이전대화_미끄러짐_규칙은_그_상대의_빠진_옛_줄만_옮긴다() {
     let base = Fx.now
+    // 머리를 다시 받은 때 — a1(85,000초 전 줄)이 24시간을 넘겼다.
+    let later = base.addingTimeInterval(2_000)
     let previous = [MoFx.entry("a1", at: base.addingTimeInterval(-85_000)), MoFx.entry("a2", at: base.addingTimeInterval(-60))]
     let next = [MoFx.entry("a2", at: base.addingTimeInterval(-60))]
     let older = [MoFx.entry("o1", at: base.addingTimeInterval(-200_000))]
-    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(peer: Fx.peerA, previousHead: previous, nextHead: next, older: older)
-        .map(\.id) == ["o1", "a1"])
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerA, previousHead: previous, nextHead: next, older: older, now: later
+    ).map(\.id) == ["o1", "a1"])
     // 지난 쪽이 비어 있어도 옮긴다(커서만 있는 상대 — 언제 부를지는 스토어가 정한다).
-    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(peer: Fx.peerA, previousHead: previous, nextHead: next, older: [])
-        .map(\.id) == ["a1"])
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerA, previousHead: previous, nextHead: next, older: [], now: later
+    ).map(\.id) == ["a1"])
     // 새 머리보다 **새로운** 줄이 빠졌으면(서버가 지웠다) 옮기지 않는다.
     let vanished = [MoFx.entry("a2", at: base.addingTimeInterval(-60)), MoFx.entry("gone", at: base.addingTimeInterval(-30))]
-    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(peer: Fx.peerA, previousHead: vanished, nextHead: next, older: older)
-        .map(\.id) == ["o1"])
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerA, previousHead: vanished, nextHead: next, older: older, now: later
+    ).map(\.id) == ["o1"])
+}
+
+@Test
+func 이전대화_미끄러짐은_창_안에서_빠진_줄을_옮기지_않는다() {
+    let base = Fx.now
+    let older = [MoFx.entry("o1", at: base.addingTimeInterval(-200_000))]
+    // 상대가 나를 차단했다(서버가 그 둘의 줄을 통째로 뺀다) — 새 머리에 그 상대 줄이 **하나도 없다**(상대 맨 앞이 없다).
+    // 몇 분 전 말까지 "지난 말"로 남으면 서버가 감춘 대화가 화면에 그대로다. 창 안의 줄은 옮기지 않는다.
+    let recent = [MoFx.entry("r1", at: base.addingTimeInterval(-600)), MoFx.entry("r2", at: base.addingTimeInterval(-60), isMine: true)]
+    let others = [MoFx.entry("b1", at: base.addingTimeInterval(-30))].map {
+        MessageHistoryEntry(id: $0.id, peerUserID: Fx.peerB, peerName: "다른 사람", peerAvatarURL: nil, body: $0.body,
+                            createdAt: $0.createdAt, isMine: false)
+    }
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerA, previousHead: recent + others, nextHead: others, older: older, now: base
+    ) == older, "창 안에서 빠진 줄(서버가 뺐다)이 지난 쪽으로 옮겨졌다")
+    // 대조: 같은 모양인데 그 줄들이 정말 24시간을 넘겼다(상대가 하루 동안 말이 없었다) — 그때는 옮긴다.
+    let aged = base.addingTimeInterval(86_400 + 600)
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerA, previousHead: recent + others, nextHead: others, older: older, now: aged
+    ).map(\.id) == ["o1", "r1", "r2"])
+    // 시계가 조금 늦은 맥(서버 now() 보다 몇 분 뒤처짐)에서도 경계에 막 걸린 줄은 옮긴다(`headWindowSlack`).
+    let edgeRow = [MoFx.entry("e1", at: base.addingTimeInterval(-86_400 + 120))]
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerA, previousHead: edgeRow, nextHead: [], older: [], now: base
+    ).map(\.id) == ["e1"])
+
+    // 새 머리가 상한까지 찼다 — 그 맨 앞보다 옛 줄은 상한에 밀려난 것이다(24시간 안이어도 옮긴다). 맨 앞보다 새 줄이 빠졌으면 안 옮긴다.
+    let full = (0..<3).map { MoFx.entry(moID("n", $0), at: base.addingTimeInterval(TimeInterval(-300 + $0 * 60))) }
+    let pushedOut = [MoFx.entry("p1", at: base.addingTimeInterval(-900)), MoFx.entry("p2", at: base.addingTimeInterval(-120))]
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerB, previousHead: pushedOut.map {
+            MessageHistoryEntry(id: $0.id, peerUserID: Fx.peerB, peerName: "다른 사람", peerAvatarURL: nil, body: $0.body,
+                                createdAt: $0.createdAt, isMine: false)
+        }, nextHead: full, older: [], now: base, headLimit: 3
+    ).map(\.id) == ["p1"])
+    // 대조: 상한에 못 미친 머리라면 같은 줄(15분 전)은 창 안이라 안 옮긴다.
+    #expect(MessageOlderHistoryRules.carriedAcrossHeadSlide(
+        peer: Fx.peerB, previousHead: pushedOut.map {
+            MessageHistoryEntry(id: $0.id, peerUserID: Fx.peerB, peerName: "다른 사람", peerAvatarURL: nil, body: $0.body,
+                                createdAt: $0.createdAt, isMine: false)
+        }, nextHead: full, older: [], now: base, headLimit: 4
+    ).isEmpty)
 }
 
 @MainActor
@@ -785,6 +834,8 @@ func 이전대화_오래_열어_둔_대화에서_24시간_경계가_움직여도
     #expect(store.selectedConversationMessages.map(\.id) == ["o1", "o2", "a1", "a2"])
     #expect(store.selectedConversationMessages.first { $0.id == "a1" }?.body == "곧 24시간이 지날 말", "머리가 안 이겼다")
 
+    // 시간이 흘러 a1(85,000초 전)이 24시간을 넘겼다 — 경계가 움직인 까닭은 시계다(창 안에서 빠진 줄은 옮기지 않는다).
+    store.clock = { Fx.now.addingTimeInterval(2_000) }
     await store.performLoadMessageHistory()
     #expect(store.messageHistory.map(\.id) == ["a2", "a3"], "머리(24시간)는 서버가 준 그대로여야 한다")
     #expect(store.messageOlderPages[Fx.peerA]?.map(\.id) == ["o1", "o2", "a1"], "머리에서 빠진 a1 이 지난 쪽으로 안 옮겨졌다")
@@ -820,10 +871,164 @@ func 이전대화_끝까지_받은_뒤_경계가_움직여도_머리에서_빠�
     #expect(store.messageOlderRowState == .end)
 
     // 끝 줄이라 다시 받을 길이 없다 — 빠진 셋은 지난 쪽으로 옮겨져야 대화가 안 줄어든다.
+    // 경계가 움직인 까닭은 시계다: 30,000초 뒤 앞 셋(80,000 · 70,000 · 60,000초 전)이 24시간을 넘겼다.
+    store.clock = { Fx.now.addingTimeInterval(30_000) }
     await store.performLoadMessageHistory()
     #expect(store.messageHistory.map(\.id) == (3..<6).map { moID("h", $0) })
     #expect(store.selectedConversationMessages.map(\.id) == (0..<6).map { moID("h", $0) }, "끝까지 받은 대화가 경계를 따라 줄었다")
     #expect(moPage(host).count == 1, "머리 다시 받기가 이전 대화를 물었다")
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 이전대화_머리에서_빠진_확성기_줄은_지난_쪽으로_안_옮긴다() async {
+    // 받은 확성기 fan-out 줄(mg)은 머리(`messageHistory`)에 있고 화면은 배너 목록으로 거른다. 24시간이 지나 머리에서 빠질 때
+    // 날것의 머리를 옮기면 그 줄이 지난 쪽에서 메시지 말풍선으로 선다. 기준선: 배너 목록이 없는 서버(필터 꺼짐)는 확성기 줄도
+    // 메시지로 보여 주므로 옮긴다 — 같은 단언 자리에서 갈린다("숨긴다"가 늘 참이라 초록인 시험이 아니게).
+    for inbox in [true, false] {
+        let megaphoneBody = "📢 라운지에 간식 있어요"
+        let server = MoPageServer(rows: [
+            MoRow(id: "a2", isMine: true, us: MoFx.micros(3_600)),
+            MoRow(id: "a1", isMine: false, us: MoFx.micros(70_000)),
+            MoRow(id: "mg", isMine: false, us: MoFx.micros(80_000), body: megaphoneBody, megaphone: true),
+            MoRow(id: "o1", isMine: false, us: MoFx.micros(100_000))
+        ])
+        let (store, _) = makeMessageReadStore("older-slide-mega-\(inbox)") { call, index in
+            switch call.rpc {
+            case "megaphone_inbox":
+                guard inbox else { return Fx.missingFunction(call.rpc) }
+                return Reply(body: Fx.json([[
+                    "message_id": "mg", "megaphone_id": "mp-mg", "sender_id": Fx.peerA, "sender_display_name": "민수",
+                    "sender_avatar_url": NSNull(), "body": "라운지에 간식 있어요", "created_epoch": MoFx.nowEpoch - 80_000
+                ]]))
+            case "message_unread_summary_v2":
+                return inbox ? Fx.summaryReply([]) : Fx.missingFunction(call.rpc)
+            case "message_unread_summary":
+                return Fx.summaryReply([])
+            case "mark_messages_read":
+                return Fx.markReply()
+            case "message_history_with_reads":
+                if index == 0 {
+                    return Fx.historyReply([
+                        MoFx.head("mg", isMine: false, secondsAgo: 80_000, body: megaphoneBody),
+                        MoFx.head("a1", isMine: false, secondsAgo: 70_000, body: "어제 이야기"),
+                        MoFx.head("a2", isMine: true, secondsAgo: 3_600)
+                    ])
+                }
+                return Fx.historyReply([MoFx.head("a2", isMine: true, secondsAgo: 3_600)])
+            case "message_page": return server.reply(call)
+            default: return nil
+            }
+        }
+        store.megaphoneBanner.schedule = { _, _ in }
+        store.megaphoneBanner.clock = { Fx.now }
+        await store.requestMegaphoneBannerRefresh()?.value
+        await messageReadWait { messageReadIdle(store) }
+        #expect(store.megaphoneBanner.capability == (inbox ? .available : .unavailable), "inbox=\(inbox)")
+        moOpen(store)
+        await store.performLoadMessageHistory()
+        await store.performLoadOlderMessages()
+        #expect(store.messageOlderPages[Fx.peerA]?.map(\.id) == ["o1"], "inbox=\(inbox)")
+        #expect(store.selectedConversationMessages.contains { $0.id == "mg" } == !inbox, "전제(inbox=\(inbox)): 머리의 확성기 줄 표시")
+
+        // 시간이 흘러 mg · a1 이 24시간을 넘겼다 — 머리에서 빠진다.
+        store.clock = { Fx.now.addingTimeInterval(20_000) }
+        await store.performLoadMessageHistory()
+        await messageReadWait { messageReadIdle(store) }
+        if inbox {
+            #expect(store.messageOlderPages[Fx.peerA]?.map(\.id) == ["o1", "a1"], "확성기 줄이 지난 쪽으로 옮겨졌다")
+            #expect(store.selectedConversationMessages.map(\.id) == ["o1", "a1", "a2"], "확성기 줄이 메시지 말풍선으로 섰다")
+        } else {
+            #expect(store.messageOlderPages[Fx.peerA]?.map(\.id) == ["o1", "mg", "a1"])
+            #expect(store.selectedConversationMessages.map(\.id) == ["o1", "mg", "a1", "a2"])
+        }
+    }
+}
+
+@MainActor
+@Test(.gomokuDefaultsCleanup)
+func 이전대화_지난_쪽의_내_말_읽음은_머리를_따른다() async {
+    // 규칙: 머리에 상대가 읽은 내 말이 있으면 지난 쪽의 내 말은 전부 읽은 것이다(지난 쪽은 머리보다 앞 · 읽음 경계는 앞으로만).
+    let base = Fx.now
+    func mine(_ id: String, _ offset: TimeInterval, read: Bool?) -> MessageHistoryEntry {
+        var entry = MoFx.entry(id, at: base.addingTimeInterval(offset), isMine: true)
+        entry.readByPeer = read
+        return entry
+    }
+    let older = [mine("o1", -200_000, read: false), MoFx.entry("o2", at: base.addingTimeInterval(-150_000)),
+                 mine("o3", -100_000, read: false), mine("o4", -90_000, read: nil)]
+    // 기준선: 머리의 내 말도 아직 안 읽혔다 — 지난 쪽 1 은 그대로다.
+    #expect(MessageOlderHistoryRules.merged(older: older, head: [mine("h1", -60, read: false)]).map(\.readByPeer)
+        == [false, nil, false, nil, false])
+    // 상대가 읽었다 — 지난 쪽의 내 말도 읽음. 받은 말(o2)과 모름(o4 — 옛 서버)은 그대로다.
+    #expect(MessageOlderHistoryRules.merged(older: older, head: [mine("h1", -60, read: true)]).map(\.readByPeer)
+        == [true, nil, true, nil, true])
+    // 머리에 내 말이 없으면(받은 말뿐) 바꿀 근거가 없다.
+    #expect(MessageOlderHistoryRules.merged(older: older, head: [MoFx.entry("h2", at: base)]).map(\.readByPeer)
+        == [false, nil, false, nil, nil])
+
+    // 스토어: 지난 쪽을 받은 뒤 상대가 읽었다 → 머리를 다시 받는다(message_read 신호와 같은 길) → 지난 쪽의 1 도 지워진다.
+    let server = MoPageServer(rows: [
+        MoRow(id: "a1", isMine: true, us: MoFx.micros(60)),
+        MoRow(id: "o2", isMine: false, us: MoFx.micros(150_000)),
+        MoRow(id: "o1", isMine: true, us: MoFx.micros(200_000), readByPeer: false)
+    ])
+    let (store, _) = makeMessageReadStore("older-read-follow") { call, index in
+        switch call.rpc {
+        case "message_history_with_reads":
+            return Fx.historyReply([MoFx.head("a1", isMine: true, secondsAgo: 60, readByPeer: index > 0)])
+        case "message_page": return server.reply(call)
+        default: return nil
+        }
+    }
+    moOpen(store)
+    await store.performLoadMessageHistory()
+    await store.performLoadOlderMessages()
+    #expect(store.selectedConversationMessages.map(\.id) == ["o1", "o2", "a1"])
+    #expect(store.selectedConversationMessages.first { $0.id == "o1" }?.readByPeer == false, "전제: 받은 그때는 안 읽음")
+    await store.performLoadMessageHistory()
+    #expect(store.messageHistory.first?.readByPeer == true, "전제: 머리의 1 이 지워졌다")
+    #expect(store.selectedConversationMessages.first { $0.id == "o1" }?.readByPeer == true,
+            "새 말은 읽었는데 지난 쪽의 내 말에 낡은 1 이 남았다")
+    #expect(store.selectedConversationMessages.first { $0.id == "o2" }?.readByPeer == nil)
+}
+
+// MARK: - ⑦ 화면 — 빈 자리 높이
+
+/// 빈 자리 한 차림의 **자연 높이**(폭은 고정 · 높이는 제안 없음) — `ViewThatFits(in: .vertical)` 이 재는 값과 같은 물음이다.
+@MainActor
+private func moIdealHeight(_ view: MessagePanelEmptyStack) -> CGFloat {
+    // 대화 자리 폭(`contentWidth`)에서 빈 자리 좌우 padding 16×2 를 뺀 폭.
+    let host = NSHostingView(rootView: view
+        .frame(width: MessagePanelLayout.contentWidth - 32)
+        .fixedSize(horizontal: false, vertical: true))
+    host.layoutSubtreeIfNeeded()
+    return host.fittingSize.height
+}
+
+@MainActor
+@Test
+func 이전대화_빈_대화의_맨_위_줄은_가장_좁은_틀에도_들어간다() throws {
+    // 가장 좁은 틀: 새 버전 배너 + 패치노트 4줄 + 주간 목표 편집이 다 떴다(`minConversationHeight`). 넉넉한 틀: 크롬 없음(`emptyStateHeight`).
+    let narrow = MessagePanelLayout.minConversationHeight
+    let roomy = min(MessagePanelLayout.conversationHeight(extraChromeHeight: 0), MessagePanelLayout.emptyStateHeight)
+    #expect(MessagePanelLayout.conversationHeight(extraChromeHeight: 1_000) == narrow)
+    let state = MessagePanelEmptyMessage.state(hasPeer: true, loaded: true, failed: false)
+    let full = moIdealHeight(MessagePanelEmptyStack(state: state, olderRow: .button))
+    let noHint = moIdealHeight(MessagePanelEmptyStack(state: state, olderRow: .button, showsHint: false))
+    let compact = moIdealHeight(MessagePanelEmptyStack(state: state, olderRow: .button, showsSymbol: false, showsHint: false))
+    // 기준선: 그 줄을 얹은 다 차림은 가장 좁은 틀을 넘친다(그래서 차림을 고른다 — 이 시험이 공허하지 않다는 증거).
+    #expect(full > narrow, "다 차림 \(full)pt 가 좁은 틀 \(narrow)pt 에 들어간다 — 기준선이 무너졌다")
+    // 가장 좁은 틀에도 들어가는 차림이 있다 — ViewThatFits 가 그것을 고른다(넘쳐 머리 구분선 · 입력칸을 덮지 않는다).
+    #expect(compact <= narrow, "가장 작은 차림 \(compact)pt 도 좁은 틀 \(narrow)pt 를 넘친다")
+    #expect(compact < noHint && noHint < full)
+    // 넉넉한 틀에서는 다 차림이 들어간다 — 크롬이 없는 날의 그림(스냅숏 ④)이 예전 그대로다.
+    #expect(full <= roomy, "다 차림 \(full)pt 가 넉넉한 틀 \(roomy)pt 도 넘친다")
+    // 소스: 줄이 있을 때만 차림을 고르고, 마지막 차림은 아이콘과 보조 한 줄을 뺀 것이다.
+    let view = moSource("CheckMessageView.swift")
+    let empty = try #require(moRegion(view, from: "private var emptyState: some View {", to: "private var composer: some View {"))
+    #expect(empty.contains("ViewThatFits(in: .vertical)"), "빈 자리가 틀에 맞춰 차림을 고르지 않는다")
+    #expect(empty.contains("emptyStack(state, olderRow: olderRow, showsSymbol: false, showsHint: false)"))
 }
 
 // MARK: - ⑦ 화면 — 소스 계약

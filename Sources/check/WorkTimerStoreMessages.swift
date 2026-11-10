@@ -427,7 +427,9 @@ extension WorkTimerStore {
             )
             // 이전 대화(2026-11-11)를 펼쳐 둔 채 24시간 경계가 움직였으면, 새 판에서 빠진 옛 줄을 지난 쪽 끝으로 옮긴다
             // (안 옮기면 지난 쪽과 새 판 사이가 빈다). 쪽을 한 번도 안 받았으면 아무것도 안 한다 — 이 판(`messageHistory`)은 그대로다.
-            carryOlderMessagesAcrossHeadSlide(previousHead: messageHistory, nextHead: sorted)
+            // 앞 판은 **화면이 보던 판**(`visibleMessageHistory`)으로 넘긴다 — 날것을 넘기면 받은 확성기 줄이 24시간을 넘는 순간
+            // 지난 쪽으로 옮겨져 메시지 말풍선으로 선다(확성기는 메시지함 밖이다).
+            carryOlderMessagesAcrossHeadSlide(previousHead: visibleMessageHistory, nextHead: sorted)
             if messageHistory != sorted { messageHistory = sorted }
             // 📢 로 시작하는데 아직 판정 못 한 줄(2026-10-30 — 계약 C3 경합)은 배너 목록을 한 번 받아 본 뒤 거른다. 그동안은 붙든다
             // (`visibleMessageHistory`) — 접두만 보고 숨기지 않고, 확인이 실패하면 메시지로 돌아온다.

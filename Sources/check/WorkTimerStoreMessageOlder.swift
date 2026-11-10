@@ -64,12 +64,15 @@ extension WorkTimerStore {
     /// 열린 대화에 그릴 메시지 — 지난 쪽 + 24시간 머리(`selectedMessageThread`). **다시 정렬하지 않고 잇는다**
     /// (`MessageOlderHistoryRules.merged` — 머리에 있는 id 는 지난 쪽에서 뺀다). 머리 쪽은 예전 그대로 확성기 줄을 뺀 판이고,
     /// 지난 쪽은 코어가 확성기 줄(`is_megaphone`)을 이미 버렸다(판정 보류는 지난 쪽에 걸지 않는다 — 확인 조회는 머리만 한다).
+    /// 다만 배너 목록이 **확성기라고 아는** id 는 여기서도 뺀다(`hides` — 판정 보류가 아니라 확정이다): 머리에서 옮겨 온 줄을
+    /// 배너 목록이 나중에 알아도 머리와 같은 답이 선다. 내 말 읽음(1)은 머리를 따른다(`MessageOlderHistoryRules.merged`).
     var selectedConversationMessages: [MessageHistoryEntry] {
         let head = selectedMessageThread?.messages ?? []
         guard let peer = selectedMessagePeerID, !blockHiddenPeerIDs.contains(peer),
               let older = messageOlderPages[peer], !older.isEmpty
         else { return head }
-        return MessageOlderHistoryRules.merged(older: older, head: head)
+        let banner = megaphoneBanner
+        return MessageOlderHistoryRules.merged(older: older.filter { !banner.hides(messageID: $0.id) }, head: head)
     }
 
     /// 대화 맨 위 줄의 모양. 함수가 없는 서버면 nil(줄이 없다) — **뷰는 이것 하나만 본다**(게이트 짝: `loadOlderMessages` 가드와 같은 조건).
@@ -195,13 +198,17 @@ extension WorkTimerStore {
     /// (지난 쪽이나 커서가 있다), 앞 머리에서 빠진 옛 줄을 지난 쪽 끝으로 옮긴다 — 규칙은 `MessageOlderHistoryRules.carriedAcrossHeadSlide`
     /// 한 곳이다. 커서만 있고 지난 쪽이 빈 상대(첫 누름이 전부 머리와 겹쳤다)도 옮긴다 — 다음 쪽은 그 커서보다 오래된 것만 주므로,
     /// 머리에서 빠진 줄을 안 옮기면 다시 받을 길이 없다.
+    /// `previousHead` 는 **화면이 보던 판**(`visibleMessageHistory` — 확성기 줄을 뺀 판)이다. 창 경계는 머리를 받은 그 조회의
+    /// 시간 · 건수(`messageHistoryHours` · `messageHistoryLimit`)와 지금 시계로 잰다.
     func carryOlderMessagesAcrossHeadSlide(previousHead: [MessageHistoryEntry], nextHead: [MessageHistoryEntry]) {
         let paged = Set(messageOlderPages.keys).union(messageOlderCursors.keys)
         guard !paged.isEmpty else { return }
+        let now = clock()
         for peer in paged {
             let older = messageOlderPages[peer] ?? []
             let carried = MessageOlderHistoryRules.carriedAcrossHeadSlide(
-                peer: peer, previousHead: previousHead, nextHead: nextHead, older: older
+                peer: peer, previousHead: previousHead, nextHead: nextHead, older: older,
+                now: now, windowHours: Self.messageHistoryHours, headLimit: Self.messageHistoryLimit
             )
             if carried != older { messageOlderPages[peer] = carried }
         }

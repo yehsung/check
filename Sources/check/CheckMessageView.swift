@@ -525,36 +525,34 @@ struct CheckMessageView: View {
             loaded: store.messageHistoryLoaded,
             failed: store.messageHistoryFailed
         )
-        return VStack(spacing: 6) {
-            Spacer(minLength: 0)
-            // 아이콘은 **글자와 함께**만 뜻을 갖는다(색·그림만으로 정보를 주지 않는다는 이 저장소의 규약).
-            Image(systemName: state.symbol)
-                .font(.system(size: 22, weight: .light))
-                .foregroundStyle(CheckTheme.secondaryText.opacity(0.55))
-            Text(state.title)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(CheckTheme.primaryText)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            if let hint = state.hint {
-                Text(hint)
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+        // 24시간 안에 말이 없는 상대라도 30일 안의 대화가 있을 수 있다(2026-11-11) — 빈 자리에서도 [이전 대화 더 보기]를 준다.
+        // 머리를 받은 뒤에만 선다(불러오는 중 · 실패 화면의 할 일은 그 문장이 말한다).
+        let olderRow = hasPeer && store.messageHistoryLoaded ? store.messageOlderRowState : nil
+        return Group {
+            if let olderRow {
+                // 그 줄(22 + 간격 6)이 얹히면 가장 좁은 틀(`minConversationHeight` — 배너 · 패치노트 · 목표 편집이 다 뜬 때)을 넘친다.
+                // 들어가는 첫 차림을 쓴다: 다 → 보조 한 줄 뺌 → 아이콘도 뺌(제목과 그 줄은 늘 남는다). 틀이 넉넉하면 예전 그림 그대로다.
+                ViewThatFits(in: .vertical) {
+                    emptyStack(state, olderRow: olderRow)
+                    emptyStack(state, olderRow: olderRow, showsHint: false)
+                    emptyStack(state, olderRow: olderRow, showsSymbol: false, showsHint: false)
+                }
+            } else {
+                emptyStack(state, olderRow: nil)
             }
-            if state.showsRetry {
-                PanelRetryButton { store.loadMessageHistory() }
-            }
-            // 24시간 안에 말이 없는 상대라도 30일 안의 대화가 있을 수 있다(2026-11-11) — 빈 자리에서도 [이전 대화 더 보기]를 준다.
-            // 머리를 받은 뒤에만 선다(불러오는 중 · 실패 화면의 할 일은 그 문장이 말한다).
-            if hasPeer, store.messageHistoryLoaded, let olderRow = store.messageOlderRowState {
-                MessageOlderHistoryRow(state: olderRow) { store.loadOlderMessages() }
-            }
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func emptyStack(
+        _ state: MessagePanelEmptyState, olderRow: MessageOlderRowState?, showsSymbol: Bool = true, showsHint: Bool = true
+    ) -> MessagePanelEmptyStack {
+        MessagePanelEmptyStack(
+            state: state, olderRow: olderRow, showsSymbol: showsSymbol, showsHint: showsHint,
+            onRetry: { store.loadMessageHistory() },
+            onLoadOlder: { store.loadOlderMessages() }
+        )
     }
 
     // MARK: 작성기
@@ -796,6 +794,48 @@ struct MessagePokeLogLine: View {
         // 보이스오버는 한 문장으로 읽는다(아이콘 이름 · 조각 셋으로 끊어 읽히면 무엇의 기록인지 흩어진다).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(MessagePokeLogText.line(for: entry))
+    }
+}
+
+/// 빈 대화 자리의 한 차림(아이콘 · 제목 · 보조 한 줄 · [다시 시도] · [이전 대화 더 보기]). 부모(`CheckMessageView.emptyState`)가
+/// 그 줄이 있을 때 차림 셋을 `ViewThatFits` 로 고른다 — 아이콘과 보조 한 줄을 빼는 스위치가 그래서 있다. 기본값은 예전 그림 그대로다.
+/// 아이콘은 **글자와 함께**만 뜻을 갖는다(색·그림만으로 정보를 주지 않는다는 이 저장소의 규약) — 빼더라도 제목은 늘 남는다.
+struct MessagePanelEmptyStack: View {
+    let state: MessagePanelEmptyState
+    var olderRow: MessageOlderRowState? = nil
+    var showsSymbol = true
+    var showsHint = true
+    var onRetry: () -> Void = {}
+    var onLoadOlder: () -> Void = {}
+
+    var body: some View {
+        VStack(spacing: 6) {
+            Spacer(minLength: 0)
+            if showsSymbol {
+                Image(systemName: state.symbol)
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundStyle(CheckTheme.secondaryText.opacity(0.55))
+            }
+            Text(state.title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CheckTheme.primaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if showsHint, let hint = state.hint {
+                Text(hint)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if state.showsRetry {
+                PanelRetryButton(action: onRetry)
+            }
+            if let olderRow {
+                MessageOlderHistoryRow(state: olderRow, action: onLoadOlder)
+            }
+            Spacer(minLength: 0)
+        }
     }
 }
 

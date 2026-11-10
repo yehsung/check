@@ -499,6 +499,7 @@ package enum MeText {
     /// '맥에서 할 수 있어요'를 싣는데, 이 판의 폰에서는 거짓이다. 서버 글자는 바꾸지 않는다: 옛 폰(1.0.16 이하)과 안드로이드·윈도우에서는 여전히 참이다.
     ///  · 아잉 큐브(`rummy`) — 폰 1.0.16 부터.
     ///  · 아잉 뒤집기(`reversi`) — 폰 1.0.17 부터(대표 답 #d_DdwzmxPClGqk). AI 연습은 미션을 채우지 않는다(서버가 1:1 판만 센다 — 규칙 시트 몫).
+    ///  · 1:1 길건너(`crossy_duel`) · 1:1 알까기(`alkkagi`) · 아잉 마작(`mahjong`) — 폰 1.0.18 부터(대표 답 "한 판에 전부" #d_xB6BJcn2nsCq).
     package static func dailyMissionCaption(game: String, detail: String) -> String {
         phonePlayableMacFirstGames.contains(game) ? "" : detail
     }
@@ -536,17 +537,17 @@ package enum MeText {
             // 맥 `ReversiEntryIcon.symbol`(반은 흑, 반은 백인 원 — 뒤집히는 돌)과 같은 이름이다. 폰 설정의 화면 모드(`.system`)가
             // 이미 쓰는 이름이라 이 앱의 iOS 바닥에서 산다(시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다).
             ("reversi", "circle.lefthalf.filled"),
-            // '아잉 마작'(4인 리치 마작 — 서버 `daily_mahjong`, sort 90 · 20261108221000, 맥 0.3.76). 폰에는 게임이 없어 보조 문장
-            // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). 맥 `MahjongEntryIcon.symbol` 과 같은 이름이다(위 ①).
+            // '아잉 마작'(4인 리치 마작 — 서버 `daily_mahjong`, sort 90 · 20261108221000, 맥 0.3.76). 폰 1.0.18 부터 게임이 있어
+            // 보조 문장을 비운다(`phonePlayableMacFirstGames`). 맥 `MahjongEntryIcon.symbol` 과 같은 이름이다(위 ①).
             ("mahjong", "square.grid.3x3.square"),
-            // '1:1 길건너'(서버 `daily_crossy_duel`, sort 100 · 20261109150000, 맥 합본 판). 폰에는 1:1 이 없어 보조 문장
-            // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). **게임 이름은 `crossy_duel`** 이다 — 혼자 하기
+            // '1:1 길건너'(서버 `daily_crossy_duel`, sort 100 · 20261109150000, 맥 합본 판). 폰 1.0.18 부터 1:1 이 있어
+            // 보조 문장을 비운다(`phonePlayableMacFirstGames`). **게임 이름은 `crossy_duel`** 이다 — 혼자 하기
             // `crossy`(위 `MiniGameKind` 가 먼저 거르는 걷는 사람 기호)와 다른 줄이라 접두로 접히면 안 된다. 체크 무늬 깃발은
             // 맥 `CrossyDuelEntryIcon`(SF `flag.checkered`)과 같은 이름이고, SF Symbols 4(2022 — macOS 13 · iOS 16)에 들어와
             // 이 앱의 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
             ("crossy_duel", "flag.checkered"),
-            // '1:1 알까기'(서버 `daily_alkkagi`, sort 110 · alkkagi/v2 20261111150000, 맥 0.3.82). 폰에는 게임이 없어 보조 문장
-            // '맥에서 할 수 있어요'를 그대로 둔다(`phonePlayableMacFirstGames` 밖). 맥 `AlkkagiEntryIcon.symbol`(SF `circle.hexagongrid.fill`)과
+            // '1:1 알까기'(서버 `daily_alkkagi`, sort 110 · alkkagi/v2 20261111150000, 맥 0.3.82). 폰 1.0.18 부터 게임이 있어
+            // 보조 문장을 비운다(`phonePlayableMacFirstGames`). 맥 `AlkkagiEntryIcon.symbol`(SF `circle.hexagongrid.fill`)과
             // 같은 이름이다(위 ① — 맥 사이드바 문 · 미션 줄이 이미 쓰는 기호). SF Symbols 1(2019 — macOS 10.15 · iOS 13)에 들어와 이 앱의
             // 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
             ("alkkagi", "circle.hexagongrid.fill"),

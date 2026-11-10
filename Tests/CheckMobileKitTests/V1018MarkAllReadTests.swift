@@ -23,6 +23,8 @@ import Testing
         }
         defer { h.tearDown() }
         h.store.listDidAppear()
+        // 이력 왕복이 끝나 두 사람이 안 읽음으로 설 때까지(전체 시험의 부하에서 settle 이 왕복 시작 전에 끝나는 경합을 막는다).
+        _ = await baseWaitUntil { h.store.sortUnreadPeerIDs.count == 2 }
         await h.settle()
         #expect(h.store.sortUnreadPeerIDs == [Self.peerA, Self.peerB], "전제: 두 사람이 안 읽음이다")
         h.store.markAllConversationsRead()
@@ -43,6 +45,7 @@ import Testing
         }
         defer { h.tearDown() }
         h.store.listDidAppear()
+        _ = await baseWaitUntil { h.count("message_history_with_pokes") >= 1 }
         await h.settle()
         h.store.markAllConversationsRead()
         await h.settle()

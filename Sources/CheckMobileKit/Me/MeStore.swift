@@ -59,6 +59,12 @@ package final class MeStore {
 
     // MARK: 기록
     package internal(set) var heatmap: WorkRhythmHeatmap = .empty
+    /// 주별 근무 리듬(폰 1.0.18 — 맥 0.3.78 과 같은 결정 #d_V0mJ363LONEW): 서비스 첫 주 ~ 이번 주(마지막 원소가 이번 주). 비면 옛 '지난주' 칸.
+    package internal(set) var rhythmWeeks: WorkRhythmWeeks = .empty
+    /// 보고 있는 주(0 = 이번 주, 1 = 지난주 …). 내 기록을 다시 읽으면 범위 안으로 붙인다.
+    package internal(set) var rhythmWeekOffset = 0
+    /// 이번 주 칸에 1분마다 얹을 진행 중 근무의 시작(기록을 읽을 때 신선한 신호였던 것만 — `loadRecords` 의 `ongoingStart`).
+    package internal(set) var rhythmLiveStart: Date?
     package internal(set) var retro: WeeklyRetro?
     package internal(set) var dailyGrid: WorkDailyGrid = .empty
     package internal(set) var tokenGrid: TokenDailyGrid = .empty
@@ -341,6 +347,9 @@ package final class MeStore {
         centerLoadFailed = false
         headerState = MeLoadState()
         heatmap = .empty
+        rhythmWeeks = .empty
+        rhythmWeekOffset = 0
+        rhythmLiveStart = nil
         retro = nil
         dailyGrid = .empty
         tokenGrid = .empty

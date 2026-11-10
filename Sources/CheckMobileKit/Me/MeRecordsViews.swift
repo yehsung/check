@@ -209,9 +209,68 @@ struct MeRhythmSection: View {
     let store: MeStore
 
     var body: some View {
+        if store.recordsState.hasLoaded, !store.rhythmWeeks.weekStarts.isEmpty {
+            weeklyBody
+        } else {
+            legacyBody
+        }
+    }
+
+    /// 주별(폰 1.0.18 — 맥 0.3.78 과 같은 결정): 머리 오른쪽 ◀ ▶ · 이번 주는 1분마다 진행 중 근무를 얹고 안 온 시간은 흐리게.
+    private var weeklyBody: some View {
+        let offset = store.rhythmWeekOffset
+        let weeks = store.rhythmWeeks
+        let weekStart = weeks.weekStart(offset: offset)
+        return VStack(alignment: .leading, spacing: MobileTheme.space2) {
+            HStack(spacing: MobileTheme.space2) {
+                Text(WorkRhythmWeekText.title(offset: offset, weekStart: weekStart))
+                    .font(.headline)
+                    .foregroundStyle(MobileTheme.label)
+                    .accessibilityAddTraits(.isHeader)
+                Spacer(minLength: 0)
+                weekButton(systemImage: "chevron.left", label: MeText.rhythmPreviousWeek, enabled: offset < weeks.maxOffset) {
+                    store.setRhythmWeekOffset(offset + 1)
+                }
+                weekButton(systemImage: "chevron.right", label: MeText.rhythmNextWeek, enabled: offset > 0) {
+                    store.setRhythmWeekOffset(offset - 1)
+                }
+            }
+            TimelineView(.periodic(from: .now, by: 60)) { timeline in
+                let base = weeks.heatmap(offset: offset) ?? .empty
+                let heatmap = (offset == 0 && weekStart != nil)
+                    ? base.addingLive(from: store.rhythmLiveStart, now: timeline.date, weekStart: weekStart!)
+                    : base
+                VStack(alignment: .leading, spacing: MobileTheme.space2) {
+                    MeRhythmGrid(heatmap: heatmap, futureFrom: WorkRhythmWeekText.futureFrom(offset: offset, now: timeline.date))
+                        .accessibilityHidden(true)
+                    Text(WorkRhythmWeekText.caption(heatmap, offset: offset))
+                        .font(.footnote)
+                        .foregroundStyle(MobileTheme.label2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func weekButton(systemImage: String, label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(enabled ? MobileTheme.accent : MobileTheme.label3Text)
+                .frame(width: 32, height: 32)
+                .frame(minWidth: AingButtonMetrics.minimumTarget, minHeight: AingButtonMetrics.minimumTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(Text(label))
+    }
+
+    private var legacyBody: some View {
         let state = store.recordsState
         let phase = MeRecordsPhase.phase(state)
-        VStack(alignment: .leading, spacing: MobileTheme.space2) {
+        return VStack(alignment: .leading, spacing: MobileTheme.space2) {
             Text(MeText.heatmapTitle)
                 .font(.headline)
                 .foregroundStyle(MobileTheme.label)
@@ -241,6 +300,8 @@ struct MeRhythmSection: View {
 struct MeRhythmGrid: View {
     let heatmap: WorkRhythmHeatmap
     var dimmed = false
+    /// 이번 주의 '아직 오지 않은' 첫 칸(요일, 시간) — 그 칸부터는 빈 칸을 흐리게(0.45) 그린다(맥 72a25efb 와 같은 모양). nil 이면 모두 지난 시간.
+    var futureFrom: (day: Int, hour: Int)? = nil
     /// 요일 글자 칸 폭(글자 크기를 따라 커진다).
     @ScaledMetric(relativeTo: .caption2) private var labelWidth: CGFloat = 18
     @ScaledMetric(relativeTo: .caption2) private var hourLabelHeight: CGFloat = 15
@@ -267,7 +328,10 @@ struct MeRhythmGrid: View {
                         let path = Path(roundedRect: rect, cornerRadius: max(1.5, cell * 0.22), style: .continuous)
                         let seconds = heatmap.buckets.indices.contains(day) && heatmap.buckets[day].indices.contains(hour) ? heatmap.buckets[day][hour] : 0
                         let level = MeText.rhythmLevel(seconds: seconds)
-                        if level == 0 || dimmed {
+                        let isFuture = futureFrom.map { day > $0.day || (day == $0.day && hour >= $0.hour) } ?? false
+                        if isFuture, level == 0 {
+                            context.fill(path, with: .color(track.opacity(0.45)))
+                        } else if level == 0 || dimmed {
                             context.fill(path, with: .color(track))
                         } else {
                             context.fill(path, with: .color(ContributionAxis.work.tint.opacity(ContributionLevels.opacity(level: level))))

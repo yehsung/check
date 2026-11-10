@@ -24,6 +24,10 @@ package enum MeText {
     package static let noRetro = "지난주 근무 기록이 없어요"
     package static let recordsFailed = "기록을 불러오지 못했어요"
     package static let heatmapTitle = "지난주 근무 리듬"
+    /// 주별 근무 리듬이 넘겨볼 수 있는 가장 이른 날 = 서비스 첫 주 월요일(2026-06-29 00:00 KST) — 맥 `WorkTimerStore.rhythmHistoryStart` 와 같은 값.
+    package static let rhythmHistoryStart = Date(timeIntervalSince1970: 1_782_658_800)
+    package static let rhythmPreviousWeek = "이전 주"
+    package static let rhythmNextWeek = "다음 주"
     package static let workGrassTitle = "최근 12주 근무"
     package static let tokenGrassTitle = "최근 12주 AI 토큰"
     package static let dayNames = ["월", "화", "수", "목", "금", "토", "일"]

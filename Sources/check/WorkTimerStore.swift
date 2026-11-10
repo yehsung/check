@@ -1037,6 +1037,33 @@ final class WorkTimerStore {
     /// 화면상 아무 일도 안 일어난 것처럼 보인다).
     var feedbackReplySending = false
 
+    // MARK: 제보 화면 캡처(11-11) — 로직은 `WorkTimerStoreFeedbackShot.swift`, 저장 프로퍼티만 여기(확장은 저장 프로퍼티를 못 둔다)
+    //
+    // 전부 **계정에 묶인다**(로그아웃 블록의 `resetFeedbackShotState()`). 캡처에는 남의 이름·대화가 찍혀 있을 수 있어,
+    // 남기면 다음 사람이 앞 사람의 화면을 본다.
+
+    /// 보내기 탭에 붙여 둔 캡처들(줄인 JPEG + 미리보기, 최대 `FeedbackShotRules.maxDraft`). **스토어에 두는 이유**는 초안과
+    /// 같다 — 파일 고르기 창이 팝오버를 닫아도 살아남아야 한다. 비우는 자리: 제보 글이 나간 순간 · [빼기] · 로그아웃.
+    var feedbackShots: [FeedbackShotDraft] = []
+    /// 고른 이미지를 줄이는 중(붙이기 버튼과 [보내기]를 잠그고 "준비하는 중…"을 보인다).
+    var feedbackShotPreparing = false
+    /// 서버에 캡처 함수·버킷이 없다(404 · PGRST202). 붙이기 줄과 칩을 숨긴다. **영구히 기억하지 않는다** — 패널을 열 때 다시 묻는다.
+    var feedbackShotServerMissing = false
+    /// 목록 뒤 한 번에 받은 캡처 행(제보 id 소문자 → 캡처들). 그림은 아니다 — 그림은 아래 칸에 필요할 때만 받는다.
+    var feedbackShotsByReport: [String: [FeedbackShot]] = [:]
+    /// 받아 둔 캡처 그림(경로 → 그림, 메모리만). **필요할 때만** 받는다(행을 펼치거나 칩을 눌렀을 때).
+    var feedbackShotImages: [String: NSImage] = [:]
+    /// 받는 중인 경로들.
+    var feedbackShotLoading: Set<String> = []
+    /// 못 받은 경로와 그 까닭(지워짐 · 실패). 다시 누르면 다시 묻는다.
+    var feedbackShotFailures: [String: FeedbackShotLoadFailure] = [:]
+    /// 패널 위 크게 보기(nil = 닫힘).
+    var feedbackShotViewer: FeedbackShotViewerState?
+    /// 올릴 파일 이름(uuid 소문자). **시도마다 새 값**이다. 시험이 갈아 끼우는 이음새.
+    @ObservationIgnored var feedbackShotFileID: () -> String = { UUID().uuidString.lowercased() }
+    /// 로그아웃 · [모두 빼기] 뒤 늦게 도착한 준비 결과를 버리는 일련번호.
+    @ObservationIgnored var feedbackShotPrepareSerial = 0
+
     // MARK: 신고 관리(운영자, v0.3.34) — 로직은 `WorkTimerStoreReportAdmin.swift`, 저장 프로퍼티만 여기(확장은 저장 프로퍼티를 못 둔다)
     //
     // "받은 제보" 탭 **안의** [신고] 칸이 읽는 값들이다. 제보 쪽 값(feedback*)과 **한 칸도 나눠 쓰지 않는다** — 목록·펼침·메모
@@ -4448,6 +4475,8 @@ extension WorkTimerStore {
         feedbackFilter = nil
         expandedFeedbackID = nil
         feedbackNoteDraft = ""
+        // 화면 캡처(11-11)도 계정에 묶인다 — 붙여 둔 캡처 · 받아 둔 그림 · 문 상태를 전부 비운다.
+        resetFeedbackShotState()
         // 신고 관리 칸(v0.3.34)도 계정에 묶인다 — 신고 목록은 남이 쓴 글(상세·신고된 메시지 원문)이고 미해결 건수는 메뉴바 점을 켠다.
         resetReportAdminState()
         insightsWeekKey = nil

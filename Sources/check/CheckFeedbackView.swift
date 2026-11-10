@@ -136,13 +136,23 @@ enum FeedbackPanelLayout {
     /// 일찍 붙을 뿐이다(잘림은 결함이고 이른 스크롤은 아니다).
     /// - Parameter rows: "내가 보낸 제보" 행들. **개수가 아니라 행 자체를 받는 이유**는 v0.3.14 다 —
     ///   답장이 달린 행은 답장 판만큼 높고, 그 몫을 안 세면 답장 하나가 목록을 프레임 밖으로 밀어낸다.
-    static func sendBodyContentHeight(rows: [FeedbackReport], hasNotice: Bool) -> CGFloat {
+    /// - Parameter shotRowHeight: 화면 캡처 붙이기 줄(11-11 — `FeedbackShotLayout.sendRowHeight`). 입구가 숨었으면 0.
+    /// - Parameter shotCount: 행마다 붙은 캡처 수(11-11). 칩이 선 행은 그만큼 높다.
+    static func sendBodyContentHeight(
+        rows: [FeedbackReport],
+        hasNotice: Bool,
+        shotRowHeight: CGFloat = 0,
+        shotCount: (FeedbackReport) -> Int = { _ in 0 }
+    ) -> CGFloat {
         // 종류 22 + 에디터 + 안내/카운터 26 + 구분선 1 + 소제목 15, 그 사이 간격 다섯 번.
         var total: CGFloat = 22 + editorHeight + 26 + 1 + 15 + sectionSpacing * 5
+        total += max(0, shotRowHeight)
         if hasNotice { total += 15 + sectionSpacing }
         if !rows.isEmpty {
             total += CGFloat(rows.count) * mineRowHeight + CGFloat(rows.count - 1) * rowSpacing + 6
             total += rows.reduce(0) { $0 + replyBlockHeight($1.reply) }
+            // 캡처 칩이 달린 행은 칩만큼 높다(11-11).
+            total += rows.reduce(0) { $0 + FeedbackShotLayout.mineRowExtra(shotCount: shotCount($1)) }
         } else {
             total += 20 + 6   // 빈 목록 한 줄
         }
@@ -214,6 +224,8 @@ struct CheckFeedbackView: View {
                 )
             }
         }
+        // 화면 캡처 크게 보기(11-11) — 열렸을 때만 패널을 덮는다(높이는 패널 그대로라 예산이 안 바뀐다).
+        .overlay { FeedbackShotViewerOverlay(store: store) }
         .padding(12)
         .pagePanelStyle()
     }
@@ -271,7 +283,12 @@ struct FeedbackSendView: View {
         FeedbackListBox(
             contentHeight: FeedbackPanelLayout.sendBodyContentHeight(
                 rows: store.myFeedback,
-                hasNotice: store.feedbackNotice != nil
+                hasNotice: store.feedbackNotice != nil,
+                shotRowHeight: FeedbackShotLayout.sendRowHeight(
+                    shown: store.feedbackShotsShown,
+                    count: store.feedbackShots.count
+                ),
+                shotCount: { store.feedbackShots(forReport: $0.id).count }
             ),
             capHeight: FeedbackPanelLayout.budget(
                 base: FeedbackPanelLayout.sendBodyHeight,
@@ -287,6 +304,10 @@ struct FeedbackSendView: View {
                     height: FeedbackPanelLayout.editorHeight,
                     rendersPlainText: rendersPlainTextEditor
                 )
+                // 화면 캡처 붙이기(11-11). **입구가 보일 때만** 이 줄이 있다 — 서버에 기능이 없으면(404) 자리도 안 먹는다.
+                if store.feedbackShotsShown {
+                    FeedbackShotAttachRow(store: store, acceptsDrops: !rendersPlainTextEditor)
+                }
                 actionRow
                 // 전송 결과 한 줄. **줄을 따로 쓰는 이유**: 가장 긴 문장이 24자라(레이트리밋) 위 줄에 얹으면
                 // 카운터와 버튼을 밀어낸다. 없을 때는 자리도 안 먹는다(대부분의 프레임이 그렇다).
@@ -389,7 +410,12 @@ struct FeedbackSendView: View {
                 // 자기 스크롤이 **없다** — 바깥 본문 스크롤 하나가 전부를 나른다(위 body 주석).
                 VStack(alignment: .leading, spacing: FeedbackPanelLayout.rowSpacing) {
                     ForEach(mine) { report in
-                        FeedbackMineRow(report: report, now: now)
+                        FeedbackMineRow(
+                            report: report,
+                            now: now,
+                            shotCells: store.feedbackShotCells(forReport: report.id),
+                            onOpenShots: { store.openFeedbackShotViewer(reportID: report.id) }
+                        )
                     }
                 }
             }
@@ -430,7 +456,11 @@ struct FeedbackInboxView: View {
                 // 자연 높이로 그린다 — 아래에 푸터가 바로 붙으므로 넓은 빈 판 자체가 생기지 않는다.
             } else {
                 FeedbackListBox(
-                    contentHeight: Self.estimatedHeight(rows, expandedID: store.expandedFeedbackID),
+                    contentHeight: Self.estimatedHeight(
+                        rows,
+                        expandedID: store.expandedFeedbackID,
+                        shotCount: { store.feedbackShots(forReport: $0.id).count }
+                    ),
                     capHeight: FeedbackPanelLayout.budget(
                         base: FeedbackPanelLayout.inboxListHeight,
                         floor: FeedbackPanelLayout.minInboxListHeight,
@@ -450,7 +480,9 @@ struct FeedbackInboxView: View {
                                 isReplySending: store.feedbackReplySending,
                                 onToggle: { store.toggleFeedbackExpansion(report.id) },
                                 onStatus: { store.applyFeedbackStatusFromEditor(id: report.id, status: $0) },
-                                onReply: { replyTapped(report) }
+                                onReply: { replyTapped(report) },
+                                shotCells: store.feedbackShotCells(forReport: report.id),
+                                onOpenShot: { store.openFeedbackShotViewer(reportID: report.id, index: $0) }
                             )
                         }
                     }
@@ -482,7 +514,11 @@ struct FeedbackInboxView: View {
     }
 
     /// 목록의 **추정** 총 높이(스크롤을 걸지 말지 정하는 데만 쓴다 — 위 `inboxRowHeight` 주석).
-    static func estimatedHeight(_ rows: [FeedbackReport], expandedID: String?) -> CGFloat {
+    static func estimatedHeight(
+        _ rows: [FeedbackReport],
+        expandedID: String?,
+        shotCount: (FeedbackReport) -> Int = { _ in 0 }
+    ) -> CGFloat {
         guard !rows.isEmpty else { return 0 }
         var total = CGFloat(rows.count) * FeedbackPanelLayout.inboxRowHeight
             + CGFloat(rows.count - 1) * FeedbackPanelLayout.rowSpacing
@@ -490,6 +526,10 @@ struct FeedbackInboxView: View {
         total += rows.reduce(0) { $0 + FeedbackPanelLayout.replyBlockHeight($1.reply) }
         if let expandedID, rows.contains(where: { $0.id == expandedID }) {
             total += FeedbackPanelLayout.inboxExpandedExtra
+        }
+        // 펼친 행에 화면 캡처가 있으면 썸네일 판만큼 더 높다(11-11).
+        if let expandedID, let expandedRow = rows.first(where: { $0.id == expandedID }) {
+            total += FeedbackShotLayout.inboxExpandedExtra(shotCount: shotCount(expandedRow))
         }
         return total
     }
@@ -540,6 +580,10 @@ struct FeedbackInboxView: View {
 struct FeedbackMineRow: View {
     let report: FeedbackReport
     let now: Date
+    /// 화면 캡처 칸들(11-11). 비었으면 이 제보에 캡처가 없다. 그림은 스토어가 받아 둔 것만 온다(뷰는 받지 않는다).
+    var shotCells: [FeedbackShotCell] = []
+    /// 칩을 눌렀을 때(받고 크게 보기).
+    var onOpenShots: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: 6) {
@@ -553,9 +597,15 @@ struct FeedbackMineRow: View {
                     .lineLimit(2)
                     .truncationMode(.tail)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(FeedbackText.ageText(report.createdAt, now: now))
-                    .font(.caption2)
-                    .foregroundStyle(CheckTheme.secondaryText)
+                // 시각 줄에 캡처 칩이 같이 선다(11-11 — 줄을 새로 만들지 않는다).
+                HStack(spacing: 6) {
+                    Text(FeedbackText.ageText(report.createdAt, now: now))
+                        .font(.caption2)
+                        .foregroundStyle(CheckTheme.secondaryText)
+                    if !shotCells.isEmpty {
+                        FeedbackShotChip(count: shotCells.count, firstCell: shotCells.first, action: onOpenShots)
+                    }
+                }
                 // ★ **제보자에게 이것이 유일한 수신 경로다**(v0.3.14). v0.3.13 까지 `adminNote` 는 이 파일에
                 //   한 번도 나오지 않았고, 그래서 여태 쓴 답장은 아무도 못 봤다. 펼침이 없는 행이라
                 //   말줄임도 없다 — 여기서 자르면 제보자는 답장을 반만 받는다.
@@ -603,6 +653,10 @@ struct FeedbackInboxRow: View {
     /// 호출부가 컴파일을 통과하고, 그 화면의 버튼은 눌러도 아무 일도 안 한다(그리고 그건 이 기능이
     /// 고치려던 결함 그 자체다).
     let onReply: () -> Void
+    /// 화면 캡처 칸들(11-11). 비었으면 캡처 없음. **펼쳤을 때만** 썸네일을 그리고, 그림은 스토어가 받아 둔 것만 온다.
+    var shotCells: [FeedbackShotCell] = []
+    /// 썸네일을 눌렀을 때(그 장을 크게 보기 · 못 받았으면 다시 받기).
+    var onOpenShot: (Int) -> Void = { _ in }
 
     /// 사람이 쓴 글과 앱이 붙인 진단을 가른 두 조각. **한 번만 가른다** — 본문과 진단이 서로 다른 판정에서
     /// 나오면 언젠가 한쪽만 고쳐져 진단이 본문에도 남는다(같은 글자가 두 번 보인다).
@@ -634,6 +688,10 @@ struct FeedbackInboxRow: View {
                     // 메타 줄: 상태 칩이 **이름과 다른 줄**에 있다(구조체 머리 주석의 배치 근거).
                     HStack(spacing: 6) {
                         FeedbackStatusChip(status: report.status)
+                        // 접혔을 때만 — 펼치면 아래 썸네일이 보이고, 메타 줄에는 macOS 버전이 선다(292pt).
+                        if !isExpanded, !shotCells.isEmpty {
+                            FeedbackShotBadge(count: shotCells.count)
+                        }
                         if let version = report.appVersion, !version.isEmpty {
                             Text(version)
                                 .font(.caption2.monospacedDigit())
@@ -668,6 +726,11 @@ struct FeedbackInboxRow: View {
             // (2026-09-10 — 설정 창에 있던 두 줄이 여기로 왔다). macOS 버전 줄이 펼침에서만 나오는 것과 같은 규약이다.
             if isExpanded, let diagnostics = parts.diagnostics {
                 FeedbackDiagnosticsBlock(text: diagnostics)
+            }
+
+            // 화면 캡처(11-11) — 진단과 같은 규약으로 **펼쳤을 때만**. 받기는 펼친 순간 스토어가 했다.
+            if isExpanded, !shotCells.isEmpty {
+                FeedbackShotStrip(cells: shotCells, onOpen: onOpenShot)
             }
 
             if isExpanded {

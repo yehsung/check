@@ -54,7 +54,9 @@ extension WorkTimerStore {
 
     /// 지금 [보내기]를 누를 수 있는가. 서버 경계(1~1000자)와 **같은 판정**이고, 전송 중에는 잠긴다.
     var canSendFeedback: Bool {
-        !isSendingFeedback && FeedbackComposer.isSendable(feedbackDraft)
+        // 화면 캡처를 줄이는 동안(11-11 — 1초 안팎)도 잠근다: 그 사이에 보내면 캡처는 빠진 채 글만 가고,
+        // 늦게 붙은 캡처가 다음 제보에 엉뚱하게 실린다.
+        !isSendingFeedback && !feedbackShotPreparing && FeedbackComposer.isSendable(feedbackDraft)
     }
 
     /// 지금 [답장 보내기]를 누를 수 있는가(v0.3.14).
@@ -85,7 +87,9 @@ extension WorkTimerStore {
             appVersion: report?.version ?? "",
             build: report?.build,
             osVersion: osVersionProvider(),
-            includesDiagnostics: !feedbackDiagnosticsLines.isEmpty
+            includesDiagnostics: !feedbackDiagnosticsLines.isEmpty,
+            // 화면 캡처(11-11)는 **붙어 있고 실릴 때만** 말한다 — 전송이 읽는 값(`feedbackShotsForSend`)과 같은 판정이다.
+            includesScreenshot: !feedbackShotsForSend.isEmpty
         )
     }
 
@@ -151,6 +155,8 @@ extension WorkTimerStore {
         // **세션이 있을 때만** 세운다. 로그인 전이면 아래 `loadFeedback()` 이 세션 가드에서 조용히 되돌아가는데,
         // 그 경우 이 깃발을 세워 두면 아무도 내려 주지 않아 화면이 영영 "불러오는 중…"에 갇힌다.
         if session != nil, !feedbackLoaded { feedbackLoading = true }
+        // 화면 캡처(11-11): 앞서 "서버에 없다"고 숨긴 입구를 다시 연다 — 이 문을 지날 때마다 목록 뒤 한 번이 다시 판정한다.
+        rearmFeedbackShots()
         loadFeedback()
         // v0.3.34: 받은 제보 탭의 [신고] 칸이 골라져 있으면 신고 목록도 새로 받는다. [제보] 칸이면 아무 일도 안 한다 —
         // 제보 쪽 왕복 수는 예전 그대로다(WorkTimerStoreReportAdmin 머리 주석 ②).
@@ -179,6 +185,8 @@ extension WorkTimerStore {
         // 그 메모가 어느 제보의 것인지 화면만으로는 알 수 없다(탭 전환이 같은 이유로 같은 일을 한다).
         expandedFeedbackID = nil
         feedbackNoteDraft = ""
+        // 캡처 크게 보기(11-11)도 닫는다 — 다시 열면 목록부터 보인다.
+        closeFeedbackShotViewer()
     }
 
     // MARK: 화면 상태
@@ -222,6 +230,8 @@ extension WorkTimerStore {
         }
         expandedFeedbackID = id
         feedbackNoteDraft = feedbackList.first { $0.id == id }?.adminNote ?? ""
+        // 펼친 행에 화면 캡처가 있으면 **지금** 그림을 받는다(11-11). 목록을 받을 때 함께 받지 않는다 — 사람이 연 행만.
+        loadFeedbackShotImages(forReport: id)
     }
 
     // MARK: 목록
@@ -278,6 +288,10 @@ extension WorkTimerStore {
         // 목록이 반영된 시점에 로딩 깃발을 내린다 — 아래 건수 조회가 끝날 때까지 붙들면
         // 화면은 이미 목록을 그리고 있는데 "불러오는 중…" 상태가 남는다(아래 `defer` 는 이른 반환의 안전망이다).
         if feedbackLoading { feedbackLoading = false }
+        // 화면 캡처(11-11): 목록이 비어 있지 않으면 **한 번에** 캡처 행을 받는다(내 제보 · 운영자는 전부 — 판정은 서버).
+        // 이 기능이 더한 자동 호출은 이것 하나다(WorkTimerStoreFeedbackShot ②). 실패해도 목록은 멀쩡하다.
+        await performLoadFeedbackShots(for: feedbackList, generation: generation)
+        guard generation == sessionGeneration else { return }
         // 미해결 건수(관리자 배지). 목록이 이미 반영된 뒤라 여기서 실패해도 화면은 멀쩡하다.
         guard ultraUnlimited else {
             if feedbackOpenCount != 0 { feedbackOpenCount = 0 }
@@ -332,10 +346,14 @@ extension WorkTimerStore {
         let appVersion = FeedbackText.appVersionField(appVersionProvider())
         let osVersion = osVersionProvider()
         let generation = sessionGeneration
+        // 화면 캡처(11-11): 입구가 보일 때 붙여 둔 것만 싣는다(안내 한 줄과 같은 판정). 이 사본으로 올린다.
+        let shots = feedbackShotsForSend
         isSendingFeedback = true
         defer { if generation == sessionGeneration { isSendingFeedback = false } }
         do {
-            _ = try await withSessionRetry { activeSession in
+            // 본문은 캡처가 있든 없든 **예전 네 키 그대로**다. 돌려받는 제보 id 는 캡처를 붙일 폴더 이름이다
+            // (못 읽어도 제보는 보낸 것으로 친다 — 서비스가 옵셔널로 흘린다).
+            let reportID = try await withSessionRetry { activeSession in
                 try await service.submitFeedback(
                     accessToken: activeSession.accessToken,
                     kind: kind,
@@ -346,7 +364,14 @@ extension WorkTimerStore {
             }
             guard generation == sessionGeneration else { return }
             feedbackDraft = ""
-            feedbackNotice = FeedbackText.sendSuccess
+            if shots.isEmpty {
+                feedbackNotice = FeedbackText.sendSuccess
+            } else {
+                // 글은 갔다 — 캡처는 이 잠금 안에서 하나씩 올리고 붙인다. 실패해도 글을 다시 보내지 않는다
+                // (WorkTimerStoreFeedbackShot ①). 안내 한 줄은 그 함수가 정한다.
+                await finishFeedbackShotsAfterSubmit(shots, returnedID: reportID, generation: generation)
+                guard generation == sessionGeneration else { return }
+            }
             await performLoadFeedback()
         } catch {
             if case .cancelled = classifyAuthError(error) { return }
@@ -556,12 +581,15 @@ extension FeedbackText {
         appVersion: String,
         build: Int?,
         osVersion: String,
-        includesDiagnostics: Bool
+        includesDiagnostics: Bool,
+        includesScreenshot: Bool = false
     ) -> String {
         var app = appVersion.isEmpty ? "앱" : "앱 \(appVersion)"
         if let build, build > 0 { app += " (\(build))" }
         var parts = [app, "macOS \(osVersion)"]
         if includesDiagnostics { parts.append(diagnosticsTerm) }
+        // 화면 캡처(11-11)도 같은 자리에 붙는다 — 꼬리("정보가 함께 전송돼요")는 그대로다.
+        if includesScreenshot { parts.append(FeedbackShotText.noticeTerm) }
         return parts.joined(separator: " · ") + " 정보가 함께 전송돼요"
     }
 

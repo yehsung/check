@@ -79,7 +79,7 @@ struct GamesGomokuMatch: View {
                     if chrome.showsStake {
                         GamesStakeLine(stake: match.stake, suffix: GomokuPhoneText.stakeGainSuffix(match.stake), gemSize: 13)
                     } else {
-                        GamesAIMatchLine()
+                        GamesAIMatchLine(difficulty: store.context.gomoku.aiGame?.difficulty ?? store.context.gomoku.aiDifficulty)
                     }
                     // 내 판을 보고 있는 사람 수(0.3.65 — 명세 §3 '대국자 본인 화면: 판돈 칩 줄에 같이').
                     // 폰에서 판돈 칩이 서는 줄은 **내비 부제**다. 0 이면 서지 않으므로 AI 판에서도 모양이 그대로다.
@@ -434,7 +434,7 @@ struct GamesGomokuResult: View {
                     if chrome.showsStake {
                         GamesStakeLine(stake: match.stake, suffix: GomokuPhoneText.stakeGainSuffix(match.stake), gemSize: 13)
                     } else {
-                        GamesAIMatchLine()
+                        GamesAIMatchLine(difficulty: store.context.gomoku.aiGame?.difficulty ?? store.context.gomoku.aiDifficulty)
                     }
                 }
             }
@@ -512,11 +512,14 @@ struct GamesGomokuResult: View {
 
 /// AI 판의 내비 부제(판돈 줄 자리) — 걸린 루비가 없다는 것을 같은 자리에서 말한다(맥 AI 판 판돈 칩 자리의 "AI 대국 · 기록 없음").
 private struct GamesAIMatchLine: View {
+    /// 이 판의 난이도(폰 1.0.18 — 맥 0.3.82 과 같이 칩에 "AI 대국 · 보통 · 기록 없음").
+    let difficulty: GomokuAIDifficulty
+
     var body: some View {
         HStack(spacing: 3) {
             Image(systemName: "cpu")
                 .accessibilityHidden(true)
-            Text(GomokuPhoneText.aiStakeChip)
+            Text(GomokuPhoneText.aiStakeChip(difficulty))
         }
         .accessibilityElement(children: .combine)
     }

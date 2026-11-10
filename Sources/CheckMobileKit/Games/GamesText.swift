@@ -515,6 +515,21 @@ package enum GomokuPhoneText {
     package static let aiThinking = "AI가 생각 중이에요"
     package static let aiThinkingShort = "생각 중"
     package static let aiStakeChip = "AI 대국 · 기록 없음"
+    /// 판 머리 칩: 난이도까지(예 "AI 대국 · 보통 · 기록 없음") — 맥 0.3.82 `GomokuText.aiStakeChip(_:)` 와 같은 글자(폰 1.0.18).
+    package static func aiStakeChip(_ difficulty: GomokuAIDifficulty) -> String { "AI 대국 · \(aiDifficultyName(difficulty)) · 기록 없음" }
+    /// 난이도 고르기(맥 0.3.82 과 같은 글자 — 대표 11-10 "몇수앞까지 계산할지에 제한"). 쉬움 2 · 보통 6 · 어려움(생각 시간이 허락하는 데까지).
+    package static let aiDifficultyTitle = "난이도 · AI가 몇 수 앞까지 계산할지"
+    package static func aiDifficultyName(_ difficulty: GomokuAIDifficulty) -> String {
+        switch difficulty {
+        case .easy: return "쉬움"
+        case .normal: return "보통"
+        case .hard: return "어려움"
+        }
+    }
+    package static func aiDifficultyDepth(_ difficulty: GomokuAIDifficulty) -> String {
+        if let plies = difficulty.lookahead { return "\(plies)수 앞까지" }
+        return "끝까지 계산"
+    }
     package static let aiResignConfirm = "기권하면 이 판은 AI가 이겨요"
     package static let aiRematch = "같은 색으로 다시 두기"
     package static let aiRematchHelp = "같은 돌 색으로 AI와 새 판을 시작해요"

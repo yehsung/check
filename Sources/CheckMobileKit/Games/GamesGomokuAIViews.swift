@@ -59,6 +59,7 @@ struct GamesGomokuAIColorSheet: View {
             SheetHeader(GomokuPhoneText.aiPromptTitle, subtitle: GomokuPhoneText.aiPromptCaption, onClose: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: MobileTheme.space4) {
+                    difficultyPicker
                     // 큰 글자에서는 세로로 — 반 폭 두 칸에서는 "나중에 둬요"가 낱글자로 꺾인다(판돈 시트와 같은 규칙).
                     Group {
                         if typeSize.isAccessibilitySize {
@@ -87,6 +88,25 @@ struct GamesGomokuAIColorSheet: View {
         // 큰 글자(접근성 크기)에서는 처음부터 크게 — 반 높이에서는 두 칸 아래 '기록 없음' 한 줄이 잘려 보였다(AX3 스크린샷 실측).
         .presentationDetents(typeSize.isAccessibilitySize ? [.large] : [.medium, .large])
         .presentationDragIndicator(.hidden)
+    }
+
+    /// 난이도 셋(폰 1.0.18 — 맥 0.3.82 과 같은 글자 · 이 기기에 기억, 처음 보통). 다음 판부터 쓴다.
+    private var difficultyPicker: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(GomokuPhoneText.aiDifficultyTitle)
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(MobileTheme.label2)
+                .fixedSize(horizontal: false, vertical: true)
+            Picker(GomokuPhoneText.aiDifficultyTitle, selection: Binding(get: { store.aiDifficulty }, set: { store.setAIDifficulty($0) })) {
+                ForEach(GomokuAIDifficulty.allCases, id: \.self) { difficulty in
+                    Text(GomokuPhoneText.aiDifficultyName(difficulty)).tag(difficulty)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(GomokuPhoneText.aiDifficultyDepth(store.aiDifficulty))
+                .font(.caption)
+                .foregroundStyle(MobileTheme.label2)
+        }
     }
 
     private func option(_ color: GomokuColor) -> some View {

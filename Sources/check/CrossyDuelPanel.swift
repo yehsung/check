@@ -19,7 +19,7 @@ import CheckCore
 //   · 문구는 `CrossyDuelText`(화면 글자)와 `CrossyDuelNoticeText`(안내·결과 사유, 코어) 두 표에만 있다.
 
 /// 로비 왼쪽 열의 탭 — 상대 고르기 · 순위.
-enum CrossyDuelLobbyTab: Equatable { case users, ranking }
+enum CrossyDuelLobbyTab: Equatable { case rooms, users, ranking }
 
 // MARK: - 창 루트
 
@@ -55,10 +55,14 @@ struct CrossyDuelPanel: View {
 
     @State private var confirmResign = false
     @State private var stakeTarget: CrossyDuelUser?
-    @State private var lobbyTab: CrossyDuelLobbyTab = .users
+    @State private var lobbyTab: CrossyDuelLobbyTab = .rooms
 
     private var activeStakeTarget: CrossyDuelUser? { stakeTarget ?? previewStakeTarget }
-    private var activeTab: CrossyDuelLobbyTab { previewLobbyTab ?? lobbyTab }
+    /// 방 문이 닫혀 있으면 방 탭은 없다 — 상대 고르기로 접는다(1:1 대기방).
+    private var activeTab: CrossyDuelLobbyTab {
+        let tab = previewLobbyTab ?? lobbyTab
+        return tab == .rooms && !duelRoomsTabAvailable() ? .users : tab
+    }
     private var myUserID: String? { safety?.session?.userID.lowercased() }
 
     /// 창 컨트롤러의 주사율 모니터를 끼운다(창 파일의 `CrossyDuelPanel(store:me:safety:)` 생성 글자를 그대로 두려고 따로 뺐다).

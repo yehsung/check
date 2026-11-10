@@ -217,10 +217,14 @@ struct TetrisDuelPanel: View {
     @State private var confirmResign = false
     @State private var stakeTarget: TetrisDuelUser?
     @State private var rulesVisible = false
-    @State private var lobbyTab: TetrisDuelLobbyTab = .users
+    @State private var lobbyTab: TetrisDuelLobbyTab = .rooms
 
     private var activeStakeTarget: TetrisDuelUser? { stakeTarget ?? previewStakeTarget }
-    private var activeTab: TetrisDuelLobbyTab { previewLobbyTab ?? lobbyTab }
+    /// 방 문이 닫혀 있으면 방 탭은 없다 — 상대 고르기로 접는다(1:1 대기방).
+    private var activeTab: TetrisDuelLobbyTab {
+        let tab = previewLobbyTab ?? lobbyTab
+        return tab == .rooms && !duelRoomsTabAvailable() ? .users : tab
+    }
     private var myUserID: String? { safety?.session?.userID.lowercased() }
 
     var body: some View {
@@ -283,6 +287,8 @@ struct TetrisDuelPanel: View {
                 TetrisDuelLobbyTabs(selected: activeTab, onSelect: { lobbyTab = $0 })
                     .frame(height: TetrisDuelWindowLayout.lobbyTabHeight)
                 switch activeTab {
+                case .rooms:
+                    if let rooms = DuelRoomsHub.store { DuelRoomsTab(store: rooms, game: .tetris) }
                 case .users:
                     TetrisDuelOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
                                            onChallenge: { stakeTarget = $0 })
@@ -294,6 +300,10 @@ struct TetrisDuelPanel: View {
             .frame(width: TetrisDuelWindowLayout.lobbyListWidth, height: TetrisDuelWindowLayout.bodyHeight,
                    alignment: .top)
             .clipped()
+            .task {
+                // 1:1 대기방 문을 아직 모르면 한 번 묻는다(열려 있으면 '방' 탭이 선다).
+                if let rooms = DuelRoomsHub.store, rooms.doorOpen == nil { await rooms.refresh(.tetris) }
+            }
             TetrisDuelLobbySide(store: store, me: me(), myUserID: myUserID,
                                 clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
                 .frame(width: TetrisDuelWindowLayout.lobbySideWidth, height: TetrisDuelWindowLayout.bodyHeight,
@@ -331,7 +341,7 @@ struct TetrisDuelPanel: View {
 }
 
 /// 로비 왼쪽 열의 탭 — 상대 고르기 · 순위(전적과 순위표 탭).
-enum TetrisDuelLobbyTab: Equatable { case users, ranking }
+enum TetrisDuelLobbyTab: Equatable { case rooms, users, ranking }
 
 // MARK: - 머리글
 
@@ -391,6 +401,10 @@ private struct TetrisDuelLobbyTabs: View {
 
     var body: some View {
         HStack(spacing: 6) {
+            if duelRoomsTabAvailable() {
+                let count = DuelRoomsHub.store?.rooms(for: .tetris).count ?? 0
+                tab(.rooms, title: count > 0 ? "\(DuelRoomText.tabRooms) \(count)" : DuelRoomText.tabRooms, icon: "door.left.hand.open")
+            }
             tab(.users, title: TetrisDuelText.usersTab, icon: "person.2.fill")
             tab(.ranking, title: TetrisDuelText.rankTab, icon: "trophy.fill")
             Spacer(minLength: 4)

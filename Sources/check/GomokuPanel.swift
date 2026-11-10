@@ -753,8 +753,10 @@ struct GomokuPanel: View {
     /// 로비는 **세 열**이다(0.3.41): 왼쪽 상대 목록 420 · 순위 340(합 780 — 옛 상대 목록 자리) · 오른쪽 400.
     private var lobby: some View {
         HStack(alignment: .top, spacing: GomokuWindowLayout.columnSpacing) {
-            GomokuOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
-                               onChallenge: { stakeTarget = $0 })
+            DuelRoomsLobbyColumn(game: .gomoku) {
+                GomokuOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
+                                   onChallenge: { stakeTarget = $0 })
+            }
                 .frame(width: GomokuWindowLayout.lobbyUsersWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)
             GomokuRankColumn(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)
                 .frame(width: GomokuWindowLayout.lobbyRankWidth, height: GomokuWindowLayout.bodyHeight, alignment: .top)

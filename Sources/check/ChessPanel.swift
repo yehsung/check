@@ -922,8 +922,10 @@ struct ChessPanel: View {
     /// 로비는 **세 열**이다: 상대 목록 420 · 순위 340 · 오른쪽 400.
     private var lobby: some View {
         HStack(alignment: .top, spacing: ChessWindowLayout.columnSpacing) {
-            ChessOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
-                              onChallenge: { stakeTarget = $0 })
+            DuelRoomsLobbyColumn(game: .chess) {
+                ChessOpponentList(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll,
+                                  onChallenge: { stakeTarget = $0 })
+            }
                 .frame(width: ChessWindowLayout.lobbyUsersWidth, height: ChessWindowLayout.bodyHeight, alignment: .top)
                 .clipped()
             ChessRankColumn(store: store, clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll)

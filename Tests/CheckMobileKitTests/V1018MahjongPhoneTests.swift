@@ -89,9 +89,8 @@ struct V1018MahjongPhoneTests {
     @Test("보조: 폰은 '두 번 눌러 버리기'를 켠 채로 처음 한 번 심는다 · 사용자가 끈 값은 다시 켜지 않는다")
     @MainActor
     func phoneAidsSeed() throws {
-        let suite = "v1018-mahjong-aids-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        // 스위트는 스크래치 절대 경로로만 연다(~/Library/Preferences 누수 게이트 — PreferencesLeakGateTests).
+        let defaults = MobileTestScratch.defaults("aids")
         let store = MahjongStore()
         store.aidsDefaults = defaults
         #expect(!store.aids.twoClickDiscard, "전제: 맥 기본은 꺼짐")

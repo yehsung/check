@@ -250,6 +250,18 @@ class CheckEditorTextView: NSTextView {
     /// 마지막으로 알린 값. 같은 값을 다시 알리지 않는다(SwiftUI 상태를 매 타자마다 흔들지 않기 위해서다).
     private var lastReportedRenderedEmpty: Bool?
 
+    /// **뷰에 그려진 글자 그대로**(조합 중 표시 글자 포함)를 바깥에 알리는 통로(2026-11-10, 콕 찌르기 이름 찾기).
+    /// 바인딩은 조합 중 한 음절 뒤처지므로(`onRenderedEmptyChange` 주석), "치는 대로 걸러지는" 검색 칸은 이 값을 쓴다.
+    /// **보내는 값으로 쓰지 마라** — 확정 전 글자다. 전송은 여전히 바인딩 + `commitComposition` 문만 지난다.
+    var onRenderedTextChange: ((String) -> Void)?
+
+    /// 마지막으로 알린 글자. 같은 글자를 다시 알리지 않는다.
+    private var lastReportedRenderedText: String?
+
+    /// 조합 확정 도중에는 그려진 글자를 알리지 않는다(`commitComposition`). 확정은 입력기를 거치며 글자가 잠깐 비었다가
+    /// 돌아오는 구간이 있어(시험 실측: "부" → "" → "부"), 그대로 알리면 검색 목록이 한 번 풀렸다가 다시 걸러진다.
+    private var suppressesRenderedTextReports = false
+
     /// 조합 확정 직후 따라오는 줄바꿈 하나를 삼킬 것인가.
     ///
     /// **왜 필요한가**: 표시 글자를 쓰는 입력기는 조합 중 Return 을 받으면 조합을 확정한 뒤 그 키를
@@ -436,8 +448,11 @@ class CheckEditorTextView: NSTextView {
     @discardableResult
     func commitComposition() -> Bool {
         guard hasMarkedText() else { return false }
+        // 확정 도중의 중간 글자는 검색 칸에 안 흘린다 — 끝난 뒤 `didChangeText()` 가 최종 글자를 한 번 알린다.
+        suppressesRenderedTextReports = true
         inputContext?.discardMarkedText()
         if hasMarkedText() { unmarkText() }
+        suppressesRenderedTextReports = false
         didChangeText()
         return true
     }
@@ -595,10 +610,21 @@ class CheckEditorTextView: NSTextView {
 
     /// 값이 **바뀌었을 때만** 알린다. 매 타자마다 같은 false 를 알리면 SwiftUI 상태가 그만큼 흔들린다.
     func reportRenderedEmptinessIfChanged() {
+        reportRenderedTextIfChanged()
         let value = renderedTextIsEmpty
         guard lastReportedRenderedEmpty != value else { return }
         lastReportedRenderedEmpty = value
         onRenderedEmptyChange?(value)
+    }
+
+    /// 그려진 글자가 **바뀌었을 때만** 알린다(`onRenderedTextChange` — 비어 있으면 아무 일도 안 한다).
+    /// 그려진 것이 비었나 알리기와 **같은 세 자리**(표시 글자 · 조합 거둠 · 글 바뀜)에서 함께 불린다.
+    func reportRenderedTextIfChanged() {
+        guard let onRenderedTextChange, !suppressesRenderedTextReports else { return }
+        let value = string
+        guard lastReportedRenderedText != value else { return }
+        lastReportedRenderedText = value
+        onRenderedTextChange(value)
     }
 
     /// 입력기가 표시 글자를 세우거나 갈아 끼울 때. **이 자리가 없으면 조합 중 안내 문구가 글자와 겹친다**
@@ -805,6 +831,9 @@ struct CheckTextEditor: View {
     var onRenderedEmptyChange: ((Bool) -> Void)?
     /// 지금 키를 받는가. 기본 true — false 는 덮개가 이 칸을 가린 동안뿐이다(`CheckEditorTextView.acceptsInput` 주석).
     var acceptsInput: Bool = true
+    /// 뷰에 그려진 글자(조합 중 표시 글자 포함)를 그대로 알려 준다. 치는 대로 걸러지는 검색 칸용 —
+    /// `CheckEditorTextView.onRenderedTextChange` 주석. 기본 nil(대화 · 제보 · 오목 칸은 안 쓴다).
+    var onRenderedTextChange: ((String) -> Void)?
 
     /// 이 칸이 쓰는 재사용 자리. 기본값은 **이 뷰를 세운 소스 위치**다(아래 `init` 의 `#fileID`/`#line`) —
     /// 그래서 호출부는 **한 글자도 안 바뀌고도** 각자 자기 자리를 갖는다.
@@ -824,6 +853,7 @@ struct CheckTextEditor: View {
         onSend: @escaping () -> Void = {},
         onRenderedEmptyChange: ((Bool) -> Void)? = nil,
         acceptsInput: Bool = true,
+        onRenderedTextChange: ((String) -> Void)? = nil,
         file: String = #fileID,
         line: Int = #line
     ) {
@@ -834,6 +864,7 @@ struct CheckTextEditor: View {
         self.onSend = onSend
         self.onRenderedEmptyChange = onRenderedEmptyChange
         self.acceptsInput = acceptsInput
+        self.onRenderedTextChange = onRenderedTextChange
         self.slot = CheckEditorSlot(id: "\(file):\(line)")
     }
 
@@ -846,6 +877,7 @@ struct CheckTextEditor: View {
             onSend: onSend,
             onRenderedEmptyChange: onRenderedEmptyChange,
             acceptsInput: acceptsInput,
+            onRenderedTextChange: onRenderedTextChange,
             slot: slot
         )
             // ★ 스크롤 뷰를 테두리 안쪽으로 물린다. 이 줄을 지우면 넘친 글이 빨간 테두리를 덮고,
@@ -873,6 +905,7 @@ private struct CheckEditorScrollView: NSViewRepresentable {
     var onSend: () -> Void
     var onRenderedEmptyChange: ((Bool) -> Void)?
     var acceptsInput: Bool
+    var onRenderedTextChange: ((String) -> Void)?
     /// 이 칸의 재사용 자리(호출 자리 하나 = 자리 하나 — `CheckEditorSlot`).
     var slot: CheckEditorSlot
 
@@ -894,6 +927,8 @@ private struct CheckEditorScrollView: NSViewRepresentable {
         let text = nsView.documentView as? CheckEditorTextView
         if let text {
             text.delegate = nil
+            // 내려간 칸이 옛 화면의 상태로 글자를 흘리지 않게 끊는다(다음 마운트의 `apply()` 가 다시 잇는다).
+            text.onRenderedTextChange = nil
             // 다음 사람이 옛 글을 물려받지 않게 비운다(내용은 `updateNSView` 가 다시 채운다).
             text.string = ""
             // 내려간 칸이 전송 문의 대상으로 남지 않게 한다(`focusedEditor` 의 마지막 갈래).
@@ -1015,6 +1050,7 @@ private struct CheckEditorScrollView: NSViewRepresentable {
         textView.canSendNow = canSendNow
         textView.onSend = onSend
         textView.onRenderedEmptyChange = onRenderedEmptyChange
+        textView.onRenderedTextChange = onRenderedTextChange
         // 바뀔 때만 움직인다(포커스 놓기 · 되찾기는 다음 턴 — 그 프로퍼티 주석).
         textView.acceptsInput = acceptsInput
         // 첫 보고는 **다음 턴**에 넘긴다. 이 함수는 `updateNSView` 안에서도 불리므로 여기서 바로 알리면

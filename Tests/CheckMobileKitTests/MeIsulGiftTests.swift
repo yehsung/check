@@ -194,7 +194,7 @@ import Testing
         store.appDidBecomeActive()
         await h.quiesceMe()
         let asked = try #require(h.requests(rpc: "character_gift_pending").first?.jsonBody)
-        #expect(asked["p_protocol"] as? Int == ShopWire.isulProtocol)
+        #expect(asked["p_protocol"] as? Int == ShopWire.devProtocol)
         let sheet = try #require(store.cakeGiftSheet, "열린 술 선물인데 시트가 안 섰다")
         #expect(sheet.gift.kind == .drink && sheet.gift.options == [Self.isul] && sheet.gift.note == "오늘 한잔 어때요?")
         #expect(sheet.selection == Self.isul && sheet.canConfirm && sheet.copy == .drink)
@@ -207,7 +207,7 @@ import Testing
         let body = try #require(h.requests(rpc: "claim_character_gift").last?.jsonBody)
         #expect(Set(body.keys) == ["p_gift", "p_character", "p_protocol"])
         #expect(body["p_gift"] as? String == Self.drinkGiftID && body["p_character"] as? String == Self.isul
-                && body["p_protocol"] as? Int == ShopWire.isulProtocol, "\(body)")
+                && body["p_protocol"] as? Int == ShopWire.devProtocol, "\(body)")
         #expect(store.cakeGiftSheet?.phase == .received(characterID: Self.isul))
         #expect(store.isOwned(Self.isul) && store.cakeGift == nil && !store.showsCakeGiftReopen)
         #expect(h.requests(rpc: "shop_state").count == shopBefore + 1, "받은 뒤 상점을 다시 안 읽었다")

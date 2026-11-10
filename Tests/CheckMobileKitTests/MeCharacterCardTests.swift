@@ -102,7 +102,10 @@ struct MeCharacterCardTests {
         var result: [Source] = []
         result.append(try builtInSource(id: "aing", displayName: "아잉"))
         for builtIn in [CharacterCatalog.builtInGoldAing, CharacterCatalog.builtInRainbowAing, CharacterCatalog.builtInCakeStrawberryAing,
-                        CharacterCatalog.builtInCakeChocoAing, CharacterCatalog.builtInIsulAing] {
+                        CharacterCatalog.builtInCakeChocoAing, CharacterCatalog.builtInIsulAing,
+                        // 폰 1.0.18: 빼빼로(상자에 글자 없는 폰 판 초상) · 흑우 · 루비 · 개발에 찌든 아잉이 — 코어 내장 순서 그대로.
+                        CharacterCatalog.builtInPeperoAing, CharacterCatalog.builtInHwooAing, CharacterCatalog.builtInRubyAing,
+                        CharacterCatalog.builtInDevAing] {
             result.append(try builtInSource(id: builtIn.id, displayName: builtIn.displayName))
         }
         let charactersDir = repoRoot.appendingPathComponent("Sources/check/Characters")
@@ -151,9 +154,8 @@ struct MeCharacterCardTests {
     @Test("원천: 내장 캐릭터 카드는 폰이 싣는 초상에서 굽는다 — 이슬 대체 그림으로 바꿔 끼운 판에서 다시 구워도 상표 그림이 카드로 돌아오지 않는다(검토 지적)")
     func builtInCardsBakeFromPhonePortraits() throws {
         let sources = try Self.sources()
-        // 빼빼로 아잉이(맥 0.3.77 먼저) · 흑우 아잉이(맥 0.3.78 먼저)는 폰 카드가 아직 없다(다음 폰 판) — 폰이 싣는 내장만 잰다.
-        let builtIns = [CharacterCatalog.builtInAingID] + CharacterCatalog.builtIns.map(\.id)
-            .filter { $0 != CharacterCatalog.builtInAingID && $0 != CharacterCatalog.peperoAingID && $0 != CharacterCatalog.hwooAingID && $0 != CharacterCatalog.rubyAingID && $0 != CharacterCatalog.devAingID }
+        // 폰 1.0.18 부터 내장 열 전부가 폰 카드다(빼빼로 · 흑우 · 루비 · 개발 포함).
+        let builtIns = [CharacterCatalog.builtInAingID] + CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.builtInAingID }
         for id in builtIns {
             let source = try #require(sources.first { $0.id == id }, "\(id) 카드 원천이 없다")
             let phone = try Self.builtInPortraitURL(id)
@@ -175,7 +177,8 @@ struct MeCharacterCardTests {
             // 조인 상자 안이라도 캐릭터 둘레(모서리)는 투명하다 — 알파가 날아가면 이 비율이 0 이 된다(HEIC 인코딩이 알파를 버리는 회귀).
             #expect(Self.transparentRatio(image) > 0.1, "\(card.id) 투명 픽셀이 없다(알파 손실 의심): \(Self.transparentRatio(image))")
         }
-        #expect(total < 200_000, "박힌 그림이 너무 커졌다: \(total)")
+        // 1.0.18 에 내장 넷(빼빼로 · 흑우 · 루비 · 개발)이 더해져 200,660 바이트(base64)다 — 한도를 260,000 으로 올린다(카드 하나 ≈ 12~16 KB).
+        #expect(total < 260_000, "박힌 그림이 너무 커졌다: \(total)")
         #expect(MeCharacterCards.image(id: "no-such-character") == nil)
     }
 
@@ -202,26 +205,21 @@ struct MeCharacterCardTests {
         #expect(MeCharacterCards.equippedID(fromServer: "aing_cake_choco") == "aing_cake_choco")
         #expect(MeCharacterCards.displayName(for: "aing_cake_strawberry") == "딸기 케이크 아잉이")
         #expect(MeCharacterCards.displayName(for: "aing_cake_choco") == "초코 케이크 아잉이")
-        // 순서: 내장 여섯이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
+        // 순서: 내장이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
         // 이슬 아잉이(맥 0.3.74 먼저 → 폰 1.0.17 — 코어 내장 여섯째): 카드가 박혔으므로 접히지 않는다. 1.0.16 은 이 값을 몰라 아잉으로 접었다.
-        // 빼빼로 아잉이(맥 0.3.77 먼저 — 코어 내장 일곱째)는 폰 카드가 아직 없다(다음 폰 판): 폰 목록에 없고, 착용값은 아잉으로 접힌다.
-        // 흑우 아잉이(맥 0.3.78 먼저 — 코어 내장 여덟째)도 폰 카드가 아직 없다: 빼빼로와 같이 빼고 잰다.
-        #expect(Array(MeCharacterCards.knownIDs.prefix(6))
-                == CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.peperoAingID && $0 != CharacterCatalog.hwooAingID && $0 != CharacterCatalog.rubyAingID && $0 != CharacterCatalog.devAingID })
+        // 폰 1.0.18: 빼빼로(일곱째) · 흑우(여덟째) · 루비(아홉째) · 개발에 찌든 아잉이(열째)도 카드가 박혔다 — 내장 열이 코어 순서로 먼저 서고,
+        // 착용값이 아잉으로 접히지 않는다(1.0.17 은 넷을 몰라 아잉으로 접었다).
+        #expect(Array(MeCharacterCards.knownIDs.prefix(10)) == CharacterCatalog.builtIns.map(\.id))
         #expect(MeCharacterCards.knownIDs.contains(CharacterCatalog.isulAingID))
         #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.isulAingID) == CharacterCatalog.isulAingID)
         #expect(MeCharacterCards.equippedID(fromServer: " aing_isul ") == CharacterCatalog.isulAingID)
         #expect(MeCharacterCards.displayName(for: CharacterCatalog.isulAingID) == "이슬 아잉이")
-        #expect(!MeCharacterCards.knownIDs.contains(CharacterCatalog.peperoAingID))
-        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.peperoAingID) == MeCharacterCards.aingID)
-        #expect(!MeCharacterCards.knownIDs.contains(CharacterCatalog.hwooAingID))
-        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.hwooAingID) == MeCharacterCards.aingID)
-        // 루비 아잉이(맥 0.3.78 먼저 — 코어 내장 아홉째)도 폰 카드가 아직 없다.
-        #expect(!MeCharacterCards.knownIDs.contains(CharacterCatalog.rubyAingID))
-        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.rubyAingID) == MeCharacterCards.aingID)
-        // v0.3.81 개발에 찌든 아잉이(맥 먼저)도 폰 카드가 아직 없다 — 목록에 없고 착용값은 아잉으로 접힌다.
-        #expect(!MeCharacterCards.knownIDs.contains(CharacterCatalog.devAingID))
-        #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.devAingID) == MeCharacterCards.aingID)
+        for (id, name) in [(CharacterCatalog.peperoAingID, "빼빼로 아잉이"), (CharacterCatalog.hwooAingID, "흑우 아잉이"),
+                           (CharacterCatalog.rubyAingID, "루비 아잉이"), (CharacterCatalog.devAingID, "개발에 찌든 아잉이")] {
+            #expect(MeCharacterCards.knownIDs.contains(id), "\(id) 카드가 없다")
+            #expect(MeCharacterCards.equippedID(fromServer: id) == id, "\(id) 착용값이 아잉으로 접혔다")
+            #expect(MeCharacterCards.displayName(for: id) == name)
+        }
     }
 
     // MARK: 다시 굽기

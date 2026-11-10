@@ -360,9 +360,9 @@ import Testing
 
     // MARK: - §6 카드 그림
 
-    @Test("카드 그림: 열두 장이고(1.0.14 케이크 둘 · 1.0.17 이슬을 더해) 무지개 카드의 픽셀 크기가 0이 아니다")
+    @Test("카드 그림: 열여섯 장이고(1.0.14 케이크 둘 · 1.0.17 이슬 · 1.0.18 빼빼로 · 흑우 · 루비 · 개발을 더해) 무지개 카드의 픽셀 크기가 0이 아니다")
     func rainbowCardIsBaked() throws {
-        #expect(MeCharacterCards.bundled.count == 12, "카드가 \(MeCharacterCards.bundled.count)장이다(무지개 9장 + 케이크 둘 + 이슬 = 12장)")
+        #expect(MeCharacterCards.bundled.count == 16, "카드가 \(MeCharacterCards.bundled.count)장이다(무지개 9장 + 케이크 둘 + 이슬 + 빼빼로 · 흑우 · 루비 · 개발 = 16장)")
         #expect(MeCharacterCards.knownIDs.contains(Self.rainbowID), "카드 표가 무지개를 모른다")
         let card = try #require(MeCharacterCards.card(id: Self.rainbowID), "무지개 카드가 없다")
         #expect(card.displayName == "무지개 아잉이")

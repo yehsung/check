@@ -177,6 +177,10 @@ enum MessagePanelLayout {
     /// 찌르기 기록 한 줄의 높이(pt · v0.3.65). 9pt 글자 한 줄 + 위아래 숨통 — 날짜 구분선(18)보다 낮게 둔다(말이 주인공이다).
     static let pokeLineHeight: CGFloat = 16
 
+    /// 대화 맨 위 [이전 대화 더 보기] 줄의 높이(pt · 2026-11-11). 스크롤 **안의** 첫 줄이다 — 고정 크롬으로 세우면 최악 크롬 여유(12pt)를
+    /// 넘어 푸터가 잘린다(위 부등식 ②). 틀 추정에는 부르는 쪽이 따로 더한다(`conversationContentHeight(lines:)` 는 줄만 센다).
+    static let olderRowHeight: CGFloat = 22
+
     /// 대화 줄(찌르기 기록 포함)의 **추정** 자연 높이(pt · v0.3.65). 말풍선·날짜 줄은 위 `conversationContentHeight(_:)` 의 산식을
     /// **그대로 빌린다**(한 줄짜리 타임라인으로 물어 바깥 padding 16 을 뺀다) — 두 산식이 갈리면 빈 회색 판이 생긴다.
     static func conversationContentHeight(lines: [MessageConversationLine]) -> CGFloat {
@@ -309,7 +313,6 @@ struct CheckMessageView: View {
     /// 읽는 자리는 전부 이것을 본다(상태 ∨ 못 박기).
     private var showsStickerGrid: Bool { stickerGridOpen || pinsStickerGridOpen }
 
-    private var thread: MessageThread? { store.selectedMessageThread }
     private var hasPeer: Bool { store.selectedMessagePeerID != nil }
 
     var body: some View {
@@ -460,15 +463,21 @@ struct CheckMessageView: View {
     private func conversationBody(cap: CGFloat) -> some View {
         // v0.3.65: 메시지 사이에 **찌르기 기록**을 시간 순서로 끼운다(서버가 24시간 안의 것만 내려 주므로 오래된 줄은 저절로 사라진다).
         // 끼움 판정은 코어 `MessageConversationTimeline` 한 곳이다 — 뷰는 자리만 그린다. 찌르기가 없으면 예전 타임라인과 줄 단위로 같다.
-        let messages = thread?.messages ?? []
+        // 2026-11-11: 메시지는 **지난 쪽 + 24시간 머리**다(`selectedConversationMessages` — [이전 대화 더 보기]로 받은 30일 안의 옛 말이
+        // 머리 앞에 이어진다). 찌르기 기록은 머리 것만이다(서버가 찌르기를 24시간만 둔다 — 늘리지 않았다).
+        let messages = store.selectedConversationMessages
         let pokes = store.selectedMessagePokeLog
+        let olderRow = store.messageOlderRowState
         if let peer = store.selectedMessagePeerID, !messages.isEmpty || !pokes.isEmpty {
             let lines = MessageConversationTimeline.lines(
                 messages: messages, pokes: pokes, chronology: store.messagePokeChronology, now: now
             )
+            // 맨 위 줄([이전 대화 더 보기])은 스크롤 **안의** 첫 줄이라 그 높이를 틀 추정에 더한다(간격 6 포함). 말풍선 산식
+            // (`conversationContentHeight(lines:)`)에 섞지 않는다 — 그 산식은 줄만 센다.
             let natural = max(
                 MessagePanelLayout.minShownConversationHeight,
                 MessagePanelLayout.conversationContentHeight(lines: lines)
+                    + (olderRow == nil ? 0 : MessagePanelLayout.olderRowHeight + 6)
             )
             MessageConversationView(
                 lines: lines,
@@ -488,7 +497,11 @@ struct CheckMessageView: View {
                 },
                 // 말풍선 본문은 AppKit 글자 뷰다(끌어 고르기 · 우클릭 신고 — 2026-11-03 ④). 입력칸과 **같은 스냅샷 스위치**로
                 // SwiftUI `Text` 대체 경로를 탄다: 둘 다 "ImageRenderer 가 못 그리는 NSView 를 같은 치수의 SwiftUI 로 바꾼다"는 같은 이유다.
-                rendersPlainText: rendersPlainTextEditor
+                rendersPlainText: rendersPlainTextEditor,
+                // [이전 대화 더 보기](2026-11-11) — 모양은 스토어 판정 하나(nil = 함수 없는 서버 · 줄 없음), 누름은 스토어 문 하나.
+                olderRow: olderRow,
+                onLoadOlder: { store.loadOlderMessages() },
+                olderAnchor: store.messageOlderScrollAnchor
             )
             .frame(height: min(cap, natural))
             .frame(maxWidth: .infinity)
@@ -532,6 +545,11 @@ struct CheckMessageView: View {
             }
             if state.showsRetry {
                 PanelRetryButton { store.loadMessageHistory() }
+            }
+            // 24시간 안에 말이 없는 상대라도 30일 안의 대화가 있을 수 있다(2026-11-11) — 빈 자리에서도 [이전 대화 더 보기]를 준다.
+            // 머리를 받은 뒤에만 선다(불러오는 중 · 실패 화면의 할 일은 그 문장이 말한다).
+            if hasPeer, store.messageHistoryLoaded, let olderRow = store.messageOlderRowState {
+                MessageOlderHistoryRow(state: olderRow) { store.loadOlderMessages() }
             }
             Spacer(minLength: 0)
         }
@@ -579,6 +597,13 @@ struct MessageConversationView: View {
     /// 렌더 시험·스냅샷 전용: 말풍선 본문을 AppKit 글자 뷰(`ChatBubbleText`) 대신 같은 조각의 SwiftUI `Text` 로 그린다
     /// (`ImageRenderer` 는 NSView 를 못 그린다 — 파일 머리 "ImageRenderer 눈가리개"). **앱은 언제나 false** 다.
     var rendersPlainText: Bool = false
+    /// 맨 위 [이전 대화 더 보기] 줄의 모양(2026-11-11). nil 이면 줄을 안 그린다(함수 없는 서버 · 옛 호출부 — 기본값).
+    var olderRow: MessageOlderRowState? = nil
+    /// 그 줄을 눌렀을 때(스토어 `loadOlderMessages` 한 문).
+    var onLoadOlder: (() -> Void)? = nil
+    /// 지난 쪽을 붙인 직후 위에 맞출 메시지(번호가 바뀔 때만 움직인다). 붙기 전 맨 위 메시지가 그 자리에 남는다 —
+    /// 안 맞추면 내용이 위로 자라는 만큼 화면이 밀리거나(바닥 앵커) 맨 위로 튀어, 읽던 자리를 잃는다.
+    var olderAnchor: MessageOlderScrollAnchor? = nil
 
     /// 맨 아래로 보낼 앵커. 마지막 말풍선 id 를 쓰지 않는 이유는 그 뒤의 아래 여백까지 보이게 하기 위해서다.
     private static let bottomAnchorID = "message-thread-bottom"
@@ -649,6 +674,14 @@ struct MessageConversationView: View {
                     }
                 }
                 .onChange(of: follow) { _, next in onFollowChange?(next) }
+                // 지난 쪽이 위에 붙었다(2026-11-11) — 붙기 전 맨 위 메시지를 **애니메이션 없이** 위에 맞춘다. macOS 14 대상이라
+                // `defaultScrollAnchor(_:for: .sizeChanges)` 가 없다 — 직접 맞춘다. 같은 갱신 안에서 한 번, 배치가 끝난 다음 차례에 한 번 더
+                // (LazyVStack 이 새 줄을 아직 안 쟀으면 첫 번째가 옛 높이로 잡힌다). 마지막 줄은 그대로라 바닥 따라가기는 안 움직인다.
+                .onChange(of: olderAnchor) { _, next in
+                    guard let id = next?.messageID, !id.isEmpty else { return }
+                    proxy.scrollTo(id, anchor: .top)
+                    DispatchQueue.main.async { proxy.scrollTo(id, anchor: .top) }
+                }
             }
         }
     }
@@ -665,6 +698,11 @@ struct MessageConversationView: View {
 
     private var content: some View {
         LazyVStack(alignment: .leading, spacing: 6) {
+            // [이전 대화 더 보기](2026-11-11)는 스크롤 **안의 첫 줄**이다 — 위로 올려 옛 말 끝에 닿으면 보이고, 고정 크롬이 아니라
+            // 패널 높이 예산을 안 먹는다. 스냅샷 클립 갈래도 같은 내용을 그린다(짧은 대화면 보인다).
+            if let olderRow {
+                MessageOlderHistoryRow(state: olderRow) { onLoadOlder?() }
+            }
             ForEach(lines) { line in
                 switch line {
                 case .day(_, let label):
@@ -701,7 +739,10 @@ extension MessageConversationView {
         clipsInsteadOfScrolling: Bool = false,
         onFollowChange: ((MessageScrollFollow) -> Void)? = nil,
         onReport: ((MessageHistoryEntry) -> Void)? = nil,
-        rendersPlainText: Bool = false
+        rendersPlainText: Bool = false,
+        olderRow: MessageOlderRowState? = nil,
+        onLoadOlder: (() -> Void)? = nil,
+        olderAnchor: MessageOlderScrollAnchor? = nil
     ) {
         self.init(
             lines: items.map { item in
@@ -717,7 +758,10 @@ extension MessageConversationView {
             clipsInsteadOfScrolling: clipsInsteadOfScrolling,
             onFollowChange: onFollowChange,
             onReport: onReport,
-            rendersPlainText: rendersPlainText
+            rendersPlainText: rendersPlainText,
+            olderRow: olderRow,
+            onLoadOlder: onLoadOlder,
+            olderAnchor: olderAnchor
         )
     }
 }
@@ -752,6 +796,59 @@ struct MessagePokeLogLine: View {
         // 보이스오버는 한 문장으로 읽는다(아이콘 이름 · 조각 셋으로 끊어 읽히면 무엇의 기록인지 흩어진다).
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(MessagePokeLogText.line(for: entry))
+    }
+}
+
+/// 대화 맨 위 **[이전 대화 더 보기]** 줄(2026-11-11 — 대표 결정 "메시지 30일로 늘리기 · 앱에 '이전 대화 더 보기' 추가").
+///
+/// 가운데 작은 알약 하나다. 모양은 스토어 판정(`MessageOlderRowState`) 하나에서 온다 — 버튼 · 받는 중 · 실패(다시 시도) · 끝.
+/// 받는 중과 끝은 눌리지 않는 글자다(누를 수 없는 것을 버튼으로 그리지 않는다). 높이는 `MessagePanelLayout.olderRowHeight` 하나다
+/// (틀 높이 추정이 같은 값을 더한다). 툴팁은 `.checkTooltip` 이다(시스템 툴팁 금지 — V0325).
+struct MessageOlderHistoryRow: View {
+    let state: MessageOlderRowState
+    let action: () -> Void
+
+    var body: some View {
+        Group {
+            if state.isTappable {
+                Button(action: action) { label }
+                    .buttonStyle(.plain)
+                    .checkTooltip(MessageNoticeText.olderTooltip)
+            } else {
+                label
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .frame(height: MessagePanelLayout.olderRowHeight)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(state.title)
+    }
+
+    private var label: some View {
+        HStack(spacing: 4) {
+            if state.isTappable {
+                Image(systemName: "clock.arrow.circlepath")
+                    .font(.system(size: 9, weight: .semibold))
+            }
+            Text(state.title)
+                .font(.system(size: 10, weight: state.isTappable ? .semibold : .regular))
+                .lineLimit(1)
+                .fixedSize()
+        }
+        .foregroundStyle(foreground)
+        .padding(.horizontal, 10)
+        .frame(height: 20)
+        .background(
+            Capsule().fill(Color.white.opacity(state.isTappable ? 0.08 : 0))
+        )
+    }
+
+    private var foreground: Color {
+        switch state {
+        case .button: return CheckTheme.accent
+        case .failed: return CheckTheme.pending
+        case .loading, .end: return CheckTheme.secondaryText.opacity(0.85)
+        }
     }
 }
 
@@ -1089,7 +1186,8 @@ struct MessageComposerView: View {
             HStack(spacing: 8) {
                 // **사라지는 규칙을 모르면 사용자는 그것을 버그로 읽는다**(그 오해는 제보로 온다).
                 // 줄을 따로 세우지 않고 이 줄의 남는 폭에 9pt 로 얹는다 — 자리를 많이 먹지 않게.
-                Text(WorkTimerStore.messageExpiryNotice)
+                // 2026-11-11: `message_page` 가 **한 번이라도 성공한 뒤에만** 30일 문장이다(`messageExpiryNoticeNow` — 모르면 예전 24시간 문장).
+                Text(store.messageExpiryNoticeNow)
                     .font(.system(size: 9))
                     .foregroundStyle(CheckTheme.secondaryText.opacity(0.7))
                     .lineLimit(1)

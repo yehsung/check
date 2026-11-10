@@ -1664,6 +1664,28 @@ final class WorkTimerStore {
     var messagePokeChronology: [String: Int] = [:]
     /// 상대별 찌르기 낙관 읽음(메시지의 `messageOptimisticReads` 와 같은 규칙).
     var messagePokeOptimisticReads: [String: MessageOptimisticRead] = [:]
+
+    // ── 이전 대화 더 보기(2026-11-11 — 메시지 30일 보관) — 로직은 `WorkTimerStoreMessageOlder.swift` ──
+    // 24시간 머리(`messageHistory`)와 **따로** 든다: 지난 쪽이 머리에 섞이면 읽음 경계(`markTarget`)가 옛 줄을 "마지막 받은 말"로
+    // 고르거나 24시간 너머의 받은 말이 메뉴바 점을 켠다. 전부 계정에 묶인다 — clearPersistedSession 이 지운다.
+
+    /// 상대별 지난 쪽(오래된 것 → 최신). 머리보다 앞에 그려진다. 패널을 닫거나 상대를 바꾸면 비운다(가장 사적인 표면).
+    var messageOlderPages: [String: [MessageHistoryEntry]] = [:]
+    /// 상대별 다음 쪽 커서(서버가 준 가장 오래된 줄의 µs · id). 없으면 다음 누름은 커서 없이 최신부터 묻는다. 화면이 안 읽는다.
+    @ObservationIgnored var messageOlderCursors: [String: MessagePageCursor] = [:]
+    /// 상대별 "더 이전 쪽이 있는가"(서버 답). 모르면 nil(아직 안 눌렀다).
+    var messageOlderHasMore: [String: Bool] = [:]
+    var messageOlderLoading = false
+    /// 마지막 지난 쪽 조회가 실패했는가(함수 없음이 아니다 — 다시 누르면 다시 묻는다).
+    var messageOlderFailed = false
+    /// `message_page` 를 쓸 수 있는가(세 갈래 — 문은 없다): nil = 모름(버튼을 보인다) · false = 함수 없는 서버(버튼을 숨긴다)
+    /// · true = 한 번이라도 성공했다(입력칸 안내가 30일 문장이 된다). false 는 **영구히 들지 않는다** — 다음 패널 열기에서 nil 로
+    /// 되돌린다(db push 는 앱이 떠 있는 동안 끝난다).
+    var messageOlderAvailable: Bool?
+    /// 지난 쪽을 붙인 직후 대화가 제자리를 지키게 하는 표(뷰가 이 id 를 위에 맞춘다). 번호가 바뀔 때만 움직인다.
+    var messageOlderScrollAnchor: MessageOlderScrollAnchor?
+    /// 지난 쪽 조회의 순번 — 비울 때마다 올려 날아가던 응답을 버린다(닫기 · 상대 바꾸기 · 차단 · 로그아웃).
+    @ObservationIgnored var messageOlderRequestToken = 0
     /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
     /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
     @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
@@ -4247,6 +4269,10 @@ extension WorkTimerStore {
         messagePokeLogSnapshot = nil
         messagePokeChronology = [:]
         messagePokeOptimisticReads = [:]
+        // 이전 대화(2026-11-11)도 계정에 묶인다 — 지난 쪽 · 커서를 남기면 다음 사람이 앞 사람의 30일 대화를 읽는다.
+        // 쓸 수 있는가도 모름으로 되돌린다(메시지 상태는 계정마다 처음부터 — 입력칸 안내도 다음 성공 전까지 24시간 문장이다).
+        clearOlderMessages()
+        messageOlderAvailable = nil
         // 장부는 **통째로 새것**으로 바꾼다 — 앞 계정의 늦은 Task 는 옛 장부를 붙잡고 있으므로 새 장부의 직렬화·스로틀을
         // 건드릴 수 없다(세대 가드와 이중 안전).
         messageReadRuntime.cancelAll()

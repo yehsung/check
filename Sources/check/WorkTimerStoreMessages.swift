@@ -261,6 +261,9 @@ extension WorkTimerStore {
         if let sheet = blockReportSheet(on: .message), sheet.target.peerID != peer {
             dismissBlockReportSheet(on: .message)
         }
+        // [이전 대화 더 보기](2026-11-11)의 숨김(함수 없는 서버)은 여기서 "모름"으로 되돌린다 — 숨김을 영구히 들면 db push 가 끝난 뒤에도
+        // 재시작 전까지 버튼이 안 선다. 서버를 부르지는 않는다(버튼을 눌러야 묻는다 — WorkTimerStoreMessageOlder 머리 ②).
+        rearmOlderMessagesAvailability()
         // 상대를 정하는 자리는 **앱 전체에서 이 한 줄뿐이다.** 이후 어떤 응답·수신 폴링·전송 성공도 이 값을
         // 바꾸지 않는다(performLoadMessageHistory 의 "다시 넣지 마라" 주석, V0251MessagePeerTests 의 소스 계약).
         selectMessagePeer(peer)
@@ -315,6 +318,8 @@ extension WorkTimerStore {
         isMessagePanelVisible = false
         // 전송 결과 문구는 이 화면의 것이다. 남기면 콕찌르기 목록 안내줄에 "메시지를 보냈어요"가 떠 있다.
         if messageNotice != nil { messageNotice = nil }
+        // 이전 대화(2026-11-11 — 30일)는 이 화면을 떠나면 비운다. 가장 사적인 표면이고, 차단(`hideBlockedPeer`)도 이 문을 지난다.
+        clearOlderMessages()
         // 신고·차단 시트(v0.3.34)도 이 화면의 것이다 — 떠나면 걷는다(레일 · [뒤로] · 다른 패널이 전부 이 문을 지난다).
         // 남기면 다음에 연 **다른 사람의 대화** 자리에 앞사람 시트가 선다(수리 전 실측). 보내던 신고는 결과 한 줄로 돌아온다.
         dismissBlockReportSheet(on: .message)
@@ -341,6 +346,8 @@ extension WorkTimerStore {
         }
         selectedMessagePeerID = peerUserID
         messageDraft = ""
+        // 앞사람과의 이전 대화(2026-11-11)는 뒷사람 화면의 것이 아니다 — 비우고 날아가던 조회도 버린다.
+        clearOlderMessages()
         // 앞사람에게서 받은 전송 결과 문구도 함께 내린다 — 다른 대화 위에 남으면 무엇에 대한 말인지 알 수 없다.
         if messageNotice != nil { messageNotice = nil }
         if let peerUserID { messageReadStamps[peerUserID] = clock() }
@@ -418,6 +425,9 @@ extension WorkTimerStore {
                 serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil,
                 arrivalOrder: messageReadRuntime.localArrivalOrder
             )
+            // 이전 대화(2026-11-11)를 펼쳐 둔 채 24시간 경계가 움직였으면, 새 판에서 빠진 옛 줄을 지난 쪽 끝으로 옮긴다
+            // (안 옮기면 지난 쪽과 새 판 사이가 빈다). 쪽을 한 번도 안 받았으면 아무것도 안 한다 — 이 판(`messageHistory`)은 그대로다.
+            carryOlderMessagesAcrossHeadSlide(previousHead: messageHistory, nextHead: sorted)
             if messageHistory != sorted { messageHistory = sorted }
             // 📢 로 시작하는데 아직 판정 못 한 줄(2026-10-30 — 계약 C3 경합)은 배너 목록을 한 번 받아 본 뒤 거른다. 그동안은 붙든다
             // (`visibleMessageHistory`) — 접두만 보고 숨기지 않고, 확인이 실패하면 메시지로 돌아온다.

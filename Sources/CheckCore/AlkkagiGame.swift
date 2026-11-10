@@ -88,6 +88,9 @@ package struct AlkkagiGame: Equatable, Sendable {
     package static let boardSize: Double = 600
     package static let stoneRadius: Double = 20
     package static let maxPull: Double = 135
+    /// 판의 첫 수(흑)의 최대 당김 = 81(최대의 60%) — 선후 맞춤(대표 #d_5KuZ3DGTw6BY · 서버 `alk_first_shot_max_pull()` 같은 값).
+    /// 규칙은 **입력**에 건다(조준 화살 · 서버가 저장 전에 줄인다). 물리(`shoot` · `advance`)는 그대로라 서버 `alkkagi_simulate` 대조가 안 바뀐다.
+    package static let firstShotMaxPull: Double = 81
     package static let placementDuration: Double = 30
     package static let turnDuration: Double = 30
 
@@ -250,6 +253,14 @@ package struct AlkkagiGame: Equatable, Sendable {
         }
         return impacts
     }
+
+    /// 지금 쏠 수 있는 최대 당김. 판의 첫 수(흑 · 아직 0수)만 `firstShotMaxPull` — 흑이 첫 차례를 놓쳐 백이 먼저 쏘면 그대로 `maxPull`.
+    package var shotPullLimit: Double {
+        phase == .aiming && shotCount == 0 && currentPlayer == .black ? Self.firstShotMaxPull : Self.maxPull
+    }
+
+    /// 판의 첫 수라 힘이 줄어 있는가(안내 줄).
+    package var isFirstShotLimited: Bool { shotPullLimit < Self.maxPull }
 
     package func remaining(_ player: Player) -> Int {
         stones.filter { $0.owner == player && !$0.isOut && (phase == .placing || $0.isPlaced) }.count

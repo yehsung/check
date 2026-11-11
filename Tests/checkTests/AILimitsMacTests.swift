@@ -2921,3 +2921,122 @@ private func amUploadSectionColumns(_ doc: String) throws -> (uploaded: String, 
     }
     return (uploaded.joined(separator: "\n"), withheld.joined(separator: "\n"))
 }
+
+// MARK: - 리더: Claude — 같은 이름의 키체인 항목이 둘일 때(11-12)
+
+/// 인자에 따라 다른 결과를 주는 `security` 가짜. `-a <계정>` 이 있으면 `named`, 없으면 `unnamed`.
+private final class AMKeychainTwoItems: @unchecked Sendable {
+    let named: AILimitCommandOutput
+    let unnamed: AILimitCommandOutput
+    private let recorded = OSAllocatedUnfairLock(initialState: [[String]]())
+
+    init(named: AILimitCommandOutput, unnamed: AILimitCommandOutput) {
+        self.named = named
+        self.unnamed = unnamed
+    }
+
+    var calls: [[String]] { recorded.withLock { $0 } }
+
+    var runner: AILimitCommandRunner {
+        { [self] command in
+            recorded.withLock { $0.append(command.arguments) }
+            return command.arguments.contains("-a") ? named : unnamed
+        }
+    }
+}
+
+/// 11-12 실측의 빈 항목 모양: 토큰이 빈 글이고 `loginEnded` 칸이 있다(값은 자리표시자).
+private let amClaudeLoggedOutJSON = """
+{"claudeAiOauth":{"accessToken":"","refreshToken":"","scopes":[],"subscriptionType":"max",
+"rateLimitTier":"default_claude_max_20x","loginEnded":"PLACEHOLDER"}}
+"""
+
+@Suite("AILimitsMac — Claude 키체인 항목이 둘일 때 이름으로 고른다")
+struct AILimitsMacClaudeKeychainAccountTests {
+    private var liveCredentials: AILimitCommandOutput {
+        AILimitCommandOutput(status: 0, stdout: Data(amClaudeCredentialsJSON(
+            expiresAtMilliseconds: (amNow.timeIntervalSince1970 + 3_600) * 1000
+        ).utf8))
+    }
+
+    private var loggedOut: AILimitCommandOutput {
+        AILimitCommandOutput(status: 0, stdout: Data(amClaudeLoggedOutJSON.utf8))
+    }
+
+    /// 이름 없는 조회가 빈 항목을 집는 맥(11-12 대표 맥)에서 **사용자 이름으로 먼저** 읽어 Claude 가 산다.
+    ///
+    /// 기준선: 계정을 안 주면(예전 동작) 같은 키체인에서 `notLoggedIn` 으로 숨는다 — 두 결과가 갈려야 이 시험이 무언가를 잰다.
+    @Test
+    func namedAccountWinsOverAnEmptyDuplicate() async throws {
+        let keychain = AMKeychainTwoItems(named: liveCredentials, unnamed: loggedOut)
+        let http = AMFakeHTTP()
+        http.responses["api.anthropic.com"] = AILimitHTTPResponse(status: 200, body: Data(amClaudeUsageJSON.utf8))
+        let reader = AILimitClaudeReader(runner: keychain.runner, fetch: http.fetcher, appVersion: "0.3.87",
+                                         keychainAccount: "tester")
+        let snapshot = try await reader.read(now: amNow).get()
+        #expect(snapshot.provider == .claude)
+        #expect(snapshot.window(.weekly)?.usedPercent == 60)
+        #expect(keychain.calls.first == ["find-generic-password", "-s", "Claude Code-credentials", "-a", "tester", "-w"])
+        #expect(keychain.calls.count == 1, "이름으로 읽었는데 한 번 더 물었다: \(keychain.calls)")
+
+        let oldWay = AILimitClaudeReader(runner: keychain.runner, fetch: http.fetcher, appVersion: "0.3.86",
+                                         keychainAccount: nil)
+        let old = await oldWay.read(now: amNow)
+        if case .failure(let error) = old { #expect(error.failure == .notLoggedIn) } else {
+            Issue.record("기준선이 갈리지 않았다 — 이름 없는 조회도 살아 있으면 이 시험은 빈 항목을 재지 않는다")
+        }
+    }
+
+    /// 그 이름의 항목이 없으면(44) 예전처럼 이름 없이 읽는다 — 계정 이름이 다른 맥도 지금과 같이 돈다.
+    @Test
+    func missingNamedItemFallsBackToTheUnnamedLookup() async throws {
+        let keychain = AMKeychainTwoItems(
+            named: AILimitCommandOutput(status: AILimitClaudeReader.keychainItemNotFoundStatus, stdout: Data()),
+            unnamed: liveCredentials
+        )
+        let reader = AILimitClaudeReader(runner: keychain.runner, fetch: AMFakeHTTP().fetcher, appVersion: "0.3.87",
+                                         keychainAccount: "tester")
+        let credentials = try await reader.credentials().get()
+        #expect(credentials.accessToken.isEmpty == false)
+        #expect(keychain.calls.count == 2)
+        #expect(keychain.calls.last == ["find-generic-password", "-s", "Claude Code-credentials", "-w"])
+    }
+
+    /// 이름으로 고른 항목이 빈 로그아웃 표시면 이름 없는 조회로 한 번 더 본다(둘 다 비면 지금처럼 숨는다).
+    @Test
+    func emptyNamedItemFallsBackAndBothEmptyStillHides() async {
+        let keychain = AMKeychainTwoItems(named: loggedOut, unnamed: loggedOut)
+        let reader = AILimitClaudeReader(runner: keychain.runner, fetch: AMFakeHTTP().fetcher, appVersion: "0.3.87",
+                                         keychainAccount: "tester")
+        let result = await reader.credentials()
+        if case .failure(let error) = result { #expect(error.failure == .notLoggedIn) } else { Issue.record("빈 항목을 살렸다") }
+        #expect(keychain.calls.count == 2)
+    }
+
+    /// 승인 창 타임아웃이면 **한 번만** 묻는다 — 두 번째 조회도 같은 창에 막혀 앱이 20초를 기다리게 된다.
+    @Test
+    func namedTimeoutDoesNotAskTwice() async {
+        let keychain = AMKeychainTwoItems(
+            named: AILimitCommandOutput(status: -1, stdout: Data(), timedOut: true),
+            unnamed: liveCredentials
+        )
+        let reader = AILimitClaudeReader(runner: keychain.runner, fetch: AMFakeHTTP().fetcher, appVersion: "0.3.87",
+                                         keychainAccount: "tester")
+        let result = await reader.credentials()
+        if case .failure(let error) = result { #expect(error.failure == .blocked) } else { Issue.record("타임아웃을 못 잡았다") }
+        #expect(keychain.calls.count == 1)
+    }
+
+    /// 기본 계정은 맥 사용자 이름이다(Claude Code 가 자기 로그인을 그 이름으로 적는다). 빈 이름은 조회에 싣지 않는다.
+    @Test
+    func defaultAccountIsTheMacUserName() async {
+        let keychain = AMKeychainTwoItems(named: liveCredentials, unnamed: loggedOut)
+        _ = await AILimitClaudeReader(runner: keychain.runner, fetch: AMFakeHTTP().fetcher, appVersion: "0.3.87")
+            .credentials()
+        #expect(keychain.calls.first?.contains(NSUserName()) == true, "\(keychain.calls)")
+        let blank = AMKeychainTwoItems(named: liveCredentials, unnamed: liveCredentials)
+        _ = await AILimitClaudeReader(runner: blank.runner, fetch: AMFakeHTTP().fetcher, appVersion: "0.3.87",
+                                      keychainAccount: "").credentials()
+        #expect(blank.calls == [["find-generic-password", "-s", "Claude Code-credentials", "-w"]])
+    }
+}

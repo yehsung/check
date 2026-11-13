@@ -99,7 +99,7 @@ object MahjongHand {
 }
 
 /** 샹텐 비용 표. 표 = 10칸 [몸통 수 m × 2 + 머리 수 p] → 더 들일 최소 장수(없으면 inf). */
-internal object ShantenTable {
+object ShantenTable {
     const val inf = 99
     val identity: IntArray = intArrayOf(0, inf, inf, inf, inf, inf, inf, inf, inf, inf)
 

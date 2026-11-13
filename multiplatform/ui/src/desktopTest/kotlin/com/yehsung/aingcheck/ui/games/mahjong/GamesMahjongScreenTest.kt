@@ -62,6 +62,12 @@ class GamesMahjongScreenTest {
         onNodeWithTag(MahjongTableTags.TABLE).assertExists()
         assertEquals(false, x.mahjong.practice?.isPaused, "화면이 보이는데 연습판이 멈췄다")
         assertEquals(GamesRummyInterfaceOrientation.landscape, x.games.rummyInterfaceOrientation, "판이 가로가 아니다")
+        // 없으면: 크기만 준 작은 글자가 테마 본문 행간(22sp)을 물려받아 가운데 판 줄이 벌어지고, 도라 띠가 아래로 밀려
+        // 귀퉁이 바람 글자(南 · 西)를 덮는다(판 8 렌더에서 본 결함).
+        val dora = onNodeWithTag(MahjongTableTags.DORA, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val winds = onAllNodesWithTag(MahjongTableTags.WIND, useUnmergedTree = true).fetchSemanticsNodes().map { it.boundsInRoot }
+        assertEquals(4, winds.size, "바람 글자가 넷이 아니다")
+        for (wind in winds) assertTrue(!wind.overlaps(dora), "도라 띠가 바람 글자를 덮는다: 도라 $dora · 바람 $wind")
         // 친(내 자리 0)이 먼저 둔다 — 버릴 패 목록이 결정에서 온다.
         val turn = assertNotNull(x.mahjong.myDecision as? MahjongDecision.Turn)
         val tile = x.mahjong.table?.myDrawn ?: turn.discard.last()

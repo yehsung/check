@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -42,7 +43,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpSize
@@ -125,6 +125,18 @@ fun GamesMahjongScreen(
     myCharacter: String?,
     modifier: Modifier = Modifier,
     onBack: (() -> Unit)? = null,
+) {
+    MahjongTextScope { ScreenBody(store, mahjong, myName, myCharacter, modifier, onBack) }
+}
+
+@Composable
+private fun ScreenBody(
+    store: GamesStore,
+    mahjong: MahjongStore,
+    myName: String?,
+    myCharacter: String?,
+    modifier: Modifier,
+    onBack: (() -> Unit)?,
 ) {
     DisposableEffect(store) {
         store.mahjongScreenDidAppear()
@@ -247,7 +259,7 @@ private fun RoomCard(store: GamesStore, mahjong: MahjongStore, blockedBy: GamesB
             if (expiresMs != null) {
                 rememberTick(1000)
                 val left = ((expiresMs / 1_000 + mahjong.serverClockOffset) - mahjong.clock().timeIntervalSince1970).toInt()
-                Text("남은 ${GamesMahjongText.remaining(maxOf(0, left))}", style = TextStyle(fontSize = 12.sp, fontFeatureSettings = TNUM), color = colors.label2)
+                Text("남은 ${GamesMahjongText.remaining(maxOf(0, left))}", style = LocalTextStyle.current.copy(fontSize = 12.sp, fontFeatureSettings = TNUM), color = colors.label2)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

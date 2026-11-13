@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,7 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,8 +56,8 @@ import com.yehsung.aingcheck.ui.games.minigame.kit.PillButton
 import com.yehsung.aingcheck.ui.games.minigame.kit.PillKind
 import com.yehsung.aingcheck.ui.games.minigame.kit.TNUM
 import com.yehsung.aingcheck.ui.theme.AingTheme
-import kotlinx.coroutines.launch
 import kotlin.math.ceil
+import kotlinx.coroutines.launch
 
 object MahjongResultTags {
     const val HAND = "mahjong.result.hand"
@@ -96,7 +96,7 @@ fun GamesMahjongHandResultCard(store: MahjongStore, payload: MahjongStatePayload
         Deltas(payload, result)
         if (nextHand != null) {
             Text(
-                GamesMahjongText.nextHand(maxOf(0, ceil(nextHand.timeIntervalSince(now)).toInt())), style = TextStyle(fontSize = 12.sp, fontFeatureSettings = TNUM),
+                GamesMahjongText.nextHand(maxOf(0, ceil(nextHand.timeIntervalSince(now)).toInt())), style = LocalTextStyle.current.copy(fontSize = 12.sp, fontFeatureSettings = TNUM),
                 color = GamesMahjongPalette.secondary, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -113,7 +113,7 @@ private fun WinContent(payload: MahjongStatePayload, win: MahjongWinResult, inde
         )
         if (count > 1) GamesMahjongChip("${index + 1}/$count", GamesMahjongPalette.accent)
         Spacer(Modifier.weight(1f))
-        Text(scoreLine(win), style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM), color = pending, maxLines = 1)
+        Text(scoreLine(win), style = LocalTextStyle.current.copy(fontSize = 14.sp, fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM), color = pending, maxLines = 1)
     }
     HandRow(win)
     val yaku = win.yaku ?: emptyList()
@@ -122,14 +122,14 @@ private fun WinContent(payload: MahjongStatePayload, win: MahjongWinResult, inde
             pair.forEach { item ->
                 Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(MahjongNoticeText.yakuName(item.id), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                    Text(if ((win.yakuman ?: 0) > 0) "역만" else "${item.han}판", style = TextStyle(fontSize = 13.sp, fontFeatureSettings = TNUM), color = GamesMahjongPalette.secondary)
+                    Text(if ((win.yakuman ?: 0) > 0) "역만" else "${item.han}판", style = LocalTextStyle.current.copy(fontSize = 13.sp, fontFeatureSettings = TNUM), color = GamesMahjongPalette.secondary)
                 }
             }
             if (pair.size == 1) Spacer(Modifier.weight(1f))
         }
     }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        val style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        val style = LocalTextStyle.current.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         if ((win.dora ?: 0) > 0) Text("도라 ${win.dora ?: 0}", style = style, color = GamesMahjongPalette.secondary)
         if ((win.aka ?: 0) > 0) Text("적도라 ${win.aka ?: 0}", style = style, color = GamesMahjongPalette.secondary)
         win.uraIndicators?.let { ura ->
@@ -212,10 +212,10 @@ private fun Deltas(payload: MahjongStatePayload, result: MahjongHandResult) {
             ) {
                 Text(seatName(payload, seatNo), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    GamesMahjongText.delta(delta), style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TNUM),
+                    GamesMahjongText.delta(delta), style = LocalTextStyle.current.copy(fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TNUM),
                     color = if (delta > 0) colors.working else if (delta < 0) colors.danger else GamesMahjongPalette.secondary,
                 )
-                Text(GamesMahjongText.score(after.getOrNull(seatNo)), style = TextStyle(fontSize = 11.sp, fontFeatureSettings = TNUM), color = GamesMahjongPalette.secondary)
+                Text(GamesMahjongText.score(after.getOrNull(seatNo)), style = LocalTextStyle.current.copy(fontSize = 11.sp, fontFeatureSettings = TNUM), color = GamesMahjongPalette.secondary)
             }
         }
     }
@@ -246,7 +246,7 @@ fun GamesMahjongMatchResultCard(store: GamesStore, mahjong: MahjongStore, payloa
                         .background(if (mine) GamesMahjongPalette.accent.copy(alpha = 0.18f) else Color.White.copy(alpha = 0.06f)).padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text(GamesMahjongText.rank(seat.finalRank), style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TNUM), color = Color.White, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
+                    Text(GamesMahjongText.rank(seat.finalRank), style = LocalTextStyle.current.copy(fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TNUM), color = Color.White, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
                     val id = seat.user?.userId ?: "seat-${seat.seatNo}"
                     PersonAvatar(seat.user?.displayName ?: "?", id, 30.dp, url = seat.user?.avatarUrl, characterHint = seat.user?.character)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -254,14 +254,14 @@ fun GamesMahjongMatchResultCard(store: GamesStore, mahjong: MahjongStore, payloa
                             Text(if (mine) "나" else seat.user?.displayName ?: "?", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             if (seat.deleted == true) GamesMahjongChip(GamesMahjongText.deletedChip, colors.danger)
                         }
-                        Text("${GamesMahjongText.grouped(seat.finalScore ?: seat.score ?: 0)}점", style = TextStyle(fontSize = 12.sp, fontFeatureSettings = TNUM), color = GamesMahjongPalette.secondary)
+                        Text("${GamesMahjongText.grouped(seat.finalScore ?: seat.score ?: 0)}점", style = LocalTextStyle.current.copy(fontSize = 12.sp, fontFeatureSettings = TNUM), color = GamesMahjongPalette.secondary)
                     }
                     if (!mahjong.isPractice && payload.match?.isVoid != true) {
                         val net = (seat.payout ?: 0) - stake
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
                             RubyIcon(ruby, size = 13.dp)
                             Text(
-                                GamesMahjongText.net(net), style = TextStyle(fontSize = 17.sp, fontFeatureSettings = TNUM),
+                                GamesMahjongText.net(net), style = LocalTextStyle.current.copy(fontSize = 17.sp, fontFeatureSettings = TNUM),
                                 color = if (net > 0) colors.working else if (net < 0) colors.danger else GamesMahjongPalette.secondary,
                             )
                         }

@@ -32,11 +32,13 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,12 +61,12 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.yehsung.aingcheck.core.rules.mahjong.MahjongClaimKind
@@ -109,9 +111,9 @@ import com.yehsung.aingcheck.ui.components.rememberRubyArt
 import com.yehsung.aingcheck.ui.games.minigame.kit.PersonAvatar
 import com.yehsung.aingcheck.ui.games.minigame.kit.TNUM
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import kotlin.math.ceil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.ceil
 
 object MahjongTableTags {
     const val TABLE = "mahjong.table"
@@ -120,6 +122,9 @@ object MahjongTableTags {
     fun action(name: String) = "mahjong.action.$name"
     const val LEAVE = "mahjong.leave"
     const val RULES = "mahjong.rules"
+    /** 가운데 판 도라 5칸 · 네 귀퉁이 바람 글자(겹치지 않아야 한다 — 시험이 잰다). */
+    const val DORA = "mahjong.center.dora"
+    const val WIND = "mahjong.center.wind"
 }
 
 /** 판 색(펠트 · 칸 — 맥 `MahjongFeltStyle` 과 같은 중간 톤). 판 화면은 늘 어둡다. */
@@ -148,6 +153,16 @@ internal fun rememberTick(periodMs: Long): Int {
     return tick
 }
 
+/**
+ * 마작 화면의 글자는 글꼴 본래 행간을 쓴다(Swift `Text` 기본과 같다). 테마 기본 글자(본문 17/22)를 그대로 두면
+ * `Text(fontSize = 8.sp)` 처럼 크기만 준 글자가 행간 22sp 를 물려받아 줄이 세 배로 벌어진다 — 가운데 판에서 도라 띠가
+ * 아래로 밀려 네 귀퉁이 바람 글자(南 · 西)를 덮었다(판 8 렌더 확인). 글꼴(Pretendard)은 그대로 물려준다.
+ */
+@Composable
+internal fun MahjongTextScope(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalTextStyle provides LocalTextStyle.current.copy(lineHeight = TextUnit.Unspecified), content = content)
+}
+
 /** 판 화면. 세로로 불렸으면(기기가 돌기를 기다리는 동안) 돌리라는 안내만. */
 @Composable
 fun GamesMahjongTableView(
@@ -158,6 +173,19 @@ fun GamesMahjongTableView(
     onRules: () -> Unit,
     onLeaveTable: () -> Unit,
     modifier: Modifier = Modifier,
+) {
+    MahjongTextScope { TableViewBody(store, mahjong, myName, myCharacter, onRules, onLeaveTable, modifier) }
+}
+
+@Composable
+private fun TableViewBody(
+    store: GamesStore,
+    mahjong: MahjongStore,
+    myName: String?,
+    myCharacter: String?,
+    onRules: () -> Unit,
+    onLeaveTable: () -> Unit,
+    modifier: Modifier,
 ) {
     var confirmingLeave by remember { mutableStateOf(false) }
     BoxWithConstraints(modifier.fillMaxSize().background(GamesMahjongPalette.background).testTag(MahjongTableTags.TABLE)) {
@@ -261,7 +289,7 @@ private fun InfoBox(mahjong: MahjongStore, payload: MahjongStatePayload) {
         Modifier.fillMaxSize().clip(RoundedCornerShape(10.dp)).background(GamesMahjongPalette.panel).padding(horizontal = 8.dp),
         verticalArrangement = Arrangement.Center,
     ) {
-        Text(GamesMahjongText.roundName(match?.round, match?.handNo), style = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.ExtraBold), color = Color.White)
+        Text(GamesMahjongText.roundName(match?.round, match?.handNo), style = LocalTextStyle.current.copy(fontSize = 15.sp, fontWeight = FontWeight.ExtraBold), color = Color.White)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             if (mahjong.isPractice) {
                 Text(GamesMahjongText.practiceTitle, fontSize = 11.sp, color = AingTheme.colors.working, maxLines = 1)
@@ -357,7 +385,7 @@ private fun SeatCard(
 private fun Score(seat: MahjongStateSeat, size: Int) {
     var scale by remember(seat.score) { mutableStateOf(1f) }
     Text(
-        GamesMahjongText.score(seat.score), style = TextStyle(fontSize = (size * scale).sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TNUM),
+        GamesMahjongText.score(seat.score), style = LocalTextStyle.current.copy(fontSize = (size * scale).sp, fontWeight = FontWeight.ExtraBold, fontFeatureSettings = TNUM),
         color = Color.White, maxLines = 1, softWrap = false,
         onTextLayout = { if (it.didOverflowWidth && scale > 0.6f) scale = maxOf(0.6f, scale - 0.1f) },
     )
@@ -484,7 +512,7 @@ private fun CenterBoard(payload: MahjongStatePayload, scale: Float) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(GamesMahjongText.roundName(match?.round, match?.handNo), fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, color = GamesMahjongPalette.glyph, maxLines = 1)
             Text(GamesMahjongText.honba(match?.honba, match?.kyotaku), fontSize = 8.sp, fontWeight = FontWeight.SemiBold, color = GamesMahjongPalette.glyph, maxLines = 1)
-            Text(GamesMahjongText.wall(match?.wallRemaining), style = TextStyle(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = TNUM), color = GamesMahjongPalette.glyph, maxLines = 1)
+            Text(GamesMahjongText.wall(match?.wallRemaining), style = LocalTextStyle.current.copy(fontSize = 8.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = TNUM), color = GamesMahjongPalette.glyph, maxLines = 1)
             val open = match?.doraIndicators ?: emptyList()
             val tw = MahjongTileSize.smallMeld.width * scale * 0.95f
             val th = MahjongTileSize.smallMeld.height * scale * 0.95f
@@ -496,7 +524,7 @@ private fun CenterBoard(payload: MahjongStatePayload, scale: Float) {
                     Rect(index * (tw + 1.5f) * density, 0f, (index * (tw + 1.5f) + tw) * density, th * density),
                 )
             }
-            GamesMahjongTileStrip(dora, Modifier.padding(top = 1.dp).size(((tw + 1.5f) * 5).dp, th.dp), cornerLabels = false, accessibilityText = "도라 표시패 ${open.size}장")
+            GamesMahjongTileStrip(dora, Modifier.padding(top = 1.dp).size(((tw + 1.5f) * 5).dp, th.dp).testTag(MahjongTableTags.DORA), cornerLabels = false, accessibilityText = "도라 표시패 ${open.size}장")
         }
         for (compass in MahjongCompass.entries) Edge(payload, compass, side, mySeat)
     }
@@ -516,7 +544,7 @@ private fun Edge(payload: MahjongStatePayload, compass: MahjongCompass, side: Fl
             Text(
                 GamesMahjongText.windGlyphs[windIndex(seat.wind)], fontSize = 9.sp, fontWeight = FontWeight.ExtraBold,
                 color = if (seat.isDealer == true) pending else GamesMahjongPalette.glyph,
-                modifier = Modifier.align(Alignment.BottomStart).offset(x = 4.dp, y = (-1).dp),
+                modifier = Modifier.align(Alignment.BottomStart).offset(x = 4.dp, y = (-1).dp).testTag(MahjongTableTags.WIND),
             )
         }
         if (seat?.riichi == true) {
@@ -847,7 +875,7 @@ private fun RoomBand(store: MahjongStore, band: MahjongRoomBand) {
             Text(GamesMahjongText.roomBandReady, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = colors.working)
         } else {
             val seconds = maxOf(0, band.expiresAt.timeIntervalSince(store.clock()).toInt())
-            Text(GamesMahjongText.roomBand(band.joined, seconds), style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = TNUM), color = Color.White)
+            Text(GamesMahjongText.roomBand(band.joined, seconds), style = LocalTextStyle.current.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFeatureSettings = TNUM), color = Color.White)
         }
         Spacer(Modifier.weight(1f))
         if (band.readyToStart && store.isHost) {

@@ -138,6 +138,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
 
     /** 1:1 길건너(판 8 — 아이폰 1.0.18 맞추기). 떼어 내기 깃발(`AppConfig.crossyDuelEnabled`)이 꺼지면 null. */
     val crossyDuel: CrossyDuelStore?
+
+    /** 1:1 알까기(판 8 — 아이폰 1.0.18 맞추기). 떼어 내기 깃발(`AppConfig.alkkagiEnabled`)이 꺼지면 null. */
+    val alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore?
     val characters: AppUserCharacterStore
     val push: PhonePushCoordinator
     val now: NowStore
@@ -259,6 +262,22 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
                 override fun realtimeDidJoin() = store.realtimeDidJoin()
             }
         }
+        // 1:1 알까기(판 8) — 서버 스냅숏이 권위인 스토어(호스트는 같은 하나 — 루비 미러 · 판돈 깃발 문).
+        alkkagi = if (env.appConfig.alkkagiEnabled) {
+            com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore(scope, clock = { env.clock.now() }, collation = env.collation, logger = env.logger)
+        } else {
+            null
+        }
+        alkkagi?.let { store ->
+            store.attach(gomokuHost)
+            // 순위 · 관전 주 스위치(코어 기본 false — 이 줄이 없으면 `alkkagi_ranking` · `alkkagi_watch_live` 가 한 번도 안 나간다).
+            store.rankingEnabled = true
+            store.spectatorFeaturesEnabled = true
+            realtime.alkkagi = object : RealtimeSignalReceiver {
+                override fun handleSignal() = store.handleSignal()
+                override fun realtimeDidJoin() = store.realtimeDidJoin()
+            }
+        }
         characters = AppUserCharacterStore(context, scope, env.knownCharacterIDs)
         context.gomoku = gomoku
         context.chess = chess
@@ -266,6 +285,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         context.rummy = rummy
         context.reversi = reversi
         context.crossyDuel = crossyDuel
+        context.alkkagi = alkkagi
         context.characters = characters
 
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
@@ -339,6 +359,10 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
                 val hidden = ids.map { it.lowercase() }.toSet()
                 if (store.hiddenPeerIDs != hidden) store.hiddenPeerIDs = hidden
             }
+            alkkagi?.let { store ->
+                val hidden = ids.map { it.lowercase() }.toSet()
+                if (store.hiddenPeerIDs != hidden) store.hiddenPeerIDs = hidden
+            }
         }
         // 메시지 탭이 실시간 신호를 받는 자리(Swift 는 MessagesStore.init 이 등록했다 — Kotlin 은 조립이 잇는다). `.drain` 은 take_pokes 가 아니라
         // 이 조회다(C§4 #15).
@@ -355,6 +379,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         reversi?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_REVERSI) }
         // 1:1 길건너 — 서버 `daily_mission_defs()` 의 game 값 `crossy_duel`(iOS 1.0.18 MobileAppModel 과 같다).
         crossyDuel?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_CROSSY_DUEL) }
+        alkkagi?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_ALKKAGI) }
 
         session.onSignedIn = { sessionDidSignIn() }
         session.onSignedOut = { sessionDidSignOut() }
@@ -496,6 +521,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         reversi?.reset()
         // 1:1 길건너도 같은 사슬이다 — 판 루프 · 보고 · 프레임 소켓이 살아 있으면 로그아웃한 사람의 판에 새 계정 토큰으로 보고가 나간다.
         crossyDuel?.reset()
+        // 1:1 알까기도 같은 사슬이다(배선 값 — 서비스 · 호스트 · 주 스위치는 남긴다).
+        alkkagi?.reset()
         ruby.rubyBalance = null
         router.reset()
         widgets.forgetCurrent()
@@ -528,5 +555,6 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         const val GAME_RUMMY: String = "rummy"
         const val GAME_REVERSI: String = "reversi"
         const val GAME_CROSSY_DUEL: String = "crossy_duel"
+        const val GAME_ALKKAGI: String = "alkkagi"
     }
 }

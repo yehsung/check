@@ -29,6 +29,7 @@ import com.yehsung.aingcheck.android.screens.games.hub.GamesHubRoute
 import com.yehsung.aingcheck.android.screens.games.minigame.MiniGameRoute
 import com.yehsung.aingcheck.android.screens.games.reversi.ReversiDestination
 import com.yehsung.aingcheck.android.screens.games.crossy.CrossyDuelRoute
+import com.yehsung.aingcheck.android.screens.games.alkkagi.AlkkagiRoute
 import com.yehsung.aingcheck.android.screens.games.rummy.RummyRoute
 import com.yehsung.aingcheck.android.screens.games.tetris.TetrisDuelRoute
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerRouteScreen
@@ -92,6 +93,7 @@ import com.yehsung.aingcheck.android.screens.games.MiniGamePlaceholder
 import com.yehsung.aingcheck.android.screens.games.RummyPlaceholder
 import com.yehsung.aingcheck.android.screens.games.ReversiPlaceholder
 import com.yehsung.aingcheck.android.screens.games.CrossyDuelPlaceholder
+import com.yehsung.aingcheck.android.screens.games.AlkkagiPlaceholder
 import com.yehsung.aingcheck.android.screens.games.StakeSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.games.TetrisDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerPlaceholder
@@ -246,6 +248,7 @@ private fun NavGraphBuilder.gamesGraph(open: (Any) -> Unit) =
         shellScreen<Dest.Rummy> { RummyPlaceholder() }
         shellScreen<Dest.Reversi> { ReversiPlaceholder() }
         shellScreen<Dest.CrossyDuel> { CrossyDuelPlaceholder() }
+        shellScreen<Dest.Alkkagi> { AlkkagiPlaceholder() }
         dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }
     }
 
@@ -350,6 +353,9 @@ private fun NavGraphBuilder.gamesGraph(
             me = RummySeatFace(name = p.me.displayName ?: RummyPhoneText.me, avatarUrl = p.me.avatarURL?.toString(), characterId = p.me.equippedServerID),
             onLeave = { nav.popBackStack() },
         )
+    }
+    shellScreen<Dest.Alkkagi> {
+        AlkkagiRoute(store = p.games, myUserID = p.session.userID, myName = p.me.displayName, onBack = { nav.popBackStack() })
     }
     shellScreen<Dest.CrossyDuel> {
         CrossyDuelRoute(

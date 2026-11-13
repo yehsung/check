@@ -353,3 +353,16 @@ fun GamesCrossyDuelTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp)
     drawCircle(gamesHex(0x2E7CF6), band * 0.42f, Offset(size.width * 0.36f, band * 3.5f))
     drawCircle(gamesHex(0x2E7CF6).copy(alpha = 0.38f), band * 0.42f, Offset(size.width * 0.64f, band * 3.5f))
 }
+
+/** 1:1 알까기 썸네일 60(판 8) — 나무 판 위에 흑 · 백 돌 몇 알과 판 밖으로 튀어 나가는 백 하나(같은 변 · 같은 둥글기). 정지 그림 한 장. */
+@Composable
+fun GamesAlkkagiTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Thumbnail(side, modifier) {
+    drawRect(Brush.linearGradient(listOf(woodLight, woodDark), Offset.Zero, Offset(size.width, size.height)))
+    val r = size.width * 0.09f
+    for ((x, y, black) in listOf(Triple(0.3f, 0.72f, true), Triple(0.55f, 0.78f, true), Triple(0.42f, 0.3f, false), Triple(0.7f, 0.36f, false))) {
+        drawStone(Offset(size.width * x, size.height * y), r, black)
+    }
+    // 판 밖으로 나가는 백 — 반쯤 걸친 자리 + 지나온 자국.
+    drawLine(Color.White.copy(alpha = 0.55f), Offset(size.width * 0.62f, size.height * 0.55f), Offset(size.width * 0.9f, size.height * 0.2f), 1.2f * density)
+    drawStone(Offset(size.width * 0.95f, size.height * 0.14f), r, false)
+}

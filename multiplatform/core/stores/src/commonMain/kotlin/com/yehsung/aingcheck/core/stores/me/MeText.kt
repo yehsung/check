@@ -403,8 +403,11 @@ object MeText {
      * 아잉 뒤집기(판 7) 줄은 [reversiPlayable] 일 때만 비운다 — 리버시가 없는 조립(Windows · 떼어 내기 깃발 끔)에서는 서버 글자가 참이다
      * (iOS 1.0.17 `phonePlayableMacFirstGames` = rummy · reversi 와 같은 규칙).
      */
-    fun dailyMissionCaption(game: String, detail: String, reversiPlayable: Boolean = false, crossyDuelPlayable: Boolean = false): String =
-        if (game == "rummy" || (reversiPlayable && game == GAME_REVERSI) || (crossyDuelPlayable && game == GAME_CROSSY_DUEL)) "" else detail
+    fun dailyMissionCaption(game: String, detail: String, reversiPlayable: Boolean = false, crossyDuelPlayable: Boolean = false, alkkagiPlayable: Boolean = false): String =
+        if (game == "rummy" || (reversiPlayable && game == GAME_REVERSI) || (crossyDuelPlayable && game == GAME_CROSSY_DUEL) || (alkkagiPlayable && game == GAME_ALKKAGI)) "" else detail
+
+    /** 서버 `daily_mission_defs()` 의 1:1 알까기 game 값(`daily_alkkagi` — 판 8). */
+    const val GAME_ALKKAGI: String = "alkkagi"
 
     /** 서버 `daily_mission_defs()` 의 1:1 길건너 game 값(`daily_crossy_duel` — 판 8). 혼자 하기 `crossy` 와 다른 줄이다. */
     const val GAME_CROSSY_DUEL: String = "crossy_duel"

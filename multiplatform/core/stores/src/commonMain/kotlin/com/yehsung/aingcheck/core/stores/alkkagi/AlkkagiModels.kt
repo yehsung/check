@@ -108,9 +108,9 @@ typealias AlkkagiMatch = AlkkagiMatchWire
 
 // MARK: - 와이어 → 규칙(판 값)
 
-internal fun AlkkagiPlayerWire.rules(): AlkkagiGame.Player = if (this == AlkkagiPlayerWire.black) AlkkagiGame.Player.black else AlkkagiGame.Player.white
-internal fun AlkkagiGame.Player.wire(): AlkkagiPlayerWire = if (this == AlkkagiGame.Player.black) AlkkagiPlayerWire.black else AlkkagiPlayerWire.white
-internal fun AlkkagiVectorWire.rules(): AlkkagiVector = AlkkagiVector(x, y)
+fun AlkkagiPlayerWire.rules(): AlkkagiGame.Player = if (this == AlkkagiPlayerWire.black) AlkkagiGame.Player.black else AlkkagiGame.Player.white
+fun AlkkagiGame.Player.wire(): AlkkagiPlayerWire = if (this == AlkkagiGame.Player.black) AlkkagiPlayerWire.black else AlkkagiPlayerWire.white
+fun AlkkagiVectorWire.rules(): AlkkagiVector = AlkkagiVector(x, y)
 
 /** 돌 한 알(와이어 → 규칙). id 가 Int 범위 밖이면 규칙의 restore 가 거른다(-1). */
 fun AlkkagiStoneWire.rules(): AlkkagiGame.Stone = AlkkagiGame.Stone(

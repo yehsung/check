@@ -79,6 +79,8 @@ data class MeDailyMissionRowContent(
             reversiPlayable: Boolean = false,
             /** 이 앱에서 1:1 길건너를 할 수 있다(판 8 — [MeLinks.crossyDuelPlayable]). 그 줄의 '맥에서' 꼬리를 비운다. */
             crossyDuelPlayable: Boolean = false,
+            /** 이 앱에서 1:1 알까기를 할 수 있다(판 8). */
+            alkkagiPlayable: Boolean = false,
         ): MeDailyMissionRowContent {
             val row = mission.row
             val state = row.state
@@ -95,6 +97,7 @@ data class MeDailyMissionRowContent(
                     rummyPlayable && mission.game == "rummy" -> MeText.dailyMissionCaption(mission.game, row.detail)
                     reversiPlayable && mission.game == MeText.GAME_REVERSI -> MeText.dailyMissionCaption(mission.game, row.detail, reversiPlayable = true)
                     crossyDuelPlayable && mission.game == MeText.GAME_CROSSY_DUEL -> MeText.dailyMissionCaption(mission.game, row.detail, crossyDuelPlayable = true)
+                    alkkagiPlayable && mission.game == MeText.GAME_ALKKAGI -> MeText.dailyMissionCaption(mission.game, row.detail, alkkagiPlayable = true)
                     else -> row.detail
                 },
                 showsFailure = showsFailure,

@@ -113,6 +113,9 @@ interface GamesContext : GamesMiniGameContext {
 
     /** 1:1 길건너(판 8). 떼어 내기 깃발(`AppConfig.crossyDuelEnabled`)이 꺼지면 null — 게임 탭은 1:1 길건너가 없는 것처럼 돈다. */
     val crossyDuel: com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore? get() = null
+
+    /** 1:1 알까기(판 8). 떼어 내기 깃발(`AppConfig.alkkagiEnabled`)이 꺼지면 null. */
+    val alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? get() = null
     val gomoku: GamesGomokuLink
     val chess: GamesBoardGameLink
     val router: GamesRouter

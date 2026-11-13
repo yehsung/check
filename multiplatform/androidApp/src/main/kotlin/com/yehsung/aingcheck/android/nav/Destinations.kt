@@ -55,6 +55,8 @@ object Dest {
     @Serializable data object Reversi
     /** 1:1 길건너(판 8 — 로비·신청·판·결과·순위 한 화면). 딥링크·푸시 글자가 없다(받은 신청은 탭 배지·허브 카드·로비 카드로 안다). */
     @Serializable data object CrossyDuel
+    /** 1:1 알까기(판 8 — 로비·판·결과·관전·순위·연습 한 화면). */
+    @Serializable data object Alkkagi
     /** 판돈 고르기(오목·체스·테트리스 — 판돈 목록은 서버값). [game] = gomoku·chess·tetris. */
     @Serializable data class StakeSheet(val game: String)
 

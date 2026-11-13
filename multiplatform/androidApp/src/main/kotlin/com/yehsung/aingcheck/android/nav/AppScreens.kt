@@ -172,6 +172,7 @@ object NavRequests {
                     // 아잉 뒤집기(판 7). 스토어가 없는 조립(떼어 내기 깃발 끔)에서는 게임 탭 스토어가 이 요청을 아예 내지 않는다(presentReversiScreen 가드).
                     GamesDestination.Reversi -> Dest.Reversi
                     GamesDestination.CrossyDuel -> Dest.CrossyDuel
+                    GamesDestination.Alkkagi -> Dest.Alkkagi
                     is GamesDestination.MiniGame -> RouteTargets.miniGame(d.kind)?.let { Dest.MiniGame(it.raw) }
                 }
                 dest?.let { nav.navigate(it) { launchSingleTop = true } }

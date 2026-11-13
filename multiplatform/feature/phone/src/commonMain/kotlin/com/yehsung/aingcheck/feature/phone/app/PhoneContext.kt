@@ -135,6 +135,9 @@ class PhoneContext(
     /** 코어 1:1 길건너 스토어(판 8 — 호스트는 오목과 같은 하나). null = 이 조립에 1:1 길건너가 없다(떼어 내기 깃발). */
     var crossyDuel: com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore? = null
 
+    /** 코어 1:1 알까기 스토어(판 8). null = 이 조립에 없다(떼어 내기 깃발). */
+    var alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? = null
+
     /** 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). */
     lateinit var characters: AppUserCharacterStore
 
@@ -207,6 +210,7 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
     /** 리버시 줄의 '맥에서 할 수 있어요'를 비운다 — 이 조립에 리버시 스토어가 있을 때만(떼어 내기 깃발이 꺼지면 서버 글자 그대로). */
     override val reversiPlayable: Boolean get() = context.reversi != null
     override val crossyDuelPlayable: Boolean get() = context.crossyDuel != null
+    override val alkkagiPlayable: Boolean get() = context.alkkagi != null
 
     override fun popMeToRoot() {
         context.router.popToRoot(PhoneTab.me)

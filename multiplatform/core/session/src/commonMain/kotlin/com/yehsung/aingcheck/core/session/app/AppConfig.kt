@@ -28,6 +28,8 @@ data class AppConfig(
      * 게임 탭 카드 · 받은 신청 배지 · 실시간 'crossy_duel' 가지 · 입구 막기 · 미션 꼬리가 전부 판 7 과 같다. 판돈 깃발([duelsEnabled])과는 다른 축이다.
      */
     val crossyDuelEnabled: Boolean = CROSSY_DUEL_ENABLED_DEFAULT,
+    /** **1:1 알까기 떼어 내기 깃발**(판 8). 끄면 폰 조립이 알까기 스토어를 만들지 않는다(카드 · 배지 · 'alkkagi' 가지 · 입구 막기 · 미션 꼬리가 판 7 그대로). */
+    val alkkagiEnabled: Boolean = ALKKAGI_ENABLED_DEFAULT,
 ) {
     companion object {
         /** 기본은 꺼짐이다(§8-17 #1). 켜는 것은 빌드 N 의 조립 지점 몫 — 여기 기본값을 true 로 바꾸지 않는다. */
@@ -38,5 +40,8 @@ data class AppConfig(
 
         /** 기본은 켜짐이다(판 8). 떼어 낼 때는 이 한 줄을 false 로 바꾼다. */
         const val CROSSY_DUEL_ENABLED_DEFAULT: Boolean = true
+
+        /** 기본은 켜짐이다(판 8). */
+        const val ALKKAGI_ENABLED_DEFAULT: Boolean = true
     }
 }

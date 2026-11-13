@@ -180,8 +180,16 @@ struct MeAchievementRow: View {
                 captionLine(state: state, failed: failed)
             }
             if state == .claimable {
-                MeClaimButton(amount: mission.reward, inFlight: store.isClaimingAchievement(mission.key)) {
-                    store.claimAchievement(key: mission.key)
+                if let characterID = mission.characterID {
+                    // 캐릭터 보상 줄 — 루비 숫자 없는 [받기](받는 것은 캐릭터다 · 보이스오버는 "받기, 개발에 찌든 아잉이").
+                    MeCharacterClaimButton(inFlight: store.isClaimingAchievement(mission.key),
+                                           accessibility: DevAingMission.claimAccessibility(name: MeCharacterCards.displayName(for: characterID))) {
+                        store.claimCharacterMission(key: mission.key)
+                    }
+                } else {
+                    MeClaimButton(amount: mission.reward, inFlight: store.isClaimingAchievement(mission.key)) {
+                        store.claimAchievement(key: mission.key)
+                    }
                 }
             }
         }
@@ -199,7 +207,20 @@ struct MeAchievementRow: View {
         .accessibilityLabel(Text(MeText.missionAccessibility(mission)))
     }
 
+    @ViewBuilder
     private func icon(tint: Color) -> some View {
+        if let characterID = mission.characterID {
+            // 캐릭터 보상 줄은 받는 캐릭터의 얼굴(같은 30pt 칸).
+            CharacterPortrait(id: characterID, mood: .plain, size: 30)
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(tint.opacity(0.14)))
+                .accessibilityHidden(true)
+        } else {
+            symbolIcon(tint: tint)
+        }
+    }
+
+    private func symbolIcon(tint: Color) -> some View {
         Image(systemName: MeText.missionIcon(mission.key))
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(tint)
@@ -267,6 +288,40 @@ struct MeAchievementRow: View {
 }
 
 // MARK: - 받기 버튼 · 연출(도전 미션 줄 · 이번 주 근무 카드가 **같은 버튼**을 쓴다)
+
+/// 캐릭터 보상 줄의 [받기](폰 1.0.18) — 루비 숫자 없이 글자만. 모양 · 높이는 `MeClaimButton` 과 같다.
+struct MeCharacterClaimButton: View {
+    var inFlight: Bool = false
+    let accessibility: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Group {
+                if inFlight {
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(MobileTheme.onAccentFill)
+                } else {
+                    Text(MeText.claimButton)
+                        .font(.footnote.weight(.bold))
+                }
+            }
+            .foregroundStyle(MobileTheme.onAccentFill)
+            .lineLimit(1)
+            .fixedSize()
+            .padding(.horizontal, MobileTheme.space3)
+            .frame(minHeight: MeAchievementLayout.claimHeight)
+            .background(Capsule().fill(MobileTheme.accentFill))
+        }
+        .buttonStyle(.plain)
+        .disabled(inFlight)
+        .opacity(inFlight ? 0.6 : 1)
+        .frame(minHeight: AingButtonMetrics.minimumTarget)
+        .contentShape(Rectangle())
+        .accessibilityLabel(Text(accessibility))
+    }
+}
 
 /// [받기 💎+50]. 강조 채움 캡슐 + 흰 글자(이 카드에서 누를 것은 이것이다). 떠 있으면 스피너로 바뀌고 눌리지 않는다
 /// (두 번 눌러도 요청 하나 — 스토어도 따로 막는다). 누름 영역은 보이는 높이와 상관없이 늘 44pt 이상이다.

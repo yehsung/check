@@ -683,7 +683,9 @@ struct V0325TooltipTests {
             // 글자 그대로("— 보유 중" · "— 뽑기…" · "사기")는 V0366CakeMacShopTests 가 값으로 잰다.
             // v0.3.74: 잠긴 칸의 얻는 길이 선물 종류마다 다르다(생일 · 술 한잔) — 카드가 그 종류의 문구 묶음(`gift:`)을 넘긴다
             // (글자는 V0374IsulMacGiftStoreTests 가 값으로 잰다).
-            ("CheckShopPanel.swift", ".checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy))"),
+            // v0.3.78: 뽑기 전용 칸의 얻는 길이 캐릭터마다 다르다(금 · 무지개 "뽑기나 조각 교환으로…" · 흑우 "조각 교환으로만…") —
+            // 카드가 `GachaText.acquireHint(for:)` 를 넘긴다(글자는 V0378HwooCoreTests 가 값으로 잰다).
+            ("CheckShopPanel.swift", ".checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy, acquireHint: GachaText.acquireHint(for: entry.id)))"),
             ("CheckSettingsView.swift", #".checkTooltip(store.isDisplayNameLocked ? "일주일에 한 번만 바꿀 수 있어요" : "별명 저장")"#),
             ("CheckSettingsView.swift", #".checkTooltip("\(WorkShortcut.default.displayString) 로 되돌려요")"#),
             ("CheckTodoBoardView.swift", ".checkTooltip(item.isDone ? TodoBoardStrings.markUndone : TodoBoardStrings.markDone)"),
@@ -726,11 +728,15 @@ struct V0325TooltipTests {
         // v0.3.69: 아잉 큐브 창(RummyPanel) 루트가 여덟 번째다. 확성기 배너 창은 [답장] 말풍선을 위해 한때 아홉 번째였으나
         // 2026-10-30 [답장] 을 빼면서 말풍선이 없어져 레이어도 걷었다([닫기] 만 남은 카드).
         // 아잉 뒤집기 창(ReversiPanel) 루트가 아홉 번째다(SPEC §5.1 — 창 루트에 레이어 + 아바타 표 두 줄).
+        // 아잉 마작 창(MahjongPanel) 루트가 열 번째다(MJ/SPEC.md §4.6 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
+        // 1:1 길건너 창(CrossyDuelPanel) 루트가 열한 번째다(CD/SPEC.md §9.5 #23 — 창 루트에 레이어 + 아바타 표, 짝은 V0335).
+        // 1:1 알까기 창(AlkkagiOnlinePanel)은 열두 번째다 — v2(alkkagi/v2 SPEC §5.1)에서 레이어가 독립 실행기 도우미
+        // (`alkkagiTooltipLayer()`, AlkkagiGameView.swift)에서 창 루트 패널로 옮겨 왔다(독립 실행기는 로컬 연습만 — §5.10).
         // 숫자만 올리지 않고 아래에서 자리(클리핑 바깥)까지 잰다.
         #expect(layerSites == [
-            "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
-            "ChessPanel.swift:1", "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1",
-            "RummyPanel.swift:1", "TetrisDuelPanel.swift:1",
+            "AlkkagiOnlinePanel.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "CheckTodoBoardWindow.swift:1",
+            "ChessPanel.swift:1", "CrossyDuelPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1",
+            "ReversiPanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1",
         ], "레이어 자리: \(layerSites)")
         // 아잉 큐브 창: 오목·체스와 **같은 자리**(창 고정 프레임·배경·전경색 뒤). 판·랙·목록·덮개 ZStack 은 전부 그 안쪽이라
         // 어느 클립(`RummyScrollBox` 의 clipped · 로비 열의 clipped)도 레이어를 자르지 않는다. 반응 말풍선 덮개
@@ -754,6 +760,13 @@ struct V0325TooltipTests {
         let reversiLayer = try #require(reversi.range(of: ".checkTooltipLayer()"))
         let reversiOverlay = try #require(reversi.range(of: "ReversiRulesOverlay("))
         #expect(reversiOverlay.upperBound <= reversiLayer.lowerBound, "규칙 덮개가 툴팁 레이어 바깥에 붙었다")
+        // 1:1 알까기 창도 같은 자리다: 창 고정 프레임·배경·전경색 뒤. 판돈 · 규칙 덮개와 판 · 로비는 전부 그 안쪽 ZStack 이다.
+        let alkkagi = try #require(Self.between(sources["AlkkagiOnlinePanel.swift"] ?? "",
+                                                "struct AlkkagiOnlinePanel: View {", ".onChange(of: store.state?.id)"))
+        #expect(alkkagi.contains("height: BoardGameLayout.contentSize.height, alignment: .topLeading) .background(CheckTheme.background) .foregroundStyle(CheckTheme.primaryText) .checkTooltipLayer()"))
+        let alkkagiLayer = try #require(alkkagi.range(of: ".checkTooltipLayer()"))
+        let alkkagiStake = try #require(alkkagi.range(of: "AlkkagiStakePrompt("))
+        #expect(alkkagiStake.upperBound <= alkkagiLayer.lowerBound, "판돈 덮개가 툴팁 레이어 바깥에 붙었다")
         // 오목 창: 창 고정 프레임·배경·전경색 뒤(판·목록 클리핑 바깥).
         let gomoku = try #require(Self.between(sources["GomokuPanel.swift"] ?? "",
                                                "struct GomokuPanel: View {", "private var content: some View {"))

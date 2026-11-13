@@ -132,7 +132,19 @@ struct V0354GoldShopProtocolTests {
         let cakes = ShopWire.cakeCharacterIDs.allSatisfy(V0366CakeCoreTests.macCakePortraitsInSourceTree)
         // v0.3.74: 이슬 아잉이 그림(초상 · 라벨)까지 실리면 5 다(누적 — 이슬의 기준선은 V0374IsulCoreTests.macIsulArtInSourceTree).
         let isul = V0374IsulCoreTests.macIsulArtInSourceTree
-        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? ShopWire.isulProtocol : ShopWire.cakeProtocol) : ShopWire.rainbowProtocol)
+        // v0.3.77: 빼빼로 그림(판 · 초상)까지 실리면 6 이다(누적 — 빼빼로의 기준선은 V0377PeperoCoreTests.macPeperoArtInSourceTree).
+        let pepero = V0377PeperoCoreTests.macPeperoArtInSourceTree
+        // v0.3.78: 흑우 그림(초상 두 장 + 무지개 밝기 맵)까지 실리면 7 이다(누적 — 기준선은 V0378HwooCoreTests.macHwooArtInSourceTree).
+        let hwoo = V0378HwooCoreTests.macHwooArtInSourceTree
+        // v0.3.78: 루비 그림까지 실리면 8 이다(누적 — 기준선은 V0378RubyCoreTests.macRubyArtInSourceTree).
+        let ruby = V0378RubyCoreTests.macRubyArtInSourceTree
+        // v0.3.81: 개발에 찌든 아잉이 그림까지 실리면 9 다(누적 — 기준선은 V0381DevAingCoreTests.macDevArtInSourceTree).
+        let dev = V0381DevAingCoreTests.macDevArtInSourceTree
+        // 지역 아잉이(두 센터) 그림까지 실리면 10 이다(누적 — 기준선은 RegionAingCoreTests.macRegionArtInSourceTree).
+        let region = RegionAingCoreTests.macRegionArtInSourceTree
+        let expected = robot ? (gold ? (rainbow ? (cakes ? (isul ? (pepero ? (hwoo ? (ruby ? (dev ? (region ? ShopWire.regionProtocol : ShopWire.devProtocol) : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol) : ShopWire.isulProtocol)
+                                                                  : ShopWire.cakeProtocol)
+                                                         : ShopWire.rainbowProtocol)
                                                 : ShopWire.goldProtocol)
                                      : ShopWire.robotProtocol)
                              : ShopWire.legacyProtocol

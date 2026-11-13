@@ -46,9 +46,19 @@ struct CheckMenuView: View {
     var previewRummyInvite: RummyRoom? = nil
     /// 스냅샷 전용: 받은 **아잉 뒤집기** 신청 배너를 강제로 그린다. 앱에서는 store.reversi.visibleIncoming 로만 결정.
     var previewReversiInvite: ReversiInvite? = nil
+    /// 스냅샷 전용: 받은 **아잉 마작** 초대 배너를 강제로 그린다. 앱에서는 store.mahjong.visibleInvites 로만 결정.
+    var previewMahjongInvite: MahjongRoom? = nil
+    /// 스냅샷 전용: 아잉 마작 **자리 비움** 배너를 강제로 그린다. 앱에서는 store.mahjong.hasAwaySeatHere 로만 결정.
+    var previewMahjongAway: Bool = false
+    /// 스냅샷 전용: 받은 **1:1 길건너** 신청 배너를 강제로 그린다. 앱에서는 store.crossyDuel.visibleIncoming 로만 결정.
+    var previewCrossyDuelInvite: CrossyDuelInvite? = nil
     /// 스냅샷 전용(v0.3.64): 미션 화면의 스크롤 내용을 **통째로** 펼쳐 그린다(세 묶음이 한 장에 보이게 — 스틸 · 묶음 순서 측정).
     /// 창이 상한을 넘으므로 앱에서는 언제나 false 다(ScrollView). 맨 끝에 둔 이유는 위 `previewGomokuInvite` 와 같다.
     var previewFullMissionList: Bool = false
+    /// 스냅샷 전용: 받은 1:1 알까기 신청 배너를 강제로 그린다. 앱에서는 store.alkkagi.visibleIncoming 만 읽는다.
+    var previewAlkkagiInvite: AlkkagiInvite? = nil
+    /// 스냅샷 전용(2026-11-10): 콕 찌르기 검색 칸에 이 글자를 넣은 채 그린다. 앱에서는 언제나 nil(빈 칸으로 열린다).
+    var previewPokeSearchQuery: String? = nil
 
     // 실제 감지(updateCheck)든 미리보기 플래그든 하나라도 켜지면 최상단 배너 후보가 된다.
     private var showsUpdateBanner: Bool {
@@ -87,6 +97,17 @@ struct CheckMenuView: View {
         /// 받은 **아잉 뒤집기** 신청. 뜻으로는 60초 신청이라 큐브(방 TTL 10분) 앞이 맞지만, 큐브 뒤에 둔다(설계 결정 D7 —
         /// 둘이 동시에 오면 큐브가 이기고 아잉 뒤집기는 다음 팝오버로 밀린다. 신청은 서버에 남아 창 로비에서 다시 보인다).
         case reversiInvite
+        /// 받은 **아잉 마작** 초대. 방 TTL 이 10분이라 1:1 신청들보다 덜 급하다 — 아잉 뒤집기 뒤다(밀려도 초대는 서버에 남아
+        /// 마작 창 로비에서 다시 보인다).
+        case mahjongInvite
+        /// 아잉 마작 **자리 비움**(이 기기가 연 판 — 창을 닫았거나 [나가기]). 판은 자동으로 흐르고 [돌아가기]가 창을 연다.
+        /// 초대 뒤다(같은 사람에게 둘이 함께 뜰 일은 드물다 — 판 중에는 초대를 못 받는다).
+        case mahjongAway
+        /// 받은 **1:1 길건너** 신청. 60초짜리 1:1 신청이지만 마작 뒤에 둔다(CD/SPEC.md §9.5 #15 — 마작 앵커를 그대로 두는 자리).
+        /// 둘이 동시에 오면 마작이 이기고 길건너는 다음 팝오버로 밀린다(신청은 서버에 남아 창 로비에서 다시 보인다).
+        case crossyDuelInvite
+        /// 받은 알까기 신청. 기존 신청 배너 순서를 유지하고 길건너 바로 뒤에 둔다.
+        case alkkagiInvite
         /// 지난주 회고 안내(주 1회).
         case retro
         /// 내 제보에 답장이 왔다는 안내(v0.3.14). 회고보다 덜 급한 이유는 회고가 '이번 주에 딱 하루'
@@ -126,6 +147,14 @@ struct CheckMenuView: View {
     static let rummyInviteBannerHeight: CGFloat = 92
     /// 받은 아잉 뒤집기 신청 배너. `ReversiInviteBanner` 는 체스 배너를 베낀 **같은 모양**이라 높이도 같다.
     static let reversiInviteBannerHeight: CGFloat = 92
+    /// 받은 아잉 마작 초대 배너. `MahjongInviteBanner` 는 큐브 배너를 베낀 **같은 모양**이라 높이도 같다.
+    static let mahjongInviteBannerHeight: CGFloat = 92
+    /// 아잉 마작 자리 비움 배너(`MahjongAwayBanner`) — 초대 배너와 같은 틀이라 높이도 같다.
+    static let mahjongAwayBannerHeight: CGFloat = 92
+    /// 받은 1:1 길건너 신청 배너. `CrossyDuelInviteBanner` 는 테트리스 배너와 **같은 모양**이라 높이도 같다.
+    static let crossyDuelInviteBannerHeight: CGFloat = 92
+    /// 받은 알까기 신청 배너. 기존 대결 배너와 같은 두 줄과 28pt 버튼 행을 쓴다.
+    static let alkkagiInviteBannerHeight: CGFloat = 92
     /// 토큰 소모량 행 높이(pt, spacing 포함).
     static let tokenUsageRowHeight: CGFloat = 53
     /// AI 리밋 카드 높이(pt, spacing 포함 — v0.3.46). **제공자 수에 따라 자란다**: 별도 창을 접고 카드를
@@ -346,6 +375,152 @@ struct CheckMenuView: View {
         }
     }
 
+    /// 팝오버에 띄울 받은 **아잉 마작** 초대(없으면 nil). 큐브와 같은 규약: **스토어가 만료·차단을 걷은 목록만** 읽는다.
+    private var mahjongBannerInvite: MahjongRoom? {
+        previewMahjongInvite ?? store.mahjong.visibleInvites.first
+    }
+
+    /// 배너 [참가]: 서버 참가 → 마작 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 큐브와 같은 순서).
+    /// 참가 결과(방이 찼다 · 루비가 모자라다 …)는 스토어 문구가 창에서 말한다.
+    private func joinMahjongInvite(_ room: MahjongRoom) {
+        let mahjong = store.mahjong
+        Task { @MainActor in
+            await mahjong.join(roomID: room.id)
+            mahjong.openWindow(focusMatchID: room.id.uuidString.lowercased())
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineMahjongInvite(_ room: MahjongRoom) {
+        let mahjong = store.mahjong
+        Task { @MainActor in
+            await mahjong.decline(roomID: room.id)
+        }
+    }
+
+    private func openMahjongInvite(_ room: MahjongRoom) {
+        store.mahjong.openWindow(focusMatchID: room.id.uuidString.lowercased())
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 아잉 마작 초대 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var mahjongInviteBanner: some View {
+        if topBanner == .mahjongInvite, let room = mahjongBannerInvite {
+            MahjongInviteBanner(
+                room: room,
+                onJoin: { joinMahjongInvite(room) },
+                onDecline: { declineMahjongInvite(room) },
+                onOpen: { openMahjongInvite(room) }
+            )
+        }
+    }
+
+    /// 아잉 마작 자리 비움 배너 후보 — **이 기기가 연 판**의 내 자리가 비움일 때만(스토어 `hasAwaySeatHere` 가 장부까지 본다).
+    private var showsMahjongAwayBanner: Bool {
+        previewMahjongAway || store.mahjong.hasAwaySeatHere
+    }
+
+    /// 배너 [돌아가기]: 마작 창을 열고 → 자리로 돌아온다 → 팝오버 닫기(창 먼저, 팝오버 나중).
+    private func comeBackToMahjong() {
+        let mahjong = store.mahjong
+        mahjong.openWindow(focusMatchID: mahjong.match?.match?.id)
+        Task { @MainActor in
+            await mahjong.comeBack()
+        }
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    @ViewBuilder
+    private var mahjongAwayBanner: some View {
+        if topBanner == .mahjongAway {
+            MahjongAwayBanner(onComeBack: { comeBackToMahjong() })
+        }
+    }
+
+    /// 팝오버에 띄울 받은 **1:1 길건너** 신청(없으면 nil). 테트리스와 같은 규약: **스토어가 만료·차단을 걷은 결과만** 읽는다.
+    private var crossyDuelBannerInvite: CrossyDuelInvite? {
+        previewCrossyDuelInvite ?? store.crossyDuel.visibleIncoming
+    }
+
+    /// 배너 [수락]: 서버 수락 → 1:1 길건너 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 테트리스와 같은 순서).
+    private func acceptCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        let crossyDuel = store.crossyDuel
+        Task { @MainActor in
+            await crossyDuel.respond(inviteID: invite.id, accept: true)
+            crossyDuel.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        let crossyDuel = store.crossyDuel
+        Task { @MainActor in
+            await crossyDuel.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openCrossyDuelInvite(_ invite: CrossyDuelInvite) {
+        store.crossyDuel.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    /// 받은 1:1 길건너 신청 배너. 그릴지는 `topBanner` 하나가 정한다(배너는 한 번에 하나).
+    @ViewBuilder
+    private var crossyDuelInviteBanner: some View {
+        if topBanner == .crossyDuelInvite, let invite = crossyDuelBannerInvite {
+            CrossyDuelInviteBanner(
+                invite: invite,
+                onAccept: { acceptCrossyDuelInvite(invite) },
+                onDecline: { declineCrossyDuelInvite(invite) },
+                onOpen: { openCrossyDuelInvite(invite) }
+            )
+        }
+    }
+
+    /// 팝오버에 띄울 받은 **1:1 알까기** 신청(없으면 nil). 길건너와 같은 규약: **스토어가 만료·차단·내 판을 걷은 결과만** 읽는다
+    /// (시계를 읽지 않는다 — 만료는 스토어 타이머가 걷는다).
+    private var alkkagiBannerInvite: AlkkagiInvite? {
+        previewAlkkagiInvite ?? store.alkkagi.visibleIncoming
+    }
+
+    /// 배너 [수락]: 서버 수락 → 1:1 알까기 창 → 팝오버 닫기(창 먼저, 팝오버 나중 — 다섯 게임과 같은 순서). **결과와 상관없이** 창을 연다
+    /// (다섯 게임 5/5 — 실패 까닭은 창 안내 줄이 말한다, SPEC §0 #12 · VC-4). 겹친 누름은 스토어 `respond` 가 `isBusy` 로 막는다.
+    private func acceptAlkkagiInvite(_ invite: AlkkagiInvite) {
+        let alkkagi = store.alkkagi
+        Task { @MainActor in
+            await alkkagi.respond(inviteID: invite.id, accept: true)
+            alkkagi.openWindow(focusMatchID: invite.id)
+            WindowTopAnchor.dismissMenuPopover()
+        }
+    }
+
+    private func declineAlkkagiInvite(_ invite: AlkkagiInvite) {
+        let alkkagi = store.alkkagi
+        Task { @MainActor in
+            await alkkagi.respond(inviteID: invite.id, accept: false)
+        }
+    }
+
+    private func openAlkkagiInvite(_ invite: AlkkagiInvite) {
+        store.alkkagi.openWindow(focusMatchID: invite.id)
+        WindowTopAnchor.dismissMenuPopover()
+    }
+
+    @ViewBuilder
+    private var alkkagiInviteBanner: some View {
+        if topBanner == .alkkagiInvite, let invite = alkkagiBannerInvite {
+            AlkkagiInviteBanner(
+                invite: invite,
+                isBusy: store.alkkagi.isBusy,
+                serverNowMs: { store.alkkagi.estimatedServerNowMs },
+                onAccept: { acceptAlkkagiInvite(invite) },
+                onDecline: { declineAlkkagiInvite(invite) },
+                onOpen: { openAlkkagiInvite(invite) }
+            )
+        }
+    }
+
     /// 받은 오목 신청 배너(v0.3.30 — 헤더 카드 아래 · 무소속 화면 맨 위). 그릴지는 `topBanner` 하나가 정한다 —
     /// 배너는 **한 번에 하나**라는 창 높이 예산(`TopBanner` 주석)은 자리가 옮겨 가도 그대로다.
     /// 남은 초는 배너 안의 **잎**(`GomokuInviteBannerCountdown`)만 읽는다 — 이 프로퍼티가 시계를 읽으면 팝오버 전체가 매초 돈다.
@@ -368,6 +543,10 @@ struct CheckMenuView: View {
         if store.isSignedIn, tetrisBannerInvite != nil { return .tetrisInvite }
         if store.isSignedIn, rummyBannerInvite != nil { return .rummyInvite }
         if store.isSignedIn, reversiBannerInvite != nil { return .reversiInvite }
+        if store.isSignedIn, mahjongBannerInvite != nil { return .mahjongInvite }
+        if store.isSignedIn, showsMahjongAwayBanner { return .mahjongAway }
+        if store.isSignedIn, crossyDuelBannerInvite != nil { return .crossyDuelInvite }
+        if store.isSignedIn, alkkagiBannerInvite != nil { return .alkkagiInvite }
         if store.isSignedIn, store.showsRetroBanner { return .retro }
         // 답장은 새 버전 안내보다 급하다(내가 쓴 글에 온 답이라 사람이 기다리고 있다).
         // 판정은 스토어가 끝내 둔 것을 읽기만 한다 — 위 경고 그대로, 여기서 시각을 비교하지 않는다.
@@ -389,6 +568,10 @@ struct CheckMenuView: View {
         case .tetrisInvite: return Self.tetrisInviteBannerHeight
         case .rummyInvite: return Self.rummyInviteBannerHeight
         case .reversiInvite: return Self.reversiInviteBannerHeight
+        case .mahjongInvite: return Self.mahjongInviteBannerHeight
+        case .mahjongAway: return Self.mahjongAwayBannerHeight
+        case .crossyDuelInvite: return Self.crossyDuelInviteBannerHeight
+        case .alkkagiInvite: return Self.alkkagiInviteBannerHeight
         case .retro: return Self.inlineBannerHeight
         // 회고와 같은 InlineActionBanner 한 줄이라 높이도 같다(배너는 동시에 하나뿐이므로 더하지 않는다).
         case .feedbackReply: return Self.inlineBannerHeight
@@ -644,6 +827,10 @@ struct CheckMenuView: View {
                     tetrisInviteBanner
                     rummyInviteBanner
                     reversiInviteBanner
+                    mahjongInviteBanner
+                    mahjongAwayBanner
+                    crossyDuelInviteBanner
+                    alkkagiInviteBanner
                     TeamlessPanel(store: store)
                     FooterBar(store: store)
                 }
@@ -676,6 +863,12 @@ struct CheckMenuView: View {
                     rummyInviteBanner
                     // 받은 아잉 뒤집기 신청도 **같은 자리**(체스와 같은 사정 — 창을 여는 길이 미니게임 창 사이드바 하나뿐이다).
                     reversiInviteBanner
+                    // 받은 아잉 마작 초대 · 자리 비움도 **같은 자리**(큐브와 같은 사정 — 창을 여는 길이 사이드바·이 배너뿐이다).
+                    mahjongInviteBanner
+                    mahjongAwayBanner
+                    // 받은 1:1 길건너 신청도 **같은 자리**(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창 사이드바 하나뿐이다).
+                    crossyDuelInviteBanner
+                    alkkagiInviteBanner
                     // v0.2.47 — 자리 비움 [되돌리기] 배너는 없앴다. 최근 30분 안에 자동 마감된 내 세션은
                     // 사용자가 버튼을 누를 필요 없이 복귀가 감지되는 순간 스스로 재개된다
                     // (WorkTimerStore.canResumeRecentlyClosedSession → CheckOverlayController.nudgeAutoStart).
@@ -845,6 +1038,8 @@ struct CheckMenuView: View {
                             // 안 본 찌르기가 있는 상대들(v0.3.65 — 사용자 결정 "찌르기도 친다"). 목록 순서와 행의 점이 메시지와 **합쳐** 읽는다.
                             // 메뉴바 빨간 점은 이 값을 읽지 않는다(메시지만 — `hasUnreadMessages`).
                             unreadPokePeerIDs: store.unreadPokePeerIDs,
+                            // [모두 읽음] — 이력을 한 번 새로 받고 안 읽은 대화마다 읽음 경계를 올린다(`markAllConversationsRead`).
+                            onMarkAllRead: { store.markAllConversationsRead() },
                             messageNotice: store.messageNotice,
                             // 큐의 맨 앞 = 아직 사용자에게 보여 주지 않은 가장 오래된 1건.
                             // ⚠︎ 말풍선(오버레이 담당)이 consumeCurrentMessage 로 큐를 밀면 이 자리도 함께 비워진다.
@@ -852,7 +1047,10 @@ struct CheckMenuView: View {
                             waitingMessageCount: store.waitingMessageCount,
                             onBack: { store.togglePokePanel() },
                             extraChromeHeight: listExtraChromeHeight,
-                            clipsOverflowInsteadOfScroll: previewClipsOverflowList
+                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                            plainTextEditors: previewPlainTextEditors,
+                            // 이름 찾기 칸의 처음 글자. 앱은 늘 빈 칸으로 연다(패널을 닫으면 검색어도 사라진다).
+                            searchDraft: previewPokeSearchQuery ?? ""
                         )
                     } else if store.isUltraPanelVisible {
                         // 울트라 화면 — **보유 수량만**(v0.3.56). 리그/토큰/찌르기/내 기록과 **같은 뼈대**다.
@@ -895,7 +1093,9 @@ struct CheckMenuView: View {
                                 // 일일 미션 받기(v0.3.64 — `daily_mission_claim`). 떠 있음 · 실패는 누적과 따로 센다.
                                 claimDaily: { store.claimDailyMission(key: $0) },
                                 dailyInFlightKeys: store.dailyMissionClaimsInFlight,
-                                dailyFailedKeys: store.dailyMissionClaimFailedKeys
+                                dailyFailedKeys: store.dailyMissionClaimFailedKeys,
+                                // 캐릭터 보상 미션 받기(v0.3.81 — 개발에 찌든 아잉이 · `achievement_character_claim`).
+                                claimCharacter: { store.claimCharacterMission(key: $0) }
                             ),
                             // 미션 화면이 떠 있으니 이 sync 가 도전 미션도 다시 묻는다(`achievementsReason(forWallet:)`).
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },
@@ -912,6 +1112,11 @@ struct CheckMenuView: View {
                             retro: store.retro,
                             dailyGrid: store.dailyGrid,
                             tokenDailyGrid: store.tokenDailyGrid,
+                            // 주별 근무 리듬(2026-11-06): 이번 주는 진행 중 근무(startedAt)를 1분마다 얹어 실시간으로 찬다.
+                            rhythmWeeks: store.rhythmWeeks,
+                            rhythmOffset: store.rhythmWeekOffset,
+                            liveStart: store.startedAt,
+                            onRhythmOffset: { store.setRhythmWeekOffset($0) },
                             // 수집 거부면 섹션을 아예 뺀다(서버에 행이 없고 앞으로도 안 쌓인다 — 빈 잔디는 거짓말이다).
                             showsTokenGrid: store.tokenUsageCollect,
                             hasLoaded: store.insightsLoaded,
@@ -924,14 +1129,26 @@ struct CheckMenuView: View {
                             onBack: { store.toggleInsightsPanel() }
                         )
                     } else if store.isShopPanelVisible {
-                        // 상점(v0.3.17). 들어오는 문은 헤더의 루비 잔량 칩 하나뿐이라 [뒤로]가 돌아갈
-                        // 곳은 언제나 홈이다(캐릭터 패널과 같은 규약 — origin 을 물을 이유가 없다).
-                        CheckShopPanel(
-                            store: store,
-                            extraChromeHeight: listExtraChromeHeight,
-                            clipsOverflowInsteadOfScroll: previewClipsOverflowList,
-                            onBack: { store.closeShopPanel() }
-                        )
+                        if store.isMegaphoneFeedShowing {
+                            // 지난 확성기(2026-11-11)는 상점 **안의 보기**다 — 문이 작성기 설명 줄 끝에 있고, [뒤로]는 작성기가 열린
+                            // 상점으로 간다. 하위 패널 깃발이 아니라서 토큰 행 게이트는 상점 깃발이 이미 센다.
+                            CheckMegaphoneFeedPanel(
+                                store: store,
+                                rendersPlainTextEditor: previewPlainTextEditors,
+                                clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                                extraChromeHeight: listExtraChromeHeight,
+                                onBack: { store.closeMegaphoneFeed() }
+                            )
+                        } else {
+                            // 상점(v0.3.17). 들어오는 문은 헤더의 루비 잔량 칩 하나뿐이라 [뒤로]가 돌아갈
+                            // 곳은 언제나 홈이다(캐릭터 패널과 같은 규약 — origin 을 물을 이유가 없다).
+                            CheckShopPanel(
+                                store: store,
+                                extraChromeHeight: listExtraChromeHeight,
+                                clipsOverflowInsteadOfScroll: previewClipsOverflowList,
+                                onBack: { store.closeShopPanel() }
+                            )
+                        }
                     } else if store.isCharacterPanelVisible {
                         // 캐릭터 선택(v0.3.15). 들어오는 문은 헤더 카드의 마스코트 하나뿐이라 [뒤로]가
                         // 돌아갈 곳은 언제나 홈(팀 목록)이다 — origin 을 물을 이유가 없다(제보와 같은 규약).
@@ -1346,12 +1563,28 @@ struct MenuBarStatusLabel: View {
     ///   `dotReasons`)을 소스 계약 시험이 함께 잰다.
     var hasReversiInvite = false
 
+    /// 받은 **아잉 마작** 초대가 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxMahjongWiringTests)이 함께 잰다.
+    var hasMahjongInvite = false
+
+    /// 아잉 마작 **자리 비움**(이 기기가 연 판)이다. 같은 짝 셋(앱 인자 · 이 칸 · `dotReasons`)이다.
+    var hasMahjongAway = false
+
+    /// 받은 **1:1 길건너** 신청이 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxCrossyDuelWiringTests)이 함께 잰다.
+    var hasCrossyDuelInvite = false
+
+    /// 받은 **1:1 알까기** 신청이 있다. 같은 사정이고 같은 이유로 **맨 뒤에 선언**한다 — 짝(앱 인자 · 이 칸 · `dotReasons`)을
+    /// 소스 계약 시험(V03xxAlkkagiWiringTests)이 함께 잰다.
+    var hasAlkkagiInvite: Bool = false
+
     /// 점을 켜는 사유들(순수 값). 비어 있으면 점이 없다.
     var dotReasons: MenuBarDotReasons {
         MenuBarDotReasons(
             unreadMessages: hasUnreadMessages, gomokuInvite: hasGomokuInvite, updateAvailable: updateAvailable,
             openReports: hasOpenReports, chessInvite: hasChessInvite, tetrisInvite: hasTetrisInvite,
-            rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite
+            rummyInvite: hasRummyInvite, reversiInvite: hasReversiInvite, mahjongInvite: hasMahjongInvite,
+            mahjongAway: hasMahjongAway, crossyDuelInvite: hasCrossyDuelInvite, alkkagiInvite: hasAlkkagiInvite
         )
     }
 
@@ -1486,6 +1719,14 @@ struct MenuBarDotReasons: Equatable, Sendable {
     var rummyInvite: Bool = false
     /// 받은 아잉 뒤집기 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
     var reversiInvite: Bool = false
+    /// 받은 아잉 마작 초대가 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var mahjongInvite: Bool = false
+    /// 아잉 마작 자리 비움(이 기기가 연 판). 같은 이유로 **맨 뒤에 선언**한다.
+    var mahjongAway: Bool = false
+    /// 받은 1:1 길건너 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var crossyDuelInvite: Bool = false
+    /// 받은 1:1 알까기 신청이 있다. 같은 이유로 **맨 뒤에 선언**한다(기존 멤버와이즈 호출 보호).
+    var alkkagiInvite: Bool = false
 
     static let unreadMessagesText = "새 메시지"
     static let gomokuInviteText = "오목 신청"
@@ -1493,11 +1734,15 @@ struct MenuBarDotReasons: Equatable, Sendable {
     static let tetrisInviteText = "테트리스 신청"
     static let rummyInviteText = RummyInviteText.dotReason
     static let reversiInviteText = ReversiText.dotReason
+    static let mahjongInviteText = MahjongInviteText.dotReason
+    static let mahjongAwayText = MahjongInviteText.awayDotReason
+    static let crossyDuelInviteText = CrossyDuelText.dotReason
+    static let alkkagiInviteText = AlkkagiText.dotReason
     static let openReportsText = "처리할 신고"
 
     var isEmpty: Bool {
         !unreadMessages && !gomokuInvite && !chessInvite && !tetrisInvite && !rummyInvite && !reversiInvite && !updateAvailable
-            && !openReports
+            && !openReports && !mahjongInvite && !mahjongAway && !crossyDuelInvite && !alkkagiInvite
     }
 
     /// 켜진 사유들의 문구(순서 고정). 하나도 없으면 nil — 점이 없으니 설명할 것도 없다.
@@ -1513,6 +1758,13 @@ struct MenuBarDotReasons: Equatable, Sendable {
         if rummyInvite { parts.append(Self.rummyInviteText) }
         // 아잉 뒤집기 신청은 큐브 뒤다(팝오버 배너 · 사이드바와 같은 순서 — 설계 결정 D7).
         if reversiInvite { parts.append(Self.reversiInviteText) }
+        // 아잉 마작 초대(방 TTL 10분)는 아잉 뒤집기 뒤 · 자리 비움은 그 뒤(팝오버 배너와 같은 순서).
+        if mahjongInvite { parts.append(Self.mahjongInviteText) }
+        if mahjongAway { parts.append(Self.mahjongAwayText) }
+        // 1:1 길건너 신청은 마작 뒤다(팝오버 배너 · 사이드바와 같은 순서).
+        if crossyDuelInvite { parts.append(Self.crossyDuelInviteText) }
+        // 1:1 알까기 신청은 길건너 뒤다(팝오버 배너 · 사이드바와 같은 순서).
+        if alkkagiInvite { parts.append(Self.alkkagiInviteText) }
         // 신고는 업데이트보다 급하다(24시간 약속) — 사람이 기다리는 두 사유 다음, 앱 업데이트 앞.
         if openReports { parts.append(Self.openReportsText) }
         if updateAvailable { parts.append(MenuBarStatusLabel.updateDotAccessibilityDescription) }
@@ -3271,6 +3523,9 @@ enum PokeTitleRowWidthBudget {
     /// 실제로 쓰는 가장 긴 힌트("3초 꾹 = 울트라")의 실측 폭. 한글 3자 + 라틴/기호/공백 7이라
     /// 글자수(10)로 재면 과대평가된다.
     static let longestHintWidth: CGFloat = 71
+    /// [모두 읽음](caption2 bold "모두 읽음" + 캡슐 좌우 7×2)의 폭 — 안내 글자 자리를 빌리므로 `longestHintWidth` 이하여야 한다.
+    /// 실측은 시험(V0381MarkAllReadTests)이 같은 글꼴로 다시 잰다.
+    static let markAllReadWidth: CGFloat = 60
 
     /// 배지가 숫자로 그릴 수 있는 **최대 자릿수**.
     ///
@@ -3737,6 +3992,8 @@ private struct PokePanel: View {
     // 안 본 찌르기가 있는 상대들(v0.3.65). 위 메시지 집합과 **합집합**이 목록 순서와 행의 점이다(`PokePanelOrder`).
     // 따로 받는 이유는 행의 보이스오버 문구 하나다 — 찌르기만 있는 사람에게 "안 읽은 메시지가 있어요"라고 말하면 거짓이다.
     var unreadPokePeerIDs: Set<String> = []
+    // [모두 읽음](2026-11-10 대표 결정) — 안 읽은 대화(메시지 ∪ 찌르기)가 있을 때만 머리 줄의 안내 글자 자리에 선다.
+    var onMarkAllRead: () -> Void = {}
     // 메시지 전송 결과 1줄 안내. 찌르기 notice 와 **다른 칸**이라 따로 받는다(스토어가 상태를 나눠 둔 이유와 같다).
     // 창에서 보낸 결과지만 이 줄도 함께 읽는다 — 같은 계정의 같은 사실이라 두 화면이 다른 말을 하면 안 된다.
     var messageNotice: String? = nil
@@ -3749,6 +4006,15 @@ private struct PokePanel: View {
     var extraChromeHeight: CGFloat = 0
     // 스냅샷 전용: 초과 리스트를 ScrollView 대신 클립으로 그린다(ImageRenderer 육안 확인용). 앱은 false.
     var clipsOverflowInsteadOfScroll: Bool = false
+    // 스냅샷 전용: 이름 찾기 칸을 AppKit 칸 대신 글자로 그린다(`CheckMenuView.previewPlainTextEditors`). 앱은 false.
+    var plainTextEditors: Bool = false
+
+    // 이름 찾기(2026-11-10 제보 "콕 찌르기에서 검색기능있으면 좋겠어요"). 패널이 내려가면 함께 사라진다 — 다시 열면 빈 칸.
+    // ★ `private` 을 붙이지 마라: 이 둘이 private 이면 멤버와이즈 init 이 private 이 되어 CheckMenuView 가 이 패널을 못 만든다.
+    /// 확정된 검색 글자(편집기 바인딩). 처음 값은 스냅샷만 넣는다.
+    @State var searchDraft: String = ""
+    /// 뷰에 그려진 검색 글자(치는 중인 음절 포함 — `PokeSearchBox`). 있으면 거르기는 이 값을 먼저 본다.
+    @State var searchRendered: String? = nil
 
     // v0.2.34: `@State isChargingUltra` 를 지웠다. 잔량이 배지로 **상시** 보이므로 "꾹 누르는 동안에만
     // 숫자를 말하는" 분기가 필요 없어졌고, 그 한 비트가 3초 홀드마다 이 패널(목록 26행 포함)을
@@ -3777,9 +4043,18 @@ private struct PokePanel: View {
             maxVisibleRows: Self.maxVisibleRows,
             rowHeight: Self.rowHeight,
             rowSpacing: Self.rowSpacing,
-            extraChromeHeight: extraChromeHeight + receiptStripHeight
+            extraChromeHeight: extraChromeHeight + receiptStripHeight + searchRowHeight
         )
     }
+
+    /// 이름 찾기 칸이 먹는 높이(칸 + 바깥 VStack 간격 12). 목록이 비면 칸을 세우지 않으므로 0 이다.
+    /// 받은 메시지 줄과 같은 이유로 목록 예산에 넣는다 — 안 넣으면 칸 높이만큼 창이 700pt 상한을 넘는다.
+    private var searchRowHeight: CGFloat {
+        entries.isEmpty ? 0 : PokeSearchBox.height + 12
+    }
+
+    /// 지금 거르는 글자. 그려진 글자(치는 중 음절 포함)가 있으면 그것, 아직 못 들었으면 확정 글자.
+    private var searchQuery: String { searchRendered ?? searchDraft }
 
     private var receiptStripHeight: CGFloat {
         latestMessage == nil ? 0 : PokeMessageReceiptStrip.height + 12   // 바깥 VStack(spacing: 12) 포함
@@ -3814,15 +4089,21 @@ private struct PokePanel: View {
                     isUnlimited: ultraUnlimited,
                     action: onOpenUltraPanel
                 )
-                // 발견성 문구는 그대로 산다. 0일 때만 "상점에서 사기"로 갈아 끼워 **획득 경로**를 말한다.
-                // 무제한인 사람에겐 그 갈아 끼움이 없다(채울 것이 없다).
-                Text(UltraBalanceText.hint(balance: ultraBalance, unlimited: ultraUnlimited))
-                    .font(.caption2)
-                    .foregroundStyle(
-                        CheckTheme.secondaryText
-                            .opacity(ultraUnlimited || (ultraBalance ?? 1) > 0 ? 1.0 : 0.65)
-                    )
-                    .fixedSize()
+                // 안 읽은 대화가 있으면 안내 글자 자리에 [모두 읽음](2026-11-10 대표 결정 — 찌르기까지 한 번에). **같은 자리 · 더 좁다**
+                // (`PokeTitleRowWidthBudget.markAllReadWidth` ≤ 가장 긴 안내 글자) — 머리 줄 폭 · 패널 높이가 그대로다.
+                if !unreadMessagePeerIDs.isEmpty || !unreadPokePeerIDs.isEmpty {
+                    PokeMarkAllReadButton(action: onMarkAllRead)
+                } else {
+                    // 발견성 문구는 그대로 산다. 0일 때만 "상점에서 사기"로 갈아 끼워 **획득 경로**를 말한다.
+                    // 무제한인 사람에겐 그 갈아 끼움이 없다(채울 것이 없다).
+                    Text(UltraBalanceText.hint(balance: ultraBalance, unlimited: ultraUnlimited))
+                        .font(.caption2)
+                        .foregroundStyle(
+                            CheckTheme.secondaryText
+                                .opacity(ultraUnlimited || (ultraBalance ?? 1) > 0 ? 1.0 : 0.65)
+                        )
+                        .fixedSize()
+                }
             }
             PanelDivider()
             // 최근 받은 메시지 1건. 목록 위·안내줄 위다 — 남이 나에게 한 말이 내가 하려던 일보다 먼저 눈에 든다.
@@ -3849,7 +4130,14 @@ private struct PokePanel: View {
                 isFocusMode: isFocusMode,
                 focusStage: focusStage
             )
-            entryList(sorted)
+            // 이름 찾기(2026-11-10). 목록 바로 위 · 사람이 있을 때만. 거르기는 **정렬한 뒤** 빼기만 한다 — 순서는 그대로다.
+            if !sorted.isEmpty {
+                PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)
+            }
+            let query = searchQuery
+            // 사람이 없으면 칸이 없으니 찾는 중도 아니다 — 빈 목록 문구('아직 다른 사용자가 없어요')를 그대로 둔다.
+            let isSearching = !sorted.isEmpty && !PokeDirectorySearch.SearchKey(query).isEmpty
+            entryList(isSearching ? PokeDirectorySearch.filter(sorted, query: query) : sorted, all: sorted, isSearching: isSearching)
         }
         .padding(12)
         .pagePanelStyle()
@@ -3871,32 +4159,42 @@ private struct PokePanel: View {
     // 상한은 행 수가 아니라 높이다 — `visibleRows` 개의 48pt 행이 차지하던 높이 그대로라, 상태메시지 행(62pt)이 섞여도
     // 어떤 조합에서도 창 높이는 v0.3.50 의 '접힌 7행'을 넘지 않는다(상태 행이 많을수록 보이는 사람이 줄고 나머지는 스크롤로 밀린다).
     @ViewBuilder
-    private func entryList(_ sorted: [PokeDirectoryEntry]) -> some View {
+    private func entryList(_ sorted: [PokeDirectoryEntry], all: [PokeDirectoryEntry], isSearching: Bool) -> some View {
         let capHeight = Self.listCapHeight(visibleRows: visibleRows)
         let contentHeight = Self.listContentHeight(entries: sorted)
         if contentHeight <= capHeight {
-            rows(sorted).frame(maxWidth: .infinity, alignment: .top)
+            // 찾는 동안은 목록 자리를 **찾기 전 높이로 붙든다**(`PokeSearchListHeight`) — 한 글자 칠 때마다 팝오버가 줄었다 늘었다 하지 않게.
+            rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity, alignment: .top)
+                .frame(
+                    height: PokeSearchListHeight.held(
+                        isSearching: isSearching, shown: contentHeight,
+                        unfiltered: Self.listContentHeight(entries: all), cap: capHeight
+                    ),
+                    alignment: .top
+                )
         } else if clipsOverflowInsteadOfScroll {
             // 스냅샷 전용: 보이는 첫 부분만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
-            rows(sorted).frame(maxWidth: .infinity, alignment: .top)
+            rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
         } else {
             // ★ `ScrollViewReader` 가 사라졌다(v0.2.49). 그것이 있던 유일한 이유는 "펼친 작성기를
             //   스스로 끌어올리기"였는데, 펼칠 것이 없어졌다 — 말풍선 버튼은 이제 **별도 창**을 연다.
             ScrollView(.vertical, showsIndicators: true) {
-                rows(sorted).frame(maxWidth: .infinity)
+                rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity)
             }
             .frame(height: capHeight)
         }
     }
 
     @ViewBuilder
-    private func rows(_ sorted: [PokeDirectoryEntry]) -> some View {
+    private func rows(_ sorted: [PokeDirectoryEntry], isSearching: Bool) -> some View {
         VStack(spacing: Self.rowSpacing) {
             if sorted.isEmpty {
-                // 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus(동기화 상태 문구).
-                Text(PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
+                // 찾다가 비면 '맞는 이름이 없어요'. 아니면 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus.
+                Text(isSearching
+                     ? PokeDirectorySearch.noMatch
+                     : PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)
@@ -3963,6 +4261,29 @@ enum MessageAnytimeNotice {
 /// 패널이 매초 무효화된다 — PokeEntryIconButton/FooterSyncStatus 가 같은 이유로 잎이다. 줄이 **뜨는지 자체**도
 /// 그 판정에 달려 있으므로 `if let` 까지 이 안에 있다(없으면 빈 뷰라 VStack 간격을 먹지 않는다).
 /// (`line` 순서를 시험이 값으로 되묻도록 private 이 아니다 — 앱에서 이 줄을 세우는 곳은 여전히 PokePanel 하나다.)
+/// 콕 찌르기 머리 줄의 [모두 읽음](2026-11-10). 안내 글자 자리를 빌려 서므로 그보다 좁아야 한다(`PokeTitleRowWidthBudget.markAllReadWidth`).
+struct PokeMarkAllReadButton: View {
+    static let title = "모두 읽음"
+    static let help = "메시지 · 찌르기를 모두 읽음으로 바꿔요"
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(Self.title)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(CheckTheme.accent)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(CheckTheme.accent.opacity(0.14)))
+                .contentShape(Capsule())
+                .fixedSize()
+        }
+        .buttonStyle(.plain)
+        .checkTooltip(Self.help)
+        .accessibilityLabel(Self.help)
+    }
+}
+
 struct PokePanelNoticeLine: View {
     let isPokeDisconnected: () -> Bool
     let messageNotice: String?
@@ -4571,6 +4892,17 @@ struct InsightsPanel: View {
     let dailyGrid: WorkDailyGrid
     // 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 나온다.
     var tokenDailyGrid: TokenDailyGrid = .empty
+    // 주별 근무 리듬(2026-11-06 대표 결정 #d_V0mJ363LONEW — "근무 리듬이 매주 실시간 쌓이고 있는게 보이게끔 … 지난 기록들 누적 주차별로").
+    // 비어 있으면(옛 픽스처 · 아직 계산 전) 옛 '지난주 근무 리듬'(heatmap) 그대로 그린다.
+    var rhythmWeeks: WorkRhythmWeeks = .empty
+    // 보고 있는 주(0 = 이번 주). 범위 밖이면 끝에 붙인다.
+    var rhythmOffset: Int = 0
+    // 지금 진행 중인 내 근무의 시작(없으면 nil). 이번 주 칸에만 1분마다 '지금까지'를 얹는다.
+    var liveStart: Date? = nil
+    // ◀ ▶ 눌림. nil 이면 넘기기 단추를 그리지 않는다(값+클로저 규약).
+    var onRhythmOffset: ((Int) -> Void)? = nil
+    // 시험 전용: 실시간 시계 대신 이 시각으로 그린다(nil 이면 TimelineView 가 1분마다 다시 그린다).
+    var rhythmNow: Date? = nil
     // 토큰 잔디 섹션을 그릴지(= 서버 수집 허용). 수집 거부자는 서버에 일별 행이 없고 앞으로도 안 쌓이므로 빈 잔디를
     // 보여 주면 "내가 안 썼다"는 거짓말이 된다 — 섹션 자체를 뺀다. 본문 높이 예산도 이 값으로 갈린다.
     var showsTokenGrid: Bool = false
@@ -4753,9 +5085,54 @@ struct InsightsPanel: View {
         )
     }
 
-    // (d) 근무 리듬 히트맵 — 지난주 요일×시간대 격자 + 가장 활발했던 시간.
+    // (d) 근무 리듬 히트맵 — 주별(2026-11-06): 기본 이번 주(진행 중 근무까지 1분마다 참) + ◀▶ 로 첫 주까지 넘겨보기.
+    //     주별 자료가 아직 없으면(옛 픽스처 · 계산 전) 옛 '지난주 근무 리듬'(heatmap) 그대로.
     @ViewBuilder
     private var heatmapSection: some View {
+        if rhythmWeeks.weekStarts.isEmpty {
+            lastWeekHeatmapSection
+        } else if let rhythmNow {
+            weeklyRhythmSection(now: rhythmNow)
+        } else {
+            TimelineView(.periodic(from: .now, by: 60)) { context in
+                weeklyRhythmSection(now: context.date)
+            }
+        }
+    }
+
+    private func weeklyRhythmSection(now: Date) -> some View {
+        let offset = min(max(0, rhythmOffset), rhythmWeeks.maxOffset)
+        let weekStart = rhythmWeeks.weekStart(offset: offset)
+        var map = rhythmWeeks.heatmap(offset: offset) ?? .empty
+        if offset == 0, let weekStart {
+            map = map.addingLive(from: liveStart, now: now, weekStart: weekStart)
+        }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "square.grid.3x3.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(CheckTheme.secondaryText)
+                // 기간이 제목 안에 들어간다(이번 주 · 지난주 · 10월 26일 주) — 옛 규약 그대로(아래 lastWeekHeatmapSection 주석).
+                Text(WorkRhythmWeekText.title(offset: offset, weekStart: weekStart))
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                if let onRhythmOffset {
+                    RhythmWeekStepper(offset: offset, maxOffset: rhythmWeeks.maxOffset, onChange: onRhythmOffset)
+                }
+            }
+            WorkRhythmHeatmapGrid(heatmap: map, futureFrom: WorkRhythmWeekText.futureFrom(offset: offset, now: now))
+            Text(WorkRhythmWeekText.caption(map, offset: offset))
+                .font(.caption2)
+                .foregroundStyle(CheckTheme.secondaryText)
+                .lineLimit(1)
+        }
+    }
+
+    // 옛 '지난주 근무 리듬' — 주별 자료가 없을 때만.
+    @ViewBuilder
+    private var lastWeekHeatmapSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: "square.grid.3x3.fill")

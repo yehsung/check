@@ -227,20 +227,30 @@ struct V03xxReversiWiringTests {
         #expect(skewed == ["Reversi"] && skewed != [RealtimeLinkConstants.reversiBroadcastEvent])
     }
 
-    // MARK: #4 폰 러너(모바일 세션 파일 — 빈 가지만)
+    // MARK: #4 폰 러너(모바일 세션 파일 — 폰 1.0.17 부터 잇는다)
 
     /// 없으면: 폰 러너의 exhaustive switch 가 컴파일되지 않거나(가지 없음 — `#if os(iOS)` 밖이라 맥 빌드도 깨진다), `.drain` 으로
-    /// 떨어뜨리면 같은 계정의 맥이 판을 하는 동안 수마다 폰이 **메시지** 요약·이력을 한 번씩 더 조회한다. 폰은 다음 폰 판에서 잇는다.
+    /// 떨어뜨리면 같은 계정의 맥이 판을 하는 동안 수마다 폰이 **메시지** 요약·이력을 한 번씩 더 조회한다. 가지가 비면(1.0.16 까지의 `break`)
+    /// 폰 판이 신청·수락·상대 수를 다음 폴링까지 모른다 — 한 수 30초라 그 사이 서버가 대신 둔다.
+    /// 폰 1.0.17(대표 답 #d_DdwzmxPClGqk "다 넣기")부터 `reversi?.handleSignal()` 로 잇고 조인 따라잡기에 `reversi?.realtimeDidJoin()` 을 더한다.
+    /// 요청 건수로 재는 못은 `GamesReversiWiringTests`(폰 스위트)에 있다.
     @Test
-    func thePhoneRunnerKeepsAnEmptyReversiBranch() throws {
+    func thePhoneRunnerWiresTheReversiBranchToTheStore() throws {
         let runner = try rwtPhoneRunner()
         #expect(rwtCount("case .reversiSignal", in: runner) == 1, "폰 러너에 아잉 뒤집기 가지가 하나가 아니다")
-        let branch = try #require(rwtBetween(runner, "case .reversiSignal:", "case .megaphoneSignal:"))
-        #expect(branch == "case .reversiSignal: break ", "폰 러너의 아잉 뒤집기 가지가 비어 있지 않다: \(branch)")
-        #expect(!branch.contains("?.handleSignal()") && !branch.contains("requestDrain"))
-        // ★ 기준선: 큐브 가지는 잇는다(같은 읽기가 '잇는 가지'를 알아본다).
+        let branch = try #require(rwtBetween(runner, "case .reversiSignal:", "case .mahjongSignal:"), "다음 가지(아잉 마작 — 맥 0.3.76)가 없다")
+        #expect(branch == "case .reversiSignal: reversi?.handleSignal() ", "폰 러너의 아잉 뒤집기 가지가 스토어로 안 간다: \(branch)")
+        #expect(!branch.contains("requestDrain") && !branch.contains("requestMessageActivity"), "아잉 뒤집기 초인종이 메시지 조회로 샌다")
+        #expect(runner.contains("rummy?.realtimeDidJoin() reversi?.realtimeDidJoin()"), "조인 따라잡기에 아잉 뒤집기가 없다(큐브 바로 뒤)")
+        #expect(runner.contains("@ObservationIgnored package weak var reversi: ReversiStore?"), "러너가 스토어를 약한 참조로 들지 않는다")
+        // 아잉 마작 가지(맥 0.3.76)는 폰 1.0.18 부터 스토어로 잇는다 — `.drain` 으로 떨어지면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
+        let mahjong = try #require(rwtBetween(runner, "case .mahjongSignal:", "case .megaphoneSignal:"))
+        #expect(mahjong == "case .mahjongSignal: mahjong?.handleSignal() ", "폰 러너의 아잉 마작 가지가 스토어로 안 간다: \(mahjong)")
+        // ★ 기준선: 큐브 가지는 같은 읽기로 '잇는 가지'다 · 체스 가지는 여전히 비어 있다(같은 읽기가 빈 가지를 알아본다).
         let rummy = try #require(rwtBetween(runner, "case .rummySignal:", "case .reversiSignal:"))
         #expect(rummy.contains("rummy?.handleSignal()"))
+        let chess = try #require(rwtBetween(runner, "case .chessSignal:", "case .tetrisSignal:"))
+        #expect(chess == "case .chessSignal: break ", "기준선이 안 갈린다 — 빈 가지 읽기가 바뀌었다: \(chess)")
     }
 
     // MARK: #5~#12 맥 소유 배선(WorkTimerStore · WorkTimerStoreRealtime)
@@ -306,8 +316,9 @@ struct V03xxReversiWiringTests {
     @Test
     func theAppWiresEveryReversiDoor() throws {
         let app = try rwtMac("CheckApp.swift")
-        #expect(app.contains("wireRummy() wireReversi() wireMegaphoneBanner()"), "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다")
-        let body = try #require(rwtBetween(app, "private func wireReversi() {", "static func closeRummyWindow() {"))
+        #expect(app.contains("wireRummy() wireReversi() wireMahjong() wireCrossyDuel() wireAlkkagi() wireMegaphoneBanner()"),
+                "실행 시 wireReversi() 를 큐브 뒤·확성기 앞에 부르지 않는다(사이에 아잉 마작 · 1:1 길건너)")
+        let body = try #require(rwtBetween(app, "private func wireReversi() {", "private func wireMahjong() {"))
         let doors: String = [
             "let reversi = store.reversi reversi.rankingEnabled = true reversi.spectatorFeaturesEnabled = true ",
             "reversi.presentWindow = { CheckReversiWindowController.shared.show() } ",
@@ -527,7 +538,7 @@ struct V03xxReversiWiringTests {
     func theMiniGameWindowOpensTheReversiWindow() throws {
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains("check.reversi.window"))
         #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckReversiWindowController.frameAutosaveName))
-        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 8)
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.count == 11, "1:1 알까기 창까지 열하나")
 
         #expect(MiniGameReversiEntryButton.title == "아잉 뒤집기")
         #expect(MiniGameReversiEntryButton.help == "리버시 규칙 1:1 대결 창을 열어요")
@@ -542,7 +553,7 @@ struct V03xxReversiWiringTests {
         #expect(panel.contains("let onRummy: () -> Void let onReversi: () -> Void"), "사이드바가 아잉 뒤집기 문을 기본값 없이 받지 않는다")
         #expect(!panel.contains("var onReversi: () -> Void = {}"), "아잉 뒤집기 문에 빈 기본값이 남았다")
         // 점 칸: 명시 init 맨 뒤 기본값(기존 호출 보호) + 창이 부르는 생성자가 메뉴바와 같은 사실을 읽는다.
-        #expect(panel.contains("init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false)"))
+        #expect(panel.contains("init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false,"))
         #expect(panel.contains("rummy: store.rummy.hasIncomingInvite, reversi: store.reversi.visibleIncoming != nil"))
         // 문 struct 는 큐브 문 struct 뒤에 선다(설계 §4.6 #18).
         let rummyDoor = try #require(panel.range(of: "struct MiniGameRummyEntryButton: View {"))
@@ -570,8 +581,8 @@ struct V03xxReversiWiringTests {
         reversi.phase = .playing
         #expect(reversi.defersMegaphoneBanner)
         let src = try rwtMac("WorkTimerStoreMegaphoneBanner.swift")
-        #expect(src.contains("rummyLive: rummy.defersMegaphoneBanner, reversiLive: reversi.defersMegaphoneBanner)"))
-        #expect(src.contains("rummyLive: Bool = false, reversiLive: Bool = false) -> Bool {"))
+        #expect(src.contains("rummyLive: rummy.defersMegaphoneBanner, reversiLive: reversi.defersMegaphoneBanner,"))
+        #expect(src.contains("rummyLive: Bool = false, reversiLive: Bool = false,"))
         #expect(src.contains("if reversiLive { return true }"))
     }
 

@@ -117,8 +117,18 @@ struct V0359RainbowShopProtocolTests {
         let cakes = ShopWire.cakeCharacterIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree)
         // v0.3.74: 이슬 아잉이 그림(초상 · 라벨)까지 실리면 5 다(누적 — 이슬의 기준선은 V0374IsulCoreTests.macIsulArtInSourceTree).
         let isul = V0374IsulCoreTests.macIsulArtInSourceTree ? [CharacterCatalog.isulAingID] : []
+        // v0.3.77: 빼빼로 그림까지 실리면 6 이다(누적 — 빼빼로의 기준선은 V0377PeperoCoreTests.macPeperoArtInSourceTree).
+        let pepero = V0377PeperoCoreTests.macPeperoArtInSourceTree ? [CharacterCatalog.peperoAingID] : []
+        // v0.3.78: 흑우 그림까지 실리면 7 이다(누적 — 흑우의 기준선은 V0378HwooCoreTests.macHwooArtInSourceTree).
+        let hwoo = V0378HwooCoreTests.macHwooArtInSourceTree ? [CharacterCatalog.hwooAingID] : []
+        // v0.3.78: 루비 그림까지 실리면 8 이다(누적 — 기준선은 V0378RubyCoreTests.macRubyArtInSourceTree).
+        let ruby = V0378RubyCoreTests.macRubyArtInSourceTree ? [CharacterCatalog.rubyAingID] : []
+        // v0.3.81: 개발에 찌든 아잉이 그림까지 실리면 9 다(누적).
+        let dev = V0381DevAingCoreTests.macDevArtInSourceTree ? [CharacterCatalog.devAingID] : []
+        // 지역 아잉이(두 센터) 그림까지 실리면 10 이다(누적).
+        let region = RegionAingCoreTests.macRegionArtInSourceTree ? CharacterCatalog.regionGiftBuiltInIDs : []
         let expected = ShopWire.protocolVersion(drawableCharacterIDs:
-            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul)
+            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul + pepero + hwoo + ruby + dev + region)
         #expect(rainbow, "무지개 그림 네 장이 소스 트리에 없다 — scripts/make-rainbow-aing.swift 를 돌려라")
 
         let host = "v0359-rainbow-bundle-\(UUID().uuidString.prefix(8))".lowercased()

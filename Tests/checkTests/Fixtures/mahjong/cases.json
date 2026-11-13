@@ -1,0 +1,7234 @@
+{
+ "schema": "mahjong-cases/1",
+ "rules": "rules.md v1 (같은 폴더). 조항 번호 MJ-nn, 확인 필요 C-nn 은 rules.md §13. basis 에 C-nn 이 적힌 사례는 기본안이라 확정되면 바뀐다.",
+ "reference": "reference.py — python3 -I reference.py --check cases.json 이 모든 사례를 다시 계산해 맞춘다.",
+ "id": "사례는 id 로 집는다(배열 순서는 바뀔 수 있다). 접두: Y 역 · YM 역만 · F 부 · H 도라·본장·입력 오류 · X 대조 시험에서 나온 것 · S 점수표 · T 꼴·텐파이 · R 후리텐 · C 울기 우선순위 · K 쿠이카에 · RI 리치 · D 도라 · P 정산·책임 지불·동시 론 · N 황패 유국 · A 도중 유국 · G 국 끝·판 끝 · O 등수",
+ "notation": {
+  "tiles": "'123m406p789s1155z' — m 만·p 통·s 삭·z 자패(1z~7z = 동·남·서·북·백·발·중), 적5 = 0m·0p·0s. 종류 번호 k = 만0~8·통9~17·삭18~26·자27~33",
+  "winds": "'E'·'S'·'W'·'N'. 친 = seat_wind 'E'",
+  "seats": "자리 0~3, 0 = 기가, 차례 순(반시계). 상가 = (s+3)%4, 하가 = (s+1)%4",
+  "melds": "[{type: chi|pon|minkan|kakan|ankan, tiles}] — 깡은 4장",
+  "yaku_ids": {
+   "riichi": "리치",
+   "double_riichi": "더블 리치",
+   "ippatsu": "일발",
+   "menzen_tsumo": "멘젠쯔모",
+   "pinfu": "핑후",
+   "iipeikou": "이페코",
+   "tanyao": "탕야오",
+   "yakuhai_haku": "역패 백",
+   "yakuhai_hatsu": "역패 발",
+   "yakuhai_chun": "역패 중",
+   "bakaze": "역패 장풍",
+   "jikaze": "역패 자풍",
+   "chankan": "창깡",
+   "rinshan": "영상개화",
+   "haitei": "해저모월",
+   "houtei": "하저로어",
+   "chiitoitsu": "치또이쯔",
+   "sanshoku": "삼색동순",
+   "ittsu": "일기통관",
+   "chanta": "찬타",
+   "toitoi": "또이또이",
+   "sanankou": "산안커",
+   "sanshoku_doukou": "삼색동각",
+   "sankantsu": "산깡쯔",
+   "honroutou": "혼노두",
+   "shousangen": "소삼원",
+   "honitsu": "혼일색",
+   "junchan": "준찬타",
+   "ryanpeikou": "량페코",
+   "chinitsu": "청일색",
+   "tenhou": "천화",
+   "chiihou": "지화",
+   "kokushi": "국사무쌍",
+   "kokushi_13": "국사무쌍 13면",
+   "suuankou": "사암각",
+   "suuankou_tanki": "사암각 단기",
+   "daisangen": "대삼원",
+   "shousuushii": "소사희",
+   "daisuushii": "대사희",
+   "tsuuiisou": "자일색",
+   "ryuuiisou": "녹일색",
+   "chinroutou": "청노두",
+   "suukantsu": "사깡쯔",
+   "chuuren": "구련보등",
+   "junsei_chuuren": "순정 구련보등"
+  },
+  "compare": "expected 에 적힌 키만 비교한다(적지 않은 키는 보지 않음). yaku 는 [id, 판] 목록이고 순서는 YAKU_ORDER(역만 → 일반 역, reference.py) 순. 역만의 판 = 13 × 배수, fu = null"
+ },
+ "types": {
+  "hand": "input = reference.evaluate() 입력(closed=화료패 뺀 손, win, tsumo, seat_wind, round_wind, melds, riichi…, dora/ura 표시패, honba, kyoutaku). expected = agari·reason·yaku·yakuman·han·fu·limit·points(본장 제외)·honba_bonus·kyoutaku_bonus·total·dora·aka·ura. {\"error\": true} = 입력 오류여야 함",
+  "score_table": "input {han, fu, dealer, tsumo, yakuman?} → points·limit (MJ-39·40)",
+  "shape": "input {closed, n_melds?} → shanten(-1=화료꼴)·waits(MJ-03 문자열)·tenpai (MJ-26)",
+  "furiten": "input {closed, events} — events: ['discard',t]·['riichi']·['draw']·['pass',t]·['call']·['set_hand',closed]·['check',t]. expected.checks = check 마다 {tile, can_ron, furiten:[discard|temporary|riichi]} (MJ-24)",
+  "claim": "input {discarder, eligible{자리:[ron|pon|kan|chi]}, answers{자리:고른 것|pass}} → {status: wait|done, action, seats} (MJ-17)",
+  "kuikae": "input {call, called, from_hand, closed_after?} → forbidden(종류 문자열)·allowed (MJ-18)",
+  "riichi": "input {closed14, score, live_left, menzen?, n_ankan?} → discards(리치 선언패 후보 종류, 정렬) (MJ-27)",
+  "riichi_ankan": "input {closed13(쯔모 전), drawn, kan?} → allowed (MJ-29)",
+  "dora": "input {indicators?, tiles?, events?} → dora_kinds·count·aka·open_counts(events 의 ['look'] 때 열린 표시패 수) (MJ-10·11)",
+  "settle_win": "input {winner, dealer, discarder?(없으면 쯔모), honba, kyoutaku, pao?{seat,yaku}, hand} 또는 {discarder, dealer, honba, kyoutaku, winners:[{seat, hand}]} → deltas[4]·bonus_to·renchan (MJ-25·41·42)",
+  "exhaustive": "input {dealer, tenpai[4], nagashi[4], discards?} → deltas[4]·renchan·nagashi_ok (MJ-43·44)",
+  "abortive": "input {check: kyuushu|suufon|suukaikan|suucha_riichi, …} → ok (MJ-45)",
+  "advance": "input {length: tonpuu|hanchan, round 0=동 1=남 2=서, hand 0~3(친 자리), honba, scores(정산 뒤·공탁 제외), outcome: dealer_win|child_win|draw_dealer_tenpai|draw_dealer_noten|abortive} → {end, reason: tobi|agari_yame|tenpai_yame|target_reached|max_round, next{round,hand,honba}} (MJ-46~50)",
+  "rank": "input {scores, kyoutaku} → order(1위부터 자리)·ranks·final_scores (MJ-51)"
+ },
+ "cases": [
+  {
+   "id": "Y-RIICHI",
+   "type": "hand",
+   "title": "리치만: 간짱 론 40부 1판",
+   "rules": [
+    "MJ-27",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "note": "20+멘젠론10+간짱2=32→40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-IPPATSU",
+   "type": "hand",
+   "title": "리치 일발",
+   "rules": [
+    "MJ-30"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true,
+    "ippatsu": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ],
+     [
+      "ippatsu",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 40,
+    "points": {
+     "ron": 2600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-DOUBLE-RIICHI",
+   "type": "hand",
+   "title": "더블 리치는 리치 대신 2판",
+   "rules": [
+    "MJ-31"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true,
+    "double_riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "double_riichi",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 40,
+    "points": {
+     "ron": 2600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-TSUMO",
+   "type": "hand",
+   "title": "멘젠쯔모만: 20+쯔모2+간짱2=24→30",
+   "rules": [
+    "MJ-32",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "from_dealer": 500,
+     "from_child": 300
+    },
+    "limit": "",
+    "total": 1100
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-NO-YAKU",
+   "type": "hand",
+   "title": "역 없는 멘젠 론은 화료 아님",
+   "rules": [
+    "MJ-23"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": false,
+    "reason": "no_yaku"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU",
+   "type": "hand",
+   "title": "핑후 론 30부",
+   "rules": [
+    "MJ-33",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "win": "4s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "pinfu",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU-TSUMO",
+   "type": "hand",
+   "title": "핑후 쯔모 20부 2판(쯔모 부 없음)",
+   "rules": [
+    "MJ-33",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "win": "1s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "pinfu",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 20,
+    "points": {
+     "from_dealer": 700,
+     "from_child": 400
+    },
+    "limit": "",
+    "total": 1500
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU-GUEST-WIND",
+   "type": "hand",
+   "title": "손님 바람 머리(북, 자리 남·장 동)는 핑후 됨",
+   "rules": [
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "123m456p789s23s44z",
+    "win": "4s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "pinfu",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU-NO-VALUE-PAIR",
+   "type": "hand",
+   "title": "장풍 머리는 핑후 아님(리치만, 40부)",
+   "rules": [
+    "MJ-33",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m456p789s23s11z",
+    "win": "4s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "note": "20+10+장풍 머리2=32→40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU-NO-PENCHAN",
+   "type": "hand",
+   "title": "변짱(12s 에 3s)은 핑후 아님",
+   "rules": [
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "123m456p789s12s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU-NO-PENCHAN-7",
+   "type": "hand",
+   "title": "변짱(89s 에 7s)도 핑후 아님",
+   "rules": [
+    "MJ-33",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m456p789p89s55s",
+    "win": "7s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "note": "789 의 7 로 화료 = 변짱 +2. 양면으로 잘못 보면 핑후가 붙어 2000",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-PINFU-CHOOSE",
+   "type": "hand",
+   "title": "12345m 에 3m: 양면 해석(핑후)과 변짱 해석 중 높은 쪽",
+   "rules": [
+    "MJ-38"
+   ],
+   "input": {
+    "closed": "12345m678p234s99s",
+    "win": "3m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ],
+     [
+      "pinfu",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "ron": 2000
+    },
+    "limit": ""
+   },
+   "note": "변짱 해석은 리치 1판 40부 1300 → 핑후 해석 2000 이 큼",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-IIPEIKOU",
+   "type": "hand",
+   "title": "이페코 + 핑후",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "112233m456p78s55s",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "pinfu",
+      1
+     ],
+     [
+      "iipeikou",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "ron": 2000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-IIPEIKOU-OPEN",
+   "type": "hand",
+   "title": "울면 이페코 없음 → 역 없음",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "112233m78s55s",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "456p"
+     }
+    ]
+   },
+   "expected": {
+    "agari": false,
+    "reason": "no_yaku"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-TANYAO",
+   "type": "hand",
+   "title": "멘젠 탕야오, 샤보 론 커쯔는 밝음",
+   "rules": [
+    "MJ-32",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "234m567p345s66s88p",
+    "win": "8p",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "note": "20+10+888p 밝은 중장 2=32→40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-TANYAO-OPEN",
+   "type": "hand",
+   "title": "쿠이탄",
+   "rules": [
+    "MJ-23"
+   ],
+   "input": {
+    "closed": "567p345s66s88p",
+    "win": "8p",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "234m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "note": "20+888p 2=22→30",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HAKU",
+   "type": "hand",
+   "title": "백 퐁",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "123m456p78s99s",
+    "win": "6s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "555z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_haku",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HATSU",
+   "type": "hand",
+   "title": "발 암커",
+   "rules": [
+    "MJ-32",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "666z123m456p78s99s",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_hatsu",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "note": "20+10+발 암커8=38→40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHUN-TSUMO",
+   "type": "hand",
+   "title": "중 퐁 쯔모(울음, 멘젠쯔모 없음)",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "234m456p78s99s",
+    "win": "6s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "777z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_chun",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "from_dealer": 500,
+     "from_child": 300
+    },
+    "limit": "",
+    "total": 1100
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-BAKAZE",
+   "type": "hand",
+   "title": "장풍(동) 퐁, 자리 남",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "234m456p78s99s",
+    "win": "6s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "bakaze",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-JIKAZE",
+   "type": "hand",
+   "title": "자풍(남) 퐁",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "234m456p78s99s",
+    "win": "6s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "222z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "jikaze",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-DOUBLE-WIND",
+   "type": "hand",
+   "title": "연풍(친 동·장 동) 동 퐁 = 2판",
+   "rules": [
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "234m456p78s99s",
+    "win": "6s",
+    "tsumo": false,
+    "seat_wind": "E",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "bakaze",
+      1
+     ],
+     [
+      "jikaze",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "ron": 2900
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SOUTH-ROUND-EAST",
+   "type": "hand",
+   "title": "남입한 동풍전: 장풍 남, 동 퐁은 손님 바람(역 없음)",
+   "rules": [
+    "MJ-06",
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "234m456p78s99s",
+    "win": "6s",
+    "tsumo": false,
+    "seat_wind": "W",
+    "round_wind": "S",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": false,
+    "reason": "no_yaku"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHANKAN",
+   "type": "hand",
+   "title": "창깡 + 핑후",
+   "rules": [
+    "MJ-20"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "win": "4s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "chankan": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "pinfu",
+      1
+     ],
+     [
+      "chankan",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "ron": 2000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-RINSHAN",
+   "type": "hand",
+   "title": "암깡 뒤 영상개화: 쯔모 부 2 + 요구 암깡 32",
+   "rules": [
+    "MJ-21",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "456p789s23s99p",
+    "win": "4s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "9999m"
+     }
+    ],
+    "rinshan": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "rinshan",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 60,
+    "points": {
+     "from_dealer": 2000,
+     "from_child": 1000
+    },
+    "limit": "",
+    "total": 4000
+   },
+   "note": "20+2+32=54→60. 기본점 960",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HAITEI",
+   "type": "hand",
+   "title": "해저모월",
+   "rules": [
+    "MJ-19"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "haitei": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "haitei",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "from_dealer": 1000,
+     "from_child": 500
+    },
+    "limit": "",
+    "total": 2000
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HOUTEI",
+   "type": "hand",
+   "title": "하저로어",
+   "rules": [
+    "MJ-19"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "houtei": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "houtei",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHIITOI",
+   "type": "hand",
+   "title": "치또이 25부",
+   "rules": [
+    "MJ-22",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "1133m5577p2288s6z",
+    "win": "6z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chiitoitsu",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 25,
+    "points": {
+     "ron": 1600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHIITOI-TSUMO",
+   "type": "hand",
+   "title": "치또이 쯔모 3판 25부(쯔모 부 없음)",
+   "rules": [
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "1133m5577p2288s6z",
+    "win": "6z",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "chiitoitsu",
+      2
+     ]
+    ],
+    "han": 3,
+    "fu": 25,
+    "points": {
+     "from_dealer": 1600,
+     "from_child": 800
+    },
+    "limit": "",
+    "total": 3200
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHIITOI-QUAD",
+   "type": "hand",
+   "title": "같은 패 4장은 2쌍이 아님 → 화료 아님",
+   "rules": [
+    "MJ-22"
+   ],
+   "input": {
+    "closed": "1111m5577p2288s6z",
+    "win": "6z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": false,
+    "reason": "not_complete"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANSHOKU",
+   "type": "hand",
+   "title": "삼색동순 + 핑후",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "123m123p123s78s55p",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "pinfu",
+      1
+     ],
+     [
+      "sanshoku",
+      2
+     ]
+    ],
+    "han": 3,
+    "fu": 30,
+    "points": {
+     "ron": 3900
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANSHOKU-OPEN",
+   "type": "hand",
+   "title": "울면 삼색 1판",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "123m123p78s55p",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "123s"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "sanshoku",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-ITTSU",
+   "type": "hand",
+   "title": "일기통관 + 핑후",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "123456789m78s55p",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "pinfu",
+      1
+     ],
+     [
+      "ittsu",
+      2
+     ]
+    ],
+    "han": 3,
+    "fu": 30,
+    "points": {
+     "ron": 3900
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-ITTSU-OPEN",
+   "type": "hand",
+   "title": "울면 일통 1판",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "123456m78s55p",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "789m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "ittsu",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHANTA",
+   "type": "hand",
+   "title": "찬타(멘젠 2판)",
+   "rules": [
+    "MJ-32",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "123m789p12s999s77z",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chanta",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 50,
+    "points": {
+     "ron": 3200
+    },
+    "limit": ""
+   },
+   "note": "20+10+변짱2+999s 암커8+중 머리2=42→50",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHANTA-OPEN",
+   "type": "hand",
+   "title": "찬타(울음 1판)",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "789p12s999s77z",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "123m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chanta",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "note": "20+2+8+2=32→40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-JUNCHAN",
+   "type": "hand",
+   "title": "준찬타(멘젠 3판)",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "123m789p12s999s11p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "junchan",
+      3
+     ]
+    ],
+    "han": 3,
+    "fu": 40,
+    "points": {
+     "ron": 5200
+    },
+    "limit": ""
+   },
+   "note": "20+10+2+8=40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-JUNCHAN-OPEN",
+   "type": "hand",
+   "title": "준찬타(울음 2판)",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "789p12s999s11p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "123m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "junchan",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "ron": 2000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-TOITOI",
+   "type": "hand",
+   "title": "또이또이(샤보 론)",
+   "rules": [
+    "MJ-32",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "333s99s55z",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "222m"
+     },
+     {
+      "type": "pon",
+      "tiles": "777p"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "toitoi",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 40,
+    "points": {
+     "ron": 2600
+    },
+    "limit": ""
+   },
+   "note": "20+2+2+333s 암커4+999s 밝은 요구4+백 머리2=34→40",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANANKOU",
+   "type": "hand",
+   "title": "산안커(양면 론)",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "222m444p888s67s99m",
+    "win": "5s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "sanankou",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 50,
+    "points": {
+     "ron": 3200
+    },
+    "limit": ""
+   },
+   "note": "20+10+4+4+4=42→50",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANANKOU-SHANPON-RON",
+   "type": "hand",
+   "title": "샤보 론으로 완성한 커쯔는 밝음 → 산안커 아님",
+   "rules": [
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "222m444p88s99m567s",
+    "win": "8s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANANKOU-SHANPON-TSUMO",
+   "type": "hand",
+   "title": "같은 손 쯔모면 산안커",
+   "rules": [
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "222m444p88s99m567s",
+    "win": "8s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ],
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "sanankou",
+      2
+     ]
+    ],
+    "han": 4,
+    "fu": 40,
+    "points": {
+     "from_dealer": 4000,
+     "from_child": 2000
+    },
+    "limit": "mangan",
+    "total": 8000
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANSHOKU-DOUKOU",
+   "type": "hand",
+   "title": "삼색동각",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "777p777s23m99s",
+    "win": "4m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "777m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "sanshoku_doukou",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 30,
+    "points": {
+     "ron": 2000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SANKANTSU",
+   "type": "hand",
+   "title": "산깡쯔",
+   "rules": [
+    "MJ-32",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "78s99m",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "minkan",
+      "tiles": "2222m"
+     },
+     {
+      "type": "ankan",
+      "tiles": "4444p"
+     },
+     {
+      "type": "minkan",
+      "tiles": "6666s"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "sankantsu",
+      2
+     ]
+    ],
+    "han": 2,
+    "fu": 60,
+    "points": {
+     "ron": 3900
+    },
+    "limit": ""
+   },
+   "note": "20+8+16+8=52→60. 기본점 960 → 3840→3900",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HONROUTOU",
+   "type": "hand",
+   "title": "혼노두 + 또이또이 + 중",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "999p111s22z77z",
+    "win": "7z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_chun",
+      1
+     ],
+     [
+      "toitoi",
+      2
+     ],
+     [
+      "honroutou",
+      2
+     ]
+    ],
+    "han": 5,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HONROUTOU-CHIITOI",
+   "type": "hand",
+   "title": "혼노두 + 치또이",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "1199m1199p11s22z3z",
+    "win": "3z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chiitoitsu",
+      2
+     ],
+     [
+      "honroutou",
+      2
+     ]
+    ],
+    "han": 4,
+    "fu": 25,
+    "points": {
+     "ron": 6400
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-SHOUSANGEN",
+   "type": "hand",
+   "title": "소삼원 = 2판 + 역패 2",
+   "rules": [
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "666z77z234m78s",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "555z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_haku",
+      1
+     ],
+     [
+      "yakuhai_hatsu",
+      1
+     ],
+     [
+      "shousangen",
+      2
+     ]
+    ],
+    "han": 4,
+    "fu": 40,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "note": "20+백 퐁4+발 암커8+중 머리2=34→40, 4판40부 → 만관",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HONITSU",
+   "type": "hand",
+   "title": "혼일색(멘젠 3) + 백",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "12334578m99m555z",
+    "win": "6m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_haku",
+      1
+     ],
+     [
+      "honitsu",
+      3
+     ]
+    ],
+    "han": 4,
+    "fu": 40,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-HONITSU-OPEN",
+   "type": "hand",
+   "title": "혼일색(울음 2) + 백",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "12334578m99m",
+    "win": "6m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "555z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_haku",
+      1
+     ],
+     [
+      "honitsu",
+      2
+     ]
+    ],
+    "han": 3,
+    "fu": 30,
+    "points": {
+     "ron": 3900
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHINITSU",
+   "type": "hand",
+   "title": "청일색(멘젠 6) 단기",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "1112345678889m",
+    "win": "9m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chinitsu",
+      6
+     ]
+    ],
+    "han": 6,
+    "fu": 50,
+    "points": {
+     "ron": 12000
+    },
+    "limit": "haneman"
+   },
+   "note": "20+10+단기2+111m 암커8+888m 암커4=44→50",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-CHINITSU-OPEN",
+   "type": "hand",
+   "title": "청일색(울음 5)",
+   "rules": [
+    "MJ-32"
+   ],
+   "input": {
+    "closed": "2345678889m",
+    "win": "9m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chinitsu",
+      5
+     ]
+    ],
+    "han": 5,
+    "fu": 30,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "note": "20+111m 밝은 요구4+888m 암커4+단기2=30",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "Y-RYANPEIKOU",
+   "type": "hand",
+   "title": "량페코 > 치또이 해석",
+   "rules": [
+    "MJ-33",
+    "MJ-38"
+   ],
+   "input": {
+    "closed": "223344m667788p5s",
+    "win": "5s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ],
+     [
+      "ryanpeikou",
+      3
+     ]
+    ],
+    "han": 4,
+    "fu": 40,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "note": "치또이로 보면 치또이2+탕야오1=3판25부 3200",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-KOKUSHI",
+   "type": "hand",
+   "title": "국사무쌍(1배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "119m19p19s123456z",
+    "win": "7z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "kokushi",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-KOKUSHI-13",
+   "type": "hand",
+   "title": "국사무쌍 13면(2배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "19m19p19s1234567z",
+    "win": "1m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "kokushi_13",
+      26
+     ]
+    ],
+    "yakuman": 2,
+    "han": 26,
+    "fu": null,
+    "points": {
+     "ron": 64000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-SUUANKOU",
+   "type": "hand",
+   "title": "사암각(샤보 쯔모, 1배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "222m444p666s99m77z",
+    "win": "9m",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "suuankou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "from_dealer": 16000,
+     "from_child": 8000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-SUUANKOU-RON-SHANPON",
+   "type": "hand",
+   "title": "샤보 론은 사암각 아님(산안커+또이또이)",
+   "rules": [
+    "MJ-33",
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "222m444p666s99m77z",
+    "win": "9m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "toitoi",
+      2
+     ],
+     [
+      "sanankou",
+      2
+     ]
+    ],
+    "han": 4,
+    "fu": 50,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "note": "20+10+4+4+4+999m 밝은 요구4+중 머리2=48→50",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-SUUANKOU-TANKI",
+   "type": "hand",
+   "title": "사암각 단기(2배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "222m444p666s888s7z",
+    "win": "7z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "suuankou_tanki",
+      26
+     ]
+    ],
+    "yakuman": 2,
+    "han": 26,
+    "fu": null,
+    "points": {
+     "ron": 64000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-DAISANGEN",
+   "type": "hand",
+   "title": "대삼원",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "777z23m99s",
+    "win": "1m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "555z"
+     },
+     {
+      "type": "pon",
+      "tiles": "666z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "daisangen",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-SHOUSUUSHII",
+   "type": "hand",
+   "title": "소사희",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "333z44z78m",
+    "win": "9m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     },
+     {
+      "type": "pon",
+      "tiles": "222z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "shousuushii",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-DAISUUSHII",
+   "type": "hand",
+   "title": "대사희(2배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "444z5m",
+    "win": "5m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     },
+     {
+      "type": "pon",
+      "tiles": "222z"
+     },
+     {
+      "type": "pon",
+      "tiles": "333z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "daisuushii",
+      26
+     ]
+    ],
+    "yakuman": 2,
+    "han": 26,
+    "fu": null,
+    "points": {
+     "ron": 64000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-TSUUIISOU",
+   "type": "hand",
+   "title": "자일색",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "222z333z55z66z",
+    "win": "6z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tsuuiisou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-TSUUIISOU-CHIITOI",
+   "type": "hand",
+   "title": "자일색 치또이 꼴",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "1122334455667z",
+    "win": "7z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tsuuiisou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "basis": "C-09 기본안",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-RYUUIISOU",
+   "type": "hand",
+   "title": "녹일색(발 있음)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "223344s666s8s666z",
+    "win": "8s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "ryuuiisou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-RYUUIISOU-NO-HATSU",
+   "type": "hand",
+   "title": "녹일색(발 없음)도 성립",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "2233444466688s",
+    "win": "8s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "ryuuiisou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "basis": "C-09 기본안",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-CHINROUTOU",
+   "type": "hand",
+   "title": "청노두",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "999m111p99s11s",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chinroutou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-SUUKANTSU",
+   "type": "hand",
+   "title": "사깡쯔",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "5z",
+    "win": "5z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "2222m"
+     },
+     {
+      "type": "minkan",
+      "tiles": "4444p"
+     },
+     {
+      "type": "kakan",
+      "tiles": "6666s"
+     },
+     {
+      "type": "minkan",
+      "tiles": "8888s"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "suukantsu",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-CHUUREN",
+   "type": "hand",
+   "title": "구련보등(1배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "1113455678999m",
+    "win": "2m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chuuren",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-JUNSEI-CHUUREN",
+   "type": "hand",
+   "title": "순정 구련보등(2배)",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "1112345678999m",
+    "win": "5m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "junsei_chuuren",
+      26
+     ]
+    ],
+    "yakuman": 2,
+    "han": 26,
+    "fu": null,
+    "points": {
+     "ron": 64000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-TENHOU",
+   "type": "hand",
+   "title": "천화",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "win": "4s",
+    "tsumo": true,
+    "seat_wind": "E",
+    "round_wind": "E",
+    "tenhou": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tenhou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "from_each": 16000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-TENHOU-SUUANKOU",
+   "type": "hand",
+   "title": "천화는 가장 높은 화료패로: 사암각 단기 → 3배",
+   "rules": [
+    "MJ-36"
+   ],
+   "input": {
+    "closed": "222m444p666s888s7z",
+    "win": "7z",
+    "tsumo": true,
+    "seat_wind": "E",
+    "round_wind": "E",
+    "tenhou": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tenhou",
+      13
+     ],
+     [
+      "suuankou_tanki",
+      26
+     ]
+    ],
+    "yakuman": 3,
+    "han": 39,
+    "fu": null,
+    "points": {
+     "from_each": 48000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-TENHOU-CHUUREN",
+   "type": "hand",
+   "title": "천화 + 순정 구련(5m 을 화료패로 봄) → 3배",
+   "rules": [
+    "MJ-36"
+   ],
+   "input": {
+    "closed": "1112345567899m",
+    "win": "9m",
+    "tsumo": true,
+    "seat_wind": "E",
+    "round_wind": "E",
+    "tenhou": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tenhou",
+      13
+     ],
+     [
+      "junsei_chuuren",
+      26
+     ]
+    ],
+    "yakuman": 3,
+    "han": 39,
+    "fu": null,
+    "points": {
+     "from_each": 48000
+    },
+    "limit": "yakuman"
+   },
+   "note": "입력 화료패 9m 그대로면 순정 아님. 14장 중 5m 을 화료패로 고른다",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-CHIIHOU",
+   "type": "hand",
+   "title": "지화",
+   "rules": [
+    "MJ-34"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "win": "4s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "chiihou": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "chiihou",
+      13
+     ]
+    ],
+    "yakuman": 1,
+    "han": 13,
+    "fu": null,
+    "points": {
+     "from_dealer": 16000,
+     "from_child": 8000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-COMPOSITE",
+   "type": "hand",
+   "title": "대사희(2) + 자일색(1) = 3배",
+   "rules": [
+    "MJ-35"
+   ],
+   "input": {
+    "closed": "444z5z",
+    "win": "5z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "111z"
+     },
+     {
+      "type": "pon",
+      "tiles": "222z"
+     },
+     {
+      "type": "pon",
+      "tiles": "333z"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "daisuushii",
+      26
+     ],
+     [
+      "tsuuiisou",
+      13
+     ]
+    ],
+    "yakuman": 3,
+    "han": 39,
+    "fu": null,
+    "points": {
+     "ron": 96000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-MAX-6",
+   "type": "hand",
+   "title": "가능한 최대 6배: 사깡쯔1 + 사암각 단기2 + 대사희2 + 자일색1",
+   "rules": [
+    "MJ-35"
+   ],
+   "input": {
+    "closed": "5z",
+    "win": "5z",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "1111z"
+     },
+     {
+      "type": "ankan",
+      "tiles": "2222z"
+     },
+     {
+      "type": "ankan",
+      "tiles": "3333z"
+     },
+     {
+      "type": "ankan",
+      "tiles": "4444z"
+     }
+    ],
+    "rinshan": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "suuankou_tanki",
+      26
+     ],
+     [
+      "daisuushii",
+      26
+     ],
+     [
+      "tsuuiisou",
+      13
+     ],
+     [
+      "suukantsu",
+      13
+     ]
+    ],
+    "yakuman": 6,
+    "han": 78,
+    "fu": null,
+    "points": {
+     "from_dealer": 96000,
+     "from_child": 48000
+    },
+    "limit": "yakuman"
+   },
+   "basis": "C-10: 우리 역만 목록으로는 6배를 넘을 수 없어 상한 유무가 결과를 바꾸지 않는다",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-KAZOE",
+   "type": "hand",
+   "title": "헤아림 역만: 청일색6+리치1+일발1+쯔모1+도라5 = 14판",
+   "rules": [
+    "MJ-35"
+   ],
+   "input": {
+    "closed": "1112345678889m",
+    "win": "9m",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true,
+    "ippatsu": true,
+    "dora": "7m8m"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ],
+     [
+      "ippatsu",
+      1
+     ],
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "chinitsu",
+      6
+     ]
+    ],
+    "han": 14,
+    "fu": 40,
+    "points": {
+     "from_dealer": 16000,
+     "from_child": 8000
+    },
+    "limit": "yakuman",
+    "yakuman": 0,
+    "dora": 5
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "YM-CHANKAN-KOKUSHI-ANKAN",
+   "type": "hand",
+   "title": "국사 13면은 암깡도 창깡. 역만이면 창깡(일반 역)은 세지 않음",
+   "rules": [
+    "MJ-20",
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "19m19p19s1234567z",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "chankan": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "kokushi_13",
+      26
+     ]
+    ],
+    "yakuman": 2,
+    "han": 26,
+    "fu": null,
+    "points": {
+     "ron": 64000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-DOUBLE-WIND-PAIR",
+   "type": "hand",
+   "title": "연풍 머리 4부: 50부",
+   "rules": [
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "999m456p789s23s11z",
+    "win": "4s",
+    "tsumo": false,
+    "seat_wind": "E",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 50,
+    "points": {
+     "ron": 2400
+    },
+    "limit": ""
+   },
+   "note": "20+10+999m 암커8+연풍 머리4=42→50. 친 1판50부 2400",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-SINGLE-WIND-PAIR",
+   "type": "hand",
+   "title": "같은 손 자리 남: 장풍 머리 2부 → 40부",
+   "rules": [
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "999m456p789s23s11z",
+    "win": "4s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-OPEN-PINFU-RON",
+   "type": "hand",
+   "title": "울음 핑후형 론 20부 → 30부",
+   "rules": [
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "567p345s67s55p",
+    "win": "8s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "234m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-OPEN-PINFU-TSUMO",
+   "type": "hand",
+   "title": "울음 핑후형 쯔모 22부 → 30부",
+   "rules": [
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "567p345s67s55p",
+    "win": "8s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "chi",
+      "tiles": "234m"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "from_dealer": 500,
+     "from_child": 300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-RINSHAN-TSUMO-FU",
+   "type": "hand",
+   "title": "영상 쯔모도 쯔모 부 2: 42→50부",
+   "rules": [
+    "MJ-21",
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "444p567s23s99p",
+    "win": "4s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "2222m"
+     }
+    ],
+    "rinshan": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ],
+     [
+      "rinshan",
+      1
+     ]
+    ],
+    "han": 2,
+    "fu": 50,
+    "points": {
+     "from_dealer": 1600,
+     "from_child": 800
+    },
+    "limit": "",
+    "total": 3200
+   },
+   "note": "20+쯔모2+중장 암깡16+444p 암커4=42→50. 영상 쯔모 부를 빼면 40부 2700",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-100",
+   "type": "hand",
+   "title": "요구 암깡 둘 + 론 커쯔 = 100부",
+   "rules": [
+    "MJ-37"
+   ],
+   "input": {
+    "closed": "234s77z55z",
+    "win": "7z",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "1111m"
+     },
+     {
+      "type": "ankan",
+      "tiles": "9999p"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "yakuhai_chun",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 100,
+    "points": {
+     "ron": 3200
+    },
+    "limit": ""
+   },
+   "note": "20+10+32+32+777z 밝은 요구4+백 머리2=100",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "F-KAN-CLOSED-SIMPLE",
+   "type": "hand",
+   "title": "중장 암깡 16부(적5 포함) + 멘젠 론",
+   "rules": [
+    "MJ-37",
+    "MJ-02"
+   ],
+   "input": {
+    "closed": "234m567p34s88p",
+    "win": "2s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "0555s"
+     }
+    ],
+    "riichi": true
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ],
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 3,
+    "fu": 50,
+    "points": {
+     "ron": 6400
+    },
+    "limit": "",
+    "aka": 1
+   },
+   "note": "20+10+중장 암깡16=46→50. 리치·탕야오 2판 + 적도라 1 = 3판50부",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-DORA-AKA-URA",
+   "type": "hand",
+   "title": "도라3 + 적1 + 뒷도라2",
+   "rules": [
+    "MJ-02",
+    "MJ-10",
+    "MJ-12"
+   ],
+   "input": {
+    "closed": "234m067p234s55s88p",
+    "win": "8p",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true,
+    "dora": "7p",
+    "ura": "4s"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ],
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 8,
+    "fu": 40,
+    "points": {
+     "ron": 16000
+    },
+    "limit": "baiman",
+    "dora": 3,
+    "aka": 1,
+    "ura": 2
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-URA-NO-RIICHI",
+   "type": "hand",
+   "title": "리치 없으면 뒷도라를 세지 않음",
+   "rules": [
+    "MJ-12"
+   ],
+   "input": {
+    "closed": "234m067p234s55s88p",
+    "win": "8p",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "dora": "7p",
+    "ura": "4s"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ]
+    ],
+    "han": 5,
+    "fu": 40,
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan",
+    "dora": 3,
+    "aka": 1,
+    "ura": 0
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-DORA-ONLY",
+   "type": "hand",
+   "title": "도라만으로는 화료 못 함",
+   "rules": [
+    "MJ-23"
+   ],
+   "input": {
+    "closed": "123m456p78s11p",
+    "win": "9s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "pon",
+      "tiles": "999m"
+     }
+    ],
+    "dora": "8m"
+   },
+   "expected": {
+    "agari": false,
+    "reason": "no_yaku"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-HONBA-RON",
+   "type": "hand",
+   "title": "본장 3 · 공탁 2",
+   "rules": [
+    "MJ-41",
+    "MJ-28"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "riichi": true,
+    "honba": 3,
+    "kyoutaku": 2
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "riichi",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 40,
+    "points": {
+     "ron": 1300
+    },
+    "limit": "",
+    "honba_bonus": {
+     "ron": 900
+    },
+    "kyoutaku_bonus": 2000,
+    "total": 4200
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-HONBA-TSUMO",
+   "type": "hand",
+   "title": "쯔모 본장 2: 셋이 200씩",
+   "rules": [
+    "MJ-41"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "honba": 2
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "from_dealer": 500,
+     "from_child": 300
+    },
+    "limit": "",
+    "honba_bonus": {
+     "from_each": 200
+    },
+    "total": 1700
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-DEALER-TSUMO",
+   "type": "hand",
+   "title": "친 쯔모 1판30부 = 500 올",
+   "rules": [
+    "MJ-39"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": true,
+    "seat_wind": "E",
+    "round_wind": "E"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "menzen_tsumo",
+      1
+     ]
+    ],
+    "han": 1,
+    "fu": 30,
+    "points": {
+     "from_each": 500
+    },
+    "limit": "",
+    "total": 1500
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "H-INVALID-IPPATSU",
+   "type": "hand",
+   "title": "리치 없는 일발은 입력 오류",
+   "rules": [
+    "MJ-30"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "win": "3s",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "ippatsu": true
+   },
+   "expected": {
+    "error": true
+   },
+   "lib": "범위 밖(입력 오류 판정은 라이브러리에 없음)"
+  },
+  {
+   "id": "H-INVALID-RINSHAN-HAITEI",
+   "type": "hand",
+   "title": "영상개화와 해저는 겹치지 않음(입력 오류)",
+   "rules": [
+    "MJ-21",
+    "MJ-33"
+   ],
+   "input": {
+    "closed": "456p789s23s99p",
+    "win": "4s",
+    "tsumo": true,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "9999m"
+     }
+    ],
+    "rinshan": true,
+    "haitei": true
+   },
+   "expected": {
+    "error": true
+   },
+   "lib": "범위 밖(입력 오류 판정은 라이브러리에 없음)"
+  },
+  {
+   "id": "X-01-SUUANKOU-OVER-KAZOE",
+   "type": "hand",
+   "title": "사암각(1배)과 헤아림(1배)이 같은 지불이면 역만 역을 고른다",
+   "rules": [
+    "MJ-33",
+    "MJ-38"
+   ],
+   "input": {
+    "closed": "3334466677888m",
+    "win": "7m",
+    "tsumo": true,
+    "seat_wind": "N",
+    "round_wind": "E",
+    "dora": "6m9s9m2m"
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "suuankou",
+      13
+     ]
+    ],
+    "han": 13,
+    "fu": null,
+    "points": {
+     "from_dealer": 16000,
+     "from_child": 8000
+    },
+    "limit": "yakuman",
+    "yakuman": 1
+   },
+   "basis": "대조 시험 X-01 (참조 구현 버그 → 고침)",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "X-02-SANANKOU-VS-DOUKOU",
+   "type": "hand",
+   "title": "같은 판·부(3판60부)인 두 해석: 표시는 YAKU_ORDER 사전순(산안커)",
+   "rules": [
+    "MJ-38"
+   ],
+   "input": {
+    "closed": "4445677m777p",
+    "win": "7m",
+    "tsumo": false,
+    "seat_wind": "S",
+    "round_wind": "E",
+    "melds": [
+     {
+      "type": "ankan",
+      "tiles": "7777s"
+     }
+    ]
+   },
+   "expected": {
+    "agari": true,
+    "yaku": [
+     [
+      "tanyao",
+      1
+     ],
+     [
+      "sanankou",
+      2
+     ]
+    ],
+    "han": 3,
+    "fu": 60,
+    "points": {
+     "ron": 7700
+    },
+    "limit": ""
+   },
+   "basis": "대조 시험 X-02 — 동점 표시 규칙은 (제안)",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-1-30-CR",
+   "type": "score_table",
+   "title": "1판 30부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 1,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 1000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-1-30-DR",
+   "type": "score_table",
+   "title": "1판 30부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 1,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 1500
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-1-30-CT",
+   "type": "score_table",
+   "title": "1판 30부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 1,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 500,
+     "from_child": 300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-1-30-DT",
+   "type": "score_table",
+   "title": "1판 30부 친 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 1,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_each": 500
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-2-20-CT",
+   "type": "score_table",
+   "title": "2판 20부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 2,
+    "fu": 20,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 700,
+     "from_child": 400
+    },
+    "limit": ""
+   },
+   "note": "핑후 쯔모",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-2-25-CR",
+   "type": "score_table",
+   "title": "2판 25부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 2,
+    "fu": 25,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 1600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-2-25-DR",
+   "type": "score_table",
+   "title": "2판 25부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 2,
+    "fu": 25,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 2400
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-3-25-CT",
+   "type": "score_table",
+   "title": "3판 25부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 3,
+    "fu": 25,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 1600,
+     "from_child": 800
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-1-110-CR",
+   "type": "score_table",
+   "title": "1판 110부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 1,
+    "fu": 110,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 3600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-1-110-DR",
+   "type": "score_table",
+   "title": "1판 110부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 1,
+    "fu": 110,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 5300
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-2-110-CR",
+   "type": "score_table",
+   "title": "2판 110부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 2,
+    "fu": 110,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 7100
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-3-60-CR",
+   "type": "score_table",
+   "title": "3판 60부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 3,
+    "fu": 60,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 7700
+    },
+    "limit": ""
+   },
+   "note": "절상만관 없음",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-3-60-DR",
+   "type": "score_table",
+   "title": "3판 60부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 3,
+    "fu": 60,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 11600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-3-60-CT",
+   "type": "score_table",
+   "title": "3판 60부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 3,
+    "fu": 60,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 3900,
+     "from_child": 2000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-4-30-CR",
+   "type": "score_table",
+   "title": "4판 30부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 4,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 7700
+    },
+    "limit": ""
+   },
+   "note": "절상만관 없음(MJ-40)",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-4-30-DR",
+   "type": "score_table",
+   "title": "4판 30부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 4,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 11600
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-4-30-CT",
+   "type": "score_table",
+   "title": "4판 30부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 4,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 3900,
+     "from_child": 2000
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-4-30-DT",
+   "type": "score_table",
+   "title": "4판 30부 친 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 4,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_each": 3900
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-4-25-CR",
+   "type": "score_table",
+   "title": "4판 25부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 4,
+    "fu": 25,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 6400
+    },
+    "limit": ""
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-4-40-CR",
+   "type": "score_table",
+   "title": "4판 40부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 4,
+    "fu": 40,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "note": "기본점 2560 > 2000 → 만관",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-3-70-CR",
+   "type": "score_table",
+   "title": "3판 70부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 3,
+    "fu": 70,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 8000
+    },
+    "limit": "mangan"
+   },
+   "note": "기본점 2240",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-5-30-CT",
+   "type": "score_table",
+   "title": "5판 30부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 5,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 4000,
+     "from_child": 2000
+    },
+    "limit": "mangan"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-5-30-DT",
+   "type": "score_table",
+   "title": "5판 30부 친 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 5,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_each": 4000
+    },
+    "limit": "mangan"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-6-30-CR",
+   "type": "score_table",
+   "title": "6판 30부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 6,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 12000
+    },
+    "limit": "haneman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-7-30-DR",
+   "type": "score_table",
+   "title": "7판 30부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 7,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 18000
+    },
+    "limit": "haneman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-8-30-CT",
+   "type": "score_table",
+   "title": "8판 30부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 8,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 8000,
+     "from_child": 4000
+    },
+    "limit": "baiman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-10-30-DR",
+   "type": "score_table",
+   "title": "10판 30부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 10,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 24000
+    },
+    "limit": "baiman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-11-30-CR",
+   "type": "score_table",
+   "title": "11판 30부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 11,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 24000
+    },
+    "limit": "sanbaiman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-12-30-DT",
+   "type": "score_table",
+   "title": "12판 30부 친 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 12,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": true
+   },
+   "expected": {
+    "points": {
+     "from_each": 12000
+    },
+    "limit": "sanbaiman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-13-30-CR",
+   "type": "score_table",
+   "title": "13판 30부 자 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 13,
+    "fu": 30,
+    "dealer": false,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 32000
+    },
+    "limit": "yakuman"
+   },
+   "note": "헤아림",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-26-30-DR",
+   "type": "score_table",
+   "title": "26판 30부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 26,
+    "fu": 30,
+    "dealer": true,
+    "tsumo": false
+   },
+   "expected": {
+    "points": {
+     "ron": 48000
+    },
+    "limit": "yakuman"
+   },
+   "note": "헤아림은 26판이어도 1배",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-YM2-CT",
+   "type": "score_table",
+   "title": "0판 0부 자 쯔모",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 0,
+    "fu": 0,
+    "dealer": false,
+    "tsumo": true,
+    "yakuman": 2
+   },
+   "expected": {
+    "points": {
+     "from_dealer": 32000,
+     "from_child": 16000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "S-YM2-DR",
+   "type": "score_table",
+   "title": "0판 0부 친 론",
+   "rules": [
+    "MJ-39",
+    "MJ-40"
+   ],
+   "input": {
+    "han": 0,
+    "fu": 0,
+    "dealer": true,
+    "tsumo": false,
+    "yakuman": 2
+   },
+   "expected": {
+    "points": {
+     "ron": 96000
+    },
+    "limit": "yakuman"
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-QUAD-NOTEN",
+   "type": "shape",
+   "title": "1m 4장을 쥐고 1m 만 기다림 → 노텐(샹텐 1)",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "1111m234p567p789p"
+   },
+   "expected": {
+    "shanten": 1,
+    "waits": "",
+    "tenpai": false
+   },
+   "note": "라이브러리 Shanten 도 1",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-QUAD-OK",
+   "type": "shape",
+   "title": "1111m234m: 111+123+4 → 4m 단기 대기(텐파이)",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "1111m234m567p789s"
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "4m",
+    "tenpai": true
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-DOUBLE-QUAD",
+   "type": "shape",
+   "title": "두 종류 4장: 샹텐 2",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "56789p22225555s"
+   },
+   "expected": {
+    "shanten": 2,
+    "waits": "",
+    "tenpai": false
+   },
+   "note": "남는 2s·5s 는 머리가 될 수 없다(4장째). 대조 시험 X-03 에서 찾음",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-NOBETAN",
+   "type": "shape",
+   "title": "노베탄 2345m",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "2345m567p789s111z"
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "25m",
+    "tenpai": true
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-CHUUREN-9",
+   "type": "shape",
+   "title": "순정 구련 9면",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "1112345678999m"
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "123456789m",
+    "tenpai": true
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-KOKUSHI-13",
+   "type": "shape",
+   "title": "국사 13면",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "19m19p19s1234567z"
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "19m19p19s1234567z",
+    "tenpai": true
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-CHIITOI",
+   "type": "shape",
+   "title": "치또이 단기",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "1133m5577p2288s6z"
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "6z",
+    "tenpai": true
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-SHANPON-RYANMEN",
+   "type": "shape",
+   "title": "23444m: 1·4m 양면 + 4m·동 샤보",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "23444m567p789s11z"
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "14m1z",
+    "tenpai": true
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-MELD-KARATEN",
+   "type": "shape",
+   "title": "퐁 1m + 손 1m 단기: 대기로 친다",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "1m234p567p789s",
+    "n_melds": 1
+   },
+   "expected": {
+    "shanten": 0,
+    "waits": "1m",
+    "tenpai": true
+   },
+   "basis": "C-06 기본안",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-IISHANTEN",
+   "type": "shape",
+   "title": "1샹텐(24s 간짱 + 5p·8p 중 머리)",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "123m456p789s24s58p"
+   },
+   "expected": {
+    "shanten": 1,
+    "waits": "",
+    "tenpai": false
+   },
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "T-RANDOM",
+   "type": "shape",
+   "title": "흩어진 손 샹텐 4",
+   "rules": [
+    "MJ-26"
+   ],
+   "input": {
+    "closed": "13579m2468p147s1z"
+   },
+   "expected": {
+    "shanten": 4,
+    "waits": "",
+    "tenpai": false
+   },
+   "note": "라이브러리 Shanten 4",
+   "lib": "mahjong 2.1.0 일치"
+  },
+  {
+   "id": "R-DISCARD",
+   "type": "furiten",
+   "title": "버림 후리텐: 4s 를 버렸으면 1s 로도 론 불가",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "events": [
+     [
+      "discard",
+      "4s"
+     ],
+     [
+      "check",
+      "1s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "1s",
+      "can_ron": false,
+      "furiten": [
+       "discard"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-DISCARD-CLEARS",
+   "type": "furiten",
+   "title": "대기가 바뀌면 다시 판정(풀림)",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "events": [
+     [
+      "discard",
+      "4s"
+     ],
+     [
+      "check",
+      "1s"
+     ],
+     [
+      "set_hand",
+      "123m456p789s24s99p"
+     ],
+     [
+      "check",
+      "3s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "1s",
+      "can_ron": false,
+      "furiten": [
+       "discard"
+      ]
+     },
+     {
+      "tile": "3s",
+      "can_ron": true,
+      "furiten": []
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-TEMP",
+   "type": "furiten",
+   "title": "동순 후리텐: 1s 를 놓치면 내 다음 쯔모까지 4s 도 불가",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "events": [
+     [
+      "pass",
+      "1s"
+     ],
+     [
+      "check",
+      "4s"
+     ],
+     [
+      "draw"
+     ],
+     [
+      "check",
+      "4s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "4s",
+      "can_ron": false,
+      "furiten": [
+       "temporary"
+      ]
+     },
+     {
+      "tile": "4s",
+      "can_ron": true,
+      "furiten": []
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-TEMP-CALL",
+   "type": "furiten",
+   "title": "치·퐁·깡으로는 동순 후리텐이 안 풀림",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "events": [
+     [
+      "pass",
+      "1s"
+     ],
+     [
+      "call"
+     ],
+     [
+      "check",
+      "4s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "4s",
+      "can_ron": false,
+      "furiten": [
+       "temporary"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-RIICHI",
+   "type": "furiten",
+   "title": "리치 후리텐: 놓친 뒤 쯔모해도 국 끝까지 불가",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "events": [
+     [
+      "riichi"
+     ],
+     [
+      "pass",
+      "1s"
+     ],
+     [
+      "draw"
+     ],
+     [
+      "check",
+      "4s"
+     ],
+     [
+      "draw"
+     ],
+     [
+      "check",
+      "1s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "4s",
+      "can_ron": false,
+      "furiten": [
+       "riichi"
+      ]
+     },
+     {
+      "tile": "1s",
+      "can_ron": false,
+      "furiten": [
+       "riichi"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-NOYAKU-MISS",
+   "type": "furiten",
+   "title": "역 없어 못 론한 대기패도 놓침(동순 후리텐)",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s24s99p",
+    "events": [
+     [
+      "pass",
+      "3s"
+     ],
+     [
+      "check",
+      "3s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "3s",
+      "can_ron": false,
+      "furiten": [
+       "temporary"
+      ]
+     }
+    ]
+   },
+   "basis": "C-05 기본안"
+  },
+  {
+   "id": "R-KOKUSHI-13",
+   "type": "furiten",
+   "title": "국사 13면: 13종 중 하나라도 버렸으면 후리텐",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "19m19p19s1234567z",
+    "events": [
+     [
+      "discard",
+      "1m"
+     ],
+     [
+      "check",
+      "9p"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "9p",
+      "can_ron": false,
+      "furiten": [
+       "discard"
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "id": "R-NOT-WAIT",
+   "type": "furiten",
+   "title": "대기가 아닌 패를 넘겨도 후리텐 아님",
+   "rules": [
+    "MJ-24"
+   ],
+   "input": {
+    "closed": "123m456p789s23s99p",
+    "events": [
+     [
+      "pass",
+      "5s"
+     ],
+     [
+      "check",
+      "1s"
+     ]
+    ]
+   },
+   "expected": {
+    "checks": [
+     {
+      "tile": "1s",
+      "can_ron": true,
+      "furiten": []
+     }
+    ]
+   }
+  },
+  {
+   "id": "C-RON-FIRST",
+   "type": "claim",
+   "title": "론 > 퐁 > 치",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "chi"
+     ],
+     "2": [
+      "pon"
+     ],
+     "3": [
+      "ron"
+     ]
+    },
+    "answers": {
+     "1": "chi",
+     "2": "pon",
+     "3": "ron"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "ron",
+    "seats": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "C-PON-OVER-CHI",
+   "type": "claim",
+   "title": "퐁 > 치",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "chi"
+     ],
+     "2": [
+      "pon"
+     ]
+    },
+    "answers": {
+     "1": "chi",
+     "2": "pon"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "pon",
+    "seats": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "C-WAIT-HIGHER",
+   "type": "claim",
+   "title": "높은 후보(퐁)가 답하기 전엔 치를 정하지 않음",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "chi"
+     ],
+     "2": [
+      "pon"
+     ]
+    },
+    "answers": {
+     "1": "chi"
+    }
+   },
+   "expected": {
+    "status": "wait"
+   }
+  },
+  {
+   "id": "C-PON-NOW",
+   "type": "claim",
+   "title": "가장 높은 후보가 답하면 바로 정함",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "chi"
+     ],
+     "2": [
+      "pon"
+     ]
+    },
+    "answers": {
+     "2": "pon"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "pon",
+    "seats": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "C-DOUBLE-RON",
+   "type": "claim",
+   "title": "더블론: 방총자 다음 차례 순으로",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 1,
+    "eligible": {
+     "2": [
+      "ron"
+     ],
+     "0": [
+      "ron",
+      "pon"
+     ]
+    },
+    "answers": {
+     "2": "ron",
+     "0": "ron"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "ron",
+    "seats": [
+     2,
+     0
+    ]
+   }
+  },
+  {
+   "id": "C-TRIPLE-RON",
+   "type": "claim",
+   "title": "트리플론도 모두 화료(삼가화 없음)",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "ron"
+     ],
+     "2": [
+      "ron"
+     ],
+     "3": [
+      "ron"
+     ]
+    },
+    "answers": {
+     "1": "ron",
+     "2": "ron",
+     "3": "ron"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "ron",
+    "seats": [
+     1,
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "id": "C-RON-WAIT",
+   "type": "claim",
+   "title": "론 후보 전원의 답을 기다림",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "2": [
+      "ron"
+     ],
+     "3": [
+      "ron"
+     ]
+    },
+    "answers": {
+     "2": "ron"
+    }
+   },
+   "expected": {
+    "status": "wait"
+   }
+  },
+  {
+   "id": "C-RON-PASS-PON",
+   "type": "claim",
+   "title": "론 후보가 패스하면 퐁",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "ron",
+      "chi"
+     ],
+     "2": [
+      "pon"
+     ]
+    },
+    "answers": {
+     "1": "pass",
+     "2": "pon"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "pon",
+    "seats": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "C-ALL-PASS",
+   "type": "claim",
+   "title": "모두 패스",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "1": [
+      "chi"
+     ],
+     "3": [
+      "pon"
+     ]
+    },
+    "answers": {
+     "1": "pass",
+     "3": "pass"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "none",
+    "seats": []
+   }
+  },
+  {
+   "id": "C-CHANKAN",
+   "type": "claim",
+   "title": "가깡 패의 창 = 론만(창깡). 둘이 론하면 둘 다",
+   "rules": [
+    "MJ-17",
+    "MJ-20",
+    "MJ-25"
+   ],
+   "input": {
+    "discarder": 0,
+    "eligible": {
+     "2": [
+      "ron"
+     ],
+     "3": [
+      "ron"
+     ]
+    },
+    "answers": {
+     "2": "ron",
+     "3": "ron"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "ron",
+    "seats": [
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "id": "C-KAN-OVER-CHI",
+   "type": "claim",
+   "title": "대명깡 > 치",
+   "rules": [
+    "MJ-17"
+   ],
+   "input": {
+    "discarder": 2,
+    "eligible": {
+     "3": [
+      "chi"
+     ],
+     "1": [
+      "kan",
+      "pon"
+     ]
+    },
+    "answers": {
+     "3": "chi",
+     "1": "kan"
+    }
+   },
+   "expected": {
+    "status": "done",
+    "action": "kan",
+    "seats": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "K-PON",
+   "type": "kuikae",
+   "title": "퐁 뒤 같은 패 금지",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "pon",
+    "called": "5p",
+    "from_hand": "55p"
+   },
+   "expected": {
+    "forbidden": "5p"
+   }
+  },
+  {
+   "id": "K-CHI-LOW",
+   "type": "kuikae",
+   "title": "3m 을 45m 으로 치: 3m·6m 금지",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "3m",
+    "from_hand": "45m"
+   },
+   "expected": {
+    "forbidden": "36m"
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "K-CHI-HIGH",
+   "type": "kuikae",
+   "title": "6m 을 45m 으로 치: 6m·3m 금지",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "6m",
+    "from_hand": "45m"
+   },
+   "expected": {
+    "forbidden": "36m"
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "K-CHI-MID",
+   "type": "kuikae",
+   "title": "5m 을 46m 으로 치(간짱): 5m 만",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "5m",
+    "from_hand": "46m"
+   },
+   "expected": {
+    "forbidden": "5m"
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "K-CHI-EDGE",
+   "type": "kuikae",
+   "title": "7m 을 89m 으로 치: 7m 만(10 없음)",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "7m",
+    "from_hand": "89m"
+   },
+   "expected": {
+    "forbidden": "7m"
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "K-CHI-RED",
+   "type": "kuikae",
+   "title": "적5(0m)를 34m 으로 치: 5m·2m 금지",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "0m",
+    "from_hand": "34m"
+   },
+   "expected": {
+    "forbidden": "25m"
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "K-NO-DISCARD",
+   "type": "kuikae",
+   "title": "울고 버릴 패가 없으면 그 울기는 선택지 아님",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "3m",
+    "from_hand": "45m",
+    "closed_after": "36m"
+   },
+   "expected": {
+    "forbidden": "36m",
+    "allowed": false
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "K-HAS-DISCARD",
+   "type": "kuikae",
+   "title": "버릴 패가 하나라도 있으면 됨",
+   "rules": [
+    "MJ-18"
+   ],
+   "input": {
+    "call": "chi",
+    "called": "3m",
+    "from_hand": "45m",
+    "closed_after": "36m9p"
+   },
+   "expected": {
+    "forbidden": "36m",
+    "allowed": true
+   },
+   "basis": "C-01 기본안"
+  },
+  {
+   "id": "RI-OK",
+   "type": "riichi",
+   "title": "텐파이가 되는 버림패만",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p789s23s99p5z",
+    "score": 25000,
+    "live_left": 30
+   },
+   "expected": {
+    "discards": [
+     "5z"
+    ]
+   }
+  },
+  {
+   "id": "RI-SCORE-1000",
+   "type": "riichi",
+   "title": "점수 정확히 1000 이면 됨",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p789s23s99p5z",
+    "score": 1000,
+    "live_left": 30
+   },
+   "expected": {
+    "discards": [
+     "5z"
+    ]
+   }
+  },
+  {
+   "id": "RI-SCORE-900",
+   "type": "riichi",
+   "title": "1000 미만이면 못 함",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p789s23s99p5z",
+    "score": 900,
+    "live_left": 30
+   },
+   "expected": {
+    "discards": []
+   }
+  },
+  {
+   "id": "RI-LIVE-4",
+   "type": "riichi",
+   "title": "산 4장 남으면 됨",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p789s23s99p5z",
+    "score": 25000,
+    "live_left": 4
+   },
+   "expected": {
+    "discards": [
+     "5z"
+    ]
+   }
+  },
+  {
+   "id": "RI-LIVE-3",
+   "type": "riichi",
+   "title": "산 3장이면 못 함",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p789s23s99p5z",
+    "score": 25000,
+    "live_left": 3
+   },
+   "expected": {
+    "discards": []
+   }
+  },
+  {
+   "id": "RI-OPEN",
+   "type": "riichi",
+   "title": "울었으면 못 함",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p789s23s99p5z",
+    "score": 25000,
+    "live_left": 30,
+    "menzen": false
+   },
+   "expected": {
+    "discards": []
+   }
+  },
+  {
+   "id": "RI-MULTI",
+   "type": "riichi",
+   "title": "버림 후보 둘: 3s(57s 간짱) 또는 7s(35s 간짱)",
+   "rules": [
+    "MJ-27"
+   ],
+   "input": {
+    "closed14": "123m456p357789s11z",
+    "score": 25000,
+    "live_left": 30
+   },
+   "expected": {
+    "discards": [
+     "3s",
+     "7s"
+    ]
+   }
+  },
+  {
+   "id": "RI-ANKAN-OK",
+   "type": "riichi_ankan",
+   "title": "대기(1·4s)가 그대로면 됨",
+   "rules": [
+    "MJ-29"
+   ],
+   "input": {
+    "closed13": "222m456p789s23s99p",
+    "drawn": "2m"
+   },
+   "expected": {
+    "allowed": true
+   },
+   "basis": "C-07 기본안"
+  },
+  {
+   "id": "RI-ANKAN-WAIT-CHANGE",
+   "type": "riichi_ankan",
+   "title": "대기 {1m,4m,동} → {1m,4m} 바뀌면 안 됨",
+   "rules": [
+    "MJ-29"
+   ],
+   "input": {
+    "closed13": "23444m567p789s11z",
+    "drawn": "4m"
+   },
+   "expected": {
+    "allowed": false
+   },
+   "basis": "C-07 기본안"
+  },
+  {
+   "id": "RI-ANKAN-OKURI",
+   "type": "riichi_ankan",
+   "title": "오쿠리깡(쯔모패가 아닌 4장으로 깡) 안 됨",
+   "rules": [
+    "MJ-29"
+   ],
+   "input": {
+    "closed13": "2222m456p789s23s9p",
+    "drawn": "9p",
+    "kan": "2m"
+   },
+   "expected": {
+    "allowed": false
+   },
+   "basis": "C-07 기본안"
+  },
+  {
+   "id": "D-WRAP",
+   "type": "dora",
+   "title": "표시패 감김: 9→1, 북→동, 중→백",
+   "rules": [
+    "MJ-10"
+   ],
+   "input": {
+    "indicators": "9m9p9s4z7z"
+   },
+   "expected": {
+    "dora_kinds": [
+     "1m",
+     "1p",
+     "1s",
+     "1z",
+     "5z"
+    ]
+   }
+  },
+  {
+   "id": "D-RED-INDICATOR",
+   "type": "dora",
+   "title": "적5 표시패 → 도라 6, 표시패 자체는 판 없음",
+   "rules": [
+    "MJ-02",
+    "MJ-10"
+   ],
+   "input": {
+    "indicators": "0m",
+    "tiles": "666m0p"
+   },
+   "expected": {
+    "dora_kinds": [
+     "6m"
+    ],
+    "count": 3,
+    "aka": 1
+   }
+  },
+  {
+   "id": "D-SAME-INDICATOR-TWICE",
+   "type": "dora",
+   "title": "같은 표시패 둘(깡도라)이면 두 번 셈",
+   "rules": [
+    "MJ-10"
+   ],
+   "input": {
+    "indicators": "9m9m",
+    "tiles": "111m"
+   },
+   "expected": {
+    "count": 6
+   }
+  },
+  {
+   "id": "D-TIMER-ANKAN",
+   "type": "dora",
+   "title": "암깡은 즉시 연다",
+   "rules": [
+    "MJ-11"
+   ],
+   "input": {
+    "events": [
+     [
+      "kan",
+      "ankan"
+     ],
+     [
+      "look"
+     ]
+    ]
+   },
+   "expected": {
+    "open_counts": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "D-TIMER-MINKAN-RINSHAN",
+   "type": "dora",
+   "title": "대명깡 직후 영상 화료: 새 깡도라 아직 안 열림",
+   "rules": [
+    "MJ-11"
+   ],
+   "input": {
+    "events": [
+     [
+      "kan",
+      "minkan"
+     ],
+     [
+      "look"
+     ]
+    ]
+   },
+   "expected": {
+    "open_counts": [
+     1
+    ]
+   },
+   "basis": "C-02 기본안"
+  },
+  {
+   "id": "D-TIMER-MINKAN-DISCARD",
+   "type": "dora",
+   "title": "대명깡 뒤 타패에 론: 타패 순간 열림",
+   "rules": [
+    "MJ-11"
+   ],
+   "input": {
+    "events": [
+     [
+      "kan",
+      "minkan"
+     ],
+     [
+      "discard"
+     ],
+     [
+      "look"
+     ]
+    ]
+   },
+   "expected": {
+    "open_counts": [
+     2
+    ]
+   },
+   "basis": "C-03 기본안"
+  },
+  {
+   "id": "D-TIMER-CHAIN",
+   "type": "dora",
+   "title": "대명깡 뒤 타패 전 암깡: 앞 깡 표시패를 먼저 열고 암깡도 즉시",
+   "rules": [
+    "MJ-11"
+   ],
+   "input": {
+    "events": [
+     [
+      "kan",
+      "minkan"
+     ],
+     [
+      "kan",
+      "ankan"
+     ],
+     [
+      "look"
+     ]
+    ]
+   },
+   "expected": {
+    "open_counts": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "D-TIMER-KAKAN-CHAIN",
+   "type": "dora",
+   "title": "가깡 두 번 연속: 둘째 선언 직전에 첫째를 연다",
+   "rules": [
+    "MJ-11"
+   ],
+   "input": {
+    "events": [
+     [
+      "kan",
+      "kakan"
+     ],
+     [
+      "kan",
+      "kakan"
+     ],
+     [
+      "look"
+     ],
+     [
+      "discard"
+     ],
+     [
+      "look"
+     ]
+    ]
+   },
+   "expected": {
+    "open_counts": [
+     2,
+     3
+    ]
+   }
+  },
+  {
+   "id": "P-DAISANGEN-TSUMO",
+   "type": "settle_win",
+   "title": "대삼원 쯔모, 책임자가 전액 + 본장",
+   "rules": [
+    "MJ-42"
+   ],
+   "input": {
+    "winner": 1,
+    "dealer": 0,
+    "honba": 1,
+    "kyoutaku": 1,
+    "pao": {
+     "seat": 2,
+     "yaku": "daisangen"
+    },
+    "hand": {
+     "closed": "777z23m99s",
+     "win": "1m",
+     "tsumo": true,
+     "seat_wind": "S",
+     "round_wind": "E",
+     "melds": [
+      {
+       "type": "pon",
+       "tiles": "555z"
+      },
+      {
+       "type": "pon",
+       "tiles": "666z"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "deltas": [
+     0,
+     33300,
+     -32300,
+     0
+    ]
+   },
+   "note": "책임 32000 + 본장 300(책임자), 공탁 1000 은 화료자"
+  },
+  {
+   "id": "P-DAISANGEN-RON",
+   "type": "settle_win",
+   "title": "대삼원 론: 방총자·책임자 반씩, 본장은 책임자",
+   "rules": [
+    "MJ-42"
+   ],
+   "input": {
+    "winner": 1,
+    "dealer": 0,
+    "discarder": 3,
+    "honba": 2,
+    "kyoutaku": 0,
+    "pao": {
+     "seat": 2,
+     "yaku": "daisangen"
+    },
+    "hand": {
+     "closed": "777z23m99s",
+     "win": "1m",
+     "tsumo": false,
+     "seat_wind": "S",
+     "round_wind": "E",
+     "melds": [
+      {
+       "type": "pon",
+       "tiles": "555z"
+      },
+      {
+       "type": "pon",
+       "tiles": "666z"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "deltas": [
+     0,
+     32600,
+     -16600,
+     -16000
+    ]
+   }
+  },
+  {
+   "id": "P-PAO-IS-DISCARDER",
+   "type": "settle_win",
+   "title": "책임자가 방총하면 혼자 전액",
+   "rules": [
+    "MJ-42"
+   ],
+   "input": {
+    "winner": 1,
+    "dealer": 0,
+    "discarder": 2,
+    "honba": 0,
+    "kyoutaku": 0,
+    "pao": {
+     "seat": 2,
+     "yaku": "daisangen"
+    },
+    "hand": {
+     "closed": "777z23m99s",
+     "win": "1m",
+     "tsumo": false,
+     "seat_wind": "S",
+     "round_wind": "E",
+     "melds": [
+      {
+       "type": "pon",
+       "tiles": "555z"
+      },
+      {
+       "type": "pon",
+       "tiles": "666z"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "deltas": [
+     0,
+     32000,
+     -32000,
+     0
+    ]
+   }
+  },
+  {
+   "id": "P-COMPOSITE-TSUMO",
+   "type": "settle_win",
+   "title": "대삼원+자일색 쯔모: 대삼원 몫만 책임, 자일색 몫은 보통",
+   "rules": [
+    "MJ-42"
+   ],
+   "input": {
+    "winner": 1,
+    "dealer": 0,
+    "honba": 0,
+    "kyoutaku": 0,
+    "pao": {
+     "seat": 2,
+     "yaku": "daisangen"
+    },
+    "hand": {
+     "closed": "777z11z22z",
+     "win": "1z",
+     "tsumo": true,
+     "seat_wind": "S",
+     "round_wind": "E",
+     "melds": [
+      {
+       "type": "pon",
+       "tiles": "555z"
+      },
+      {
+       "type": "pon",
+       "tiles": "666z"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "deltas": [
+     -16000,
+     64000,
+     -40000,
+     -8000
+    ]
+   }
+  },
+  {
+   "id": "P-DAISUUSHII-RON",
+   "type": "settle_win",
+   "title": "대사희(2배) 론 책임: 64000 을 반씩",
+   "rules": [
+    "MJ-42"
+   ],
+   "input": {
+    "winner": 2,
+    "dealer": 0,
+    "discarder": 1,
+    "honba": 0,
+    "kyoutaku": 0,
+    "pao": {
+     "seat": 3,
+     "yaku": "daisuushii"
+    },
+    "hand": {
+     "closed": "444z5m",
+     "win": "5m",
+     "tsumo": false,
+     "seat_wind": "W",
+     "round_wind": "E",
+     "melds": [
+      {
+       "type": "pon",
+       "tiles": "111z"
+      },
+      {
+       "type": "pon",
+       "tiles": "222z"
+      },
+      {
+       "type": "pon",
+       "tiles": "333z"
+      }
+     ]
+    }
+   },
+   "expected": {
+    "deltas": [
+     0,
+     -32000,
+     64000,
+     -32000
+    ]
+   },
+   "basis": "C-11 기본안(2배 몫 전부)"
+  },
+  {
+   "id": "P-DEALER-TSUMO",
+   "type": "settle_win",
+   "title": "친 쯔모 1판30부 + 본장1 + 공탁1",
+   "rules": [
+    "MJ-39",
+    "MJ-41"
+   ],
+   "input": {
+    "winner": 0,
+    "dealer": 0,
+    "honba": 1,
+    "kyoutaku": 1,
+    "hand": {
+     "closed": "123m456p789s24s99p",
+     "win": "3s",
+     "tsumo": true,
+     "seat_wind": "E",
+     "round_wind": "E"
+    }
+   },
+   "expected": {
+    "deltas": [
+     2800,
+     -600,
+     -600,
+     -600
+    ]
+   }
+  },
+  {
+   "id": "P-DOUBLE-RON",
+   "type": "settle_win",
+   "title": "더블론: 본장·공탁은 방총자 다음 차례의 화료자만",
+   "rules": [
+    "MJ-25",
+    "MJ-41"
+   ],
+   "input": {
+    "discarder": 0,
+    "dealer": 0,
+    "honba": 2,
+    "kyoutaku": 1,
+    "winners": [
+     {
+      "seat": 3,
+      "hand": {
+       "closed": "123m456p789s45s99p",
+       "win": "3s",
+       "tsumo": false,
+       "seat_wind": "N",
+       "round_wind": "E"
+      }
+     },
+     {
+      "seat": 1,
+      "hand": {
+       "closed": "123m456p789s24s99p",
+       "win": "3s",
+       "tsumo": false,
+       "seat_wind": "S",
+       "round_wind": "E",
+       "riichi": true
+      }
+     }
+    ]
+   },
+   "expected": {
+    "deltas": [
+     -2900,
+     2900,
+     0,
+     1000
+    ],
+    "bonus_to": 1,
+    "renchan": false
+   },
+   "note": "1번: 1300+600+1000, 3번: 1000. 방총자 −(1300+600)−1000"
+  },
+  {
+   "id": "P-DOUBLE-RON-DEALER",
+   "type": "settle_win",
+   "title": "더블론에 친이 있으면 연장, 공탁은 차례상 첫 화료자",
+   "rules": [
+    "MJ-25",
+    "MJ-46"
+   ],
+   "input": {
+    "discarder": 2,
+    "dealer": 0,
+    "honba": 0,
+    "kyoutaku": 2,
+    "winners": [
+     {
+      "seat": 1,
+      "hand": {
+       "closed": "123m456p789s23s99p",
+       "win": "4s",
+       "tsumo": false,
+       "seat_wind": "S",
+       "round_wind": "E"
+      }
+     },
+     {
+      "seat": 0,
+      "hand": {
+       "closed": "123m456p789s23s99p",
+       "win": "4s",
+       "tsumo": false,
+       "seat_wind": "E",
+       "round_wind": "E"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "deltas": [
+     3500,
+     1000,
+     -2500,
+     0
+    ],
+    "bonus_to": 0,
+    "renchan": true
+   },
+   "note": "친 1500+2000, 자 1000"
+  },
+  {
+   "id": "P-TRIPLE-RON",
+   "type": "settle_win",
+   "title": "트리플론",
+   "rules": [
+    "MJ-25"
+   ],
+   "input": {
+    "discarder": 1,
+    "dealer": 0,
+    "honba": 1,
+    "kyoutaku": 0,
+    "winners": [
+     {
+      "seat": 0,
+      "hand": {
+       "closed": "123m456p789s23s99p",
+       "win": "4s",
+       "tsumo": false,
+       "seat_wind": "E",
+       "round_wind": "E"
+      }
+     },
+     {
+      "seat": 2,
+      "hand": {
+       "closed": "123m456p789s23s99p",
+       "win": "4s",
+       "tsumo": false,
+       "seat_wind": "W",
+       "round_wind": "E"
+      }
+     },
+     {
+      "seat": 3,
+      "hand": {
+       "closed": "123m456p789s23s99p",
+       "win": "4s",
+       "tsumo": false,
+       "seat_wind": "N",
+       "round_wind": "E"
+      }
+     }
+    ]
+   },
+   "expected": {
+    "deltas": [
+     1500,
+     -3800,
+     1300,
+     1000
+    ],
+    "bonus_to": 2,
+    "renchan": true
+   }
+  },
+  {
+   "id": "N-TENPAI-1",
+   "type": "exhaustive",
+   "title": "텐파이 1명(친)",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     true,
+     false,
+     false,
+     false
+    ],
+    "nagashi": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     3000,
+     -1000,
+     -1000,
+     -1000
+    ],
+    "renchan": true
+   }
+  },
+  {
+   "id": "N-TENPAI-2",
+   "type": "exhaustive",
+   "title": "텐파이 2명, 친 노텐",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     false,
+     true,
+     true,
+     false
+    ],
+    "nagashi": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     -1500,
+     1500,
+     1500,
+     -1500
+    ],
+    "renchan": false
+   }
+  },
+  {
+   "id": "N-TENPAI-3",
+   "type": "exhaustive",
+   "title": "텐파이 3명",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     true,
+     true,
+     true,
+     false
+    ],
+    "nagashi": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     1000,
+     1000,
+     1000,
+     -3000
+    ],
+    "renchan": true
+   }
+  },
+  {
+   "id": "N-TENPAI-0",
+   "type": "exhaustive",
+   "title": "모두 노텐",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 1,
+    "tenpai": [
+     false,
+     false,
+     false,
+     false
+    ],
+    "nagashi": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "renchan": false
+   }
+  },
+  {
+   "id": "N-TENPAI-4",
+   "type": "exhaustive",
+   "title": "모두 텐파이",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 1,
+    "tenpai": [
+     true,
+     true,
+     true,
+     true
+    ],
+    "nagashi": [
+     false,
+     false,
+     false,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "renchan": true
+   }
+  },
+  {
+   "id": "N-NAGASHI-CHILD",
+   "type": "exhaustive",
+   "title": "자 유국만관(노텐벌 대신), 친 텐파이 연장",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     true,
+     false,
+     false,
+     false
+    ],
+    "nagashi": [
+     false,
+     false,
+     true,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     -4000,
+     -2000,
+     8000,
+     -2000
+    ],
+    "renchan": true
+   },
+   "basis": "C-13 기본안"
+  },
+  {
+   "id": "N-NAGASHI-DEALER",
+   "type": "exhaustive",
+   "title": "친 유국만관 + 친 노텐 → 넘김",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     false,
+     false,
+     false,
+     false
+    ],
+    "nagashi": [
+     true,
+     false,
+     false,
+     false
+    ]
+   },
+   "expected": {
+    "deltas": [
+     12000,
+     -4000,
+     -4000,
+     -4000
+    ],
+    "renchan": false
+   }
+  },
+  {
+   "id": "N-NAGASHI-TWO",
+   "type": "exhaustive",
+   "title": "유국만관 둘: 각자 받고 서로 냄",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     false,
+     false,
+     false,
+     false
+    ],
+    "nagashi": [
+     false,
+     true,
+     false,
+     true
+    ]
+   },
+   "expected": {
+    "deltas": [
+     -8000,
+     6000,
+     -4000,
+     6000
+    ],
+    "renchan": false
+   }
+  },
+  {
+   "id": "N-NAGASHI-CHECK",
+   "type": "exhaustive",
+   "title": "유국만관 조건",
+   "rules": [
+    "MJ-43",
+    "MJ-44"
+   ],
+   "input": {
+    "dealer": 0,
+    "tenpai": [
+     false,
+     false,
+     false,
+     false
+    ],
+    "nagashi": [
+     false,
+     false,
+     false,
+     false
+    ],
+    "discards": [
+     {
+      "discards": "19m1z9p7z"
+     },
+     {
+      "discards": "19m1z9p",
+      "called_away": true
+     },
+     {
+      "discards": "19m5m"
+     }
+    ]
+   },
+   "expected": {
+    "deltas": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "renchan": false,
+    "nagashi_ok": [
+     true,
+     false,
+     false
+    ]
+   }
+  },
+  {
+   "id": "A-KYUUSHU-9",
+   "type": "abortive",
+   "title": "구종구패: 요구패 9종",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "kyuushu",
+    "hand14": "1923456m19p19s123z"
+   },
+   "expected": {
+    "ok": true
+   }
+  },
+  {
+   "id": "A-KYUUSHU-8",
+   "type": "abortive",
+   "title": "8종이면 안 됨",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "kyuushu",
+    "hand14": "19234567m19p19s12z"
+   },
+   "expected": {
+    "ok": false
+   }
+  },
+  {
+   "id": "A-KYUUSHU-CALLED",
+   "type": "abortive",
+   "title": "앞서 울기가 있으면 안 됨",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "kyuushu",
+    "hand14": "1923456m19p19s123z",
+    "first_turn_uninterrupted": false
+   },
+   "expected": {
+    "ok": false
+   }
+  },
+  {
+   "id": "A-SUUFON",
+   "type": "abortive",
+   "title": "사풍연타",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "suufon",
+    "first_discards": "1111z"
+   },
+   "expected": {
+    "ok": true
+   }
+  },
+  {
+   "id": "A-SUUFON-DIFF",
+   "type": "abortive",
+   "title": "다른 바람이 섞이면 아님",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "suufon",
+    "first_discards": "1112z"
+   },
+   "expected": {
+    "ok": false
+   }
+  },
+  {
+   "id": "A-SUUFON-DRAGON",
+   "type": "abortive",
+   "title": "삼원패 넷은 아님",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "suufon",
+    "first_discards": "5555z"
+   },
+   "expected": {
+    "ok": false
+   }
+  },
+  {
+   "id": "A-SUUFON-CALL",
+   "type": "abortive",
+   "title": "울기가 끼면 아님",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "suufon",
+    "first_discards": "1111z",
+    "any_call": true
+   },
+   "expected": {
+    "ok": false
+   }
+  },
+  {
+   "id": "A-SUUKAIKAN",
+   "type": "abortive",
+   "title": "2명 이상 합계 4깡",
+   "rules": [
+    "MJ-16",
+    "MJ-45"
+   ],
+   "input": {
+    "check": "suukaikan",
+    "kan_seats": [
+     0,
+     1,
+     0,
+     2
+    ]
+   },
+   "expected": {
+    "ok": true
+   }
+  },
+  {
+   "id": "A-SUUKAIKAN-ONE",
+   "type": "abortive",
+   "title": "한 사람 4깡은 계속",
+   "rules": [
+    "MJ-16"
+   ],
+   "input": {
+    "check": "suukaikan",
+    "kan_seats": [
+     3,
+     3,
+     3,
+     3
+    ]
+   },
+   "expected": {
+    "ok": false
+   }
+  },
+  {
+   "id": "A-SUUCHA-RIICHI",
+   "type": "abortive",
+   "title": "사가리치",
+   "rules": [
+    "MJ-45"
+   ],
+   "input": {
+    "check": "suucha_riichi",
+    "riichi_established": 4
+   },
+   "expected": {
+    "ok": true
+   }
+  },
+  {
+   "id": "G-CHILD-WIN",
+   "type": "advance",
+   "title": "자 화료 → 친 넘김, 본장 0",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 0,
+    "honba": 2,
+    "scores": [
+     25000,
+     25000,
+     25000,
+     25000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 1,
+     "honba": 0
+    }
+   }
+  },
+  {
+   "id": "G-DEALER-WIN",
+   "type": "advance",
+   "title": "친 화료 → 연장 본장 +1",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 0,
+    "honba": 0,
+    "scores": [
+     25000,
+     25000,
+     25000,
+     25000
+    ],
+    "outcome": "dealer_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 0,
+     "honba": 1
+    }
+   }
+  },
+  {
+   "id": "G-DRAW-NOTEN",
+   "type": "advance",
+   "title": "황패 친 노텐 → 넘기되 본장 +1",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 1,
+    "honba": 0,
+    "scores": [
+     25000,
+     25000,
+     25000,
+     25000
+    ],
+    "outcome": "draw_dealer_noten"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 2,
+     "honba": 1
+    }
+   },
+   "basis": "C-16 기본안"
+  },
+  {
+   "id": "G-ABORTIVE",
+   "type": "advance",
+   "title": "도중 유국 → 연장 본장 +1",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 1,
+    "hand": 2,
+    "honba": 3,
+    "scores": [
+     25000,
+     25000,
+     25000,
+     25000
+    ],
+    "outcome": "abortive"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 1,
+     "hand": 2,
+     "honba": 4
+    }
+   }
+  },
+  {
+   "id": "G-TOBI",
+   "type": "advance",
+   "title": "0 미만 → 판 끝",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 0,
+    "hand": 1,
+    "honba": 0,
+    "scores": [
+     -100,
+     40100,
+     30000,
+     30000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": true,
+    "reason": "tobi"
+   }
+  },
+  {
+   "id": "G-ZERO",
+   "type": "advance",
+   "title": "정확히 0 이면 계속",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 0,
+    "hand": 1,
+    "honba": 0,
+    "scores": [
+     0,
+     40000,
+     30000,
+     30000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 2,
+     "honba": 0
+    }
+   }
+  },
+  {
+   "id": "G-AGARI-YAME",
+   "type": "advance",
+   "title": "동4국 친 화료, 친 1위·30000↑ → 화료 그만",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     20000,
+     20000,
+     25000,
+     35000
+    ],
+    "outcome": "dealer_win"
+   },
+   "expected": {
+    "end": true,
+    "reason": "agari_yame"
+   }
+  },
+  {
+   "id": "G-AGARI-YAME-NOT-TOP",
+   "type": "advance",
+   "title": "친 30000↑ 이지만 1위 아님 → 계속",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     33000,
+     15000,
+     20000,
+     32000
+    ],
+    "outcome": "dealer_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 3,
+     "honba": 1
+    }
+   }
+  },
+  {
+   "id": "G-AGARI-YAME-TIE",
+   "type": "advance",
+   "title": "친과 동점 1위면 기가에 가까운 쪽(0번)이 위 → 친(3번)은 1위 아님",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     32000,
+     16000,
+     20000,
+     32000
+    ],
+    "outcome": "dealer_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 3,
+     "honba": 1
+    }
+   }
+  },
+  {
+   "id": "G-AGARI-YAME-UNDER",
+   "type": "advance",
+   "title": "친 1위지만 30000 미만 → 계속",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 1,
+    "scores": [
+     23000,
+     24000,
+     24000,
+     29000
+    ],
+    "outcome": "dealer_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 3,
+     "honba": 2
+    }
+   }
+  },
+  {
+   "id": "G-TENPAI-YAME",
+   "type": "advance",
+   "title": "텐파이 그만",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 1,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     20000,
+     20000,
+     25000,
+     35000
+    ],
+    "outcome": "draw_dealer_tenpai"
+   },
+   "expected": {
+    "end": true,
+    "reason": "tenpai_yame"
+   }
+  },
+  {
+   "id": "G-ABORTIVE-LAST",
+   "type": "advance",
+   "title": "마지막 국 도중 유국엔 그만 없음",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     20000,
+     20000,
+     25000,
+     35000
+    ],
+    "outcome": "abortive"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 3,
+     "honba": 1
+    }
+   }
+  },
+  {
+   "id": "G-NANNYU",
+   "type": "advance",
+   "title": "동풍전 동4 끝, 1위 29900 → 남입(남1)",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 1,
+    "scores": [
+     29900,
+     25100,
+     25000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 1,
+     "hand": 0,
+     "honba": 0
+    }
+   }
+  },
+  {
+   "id": "G-E4-END",
+   "type": "advance",
+   "title": "동풍전 동4 끝, 30000 이상 있음 → 끝",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     30000,
+     25000,
+     25000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": true,
+    "reason": "target_reached"
+   }
+  },
+  {
+   "id": "G-SUDDEN-DEATH",
+   "type": "advance",
+   "title": "남입 뒤 서든데스: 30000 넘으면 끝",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 1,
+    "hand": 0,
+    "honba": 0,
+    "scores": [
+     31000,
+     24000,
+     25000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": true,
+    "reason": "target_reached"
+   }
+  },
+  {
+   "id": "G-SUDDEN-DEATH-GO",
+   "type": "advance",
+   "title": "남입 뒤 아무도 30000 아니면 다음 국",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 1,
+    "hand": 0,
+    "honba": 0,
+    "scores": [
+     29000,
+     26000,
+     25000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 1,
+     "hand": 1,
+     "honba": 0
+    }
+   }
+  },
+  {
+   "id": "G-TONPUU-MAX",
+   "type": "advance",
+   "title": "동풍전 남4 끝 → 30000 미만이어도 끝(서입 없음)",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 1,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     29000,
+     26000,
+     25000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": true,
+    "reason": "max_round"
+   }
+  },
+  {
+   "id": "G-HANCHAN-E4",
+   "type": "advance",
+   "title": "반장전 동4 끝은 마지막 국 아님(30000↑ 있어도 남1)",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     40000,
+     20000,
+     20000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 1,
+     "hand": 0,
+     "honba": 0
+    }
+   }
+  },
+  {
+   "id": "G-SHANYU",
+   "type": "advance",
+   "title": "반장전 남4 끝, 1위 29000 → 서입",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 1,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     29000,
+     26000,
+     25000,
+     20000
+    ],
+    "outcome": "child_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 2,
+     "hand": 0,
+     "honba": 0
+    }
+   }
+  },
+  {
+   "id": "G-HANCHAN-MAX",
+   "type": "advance",
+   "title": "반장전 서4 끝 → 끝",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "hanchan",
+    "round": 2,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     29000,
+     26000,
+     25000,
+     20000
+    ],
+    "outcome": "draw_dealer_noten"
+   },
+   "expected": {
+    "end": true,
+    "reason": "max_round"
+   }
+  },
+  {
+   "id": "G-C17",
+   "type": "advance",
+   "title": "서든데스 중 친 텐파이 연장, 다른 사람 30000↑, 친 1위 아님 → 계속",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 1,
+    "hand": 1,
+    "honba": 0,
+    "scores": [
+     31000,
+     26000,
+     23000,
+     20000
+    ],
+    "outcome": "draw_dealer_tenpai"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 1,
+     "hand": 1,
+     "honba": 1
+    }
+   },
+   "basis": "C-17 기본안(천봉식)"
+  },
+  {
+   "id": "G-DOUBLE-RON-DEALER-LAST",
+   "type": "advance",
+   "title": "마지막 국 더블론에 친 포함, 자가 30000↑ → 연장 계속",
+   "rules": [
+    "MJ-46",
+    "MJ-47",
+    "MJ-48",
+    "MJ-49",
+    "MJ-50"
+   ],
+   "input": {
+    "length": "tonpuu",
+    "round": 0,
+    "hand": 3,
+    "honba": 0,
+    "scores": [
+     22000,
+     31000,
+     20000,
+     27000
+    ],
+    "outcome": "dealer_win"
+   },
+   "expected": {
+    "end": false,
+    "next": {
+     "round": 0,
+     "hand": 3,
+     "honba": 1
+    }
+   }
+  },
+  {
+   "id": "O-ALL-TIE",
+   "type": "rank",
+   "title": "넷 동점: 기가부터, 공탁은 1위",
+   "rules": [
+    "MJ-51"
+   ],
+   "input": {
+    "scores": [
+     25000,
+     25000,
+     25000,
+     25000
+    ],
+    "kyoutaku": 2
+   },
+   "expected": {
+    "order": [
+     0,
+     1,
+     2,
+     3
+    ],
+    "ranks": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "final_scores": [
+     27000,
+     25000,
+     25000,
+     25000
+    ]
+   }
+  },
+  {
+   "id": "O-TIE-TOP",
+   "type": "rank",
+   "title": "1위 동점: 기가에 가까운 1번이 위",
+   "rules": [
+    "MJ-51"
+   ],
+   "input": {
+    "scores": [
+     20000,
+     30000,
+     30000,
+     20000
+    ],
+    "kyoutaku": 1
+   },
+   "expected": {
+    "order": [
+     1,
+     2,
+     0,
+     3
+    ],
+    "ranks": [
+     3,
+     1,
+     2,
+     4
+    ],
+    "final_scores": [
+     20000,
+     31000,
+     30000,
+     20000
+    ]
+   }
+  },
+  {
+   "id": "O-NEGATIVE",
+   "type": "rank",
+   "title": "음수도 센다",
+   "rules": [
+    "MJ-51"
+   ],
+   "input": {
+    "scores": [
+     -1000,
+     41000,
+     30000,
+     30000
+    ],
+    "kyoutaku": 0
+   },
+   "expected": {
+    "order": [
+     1,
+     2,
+     3,
+     0
+    ],
+    "ranks": [
+     4,
+     1,
+     2,
+     3
+    ],
+    "final_scores": [
+     -1000,
+     41000,
+     30000,
+     30000
+    ]
+   }
+  }
+ ]
+}

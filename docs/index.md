@@ -1,8 +1,12 @@
 ---
 title: 아잉체크
+# 대표 페이지는 랜딩이다 — 검색엔진이 이 지원 페이지 대신 랜딩을 보여 주게 한다(jekyll-seo-tag 가 canonical 로 쓴다).
+canonical_url: https://aing-check.vercel.app/
 ---
 
 # 아잉체크
+
+아잉체크 소개와 내려받기는 **[aing-check.vercel.app](https://aing-check.vercel.app/)** 에 있습니다. 이 페이지는 지원 안내입니다.
 
 **아잉체크**(aing-check)는 일하는 시간을 스스로 재고, 팀이 지금 어디쯤인지 한눈에 보는 앱입니다.
 맥 메뉴바 앱과 아이폰·안드로이드 앱이 같은 계정으로 이어집니다.

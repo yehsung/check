@@ -44,32 +44,30 @@ import CheckCore
 ///   · 로비: [상대 목록 420 | 20 | 순위 340] = 왼쪽 블록 780 | 오른쪽 열 400 → 780 + 20 + 400 = 1200
 enum GomokuWindowLayout {
     /// 창 콘텐츠 크기(고정). 컨트롤러의 min/max 도 이 값 하나를 쓴다.
-    static let contentSize = CGSize(width: 1240, height: 700)
-    static let contentPadding: CGFloat = 20
-    static let columnSpacing: CGFloat = 20
-    static let headerHeight: CGFloat = 40
-    static let headerSpacing: CGFloat = 12
+    static let contentSize = BoardGameLayout.contentSize
+    static let contentPadding = BoardGameLayout.contentPadding
+    static let columnSpacing = BoardGameLayout.columnSpacing
+    static let headerHeight = BoardGameLayout.headerHeight
+    static let headerSpacing = BoardGameLayout.headerSpacing
     /// 로비 왼쪽(상대 목록) 폭. v0.3.29 에서 540 → 780(로비가 두 열이 되며 판돈 카드 자리를 흡수했다).
     static let lobbyListWidth: CGFloat = 780
 
-    static var innerSize: CGSize {
-        CGSize(width: contentSize.width - contentPadding * 2, height: contentSize.height - contentPadding * 2)
-    }
-    static var bodyHeight: CGFloat { innerSize.height - headerHeight - headerSpacing }
+    static var innerSize: CGSize { BoardGameLayout.innerSize }
+    static var bodyHeight: CGFloat { BoardGameLayout.bodyHeight }
     /// 판 한 변 = 본문 높이(정사각).
-    static var boardSide: CGFloat { bodyHeight }
+    static var boardSide: CGFloat { BoardGameLayout.boardSide }
     /// 대국·결과 화면의 오른쪽 열 = 판을 뺀 나머지(v0.3.30 — 채팅 열이 이 열 안으로 들어와 **두 열**이다).
-    static var sideColumnWidth: CGFloat { innerSize.width - columnSpacing - boardSide }
+    static var sideColumnWidth: CGFloat { BoardGameLayout.sideColumnWidth }
     /// 로비 오른쪽 열 = 상대 목록을 뺀 나머지(**두 열**이라 간격은 하나다).
     static var lobbySideWidth: CGFloat { innerSize.width - columnSpacing - lobbyListWidth }
 
     // MARK: 대국 오른쪽 열의 세로 예산 (v0.3.30)
 
     /// 위아래 칸 사이 간격(카드 · 판돈 줄 · 채팅 · 기권).
-    static let matchSideSpacing: CGFloat = 10
+    static let matchSideSpacing = BoardGameLayout.matchSideSpacing
     /// 두 사람 카드의 **고정** 높이. 말풍선이 떠도 열이 한 픽셀도 안 흔들리게 못 박는다
     /// (초상 60 + 안쪽 여백 4×2 = 68, 카드 위아래 여백 8×2 → 84).
-    static let playerCardHeight: CGFloat = 84
+    static let playerCardHeight = BoardGameLayout.playerCardHeight
     /// 판돈 칩 폭(판돈 줄 왼쪽). 나머지 폭은 상태 상자가 쓴다.
     static let stakeChipWidth: CGFloat = 176
     /// 채팅 로그의 최소 높이 — 가장 꽉 찬 경우(상태 상자 네 줄 · 상대가 껐다는 줄 · 글자 수 · 기권 확인)에도

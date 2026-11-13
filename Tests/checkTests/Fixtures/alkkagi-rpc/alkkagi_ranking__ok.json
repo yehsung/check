@@ -1,0 +1,80 @@
+{
+  "me": {
+    "draws": 1,
+    "losses": 1,
+    "points": 0,
+    "rank": 3,
+    "wins": 1
+  },
+  "record_since_ms": null,
+  "rows": [
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-8b97c765",
+      "draws": 0,
+      "id": "8b97c765-141d-4681-bb7f-2121db2356d8",
+      "losses": 0,
+      "points": 1,
+      "rank": 1,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-aa3fefd9",
+      "draws": 0,
+      "id": "aa3fefd9-9f91-4422-afe0-0a491f436ad7",
+      "losses": 0,
+      "points": 1,
+      "rank": 1,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-73548af6",
+      "draws": 1,
+      "id": "73548af6-1eda-4a14-9d81-a6edb92969d1",
+      "losses": 1,
+      "points": 0,
+      "rank": 3,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-cbc374cd",
+      "draws": 1,
+      "id": "cbc374cd-84c6-4f3e-a6cc-6fa05e6c32f6",
+      "losses": 1,
+      "points": 0,
+      "rank": 3,
+      "wins": 1
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-2ebb8b4a",
+      "draws": 0,
+      "id": "2ebb8b4a-d1e1-406d-af0f-75a8d765add9",
+      "losses": 1,
+      "points": -1,
+      "rank": 5,
+      "wins": 0
+    },
+    {
+      "avatar_url": null,
+      "character_id": null,
+      "display_name": "T-c34d2886",
+      "draws": 0,
+      "id": "c34d2886-0936-4721-9845-44d49e993a7c",
+      "losses": 1,
+      "points": -1,
+      "rank": 5,
+      "wins": 0
+    }
+  ],
+  "server_now_ms": 1794260785101.655,
+  "status": "ok"
+}

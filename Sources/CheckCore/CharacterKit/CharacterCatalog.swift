@@ -86,10 +86,93 @@ package struct CharacterCatalog: Sendable {
         kind: .scene3D
     )
 
-    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이, 이슬 아잉이).
-    /// 번들이 비어도 이 여섯은 늘 있다.
+    /// 빼빼로 아잉이(v0.3.77 · 빼빼로 데이 11-11 기간 선물 전용)의 고정 id. 서버 CHECK·가격표(`gift_only = true` · `gift_kind = 'pepero'`)·
+    /// `character_gifts.options` 의 id 와 같다. 매니페스트 파일로 못 싣는 이유는 케이크 · 이슬과 같다(밑줄 id · scene3D 는 초상을 못 가진다).
+    package static let peperoAingID = "aing_pepero"
+
+    /// 빼빼로 아잉이의 **표시 이름 — 한 곳**. '빼빼로'는 남의 상표라 이름이 바뀔 수 있다(가안 2026-11-04). 카탈로그 이름 · 받는 창 본문
+    /// (`PeperoGiftText.body`)이 이 값을 읽는다. 바꾸면 여기 하나와 `PeperoGiftText` 의 행사 이름 글자만 고친다.
+    package static let peperoAingDisplayName = "빼빼로 아잉이"
+
+    /// 코드에 박힌 빼빼로 아잉이 — 아잉과 **같은 3D 메시**에 빼빼로 마감(`CharacterManifest.Finish.pepero`)을 입힐 변형이다.
+    /// **빼빼로 데이 기간 선물 전용**이다(사용자 결정 2026-11-04 "11-11 기간 선물 (이슬처럼)"): 루비로도 · 뽑기로도 · 조각 교환으로도 못 얻고,
+    /// 운영자가 11-11 에 지급한 빼빼로 선물(`character_gifts.kind = 'pepero'`)에서 고를 것 없이 받는다(안 받은 선물은 며칠 뒤 서버가 거둔다).
+    /// ★ 그림(3D 마감 · 초상)은 시안을 고르는 중이다 — 그림이 붙기 전엔 맥 · 폰 어느 쪽도 "그릴 수 있다"고 말하지 않는다
+    ///   (`ShopWire.peperoProtocol` 6 을 안 보낸다 → 서버가 빼빼로 행 · 선물을 안 싣는다).
+    package static let builtInPeperoAing = CharacterManifest(
+        id: peperoAingID,
+        displayName: peperoAingDisplayName,
+        kind: .scene3D
+    )
+
+    /// 흑우 아잉이(v0.3.78 · **조각 20개로만** 바꾸는 캐릭터)의 고정 id. 서버 CHECK·가격표(`gacha_only = true` · `min_protocol = 7`)·
+    /// `gacha_pool`(확률 **0** · 조각 20 · sort 0 — 추첨에 안 나온다)의 id 와 같다. 매니페스트 파일로 못 싣는 이유는 금 · 무지개와 같다.
+    /// 대표 결정(2026-11-06): 제보 "뽑기말고 조각으로만 교환할 수 있는 흑우 아잉이" → "흑우 아잉이 좋음" · 조각 "20개 (황금·무지개와 같게)" ·
+    /// 그림 "U9 네온"(짙은 남색 몸 + 왼쪽 하늘색 · 오른쪽 분홍 네온 테). 이름은 대표가 정한 그대로다(디자인에는 이름을 반영하지 않는다).
+    package static let hwooAingID = "aing_hwoo"
+
+    /// 코드에 박힌 흑우 아잉이 — 아잉과 **같은 3D 메시**에 네온 마감(`CharacterManifest.Finish.hwoo`)을 입힌 변형이다.
+    /// 루비로도(서버 `gacha_only` → `not_for_sale`) · 뽑기로도(확률 0) 못 얻고 **조각 교환으로만** 얻는다.
+    package static let builtInHwooAing = CharacterManifest(
+        id: hwooAingID,
+        displayName: "흑우 아잉이",
+        kind: .scene3D
+    )
+
+    /// 루비 아잉이(v0.3.78 · 상점에서 **루비 1000개**로 사는 캐릭터)의 고정 id. 서버 CHECK·가격표(`price = 1000` · `min_protocol = 8` ·
+    /// 뽑기 · 선물 표식 없음)의 id 와 같다. 매니페스트 파일로 못 싣는 이유는 금 · 무지개와 같다(밑줄 id · scene3D 는 초상을 못 가진다).
+    /// 대표 결정(2026-11-06): "루비 아잉이는 루비 1000개로 구매 가능하게" · 그림 7차 "Y5 배 띠 · 6:4"(아잉이 몸이 앱 루비 아이콘처럼
+    /// 깎인 분홍 보석 — 원래 몸매에 6:4 로 섞고 보석 띠는 배 높이).
+    package static let rubyAingID = "aing_ruby"
+
+    /// 코드에 박힌 루비 아잉이 — 아잉 메시를 **보석 모양으로 다시 빚은** 변형이다(`CharacterManifest.Finish.ruby` — 다른 아잉이와 달리 몸 모양이
+    /// 바뀐다. 정점 이동은 `RubyAingShape`). 뽑기 · 선물 · 조각과 무관한 **보통 상점 캐릭터**다(서버 가격표 행이 값을 정한다).
+    package static let builtInRubyAing = CharacterManifest(
+        id: rubyAingID,
+        displayName: "루비 아잉이",
+        kind: .scene3D
+    )
+
+    /// 개발에 찌든 아잉이(제보 11-08 · 시안 D2 '후드티 개발자')의 고정 id. 서버 CHECK · 가격표의 id 와 같다. 매니페스트 파일로 못 싣는 이유는
+    /// 금 · 무지개와 같다. 대표 결정(2026-11-10): "개발에 찌든 아잉이 에셋 시안 여러개 뽑아보자. 이거 구현해야겠어" → #d_NuLS5imieQds "D2 후드티 개발자".
+    package static let devAingID = DevAingArt.characterID
+
+    /// 코드에 박힌 개발에 찌든 아잉이 — 아잉과 **같은 3D 메시**에 후드티 마감(`CharacterManifest.Finish.dev`)을 입힌 변형이다.
+    package static let builtInDevAing = CharacterManifest(
+        id: devAingID,
+        displayName: "개발에 찌든 아잉이",
+        kind: .scene3D
+    )
+
+    /// 부산 갈매기 아잉이(지역 아잉이 — 부산 센터 선물)의 고정 id. 서버 CHECK · 가격표(`gift_only = true` · `gift_kind = 'region'`) ·
+    /// `character_gifts.options` 의 id 와 같다. 대표 결정(2026-11-10): "각센터 사람들 자기들 지역만의 아잉이 하나씩 갖게끔" ·
+    /// 얻는 길 #d_RyTlg0ZZED04 "가. 우리 센터 선물" · 그림 #d_afa6DRyExPLp "G1 갈매기가 된 아잉이". 정본은 `RegionAingArt`.
+    package static let busanAingID = RegionAingArt.busanID
+
+    /// 서울의 밤 아잉이(지역 아잉이 — 서울 센터 선물)의 고정 id. 그림 #d_MOlCB5s8cPsm "H5 서울의 밤"(+ 메모: 점 줄이기).
+    package static let seoulAingID = RegionAingArt.seoulID
+
+    /// 코드에 박힌 부산 갈매기 아잉이 — 아잉과 **같은 3D 메시**에 갈매기 마감(`CharacterManifest.Finish.busan` — 흰 몸 · 날개 팔 · 부리 ·
+    /// 발 · 꼬리깃)을 입힌 변형이다. **부산 센터 선물 전용**: 루비 · 뽑기 · 조각으로 못 얻고, 부산 센터 사람이 받는 지역 선물에서 고를 것 없이 받는다.
+    package static let builtInBusanAing = CharacterManifest(
+        id: busanAingID,
+        displayName: RegionAingArt.busanDisplayName,
+        kind: .scene3D
+    )
+
+    /// 코드에 박힌 서울의 밤 아잉이 — 아잉과 **같은 3D 메시**에 밤하늘 마감(`CharacterManifest.Finish.seoul` — 남색 몸 · 별 · 초승달 ·
+    /// 빌딩 그림자 · 남산 타워 그림자)을 입힌 변형이다. **서울 센터 선물 전용**(부산과 같은 길).
+    package static let builtInSeoulAing = CharacterManifest(
+        id: seoulAingID,
+        displayName: RegionAingArt.seoulDisplayName,
+        kind: .scene3D
+    )
+
+    /// 코드에 박힌 항목 전부 — **표시 순서 그대로**(아잉, 황금 아잉이, 무지개 아잉이, 딸기 케이크 아잉이, 초코 케이크 아잉이, 이슬 아잉이,
+    /// 빼빼로 아잉이, 흑우 아잉이, 루비 아잉이, 개발에 찌든 아잉이, 부산 갈매기 아잉이, 서울의 밤 아잉이). 번들이 비어도 이 열은 늘 있다.
     package static let builtIns: [CharacterManifest] = [
         builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
+        builtInPeperoAing, builtInHwooAing, builtInRubyAing, builtInDevAing, builtInBusanAing, builtInSeoulAing,
     ]
 
     /// 이 id 가 황금 아잉이인가. 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 `aing_gold` 다).
@@ -106,11 +189,48 @@ package struct CharacterCatalog: Sendable {
     /// (사용자 결정: 황금 2026-10-15 · 무지개 2026-10-20 "황금처럼 뽑기 전용"). 상점 구매 가능 · 확률표 상점가 칸 · 고르기 잠긴 카드의
     /// 안내가 전부 이 한 곳을 묻는다 — 새 희귀 캐릭터는 여기 하나만 더하면 된다.
     package static func isGachaOnlyBuiltIn(_ id: String?) -> Bool {
-        isGoldAing(id) || isRainbowAing(id)
+        isGoldAing(id) || isRainbowAing(id) || isHwooAing(id)
     }
 
+    /// 이 id 가 흑우 아잉이인가. 금과 같은 규칙(정확히 `aing_hwoo` 만 — 공백 · 대소문자를 봐주지 않는다).
+    package static func isHwooAing(_ id: String?) -> Bool {
+        id == hwooAingID
+    }
+
+    /// **조각 교환으로만** 얻는 내장 캐릭터(흑우 아잉이 — v0.3.78)인가. 뽑기 전용(`isGachaOnlyBuiltIn` — 루비로 안 판다)의 부분집합이고,
+    /// 화면의 얻는 길 문구가 "뽑기 또는 조각 N개"가 아니라 "조각 N개로 교환"이 된다(뽑기에는 안 나온다 — 서버 확률 0).
+    package static func isShardOnlyBuiltIn(_ id: String?) -> Bool {
+        isHwooAing(id)
+    }
+
+    /// 이 id 가 루비 아잉이인가. 금과 같은 규칙(정확히 `aing_ruby` 만 — 공백 · 대소문자를 봐주지 않는다).
+    package static func isRubyAing(_ id: String?) -> Bool {
+        id == rubyAingID
+    }
+
+    /// 이 id 가 개발에 찌든 아잉이인가. 금과 같은 규칙(정확히 `aing_dev` 만).
+    package static func isDevAing(_ id: String?) -> Bool {
+        id == devAingID
+    }
+
+    /// 개발에 찌든 아잉이 — '개발' 뜻 자리(능력 번호 9)는 이 목록이다.
+    package static let devBuiltInIDs: [String] = [devAingID]
+
+    /// 도전 미션 보상으로만 얻는 내장 캐릭터인가(v0.3.81 개발에 찌든 아잉이 — 대표 #d_OwYy6Avg5alV "미션보상으로 가자. 총 누적근무시간
+    /// 100시간 이상달성"). 상점에서 못 사고 뽑기 · 조각 · 선물에도 없다. 서버 가격표 행은 판매를 막으려고 `gacha_only = true` 를 싣지만
+    /// **뽑기 전용이 아니다**(`ShopCharacterRow.isGachaOnly` 가 이 판정으로 거른다 — 케이크의 `gacha_only` 와 같은 사정).
+    package static func isMissionRewardBuiltIn(_ id: String?) -> Bool {
+        isDevAing(id)
+    }
+
+    /// 루비로 사는 내장 캐릭터 — 루비 아잉이 하나(v0.3.78). '루비' 뜻 자리(능력 번호 8)는 이 목록이다.
+    package static let shopBuiltInIDs: [String] = [rubyAingID]
+
+    /// 조각 교환 전용 내장 캐릭터 — 흑우 하나(v0.3.78). '흑우' 뜻 자리(능력 번호 7)는 이 목록이다.
+    package static let shardOnlyBuiltInIDs: [String] = [hwooAingID]
+
     /// 희귀 내장 캐릭터의 표시 순서(교환 목록 맨 위 · 확률표가 순서를 안 줄 때) — 황금 먼저, 무지개 다음.
-    package static let gachaOnlyBuiltInIDs: [String] = [goldAingID, rainbowAingID]
+    package static let gachaOnlyBuiltInIDs: [String] = [goldAingID, rainbowAingID, hwooAingID]
 
     /// 이 id 가 케이크 아잉이(딸기 · 초코)인가. 금과 같은 규칙(정확히 그 두 id 만 — 공백 · 대소문자를 봐주지 않는다).
     package static func isCakeAing(_ id: String?) -> Bool {
@@ -122,19 +242,41 @@ package struct CharacterCatalog: Sendable {
         id == isulAingID
     }
 
-    /// **선물로만** 얻는 내장 캐릭터(생일 — 딸기 · 초코 케이크 아잉이, 술 한잔 — 이슬 아잉이)인가 — 서버 `gift_only` 표식이 빠지거나
-    /// false 로 와도 루비 · 뽑기 · 조각으로는 못 얻는다(사용자 결정 2026-10-26 "뽑기로도 못뽑는걸로" · 2026-11-03 "선물 전용 (케이크처럼)").
+    /// 이 id 가 빼빼로 아잉이인가. 금과 같은 규칙(정확히 `aing_pepero` 만 — 공백 · 대소문자를 봐주지 않는다).
+    package static func isPeperoAing(_ id: String?) -> Bool {
+        id == peperoAingID
+    }
+
+    /// 이 id 가 부산 갈매기 아잉이인가. 금과 같은 규칙(정확히 `aing_busan` 만).
+    package static func isBusanAing(_ id: String?) -> Bool {
+        id == busanAingID
+    }
+
+    /// 이 id 가 서울의 밤 아잉이인가. 금과 같은 규칙(정확히 `aing_seoul` 만).
+    package static func isSeoulAing(_ id: String?) -> Bool {
+        id == seoulAingID
+    }
+
+    /// 이 id 가 지역 아잉이(부산 · 서울)인가 — 센터 선물 전용.
+    package static func isRegionAing(_ id: String?) -> Bool {
+        id == busanAingID || id == seoulAingID
+    }
+
+    /// **선물로만** 얻는 내장 캐릭터(생일 — 딸기 · 초코 케이크 아잉이, 술 한잔 — 이슬 아잉이, 빼빼로 데이 — 빼빼로 아잉이)인가 — 서버 `gift_only`
+    /// 표식이 빠지거나 false 로 와도 루비 · 뽑기 · 조각으로는 못 얻는다(사용자 결정 2026-10-26 "뽑기로도 못뽑는걸로" · 2026-11-03 "선물 전용
+    /// (케이크처럼)" · 2026-11-04 "11-11 기간 선물 (이슬처럼)").
     /// 상점 구매 가능(`ShopCharacterRow.isPurchasable`) · 잠긴 칸 · 조각 교환 금지 · 고르기의 '가진 사람만'이 이 한 곳을 묻는다.
     ///
     /// ★ (v0.3.74) 이 판정은 **'선물 전용 전부'** 뜻으로만 쓴다. '케이크(생일)' 뜻 — 생일 선물 선택지 · 능력 번호 4 · 케이크 순서 — 은
     ///   `birthdayGiftBuiltInIDs` 를, 종류별 문구는 `CharacterGiftKind(builtInID:)` 를 묻는다. 이슬을 케이크 뜻 자리에 섞으면
-    ///   이슬 초상이 없는 빌드(폰)가 능력 번호 3 으로 떨어져 케이크까지 잃는다(설계서 §2).
+    ///   이슬 초상이 없는 빌드(폰 1.0.16 이하)가 능력 번호 3 으로 떨어져 케이크까지 잃는다(설계서 §2). 빼빼로(v0.3.77)도 같다 — 케이크 뜻 · 술 뜻 자리에
+    ///   섞으면 빼빼로 그림이 없는 빌드(맥 0.3.76 이하 · 폰 전부)가 번호를 잃는다. 빼빼로 뜻 자리는 `peperoGiftBuiltInIDs` 다.
     ///
     /// ★ `isGachaOnlyBuiltIn` 과 **겹치지 않는다**(케이크는 뽑기 전용이 아니다 — 뽑기 화면 · 확률표 · 교환 목록에 서지 않는다).
     ///   서버는 not_for_sale 갈래를 타게 하려고 케이크 행에 `gacha_only = true` 도 싣지만, 클라의 '뽑기 전용' 판정은 그 표식을
     ///   `gift_only` 보다 뒤에 본다(화면이 "뽑기나 조각 교환으로 얻을 수 있어요"라고 거짓말하지 않게).
     package static func isGiftOnlyBuiltIn(_ id: String?) -> Bool {
-        isCakeAing(id) || isIsulAing(id)
+        isCakeAing(id) || isIsulAing(id) || isPeperoAing(id) || isRegionAing(id)
     }
 
     /// 생일 선물 내장 캐릭터의 순서 — **딸기 먼저, 초코 다음**(표시 순서 · 생일 선물 선택지의 순서가 같다). '케이크' 뜻 자리는 이 목록이다.
@@ -143,11 +285,20 @@ package struct CharacterCatalog: Sendable {
     /// '술 한잔' 선물 내장 캐릭터 — 이슬 하나(v0.3.74). 술 선물의 선택지는 이 목록뿐이다.
     package static let drinkGiftBuiltInIDs: [String] = [isulAingID]
 
-    /// 선물 전용 내장 캐릭터 **전부**(생일 → 술, 표시 순서) — '루비로 못 산다 · 잠긴 칸' 뜻으로만 쓴다(`isGiftOnlyBuiltIn` 과 같은 집합).
-    /// ★ 케이크 뜻(생일 선물 선택지 · `ShopWire.cakeCharacterIDs`)에 쓰지 마라 — `birthdayGiftBuiltInIDs` 다.
-    package static let giftOnlyBuiltInIDs: [String] = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs
+    /// 빼빼로 데이 선물 내장 캐릭터 — 빼빼로 아잉이 하나(v0.3.77). 빼빼로 선물의 선택지는 이 목록뿐이다. '빼빼로' 뜻 자리(능력 번호 6 ·
+    /// 빼빼로 선물 선택지)는 이 목록이다.
+    package static let peperoGiftBuiltInIDs: [String] = [peperoAingID]
 
-    /// 이 내장 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술 한잔). 선물 전용 내장이 아니면 nil.
+    /// 우리 센터 선물(지역 아잉이) 내장 캐릭터 — 부산 → 서울(표시 순서). 한 사람의 선물 선택지는 **그 사람 센터의 것 하나**다(서버가 고른다).
+    /// '지역' 뜻 자리(능력 번호 10 · 지역 선물 선택지)는 이 목록이다 — 두 센터 그림이 다 붙어야 10 을 말한다.
+    package static let regionGiftBuiltInIDs: [String] = [busanAingID, seoulAingID]
+
+    /// 선물 전용 내장 캐릭터 **전부**(생일 → 술 → 빼빼로, 표시 순서) — '루비로 못 산다 · 잠긴 칸' 뜻으로만 쓴다(`isGiftOnlyBuiltIn` 과 같은 집합).
+    /// ★ 케이크 뜻(생일 선물 선택지 · `ShopWire.cakeCharacterIDs`)에 쓰지 마라 — `birthdayGiftBuiltInIDs` 다. 술 뜻 · 빼빼로 뜻도 각자 목록이다.
+    /// 이 목록은 내장 열을 '선물 전용'으로 거른 것과 같아야 한다(시험이 잰다).
+    package static let giftOnlyBuiltInIDs: [String] = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs + peperoGiftBuiltInIDs + regionGiftBuiltInIDs
+
+    /// 이 내장 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술 한잔 · 빼빼로 → 빼빼로 데이). 선물 전용 내장이 아니면 nil.
     /// 잠긴 칸 · 잠긴 카드의 안내처럼 **종류마다 말이 다른** 자리가 이 한 곳을 묻는다(`CharacterGiftKind.copy`).
     package static func giftKind(ofBuiltIn id: String?) -> CharacterGiftKind? {
         CharacterGiftKind(builtInID: id)

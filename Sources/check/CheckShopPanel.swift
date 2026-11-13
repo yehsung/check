@@ -19,6 +19,14 @@ import CheckCore
 enum ShopSelection: Equatable, Hashable {
     case character(String)
     case ultra
+    /// 오목알 스킨(v0.3.81 — 상점 루비 100).
+    case omokSkin(OmokStoneSkin)
+}
+
+/// 상점 아래 칸의 탭(v0.3.81). 서버에 스킨 상점이 없으면 탭 없이 캐릭터만(예전 모양).
+enum ShopTab: Equatable, Hashable, CaseIterable {
+    case characters
+    case omokSkins
 }
 
 /// 루비 아이콘 비트맵. 번들에서 한 번만 읽어 캐시한다.
@@ -175,6 +183,7 @@ enum ShopText {
         switch selection {
         case .character(let id): return catalog.manifest(id: id)?.displayName ?? id
         case .ultra: return "울트라 찌르기 1개"
+        case .omokSkin(let skin): return "오목알 스킨 · \(skin.displayName)"
         case nil: return WorkTimerStore.pickSomethingNotice
         }
     }
@@ -348,8 +357,16 @@ struct CheckShopPanel: View {
                 CheckGachaPanel(store: store, catalog: catalog)
             } else {
                 VStack(alignment: .leading, spacing: 4) {
-                    sectionHeader("캐릭터")
-                    grid
+                    // v0.3.81: [캐릭터 | 오목알] 탭 — 같은 자리 · 같은 높이 예산(격자 상자)을 나눠 쓴다. 서버에 스킨 상점이 없으면 예전 소제목.
+                    if store.omokSkinsUnavailable {
+                        sectionHeader("캐릭터")
+                        grid
+                    } else {
+                        ShopTabHeader(selection: store.shopTab) { tab in
+                            if store.shopTab != tab { store.shopTab = tab; store.shopSelection = nil; store.shopNotice = nil }
+                        }
+                        if store.shopTab == .omokSkins { omokSkinGrid } else { grid }
+                    }
                 }
                 purchaseBar
             }
@@ -677,6 +694,103 @@ struct CheckShopPanel: View {
         }
     }
 
+    // MARK: 오목알 스킨 격자(v0.3.81)
+
+    /// '일반 돌' + 서버가 말한 스킨들(못 읽었으면 번들 스킨을 자리만 — 값 없음). 캐릭터 격자와 같은 상자 · 같은 칸 크기.
+    private var omokSkinCells: [OmokSkinCell] {
+        let rows = store.omokSkins?.rows ?? OmokStoneSkin.allCases.map { OmokSkinsState.Row(skin: $0) }
+        return [OmokSkinCell(skin: nil, row: nil)] + rows.map { OmokSkinCell(skin: $0.skin, row: $0) }
+    }
+
+    private var omokSkinGrid: some View {
+        let cells = omokSkinCells
+        let rowCount = (cells.count + ShopPanelGridBudget.columns - 1) / ShopPanelGridBudget.columns
+        let natural = ShopPanelGridBudget.naturalHeight(rowCount: rowCount)
+        let cap = ShopPanelGridBudget.capHeight(
+            extraChromeHeight: extraChromeHeight + ShopPanelGridBudget.gachaChrome(gachaShown: store.isGachaAvailable,
+                                                                                  extraChromeHeight: extraChromeHeight))
+        // 탭을 오가도 패널 높이가 안 흔들리게 캐릭터 격자가 차지할 높이만큼은 자리를 지킨다(스킨이 셋으로 줄어 한 줄이 된 뒤 — 대표 11-10
+        // "네온 흑백 다이아 이렇게 3개 빼."). 넘치는 쪽은 예전처럼 상한에서 스크롤한다.
+        let charactersHeight = min(ShopPanelGridBudget.naturalHeight(rowCount: rows.count), cap)
+        return FeedbackListBox(contentHeight: natural, capHeight: cap, clipsInsteadOfScrolling: clipsOverflowInsteadOfScroll) {
+            VStack(spacing: ShopPanelGridBudget.cardSpacing) {
+                ForEach(0..<rowCount, id: \.self) { r in
+                    HStack(spacing: ShopPanelGridBudget.cardSpacing) {
+                        ForEach(0..<ShopPanelGridBudget.columns, id: \.self) { c in
+                            let index = r * ShopPanelGridBudget.columns + c
+                            if index < cells.count {
+                                omokSkinCard(cells[index])
+                            } else {
+                                Color.clear.frame(maxWidth: .infinity).frame(height: ShopPanelGridBudget.cardHeight)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .frame(minHeight: charactersHeight, alignment: .top)
+    }
+
+    private func omokSkinCard(_ cell: OmokSkinCell) -> some View {
+        let equipped = store.omokSkins.map { $0.equipped == cell.skin } ?? (cell.skin == nil)
+        let owned = cell.skin == nil || cell.row?.owned == true
+        let picked = cell.skin.map { store.shopSelection == .omokSkin($0) } ?? false
+        let busy = cell.skin.map { store.purchasingID == OmokSkinShopText.purchaseID($0) } ?? false
+        let line = OmokSkinCardLine.of(owned: owned, equipped: equipped, price: cell.row?.price)
+        return Button {
+            store.selectOmokSkin(cell.skin)
+        } label: {
+            VStack(spacing: 4) {
+                OmokSkinPreview(skin: cell.skin)
+                    .frame(width: 80, height: 56)
+                Text(OmokSkinShopText.name(cell.skin))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(CheckTheme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                switch line {
+                case .equipped:
+                    HStack(spacing: 2) {
+                        Image(systemName: "checkmark").font(.system(size: 8, weight: .bold))
+                        Text(OmokSkinShopText.equippedBadge).font(.caption2.weight(.bold))
+                    }
+                    .foregroundStyle(CheckTheme.working)
+                case .owned:
+                    Text(OmokSkinShopText.owned).font(.caption2.weight(.bold)).foregroundStyle(CheckTheme.secondaryText)
+                case .price(let price):
+                    HStack(spacing: 3) {
+                        RubyIcon(size: 10)
+                        Text(busy ? "…" : ShopText.cardPrice(owned: false, price: price))
+                            .font(.caption2.weight(.bold))
+                            .monospacedDigit()
+                            .foregroundStyle(CheckTheme.primaryText)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: ShopPanelGridBudget.cardHeight)
+            .background {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(CheckTheme.trackFill)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(picked ? CheckTheme.accent
+                                                 : (equipped ? CheckTheme.working.opacity(0.7) : CheckTheme.border),
+                                          lineWidth: picked || equipped ? 2 : 1)
+                    }
+            }
+            .overlay(alignment: .topTrailing) {
+                if picked { pickedBadge.padding(4) }
+            }
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .disabled(store.purchasingID != nil || store.omokSkinEquipInFlight)
+        .checkTooltip(OmokSkinCardLine.tooltip(name: OmokSkinShopText.name(cell.skin), line: line))
+        .accessibilityLabel(OmokSkinCardLine.tooltip(name: OmokSkinShopText.name(cell.skin), line: line))
+    }
+
     @ViewBuilder
     private func card(_ entry: ShopCharacterRow) -> some View {
         let owned = entry.owned == true || store.ownedCharacterIDs.contains(entry.id)
@@ -690,9 +804,11 @@ struct CheckShopPanel: View {
         let line = ShopCardLine.of(id: entry.id, owned: owned, rows: store.shopCharacters)
         let gachaOnly = line == .gachaOnly
         let giftLocked = line == .giftLocked
+        // 미션 보상 잠긴 칸(v0.3.81 개발에 찌든 아잉이 — 안 가진 사람): 자물쇠 + '미션 보상', 흐리게. 누르면 얻는 길을 말한다.
+        let missionLocked = line == .missionLocked
         // 잠긴 칸의 글자는 그 캐릭터를 주는 선물 종류의 묶음(케이크 → 생일 · 이슬 → 술 한잔 — v0.3.74).
         let giftCopy = WorkTimerStore.giftCopy(for: entry.id)
-        let affordable = !giftLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
+        let affordable = !giftLocked && !missionLocked && (gachaOnly || ((store.rubyBalance).flatMap { have in entry.price.map { have >= $0 } } ?? false))
         let name = catalog.manifest(id: entry.id)?.displayName ?? entry.id
         let picked = store.shopSelection == .character(entry.id)
         Button {
@@ -709,13 +825,18 @@ struct CheckShopPanel: View {
                     .foregroundStyle(CheckTheme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
-                if giftLocked {
+                if missionLocked {
+                    ShopMissionLockedCaption()
+                } else if giftLocked {
                     ShopGiftLockedCaption(copy: giftCopy)
                 } else if gachaOnly {
                     // 두 줄까지 — "뽑기 또는 / 조각 20개". 카드 높이(112)는 그대로다(초상 56 + 이름 + 두 줄이 그 안에 든다).
                     // 문구는 코어 한 벌(`GachaText.gachaOnlyPrice` — 확률표 금 줄 · 폰과 같은 글자): "뽑기 또는 조각 20개", 교환값을 모르면
                     // "뽑기 전용". 숫자는 서버 `shard_costs` 다. 가진 것은 다른 카드처럼 "보유".
-                    Text(owned ? GachaText.owned : GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: entry.id)))
+                    // 조각 교환 전용(흑우 — v0.3.78)은 "조각 20개로 교환"(뽑기에는 안 나온다).
+                    Text(owned ? GachaText.owned
+                         : CharacterCatalog.isShardOnlyBuiltIn(entry.id) ? GachaText.shardOnlyPrice(shardCost: store.gachaShardCost(of: entry.id))
+                         : GachaText.gachaOnlyPrice(shardCost: store.gachaShardCost(of: entry.id)))
                         .font(.caption2.weight(.bold))
                         .monospacedDigit()
                         .foregroundStyle(owned ? AnyShapeStyle(CheckTheme.secondaryText)
@@ -759,8 +880,8 @@ struct CheckShopPanel: View {
         // 구매 중에만 막는다. 보유한 것도 누를 수 있다 — 누르면 "이미 갖고 있어요"라고 말한다
         // (침묵하면 눌러도 아무 일이 없어 고장으로 보인다).
         .disabled(store.purchasingID != nil)
-        .checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy))
-        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned, gift: giftCopy))
+        .checkTooltip(line.tooltip(name: name, owned: owned, gift: giftCopy, acquireHint: GachaText.acquireHint(for: entry.id)))
+        .accessibilityLabel(line.accessibilityLabel(name: name, owned: owned, gift: giftCopy, acquireHint: GachaText.acquireHint(for: entry.id)))
     }
 }
 
@@ -770,31 +891,38 @@ enum ShopCardLine: Equatable, Sendable {
     case giftLocked
     /// 뽑기 전용(황금 · 무지개 아잉이 — 서버 표식 포함): "뽑기 또는 조각 20개" / 보유.
     case gachaOnly
+    /// 미션 보상 잠긴 칸(v0.3.81 개발에 찌든 아잉이 — 안 가진 사람): 자물쇠 + '미션 보상'. 서버 행은 판매를 막으려 `gacha_only` 를 싣지만
+    /// 뽑기에는 없다 — 그래서 뽑기 갈래보다 **먼저** 가른다(id 로 안다).
+    case missionLocked
     /// 루비 가격 / 보유. 가진 케이크도 여기다(보통 보유 칸).
     case price
 
     static func of(id: String, owned: Bool, rows: [ShopCharacterRow]) -> ShopCardLine {
+        if !owned, CharacterCatalog.isMissionRewardBuiltIn(id) { return .missionLocked }
         if !owned, WorkTimerStore.isGiftOnly(id, rows: rows) { return .giftLocked }
         if WorkTimerStore.isGachaOnly(id, rows: rows) { return .gachaOnly }
         return .price
     }
 
     /// 말풍선 — 얻는 길을 말한다(잠긴 칸 · 뽑기 전용에 "사기"는 거짓이다). `gift` = 잠긴 칸을 주는 선물 종류의 문구(기본 생일 — 0.3.66).
-    func tooltip(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday) -> String {
+    /// `acquireHint` = 뽑기 전용 칸의 얻는 길(기본 "뽑기나 조각 교환으로…" · 조각 교환 전용 흑우는 "조각 교환으로만…" — `GachaText.acquireHint(for:)`).
+    func tooltip(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday, acquireHint: String = GachaText.gachaOnlyHint) -> String {
         if owned { return "\(name) — 보유 중" }
         switch self {
         case .giftLocked: return "\(name) — \(gift.lockedHint)"
-        case .gachaOnly: return "\(name) — \(GachaText.gachaOnlyHint)"
+        case .gachaOnly: return "\(name) — \(acquireHint)"
+        case .missionLocked: return "\(name) — \(DevAingMission.lockedHint)"
         case .price: return "\(name) 사기"
         }
     }
 
     /// 읽기 이름.
-    func accessibilityLabel(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday) -> String {
+    func accessibilityLabel(name: String, owned: Bool, gift: CharacterGiftCopy = .birthday, acquireHint: String = GachaText.gachaOnlyHint) -> String {
         if owned { return "\(name) 보유 중" }
         switch self {
         case .giftLocked: return "\(name) 잠김, \(gift.lockedCaption) — \(gift.lockedHint)"
-        case .gachaOnly: return "\(name), \(GachaText.gachaOnlyHint)"
+        case .gachaOnly: return "\(name), \(acquireHint)"
+        case .missionLocked: return "\(name) 잠김, \(DevAingMission.lockedCaption) — \(DevAingMission.lockedHint)"
         case .price: return "\(name) 사기"
         }
     }
@@ -810,6 +938,111 @@ struct ShopGiftLockedCaption: View {
             Image(systemName: "lock.fill")
                 .font(.system(size: 8, weight: .bold))
             Text(copy.lockedCaption)
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .foregroundStyle(CheckTheme.secondaryText)
+    }
+}
+
+/// 오목알 스킨 칸 하나('일반 돌'은 skin nil).
+struct OmokSkinCell: Equatable {
+    let skin: OmokStoneSkin?
+    let row: OmokSkinsState.Row?
+}
+
+/// 스킨 칸 아래 줄(순수 — 시험이 같은 함수를 부른다): 착용 중 › 보유 › 값.
+enum OmokSkinCardLine: Equatable {
+    case equipped
+    case owned
+    case price(Int?)
+
+    static func of(owned: Bool, equipped: Bool, price: Int?) -> OmokSkinCardLine {
+        if equipped { return .equipped }
+        return owned ? .owned : .price(price)
+    }
+
+    static func tooltip(name: String, line: OmokSkinCardLine) -> String {
+        switch line {
+        case .equipped: return "\(name) — 지금 쓰는 돌"
+        case .owned: return "\(name) — 눌러서 바꾸기"
+        case .price: return "\(name) 스킨 사기 — \(OmokSkinShopText.tabNote)"
+        }
+    }
+}
+
+/// [캐릭터 | 오목알] 탭 머리. 예전 소제목("캐릭터")과 같은 글자 크기 · 같은 높이라 아래 격자가 움직이지 않는다.
+struct ShopTabHeader: View {
+    let selection: ShopTab
+    let onSelect: (ShopTab) -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            tab(.characters, OmokSkinShopText.tabCharacters)
+            tab(.omokSkins, OmokSkinShopText.tabSkins)
+            Spacer(minLength: 4)
+            if selection == .omokSkins {
+                Text(OmokSkinShopText.tabNote)
+                    .font(.caption2)
+                    .foregroundStyle(CheckTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func tab(_ tab: ShopTab, _ title: String) -> some View {
+        let on = selection == tab
+        return Button { onSelect(tab) } label: {
+            Text(title)
+                .font(.caption2.weight(on ? .bold : .semibold))
+                .foregroundStyle(on ? CheckTheme.primaryText : CheckTheme.secondaryText)
+                .overlay(alignment: .bottom) {
+                    Capsule().fill(on ? CheckTheme.accent : Color.clear).frame(height: 2).offset(y: 3)
+                }
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .focusEffectDisabled()
+        .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// 스킨 칸의 그림 — 나무 판 조각 위에 그 스킨의 흑 · 백 돌 한 쌍(일반 돌 칸은 일반 흑 · 백). 판 그림과 **같은 식**(코어 `OmokStoneSkin.draw`).
+struct OmokSkinPreview: View {
+    let skin: OmokStoneSkin?
+
+    var body: some View {
+        Canvas { context, size in
+            let frame = CGRect(origin: .zero, size: size)
+            context.fill(Path(roundedRect: frame, cornerRadius: 8, style: .continuous),
+                         with: .linearGradient(Gradient(colors: [BoardGameDrawing.woodLight, BoardGameDrawing.woodDark]),
+                                               startPoint: .zero, endPoint: CGPoint(x: size.width, y: size.height)))
+            var grid = Path()
+            let midY = size.height / 2
+            grid.move(to: CGPoint(x: 0, y: midY)); grid.addLine(to: CGPoint(x: size.width, y: midY))
+            for x in [size.width * 0.3, size.width * 0.7] { grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height)) }
+            context.stroke(grid, with: .color(BoardGameDrawing.lineColor.opacity(0.7)), lineWidth: 0.8)
+            let r = min(size.height * 0.36, size.width * 0.18)
+            for (i, black) in [true, false].enumerated() {
+                let c = CGPoint(x: size.width * (i == 0 ? 0.3 : 0.7), y: midY)
+                GomokuBoardView.drawStone(&context, at: c, radius: r, color: black ? .black : .white, opacity: 1,
+                                          skin: skin, seed: i == 0 ? 3 : 7)
+            }
+        }
+        .accessibilityHidden(true)
+    }
+}
+
+/// 상점 잠긴 칸(미션 보상 — v0.3.81 개발에 찌든 아잉이)의 아래 줄: 자물쇠 + '미션 보상'. 선물 잠긴 칸과 같은 모양 · 같은 자리.
+struct ShopMissionLockedCaption: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 8, weight: .bold))
+            Text(DevAingMission.lockedCaption)
                 .font(.caption2.weight(.bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

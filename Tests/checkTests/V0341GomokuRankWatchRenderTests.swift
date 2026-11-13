@@ -912,7 +912,9 @@ func spectatorViewsKeepInputsChatAndClocksOut() throws {
     }
     // 창 상수: 창 크기·판·오른쪽 열은 그대로(넓히지 않았다).
     let window = rwStripped(try rwSource("CheckGomokuWindow.swift"))
-    #expect(window.contains("static let contentSize = CGSize(width: 1240, height: 700)"), "창을 넓혔다 — 13\" 맥에 안 들어간다")
+    let common = rwStripped(try rwSource("BoardGameComponents.swift"))
+    #expect(window.contains("static let contentSize = BoardGameLayout.contentSize"))
+    #expect(common.contains("static let contentSize = CGSize(width: 1240, height: 700)"), "창을 넓혔다 — 13\" 맥에 안 들어간다")
     #expect(window.contains("static let lobbyUsersWidth: CGFloat = 420") && window.contains("static let liveWatchChipHeight: CGFloat = 18"))
 }
 

@@ -13,7 +13,7 @@ import Foundation
 //
 // 여기는 **해석만** 한다(순수 함수 · Foundation 만). 그리는 것은 맥 말풍선(`ChatMarkdownText` — Sources/check)이고,
 // 한 줄 미리보기 자리(팝오버 수신 줄 · 캐릭터 도착 말풍선 · 신고 인용 · 확성기 배너)는 `plainPreview` 를 쓴다.
-// 폰이 나중에 같은 해석을 쓸 수 있게 코어에 둔다(지금 폰은 평문 그대로다 — 이번 범위 밖).
+// 폰도 같은 해석을 쓴다(1.0.17 — 말풍선 `MessagesBubbleMarkdown` · 한 줄 자리 넷도 `plainPreview`). 그릴 조각 · 복사 글은 `ChatMarkdownPieces`.
 //
 // ## 왜 직접 해석하는가 — `AttributedString(markdown:)` 을 안 쓴 이유
 //  · 그 파서는 기울임·코드·목록·인용까지 다 해석한다. 받는 문법을 셋으로 좁히려면 결과를 되돌려 기호를 다시 지어내야 한다.

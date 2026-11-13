@@ -13,7 +13,7 @@ import Testing
 
     // MARK: 에셋
 
-    @Test("초상 22장: 11 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
+    @Test("초상 24장: 12 캐릭터 × 표정 2 가 공용 번들(위젯도 읽는다)에 있고, 맥 원본과 픽셀까지 같고, 알파가 있다")
     func portraitsAreBundledCopiesOfMacArt() throws {
         // 0.3.43(2026-10-05)에 로봇이 들어와 6 → **7 캐릭터 · 14장**이 됐다(맥 `AppUserAvatarArt.knownIDs` 도 7).
         // 개수를 **두 자리**에서 잰다: 명단 길이(7)와 **맥 원본과 실제로 대조한 장수**(14). 명단만 재면 번들 사본이
@@ -24,7 +24,11 @@ import Testing
         // 0.3.59(폰 1.0.10, 2026-10-20)에 무지개 아잉이가 들어와 **9 캐릭터 · 18장**이 됐다 — 금과 같은 자리(`Resources/aing_rainbow-<표정>.png`).
         // 0.3.66(폰 1.0.14, 2026-10-26)에 케이크 아잉이 둘(딸기 · 초코 — 생일 선물 전용)이 들어와 **11 캐릭터 · 22장**이 됐다 — 같은 자리
         // (`Resources/aing_cake_<맛>-<표정>.png`, 생성기 `scripts/make-cake-aing.swift` 가 맥 · 폰 사본을 바이트 그대로 굽는다).
-        #expect(AingCharacterArt.knownIDs.count == 11, "폰 초상 명단이 11 캐릭터가 아니다: \(AingCharacterArt.knownIDs)")
+        // 폰 1.0.17(맥 0.3.74 먼저)에 이슬 아잉이('술 한잔' 선물 전용)가 들어와 **12 캐릭터 · 24장**이 됐다 — 같은 자리
+        // (`Resources/aing_isul-<표정>.png`, 생성기 `scripts/make-isul-aing.swift` 는 맥 사본만 굽고 폰 사본은 그 파일을 바이트 그대로 복사했다).
+        #expect(AingCharacterArt.knownIDs.count == 16, "폰 초상 명단이 16 캐릭터가 아니다(1.0.18 — 빼빼로 · 흑우 · 루비 · 개발): \(AingCharacterArt.knownIDs)")
+        #expect(AingCharacterArt.knownIDs.contains("aing_isul"),
+                "이슬 아잉이(폰 1.0.17)가 폰 초상 명단에 없다 — 폰이 능력 번호 5 를 못 말해 술 선물을 못 받고, 이슬 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.knownIDs.contains("aing_cake_strawberry") && AingCharacterArt.knownIDs.contains("aing_cake_choco"),
                 "케이크 아잉이(0.3.66)가 폰 초상 명단에 없다 — 폰이 능력 번호 4 를 못 말해 생일 선물을 못 받고, 케이크 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.knownIDs.contains("robot"), "로봇(0.3.43)이 폰 초상 명단에 없다 — 맥에만 있는 캐릭터는 폰에서 이니셜로 선다")
@@ -45,18 +49,25 @@ import Testing
                     : Self.root.appendingPathComponent("Sources/check/Characters/\(id)/portrait-\(expression.rawValue).png")
                 // 무손실 재압축(PNG optimize)이라 파일 바이트가 아니라 **픽셀**을 대조한다 — 실측(2026-10-06): 로봇 2장만
                 // 바이트까지 같고 나머지 12장은 사본이 재압축돼 바이트가 다르다. 그래서 기준은 픽셀이다(이름도 그렇게 말한다).
+                // 빼빼로만 예외(폰 1.0.18): 폰 초상은 상자에 '빼빼로' 글자가 없는 판(상표 대비 — `pepero-aing/art-alt`)이라 맥 원본과 **달라야** 한다.
+                // 크기 · 알파는 위에서 같이 잰다. 같아지면 상표 글자 판이 폰에 실린 것이다.
+                if id == CharacterCatalog.peperoAingID {
+                    #expect(try Self.pixels(url) != Self.pixels(mac), "\(id)-\(expression) 이 맥 원본(상자에 '빼빼로' 글자)과 같다 — 폰은 글자 없는 판이어야 한다")
+                    continue
+                }
                 #expect(try Self.pixels(url) == Self.pixels(mac), "\(id)-\(expression) 이 맥 원본 그림과 다르다")
                 comparedWithMac += 1
             }
         }
-        #expect(comparedWithMac == 22, "맥 원본과 대조한 초상이 22장이 아니다: \(comparedWithMac)장")
+        #expect(comparedWithMac == 30, "맥 원본과 대조한 초상이 30장(16 캐릭터 × 2 − 빼빼로 2)이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")
     func portraitIDsMatchAppCatalog() {
         #expect(AingCharacterArt.knownIDs == MeCharacterCards.knownIDs)
         for raw in [nil, "", "  ", "fox", " fox ", "ghost", "unknown-new", "aing", "FOX", "aing_gold", "AING_GOLD",
-                    "aing_cake_strawberry", "aing_cake_choco", "AING_CAKE_CHOCO", "aing-cake-choco"] as [String?] {
+                    "aing_cake_strawberry", "aing_cake_choco", "AING_CAKE_CHOCO", "aing-cake-choco",
+                    "aing_isul", " aing_isul ", "AING_ISUL", "aing-isul"] as [String?] {
             #expect(AingCharacterArt.resolvedID(raw) == MeCharacterCards.equippedID(fromServer: raw), "\(String(describing: raw))")
         }
     }
@@ -200,8 +211,9 @@ import Testing
         #expect(gems.contains("Sources/CheckMobileKit/Components/RubyComponents.swift"), "대조: 보석 부품을 못 찾았다")
     }
 
-    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 여덟")
+    @Test("탭 막대 숨김은 공용 수단 하나(`hidesTabBar(for:)`)가 정의한다 · 숨기는 화면 목록 아홉")
     func tabBarPolicy() throws {
+        // reversiMatch 는 아잉 뒤집기(1.0.17)에 늘었다 — 한 수 30초 몰입 화면이라 탭을 잘못 눌러 나가면 자동 착수가 쌓인다(3번이면 진다).
         // rummyMatch 는 아잉 큐브(1.0.16)에 늘었다 — 끌기가 화면 아래 받침대에서 시작해 탭 막대와 겹친다.
         // grassDetail 은 0.3.31 에 늘었다 — 잔디 상세는 **자체 하단 값 막대**를 가져 탭 막대와 둘이 쌓이면 엄지 사정권이 좁아진다.
         // tetrisMatch 는 1:1 테트리스(1.0.11)에 늘었다 — 체스보다 까닭이 세다: 판 시간이 단조 시계로 흐르므로(D10)
@@ -210,7 +222,8 @@ import Testing
         // chessMatch 는 폰 체스(1.0.5)에 늘었다 — 오목 대국과 같은 몰입 화면이고, 그 갈래가 없으면 체스 대국 화면이
         // 탭 막대를 **숨길 수단이 없다**(직접 `toolbar(.hidden, for: .tabBar)` 를 쓰는 길은 게임 폴더 계약이 막는다).
         #expect(Set(TabBarPolicy.Screen.allCases.map { $0.rawValue })
-                == ["conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "shop", "miniGamePlay", "grassDetail"])
+                == ["conversation", "gomokuMatch", "chessMatch", "tetrisMatch", "rummyMatch", "reversiMatch", "alkkagiMatch", "mahjongMatch", "shop", "miniGamePlay",
+                   "grassDetail"])
         let chrome = try IntegrationContractTests.code("Sources/CheckMobileKit/Components/SheetChrome.swift")
         // d7701ab 부터 숨김은 정책 표(`TabBarPolicy.hidesTabBar(on:)`)를 거쳐 `.hidden`/`.automatic` 중 하나를 고른다 — 리터럴
         // `toolbar(.hidden, for: .tabBar)` 는 주석에만 남아 이 대조가 주석을 걷어낸 소스에서 늘 빨갰다(1.0.6 이후).
@@ -222,6 +235,9 @@ import Testing
         let rummyMatchView = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesRummyMatch.swift")
         #expect(rummyMatchView.contains(".hidesTabBar(for: .rummyMatch)"),
                 "아잉 큐브 판이 탭 막대 숨김을 부르지 않는다 — 갈래만 늘었다")
+        let reversiMatchView = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesReversiMatch.swift")
+        #expect(reversiMatchView.contains(".hidesTabBar(for: .reversiMatch)"),
+                "아잉 뒤집기 판이 탭 막대 숨김을 부르지 않는다 — 갈래만 늘었다")
         #expect(chrome.contains("func hidesTabBar(for screen: TabBarPolicy.Screen)")
                 && chrome.contains("toolbar(TabBarPolicy.hidesTabBar(on: screen) ? .hidden : .automatic, for: .tabBar)"))
     }

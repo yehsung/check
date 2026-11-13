@@ -77,12 +77,15 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
         package let claimedAtMs: Int?
         /// 화면 순서(작을수록 위). 없으면 맨 뒤.
         package let sort: Int
+        /// 캐릭터 보상 미션의 보상 캐릭터(v0.3.81 — 최상위 `character_missions` 줄, 개발에 찌든 아잉이). nil = 루비 미션.
+        /// 캐릭터 줄의 `reward` 는 언제나 0 이고 받기는 `achievement_character_claim` 이다(옛 `achievement_claim` 은 이 줄을 모른다).
+        package let characterID: String?
 
         package var id: String { key }
 
         package init(key: String, series: String? = nil, tier: Int = 1, title: String, detail: String = "",
                      reward: Int = 0, target: Int = 1, progress: Int = 0, achieved: Bool = false, claimed: Bool = false,
-                     achievedAtMs: Int? = nil, claimedAtMs: Int? = nil, sort: Int = Int.max) {
+                     achievedAtMs: Int? = nil, claimedAtMs: Int? = nil, sort: Int = Int.max, characterID: String? = nil) {
             self.key = key
             self.series = (series?.isEmpty == false ? series : nil) ?? key
             self.tier = tier
@@ -96,6 +99,7 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
             self.achievedAtMs = achievedAtMs
             self.claimedAtMs = claimedAtMs
             self.sort = sort
+            self.characterID = (characterID?.isEmpty == false) ? characterID : nil
         }
 
         /// 채웠고 아직 안 받았다 — [받기] 버튼이 서는 줄.
@@ -116,7 +120,7 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
             Mission(key: key, series: series, tier: tier, title: title, detail: detail, reward: reward, target: target,
                     progress: progress, achieved: true, claimed: true,
                     achievedAtMs: achievedAtMs ?? previous.achievedAtMs, claimedAtMs: claimedAtMs ?? previous.claimedAtMs,
-                    sort: sort)
+                    sort: sort, characterID: characterID)
         }
     }
 
@@ -151,10 +155,13 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
     /// 지금 연속 근무일(최상위 `streak_days` — 폰 칩 전용). **nil = 이 서버는 안 알려 준다**(키 없음 · 모양이 틀림) — 칩을 숨긴다.
     /// 미션 줄의 `progress` 로 대신하지 마라: 서버가 target 에서 자르고 달성 뒤에는 target 에 고정한다(30일을 넘긴 사람은 2일째여도 30).
     package var streakDays: Int?
+    /// 캐릭터 보상 미션(v0.3.81 — 최상위 `character_missions`, 지금은 '누적 근무 100시간' → 개발에 찌든 아잉이 한 줄). 키가 없는 서버는 [].
+    /// 루비 미션(`missions`)과 따로 온다 — 옛 앱의 [모두 받기]가 그릴 수 없는 캐릭터를 받지 않게 서버가 갈라 둔 것이다.
+    package var characterMissions: [Mission]
 
     package init(launchAtMs: Int? = nil, missions: [Mission] = [], reportedClaimableCount: Int? = nil,
                  reportedClaimableRuby: Int? = nil, claimedNow: [Claim] = [], rubyBalance: Int? = nil, serverNowMs: Int? = nil,
-                 daily: DailyMissionStatus? = nil, streakDays: Int? = nil) {
+                 daily: DailyMissionStatus? = nil, streakDays: Int? = nil, characterMissions: [Mission] = []) {
         var seen = Set<String>()
         self.launchAtMs = launchAtMs
         self.missions = missions.filter { seen.insert($0.key).inserted }
@@ -165,11 +172,14 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
         self.serverNowMs = serverNowMs
         self.daily = daily
         self.streakDays = streakDays
+        var seenCharacter = Set<String>()
+        self.characterMissions = characterMissions.filter { $0.characterID != nil && seenCharacter.insert($0.key).inserted }
     }
 
     /// 키는 서비스 디코더의 `.convertFromSnakeCase` 를 거친 **카멜**이다(`claimed_at_ms` → `claimedAtMs`).
     package enum CodingKeys: String, CodingKey {
         case launchAtMs, missions, claimableCount, claimableRuby, claimedNow, rubyBalance, serverNowMs, daily, streakDays
+        case characterMissions
     }
 
     package init(from decoder: Decoder) throws {
@@ -184,7 +194,10 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
             serverNowMs: c.achievementLossyInt(forKey: .serverNowMs),
             // 일일 칸 하나가 깨져도 누적 미션은 산다(칸이 객체가 아니면 nil = 일일 없음).
             daily: c.achievementLossy(DailyMissionStatus.self, forKey: .daily),
-            streakDays: c.achievementLossyInt(forKey: .streakDays)
+            streakDays: c.achievementLossyInt(forKey: .streakDays),
+            // 캐릭터 보상 미션(v0.3.81). 줄 하나가 깨져도 나머지 · 루비 미션은 산다.
+            characterMissions: (c.achievementLossyList(AchievementLossyCharacterMission.self, forKey: .characterMissions) ?? [])
+                .compactMap(\.mission)
         )
     }
 
@@ -193,8 +206,13 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
     /// 받을 수 있는 미션(채웠고 아직 안 받은 것) — 계열로 접기 **전**이다(콕 10 · 50 을 둘 다 채웠으면 둘 다).
     package var claimable: [Mission] { missions.filter(\.isClaimable) }
 
+    /// 받을 수 있는 캐릭터 보상 미션(v0.3.81). `claimable` 은 루비 미션만이다 — [모두 받기](`achievement_claim(null)`)가 실패를
+    /// 표시할 줄이 루비 줄뿐이라서다(캐릭터는 그 요청이 안 준다).
+    package var characterClaimable: [Mission] { characterMissions.filter(\.isClaimable) }
+
     /// 레일 배지 · 절 머리의 "받을 보상 N개". 줄에서 센다(서버 숫자와 갈리면 줄이 이긴다 — 그리는 것이 줄이다).
-    package var claimableCount: Int { claimable.count }
+    /// v0.3.81: 캐릭터 보상 줄도 센다(같은 절에 서는 [받기]다).
+    package var claimableCount: Int { claimable.count + characterClaimable.count }
 
     package var claimableRuby: Int { claimable.reduce(0) { $0 + $1.reward } }
 
@@ -218,6 +236,12 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
         return rows.sorted { ($0.sort, $0.key) < ($1.sort, $1.key) }.map(\.row)
     }
 
+    /// 누적 미션 절의 줄 — 루비 미션 계열 줄(`seriesRows`) 뒤에 캐릭터 보상 줄(v0.3.81)을 `sort` 순으로 잇는다.
+    /// 캐릭터 줄의 sort(140)는 루비 줄 최대(130)보다 크다 — 그래도 서버가 바꾸면 따로 정렬한 순서대로 뒤에 선다(줄이 섞이지 않게).
+    package var sectionRows: [Mission] {
+        seriesRows + characterMissions.sorted { ($0.sort, $0.key) < ($1.sort, $1.key) }
+    }
+
     /// 키 → 계열(받기 연출이 어느 줄에 설지 고를 때). 모르는 키는 nil.
     package func series(ofKey key: String) -> String? {
         missions.first { $0.key == key }?.series
@@ -239,10 +263,20 @@ package struct AchievementStatus: Decodable, Equatable, Sendable {
         copy.daily = daily?.merged(over: previous.daily)
         let claimedBefore = Dictionary(previous.missions.filter(\.claimed).map { ($0.key, $0) },
                                        uniquingKeysWith: { first, _ in first })
-        guard !claimedBefore.isEmpty else { return copy }
-        copy.missions = missions.map { mission in
-            guard !mission.claimed, let before = claimedBefore[mission.key] else { return mission }
-            return mission.markedClaimed(from: before)
+        if !claimedBefore.isEmpty {
+            copy.missions = missions.map { mission in
+                guard !mission.claimed, let before = claimedBefore[mission.key] else { return mission }
+                return mission.markedClaimed(from: before)
+            }
+        }
+        // 캐릭터 보상 줄(v0.3.81)도 같은 규약 — 받은 캐릭터 줄에 [받기]가 다시 서지 않게.
+        let characterClaimedBefore = Dictionary(previous.characterMissions.filter(\.claimed).map { ($0.key, $0) },
+                                                uniquingKeysWith: { first, _ in first })
+        if !characterClaimedBefore.isEmpty {
+            copy.characterMissions = characterMissions.map { mission in
+                guard !mission.claimed, let before = characterClaimedBefore[mission.key] else { return mission }
+                return mission.markedClaimed(from: before)
+            }
         }
         return copy
     }
@@ -289,9 +323,84 @@ package struct AchievementClaimRequest: Encodable, Equatable, Sendable {
     }
 }
 
+/// `achievement_character_claim(p_key, p_protocol)` 본문(v0.3.81). 키 둘을 **언제나** 싣는다 — 서버가 능력 번호로 그림 없는 클라를
+/// 거른다(`needs_update`) — 맥은 `WorkTimerStore.shopProtocolVersion`(그림이 실재하는 캐릭터로 정한 번호)을 싣는다. 인코더가 `.convertToSnakeCase` 라 `pKey` → `p_key` · `pProtocol` → `p_protocol`.
+package struct AchievementCharacterClaimRequest: Encodable, Equatable, Sendable {
+    package let pKey: String
+    package let pProtocol: Int
+
+    package init(key: String, protocolNumber: Int) {
+        pKey = key
+        pProtocol = protocolNumber
+    }
+}
+
+/// `achievement_character_claim` 응답 — 상태 모양(`AchievementStatus`) + 이 호출의 결과(`status`) · 받은 캐릭터.
+package struct AchievementCharacterClaimResponse: Decodable, Equatable, Sendable {
+    /// 서버 결과 어휘(`status`).
+    package enum Outcome: String, Equatable, Sendable {
+        /// 이번에 받았다.
+        case ok
+        /// 이미 받았다(또는 다른 길로 가졌다) — 오류가 아니다.
+        case already
+        /// 아직 못 채웠다.
+        case notMet = "not_met"
+        /// 숨김 계정 — 달성하지 않는다.
+        case hidden
+        case unknownKey = "unknown_key"
+        /// 이 클라의 능력 번호로는 그 캐릭터를 못 그린다.
+        case needsUpdate = "needs_update"
+    }
+
+    package var status: AchievementStatus
+    /// nil = 모르는 어휘 · 칸 없음.
+    package var outcome: Outcome?
+    /// 이 호출이 실제로 준 캐릭터(`claimed_now[].character_id`).
+    package var claimedCharacterIDs: [String]
+
+    package init(status: AchievementStatus, outcome: Outcome?, claimedCharacterIDs: [String] = []) {
+        self.status = status
+        self.outcome = outcome
+        self.claimedCharacterIDs = claimedCharacterIDs
+    }
+
+    private enum CodingKeys: String, CodingKey { case status, claimedNow }
+    private struct ClaimedCharacter: Decodable {
+        let characterId: String?
+        init(from decoder: Decoder) throws {
+            characterId = (try? decoder.container(keyedBy: Key.self))?.achievementLossy(String.self, forKey: .characterId)
+        }
+        enum Key: String, CodingKey { case characterId }
+    }
+
+    package init(from decoder: Decoder) throws {
+        let state = try AchievementStatus(from: decoder)
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(status: state,
+                  outcome: c.achievementLossy(String.self, forKey: .status).flatMap(Outcome.init(rawValue:)),
+                  claimedCharacterIDs: (c.achievementLossyList(ClaimedCharacter.self, forKey: .claimedNow) ?? [])
+                    .compactMap(\.characterId).filter { !$0.isEmpty })
+    }
+}
+
 extension SupabaseWorkService {
     package nonisolated static let achievementsStatusPath = "/rest/v1/rpc/achievements_status"
     package nonisolated static let achievementClaimPath = "/rest/v1/rpc/achievement_claim"
+    package nonisolated static let achievementCharacterClaimPath = "/rest/v1/rpc/achievement_character_claim"
+
+    /// 캐릭터 보상 미션 받기(v0.3.81). `achievement_character_claim(p_key, p_protocol)` — 응답은 상태 모양 + 결과 어휘 + 받은 캐릭터.
+    /// 함수가 없는 서버(db push 전)는 `.databaseSchemaMissing` 으로 throw 한다 — 그런 서버는 `character_missions` 도 안 줘서 버튼이 없다.
+    package func achievementCharacterClaim(accessToken: String, key: String,
+                                           protocolNumber: Int) async throws -> AchievementCharacterClaimResponse {
+        let data = try await send(
+            path: Self.achievementCharacterClaimPath,
+            method: "POST",
+            body: AchievementCharacterClaimRequest(key: key, protocolNumber: protocolNumber),
+            accessToken: accessToken,
+            prefer: nil
+        )
+        return try decoder.decode(AchievementCharacterClaimResponse.self, from: data)
+    }
 
     /// 도전 미션 상태. `achievements_status()` — 인자 없음(서버가 `auth.uid()` 를 쓴다).
     ///
@@ -364,6 +473,46 @@ private struct AchievementLossyMission: Decodable {
             achievedAtMs: achievedAtMs,
             claimedAtMs: claimedAtMs,
             sort: c.achievementLossyInt(forKey: .sort) ?? Int.max
+        )
+    }
+}
+
+/// 캐릭터 보상 미션 한 줄(v0.3.81 `character_missions`). 키 · 제목 · 캐릭터가 없으면 nil — 그 줄만 버린다.
+/// 받음 · 달성은 서버 칸 그대로, 없으면 시각으로(루비 줄과 같은 규약). 보상은 루비 0 · 계열은 키 자신.
+private struct AchievementLossyCharacterMission: Decodable {
+    let mission: AchievementStatus.Mission?
+
+    enum CodingKeys: String, CodingKey {
+        case key, title, detail, characterId, target, progress, achieved, claimed, achievedAtMs, claimedAtMs, sort
+    }
+
+    init(from decoder: Decoder) throws {
+        guard let c = try? decoder.container(keyedBy: CodingKeys.self),
+              let key = c.achievementLossy(String.self, forKey: .key), !key.isEmpty,
+              let title = c.achievementLossy(String.self, forKey: .title)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !title.isEmpty,
+              let characterID = c.achievementLossy(String.self, forKey: .characterId), !characterID.isEmpty
+        else {
+            mission = nil
+            return
+        }
+        let achievedAtMs = c.achievementLossyInt(forKey: .achievedAtMs)
+        let claimedAtMs = c.achievementLossyInt(forKey: .claimedAtMs)
+        mission = AchievementStatus.Mission(
+            key: key,
+            series: key,
+            tier: 1,
+            title: title,
+            detail: c.achievementLossy(String.self, forKey: .detail) ?? "",
+            reward: 0,
+            target: c.achievementLossyInt(forKey: .target) ?? 1,
+            progress: c.achievementLossyInt(forKey: .progress) ?? 0,
+            achieved: c.achievementLossy(Bool.self, forKey: .achieved) ?? (achievedAtMs != nil),
+            claimed: c.achievementLossy(Bool.self, forKey: .claimed) ?? (claimedAtMs != nil),
+            achievedAtMs: achievedAtMs,
+            claimedAtMs: claimedAtMs,
+            sort: c.achievementLossyInt(forKey: .sort) ?? Int.max,
+            characterID: characterID
         )
     }
 }

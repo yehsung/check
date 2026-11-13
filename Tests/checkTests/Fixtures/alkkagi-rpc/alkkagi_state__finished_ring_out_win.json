@@ -1,0 +1,195 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": null,
+    "display_name": "T-73548af6",
+    "id": "73548af6-1eda-4a14-9d81-a6edb92969d1"
+  },
+  "protocol": 2,
+  "server_now_ms": 1794260785057.428,
+  "state": {
+    "accepted_at_ms": 1794260785043.647,
+    "black": {
+      "avatar_url": null,
+      "busy": false,
+      "character_id": null,
+      "display_name": "T-73548af6",
+      "id": "73548af6-1eda-4a14-9d81-a6edb92969d1"
+    },
+    "chat": [],
+    "chat_seq": 0,
+    "current_player": "black",
+    "deadline_ms": null,
+    "finish_reason": "ring_out",
+    "forfeit_after": 3,
+    "grace_ms": 2000,
+    "id": "8bc47868-5f15-4e42-9a4e-22f51ab877de",
+    "muted": false,
+    "my_color": "black",
+    "my_missed_turns": 0,
+    "my_ready": true,
+    "opponent_missed_turns": 0,
+    "opponent_ready": true,
+    "phase": "finished",
+    "placement_revision": 7,
+    "result": "black",
+    "revision": 15,
+    "ruby_balance": 103,
+    "settled": true,
+    "shot": {},
+    "shot_count": 0,
+    "stake": 3,
+    "stones": [
+      {
+        "id": 0,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 80,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 1,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 190,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 300,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 410,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 4,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "black",
+        "position": {
+          "x": 520,
+          "y": 460
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 5,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 80,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 6,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 190,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 7,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 300,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 8,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 410,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 9,
+        "isOut": false,
+        "isPlaced": true,
+        "owner": "white",
+        "position": {
+          "x": 520,
+          "y": 140
+        },
+        "velocity": {
+          "x": 0,
+          "y": 0
+        }
+      }
+    ],
+    "watchers": 0,
+    "white": {
+      "avatar_url": null,
+      "busy": false,
+      "character_id": null,
+      "display_name": "T-cbc374cd",
+      "id": "cbc374cd-84c6-4f3e-a6cc-6fa05e6c32f6"
+    }
+  },
+  "status": "ok"
+}

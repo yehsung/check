@@ -12,13 +12,44 @@ import AppKit
 /// - `UILabel` 은 `lineBreakStrategy = .hangulWordPriority`(라벨 속성 · 문단 스타일 둘 다)를 줘도 음절에서 끊었다.
 /// - TextKit(`NSLayoutManager`)은 문단 스타일의 전략을 지킨다 — 그래서 말풍선 본문은 TextKit 으로 재고 그린다
 ///   (`MessagesBubbleTextUIView`). 이 파일의 재기·줄 나누기는 맥에서도 같은 API 라 `swift test` 가 잰다.
+/// - 1.0.17 골라 복사(대표 답 "말풍선에서 바로 길게 눌러 고르기"): 그 글 칸은 고를 수 있는 `UITextView` 가 되었지만 **TextKit 1 틀째 이 엔진의 것**을
+///   넘겨 짓는다(`prepareForTextView`) — 줄을 나누는 것은 여전히 이 엔진(같은 끊기 대리자 · 같은 줄 조각 여백 0)이고, 크기는 따로 둔 재기 엔진이 잰다.
 ///
 /// 전략은 **`hangulWordPriority` 하나만** 쓴다. `.standard` 를 섞으면 그 안의 `pushOut`(마지막 줄 외톨이 막기)이
 /// "오후에 디자인 리뷰 10 / 분만 가능할까요?"처럼 숫자와 한글 사이를 끊었다(TextKit 실측 · 폭 180~240pt 모두).
 /// `hangulWordPriority` 는 **한글과 한글 사이**만 막는다 — "봤어요! 2 / 번이"처럼 숫자·기호와 한글 사이는 여전히 끊겨서,
 /// 배치 대리자가 "한글이 든 어절 안"의 끊기를 한 번 더 거른다(`allowsWordBreak`). 폭보다 긴 어절은 TextKit 이 글자 단위로 접는다.
+///
+/// 1.0.17: 글은 서식(제목 · 굵게 · 링크 — `MessagesBubbleMarkdown.attributed`)째 들어온다. 글꼴이 섞여도 재기 · 줄바꿈은 이 엔진 그대로이고,
+/// 링크 누름 판정(`Engine.link(at:width:)`)도 그린 배치 그대로 잰다.
 package enum MessagesBubbleTextLayout {
     package static let lineBreakStrategy: NSParagraphStyle.LineBreakStrategy = [.hangulWordPriority]
+
+    // MARK: 말풍선 안쪽 여백
+
+    /// 말풍선 안쪽 여백(시안 `.b-bub` — 위 8 · 좌우 13 · 아래 9). 1.0.16 까지는 글 칸 바깥 SwiftUI `.padding` 이었다.
+    /// 1.0.17 부터 **글 칸 안**이다(`UITextView.textContainerInset`): 여백 띠를 길게 눌러도 고르기 · 편집 메뉴([신고])가 뜨고, 고르기 손잡이가
+    /// 글 칸 안에 들어선다(맥 2026-11-03 검토 P1 — 여백이 바깥이면 짧은 말풍선의 대부분에서 메뉴가 안 떴다). 값은 예전 padding 그대로다.
+    package struct BubbleInsets: Equatable, Sendable {
+        package let top: CGFloat
+        package let horizontal: CGFloat
+        package let bottom: CGFloat
+    }
+
+    package static let bubbleInsets = BubbleInsets(top: 8, horizontal: 13, bottom: 9)
+
+    /// 말풍선 폭 제안 → 글을 배치할 폭. 예전 SwiftUI `.padding(.horizontal, 13)` 이 안쪽 글 칸에 넘기던 제안과 같은 셈이다:
+    /// 제안 없음(nil)은 "제한 없음"(`greatestFiniteMagnitude` — 예전 글 칸의 `?? .greatestFiniteMagnitude`), 무한대는 그대로, 유한 폭은 여백을 빼되 0 아래로 내려가지 않는다.
+    package static func textWidth(forBubbleWidth width: CGFloat?) -> CGFloat {
+        guard let width else { return .greatestFiniteMagnitude }
+        guard width.isFinite else { return width }
+        return max(width - 2 * bubbleInsets.horizontal, 0)
+    }
+
+    /// 글이 차지한 크기 → 말풍선 한 장(여백 포함) 크기.
+    package static func bubbleSize(textSize: CGSize) -> CGSize {
+        CGSize(width: textSize.width + 2 * bubbleInsets.horizontal, height: textSize.height + bubbleInsets.top + bubbleInsets.bottom)
+    }
 
     package static func paragraphStyle() -> NSParagraphStyle {
         let paragraph = NSMutableParagraphStyle()
@@ -90,6 +121,22 @@ package enum MessagesBubbleTextLayout {
             return CGSize(width: min(ceil(used.width), width), height: ceil(used.height))
         }
 
+        /// 말풍선 폭 제안 → 말풍선 한 장(여백 포함) 크기. 여백 뺀 폭에서 `fittingSize` 로 재고 여백을 더한다 —
+        /// 1.0.16 의 "SwiftUI padding + 안쪽 글 칸 `fittingSize`" 와 같은 값이다(시험이 잰다).
+        package func bubbleFittingSize(proposedWidth: CGFloat?) -> CGSize {
+            MessagesBubbleTextLayout.bubbleSize(textSize: fittingSize(width: MessagesBubbleTextLayout.textWidth(forBubbleWidth: proposedWidth)))
+        }
+
+        /// 이 엔진의 틀을 **고를 수 있는 글 칸(`UITextView` — TextKit 1)** 에 그대로 넘기기 전에 부른다(`init(frame:textContainer:)`).
+        /// 틀 폭은 글 칸 폭(안쪽 여백 뺀 값)을 따라가고, 높이는 끝이 없다. 줄 조각 여백 0 · 줄바꿈 방식 · 끊기 대리자는 init 그대로라
+        /// **재는 엔진과 같은 줄**이 나온다(V1017BubbleSelection 시험이 같은 글 · 같은 폭에서 두 엔진의 줄과 크기를 대조한다).
+        package func prepareForTextView() {
+            container.widthTracksTextView = true
+            container.heightTracksTextView = false
+            container.maximumNumberOfLines = 0
+            container.size = CGSize(width: max(container.size.width, 1), height: .greatestFiniteMagnitude)
+        }
+
         /// 폭 `width` 에서 줄마다 끊긴 글(테스트 · 진단용).
         package func lines(width: CGFloat) -> [String] {
             layout(width: width)
@@ -106,6 +153,64 @@ package enum MessagesBubbleTextLayout {
             let size = CGSize(width: max(width, 1), height: .greatestFiniteMagnitude)
             if container.size != size { container.size = size }
             layoutManager.ensureLayout(for: container)
+        }
+
+        /// 손가락 오차(pt). 링크 글자 상자를 이만큼 넓혀 본다 — 줄 끝 너머 멀리 · 빈 곳은 여전히 아니다.
+        package static let touchSlop: CGFloat = 4
+
+        /// 폭 `width` 로 배치한 글에서 `point`(글 칸 좌표 — 말풍선 본문 뷰가 그리는 자리 그대로)를 누르면 열 링크.
+        /// 판정: 링크 구간마다 **줄 조각별 글자 상자**(`boundingRect` — 그 줄에 놓인 링크 글자만 감싼다)를 구해 `touchSlop` 만큼 넓혀 본다.
+        /// 상자 안에 바로 든 링크가 먼저이고, 없으면 넓힌 상자에 든 것 가운데 가장 가까운 링크다.
+        /// 링크 위가 아니면 nil — 호스트 꼬리표(링크가 아니다) · 평범한 글자 · 줄 끝 너머 · 글 아래 빈 곳.
+        /// 여는 것은 이 값이 아니라 `MessagesBubbleMarkdown.follow` 를 지난 값이다(스킴 검사 두 겹).
+        ///
+        /// ★ "가장 가까운 글자 하나의 상자 + 오차"로 재던 첫 판(2026-11-03 검토 minor)은 링크 옆에 다른 글리프가 있으면 오차가 듣지 않았다 —
+        ///   링크 뒤 줄바꿈 글리프(상자가 칸 끝까지 이어진다) · 꼬리표 앞 공백이 가장 가까운 글자가 되어, 링크 끝 바로 옆을 눌러도 nil 이었다.
+        package func link(at point: CGPoint, width: CGFloat) -> URL? {
+            layout(width: width)
+            guard storage.length > 0, layoutManager.numberOfGlyphs > 0 else { return nil }
+            var nearest: (url: URL, distance: CGFloat)?
+            let whole = NSRange(location: 0, length: storage.length)
+            storage.enumerateAttribute(MessagesBubbleMarkdown.linkKey, in: whole) { value, range, stop in
+                guard let url = value as? URL else { return }
+                for box in linkBoxes(characterRange: range) {
+                    if box.contains(point) {
+                        nearest = (url, 0)
+                        stop.pointee = true
+                        return
+                    }
+                    guard box.insetBy(dx: -Self.touchSlop, dy: -Self.touchSlop).contains(point) else { continue }
+                    let dx = max(box.minX - point.x, 0, point.x - box.maxX)
+                    let dy = max(box.minY - point.y, 0, point.y - box.maxY)
+                    let distance = (dx * dx + dy * dy).squareRoot()
+                    if distance < (nearest?.distance ?? .greatestFiniteMagnitude) { nearest = (url, distance) }
+                }
+            }
+            return nearest?.url
+        }
+
+        /// 말풍선 좌표(안쪽 여백 포함 — 글 칸이 받은 누름 자리 그대로) → 열 링크. 여백만큼 옮겨 글 좌표로 바꾸고, 여백 뺀 폭으로 잰다.
+        /// 여백 띠 위는 링크 상자 밖이라 nil 이다(손가락 오차 안이면 그 링크).
+        package func link(atBubblePoint point: CGPoint, bubbleWidth: CGFloat) -> URL? {
+            let insets = MessagesBubbleTextLayout.bubbleInsets
+            return link(
+                at: CGPoint(x: point.x - insets.horizontal, y: point.y - insets.top),
+                width: max(bubbleWidth - 2 * insets.horizontal, 0)
+            )
+        }
+
+        /// 링크 한 구간의 줄 조각별 글자 상자(여러 줄로 접히면 줄마다 하나). 빈 상자는 뺀다.
+        private func linkBoxes(characterRange: NSRange) -> [CGRect] {
+            let glyphs = layoutManager.glyphRange(forCharacterRange: characterRange, actualCharacterRange: nil)
+            guard glyphs.length > 0 else { return [] }
+            var boxes: [CGRect] = []
+            layoutManager.enumerateLineFragments(forGlyphRange: glyphs) { _, _, _, lineGlyphs, _ in
+                let part = NSIntersectionRange(glyphs, lineGlyphs)
+                guard part.length > 0 else { return }
+                let box = self.layoutManager.boundingRect(forGlyphRange: part, in: self.container)
+                if !box.isEmpty { boxes.append(box) }
+            }
+            return boxes
         }
     }
 }

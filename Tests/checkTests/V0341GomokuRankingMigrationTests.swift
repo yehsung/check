@@ -290,6 +290,14 @@ private let t41IntendedGomokuRewrites: [String: (why: String, required: [String]
     // 2026-10-23 관전자 수(20261023120000): 대국자 본인 화면에도 👁 N 을 띄우려고 상태 봉투 최상위에 `watchers` 한 칸을
     // 더했다. 상태 빌더는 전적을 보고하지 않으므로 컷을 못 지운다. required 는 덮어쓴 이유 한 줄과, 정본이 지키던
     // 참가자 전용 칸(my_auto_streak — 이게 빠지면 관전 봉투와 대국 봉투가 같아져 버린 것이다)이다.
+    // 2026-11-10 오목알 스킨(20261111130000 — 대표 #d_UVBJ8vJua1jD 상점 루비 100 · #d_RR2dyBIHDMW5 상대에게도 보임): match 객체에
+    // black_skin · white_skin 두 칸. 정본 본문(20261023120000) + 한 자리 — 그 파일 §7 이 더한 자리를 되돌려 정본 지문(c473c001)을 잰다.
+    // 상태 빌더는 전적을 보고하지 않으므로 컷을 못 지운다. required 는 덮어쓴 이유 한 줄과 정본이 지키던 두 칸이다.
+    "20261111130000_omok_skins.sql:gomoku__state": (
+        "오목알 스킨 — match 에 black_skin · white_skin(20261111130000 §5)",
+        ["public.omok__skin_of(m.black)", "public.match__watchers('gomoku', p_match_id)", "'my_auto_streak'"],
+        ["public.gomoku__record(", "public.gomoku_record_epoch()", "finished_at >=", "count(*) filter (where g.winner"]
+    ),
     "20261023120000_match_watchers.sql:gomoku__state": (
         "관전자 수 — 최상위 봉투에 watchers 한 칸(20261023120000 §10)",
         ["public.match__watchers('gomoku', p_match_id)", "'my_auto_streak'"],

@@ -24,6 +24,10 @@ package enum MeText {
     package static let noRetro = "지난주 근무 기록이 없어요"
     package static let recordsFailed = "기록을 불러오지 못했어요"
     package static let heatmapTitle = "지난주 근무 리듬"
+    /// 주별 근무 리듬이 넘겨볼 수 있는 가장 이른 날 = 서비스 첫 주 월요일(2026-06-29 00:00 KST) — 맥 `WorkTimerStore.rhythmHistoryStart` 와 같은 값.
+    package static let rhythmHistoryStart = Date(timeIntervalSince1970: 1_782_658_800)
+    package static let rhythmPreviousWeek = "이전 주"
+    package static let rhythmNextWeek = "다음 주"
     package static let workGrassTitle = "최근 12주 근무"
     package static let tokenGrassTitle = "최근 12주 AI 토큰"
     package static let dayNames = ["월", "화", "수", "목", "금", "토", "일"]
@@ -413,7 +417,9 @@ package enum MeText {
     /// 진행 숫자 "23/50". 받은 줄은 이 자리에 `claimedMark` 를 그린다(연속 근무는 받은 뒤 지금 연속이 다시 낮아질 수 있어
     /// 숫자가 거짓이 된다 — 달성은 끈적하다).
     package static func missionProgress(_ mission: AchievementStatus.Mission) -> String {
-        "\(mission.progress)/\(mission.target)"
+        // 캐릭터 보상 줄(개발에 찌든 아잉이 — 누적 근무 시간)은 단위까지 "37/100시간"(맥과 같은 글자).
+        if mission.characterID != nil { return DevAingMission.count(progress: mission.progress, target: mission.target) }
+        return "\(mission.progress)/\(mission.target)"
     }
 
     /// 보상 숫자 "+50"(루비 보석은 화면이 `RubyIcon` 으로 그린다 — 폰은 💎 이모지를 쓰지 않는다). 0 이면 nil(칩 없음).
@@ -447,6 +453,7 @@ package enum MeText {
         switch mission.state {
         case .inProgress:
             let progress = "\(mission.title), \(missionProgress(mission))"
+            if let id = mission.characterID { return "\(progress), 달성하면 \(MeCharacterCards.displayName(for: id))" }
             return mission.reward > 0 ? "\(progress), 달성하면 루비 \(mission.reward)개" : progress
         case .claimable:
             return "\(mission.title), 달성했어요"
@@ -488,11 +495,17 @@ package enum MeText {
     /// 맥 `DailyMissionCopy.resetNote` 와 한 글자도 다르지 않다.
     package static let dailyMissionsResetNote = "자정에 초기화 · 안 받으면 사라져요"
 
-    /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 아잉 큐브 줄만 비운다 — 서버가 큐브 없는 옛 폰을 위해 '맥에서 할 수 있어요'를 싣는데,
-    /// 이 판의 폰은 큐브를 할 수 있어 거짓이다(서버 글자를 바꾸면 옛 폰에서 거짓이 된다).
+    /// 일일 미션 줄의 보조 문장. 서버 글자를 그대로 쓰되 **이 폰이 할 수 있는 게임 줄**은 비운다 — 서버가 그 게임이 없는 옛 폰을 위해
+    /// '맥에서 할 수 있어요'를 싣는데, 이 판의 폰에서는 거짓이다. 서버 글자는 바꾸지 않는다: 옛 폰(1.0.16 이하)과 안드로이드·윈도우에서는 여전히 참이다.
+    ///  · 아잉 큐브(`rummy`) — 폰 1.0.16 부터.
+    ///  · 아잉 뒤집기(`reversi`) — 폰 1.0.17 부터(대표 답 #d_DdwzmxPClGqk). AI 연습은 미션을 채우지 않는다(서버가 1:1 판만 센다 — 규칙 시트 몫).
+    ///  · 1:1 길건너(`crossy_duel`) · 1:1 알까기(`alkkagi`) · 아잉 마작(`mahjong`) — 폰 1.0.18 부터(대표 답 "한 판에 전부" #d_xB6BJcn2nsCq).
     package static func dailyMissionCaption(game: String, detail: String) -> String {
-        game == "rummy" ? "" : detail
+        phonePlayableMacFirstGames.contains(game) ? "" : detail
     }
+
+    /// 서버가 '맥에서 할 수 있어요'를 싣는 게임 중 **이 폰이 할 수 있는 것**(위 `dailyMissionCaption`). 폰에 게임을 넣는 판에서 여기에 더한다.
+    package static let phonePlayableMacFirstGames: Set<String> = ["rummy", "reversi", "crossy_duel", "alkkagi", "mahjong"]
 
     /// 일일 줄 아이콘(SF Symbol) — **게임 이름으로 고른다**(키가 아니다: 누적 미션의 `gomoku1` 과 일일 `daily_gomoku` 가
     /// 같은 기호를 쓰게). 미니게임 셋은 코어 `MiniGameKind.icon`(게임 화면 · 순위표가 쓰는 그 기호)이고, 1:1 셋은 맥 입구
@@ -519,6 +532,25 @@ package enum MeText {
             //    시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다 — **없는 이름은 런타임에 경고 없이 빈 칸**
             //    이 된다(그 함정은 `MiniGameKind.icon` 주석에 있다).
             ("rummy", "cube.fill"),
+            // '아잉 뒤집기'(리버시 — 서버 `daily_reversi`, sort 80). 서버는 모든 플랫폼에 이 줄을 내린다(20261108200000 — 1.0.16 폰에도).
+            // 폰 1.0.17 부터 게임도 있다. 표에 없으면 기본 별로 그려져 같은 줄이 맥과 다른 그림이 된다(위 ①).
+            // 맥 `ReversiEntryIcon.symbol`(반은 흑, 반은 백인 원 — 뒤집히는 돌)과 같은 이름이다. 폰 설정의 화면 모드(`.system`)가
+            // 이미 쓰는 이름이라 이 앱의 iOS 바닥에서 산다(시험이 `NSImage(systemSymbolName:)` 로 한 번 더 되묻는다).
+            ("reversi", "circle.lefthalf.filled"),
+            // '아잉 마작'(4인 리치 마작 — 서버 `daily_mahjong`, sort 90 · 20261108221000, 맥 0.3.76). 폰 1.0.18 부터 게임이 있어
+            // 보조 문장을 비운다(`phonePlayableMacFirstGames`). 맥 `MahjongEntryIcon.symbol` 과 같은 이름이다(위 ①).
+            ("mahjong", "square.grid.3x3.square"),
+            // '1:1 길건너'(서버 `daily_crossy_duel`, sort 100 · 20261109150000, 맥 합본 판). 폰 1.0.18 부터 1:1 이 있어
+            // 보조 문장을 비운다(`phonePlayableMacFirstGames`). **게임 이름은 `crossy_duel`** 이다 — 혼자 하기
+            // `crossy`(위 `MiniGameKind` 가 먼저 거르는 걷는 사람 기호)와 다른 줄이라 접두로 접히면 안 된다. 체크 무늬 깃발은
+            // 맥 `CrossyDuelEntryIcon`(SF `flag.checkered`)과 같은 이름이고, SF Symbols 4(2022 — macOS 13 · iOS 16)에 들어와
+            // 이 앱의 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
+            ("crossy_duel", "flag.checkered"),
+            // '1:1 알까기'(서버 `daily_alkkagi`, sort 110 · alkkagi/v2 20261111150000, 맥 0.3.82). 폰 1.0.18 부터 게임이 있어
+            // 보조 문장을 비운다(`phonePlayableMacFirstGames`). 맥 `AlkkagiEntryIcon.symbol`(SF `circle.hexagongrid.fill`)과
+            // 같은 이름이다(위 ① — 맥 사이드바 문 · 미션 줄이 이미 쓰는 기호). SF Symbols 1(2019 — macOS 10.15 · iOS 13)에 들어와 이 앱의
+            // 바닥에서 산다(CoreGlyphs `name_availability.plist` · 시험이 `NSImage(systemSymbolName:)` 로 되묻는다).
+            ("alkkagi", "circle.hexagongrid.fill"),
         ]
         return table.first { $0.game == game }?.symbol ?? missionFallbackIcon
     }
@@ -636,6 +668,29 @@ package enum MeText {
     package static func gachaAcquirePhrase(shardCost: Int?) -> String {
         guard let shardCost, shardCost > 0 else { return GachaText.gachaOnlyHint }
         return "뽑기 또는 \(GachaText.shardCost(shardCost))로 얻을 수 있어요"
+    }
+
+    /// 조각 교환 전용(흑우 아잉이 — 맥 0.3.78 · 폰 1.0.18)을 얻는 길 — 뽑기에서는 안 나온다. 교환값을 알면 "조각 20개 교환으로만 …".
+    package static func shardOnlyAcquirePhrase(shardCost: Int?) -> String {
+        guard let shardCost, shardCost > 0 else { return GachaText.shardOnlyHint }
+        return "\(GachaText.shardCost(shardCost)) 교환으로만 얻을 수 있어요"
+    }
+
+    /// 뽑기 전용 · 조각 교환 전용을 id 로 가른 얻는 길(타일 · 안내 · 보이스오버가 이 한 곳을 묻는다).
+    package static func acquirePhrase(id: String, shardCost: Int?) -> String {
+        CharacterCatalog.isShardOnlyBuiltIn(id) ? shardOnlyAcquirePhrase(shardCost: shardCost) : gachaAcquirePhrase(shardCost: shardCost)
+    }
+
+    /// 상점에서 얻는 길 타일을 눌렀을 때 — "흑우 아잉이는 조각 20개 교환으로만 얻을 수 있어요" · 뽑기 전용은 `gachaOnlyNotice` 와 같다.
+    package static func acquireNotice(id: String, shardCost: Int?) -> String {
+        let name = MeCharacterCards.displayName(for: id)
+        return "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) \(acquirePhrase(id: id, shardCost: shardCost))"
+    }
+
+    /// 고르기에서 안 가진 얻는 길 캐릭터를 눌렀을 때(뽑기 전용 · 조각 교환 전용).
+    package static func lockedAcquireCharacter(id: String, shardCost: Int?) -> String {
+        let name = MeCharacterCards.displayName(for: id)
+        return "\(name)\(particle(name, withFinal: "은", withoutFinal: "는")) 아직 없어요 — \(acquirePhrase(id: id, shardCost: shardCost))"
     }
 
     /// 상점에서 뽑기 전용 타일을 눌렀을 때: "황금 아잉이는 뽑기 또는 조각 20개로 얻을 수 있어요"(무지개 아잉이도 같은 말 —

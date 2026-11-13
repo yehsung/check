@@ -37,6 +37,9 @@ private func mdrEnter(_ store: WorkTimerStore, _ door: MiniGameDuelDoor) {
     case .tetris: store.openTetrisDuelFromMiniGame()
     case .rummy: store.openRummyFromMiniGame()
     case .reversi: store.openReversiFromMiniGame()
+    case .mahjong: store.openMahjongFromMiniGame()
+    case .crossyDuel: store.openCrossyDuelFromMiniGame()
+    case .alkkagi: store.openAlkkagiFromMiniGame()
     }
 }
 
@@ -61,11 +64,12 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ① 스토어 판정
 
-    @Test("다섯 대결 창 모두: 미니게임 창에서 들어가 사람이 닫으면 미니게임 창이 다시 선다", .gomokuDefaultsCleanup,
-          arguments: [MiniGameDuelDoor.gomoku, .chess, .tetris, .rummy, .reversi])
+    @Test("여덟 같이 하기 창 모두: 미니게임 창에서 들어가 사람이 닫으면 미니게임 창이 다시 선다", .gomokuDefaultsCleanup,
+          arguments: MiniGameDuelDoor.allCases)
     func closingTheDuelWindowReturnsToTheMiniGameWindow(door: MiniGameDuelDoor) {
         // 없으면: 대결 창을 닫으면 화면에 아무것도 안 남는다 — 사용자는 팝오버를 다시 열고 미니게임을 다시 눌러야 한다.
         let store = mdrStore("return")
+        defer { CheckAlkkagiWindowController.shared.close() }
         store.isMiniGamePanelVisible = true
         mdrEnter(store, door)
         #expect(!store.isMiniGamePanelVisible, "전제: 들어가면 미니게임 창이 내려간다(0.3.50)")
@@ -77,16 +81,18 @@ struct MiniGameDuelReturnTests {
         store.closeMiniGamePanel()
     }
 
-    @Test("프로그램 닫기(로그아웃·계정 전환)는 미니게임 창을 띄우지 않고 표지만 지운다", .gomokuDefaultsCleanup)
-    func programmaticCloseOnlyClearsTheMark() {
+    @Test("프로그램 닫기(로그아웃과 계정 전환)는 미니게임 창을 띄우지 않고 표지만 지운다", .gomokuDefaultsCleanup,
+          arguments: MiniGameDuelDoor.allCases)
+    func programmaticCloseOnlyClearsTheMark(door: MiniGameDuelDoor) {
         let store = mdrStore("program")
+        defer { CheckAlkkagiWindowController.shared.close() }
         store.isMiniGamePanelVisible = true
-        store.openGomokuFromMiniGame()
-        store.duelWindowDidClose(.gomoku, byUser: false)
-        #expect(!store.isMiniGamePanelVisible, "로그아웃으로 닫힌 오목 창이 미니게임 창을 띄웠다")
+        mdrEnter(store, door)
+        store.duelWindowDidClose(door, byUser: false)
+        #expect(!store.isMiniGamePanelVisible, "프로그램으로 닫힌 \(door) 창이 미니게임 창을 띄웠다")
         #expect(store.miniGameDuelReturn == nil)
         // 다음에 사람이 같은 창을 닫아도(이번엔 팝오버에서 연 창) 미니게임 창은 안 선다.
-        store.duelWindowDidClose(.gomoku, byUser: true)
+        store.duelWindowDidClose(door, byUser: true)
         #expect(!store.isMiniGamePanelVisible)
     }
 
@@ -199,13 +205,75 @@ struct MiniGameDuelReturnTests {
 
     // MARK: ③ 앱 배선
 
-    @Test("CheckApp 이 다섯 창의 닫힘을 스토어의 duelWindowDidClose 로 잇는다(문마다 자기 이름으로)")
-    func theAppWiresAllFourWindows() throws {
+    @Test("알까기는 창 하나를 재사용하고 사용자 닫기와 프로그램 닫기를 구분한다")
+    func alkkagiWindowReusesItsWindowAndDoesNotReturnAfterLogout() throws {
+        let controller = CheckAlkkagiWindowController()
+        var heard: [Bool] = []
+        controller.onClosed = { heard.append($0) }
+        defer {
+            controller.onClosed = nil
+            controller.close()
+            controller.currentWindow?.delegate = nil
+            controller.currentWindow?.close()
+        }
+
+        controller.show(me: AlkkagiPlayerProfile(name: "흑돌 닉네임"))
+        let window = try #require(controller.currentWindow)
+        let content = try #require(window.contentView)
+        let hosting = try #require(content as? NSHostingView<AlkkagiGameView>)
+        #expect(hosting.rootView.me.name == "흑돌 닉네임")
+        #expect(window.identifier?.rawValue == CheckAlkkagiWindowController.frameAutosaveName)
+        #expect(window.contentMinSize == BoardGameLayout.contentSize)
+        #expect(window.contentMaxSize == window.contentMinSize)
+        #expect(!window.styleMask.contains(.resizable))
+        #expect(MiniGameSpaceKey.standaloneWindowIDs.contains(CheckAlkkagiWindowController.frameAutosaveName))
+        controller.show()
+        #expect(controller.currentWindow === window)
+        #expect(window.contentView === content, "중복 열기가 진행 중인 판을 바꿨다")
+
+        controller.closeFromUser()
+        #expect(heard == [true])
+        #expect(!controller.isOpen && window.contentView == nil)
+        controller.show()
+        #expect(controller.currentWindow === window)
+        controller.close()
+        #expect(heard == [true, false])
+        #expect(!controller.isOpen && !window.isVisible && window.contentView == nil)
+        // 로그아웃 뒤 늦게 온 닫힘이나 돌아가기 동작은 목록을 되살리지 않는다.
+        controller.windowWillClose(Notification(name: NSWindow.willCloseNotification, object: window))
+        controller.closeFromUser()
+        controller.close()
+        #expect(heard == [true, false])
+    }
+
+    @Test("알까기는 새 창을 먼저 열고 이전 창을 닫으며 앱이 계정 전환 시 정리한다")
+    func alkkagiEntryAndLogoutWiring() throws {
+        let store = mdrCode(try mdrSource("WorkTimerStoreMiniGame.swift"))
+        let entryStart = try #require(store.range(of: "func openAlkkagiFromMiniGame()"))
+        let entry = String(store[entryStart.lowerBound...].prefix(550))
+        #expect(entry.contains("noteMiniGameDuelReturn(.alkkagi)"))
+        #expect(entry.contains("alkkagi.openWindow(focusMatchID: nil)"))
+        #expect(entry.contains("closeMiniGamePanel()"))
+        let app = mdrCode(try mdrSource("CheckApp.swift"))
+        #expect(app.contains("wireCrossyDuel() wireAlkkagi()"))
+        let hook = try #require(app.range(of: "private func wireAlkkagi()"))
+        let wiring = String(app[hook.lowerBound...].prefix(1000))
+        #expect(wiring.contains("configure(store: alkkagi, safety: store)"))
+        #expect(wiring.contains("alkkagi.presentWindow ="))
+        #expect(wiring.contains("alkkagi.dismissWindow ="))
+        #expect(wiring.contains("ChessAccountWatcher(userID:"))
+        #expect(wiring.contains("CheckAlkkagiWindowController.shared.close()"))
+    }
+
+    @Test("CheckApp 이 여덟 창의 닫힘을 스토어의 duelWindowDidClose 로 잇는다(문마다 자기 이름으로)")
+    func theAppWiresAllDuelWindows() throws {
         // 없으면: 스토어 판정·컨트롤러 알림이 다 초록인데 둘을 잇는 줄이 없어 실제 앱에서는 아무 일도 안 일어난다.
         let app = mdrCode(try mdrSource("CheckApp.swift"))
         for (controller, door) in [("CheckGomokuWindowController", "gomoku"), ("CheckChessWindowController", "chess"),
                                    ("CheckTetrisDuelWindowController", "tetris"), ("CheckRummyWindowController", "rummy"),
-                                   ("CheckReversiWindowController", "reversi")] {
+                                   ("CheckReversiWindowController", "reversi"), ("CheckMahjongWindowController", "mahjong"),
+                                   ("CheckCrossyDuelWindowController", "crossyDuel"),
+                                   ("CheckAlkkagiWindowController", "alkkagi")] {
             let hook = try #require(app.range(of: "\(controller).shared.onClosed = {"), "\(controller) 의 닫힘을 안 잇는다")
             let body = String(app[hook.upperBound...].prefix(160))
             #expect(body.contains("duelWindowDidClose(.\(door), byUser: byUser)"), "\(controller) 가 다른 문 이름으로 이어졌다: \(body)")

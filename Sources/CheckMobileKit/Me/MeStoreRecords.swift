@@ -31,7 +31,8 @@ extension MeStore {
         let goalSeconds = (context.session.profile?.teamGoalHours ?? TeamWeeklyGoal.defaultGoalHours) * 3600
         do {
             let rows = try await context.withMobileSessionRetry { session in
-                try await service.fetchMySessions(accessToken: session.accessToken, userID: session.userID, since: since)
+                // 주별 근무 리듬(폰 1.0.18)이 서비스 첫 주까지 넘겨보므로 세션만 그날부터 받는다(토큰 일별은 아래에서 since 그대로 — 맥과 같다).
+                try await service.fetchMySessions(accessToken: session.accessToken, userID: session.userID, since: min(since, MeText.rhythmHistoryStart))
             }
             guard generation == context.generation, isCurrent("records", serial) else { return }
 
@@ -87,6 +88,9 @@ extension MeStore {
             let output = await Task.detached(priority: .userInitiated) { MeRecordsOutput(input) }.value
             guard generation == context.generation, isCurrent("records", serial) else { return }
             if heatmap != output.insights.heatmap { heatmap = output.insights.heatmap }
+            if rhythmWeeks != output.insights.rhythmWeeks { rhythmWeeks = output.insights.rhythmWeeks }
+            if rhythmWeekOffset > rhythmWeeks.maxOffset { rhythmWeekOffset = rhythmWeeks.maxOffset }
+            if rhythmLiveStart != ongoingStart { rhythmLiveStart = ongoingStart }
             if retro != output.insights.retro { retro = output.insights.retro }
             if dailyGrid != output.insights.dailyGrid { dailyGrid = output.insights.dailyGrid }
             if tokenGrid != output.tokenGrid { tokenGrid = output.tokenGrid }
@@ -219,9 +223,19 @@ extension MeStore {
         )
     }
 
+    /// 보고 있는 주를 바꾼다(◀ = +1 · ▶ = −1). 범위 밖은 끝에 붙인다(맥 `setRhythmWeekOffset` 과 같다).
+    package func setRhythmWeekOffset(_ offset: Int) {
+        let clamped = min(max(0, offset), rhythmWeeks.maxOffset)
+        if rhythmWeekOffset != clamped { rhythmWeekOffset = clamped }
+    }
+
     func discardRecords() {
         recordsWeekKey = nil
         heatmap = .empty
+        // 주별 리듬도 계산 시점의 '이번 주'가 마지막 원소다 — 새 주에 지난주를 '이번 주'로 그리지 않게 버린다.
+        rhythmWeeks = .empty
+        rhythmWeekOffset = 0
+        rhythmLiveStart = nil
         retro = nil
         dailyGrid = .empty
         tokenGrid = .empty

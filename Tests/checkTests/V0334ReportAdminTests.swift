@@ -97,6 +97,14 @@ final class ReportAdminURLProtocol: URLProtocol {
         return URLSession(configuration: configuration)
     }
 
+    /// 스크립트하지 않은 경로의 응답(`[]`). 2026-11-11(사진): 신고된 사진 경로 `report_admin_photo_paths` 는 **없는 서버**가 기본이다 —
+    /// `[]` 로 답하면 "함수가 있는 서버"로 읽혀 기존 스위트가 모르는 새 경로를 탄다(새 경로는 MessagePhotoTests 가 잰다).
+    static func defaultReply(path: String) -> Reply {
+        path == "/rest/v1/rpc/report_admin_photo_paths"
+            ? Reply(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.report_admin_photo_paths(p_ids) in the schema cache"}"#)
+            : Reply()
+    }
+
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
@@ -129,7 +137,7 @@ final class ReportAdminURLProtocol: URLProtocol {
             Self.lock.unlock()
             return
         }
-        let reply = Self.replies[host]?[path] ?? Reply()
+        let reply = Self.replies[host]?[path] ?? Self.defaultReply(path: path)
         Self.lock.unlock()
         deliver(reply)
     }

@@ -628,41 +628,14 @@ extension SupabaseWorkService {
         accountStatus: CodexAccountProbeStatus? = nil,
         diagnostics: CodexUsageDiagnostics? = nil
     ) async throws {
-        // v0.2.43(코드 리뷰 P1): 미로그인(3)이면 스냅샷 네 값을 **싣지 않는다**. 스토어는 로그아웃·API 키 전환 뒤에도 마지막 스냅샷을
-        // 계속 들고 있는데(CheckCodexAccountUsage 는 status 만 바꾼다), 그것을 status 3 과 함께 실으면 서버가 "스냅샷 있는 미로그인 기기"
-        // 라는 어긋난 상태를 본다(구 산식은 그 기기의 반영일 로컬을 계정 위에 얹어 최대 2배 이중 계상). 키를 빼면 서버의 마지막 계정값은
-        // 보존되고, 산식 쪽은 서버 가드(스냅샷 없는 status 3 만 계정 밖)가 막는다 — 클라 생략은 그 가드의 짝이지 대체가 아니다.
-        let snapshot: CodexAccountUsage? = (accountStatus == .notLoggedIn) ? nil : account
-        let accountFields: TokenUsageAccountFields? = (account == nil && accountStatus == nil) ? nil : TokenUsageAccountFields(
-            month: snapshot.map { $0.monthTotal(usage.month) },
-            lifetime: snapshot?.lifetimeTokens,
-            fetchedAt: snapshot.map { dateFormatter.string(from: $0.fetchedAt) },
-            lastDay: snapshot?.latestBucketDate(in: usage.month),
-            status: accountStatus?.rawValue
-        )
         try await sendNoBody(
             path: "/rest/v1/token_usage_device_monthly",
             method: "POST",
             queryItems: [URLQueryItem(name: "on_conflict", value: "user_id,month,device_id")],
-            body: TokenUsageUpsertRequest(
-                userId: userID,
-                month: usage.month,
-                deviceId: deviceID,
-                claudeInput: usage.claudeInput,
-                claudeOutput: usage.claudeOutput,
-                claudeCacheRead: usage.claudeCacheRead,
-                claudeCacheCreation: usage.claudeCacheCreation,
-                codexInput: usage.codexInput,
-                codexOutput: usage.codexOutput,
-                total: usage.total,
-                todayTotal: usage.todayTotal,
-                todayDate: usage.todayDate,
-                codexCacheRead: usage.codexCacheRead,
-                account: accountFields,
-                // v0.3.12: 합이 0 이면 nil → 본문에서 antigravity_* 네 키가 통째로 빠진다(안 쓰는 사람의 본문은 종전과 동일).
-                // 요청은 **늘리지 않는다** — 같은 upsert 한 번에 얹는다(컬럼이 없는 서버면 400 이고, 호출측이 조용히 삼켜 다음 기회에 재시도한다).
-                antigravity: TokenUsageAntigravityFields(usage: usage),
-                diagnostics: diagnostics
+            body: TokenUsageUpsertRequest.monthly(
+                userID: userID, usage: usage, deviceID: deviceID,
+                account: account, accountStatus: accountStatus, diagnostics: diagnostics,
+                formatDate: { dateFormatter.string(from: $0) }
             ),
             accessToken: accessToken,
             prefer: "resolution=merge-duplicates,return=minimal"

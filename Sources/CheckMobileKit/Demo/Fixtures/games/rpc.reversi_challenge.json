@@ -1,0 +1,10 @@
+{
+  "__note": [
+    "[N 걸고 도전하기] 응답(ok). 모양은 서버 reversi_challenge ok — match_id 는 보낸 신청 장면과 같은 pending 판(…eb)이라 뒤따르는 상태 읽기도 픽스처가 답한다."
+  ],
+  "invite_expires_ms": 1789621560000,
+  "match_id": "d0000000-0000-4000-8000-0000000000eb",
+  "ruby_balance": 42,
+  "server_now_ms": 1789621500000,
+  "status": "ok"
+}

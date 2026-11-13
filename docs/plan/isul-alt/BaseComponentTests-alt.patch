@@ -1,0 +1,23 @@
+diff --git a/Tests/CheckMobileKitTests/BaseComponentTests.swift b/Tests/CheckMobileKitTests/BaseComponentTests.swift
+index 68044edd..e0d3410c 100644
+--- a/Tests/CheckMobileKitTests/BaseComponentTests.swift
++++ b/Tests/CheckMobileKitTests/BaseComponentTests.swift
+@@ -49,7 +49,17 @@ import Testing
+                     : Self.root.appendingPathComponent("Sources/check/Characters/\(id)/portrait-\(expression.rawValue).png")
+                 // 무손실 재압축(PNG optimize)이라 파일 바이트가 아니라 **픽셀**을 대조한다 — 실측(2026-10-06): 로봇 2장만
+                 // 바이트까지 같고 나머지 12장은 사본이 재압축돼 바이트가 다르다. 그래서 기준은 픽셀이다(이름도 그렇게 말한다).
+-                #expect(try Self.pixels(url) == Self.pixels(mac), "\(id)-\(expression) 이 맥 원본 그림과 다르다")
++                if id == CharacterCatalog.isulAingID {
++                    // 폰 이슬은 **대체 그림**이다(심사 지침 5.2.1 반려 대응 — 대표 결정 #d_dk4IjWRZvFYR "그대로 + 대체 그림 미리 준비"):
++                    // 생성기 `scripts/make-isul-aing.swift --label` 로 라벨 큰 글자만 바꿨다. 모양(알파)은 맥과 같고 색(라벨)만 다르다 —
++                    // 아바타 틀 · 카드 조인 상자가 그대로인 근거다. 맥 그림은 바꾸지 않는다.
++                    let phone = try Self.pixels(url), macPixels = try Self.pixels(mac)
++                    let alpha = { (p: [UInt8]) in stride(from: 3, to: p.count, by: 4).map { p[$0] } }
++                    #expect(alpha(phone) == alpha(macPixels), "\(id)-\(expression) 대체 그림의 모양(알파)이 맥과 다르다")
++                    #expect(phone != macPixels, "\(id)-\(expression) 가 맥 그림 그대로다 — 대체 그림이 안 들어왔다")
++                } else {
++                    #expect(try Self.pixels(url) == Self.pixels(mac), "\(id)-\(expression) 이 맥 원본 그림과 다르다")
++                }
+                 comparedWithMac += 1
+             }
+         }

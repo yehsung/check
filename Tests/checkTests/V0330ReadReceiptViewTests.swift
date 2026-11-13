@@ -321,11 +321,15 @@ struct V0330ReadReceiptViewTests {
     // MARK: 보관 안내
 
     /// 창 상단 보관 안내는 상수에서 파생된다 — 24시간이 자동으로 나온다(리터럴을 뷰에 적지 않았다).
+    ///
+    /// 2026-11-11(메시지 30일 · 이전 대화 더 보기): 뷰는 스토어의 `messageExpiryNoticeNow` 하나를 읽는다 — `message_page` 가 한 번이라도
+    /// 성공한 뒤에만 30일 문장이고, 그 전에는 위 24시간 문장 그대로다(두 갈래의 값은 MessageOlderHistoryTests 가 잰다).
     @Test func 보관_안내는_24시간을_말한다() throws {
         #expect(WorkTimerStore.messageHistoryHours == 24)
         #expect(WorkTimerStore.messageExpiryNotice == "24시간이 지난 메시지는 사라져요")
         let view = try m2rSource("CheckMessageView.swift")
-        #expect(view.contains("Text(WorkTimerStore.messageExpiryNotice)"))
+        #expect(view.contains("Text(store.messageExpiryNoticeNow)"))
         #expect(!view.contains("12시간") && !view.contains("24시간"), "보관 시간을 뷰에 리터럴로 적었다")
+        #expect(!view.contains("30일"), "보관 날수를 뷰에 리터럴로 적었다")
     }
 }

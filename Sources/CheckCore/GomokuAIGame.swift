@@ -35,6 +35,8 @@ package nonisolated struct GomokuAIGame: Equatable, Sendable {
     package let turnSeconds: TimeInterval
     /// 연속 대리 착수 몇 번에 사람이 지는가.
     package let autoLossStreak: Int
+    /// AI 난이도(몇 수 앞까지 계산하는가). 판마다 고정 — [다시 두기]도 같은 난이도로.
+    package let difficulty: GomokuAIDifficulty
 
     package private(set) var board = GomokuBoard()
     /// 기록 수(규칙 패스 포함 — 서버 move_count 와 같은 눈금).
@@ -64,10 +66,12 @@ package nonisolated struct GomokuAIGame: Equatable, Sendable {
         humanColor: GomokuColor,
         turnSeconds: TimeInterval = 30,
         autoLossStreak: Int = 3,
+        difficulty: GomokuAIDifficulty = .hard,
         now: Date
     ) {
         self.id = id
         self.humanColor = humanColor
+        self.difficulty = difficulty
         self.turnSeconds = turnSeconds
         self.autoLossStreak = max(1, autoLossStreak)
         startTurn(.black, now: now)
@@ -82,10 +86,12 @@ package nonisolated struct GomokuAIGame: Equatable, Sendable {
         humanAutoStreak: Int = 0,
         turnSeconds: TimeInterval = 30,
         autoLossStreak: Int = 3,
+        difficulty: GomokuAIDifficulty = .hard,
         now: Date
     ) {
         self.id = id
         self.humanColor = humanColor
+        self.difficulty = difficulty
         self.turnSeconds = turnSeconds
         self.autoLossStreak = max(1, autoLossStreak)
         self.board = board

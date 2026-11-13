@@ -78,6 +78,8 @@ extension WorkTimerStore {
         refreshAppUserCharacters()
         // 생일 선물(v0.3.66) — 앱 시작에 한 번 묻는다. 열린 선물이 있으면 축하 창이 이 실행에 한 번 스스로 뜬다(WorkTimerStoreCakeGift.swift).
         refreshCakeGift(reason: .launch)
+        // 오목알 스킨(v0.3.81) — AI 판의 내 돌이 낀 스킨으로 서게 한 번 읽는다(서버 판은 대국 응답이 말한다).
+        loadOmokSkins()
     }
 
     func signIn(email: String, password: String) async {
@@ -123,6 +125,8 @@ extension WorkTimerStore {
         refreshAppUserCharacters()
         // 생일 선물(v0.3.66) — 로그인 직후 한 번 묻는다(시작 경로와 같은 이유).
         refreshCakeGift(reason: .signIn)
+        // 오목알 스킨(v0.3.81) — 시작 경로와 같은 이유.
+        loadOmokSkins()
     }
 
     func signUp(email: String, password: String, displayName: String, center: String? = nil) async {
@@ -427,7 +431,7 @@ extension WorkTimerStore {
     /// 선물 전용 캐릭터의 문구 묶음(순수) — 내장 id 면 그 선물 종류(케이크 → 생일 · 이슬 → 술 한잔), 서버 표식으로만 선물 전용인
     /// 모르는 id 는 생일(0.3.66 선례 — 그때는 선물이 생일뿐이었다). 상점 잠긴 칸 · 안내 · 되돌림이 이 한 곳을 묻는다.
     nonisolated static func giftCopy(for id: String) -> CharacterGiftCopy {
-        (CharacterCatalog.giftKind(ofBuiltIn: id) ?? .birthday).copy
+        (CharacterCatalog.giftKind(ofBuiltIn: id) ?? .birthday).copy(for: id)
     }
 
     /// 되돌린 캐릭터에 맞는 안내(순수).
@@ -649,6 +653,9 @@ extension WorkTimerStore {
         for row in rows where row.owned == true { owned.insert(row.id) }
         ownedCharacterIDs = owned
         shopOwnershipGeneration = sessionGeneration
+        // 빼빼로 장식 미리 굽기(조정자 결정 11-04 — 가진 사람만): 상점 상태가 시작보다 늦게 와 가진 것이 확인되면 그때 한 번 굽는다
+        // (상점 상태는 여러 번 온다 — 문이 둘째 요청부터 접는다, `PeperoPrewarmGate`).
+        if owned.contains(CharacterCatalog.peperoAingID) { peperoPrewarmGate.request() }
         // 생일 선물(v0.3.66): 다른 기기에서 받았으면 열린 선물의 선택지가 보유와 어긋난다 — 맞추고, 남는 게 없으면 선물 · 카드를 거둔다.
         reconcileCakeGiftWithOwnership()
     }
@@ -672,6 +679,12 @@ extension WorkTimerStore {
             shopNotice = Self.alreadyOwnedNotice
             return
         }
+        // 미션 보상(개발에 찌든 아잉이 — v0.3.81)도 **고르지 않는다** — 얻는 길(도전 미션)만 말한다.
+        if case .character(let id) = selection, CharacterCatalog.isMissionRewardBuiltIn(id) {
+            shopSelection = nil
+            shopNotice = DevAingMission.lockedHint
+            return
+        }
         // 선물 전용(케이크 아잉이 — v0.3.66 · 이슬 아잉이 — v0.3.74)은 **고르지 않는다** — 가격도 [구매하기]도 없는 잠긴 칸이다.
         // 얻는 길만 말한다(그 선물 종류의 문구 — `giftCopy(for:)`).
         if case .character(let id) = selection, Self.isGiftOnly(id, rows: shopCharacters) {
@@ -685,7 +698,7 @@ extension WorkTimerStore {
             if isGachaAvailable {
                 openGachaPanel()
             } else {
-                shopNotice = GachaText.gachaOnlyHint
+                shopNotice = GachaText.acquireHint(for: id)
             }
             return
         }
@@ -698,6 +711,8 @@ extension WorkTimerStore {
     /// (`ShopCharacterRow.isPurchasable` 과 같은 규칙 — 목록에 아직 없는 id 도 금 · 무지개면 참).
     nonisolated static func isGachaOnly(_ id: String, rows: [ShopCharacterRow]) -> Bool {
         if CharacterCatalog.isGachaOnlyBuiltIn(id) { return true }
+        // 미션 보상(v0.3.81 개발 아잉이)은 서버가 `gacha_only = true` 를 실어도 뽑기 전용이 아니다(`ShopCharacterRow.isGachaOnly`).
+        if CharacterCatalog.isMissionRewardBuiltIn(id) { return false }
         // 케이크(v0.3.66 생일 선물 전용)는 서버가 `gacha_only = true` 를 함께 실어도 뽑기 전용이 아니다(`ShopCharacterRow.isGachaOnly`).
         if CharacterCatalog.isGiftOnlyBuiltIn(id) { return false }
         return rows.first { $0.id == id }?.isGachaOnly == true
@@ -719,6 +734,7 @@ extension WorkTimerStore {
         switch shopSelection {
         case .character(let id): return shopPrice(of: id)
         case .ultra: return ultraPrice
+        case .omokSkin(let skin): return omokSkinPrice(skin)
         case nil: return nil
         }
     }
@@ -738,7 +754,13 @@ extension WorkTimerStore {
         // 값 확인보다 **먼저** 본다 — 그 캐릭터는 값이 없어(`shopPrice` nil) 아래 갈래가 상점을 다시 읽고 조용히 끝난다.
         if case .character(let id) = selection, Self.isGachaOnly(id, rows: shopCharacters) {
             shopSelection = nil
-            shopNotice = GachaText.gachaOnlyHint
+            shopNotice = GachaText.acquireHint(for: id)
+            return
+        }
+        // 미션 보상(v0.3.81 개발 아잉이)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
+        if case .character(let id) = selection, CharacterCatalog.isMissionRewardBuiltIn(id) {
+            shopSelection = nil
+            shopNotice = DevAingMission.lockedHint
             return
         }
         // 선물 전용(v0.3.66 생일 · v0.3.74 술 한잔)도 여기까지 와도 사지 않는다(서버도 `not_for_sale` 로 거절한다).
@@ -763,6 +785,7 @@ extension WorkTimerStore {
         switch selection {
         case .character(let id): buyCharacter(id)
         case .ultra: buyUltra(count: 1)
+        case .omokSkin(let skin): buyOmokSkin(skin)
         }
     }
 
@@ -798,7 +821,7 @@ extension WorkTimerStore {
                 case "not_for_sale":
                     // 황금·무지개 아잉이(v0.3.54 · v0.3.59)는 루비로 안 판다 — 루비는 안 깎였다. "구매 실패"로 뭉개면 다시 눌러 보게 된다.
                     // 케이크 아잉이(v0.3.66) · 이슬 아잉이(v0.3.74)도 같은 갈래로 거절되지만 얻는 길이 다르다(그 선물 종류).
-                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? Self.giftCopy(for: id).lockedHint : GachaText.gachaOnlyHint
+                    self.shopNotice = Self.isGiftOnly(id, rows: self.shopCharacters) ? Self.giftCopy(for: id).lockedHint : GachaText.acquireHint(for: id)
                 case "needs_update":
                     // 서버는 "이 앱은 그 캐릭터를 아직 못 산다"고 거절했고 **루비는 안 깎였다**.
                     // `default:` 의 "구매 실패" 로 떨어지면 사용자는 돈이 빠졌는지, 다시 눌러야 하는지 알 수 없다.

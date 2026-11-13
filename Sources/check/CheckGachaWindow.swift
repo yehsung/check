@@ -140,8 +140,15 @@ struct CheckGachaWindowView: View {
 
     @MainActor private static var portraitCache: [String: CGImage] = [:]
 
+    /// 이 캐릭터의 결과 초상 캐시를 버린다 — 그림 저장소(`IsulArt` · `PeperoArt`)가 새 초상을 받았을 때 부른다(v0.3.77).
+    @MainActor static func forgetPortrait(characterID: String) {
+        portraitCache[characterID] = nil
+    }
+
     /// 결과 초상(192px 중립 초상 — 시안 앱이 쓴 그 그림). 기계는 공개 중 매 프레임 이 문을 부르므로 id 마다 한 번만 푼다.
     @MainActor static func portrait(_ id: String) -> Image {
+        IsulArtRevision.observe(characterID: id)
+        PeperoArtRevision.observe(characterID: id)
         if let hit = portraitCache[id] { return Image(decorative: hit, scale: 1) }
         guard let cg = CheckMascotAssets.image(for: .neutral, characterID: id)?
             .cgImage(forProposedRect: nil, context: nil, hints: nil) else { return Image(systemName: "questionmark") }
@@ -308,6 +315,15 @@ struct GachaWindowPalette {
         case .cakeStrawberry, .cakeChoco: return nil
         // 이슬(v0.3.74)도 희귀가 아니다 — 술 한잔 선물 전용(`Finish.isRare` 거짓).
         case .isul: return nil
+        // 빼빼로(v0.3.77)도 희귀가 아니다 — 빼빼로 데이 선물 전용(`Finish.isRare` 거짓).
+        case .pepero: return nil
+        // 흑우(v0.3.78)도 희귀 강조를 안 쓴다 — 조각 교환 전용(확률표에 안 선다 · `Finish.isRare` 거짓).
+        case .hwoo: return nil
+        // 루비 아잉이(v0.3.78)는 보통 상점 캐릭터라 희귀 강조를 안 쓴다(`Finish.isRare` 거짓).
+        case .ruby: return nil
+        case .dev: return nil
+        // 부산 갈매기 아잉이(지역 아잉이 — 센터 선물 전용)도 희귀가 아니다(`Finish.isRare` 거짓).
+        case .busan, .seoul: return nil
         }
     }
 

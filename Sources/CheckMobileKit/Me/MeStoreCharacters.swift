@@ -152,10 +152,33 @@ extension MeStore {
         equippedLoaded && equippedCharacterID == id
     }
 
+    /// 미션 보상으로만 얻는 캐릭터인가(개발에 찌든 아잉이 — 누적 근무 100시간, 맥 0.3.81 · 폰 1.0.18). 서버는 이 행을 `gacha_only` 로 싣지만
+    /// 뽑기에서도 교환에서도 안 나온다 — 잠긴 칸 "미션 보상"(맥 `.missionLocked` 와 같은 글자 · `DevAingMission`).
+    package func isMissionLocked(_ id: String) -> Bool {
+        CharacterCatalog.isDevAing(id)
+    }
+
+    /// 조각 교환으로만 얻는 캐릭터인가(흑우 아잉이 — 맥 0.3.78 · 폰 1.0.18). 뽑기 전용 줄에 서되 얻는 길은 "조각 교환 전용".
+    package func isShardOnly(_ id: String) -> Bool {
+        CharacterCatalog.isShardOnlyBuiltIn(id)
+    }
+
     /// 생일 선물로만 얻는 캐릭터인가(케이크 아잉이 둘 — **내장 id 는 표식과 무관하게 언제나**, 그 밖은 서버 `gift_only` 표식).
     /// 판정은 코어 한 곳(`CharacterCatalog.isGiftOnlyBuiltIn` · `ShopCharacterRow.isGiftOnly`)에서 가져온다.
     package func isGiftOnly(_ id: String) -> Bool {
         CharacterCatalog.isGiftOnlyBuiltIn(id) || shopCharacters.first { $0.id == id }?.isGiftOnly == true
+    }
+
+    /// 선물 전용 캐릭터를 주는 선물 종류 — 내장 id 면 그 종류(케이크 → 생일 · 이슬 → 술 한잔), 서버 표식으로만 선물 전용인 모르는 id 는
+    /// 생일(0.3.66 선례 — 그때는 선물이 생일뿐이었다). 맥 `WorkTimerStore.giftCopy(for:)` 와 같은 규칙. 잠긴 칸 캡션 · 안내 · 접근성 글이
+    /// 이 한 곳을 묻는다(이슬 칸에 '생일 선물 전용'이 서지 않게).
+    package func giftKind(of id: String) -> CharacterGiftKind {
+        CharacterCatalog.giftKind(ofBuiltIn: id) ?? .birthday
+    }
+
+    /// 그 선물 종류의 문구 묶음(`CakeGiftText` · `DrinkGiftText`).
+    package func giftCopy(for id: String) -> CharacterGiftCopy {
+        giftKind(of: id).copy
     }
 
     package func isOwned(_ id: String) -> Bool {
@@ -200,12 +223,19 @@ extension MeStore {
             shopNotice = MeText.alreadyOwned
             return
         }
-        // 생일 선물 전용(케이크 아잉이)은 사는 줄도 뽑는 줄도 아니다 — 고르지 않고 얻는 길을 말한다(잠긴 칸 안내).
+        // 선물 전용(케이크 · 이슬 아잉이)은 사는 줄도 뽑는 줄도 아니다 — 고르지 않고 얻는 길을 말한다(잠긴 칸 안내 — 그 선물 종류의 글).
         // 아래 막대는 이 칸의 이름과 안내만 세우고 사기 단추를 세우지 않는다(`shopGiftHintID` — 흐린 '사기'가 남지 않게).
         // 다시 눌러도 풀지 않는다(살 것을 고른 것이 아니라 안내를 연 것이다 — 화면 onAppear 가 두 번 불러도 같다).
         if isGiftOnly(id) {
             shopSelection = nil
-            shopNotice = CakeGiftText.lockedHint
+            shopNotice = giftCopy(for: id).lockedHint
+            shopGiftHintID = id
+            return
+        }
+        // 미션 보상(개발에 찌든 아잉이)도 사는 줄 · 뽑는 줄이 아니다 — 선물 칸과 같은 막대(이름 + 얻는 길 · 사기 단추 없음).
+        if isMissionLocked(id) {
+            shopSelection = nil
+            shopNotice = DevAingMission.lockedHint
             shopGiftHintID = id
             return
         }
@@ -235,7 +265,7 @@ extension MeStore {
     package var shopBarDetail: String? {
         if let shopNotice { return shopNotice }
         if let id = shopGachaHintID {
-            return MeText.gachaOnlyNotice(MeCharacterCards.displayName(for: id), shardCost: gachaShardCost(of: id))
+            return MeText.acquireNotice(id: id, shardCost: gachaShardCost(of: id))
         }
         guard shopSelection != nil, let price = shopSelectionPrice, let have = rubyBalance, have < price else { return nil }
         return CheckCoreShared.shortfallNotice(need: price, have: have)
@@ -303,13 +333,15 @@ extension MeStore {
         guard savingCharacterID == nil, context.session.isSignedIn else { return }
         guard isUnlocked(id) else {
             // 뽑기 전용(황금 · 무지개 아잉이)에게 "상점에서 살 수 있어요"는 거짓이다 — 얻는 길을 그대로 말한다.
-            // 생일 선물 전용(케이크)에게는 둘 다 거짓이다 — 잠긴 칸 안내 그대로.
+            // 선물 전용(케이크 · 이슬)에게는 둘 다 거짓이다 — 그 선물 종류의 잠긴 칸 안내 그대로.
             let name = MeCharacterCards.displayName(for: id)
-            if isGiftOnly(id) {
-                characterNotice = CakeGiftText.lockedHint
+            if isMissionLocked(id) {
+                characterNotice = DevAingMission.lockedHint
+            } else if isGiftOnly(id) {
+                characterNotice = giftCopy(for: id).lockedHint
             } else {
                 characterNotice = isGachaOnly(id)
-                    ? MeText.lockedGachaCharacter(name, shardCost: gachaShardCost(of: id))
+                    ? MeText.lockedAcquireCharacter(id: id, shardCost: gachaShardCost(of: id))
                     : MeText.lockedCharacter(name)
             }
             isCharacterNoticeError = false
@@ -345,7 +377,7 @@ extension MeStore {
                 case "not_owned":
                     // 다른 기기에서 환불·운영자 정리 등으로 소유가 사라졌다 — 상점 상태를 다시 읽어 화면을 사실에 맞춘다.
                     self.ownedCharacterIDs.remove(id)
-                    self.characterNotice = self.isGiftOnly(id) ? CakeGiftText.lockedHint
+                    self.characterNotice = self.isGiftOnly(id) ? self.giftCopy(for: id).lockedHint
                         : (self.isGachaOnly(id) ? MeText.gachaCharacterNotOwned : MeText.characterNotOwned)
                     self.isCharacterNoticeError = true
                     needsReread = !self.equippedLoaded
@@ -374,12 +406,15 @@ extension MeStore {
         guard context.session.isSignedIn else { return }
         if !shopState.isLoading { launch { [weak self] in await self?.loadShop() } }
         launch { [weak self] in await self?.loadEquippedCharacter() }
+        // 상점이 뜰 때마다 오목알 상태도 다시 읽는다(다른 기기에서 산 · 낀 것을 따라온다).
+        if !omokSkinsLoading { launch { [weak self] in await self?.loadOmokSkins() } }
     }
 
     package func shopDidDisappear() {
         shopNotice = nil
         shopGachaHintID = nil
         shopGiftHintID = nil
+        omokSkinNotice = nil
         if purchasingID == nil { shopSelection = nil }
         gachaDidDisappear()
     }

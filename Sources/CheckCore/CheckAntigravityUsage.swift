@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(SQLite3)
 import SQLite3
+#endif
 
 // MARK: - v0.3.12: 안티그래비티 CLI(agy) 토큰 사용량 — 파서 + 증분 스캐너
 //
@@ -366,7 +368,12 @@ package enum AntigravityConversationReader {
     private static func fence(_ path: String) -> Fence? {
         var st = stat()
         guard path.withCString({ stat($0, &st) }) == 0 else { return nil }
+        #if os(Linux)
+        // 리눅스 스캐너(aing-scan): glibc 의 stat 은 수정 시각 칸 이름이 st_mtim 이다.
+        return Fence(size: Int64(st.st_size), seconds: Int(st.st_mtim.tv_sec), nanoseconds: Int(st.st_mtim.tv_nsec))
+        #else
         return Fence(size: Int64(st.st_size), seconds: st.st_mtimespec.tv_sec, nanoseconds: st.st_mtimespec.tv_nsec)
+        #endif
     }
 
     /// sqlite URI 파일명에서 그대로 둬도 되는 문자 — **ASCII 비예약 문자 + `/`** 뿐이다.
@@ -406,6 +413,7 @@ package enum AntigravityConversationReader {
         path: String, afterIdx: Int, limit: Int = maxRowsPerScan,
         duringImmutableRead: (() -> Void)? = nil
     ) -> ReadResult {
+        #if canImport(SQLite3)
         let direct = attempt(path: path, afterIdx: afterIdx, limit: limit, immutable: false)
         // 성공했거나, 사이드카와 무관한 이유(표 없음·잠금·손상)로 실패했으면 2단은 답이 아니다.
         // 특히 `.queryFailed`(= 표가 없는 남의 db)에서 immutable 로 다시 여는 것은 같은 실패를 두 번 하는 낭비다.
@@ -429,8 +437,15 @@ package enum AntigravityConversationReader {
             return out
         }
         return fallback.result
+        #else
+        // 리눅스 스캐너(aing-scan): 시스템 sqlite 모듈이 없다 — 안티그래비티는 맥에서만 센다(리눅스는 다음 판).
+        var out = ReadResult()
+        out.outcome = .openFailed
+        return out
+        #endif
     }
 
+    #if canImport(SQLite3)
     /// 1단(`SQLITE_OPEN_READONLY`)의 실패 원인 코드가 **사이드카를 다룰 권한이 없어서** 생긴 것인가 — 그렇다면 2단(immutable)이 답이다.
     ///
     ///  · `SQLITE_CANTOPEN`(14) — 위 표의 (i)·(ii): 사이드카가 없거나 디렉터리에 `-shm` 을 만들 수 없다. 원래의 유일한 갈래.
@@ -510,6 +525,7 @@ package enum AntigravityConversationReader {
         out.truncated = seen >= cap
         return (out, SQLITE_OK)
     }
+    #endif
 }
 
 // MARK: - 파일별 증분 상태

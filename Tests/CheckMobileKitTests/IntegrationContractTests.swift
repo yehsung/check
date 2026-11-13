@@ -131,6 +131,11 @@ import Testing
         "games/rummy/room/guest", "games/rummy/room/tab-exit", "games/rummy/room/guest/tab-exit", "games/rummy/lobby/empty", "games/rummy/lobby/failed", "games/rummy/lobby/short",
         "games/rummy/lobby/update", "games/rummy/lobby/missing", "games/rummy/lobby/people", "games/rummy/lobby/busy",
         "games/rummy/lobby/sheet", "games/rummy/ranking/failed",
+        // 아잉 뒤집기(1.0.17 — 라우트 표는 `MobileDemoReversiRoute` 머리말, 픽스처 계약은 `GamesReversiDemoTests`).
+        "games/reversi/lobby", "games/reversi/lobby/invites", "games/reversi/ranking", "games/reversi/rules",
+        "games/reversi/match/playing", "games/reversi/match/warned", "games/reversi/match/won", "games/reversi/match/draw",
+        "games/reversi/match/lost", "games/reversi/watch", "games/reversi/watch/over",
+        "games/reversi/ai", "games/reversi/ai/white", "games/reversi/ai/invite",
         // 나 탭 기록 없는 계정(w15 E): 라우트는 `me` 와 같게 열리고(끝 `/` 는 버려진다) 장면만 `_me-`.
         "me/",
         // 상점 뽑기 시트(폰 1.0.10 색 시안): 라우트는 `me/shop` 으로 열리고 장면도 `_me-shop` 이다 —
@@ -164,8 +169,10 @@ import Testing
             let tetrisHasNoRouteYet = route?.hasPrefix("games/tetris/") == true
             // 아잉 큐브도 같은 갈래다(`AingRoute` 에 가지가 없고 앱 모델의 데모 갈래가 연다). 아래 ★ 단언이 스스로 만료시킨다.
             let rummyHasNoRouteYet = route?.hasPrefix("games/rummy/") == true
+            // 아잉 뒤집기도 같은 갈래다(`AingRoute` 에 가지가 없고 앱 모델의 데모 갈래가 연다). 아래 ★ 단언이 스스로 만료시킨다.
+            let reversiHasNoRouteYet = route?.hasPrefix("games/reversi/") == true
             if let route, !["login", "update", "now/teamless"].contains(route), !chessHasNoRouteYet,
-               !tetrisHasNoRouteYet, !rummyHasNoRouteYet, MobileAuthRoute.demo(route) == nil {
+               !tetrisHasNoRouteYet, !rummyHasNoRouteYet, !reversiHasNoRouteYet, MobileAuthRoute.demo(route) == nil {
                 #expect(AingRoute(path: route) != nil, "장면 _\(scene) 의 라우트 \(route) 를 앱이 열지 못한다")
             }
         }
@@ -178,6 +185,8 @@ import Testing
                 "1:1 테트리스 라우트가 생겼다 — 위 games/tetris 예외 갈래를 지워라")
         #expect(AingRoute(path: "games/rummy/lobby") == nil,
                 "아잉 큐브 라우트가 생겼다 — 위 games/rummy 예외 갈래를 지워라")
+        #expect(AingRoute(path: "games/reversi/lobby") == nil,
+                "아잉 뒤집기 라우트가 생겼다 — 위 games/reversi 예외 갈래를 지워라")
         // ★ 그리고 **`games/tetris` 한 토막은 여전히 솔로 미니게임이어야 한다.** 1:1 쪽이 이 글자를 가로채는 날
         // (데모 갈래가 `AingRoute` 보다 앞이므로 가로채는 것은 한 줄이다) 솔로 테트리스 데모 라우트가 조용히 사라진다 —
         // 설계서 P1 의 "솔로는 한 글자도 건드리지 않는다" 를 동작으로 어기는 자리다.
@@ -216,6 +225,14 @@ import Testing
             "games/rummy/match/my-turn": ["rpc.rummy_lobby", "rpc.rummy_state", "rpc.rummy_heartbeat"],
             "games/rummy/match/edited": ["rpc.rummy_lobby", "rpc.rummy_state", "rpc.rummy_draft"],
             "games/rummy/result": ["rpc.rummy_lobby", "rpc.rummy_state"],
+            // 아잉 뒤집기. 보낸 신청 장면이 `rpc.reversi_state` 를 함께 요구한다 — 코어가 보낸 신청을 5초 폴링으로 한 번 읽고,
+            // 그 키가 404 면 `noteServerMissing()` 이 로비를 통째로 '곧 열려요'로 내린다. 관전 장면은 `rpc.reversi_watch_live`.
+            "games/reversi/lobby": ["rpc.reversi_lobby", "rpc.reversi_ranking"],
+            "games/reversi/lobby/invites": ["rpc.reversi_lobby", "rpc.reversi_state"],
+            "games/reversi/match/playing": ["rpc.reversi_lobby", "rpc.reversi_state"],
+            "games/reversi/match/won": ["rpc.reversi_lobby", "rpc.reversi_state"],
+            "games/reversi/watch": ["rpc.reversi_lobby", "rpc.reversi_watch_live", "rpc.reversi_ranking"],
+            "games/reversi/ai/invite": ["rpc.reversi_lobby"],
             "me": ["rpc.shop_state", "rest.work_sessions.get"],
             "me/shop": ["rpc.shop_state"],
             "me/feedback": ["rpc.feedback_list"],

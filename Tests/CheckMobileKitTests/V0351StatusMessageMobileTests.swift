@@ -255,7 +255,8 @@ import Testing
                 "대화 이름표에서 상태 줄이 사라졌다")
         let view = try #require(Self.block(conversation, after: "struct MessagesConversationView: View"))
         #expect(view.contains(".statuses[peerID]"), "대화 화면이 판에서 상대의 상태를 꺼내지 않는다 — 이름표는 늘 nil 을 받는다")
-        #expect(view.contains("MessagesConversationNameplate(header: header, presence: presence, statusMessage: statusMessage)"),
+        // 1.0.17: 같은 호출에 상대 집중(`isFocused:`)이 뒤따른다 — 그 배선은 `V1017FocusWiringContractTests` 가 잰다.
+        #expect(view.contains("MessagesConversationNameplate(header: header, presence: presence, statusMessage: statusMessage, isFocused: peerFocused)"),
                 "이름표에 상태를 안 넘긴다 — 기본값 nil 로 조용히 빈 줄이 된다")
     }
 

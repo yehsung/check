@@ -5,6 +5,7 @@ import CheckCore
 // MARK: - 말풍선 마크다운 그리기 (대표 요청 2026-11-03 ③④ · 범위는 대표 결정 "제목·굵게·링크만")
 //
 // 해석은 `ChatMarkdown`(CheckCore — 순수 함수)이 하고, 여기는 그 줄들을 **그릴 조각 목록 하나**(`pieces`)로 옮긴다.
+// 무엇을 그리는가(조각 · 꼬리표 · 복사 표시)는 코어 `ChatMarkdownPieces` 가 정하고(폰 말풍선과 한 벌), 여기는 맥 크기(pt)와 색을 입힌다.
 // 그 목록을 두 그리기가 같이 쓴다:
 //   · `nsAttributed` — **앱이 그리는 쪽**. 말풍선 본문은 고를 수 있는 AppKit 글자 뷰다(`ChatBubbleTextView` — 대표 결정
 //     "받은 말풍선도 드래그, 우클릭에 신고 유지"). AppKit 은 SwiftUI 의 `Font` 를 못 읽으므로 NSFont 로 따로 짓는다.
@@ -44,16 +45,10 @@ enum ChatMarkdownText {
 
     // MARK: 그릴 조각 — 두 그리기가 같이 옮겨 적는 목록
 
-    /// 말풍선이 그리는 조각 하나. 이어 붙이면 말풍선에 보이는 글자 전부다.
+    /// 말풍선이 그리는 조각 하나 — 코어 조각(`ChatMarkdownPiece` — 무엇을 그리는가)에 맥 크기(pt)를 입힌 것. 이어 붙이면 말풍선에 보이는 글자 전부다.
+    /// 무엇을 그리는가(글자 · 제목 · 굵게 · 링크 · 꼬리표)는 코어 `ChatMarkdownPieces.pieces` 한 곳이 정한다 — 폰 말풍선도 같은 목록을 그린다.
     struct Piece: Equatable {
-        enum Kind: Equatable {
-            /// 해석 조각(본문 · 굵게 · 링크).
-            case span
-            /// 줄 사이 "\n".
-            case lineBreak
-            /// `[글](주소)` 뒤에 붙이는 실제 호스트 " (호스트)" — 링크가 아니다(누르는 자리는 글 그대로다).
-            case disclosure
-        }
+        typealias Kind = ChatMarkdownPiece.Kind
 
         let kind: Kind
         let text: String
@@ -61,31 +56,25 @@ enum ChatMarkdownText {
         /// 굵게 그리는가. 제목 줄의 조각은 언제나 굵다.
         let isBold: Bool
         let link: URL?
+
+        /// 코어 조각 → 맥 조각. 줄 사이 "\n" 은 본문 크기다(코어가 `.paragraph` 로 준다).
+        init(_ core: ChatMarkdownPiece) {
+            kind = core.kind
+            text = core.text
+            size = ChatMarkdownText.fontSize(for: core.line)
+            isBold = core.isBold
+            link = core.link
+        }
     }
 
     /// 본문 → 그릴 조각들. **이모티콘 폴백은 부르는 쪽이 먼저 거친다**(`AingStickerText.preview` → 여기).
     static func pieces(_ body: String) -> [Piece] {
-        var out: [Piece] = []
-        for (index, line) in ChatMarkdown.parse(body).enumerated() {
-            if index > 0 { out.append(Piece(kind: .lineBreak, text: "\n", size: baseSize, isBold: false, link: nil)) }
-            let size = fontSize(for: line.kind)
-            let isHeading: Bool
-            if case .heading = line.kind { isHeading = true } else { isHeading = false }
-            // `[글](주소)` 는 글 뒤에 실제 호스트를 작게 붙인다(`ChatMarkdown.linkDisclosures` — 보이는 글과 여는 곳이 다른 링크).
-            let disclosures = ChatMarkdown.linkDisclosures(line)
-            for (spanIndex, span) in line.spans.enumerated() {
-                out.append(Piece(kind: .span, text: span.text, size: size, isBold: isHeading || span.isBold, link: span.link))
-                if let host = disclosures[spanIndex] {
-                    out.append(Piece(kind: .disclosure, text: " (\(host))", size: size, isBold: false, link: nil))
-                }
-            }
-        }
-        return out
+        ChatMarkdownPieces.pieces(body).map(Piece.init)
     }
 
-    /// 한 줄에 그리는 쪽이 **덧붙이는** 글자 수(호스트 꼬리표). 말풍선 높이 추정이 같은 글자로 세게 한다.
+    /// 한 줄에 그리는 쪽이 **덧붙이는** 글자 수(호스트 꼬리표). 말풍선 높이 추정이 같은 글자로 세게 한다(코어 `ChatMarkdownPieces.addedCharacters`).
     static func addedCharacters(_ line: ChatMarkdownLine) -> Int {
-        ChatMarkdown.linkDisclosures(line).values.reduce(0) { $0 + $1.count + 3 }
+        ChatMarkdownPieces.addedCharacters(line)
     }
 
     // MARK: SwiftUI — 렌더 시험·스냅샷 대체 경로
@@ -133,15 +122,15 @@ enum ChatMarkdownText {
         let palette = AppKitPalette(isMine: isMine)
         let paragraph = paragraphStyle
         let result = NSMutableAttributedString()
-        let pieces = pieces(body)
-        let copyLinks = copyLinks(pieces)
-        for (index, piece) in pieces.enumerated() {
+        let core = ChatMarkdownPieces.pieces(body)
+        let copyLinks = ChatMarkdownPieces.copyLinks(core)
+        for (index, piece) in core.map(Piece.init).enumerated() {
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: nsFont(size: piece.size, isBold: piece.isBold),
                 .foregroundColor: palette.text,
                 .paragraphStyle: paragraph,
             ]
-            // 복사 표시(그림에는 안 보인다) — 고른 글자를 담을 때 링크의 실제 주소를 되찾는 자리(`ChatBubbleTextView.copyText`).
+            // 복사 표시(그림에는 안 보인다) — 고른 글자를 담을 때 링크의 실제 주소를 되찾는 자리(코어 `ChatMarkdownCopy.text`).
             if let url = copyLinks[index] { attributes[copyLinkKey] = url }
             if piece.kind == .disclosure { attributes[disclosureKey] = true }
             switch piece.kind {
@@ -161,36 +150,10 @@ enum ChatMarkdownText {
         return result
     }
 
-    /// 고른 글자를 복사할 때 **실제 주소를 덧붙일 링크**의 표시(값: 그 주소). 글이 주소와 다른 링크의 글 조각과 그 뒤 꼬리표에 붙는다.
-    static let copyLinkKey = NSAttributedString.Key("check.chatBubble.copyLink")
-    /// 호스트 꼬리표 " (호스트)" 조각의 표시 — 복사할 때 이 글자 대신 실제 주소를 담는다.
-    static let disclosureKey = NSAttributedString.Key("check.chatBubble.disclosure")
-
-    /// 조각 위치 → 복사에 담을 실제 주소. 같은 주소로 이어진 링크 조각들이 한 링크이고(`ChatMarkdown.linkDisclosures` 와 같은 묶음),
-    /// 그 글이 주소 자체가 아니면(`[자료](https://a.example/doc)` · `[a.example](https://a.example/doc)`) 글 조각들과 바로 뒤 꼬리표에 표시한다.
-    /// 맨 주소 · `[https://a.com/](https://a.com)` 처럼 글이 곧 주소인 링크는 표시하지 않는다(보이는 글자가 이미 주소다).
-    static func copyLinks(_ pieces: [Piece]) -> [Int: URL] {
-        var result: [Int: URL] = [:]
-        var index = 0
-        while index < pieces.count {
-            guard pieces[index].kind == .span, let url = pieces[index].link else {
-                index += 1
-                continue
-            }
-            var end = index
-            var label = ""
-            while end < pieces.count, pieces[end].kind == .span, pieces[end].link == url {
-                label += pieces[end].text
-                end += 1
-            }
-            if ChatMarkdown.comparableAddress(label) != ChatMarkdown.comparableAddress(url.absoluteString) {
-                for spot in index..<end { result[spot] = url }
-                if end < pieces.count, pieces[end].kind == .disclosure { result[end] = url }
-            }
-            index = end
-        }
-        return result
-    }
+    /// 고른 글자를 복사할 때 **실제 주소를 덧붙일 링크**의 표시(값: 그 주소) — 코어 키 그대로다(폰 말풍선도 같은 키를 싣는다).
+    static let copyLinkKey = ChatMarkdownCopy.linkKey
+    /// 호스트 꼬리표 " (호스트)" 조각의 표시 — 복사할 때 이 글자 대신 실제 주소를 담는다(코어 키 그대로).
+    static let disclosureKey = ChatMarkdownCopy.disclosureKey
 
     /// AppKit 조각 글꼴. SwiftUI `Font.system(size:weight:)` 와 같은 시스템 글꼴이다.
     static func nsFont(size: CGFloat, isBold: Bool) -> NSFont {

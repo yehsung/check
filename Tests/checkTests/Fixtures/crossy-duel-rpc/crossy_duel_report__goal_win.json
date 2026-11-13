@@ -1,0 +1,57 @@
+{
+  "state": {
+    "accepted_at_ms": 1793979137536,
+    "checkpoint_ms": 3000,
+    "countdown_ms": 3000,
+    "end_at_ms": 1793979322536,
+    "end_reason": "goal",
+    "final": {
+      "me": 100,
+      "opponent": 37
+    },
+    "finished_at_ms": 1793979182539,
+    "frames": null,
+    "goal": 100,
+    "grace_end_ms": 1793979324536,
+    "heartbeat_ms": 3000,
+    "match_id": "2c541e9b-9a7e-4d45-8513-076d5752bf2a",
+    "max_duration_seconds": 180,
+    "me": {
+      "avatar_url": "https://example.invalid/b.png",
+      "character": null,
+      "deaths": 1,
+      "display_name": "라마바",
+      "goal_at_ms": 1793979182539,
+      "id": "73b739c3-b64d-4d30-9068-b358f413d542",
+      "last_seen_ms": 1793979182539,
+      "ready": true,
+      "score": 100,
+      "seq": 3
+    },
+    "my_device": "this",
+    "opponent": {
+      "avatar_url": null,
+      "character": "aing",
+      "deaths": 2,
+      "display_name": "가나다",
+      "goal_at_ms": null,
+      "id": "06294292-2330-4534-a668-2492b7976017",
+      "last_seen_ms": 1793979181537,
+      "ready": true,
+      "score": 37,
+      "seq": 2
+    },
+    "ready_deadline_ms": 1793979167536,
+    "report_ms": 1000,
+    "result": "opponent_win",
+    "ruby_balance": 105,
+    "seed": 1205686449,
+    "server_now_ms": 1793979182540,
+    "silence_ms": 15000,
+    "stake": 5,
+    "start_at_ms": 1793979142536,
+    "status": "finished",
+    "winner": "73b739c3-b64d-4d30-9068-b358f413d542"
+  },
+  "status": "ok"
+}

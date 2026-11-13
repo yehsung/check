@@ -1,0 +1,13 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": "aing",
+    "display_name": "가나다",
+    "id": "e81c4064-67bc-44c3-b0eb-99a98f7783c9"
+  },
+  "protocol": 1,
+  "server_now_ms": 1794260784940.871,
+  "state": null,
+  "status": "unsupported_client"
+}

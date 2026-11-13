@@ -109,12 +109,30 @@ private func avFetches(_ host: String) -> Int {
                 && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
                 // v0.3.74: 이슬(내장)도 같은 규칙 — 기준선은 소스 트리의 이슬 초상 파일이다(그림 갈래 전엔 없다 → 이니셜).
                 && (!CharacterCatalog.isIsulAing($0) || V0374IsulCoreTests.macIsulPortraitsInSourceTree)
+                // v0.3.77: 빼빼로(내장)도 같은 규칙 — 그림 갈래 전엔 초상이 없다 → 이니셜.
+                && (!CharacterCatalog.isPeperoAing($0) || V0377PeperoCoreTests.macPeperoPortraitsInSourceTree)
+                // v0.3.78: 흑우(내장)도 같은 규칙 — 기준선은 소스 트리의 흑우 초상(생성기 결과를 커밋한다).
+                && (!CharacterCatalog.isHwooAing($0) || V0378HwooCoreTests.macHwooPortraitsInSourceTree)
+                // v0.3.78: 루비(내장)도 같은 규칙 — 기준선은 소스 트리의 루비 초상(생성기 결과를 커밋한다).
+                && (!CharacterCatalog.isRubyAing($0) || V0378RubyCoreTests.macRubyPortraitsInSourceTree)
+                && (!CharacterCatalog.isDevAing($0) || V0381DevAingCoreTests.macDevPortraitsInSourceTree)
+                && (!CharacterCatalog.isBusanAing($0) || RegionAingCoreTests.macBusanPortraitsInSourceTree)
+                && (!CharacterCatalog.isSeoulAing($0) || RegionAingCoreTests.macSeoulPortraitsInSourceTree)
         }
         #expect(Set(AppUserAvatarArt.knownIDs) == Set(drawableCatalog), "번들 카탈로그에 초상 없는 캐릭터가 섞였다")
         #expect(directory.knownIDs == Set(AppUserAvatarArt.knownIDs))
         // v0.3.74: 이슬도 소스 트리에 초상이 있으면 하나 더(초상 조회가 그림 저장소 `IsulArt` 를 탄다 — 3D 갈래).
         let isulPortraits = V0374IsulCoreTests.macIsulPortraitsInSourceTree ? 1 : 0
+        // v0.3.77: 빼빼로도 소스 트리에 초상이 있으면 하나 더(그림 갈래 전엔 0).
+        let peperoPortraits = V0377PeperoCoreTests.macPeperoPortraitsInSourceTree ? 1 : 0
+        // v0.3.78: 흑우도 소스 트리에 초상이 있으면 하나 더.
+        let hwooPortraits = V0378HwooCoreTests.macHwooPortraitsInSourceTree ? 1 : 0
+        let rubyPortraits = V0378RubyCoreTests.macRubyPortraitsInSourceTree ? 1 : 0
+        let devPortraits = V0381DevAingCoreTests.macDevPortraitsInSourceTree ? 1 : 0
+        let busanPortraits = RegionAingCoreTests.macBusanPortraitsInSourceTree ? 1 : 0
+        let seoulPortraits = RegionAingCoreTests.macSeoulPortraitsInSourceTree ? 1 : 0
         #expect(AppUserAvatarArt.knownIDs.count == 7 + (goldPortraits ? 1 : 0) + (rainbowPortraits ? 1 : 0) + cakePortraits + isulPortraits
+                    + peperoPortraits + hwooPortraits + rubyPortraits + devPortraits + busanPortraits + seoulPortraits
                     && AppUserAvatarArt.knownIDs.contains("aing"),
                 Comment(rawValue: "아는 캐릭터 \(AppUserAvatarArt.knownIDs) · 금 초상 \(goldPortraits) · 무지개 초상 \(rainbowPortraits)"))
         // 로봇(2026-10-05)은 **폴더만 넣어** 들어온 일곱 번째다 — 카탈로그가 번들 폴더를 실제로 훑는다는 증거다.
@@ -429,7 +447,17 @@ private func avFetches(_ host: String) -> Int {
         // 2026-10-30: 확성기 배너 카드가 한 자리를 더했다(보낸 사람 얼굴). 31 + 7 + 1.
         // 아잉 뒤집기 창이 다섯 자리를 더했다(로비 상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청). 39 + 5 — 아래 `reversi` 필터가
         // 자리마다 그 사람 id 와 착용값을 되묻는다.
-        #expect(avatars.count == 44, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
+        // 아잉 마작 창이 다섯 자리를 더했다(로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리 · 판 결과 줄). 44 + 5 — 아래
+        // `mahjong` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다.
+        // 1:1 길건너 창이 여섯 자리를 더했다(로비 상대 줄 · 순위 행 · 받은 신청 · 경주 띠 나/상대 · 결과 카드 상대). 49 + 6 — 아래
+        // `crossyDuel` 필터가 자리마다 그 사람 id 와 착용값을 되묻는다(CD/SPEC.md §9.5 #23).
+        // 1:1 알까기 v2 로비가 다섯 자리를 더했다(상대 줄 · 순위 행 · 지금 대결 중 둘 · 받은 신청 — AlkkagiPanelLobby.swift,
+        // alkkagi/v2 SPEC §5.3). 55 + 5 — 판 · 결과 · 관전 카드는 공용 `BoardGamePlayerCard` 를 쓴다.
+        // 1:1 대기방 로비(여섯 게임 공용 부품)가 한 자리를 더했다(방 줄의 방장 얼굴 — DuelRoomsLobby.swift). 60 + 1 — 아래
+        // `duelRooms` 필터가 방장 id 와 착용값을 되묻는다(방 id 로 대신 그리면 남의 캐릭터가 선다).
+        // 지난 확성기 페이지(2026-11-11)가 한 자리를 더했다(줄마다 보낸 사람 얼굴 — CheckMegaphoneFeedPanel.swift). 61 + 1 — 아래
+        // `megaphoneFeed` 필터가 보낸 사람 id · 사진을 되묻는다(서버 줄에 착용값이 없어 캐릭터는 팝오버 루트의 표가 정한다).
+        #expect(avatars.count == 62, "CheckAvatarView( 호출 \(avatars.count)곳: \(avatars.map(\.file))")
         for call in avatars {
             #expect(call.text.contains("userID:"), "\(call.file): \(call.text) — 사용자 id 없이 그리면 그 자리만 이니셜로 남는다")
         }
@@ -511,6 +539,45 @@ private func avFetches(_ host: String) -> Int {
                     "ReversiPanelLobby.swift 에 \(id) · \(hint) 짝이 없다")
         }
 
+        // 아잉 마작 다섯 자리: 로비 사람 줄 · 순위 행 · 초대/공개 방 카드 방장 · 탁자 자리(나 = 내 얼굴) · 판 결과 줄. 49 만 올리면 한
+        // 자리가 남의 id 나 착용값 없이 그려도 초록이라, 자리마다 **그 사람의** id·착용값을 되묻는다.
+        let mahjong = avatars.filter { $0.file.hasPrefix("Mahjong") }
+        #expect(mahjong.count == 5, "\(mahjong.map(\.text))")
+        let mahjongIDs: [(String, String, String)] = [
+            ("MahjongPanelLobby.swift", "userID: user.id.uuidString.lowercased()", "characterHint: user.character"),
+            ("MahjongPanelLobby.swift", "userID: row.userId,", "characterHint: row.character"),
+            ("MahjongPanelLobby.swift", "userID: room.host?.id,", "characterHint: room.host?.character"),
+            ("MahjongPanelTable.swift", "userID: seat.user?.userId,", "characterHint: me?.characterID ?? seat.user?.character"),
+            ("MahjongPanelResult.swift", "userID: seat.user?.userId,", "characterHint: seat.user?.character"),
+        ]
+        for (file, id, hint) in mahjongIDs {
+            #expect(mahjong.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
+        }
+        // 1:1 길건너 여섯 자리 — 자리마다 그 사람 id 와 착용값(내 점은 내 얼굴 값)을 함께 넘긴다.
+        let crossyDuel = avatars.filter { $0.file.hasPrefix("CrossyDuel") }
+        #expect(crossyDuel.count == 6, "\(crossyDuel.map(\.text))")
+        let crossyDuelIDs: [(String, String, String)] = [
+            ("CrossyDuelPanelLobby.swift", "userID: user.id,", "characterHint: user.characterID"),
+            ("CrossyDuelPanelLobby.swift", "userID: entry.user.id,", "characterHint: entry.user.characterID"),
+            ("CrossyDuelPanelLobby.swift", "userID: invite.peer.id,", "characterHint: invite.peer.characterID"),
+            ("CrossyDuelPanelMatch.swift", "userID: myUserID,", "characterHint: me.characterID"),
+            ("CrossyDuelPanelMatch.swift", "userID: opponent.id,", "characterHint: opponent.characterID"),
+            ("CrossyDuelPanelMatch.swift", "userID: match.opponent.id,", "characterHint: match.opponent.characterID"),
+        ]
+        for (file, id, hint) in crossyDuelIDs {
+            #expect(crossyDuel.contains { $0.file == file && $0.text.contains(id) && $0.text.contains(hint) }, "\(file) 에 \(id) · \(hint) 짝이 없다")
+        }
+        // 1:1 대기방 한 자리: 방 줄의 방장 얼굴 — 방장 id · 방장 착용값(방 id 로 대신하지 않는다).
+        let duelRooms = avatars.filter { $0.file == "DuelRoomsLobby.swift" }
+        #expect(duelRooms.count == 1, "\(duelRooms.map(\.text))")
+        #expect(duelRooms.allSatisfy { $0.text.contains("userID: room.host?.userID,") && $0.text.contains("characterHint: room.host?.character")
+            && !$0.text.contains("room.id") }, "\(duelRooms.map(\.text))")
+        // 지난 확성기 한 자리: 줄의 보낸 사람 — 그 사람 id · 사진(서버 `sender_id` · `sender_avatar_url`. 착용값 칸은 서버에 없다).
+        let megaphoneFeed = avatars.filter { $0.file == "CheckMegaphoneFeedPanel.swift" }
+        #expect(megaphoneFeed.count == 1, "\(megaphoneFeed.map(\.text))")
+        #expect(megaphoneFeed.allSatisfy { $0.text.contains("userID: item.senderID,") && $0.text.contains("avatarURL: item.senderAvatarURL,") },
+                "\(megaphoneFeed.map(\.text))")
+
         // 내 프로필 편집(EditableAvatarView)도 같은 규칙 · 팀원 행은 그 팀원의 id 를 싣는다.
         let editable = try Self.calls(of: "EditableAvatarView")
         #expect(editable.count == 1 && editable.allSatisfy { $0.text.contains("userID: userID") }, "\(editable)")
@@ -556,10 +623,21 @@ private func avFetches(_ host: String) -> Int {
             let n = V0325TooltipTests.count(".appUserAvatarCharacters(from:", in: code)
             return n > 0 ? "\(name):\(n)" : nil
         }.sorted()
-        #expect(roots == ["CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
-                          "GomokuPanel.swift:1", "MiniGamePanel.swift:1", "ReversiPanel.swift:1", "RummyPanel.swift:1",
-                          "TetrisDuelPanel.swift:1"],
+        // 아잉 마작 창(MahjongPanel)이 열째 루트다(MJ/SPEC.md §4.6 #23 — 툴팁 레이어 짝은 V0325).
+        // 1:1 길건너 창(CrossyDuelPanel)이 열한째 루트다(CD/SPEC.md §9.5 #23).
+        // 1:1 알까기 창(AlkkagiOnlinePanel)이 열두째 루트다(alkkagi/v2 SPEC §5.1 — 툴팁 레이어 짝은 V0325).
+        #expect(roots == ["AlkkagiOnlinePanel.swift:1", "CheckMegaphoneBannerWindow.swift:1", "CheckMenuView.swift:1", "CheckSettingsView.swift:1", "ChessPanel.swift:1",
+                          "CrossyDuelPanel.swift:1", "GomokuPanel.swift:1", "MahjongPanel.swift:1", "MiniGamePanel.swift:1",
+                          "ReversiPanel.swift:1", "RummyPanel.swift:1", "TetrisDuelPanel.swift:1"],
                 "\(roots)")
+        // 1:1 길건너 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·경주 띠·신청의 남의 얼굴이 이니셜로 떨어진다).
+        #expect(sources["CrossyDuelPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckCrossyDuelWindow.swift"]?.contains("CrossyDuelPanel(store: crossyDuel, me: me, safety: safety)") == true)
+        // 1:1 알까기 창도 같은 짝 · 창이 패널을 safety 배선으로 담고 앱이 소유자를 safety 로 넘긴다(빠지면 로비 얼굴이 이니셜로 떨어진다).
+        #expect(sources["AlkkagiOnlinePanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
+        #expect(sources["CheckAlkkagiWindow.swift"]?.contains("AlkkagiOnlinePanel(store: onlineStore, safety: safety)") == true)
+        #expect(sources["CheckApp.swift"]?.contains("CheckAlkkagiWindowController.shared.configure(store: alkkagi, safety: store)") == true)
+        #expect(sources["CheckApp.swift"]?.contains("CheckCrossyDuelWindowController.shared.configure(store: store.crossyDuel, me:") == true)
         // 아잉 뒤집기 창도 같은 짝 · 창이 패널을 safety 배선으로 담는다(빠지면 로비·순위·신청의 남의 얼굴이 이니셜로 떨어진다).
         #expect(sources["ReversiPanel.swift"]?.contains(".checkTooltipLayer() .appUserAvatarCharacters(from: safety)") == true)
         #expect(sources["CheckReversiWindow.swift"]?.contains("ReversiPanel(store: reversi, me: me, safety: safety)") == true)

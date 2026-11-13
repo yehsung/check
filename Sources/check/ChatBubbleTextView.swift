@@ -18,7 +18,7 @@ import CheckCore
 //  · 우클릭 메뉴 — 받은 말풍선: [복사] · [이 메시지 신고하기], 내 말풍선: [복사]. [신고]는 받은 `onReport` 를 그대로 부른다
 //    (어느 말풍선에 서는지는 `MessageBubbleReportRule` 한 곳 — 대화 뷰가 거른 것만 들어온다).
 //  · [복사] — 고른 글자가 있으면 **고른 글자**, 없으면 말풍선 **원문**(`rawBody` — 마크다운 기호·이모티콘 토큰 그대로).
-//    고른 글자에 `[글](주소)` 링크가 걸치면 호스트 꼬리표 대신 **실제 주소**를 담는다(`copyText` — 2026-11-03 검토 P2).
+//    고른 글자에 `[글](주소)` 링크가 걸치면 호스트 꼬리표 대신 **실제 주소**를 담는다(코어 `ChatMarkdownCopy.text` — 2026-11-03 검토 P2).
 //    붙여넣기판에는 **서식 없는 글자만** 쓴다: 서식째 쓰면 내 말풍선의 흰 글자가 흰 문서에 붙어 안 보인다.
 //    ⌘C · [복사]뿐 아니라 끌어 놓기 · 서비스 메뉴(`writeSelection`)도 같다(검토 P2 — 그 길은 NSTextView 기본이 RTF 를 싣는다).
 //  · **말풍선 전체가 이 뷰다** — 여백(좌우 8 · 위아래 5)은 SwiftUI padding 이 아니라 글자 뷰 안쪽 여백(`textContainerInset`)이다.
@@ -100,46 +100,16 @@ final class ChatBubbleTextView: NSTextView {
 
     // MARK: 복사
 
-    /// 고른 자리의 복사 글자(여러 구간이면 줄바꿈으로 잇는다 — 링크는 실제 주소째, `copyText`). 아무것도 안 골랐으면 nil.
+    /// 고른 자리의 복사 글자(여러 구간이면 줄바꿈으로 잇는다). 아무것도 안 골랐으면 nil.
+    /// 보이는 글자 그대로이되 **`[글](주소)` 링크만 다르다**(2026-11-03 검토 P2) — 꼬리표 대신 실제 주소를 담는다.
+    /// 규칙은 코어 `ChatMarkdownCopy.text` 한 곳이다(폰 말풍선의 고른 글 복사도 같은 함수를 쓴다).
     var selectedText: String? {
         guard let storage = textStorage else { return nil }
-        let parts = selectedRanges.map(\.rangeValue)
-            .filter { $0.length > 0 && NSMaxRange($0) <= storage.length }
-            .map { Self.copyText(storage, range: $0) }
-        return parts.isEmpty ? nil : parts.joined(separator: "\n")
+        return ChatMarkdownCopy.text(storage, ranges: selectedRanges.map(\.rangeValue))
     }
 
-    /// 그린 글자의 한 구간 → 복사할 글자. 보이는 글자 그대로이되 **`[글](주소)` 링크만 다르다**(2026-11-03 검토 P2):
-    /// 보이는 것은 `글 (호스트)` 인데 그대로 담으면 실제 주소는 빠지고 보낸 사람이 치지 않은 꼬리표가 들어간다. 그래서
-    /// 글이 주소와 다른 링크(`ChatMarkdownText.copyLinkKey` 가 붙은 조각)는 고른 글 뒤에 ` (실제 주소)` 를 한 번 담고, 꼬리표 글자는
-    /// 그 자리로 갈음한다. 꼬리표만 골라도 주소를 담는다. 맨 주소(글 = 주소)는 보이는 그대로다.
-    static func copyText(_ text: NSAttributedString, range: NSRange) -> String {
-        let source = text.string as NSString
-        var out = ""
-        var pending: URL?
-        func flush() {
-            guard let url = pending else { return }
-            out += (out.isEmpty ? "" : " ") + "(\(url.absoluteString))"
-            pending = nil
-        }
-        text.enumerateAttributes(in: range) { attributes, run, _ in
-            let url = attributes[ChatMarkdownText.copyLinkKey] as? URL
-            if attributes[ChatMarkdownText.disclosureKey] != nil {
-                // 꼬리표 " (호스트)" — 글자 대신 실제 주소. 고른 것이 꼬리표에서 시작했으면 그 주소를 여기서 집는다.
-                if pending == nil { pending = url }
-                flush()
-                return
-            }
-            if pending != url { flush() }
-            out += source.substring(with: run)
-            if let url { pending = url }
-        }
-        flush()
-        return out
-    }
-
-    /// [복사]가 담을 글자 — 고른 글자가 있으면 그것, 없으면 원문.
-    var textToCopy: String { selectedText ?? rawBody }
+    /// [복사]가 담을 글자 — 고른 글자가 있으면 그것, 없으면 원문(코어 `ChatMarkdownCopy.menuText` — 폰 [복사]와 같은 규칙).
+    var textToCopy: String { ChatMarkdownCopy.menuText(selection: selectedText, raw: rawBody) }
 
     /// ⌘C · Edit 메뉴의 복사. **고른 글자만**, **서식 없이** 쓴다(파일 머리 주석). 고른 것이 없으면 아무것도 안 한다.
     override func copy(_ sender: Any?) {

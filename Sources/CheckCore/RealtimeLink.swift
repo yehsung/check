@@ -134,6 +134,15 @@ package enum RealtimeLinkConstants {
     /// '모르는 이름' 갈래로 떨어져 **수마다 `take_pokes` 가 한 번씩 더** 나가고 소켓은 판 상태를 한 번도 당기지 않는다.
     /// 옛 앱은 이 이름을 몰라 drain 으로 접는다 — 같은 계정의 옛 기기만 해당하고 서버는 수·상태가 바뀔 때만 울린다.
     package static let reversiBroadcastEvent = "reversi"
+    /// 아잉 마작(4인 리치 마작 — 내부 이름 mahjong) 신호의 브로드캐스트 이벤트 이름. 서버 판 파일의
+    /// `realtime.send(…, 'mahjong', poke_topic(…), true)` 와 **문자 그대로 같다**(MJ/SPEC.md §1). 아잉 뒤집기와 같은 까닭으로 따로 둔다 —
+    /// 없으면 버림마다 초인종이 '모르는 이름' 갈래로 떨어져 `take_pokes` 가 한 번씩 더 나가고 판 상태는 한 번도 당기지 않는다.
+    package static let mahjongBroadcastEvent = "mahjong"
+    /// 1:1 길건너(내부 이름 crossy_duel) 신호의 브로드캐스트 이벤트 이름. 서버 판 파일 `crossy_duel__ring` 의
+    /// `realtime.send(…, 'crossy_duel', poke_topic(…), true)` 와 **문자 그대로 같다**(CD/SPEC.md §1). 아잉 마작과 같은 까닭으로 따로 둔다 —
+    /// 없으면 신청·수락·시작·정산 초인종이 '모르는 이름' 갈래로 떨어져 `take_pokes` 가 한 번씩 더 나가고 판 상태는 한 번도 당기지 않는다.
+    package static let crossyDuelBroadcastEvent = "crossy_duel"
+    package static let alkkagiBroadcastEvent = "alkkagi"
     /// 확성기 배너 신호의 브로드캐스트 이벤트 이름(2026-10-30). 서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보내는
     /// `realtime.send({v:1, m:<megaphone_id>}, 'megaphone', poke_topic(…), true)` 와 **문자 그대로 같다**.
     /// payload 는 믿지 않고 "배너 목록(`megaphone_inbox`)을 다시 받아라"로만 쓴다. **take_pokes 로 보내지 않는다** — 확성기 줄의
@@ -225,6 +234,13 @@ package enum RealtimeEffect: Equatable, Sendable {
     /// 아잉 뒤집기 신호('reversi')를 받았다 → 아잉 뒤집기 상태 재조회 1회(직렬화는 `ReversiStore.handleSignal` 이 한다).
     /// **take_pokes 가 아니다** — 오목·체스·테트리스·아잉 큐브와 같은 사정이다. 폰은 판을 잇기 전까지 이 가지를 **비워 둔다**(drain 으로 안 떨어지게).
     case reversiSignal
+    /// 아잉 마작 신호('mahjong')를 받았다 → 아잉 마작 상태 재조회 1회(직렬화는 `MahjongStore.handleSignal` 이 한다).
+    /// **take_pokes 가 아니다** — 아잉 뒤집기와 같은 사정이다. 폰은 판을 잇기 전까지 이 가지를 **비워 둔다**(drain 으로 안 떨어지게).
+    case mahjongSignal
+    /// 1:1 길건너 신호('crossy_duel')를 받았다 → 1:1 길건너 상태 재조회 1회(직렬화는 `CrossyDuelStore.handleSignal` 이 한다).
+    /// **take_pokes 가 아니다** — 아잉 마작과 같은 사정이다. 폰은 판을 잇기 전까지 이 가지를 **비워 둔다**(drain 으로 안 떨어지게).
+    case crossyDuelSignal
+    case alkkagiSignal
     /// 읽음 신호('message_read')를 받았다 → 메시지 활동 새로고침(요약 + 대화 패널이 보이면 이력) 1회.
     /// **take_pokes 가 아니다**(v0.3.30) — 읽음은 소비할 행을 만들지 않는다.
     case messageReadSignal
@@ -526,6 +542,15 @@ package struct RealtimeLink: Equatable, Sendable {
             // 붙어 있어야 하는 소스 계약 V0327 · V0360). 이 줄이 없으면 확성기 신호가 아래 기본값으로 떨어져 배너는 안 뜨고
             // take_pokes 만 한 번 더 나간다.
             if event == RealtimeLinkConstants.megaphoneBroadcastEvent { return [.megaphoneSignal] }
+            // 알까기도 알림을 받으면 권한을 검사하는 RPC로 현재 상태를 다시 읽는다.
+            if event == RealtimeLinkConstants.alkkagiBroadcastEvent { return [.alkkagiSignal] }
+            // 1:1 길건너도 같은 까닭으로 아잉 마작 줄 **앞**에 선다(라우팅 줄만 마작 앞 — CD/SPEC.md §9.5 #3, 마작 계약의
+            // mahjong→reversi→rummy 연속 문장을 그대로 둔다). 이 줄이 없으면 신청·시작·정산 초인종이 아래 기본값으로 떨어져
+            // take_pokes 가 한 번씩 더 나가고 소켓은 1:1 길건너 상태를 한 번도 당기지 않는다.
+            if event == RealtimeLinkConstants.crossyDuelBroadcastEvent { return [.crossyDuelSignal] }
+            // 아잉 마작도 같은 까닭으로 아잉 뒤집기 줄 **앞**에 선다(라우팅 줄만 리버시 앞 — MJ/SPEC.md §4.6 #3). 이 줄이 없으면
+            // 버림마다 아래 기본값으로 떨어져 take_pokes 가 한 번씩 더 나가고 소켓은 아잉 마작 상태를 한 번도 당기지 않는다.
+            if event == RealtimeLinkConstants.mahjongBroadcastEvent { return [.mahjongSignal] }
             // 아잉 뒤집기도 같은 까닭으로 아잉 큐브 줄 **앞**에 선다 — 큐브·테트리스·오목·체스 네 줄과 drain 기본값이 한 문장으로
             // 붙어 있어야 하는 소스 계약(V0369RummyWiringTests)을 지키기 위해서다. 이 줄이 없으면 수마다 아래 기본값으로 떨어져
             // take_pokes 가 한 번씩 더 나가고 소켓은 아잉 뒤집기 상태를 한 번도 당기지 않는다.

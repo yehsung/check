@@ -1,0 +1,164 @@
+{
+  "__note": [
+    "결과 장면(무승부 · 환불). 닿는 길: games/reversi/match/draw. 정산 뒤 서버 사실: 루비 42 · 4승 2패 2무."
+  ],
+  "auto_abandon_streak": 3,
+  "invite_ttl_seconds": 60,
+  "matches": [
+    {
+      "a": {
+        "avatar_url": null,
+        "character": "ghost",
+        "display_name": "솜사탕",
+        "id": "d0000000-0000-4000-8000-0000000000b7"
+      },
+      "b": {
+        "avatar_url": null,
+        "character": "aing",
+        "display_name": "꿀떡",
+        "id": "d0000000-0000-4000-8000-0000000000b9"
+      },
+      "id": "d0000000-0000-4000-8000-0000000000e8",
+      "stake": 3,
+      "started_at_ms": 1789621439000,
+      "watchers": 0
+    },
+    {
+      "a": {
+        "avatar_url": null,
+        "character": null,
+        "display_name": "민트별",
+        "id": "d0000000-0000-4000-8000-0000000000b3"
+      },
+      "b": {
+        "avatar_url": null,
+        "character": "fox",
+        "display_name": "달토끼",
+        "id": "d0000000-0000-4000-8000-0000000000b6"
+      },
+      "id": "d0000000-0000-4000-8000-0000000000e6",
+      "stake": 10,
+      "started_at_ms": 1789621248000,
+      "watchers": 3
+    }
+  ],
+  "me": {
+    "active_match_id": null,
+    "draws": 2,
+    "incoming": [],
+    "losses": 2,
+    "outgoing": null,
+    "ruby_balance": 42,
+    "wins": 4
+  },
+  "server_now_ms": 1789621500000,
+  "stakes": [
+    3,
+    5,
+    10
+  ],
+  "status": "ok",
+  "turn_grace_seconds": 2,
+  "turn_seconds": 30,
+  "users": [
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b1",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": "aing",
+      "display_name": "꿀떡",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b9",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": "fox",
+      "display_name": "달토끼",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b6",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "seoul",
+      "character": null,
+      "display_name": "민트별",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b3",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "busan",
+      "character": "ghost",
+      "display_name": "솜사탕",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b7",
+      "in_match": true,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": null,
+      "character": "shiba",
+      "display_name": "호두과자",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b4",
+      "in_match": false,
+      "is_working": true
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": null,
+      "character": "robot",
+      "display_name": "모카빵",
+      "focus_mode": true,
+      "id": "d0000000-0000-4000-8000-0000000000b8",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": true,
+      "center": "busan",
+      "character": "ghost",
+      "display_name": "초코칩",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b2",
+      "in_match": false,
+      "is_working": false
+    },
+    {
+      "avatar_url": null,
+      "capable": false,
+      "center": "busan",
+      "character": "squirrel",
+      "display_name": "보리차",
+      "focus_mode": false,
+      "id": "d0000000-0000-4000-8000-0000000000b5",
+      "in_match": false,
+      "is_working": false
+    }
+  ]
+}

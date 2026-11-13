@@ -30,7 +30,41 @@ private let reRobotMigration = "20261005120000_character_roster_v3_robot.sql"
 /// 그 파일의 `update public.character_prices` 는 전부 `set gift_kind = …`(케이크 둘 = birthday · 프로브의 CHECK 이빨)이고, 새 행 aing_isul 은
 /// gacha_only(상점에서 안 판다)라 가입 지급 ≥ (뽑기 전용을 뺀) 최저가 부등식을 바꿀 수 없다 — 그래서 그 파일은 그 부등식을 다시 재지 않는다.
 /// 여기서는 그 대신 "update 가 gift_kind 만 쓴다 · insert 는 뽑기 전용 행뿐"을 잰다(가격을 쓰는 순간 빨갛다).
-private let reGiftKindOnlyLaterFiles: Set<String> = ["20261108122000_isul_aing_drink_gift.sql"]
+/// v0.3.77 빼빼로 아잉이(빼빼로 데이 선물 — 서버 초안 pepero-aing/server/20261108230000_pepero_aing_gift.sql)도 같은 결이다: 새 행 aing_pepero 는
+/// gacha_only · gift_only 이고, 가격표 update 는 §8 ⑫ 프로브의 **거절되는 시도** 둘뿐이다(`set gift_kind = 'beer'` · `set gift_only = false` —
+/// 각각 `begin … exception when check_violation` 안에서 CHECK 이빨이 막는지 잰다). 그래서 아래 규칙은 "set 이 gift_kind 하나" 말고도
+/// "CHECK 거절을 기대하는 프로브 안의 선물 칸(gift_kind · gift_only) 시도"를 받는다(`reIsRejectedGiftProbe`).
+/// ★ 키는 **번호를 뺀 이름**이다(`reMigrationStem`): 서버 파일은 적용 때 원격 마지막 적용분 바로 뒤 번호로 **이름만** 옮긴다(이슬 20261108120000 →
+///   20261108122000 선례) — 번호로 박으면 옮기는 순간 다시 빨갛다.
+private let reGiftKindOnlyLaterStems: Set<String> = ["isul_aing_drink_gift.sql", "pepero_aing_gift.sql"]
+
+/// v0.3.78: 이 파일 뒤에서 **새 캐릭터 행 하나만** 더하는 파일(번호를 뺀 이름 → 그 id). 가격표의 다른 행 값은 고치지 않는다.
+/// 흑우(조각 교환 전용 — `gacha_only = true`)는 파는 행이 아니라 최저가에 들지 않고, 루비(루비 1000 으로 파는 행)는 값이 최저가 이상이라
+/// 최저가를 내리지 못한다 — 둘 다 '가입 지급 ≥ 최저가'를 깰 수 없다. 그래서 이 둘은 '뽑기 전용 insert + 사후 단언' 대신
+/// update 0 · insert 한 행 · 그 id 가 등록과 같다 · 파는 행이면 값 ≥ 이 파일의 최저가 를 잰다(운영 적용 때 번호만 옮겨도 같은 등록을 탄다).
+private let reNewCharacterLaterStems: [String: [String]] = [
+    "aing_hwoo_shard_only.sql": ["aing_hwoo"],
+    "aing_ruby_shop.sql": ["aing_ruby"],
+    "aing_dev_mission.sql": ["aing_dev"],
+    // v0.3.85 지역 아잉이 — 센터 둘이라 행이 둘(둘 다 gacha_only · gift_only 'region' — 파는 행이 아니다).
+    "region_aing_gift.sql": ["aing_busan", "aing_seoul"],
+]
+
+/// 마이그레이션 이름에서 앞 번호(14자리 + `_`)를 뗀 꼬리.
+private func reMigrationStem(_ name: String) -> String {
+    guard let underscore = name.firstIndex(of: "_"), name[..<underscore].count == 14, name[..<underscore].allSatisfy(\.isNumber) else { return name }
+    return String(name[name.index(after: underscore)...])
+}
+
+/// 가격표 update 한 문장(`clause` = `update public.character_prices` 뒤 `;` 까지, `after` = 그 `;` 뒤 글)이 **CHECK 거절을 기대하는 프로브**인가 —
+/// 문장 바로 뒤가 `exception when check_violation` 이고(그 begin 블록의 유일한 문장 — 막히면 아무것도 안 쓴다) 쓰는 칸이 선물 칸(gift_kind · gift_only)뿐.
+private func reIsRejectedGiftProbe(clause: String, after: String) -> Bool {
+    guard after.drop { $0 == ";" || $0.isWhitespace }.hasPrefix("exception when check_violation") else { return false }
+    let set = clause.range(of: "set ").map { String(clause[$0.upperBound...]) } ?? ""
+    let assignment = set.components(separatedBy: " where ").first ?? set
+    let columns = assignment.components(separatedBy: ",").map { $0.components(separatedBy: "=").first?.trimmingCharacters(in: .whitespaces) ?? "" }
+    return !columns.isEmpty && columns.allSatisfy { ["gift_kind", "gift_only"].contains($0) }
+}
 
 private struct REError: Error, CustomStringConvertible {
     let description: String
@@ -353,11 +387,17 @@ struct V0351RubyEconomyMigrationTests {
         //   무지개는 루비로 안 판다(설계 확정 · 카탈로그 내장). 그래서 명단은 금을 꼭 품고, 그 밖에는 무지개만 허락한다.
         // v0.3.66: 케이크 둘(20261026120000_cake_aing_gift.sql)은 not_for_sale 갈래를 타려고 `gacha_only = true` 로 들어간다 — 생일 선물
         //   전용이라 루비로 안 판다(카탈로그 내장 · `isGiftOnlyBuiltIn`). 명단에 있어도 되고, 유료 명단에서는 언제나 빠진다.
+        // v0.3.78: 흑우 아잉이(20261109100000 — 조각 20개 교환 전용)도 `gacha_only = true` 로 들어간다(not_for_sale 갈래). 그 파일이
+        //   대기열에 들어온 뒤에도 이 명단이 빨개지지 않게 허락한다(루비로 안 판다 — 카탈로그 내장 · `isShardOnlyBuiltIn`).
         #expect(gachaOnly.contains("aing_gold")
-                && gachaOnly.isSubset(of: Set(["aing_gold", "aing_rainbow"] + CharacterCatalog.giftOnlyBuiltInIDs)),
-                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow, 케이크 둘)]")
+                && gachaOnly.isSubset(of: Set(["aing_gold", "aing_rainbow", CharacterCatalog.hwooAingID, CharacterCatalog.devAingID] + CharacterCatalog.giftOnlyBuiltInIDs)),
+                "뽑기 전용 명단을 \(gachaOnly.sorted()) 로 읽었다 — 기대 [aing_gold(, aing_rainbow, 케이크 둘, aing_hwoo)]")
+        // v0.3.78: 흑우(조각 교환 전용 — 루비로 안 판다)와 루비 아잉이(제 서버 파일 20261109110000 이 처음부터 1000 으로 넣는다 — 2배 표가
+        //   생긴 **뒤**의 캐릭터라 '옛 값의 2배'가 없다)는 이 2배 표의 대상이 아니다. 두 파일이 대기열 밖이어도 안이어도 같게 카탈로그로 뺀다.
         let paid = Set(CheckMascotAssets.catalog.allIDs.filter {
             $0 != CharacterCatalog.builtInAingID && !CharacterCatalog.isRainbowAing($0) && !CharacterCatalog.isGiftOnlyBuiltIn($0)
+                && !CharacterCatalog.isShardOnlyBuiltIn($0) && !CharacterCatalog.isRubyAing($0)
+                && !CharacterCatalog.isMissionRewardBuiltIn($0)
         }).subtracting(gachaOnly)
         #expect(Set(newPrices.keys) == paid, "가격을 고친 캐릭터 \(newPrices.keys.sorted()) ≠ 번들의 유료 캐릭터 \(paid.sorted())")
     }
@@ -377,17 +417,40 @@ struct V0351RubyEconomyMigrationTests {
             "insert into public.character_prices(character_id, price, min_protocol) values ('cat', 80, 2) on conflict (character_id) do nothing;")))
         #expect(reInsertsAreGachaOnly(try rePriceInserts(
             "insert into public.character_prices (character_id, price, min_protocol, gacha_only) values ('aing_gold', 1000, 2, true) on conflict (character_id) do nothing;")))
+        // 기준선: 프로브 판별식이 거절 프로브만 받는다(가격 칸 · 뒤에 거절 처리가 없는 문장 · 다른 예외는 받지 않는다).
+        #expect(reIsRejectedGiftProbe(clause: " set gift_only = false where character_id = 'aing_pepero'", after: ";\n    exception when check_violation then v_n := v_n + 1;"))
+        #expect(!reIsRejectedGiftProbe(clause: " set gift_only = false where character_id = 'aing_pepero'", after: ";\n    perform 1;"))
+        #expect(!reIsRejectedGiftProbe(clause: " set price = 1 where character_id = 'aing_pepero'", after: "; exception when check_violation then null;"))
+        #expect(!reIsRejectedGiftProbe(clause: " set gift_only = false, price = 1 where character_id = 'x'", after: "; exception when check_violation then null;"))
+        #expect(!reIsRejectedGiftProbe(clause: " set gift_only = false where character_id = 'x'", after: "; exception when unique_violation then null;"))
+        #expect(reMigrationStem("20261109010000_pepero_aing_gift.sql") == "pepero_aing_gift.sql" && reMigrationStem("x_pepero_aing_gift.sql") == "x_pepero_aing_gift.sql")
         for later in names[(mine + 1)...] {
             let sql = reStripSQL(try reRaw(later)).lowercased()
-            if reGiftKindOnlyLaterFiles.contains(later) {
+            if let ids = reNewCharacterLaterStems[reMigrationStem(later)] {
+                #expect(!sql.contains("update public.character_prices"), "\(later) 가 가격표 값을 다시 쓴다 — 새 캐릭터 행만 더해야 한다")
+                let rows = try rePriceInserts(sql).flatMap { insert in insert.rows.map { (insert.columns, $0) } }
+                #expect(rows.count == ids.count, "\(later) 의 가격표 insert 행이 \(rows.count)개다(기대 \(ids.count) — \(ids))")
+                for (columns, row) in rows {
+                    let value = { (name: String) -> String? in columns.firstIndex(of: name).flatMap { $0 < row.count ? row[$0] : nil } }
+                    #expect(ids.map { "'\($0)'" }.contains(value("character_id") ?? ""), "\(later) 가 \(ids) 아닌 행을 더한다: \(row)")
+                    if value("gacha_only") != "true" {
+                        let price = value("price").flatMap(Int.init) ?? -1
+                        #expect(price >= cheapest, "\(later) 의 파는 행 \(row) 값 \(price) 이 최저가 \(cheapest) 아래다 — 가입 지급 ≥ 최저가가 깨진다")
+                    }
+                }
+                continue
+            }
+            if reGiftKindOnlyLaterStems.contains(reMigrationStem(later)) {
                 // gift_kind 만 쓰는 파일: update 마다 set 바로 뒤가 gift_kind 하나여야 한다(쉼표로 다른 칸을 이어 쓰면 빨강).
+                // 예외는 CHECK 거절을 기대하는 프로브 안의 선물 칸 시도뿐(`reIsRejectedGiftProbe` — 막히면 아무것도 안 쓴다).
                 let updates = sql.components(separatedBy: "update public.character_prices").dropFirst()
                 #expect(!updates.isEmpty, "기준선: \(later) 에 가격표 update 가 없다 — 이 예외가 필요 없다")
                 for tail in updates {
                     let clause = String(tail.prefix { $0 != ";" })
+                    let after = String(tail.dropFirst(clause.count))
                     let set = clause.range(of: "set ").map { String(clause[$0.upperBound...]) } ?? ""
                     let assignment = set.components(separatedBy: " where ").first ?? set
-                    #expect(set.hasPrefix("gift_kind =") && !assignment.contains(","),
+                    #expect((set.hasPrefix("gift_kind =") && !assignment.contains(",")) || reIsRejectedGiftProbe(clause: clause, after: after),
                             "\(later) 가 가격표의 gift_kind 밖 칸을 쓴다: update public.character_prices\(clause.prefix(120))")
                 }
                 #expect(reInsertsAreGachaOnly(try rePriceInserts(sql)),

@@ -10,12 +10,17 @@
 //   swift -O scripts/make-isul-aing.swift --out <폴더>       같은 3장을 <폴더> 바로 아래에 쓴다(저장소는 안 건드린다 — 결정성 검사용).
 //   swift -O scripts/make-isul-aing.swift --preview <폴더>   산출물에 더해 앱 구도 3D 참고 렌더(정면 · 3/4 · 뒤 512², 눈가 4배 크롭 고침 전후,
 //                                                            초상 4배)를 <폴더>에 쓴다 — 저장소 밖에 둔다. --out 과 같이 쓸 수 있다.
+//   swift -O scripts/make-isul-aing.swift --label <글자> --out <폴더>
+//                                                            라벨 큰 글자만 바꾼 **대체 그림**(폰 1.0.17 대표 결정 #d_dk4IjWRZvFYR "그대로 + 대체 그림
+//                                                            미리 준비" — 심사 지침 5.2.1 로 반려되면 폰 사본만 바꿔 낸다). 모양 · 색 · 자리는 그대로다.
+//                                                            ★ 저장소(맥 그림)에 쓰지 않도록 --out 과 같이 쓴다(--label 만 주면 멈춘다).
+//                                                            --label 을 안 주면 지금 글자 그대로라 맥 산출물은 바이트까지 같다.
 //   오프스크린 SCNRenderer(Metal) · CoreGraphics · CoreText 만 쓴다 — 화면에 창을 띄우지 않고 네트워크를 쓰지 않는다.
 //   라벨 글꼴 '나눔손글씨 붓'(Nanum Brush Script, macOS 내려받기 글꼴)이 없으면 **멈춘다**(다른 글꼴로 바꾸지 않는다 — 바이트가 달라진다).
 //
 // 입력(저장소, 읽기만): Sources/check/Resources/aing.scn(메시 · UV · 512² 라벤더 디퓨즈) · aing_rainbow-shade.png(무지개 생성기 산출 —
 //   라벤더 밝기 맵, 케이크 · 이슬이 같이 쓴다) · aing-neutral.png · aing-negative.png(192² 아잉 초상)
-// 출력(전부 커밋, 폰 사본은 만들지 않는다 — 맥 먼저):
+// 출력(전부 커밋 — 폰 1.0.17 은 초상 두 장을 바이트 그대로 `Sources/CheckMobileShared/Resources/Portraits/` 에 복사해 쓴다):
 //   aing_isul-neutral.png    192×192 RGBA 초상(아잉 초상의 피부만 초록 유리 + 라벨로 재색 + 3D 병뚜껑 층, 후광 없음)
 //   aing_isul-negative.png   〃 (시무룩 — aing-negative.png 원본에서). 두 장은 같은 몸 배율 · 같은 몸 자리(상점 · 선택 창에 나란히 놓여도 맞는다).
 //   aing_isul-label.png      라벨 텍스처 폴백(1200×551, 프리멀티 아님 PNG). 가로 = 둘레각 θ ∈ [−labelHalfWidth, +labelHalfWidth](정면 0),
@@ -53,7 +58,7 @@
 //    `decorNodeName` 노드 **아래 전부**를 뺀다(케이크 isDecor 와 같은 자리). 만들기 비용은 --preview 의 [decor] 줄(프로세스당 한 번 만들어 clone).
 // 5) 프레이밍: 뚜껑 꼭대기(물체 좌표 y) `IsulCap.capTopY`. 앱 카메라가 이 높이 + 부유 0.07 까지 안 자르게 — --preview 의 [frame] 줄이
 //    지금 앱 카메라(몸만 보고 잡은 40°) 화면 위 여백을 프레임 높이 비율로 보여 준다(부유 0 · +0.07).
-// 6) 초상 파일 이름은 `<id>-<neutral|negative>.png`(금 · 무지개 · 케이크 규약). 폰 `AingCharacterArt.knownIDs` 에는 이번에 넣지 않는다.
+// 6) 초상 파일 이름은 `<id>-<neutral|negative>.png`(금 · 무지개 · 케이크 규약). 폰은 1.0.17 부터 `AingCharacterArt.knownIDs` 에 넣는다(사본 두 장).
 //
 // 이 스크립트는 앱 모듈을 링크하지 않는다. isGoldSkin · 합성 · 몸 좌표 상수를 여기 한 번 더 적는다 — 앱 쪽이 바뀌면 여기도 같이.
 
@@ -70,7 +75,7 @@ let characterID = "aing_isul"
 let expressions = ["neutral", "negative"]
 
 let labelFontFamily = "Nanum Brush Script"
-let labelText = "참이슬"
+var labelText = "참이슬"                             // 라벨 큰 글자 — `--label` 로만 바꾼다(대체 그림, 위 사용법)
 let labelSub = "아잉 에디션"
 let labelInk = SIMD3<Double>(0.04, 0.33, 0.17)      // 글자색(sRGB 0–1) — 시안 R '초록 글씨'
 let labelAccent = SIMD3<Double>(0.10, 0.56, 0.30)   // 위 두 줄 · 작은 글자
@@ -1104,14 +1109,19 @@ func writePreview(into dir: String, label: CGImage, portraits: [(String, CGImage
 var args = Array(CommandLine.arguments.dropFirst())
 while !args.isEmpty {
     let flag = args.removeFirst()
-    guard let value = args.first else { fail("사용: [--out <폴더>] [--preview <폴더>]") }
+    guard let value = args.first else { fail("사용: [--out <폴더>] [--preview <폴더>] [--label <글자>]") }
     args.removeFirst()
     switch flag {
     case "--out": outDir = value
     case "--preview": previewDir = value
+    case "--label":
+        guard !value.trimmingCharacters(in: .whitespaces).isEmpty else { fail("--label 글자가 비었다") }
+        labelText = value
     default: fail("모르는 인자: \(flag)")
     }
 }
+// 대체 그림은 저장소의 맥 그림을 덮지 않는다(맥은 고른 그림 그대로 — 대표 결정 #d_dk4IjWRZvFYR).
+if labelText != "참이슬", outDir == resourceDir { fail("--label 은 --out <저장소 밖 폴더> 와 같이 써라(맥 그림을 덮지 않는다)") }
 guard FileManager.default.fileExists(atPath: modelPath) else { fail("저장소 루트에서 실행하라(\(modelPath) 없음)") }
 _ = brushFont(size: 12)
 

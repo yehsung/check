@@ -462,6 +462,10 @@ func theHeaderFitsInThreeHundredFortyFour() throws {
     rows.append((MiniGameRummyEntryButton.title, try tmNaturalWidth(MiniGameRummyEntryButton {})))
     // 아잉 뒤집기 문은 받은 신청 점까지 단 가장 넓은 꼴로 잰다(점이 이름 자리를 밀어낸다).
     rows.append((MiniGameReversiEntryButton.title, try tmNaturalWidth(MiniGameReversiEntryButton(hasInvite: true) {})))
+    // 1:1 길건너 문(CD/SPEC.md §9.5 #23)도 받은 신청 점까지 단 꼴로 잰다.
+    rows.append((MiniGameCrossyDuelEntryButton.title, try tmNaturalWidth(MiniGameCrossyDuelEntryButton(hasInvite: true) {})))
+    // 1:1 알까기 문(alkkagi/v2 SPEC §6 #4 — 이름이 '알까기' → '1:1 알까기' 로 길어졌다)도 받은 신청 점까지 단 꼴로 잰다.
+    rows.append((MiniGameAlkkagiEntryButton.title, try tmNaturalWidth(MiniGameAlkkagiEntryButton(hasInvite: true) {})))
     for (title, width) in rows {
         print("[사이드바] \(title): \(String(format: "%.1f", width))pt / \(room)pt")
         #expect(width <= room, "사이드바 줄 '\(title)' 이 \(width)pt 라 \(room)pt 줄에서 이름이 잘린다")

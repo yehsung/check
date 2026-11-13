@@ -214,7 +214,10 @@ import Testing
         #expect(!tab.contains("RelativeTimeText("), "목록 시각은 대화와 같은 눈금(timeText)")
         #expect(conversation.contains("MobileTheme.bubbleIn") && !conversation.contains(".stroke(line.entry.isMine"), "받은 말풍선은 bubbleIn 칠 · 테두리 없음")
         #expect(!composer.contains("MobileTheme.surface.ignoresSafeArea"), "입력 막대에 흰 띠를 깔지 않는다(비평 04)")
-        #expect(conversation.contains("MessagesBubbleTextLayout.paragraphStyle()") && !conversation.contains("Text(text)"),
+        // 1.0.17: 말풍선 글은 서식 글 한 장(`MessagesBubbleMarkdown.attributed`)이고, 어절 줄바꿈 문단 스타일은 그 함수가 모든 글자에 싣는다.
+        let bubbleMarkdown = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesBubbleMarkdown.swift")
+        #expect(conversation.contains("MessagesBubbleMarkdown.attributed(") && bubbleMarkdown.contains("MessagesBubbleTextLayout.paragraphStyle()")
+                && !conversation.contains("Text(text)"),
                 "말풍선 본문은 TextKit 어절 줄바꿈(SwiftUI Text 는 음절에서 끊는다)")
         #expect(conversation.contains("UIPasteboard.general.string = body"), "복사는 원문 그대로(길게 눌러 메뉴 · 보이스오버 동작)")
         #expect(conversation.contains(".defaultScrollAnchor(.bottom, for: .alignment)"), "짧은 대화는 입력칸 쪽에 붙는다")

@@ -532,7 +532,7 @@ func 계정삭제는_진행_중_오목_판을_기권_정산한_뒤에_auth_users
 
 /// set null 이 허용되는 **칸**(파일 + 줄 앞머리로 못 박는다 — 파일 단위로 열어 주면 그 파일의 다른 FK 까지 통과한다).
 /// 둘 다 "작성자만 지우고 본문은 남긴다"(익명화)가 의도된 동작이고, 각 마이그레이션의 §0/§8 이 같은 예외를 카탈로그
-/// 단언에도 적어 둔다. 셋째를 더하려면 그 파일 머리말에 이유를 적고 여기에도 적어라.
+/// 단언에도 적어 둔다. 새 예외를 더하려면 그 파일 머리말에 이유를 적고 여기에도 적어라(셋째 큐브 · 넷째·다섯째 마작이 그렇게 들어왔다).
 private let deleteAccountSetNullExceptions: [(file: String, columnPrefix: String)] = [
     ("20260910120000_feedback_reports.sql", "user_id uuid references auth.users(id)"),
     ("20260918180000_blocks_and_reports.sql", "reporter uuid references auth.users(id)"),
@@ -540,6 +540,18 @@ private let deleteAccountSetNullExceptions: [(file: String, columnPrefix: String
     // 진행 중 판·모으는 방은 delete_my_account(§50.2)가 auth 삭제 **전에** 기권·cancelled 로 닫으므로 host 가 null 이 되는 것은
     // 끝난 판뿐이다.
     ("20261103120000_rummy.sql", "host uuid null references auth.users(id)"),
+    // 넷째·다섯째(2026-11-04 아잉 마작 판 파일 — 맥 0.3.76 과 함께 `supabase/migrations` 에 든다, 그 전엔 이 두 줄이 아무것도 열지 않는다):
+    // 방장(mahjong_matches.host)과 자리 사람(mahjong_seats.user_id). 계정을 지워도 판·자리 행(패·강·점수·끝난 판 결과 — 남은 사람의
+    // 전적·순위가 센다)을 남긴다. 진행 중 판은 delete_my_account 의 마작 조각이 auth 삭제 **전에** 그 자리를 자리 비움(account_deleted)으로
+    // 돌려 셋이 끝까지 두고, 모으는 방은 닫거나(방장) 빠진다. 그 파일 머리말의 'FK set null 두 칸' 줄이 같은 이유를 적는다.
+    // 멤버 표(mahjong_members.user_id)는 `not null … on delete cascade` 라 이 목록에 없다.
+    ("20261108221000_mahjong_table.sql", "host uuid references auth.users(id)"),
+    ("20261108221000_mahjong_table.sql", "user_id uuid references auth.users(id)"),
+    // 여섯째(2026-11-10 1:1 대기방 — 맥 0.3.83 과 함께 운영 16:51 적용): 방에 들어온 사람(duel_rooms.joiner). 방장(host)은
+    // `not null … on delete cascade` 라 방장이 계정을 지우면 방 행이 같이 사라진다. 들어온 사람이 계정을 지우면 '시작됨 + 판 id' 방 행은
+    // 남고 joiner 만 비운다(판 자체는 그 게임 표와 delete_my_account 의 게임 조각이 맡는다). 방 행은 매분 훑기가 7일 뒤 지운다.
+    // 그 파일은 운영 이력(md5 5e3e25d8)과 같아야 해서 머리말을 고치지 않고 이유를 여기 적는다.
+    ("20261112120000_duel_rooms.sql", "joiner uuid references auth.users(id)"),
 ]
 
 @Test
@@ -560,10 +572,11 @@ func 사용자_프로필_팀을_가리키는_FK_는_전부_cascade_이고_예외
             guard targets.contains(where: { lowered.contains($0) }) else { continue }
             seen += 1
             if lowered.contains("on delete cascade") { continue }
-            // set null 예외는 **셋뿐이다**: 제보함(feedback_reports.user_id)과 신고함(content_reports.reporter)은
+            // set null 예외는 **여섯뿐이다**: 제보함(feedback_reports.user_id)과 신고함(content_reports.reporter)은
             // "작성자만 지우고 본문은 남긴다"(익명화) — 두 마이그레이션의 §0/§8 이 그 예외를 카탈로그 단언의 예외 목록에도 적어 둔다.
             // 셋째 아잉 큐브 방장(rummy_matches.host)은 끝난 판의 결과·자리 행을 남기려고다(진행 중·모으는 방은 계정 삭제가 먼저 닫는다).
-            // 넷째를 더하려면 그 파일 머리말에 이유를 적고 여기에도 적어라.
+            // 넷째·다섯째 아잉 마작 방장·자리 사람(mahjong_matches.host · mahjong_seats.user_id)도 판·자리 행을 남기려고다(진행 중 판은
+            // 계정 삭제가 먼저 자리 비움으로 돌린다). 여섯째 1:1 대기방 참가자(duel_rooms.joiner)는 방 행을 남기려고다. 일곱째를 더하려면 그 파일 머리말에 이유를 적고 여기에도 적어라.
             if lowered.contains("on delete set null"),
                deleteAccountSetNullExceptions.contains(where: {
                    file.lastPathComponent == $0.file && squashWhitespace(lowered).hasPrefix($0.columnPrefix)

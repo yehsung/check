@@ -73,7 +73,7 @@ enum MiniGameWindowLayout {
     static let sidebarRowSpacing: CGFloat = 4
     /// 줄 왼쪽 아이콘 타일 한 변(옛 칩 아이콘은 caption2 ≈ 12pt 였다).
     static let sidebarIconSize: CGFloat = 30
-    /// 사이드바의 대결 문 수(오목 · 체스 · 테트리스 · 아잉 큐브 · 아잉 뒤집기) — 문 목록(`MiniGameDuelDoor`) 하나에서 온다.
+    /// 사이드바의 같이 하기 문 수 — 문 목록(`MiniGameDuelDoor`) 하나에서 온다.
     static var sidebarDuelRows: Int { MiniGameDuelDoor.allCases.count }
 
     /// 줄들만의 세로(머리 빼고).
@@ -474,7 +474,12 @@ enum MiniGameSpaceKey {
          CheckTetrisDuelWindowController.frameAutosaveName,
          CheckCakeGiftWindowController.frameAutosaveName,
          CheckRummyWindowController.frameAutosaveName,
-         CheckReversiWindowController.frameAutosaveName]
+         CheckReversiWindowController.frameAutosaveName,
+         CheckMahjongWindowController.frameAutosaveName,
+         // 1:1 길건너 창: 판이 방향키·WASD·스페이스로 뛰는 창이다. 빠지면 미니게임 창을 띄워 둔 채 이 창에서 뛸 때 미니게임 모니터가
+         // 키를 먼저 삼킨다(CD/SPEC.md §9.5 #17).
+         CheckCrossyDuelWindowController.frameAutosaveName,
+         CheckAlkkagiWindowController.frameAutosaveName]
     }
 
     /// 지금 걸려 있는 모니터가 부를 동작. 창 게이트(창 가시성)를 통과했을 때 실행되는 바로 그 클로저다 —
@@ -809,6 +814,9 @@ struct CheckMiniGameWindowView: View {
             onTetrisDuel: { store.openTetrisDuelFromMiniGame() },
             onRummy: { store.openRummyFromMiniGame() },
             onReversi: { store.openReversiFromMiniGame() },
+            onMahjong: { store.openMahjongFromMiniGame() },
+            onCrossyDuel: { store.openCrossyDuelFromMiniGame() },
+            onAlkkagi: { store.openAlkkagiFromMiniGame() },
             clipsOverflowInsteadOfScroll: clipsOverflowInsteadOfScroll
         )
     }
@@ -1530,14 +1538,21 @@ struct MiniGameDuelInvites: Equatable {
     var tetris = false
     var rummy = false
     var reversi = false
+    var mahjong = false
+    var crossyDuel = false
+    var alkkagi = false
 
     /// 새 문의 칸은 **맨 뒤**에 기본값과 함께 붙인다 — 기존 호출(`MiniGameDuelInvites(tetris: true)` 등)이 한 글자도 안 바뀐다.
-    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false) {
+    init(gomoku: Bool = false, chess: Bool = false, tetris: Bool = false, rummy: Bool = false, reversi: Bool = false,
+         mahjong: Bool = false, crossyDuel: Bool = false, alkkagi: Bool = false) {
         self.gomoku = gomoku
         self.chess = chess
         self.tetris = tetris
         self.rummy = rummy
         self.reversi = reversi
+        self.mahjong = mahjong
+        self.crossyDuel = crossyDuel
+        self.alkkagi = alkkagi
     }
 
     @MainActor
@@ -1547,7 +1562,10 @@ struct MiniGameDuelInvites: Equatable {
             chess: store.chess.visibleIncoming != nil,
             tetris: store.tetris.visibleIncoming != nil,
             rummy: store.rummy.hasIncomingInvite,
-            reversi: store.reversi.visibleIncoming != nil
+            reversi: store.reversi.visibleIncoming != nil,
+            mahjong: store.mahjong.hasIncomingInvite,
+            crossyDuel: store.crossyDuel.visibleIncoming != nil,
+            alkkagi: store.alkkagi.visibleIncoming != nil
         )
     }
 }
@@ -1560,6 +1578,9 @@ extension MiniGameDuelInvites {
         case .tetris: tetris
         case .rummy: rummy
         case .reversi: reversi
+        case .mahjong: mahjong
+        case .crossyDuel: crossyDuel
+        case .alkkagi: alkkagi
         }
     }
 
@@ -1679,6 +1700,11 @@ struct MiniGameSidebar: View {
     let onTetrisDuel: () -> Void
     let onRummy: () -> Void
     let onReversi: () -> Void
+    let onMahjong: () -> Void
+    /// 1:1 길건너 문(일곱째 — 기본값 없음: 호출부가 빠뜨리면 컴파일이 막는다).
+    let onCrossyDuel: () -> Void
+    /// 1:1 알까기 문(여덟째).
+    let onAlkkagi: () -> Void
     /// 스냅샷 전용: 같이 하기 칸을 ScrollView 대신 클립으로 그린다(ImageRenderer 는 ScrollView 안쪽을 못 그린다). 앱은 언제나 false.
     var clipsOverflowInsteadOfScroll: Bool = false
 
@@ -1708,6 +1734,9 @@ struct MiniGameSidebar: View {
                     MiniGameTetrisDuelEntryButton(hasInvite: invites.tetris) { onTetrisDuel() }
                     MiniGameRummyEntryButton(hasInvite: invites.rummy) { onRummy() }
                     MiniGameReversiEntryButton(hasInvite: invites.reversi) { onReversi() }
+                    MiniGameMahjongEntryButton(hasInvite: invites.mahjong) { onMahjong() }
+                    MiniGameCrossyDuelEntryButton(hasInvite: invites.crossyDuel) { onCrossyDuel() }
+                    MiniGameAlkkagiEntryButton(hasInvite: invites.alkkagi) { onAlkkagi() }
                 }
             }
             .disabled(!doorsOpen)
@@ -1931,6 +1960,21 @@ struct MiniGameReversiEntryButton: View {
 
     var body: some View {
         MiniGameSidebarRow(title: Self.title, icon: ReversiEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
+                           hasInvite: hasInvite, help: Self.help, action: action)
+    }
+}
+
+/// 사이드바의 [1:1 알까기] 문(여덟째). 이름·도움말 글자는 맥 문구 집 `AlkkagiText` 한 곳에서, 아이콘은 `AlkkagiEntryIcon` 한 출처에서
+/// 온다(뒤집기 문이 `ReversiText` · `ReversiEntryIcon` 을 쓰는 것과 같은 방식 — SPEC §6 #4). 렌더 테스트가 단독으로 그린다(internal).
+struct MiniGameAlkkagiEntryButton: View {
+    static let title = AlkkagiText.gameName
+    static let help = AlkkagiText.sidebarHelp
+
+    var hasInvite = false
+    let action: () -> Void
+
+    var body: some View {
+        MiniGameSidebarRow(title: Self.title, icon: AlkkagiEntryIcon.resolved, tint: CheckTheme.working, opensWindow: true,
                            hasInvite: hasInvite, help: Self.help, action: action)
     }
 }

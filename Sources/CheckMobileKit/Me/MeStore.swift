@@ -57,8 +57,24 @@ package final class MeStore {
     package internal(set) var centerLoadFailed = false
     package internal(set) var headerState = MeLoadState()
 
+    // MARK: 오목알 스킨(폰 1.0.18 — 맥 0.3.81 · 0.3.82 셋: 주사위 · 고양이 · 픽셀)
+    package internal(set) var omokSkins: OmokSkinsState?
+    /// 서버에 스킨 함수가 없다(옛 서버) — 상점 '오목알' 절을 감춘다.
+    package internal(set) var omokSkinsUnavailable = false
+    /// 떠 있는 스킨 쓰기("equip" 또는 사는 스킨 id). 떠 있는 동안 칸 탭은 요청을 안 보낸다.
+    package internal(set) var omokSkinBusy: String?
+    /// 오목알 절 아래 한 줄(샀어요 · 바꿨어요 · 모자라요 · 실패).
+    package internal(set) var omokSkinNotice: String?
+    @ObservationIgnored var omokSkinsLoading = false
+
     // MARK: 기록
     package internal(set) var heatmap: WorkRhythmHeatmap = .empty
+    /// 주별 근무 리듬(폰 1.0.18 — 맥 0.3.78 과 같은 결정 #d_V0mJ363LONEW): 서비스 첫 주 ~ 이번 주(마지막 원소가 이번 주). 비면 옛 '지난주' 칸.
+    package internal(set) var rhythmWeeks: WorkRhythmWeeks = .empty
+    /// 보고 있는 주(0 = 이번 주, 1 = 지난주 …). 내 기록을 다시 읽으면 범위 안으로 붙인다.
+    package internal(set) var rhythmWeekOffset = 0
+    /// 이번 주 칸에 1분마다 얹을 진행 중 근무의 시작(기록을 읽을 때 신선한 신호였던 것만 — `loadRecords` 의 `ongoingStart`).
+    package internal(set) var rhythmLiveStart: Date?
     package internal(set) var retro: WeeklyRetro?
     package internal(set) var dailyGrid: WorkDailyGrid = .empty
     package internal(set) var tokenGrid: TokenDailyGrid = .empty
@@ -94,8 +110,8 @@ package final class MeStore {
     /// 상점에서 마지막으로 누른 뽑기 전용 타일(황금 아잉이). 안내 줄(`shopBarDetail`)이 **읽을 때** 문장을 만든다 —
     /// 누를 때 만들어 두면 상점이 아직 안 읽힌 순간의 "뽑기로만"이 교환값(조각 20)을 안 뒤에도 남는다(시뮬레이터 실측).
     package internal(set) var shopGachaHintID: String?
-    /// 상점에서 마지막으로 누른 **생일 선물 전용** 잠긴 칸(케이크 아잉이 — v0.3.66). 고른 것(`shopSelection`)이 아니다 — 살 수 없다.
-    /// 아래 막대가 이 값으로 그 칸 이름과 얻는 길(`CakeGiftText.lockedHint`)만 말하고 사기 단추를 세우지 않는다.
+    /// 상점에서 마지막으로 누른 **선물 전용** 잠긴 칸(케이크 아잉이 — v0.3.66 · 이슬 아잉이 — 폰 1.0.17). 고른 것(`shopSelection`)이 아니다 — 살 수 없다.
+    /// 아래 막대가 이 값으로 그 칸 이름과 얻는 길(그 선물 종류의 `lockedHint` — `giftCopy(for:)`)만 말하고 사기 단추를 세우지 않는다.
     package internal(set) var shopGiftHintID: String?
     package internal(set) var purchasingID: String?
     /// 상점 RPC(`shop_state`·`buy_character`)에 싣는 능력 번호의 **재료**: 이 번들에 초상이 있는 캐릭터 id.
@@ -157,6 +173,8 @@ package final class MeStore {
     @ObservationIgnored package internal(set) var cakeGiftAutoShownIDs: Set<String> = []
     /// '다시 열기' 줄의 [고르기]가 서버에 다시 묻는 중(단추가 돈다 · 겹쳐 누르기 막기).
     package internal(set) var cakeGiftReopening = false
+    /// 결론 난 선물의 시트를 내렸다 — 화면에서 다 내려가면(`cakeGiftSheetDidDisappear`) 다음 선물을 묻는다(폰 1.0.17 · 번호 5 에서만).
+    @ObservationIgnored package internal(set) var cakeGiftFollowUpPending = false
 
     // MARK: 이번 주 근무 보상 (v0.3.55 · 폰 1.0.8(19) — MeStoreWeeklyWork.swift)
     /// 서버 `weekly_work_status()` 의 마지막 **그릴 만한** 응답(CheckCore 모델 — 맥과 한 벌). nil = 아직 모른다(못 읽었으면 지난 값을 둔다).
@@ -303,6 +321,8 @@ package final class MeStore {
         // 사용자의 리밋 위젯이 영원히 비는 것을 막는다(GET 하나다). 로그인 직후에도 여기로 들어온다
         // (`MobileAppModel.sessionDidSignIn` → scene 이 active 면 `activateStores()`).
         aiLimits.refreshIfStale()
+        // 오목알 스킨: 세션마다 한 번(이 값의 소비자에 AI 오목 판이 있다 — 낀 스킨을 내 돌에 그린다 · GET 하나).
+        refreshOmokSkinsIfNeeded()
         // 주간 보상도 탭이 안 보여도 받는다(앞에 올 때마다 · 60초 스로틀) — 정산 결과의 루비가 게임 탭·상점 알약에도 바로 선다.
         refreshWeeklyWorkIfStale()
         // 도전 미션도 주간 보상과 **똑같이** 탭이 안 보여도 받는다(앞에 올 때마다 · 같은 60초 스로틀) — 이제 이 값이
@@ -338,7 +358,14 @@ package final class MeStore {
         centerLoaded = false
         centerLoadFailed = false
         headerState = MeLoadState()
+        omokSkins = nil
+        omokSkinsUnavailable = false
+        omokSkinBusy = nil
+        omokSkinNotice = nil
         heatmap = .empty
+        rhythmWeeks = .empty
+        rhythmWeekOffset = 0
+        rhythmLiveStart = nil
         retro = nil
         dailyGrid = .empty
         tokenGrid = .empty
@@ -384,6 +411,7 @@ package final class MeStore {
         cakeGiftCheckedAt = nil
         cakeGiftLoading = false
         cakeGiftReopening = false
+        cakeGiftFollowUpPending = false
         // 주간 보상도 계정에 묶인다 — 안 비우면 다음 계정 카드에 앞 사람의 근무 시간·받은 칸·'받았어요'가 선다.
         // 계정별 '본 칸' 저장값(defaults)은 키가 계정별이라 그대로 둔다.
         weeklyWork = nil

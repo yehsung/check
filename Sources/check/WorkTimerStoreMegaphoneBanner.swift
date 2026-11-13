@@ -135,7 +135,10 @@ extension WorkTimerStore {
     var isMegaphoneBannerDeferred: Bool {
         MegaphoneBannerDeferral.isDeferred(gomoku: gomoku.phase, chess: chess.phase, tetris: tetris.phase,
                                            miniGameRoundLive: isMiniGameRoundLive, rummyLive: rummy.defersMegaphoneBanner,
-                                           reversiLive: reversi.defersMegaphoneBanner)
+                                           reversiLive: reversi.defersMegaphoneBanner,
+                                           mahjongLive: mahjong.defersMegaphoneBanner,
+                                           crossyDuelLive: crossyDuel.defersMegaphoneBanner,
+                                           alkkagiLive: alkkagi.defersMegaphoneBanner)
     }
 
     /// 미룸이 바뀌었으면 배너 스토어에 알린다(바뀐 때만 — 미루기 시작이면 떠 있던 배너를 줄로 되돌리고, 풀렸으면 신선한 것만 띄운다).
@@ -149,10 +152,12 @@ extension WorkTimerStore {
 }
 
 /// 배너 미룸 판정(순수 함수). 오목 · 체스는 `playing`, 테트리스는 `countdown` · `playing`, 미니게임은 판 진행 중, 아잉 큐브는 손댄 판에서 내 자리 playing,
-/// 아잉 뒤집기는 `playing`.
+/// 아잉 뒤집기는 `playing`, 아잉 마작은 이 기기가 연 루비 판 진행 중, 1:1 길건너는 `countdown` · `playing`,
+/// 1:1 알까기는 진행 판(`placing` · `aiming` · `rolling`).
 enum MegaphoneBannerDeferral {
     static func isDeferred(gomoku: GomokuPhase, chess: ChessPhase, tetris: TetrisDuelPhase, miniGameRoundLive: Bool,
-                           rummyLive: Bool = false, reversiLive: Bool = false) -> Bool {
+                           rummyLive: Bool = false, reversiLive: Bool = false, mahjongLive: Bool = false,
+                           crossyDuelLive: Bool = false, alkkagiLive: Bool = false) -> Bool {
         if gomoku == .playing { return true }
         if chess == .playing { return true }
         if tetris == .countdown || tetris == .playing { return true }
@@ -162,6 +167,12 @@ enum MegaphoneBannerDeferral {
         if rummyLive { return true }
         // 아잉 뒤집기: 1:1 판이 진행 중(`ReversiStore.defersMegaphoneBanner` = phase == .playing). 큐브와 같은 Bool 꼴로 받는다.
         if reversiLive { return true }
+        // 아잉 마작: 이 기기가 연 루비 판이 진행 중(`MahjongStore.defersMegaphoneBanner` — 연습판은 미루지 않는다).
+        if mahjongLive { return true }
+        // 1:1 길건너: 카운트다운 · 판 중(`CrossyDuelStore.defersMegaphoneBanner` — 테트리스 꼴).
+        if crossyDuelLive { return true }
+        // 1:1 알까기: 진행 판(`AlkkagiOnlineStore.defersMegaphoneBanner` — 배치 · 조준 · 굴림, alkkagi/v2 SPEC §6 #5).
+        if alkkagiLive { return true }
         return false
     }
 }

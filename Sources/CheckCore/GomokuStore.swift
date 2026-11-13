@@ -84,6 +84,9 @@ package nonisolated struct GomokuMatchState: Identifiable, Equatable, Sendable {
     package var autoPoints: Set<GomokuPoint> = []
     /// 마지막 수가 자동으로 놓인 것인가(상태줄·툴팁이 "시간이 지나 자동으로 놓인 수"를 말할 근거).
     package var lastMoveWasAuto: Bool = false
+    /// 0.3.81 — 이 판의 흑 · 백 오목알 스킨(서버 match.black_skin · white_skin — 상대에게도 보임). 기본값을 둔 채 맨 끝(멤버와이즈 초기화
+    /// 호출부가 그대로 컴파일되게). AI 판은 스토어가 내 스킨만 얹는다(`aiStoneSkin`).
+    package var stoneSkins: OmokStoneSkins = .plain
     /// 자동 착수가 연속 3번 놓여 끝난 판인가. **저장 칸이 아니라 `endReason` 에서 파생된다**(0.3.28) —
     /// 열거값 `.abandoned` 가 들어오면서 사실의 출처가 하나로 합쳐졌고, 같은 사실을 두 칸에 들고 있으면
     /// 언젠가 둘이 갈린다. 부르는 쪽(결과 화면·코어 테스트)은 그대로 이 이름을 쓴다.
@@ -147,6 +150,8 @@ package nonisolated struct GomokuSpectateState: Identifiable, Equatable, Sendabl
     package var endReason: GomokuEndReason? = nil
     package var blackAutoStreak: Int = 0
     package var whiteAutoStreak: Int = 0
+    /// 0.3.81 — 두 사람의 오목알 스킨(서버 match.black_skin · white_skin). 첫 응답 전에는 일반 돌.
+    package var stoneSkins: OmokStoneSkins = .plain
 
     /// 서버 응답을 한 번이라도 반영했는가(= 흑·백이 확정됐는가). 그 전에는 로딩 화면이다.
     package var hasServerState: Bool { black != nil && white != nil }
@@ -244,27 +249,6 @@ package nonisolated struct GomokuAttention: Equatable, Sendable {
 }
 
 // MARK: - 대국 채팅 (v0.3.28)
-
-/// 빠른 문구 여덟. **코드는 서버와 나누고 한국어 문구는 앱만 갖는다** — 서버 `gomoku_chat_quick_codes()` 는
-/// 같은 여덟 코드만 검사하고 표에 저장되는 것도 코드다. 그래서 문구를 다듬는 날 서버를 배포할 필요가 없다.
-/// 반대로 서버가 코드를 넓히는 날 옛 앱은 그 코드를 모르는데, 그때 말이 사라지지 않게 받는 쪽에서
-/// `GomokuNoticeText.chatUnknownQuick` 한 줄로 접는다(소실은 오배달보다 나쁘다).
-package nonisolated enum GomokuQuickPhrase: String, CaseIterable, Sendable {
-    case hi, gg, nice, hurry, sorry, think, oops, rematch
-
-    package var text: String {
-        switch self {
-        case .hi: return "안녕하세요"
-        case .gg: return "잘 뒀어요"
-        case .nice: return "좋은 수네요"
-        case .hurry: return "한 수 부탁해요"
-        case .sorry: return "미안해요"
-        case .think: return "생각 중이에요"
-        case .oops: return "실수했어요"
-        case .rematch: return "한 판 더 할까요?"
-        }
-    }
-}
 
 /// 대국 채팅 한 줄(화면 값). `seq` 가 곧 id 다 — 서버가 판마다 1부터 매기는 번호라 한 판 안에서 유일하고,
 /// 판이 바뀌면 대화를 통째로 비우므로 판을 가로질러 겹칠 일이 없다.
@@ -636,8 +620,20 @@ package final class GomokuStore {
     }
     /// 지금 AI 대국(로컬 판, docs/plan/gomoku-ai.md). 서버 판과 섞이지 않는다 — 확장 파일 머리 주석.
     package internal(set) var aiGame: GomokuAIGame?
+    /// 0.3.81 — AI 판에서 **사람 쪽** 돌에 입힐 내 오목알 스킨(맥은 상점 스킨 상태가 이 값을 맞춘다 · 폰은 아직 nil = 일반 돌).
+    /// 서버 판은 응답의 match.black_skin · white_skin 이 말하므로 이 값을 안 쓴다. 바뀌면 진행 중인 AI 판 화면 값도 바로 바뀐다.
+    package var aiStoneSkin: OmokStoneSkin? {
+        didSet {
+            guard aiStoneSkin != oldValue, isAIMatch, var current = match else { return }
+            current.stoneSkins = OmokStoneSkins(color: current.myColor == .black, skin: aiStoneSkin)
+            if match != current { match = current }
+        }
+    }
     /// AI 갈래 장부(선택기·작업·세대). 관찰 대상이 아니다.
     @ObservationIgnored package let aiRuntime = GomokuAIRuntime()
+    /// AI 와 두기 난이도(몇 수 앞까지). 다음 판부터 쓴다. 기억하는 곳은 `aiDifficultyDefaults`(시험은 nil 또는 시험 전용 스위트).
+    package internal(set) var aiDifficulty: GomokuAIDifficulty = GomokuStore.storedAIDifficulty(.standard)
+    @ObservationIgnored package var aiDifficultyDefaults: UserDefaults? = .standard
     /// 탭 순간 화면이 본 판과 스토어 판이 달랐던 횟수(진단·테스트 지점). 화면을 다시 그리게 하지 않도록 관찰에서 뺀다.
     @ObservationIgnored package private(set) var tapDivergenceCount = 0
     /// 사용자 어휘 안내 한 줄.
@@ -1452,7 +1448,8 @@ package final class GomokuStore {
             id: id, stake: stake, myColor: myColor, opponent: opponent, board: board, lastMove: lastMove,
             moveCount: appliedCount, turn: turn, deadline: deadline, isFinished: isFinished, outcome: outcome,
             endReason: row.endReason.flatMap(GomokuEndReason.init(rawValue:)), rubyDelta: rubyDelta,
-            blackPassed: blackPassed, autoPoints: autoPoints, lastMoveWasAuto: lastMoveWasAuto
+            blackPassed: blackPassed, autoPoints: autoPoints, lastMoveWasAuto: lastMoveWasAuto,
+            stoneSkins: OmokStoneSkins(blackWire: row.blackSkin, whiteWire: row.whiteSkin)
         )
         let justFinished = isFinished && base?.isFinished == false
         let previous = match

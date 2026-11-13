@@ -28,7 +28,10 @@ package final class MobileRealtimeRegistration {
 ///     그리고 iOS 에서는 서비스에 그 메서드가 **컴파일되지 않는다**(`SupabaseWorkServiceMacOnly.swift`).
 ///  2. `.messageReadSignal` → 등록된 `onMessageRead` 핸들러들(뒤쪽 1초 합치기만 — 앞쪽 즉시 처리는 없다).
 ///  3. `.gomokuSignal` → `GomokuStore.handleSignal()` · `.tetrisSignal` → `TetrisDuelStore.handleSignal()`(1.0.11). · `.rummySignal` → `RummyStore.handleSignal()`(1.0.16).
+///     · `.reversiSignal` → `ReversiStore.handleSignal()`(1.0.17).
 ///     `.chessSignal` 은 **일부러 빈 가지**다 — 까닭 셋을 그 자리에 적었다(폰 체스는 1.0.6 에 나갔다).
+///     · `.mahjongSignal` → `MahjongStore.handleSignal()`(1.0.18). `.drain` 으로 새면 같은 계정 맥의 버림마다 메시지 조회가 한 번씩 더 나간다.
+///     · `.crossyDuelSignal` → `CrossyDuelStore.handleSignal()`(1.0.18). · `.alkkagiSignal` → `AlkkagiOnlineStore.handleSignal()`(1.0.18).
 ///  4. 연결은 **앱이 active 이고 로그인 상태일 때만**. background 로 가면 `.willSleep` 으로 내려놓는다.
 /// 토큰 갱신은 세션 스토어의 조정자를 지난다(`refreshForRealtime`) — 갱신 주체가 둘이 되지 않게.
 @MainActor
@@ -49,6 +52,14 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var tetris: TetrisDuelStore?
     /// 아잉 큐브 신호를 받을 스토어(앱 모델이 붙인다 — 위 두 칸과 같은 꼴).
     @ObservationIgnored package weak var rummy: RummyStore?
+    /// 아잉 뒤집기 신호를 받을 스토어(앱 모델이 붙인다 — 위 세 칸과 같은 꼴 · 폰 1.0.17).
+    @ObservationIgnored package weak var reversi: ReversiStore?
+    /// 1:1 길건너 신호를 받을 스토어(앱 모델이 붙인다 — 폰 1.0.18).
+    @ObservationIgnored package weak var crossyDuel: CrossyDuelStore?
+    /// 1:1 알까기 신호를 받을 스토어(앱 모델이 붙인다 — 폰 1.0.18).
+    @ObservationIgnored package weak var alkkagi: AlkkagiOnlineStore?
+    /// 아잉 마작 신호를 받을 스토어(앱 모델이 붙인다 — 폰 1.0.18).
+    @ObservationIgnored package weak var mahjong: MahjongStore?
     /// 확성기 배너 신호(`megaphone`)를 받을 스토어(앱 모델이 붙인다 — 오목·테트리스 칸과 같은 꼴).
     @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
 
@@ -209,6 +220,10 @@ package final class MobileRealtimeRunner {
             effectLog.append(effect)
             if effectLog.count > 50 { effectLog.removeFirst(effectLog.count - 50) }
             switch effect {
+            case .alkkagiSignal:
+                // 1:1 알까기(맥 0.3.80 · 폰 1.0.18). 신청 · 수락 · 배치 · 쏘기 · 정산이 이 초인종으로 온다 — 직렬화된 재조회 한 번.
+                // `.drain` 으로 떨어뜨리지 않는 까닭은 아래 아잉 뒤집기 가지와 같다(수마다 메시지 조회가 한 번씩 더 나간다).
+                alkkagi?.handleSignal()
             case .connect(let linkToken):
                 performConnect(linkToken: linkToken)
             case .disconnect:
@@ -228,6 +243,15 @@ package final class MobileRealtimeRunner {
                 tetris?.realtimeDidJoin()
                 // 아잉 큐브도 같은 자리다. 소켓이 내려가 있던 사이의 초대·참가·시작·차례는 재생되지 않는다.
                 rummy?.realtimeDidJoin()
+                // 아잉 뒤집기도 같은 자리다(로비 한 번 + 그 응답이 가리키는 판). 소켓이 내려가 있던 사이의 신청·수락·상대 수는 재생되지 않는다 —
+                // 받은 신청은 60초를 살고 내 차례는 30초 뒤 서버가 대신 두므로(연속 3번이면 패) 다음 계기까지 기다리면 늦다.
+                reversi?.realtimeDidJoin()
+                // 1:1 길건너도 같은 자리다(신청 60초 · 준비 · 판 시작이 이 초인종으로 온다).
+                crossyDuel?.realtimeDidJoin()
+                // 1:1 알까기도 같은 자리다(신청 60초 · 숨긴 배치 30초 · 한 수 30초 — 다음 계기까지 기다리면 늦다).
+                alkkagi?.realtimeDidJoin()
+                // 아잉 마작도 같은 자리다(초대 · 방 · 시작 · 차례 · 울기 창이 이 초인종으로 온다 — 울기 창은 짧다).
+                mahjong?.realtimeDidJoin()
             case .drain:
                 // ★ take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다.
                 requestMessageActivity(now: now)
@@ -274,16 +298,26 @@ package final class MobileRealtimeRunner {
                 // ★ `.drain` 으로 떨어뜨리면 안 되는 까닭은 체스 가지와 같다: 작업 판 초인종이 끌기마다 울리고, 새면 그때마다 메시지 조회가 한 번씩 더 나간다.
                 rummy?.handleSignal()
             case .reversiSignal:
-                // 아잉 뒤집기(1:1 리버시 — 맥 먼저). 폰은 **다음 폰 판에서 잇는다**(대표 결정 "맥 먼저, 폰은 다음 폰 판에 모아서" —
-                // 그때까지 서버 능력 협상이 폰에서 신청이 안 가게 막는다). 그래서 지금은 이 신호를 소비할 스토어가 폰에 없다.
+                // 아잉 뒤집기(1:1 리버시 — 맥 0.3.74 · 폰 1.0.17, 대표 답 #d_DdwzmxPClGqk "다 넣기 (루비 걸기 포함)"). 체스 가지와 달리 **잇는다** —
+                // 신청·수락·상대 수·자동 착수·정산이 전부 이 초인종으로 온다. 받은 신청은 로비 `me.incoming` 으로만 오므로(받은함 RPC 없음)
+                // 이 가지가 비면 폰은 다음 허브 진입(30초 스로틀)까지 신청을 모르고, 탭 배지(`GamesStore.badgeCount`)도 그 신선도를 잃는다.
+                // `handleSignal()` 은 **직렬화된 재조회 한 번**이다(진행 중 1:1 판이면 그 판 · 아니면 로비, 도는 중이면 뒤따르는 한 번으로 합친다).
                 // ★ `.drain` 으로 떨어뜨리면 안 되는 까닭은 위 체스 가지 ③과 같다: `.drain` 은 "새 메시지가 있다"는 뜻이라 같은 계정의
-                //   맥이 판을 하는 동안 **수마다** 메시지 요약·이력 조회가 한 번씩 더 나간다. 가지를 **따로 비워 두는 것**이 그 차단이다.
-                break
+                //   맥이 판을 하는 동안 **수마다** 메시지 요약·이력 조회가 한 번씩 더 나간다. 잇는 것과 따로 두는 것은 별개의 요구다.
+                reversi?.handleSignal()
+            case .mahjongSignal:
+                // 아잉 마작(4인 리치 마작 — 맥 0.3.76 · 폰 1.0.18). 초대 · 방 · 시작 · 버림 · 울기가 이 초인종으로 온다 — 코어가 합쳐 한 번 더 읽는다.
+                // `.drain` 으로 떨어뜨리지 않는 까닭은 위 아잉 뒤집기 가지와 같다(버림마다 메시지 조회가 한 번씩 더 나간다).
+                mahjong?.handleSignal()
             case .megaphoneSignal:
                 // 확성기 배너 신호(2026-10-30 — 서버 `send_megaphone` 이 받는 사람마다 `poke_ring` 다음에 보낸다, 계약 S2-3).
                 // 배너 목록만 다시 읽는다. `.drain` 으로 떨어뜨리지 않는 까닭은 위 체스 가지 ③과 같다 — 같은 확성기의
                 // `poke_ring` 이 이미 메시지 활동을 깨웠으므로 메시지 조회가 한 번 더 나갈 뿐이다.
                 requestMegaphoneRefresh()
+            case .crossyDuelSignal:
+                // 1:1 길건너(맥 0.3.78 · 폰 1.0.18). 신청 · 수락 · 준비 · 판 시작 · 정산이 이 초인종으로 온다 — 직렬화된 재조회 한 번.
+                // `.drain` 으로 떨어뜨리면 안 되는 까닭은 위 아잉 뒤집기 가지와 같다(판마다 메시지 조회가 한 번씩 더 나간다).
+                crossyDuel?.handleSignal()
             case .pushAccessToken(let token):
                 transport?.pushAccessToken(token)
             case .scheduleTokenRefresh(let at):

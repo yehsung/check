@@ -71,6 +71,18 @@ struct V0336PortraitBoxTests {
         // v0.3.74 이슬 아잉이: 같은 2D 몸(0.88배) 위에 불투명 병뚜껑 — 알파 상자(146×150)로 조이면 얼굴이 아잉 변형보다 커진다.
         // 케이크와 같은 자르기(`cakeBodyFramed`)로 같은 상자에 선다(얼굴 크기를 아잉 변형과 같게).
         ("aing_isul", CGSize(width: 162, height: 153)),
+        // v0.3.77 빼빼로 아잉이: 같은 2D 몸(0.88배) 앞에 몸보다 넓은 불투명 상자 · 머리 위로 막대 — **알파 상자**(`tight`)로 조인다. 상자 옆 넘침 ·
+        // 막대 높이가 케이크 자르기의 둘레 8% 와 비슷해 얼굴이 이슬 · 케이크 눈금과 3.6% 안에 선다(케이크 자르기면 190×180 — 15% 작아진다).
+        ("aing_pepero", CGSize(width: 168, height: 160)),
+        // v0.3.78 흑우 아잉이: 아잉 초상의 피부색만 바꾸고 알파는 그대로 둔 그림(후광 · 장식 · 몸 축소 없음) — 아잉과 같은 알파 상자(`tight`).
+        ("aing_hwoo", CGSize(width: 164, height: 154)),
+        // v0.3.78 루비 아잉이: 몸 모양이 바뀌어 3D 정면 렌더를 아잉 초상의 몸 상자(폭 · 바닥)에 맞춰 구운 그림 — 알파 상자(`tight`) 166×152.
+        ("aing_ruby", CGSize(width: 166, height: 152)),
+        ("aing_dev", CGSize(width: 166, height: 152)),
+        // 부산 갈매기 아잉이: 개발 아잉이와 같은 3D 정면 렌더 초상(아잉 초상 몸 상자에 맞춤) — 날개 팔 · 물갈퀴 발까지 알파 상자(`tight`).
+        ("aing_busan", CGSize(width: 164, height: 162)),
+        // 서울의 밤 아잉이: 같은 3D 정면 렌더 초상(장식 없음 — 개발 아잉이와 같은 알파 상자).
+        ("aing_seoul", CGSize(width: 166, height: 153)),
     ]
 
     @Test func 높이를_지름에_맞추고_폭은_원본_비대로_따라간다() {
@@ -116,8 +128,11 @@ struct V0336PortraitBoxTests {
             let capped = abs(box.height - 26 * AppUserAvatarArt.artHeightFraction) > 1e-9
             // v0.3.66 케이크 둘도 금과 같은 몸 상자(가로가 세로보다 넓다)라 상한에 걸린다.
             // v0.3.74 이슬도 케이크와 같은 몸 상자라 상한에 걸린다.
+            // v0.3.77 빼빼로도 알파 상자가 가로로 넓어(168×160 — 상자가 몸보다 넓다) 상한에 걸린다.
+            // v0.3.78 흑우는 아잉 초상과 알파가 같아(164×154) 아잉처럼 상한에 걸린다. 루비(166×152)도 가로가 넓어 걸린다.
             #expect(capped == (id == "aing" || id == "aing_gold" || id == "aing_rainbow" || CharacterCatalog.isCakeAing(id)
-                               || CharacterCatalog.isIsulAing(id)),
+                               || CharacterCatalog.isIsulAing(id) || CharacterCatalog.isPeperoAing(id) || CharacterCatalog.isHwooAing(id)
+                               || CharacterCatalog.isRubyAing(id) || CharacterCatalog.isDevAing(id) || CharacterCatalog.isRegionAing(id)),
                     "\(id) 가 상한에 \(capped ? "걸렸다" : "안 걸렸다")")
             // 어느 캐릭터든 원보다 크게 넘치지 않는다(레퍼런스는 1.018/0.80 이었다).
             #expect(box.height <= 26 * 1.03 + 1e-9 && box.width <= 26 * 1.02 + 1e-9)
@@ -239,6 +254,8 @@ struct V0336AvatarArtSourceTests {
                         && (!CharacterCatalog.isCakeAing($0) || V0366CakeCoreTests.macCakePortraitsInSourceTree($0))
                         // v0.3.74: 이슬(내장)도 같은 규칙 — 소스 트리에 이슬 초상이 있을 때만 센다.
                         && (!CharacterCatalog.isIsulAing($0) || V0374IsulCoreTests.macIsulPortraitsInSourceTree)
+                        // v0.3.77: 빼빼로(내장)도 같은 규칙 — 그림 갈래 전엔 초상이 없다.
+                        && (!CharacterCatalog.isPeperoAing($0) || V0377PeperoCoreTests.macPeperoPortraitsInSourceTree)
                 }))
     }
 }
@@ -304,7 +321,17 @@ struct V0336FaceScaleTests {
         let cakes = CharacterCatalog.birthdayGiftBuiltInIDs.filter(V0366CakeCoreTests.macCakePortraitsInSourceTree).count
         // v0.3.74: 이슬도 같은 기준선(소스 트리의 이슬 초상).
         let isul = V0374IsulCoreTests.macIsulPortraitsInSourceTree ? 1 : 0
-        #expect(widths.count == 9 + cakes + isul, "\(widths.count) 종만 쟀다")
+        // v0.3.77: 빼빼로도 같은 기준선(소스 트리의 빼빼로 초상).
+        let pepero = V0377PeperoCoreTests.macPeperoPortraitsInSourceTree ? 1 : 0
+        // v0.3.78: 흑우도 같은 기준선(소스 트리의 흑우 초상).
+        let hwoo = V0378HwooCoreTests.macHwooPortraitsInSourceTree ? 1 : 0
+        // v0.3.78: 루비도 같은 기준선(소스 트리의 루비 초상).
+        let ruby = V0378RubyCoreTests.macRubyPortraitsInSourceTree ? 1 : 0
+        // v0.3.81: 개발에 찌든 아잉이도 같은 기준선.
+        let dev = V0381DevAingCoreTests.macDevPortraitsInSourceTree ? 1 : 0
+        let busan = RegionAingCoreTests.macBusanPortraitsInSourceTree ? 1 : 0
+        let seoul = RegionAingCoreTests.macSeoulPortraitsInSourceTree ? 1 : 0
+        #expect(widths.count == 9 + cakes + isul + pepero + hwoo + ruby + dev + busan + seoul, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
         #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")
@@ -335,8 +362,10 @@ struct V0336FaceScaleTests {
         }
         let values = heights.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
-        #expect(lo > 0.94 && hi <= AppUserAvatarArt.artHeightFraction + 1e-9, "\(heights)")
-        #expect(hi / lo < 1.10, "상자 높이가 \(hi / lo) 배 갈렸다 — \(heights)")
+        // v0.3.78 루비 아잉이(166×152 — 판처럼 평평한 정수리라 아잉보다 조금 납작)가 가로 상한에 걸려 0.934 로 가장 낮다. 얼굴 크기 계약
+        // (위 1.3 배)은 그대로 통과한다 — 바닥을 0.94 → 0.93, 편차를 1.10 → 1.11 로 그 한 캐릭터만큼 넓혔다(실측 1.103).
+        #expect(lo > 0.93 && hi <= AppUserAvatarArt.artHeightFraction + 1e-9, "\(heights)")
+        #expect(hi / lo < 1.11, "상자 높이가 \(hi / lo) 배 갈렸다 — \(heights)")
     }
 }
 
@@ -415,7 +444,12 @@ struct V0336AvatarRenderTests {
                 #expect(abs(ink.width - box.width / size) < 0.03,
                         "\(id) 그려진 폭 \(ink.width) · 상자 \(box.width / size) — 뷰가 상자 규칙을 안 쓴다")
             }
-            #expect(ink.topGap < 0.043, "\(id) 머리 위가 \(ink.topGap) 비었다 — 그림이 아래로 내려갔다(옛 규칙은 0.047~0.086)")
+            // 빼빼로 아잉이(v0.3.77)는 머리 위 양옆으로 막대가 솟아(가운데 띠 밖) 알파 상자 꼭대기가 막대 끝이다 — 가운데 띠의 첫 잉크(머리)는
+            // 그만큼 한 행 남짓 아래에 선다(실측 2026-11-04 64pt @2x: 0.0547). 얼굴 크기는 V0377PeperoMac3DTests 가 이슬 · 케이크와 맞댄다.
+            // 0.062 가 옛 규칙 띠(0.047~0.086) 안이라 못 잡을까(검토 low) — 뮤테이션으로 쟀다(2026-11-04): 빼빼로를 `.bodyFramed` 로 되돌리면
+            // 이 줄(topGap)이 빨갛고 같은 묶음 다섯 단언 · V0377 눈금도 같이 빨갛다(9건). 더 조이면 실측 0.0547 과 여유가 없어 그대로 둔다.
+            let topLimit = CharacterCatalog.isPeperoAing(id) ? 0.062 : 0.043
+            #expect(ink.topGap < topLimit, "\(id) 머리 위가 \(ink.topGap) 비었다 — 그림이 아래로 내려갔다(옛 규칙은 0.047~0.086)")
             // 케이크 아잉이(v0.3.66)는 금 · 무지개와 **같은 자르기 눈금**(몸 + 둘레 8%)인데 그 8% 를 채울 후광이 없다 — 금 · 무지개는 그 띠를
             // 빛이 채워 0.90 을 넘는다. 얼굴 크기를 아잉 변형과 같게 둔 것은 조정자 결정이라(키우면 장식이 더 잘리고 얼굴만 커진다)
             // 케이크의 하한은 그 띠만큼 낮춘다(실측 2026-10-26: 딸기 0.883 · 초코 0.875). 얼굴 크기 자체는 V0366CakeMacScreensTests.avatarFaceMatchesTheAingVariants 가 금과 맞댄다.

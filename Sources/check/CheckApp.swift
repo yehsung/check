@@ -84,7 +84,16 @@ struct CheckApp: App {
             hasRummyInvite: appDelegate.store.rummy.hasIncomingInvite,
             // 받은 **아잉 뒤집기** 신청도 같은 점(체스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
             // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
-            hasReversiInvite: appDelegate.store.reversi.visibleIncoming != nil
+            hasReversiInvite: appDelegate.store.reversi.visibleIncoming != nil,
+            // 받은 **아잉 마작** 초대도 같은 점(큐브와 같은 사정). 만료·차단은 스토어가 걷어 이 값을 내린다.
+            hasMahjongInvite: appDelegate.store.mahjong.hasIncomingInvite,
+            // 아잉 마작 **자리 비움**(이 기기가 연 판)도 같은 점 — 판은 자동으로 흐르니 돌아갈 길을 창 밖에서 알린다.
+            hasMahjongAway: appDelegate.store.mahjong.hasAwaySeatHere,
+            // 받은 **1:1 길건너** 신청도 같은 점(테트리스와 같은 사정 — 창을 여는 길이 미니게임 창의 문 하나뿐이고 폴링은 창이 보일
+            // 때만 돈다). 만료·차단은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
+            hasCrossyDuelInvite: appDelegate.store.crossyDuel.visibleIncoming != nil,
+            // 받은 **1:1 알까기** 신청도 같은 점(길건너와 같은 사정). 만료·차단·내 판은 스토어가 걷어 이 값을 내린다(라벨은 시계를 안 읽는다).
+            hasAlkkagiInvite: appDelegate.store.alkkagi.visibleIncoming != nil
         )
     }
 }
@@ -211,6 +220,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         wireRummy()
         // 아잉 뒤집기 — 큐브와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
         wireReversi()
+        // 아잉 마작 — 뒤집기와 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireMahjong()
+        // 1:1 길건너 — 마작과 **같은 순서 제약**이다(말풍선 큐가 오버레이 컨트롤러에 산다).
+        wireCrossyDuel()
+        // 1:1 알까기(외부 기여 PR #9) — 길건너와 **같은 순서 제약**이다(초대 말풍선 · 창 · 계정 전환 정리).
+        wireAlkkagi()
         // 확성기 배너(2026-10-30) — 받은 확성기를 화면 위 배너로. **오버레이 컨트롤러를 만든 뒤에** 잇는다: 배너는 캐릭터 패널 한 칸 위에
         // 서고, 대결 미룸(위 세 판의 단계)이 이미 배선돼 있어야 첫 확성기가 제자리에 뜬다.
         wireMegaphoneBanner()
@@ -300,6 +315,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 미리 안 구우면 케이크를 입은 사람의 첫 오버레이나, 케이크를 안 입은 사람이 울트라로 남의 케이크를 맞는 순간 메인이 그만큼 멎는다.
         // 조건 없이 누구에게나 한 번이다(`CakeAingFinish.prewarmDecorTemplates` 주석).
         CakeAingFinish.prewarmDecorTemplates(after: 5)
+        // 빼빼로 아잉이 장식(v0.3.77 — 상자 2048×768 + 막대 셋 ≈ 13MB · release ~0.7초)은 **입었거나 가진 사람만** 같은 때 메인 밖에서 미리 굽는다
+        // (조정자 결정 11-04 — `PeperoPrewarmGate`). 시작 직후엔 상점 상태가 없어 보유를 모를 수 있다 — 로컬 저장 선택값(지금 입은 캐릭터)으로 먼저
+        // 가르고, 가진 것은 상점 상태(`applyShopState`) · 선물 받기(`applyCakeGiftClaim`)가 문을 다시 두드린다(한 번만 굽는다).
+        PeperoPrewarmGate.shared.arm(after: 5,
+                                     wornID: CheckCharacter3DScene.selectedCharacter(defaults: store.characterDefaults).id,
+                                     ownedIDs: store.ownedCharacterIDs)
         // 맥 앱스토어 판(v0.3.51): 첫 실행 안내(로그인 시 자동 실행 · AI 기록 읽기 동의를 한 화면에서 — 한 번만)와
         // 다른 판(brew·DMG) 동시 실행 경고(한 번만). Developer ID 판에서는 `start()` 가 아무 창도 만들지 않는다.
         masOnboarding = MacAppStoreOnboardingController(store: store)
@@ -378,6 +399,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CheckReversiWindowController.shared.configure(store: store.reversi, me: { [weak self] in
             guard let self else { return ReversiPlayerFace.fallback }
             return ReversiPlayerFace.me(from: self.store)
+        }, safety: store)
+        // 아잉 마작 창도 같은 자리에서 배선한다 — 큐브 창의 형제다(닫아도 판은 자동으로 끝까지 — 닫기 ≠ 기권).
+        CheckMahjongWindowController.shared.configure(store: store.mahjong, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
+        }, safety: store)
+        // 1:1 길건너 창도 같은 자리에서 배선한다 — 테트리스 창의 형제다(키를 잃거나 닫혀도 판을 끝내지 않는다).
+        CheckCrossyDuelWindowController.shared.configure(store: store.crossyDuel, me: { [weak self] in
+            guard let self else { return ChessPlayerFace.fallback }
+            return ChessPlayerFace.me(from: self.store)
         }, safety: store)
         // 캐릭터 뽑기 창(v0.3.54 — 캡슐 기계)도 같은 자리에서 배선한다. 창은 첫 `show()` 에 만들어진다(상점 뽑기 패널의 [뽑기 · 50] ·
         // 캐릭터 고르기의 잠긴 황금 아잉이). 로그아웃은 스토어가 닫는다(`resetGachaState`).
@@ -626,6 +657,123 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
             CheckReversiWindowController.shared.close()
             self?.overlayController?.clearReversiInvites()
+        }.start()
+    }
+
+    /// 아잉 마작(4인 리치 마작)의 문들을 잇는다(실행당 1회). 뒤집기와 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V03xxMahjongWiringTests)이 줄마다 되묻는다.
+    ///   ① `rankingEnabled` — 순위의 주 스위치(스토어는 폰과 공용이라 기본이 꺼짐). 관전은 없다(대표 답).
+    ///   ② `presentWindow` · ③ `dismissWindow` — 창을 띄우고 닫는 유일한 문.
+    ///   ④ `requestAttention` — 모양만(메뉴바 앱이라 독 주의는 거의 안 보인다 — 완화책은 말풍선·점·배너).
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 아잉 마작을 아는 길**(받은 초대 · 판 시작·국마다 첫 차례·자리 비움·닫기 안내).
+    ///   ⑥ `onOpenMahjong` — 그 말풍선을 눌렀을 때 그 방·판의 창.
+    ///   ⑦ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만). 닫기 안내 말풍선은 창 컨트롤러가
+    ///      스토어(`windowDidClose(byUser:)`)에 직접 알린다 — 여기서 또 부르면 한 번 닫기에 두 번 알린다.
+    ///   ⑧ App Nap — 이 기기가 연 방·판(room·active) 동안 붙든다(5초 깨우기가 밀리면 판이 멎는다). 연습판은 빼다.
+    /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 다른 게임과 같은 자리다.
+    private func wireMahjong() {
+        let mahjong = store.mahjong
+        mahjong.rankingEnabled = true
+        mahjong.presentWindow = { CheckMahjongWindowController.shared.show() }
+        mahjong.dismissWindow = { CheckMahjongWindowController.shared.close() }
+        CheckMahjongWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.mahjong, byUser: byUser)
+        }
+        mahjong.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        mahjong.onInviteArrived = { [weak self] room in
+            self?.overlayController?.enqueueMahjongInvite(room)
+        }
+        mahjong.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueMahjongAttention(attention)
+        }
+        overlayController?.onOpenMahjong = { [weak self] matchID in
+            self?.store.mahjong.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckMahjongWindowController.shared.close()
+            self?.overlayController?.clearMahjongInvites()
+        }.start()
+        let mahjongActivity = MahjongActivityHold()
+        mahjong.onHoldingActivityChange = { holding in mahjongActivity.set(holding) }
+    }
+
+    /// 1:1 길건너의 문들을 잇는다(실행당 1회). 테트리스·마작과 같은 까닭으로 **전부 빠져도 조용히 초록이다** —
+    /// 스토어 쪽 문이 옵셔널이라 `?.` 가 삼킨다. 그래서 소스 계약 시험(V03xxCrossyDuelWiringTests)이 줄마다 되묻는다(CD/SPEC.md §9.5 #13).
+    ///   ① `rankingEnabled` — 순위의 주 스위치(스토어는 폰과 공용이라 기본이 꺼짐). 관전은 없다.
+    ///   ② `presentWindow` · ③ `dismissWindow` — 창을 띄우고 닫는 유일한 문.
+    ///   ④ `requestAttention` — 모양만(메뉴바 앱이라 독 주의는 거의 안 보인다 — 완화책은 말풍선·점·배너).
+    ///   ⑤ `onInviteArrived`·`onAttention` — **창 밖에서 1:1 길건너를 아는 길**(받은 신청 · 판 시작).
+    ///   ⑥ `onOpenCrossyDuel` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑦ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만).
+    ///   ⑧ App Nap — 카운트다운·판 중(이 기기가 연 판) 붙든다. 보고가 밀리면 서버가 15초 침묵 패를 낸다.
+    /// `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다 — 다른 게임과 같은 자리다.
+    private func wireCrossyDuel() {
+        let crossyDuel = store.crossyDuel
+        crossyDuel.rankingEnabled = true
+        crossyDuel.presentWindow = { CheckCrossyDuelWindowController.shared.show() }
+        crossyDuel.dismissWindow = { CheckCrossyDuelWindowController.shared.close() }
+        CheckCrossyDuelWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.crossyDuel, byUser: byUser)
+        }
+        crossyDuel.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        crossyDuel.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueCrossyDuelInvite(invite)
+        }
+        crossyDuel.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueCrossyDuelAttention(attention)
+        }
+        overlayController?.onOpenCrossyDuel = { [weak self] matchID in
+            self?.store.crossyDuel.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckCrossyDuelWindowController.shared.close()
+            self?.overlayController?.clearCrossyDuelInvites()
+        }.start()
+        let crossyDuelActivity = CrossyDuelActivityHold()
+        crossyDuel.onHoldingActivityChange = { holding in crossyDuelActivity.set(holding) }
+    }
+
+    /// 1:1 알까기의 문들을 잇는다(실행당 1회 — 길건너 꼴, alkkagi/v2 SPEC §6 #1). 스토어 쪽 문이 옵셔널이라 **전부 빠져도 조용히
+    /// 초록이다** — 그래서 소스 계약 시험(V03xxAlkkagiWiringTests)이 줄마다 되묻는다.
+    ///   ① `rankingEnabled` · `spectatorFeaturesEnabled` — 순위 · 관전의 주 스위치(스토어 기본은 꺼짐 — 시험 · 미리보기 조립).
+    ///   ② 창 `configure(store:safety:)` — `safety` 는 창 루트의 아바타 캐릭터 표(`appUserAvatarCharacters(from:)`)를 흘린다.
+    ///   ③ `presentWindow` · ④ `dismissWindow` — 창을 띄우고 닫는 유일한 문.
+    ///   ⑤ 창의 onClosed — 사람이 닫으면 미니게임 창으로 돌아온다(미니게임 창에서 들어온 창만).
+    ///   ⑥ `requestAttention` — 모양만(메뉴바 앱이라 독 주의는 거의 안 보인다 — 완화책은 말풍선·점·배너).
+    ///   ⑦ `onInviteArrived` · `onAttention` — **창 밖에서 1:1 알까기를 아는 길**(받은 신청 · 판 시작 · 내 차례). 한 수 30초라 창을
+    ///      닫아 둔 사람에게 차례 말풍선이 없으면 세 번 넘겨 판돈을 잃는다.
+    ///   ⑧ `onOpenAlkkagi` — 그 말풍선을 눌렀을 때 그 판의 창.
+    ///   ⑨ 계정 감시자 — 로그아웃 · 계정 전환에 창을 닫고 말풍선 큐를 비운다.
+    /// App Nap 붙들기는 없다(차례제 다수 — SPEC §2.2). `onMatchFinished`(일일 미션 진행)는 소유자(WorkTimerStore)가 잇는다.
+    private func wireAlkkagi() {
+        let alkkagi = store.alkkagi
+        alkkagi.rankingEnabled = true
+        alkkagi.spectatorFeaturesEnabled = true
+        CheckAlkkagiWindowController.shared.configure(store: alkkagi, safety: store)
+        alkkagi.presentWindow = { CheckAlkkagiWindowController.shared.show() }
+        alkkagi.dismissWindow = { CheckAlkkagiWindowController.shared.close() }
+        CheckAlkkagiWindowController.shared.onClosed = { [weak self] byUser in
+            self?.store.duelWindowDidClose(.alkkagi, byUser: byUser)
+        }
+        alkkagi.requestAttention = {
+            if !NSApp.isActive { NSApp.requestUserAttention(.criticalRequest) }
+        }
+        alkkagi.onInviteArrived = { [weak self] invite in
+            self?.overlayController?.enqueueAlkkagiInvite(invite)
+        }
+        alkkagi.onAttention = { [weak self] attention in
+            self?.overlayController?.enqueueAlkkagiAttention(attention)
+        }
+        overlayController?.onOpenAlkkagi = { [weak self] matchID in
+            self?.store.alkkagi.openWindow(focusMatchID: matchID)
+        }
+        ChessAccountWatcher(userID: { [weak self] in self?.store.session?.userID }) { [weak self] in
+            CheckAlkkagiWindowController.shared.close()
+            self?.overlayController?.clearAlkkagiInvites()
         }.start()
     }
 

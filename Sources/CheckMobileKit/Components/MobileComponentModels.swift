@@ -447,7 +447,7 @@ package enum ProgressBarRule {
 // MARK: - 탭 막대
 
 /// 탭 막대를 숨기는 화면(시안 B: **목록 화면에만** 탭 막대 — 자체 하단 막대·몰입 화면은 숨긴다).
-/// 대화 · 오목 대국 · 체스 대국 · 1:1 테트리스 판 · 상점 · 미니게임 플레이가 `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)를 쓴다.
+/// 대화 · 오목 대국 · 체스 대국 · 1:1 테트리스 판 · 아잉 큐브 판 · 아잉 뒤집기 판 · 1:1 알까기 판 · 상점 · 미니게임 플레이가 `.hidesTabBar(for:)`(iOS 층 `SheetChrome.swift`)를 쓴다.
 /// 규칙이 한 곳이어야 화면마다 갈리지 않는다 — 화면이 `toolbar(.hidden, for: .tabBar)` 를 직접 쓰면 안 된다(게임 폴더 계약).
 package enum TabBarPolicy {
     package enum Screen: String, CaseIterable, Sendable {
@@ -462,6 +462,14 @@ package enum TabBarPolicy {
         case tetrisMatch
         /// 아잉 큐브 판(1.0.16) — 같은 몰입 화면이다. 가로 화면이고 끌기가 화면 아래 받침대에서 시작해 탭 막대와 겹친다.
         case rummyMatch
+        /// 아잉 뒤집기 대국·결과(1.0.17) — 오목과 같은 한 수 30초 몰입 화면 + 자체 동작 줄. 탭을 잘못 눌러 빠져나가면
+        /// 서버 시계가 계속 흘러 자동 착수가 쌓이고, 연속 3번이면 판돈째 진다.
+        case reversiMatch
+        /// 1:1 알까기 판 · 결과 · 연습(1.0.18) — 한 수 30초 몰입 화면 + 자체 동작 줄. 판 위 끌기가 화면 아래까지 내려오고,
+        /// 탭을 잘못 눌러 빠져나가면 서버 시계가 흘러 차례를 넘기고 세 번이면 판돈째 진다.
+        case alkkagiMatch
+        /// 아잉 마작 판 · 결과 · 연습(1.0.18 — 가로) — 큐브 판과 같은 몰입 화면. 손패 · 동작 열이 화면 아래 · 오른쪽 끝까지 온다.
+        case mahjongMatch
         case shop
         case miniGamePlay
         /// 잔디 상세 — 자체 하단 값 막대를 가진다(막대 둘이 쌓이면 엄지 사정권이 좁아진다).

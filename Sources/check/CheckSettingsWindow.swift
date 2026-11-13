@@ -102,7 +102,11 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
     ///   여는 순간 화면보다 크면 화면 높이에서 멈추고(`growForContentIfNeeded` · `keepOnScreen`), 그때 본문은 v0.3.47 의
     ///   `ViewThatFits` 가 스크롤로 받는다(잘리지 않는다 — AI 리밋을 연동한 맥은 이미 그 상태로 쓰고 있다). 큰 화면에서는 예전처럼
     ///   스크롤 없이 다 보인다. 이 상수는 여전히 "스크롤 없이 다 보이는 높이"의 계약이고 V0340·V0347 이 5pt 여유를 되묻는다.
-    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 980)
+    ///
+    /// 2026-11(aing-scan): '내 정보'의 [AI 토큰 사용량 공개] 아래에 [원격 기계 연결] 행(두 줄 행 — [차단한 사람]과 같은 모양)이 붙어
+    /// 가장 높은 상태가 1030pt(+55 — 구분선 + 간격 + 두 줄 행, 실측 2026-11-07 폭 380)가 됐다. 같은 5pt 여유로 **1035**.
+    /// 목록·명령은 본문에 펼치지 않는다 — 행을 누르면 본문 자리에 선다(`CheckRemoteScannerSettingsPage`).
+    static let defaultContentSize = NSSize(width: CheckSettingsView.preferredWidth + 40, height: 1035)
     /// 최소 크기. 폭은 뷰가 선언한 하한(`minWidth: Self.preferredWidth`)을 그대로 따른다 — 여기에 뷰가
     /// 모르는 숫자를 새로 적으면 그 순간 두 하한이 갈리고, 갈리는 쪽이 위 높이 계약을 깬다(바로 위 실측표).
     static let minContentSize = NSSize(width: CheckSettingsView.preferredWidth, height: 260)
@@ -327,6 +331,8 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         endWorkShortcutRecording()
         // [차단한 사람] 쪽을 보던 채 닫아도 다시 열면 설정 본문부터 보인다(v0.3.34).
         wiring?.store.closeBlockedPeopleSettings()
+        // [원격 기계 연결] 쪽도 같다 — 화면에 띄운 연결 코드까지 지운다.
+        wiring?.store.closeRemoteScannerSettings()
         // [계정 삭제] 쪽도 같다(v0.3.51) — 비밀번호 칸과 2단 확인까지 비운다(삭제 왕복 중이면 스토어가 그대로 둔다).
         wiring?.store.closeAccountDeletionSettings()
         // 사진 되돌리기 확인을 연 채 닫아도 다음에 열면 평소 상태다(v0.3.36) — 이 창은 닫아도 뷰가 살아 있다.
@@ -343,6 +349,7 @@ final class CheckSettingsWindowController: NSObject, NSWindowDelegate {
         guard (notification.object as AnyObject?) === windowStorage else { return }
         endWorkShortcutRecording()
         wiring?.store.closeBlockedPeopleSettings()
+        wiring?.store.closeRemoteScannerSettings()
         wiring?.store.closeAccountDeletionSettings()
         wiring?.store.resetAvatarRemovalRow()
         stuckWindowWatchdog?.cancel()

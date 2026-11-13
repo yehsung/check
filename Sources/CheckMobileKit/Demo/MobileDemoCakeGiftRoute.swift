@@ -28,6 +28,14 @@ import Foundation
 /// | `me/gift/picked`    | 같은 시트 — 첫 선택지(딸기)를 골라 둠(확인 단추 켜짐)            |
 /// | `me/gift/received`  | 골라서 받은 뒤 — "딸기 케이크 아잉이를 받았어요!" + [지금 입기] [닫기] |
 /// | `me/gift/dismissed` | 시트를 띄우지 않고 닫은 것으로 — 나 탭 '다시 열기' 줄             |
+/// | `me/gift/drink`           | 술 한잔 선물(폰 1.0.17 · 이슬 아잉이) 초대장 시트 — 운영자 한 줄 · 이슬 하나 · [짠 받기] 켜짐 |
+/// | `me/gift/drink/received`  | 받은 뒤 — "이슬 아잉이를 받았어요!" + [지금 입기] [닫기]          |
+/// | `me/gift/drink/dismissed` | 시트를 띄우지 않고 닫은 것으로 — 나 탭 '다시 열기' 줄(🥂 "짠! 선물이 왔어요" [받기]) |
+///
+/// 술 장면은 같은 길에 바늘만 다르다: 받기 전 `demo-drink`(`rpc.character_gift_pending@demo-drink.json` — 열린 술 선물), 받은 뒤
+/// `demo-drink-got`(상점 `_me/rpc.shop_state@demo-drink-got.json` — 이슬 보유 · 선물 조회 `@demo-drink-got` — 선물 없음). 받기 전 상점은
+/// 일반 `_me` 상점 그대로다(이슬은 모두에게 잠긴 칸 — 서버 번호 5 모양, 서버가 만들 수 있는 상태). 수령 · 착용 응답은 본문의 `aing_isul`
+/// 글자로 고른다(`rpc.claim_character_gift@aing_isul.json` · `rpc.set_character@aing_isul.json`) — 받은 뒤 바늘에 그 글자를 넣지 않는다(위와 같은 까닭).
 ///
 /// 실행:
 /// ```
@@ -42,6 +50,9 @@ package struct MobileDemoCakeGiftRoute: Hashable, Sendable {
     package static let needle = "demo-gift"
     /// 받은 뒤 바늘의 머리(`demo-gift-got` + `-strawberry` | `-choco`). 이 머리만으로 고르는 파일도 있다(선물 조회 — 선물 없음).
     package static let claimedNeedle = "demo-gift-got"
+    /// 술 한잔 장면(폰 1.0.17)의 받기 전 · 받은 뒤 바늘. 선택지가 이슬 하나라 받은 뒤 바늘에 꼬리가 없다.
+    package static let drinkNeedle = "demo-drink"
+    package static let drinkClaimedNeedle = "demo-drink-got"
 
     /// 받은 뒤 바늘의 꼬리 — 케이크 id 의 짧은 이름. 모르는 id 면 nil(기록하지 않는다).
     package static func claimedSuffix(for characterID: String) -> String? {
@@ -56,38 +67,63 @@ package struct MobileDemoCakeGiftRoute: Hashable, Sendable {
     /// URLSession 스레드에서 불리므로 자물쇠로 감싼다.
     package final class Ledger: @unchecked Sendable {
         private let lock = NSLock()
+        private let kind: CharacterGiftKind
         private var claimed: String?
 
-        package init() {}
+        /// `kind` = 이 장면의 선물 종류(생일 · 술 한잔). 기본은 생일(1.0.14 장면).
+        package init(kind: CharacterGiftKind = .birthday) {
+            self.kind = kind
+        }
 
-        /// 지금 붙일 바늘 — 받기 전 `demo-gift`, 받은 뒤 `demo-gift-got-<strawberry|choco>`.
+        /// 지금 붙일 바늘 — 생일: 받기 전 `demo-gift`, 받은 뒤 `demo-gift-got-<strawberry|choco>` · 술: `demo-drink` → `demo-drink-got`.
         package var needle: String {
             lock.lock()
             defer { lock.unlock() }
-            return claimed.map { "\(MobileDemoCakeGiftRoute.claimedNeedle)-\($0)" } ?? MobileDemoCakeGiftRoute.needle
+            switch kind {
+            case .birthday:
+                return claimed.map { "\(MobileDemoCakeGiftRoute.claimedNeedle)-\($0)" } ?? MobileDemoCakeGiftRoute.needle
+            case .drink, .pepero, .region:
+                // 빼빼로(지역 아잉이도 같다 — 맥 먼저 · 능력 10)(맥 0.3.77 먼저 · 능력 6)는 폰에 장면이 없다(다음 폰 판) — 고를 것 없는 한 개 선물이라 술 장면의 바늘 꼴을 같이 쓴다.
+                return claimed == nil ? MobileDemoCakeGiftRoute.drinkNeedle : MobileDemoCakeGiftRoute.drinkClaimedNeedle
+            }
         }
 
-        /// 수령이 성공했으면(200 · status ok · 아는 케이크 id) 받은 것을 적는다. 그 밖의 요청 · 응답은 무시한다.
+        /// 수령이 성공했으면(200 · status ok · 이 종류의 선물로 받는 id) 받은 것을 적는다. 그 밖의 요청 · 응답은 무시한다.
         package func record(_ request: MobileStubRequest, response: MobileStubResponse) {
             guard request.rpcName == "claim_character_gift", response.status == 200,
                   let object = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any],
-                  object["status"] as? String == "ok", let id = object["character_id"] as? String,
-                  let suffix = MobileDemoCakeGiftRoute.claimedSuffix(for: id) else { return }
+                  object["status"] as? String == "ok", let id = object["character_id"] as? String else { return }
+            let mark: String?
+            switch kind {
+            case .birthday: mark = MobileDemoCakeGiftRoute.claimedSuffix(for: id)
+            case .drink, .pepero, .region: mark = kind.builtInIDs.contains(id) ? id : nil
+            }
+            guard let mark else { return }
             lock.lock()
-            claimed = suffix
+            claimed = mark
             lock.unlock()
         }
     }
 
     /// 시트에 시킬 일(`picked` · `received` · `dismissed`). nil 이면 띄우기만.
     package var action: String?
+    /// 이 장면의 선물 종류 — `me/gift…` 는 생일, `me/gift/drink…` 는 술 한잔(폰 1.0.17).
+    package var kind: CharacterGiftKind
 
-    package init(action: String? = nil) {
+    package init(action: String? = nil, kind: CharacterGiftKind = .birthday) {
         self.action = action
+        self.kind = kind
     }
 
     package var openRoute: String { Self.openRoute }
     package var scene: String { Self.scene }
+    /// 받기 전 바늘(종류별).
+    package var needle: String { kind != .birthday ? Self.drinkNeedle : Self.needle }
+
+    /// 이 장면의 수령 기록(데모 한 실행에 하나).
+    package func makeLedger() -> Ledger {
+        Ledger(kind: kind)
+    }
 
     /// 데모 라우트 글자 → 값. 선물 라우트가 아니면 nil. 모르는 꼬리는 띄우기만(라우트를 조용히 버리지 않는다).
     package init?(demoRoute raw: String) {
@@ -95,18 +131,25 @@ package struct MobileDemoCakeGiftRoute: Hashable, Sendable {
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
             .lowercased()
         guard path == "me/gift" || path.hasPrefix("me/gift/") else { return nil }
-        let tail = path.split(separator: "/").dropFirst(2).first.map(String.init)
-        switch tail {
+        var tail = path.split(separator: "/").dropFirst(2).map(String.init)
+        let kind: CharacterGiftKind
+        if tail.first == "drink" {
+            kind = .drink
+            tail.removeFirst()
+        } else {
+            kind = .birthday
+        }
+        switch tail.first {
         case "picked", "received", "dismissed":
-            self.init(action: tail)
+            self.init(action: tail.first, kind: kind)
         default:
-            self.init(action: nil)
+            self.init(action: nil, kind: kind)
         }
     }
 
     /// 바늘을 요청 본문 꼬리에 붙인 사본(`MobileDemoMissionsRoute.rewrite` 와 같다 — 기록은 원본으로 남는다). 받기 전 바늘이다.
     package func rewrite(_ request: MobileStubRequest) -> MobileStubRequest {
-        rewrite(request, needle: Self.needle)
+        rewrite(request, needle: needle)
     }
 
     /// 수령 기록을 보고 바늘을 고른 사본(받기 전 `demo-gift` · 받은 뒤 `demo-gift-got-…`). 데모 스텁 응답기가 쓴다.

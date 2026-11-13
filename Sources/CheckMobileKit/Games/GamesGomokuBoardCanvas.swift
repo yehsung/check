@@ -15,6 +15,8 @@ struct GamesGomokuBoardCanvas: View {
     var showsCoordinates = true
     /// 끝난 판의 승리선 양 끝(`GomokuPhoneWinLine`) — 돌 위로 굵은 선을 긋는다.
     var winLine: (from: GomokuPoint, to: GomokuPoint)?
+    /// 이 판의 흑 · 백 오목알 스킨(폰 1.0.18 — 서버 `match.black_skin` · `white_skin`, 상대에게도 보인다 · 맥 0.3.81 과 같은 그림). nil = 일반 돌.
+    var stoneSkins: OmokStoneSkins = .plain
 
     static let woodLight = Color(red: 0.88, green: 0.73, blue: 0.49)
     static let woodDark = Color(red: 0.79, green: 0.62, blue: 0.38)
@@ -78,7 +80,8 @@ struct GamesGomokuBoardCanvas: View {
         for y in g.originY..<(g.originY + g.lines) {
             for x in g.originX..<(g.originX + g.lines) {
                 guard let point = GomokuPoint(x: x, y: y), let color = board[point] else { continue }
-                Self.drawStone(&context, at: g.location(of: point), radius: radius, color: color, opacity: 1)
+                Self.drawStone(&context, at: g.location(of: point), radius: radius, color: color, opacity: 1,
+                               skin: stoneSkins.skin(black: color == .black), seed: OmokStoneSkins.seed(x: x, y: y))
             }
         }
         for point in autoPoints where g.contains(point) && board[point] != nil {
@@ -102,7 +105,9 @@ struct GamesGomokuBoardCanvas: View {
         }
         if let preview, g.contains(preview.point), board[preview.point] == nil {
             let c = g.location(of: preview.point)
-            Self.drawStone(&context, at: c, radius: radius, color: preview.color, opacity: 0.55)
+            Self.drawStone(&context, at: c, radius: radius, color: preview.color, opacity: 0.55,
+                           skin: stoneSkins.skin(black: preview.color == .black),
+                           seed: OmokStoneSkins.seed(x: preview.point.x, y: preview.point.y))
             let ring = Path(ellipseIn: CGRect(x: c.x - radius - 2, y: c.y - radius - 2, width: (radius + 2) * 2, height: (radius + 2) * 2))
             context.stroke(ring, with: .color(Self.previewRing), style: StrokeStyle(lineWidth: max(1.5, g.cell * 0.09), dash: [3, 2]))
         }
@@ -125,7 +130,21 @@ struct GamesGomokuBoardCanvas: View {
         }
     }
 
-    static func drawStone(_ context: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, color: GomokuColor, opacity: Double) {
+    /// 돌 하나. 스킨이 있으면 그 스킨의 CoreGraphics 식(코어 `OmokStoneSkin.draw` — 맥과 같은 식)을 같은 자리 · 같은 반지름에 그린다.
+    /// 반투명(미리보기)은 투명 층 하나로 묶어 그림자 · 몸이 겹쳐 진해지지 않게 한다(맥 `GomokuPanel.drawStone` 과 같다).
+    static func drawStone(_ context: inout GraphicsContext, at c: CGPoint, radius r: CGFloat, color: GomokuColor, opacity: Double,
+                          skin: OmokStoneSkin? = nil, seed: Int = 0) {
+        if let skin {
+            context.withCGContext { cg in
+                cg.saveGState()
+                cg.setAlpha(CGFloat(opacity))
+                cg.beginTransparencyLayer(auxiliaryInfo: nil)
+                skin.draw(in: cg, center: c, radius: r, black: color == .black, seed: seed)
+                cg.endTransparencyLayer()
+                cg.restoreGState()
+            }
+            return
+        }
         var layer = context
         layer.opacity = opacity
         layer.fill(Path(ellipseIn: CGRect(x: c.x - r + r * 0.06, y: c.y - r + r * 0.14, width: r * 2, height: r * 2)),
@@ -186,7 +205,7 @@ struct GamesGomokuPlayBoard: View {
         let previewPoint = preview.visiblePoint(match: match, isBusy: store.isBusy, forbidden: forbidden)
         GamesGomokuBoardCanvas(
             board: match.board, geometry: geometry, lastMove: match.lastMove, forbidden: forbidden,
-            autoPoints: match.autoPoints, preview: previewPoint.map { ($0, match.myColor) }
+            autoPoints: match.autoPoints, preview: previewPoint.map { ($0, match.myColor) }, stoneSkins: match.stoneSkins
         )
         .contentShape(Rectangle())
         .gesture(SpatialTapGesture().onEnded { value in

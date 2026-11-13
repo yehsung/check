@@ -1784,7 +1784,8 @@ func sourceContractLiveAccountStoreIsBuiltOnlyInCheckApp() throws {
     // 짝 게이트의 나머지 반쪽 — 이 두 인자가 빠지면 규칙·테스트가 전부 초록인 채 화면만 옛 숫자를 그린다.
     #expect(menu.contains("serverRow: store.myTokenRow, userID: store.session?.userID"))
     // 하트비트 본문은 여전히 다섯 필드다(구조체에 let 이 5개).
-    let models = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/CheckCore/SupabaseWorkModels.swift"), encoding: .utf8))
+    // 2026-11-07: 토큰 업로드 본문 모양은 SupabaseWorkModels.swift 에서 TokenUsageUpload.swift 로 옮겼다(원격 스캐너와 공용).
+    let models = c41StrippingComments(try String(contentsOf: c41RepoURL("Sources/CheckCore/TokenUsageUpload.swift"), encoding: .utf8))
     let heartbeat = try #require(models.components(separatedBy: "struct TokenScanHeartbeatRequest: Encodable {").last?
         .components(separatedBy: "}").first)
     #expect(heartbeat.components(separatedBy: "let ").count - 1 == 5)

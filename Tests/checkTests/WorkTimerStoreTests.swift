@@ -4704,7 +4704,8 @@ func insightsLoadFillsTheDailyGridAndWeekRolloverOrSignOutResetsIt() async throw
 
     await store.performLoadInsights()
 
-    // 조회 창은 잔디 시작(이번 주 월요일 − 12주)까지 넓어졌다 — 요청의 since 가 그 날짜다.
+    // 잔디 창은 이번 주 월요일 − 12주다. 세션 조회는 2026-11-06 부터 주별 근무 리듬(첫 주까지 넘겨보기) 때문에
+    // 서비스 첫 주(rhythmHistoryStart)까지 넓다 — 요청의 since 가 둘 중 이른 날짜다.
     let request = try #require(URLProtocolStub.requests(forHost: testHost).last {
         $0.url?.path == "/rest/v1/work_sessions" && $0.httpMethod == "GET"
     })
@@ -4712,7 +4713,11 @@ func insightsLoadFillsTheDailyGridAndWeekRolloverOrSignOutResetsIt() async throw
     #expect(since == WorkDailyGrid.windowStart(now: Date()))
     let requestURL = try #require(request.url)
     let items = try #require(URLComponents(url: requestURL, resolvingAgainstBaseURL: false)?.queryItems)
-    #expect(items.contains(URLQueryItem(name: "ended_at", value: "gte.\(ISO8601DateFormatter().string(from: since))")))
+    let sessionSince = min(since, WorkTimerStore.rhythmHistoryStart)
+    #expect(items.contains(URLQueryItem(name: "ended_at", value: "gte.\(ISO8601DateFormatter().string(from: sessionSince))")))
+    // 주별 리듬도 같은 조회에서 찬다: 이번 주까지 이어지고 지난주 월요일 칸에 2시간.
+    #expect(store.rhythmWeeks.weekStarts.last == TeamWeeklyGoal.koreanWeekStart(for: Date()))
+    #expect(store.rhythmWeeks.heatmap(offset: 1)?.totalSeconds == 7_200)
     #expect(items.contains(URLQueryItem(name: "limit", value: "5000")))
 
     // 잔디: 13열, 지난주(11열) 월요일 칸에 2시간. 히트맵/회고는 넓어진 창에서도 예전 값 그대로다.
@@ -4745,6 +4750,7 @@ func insightsLoadFillsTheDailyGridAndWeekRolloverOrSignOutResetsIt() async throw
     store.discardInsightsIfWeekRolledOver()
     #expect(store.dailyGrid == .empty)
     #expect(store.heatmap == .empty)
+    #expect(store.rhythmWeeks == .empty)
     #expect(!store.insightsLoaded)
 
     // 같은 주면 버리지 않는다.

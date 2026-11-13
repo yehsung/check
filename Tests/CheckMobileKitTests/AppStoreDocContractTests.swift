@@ -8,9 +8,12 @@ import Testing
 /// 어긋나면 빨개진다** — 애플의 정의 문구 자체는 외부 사실이라 여기서 못 재지만, 그 정의를 적용한 결론은
 /// 코드 사실(환금 불가 재화의 판돈이 있다 · 자정 상품이 매일 있다)에서 따라 나오므로 그 **함의**를 묶는다.
 ///
-/// - 모의 도박(Simulated Gambling) = "실제 돈이나 환금 가능한 재화 **없이** 거는 것" → 판돈이 있는 한 '예', 등급 13+ 이상.
+/// - 모의 도박(Simulated Gambling): **문서의 답은 실제 ASC 값('아니오' · NONE)이다**(폰 1.0.17 갈래 4/4 에서 뒤집었다). 정의 글자만 보면 환금 불가
+///   루비 판돈도 걸리지만, '예 · 드묾' 으로 낸 1.0 이 2026-09-19 개인 개발자 계정 자동 반려(지침 2.3.6)를 맞았고 2026-09-21 NONE 으로 고친 뒤
+///   루비 1:1 넷(오목 · 체스 · 테트리스 · 큐브)이 통과했다. 이 계약이 예전에 '예' 를 정답으로 박아 두어, 문서를 믿고 설문을 고치면 자동 반려가
+///   다시 나는 자리였다 — 이제는 답 칸이 '아니오(NONE)' 이고 근거 칸이 그 까닭(2.3.6 · 개인 개발자 · 자동 반려)을 말해야 초록이다.
 /// - 경연(Contests) = "순위·보상을 두고 겨루는 행사"(실물 상품 조건 없음) → 매일 자정 상품이 있는 한 '예·잦음', 13+.
-/// 출처: <https://developer.apple.com/help/app-store-connect/reference/age-ratings/> (2026-09-18 원문).
+/// 출처: <https://developer.apple.com/help/app-store-connect/reference/age-ratings/> (2026-09-18 원문) · 반려 원문 요지는 문서 §3.
 @Suite("w16 제출 자료 계약")
 struct AppStoreDocContractTests {
     static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
@@ -54,7 +57,7 @@ struct AppStoreDocContractTests {
 
     // MARK: medium 1 — 연령 설문
 
-    @Test("판돈(환금 불가 루비)이 있는 한 §3 모의 도박은 '예' · 자정 상품이 있는 한 경연은 '예' · 예상 등급은 13+")
+    @Test("§3 모의 도박은 실제 ASC 값 '아니오(NONE)'와 그 까닭(2.3.6 자동 반려) · 판돈 사실(아잉 뒤집기 포함) · 자정 상품이 있는 한 경연은 '예' · 예상 등급은 13+ · §3.1 1.0.17 제출 값")
     func ageRatingFollowsWageringFacts() throws {
         // 대조 — 코드 사실이 사라지면 이 계약의 전제도 사라진다(그때는 문서와 함께 이 테스트를 고친다).
         let stakes = try Self.lobbyStakes()
@@ -66,10 +69,15 @@ struct AppStoreDocContractTests {
         let survey = try Self.section(of: doc, heading: "## 3. 연령 등급 설문 예상 답")
 
         let gambling = try Self.row(in: survey, containing: "모의 도박(Simulated Gambling)")
-        #expect(gambling[1].contains("예") && !gambling[1].contains("아니오"),
-                "환금 불가 재화로 거는 것이 애플의 모의 도박 정의 그 자체다 — '아니오' 로 답하면 심사에서 등급이 정정된다: \(gambling[1])")
-        #expect(gambling[1].contains("13+"), "모의 도박 '드묾' 은 13+ 다: \(gambling[1])")
+        // 답 칸 = ASC 실제 값. '예 · 드묾' 으로 되돌리면 개인 개발자 계정은 제출 단계에서 자동 반려된다(2026-09-19 실측).
+        #expect(gambling[1].contains("아니오") && gambling[1].contains("NONE") && !gambling[1].contains("드묾") && !gambling[1].contains("예 ·"),
+                "모의 도박 답이 실제 ASC 값(NONE)이 아니다 — 문서를 믿고 설문을 '예' 로 고치면 2.3.6 자동 반려가 다시 난다: \(gambling[1])")
+        for reason in ["2.3.6", "개인 개발자", "자동 반려", "INFREQUENT_OR_MILD"] {
+            #expect(gambling[2].contains(reason), "모의 도박 근거 칸이 '아니오' 의 까닭(\(reason))을 말하지 않는다 — 다음 사람이 정의만 읽고 되돌린다")
+        }
         #expect(gambling[2].contains("\(stakes[0])/\(stakes[1])/\(stakes[2])"), "근거 칸의 판돈 숫자가 픽스처와 다르다: \(gambling[2])")
+        // 루비를 거는 1:1 이 늘면 근거 칸도 그 게임을 말한다(설문 답이 그대로라는 판단의 근거) — 아잉 뒤집기(1.0.17).
+        #expect(gambling[2].contains(ReversiNoticeText.gameName), "모의 도박 근거 칸이 \(ReversiNoticeText.gameName)(루비 3/5/10 · 1.0.17)를 모른다")
 
         let contests = try Self.row(in: survey, containing: "경연(Contests)")
         #expect(contests[1].contains("예") && !contests[1].contains("아니오") && !contests[1].contains("확인 필요"),
@@ -82,7 +90,17 @@ struct AppStoreDocContractTests {
 
         let verdict = try #require(survey.split(separator: "\n").first { $0.hasPrefix("예상 결과 등급") }, "예상 등급 줄이 없다")
         #expect(verdict.contains("**13+**") && !verdict.contains("**4+**"),
-                "모의 도박·경연 어느 한쪽만으로도 13+ 인데 4+ 를 예상한다: \(verdict)")
+                "경연(잦음)만으로도 13+ 인데 4+ 를 예상한다: \(verdict)")
+        #expect(verdict.contains("NONE"), "예상 등급 줄이 모의 도박 답(NONE)과 어긋난 말을 한다: \(verdict)")
+
+        // §3.1 — 1.0.17 제출 때 ASC 에서 바꿀 값(대표 결정 원문 번호 · 값). ASC 일이라 저장소는 기록만 한다.
+        let submit = try Self.section(of: doc, heading: "### 3.1 1.0.17 제출 때")
+        for fact in ["#d_E3bxq1b2jSsS", "INFREQUENT_OR_MILD", "#d_ON6kUqxzfy9m", "https://aing-check.vercel.app", "gamblingSimulated"] {
+            #expect(submit.contains(fact), "§3.1 이 1.0.17 제출 값(\(fact))을 적지 않았다")
+        }
+        let support = try Self.row(in: submit, containing: "지원 URL")
+        #expect(support[2].contains("https://aing-check.vercel.app") && support[1].contains("https://yehsung.github.io/check/"),
+                "지원 URL 줄: 지금 \(support[1]) → 제출 때 \(support[2])")
     }
 
     // MARK: 1.0.8 — 루트 상자(캐릭터 뽑기)
@@ -541,5 +559,188 @@ struct AppStoreDocContractTests {
         }
         #expect(!summary.contains("@") && !summary.lowercased().contains("password") && !summary.contains("비밀번호"),
                 "§5.3 1.0.16 요약에 계정 정보 꼴 글자가 있다")
+    }
+
+    // MARK: 1.0.17 — 아잉 뒤집기 · 메시지 서식 · 골라 복사 · 집중 표시 · 이슬 (검토 지적: 가지에 출시 문서가 없었다)
+
+    /// 1.0.16 블록 시험과 같은 수법이다: 문서가 부르는 앱 글자를 **문구 표에서** 읽어 맞춘다. 이 판의 핵심은 셋이다 —
+    /// ① 아잉 뒤집기 1:1 은 두 기기 · 두 계정이 필요하고 로봇 연습은 한 기기로 된다(2.3.1(a) "accessible for review"),
+    /// ② 받은 말풍선 신고가 길게 누름 메뉴에서 iOS 편집 메뉴로 옮겼다(지침 1.2 — 메모가 그 길을 말해야 한다),
+    /// ③ 이슬 아잉이로 연령 설문 술 칸이 '드묾'이 된다(대표 답 #d_E3bxq1b2jSsS) — 상표 글자는 어디에도 없다(#d_dk4IjWRZvFYR).
+    @MainActor
+    @Test("1.0.17: §0.1 게임·메시지·나 줄 · §1.4 · §2.1 · §4.1 · §5.2 New in 1.0.17 · §5.3 요약 · §6.2 가 앱 글자와 맞고 금지 낱말 · 상표 글자가 없다")
+    func flipFormattingFocusAndIsulAreDocumented() throws {
+        // ── 대조: 문서가 부르는 앱 글자(바뀌면 문서와 함께 고친다)
+        #expect(ReversiPhoneText.title == "아잉 뒤집기" && ReversiPhoneText.aiButton == "로봇과 연습하기", "전제: 게임 이름 · 로봇 입구")
+        #expect(ReversiPhoneText.lobbyTitle == "상대 고르기" && ReversiPhoneText.accept == "수락", "전제: 신청 · 수락 글자")
+        #expect(ReversiPhoneText.liveTitle == "지금 대결 중" && ReversiPhoneText.watch == "관전", "전제: 관전 입구")
+        #expect(ReversiPhoneText.rulesTitle == "아잉 뒤집기 규칙", "전제: 규칙 시트 제목")
+        #expect(ReversiStake.allCases.map(\.rawValue) == [3, 5, 10], "전제: 루비 셋 — 메모의 '3, 5 or 10 rubies'")
+        #expect(BlockReportText.reportMessageAction == "이 메시지 신고하기", "전제: 편집 메뉴의 신고 글자")
+        #expect(MessagesFocusText.personChip == "집중", "전제: 집중 칩 글자")
+        #expect(DrinkGiftText.lockedCaption == "술 한잔 선물 전용" && DrinkGiftText.title == "짠! 🥂", "전제: 이슬 잠긴 칸 · 받는 창 제목")
+        let rpcs = ["reversi_challenge", "reversi_cancel", "reversi_respond", "reversi_move", "reversi_resign"]
+        for rpc in rpcs {
+            #expect(try !IntegrationContractTests.files(containing: ["\"\(rpc)\""], under: "Sources/CheckCore").isEmpty, "전제: 코어가 \(rpc) 를 부른다")
+        }
+        let trademarks = ["참" + "이슬", "오" + "델로", "오" + "셀로", "oth" + "ello"]
+
+        let doc = try Self.document("docs/appstore.md")
+
+        // ── ① §0.1 기능 범위 — 게임 · 메시지 · 나 줄.
+        let scope = try Self.section(of: doc, heading: "### 0.1 실제 기능 범위")
+        let games = try Self.row(in: scope, containing: "| 게임 |")
+        #expect(games.count == 4, "게임 줄의 칸이 넷이 아니다(칸 안 '|' 금지): \(games.count)")
+        #expect(games[1].contains("\(ReversiPhoneText.title)(1.0.17") && games[1].contains("「\(ReversiPhoneText.aiButton)」"),
+                "게임 줄이 아잉 뒤집기 · 로봇 연습을 말하지 않는다")
+        for rpc in rpcs { #expect(games[2].contains("`\(rpc)`"), "게임 쓰기 칸에 \(rpc) 가 없다") }
+        #expect(games[2].contains("로봇 연습은 서버에 아무것도 안 쓴다"), "로봇 연습이 서버를 안 탄다는 사실이 없다")
+        let messages = try Self.row(in: scope, containing: "| 메시지 |")
+        for fact in ["서식(1.0.17", "골라 복사(1.0.17", "집중 표시(1.0.17", "「\(MessagesFocusText.personChip)」", "[\(BlockReportText.reportMessageAction)]",
+                     "집중을 켜고 끄는 단추가 없다"] {
+            #expect(messages[1].contains(fact), "메시지 줄에 '\(fact)' 가 없다")
+        }
+        #expect(messages[2].contains("새 쓰기 0") && messages[2].contains("focus_mode"), "메시지 쓰기 칸이 1.0.17 에 새 쓰기가 없다는 사실을 말하지 않는다")
+        let me = try Self.row(in: scope, containing: "| 나 |")
+        #expect(me[1].contains("1.0.17") && me[1].contains(DrinkGiftText.lockedCaption) && me[1].contains(DrinkGiftText.title), "나 줄에 이슬 잠긴 칸 · 받는 창이 없다")
+        #expect(me[2].contains("`claim_character_gift`"), "나 쓰기 칸에 선물 받기가 없다")
+
+        // ── ② §1.4 설명문(ASC 초안): 1:1 여섯 · 마작 · 서식 · 4,000 바이트 · 금지 낱말 · 상표.
+        // 1.0.18 초안으로 넘어갔다 — 1:1 수는 1.0.17 의 넷(오목·체스·테트리스·뒤집기)에 길건너 · 알까기를 더한 여섯이고 아잉 마작이 붙는다.
+        // 게임 이름의 '1:1 ' 머리는 설명문의 '1:1 대결은 … 여섯 가지' 안에서 떼어 쓴다(같은 줄에 1:1 을 두 번 쓰지 않게).
+        let copy = try Self.section(of: doc, heading: "### 1.4 설명")
+        let quoted = copy.split(separator: "\n").filter { $0.hasPrefix(">") }
+            .map { $0.dropFirst().trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+        #expect(quoted.utf8.count <= 4_000, "설명문이 4,000 바이트를 넘는다: \(quoted.utf8.count)")
+        let crossy = CrossyDuelPhoneText.title.replacingOccurrences(of: "1:1 ", with: "")
+        let alkkagi = AlkkagiPhoneText.title.replacingOccurrences(of: "1:1 ", with: "")
+        #expect(quoted.contains("오목·체스·테트리스·\(ReversiPhoneText.title)·\(crossy)·\(alkkagi) 여섯 가지"), "「■ 게임」 의 1:1 수가 앱과 다르다")
+        #expect(quoted.contains("\(GamesMahjongText.title)은 4명이 리치 마작 규칙으로"), "「■ 게임」 에 아잉 마작이 없다")
+        #expect(quoted.contains("제목·굵게·링크"), "「■ 메시지」 에 서식이 없다")
+        #expect(copy.contains("이 절은 **1.0.18 제출 초안**이다(\(quoted.count)자 · \(quoted.utf8.count)바이트)"), "머리 줄의 글자 수가 설명문과 다르다")
+        for word in ["판돈", "베팅", "도박", "내기", "러미", "Supabase"] + trademarks {
+            #expect(!quoted.contains(word), "스토어 설명문에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ── ③ §2.1 라벨: 게임플레이 줄이 아잉 뒤집기를 신고한다(수집 항목) · 로봇 연습은 서버에 안 간다.
+        let label = try Self.section(of: doc, heading: "### 2.1 수집함")
+        let gameplay = try Self.row(in: label, containing: "**게임플레이 콘텐츠**")
+        #expect(gameplay[1].contains(ReversiPhoneText.title) && gameplay[1].contains("로봇 연습 판은 기기 안에서만"), "라벨 게임플레이 줄이 아잉 뒤집기를 모른다")
+
+        // ── ④ §4.1 지금 URL: 처리방침은 앱 글자의 주소 · 지원/마케팅은 대표 결정 주소. 옛 비교(처리방침 링크 없음)는 기록 절에만.
+        let urls = try Self.section(of: doc, heading: "### 4.1 지금 값")
+        #expect(urls.contains(MeText.privacyPolicyURL.absoluteString) && urls.contains(MeText.termsOfServiceURL.absoluteString))
+        #expect(urls.contains("https://aing-check.vercel.app") && urls.contains("#d_ON6kUqxzfy9m") && urls.contains("#d_JgbxZbRY8q3j"))
+        #expect(!urls.contains("처리방침 링크가 없다"), "지금 값 절이 옛 상태(앱에 처리방침 링크 없음)를 말한다")
+        let old = try #require(doc.range(of: "### 4.2 첫 출시 전 비교"), "옛 비교가 기록 절로 갈리지 않았다")
+        let stale = try #require(doc.range(of: "앱 화면에는 처리방침 링크가 없다"))
+        #expect(stale.lowerBound > old.lowerBound, "'처리방침 링크가 없다'가 기록 절 밖에 있다")
+
+        // ── ⑤ §5.2 심사원용 영어 메모 — 1.0.17 블록.
+        let notes = try Self.section(of: doc, heading: "### 5.2 노트 본문")
+        let start = try #require(notes.range(of: "**New in 1.0.17"), "§5.2 에 New in 1.0.17 블록이 없다")
+        let rest = notes[start.lowerBound...]
+        let block = String(rest[..<(rest.range(of: "**Screens that")?.lowerBound ?? rest.endIndex)])
+        for appText in [ReversiPhoneText.title, ReversiPhoneText.aiButton, ReversiPhoneText.lobbyTitle, ReversiPhoneText.accept,
+                        ReversiPhoneText.liveTitle, ReversiPhoneText.watch, ReversiPhoneText.rulesTitle, BlockReportText.reportMessageAction,
+                        MessagesFocusText.personChip, DrinkGiftText.lockedCaption, DrinkGiftText.title] {
+            #expect(block.contains("「\(appText)」"), "§5.2 1.0.17 블록에 앱 글자 「\(appText)」 가 없다")
+        }
+        for fact in ["two devices and two demo accounts", "3, 5 or 10 rubies", "cannot be bought with money or cashed out", "no in-app purchases",
+                     "within 60 seconds", "30 seconds", "three automatic placements in a row", "Infrequent/Mild", "13+", "conversation ··· menu"] {
+            #expect(block.contains(fact), "§5.2 1.0.17 블록에 '\(fact)' 가 없다")
+        }
+        #expect(!block.contains("@") && !block.lowercased().contains("password"), "1.0.17 블록에 계정 정보 꼴 글자가 있다")
+        for word in ["gambl", "wager", "bet ", "betting", "casino", "jackpot", "cash prize", "Supabase", "supabase", "Apple Pay", "판돈"] + trademarks {
+            #expect(!block.lowercased().contains(word.lowercased()), "§5.2 1.0.17 블록에 금지 낱말 '\(word)' 가 있다")
+        }
+
+        // ── ⑥ §5.3 한국어 요약 — 서버 상수 · 연령 설문 · 이슬 대비 · URL · 게시일 · whatsNew 세 줄.
+        let korean = try Self.section(of: doc, heading: "### 5.3 노트 한국어 요약")
+        let summaryStart = try #require(korean.range(of: "- 1.0.17 은"), "§5.3 에 1.0.17 요약 줄이 없다")
+        let summaryRest = korean[summaryStart.lowerBound...]
+        let summary = String(summaryRest[..<(summaryRest.range(of: "\n- 1.0.7")?.lowerBound ?? summaryRest.endIndex)])
+        for conclusion in ["reversi_ios_min_build", "**29**", "사용자 승인", "ASC 심사 메모 칸에만", "그대로 NONE", "docs/plan/isul-alt/README.md",
+                           "#d_ON6kUqxzfy9m", "#d_x57oDD1VwQ1y", "whatsNew"] {
+            #expect(summary.contains(conclusion), "§5.3 1.0.17 요약에 '\(conclusion)' 가 없다")
+        }
+        #expect(!summary.contains("@") && !summary.lowercased().contains("password") && !summary.contains("비밀번호"), "§5.3 1.0.17 요약에 계정 정보 꼴 글자가 있다")
+        let fence = try #require(summary.range(of: "```\n"), "whatsNew 코드 칸이 없다")
+        let whatsNewBody = summary[fence.upperBound...]
+        let whatsNew = String(whatsNewBody[..<(whatsNewBody.range(of: "```")?.lowerBound ?? whatsNewBody.endIndex)])
+        let lines = whatsNew.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        #expect(lines.count == 3 && lines[0].contains(ReversiPhoneText.title), "whatsNew 초안이 세 줄 · 첫 줄 아잉 뒤집기가 아니다: \(lines)")
+        for word in ["판돈", "베팅", "도박", "내기"] + trademarks { #expect(!whatsNew.contains(word), "whatsNew 에 금지 낱말 '\(word)'") }
+
+        // ── ⑦ §6.2 스크린샷: me/shop 은 예비에서 빠졌고 까닭(이슬 칸 그림 라벨의 상표)이 적혀 있다.
+        let shots = try Self.section(of: doc, heading: "### 6.2 여섯 장")
+        let spare = try #require(shots.split(separator: "\n").first { $0.hasPrefix("예비(") }, "예비 줄이 없다")
+        #expect(!spare.contains("`me/shop`"), "예비 스크린샷에 이슬 잠긴 칸(상표 그림)이 서는 me/shop 이 남았다")
+        #expect(shots.contains("`me/shop`(상점)은 스크린샷에 쓰지 않는다") && shots.contains("#d_dk4IjWRZvFYR"), "me/shop 을 쓰지 않는 까닭이 없다")
+    }
+
+    /// `privacy.md` 를 **따옴표로** 인용한 근거는 그 글이 처리방침에 실제로 있어야 한다(줄 번호는 처리방침이 자라며 밀린다 — `privacy.md:103` 이
+    /// 빈 줄이 된 채 '루비 현금 구매·환금 불가'의 근거로 남아 있었다, 검토 지적). 루비 현금 사실을 말하는 세 칸(§0 앱 내 결제 · §3 도박(실제) ·
+    /// §3 루트 상자)은 반드시 따옴표 인용을 든다. 기준선: 처리방침에 없는 글을 인용하면 빨개진다.
+    @Test("appstore.md 의 처리방침 따옴표 인용은 처리방침에 실제로 있다 · 루비 현금 사실 세 칸은 실제 문장을 든다(기준선: 없는 글은 걸린다)")
+    func privacyQuotesExistInThePolicy() throws {
+        let doc = try Self.document("docs/appstore.md")
+        let policy = try Self.document("docs/privacy.md")
+        let pattern = try NSRegularExpression(pattern: #"privacy\.md(?::[0-9, -]+)?`?\("([^"]+)"\)"#)
+        func quotes(_ text: String) -> [String] {
+            pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+                Range(match.range(at: 1), in: text).map { String(text[$0]) }
+            }
+        }
+        let all = quotes(doc)
+        #expect(all.count >= 5, "처리방침 따옴표 인용이 거의 없다 — 정규식이 안 맞는다: \(all.count)")
+        for quote in all {
+            #expect(policy.contains(quote), "appstore.md 가 처리방침에 없는 글을 인용한다: \(quote)")
+        }
+        // 기준선: 처리방침에 없는 글은 걸린다(이 시험이 아무것도 안 재는 것이 아니다).
+        #expect(!policy.contains(quotes(#"`privacy.md`("루비는 현금으로 바꿀 수 있습니다")"#).first ?? ""), "기준선: 정규식이 인용을 못 집었다")
+        let facts = try Self.section(of: doc, heading: "## 0. 앱 사실 요약")
+        let survey = try Self.section(of: doc, heading: "## 3. 연령 등급 설문 예상 답")
+        for (section, needle) in [(facts, "| 앱 내 결제 |"), (survey, "| 도박(실제) |"), (survey, "| **루트 상자** |")] {
+            let row = try Self.row(in: section, containing: needle).joined(separator: " | ")
+            let cited = quotes(row)
+            #expect(!cited.isEmpty, "\(needle) 근거 칸이 처리방침 문장을 따옴표로 들지 않는다(줄 번호만으로는 밀린다)")
+            #expect(cited.allSatisfy { policy.contains($0) }, "\(needle) 근거 칸 인용이 처리방침에 없다: \(cited)")
+            #expect(!row.contains("privacy.md:103"), "\(needle) 근거 칸이 빈 줄(privacy.md:103)을 가리킨다")
+        }
+    }
+
+    /// 출시 게이트(`ios/scripts/check-release-app.sh` 5번) 기능 문구 표는 **릴리스마다 그 판 것으로 옮긴다**(스크립트 머리말의 관행) — 안 옮기면
+    /// 게이트가 옛 기능만 재서 새 기능이 글자 없이 나가도 초록이다(1.0.17 검토 지적: 가지가 1.0.16 표 그대로였다). 그래서 표의 판 이름을
+    /// `ios/project.yml` 버전에 묶고, 표의 글자가 지금 소스의 리터럴이며(주석 걷기) 16바이트 이상이고 서로 포함하지 않는지 잰다.
+    @MainActor
+    @Test("출시 게이트 기능 문구 표: 판 이름 = project.yml 버전 · 글자는 지금 소스 리터럴 · 16바이트 이상 · 서로 포함 없음 · 앞 판 바닥 줄 하나")
+    func releaseGateTableFollowsTheVersion() throws {
+        let script = try Self.document("ios/scripts/check-release-app.sh")
+        let version = try Self.projectSetting("MARKETING_VERSION")
+        #expect(script.contains("echo \"\(version) 기능 문구("), "게이트 표가 \(version) 판으로 옮겨지지 않았다(echo 머리)")
+        #expect(script.contains("# ── 5. 기능 문구 (\(version) —"), "게이트 5번 머리말이 \(version) 판이 아니다")
+        let tableStart = try #require(script.range(of: "want = [\n"), "게이트에 want 표가 없다")
+        let tail = script[tableStart.upperBound...]
+        let table = String(tail[..<(tail.range(of: "\n]\n")?.lowerBound ?? tail.endIndex)])
+        let regex = try NSRegularExpression(pattern: #"\("([^"]+)", (None|\d+)\)"#)
+        let rows: [(text: String, expected: String)] = regex.matches(in: table, range: NSRange(table.startIndex..., in: table)).compactMap { match in
+            guard let text = Range(match.range(at: 1), in: table), let expected = Range(match.range(at: 2), in: table) else { return nil }
+            return (String(table[text]), String(table[expected]))
+        }
+        #expect(rows.count >= 5, "게이트 표가 거의 비었다: \(rows.count)")
+        for row in rows {
+            #expect(row.text.utf8.count >= 16, "'\(row.text)' 는 \(row.text.utf8.count)바이트 — 15바이트 이하는 Release 에서 못 잰다")
+            let homes = try ["Sources/CheckCore", "Sources/CheckMobileKit", "Sources/CheckMobileShared"]
+                .flatMap { try IntegrationContractTests.files(containing: ["\"\(row.text)\""], under: $0) }
+            #expect(!homes.isEmpty, "게이트 글자 '\(row.text)' 가 소스 리터럴에 없다(문구가 바뀌었으면 표도 옮겨라)")
+        }
+        for a in rows {
+            for b in rows where a.text != b.text {
+                #expect(!b.text.contains(a.text), "게이트 글자가 서로 포함된다: '\(a.text)' ⊂ '\(b.text)'")
+            }
+        }
+        // 앞 판 바닥 줄은 실측(정수)으로 하나 이상 — 이 판 줄은 아카이브로 재기 전까지 None 이어도 된다.
+        #expect(rows.contains { $0.expected != "None" }, "앞 판 바닥 줄(실측 기대 횟수)이 없다 — 병합이 앞 판 기능을 떨어뜨려도 못 잡는다")
     }
 }

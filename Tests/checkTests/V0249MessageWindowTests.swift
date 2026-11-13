@@ -58,6 +58,25 @@ private func mwStore(host: String, signedIn: Bool = true, working: Bool = true,
         host: host,
         path: "/rest/v1/rpc/message_history_with_pokes"
     )
+    // 2026-11-11: [이전 대화 더 보기]의 `message_page` 도 없는 서버를 깐다 — 버튼을 눌러야만 부르지만, 미등록 기본값(200 `[]`)이면
+    // 누르는 시험이 생기는 날 "함수가 있는 빈 서버"로 조용히 바뀐다(새 경로는 MessageOlderHistoryTests 가 잰다).
+    FeedbackURLProtocol.set(
+        .init(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.message_page(p_peer, p_before_us, p_before_id, p_limit) in the schema cache"}"#),
+        host: host,
+        path: "/rest/v1/rpc/message_page"
+    )
+    // 2026-11-11(사진): `send_photo_message` 도 없는 서버를 깐다(사진은 고른 사람만 보내지만 기본값이 "함수가 있는 서버"가 되지 않게 —
+    // 새 경로는 MessagePhotoTests 가 잰다).
+    FeedbackURLProtocol.set(
+        .init(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.send_photo_message(p_to, p_path, p_width, p_height, p_caption, p_client_message_id) in the schema cache"}"#),
+        host: host,
+        path: "/rest/v1/rpc/send_photo_message"
+    )
+    FeedbackURLProtocol.set(
+        .init(status: 404, body: #"{"code":"PGRST202","message":"Could not find the function public.report_admin_photo_paths(p_ids) in the schema cache"}"#),
+        host: host,
+        path: "/rest/v1/rpc/report_admin_photo_paths"
+    )
     let service = SupabaseWorkService(
         projectURL: URL(string: "http://\(host)")!,
         anonKey: "anon-test-key",

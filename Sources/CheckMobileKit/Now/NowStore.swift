@@ -292,6 +292,9 @@ package final class NowStore {
         refreshTimer = timers.schedule(after: Self.refreshIntervalSeconds) { [weak self] in
             guard let self, self.isActive else { return }
             self.refresh()
+            // 내 집중(1.0.17): 켜짐으로 알고 메시지 화면(목록 · 대화)이 떠 있을 때만 다시 묻는다 — 맥에서 끈 집중을 그 화면에 머무는 동안
+            // 따라잡는다(조건은 메시지 스토어가 판정한다 · `MessagesFocusRules.rechecksOnTick`). 이 틱에 기대는 까닭: 메시지 화면에는 따로 도는 시계가 없다.
+            self.context.links.messages?.refreshMyFocusModeIfFocused()
             // 앱을 켜 둔 채(화면 꺼짐 없음) 오래 두어도 확인 알림이 오지 않게 — 폰이 연 근무일 때만, 5분에 한 번.
             if self.phoneSession?.origin == .phone {
                 self.touchPhoneWorkIfNeeded(minimumInterval: Self.phoneTouchWhileActiveSeconds)
@@ -354,6 +357,8 @@ package final class NowStore {
             guard stillCurrent() else { return }
             directory = rows
             hasLoadedDirectory = true
+            // 메시지의 상대 집중 판정은 이 명부가 이긴다 — 서버 거절로 세운 '집중 중' 문구를 상태로 넘길 때다(`MessagesStore.settleFocusNotices`).
+            context.links.messages?.settleFocusNotices()
         } catch {
             guard stillCurrent() else { return }
             if MobileDeviceRPC.isMissingFunction(error) {
@@ -492,6 +497,14 @@ package final class NowStore {
             goalHours: goalHours,
             origin: working ? workOrigin(of: me) : .unknown
         )
+    }
+
+    /// 집중 중인 사람(1.0.17 · 대표 답 #d_6A32rmcoJZZd "말 걸 수 있는 줄 전부") — 근무 중 줄의 '집중' 칩 재료. **출처는 메시지 스토어 한 곳**
+    /// (`MessagesStore.focusedPeerIDs` — [보내기] 잠금 · 대화 목록 칩과 같은 겹치기 · 같은 차단 거르기)이고 여기서는 그대로 넘긴다.
+    /// `NowWorkingPerson` 에 칸을 두지 않는 까닭: `workingPeople` 은 메시지 판(`presenceBoard`)도 부르는 재료라 거기에 집중을 구우면
+    /// 같은 사실의 출처가 두 벌이 된다(2026-11-03 검토가 판의 집중 칸을 뺀 이유와 같다). 메시지 스토어가 없으면(시험 조립) 빈 집합 — 칩 없음.
+    package var focusedPeerIDs: Set<String> {
+        context.links.messages?.focusedPeerIDs ?? []
     }
 
     /// 지금 근무 중(나 제외): 우리 팀(경과 시간 · 오래 일한 순) 먼저, 그다음 다른 팀(근무 여부만 · 이름순).

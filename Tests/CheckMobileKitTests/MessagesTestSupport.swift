@@ -46,6 +46,8 @@ final class MessagesStubServer: @unchecked Sendable {
     private var historyScript: [[Row]] = []
     /// RPC 이름별 덮어쓰기 응답기(nil 을 돌려주면 기본 응답). 계정 전환 · 겹친 늦은 응답 시나리오가 쓴다.
     private var overrides: [String: @Sendable (MobileStubRequest) -> MobileStubResponse?] = [:]
+    /// 내 집중 한 행 GET(`/rest/v1/profiles?select=focus_mode` — 1.0.17) 응답. nil 이면 지금까지처럼 404(옛 서버 — 스토어는 "모름"으로 둔다).
+    private var myFocusResponse: MobileStubResponse?
 
     /// `rpc` 요청에 먼저 물어볼 응답기. **잠금 밖에서** 부른다 — 응답기 안에서 이 서버의 다른 메서드를 불러도 된다.
     func override(_ rpc: String, _ responder: @escaping @Sendable (MobileStubRequest) -> MobileStubResponse?) {
@@ -61,6 +63,7 @@ final class MessagesStubServer: @unchecked Sendable {
     func setMark(_ response: MobileStubResponse) { lock.lock(); markResponse = response; lock.unlock() }
     func setWithReadsMissing(_ value: Bool) { lock.lock(); withReadsMissing = value; lock.unlock() }
     func scriptHistory(_ steps: [[Row]]) { lock.lock(); historyScript = steps; lock.unlock() }
+    func setMyFocus(_ response: MobileStubResponse?) { lock.lock(); myFocusResponse = response; lock.unlock() }
     func setRead(peer: String) {
         lock.lock()
         rows = rows.map { row in
@@ -115,6 +118,10 @@ final class MessagesStubServer: @unchecked Sendable {
         default: break
         }
         if request.path == "/rest/v1/memberships" { return BaseStub.membershipOK }
+        if request.path == "/rest/v1/profiles", request.method == "GET", request.queryValue("select") == "focus_mode",
+           let myFocusResponse {
+            return myFocusResponse
+        }
         if request.path == "/auth/v1/token" {
             // 계정 전환: 비밀번호 로그인은 두 번째 사용자로 답한다.
             return BaseStub.authResponse(
@@ -210,7 +217,7 @@ struct MessagesHarness {
         for _ in 0..<3 {
             _ = await baseWaitUntil {
                 store.pendingActivityTask == nil && !store.isMarkingRead && !store.isSending && !store.directoryLoading
-                    && model.now.refreshTask == nil
+                    && !store.isFetchingMyFocusMode && model.now.refreshTask == nil
             }
             await baseYield()
         }

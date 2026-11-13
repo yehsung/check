@@ -82,8 +82,11 @@ import Testing
         /// 여기 더한 까닭: 이 집합은 **정확히 같아야** 하므로 픽스처에 `daily` 를 넣으면 여덟 장 전부가 빨개진다 —
         /// 그래서 픽스처와 이 줄을 **같이** 고친다(관전자 수 때는 이 못을 피해 가느라 데모에서 수가 늘 0 이었다).
         /// `daily` 안의 칸 · 값은 `MeDailyMissionViewTests` 가 잰다(그 절의 소유다).
+        /// ★ `streak_days`(20261106150000 — 11-02 운영 적용, 폰 1.0.16 연속 근무 칩)도 같은 까닭으로 같은 커밋에 더했다.
+        /// 세 응답(`achievements_status` · `achievement_claim` · `daily_mission_claim`) 최상위에 붙는 정수 하나이고, 값의 규칙은
+        /// §1b 가 잰다. 이 칸이 빠진 픽스처는 데모 나 탭 장면에서 칩을 숨겨 운영 화면과 다른 그림이 된다.
         static let status: Set<String> = ["launch_at_ms", "missions", "claimable_count", "claimable_ruby",
-                                          "ruby_balance", "server_now_ms", "daily"]
+                                          "ruby_balance", "server_now_ms", "daily", "streak_days"]
         static let mission: Set<String> = ["key", "series", "tier", "title", "detail", "reward", "target", "progress",
                                           "achieved", "claimed", "achieved_at_ms", "claimed_at_ms", "sort"]
         static let claim: Set<String> = ["key", "title", "reward"]
@@ -225,6 +228,51 @@ import Testing
             }
             // 같은 키가 둘이면 앞의 것만 산다 — 픽스처에 중복이 없다는 것까지 못 박는다(중복이면 count 가 13 이 안 된다).
             #expect(Set(status.missions.map(\.key)).count == Self.defs.count, "\(path): 키가 중복이다")
+        }
+    }
+
+    // MARK: - §1b 최상위 streak_days(20261106150000) — 지금 연속 근무일
+
+    @Test("streak_days: 열한 장 모두 숫자로 있다 · 안 달성한 연속 줄의 진행과 같다(서버 규칙) · 장면마다 값이 갈린다 · 갓 가입은 null 이 아니라 0")
+    func streakDaysFollowsTheServerRule() throws {
+        // 서버(20261106150000 ②): streak_days = 연속 계열의 **날것** 진행(`achievements__eval` 의 progress — 판 없으면 coalesce 로 0).
+        // 같은 값을 미션 줄은 `least(값, target)` 로 잘라 적고, 달성한 줄은 target 에 고정한다. 그래서 **안 달성한 연속 줄**의
+        // progress 는 streak_days 와 같아야 한다 — 갈리면 칩('연속 N일')과 미션 줄('N/30')이 같은 화면에서 다른 날수를 말한다.
+        let want: [String: Int] = [
+            "me/_me/rpc.achievements_status.json": 17,
+            "me/_me/rpc.achievements_status@demo-progress.json": 3,
+            "me/_me/rpc.achievements_status@demo-all-claimed.json": 31,
+            "me/_me-/rpc.achievements_status.json": 0,
+            "me/_me/rpc.achievement_claim.json": 17,
+            "me/_me/rpc.achievement_claim@todo3.json": 17,
+            "me/_me/rpc.achievement_claim@poke10.json": 17,
+            "me/_me/rpc.achievement_claim@streak14.json": 17,
+            "me/_me/rpc.daily_mission_claim.json": 17,
+            "me/_me/rpc.daily_mission_claim@daily_gomoku.json": 17,
+            "me/_me/rpc.daily_mission_claim@daily_timing_bar.json": 17,
+        ]
+        // 일일 받기 응답 셋도 같은 모양이다(서버가 `achievements__status` 하나로 세 응답을 만든다) — 목록이 빠지면 덜 재고 초록이 된다.
+        let paths = Self.missionPaths + MeDailyMissionViewTests.claimPaths
+        #expect(Set(want.keys) == Set(paths), "재는 픽스처 목록이 바뀌었다: \(Set(want.keys).symmetricDifference(Set(paths)))")
+        #expect(Set(want.values).count >= 4, "장면마다 값이 갈려야 칩이 어느 픽스처를 읽었는지 가린다")
+
+        for path in paths {
+            let expected = try #require(want[path], "\(path): 기대값이 없다")
+            let object = try Self.raw(path)
+            // 칸은 숫자다(없거나 null 이면 폰이 칩을 숨긴다 — `achievementLossyInt`).
+            let number = try #require(object["streak_days"] as? NSNumber, "\(path): streak_days 가 없거나 숫자가 아니다")
+            #expect(number.intValue == expected, "\(path): streak_days \(number.intValue) ≠ \(expected)")
+
+            let status = try Self.status(path)
+            #expect(status.streakDays == expected, "\(path): 디코드 뒤 값이 \(String(describing: status.streakDays))다(칩이 숨거나 다른 수를 말한다)")
+            let streakRows = status.missions.filter { $0.series == "streak" }
+            #expect(streakRows.count == 2, "\(path): 연속 계열 줄이 \(streakRows.count)개다")
+            for mission in streakRows where !mission.achieved {
+                #expect(mission.progress == expected,
+                        "\(path) \(mission.key): 안 달성한 줄의 진행 \(mission.progress) ≠ streak_days \(expected)(서버는 같은 값을 잘라 적는다)")
+            }
+            // 둘 다 달성한 장면(전부 받음)은 줄이 target 에 고정이라 줄로는 값을 못 가린다 — 서버도 아무 수나 줄 수 있다
+            // (30일을 넘긴 사람의 지금 2일은 2 다 — `V1016StreakChipTests.notFromCappedProgress`). 값은 위 표가 못 박는다.
         }
     }
 

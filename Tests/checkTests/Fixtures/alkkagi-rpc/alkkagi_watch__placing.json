@@ -1,0 +1,46 @@
+{
+  "me": {
+    "avatar_url": null,
+    "busy": false,
+    "character_id": null,
+    "display_name": "T-73548af6",
+    "id": "73548af6-1eda-4a14-9d81-a6edb92969d1"
+  },
+  "protocol": 2,
+  "server_now_ms": 1794260785033.786,
+  "state": {
+    "black": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": null,
+      "display_name": "T-6240babf",
+      "id": "6240babf-7744-498a-bf25-6269fe123398"
+    },
+    "black_missed_turns": 0,
+    "black_ready": false,
+    "current_player": "black",
+    "deadline_ms": 1794260814952.243,
+    "finish_reason": null,
+    "finished_at_ms": null,
+    "forfeit_after": 3,
+    "id": "f69abad0-6021-4a66-9042-d9aaeff39e35",
+    "phase": "placing",
+    "result": null,
+    "revision": 2,
+    "shot": null,
+    "shot_count": 0,
+    "stake": 3,
+    "stones": [],
+    "watchers": 0,
+    "white": {
+      "avatar_url": null,
+      "busy": true,
+      "character_id": null,
+      "display_name": "T-2ebb8b4a",
+      "id": "2ebb8b4a-d1e1-406d-af0f-75a8d765add9"
+    },
+    "white_missed_turns": 0,
+    "white_ready": false
+  },
+  "status": "ok"
+}

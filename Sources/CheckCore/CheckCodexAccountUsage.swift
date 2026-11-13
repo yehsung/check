@@ -2,8 +2,11 @@ import Foundation
 #if os(macOS)
 import AppKit
 #endif
+// AING_SCAN: 원격 기계 스캐너(aing-scan)가 이 파일을 함께 컴파일할 때 정의된다 — 계정 프로브·스토어는 앱 전용이라 빠진다.
+#if !AING_SCAN
 import Observation
 import os
+#endif
 
 // MARK: - Codex 계정 사용량 (로컬 `codex app-server` 의 account/usage/read)
 
@@ -91,7 +94,7 @@ package enum CodexAccountProbeStatus: Int, Codable, Equatable, Sendable {
     case failed = 5
 }
 
-#if os(macOS)
+#if os(macOS) && !AING_SCAN
 // B3: codex app-server 를 자식 프로세스(Process)로 띄워 계정 사용량을 묻는다 — macOS 전용.
 /// `codex app-server` 를 띄워 `account/usage/read` 를 한 번 묻는 순수+Process 프로브. 상태는 실행 파일 탐색 캐시뿐이다.
 ///
@@ -786,7 +789,7 @@ package enum CodexAccountUsageProbe {
 
 // MARK: - 스토어 (@MainActor · 30분 간격 · 영속)
 
-#if os(macOS)
+#if os(macOS) && !AING_SCAN
 // B3: 위 프로브의 러너 타입(CodexAccountUsageProbe.Failure)에 묶인 맥 스토어 — macOS 전용.
 /// 계정 사용량 스냅샷의 갱신 간격·영속·상태를 담당한다. 프로브 실행은 주입된 `runner` 에 위임하므로 테스트는 실제 `codex` 를
 /// 절대 띄우지 않는다(`inert()`/러너 주입).

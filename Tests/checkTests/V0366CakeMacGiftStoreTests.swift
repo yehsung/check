@@ -130,14 +130,26 @@ private func gcStore(host: String, server: GiftServer, spy: GiftWindowSpy, signe
     // 이 묶음은 생일 선물(능력 번호 4)의 시험이다 — 이슬까지 그리는 빌드(5 — v0.3.74)가 되어도 기본은 4 로 잰다(술 선물은
     // `V0374IsulMacGiftStoreTests` 가 잰다). 핵심 시나리오(한 번 띄우기 · 안 받고 닫기 · 받은 뒤 낡은 응답 · 다른 기기 수령 · 팝오버 복귀)는
     // 실제 출하 번호 5 로도 돈다(`gcProtocols` — 검토 수리): 5 에선 결론 난 선물을 닫으면 '다음 선물'을 한 번 더 묻는다.
-    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter { !ShopWire.isulCharacterIDs.contains($0) }
-    store.drawableCharacterIDs = protocolVersion >= ShopWire.isulProtocol ? base + ShopWire.isulCharacterIDs : base
+    // v0.3.77: 빼빼로 그림까지 실린 번들(6)에서도 번호를 4 · 5 로 주입한다 — 빼빼로 · 이슬을 빼고 다시 더한다.
+    // v0.3.78: 흑우까지 실린 번들(7)에서도 같은 주입 — 흑우도 빼고 7 이상일 때만 다시 더한다.
+    let base = WorkTimerStore.bundledDrawableCharacterIDs.filter {
+        !ShopWire.isulCharacterIDs.contains($0) && !ShopWire.peperoCharacterIDs.contains($0) && !ShopWire.hwooCharacterIDs.contains($0) && !ShopWire.rubyCharacterIDs.contains($0)
+            && !ShopWire.devCharacterIDs.contains($0) && !ShopWire.regionCharacterIDs.contains($0)
+    }
+    // 출하 번호 6(빼빼로까지 — 이 빌드의 실제 번호)도 핵심 시나리오에서 돈다(`gcProtocols` — 검토 수리: 4 · 5 만 주입하면 '실제 출하 번호로
+    // 핀'이 조용히 낡는다).
+    store.drawableCharacterIDs = (protocolVersion >= ShopWire.isulProtocol ? base + ShopWire.isulCharacterIDs : base)
+        + (protocolVersion >= ShopWire.peperoProtocol ? ShopWire.peperoCharacterIDs : [])
+        + (protocolVersion >= ShopWire.hwooProtocol ? ShopWire.hwooCharacterIDs : [])
+        + (protocolVersion >= ShopWire.rubyProtocol ? ShopWire.rubyCharacterIDs : [])
+        + (protocolVersion >= ShopWire.devProtocol ? ShopWire.devCharacterIDs : [])
+        + (protocolVersion >= ShopWire.regionProtocol ? ShopWire.regionCharacterIDs : [])
     V0354CoreStub.retain(store)
     return store
 }
 
-/// 핵심 시나리오를 도는 능력 번호 — 생일만 받는 빌드(4 · 0.3.66~0.3.73) · 실제 출하 빌드(5 — 술 한잔까지).
-private let gcProtocols = [ShopWire.cakeProtocol, ShopWire.isulProtocol]
+/// 핵심 시나리오를 도는 능력 번호 — 생일만 받는 빌드(4 · 0.3.66~0.3.73) · 술 한잔까지(5 · 0.3.74~0.3.76) · 실제 출하 빌드(6 — 빼빼로까지, v0.3.77).
+private let gcProtocols = [ShopWire.cakeProtocol, ShopWire.isulProtocol, ShopWire.peperoProtocol]
 
 private func gcPendingCount(_ host: String) -> Int {
     GomokuStubProtocol.count(host: host, rpc: "character_gift_pending")

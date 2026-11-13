@@ -122,8 +122,13 @@ extension WorkTimerStore {
             shopNotice = gift.copy.lockedHint
             return
         }
+        // 미션 보상(개발에 찌든 아잉이 — v0.3.81): 상점을 열고 얻는 길(도전 미션 '누적 근무 100시간')을 말한다.
+        if CharacterCatalog.isMissionRewardBuiltIn(id) {
+            shopNotice = DevAingMission.lockedHint
+            return
+        }
         guard CharacterCatalog.isGachaOnlyBuiltIn(id) else { return }
-        shopNotice = GachaText.gachaOnlyHint
+        shopNotice = GachaText.acquireHint(for: id)
     }
 
     /// 뽑기가 지금 이 캐릭터를 **내는가** — 뽑기가 열려 있고(값 · 완전한 확률표) 그 id 가 확률표나 교환표에 있다.
@@ -205,6 +210,16 @@ extension WorkTimerStore {
         // **입고 있으면 가진 것이다**(서버 `set_character` 는 안 가진 캐릭터를 거절한다) — 상점을 아직 못 읽었거나(시작 직후 · 오프라인)
         // 다른 기기에서 받아 입은 뒤 이 맥의 보유가 낡았어도, 지금 입은 케이크 카드는 선다(금 · 무지개의 '로드 전 관용'과 같은 결).
         if CharacterCatalog.isGiftOnlyBuiltIn(id) { return owned.contains(id) || id == wearing }
+        // 흑우 아잉이(v0.3.78 조각 교환 전용)는 **서버가 흑우를 말할 때만**(상점 목록 · 뽑기 교환 목록) 또는 가졌거나 입었을 때 선다.
+        // 금 · 무지개의 '로드 전' 관용을 주면, 흑우 행을 모르는 서버(마이그레이션 전)에서 시작 직후 아무도 얻을 수 없는 잠긴 카드가 섰다 사라진다.
+        if CharacterCatalog.isShardOnlyBuiltIn(id) {
+            return owned.contains(id) || id == wearing || gachaAvailable || rows.contains { $0.id == id }
+        }
+        // 루비 아잉이(v0.3.78 상점 루비 1000)도 **서버가 루비를 말할 때만**(상점 목록) 또는 가졌거나 입었을 때 선다 — 내장 캐릭터라 번들에 늘 있어,
+        // 이 문이 없으면 루비 행을 모르는 서버(마이그레이션 전 · 능력 번호 8 미만으로 읽은 목록)에서 살 수 없는 잠긴 카드가 선다.
+        if CharacterCatalog.isRubyAing(id) || CharacterCatalog.isDevAing(id) {
+            return owned.contains(id) || id == wearing || rows.contains { $0.id == id }
+        }
         guard isGachaOnly(id, rows: rows) else { return true }
         return !shopLoaded || gachaAvailable || owned.contains(id) || rows.contains { $0.id == id }
     }
@@ -220,7 +235,8 @@ extension WorkTimerStore {
         guard shopCharacters.isEmpty else {
             // 선물 전용 잠긴 칸 정책(v0.3.74 — 술 한잔 선물은 상수 하나로 '모두에게' ↔ '가진 사람만'). 생일 케이크는 언제나 모두에게(0.3.66 그대로).
             return Self.shopRowsApplyingGiftCellPolicy(Self.giftOnlyInDisplayOrder(shopCharacters),
-                                                       owned: ownedCharacterIDs, drinkPolicy: drinkGiftCellPolicy)
+                                                       owned: ownedCharacterIDs, drinkPolicy: drinkGiftCellPolicy,
+                                                       peperoPolicy: peperoGiftCellPolicy)
         }
         // 착용 관용(`wearing` — 입은 케이크)은 고르기 몫이다: 자리표시 줄은 `owned: false` 라 입은 케이크를 세우면 잠긴 칸('생일 선물 전용')으로 선다.
         return catalog.allIDs
@@ -236,13 +252,29 @@ extension WorkTimerStore {
     /// 서버(p ≥ 5)는 이슬 행을 모두에게 싣는다 — 숨기는 것은 이 화면의 몫이다.
     nonisolated static let drinkGiftLockedCellPolicy: GiftLockedCellPolicy = .everyone
 
-    /// 상점 줄에 선물 전용 잠긴 칸 정책을 입힌다(순수 — 값으로 검증한다). 술 한잔 선물(이슬)만 `drinkPolicy` 를 따르고, 생일 케이크 ·
-    /// 그 밖의 줄은 한 칸도 안 건드린다. 가진 줄(서버 `owned` 또는 이 맥이 아는 보유)은 정책과 무관하게 선다(보유 칸이다).
+    /// 빼빼로 아잉이(빼빼로 데이 기간 선물 전용 — v0.3.77)의 잠긴 칸 정책 — **이 상수 하나다.** 이슬과 같게 '모두에게'(작업 지시 2026-11-04
+    /// "잠긴 칸 정책은 이슬처럼 '모두에게'"). 뒤집으면 `.ownersOnly`. 서버(p ≥ 6)는 빼빼로 행을 모두에게 싣는다 — 숨기는 것은 이 화면의 몫이다.
+    /// (그림이 붙기 전의 이 빌드는 번호 5 라 서버가 빼빼로 행을 아예 안 싣는다 — 이 정책은 번호 6 빌드부터 읽힌다.)
+    nonisolated static let peperoGiftLockedCellPolicy: GiftLockedCellPolicy = .everyone
+
+    /// 상점 줄에 선물 전용 잠긴 칸 정책을 입힌다(순수 — 값으로 검증한다). 술 한잔 선물(이슬)은 `drinkPolicy`, 빼빼로 데이 선물(빼빼로)은
+    /// `peperoPolicy` 를 따르고, 생일 케이크 · 그 밖의 줄은 한 칸도 안 건드린다. 가진 줄(서버 `owned` 또는 이 맥이 아는 보유)은 정책과
+    /// 무관하게 선다(보유 칸이다).
     nonisolated static func shopRowsApplyingGiftCellPolicy(_ rows: [ShopCharacterRow], owned: Set<String>,
-                                                          drinkPolicy: GiftLockedCellPolicy) -> [ShopCharacterRow] {
-        guard drinkPolicy == .ownersOnly else { return rows }
+                                                          drinkPolicy: GiftLockedCellPolicy,
+                                                          peperoPolicy: GiftLockedCellPolicy = WorkTimerStore.peperoGiftLockedCellPolicy) -> [ShopCharacterRow] {
+        func policy(_ kind: CharacterGiftKind?) -> GiftLockedCellPolicy {
+            switch kind {
+            case .drink: return drinkPolicy
+            case .pepero: return peperoPolicy
+            // 우리 센터 선물(지역 아잉이): 다른 센터 사람에게도 잠긴 칸으로 선다(대표 #d_RyTlg0ZZED04 "가. 우리 센터 선물" — 카드 본문
+            // "다른 센터 상점에는 '센터 전용' 잠긴 칸으로 보여요"). 서버(p ≥ 10)는 두 행을 모두에게 싣는다.
+            case .birthday, .region, nil: return .everyone
+            }
+        }
+        guard drinkPolicy == .ownersOnly || peperoPolicy == .ownersOnly else { return rows }
         return rows.filter { row in
-            guard CharacterCatalog.giftKind(ofBuiltIn: row.id) == .drink else { return true }
+            guard policy(CharacterCatalog.giftKind(ofBuiltIn: row.id)) == .ownersOnly else { return true }
             return row.owned == true || owned.contains(row.id)
         }
     }
@@ -506,7 +538,7 @@ extension WorkTimerStore {
     }
 }
 
-/// 선물 전용 캐릭터의 상점 잠긴 칸을 누구에게 세우는가(v0.3.74 — `WorkTimerStore.drinkGiftLockedCellPolicy`).
+/// 선물 전용 캐릭터의 상점 잠긴 칸을 누구에게 세우는가(v0.3.74 — `WorkTimerStore.drinkGiftLockedCellPolicy` · v0.3.77 `peperoGiftLockedCellPolicy`).
 enum GiftLockedCellPolicy: Equatable, Sendable {
     /// 모두에게 — 안 가진 사람에겐 자물쇠 + '○○ 선물 전용' 잠긴 칸(케이크 선례).
     case everyone

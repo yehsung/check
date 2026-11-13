@@ -1,0 +1,442 @@
+{
+  "state": {
+    "match": {
+      "id": "5fc81bbb-f1ab-444d-825a-384ca29fe885",
+      "seq": 20,
+      "host": {
+        "id": "067f8528-f33e-42ab-a20d-d7e94cadc4f6",
+        "character": null,
+        "avatar_url": null,
+        "display_name": "mjt-067f8528-f33e-42ab-a20d-d7e94cadc4f6"
+      },
+      "honba": 0,
+      "phase": "turn",
+      "round": 0,
+      "stake": 3,
+      "format": "tonpuu",
+      "status": "active",
+      "base_ms": 5000,
+      "hand_no": 0,
+      "kyotaku": 1,
+      "grace_ms": 1000,
+      "extension": false,
+      "is_public": false,
+      "kan_count": 0,
+      "turn_seat": 1,
+      "wake_seat": 2,
+      "created_ms": 1793699162673,
+      "end_reason": null,
+      "hand_index": 0,
+      "started_ms": 1793699162673,
+      "wake_at_ms": 1793699168723,
+      "dealer_seat": 0,
+      "finished_ms": null,
+      "backup_at_ms": 1793699191723,
+      "bank_full_ms": 20000,
+      "next_hand_ms": null,
+      "wall_remaining": 61,
+      "dora_indicators": [
+        58
+      ],
+      "room_expires_ms": 1793699162673
+    },
+    "seats": [
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "067f8528-f33e-42ab-a20d-d7e94cadc4f6",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-067f8528-f33e-42ab-a20d-d7e94cadc4f6"
+        },
+        "wind": "E",
+        "melds": [],
+        "score": 25000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 0,
+        "discards": [
+          {
+            "tile": 101,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          },
+          {
+            "tile": 94,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          },
+          {
+            "tile": 46,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          }
+        ],
+        "is_dealer": true,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
+      },
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "60df9101-a0e0-43e3-9f95-ef319ff188bc",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-60df9101-a0e0-43e3-9f95-ef319ff188bc"
+        },
+        "wind": "S",
+        "melds": [],
+        "score": 24000,
+        "payout": null,
+        "riichi": true,
+        "deleted": false,
+        "seat_no": 1,
+        "discards": [
+          {
+            "tile": 126,
+            "taken": true,
+            "riichi": true,
+            "tsumogiri": true
+          },
+          {
+            "tile": 49,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          }
+        ],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 14,
+        "final_score": null
+      },
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "05ac5946-d552-46a6-b14d-6bea2744ee07",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-05ac5946-d552-46a6-b14d-6bea2744ee07"
+        },
+        "wind": "W",
+        "melds": [
+          {
+            "type": "pon",
+            "tiles": [
+              124,
+              125,
+              126
+            ],
+            "called": 126,
+            "from_seat": 1
+          }
+        ],
+        "score": 25000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 2,
+        "discards": [
+          {
+            "tile": 5,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": false
+          },
+          {
+            "tile": 91,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          }
+        ],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 10,
+        "final_score": null
+      },
+      {
+        "away": false,
+        "user": {
+          "center": null,
+          "user_id": "03d3f17a-176c-4720-95e3-4128679d8b39",
+          "character": null,
+          "avatar_url": null,
+          "display_name": "mjt-03d3f17a-176c-4720-95e3-4128679d8b39"
+        },
+        "wind": "N",
+        "melds": [],
+        "score": 25000,
+        "payout": null,
+        "riichi": false,
+        "deleted": false,
+        "seat_no": 3,
+        "discards": [
+          {
+            "tile": 86,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          },
+          {
+            "tile": 3,
+            "taken": false,
+            "riichi": false,
+            "tsumogiri": true
+          }
+        ],
+        "is_dealer": false,
+        "final_rank": null,
+        "hand_count": 13,
+        "final_score": null
+      }
+    ],
+    "events": [
+      {
+        "seq": 1,
+        "dora": [
+          58
+        ],
+        "kind": "deal",
+        "seat": 0,
+        "at_ms": 1793699162675,
+        "honba": 0,
+        "round": 0,
+        "hand_no": 0,
+        "kyotaku": 0,
+        "hand_index": 0,
+        "dealer_seat": 0
+      },
+      {
+        "seq": 2,
+        "kind": "discard",
+        "seat": 0,
+        "tile": 101,
+        "at_ms": 1793699162679,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 3,
+        "kind": "draw",
+        "priv": {
+          "tile": 126
+        },
+        "seat": 1,
+        "tile": 126,
+        "at_ms": 1793699162681,
+        "rinshan": false
+      },
+      {
+        "seq": 4,
+        "kind": "discard",
+        "seat": 1,
+        "tile": 126,
+        "at_ms": 1793699162685,
+        "riichi": true,
+        "tsumogiri": true
+      },
+      {
+        "seq": 5,
+        "kind": "riichi",
+        "seat": 1,
+        "at_ms": 1793699162688
+      },
+      {
+        "seq": 6,
+        "kind": "call",
+        "seat": 2,
+        "type": "pon",
+        "at_ms": 1793699162688,
+        "tiles": [
+          124,
+          125,
+          126
+        ],
+        "called": 126,
+        "from_seat": 1
+      },
+      {
+        "seq": 7,
+        "kind": "discard",
+        "seat": 2,
+        "tile": 5,
+        "at_ms": 1793699162691,
+        "riichi": false,
+        "tsumogiri": false
+      },
+      {
+        "seq": 8,
+        "kind": "draw",
+        "seat": 3,
+        "tile": null,
+        "at_ms": 1793699162692,
+        "rinshan": false
+      },
+      {
+        "seq": 9,
+        "kind": "discard",
+        "seat": 3,
+        "tile": 86,
+        "at_ms": 1793699162696,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 10,
+        "kind": "draw",
+        "seat": 0,
+        "tile": null,
+        "at_ms": 1793699162698,
+        "rinshan": false
+      },
+      {
+        "seq": 11,
+        "kind": "discard",
+        "seat": 0,
+        "tile": 94,
+        "at_ms": 1793699162702,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 12,
+        "kind": "draw",
+        "priv": {
+          "tile": 49
+        },
+        "seat": 1,
+        "tile": 49,
+        "at_ms": 1793699162703,
+        "rinshan": false
+      },
+      {
+        "seq": 13,
+        "kind": "discard",
+        "seat": 1,
+        "tile": 49,
+        "at_ms": 1793699162705,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 14,
+        "kind": "draw",
+        "seat": 2,
+        "tile": null,
+        "at_ms": 1793699162707,
+        "rinshan": false
+      },
+      {
+        "seq": 15,
+        "kind": "discard",
+        "seat": 2,
+        "tile": 91,
+        "at_ms": 1793699162708,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 16,
+        "kind": "draw",
+        "seat": 3,
+        "tile": null,
+        "at_ms": 1793699162710,
+        "rinshan": false
+      },
+      {
+        "seq": 17,
+        "kind": "discard",
+        "seat": 3,
+        "tile": 3,
+        "at_ms": 1793699162715,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 18,
+        "kind": "draw",
+        "seat": 0,
+        "tile": null,
+        "at_ms": 1793699162716,
+        "rinshan": false
+      },
+      {
+        "seq": 19,
+        "kind": "discard",
+        "seat": 0,
+        "tile": 46,
+        "at_ms": 1793699162720,
+        "riichi": false,
+        "tsumogiri": true
+      },
+      {
+        "seq": 20,
+        "kind": "draw",
+        "priv": {
+          "tile": 52
+        },
+        "seat": 1,
+        "tile": 52,
+        "at_ms": 1793699162723,
+        "rinshan": false
+      }
+    ],
+    "members": [],
+    "my_away": null,
+    "my_hand": [
+      0,
+      4,
+      8,
+      12,
+      17,
+      20,
+      24,
+      28,
+      32,
+      36,
+      37,
+      40,
+      44
+    ],
+    "my_seat": 1,
+    "my_drawn": 52,
+    "my_waits": [
+      9,
+      12
+    ],
+    "last_hand": null,
+    "reactions": [],
+    "my_furiten": [
+      "discard"
+    ],
+    "my_decision": {
+      "seq": 20,
+      "kind": "turn",
+      "ankan": [],
+      "kakan": [],
+      "tsumo": false,
+      "riichi": [],
+      "bank_ms": 20000,
+      "discard": [
+        52
+      ],
+      "kyuushu": false,
+      "started_ms": 1793699162723,
+      "deadline_ms": 1793699163656,
+      "decision_seq": 20,
+      "not_before_ms": 1793699163656
+    },
+    "ruby_balance": 100,
+    "server_now_ms": 1793699162726
+  },
+  "status": "too_early"
+}

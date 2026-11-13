@@ -80,7 +80,7 @@ package enum MobileDemo {
         // 새 장면 폴더를 만들지 않는 까닭과 바늘을 본문 꼬리에 붙이는 까닭은 `MobileDemoMissionsRoute` 머리말에 있다.
         let missions = MobileDemoMissionsRoute(demoRoute: route)
         // 선물 장면의 수령 기록 — 받은 뒤 요청은 받은 뒤 바늘로 고른다(받은 것만 보유 · 선물 없음 — `MobileDemoCakeGiftRoute` 머리말).
-        let giftLedger = MobileDemoCakeGiftRoute.Ledger()
+        let giftLedger = cakeGift?.makeLedger() ?? MobileDemoCakeGiftRoute.Ledger()
         MobileStubURLProtocol.register(host: host) { raw in
             // 선물 장면이면 바늘(`demo-gift` · 받은 뒤 `demo-gift-got-…`)을 먼저 붙인다 — 그 뒤는 다른 장면과 같은 길이다.
             let request = teamRoster?.rewrite(raw) ?? cakeGift.map { $0.rewrite(raw, ledger: giftLedger) } ?? raw

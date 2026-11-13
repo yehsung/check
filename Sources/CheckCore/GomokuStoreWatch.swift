@@ -400,6 +400,8 @@ extension GomokuStore {
         next.endReason = row.endReason.flatMap(GomokuEndReason.init(rawValue:))
         if let streak = response.blackAutoStreak { next.blackAutoStreak = streak }
         if let streak = response.whiteAutoStreak { next.whiteAutoStreak = streak }
+        // 0.3.81 오목알 스킨 — 관전자도 두 사람의 스킨으로 본다(상대에게도 보임). 안 싣는 서버면 일반 돌.
+        next.stoneSkins = OmokStoneSkins(blackWire: row.blackSkin, whiteWire: row.whiteSkin)
         return (next, false)
     }
 }

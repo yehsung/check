@@ -431,7 +431,8 @@ private final class GamesMainFlag {
     func matchSourceContract() throws {
         let match = try IntegrationContractTests.code("Sources/CheckMobileKit/Games/GamesGomokuMatch.swift")
         #expect(match.components(separatedBy: "if chrome.showsChatDrawer {").count - 1 == 2, "대국·결과 두 서랍이 판 종류를 보지 않는다")
-        #expect(match.components(separatedBy: "GamesAIMatchLine()").count - 1 == 2, "대국·결과 내비 부제가 판 종류를 보지 않는다")
+        // 폰 1.0.18: 칩이 그 판의 난이도를 받는다(`V1018GomokuAIDifficultyTests`).
+        #expect(match.components(separatedBy: "GamesAIMatchLine(difficulty:").count - 1 == 2, "대국·결과 내비 부제가 판 종류를 보지 않는다")
         #expect(match.components(separatedBy: "if chrome.showsStake { GamesRubyDelta(delta: delta) }").count - 1 == 2, "AI 결과에 루비 변화가 선다")
         #expect(match.contains("gomoku.restartAIMatch()"), "AI 결과의 다시 두기가 코어 문이 아니다")
         #expect(match.contains("GamesGomokuAIThinkingMark()"), "AI 차례에 '생각 중' 표시가 없다")

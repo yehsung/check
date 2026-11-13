@@ -1,0 +1,7 @@
+{
+  "__note": [
+    "보낸 신청 [취소] 응답(ok). 서버 reversi_cancel ok 는 status · server_now_ms 둘뿐이다."
+  ],
+  "server_now_ms": 1789621500000,
+  "status": "ok"
+}

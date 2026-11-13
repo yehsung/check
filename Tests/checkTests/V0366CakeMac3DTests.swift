@@ -538,7 +538,8 @@ import Testing
         let drawable = CheckMascotAssets.drawableCharacterIDs()
         #expect(drawable.contains(CharacterCatalog.cakeStrawberryAingID) && drawable.contains(CharacterCatalog.cakeChocoAingID), "\(drawable)")
         // v0.3.74: 이슬 그림까지 실린 빌드는 누적으로 5 다(케이크의 몫은 "4 이상" — 5 의 기준선은 V0374IsulCoreTests).
-        let expected = V0374IsulCoreTests.macIsulArtInSourceTree ? ShopWire.isulProtocol : ShopWire.cakeProtocol
+        // v0.3.77: 빼빼로 그림까지 실리면 6(누적 — 6 의 기준선은 V0377PeperoCoreTests).
+        let expected = V0377PeperoCoreTests.expectedMacProtocolFromIsulOn
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == expected)
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == expected)
         let store = V0317ShopTests.plainStore()

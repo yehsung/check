@@ -104,6 +104,40 @@ func sidebarInviteDotsFollowTheLiveStoreFacts() throws {
     #expect(sidebarInviteWakes(store) { store.reversi.incoming = [] })
     #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
 
+    // ⑦ 1:1 길건너(CD/SPEC.md §9.5 #18) — 메뉴바와 같은 사실(`visibleIncoming` — 차단을 거른 첫 신청).
+    let crossyPeer = CrossyDuelUser(id: "00000000-0000-0000-0000-000000000017", displayName: "하린", characterID: "fox",
+                                    isWorking: true)
+    #expect(sidebarInviteWakes(store) {
+        store.crossyDuel.incoming = [CrossyDuelInvite(id: "c-1", peer: crossyPeer, stake: 5, expiresAt: Date().addingTimeInterval(45))]
+    }, "1:1 길건너 신청이 들어왔는데 창이 안 깨어난다")
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(crossyDuel: true))
+    // 차단으로 걷어낸 사람의 신청은 점을 내린다 — 앱 소유자의 차단 거울(`blockHiddenPeerIDs`)을 지나 스토어까지 닿는다.
+    #expect(sidebarInviteWakes(store) { store.blockHiddenPeerIDs = [crossyPeer.id] })
+    #expect(MiniGameDuelInvites(store: store).crossyDuel == false, "차단한 사람의 1:1 길건너 신청에 점이 남았다")
+    store.blockHiddenPeerIDs = []
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(crossyDuel: true))
+    #expect(sidebarInviteWakes(store) { store.crossyDuel.incoming = [] })
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
+
+    // ⑧ 1:1 알까기(alkkagi/v2 SPEC §6 #4) — 메뉴바와 같은 사실(`visibleIncoming` — 차단 · 내 판을 거른 첫 신청).
+    let alkkagiPeer = AlkkagiPeer(id: "00000000-0000-0000-0000-000000000018", displayName: "도윤", characterID: "fox")
+    #expect(sidebarInviteWakes(store) {
+        store.alkkagi.incoming = [AlkkagiInvite(id: "a-1", opponent: alkkagiPeer,
+                                                expiresAtMs: (Date().timeIntervalSince1970 + 45) * 1_000, stake: 5)]
+    }, "1:1 알까기 신청이 들어왔는데 창이 안 깨어난다")
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(alkkagi: true))
+    #expect(sidebarInviteWakes(store) { store.blockHiddenPeerIDs = [alkkagiPeer.id] })
+    #expect(MiniGameDuelInvites(store: store).alkkagi == false, "차단한 사람의 1:1 알까기 신청에 점이 남았다")
+    store.blockHiddenPeerIDs = []
+    // 알까기 스토어는 차단한 사람의 신청을 목록에서 걷는다(필터가 아니라 지움) — 다음 로비가 다시 싣는 것과 같게 다시 넣는다.
+    #expect(sidebarInviteWakes(store) {
+        store.alkkagi.incoming = [AlkkagiInvite(id: "a-1", opponent: alkkagiPeer,
+                                                expiresAtMs: (Date().timeIntervalSince1970 + 45) * 1_000, stake: 5)]
+    })
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites(alkkagi: true))
+    #expect(sidebarInviteWakes(store) { store.alkkagi.incoming = [] })
+    #expect(MiniGameDuelInvites(store: store) == MiniGameDuelInvites())
+
     // 창 뷰가 실제로 이 생성자를 부른다(스냅샷 전용 previewInvites 가 없을 때) — 위 측정이 창의 길이라는 연결.
     let panel = try String(contentsOf: URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

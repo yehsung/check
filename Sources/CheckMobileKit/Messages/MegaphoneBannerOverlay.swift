@@ -77,6 +77,7 @@ private struct MegaphoneBannerInteractiveCard: View {
 
     var body: some View {
         MegaphoneBannerCard(banner: banner, onClose: onClose)
+            .id(banner.id)
             .contentShape(RoundedRectangle(cornerRadius: MegaphoneBannerPhoneRules.cornerRadius, style: .continuous))
             .simultaneousGesture(pressAndSwipe)
             .offset(y: dragOffset)
@@ -109,10 +110,15 @@ private struct MegaphoneBannerInteractiveCard: View {
     }
 }
 
-/// 카드 모양: 유리 둥근 카드 · 아바타 · 닉네임 · 📢 · 본문(최대 4줄) · [닫기].
+/// 카드 모양: 유리 둥근 카드 · 아바타 · 닉네임 · 📢 · 본문(최대 4줄 — 넘치면 [더 보기]로 같은 자리에서 펼친다) · [닫기].
 private struct MegaphoneBannerCard: View {
     let banner: MegaphoneBanner
     let onClose: () -> Void
+    /// [더 보기]를 눌러 전체 글로 펼쳤다. 카드는 배너마다 새로 서므로(`.id(banner.id)`) 다음 배너는 다시 접힌다.
+    @State private var isExpanded = false
+    /// 같은 폭 · 같은 글꼴로 잰 전체 글 높이와 접힌(4줄) 높이 — 넘침 판정(`MegaphoneBannerPhoneRules.needsMore`).
+    @State private var fullHeight: CGFloat = 0
+    @State private var foldedHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -127,15 +133,36 @@ private struct MegaphoneBannerCard: View {
                     .accessibilityHidden(true)
                 Spacer(minLength: 0)
             }
-            Text(banner.body)
+            // 서식 기호 · 이모티콘 토큰을 벗긴 글(1.0.17 — 맥 배너와 같은 `ChatMarkdown.plainPreview`). 링크는 누를 수 없는 글자다(맥과 같다).
+            // 보이스오버 라벨(아래)도 같은 함수를 지난다.
+            Text(MegaphoneBannerPhoneText.shownBody(banner.body))
                 .font(.body.weight(.semibold))
                 .foregroundStyle(MobileTheme.label)
-                .lineLimit(MegaphoneBannerPhoneRules.bodyLineLimit)
+                .lineLimit(isExpanded ? nil : MegaphoneBannerPhoneRules.bodyLineLimit)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+                    if !isExpanded { foldedHeight = height }
+                }
+                // 같은 폭 · 같은 글꼴의 줄 제한 없는 글을 숨겨 깔아 전체 높이를 잰다(넘치는지 알 길이 SwiftUI 엔 이것뿐이다).
+                .background(alignment: .topLeading) {
+                    Text(MegaphoneBannerPhoneText.shownBody(banner.body))
+                        .font(.body.weight(.semibold))
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .hidden()
+                        .accessibilityHidden(true)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
+                }
             HStack(spacing: 8) {
                 Spacer(minLength: 0)
+                if !isExpanded && MegaphoneBannerPhoneRules.needsMore(fullHeight: fullHeight, foldedHeight: foldedHeight) {
+                    AingButton(MegaphoneBannerPhoneText.more, kind: .tinted, size: .md) {
+                        withAnimation(.spring(duration: 0.25)) { isExpanded = true }
+                    }
+                }
                 AingButton(MegaphoneBannerPhoneText.close, kind: .gray, size: .md) { onClose() }
             }
         }

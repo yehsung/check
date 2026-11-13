@@ -361,11 +361,20 @@ final class WorkTimerStore {
             // 아잉 뒤집기 받은 신청도 같은 자리에서 본다 — 폴링이 창이 보일 때만 도는 것도 같아서, 창을 안 연 사람에게는
             // 이 한 줄과 소켓 신호가 신청(TTL 60초)을 아는 전부다.
             reversi.refreshLobbyIfStale()
+            // 아잉 마작 받은 초대도 같은 자리에서 본다 — 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 초대(방 TTL 10분)를 아는 전부다.
+            mahjong.refreshLobbyIfStale()
+            // 1:1 길건너 받은 신청도 같은 자리에서 본다 — 창을 안 연 사람에게는 이 한 줄과 소켓 신호가 신청을 아는 전부다.
+            // 팝오버 열기는 **가벼운 로비**(`p_users` false — 사람 목록·전적 없이 받은 신청·진행 판만, CD/SPEC.md §6.3 CS-4)다.
+            crossyDuel.refreshLobbyIfStale()
+            // 1:1 알까기 받은 신청도 같은 자리 · 같은 가벼운 로비(`p_users` false — alkkagi/v2 SPEC §4.3 메뉴 스로틀 30초)다.
+            alkkagi.refreshLobbyIfStale()
             // 메시지 요약 + 이력을 60초 스로틀로 한 번 받는다(v0.3.30) — 대화 패널이 안 보여도 받는다: 안 읽음 점과
             // 메뉴바 점이 이력·요약 중 최신 쪽을 기준으로 계산되기 때문이다(unreadMessagePeerIDs).
             refreshMessageActivityOnMenuOpen()
             // 확성기 배너의 예비 경로(2026-10-30) — 소켓이 끊겨 'megaphone' 신호를 놓쳐도 여는 순간 5분 스로틀로 한 번 맞춘다.
             refreshMegaphoneBannerIfStale()
+            // 지난 확성기 페이지(2026-11-11)를 연 채 닫았고 그동안 신호를 놓쳤으면 한 번 읽는다(놓친 신호가 없으면 0건).
+            refreshMegaphoneFeedIfSignalMissed()
             // 대화 패널이 떠 있는 채로 다시 열었으면 지금 보이는 대화를 읽음으로 올린다(들고 있는 이력 기준 — 새 이력이
             // 도착하면 그 응답 자리에서 한 번 더 판정한다).
             evaluateMessageReadMarking()
@@ -879,6 +888,15 @@ final class WorkTimerStore {
     ///   상품 종류마다 구매 방법이 다르면 그게 곧 실수의 자리라, 울트라도 같은 길을 지난다.
     var shopSelection: ShopSelection?
 
+    /// 상점 아래 칸의 탭(v0.3.81 — 캐릭터 | 오목알). 상점을 닫아도 남는다(다시 열면 보던 탭).
+    var shopTab: ShopTab = .characters
+    /// 오목알 스킨 상점 상태(v0.3.81 — `omok_skins_state`). nil = 아직 못 읽음. 상점을 열 때 · 사기 · 끼기 뒤에 맞춘다.
+    var omokSkins: OmokSkinsState?
+    /// 이 서버엔 스킨 상점이 없다(함수 없음 — db push 전). '오목알' 탭을 감춘다.
+    var omokSkinsUnavailable = false
+    /// 끼기 요청이 떠 있다(두 번 눌러도 한 번).
+    var omokSkinEquipInFlight = false
+
     /// 지금 사고 있는 것의 id(`WorkTimerStore.ultraPurchaseID` 면 울트라). nil 이면 구매 중이 아니다.
     /// 하나만 두는 이유: 동시에 둘을 사면 잔량 응답 둘이 뒤섞여 어느 쪽이 최신인지 알 수 없다.
     var purchasingID: String?
@@ -969,9 +987,16 @@ final class WorkTimerStore {
     @ObservationIgnored var cakeGiftWindowHooks = CakeGiftWindowHooks.live
     /// 조회가 떠 있는 동안 선물이 결론 났다 — 그 조회가 끝나면 다음 선물을 한 번 더 묻는다(v0.3.74 `followUpCakeGiftIfNeeded`). 화면이 읽지 않는다.
     @ObservationIgnored var cakeGiftFollowUpQueued = false
+    /// 우리 센터 선물(지역 아잉이)을 서버에 마련해 달라고 이미 말한 세션 세대(`region_gift_ensure` — 세대당 한 번, 성공했을 때만 적는다).
+    @ObservationIgnored var regionGiftEnsuredGeneration: Int?
     /// 상점이 안 가진 사람에게 이슬 아잉이(술 한잔 선물 전용)의 잠긴 칸을 세우는가(v0.3.74). 정본은 상수 하나
     /// (`WorkTimerStore.drinkGiftLockedCellPolicy`)이고, 이 칸은 시험이 두 값을 다 재려고 갈아 끼우는 이음새다. 격자가 읽는다.
     var drinkGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.drinkGiftLockedCellPolicy
+    /// 빼빼로 아잉이(v0.3.77) 잠긴 칸 정책 — 정본은 상수(`WorkTimerStore.peperoGiftLockedCellPolicy`), 이 칸은 시험의 이음새다(이슬 칸과 같다).
+    var peperoGiftCellPolicy: GiftLockedCellPolicy = WorkTimerStore.peperoGiftLockedCellPolicy
+    /// 빼빼로 장식 미리 굽기의 문(조정자 결정 11-04 — 가진 사람 · 입은 사람만, `PeperoPrewarmGate`). 상점 상태가 가진 것을 확인하거나 선물을 받으면
+    /// 이 문을 두드린다. 앱은 언제나 `.shared`(앱 시작이 연 문), 시험은 자기 문을 끼운다(테스트 이음새). 화면이 읽지 않는다.
+    @ObservationIgnored var peperoPrewarmGate = PeperoPrewarmGate.shared
 
     /// 지금 보고 있는 제보 목록. 관리자면 전체, 아니면 내가 보낸 것만 — **그 판정은 서버가 한다**(feedback_list).
     /// 내용은 **사용자가 쓴 글**이다. 로그로 흘리지 마라.
@@ -1013,6 +1038,36 @@ final class WorkTimerStore {
     /// 보이고 연타가 같은 답장을 두 번 보낸다(그리고 두 번째는 서버 트리거가 시각을 안 찍어
     /// 화면상 아무 일도 안 일어난 것처럼 보인다).
     var feedbackReplySending = false
+
+    // MARK: 제보 화면 캡처(11-11) — 로직은 `WorkTimerStoreFeedbackShot.swift`, 저장 프로퍼티만 여기(확장은 저장 프로퍼티를 못 둔다)
+    //
+    // 전부 **계정에 묶인다**(로그아웃 블록의 `resetFeedbackShotState()`). 캡처에는 남의 이름·대화가 찍혀 있을 수 있어,
+    // 남기면 다음 사람이 앞 사람의 화면을 본다.
+
+    /// 보내기 탭에 붙여 둔 캡처들(줄인 JPEG + 미리보기, 최대 `FeedbackShotRules.maxDraft`). **스토어에 두는 이유**는 초안과
+    /// 같다 — 파일 고르기 창이 팝오버를 닫아도 살아남아야 한다. 비우는 자리: 제보 글이 나간 순간 · [빼기] · 로그아웃.
+    var feedbackShots: [FeedbackShotDraft] = []
+    /// 고른 이미지를 줄이는 중(붙이기 버튼과 [보내기]를 잠그고 "준비하는 중…"을 보인다).
+    var feedbackShotPreparing = false
+    /// 서버에 캡처 함수·버킷이 없다(404 · PGRST202). 붙이기 줄과 칩을 숨긴다. **영구히 기억하지 않는다** — 패널을 열 때 다시 묻는다.
+    var feedbackShotServerMissing = false
+    /// 이 패널에서 붙이기가 문 닫힘(`unsupported_client`)을 들었다. 붙이기 줄만 숨긴다(칩 · 받은 캡처는 그대로 — 목록은 문과 무관하다).
+    /// **영구히 기억하지 않는다** — 패널을 열 때 다시 묻는다(`rearmFeedbackShots`).
+    var feedbackShotDoorClosed = false
+    /// 목록 뒤 한 번에 받은 캡처 행(제보 id 소문자 → 캡처들). 그림은 아니다 — 그림은 아래 칸에 필요할 때만 받는다.
+    var feedbackShotsByReport: [String: [FeedbackShot]] = [:]
+    /// 받아 둔 캡처 그림(경로 → 그림, 메모리만). **필요할 때만** 받는다(행을 펼치거나 칩을 눌렀을 때).
+    var feedbackShotImages: [String: NSImage] = [:]
+    /// 받는 중인 경로들.
+    var feedbackShotLoading: Set<String> = []
+    /// 못 받은 경로와 그 까닭(지워짐 · 실패). 다시 누르면 다시 묻는다.
+    var feedbackShotFailures: [String: FeedbackShotLoadFailure] = [:]
+    /// 패널 위 크게 보기(nil = 닫힘).
+    var feedbackShotViewer: FeedbackShotViewerState?
+    /// 올릴 파일 이름(uuid 소문자). **시도마다 새 값**이다. 시험이 갈아 끼우는 이음새.
+    @ObservationIgnored var feedbackShotFileID: () -> String = { UUID().uuidString.lowercased() }
+    /// 로그아웃 · [모두 빼기] 뒤 늦게 도착한 준비 결과를 버리는 일련번호.
+    @ObservationIgnored var feedbackShotPrepareSerial = 0
 
     // MARK: 신고 관리(운영자, v0.3.34) — 로직은 `WorkTimerStoreReportAdmin.swift`, 저장 프로퍼티만 여기(확장은 저장 프로퍼티를 못 둔다)
     //
@@ -1182,6 +1237,11 @@ final class WorkTimerStore {
     var retro: WeeklyRetro?
     /// 최근 12주 일별 근무 잔디(이슈 #3). heatmap/retro 와 같은 조회·같은 파싱에서 함께 계산되고 함께 비워진다.
     var dailyGrid: WorkDailyGrid = .empty
+    /// 첫 주 ~ 이번 주 주별 근무 리듬(2026-11-06 대표 결정 — 이번 주 실시간 + ◀▶ 주별 넘겨보기). 완료 세션만 담고,
+    /// 이번 주 칸의 진행 중 근무는 화면이 1분마다 얹는다. heatmap/retro 와 같은 조회에서 함께 계산되고 함께 비워진다.
+    var rhythmWeeks: WorkRhythmWeeks = .empty
+    /// 보고 있는 주(0 = 이번 주, 1 = 지난주 …). 내 기록을 열 때마다 이번 주로 돌아간다.
+    var rhythmWeekOffset = 0
     /// 최근 12주 일별 AI 토큰 잔디(이슈 #3 의 토큰 절반). 같은 조회 안에서 서버 일별 표 + 로컬 일별 맵 + 계정 버킷을 합쳐 계산하고
     /// (WorkTimerStoreInsights), 주가 바뀌거나 로그아웃하면 근무 잔디와 함께 비워진다. 토큰 조회는 **독립 실패**다 — 못 받아도
     /// 근무 잔디·회고·히트맵은 그대로 그려진다. 수집 거부(tokenUsageCollect == false)면 항상 empty(패널도 섹션을 숨긴다).
@@ -1334,6 +1394,17 @@ final class WorkTimerStore {
     /// (`ReversiStoreHost = GomokuStoreHost`). 판정은 서버가 하고 이 스토어는 서버 state 를 그대로 든다(AI 연습 판만 로컬).
     let reversi: ReversiStore
 
+    /// 아잉 마작(4인 리치 마작 — 내부 이름 mahjong) 스토어. 아잉 뒤집기와 **같은 호스트 프로토콜**을 요구한다
+    /// (`MahjongStoreHost = GomokuStoreHost`). 판정은 서버가 하고 이 스토어는 서버 state 를 그대로 든다(혼자 연습판만 로컬).
+    let mahjong: MahjongStore
+
+    /// 1:1 길건너(내부 이름 crossy_duel) 스토어. 아잉 마작과 **같은 호스트 프로토콜**을 요구한다
+    /// (`CrossyDuelStoreHost = GomokuStoreHost`). 판정·정산은 서버가 하고 판 구동기(`CrossyGame`)만 이 기기에서 돈다.
+    let crossyDuel: CrossyDuelStore
+    let alkkagi: AlkkagiOnlineStore
+    /// 1:1 대기방(맥 1:1 여섯 게임 공용 — 방 = 상대 없는 신청). 창 여섯이 `DuelRoomsHub.store` 로 같은 스토어를 본다.
+    let duelRooms = DuelRoomStore()
+
     /// 확성기(📢 v0.3.51) 작성 스토어 — **폰과 같은 코어 스토어**다(`MegaphoneStore`). 이 스토어는 호스트(세션·루비 미러)만
     /// 빌려 주고, 화면은 상점 패널(`CheckShopPanel`)이 그린다. 오목·체스와 같은 소유 규약(약참조 호스트 · 로그아웃에 reset).
     let megaphone: MegaphoneStore
@@ -1342,6 +1413,9 @@ final class WorkTimerStore {
     /// 폰과 같은 코어 스토어다(`MegaphoneBannerStore`). 소유 규약은 `megaphone` 과 같다(약참조 호스트 · 로그아웃에 reset).
     /// 맥 배선(필터 자리 · 실시간 · 예비 새로고침 · 본인 배너)은 `WorkTimerStoreMegaphoneBanner.swift`.
     let megaphoneBanner: MegaphoneBannerStore
+    /// 지난 확성기(2026-11-11 — 최근 30일 모아 보기). 폰과 같은 코어 스토어다(`MegaphoneFeedStore`). 소유 규약은 `megaphone` 과 같다
+    /// (약참조 호스트 · 로그아웃에 reset). 줄은 배너 스토어와 **다른 타입**이라 배너로 다시 뜨지 않는다. 맥 배선은 `WorkTimerStoreMegaphoneFeed.swift`.
+    let megaphoneFeed: MegaphoneFeedStore
     /// 배너 예비 새로고침(팝오버 열기 · 폴링 틱)의 60초 스로틀 장부. 실시간 신호·판정 보류는 이 스로틀을 지나지 않는다.
     @ObservationIgnored var megaphoneBannerLastRefreshAt: Date = .distantPast
     /// 배너 미룸의 마지막 값(바뀐 때만 `deferralChanged()` 를 부른다 — `megaphoneBannerDeferralMayHaveChanged`).
@@ -1604,6 +1678,8 @@ final class WorkTimerStore {
     var messageReadReceiptsAvailable = false
     /// 마지막으로 받은 안 읽음 요약(서버 판정)과 그 요청의 일련번호. nil = 아직 못 받았다(옛 서버 포함).
     var messageUnreadSummary: MessageUnreadSummarySnapshot?
+    /// [모두 읽음]이 이력을 다시 받는 중인가(두 번 눌러도 한 번만 돈다 — `markAllConversationsRead`).
+    var messageMarkAllReadInFlight = false
     /// 마지막 이력이 읽음 칸을 실어 왔을 때의 일련번호와 **서버 순서**. nil = 이력이 읽음을 모른다(옛 서버·아직 안 받음).
     var messageHistoryReadSnapshot: MessageHistoryReadSnapshot?
     /// 상대별 낙관 읽음 — 읽음 처리를 보낸 순간 점을 바로 끄기 위한 기록. 서버 스냅샷이 이 기록보다 **나중에**
@@ -1623,6 +1699,61 @@ final class WorkTimerStore {
     var messagePokeChronology: [String: Int] = [:]
     /// 상대별 찌르기 낙관 읽음(메시지의 `messageOptimisticReads` 와 같은 규칙).
     var messagePokeOptimisticReads: [String: MessageOptimisticRead] = [:]
+
+    // ── 이전 대화 더 보기(2026-11-11 — 메시지 30일 보관) — 로직은 `WorkTimerStoreMessageOlder.swift` ──
+    // 24시간 머리(`messageHistory`)와 **따로** 든다: 지난 쪽이 머리에 섞이면 읽음 경계(`markTarget`)가 옛 줄을 "마지막 받은 말"로
+    // 고르거나 24시간 너머의 받은 말이 메뉴바 점을 켠다. 전부 계정에 묶인다 — clearPersistedSession 이 지운다.
+
+    /// 상대별 지난 쪽(오래된 것 → 최신). 머리보다 앞에 그려진다. 패널을 닫거나 상대를 바꾸면 비운다(가장 사적인 표면).
+    var messageOlderPages: [String: [MessageHistoryEntry]] = [:]
+    /// 상대별 다음 쪽 커서(서버가 준 가장 오래된 줄의 µs · id). 없으면 다음 누름은 커서 없이 최신부터 묻는다. 화면이 안 읽는다.
+    @ObservationIgnored var messageOlderCursors: [String: MessagePageCursor] = [:]
+    /// 상대별 "더 이전 쪽이 있는가"(서버 답). 모르면 nil(아직 안 눌렀다).
+    var messageOlderHasMore: [String: Bool] = [:]
+    var messageOlderLoading = false
+    /// 마지막 지난 쪽 조회가 실패했는가(함수 없음이 아니다 — 다시 누르면 다시 묻는다).
+    var messageOlderFailed = false
+    /// `message_page` 를 쓸 수 있는가(세 갈래 — 문은 없다): nil = 모름(버튼을 보인다) · false = 함수 없는 서버(버튼을 숨긴다)
+    /// · true = 한 번이라도 성공했다(입력칸 안내가 30일 문장이 된다). false 는 **영구히 들지 않는다** — 다음 패널 열기에서 nil 로
+    /// 되돌린다(db push 는 앱이 떠 있는 동안 끝난다).
+    var messageOlderAvailable: Bool?
+    /// 지난 쪽을 붙인 직후 대화가 제자리를 지키게 하는 표(뷰가 이 id 를 위에 맞춘다). 번호가 바뀔 때만 움직인다.
+    var messageOlderScrollAnchor: MessageOlderScrollAnchor?
+    /// 지난 쪽 조회의 순번 — 비울 때마다 올려 날아가던 응답을 버린다(닫기 · 상대 바꾸기 · 차단 · 로그아웃).
+    @ObservationIgnored var messageOlderRequestToken = 0
+
+    // ── 메시지 사진(2026-11-11 — 맥 0.3.86) — 로직은 `WorkTimerStoreMessagePhotos.swift`, 전선은 코어 `MessagePhotoWire.swift` ──
+    // 24시간 머리(`messageHistory`)에는 사진 칸이 없다 — 사진은 **따로 든 표**(`messagePhotoMeta`)로 배우고 그릴 때만 얹는다(머리 · 안 읽음 ·
+    // 읽음 경계는 한 글자도 안 바뀐다). 전부 계정에 묶인다 — clearPersistedSession 이 지운다(그림 캐시까지).
+
+    /// 상대별 사진 칸(메시지 id → 사진 · 설명). 대화를 열 때 · 열린 대화에 받은 말이 올 때 `message_page` 로 배운다(지난 쪽 줄도 든다).
+    var messagePhotoMeta: [String: [String: MessagePhotoMeta]] = [:]
+    /// 사진 칸을 `message_page` 로 받을 수 있는가: nil 모름 · false 함수 없는 서버(다음 패널 열기까지 안 묻는다) · true 받아 봤다.
+    @ObservationIgnored var messagePhotoMetaAvailable: Bool?
+    /// 고른 사진(미리 보기 덮개 · 보내기 전). nil = 고른 사진이 없다. 실패해도 남는다(다시 [보내기]).
+    var messagePhotoDraft: MessagePhotoDraft?
+    /// 고른 사진을 줄이는 중(떼어 낸 작업).
+    var messagePhotoPreparing = false
+    /// 이 세션에 사진 문이 닫혀 있음을 배웠다(서버 `unsupported_client` · 함수/버킷 없음) — 다음 패널 열기까지 [사진] 버튼을 숨긴다.
+    var messagePhotoSendClosed = false
+    /// 크게 보기(대화 자리 덮개). nil = 안 띄웠다.
+    var messagePhotoViewer: MessagePhotoViewerItem?
+    /// 사진 그림 메모리 캐시(저장소 **경로**가 열쇠 — 서명 URL 은 바뀐다). 디스크에 남기지 않는다.
+    let messagePhotoImages = MessagePhotoImageCache()
+    /// 사진 칸 조회의 비관찰 장부(연 상대 · 덮은 id · 날아가는 조회 · 뒤따를 한 번 · 순번).
+    @ObservationIgnored var messagePhotoRuntime = MessagePhotoRuntime()
+    /// 사진 바이트 받기(주입 — 시험 전용). nil 이면 서명 URL 로 받는다(시험 프로세스에서는 주입 없이 네트워크로 안 나간다).
+    @ObservationIgnored var messagePhotoDataLoader: (@Sendable @MainActor (String) async throws -> Data)?
+    /// 머리 변화 뒤 사진 칸 조회를 모으는 잠(주입 — 프로덕션은 실제 수면 `messagePhotoMetaDebounceSeconds`).
+    @ObservationIgnored var messagePhotoMetaDebounceSleep: @Sendable (TimeInterval) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
+    /// 운영자 신고함: 신고 id → 신고된 사진 경로(`report_admin_photo_paths`). `ContentReportAdminRow` 에 칸을 더하지 않는다(V0334 계약).
+    var reportAdminPhotoPaths: [String: String] = [:]
+    /// 운영자 신고함에서 크게 펼친 사진의 신고 id.
+    var reportAdminPhotoEnlargedID: String?
+    /// 사진 경로를 이미 물어본 신고 id(사진이 없다는 답도 든다) — 목록을 다시 받아도 새 id 만 묻는다.
+    @ObservationIgnored var reportAdminPhotoChecked: Set<String> = []
     /// 읽음 절의 비관찰 장부(일련번호 · 왕복 직렬화 · 스로틀). 한 덩어리로 들어 로그아웃에서 한 줄로 비운다
     /// (RealtimeRuntime 과 같은 이유 — 흩뿌리면 "하나를 안 지웠다"가 이 계층에서 가장 흔한 누수다).
     @ObservationIgnored var messageReadRuntime = MessageReadRuntime()
@@ -1695,6 +1826,12 @@ final class WorkTimerStore {
             rummy.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
             // 아잉 뒤집기도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선에 남지 않게.
             if reversi.hiddenPeerIDs != blockHiddenPeerIDs { reversi.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 아잉 마작도 같은 관계다 — 차단한 사람이 로비·공개 방·받은 초대·배너에 남지 않게(큐브 꼴, 같음 가드는 스토어 안).
+            mahjong.setHiddenPeers(Set(blockHiddenPeerIDs.compactMap { UUID(uuidString: $0) }))
+            // 1:1 길건너도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선에 남지 않게(리버시 꼴).
+            if crossyDuel.hiddenPeerIDs != blockHiddenPeerIDs { crossyDuel.hiddenPeerIDs = blockHiddenPeerIDs }
+            // 1:1 알까기도 같은 관계다 — 차단한 사람이 로비·받은 신청·배너·말풍선·메뉴바 점에 남지 않게(길건너 꼴).
+            if alkkagi.hiddenPeerIDs != blockHiddenPeerIDs { alkkagi.hiddenPeerIDs = blockHiddenPeerIDs }
         }
     }
     /// 차단 왕복이 떠 있는 상대(한 번에 하나 — 확인 시트를 지난 동작이다).
@@ -1716,6 +1853,23 @@ final class WorkTimerStore {
     /// **팝오버 패널 깃발(`is…Visible`)이 아니다** — 설정 창 안의 쪽 전환이라 팝오버 자리를 한 톨도 안 먹는다. 그래서 이름도
     /// 그 규약(`CheckMenuView.subPanelFlagNames` 와 대조하는 테스트가 세는 모양)을 따르지 않는다.
     var showsBlockedPeopleInSettings = false
+
+    // ── 원격 기계 연결(aing-scan, 2026-11) ── 로직은 `WorkTimerStoreScanner.swift`. 계정에 묶인다 — clearPersistedSession 이 비운다.
+
+    /// 설정 창이 [원격 기계 연결] 쪽을 보고 있는가(차단 목록과 같은 쪽 전환 — 설정 본문 높이 계약을 먹지 않는다).
+    var showsRemoteScannerInSettings = false
+    var remoteScannerDevices: [ScannerDevice] = []
+    var remoteScannerLoaded = false
+    var remoteScannerLoading = false
+    var remoteScannerFailed = false
+    /// 서버에 스캐너 함수가 아직 없다(앱이 db push 보다 먼저 나간 경우) — 화면이 "준비 중"이라고 말한다.
+    var remoteScannerServerNotReady = false
+    /// 방금 만든 연결 코드(화면에만 · 저장하지 않는다). 만료 시각이 지나면 화면이 지운다.
+    var remoteScannerLinkCode: ScannerLinkCode?
+    var remoteScannerMakingCode = false
+    /// 목록 위 한 줄(코드 만들기·끊기 실패 등).
+    var remoteScannerNotice: String?
+    var revokingScannerDeviceIDs: Set<String> = []
 
     // ── 기본 아바타 = 착용 캐릭터 (2026-09-20 — 맥) ──
     //
@@ -2019,10 +2173,17 @@ final class WorkTimerStore {
         self.rummy = RummyStore()
         // 아잉 뒤집기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.reversi = ReversiStore()
+        // 아잉 마작도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.mahjong = MahjongStore()
+        // 1:1 길건너도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.crossyDuel = CrossyDuelStore()
+        self.alkkagi = AlkkagiOnlineStore()
         // 확성기도 같다 — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
         self.megaphone = MegaphoneStore()
         // 확성기 배너도 같다(2026-10-30). 본 것 기록은 이 앱의 defaults 에 둔다(시험은 격리 스위트).
         self.megaphoneBanner = MegaphoneBannerStore(defaults: defaults)
+        // 지난 확성기도 같다(2026-11-11) — host 없이 만들고 초기화 끝에서 자신을 넘긴다(attach).
+        self.megaphoneFeed = MegaphoneFeedStore()
         self.service = service
         self.defaults = defaults
         let resolvedVault = tokenVault ?? Self.defaultTokenVault(defaults: defaults)
@@ -2083,6 +2244,15 @@ final class WorkTimerStore {
         tetris.attach(host: self)
         rummy.attach(host: self)
         reversi.attach(host: self)
+        mahjong.attach(host: self)
+        crossyDuel.attach(host: self)
+        alkkagi.attach(host: self)
+        duelRooms.attach(host: self)
+        DuelRoomsHub.store = duelRooms
+        duelRooms.rubyBalanceSource = { [weak self] in self?.rubyBalance }
+        // 방에서 선 판은 이 기기가 연 판이다 — 방장(숨이 '시작됨')과 참가자(참가 ok) 모두 그 게임 스토어가 받아 창을 연다.
+        duelRooms.onRoomStarted = { [weak self] game, matchID in self?.adoptDuelRoomMatch(game, matchID: matchID) }
+        duelRooms.onJoined = { [weak self] game, matchID in self?.adoptDuelRoomMatch(game, matchID: matchID) }
         // v0.3.69: '이 기기가 연 판' 기록(한 판 한 기기 — TetrisDuelStore 머리말 ⑩)을 이 앱의 defaults 에 둔다. 빠지면 기록이
         // 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 옛 서버(my_device 없음)에서 자기 판을 못 알아보고 침묵 패를 한다.
         tetris.defaults = defaults
@@ -2093,6 +2263,11 @@ final class WorkTimerStore {
         // 2026-11-03: 아잉 뒤집기도 '이 기기가 연 판' 장부를 이 앱의 defaults 에 둔다(오목·체스와 같은 규칙 — 창은 판을 연 기기에서만
         // 저절로 열린다). 빠지면 장부가 프로세스 안에만 살아, 판 중에 앱을 다시 켠 이 기기가 자기 판의 창을 안 띄워 30초를 흘린다.
         reversi.deviceLedger.defaults = defaults
+        // 아잉 마작도 같은 장부를 이 앱의 defaults 에 둔다(같은 규칙 — 창·주의·말풍선·깨우기·방 확인은 판을 연 기기에서만).
+        mahjong.deviceLedger.defaults = defaults
+        // 1:1 길건너도 같은 장부를 이 앱의 defaults 에 둔다(`GameDeviceLedger(game: "crossy_duel")` — 서버 my_device 가 없을 때
+        // 이 기기가 연 판을 알아보는 마지막 근거). 빠지면 판 중에 앱을 다시 켠 이 기기가 자기 판을 못 알아보고 침묵 패를 한다.
+        crossyDuel.deviceLedger.defaults = defaults
         // v0.3.64: 1:1 판이 끝난(결과를 받은) 순간 일일 미션 진행을 한 번 묻는다 — 새 타이머 없이 이벤트로(`refreshAchievementsAfterGameResult`).
         // 게임 이름은 일일 미션 키(`daily_<게임>`)의 꼬리다 — 그 줄을 이미 채웠으면 묻지 않는다.
         gomoku.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "gomoku") }
@@ -2100,8 +2275,12 @@ final class WorkTimerStore {
         tetris.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "tetris_duel") }
         rummy.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "rummy") }
         reversi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "reversi") }
+        mahjong.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "mahjong") }
+        crossyDuel.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "crossy_duel") }
+        alkkagi.onMatchFinished = { [weak self] in self?.refreshAchievementsAfterGameResult(game: "alkkagi") }
         megaphone.attach(host: self)
         megaphoneBanner.attach(host: self)
+        megaphoneFeed.attach(host: self)
         // 실시간 대결 · 미니게임 판 동안 배너를 미룬다(바뀔 때 알리는 쪽은 배너 창 컨트롤러 · 판 장부).
         megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
         // 보낸 사람 본인에게도 보낸 직후 자기 배너를 한 번(서버 fan-out 에는 본인이 없다 — 계약 C2).
@@ -3080,6 +3259,8 @@ final class WorkTimerStore {
             closePokePanel()
             closeUltraPanelForAnotherScreen()
             closeMissionPanel()
+            // 근무 리듬은 열 때마다 이번 주부터 보여 준다(대표 결정: "매주 실시간 쌓이고 있는게 보이게끔").
+            if rhythmWeekOffset != 0 { rhythmWeekOffset = 0 }
             // 배너 소비 판정은 evaluateRetroBanner 한 곳에만 둔다 — 예전엔 여기서 markRetroBannerSeen() 을
             // 무조건 불러, 아직 회고를 못 받은 상태(첫 조회 실패·오프라인)에서 패널을 열기만 해도 이번 주 키가
             // 소진돼 뒤늦게 회고가 도착해도 그 주 내내 배너가 뜨지 않았다(회귀 지점). 패널이 열려 있으므로
@@ -3106,6 +3287,8 @@ final class WorkTimerStore {
         shopNotice = nil
         // 확성기 작성기는 상점 패널 안에 산다 — 패널을 닫으면 같이 접는다(쓰던 글은 남는다).
         megaphone.close()
+        // 지난 확성기 페이지(2026-11-11)도 상점 자리에 선다 — 같이 닫는다(받아 둔 줄은 남는다).
+        closeMegaphoneFeed()
         // 뽑기 패널(v0.3.54)도 상점 안에 산다. 결과는 남긴다(다시 열면 방금 무엇이 나왔는지 보인다).
         closeGachaPanel()
     }
@@ -3124,6 +3307,8 @@ final class WorkTimerStore {
         closeFeedbackPanel()
         closeCharacterPanel()
         isShopPanelVisible = true
+        // 상점은 언제나 상점 첫 화면으로 열린다 — 지난 확성기 페이지(2026-11-11)가 남아 있으면 내린다.
+        closeMegaphoneFeed()
         isLeaderboardVisible = false
         closeTokenBoard()
         closePokePanel()
@@ -3131,6 +3316,8 @@ final class WorkTimerStore {
         closeMissionPanel()
         isInsightsPanelVisible = false
         loadShopState()
+        // 오목알 스킨 상태(v0.3.81)도 상점 진입에 묻는다 — 가짐 · 낌 · 값은 다른 기기에서도 바뀐다.
+        loadOmokSkins()
         // 확성기 카드의 가격(💎50)도 서버가 말한다 — 작성기를 열기 전부터 보이게 같이 읽는다(v0.3.51).
         prefetchMegaphoneInfo()
         // 생일 선물(v0.3.66)도 상점 진입에 묻는다 — 잠긴 케이크 칸을 본 사람이 받을 선물이 있으면 축하 창 · 다시 열기 카드가 선다.
@@ -4157,6 +4344,12 @@ extension WorkTimerStore {
         messagePokeLogSnapshot = nil
         messagePokeChronology = [:]
         messagePokeOptimisticReads = [:]
+        // 이전 대화(2026-11-11)도 계정에 묶인다 — 지난 쪽 · 커서를 남기면 다음 사람이 앞 사람의 30일 대화를 읽는다.
+        // 쓸 수 있는가도 모름으로 되돌린다(메시지 상태는 계정마다 처음부터 — 입력칸 안내도 다음 성공 전까지 24시간 문장이다).
+        clearOlderMessages()
+        messageOlderAvailable = nil
+        // 메시지 사진(2026-11-11)도 계정에 묶인다 — 사진 칸 · 고른 사진 · 크게 보기 · **그림 캐시**(남의 비공개 사진)를 다 걷는다.
+        resetMessagePhotoState()
         // 장부는 **통째로 새것**으로 바꾼다 — 앞 계정의 늦은 Task 는 옛 장부를 붙잡고 있으므로 새 장부의 직렬화·스로틀을
         // 건드릴 수 없다(세대 가드와 이중 안전).
         messageReadRuntime.cancelAll()
@@ -4167,6 +4360,8 @@ extension WorkTimerStore {
         // 캐릭터 한 표도 계정에 묶인다(2026-09-20). 남기면 다음 계정 화면에 앞 계정의 표(숨김 격리 쪽이 다를 수 있다)와
         // 앞 계정의 내 칸이 남고, 떠 있던 조회가 늦게 와 다시 채운다 — 순번을 올려 그 응답을 버린다.
         clearAppUserCharacters()
+        // 원격 토큰 스캐너(다른 기기 또는 서버 연결) 쪽 상태도 계정에 묶인다.
+        clearRemoteScannerState()
         // 버전 보고 도장도 계정에 묶인다. 남기면 다음 계정이 자기 프로필에 버전을 못 남겨,
         // 그 사람은 근무 중인데도 아무에게서 메시지를 못 받는다(서버가 app_build 를 null 로 본다).
         reportedAppVersionStamp = nil
@@ -4254,10 +4449,17 @@ extension WorkTimerStore {
         rummy.reset()
         // 아잉 뒤집기도 같은 이유로 내린다. 빠뜨리면 다음 사람이 앞 계정의 판·신청을 보고 앞 계정의 폴링이 새 토큰으로 돈다.
         reversi.reset()
+        // 아잉 마작도 같은 이유로 내린다(방·판·초대·연습판·장부 판).
+        mahjong.reset()
+        // 1:1 길건너도 같은 이유로 내린다(판 구동기·신청·장부 판·폴링). 빠뜨리면 다음 사람이 앞 계정의 판을 보고 앞 계정의 보고가 새 토큰으로 돈다.
+        crossyDuel.reset()
+        alkkagi.reset()
         // 확성기 작성 글·요청 id·정보도 계정에 묶인다(v0.3.51). 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
         // 확성기 배너의 큐·필터 id·스로틀도 계정에 묶인다(2026-10-30). 남기면 앞 사람이 받은 확성기 id 로 다음 사람의 줄을 거른다.
         resetMegaphoneBanner()
+        // 지난 확성기 목록·문도 계정에 묶인다(2026-11-11). 남기면 다음 사람이 앞 사람의 목록('내가 보낸' 표시 포함)을 본다.
+        megaphoneFeed.reset()
         // 뽑기 정보·결과·요청 id 도 계정에 묶인다(v0.3.54).
         resetGachaState()
         // 생일 선물(v0.3.66)도 계정에 묶인다 — 앞 사람의 선물 창 · 다시 열기 카드를 다음 사람이 보지 않게.
@@ -4351,12 +4553,16 @@ extension WorkTimerStore {
         feedbackFilter = nil
         expandedFeedbackID = nil
         feedbackNoteDraft = ""
+        // 화면 캡처(11-11)도 계정에 묶인다 — 붙여 둔 캡처 · 받아 둔 그림 · 문 상태를 전부 비운다.
+        resetFeedbackShotState()
         // 신고 관리 칸(v0.3.34)도 계정에 묶인다 — 신고 목록은 남이 쓴 글(상세·신고된 메시지 원문)이고 미해결 건수는 메뉴바 점을 켠다.
         resetReportAdminState()
         insightsWeekKey = nil
         heatmap = .empty
         retro = nil
         dailyGrid = .empty
+        rhythmWeeks = .empty
+        rhythmWeekOffset = 0
         // 토큰 잔디도 계정의 것이다(서버 일별 행 + 이 계정으로 올린 로컬 맵) — 다음 계정에 물려주지 않는다.
         tokenDailyGrid = .empty
         showsRetroBanner = false
@@ -4400,8 +4606,12 @@ extension WorkTimerStore {
         tetris.reset()
         rummy.reset()
         reversi.reset()
+        mahjong.reset()
+        crossyDuel.reset()
+        alkkagi.reset()
         megaphone.reset()
         resetMegaphoneBanner()
+        megaphoneFeed.reset()
         resetGachaState()
         resetCakeGiftState()
         startedAt = nil
@@ -4643,4 +4853,21 @@ struct PendingSleepClose: Codable, Equatable {
     let sessionStartedAt: Date
     let sleepBeganAt: Date
     let lastInputAt: Date?
+}
+
+extension WorkTimerStore {
+    /// 1:1 대기방에서 선 판을 그 게임 스토어에 넘긴다(이 기기가 연 판 장부에 적고 판을 다시 읽는다 → 원래 길이 창을 띄운다).
+    func adoptDuelRoomMatch(_ game: DuelRoomGame, matchID: String) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            switch game {
+            case .gomoku: await self.gomoku.adoptRoomMatch(matchID)
+            case .chess: await self.chess.adoptRoomMatch(matchID)
+            case .tetris: await self.tetris.adoptRoomMatch(matchID)
+            case .reversi: await self.reversi.adoptRoomMatch(matchID)
+            case .crossyDuel: await self.crossyDuel.adoptRoomMatch(matchID)
+            case .alkkagi: await self.alkkagi.adoptRoomMatch(matchID)
+            }
+        }
+    }
 }

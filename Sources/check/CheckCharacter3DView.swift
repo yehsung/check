@@ -128,7 +128,7 @@ enum CheckCharacter3DScene {
         return makeAingScene(animated: animated, finish: character.finish)
     }
 
-    /// 아잉 메시 위의 마감(금 · 무지개 · 케이크 둘 · 이슬) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
+    /// 아잉 메시 위의 마감(금 · 무지개 · 케이크 둘 · 이슬 · 빼빼로) — `makeAingScene` 과 `makeCharacterNode`(울트라 교체)가 **같은 자리**에서 부른다.
     /// 스프라이트는 언제나 `.standard` 라 여기 오지 않는다.
     private static func applyFinish(_ finish: CharacterManifest.Finish, to character: SCNNode) {
         switch finish {
@@ -141,6 +141,21 @@ enum CheckCharacter3DScene {
         // 이슬(v0.3.74): 무지개와 같은 디퓨즈 합성 + 초록 유리 몸 셰이더(ckShadeMap · 라벨 ckLabelMap) + 병뚜껑 장식 노드(`check.isulDecor`).
         // 케이크처럼 내려 세우지 않는다(뚜껑이 낮아 지금 구도로 부유 꼭대기까지 안 잘린다 — `IsulAingFinish` 머리말 ★ 프레이밍).
         case .isul: IsulAingFinish.apply(to: character)
+        // 빼빼로(v0.3.77): 몸은 아잉 그대로(재질 안 바꿈) + 상자 · 막대 셋 장식 노드(`check.peperoDecor` — 인쇄 판은 `PeperoArt`) + 표식.
+        // 내려 세우지 않는다(막대 끝이 초코 불꽃보다 낮아 지금 구도로 부유 꼭대기까지 안 잘린다 — `PeperoAingFinish` 머리말 ★ 프레이밍).
+        case .pepero: PeperoAingFinish.apply(to: character)
+        // 흑우(v0.3.78): 무지개와 같은 디퓨즈 합성 + 네온 몸 셰이더(ckShadeMap) + 표식. 장식 없음 · 내려 세우지 않는다.
+        case .hwoo: HwooAingFinish.apply(to: character)
+        // 루비(v0.3.78): 몸 빚기(정점마다 구운 거리를 geometry 셰이더가 옮김) + 무지개와 같은 디퓨즈 합성 + 보석 몸 셰이더 + 표식.
+        // 장식 없음 · 내려 세우지 않는다(카메라는 원래 몸 상자로 이미 섰다 — Y5 는 원래 몸과 가까워 부유 꼭대기까지 안 잘린다).
+        case .ruby: RubyAingFinish.apply(to: character)
+        // 개발에 찌든 아잉이: 무지개와 같은 디퓨즈 합성 + 후드 몸 셰이더(눈꺼풀 덮개) + 끈 장식(`check.devDecor`) + 표식. 내려 세우지 않는다.
+        case .dev: DevAingFinish.apply(to: character)
+        // 부산 갈매기 아잉이(지역 아잉이): 무지개와 같은 디퓨즈 합성 + 갈매기 몸 셰이더 + 부리 · 발 · 꼬리깃 장식(`check.busanDecor`) + 표식.
+        // 내려 세우지 않는다(장식이 몸 상자 밖으로 거의 안 나온다 — `RegionAingFinish` 머리말 ★ 프레이밍).
+        case .busan: RegionAingFinish.applyBusan(to: character)
+        // 서울의 밤 아잉이(지역 아잉이): 무지개와 같은 디퓨즈 합성 + 밤하늘 몸 셰이더 + 표식. 장식 없음 · 내려 세우지 않는다.
+        case .seoul: RegionAingFinish.applySeoul(to: character)
         }
     }
 
@@ -343,7 +358,13 @@ enum CheckCharacter3DScene {
     ///
     /// 황금 아잉이(v0.3.54)의 얼굴이면 **라벤더 원본에서 감은 눈을 굽고** 같은 금 합성을 한다(`GoldAingFinish.closedEyesImage`) —
     /// 금 디퓨즈에서 바로 구우면 감은 눈의 색 분류가 금 피부를 피부로 못 알아봐 눈꺼풀이 라벤더 얼룩이 된다.
-    static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?) -> CGImage? {
+    ///
+    /// `character` 를 주면 그 캐릭터 몫의 손질을 더한다 — 루비 아잉이(v0.3.78)는 보석 몸 위에서 덮인 눈 자리의 옛 눈 결(둥근 테 · 하이라이트
+    /// 조각)이 드러나 그 자리를 밝기 맵 피부로 다시 채운다(`RubyAingFinish.closedEyesImage`). 다른 캐릭터는 지금 그대로다.
+    static func makeClosedEyesImage(faceImage: CGImage, geometry: SCNGeometry?, character: SCNNode? = nil) -> CGImage? {
+        if RubyAingFinish.isRuby(character) {
+            return RubyAingFinish.closedEyesImage(faceImage: faceImage, geometry: geometry)
+        }
         if let original = GoldAingFinish.lavenderOriginal(ofGoldFace: faceImage) {
             return GoldAingFinish.closedEyesImage(goldFace: faceImage, original: original) { lavender in
                 lavenderClosedEyesImage(faceImage: lavender, geometry: geometry)
@@ -383,7 +404,9 @@ enum CheckCharacter3DScene {
             let node = makeClosedEyeNode(image: image)
             node.name = name
             // 표면보다 살짝 앞(+z)에 둬 z-파이팅/가림을 피하고, 눈 세로 중앙에서 하단 경계로 내린다(-y).
-            node.position = SCNVector3(pos.x, pos.y - closedEyeLowering, pos.z + 0.035)
+            // 루비 아잉이(v0.3.78)는 몸 셰이더가 눈 자리를 옮기므로 선 판도 같은 만큼 옮긴다(아니면 0).
+            let shift = RubyAingFinish.closedEyeOffset(for: character, anchor: pos)
+            node.position = SCNVector3(pos.x + shift.x, pos.y - closedEyeLowering + shift.y, pos.z + 0.035 + shift.z)
             node.isHidden = true
             character.addChildNode(node)
         }
@@ -1477,6 +1500,16 @@ struct CheckOverlayCharacterView: View {
     /// 근무 시간 라벨의 세로 위치 비율(0=상단, 1=하단). 볼 아래 몸통 중상부(얼굴은 안 가림)에 오도록 54%.
     static let timerVerticalFraction: CGFloat = 0.49
 
+    /// 빼빼로 아잉이(v0.3.77 — 검토 수리)의 근무 시간 라벨 자리. 빼빼로는 몸 앞에 빨간 상자가 서서 0.49 가 상자 위 테(크림 입술)와 '빼빼로' 인쇄
+    /// 윗부분이다(앱 구도 280×340 실측: 빨강 띠 0.491–0.659 · 흰 글자 0.503–0.612 — 캡슐 ~19pt 가 글자 윗부분 40% 를 늘 덮었다). 상자 아래
+    /// 빈 자리로 내린다(상자 아래 끝 + 여유 · 패널 안 — `V0377PeperoMac3DTests.timerSitsBelowThePeperoBox` 가 앱 씬과 라벨 크기로 잰다).
+    static let peperoTimerVerticalFraction: CGFloat = 0.75
+
+    /// 착용 캐릭터별 근무 시간 라벨 세로 위치(body 가 이 함수 하나로 고른다).
+    static func timerVerticalFraction(characterID: String) -> CGFloat {
+        CharacterCatalog.isPeperoAing(characterID) ? peperoTimerVerticalFraction : timerVerticalFraction
+    }
+
     /// 울트라 격발 시 캐릭터가 설 정사각형 한 변의 비율(뷰 짧은 변 기준).
     static let ultraSideRatio: CGFloat = 0.98
 
@@ -1545,10 +1578,13 @@ struct CheckOverlayCharacterView: View {
                 // 타이머 라벨은 격발 중 숨긴다 — 전체화면 한복판의 작은 MM:SS 는 정보도 장식도 아니고,
                 // 라벨 위치가 높이의 49%라 거대 캐릭터의 배 한가운데 박힌다. 조건만 바뀌므로 안전하다.
                 if showsTimer && !ultra {
+                    // 착용 캐릭터를 여기서 읽어 관찰을 등록한다(설정에서 빼빼로로 바꾸면 라벨도 곧바로 상자 아래로 간다).
+                    let _ = CharacterSelectionBroadcast.shared.revision
+                    let wornID = CheckCharacter3DScene.selectedCharacter(defaults: characterDefaults).id
                     CheckOverlayTimerLabel(text: CheckOverlayTimeFormatter.text(elapsedSeconds))
                         .position(
                             x: geo.size.width / 2,
-                            y: geo.size.height * Self.timerVerticalFraction
+                            y: geo.size.height * Self.timerVerticalFraction(characterID: wornID)
                         )
                 }
                 if let engine, let greeting = engine.greetingText {

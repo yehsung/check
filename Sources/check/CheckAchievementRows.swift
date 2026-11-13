@@ -52,8 +52,10 @@ enum AchievementCopy {
     }
 
     /// 진행 숫자("23/50"). 받은 줄은 이 자리에 `claimedMark` 를 그린다(연속 근무는 받은 뒤 지금 연속이 다시 낮을 수 있다 — 숫자는 거짓이 된다).
+    /// 캐릭터 보상 줄(v0.3.81 — 누적 근무 시간)은 단위를 붙인다("37/100시간").
     static func count(_ mission: AchievementStatus.Mission) -> String {
-        "\(mission.progress)/\(mission.target)"
+        if mission.characterID != nil { return DevAingMission.count(progress: mission.progress, target: mission.target) }
+        return "\(mission.progress)/\(mission.target)"
     }
 
     /// 절 머리 오른쪽 — 받을 것이 있으면 "받을 보상 2개"(줄이 스크롤 아래에 있어도 여기서 보인다). 없으면 nil.
@@ -72,12 +74,15 @@ enum AchievementCopy {
             ("phone", "iphone"),
             ("todo", "checklist"),
             ("gomoku", "circle.grid.3x3.fill"),
+            ("alkkagi", AlkkagiEntryIcon.symbol),
             ("chess", ChessEntryIcon.symbol),
             ("minigame", "gamecontroller.fill"),
             ("team", "person.3.fill"),
             ("poke", "hand.point.right.fill"),
             ("ultra", "bolt.fill"),
             ("streak", HeaderStreakCopy.icon),
+            // 누적 근무 시간(v0.3.81 캐릭터 보상 — 개발에 찌든 아잉이). 근무를 뜻하는 시계.
+            ("work", "clock.fill"),
         ]
         return table.first { key.hasPrefix($0.prefix) }?.symbol ?? fallbackIcon
     }
@@ -98,12 +103,19 @@ enum DailyMissionCopy {
         if let kind = MiniGameKind(rawValue: game) { return kind.icon }
         switch game {
         case "gomoku": return MiniGameGomokuEntryButton.icon
+        // 일일 미션 열둘째 줄(daily_alkkagi) — 미니게임 창 사이드바의 [1:1 알까기] 문과 같은 기호(한 출처 `AlkkagiEntryIcon`).
+        case "alkkagi": return AlkkagiEntryIcon.resolved
         case "chess": return ChessEntryIcon.resolved
         case "tetris_duel": return TetrisDuelEntryIcon.resolved
         // v0.3.69 일일 미션 여덟째 줄(daily_rummy) — 미니게임 창 머리글의 [큐브] 입구와 같은 기호.
         case "rummy": return RummyEntryIcon.resolved
         // 일일 미션 아홉째 줄(daily_reversi) — 미니게임 창 사이드바의 [아잉 뒤집기] 문과 같은 기호.
         case "reversi": return ReversiEntryIcon.resolved
+        // 일일 미션 열째 줄(daily_mahjong) — 미니게임 창 사이드바의 [아잉 마작] 문과 같은 기호.
+        case "mahjong": return MahjongEntryIcon.resolved
+        // 일일 미션 열한째 줄(daily_crossy_duel) — 미니게임 창 사이드바의 [1:1 길건너] 문 · 폰 MeText 와 같은 기호(flag.checkered).
+        // 키가 혼자 하기 `crossy` 가 아니라 `crossy_duel` 이라 위 `MiniGameKind` 줄에 걸리지 않는다(CD/SPEC.md §1 일일 미션 줄).
+        case "crossy_duel": return CrossyDuelEntryIcon.resolved
         default: return AchievementCopy.fallbackIcon
         }
     }
@@ -183,7 +195,8 @@ enum AchievementSectionState: Equatable {
         if unavailable { return .hidden }
         // 받아 둔 값이 있으면 실패해도 그 값을 그린다(알던 줄을 지우지 않는다 — 주간 줄과 같은 규약).
         if let status {
-            let rows = status.seriesRows
+            // 루비 미션 계열 줄 뒤에 캐릭터 보상 줄(v0.3.81 — `sectionRows`). 받을 것의 수도 둘 다 센다(`claimableCount`).
+            let rows = status.sectionRows
             return rows.isEmpty ? .hidden : .loaded(rows: rows, claimableCount: status.claimableCount)
         }
         return failed ? .failed : .loading
@@ -241,6 +254,9 @@ struct MissionClaimContext {
     /// 떠 있는 일일 받기 · 마지막 일일 받기가 실패한 키(v0.3.64 — 누적 쪽과 따로 센다).
     var dailyInFlightKeys: Set<String> = []
     var dailyFailedKeys: Set<String> = []
+    /// 캐릭터 보상 미션 받기(v0.3.81 — `achievement_character_claim`). 떠 있음 · 실패는 누적 집합(`inFlightKeys` · `failedKeys`)을
+    /// 같이 쓴다(키가 겹치지 않는다). 줄은 `mission.characterID` 가 있으면 이리로 보낸다.
+    var claimCharacter: (String) -> Void = { _ in }
 
     func isInFlight(_ key: String) -> Bool {
         inFlightKeys.contains(key) || inFlightKeys.contains(WorkTimerStore.achievementClaimAllSlot)
@@ -358,6 +374,8 @@ enum MissionClaimMotion {
 struct MissionClaimButton: View {
     let amount: Int
     var inFlight: Bool = false
+    /// 캐릭터 보상(v0.3.81)이면 그 캐릭터 — 루비 "+N" 대신 작은 초상을 그린다. nil = 루비.
+    var characterID: String? = nil
     let action: () -> Void
 
     @State private var hovering = false
@@ -369,10 +387,15 @@ struct MissionClaimButton: View {
             HStack(spacing: 4) {
                 Text(AchievementCopy.claimButton)
                     .font(.caption.weight(.bold))
-                RubyIcon(size: 13)
-                Text("+\(max(0, amount))")
-                    .font(.caption.weight(.heavy))
-                    .monospacedDigit()
+                if let characterID {
+                    CharacterPortrait(characterID: characterID)
+                        .frame(width: 22, height: 18)
+                } else {
+                    RubyIcon(size: 13)
+                    Text("+\(max(0, amount))")
+                        .font(.caption.weight(.heavy))
+                        .monospacedDigit()
+                }
             }
             .foregroundStyle(.white)
             .lineLimit(1)
@@ -390,7 +413,8 @@ struct MissionClaimButton: View {
         .disabled(inFlight)
         .opacity(inFlight ? 0.55 : 1)
         .onHover { hovering = $0 }
-        .accessibilityLabel(AchievementCopy.claimAccessibility(amount))
+        .accessibilityLabel(characterID.map { DevAingMission.claimAccessibility(name: CharacterRewardLabel.name($0)) }
+                            ?? AchievementCopy.claimAccessibility(amount))
     }
 }
 
@@ -400,6 +424,8 @@ struct MissionClaimBurstFace: View, Animatable {
     let amount: Int
     var progress: Double
     var reduceMotion: Bool = false
+    /// 캐릭터 보상(v0.3.81)이면 루비 "+N" 대신 그 캐릭터 초상 + "획득".
+    var characterID: String? = nil
 
     /// `Animatable` 은 격리 없는 프로토콜이라 이 속성도 격리 없이 둔다(값 타입의 Sendable 저장 속성이라 안전하다).
     nonisolated var animatableData: Double {
@@ -410,10 +436,17 @@ struct MissionClaimBurstFace: View, Animatable {
     var body: some View {
         let frame = MissionClaimBurstCurve.frame(at: progress, reduceMotion: reduceMotion)
         HStack(spacing: 3) {
-            RubyIcon(size: 14)
-            Text("+\(max(0, amount))")
-                .font(.system(size: 14, weight: .heavy, design: .rounded))
-                .monospacedDigit()
+            if let characterID {
+                CharacterPortrait(characterID: characterID)
+                    .frame(width: 24, height: 20)
+                Text(CharacterRewardLabel.burstText)
+                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+            } else {
+                RubyIcon(size: 14)
+                Text("+\(max(0, amount))")
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
+                    .monospacedDigit()
+            }
         }
         .foregroundStyle(CheckTheme.working)
         .fixedSize()
@@ -434,12 +467,14 @@ struct MissionClaimBurstFace: View, Animatable {
 struct MissionClaimBurstView: View {
     let amount: Int
     let reduceMotion: Bool
+    var characterID: String? = nil
 
     @Environment(\.missionClaim) private var claim
     @State private var progress: Double = 0
 
     var body: some View {
-        MissionClaimBurstFace(amount: amount, progress: claim.frozenBurstProgress ?? progress, reduceMotion: reduceMotion)
+        MissionClaimBurstFace(amount: amount, progress: claim.frozenBurstProgress ?? progress, reduceMotion: reduceMotion,
+                              characterID: characterID)
             .allowsHitTesting(false)
             .accessibilityHidden(true)
             .onAppear {
@@ -534,7 +569,14 @@ struct AchievementRowView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(squeeze)
                     Spacer(minLength: 4)
-                    if state != .claimable, let reward = AchievementCopy.reward(mission) {
+                    if state != .claimable, let characterID = mission.characterID {
+                        // 캐릭터 보상(v0.3.81) — 루비 칩 자리에 그 캐릭터의 작은 초상 + 이름.
+                        CharacterRewardLabel(characterID: characterID)
+                            .foregroundStyle(tint)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Capsule().fill(tint.opacity(0.16)))
+                    } else if state != .claimable, let reward = AchievementCopy.reward(mission) {
                         RubyRewardLabel(text: reward)
                             .foregroundStyle(tint)
                             .padding(.horizontal, 6)
@@ -576,8 +618,10 @@ struct AchievementRowView: View {
                 }
             }
             if state == .claimable {
-                MissionClaimButton(amount: mission.reward, inFlight: claim.isInFlight(mission.key, group: group)) {
-                    claim.claim(mission.key, group: group)
+                MissionClaimButton(amount: mission.reward, inFlight: claim.isInFlight(mission.key, group: group),
+                                   characterID: mission.characterID) {
+                    // 캐릭터 보상 줄은 받기 함수가 다르다(`achievement_character_claim` — v0.3.81).
+                    if mission.characterID != nil { claim.claimCharacter(mission.key) } else { claim.claim(mission.key, group: group) }
                 }
             }
         }
@@ -590,7 +634,7 @@ struct AchievementRowView: View {
         // 받기 연출은 줄(계열) 자리에 선다 — 콕 10 을 받아 이 줄이 콕 50 으로 바뀌어도 "+5"는 같은 자리에서 떠오른다.
         .overlay(alignment: .trailing) {
             if let burst = claim.bursts[burstTarget] {
-                MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces)
+                MissionClaimBurstView(amount: burst.amount, reduceMotion: reduces, characterID: burst.characterID)
                     .id(burst.serial)
                     .padding(.trailing, 12)
             }
@@ -609,6 +653,33 @@ private struct AchievementRowAnimationKey: Equatable {
     init(_ mission: AchievementStatus.Mission) {
         key = mission.key
         state = mission.state
+    }
+}
+
+/// 캐릭터 보상 칩(v0.3.81 — 개발에 찌든 아잉이): 작은 초상 + 이름. 줄 칩 자리(루비 칩과 같은 높이)에 선다. 색 · 바탕은 부르는 쪽이 칠한다.
+struct CharacterRewardLabel: View {
+    let characterID: String
+
+    /// 연출 글자("획득").
+    static let burstText = "획득"
+
+    /// 표시 이름(번들 매니페스트 — 없으면 id).
+    @MainActor
+    static func name(_ characterID: String) -> String {
+        CheckCharacter3DScene.catalog.manifest(id: characterID)?.displayName ?? characterID
+    }
+
+    var body: some View {
+        HStack(spacing: 3) {
+            CharacterPortrait(characterID: characterID)
+                .frame(width: 18, height: 15)
+            Text(Self.name(characterID))
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+        }
+        .fixedSize()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("보상 \(Self.name(characterID))")
     }
 }
 

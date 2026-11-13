@@ -22,6 +22,11 @@ import Foundation
 // `grant_drink_gift` 로 지급한다. `character_gift_pending(p_protocol)` 은 p < 4 면 gift 없음 · 4 면 **생일만**(옛 행동 그대로) ·
 // 5 이상이면 두 종류 중 먼저 지급된 것 하나이고, gift 객체에 `"kind"` 를 싣는다(키가 없으면 옛 서버 — 생일로 읽는다).
 // 술 선물 수령은 p < 5 면 `needs_update`(아무것도 안 움직인다). 수령 · 결과 분류는 생일과 같은 함수 · 같은 어휘다.
+//
+// ── 빼빼로 데이 선물 — 빼빼로 아잉이 (v0.3.77 맥 먼저 · 11-11 기간 선물) ──
+// 셋째 종류 `'pepero'`. 이슬과 같은 틀이다: 선택지 하나(고를 것 없이 받기) · 최소 능력 번호 6 · 서버는 p ≥ 6 에게만 빼빼로 선물을 싣고,
+// 수령은 p < 6 이면 `needs_update`. 옛 빌드(0.3.74~0.3.76 — 이 종류를 모른다)는 서버가 실어 보내도 `kind` 를 몰라 선물 없음으로 삼킨다
+// (아래 디코드 규칙) — 그래도 서버는 번호로 먼저 막는다(옛 빌드는 받을 수 없는 선물을 가진 채 생일 · 술 선물까지 가려지지 않게).
 
 // MARK: 전선 모양 — character_gift_pending
 
@@ -34,22 +39,27 @@ package struct CharacterGiftPendingRequest: Encodable, Equatable, Sendable {
     }
 }
 
-// MARK: 선물 종류 — birthday · drink (v0.3.74)
+// MARK: 선물 종류 — birthday · drink (v0.3.74) · pepero (v0.3.77)
 
 /// 선물 종류. 서버 `character_gifts.kind` · `character_prices.gift_kind` 의 원문 값과 같다(`rawValue`).
 ///
-/// ★ 종류마다 **선택지 집합이 따로**다 — 생일 선물엔 케이크만, 술 선물엔 이슬만 선다(`builtInIDs`). 서버가 섞어 보내도(초안 전 ·
-///   잘못 지급) 클라는 그 종류의 것만 남긴다. 그리고 종류마다 **받을 수 있는 능력 번호가 다르다**(`minProtocol` — 생일 4 · 술 5).
+/// ★ 종류마다 **선택지 집합이 따로**다 — 생일 선물엔 케이크만, 술 선물엔 이슬만, 빼빼로 선물엔 빼빼로만 선다(`builtInIDs`). 서버가 섞어
+///   보내도(초안 전 · 잘못 지급) 클라는 그 종류의 것만 남긴다. 그리고 종류마다 **받을 수 있는 능력 번호가 다르다**(`minProtocol` — 생일 4 ·
+///   술 5 · 빼빼로 6).
 package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
     /// 생일 선물(v0.3.66) — 케이크 아잉이 둘 중 하나를 받는 사람이 고른다.
     case birthday
     /// '술 한잔' 선물(v0.3.74) — 이슬 아잉이 하나, 고를 것 없이 받는다.
     case drink
+    /// 빼빼로 데이 선물(v0.3.77 · 11-11 기간 선물) — 빼빼로 아잉이 하나, 고를 것 없이 받는다.
+    case pepero
+    /// 우리 센터 선물(지역 아잉이) — 그 사람 센터의 아잉이 하나(부산 → 갈매기 · 서울 → 서울 아잉이), 고를 것 없이 받는다. 기한 없음.
+    case region
 
-    /// 서버 원문 값("birthday" · "drink"). 문자열을 적는 곳은 여기(`rawValue`) 하나다.
+    /// 서버 원문 값("birthday" · "drink" · "pepero"). 문자열을 적는 곳은 여기(`rawValue`) 하나다.
     package var wireValue: String { rawValue }
 
-    /// 서버 원문 → 종류. 정확히 그 두 값만(공백 · 대소문자를 봐주지 않는다 — 서버 CHECK 가 두 값만 허락한다). 그 밖은 nil.
+    /// 서버 원문 → 종류. 정확히 그 세 값만(공백 · 대소문자를 봐주지 않는다 — 서버 CHECK 가 그 값들만 허락한다). 그 밖은 nil.
     package init?(wireValue: String?) {
         guard let wireValue, let kind = Self(rawValue: wireValue) else { return nil }
         self = kind
@@ -60,14 +70,18 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         switch self {
         case .birthday: return CharacterCatalog.birthdayGiftBuiltInIDs
         case .drink: return CharacterCatalog.drinkGiftBuiltInIDs
+        case .pepero: return CharacterCatalog.peperoGiftBuiltInIDs
+        case .region: return CharacterCatalog.regionGiftBuiltInIDs
         }
     }
 
-    /// 이 종류의 선물을 받을 수 있는 최소 능력 번호(서버 `claim_character_gift` 의 문턱과 같다 — 생일 4 · 술 5).
+    /// 이 종류의 선물을 받을 수 있는 최소 능력 번호(서버 `claim_character_gift` 의 문턱과 같다 — 생일 4 · 술 5 · 빼빼로 6).
     package var minProtocol: Int {
         switch self {
         case .birthday: return ShopWire.cakeProtocol
         case .drink: return ShopWire.isulProtocol
+        case .pepero: return ShopWire.peperoProtocol
+        case .region: return ShopWire.regionProtocol
         }
     }
 
@@ -76,17 +90,28 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         protocolVersion >= minProtocol
     }
 
-    /// 내장 캐릭터 → 그 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술). 선물 전용 내장이 아니면 nil.
+    /// 내장 캐릭터 → 그 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술 · 빼빼로 → 빼빼로). 선물 전용 내장이 아니면 nil.
     package init?(builtInID id: String?) {
         guard let id, let kind = Self.allCases.first(where: { $0.builtInIDs.contains(id) }) else { return nil }
         self = kind
     }
 
-    /// 이 종류의 문구 묶음(받는 창 · 잠긴 칸 · 다시 열기 카드). 글자는 `CakeGiftText` · `DrinkGiftText` 한 곳에 있다.
+    /// 이 종류의 문구 묶음(받는 창 · 잠긴 칸 · 다시 열기 카드). 글자는 `CakeGiftText` · `DrinkGiftText` · `PeperoGiftText` 한 곳에 있다.
     package var copy: CharacterGiftCopy {
         switch self {
         case .birthday: return .birthday
         case .drink: return .drink
+        case .pepero: return .pepero
+        case .region: return .region
+        }
+    }
+
+    /// 이 종류에서 캐릭터 `id` 를 주는 선물의 문구 묶음 — 우리 센터 선물은 그 아잉이의 센터 이름이 든 판(`CharacterGiftCopy.region(center:)`),
+    /// 나머지는 `copy` 그대로다.
+    package func copy(for id: String?) -> CharacterGiftCopy {
+        switch self {
+        case .region: return .region(center: RegionAingArt.centerName(of: id))
+        case .birthday, .drink, .pepero: return copy
         }
     }
 }
@@ -146,6 +171,11 @@ package struct CharacterGiftOffer: Decodable, Equatable, Sendable, Identifiable 
         let note = container.giftLossy(String.self, forKey: .note)?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.note = (note?.isEmpty ?? true) ? nil : note
         self.createdAt = container.giftLossy(String.self, forKey: .createdAt)
+    }
+
+    /// 이 선물 한 장의 문구 묶음(받는 창 · 다시 열기 카드) — 종류의 묶음이고, 우리 센터 선물은 선택지(그 사람 센터의 아잉이 하나)의 센터 이름이 든다.
+    package var copy: CharacterGiftCopy {
+        kind.copy(for: options.first)
     }
 
     /// 서버 선택지 → 화면 선택지: 이 빌드가 아는 **그 종류의** 내장 캐릭터만, `CharacterGiftKind.builtInIDs` 순서로
@@ -307,7 +337,8 @@ extension SupabaseWorkService {
     /// - 그 밖의 실패(네트워크 · 5xx · 세션 만료 · status 없는 응답)는 **던진다** — 호출부는 지금 아는 선물을 그대로 둔다.
     ///
     /// `protocolVersion` 은 `ShopWire.protocolVersion(drawableCharacterIDs:)` 로만 만든다 — 4 미만이면 서버가 gift 를 싣지 않고,
-    /// 4 면 생일 선물만 싣는다(술 선물은 5 부터 — v0.3.74). 이 빌드의 번호로 받을 수 없는 종류가 섞여 오면 nil 이다.
+    /// 4 면 생일 선물만 싣는다(술 선물은 5 부터 — v0.3.74 · 빼빼로 선물은 6 부터 — v0.3.77). 이 빌드의 번호로 받을 수 없는 종류가
+    /// 섞여 오면 nil 이다(빼빼로 그림이 없는 빌드 = 번호 5 이하에 빼빼로 선물이 와도 안 띄운다).
     package func fetchCharacterGiftPending(accessToken: String, protocolVersion: Int) async throws -> CharacterGiftOffer? {
         let data: Data
         do {
@@ -442,7 +473,43 @@ package nonisolated enum DrinkGiftText {
     }
 }
 
-/// 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 `CharacterGiftKind.copy` 로 받는다(글자는 `CakeGiftText` · `DrinkGiftText` 한 곳).
+/// 빼빼로 데이 선물 문구(v0.3.77 빼빼로 아잉이 — 11-11 기간 선물). **대표 결정 C "장난스럽게"**(2026-11-04 결재 #d_JyxuQRmHOYKC — 몰래 챙겨 온 느낌, 단추도 '쏙 받기'). 바뀌면 여기 한 곳만 고친다.
+/// `DrinkGiftText` 와 같은 모양 · 같은 자리다. '빼빼로'는 남의 상표라 행사 이름 · 캐릭터 이름이 바뀔 수 있다 — 캐릭터 이름은
+/// `CharacterCatalog.peperoAingDisplayName` 한 곳에서 읽고, 행사 이름이 든 줄(제목 · 다시 열기 · 잠긴 칸)은 이 묶음에만 있다.
+/// 실패 · 거절 줄은 생일과 한 벌이다.
+package nonisolated enum PeperoGiftText {
+    /// 받는 창 제목.
+    package static let title = "빼빼로 받아랏! 🍫"
+    /// 받는 창 본문(운영자 한 줄 `note` 가 있으면 화면이 그 위에 크게 — 이슬 초대장과 같은 틀).
+    package static let body = "몰래 하나 챙겨 왔어요. \(CharacterCatalog.peperoAingDisplayName) 쏙!"
+    /// 확인 단추(고를 것이 없다 — 선택지는 빼빼로 하나).
+    package static let confirmButton = "쏙 받기"
+    /// 받은 뒤의 단추 둘(생일과 같은 글자).
+    package static let wearNowButton = CakeGiftText.wearNowButton
+    package static let closeButton = CakeGiftText.closeButton
+    /// 상점 잠긴 칸 캡션(가격 · 사기 단추 자리).
+    package static let lockedCaption = "빼빼로 데이 선물 전용"
+    /// 잠긴 칸을 골랐을 때의 안내.
+    package static let lockedHint = "빼빼로 데이 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요."
+    /// 받지 않고 닫은 뒤 메뉴 팝오버 · 상점에 남는 카드.
+    package static let reopenTitle = "빼빼로가 쏙 들어왔어요"
+    package static let reopenButton = "받기"
+    /// 결과를 모르는 수령의 한 줄 — 생일과 같은 글자다(다시 눌러도 안전하다).
+    package static let claimFailed = CakeGiftText.claimFailed
+
+    /// 받은 뒤 한 줄 — "빼빼로 아잉이를 받았어요!"(조사 규칙은 생일과 한 곳).
+    package static func received(name: String) -> String {
+        CakeGiftText.received(name: name)
+    }
+
+    /// 수령 결과 중 받은 화면이 아닌 것의 한 줄 — 생일과 같은 어휘 · 같은 글자(`CakeGiftText.notice`).
+    package static func notice(for outcome: CharacterGiftClaimOutcome, name: (String) -> String) -> String? {
+        CakeGiftText.notice(for: outcome, name: name)
+    }
+}
+
+/// 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 `CharacterGiftKind.copy` 로 받는다(글자는 `CakeGiftText` · `DrinkGiftText` ·
+/// `PeperoGiftText` 한 곳).
 package struct CharacterGiftCopy: Equatable, Sendable {
     package let title: String
     package let body: String
@@ -473,6 +540,29 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         reopenTitle: DrinkGiftText.reopenTitle, reopenButton: DrinkGiftText.reopenButton,
         claimFailed: DrinkGiftText.claimFailed
     )
+
+    /// 빼빼로 데이 선물(빼빼로 아잉이 — v0.3.77, 문구는 대표 결정 C).
+    package static let pepero = CharacterGiftCopy(
+        title: PeperoGiftText.title, body: PeperoGiftText.body, confirmButton: PeperoGiftText.confirmButton,
+        wearNowButton: PeperoGiftText.wearNowButton, closeButton: PeperoGiftText.closeButton,
+        lockedCaption: PeperoGiftText.lockedCaption, lockedHint: PeperoGiftText.lockedHint,
+        reopenTitle: PeperoGiftText.reopenTitle, reopenButton: PeperoGiftText.reopenButton,
+        claimFailed: PeperoGiftText.claimFailed
+    )
+
+    /// 우리 센터 선물(지역 아잉이 — 센터를 모를 때의 "우리 센터" 판). 선물 한 장의 글자는 `region(center:)`(`CharacterGiftOffer.copy`).
+    package static let region = region(center: nil)
+
+    /// 우리 센터 선물 — 그 센터 이름이 든 판("부산센터 선물 도착!" — 대표 #d_vxeOaE7gAxzt). 잠긴 칸 줄은 센터와 무관하게 같다.
+    package static func region(center: String?) -> CharacterGiftCopy {
+        CharacterGiftCopy(
+            title: RegionGiftText.title(center: center), body: RegionGiftText.body(center: center), confirmButton: RegionGiftText.confirmButton,
+            wearNowButton: RegionGiftText.wearNowButton, closeButton: RegionGiftText.closeButton,
+            lockedCaption: RegionGiftText.lockedCaption, lockedHint: RegionGiftText.lockedHint,
+            reopenTitle: RegionGiftText.reopenTitle(center: center), reopenButton: RegionGiftText.reopenButton,
+            claimFailed: RegionGiftText.claimFailed
+        )
+    }
 
     /// 받은 뒤 한 줄(종류와 무관하게 한 규칙 — "○○를 받았어요!").
     package func received(name: String) -> String {

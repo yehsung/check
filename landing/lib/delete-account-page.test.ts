@@ -5,6 +5,7 @@
 //   ① 앱·개발자 이름이 등록정보 상수(STORE_LISTING)에서 온다 ② 지워지는 것·남는 것·웹에서 지우기·메일함도 못 쓸 때(지원 경로)가 있다
 //   ②-1 고지 문장(지워지는 것·같이 처리되는 것·남는 것·되돌릴 수 없음)이 앱·처리방침과 같은 사실을 싣는다
 //   ②-2 서버 백업은 처리방침·페이지 어디에도 싣지 않는다(2026-10-28 사용자 결정)
+//   ②-3 대국 게임 이름(오목·체스·테트리스·아잉 뒤집기 · 아잉 큐브)이 처리방침 계정 삭제 절과 이 페이지에 똑같이 있다(2026-11-03 #d_x57oDD1VwQ1y)
 //   ③ 설정은 NEXT_PUBLIC_* 두 이름을 글자 그대로 읽는다(빌드 때 박힘) ④ 운영 주소·서비스 롤 키·브라우저 저장소·콘솔 0
 //   ⑤ 랜딩 금지어 0(히어로·FAQ 시험과 같은 목록) ⑥ 흐름 섬 배선(체크박스·삭제 버튼·lib 손잡이 — 행동은 delete-account-client.test 가 잰다).
 import { test } from 'node:test';
@@ -61,7 +62,8 @@ test('②-1 고지 문장 — 지워지는 것(앱 MeText.deleteAccountItems · 
   for (const item of ['근무 기록', '메시지', '할 일', '캐릭터와 루비', '순위 기록']) assert.ok(deleted.includes(item), `지워지는 것 '${item}'`);
   // 처리방침 계정 삭제 절의 '같이 처리되는 것'(진행 중 대국 기권 마감 · 혼자 남은 팀 · 차단 기록 · 내가 보낸 메시지).
   const also = listBlock('ALSO');
-  assert.ok(also.includes('진행 중이던 오목·체스·테트리스 대국은 지우기 전에 내가 진 것으로 끝내요'), '대국 정산');
+  assert.ok(also.includes('진행 중이던 오목·체스·테트리스·아잉 뒤집기·1:1 길건너·1:1 알까기 대국은 지우기 전에 내가 진 것으로 끝내요'), '1:1 대국 정산(폰 1.0.18 — 1:1 길건너 · 1:1 알까기 포함)');
+  assert.ok(also.includes('진행 중이던 아잉 큐브 판은 내가 기권한 것으로 끝내고'), '아잉 큐브 기권 정리(delete_my_account 의 rummy 절)');
   assert.ok(also.includes('나 혼자 남아 있던 팀은 함께 지워져요'), '혼자 남은 팀');
   assert.ok(also.includes('차단 기록은 내가 한 것도, 남이 나를 차단한 것도 함께 지워져요'), '차단 기록');
   assert.ok(also.includes('다른 사람이 받은 메시지 중 내가 보낸 것도 함께 지워져요'), '보낸 메시지');
@@ -69,6 +71,49 @@ test('②-1 고지 문장 — 지워지는 것(앱 MeText.deleteAccountItems · 
   assert.ok(listBlock('KEPT').includes('보낸 제보와 신고는 작성자 없이 내용만 남아요'), '제보·신고는 익명으로 남음');
   // 되돌릴 수 없음 — 체크박스 문구(흐름 섬)와 따로, 페이지 머리 문단에도(설정이 없어 폼이 안 뜰 때도 보이게).
   assert.match(PAGE, /<p className="t-body mt-5">[\s\S]*?지운 계정은 되돌릴 수 없고[\s\S]*?<\/p>/, '머리 문단의 되돌릴 수 없음');
+});
+
+/**
+ * 대국 게임 이름 — 서버 delete_my_account 가 지우기 전에 정리하는 판(gomoku·chess·tetris·reversi_matches · rummy_seats)의 화면 이름.
+ * 새 대국 게임이 그 함수에 들어오면(예: 출시 전인 게임) 이 목록 · 처리방침 · 이 페이지를 같은 커밋에서 함께 고친다.
+ */
+const DUEL_GAMES = ['오목', '체스', '테트리스', '아잉 뒤집기', '1:1 길건너', '1:1 알까기'] as const;
+const GROUP_GAMES = ['아잉 큐브', '아잉 마작'] as const;
+
+/** 처리방침 계정 삭제 절의 한 덩이 — `start` 줄부터 다음 빈 줄(또는 끝)까지. */
+function privacyBlock(start: string): string {
+  const policy = readFileSync(new URL('../../docs/privacy.md', import.meta.url), 'utf8');
+  const lines = policy.split('\n');
+  const at = lines.findIndex((l) => l.startsWith(start));
+  assert.ok(at >= 0, `처리방침에 '${start}' 줄이 없다`);
+  const rest = lines.slice(at);
+  const end = rest.findIndex((l, i) => i > 0 && l.trim() === '');
+  return rest.slice(0, end < 0 ? undefined : end).join('\n');
+}
+
+test('②-3 대국 게임 이름 — 처리방침과 이 페이지가 같은 게임을 말한다(지워지는 것 · 진행 중 판 정리)', () => {
+  const deleted = listBlock('DELETED');
+  const also = listBlock('ALSO');
+  const policyDeleted = privacyBlock('지워지는 것:');
+  const policyAlso = privacyBlock('같이 처리되는 것:');
+  for (const g of [...DUEL_GAMES, ...GROUP_GAMES]) {
+    assert.ok(deleted.includes(g), `페이지 지워지는 것에 '${g}'`);
+    assert.ok(also.includes(g), `페이지 같이 처리되는 것에 '${g}'`);
+    assert.ok(policyDeleted.includes(g), `처리방침 지워지는 것에 '${g}'`);
+    assert.ok(policyAlso.includes(g), `처리방침 같이 처리되는 것에 '${g}'`);
+  }
+  // 1:1 은 '진 것으로', 아잉 큐브는 '기권' — 두 문서가 같은 갈래로 말한다.
+  const duelLine = also.split('\n').find((l) => l.includes('내가 진 것으로')) ?? '';
+  for (const g of DUEL_GAMES) assert.ok(duelLine.includes(g), `페이지 1:1 정산 줄에 '${g}'`);
+  assert.ok(also.split('\n').some((l) => l.includes('아잉 큐브') && l.includes('기권')), '페이지 아잉 큐브 기권 줄');
+  const policyDuel = policyAlso.split('\n').find((l) => l.includes('내가 진 것으로')) ?? '';
+  for (const g of DUEL_GAMES) assert.ok(policyDuel.includes(g), `처리방침 1:1 정산 줄에 '${g}'`);
+  assert.ok(policyAlso.split('\n').some((l) => l.includes('아잉 큐브') && l.includes('기권')), '처리방침 아잉 큐브 기권 줄');
+  // 아잉 마작(폰 1.0.18)은 '자리 비움'으로 남은 셋이 끝까지 둔다 — 두 문서가 같은 갈래로 말한다.
+  assert.ok(also.split('\n').some((l) => l.includes('아잉 마작') && l.includes('자리 비움')), '페이지 아잉 마작 자리 비움 줄');
+  assert.ok(policyAlso.split('\n').some((l) => l.includes('아잉 마작') && l.includes('자리 비움')), '처리방침 아잉 마작 자리 비움 줄');
+  // 아잉 큐브의 남는 것(같은 판 다른 사람 기록 · 진행 기록)은 페이지 '남는 것'에도 있다.
+  assert.ok(listBlock('KEPT').includes('아잉 큐브'), '페이지 남는 것에 아잉 큐브');
 });
 
 /** 처리방침(docs/privacy.md)에 서버 백업 줄이 있나 — 사용자 결정(2026-10-28)으로 두 곳 모두 백업 이야기를 싣지 않는다. */

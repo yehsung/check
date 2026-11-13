@@ -1,0 +1,1 @@
+../../../../Sources/check/AlkkagiGameView.swift

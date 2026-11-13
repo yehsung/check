@@ -1,0 +1,415 @@
+{
+  "__note": [
+    "관전 장면(끝남 — 기권). 닿는 길: games/reversi/watch/over. 끝난 판은 로비 matches 에 없다(서버는 active 만 싣는다) — 라우트가 id 로 바로 건다.",
+    "구름빵(흑) 승 · 호두과자(백) 기권 · 판돈 5 · 29수(시드 601) · 70초 전에 끝남(끝난 판은 3분 동안 볼 수 있다).",
+    "기권 판은 score 가 null 이다(서버 CHECK — 자연 종료만 점수)."
+  ],
+  "state": {
+    "auto_abandon_streak": 3,
+    "black_auto_streak": 0,
+    "black_user": {
+      "avatar_url": null,
+      "center": "seoul",
+      "character": "jellyfish",
+      "display_name": "구름빵",
+      "user_id": "d0000000-0000-4000-8000-0000000000b1"
+    },
+    "grace_ms": 2000,
+    "legal_moves": [],
+    "match": {
+      "black": "d0000000-0000-4000-8000-0000000000b1",
+      "board": "..bw..w....w.w...wbwbb..b.bwwb...bbbwbbb.bbbwbw....wbbb......b..",
+      "challenger": "d0000000-0000-4000-8000-0000000000b4",
+      "deadline_ms": null,
+      "discs": {
+        "black": 21,
+        "empty": 31,
+        "white": 12
+      },
+      "end_reason": "resign",
+      "finished_ms": 1789621430000,
+      "id": "d0000000-0000-4000-8000-0000000000e7",
+      "invite_expires_ms": 1789620993000,
+      "move_count": 29,
+      "opponent": "d0000000-0000-4000-8000-0000000000b1",
+      "result": "black_win",
+      "score": null,
+      "stake": 5,
+      "started_ms": 1789620960000,
+      "status": "finished",
+      "turn": null,
+      "turn_started_ms": 1789621424000,
+      "white": "d0000000-0000-4000-8000-0000000000b4",
+      "winner": "d0000000-0000-4000-8000-0000000000b1"
+    },
+    "moves": [
+      {
+        "at_ms": 1789620976000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          27
+        ],
+        "idx": 19,
+        "kind": "stone",
+        "seq": 1
+      },
+      {
+        "at_ms": 1789620992000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          35
+        ],
+        "idx": 34,
+        "kind": "stone",
+        "seq": 2
+      },
+      {
+        "at_ms": 1789621008000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          34
+        ],
+        "idx": 41,
+        "kind": "stone",
+        "seq": 3
+      },
+      {
+        "at_ms": 1789621024000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          28
+        ],
+        "idx": 21,
+        "kind": "stone",
+        "seq": 4
+      },
+      {
+        "at_ms": 1789621040000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          28
+        ],
+        "idx": 29,
+        "kind": "stone",
+        "seq": 5
+      },
+      {
+        "at_ms": 1789621056000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          28
+        ],
+        "idx": 20,
+        "kind": "stone",
+        "seq": 6
+      },
+      {
+        "at_ms": 1789621072000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          36
+        ],
+        "idx": 45,
+        "kind": "stone",
+        "seq": 7
+      },
+      {
+        "at_ms": 1789621088000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          36
+        ],
+        "idx": 44,
+        "kind": "stone",
+        "seq": 8
+      },
+      {
+        "at_ms": 1789621104000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          28,
+          35,
+          36
+        ],
+        "idx": 37,
+        "kind": "stone",
+        "seq": 9
+      },
+      {
+        "at_ms": 1789621120000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          29
+        ],
+        "idx": 38,
+        "kind": "stone",
+        "seq": 10
+      },
+      {
+        "at_ms": 1789621136000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          20,
+          21,
+          29
+        ],
+        "idx": 13,
+        "kind": "stone",
+        "seq": 11
+      },
+      {
+        "at_ms": 1789621152000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          34,
+          35,
+          36,
+          37
+        ],
+        "idx": 33,
+        "kind": "stone",
+        "seq": 12
+      },
+      {
+        "at_ms": 1789621168000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          35,
+          36,
+          44
+        ],
+        "idx": 43,
+        "kind": "stone",
+        "seq": 13
+      },
+      {
+        "at_ms": 1789621184000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          20,
+          29
+        ],
+        "idx": 11,
+        "kind": "stone",
+        "seq": 14
+      },
+      {
+        "at_ms": 1789621200000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          37,
+          38
+        ],
+        "idx": 39,
+        "kind": "stone",
+        "seq": 15
+      },
+      {
+        "at_ms": 1789621216000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          37,
+          45
+        ],
+        "idx": 53,
+        "kind": "stone",
+        "seq": 16
+      },
+      {
+        "at_ms": 1789621232000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          45
+        ],
+        "idx": 54,
+        "kind": "stone",
+        "seq": 17
+      },
+      {
+        "at_ms": 1789621248000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          19,
+          27,
+          35,
+          43,
+          44
+        ],
+        "idx": 51,
+        "kind": "stone",
+        "seq": 18
+      },
+      {
+        "at_ms": 1789621264000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          27
+        ],
+        "idx": 26,
+        "kind": "stone",
+        "seq": 19
+      },
+      {
+        "at_ms": 1789621280000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          26
+        ],
+        "idx": 17,
+        "kind": "stone",
+        "seq": 20
+      },
+      {
+        "at_ms": 1789621296000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          19,
+          20
+        ],
+        "idx": 18,
+        "kind": "stone",
+        "seq": 21
+      },
+      {
+        "at_ms": 1789621312000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          13,
+          20,
+          27
+        ],
+        "idx": 6,
+        "kind": "stone",
+        "seq": 22
+      },
+      {
+        "at_ms": 1789621328000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          26,
+          34,
+          35,
+          43,
+          44
+        ],
+        "idx": 42,
+        "kind": "stone",
+        "seq": 23
+      },
+      {
+        "at_ms": 1789621344000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          28,
+          36,
+          44
+        ],
+        "idx": 52,
+        "kind": "stone",
+        "seq": 24
+      },
+      {
+        "at_ms": 1789621360000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          11,
+          20,
+          29
+        ],
+        "idx": 2,
+        "kind": "stone",
+        "seq": 25
+      },
+      {
+        "at_ms": 1789621376000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          45
+        ],
+        "idx": 46,
+        "kind": "stone",
+        "seq": 26
+      },
+      {
+        "at_ms": 1789621392000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          33
+        ],
+        "idx": 24,
+        "kind": "stone",
+        "seq": 27
+      },
+      {
+        "at_ms": 1789621408000,
+        "auto": false,
+        "color": "white",
+        "flipped": [
+          11,
+          19
+        ],
+        "idx": 3,
+        "kind": "stone",
+        "seq": 28
+      },
+      {
+        "at_ms": 1789621424000,
+        "auto": false,
+        "color": "black",
+        "flipped": [
+          37,
+          45,
+          52,
+          53
+        ],
+        "idx": 61,
+        "kind": "stone",
+        "seq": 29
+      }
+    ],
+    "my_auto_streak": null,
+    "my_color": null,
+    "opponent": null,
+    "opponent_auto_streak": null,
+    "ruby_balance": null,
+    "server_now_ms": 1789621500000,
+    "turn_seconds": 30,
+    "watchers": 1,
+    "white_auto_streak": 0,
+    "white_user": {
+      "avatar_url": null,
+      "center": null,
+      "character": "shiba",
+      "display_name": "호두과자",
+      "user_id": "d0000000-0000-4000-8000-0000000000b4"
+    }
+  },
+  "status": "ok"
+}

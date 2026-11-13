@@ -243,6 +243,7 @@ enum AppUserAvatarArt {
     @MainActor
     static func portrait(characterID: String) -> CGImage? {
         IsulArtRevision.observe(characterID: characterID)
+        PeperoArtRevision.observe(characterID: characterID)
         if let hit = cache[characterID] { return hit }
         guard let url = CheckMascotAssets.portraitURL(for: .neutral, characterID: characterID),
               let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -280,6 +281,12 @@ enum AppUserAvatarArt {
         // 이슬 아잉이(v0.3.74)도 같은 2D 몸(0.88배) 위에 **불투명 병뚜껑**이 머리 위에 섰다 — 케이크와 같은 자르기(몸 상자 + 둘레 8%)로
         // 얼굴을 아잉 변형과 같은 눈금에 세운다(코어 `isCake` 는 케이크 뜻만이라 따로 묻는다 — 설계서 §2 함정).
         if finish.isCake || finish == .isul { return .cakeBodyFramed }
+        // 빼빼로 아잉이(v0.3.77)는 **알파 상자**다(케이크 자르기가 아니다). 같은 2D 몸(0.88배) 앞에 몸보다 넓은 불투명 상자가, 머리 위로 막대가 섰다 —
+        // 케이크 자르기는 불투명 상자 폭을 몸 폭으로 읽어 얼굴이 15% 작아진다(실측 46pt 눈금 0.2469 대 이슬 · 초코 0.2896). 알파 상자(V0336 표
+        // 168×160)는 상자 옆 넘침 · 막대 높이가 케이크의 둘레 8% 와 **비슷해** 얼굴이 이슬 · 케이크보다 **3.6% 작은** 눈금에 선다(실측 0.2793 —
+        // 같은 눈금은 아니다). 막대가 머리 양옆으로 솟아 머리(가운데 띠 첫 잉크)는 한 행 남짓 아래에 선다(V0336 topGap 한도를 빼빼로만 따로 둔
+        // 이유). 눈금은 `V0377PeperoMac3DTests.avatarFaceMatchesTheOtherVariants`(5% 안 · 케이크 자르기 기준선 10% 넘게)가 맞댄다.
+        if finish == .pepero { return .tight }
         return finish.isRare ? .bodyFramed : .tight
     }
 
@@ -538,40 +545,12 @@ extension CheckAvatarView {
     }
 
     /// 두 진입로의 공통 몸통. 이미지가 없는 파일(비이미지·깨진 바이트)이면 nil.
+    ///
+    /// 2026-11-11: ImageIO 몸통(축소 · EXIF 방향 · 흰 바탕 · JPEG)은 코어 `ImageDownscale` 로 옮겼다 — 메시지 사진(1600px)이 **같은 몸통**을
+    /// 쓴다(두 벌로 두면 한쪽만 고쳐지는 날이 온다). 규칙과 옵션은 위 주석 그대로다(옮기면서 한 글자도 안 바꿨다).
     private nonisolated static func downscaledJPEGData(
         from source: CGImageSource, maxDimension: CGFloat, compression: CGFloat
     ) -> Data? {
-        guard CGImageSourceGetCount(source) > 0 else { return nil }
-        let options: [CFString: Any] = [
-            // 박혀 있는 EXIF 썸네일(작고 거칠다)을 쓰지 않고 본 이미지에서 만든다.
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: Int(maxDimension.rounded()),
-            kCGImageSourceShouldCacheImmediately: true
-        ]
-        guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        let flattened = flattenedOnWhite(thumbnail) ?? thumbnail
-        let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(
-            destination, flattened, [kCGImageDestinationLossyCompressionQuality: compression] as CFDictionary
-        )
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return output as Data
-    }
-
-    /// 투명 PNG 가 검게 올라가지 않게 흰 바탕에 한 번 그린다(폰 `MeAvatarImage.flattenedOnWhite` 와 같은 처방).
-    /// 썸네일 크기(≤ maxDimension)에서만 도는 그리기라 비용이 작다.
-    private nonisolated static func flattenedOnWhite(_ image: CGImage) -> CGImage? {
-        guard let context = CGContext(
-            data: nil, width: image.width, height: image.height, bitsPerComponent: 8, bytesPerRow: 0,
-            space: CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB(),
-            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
-        ) else { return nil }
-        context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        context.fill(CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        context.interpolationQuality = .high
-        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        return context.makeImage()
+        ImageDownscale.downscaledJPEG(from: source, maxPixelSize: Int(maxDimension.rounded()), quality: compression)
     }
 }

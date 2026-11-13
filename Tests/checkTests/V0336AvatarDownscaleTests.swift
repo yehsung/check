@@ -180,7 +180,10 @@ func 바이트_진입로와_파일_진입로가_같은_결과를_낸다() async 
 func 축소는_원본_해상도_비트맵을_거치지_않는다() throws {
     let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent()
+    // 2026-11-11: ImageIO 몸통은 코어 `ImageDownscale`(MessagePhotoEncoder.swift)로 옮겨 메시지 사진과 같이 쓴다 — 두 파일을 이어 읽는다
+    // (아바타 쪽에는 파일 진입로 `CGImageSourceCreateWithURL` 이, 몸통 쪽에는 축소 옵션이 산다). 단언은 그대로다.
     let source = try String(contentsOf: root.appendingPathComponent("Sources/check/CheckAvatarView.swift"), encoding: .utf8)
+        + "\n" + String(contentsOf: root.appendingPathComponent("Sources/CheckCore/MessagePhotoEncoder.swift"), encoding: .utf8)
     let code = source.split(separator: "\n", omittingEmptySubsequences: false).map { line -> Substring in
         guard let comment = line.range(of: "//") else { return line }
         return line[..<comment.lowerBound]

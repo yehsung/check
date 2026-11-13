@@ -105,6 +105,24 @@ for HALO_DEG in $(seq 0 10 350); do
     exit 1
   fi
 done
+# 빼빼로 아잉이 그림 세 장이 앱 안에 실렸는가(v0.3.77). 하나라도 빠지면 앱이 빼빼로를 못 그린다고 보고(PeperoAingFinish.isDrawable)
+# 상점 능력 번호를 5 로 조용히 내린다 — 빼빼로 선물이 안 오고 공증·버전·스탬프 검사는 다 통과한다. 이름은 PeperoArt.Kind.bundleName 과 같다.
+PEPERO_ART_DIR="$RES_DIR/check_check.bundle/Contents/Resources"
+for PEPERO_PNG in aing_pepero-box aing_pepero-neutral aing_pepero-negative; do
+  if [[ ! -s "$PEPERO_ART_DIR/$PEPERO_PNG.png" ]]; then
+    echo "error: 빼빼로 아잉이 그림이 앱에 없다: $PEPERO_ART_DIR/$PEPERO_PNG.png" >&2
+    exit 1
+  fi
+done
+# 흑우 · 루비 아잉이 초상이 앱 안에 실렸는가(v0.3.78). 하나라도 빠지면 HwooAingArt/RubyAingArt.isDrawable 이 거짓이라 상점 능력 번호가
+# 6 으로 조용히 내려간다 — 흑우 조각 교환 · 루비 1000 구매가 안 보이고 공증·버전·스탬프 검사는 다 통과한다. 이름은 <id>-<표정> 이다.
+NEW_AING_ART_DIR="$RES_DIR/check_check.bundle/Contents/Resources"
+for NEW_AING_PNG in aing_hwoo-neutral aing_hwoo-negative aing_ruby-neutral aing_ruby-negative; do
+  if [[ ! -s "$NEW_AING_ART_DIR/$NEW_AING_PNG.png" ]]; then
+    echo "error: 흑우·루비 아잉이 그림이 앱에 없다: $NEW_AING_ART_DIR/$NEW_AING_PNG.png" >&2
+    exit 1
+  fi
+done
 
 if [[ -n "${CHECK_SUPABASE_ANON_KEY:-}" ]]; then
   CONFIG_PLIST="$RES_DIR/CheckConfig.plist"
@@ -133,9 +151,9 @@ cat > "$APP_DIR/Contents/Info.plist" <<'PLIST'
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.3.75</string>
+  <string>0.3.86</string>
   <key>CFBundleVersion</key>
-  <string>128</string>
+  <string>139</string>
   <key>LSMinimumSystemVersion</key>
   <string>14.0</string>
   <key>LSUIElement</key>

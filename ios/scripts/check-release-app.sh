@@ -23,7 +23,7 @@
 #   나머지 목록은 그대로다: 그것들은 부르는 순간 남의 데이터가 틀어진다.
 #  4. 앱을 열지 않고 도는 알림 액션(w10 에서 걷어냄 — MESSAGE 답장 · 읽음, GOMOKU_INVITE 거절)의 식별자 · 답장 실패 안내 알림 ·
 #     텍스트 입력 액션 클래스 참조가 0건이다(strings · nm). 이전 Release 바이너리(w4/int)에는 모두 있었다 — 되살아나면 여기서 잡힌다.
-#  5. **그 버전의 기능 문구가 앱 바이너리에 실제로 있다**(1.0.16 — 아잉 큐브 · 일시정지 · 팀 명단 · 사진 지우기 · 센터 · [순위] 역대 · 새 버전 안내 · PC 라벨).
+#  5. **그 버전의 기능 문구가 앱 바이너리에 실제로 있다**(1.0.18 — 오목알 스킨 · 오목 AI 난이도 · 1:1 길건너 · 빼빼로 · 개발 아잉이 · 1:1 알까기 · 아잉 마작 · 1.0.17 바닥 한 줄).
 #  4.5 **길건너 아잉이 모델이 번들에 있다**(없으면 게임이 보라색 공으로 조용히 접힌다).
 #     ★ 이 표는 **릴리스마다 그 버전 것으로 옮긴다**(맥의 버전 고정 시험과 같은 관행). 안 옮기면
 #       게이트가 옛 기능만 재서, 새 기능이 문구 없이 나가도 초록이다. 1~4 가 "없어야 할 것이 없다" 를 재는 데 비해
@@ -67,7 +67,7 @@ done
 #   세 줄을 재서 전부 0회였다. 0 은 **막는** 쪽이라 거짓 초록은 아니지만, 모르고 돌리면 "기능이 통째로 빠졌다"는
 #   틀린 결론으로 시간을 버린다. **Release 아카이브로 돌려라**(기대 횟수도 아카이브로 재서 박는다).
 #
-# ── 5. 기능 문구 (1.0.16 — 큐브 넷 · 일시정지 둘 · 팀 명단 · 사진 · 센터 · 역대 · 새 버전 안내 · PC · 1.0.15 바닥 한 줄) ───
+# ── 5. 기능 문구 (1.0.18 — 스킨 · AI 난이도 · 1:1 길건너 · 빼빼로 · 개발 아잉이 · 1.0.17 바닥 한 줄) ───
 #
 # 왜 `strings | grep` 이 아니라 python 바이트인가: `strings` 는 C 로케일의 '출력 가능한 글자' 만 잇는다 — 한글 바이트는
 # 그 집합에 없어서 잘려 나가고, `grep -a` 로도 안 잡힌다(저장소 메모 '산출물 검증엔 빌드 시각이 필요하다' 의 그 자리).
@@ -90,31 +90,33 @@ done
 # `기권하면 판돈을 잃어요` · 규칙 본문 …) 화면이 문장 하나를 늘릴 때마다 수가 흔들린다. 그래서 **문구 표의 리터럴을
 # 통째로** 쓴다 — 아래 표의 글자는 전부 폰 문구 표(`GamesRummyText` · `GamesMiniGameText` · `NowText` · `MeText` · `RankingsText`)와 코어 `AvatarRemovalText` 의 값과 한 글자까지 같다.
 #
-# ★ **1.0.16 — 열세 줄을 잰다. 전부 2026-11-01 build 28 아카이브(디바이스 · Release) 실측 1회다**(바이트는 같은 날 계산):
-#   2~4명이 숫자 타일로 묶음을 만들어 랙을 먼저 비우는 게임  77B  GamesRummyText.subtitle — 게임 탭 카드
-#   내 차례예요 — 타일을 끌어 판에 놓아요                 54B  GamesRummyText.myTurn — 판 화면(터치로 다시 쓴 글자)
-#   화면을 가로로 돌리고 있어요                          39B  GamesRummyText.rotating — 판 화면만 가로
-#   탭을 옮겨서 방에서 나왔어요                          39B  GamesRummyText.tabLeftNotice — 폰에만 있는 이탈 길
-#   지금 그만두면 지금까지 간 줄 수가 점수로 기록돼요      70B  GamesMiniGameText.pauseSubtitle(.crossy)
-#   5분 넘게 멈춰서 여기까지 기록했어요                   50B  GamesMiniGameText.pauseCapEnded
-#   아직 명단에 보일 팀원이 없어요                        43B  NowText.teamRosterEmpty — 우리 팀 전체 명단
-#   지우면 내 자리에 착용한 캐릭터가 대신 보여요.          64B  AvatarRemovalText.detail — 맥에서 코어로 옮겼고 폰이 처음 링크한다
-#   소속 센터를 아직 못 읽었어요                          40B  MeText.centerLoadFailed
-#   역대 · 마감 없이 이어져요                             36B  RankingsText 부제 — [순위] 탭 역대
-#   새 버전이 나왔어요                                   26B  NowText.updateNoticeTitle
-#   이미 PC에서 근무 중이에요                             35B  NowText.alreadyWorkingOnPC
-#   쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸          65B  **1.0.15 바닥 한 줄**. 병합이 앞 판 기능을 떨어뜨리면 여기서 잡힌다.
-#   ⚠️ 1.0.15 의 나머지 줄(역대 규칙 둘 · AI 리밋 뒷문장)과 1.0.14 바닥 줄은 **뺐다.** 이 판을 증명하지 못한다.
-#   ⚠️ 길건너의 `MiniGameKind.crossy.howToPlay`(첫째 줄 "한 칸씩 뛰어 앞으로 · …")는 **넣지 마라.** 그 값은 CheckCore 에
-#     있고 1.0.14 바이너리에 **이미 있다**(폰이 전부터 그 함수를 불렀다). 있다고 해도 무엇도 증명하지 못한다.
+# ★ **1.0.17 — 아홉 줄을 잰다. 기대 횟수는 build 29 아카이브(디바이스 · Release, 2026-11-04 01:17 KST)로 잰 값 — 아홉 줄 모두 1회**(바이트는 2026-11-04 계산).
+#   제출판 build 30(맥 0.3.76 main 병합 뒤, 2026-11-04 13:25 KST 아카이브)도 아홉 줄 모두 1회 · 금지 0 으로 같았다.
+#   후보는 전부 **1.0.16 소스(e78bb293)에 0회**이고, 지금 소스에서 **다른 리터럴 안에 들어 있지 않다**(주석 · 데모 픽스처 JSON 은 바이너리에 없다)를 확인했다.
+#   사람을 골라 신청하거나 로봇과 연습해 보세요              62B  ReversiPhoneText.idleLine — 게임 탭 다섯째 카드 · 로비
+#   리버시 규칙 · 흑 선공 · 한 수 30초                      47B  ReversiPhoneText.subtitle — 카드 부제
+#   로봇과 연습하기                                        22B  ReversiPhoneText.aiButton — 로봇 연습 입구
+#   한 번 더 시간이 지나면 져요                              38B  ReversiPhoneText.autoStreakWarning — 판 화면(자동 착수 두 번째)
+#   판만 보여 줘요 · 관전자는 둘 수 없어요                   54B  ReversiPhoneText.watchCaption — 관전 판
+#   끝난 판은 3분 동안만 볼 수 있어요                        46B  ReversiPhoneText.watchTailCaption — 관전 판
+#   술 한잔 선물 전용                                       24B  DrinkGiftText.lockedCaption(코어) — 상점 · 고르기 이슬 잠긴 칸
+#   집중 모드에서는 메시지를 보낼 수 없어요. 맥에서 …        105B MessageNoticeText.senderFocused(코어) — 입력줄 · 목록 위 한 줄(내 집중)
+#   2~4명이 숫자 타일로 묶음을 만들어 랙을 먼저 비우는 게임   77B  **1.0.16 바닥 한 줄**(GamesRummyText.subtitle). 병합이 앞 판 기능을 떨어뜨리면 여기서 잡힌다.
+#   ⚠️ 1.0.16 의 나머지 열두 줄은 **뺐다.** 이 판을 증명하지 못한다.
+#   ⚠️ **넣지 마라 — 판을 증명하지 못하는 후보 일곱**(1.0.17 검토 지적):
+#     · 1.0.16 바이너리에 이미 있다: "지금 대결 중인 판이 없어요"(GamesChessText) · "순위를 불러오고 있어요"(GamesTetrisDuelText) ·
+#       "보낸 신청의 답을 기다리고 있어요"(GamesTetrisDuelText) — 리버시 화면이 같은 글자를 써도 옛 화면이 이미 싣고 있었다.
+#     · 다른 리터럴 안에 그대로 들어 있다(두 번 세어진다): "시간이 지나 자동으로 놓이는 중이에요"(⊂ "상대 시간이 지나 …") ·
+#       "로봇과 둔 판은 루비·전적·순위에 남지 않아요"(⊂ 규칙 줄) · "여러 줄이 한 번에"(⊂ 규칙 줄) · "이슬 아잉이"(⊂ DrinkGiftText.body ·
+#       CharacterCatalog · MeCharacterCardData 셋에 있다).
+#     아래 표 안의 쌍끼리만 포함 관계를 막으므로(아래 python) 표 밖 리터럴과의 겹침은 사람이 거른다.
 #
-# ★ **1.0.16 에서 이 게이트가 못 재는 것** — 숨기지 말고 적어 둔다:
-#   · **체스 끌어 두기**: 화면 글자가 **없는** 기능이다. `GamesChessDragTests` 가 판정을 값으로 잰다.
-#   · **점수 인편 · 길건너 판 도중 토큰**: 화면 글자가 없다. `GamesMiniGamePendingSubmitTests` 가 잰다.
-#   · **연속 근무 칩 · 미션 루비 잔량 · 이용약관 줄**: 글자가 끼워 넣기거나 15바이트 이하이거나(`이용약관` 12B) 앞 판에 이미 있다.
-#     `V1016StreakChipTests` · `V1016MissionRubyChipTests` · `V1016TermsLinkTests` 가 값으로 잰다.
-#   · **판 화면 가로**: 글자 한 줄(`rotating`)은 여기서 재지만 방향 설정은 바이너리가 아니라 Info.plist 칸이다 —
-#     `V1016RummyLandscapeTests` 가 전환 규칙을, 출시 때 사람이 `plutil -extract UISupportedInterfaceOrientations` 로 칸을 본다.
+# ★ **1.0.17 에서 이 게이트가 못 재는 것** — 숨기지 말고 적어 둔다:
+#   · **메시지 서식 · 골라 복사**: 새 화면 글자가 없다(편집 메뉴는 iOS 것 · [신고]는 앞 판 글자). `V1017ChatMarkdownMobileTests` ·
+#     `V1017BubbleSelectionMobileTests` 가 규칙 · 배선을 잰다.
+#   · **집중 칩**: "집중"(6B) · "집중 중"(10B)은 15바이트 이하라 못 잰다 — 긴 문장(senderFocused)을 대신 잰다. `V1017FocusRowsMobileTests`.
+#   · **이슬 그림**: 번들 PNG 두 장 · 카드 HEIC 다. `BaseComponentTests`(맥 원본과 픽셀) · `IsulAltKitTests`(대체 꾸러미)가 잰다.
+#   · **처리방침 개정**: 앱 바이너리가 아니라 GitHub Pages(main 푸시)다. `V1017PrivacyPolicyFactsTests`.
 #   게이트에 억지로 짧은 글자를 넣지 마라.
 #
 # ※ 기대값은 **아카이브(디바이스 · Release)로 재서** 박는다. **시뮬레이터 Release 는
@@ -146,25 +148,17 @@ import sys
 
 # 횟수 `None` = **아직 안 쟀다**(아카이브로 확정한다). 0 이면 막고, 수는 알리기만 한다.
 want = [
-    # 1.0.16 — 아잉 큐브. 게임 탭 카드 · 내 차례 줄 · 판 화면 가로 전환 · 탭을 옮겨 방에서 나옴(`GamesRummyText`)
-    ("2~4명이 숫자 타일로 묶음을 만들어 랙을 먼저 비우는 게임", 1),
-    ("내 차례예요 — 타일을 끌어 판에 놓아요", 1),
-    ("화면을 가로로 돌리고 있어요", 1),
-    ("탭을 옮겨서 방에서 나왔어요", 1),
-    # 1.0.16 — 미니게임 일시정지(`GamesMiniGameText`)
-    ("지금 그만두면 지금까지 간 줄 수가 점수로 기록돼요", 1),
-    ("5분 넘게 멈춰서 여기까지 기록했어요", 1),
-    # 1.0.16 — 지금 탭 우리 팀 전체 명단(`NowText`)
-    ("아직 명단에 보일 팀원이 없어요", 1),
-    # 1.0.16 — 설정의 프로필 사진 지우기 · 소속 센터 행(`AvatarRemovalText` · `MeText`)
-    ("지우면 내 자리에 착용한 캐릭터가 대신 보여요.", 1),
-    ("소속 센터를 아직 못 읽었어요", 1),
-    # 1.0.16 — [순위] 탭 역대 · 새 버전 안내 · 기기 라벨 'PC'(`RankingsText` · `NowText`)
-    ("역대 · 마감 없이 이어져요", 1),
-    ("새 버전이 나왔어요", 1),
-    ("이미 PC에서 근무 중이에요", 1),
-    # 1.0.15 — 앞 버전 것을 **한 줄만** 바닥으로 남긴다(기능이 통째로 빠진 바이너리를 막는 그물).
-    ("쓸어서 그 방향으로 한 칸 · 탭하면 앞으로 한 칸", 1),
+    # 1.0.18 — 맥 기능 이식 판(대표 지시 11-10). build 31 아카이브(디바이스 · Release, 2026-11-10) 실측 다섯 줄 모두 1회.
+    ("내 돌은 상대 화면에도 이 스킨으로 보여요", 1),        # 오목알 스킨 절(`OmokSkinPhoneText.note`)
+    ("난이도 · AI가 몇 수 앞까지 계산할지", 1),            # 오목 AI 난이도(`GomokuPhoneText.aiDifficultyTitle`)
+    ("100점에 먼저 닿으면 이겨요", 1),                    # 1:1 길건너 카드(`CrossyDuelPhoneText.cardSubtitle`)
+    ("빼빼로 데이 선물 전용", 1),                          # 빼빼로 잠긴 칸(코어 `PeperoGiftText.lockedCaption` — 폰이 처음 링크한다)
+    ("누적 미션 '누적 근무 100시간'을 채우면 받아요", 1),   # 개발 아잉이 얻는 길(코어 `DevAingMission.lockedHint`)
+    # 1.0.18 '한 판에 전부'(대표 #d_xB6BJcn2nsCq) — 1:1 알까기 · 아잉 마작. 폰에서 새로 쓴 글자(맥 타깃 글자는 폰 바이너리에 없다). build 32 아카이브 실측 1회.
+    ("놓으면 날아가요 · 돌 위로 되돌리면 취소", 1),                        # 1:1 알까기 손짓 안내(`AlkkagiPhoneText.aimRelease`)
+    ("리치 마작 4인 대국 · 방을 열어 초대하거나 혼자 연습해요", 1),            # 아잉 마작 카드(`GamesMahjongPhoneText.cardSubtitle`)
+    # 1.0.17 — 앞 버전 것을 **한 줄만** 바닥으로 남긴다(기능이 통째로 빠진 바이너리를 막는 그물). build 30 아카이브 실측 1회.
+    ("술 한잔 선물 전용", 1),
 ]
 # ⚠️ **길건너의 `MiniGameKind.crossy.howToPlay`("한 칸씩 뛰어 앞으로 · …")를 여기 넣지 마라.**
 # 그 글자는 CheckCore 에 있고 **1.0.14 바이너리에 이미 들어 있다**(폰이 `GamesMiniGameText.howToPlay(.crossy)` 를
@@ -195,11 +189,11 @@ if missing:
     print("MISSING:" + " · ".join(missing))
 PY
 )"
-  echo "1.0.16 기능 문구(아잉 큐브 · 일시정지 · 팀 명단 · 사진 · 센터 · 역대 · 새 버전 안내 · PC):"
+  echo "1.0.18 기능 문구(스킨 · AI 난이도 · 1:1 길건너 · 빼빼로 · 개발 아잉이 · 1:1 알까기 · 아잉 마작 · 1.0.17 바닥):"
   echo "${feature_report%$'\n'MISSING:*}"
   feature_found="$(printf '%s\n' "${feature_report%$'\n'MISSING:*}" | grep -c '회' || true)"
   if [[ "$feature_report" == *$'\n'MISSING:* ]]; then
-    report "1.0.16 기능 문구가 앱 바이너리에 없다: ${feature_report##*$'\n'MISSING:}"
+    report "1.0.18 기능 문구가 앱 바이너리에 없다: ${feature_report##*$'\n'MISSING:}"
   fi
 else
   report "앱 바이너리가 없어 기능 문구를 세지 못했다: $app_bin"
@@ -209,4 +203,4 @@ if [[ "$fail" -ne 0 ]]; then
   echo "Release 번들 계약 위반"
   exit 1
 fi
-echo "OK: 픽스처 0 · 금지 문자열 0 · 금지 심볼 0(뒤에서 도는 알림 액션 흔적 포함) · 1.0.16 기능 문구 ${feature_found:-0}/${feature_found:-0} 전부 있음 · 길건너 모델 있음"
+echo "OK: 픽스처 0 · 금지 문자열 0 · 금지 심볼 0(뒤에서 도는 알림 액션 흔적 포함) · 1.0.18 기능 문구 ${feature_found:-0}/${feature_found:-0} 전부 있음 · 길건너 모델 있음"

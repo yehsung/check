@@ -24,14 +24,20 @@ object GamesBusyText {
         GamesBusyGame.rummy -> "아잉 큐브 판"
         // 아잉 뒤집기(판 7 — iOS 1.0.17 `ChessPhoneText.BusyGame.matchNoun` 과 같은 글자). 받침으로 끝나 뒤에 "이" 가 붙는다.
         GamesBusyGame.reversi -> "${ReversiNoticeText.gameName} 판"
+        // 판 8(iOS 1.0.18 `ChessPhoneText.BusyGame.matchNoun` 과 같은 글자).
+        GamesBusyGame.crossyDuel -> "${com.yehsung.aingcheck.core.stores.crossy.CrossyDuelNoticeText.gameName} 대결"
+        GamesBusyGame.alkkagi -> "1:1 알까기 판"
+        GamesBusyGame.mahjong -> "아잉 마작 판"
     }
 
     /** 다른 판을 두는 중이라 입구가 막혔다 — "오목을 두는 중이에요" · "체스를 두는 중이에요" · "1:1 테트리스 대결 중이에요". */
     fun busyTitle(playing: GamesBusyGame): String = when (playing) {
         // 아잉 뒤집기도 돌을 **둔다**(iOS 1.0.17 · 맥 `ReversiText` 의 "두기" 낱말과 같다).
         GamesBusyGame.gomoku, GamesBusyGame.chess, GamesBusyGame.reversi -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
-        GamesBusyGame.tetris -> "${playing.gameName} 대결 중이에요"
+        // 1:1 길건너 · 1:1 알까기도 겨룬다(iOS 1.0.18 — 테트리스와 같은 말).
+        GamesBusyGame.tetris, GamesBusyGame.crossyDuel, GamesBusyGame.alkkagi -> "${playing.gameName} 대결 중이에요"
         GamesBusyGame.rummy -> "${playing.gameName} 하는 중이에요"
+        GamesBusyGame.mahjong -> "${playing.gameName}${objectParticle(playing.gameName)} 하는 중이에요"
     }
 
     /** 그 아래 한 줄 — 언제 풀리는지 말한다(막힌 이유만 말하면 사용자가 기다릴 끝을 모른다). [blocked] 가 **막힌 입구**다. */

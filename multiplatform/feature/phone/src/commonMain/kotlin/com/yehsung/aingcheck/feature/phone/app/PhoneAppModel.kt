@@ -36,6 +36,10 @@ import com.yehsung.aingcheck.core.stores.now.NowStore
 import com.yehsung.aingcheck.core.stores.now.NowTodoStorage
 import com.yehsung.aingcheck.core.stores.rankings.RankingsStore
 import com.yehsung.aingcheck.core.stores.reversi.ReversiStore
+import com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore
+import com.yehsung.aingcheck.core.stores.crossy.SocketCrossyDuelFrameChannel
+import com.yehsung.aingcheck.core.net.realtime.BroadcastFrameSocket
+import com.yehsung.aingcheck.core.net.realtime.RealtimeFeature
 import com.yehsung.aingcheck.core.stores.rummy.RummyStore
 import com.yehsung.aingcheck.core.stores.rummy.setHiddenPeers
 import com.yehsung.aingcheck.core.stores.tetris.TetrisDuelStore
@@ -90,6 +94,11 @@ class PhoneEnvironment(
     val logger: Logger? = null,
     /** 데모 조립(stub 변형). 스토어는 이 값으로 동작을 바꾸지 않는다 — 설명 시트만 띄우지 않는다. */
     val isDemo: Boolean = false,
+    /**
+     * 1:1 길건너 판 표시 프레임 소켓(둘째 소켓 — 판 8). 조립 지점이 Ktor 로 만든다. 시험 프로세스·리얼타임 킬스위치면 null 을 돌려준다 — 그러면 판은
+     * 대체 길(DB 보고만)로 돌고 상대 반투명 그림자는 안 보인다. 기본(null 함수)은 프레임 없음.
+     */
+    val frameSocketFactory: (() -> BroadcastFrameSocket?)? = null,
 )
 
 /**
@@ -126,6 +135,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
      * 만들지 않으니 요청 · 실시간 가지 · 카드 · 배지 · 입구 막기 · 미션 꼬리 숨김이 전부 판 7 이전과 같다(PhoneReversiWiringTest 가 잰다).
      */
     val reversi: ReversiStore?
+
+    /** 1:1 길건너(판 8 — 아이폰 1.0.18 맞추기). 떼어 내기 깃발(`AppConfig.crossyDuelEnabled`)이 꺼지면 null. */
+    val crossyDuel: CrossyDuelStore?
     val characters: AppUserCharacterStore
     val push: PhonePushCoordinator
     val now: NowStore
@@ -224,12 +236,36 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
             override fun handleSignal() = rummy.handleSignal()
             override fun realtimeDidJoin() = rummy.realtimeDidJoin()
         }
+        // 1:1 길건너(판 8) — 호스트는 위 다섯과 같은 하나(루비 미러 한 칸 · 같은 판돈 깃발 문). 떼어 내기 깃발이 꺼지면 만들지 않는다.
+        crossyDuel = if (env.appConfig.crossyDuelEnabled) {
+            CrossyDuelStore(gomokuHost, scope, clock = { env.clock.now() }, collation = env.collation, logger = env.logger)
+        } else {
+            null
+        }
+        crossyDuel?.let { store ->
+            // 한 판 한 기기: '이 기기가 연 판' 장부를 둘 곳(빠지면 판 중에 앱을 다시 켠 폰이 옛 서버에서 자기 판을 못 알아본다).
+            store.deviceLedger.defaults = env.prefs
+            // 순위 주 스위치(코어 기본 false). 이 줄이 없으면 `crossy_duel_ranking` 이 한 번도 안 나간다.
+            store.rankingEnabled = true
+            // 판 표시 프레임(상대 반투명 그림자). 킬스위치(`check.realtimeEnabled`)는 처음 필요할 때 한 번만 읽는다 — 실행 중에 뒤집히지 않게.
+            val makeSocket = env.frameSocketFactory
+            store.makeFrameChannel = {
+                if (makeSocket == null || !RealtimeFeature.isEnabled(env.prefs.getBoolean(RealtimeFeature.defaultsKey), emptyMap())) null
+                else makeSocket()?.let(::SocketCrossyDuelFrameChannel)
+            }
+            // 실시간 'crossy_duel' 초인종을 받을 자리. 빠지면 받은 신청이 다음 허브 진입(30초 스로틀)까지 안 서고 판 시작을 늦게 안다.
+            realtime.crossyDuel = object : RealtimeSignalReceiver {
+                override fun handleSignal() = store.handleSignal()
+                override fun realtimeDidJoin() = store.realtimeDidJoin()
+            }
+        }
         characters = AppUserCharacterStore(context, scope, env.knownCharacterIDs)
         context.gomoku = gomoku
         context.chess = chess
         context.tetris = tetris
         context.rummy = rummy
         context.reversi = reversi
+        context.crossyDuel = crossyDuel
         context.characters = characters
 
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
@@ -299,6 +335,10 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
                 val hidden = ids.map { it.lowercase() }.toSet()
                 if (store.hiddenPeerIDs != hidden) store.hiddenPeerIDs = hidden
             }
+            crossyDuel?.let { store ->
+                val hidden = ids.map { it.lowercase() }.toSet()
+                if (store.hiddenPeerIDs != hidden) store.hiddenPeerIDs = hidden
+            }
         }
         // 메시지 탭이 실시간 신호를 받는 자리(Swift 는 MessagesStore.init 이 등록했다 — Kotlin 은 조립이 잇는다). `.drain` 은 take_pokes 가 아니라
         // 이 조회다(C§4 #15).
@@ -313,6 +353,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         rummy.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_RUMMY) }
         // 아잉 뒤집기 — 서버 `daily_reversi` 의 game 값. 코어는 **1:1 판에서만** 부른다(AI 연습은 미션을 채우지 않는다 — 서버가 안 센다).
         reversi?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_REVERSI) }
+        // 1:1 길건너 — 서버 `daily_mission_defs()` 의 game 값 `crossy_duel`(iOS 1.0.18 MobileAppModel 과 같다).
+        crossyDuel?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_CROSSY_DUEL) }
 
         session.onSignedIn = { sessionDidSignIn() }
         session.onSignedOut = { sessionDidSignOut() }
@@ -452,6 +494,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 아잉 뒤집기도 같은 사슬이다 — 안 넣으면 다음 사람의 로비에 앞 사람의 판·신청·순위·루비가 남고, 앞 계정의 신호 재조회가 다음 사람의 화면에 신청을
         // 세운다. `reset()` 은 배선 값(주 스위치 둘 · 문 · 시계)을 건드리지 않는다.
         reversi?.reset()
+        // 1:1 길건너도 같은 사슬이다 — 판 루프 · 보고 · 프레임 소켓이 살아 있으면 로그아웃한 사람의 판에 새 계정 토큰으로 보고가 나간다.
+        crossyDuel?.reset()
         ruby.rubyBalance = null
         router.reset()
         widgets.forgetCurrent()
@@ -483,5 +527,6 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         const val GAME_TETRIS_DUEL: String = "tetris_duel"
         const val GAME_RUMMY: String = "rummy"
         const val GAME_REVERSI: String = "reversi"
+        const val GAME_CROSSY_DUEL: String = "crossy_duel"
     }
 }

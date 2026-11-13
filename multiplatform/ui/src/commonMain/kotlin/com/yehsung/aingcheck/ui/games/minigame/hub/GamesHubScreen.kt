@@ -57,6 +57,7 @@ import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameBoard
 import com.yehsung.aingcheck.core.stores.minigame.MiniGameExposure
 import com.yehsung.aingcheck.core.stores.reversi.GamesReversiCard
 import com.yehsung.aingcheck.core.stores.reversi.ReversiPhoneText
+import com.yehsung.aingcheck.core.stores.crossy.CrossyDuelPhoneText
 import com.yehsung.aingcheck.core.stores.rummy.GamesRummyCard
 import com.yehsung.aingcheck.core.stores.rummy.RummyPhoneText
 import com.yehsung.aingcheck.core.stores.tetris.GamesTetrisDuelCard
@@ -131,6 +132,7 @@ object GamesHubTags {
     const val TETRIS_DUEL: String = "games.hub.tetrisDuel"
     const val RUMMY: String = "games.hub.rummy"
     const val REVERSI: String = "games.hub.reversi"
+    const val CROSSY_DUEL: String = "games.hub.crossyDuel"
 }
 
 /** 이 빌드 게임 탭에 서는 미니게임(폰 노출 규칙 ∩ 표시 깃발). 타일·오늘 내 순위·새로고침이 **같은 한 목록**을 본다. */
@@ -168,6 +170,7 @@ fun GamesHubScreen(
             TetrisDuelCard(store, onOpen, Modifier.padding(top = 12.dp))
             RummyCard(store, onOpen, Modifier.padding(top = 12.dp))
             ReversiCard(store, onOpen, Modifier.padding(top = 12.dp))
+            CrossyDuelCard(store, onOpen, Modifier.padding(top = 12.dp))
             TodayRanks(store, art, onOpen, onOpenRankings)
             LiveMatches(facts, now)
         }
@@ -354,6 +357,28 @@ private fun ReversiCard(store: GamesStore, onOpen: (GamesDestination) -> Unit, m
         if (blockedBy == null) ReversiPhoneText.cardOpenHint else GamesBusyText.entryBlockHint(blockedBy, GamesBusyGame.reversi) ?: "",
         GamesHubTags.REVERSI, modifier, { GamesReversiTabThumbnail() },
     ) { onOpen(GamesDestination.Reversi) }
+}
+
+/**
+ * 1:1 길건너 카드(판 8 — iOS 1.0.18 `crossyDuelCard`). 다른 1:1 판이 흐르면 막히고(`crossyDuelEntryBlock`), 받은 신청이 있으면 칩이 그 수를 말한다.
+ * 스토어가 없는 조립(떼어 내기 깃발 끔 · Windows)에는 **카드가 서지 않는다**. 판돈 깃발이 꺼진 빌드는 수락할 수 없어 칩을 세지 않는다.
+ */
+@Composable
+private fun CrossyDuelCard(store: GamesStore, onOpen: (GamesDestination) -> Unit, modifier: Modifier) {
+    val duel = store.crossyDuel ?: return
+    val blockedBy = store.crossyDuelEntryBlock
+    val incoming = if (duel.duelsEnabled) duel.visibleIncomingInvites.size else 0
+    val chip = when {
+        blockedBy != null -> GamesBusyText.entryBlock(blockedBy)
+        store.hasLiveCrossyDuelMatch -> GamesText.activeMatchChip
+        incoming > 0 -> "${CrossyDuelPhoneText.incomingTitle} $incoming"
+        else -> null
+    }
+    BoardGameCard(
+        CrossyDuelPhoneText.title, CrossyDuelPhoneText.cardSubtitle, chip, null, blockedBy != null,
+        if (blockedBy == null) CrossyDuelPhoneText.cardOpenHint else GamesBusyText.entryBlockHint(blockedBy, GamesBusyGame.crossyDuel) ?: "",
+        GamesHubTags.CROSSY_DUEL, modifier, { GamesCrossyDuelTabThumbnail() },
+    ) { onOpen(GamesDestination.CrossyDuel) }
 }
 
 // MARK: 오늘 내 순위

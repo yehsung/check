@@ -28,6 +28,7 @@ import com.yehsung.aingcheck.android.screens.games.gomoku.GomokuDestination
 import com.yehsung.aingcheck.android.screens.games.hub.GamesHubRoute
 import com.yehsung.aingcheck.android.screens.games.minigame.MiniGameRoute
 import com.yehsung.aingcheck.android.screens.games.reversi.ReversiDestination
+import com.yehsung.aingcheck.android.screens.games.crossy.CrossyDuelRoute
 import com.yehsung.aingcheck.android.screens.games.rummy.RummyRoute
 import com.yehsung.aingcheck.android.screens.games.tetris.TetrisDuelRoute
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerRouteScreen
@@ -90,6 +91,7 @@ import com.yehsung.aingcheck.android.screens.games.GomokuPlaceholder
 import com.yehsung.aingcheck.android.screens.games.MiniGamePlaceholder
 import com.yehsung.aingcheck.android.screens.games.RummyPlaceholder
 import com.yehsung.aingcheck.android.screens.games.ReversiPlaceholder
+import com.yehsung.aingcheck.android.screens.games.CrossyDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.games.StakeSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.games.TetrisDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerPlaceholder
@@ -243,6 +245,7 @@ private fun NavGraphBuilder.gamesGraph(open: (Any) -> Unit) =
         shellScreen<Dest.TetrisDuel> { TetrisDuelPlaceholder(open) }
         shellScreen<Dest.Rummy> { RummyPlaceholder() }
         shellScreen<Dest.Reversi> { ReversiPlaceholder() }
+        shellScreen<Dest.CrossyDuel> { CrossyDuelPlaceholder() }
         dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }
     }
 
@@ -346,6 +349,13 @@ private fun NavGraphBuilder.gamesGraph(
             myUserID = p.session.userID,
             me = RummySeatFace(name = p.me.displayName ?: RummyPhoneText.me, avatarUrl = p.me.avatarURL?.toString(), characterId = p.me.equippedServerID),
             onLeave = { nav.popBackStack() },
+        )
+    }
+    shellScreen<Dest.CrossyDuel> {
+        CrossyDuelRoute(
+            store = p.games,
+            myUserID = p.session.userID,
+            onBack = { nav.popBackStack() },
         )
     }
     shellScreen<Dest.Reversi> {

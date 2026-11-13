@@ -51,4 +51,7 @@ fun RummyPlaceholder() = PlaceholderScreen("아잉 큐브", "ios-1017 큐브")
 fun ReversiPlaceholder() = PlaceholderScreen(com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName, "판 7")
 
 @Composable
+fun CrossyDuelPlaceholder() = PlaceholderScreen(com.yehsung.aingcheck.core.stores.crossy.CrossyDuelNoticeText.gameName, "판 8")
+
+@Composable
 fun StakeSheetPlaceholder(game: String) = PlaceholderScreen("판돈 고르기", "W4-a·b", detail = "game=$game · 판돈 목록은 서버값")

@@ -81,6 +81,11 @@ class PhoneRealtimeRunner(
     /** 아잉 뒤집기 신호를 받을 스토어(조립이 붙인다 — 같은 꼴·같은 자리 · 판 7). 떼어 내기 깃발이 꺼진 조립은 비워 둔다(가지는 아무 일도 안 한다). */
     var reversi: RealtimeSignalReceiver? = null
 
+    /** 1:1 길건너 · 1:1 알까기 · 아잉 마작(판 8 — Swift `realtime.crossyDuel` 등). 조립이 각 스토어로 잇는다. */
+    var crossyDuel: RealtimeSignalReceiver? = null
+    var alkkagi: RealtimeSignalReceiver? = null
+    var mahjong: RealtimeSignalReceiver? = null
+
     /** 확성기 배너 신호('megaphone')를 받을 자리(조립이 붙인다 — 배너 스토어 refresh). 비어 있으면 아무 일도 안 한다(같은 묶음의 ring 이 메시지를 갚는다). */
     var megaphone: (() -> Unit)? = null
 
@@ -252,6 +257,10 @@ class PhoneRealtimeRunner(
                     // 아잉 뒤집기도 같은 자리다(로비 한 번 + 그 응답이 가리키는 판). 받은 신청은 60초를 살고 내 차례는 30초 뒤 서버가 대신 두므로(연속 3번이면 패)
                     // 다음 계기까지 기다리면 늦다.
                     reversi?.realtimeDidJoin()
+                    // 1:1 길건너도 같은 자리다(가벼운 로비 한 번 — 받은 신청 60초 · 판 시작을 놓치지 않게).
+                    crossyDuel?.realtimeDidJoin()
+                    alkkagi?.realtimeDidJoin()
+                    mahjong?.realtimeDidJoin()
                 }
                 // INV-MobileRealtimeRunner-8764ac83 이식: take_pokes 가 아니다(R3). 새 메시지가 있다는 신호일 뿐 — 요약·이력 조회로 갚는다
                 //   (PhoneRealtimeRunnerTest 가 진짜 메시지 스토어로 요청을 재서 take_pokes 0 · message_unread_summary 1 을 단언한다).
@@ -271,6 +280,11 @@ class PhoneRealtimeRunner(
                 // 아잉 뒤집기(판 7 — iOS 1.0.17 과 같이 **잇는다**): 신청·수락·상대 수·자동 착수·정산이 전부 이 초인종으로 온다. 받은 신청은 로비 `me.incoming`
                 //   으로만 오므로 이 가지가 비면 탭 배지가 다음 허브 진입(30초 스로틀)까지 늦다. `.drain` 으로 떨어뜨리면 수마다 메시지 조회가 한 번씩 더 나간다.
                 RealtimeEffect.ReversiSignal -> reversi?.handleSignal()
+                // 1:1 길건너(판 8 — iOS 1.0.18 과 같이 **잇는다**): 신청·수락·시작·정산 초인종. 받은 신청은 로비 `me.incoming` 으로만 온다.
+                RealtimeEffect.CrossyDuelSignal -> crossyDuel?.handleSignal()
+                // 1:1 알까기 · 아잉 마작: 받을 스토어를 이을 때까지 **일부러 빈 가지**다(`.drain` 으로 떨어뜨리면 울릴 때마다 메시지 조회가 나간다).
+                RealtimeEffect.AlkkagiSignal -> alkkagi?.handleSignal()
+                RealtimeEffect.MahjongSignal -> mahjong?.handleSignal()
                 // 확성기 배너(Swift MobileRealtimeRunner .megaphoneSignal @ 8b40bd44): 배너 목록 재조회 — **take_pokes 도 메시지 조회도 아니다**
                 //   (확성기 줄의 소비·요약은 같은 묶음의 ring → .drain 이 맡는다). `.drain` 으로 떨어뜨리면 배너가 안 뜬다.
                 RealtimeEffect.MegaphoneSignal -> megaphone?.invoke()

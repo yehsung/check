@@ -51,7 +51,7 @@ fun MeDailyMissionsSection(store: MeStore, reduceMotion: Boolean = false, frozen
         Column(verticalArrangement = Arrangement.spacedBy(MeAchievementLayout.rowSpacing)) {
             for (mission in section.rows) {
                 val links = store.context.meLinks
-                val content = MeDailyMissionRowContent.make(mission, store.dailyMissionClaimDidFail(mission.key), links.rummyPlayable, links.reversiPlayable)
+                val content = MeDailyMissionRowContent.make(mission, store.dailyMissionClaimDidFail(mission.key), links.rummyPlayable, links.reversiPlayable, links.crossyDuelPlayable)
                 MissionRow(
                     modifier = Modifier.testTag(MissionTags.row(mission.key)),
                     icon = missionIcon(content.icon),
@@ -70,7 +70,7 @@ fun MeDailyMissionsSection(store: MeStore, reduceMotion: Boolean = false, frozen
                     burst = store.dailyClaimBurst(mission.key)?.let { it.serial to it.amount },
                     reduceMotion = reduceMotion,
                     frozenBurstProgress = frozenBurstProgress,
-                    hidesEmptyCaption = links.rummyPlayable || links.reversiPlayable,
+                    hidesEmptyCaption = links.rummyPlayable || links.reversiPlayable || links.crossyDuelPlayable,
                 )
             }
         }

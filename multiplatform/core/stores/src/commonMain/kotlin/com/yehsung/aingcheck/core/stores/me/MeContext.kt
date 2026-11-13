@@ -97,6 +97,9 @@ interface MeLinks {
      */
     val reversiPlayable: Boolean get() = false
 
+    /** 이 앱에서 1:1 길건너를 할 수 있다(판 8 — 폰 조립에 스토어가 있다). 미션 줄의 '맥에서' 꼬리를 비운다. */
+    val crossyDuelPlayable: Boolean get() = false
+
     /**
      * 내가 낀 오목알 스킨(판 8 — 폰 1.0.18 `context.gomoku.aiStoneSkin`). 서버 대국 · 관전은 응답의 `black_skin` · `white_skin` 으로 그리고,
      * **AI 판만** 로컬이라 이 값으로 내 돌을 그린다. 고리가 없으면 아무 일도 안 한다(AI 판은 일반 돌).

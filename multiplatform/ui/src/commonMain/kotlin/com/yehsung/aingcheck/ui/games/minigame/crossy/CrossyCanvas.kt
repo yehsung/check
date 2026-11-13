@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
 import com.yehsung.aingcheck.core.rules.minigame.crossy.CrossyGame
+import com.yehsung.aingcheck.core.stores.crossy.CrossyDuelGhost
 import com.yehsung.aingcheck.core.stores.games.GamesMiniGameText
 import com.yehsung.aingcheck.ui.games.minigame.GamesCanvasColors
 import com.yehsung.aingcheck.ui.games.minigame.GamesOverlayCard
@@ -324,9 +325,22 @@ internal val CrossyGame.showsTopScore: Boolean
  * 길건너 캔버스(그림 + 점수 + 시작/결과 카드). [game] 은 읽기만 한다. [bestScore] 는 결과 카드의 "최고 N" · 신기록 판정.
  */
 @Composable
-fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: MiniGameArt, modifier: Modifier = Modifier, touchControls: Boolean = false) {
+fun CrossyCanvas(
+    game: CrossyGame,
+    bestScore: Long,
+    reduceMotion: Boolean,
+    art: MiniGameArt,
+    modifier: Modifier = Modifier,
+    touchControls: Boolean = false,
+    /** 1:1 길건너 상대 반투명 그림자(판 8 — 표시 전용). null 이면 그리지 않는다. */
+    ghost: CrossyDuelGhost? = null,
+    /** 혼자 하기 카드(시작 · 결과)와 위 점수를 그리는가. 1:1 은 화면이 머리 · 겹을 따로 그려 끈다. */
+    soloChrome: Boolean = true,
+) {
     val camera = remember { CrossyCameraFollower() }
     val cameraX = camera.follow(game)
+    val ghostFollower = remember { CrossyGhostFollower() }
+    val ghostPose = ghostFollower.follow(game, ghost)
     val density = LocalDensity.current.density
     BoxWithConstraints(modifier) {
         val sprite = if (game.isGameOver && game.death?.cause == CrossyGame.DeathCause.car) art.flappyNegative ?: art.flappySide else art.flappySide
@@ -334,8 +348,8 @@ fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: 
         val centerX = constraints.maxWidth / 2f
         // 폰 카드는 세 캔버스와 같은 배율 0.82 다(iOS GamesCrossyCanvas) — 조작 줄이 하나 더 있어 원래 배율이면 꼬리가 낱글자로 꺾인다.
         val cardScale = if (touchControls) scale * 0.82f else scale
-        Canvas(Modifier.fillMaxSize()) { drawCrossy(this, game, cameraX, reduceMotion, sprite) }
-        Box(Modifier.fillMaxSize().clearAndSetSemantics { }) {
+        Canvas(Modifier.fillMaxSize()) { drawCrossy(this, game, cameraX, reduceMotion, sprite, ghostPose, art.flappySide) }
+        if (soloChrome) Box(Modifier.fillMaxSize().clearAndSetSemantics { }) {
             if (game.showsTopScore) {
                 Text(
                     game.score.toString(),
@@ -372,7 +386,15 @@ fun CrossyCanvas(game: CrossyGame, bestScore: Long, reduceMotion: Boolean, art: 
 private const val CROSSY_REFERENCE_WIDTH: Float = 292f
 
 /** 한 프레임(시험이 화면 없이 부를 수 있게 DrawScope 하나만 받는다). */
-fun drawCrossy(scope: DrawScope, game: CrossyGame, cameraX: Double, reduceMotion: Boolean, sprite: ImageBitmap?) = with(scope) {
+fun drawCrossy(
+    scope: DrawScope,
+    game: CrossyGame,
+    cameraX: Double,
+    reduceMotion: Boolean,
+    sprite: ImageBitmap?,
+    ghost: CrossyGhostPose? = null,
+    ghostSprite: ImageBitmap? = sprite,
+) = with(scope) {
     drawRect(CrossyPaint.background)
     val view = CrossyView(size, cameraX, game.cameraRow)
     val pose = CrossyAingPose.of(game, reduceMotion)
@@ -383,6 +405,8 @@ fun drawCrossy(scope: DrawScope, game: CrossyGame, cameraX: Double, reduceMotion
         drawGround(view, lane, row, game)
         if (lane != null) drawLaneThings(view, lane, game)
         if (row == poseRow && !flying) drawAing(view, pose, sprite)
+        // 상대 그림자는 그 줄의 물건 뒤 · 내 아잉이와 같은 깊이 순서로(같은 줄이면 내 아잉이 뒤에 — 내 것이 늘 또렷하다).
+        if (ghost != null && ghost.rowIndex == row) drawGhost(view, ghost, ghostSprite)
     }
     if (flying) drawAing(view, pose, sprite)
 }
@@ -595,6 +619,68 @@ private fun DrawScope.drawAing(view: CrossyView, pose: CrossyAingPose, sprite: I
                     drawCircle(GamesCanvasColors.working.copy(alpha = pose.alpha), side * 0.42f, Offset(cx, bottom - side * 0.45f))
                 }
             }
+        }
+    }
+}
+
+// MARK: - 1:1 상대 반투명 그림자(판 8 — 맥 0.3.82 · 폰 1.0.18 `CrossyScene.ghostTarget`)
+
+/** 그릴 그림자 한 점(칸 · 줄 · 서는 높이 · 방향). 표시 전용이다. */
+data class CrossyGhostPose(val column: Double, val row: Double, val height: Double, val mirrored: Boolean) {
+    /** 깊이 순서에 쓰는 줄(반올림 — 뛰는 중이면 가까운 줄). */
+    val rowIndex: Int get() = row.roundToInt()
+
+    companion object {
+        /** 맥 · 폰 `CrossyScene.ghostOpacity`. */
+        const val OPACITY: Float = 0.38f
+    }
+}
+
+/**
+ * 받은 그림자 자리를 부드럽게 따라간다(맥 · 폰 `CrossyScene.updateGhost` 와 같은 규칙): 2칸 넘게 벌어지면(부활 · 큰 순간 이동) 곧바로 옮기고,
+ * 그 밖은 지수로 따라간다(초당 약 14배). 시간은 판 시간(`elapsed`) 차이로 잰다 — 틱 주기와 무관하게 같은 그림.
+ */
+class CrossyGhostFollower {
+    private var shown: Pair<Double, Double>? = null
+    private var at: Double = 0.0
+
+    fun follow(game: CrossyGame, ghost: CrossyDuelGhost?): CrossyGhostPose? {
+        if (ghost == null || ghost.dead) {
+            shown = null
+            at = game.elapsed
+            return null
+        }
+        val target = ghost.x to ghost.row.toDouble()
+        val previous = shown
+        val dt = maxOf(0.0, game.elapsed - at)
+        at = game.elapsed
+        val next = if (previous == null || kotlin.math.hypot(previous.first - target.first, previous.second - target.second) > 2.0) {
+            target
+        } else {
+            val k = min(1.0, dt * 14.0)
+            (previous.first + (target.first - previous.first) * k) to (previous.second + (target.second - previous.second) * k)
+        }
+        shown = next
+        val kind = game.lane(ghost.row)?.kind
+        return CrossyGhostPose(next.first, next.second, CrossyLook.standHeight(kind), ghost.facing == CrossyGame.Direction.left)
+    }
+}
+
+private fun DrawScope.drawGhost(view: CrossyView, pose: CrossyGhostPose, sprite: ImageBitmap?) {
+    val cx = view.x(pose.column)
+    val side = (CrossyLook.aingHeight * view.unit * 1.05).toFloat()
+    val bottom = view.y(pose.row, pose.height)
+    val pivot = Offset(cx, bottom)
+    scale(if (pose.mirrored) -1f else 1f, 1f, pivot) {
+        val topLeft = Offset(cx - side / 2, bottom - side)
+        if (sprite != null) {
+            drawImage(
+                sprite, IntOffset.Zero, IntSize(sprite.width, sprite.height),
+                IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()), IntSize(side.roundToInt(), side.roundToInt()),
+                alpha = CrossyGhostPose.OPACITY, filterQuality = FilterQuality.High,
+            )
+        } else {
+            drawCircle(GamesCanvasColors.working.copy(alpha = CrossyGhostPose.OPACITY), side * 0.42f, Offset(cx, bottom - side * 0.45f))
         }
     }
 }

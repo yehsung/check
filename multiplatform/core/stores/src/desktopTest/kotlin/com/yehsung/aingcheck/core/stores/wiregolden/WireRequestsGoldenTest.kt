@@ -5,6 +5,7 @@
 package com.yehsung.aingcheck.core.stores.wiregolden
 
 import com.yehsung.aingcheck.core.net.*
+import com.yehsung.aingcheck.core.wire.games.CrossyDuelReportBody
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
 import com.yehsung.aingcheck.core.stores.service.achievementClaim
@@ -334,6 +335,17 @@ class WireRequestsGoldenTest {
         "tetrisState" to { s -> s.tetrisState(t, m) },
         "tetrisResign" to { s -> s.tetrisResign(t, m) },
         "tetrisRanking" to { s -> s.tetrisRanking(t) },
+        // 1:1 길건너(판 8 — iOS 1.0.18 맞추기). 보고의 55P03 은 공용 duelRPC 가 SQLSTATE 를 잃어 몸통을 따로 둔다(CrossyDuelLockNotAvailable).
+        "crossyDuelLobby" to { s -> s.crossyDuelLobby(t) },
+        "crossyDuelLobby(light)" to { s -> s.crossyDuelLobby(t, users = false) },
+        "crossyDuelChallenge" to { s -> s.crossyDuelChallenge(t, p, 3) },
+        "crossyDuelCancel" to { s -> s.crossyDuelCancel(t, m) },
+        "crossyDuelRespond" to { s -> s.crossyDuelRespond(t, m, true) },
+        "crossyDuelReport" to { s -> s.crossyDuelReport(t, m, CrossyDuelReportBody(seq = 12, score = 37, deaths = 2)) },
+        "crossyDuelReport#lockTimeout" to { s -> s.crossyDuelReport(t, m, CrossyDuelReportBody(seq = 13, score = 100, deaths = 2)) },
+        "crossyDuelState" to { s -> s.crossyDuelState(t, m) },
+        "crossyDuelResign" to { s -> s.crossyDuelResign(t, m) },
+        "crossyDuelRanking" to { s -> s.crossyDuelRanking(t) },
         "tetrisWatchLive" to { s -> s.tetrisWatchLive(t, m) },
         "tetrisWatch" to { s -> s.tetrisWatch(t, m) },
         // ---- 결과 대조(서비스 후처리) ----
@@ -486,6 +498,8 @@ class WireRequestsGoldenTest {
                 is SupabaseWorkServiceError -> dumpError(e)
                 is SerializationException -> JsonPrimitive("\$decoding")
                 is SwiftDecodingError -> JsonPrimitive("\$decoding")   // rules 의 관대한 디코드가 던지는 Swift DecodingError
+                is com.yehsung.aingcheck.core.net.CrossyDuelLockNotAvailable ->
+                    JsonObject(mapOf("\$dump" to JsonObject(emptyMap()), "\$type" to JsonPrimitive("CrossyDuelLockNotAvailable")))
                 is CharacterSyncFetchError.NoProfileRow ->
                     JsonObject(mapOf("\$dump" to JsonPrimitive("noProfileRow"), "\$type" to JsonPrimitive("CharacterSyncFetchError")))
                 else -> JsonObject(mapOf("\$type" to JsonPrimitive(e::class.qualifiedName ?: "?"), "\$message" to JsonPrimitive(e.message ?: "")))

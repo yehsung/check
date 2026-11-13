@@ -33,6 +33,8 @@ object GamesRoutes {
         GamesDestination.Rummy -> Dest.Rummy
         // 아잉 뒤집기(판 7). 카드는 스토어가 있을 때만 서므로(떼어 내기 깃발) 이 갈래는 깃발이 켜진 조립에서만 닿는다.
         GamesDestination.Reversi -> Dest.Reversi
+        // 1:1 길건너(판 8). 카드는 스토어가 있을 때만 선다(떼어 내기 깃발).
+        GamesDestination.CrossyDuel -> Dest.CrossyDuel
     }
 
     /**

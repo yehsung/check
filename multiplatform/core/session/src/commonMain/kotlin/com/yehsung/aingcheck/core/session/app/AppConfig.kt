@@ -23,6 +23,11 @@ data class AppConfig(
      * 판돈 깃발이 꺼진 빌드는 리버시 신청·수락이 체스처럼 잠긴다(AI 연습 · 관전 · 순위는 열린다). Windows 조립은 이 값을 읽지 않는다.
      */
     val reversiEnabled: Boolean = REVERSI_ENABLED_DEFAULT,
+    /**
+     * **1:1 길건너 떼어 내기 깃발**(판 8 — 대표 #d_IEgEZqiiKlmI "맞추기는 판 8 한 번에"). 끄면 폰 조립이 1:1 길건너 스토어를 **만들지 않는다** —
+     * 게임 탭 카드 · 받은 신청 배지 · 실시간 'crossy_duel' 가지 · 입구 막기 · 미션 꼬리가 전부 판 7 과 같다. 판돈 깃발([duelsEnabled])과는 다른 축이다.
+     */
+    val crossyDuelEnabled: Boolean = CROSSY_DUEL_ENABLED_DEFAULT,
 ) {
     companion object {
         /** 기본은 꺼짐이다(§8-17 #1). 켜는 것은 빌드 N 의 조립 지점 몫 — 여기 기본값을 true 로 바꾸지 않는다. */
@@ -30,5 +35,8 @@ data class AppConfig(
 
         /** 기본은 켜짐이다(판 7). 떼어 낼 때는 이 한 줄을 false 로 바꾼다(또는 조립 지점이 `AppConfig(reversiEnabled = false)` 로 넣는다). */
         const val REVERSI_ENABLED_DEFAULT: Boolean = true
+
+        /** 기본은 켜짐이다(판 8). 떼어 낼 때는 이 한 줄을 false 로 바꾼다. */
+        const val CROSSY_DUEL_ENABLED_DEFAULT: Boolean = true
     }
 }

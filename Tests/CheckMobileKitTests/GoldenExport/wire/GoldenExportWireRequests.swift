@@ -330,6 +330,22 @@ struct GoldenExportWireRequests {
             WireCall(id: "tetrisRanking") { s, t in try await s.tetrisRanking(accessToken: t) },
             WireCall(id: "tetrisWatchLive") { s, t in try await s.tetrisWatchLive(accessToken: t, matchID: m) },
             WireCall(id: "tetrisWatch") { s, t in try await s.tetrisWatch(accessToken: t, matchID: m) },
+            // ---- 1:1 길건너(Android 판 8 — 아이폰 1.0.18 맞추기) ----
+            WireCall(id: "crossyDuelLobby") { s, t in try await s.crossyDuelLobby(accessToken: t) },
+            WireCall(id: "crossyDuelLobby(light)") { s, t in try await s.crossyDuelLobby(accessToken: t, users: false) },
+            WireCall(id: "crossyDuelChallenge") { s, t in try await s.crossyDuelChallenge(accessToken: t, opponentID: p, stake: 3) },
+            WireCall(id: "crossyDuelCancel") { s, t in try await s.crossyDuelCancel(accessToken: t, matchID: m) },
+            WireCall(id: "crossyDuelRespond") { s, t in try await s.crossyDuelRespond(accessToken: t, matchID: m, accept: true) },
+            WireCall(id: "crossyDuelReport") { s, t in
+                try await s.crossyDuelReport(accessToken: t, matchID: m, report: CrossyDuelReportBody(seq: 12, score: 37, deaths: 2))
+            },
+            WireCall(id: "crossyDuelReport#lockTimeout",
+                     responses: [MobileStubResponse.json(#"{"code":"55P03","message":"canceling statement due to lock timeout"}"#, status: 500)]) { s, t in
+                try await s.crossyDuelReport(accessToken: t, matchID: m, report: CrossyDuelReportBody(seq: 13, score: 100, deaths: 2))
+            },
+            WireCall(id: "crossyDuelState") { s, t in try await s.crossyDuelState(accessToken: t, matchID: m) },
+            WireCall(id: "crossyDuelResign") { s, t in try await s.crossyDuelResign(accessToken: t, matchID: m) },
+            WireCall(id: "crossyDuelRanking") { s, t in try await s.crossyDuelRanking(accessToken: t) },
             // ---- 아잉 큐브(요청 + 서버 실출력 응답 대표 — 전체 디코드는 wire/decode-fixtures-rummy) ----
             WireCall(id: "rummyLobby") { s, t in try await s.rummyLobby(accessToken: t) },
             WireCall(id: "rummyLobby#data", responses: [Self.rummyFixture("lobby_with_room_invites_public.json")]) { s, t in try await s.rummyLobby(accessToken: t) },

@@ -24,6 +24,7 @@ import com.yehsung.aingcheck.android.widget.WidgetTodoToggle
 import com.yehsung.aingcheck.android.widget.toAingWidgetInput
 import com.yehsung.aingcheck.core.net.SupabaseWorkService
 import com.yehsung.aingcheck.core.net.realtime.KtorRealtimeTransport
+import com.yehsung.aingcheck.core.net.realtime.KtorBroadcastFrameSocket
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
 import com.yehsung.aingcheck.core.session.app.AppInfo
 import com.yehsung.aingcheck.core.session.app.SessionClock
@@ -174,6 +175,12 @@ class AppContainer(
                 drawableCharacters = CharacterArt.drawableCharacterSource,
                 knownCharacterIDs = CharacterArt.portraitIds,
                 logger = logger,
+                // 1:1 길건너 판 표시 프레임(둘째 소켓 — 판 8). 시험 프로세스면 생성기가 null 을 돌려준다(초인종 소켓과 같은 판정).
+                frameSocketFactory = {
+                    KtorBroadcastFrameSocket.create(
+                        HttpEngineFactory.ktorClient(KtorRealtimeTransport.clientConfig), mainScope, runningTests, System.getenv(),
+                    )
+                },
             ),
         )
     }

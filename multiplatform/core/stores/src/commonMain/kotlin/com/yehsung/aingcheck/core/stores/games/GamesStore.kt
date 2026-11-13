@@ -64,6 +64,9 @@ sealed interface GamesDestination {
      * `phase`·`spectating` 으로 갈아 끼운다). 떼어 내기 깃발이 꺼진 조립(스토어 없음)에서는 이 목적지로 가는 문이 하나도 서지 않는다.
      */
     data object Reversi : GamesDestination
+
+    /** 1:1 길건너(판 8 — iOS 1.0.18 `GamesDestination.crossyDuel`) — 로비 · 판 · 결과 · 순위를 **입구 하나**로 연다. */
+    data object CrossyDuel : GamesDestination
 }
 
 /**
@@ -88,7 +91,14 @@ enum class GamesBusyGame(val rawValue: String) {
      * 아잉 뒤집기(판 7). 서버 `game__busy_users()` 가 리버시 active 판까지 본다(다른 게임과 겹침을 서버도 막는다) — 클라는 **다섯 방향**을 막아
      * 어느 판 때문인지 먼저 그린다(iOS 1.0.17 `GamesBusyGame.reversi`).
      */
-    reversi("reversi");
+    reversi("reversi"),
+
+    /** 1:1 길건너(판 8 — iOS 1.0.18). 서버 `game__busy_users()` 가 길건너 active 판까지 본다 — 클라는 여섯 방향을 막는다. */
+    crossyDuel("crossyDuel"),
+
+    /** 1:1 알까기 · 아잉 마작(판 8 — iOS 1.0.18). 마작은 방에 앉은 것(joined)도 바쁨이다. */
+    alkkagi("alkkagi"),
+    mahjong("mahjong");
 
     /**
      * 문구 표가 쓰는 이름(Swift `ChessPhoneText.BusyGame.gameName` — 그 표는 W2-d 의 GamesChessText 다).
@@ -102,6 +112,9 @@ enum class GamesBusyGame(val rawValue: String) {
             tetris -> "1:1 테트리스"
             rummy -> "아잉 큐브"
             reversi -> ReversiNoticeText.gameName
+            crossyDuel -> com.yehsung.aingcheck.core.stores.crossy.CrossyDuelNoticeText.gameName
+            alkkagi -> "1:1 알까기"
+            mahjong -> "아잉 마작"
         }
 }
 
@@ -179,7 +192,7 @@ class GamesStore(val context: GamesContext) {
      */
     val isAnyMatchScreenVisible: Boolean
         get() {
-            if (isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible) return true
+            if (isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible || isCrossyDuelScreenVisible) return true
             // 큐브: 손댄 판에서 내 자리가 playing 이면 다른 탭에 있어도 참(언제든 차례가 돌아온다). 놀던 기기가 판을 읽기만 하는 동안 · 기권 뒤 구경은 거짓. 로비 · 방 · 결과 화면은 다른 대결 화면과 같은 대접(iOS 61d75d8c).
             val rummy = context.rummy ?: return false
             return rummy.defersMegaphoneBanner || (isRummyScreenVisible && rummy.phase != RummyPhase.playing)
@@ -194,6 +207,10 @@ class GamesStore(val context: GamesContext) {
      * 부르면 보이지도 않는 판에 폴링이 돌고 AI 연습 판의 사람 시계가 흐른다.
      */
     var isReversiScreenVisible: Boolean by mutableStateOf(false)
+        private set
+
+    /** 1:1 길건너 화면(로비 · 판 · 결과)이 떠 있다(판 8 — iOS 1.0.18). */
+    var isCrossyDuelScreenVisible: Boolean by mutableStateOf(false)
         private set
 
     /** 결과에서 [최종 판]을 펴 둔 판. 판 id 를 쥐는 까닭: 다음 판의 결과가 이 표시를 물려받아 저절로 가로가 되면 안 된다. */
@@ -298,6 +315,8 @@ class GamesStore(val context: GamesContext) {
         // (연속 3번이면 판돈째 진다). 코어가 부르는 자리 셋: `openWindow` · 수락 응답(`respond`) · 진행 판으로 처음 넘어갈 때(`noteMatchProgress`).
         // 로그아웃 `reset()` 이 부르는 `dismissWindow` 는 달지 않는다 — 폰은 로그아웃의 `router.reset()` 이 경로를 비운다. 스토어가 없는 조립은 건너뛴다.
         context.reversi?.presentWindow = { presentReversiScreen() }
+        // 1:1 길건너도 **같은 문**이다(판 8 — iOS 1.0.18). 안 물리면 수락·시작이 화면을 못 연다 — 30초 준비 문이 닫히면 판돈이 돌아오지만 판은 안 선다.
+        context.crossyDuel?.presentWindow = { presentCrossyDuelScreen() }
     }
 
     // MARK: 자리 API
@@ -362,6 +381,15 @@ class GamesStore(val context: GamesContext) {
                 reversi.refreshLobbyIfStale()
             }
         }
+        // 1:1 길건너(판 8 — iOS 1.0.18): 화면이 보이면 가림을 풀거나 창을 세우고 신호 동기화 한 번, 안 보이면 가벼운 로비(30초 스로틀).
+        context.crossyDuel?.let { duel ->
+            if (isCrossyDuelScreenVisible) {
+                if (duel.isWindowVisible) duel.windowOcclusionDidChange(visible = true) else duel.windowDidShow()
+                duel.requestSync()
+            } else {
+                duel.refreshLobbyIfStale()
+            }
+        }
         syncIdleTimer()
     }
 
@@ -404,6 +432,10 @@ class GamesStore(val context: GamesContext) {
         context.reversi?.let { reversi ->
             if (isReversiScreenVisible && reversi.isWindowVisible) reversi.windowOcclusionDidChange(visible = false)
         }
+        // 1:1 길건너도 **가림**이다(결과 카드를 지킨다). ★ 판은 멈추지 않는다 — 판 루프는 단조 시계로 흐르고 서버 시계도 흐른다.
+        context.crossyDuel?.let { duel ->
+            if (isCrossyDuelScreenVisible && duel.isWindowVisible) duel.windowOcclusionDidChange(visible = false)
+        }
         syncIdleTimer()
     }
 
@@ -414,6 +446,7 @@ class GamesStore(val context: GamesContext) {
         isTetrisScreenVisible = false
         isRummyScreenVisible = false
         isReversiScreenVisible = false
+        isCrossyDuelScreenVisible = false
         rummyPersonLeftScreen = false
         rummyFinalBoardMatchID = null
         rummyDeparturePrompt = null
@@ -439,6 +472,9 @@ class GamesStore(val context: GamesContext) {
     /** 코어 아잉 뒤집기 스토어 줄임(= `context.reversi`). null = 이 조립에 리버시가 없다(Windows · 떼어 내기 깃발 끔) — 카드·화면 문을 세우지 않는다. */
     val reversi: ReversiStore? get() = context.reversi
 
+    /** 코어 1:1 길건너 스토어 줄임(= `context.crossyDuel`, 판 8). null = 이 조립에 없다. */
+    val crossyDuel: com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore? get() = context.crossyDuel
+
     /**
      * 탭 배지: 만료 안 된 받은 오목 신청 수 + 받은 아잉 큐브 초대 수.
      *
@@ -456,7 +492,9 @@ class GamesStore(val context: GamesContext) {
      */
     val badgeCount: Int
         get() = context.gomoku.pendingIncomingInviteCount + (context.rummy?.pendingIncomingInviteCount ?: 0) +
-            (context.reversi?.visibleIncomingInvites?.size ?: 0)
+            (context.reversi?.visibleIncomingInvites?.size ?: 0) +
+            // 1:1 길건너(판 8 — iOS 1.0.18 badgeCount): 초인종을 잇고 만료는 코어 타이머가 걷는다(뒤집기와 같은 근거). 판돈 깃발이 꺼진 빌드는 수락할 수 없어 0.
+            (context.crossyDuel?.takeIf { it.duelsEnabled }?.visibleIncomingInvites?.size ?: 0)
 
     /** 게임 탭이 보여 주는 루비 잔액 — **공유 미러**를 먼저 읽는다(나 탭 상점 구매가 미러만 적는다). 미러를 모르면 테트리스 코어 값. */
     val rubyBalance: Long? get() = context.sharedRubyBalance ?: context.tetris.rubyBalance
@@ -573,6 +611,15 @@ class GamesStore(val context: GamesContext) {
      * **AI 연습 판**이 지금 진행 중인가(끝난 판은 아니다). 서버는 이 판을 볼 수 없다(행이 없다). 코어 `challenge`·`respond` 에는 AI 가드가 없어 1:1 판이
      * 서는 순간 두던 AI 판이 문구 없이 버려진다 — 신청은 [com.yehsung.aingcheck.core.stores.reversi.GamesReversiChallengeGate] 가, 수락은 화면 확인이 막는다.
      */
+    /** 1:1 길건너 진행 판(사람끼리뿐). 서버가 말한 id 또는 들고 있는 안 끝난 판(판 8 — iOS 1.0.18). */
+    val hasLiveCrossyDuelMatch: Boolean
+        get() {
+            val duel = context.crossyDuel ?: return false
+            if (duel.activeMatchID != null) return true
+            val match = duel.match ?: return false
+            return !match.isFinished
+        }
+
     val hasLiveReversiAIGame: Boolean
         get() {
             val reversi = context.reversi ?: return false
@@ -586,7 +633,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
-            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
+            if (hasLiveReversiMatch) return GamesBusyGame.reversi
+            return if (hasLiveCrossyDuelMatch) GamesBusyGame.crossyDuel else null
         }
 
     /**
@@ -599,7 +647,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveChessMatch) return GamesBusyGame.chess
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
-            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
+            if (hasLiveReversiMatch) return GamesBusyGame.reversi
+            return if (hasLiveCrossyDuelMatch) GamesBusyGame.crossyDuel else null
         }
 
     /**
@@ -611,7 +660,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveChessMatch) return GamesBusyGame.chess
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
-            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
+            if (hasLiveReversiMatch) return GamesBusyGame.reversi
+            return if (hasLiveCrossyDuelMatch) GamesBusyGame.crossyDuel else null
         }
 
     /**
@@ -623,7 +673,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveChessMatch) return GamesBusyGame.chess
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
-            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
+            if (hasLiveReversiMatch) return GamesBusyGame.reversi
+            return if (hasLiveCrossyDuelMatch) GamesBusyGame.crossyDuel else null
         }
 
     /**
@@ -635,7 +686,18 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
             if (hasLiveChessMatch) return GamesBusyGame.chess
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
-            return if (hasLiveRummyMatch) GamesBusyGame.rummy else null
+            if (hasLiveRummyMatch) return GamesBusyGame.rummy
+            return if (hasLiveCrossyDuelMatch) GamesBusyGame.crossyDuel else null
+        }
+
+    /** 1:1 길건너 입구 막기(판 8 — iOS 1.0.18) — 다른 1:1 중 하나가 흐르면 그 까닭을 먼저 말한다(서버도 `game__busy_users` 로 막는다). */
+    val crossyDuelEntryBlock: GamesBusyGame?
+        get() {
+            if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
+            if (hasLiveChessMatch) return GamesBusyGame.chess
+            if (hasLiveTetrisMatch) return GamesBusyGame.tetris
+            if (hasLiveRummyMatch) return GamesBusyGame.rummy
+            return if (hasLiveReversiMatch) GamesBusyGame.reversi else null
         }
 
     /**
@@ -674,6 +736,18 @@ class GamesStore(val context: GamesContext) {
             syncReversiHiddenPeers()
             context.reversi?.refreshLobbyIfStale()
         }
+        // 1:1 길건너도 받은함 RPC 가 없다 — 받은 신청 · 진행 판 id 가 `crossy_duel_lobby` 로 온다(30초 스로틀).
+        if (context.crossyDuel != null) {
+            syncCrossyDuelHiddenPeers()
+            context.crossyDuel?.refreshLobbyIfStale()
+        }
+    }
+
+    /** 차단 거울(맥 `WorkTimerStore` 의 `crossyDuel.hiddenPeerIDs = blockHiddenPeerIDs` 와 같은 길). 코어는 소문자 uuid. */
+    fun syncCrossyDuelHiddenPeers() {
+        val duel = context.crossyDuel ?: return
+        val hidden = context.hiddenBlockedPeerIDs.map { it.lowercase() }.toSet()
+        if (duel.hiddenPeerIDs != hidden) duel.hiddenPeerIDs = hidden
     }
 
     /**
@@ -858,6 +932,29 @@ class GamesStore(val context: GamesContext) {
         reversi.reversiStopWatching()
         reversi.windowDidHide()
         reversi.windowDidClose()
+    }
+
+    // MARK: 1:1 길건너 화면 수명(판 8 — iOS 1.0.18)
+
+    /**
+     * 1:1 길건너 화면이 나타났다. [isCrossyDuelScreenVisible] 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를
+     * 봐야 화면을 또 열지 않는다. `windowDidShow()` 가 폴링 · **준비 보고의 문**이다(앱이 active 일 때만 — 안 보이는 판의 준비가 나가지 않게).
+     */
+    fun crossyDuelScreenDidAppear() {
+        val duel = context.crossyDuel ?: return
+        isCrossyDuelScreenVisible = true
+        syncCrossyDuelHiddenPeers()
+        duel.openWindow(null)
+        if (isAppActive) duel.windowDidShow()
+    }
+
+    /** 1:1 길건너 화면이 사라졌다. **닫기는 기권이 아니다** — 진행 중 판은 그대로 흐르고, 끝난 판(결과 카드)은 접는다. */
+    fun crossyDuelScreenDidDisappear() {
+        if (!isCrossyDuelScreenVisible) return
+        isCrossyDuelScreenVisible = false
+        val duel = context.crossyDuel ?: return
+        duel.windowDidHide()
+        duel.windowDidClose()
     }
 
     // MARK: 아잉 큐브 화면 수명 (테트리스에서 수리한 모양 그대로 — GamesRummyScreen 이 부른다)
@@ -1071,6 +1168,9 @@ class GamesStore(val context: GamesContext) {
             // 아잉 큐브: 이 기기가 쥔 방·판이면 **어느 화면에 있든 켠다** — 남의 차례를 기다리는 동안(한 차례 60초 × 3명) 자동잠금이 닿으면 앱이 뒤로 가고 하트비트가 멈춰
             // 90초 뒤 끊김 기권으로 **판돈을 잃는다**. 놀던 기기 · 기권 뒤 구경은 쥐지 않는다(코어 `isHoldingMatch`).
             if (context.rummy?.isHoldingMatch == true) return true
+            // 1:1 길건너(판 8): 이 기기가 두는 판이 카운트다운 · 달리기 중이면 **어느 화면에 있든** 켠다(코어 `holdsActivity` — 다른 기기 판은 아니다).
+            //   자동잠금이 닿으면 판 루프가 재워지고 보고가 멎어 서버가 끊김으로 닫는다.
+            if (context.crossyDuel?.holdsActivity == true) return true
             // 아잉 뒤집기: 1:1 판은 **어느 화면에 있든** 켠다(한 수 30초 — 자동잠금이 닿으면 소켓이 내려가 상대 수를 모르고, 서버가 대신 둔 수가 연속 3번이면
             // 판돈째 진다). AI 연습은 화면이 보일 때만(떠나면 코어가 사람 시계를 멈춘다 — 체스 로봇과 같다). '이 기기가 연 판' 장부가 없어 같은 계정 다른 기기의
             // 판에서도 켠다 — Android 오목과 같은 수준(ReversiStore 머리말 · 아이폰 1.0.17 은 `ownsMatch` 로 거른다).
@@ -1220,6 +1320,12 @@ class GamesStore(val context: GamesContext) {
     private fun presentReversiScreen() {
         if (!isAppActive || !context.sessionStore.isSignedIn || isReversiScreenVisible || context.reversi == null) return
         context.router.present(GamesDestination.Reversi)
+    }
+
+    /** 1:1 길건너 판이 막 열렸다 — 화면을 연다(판 8 — iOS 1.0.18). 코어는 **이 기기가 두는 판**에서만 부른다(한 판 한 기기). */
+    private fun presentCrossyDuelScreen() {
+        if (!isAppActive || !context.sessionStore.isSignedIn || isCrossyDuelScreenVisible || context.crossyDuel == null) return
+        context.router.present(GamesDestination.CrossyDuel)
     }
 }
 

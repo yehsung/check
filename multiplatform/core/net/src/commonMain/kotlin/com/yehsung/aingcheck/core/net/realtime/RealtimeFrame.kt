@@ -55,6 +55,31 @@ object RealtimeFrame {
     fun accessToken(channel: String, token: String, ref: String, joinRef: String): String =
         encode(wireTopic(channel), "access_token", JsonObject(mapOf("access_token" to JsonPrimitive(token))), ref, joinRef)
 
+    /**
+     * 클라 발신 브로드캐스트 1건(1:1 길건너 판 표시 프레임 — Swift `RealtimeFrame.broadcast`, 판 8). **`poke:` 채널에 싣지 마라.**
+     * vsn 1.0.0 객체형: 바깥 `event` 는 "broadcast", 바깥 `payload` 에 `{type:"broadcast", event:<이름>, payload:<본문>}`.
+     * [joinRef] 는 이 채널 phx_join 의 ref — Phoenix 는 join_ref 가 맞지 않는 push 를 그 채널 것으로 보지 않는다.
+     */
+    fun broadcast(channel: String, event: String, payload: JsonObject, ref: String, joinRef: String): String = encode(
+        wireTopic(channel), "broadcast",
+        JsonObject(linkedMapOf("type" to JsonPrimitive("broadcast"), "event" to JsonPrimitive(event), "payload" to payload)),
+        ref, joinRef,
+    )
+
+    /**
+     * 들어온 글자가 **우리 채널의 브로드캐스트**면 이름과 안쪽 본문(Swift `decodeBroadcastPayload`). 아니면 null(깨진 JSON · 다른 토픽 ·
+     * 다른 이벤트 · 본문이 객체가 아님). 토픽은 **정확히** 맞아야 한다(누가 보낸 판인지 모르는 본문은 표시할 수 없다).
+     */
+    fun decodeBroadcastPayload(text: String, channel: String): Pair<String, JsonObject>? {
+        val obj = try { parser.parseToJsonElement(text) as? JsonObject } catch (e: Exception) { null } ?: return null
+        if (obj["event"].stringOrNull() != "broadcast") return null
+        if (obj["topic"].stringOrNull() != wireTopic(channel)) return null
+        val envelope = obj["payload"] as? JsonObject ?: return null
+        val event = envelope["event"].stringOrNull() ?: return null
+        val payload = envelope["payload"] as? JsonObject ?: return null
+        return event to payload
+    }
+
     private fun encode(topic: String, event: String, payload: JsonObject, ref: String, joinRef: String?): String {
         val fields = linkedMapOf<String, JsonElement>(
             "topic" to JsonPrimitive(topic), "event" to JsonPrimitive(event), "payload" to payload, "ref" to JsonPrimitive(ref),

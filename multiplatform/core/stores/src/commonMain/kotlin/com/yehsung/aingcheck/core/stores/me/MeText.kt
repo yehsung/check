@@ -403,8 +403,11 @@ object MeText {
      * 아잉 뒤집기(판 7) 줄은 [reversiPlayable] 일 때만 비운다 — 리버시가 없는 조립(Windows · 떼어 내기 깃발 끔)에서는 서버 글자가 참이다
      * (iOS 1.0.17 `phonePlayableMacFirstGames` = rummy · reversi 와 같은 규칙).
      */
-    fun dailyMissionCaption(game: String, detail: String, reversiPlayable: Boolean = false): String =
-        if (game == "rummy" || (reversiPlayable && game == GAME_REVERSI)) "" else detail
+    fun dailyMissionCaption(game: String, detail: String, reversiPlayable: Boolean = false, crossyDuelPlayable: Boolean = false): String =
+        if (game == "rummy" || (reversiPlayable && game == GAME_REVERSI) || (crossyDuelPlayable && game == GAME_CROSSY_DUEL)) "" else detail
+
+    /** 서버 `daily_mission_defs()` 의 1:1 길건너 game 값(`daily_crossy_duel` — 판 8). 혼자 하기 `crossy` 와 다른 줄이다. */
+    const val GAME_CROSSY_DUEL: String = "crossy_duel"
 
     /** 서버 `daily_mission_defs()` 의 아잉 뒤집기 game 값(`daily_reversi`). */
     const val GAME_REVERSI: String = "reversi"
@@ -424,6 +427,10 @@ object MeText {
             // 아잉 뒤집기(서버 20261108200000 의 아홉째 일일 미션 daily_reversi — 화면은 아직 없어도 서버가 이 줄을 모두에게 준다).
             // 맥과 한 벌인 기호: Sources/check/CheckAchievementRows.swift:105-106 → ReversiPanelBanner.swift:276 ReversiEntryIcon.symbol @ 12624739.
             "reversi" to "circle.lefthalf.filled",
+            // 판 8(iOS 1.0.18 MeText.dailyMissionIcon 과 한 벌): 아잉 마작 · 1:1 길건너(`crossy_duel` — 혼자 하기 `crossy` 와 다른 줄) · 1:1 알까기.
+            "mahjong" to "square.grid.3x3.square",
+            "crossy_duel" to "flag.checkered",
+            "alkkagi" to "circle.hexagongrid.fill",
         )
         return table.firstOrNull { it.first == game }?.second ?: missionFallbackIcon
     }

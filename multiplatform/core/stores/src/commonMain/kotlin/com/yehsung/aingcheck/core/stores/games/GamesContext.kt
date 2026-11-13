@@ -110,6 +110,9 @@ interface GamesContext : GamesMiniGameContext {
      * 허브 조회 · 화면 문 모두 건너뛴다). 그래서 이 칸 하나가 리버시 입구의 유일한 스위치다.
      */
     val reversi: ReversiStore? get() = null
+
+    /** 1:1 길건너(판 8). 떼어 내기 깃발(`AppConfig.crossyDuelEnabled`)이 꺼지면 null — 게임 탭은 1:1 길건너가 없는 것처럼 돈다. */
+    val crossyDuel: com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore? get() = null
     val gomoku: GamesGomokuLink
     val chess: GamesBoardGameLink
     val router: GamesRouter

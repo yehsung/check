@@ -4741,6 +4741,281 @@
       "unordered": false
     },
     {
+      "id": "crossyDuelLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1,
+            "p_users": true
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelLobby(light)",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1,
+            "p_users": false
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelChallenge",
+      "requests": [
+        {
+          "body": {
+            "p_opponent": "bb000000-0000-4000-8000-0000000000b2",
+            "p_protocol": 1,
+            "p_stake": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_challenge",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelCancel",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_cancel",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelRespond",
+      "requests": [
+        {
+          "body": {
+            "p_accept": true,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_respond",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelReport",
+      "requests": [
+        {
+          "body": {
+            "p_deaths": 2,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_score": 37,
+            "p_seq": 12
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_report",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelReport#lockTimeout",
+      "requests": [
+        {
+          "body": {
+            "p_deaths": 2,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_score": 100,
+            "p_seq": 13
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_report",
+          "query": []
+        }
+      ],
+      "responses": [
+        {
+          "body": "{\"code\":\"55P03\",\"message\":\"canceling statement due to lock timeout\"}",
+          "status": 500
+        }
+      ],
+      "result": {
+        "throws": {
+          "$dump": {},
+          "$type": "CrossyDuelLockNotAvailable"
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelResign",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_resign",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "crossyDuelRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/crossy_duel_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
       "id": "rummyLobby",
       "requests": [
         {

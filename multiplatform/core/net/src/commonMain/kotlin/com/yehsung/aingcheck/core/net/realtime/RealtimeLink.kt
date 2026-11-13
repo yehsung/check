@@ -64,6 +64,15 @@ object RealtimeLinkConstants {
      * 같은 묶음의 `ring` 이 맡는다.
      */
     const val megaphoneBroadcastEvent = "megaphone"
+
+    /**
+     * 1:1 길건너 · 1:1 알까기 · 아잉 마작 신호(원본 RealtimeLink.swift @ 928d5562 — 폰 1.0.18 · Android 판 8). 서버 `crossy_duel__ring` ·
+     * `alkkagi` · 마작 판 파일의 `realtime.send(…, '<이름>', poke_topic(…), true)` 와 **문자 그대로 같다**. 이 이름이 없으면 초인종이
+     * '모르는 이름' 갈래(drain)로 떨어져 울릴 때마다 메시지 조회가 한 번 더 나가고 판 상태는 한 번도 당기지 않는다.
+     */
+    const val crossyDuelBroadcastEvent = "crossy_duel"
+    const val alkkagiBroadcastEvent = "alkkagi"
+    const val mahjongBroadcastEvent = "mahjong"
 }
 
 /** Swift `RealtimeTransportEvent`. */
@@ -115,6 +124,11 @@ sealed interface RealtimeEffect {
 
     /** 아잉 뒤집기 신호('reversi')를 받았다 → 아잉 뒤집기 상태 재조회 1회(직렬화는 스토어 `handleSignal` 이 한다). **take_pokes 가 아니다.** */
     data object ReversiSignal : RealtimeEffect
+
+    /** 1:1 길건너 · 1:1 알까기 · 아잉 마작 신호(판 8). 스토어 `handleSignal` 이 직렬화한다. **take_pokes 가 아니다.** 받을 스토어가 없으면 빈 가지. */
+    data object CrossyDuelSignal : RealtimeEffect
+    data object AlkkagiSignal : RealtimeEffect
+    data object MahjongSignal : RealtimeEffect
     data object MessageReadSignal : RealtimeEffect
 
     /** 확성기 신호('megaphone')를 받았다 → 배너 목록 재조회 1회(겹치면 배너 스토어 refresh 가 하나로 모은다). **take_pokes 가 아니다.** */
@@ -325,6 +339,10 @@ class RealtimeLink(transportAvailable: Boolean = false) {
                     // 확성기(2026-10-30)는 테트리스 가지 앞에 선다(Swift 와 같은 순서). 이 줄이 없으면 아래 기본값으로 떨어져 배너는 안 뜨고
                     // 메시지 조회만 한 번 더 나간다.
                     RealtimeLinkConstants.megaphoneBroadcastEvent -> listOf(RealtimeEffect.MegaphoneSignal)
+                    // 알까기 · 1:1 길건너 · 마작은 뒤집기 줄 **앞**에 선다(Swift 1.0.18 과 같은 순서).
+                    RealtimeLinkConstants.alkkagiBroadcastEvent -> listOf(RealtimeEffect.AlkkagiSignal)
+                    RealtimeLinkConstants.crossyDuelBroadcastEvent -> listOf(RealtimeEffect.CrossyDuelSignal)
+                    RealtimeLinkConstants.mahjongBroadcastEvent -> listOf(RealtimeEffect.MahjongSignal)
                     // 아잉 뒤집기는 큐브 줄 **앞**에 선다(Swift 와 같은 순서). 이 줄이 없으면 수마다 아래 기본값으로 떨어진다.
                     RealtimeLinkConstants.reversiBroadcastEvent -> listOf(RealtimeEffect.ReversiSignal)
                     RealtimeLinkConstants.rummyBroadcastEvent -> listOf(RealtimeEffect.RummySignal)

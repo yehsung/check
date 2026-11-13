@@ -53,6 +53,8 @@ object Dest {
     @Serializable data object Rummy
     /** 아잉 뒤집기(판 7 — 로비·신청·판·AI 연습·관전·순위·결과 한 화면). 딥링크·푸시 글자가 없다(결정 "채팅·푸시 없음" — 받은 신청은 탭 배지·허브 칩·로비 카드로 안다). */
     @Serializable data object Reversi
+    /** 1:1 길건너(판 8 — 로비·신청·판·결과·순위 한 화면). 딥링크·푸시 글자가 없다(받은 신청은 탭 배지·허브 카드·로비 카드로 안다). */
+    @Serializable data object CrossyDuel
     /** 판돈 고르기(오목·체스·테트리스 — 판돈 목록은 서버값). [game] = gomoku·chess·tetris. */
     @Serializable data class StakeSheet(val game: String)
 

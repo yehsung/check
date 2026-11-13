@@ -138,7 +138,13 @@ object ChessPhoneText {
         gomoku("gomoku"), chess("chess"), tetris("tetris"), rummy("rummy"),
 
         /** 아잉 뒤집기(판 7 — iOS 1.0.17). 이름 글자는 코어 `ReversiNoticeText.gameName` 한 곳에서 받는다. */
-        reversi("reversi");
+        reversi("reversi"),
+
+        /** 1:1 길건너(판 8 — iOS 1.0.18). 이름 글자는 코어 `CrossyDuelNoticeText.gameName` 한 곳. */
+        crossyDuel("crossyDuel"),
+
+        /** 1:1 알까기 · 아잉 마작(판 8 — iOS 1.0.18). 마작은 방에 앉아 시작을 기다리는 동안도 이 판이다. */
+        alkkagi("alkkagi"), mahjong("mahjong");
 
         /** 게임 이름("오목" · "체스" · "1:1 테트리스"). */
         val gameName: String
@@ -148,6 +154,9 @@ object ChessPhoneText {
                 tetris -> "1:1 테트리스"
                 rummy -> "아잉 큐브"
                 reversi -> com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName
+                crossyDuel -> com.yehsung.aingcheck.core.stores.crossy.CrossyDuelNoticeText.gameName
+                alkkagi -> "1:1 알까기"
+                mahjong -> "아잉 마작"
             }
 
         /** 진행 중인 판을 가리키는 말. 모두 받침으로 끝나므로 뒤에 "이" 를 붙인다. */
@@ -158,6 +167,9 @@ object ChessPhoneText {
                 tetris -> "테트리스 대결"
                 rummy -> "아잉 큐브 판"
                 reversi -> "${com.yehsung.aingcheck.core.stores.reversi.ReversiNoticeText.gameName} 판"
+                crossyDuel -> "${com.yehsung.aingcheck.core.stores.crossy.CrossyDuelNoticeText.gameName} 대결"
+                alkkagi -> "$gameName 판"
+                mahjong -> "$gameName 판"
             }
     }
 
@@ -165,8 +177,11 @@ object ChessPhoneText {
     fun busyTitle(playing: BusyGame): String = when (playing) {
         // 아잉 뒤집기도 돌을 **둔다**(iOS 1.0.17 · 맥 `ReversiText` 의 "두기" 낱말과 같다).
         BusyGame.gomoku, BusyGame.chess, BusyGame.reversi -> "${playing.gameName}${objectParticle(playing.gameName)} 두는 중이에요"
-        BusyGame.tetris -> "${playing.gameName} 대결 중이에요"
+        // 1:1 길건너 · 1:1 알까기도 '둔다'가 아니라 겨룬다(iOS 1.0.18 — 테트리스와 같은 말).
+        BusyGame.tetris, BusyGame.crossyDuel, BusyGame.alkkagi -> "${playing.gameName} 대결 중이에요"
+        // 타일 게임이라 '둔다'가 아니다(아잉 마작도 같은 말 — iOS 1.0.18).
         BusyGame.rummy -> "${playing.gameName} 하는 중이에요"
+        BusyGame.mahjong -> "${playing.gameName}${objectParticle(playing.gameName)} 하는 중이에요"
     }
 
     /**
@@ -764,8 +779,10 @@ data class ChessPhoneRuleLine(val title: String, val detail: String) {
                 // INV-GamesChessText-869daee5 이식: 게임이 셋이다(1.0.11 — 1:1 테트리스). 셋을 다 말해야 한다 — 이름이 빠진 게임은 사용자가
                 // "그건 되겠지" 하고 눌렀다가 서버 거절을 받는 동안 **두던 판의 시계를 쓴다**.
                 // 판 7: 게임이 다섯이다(iOS 1.0.17 — 1:1 테트리스 · 아잉 큐브 · 아잉 뒤집기). 이 조립에 있는 게임은 다 말한다(뒤 이름은 모두 받침 없이 끝나 "는").
-                (listOf("체스", "오목", "1:1 테트리스") + extraOneMatchGames).joinToString("·") +
-                    "는 한 번에 한 판만 할 수 있어요. 한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.",
+                // 판 8: 1:1 길건너 · 1:1 알까기 · 아잉 마작이 붙는다(iOS 1.0.18). 마지막 이름의 받침을 따라 '은/는'(아잉 마작 → '은').
+                (listOf("체스", "오목", "1:1 테트리스") + extraOneMatchGames).let { names ->
+                    names.joinToString("·") + topicParticle(names.last())
+                } + " 한 번에 한 판만 할 수 있어요. 한 판을 하는 중에는 다른 쪽을 신청하거나 수락할 수 없어요.",
             ),
         )
     }
@@ -795,4 +812,11 @@ internal fun formatOneDecimal(x: Double): String {
         if (remainder > half || (remainder == half && tenths % 2 == 1L)) tenths += 1
     }
     return "${tenths / 10}.${tenths % 10}"
+}
+
+/** 주제 조사 '은/는'(마지막 글자 받침 — 한글 음절이 아니면 '는'). */
+internal fun topicParticle(word: String): String {
+    val c = word.lastOrNull() ?: return "는"
+    if (c !in '\uAC00'..'\uD7A3') return "는"
+    return if ((c.code - 0xAC00) % 28 != 0) "은" else "는"
 }

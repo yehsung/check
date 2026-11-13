@@ -327,3 +327,29 @@ fun GamesTetrisDuelTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp)
         }
     }
 }
+
+/**
+ * 1:1 길건너 썸네일 60(판 8) — 다른 대결 카드와 **같은 변·같은 둥글기**. 풀밭 · 찻길(가운데 흰 점선) · 풀밭 위에 두 사람(파랑 = 나 · 반투명 = 상대)이
+ * 나란히 앞으로 가는 모습 하나. 정지 그림 한 장이다(아이폰은 SF 기호 `flag.checkered` 를 쓴다 — Android 는 판 그림으로 같은 뜻을 낸다).
+ */
+@Composable
+fun GamesCrossyDuelTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Thumbnail(side, modifier) {
+    val band = size.height / 5
+    val grass = gamesHex(0x6CBF5A)
+    val grassDark = gamesHex(0x5DAE4C)
+    val road = gamesHex(0x55595F)
+    drawRect(grass)
+    drawRect(grassDark, Offset(0f, band * 4), Size(size.width, band))
+    drawRect(road, Offset(0f, band), Size(size.width, band * 2))
+    val dash = size.width / 7
+    var x = dash * 0.3f
+    while (x < size.width) {
+        drawRect(Color.White.copy(alpha = 0.85f), Offset(x, band * 2 - 0.75f * density), Size(dash * 0.55f, 1.5f * density))
+        x += dash
+    }
+    // 차 한 대(위 차선).
+    drawRoundRect(gamesHex(0xE5533D), Offset(size.width * 0.58f, band * 1.2f), Size(size.width * 0.26f, band * 0.6f), androidx.compose.ui.geometry.CornerRadius(2f * density))
+    // 두 사람 — 나(진한 파랑)와 상대(반투명).
+    drawCircle(gamesHex(0x2E7CF6), band * 0.42f, Offset(size.width * 0.36f, band * 3.5f))
+    drawCircle(gamesHex(0x2E7CF6).copy(alpha = 0.38f), band * 0.42f, Offset(size.width * 0.64f, band * 3.5f))
+}

@@ -40,6 +40,8 @@ class PhoneGamesContext(private val phone: PhoneContext, override val gomoku: Ph
     override val rummy: RummyStore? get() = phone.rummy
     /** 아잉 뒤집기(판 7). 떼어 내기 깃발이 꺼진 조립은 null — 게임 탭이 리버시가 없는 것처럼 돈다. */
     override val reversi: ReversiStore? get() = phone.reversi
+    /** 1:1 길건너(판 8). 떼어 내기 깃발이 꺼진 조립은 null. */
+    override val crossyDuel: com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore? get() = phone.crossyDuel
     override val router: GamesRouter get() = phone.router
 
     /** 메시지 탭이 차단해 숨긴 상대(Swift `context.links.messages?.hiddenBlockedPeerIDs`). 메시지 스토어가 없으면 빈 집합. */

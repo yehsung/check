@@ -62,10 +62,10 @@ object MahjongHand {
     }
 
     /** MJ-22-2 서로 다른 7쌍(4장을 2쌍으로 치지 않음). */
-    internal fun isChiitoi(c: IntArray): Boolean = c.sum() == 14 && c.count { it == 2 } == 7
+    fun isChiitoi(c: IntArray): Boolean = c.sum() == 14 && c.count { it == 2 } == 7
 
     /** MJ-22-3 요구패 13종 1장씩 + 그중 하나 1장 더. */
-    internal fun isKokushi(c: IntArray): Boolean {
+    fun isKokushi(c: IntArray): Boolean {
         if (c.sum() != 14) return false
         val y = MahjongTiles.yaochu
         return y.all { c[it] >= 1 } && y.sumOf { c[it] } == 14

@@ -3,6 +3,7 @@ package com.yehsung.aingcheck.ui.screens.messages
 
 object MessagesTags {
     const val LIST_SCREEN = "messages-list"
+    const val MARK_ALL_READ = "messages-mark-all-read"
     const val LIST_SUBTITLE = "messages-list-subtitle"
     const val MEGAPHONE_BUTTON = "messages-megaphone"
     const val NEW_CONVERSATION_BUTTON = "messages-new-conversation"

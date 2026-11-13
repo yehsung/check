@@ -108,6 +108,38 @@ fun MeClaimButton(amount: Long, inFlight: Boolean = false, enabled: Boolean = tr
     }
 }
 
+/** 캐릭터 보상 줄의 [받기](판 8 — 폰 1.0.18 `MeCharacterClaimButton`) — 루비 숫자 없이 글자만. 모양 · 높이는 [MeClaimButton] 과 같다. */
+@Composable
+fun MeCharacterClaimButton(accessibility: String, inFlight: Boolean = false, enabled: Boolean = true, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c = AingTheme.colors
+    Box(
+        modifier
+            .heightIn(min = AingDimens.minimumTarget)
+            .clip(CircleShape)
+            .clickable(enabled = enabled && !inFlight, role = Role.Button, onClick = onClick)
+            .clearAndSetSemantics {
+                contentDescription = accessibility
+                role = Role.Button
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier
+                .graphicsLayer { alpha = if (inFlight) 0.6f else 1f }
+                .defaultMinSize(minHeight = MeAchievementLayout.claimHeight)
+                .background(c.accentFill, CircleShape)
+                .padding(horizontal = AingDimens.space3),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (inFlight) {
+                CircularProgressIndicator(Modifier.size(14.dp), color = c.onAccentFill, strokeWidth = 2.dp)
+            } else {
+                Text(MeText.claimButton, style = MeType.footnote.copy(fontWeight = FontWeight.Bold), color = c.onAccentFill)
+            }
+        }
+    }
+}
+
 /**
  * 받기 연출 — "+N" 알약이 그 자리에서 톡 떠올랐다가 사라진다(0.9초 · 한 번 재생하고 끝). 다시 재생하려면 부르는 쪽이 [serial] 을 바꾼다.
  * [frozenProgress] 가 있으면 그 진행도로 멈춘 그림(스냅숏 · 시험).

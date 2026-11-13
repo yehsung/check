@@ -13,6 +13,7 @@ import com.yehsung.aingcheck.core.wire.games.GomokuRPCStatus
 import com.yehsung.aingcheck.core.wire.games.GomokuWatchResponse
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkins
 
 // 오목 스토어의 **관전** 갈래(0.3.41) — 남의 진행 중인 판을 읽기 전용으로 본다.
 //
@@ -383,6 +384,7 @@ fun gomokuSpectateState(
         endReason = row.endReason?.let { GomokuEndReason.fromRawValue(it) },
         blackAutoStreak = response.blackAutoStreak?.toInt() ?: previous.blackAutoStreak,
         whiteAutoStreak = response.whiteAutoStreak?.toInt() ?: previous.whiteAutoStreak,
+        stoneSkins = OmokStoneSkins.ofWire(row.blackSkin, row.whiteSkin),
     )
     return next to false
 }

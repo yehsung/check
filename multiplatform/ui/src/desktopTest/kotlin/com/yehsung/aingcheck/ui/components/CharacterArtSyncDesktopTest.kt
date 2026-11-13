@@ -40,7 +40,9 @@ class CharacterArtSyncDesktopTest {
     fun everyPortraitAndArtDecodesAndEqualsTheMacOriginal() {
         for (id in CharacterArt.portraitIds) for (e in CharacterExpression.entries) {
             val path = CharacterArt.portraitPath(id, e)
-            val original = if (id.startsWith("aing")) File(repo, "Sources/check/Resources/$id-${e.fileSuffix}.png")
+            // 판 8 — 빼빼로만 폰 판 그림(상자 글자 없음)이 원본이다.
+            val original = if (id == "aing_pepero") File(repo, "Sources/CheckMobileShared/Resources/Portraits/$id-${e.fileSuffix}.png")
+            else if (id.startsWith("aing")) File(repo, "Sources/check/Resources/$id-${e.fileSuffix}.png")
             else File(repo, "Sources/check/Characters/$id/portrait-${e.fileSuffix}.png")
             assertContentEquals(original.readBytes(), runBlocking { Res.readBytes(path) }, "$path ≠ ${original.relativeTo(repo)}")
             val img = assertNotNull(runBlocking { CharacterArt.decode(path) }, "$path 디코드 실패")

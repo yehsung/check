@@ -185,6 +185,9 @@ data class GomokuMatchRow(
     @SerialName("turn_started_ms") val turnStartedMs: Double? = null,
     @SerialName("started_ms") val startedMs: Double? = null,
     @SerialName("finished_ms") val finishedMs: Double? = null,
+    /** 맥 0.3.81 — 오목알 스킨(서버 20261111130000): 흑 · 백이 **지금 낀** 스킨 id. 안 싣는 옛 서버 · 일반 돌이면 null(판 8). */
+    @SerialName("black_skin") val blackSkin: String? = null,
+    @SerialName("white_skin") val whiteSkin: String? = null,
 )
 
 /** Swift `GomokuMoveRow`: Decodable, Equatable, Sendable. */

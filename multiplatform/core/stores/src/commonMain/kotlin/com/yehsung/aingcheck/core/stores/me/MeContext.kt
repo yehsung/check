@@ -97,6 +97,12 @@ interface MeLinks {
      */
     val reversiPlayable: Boolean get() = false
 
+    /**
+     * 내가 낀 오목알 스킨(판 8 — 폰 1.0.18 `context.gomoku.aiStoneSkin`). 서버 대국 · 관전은 응답의 `black_skin` · `white_skin` 으로 그리고,
+     * **AI 판만** 로컬이라 이 값으로 내 돌을 그린다. 고리가 없으면 아무 일도 안 한다(AI 판은 일반 돌).
+     */
+    fun noteEquippedOmokSkin(skin: com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkin?) {}
+
     /** 나 탭 경로를 루트로(Swift `context.router.popToRoot(.me)`, W2-f). */
     fun popMeToRoot() {}
 

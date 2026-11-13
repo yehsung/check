@@ -58,6 +58,8 @@ import com.yehsung.aingcheck.core.stores.gomoku.GomokuTapOutcome
 import com.yehsung.aingcheck.core.stores.gomoku.GomokuTapPreview
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.launch
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkin
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkins
 
 /** 판 그림 상수(Swift `GamesGomokuBoardCanvas` 정적 색 — sRGB 그대로). */
 object GomokuBoardInk {
@@ -111,6 +113,8 @@ data class GomokuBoardPicture(
     val originX: Int = 0,
     val originY: Int = 0,
     val insetRatio: Double = 0.06,
+    /** 판 8 — 이 판의 흑 · 백 오목알 스킨(서버 match.black_skin · white_skin, 상대에게도 보인다). 일반 돌이면 plain. */
+    val stoneSkins: OmokStoneSkins = OmokStoneSkins.plain,
 )
 
 /** 입력 없는 판 그림. [side] 한 변. */
@@ -170,7 +174,7 @@ fun DrawScope.drawGomokuBoard(picture: GomokuBoardPicture, measurer: TextMeasure
     for (y in g.originY until g.originY + g.lines) for (x in g.originX until g.originX + g.lines) {
         val point = GomokuPoint.at(x, y) ?: continue
         val color = picture.board[point] ?: continue
-        drawStone(g.location(point).offset(), radius, color, 1f)
+        drawStone(g.location(point).offset(), radius, color, 1f, picture.stoneSkins.skin(color == GomokuColor.black), OmokStoneSkins.seed(x, y))
     }
     for (point in picture.autoPoints) {
         if (!g.contains(point) || picture.board[point] == null) continue
@@ -190,7 +194,7 @@ fun DrawScope.drawGomokuBoard(picture: GomokuBoardPicture, measurer: TextMeasure
     val preview = picture.preview
     if (preview != null && g.contains(preview.first) && picture.board[preview.first] == null) {
         val c = g.location(preview.first).offset()
-        drawStone(c, radius, preview.second, 0.55f)
+        drawStone(c, radius, preview.second, 0.55f, picture.stoneSkins.skin(preview.second == GomokuColor.black), OmokStoneSkins.seed(preview.first.x, preview.first.y))
         drawCircle(
             GomokuBoardInk.previewRing, radius = radius + 2f * density, center = c,
             style = Stroke(width = maxOf(1.5f * density, cell * 0.09f), pathEffect = PathEffect.dashPathEffect(floatArrayOf(3f * density, 2f * density))),
@@ -220,7 +224,12 @@ private fun DrawScope.drawCentered(measurer: TextMeasurer, text: String, style: 
 }
 
 /** 돌 하나(그림자 + 방사형 빛). [opacity] 는 사본 층에만 건다(미리보기 · 규칙 예시). */
-fun DrawScope.drawStone(c: Offset, r: Float, color: GomokuColor, opacity: Float) {
+fun DrawScope.drawStone(c: Offset, r: Float, color: GomokuColor, opacity: Float, skin: OmokStoneSkin? = null, seed: Int = 0) {
+    // 판 8 — 스킨이 있으면 맥 · 폰과 같은 식의 그림(OmokStoneArt). 반투명(미리보기)은 투명 층 하나로 묶는다.
+    if (skin != null) {
+        OmokStoneArt.draw(this, skin, c, r, color == GomokuColor.black, seed, opacity)
+        return
+    }
     drawCircle(Color.Black.copy(alpha = 0.25f * opacity), radius = r, center = Offset(c.x + r * 0.06f, c.y + r * 0.14f))
     val highlight = Offset(c.x - r * 0.35f, c.y - r * 0.4f)
     when (color) {
@@ -291,6 +300,7 @@ fun GomokuPlayBoard(
     val picture = GomokuBoardPicture(
         board = match.board, lastMove = match.lastMove, forbidden = forbidden, autoPoints = match.autoPoints,
         preview = previewPoint?.let { it to match.myColor },
+        stoneSkins = match.stoneSkins,
     )
     val measurer = rememberTextMeasurer()
     val colors = AingTheme.colors

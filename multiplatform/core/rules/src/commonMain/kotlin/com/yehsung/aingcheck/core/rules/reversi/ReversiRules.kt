@@ -197,16 +197,16 @@ object ReversiRules {
     /** 끝났다고 이미 아는 판의 분류: 한쪽 0개 → wipeout(가득 차도 전멸 먼저) → 빈칸 0 → board_full → no_moves. */
     internal fun endKindOfFinished(board: ReversiBoard): ReversiEndKind {
         val counts = board.counts
-        if (counts.black == 0 || counts.white == 0) return ReversiEndKind.wipeout
-        if (counts.empty == 0) return ReversiEndKind.boardFull
+        if (counts.black == 0L || counts.white == 0L) return ReversiEndKind.wipeout
+        if (counts.empty == 0L) return ReversiEndKind.boardFull
         return ReversiEndKind.noMoves
     }
 
     /** WOF 점수 계산(끝났는지는 보지 않는다). */
     internal fun wofScore(board: ReversiBoard): ReversiScore {
         val counts = board.counts
-        if (counts.black > counts.white) return ReversiScore(counts.black + counts.empty, counts.white, ReversiResult.blackWin)
-        if (counts.white > counts.black) return ReversiScore(counts.black, counts.white + counts.empty, ReversiResult.whiteWin)
+        if (counts.black > counts.white) return ReversiScore((counts.black + counts.empty).toInt(), counts.white.toInt(), ReversiResult.blackWin)
+        if (counts.white > counts.black) return ReversiScore(counts.black.toInt(), (counts.white + counts.empty).toInt(), ReversiResult.whiteWin)
         return ReversiScore(32, 32, ReversiResult.draw)
     }
 }

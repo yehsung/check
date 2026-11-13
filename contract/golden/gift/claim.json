@@ -298,6 +298,46 @@
           "kind": null
         },
         {
+          "characterID": "aing_pepero",
+          "giftKindOfBuiltIn": "pepero",
+          "kind": "pepero"
+        },
+        {
+          "characterID": "aing_hwoo",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_ruby",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_dev",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_busan",
+          "giftKindOfBuiltIn": "region",
+          "kind": "region"
+        },
+        {
+          "characterID": "aing_seoul",
+          "giftKindOfBuiltIn": "region",
+          "kind": "region"
+        },
+        {
+          "characterID": "AING_HWOO",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
+          "characterID": "aing_dev ",
+          "giftKindOfBuiltIn": null,
+          "kind": null
+        },
+        {
           "characterID": "aing_isul",
           "giftKindOfBuiltIn": "drink",
           "kind": "drink"
@@ -357,6 +397,59 @@
             true
           ],
           "wireValue": "drink"
+        },
+        {
+          "builtInIDs": [
+            "aing_pepero"
+          ],
+          "copy": {
+            "body": "몰래 하나 챙겨 왔어요. 빼빼로 아잉이 쏙!",
+            "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+            "closeButton": "닫기",
+            "confirmButton": "쏙 받기",
+            "lockedCaption": "빼빼로 데이 선물 전용",
+            "lockedHint": "빼빼로 데이 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요.",
+            "reopenButton": "받기",
+            "reopenTitle": "빼빼로가 쏙 들어왔어요",
+            "title": "빼빼로 받아랏! 🍫",
+            "wearNowButton": "지금 입기"
+          },
+          "minProtocol": 6,
+          "supported": [
+            false,
+            false,
+            false,
+            false,
+            true
+          ],
+          "wireValue": "pepero"
+        },
+        {
+          "builtInIDs": [
+            "aing_busan",
+            "aing_seoul"
+          ],
+          "copy": {
+            "body": "우리 센터 사람에게만 주는 아잉이예요. 지금 받아 가세요!",
+            "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+            "closeButton": "닫기",
+            "confirmButton": "받기",
+            "lockedCaption": "센터 선물",
+            "lockedHint": "그 센터 사람에게만 주는 선물이에요. 루비나 뽑기로는 얻을 수 없어요.",
+            "reopenButton": "받기",
+            "reopenTitle": "우리 센터 선물이 기다려요",
+            "title": "우리 센터 선물 도착!",
+            "wearNowButton": "지금 입기"
+          },
+          "minProtocol": 10,
+          "supported": [
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "wireValue": "region"
         }
       ],
       "supportedProtocols": [

@@ -69,6 +69,7 @@ import kotlin.math.roundToInt
 object MegaphoneBannerTags {
     const val CARD = "megaphoneBanner.card"
     const val CLOSE = "megaphoneBanner.close"
+    const val MORE = "megaphoneBanner.more"
 }
 
 /** 좌우 여백(iOS MobileTheme.sideMargin 과 같은 16). */
@@ -120,6 +121,9 @@ private fun ScreenReaderHold(store: MegaphoneBannerStore) {
 private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore) {
     val density = LocalDensity.current
     var drag by remember(banner.megaphoneID) { mutableFloatStateOf(0f) }
+    // 판 8 — [더 보기]: 배너마다 다시 접힌다(열쇠가 배너 id).
+    var isExpanded by remember(banner.megaphoneID) { mutableStateOf(false) }
+    var overflows by remember(banner.megaphoneID) { mutableStateOf(false) }
     val colors = AingTheme.colors
     Surface(
         shape = RoundedCornerShape(MegaphoneBannerPhoneRules.cornerRadius.dp),
@@ -186,9 +190,15 @@ private fun BannerCard(banner: MegaphoneBanner, store: MegaphoneBannerStore) {
                 color = colors.label,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 17.sp,
-                maxLines = MegaphoneBannerPhoneRules.bodyLineLimit,
+                maxLines = if (isExpanded) Int.MAX_VALUE else MegaphoneBannerPhoneRules.bodyLineLimit,
                 overflow = TextOverflow.Ellipsis,
+                onTextLayout = { layout -> if (!isExpanded) overflows = layout.hasVisualOverflow },
             )
+            if (MegaphoneBannerPhoneRules.needsMore(overflows, isExpanded)) {
+                TextButton(onClick = { isExpanded = true }, modifier = Modifier.testTag(MegaphoneBannerTags.MORE)) {
+                    Text(MegaphoneBannerPhoneText.more, color = colors.accent, fontWeight = FontWeight.SemiBold)
+                }
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { store.dismissCurrent() }, modifier = Modifier.testTag(MegaphoneBannerTags.CLOSE)) {
                     Text(MegaphoneBannerPhoneText.close, color = colors.label2)

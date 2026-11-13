@@ -63,16 +63,20 @@ data class ShopCharacterRow(
     @SerialName("gacha_only") val gachaOnly: Boolean? = null,
     @SerialName("gift_only") val giftOnly: Boolean? = null,
 ) {
-    /** 살 수 있다 = 뽑기 전용도 선물 전용도 아니고 값이 있다. */
+    /** 살 수 있다 = 뽑기 전용도 선물 전용도 미션 보상도 아니고 값이 있다. */
     val isPurchasable: Boolean
         get() = gachaOnly != true && !BuiltInCharacterIds.isGachaOnlyBuiltIn(id) &&
-            giftOnly != true && !BuiltInCharacterIds.isGiftOnlyBuiltIn(id) && price != null
+            giftOnly != true && !BuiltInCharacterIds.isGiftOnlyBuiltIn(id) &&
+            !BuiltInCharacterIds.isMissionRewardBuiltIn(id) && price != null
+
+    /** 도전 미션 보상 줄인가(맥 0.3.81 개발에 찌든 아잉이 — id 로 안다). 상점의 잠긴 칸 '미션 보상'이 이 값으로 선다. */
+    val isMissionReward: Boolean get() = BuiltInCharacterIds.isMissionRewardBuiltIn(id)
 
     // INV-SupabaseWorkModels-746177aa 이식: 선물 전용이 먼저 이긴다(케이크 행은 gacha_only 도 싣는다).
     val isGiftOnly: Boolean get() = giftOnly == true || BuiltInCharacterIds.isGiftOnlyBuiltIn(id)
 
-    /** 케이크는 뽑기 전용이 아니다(선물 전용이 우선). */
-    val isGachaOnly: Boolean get() = !isGiftOnly && (gachaOnly == true || BuiltInCharacterIds.isGachaOnlyBuiltIn(id))
+    /** 케이크는 뽑기 전용이 아니다(선물 전용이 우선). 미션 보상(개발 아잉이)도 서버가 `gacha_only = true` 를 싣지만 뽑기에는 없다. */
+    val isGachaOnly: Boolean get() = !isGiftOnly && !isMissionReward && (gachaOnly == true || BuiltInCharacterIds.isGachaOnlyBuiltIn(id))
 }
 
 /** shop_state 본문. `p_protocol` 이 null 이면 키째 뺀다(= 옛 서명 `{}` — C§4 #9). */

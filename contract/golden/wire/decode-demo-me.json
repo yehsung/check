@@ -841,6 +841,13 @@
             "id": "aing_cake_choco",
             "owned": false,
             "price": 2001
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_isul",
+            "owned": false,
+            "price": 2002
           }
         ],
         "gacha": {
@@ -2506,6 +2513,13 @@
             "id": "aing_cake_choco",
             "owned": false,
             "price": 2001
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_isul",
+            "owned": false,
+            "price": 2002
           }
         ],
         "gacha": {
@@ -2644,6 +2658,160 @@
             "gachaOnly": true,
             "giftOnly": true,
             "id": "aing_cake_strawberry",
+            "owned": true,
+            "price": 2000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_choco",
+            "owned": false,
+            "price": 2001
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_isul",
+            "owned": true,
+            "price": 2002
+          }
+        ],
+        "gacha": {
+          "odds": [
+            {
+              "characterID": "aing_gold",
+              "percent": {
+                "$f64": "4008000000000000"
+              }
+            },
+            {
+              "characterID": "aing_rainbow",
+              "percent": {
+                "$f64": "4000000000000000"
+              }
+            },
+            {
+              "characterID": "fox",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "squirrel",
+              "percent": {
+                "$f64": "4038000000000000"
+              }
+            },
+            {
+              "characterID": "shiba",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "ghost",
+              "percent": {
+                "$f64": "402c000000000000"
+              }
+            },
+            {
+              "characterID": "jellyfish",
+              "percent": {
+                "$f64": "4026000000000000"
+              }
+            },
+            {
+              "characterID": "robot",
+              "percent": {
+                "$f64": "4020000000000000"
+              }
+            }
+          ],
+          "price": 50,
+          "shardCosts": {
+            "aing_gold": 20,
+            "aing_rainbow": 20,
+            "fox": 2,
+            "ghost": 4,
+            "jellyfish": 5,
+            "robot": 8,
+            "shiba": 4,
+            "squirrel": 2
+          },
+          "shards": 23
+        },
+        "rubyBalance": 120,
+        "ultraBalance": 2,
+        "ultraBuyMax": 20,
+        "ultraPrice": 5
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/_me/rpc.shop_state@demo-drink-got.json",
+      "type": "ShopStateResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characters": [
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "fox",
+            "owned": true,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "squirrel",
+            "owned": false,
+            "price": 60
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "ghost",
+            "owned": false,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "shiba",
+            "owned": true,
+            "price": 100
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "jellyfish",
+            "owned": false,
+            "price": 140
+          },
+          {
+            "gachaOnly": false,
+            "giftOnly": false,
+            "id": "robot",
+            "owned": false,
+            "price": 200
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_gold",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": false,
+            "id": "aing_rainbow",
+            "owned": false,
+            "price": 1000
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_cake_strawberry",
             "owned": false,
             "price": 2000
           },
@@ -2653,6 +2821,13 @@
             "id": "aing_cake_choco",
             "owned": true,
             "price": 2001
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_isul",
+            "owned": false,
+            "price": 2002
           }
         ],
         "gacha": {
@@ -2800,6 +2975,13 @@
             "id": "aing_cake_choco",
             "owned": false,
             "price": 2001
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_isul",
+            "owned": false,
+            "price": 2002
           }
         ],
         "gacha": {
@@ -2947,6 +3129,13 @@
             "id": "aing_cake_choco",
             "owned": false,
             "price": 2001
+          },
+          {
+            "gachaOnly": true,
+            "giftOnly": true,
+            "id": "aing_isul",
+            "owned": false,
+            "price": 2002
           }
         ],
         "gacha": {
@@ -5467,25 +5656,24 @@
         "gift": null,
         "status": "ok"
       },
-      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift-got.json",
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-drink-got.json",
       "type": "CharacterGiftPendingResponse",
       "variants": []
     },
     {
       "dump": {
         "gift": {
-          "createdAt": "2026-09-17T04:30:00.123456+00:00",
-          "id": "d0000000-0000-4000-8000-0000000c4e01",
-          "kind": "birthday",
-          "note": null,
+          "createdAt": "2026-09-17T04:40:00.123456+00:00",
+          "id": "d0000000-0000-4000-8000-0000000d71c1",
+          "kind": "drink",
+          "note": "금요일 저녁, 한잔 어때요?",
           "options": [
-            "aing_cake_strawberry",
-            "aing_cake_choco"
+            "aing_isul"
           ]
         },
         "status": "ok"
       },
-      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift.json",
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-drink.json",
       "type": "CharacterGiftPendingResponse",
       "variants": [
         {
@@ -5560,6 +5748,46 @@
         },
         {
           "op": "remove",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "num",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.kind",
+          "result": [
+            [
+              "$.gift",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "remove",
           "path": "$.gift.options",
           "result": [
             [
@@ -5603,10 +5831,8 @@
           "path": "$.gift.options[0]",
           "result": [
             [
-              "$.gift.options",
-              [
-                "aing_cake_choco"
-              ]
+              "$.gift",
+              null
             ]
           ]
         },
@@ -5615,10 +5841,8 @@
           "path": "$.gift.options[0]",
           "result": [
             [
-              "$.gift.options",
-              [
-                "aing_cake_choco"
-              ]
+              "$.gift",
+              null
             ]
           ]
         },
@@ -5627,32 +5851,50 @@
           "path": "$.gift.options[0]",
           "result": [
             [
-              "$.gift.options",
-              [
-                "aing_cake_choco"
-              ]
+              "$.gift",
+              null
             ]
           ]
         },
         {
           "op": "remove",
           "path": "$.gift.note",
-          "result": []
+          "result": [
+            [
+              "$.gift.note",
+              null
+            ]
+          ]
         },
         {
-          "op": "str",
+          "op": "null",
           "path": "$.gift.note",
           "result": [
             [
               "$.gift.note",
-              "3"
+              null
             ]
           ]
         },
         {
           "op": "num",
           "path": "$.gift.note",
-          "result": []
+          "result": [
+            [
+              "$.gift.note",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "enum",
+          "path": "$.gift.note",
+          "result": [
+            [
+              "$.gift.note",
+              "zz_unknown_value"
+            ]
+          ]
         },
         {
           "op": "remove",
@@ -5691,6 +5933,44 @@
             [
               "$.gift.createdAt",
               "zz_unknown_value"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "dump": {
+        "gift": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift-got.json",
+      "type": "CharacterGiftPendingResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "gift": {
+          "createdAt": "2026-09-17T04:30:00.123456+00:00",
+          "id": "d0000000-0000-4000-8000-0000000c4e01",
+          "kind": "birthday",
+          "note": null,
+          "options": [
+            "aing_cake_strawberry",
+            "aing_cake_choco"
+          ]
+        },
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.character_gift_pending@demo-gift.json",
+      "type": "CharacterGiftPendingResponse",
+      "variants": [
+        {
+          "op": "str",
+          "path": "$.gift.note",
+          "result": [
+            [
+              "$.gift.note",
+              "3"
             ]
           ]
         }
@@ -5821,6 +6101,17 @@
         "status": "ok"
       },
       "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.claim_character_gift@aing_cake_choco.json",
+      "type": "CharacterGiftClaimResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "characterId": "aing_isul",
+        "minProtocol": null,
+        "replayed": false,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.claim_character_gift@aing_isul.json",
       "type": "CharacterGiftClaimResponse",
       "variants": []
     },
@@ -7123,6 +7414,16 @@
         "status": "ok"
       },
       "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_character@aing_cake_strawberry.json",
+      "type": "SetCharacterResponse",
+      "variants": []
+    },
+    {
+      "dump": {
+        "character": "aing_isul",
+        "id": null,
+        "status": "ok"
+      },
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/me/rpc.set_character@aing_isul.json",
       "type": "SetCharacterResponse",
       "variants": []
     },

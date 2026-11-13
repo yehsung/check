@@ -10,6 +10,7 @@ import com.yehsung.aingcheck.core.rules.renju.GomokuOutcome
 import com.yehsung.aingcheck.core.rules.renju.GomokuPoint
 import com.yehsung.aingcheck.core.stores.minigame.GamesMiniGameBoard
 import kotlin.math.ceil
+import com.yehsung.aingcheck.core.rules.ai.GomokuAIDifficulty
 
 // 게임 탭 문구(SPEC-ios §3.5). **맥과 같은 뜻이면 같은 문장이다** — 출처를 줄마다 적는다.
 //  · 미니게임 허브 문구는 맥 `MiniGamePanel` · `WorkTimerStoreMiniGame` 에서 옮겼다.
@@ -482,6 +483,20 @@ object GomokuPhoneText {
     const val aiThinking: String = "AI가 생각 중이에요"
     const val aiThinkingShort: String = "생각 중"
     const val aiStakeChip: String = "AI 대국 · 기록 없음"
+
+    /** 판 머리 칩: 난이도까지(예 "AI 대국 · 보통 · 기록 없음") — 판 8 · 맥 0.3.82 · 폰 1.0.18 과 같은 글자. */
+    fun aiStakeChip(difficulty: GomokuAIDifficulty): String = "AI 대국 · ${aiDifficultyName(difficulty)} · 기록 없음"
+
+    /** 난이도 고르기(맥 0.3.82 과 같은 글자 — 대표 11-10 "몇수앞까지 계산할지에 제한"). 쉬움 2 · 보통 6 · 어려움(생각 시간이 허락하는 데까지). */
+    const val aiDifficultyTitle: String = "난이도 · AI가 몇 수 앞까지 계산할지"
+
+    fun aiDifficultyName(difficulty: GomokuAIDifficulty): String = when (difficulty) {
+        GomokuAIDifficulty.easy -> "쉬움"
+        GomokuAIDifficulty.normal -> "보통"
+        GomokuAIDifficulty.hard -> "어려움"
+    }
+
+    fun aiDifficultyDepth(difficulty: GomokuAIDifficulty): String = difficulty.lookahead?.let { "${it}수 앞까지" } ?: "끝까지 계산"
     const val aiResignConfirm: String = "기권하면 이 판은 AI가 이겨요"
     const val aiRematch: String = "같은 색으로 다시 두기"
     const val aiRematchHelp: String = "같은 돌 색으로 AI와 새 판을 시작해요"

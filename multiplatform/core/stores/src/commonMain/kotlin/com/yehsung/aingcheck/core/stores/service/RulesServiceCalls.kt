@@ -27,6 +27,15 @@ import com.yehsung.aingcheck.core.rules.text.MessageBodyValidation
 import com.yehsung.aingcheck.core.rules.text.StatusMessageSaveOutcome
 import com.yehsung.aingcheck.core.rules.weekly.WeeklyWorkStatus
 import com.yehsung.aingcheck.core.stores.me.AILimitFetchedRow
+import com.yehsung.aingcheck.core.net.achievementCharacterClaimRaw
+import com.yehsung.aingcheck.core.net.omokSkinsStateRaw
+import com.yehsung.aingcheck.core.net.buyOmokSkinRaw
+import com.yehsung.aingcheck.core.net.setOmokSkinRaw
+import com.yehsung.aingcheck.core.rules.achievements.AchievementCharacterClaimResponse
+import com.yehsung.aingcheck.core.rules.achievements.OmokSkinRequests
+import com.yehsung.aingcheck.core.rules.achievements.OmokSkinWriteResponse
+import com.yehsung.aingcheck.core.rules.achievements.OmokSkinsState
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkin
 
 /*
  * Swift 서비스 함수 가운데 **반환 타입이 rules 에 있는 것**(G5 골든 spec.resultOtherLanes)의 Kotlin 한 벌.
@@ -58,6 +67,22 @@ suspend fun SupabaseWorkService.achievementsStatus(accessToken: String): Achieve
 /** Swift `achievementClaim(accessToken:key:)` — key 가 null 이면 받을 것 전부. 응답은 상태와 같은 모양 + claimed_now. */
 suspend fun SupabaseWorkService.achievementClaim(accessToken: String, key: String?): AchievementStatus =
     AchievementStatus.decode(achievementClaimRaw(accessToken, key))
+
+/** Swift `achievementCharacterClaim(accessToken:key:protocolNumber:)`(맥 0.3.81). */
+suspend fun SupabaseWorkService.achievementCharacterClaim(accessToken: String, key: String, protocolNumber: Int): AchievementCharacterClaimResponse =
+    AchievementCharacterClaimResponse.decode(achievementCharacterClaimRaw(accessToken, key, protocolNumber))
+
+/** Swift `omokSkinsState(accessToken:)` — 스킨 능력 1 로 묻는다. */
+suspend fun SupabaseWorkService.omokSkinsState(accessToken: String): OmokSkinsState =
+    OmokSkinsState.decode(omokSkinsStateRaw(accessToken, OmokSkinRequests.state()))
+
+/** Swift `buyOmokSkin(accessToken:skin:)`. */
+suspend fun SupabaseWorkService.buyOmokSkin(accessToken: String, skin: OmokStoneSkin): OmokSkinWriteResponse =
+    OmokSkinWriteResponse.decode(buyOmokSkinRaw(accessToken, OmokSkinRequests.buy(skin)))
+
+/** Swift `setOmokSkin(accessToken:skin:)` — null 이면 일반 돌. */
+suspend fun SupabaseWorkService.setOmokSkin(accessToken: String, skin: OmokStoneSkin?): OmokSkinWriteResponse =
+    OmokSkinWriteResponse.decode(setOmokSkinRaw(accessToken, OmokSkinRequests.set(skin)))
 
 /** Swift `dailyMissionClaim(accessToken:key:)` — 응답은 achievements_status 와 같은 모양 전체 + claimed_now(일일 지급만). */
 suspend fun SupabaseWorkService.dailyMissionClaim(accessToken: String, key: String?): AchievementStatus =

@@ -9,6 +9,7 @@ import com.yehsung.aingcheck.core.net.fetchShopState
 import com.yehsung.aingcheck.core.net.setCharacter
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
 import com.yehsung.aingcheck.core.rules.character.CharacterSyncDecision
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
 import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.core.rules.format.SharedText
 import com.yehsung.aingcheck.core.rules.gacha.ShopWire
@@ -188,11 +189,20 @@ fun MeStore.price(id: String): Long? {
     return if (row.isPurchasable) row.price else null
 }
 
-/** 뽑기·조각 교환으로만 얻는 캐릭터인가(서버 표식 · 내장 뽑기 전용 둘 — 케이크는 선물 전용이 이긴다). */
+/** 뽑기·조각 교환으로만 얻는 캐릭터인가(서버 표식 · 내장 뽑기 전용 둘 — 케이크는 선물 전용이 이긴다 · 미션 보상은 뽑기가 아니다). */
 fun MeStore.isGachaOnly(id: String): Boolean {
-    if (CharacterCatalog.isGiftOnlyBuiltIn(id)) return false
+    if (CharacterCatalog.isGiftOnlyBuiltIn(id) || isMissionLocked(id)) return false
     return CharacterCatalog.isGachaOnlyBuiltIn(id) || shopCharacters.firstOrNull { it.id == id }?.isGachaOnly == true
 }
+
+/**
+ * 미션 보상으로만 얻는 캐릭터인가(개발에 찌든 아잉이 — 누적 근무 100시간, 맥 0.3.81 · 폰 1.0.18). 서버는 이 행을 `gacha_only` 로 싣지만
+ * 뽑기에서도 교환에서도 안 나온다 — 잠긴 칸 "미션 보상"(`DevAingMission`).
+ */
+fun MeStore.isMissionLocked(id: String): Boolean = CharacterCatalog.isMissionRewardBuiltIn(id)
+
+/** 조각 교환으로만 얻는 캐릭터인가(흑우 아잉이 — 맥 0.3.78 · 폰 1.0.18). 뽑기 전용 줄에 서되 얻는 길은 "조각 교환 전용". */
+fun MeStore.isShardOnly(id: String): Boolean = CharacterCatalog.isShardOnlyBuiltIn(id)
 
 // MARK: 상점
 
@@ -204,6 +214,13 @@ fun MeStore.selectShopItem(id: String) {
     if (isOwned(id)) {
         shopSelection = null
         shopNotice = MeText.alreadyOwned
+        return
+    }
+    // 미션 보상(개발에 찌든 아잉이)도 사는 줄 · 뽑는 줄이 아니다 — 선물 칸과 같은 막대(이름 + 얻는 길 · 사기 단추 없음).
+    if (isMissionLocked(id)) {
+        shopSelection = null
+        shopNotice = DevAingMission.lockedHint
+        shopGiftHintID = id
         return
     }
     // 선물 전용(케이크 · 이슬)은 사는 줄도 뽑는 줄도 아니다 — 얻는 길만 그 종류의 글자로 말한다(사기 단추를 세우지 않는다). 다시 눌러도 풀지 않는다.
@@ -239,7 +256,7 @@ val MeStore.canConfirmPurchase: Boolean
 val MeStore.shopBarDetail: String?
     get() {
         shopNotice?.let { return it }
-        shopGachaHintID?.let { return MeText.gachaOnlyNotice(MeCharacterCards.displayName(it), gachaShardCost(it)) }
+        shopGachaHintID?.let { return MeText.acquireNotice(it, gachaShardCost(it)) }
         if (shopSelection == null) return null
         val price = shopSelectionPrice ?: return null
         val have = rubyBalance ?: return null
@@ -310,8 +327,9 @@ fun MeStore.chooseCharacter(id: String) {
     if (!isUnlocked(id)) {
         val name = MeCharacterCards.displayName(id)
         characterNotice = when {
+            isMissionLocked(id) -> DevAingMission.lockedHint
             isGiftOnly(id) -> giftKind(id).copy.lockedHint
-            isGachaOnly(id) -> MeText.lockedGachaCharacter(name, gachaShardCost(id))
+            isGachaOnly(id) -> MeText.lockedAcquireCharacter(id, gachaShardCost(id))
             else -> MeText.lockedCharacter(name)
         }
         isCharacterNoticeError = false
@@ -344,6 +362,7 @@ fun MeStore.chooseCharacter(id: String) {
                     // 다른 기기에서 소유가 사라졌다 — 상점 상태를 다시 읽어 화면을 사실에 맞춘다.
                     ownedCharacterIDs = ownedCharacterIDs - id
                     characterNotice = when {
+                        isMissionLocked(id) -> DevAingMission.lockedHint
                         isGiftOnly(id) -> giftKind(id).copy.lockedHint
                         isGachaOnly(id) -> MeText.gachaCharacterNotOwned
                         else -> MeText.characterNotOwned
@@ -377,9 +396,15 @@ fun MeStore.charactersDidAppear() {
     if (!context.sessionStore.isSignedIn) return
     if (!shopState.isLoading) launch { loadShop() }
     launch { loadEquippedCharacter() }
+    // 판 8(폰 1.0.18) — 상점이 뜰 때마다 오목알 상태도 다시 읽는다(다른 기기에서 산 · 낀 것을 따라온다).
+    if (!omokSkinsLoading) {
+        omokSkinsLoading = true
+        launch { loadOmokSkins() }
+    }
 }
 
 fun MeStore.shopDidDisappear() {
+    omokSkinNotice = null
     shopNotice = null
     shopGachaHintID = null
     shopGiftHintID = null

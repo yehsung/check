@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/CharacterKit/CharacterManifest.swift @ 1b8260d (+ GoldAing.swift 의 CharacterManifest.Finish — Kotlin 은 중첩 타입을 다른 파일에서 늘릴 수 없어 여기 둔다)
+// 원본: Sources/CheckCore/CharacterKit/CharacterManifest.swift @ 1b8260d (+ GoldAing.swift @ e4995a3a 의 CharacterManifest.Finish — Kotlin 은 중첩 타입을 다른 파일에서 늘릴 수 없어 여기 둔다)
 package com.yehsung.aingcheck.core.rules.character
 
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
@@ -60,20 +60,32 @@ data class CharacterManifest(
         cakeChoco,
         /** 이슬 아잉이(맥 0.3.74 '술 한잔' 선물 전용 — 초록 유리 몸 · 라벨 · 병뚜껑). Android 는 정지 초상만 그린다. */
         isul,
+        /** 빼빼로 아잉이(맥 0.3.77 · 판 8). 희귀가 아니다. Android 는 정지 초상만 그린다. */
+        pepero,
+        /** 흑우 아잉이(맥 0.3.78 조각 교환 전용 · 판 8). 희귀가 아니다(교환 목록 순서는 `gachaOnlyBuiltInIDs`). */
+        hwoo,
+        /** 루비 아잉이(맥 0.3.78 상점 루비 1000 · 판 8). 희귀가 아니다. */
+        ruby,
+        /** 개발에 찌든 아잉이(맥 0.3.81 미션 보상 · 판 8). 희귀가 아니다. */
+        dev,
+        /** 부산 갈매기 아잉이(지역 — Android 는 그림이 없다). 희귀가 아니다. */
+        busan,
+        /** 서울의 밤 아잉이(지역 — Android 는 그림이 없다). 희귀가 아니다. */
+        seoul,
         ;
 
         /** 희귀(뽑기 전용 내장 — 황금 · 무지개). 확률표 강조 · 결과 연출 · 교환 목록 맨 위가 이 값으로 갈린다. */
         val isRare: Boolean
             get() = when (this) {
                 gold, rainbow -> true
-                standard, cakeStrawberry, cakeChoco, isul -> false
+                standard, cakeStrawberry, cakeChoco, isul, pepero, hwoo, ruby, dev, busan, seoul -> false
             }
 
         /** 케이크 마감(딸기 · 초코)인가. */
         val isCake: Boolean
             get() = when (this) {
                 cakeStrawberry, cakeChoco -> true
-                standard, gold, rainbow, isul -> false
+                standard, gold, rainbow, isul, pepero, hwoo, ruby, dev, busan, seoul -> false
             }
 
         companion object {
@@ -84,6 +96,12 @@ data class CharacterManifest(
                 characterID == CharacterCatalog.cakeStrawberryAingID -> cakeStrawberry
                 characterID == CharacterCatalog.cakeChocoAingID -> cakeChoco
                 CharacterCatalog.isIsulAing(characterID) -> isul
+                CharacterCatalog.isPeperoAing(characterID) -> pepero
+                CharacterCatalog.isHwooAing(characterID) -> hwoo
+                CharacterCatalog.isRubyAing(characterID) -> ruby
+                CharacterCatalog.isDevAing(characterID) -> dev
+                characterID == CharacterCatalog.busanAingID -> busan
+                characterID == CharacterCatalog.seoulAingID -> seoul
                 else -> standard
             }
         }

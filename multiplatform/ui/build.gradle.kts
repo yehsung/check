@@ -82,6 +82,21 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
         rename("^aing_isul-(neutral|negative)\\.png$", "portrait-$1.png")
         into("files/characters/aing_isul")
     }
+    // 판 8(아이폰 1.0.18 맞추기): 흑우(조각 교환 전용) · 루비(상점 1000) · 개발에 찌든 아잉이(누적 근무 100시간 미션 보상) — 맥 원본 그대로
+    //   (폰 Portraits 와 바이트까지 같다). 빼빼로만 폰 판(상자에 글자 없는 그림 — 기억 pepero-aing-decisions '폰은 상자에 글자 없는 판')을 싣는다.
+    //   상점 번호는 그림 집합에서 파생된다(ShopWire.protocolVersion) — 넷이 다 실려야 9, 지역 아잉이(10)는 싣지 않는다(안드로이드 범위 밖).
+    for (id in listOf("aing_hwoo", "aing_ruby", "aing_dev")) {
+        from(repoDir.resolve("Sources/check/Resources")) {
+            include("$id-neutral.png", "$id-negative.png")
+            rename("^$id-(neutral|negative)\\.png$", "portrait-$1.png")
+            into("files/characters/$id")
+        }
+    }
+    from(repoDir.resolve("Sources/CheckMobileShared/Resources/Portraits")) {
+        include("aing_pepero-neutral.png", "aing_pepero-negative.png")
+        rename("^aing_pepero-(neutral|negative)\\.png$", "portrait-$1.png")
+        into("files/characters/aing_pepero")
+    }
     from(repoDir.resolve("Sources/CheckMobileKit/Resources/Art")) {
         // aing-side.png: 플래피 아잉 옆모습(W4-b — 미니게임 캐릭터는 아잉 고정, MiniGameArt.FLAPPY_SIDE_PATH). 없으면 캔버스가 초록 원으로 폴백한다.
         include("ruby.png", "ruby-48.png", "ruby-96.png", "stage-*-neutral.png", "aing-side.png")

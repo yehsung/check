@@ -84,6 +84,11 @@ import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.max
+import com.yehsung.aingcheck.core.rules.insights.WorkRhythmWeekText
+import com.yehsung.aingcheck.core.rules.insights.addingLive
+import com.yehsung.aingcheck.core.stores.me.setRhythmWeekOffset
+import com.yehsung.aingcheck.ui.screens.session.kit.rememberNow
+import androidx.compose.ui.semantics.clearAndSetSemantics
 
 /**
  * 나 탭 루트.
@@ -291,9 +296,13 @@ internal fun MeRecordsCard(store: MeStore, scope: CoroutineScope, modifier: Modi
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(colors.separator))
         Column(Modifier.testTag(MeAnchor.Rhythm.tag), verticalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
-            Text(MeText.heatmapTitle, style = MaterialTheme.typography.titleMedium, color = colors.label, modifier = Modifier.semantics { heading() })
-            MeRhythmGrid(if (state.hasLoaded) store.heatmap else WorkRhythmHeatmap.empty, dimmed = phase != MeRecordsPhase.Ready)
-            Text(MeHomeRules.rhythmCaption(phase, store.heatmap), style = MaterialTheme.typography.bodySmall, color = colors.label2)
+            if (state.hasLoaded && store.rhythmWeeks.weekStarts.isNotEmpty()) {
+                MeRhythmWeekly(store)
+            } else {
+                Text(MeText.heatmapTitle, style = MaterialTheme.typography.titleMedium, color = colors.label, modifier = Modifier.semantics { heading() })
+                MeRhythmGrid(if (state.hasLoaded) store.heatmap else WorkRhythmHeatmap.empty, dimmed = phase != MeRecordsPhase.Ready)
+                Text(MeHomeRules.rhythmCaption(phase, store.heatmap), style = MaterialTheme.typography.bodySmall, color = colors.label2)
+            }
             if (phase == MeRecordsPhase.Failed) {
                 LoadFailureRow(MeText.recordsFailed, MeText.retry, isRetrying = state.isLoading) { scope.launch { store.loadRecords() } }
             }
@@ -301,9 +310,44 @@ internal fun MeRecordsCard(store: MeStore, scope: CoroutineScope, modifier: Modi
     }
 }
 
-/** 지난주 근무 리듬(요일 7 × 시 24). 칸 농도는 잔디와 같은 사다리(한 칸 3600초가 가장 진하다). */
+/**
+ * 판 8(폰 1.0.18 · 맥 0.3.78 #d_V0mJ363LONEW) — 주별 근무 리듬: 머리 오른쪽 ◀ ▶ · 이번 주는 1분마다 진행 중 근무를 얹고 안 온 시간은 흐리게.
+ */
 @Composable
-internal fun MeRhythmGrid(heatmap: WorkRhythmHeatmap, dimmed: Boolean) {
+private fun MeRhythmWeekly(store: MeStore) {
+    val colors = AingTheme.colors
+    val offset = store.rhythmWeekOffset
+    val weeks = store.rhythmWeeks
+    val weekStart = weeks.weekStart(offset)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(WorkRhythmWeekText.title(offset, weekStart), style = MaterialTheme.typography.titleMedium, color = colors.label,
+            modifier = Modifier.weight(1f).semantics { heading() })
+        RhythmWeekButton(AppIcon.ChevronLeft, MeText.rhythmPreviousWeek, enabled = offset < weeks.maxOffset) { store.setRhythmWeekOffset(offset + 1) }
+        RhythmWeekButton(AppIcon.ChevronRight, MeText.rhythmNextWeek, enabled = offset > 0) { store.setRhythmWeekOffset(offset - 1) }
+    }
+    val now = rememberNow(store.context.clock, 60).timeIntervalSince1970
+    val base = weeks.heatmap(offset) ?: WorkRhythmHeatmap.empty
+    val heatmap = if (offset == 0 && weekStart != null) base.addingLive(store.rhythmLiveStart, now, weekStart) else base
+    Box(Modifier.clearAndSetSemantics { }) { MeRhythmGrid(heatmap, dimmed = false, futureFrom = WorkRhythmWeekText.futureFrom(offset, now)) }
+    Text(WorkRhythmWeekText.caption(heatmap, offset), style = MaterialTheme.typography.bodySmall, color = colors.label2)
+}
+
+@Composable
+private fun RhythmWeekButton(icon: AppIcon, label: String, enabled: Boolean, onClick: () -> Unit) {
+    val colors = AingTheme.colors
+    Box(
+        Modifier.size(AingDimens.minimumTarget)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        AingIcon(icon, contentDescription = null, size = 18.dp, tint = if (enabled) colors.accent else colors.label3Text)
+    }
+}
+
+/** 근무 리듬(요일 7 × 시 24). 칸 농도는 잔디와 같은 사다리(한 칸 3600초가 가장 진하다). [futureFrom] 부터의 빈 칸은 흐리게(이번 주 — 아직 안 온 시간). */
+@Composable
+internal fun MeRhythmGrid(heatmap: WorkRhythmHeatmap, dimmed: Boolean, futureFrom: Pair<Int, Int>? = null) {
     val colors = AingTheme.colors
     val type = MaterialTheme.typography.labelSmall
     val measurer = rememberTextMeasurer()
@@ -328,7 +372,9 @@ internal fun MeRhythmGrid(heatmap: WorkRhythmHeatmap, dimmed: Boolean) {
                 for (hour in 0 until WorkRhythmHeatmap.HOUR_COUNT) {
                     val seconds = heatmap.buckets.getOrNull(day)?.getOrNull(hour) ?: 0L
                     val level = MeText.rhythmLevel(seconds)
-                    val color = if (level == 0 || dimmed) colors.fill
+                    val isFuture = futureFrom?.let { day > it.first || (day == it.first && hour >= it.second) } ?: false
+                    val color = if (isFuture && level == 0) colors.fill.copy(alpha = colors.fill.alpha * 0.45f)
+                    else if (level == 0 || dimmed) colors.fill
                     else ContributionAxis.Work.tint(colors).let { it.copy(alpha = it.alpha * ContributionLevels.opacity(level)) }
                     drawRoundRect(color, Offset(left + hour * (cell + gap), y), Size(cell, cell), CornerRadius(max(1.5f * d, cell * 0.22f)))
                 }

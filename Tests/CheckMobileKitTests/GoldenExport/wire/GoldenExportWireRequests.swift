@@ -250,6 +250,12 @@ struct GoldenExportWireRequests {
             WireCall(id: "achievementsStatus") { s, t in try await s.achievementsStatus(accessToken: t) },
             WireCall(id: "achievementClaim") { s, t in try await s.achievementClaim(accessToken: t, key: "poke10") },
             WireCall(id: "achievementClaim(nil)") { s, t in try await s.achievementClaim(accessToken: t, key: nil) },
+            // 판 8(아이폰 1.0.18 맞추기): 캐릭터 보상 미션(개발에 찌든 아잉이 — 맥 0.3.81) · 오목알 스킨(맥 0.3.81~0.3.82).
+            WireCall(id: "achievementCharacterClaim") { s, t in try await s.achievementCharacterClaim(accessToken: t, key: "work100", protocolNumber: 9) },
+            WireCall(id: "omokSkinsState") { s, t in try await s.omokSkinsState(accessToken: t) },
+            WireCall(id: "buyOmokSkin") { s, t in try await s.buyOmokSkin(accessToken: t, skin: .dice) },
+            WireCall(id: "setOmokSkin") { s, t in try await s.setOmokSkin(accessToken: t, skin: .cat) },
+            WireCall(id: "setOmokSkin(nil)") { s, t in try await s.setOmokSkin(accessToken: t, skin: nil) },
             WireCall(id: "dailyMissionClaim") { s, t in try await s.dailyMissionClaim(accessToken: t, key: "daily_gomoku") },
             WireCall(id: "dailyMissionClaim(nil)") { s, t in try await s.dailyMissionClaim(accessToken: t, key: nil) },
             WireCall(id: "weeklyWorkStatus") { s, t in try await s.weeklyWorkStatus(accessToken: t) },
@@ -712,6 +718,10 @@ struct GoldenExportWireRequests {
     /// 결과를 대조하지 않는 case(반환 타입이 다른 갈래의 규칙이다 — Kotlin 은 요청만 대조하고 결과는 그 갈래가 같은 골든 결과로 잰다).
     static let resultOtherLanes: [String: String] = [
         "setStatusMessage": "W1-c(StatusMessageSaveOutcome — rules/text)",
+        // 판 8: 캐릭터 보상 미션 · 오목알 스킨 — 응답은 rules(achievements 갈래)의 관대한 디코드가 읽는다.
+        "achievementCharacterClaim": "W1-c(AchievementCharacterClaimResponse)",
+        "omokSkinsState": "W1-c(OmokSkinsState)", "buyOmokSkin": "W1-c(OmokSkinWriteResponse)",
+        "setOmokSkin": "W1-c(OmokSkinWriteResponse)", "setOmokSkin(nil)": "W1-c(OmokSkinWriteResponse)",
         "setStatusMessage(nil)": "W1-c(StatusMessageSaveOutcome — rules/text)",
         "achievementsStatus": "W1-c(AchievementStatus)", "achievementClaim": "W1-c(AchievementStatus)",
         "achievementClaim(nil)": "W1-c(AchievementStatus)", "dailyMissionClaim": "W1-c(AchievementStatus)",
@@ -750,6 +760,17 @@ struct GoldenExportWireRequests {
         "aiLimitPercent": "I", "aiLimitRow": "I", "aiLimitClearingRow": "I", "upsertAILimits": "I", "fetchAILimitDevices": "I",
         "upsertAILimitMainDeviceID": "I",
         "fetchReportAdminList": "admin", "updateReportAdmin": "admin", "fetchReportOpenCount": "admin", "item": "admin",
+        // 맥 0.3.79~0.3.86 전용(폰 1.0.18 · Android 판 8 범위 밖 — 폰 다음 판 후보): 다른 기기·서버 연결 · 지역 선물 · 메시지 사진 · 30일 쪽 넘김 ·
+        // 지난 확성기 · 제보 캡처 · 비공개 저장소. 폰 소스가 부르기 시작하면 phoneCalledNames 가 빨갛게 잡는다.
+        "createScannerLinkCode": "mac", "fetchScannerDevices": "mac", "revokeScannerDevice": "mac",
+        "ensureRegionGift": "mac",
+        "uploadMessagePhoto": "mac", "sendPhotoMessage": "mac", "fetchMessagePhotoData": "mac",
+        "fetchReportAdminPhotoPaths": "admin", "reportAdminPhotoPaths": "admin",
+        "fetchMessagePage": "mac", "messagePage": "mac", "messagePageEntry": "mac",
+        "fetchMegaphoneFeed": "mac", "megaphoneAdminHide": "admin",
+        "uploadFeedbackShot": "mac", "attachFeedbackShot": "mac", "fetchFeedbackShots": "admin", "downloadFeedbackShot": "admin",
+        "uploadPrivateObject": "mac", "downloadPrivateObject": "mac", "createSignedObjectURL": "mac", "downloadSignedObject": "mac",
+        "downloadPrivateObjectViaSignedURL": "mac", "deletePrivateObject": "mac", "privateStorageError": "mac", "signedURL": "mac",
     ]
 
     /// 폰 소스(주석을 걷은 글자)에서 `.이름(` 으로 부르는 서비스 메서드 이름.

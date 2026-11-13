@@ -76,6 +76,12 @@ class SupabaseWorkService(
         const val gachaExchangePath = "/rest/v1/rpc/gacha_exchange"
         const val achievementsStatusPath = "/rest/v1/rpc/achievements_status"
         const val achievementClaimPath = "/rest/v1/rpc/achievement_claim"
+        /** 캐릭터 보상 미션 받기(맥 0.3.81 · `achievement_character_claim(p_key, p_protocol)`). */
+        const val achievementCharacterClaimPath = "/rest/v1/rpc/achievement_character_claim"
+        /** 오목알 스킨(맥 0.3.81 · 판 8) — 상점 상태 · 사기 · 끼기. */
+        const val omokSkinsStatePath = "/rest/v1/rpc/omok_skins_state"
+        const val buyOmokSkinPath = "/rest/v1/rpc/buy_omok_skin"
+        const val setOmokSkinPath = "/rest/v1/rpc/set_omok_skin"
         const val dailyMissionClaimPath = "/rest/v1/rpc/daily_mission_claim"
         const val weeklyWorkStatusPath = "/rest/v1/rpc/weekly_work_status"
         const val weeklyWorkClaimPath = "/rest/v1/rpc/weekly_work_claim"

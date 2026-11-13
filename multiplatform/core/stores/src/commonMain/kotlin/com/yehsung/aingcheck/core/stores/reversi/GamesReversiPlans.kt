@@ -296,7 +296,7 @@ data class GamesReversiMatchChrome(
 
         /** 카드 부제 "흑 · 12개 · 자동 1/3". */
         fun cardSubtitle(color: ReversiColor, counts: ReversiCounts, autoStreak: Int, limit: Int): String {
-            val discs = ReversiPhoneText.discLine(color, if (color == ReversiColor.black) counts.black else counts.white)
+            val discs = ReversiPhoneText.discLine(color, (if (color == ReversiColor.black) counts.black else counts.white).toInt())
             val streak = ReversiPhoneText.autoStreak(autoStreak, maxOf(1, limit)) ?: return discs
             return "$discs · $streak"
         }
@@ -357,7 +357,7 @@ object GamesReversiMoveLog {
                 ReversiColor.white -> { val opens = !openRowHasBlack; openRowHasBlack = false; opens }
             }
             if (opensRow) rows += 1
-            chips += Chip(ply.seq, if (opensRow) rows else null, ply.color, ReversiPhoneText.plyText(ply), ply.kind == ReversiPly.Kind.pass, ply.auto)
+            chips += Chip(ply.seq.toInt(), if (opensRow) rows else null, ply.color, ReversiPhoneText.plyText(ply), ply.kind == ReversiPly.Kind.pass, ply.auto)
         }
         return chips
     }

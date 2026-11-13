@@ -11,6 +11,7 @@ import com.yehsung.aingcheck.core.rules.renju.GomokuPoint
 import com.yehsung.aingcheck.core.rules.renju.GomokuTapRefusal
 import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.games.GomokuRPCStatus
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkins
 
 // 화면 값 타입(설계서 §6.3 선언 그대로 — 화면 갈래 W4-a 가 이 선언만 믿고 짠다). Swift 는 GomokuStore.swift 한 파일이지만 Kotlin 은
 // 타입 몫을 이 파일로 뗐다(스토어 본문 GomokuStore.kt 가 2천 줄을 넘지 않게 — C§2.3 "한 파일 하나"의 예외, 원본 줄 구간을 머리에 적는다).
@@ -94,6 +95,8 @@ data class GomokuMatchState(
     val autoPoints: Set<GomokuPoint> = emptySet(),
     /** 마지막 수가 자동으로 놓인 것인가(상태줄·툴팁이 "시간이 지나 자동으로 놓인 수"를 말할 근거). */
     val lastMoveWasAuto: Boolean = false,
+    /** 판 8(맥 0.3.81 · 폰 1.0.18) — 이 판의 흑 · 백 오목알 스킨(서버 match.black_skin · white_skin — 상대에게도 보임). AI 판은 스토어가 내 스킨만 얹는다. */
+    val stoneSkins: OmokStoneSkins = OmokStoneSkins.plain,
 ) {
     /** 자동 착수가 연속 3번 놓여 끝난 판인가. **저장 칸이 아니라 [endReason] 에서 파생된다**(0.3.28 — 사실의 출처는 하나). */
     val endedByAbandon: Boolean get() = endReason == GomokuEndReason.abandoned
@@ -155,6 +158,8 @@ data class GomokuSpectateState(
     val endReason: GomokuEndReason? = null,
     val blackAutoStreak: Int = 0,
     val whiteAutoStreak: Int = 0,
+    /** 판 8 — 두 사람의 오목알 스킨(서버 match.black_skin · white_skin). 첫 응답 전에는 일반 돌. */
+    val stoneSkins: OmokStoneSkins = OmokStoneSkins.plain,
 ) {
     /** 서버 응답을 한 번이라도 반영했는가(= 흑·백이 확정됐는가). 그 전에는 로딩 화면이다. */
     val hasServerState: Boolean get() = black != null && white != null

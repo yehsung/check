@@ -294,7 +294,15 @@ data class MessageHistoryEntry(
     val isMine: Boolean,
     val readByPeer: Boolean? = null,
     val isUnread: Boolean? = null,
+    /**
+     * 맥 0.3.86 — 이 줄에 붙은 사진(Swift `MessagePhotoAttachment`). 서버 칸은 `message_page` 행에만 있고 Android 는 그 길을 부르지 않으므로
+     * 언제나 null 이다(사진 메시지는 대체 문구로 보인다). 모델 모양만 맥 · 폰과 같게 둔다(골든 덤프 칸).
+     */
+    val photo: MessagePhotoAttachment? = null,
 )
+
+/** Swift `MessagePhotoAttachment`(맥 0.3.86 메시지 사진 — 경로 · 픽셀 크기). Android 판 8 은 만들지 않는다(모양만). */
+data class MessagePhotoAttachment(val path: String, val width: Long, val height: Long)
 
 // ---------------------------------------------------------------- 프로필 칸
 

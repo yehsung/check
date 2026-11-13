@@ -1,11 +1,13 @@
-// 원본: Sources/CheckMobileKit/Me/MeStoreAchievements.swift @ 1b8260d · :132 (streakDays) @ 1ca907fa
+// 원본: Sources/CheckMobileKit/Me/MeStoreAchievements.swift @ 1b8260d · :132 (streakDays) @ 1ca907fa · claimCharacterMission @ 0c3168bd(폰 1.0.18)
 package com.yehsung.aingcheck.core.stores.me
 
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
 import com.yehsung.aingcheck.core.net.AuthErrorRules
+import com.yehsung.aingcheck.core.net.achievementCharacterClaimRaw
 import com.yehsung.aingcheck.core.net.achievementClaimRaw
 import com.yehsung.aingcheck.core.net.achievementsStatusRaw
 import com.yehsung.aingcheck.core.net.dailyMissionClaimRaw
+import com.yehsung.aingcheck.core.rules.achievements.AchievementCharacterClaimResponse
 import com.yehsung.aingcheck.core.rules.achievements.AchievementStatus
 import com.yehsung.aingcheck.core.rules.achievements.DailyMissionStatus
 import com.yehsung.aingcheck.core.wire.SwiftDate
@@ -69,7 +71,8 @@ val MeStore.achievementSection: MeAchievementSection
         val status = achievements
         if (status != null) {
             // 받아 둔 값이 있으면 실패해도 그 값을 그린다(알던 줄을 지우지 않는다).
-            val rows = status.seriesRows
+            // 누적 루비 계열 줄 뒤에 캐릭터 보상 줄(개발에 찌든 아잉이 — 누적 근무 100시간, 맥 0.3.81 · 폰 1.0.18)을 잇는다(코어 sectionRows).
+            val rows = status.sectionRows
             return if (rows.isEmpty()) MeAchievementSection.Hidden else MeAchievementSection.Loaded(rows, status.claimableCount)
         }
         return if (achievementsState.hasFailed) MeAchievementSection.Failed else MeAchievementSection.Loading
@@ -248,6 +251,48 @@ fun MeStore.claimAchievement(key: String?) {
             celebrateAchievementClaims(status)
         } finally {
             if (generation == context.generation) achievementClaimsInFlight = achievementClaimsInFlight - slot
+        }
+    }
+}
+
+/**
+ * 캐릭터 보상 미션 받기(판 8 — 개발에 찌든 아잉이 · `achievement_character_claim(p_key, p_protocol)`, 폰 1.0.18 `claimCharacterMission` 과
+ * 같은 규약): 같은 키는 한 번에 하나 · 실패는 그 줄 · 응답이 상태를 옮긴다. 루비가 아니라 캐릭터가 오므로 받으면 상점을 다시 읽어 보유를
+ * 맞춘다(고르기 · 상점 칸이 서버 보유로 선다).
+ */
+fun MeStore.claimCharacterMission(key: String) {
+    if (!context.sessionStore.isSignedIn || !achievementsAvailable) return
+    if (key in achievementClaimsInFlight) return
+    achievementClaimsInFlight = achievementClaimsInFlight + key
+    val generation = context.generation
+    val rubyWriteAtDeparture = context.ruby.rubyWriteSerial
+    val service = context.service
+    launch {
+        try {
+            val protocolNumber = shopProtocolVersion()
+            val response = try {
+                AchievementCharacterClaimResponse.decode(
+                    context.withSessionRetry { s -> service.achievementCharacterClaimRaw(s.accessToken, key, protocolNumber) },
+                )
+            } catch (e: Throwable) {
+                if (generation != context.generation) return@launch
+                if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return@launch
+                markAchievementClaim(key, failed = true)
+                return@launch
+            }
+            if (generation != context.generation) return@launch
+            noteLocalWrite(MeStore.ACHIEVEMENT_CLAIM_WRITE_KEY)
+            applyAchievementStatus(response.status, rubyWriteAtDeparture)
+            when (response.outcome) {
+                AchievementCharacterClaimResponse.Outcome.ok, AchievementCharacterClaimResponse.Outcome.already,
+                AchievementCharacterClaimResponse.Outcome.notMet, AchievementCharacterClaimResponse.Outcome.hidden,
+                -> markAchievementClaim(key, failed = false)
+                else -> markAchievementClaim(key, failed = true)
+            }
+            if (response.outcome != AchievementCharacterClaimResponse.Outcome.ok || response.claimedCharacterIDs.isEmpty()) return@launch
+            loadShop()
+        } finally {
+            if (generation == context.generation) achievementClaimsInFlight = achievementClaimsInFlight - key
         }
     }
 }

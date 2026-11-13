@@ -129,10 +129,10 @@ class ReversiAIGame private constructor(
     val winner: ReversiColor? get() = result?.winner
 
     /** 마지막으로 놓인 돌의 칸(패스는 건너뛴다). */
-    val lastStoneIdx: Int? get() = pliesStorage.lastOrNull { it.kind == ReversiPly.Kind.stone }?.idx
+    val lastStoneIdx: Int? get() = pliesStorage.lastOrNull { it.kind == ReversiPly.Kind.stone }?.idx?.toInt()
 
     /** 시간 초과로 대신 놓인 돌의 칸들. */
-    val autoStones: Set<Int> get() = pliesStorage.mapNotNullTo(LinkedHashSet()) { if (it.auto) it.idx else null }
+    val autoStones: Set<Int> get() = pliesStorage.mapNotNullTo(LinkedHashSet()) { if (it.auto) it.idx?.toInt() else null }
 
     /** 지금 차례의 합법 수(오름차순). 끝났으면 []. */
     val legalMoves: List<Int> get() = turn?.let { ReversiRules.legalMoves(board, it) } ?: emptyList()
@@ -250,9 +250,9 @@ class ReversiAIGame private constructor(
     private fun record(played: ReversiPlay.Played, color: ReversiColor, idx: Int, auto: Boolean, now: Double) {
         val outcome = played.outcome
         board = outcome.board
-        pliesStorage.add(ReversiPly(pliesStorage.size + 1, color, ReversiPly.Kind.stone, idx, outcome.flipped, auto))
+        pliesStorage.add(ReversiPly((pliesStorage.size + 1).toLong(), color, ReversiPly.Kind.stone, idx.toLong(), outcome.flipped.map { it.toLong() }, auto))
         if (outcome.passed) {
-            pliesStorage.add(ReversiPly(pliesStorage.size + 1, color.opponent, ReversiPly.Kind.pass, null, emptyList(), false))
+            pliesStorage.add(ReversiPly((pliesStorage.size + 1).toLong(), color.opponent, ReversiPly.Kind.pass, null, emptyList(), false))
         }
         val next = outcome.next
         if (next != null) startTurn(next, now) else finishNaturally(now)
@@ -261,7 +261,7 @@ class ReversiAIGame private constructor(
     /** 차례 주인이 둘 곳이 없을 때(불변식 위반·검증용 시작 판)의 V-09 복구: 상대에게 수가 있으면 패스 한 줄 + 상대 차례, 둘 다 없으면 자연 종료. */
     private fun foldStuckTurn(color: ReversiColor, now: Double) {
         if (ReversiRules.hasLegalMove(board, color.opponent)) {
-            pliesStorage.add(ReversiPly(pliesStorage.size + 1, color, ReversiPly.Kind.pass, null, emptyList(), false))
+            pliesStorage.add(ReversiPly((pliesStorage.size + 1).toLong(), color, ReversiPly.Kind.pass, null, emptyList(), false))
             startTurn(color.opponent, now)
         } else {
             finishNaturally(now)

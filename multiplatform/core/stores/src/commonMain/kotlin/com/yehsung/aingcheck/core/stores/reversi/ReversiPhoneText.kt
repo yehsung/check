@@ -111,7 +111,7 @@ object ReversiPhoneText {
     /** 수 한 칸 글자: 돌이면 "d3"(자동이면 "d3 · 자동"), 패스면 "넘김". */
     fun plyText(ply: ReversiPly): String = when (ply.kind) {
         ReversiPly.Kind.pass -> pass
-        ReversiPly.Kind.stone -> if (ply.auto) "${coordinate(ply.idx)} · 자동" else coordinate(ply.idx)
+        ReversiPly.Kind.stone -> if (ply.auto) "${coordinate(ply.idx?.toInt())} · 자동" else coordinate(ply.idx?.toInt())
     }
 
     const val resign: String = "기권"

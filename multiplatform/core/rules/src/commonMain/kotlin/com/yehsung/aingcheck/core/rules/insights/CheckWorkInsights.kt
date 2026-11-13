@@ -299,7 +299,13 @@ object TokenDailyMerge {
 }
 
 /** 개인 기록 계산 결과 묶음(히트맵 + 회고 + 잔디) — 같은 파싱 결과를 나눠 쓴다. 순수 계산이라 어느 스레드에서 불러도 같다. */
-data class WorkInsightsComputation(val heatmap: WorkRhythmHeatmap, val retro: WeeklyRetro?, val dailyGrid: WorkDailyGrid) {
+data class WorkInsightsComputation(
+    val heatmap: WorkRhythmHeatmap,
+    val retro: WeeklyRetro?,
+    val dailyGrid: WorkDailyGrid,
+    /** 판 8(맥 0.3.78 · 폰 1.0.18) — 첫 주 ~ 이번 주 주별 리듬(완료 세션만). 조회 창이 이른 주까지 닿아야 앞 주들이 찬다. */
+    val rhythmWeeks: WorkRhythmWeeks = WorkRhythmWeeks.empty,
+) {
     companion object {
         /** ongoingStart: 진행 중인 내 세션의 시작 — 지금까지만 기여한다. 잔디는 진행 세션을 스스로 얹는다(이중 계상 없음). */
         fun build(rows: List<WorkSessionTimes>, now: Double, goalSeconds: Long, ongoingStart: Double? = null): WorkInsightsComputation {
@@ -310,6 +316,8 @@ data class WorkInsightsComputation(val heatmap: WorkRhythmHeatmap, val retro: We
                 WorkRhythmHeatmap.build(parsed, now),
                 WeeklyRetro.build(parsed, now, goalSeconds),
                 WorkDailyGrid.build(completed, now, ongoingStart),
+                // 주별 리듬은 **완료분만** 담는다 — 진행 중 세션은 화면이 1분마다 '지금까지'를 얹어 실시간으로 찬다(WorkRhythmHeatmap.addingLive).
+                WorkRhythmWeeks.build(completed, now),
             )
         }
     }

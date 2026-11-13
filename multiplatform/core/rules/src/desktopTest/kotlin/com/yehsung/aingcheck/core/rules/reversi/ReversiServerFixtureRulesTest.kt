@@ -57,7 +57,7 @@ class ReversiServerFixtureRulesTest {
                     val mover = turn ?: fail("$file: active 인데 차례가 없다")
                     assertTrue(ReversiRules.hasLegalMove(board, mover), "$file: 차례 주인이 둘 곳이 없다(V-09 불변식)")
                     if (state.myColor == mover) {
-                        assertEquals(ReversiRules.legalMoves(board, mover), legal, "$file: legal_moves")
+                        assertEquals(ReversiRules.legalMoves(board, mover), legal.map { it.toInt() }, "$file: legal_moves")
                         legalChecked += 1
                     } else {
                         assertTrue(legal.isEmpty(), "$file: 내 차례가 아닌데 legal_moves 가 있다")
@@ -76,7 +76,7 @@ class ReversiServerFixtureRulesTest {
                 if (score != null) {
                     // 자연 종료 — WOF 점수 · 끝 분류가 Kotlin 규칙과 같다(V-10·V-11).
                     val kotlin = ReversiRules.score(board) ?: fail("$file: 끝난 판인데 Kotlin 규칙은 안 끝났다고 한다")
-                    assertTrue(score.black == kotlin.black && score.white == kotlin.white, "$file: 점수")
+                    assertTrue(score.black == kotlin.black.toLong() && score.white == kotlin.white.toLong(), "$file: 점수")
                     assertEquals(kotlin.result, match.result, "$file: 결과")
                     assertEquals(ReversiRules.endKind(board)?.rawValue, match.endReason?.rawValue, "$file: 끝 분류")
                     scored += 1
@@ -89,14 +89,14 @@ class ReversiServerFixtureRulesTest {
             val lastIndex = moves.indexOfLast { it.kind == ReversiPly.Kind.stone }
             if (lastIndex >= 0 && moves.drop(lastIndex + 1).all { it.kind == ReversiPly.Kind.pass }) {
                 val row = moves[lastIndex]
-                val idx = assertNotNull(row.idx)
+                val idx = assertNotNull(row.idx).toInt()
                 val cells = board.string.toCharArray()
                 cells[idx] = '.'
-                for (cell in row.flipped) cells[cell] = row.color.opponent.cell
+                for (cell in row.flipped) cells[cell.toInt()] = row.color.opponent.cell
                 val prior = assertNotNull(ReversiBoard.fromString(cells.concatToString()))
                 val outcome = ReversiRules.play(prior, row.color, idx).outcomeOrNull ?: fail("$file: 되돌린 판에서 그 수가 불법이다")
                 assertEquals(board, outcome.board, "$file: 다시 둔 판이 서버 판과 다르다")
-                assertEquals(row.flipped, outcome.flipped, "$file: 뒤집힌 칸")
+                assertEquals(row.flipped.map { it.toInt() }, outcome.flipped, "$file: 뒤집힌 칸")
                 val passes = moves.size - 1 - lastIndex
                 assertEquals(passes == 1, outcome.passed, "$file: 뒤따른 패스 줄")
                 if (match.matchStatus == ReversiMatchStatus.active) assertEquals(turn, outcome.next, "$file: 다음 차례")

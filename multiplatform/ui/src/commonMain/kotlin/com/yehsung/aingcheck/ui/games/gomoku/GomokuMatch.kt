@@ -335,6 +335,7 @@ internal fun GomokuResultView(games: GamesStore, gomoku: GomokuStore, match: Gom
                         GomokuBoardPicture(
                             board = match.board, lastMove = match.lastMove, autoPoints = match.autoPoints,
                             winLine = if (match.endReason == GomokuEndReason.five) GomokuPhoneWinLine.ends(match.board, match.lastMove) else null,
+                            stoneSkins = match.stoneSkins,
                         ),
                         side = side,
                         modifier = Modifier.testTag(GomokuScreenTags.board).semantics { contentDescription = GomokuScreenText.boardAccessibility(match, 0) },

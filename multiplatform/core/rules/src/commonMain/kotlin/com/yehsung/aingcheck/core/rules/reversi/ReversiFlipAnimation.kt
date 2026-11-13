@@ -101,11 +101,11 @@ data class ReversiFlipAnimation(
             val fresh = plies.filter { it.seq > previousMoveCount && it.seq <= nextMoveCount }.sortedBy { it.seq }
             val stone = fresh.firstOrNull() ?: return null
             val idx = stone.idx
-            if (fresh.size != delta || stone.seq != previousMoveCount + 1 || stone.kind != ReversiPly.Kind.stone || idx == null || stone.flipped.isEmpty()) {
+            if (fresh.size != delta || stone.seq != (previousMoveCount + 1).toLong() || stone.kind != ReversiPly.Kind.stone || idx == null || stone.flipped.isEmpty()) {
                 return null
             }
             if (delta == 2 && fresh[1].kind != ReversiPly.Kind.pass) return null
-            return ReversiFlipAnimation(matchID, now, idx, stone.color, stone.flipped)
+            return ReversiFlipAnimation(matchID, now, idx.toInt(), stone.color, stone.flipped.map { it.toInt() })
         }
 
         /** 두 칸의 고리 거리(행·열 2차원 — 1차원 idx 차로 재지 않는다, V-01). */

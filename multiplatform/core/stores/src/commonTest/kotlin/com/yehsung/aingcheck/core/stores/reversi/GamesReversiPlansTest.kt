@@ -98,7 +98,7 @@ class GamesReversiPlansTest {
     @Test
     fun moveLogPairsByColorNotParity() {
         fun ply(seq: Int, color: ReversiColor, pass: Boolean = false, auto: Boolean = false) =
-            ReversiPly(seq, color, if (pass) ReversiPly.Kind.pass else ReversiPly.Kind.stone, if (pass) null else 19 + seq, emptyList(), auto)
+            ReversiPly(seq.toLong(), color, if (pass) ReversiPly.Kind.pass else ReversiPly.Kind.stone, if (pass) null else (19 + seq).toLong(), emptyList(), auto)
         // 흑 · 백 · 흑 · 흑(백이 넘김 없이 기록 구멍) · 백(넘김) — 홀짝으로 자르면 번호가 밀린다.
         val chips = GamesReversiMoveLog.chips(listOf(ply(1, ReversiColor.black), ply(2, ReversiColor.white), ply(3, ReversiColor.black, auto = true), ply(4, ReversiColor.black), ply(5, ReversiColor.white, pass = true)))
         assertEquals(listOf(1, null, 2, 3, null), chips.map { it.number })

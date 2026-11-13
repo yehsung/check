@@ -8,7 +8,7 @@ import com.yehsung.aingcheck.core.net.claimCharacterGift
 import com.yehsung.aingcheck.core.net.fetchCharacterGiftPending
 import com.yehsung.aingcheck.core.rules.character.gift.CharacterGiftClaimOutcome
 import com.yehsung.aingcheck.core.rules.character.gift.CharacterGiftCopy
-import com.yehsung.aingcheck.core.rules.character.gift.copy
+import com.yehsung.aingcheck.core.rules.character.gift.copyFor
 import com.yehsung.aingcheck.core.rules.gacha.ShopWire
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer
@@ -64,8 +64,8 @@ data class MeCakeGiftSheet(
     /** 선물 종류(생일 · 술 한잔). */
     val kind: CharacterGiftKind get() = gift.kind
 
-    /** 이 시트가 그리는 글자 묶음(제목 · 본문 · 확인 단추 · 받은 뒤 단추 · 다시 열기). */
-    val texts: CharacterGiftCopy get() = gift.kind.copy
+    /** 이 시트가 그리는 글자 묶음(제목 · 본문 · 확인 단추 · 받은 뒤 단추 · 다시 열기). 우리 센터 선물은 센터 이름이 든 판. */
+    val texts: CharacterGiftCopy get() = gift.kind.copyFor(gift.options.firstOrNull())
 
     /** 고를 것이 있는가 — 생일(케이크 둘 중 하나)만. 술 한잔은 이슬 하나라 고르기 없이 [짠 받기]. */
     val choosesOption: Boolean get() = gift.kind == CharacterGiftKind.birthday
@@ -78,9 +78,12 @@ data class MeCakeGiftSheet(
         fun open(gift: CharacterGiftOffer, notice: String? = null): MeCakeGiftSheet =
             MeCakeGiftSheet(gift, selection = preselection(gift), notice = notice)
 
-        /** 미리 고를 것 — 술 한잔이면 그 하나(선택지가 정확히 하나일 때만), 그 밖은 null. */
+        /**
+         * 미리 고를 것 — 고를 것 없는 한 개 선물(술 한잔 · 빼빼로 — 폰 1.0.18 · 판 8)이면 그 하나(선택지가 정확히 하나일 때만), 생일은 null
+         * (둘 중 사용자가 고른다).
+         */
         fun preselection(gift: CharacterGiftOffer): String? =
-            if (gift.kind == CharacterGiftKind.drink) gift.options.singleOrNull() else null
+            if (gift.kind != CharacterGiftKind.birthday) gift.options.singleOrNull() else null
     }
 }
 

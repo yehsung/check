@@ -49,6 +49,7 @@ import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
 
 /**
  * 살아 있는 미리보기 자리(W5-c). [Draw] 는 캐릭터 [characterId] 를 [size] 칸에 그린다. [revealSerial] 이 바뀌면(뽑기 공개 뒤) 한 번 도는 연출을
@@ -102,6 +103,8 @@ object MeCharacterTileRules {
         is MeCharacterTileStatus.Price -> "$name, ${RubyPriceRule.accessibilityText(status.price.toLong(), RubyPriceRule.isShort(status.price.toLong(), status.balance))}"
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
         is MeCharacterTileStatus.GiftOnly -> "$name, ${status.kind.copy.lockedCaption}"
+        is MeCharacterTileStatus.ShardOnly -> "$name, ${MeText.shardOnlyAcquirePhrase(status.shardCost)}"
+        MeCharacterTileStatus.MissionLocked -> "$name, ${DevAingMission.lockedCaption} — ${DevAingMission.lockedHint}"
         MeCharacterTileStatus.UnknownPrice -> "$name, 가격 모름"
         MeCharacterTileStatus.Busy -> "$name, ${MeText.loading}"
         MeCharacterTileStatus.None -> name

@@ -64,6 +64,10 @@ class PhoneGomokuLink(val store: GomokuStore, val aiThinker: GamesGomokuAIThinke
     GamesGomokuLink, GamesLobbyRoster<GomokuUser> {
     init {
         store.aiMoveChooser = aiThinker.chooser
+        // 판 8 — 그 판의 난이도(몇 수 앞까지)를 폰 생각 시간(1.5초)과 함께 넘긴다. 판이 없으면 기본(어려움).
+        aiThinker.limitsProvider = {
+            store.aiGame?.difficulty?.limits?.copy(timeBudget = GamesGomokuAIThinker.phoneLimits.timeBudget) ?: aiThinker.limits
+        }
         aiThinker.isStillNeeded = { board, color ->
             val game = store.aiGame
             store.isAIThinking && game != null && game.board == board && game.aiColor == color

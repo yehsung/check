@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/ShopProtocol.swift @ 12624739(이슬 번호 5)
+// 원본: Sources/CheckCore/ShopProtocol.swift @ e4995a3a(이슬 5 · 빼빼로 6 · 흑우 7 · 루비 8 · 개발 9 · 지역 10)
 package com.yehsung.aingcheck.core.rules.gacha
 
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
@@ -37,11 +37,35 @@ object ShopWire {
     /** 이 번호를 요구하는 캐릭터 — 이슬 하나(`CharacterCatalog.drinkGiftBuiltInIDs`). */
     val isulCharacterIDs: List<String> get() = CharacterCatalog.drinkGiftBuiltInIDs
 
+    /** 빼빼로 아잉이(맥 0.3.77 빼빼로 데이 선물 전용)가 든 명단과 빼빼로 선물을 받는 번호. 6 미만에게 서버는 그 행을 안 보이고 수령은 needs_update. */
+    const val peperoProtocol = 6
+    val peperoCharacterIDs: List<String> get() = CharacterCatalog.peperoGiftBuiltInIDs
+
+    /** 흑우 아잉이(맥 0.3.78 조각 교환 전용) 행 · 교환표를 받는 번호. 7 미만에게 서버는 그 행을 안 보이고 교환은 needs_update. */
+    const val hwooProtocol = 7
+    val hwooCharacterIDs: List<String> get() = CharacterCatalog.shardOnlyBuiltInIDs
+
+    /** 루비 아잉이(맥 0.3.78 상점 루비 1000) 행을 받고 사는 번호. 8 미만에게 서버는 그 행을 안 보이고 구매는 needs_update. */
+    const val rubyProtocol = 8
+    val rubyCharacterIDs: List<String> get() = CharacterCatalog.shopBuiltInIDs
+
+    /** 개발에 찌든 아잉이(맥 0.3.81 미션 보상) 행 · 얻는 길을 받는 번호. 9 미만에게 서버는 그 행을 안 보인다. */
+    const val devProtocol = 9
+    val devCharacterIDs: List<String> get() = CharacterCatalog.devBuiltInIDs
+
+    /**
+     * 지역 아잉이(부산 · 서울 — 우리 센터 선물)와 그 선물을 받는 번호. **두 센터를 다** 그릴 수 있을 때만 말한다. Android 판 8 은 지역 그림을
+     * 싣지 않아 9 에 머문다(안드로이드 범위 밖 — 아이폰 1.0.18 에도 없다).
+     */
+    const val regionProtocol = 10
+    val regionCharacterIDs: List<String> get() = CharacterCatalog.regionGiftBuiltInIDs
+
     /**
      * 그릴 수 있는 id 들 → 서버에 말할 번호.
      * INV-ShopProtocol-c8e9aa64 이식: **번호는 누적이다** — 서버 게이트는 `min_protocol <= p_protocol` 이라 2 를 보내면 1 짜리(robot)도 받는다.
      * 그래서 앞 번호의 캐릭터를 전부 그릴 수 있을 때만 다음 번호를 말한다(건너뛰어 말할 수 없다 — 보수적인 쪽으로 틀린다). 4 는 케이크 **둘 다**,
      * 5 는 여기까지 전부 **와** 이슬(로봇 · 금 · 무지개 · 케이크 둘 · 이슬을 전부 그리는 빌드). 이슬만 있고 케이크가 하나라도 빠지면 3 에 머문다.
+     * 6 · 7 · 8 · 9 · 10 도 같다 — 빼빼로 · 흑우 · 루비 · 개발 · 지역 둘을 차례로 다 그릴 수 있을 때만(Android 판 8 은 9).
      */
     fun protocolVersion(drawableCharacterIDs: Iterable<String>): Int {
         val drawable = drawableCharacterIDs.toSet()
@@ -49,7 +73,12 @@ object ShopWire {
         if (goldCharacterID !in drawable) return robotProtocol
         if (rainbowCharacterID !in drawable) return goldProtocol
         if (!cakeCharacterIDs.all { it in drawable }) return rainbowProtocol
-        return if (isulCharacterIDs.all { it in drawable }) isulProtocol else cakeProtocol
+        if (!isulCharacterIDs.all { it in drawable }) return cakeProtocol
+        if (!peperoCharacterIDs.all { it in drawable }) return isulProtocol
+        if (!hwooCharacterIDs.all { it in drawable }) return peperoProtocol
+        if (!rubyCharacterIDs.all { it in drawable }) return hwooProtocol
+        if (!devCharacterIDs.all { it in drawable }) return rubyProtocol
+        return if (regionCharacterIDs.all { it in drawable }) regionProtocol else devProtocol
     }
 
     /** 생일 선물을 조회 · 수령할 수 있는가(서버 문턱 `p_protocol >= 4`). 판정의 권위는 서버다 — 헛왕복을 줄이는 문이다. */
@@ -60,6 +89,12 @@ object ShopWire {
      * 4 인 빌드는 생일 선물만 받는다. 이 값은 '다음 선물' 되묻기의 문이다(서버는 한 번에 하나만 내린다).
      */
     fun supportsDrinkGift(protocolVersion: Int): Boolean = protocolVersion >= isulProtocol
+
+    /** 빼빼로 선물을 받을 수 있는가(서버 문턱 `p_protocol >= 6`). */
+    fun supportsPeperoGift(protocolVersion: Int): Boolean = protocolVersion >= peperoProtocol
+
+    /** 우리 센터 선물을 마련 · 조회 · 수령할 수 있는가(서버 문턱 10). Android 판 8 은 늘 거짓이다. */
+    fun supportsRegionGift(protocolVersion: Int): Boolean = protocolVersion >= regionProtocol
 
     /** 뽑기를 쓸 수 있는가(`p_protocol >= 2`). 화면을 여는 판정은 이것이 아니라 `shop_state.gacha` 의 유무다. */
     fun supportsGacha(protocolVersion: Int): Boolean = protocolVersion >= goldProtocol

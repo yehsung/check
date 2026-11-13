@@ -21,9 +21,9 @@ import kotlin.test.assertTrue
 class ReversiFlipAnimationTest {
     private val t0 = 1_793_660_908.0
 
-    private fun stone(seq: Int, color: ReversiColor, idx: Int, flipped: List<Int>) = ReversiPly(seq, color, ReversiPly.Kind.stone, idx, flipped, false)
+    private fun stone(seq: Int, color: ReversiColor, idx: Int, flipped: List<Int>) = ReversiPly(seq.toLong(), color, ReversiPly.Kind.stone, idx.toLong(), flipped.map { it.toLong() }, false)
 
-    private fun pass(seq: Int, color: ReversiColor) = ReversiPly(seq, color, ReversiPly.Kind.pass, null, emptyList(), false)
+    private fun pass(seq: Int, color: ReversiColor) = ReversiPly(seq.toLong(), color, ReversiPly.Kind.pass, null, emptyList(), false)
 
     /** Swift `make(from: rvMatch("m", count: 4), to: rvMatch(id, count:, plies:))` — 프로덕션 짝 [ReversiFlipAnimation.make](previousMatchID, …) 를 그대로 부른다(판 id 가드는 그 안에 있다). */
     private fun make(previousID: String?, nextID: String, count: Int, plies: List<ReversiPly>): ReversiFlipAnimation? =

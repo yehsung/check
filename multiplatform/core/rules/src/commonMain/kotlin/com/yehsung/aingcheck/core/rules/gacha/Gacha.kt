@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/Gacha.swift @ 1b8260d (와이어 포함 전부 — C§3.2 B-1. 서비스 래퍼 `extension SupabaseWorkService` 는 net(W1-d) 몫)
+// 원본: Sources/CheckCore/Gacha.swift @ 1b8260d · e4995a3a(흑우 — 확률 0 줄 빼기 · 조각 교환 전용 글자) (와이어 포함 전부 — C§3.2 B-1. 서비스 래퍼 `extension SupabaseWorkService` 는 net(W1-d) 몫)
 package com.yehsung.aingcheck.core.rules.gacha
 
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
@@ -452,7 +452,9 @@ object GachaRules {
     fun oddsRows(info: GachaInfo, shopRows: List<GachaShopRow>, displayName: (String) -> String?): List<GachaOddsRow> {
         val rowsByID = LinkedHashMap<String, GachaShopRow>()
         for (row in shopRows) if (row.id !in rowsByID) rowsByID[row.id] = row
-        return (info.odds ?: emptyList()).map { entry ->
+        // 확률 0 인 줄(맥 0.3.78 — 흑우: 조각 교환 전용, 서버가 확률표 맨 앞에 0 으로 싣는다)은 **뽑기 확률** 표에 서지 않는다 —
+        // 0% 줄은 "뽑을 수 있는데 안 나온다"로 읽힌다. 교환 목록([exchangeRows])은 교환표(`shard_costs`)를 보므로 그대로 선다.
+        return (info.odds ?: emptyList()).filter { it.percent > 0 }.map { entry ->
             val id = entry.characterID
             val row = rowsByID[id]
             // 서버 표식이 참이면 뽑기 전용 · 황금·무지개는 표식과 무관하게 언제나 뽑기 전용.
@@ -460,6 +462,8 @@ object GachaRules {
             val price = if (gachaOnly) null else row?.price
             val cost = if (isNeverExchangeable(id)) null else info.shardCosts?.get(id)?.takeIf { it > 0 }
             val priceText = when {
+                // 조각 교환 전용(흑우): "조각 20개로 교환" — 뽑기에는 안 나온다.
+                CharacterCatalog.isShardOnlyBuiltIn(id) -> GachaText.shardOnlyPrice(cost)
                 gachaOnly -> GachaText.gachaOnlyPrice(cost)
                 price != null -> "$price"
                 else -> GachaText.unknownValue
@@ -518,6 +522,21 @@ object GachaText {
     }
 
     const val gachaOnlyHint = "뽑기나 조각 교환으로 얻을 수 있어요"
+
+    /** 조각 교환 전용(흑우 — 맥 0.3.78)의 얻는 길: "조각 20개로 교환". 교환값을 모르면 "조각 교환 전용". */
+    fun shardOnlyPrice(shardCost: Long?): String {
+        if (shardCost == null || shardCost <= 0) return shardOnly
+        return "${shardCost(shardCost)}로 교환"
+    }
+
+    /** 조각 교환 전용의 짧은 말(교환값을 모를 때). */
+    const val shardOnly = "조각 교환 전용"
+
+    /** 조각 교환 전용 캐릭터를 눌렀을 때의 한 줄(뽑기에는 안 나온다 — "뽑기나"는 거짓이다). */
+    const val shardOnlyHint = "조각 교환으로만 얻을 수 있어요"
+
+    /** 이 캐릭터의 얻는 길 안내(뽑기 전용 · 조각 교환 전용을 가른다 — 잠긴 카드 · 상점 not_for_sale 이 이 한 곳을 묻는다). */
+    fun acquireHint(characterID: String?): String = if (CharacterCatalog.isShardOnlyBuiltIn(characterID)) shardOnlyHint else gachaOnlyHint
     const val unknownValue = "—"
     const val owned = "보유"
     const val exchangeButton = "교환"

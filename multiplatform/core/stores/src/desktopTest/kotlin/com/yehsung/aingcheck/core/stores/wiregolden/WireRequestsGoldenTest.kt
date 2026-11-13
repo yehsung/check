@@ -69,6 +69,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkin
+import com.yehsung.aingcheck.core.stores.service.achievementCharacterClaim
+import com.yehsung.aingcheck.core.stores.service.buyOmokSkin
+import com.yehsung.aingcheck.core.stores.service.omokSkinsState
+import com.yehsung.aingcheck.core.stores.service.setOmokSkin
 
 
 
@@ -130,6 +135,12 @@ class WireRequestsGoldenTest {
         "achievementClaim#data" to { s -> s.achievementClaim(t, "poke10") },
         "achievementClaim(nil)" to { s -> s.achievementClaim(t, null) },
         "achievementClaim(nil)#data" to { s -> s.achievementClaim(t, null) },
+        // 판 8(아이폰 1.0.18 맞추기): 캐릭터 보상 미션 · 오목알 스킨.
+        "achievementCharacterClaim" to { s -> s.achievementCharacterClaim(t, "work100", 9) },
+        "omokSkinsState" to { s -> s.omokSkinsState(t) },
+        "buyOmokSkin" to { s -> s.buyOmokSkin(t, OmokStoneSkin.dice) },
+        "setOmokSkin" to { s -> s.setOmokSkin(t, OmokStoneSkin.cat) },
+        "setOmokSkin(nil)" to { s -> s.setOmokSkin(t, null) },
         "dailyMissionClaim" to { s -> s.dailyMissionClaim(t, "daily_gomoku") },
         "dailyMissionClaim#data" to { s -> s.dailyMissionClaim(t, "daily_gomoku") },
         "dailyMissionClaim(nil)" to { s -> s.dailyMissionClaim(t, null) },

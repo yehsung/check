@@ -64,6 +64,12 @@ class GamesGomokuAIThinker {
 
     var engine: Engine = realEngine
     var limits: GomokuAISearchLimits = phoneLimits
+
+    /**
+     * 이번 수의 한도(판 8 — 오목 AI 난이도). 조립이 지금 AI 판의 난이도 한도(몇 수 앞까지)에 폰 생각 시간을 얹어 준다. 기본은 [limits](어려움).
+     * ★ 아이폰 1.0.18 은 이 자리 없이 [limits] 고정이라 난이도가 실제 AI 에 안 먹는다(글자만 바뀐다) — Android 는 판의 난이도를 쓴다.
+     */
+    var limitsProvider: () -> GomokuAISearchLimits = { limits }
     /** 탐색을 돌리는 디스패처(Swift `Task.detached` — 메인 밖). 시험은 시험 디스패처를 넣는다. */
     var searchDispatcher: CoroutineDispatcher = Dispatchers.Default
     /** 이 판·색의 수가 아직 필요한가(코어 AI 판이 그 판에서 AI 차례로 멈춰 있는가). 필요 없으면 **다시 생각하지 않는다**. */
@@ -117,7 +123,7 @@ class GamesGomokuAIThinker {
                 continue
             }
             val engine = engine
-            val limits = limits
+            val limits = limitsProvider()
             val outcome = coroutineScope {
                 // 메인 밖에서 돈다 — 코어 기본 선택기와 같은 수법. 엔진이 보는 취소는 이 작업의 취소다.
                 val search = async(searchDispatcher) {

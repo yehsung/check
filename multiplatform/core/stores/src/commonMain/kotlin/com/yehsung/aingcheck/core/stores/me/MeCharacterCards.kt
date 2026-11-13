@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Me/MeCharacterCards.swift · Sources/CheckMobileKit/Me/MeCharacterCardData.swift(그림 바이트 heicBase64 를 뺀 메타) @ 1b8260d
+// 원본: Sources/CheckMobileKit/Me/MeCharacterCards.swift · Sources/CheckMobileKit/Me/MeCharacterCardData.swift(그림 바이트 heicBase64 를 뺀 메타) @ 1b8260d · 928d5562(새 아잉이 넷)
 package com.yehsung.aingcheck.core.stores.me
 
 import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
@@ -40,6 +40,11 @@ object MeCharacterCards {
         MeCharacterCard("aing_cake_strawberry", "딸기 케이크 아잉이", false, 146, 163, 146, 163),
         MeCharacterCard("aing_cake_choco", "초코 케이크 아잉이", false, 146, 169, 146, 169),
         MeCharacterCard("aing_isul", "이슬 아잉이", false, 146, 151, 146, 151),
+        // 판 8(아이폰 1.0.18 맞추기): 폰 MeCharacterCardData.swift 생성물의 자르기 값 그대로(빼빼로는 폰 판 — 상자 글자 없음).
+        MeCharacterCard("aing_pepero", "빼빼로 아잉이", false, 168, 160, 168, 160),
+        MeCharacterCard("aing_hwoo", "흑우 아잉이", false, 164, 154, 164, 154),
+        MeCharacterCard("aing_ruby", "루비 아잉이", false, 166, 152, 166, 152),
+        MeCharacterCard("aing_dev", "개발에 찌든 아잉이", false, 166, 152, 166, 152),
         MeCharacterCard("fox", "여우", false, 444, 512, 187, 216),
         MeCharacterCard("ghost", "유령", false, 504, 512, 213, 216),
         MeCharacterCard("jellyfish", "해파리", false, 444, 512, 187, 216),
@@ -72,11 +77,20 @@ object MeCharacterCards {
      * '착용 중' 칸이 선다(검토 ISUL-1). 문은 나 탭 스토어가 쥔 그림 재료의 [DrawableCharacterSource.takesDrinkGift] 하나다.
      */
     fun knownIDs(takesDrinkGift: Boolean): List<String> =
-        if (takesDrinkGift) knownIDs else knownIDs.filter { it !in CharacterCatalog.drinkGiftBuiltInIDs }
+        if (takesDrinkGift) knownIDs else knownIDs.filter { it !in protocolFivePlusIDs }
 
     /** [knownIDs] (두 인자 판)에 드는가. */
     fun isKnown(id: String, takesDrinkGift: Boolean): Boolean =
-        isKnown(id) && (takesDrinkGift || id !in CharacterCatalog.drinkGiftBuiltInIDs)
+        isKnown(id) && (takesDrinkGift || id !in protocolFivePlusIDs)
+
+    /**
+     * 상점 번호 5 이상에서만 서버가 싣는 내장(이슬 · 빼빼로 · 흑우 · 루비 · 개발) — 번호 4 플랫폼(Windows v1)은 이들을 모른다(서버가 그 행을
+     * 가진 사람에게도 안 싣는 상대라, 알면 잠긴 '착용 중' 칸이 선다 — 검토 ISUL-1 과 같은 사정).
+     */
+    private val protocolFivePlusIDs: Set<String> = (
+        CharacterCatalog.drinkGiftBuiltInIDs + CharacterCatalog.peperoGiftBuiltInIDs + CharacterCatalog.shardOnlyBuiltInIDs +
+            CharacterCatalog.shopBuiltInIDs + CharacterCatalog.devBuiltInIDs
+        ).toSet()
 
     /**
      * 서버 착용값 → 화면에 세울 id. 비었거나 이 플랫폼이 모르는 id 면 아잉(서버 값은 건드리지 않는다). 술 한잔 선물을 안 받는 플랫폼은

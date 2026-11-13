@@ -57,6 +57,10 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.jvm.JvmName
 import kotlin.math.abs
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkin
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkins
+import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
+import com.yehsung.aingcheck.core.rules.ai.GomokuAIDifficulty
 
 // 1:1 오목 대결 스토어(v0.3.27) — 화면 상태 · 서버 동기화 · 안전망 폴링 · RPC 호출.
 //
@@ -120,6 +124,9 @@ class GomokuStore(
     host: GomokuStoreHost? = null,
 ) {
     companion object {
+        /** AI 난이도 기억 열쇠(맥 · 폰과 같은 글자). */
+        const val AI_DIFFICULTY_KEY = "gomoku.aiDifficulty"
+
         /** 상대 차례의 대국 상태 안전망 조회 주기(초) — 실시간 구독 중 + 마감이 가깝거나 마감을 모를 때. */
         const val statePollSecondsWhileSubscribed: Double = 3.0
         /** 같은 조회 — 미구독(킬스위치·재연결 중). 신호가 없으니 더 촘촘하다. */
@@ -250,6 +257,41 @@ class GomokuStore(
     var outgoing: GomokuInvite? by mutableStateOf(null)
 
     private var matchCell by mutableStateOf<GomokuMatchState?>(null)
+
+    /**
+     * 판 8(맥 0.3.81 · 폰 1.0.18 `aiStoneSkin`) — AI 판에서 **사람 쪽** 돌에 입힐 내 오목알 스킨(나 탭 상점 상태가 `MeLinks.noteEquippedOmokSkin`
+     * 으로 맞춘다). 서버 판은 응답의 black_skin · white_skin 이 말하므로 이 값을 안 쓴다. 바뀌면 진행 중인 AI 판 화면 값도 바로 바뀐다.
+     */
+    /**
+     * 판 8(맥 0.3.82 · 폰 1.0.18) — AI 와 두기 난이도(몇 수 앞까지). 다음 판부터 쓴다. 기억하는 곳은 [aiDifficultyPrefs](조립이 기기 설정을
+     * 넘긴다 · 시험은 null — 처음은 보통).
+     */
+    var aiDifficulty: GomokuAIDifficulty by mutableStateOf(GomokuAIDifficulty.normal)
+        internal set
+
+    /** 난이도를 기억할 기기 설정(Swift `aiDifficultyDefaults`). 넣는 순간 기억해 둔 값을 읽는다. */
+    var aiDifficultyPrefs: KeyValueStore? = null
+        set(value) {
+            field = value
+            val stored = GomokuAIDifficulty.fromRaw(value?.getString(AI_DIFFICULTY_KEY)) ?: GomokuAIDifficulty.normal
+            if (aiDifficulty != stored) aiDifficulty = stored
+        }
+
+    /** AI 와 두기 창의 난이도 고르기. 다음 판부터 쓰고, 이 기기에 기억한다. */
+    fun setAIDifficulty(difficulty: GomokuAIDifficulty) {
+        if (aiDifficulty != difficulty) aiDifficulty = difficulty
+        aiDifficultyPrefs?.putString(AI_DIFFICULTY_KEY, difficulty.name)
+    }
+
+    var aiStoneSkin: OmokStoneSkin? = null
+        set(value) {
+            if (field == value) return
+            field = value
+            val current = match ?: return
+            if (!isAIMatch) return
+            val next = current.copy(stoneSkins = OmokStoneSkins.ofColor(current.myColor == GomokuColor.black, value))
+            if (match != next) match = next
+        }
 
     /** 지금 판. 대입마다 Swift `didSet` 몫([matchDidChange])이 돈다 — 같은 값을 다시 넣어도 돈다(Swift 와 같다). */
     var match: GomokuMatchState?
@@ -982,6 +1024,7 @@ class GomokuStore(
             moveCount = appliedCount, turn = turn, deadline = deadline, isFinished = isFinished, outcome = outcome,
             endReason = row.endReason?.let { GomokuEndReason.fromRawValue(it) }, rubyDelta = rubyDelta,
             blackPassed = blackPassed, autoPoints = autoPoints.toSet(), lastMoveWasAuto = lastMoveWasAuto,
+            stoneSkins = OmokStoneSkins.ofWire(row.blackSkin, row.whiteSkin),
         )
         val justFinished = isFinished && base?.isFinished == false
         val previous = match

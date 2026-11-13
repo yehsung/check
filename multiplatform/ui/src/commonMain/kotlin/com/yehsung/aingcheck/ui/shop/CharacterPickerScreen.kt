@@ -57,6 +57,9 @@ import com.yehsung.aingcheck.core.stores.me.showsGacha
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
+import com.yehsung.aingcheck.core.stores.me.isMissionLocked
+import com.yehsung.aingcheck.core.stores.me.isShardOnly
 
 object PickerTags {
     const val HERO = "picker.hero"
@@ -156,14 +159,17 @@ private fun PickerTile(store: MeStore, id: String, onOpenMachine: () -> Unit) {
         isOn -> MeCharacterTileStatus.Equipped
         store.isOwned(id) -> MeCharacterTileStatus.Owned
         // 고르기에는 가진 사람에게만 서므로(pickerIDs) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
+        store.isMissionLocked(id) -> MeCharacterTileStatus.MissionLocked
         store.isGiftOnly(id) -> MeCharacterTileStatus.GiftOnly(store.giftKind(id))
+        store.isShardOnly(id) -> MeCharacterTileStatus.ShardOnly(store.gachaShardCost(id))
         store.isGachaOnly(id) -> MeCharacterTileStatus.GachaOnly(store.gachaShardCost(id))
         else -> store.price(id)?.let { MeCharacterTileStatus.Price(it, store.rubyBalance) }
             ?: if (unlocked) MeCharacterTileStatus.None else MeCharacterTileStatus.UnknownPrice
     }
     val lockedLabel = when {
+        store.isMissionLocked(id) -> "$name, 잠김 — ${DevAingMission.lockedHint}"
         store.isGiftOnly(id) -> "$name, 잠김 — ${store.giftKind(id).copy.lockedCaption}"
-        store.isGachaOnly(id) -> "$name, 잠김 — ${MeText.gachaAcquirePhrase(store.gachaShardCost(id))}"
+        store.isGachaOnly(id) -> "$name, 잠김 — ${MeText.acquirePhrase(id, store.gachaShardCost(id))}"
         else -> "$name, 잠김 — 상점에서 사기"
     }
     MeCharacterTile(

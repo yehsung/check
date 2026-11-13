@@ -38,6 +38,42 @@
           "finish": "isul",
           "id": "aing_isul",
           "kind": "scene3D"
+        },
+        {
+          "displayName": "빼빼로 아잉이",
+          "finish": "pepero",
+          "id": "aing_pepero",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "흑우 아잉이",
+          "finish": "hwoo",
+          "id": "aing_hwoo",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "루비 아잉이",
+          "finish": "ruby",
+          "id": "aing_ruby",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "개발에 찌든 아잉이",
+          "finish": "dev",
+          "id": "aing_dev",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "부산 갈매기 아잉이",
+          "finish": "busan",
+          "id": "aing_busan",
+          "kind": "scene3D"
+        },
+        {
+          "displayName": "서울의 밤 아잉이",
+          "finish": "seoul",
+          "id": "aing_seoul",
+          "kind": "scene3D"
         }
       ],
       "cakeChocoAingID": "aing_cake_choco",
@@ -45,12 +81,16 @@
       "charactersSubdirectory": "Characters",
       "gachaOnlyBuiltInIDs": [
         "aing_gold",
-        "aing_rainbow"
+        "aing_rainbow",
+        "aing_hwoo"
       ],
       "giftOnlyBuiltInIDs": [
         "aing_cake_strawberry",
         "aing_cake_choco",
-        "aing_isul"
+        "aing_isul",
+        "aing_pepero",
+        "aing_busan",
+        "aing_seoul"
       ],
       "goldAingID": "aing_gold",
       "id": "builtins",
@@ -265,13 +305,123 @@
       "isRare": false
     },
     {
+      "characterID": "aing_pepero",
+      "finish": "pepero",
+      "id": "id-16",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": true,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_hwoo",
+      "finish": "hwoo",
+      "id": "id-17",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": true,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_ruby",
+      "finish": "ruby",
+      "id": "id-18",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_dev",
+      "finish": "dev",
+      "id": "id-19",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_busan",
+      "finish": "busan",
+      "id": "id-20",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": true,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_seoul",
+      "finish": "seoul",
+      "id": "id-21",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": true,
+      "isGoldAing": false,
+      "isNeverExchangeable": true,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "AING_HWOO",
+      "finish": "standard",
+      "id": "id-22",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
+      "characterID": "aing_dev ",
+      "finish": "standard",
+      "id": "id-23",
+      "isCake": false,
+      "isCakeAing": false,
+      "isGachaOnlyBuiltIn": false,
+      "isGiftOnlyBuiltIn": false,
+      "isGoldAing": false,
+      "isNeverExchangeable": false,
+      "isRainbowAing": false,
+      "isRare": false
+    },
+    {
       "allIDs": [
         "aing",
         "aing_gold",
         "aing_rainbow",
         "aing_cake_strawberry",
         "aing_cake_choco",
-        "aing_isul"
+        "aing_isul",
+        "aing_pepero",
+        "aing_hwoo",
+        "aing_ruby",
+        "aing_dev",
+        "aing_busan",
+        "aing_seoul"
       ],
       "bundled": [],
       "displayNames": [
@@ -280,7 +430,13 @@
         "무지개 아잉이",
         "딸기 케이크 아잉이",
         "초코 케이크 아잉이",
-        "이슬 아잉이"
+        "이슬 아잉이",
+        "빼빼로 아잉이",
+        "흑우 아잉이",
+        "루비 아잉이",
+        "개발에 찌든 아잉이",
+        "부산 갈매기 아잉이",
+        "서울의 밤 아잉이"
       ],
       "id": "catalog-0"
     },
@@ -292,6 +448,12 @@
         "aing_cake_strawberry",
         "aing_cake_choco",
         "aing_isul",
+        "aing_pepero",
+        "aing_hwoo",
+        "aing_ruby",
+        "aing_dev",
+        "aing_busan",
+        "aing_seoul",
         "fox",
         "robot"
       ],
@@ -312,6 +474,12 @@
         "딸기 케이크 아잉이",
         "초코 케이크 아잉이",
         "이슬 아잉이",
+        "빼빼로 아잉이",
+        "흑우 아잉이",
+        "루비 아잉이",
+        "개발에 찌든 아잉이",
+        "부산 갈매기 아잉이",
+        "서울의 밤 아잉이",
         "여우",
         "로봇"
       ],
@@ -325,6 +493,12 @@
         "aing_cake_strawberry",
         "aing_cake_choco",
         "aing_isul",
+        "aing_pepero",
+        "aing_hwoo",
+        "aing_ruby",
+        "aing_dev",
+        "aing_busan",
+        "aing_seoul",
         "alpha",
         "zeta"
       ],
@@ -357,6 +531,12 @@
         "딸기 케이크 아잉이",
         "초코 케이크 아잉이",
         "이슬 아잉이",
+        "빼빼로 아잉이",
+        "흑우 아잉이",
+        "루비 아잉이",
+        "개발에 찌든 아잉이",
+        "부산 갈매기 아잉이",
+        "서울의 밤 아잉이",
         "알파",
         "제타"
       ],

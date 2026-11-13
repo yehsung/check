@@ -1205,6 +1205,25 @@ class MessagesStore(
         markRead(peer, through, pokeThrough)
     }
 
+    /**
+     * [모두 읽음](판 8 — 폰 1.0.18 `markAllConversationsRead` · 맥 0.3.81 과 같은 뜻 · 서버 변경 없음 · 대표 결정 11-10 "버튼 한번으로 전체 읽음 처리").
+     * 안 읽은 대화(메시지 ∪ 찌르기 — [sortUnreadPeerIDs])마다 **대화를 열 때와 같은 경계**(화면에 받아 둔 마지막 받은 메시지 · 찌르기)로 읽음을 올린다
+     * ([markRead] — 상대별로 겹치지 않으니 두 번 눌러도 한 차례). 받아 두지 않은 더 오래된 대화는 열 때 꺼진다(맥 · 폰과 같은 한계).
+     */
+    fun markAllConversationsRead() {
+        if (!isSignedIn) return
+        for (peer in sortUnreadPeerIDs.sorted()) {
+            val through = historySnapshot?.let { snapshot ->
+                MessageUnreadRules.markTarget(peer, visibleHistory, snapshot, optimisticReads[peer])
+            }
+            val pokeThrough = pokeSnapshot?.let { snapshot ->
+                MessagePokeLogRules.markTarget(peer, visiblePokeLog, snapshot, optimisticPokeReads[peer])
+            }
+            if (through == null && pokeThrough == null) continue
+            markRead(peer, through, pokeThrough)
+        }
+    }
+
     /** 읽음 처리 1회. 상대별로 겹치지 않는다. 응답 전에 낙관 읽음으로 점·배지를 곧바로 끈다 — 실패해도 되돌리지 않는다(정산만). */
     private fun markRead(peer: String, through: String?, pokeThrough: String?) {
         if (peer in runtime.markInFlight) {

@@ -90,7 +90,7 @@ data class ReversiBoard(val black: ULong, val white: ULong) {
         get() {
             val b = black.countOneBits()
             val w = white.countOneBits()
-            return ReversiCounts(black = b, white = w, empty = CELLS - b - w)
+            return ReversiCounts(black = b.toLong(), white = w.toLong(), empty = (CELLS - b - w).toLong())
         }
 
     object Serializer : KSerializer<ReversiBoard> {
@@ -133,9 +133,9 @@ data class ReversiBoard(val black: ULong, val white: ULong) {
 /** Swift `ReversiCounts` — 판 위 돌 수(와이어 `discs` 칸 `{black, white, empty}`). 세 칸 모두 필수다(Swift 합성 Codable). */
 @Serializable
 data class ReversiCounts(
-    @SerialName("black") val black: Int,
-    @SerialName("white") val white: Int,
-    @SerialName("empty") val empty: Int,
+    @SerialName("black") val black: Long,
+    @SerialName("white") val white: Long,
+    @SerialName("empty") val empty: Long,
 )
 
 /** Swift `ReversiResult` — 결과(색 기준). 와이어 `black_win`·`white_win`·`draw`. 모르는 글자는 던진다. */
@@ -210,11 +210,11 @@ enum class ReversiIllegalReason(override val rawValue: String) : SwiftRawValued 
 @Serializable(with = ReversiPly.Serializer::class)
 data class ReversiPly(
     /** 1 부터(패스 포함 기록 번호 — 서버 move_count 와 같은 눈금). */
-    val seq: Int,
+    val seq: Long,
     val color: ReversiColor,
     val kind: Kind,
-    val idx: Int?,
-    val flipped: List<Int>,
+    val idx: Long?,
+    val flipped: List<Long>,
     /** 시간 초과 자동 착수만 참. 패스 줄은 늘 거짓. */
     val auto: Boolean,
 ) {
@@ -230,11 +230,12 @@ data class ReversiPly(
         override fun deserialize(decoder: Decoder): ReversiPly {
             val c = SwiftDecoding.keyed(decoder)
             return ReversiPly(
-                seq = c.int("seq"),
+                // Swift Int 는 64비트다 — 골든의 'big'(2^32) 변형이 그대로 읽혀야 맥 · 폰과 같다(판 8 골든). 화면 · 엔진은 0…64 범위로 접어 쓴다.
+                seq = c.long("seq"),
                 color = c.decode("color", ReversiColor.serializer()),
                 kind = c.decode("kind", Kind.serializer()),
-                idx = c.intIfPresent("idx"),
-                flipped = c.decodeIfPresent("flipped", ListSerializer(Int.serializer())) ?: emptyList(),
+                idx = c.longIfPresent("idx"),
+                flipped = c.decodeIfPresent("flipped", ListSerializer(Long.serializer())) ?: emptyList(),
                 auto = c.boolIfPresent("auto") ?: false,
             )
         }

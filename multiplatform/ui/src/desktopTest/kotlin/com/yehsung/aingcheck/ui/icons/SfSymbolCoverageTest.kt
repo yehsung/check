@@ -168,6 +168,9 @@ internal object SfSymbolScan {
         // 일일 미션 게임 이름(0.3.74 Sources/CheckMobileKit/Games/GamesRummyTile.swift `Image(systemName: MeText.dailyMissionIcon(game: "rummy"))`)
         // — 기호 인자 안 **안쪽 호출의 game: 인자**라 수집기 (1)·(2)에 걸린다. 기호는 dailyMissionIcon 이 돌려주는 cube.fill(이미 대응표에 있다)
         "rummy",
+        // 판 8 기준선(맥 0.3.77~0.3.86 · 폰 1.0.18) — 창 자리 저장 키 · SceneKit 장식 노드 이름 · 보조 설정 키 · 마크다운 링크 표지 · 지역 마감 키(기호가 아니다)
+        "check.alkkagi.window", "check.mahjong.window", "check.pepero.box", "check.busan.beak", "check.busan.foot", "check.busan.tail",
+        "check.bubble.link", "mahjong.aids", "region.busan", "region.seoul",
     )
 
     /** 문맥 낱말도 점도 없이 쓰이는 간접 기호(낱말 하나). 지금은 없다 — 생기면 여기 적고 원문 대조가 따라온다. */

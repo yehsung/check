@@ -248,8 +248,8 @@ data class ReversiPlayerRow(
 /** Swift `ReversiScoreRow` — WOF 점수(자연 종료만 — 기권·abandoned 판은 null, V-15). 빈칸은 이긴 쪽에 더해져 합이 늘 64 다. */
 @Serializable
 data class ReversiScoreRow(
-    @SerialName("black") val black: Int? = null,
-    @SerialName("white") val white: Int? = null,
+    @SerialName("black") val black: Long? = null,
+    @SerialName("white") val white: Long? = null,
 )
 
 /**
@@ -268,7 +268,7 @@ data class ReversiMatchRow(
     @SerialName("black") val black: String? = null,
     @SerialName("white") val white: String? = null,
     /** 패스 포함 기록 수 = 마지막 seq. `p_expected_seq` 의 눈금. */
-    @SerialName("move_count") val moveCount: Int? = null,
+    @SerialName("move_count") val moveCount: Long? = null,
     /** 끝났거나 pending 이면 null. */
     @SerialName("turn") val turn: ReversiColor? = null,
     @SerialName("turn_started_ms") val turnStartedMs: Double? = null,
@@ -307,7 +307,7 @@ data class ReversiStatePayload(
     /** 관전·pending 이면 null. */
     @SerialName("my_color") val myColor: ReversiColor? = null,
     /** active 이고 **내 차례일 때만** 오름차순. 그 밖은 []. 클라는 이 목록만 하이라이트·입력으로 받는다. */
-    @SerialName("legal_moves") val legalMoves: List<Int>? = null,
+    @SerialName("legal_moves") val legalMoves: List<Long>? = null,
     @SerialName("black_auto_streak") val blackAutoStreak: Long? = null,
     @SerialName("white_auto_streak") val whiteAutoStreak: Long? = null,
     @SerialName("my_auto_streak") val myAutoStreak: Long? = null,

@@ -21,7 +21,11 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class MeStreakChipTest {
     /** 옛 서버의 진짜 응답 모양(데모 픽스처) — 키가 없다. */
-    private val oldServer = MeFixtures.fixture("_me/rpc.achievements_status.json")
+    // 데모 픽스처는 1.0.16 이후 `streak_days` 를 싣는다(맥 · 폰 main — 폰 V1016StreakChipTests 도 픽스처가 아니라 키 없는 본문을 쓴다).
+    // 그래서 '옛 서버'는 픽스처에서 그 키를 **뺀** 본문이다 — 나머지 칸은 데모 그대로.
+    private val oldServer = JsonObject(
+        (Json.parseToJsonElement(MeFixtures.fixture("_me/rpc.achievements_status.json")) as JsonObject).filterKeys { it != "streak_days" },
+    ).toString()
 
     private fun withStreak(value: String, base: String = oldServer): String =
         base.trimEnd().dropLast(1) + ""","streak_days":$value}"""

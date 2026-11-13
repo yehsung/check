@@ -20,15 +20,19 @@ class CharacterArtNoCopyTest {
             .filter { it.name.startsWith("ruby") || it.name.startsWith("stage-") }
         // 0.3.62 아잉이 이모티콘(G §8-2 — 초상처럼 Gradle Sync 로 읽는다).
         val stickers = File(repo, CharacterArt.STICKER_SOURCE_DIR).listFiles().orEmpty().filter { it.isFile && it.name.endsWith(".png") }
-        return (chars.toList() + aing + art + stickers).sortedBy { it.path }
+        // 판 8 — 빼빼로 초상은 폰 판(상자 글자 없음 · Sources/CheckMobileShared/Resources/Portraits)을 싣는다.
+        val pepero = File(repo, "Sources/CheckMobileShared/Resources/Portraits").listFiles().orEmpty()
+            .filter { it.name == "aing_pepero-neutral.png" || it.name == "aing_pepero-negative.png" }
+        return (chars.toList() + aing + pepero + art + stickers).sortedBy { it.path }
     }
 
     @Test
     fun noCopyOfCharacterArtUnderMultiplatform() {
         val repo = DesktopSnapshots.repoRoot
         val src = originals(repo)
-        // 초상 12×2(1b8260d 케이크 딸기·초코 · 12624739 이슬 더함) + 매니페스트 6 + 루비 3 + 무대 6 + 이모티콘 6(sticker-*.png, 0.3.63 그림) = 45
-        assertTrue(src.size == 45, "원본 그림을 ${src.size}개 찾았다(45 이어야 한다): ${src.map { it.name }}")
+        // 초상 16×2(1b8260d 케이크 딸기·초코 · 12624739 이슬 · 판 8 빼빼로 · 흑우 · 루비 · 개발) + 빼빼로 폰 판 2(맥 판과 둘 다 원본)
+        // + 매니페스트 6 + 루비 3 + 무대 6 + 이모티콘 6 = 55
+        assertTrue(src.size == 55, "원본 그림을 ${src.size}개 찾았다(55 이어야 한다): ${src.map { it.name }}")
         assertTrue(src.count { it.name.startsWith("sticker-") } == 6, "이모티콘 원본: ${src.filter { it.name.startsWith("sticker-") }.map { it.name }}")
         val copies = findCopies(DesktopSnapshots.mpRoot, src.associateBy { sha(it) })
         assertTrue(copies.isEmpty(), "multiplatform/ 에 원본 그림 사본이 있다(Gradle Sync 로 읽어야 한다):\n" + copies.joinToString("\n"))

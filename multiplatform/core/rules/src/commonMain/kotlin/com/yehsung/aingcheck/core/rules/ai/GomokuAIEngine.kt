@@ -193,7 +193,14 @@ internal class GomokuAIEngine(
     private val budget: Duration,
     private val isCancelled: () -> Boolean,
     timeSource: TimeSource = TimeSource.Monotonic,
+    limits: GomokuAISearchLimits = GomokuAISearchLimits(),
 ) {
+    // 난이도(판 8 · 맥 0.3.82) — 몇 수 앞까지 · 몰기 깊이. 기본값은 판 7 까지의 단일 난이도(어려움) 그대로다.
+    private val plyCap: Int = minOf(maxPly - 1, maxOf(1, limits.lookahead ?: maxPly))
+    private val vcfDepthLimit: Int = maxOf(0, limits.vcfDepth)
+    private val defenseVcfDepthLimit: Int = maxOf(0, limits.defenseVcfDepth)
+    private val leafVcfDepthLimit: Int = maxOf(0, limits.leafVcfDepth)
+
     // 판 상태
     private val cells = ByteArray(cellCount) { 3 }
     private val shapes = ByteArray(cellCount * 8) // p*8 + c*4 + d
@@ -573,10 +580,10 @@ internal class GomokuAIEngine(
         forEachCandidate { p ->
             if (makesFour(p, side)) { hasFour = true; false } else true
         }
-        if (hasFour) {
+        if (hasFour && leafVcfDepthLimit > 0) {
             vcfBudget = 120
             vcfBudgetHit = false
-            if (vcfMove(side, 8, null) != null) return win - (ply + 20)
+            if (vcfMove(side, leafVcfDepthLimit, null) != null) return win - (ply + 20)
         }
         val mine = (if (side == 1) sums0 else sums1) + centralityWeight * (if (side == 1) centrality0 else centrality1)
         val theirs = (if (opponent == 1) sums0 else sums1) + centralityWeight * (if (opponent == 1) centrality0 else centrality1)
@@ -672,7 +679,7 @@ internal class GomokuAIEngine(
     fun negamax(depth: Int, alphaIn: Int, betaIn: Int, ply: Int, side: Int): Int {
         tick()
         if (aborted) return 0
-        if (ply >= maxPly - 1) return evaluate(side, ply)
+        if (ply >= maxPly - 1 || ply >= plyCap) return evaluate(side, ply)
         var alpha = alphaIn
         var beta = betaIn
         val key = hash xor (if (side == 2) zobrist[625 * 2] else 0L)
@@ -771,17 +778,17 @@ internal class GomokuAIEngine(
         if (checkAbortNow()) return fallback
 
         // 4) 내 VCF.
-        if (opponentFives.isEmpty()) {
+        if (opponentFives.isEmpty() && vcfDepthLimit > 0) {
             vcfBudget = 30_000
             vcfBudgetHit = false
-            val move = vcfMove(side, 16, null)
+            val move = vcfMove(side, vcfDepthLimit, null)
             if (move != null && isLegal(move, side)) return move
             if (checkAbortNow()) return fallback
         }
 
         // 5) 상대 VCF 가 있으면 그것을 끊는 수로 좁힌다.
         var rootMoves: List<Int> = emptyList()
-        if (opponentFives.isEmpty() && hasVCF(opponent, 16, 20_000)) {
+        if (opponentFives.isEmpty() && defenseVcfDepthLimit > 0 && hasVCF(opponent, defenseVcfDepthLimit, 20_000)) {
             var defenses = ArrayList<Int>()
             var pool: List<Int> = legalNear.sortedWith { a, b ->
                 compareDescending(value(a, side) + value(a, opponent), value(b, side) + value(b, opponent))
@@ -794,7 +801,7 @@ internal class GomokuAIEngine(
             val uncertain = ArrayList<Int>()
             for (m in pool) {
                 make(m, side)
-                val stillLost = hasVCF(opponent, 16, 4_000)
+                val stillLost = hasVCF(opponent, defenseVcfDepthLimit, 4_000)
                 val unknown = vcfBudgetHit
                 unmake(m)
                 if (checkAbortNow()) break

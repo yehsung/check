@@ -189,7 +189,7 @@ class ReversiStoreContractTest {
         assertEquals(4, store.match?.moveCount)
         assertEquals(true, store.match?.isMyTurn)
         assertEquals(setOf(58), store.legalTargets)
-        assertEquals(listOf(3, 4), store.match?.plies?.map { it.seq })
+        assertEquals(listOf(3L, 4L), store.match?.plies?.map { it.seq })
         // 상대(백)가 둘 곳이 없어 내 차례가 이어진다 — 상태줄이 말한다.
         val rivalName = fixtureJSON(REVERSI_FIXTURES, "reversi_move__ok_pass").obj("state")!!.obj("opponent")!!.str("display_name")!!
         assertEquals(ReversiNoticeText.opponentPassed(rivalName), store.notice)
@@ -520,7 +520,7 @@ class ReversiStoreContractTest {
                 "reversi_move", "reversi_resign" -> {
                     val payload = response!!.state
                     val myColor = payload?.myColor ?: ReversiColor.black
-                    val serverCount = payload?.match?.moveCount ?: 1
+                    val serverCount = payload?.match?.moveCount?.toInt() ?: 1
                     store.match = ReversiMatchState(
                         id = payload?.match?.id ?: mainMatch, stake = 5, myColor = myColor, opponent = ReversiUser(viewerA, ""),
                         moveCount = maxOf(0, serverCount - 1), turn = myColor, legalMoves = listOf(19),
@@ -550,7 +550,7 @@ class ReversiStoreContractTest {
                     when {
                         status == ReversiRPCStatus.notFound -> assertNull(store.match, name)
                         response!!.state?.match?.status == "pending" -> assertEquals(json.obj("state")!!.obj("match")!!.str("id"), store.outgoing?.id ?: store.incoming.firstOrNull()?.id, name)
-                        else -> assertEquals(response.state?.match?.moveCount, store.match?.moveCount, name)
+                        else -> assertEquals(response.state?.match?.moveCount?.toInt(), store.match?.moveCount, name)
                     }
                 }
                 "reversi_ranking" -> {

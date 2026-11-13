@@ -1100,7 +1100,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "한결",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "오늘은 회의 많은 날 🙏",
           "userId": "d0000000-0000-4000-8000-0000000000b1"
@@ -1110,7 +1110,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "소라",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "부산에서 커피 한 잔 ☕️",
           "userId": "d0000000-0000-4000-8000-0000000000b2"
@@ -1120,7 +1120,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "하린",
-          "focusMode": null,
+          "focusMode": true,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b5"
@@ -1130,7 +1130,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "도윤",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "4시 이후에 답장할게요",
           "userId": "d0000000-0000-4000-8000-0000000000b4"
@@ -1140,7 +1140,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민재",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b3"
@@ -1150,7 +1150,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "은비",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b6"
@@ -1160,7 +1160,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "지우",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-0000000000b9"
@@ -1170,7 +1170,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "태오",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b7"
@@ -1378,6 +1378,36 @@
               "zz_unknown_value"
             ]
           ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].focus_mode",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].focus_mode",
+          "result": "error"
         }
       ]
     },
@@ -1428,11 +1458,65 @@
     {
       "dump": [
         {
+          "focusMode": true,
+          "minigamePublic": null,
+          "tokenUsageCollect": null,
+          "tokenUsagePublic": null
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/_messages-d0000000-0000-4000-8000-0000000000b4/rest.profiles.get@select=focus_mode.json",
+      "type": "[ProfilePrivacyRow]",
+      "variants": [
+        {
+          "op": "null",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "str",
+          "path": "$[0]",
+          "result": "error"
+        },
+        {
+          "op": "remove",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].focus_mode",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].focus_mode",
+          "result": "error"
+        }
+      ]
+    },
+    {
+      "dump": [
+        {
           "avatarUrl": null,
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "한결",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "오늘은 회의 많은 날 🙏",
           "userId": "d0000000-0000-4000-8000-0000000000b1"
@@ -1442,7 +1526,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "소라",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "부산에서 커피 한 잔 ☕️",
           "userId": "d0000000-0000-4000-8000-0000000000b2"
@@ -1452,7 +1536,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "하린",
-          "focusMode": null,
+          "focusMode": true,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b5"
@@ -1462,7 +1546,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "도윤",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "4시 이후에 답장할게요",
           "userId": "d0000000-0000-4000-8000-0000000000b4"
@@ -1472,7 +1556,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민재",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b3"
@@ -1482,7 +1566,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "은비",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b6"
@@ -1492,7 +1576,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "지우",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-0000000000b9"
@@ -1502,7 +1586,181 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "태오",
-          "focusMode": null,
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/_messages-d0000000-0000-4000-8000-0000000000b4/rpc.app_user_directory.json",
+      "type": "[PokeDirectoryRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "한결",
+          "focusMode": false,
+          "isWorking": true,
+          "statusMessage": "오늘은 회의 많은 날 🙏",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "busan",
+          "displayName": "소라",
+          "focusMode": false,
+          "isWorking": true,
+          "statusMessage": "부산에서 커피 한 잔 ☕️",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "하린",
+          "focusMode": true,
+          "isWorking": true,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b5"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "busan",
+          "displayName": "도윤",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": "4시 이후에 답장할게요",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "민재",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b3"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": null,
+          "displayName": "은비",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "busan",
+          "displayName": "지우",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": "점심 먹고 올게요",
+          "userId": "d0000000-0000-4000-8000-0000000000b9"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "태오",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b7"
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/_messages-d0000000-0000-4000-8000-0000000000b5/rpc.app_user_directory.json",
+      "type": "[PokeDirectoryRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "한결",
+          "focusMode": false,
+          "isWorking": true,
+          "statusMessage": "오늘은 회의 많은 날 🙏",
+          "userId": "d0000000-0000-4000-8000-0000000000b1"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "busan",
+          "displayName": "소라",
+          "focusMode": false,
+          "isWorking": true,
+          "statusMessage": "부산에서 커피 한 잔 ☕️",
+          "userId": "d0000000-0000-4000-8000-0000000000b2"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "하린",
+          "focusMode": true,
+          "isWorking": true,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b5"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "busan",
+          "displayName": "도윤",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": "4시 이후에 답장할게요",
+          "userId": "d0000000-0000-4000-8000-0000000000b4"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "민재",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b3"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": null,
+          "displayName": "은비",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": null,
+          "userId": "d0000000-0000-4000-8000-0000000000b6"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "busan",
+          "displayName": "지우",
+          "focusMode": false,
+          "isWorking": false,
+          "statusMessage": "점심 먹고 올게요",
+          "userId": "d0000000-0000-4000-8000-0000000000b9"
+        },
+        {
+          "avatarUrl": null,
+          "canReceiveMessage": true,
+          "center": "seoul",
+          "displayName": "태오",
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b7"
@@ -1703,7 +1961,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "한결",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "오늘은 회의 많은 날 🙏",
           "userId": "d0000000-0000-4000-8000-0000000000b1"
@@ -1713,7 +1971,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "소라",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "부산에서 커피 한 잔 ☕️",
           "userId": "d0000000-0000-4000-8000-0000000000b2"
@@ -1723,7 +1981,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "하린",
-          "focusMode": null,
+          "focusMode": true,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b5"
@@ -1733,7 +1991,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "도윤",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "4시 이후에 답장할게요",
           "userId": "d0000000-0000-4000-8000-0000000000b4"
@@ -1743,7 +2001,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민재",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b3"
@@ -1753,7 +2011,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "은비",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b6"
@@ -1763,7 +2021,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "지우",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-0000000000b9"
@@ -1773,7 +2031,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "태오",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-0000000000b7"
@@ -1781,6 +2039,19 @@
       ],
       "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/_messages/rpc.app_user_directory.json",
       "type": "[PokeDirectoryRow]",
+      "variants": []
+    },
+    {
+      "dump": [
+        {
+          "focusMode": false,
+          "minigamePublic": null,
+          "tokenUsageCollect": null,
+          "tokenUsagePublic": null
+        }
+      ],
+      "id": "Sources/CheckMobileKit/Demo/Fixtures/messages/rest.profiles.get@select=focus_mode.json",
+      "type": "[ProfilePrivacyRow]",
       "variants": []
     },
     {
@@ -3731,7 +4002,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민트",
-          "focusMode": null,
+          "focusMode": true,
           "isWorking": true,
           "statusMessage": "3시까지 집중할게요 🎧",
           "userId": "d0000000-0000-4000-8000-000000000102"
@@ -3741,7 +4012,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "라임",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000103"
@@ -3751,7 +4022,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "보리",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-000000000104"
@@ -3761,7 +4032,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "코랄",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "오늘은 재택 중이에요",
           "userId": "d0000000-0000-4000-8000-000000000201"
@@ -3771,7 +4042,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "모래",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000203"
@@ -3781,7 +4052,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "하늘",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000202"
@@ -3791,7 +4062,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "자두",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000105"
@@ -3801,7 +4072,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "구름",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "휴가 중 🌴",
           "userId": "d0000000-0000-4000-8000-000000000204"
@@ -3811,7 +4082,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "바다",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000205"
@@ -4019,6 +4290,36 @@
               "zz_unknown_value"
             ]
           ]
+        },
+        {
+          "op": "remove",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "null",
+          "path": "$[0].focus_mode",
+          "result": [
+            [
+              "$[0].focusMode",
+              null
+            ]
+          ]
+        },
+        {
+          "op": "str",
+          "path": "$[0].focus_mode",
+          "result": "error"
+        },
+        {
+          "op": "num",
+          "path": "$[0].focus_mode",
+          "result": "error"
         }
       ]
     },
@@ -5569,7 +5870,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "민트",
-          "focusMode": null,
+          "focusMode": true,
           "isWorking": true,
           "statusMessage": "3시까지 집중할게요 🎧",
           "userId": "d0000000-0000-4000-8000-000000000102"
@@ -5579,7 +5880,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "라임",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000103"
@@ -5589,7 +5890,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "보리",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "점심 먹고 올게요",
           "userId": "d0000000-0000-4000-8000-000000000104"
@@ -5599,7 +5900,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "코랄",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": "오늘은 재택 중이에요",
           "userId": "d0000000-0000-4000-8000-000000000201"
@@ -5609,7 +5910,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "모래",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000203"
@@ -5619,7 +5920,7 @@
           "canReceiveMessage": true,
           "center": null,
           "displayName": "하늘",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": true,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000202"
@@ -5629,7 +5930,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "자두",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000105"
@@ -5639,7 +5940,7 @@
           "canReceiveMessage": true,
           "center": "seoul",
           "displayName": "구름",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": "휴가 중 🌴",
           "userId": "d0000000-0000-4000-8000-000000000204"
@@ -5649,7 +5950,7 @@
           "canReceiveMessage": true,
           "center": "busan",
           "displayName": "바다",
-          "focusMode": null,
+          "focusMode": false,
           "isWorking": false,
           "statusMessage": null,
           "userId": "d0000000-0000-4000-8000-000000000205"

@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/CharacterGift.swift(전선 모양 · CharacterGiftKind · choosable · lossy 보조 — 배정표 W1-d 몫) @ 12624739
+// 원본: Sources/CheckCore/CharacterGift.swift(전선 모양 · CharacterGiftKind · choosable · lossy 보조 — 배정표 W1-d 몫) @ e4995a3a(빼빼로 · 지역 종류)
 package com.yehsung.aingcheck.core.wire.gift
 
 import com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds
@@ -31,6 +31,12 @@ enum class CharacterGiftKind(val wireValue: String) {
 
     /** '술 한잔' 선물(0.3.74) — 이슬 아잉이 하나, 고를 것 없이 받는다. */
     drink("drink"),
+
+    /** 빼빼로 데이 선물(맥 0.3.77 · 11-11 기간 선물) — 빼빼로 아잉이 하나, 고를 것 없이 받는다(번호 6). */
+    pepero("pepero"),
+
+    /** 우리 센터 선물(지역 아잉이 — 번호 10). Android 판 8 은 번호 10 을 말하지 않아 서버가 이 종류를 싣지 않는다(종류만 안다). */
+    region("region"),
     ;
 
     /** 이 종류의 선물로 받는 내장 캐릭터 — **표시 순서 그대로**(생일 = 딸기 → 초코 · 술 = 이슬). 선물 선택지는 이 목록으로 거른다. */
@@ -38,26 +44,30 @@ enum class CharacterGiftKind(val wireValue: String) {
         get() = when (this) {
             birthday -> BuiltInCharacterIds.birthdayGiftBuiltInIDs
             drink -> BuiltInCharacterIds.drinkGiftBuiltInIDs
+            pepero -> BuiltInCharacterIds.peperoGiftBuiltInIDs
+            region -> BuiltInCharacterIds.regionGiftBuiltInIDs
         }
 
     /**
-     * 이 종류를 받을 수 있는 최소 능력 번호(서버 `claim_character_gift` 의 문턱 — 생일 4 · 술 5). 값은 rules `ShopWire.cakeProtocol` ·
-     * `ShopWire.isulProtocol` 과 같다(와이어는 rules 를 못 본다 — rules 시험 `CharacterShopGoldenTest.giftKindsMatchSwift` 가 둘을 맞댄다).
+     * 이 종류를 받을 수 있는 최소 능력 번호(서버 `claim_character_gift` 의 문턱 — 생일 4 · 술 5 · 빼빼로 6 · 지역 10). 값은 rules `ShopWire.cakeProtocol` ·
+     * `ShopWire.isulProtocol` · `peperoProtocol` · `regionProtocol` 과 같다(와이어는 rules 를 못 본다 — rules 시험 `CharacterShopGoldenTest.giftKindsMatchSwift` 가 둘을 맞댄다).
      */
     val minProtocol: Int
         get() = when (this) {
             birthday -> 4
             drink -> 5
+            pepero -> 6
+            region -> 10
         }
 
     /** 이 번호의 빌드가 이 종류의 선물을 받을 수 있는가(번호는 누적). */
     fun isSupported(protocolVersion: Int): Boolean = protocolVersion >= minProtocol
 
     companion object {
-        /** 서버 원문 → 종류. 정확히 그 두 값만(공백 · 대소문자를 봐주지 않는다 — 서버 CHECK 가 두 값만 허락한다). 그 밖은 null. */
+        /** 서버 원문 → 종류. 정확히 그 값들만(공백 · 대소문자를 봐주지 않는다 — 서버 CHECK 가 그 값들만 허락한다). 그 밖은 null. */
         fun fromWire(wireValue: String?): CharacterGiftKind? = entries.firstOrNull { it.wireValue == wireValue }
 
-        /** 내장 캐릭터 → 그 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술). 선물 전용 내장이 아니면 null. */
+        /** 내장 캐릭터 → 그 캐릭터를 주는 선물 종류(케이크 → 생일 · 이슬 → 술 · 빼빼로 → 빼빼로 · 지역 → 지역). 선물 전용 내장이 아니면 null. */
         fun ofBuiltIn(id: String?): CharacterGiftKind? = if (id == null) null else entries.firstOrNull { id in it.builtInIDs }
     }
 }

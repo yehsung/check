@@ -16,6 +16,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
+import com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkins
+import com.yehsung.aingcheck.core.rules.ai.GomokuAIDifficulty
+import com.yehsung.aingcheck.core.rules.ai.GomokuAISearchLimits
 
 // 오목 스토어의 **AI 대국** 갈래 — 설계: docs/plan/gomoku-ai.md §4.
 //
@@ -40,15 +43,26 @@ typealias GomokuAIMoveChooser = suspend (GomokuBoard, GomokuColor) -> GomokuPoin
 class GomokuAIRuntime {
     companion object {
         /** 기본 선택기: 엔진을 백그라운드(Default)에서 돌리고, 기다리던 쪽이 취소되면 엔진에도 취소를 전한다. */
-        val engineChooser: GomokuAIMoveChooser = { board, color ->
+        val engineChooser: GomokuAIMoveChooser = engineChooser(GomokuAISearchLimits())
+
+        /** 판 8(맥 0.3.82) — 난이도 한도로 도는 기본 선택기. */
+        fun engineChooser(limits: GomokuAISearchLimits): GomokuAIMoveChooser = { board, color ->
             withContext(Dispatchers.Default) {
                 val job = coroutineContext[Job]
-                GomokuAI.bestMove(board = board, toMove = color, isCancelled = { job?.isActive == false })
+                GomokuAI.bestMove(board = board, toMove = color, limits = limits, isCancelled = { job?.isActive == false })
             }
         }
     }
 
     var chooser: GomokuAIMoveChooser = engineChooser
+        set(value) {
+            field = value
+            chooserReplaced = true
+        }
+
+    /** 선택기를 바깥(시험 · 폰 생각 장치)이 갈아 끼웠는가 — 아니면 판의 난이도 한도로 기본 선택기를 만든다(맥 `chooserReplaced`). */
+    var chooserReplaced: Boolean = false
+        private set
     /** AI 가 즉답해도 화면에 "생각 중"을 이만큼은 보여 준다(초). 시험은 0. */
     var minimumThinkSeconds: Double = 0.6
     /** 0..<n 중 하나. 대리 착수·엔진 대타가 쓴다(시험은 고정한다). */
@@ -128,14 +142,14 @@ fun GomokuStore.startAIMatch(humanColor: GomokuColor) {
         if (match != null || activeMatchID != null) setAINotice(GomokuNoticeText.busy)
         return
     }
-    beginAIGame(humanColor)
+    beginAIGame(humanColor, aiDifficulty)
 }
 
-/** 결과 화면 [다시 두기] — 같은 색으로 새 판. */
+/** 결과 화면 [다시 두기] — 같은 색 · 같은 난이도로 새 판. */
 fun GomokuStore.restartAIMatch() {
     val game = aiGame ?: return
     if (!isAIMatch || !game.isFinished) return
-    beginAIGame(game.humanColor)
+    beginAIGame(game.humanColor, game.difficulty)
 }
 
 /** 사람 시계가 다 됐으면 대신 둔다(시계 작업이 깨어나 부른다 — 시험은 `now` 를 넣어 직접 부른다). */
@@ -211,12 +225,12 @@ internal fun GomokuStore.discardAIGame() {
 
 // MARK: 내부
 
-private fun GomokuStore.beginAIGame(humanColor: GomokuColor) {
+private fun GomokuStore.beginAIGame(humanColor: GomokuColor, difficulty: GomokuAIDifficulty) {
     aiRuntime.cancelTasks()
     aiRuntime.bump()
     val game = GomokuAIGame.start(
         humanColor = humanColor, now = clock().timeIntervalSince1970,
-        turnSeconds = turnSeconds.toDouble(), autoLossStreak = autoAbandonStreak,
+        turnSeconds = turnSeconds.toDouble(), autoLossStreak = autoAbandonStreak, difficulty = difficulty,
     )
     // 순서가 계약이다: 판을 먼저 세우고 화면 값을 옮긴다(`match` 대입은 id 가 같으면 버리지 않는다).
     aiGame = game.copy()
@@ -229,7 +243,9 @@ private fun GomokuStore.beginAIGame(humanColor: GomokuColor) {
 private fun GomokuStore.commitAIGame(game: GomokuAIGame) {
     if (!(isWindowVisible && !isWindowOccluded) && game.deadline != null) game.pause(clock().timeIntervalSince1970)
     if (aiGame != game) aiGame = game
-    val next = game.matchState()
+    val base = game.matchState()
+    // 판 8 — AI 판은 로컬이라 내 낀 스킨을 사람 쪽 돌에만 얹는다(폰 1.0.18 과 같다).
+    val next = base.copy(stoneSkins = OmokStoneSkins.ofColor(base.myColor == GomokuColor.black, aiStoneSkin))
     if (match != next) match = next
     val nextPhase = if (game.isFinished) GomokuPhase.result else GomokuPhase.playing
     if (phase != nextPhase) phase = nextPhase
@@ -252,7 +268,7 @@ private fun GomokuStore.scheduleAITurnIfNeeded() {
     val expectedCount = game.moveCount
     val color = game.aiColor
     val board = game.board
-    val chooser = aiRuntime.chooser
+    val chooser = if (aiRuntime.chooserReplaced) aiRuntime.chooser else GomokuAIRuntime.engineChooser(game.difficulty.limits)
     val minimumMillis = (aiRuntime.minimumThinkSeconds * 1000).toLong()
     aiRuntime.noteChooserCall()
     aiRuntime.moveTask = scope.launch {

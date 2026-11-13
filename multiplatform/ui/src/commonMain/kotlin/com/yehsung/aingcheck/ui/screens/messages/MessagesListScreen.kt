@@ -77,6 +77,9 @@ import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import com.yehsung.aingcheck.ui.screens.session.kit.AingButton
+import com.yehsung.aingcheck.ui.screens.session.kit.AingButtonKind
+import com.yehsung.aingcheck.ui.screens.session.kit.AingButtonSize
 
 /** 메시지 탭 글자(Swift `MessagesListText`). */
 object MessagesListText {
@@ -86,6 +89,8 @@ object MessagesListText {
     const val workingTitle = "지금 근무 중"
     const val workingTrailing = "바로 말 걸기"
     const val nobodyWorking = "지금 근무 중인 사람이 없어요"
+    /** 안 읽은 대화(메시지 · 찌르기)를 한 번에 읽음으로(판 8 — 폰 1.0.18 · 맥 0.3.81 과 같은 글자). */
+    const val markAllRead = "모두 읽음"
     const val historyFailedNotice = "새 메시지를 불러오지 못했어요. 당겨서 다시 시도해 주세요"
     const val loadFailedTitle = "메시지를 불러오지 못했어요"
     const val emptyTitle = "아직 주고받은 메시지가 없어요"
@@ -163,6 +168,17 @@ fun MessagesListScreen(
                     }
                 }
             } else {
+                // 판 8 [모두 읽음](폰 1.0.18 · 맥 0.3.81 — 대표 결정 11-10) — 안 읽은 대화(메시지 ∪ 찌르기)가 있을 때만. 목록 머리 오른쪽 작은 단추.
+                if (store.sortUnreadPeerIDs.isNotEmpty()) {
+                    item("mark-all-read") {
+                        Row(Modifier.fillMaxWidth().padding(horizontal = AingDimens.sideMargin).padding(bottom = 4.dp), horizontalArrangement = Arrangement.End) {
+                            AingButton(
+                                MessagesListText.markAllRead, onClick = { store.markAllConversationsRead() },
+                                modifier = Modifier.testTag(MessagesTags.MARK_ALL_READ), kind = AingButtonKind.Tinted, size = AingButtonSize.Sm,
+                            )
+                        }
+                    }
+                }
                 itemsIndexed(rows, key = { _, row -> "row-${row.id}" }) { index, row ->
                     ThreadRowCard(row, presence.peers[row.peerUserID], row.peerUserID in focused, index, rows.size) { onOpen(row.peerUserID) }
                 }

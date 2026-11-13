@@ -1,4 +1,4 @@
-// 원본: Sources/CheckCore/CrossyGame.swift @ 1b8260d
+// 원본: Sources/CheckCore/CrossyGame.swift @ 1b8260d · e4995a3a(1:1 대결 모드 — Rules · deaths · 부활 · begin · restore)
 package com.yehsung.aingcheck.core.rules.minigame.crossy
 
 import com.yehsung.aingcheck.core.rules.minigame.MiniGameKind
@@ -38,6 +38,12 @@ class CrossyGame private constructor(
     private var segmentLeft: Int,
     private var segmentIndex: Int,
     private var pathColumn: Int,
+    /** 규칙 값(혼자 하기 [Rules.solo] · 1:1 [Rules.duel]). 판 도중 안 바뀐다. */
+    val rules: Rules = Rules.solo,
+    deaths: Int = 0,
+    respawnShield: RespawnShield? = null,
+    /** 1:1 강 부활이 통나무를 기다린 초(0.25초씩, 최대 3초 — 그 뒤엔 뒤쪽 땅 줄). */
+    private var respawnWaited: Double = 0.0,
 ) {
     // MARK: 값 타입
 
@@ -204,11 +210,17 @@ class CrossyGame private constructor(
         private set
     var roundSeed: ULong = roundSeed
         private set
+    /** 죽은 횟수 — die() 마다 +1(혼자 하기에도 세지만 의미 없음). 새 판에 0. */
+    var deaths: Int = deaths
+        private set
+    /** 부활 보호(그 줄 · 판 시계 끝) — 그림 깜빡임용 읽기 전용. 혼자 하기는 언제나 null. */
+    var respawnShield: RespawnShield? = respawnShield
+        private set
 
     // MARK: 만들기
 
     /** 시드에서 시작 판(준비 상태)을 만든다. */
-    constructor(seed: ULong) : this(
+    constructor(seed: ULong, rules: Rules = Rules.solo) : this(
         phase = Phase.Ready,
         lanes = mutableListOf(),
         player = Player(0, startColumn.toDouble(), false, Direction.forward),
@@ -228,6 +240,7 @@ class CrossyGame private constructor(
         segmentLeft = 0,
         segmentIndex = 0,
         pathColumn = startColumn,
+        rules = rules,
     ) {
         val first = seedSource.next()
         roundSeed = first
@@ -239,7 +252,7 @@ class CrossyGame private constructor(
     fun copy(): CrossyGame = CrossyGame(
         phase, laneList.mapTo(mutableListOf()) { it.copy() }, player, hop, queued, score, cameraRow, sinceProgress, death,
         elapsed, hopCount, roundSeed, seedSource.copy(), generator.copy(), roundsStarted, segmentKind, segmentLeft,
-        segmentIndex, pathColumn,
+        segmentIndex, pathColumn, rules, deaths, respawnShield, respawnWaited,
     )
 
     /** Swift synthesized `==` — 저장 칸 전부(난수 상태 · 덩어리 장부까지). */
@@ -251,7 +264,8 @@ class CrossyGame private constructor(
             sinceProgress == other.sinceProgress && death == other.death && elapsed == other.elapsed &&
             hopCount == other.hopCount && roundSeed == other.roundSeed && seedSource == other.seedSource &&
             generator == other.generator && roundsStarted == other.roundsStarted && segmentKind == other.segmentKind &&
-            segmentLeft == other.segmentLeft && segmentIndex == other.segmentIndex && pathColumn == other.pathColumn
+            segmentLeft == other.segmentLeft && segmentIndex == other.segmentIndex && pathColumn == other.pathColumn &&
+            rules == other.rules && deaths == other.deaths && respawnShield == other.respawnShield && respawnWaited == other.respawnWaited
     }
 
     override fun hashCode(): Int = score * 31 + hopCount
@@ -294,6 +308,8 @@ class CrossyGame private constructor(
     fun action() {
         when (phase) {
             Phase.Ready, Phase.Result -> {
+                // 1:1 — 끝난 판(100 도달)은 다시 안 연다(다음 클릭이 새 판 = 새 길 · 점수 0 이 되면 안 된다).
+                if (phase == Phase.Result && !rules.allowsRestart) return
                 startRound()
                 input(Direction.forward)
             }
@@ -337,6 +353,11 @@ class CrossyGame private constructor(
                 elapsed += d
                 moveLanes(d)
                 val left = p.hold - d
+                if (rules.respawnDelay != null) {
+                    // 1:1 — 결과가 아니라 죽은 줄에서 다시 선다(1e-9 는 부동소수 찌꺼기 몫 — 3.0초에 정확히 서게).
+                    if (left <= 1e-9) respawnAfterDelay() else phase = Phase.Over(left)
+                    return
+                }
                 phase = if (left <= 0) Phase.Result else Phase.Over(left)
                 return
             }
@@ -347,15 +368,19 @@ class CrossyGame private constructor(
         moveLanes(d)
         movePlayer(d)
         if (phase is Phase.Over) return
-        if (score >= maxScore) {
-            score = maxScore
+        // 끝 점수 — 혼자 하기는 상한 maxScore, 1:1 은 목표(100). 같은 걸음의 checkDeaths 보다 앞이라 착지 순간 차가 겹쳐도 그 점수는 인정된다.
+        val cap = minOf(maxScore, rules.goalScore ?: maxScore)
+        if (score >= cap) {
+            score = cap
             phase = Phase.Result
             hop = null
             queued = null
+            respawnShield = null
             return
         }
         moveCamera(d)
         sinceProgress += d
+        respawnShield?.let { if (elapsed >= it.until) respawnShield = null }
         checkDeaths()
         fillLanes()
     }
@@ -374,6 +399,9 @@ class CrossyGame private constructor(
             pathColumn = startColumn
         }
         roundsStarted += 1
+        deaths = 0
+        respawnShield = null
+        respawnWaited = 0.0
         player = Player(0, startColumn.toDouble(), false, Direction.forward)
         hop = null
         queued = null
@@ -409,6 +437,10 @@ class CrossyGame private constructor(
             } else {
                 toX = column.toDouble()
             }
+        }
+        if (!rules.leftBehindKills && toRow.toDouble() < cameraRow - behindRows) {
+            // 1:1 — 놓침 죽음이 없는 대신 카메라보다 2.5줄 넘게 뒤로는 못 간다(막힌 칸처럼 제자리 통통).
+            bumped = true
         }
         hop = if (bumped) {
             Hop(fromRow, fromX, fromRow, fromX, player.riding, carry, direction, bumped = true, fromRiding = player.riding)
@@ -452,6 +484,8 @@ class CrossyGame private constructor(
     }
 
     private fun land(landed: Hop) {
+        // 부활 보호는 그 줄 한정이다 — 다른 줄에 착지하면 끝(돌아와도 다시 무적이 아니다).
+        respawnShield?.let { if (it.row != landed.toRow) respawnShield = null }
         player = player.copy(row = landed.toRow, x = landed.toX)
         val lane = lane(landed.toRow) ?: return
         if (lane.kind == LaneKind.river) {
@@ -474,7 +508,7 @@ class CrossyGame private constructor(
     private fun moveCamera(dt: Double) {
         val target = playerVisual.row
         if (target > cameraRow) cameraRow += (target - cameraRow) * swiftMin(1.0, followRate * dt)
-        cameraRow += creepSpeed(score) * dt
+        if (rules.cameraCreeps) cameraRow += creepSpeed(score) * dt
     }
 
     private fun checkDeaths() {
@@ -493,13 +527,13 @@ class CrossyGame private constructor(
         val lane = lane(spot.row)
         if (lane != null) {
             when (lane.kind) {
-                LaneKind.road -> if (lane.moverList.any { it.overlaps(spot.x, playerHalfWidth, grace = 0.06) }) {
+                LaneKind.road -> if (!shieldCovers(spot.row) && lane.moverList.any { it.overlaps(spot.x, playerHalfWidth, grace = 0.06) }) {
                     die(DeathCause.car, push = lane.direction)
                     return
                 }
                 LaneKind.rail -> {
                     val train = lane.train
-                    if (train != null && train.overlaps(spot.x, playerHalfWidth)) {
+                    if (!shieldCovers(spot.row) && train != null && train.overlaps(spot.x, playerHalfWidth)) {
                         die(DeathCause.train, push = lane.direction)
                         return
                     }
@@ -507,18 +541,235 @@ class CrossyGame private constructor(
                 LaneKind.grass, LaneKind.river -> Unit
             }
         }
-        if (spot.row.toDouble() < cameraRow - behindRows || sinceProgress >= idleLimit) {
+        // 1:1 은 둘 다 끈다(그 줄에서 다시 서면 또 놓치는 무한 고리 — 침묵은 서버가 판정한다).
+        if (rules.leftBehindKills && (spot.row.toDouble() < cameraRow - behindRows || sinceProgress >= idleLimit)) {
             die(DeathCause.leftBehind, push = 0)
         }
     }
 
     private fun die(cause: DeathCause, push: Int) {
         val spot = occupancy
+        deaths += 1
         death = Death(cause, spot.row, spot.x, elapsed, push)
         player = player.copy(row = spot.row, x = spot.x, riding = false)
         hop = null
         queued = null
-        phase = Phase.Over(deathHold)
+        respawnShield = null
+        phase = Phase.Over(rules.respawnDelay ?: deathHold)
+    }
+
+    // MARK: 1:1 대결 모드(길건너 1:1 — 설계서 crossy-duel/SPEC.md §7)
+    //
+    // 혼자 하기 규칙은 그대로다. 1:1 은 같은 값 타입에 규칙 값([Rules.duel])만 바꿔 끼운다 — 100점에 먼저 닿으면 끝, 죽으면 3초 뒤
+    // **그 줄에서** 다시(점수 유지), 카메라 혼자 가기 · 놓침 죽음 없음, 결과에서 다시 하기 없음.
+
+    /** 판 규칙 값. 혼자 하기는 [solo](지금 동작 그대로), 1:1 은 [duel]. */
+    data class Rules(
+        /** 이 점수에 닿으면 끝(Result). null = 혼자 하기(상한 maxScore 만). */
+        val goalScore: Int?,
+        /** 죽은 뒤 다시 서기까지(초). null = 혼자 하기(deathHold 뒤 결과). */
+        val respawnDelay: Double?,
+        /** 카메라가 혼자 앞으로 가는가(creepSpeed). */
+        val cameraCreeps: Boolean,
+        /** 놓침 죽음(카메라 2.5줄 뒤처짐 · 9초 정체)이 있는가. 없으면 카메라 2.5줄 뒤로 가는 뛰기가 막힌다. */
+        val leftBehindKills: Boolean,
+        /** 결과에서 클릭 · 스페이스가 새 판을 여는가. */
+        val allowsRestart: Boolean,
+    ) {
+        companion object {
+            val solo = Rules(goalScore = null, respawnDelay = null, cameraCreeps = true, leftBehindKills = true, allowsRestart = true)
+            val duel = Rules(goalScore = 100, respawnDelay = RESPAWN_DELAY_SECONDS, cameraCreeps = false, leftBehindKills = false, allowsRestart = false)
+        }
+    }
+
+    /** 부활 보호 — [row] 줄에 있는 동안(충돌 자리 기준) 판 시계 [until] 전까지 차 · 기차에 안 죽는다. */
+    data class RespawnShield(val row: Int, val until: Double)
+
+    /** 카운트다운이 끝나 판을 연다 — Ready 에서만 startRound()(첫 판 = 같은 씨앗, 뛰지 않는다). 그 밖에선 아무것도 안 한다. */
+    fun begin() {
+        if (phase != Phase.Ready) return
+        startRound()
+    }
+
+    /**
+     * 앱 재실행 이어 하기 — 같은 씨앗 판을 줄 [row] 까지 채우고 부활 자리 규칙(§7.2)으로 세운다. 끝나면 phase == Running · 첫 판이 열렸고
+     * cameraRow == row · score · deaths = 인자 값(SPEC §7.1 restore 불변식, CC-2). 판 도중에도 부른다(서버 me.score 가 더 클 때, CC-22).
+     */
+    fun restore(row: Int, score: Int, deaths: Int) {
+        if (roundsStarted == 0) startRound()
+        val referenceX = player.x
+        // 들고 있는 줄보다 뒤로 세우면 이 판 줄을 처음부터 다시 만든다(줄은 씨앗에서 순서대로만 나온다 — 같은 줄이 선다).
+        val first = laneList.firstOrNull()
+        if (lane(row) == null && first != null && row < first.row) rebuildRoundLanes()
+        this.score = score
+        this.deaths = deaths
+        cameraRow = row.toDouble()
+        player = Player(row, referenceX, false, Direction.forward)
+        hop = null
+        queued = null
+        death = null
+        sinceProgress = 0.0
+        respawnShield = null
+        respawnWaited = 0.0
+        phase = Phase.Running
+        fillLanes()
+        placeForRespawn(row, referenceX, canWait = false)
+    }
+
+    /** 부활 보호가 지금 그 **충돌 자리** 줄을 지키는가(차 · 기차만 — occupancy.row 로 잰다, CC-13). */
+    private fun shieldCovers(row: Int): Boolean {
+        val shield = respawnShield ?: return false
+        return shield.row == row && elapsed < shield.until
+    }
+
+    /** Over 가 끝났다(1:1) — 죽은 줄에서 다시 선다. 점수 · 판 시계 · 씨앗 · 줄 · 난수는 그대로, land() 를 거치지 않는다. */
+    private fun respawnAfterDelay() {
+        val row = death?.row ?: player.row
+        val x = death?.x ?: player.x
+        if (!placeForRespawn(row, x, canWait = true)) return
+        death = null
+        respawnWaited = 0.0
+        phase = Phase.Running
+    }
+
+    /**
+     * 부활 자리를 정해 세운다. 강에 쓸 통나무가 없고 canWait 면 0.25초를 더 기다리기로 하고(Over(0.25)) false.
+     *  · 찻길 — 막힘 없는 칸을 referenceX 에서 가까운 순(같으면 왼쪽 먼저)으로, 그 줄만 사본으로 1.5초 미리 돌려 안 치이는 첫 칸. 없으면 1초 칸,
+     *    그것도 없으면 그 칸 + 보호 1초.
+     *  · 기찻길 — 그 칸. 1.5초 안에 기차가 겹치면 마지막 겹침 + 0.1초까지 보호(최대 2.5초).
+     *  · 강 — 놀이 칸 안 통나무 위 중 실려 나가기까지 가장 긴 자리에 riding. 물 위에는 안 세운다.
+     *  · 풀밭 — 그 칸(막혔으면 가장 가까운 빈칸).
+     */
+    private fun placeForRespawn(row: Int, referenceX: Double, canWait: Boolean): Boolean {
+        val lane = lane(row)
+        if (lane == null) {
+            stand(row, clampedColumn(referenceX).toDouble(), riding = false)
+            return true
+        }
+        when (lane.kind) {
+            LaneKind.grass -> {
+                val column = nearestOpenColumn(lane, referenceX) ?: clampedColumn(referenceX)
+                stand(row, column.toDouble(), riding = false)
+            }
+            LaneKind.road -> {
+                val hits = carHitTimes(row, RESPAWN_ROAD_SAFE_SECONDS)
+                val order = columnsByDistance(referenceX).filter { !lane.isBlocked(it) }
+                val fallback = RESPAWN_ROAD_FALLBACK_SAFE_SECONDS
+                val safe = order.firstOrNull { hits[it] == null }
+                val fair = order.firstOrNull { c -> hits[c]?.let { it > fallback + 1e-9 } ?: true }
+                if (safe != null) {
+                    stand(row, safe.toDouble(), riding = false)
+                } else if (fair != null) {
+                    stand(row, fair.toDouble(), riding = false)
+                } else {
+                    stand(row, clampedColumn(referenceX).toDouble(), riding = false)
+                    respawnShield = RespawnShield(row, elapsed + fallback)
+                }
+            }
+            LaneKind.rail -> {
+                val column = clampedColumn(referenceX)
+                stand(row, column.toDouble(), riding = false)
+                val pass = trainPass(row, column)
+                if (pass != null && pass.first <= RESPAWN_RAIL_LOOKAHEAD + 1e-9) {
+                    val length = minOf(RESPAWN_SHIELD_MAX_SECONDS, pass.second + RESPAWN_RAIL_TRAIL)
+                    respawnShield = RespawnShield(row, elapsed + length)
+                }
+            }
+            LaneKind.river -> {
+                val x = bestLogSpot(lane)
+                if (x != null) {
+                    stand(row, x, riding = true)
+                } else if (canWait && respawnWaited + RESPAWN_RIVER_WAIT_STEP <= RESPAWN_RIVER_WAIT_MAX + 1e-9) {
+                    respawnWaited += RESPAWN_RIVER_WAIT_STEP
+                    phase = Phase.Over(RESPAWN_RIVER_WAIT_STEP)
+                    return false
+                } else {
+                    standOnLandBehind(row, referenceX)
+                }
+            }
+        }
+        return true
+    }
+
+    private fun stand(row: Int, x: Double, riding: Boolean) {
+        player = Player(row, x, riding, Direction.forward)
+        hop = null
+        queued = null
+        respawnShield = null
+    }
+
+    /** 강 대체 경로(CC-14) — 뒤쪽으로 가장 가까운 땅 줄의 빈칸에 보호 2초. 점수는 그대로다(DEC:13 '점수 유지'). */
+    private fun standOnLandBehind(row: Int, referenceX: Double) {
+        var candidate = row - 1
+        while (true) {
+            val lane = lane(candidate) ?: break
+            if (lane.kind != LaneKind.river) {
+                val column = nearestOpenColumn(lane, referenceX)
+                if (column != null) {
+                    stand(candidate, column.toDouble(), riding = false)
+                    respawnShield = RespawnShield(candidate, elapsed + RESPAWN_FALLBACK_SHIELD_SECONDS)
+                    return
+                }
+            }
+            candidate -= 1
+        }
+        // 뒤에 설 땅이 없다(시작 풀밭 가운데는 늘 열려 있어 일어나지 않는 길) — 그 줄 그대로, 보호만.
+        stand(row, clampedColumn(referenceX).toDouble(), riding = false)
+        respawnShield = RespawnShield(row, elapsed + RESPAWN_FALLBACK_SHIELD_SECONDS)
+    }
+
+    /** 그 찻길 줄만 사본으로 [horizon] 초 미리 돌려 칸마다 차가 처음 닿는 시각(안 닿으면 null). 판 자신은 안 바뀐다. */
+    private fun carHitTimes(row: Int, horizon: Double): Array<Double?> {
+        val hits = arrayOfNulls<Double>(columns)
+        val lane = lane(row) ?: return hits
+        val probe = copy()
+        probe.laneList = mutableListOf(lane.copy())
+        var t = 0.0
+        while (true) {
+            val current = probe.laneList.firstOrNull()
+            if (current != null) {
+                for (column in 0 until columns) {
+                    if (hits[column] != null) continue
+                    // 판정은 checkDeaths 의 찻길 갈래와 같은 식(반폭 · 끝 너그러움 0.06).
+                    if (current.moverList.any { it.overlaps(column.toDouble(), playerHalfWidth, grace = 0.06) }) hits[column] = t
+                }
+            }
+            if (t >= horizon - 1e-9) break
+            probe.moveLanes(RESPAWN_PROBE_STEP)
+            t += RESPAWN_PROBE_STEP
+        }
+        return hits
+    }
+
+    /** 그 기찻길 줄만 사본으로 최대 2.5초 미리 돌려, 기차가 그 칸에 처음 · 마지막으로 겹치는 시각(첫 통과만). 안 겹치면 null. */
+    private fun trainPass(row: Int, column: Int): Pair<Double, Double>? {
+        val original = lane(row) ?: return null
+        if (original.kind != LaneKind.rail) return null
+        val lane = original.copy()
+        var first: Double? = null
+        var last = 0.0
+        var t = 0.0
+        while (t <= RESPAWN_SHIELD_MAX_SECONDS + 1e-9) {
+            if (lane.train?.overlaps(column.toDouble(), playerHalfWidth) == true) {
+                if (first == null) first = t
+                last = t
+            } else if (first != null) {
+                break
+            }
+            stepRailProbe(lane, RESPAWN_PROBE_STEP)
+            t += RESPAWN_PROBE_STEP
+        }
+        return first?.let { it to last }
+    }
+
+    /** 이 판의 줄을 처음부터 다시 만들 준비 — 판마다 줄은 CrossyRandom(roundSeed) 하나로 순서대로만 나온다. */
+    private fun rebuildRoundLanes() {
+        generator = CrossyRandom(roundSeed)
+        laneList = mutableListOf()
+        segmentKind = LaneKind.grass
+        segmentLeft = 0
+        segmentIndex = 0
+        pathColumn = startColumn
     }
 
     // MARK: 내부 — 줄
@@ -727,6 +978,57 @@ class CrossyGame private constructor(
     }
 
     companion object {
+        /** 죽은 뒤 다시 서기까지(1:1, DEC:13 '3초 뒤'). */
+        const val RESPAWN_DELAY_SECONDS: Double = 3.0
+        /** 찻길 부활 칸이 안 치여야 하는 시간(미리 돌려 본다) — 첫 단계. */
+        const val RESPAWN_ROAD_SAFE_SECONDS: Double = 1.5
+        /** 부활 보호의 최대 길이(기찻길 — 기차가 지나갈 때까지). */
+        const val RESPAWN_SHIELD_MAX_SECONDS: Double = 2.5
+        /** 줄 생성 버전(SPEC §2 v1.1) — 줄 생성 · 난이도를 바꾸면 올리고 서버 crossy_duel_min_build 를 짝으로 올린다. */
+        const val LANE_GENERATOR_VERSION: Int = 1
+        private const val RESPAWN_ROAD_FALLBACK_SAFE_SECONDS: Double = 1.0
+        private const val RESPAWN_PROBE_STEP: Double = 1.0 / 60
+        private const val RESPAWN_RAIL_LOOKAHEAD: Double = 1.5
+        private const val RESPAWN_RAIL_TRAIL: Double = 0.1
+        private const val RESPAWN_RIVER_WAIT_STEP: Double = 0.25
+        private const val RESPAWN_RIVER_WAIT_MAX: Double = 3.0
+        private const val RESPAWN_FALLBACK_SHIELD_SECONDS: Double = 2.0
+
+        /** 칸 0…8 을 x 에서 가까운 순으로(같으면 왼쪽 먼저). */
+        private fun columnsByDistance(x: Double): List<Int> = (0 until columns).sortedWith { a, b ->
+            val da = kotlin.math.abs(a.toDouble() - x)
+            val db = kotlin.math.abs(b.toDouble() - x)
+            if (da != db) da.compareTo(db) else a.compareTo(b)
+        }
+
+        private fun clampedColumn(x: Double): Int = minOf(columns - 1, maxOf(0, x.roundedHalfAwayFromZero().toInt()))
+
+        private fun nearestOpenColumn(lane: Lane, x: Double): Int? = columnsByDistance(x).firstOrNull { !lane.isBlocked(it) }
+
+        /**
+         * 강 줄에서 태울 자리 — 놀이 칸 안 통나무 위 중 실려 나가기까지 가장 긴 자리(흐름 반대쪽 끝에서 반 칸 안). 놀이 칸 안에 한 칸 이상 들어온
+         * 통나무만 치고, 그 자리도 1초 안에 실려 나가면 '없음'으로 친다(곧바로 또 죽지 않게 — 0.25초 더 기다린다).
+         */
+        private fun bestLogSpot(lane: Lane): Double? {
+            if (lane.kind != LaneKind.river) return null
+            var best: Pair<Double, Double>? = null
+            for (log in lane.moverList) {
+                val lo = maxOf(log.x, playMinX)
+                val hi = minOf(log.maxX, playMaxX)
+                if (!(hi - lo >= 1.0 - 1e-9)) continue
+                val x = if (lane.direction > 0) lo + 0.5 else hi - 0.5
+                val room = if (lane.direction > 0) playMaxX - x else x - playMinX
+                val exit = if (lane.speed > 0) room / lane.speed else Double.POSITIVE_INFINITY
+                if (best == null || exit > best.second) best = x to exit
+            }
+            val b = best ?: return null
+            if (!(b.second >= RESPAWN_ROAD_FALLBACK_SAFE_SECONDS)) return null
+            return b.first
+        }
+
+        /** 부활 미리 보기용 기찻길 한 걸음(판의 stepRail 과 같은 식 — 사본 줄에만 쓴다). */
+        private fun stepRailProbe(lane: Lane, dt: Double) = stepRail(lane, dt)
+
         const val columns: Int = 9
         const val startColumn: Int = 4
 

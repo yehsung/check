@@ -318,6 +318,32 @@ suspend fun SupabaseWorkService.achievementsStatusRaw(accessToken: String): Json
 suspend fun SupabaseWorkService.achievementClaimRaw(accessToken: String, key: String?): JsonElement =
     decodeRaw(send(SupabaseWorkService.achievementClaimPath, "POST", emptyList(), encode(achievementClaimBody(key)), accessToken, null))
 
+/**
+ * achievement_character_claim(맥 0.3.81) — `{"p_key": 키, "p_protocol": 상점 번호}` 둘 다 언제나. 응답은 상태 모양 + status(결과 어휘) +
+ * claimed_now[].character_id(W1-c `AchievementCharacterClaimResponse`).
+ */
+suspend fun SupabaseWorkService.achievementCharacterClaimRaw(accessToken: String, key: String, protocolNumber: Int): JsonElement =
+    decodeRaw(
+        send(
+            SupabaseWorkService.achievementCharacterClaimPath, "POST", emptyList(),
+            encode(kotlinx.serialization.json.buildJsonObject {
+                put("p_key", kotlinx.serialization.json.JsonPrimitive(key))
+                put("p_protocol", kotlinx.serialization.json.JsonPrimitive(protocolNumber))
+            }),
+            accessToken, null,
+        ),
+    )
+
+/** 오목알 스킨 세 RPC(맥 0.3.81 · 판 8) — 본문은 rules `OmokSkinRequests` 가 만든다(키를 언제나 싣는다). 응답은 rules 가 관대하게 읽는다. */
+suspend fun SupabaseWorkService.omokSkinsStateRaw(accessToken: String, body: JsonElement): JsonElement =
+    decodeRaw(send(SupabaseWorkService.omokSkinsStatePath, "POST", emptyList(), encode(body), accessToken, null))
+
+suspend fun SupabaseWorkService.buyOmokSkinRaw(accessToken: String, body: JsonElement): JsonElement =
+    decodeRaw(send(SupabaseWorkService.buyOmokSkinPath, "POST", emptyList(), encode(body), accessToken, null))
+
+suspend fun SupabaseWorkService.setOmokSkinRaw(accessToken: String, body: JsonElement): JsonElement =
+    decodeRaw(send(SupabaseWorkService.setOmokSkinPath, "POST", emptyList(), encode(body), accessToken, null))
+
 /** daily_mission_claim(v0.3.64) — 같은 본문 모양, 응답은 AchievementStatus(W1-c). */
 suspend fun SupabaseWorkService.dailyMissionClaimRaw(accessToken: String, key: String?): JsonElement =
     decodeRaw(send(SupabaseWorkService.dailyMissionClaimPath, "POST", emptyList(), encode(achievementClaimBody(key)), accessToken, null))

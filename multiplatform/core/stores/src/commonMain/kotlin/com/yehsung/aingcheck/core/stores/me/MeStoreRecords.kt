@@ -28,6 +28,7 @@ import com.yehsung.aingcheck.core.wire.models.TokenUsageMonthKey
 import com.yehsung.aingcheck.core.wire.models.WorkSessionRow
 import com.yehsung.aingcheck.core.wire.models.toTokenBoardEntries
 import kotlinx.coroutines.withContext
+import com.yehsung.aingcheck.core.rules.insights.WorkRhythmWeeks
 
 // 기록(지난주 회고 · 12주 근무 잔디 · 12주 AI 토큰 잔디 · 지난주 근무 리듬) — 계산은 전부 코어(rules insights) 그대로, 폰은 **읽기 GET** 만:
 // 내 완료 세션(work_sessions) · 내 일별 토큰(token_usage_device_daily) · 토큰 설정(profiles — 수집 여부만) · 팀 상태(진행 중 세션 시작 시각만).
@@ -54,7 +55,8 @@ suspend fun MeStore.loadRecords() {
         val teamID = context.sessionStore.profile?.teamID
         val goalSeconds = (context.sessionStore.profile?.teamGoalHours ?: TeamWeeklyGoal.defaultGoalHours) * 3600
         val rows = try {
-            context.withSessionRetry { s -> service.fetchMySessions(s.accessToken, s.userID, since) }
+            // 판 8 — 주별 근무 리듬이 서비스 첫 주까지 넘겨보므로 세션만 그날부터 받는다(토큰 일별은 since 그대로 — 맥 · 폰과 같다).
+            context.withSessionRetry { s -> service.fetchMySessions(s.accessToken, s.userID, minOf(since, MeText.rhythmHistoryStart)) }
         } catch (e: Throwable) {
             if (generation != context.generation || !isCurrent("records", serial)) return
             if (AuthErrorRules.classify(e) == AuthErrorDisposition.cancelled) return
@@ -104,6 +106,10 @@ suspend fun MeStore.loadRecords() {
         val output = withContext(computeContext) { MeRecordsOutput.compute(input) }
         if (generation != context.generation || !isCurrent("records", serial)) return
         if (heatmap != output.insights.heatmap) heatmap = output.insights.heatmap
+        if (rhythmWeeks != output.insights.rhythmWeeks) rhythmWeeks = output.insights.rhythmWeeks
+        if (rhythmWeekOffset > rhythmWeeks.maxOffset) rhythmWeekOffset = rhythmWeeks.maxOffset
+        val live = ongoingStart?.timeIntervalSince1970
+        if (rhythmLiveStart != live) rhythmLiveStart = live
         if (retro != output.insights.retro) retro = output.insights.retro
         if (dailyGrid != output.insights.dailyGrid) dailyGrid = output.insights.dailyGrid
         if (tokenGrid != output.tokenGrid) tokenGrid = output.tokenGrid
@@ -201,9 +207,19 @@ val MeStore.recordsPlaceholder: String?
         hasTokenGrass = showsTokenGrid && tokenGrid.totalTokens > 0,
     )
 
+/** 판 8 — 보고 있는 주를 바꾼다(◀ = +1 · ▶ = −1). 범위 밖은 끝에 붙인다(맥 `setRhythmWeekOffset` 과 같다). */
+fun MeStore.setRhythmWeekOffset(offset: Int) {
+    val clamped = minOf(maxOf(0, offset), rhythmWeeks.maxOffset)
+    if (rhythmWeekOffset != clamped) rhythmWeekOffset = clamped
+}
+
 internal fun MeStore.discardRecords() {
     recordsWeekKey = null
     heatmap = WorkRhythmHeatmap.empty
+    // 주별 리듬도 계산 시점의 '이번 주'가 마지막 원소다 — 새 주에 지난주를 '이번 주'로 그리지 않게 버린다.
+    rhythmWeeks = WorkRhythmWeeks.empty
+    rhythmWeekOffset = 0
+    rhythmLiveStart = null
     retro = null
     dailyGrid = WorkDailyGrid.empty
     tokenGrid = TokenDailyGrid.empty

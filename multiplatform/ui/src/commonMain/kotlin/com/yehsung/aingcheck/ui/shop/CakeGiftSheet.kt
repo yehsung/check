@@ -70,6 +70,7 @@ import com.yehsung.aingcheck.core.stores.me.selectCakeGiftOption
 import com.yehsung.aingcheck.core.stores.me.showsCakeGiftReopen
 import com.yehsung.aingcheck.core.stores.me.wearReceivedCakeGift
 import com.yehsung.aingcheck.core.rules.character.gift.copy
+import com.yehsung.aingcheck.core.rules.character.gift.copyFor
 import com.yehsung.aingcheck.ui.icons.AingIcon
 import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
@@ -353,7 +354,7 @@ private fun BottomBar(store: MeStore, sheet: MeCakeGiftSheet) {
 fun MeCakeGiftReopenRow(store: MeStore, modifier: Modifier = Modifier) {
     if (!store.showsCakeGiftReopen) return
     val gift = store.cakeGift ?: return
-    val copy = gift.kind.copy
+    val copy = gift.kind.copyFor(gift.options.firstOrNull())
     val glyph = CakeGiftTitleParts.split(copy.title).second
     val c = AingTheme.colors
     MeCard(modifier) {

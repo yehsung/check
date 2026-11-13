@@ -35,6 +35,8 @@ class GomokuAIGame private constructor(
     board: GomokuBoard,
     moveCount: Int,
     humanAutoStreak: Int,
+    /** 판 8(맥 0.3.82 · 폰 1.0.18) — 이 판의 난이도(몇 수 앞까지). [다시 두기]는 같은 난이도로 새 판. */
+    val difficulty: GomokuAIDifficulty = GomokuAIDifficulty.hard,
 ) {
     /** 판을 막 둔 결과의 거절(사람 착수). */
     data class Refusal(val kind: GomokuTapRefusal, val reason: GomokuForbiddenReason?)
@@ -80,7 +82,7 @@ class GomokuAIGame private constructor(
         private set
 
     fun copy(): GomokuAIGame {
-        val other = GomokuAIGame(id, humanColor, turnSeconds, autoLossStreak, boardStorage.copy(), moveCount, humanAutoStreak)
+        val other = GomokuAIGame(id, humanColor, turnSeconds, autoLossStreak, boardStorage.copy(), moveCount, humanAutoStreak, difficulty)
         other.lastMove = lastMove
         other.turn = turn
         other.deadline = deadline
@@ -266,7 +268,8 @@ class GomokuAIGame private constructor(
             other.lastMove == lastMove && other.turn == turn && other.deadline == deadline &&
             other.pausedRemaining == pausedRemaining && other.isFinished == isFinished && other.outcome == outcome &&
             other.endReason == endReason && other.autoPointsStorage == autoPointsStorage &&
-            other.lastMoveWasAuto == lastMoveWasAuto && other.blackPassed == blackPassed && other.humanAutoStreak == humanAutoStreak
+            other.lastMoveWasAuto == lastMoveWasAuto && other.blackPassed == blackPassed && other.humanAutoStreak == humanAutoStreak &&
+            other.difficulty == difficulty
 
     override fun hashCode(): Int = id.hashCode() * 31 + boardStorage.hashCode()
 
@@ -287,8 +290,9 @@ class GomokuAIGame private constructor(
             id: String = newID(),
             turnSeconds: Double = 30.0,
             autoLossStreak: Int = 3,
+            difficulty: GomokuAIDifficulty = GomokuAIDifficulty.hard,
         ): GomokuAIGame {
-            val game = GomokuAIGame(id, humanColor, turnSeconds, maxOf(1, autoLossStreak), GomokuBoard(), 0, 0)
+            val game = GomokuAIGame(id, humanColor, turnSeconds, maxOf(1, autoLossStreak), GomokuBoard(), 0, 0, difficulty)
             game.startTurn(GomokuColor.black, now)
             return game
         }
@@ -306,8 +310,9 @@ class GomokuAIGame private constructor(
             humanAutoStreak: Int = 0,
             turnSeconds: Double = 30.0,
             autoLossStreak: Int = 3,
+            difficulty: GomokuAIDifficulty = GomokuAIDifficulty.hard,
         ): GomokuAIGame {
-            val game = GomokuAIGame(id, humanColor, turnSeconds, maxOf(1, autoLossStreak), board.copy(), board.stoneCount, humanAutoStreak)
+            val game = GomokuAIGame(id, humanColor, turnSeconds, maxOf(1, autoLossStreak), board.copy(), board.stoneCount, humanAutoStreak, difficulty)
             game.startTurn(turn, now)
             return game
         }

@@ -354,23 +354,23 @@ fun spectateState(
     if (status != ReversiMatchStatus.active && status != ReversiMatchStatus.finished) return null
     val isFinished = status == ReversiMatchStatus.finished
     val records = (payload.moves ?: emptyList()).filter { it.seq >= 1 }.sortedBy { it.seq }
-    val rebuild = requestedSince == 0 || records.firstOrNull()?.seq == 1
+    val rebuild = requestedSince == 0 || records.firstOrNull()?.seq == 1L
 
     val merged = if (rebuild) ArrayList() else ArrayList(previous.plies)
     var applied = if (rebuild) 0 else previous.appliedSeq
     for (record in records) {
         if (record.seq <= applied) continue
-        if (record.seq != applied + 1 && !rebuild) return previous to true
+        if (record.seq != (applied + 1).toLong() && !rebuild) return previous to true
         merged += record
-        applied = record.seq
+        applied = record.seq.toInt()
     }
-    val moveCount = row.moveCount ?: applied
+    val moveCount = row.moveCount?.toInt() ?: applied
     if (moveCount != applied && !rebuild) return previous to true
 
     val board = row.board ?: previous.board
     val result = if (isFinished) row.result else null
     val scoreRow = row.score
-    val score = if (scoreRow?.black != null && scoreRow.white != null && result != null) ReversiScore(scoreRow.black!!, scoreRow.white!!, result) else null
+    val score = if (scoreRow?.black != null && scoreRow.white != null && result != null) ReversiScore(scoreRow.black!!.toInt(), scoreRow.white!!.toInt(), result) else null
     val next = previous.copy(
         blackUser = black,
         whiteUser = white,
@@ -379,8 +379,8 @@ fun spectateState(
         moveCount = moveCount,
         appliedSeq = moveCount,
         plies = merged.toList(),
-        lastStoneIdx = merged.lastOrNull { it.kind == ReversiPly.Kind.stone }?.idx,
-        autoStones = merged.mapNotNullTo(LinkedHashSet()) { if (it.kind == ReversiPly.Kind.stone && it.auto) it.idx else null },
+        lastStoneIdx = merged.lastOrNull { it.kind == ReversiPly.Kind.stone }?.idx?.toInt(),
+        autoStones = merged.mapNotNullTo(LinkedHashSet()) { if (it.kind == ReversiPly.Kind.stone && it.auto) it.idx?.toInt() else null },
         turn = if (isFinished) null else row.turn,
         turnStartedAt = if (isFinished) null else turnStartedAt,
         deadline = if (isFinished) null else deadline,

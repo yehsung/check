@@ -10,6 +10,13 @@ object MegaphoneBannerPhoneRules {
     /** 본문 최대 줄 수. */
     const val bodyLineLimit = 4
 
+    /**
+     * 본문이 접힌 배너([bodyLineLimit] 줄)에 다 안 들어가는가 — [더 보기]를 세울지(판 8 · 폰 1.0.18 `needsMore` 와 같은 결정). 폰은 같은 폭 ·
+     * 같은 글꼴의 전체 높이를 따로 재지만 Compose 는 접힌 글의 배치 결과가 넘침을 바로 말한다(`TextLayoutResult.hasVisualOverflow`).
+     * 펼친 뒤에는 단추가 없다(다음 배너는 다시 접혀 선다).
+     */
+    fun needsMore(hasVisualOverflow: Boolean, isExpanded: Boolean): Boolean = !isExpanded && hasVisualOverflow
+
     /** 카드 모서리. */
     const val cornerRadius = 22f
 
@@ -60,6 +67,9 @@ object MegaphoneBannerPhoneRules {
 /** 배너에 보이는 글자. */
 object MegaphoneBannerPhoneText {
     const val close = "닫기"
+
+    /** 긴 확성기(4줄을 넘는 글)를 같은 자리에서 전체 글로 펼치는 단추(판 8 · 폰 1.0.18 · 맥 0.3.81 과 같은 글자 — 대표 결정 11-10). */
+    const val more = "더 보기"
 
     /**
      * 배너 카드에 보일 본문 — 서식 기호(`## ` · `**` · `[글](주소)`)와 이모티콘 토큰(`[아잉:기쁨]` → "아잉이 기쁨")을 벗긴 한 줄 글

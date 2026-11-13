@@ -2851,6 +2851,7 @@
       "responses": [],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [],
           "daily": null,
           "launchAtMs": null,
@@ -2886,6 +2887,7 @@
       "responses": [],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [],
           "daily": null,
           "launchAtMs": null,
@@ -2921,6 +2923,7 @@
       "responses": [],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [],
           "daily": null,
           "launchAtMs": null,
@@ -2930,6 +2933,177 @@
           "rubyBalance": null,
           "serverNowMs": null,
           "streakDays": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "achievementCharacterClaim",
+      "requests": [
+        {
+          "body": {
+            "p_key": "work100",
+            "p_protocol": 9
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/achievement_character_claim",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": {
+          "claimedCharacterIDs": [],
+          "outcome": null,
+          "status": {
+            "characterMissions": [],
+            "claimedNow": [],
+            "daily": null,
+            "launchAtMs": null,
+            "missions": [],
+            "reportedClaimableCount": null,
+            "reportedClaimableRuby": null,
+            "rubyBalance": null,
+            "serverNowMs": null,
+            "streakDays": null
+          }
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "omokSkinsState",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/omok_skins_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": {
+          "equipped": null,
+          "rows": [],
+          "rubyBalance": null,
+          "status": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "buyOmokSkin",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1,
+            "p_skin": "dice"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/buy_omok_skin",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": {
+          "equipped": null,
+          "have": null,
+          "need": null,
+          "price": null,
+          "rubyBalance": null,
+          "skin": null,
+          "status": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "setOmokSkin",
+      "requests": [
+        {
+          "body": {
+            "p_skin": "cat"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_omok_skin",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": {
+          "equipped": null,
+          "have": null,
+          "need": null,
+          "price": null,
+          "rubyBalance": null,
+          "skin": null,
+          "status": null
+        }
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "setOmokSkin(nil)",
+      "requests": [
+        {
+          "body": {
+            "p_skin": null
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/set_omok_skin",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "ok": {
+          "equipped": null,
+          "have": null,
+          "need": null,
+          "price": null,
+          "rubyBalance": null,
+          "skin": null,
+          "status": null
         }
       },
       "routes": [],
@@ -2956,6 +3130,7 @@
       "responses": [],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [],
           "daily": null,
           "launchAtMs": null,
@@ -2991,6 +3166,7 @@
       "responses": [],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [],
           "daily": null,
           "launchAtMs": null,
@@ -8854,6 +9030,7 @@
             "peerAvatarURL": null,
             "peerName": "사용자",
             "peerUserID": "p1",
+            "photo": null,
             "readByPeer": null
           },
           {
@@ -8869,6 +9046,7 @@
             },
             "peerName": "친구",
             "peerUserID": "p2",
+            "photo": null,
             "readByPeer": null
           },
           {
@@ -8882,6 +9060,7 @@
             "peerAvatarURL": null,
             "peerName": "사용자",
             "peerUserID": "p3",
+            "photo": null,
             "readByPeer": null
           }
         ]
@@ -8927,6 +9106,7 @@
             "peerAvatarURL": null,
             "peerName": "사용자",
             "peerUserID": "p1",
+            "photo": null,
             "readByPeer": true
           },
           {
@@ -8942,6 +9122,7 @@
             },
             "peerName": "친구",
             "peerUserID": "p2",
+            "photo": null,
             "readByPeer": null
           },
           {
@@ -8955,6 +9136,7 @@
             "peerAvatarURL": null,
             "peerName": "사용자",
             "peerUserID": "p3",
+            "photo": null,
             "readByPeer": null
           }
         ]
@@ -9008,6 +9190,7 @@
               "peerAvatarURL": null,
               "peerName": "사용자",
               "peerUserID": "p1",
+              "photo": null,
               "readByPeer": true
             },
             {
@@ -9021,6 +9204,7 @@
               "peerAvatarURL": null,
               "peerName": "사용자",
               "peerUserID": "p2",
+              "photo": null,
               "readByPeer": null
             },
             {
@@ -9034,6 +9218,7 @@
               "peerAvatarURL": null,
               "peerName": "사용자",
               "peerUserID": "p1",
+              "photo": null,
               "readByPeer": null
             }
           ],
@@ -10069,12 +10254,13 @@
       ],
       "responses": [
         {
-          "body": "{\n  \"__note\": [\n    \"achievements_status() — 데모 계정(장면 _me · 라우트 `me` 또는 `me/missions`). **받을 것 넷**: 할 일 20 · 콕10 5 · 콕50 20 · 연속14 30 = 75.\",\n    \"★ 콕은 50회까지 채웠는데 10회를 안 받았다 — 계열 줄(AchievementStatus.seriesRows)은 **poke10** 의 [받기]를 세워야 한다. 위 단계(poke50)가 가리면 사용자는 받을 보상을 영영 못 본다(사장님 지시의 핵심).\",\n    \"팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.\",\n    \"claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).\",\n    \"값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).\",\n    \"시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
+          "body": "{\n  \"__note\": [\n    \"achievements_status() — 데모 계정(장면 _me · 라우트 `me` 또는 `me/missions`). **받을 것 넷**: 할 일 20 · 콕10 5 · 콕50 20 · 연속14 30 = 75.\",\n    \"★ 콕은 50회까지 채웠는데 10회를 안 받았다 — 계열 줄(AchievementStatus.seriesRows)은 **poke10** 의 [받기]를 세워야 한다. 위 단계(poke50)가 가리면 사용자는 받을 보상을 영영 못 본다(사장님 지시의 핵심).\",\n    \"팀은 team2 를 받았고 team3 는 2/3 — 그 줄은 [받기] 없이 **team3**(아직 안 받은 가장 낮은 단계)로 선다.\",\n    \"claimable_count · claimable_ruby 는 서버가 센 값이고 줄에서 센 값과 **같아야** 한다(둘이 갈리면 배지와 줄이 다른 수를 말한다).\",\n    \"값은 전부 achievement_defs() 그대로다(제목 · 보조 문장 · 보상 · 목표 · 순서는 서버가 말한다 — 앱에 숫자를 적지 않는다).\",\n    \"시각은 고정 시계(MobileClock.demoInstant = 1789621500000)보다 앞이다. launch_at_ms = 2026-09-15 00:00 KST.\",\n    \"daily 는 서버 정의표 열한 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 · 아잉 마작 90 · 1:1 길건너 100 포함 — 20261108200000 · 20261108221000 · 20261109150000).\",\n    \"streak_days 17 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 안 받은 연속 줄 streak30 의 진행 17/30 과 같다(달성한 streak14 는 14 에 고정).\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 120,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_crossy\",\n        \"game\": \"crossy\",\n        \"title\": \"길건너 아잉이 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 35\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      },\n      {\n        \"key\": \"daily_reversi\",\n        \"game\": \"reversi\",\n        \"title\": \"아잉 뒤집기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 80\n      },\n      {\n        \"key\": \"daily_mahjong\",\n        \"game\": \"mahjong\",\n        \"title\": \"아잉 마작 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 90\n      },\n      {\n        \"key\": \"daily_crossy_duel\",\n        \"game\": \"crossy_duel\",\n        \"title\": \"1:1 길건너 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 100\n      },\n      {\n        \"key\": \"daily_alkkagi\",\n        \"game\": \"alkkagi\",\n        \"title\": \"1:1 알까기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 110\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  },\n  \"streak_days\": 17\n}\n",
           "status": 200
         }
       ],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [],
           "daily": {
             "kstDay": "2026-09-17",
@@ -10084,6 +10270,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10102,6 +10289,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": true,
                   "claimedAtMs": 1789603200000,
                   "detail": "",
@@ -10120,6 +10308,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10134,10 +10323,30 @@
                 }
               },
               {
+                "game": "crossy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "",
+                  "key": "daily_crossy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy",
+                  "sort": 35,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "길건너 아잉이 한 판 하기"
+                }
+              },
+              {
                 "game": "gomoku",
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10156,6 +10365,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10174,6 +10384,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10192,6 +10403,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "맥에서 할 수 있어요",
@@ -10204,6 +10416,82 @@
                   "tier": 1,
                   "title": "아잉 큐브 한 판 하기"
                 }
+              },
+              {
+                "game": "reversi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_reversi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_reversi",
+                  "sort": 80,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 뒤집기 한 판 하기"
+                }
+              },
+              {
+                "game": "mahjong",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_mahjong",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_mahjong",
+                  "sort": 90,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 마작 한 판 하기"
+                }
+              },
+              {
+                "game": "crossy_duel",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_crossy_duel",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy_duel",
+                  "sort": 100,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 길건너 한 판 하기"
+                }
+              },
+              {
+                "game": "alkkagi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_alkkagi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_alkkagi",
+                  "sort": 110,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 알까기 한 판 하기"
+                }
               }
             ],
             "reportedClaimableCount": 2,
@@ -10215,6 +10503,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "아이폰 앱에 같은 계정으로 로그인",
@@ -10230,6 +10519,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789602000000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10245,6 +10535,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -10260,6 +10551,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -10275,6 +10567,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "타이밍 바 · 플래피 아잉 · 테트리스",
@@ -10290,6 +10583,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10305,6 +10599,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10320,6 +10615,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10335,6 +10631,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10350,6 +10647,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -10365,6 +10663,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10380,6 +10679,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789608000000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10395,6 +10695,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10412,7 +10713,7 @@
           "reportedClaimableRuby": 75,
           "rubyBalance": 120,
           "serverNowMs": 1789621500000,
-          "streakDays": null
+          "streakDays": 17
         }
       },
       "routes": [],
@@ -10442,6 +10743,7 @@
       ],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [
             {
               "key": "poke10",
@@ -10462,6 +10764,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10485,6 +10788,7 @@
             {
               "achieved": true,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789534800000,
               "detail": "콕 10번 받기",
@@ -10500,6 +10804,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10601,12 +10906,13 @@
       ],
       "responses": [
         {
-          "body": "{\n  \"__note\": [\n    \"achievement_claim(p_key = 'poke10') — 한 줄 받기. ★ 받은 뒤 **그 자리에 poke50 의 [받기]가 선다**(계열 줄은 받을 수 있는 가장 낮은 단계).\",\n    \"claimed_now 한 건(+5) · 잔량 125 · 남은 받을 것 셋(할 일 20 · 콕50 20 · 연속14 30 = 70).\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 3,\n  \"claimable_ruby\": 70,\n  \"ruby_balance\": 125,\n  \"server_now_ms\": 1789621500000,\n  \"claimed_now\": [\n    {\n      \"key\": \"poke10\",\n      \"title\": \"콕 찌르기 10회\",\n      \"reward\": 5\n    }\n  ],\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
+          "body": "{\n  \"__note\": [\n    \"achievement_claim(p_key = 'poke10') — 한 줄 받기. ★ 받은 뒤 **그 자리에 poke50 의 [받기]가 선다**(계열 줄은 받을 수 있는 가장 낮은 단계).\",\n    \"claimed_now 한 건(+5) · 잔량 125 · 남은 받을 것 셋(할 일 20 · 콕50 20 · 연속14 30 = 70).\",\n    \"daily 는 서버 정의표 열한 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 · 아잉 마작 90 · 1:1 길건너 100 포함 — 20261108200000 · 20261108221000 · 20261109150000).\",\n    \"streak_days 17 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 받기 응답도 같은 모양이다(상태 조회와 같은 값).\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 3,\n  \"claimable_ruby\": 70,\n  \"ruby_balance\": 125,\n  \"server_now_ms\": 1789621500000,\n  \"claimed_now\": [\n    {\n      \"key\": \"poke10\",\n      \"title\": \"콕 찌르기 10회\",\n      \"reward\": 5\n    }\n  ],\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_crossy\",\n        \"game\": \"crossy\",\n        \"title\": \"길건너 아잉이 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 35\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      },\n      {\n        \"key\": \"daily_reversi\",\n        \"game\": \"reversi\",\n        \"title\": \"아잉 뒤집기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 80\n      },\n      {\n        \"key\": \"daily_mahjong\",\n        \"game\": \"mahjong\",\n        \"title\": \"아잉 마작 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 90\n      },\n      {\n        \"key\": \"daily_crossy_duel\",\n        \"game\": \"crossy_duel\",\n        \"title\": \"1:1 길건너 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 100\n      },\n      {\n        \"key\": \"daily_alkkagi\",\n        \"game\": \"alkkagi\",\n        \"title\": \"1:1 알까기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 110\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  },\n  \"streak_days\": 17\n}\n",
           "status": 200
         }
       ],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [
             {
               "key": "poke10",
@@ -10622,6 +10928,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10640,6 +10947,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": true,
                   "claimedAtMs": 1789603200000,
                   "detail": "",
@@ -10658,6 +10966,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10672,10 +10981,30 @@
                 }
               },
               {
+                "game": "crossy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "",
+                  "key": "daily_crossy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy",
+                  "sort": 35,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "길건너 아잉이 한 판 하기"
+                }
+              },
+              {
                 "game": "gomoku",
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10694,6 +11023,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10712,6 +11042,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -10724,6 +11055,101 @@
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
                 }
+              },
+              {
+                "game": "rummy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
+                }
+              },
+              {
+                "game": "reversi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_reversi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_reversi",
+                  "sort": 80,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 뒤집기 한 판 하기"
+                }
+              },
+              {
+                "game": "mahjong",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_mahjong",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_mahjong",
+                  "sort": 90,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 마작 한 판 하기"
+                }
+              },
+              {
+                "game": "crossy_duel",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_crossy_duel",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy_duel",
+                  "sort": 100,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 길건너 한 판 하기"
+                }
+              },
+              {
+                "game": "alkkagi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_alkkagi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_alkkagi",
+                  "sort": 110,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 알까기 한 판 하기"
+                }
               }
             ],
             "reportedClaimableCount": 2,
@@ -10735,6 +11161,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "아이폰 앱에 같은 계정으로 로그인",
@@ -10750,6 +11177,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789602000000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10765,6 +11193,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -10780,6 +11209,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -10795,6 +11225,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "타이밍 바 · 플래피 아잉 · 테트리스",
@@ -10810,6 +11241,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789621500000,
               "detail": "",
@@ -10825,6 +11257,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10840,6 +11273,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10855,6 +11289,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10870,6 +11305,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -10885,6 +11321,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10900,6 +11337,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789608000000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10915,6 +11353,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -10932,7 +11371,7 @@
           "reportedClaimableRuby": 70,
           "rubyBalance": 125,
           "serverNowMs": 1789621500000,
-          "streakDays": null
+          "streakDays": 17
         }
       },
       "routes": [],
@@ -10958,12 +11397,13 @@
       ],
       "responses": [
         {
-          "body": "{\n  \"__note\": [\n    \"achievement_claim(p_key = null) — **받을 것 전부**(본문 {\\\"p_key\\\":null}). 바늘 없는 기본 파일이라 변형이 없는 키도 이 응답을 받는다.\",\n    \"claimed_now 는 이 호출이 **장부에 실제로 넣은** 네 건이다(서버 순서 = order by d.sort, d.key). 합 75 → 잔량 120 + 75 = 195.\",\n    \"응답 모양은 상태 조회와 같다 + claimed_now 뿐이다(화면은 claimed_now 로만 '받았다'를 말한다).\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 0,\n  \"claimable_ruby\": 0,\n  \"ruby_balance\": 195,\n  \"server_now_ms\": 1789621500000,\n  \"claimed_now\": [\n    {\n      \"key\": \"todo3\",\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"reward\": 20\n    },\n    {\n      \"key\": \"poke10\",\n      \"title\": \"콕 찌르기 10회\",\n      \"reward\": 5\n    },\n    {\n      \"key\": \"poke50\",\n      \"title\": \"콕 찌르기 50회\",\n      \"reward\": 20\n    },\n    {\n      \"key\": \"streak14\",\n      \"title\": \"14일 연속 근무\",\n      \"reward\": 30\n    }\n  ],\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  }\n}\n",
+          "body": "{\n  \"__note\": [\n    \"achievement_claim(p_key = null) — **받을 것 전부**(본문 {\\\"p_key\\\":null}). 바늘 없는 기본 파일이라 변형이 없는 키도 이 응답을 받는다.\",\n    \"claimed_now 는 이 호출이 **장부에 실제로 넣은** 네 건이다(서버 순서 = order by d.sort, d.key). 합 75 → 잔량 120 + 75 = 195.\",\n    \"응답 모양은 상태 조회와 같다 + claimed_now 뿐이다(화면은 claimed_now 로만 '받았다'를 말한다).\",\n    \"daily 는 서버 정의표 열한 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 · 아잉 마작 90 · 1:1 길건너 100 포함 — 20261108200000 · 20261108221000 · 20261109150000).\",\n    \"streak_days 17 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 받기 응답도 같은 모양이다(상태 조회와 같은 값).\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": 1789621500000,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 0,\n  \"claimable_ruby\": 0,\n  \"ruby_balance\": 195,\n  \"server_now_ms\": 1789621500000,\n  \"claimed_now\": [\n    {\n      \"key\": \"todo3\",\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"reward\": 20\n    },\n    {\n      \"key\": \"poke10\",\n      \"title\": \"콕 찌르기 10회\",\n      \"reward\": 5\n    },\n    {\n      \"key\": \"poke50\",\n      \"title\": \"콕 찌르기 50회\",\n      \"reward\": 20\n    },\n    {\n      \"key\": \"streak14\",\n      \"title\": \"14일 연속 근무\",\n      \"reward\": 30\n    }\n  ],\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_crossy\",\n        \"game\": \"crossy\",\n        \"title\": \"길건너 아잉이 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 35\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      },\n      {\n        \"key\": \"daily_reversi\",\n        \"game\": \"reversi\",\n        \"title\": \"아잉 뒤집기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 80\n      },\n      {\n        \"key\": \"daily_mahjong\",\n        \"game\": \"mahjong\",\n        \"title\": \"아잉 마작 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 90\n      },\n      {\n        \"key\": \"daily_crossy_duel\",\n        \"game\": \"crossy_duel\",\n        \"title\": \"1:1 길건너 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 100\n      },\n      {\n        \"key\": \"daily_alkkagi\",\n        \"game\": \"alkkagi\",\n        \"title\": \"1:1 알까기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 110\n      }\n    ],\n    \"claimable_count\": 2,\n    \"claimable_ruby\": 10\n  },\n  \"streak_days\": 17\n}\n",
           "status": 200
         }
       ],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [
             {
               "key": "todo3",
@@ -10994,6 +11434,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11012,6 +11453,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": true,
                   "claimedAtMs": 1789603200000,
                   "detail": "",
@@ -11030,6 +11472,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11044,10 +11487,30 @@
                 }
               },
               {
+                "game": "crossy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "",
+                  "key": "daily_crossy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy",
+                  "sort": 35,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "길건너 아잉이 한 판 하기"
+                }
+              },
+              {
                 "game": "gomoku",
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11066,6 +11529,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11084,6 +11548,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11096,6 +11561,101 @@
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
                 }
+              },
+              {
+                "game": "rummy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
+                }
+              },
+              {
+                "game": "reversi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_reversi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_reversi",
+                  "sort": 80,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 뒤집기 한 판 하기"
+                }
+              },
+              {
+                "game": "mahjong",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_mahjong",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_mahjong",
+                  "sort": 90,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 마작 한 판 하기"
+                }
+              },
+              {
+                "game": "crossy_duel",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_crossy_duel",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy_duel",
+                  "sort": 100,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 길건너 한 판 하기"
+                }
+              },
+              {
+                "game": "alkkagi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_alkkagi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_alkkagi",
+                  "sort": 110,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 알까기 한 판 하기"
+                }
               }
             ],
             "reportedClaimableCount": 2,
@@ -11107,6 +11667,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "아이폰 앱에 같은 계정으로 로그인",
@@ -11122,6 +11683,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789602000000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789621500000,
               "detail": "",
@@ -11137,6 +11699,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -11152,6 +11715,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -11167,6 +11731,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "타이밍 바 · 플래피 아잉 · 테트리스",
@@ -11182,6 +11747,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789621500000,
               "detail": "",
@@ -11197,6 +11763,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789621500000,
               "detail": "",
@@ -11212,6 +11779,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11227,6 +11795,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11242,6 +11811,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -11257,6 +11827,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11272,6 +11843,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789608000000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789621500000,
               "detail": "",
@@ -11287,6 +11859,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11304,7 +11877,7 @@
           "reportedClaimableRuby": 0,
           "rubyBalance": 195,
           "serverNowMs": 1789621500000,
-          "streakDays": null
+          "streakDays": 17
         }
       },
       "routes": [],
@@ -11330,12 +11903,13 @@
       ],
       "responses": [
         {
-          "body": "{\n  \"__note\": [\n    \"daily_mission_claim(p_key='daily_gomoku') — 그 줄 하나만(루비 5). 타이밍 바는 아직 [받기] 로 남는다(받을 것 1 · 5).\",\n    \"잔량 120 + 5 = 125.\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 125,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789621500000,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      }\n    ],\n    \"claimable_count\": 1,\n    \"claimable_ruby\": 5\n  },\n  \"claimed_now\": [\n    {\n      \"key\": \"daily_gomoku\",\n      \"title\": \"1:1 오목 한 판 두기\",\n      \"reward\": 5\n    }\n  ]\n}\n",
+          "body": "{\n  \"__note\": [\n    \"daily_mission_claim(p_key='daily_gomoku') — 그 줄 하나만(루비 5). 타이밍 바는 아직 [받기] 로 남는다(받을 것 1 · 5).\",\n    \"잔량 120 + 5 = 125.\",\n    \"daily 는 서버 정의표 열한 줄 그대로다(길건너 sort 35 · 아잉 큐브 70 · 아잉 뒤집기 80 · 아잉 마작 90 · 1:1 길건너 100 포함 — 20261108200000 · 20261108221000 · 20261109150000).\",\n    \"streak_days 17 — 지금 연속 근무일(서버 20261106150000 최상위 키 · target 에서 안 잘린 값). 일일 받기 응답도 같은 모양이다(상태 조회와 같은 값).\"\n  ],\n  \"launch_at_ms\": 1789398000000,\n  \"missions\": [\n    {\n      \"key\": \"phone_login\",\n      \"series\": \"phone_login\",\n      \"tier\": 1,\n      \"title\": \"폰 앱에서 로그인하기\",\n      \"detail\": \"아이폰 앱에 같은 계정으로 로그인\",\n      \"reward\": 50,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 10\n    },\n    {\n      \"key\": \"todo3\",\n      \"series\": \"todo3\",\n      \"tier\": 1,\n      \"title\": \"할 일 3개 이상 등록하기\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 3,\n      \"progress\": 3,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789602000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 20\n    },\n    {\n      \"key\": \"gomoku1\",\n      \"series\": \"gomoku1\",\n      \"tier\": 1,\n      \"title\": \"오목 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 30\n    },\n    {\n      \"key\": \"chess1\",\n      \"series\": \"chess1\",\n      \"tier\": 1,\n      \"title\": \"체스 한 판 두기\",\n      \"detail\": \"\",\n      \"reward\": 10,\n      \"target\": 1,\n      \"progress\": 1,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 40\n    },\n    {\n      \"key\": \"minigame3\",\n      \"series\": \"minigame3\",\n      \"tier\": 1,\n      \"title\": \"미니게임 3종 한 판씩 해보기\",\n      \"detail\": \"타이밍 바 · 플래피 아잉 · 테트리스\",\n      \"reward\": 10,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 50\n    },\n    {\n      \"key\": \"poke10\",\n      \"series\": \"poke\",\n      \"tier\": 1,\n      \"title\": \"콕 찌르기 10회\",\n      \"detail\": \"\",\n      \"reward\": 5,\n      \"target\": 10,\n      \"progress\": 10,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 60\n    },\n    {\n      \"key\": \"poke50\",\n      \"series\": \"poke\",\n      \"tier\": 2,\n      \"title\": \"콕 찌르기 50회\",\n      \"detail\": \"\",\n      \"reward\": 20,\n      \"target\": 50,\n      \"progress\": 50,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789605600000,\n      \"claimed_at_ms\": null,\n      \"sort\": 70\n    },\n    {\n      \"key\": \"poke100\",\n      \"series\": \"poke\",\n      \"tier\": 3,\n      \"title\": \"콕 찌르기 100회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 100,\n      \"progress\": 62,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 80\n    },\n    {\n      \"key\": \"ultra5\",\n      \"series\": \"ultra5\",\n      \"tier\": 1,\n      \"title\": \"울트라 찌르기 5회\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 5,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 90\n    },\n    {\n      \"key\": \"team2\",\n      \"series\": \"team\",\n      \"tier\": 1,\n      \"title\": \"팀 2명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 50,\n      \"target\": 2,\n      \"progress\": 2,\n      \"achieved\": true,\n      \"claimed\": true,\n      \"achieved_at_ms\": 1789534800000,\n      \"claimed_at_ms\": 1789538400000,\n      \"sort\": 100\n    },\n    {\n      \"key\": \"team3\",\n      \"series\": \"team\",\n      \"tier\": 2,\n      \"title\": \"팀 3명 채우기\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 3,\n      \"progress\": 2,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 110\n    },\n    {\n      \"key\": \"streak14\",\n      \"series\": \"streak\",\n      \"tier\": 1,\n      \"title\": \"14일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 30,\n      \"target\": 14,\n      \"progress\": 14,\n      \"achieved\": true,\n      \"claimed\": false,\n      \"achieved_at_ms\": 1789608000000,\n      \"claimed_at_ms\": null,\n      \"sort\": 120\n    },\n    {\n      \"key\": \"streak30\",\n      \"series\": \"streak\",\n      \"tier\": 2,\n      \"title\": \"30일 연속 근무\",\n      \"detail\": \"\",\n      \"reward\": 200,\n      \"target\": 30,\n      \"progress\": 17,\n      \"achieved\": false,\n      \"claimed\": false,\n      \"achieved_at_ms\": null,\n      \"claimed_at_ms\": null,\n      \"sort\": 130\n    }\n  ],\n  \"claimable_count\": 4,\n  \"claimable_ruby\": 75,\n  \"ruby_balance\": 125,\n  \"server_now_ms\": 1789621500000,\n  \"daily\": {\n    \"kst_day\": \"2026-09-17\",\n    \"reset_at_ms\": 1789657200000,\n    \"missions\": [\n      {\n        \"key\": \"daily_timing_bar\",\n        \"game\": \"timing_bar\",\n        \"title\": \"타이밍 바 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 10\n      },\n      {\n        \"key\": \"daily_flappy\",\n        \"game\": \"flappy\",\n        \"title\": \"플래피 아잉 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789603200000,\n        \"sort\": 20\n      },\n      {\n        \"key\": \"daily_tetris\",\n        \"game\": \"tetris\",\n        \"title\": \"테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 30\n      },\n      {\n        \"key\": \"daily_crossy\",\n        \"game\": \"crossy\",\n        \"title\": \"길건너 아잉이 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 35\n      },\n      {\n        \"key\": \"daily_gomoku\",\n        \"game\": \"gomoku\",\n        \"title\": \"1:1 오목 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 1,\n        \"achieved\": true,\n        \"claimed\": true,\n        \"claimed_at_ms\": 1789621500000,\n        \"sort\": 40\n      },\n      {\n        \"key\": \"daily_chess\",\n        \"game\": \"chess\",\n        \"title\": \"1:1 체스 한 판 두기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 50\n      },\n      {\n        \"key\": \"daily_tetris_duel\",\n        \"game\": \"tetris_duel\",\n        \"title\": \"1:1 테트리스 한 판 하기\",\n        \"detail\": \"\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 60\n      },\n      {\n        \"key\": \"daily_rummy\",\n        \"game\": \"rummy\",\n        \"title\": \"아잉 큐브 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 70\n      },\n      {\n        \"key\": \"daily_reversi\",\n        \"game\": \"reversi\",\n        \"title\": \"아잉 뒤집기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 80\n      },\n      {\n        \"key\": \"daily_mahjong\",\n        \"game\": \"mahjong\",\n        \"title\": \"아잉 마작 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 90\n      },\n      {\n        \"key\": \"daily_crossy_duel\",\n        \"game\": \"crossy_duel\",\n        \"title\": \"1:1 길건너 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 100\n      },\n      {\n        \"key\": \"daily_alkkagi\",\n        \"game\": \"alkkagi\",\n        \"title\": \"1:1 알까기 한 판 하기\",\n        \"detail\": \"맥에서 할 수 있어요\",\n        \"reward\": 5,\n        \"target\": 1,\n        \"progress\": 0,\n        \"achieved\": false,\n        \"claimed\": false,\n        \"claimed_at_ms\": null,\n        \"sort\": 110\n      }\n    ],\n    \"claimable_count\": 1,\n    \"claimable_ruby\": 5\n  },\n  \"claimed_now\": [\n    {\n      \"key\": \"daily_gomoku\",\n      \"title\": \"1:1 오목 한 판 두기\",\n      \"reward\": 5\n    }\n  ],\n  \"streak_days\": 17\n}\n",
           "status": 200
         }
       ],
       "result": {
         "ok": {
+          "characterMissions": [],
           "claimedNow": [
             {
               "key": "daily_gomoku",
@@ -11351,6 +11925,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11369,6 +11944,7 @@
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": true,
                   "claimedAtMs": 1789603200000,
                   "detail": "",
@@ -11387,6 +11963,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11401,10 +11978,30 @@
                 }
               },
               {
+                "game": "crossy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "",
+                  "key": "daily_crossy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy",
+                  "sort": 35,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "길건너 아잉이 한 판 하기"
+                }
+              },
+              {
                 "game": "gomoku",
                 "row": {
                   "achieved": true,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": true,
                   "claimedAtMs": 1789621500000,
                   "detail": "",
@@ -11423,6 +12020,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11441,6 +12039,7 @@
                 "row": {
                   "achieved": false,
                   "achievedAtMs": null,
+                  "characterID": null,
                   "claimed": false,
                   "claimedAtMs": null,
                   "detail": "",
@@ -11453,6 +12052,101 @@
                   "tier": 1,
                   "title": "1:1 테트리스 한 판 하기"
                 }
+              },
+              {
+                "game": "rummy",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_rummy",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_rummy",
+                  "sort": 70,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 큐브 한 판 하기"
+                }
+              },
+              {
+                "game": "reversi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_reversi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_reversi",
+                  "sort": 80,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 뒤집기 한 판 하기"
+                }
+              },
+              {
+                "game": "mahjong",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_mahjong",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_mahjong",
+                  "sort": 90,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "아잉 마작 한 판 하기"
+                }
+              },
+              {
+                "game": "crossy_duel",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_crossy_duel",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_crossy_duel",
+                  "sort": 100,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 길건너 한 판 하기"
+                }
+              },
+              {
+                "game": "alkkagi",
+                "row": {
+                  "achieved": false,
+                  "achievedAtMs": null,
+                  "characterID": null,
+                  "claimed": false,
+                  "claimedAtMs": null,
+                  "detail": "맥에서 할 수 있어요",
+                  "key": "daily_alkkagi",
+                  "progress": 0,
+                  "reward": 5,
+                  "series": "daily_alkkagi",
+                  "sort": 110,
+                  "target": 1,
+                  "tier": 1,
+                  "title": "1:1 알까기 한 판 하기"
+                }
               }
             ],
             "reportedClaimableCount": 1,
@@ -11464,6 +12158,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "아이폰 앱에 같은 계정으로 로그인",
@@ -11479,6 +12174,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789602000000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11494,6 +12190,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -11509,6 +12206,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -11524,6 +12222,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "타이밍 바 · 플래피 아잉 · 테트리스",
@@ -11539,6 +12238,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11554,6 +12254,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789605600000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11569,6 +12270,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11584,6 +12286,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11599,6 +12302,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789534800000,
+              "characterID": null,
               "claimed": true,
               "claimedAtMs": 1789538400000,
               "detail": "",
@@ -11614,6 +12318,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11629,6 +12334,7 @@
             {
               "achieved": true,
               "achievedAtMs": 1789608000000,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11644,6 +12350,7 @@
             {
               "achieved": false,
               "achievedAtMs": null,
+              "characterID": null,
               "claimed": false,
               "claimedAtMs": null,
               "detail": "",
@@ -11661,7 +12368,7 @@
           "reportedClaimableRuby": 75,
           "rubyBalance": 125,
           "serverNowMs": 1789621500000,
-          "streakDays": null
+          "streakDays": 17
         }
       },
       "routes": [],
@@ -13166,23 +13873,46 @@
       "aiLimitClearingRow": "I",
       "aiLimitPercent": "I",
       "aiLimitRow": "I",
+      "attachFeedbackShot": "mac",
       "awaySync": "H",
       "buyUltra": "H",
       "closeAbandonedSessions": "H",
+      "createScannerLinkCode": "mac",
+      "createSignedObjectURL": "mac",
+      "deletePrivateObject": "mac",
+      "downloadFeedbackShot": "admin",
+      "downloadPrivateObject": "mac",
+      "downloadPrivateObjectViaSignedURL": "mac",
+      "downloadSignedObject": "mac",
+      "ensureRegionGift": "mac",
       "fetchAILimitDevices": "I",
+      "fetchFeedbackShots": "admin",
       "fetchLegacyTokenUsageTotal": "H",
+      "fetchMegaphoneFeed": "mac",
+      "fetchMessagePage": "mac",
+      "fetchMessagePhotoData": "mac",
       "fetchMyOverlappingSessions": "H",
       "fetchReportAdminList": "admin",
+      "fetchReportAdminPhotoPaths": "admin",
       "fetchReportOpenCount": "admin",
+      "fetchScannerDevices": "mac",
       "heartbeat": "H",
       "insertClosedSession": "H",
       "item": "admin",
       "makeWorkTickRequest": "H",
+      "megaphoneAdminHide": "admin",
+      "messagePage": "mac",
+      "messagePageEntry": "mac",
+      "privateStorageError": "mac",
       "reopenSession": "H",
+      "reportAdminPhotoPaths": "admin",
       "reportDeviceInput": "H",
+      "revokeScannerDevice": "mac",
+      "sendPhotoMessage": "mac",
       "sendPoke": "H",
       "sendTokenScanHeartbeat": "H",
       "sendUltraPoke": "H",
+      "signedURL": "mac",
       "startWork": "H",
       "stopWork": "H",
       "syncUltraWallet": "H",
@@ -13190,6 +13920,9 @@
       "updateAppVersion": "H",
       "updateFocusMode": "H",
       "updateReportAdmin": "admin",
+      "uploadFeedbackShot": "mac",
+      "uploadMessagePhoto": "mac",
+      "uploadPrivateObject": "mac",
       "upsertAILimitMainDeviceID": "I",
       "upsertAILimits": "I",
       "upsertLegacyTokenUsage": "H",
@@ -13202,6 +13935,7 @@
     "responses": "이 case 의 응답 대본(차례대로, 끝나면 200 {}). unordered = 동시에 떠나는 요청이라 정규 글자 순으로 정렬해 비교",
     "result": "서비스 반환값: {\"ok\": GoldenMirror 덤프(Void = \"$void\", nil = null, 글자 잎은 요청과 같은 자리표시)} 또는 {\"throws\": SupabaseWorkServiceError 덤프 | \"$decoding\" | {\"$type\", \"$dump\"}}",
     "resultOtherLanes": {
+      "achievementCharacterClaim": "W1-c(AchievementCharacterClaimResponse)",
       "achievementClaim": "W1-c(AchievementStatus)",
       "achievementClaim#data": "W1-c(AchievementStatus)",
       "achievementClaim(nil)": "W1-c(AchievementStatus)",
@@ -13211,6 +13945,7 @@
       "achievementsStatus#lossy": "W1-c(AchievementStatus)",
       "achievementsStatus#missing": "W1-c(AchievementStatus)",
       "achievementsStatus#notObject": "W1-c(AchievementStatus)",
+      "buyOmokSkin": "W1-c(OmokSkinWriteResponse)",
       "dailyMissionClaim": "W1-c(AchievementStatus)",
       "dailyMissionClaim#data": "W1-c(AchievementStatus)",
       "dailyMissionClaim(nil)": "W1-c(AchievementStatus)",
@@ -13224,10 +13959,13 @@
       "megaphoneInfo": "W1-c(MegaphoneInfo)",
       "megaphoneInfo#badType": "W1-c(MegaphoneInfo)",
       "megaphoneInfo#data": "W1-c(MegaphoneInfo)",
+      "omokSkinsState": "W1-c(OmokSkinsState)",
       "sendMegaphone": "W1-c(MegaphoneSendOutcome)",
       "sendMegaphone#badType": "W1-c(MegaphoneSendOutcome)",
       "sendMegaphone#missing": "W1-c(MegaphoneSendOutcome)",
       "sendMegaphone#outcomes": "W1-c(MegaphoneSendOutcome)",
+      "setOmokSkin": "W1-c(OmokSkinWriteResponse)",
+      "setOmokSkin(nil)": "W1-c(OmokSkinWriteResponse)",
       "setStatusMessage": "W1-c(StatusMessageSaveOutcome — rules/text)",
       "setStatusMessage#outcomes": "W1-c(StatusMessageSaveOutcome — rules/text)",
       "setStatusMessage(nil)": "W1-c(StatusMessageSaveOutcome — rules/text)",

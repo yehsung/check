@@ -5,7 +5,9 @@ package com.yehsung.aingcheck.core.stores.me
 
 import com.yehsung.aingcheck.core.rules.achievements.AchievementNoticeText
 import com.yehsung.aingcheck.core.rules.achievements.AchievementStatus
+import com.yehsung.aingcheck.core.rules.character.CharacterCatalog
 import com.yehsung.aingcheck.core.rules.character.CharacterManifest
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
 import com.yehsung.aingcheck.core.rules.format.MenuBarStatusFormatter
 import com.yehsung.aingcheck.core.rules.format.TokenNumberFormatter
 import com.yehsung.aingcheck.core.rules.format.roundedHalfAwayFromZero
@@ -118,6 +120,11 @@ object MeText {
     fun shortfallPercent(workedSeconds: Long, goalSeconds: Long): Int = minOf(99, percent(workedSeconds, goalSeconds))
 
     /** 개인 기록 조회 창의 시작: min(회고 비교선 = 그 전주 월요일, 잔디 = 12주 전 월요일). */
+    /** 판 8 — 주별 근무 리듬이 넘겨볼 수 있는 가장 이른 날 = 서비스 첫 주 월요일(2026-06-29 00:00 KST). 맥 · 폰과 같은 값. */
+    val rhythmHistoryStart: SwiftDate = SwiftDate(1_782_658_800.0)
+    const val rhythmPreviousWeek = "이전 주"
+    const val rhythmNextWeek = "다음 주"
+
     fun insightsWindowStart(now: SwiftDate): SwiftDate {
         val seconds = now.timeIntervalSince1970
         val retroStart = WorkInsightsWeekWindow.lastWeek(seconds).previousStart
@@ -335,7 +342,9 @@ object MeText {
     /** 받기가 실패한 **그 줄** 안의 문장(코어 `AchievementNoticeText.claimFailedRow` — 맥과 한 글자도 다르지 않다). */
     const val claimFailed = AchievementNoticeText.claimFailedRow
 
-    fun missionProgress(mission: AchievementStatus.Mission): String = "${mission.progress}/${mission.target}"
+    fun missionProgress(mission: AchievementStatus.Mission): String =
+        // 캐릭터 보상 줄(개발에 찌든 아잉이 — 누적 근무 시간)은 단위까지 "37/100시간"(맥 · 폰과 같은 글자).
+        if (mission.characterID != null) DevAingMission.count(mission.progress, mission.target) else "${mission.progress}/${mission.target}"
 
     /** 보상 숫자 "+50"(루비 보석은 화면이 그린다 — 💎 이모지를 쓰지 않는다). 0 이면 null(칩 없음). */
     fun missionReward(ruby: Long): String? = if (ruby > 0) weeklyRubyGain(ruby) else null
@@ -351,7 +360,12 @@ object MeText {
     fun missionAccessibility(mission: AchievementStatus.Mission): String = when (mission.state) {
         AchievementStatus.RowState.inProgress -> {
             val progress = "${mission.title}, ${missionProgress(mission)}"
-            if (mission.reward > 0) "$progress, 달성하면 루비 ${mission.reward}개" else progress
+            val characterID = mission.characterID
+            when {
+                characterID != null -> "$progress, 달성하면 ${MeCharacterCards.displayName(characterID)}"
+                mission.reward > 0 -> "$progress, 달성하면 루비 ${mission.reward}개"
+                else -> progress
+            }
         }
         AchievementStatus.RowState.claimable -> "${mission.title}, 달성했어요"
         AchievementStatus.RowState.claimed ->
@@ -501,6 +515,28 @@ object MeText {
 
     fun lockedGachaCharacter(name: String, shardCost: Long?): String =
         "$name${particle(name, "은", "는")} 아직 없어요 — ${gachaAcquirePhrase(shardCost)}"
+
+    /** 조각 교환 전용(흑우 — 맥 0.3.78 · 폰 1.0.18)을 얻는 길 — 뽑기에서는 안 나온다. 교환값을 알면 "조각 20개 교환으로만 …". */
+    fun shardOnlyAcquirePhrase(shardCost: Long?): String {
+        if (shardCost == null || shardCost <= 0) return GachaText.shardOnlyHint
+        return "${GachaText.shardCost(shardCost)} 교환으로만 얻을 수 있어요"
+    }
+
+    /** 뽑기 전용 · 조각 교환 전용을 id 로 가른 얻는 길(타일 · 안내 · 톡백이 이 한 곳을 묻는다). */
+    fun acquirePhrase(id: String, shardCost: Long?): String =
+        if (CharacterCatalog.isShardOnlyBuiltIn(id)) shardOnlyAcquirePhrase(shardCost) else gachaAcquirePhrase(shardCost)
+
+    /** 상점에서 얻는 길 칸을 눌렀을 때 — "흑우 아잉이는 조각 20개 교환으로만 얻을 수 있어요" · 뽑기 전용은 [gachaOnlyNotice] 와 같다. */
+    fun acquireNotice(id: String, shardCost: Long?): String {
+        val name = MeCharacterCards.displayName(id)
+        return "$name${particle(name, "은", "는")} ${acquirePhrase(id, shardCost)}"
+    }
+
+    /** 고르기에서 안 가진 얻는 길 캐릭터를 눌렀을 때(뽑기 전용 · 조각 교환 전용). */
+    fun lockedAcquireCharacter(id: String, shardCost: Long?): String {
+        val name = MeCharacterCards.displayName(id)
+        return "$name${particle(name, "은", "는")} 아직 없어요 — ${acquirePhrase(id, shardCost)}"
+    }
 
     const val gachaCharacterNotOwned = "아직 없는 캐릭터예요 — 뽑기나 조각 교환으로 얻을 수 있어요"
 

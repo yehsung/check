@@ -1,5 +1,6 @@
 // 원본: Sources/CheckCore/Achievements.swift @ 1b8260d (서비스 래퍼 `extension SupabaseWorkService` 는 net(W1-d) 몫)
 // 원본: Sources/CheckCore/Achievements.swift:152 @ 1ca907fa (streakDays) · :267 (HeaderStreakCopy)
+// 원본: Sources/CheckCore/Achievements.swift @ e4995a3a (캐릭터 보상 미션 characterMissions · achievement_character_claim — 맥 0.3.81)
 package com.yehsung.aingcheck.core.rules.achievements
 
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
@@ -41,6 +42,11 @@ data class AchievementStatus(
      * 미션 줄의 `progress` 로 대신하지 마라: 서버가 target 에서 자르고 달성 뒤에는 target 에 고정한다(30일을 넘긴 사람은 2일째여도 30).
      */
     val streakDays: Long? = null,
+    /**
+     * 캐릭터 보상 미션(맥 0.3.81 · 최상위 `character_missions` — 개발에 찌든 아잉이 '누적 근무 100시간'). 줄마다 [Mission.characterID] 가 있다.
+     * 받기는 루비 미션과 다른 RPC(`achievement_character_claim`)다. 키 없음 · 모양이 틀림 → 빈 목록(루비 미션은 산다).
+     */
+    val characterMissions: List<Mission> = emptyList(),
 ) {
     /** 줄 하나가 그리는 상태 — 미달성 → [받기] → 받음, 이 순서로만. */
     enum class RowState { inProgress, claimable, claimed }
@@ -60,6 +66,8 @@ data class AchievementStatus(
         val achievedAtMs: Long?,
         val claimedAtMs: Long?,
         val sort: Long,
+        /** 캐릭터 보상 줄이면 그 캐릭터 id(빈 글자는 null). 루비 미션은 null. */
+        val characterID: String? = null,
     ) {
         val id: String get() = key
 
@@ -81,6 +89,7 @@ data class AchievementStatus(
             key = key, series = series, tier = tier, title = title, detail = detail, reward = reward, target = target,
             progress = progress, achieved = true, claimed = true,
             achievedAtMs = achievedAtMs ?: previous.achievedAtMs, claimedAtMs = claimedAtMs ?: previous.claimedAtMs, sort = sort,
+            characterID = characterID,
         )
 
         companion object {
@@ -88,7 +97,7 @@ data class AchievementStatus(
             fun of(
                 key: String, series: String? = null, tier: Long = 1, title: String, detail: String = "", reward: Long = 0,
                 target: Long = 1, progress: Long = 0, achieved: Boolean = false, claimed: Boolean = false,
-                achievedAtMs: Long? = null, claimedAtMs: Long? = null, sort: Long = Long.MAX_VALUE,
+                achievedAtMs: Long? = null, claimedAtMs: Long? = null, sort: Long = Long.MAX_VALUE, characterID: String? = null,
             ): Mission {
                 val clampedTarget = maxOf(1L, target)
                 return Mission(
@@ -105,6 +114,7 @@ data class AchievementStatus(
                     achievedAtMs = achievedAtMs,
                     claimedAtMs = claimedAtMs,
                     sort = sort,
+                    characterID = characterID?.takeIf { it.isNotEmpty() },
                 )
             }
         }
@@ -122,8 +132,11 @@ data class AchievementStatus(
     /** 받을 수 있는 미션 — 계열로 접기 **전**이다. */
     val claimable: List<Mission> get() = missions.filter { it.isClaimable }
 
-    /** 배지 · 절 머리의 "받을 보상 N개" — 줄에서 센다(서버 숫자와 갈리면 줄이 이긴다). */
-    val claimableCount: Int get() = claimable.size
+    /** 받을 수 있는 캐릭터 보상 줄(맥 0.3.81). */
+    val characterClaimable: List<Mission> get() = characterMissions.filter { it.isClaimable }
+
+    /** 배지 · 절 머리의 "받을 보상 N개" — 줄에서 센다(서버 숫자와 갈리면 줄이 이긴다). 캐릭터 보상 줄도 센다. */
+    val claimableCount: Int get() = claimable.size + characterClaimable.size
 
     val claimableRuby: Long get() = claimable.sumOf { it.reward }
 
@@ -143,6 +156,10 @@ data class AchievementStatus(
             return rows.sortedWith(compareBy<Triple<Long, String, Mission>> { it.first }.thenBy(SWIFT_STRING) { it.second }).map { it.third }
         }
 
+    /** 누적 미션 절의 줄 — 계열 줄([seriesRows]) 다음 캐릭터 보상 줄(sort · 키 순). */
+    val sectionRows: List<Mission>
+        get() = seriesRows + characterMissions.sortedWith(compareBy<Mission> { it.sort }.thenBy(SWIFT_STRING) { it.key })
+
     fun series(ofKey: String): String? = missions.firstOrNull { it.key == ofKey }?.series
 
     val claimedNowRuby: Long get() = claimedNow.sumOf { it.reward }
@@ -156,11 +173,17 @@ data class AchievementStatus(
         val mergedDaily = daily?.merged(previous.daily)
         val claimedBefore = LinkedHashMap<String, Mission>()
         for (mission in previous.missions) if (mission.claimed && mission.key !in claimedBefore) claimedBefore[mission.key] = mission
-        if (claimedBefore.isEmpty()) return copy(daily = mergedDaily)
+        // 캐릭터 보상 줄(맥 0.3.81)도 같은 규약 — 받은 캐릭터 줄에 [받기]가 다시 서지 않게.
+        val characterClaimedBefore = LinkedHashMap<String, Mission>()
+        for (mission in previous.characterMissions) if (mission.claimed && mission.key !in characterClaimedBefore) characterClaimedBefore[mission.key] = mission
         return copy(
             daily = mergedDaily,
-            missions = missions.map { mission ->
+            missions = if (claimedBefore.isEmpty()) missions else missions.map { mission ->
                 val before = claimedBefore[mission.key]
+                if (mission.claimed || before == null) mission else mission.markedClaimed(before)
+            },
+            characterMissions = if (characterClaimedBefore.isEmpty()) characterMissions else characterMissions.map { mission ->
+                val before = characterClaimedBefore[mission.key]
                 if (mission.claimed || before == null) mission else mission.markedClaimed(before)
             },
         )
@@ -175,10 +198,13 @@ data class AchievementStatus(
             launchAtMs: Long? = null, missions: List<Mission> = emptyList(), reportedClaimableCount: Long? = null,
             reportedClaimableRuby: Long? = null, claimedNow: List<Claim> = emptyList(), rubyBalance: Long? = null,
             serverNowMs: Long? = null, daily: DailyMissionStatus? = null, streakDays: Long? = null,
+            characterMissions: List<Mission> = emptyList(),
         ): AchievementStatus {
             val seen = HashSet<String>()
+            val seenCharacter = HashSet<String>()
             return AchievementStatus(launchAtMs, missions.filter { seen.add(it.key) }, reportedClaimableCount, reportedClaimableRuby,
-                claimedNow, rubyBalance, serverNowMs, daily, streakDays)
+                claimedNow, rubyBalance, serverNowMs, daily, streakDays,
+                characterMissions.filter { it.characterID != null && seenCharacter.add(it.key) })
         }
 
         /** 관대한 디코드(서비스 디코더 — 키는 convertFromSnakeCase). 최상위가 객체가 아니면 [SwiftDecodingError]. */
@@ -195,6 +221,35 @@ data class AchievementStatus(
                 // 일일 칸 하나가 깨져도 누적 미션은 산다(객체가 아니면 null = 일일 없음).
                 daily = c.element("daily")?.takeIf { it !is JsonNull }?.let { DailyMissionStatus.decodeOrNull(it) },
                 streakDays = AchievementLossy.int(c, "streakDays"),
+                // 캐릭터 보상 미션(맥 0.3.81). 줄 하나가 깨져도 나머지 · 루비 미션은 산다.
+                characterMissions = AchievementLossy.list(c, "characterMissions")?.mapNotNull(::lossyCharacterMission) ?: emptyList(),
+            )
+        }
+
+        /** 캐릭터 보상 줄 — 키 · 제목 · characterId 가 다 있어야 한다(그 행만 버린다). 계열은 키 · 단계 1 · 보상 0. */
+        private fun lossyCharacterMission(element: JsonElement): Mission? {
+            val obj = element as? JsonObject ?: return null
+            val c = SwiftKeyed(obj)
+            val key = c.lossyString("key")?.takeIf { it.isNotEmpty() } ?: return null
+            val title = c.lossyString("title")?.let(TextScalars::trimmingWhitespacesAndNewlines)?.takeIf { it.isNotEmpty() } ?: return null
+            val characterID = c.lossyString("characterId")?.takeIf { it.isNotEmpty() } ?: return null
+            val achievedAtMs = AchievementLossy.int(c, "achievedAtMs")
+            val claimedAtMs = AchievementLossy.int(c, "claimedAtMs")
+            return Mission.of(
+                key = key,
+                series = key,
+                tier = 1,
+                title = title,
+                detail = c.lossyString("detail") ?: "",
+                reward = 0,
+                target = AchievementLossy.int(c, "target") ?: 1,
+                progress = AchievementLossy.int(c, "progress") ?: 0,
+                achieved = c.lossyBool("achieved") ?: (achievedAtMs != null),
+                claimed = c.lossyBool("claimed") ?: (claimedAtMs != null),
+                achievedAtMs = achievedAtMs,
+                claimedAtMs = claimedAtMs,
+                sort = AchievementLossy.int(c, "sort") ?: Long.MAX_VALUE,
+                characterID = characterID,
             )
         }
 
@@ -292,4 +347,39 @@ object HeaderStreakCopy {
 /** `achievement_claim(p_key)` · `daily_mission_claim(p_key)` 본문 — **키를 언제나 싣는다**(null = 받을 것 전부). */
 data class AchievementClaimRequest(val pKey: String?) {
     fun body(): JsonObject = JsonObject(mapOf("p_key" to (pKey?.let { JsonPrimitive(it) } ?: JsonNull)))
+}
+
+/**
+ * `achievement_character_claim(p_key, p_protocol)` 본문(맥 0.3.81). 키 둘을 **언제나** 싣는다 — 서버가 능력 번호로 그림 없는 클라를 거른다
+ * (`needs_update`). 번호는 그림이 실재하는 캐릭터로 정한 상점 번호(`ShopWire.protocolVersion`)다.
+ */
+data class AchievementCharacterClaimRequest(val pKey: String, val pProtocol: Int) {
+    fun body(): JsonObject = JsonObject(mapOf("p_key" to JsonPrimitive(pKey), "p_protocol" to JsonPrimitive(pProtocol)))
+}
+
+/** `achievement_character_claim` 응답 — 상태 모양 + 결과 어휘(`status`) + 받은 캐릭터(`claimed_now[].character_id`). */
+data class AchievementCharacterClaimResponse(
+    val status: AchievementStatus,
+    val outcome: Outcome?,
+    val claimedCharacterIDs: List<String> = emptyList(),
+) {
+    enum class Outcome(val wire: String) {
+        ok("ok"), already("already"), notMet("not_met"), hidden("hidden"), unknownKey("unknown_key"), needsUpdate("needs_update");
+
+        companion object {
+            fun fromWire(raw: String?): Outcome? = entries.firstOrNull { it.wire == raw }
+        }
+    }
+
+    companion object {
+        /** 관대한 디코드(서비스 디코더 — 키는 convertFromSnakeCase). 최상위가 객체가 아니면 [SwiftDecodingError]. */
+        fun decode(element: JsonElement): AchievementCharacterClaimResponse {
+            val state = AchievementStatus.decode(element)
+            val c = SwiftKeyed(SwiftValue.obj(element))
+            val ids = AchievementLossy.list(c, "claimedNow")?.mapNotNull { e ->
+                (e as? JsonObject)?.let { SwiftKeyed(it).lossyString("characterId") }?.takeIf { it.isNotEmpty() }
+            } ?: emptyList()
+            return AchievementCharacterClaimResponse(state, Outcome.fromWire(c.lossyString("status")), ids)
+        }
+    }
 }

@@ -35,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlin.coroutines.CoroutineContext
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
+import com.yehsung.aingcheck.core.rules.insights.WorkRhythmWeeks
 
 /**
  * 나 탭 스토어(SPEC-ios §3.6) — 프로필 머리 · 루비 · 기록(회고·잔디·리듬) · 캐릭터(상점·고르기·뽑기) · 생일 선물 · 이번 주 근무 ·
@@ -91,6 +92,16 @@ class MeStore(
     // MARK: 기록
     var heatmap by mutableStateOf(WorkRhythmHeatmap.empty)
         internal set
+
+    /** 판 8(폰 1.0.18 · 맥 0.3.78 #d_V0mJ363LONEW) — 서비스 첫 주 ~ 이번 주 주별 근무 리듬(마지막이 이번 주). 비면 옛 '지난주' 칸. */
+    var rhythmWeeks by mutableStateOf(WorkRhythmWeeks.empty)
+        internal set
+    /** 보고 있는 주(0 = 이번 주, 1 = 지난주 …). 내 기록을 다시 읽으면 범위 안으로 붙인다. */
+    var rhythmWeekOffset by mutableStateOf(0)
+        internal set
+    /** 이번 주 칸에 1분마다 얹을 진행 중 근무의 시작(기록을 읽을 때 신선한 신호였던 것만). 1970 기준 초. */
+    var rhythmLiveStart by mutableStateOf<Double?>(null)
+        internal set
     var retro by mutableStateOf<WeeklyRetro?>(null)
         internal set
     var dailyGrid by mutableStateOf(WorkDailyGrid.empty)
@@ -143,6 +154,20 @@ class MeStore(
     var shopGiftHintID by mutableStateOf<String?>(null)
         internal set
     var purchasingID by mutableStateOf<String?>(null)
+        internal set
+
+    // MARK: 오목알 스킨(판 8 — 폰 1.0.18 MeStore.omokSkins…)
+    /** 상점 '오목알' 절의 서버 상태. null = 아직 모른다. */
+    var omokSkins by mutableStateOf<com.yehsung.aingcheck.core.rules.achievements.OmokSkinsState?>(null)
+        internal set
+    /** 이 서버엔 스킨이 없다(함수 없음) — 절을 숨긴다. */
+    var omokSkinsUnavailable by mutableStateOf(false)
+        internal set
+    internal var omokSkinsLoading = false
+    /** 떠 있는 쓰기 — 스킨 원문(사기) · "equip"(끼기). 하나만 뜬다. */
+    var omokSkinBusy by mutableStateOf<String?>(null)
+        internal set
+    var omokSkinNotice by mutableStateOf<String?>(null)
         internal set
 
     /**
@@ -449,6 +474,9 @@ class MeStore(
         centerLoaded = false
         headerState.reset()
         heatmap = WorkRhythmHeatmap.empty
+        rhythmWeeks = WorkRhythmWeeks.empty
+        rhythmWeekOffset = 0
+        rhythmLiveStart = null
         retro = null
         dailyGrid = WorkDailyGrid.empty
         tokenGrid = TokenDailyGrid.empty
@@ -468,6 +496,11 @@ class MeStore(
         shopGachaHintID = null
         shopGiftHintID = null
         purchasingID = null
+        omokSkins = null
+        omokSkinsUnavailable = false
+        omokSkinsLoading = false
+        omokSkinBusy = null
+        omokSkinNotice = null
         equippedServerID = null
         equippedLoaded = false
         equippedLoadFailed = false

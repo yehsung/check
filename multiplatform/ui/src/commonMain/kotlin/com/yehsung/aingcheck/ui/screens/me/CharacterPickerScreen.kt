@@ -87,6 +87,9 @@ import com.yehsung.aingcheck.ui.screens.settingscommon.SectionTitle
 import com.yehsung.aingcheck.ui.theme.AingColors
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
+import com.yehsung.aingcheck.core.stores.me.isMissionLocked
+import com.yehsung.aingcheck.core.stores.me.isShardOnly
 
 object CharacterPickerTags {
     fun tile(id: String) = "picker-tile:$id"
@@ -151,12 +154,18 @@ object CharacterPickerRules {
         balance: Long?,
         unlocked: Boolean,
         giftKind: CharacterGiftKind = CharacterGiftKind.birthday,
+        missionLocked: Boolean = false,
+        shardOnly: Boolean = false,
     ): MeCharacterTileStatus = when {
         savingThis -> MeCharacterTileStatus.Busy
         isOn -> MeCharacterTileStatus.Equipped
         owned -> MeCharacterTileStatus.Owned
+        // 미션 보상(개발에 찌든 아잉이 — 판 8)은 잠긴 칸 "미션 보상".
+        missionLocked -> MeCharacterTileStatus.MissionLocked
         // 고르기에는 가진 사람에게만 서므로(pickerIDs) 거의 닿지 않는다 — 착용값이 소유보다 먼저 도착한 창의 안전망.
         giftOnly -> MeCharacterTileStatus.GiftOnly(giftKind)
+        // 조각 교환 전용(흑우 — 판 8)은 "조각 20개로 교환".
+        shardOnly -> MeCharacterTileStatus.ShardOnly(shardCost)
         gachaOnly -> MeCharacterTileStatus.GachaOnly(shardCost)
         price != null -> MeCharacterTileStatus.Price(price, balance)
         unlocked -> MeCharacterTileStatus.None
@@ -177,15 +186,21 @@ object CharacterPickerRules {
         }
         is MeCharacterTileStatus.GachaOnly -> MeText.gachaTileAccessibility(name, status.shardCost)
         is MeCharacterTileStatus.GiftOnly -> "$name, ${status.kind.copy.lockedCaption}"
+        is MeCharacterTileStatus.ShardOnly -> "$name, ${MeText.shardOnlyAcquirePhrase(status.shardCost)}"
+        MeCharacterTileStatus.MissionLocked -> "$name, ${DevAingMission.lockedCaption} — ${DevAingMission.lockedHint}"
         MeCharacterTileStatus.UnknownPrice -> "$name, 가격 모름"
         MeCharacterTileStatus.Busy -> "$name, ${MeText.loading}"
         MeCharacterTileStatus.None -> name
     }
 
     /** 잠긴 타일 읽기 글자(얻는 길을 말한다). */
-    fun lockedLabel(name: String, giftOnly: Boolean, gachaOnly: Boolean, shardCost: Long?, giftKind: CharacterGiftKind = CharacterGiftKind.birthday): String = when {
+    fun lockedLabel(
+        name: String, giftOnly: Boolean, gachaOnly: Boolean, shardCost: Long?, giftKind: CharacterGiftKind = CharacterGiftKind.birthday,
+        missionLocked: Boolean = false, shardOnly: Boolean = false,
+    ): String = when {
+        missionLocked -> "$name, 잠김 — ${DevAingMission.lockedHint}"
         giftOnly -> "$name, 잠김 — ${giftKind.copy.lockedCaption}"
-        gachaOnly -> "$name, 잠김 — ${MeText.gachaAcquirePhrase(shardCost)}"
+        gachaOnly -> "$name, 잠김 — ${if (shardOnly) MeText.shardOnlyAcquirePhrase(shardCost) else MeText.gachaAcquirePhrase(shardCost)}"
         else -> "$name, 잠김 — 상점에서 사기"
     }
 
@@ -293,9 +308,11 @@ private fun PickerTile(store: MeStore, id: String, openGachaMachine: () -> Unit,
         balance = store.rubyBalance,
         unlocked = unlocked,
         giftKind = store.giftKind(id),
+        missionLocked = store.isMissionLocked(id),
+        shardOnly = store.isShardOnly(id),
     )
     val label = if (unlocked) CharacterPickerRules.accessibilityText(name, status)
-    else CharacterPickerRules.lockedLabel(name, giftOnly, gachaOnly, shardCost, store.giftKind(id))
+    else CharacterPickerRules.lockedLabel(name, giftOnly, gachaOnly, shardCost, store.giftKind(id), store.isMissionLocked(id), store.isShardOnly(id))
     MeCharacterTile(
         id = id,
         name = name,
@@ -423,8 +440,7 @@ private fun ShrinkingLine(text: String, style: androidx.compose.ui.text.TextStyl
 object TileSparkle {
     fun solid(colors: AingColors, finish: CharacterManifest.Finish): androidx.compose.ui.graphics.Color? = when (finish) {
         CharacterManifest.Finish.rainbow -> if (colors.isDark) null else colors.rainbowStops[5]
-        CharacterManifest.Finish.gold, CharacterManifest.Finish.standard,
-        CharacterManifest.Finish.cakeStrawberry, CharacterManifest.Finish.cakeChoco, CharacterManifest.Finish.isul -> colors.gold
+        else -> colors.gold
     }
 }
 

@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 1b8260d (초상 이름 `<id>-<표정>` · 192px · 케이크 둘 0.3.66 · knownIDs = 번들에 실린 초상)
+// 원본: Sources/CheckMobileShared/AingCharacterArt.swift @ 928d5562 (초상 이름 `<id>-<표정>` · 192px · 케이크 둘 0.3.66 · 1.0.18 새 아잉이 넷 · knownIDs = 번들에 실린 초상)
 // 원본: Sources/CheckMobileKit/Components/MobileArt.swift @ 862be0f (루비·무대 그림 창구)
 // 원본: Sources/CheckCore/AingSticker.swift @ 862be0f (이모티콘 그림 이름 `sticker-<rawValue>.png`)
 //
@@ -7,6 +7,8 @@
 //   Sources/check/Characters/<id>/{manifest.json, portrait-neutral.png, portrait-negative.png} → files/characters/<id>/…
 //   Sources/check/Resources/<aing·aing_gold·aing_rainbow·aing_cake_strawberry·aing_cake_choco>-<표정>.png → files/characters/<id>/portrait-<표정>.png
 //   Sources/check/Resources/aing_isul-<표정>.png(맥 0.3.74 이슬 아잉이 — 그림 갈아 끼우는 자리는 ui/build.gradle.kts `isulPortraitSource` 하나) → files/characters/aing_isul/…
+//   Sources/check/Resources/aing_{hwoo,ruby,dev}-<표정>.png · Sources/CheckMobileShared/Resources/Portraits/aing_pepero-<표정>.png(폰 판 — 상자 글자 없음)
+//     → files/characters/<id>/…(판 8 — 아이폰 1.0.18 의 새 아잉이 넷. 넷이 다 실려야 상점 번호 9)
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-<id>-neutral}.png    → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-<이름>.png(0.3.62 아잉이 이모티콘)           → files/stickers/…
 // 스프라이트 아틀라스(atlas.png)는 싣지 않는다 — 살아 있는 캐릭터는 구운 자산(W0-d·W5)이 맡는다.
@@ -30,6 +32,7 @@ object CharacterArt {
      */
     val portraitIds: List<String> = listOf(
         "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul",
+        "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev",
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
     )
 

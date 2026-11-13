@@ -188,7 +188,7 @@ class ReversiWireContractTest {
         assertEquals(peer, state.opponent?.userId)
         assertEquals("상대01", state.opponent?.displayName)
         assertEquals(ReversiColor.white, state.myColor)
-        assertEquals(listOf(18, 20, 34), state.legalMoves)
+        assertEquals(listOf(18L, 20L, 34L), state.legalMoves)
         assertTrue(state.blackAutoStreak == 1L && state.whiteAutoStreak == 0L)
         assertTrue(state.myAutoStreak == 0L && state.opponentAutoStreak == 1L)
         assertEquals(3L, state.autoAbandonStreak)

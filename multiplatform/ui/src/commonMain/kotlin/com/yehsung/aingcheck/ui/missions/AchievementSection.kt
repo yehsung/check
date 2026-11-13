@@ -1,4 +1,4 @@
-// 원본: Sources/CheckMobileKit/Me/MeAchievementViews.swift @ 3bd04bd (MeAchievementsSection · MeAchievementRow)
+// 원본: Sources/CheckMobileKit/Me/MeAchievementViews.swift @ 3bd04bd (MeAchievementsSection · MeAchievementRow) · 0c3168bd(캐릭터 보상 줄 — 폰 1.0.18)
 //
 // 「누적 미션」(도전 미션) 카드 — 머리(소제목 + 받을 보상 수 + [전부 받기]) + 계열마다 한 줄. 사장님 확정(2026-10-19): 달성하면 [받기]가
 // 생기고 누르면 받아진다. 이 파일은 **그림만** 그린다 — 제목 · 보조 문장 · 보상 · 목표 · 순서는 전부 서버 응답이고(스토어 achievementSection),
@@ -58,6 +58,11 @@ import com.yehsung.aingcheck.ui.shop.MeType.digits
 import com.yehsung.aingcheck.ui.shop.rememberRuby
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
+import androidx.compose.foundation.Image
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
+import com.yehsung.aingcheck.core.stores.me.MeCharacterCards
+import com.yehsung.aingcheck.core.stores.me.claimCharacterMission
+import com.yehsung.aingcheck.ui.shop.rememberPortrait
 
 object MissionTags {
     const val RUBY_BALANCE = "missions-ruby-balance"
@@ -134,9 +139,13 @@ internal fun missionIcon(sfName: String): AppIcon = SfSymbols.icon(sfName) ?: Ap
 private fun AchievementRow(store: MeStore, mission: AchievementStatus.Mission, reduceMotion: Boolean, frozenBurstProgress: Float?) {
     val state = mission.state
     val failed = state == AchievementStatus.RowState.claimable && store.achievementClaimDidFail(mission.key)
+    val characterID = mission.characterID
     MissionRow(
         modifier = Modifier.testTag(MissionTags.row(mission.key)),
         icon = missionIcon(MeText.missionIcon(mission.key)),
+        // 캐릭터 보상 줄(개발에 찌든 아잉이 — 판 8)은 받는 캐릭터의 얼굴 · 루비 숫자 없는 [받기](톡백 "받기, 개발에 찌든 아잉이").
+        portraitID = characterID,
+        characterClaimAccessibility = characterID?.let { DevAingMission.claimAccessibility(MeCharacterCards.displayName(it)) },
         title = mission.title,
         rewardChip = if (state == AchievementStatus.RowState.claimable) null else MeText.missionReward(mission.reward),
         fraction = mission.fraction,
@@ -147,7 +156,7 @@ private fun AchievementRow(store: MeStore, mission: AchievementStatus.Mission, r
         claimedMark = if (state == AchievementStatus.RowState.claimed) MeText.claimedMark else null,
         claimAmount = if (state == AchievementStatus.RowState.claimable) mission.reward else null,
         claimInFlight = store.isClaimingAchievement(mission.key),
-        onClaim = { store.claimAchievement(mission.key) },
+        onClaim = { if (characterID != null) store.claimCharacterMission(mission.key) else store.claimAchievement(mission.key) },
         accessibility = MeText.missionAccessibility(mission),
         burst = store.claimBurst(mission.series)?.let { it.serial to it.amount },
         reduceMotion = reduceMotion,
@@ -179,6 +188,10 @@ internal fun MissionRow(
     reduceMotion: Boolean,
     frozenBurstProgress: Float?,
     hidesEmptyCaption: Boolean = false,
+    /** 캐릭터 보상 줄이면 그 캐릭터 id — 아이콘 칸에 초상을 그린다. */
+    portraitID: String? = null,
+    /** 캐릭터 보상 줄의 [받기] 톡백 — 있으면 루비 숫자 없는 [받기]를 세운다. */
+    characterClaimAccessibility: String? = null,
 ) {
     val c = AingTheme.colors
     val tint = if (isClaimed) c.working else c.accent
@@ -192,7 +205,12 @@ internal fun MissionRow(
             horizontalArrangement = Arrangement.spacedBy(AingDimens.space3),
         ) {
             Box(Modifier.size(30.dp).background(tint.copy(alpha = 0.14f), RoundedCornerShape(8.dp)).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
-                AingIcon(icon, contentDescription = null, size = 17.dp, tint = tint)
+                if (portraitID != null) {
+                    val art = rememberPortrait(portraitID)
+                    if (art != null) Image(art, contentDescription = null, modifier = Modifier.size(28.dp)) else AingIcon(icon, contentDescription = null, size = 17.dp, tint = tint)
+                } else {
+                    AingIcon(icon, contentDescription = null, size = 17.dp, tint = tint)
+                }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(AingDimens.space1)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AingDimens.space2)) {
@@ -219,7 +237,10 @@ internal fun MissionRow(
                     }
                 }
             }
-            if (claimAmount != null) MeClaimButton(claimAmount, inFlight = claimInFlight, onClick = onClaim)
+            if (claimAmount != null) {
+                if (characterClaimAccessibility != null) MeCharacterClaimButton(characterClaimAccessibility, inFlight = claimInFlight, onClick = onClaim)
+                else MeClaimButton(claimAmount, inFlight = claimInFlight, onClick = onClaim)
+            }
         }
         if (burst != null) {
             MeClaimBurstView(burst.second, burst.first, reduceMotion, Modifier.align(Alignment.CenterEnd), frozenBurstProgress)

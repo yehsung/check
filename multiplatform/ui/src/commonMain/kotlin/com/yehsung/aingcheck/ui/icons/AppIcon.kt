@@ -171,6 +171,17 @@ import com.yehsung.aingcheck.ui.resources.ms_warning
 import com.yehsung.aingcheck.ui.resources.ms_warning_fill
 import com.yehsung.aingcheck.ui.resources.ms_wb_twilight_fill
 import com.yehsung.aingcheck.ui.resources.ms_wine_bar_fill
+import com.yehsung.aingcheck.ui.resources.ms_volume_up
+import com.yehsung.aingcheck.ui.resources.ms_volume_off
+import com.yehsung.aingcheck.ui.resources.ms_tune
+import com.yehsung.aingcheck.ui.resources.ms_image
+import com.yehsung.aingcheck.ui.resources.ms_location_on_fill
+import com.yehsung.aingcheck.ui.resources.ms_search
+import com.yehsung.aingcheck.ui.resources.ms_favorite_fill
+import com.yehsung.aingcheck.ui.resources.ms_visibility_off
+import com.yehsung.aingcheck.ui.resources.ms_history
+import com.yehsung.aingcheck.ui.resources.ms_bubble_chart_fill
+import com.yehsung.aingcheck.ui.resources.ms_open_in_full
 import com.yehsung.aingcheck.ui.resources.ms_workspace_premium
 import org.jetbrains.compose.resources.DrawableResource
 
@@ -345,6 +356,28 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
      *   iOS MeCakeGiftReopenRow(아이폰 1.0.17 — 기호 🥂)처럼 제목 끝 그림 글자를 쓴다(ui/shop MeCakeGiftReopenRow). 검토 ISUL-5.
      */
     WineBarFill("wine_bar", true),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `speaker.wave.2`) — 공식 Material Symbols volume_up. */
+    VolumeUp("volume_up", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `speaker.slash`) — 공식 Material Symbols volume_off. */
+    VolumeOff("volume_off", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `slider.horizontal.3`) — 공식 Material Symbols tune. */
+    Tune("tune", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `photo`) — 공식 Material Symbols image. */
+    Image("image", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `mappin.circle.fill`) — 공식 Material Symbols location_on (채움). */
+    LocationOnFill("location_on", true),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `magnifyingglass`) — 공식 Material Symbols search. */
+    Search("search", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `heart.fill`) — 공식 Material Symbols favorite (채움). */
+    FavoriteFill("favorite", true),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `eye.slash`) — 공식 Material Symbols visibility_off. */
+    VisibilityOff("visibility_off", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `clock.arrow.circlepath`) — 공식 Material Symbols history. */
+    History("history", false),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `circle.hexagongrid.fill`) — 공식 Material Symbols bubble_chart (채움). */
+    BubbleChartFill("bubble_chart", true),
+    /** 판 8 기준선(맥 0.3.78~0.3.86 · 폰 1.0.18 의 SF `arrow.up.left.and.arrow.down.right`) — 공식 Material Symbols open_in_full. */
+    OpenInFull("open_in_full", false),
     WorkspacePremium("workspace_premium", false),
     ;
 
@@ -518,6 +551,17 @@ enum class AppIcon(val materialName: String, val filled: Boolean) {
             WarningFill -> Res.drawable.ms_warning_fill
             WbTwilightFill -> Res.drawable.ms_wb_twilight_fill
             WineBarFill -> Res.drawable.ms_wine_bar_fill
+            VolumeUp -> Res.drawable.ms_volume_up
+            VolumeOff -> Res.drawable.ms_volume_off
+            Tune -> Res.drawable.ms_tune
+            Image -> Res.drawable.ms_image
+            LocationOnFill -> Res.drawable.ms_location_on_fill
+            Search -> Res.drawable.ms_search
+            FavoriteFill -> Res.drawable.ms_favorite_fill
+            VisibilityOff -> Res.drawable.ms_visibility_off
+            History -> Res.drawable.ms_history
+            BubbleChartFill -> Res.drawable.ms_bubble_chart_fill
+            OpenInFull -> Res.drawable.ms_open_in_full
             WorkspacePremium -> Res.drawable.ms_workspace_premium
         }
 }

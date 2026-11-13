@@ -774,21 +774,22 @@ class ReversiStore(
         val myColor = payload.myColor ?: return StateApplyOutcome.ignored
 
         val base = if (held?.id == id) held else null
-        val serverCount = row.moveCount
+        // 와이어는 Swift Int(64비트)라 Long — 판 수는 0…128 이라 Int 로 접어 쓴다(판 8 골든 맞춤).
+        val serverCount = row.moveCount?.toInt()
         // ④ 같은 판을 진행 중으로 들고 있는데 **수 번호가 줄어든** 응답은 착수보다 먼저 읽힌 옛 스냅숏이다.
         if (base != null && !base.isFinished && !isFinished && serverCount != null && serverCount < base.moveCount) return StateApplyOutcome.ignored
         // ④ 같은 판을 이미 끝남으로 들고 있으면 진행 중 응답은 전부 끝나기 전에 읽힌 옛 스냅숏이다.
         if (base != null && base.isFinished && !isFinished) return StateApplyOutcome.ignored
 
         val records = (payload.moves ?: emptyList()).filter { it.seq >= 1 }.sortedBy { it.seq }
-        val rebuild = base == null || records.firstOrNull()?.seq == 1 || requestedSince == 0
+        val rebuild = base == null || records.firstOrNull()?.seq == 1L || requestedSince == 0
         val merged = if (rebuild) ArrayList() else ArrayList(base?.plies ?: emptyList())
         var applied = if (rebuild) 0 else (base?.moveCount ?: 0)
         for (record in records) {
             if (record.seq <= applied) continue
-            if (record.seq != applied + 1 && !rebuild) return StateApplyOutcome.needsFull
+            if (record.seq != (applied + 1).toLong() && !rebuild) return StateApplyOutcome.needsFull
             merged += record
-            applied = record.seq
+            applied = record.seq.toInt()
         }
         val moveCount = serverCount ?: applied
         if (moveCount != applied && !rebuild) return StateApplyOutcome.needsFull
@@ -801,7 +802,7 @@ class ReversiStore(
         val turnStartedAt = deviceDate(row.turnStartedMs)
         val deadline = if (isFinished) null else (deviceDate(row.deadlineMs) ?: turnStartedAt?.addingTimeInterval(turnSeconds.toDouble()))
         // **서버가 준 것만** 쓴다(⑦). 상대 차례·끝난 판은 [] 라 착수가 전부 막힌다.
-        val legal = if (isFinished || turn != myColor) emptyList() else (payload.legalMoves ?: emptyList()).filter { it in 0 until 64 }.distinct().sorted()
+        val legal = if (isFinished || turn != myColor) emptyList() else (payload.legalMoves ?: emptyList()).filter { it in 0L until 64L }.map { it.toInt() }.distinct().sorted()
         val blackID = row.black?.lowercase()
         val whiteID = row.white?.lowercase()
         val opponentID = if (myColor == ReversiColor.black) whiteID else blackID
@@ -819,7 +820,7 @@ class ReversiStore(
         }
         val scoreRow = row.score
         val score: ReversiScore? =
-            if (scoreRow?.black != null && scoreRow.white != null && result != null) ReversiScore(scoreRow.black!!, scoreRow.white!!, result) else null
+            if (scoreRow?.black != null && scoreRow.white != null && result != null) ReversiScore(scoreRow.black!!.toInt(), scoreRow.white!!.toInt(), result) else null
         val myStreak = (payload.myAutoStreak ?: (if (myColor == ReversiColor.black) payload.blackAutoStreak else payload.whiteAutoStreak) ?: 0L).toInt()
         val opponentStreak = (payload.opponentAutoStreak ?: (if (myColor == ReversiColor.black) payload.whiteAutoStreak else payload.blackAutoStreak) ?: 0L).toInt()
 
@@ -827,8 +828,8 @@ class ReversiStore(
             id = id, isAI = false, status = status, stake = (row.stake ?: base?.stake?.toLong() ?: 0L).toInt(), myColor = myColor,
             opponent = opponent, blackUser = blackUser, whiteUser = whiteUser, board = board, moveCount = moveCount,
             turn = turn, turnStartedAt = turnStartedAt, deadline = deadline, legalMoves = legal, plies = merged.toList(),
-            lastStoneIdx = merged.lastOrNull { it.kind == ReversiPly.Kind.stone }?.idx,
-            autoStones = merged.mapNotNullTo(LinkedHashSet()) { if (it.kind == ReversiPly.Kind.stone && it.auto) it.idx else null },
+            lastStoneIdx = merged.lastOrNull { it.kind == ReversiPly.Kind.stone }?.idx?.toInt(),
+            autoStones = merged.mapNotNullTo(LinkedHashSet()) { if (it.kind == ReversiPly.Kind.stone && it.auto) it.idx?.toInt() else null },
             counts = row.discs ?: board.counts, score = score, result = if (isFinished) result else null,
             endReason = if (isFinished) row.endReason else null, winner = if (isFinished) winner else null,
             myAutoStreak = myStreak, opponentAutoStreak = opponentStreak,

@@ -359,7 +359,7 @@ private fun GomokuTopBar(gomoku: GomokuStore, state: GomokuScreenState, onBack: 
                     } else {
                         Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
                             AingIcon(AppIcon.Memory, contentDescription = null, size = 13.dp, tint = colors.label2)
-                            Text(GomokuPhoneText.aiStakeChip, style = BoardText.caption(), color = colors.label2)
+                            Text(GomokuPhoneText.aiStakeChip(gomoku.aiGame?.difficulty ?: gomoku.aiDifficulty), style = BoardText.caption(), color = colors.label2)
                         }
                     }
                     if (gomoku.phase == GomokuPhase.playing) WatcherBadge(gomoku.spectatorCount, style = BoardText.caption())

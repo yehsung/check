@@ -140,22 +140,13 @@ class MissionsScreenDesktopTest {
 
     @Test
     fun dailyRowsFollowTheServer() {
-        // 기준선: 데모 픽스처(맥 main 0.3.74 — 여섯 줄 + 아잉 큐브 daily_rummy)가 주는 일곱 줄이면 일곱 줄.
-        assertEquals(7, dailyRows(MeScreenFixtures.achievements))
-        // 서버가 길건너 아잉이 줄(폰 1.0.14 바닥에도 '모두에게 보이기', G §8-18 7)을 더 주면 여덟 줄. 화면이 거르지 않는다.
-        val eight = MeScreenFixtures.achievements.replacingOnce(
-            """"key": "daily_tetris_duel",""",
-            """"key": "daily_crossy", "game": "crossy", "title": "길건너 아잉이 한 판 하기", "detail": "", "reward": 5, "target": 1, "progress": 0,
-            "achieved": false, "claimed": false, "claimed_at_ms": null, "sort": 70}, {"key": "daily_tetris_duel",""",
-        )
-        assertEquals(8, dailyRows(eight))
-        // 서버 20261108200000 의 아홉째 줄 daily_reversi(아잉 뒤집기 — 이 판엔 화면이 없다)도 서버 글자 그대로 선다: 아홉 줄.
-        val nine = eight.replacingOnce(
-            """"key": "daily_rummy",""",
-            """"key": "daily_reversi", "game": "reversi", "title": "$REVERSI_TITLE", "detail": "$REVERSI_DETAIL", "reward": 5, "target": 1, "progress": 0,
-            "achieved": false, "claimed": false, "claimed_at_ms": null, "sort": 80}, {"key": "daily_rummy",""",
-        )
-        assertEquals(9, dailyRows(nine))
+        // 기준선(판 8 — 맥 main e4995a3a 데모 픽스처): 서버가 주는 열두 줄이면 열두 줄(타이밍 바 · 플래피 · 테트리스 · 길건너 · 오목 · 체스 ·
+        // 1:1 테트리스 · 아잉 큐브 · 아잉 뒤집기 · 아잉 마작 · 1:1 길건너 · 1:1 알까기). 화면이 거르지 않는다(G §8-18 7 — '모두에게 보이기').
+        assertEquals(12, dailyRows(MeScreenFixtures.achievements))
+        // 한 줄을 빼면 열한 줄 — 줄 수는 서버가 정한다.
+        val eleven = MeScreenFixtures.achievements.replace(Regex(""",\s*\{[^{}]*"key":\s*"daily_alkkagi"[^{}]*\}"""), "")
+        assertEquals(11, dailyRows(eleven))
+        val nine = MeScreenFixtures.achievements
         runDesktopComposeUiTest(W, H) {
             val s = store(achievements = nine)
             setContent { W4cDesktopSnapshots.frame(false, W, H) { MeMissionsContent(s, scrolls = false) }() }

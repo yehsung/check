@@ -265,7 +265,8 @@ class PhoneAppModelTest {
 
     @Test
     fun streakChipStaysHiddenOnAServerWithoutTheKey() = runTest {
-        val fixture = achievementsFixture()
+        // 데모 픽스처는 1.0.16 이후 streak_days 를 싣는다(맥 · 폰 main) — '옛 서버'는 그 키를 뺀 본문이다(폰 V1016StreakChipTests 와 같은 뜻).
+        val fixture = achievementsFixture { JsonObject(it.filterKeys { k -> k != "streak_days" }) }
         assertTrue("streak_days" !in Json.parseToJsonElement(fixture).jsonObject, "대조: 옛 서버 응답이어야 한다")
         val h = PhoneHarness(this) { r -> if (r.rpcName == "achievements_status") Reply.Json(fixture) else null }
         h.signIn()

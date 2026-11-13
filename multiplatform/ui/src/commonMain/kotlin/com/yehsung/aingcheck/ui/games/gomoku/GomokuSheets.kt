@@ -58,6 +58,9 @@ import com.yehsung.aingcheck.ui.icons.AppIcon
 import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import kotlinx.coroutines.launch
+import com.yehsung.aingcheck.core.rules.ai.GomokuAIDifficulty
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
 
 /** 판돈 시트. 공유 미러(나 탭 상점 구매도 적는다)를 먼저 읽는다 — `GamesStore.rubyBalance` 와 같은 순서. */
 @Composable
@@ -216,6 +219,26 @@ internal fun BoxScope.GomokuAIColorSheet(gomoku: GomokuStore, onClose: () -> Uni
                         style = BoardText.subheadline().copy(fontWeight = FontWeight.SemiBold), color = if (enabled) colors.label else colors.label2)
                 }
             }
+        }
+        // 판 8 — 난이도 셋(맥 0.3.82 · 폰 1.0.18 과 같은 글자 · 이 기기에 기억, 처음 보통). 다음 판부터 쓴다.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin)) {
+            Text(GomokuPhoneText.aiDifficultyTitle, style = BoardText.caption().copy(fontWeight = FontWeight.SemiBold), color = colors.label2)
+            Row(Modifier.fillMaxWidth().background(colors.fill, RoundedCornerShape(10.dp)).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                for (difficulty in GomokuAIDifficulty.entries) {
+                    val selected = gomoku.aiDifficulty == difficulty
+                    Box(
+                        Modifier.weight(1f).defaultMinSize(minHeight = 36.dp)
+                            .background(if (selected) colors.surface else colors.fill.copy(alpha = 0f), RoundedCornerShape(8.dp))
+                            .selectable(selected = selected, role = Role.RadioButton) { gomoku.setAIDifficulty(difficulty) }
+                            .testTag("gomoku-ai-difficulty-${difficulty.name}"),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(GomokuPhoneText.aiDifficultyName(difficulty), style = BoardText.subheadline().copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
+                            color = colors.label)
+                    }
+                }
+            }
+            Text(GomokuPhoneText.aiDifficultyDepth(gomoku.aiDifficulty), style = BoardText.caption(), color = colors.label2)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin)) {
             AingIcon(AppIcon.Memory, contentDescription = null, size = 15.dp, tint = colors.accent)

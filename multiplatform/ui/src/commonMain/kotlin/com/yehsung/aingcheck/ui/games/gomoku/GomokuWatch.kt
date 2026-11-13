@@ -147,6 +147,7 @@ private fun WatchBoard(watch: GomokuSpectateState, side: Dp) {
             GomokuBoardPicture(
                 board = watch.board, lastMove = watch.lastMove, autoPoints = watch.autoPoints,
                 winLine = if (watch.isFinished && watch.endReason == GomokuEndReason.five) GomokuPhoneWinLine.ends(watch.board, watch.lastMove) else null,
+                stoneSkins = watch.stoneSkins,
             ),
             side = side,
             modifier = Modifier.testTag(GomokuScreenTags.board).clearAndSetSemantics { contentDescription = GomokuPhoneWatchText.watchBoardAccessibility(watch) },

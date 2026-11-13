@@ -1,9 +1,12 @@
-// 원본: Sources/CheckCore/CharacterGift.swift(CharacterGiftClaimOutcome · CakeGiftText · DrinkGiftText · CharacterGiftCopy · CharacterGiftKind.copy) @ 12624739
+// 원본: Sources/CheckCore/CharacterGift.swift(CharacterGiftClaimOutcome · CakeGiftText · DrinkGiftText · PeperoGiftText · CharacterGiftCopy · CharacterGiftKind.copy) @ e4995a3a
+// 원본: Sources/CheckCore/RegionGift.swift(RegionGiftText — 글자만, 지역 선물 마련 RPC 는 옮기지 않는다: Android 는 번호 10 을 말하지 않는다) @ e4995a3a
 //       (전선 모양 · CharacterGiftKind 의 원문 값 · 서비스 · 디코드 보조는 W1-d core/wire — 배정표 round5)
 package com.yehsung.aingcheck.core.rules.character.gift
 
 import com.yehsung.aingcheck.core.rules.gacha.ShopWire
 import com.yehsung.aingcheck.core.rules.text.TextScalars
+import com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds
+import com.yehsung.aingcheck.core.wire.character.RegionAingNames
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
 
 /**
@@ -145,7 +148,47 @@ object DrinkGiftText {
     fun notice(outcome: CharacterGiftClaimOutcome, name: (String) -> String): String? = CakeGiftText.notice(outcome, name)
 }
 
-/** 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 [CharacterGiftKind.copy] 로 받는다(글자는 [CakeGiftText] · [DrinkGiftText] 한 곳). */
+/**
+ * 빼빼로 데이 선물 문구(맥 0.3.77 빼빼로 아잉이 — Swift `PeperoGiftText` 글자 그대로). **대표 결정 C "장난스럽게"**(2026-11-04 결재
+ * #d_JyxuQRmHOYKC). [DrinkGiftText] 와 같은 모양 · 같은 자리다. 캐릭터 이름은 [BuiltInCharacterIds.peperoAingDisplayName] 한 곳에서 읽는다.
+ */
+object PeperoGiftText {
+    const val title = "빼빼로 받아랏! 🍫"
+    val body: String = "몰래 하나 챙겨 왔어요. ${BuiltInCharacterIds.peperoAingDisplayName} 쏙!"
+    const val confirmButton = "쏙 받기"
+    const val wearNowButton = CakeGiftText.wearNowButton
+    const val closeButton = CakeGiftText.closeButton
+    const val lockedCaption = "빼빼로 데이 선물 전용"
+    const val lockedHint = "빼빼로 데이 선물로만 받을 수 있어요. 루비나 뽑기로는 얻을 수 없어요."
+    const val reopenTitle = "빼빼로가 쏙 들어왔어요"
+    const val reopenButton = "받기"
+    const val claimFailed = CakeGiftText.claimFailed
+
+    fun received(name: String): String = CakeGiftText.received(name)
+
+    fun notice(outcome: CharacterGiftClaimOutcome, name: (String) -> String): String? = CakeGiftText.notice(outcome, name)
+}
+
+/**
+ * 우리 센터 선물 문구(지역 아잉이 — Swift `RegionGiftText` 글자 그대로). Android 판 8 은 번호 10 을 말하지 않아 이 선물이 오지 않는다 —
+ * 종류 열거가 맥과 같게 서려고 글자만 둔다.
+ */
+object RegionGiftText {
+    const val confirmButton = "받기"
+    const val wearNowButton = CakeGiftText.wearNowButton
+    const val closeButton = CakeGiftText.closeButton
+    const val lockedCaption = "센터 선물"
+    const val lockedHint = "그 센터 사람에게만 주는 선물이에요. 루비나 뽑기로는 얻을 수 없어요."
+    const val reopenButton = "받기"
+    const val claimFailed = CakeGiftText.claimFailed
+
+    fun centerLabel(center: String?): String = if (center.isNullOrEmpty()) "우리 센터" else "${center}센터"
+    fun title(center: String?): String = "${centerLabel(center)} 선물 도착!"
+    fun body(center: String?): String = "${centerLabel(center)} 사람에게만 주는 아잉이예요. 지금 받아 가세요!"
+    fun reopenTitle(center: String?): String = "${centerLabel(center)} 선물이 기다려요"
+}
+
+/** 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 [CharacterGiftKind.copy] 로 받는다(글자는 [CakeGiftText] · [DrinkGiftText] · [PeperoGiftText] · [RegionGiftText] 한 곳). */
 data class CharacterGiftCopy(
     val title: String,
     val body: String,
@@ -183,6 +226,27 @@ data class CharacterGiftCopy(
             reopenTitle = DrinkGiftText.reopenTitle, reopenButton = DrinkGiftText.reopenButton,
             claimFailed = DrinkGiftText.claimFailed,
         )
+
+        /** 빼빼로 데이 선물(빼빼로 아잉이 — 0.3.77, 문구는 대표 결정 C). */
+        val pepero = CharacterGiftCopy(
+            title = PeperoGiftText.title, body = PeperoGiftText.body, confirmButton = PeperoGiftText.confirmButton,
+            wearNowButton = PeperoGiftText.wearNowButton, closeButton = PeperoGiftText.closeButton,
+            lockedCaption = PeperoGiftText.lockedCaption, lockedHint = PeperoGiftText.lockedHint,
+            reopenTitle = PeperoGiftText.reopenTitle, reopenButton = PeperoGiftText.reopenButton,
+            claimFailed = PeperoGiftText.claimFailed,
+        )
+
+        /** 우리 센터 선물 — 센터 이름이 든 판("부산센터 선물 도착!"). 잠긴 칸 줄은 센터와 무관하게 같다. */
+        fun region(center: String?): CharacterGiftCopy = CharacterGiftCopy(
+            title = RegionGiftText.title(center), body = RegionGiftText.body(center), confirmButton = RegionGiftText.confirmButton,
+            wearNowButton = RegionGiftText.wearNowButton, closeButton = RegionGiftText.closeButton,
+            lockedCaption = RegionGiftText.lockedCaption, lockedHint = RegionGiftText.lockedHint,
+            reopenTitle = RegionGiftText.reopenTitle(center), reopenButton = RegionGiftText.reopenButton,
+            claimFailed = RegionGiftText.claimFailed,
+        )
+
+        /** 우리 센터 선물(센터를 모를 때의 "우리 센터" 판). */
+        val region: CharacterGiftCopy = region(null)
     }
 }
 
@@ -191,7 +255,15 @@ val CharacterGiftKind.copy: CharacterGiftCopy
     get() = when (this) {
         CharacterGiftKind.birthday -> CharacterGiftCopy.birthday
         CharacterGiftKind.drink -> CharacterGiftCopy.drink
+        CharacterGiftKind.pepero -> CharacterGiftCopy.pepero
+        CharacterGiftKind.region -> CharacterGiftCopy.region
     }
+
+/** 이 종류에서 캐릭터 `id` 를 주는 선물의 문구 묶음 — 우리 센터 선물은 그 아잉이의 센터 이름이 든 판, 나머지는 [copy] 그대로(Swift `copy(for:)`). */
+fun CharacterGiftKind.copyFor(id: String?): CharacterGiftCopy = when (this) {
+    CharacterGiftKind.region -> CharacterGiftCopy.region(RegionAingNames.centerName(id))
+    else -> copy
+}
 
 /**
  * 이 종류를 받을 수 있는 최소 능력 번호 — rules 의 정본 상수(`ShopWire.cakeProtocol` · `ShopWire.isulProtocol`). 와이어 열거의
@@ -201,4 +273,6 @@ val CharacterGiftKind.shopMinProtocol: Int
     get() = when (this) {
         CharacterGiftKind.birthday -> ShopWire.cakeProtocol
         CharacterGiftKind.drink -> ShopWire.isulProtocol
+        CharacterGiftKind.pepero -> ShopWire.peperoProtocol
+        CharacterGiftKind.region -> ShopWire.regionProtocol
     }

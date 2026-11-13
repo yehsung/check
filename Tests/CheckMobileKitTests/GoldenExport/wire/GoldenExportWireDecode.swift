@@ -102,6 +102,10 @@ enum WireDecodeRegistry {
             "RummyLobby": one(RummyLobby.self),
             "RummyActionResponse": one(RummyActionResponse.self),
             "RummyRanking": one(RummyRanking.self),
+            // 아잉 뒤집기(맥 0.3.74 · 폰 1.0.17 · Android 판 7) — 폰 데모 픽스처(games/…reversi_*)가 main 에 들어와 레지스트리에 더한다(판 8 기준선).
+            "ReversiLobbyResponse": one(ReversiLobbyResponse.self),
+            "ReversiActionResponse": one(ReversiActionResponse.self),
+            "ReversiRankingResponse": one(ReversiRankingResponse.self),
         ]
     }()
 
@@ -258,11 +262,20 @@ enum WireDecodeRegistry {
         "rpc.rummy_react": "RummyActionResponse",
         "rpc.rummy_start": "RummyActionResponse",
         "rpc.rummy_state": "RummyActionResponse",
+        "rpc.reversi_lobby": "ReversiLobbyResponse",
+        "rpc.reversi_ranking": "ReversiRankingResponse",
+        "rpc.reversi_cancel": "ReversiActionResponse",
+        "rpc.reversi_challenge": "ReversiActionResponse",
+        "rpc.reversi_respond": "ReversiActionResponse",
+        "rpc.reversi_state": "ReversiActionResponse",
+        "rpc.reversi_watch_live": "ReversiActionResponse",
     ]
 
     /// `rest.profiles.get@…` 는 select 칸으로 타입이 갈린다(같은 표, 다른 GET).
     static func profilesType(variant: String) -> String? {
         if variant.contains("minigame_public") || variant.contains("token_usage_collect") { return "[ProfilePrivacyRow]" }
+        // 폰 1.0.17 집중 모드(내 집중 → 메시지 잠금): `select=focus_mode` 도 같은 행 모양(ProfilePrivacyRow.focusMode).
+        if variant.contains("focus_mode") { return "[ProfilePrivacyRow]" }
         if variant.contains("character") { return "[CharacterSyncProfileRow]" }
         if variant.contains("display_name_changed_at") { return "[DisplayNameChangedAtRow]" }
         if variant.contains("display_name,avatar_url") { return "[MeProfileCardRow]" }
@@ -511,7 +524,7 @@ struct GoldenExportWireDecode {
                 #expect(known, "분류 안 된 데모 픽스처 \(rel)")
             }
         }
-        #expect(total == 255, "데모 픽스처 수가 바뀌었다(\(total)) — 배정표(255)와 골든을 다시 본다")
+        #expect(total == 285, "데모 픽스처 수가 바뀌었다(\(total)) — 배정표(285 — 판 8 기준선: 리버시 데모 21장 · 집중 GET 2장 · 그 밖 7장 더함)와 골든을 다시 본다")
         let fixtures = try fixtureFiles(["chess-rpc", "chess-rpc-clock10", "gomoku-rpc", "message-rpc", "todo-rpc", "rummy/server"])
         #expect(fixtures.count == 276, "시험 픽스처 수가 바뀌었다(\(fixtures.count))")
     }

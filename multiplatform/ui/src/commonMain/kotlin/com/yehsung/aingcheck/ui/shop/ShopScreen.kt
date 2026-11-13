@@ -85,6 +85,9 @@ import com.yehsung.aingcheck.ui.theme.AingDimens
 import com.yehsung.aingcheck.ui.theme.AingTheme
 import com.yehsung.aingcheck.ui.components.ModalPresenceMark
 import kotlinx.coroutines.launch
+import com.yehsung.aingcheck.core.stores.me.isMissionLocked
+import com.yehsung.aingcheck.core.stores.me.isShardOnly
+import com.yehsung.aingcheck.core.stores.me.showsOmokSkins
 
 object ShopTags {
     const val SCREEN = "shop.screen"
@@ -185,6 +188,8 @@ fun MeShopContent(
         )
         TileGrid(ids) { id -> ShopTile(store, id, onOpenMachine) }
         previewID(store)?.let { MeCharacterPreviewCard(it) }
+        // 판 8(폰 1.0.18) — 오목알 스킨. 서버가 스킨 줄을 말할 때만.
+        if (store.showsOmokSkins) MeOmokSkinSection(store)
     }
 }
 
@@ -222,7 +227,11 @@ private fun ShopTile(store: MeStore, id: String, onOpenMachine: () -> Unit) {
         store.purchasingID == id -> MeCharacterTileStatus.Busy
         equipped -> MeCharacterTileStatus.Equipped
         owned -> MeCharacterTileStatus.Owned
+        // 미션 보상(개발에 찌든 아잉이) — 잠긴 칸 "미션 보상". 서버 행의 gacha_only 는 판매를 막는 표식일 뿐이다.
+        store.isMissionLocked(id) -> MeCharacterTileStatus.MissionLocked
         store.isGiftOnly(id) -> MeCharacterTileStatus.GiftOnly(store.giftKind(id))
+        // 조각 교환 전용(흑우) — "조각 20개로 교환"(뽑기에서는 안 나온다).
+        store.isShardOnly(id) -> MeCharacterTileStatus.ShardOnly(store.gachaShardCost(id))
         // 뽑기 전용(황금 · 무지개 아잉이) — 서버가 싣는 명목 가격(1000)을 보이지 않는다. 사는 줄이 아니다.
         store.isGachaOnly(id) -> MeCharacterTileStatus.GachaOnly(store.gachaShardCost(id))
         else -> store.price(id)?.let { MeCharacterTileStatus.Price(it, store.rubyBalance) } ?: MeCharacterTileStatus.UnknownPrice

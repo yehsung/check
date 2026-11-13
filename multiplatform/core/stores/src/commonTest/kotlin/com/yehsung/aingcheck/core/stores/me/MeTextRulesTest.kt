@@ -109,9 +109,13 @@ class MeTextRulesTest {
     @Test
     fun knownIDsFollowTheBuiltInOrderThenSorted() {
         assertEquals(
-            listOf("aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul", "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel"),
+            listOf(
+                "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul",
+                "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev",
+                "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
+            ),
             MeCharacterCards.knownIDs,
-            "내장 여섯(이슬 — 맥 0.3.74 · 판 7 은 케이크 뒤) 다음 이름순",
+            "내장(이슬 — 판 7 · 빼빼로 · 흑우 · 루비 · 개발 — 판 8, 지역 둘은 그림이 없어 빠진다) 다음 이름순",
         )
         for (drinks in listOf(true, false)) {
             assertEquals("aing", MeCharacterCards.equippedID(" ", drinks), "빈 착용값 = 아잉")
@@ -123,7 +127,13 @@ class MeTextRulesTest {
         assertEquals("aing_isul", MeCharacterCards.equippedID("aing_isul", takesDrinkGift = true))
         assertEquals("aing", MeCharacterCards.equippedID("aing_isul", takesDrinkGift = false))
         assertEquals(MeCharacterCards.knownIDs, MeCharacterCards.knownIDs(takesDrinkGift = true))
-        assertEquals(MeCharacterCards.knownIDs - "aing_isul", MeCharacterCards.knownIDs(takesDrinkGift = false))
+        // 판 8: 번호 5 이상에서만 서버가 싣는 내장(이슬 · 빼빼로 · 흑우 · 루비 · 개발)은 번호 4 플랫폼이 모른다(같은 ISUL-1 사정).
+        assertEquals(
+            MeCharacterCards.knownIDs - setOf("aing_isul", "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev"),
+            MeCharacterCards.knownIDs(takesDrinkGift = false),
+        )
+        assertEquals("aing", MeCharacterCards.equippedID("aing_dev", takesDrinkGift = false))
+        assertEquals("aing_dev", MeCharacterCards.equippedID("aing_dev", takesDrinkGift = true))
         assertTrue(MeCharacterCards.isKnown("aing_isul"), "이름 · 메타 표에는 두 플랫폼 다 있다(남의 이름을 그릴 수 있게)")
         assertFalse(MeCharacterCards.isKnown("aing_isul", takesDrinkGift = false))
     }

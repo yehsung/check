@@ -10,7 +10,7 @@
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessNotation.swift": "98f9e8fee9601762569556c20e4ad6a8b7c5a77eeca43fd26efc1805d02c9dbd",
         "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6"
       }
     },
     "chess/ai-trace": {
@@ -23,7 +23,7 @@
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessNotation.swift": "98f9e8fee9601762569556c20e4ad6a8b7c5a77eeca43fd26efc1805d02c9dbd",
         "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6"
       }
     },
     "chess/fen": {
@@ -34,7 +34,7 @@
       "swiftSources": {
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6"
       }
     },
     "chess/moves": {
@@ -46,7 +46,7 @@
         "Sources/CheckCore/ChessFEN.swift": "a1501636dad33bd113588e0cb25c5bb91dd109b4c6c18c311e765366634afb32",
         "Sources/CheckCore/ChessNotation.swift": "98f9e8fee9601762569556c20e4ad6a8b7c5a77eeca43fd26efc1805d02c9dbd",
         "Sources/CheckCore/ChessRules.swift": "f16701f12253b8284fe247dffa156002f5ae6b711c597278daf8d7639a67926b",
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c"
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6"
       }
     },
     "chess/notation": {
@@ -89,7 +89,7 @@
         "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "adc0828fe98eea0978efcba1f7c73740a89f514c71a1aecf4c5861600f1cc8c5"
       },
       "swiftSources": {
-        "Sources/CheckCore/CrossyGame.swift": "9d059c7a86139cad0acaf6af53f88b7cd306dbab54f96b7cd1f76550857a3f67",
+        "Sources/CheckCore/CrossyGame.swift": "83afc6968eb6e127afddfbc58dc30327a525f012ae5953aa0b839c0fa74e5f03",
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287"
       }
     },
@@ -99,7 +99,7 @@
         "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "adc0828fe98eea0978efcba1f7c73740a89f514c71a1aecf4c5861600f1cc8c5"
       },
       "swiftSources": {
-        "Sources/CheckCore/CrossyGame.swift": "9d059c7a86139cad0acaf6af53f88b7cd306dbab54f96b7cd1f76550857a3f67",
+        "Sources/CheckCore/CrossyGame.swift": "83afc6968eb6e127afddfbc58dc30327a525f012ae5953aa0b839c0fa74e5f03",
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287"
       }
     },
@@ -109,7 +109,7 @@
         "Tests/checkTests/GoldenExport/games-tetris-minigame/GoldenExportCrossy.swift": "adc0828fe98eea0978efcba1f7c73740a89f514c71a1aecf4c5861600f1cc8c5"
       },
       "swiftSources": {
-        "Sources/CheckCore/CrossyGame.swift": "9d059c7a86139cad0acaf6af53f88b7cd306dbab54f96b7cd1f76550857a3f67",
+        "Sources/CheckCore/CrossyGame.swift": "83afc6968eb6e127afddfbc58dc30327a525f012ae5953aa0b839c0fa74e5f03",
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287"
       }
     },
@@ -121,7 +121,7 @@
       "swiftSources": {
         "Sources/CheckCore/AILimitFreshnessRule.swift": "582e9642dcf060f38da273281b5b08594a8dea4164beec27bf7137ca8d7508f3",
         "Sources/CheckCore/AILimits.swift": "6ae8318ce105f7997fcbc27ec187be880257f48c248b4dc9144b0d63a6e252af",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceAILimits.swift": "eba8ed3bb06401cb4b17784a7a8c31f74d25900e573f77939a4d2b1de93f7423"
       }
     },
@@ -132,9 +132,9 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AILimitFreshnessRule.swift": "582e9642dcf060f38da273281b5b08594a8dea4164beec27bf7137ca8d7508f3",
-        "Sources/CheckCore/CheckWorkInsights.swift": "5aba205ce859558dbb4dbfff53c420b4efb3435e95182473c4450620a5a61817",
+        "Sources/CheckCore/CheckWorkInsights.swift": "18c3026c17217365ff5edba2b2c2a227450884a7a8ee5719bcfbbb220342a89b",
         "Sources/CheckCore/MenuBarStatusFormatter.swift": "7c03c251205d930fd1891c54be25015ac82ae8920788fb621223f520403ebd93",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "dates/parse": {
@@ -144,9 +144,9 @@
       },
       "swiftSources": {
         "Sources/CheckCore/CheckTodoModel.swift": "1ecc07d4f68e441f9c18c02dad34406af84731a8031a96ff936f19b0c00130bf",
-        "Sources/CheckCore/CheckWorkInsights.swift": "5aba205ce859558dbb4dbfff53c420b4efb3435e95182473c4450620a5a61817",
+        "Sources/CheckCore/CheckWorkInsights.swift": "18c3026c17217365ff5edba2b2c2a227450884a7a8ee5719bcfbbb220342a89b",
         "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/WeeklyWorkReward.swift": "768da9be40793050cda8f86f841e993ae932bd61c132fa3b49ac7118ea044f88"
       }
     },
@@ -156,7 +156,7 @@
         "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "03d40ec317dd267ca647bd159b7109f2d97ec69e35d3d8ee87071c0431a334fe"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/check/WorkTimerStorePoke.swift": "cdef6112e64531ab8322b75c03af0ae22e46805ae64518b2849525747451e45e"
       }
     },
@@ -166,8 +166,8 @@
         "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "03d40ec317dd267ca647bd159b7109f2d97ec69e35d3d8ee87071c0431a334fe"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea"
       }
     },
     "desktop-poke/send-notice": {
@@ -176,7 +176,7 @@
         "Tests/checkTests/GoldenExport/desktop-poke/GoldenExportDesktopPoke.swift": "03d40ec317dd267ca647bd159b7109f2d97ec69e35d3d8ee87071c0431a334fe"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/check/WorkTimerStorePoke.swift": "cdef6112e64531ab8322b75c03af0ae22e46805ae64518b2849525747451e45e"
       }
     },
@@ -196,8 +196,8 @@
       },
       "swiftSources": {
         "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea"
       }
     },
     "desktop-ultra/wallet-apply": {
@@ -206,7 +206,7 @@
         "Tests/checkTests/GoldenExport/desktop-ultra/GoldenExportDesktopUltra.swift": "73ee963bdcf57044e5d27a1c1867fd901e7e74550faf05ea0ab8b3f1d9ca0ef1"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/check/WorkTimerStorePoke.swift": "cdef6112e64531ab8322b75c03af0ae22e46805ae64518b2849525747451e45e"
       }
     },
@@ -218,7 +218,7 @@
       "swiftSources": {
         "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
         "Sources/check/CheckWorkNudge.swift": "3b0e7931f58481d5d22651f64fd6405821e963b896c8124c59f960d0c31e6a4b",
-        "Sources/check/WorkTimerStore.swift": "1529e6c35fccee46ebdb1a2b2bf463ffcd798ca6396e88dfdbad4c5b78c13580"
+        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6"
       }
     },
     "desktop-work-policy/laps": {
@@ -228,7 +228,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
-        "Sources/check/WorkTimerStore.swift": "1529e6c35fccee46ebdb1a2b2bf463ffcd798ca6396e88dfdbad4c5b78c13580"
+        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6"
       }
     },
     "desktop-work-policy/nudge": {
@@ -246,9 +246,9 @@
         "Tests/checkTests/GoldenExport/desktop-work-queue/GoldenExportDesktopWorkQueue.swift": "526a8331ec29772ef55f05e3a12b9ad43ea066d8755c2ab5ff821013da1721be"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89",
-        "Sources/check/WorkTimerStore.swift": "1529e6c35fccee46ebdb1a2b2bf463ffcd798ca6396e88dfdbad4c5b78c13580",
-        "Sources/check/WorkTimerStoreSync.swift": "01f4395c74b656089a7c1b2e480819311ae815b740bfa3d78d3937217dbbd1e0"
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea",
+        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6",
+        "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
     "desktop-work-state/ownership": {
@@ -257,8 +257,8 @@
         "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift": "9e9d3f76971d461810543bc05d01c60ff781f0b3b8d768c582fa9b6ab3bdd551"
       },
       "swiftSources": {
-        "Sources/check/WorkTimerStore.swift": "1529e6c35fccee46ebdb1a2b2bf463ffcd798ca6396e88dfdbad4c5b78c13580",
-        "Sources/check/WorkTimerStoreSync.swift": "01f4395c74b656089a7c1b2e480819311ae815b740bfa3d78d3937217dbbd1e0"
+        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6",
+        "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
     "desktop-work/requests": {
@@ -268,8 +268,8 @@
       },
       "swiftSources": {
         "Sources/CheckCore/SupabaseWorkHTTP.swift": "867512bfd55689c87800000591bdb7d298c7c9c9a1b51b5febedd1d18d3319e6",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea"
       }
     },
     "duel-fee/fee": {
@@ -348,7 +348,7 @@
     "gacha/character-kit": {
       "file": "1e71e39e3bc67cc177c2589b01bfb8bd34222077158650668ae1ca4d8969220f",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "184fa2a6e8ed4cd936abab3ad5d9fcb5b1955b9812c2444c130ddc3ab996011b"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
       },
       "swiftSources": {
         "Sources/CheckCore/CharacterKit/CharacterManifest.swift": "f1e735ed10006e2001bb19806e4303a0754000c3e9326f531dad2f62e085d53f",
@@ -360,46 +360,46 @@
     "gacha/odds": {
       "file": "ea82887d4eff11dccf3cc328e83d7a64d671cdac930b604ba87606f6f93cf7e5",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "184fa2a6e8ed4cd936abab3ad5d9fcb5b1955b9812c2444c130ddc3ab996011b"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "0e2ac6d5acb9e94e4be7ba5be026b8935336f2751b56598be0f3bf5859e6d14a",
-        "Sources/CheckCore/CharacterKit/GoldAing.swift": "ae076069b6287698bde71331ede09745fd34d46f96259f8a86f33da16d80cad1",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
+        "Sources/CheckCore/CharacterKit/GoldAing.swift": "bf84fdee11248bdb6cbd19af8ca09ca1a5662c744af9e3c65a505e96f8de133a",
         "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2"
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e"
       }
     },
     "gacha/shop-protocol": {
       "file": "b1c0de0995d87ff982cb7a16cdb6d50c14da80664740175023ca0e2a0424532c",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "184fa2a6e8ed4cd936abab3ad5d9fcb5b1955b9812c2444c130ddc3ab996011b"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "0e2ac6d5acb9e94e4be7ba5be026b8935336f2751b56598be0f3bf5859e6d14a",
-        "Sources/CheckCore/ShopProtocol.swift": "96b13e9d9dd4a590682dfd413a2d9ce8633396a201fe4b57ba64597c58dc4319"
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
+        "Sources/CheckCore/ShopProtocol.swift": "6985b3a8b63d0b8eeb19e6a233fdacf56450ae4e13522b406391c7a22313bc1d"
       }
     },
     "gift/catalog": {
-      "file": "468bec99fdbcc835395e4947605e557e82153a277a999e5f8c86735ef190d993",
+      "file": "55a8c78e3ccd29ccb875f3d0415d7967966ca767ca151d2743289a5cfd277c9d",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "184fa2a6e8ed4cd936abab3ad5d9fcb5b1955b9812c2444c130ddc3ab996011b"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "0e2ac6d5acb9e94e4be7ba5be026b8935336f2751b56598be0f3bf5859e6d14a",
-        "Sources/CheckCore/CharacterKit/GoldAing.swift": "ae076069b6287698bde71331ede09745fd34d46f96259f8a86f33da16d80cad1",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
+        "Sources/CheckCore/CharacterKit/GoldAing.swift": "bf84fdee11248bdb6cbd19af8ca09ca1a5662c744af9e3c65a505e96f8de133a",
         "Sources/CheckCore/CharacterKit/RainbowAing.swift": "9f4b85de6835b71c84a742bc1ecc32528138ea3b6605070b45644f9462b79f1b",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2"
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e"
       }
     },
     "gift/claim": {
-      "file": "9ede3428284edf4137d191128d8f3cc1d42303f5042a960dde9a9d5c81622ab9",
+      "file": "f6ee98b6e6582750f18ece05ab66b4c19e067d30f441c662c1dbbd13759e7d3f",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "184fa2a6e8ed4cd936abab3ad5d9fcb5b1955b9812c2444c130ddc3ab996011b"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "0e2ac6d5acb9e94e4be7ba5be026b8935336f2751b56598be0f3bf5859e6d14a",
-        "Sources/CheckCore/ShopProtocol.swift": "96b13e9d9dd4a590682dfd413a2d9ce8633396a201fe4b57ba64597c58dc4319"
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
+        "Sources/CheckCore/ShopProtocol.swift": "6985b3a8b63d0b8eeb19e6a233fdacf56450ae4e13522b406391c7a22313bc1d"
       }
     },
     "insights/computation": {
@@ -408,9 +408,9 @@
         "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "9ea5339f97f166eeee74c47caa1362b1fbf6bde36e29ff01c679da2dfb52b421"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckWorkInsights.swift": "5aba205ce859558dbb4dbfff53c420b4efb3435e95182473c4450620a5a61817",
+        "Sources/CheckCore/CheckWorkInsights.swift": "18c3026c17217365ff5edba2b2c2a227450884a7a8ee5719bcfbbb220342a89b",
         "Sources/CheckCore/MenuBarStatusFormatter.swift": "7c03c251205d930fd1891c54be25015ac82ae8920788fb621223f520403ebd93",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "insights/token": {
@@ -420,10 +420,10 @@
       },
       "swiftSources": {
         "Sources/CheckCore/CheckTokenRowDisplay.swift": "97685c087ab20d7112acea8e980b98b50e225da3ac40b4126092b2d0727510cc",
-        "Sources/CheckCore/CheckTokenUsage.swift": "318a955ee3be74ac02704cb44ec2672526bdfe3f912d9aeec447c3301c85e65e",
-        "Sources/CheckCore/CheckWorkInsights.swift": "5aba205ce859558dbb4dbfff53c420b4efb3435e95182473c4450620a5a61817",
+        "Sources/CheckCore/CheckTokenUsage.swift": "872502eb800481cb26214c2dd9c553381317309cd96d43b9f1d4ff5c3aede4df",
+        "Sources/CheckCore/CheckWorkInsights.swift": "18c3026c17217365ff5edba2b2c2a227450884a7a8ee5719bcfbbb220342a89b",
         "Sources/CheckCore/CodexEffectiveRule.swift": "417e3cb434645b7cfee5221aa969cf525db27066c408aacf0aab672c28466ef0",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "jwt/expiry": {
@@ -441,8 +441,8 @@
         "Tests/CheckMobileKitTests/GoldenExport/messages/GoldenExportMessages.swift": "9d62e96a22367a44967721205ddbd596a352d466ac62d0ae671e68fa05f5206e"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "e53bc32db941582dbb4235be9b03feb89a32985cbcc7961c5e2ca27cd616f275"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "0f8ab7b7c5507384497303bde55fc614051e84c65c8f5b9bdf95fb67c80ee849"
       }
     },
     "messages/poke-log": {
@@ -453,7 +453,7 @@
       "swiftSources": {
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/MessageRules.swift": "887dc87a6291688ea472e6521e80251bded3db2aac5ba274aa073e412baa0ea5",
-        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "e53bc32db941582dbb4235be9b03feb89a32985cbcc7961c5e2ca27cd616f275"
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "0f8ab7b7c5507384497303bde55fc614051e84c65c8f5b9bdf95fb67c80ee849"
       }
     },
     "messages/store-rules": {
@@ -464,7 +464,7 @@
       "swiftSources": {
         "Sources/CheckMobileKit/Components/MobileRelativeTime.swift": "af2dd38d3c82d0e34652c9d0f5cfe26e99dab40541f03cf4981c4f4706deeb0c",
         "Sources/CheckMobileKit/Messages/MessagesBlockRules.swift": "472948e8f3fb876762a13cbbac13c7b3aac85a70030a8a8f0acd9f176ce0108d",
-        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "e53bc32db941582dbb4235be9b03feb89a32985cbcc7961c5e2ca27cd616f275"
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "0f8ab7b7c5507384497303bde55fc614051e84c65c8f5b9bdf95fb67c80ee849"
       }
     },
     "messages/thread-list": {
@@ -475,16 +475,16 @@
       "swiftSources": {
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/MessageRules.swift": "887dc87a6291688ea472e6521e80251bded3db2aac5ba274aa073e412baa0ea5",
-        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "e53bc32db941582dbb4235be9b03feb89a32985cbcc7961c5e2ca27cd616f275"
+        "Sources/CheckMobileKit/Messages/MessagesRules.swift": "0f8ab7b7c5507384497303bde55fc614051e84c65c8f5b9bdf95fb67c80ee849"
       }
     },
     "missions/achievements": {
-      "file": "e14d322bf1f4ba4e5f5ebc64ce7080163e6a47f710e2bc2fb41503415f81ea9c",
+      "file": "076fbd1109999b8f5db341254ef3f3579312033fd0b31d7d8b8a0dc0a0d7780f",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "184fa2a6e8ed4cd936abab3ad5d9fcb5b1955b9812c2444c130ddc3ab996011b"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
       },
       "swiftSources": {
-        "Sources/CheckCore/Achievements.swift": "745ee4fec876034ae1ce19c829b43f0156c2f591d850eb4df5a97f6269908663",
+        "Sources/CheckCore/Achievements.swift": "b3ee4a432d9ee49427d916d0c3b2315100736b22a8bbb8818ccba5ceb19847dc",
         "Sources/CheckCore/DailyMissions.swift": "70668d28a2ea4513288689182454e08768461dd8863da4bebc873e2ee0e3b9ca"
       }
     },
@@ -495,7 +495,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287",
-        "Sources/check/MiniGamePanel.swift": "5e26266706d1d3e83a79742b69bef280b05787285f5bbce3b06afc75578b5eb4"
+        "Sources/check/MiniGamePanel.swift": "f123a4053cf60e164ddf2a9fe383bcc118e61aaf484d636594b23a5ab42160eb"
       }
     },
     "realtime/frames": {
@@ -515,7 +515,7 @@
       "swiftSources": {
         "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696",
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287",
-        "Sources/CheckCore/RealtimeLink.swift": "9e510e720bfa67cc3473a6ba511a20d21005a7568da312bf17b3d540c61b6728"
+        "Sources/CheckCore/RealtimeLink.swift": "d65312b1098b1e6f09bdf6c1ea95fd0860ac8d01c78803c6b05c0e1ca84e6b97"
       }
     },
     "renju/ai-game": {
@@ -524,9 +524,9 @@
         "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
-        "Sources/CheckCore/GomokuAIGame.swift": "cddd93556303d6cbb84ac0b41b3e40567c4fc26176a945f49e03527ef48813b6",
+        "Sources/CheckCore/GomokuAIGame.swift": "9cddec85290733287ba9ba2cfe4162a77ac31af09536f2aeefbe4faa52539c47",
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6",
-        "Sources/CheckCore/GomokuStore.swift": "ba625005a9b2d35486ff216503b04d50c1a84e51c31ae77c2049b6eba9955037",
+        "Sources/CheckCore/GomokuStore.swift": "a2b44a95a1f9f7b67a351a6c630add23cd3388c4c995c27f58bc25cff5f3cb77",
         "Sources/CheckCore/GomokuTurnWarning.swift": "0a1b881b92317b4a1fcac362ccf1e461dfa0a85076e532baa7b5900d952bc6f9"
       }
     },
@@ -536,8 +536,8 @@
         "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
-        "Sources/CheckCore/GomokuAI.swift": "e5a02f8d83a04e1a8e83fe381d0367c8fcbfdb5db23ddf7b4f4ab0889101406b",
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
+        "Sources/CheckCore/GomokuAI.swift": "98212380a14ee23b5a43c09e779b3da433fdaae1db71725fbbfb639a602cab6b",
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6",
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6",
         "Tests/checkTests/Fixtures/gomoku-ai-puzzles.json": "fca6ca7da8c2256bb820ae9455b8c85a4b50eab99b7848f23427d07bcf14d171"
       }
@@ -548,8 +548,8 @@
         "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardAI.swift": "187f647ae5a702c8c14bc31c990a6a621d0ad1d2b8c533cf4c0aa25a096b9e4e"
       },
       "swiftSources": {
-        "Sources/CheckCore/GomokuAI.swift": "e5a02f8d83a04e1a8e83fe381d0367c8fcbfdb5db23ddf7b4f4ab0889101406b",
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
+        "Sources/CheckCore/GomokuAI.swift": "98212380a14ee23b5a43c09e779b3da433fdaae1db71725fbbfb639a602cab6b",
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6",
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6"
       }
     },
@@ -569,7 +569,7 @@
         "Tests/checkTests/GoldenExport/games-board/GoldenExportGamesBoardRenju.swift": "3d144240b9b9bcc346bd5d6d75bff13fbe6d0d3ad8606dd04ed862d8d4143e43"
       },
       "swiftSources": {
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6",
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6"
       }
     },
@@ -580,7 +580,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/GomokuRules.swift": "051f56726baacc64eae9c4202ad0e69b136fdd255dbb0f89e329727fec250bb6",
-        "Sources/CheckCore/GomokuStore.swift": "ba625005a9b2d35486ff216503b04d50c1a84e51c31ae77c2049b6eba9955037",
+        "Sources/CheckCore/GomokuStore.swift": "a2b44a95a1f9f7b67a351a6c630add23cd3388c4c995c27f58bc25cff5f3cb77",
         "Sources/CheckCore/GomokuTurnWarning.swift": "0a1b881b92317b4a1fcac362ccf1e461dfa0a85076e532baa7b5900d952bc6f9"
       }
     },
@@ -590,7 +590,7 @@
         "Tests/checkTests/GoldenExport/_base/GoldenExportBase.swift": "dcc201b10c3b8faac9eef127473e526a99763ddbee692d7d870fad6070e842bc"
       },
       "swiftSources": {
-        "Sources/CheckCore/GomokuAIEngine.swift": "e93ca153b93b22024cc0cfa2d71bcd5ca47897e86654df3705616ce2c476ff5c",
+        "Sources/CheckCore/GomokuAIEngine.swift": "debd82a8d74f3d0a11bc81a9af7426ac9d2c2bb31c6c8f729b06f962e5c051a6",
         "Sources/CheckCore/MiniGameEngine.swift": "4671b41edf0358703b4dcee1304de30fe5c3ae07074844dbb3c5dac95d4c7287"
       }
     },
@@ -682,7 +682,7 @@
         "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesText.swift": "f4f68ed4790d8e583993f6d42c1342430d211bf57ecd3a381d05768919b34668"
       },
       "swiftSources": {
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "sort/natural-ko": {
@@ -692,8 +692,8 @@
       },
       "swiftSources": {
         "Sources/CheckCore/ChessStore.swift": "e50768742fcac202c01a3fb2958a47b11419bb18931d9433db55a1b974677a50",
-        "Sources/CheckCore/GomokuStore.swift": "ba625005a9b2d35486ff216503b04d50c1a84e51c31ae77c2049b6eba9955037",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/GomokuStore.swift": "a2b44a95a1f9f7b67a351a6c630add23cd3388c4c995c27f58bc25cff5f3cb77",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/TetrisDuelStore.swift": "129bae88639848e3273316dddd8f6770fa7011bd3b9aad748590bfea03344497"
       }
     },
@@ -704,7 +704,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AingSticker.swift": "157293917798cb09fbeae316c289e1f02857f8bacb7f0beca2636fb8f0618d1f",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "tetris/bags": {
@@ -828,7 +828,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "text/number-format": {
@@ -837,7 +837,7 @@
         "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesRecords.swift": "9ea5339f97f166eeee74c47caa1362b1fbf6bde36e29ff01c679da2dfb52b421"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckTokenUsage.swift": "318a955ee3be74ac02704cb44ec2672526bdfe3f912d9aeec447c3301c85e65e"
+        "Sources/CheckCore/CheckTokenUsage.swift": "872502eb800481cb26214c2dd9c553381317309cd96d43b9f1d4ff5c3aede4df"
       }
     },
     "text/sanitize": {
@@ -848,7 +848,7 @@
       "swiftSources": {
         "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "text/scalar-classes": {
@@ -860,7 +860,7 @@
         "Sources/CheckCore/AingSticker.swift": "157293917798cb09fbeae316c289e1f02857f8bacb7f0beca2636fb8f0618d1f",
         "Sources/CheckCore/CheckTodoModel.swift": "1ecc07d4f68e441f9c18c02dad34406af84731a8031a96ff936f19b0c00130bf",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "text/status-message": {
@@ -940,7 +940,7 @@
         "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenScan.swift": "bfbbc8a198c6bb006b5b18759f88df45149f59c2789831dbc89f785e9aefd0a4"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckTokenUsage.swift": "318a955ee3be74ac02704cb44ec2672526bdfe3f912d9aeec447c3301c85e65e"
+        "Sources/CheckCore/CheckTokenUsage.swift": "872502eb800481cb26214c2dd9c553381317309cd96d43b9f1d4ff5c3aede4df"
       }
     },
     "token-usage/upload/account": {
@@ -949,11 +949,11 @@
         "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckCodexAccountUsage.swift": "e88f2993a09f851855c4924e6106bd1ad3caaf042e9a7a2cc206c73f2af6f51f",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "8a3d372f01b77a7a774acb92a61e3eba0eca062b12f34573ea5163773fab11f6",
         "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89",
-        "Sources/check/WorkTimerStoreSync.swift": "01f4395c74b656089a7c1b2e480819311ae815b740bfa3d78d3937217dbbd1e0"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea",
+        "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
     "token-usage/upload/daily": {
@@ -962,11 +962,11 @@
         "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckCodexAccountUsage.swift": "e88f2993a09f851855c4924e6106bd1ad3caaf042e9a7a2cc206c73f2af6f51f",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "8a3d372f01b77a7a774acb92a61e3eba0eca062b12f34573ea5163773fab11f6",
         "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89",
-        "Sources/check/WorkTimerStoreSync.swift": "01f4395c74b656089a7c1b2e480819311ae815b740bfa3d78d3937217dbbd1e0"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea",
+        "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
     "token-usage/upload/diagnostics": {
@@ -975,11 +975,11 @@
         "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckCodexAccountUsage.swift": "e88f2993a09f851855c4924e6106bd1ad3caaf042e9a7a2cc206c73f2af6f51f",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "8a3d372f01b77a7a774acb92a61e3eba0eca062b12f34573ea5163773fab11f6",
         "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89",
-        "Sources/check/WorkTimerStoreSync.swift": "01f4395c74b656089a7c1b2e480819311ae815b740bfa3d78d3937217dbbd1e0"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea",
+        "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
     "token-usage/upload/requests": {
@@ -988,11 +988,11 @@
         "Tests/checkTests/GoldenExport/token-usage/GoldenExportTokenUpload.swift": "d7592ebffd62b6148f4fff8a5fe54bc4acfc46a4cacc5d8c525e5d662a3d9f39"
       },
       "swiftSources": {
-        "Sources/CheckCore/CheckCodexAccountUsage.swift": "e88f2993a09f851855c4924e6106bd1ad3caaf042e9a7a2cc206c73f2af6f51f",
+        "Sources/CheckCore/CheckCodexAccountUsage.swift": "8a3d372f01b77a7a774acb92a61e3eba0eca062b12f34573ea5163773fab11f6",
         "Sources/CheckCore/CheckTokenUsageDiagnostics.swift": "0edb1d145aed4ef6ff89a2b0e89aa188d0552e36e4318e80918dfde3a8a20042",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
-        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "9d52f282444a8c413386fe23cd49f3a527fb5a0ee14c0fff7c8fcccb5fdb3e89",
-        "Sources/check/WorkTimerStoreSync.swift": "01f4395c74b656089a7c1b2e480819311ae815b740bfa3d78d3937217dbbd1e0"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
+        "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea",
+        "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
     "weekly/status": {
@@ -1005,18 +1005,18 @@
       }
     },
     "wire/decode-demo-games": {
-      "file": "645d738fdcb179ad59789c1abb8a5adf785bd98cad62492aaf707d08cf004329",
+      "file": "99c8fbc99bdec62e2b0255a7ecb75e89bfa5ae2024b5d612983f1a29387629f2",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1029,18 +1029,18 @@
       }
     },
     "wire/decode-demo-me": {
-      "file": "44a88fe16cdb7c918c9402bdb77fd2efff11e5d9d72147332d9de228646694aa",
+      "file": "813a07e2b4609b2173952308be43f2d0596dd9562a5262995352c8bd1217c038",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1053,18 +1053,18 @@
       }
     },
     "wire/decode-demo-other": {
-      "file": "63b5d025b56e36ac546759cd064641783a2afe2f177c1778a4ecfbeaf6463dfb",
+      "file": "4dba4f352dd357b9aa8faa841405863d0417cfe8fc5240bef84c307176161b76",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1079,16 +1079,16 @@
     "wire/decode-fixtures-chess": {
       "file": "af7a6dd06d282cbc6dbf60af20ad7273489ffb1e8dde15cca8fb9c1510cd4789",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1101,18 +1101,18 @@
       }
     },
     "wire/decode-fixtures-gomoku": {
-      "file": "c62bf228737f9e63fe6d15831233062785c7c894a0bc92ac89b87f565a36eaf7",
+      "file": "fa3fed9b62836aea7e5b778ad0ffb165ff461dee0f9186ac9268e6bef9e89564",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1127,16 +1127,16 @@
     "wire/decode-fixtures-message-todo": {
       "file": "04ea4c5900e75e53b5fc859963d6f5b4eed6d0bd8b6404a846fd3e18d2fb244d",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1151,28 +1151,28 @@
     "wire/decode-fixtures-rummy": {
       "file": "832e34ab0fe619d43da2cec5c5722cc4f5ae776395b1acaa93904c4eb42673ab",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/RummyRules.swift": "665c1e95cd324bf14fa69f64862fc0b93b771b23b51dccb45ead6ce135c9bee6",
         "Sources/CheckCore/RummyTableLayout.swift": "a76178c5283ddb0db7ebf98864ea4875877e2768dfeddcd5380236ffae3b98c6",
         "Sources/CheckCore/RummyWire.swift": "e9c36613ec9306ad5988eaf8cd0ec6d72fa21acde3fe2a83aef0dd293a40a08f",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082"
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c"
       }
     },
     "wire/decode-synthetic": {
-      "file": "fe84bae96fc1cb4464a0ac15790aebbde5f5b0fd739af750417afdb45255c38f",
+      "file": "a76d21c0b20671dd1591c3a177ecad29bb7cc8979a34fc7cd8278b965a4e5684",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "df7c7163ed3327df0bd5ccb93701fe02e9d6e6b9643ccf295d9832c3a448e071"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireDecode.swift": "88ab8ab858750da439e2e425f0854163394dcbef4f46d70402dceebdade3fd55"
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
         "Sources/CheckCore/SupabaseWorkServiceCharacter.swift": "438c63e9668428c3e86690723dc3185b6741155f4f5d44e728b3950254eea08c",
         "Sources/CheckCore/SupabaseWorkServiceMessageReads.swift": "4cdf3729473e40177c78a08c46065dd1e841ddeb2ee4e3dd29c42064232bcbd2",
@@ -1194,18 +1194,18 @@
       }
     },
     "wire/requests": {
-      "file": "29e38808e70c644f30bd04474d7f725c92675edcb11c95939f11fa23ae66621e",
+      "file": "0b650829043cfd5494e20ba6178503f77be54a4c591c4101e721de0f7734976a",
       "generator": {
-        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift": "cb870493b593035a384ee0e40bba39cdeec670ba22189512210cb17a30fc19d2"
+        "Tests/CheckMobileKitTests/GoldenExport/wire/GoldenExportWireRequests.swift": "4005ac2e04828d9fec767cb6531fa53ad91130118386e67326c02982c41beb8a"
       },
       "swiftSources": {
-        "Sources/CheckCore/Achievements.swift": "745ee4fec876034ae1ce19c829b43f0156c2f591d850eb4df5a97f6269908663",
+        "Sources/CheckCore/Achievements.swift": "b3ee4a432d9ee49427d916d0c3b2315100736b22a8bbb8818ccba5ceb19847dc",
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/DailyMissions.swift": "70668d28a2ea4513288689182454e08768461dd8863da4bebc873e2ee0e3b9ca",
         "Sources/CheckCore/DuelRPC.swift": "b83c80d0632d669dd62fccd924447bdfdf25cb510b9f55e665c5160d6fe6680b",
-        "Sources/CheckCore/Gacha.swift": "bfae96ef6881cbbdd8999a732dffdd241aed673db715e783c5d2ce185d667ae2",
+        "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/Megaphone.swift": "13f03912354e3c28beae254980663d28a1258c250a5958dfe9b6ba97c5c3140e",
         "Sources/CheckCore/MegaphoneBanner.swift": "ed371c25d9ba458161bfad7a57a9c9faded4aa73013349e29d9f5918a97dbe97",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1215,7 +1215,7 @@
         "Sources/CheckCore/RummyWire.swift": "e9c36613ec9306ad5988eaf8cd0ec6d72fa21acde3fe2a83aef0dd293a40a08f",
         "Sources/CheckCore/StatusMessage.swift": "4c0e07ec3820382f3cbb470826043b92be5e1c851485227814e736a62dc8aeee",
         "Sources/CheckCore/SupabaseWorkHTTP.swift": "867512bfd55689c87800000591bdb7d298c7c9c9a1b51b5febedd1d18d3319e6",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkService.swift": "d51f3abad36ebf92705380b6152990256ae58ad101962040ffeae4fceb80b519",
         "Sources/CheckCore/SupabaseWorkServiceAILimits.swift": "eba8ed3bb06401cb4b17784a7a8c31f74d25900e573f77939a4d2b1de93f7423",
         "Sources/CheckCore/SupabaseWorkServiceBlocks.swift": "1abcbd3d565c5bb7da30d5ec7b4143e631fc6f4e3c56f69b9d7eeac4161fd8dd",
@@ -1241,10 +1241,10 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "827002d36dc63e74befe5ac7bba63ca46e062d95b6d563cd8d4e5a5c2585aac0",
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "0e2ac6d5acb9e94e4be7ba5be026b8935336f2751b56598be0f3bf5859e6d14a",
+        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
-        "Sources/CheckCore/SupabaseWorkModels.swift": "11daf82aaeb8eb27d0a0f519704b3c1a8a2122486859292e001b3cd6e5f47082",
+        "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkService.swift": "d51f3abad36ebf92705380b6152990256ae58ad101962040ffeae4fceb80b519",
         "Sources/CheckCore/TodoSync.swift": "2d0a35e10848caacf57f25331f02259deccf95f99517b57fab98c397d93cc3c1",
         "Sources/CheckMobileKit/Session/MobilePhoneWorkService.swift": "0b142e721ce26eacf95187026ccd28ebf314c5e60c7962ae886c388ec1e957f6"

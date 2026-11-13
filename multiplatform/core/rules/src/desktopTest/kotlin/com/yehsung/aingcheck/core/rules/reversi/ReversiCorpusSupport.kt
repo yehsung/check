@@ -37,7 +37,7 @@ internal fun JsonObject.objects(key: String): List<JsonObject> = (this[key] as? 
 internal fun JsonElement?.isJsonNull(): Boolean = this == null || this is JsonNull
 
 /** 코퍼스 `{black, white, empty}`·`{black, white}` 칸 → 돌 수. */
-internal fun JsonObject.counts(): ReversiCounts = ReversiCounts(intOrNull("black")!!, intOrNull("white")!!, intOrNull("empty")!!)
+internal fun JsonObject.counts(): ReversiCounts = ReversiCounts(intOrNull("black")!!.toLong(), intOrNull("white")!!.toLong(), intOrNull("empty")!!.toLong())
 
 /** WOF 점수(코퍼스 `{black, white, result}`)와 견줄 Kotlin 점수의 글자 꼴. */
 internal fun ReversiScore.triple(): Triple<Int, Int, String> = Triple(black, white, result.rawValue)

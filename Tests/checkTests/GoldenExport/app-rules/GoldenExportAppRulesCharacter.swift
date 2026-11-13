@@ -43,6 +43,8 @@ struct GoldenExportAppRulesCharacter {
         "AING_GOLD", "aing_cake", "aing_cake_strawberry ", nil,
         // v0.3.74 이슬 아잉이('술 한잔' 선물 전용) — 금과 같은 규칙(정확히 aing_isul 만). 기존 id-0…12 번호를 밀지 않게 맨 뒤에 둔다.
         "aing_isul", "AING_ISUL", "aing_isul ",
+        // 안드로이드 판 8(아이폰 1.0.18 맞추기): 빼빼로 · 흑우 · 루비 · 개발 · 지역 둘 — 같은 규칙(정확히 그 id 만). 앞 번호를 밀지 않게 맨 뒤에.
+        "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul", "AING_HWOO", "aing_dev ",
     ]
 
     // MARK: gift/catalog
@@ -55,6 +57,12 @@ struct GoldenExportAppRulesCharacter {
         case .cakeStrawberry: return "cakeStrawberry"
         case .cakeChoco: return "cakeChoco"
         case .isul: return "isul"
+        case .pepero: return "pepero"
+        case .hwoo: return "hwoo"
+        case .ruby: return "ruby"
+        case .dev: return "dev"
+        case .busan: return "busan"
+        case .seoul: return "seoul"
         }
     }
 

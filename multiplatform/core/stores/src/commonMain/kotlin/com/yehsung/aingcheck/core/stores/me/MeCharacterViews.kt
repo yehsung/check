@@ -4,6 +4,8 @@ package com.yehsung.aingcheck.core.stores.me
 import com.yehsung.aingcheck.core.rules.character.gift.copy
 import com.yehsung.aingcheck.core.rules.gacha.GachaRules
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
+import com.yehsung.aingcheck.core.rules.character.DevAingMission
+import com.yehsung.aingcheck.core.rules.gacha.GachaText
 
 /**
  * 타일 · 구매 막대 · 고르기 머리에 설 캐릭터 이름. 카드 표 → **코어 내장 이름** → id 차례다.
@@ -29,6 +31,12 @@ sealed interface MeCharacterTileStatus {
      * [kind] 는 내장 id 로 안다(`MeStore.giftKind` — 서버 행은 종류를 싣지 않는다).
      */
     data class GiftOnly(val kind: CharacterGiftKind = CharacterGiftKind.birthday) : MeCharacterTileStatus
+
+    /** 조각 교환으로만 얻는다(흑우 아잉이 — 폰 1.0.18 · 판 8) — "조각 20개로 교환". 뽑기에서는 안 나와 '뽑기 ·' 를 말하면 거짓이다. */
+    data class ShardOnly(val shardCost: Long?) : MeCharacterTileStatus
+
+    /** 미션 보상으로만 얻는다(개발에 찌든 아잉이 — 폰 1.0.18 · 판 8) — 잠긴 칸 "미션 보상"(맥 `.missionLocked` 와 같은 글자). */
+    data object MissionLocked : MeCharacterTileStatus
     data object UnknownPrice : MeCharacterTileStatus
     data object Busy : MeCharacterTileStatus
     data object None : MeCharacterTileStatus
@@ -60,6 +68,8 @@ sealed interface MeCharacterTileStatus {
             is Price -> Content.Ruby(price, balance)
             is GachaOnly -> Content.Acquire(MeText.gachaTileStatus(shardCost))
             is GiftOnly -> Content.Locked(kind.copy.lockedCaption)
+            is ShardOnly -> Content.Acquire(GachaText.shardOnlyPrice(shardCost))
+            MissionLocked -> Content.Locked(DevAingMission.lockedCaption)
             UnknownPrice -> Content.Text("—", emphasized = false)
             Busy -> Content.Spinner
             None -> Content.Text(" ", emphasized = false)

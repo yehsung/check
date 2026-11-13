@@ -42,9 +42,9 @@ class ReversiAIGameTest {
     private fun at(seconds: Double): Double = t0 + seconds
 
     private fun stone(seq: Int, color: ReversiColor, idx: Int, flipped: List<Int>, auto: Boolean = false) =
-        ReversiPly(seq, color, ReversiPly.Kind.stone, idx, flipped, auto)
+        ReversiPly(seq.toLong(), color, ReversiPly.Kind.stone, idx.toLong(), flipped.map { it.toLong() }, auto)
 
-    private fun pass(seq: Int, color: ReversiColor) = ReversiPly(seq, color, ReversiPly.Kind.pass, null, emptyList(), false)
+    private fun pass(seq: Int, color: ReversiColor) = ReversiPly(seq.toLong(), color, ReversiPly.Kind.pass, null, emptyList(), false)
 
     private class Run(val game: ReversiAIGame) {
         var abandonedAt: Int? = null
@@ -367,8 +367,8 @@ class ReversiAIGameTest {
             }
             val plies = game.plies
             assertEquals(expectedKinds, plies.map { it.kind }, "$label 기록 줄")
-            assertEquals((1..plies.size).toList(), plies.map { it.seq }, "$label seq")
-            assertEquals(moves, plies.mapNotNull { it.idx }, "$label 돌 칸")
+            assertEquals((1..plies.size).toList(), plies.map { it.seq.toInt() }, "$label seq")
+            assertEquals(moves, plies.mapNotNull { it.idx?.toInt() }, "$label 돌 칸")
             for ((prev, ply) in plies.zipWithNext()) {
                 if (ply.kind == ReversiPly.Kind.pass) assertEquals(prev.color.opponent, ply.color, "$label: 패스는 방금 둔 사람의 상대")
             }

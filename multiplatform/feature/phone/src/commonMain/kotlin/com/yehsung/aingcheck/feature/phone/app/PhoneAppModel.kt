@@ -178,6 +178,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 순위표·관전의 **주 스위치**. 기본이 꺼짐이라 이 한 줄이 없으면 `gomoku_ranking`·`gomoku_watch` 가 한 번도 안 나간다 — 화면이 죽는데
         // 빨간 시험이 없다(Swift 머리말). "기본값이니 지워도 되겠지"로 지우지 마라(PhoneAppModelTest 가 요청 건수로 잰다).
         gomoku.spectatorFeaturesEnabled = true
+        // 판 8 — 오목 AI 난이도를 이 기기에 기억한다(맥 · 폰과 같은 열쇠 gomoku.aiDifficulty, 처음은 보통).
+        gomoku.aiDifficultyPrefs = env.prefs
         chess = ChessStore(scope, gomokuHost)
         // 체스 순위·관전의 주 스위치(오목 한 줄과 짝).
         chess.spectatorFeaturesEnabled = true

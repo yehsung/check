@@ -417,6 +417,7 @@
         },
         "match": {
           "black": null,
+          "blackSkin": null,
           "board": "b",
           "challenger": null,
           "deadlineMs": {
@@ -435,6 +436,7 @@
           "turn": null,
           "turnStartedMs": null,
           "white": null,
+          "whiteSkin": null,
           "winner": null
         },
         "moves": [

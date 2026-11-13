@@ -123,6 +123,9 @@ class PhoneContext(
     /** 아잉 큐브가 이어졌는가(조립 전 · 시험 문맥에서는 거짓). */
     val hasRummy: Boolean get() = ::rummy.isInitialized
 
+    /** 오목 스토어가 조립됐는가(조립 순서상 나 탭 스토어가 먼저 설 수 있다 — 판 8 오목알 스킨 고리). */
+    val hasGomoku: Boolean get() = ::gomoku.isInitialized
+
     /**
      * 코어 아잉 뒤집기 스토어(판 7 — 호스트는 오목과 **같은** 하나). **null = 이 조립에 리버시가 없다** — 떼어 내기 깃발(`AppConfig.reversiEnabled`)이
      * 꺼졌거나 조립 전·시험 문맥이다. 게임 탭·나 탭·실시간이 전부 이 칸 하나를 본다.
@@ -192,6 +195,11 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
     }
 
     override val rummyPlayable: Boolean get() = context.hasRummy
+
+    /** 판 8 — 내가 낀 오목알 스킨을 AI 판(로컬)에 얹는다(폰 1.0.18 `context.gomoku.aiStoneSkin`). 서버 판은 응답이 말한다. */
+    override fun noteEquippedOmokSkin(skin: com.yehsung.aingcheck.core.rules.achievements.OmokStoneSkin?) {
+        if (context.hasGomoku) context.gomoku.aiStoneSkin = skin
+    }
 
     /** 리버시 줄의 '맥에서 할 수 있어요'를 비운다 — 이 조립에 리버시 스토어가 있을 때만(떼어 내기 깃발이 꺼지면 서버 글자 그대로). */
     override val reversiPlayable: Boolean get() = context.reversi != null

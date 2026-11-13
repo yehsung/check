@@ -29,9 +29,8 @@ object GachaPaint {
             CharacterManifest.Finish.gold -> GachaInk.Solid(c.goldText)
             CharacterManifest.Finish.rainbow -> AingTextPaint.textBrushOrNull(text, c.rainbowStops)?.let { GachaInk.Painted(it) }
                 ?: GachaInk.Solid(AingTextPaint.solidFor(c.rainbowStops, c.label))
-            // 케이크 · 이슬(선물 전용)은 희귀가 아니다 — Swift MobileTheme `.cakeStrawberry, .cakeChoco, .isul: return nil`.
-            CharacterManifest.Finish.standard, CharacterManifest.Finish.cakeStrawberry, CharacterManifest.Finish.cakeChoco,
-            CharacterManifest.Finish.isul -> null
+            // 케이크 · 이슬 · 빼빼로 · 흑우 · 루비 · 개발 · 지역은 희귀가 아니다 — Swift MobileTheme(1.0.18) 의 평범 갈래와 같다.
+            else -> null
         }
     }
 

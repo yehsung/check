@@ -323,7 +323,9 @@ class MahjongStore(
     var serverClockOffset: Double = 0.0
         internal set
     internal var writeRevision = 0
-    internal var lobbyRoom: MahjongRoom? = null
+    /** 로비가 말한 내 forming 방(내가 앉은 방은 받은 초대 목록에서 뺀다). */
+    var lobbyRoom by mutableStateOf<MahjongRoom?>(null)
+        internal set
     internal var activeMatchID: String? = null
     internal val answeredWindowIDs = mutableSetOf<String>()
     internal val answeredWindowAnswers = mutableMapOf<String, String>()
@@ -335,7 +337,8 @@ class MahjongStore(
     internal var resetGeneration = 0
     internal var pollJob: Job? = null
     internal var wakeJob: Job? = null
-    internal val practiceRuntime = MahjongPracticeRuntime()
+    /** 연습판 장부(봇 결정 주입 · 세대 · 작업). 시험이 보여 주는 시간 · 패산 · 자리를 고정한다. */
+    val practiceRuntime = MahjongPracticeRuntime()
 
     internal var lobbyInFlight = false
     internal var lobbyAgain = false

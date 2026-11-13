@@ -134,6 +134,7 @@ object GamesHubTags {
     const val REVERSI: String = "games.hub.reversi"
     const val CROSSY_DUEL: String = "games.hub.crossyDuel"
     const val ALKKAGI: String = "games.hub.alkkagi"
+    const val MAHJONG: String = "games.hub.mahjong"
 }
 
 /** 이 빌드 게임 탭에 서는 미니게임(폰 노출 규칙 ∩ 표시 깃발). 타일·오늘 내 순위·새로고침이 **같은 한 목록**을 본다. */
@@ -173,6 +174,7 @@ fun GamesHubScreen(
             ReversiCard(store, onOpen, Modifier.padding(top = 12.dp))
             CrossyDuelCard(store, onOpen, Modifier.padding(top = 12.dp))
             AlkkagiCard(store, onOpen, Modifier.padding(top = 12.dp))
+            MahjongCard(store, onOpen, Modifier.padding(top = 12.dp))
             TodayRanks(store, art, onOpen, onOpenRankings)
             LiveMatches(facts, now)
         }
@@ -400,6 +402,25 @@ private fun AlkkagiCard(store: GamesStore, onOpen: (GamesDestination) -> Unit, m
         if (blockedBy == null) com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiPhoneText.cardOpenHint else GamesBusyText.entryBlockHint(blockedBy, GamesBusyGame.alkkagi) ?: "",
         GamesHubTags.ALKKAGI, modifier, { GamesAlkkagiTabThumbnail() },
     ) { onOpen(GamesDestination.Alkkagi) }
+}
+
+/** 아잉 마작 카드(판 8 — iOS 1.0.18 `mahjongCard`). 여덟째 방향. 스토어가 없는 조립에는 서지 않는다. */
+@Composable
+private fun MahjongCard(store: GamesStore, onOpen: (GamesDestination) -> Unit, modifier: Modifier) {
+    val mj = store.mahjong ?: return
+    val blockedBy = store.mahjongEntryBlock
+    val incoming = if (mj.duelsEnabled) mj.visibleInvites.size else 0
+    val chip = when {
+        blockedBy != null -> GamesBusyText.entryBlock(blockedBy)
+        store.hasLiveMahjongSeat -> GamesText.activeMatchChip
+        incoming > 0 -> "${com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongText.invitesTitle} $incoming"
+        else -> null
+    }
+    BoardGameCard(
+        com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongText.title, com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongPhoneText.cardSubtitle, chip, null, blockedBy != null,
+        if (blockedBy == null) com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongPhoneText.cardOpenHint else GamesBusyText.entryBlockHint(blockedBy, GamesBusyGame.mahjong) ?: "",
+        GamesHubTags.MAHJONG, modifier, { GamesMahjongTabThumbnail() },
+    ) { onOpen(GamesDestination.Mahjong) }
 }
 
 // MARK: 오늘 내 순위

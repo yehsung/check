@@ -210,6 +210,9 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
     /** 아잉 큐브 스토어(기본 null — 게임 탭은 큐브가 없는 것처럼 돈다). GamesStore 를 만들기 전에 넣는다. */
     var rummy: RummyStore? = null
 
+    /** 아잉 마작 스토어(기본 null — 게임 탭은 마작이 없는 것처럼 돈다). GamesStore 를 만들기 전에 넣는다. */
+    var mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? = null
+
     /** 게임 탭 스토어가 단 떠나는 문(시험이 탭 막대 대신 밟는다). */
     var departureGuard: ((resume: () -> Unit) -> Boolean)? = null
 
@@ -221,6 +224,7 @@ class UiGamesHarness(val testScope: TestScope, appConfig: AppConfig = AppConfig(
         override fun refreshAchievementsAfterGameResult(game: String) = Unit
         override val tetris: TetrisDuelStore get() = this@UiGamesHarness.tetris
         override val rummy: RummyStore? get() = this@UiGamesHarness.rummy
+        override val mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? get() = this@UiGamesHarness.mahjong
         override val gomoku: GamesGomokuLink get() = this@UiGamesHarness.gomoku
         override val chess: GamesBoardGameLink get() = this@UiGamesHarness.chess
         override val router: GamesRouter = object : GamesRouter {

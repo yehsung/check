@@ -1,6 +1,7 @@
 // 원본: Sources/CheckMobileKit/Games/GamesStore.swift @ 1b8260d
 package com.yehsung.aingcheck.core.stores.games
 
+import com.yehsung.aingcheck.core.stores.mahjong.refreshLobbyIfStale
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -70,6 +71,9 @@ sealed interface GamesDestination {
 
     /** 1:1 알까기(판 8 — iOS 1.0.18) — 로비 · 판 · 결과 · 관전 · 순위 · 연습을 **입구 하나**로 연다. */
     data object Alkkagi : GamesDestination
+
+    /** 아잉 마작(판 8 — iOS 1.0.18) — 로비 · 방 · 혼자 연습 · 판(가로) · 결과 · 순위를 **입구 하나**로 연다(큐브와 같은 구조). */
+    data object Mahjong : GamesDestination
 }
 
 /**
@@ -195,7 +199,11 @@ class GamesStore(val context: GamesContext) {
      */
     val isAnyMatchScreenVisible: Boolean
         get() {
-            if (isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible || isCrossyDuelScreenVisible || isAlkkagiScreenVisible) return true
+            if (isGomokuScreenVisible || isChessScreenVisible || isTetrisScreenVisible || isReversiScreenVisible || isCrossyDuelScreenVisible || isAlkkagiScreenVisible ||
+                isMahjongScreenVisible
+            ) return true
+            // 아잉 마작: 이 기기가 연 판을 두는 중이면 다른 탭에서도 미룬다(코어 `defersMegaphoneBanner` — 연습판 · 이 기기 판만, 큐브와 같은 대접).
+            if (context.mahjong?.defersMegaphoneBanner == true) return true
             // 큐브: 손댄 판에서 내 자리가 playing 이면 다른 탭에 있어도 참(언제든 차례가 돌아온다). 놀던 기기가 판을 읽기만 하는 동안 · 기권 뒤 구경은 거짓. 로비 · 방 · 결과 화면은 다른 대결 화면과 같은 대접(iOS 61d75d8c).
             val rummy = context.rummy ?: return false
             return rummy.defersMegaphoneBanner || (isRummyScreenVisible && rummy.phase != RummyPhase.playing)
@@ -219,6 +227,22 @@ class GamesStore(val context: GamesContext) {
     /** 1:1 알까기 화면(로비 · 판 · 결과 · 관전 · 연습)이 떠 있다(판 8). */
     var isAlkkagiScreenVisible: Boolean by mutableStateOf(false)
         private set
+
+    /** 아잉 마작 화면(로비 · 방 · 판 · 결과)이 떠 있다(판 8). */
+    var isMahjongScreenVisible: Boolean by mutableStateOf(false)
+        private set
+
+    /** 아잉 마작 판 결과에서 [로비로]를 누른 판 id(코어가 그 판을 finished 로 들고 있어도 화면은 로비 — 맥 `dismissedMatchID` 와 같다). */
+    var mahjongDismissedMatchID: String? by mutableStateOf(null)
+
+    /** 아잉 마작 화면이 판을 그리는가(= 가로). 화면 고르기는 `GamesMahjongScreenRule` 한 곳. */
+    val mahjongWantsLandscape: Boolean
+        get() {
+            val mahjong = context.mahjong ?: return false
+            return isMahjongScreenVisible &&
+                com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongScreenRule.of(mahjong, mahjongDismissedMatchID) ==
+                com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongScreenRule.table
+        }
 
     /** 결과에서 [최종 판]을 펴 둔 판. 판 id 를 쥐는 까닭: 다음 판의 결과가 이 표시를 물려받아 저절로 가로가 되면 안 된다. */
     private var rummyFinalBoardMatchID: SwiftUUID? by mutableStateOf(null)
@@ -274,6 +298,8 @@ class GamesStore(val context: GamesContext) {
     /** 화면 방향 — 앱에서 단 하나의 답(GamesRummyOrientation.kt 머리말). 저장하지 않고 지금 상태에서 계산한다. 이 기기가 큐브를 못 하는 안내가 서 있으면 판을 그리지 않으니 세로다. */
     val rummyInterfaceOrientation: GamesRummyInterfaceOrientation
         get() {
+            // 아잉 마작 판(루비 판 · 연습판)도 가로다(iOS 1.0.18 — 큐브와 같은 '이 화면만 가로'). 로비 · 방은 세로.
+            if (mahjongWantsLandscape) return GamesRummyInterfaceOrientation.landscape
             val rummy = context.rummy ?: return GamesRummyInterfaceOrientation.portrait
             return GamesRummyOrientationRule.orientation(
                 phase = rummy.phase,
@@ -326,6 +352,8 @@ class GamesStore(val context: GamesContext) {
         context.crossyDuel?.presentWindow = { presentCrossyDuelScreen() }
         // 1:1 알까기: 판이 처음 서면(이 기기든 같은 계정 다른 기기든) 코어가 부른다. 앱이 앞에 있을 때만 화면을 쌓는다.
         context.alkkagi?.presentWindow = { presentAlkkagiScreen() }
+        // 아잉 마작: 이 기기가 연 판이 시작되면 코어가 부른다(장부 판만). 앱이 앞에 있을 때만 화면을 쌓는다.
+        context.mahjong?.presentWindow = { presentMahjongScreen() }
     }
 
     // MARK: 자리 API
@@ -407,6 +435,14 @@ class GamesStore(val context: GamesContext) {
                 alk.refreshLobbyIfStale()
             }
         }
+        context.mahjong?.let { mj ->
+            if (isMahjongScreenVisible) {
+                if (mj.isWindowVisible) mj.windowOcclusionDidChange(visible = true) else mj.windowDidShow()
+                mj.requestSync()
+            } else {
+                mj.refreshLobbyIfStale()
+            }
+        }
         syncIdleTimer()
     }
 
@@ -455,6 +491,8 @@ class GamesStore(val context: GamesContext) {
         }
         // 1:1 알까기도 가림이다(폴링 · 관전 걸음만 쉰다 — 서버 시계는 흐른다).
         context.alkkagi?.let { alk -> if (isAlkkagiScreenVisible && alk.isWindowVisible) alk.windowOcclusionDidChange(visible = false) }
+        // 아잉 마작도 가림이다(폴링 · 연습판만 멈춘다 — 루비 판은 서버 시계로 흐른다).
+        context.mahjong?.let { mj -> if (isMahjongScreenVisible && mj.isWindowVisible) mj.windowOcclusionDidChange(visible = false) }
         syncIdleTimer()
     }
 
@@ -467,6 +505,8 @@ class GamesStore(val context: GamesContext) {
         isReversiScreenVisible = false
         isCrossyDuelScreenVisible = false
         isAlkkagiScreenVisible = false
+        isMahjongScreenVisible = false
+        mahjongDismissedMatchID = null
         rummyPersonLeftScreen = false
         rummyFinalBoardMatchID = null
         rummyDeparturePrompt = null
@@ -498,6 +538,9 @@ class GamesStore(val context: GamesContext) {
     /** 코어 1:1 알까기 스토어 줄임(= `context.alkkagi`, 판 8). */
     val alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? get() = context.alkkagi
 
+    /** 코어 아잉 마작 스토어 줄임(= `context.mahjong`, 판 8). */
+    val mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? get() = context.mahjong
+
     /**
      * 탭 배지: 만료 안 된 받은 오목 신청 수 + 받은 아잉 큐브 초대 수.
      *
@@ -518,7 +561,9 @@ class GamesStore(val context: GamesContext) {
             (context.reversi?.visibleIncomingInvites?.size ?: 0) +
             // 1:1 길건너(판 8 — iOS 1.0.18 badgeCount): 초인종을 잇고 만료는 코어 타이머가 걷는다(뒤집기와 같은 근거). 판돈 깃발이 꺼진 빌드는 수락할 수 없어 0.
             (context.crossyDuel?.takeIf { it.duelsEnabled }?.visibleIncomingInvites?.size ?: 0) +
-            (context.alkkagi?.takeIf { it.duelsEnabled }?.visibleIncomingInvites?.size ?: 0)
+            (context.alkkagi?.takeIf { it.duelsEnabled }?.visibleIncomingInvites?.size ?: 0) +
+            // 아잉 마작도 받은 초대가 `mahjong_lobby` 로 온다(초대 수명 10분 · 초인종이 로비를 다시 읽는다 — 큐브와 같은 근거).
+            (context.mahjong?.takeIf { it.duelsEnabled }?.visibleInvites?.size ?: 0)
 
     /** 게임 탭이 보여 주는 루비 잔액 — **공유 미러**를 먼저 읽는다(나 탭 상점 구매가 미러만 적는다). 미러를 모르면 테트리스 코어 값. */
     val rubyBalance: Long? get() = context.sharedRubyBalance ?: context.tetris.rubyBalance
@@ -651,6 +696,18 @@ class GamesStore(val context: GamesContext) {
             return state.phase != com.yehsung.aingcheck.core.wire.games.AlkkagiMatchPhase.finished
         }
 
+    /** 아잉 마작 자리(서버 방에 앉았거나 판을 두는 중 — 서버 `game__busy_users` 의 joined · playing 과 같은 뜻). 연습판은 서버 자리가 아니다. */
+    val hasLiveMahjongSeat: Boolean
+        get() {
+            val mahjong = context.mahjong ?: return false
+            val header = mahjong.match?.match
+            if (header != null && (mahjong.match?.mySeat != null || header.matchStatus == com.yehsung.aingcheck.core.stores.mahjong.MahjongMatchStatus.forming)) {
+                return header.matchStatus == com.yehsung.aingcheck.core.stores.mahjong.MahjongMatchStatus.forming ||
+                    header.matchStatus == com.yehsung.aingcheck.core.stores.mahjong.MahjongMatchStatus.active
+            }
+            return mahjong.lobbyRoom != null
+        }
+
     val hasLiveReversiAIGame: Boolean
         get() {
             val reversi = context.reversi ?: return false
@@ -666,7 +723,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
             if (hasLiveReversiMatch) return GamesBusyGame.reversi
             if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
-            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
+            if (hasLiveAlkkagiMatch) return GamesBusyGame.alkkagi
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
         }
 
     /**
@@ -681,7 +739,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
             if (hasLiveReversiMatch) return GamesBusyGame.reversi
             if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
-            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
+            if (hasLiveAlkkagiMatch) return GamesBusyGame.alkkagi
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
         }
 
     /**
@@ -695,7 +754,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
             if (hasLiveReversiMatch) return GamesBusyGame.reversi
             if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
-            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
+            if (hasLiveAlkkagiMatch) return GamesBusyGame.alkkagi
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
         }
 
     /**
@@ -709,7 +769,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
             if (hasLiveReversiMatch) return GamesBusyGame.reversi
             if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
-            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
+            if (hasLiveAlkkagiMatch) return GamesBusyGame.alkkagi
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
         }
 
     /**
@@ -723,7 +784,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
             if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
-            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
+            if (hasLiveAlkkagiMatch) return GamesBusyGame.alkkagi
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
         }
 
     /** 1:1 길건너 입구 막기(판 8 — iOS 1.0.18) — 다른 1:1 중 하나가 흐르면 그 까닭을 먼저 말한다(서버도 `game__busy_users` 로 막는다). */
@@ -734,7 +796,8 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
             if (hasLiveReversiMatch) return GamesBusyGame.reversi
-            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
+            if (hasLiveAlkkagiMatch) return GamesBusyGame.alkkagi
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
         }
 
     /** 1:1 알까기 입구 막기(판 8 — iOS 1.0.18) — 다른 1:1 중 하나가 흐르면 그 까닭을 먼저 말한다(서버도 막는다). */
@@ -745,7 +808,20 @@ class GamesStore(val context: GamesContext) {
             if (hasLiveTetrisMatch) return GamesBusyGame.tetris
             if (hasLiveRummyMatch) return GamesBusyGame.rummy
             if (hasLiveReversiMatch) return GamesBusyGame.reversi
-            return if (hasLiveCrossyDuelMatch) GamesBusyGame.crossyDuel else null
+            if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
+            return if (hasLiveMahjongSeat) GamesBusyGame.mahjong else null
+        }
+
+    /** 아잉 마작 입구 막기(판 8 — iOS 1.0.18) — 다른 일곱 판 중 하나가 흐르면 그 까닭을 먼저 말한다(서버도 시작 · 참가에서 막는다). */
+    val mahjongEntryBlock: GamesBusyGame?
+        get() {
+            if (hasLiveGomokuMatch) return GamesBusyGame.gomoku
+            if (hasLiveChessMatch) return GamesBusyGame.chess
+            if (hasLiveTetrisMatch) return GamesBusyGame.tetris
+            if (hasLiveRummyMatch) return GamesBusyGame.rummy
+            if (hasLiveReversiMatch) return GamesBusyGame.reversi
+            if (hasLiveCrossyDuelMatch) return GamesBusyGame.crossyDuel
+            return if (hasLiveAlkkagiMatch) GamesBusyGame.alkkagi else null
         }
 
     /**
@@ -794,6 +870,18 @@ class GamesStore(val context: GamesContext) {
             syncAlkkagiHiddenPeers()
             context.alkkagi?.refreshLobbyIfStale()
         }
+        // 아잉 마작도 받은 초대 · 내 방 · 진행 판 id 가 `mahjong_lobby` 로 온다(코어 스로틀).
+        if (context.mahjong != null) {
+            syncMahjongHiddenPeers()
+            context.mahjong?.refreshLobbyIfStale()
+        }
+    }
+
+    /** 차단 거울(맥 `WorkTimerStore` 의 `mahjong.setHiddenPeers(…)` 와 같은 길). */
+    fun syncMahjongHiddenPeers() {
+        val mj = context.mahjong ?: return
+        val hidden = context.hiddenBlockedPeerIDs.mapNotNull { com.yehsung.aingcheck.core.wire.SwiftUUID.parse(it) }.toSet()
+        if (mj.hiddenPeerIDs != hidden) mj.setHiddenPeers(hidden)
     }
 
     fun syncAlkkagiHiddenPeers() {
@@ -1037,6 +1125,28 @@ class GamesStore(val context: GamesContext) {
         alk.windowDidClose()
     }
 
+    // MARK: 아잉 마작 화면 수명(판 8 — iOS 1.0.18)
+
+    /** [isMahjongScreenVisible] 을 **먼저** 적는다 — `openWindow` 가 `presentWindow` 를 부르고, 그 문이 "이미 보인다"를 봐야 또 쌓지 않는다. */
+    fun mahjongScreenDidAppear() {
+        val mj = context.mahjong ?: return
+        isMahjongScreenVisible = true
+        syncMahjongHiddenPeers()
+        mj.openWindow(null)
+        if (isAppActive) mj.windowDidShow()
+        syncIdleTimer()
+    }
+
+    /** 화면을 떠났다(뒤로 · 다른 탭 · 로그아웃). 닫기는 기권이 아니다 — 판은 서버 시계로 계속된다. 연습판은 멈춘다. */
+    fun mahjongScreenDidDisappear() {
+        if (!isMahjongScreenVisible) return
+        isMahjongScreenVisible = false
+        val mj = context.mahjong ?: return
+        mj.windowDidHide()
+        mj.windowDidClose(byUser = true)
+        syncIdleTimer()
+    }
+
     // MARK: 아잉 큐브 화면 수명 (테트리스에서 수리한 모양 그대로 — GamesRummyScreen 이 부른다)
 
     /**
@@ -1253,6 +1363,8 @@ class GamesStore(val context: GamesContext) {
             if (context.crossyDuel?.holdsActivity == true) return true
             // 1:1 알까기: 진행 판(배치 · 조준 · 굴림)이면 어느 화면에 있든 켠다(한 수 30초 — 자동잠금이 닿으면 차례를 놓친다).
             if (hasLiveAlkkagiMatch) return true
+            // 아잉 마작: 화면이 떠 있고 판(연습판 포함)이 도는 동안 켠다(한 수 5초 + 예비 — 화면이 꺼지면 자리 비움이 된다).
+            if (isMahjongScreenVisible && context.mahjong?.phase == com.yehsung.aingcheck.core.stores.mahjong.MahjongPhase.playing) return true
             // 아잉 뒤집기: 1:1 판은 **어느 화면에 있든** 켠다(한 수 30초 — 자동잠금이 닿으면 소켓이 내려가 상대 수를 모르고, 서버가 대신 둔 수가 연속 3번이면
             // 판돈째 진다). AI 연습은 화면이 보일 때만(떠나면 코어가 사람 시계를 멈춘다 — 체스 로봇과 같다). '이 기기가 연 판' 장부가 없어 같은 계정 다른 기기의
             // 판에서도 켠다 — Android 오목과 같은 수준(ReversiStore 머리말 · 아이폰 1.0.17 은 `ownsMatch` 로 거른다).
@@ -1405,6 +1517,12 @@ class GamesStore(val context: GamesContext) {
     }
 
     /** 1:1 길건너 판이 막 열렸다 — 화면을 연다(판 8 — iOS 1.0.18). 코어는 **이 기기가 두는 판**에서만 부른다(한 판 한 기기). */
+    /** 아잉 마작 판이 막 열렸다 — 화면을 연다(판 8). 코어는 이 기기가 연 판에서만 부른다. */
+    private fun presentMahjongScreen() {
+        if (!isAppActive || !context.sessionStore.isSignedIn || isMahjongScreenVisible || context.mahjong == null) return
+        context.router.present(GamesDestination.Mahjong)
+    }
+
     /** 1:1 알까기 판이 막 열렸다 — 화면을 연다(판 8). */
     private fun presentAlkkagiScreen() {
         if (!isAppActive || !context.sessionStore.isSignedIn || isAlkkagiScreenVisible || context.alkkagi == null) return

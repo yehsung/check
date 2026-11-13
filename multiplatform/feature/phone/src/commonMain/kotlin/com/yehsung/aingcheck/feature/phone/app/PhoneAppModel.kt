@@ -141,6 +141,9 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
 
     /** 1:1 알까기(판 8 — 아이폰 1.0.18 맞추기). 떼어 내기 깃발(`AppConfig.alkkagiEnabled`)이 꺼지면 null. */
     val alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore?
+
+    /** 아잉 마작(판 8 — 아이폰 1.0.18 맞추기). 떼어 내기 깃발(`AppConfig.mahjongEnabled`)이 꺼지면 null. */
+    val mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore?
     val characters: AppUserCharacterStore
     val push: PhonePushCoordinator
     val now: NowStore
@@ -278,6 +281,25 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
                 override fun realtimeDidJoin() = store.realtimeDidJoin()
             }
         }
+        // 아잉 마작(판 8) — 4인 판 스토어(호스트는 같은 하나 — 루비 미러 · 판돈 깃발 문). 연습판 봇은 메인 밖(기본 Dispatchers.Default)에서 생각한다.
+        mahjong = if (env.appConfig.mahjongEnabled) {
+            com.yehsung.aingcheck.core.stores.mahjong.MahjongStore(gomokuHost, scope, clock = { env.clock.now() })
+        } else {
+            null
+        }
+        mahjong?.let { store ->
+            store.deviceLedger.defaults = env.prefs
+            store.aidsDefaults = env.prefs
+            // 폰 기본(두 번 눌러 버리기 켜짐)을 처음 한 번 심는다(iOS GamesMahjongPhoneAids.seedIfNeeded).
+            com.yehsung.aingcheck.core.stores.mahjong.GamesMahjongPhoneAids.seedIfNeeded(store, env.prefs)
+            // 순위 주 스위치(코어 기본 false — 이 줄이 없으면 `mahjong_ranking` 이 한 번도 안 나간다).
+            store.rankingEnabled = true
+            store.timersEnabled = env.runsTimers
+            realtime.mahjong = object : RealtimeSignalReceiver {
+                override fun handleSignal() = store.requestSync()
+                override fun realtimeDidJoin() = store.requestSync()
+            }
+        }
         characters = AppUserCharacterStore(context, scope, env.knownCharacterIDs)
         context.gomoku = gomoku
         context.chess = chess
@@ -286,6 +308,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         context.reversi = reversi
         context.crossyDuel = crossyDuel
         context.alkkagi = alkkagi
+        context.mahjong = mahjong
         context.characters = characters
 
         push = PhonePushCoordinator(context, isDemo = env.isDemo)
@@ -363,6 +386,10 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
                 val hidden = ids.map { it.lowercase() }.toSet()
                 if (store.hiddenPeerIDs != hidden) store.hiddenPeerIDs = hidden
             }
+            mahjong?.let { store ->
+                val hidden = ids.mapNotNull { com.yehsung.aingcheck.core.wire.SwiftUUID.parse(it) }.toSet()
+                if (store.hiddenPeerIDs != hidden) store.setHiddenPeers(hidden)
+            }
         }
         // 메시지 탭이 실시간 신호를 받는 자리(Swift 는 MessagesStore.init 이 등록했다 — Kotlin 은 조립이 잇는다). `.drain` 은 take_pokes 가 아니라
         // 이 조회다(C§4 #15).
@@ -380,6 +407,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // 1:1 길건너 — 서버 `daily_mission_defs()` 의 game 값 `crossy_duel`(iOS 1.0.18 MobileAppModel 과 같다).
         crossyDuel?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_CROSSY_DUEL) }
         alkkagi?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_ALKKAGI) }
+        // 아잉 마작 — 서버 `daily_mahjong` 의 game 값. 코어는 루비 판이 끝났을 때만 부른다(연습판 · 무효 판 제외).
+        mahjong?.onMatchFinished = { me.refreshAchievementsAfterGameResult(GAME_MAHJONG) }
 
         session.onSignedIn = { sessionDidSignIn() }
         session.onSignedOut = { sessionDidSignOut() }
@@ -523,6 +552,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         crossyDuel?.reset()
         // 1:1 알까기도 같은 사슬이다(배선 값 — 서비스 · 호스트 · 주 스위치는 남긴다).
         alkkagi?.reset()
+        // 아잉 마작도 같은 사슬이다 — 연습판 봇 · 깨우기 · 폴링이 살아 있으면 다음 사람 화면에 앞 계정의 방 · 판이 남는다.
+        mahjong?.reset()
         ruby.rubyBalance = null
         router.reset()
         widgets.forgetCurrent()
@@ -556,5 +587,6 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         const val GAME_REVERSI: String = "reversi"
         const val GAME_CROSSY_DUEL: String = "crossy_duel"
         const val GAME_ALKKAGI: String = "alkkagi"
+        const val GAME_MAHJONG: String = "mahjong"
     }
 }

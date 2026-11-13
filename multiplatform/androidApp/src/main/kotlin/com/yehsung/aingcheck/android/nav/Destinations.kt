@@ -57,6 +57,8 @@ object Dest {
     @Serializable data object CrossyDuel
     /** 1:1 알까기(판 8 — 로비·판·결과·관전·순위·연습 한 화면). */
     @Serializable data object Alkkagi
+    /** 아잉 마작(판 8 — 로비 · 방 · 혼자 연습 · 판(가로) · 결과 · 순위 한 화면). */
+    @Serializable data object Mahjong
     /** 판돈 고르기(오목·체스·테트리스 — 판돈 목록은 서버값). [game] = gomoku·chess·tetris. */
     @Serializable data class StakeSheet(val game: String)
 

@@ -138,6 +138,9 @@ class PhoneContext(
     /** 코어 1:1 알까기 스토어(판 8). null = 이 조립에 없다(떼어 내기 깃발). */
     var alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? = null
 
+    /** 코어 아잉 마작 스토어(판 8). null = 이 조립에 없다(떼어 내기 깃발). */
+    var mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? = null
+
     /** 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). */
     lateinit var characters: AppUserCharacterStore
 
@@ -211,6 +214,7 @@ class PhoneMeLinks(private val context: PhoneContext) : MeLinks {
     override val reversiPlayable: Boolean get() = context.reversi != null
     override val crossyDuelPlayable: Boolean get() = context.crossyDuel != null
     override val alkkagiPlayable: Boolean get() = context.alkkagi != null
+    override val mahjongPlayable: Boolean get() = context.mahjong != null
 
     override fun popMeToRoot() {
         context.router.popToRoot(PhoneTab.me)

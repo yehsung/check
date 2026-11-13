@@ -44,6 +44,8 @@ class PhoneGamesContext(private val phone: PhoneContext, override val gomoku: Ph
     override val crossyDuel: com.yehsung.aingcheck.core.stores.crossy.CrossyDuelStore? get() = phone.crossyDuel
     /** 1:1 알까기(판 8). */
     override val alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? get() = phone.alkkagi
+    /** 아잉 마작(판 8). */
+    override val mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? get() = phone.mahjong
     override val router: GamesRouter get() = phone.router
 
     /** 메시지 탭이 차단해 숨긴 상대(Swift `context.links.messages?.hiddenBlockedPeerIDs`). 메시지 스토어가 없으면 빈 집합. */

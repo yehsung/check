@@ -366,3 +366,35 @@ fun GamesAlkkagiTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = 
     drawLine(Color.White.copy(alpha = 0.55f), Offset(size.width * 0.62f, size.height * 0.55f), Offset(size.width * 0.9f, size.height * 0.2f), 1.2f * density)
     drawStone(Offset(size.width * 0.95f, size.height * 0.14f), r, false)
 }
+
+/** 아잉 마작 썸네일 — 청록 펠트 위에 패 셋(뒷면 하나 · 앞면 둘). 글자 없이 몸체 · 통 · 삭 모양만. */
+@Composable
+fun GamesMahjongTabThumbnail(modifier: Modifier = Modifier, side: Dp = 60.dp) = Thumbnail(side, modifier) {
+    drawRect(Color(0.24f, 0.39f, 0.36f))
+    val w = size.width * 0.26f
+    val h = w * 62f / 46f
+    val top = size.height * 0.5f - h / 2
+    val r = CornerRadius(w * 0.14f)
+    val navy = Color(0.16f, 0.20f, 0.44f)
+    val pink = Color(1f, 0.44f, 0.65f)
+    val cream = Color(0.98f, 0.97f, 1f)
+    val bevel = Color(0.79f, 0.75f, 0.89f)
+    val lefts = listOf(size.width * 0.08f, size.width * 0.37f, size.width * 0.66f)
+    // 뒷면
+    drawRoundRect(navy, Offset(lefts[0], top), Size(w, h), r)
+    drawRoundRect(pink, Offset(lefts[0] + 1.5f, top + 1.5f), Size(w - 3f, h - 3f), r, style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+    // 앞면 둘
+    for (x in lefts.drop(1)) {
+        drawRoundRect(bevel, Offset(x, top), Size(w, h), r)
+        drawRoundRect(cream, Offset(x, top), Size(w, h * 0.92f), r)
+    }
+    // 1통(빨간 고리)
+    val c1 = Offset(lefts[1] + w / 2, top + h * 0.46f)
+    drawCircle(Color(0.87f, 0.18f, 0.27f), w * 0.3f, c1)
+    drawCircle(cream, w * 0.19f, c1)
+    drawCircle(Color(0.87f, 0.18f, 0.27f), w * 0.1f, c1)
+    // 2삭(초록 막대 둘)
+    val sw = w * 0.13f
+    for (y in listOf(0.27f, 0.62f)) drawRoundRect(Color(0.07f, 0.72f, 0.53f), Offset(lefts[2] + w / 2 - sw / 2, top + h * y), Size(sw, h * 0.26f), CornerRadius(sw / 2))
+}
+

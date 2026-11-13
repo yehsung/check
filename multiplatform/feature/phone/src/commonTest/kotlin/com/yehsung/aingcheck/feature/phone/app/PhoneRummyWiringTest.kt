@@ -52,7 +52,7 @@ class PhoneRummyWiringTest {
         "message_history_with_pokes", "message_history_with_reads", "message_history" -> Reply.missingFunction
         "app_user_directory", "message_blocks", "my_blocked_users", "blocked_users" -> Reply.Json("[]")
         // 판 7: 아잉 뒤집기도 조인 따라잡기에서 로비를 한 번 읽는다(떼어 내기 깃발 기본 켜짐) — 다른 게임 로비와 같은 대접.
-        "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby", "reversi_lobby", "crossy_duel_lobby", "alkkagi_lobby" -> Reply.missingFunction
+        "gomoku_lobby", "gomoku_inbox", "tetris_lobby", "chess_lobby", "reversi_lobby", "crossy_duel_lobby", "alkkagi_lobby", "mahjong_lobby", "mahjong_ranking" -> Reply.missingFunction
         "work_phone_touch" -> Reply.Json("""{"status":"not_working"}""")
         "delete_my_account" -> Reply.Json("null")
         else -> null

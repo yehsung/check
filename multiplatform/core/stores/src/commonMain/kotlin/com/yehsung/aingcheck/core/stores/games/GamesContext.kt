@@ -116,6 +116,9 @@ interface GamesContext : GamesMiniGameContext {
 
     /** 1:1 알까기(판 8). 떼어 내기 깃발(`AppConfig.alkkagiEnabled`)이 꺼지면 null. */
     val alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? get() = null
+
+    /** 아잉 마작(판 8). 떼어 내기 깃발(`AppConfig.mahjongEnabled`)이 꺼지면 null. */
+    val mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? get() = null
     val gomoku: GamesGomokuLink
     val chess: GamesBoardGameLink
     val router: GamesRouter

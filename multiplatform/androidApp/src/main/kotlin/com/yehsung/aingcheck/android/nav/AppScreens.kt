@@ -173,6 +173,7 @@ object NavRequests {
                     GamesDestination.Reversi -> Dest.Reversi
                     GamesDestination.CrossyDuel -> Dest.CrossyDuel
                     GamesDestination.Alkkagi -> Dest.Alkkagi
+                    GamesDestination.Mahjong -> Dest.Mahjong
                     is GamesDestination.MiniGame -> RouteTargets.miniGame(d.kind)?.let { Dest.MiniGame(it.raw) }
                 }
                 dest?.let { nav.navigate(it) { launchSingleTop = true } }

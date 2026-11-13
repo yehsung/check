@@ -57,4 +57,7 @@ fun CrossyDuelPlaceholder() = PlaceholderScreen(com.yehsung.aingcheck.core.store
 fun AlkkagiPlaceholder() = PlaceholderScreen(com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiNoticeText.gameName, "판 8")
 
 @Composable
+fun MahjongPlaceholder() = PlaceholderScreen(com.yehsung.aingcheck.core.stores.mahjong.MahjongNoticeText.gameName, "판 8")
+
+@Composable
 fun StakeSheetPlaceholder(game: String) = PlaceholderScreen("판돈 고르기", "W4-a·b", detail = "game=$game · 판돈 목록은 서버값")

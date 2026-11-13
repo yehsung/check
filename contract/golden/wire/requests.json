@@ -5016,6 +5016,387 @@
       "unordered": false
     },
     {
+      "id": "mahjongLobby",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_lobby",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongCreate",
+      "requests": [
+        {
+          "body": {
+            "p_format": "hanchan",
+            "p_protocol": 1,
+            "p_public": true,
+            "p_stake": 5
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_create",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongInvite",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_user_id": "bb000000-0000-4000-8000-0000000000b2"
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_invite",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongJoin",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_join",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongDecline",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_decline",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongLeave",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_leave",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongStart",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_start",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongState",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_since_seq": 7
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_state",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongAct",
+      "requests": [
+        {
+          "body": {
+            "p_action": "discard",
+            "p_expected_seq": 12,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_tiles": [
+              16
+            ]
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_act",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongAct(tsumo)",
+      "requests": [
+        {
+          "body": {
+            "p_action": "tsumo",
+            "p_expected_seq": 13,
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_tiles": []
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_act",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongCallAnswer",
+      "requests": [
+        {
+          "body": {
+            "p_action": "chi",
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1,
+            "p_tiles": [
+              9,
+              13
+            ],
+            "p_window_id": 3
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_call",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongBack",
+      "requests": [
+        {
+          "body": {
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_back",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongReact",
+      "requests": [
+        {
+          "body": {
+            "p_key": "aing_heart",
+            "p_match_id": "cc000000-0000-4000-8000-0000000000c3",
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_react",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
+      "id": "mahjongRanking",
+      "requests": [
+        {
+          "body": {
+            "p_protocol": 1
+          },
+          "headers": {
+            "accept": "application/json",
+            "apikey": "<ANON>",
+            "authorization": "Bearer <ACCESS>",
+            "content-type": "application/json"
+          },
+          "method": "POST",
+          "path": "/rest/v1/rpc/mahjong_ranking",
+          "query": []
+        }
+      ],
+      "responses": [],
+      "result": {
+        "throws": "$decoding"
+      },
+      "routes": [],
+      "unordered": false
+    },
+    {
       "id": "rummyLobby",
       "requests": [
         {

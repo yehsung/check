@@ -30,6 +30,7 @@ import com.yehsung.aingcheck.android.screens.games.minigame.MiniGameRoute
 import com.yehsung.aingcheck.android.screens.games.reversi.ReversiDestination
 import com.yehsung.aingcheck.android.screens.games.crossy.CrossyDuelRoute
 import com.yehsung.aingcheck.android.screens.games.alkkagi.AlkkagiRoute
+import com.yehsung.aingcheck.android.screens.games.mahjong.MahjongRoute
 import com.yehsung.aingcheck.android.screens.games.rummy.RummyRoute
 import com.yehsung.aingcheck.android.screens.games.tetris.TetrisDuelRoute
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerRouteScreen
@@ -94,6 +95,7 @@ import com.yehsung.aingcheck.android.screens.games.RummyPlaceholder
 import com.yehsung.aingcheck.android.screens.games.ReversiPlaceholder
 import com.yehsung.aingcheck.android.screens.games.CrossyDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.games.AlkkagiPlaceholder
+import com.yehsung.aingcheck.android.screens.games.MahjongPlaceholder
 import com.yehsung.aingcheck.android.screens.games.StakeSheetPlaceholder
 import com.yehsung.aingcheck.android.screens.games.TetrisDuelPlaceholder
 import com.yehsung.aingcheck.android.screens.me.CharacterPickerPlaceholder
@@ -249,6 +251,7 @@ private fun NavGraphBuilder.gamesGraph(open: (Any) -> Unit) =
         shellScreen<Dest.Reversi> { ReversiPlaceholder() }
         shellScreen<Dest.CrossyDuel> { CrossyDuelPlaceholder() }
         shellScreen<Dest.Alkkagi> { AlkkagiPlaceholder() }
+        shellScreen<Dest.Mahjong> { MahjongPlaceholder() }
         dialog<Dest.StakeSheet> { StakeSheetPlaceholder(it.toRoute<Dest.StakeSheet>().game) }
     }
 
@@ -356,6 +359,9 @@ private fun NavGraphBuilder.gamesGraph(
     }
     shellScreen<Dest.Alkkagi> {
         AlkkagiRoute(store = p.games, myUserID = p.session.userID, myName = p.me.displayName, onBack = { nav.popBackStack() })
+    }
+    shellScreen<Dest.Mahjong> {
+        MahjongRoute(store = p.games, myName = p.me.displayName, myCharacter = p.me.equippedServerID, onBack = { nav.popBackStack() })
     }
     shellScreen<Dest.CrossyDuel> {
         CrossyDuelRoute(

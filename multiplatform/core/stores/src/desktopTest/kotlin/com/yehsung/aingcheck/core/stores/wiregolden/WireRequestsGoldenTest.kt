@@ -6,6 +6,19 @@ package com.yehsung.aingcheck.core.stores.wiregolden
 
 import com.yehsung.aingcheck.core.net.*
 import com.yehsung.aingcheck.core.wire.games.CrossyDuelReportBody
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongLobby
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongCreate
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongInvite
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongJoin
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongDecline
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongLeave
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongStart
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongState
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongAct
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongCallAnswer
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongBack
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongReact
+import com.yehsung.aingcheck.core.stores.mahjong.mahjongRanking
 import com.yehsung.aingcheck.core.rules.format.SwiftDecodingError
 import com.yehsung.aingcheck.core.rules.text.RulesWireTextRules
 import com.yehsung.aingcheck.core.stores.service.achievementClaim
@@ -346,6 +359,23 @@ class WireRequestsGoldenTest {
         "crossyDuelState" to { s -> s.crossyDuelState(t, m) },
         "crossyDuelResign" to { s -> s.crossyDuelResign(t, m) },
         "crossyDuelRanking" to { s -> s.crossyDuelRanking(t) },
+        // 아잉 마작(판 8 — iOS 1.0.18 맞추기). 몸통은 공용 duelRPC(교착 재시도는 쓰기 · state 만). 패는 물리 id(적5 = 16).
+        "mahjongLobby" to { s -> s.mahjongLobby(t) },
+        "mahjongCreate" to { s -> s.mahjongCreate(t, 5, true, "hanchan") },
+        "mahjongInvite" to { s -> s.mahjongInvite(t, m, p) },
+        "mahjongJoin" to { s -> s.mahjongJoin(t, m) },
+        "mahjongDecline" to { s -> s.mahjongDecline(t, m) },
+        "mahjongLeave" to { s -> s.mahjongLeave(t, m) },
+        "mahjongStart" to { s -> s.mahjongStart(t, m) },
+        "mahjongState" to { s -> s.mahjongState(t, m, 7) },
+        "mahjongAct" to { s -> s.mahjongAct(t, m, 12, "discard", listOf(com.yehsung.aingcheck.core.rules.mahjong.MahjongTile.of(16)!!)) },
+        "mahjongAct(tsumo)" to { s -> s.mahjongAct(t, m, 13, "tsumo", emptyList()) },
+        "mahjongCallAnswer" to { s ->
+            s.mahjongCallAnswer(t, m, 3, "chi", listOf(com.yehsung.aingcheck.core.rules.mahjong.MahjongTile.of(9)!!, com.yehsung.aingcheck.core.rules.mahjong.MahjongTile.of(13)!!))
+        },
+        "mahjongBack" to { s -> s.mahjongBack(t, m) },
+        "mahjongReact" to { s -> s.mahjongReact(t, m, "aing_heart") },
+        "mahjongRanking" to { s -> s.mahjongRanking(t) },
         "tetrisWatchLive" to { s -> s.tetrisWatchLive(t, m) },
         "tetrisWatch" to { s -> s.tetrisWatch(t, m) },
         // ---- 결과 대조(서비스 후처리) ----

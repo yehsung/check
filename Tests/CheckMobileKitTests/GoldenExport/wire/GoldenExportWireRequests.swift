@@ -346,6 +346,26 @@ struct GoldenExportWireRequests {
             WireCall(id: "crossyDuelState") { s, t in try await s.crossyDuelState(accessToken: t, matchID: m) },
             WireCall(id: "crossyDuelResign") { s, t in try await s.crossyDuelResign(accessToken: t, matchID: m) },
             WireCall(id: "crossyDuelRanking") { s, t in try await s.crossyDuelRanking(accessToken: t) },
+            // ---- 아잉 마작(Android 판 8 — 아이폰 1.0.18 맞추기). 패는 물리 id(적5 = 16) ----
+            WireCall(id: "mahjongLobby") { s, t in try await s.mahjongLobby(accessToken: t) },
+            WireCall(id: "mahjongCreate") { s, t in try await s.mahjongCreate(accessToken: t, stake: 5, isPublic: true, format: "hanchan") },
+            WireCall(id: "mahjongInvite") { s, t in try await s.mahjongInvite(accessToken: t, matchID: m, userID: p) },
+            WireCall(id: "mahjongJoin") { s, t in try await s.mahjongJoin(accessToken: t, matchID: m) },
+            WireCall(id: "mahjongDecline") { s, t in try await s.mahjongDecline(accessToken: t, matchID: m) },
+            WireCall(id: "mahjongLeave") { s, t in try await s.mahjongLeave(accessToken: t, matchID: m) },
+            WireCall(id: "mahjongStart") { s, t in try await s.mahjongStart(accessToken: t, matchID: m) },
+            WireCall(id: "mahjongState") { s, t in try await s.mahjongState(accessToken: t, matchID: m, sinceSeq: 7) },
+            WireCall(id: "mahjongAct") { s, t in
+                try await s.mahjongAct(accessToken: t, matchID: m, expectedSeq: 12, action: "discard", tiles: [MahjongTile(id: 16)!])
+            },
+            WireCall(id: "mahjongAct(tsumo)") { s, t in try await s.mahjongAct(accessToken: t, matchID: m, expectedSeq: 13, action: "tsumo", tiles: []) },
+            WireCall(id: "mahjongCallAnswer") { s, t in
+                try await s.mahjongCallAnswer(accessToken: t, matchID: m, windowID: 3, action: "chi",
+                                              tiles: [MahjongTile(id: 9)!, MahjongTile(id: 13)!])
+            },
+            WireCall(id: "mahjongBack") { s, t in try await s.mahjongBack(accessToken: t, matchID: m) },
+            WireCall(id: "mahjongReact") { s, t in try await s.mahjongReact(accessToken: t, matchID: m, key: "aing_heart") },
+            WireCall(id: "mahjongRanking") { s, t in try await s.mahjongRanking(accessToken: t) },
             // ---- 아잉 큐브(요청 + 서버 실출력 응답 대표 — 전체 디코드는 wire/decode-fixtures-rummy) ----
             WireCall(id: "rummyLobby") { s, t in try await s.rummyLobby(accessToken: t) },
             WireCall(id: "rummyLobby#data", responses: [Self.rummyFixture("lobby_with_room_invites_public.json")]) { s, t in try await s.rummyLobby(accessToken: t) },

@@ -1118,8 +1118,11 @@ private func v0358Calls(_ host: String, _ rpc: String = "achievements_status") -
         #expect(count("claimAchievement(key: $0)") == 1 && count("claimWeeklyWork()") == 2,
                 "받기를 부르는 자리가 화면 말고도 있다 — 정의 1 + 호출 1 이어야 한다")
         // 일일 받기(v0.3.64)도 같다 — 화면의 맥락 하나뿐(자동 지급 금지).
-        #expect(count("claimDailyMission(key: $0)") == 1 && count("claimDailyMission(key:") == 2,
-                "일일 받기를 부르는 자리가 화면 말고도 있다 — 정의 1 + 호출 1 이어야 한다")
+        #expect(count("claimDailyMission(key: $0)") == 1 && count("claimDailyMission(key:") == 3,
+                "일일 받기를 부르는 자리가 화면 말고도 있다 — 정의 1 + 줄 [받기] 1 + 머리 [모두 받기] 1 이어야 한다")
+        // 묶음 머리 [모두 받기](제보 11-17)도 화면의 맥락 한 자리씩뿐이다 — 키 없는 받기를 스토어가 스스로 부르지 않는다.
+        #expect(count("claimDailyMission(key: nil)") == 1 && count("claimAchievement(key: nil)") == 1,
+                "키 없는 받기를 부르는 자리가 화면의 [모두 받기] 하나가 아니다")
         let poke = try v0358Code("WorkTimerStorePoke.swift")
         let sync = try #require(poke.range(of: "func syncUltraWallet(reason: UltraSyncReason) {"))
         #expect(poke[sync.upperBound...].prefix(600).contains("refreshAchievements(reason: achievementsReason)"),

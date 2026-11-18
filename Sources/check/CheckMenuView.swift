@@ -1099,7 +1099,10 @@ struct CheckMenuView: View {
                                 dailyInFlightKeys: store.dailyMissionClaimsInFlight,
                                 dailyFailedKeys: store.dailyMissionClaimFailedKeys,
                                 // 캐릭터 보상 미션 받기(v0.3.81 — 개발에 찌든 아잉이 · `achievement_character_claim`).
-                                claimCharacter: { store.claimCharacterMission(key: $0) }
+                                claimCharacter: { store.claimCharacterMission(key: $0) },
+                                // 묶음 머리 [모두 받기](제보 11-17) — 키 없는 받기 = 그 묶음의 받을 것 전부(누적은 루비 미션만).
+                                claimAllAchievements: { store.claimAchievement(key: nil) },
+                                claimAllDaily: { store.claimDailyMission(key: nil) }
                             ),
                             // 미션 화면이 떠 있으니 이 sync 가 도전 미션도 다시 묻는다(`achievementsReason(forWallet:)`).
                             onRetry: { store.syncUltraWallet(reason: .panelOpen) },
@@ -5749,7 +5752,8 @@ private struct MissionPanel: View {
         let rows = VStack(spacing: Self.rowSpacing) {
             // ── 일일 미션(v0.3.64) — 머리 · 3시간 줄 · 안내줄 · 서버 일일 줄 ──
             MissionGroupHeader(title: DailyMissionCopy.sectionTitle, note: DailyMissionCopy.resetNote,
-                               pendingCount: dailyClaimableCount)
+                               pendingCount: dailyClaimableCount,
+                               claimAll: MissionClaimAllOffer.daily(dailyMissions))
             if missions.isEmpty {
                 Text(hasLoaded ? MissionPanelCopy.emptyCaption
                                : (hasFailed ? MissionPanelCopy.failedCaption : MissionPanelCopy.loadingCaption))

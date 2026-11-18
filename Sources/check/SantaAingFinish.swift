@@ -16,7 +16,10 @@ import simd
 //  ④ 장식 — 털 방울 · 콧수염 둘 · 코 · 장화 둘 · 둥근 팔 둘(소매 · 소맷부리 · 장갑)(`SantaAingDecor.decorNodeName` — `AingDecor.rootNames` 에 더함:
 //     얼굴 탐색 · 클릭 · 상자 계산이 뺀다). 모양 · 색 · 굽기는 CheckCore `SantaAingDecor` · `SantaDecorBake` 한 곳(초상 생성기와 같은 조각 · 같은 텍스처).
 //  ⑤ 표식 — 캐릭터 노드의 빈 노드 `markerName`(엔진 `currentCharacterID` 가 가른다 — 같은 메시라 종류로 못 가른다).
-// ★ 프레이밍: 내려 세우지 않는다 — 털 방울 꼭대기(≈ 1.08)는 빼빼로 막대 끝(1.0951)보다 낮고, 장화 바닥(≈ −0.88)도 몸 상자 밑에 조금만 나온다.
+// ★ 프레이밍: 쉼 · 부유는 내려 세우지 않는다 — 털 방울 꼭대기(≈ 1.08)는 빼빼로 막대 끝(1.0951)보다 낮고, 장화 바닥(≈ −0.88)도 몸 상자 밑에 조금만
+//   나온다(부유 꼭대기 위 여백 0.050 · 요 ±40° 같음). 울트라는 다르다: 기본 자세의 임팩트 스트레치(y × 1.32)에서 털 방울이 프레임 위로 0.042 나가
+//   (이슬 뚜껑 0.016 의 2.6배) 엔진이 산타에 `ReactionActions.UltraRagePose.santa`(기본 기울기 · 연출 내내 extent × 0.10 내림)를 고른다 —
+//   스트레치 위 여백 0.024 · rage 양 끝 ≥ 0.16 · 아래 ≥ 0.17(`SantaAingMac3DTests.framingKeepsThePompomInside`).
 // ★ 장식 굽기(텍스처 열넷)는 프로세스당 한 번이고 행을 나눠 여러 코어로 굽는다 — 원본을 한 번 만들고 씬마다 `clone()` 을 붙인다(지역 아잉이와 같은 길).
 enum SantaAingFinish {
     private static let logger = Logger(subsystem: "kingcheck", category: "character")

@@ -625,10 +625,14 @@ final class ReactionEngine {
     }
 
     /// 울트라 격발 자세 — 지금 서 있는 캐릭터로 고른다(격발은 발신자 캐릭터로 갈아입은 **뒤** 요청되므로 그 캐릭터의 자세다).
-    /// 빼빼로만 따로다(`ReactionActions.UltraRagePose.pepero` 주석 — 상자 밑 몸 · 막대 잘림). 재생(`perform`)과 재-attach 되재생
-    /// (`reactionAction(for:)`)이 둘 다 여기서 읽는다.
+    /// 빼빼로 · 산타만 따로다(`ReactionActions.UltraRagePose.pepero` 주석 — 상자 밑 몸 · 막대 잘림 · `.santa` 주석 — 스트레치에서 털 방울 잘림).
+    /// 재생(`perform`)과 재-attach 되재생(`reactionAction(for:)`)이 둘 다 여기서 읽는다.
     var ultraRagePose: ReactionActions.UltraRagePose {
-        currentCharacterID == CharacterCatalog.peperoAingID ? .pepero : .standard
+        switch currentCharacterID {
+        case CharacterCatalog.peperoAingID: .pepero
+        case CharacterCatalog.santaAingID: .santa
+        default: .standard
+        }
     }
 
     /// 헤드리스 검증 지점: 지금 몰고 있는 것이 스프라이트인가.
@@ -1713,7 +1717,7 @@ enum ReactionActions {
     /// 스케일 진동을 키운다. moveBy 쌍이 정확히 상쇄되므로 드리프트가 0 이다(poked 와 같은 규약) —
     /// 안 그러면 5초 뒤 원래 자리로 못 돌아와 작은 패널로 복귀했을 때 캐릭터가 창 밖으로 나가 있다.
     /// 총 0.36 + 4.16 + 0.48 = 5.00s, scale·euler·position 모두 identity 로 끝난다.
-    /// 자세(`pose`)는 캐릭터마다 엔진이 고른다(`ReactionEngine.ultraRagePose`) — 기본은 `.standard`, 빼빼로만 `.pepero`.
+    /// 자세(`pose`)는 캐릭터마다 엔진이 고른다(`ReactionEngine.ultraRagePose`) — 기본은 `.standard`, 빼빼로는 `.pepero`, 산타는 `.santa`.
     static func ultraPoked(extent: CGFloat, pose: UltraRagePose = .standard) -> SCNAction {
         let identity = SCNVector3(1, 1, 1)
         let jitter = extent * 0.06
@@ -1782,6 +1786,11 @@ enum ReactionActions {
         /// 0.11–0.13). 그래서 x 기울기를 없애고(밑에서 보는 구도가 안 생긴다) z 를 28° 로 줄이고 연출 내내 extent × 0.11 내려 세운다 — 실측(앱 씬):
         /// 위 여백 plus 0.050 · minus 0.047 · 임팩트 스트레치 0.021 · 아래 여백 ≥ 0.18(`V0377PeperoMac3DTests.ultraRageKeepsTheBoxAndSticksInFrame`).
         static let pepero = UltraRagePose(tiltX: 0, rollZ: 28, lift: 0.6, drop: 0.11)
+        /// 산타 아잉이(검토 수리). 털 방울 꼭대기(≈ 1.08)가 아잉 머리 위로 솟아, 기본 자세면 임팩트 스트레치(y × 1.32)에서 털 방울이 프레임 위로
+        /// 프레임 높이의 0.042 만큼 나갔다(이슬 뚜껑은 같은 자리에서 0.016 — 2.6배). 기울기 · 흔들림은 기본 그대로 두고 연출 내내 extent × 0.10
+        /// 내려 세운다(빼빼로와 같은 내려 세우기) — 실측(앱 씬, 280×340 · 945²): 위 여백 스트레치 0.024 · plus 0.206 · minus 0.162,
+        /// 아래 여백 ≥ 0.17(`SantaAingMac3DTests.framingKeepsThePompomInside` — 0.08 이면 스트레치 0.012 로 모자랐다).
+        static let santa = UltraRagePose(tiltX: 12, rollZ: 34, lift: 0.6, drop: 0.10)
     }
 
     /// 발광 한쪽 끝(sign > 0 = plus · 아니면 minus)에서 wrapper 가 서는 자세 — `ultraPoked` 의 rage 가 실제로 지나는 값이다

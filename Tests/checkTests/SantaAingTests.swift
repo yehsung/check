@@ -9,7 +9,8 @@ import Testing
 //     때만(판정 자리는 `ShopWire.protocolVersion` 하나) · 팔 접기 · 셰이더 글자 · 장식 조각 · 장식 굽기.
 //  ② 선물 전선: 'santa' 해석(서비스 디코더 = snake → camel) · 번호 10 이하 빌드엔 섞여 와도 안 띄움 · 수령 needs_update(min 11) · 문구 가안.
 //  ③ 맥 3D: 실제 앱 씬에 산타 마감(팔 접기 굽기 칸 + 무지개 합성 디퓨즈 + 산타 셰이더 + ckShadeMap + 장식 + 표식) · 렌더(배 빨강 · 수염 흰 ·
-//     얼굴 살구빛 · 장화 검정) · 엔진 교체 왕복 · 그릴 수 있다(번들 → 11) · 초상 URL.
+//     얼굴 살구빛 · 장화 검정) · 엔진 교체 왕복 · 그릴 수 있다(번들 → 11) · 초상 URL · 프레이밍(부유 · 울트라 산타 자세 — 스트레치 털 방울).
+//  ④ 출시 게이트: 문구가 가안(`SantaGiftText.copyDecided` false)인 채로 맥 버전을 0.3.86 다음으로 올리면 빨갛다.
 // 증거 PNG: `CHECK_SANTA_AING_EVIDENCE_DIR=<폴더>` — 정면 · 3/4 · 뒤 · 감은 눈 · 울트라(아잉과 나란히).
 
 @Suite struct SantaAingCoreTests {
@@ -269,6 +270,41 @@ import Testing
         #expect(copy.title == SantaGiftText.title && copy.body == SantaGiftText.body && copy.confirmButton == SantaGiftText.confirmButton
                 && copy.lockedCaption == SantaGiftText.lockedCaption && copy.lockedHint == SantaGiftText.lockedHint
                 && copy.reopenTitle == SantaGiftText.reopenTitle && copy.reopenButton == SantaGiftText.reopenButton)
+        #expect(!SantaGiftText.copyDecided, "문구가 정해졌다 — 위 가안 기록을 정해진 글자로 바꾸고 이 시험 이름도 바꾼다")
+    }
+
+    /// 출시 게이트(검토 지적 — 가안 문구는 게이트를 지나 판에 실린다: 위 시험은 가안을 적어 둘 뿐이라 가안이 나가도 초록이다).
+    /// 산타 코드가 든 맥 판은 받는 창 · 잠긴 칸 안내를 싣는다(서버 행이 들어오면 잠긴 칸은 모두가 본다). 그래서 문구가 정해지기 전에
+    /// 맥 버전을 0.3.86(산타 전 마지막 판) 다음으로 올리면 여기가 빨갛다 — 문구를 정하거나, 그 판에서 산타를 빼야 낸다.
+    /// 정해진 뒤(`SantaGiftText.copyDecided` true)에는 임시 표시 셋이 `SantaGift.swift` · `CharacterGiftCopy.santa` 주석에서 걷혔는지 본다.
+    @Test("santaGiftCopyDecidedBeforeNextRelease — 문구가 정해지기 전엔 0.3.86 다음 맥 판을 못 낸다 · 정해지면 임시 표시가 걷혔다")
+    func santaGiftCopyDecidedBeforeNextRelease() throws {
+        let root = CheckCoreSourceLayout.repoRoot
+        let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
+        let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
+        let key = "<key>CFBundleShortVersionString</key><string>"
+        let start = try #require(squashed.range(of: key)).upperBound
+        let end = try #require(squashed[start...].range(of: "</string>")).lowerBound
+        let version = String(squashed[start..<end])
+        let parts = version.split(separator: ".").map { Int($0) }
+        try #require(parts.count == 3 && parts.allSatisfy { $0 != nil }, "맥 버전 '\(version)' 을 못 읽었다")
+        let beyondLastSantaFreeRelease = [0, 3, 86].lexicographicallyPrecedes(parts.compactMap { $0 })
+
+        let markers = ["가안", "결정 대기", "출시 전 교체"]
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/CheckCore/SantaGift.swift"), encoding: .utf8)
+        let copyLines = try String(contentsOf: root.appendingPathComponent("Sources/CheckCore/CharacterGift.swift"), encoding: .utf8)
+            .components(separatedBy: "\n").filter { $0.contains("산타") || $0.contains("SantaGiftText") }
+        #expect(!copyLines.isEmpty, "CharacterGiftCopy.santa 줄을 못 찾았다 — 표시 검사가 눈이 멀었다")
+        if SantaGiftText.copyDecided {
+            for marker in markers {
+                #expect(!source.contains(marker), "문구가 정해졌는데 SantaGift.swift 에 임시 표시 '\(marker)' 가 남았다")
+                #expect(!copyLines.contains { $0.contains(marker) }, "문구가 정해졌는데 CharacterGiftCopy.santa 주석에 '\(marker)' 가 남았다")
+            }
+        } else {
+            #expect(source.contains("출시 전 교체"), "copyDecided 가 false 인데 SantaGift.swift 의 임시 표시가 없다 — 값과 주석이 어긋났다")
+            #expect(!beyondLastSantaFreeRelease,
+                    "맥 버전 \(version): 산타 아잉이 문구가 아직 가안이다(대표 결정 대기) — 문구를 정해 SantaGiftText 를 바꾸고 copyDecided 를 true 로 하거나, 이 판에서 산타를 뺀다")
+        }
     }
 }
 
@@ -376,6 +412,70 @@ import Testing
         #expect(CheckMascotAssets.catalog.portraitURL(for: CharacterCatalog.santaAingID, mood: .negative)?.lastPathComponent == "aing_santa-negative.png")
         #expect(CheckMascotAssets.image(for: .neutral, characterID: CharacterCatalog.santaAingID)?.size.width == 192)
         #expect(CheckMascotAssets.image(for: .negative, characterID: CharacterCatalog.santaAingID)?.size.width == 192)
+    }
+
+    // MARK: 프레이밍(검토 지적 — 머리말 ★ 프레이밍은 부유 쉼 자세만 맞댔고, 울트라 자세는 아무도 안 쟀다)
+
+    @Test("프레이밍: 부유 꼭대기(요 0 · ±40°)에서 털 방울이 프레임 안(위 ≥ 0.02) · 울트라는 엔진이 산타 자세(내려 세움)를 골라 rage 양 끝 · 임팩트 스트레치에서도 위 ≥ 0.02 · 아래 ≥ 0.1 — 기본 자세면 스트레치에서 털 방울이 잘린다(기준선)")
+    func framingKeepsThePompomInside() throws {
+        // ① 부유(쉼 · 꼭대기 +0.07) — 케이크 · 빼빼로와 같은 잣대(위 ≥ 0.02). 쉼 · 부유는 내려 세우지 않는다.
+        for yaw in [0.0, 40.0, -40.0] {
+            let up = try V0366CakeMac3DTests.frame(Self.santa, float: true, yawDegrees: yaw)
+            let rest = try V0366CakeMac3DTests.frame(Self.santa, float: false, yawDegrees: yaw)
+            print(String(format: "[santa-aing] 부유 요 %.0f°: 꼭대기 위 %.3f · 쉼 아래 %.3f", yaw, up.top, rest.bottom))
+            #expect(up.top >= 0.02, "요 \(yaw)°: 부유 꼭대기에서 털 방울 위 여유 \(up.top) — 잘린다")
+            #expect(rest.bottom >= 0.2, "요 \(yaw)°: 쉼 자세 장화 아래 여유 \(rest.bottom)")
+        }
+
+        // ② 울트라 — 엔진이 산타에 산타 자세를 고른다(기울기 · 흔들림은 기본 그대로, 내려 세우기만 더한다). 다른 캐릭터 자세는 그대로.
+        let scene = try V0354GoldAing3DTests.scene(Self.santa)
+        let wrapper = try V0354GoldAing3DTests.wrapper(scene)
+        let engine = ReactionEngine()
+        engine.attach(node: wrapper, sceneRoot: scene.rootNode, view: nil)
+        #expect(engine.currentCharacterID == CharacterCatalog.santaAingID && engine.ultraRagePose == .santa, "엔진이 산타 자세를 안 고른다 — \(engine.ultraRagePose)")
+        let santaPose = ReactionActions.UltraRagePose.santa, standard = ReactionActions.UltraRagePose.standard
+        #expect(santaPose.tiltX == standard.tiltX && santaPose.rollZ == standard.rollZ && santaPose.lift == standard.lift && santaPose.drop > 0,
+                "산타 자세는 기본 기울기 · 흔들림에 내려 세우기만 더한다 — \(santaPose)")
+        for other in [CharacterCatalog.builtInAing, CharacterCatalog.builtInIsulAing, CharacterCatalog.builtInBusanAing] {
+            let s = try V0354GoldAing3DTests.scene(other)
+            let e = ReactionEngine()
+            e.attach(node: try V0354GoldAing3DTests.wrapper(s), sceneRoot: s.rootNode, view: nil)
+            #expect(e.ultraRagePose == .standard, "\(other.id) 의 격발 자세가 바뀌었다")
+        }
+        // 내려 세우기는 moveBy 쌍이라 5초 뒤 제자리 · 총 길이 5초 그대로(빼빼로와 같은 액션 길).
+        #expect(abs(ReactionActions.ultraPoked(extent: 1.921, pose: .santa).duration - 5.0) < 0.001)
+
+        let (lo, hi) = AingDecor.bodyBoundingBox(of: wrapper)
+        let extent = CGFloat(max(hi.x - lo.x, max(hi.y - lo.y, hi.z - lo.z)))
+        var shots: [String: V0377PeperoReviewFixTests.Shot] = [:]
+        for (label, pose) in [("santa", santaPose), ("standard", standard)] {
+            for (name, euler, scale, position) in V0377PeperoReviewFixTests.ragePoses(pose, extent: extent) {
+                wrapper.eulerAngles = euler
+                wrapper.scale = scale
+                wrapper.position = position
+                for size in [CGSize(width: 280, height: 340), CGSize(width: 945, height: 945)] {
+                    let image = try V0359Rainbow3DTests.render(scene, size: size)
+                    let s = V0377PeperoReviewFixTests.shot(image)
+                    shots["\(label)-\(name)-\(Int(size.width))"] = s
+                    print(String(format: "[santa-aing] 울트라 %@ %@ %d: 위 %.3f · 아래 %.3f", label, name, Int(size.width), s.top, s.bottom))
+                    if Self.evidenceDirectory != nil { try Self.write(image, "santa-ultra-\(label)-\(name)-\(Int(size.width)).png") }
+                }
+            }
+        }
+        wrapper.eulerAngles = SCNVector3(0, 0, 0)
+        wrapper.scale = SCNVector3(1, 1, 1)
+        wrapper.position = SCNVector3(0, 0, 0)
+        for size in [280, 945] {
+            for name in ["plus", "minus", "stretch"] {
+                let s = try #require(shots["santa-\(name)-\(size)"])
+                #expect(s.top >= 0.02, "산타 격발 \(name) \(size): 위 여백 \(s.top) — 털 방울이 프레임 위로 잘린다")
+                #expect(s.bottom >= 0.1, "산타 격발 \(name) \(size): 아래 여백 \(s.bottom) — 장화가 프레임 아래로 나간다")
+            }
+            // 기준선: 기본 자세면 임팩트 스트레치에서 털 방울이 위 가장자리에 닿는다(실측 0.000 — 투영으로는 프레임 높이의 0.042 넘는다).
+            // 이것이 안 나오면 위 재기가 눈이 멀었거나 내려 세우기가 필요 없어졌다.
+            let undropped = try #require(shots["standard-stretch-\(size)"])
+            #expect(undropped.top < 0.005, "기준선: 기본 자세 스트레치 \(size) 위 여백 \(undropped.top) — 잘림을 못 잰다")
+        }
     }
 
     static func write(_ image: CGImage, _ name: String) throws {

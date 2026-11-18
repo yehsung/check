@@ -11,6 +11,11 @@ import Foundation
 ///
 /// ★ 문구 대표 결정 대기 — 출시 전 교체. 아래 글자는 전부 **가안**이다(받는 창 말투는 대표가 아직 정하지 않았다). 바뀌면 이 묶음만 고친다.
 package nonisolated enum SantaGiftText {
+    /// 문구가 대표 결정으로 정해졌는가(정해지기 전 false). **출시 게이트**: false 인 채로 맥 버전을 0.3.86 다음으로 올리면
+    /// `SantaGiftWireTests.santaGiftCopyDecidedBeforeNextRelease` 가 빨갛다 — 정하지 않은 문구(잠긴 칸 안내는 모두가 본다)가 판에 실려 나가는 것을 막는다.
+    /// 정해지면: 아래 글자를 바꾸고 · 이 값을 true 로 · 이 파일과 `CharacterGiftCopy.santa` 주석의 임시 표시를 걷는다(게이트가 그 표시 셋을 찾는다).
+    package static let copyDecided = false
+
     /// 받는 창 제목(가안).
     package static let title = "메리 크리스마스! 🎄"
     /// 받는 창 본문(가안 — 운영자 한 줄 `note` 가 있으면 화면이 그 위에 크게, 빼빼로 초대장과 같은 틀).

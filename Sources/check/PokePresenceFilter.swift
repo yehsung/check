@@ -23,6 +23,13 @@ import CheckCore
 //   **집중은 칸을 바꾸지 않는다**: 집중은 근무 중에 켜는 일이라 칩이 '집중'인 사람도 근무 중이면 근무중 칸에 든다
 //   (칩은 집중을 근무중보다 앞에 그려 근무 여부를 가린다 — 그 사람이 지금 일하는 중인지는 칸이 말해 준다).
 //   집중을 켜 둔 채 퇴근한 사람(2단은 끌 때까지 남는다)은 근무 중이 아니므로 자리비움 칸이다 — 칩은 그때도 '집중'이다.
+//   그래서 칸의 안내 말에 '(집중 포함)'을 적지 않는다(2026-11-18 검토 반영) — 그 말을 읽고 자리비움 칸에서 '집중' 칩을 보면
+//   고장으로 읽힌다. 칩이 '집중'인 사람을 모두 근무중 칸에 넣기로 하면 `admits(.working)` 한 줄(`isWorking || isFocused`)과
+//   `.away` 의 짝을 함께 바꾼다.
+//
+// ★ 가려진 안 읽음(2026-11-18 검토 반영): 고른 칸은 앱이 켜져 있는 동안 남는다. 근무중 칸을 골라 둔 채 퇴근한 사람이 메시지를
+//   보내면 그 행은 아무 표시 없이 빠진다 — 그 사람이 **든 칸**에 작은 점을 찍어 알린다(`segmentsHidingUnread`). 새 높이 · 새 폭 0
+//   (점은 칸 위에 얹는다). [모두 읽음]은 그대로 **모두**다 — 점이 가려진 사람이 있다고 미리 말한다.
 
 /// 근무 칸 셋. 앱이 켜져 있는 동안 스토어가 들고 있고(`WorkTimerStore.pokePresenceFilter`), 로그아웃하면 전체로 돌아간다.
 enum PokePresenceFilter: String, CaseIterable, Equatable, Sendable {
@@ -39,7 +46,8 @@ enum PokePresenceFilter: String, CaseIterable, Equatable, Sendable {
         }
     }
 
-    /// 툴팁 · 보이스오버 말(같은 문장).
+    /// 툴팁 말. 보이스오버는 이 문장을 힌트로 듣고(`.checkTooltip` 이 붙인다) 이름은 보이는 글자(`label`)로 듣는다 —
+    /// 음성 제어로 "근무중 클릭"이라 말하면 그 칸이 눌려야 한다.
     var help: String {
         switch self {
         case .all: return PokePresenceFilterText.allHelp
@@ -55,6 +63,26 @@ enum PokePresenceFilter: String, CaseIterable, Equatable, Sendable {
         case .working: return entry.isWorking
         case .away: return !entry.isWorking
         }
+    }
+
+    /// 지금 고른 칸 때문에 **가려진** 안 읽은 사람(메시지든 찌르기든)이 든 칸. 점은 그 사람이 속한 칸(근무중 · 자리비움)에만 찍는다 —
+    /// 전체에도 찍으면 점 둘이 같은 말을 한다. 전체를 골랐으면 가려진 사람이 없다(빈 집합). 판정은 `admits` 하나를 쓴다 —
+    /// 칸 나누는 규칙이 바뀌어도 점이 따로 낡지 않게.
+    static func segmentsHidingUnread(
+        _ entries: [PokeDirectoryEntry],
+        selected: PokePresenceFilter,
+        unreadMessagePeerIDs: Set<String>,
+        unreadPokePeerIDs: Set<String>
+    ) -> Set<PokePresenceFilter> {
+        guard selected != .all, !(unreadMessagePeerIDs.isEmpty && unreadPokePeerIDs.isEmpty) else { return [] }
+        var segments: Set<PokePresenceFilter> = []
+        for entry in entries where !selected.admits(entry)
+            && (unreadMessagePeerIDs.contains(entry.userID) || unreadPokePeerIDs.contains(entry.userID)) {
+            for segment in allCases where segment != .all && segment != selected && segment.admits(entry) {
+                segments.insert(segment)
+            }
+        }
+        return segments
     }
 }
 
@@ -74,8 +102,15 @@ enum PokePresenceFilterText {
     static let awayLabel = "자리비움"
 
     static let allHelp = "모두 보기"
-    static let workingHelp = "근무 중인 사람만 보기(집중 포함)"
-    static let awayHelp = "자리를 비운 사람만 보기"
+    static let workingHelp = "근무 중인 사람만 보기"
+    static let awayHelp = "근무 중이 아닌 사람만 보기"
+    /// 가려진 안 읽은 사람이 든 칸의 툴팁 꼬리 · 보이스오버 값.
+    static let hidingUnread = "안 읽은 대화가 있어요"
+
+    /// 칸의 툴팁. 가려진 안 읽은 사람이 있으면 그 말을 덧붙인다(점만 있고 말이 없으면 무슨 점인지 모른다).
+    static func help(_ filter: PokePresenceFilter, hidingUnread: Bool) -> String {
+        hidingUnread ? "\(filter.help) — \(Self.hidingUnread)" : filter.help
+    }
     /// 칸 묶음 전체의 보이스오버 이름.
     static let groupLabel = "목록 거르기"
 
@@ -134,13 +169,15 @@ struct PokeSearchFilterRow<Search: View>: View {
     static var spacing: CGFloat { 6 }
 
     let presence: PokePresenceFilter
+    /// 가려진 안 읽은 사람이 든 칸(`PokePresenceFilter.segmentsHidingUnread`). 비면 점이 없다.
+    var hidingUnread: Set<PokePresenceFilter> = []
     let onSelect: (PokePresenceFilter) -> Void
     @ViewBuilder let search: () -> Search
 
     var body: some View {
         HStack(spacing: Self.spacing) {
             search()
-            PokePresenceFilterBar(selection: presence, onSelect: onSelect)
+            PokePresenceFilterBar(selection: presence, hidingUnread: hidingUnread, onSelect: onSelect)
         }
         .frame(height: PokeSearchBox.height)
     }
@@ -156,8 +193,14 @@ struct PokePresenceFilterBar: View {
     static let inset: CGFloat = 2
     /// 칸 하나의 좌우 여백.
     static let segmentPadding: CGFloat = 6
+    /// 가려진 안 읽음 점의 지름 · 칸 모서리에서 들인 거리(pt). 색은 행 말풍선의 안 읽음 점과 같은 accent 다.
+    /// 들인 거리 1 이면 점(오른쪽 끝 −1 … −6)이 글자 끝(좌우 여백 6 안쪽)과 겹치지 않는다.
+    static let unreadDotSize: CGFloat = 5
+    static let unreadDotInset: CGFloat = 1
 
     let selection: PokePresenceFilter
+    /// 가려진 안 읽은 사람이 든 칸. 점은 칸 위에 얹어(overlay) 폭 · 높이를 바꾸지 않는다.
+    var hidingUnread: Set<PokePresenceFilter> = []
     let onSelect: (PokePresenceFilter) -> Void
 
     var body: some View {
@@ -183,6 +226,7 @@ struct PokePresenceFilterBar: View {
 
     private func segment(_ filter: PokePresenceFilter) -> some View {
         let isSelected = filter == selection
+        let hidesUnread = hidingUnread.contains(filter)
         return Button {
             // 같은 칸을 다시 눌러도 아무 일도 없다(스토어도 같은 값은 안 쓴다 — 패널 body 를 헛돌리지 않게).
             if !isSelected { onSelect(filter) }
@@ -198,12 +242,23 @@ struct PokePresenceFilterBar: View {
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(isSelected ? CheckTheme.accent.opacity(0.18) : Color.clear)
                 )
+                // 가려진 안 읽음 점 — 칸 오른쪽 위 모서리 안쪽. 얹기만 해서 칸 폭 · 줄 높이가 그대로다.
+                .overlay(alignment: .topTrailing) {
+                    if hidesUnread {
+                        Circle()
+                            .fill(CheckTheme.accent)
+                            .frame(width: Self.unreadDotSize, height: Self.unreadDotSize)
+                            .padding(Self.unreadDotInset)
+                    }
+                }
                 .contentShape(Rectangle())
                 .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.plain)
-        .checkTooltip(filter.help)
-        .accessibilityLabel(filter.help)
+        .checkTooltip(PokePresenceFilterText.help(filter, hidingUnread: hidesUnread))
+        // 이름은 보이는 글자 그대로('전체' · '근무중' · '자리비움'), 긴 문장은 툴팁이 힌트로 붙인다.
+        .accessibilityLabel(filter.label)
+        .accessibilityValue(hidesUnread ? PokePresenceFilterText.hidingUnread : "")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

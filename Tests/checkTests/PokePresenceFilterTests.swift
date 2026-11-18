@@ -121,6 +121,31 @@ private let pfSorted = PokePanelOrder.sorted(pfPeople, unreadMessagePeerIDs: ["e
         #expect(Set(texts.compactMap { $0 }).count == 5)
     }
 
+    @Test("가려진 안 읽음: 고른 칸 밖의 안 읽은 사람이 든 칸에만 점 — 전체를 골랐거나 안 읽은 사람이 다 보이면 점이 없다")
+    func hiddenUnreadMarksItsOwnSegment() {
+        func marks(_ selected: PokePresenceFilter, messages: Set<String> = [], pokes: Set<String> = []) -> Set<PokePresenceFilter> {
+            PokePresenceFilter.segmentsHidingUnread(pfSorted, selected: selected, unreadMessagePeerIDs: messages, unreadPokePeerIDs: pokes)
+        }
+        // 근무중을 골랐는데 자리비움인 마루(e)가 메시지를 보냈다 → 자리비움 칸에 점. 근무 중인 바다(f)의 찌르기는 보이므로 점이 아니다.
+        #expect(marks(.working, messages: ["e"], pokes: ["f"]) == [.away])
+        // 거꾸로: 자리비움을 골랐는데 근무 중인 바다(f)가 찔렀다 → 근무중 칸에 점(찌르기도 안 읽음이다 — v0.3.65).
+        #expect(marks(.away, pokes: ["f"]) == [.working])
+        #expect(marks(.away, messages: ["e"]) == [], "보이는 사람의 안 읽음에 점을 찍었다")
+        // 전체를 골랐으면 아무도 안 가려진다 — 안 읽음이 있어도 점이 없다.
+        #expect(marks(.all, messages: ["e"], pokes: ["f"]) == [])
+        #expect(marks(.working) == [] && marks(.away) == [])
+        // 전체 칸에는 점을 안 찍는다(점은 그 사람이 든 칸 하나).
+        for selected in PokePresenceFilter.allCases {
+            #expect(!marks(selected, messages: Set(pfSorted.map(\.userID))).contains(.all))
+            #expect(!marks(selected, messages: Set(pfSorted.map(\.userID))).contains(selected), "고른 칸에 점이 찍혔다(\(selected))")
+        }
+        // 집중을 켠 채 퇴근한 라온(d)은 자리비움 칸 사람이다 — 판정은 `admits` 하나라 칸 나누기와 점이 같은 규칙이다.
+        #expect(marks(.working, messages: ["d"]) == [.away])
+        // 툴팁: 점이 있으면 그 까닭을 덧붙인다.
+        #expect(PokePresenceFilterText.help(.away, hidingUnread: false) == PokePresenceFilter.away.help)
+        #expect(PokePresenceFilterText.help(.away, hidingUnread: true).hasSuffix(PokePresenceFilterText.hidingUnread))
+    }
+
     @Test("칸 글자는 행 칩의 낱말과 같다(근무중 · 자리비움) · 빈 문구는 목록 폭 한 줄에 든다")
     func copyMatchesChipsAndFitsOneLine() throws {
         #expect(PokePresenceFilter.allCases.map(\.label) == ["전체", "근무중", "자리비움"])
@@ -224,12 +249,17 @@ private func pfStore(people: [PokeDirectoryEntry], presence: PokePresenceFilter 
     func sameRowAndBudgetUnchanged() throws {
         let menu = pfStripComments(try pfSource("Sources/check/CheckMenuView.swift"))
         let panel = try #require(pfRegion(menu, from: "private struct PokePanel: View {", to: "static func listContentHeight(rowCount:"))
-        let rowStart = try #require(panel.range(of: "PokeSearchFilterRow(presence: presenceFilter, onSelect: onSelectPresenceFilter) {"),
-                                    "근무 칸이 검색 칸 줄에 없다")
+        let rowStart = try #require(panel.range(of: "PokeSearchFilterRow("), "근무 칸이 검색 칸 줄에 없다")
         let afterRow = panel[rowStart.upperBound...]
         let narrowing = try #require(afterRow.range(of: "PokeDirectoryNarrowing.apply("))
-        #expect(afterRow[..<narrowing.lowerBound].contains("PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)"),
+        let rowCall = afterRow[..<narrowing.lowerBound]
+        #expect(rowCall.contains("PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)"),
                 "검색 칸이 근무 칸과 같은 줄 안에 있지 않다")
+        #expect(rowCall.contains("presence: presenceFilter,") && rowCall.contains("onSelect: onSelectPresenceFilter"))
+        // 가려진 안 읽음 점: 정렬된 목록과 안 읽음 두 집합(메시지 · 찌르기)을 그대로 넘긴다.
+        #expect(rowCall.contains("hidingUnread: PokePresenceFilter.segmentsHidingUnread("), "가려진 안 읽은 사람을 칸이 모른다")
+        #expect(rowCall.contains("sorted, selected: presenceFilter,"))
+        #expect(rowCall.contains("unreadMessagePeerIDs: unreadMessagePeerIDs, unreadPokePeerIDs: unreadPokePeerIDs"))
         #expect(panel.components(separatedBy: "PokeSearchBox(").count - 1 == 1, "검색 칸이 줄 밖에 하나 더 섰다")
         #expect(panel.contains("entryList(PokeDirectoryNarrowing.apply(sorted, query: searchQuery, presence: presenceFilter), all: sorted)"),
                 "거르기가 정렬된 목록(sorted)을 거치지 않는다 — 순서가 깨진다")
@@ -241,19 +271,40 @@ private func pfStore(people: [PokeDirectoryEntry], presence: PokePresenceFilter 
         #expect(panel.contains("isSearching: narrowing.isNarrowed"), "칸을 바꿀 때 목록 자리가 줄었다 늘었다 한다")
     }
 
+    @Test("소스: 걸러서 비면 그 칸의 한 줄이 행 자리에 선다 — 목록의 세 갈래(맞춤 · 클립 · 스크롤)가 모두 그 줄을 넘긴다")
+    func emptyLineReachesThePanel() throws {
+        let menu = pfStripComments(try pfSource("Sources/check/CheckMenuView.swift"))
+        let list = try #require(pfRegion(menu, from: "private func entryList(_ narrowing: PokeDirectoryNarrowing, all: [PokeDirectoryEntry])",
+                                         to: "private func rows(_ sorted: [PokeDirectoryEntry], emptyText: String?)"))
+        #expect(list.components(separatedBy: "rows(sorted, emptyText: narrowing.emptyText)").count - 1 == 3,
+                "목록 한 갈래가 칸의 빈 문구를 안 넘긴다")
+        let rows = try #require(pfRegion(menu, from: "private func rows(_ sorted: [PokeDirectoryEntry], emptyText: String?)",
+                                         to: "PokeDirectoryRowView("))
+        // '?? 원래 문구'가 빠지면 근무중 칸이 비었을 때 '아직 다른 사용자가 없어요'(거짓)가 뜬다.
+        #expect(rows.contains("Text(emptyText ?? PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))"),
+                "빈 행이 칸의 한 줄(emptyText)을 먼저 보지 않는다")
+    }
+
     @Test("소스: 칸마다 툴팁 · 보이스오버 말 · 고른 칸 표시 — AppKit 고르개(Picker)는 쓰지 않는다")
     func accessibilityAndTooltips() throws {
         let filter = pfStripComments(try pfSource("Sources/check/PokePresenceFilter.swift"))
         let bar = try #require(pfRegion(filter, from: "struct PokePresenceFilterBar: View {", to: nil))
-        #expect(bar.contains(".checkTooltip(filter.help)"))
-        #expect(bar.contains(".accessibilityLabel(filter.help)"))
+        #expect(bar.contains(".checkTooltip(PokePresenceFilterText.help(filter, hidingUnread: hidesUnread))"))
+        // 이름은 보이는 글자 그대로 — 음성 제어 "근무중 클릭"이 그 칸을 찾는다. 긴 문장은 툴팁이 힌트로 붙인다.
+        #expect(bar.contains(".accessibilityLabel(filter.label)"))
+        #expect(!bar.contains(".accessibilityLabel(filter.help)"), "보이스오버가 보이는 글자와 다른 이름을 읽는다")
+        #expect(bar.contains(".accessibilityValue(hidesUnread ? PokePresenceFilterText.hidingUnread : \"\")"))
         #expect(bar.contains(".accessibilityAddTraits(isSelected ? .isSelected : [])"))
         #expect(bar.contains(".accessibilityLabel(PokePresenceFilterText.groupLabel)"))
         #expect(!bar.contains("Picker("), "AppKit 고르개는 렌더 시험에서 노란 상자가 된다")
         // 툴팁 말은 칸마다 다르고 비어 있지 않다.
         let helps = PokePresenceFilter.allCases.map(\.help)
         #expect(Set(helps).count == 3 && helps.allSatisfy { !$0.isEmpty })
-        #expect(PokePresenceFilter.working.help.contains("집중"), "근무중 칸에 집중이 든다는 말이 없다")
+        // 칸은 근무 여부 하나로 나눈다 — 집중을 켠 채 퇴근한 사람('집중' 칩)은 자리비움 칸이다. 근무중 툴팁이 '(집중 포함)'이라
+        // 말하면 자리비움 칸의 '집중' 칩이 고장으로 읽힌다.
+        for filter in PokePresenceFilter.allCases {
+            #expect(!filter.help.contains("집중"), "\(filter.label) 툴팁이 집중을 말한다 — 칸은 근무 여부만 본다")
+        }
     }
 }
 
@@ -276,6 +327,37 @@ private func pfDiffering(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> Int {
     let count = a.bytesPerRow * a.pixelsHigh
     var n = 0
     var i = 0
+    while i < count {
+        if abs(Int(pa[i]) - Int(pb[i])) > 8 { n += 1 }
+        i += 1
+    }
+    return n
+}
+
+/// 픽셀 줄마다 다른 바이트가 있는 줄 번호(위에서부터). 크기가 다르면 nil.
+@MainActor
+private func pfDifferingRows(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep) -> [Int]? {
+    guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh, a.bytesPerRow == b.bytesPerRow,
+          let pa = a.bitmapData, let pb = b.bitmapData else { return nil }
+    var rows: [Int] = []
+    for y in 0..<a.pixelsHigh {
+        let start = y * a.bytesPerRow
+        for i in start..<(start + a.bytesPerRow) where abs(Int(pa[i]) - Int(pb[i])) > 8 {
+            rows.append(y)
+            break
+        }
+    }
+    return rows
+}
+
+/// 픽셀 줄 `row` 아래(그 줄 제외)에서 채널 차이가 8 을 넘는 바이트 수. 크기가 다르면 nil.
+@MainActor
+private func pfDifferingBelow(_ a: NSBitmapImageRep, _ b: NSBitmapImageRep, row: Int) -> Int? {
+    guard a.pixelsWide == b.pixelsWide, a.pixelsHigh == b.pixelsHigh, a.bytesPerRow == b.bytesPerRow,
+          let pa = a.bitmapData, let pb = b.bitmapData else { return nil }
+    var n = 0
+    var i = (row + 1) * a.bytesPerRow
+    let count = a.bytesPerRow * a.pixelsHigh
     while i < count {
         if abs(Int(pa[i]) - Int(pb[i])) > 8 { n += 1 }
         i += 1
@@ -382,6 +464,77 @@ private let pfPanelPool: [PokeDirectoryEntry] = [
         let emptyAway = try pfPanel(pfStore(people: [], presence: .away))
         #expect(emptyAway.pixelsHigh == emptyAll.pixelsHigh)
         #expect(pfDiffering(emptyAll, emptyAway) < 40, "빈 목록인데 근무 칸이 섰다")
+    }
+
+    @Test("빈 문구는 그 칸의 말이다 — 검색 줄 아래(목록 자리)만 비교해 근무중 빈 칸과 자리비움 '맞는 이름 없음'이 다르게 그려진다")
+    func emptyLineWordingIsTheFiltersOwn() throws {
+        let threeAway = [pfPanelPool[2], pfPanelPool[3], pfPanelPool[4]]
+        // 검색 줄의 아래 끝 찾기: 목록이 같고 고른 칸만 다른 두 장(전체 · 자리비움 — 셋 다 자리비움)이 갈리는 마지막 픽셀 줄.
+        let all = try pfPanel(pfStore(people: threeAway, presence: .all))
+        let away = try pfPanel(pfStore(people: threeAway, presence: .away))
+        let selectorRows = try #require(pfDifferingRows(all, away), "두 장 크기가 다르다")
+        let cutoff = try #require(selectorRows.max(), "고른 칸 표시가 안 그려졌다")
+        #expect(cutoff < all.pixelsHigh / 2, "고른 칸 표시가 패널 아래쪽까지 번졌다(\(cutoff)px)")
+
+        // 둘 다 빈 목록이지만 칸의 말이 다르다: '지금 근무 중인 사람이 없어요' · '자리를 비운 사람 중엔 맞는 이름이 없어요'.
+        let emptyWorking = try pfPanel(pfStore(people: threeAway, presence: .working))
+        let emptyWorkingTwin = try pfPanel(pfStore(people: threeAway, presence: .working))
+        let awayNoMatch = try pfPanel(pfStore(people: threeAway, presence: .away), query: "없는이름")
+        pfSave(awayNoMatch, "poke-filter-away-nomatch")
+        let noise = try #require(pfDifferingBelow(emptyWorking, emptyWorkingTwin, row: cutoff))
+        let wording = try #require(pfDifferingBelow(emptyWorking, awayNoMatch, row: cutoff), "빈 칸 두 장의 창 높이가 다르다")
+        // 기준선: 같은 입력 두 장은 목록 자리에서 같다 — 아래 차이가 잡음이 아니라 글자 때문이라는 뜻이다.
+        #expect(noise < 40, "같은 입력 두 장이 목록 자리에서 다르다: \(noise)")
+        // 칸의 말(emptyText)이 빠져 원래 문구('아직 다른 사용자가 없어요')로 돌아가면 두 장의 목록 자리가 같아진다.
+        #expect(wording > 400, "근무중 빈 칸과 자리비움 '맞는 이름 없음'의 목록 자리가 같다 — 칸의 빈 문구가 안 그려진다: \(wording)")
+        #expect(PokePresenceFilterText.empty(presence: .working, isSearching: false)
+                != PokePresenceFilterText.empty(presence: .away, isSearching: true))
+    }
+
+    @Test("가려진 안 읽음 점: 칸 폭 · 줄 높이 그대로, 점은 그 칸 위에만 — 패널 높이도 그대로")
+    func hiddenUnreadDotKeepsSize() throws {
+        let plain = try pfBitmap(PokePresenceFilterBar(selection: .working, onSelect: { _ in }))
+        let dotted = try pfBitmap(PokePresenceFilterBar(selection: .working, hidingUnread: [.away], onSelect: { _ in }))
+        let plainTwin = try pfBitmap(PokePresenceFilterBar(selection: .working, onSelect: { _ in }))
+        #expect(dotted.pixelsWide == plain.pixelsWide && dotted.pixelsHigh == plain.pixelsHigh, "점이 칸 크기를 바꿨다")
+        #expect(pfDiffering(plain, plainTwin) < 8, "기준선: 같은 입력 두 장이 다르다")
+        #expect(pfDiffering(plain, dotted) > 20, "점이 안 그려졌다")
+        // 점은 자리비움 칸(오른쪽 끝 칸) 위에만 — 다른 바이트가 모두 고르개 오른쪽 1/3 안에 있다.
+        if let pa = plain.bitmapData, let pb = dotted.bitmapData {
+            let bytesPerPixel = plain.bitsPerPixel / 8
+            var leftmost = Int.max
+            for y in 0..<plain.pixelsHigh {
+                for x in 0..<plain.pixelsWide {
+                    let i = y * plain.bytesPerRow + x * bytesPerPixel
+                    if (0..<bytesPerPixel).contains(where: { abs(Int(pa[i + $0]) - Int(pb[i + $0])) > 8 }) { leftmost = min(leftmost, x) }
+                }
+            }
+            #expect(leftmost > plain.pixelsWide * 2 / 3, "점이 자리비움 칸 밖(\(leftmost)px / \(plain.pixelsWide)px)에 그려졌다")
+        }
+        let row = try pfBitmap(
+            PokeSearchFilterRow(presence: .working, hidingUnread: [.away], onSelect: { _ in }) {
+                PokeSearchBox(draft: .constant(""), rendered: .constant(nil), rendersPlainText: true)
+            }
+            .frame(width: PokeTitleRowWidthBudget.contentWidth)
+        )
+        pfSave(row, "poke-filter-row-hidden-unread")
+        #expect(row.pixelsHigh == Int(PokeSearchBox.height * 2), "점이 검색 줄 높이를 바꿨다")
+
+        // 패널: 근무중을 골라 둔 채 자리비움인 지현(u3)이 메시지를 보냈다 → 자리비움 칸에 점, 창 높이는 그대로.
+        let store = pfStore(people: pfPanelPool, presence: .working)
+        store.messageHistory = [
+            MessageHistoryEntry(id: "pf-m1", peerUserID: "u3", peerName: "지현", peerAvatarURL: nil, body: "퇴근했어요",
+                                createdAt: Date(timeIntervalSince1970: 1_789_999_940), isMine: false),
+        ]
+        #expect(store.unreadMessagePeerIDs == ["u3"], "전제: 지현의 메시지가 안 읽음이다")
+        let sorted = PokePanelOrder.sorted(store.pokeDirectory, unreadMessagePeerIDs: store.unreadMessagePeerIDs,
+                                           unreadPokePeerIDs: store.unreadPokePeerIDs)
+        #expect(PokePresenceFilter.segmentsHidingUnread(sorted, selected: .working, unreadMessagePeerIDs: store.unreadMessagePeerIDs,
+                                                        unreadPokePeerIDs: store.unreadPokePeerIDs) == [.away])
+        let panel = try pfPanel(store)
+        let baseline = try pfPanel(pfStore(people: pfPanelPool, presence: .all))
+        pfSave(panel, "poke-filter-working-hidden-unread")
+        #expect(panel.pixelsHigh == baseline.pixelsHigh, "가려진 안 읽음이 있을 때 창 높이가 바뀌었다")
     }
 }
 

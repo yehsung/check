@@ -4141,8 +4141,16 @@ private struct PokePanel: View {
             )
             // 이름 찾기(2026-11-10) + 근무 칸(2026-11-18). 목록 바로 위 · 사람이 있을 때만 · **한 줄**이다(새 높이 0 — `searchRowHeight` 그대로).
             // 거르기는 **정렬한 뒤** 빼기만 한다 — 순서는 그대로다. 이름 찾기와 근무 칸은 함께 건다(AND).
+            // 고른 칸에 가려진 안 읽은 사람이 있으면 그 사람이 든 칸에 점이 찍힌다(`segmentsHidingUnread` — 전체를 골랐으면 없다).
             if !sorted.isEmpty {
-                PokeSearchFilterRow(presence: presenceFilter, onSelect: onSelectPresenceFilter) {
+                PokeSearchFilterRow(
+                    presence: presenceFilter,
+                    hidingUnread: PokePresenceFilter.segmentsHidingUnread(
+                        sorted, selected: presenceFilter,
+                        unreadMessagePeerIDs: unreadMessagePeerIDs, unreadPokePeerIDs: unreadPokePeerIDs
+                    ),
+                    onSelect: onSelectPresenceFilter
+                ) {
                     PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)
                 }
             }

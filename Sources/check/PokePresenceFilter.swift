@@ -108,7 +108,7 @@ enum PokePresenceFilterText {
     static let hidingUnread = "안 읽은 대화가 있어요"
 
     /// 칸의 툴팁. 가려진 안 읽은 사람이 있으면 그 말을 덧붙인다(점만 있고 말이 없으면 무슨 점인지 모른다).
-    static func help(_ filter: PokePresenceFilter, hidingUnread: Bool) -> String {
+    static func tooltip(_ filter: PokePresenceFilter, hidingUnread: Bool) -> String {
         hidingUnread ? "\(filter.help) — \(Self.hidingUnread)" : filter.help
     }
     /// 칸 묶음 전체의 보이스오버 이름.
@@ -255,7 +255,7 @@ struct PokePresenceFilterBar: View {
                 .fixedSize(horizontal: true, vertical: false)
         }
         .buttonStyle(.plain)
-        .checkTooltip(PokePresenceFilterText.help(filter, hidingUnread: hidesUnread))
+        .checkTooltip(PokePresenceFilterText.tooltip(filter, hidingUnread: hidesUnread))
         // 이름은 보이는 글자 그대로('전체' · '근무중' · '자리비움'), 긴 문장은 툴팁이 힌트로 붙인다.
         .accessibilityLabel(filter.label)
         .accessibilityValue(hidesUnread ? PokePresenceFilterText.hidingUnread : "")

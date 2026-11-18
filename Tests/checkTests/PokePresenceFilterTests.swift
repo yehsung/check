@@ -142,8 +142,8 @@ private let pfSorted = PokePanelOrder.sorted(pfPeople, unreadMessagePeerIDs: ["e
         // 집중을 켠 채 퇴근한 라온(d)은 자리비움 칸 사람이다 — 판정은 `admits` 하나라 칸 나누기와 점이 같은 규칙이다.
         #expect(marks(.working, messages: ["d"]) == [.away])
         // 툴팁: 점이 있으면 그 까닭을 덧붙인다.
-        #expect(PokePresenceFilterText.help(.away, hidingUnread: false) == PokePresenceFilter.away.help)
-        #expect(PokePresenceFilterText.help(.away, hidingUnread: true).hasSuffix(PokePresenceFilterText.hidingUnread))
+        #expect(PokePresenceFilterText.tooltip(.away, hidingUnread: false) == PokePresenceFilter.away.help)
+        #expect(PokePresenceFilterText.tooltip(.away, hidingUnread: true).hasSuffix(PokePresenceFilterText.hidingUnread))
     }
 
     @Test("칸 글자는 행 칩의 낱말과 같다(근무중 · 자리비움) · 빈 문구는 목록 폭 한 줄에 든다")
@@ -289,7 +289,7 @@ private func pfStore(people: [PokeDirectoryEntry], presence: PokePresenceFilter 
     func accessibilityAndTooltips() throws {
         let filter = pfStripComments(try pfSource("Sources/check/PokePresenceFilter.swift"))
         let bar = try #require(pfRegion(filter, from: "struct PokePresenceFilterBar: View {", to: nil))
-        #expect(bar.contains(".checkTooltip(PokePresenceFilterText.help(filter, hidingUnread: hidesUnread))"))
+        #expect(bar.contains(".checkTooltip(PokePresenceFilterText.tooltip(filter, hidingUnread: hidesUnread))"))
         // 이름은 보이는 글자 그대로 — 음성 제어 "근무중 클릭"이 그 칸을 찾는다. 긴 문장은 툴팁이 힌트로 붙인다.
         #expect(bar.contains(".accessibilityLabel(filter.label)"))
         #expect(!bar.contains(".accessibilityLabel(filter.help)"), "보이스오버가 보이는 글자와 다른 이름을 읽는다")

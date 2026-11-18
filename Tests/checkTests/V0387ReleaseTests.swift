@@ -4,10 +4,11 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// MARK: - 릴리스 게이트 (v0.3.87 — Claude 로그인 수리 · 콕 찌르기 칸 · 미션 모두 받기 · 산타 아잉이)
+// MARK: - 릴리스 게이트 (v0.3.87 — Claude 로그인 수리 · AI 리밋 근무 밖 10분 읽기 · 콕 찌르기 칸 · 미션 모두 받기 · 산타 아잉이)
 //
 // **관행**: 버전 고정과 "맨 위 섹션" 단언은 *그 릴리스의 시험 파일*이 든다(… → 0.3.86 → 여기).
 // 대표 결정: 한 판 #d_d5uHytEKkEXj "지금 한 판으로(수리 셋 + 산타)" · Claude 로그인 #d_IYrzxrcSCkTs "다음 맥 판에 넣기" ·
+//   AI 리밋 근무 밖 10분 읽기 #d_wUQfi8Uo68gx "지금 산타 아잉이 추가하고있는거에 같이 넣을거야"(check 개발 f5965c58) ·
 //   콕 찌르기 칸 · 모두 받기 #d_OuNnIBw0Ntdr "추천대로: 찌르기 칸·모두 받기는 고치기" ·
 //   산타 #d_Tx5bJnJvCmN6 · #d_3VZdglOgRABx · 문구 #d_4wR1Qzn9OKmt · 기간 #d_jdcyBSon9oZ3(12-21~25).
 // 산타는 깜짝 선물이다 — 서버(가격표 행)는 12-21 아침 지급 직전에 켜고, 그 전에는 상점 · 고르기 어디에도 안 선다.
@@ -35,7 +36,7 @@ func v0387VersionAndChangelog() throws {
     for banned in ["서버", "CheckCore", "테스트", "protocol", "RPC", "디코드", "build", "키체인"] {
         #expect(!section.contains(banned), "사용자 문구에 내부 어휘('\(banned)')가 있다")
     }
-    #expect(items.contains { $0.contains("Claude") }, "Claude 로그인 수리 줄이 없다")
+    #expect(items.contains { $0.contains("Claude") && $0.contains("10분") }, "AI 리밋 줄(Claude 고침 · 근무 밖 10분 새로 고침)이 없다")
     #expect(items.contains { $0.contains("콕 찌르기") && $0.contains("근무중") && $0.contains("자리비움") }, "콕 찌르기 칸 줄이 없다")
     #expect(items.contains { $0.contains("모두 받기") }, "미션 모두 받기 줄이 없다")
     for secret in ["산타", "크리스마스", "선물"] {

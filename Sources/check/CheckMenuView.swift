@@ -1049,6 +1049,10 @@ struct CheckMenuView: View {
                             extraChromeHeight: listExtraChromeHeight,
                             clipsOverflowInsteadOfScroll: previewClipsOverflowList,
                             plainTextEditors: previewPlainTextEditors,
+                            // 거르기 칸 '전체 · 근무중 · 자리비움'(2026-11-18). 검색어와 달리 **스토어에** 남는다 — 패널을 닫았다 열어도
+                            // 고른 칸 그대로고, 로그아웃하면 전체로 돌아간다. 화면에서 빼기만 하므로 조회 · 폴링은 그대로다.
+                            presenceFilter: store.pokePresenceFilter,
+                            onSelectPresenceFilter: { store.selectPokePresenceFilter($0) },
                             // 이름 찾기 칸의 처음 글자. 앱은 늘 빈 칸으로 연다(패널을 닫으면 검색어도 사라진다).
                             searchDraft: previewPokeSearchQuery ?? ""
                         )
@@ -4008,6 +4012,10 @@ private struct PokePanel: View {
     var clipsOverflowInsteadOfScroll: Bool = false
     // 스냅샷 전용: 이름 찾기 칸을 AppKit 칸 대신 글자로 그린다(`CheckMenuView.previewPlainTextEditors`). 앱은 false.
     var plainTextEditors: Bool = false
+    // 목록 거르기 칸 '전체 · 근무중 · 자리비움'(2026-11-18 제보). 고른 칸은 스토어가 들고(`pokePresenceFilter`) 패널은 값 + 클로저로만 받는다 —
+    // 렌더 시험이 칸마다 그릴 수 있게. 시계를 안 읽는 값이라 잎으로 가둘 이유가 없다. 기본값(전체)이면 거르는 것이 없다.
+    var presenceFilter: PokePresenceFilter = .all
+    var onSelectPresenceFilter: (PokePresenceFilter) -> Void = { _ in }
 
     // 이름 찾기(2026-11-10 제보 "콕 찌르기에서 검색기능있으면 좋겠어요"). 패널이 내려가면 함께 사라진다 — 다시 열면 빈 칸.
     // ★ `private` 을 붙이지 마라: 이 둘이 private 이면 멤버와이즈 init 이 private 이 되어 CheckMenuView 가 이 패널을 못 만든다.
@@ -4049,6 +4057,7 @@ private struct PokePanel: View {
 
     /// 이름 찾기 칸이 먹는 높이(칸 + 바깥 VStack 간격 12). 목록이 비면 칸을 세우지 않으므로 0 이다.
     /// 받은 메시지 줄과 같은 이유로 목록 예산에 넣는다 — 안 넣으면 칸 높이만큼 창이 700pt 상한을 넘는다.
+    /// 근무 칸(2026-11-18)은 **같은 줄** 오른쪽이라 이 값에 아무것도 더하지 않는다(`PokeSearchFilterRow`).
     private var searchRowHeight: CGFloat {
         entries.isEmpty ? 0 : PokeSearchBox.height + 12
     }
@@ -4130,14 +4139,23 @@ private struct PokePanel: View {
                 isFocusMode: isFocusMode,
                 focusStage: focusStage
             )
-            // 이름 찾기(2026-11-10). 목록 바로 위 · 사람이 있을 때만. 거르기는 **정렬한 뒤** 빼기만 한다 — 순서는 그대로다.
+            // 이름 찾기(2026-11-10) + 근무 칸(2026-11-18). 목록 바로 위 · 사람이 있을 때만 · **한 줄**이다(새 높이 0 — `searchRowHeight` 그대로).
+            // 거르기는 **정렬한 뒤** 빼기만 한다 — 순서는 그대로다. 이름 찾기와 근무 칸은 함께 건다(AND).
+            // 고른 칸에 가려진 안 읽은 사람이 있으면 그 사람이 든 칸에 점이 찍힌다(`segmentsHidingUnread` — 전체를 골랐으면 없다).
             if !sorted.isEmpty {
-                PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)
+                PokeSearchFilterRow(
+                    presence: presenceFilter,
+                    hidingUnread: PokePresenceFilter.segmentsHidingUnread(
+                        sorted, selected: presenceFilter,
+                        unreadMessagePeerIDs: unreadMessagePeerIDs, unreadPokePeerIDs: unreadPokePeerIDs
+                    ),
+                    onSelect: onSelectPresenceFilter
+                ) {
+                    PokeSearchBox(draft: $searchDraft, rendered: $searchRendered, rendersPlainText: plainTextEditors)
+                }
             }
-            let query = searchQuery
-            // 사람이 없으면 칸이 없으니 찾는 중도 아니다 — 빈 목록 문구('아직 다른 사용자가 없어요')를 그대로 둔다.
-            let isSearching = !sorted.isEmpty && !PokeDirectorySearch.SearchKey(query).isEmpty
-            entryList(isSearching ? PokeDirectorySearch.filter(sorted, query: query) : sorted, all: sorted, isSearching: isSearching)
+            // 사람이 없으면 칸이 없으니 거르는 중도 아니다 — 빈 목록 문구('아직 다른 사용자가 없어요')를 그대로 둔다(`PokeDirectoryNarrowing`).
+            entryList(PokeDirectoryNarrowing.apply(sorted, query: searchQuery, presence: presenceFilter), all: sorted)
         }
         .padding(12)
         .pagePanelStyle()
@@ -4159,42 +4177,43 @@ private struct PokePanel: View {
     // 상한은 행 수가 아니라 높이다 — `visibleRows` 개의 48pt 행이 차지하던 높이 그대로라, 상태메시지 행(62pt)이 섞여도
     // 어떤 조합에서도 창 높이는 v0.3.50 의 '접힌 7행'을 넘지 않는다(상태 행이 많을수록 보이는 사람이 줄고 나머지는 스크롤로 밀린다).
     @ViewBuilder
-    private func entryList(_ sorted: [PokeDirectoryEntry], all: [PokeDirectoryEntry], isSearching: Bool) -> some View {
+    private func entryList(_ narrowing: PokeDirectoryNarrowing, all: [PokeDirectoryEntry]) -> some View {
+        let sorted = narrowing.rows
         let capHeight = Self.listCapHeight(visibleRows: visibleRows)
         let contentHeight = Self.listContentHeight(entries: sorted)
         if contentHeight <= capHeight {
-            // 찾는 동안은 목록 자리를 **찾기 전 높이로 붙든다**(`PokeSearchListHeight`) — 한 글자 칠 때마다 팝오버가 줄었다 늘었다 하지 않게.
-            rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity, alignment: .top)
+            // 거르는 동안(이름 찾기 · 근무 칸)은 목록 자리를 **거르기 전 높이로 붙든다**(`PokeSearchListHeight`) — 한 글자 칠 때마다,
+            // 칸을 바꿀 때마다 팝오버가 줄었다 늘었다 하지 않게.
+            rows(sorted, emptyText: narrowing.emptyText).frame(maxWidth: .infinity, alignment: .top)
                 .frame(
                     height: PokeSearchListHeight.held(
-                        isSearching: isSearching, shown: contentHeight,
+                        isSearching: narrowing.isNarrowed, shown: contentHeight,
                         unfiltered: Self.listContentHeight(entries: all), cap: capHeight
                     ),
                     alignment: .top
                 )
         } else if clipsOverflowInsteadOfScroll {
             // 스냅샷 전용: 보이는 첫 부분만 클립해 그린다(ScrollView는 ImageRenderer가 못 그림).
-            rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity, alignment: .top)
+            rows(sorted, emptyText: narrowing.emptyText).frame(maxWidth: .infinity, alignment: .top)
                 .frame(height: capHeight, alignment: .top)
                 .clipped()
         } else {
             // ★ `ScrollViewReader` 가 사라졌다(v0.2.49). 그것이 있던 유일한 이유는 "펼친 작성기를
             //   스스로 끌어올리기"였는데, 펼칠 것이 없어졌다 — 말풍선 버튼은 이제 **별도 창**을 연다.
             ScrollView(.vertical, showsIndicators: true) {
-                rows(sorted, isSearching: isSearching).frame(maxWidth: .infinity)
+                rows(sorted, emptyText: narrowing.emptyText).frame(maxWidth: .infinity)
             }
             .frame(height: capHeight)
         }
     }
 
     @ViewBuilder
-    private func rows(_ sorted: [PokeDirectoryEntry], isSearching: Bool) -> some View {
+    private func rows(_ sorted: [PokeDirectoryEntry], emptyText: String?) -> some View {
         VStack(spacing: Self.rowSpacing) {
             if sorted.isEmpty {
-                // 찾다가 비면 '맞는 이름이 없어요'. 아니면 로드 성공했는데 비면 '아직 아무도 없음', 로드 전/실패면 fallbackStatus.
-                Text(isSearching
-                     ? PokeDirectorySearch.noMatch
-                     : PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
+                // 걸러서 비면 그 칸의 한 줄('맞는 이름이 없어요' · '지금 근무 중인 사람이 없어요' …, `PokePresenceFilterText.empty`).
+                // 거르는 것이 없는데 비면 로드 성공은 '아직 아무도 없음', 로드 전/실패면 fallbackStatus.
+                Text(emptyText ?? PokeDirectoryEmptyMessage.text(hasLoaded: hasLoaded, fallbackStatus: fallbackStatus))
                     .font(.caption)
                     .foregroundStyle(CheckTheme.secondaryText)
                     .frame(maxWidth: .infinity, minHeight: Self.rowHeight, alignment: .leading)

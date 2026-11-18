@@ -1436,6 +1436,9 @@ final class WorkTimerStore {
     var pokeCooldownUntil: [String: Date] = [:]
     // 패널 상단 1줄 안내(찌르기 실패 사유 등). 패널 닫기/성공 시 nil.
     var pokeNotice: String?
+    // 목록 거르기 칸 '전체 · 근무중 · 자리비움'(2026-11-18 제보). 앱이 켜져 있는 동안 남는다(패널을 닫았다 열어도 고른 칸 그대로) ·
+    // 로그아웃하면 전체로 돌아간다(clearPersistedSession). 화면만 거르는 값이라 조회 · 폴링과 무관하다(`PokePresenceFilter`).
+    var pokePresenceFilter: PokePresenceFilter = .all
     // ── 울트라 재화 지갑 (v0.2.34) ──
     //
     // v0.2.33 의 세 미러(ultraPokeSpentDay / ultraRemainingToday / ultraRemainingDay)는 **통째로 지웠다.**
@@ -4311,6 +4314,8 @@ extension WorkTimerStore {
         pokeDirectoryLoaded = false
         pokeCooldownUntil = [:]
         pokeNotice = nil
+        // 거르기 칸도 처음(전체)으로 — 다음 사람이 찌르기 화면을 열자마자 앞 사람이 고른 칸으로 반쯤 빈 목록을 보지 않게.
+        pokePresenceFilter = .all
         // 메시지도 계정에 묶인 상태다. 큐를 남기면 새 계정 화면에 앞 사람에게 온 말이 뜨고,
         // 쿨타임을 남기면 새 계정이 자기 첫 메시지를 못 보낸다(찔림과 같은 규약).
         receivedMessages = []

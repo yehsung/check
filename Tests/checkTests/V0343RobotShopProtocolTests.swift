@@ -381,8 +381,11 @@ struct V0343RobotShopProtocolTests {
         // 지역 아잉이(부산 · 서울 — 두 센터 다)까지 실린 빌드는 누적으로 10 이다.
         let regionDrawable = CharacterCatalog.regionGiftBuiltInIDs.allSatisfy(fullDrawable.contains)
         #expect(regionDrawable == RegionAingCoreTests.macRegionArtInSourceTree, "지역 아잉이 그림 판정이 소스 트리와 갈렸다")
+        // 산타 아잉이(초상 두 장 + 무지개 밝기 맵)까지 실린 빌드는 누적으로 11 이다.
+        let santaDrawable = fullDrawable.contains(CharacterCatalog.santaAingID)
+        #expect(santaDrawable == SantaAingCoreTests.macSantaArtInSourceTree, "산타 아잉이 그림 판정이 소스 트리와 갈렸다")
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: fullDrawable)
-                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? (peperoDrawable ? (hwooDrawable ? (rubyDrawable ? (devDrawable ? (regionDrawable ? ShopWire.regionProtocol : ShopWire.devProtocol) : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol)
+                == (goldDrawable ? (rainbowDrawable ? (cakesDrawable ? (isulDrawable ? (peperoDrawable ? (hwooDrawable ? (rubyDrawable ? (devDrawable ? (regionDrawable ? (santaDrawable ? ShopWire.santaProtocol : ShopWire.regionProtocol) : ShopWire.devProtocol) : ShopWire.rubyProtocol) : ShopWire.hwooProtocol) : ShopWire.peperoProtocol)
                                                                                                       : ShopWire.isulProtocol)
                                                                                      : ShopWire.cakeProtocol)
                                                                      : ShopWire.rainbowProtocol)

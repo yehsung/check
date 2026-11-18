@@ -19,7 +19,7 @@ import Testing
     func catalog() {
         // 부산 갈매기 아잉이(지역 아잉이)가 열한째로 뒤에 붙었다 — 개발 아잉이의 자리(열째)는 그대로다.
         #expect(CharacterCatalog.builtIns.map(\.id).firstIndex(of: "aing_dev") == 9)
-        #expect(CharacterCatalog.builtIns.count == 12)
+        #expect(CharacterCatalog.builtIns.count == 13)   // 산타 아잉이가 열셋째
         #expect(CharacterCatalog.builtInDevAing.displayName == "개발에 찌든 아잉이")
         #expect(CharacterManifest.Finish(characterID: "aing_dev") == .dev)
         #expect(!CharacterManifest.Finish.dev.isRare && !CharacterManifest.Finish.dev.isCake)

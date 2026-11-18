@@ -30,8 +30,9 @@ import Testing
 
     @Test("카탈로그: 부산 갈매기 · 서울의 밤 아잉이는 내장 열한째 · 열두째(맨 끝) · 마감 .busan · .seoul · 선물 전용(지역) · 희귀 · 뽑기 · 조각 · 미션 아님")
     func catalog() {
-        #expect(CharacterCatalog.builtIns.suffix(2).map(\.id) == ["aing_busan", "aing_seoul"])
-        #expect(CharacterCatalog.builtIns.count == 12)
+        // 산타 아잉이(크리스마스 선물)가 열셋째로 뒤에 붙었다 — 두 지역 아잉이의 자리(열한째 · 열두째)는 그대로다.
+        #expect(Array(CharacterCatalog.builtIns.map(\.id)[10...11]) == ["aing_busan", "aing_seoul"])
+        #expect(CharacterCatalog.builtIns.count == 13)
         #expect(CharacterCatalog.builtInSeoulAing.displayName == "서울의 밤 아잉이")
         #expect(CharacterManifest.Finish(characterID: "aing_seoul") == .seoul)
         #expect(!CharacterManifest.Finish.seoul.isRare && !CharacterManifest.Finish.seoul.isCake)
@@ -301,8 +302,9 @@ import Testing
         #expect(drawable.contains(CharacterCatalog.busanAingID) && drawable.contains(CharacterCatalog.seoulAingID), "\(drawable)")
         #expect(RegionAingFinish.isDrawable(CharacterCatalog.busanAingID) && RegionAingFinish.isDrawable(CharacterCatalog.seoulAingID))
         #expect(!RegionAingFinish.isDrawable(CharacterCatalog.devAingID))
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.regionProtocol)
-        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) == ShopWire.regionProtocol)
+        // 번호는 누적 — 산타 아잉이까지 실린 번들은 11(SantaAingMac3DTests). 지역 아잉이 몫은 '10 이상'.
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.regionProtocol)
+        #expect(ShopWire.protocolVersion(drawableCharacterIDs: WorkTimerStore.bundledDrawableCharacterIDs) >= ShopWire.regionProtocol)
         for one in CharacterCatalog.regionGiftBuiltInIDs {
             #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable.filter { $0 != one }) == ShopWire.devProtocol, "\(one) 가 빠졌는데 10")
         }

@@ -127,8 +127,10 @@ struct V0359RainbowShopProtocolTests {
         let dev = V0381DevAingCoreTests.macDevArtInSourceTree ? [CharacterCatalog.devAingID] : []
         // 지역 아잉이(두 센터) 그림까지 실리면 10 이다(누적).
         let region = RegionAingCoreTests.macRegionArtInSourceTree ? CharacterCatalog.regionGiftBuiltInIDs : []
+        // 산타 아잉이 그림까지 실리면 11 이다(누적).
+        let santa = SantaAingCoreTests.macSantaArtInSourceTree ? CharacterCatalog.santaGiftBuiltInIDs : []
         let expected = ShopWire.protocolVersion(drawableCharacterIDs:
-            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul + pepero + hwoo + ruby + dev + region)
+            (robot ? ["robot"] : []) + (gold ? ["aing_gold"] : []) + (rainbow ? ["aing_rainbow"] : []) + cakes + isul + pepero + hwoo + ruby + dev + region + santa)
         #expect(rainbow, "무지개 그림 네 장이 소스 트리에 없다 — scripts/make-rainbow-aing.swift 를 돌려라")
 
         let host = "v0359-rainbow-bundle-\(UUID().uuidString.prefix(8))".lowercased()

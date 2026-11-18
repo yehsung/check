@@ -286,6 +286,8 @@ extension WorkTimerStore {
             case .pepero: cakeGiftNotice = PeperoGiftText.notice(for: outcome, name: name)
             // 우리 센터 선물(지역 아잉이): 실패 · 거절 줄은 생일과 한 벌이다.
             case .region: cakeGiftNotice = CakeGiftText.notice(for: outcome, name: name)
+            // 크리스마스 선물(산타 아잉이): 실패 · 거절 줄은 생일과 한 벌이다(`SantaGiftText.notice`).
+            case .santa: cakeGiftNotice = SantaGiftText.notice(for: outcome, name: name)
             }
         }
         if outcome.settlesGift {
@@ -398,6 +400,8 @@ extension CharacterGiftKind {
         case .pepero: return "heart.fill"
         // 우리 센터 선물(지역 아잉이) — 지도 핀(받는 창 제목 "📍" 과 같은 뜻).
         case .region: return "mappin.circle.fill"
+        // 크리스마스 선물(산타 아잉이) — 눈송이(받는 창 제목 "🎄" 과 같은 철).
+        case .santa: return "snowflake"
         }
     }
 
@@ -406,7 +410,7 @@ extension CharacterGiftKind {
     var showsInviteScreen: Bool {
         switch self {
         case .birthday: return false
-        case .drink, .pepero, .region: return true
+        case .drink, .pepero, .region, .santa: return true
         }
     }
 }

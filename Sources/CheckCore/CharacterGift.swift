@@ -27,6 +27,10 @@ import Foundation
 // 셋째 종류 `'pepero'`. 이슬과 같은 틀이다: 선택지 하나(고를 것 없이 받기) · 최소 능력 번호 6 · 서버는 p ≥ 6 에게만 빼빼로 선물을 싣고,
 // 수령은 p < 6 이면 `needs_update`. 옛 빌드(0.3.74~0.3.76 — 이 종류를 모른다)는 서버가 실어 보내도 `kind` 를 몰라 선물 없음으로 삼킨다
 // (아래 디코드 규칙) — 그래도 서버는 번호로 먼저 막는다(옛 빌드는 받을 수 없는 선물을 가진 채 생일 · 술 선물까지 가려지지 않게).
+//
+// ── 크리스마스 선물 — 산타 아잉이 (맥 먼저 · 크리스마스 기간 선물) ──
+// 다섯째 종류 `'santa'`. 빼빼로와 같은 틀이다: 선택지 하나(고를 것 없이 받기) · 최소 능력 번호 11 · 서버는 p ≥ 11 에게만 산타 선물을 싣고,
+// 수령은 p < 11 이면 `needs_update`. 이 종류를 모르는 옛 빌드는 `kind` 를 몰라 선물 없음으로 삼킨다(아래 디코드 규칙). 문구는 `SantaGiftText`(가안).
 
 // MARK: 전선 모양 — character_gift_pending
 
@@ -55,6 +59,8 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
     case pepero
     /// 우리 센터 선물(지역 아잉이) — 그 사람 센터의 아잉이 하나(부산 → 갈매기 · 서울 → 서울 아잉이), 고를 것 없이 받는다. 기한 없음.
     case region
+    /// 크리스마스 선물(크리스마스 기간 선물) — 산타 아잉이 하나, 고를 것 없이 받는다(안 받은 선물은 기간 뒤 서버가 거둔다).
+    case santa
 
     /// 서버 원문 값("birthday" · "drink" · "pepero"). 문자열을 적는 곳은 여기(`rawValue`) 하나다.
     package var wireValue: String { rawValue }
@@ -72,6 +78,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .drink: return CharacterCatalog.drinkGiftBuiltInIDs
         case .pepero: return CharacterCatalog.peperoGiftBuiltInIDs
         case .region: return CharacterCatalog.regionGiftBuiltInIDs
+        case .santa: return CharacterCatalog.santaGiftBuiltInIDs
         }
     }
 
@@ -82,6 +89,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .drink: return ShopWire.isulProtocol
         case .pepero: return ShopWire.peperoProtocol
         case .region: return ShopWire.regionProtocol
+        case .santa: return ShopWire.santaProtocol
         }
     }
 
@@ -103,6 +111,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
         case .drink: return .drink
         case .pepero: return .pepero
         case .region: return .region
+        case .santa: return .santa
         }
     }
 
@@ -111,7 +120,7 @@ package enum CharacterGiftKind: String, CaseIterable, Sendable, Equatable {
     package func copy(for id: String?) -> CharacterGiftCopy {
         switch self {
         case .region: return .region(center: RegionAingArt.centerName(of: id))
-        case .birthday, .drink, .pepero: return copy
+        case .birthday, .drink, .pepero, .santa: return copy
         }
     }
 }
@@ -548,6 +557,15 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         lockedCaption: PeperoGiftText.lockedCaption, lockedHint: PeperoGiftText.lockedHint,
         reopenTitle: PeperoGiftText.reopenTitle, reopenButton: PeperoGiftText.reopenButton,
         claimFailed: PeperoGiftText.claimFailed
+    )
+
+    /// 크리스마스 선물(산타 아잉이 — 문구는 가안 `SantaGiftText`, 대표 결정 대기).
+    package static let santa = CharacterGiftCopy(
+        title: SantaGiftText.title, body: SantaGiftText.body, confirmButton: SantaGiftText.confirmButton,
+        wearNowButton: SantaGiftText.wearNowButton, closeButton: SantaGiftText.closeButton,
+        lockedCaption: SantaGiftText.lockedCaption, lockedHint: SantaGiftText.lockedHint,
+        reopenTitle: SantaGiftText.reopenTitle, reopenButton: SantaGiftText.reopenButton,
+        claimFailed: SantaGiftText.claimFailed
     )
 
     /// 우리 센터 선물(지역 아잉이 — 센터를 모를 때의 "우리 센터" 판). 선물 한 장의 글자는 `region(center:)`(`CharacterGiftOffer.copy`).

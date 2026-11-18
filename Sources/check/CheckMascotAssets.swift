@@ -170,6 +170,9 @@ enum CheckMascotAssets {
             if CharacterCatalog.isDevAing(id) { return DevAingFinish.isDrawable(fileManager: fileManager) }
             // 지역 아잉이(부산 · 서울): 초상 두 장 + 밝기 맵. 개발까지 서고 **두 센터가 다** 서야 능력 번호 10 이 나간다(서울 그림 전엔 9).
             if CharacterCatalog.isRegionAing(id) { return RegionAingFinish.isDrawable(id, fileManager: fileManager) }
+            // 산타 아잉이: 초상 두 장 + 밝기 맵. 지역 두 센터까지 서고 산타도 서야 능력 번호 11 이 나간다(빠지면 10 에 머물고 서버가 산타 행 ·
+            // 크리스마스 선물을 안 싣는다). 정의는 `SantaAingFinish.isDrawable` 한 곳.
+            if CharacterCatalog.isSantaAing(id) { return SantaAingFinish.isDrawable(fileManager: fileManager) }
             var required: [URL?] = id == CharacterCatalog.builtInAingID
                 ? [url(for: .neutral), url(for: .negative)]
                 : [catalog.portraitURL(for: id, mood: .neutral), catalog.portraitURL(for: id, mood: .negative)]

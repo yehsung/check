@@ -269,7 +269,8 @@ extension WorkTimerStore {
             case .pepero: return peperoPolicy
             // 우리 센터 선물(지역 아잉이): 다른 센터 사람에게도 잠긴 칸으로 선다(대표 #d_RyTlg0ZZED04 "가. 우리 센터 선물" — 카드 본문
             // "다른 센터 상점에는 '센터 전용' 잠긴 칸으로 보여요"). 서버(p ≥ 10)는 두 행을 모두에게 싣는다.
-            case .birthday, .region, nil: return .everyone
+            // 크리스마스 선물(산타 아잉이): 케이크 · 이슬 · 빼빼로와 같게 모두에게 잠긴 칸('크리스마스 선물'). 서버(p ≥ 11)는 산타 행을 모두에게 싣는다.
+            case .birthday, .region, .santa, nil: return .everyone
             }
         }
         guard drinkPolicy == .ownersOnly || peperoPolicy == .ownersOnly else { return rows }

@@ -82,8 +82,9 @@ package struct MobileDemoCakeGiftRoute: Hashable, Sendable {
             switch kind {
             case .birthday:
                 return claimed.map { "\(MobileDemoCakeGiftRoute.claimedNeedle)-\($0)" } ?? MobileDemoCakeGiftRoute.needle
-            case .drink, .pepero, .region:
+            case .drink, .pepero, .region, .santa:
                 // 빼빼로(지역 아잉이도 같다 — 맥 먼저 · 능력 10)(맥 0.3.77 먼저 · 능력 6)는 폰에 장면이 없다(다음 폰 판) — 고를 것 없는 한 개 선물이라 술 장면의 바늘 꼴을 같이 쓴다.
+                // 산타(크리스마스 선물 — 맥 먼저 · 능력 11)도 폰에 장면이 없다(폰은 산타를 그리지 않는다).
                 return claimed == nil ? MobileDemoCakeGiftRoute.drinkNeedle : MobileDemoCakeGiftRoute.drinkClaimedNeedle
             }
         }
@@ -96,7 +97,7 @@ package struct MobileDemoCakeGiftRoute: Hashable, Sendable {
             let mark: String?
             switch kind {
             case .birthday: mark = MobileDemoCakeGiftRoute.claimedSuffix(for: id)
-            case .drink, .pepero, .region: mark = kind.builtInIDs.contains(id) ? id : nil
+            case .drink, .pepero, .region, .santa: mark = kind.builtInIDs.contains(id) ? id : nil
             }
             guard let mark else { return }
             lock.lock()

@@ -619,6 +619,8 @@ final class ReactionEngine {
         // 부산 갈매기 아잉이도 같은 메시라 자기 표식(`RegionAingFinish.busanMarkerName`)으로 가른다.
         if RegionAingFinish.isBusan(character) { return CharacterCatalog.busanAingID }
         if RegionAingFinish.isSeoul(character) { return CharacterCatalog.seoulAingID }
+        // 산타 아잉이도 같은 메시(팔 접기는 셰이더가 한다)라 자기 표식(`SantaAingFinish.markerName`)으로 가른다.
+        if SantaAingFinish.isSanta(character) { return CharacterCatalog.santaAingID }
         return CharacterCatalog.builtInAingID
     }
 

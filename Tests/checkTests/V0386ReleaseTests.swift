@@ -15,14 +15,10 @@ import Testing
 //
 // 골라 돌리는 필터:
 //   --filter 'checkTests\.(v0386VersionAndChangelog|v0385VersionAndChangelog)\('
-@Test("버전 0.3.86 / 139 · CHANGELOG 0.3.86 가 맨 위(네 줄 · 배너 폭 안 · 내부 어휘 없음)")
+@Test("CHANGELOG 0.3.86 (네 줄 · 배너 폭 안 · 내부 어휘 없음)")
 func v0386VersionAndChangelog() throws {
     let root = CheckCoreSourceLayout.repoRoot
-    let build = try String(contentsOf: root.appendingPathComponent("scripts/build-local.sh"), encoding: .utf8)
-    let squashed = build.replacingOccurrences(of: "\n", with: "").replacingOccurrences(of: " ", with: "")
-    #expect(squashed.contains("<key>CFBundleShortVersionString</key><string>0.3.86</string>"))
-    #expect(squashed.contains("<key>CFBundleVersion</key><string>139</string>"),
-            "사진 · 캡처 서버 문 열기(139)가 이 build 와 같아야 한다")
+    // 버전 고정과 맨 위 섹션 단언은 0.3.87 로 옮겼다(V0387ReleaseTests).
     let changelog = try String(contentsOf: root.appendingPathComponent("CHANGELOG.md"), encoding: .utf8)
     let section = try #require(changelog.components(separatedBy: "\n## ").first { $0.hasPrefix("0.3.86\n") })
     let items = section.components(separatedBy: "\n").filter { $0.hasPrefix("- ") }
@@ -40,6 +36,4 @@ func v0386VersionAndChangelog() throws {
     #expect(items.contains { $0.contains("확성기") && $0.contains("캡처") }, "지난 확성기 · 캡처 줄이 없다")
     #expect(items.contains { $0.contains("대기방") }, "대기방 수리 줄이 없다")
     #expect(items.contains { $0.contains("알까기") }, "알까기 줄이 없다")
-    #expect(changelog.range(of: "## 0.3.86")!.lowerBound < changelog.range(of: "## 0.3.85")!.lowerBound,
-            "0.3.86 가 맨 위 섹션이 아니다(릴리스 스크립트가 맨 위 버전을 쓴다)")
 }

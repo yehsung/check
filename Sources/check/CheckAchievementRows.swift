@@ -738,7 +738,7 @@ struct MissionGroupHeader: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
-            Spacer(minLength: 4)
+            Spacer(minLength: Self.spacerMinLength(hasClaimAll: claimAll != nil))
             if let claimAll {
                 // 폭만 잡는다(높이 0) — 머리 줄 높이 · 글자 자리가 버튼이 없을 때와 같다. 누르는 버튼은 아래 overlay 다.
                 claimAllButton(claimAll)
@@ -760,6 +760,11 @@ struct MissionGroupHeader: View {
         }
         .padding(.top, 6)
     }
+
+    /// 안내와 오른쪽 끝(힌트 · [모두 받기] 자리) 사이 Spacer 의 최소 폭. 버튼이 서면 0 — HStack 간격 6 + 6 만으로 12pt 가 벌어지고,
+    /// 일일 머리 + 가장 긴 버튼('12개 모두 받기' — 서버 일일 열두 줄)이 '스크롤 막대 항상 보기' 폭(292 − 17pt)에도 안내를 줄이지 않고
+    /// 들어간다(검토 지적 2026-11-18 · 시험이 잰다). 버튼이 없으면 예전 그대로 4.
+    static func spacerMinLength(hasClaimAll: Bool) -> CGFloat { hasClaimAll ? 0 : 4 }
 
     private func claimAllButton(_ offer: MissionClaimAllOffer) -> MissionClaimAllButton {
         MissionClaimAllButton(offer: offer, busy: claim.isClaimAllBusy(offer.group)) { claim.claimAll(offer.group) }

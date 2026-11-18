@@ -208,6 +208,9 @@ extension WorkTimerStore {
         // 전부 받기가 떠 있으면 낱개도 기다린다(같은 행을 두 요청이 함께 잡지 않게 — 서버가 막지만 버튼도 흐려 둔다).
         guard !achievementClaimsInFlight.contains(slot),
               !achievementClaimsInFlight.contains(Self.achievementClaimAllSlot) else { return nil }
+        // 거꾸로도 같다 — 낱개(캐릭터 받기 포함)가 하나라도 떠 있으면 키 없는 받기는 기다린다. 화면의 [모두 받기]도 그때 흐려지지만
+        // (`MissionClaimContext.isClaimAllBusy`) 다시 그려지기 전의 두 번 누름은 스토어가 막는다(검토 지적 2026-11-18 — 말풍선 둘 금지).
+        guard key != nil || achievementClaimsInFlight.isEmpty else { return nil }
         achievementClaimsInFlight.insert(slot)
         let generation = sessionGeneration
         let rubySerial = rubyBalanceWriteSerial
@@ -246,7 +249,9 @@ extension WorkTimerStore {
         if failed {
             next.formUnion(keys)
         } else if key == nil {
-            next.removeAll()
+            // 키 없는 받기는 루비 미션만 받는다 — 캐릭터 보상 줄(`claimCharacterMission`)의 실패 표시는 남긴다(그 줄은 아직 못 받았다.
+            // 지우면 받을 수 있는 것처럼 보이고 눌러도 또 실패한다 — 검토 지적 2026-11-18, 맥 [모두 받기]가 이 길을 처음 연다).
+            next.formIntersection(Set(achievements?.characterMissions.map(\.key) ?? []))
         } else {
             next.subtract(keys)
         }
@@ -382,6 +387,8 @@ extension WorkTimerStore {
         let slot = key ?? Self.achievementClaimAllSlot
         guard !dailyMissionClaimsInFlight.contains(slot),
               !dailyMissionClaimsInFlight.contains(Self.achievementClaimAllSlot) else { return nil }
+        // 낱개가 떠 있으면 키 없는 일일 받기도 기다린다(누적 받기와 같은 이유 — 검토 지적 2026-11-18).
+        guard key != nil || dailyMissionClaimsInFlight.isEmpty else { return nil }
         dailyMissionClaimsInFlight.insert(slot)
         let generation = sessionGeneration
         let rubySerial = rubyBalanceWriteSerial

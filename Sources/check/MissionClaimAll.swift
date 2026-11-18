@@ -88,6 +88,7 @@ extension MissionClaimContext {
 
     /// 그 묶음에 떠 있는 받기가 하나라도 있는가 — [모두 받기]가 흐려진다(같은 줄을 두 요청이 함께 잡지 않게. 모두 받기가 떠 있으면
     /// 줄 쪽은 `isInFlight(_:group:)` 가 이미 막는다 — 스토어 자리 `achievementClaimAllSlot`). 누적은 캐릭터 받기도 같은 집합이다.
+    /// 스토어도 같은 규칙으로 막는다(낱개가 떠 있으면 키 없는 받기 0건 — 이 흐림이 그려지기 전의 두 번 누름 몫).
     func isClaimAllBusy(_ group: MissionClaimAllGroup) -> Bool {
         switch group {
         case .daily: return !dailyInFlightKeys.isEmpty

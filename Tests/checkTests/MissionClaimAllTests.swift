@@ -13,7 +13,7 @@ import Testing
 //    계열로 접기 전) · 낱말 하나('모두 받기') · 맥락이 묶음마다 맞는 받기를 부른다 · 떠 있으면 흐려진다.
 //  B 스토어 길 — 미션 화면의 맥락으로 누르면 그 묶음만 키 없이 한 번(`{"p_key":null}`) · 다른 묶음 받기는 0건 · 말풍선은 합계로 한 번 ·
 //    연출은 줄(계열)마다 하나 · 떠 있는 동안 두 번째는 0건 · 줄 [받기]도 흐려진다 · 실패는 받을 줄 전부 · 자정을 넘기면 받기 0건.
-//  C 그림 — 머리 20pt · 292pt 안(일일 머리 안내와 같이) · 버튼은 제목 · 안내 글자를 안 밀고 머리 밖으로 안 나간다 · 하나뿐이면 버튼 없음 ·
+//  C 그림 — 머리 20pt · 292pt 안(일일 머리 안내와 같이 — '스크롤 막대 항상 보기' 폭에서도) · 버튼은 제목 · 안내 글자를 안 밀고 머리 밖으로 안 나간다 · 하나뿐이면 버튼 없음 ·
 //    팝오버 창 높이 그대로(≤ 700pt) · PNG 는 `FEATURE_SHOTS_DIR` 에.
 //  D 소스 계약(주석 제외) — 배선 · 새 네트워크 없음 · 주간 머리엔 없다.
 // 실네트워크 없음(호스트별 스텁) · 창 없음(ImageRenderer 만) · 이름 · 숫자는 전부 지어낸 것이다.
@@ -148,10 +148,14 @@ private func mcaChild(_ label: String, of value: Any) -> Any? {
     Mirror(reflecting: value).children.first { $0.label == label }?.value
 }
 
-/// PNG 를 `FEATURE_SHOTS_DIR`(있으면)에 굽는다. 없으면 이 실행의 임시 폴더.
+/// 스틸을 구울 폴더(`FEATURE_SHOTS_DIR`). 없으면 nil — 스위트 · 게이트 실행은 PNG 를 안 쓴다(단언은 그대로 돈다 · V0355 스틸과 같은 규약).
+private var mcaShotsDir: URL? {
+    ProcessInfo.processInfo.environment["FEATURE_SHOTS_DIR"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0, isDirectory: true) }
+}
+
+/// PNG 를 `FEATURE_SHOTS_DIR` 에 굽는다. 없으면 아무것도 안 쓴다.
 private func mcaSave(_ bitmap: NSBitmapImageRep, name: String) {
-    let dir = ProcessInfo.processInfo.environment["FEATURE_SHOTS_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
-        ?? FileManager.default.temporaryDirectory.appendingPathComponent("check-claim-all", isDirectory: true)
+    guard let dir = mcaShotsDir else { return }
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     guard let png = bitmap.representation(using: .png, properties: [:]) else { return }
     try? png.write(to: dir.appendingPathComponent(name))
@@ -205,6 +209,7 @@ private func mcaStore(_ label: String,
                       status: @escaping @Sendable (Int) -> GomokuStubProtocol.Reply = { _ in .init(body: MCAFixture.json()) },
                       achievementClaim: @escaping @Sendable (Int) -> GomokuStubProtocol.Reply = { _ in .init(status: 500, body: "{}") },
                       dailyClaim: @escaping @Sendable (Int) -> GomokuStubProtocol.Reply = { _ in .init(status: 500, body: "{}") },
+                      characterClaim: @escaping @Sendable (Int) -> GomokuStubProtocol.Reply = { _ in .init(status: 500, body: "{}") },
                       function: String = #function) -> (WorkTimerStore, String) {
     let host = V0355WeeklyStoreTests.host("mca-\(label)")
     GomokuStubProtocol.register(host: host) { rpc, _, index in
@@ -212,6 +217,7 @@ private func mcaStore(_ label: String,
         case "achievements_status": return status(index)
         case "achievement_claim": return achievementClaim(index)
         case "daily_mission_claim": return dailyClaim(index)
+        case "achievement_character_claim": return characterClaim(index)
         default: return nil
         }
     }
@@ -454,6 +460,91 @@ private func mcaCalls(_ host: String, _ rpc: String) -> [GomokuStubProtocol.Call
         #expect(store.achievementClaimFailedKeys.isEmpty && bubbles == [275])
     }
 
+    @Test("캐릭터 줄 실패 표시는 누적 [모두 받기]가 지우지 않는다(그 요청은 캐릭터를 안 받는다) · 모두 받기 성공은 루비 줄 표시만 내린다")
+    func mcaClaimAllKeepsCharacterFailure() async throws {
+        let rows = MCAFixture.cumulativeSeveral
+        let character = MCAFixture.characterClaimable
+        let statusBody = MCAFixture.json(rows, character: character)
+        let claimBody = MCAFixture.claimAllCumulativeJSON(rows, character: character)
+        let (store, host) = mcaStore("character-kept",
+                                     status: { _ in .init(body: statusBody) },
+                                     achievementClaim: { index in
+                                         index == 0 ? .init(status: 500, body: #"{"message":"boom"}"#) : .init(body: claimBody)
+                                     },
+                                     characterClaim: { _ in .init(status: 500, body: #"{"message":"boom"}"#) })
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        let context = try mcaPanelContext(store)
+        // 캐릭터 줄 [받기]가 실패했다 — 그 줄에 실패 문장.
+        context.claimCharacter("work100")
+        #expect(await V0354CoreStub.waitUntil {
+            store.achievementClaimsInFlight.isEmpty && mcaCalls(host, "achievement_character_claim").count == 1
+        })
+        #expect(store.achievementClaimFailedKeys == ["work100"], "전제: 캐릭터 줄 실패 표시 \(store.achievementClaimFailedKeys.sorted())")
+        // 모두 받기 실패 — 루비 줄 전부가 더해진다(캐릭터 표시는 그대로).
+        context.claimAll(.achievement)
+        #expect(await V0354CoreStub.waitUntil { store.achievementClaimsInFlight.isEmpty && mcaCalls(host, "achievement_claim").count == 1 })
+        #expect(store.achievementClaimFailedKeys == ["work100", "phone_login", "team3", "poke10", "poke50"])
+        // 모두 받기 성공 — 루비 줄 표시만 내린다. 캐릭터 줄은 아직 못 받았으니 실패 문장이 남는다(지우면 받을 수 있는 것처럼 보인다).
+        context.claimAll(.achievement)
+        #expect(await V0354CoreStub.waitUntil { store.achievementClaimsInFlight.isEmpty && mcaCalls(host, "achievement_claim").count == 2 })
+        #expect(store.achievementClaimFailedKeys == ["work100"],
+                "모두 받기 성공이 캐릭터 줄 실패 표시까지 지웠다: \(store.achievementClaimFailedKeys.sorted())")
+        #expect(store.achievements?.characterClaimable.map(\.key) == ["work100"])
+        #expect(mcaCalls(host, "achievement_character_claim").count == 1, "모두 받기가 캐릭터 받기를 불렀다")
+    }
+
+    @Test("스토어도 막는다 — 그 묶음 낱개(캐릭터 받기 포함)가 떠 있으면 키 없는 받기 0건 · 다른 묶음 낱개는 상관없다 · 끝나면 나간다 · 말풍선은 받기마다 한 번")
+    func mcaStoreRefusesClaimAllNextToSingle() async throws {
+        let rows = MCAFixture.cumulativeSeveral, daily = MCAFixture.dailySeveral
+        let team = try #require(rows.first { $0.key == "team3" })
+        let restRows = rows.filter { $0.achieved && !$0.claimed && $0.key != team.key }
+        let afterTeam = V0358Fixture.with(rows, team.key, claimed: true)
+        let allRows = restRows.reduce(afterTeam) { V0358Fixture.with($0, $1.key, claimed: true) }
+        let gomoku = try #require(daily.first { $0.key == "daily_gomoku" })
+        let restDaily = daily.filter { $0.achieved && !$0.claimed && $0.key != gomoku.key }
+        let afterGomoku = V0364Fixture.with(daily, gomoku.key, claimed: true)
+        let allDaily = restDaily.reduce(afterGomoku) { V0364Fixture.with($0, $1.key, claimed: true) }
+        #expect(restRows.count == 3 && restDaily.count == 2, "전제: 누적 넷 · 일일 셋을 받을 수 있다")
+        // 받기 응답은 언제나 일일 칸을 같이 싣는다(실서버와 같다 — 빠지면 일일 줄이 사라진다).
+        let teamBody = MCAFixture.json(afterTeam, daily: daily, claimedNow: [(team.key, team.title, team.reward)])
+        let restBody = MCAFixture.json(allRows, daily: daily, claimedNow: restRows.map { ($0.key, $0.title, $0.reward) })
+        let gomokuBody = MCAFixture.json(rows, daily: afterGomoku, claimedNow: [(gomoku.key, gomoku.title, gomoku.reward)])
+        let restDailyBody = MCAFixture.json(rows, daily: allDaily, claimedNow: restDaily.map { ($0.key, $0.title, $0.reward) })
+        let (store, host) = mcaStore("single-then-all",
+                                     status: { _ in .init(body: MCAFixture.json(rows, daily: daily)) },
+                                     achievementClaim: { index in index == 0 ? .init(body: teamBody, delay: 0.3) : .init(body: restBody) },
+                                     dailyClaim: { index in index == 0 ? .init(body: gomokuBody, delay: 0.3) : .init(body: restDailyBody) })
+        var bubbles: [Int] = []
+        store.onRewardTrigger = { if case .rubyReward(let amount) = $0 { bubbles.append(amount) } }
+        await store.refreshAchievements(reason: .missionPanel)?.value
+        // 줄 [받기] 를 누르고 화면이 다시 그려지기 전에 [모두 받기]를 누른 순간.
+        let single = store.claimAchievement(key: team.key)
+        #expect(single != nil)
+        #expect(store.claimAchievement(key: nil) == nil, "누적 낱개가 떠 있는데 키 없는 받기가 나갔다")
+        let dailySingle = store.claimDailyMission(key: gomoku.key)
+        #expect(dailySingle != nil, "누적 낱개가 일일 받기까지 막았다")
+        #expect(store.claimDailyMission(key: nil) == nil, "일일 낱개가 떠 있는데 키 없는 일일 받기가 나갔다")
+        await single?.value
+        await dailySingle?.value
+        #expect(mcaCalls(host, "achievement_claim").count == 1 && mcaCalls(host, "daily_mission_claim").count == 1, "겹친 받기가 나갔다")
+        // 캐릭터 받기가 떠 있어도 같다(같은 집합 — 화면의 흐림 `isClaimAllBusy` 와 같은 규칙).
+        store.achievementClaimsInFlight = ["work100"]
+        #expect(store.claimAchievement(key: nil) == nil, "캐릭터 받기가 떠 있는데 키 없는 받기가 나갔다")
+        store.achievementClaimsInFlight = []
+        // 낱개가 끝나면 나간다.
+        let all = store.claimAchievement(key: nil)
+        let dailyAll = store.claimDailyMission(key: nil)
+        #expect(all != nil && dailyAll != nil, "낱개가 끝났는데 [모두 받기]가 막혔다")
+        await all?.value
+        await dailyAll?.value
+        #expect(mcaCalls(host, "achievement_claim").count == 2 && mcaCalls(host, "achievement_claim").last?.body == #"{"p_key":null}"#)
+        #expect(mcaCalls(host, "daily_mission_claim").count == 2 && mcaCalls(host, "daily_mission_claim").last?.body == #"{"p_key":null}"#)
+        // 말풍선은 받기마다 한 번 — 낱개 · 나머지 합(누적) · 낱개 · 나머지 합(일일).
+        let expected = [team.reward, restRows.reduce(0) { $0 + $1.reward }, gomoku.reward, restDaily.reduce(0) { $0 + $1.reward }]
+        #expect(bubbles.sorted() == expected.sorted(), "말풍선 \(bubbles)")
+        #expect(store.achievements?.claimable.isEmpty == true && MissionClaimAllOffer.daily(store.dailyMissionRows) == nil)
+    }
+
     @Test("자정 — 서버 시각으로 리셋을 넘기면 일일 버튼이 내려가고 · 남은 버튼을 눌러도 받기 0건(넘김을 적고 조회 한 번 — 반응 없는 버튼 금지)")
     func mcaDailyRollover() async throws {
         let clock = V0355Clock(V0355WeeklyStoreTests.t0)
@@ -485,15 +576,16 @@ private func mcaCalls(_ host: String, _ rpc: String) -> [GomokuStubProtocol.Call
     static func height(_ view: CheckMenuView) throws -> CGFloat { CGFloat(try mcaBitmap(view).pixelsHigh) / 2 }
 
     static func header(_ claimAll: MissionClaimAllOffer?, pending: Int, note: String? = DailyMissionCopy.resetNote,
+                       width: CGFloat = 292,
                        context: MissionClaimContext = MissionClaimContext()) throws -> NSBitmapImageRep {
         try mcaBitmap(MissionGroupHeader(title: DailyMissionCopy.sectionTitle, note: note, pendingCount: pending, claimAll: claimAll)
-            .frame(width: 292)
+            .frame(width: width)
             .background(Color.black)
             .environment(\.missionClaim, context)
             .environment(\.colorScheme, .dark))
     }
 
-    @Test("머리 — 버튼이 서도 한 줄 20pt · 292pt 안(일일 안내 + 가장 긴 '12개 모두 받기') · 제목 · 안내 글자는 그대로 · 버튼은 머리 밖으로 안 나간다")
+    @Test("머리 — 버튼이 서도 한 줄 20pt · 292pt 안(일일 안내 + 가장 긴 '12개 모두 받기') · 스크롤 막대가 보이는 폭에서도 · 제목 · 안내 글자는 그대로 · 버튼은 머리 밖으로 안 나간다")
     func mcaHeaderFitsWidthAndHeight() throws {
         let caption = NSFont.preferredFont(forTextStyle: .caption1)
         let bold = NSFontManager.shared.convert(caption, toHaveTrait: .boldFontMask)
@@ -504,8 +596,12 @@ private func mcaCalls(_ host: String, _ rpc: String) -> [GomokuStubProtocol.Call
         let buttonWidth = CGFloat(button.pixelsWide) / 2
         #expect(CGFloat(button.pixelsHigh) / 2 == MissionClaimAllButton.height && MissionClaimAllButton.height <= MissionGroupLayout.headerHeight)
         let noteEnd = width(DailyMissionCopy.sectionTitle, bold) + 6 + width(DailyMissionCopy.resetNote, caption2)
-        let total = noteEnd + 4 + buttonWidth
-        print("[mca] 일일 머리 폭 — 제목+안내 \(noteEnd) + 버튼 \(buttonWidth) = \(total)pt / 292pt")
+        // 머리는 `HStack(spacing: 6)` 에 안내 · Spacer · 버튼 자리다 — 안내와 버튼 사이 최소 6 + Spacer 최소 + 6(검토 지적 2026-11-18:
+        // 예전 셈은 Spacer 몫 4 만 더해 HStack 간격 둘(12pt)을 빠뜨렸다).
+        #expect(MissionGroupHeader.spacerMinLength(hasClaimAll: false) == 4, "버튼 없는 머리의 Spacer 가 바뀌었다")
+        let gap: CGFloat = 6 + MissionGroupHeader.spacerMinLength(hasClaimAll: true) + 6
+        let total = noteEnd + gap + buttonWidth
+        print("[mca] 일일 머리 폭 — 제목+안내 \(noteEnd) + 틈 \(gap) + 버튼 \(buttonWidth) = \(total)pt / 292pt")
         #expect(total <= 292, "일일 머리가 한 줄에 안 들어간다(\(total)pt)")
         for count in [2, 6, 12] {
             let offer = MissionClaimAllOffer(group: .daily, count: count)
@@ -521,6 +617,17 @@ private func mcaCalls(_ host: String, _ rpc: String) -> [GomokuStubProtocol.Call
             #expect(box.maxX <= 292)
             #expect(mcaGradientPixels(with, x: box.minX...box.maxX, y: 0...20) > 150, "머리 버튼이 [받기]와 같은 그라데이션이 아니다")
         }
+        // '스크롤 막대 항상 보기'(시스템 설정)면 스크롤 내용이 막대 폭만큼 좁다 — 서버 일일 열두 줄을 다 채운 날(가장 긴 버튼)에도
+        // 안내 글자가 줄어들거나 밀리지 않는다.
+        let legacyWidth = 292 - NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+        print("[mca] 막대 보기 폭 \(legacyWidth)pt — 필요 \(total)pt")
+        #expect(total <= legacyWidth, "스크롤 막대가 보이면 일일 머리가 한 줄에 안 들어간다(\(total)pt > \(legacyWidth)pt)")
+        let narrowWith = try Self.header(widest, pending: widest.count, width: legacyWidth)
+        let narrowWithout = try Self.header(nil, pending: 0, width: legacyWidth)
+        #expect(narrowWith.pixelsHigh == 40)
+        let narrowBox = try #require(mcaDiffBox(narrowWith, narrowWithout), "좁은 머리에 버튼이 안 그려졌다")
+        #expect(narrowBox.minX >= noteEnd, "막대 보기 폭에서 버튼이 안내 글자를 줄이거나 밀었다(갈림 x \(narrowBox.minX) < 안내 끝 \(noteEnd))")
+        #expect(narrowBox.maxX <= legacyWidth)
         // 흐린 버튼(떠 있음)은 다른 그림이다 — 같은 자리 · 같은 크기.
         let offer = MissionClaimAllOffer(group: .daily, count: 3)
         let idle = try Self.header(offer, pending: 3)
@@ -598,8 +705,12 @@ private func mcaCalls(_ host: String, _ rpc: String) -> [GomokuStubProtocol.Call
         mcaSave(several, name: "claim-all-panel-several-full.png")
         mcaSave(single, name: "claim-all-panel-single-full.png")
         mcaSave(busy, name: "claim-all-panel-daily-busy-full.png")
-        mcaSave(try visible(MCAFixture.status(daily: MCAFixture.dailySeveral)), name: "claim-all-panel-several-visible.png")
-        mcaSave(try visible(MCAFixture.status(MCAFixture.cumulativeSingle, daily: MCAFixture.dailySingle)), name: "claim-all-panel-single-visible.png")
+        // 보이는 창 스틸은 PNG 전용이다(단언 없음) — 폴더를 받았을 때만 그린다(스위트 시간을 아낀다).
+        if mcaShotsDir != nil {
+            mcaSave(try visible(MCAFixture.status(daily: MCAFixture.dailySeveral)), name: "claim-all-panel-several-visible.png")
+            mcaSave(try visible(MCAFixture.status(MCAFixture.cumulativeSingle, daily: MCAFixture.dailySingle)),
+                    name: "claim-all-panel-single-visible.png")
+        }
         #expect(several.pixelsHigh == single.pixelsHigh, "같은 줄 수인데 스틸 높이가 다르다")
         // 일일 머리 자리 — 같은 표에서 일일 버튼만 다른 그림(떠 있음)과 견주면 위쪽 첫 갈림이 일일 머리다.
         let dailyHead = try #require(mcaDiffBox(several, busy, maxX: 330), "떠 있는데 일일 버튼 · 줄이 안 흐려졌다")

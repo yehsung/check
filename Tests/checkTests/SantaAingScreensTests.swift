@@ -6,9 +6,9 @@ import Testing
 @testable import check
 @testable import CheckCore
 
-// 산타 아잉이 — 크리스마스 선물의 맥 **화면**(창 없이 — ImageRenderer): 받는 창(초대장 — 고를 것 없이 [선물 받기]) · 받은 뒤 ·
+// 산타 아잉이 — 크리스마스 선물의 맥 **화면**(창 없이 — ImageRenderer): 받는 창(초대장 — 고를 것 없이 [선물 열기]) · 받은 뒤 ·
 // 상점 잠긴 칸('크리스마스 선물' — 모두에게) · 보유 칸 · 잠긴 칸을 누른 바(얻는 길 안내) · 메뉴 다시 열기 카드 문구. 틀은 지역 아잉이
-// (RegionAingScreensTests)와 같다. 문구는 가안(`SantaGiftText` — 대표 결정 대기).
+// (RegionAingScreensTests)와 같다. 문구는 `SantaGiftText`(대표 #d_4wR1Qzn9OKmt "띵동! 산타 왔어요 🎁").
 // 증거 PNG: `CHECK_SANTA_AING_EVIDENCE_DIR=<폴더>` 를 주면 떨군다(기본 실행은 안 쓴다).
 
 private let stSanta = CharacterCatalog.santaAingID
@@ -64,7 +64,7 @@ private func stShopStore(owned: Set<String>, function: String = #function, line:
 @MainActor
 @Suite("산타 아잉이 — 맥 화면", .serialized)
 struct SantaAingScreensTests {
-    @Test("받는 창(크리스마스 선물): 초대장 → 받은 뒤 — 제목 · 카드 문구는 산타 묶음 · 초상이 칠해진다 · 고를 것 없이 [선물 받기] · 운영자 한 줄")
+    @Test("받는 창(크리스마스 선물): 초대장 → 받은 뒤 — 제목 · 카드 문구는 산타 묶음 · 초상이 칠해진다 · 고를 것 없이 [선물 열기] · 운영자 한 줄")
     func inviteWindow() throws {
         let size = CakeGiftWindowLayout.contentSize
         func shot(_ store: WorkTimerStore) throws -> NSBitmapImageRep {
@@ -93,7 +93,7 @@ struct SantaAingScreensTests {
         stSave(received, "santa-window-received.png")
     }
 
-    @Test("수령 실패 줄: 산타 선물의 needs_update · 알 수 없음은 생일과 같은 글자(가안 묶음의 notice) · 선물은 열린 채")
+    @Test("수령 실패 줄: 산타 선물의 needs_update · 알 수 없음은 생일과 같은 글자(산타 묶음의 notice) · 선물은 열린 채")
     func claimFailureNotice() {
         let store = V0366CakeMacScreensTests.menuStore("santa-notice")
         let offer = stOffer()

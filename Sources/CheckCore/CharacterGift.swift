@@ -30,7 +30,7 @@ import Foundation
 //
 // ── 크리스마스 선물 — 산타 아잉이 (맥 먼저 · 크리스마스 기간 선물) ──
 // 다섯째 종류 `'santa'`. 빼빼로와 같은 틀이다: 선택지 하나(고를 것 없이 받기) · 최소 능력 번호 11 · 서버는 p ≥ 11 에게만 산타 선물을 싣고,
-// 수령은 p < 11 이면 `needs_update`. 이 종류를 모르는 옛 빌드는 `kind` 를 몰라 선물 없음으로 삼킨다(아래 디코드 규칙). 문구는 `SantaGiftText`(가안).
+// 수령은 p < 11 이면 `needs_update`. 이 종류를 모르는 옛 빌드는 `kind` 를 몰라 선물 없음으로 삼킨다(아래 디코드 규칙). 문구는 `SantaGiftText`(대표 #d_4wR1Qzn9OKmt "띵동! 산타 왔어요 🎁").
 
 // MARK: 전선 모양 — character_gift_pending
 
@@ -559,7 +559,7 @@ package struct CharacterGiftCopy: Equatable, Sendable {
         claimFailed: PeperoGiftText.claimFailed
     )
 
-    /// 크리스마스 선물(산타 아잉이 — 문구는 가안 `SantaGiftText`, 대표 결정 대기).
+    /// 크리스마스 선물(산타 아잉이 — 문구는 `SantaGiftText`, 대표 #d_4wR1Qzn9OKmt).
     package static let santa = CharacterGiftCopy(
         title: SantaGiftText.title, body: SantaGiftText.body, confirmButton: SantaGiftText.confirmButton,
         wearNowButton: SantaGiftText.wearNowButton, closeButton: SantaGiftText.closeButton,

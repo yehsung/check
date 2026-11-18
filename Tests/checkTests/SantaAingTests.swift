@@ -7,7 +7,7 @@ import Testing
 // 산타 아잉이(크리스마스 기간 선물 — 대표 #d_3VZdglOgRABx "산타아잉이는 그냥 주고, 루돌프 아잉이는 따로 이벤트를 기획하자").
 //  ① 코어: 내장 열셋째 · 마감 .santa · 선물 전용(종류 santa — 빼빼로와 같은 기간 선물) · 능력 번호 11 은 지역 두 센터까지 다 그리고 산타도 그릴
 //     때만(판정 자리는 `ShopWire.protocolVersion` 하나) · 팔 접기 · 셰이더 글자 · 장식 조각 · 장식 굽기.
-//  ② 선물 전선: 'santa' 해석(서비스 디코더 = snake → camel) · 번호 10 이하 빌드엔 섞여 와도 안 띄움 · 수령 needs_update(min 11) · 문구 가안.
+//  ② 선물 전선: 'santa' 해석(서비스 디코더 = snake → camel) · 번호 10 이하 빌드엔 섞여 와도 안 띄움 · 수령 needs_update(min 11) · 문구(대표 C).
 //  ③ 맥 3D: 실제 앱 씬에 산타 마감(팔 접기 굽기 칸 + 무지개 합성 디퓨즈 + 산타 셰이더 + ckShadeMap + 장식 + 표식) · 렌더(배 빨강 · 수염 흰 ·
 //     얼굴 살구빛 · 장화 검정) · 엔진 교체 왕복 · 그릴 수 있다(번들 → 11) · 초상 URL · 프레이밍(부유 · 울트라 산타 자세 — 스트레치 털 방울).
 //  ④ 출시 게이트: 문구가 가안(`SantaGiftText.copyDecided` false)인 채로 맥 버전을 0.3.86 다음으로 올리면 빨갛다.
@@ -253,14 +253,14 @@ import Testing
         #expect(calls.allSatisfy { Set($0.json.keys) == ["p_protocol"] })
     }
 
-    /// 받는 창 문구는 대표 결정 대기다(출시 전 교체). 이 시험은 지금의 **가안**을 적어 두기만 한다 — 문구가 정해지면 부모가 이 줄들을 바꾼다.
-    @Test("santaGiftCopyAwaitingDecision — 문구 대표 결정 대기(가안 기록)")
-    func santaGiftCopyAwaitingDecision() {
-        #expect(SantaGiftText.title == "메리 크리스마스! 🎄")
-        #expect(SantaGiftText.body == "산타 아잉이가 선물 들고 왔어요!")
-        #expect(SantaGiftText.confirmButton == "선물 받기")
-        #expect(SantaGiftText.reopenTitle == "산타 선물이 기다려요")
-        #expect(SantaGiftText.reopenButton == "받기")
+    /// 받는 창 문구 — 대표 결정 #d_4wR1Qzn9OKmt "C 띵동! 산타 왔어요 🎁"(깜짝 방문 느낌, 단추 '선물 열기'). 다시 열기 카드는 그 말투에 맞춤.
+    @Test("santaGiftCopyDecided — 받는 창 문구는 대표 결정 C(띵동! 산타 왔어요 🎁 · 선물 열기)")
+    func santaGiftCopyDecided() {
+        #expect(SantaGiftText.title == "띵동! 산타 왔어요 🎁")
+        #expect(SantaGiftText.body == "착한 아잉이에게 산타가 찾아왔어요")
+        #expect(SantaGiftText.confirmButton == "선물 열기")
+        #expect(SantaGiftText.reopenTitle == "띵동! 산타 선물이 기다려요 🎁")
+        #expect(SantaGiftText.reopenButton == "선물 열기")
         #expect(SantaGiftText.lockedCaption == "크리스마스 선물")
         #expect(SantaGiftText.lockedHint == "크리스마스에만 주는 선물이에요. 루비나 뽑기로는 얻을 수 없어요.")
         #expect(SantaGiftText.wearNowButton == CakeGiftText.wearNowButton && SantaGiftText.closeButton == CakeGiftText.closeButton)
@@ -270,7 +270,7 @@ import Testing
         #expect(copy.title == SantaGiftText.title && copy.body == SantaGiftText.body && copy.confirmButton == SantaGiftText.confirmButton
                 && copy.lockedCaption == SantaGiftText.lockedCaption && copy.lockedHint == SantaGiftText.lockedHint
                 && copy.reopenTitle == SantaGiftText.reopenTitle && copy.reopenButton == SantaGiftText.reopenButton)
-        #expect(!SantaGiftText.copyDecided, "문구가 정해졌다 — 위 가안 기록을 정해진 글자로 바꾸고 이 시험 이름도 바꾼다")
+        #expect(SantaGiftText.copyDecided, "문구는 대표 결정으로 정해졌다(#d_4wR1Qzn9OKmt) — copyDecided 가 false 로 돌아가면 출시 게이트가 다시 잠긴다")
     }
 
     /// 출시 게이트(검토 지적 — 가안 문구는 게이트를 지나 판에 실린다: 위 시험은 가안을 적어 둘 뿐이라 가안이 나가도 초록이다).

@@ -156,6 +156,10 @@ enum CheckCharacter3DScene {
         case .busan: RegionAingFinish.applyBusan(to: character)
         // 서울의 밤 아잉이(지역 아잉이): 무지개와 같은 디퓨즈 합성 + 밤하늘 몸 셰이더 + 표식. 장식 없음 · 내려 세우지 않는다.
         case .seoul: RegionAingFinish.applySeoul(to: character)
+        // 산타 아잉이(크리스마스 선물): 팔 접기(geometry 셰이더) + 무지개와 같은 디퓨즈 합성 + 산타 몸 셰이더 + 털 방울 · 콧수염 · 코 · 장화 ·
+        // 둥근 팔 장식(`check.santaDecor`) + 표식. 내려 세우지 않는다(털 방울이 빼빼로 막대 끝보다 낮다 — 울트라만 엔진이 내려 세운다,
+        // `SantaAingFinish` 머리말 ★ 프레이밍).
+        case .santa: SantaAingFinish.apply(to: character)
         }
     }
 

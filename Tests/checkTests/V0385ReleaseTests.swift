@@ -42,7 +42,8 @@ func v0385RegionAingGate() {
     #expect(RegionAingFinish.isDrawable(CharacterCatalog.busanAingID) && RegionAingFinish.isDrawable(CharacterCatalog.seoulAingID),
             "두 센터 아잉이 그림이 번들에 다 있어야 한다")
     let drawable = WorkTimerStore.bundledDrawableCharacterIDs
-    #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) == ShopWire.regionProtocol,
+    // 옛 판 게이트 — 번호는 누적이라 '10 이상'(산타 아잉이 판은 11).
+    #expect(ShopWire.protocolVersion(drawableCharacterIDs: drawable) >= ShopWire.regionProtocol,
             "출시 빌드가 10 을 싣지 않으면 아무도 우리 센터 선물을 못 받는다 — 번들 drawable \(drawable)")
     #expect(CharacterGiftKind.region.minProtocol == ShopWire.regionProtocol)
     #expect(CharacterGiftOffer(id: "g", options: [CharacterCatalog.busanAingID], kind: .region).copy.title == "부산센터 선물 도착!")

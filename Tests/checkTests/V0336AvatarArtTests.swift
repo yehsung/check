@@ -83,6 +83,9 @@ struct V0336PortraitBoxTests {
         ("aing_busan", CGSize(width: 164, height: 162)),
         // 서울의 밤 아잉이: 같은 3D 정면 렌더 초상(장식 없음 — 개발 아잉이와 같은 알파 상자).
         ("aing_seoul", CGSize(width: 166, height: 153)),
+        // 산타 아잉이: 같은 3D 정면 렌더 초상(아잉 초상 몸 상자에 맞춤) — 정수리 털 방울 · 장화까지 알파 상자(`tight`). 세로가 길어(165×173)
+        // 가로 상한에 안 걸린다.
+        ("aing_santa", CGSize(width: 165, height: 173)),
     ]
 
     @Test func 높이를_지름에_맞추고_폭은_원본_비대로_따라간다() {
@@ -331,7 +334,8 @@ struct V0336FaceScaleTests {
         let dev = V0381DevAingCoreTests.macDevPortraitsInSourceTree ? 1 : 0
         let busan = RegionAingCoreTests.macBusanPortraitsInSourceTree ? 1 : 0
         let seoul = RegionAingCoreTests.macSeoulPortraitsInSourceTree ? 1 : 0
-        #expect(widths.count == 9 + cakes + isul + pepero + hwoo + ruby + dev + busan + seoul, "\(widths.count) 종만 쟀다")
+        let santa = SantaAingCoreTests.macSantaPortraitsInSourceTree ? 1 : 0
+        #expect(widths.count == 9 + cakes + isul + pepero + hwoo + ruby + dev + busan + seoul + santa, "\(widths.count) 종만 쟀다")
         let values = widths.map(\.1)
         let lo = try #require(values.min()), hi = try #require(values.max())
         #expect(hi / lo < 1.30, "얼굴 폭이 \(hi / lo) 배 갈렸다 — \(widths)")

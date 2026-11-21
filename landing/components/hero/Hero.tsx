@@ -4,12 +4,12 @@
 // 렌더 높이 --pop-h(1440×900 → 653 = .5 배율), 둘레 베젤 16px. 크롭·마스크 없음(모서리 14px 둥글림은 렌더 바깥 여백만 닿는다).
 // 들어오는 순간(유일한 자동 연출 — globals.css): 글 줄 200–700 차례로 · 팝오버 응결 300–1100(.hero-pop) · 아잉 1200~(HeroStage).
 // 버튼 줄은 두 벌을 SSR 하고 폭·플랫폼으로 하나만 보인다(깜빡임 0):
-//   ≥768 · iOS 아님 : [Mac용 다운로드](보라 유리 — 클릭하면 설치 선택 창 §11) [brew 알약] · 메타 '무료 · macOS 14 이상 · Apple 공증'
+//   ≥768 · iOS·안드로이드 아님 : [Mac용 다운로드](보라 유리 — 클릭하면 설치 선택 창 §11) [brew 알약] · 메타 '무료 · macOS 14 이상 · Apple 공증'
 //   폰(< 768) · iOS 기기(§9.4.1) : [App Store 배지] [Mac용 다운로드](투명 유리 → 설치 절 — 폰에 DMG 는 쓸모없다) · 메타 '무료 · iOS 18 이상 · macOS 14 이상'.
 //                                 brew 알약은 숨긴다(폰에선 쓸 수 없다 — 설치 절이 보여 준다).
-//   폰 · 안드로이드 기기(<html data-android> — §12): App Store 배지를 숨기고 [Mac용 다운로드](→ 설치 절 — 안드로이드 카드가 맨 앞)가 줄을 채운다 ·
-//                                 메타 '무료 · 안드로이드 출시 준비 중 · macOS 14 이상'. JS 없음·판별 전 = 위 폰 벌 그대로(배지).
-//                                 [ANDROID-LAUNCH] 정식 출시 때 배지 자리에 Play 스토어 버튼(LINKS.androidStore · 새 탭)을 두고 메타를 바꾼다.
+//   안드로이드 기기(<html data-android> — 폰·태블릿, §12.8 · 대표 결재 #d_88MQEAwesX78 '기기마다 자기 스토어'): 아이폰과 같은 자리·같은 모양 —
+//                                 App Store 배지 자리에 Google Play 공식 배지(PlayStoreBadge · LINKS.androidStore 새 탭) + [Mac용 다운로드](→ 설치 절) ·
+//                                 메타 '무료 · 안드로이드 · macOS 14 이상'. JS 없음·판별 전 = 위 폰 벌 그대로(App Store 배지).
 // 폰·태블릿 팝오버(§9.4.2): 폭을 줄이고 아잉을 데스크톱처럼 베젤 왼아래 모서리에 겹쳐 붙인다(혼자 떨어진 줄 없음) — globals.css.
 import type { CSSProperties } from 'react';
 import { Glass } from '@/components/glass/Glass';
@@ -18,6 +18,7 @@ import { BrewPill } from '@/components/glass/CommandPill';
 import { RenderImage } from '@/components/ui/RenderImage';
 import { DownloadCTA } from '@/components/ui/DownloadCTA';
 import { AppStoreBadge } from '@/components/ui/AppStoreBadge';
+import { PlayStoreBadge } from '@/components/ui/PlayStoreBadge';
 import { KeepDots } from '@/components/ui/KeepDots';
 import { glassButtonClass } from '@/components/glass/GlassButton';
 import { GlassFx } from '@/components/glass/GlassFx';
@@ -28,14 +29,14 @@ import { HERO_COPY } from './copy';
 import { HeroStage } from './HeroStage';
 
 const line = (i: number) => ({ '--i': i }) as CSSProperties;
-/** 두 벌 보이기: WIDE = ≥768 이고 iOS 아님 · NARROW = 폰(< 768) 또는 iOS 기기(§9.4.1 — 같은 규칙) */
-const WIDE = 'contents phone:hidden [html[data-platform=ios]_&]:hidden';
-const NARROW = 'hidden phone:contents [html[data-platform=ios]_&]:contents';
-const WIDE_INLINE = 'phone:hidden [html[data-platform=ios]_&]:hidden';
+/** 두 벌 보이기: WIDE = ≥768 이고 iOS·안드로이드 아님 · NARROW = 폰(< 768) 또는 iOS · 안드로이드 기기(§9.4.1 · §12.8 — 태블릿도 같은 규칙) */
+const WIDE = 'contents phone:hidden [html[data-platform=ios]_&]:hidden [html[data-android]_&]:hidden';
+const NARROW = 'hidden phone:contents [html[data-platform=ios]_&]:contents [html[data-android]_&]:contents';
+const WIDE_INLINE = 'phone:hidden [html[data-platform=ios]_&]:hidden [html[data-android]_&]:hidden';
 const NARROW_INLINE = 'hidden phone:inline [html[data-platform=ios]_&]:inline';
-/** 안드로이드 기기(§12): 폰 벌 안에서 배지를 숨기고(Mac용 다운로드가 늘어나 줄을 채운다) · 메타 ↔ 안드로이드 메타를 바꾼다 */
+/** 안드로이드 기기(§12.8): 폰 벌 안에서 App Store 배지 ↔ Google Play 배지 · 메타 ↔ 안드로이드 메타를 바꾼다(자리·모양은 같다) */
 const NOT_ANDROID = '[html[data-android]_&]:hidden';
-const ANDROID_GROW = '[html[data-android]_&]:ml-0 [html[data-android]_&]:grow';
+const ANDROID_ONLY = 'hidden [html[data-android]_&]:contents';
 const orb = (c: string, left: string, top: string, size: string) => ({ '--c': c, '--s': size, left, top }) as CSSProperties;
 
 export function Hero({ release }: { release: ReleaseInfo }) {
@@ -74,7 +75,10 @@ export function Hero({ release }: { release: ReleaseInfo }) {
                 배지는 lazy(placement 'hero-phone') — 데스크톱에서는 display:none 이라 받지 않는다(첫 화면 −9KB) */}
             <span className={NARROW}>
               <AppStoreBadge height={48} placement="hero-phone" className={`-m-3 ${NOT_ANDROID}`} />
-              <a href={LINKS.install} data-cta="hero-install" className={glassButtonClass('glass', 'l', `ml-3 [--b-h:48px] [--b-px:22px] ${ANDROID_GROW}`)}>
+              <span className={ANDROID_ONLY}>
+                <PlayStoreBadge height={48} placement="hero-phone-play" className="-m-3" />
+              </span>
+              <a href={LINKS.install} data-cta="hero-install" className={glassButtonClass('glass', 'l', 'ml-3 [--b-h:48px] [--b-px:22px]')}>
                 {HERO_COPY.cta}
                 <GlassFx specular />
               </a>
@@ -85,7 +89,7 @@ export function Hero({ release }: { release: ReleaseInfo }) {
             <span className={`${NARROW_INLINE} ${NOT_ANDROID}`}>
               <KeepDots text={HERO_COPY.metaPhone} items />
             </span>
-            <span className="hidden phone:[html[data-android]_&]:inline">
+            <span className="hidden [html[data-android]_&]:inline">
               <KeepDots text={ANDROID_COPY.phoneMeta} items />
             </span>
             {/* 글자는 14px 줄이지만 누를 자리는 44px — 위아래 여백을 음수 바깥 여백으로 상쇄 */}

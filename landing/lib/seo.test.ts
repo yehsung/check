@@ -56,6 +56,7 @@ function fixtureLink(key: string): string {
 const LINKS: SeoLinks = {
   github: fixtureLink('github'),
   appStore: fixtureLink('appStore'),
+  androidStore: fixtureLink('androidStore'),
   dmgLatest: fixtureLink('dmgLatest'),
   zipLatest: fixtureLink('zipLatest'),
   releases: fixtureLink('releases'),
@@ -380,20 +381,21 @@ test('llms.txt: 설치 = brew 명령 · DMG(설치 카드 메타 줄 그대로) 
   assert.ok(!/\d{4}-\d{2}-\d{2}/.test(noDate));
 });
 
-test('llms.txt: 설치 묶음에 안드로이드 한 줄 = 카드 한 줄(출시 준비 중 — 주소 0 · 베타 안내 0, §12 · [ANDROID-LAUNCH])', () => {
+test('llms.txt: 설치 묶음에 안드로이드 한 줄 = [Play 스토어](주소) — 카드 한 줄(iPhone 줄과 같은 꼴 · 베타 안내 0, §12.8)', () => {
   const t = llms();
-  const want = '- Android: 안드로이드 앱은 Play 스토어 출시를 준비하고 있어요.';
-  assert.equal(androidLine(), want);
-  assert.equal(androidLine(), `- Android: ${ANDROID_COPY.line}`, 'ANDROID_COPY 에서 조립(새 문장 0)');
+  const want = '- Android: [Play 스토어](https://play.google.com/store/apps/details?id=com.yehsung.aingcheck) — 안드로이드 앱은 Play 스토어에서 받을 수 있어요.';
+  assert.equal(androidLine(LINKS.androidStore), want);
+  assert.equal(androidLine(LINKS.androidStore), `- Android: [Play 스토어](${LINKS.androidStore}) — ${ANDROID_COPY.line}`, 'ANDROID_COPY · LINKS 에서 조립(새 문장 0)');
   // 설치 묶음 안 — iPhone 줄 다음 · GitHub 릴리스 줄 앞
   assert.ok(t.includes(`\n- iPhone: [App Store](${LINKS.appStore}) — iOS 18 이상 · 무료\n${want}\n- [GitHub 릴리스](${LINKS.releases})`), '설치 묶음 자리');
   const install = t.slice(t.indexOf('**설치**'), t.indexOf('**기능**'));
   assert.equal(install.split('\n').filter((l) => l.startsWith('- Android')).length, 1, '한 줄');
   // 내린 베타 안내가 남지 않는다(문서 전체)
-  for (const gone of ['groups.google.com', 'apps/testing', 'play.google.com', '베타', '테스터', '구글 그룹']) assert.ok(!t.includes(gone), gone);
+  for (const gone of ['groups.google.com', 'apps/testing', '베타', '테스터', '구글 그룹', '출시 준비 중', '출시를 준비하고']) assert.ok(!t.includes(gone), gone);
+  assert.equal(t.split('play.google.com').length, 2, 'Play 주소는 안드로이드 줄 한 번');
   // 폴백 릴리스여도 그대로(버전과 무관)
   assert.ok(llms(null, DMG, false).includes(`\n${want}\n`));
-  // 안드로이드 MobileApplication LD 는 싣지 않는다(출시 전)
+  // 안드로이드 MobileApplication LD 는 이번엔 싣지 않는다(문구·링크만 — §12.8)
   const graph = homeJsonLd({ links: LINKS, choice: DMG, live: true, siteUrl: SITE })['@graph'] as { '@type': string; '@id': string }[];
   assert.deepEqual(graph.map((g) => g['@type']), ['WebSite', 'Organization', 'SoftwareApplication', 'MobileApplication']);
   assert.ok(!JSON.stringify(graph).includes('play.google.com'), 'LD 에 Play 주소 0');

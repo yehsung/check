@@ -1,6 +1,7 @@
 import { BrewPill } from "@/components/glass/CommandPill";
 import { LocalLight } from "@/components/glass/LocalLight";
 import { AppStoreBadge } from "@/components/ui/AppStoreBadge";
+import { PlayStoreBadge } from "@/components/ui/PlayStoreBadge";
 import { DownloadCTA } from "@/components/ui/DownloadCTA";
 import { Headline } from "@/components/ui/Headline";
 import { glassButtonClass } from "@/components/glass/GlassButton";
@@ -15,17 +16,15 @@ import { OUTRO } from "./copy";
 //   + OutroStage 안의 아잉 뒤 오키드 · 받침 아래 보라. 아래쪽 빛은 절 끝 전에 잦아들게 두어 푸터(bg-deep) 경계가 끊겨 보이지 않는다.
 //   절 루트는 relative isolate overflow-clip(glass-api §7 — 빛이 옆 절로 번지거나 가로 넘침을 만들지 않게). 빛은 절 안에서 잦아들게 둔다.
 // - 버튼 줄은 두 벌을 SSR 하고 폭·플랫폼으로 하나만 보인다(히어로와 같은 규칙 — §9.4.4):
-//   ≥768 · iOS 아님(§8 순서): Mac용 다운로드(DownloadCTA — 클릭하면 설치 선택 창 §11) · brew 알약(복사 → 복사했어요) · App Store 배지.
+//   ≥768 · iOS·안드로이드 아님(§8 순서): Mac용 다운로드(DownloadCTA — 클릭하면 설치 선택 창 §11) · brew 알약(복사 → 복사했어요) ·
+//     App Store 배지 + Google Play 배지(둘 다 — 컴퓨터에서는 어느 폰인지 모른다. 대표 결재 #d_88MQEAwesX78 · §12.8).
 //   폰(< 768) · iOS 기기: App Store 배지가 먼저 · Mac용 다운로드(투명 유리 → 설치 절 — 폰에 DMG 는 쓸모없다) 한 줄.
-//   폰 · 안드로이드 기기(<html data-android> — §12): 배지를 숨기고 Mac용 다운로드(→ 설치 절)가 줄을 채운다 — 히어로와 같다.
-//   [ANDROID-LAUNCH] 정식 출시 때 배지 자리에 Play 스토어 버튼(LINKS.androidStore · 새 탭).
+//   안드로이드 기기(<html data-android> — 폰·태블릿, §12.8): App Store 배지 자리에 Google Play 배지 + Mac용 다운로드 — 히어로와 같다(기기마다 자기 스토어).
 //   brew 알약은 폰에서 한 줄에 안 들어가 숨긴다(§9.4.3 — 설치 절 터미널이 보여 준다). 배지 사방 여백 = 높이/4(애플 규칙, <a> 패딩) —
 //   가로 줄에서는 위아래 여백만 줄 높이에서 뺀다.
 // - 아잉 폭 --aing-w 를 이 절에서 정한다: phone 132 · tab 156 · desk clamp(160, 22svh, 208).
 //   1440×900: 받침+아잉 ≈ 247 → H2 → 한 줄 → 버튼 줄 → 절 ≈ 680(그 아래 푸터까지 한 화면).
 
-/** 안드로이드 기기(§12): 배지를 숨기니 폰 벌의 Mac용 다운로드가 늘어나 줄을 채운다(배지의 −12px 짝 ml-3 은 뗀다) */
-const ANDROID_GROW = "[html[data-android]_&]:ml-0 [html[data-android]_&]:grow";
 
 const SECTION =
   "relative isolate overflow-clip px-5 pb-16 pt-4 text-center tab:px-8 tab:pb-28 desk:px-8 desk:pb-32 desk:pt-6 " +
@@ -48,8 +47,8 @@ export function Outro({ release }: { release?: ReleaseInfo } = {}) {
       <Headline level={2} size="h2" lines={OUTRO.title} id="outro-h2" className="mt-7 tab:mt-8 desk:mt-9" />
       <p className="t-lead mx-auto mt-5 max-w-[44em] text-balance">{OUTRO.lead}</p>
 
-      {/* ≥768 · iOS 아님 */}
-      <div className="mx-auto mt-8 hidden flex-row flex-wrap items-center justify-center gap-3 tab:flex desk:flex [html[data-platform=ios]_&]:hidden" data-chooser-row="">
+      {/* ≥768 · iOS·안드로이드 아님 */}
+      <div className="mx-auto mt-8 hidden flex-row flex-wrap items-center justify-center gap-3 tab:flex desk:flex [html[data-platform=ios]_&]:hidden [html[data-android]_&]:hidden" data-chooser-row="">
         <DownloadCTA
           placement="outro"
           size="l"
@@ -57,12 +56,19 @@ export function Outro({ release }: { release?: ReleaseInfo } = {}) {
           release={release}
         />
         <BrewPill className="text-left" />
-        <AppStoreBadge height={48} placement="outro" className="self-center -my-3" />
+        {/* 배지 둘은 한 묶음으로 줄바꿈한다(사이 = 여백 12px 가 겹쳐 보이는 틈 12 — 두 스토어 규칙의 사방 여백 높이/4 를 지킨다) */}
+        <span data-store-badges="" className="inline-flex shrink-0 items-center self-center -my-3">
+          <AppStoreBadge height={48} placement="outro" />
+          <PlayStoreBadge height={48} placement="outro-play" className="-ml-3" />
+        </span>
       </div>
-      {/* 폰 · iOS: 배지 먼저(히어로와 같은 순서) */}
-      <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 tab:hidden desk:hidden [html[data-platform=ios]_&]:flex">
+      {/* 폰 · iOS · 안드로이드: 자기 스토어 배지 먼저(히어로와 같은 순서) */}
+      <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 tab:hidden desk:hidden [html[data-platform=ios]_&]:flex [html[data-android]_&]:flex">
         <AppStoreBadge height={48} placement="outro-phone" className="-m-3 [html[data-android]_&]:hidden" />
-        <a href={LINKS.install} data-cta="outro-install" className={glassButtonClass("glass", "l", `ml-3 [--b-h:48px] [--b-px:22px] ${ANDROID_GROW}`)}>
+        <span className="hidden [html[data-android]_&]:contents">
+          <PlayStoreBadge height={48} placement="outro-phone-play" className="-m-3" />
+        </span>
+        <a href={LINKS.install} data-cta="outro-install" className={glassButtonClass("glass", "l", "ml-3 [--b-h:48px] [--b-px:22px]")}>
           {OUTRO.cta}
           <GlassFx specular />
         </a>

@@ -49,14 +49,14 @@ test("FAQ 5문항이 §8 의 1–5번과 글자까지 같다(순서 포함)", ()
   });
 });
 
-test("2번 답 맨 끝 = 안드로이드 출시 준비 중 한 문장(§12 · ANDROID_COPY.line — 카드 한 줄과 같다 · [ANDROID-LAUNCH]) — 앞 문장은 그대로 · JSON-LD 도 따라간다", () => {
+test("2번 답 맨 끝 = 안드로이드 Play 스토어 한 문장(§12.8 · ANDROID_COPY.line — 카드 한 줄과 같다) — 앞 문장은 그대로 · JSON-LD 도 따라간다", () => {
   const a = FAQ_ITEMS[1].a;
   assert.equal(FAQ_ITEMS[1].q, "어떤 기기와 OS에서 쓸 수 있나요?");
-  assert.equal(ANDROID_COPY.line, "안드로이드 앱은 Play 스토어 출시를 준비하고 있어요.");
+  assert.equal(ANDROID_COPY.line, "안드로이드 앱은 Play 스토어에서 받을 수 있어요.");
   assert.ok(a.endsWith(` ${ANDROID_COPY.line}`), "맨 끝에 공백 하나 + 문장");
   assert.equal(
     a,
-    "macOS 14 이상 맥이면 Apple Silicon·Intel 모두 돼요. 아이폰은 iOS 18 이상이에요. 근무 시작·종료는 맥에서 하고, 아이폰에선 현황·메시지·할 일·게임을 써요. 안드로이드 앱은 Play 스토어 출시를 준비하고 있어요.",
+    "macOS 14 이상 맥이면 Apple Silicon·Intel 모두 돼요. 아이폰은 iOS 18 이상이에요. 근무 시작·종료는 맥에서 하고, 아이폰에선 현황·메시지·할 일·게임을 써요. 안드로이드 앱은 Play 스토어에서 받을 수 있어요.",
   );
   assert.equal(a.split(ANDROID_COPY.line).length, 2, "한 번만");
   // 내린 베타 안내가 어느 문항에도 남지 않는다 · 다른 문항에는 안드로이드 문장이 없다 · 최소 OS 버전을 지어내지 않는다

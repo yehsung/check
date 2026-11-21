@@ -518,6 +518,8 @@ async function buildBrand() {
   fs.mkdirSync(outAbs("brand"), { recursive: true });
   fs.copyFileSync(badgeSrc, outAbs("brand/appstore-badge-ko-black.svg"));
   if (!fs.readFileSync(badgeSrc).equals(fs.readFileSync(outAbs("brand/appstore-badge-ko-black.svg")))) errors.push("61행 배지 바이트가 원본과 다르다");
+  // Google Play 배지(brand/googleplay-badge-ko.png — docs/v3/brief.md §12.8): 저장소에 둔 사본을 그대로 쓴다(여기서 만들지 않는다).
+  // 원본 = play.google.com/intl/ko/badges/static/images/badges/ko_badge_web_generic.png(646×250) 에서 위아래 투명 여백 29px 씩만 잘라 646×192.
   // 62행 QR: scripts/make-qr.py(App Store · 안드로이드 베타 안내 /#android — docs/v3/brief.md §12)
   const py = process.env.PYTHON ?? "python3";
   const r = spawnSync(py, [path.join(ROOT, "scripts/make-qr.py")], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
@@ -679,7 +681,7 @@ function expectedOutputs() {
   }
   for (const [, rel] of IOS) a(rel);
   for (const [rel] of V31) a(rel);
-  for (const rel of ["brand/appstore-badge-ko-black.svg", "brand/qr-appstore.svg", "brand/qr-android-beta.svg", "brand/icon-64.webp", "brand/icon-256.webp"]) a(rel);
+  for (const rel of ["brand/appstore-badge-ko-black.svg", "brand/googleplay-badge-ko.png", "brand/qr-appstore.svg", "brand/qr-android-beta.svg", "brand/icon-64.webp", "brand/icon-256.webp"]) a(rel);
   list.push("app/icon.png", "app/apple-icon.png");
   list.push("data/generated/assets.json", "data/generated/sequences.json", "data/generated/bubbles.json", "data/generated/grass.json");
   return list;

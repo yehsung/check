@@ -1,5 +1,5 @@
 import { LINKS, RELEASE_FALLBACK, type ReleaseInfo } from "@/data/fixtures";
-import { chooserMetaParts, installChoice } from "@/data/install-copy";
+import { ANDROID_COPY, chooserMetaParts, installChoice } from "@/data/install-copy";
 import { glassButtonClass } from "@/components/glass/GlassButton";
 import { GlassFx } from "@/components/glass/GlassFx";
 import { InstallChooser } from "@/components/install/InstallChooser";
@@ -14,7 +14,8 @@ import { InstallChooser } from "@/components/install/InstallChooser";
 //
 // 자리(Placement)별 규칙(docs/v3/brief.md §11 — 2026-10-30: 바로 DMG 를 받지 않고 Homebrew · DMG 중 고르게)
 //   nav     : mac·other(≥768) = 설치 선택 창 방아쇠(InstallChooser — JS 없으면 '/#install' 링크) · 폰(< 768)은 같은 글자로 설치 절('/#install')로 간다
-//             (§9.2 — 폰에 DMG 는 쓸모없다. 두 벌을 SSR 하고 폭으로 하나만 보인다) · ios = App Store 버튼
+//             (§9.2 — 폰에 DMG 는 쓸모없다. 두 벌을 SSR 하고 폭으로 하나만 보인다) · ios = App Store 버튼 ·
+//             안드로이드 기기(<html data-android> — other 의 한 갈래) = Play 스토어 버튼(§12.8 · 기기마다 자기 스토어 #d_88MQEAwesX78)
 //   hero    : mac·other = 설치 선택 창 방아쇠 · ios = 아무것도 그리지 않는다(옆의 App Store 배지가 버튼 줄 맨 앞이 된다)
 //             (폰 < 768 벌은 Hero.tsx 가 따로 그린다 — 배지 + 설치 절 링크)
 //   outro   : hero 와 같다
@@ -91,7 +92,21 @@ export function DownloadCTA({ placement, size, tone = "fill", label, file = "dmg
           </a>
         </span>
       )}
-      <span className={VIS.other}>{main}</span>
+      <span className={VIS.other}>
+        {placement === "nav" ? (
+          <>
+            <span className="contents [html[data-android]_&]:hidden">{main}</span>
+            <span className="hidden [html[data-android]_&]:contents">
+              <a href={LINKS.androidStore} target="_blank" rel="noopener noreferrer" data-cta="nav-android" className={cx(btn)}>
+                {ANDROID_COPY.nav}
+                <GlassFx specular />
+              </a>
+            </span>
+          </>
+        ) : (
+          main
+        )}
+      </span>
     </>
   );
 }

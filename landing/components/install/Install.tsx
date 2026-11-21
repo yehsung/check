@@ -1,13 +1,13 @@
 // components/install/Install.tsx — 설치 #install(docs/v3/brief.md §4.5 · 문구 §8 '설치' · §9.3 · 안드로이드 §12). server 컴포넌트 — 움직이는 건 BrewTerminal 하나.
 // brew 가 주인공: 가운데 H2 두 줄 + 부제 → 왼쪽(넓게 ≈60%) regular 유리 터미널 / 오른쪽 regular 유리 카드 둘
-// (Homebrew를 안 쓴다면 — DMG · 아이폰에서도 — App Store·QR) → 아래 전폭 안드로이드 카드(#android — Play 스토어 출시 준비 중 한 줄).
+// (Homebrew를 안 쓴다면 — DMG · 아이폰에서도 — App Store·QR) → 아래 전폭 안드로이드 카드(#android — 한 줄 + Google Play 배지).
 // v3.1(§9.3): 터미널 아래 업데이트 줄은 지웠다(upgrade 명령을 보이지 않는다).
 //
 // 배치
 //   desk(≥1024·≥640) : 2열 [1.6fr | 1fr]. 왼쪽 열 = 터미널(카드 둘 높이를 채운다), 오른쪽 = DMG 카드 위 · iPhone 카드 아래.
-//                      3번째 줄 = 안드로이드 카드 두 칸 전폭 — 낮은 띠 한 줄(제목 · 한 줄 가로로)
+//                      3번째 줄 = 안드로이드 카드 두 칸 전폭 — 낮은 띠 한 줄(제목 · 한 줄 가로로 · 배지는 오른쪽 끝)
 //   768–1023         : 터미널 전폭 → DMG · iPhone 카드 두 칸 → 안드로이드 카드 전폭(데스크톱과 같은 띠)
-//   390              : 터미널(명령 한 줄 · [복사] 는 제목 줄 · 출력 긴 줄만 줄바꿈) → DMG 카드 → iPhone 카드 → 안드로이드 카드(제목 위 · 한 줄 아래).
+//   390              : 터미널(명령 한 줄 · [복사] 는 제목 줄 · 출력 긴 줄만 줄바꿈) → DMG 카드 → iPhone 카드 → 안드로이드 카드(제목 → 한 줄 → 배지 — 아이폰 카드와 같은 자리).
 //                      <html data-platform=ios> 면 iPhone 카드가, <html data-android> 면 안드로이드 카드가 맨 앞
 //                      (768 이상은 칸 자리를 못박아 순서가 그대로)
 // 빛: 절 뒤 LocalLight 넷(터미널 뒤 보라 넓게 · 카드 뒤 인디고 · 위 오키드 · 아래 안드로이드 카드 뒤 보라) — 어느 스크롤 위치에서도 유리 뒤에 색이 있다.
@@ -22,6 +22,7 @@ import { LocalLight } from '@/components/glass/LocalLight';
 import { Headline } from '@/components/ui/Headline';
 import { DownloadCTA } from '@/components/ui/DownloadCTA';
 import { AppStoreBadge } from '@/components/ui/AppStoreBadge';
+import { PlayStoreBadge } from '@/components/ui/PlayStoreBadge';
 import { QrCode } from '@/components/ui/QrCode';
 import { BrewTerminal } from './BrewTerminal';
 
@@ -52,9 +53,9 @@ const CARD = 'glass-tint-soft flex min-w-0 flex-col p-6 min-[768px]:p-7';
 const CARD_H = 't-h4 text-ink-1';
 
 /**
- * 안드로이드 카드(#android — §12). Play 스토어 출시 준비 중이라 제목과 한 줄뿐, 누를 것이 없다(옛 QR·공유 링크 /#android 가 이 자리로 온다).
- * ≥768 은 3번째 줄 두 칸 전폭의 낮은 띠(제목 · 한 줄 가로로) · 폰은 쌓고, 안드로이드 기기면 맨 앞(-order-1 — 폰에서만 순서가 바뀐다).
- * [ANDROID-LAUNCH] 정식 출시 때: 한 줄 오른쪽(폰은 아래)에 [Play 스토어에서 받기](LINKS.androidStore · 새 탭) 버튼을 두고 글자를 바꾼다.
+ * 안드로이드 카드(#android — §12.8 · 옛 QR·공유 링크 /#android 가 이 자리로 온다). 제목 · 한 줄 · Google Play 공식 배지(LINKS.androidStore 새 탭 —
+ * 아이폰 카드의 App Store 배지와 짝, 같은 높이 48 · 같은 여백 규칙). ≥768 은 3번째 줄 두 칸 전폭의 낮은 띠(제목 · 한 줄 가로로, 배지는 오른쪽 끝) ·
+ * 폰은 쌓고(배지는 왼쪽 — 아이폰 카드와 같다), 안드로이드 기기면 맨 앞(-order-1 — 폰에서만 순서가 바뀐다).
  */
 function AndroidCard() {
   return (
@@ -64,13 +65,17 @@ function AndroidCard() {
       data-install="android"
       className={
         `${CARD} [html[data-android]_&]:-order-1 min-[768px]:col-span-2 min-[768px]:col-start-1 min-[768px]:row-start-3 ` +
-        'min-[768px]:flex-row min-[768px]:flex-wrap min-[768px]:items-baseline min-[768px]:gap-x-6 min-[768px]:gap-y-2'
+        'min-[768px]:flex-row min-[768px]:flex-wrap min-[768px]:items-center min-[768px]:gap-x-6 min-[768px]:gap-y-3'
       }
     >
       <h3 className={CARD_H}>{A.title}</h3>
       <p data-android-line="" className="t-small mt-2 text-pretty text-ink-2 min-[768px]:mt-0">
         {A.line}
       </p>
+      {/* 배지 여백(높이/4)은 그대로 두고 바깥 음수 여백으로 보이는 배지 왼쪽을 글 열에 맞춘다(아이폰 카드와 같다) */}
+      <div className="mt-5 flex min-[768px]:my-0 min-[768px]:ml-auto">
+        <PlayStoreBadge height={48} placement="install-play" className="-m-3" />
+      </div>
     </Glass>
   );
 }
@@ -149,7 +154,7 @@ export function Install({ release }: { release: ReleaseInfo }) {
             </div>
           </Glass>
 
-          {/* 안드로이드 — Play 스토어 출시 준비 중(§12). desk·768–1023 은 3번째 줄 두 칸 전폭 · 폰은 맨 아래(안드로이드 기기면 맨 앞) */}
+          {/* 안드로이드 — Play 스토어(§12.8). desk·768–1023 은 3번째 줄 두 칸 전폭 · 폰은 맨 아래(안드로이드 기기면 맨 앞) */}
           <AndroidCard />
         </div>
       </div>

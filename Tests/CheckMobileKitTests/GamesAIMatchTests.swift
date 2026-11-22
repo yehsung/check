@@ -595,3 +595,45 @@ func hubCardAIMatchDoesNotHideIncoming() {
         incoming: 1, hasActiveMatch: GamesText.hubShowsActiveMatch(active: true, isAIMatch: true, incoming: 1), hasOutgoing: false)
     #expect(line == "받은 신청 1건")
 }
+
+// MARK: - 폰 1.0.19 — 난이도가 실제 AI 에 먹는다
+
+/// 엔진이 받은 한도를 적는 가짜 엔진(수는 가장 가까운 빈칸).
+private final class GamesAILimitsProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: [GomokuAISearchLimits] = []
+    var limits: [GomokuAISearchLimits] { lock.withLock { seen } }
+    var engine: GamesGomokuAIThinker.Engine {
+        { [self] board, color, limits, _ in
+            lock.withLock { seen.append(limits) }
+            return nearest(board, color)
+        }
+    }
+}
+
+extension GamesAIMatchTests {
+    @Test("난이도: 쉬움 · 보통은 그 수만큼만 앞을 보고(맥과 같은 한도), 어려움은 폰 한도 — 1.0.18 은 늘 어려움이었다")
+    @MainActor
+    func difficultyReachesThePhoneEngine() async throws {
+        for difficulty in GomokuAIDifficulty.allCases {
+            let (harness, _) = await aiHarness("ai-level-\(difficulty.rawValue)", mode: nil)
+            let gomoku = harness.gomoku
+            gomoku.aiDifficultyDefaults = MobileTestScratch.defaults("level-\(difficulty.rawValue)")
+            let probe = GamesAILimitsProbe()
+            harness.games.aiThinker.engine = probe.engine
+            gomoku.setAIDifficulty(difficulty)
+            gomoku.startAIMatch(humanColor: .black)
+            #expect(gomoku.aiGame?.difficulty == difficulty, "\(difficulty): 판이 고른 난이도로 서지 않았다")
+            await gomoku.place(pt("H8"))
+            #expect(await baseWaitUntil { gomoku.match?.moveCount == 2 }, "\(difficulty): AI 가 답하지 않았다")
+            let used = try #require(probe.limits.first, "\(difficulty): 엔진이 불리지 않았다")
+            let expected = difficulty == .hard ? GamesGomokuAIThinker.phoneLimits : difficulty.limits
+            #expect(used.lookahead == expected.lookahead && used.maxDepth == expected.maxDepth
+                    && used.vcfDepth == expected.vcfDepth && used.timeBudget == expected.timeBudget,
+                    "\(difficulty): 엔진이 받은 한도(앞 \(String(describing: used.lookahead)) · 깊이 \(used.maxDepth))가 난이도 한도가 아니다")
+            await harness.tearDown()
+        }
+        // 대조: 쉬움과 어려움의 한도가 정말 다르다(같으면 위 단언은 아무것도 못 가른다).
+        #expect(GomokuAIDifficulty.easy.limits.maxDepth != GamesGomokuAIThinker.phoneLimits.maxDepth)
+    }
+}

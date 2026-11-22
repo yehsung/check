@@ -330,6 +330,11 @@ package final class GamesStore {
             guard let gomoku, gomoku.isAIThinking, let game = gomoku.aiGame else { return false }
             return game.board == board && game.aiColor == color
         }
+        // 난이도: 쉬움 · 보통은 그 수만큼만 앞을 본다(맥과 같은 한도). 어려움은 nil → 폰 한도(맥 기본값과 같은 1.5초 · 깊이 64).
+        aiThinker.difficultyLimits = { [weak gomoku = context.gomoku] _, _ in
+            guard let difficulty = gomoku?.aiGame?.difficulty, difficulty != .hard else { return nil }
+            return difficulty.limits
+        }
         #if os(iOS)
         // 화면 꺼짐 방지의 주인은 이 스토어다 — 게임 탭을 한 번도 안 열었어도(다른 탭에서 판이 시작돼도) 값이 따라간다.
         installIdleTimerSink { GamesSystemIdleTimer.apply(disabled: $0) }

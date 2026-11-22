@@ -42,7 +42,12 @@ package final class GamesGomokuAIThinker {
     }
 
     package var engine: Engine = GamesGomokuAIThinker.realEngine
+    /// 어려움(시간이 허락하는 데까지)의 한도. 쉬움 · 보통은 아래 `difficultyLimits` 가 판의 난이도로 준다.
     package var limits: GomokuAISearchLimits = GamesGomokuAIThinker.phoneLimits
+    /// 이 판의 난이도 한도(쉬움 2수 · 보통 6수 — 코어 `GomokuAIDifficulty.limits`). nil 이면 어려움 → `limits`.
+    /// 폰 1.0.18 은 이 자리가 없어서 쉬움 · 보통을 골라도 늘 어려움으로 뒀다(코어는 선택기를 갈아 끼우면 난이도 한도를 안 넘긴다 —
+    /// `GomokuStoreAI.scheduleAITurnIfNeeded`). `GamesStore` 가 코어의 지금 판 난이도로 채운다.
+    package var difficultyLimits: @MainActor (GomokuBoard, GomokuColor) -> GomokuAISearchLimits? = { _, _ in nil }
     /// 이 판·색의 수가 아직 필요한가(코어 AI 판이 그 판에서 AI 차례로 멈춰 있는가). `GamesStore` 가 코어 상태로 채운다.
     /// 필요 없으면 **다시 생각하지 않는다** — 기권한 판을 화면에 돌아올 때 1.5초 더 생각하던 낭비를 막는다. 코어는 그때 결과를 어차피 버린다.
     package var isStillNeeded: @MainActor (GomokuBoard, GomokuColor) -> Bool = { _, _ in true }
@@ -96,7 +101,7 @@ package final class GamesGomokuAIThinker {
                 continue
             }
             let engine = self.engine
-            let limits = self.limits
+            let limits = difficultyLimits(board, color) ?? self.limits
             // 메인 액터 밖(분리된 작업)에서 돈다 — 코어 기본 선택기와 같은 수법. 엔진이 보는 취소는 이 작업의 취소다.
             let search = Task.detached(priority: .userInitiated) {
                 engine(board, color, limits, { Task.isCancelled })

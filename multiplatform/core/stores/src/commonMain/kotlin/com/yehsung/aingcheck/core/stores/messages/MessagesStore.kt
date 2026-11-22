@@ -187,6 +187,9 @@ class MessagesStore(
         private set
     var directoryFailed: Boolean by mutableStateOf(false)
         private set
+    /** 사람 찾기 거르기 칸(판 9 · 아이폰 1.0.19 — [MessagesPresenceFilter]). 앱이 켜져 있는 동안 남고 로그아웃하면 전체. */
+    var directoryPresenceFilter: MessagesPresenceFilter by mutableStateOf(MessagesPresenceFilter.all)
+        private set
 
     // ---------------------------------------------------------------- 차단 · 신고(동작은 MessagesBlockStore.kt)
 
@@ -363,6 +366,7 @@ class MessagesStore(
         directoryLoaded = false
         directoryLoading = false
         directoryFailed = false
+        directoryPresenceFilter = MessagesPresenceFilter.all
         hiddenBlockedPeerIDs = emptySet()
         blockedPeople = emptyList()
         blocksLoaded = false
@@ -672,6 +676,19 @@ class MessagesStore(
         val hidden = hiddenBlockedPeerIDs
         val visible = if (hidden.isEmpty()) directory else directory.filter { it.userID !in hidden }
         return MessagesDirectoryRules.filter(visible, query, unreadPeerIDs = sortUnreadPeerIDs, collation = collation)
+    }
+
+    /** 사람 찾기에 **보일 사람** — 이름 찾기([filteredDirectory]) 결과에서 거르기 칸에 안 드는 사람을 뺀다(순서 그대로 · AND). */
+    fun visibleDirectory(query: String): List<PokeDirectoryEntry> {
+        val found = filteredDirectory(query)
+        val presence = directoryPresenceFilter
+        return if (presence == MessagesPresenceFilter.all) found else found.filter(presence::admits)
+    }
+
+    /** 거르기 칸 고르기. 같은 값은 쓰지 않는다(재구성이 헛돌지 않게). 네트워크는 건드리지 않는다. */
+    fun selectDirectoryPresenceFilter(filter: MessagesPresenceFilter) {
+        if (directoryPresenceFilter == filter) return
+        directoryPresenceFilter = filter
     }
 
     // ---------------------------------------------------------------- 화면 사건

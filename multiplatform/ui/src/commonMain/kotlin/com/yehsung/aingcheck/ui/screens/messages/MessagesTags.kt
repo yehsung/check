@@ -33,6 +33,9 @@ object MessagesTags {
 
     const val NEW_CONVERSATION_SHEET = "new-conversation-sheet"
     const val NEW_CONVERSATION_SEARCH = "new-conversation-search"
+    /** 사람 찾기 거르기 칸(판 9) — 칸마다 꼬리표 `new-conversation-presence-<all|working|away>`. */
+    const val NEW_CONVERSATION_PRESENCE = "new-conversation-presence"
+    fun presenceSegment(name: String) = "new-conversation-presence-$name"
     fun person(userID: String): String = "person-$userID"
 
     const val MEGAPHONE_SHEET = "megaphone-sheet"

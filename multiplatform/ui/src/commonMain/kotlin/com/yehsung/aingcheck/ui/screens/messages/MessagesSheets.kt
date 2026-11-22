@@ -31,6 +31,9 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -58,6 +61,8 @@ import com.yehsung.aingcheck.core.rules.text.AingStickerText
 import com.yehsung.aingcheck.core.rules.text.MegaphoneText
 import com.yehsung.aingcheck.core.stores.messages.MessagesComposerRules
 import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
+import com.yehsung.aingcheck.core.stores.messages.MessagesPresenceFilter
+import com.yehsung.aingcheck.core.stores.messages.MessagesPresenceFilterText
 import com.yehsung.aingcheck.core.stores.messages.MessagesStore
 import com.yehsung.aingcheck.core.stores.messages.MobileLoadText
 import com.yehsung.aingcheck.core.stores.messages.PresenceStatus
@@ -169,7 +174,9 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
     val query = rememberTextFieldState()
     LaunchedEffect(store) { store.loadDirectory() }
     val q = query.text.toString()
-    val people = store.filteredDirectory(q)
+    // 이름 찾기 + 거르기 칸(판 9 · 아이폰 1.0.19 777a0e31 · 맥 0.3.87 '전체 · 근무중 · 자리비움') — 빼기만, 순서 그대로.
+    val people = store.visibleDirectory(q)
+    val presence = store.directoryPresenceFilter
     val working = people.filter { it.isWorking }
     val others = people.filter { !it.isWorking }
     // 집중 중인 사람은 **한 번** 받아 줄마다 묻는다 — 출처는 [보내기] 잠금과 같은 MessagesStore.focusedPeerIDs 하나다(차단 거르기도 거기서 ·
@@ -191,12 +198,18 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
                         MobileLoadText.retry, { store.refreshPeopleDirectories() })
                 }
                 !store.directoryLoaded -> item("loading") { Box(Modifier.padding(horizontal = AingDimens.sideMargin)) { LoadingRow() } }
-                people.isEmpty() -> item("empty") {
-                    EmptyStateView(sf("person.crop.circle.badge.questionmark", AppIcon.Help),
-                        if (q.isEmpty()) NewConversationText.nobody else NewConversationText.notFound(q),
-                        if (q.isEmpty()) null else NewConversationText.searchHint)
+                people.isEmpty() -> {
+                    if (store.directory.isNotEmpty()) item("presence") { PresenceFilterRow(presence) { store.selectDirectoryPresenceFilter(it) } }
+                    item("empty") {
+                        // 칸 때문에 비었으면 칸의 말(맥 · 아이폰과 같은 문구), 아니면 원래 말(빈 명부 · 이름 못 찾음).
+                        val presenceEmpty = MessagesPresenceFilterText.empty(presence, isSearching = q.isNotBlank())
+                        EmptyStateView(sf("person.crop.circle.badge.questionmark", AppIcon.Help),
+                            presenceEmpty ?: if (q.isEmpty()) NewConversationText.nobody else NewConversationText.notFound(q),
+                            if (presenceEmpty == null && q.isNotEmpty()) NewConversationText.searchHint else null)
+                    }
                 }
                 else -> {
+                    item("presence") { PresenceFilterRow(presence) { store.selectDirectoryPresenceFilter(it) } }
                     if (working.isNotEmpty()) {
                         item("working-title") { GroupTitle(NewConversationText.workingGroup(working.size)) }
                         itemsIndexed(working, key = { _, p -> "w-${p.userID}" }) { index, person ->
@@ -215,6 +228,27 @@ fun MessagesNewConversationSheet(store: MessagesStore, onSelect: (String) -> Uni
                     }
                 }
             }
+        }
+    }
+}
+
+/** 거르기 칸 한 줄(검색 칸 아래 · 첫 묶음 위). 고른 칸은 스토어에 남는다(로그아웃하면 전체). 모양은 순위 탭 분할 버튼과 같다. */
+@Composable
+private fun PresenceFilterRow(selected: MessagesPresenceFilter, onSelect: (MessagesPresenceFilter) -> Unit) {
+    val filters = MessagesPresenceFilter.entries
+    SingleChoiceSegmentedButtonRow(
+        Modifier.fillMaxWidth().padding(start = AingDimens.titleMargin, end = AingDimens.titleMargin, top = 8.dp, bottom = 6.dp)
+            .semantics { contentDescription = MessagesPresenceFilterText.groupLabel }
+            .testTag(MessagesTags.NEW_CONVERSATION_PRESENCE),
+    ) {
+        filters.forEachIndexed { index, filter ->
+            SegmentedButton(
+                selected = selected == filter,
+                onClick = { onSelect(filter) },
+                shape = SegmentedButtonDefaults.itemShape(index, filters.size),
+                modifier = Modifier.testTag(MessagesTags.presenceSegment(filter.name)),
+                icon = {},
+            ) { Text(filter.label, maxLines = 1) }
         }
     }
 }

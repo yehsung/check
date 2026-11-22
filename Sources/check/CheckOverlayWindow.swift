@@ -1,6 +1,7 @@
 import AppKit
 import MachO
 import Observation
+import os
 import SceneKit
 import SwiftUI
 import CheckCore
@@ -106,8 +107,12 @@ final class CheckOverlayController {
         case sessionInactive
     }
 
-    /// 해제 노티 유실 안전밸브가 걷어낼 수 있는 사유. `.screensAsleep` 은 **아니다** — 디스플레이 슬립은 공개 API 짝이고,
-    /// 콘솔 세션 판정은 디스플레이 상태에 대해 아무 말도 하지 않는다.
+    /// 해제 노티 유실 안전밸브가 **콘솔 세션 판정으로** 걷어낼 수 있는 사유. `.screensAsleep` 은 여기 없다 — 콘솔 세션 판정은
+    /// 디스플레이 상태에 대해 아무 말도 하지 않는다.
+    ///
+    /// `.screensAsleep` 은 **다른 근거로만** 걷는다(2026-11-22, 설계 §3.3 H2): 주입된 `displaysAwake()` 가 **true**(활성 디스플레이가
+    /// 있고 하나도 안 잔다)일 때다. 깨움 노티(`screensDidWake`)가 한 번 빠지거나 순서가 뒤집히면(`onMain` 이 다른 스레드의 sleep 을
+    /// 메인의 wake 뒤로 미룰 수 있다) 프로세스가 끝날 때까지 캐릭터가 굳던 구멍이다. nil(모름)·false 면 그대로 둔다.
     static let staleReleasableReasons: Set<RenderSuspendReason> = [.screenLocked, .sessionInactive]
 
     /// 잠금/해제 배포 노티 이름. **비공개 이름**이라 계약이 없다 — 안 오면 아무 일도 없어야 하고(기본값은 렌더 유지),
@@ -144,7 +149,10 @@ final class CheckOverlayController {
     /// 패널 프레임이 전체화면인 채로 오염돼 다음 근무 시작 때까지 따라온다. 안전밸브다.
     static let ultraWatchdogGrace: Double = 1.0
 
-    let panel: NSPanel
+    /// 캐릭터 패널. **`var` 인 이유:** 윈도우 서버가 이 창의 "모든 Space" 소속을 잃으면(2026-11-22 대표 맥 실측 —
+    /// Space 12개 중 2개에만 남았다) 내렸다 올리기로는 안 낫고 창을 새로 만들어야 낫는다(`rebuildPanel`).
+    /// 바깥(CheckApp)은 이 값을 **매번 다시 읽는다** — 창 객체를 붙들어 두는 곳이 생기면 그곳만 옛 창을 본다.
+    private(set) var panel: NSPanel
     /// 리액션 조율기. 표시 중일 때만 이벤트를 받아 캐릭터 wrapper 에 SCNAction 을 건다.
     let engine: ReactionEngine
     /// 표시 의도 상태. 헤드리스 환경에서도 결정적으로 검증할 수 있는 지점(실제 표시 여부는 `panel.isVisible`).
@@ -169,6 +177,34 @@ final class CheckOverlayController {
     var blinkSleep: @Sendable (Double) async -> Void = {
         try? await Task.sleep(for: .seconds($0), tolerance: .seconds(1))
     }
+
+    // MARK: Space 소속 감시(2026-11-22) — 주입 자리. init 서명을 건드리지 않는다(init 을 부르는 시험 30여 곳이 그대로 컴파일된다).
+
+    /// 패널이 지금 그 화면의 Space 에 있는가. 프로덕션은 SkyLight 읽기 + 공개 신호 교차 확인(`OverlaySpaceProbe.presence`).
+    /// nil = 모름 → 아무것도 하지 않는다.
+    ///
+    /// **테스트 실행에서는 기본값이 언제나 nil 이다.** 기존 시험 30여 개가 이 컨트롤러를 진짜 창으로 띄우는데, 기본값이
+    /// 실제 윈도우 서버를 물으면 그 시험들의 결과가 "그 순간 이 맥의 Space 구성"(전체 화면 Space 위에서 돌았는가 등)에 따라
+    /// 갈린다 — 창이 조용히 갈아 끼워져 `controller.panel` 을 붙든 단언이 간헐적으로 빨개진다. 고장을 일부러 주입하는 시험만
+    /// 이 값을 갈아 끼운다(`CheckMousePanel` 과 같은 단 하나의 전환 지점 `CheckPanelVisibility.isRunningTests`).
+    var spacePresence: @MainActor (NSWindow) -> OverlaySpacePresence? = { window in
+        CheckPanelVisibility.isRunningTests ? nil : OverlaySpaceProbe.presence(of: window)
+    }
+    /// 소속 확인 사이의 수면(`spaceCheckDelaySeconds`). 프로덕션은 실제 `Task.sleep` — **취소되면 즉시 돌아오므로**
+    /// 깨어난 쪽이 `Task.isCancelled` 와 세대를 반드시 본다(이 파일의 다른 태스크와 같은 함정).
+    var spaceCheckSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
+    /// 재생성 상한(1시간 슬라이딩 창)의 시계.
+    var panelRebuildClock: () -> Date = { Date() }
+    /// 디스플레이가 깨어 있는가(설계 §3.3 H2). true 일 때만 `.screensAsleep` 을 깨움 노티 없이 걷는다. nil = 모름(그대로 둔다).
+    /// 테스트 실행에서는 기본값이 nil 이다 — 위 `spacePresence` 와 같은 이유(그 순간 이 맥의 화면 상태가 기존 시험에 새지 않게).
+    var displaysAwake: () -> Bool? = {
+        CheckPanelVisibility.isRunningTests ? nil : OverlayDisplayProbe.allActiveDisplaysAwake()
+    }
+    /// 수리 사다리 1단(뷰 이동 없음). 시험이 횟수를 세려고 감쌀 수 있다.
+    var panelSpaceRepair: @MainActor (NSWindow) -> Void = { OverlayPanelRepair.reapplyCollectionBehavior($0) }
+
     private let store: WorkTimerStore
     /// 드래그로 옮긴 위치를 영속하는 저장소(테스트 격리를 위해 주입 가능).
     private let defaults: UserDefaults
@@ -431,6 +467,50 @@ final class CheckOverlayController {
     /// 무장했는가**다 — beginPeek 이 수용된 경로에서만 이 태스크를 다시 만든다.
     var isPeekArmed: Bool { pokePeekTask != nil }
 
+    // MARK: Space 소속 감시 — 상태(헤드리스 검증 지점은 private(set))
+
+    /// 소속 확인 간격(초). 놓침 1회 뒤 이만큼 자고 다시 본다(2회 연속이어야 고친다). 새 패널의 첫 커밋(25~55ms 실측)보다
+    /// 넉넉히 길어 "막 올린 새 창의 빈 목록"을 놓침으로 세지 않는다.
+    static let spaceCheckDelaySeconds: Double = 0.75
+    /// 연속 몇 번 "현재 Space 에 없음"이어야 고치는가.
+    static let spaceMissesToRepair = 2
+    /// 재생성 상한(1시간 슬라이딩 창). 넘으면 `.error` 한 번만 남기고 멈춘다 — 다음 창이 열리면 다시 허용한다.
+    /// 할 일 보드는 "실행당 3회"지만 캐릭터는 며칠씩 떠 있고 원인이 다시 올 수 있어 시간 창이다.
+    static let maxPanelRebuildsPerHour = 3
+    /// 사다리 1단(collectionBehavior 재적용)의 상한 — 같은 장부의 두 배. 1단은 화면에 아무 흔적이 없지만 판정이 틀린 세계에서
+    /// 무한히 돌지 않게 묶는다.
+    static let maxPanelReapplicationsPerHour = 6
+    /// 재생성 직후 같은 값의 `updateWorking` 재통지를 무시하는 시간(초, 반론 R1). 재통지는 다음 런루프에 온다(실측 0.5초 안) —
+    /// 메인 스레드가 잠깐 막혀도 놓치지 않게 넉넉히 둔다(삼키는 것은 아무것도 안 바뀐 호출뿐이라 길어도 잃는 것이 없다).
+    static let rebuildRenotifyGraceSeconds: Double = 2.0
+
+    /// 이 프로세스에서 실제로 다시 만든 횟수.
+    private(set) var panelRebuilds = 0
+    private var panelRebuildTimes: [Date] = []
+    private var panelReapplyTimes: [Date] = []
+    /// 연속 놓침 수(모름·건너뜀이면 0 으로 돌아간다).
+    private(set) var spaceMissStreak = 0
+    /// 이번 고장 한 건에서 마지막으로 쓴 수리 단(nil = 아직 안 고쳤다 / 나았다).
+    private(set) var spaceRepairStage: PanelRepairRung?
+    /// 마지막 재확인 결과(헤드리스 검증 지점 — 로그와 같은 값).
+    private(set) var lastSpaceRepairVerdict: SpaceRepairVerdict?
+    private var spaceCheckTask: Task<Void, Never>?
+    private var spaceCheckGeneration = 0
+    private var spaceRepairVerifyTask: Task<Void, Never>?
+    private var spaceRepairVerifyGeneration = 0
+    /// 지금 패널이 한 번이라도 올라간 적이 있는가. 안 올린 새 창은 SkyLight 가 `[]` 를 돌려주므로 표시 직전 판정을 건너뛴다.
+    private(set) var panelHasBeenOrderedIn = false
+    /// 진단 로그의 `after=` — 고장 전에 무슨 사건이 있었는가(Space 전환·잠금 해제·깨움·화면 구성·울트라·표시).
+    private var lastSpaceEvent: SpaceCheckEvent = .launch
+    /// 이 창의 첫 저하 전이를 이미 남겼는가(같은 창에서 같은 로그를 반복하지 않는다).
+    private var spaceDegradationLogged = false
+    /// 상한 로그를 이미 남겼는가(넘은 동안 한 번만).
+    private var panelRepairCapLogged = false
+    /// 같은 값 재통지를 무시하는 마감(반론 R1). 재생성이 세운다.
+    private var rebuildRenotifyGraceUntil: Date?
+    /// 재생성 전 SCNView·Metal 장치(반론 R5 — 재확인 로그가 "같은 것인가"를 적는다).
+    private var rebuildViewIdentity: (view: ObjectIdentifier?, device: UInt64?)?
+
     init(
         store: WorkTimerStore,
         notificationCenter: NotificationCenter = .default,
@@ -522,6 +602,9 @@ final class CheckOverlayController {
         reposition()
         observeScreenChanges()
         observeRenderSuspension(workspace: workspaceNotifications, distributed: distributedNotifications)
+        // Space 가 바뀔 때마다 캐릭터 창이 새 Space 에 실제로 있는지 본다(2026-11-22 — 소속을 잃은 창은 전체 화면 Space 에서
+        // 통째로 없었다). 토큰은 렌더 정지 옵저버와 같은 상자에 담아 deinit 해제 경로를 같이 쓴다.
+        observeActiveSpaceChanges(workspace: workspaceNotifications)
         // 넛지 스케줄러를 실행 시 여기서 한 번 가동한다. 이 줄이 없으면 유일한 기동 지점이 updateWorking 의
         // defer 뿐이고, updateWorking 은 숨겨진 패널의 SwiftUI 루트 뷰가 `.onChange(initial: true)` 를 실제로
         // 평가해 줄 때만 불린다 — 즉 자동 근무 시작 전체가 "숨긴 패널의 body 도 평가된다"는 검증 안 된 런타임
@@ -563,6 +646,22 @@ final class CheckOverlayController {
     /// 표시 시: 폴짝 점프+스핀(commuteStart). 숨김 시: 앞으로 꾸벅 인사(commuteEnd) 후 패널을 내린다.
     /// 인사 완료 콜백은 렌더 루프가 돌 때 오고, 워치독이 최대 `farewellHideDeadline` 내 숨김을 보장한다.
     func updateWorking(_ isWorking: Bool) {
+        // ★ 재생성 직후의 같은 값 재통지는 삼킨다(반론 R1). 호스팅 뷰를 새 창으로 옮기면 SwiftUI 가 **다음 런루프에**
+        //   `.onChange(of:initial:)` 를 다시 흘릴 수 있는데, 그때는 아래 래치가 이미 풀려 있다. 비근무에서 그 재통지가
+        //   updateWorking(false) 로 오면 방금 띄운 찌르기 peek 를 취소하고 창을 내리고, 근무 중이면 출근 점프를 다시 재생한다.
+        //   삼키는 것은 **아무것도 안 바뀐 호출**(근무 여부와 표시 의도가 둘 다 그대로)뿐이다 — 진짜 전이는 그대로 통과한다.
+        //   실측(OverlaySpaceRebuildTests R1a·R1b, 이 문을 지운 변이): 옮긴 뒤 0.5초 안에 재통지가 와서 peek 가 취소·숨김되고
+        //   근무 중에는 `.commuteStart` 가 다시 재생됐다. 로그인 변화 재통지의 몫(넛지 스케줄러 동기화)은 삼켜도 그대로 한다.
+        if let until = rebuildRenotifyGraceUntil {
+            if panelRebuildClock() < until {
+                if isWorking == wasWorkingAtLastUpdate && (isWorking && store.isOverlayEnabled) == shouldBeVisible {
+                    syncNudgeScheduler()
+                    return
+                }
+            } else {
+                rebuildRenotifyGraceUntil = nil
+            }
+        }
         // ★ 재진입 차단. 이 함수는 패널 프레임·표시를 바꾸고, 그 변경은 NSHostingView 가 SwiftUI 루트 뷰를
         //   **그 자리에서** 다시 평가하게 만든다 → `.onChange(of: store.snapshot.isWorking)` 가 이 함수를
         //   자기 실행 도중에 되부른다. 중첩 호출은 새 정보가 없다(우리 자신의 그리기가 만든 통지이고,
@@ -616,7 +715,16 @@ final class CheckOverlayController {
             farewellTask = nil
             engine.renderActive = true
             reposition()
+            if !wasVisible {
+                // 표시 전이: 걸린 채 남은 렌더 정지 사유를 먼저 걷고(깜빡임 tick 은 표시 중에만 돈다 — 설계 §3.3),
+                // 숨어 있던 창이 소속을 잃었으면 **올리기 전에** 고친다(아직 화면에 없으니 아무도 못 본다 — 설계 §3.2).
+                reconcileStaleRenderSuspension()
+                refreshPanelBeforeShowingIfDegraded(.shown)
+            }
             panel.orderFrontRegardless()
+            if !wasVisible {
+                notePanelShown(.shown)
+            }
             installMouseMoveMonitor()
             startDrowsyScheduler()
             startBlinkScheduler()
@@ -1125,6 +1233,8 @@ final class CheckOverlayController {
                 await sleep(interval)
                 guard let self, !Task.isCancelled else { return }
                 self.reconcileStaleRenderSuspension()
+                // Space 소속 안전망: 사건(Space 전환·표시·해제) 노티를 놓쳐도 이 주기에 잡힌다. 연속 놓침 수를 공유한다.
+                self.runSpaceCheck(event: .blinkTick)
                 // 전체화면 격발 중엔 깜빡이지 않는다 — 5초 연출의 표정을 건드리지 않는다.
                 guard self.shouldBeVisible, !self.isUltraActive else { continue }
                 self.engine.blink()
@@ -2490,6 +2600,8 @@ final class CheckOverlayController {
             removeMouseMoveMonitor()
             pinIgnoresMouseEvents(true)
             engine.invalidateBodyHitCache()   // 뷰 크기가 바뀌면 캐시된 투영 rect 는 옛 좌표계의 거짓말이다
+            // 걸린 채 남은 렌더 정지 사유를 걷는다(설계 §3.3) — 숨김 상태에서 받은 울트라는 깜빡임 tick 이 없다.
+            reconcileStaleRenderSuspension()
             engine.isUltraActive = true
             engine.renderActive = true
             // ★ display: **false** 여야 한다. true 면 AppKit 이 여기서 표시 패스를 강제하고, 그 패스가
@@ -2506,10 +2618,17 @@ final class CheckOverlayController {
             // ★ **nil 이어도 반드시 부른다.** `if let` 으로 감싸면 보낸 사람이 캐릭터를 안 고른 경우
             //   (= 캐릭터 이전 버전을 쓰는 사람 전부) 교체가 통째로 생략되어 **내 캐릭터가 나를 덮친다.**
             //   nil 은 "안 바꿈"이 아니라 "아잉"이다 — 판정은 applyUltraCharacter 안에 한 곳만 둔다.
+            //
+            // ★ 숨어 있던 창이 Space 소속을 잃었으면 **덮기 전에** 고친다(설계 §3.2). 크롬 전체 화면에서 받은 울트라가
+            //   첫 프레임부터 보이게 하는 유일한 자리다 — 사후 감지로만 하면 격발 5초 중 1.5초 이상을 잃는다.
+            //   갈아입기보다 앞인 이유: 재생성은 호스팅 뷰를 새 창으로 옮기는데, 옮긴 뒤에 갈아입어야 붙잡는 씬이 같다.
+            let wasHidden = !panel.isVisible
+            if wasHidden { refreshPanelBeforeShowingIfDegraded(.ultraStart) }
             applyUltraCharacter(characterID)
             onUltraWillCoverScreen?()
             panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
             panel.orderFrontRegardless()
+            if wasHidden { panelHasBeenOrderedIn = true }
             // ★ 그리고 **덮은 뒤에 한 번 더** 부른다. 캐릭터를 꺼 둔 사용자는 씬이 위 setFrame 안에서 처음 서므로
             //   (지연 마운트 — hasEverShown 래치) 첫 호출은 붙잡을 씬이 없어 조용히 실패했다. 이미 갈아입었으면 no-op 이다.
             //   리액션 요청보다는 **앞**이어야 한다: 재-attach 가 재생 중인 리액션을 처음부터 되재생하므로,
@@ -2518,6 +2637,10 @@ final class CheckOverlayController {
         }
         engine.request(.ultraPoked(bubbleText: text))
         armUltraRestore(startedAt: takeoverStart)
+        // 울트라를 받을 때마다 한 줄(반론 (c) 판별 로그): 그 순간 창이 지금 Space 에 있었는가. "울트라가 안 보였다"는 다음 신고를
+        // 창 소속(이 로그가 no) · 렌더러(yes 인데 안 보임)로 바로 가른다. 재수신은 확인을 다시 걸지 않는다(창이 그대로다).
+        logPanelPresence(isRefresh ? "ultra refresh" : "ultra received")
+        if !isRefresh { scheduleSpaceCheck(.ultraStart) }
     }
 
     /// 격발 동안 발신자 캐릭터로 갈아입는다. **떼어낸 내 캐릭터 노드를 그대로 들고 있다가** 원복 때 도로 붙인다
@@ -2678,6 +2801,8 @@ final class CheckOverlayController {
         }
         if shouldBeVisible {
             panel.orderFrontRegardless()
+            // 화면만 하던 프레임을 원래대로 줄인 직후다 — 그 전이가 소속을 건드리는지 진단 겸 확인한다(원인 후보 사건).
+            scheduleSpaceCheck(.ultraEnd)
             if restore.hadMouseMonitor { installMouseMoveMonitor() }   // 때리기·드래그 복원
         } else {
             // 울트라 전에 숨김이었다(비근무 또는 캐릭터 표시 꺼짐) → 그대로 다시 숨긴다. peek 퇴장과 동일 계약.
@@ -2724,7 +2849,17 @@ final class CheckOverlayController {
         pokePeekTask?.cancel()
         engine.renderActive = true
         reposition()
+        let wasHidden = !panel.isVisible
+        if wasHidden {
+            // 표시 직전 두 가지(설계 §3.2·§3.3): 걸린 렌더 정지 사유 걷기, 소속을 잃은 숨은 창 고치기.
+            // peek 는 깜빡임 tick 이 없는 경로라 여기서 안 하면 숨김 상태에서는 아무도 안 한다.
+            reconcileStaleRenderSuspension()
+            refreshPanelBeforeShowingIfDegraded(.peek)
+        }
         panel.orderFrontRegardless()
+        if wasHidden {
+            notePanelShown(.peek)
+        }
         pokePeekTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .seconds(Self.pokePeekSeconds))
             guard let self, !Task.isCancelled else { return }
@@ -2824,9 +2959,26 @@ final class CheckOverlayController {
             object: nil,
             queue: nil
         ) { [weak self] _ in
-            Task { @MainActor in self?.reposition() }
+            Task { @MainActor in
+                self?.reposition()
+                // 화면 구성 변경(외장 모니터 끔·켬 등)은 Space 재배정의 원인 후보다 — 진단 겸 소속을 다시 본다.
+                self?.scheduleSpaceCheck(.screens)
+            }
         }
         screenObserver = OverlayObserverToken(center: notificationCenter, raw: token)
+    }
+
+    /// Space 전환을 구독한다. 전환 0.75초 뒤 캐릭터 창이 새 Space 에 실제로 있는지 본다(놓치면 0.75초 뒤 한 번 더).
+    private func observeActiveSpaceChanges(workspace: NotificationCenter?) {
+        guard let workspace else { return }
+        let token = workspace.addObserver(
+            forName: NSWorkspace.activeSpaceDidChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] _ in
+            Self.onMain { self?.scheduleSpaceCheck(.spaceChanged) }
+        }
+        renderSuspendObservers.append(OverlayObserverToken(center: workspace, raw: token))
     }
 
     // MARK: - 렌더 정지(화면 슬립·잠금·세션 비활성) — 표시 의도(shouldBeVisible)와 절대 섞지 않는다
@@ -2838,26 +2990,33 @@ final class CheckOverlayController {
     /// 핸들러는 게시 스레드에서 동기 실행된다(queue: nil). NSWorkspace·배포 센터 모두 메인에서 게시하므로 평소에는
     /// 메인 액터에 동기 진입해 그 자리에서 플래그를 내리고, 혹시 다른 스레드면 메인으로 한 번 건너뛴다.
     private func observeRenderSuspension(workspace: NotificationCenter?, distributed: NotificationCenter?) {
+        // `spaceCheck` 이 있으면 해제 쪽 사건 뒤에 Space 소속도 다시 본다 — 잠금·해제·깨움은 소속을 빼앗는 원인 후보이고
+        // (설계 §1.5), 잠금 중에는 판정하지 않으므로 해제 직후가 첫 기회다.
         func observe(
             _ center: NotificationCenter,
             _ name: Notification.Name,
             _ reason: RenderSuspendReason,
-            suspends: Bool
+            suspends: Bool,
+            spaceCheck: SpaceCheckEvent? = nil
         ) {
             let token = center.addObserver(forName: name, object: nil, queue: nil) { [weak self] _ in
-                Self.onMain { self?.setRenderSuspension(reason, suspended: suspends) }
+                Self.onMain {
+                    self?.setRenderSuspension(reason, suspended: suspends)
+                    if let spaceCheck { self?.scheduleSpaceCheck(spaceCheck) }
+                }
             }
             renderSuspendObservers.append(OverlayObserverToken(center: center, raw: token))
         }
         if let workspace {
             observe(workspace, NSWorkspace.screensDidSleepNotification, .screensAsleep, suspends: true)
-            observe(workspace, NSWorkspace.screensDidWakeNotification, .screensAsleep, suspends: false)
+            observe(workspace, NSWorkspace.screensDidWakeNotification, .screensAsleep, suspends: false, spaceCheck: .wake)
             observe(workspace, NSWorkspace.sessionDidResignActiveNotification, .sessionInactive, suspends: true)
-            observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification, .sessionInactive, suspends: false)
+            observe(workspace, NSWorkspace.sessionDidBecomeActiveNotification, .sessionInactive, suspends: false,
+                    spaceCheck: .sessionActive)
         }
         if let distributed {
             observe(distributed, Self.screenLockedNotification, .screenLocked, suspends: true)
-            observe(distributed, Self.screenUnlockedNotification, .screenLocked, suspends: false)
+            observe(distributed, Self.screenUnlockedNotification, .screenLocked, suspends: false, spaceCheck: .unlock)
         }
     }
 
@@ -2882,16 +3041,26 @@ final class CheckOverlayController {
     ///
     /// **한 방향뿐이다.** 반대(판정은 잠금인데 사유가 없음)는 세우지 않는다 — 비공개 노티 밖의 근거로 렌더를 멈추면
     /// 원격 세션·CI 처럼 판정이 늘 '잠금'인 맥에서 캐릭터가 영영 안 움직인다(넛지가 같은 함정을 이미 겪었다).
-    /// `.screensAsleep` 도 건드리지 않는다(`staleReleasableReasons` 주석). 사유가 없으면 판정 호출 자체를 하지 않는다.
-    /// 깜빡임 tick 이 부르고, 테스트는 직접 부른다. 걷어낸 게 있으면 true.
+    /// `.screensAsleep` 은 콘솔 세션 판정으로 걷지 않고 `displaysAwake() == true` 일 때만 걷는다(`staleReleasableReasons` 주석).
+    /// 사유가 없으면 판정 호출 자체를 하지 않는다(평시 비용 0).
+    ///
+    /// 부르는 곳: 깜빡임 tick(표시 중), 그리고 **표시 전이 · peek · 울트라 시작**(2026-11-22 — 숨김 상태에서는 깜빡임 tick 이
+    /// 없어 걸린 사유가 다음 표시까지 아무도 안 걷었고, 그사이 peek·울트라가 굳은 채 떴다). 테스트는 직접 부른다. 걷어낸 게 있으면 true.
     @discardableResult
     func reconcileStaleRenderSuspension() -> Bool {
+        var released = false
         let stale = renderSuspendReasons.intersection(Self.staleReleasableReasons)
-        guard !stale.isEmpty, consoleSessionUsable() else { return false }
-        for reason in stale {
-            setRenderSuspension(reason, suspended: false)
+        if !stale.isEmpty, consoleSessionUsable() {
+            for reason in stale {
+                setRenderSuspension(reason, suspended: false)
+            }
+            released = true
         }
-        return true
+        if renderSuspendReasons.contains(.screensAsleep), displaysAwake() == true {
+            setRenderSuspension(.screensAsleep, suspended: false)
+            released = true
+        }
+        return released
     }
 
     /// 메인 스레드면 그 자리에서(동기), 아니면 메인 액터로 건너뛰어 실행한다. 노티 핸들러 전용.
@@ -2937,6 +3106,393 @@ final class CheckOverlayController {
         let x = min(max(origin.x, visibleFrame.minX), maxX)
         let y = min(max(origin.y, visibleFrame.minY), maxY)
         return NSPoint(x: x, y: y)
+    }
+
+    // MARK: - Space 소속 감시와 수리 (2026-11-22)
+    //
+    // 대표 맥 실측: 3.5일째 돌던 프로세스의 캐릭터 창이 Space 12개 중 2개에만 소속돼 있었다(설정이 같은 할 일 보드는 12개 전부).
+    // 나머지 전체 화면 Space 에서는 창이 **통째로 없어서** [캐릭터 표시]·찌르기 peek·울트라가 전부 같은 창을 올리기만 하고 아무것도
+    // 안 보였다. 내렸다 올리기로는 안 낫고(실측), 앱을 다시 켜야 나았다. 무엇이 소속을 빼앗는지는 아직 모른다 — 그래서
+    //  ① 보여야 하는데 지금 Space 에 없으면(2회 연속) 고치고, ② 고장의 첫 전이와 직전 사건을 `.error` 로 남긴다(원인 규명).
+    //
+    // 수리 사다리(알파 0 프로브 실측, 2026-11-22 같은 맥):
+    //  1단 `collectionBehavior` 를 [] → 원래 값(따로 커밋). 뷰 이동이 없어 SwiftUI 재통지(반론 R1)·Metal(R5) 위험이 없다.
+    //     망가진 네 모양 전부 4/4 나았고, 내려 둔 창에서도 나았다.
+    //  2단 창만 새로 만들고 **같은 호스팅 뷰**를 옮겨 싣는다(`rebuildPanel`). 4/4 나았고 SCNView·씬·장치가 그대로 이어 그렸다.
+    //  (3단 비공개 쓰기는 넣지 않았다 — 2단이 안 나으면 `stage=rebuild healed=false` 로 구분해 남긴다.)
+
+    /// 소속 확인을 부른 사건. 진단 로그의 `after=`(고장 직전 사건)·`via=`(그것을 잡은 확인)에 그대로 찍힌다.
+    enum SpaceCheckEvent: String, Sendable {
+        case launch, spaceChanged, shown, peek, ultraStart, ultraEnd, unlock, wake, sessionActive, screens, blinkTick
+    }
+
+    /// 수리 사다리의 단.
+    enum PanelRepairRung: String, Sendable {
+        case reapplyCollectionBehavior = "reapply"
+        case rebuild
+    }
+
+    /// 확인을 건너뛴 까닭. 건너뛰면 연속 놓침 수가 0 으로 돌아간다("연속"은 판정할 수 있었던 확인끼리만 잇는다).
+    enum SpaceCheckSkip: String, Equatable, Sendable {
+        /// 보여야 할 의도가 없다(비근무·캐릭터 꺼짐이고 peek·울트라도 아님).
+        case notIntendedVisible
+        /// AppKit 이 창을 올려 두지 않았다.
+        case notOrderedIn
+        /// 잠금·빠른 사용자 전환·화면 꺼짐(렌더 정지 사유) 또는 콘솔 세션 판정이 '못 씀'.
+        case sessionUnusable
+        /// 다른 일 중이다(updateWorking 도중 · 근무 종료 인사 0.55초 · 드래그 중).
+        case busy
+        /// 질의가 모른다고 했다(심볼 없음·질의 실패·비공개와 공개 신호가 엇갈림).
+        case unknown
+        /// 상한에 걸렸다.
+        case capped
+    }
+
+    enum SpaceCheckOutcome: Equatable, Sendable {
+        case skipped(SpaceCheckSkip)
+        case onCurrentSpace
+        case miss(streak: Int)
+        case repaired(PanelRepairRung)
+    }
+
+    /// 수리 0.75초 뒤 재확인 결과(healed nil = 모름 — 창이 내려갔거나 질의가 모른다).
+    struct SpaceRepairVerdict: Equatable, Sendable {
+        let rung: PanelRepairRung
+        let healed: Bool?
+    }
+
+    /// 재생성 까닭(로그에 남는다).
+    enum PanelRebuildReason: String, Sendable {
+        /// 2회 연속 지금 Space 에 없었고, 이번 고장에서 1단을 이미 썼다.
+        case missingCurrentSpace
+        /// 1단 뒤 재확인에서도 없었다.
+        case reapplyDidNotHeal
+        /// 표시 직전 숨은 창에서 잡았고, 1단을 이미 썼다.
+        case preShow
+        /// 시험·수동.
+        case manual
+    }
+
+    private static let spaceLogger = Logger(subsystem: "kingcheck", category: "overlay")
+
+    /// 순수 판정 ① — 지금 확인해도 되는가(nil 이면 된다). 순서가 곧 우선순위다.
+    static func spaceCheckGate(intendedVisible: Bool, orderedIn: Bool, sessionUsable: Bool, busy: Bool) -> SpaceCheckSkip? {
+        if !intendedVisible { return .notIntendedVisible }
+        if !orderedIn { return .notOrderedIn }
+        if !sessionUsable { return .sessionUnusable }
+        if busy { return .busy }
+        return nil
+    }
+
+    /// 순수 판정 ② — 이번 소속으로 연속 놓침이 몇이 되고, 고칠 때인가. 재생성 근거는 "현재 Space 빠짐" 하나다(반론 D2).
+    static func spaceMissVerdict(presence: OverlaySpacePresence, priorMissStreak: Int) -> (streak: Int, repair: Bool) {
+        guard presence.isMissing else { return (0, false) }
+        let streak = priorMissStreak + 1
+        return (streak, streak >= spaceMissesToRepair)
+    }
+
+    /// 순수 판정 ③ — 1시간 슬라이딩 창에 자리가 남았는가.
+    static func repairBudgetAllows(_ times: [Date], limit: Int, now: Date) -> Bool {
+        times.filter { now.timeIntervalSince($0) < 3600 }.count < limit
+    }
+
+    /// 보여야 하는가: 근무 중 표시 · peek · 울트라. 캐릭터를 꺼 둔 비근무 상태는 고칠 대상이 아니다.
+    private var spaceCheckIntendedVisible: Bool { shouldBeVisible || isUltraActive || isPeekArmed }
+
+    /// 세션이 쓸 수 있는가. 잠금·빠른 사용자 전환·화면 꺼짐 동안에는 판정하지 않는다(넛지와 같은 콘솔 세션 판정 주입).
+    private var spaceCheckSessionUsable: Bool {
+        renderSuspendReasons.isDisjoint(with: [.screenLocked, .sessionInactive, .screensAsleep]) && consoleSessionUsable()
+    }
+
+    /// 다른 일 중인가. 드래그는 `isDragCandidate && didDrag` 로만 본다 — 트랙패드 세 손가락 드래그는 `pressedMouseButtons`
+    /// 비트를 안 세울 수 있다(반론 D5).
+    private var spaceCheckBusy: Bool { isUpdatingWorking || farewellTask != nil || (isDragCandidate && didDrag) }
+
+    private func currentSpaceCheckSkip() -> SpaceCheckSkip? {
+        let intended = spaceCheckIntendedVisible
+        let orderedIn = panel.isVisible && panel.windowNumber > 0
+        // 콘솔 세션 판정은 앞 두 관문을 지난 뒤에만 묻는다(평시 비용 0).
+        guard intended, orderedIn else {
+            return Self.spaceCheckGate(intendedVisible: intended, orderedIn: orderedIn, sessionUsable: true, busy: false)
+        }
+        return Self.spaceCheckGate(
+            intendedVisible: true, orderedIn: true, sessionUsable: spaceCheckSessionUsable, busy: spaceCheckBusy)
+    }
+
+    /// 사건 뒤 0.75초에 확인을 예약한다(놓침 1회면 0.75초 뒤 한 번 더). 앞 예약은 취소하고 세대를 올린다.
+    ///
+    /// ★ 프로덕션 수면(`try? await Task.sleep`)은 취소되면 **즉시** 돌아온다 — 깨어난 쪽이 취소·세대를 안 보면 cancel() 이 곧
+    ///   즉시 실행이다(이 파일 farewellTask 주석의 그 함정). 시험의 게이트 수면은 취소돼도 안 깨므로 세대 검사가 그쪽을 막는다.
+    func scheduleSpaceCheck(_ event: SpaceCheckEvent) {
+        lastSpaceEvent = event
+        spaceCheckTask?.cancel()
+        spaceCheckGeneration &+= 1
+        let generation = spaceCheckGeneration
+        let sleep = spaceCheckSleep
+        let delay = Self.spaceCheckDelaySeconds
+        let attempts = Self.spaceMissesToRepair
+        spaceCheckTask = Task { @MainActor [weak self] in
+            for _ in 0..<attempts {
+                await sleep(delay)
+                guard !Task.isCancelled, let self, self.spaceCheckGeneration == generation else { return }
+                guard case .miss = self.runSpaceCheck(event: event) else { break }
+            }
+            guard let self, self.spaceCheckGeneration == generation else { return }
+            self.spaceCheckTask = nil
+        }
+    }
+
+    /// 한 번 확인한다(깜빡임 tick·예약 확인·시험이 부른다). 2회 연속 "지금 Space 에 없음"이면 사다리를 한 단 오른다.
+    @discardableResult
+    func runSpaceCheck(event: SpaceCheckEvent) -> SpaceCheckOutcome {
+        if let skip = currentSpaceCheckSkip() {
+            spaceMissStreak = 0
+            return .skipped(skip)
+        }
+        guard let presence = spacePresence(panel) else {
+            spaceMissStreak = 0
+            return .skipped(.unknown)
+        }
+        noteMembership(presence, via: event)
+        let verdict = Self.spaceMissVerdict(presence: presence, priorMissStreak: spaceMissStreak)
+        spaceMissStreak = verdict.streak
+        guard presence.isMissing else {
+            // 지금 Space 에 있다 = 이번 고장은 끝났다(1단이 나았든 저절로 돌아왔든).
+            spaceRepairStage = nil
+            return .onCurrentSpace
+        }
+        guard verdict.repair else { return .miss(streak: verdict.streak) }
+        spaceMissStreak = 0
+        return repairPanelSpace(presence: presence, reason: .missingCurrentSpace)
+    }
+
+    /// 표시 직전 갱신(설계 §3.2): 숨어 있던 창을 **올리기 전에** 소속을 한 번 묻고, 지금 Space 가 빠졌으면 그 자리에서 고친다.
+    /// 창이 아직 화면에 없으니 무엇을 해도 아무도 못 본다 — 대표님의 자연스러운 행동(표시 껐다 켜기)이 확실한 수리 버튼이 된다.
+    ///
+    /// 1회 판정이다(2회 규칙 없음). 오탐을 막는 것은 둘이다: ① 한 번도 올린 적 없는 창은 묻지 않는다(SkyLight 가 `[]` 를 준다),
+    /// ② 프로덕션 판정은 비공개 "없음"과 공개 `!isOnActiveSpace` 가 **둘 다** 일 때만 없음이다(실측: 정상 숨은 창 true, 새 창 true).
+    @discardableResult
+    func refreshPanelBeforeShowingIfDegraded(_ event: SpaceCheckEvent) -> Bool {
+        guard !panel.isVisible, panelHasBeenOrderedIn, panel.windowNumber > 0 else { return false }
+        guard spaceCheckSessionUsable else { return false }
+        guard let presence = spacePresence(panel), presence.isMissing else { return false }
+        noteMembership(presence, via: event)
+        if case .repaired = repairPanelSpace(presence: presence, reason: .preShow) { return true }
+        return false
+    }
+
+    /// 사다리를 한 단 오른다. 이번 고장에서 아직 아무것도 안 했으면 1단, 1단을 이미 썼으면 2단(재생성).
+    private func repairPanelSpace(presence: OverlaySpacePresence, reason: PanelRebuildReason) -> SpaceCheckOutcome {
+        let now = panelRebuildClock()
+        if spaceRepairStage == nil,
+           Self.repairBudgetAllows(panelReapplyTimes, limit: Self.maxPanelReapplicationsPerHour, now: now) {
+            panelReapplyTimes = panelReapplyTimes.filter { now.timeIntervalSince($0) < 3600 } + [now]
+            spaceRepairStage = .reapplyCollectionBehavior
+            panelSpaceRepair(panel)
+            Self.spaceLogger.notice(
+                "overlay panel repair step=1 reapply members=\(self.membershipText(presence), privacy: .public) n=\(self.panelReapplyTimes.count, privacy: .public)/h"
+            )
+            scheduleSpaceRepairVerify(.reapplyCollectionBehavior)
+            return .repaired(.reapplyCollectionBehavior)
+        }
+        return rebuildPanel(reason: reason, now: now) ? .repaired(.rebuild) : .skipped(.capped)
+    }
+
+    /// 창만 새로 만들고 안의 화면(SwiftUI 루트·SCNView·씬·엔진 attach)은 **같은 호스팅 뷰째** 옮겨 싣는다(설계 §3.1).
+    ///
+    /// 잃는 것이 없다: 지연 마운트 래치(`hasEverShown`)·SCNView·씬·`engine.attachedView`·울트라에서 떼어 둔 노드는 호스팅 뷰
+    /// 안이나 이 컨트롤러에 산다. 모델을 다시 읽지 않고 감은 눈도 다시 굽지 않는다. 늦게 도는 블록(peek 퇴장·인사 숨김·울트라 원복)은
+    /// 전부 `self.panel` 을 그때 읽으므로 새 창에 작용한다. 옛 창은 내리기만 한다(`close()` 는 부르지 않는다 — 보드
+    /// `rebuildStuckPanel` 과 같다).
+    ///
+    /// 상한은 **여기 한 곳**이다(1시간 3회, 주입 시계). 넘으면 `.error` 한 번만 남기고 false.
+    @discardableResult
+    func rebuildPanel(reason: PanelRebuildReason, now: Date? = nil) -> Bool {
+        let now = now ?? panelRebuildClock()
+        panelRebuildTimes = panelRebuildTimes.filter { now.timeIntervalSince($0) < 3600 }
+        guard Self.repairBudgetAllows(panelRebuildTimes, limit: Self.maxPanelRebuildsPerHour, now: now) else {
+            if !panelRepairCapLogged {
+                panelRepairCapLogged = true
+                Self.spaceLogger.error(
+                    "overlay panel rebuild capped reason=\(reason.rawValue, privacy: .public) max=\(Self.maxPanelRebuildsPerHour, privacy: .public)/h total=\(self.panelRebuilds, privacy: .public)"
+                )
+            }
+            return false
+        }
+        panelRepairCapLogged = false
+        let priorLatch = isUpdatingWorking
+        let identityBefore = currentViewIdentity()
+        let wasOrderedIn = swapInFreshPanel()
+        panelRebuildTimes.append(now)
+        panelRebuilds += 1
+        spaceMissStreak = 0
+        spaceRepairStage = .rebuild
+        panelHasBeenOrderedIn = wasOrderedIn
+        spaceDegradationLogged = false
+        rebuildViewIdentity = identityBefore
+        rebuildRenotifyGraceUntil = now.addingTimeInterval(Self.rebuildRenotifyGraceSeconds)
+        Self.spaceLogger.error(
+            "overlay panel rebuilt reason=\(reason.rawValue, privacy: .public) n=\(self.panelRebuildTimes.count, privacy: .public)/h total=\(self.panelRebuilds, privacy: .public) orderedIn=\(wasOrderedIn, privacy: .public) ultra=\(self.isUltraActive, privacy: .public) peek=\(self.isPeekArmed, privacy: .public) after=\(self.lastSpaceEvent.rawValue, privacy: .public)"
+        )
+        scheduleSpaceRepairVerify(.rebuild)
+        // 반론 R4: 옮기는 동안 래치가 동기 재통지를 삼켰다 — 그중 진짜 전이가 있었으면 여기서 한 번 맞춘다.
+        // updateWorking 안(표시 직전 갱신)에서 불렸으면 바깥 호출이 끝까지 맞추므로 건드리지 않는다.
+        if !priorLatch { reconcileIntendedVisibilityAfterRebuild() }
+        return true
+    }
+
+    /// 새 창으로 갈아 끼운다(래치 안). 옛 창이 올라가 있었으면 true.
+    private func swapInFreshPanel() -> Bool {
+        let old = panel
+        let frame = old.frame                                   // 울트라 중이면 전체 화면 프레임 그대로
+        let wasOrderedIn = old.isVisible
+        let intendedIgnores = old.ignoresMouseEvents             // CheckMousePanel: 테스트에선 의도값을 돌려준다
+        let acceptsMoved = old.acceptsMouseMovedEvents
+        let fresh = Self.makePanel(size: frame.size)              // 같은 설정(모든 Space·floating·캡처 제외·테스트 알파 0)
+        // 이동 중 SwiftUI 가 `.onChange` 를 그 자리에서 되부르면 updateWorking 이 commuteStart 를 또 건다 → 래치로 삼킨다.
+        // ★ 저장·복원이어야 한다: updateWorking 안(표시 직전 갱신)에서도 불리므로 false 로 내리면 바깥 래치가 깨진다.
+        let priorLatch = isUpdatingWorking
+        isUpdatingWorking = true
+        defer { isUpdatingWorking = priorLatch }
+        old.contentView = nil
+        fresh.contentView = contentHostingView
+        fresh.setFrame(frame, display: false)
+        fresh.acceptsMouseMovedEvents = acceptsMoved
+        fresh.ignoresMouseEvents = pinnedIgnoresMouseEvents ?? intendedIgnores   // 울트라 못 박기 유지
+        panel = fresh
+        if wasOrderedIn { fresh.orderFrontRegardless() }        // 새 창을 먼저 올리고
+        old.orderOut(nil)                                        // 옛 창을 내린다
+        return wasOrderedIn
+    }
+
+    /// 반론 R4 — 표시 의도(`shouldBeVisible`)가 스토어(근무 중 && 캐릭터 켬)와 어긋났으면 정상 경로로 한 번 맞춘다.
+    private func reconcileIntendedVisibilityAfterRebuild() {
+        let working = store.snapshot.isWorking
+        if (working && store.isOverlayEnabled) != shouldBeVisible {
+            updateWorking(working)
+        }
+    }
+
+    /// 수리 0.75초 뒤 재확인을 예약한다(사다리의 다음 단 판정).
+    private func scheduleSpaceRepairVerify(_ rung: PanelRepairRung) {
+        spaceRepairVerifyTask?.cancel()
+        spaceRepairVerifyGeneration &+= 1
+        let generation = spaceRepairVerifyGeneration
+        let sleep = spaceCheckSleep
+        let delay = Self.spaceCheckDelaySeconds
+        spaceRepairVerifyTask = Task { @MainActor [weak self] in
+            await sleep(delay)
+            guard !Task.isCancelled, let self, self.spaceRepairVerifyGeneration == generation else { return }
+            self.spaceRepairVerifyTask = nil
+            self.verifySpaceRepair(rung)
+        }
+    }
+
+    /// 수리가 나았는지 본다. 1단이 안 나았으면 2단(재생성)으로 오르고, 2단이 안 나았으면 `.error` 로 구분해 남긴다(반론 R3).
+    @discardableResult
+    func verifySpaceRepair(_ rung: PanelRepairRung) -> Bool? {
+        let orderedIn = panel.isVisible && panel.windowNumber > 0
+        let presence = orderedIn ? spacePresence(panel) : nil
+        let healed = presence.map { !$0.isMissing }
+        lastSpaceRepairVerdict = SpaceRepairVerdict(rung: rung, healed: healed)
+        let healedText = healed.map { $0 ? "true" : "false" } ?? (orderedIn ? "unknown" : "unknown-hidden")
+        let identity = identityNote(for: rung)
+        Self.spaceLogger.notice(
+            "overlay panel repair verified step=\(rung == .rebuild ? 2 : 1, privacy: .public) \(rung.rawValue, privacy: .public) healed=\(healedText, privacy: .public) members=\(presence.map { self.membershipText($0) } ?? "?", privacy: .public) sticky=\(Self.stickyText(self.panel), privacy: .public)\(identity, privacy: .public)"
+        )
+        switch healed {
+        case .some(true):
+            spaceRepairStage = nil
+            spaceMissStreak = 0
+        case .some(false):
+            if rung == .reapplyCollectionBehavior {
+                if currentSpaceCheckSkip() == nil { rebuildPanel(reason: .reapplyDidNotHeal) }
+            } else {
+                Self.spaceLogger.error(
+                    "overlay panel rebuild did not heal stage=rebuild healed=false members=\(presence.map { self.membershipText($0) } ?? "?", privacy: .public) (no further rung)"
+                )
+            }
+        case .none:
+            break
+        }
+        return healed
+    }
+
+    /// 창이 올라간 직후(표시 전이·peek): 올린 적 있음 표시 → 한 줄 진단 → 0.75초 뒤 확인 예약.
+    private func notePanelShown(_ event: SpaceCheckEvent) {
+        panelHasBeenOrderedIn = true
+        logPanelPresence(event == .peek ? "peek shown" : "shown")
+        scheduleSpaceCheck(event)
+    }
+
+    /// 표시 전이·울트라 수신마다 한 줄(반론 (c) 판별 로그): 그 순간 창이 지금 Space 에 있었는가(yes/no/unknown).
+    private func logPanelPresence(_ label: String) {
+        let presence = spacePresence(panel)
+        let onCurrent = presence.map { $0.isMissing ? "no" : "yes" } ?? "unknown"
+        Self.spaceLogger.notice(
+            "overlay \(label, privacy: .public) onCurrentSpace=\(onCurrent, privacy: .public) members=\(presence.map { self.membershipText($0) } ?? "?", privacy: .public)"
+        )
+    }
+
+    /// 소속 진단: "그 화면의 Space 전부"에서 줄어든 **첫 전이**를 `.error` 로 남긴다(원인 규명용 — 기본 수준 로그는 이 맥에서
+    /// 19시간만 남지만 error 는 며칠 남는다). 일부만 빠졌어도(현재 Space 는 있음) 남긴다 — 고치지는 않는다(반론 D2).
+    private func noteMembership(_ presence: OverlaySpacePresence, via event: SpaceCheckEvent) {
+        let total = displaySpaceCount(for: presence)
+        let members = presence.memberCount
+        let partial: Bool = {
+            guard let members, let total else { return false }
+            return members < total
+        }()
+        if presence.isMissing || partial {
+            guard !spaceDegradationLogged else { return }
+            spaceDegradationLogged = true
+            var spacesText = "?"
+            var currentText = "?"
+            if case .missingCurrentSpace(let spaces, let current) = presence {
+                spacesText = spaces.map { "\($0)" } ?? "?"
+                currentText = current.map(String.init) ?? "?"
+            }
+            Self.spaceLogger.error(
+                "overlay sticky degraded \(members.map(String.init) ?? "?", privacy: .public)/\(total.map(String.init) ?? "?", privacy: .public) missingCurrent=\(presence.isMissing, privacy: .public) after=\(self.lastSpaceEvent.rawValue, privacy: .public) via=\(event.rawValue, privacy: .public) spaces=\(spacesText, privacy: .public) current=\(currentText, privacy: .public) sticky=\(Self.stickyText(self.panel), privacy: .public)"
+            )
+        } else if let members, let total, members >= total {
+            spaceDegradationLogged = false
+        }
+    }
+
+    private func displaySpaceCount(for presence: OverlaySpacePresence) -> Int? {
+        if case .onCurrentSpace(_, let total) = presence, let total { return total }
+        return OverlaySpaceProbe.displaySpaceCount(windowNumber: panel.windowNumber)
+    }
+
+    private func membershipText(_ presence: OverlaySpacePresence) -> String {
+        presence.membershipText(displaySpaceCount: displaySpaceCount(for: presence))
+    }
+
+    private static func stickyText(_ window: NSWindow) -> String {
+        OverlaySpaceProbe.stickyTag(windowNumber: window.windowNumber).map { $0 ? "on" : "off" } ?? "?"
+    }
+
+    /// 반론 R5 — 재생성 재확인 로그에 "SCNView·Metal 장치가 같은 것인가"를 적는다(1단은 뷰를 안 옮기므로 비운다).
+    private func identityNote(for rung: PanelRepairRung) -> String {
+        guard rung == .rebuild, let before = rebuildViewIdentity else { return "" }
+        let now = currentViewIdentity()
+        let sameView = before.view == nil ? "none" : (before.view == now.view ? "same" : "changed")
+        let sameDevice = before.device == nil ? "none" : (before.device == now.device ? "same" : "changed")
+        return " scnView=\(sameView) device=\(sameDevice)"
+    }
+
+    private func currentViewIdentity() -> (view: ObjectIdentifier?, device: UInt64?) {
+        let scn = contentHostingView.flatMap { Self.firstSCNView(in: $0) }
+        return (scn.map(ObjectIdentifier.init), scn?.device?.registryID)
+    }
+
+    private static func firstSCNView(in view: NSView) -> SCNView? {
+        if let scn = view as? SCNView { return scn }
+        for sub in view.subviews {
+            if let found = firstSCNView(in: sub) { return found }
+        }
+        return nil
     }
 
     /// 클릭 통과·항상 위·전(全) Space/전체화면 유지·투명 배경으로 설정된 오버레이 패널을 만든다.

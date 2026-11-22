@@ -288,6 +288,9 @@ func wakeResumesImmediatelyWithoutTouchingVisibilityIntent() {
 
     // 반대 방향도 직교: 근무 종료(표시 의도 하강)는 정지 사유를 건드리지 않는다 — 잠긴 채 근무가 끝나고
     // 잠긴 채 다시 시작해도 여전히 정지 상태여야 한다.
+    // (2026-11-22: 표시 전이도 안전밸브를 돌린다. "잠겼다"는 세계는 콘솔 세션 판정도 '잠금'이어야 맞다 — 판정이 '사용 가능'인데
+    //  잠금 노티만 남은 것은 해제 노티 유실이고, 그때 표시 전이가 사유를 걷는 것이 새 계약이다.)
+    h.probe.usable = false
     h.lock()
     h.controller.updateWorking(false)
     #expect(h.engine.renderSuspended)

@@ -30,6 +30,12 @@ sealed interface MeDailyMissionSection {
     val claimableCount: Int get() = 0
     val claimableRuby: Long get() = 0
 
+    /**
+     * 머리에 [모두 받기]를 세우는가 — 받을 것이 **둘 이상**일 때만(하나뿐이면 그 줄 [받기]와 같은 일을 하는 버튼이 둘이 된다 —
+     * 누적 미션 머리와 같은 규칙 · 맥 0.3.87 `MissionClaimAllOffer` 와 같은 문턱). 폰 1.0.19 a3d734c5 · 안드로이드 판 9.
+     */
+    val showsClaimAll: Boolean get() = claimableCount > 1
+
     companion object {
         /** 응답의 `daily` 와 **서버 시각 추정값**에서 고른다(날이 끝났으면 코어가 줄을 새 날의 모양으로 바꿔 준다). */
         fun make(daily: DailyMissionStatus?, serverNowMs: Long?): MeDailyMissionSection {

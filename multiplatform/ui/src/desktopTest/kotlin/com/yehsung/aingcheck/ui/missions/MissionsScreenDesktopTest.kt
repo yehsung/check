@@ -50,13 +50,16 @@ class MissionsScreenDesktopTest {
             ),
         )
 
-    /** [gomokuClaimed] — 음성 기준선: 일일 「1:1 오목」 한 줄만 받음으로(버튼 → "받음", 막대 초록). */
-    private fun scene(dark: Boolean, gomokuClaimed: Boolean): @Composable () -> Unit {
-        val achievements = if (!gomokuClaimed) MeScreenFixtures.achievements else MeScreenFixtures.achievements.let { json ->
-            val at = json.indexOf("\"key\": \"daily_gomoku\"")
-            val claimed = json.indexOf("\"claimed\": false", at)
-            require(at >= 0 && claimed > at) { "픽스처에 일일 오목 줄이 없다" }
-            json.substring(0, claimed) + "\"claimed\": true" + json.substring(claimed + "\"claimed\": false".length)
+    /**
+     * [flappyUnclaimed] — 음성 기준선: 일일 「플래피」 한 줄만 받음 → 받을 수 있음으로(✓받음 → [받기], 머리 "받을 보상 2개" → "3개").
+     * 판 9 전에는 「1:1 오목」을 받음으로 바꿨는데, 그러면 받을 것이 하나로 줄어 머리의 [모두 받기]가 사라지고 아래가 통째로 밀린다(한 군데가 아니다).
+     */
+    private fun scene(dark: Boolean, flappyUnclaimed: Boolean): @Composable () -> Unit {
+        val achievements = if (!flappyUnclaimed) MeScreenFixtures.achievements else MeScreenFixtures.achievements.let { json ->
+            val at = json.indexOf("\"key\": \"daily_flappy\"")
+            val claimed = json.indexOf("\"claimed\": true", at)
+            require(at >= 0 && claimed > at) { "픽스처에 받은 일일 플래피 줄이 없다" }
+            json.substring(0, claimed) + "\"claimed\": false" + json.substring(claimed + "\"claimed\": true".length)
         }
         val s = store(achievements = achievements)
         return W4cDesktopSnapshots.frame(dark, W, H) { MeMissionsContent(s, scrolls = false) }
@@ -169,6 +172,35 @@ class MissionsScreenDesktopTest {
         }
         assertEquals(0, cards, "일일 미션이 없는 서버인데 일일 카드가 섰다")
         assertEquals(2, others, "기준선: 이번 주 · 누적 카드는 그대로 선다")
+    }
+
+    /**
+     * 판 9(폰 1.0.19 a3d734c5): 일일 머리의 [모두 받기]는 받을 것이 **둘 이상**일 때만 선다. 데모 픽스처는 일일 받을 것 둘(눈치 · 오목) →
+     * 버튼 하나 · 오목을 받음으로 바꾸면 하나 → 버튼 없음. 누적 머리의 버튼(같은 낱말)과 따로 센다.
+     */
+    @Test
+    fun dailyClaimAllOnlyForTwoOrMore() {
+        fun count(gomokuClaimed: Boolean): Pair<Int, List<String>> {
+            var n = -1
+            var labels = emptyList<String>()
+            runDesktopComposeUiTest(W, H) {
+                val achievements = if (!gomokuClaimed) MeScreenFixtures.achievements else MeScreenFixtures.achievements.let { json ->
+                    val at = json.indexOf("\"key\": \"daily_gomoku\"")
+                    val claimed = json.indexOf("\"claimed\": false", at)
+                    json.substring(0, claimed) + "\"claimed\": true" + json.substring(claimed + "\"claimed\": false".length)
+                }
+                val s = store(achievements = achievements)
+                setContent { W4cDesktopSnapshots.frame(false, W, H) { MeMissionsContent(s, scrolls = false) }() }
+                val nodes = onAllNodesWithTag(MissionTags.DAILY_CLAIM_ALL).fetchSemanticsNodes()
+                n = nodes.size
+                labels = nodes.flatMap { it.config.getOrNull(SemanticsProperties.ContentDescription) ?: emptyList() }
+            }
+            return n to labels
+        }
+        val (two, labels) = count(gomokuClaimed = false)
+        assertEquals(1, two, "일일 받을 것이 둘인데 머리에 [모두 받기]가 없다")
+        assertEquals(listOf("모두 받기, 루비 10개"), labels, "보이스오버가 일일 루비 합을 말하지 않는다")
+        assertEquals(0, count(gomokuClaimed = true).first, "일일 받을 것이 하나뿐인데 [모두 받기]가 섰다")
     }
 
     /** 화면에 선 일일 줄 수(꼬리표가 "missions.row.daily_" 로 시작하는 마디 — 스토어 값으로 세지 않는다). */

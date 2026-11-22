@@ -1,6 +1,6 @@
 // 원본: Sources/CheckMobileKit/Me/MeAchievementViews.swift @ 3bd04bd (MeAchievementsSection · MeAchievementRow) · 0c3168bd(캐릭터 보상 줄 — 폰 1.0.18)
 //
-// 「누적 미션」(도전 미션) 카드 — 머리(소제목 + 받을 보상 수 + [전부 받기]) + 계열마다 한 줄. 사장님 확정(2026-10-19): 달성하면 [받기]가
+// 「누적 미션」(도전 미션) 카드 — 머리(소제목 + 받을 보상 수 + [모두 받기]) + 계열마다 한 줄. 사장님 확정(2026-10-19): 달성하면 [받기]가
 // 생기고 누르면 받아진다. 이 파일은 **그림만** 그린다 — 제목 · 보조 문장 · 보상 · 목표 · 순서는 전부 서버 응답이고(스토어 achievementSection),
 // 판정도 스토어다. 그래서 이 파일에 미션 제목도, 50 · 20 · 10 같은 보상 숫자도 한 줄 없다.
 //  · 받기 **실패는 그 줄 안**에서 말한다(토스트 · 알림창 · 절 위 안내줄 없음). [받기]는 그대로 남아 다시 누르는 것이 재시도다.
@@ -68,6 +68,8 @@ object MissionTags {
     const val RUBY_BALANCE = "missions-ruby-balance"
     const val ACHIEVEMENTS = "missions.achievements"
     const val DAILY = "missions.daily"
+    /** 일일 머리의 [모두 받기](판 9). */
+    const val DAILY_CLAIM_ALL = "missions.daily.claimAll"
     const val WEEKLY = "missions.weekly"
     const val EMPTY = "missions.empty"
     fun row(key: String) = "missions.row.$key"
@@ -108,7 +110,7 @@ internal fun MissionCard(modifier: Modifier = Modifier, content: @Composable () 
     ) { content() }
 }
 
-/** 소제목 + 오른쪽 "받을 보상 N개" · [전부 받기]. 받을 것이 **둘 이상**일 때만 전부 받기를 준다. */
+/** 소제목 + 오른쪽 "받을 보상 N개" · [모두 받기]. 받을 것이 **둘 이상**일 때만 모두 받기를 준다. */
 @Composable
 private fun Header(store: MeStore) {
     val c = AingTheme.colors

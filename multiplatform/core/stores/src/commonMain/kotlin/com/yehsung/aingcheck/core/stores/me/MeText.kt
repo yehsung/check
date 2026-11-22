@@ -336,7 +336,8 @@ object MeText {
     const val missionsRowDetail = "일일 · 이번 주 · 누적 미션"
     const val missionsEmpty = "받을 수 있는 미션이 아직 없어요"
     const val claimButton = "받기"
-    const val claimAllButton = "전부 받기"
+    /** 폰 1.0.19 · 판 9 부터 맥 0.3.87 과 같은 낱말 '모두 받기'(제보 원문 "모두 수령") — 일일 · 누적 두 묶음이 같은 버튼이다. */
+    const val claimAllButton = "모두 받기"
     const val claimedMark = weeklyGrantSuffix
 
     /** 받기가 실패한 **그 줄** 안의 문장(코어 `AchievementNoticeText.claimFailedRow` — 맥과 한 글자도 다르지 않다). */

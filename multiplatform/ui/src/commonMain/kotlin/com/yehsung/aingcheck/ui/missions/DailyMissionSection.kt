@@ -4,7 +4,9 @@
 // = 루비 5, **자정(KST)까지 안 받으면 사라진다**. 줄 수 · 제목 · 보상은 **서버가 주는 대로**다(G §8-18 7 — 일곱 번째 줄도 서버가 주면 선다).
 //  ① 제목 · 보상 · 순서는 서버 글자 — 이 파일에 "한 판 하기" 도 5 도 없다. ② 버튼 · 연출은 누적 미션과 같은 부품.
 //  ③ 그리는 값은 순수 값(스토어 `MeDailyMissionRowContent`) — 화면은 배치만. ④ 날을 넘긴 줄에는 [받기]가 없다(코어가 판정).
-//  ⑤ 일일의 떠 있음 · 실패는 누적과 따로 센다(장부가 두 벌 — 스토어). [전부 받기] 는 **없다**(맥도 없다 — 줄마다 받는 손맛이 요점).
+//  ⑤ 일일의 떠 있음 · 실패는 누적과 따로 센다(장부가 두 벌 — 스토어).
+//  ⑥ 판 9(폰 1.0.19 a3d734c5 · 맥 0.3.87): 받을 것이 둘 이상이면 머리에 [모두 받기] — 받는 길은 낱개와 같은 한 길
+//     ([claimAllDailyMissions] → `daily_mission_claim(null)`, 날 넘김 처리까지 같다). 제보 11-17 서울 "미션 루비 모두 수령".
 // 갈래는 둘이다(스토어 MeDailyMissionSection): 그릴 것이 없으면 **카드째 없다**(모르는 동안 자리를 잡으면 옛 서버에서 빈 카드가 섰다 사라진다).
 package com.yehsung.aingcheck.ui.missions
 
@@ -24,11 +26,16 @@ import com.yehsung.aingcheck.core.stores.me.MeDailyMissionRowContent
 import com.yehsung.aingcheck.core.stores.me.MeDailyMissionSection
 import com.yehsung.aingcheck.core.stores.me.MeStore
 import com.yehsung.aingcheck.core.stores.me.MeText
+import com.yehsung.aingcheck.core.stores.me.claimAllDailyMissions
 import com.yehsung.aingcheck.core.stores.me.claimDailyMission
 import com.yehsung.aingcheck.core.stores.me.dailyClaimBurst
 import com.yehsung.aingcheck.core.stores.me.dailyMissionClaimDidFail
+import com.yehsung.aingcheck.core.stores.me.dailyMissionClaimableRuby
 import com.yehsung.aingcheck.core.stores.me.dailyMissionSection
 import com.yehsung.aingcheck.core.stores.me.isClaimingDailyMission
+import com.yehsung.aingcheck.ui.shop.MeButton
+import com.yehsung.aingcheck.ui.shop.MeButtonKind
+import com.yehsung.aingcheck.ui.shop.MeButtonSize
 import com.yehsung.aingcheck.ui.shop.MeType
 import com.yehsung.aingcheck.ui.shop.MeType.digits
 import com.yehsung.aingcheck.ui.theme.AingDimens
@@ -44,6 +51,14 @@ fun MeDailyMissionsSection(store: MeStore, reduceMotion: Boolean = false, frozen
                 Text(MeText.dailyMissionsTitle, style = MeType.headline, color = c.label, maxLines = 1, modifier = Modifier.weight(1f).semantics { heading() })
                 MeText.claimPendingHint(section.claimableCount)?.let {
                     Text(it, style = MeType.footnote.copy(fontWeight = FontWeight.SemiBold).digits(), color = c.accent, maxLines = 1)
+                }
+                if (section.showsClaimAll) {
+                    MeButton(
+                        MeText.claimAllButton, kind = MeButtonKind.Tinted, size = MeButtonSize.Sm,
+                        modifier = Modifier.testTag(MissionTags.DAILY_CLAIM_ALL),
+                        isBusy = store.isClaimingDailyMission(MeStore.ACHIEVEMENT_CLAIM_ALL_SLOT),
+                        contentDescription = MeText.claimAllAccessibility(store.dailyMissionClaimableRuby),
+                    ) { store.claimAllDailyMissions() }
                 }
             }
             Text(MeText.dailyMissionsResetNote, style = MeType.caption, color = c.label3Text, maxLines = 1, overflow = TextOverflow.Ellipsis)

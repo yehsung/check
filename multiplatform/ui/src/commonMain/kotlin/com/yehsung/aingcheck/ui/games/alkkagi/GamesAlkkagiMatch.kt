@@ -81,6 +81,12 @@ object AlkkagiTags {
     const val RESIGN = "alkkagi.resign"
     const val READY = "alkkagi.ready"
     const val BACK_TO_LOBBY = "alkkagi.backToLobby"
+    /** 판 9 안내 — 상태 상자 · 가운데 띠 · 손 안내 · 처음 따라 하기 카드. */
+    const val STATUS_BOX = "alkkagi.statusBox"
+    const val GUIDE_BAND = "alkkagi.guideBand"
+    const val PULL_HINT = "alkkagi.pullHint"
+    const val COACH = "alkkagi.coach"
+    const val COACH_DONE = "alkkagi.coachDone"
 }
 
 /** 서버 판(배치 · 조준 · 굴림 · 결과). 판 그림 · 손짓은 [GamesAlkkagiBoardView], 판 값은 [GamesAlkkagiBoardModel]. */
@@ -92,9 +98,12 @@ fun GamesAlkkagiMatchView(
     refreshHz: Int,
     reduceMotion: Boolean,
     modifier: Modifier = Modifier,
+    /** 손 안내 횟수를 기억할 앱 설정 저장소(판 9 — 이 기기에서 세 번 쏘면 그만). null 이면 이 판에서만 센다. */
+    guidePrefs: com.yehsung.aingcheck.core.foundation.platform.KeyValueStore? = null,
 ) {
     val model = remember(alkkagi) { GamesAlkkagiBoardModel() }
     LaunchedEffect(alkkagi, model) { model.attachOnline(alkkagi) }
+    LaunchedEffect(model, guidePrefs) { if (guidePrefs != null && model.guidePrefs == null) model.guidePrefs = guidePrefs }
     var confirmingResign by remember { mutableStateOf(false) }
     val myColor = state.myColor.rules()
     val myPeer = if (state.myColor == AlkkagiPlayerWire.black) state.black else state.white
@@ -173,12 +182,34 @@ private fun StatusLine(alkkagi: AlkkagiOnlineStore, model: GamesAlkkagiBoardMode
         warning != null -> warning to colors.pending
         model.notice != null -> model.notice!! to colors.pending
         alkkagi.isMyTurn && state.phase != AlkkagiMatchPhase.finished -> model.status to colors.working
+        // 판 9(아이폰 1.0.19): 숨겨 놓기에서 아직 준비 전이면 내가 할 일 — 초록.
+        state.phase == AlkkagiMatchPhase.placing && !state.myReady -> model.status to colors.working
         else -> model.status to colors.label2
     }
-    Row(Modifier.fillMaxWidth().heightIn(min = 22.dp).semantics(mergeDescendants = true) { }, verticalAlignment = Alignment.CenterVertically) {
-        Text(text, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = tint, maxLines = 2, modifier = Modifier.weight(1f))
-        if (model.selectedID != null) {
-            Text(AlkkagiPhoneText.power(model.power), style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM), color = colors.accent)
+    GamesAlkkagiStatusBox(text, tint, if (model.selectedID != null) model.power else null)
+}
+
+/**
+ * 상태 상자(판 9 · 아이폰 1.0.19 faba845a — 맥 0.3.86 C안의 '오목처럼 큰 글 + 상태 색 상자'). 내 차례 초록 · 기다림 회색 · 경고 주황.
+ * [power] — 조준 중이면 힘(0…1).
+ */
+@Composable
+fun GamesAlkkagiStatusBox(text: String, tint: androidx.compose.ui.graphics.Color, power: Double?, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 40.dp)
+            .background(colors.surface, shape).background(tint.copy(alpha = 0.12f), shape)
+            .border(1.5.dp, tint.copy(alpha = 0.45f), shape)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .semantics(mergeDescendants = true) { }
+            .testTag(AlkkagiTags.STATUS_BOX),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = tint, maxLines = 2, modifier = Modifier.weight(1f))
+        if (power != null) {
+            Text(AlkkagiPhoneText.power(power), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM),
+                color = colors.accent, modifier = Modifier.padding(start = 4.dp))
         }
     }
 }
@@ -292,8 +323,15 @@ fun GamesAlkkagiResultCard(outcome: AlkkagiOutcome?, reason: AlkkagiEndReason?, 
 
 /** 연습 판 — 한 폰에서 둘이 번갈아(루비 · 전적에 남지 않는다). */
 @Composable
-fun GamesAlkkagiPracticeView(refreshHz: Int, reduceMotion: Boolean, onExit: () -> Unit, modifier: Modifier = Modifier) {
+fun GamesAlkkagiPracticeView(
+    refreshHz: Int,
+    reduceMotion: Boolean,
+    onExit: () -> Unit,
+    modifier: Modifier = Modifier,
+    guidePrefs: com.yehsung.aingcheck.core.foundation.platform.KeyValueStore? = null,
+) {
     val model = remember { GamesAlkkagiBoardModel() }
+    LaunchedEffect(model, guidePrefs) { if (guidePrefs != null && model.guidePrefs == null) model.guidePrefs = guidePrefs }
     val game = model.game
     val colors = AingTheme.colors
     Column(modifier.fillMaxSize().testTag(AlkkagiTags.PRACTICE)) {
@@ -305,15 +343,13 @@ fun GamesAlkkagiPracticeView(refreshHz: Int, reduceMotion: Boolean, onExit: () -
             PracticeRow(model, AlkkagiGame.Player.white)
             GamesAlkkagiBoardView(model, if (game.phase == AlkkagiGame.Phase.placing) game.currentPlayer else null, refreshHz, reduceMotion)
             PracticeRow(model, AlkkagiGame.Player.black)
-            Row(Modifier.fillMaxWidth().heightIn(min = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    model.notice ?: model.status, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (model.notice == null) colors.label2 else colors.pending, maxLines = 2, modifier = Modifier.weight(1f),
-                )
-                if (model.selectedID != null) {
-                    Text(AlkkagiPhoneText.power(model.power), style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold, fontFeatureSettings = TNUM), color = colors.accent)
-                }
+            // 연습 판 상태 색: 안내(놓기 실패) 주황 · 놓기 · 쏘기 차례 초록 · 굴림 · 끝 회색(아이폰 1.0.19 practiceTint).
+            val practiceTint = when {
+                model.notice != null -> colors.pending
+                game.phase == AlkkagiGame.Phase.placing || game.phase == AlkkagiGame.Phase.aiming -> colors.working
+                else -> colors.label2
             }
+            GamesAlkkagiStatusBox(model.notice ?: model.status, practiceTint, if (model.selectedID != null) model.power else null)
             if (game.phase == AlkkagiGame.Phase.placing) GamesAlkkagiPlacementBar(model, false)
         }
         Row(

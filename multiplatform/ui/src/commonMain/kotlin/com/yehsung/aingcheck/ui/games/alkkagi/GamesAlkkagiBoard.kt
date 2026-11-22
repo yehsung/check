@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.alkkagi.AlkkagiGame
@@ -251,6 +252,8 @@ fun GamesAlkkagiBoardView(
     MiniGameFrameLoop(running = true, refreshHz = refreshHz) { nanos -> model.tick(nanos / 1e9) }
     val accent = AingTheme.colors.accent
     val danger = AingTheme.colors.danger
+    val working = AingTheme.colors.working
+    val measurer = rememberTextMeasurer()
     BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(1f)) {
         val sidePx = constraints.maxWidth.toFloat()
         val side = maxWidth
@@ -287,9 +290,11 @@ fun GamesAlkkagiBoardView(
                 val scale = (size.width / AlkkagiGame.boardSize).toFloat()
                 val game = model.game
                 if (game.phase == AlkkagiGame.Phase.placing && placingPlayer != null) {
-                    val y = if (placingPlayer == AlkkagiGame.Player.black) size.height / 2 else 0f
-                    drawRect(accent.copy(alpha = 0.12f), Offset(0f, y), Size(size.width, size.height / 2))
+                    // 둘 수 있는 **실제** 칸만 파랗게 + 점선 + '내 진영', 그 밖은 어둡게(판 9 · 아이폰 1.0.19 · 맥 0.3.86 C안 — 옛 그림은 판 절반을
+                    // 12% 로만 칠해 거의 안 보였고 300~320 은 칠했는데 못 뒀다).
+                    GamesAlkkagiGuideDrawing.zones(this, placingPlayer, accent, measurer)
                 }
+                if (model.guideIsMyAim) GamesAlkkagiGuideDrawing.myStones(this, scale, game.stones, model.guideSide, working)
                 for (stone in game.stones) {
                     if (!stone.isPlaced || stone.isOut) continue
                     GamesAlkkagiDrawing.stone(this, stone, scale, stone.id == model.selectedID, model.pull, model.launch, model.hits, !reduceMotion)
@@ -310,6 +315,11 @@ fun GamesAlkkagiBoardView(
             // 떨어지는 돌은 판 칸 밖(여백)까지 그린다 — 판과 같은 크기의 **자르지 않는** 캔버스를 겹쳐 둔다(판을 밀지 않게 · Compose Canvas 는 기본으로 자르지 않는다).
             Canvas(Modifier.size(side)) {
                 GamesAlkkagiDrawing.falling(this, model.falls, (sidePx / AlkkagiGame.boardSize).toFloat(), Offset.Zero, reduceMotion)
+            }
+            // 판 위 안내(판 9): 쏘기 차례의 손 안내 · 숨겨 놓기의 가운데 띠. 입력을 막지 않는다(덮개는 손짓을 받지 않는다 — 판 캔버스가 받는다).
+            model.pullHintStone?.let { hint -> GamesAlkkagiPullHint(hint, model.guideSide, reduceMotion, side) }
+            model.guideBandText?.let { text ->
+                Box(Modifier.size(side), contentAlignment = Alignment.Center) { GamesAlkkagiGuideBand(text) }
             }
         }
     }

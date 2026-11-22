@@ -41,6 +41,9 @@ class GamesAlkkagiBoardModel {
         const val replayCatchUpRate = 0.5
         const val replayDrainRate = 1.0
         const val maxReplayDrain = 1.2
+        /** 손 안내를 몇 번 쏠 때까지 보여 주나(이 기기에서 쏜 횟수 — 익숙해지면 사라진다). 맥 · 아이폰과 같은 3. */
+        const val PULL_HINT_SHOT_LIMIT = 3
+        const val PULL_HINT_SHOTS_KEY = "alkkagi.pullHintShots"
     }
 
     /** 판 값(관찰 칸 — 값이 바뀔 때마다 새 사본을 넣는다). */
@@ -102,7 +105,7 @@ class GamesAlkkagiBoardModel {
             return l.direction * (-sin(l.age * 38) * exp(-l.age * 17) * l.power * 6)
         }
 
-    /** 상태 한 줄(맥과 같은 서열 — 폰 손짓 글자만 다르다). */
+    /** 상태 한 줄(맥과 같은 서열 · 같은 안내 글 — 폰 손짓 꼬리만 다르다). 판 9 부터 C안 안내 글([AlkkagiPhoneGuideText] · 아이폰 1.0.19). */
     val status: String
         get() {
             val store = onlineStore
@@ -112,24 +115,82 @@ class GamesAlkkagiBoardModel {
                 if (state.phase == AlkkagiMatchPhase.finished) return AlkkagiPhoneText.outcomeTitle(store.outcome)
                 if (state.phase == AlkkagiMatchPhase.rolling) return AlkkagiPhoneText.rolling
                 if (state.phase == AlkkagiMatchPhase.placing) {
-                    return if (state.myReady) AlkkagiPhoneText.placingReadyWaiting else AlkkagiPhoneText.placingMine(state.myColor.rules())
+                    val mine = state.myColor.rules()
+                    return if (state.myReady) AlkkagiPhoneGuideText.placedWaiting
+                    else AlkkagiPhoneGuideText.placing(mine, game.placedCount(mine), player = null)
                 }
                 if (!store.isMyTurn) {
                     val peer = if (state.currentPlayer == AlkkagiPlayerWire.black) state.black else state.white
-                    return AlkkagiPhoneText.opponentTurn(peer.displayName)
+                    return AlkkagiPhoneGuideText.opponentTurn(peer.displayName)
                 }
             }
+            // 연습 판(한 폰 둘이)은 흑 · 백을 글에 넣는다. 서버 판은 늘 '나'.
+            val player: AlkkagiGame.Player? = if (isOnline) null else game.currentPlayer
             return when (game.phase) {
-                AlkkagiGame.Phase.placing -> AlkkagiPhoneText.placingPractice(game.currentPlayer)
-                AlkkagiGame.Phase.aiming -> if (game.isFirstShotLimited) {
-                    if (selectedID == null) AlkkagiPhoneText.firstShotHint else AlkkagiPhoneText.firstShotRelease
-                } else {
-                    if (selectedID == null) AlkkagiPhoneText.aimHint(game.currentPlayer) else AlkkagiPhoneText.aimRelease
-                }
+                AlkkagiGame.Phase.placing -> AlkkagiPhoneGuideText.placing(game.currentPlayer, game.placedCount(game.currentPlayer), player)
+                // 판의 첫 수(흑)는 힘이 60%까지(선후 맞춤) — 연습 판 · 서버 판 같은 안내.
+                AlkkagiGame.Phase.aiming -> AlkkagiPhoneGuideText.aiming(player, holding = selectedID != null, firstShotLimited = game.isFirstShotLimited)
                 AlkkagiGame.Phase.rolling -> AlkkagiPhoneText.rolling
                 AlkkagiGame.Phase.finished -> AlkkagiPhoneText.practiceResult(game.result)
             }
         }
+
+    // MARK: 안내(판 9 — 아이폰 1.0.19 · 맥 0.3.86 C안)
+
+    /**
+     * 손 안내 횟수를 기억할 곳. 앱은 판 화면이 기본 저장소를 넣고, 시험은 시험용 저장소를 넣는다. null 이면 이 판에서만 센다
+     * (기본 저장소에 쓰지 않는다 — 시험 잔재 사고).
+     */
+    var guidePrefs: com.yehsung.aingcheck.core.foundation.platform.KeyValueStore? = null
+        set(value) {
+            field = value
+            pullHintShots = value?.getLong(PULL_HINT_SHOTS_KEY)?.toInt() ?: pullHintShots
+        }
+
+    /** 손 안내를 본 채로 쏜 횟수. */
+    var pullHintShots: Int by mutableStateOf(0)
+        private set
+
+    /** 숨겨 놓기에서 내가 아직 준비 전인가. */
+    val guideIsMyPlacing: Boolean
+        get() {
+            if (game.phase != AlkkagiGame.Phase.placing) return false
+            val store = onlineStore ?: return true
+            return store.state?.myReady == false
+        }
+
+    /** 쏘기 차례가 나고 아직 돌을 안 잡았는가. */
+    val guideIsMyAim: Boolean
+        get() {
+            if (game.phase != AlkkagiGame.Phase.aiming || selectedID != null) return false
+            val store = onlineStore ?: return true
+            return store.isMyTurn
+        }
+
+    /** 안내가 가리키는 쪽 — 서버 판은 나, 연습 판(한 폰 둘이)은 지금 차례인 쪽. */
+    val guideSide: AlkkagiGame.Player get() = if (isOnline) myColor else game.currentPlayer
+
+    /** 손 안내를 붙일 내 돌(판 가운데에 가장 가까운 돌) — 안내가 필요 없으면 null. */
+    val pullHintStone: AlkkagiGame.Stone?
+        get() {
+            if (!guideIsMyAim || pullHintShots >= PULL_HINT_SHOT_LIMIT) return null
+            return AlkkagiPhoneGuideGeometry.hintStone(game.stones, guideSide)
+        }
+
+    /** 숨겨 놓기 · 판 가운데 띠 글(내가 놓을 차례일 때만). */
+    val guideBandText: String?
+        get() {
+            if (!guideIsMyPlacing) return null
+            val side = if (isOnline) myColor else game.currentPlayer
+            return AlkkagiPhoneGuideText.band(side, game.placedCount(side))
+        }
+
+    /** 쐈다 — 손 안내를 보던 중이면 한 번 센다. */
+    private fun countPullHintShot(hinted: Boolean) {
+        if (!hinted || pullHintShots >= PULL_HINT_SHOT_LIMIT) return
+        pullHintShots += 1
+        guidePrefs?.putLong(PULL_HINT_SHOTS_KEY, pullHintShots.toLong())
+    }
 
     // MARK: 손짓(판 좌표 — 화면이 점을 판 600 칸으로 바꿔 넘긴다)
 
@@ -175,7 +236,7 @@ class GamesAlkkagiBoardModel {
                 val store = onlineStore
                 if (store != null) {
                     if (!g.canPlace(id, at)) {
-                        notice = AlkkagiPhoneText.placementInvalid
+                        notice = AlkkagiPhoneGuideText.placeRejected
                         return
                     }
                     store.scope.launch {
@@ -191,7 +252,7 @@ class GamesAlkkagiBoardModel {
                     notice = null
                     haptic?.invoke(AlkkagiPhoneHaptic.Place)
                 } else {
-                    notice = AlkkagiPhoneText.placementInvalid
+                    notice = AlkkagiPhoneGuideText.placeRejected
                 }
                 return
             }
@@ -200,9 +261,12 @@ class GamesAlkkagiBoardModel {
             val shotPull = pull
             val shotPower = power
             val actionID = randomUUIDString()
+            // 손 안내를 보던 차례였나(돌을 잡기 전 — 잡으면 안내는 사라진다). 쏜 뒤 한 번 센다.
+            val hinted = pullHintShots < PULL_HINT_SHOT_LIMIT
             var shot = false
             mutate { shot = it.shoot(id, shotPull) }
             if (!shot) return
+            countPullHintShot(hinted)
             launch = AlkkagiPhoneLaunch(id, shotPull * (-1 / shotPull.length), shotPower)
             hitStop = 0.0
             hitStopSpent = 0.0

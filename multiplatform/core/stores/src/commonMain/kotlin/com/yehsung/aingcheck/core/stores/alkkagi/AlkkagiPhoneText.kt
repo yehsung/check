@@ -89,15 +89,7 @@ object AlkkagiPhoneText {
     const val waitBusy = "잠시만 기다려 주세요"
     const val rolling = "돌이 멈추면 차례가 바뀌어요"
     const val placingHelpOnline = "30초 동안 동시에 숨겨 놓아요. 둘 다 준비하거나 시간이 끝날 때까지 상대 돌은 보이지 않아요."
-    const val placingHelpPractice = "내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동으로 놓여요."
-    const val placingReadyWaiting = "준비 완료 · 상대를 기다리고 있어요"
-    fun placingMine(player: AlkkagiGame.Player): String = "${stoneTitle(player)} 숨겨 놓는 중 · 내 영역을 눌러 주세요"
-    fun placingPractice(player: AlkkagiGame.Player): String = "${stoneTitle(player)} 놓는 중 · 내 영역을 눌러 놓아요"
-    fun aimHint(player: AlkkagiGame.Player): String = "${stoneTitle(player)} 차례 — 내 돌을 눌러 뒤로 당겨 보세요"
-    const val aimRelease = "놓으면 날아가요 · 돌 위로 되돌리면 취소"
-    const val firstShotHint = "첫 수는 힘이 60%까지예요 — 돌을 뒤로 당겨 보세요"
-    const val firstShotRelease = "첫 수는 힘 60%까지 · 놓으면 날아가요 · 돌 위로 되돌리면 취소"
-    const val placementInvalid = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
+    const val placingHelpPractice = "파란 칸에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동으로 놓여요."
     fun placementDone(placed: Int): String = "배치 완료 ($placed/5)"
     const val readyDone = "준비 완료"
     fun power(value: Double): String = "힘 ${floor(min(1.0, max(0.0, value)) * 100).toInt()}%"
@@ -172,5 +164,88 @@ object AlkkagiPhoneText {
         user.inMatch -> UserStatus(inMatch, false)
         user.isFocused -> UserStatus(focused, false)
         else -> UserStatus(if (user.isWorking) working else available, true)
+    }
+}
+
+// ---------------------------------------------------------------- 안내(판 9 · 아이폰 1.0.19 faba845a · 맥 0.3.86 `AlkkagiGuideText` · C안의 폰 짝)
+//
+// 대표 11-10 "알까기 어디다 돌 둬야되는지 판 구분도 별로 안되어있고 어떻게 할지 유도해주는게 너무 약해. 뭘 하라는건지 모르겠어"
+// → 맥 #d_cjxnVZpLHWw5 "C안" → 폰 대표 #d_xygj8oZRFlfH "추천안대로 한 판(1.0.19)에 전부"(5번 알까기 안내 · 안드로이드는 판 9).
+// 맥 · 아이폰과 같은 글자다. 다른 것은 손짓 꼬리 하나 — 맥 "Esc로 취소" 자리가 폰은 "돌 위로 되돌리면 취소".
+object AlkkagiPhoneGuideText {
+    /** 판 위 '아래 · 위' — 판은 돌리지 않는다(흑은 아래, 백은 위). */
+    fun sideWord(side: AlkkagiGame.Player): String = if (side == AlkkagiGame.Player.black) "아래" else "위"
+
+    /** 숨겨 놓기 · 판 가운데 띠. */
+    fun band(side: AlkkagiGame.Player, placed: Int): String = "내 진영(${sideWord(side)} 파란 칸)에 돌 5개를 놓으세요 · $placed/5"
+
+    /** 숨겨 놓기 · 상태 줄. [player] 는 연습 판(한 폰 둘이)에서만 — 흑 · 백 차례를 글에 넣는다. */
+    fun placing(side: AlkkagiGame.Player, placed: Int, player: AlkkagiGame.Player?): String {
+        val body = "${sideWord(side)} 파란 칸에 ${if (player == null) "내 " else ""}돌 5개를 놓으세요 ($placed/5)"
+        return player?.let { "${AlkkagiPhoneText.stoneTitle(it)} 차례 — $body" } ?: body
+    }
+
+    const val placedWaiting = "준비 완료 — 상대가 놓기를 기다려요"
+    const val placeRejected = "파란 칸 안에, 다른 돌과 겹치지 않게 놓아 주세요"
+
+    fun opponentTurn(name: String?): String = "${AlkkagiPhoneText.displayName(name)}님이 쏠 차례예요 — 기다려 주세요"
+
+    /** 폰 취소 손짓(맥 "Esc로 취소" 자리). */
+    const val cancelTail = "돌 위로 되돌리면 취소"
+
+    /** 쏘기 차례 · 상태 줄. 첫 수(흑)는 힘 60% 를 함께 말한다(선후 맞춤). */
+    fun aiming(player: AlkkagiGame.Player?, holding: Boolean, firstShotLimited: Boolean): String {
+        if (holding) {
+            return if (firstShotLimited) "첫 수는 힘 60%까지 · 놓으면 반대쪽으로 날아가요 · $cancelTail" else "놓으면 반대쪽으로 날아가요 · $cancelTail"
+        }
+        val who = player?.let { "${AlkkagiPhoneText.stoneTitle(it)} 차례" } ?: "내 차례"
+        return "$who — ${if (player == null) "내 " else ""}돌을 뒤로 당겼다 놓으세요${if (firstShotLimited) " (첫 수는 힘 60%까지)" else ""}"
+    }
+
+    /** 손 안내 말풍선. */
+    const val handHint = "뒤로 당겼다 놓기"
+    /** 판 위 진영 이름표. */
+    const val mineZone = "내 진영"
+    const val theirZone = "상대 진영"
+}
+
+/** 처음 한 번 따라 하기 — 알까기 화면을 처음 열 때 로비 위에 한 번. [알겠어요]로 닫으면 다시 저절로 안 뜬다(맥 `AlkkagiFirstTimeCoach` 와 같은 세 줄). */
+object AlkkagiPhoneFirstTimeCoach {
+    /** '봤음' 기억 키(앱 기본 저장소). */
+    const val seenKey = "alkkagi.firstTimeCoachSeen"
+    const val title = "처음 하는 알까기"
+    const val done = "알겠어요"
+    data class Step(val icon: String, val title: String, val detail: String)
+    val steps: List<Step> = listOf(
+        Step("hand.tap.fill", "파란 칸(내 진영)에 내 돌 5개를 숨겨 놓아요", "상대는 둘 다 놓을 때까지 못 봐요 · 30초"),
+        Step("hand.draw.fill", "내 차례가 오면 내 돌을 뒤로 당겼다 놓아요", "당긴 반대쪽으로 날아가요 · 한 수 30초"),
+        Step("arrow.up.right.circle.fill", "상대 돌을 판 밖으로 모두 밀어내면 이겨요", "내 돌도 밖으로 나가면 빠져요"),
+    )
+
+    /** 띄울까: 아직 안 봤을 때만(화면이 로비일 때만 그린다 — 판 · 연습 · 관전 중엔 시간이 흐른다). */
+    fun shows(seen: Boolean): Boolean = !seen
+}
+
+/** 안내 그림의 순수 값(맥 `AlkkagiGuideDrawing` 의 셈 부분 · 아이폰과 같다). 그리기는 화면이 한다. */
+object AlkkagiPhoneGuideGeometry {
+    /** 숨겨 놓기에서 돌을 둘 수 있는 칸의 경계(판 좌표) — `AlkkagiGame.canPlace` 와 같은 값(시험이 둘을 맞춰 본다). */
+    const val blackZoneTop: Double = 320.0
+    const val whiteZoneBottom: Double = 280.0
+
+    /** 손 안내를 붙일 돌: 판 가운데(가로)에 가장 가까운 내 돌. */
+    fun hintStone(stones: List<AlkkagiGame.Stone>, mine: AlkkagiGame.Player): AlkkagiGame.Stone? =
+        stones.filter { it.owner == mine && it.isPlaced && !it.isOut }
+            .minByOrNull { kotlin.math.abs(it.position.x - AlkkagiGame.boardSize / 2) }
+
+    /** 손 안내 움직임(2초 한 바퀴): 0~0.9초 당김 → 1.2초까지 버팀 → 놓음(화살이 밝아지고 손이 돌아간다). 맥과 같은 박자. */
+    fun pullHintPhase(t: Double): Pair<Double, Double> {
+        val cycle = t % 2.0
+        if (cycle < 0.9) {
+            val x = cycle / 0.9
+            return x * x * (3 - 2 * x) to 0.0
+        }
+        if (cycle < 1.2) return 1.0 to 0.0
+        val x = kotlin.math.min(1.0, (cycle - 1.2) / 0.8)
+        return 0.0 to 1 - x
     }
 }

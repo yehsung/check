@@ -48,6 +48,7 @@ import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiInvite
 import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiLobbyUser
 import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiNoticeText
 import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore
+import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiPhoneFirstTimeCoach
 import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiPhoneText
 import com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiStake
 import com.yehsung.aingcheck.core.stores.games.GamesBusyGame
@@ -121,7 +122,7 @@ fun GamesAlkkagiScreen(
         when {
             state != null -> {
                 GamesHeaderBar(AlkkagiPhoneText.title, onBack = onBack)
-                GamesAlkkagiMatchView(alkkagi, state, myName, refreshHz, reduceMotion)
+                GamesAlkkagiMatchView(alkkagi, state, myName, refreshHz, reduceMotion, guidePrefs = store.context.keyValueStore)
             }
             watched != null -> {
                 GamesHeaderBar(AlkkagiPhoneText.title, onBack = onBack)
@@ -129,7 +130,7 @@ fun GamesAlkkagiScreen(
             }
             practicing -> {
                 GamesHeaderBar(AlkkagiPhoneText.practiceTitle, onBack = { practicing = false })
-                GamesAlkkagiPracticeView(refreshHz, reduceMotion, onExit = { practicing = false })
+                GamesAlkkagiPracticeView(refreshHz, reduceMotion, onExit = { practicing = false }, guidePrefs = store.context.keyValueStore)
             }
             else -> {
                 GamesHeaderBar(AlkkagiPhoneText.title, onBack = onBack)
@@ -156,6 +157,15 @@ private fun AlkkagiLobby(store: GamesStore, alkkagi: AlkkagiOnlineStore, myUserI
         verticalArrangement = Arrangement.spacedBy(AingDimens.rowSpacing),
     ) {
         Text(AlkkagiPhoneText.lobbyCaption, style = MaterialTheme.typography.bodySmall, color = colors.label2, modifier = Modifier.padding(horizontal = AingDimens.titleMargin - AingDimens.sideMargin))
+        // 처음 한 번 따라 하기(판 9 · 아이폰 1.0.19) — 로비에서만(판 · 연습 · 관전 중엔 시간이 흐른다). [알겠어요]로 닫으면 다시 저절로 안 뜬다(이 기기 설정).
+        val prefs = store.context.keyValueStore
+        var coachSeen by remember { mutableStateOf(prefs.getBoolean(AlkkagiPhoneFirstTimeCoach.seenKey) == true) }
+        if (AlkkagiPhoneFirstTimeCoach.shows(coachSeen)) {
+            GamesAlkkagiCoachCard(onDone = {
+                prefs.putBoolean(AlkkagiPhoneFirstTimeCoach.seenKey, true)
+                coachSeen = true
+            })
+        }
         alkkagi.notice?.takeIf { it != availabilityLine(alkkagi.availability) }?.let { InlineNotice(it, kind = NoticeKind.Info) }
         GamesBusyText.entryBlockNotice(blockedBy, GamesBusyGame.alkkagi)?.let { InlineNotice(it, kind = NoticeKind.Warning) }
         when (alkkagi.availability) {

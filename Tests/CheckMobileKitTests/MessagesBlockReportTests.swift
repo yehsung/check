@@ -416,14 +416,18 @@ import Testing
         #expect(conversation.contains("MessagesReportSheet("))
         #expect(conversation.contains("line.entry.isMine ? nil :"), "내 말풍선에도 신고 메뉴가 붙는다")
 
-        // 차단을 부르는 파일은 **확인 시트를 지나는 두 UGC 면**뿐이다(스토어 정의 파일 제외):
-        // 1:1 대화 화면과 오목 채팅 서랍. 확인 없는 차단은 여전히 없다(둘 다 `MessagesBlockConfirmSheet` 가 유일한 입구다).
+        // 차단을 부르는 파일은 **확인 시트를 지나는 세 UGC 면**뿐이다(스토어 정의 파일 제외):
+        // 1:1 대화 화면 · 오목 채팅 서랍 · 지난 확성기(폰 1.0.19). 확인 없는 차단은 여전히 없다(셋 다 `MessagesBlockConfirmSheet` 가 유일한 입구다).
         let callers = try IntegrationContractTests.files(containing: ["blockPeer("], under: "Sources/CheckMobileKit")
         #expect(callers == [
             "Sources/CheckMobileKit/Games/GamesGomokuChat.swift",
             "Sources/CheckMobileKit/Messages/MessagesBlockStore.swift",
             "Sources/CheckMobileKit/Messages/MessagesConversationView.swift",
+            "Sources/CheckMobileKit/Messages/MessagesMegaphoneFeedView.swift",
         ], "차단을 부르는 파일이 늘었다: \(callers)")
+        let feed = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesMegaphoneFeedView.swift")
+        #expect(feed.contains("MessagesBlockConfirmSheet(") && feed.components(separatedBy: "store.blockPeer(").count - 1 == 1,
+                "지난 확성기의 차단이 확인 시트 한 곳을 지나지 않는다")
         #expect(conversation.components(separatedBy: "store.blockPeer(").count - 1 == 1, "차단을 부르는 자리가 한 곳이 아니다")
 
         // 신고를 **보내는** 곳은 시트 하나다(입구가 늘어도 보내는 문은 하나여야 한다).

@@ -73,6 +73,23 @@ package final class MessagesStore {
     package private(set) var directoryLoaded = false
     package private(set) var directoryLoading = false
     package private(set) var directoryFailed = false
+    // MARK: 이전 대화 더 보기(폰 1.0.19 — 메시지 30일 보관 · `message_page` · 맥 0.3.86 `WorkTimerStoreMessageOlder` 의 폰 짝)
+
+    /// 상대별 지난 쪽(오래된 것 → 최신). **24시간 머리(`history`)와 따로 든다** — 읽음 경계 · 점 · 모두 읽음 어디에도 안 들어간다.
+    package internal(set) var olderPages: [String: [MessageHistoryEntry]] = [:]
+    /// 상대별 다음 쪽 커서(서버가 준 가장 오래된 줄 — 확성기 줄 포함). 뒤로만 간다.
+    @ObservationIgnored package internal(set) var olderCursors: [String: MessagePageCursor] = [:]
+    /// 상대별 "더 있다"(false = 서버가 끝이라고 했다).
+    package internal(set) var olderHasMore: [String: Bool] = [:]
+    /// 쓸 수 있는가: nil 모름 · false 함수 없는 서버(버튼을 숨긴다 — 다음 대화 열기에서 모름으로) · true 한 번이라도 성공.
+    package internal(set) var olderAvailable: Bool?
+    package internal(set) var olderLoading = false
+    package internal(set) var olderFailed = false
+    /// 지난 쪽을 붙인 직후 위에 맞출 줄(`serial` 이 바뀔 때만 화면이 움직인다).
+    package internal(set) var olderScrollAnchor: MessagesOlderScrollAnchor?
+    /// 날아가던 응답을 버리는 순번(비우기 · 상대 바꾸기 · 로그아웃이 올린다).
+    @ObservationIgnored package internal(set) var olderRequestToken = 0
+
     /// 사람 찾기 거르기 칸(폰 1.0.19 — `MessagesPresenceFilter`). 앱이 켜져 있는 동안 남고 로그아웃하면 전체.
     package private(set) var directoryPresenceFilter: MessagesPresenceFilter = .all
 
@@ -222,6 +239,8 @@ package final class MessagesStore {
         directoryFailed = false
         directoryPresenceFilter = .all
         megaphoneFeed.reset()
+        clearOlderMessages()
+        olderAvailable = nil
         hiddenBlockedPeerIDs = []
         blockedPeople = []
         blocksLoaded = false
@@ -443,7 +462,7 @@ package final class MessagesStore {
     /// 대화 화면 줄(말풍선 · 날짜 · **찌르기 기록** · 보내는 중). 찌르기는 차단 관문을 지난 `pokeLog(for:)` 에서 온다.
     package func conversationItems(for peerID: String) -> [MessagesConversationItem] {
         MessagesConversationRules.items(
-            messages: thread(for: peerID)?.messages ?? [],
+            messages: conversationMessages(for: peerID),
             pokes: pokeLog(for: peerID),
             chronology: pokeChronology,
             pending: pendingOutgoing.filter { $0.peerUserID == peerID },
@@ -621,6 +640,12 @@ package final class MessagesStore {
     /// 대화 화면이 섰다. `token` 은 뷰 인스턴스마다 다르다 — 같은 상대의 새 화면이 옛 화면의 사라짐보다 먼저 서도 표시가 꺼지지 않게.
     package func conversationDidAppear(peerID: String, token: UUID) {
         guard !peerID.isEmpty else { return }
+        // 이전 대화 더 보기: 다른 상대의 지난 쪽은 비우고(남의 30일 대화가 다른 화면에 붙지 않게), 함수 없음 숨김은 모름으로 되돌린다.
+        if runtime.shownConversations.last?.peerID != peerID, olderPages.keys.contains(where: { $0 != peerID })
+            || olderCursors.keys.contains(where: { $0 != peerID }) {
+            clearOlderMessages()
+        }
+        rearmOlderMessagesAvailability()
         runtime.shownConversations.removeAll { $0.token == token }
         runtime.shownConversations.append((token, peerID))
         openConversationPeerID = peerID
@@ -641,6 +666,8 @@ package final class MessagesStore {
         runtime.shownConversations.removeAll { $0.token == token }
         let current = runtime.shownConversations.last?.peerID
         if openConversationPeerID != current { openConversationPeerID = current }
+        // 대화를 다 닫으면 지난 쪽을 비운다(다시 열면 다시 누른다 — 맥 패널 닫기와 같다).
+        if current == nil { clearOlderMessages() }
         syncRouterVisibility()
     }
 
@@ -957,6 +984,8 @@ package final class MessagesStore {
             }
             let previousIDs = Set(history.map(\.id))
             let sorted = loaded.entries.sortedForMessageHistory(serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil)
+            // 24시간 머리가 미끄러졌으면 지난 쪽을 받은 상대의 빠진 옛 줄을 지난 쪽 끝으로 옮긴다(대화 가운데가 비지 않게 — 1.0.19).
+            carryOlderMessagesAcrossHeadSlide(previousHead: threads.flatMap(\.messages), nextHead: sorted)
             if history != sorted { history = sorted }
             if loaded.hasReadReceipts {
                 let snapshot = MessageHistoryReadSnapshot(serial: serial, serverOrder: loaded.serverOrder)

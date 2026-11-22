@@ -270,10 +270,12 @@ struct MessagesListView: View {
 struct MessagesExpiryNote: View {
     let alignment: HorizontalAlignment
     var font: Font = .footnote
+    /// 보관 안내 글(폰 1.0.19 — `message_page` 가 한 번이라도 성공하면 30일 문장 · `MessagesStore.expiryNotice`). 기본은 예전 24시간 문장.
+    var text: String = MessageNoticeText.expiry
 
     var body: some View {
         Label {
-            Text(MessageNoticeText.expiry)
+            Text(text)
         } icon: {
             Image(systemName: "timer")
                 .accessibilityHidden(true)

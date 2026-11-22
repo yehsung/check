@@ -65,7 +65,7 @@ struct V1019MegaphoneFeedTests {
     func wiring() throws {
         let sheet = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesMegaphoneSheet.swift").filter { !$0.isWhitespace }
         #expect(sheet.contains("ifstore.showsMegaphoneFeedEntry{NavigationLink{MessagesMegaphoneFeedView(store:store)}"))
-        #expect(sheet.contains("store.megaphoneFeed.rearm()"))
+        #expect(sheet.contains(".onAppear{store.megaphoneFeed.rearm()}"))
         let page = try IntegrationContractTests.code("Sources/CheckMobileKit/Messages/MessagesMegaphoneFeedView.swift").filter { !$0.isWhitespace }
         #expect(page.contains(".onAppear{feed.open()}") && page.contains(".onDisappear{feed.close()}"))
         #expect(page.contains("letitems=store.visibleMegaphoneFeed"), "차단한 사람 글을 거르지 않은 목록을 그린다")

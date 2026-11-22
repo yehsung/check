@@ -73,11 +73,9 @@ struct MessagesMegaphoneSheet: View {
             }
             .sheetCloseButton { dismiss() }
         }
-        .onAppear {
-            mega.open()
-            // 작성기를 여는 순간(다음 자연스러운 진입) — 닫혔던 '지난 확성기' 문을 모름으로 되돌린다. 요청은 없다(코어 `rearm`).
-            store.megaphoneFeed.rearm()
-        }
+        .onAppear { mega.open() }
+        // 작성기를 여는 순간(다음 자연스러운 진입) — 닫혔던 '지난 확성기' 문을 모름으로 되돌린다. 요청은 없다(코어 `rearm`).
+        .onAppear { store.megaphoneFeed.rearm() }
         .onDisappear { mega.close() }
     }
 

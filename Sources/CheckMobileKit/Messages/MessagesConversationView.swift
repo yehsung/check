@@ -45,9 +45,14 @@ struct MessagesConversationView: View {
             ScrollView {
                 // Lazy 가 아니다: 화면 밖 줄의 높이를 어림하면 큰 글자에서 `scrollTo` 가 바닥에 못 닿았다(AX3 실측). 이력은 24시간 · 200건 상한이다.
                 VStack(spacing: 3) {
-                    MessagesExpiryNote(alignment: .center, font: .caption)
+                    MessagesExpiryNote(alignment: .center, font: .caption, text: store.expiryNotice)
                         .padding(.top, 8)
                         .padding(.bottom, 2)
+                    // 이전 대화 더 보기(폰 1.0.19 — 메시지 30일 보관). 서버를 부르는 자리는 이 버튼 하나다(코어 · 맥과 같은 규약).
+                    if let older = store.olderRowState(for: peerID) {
+                        MessagesOlderRow(state: older) { store.loadOlderMessages(peerID: peerID) }
+                            .padding(.bottom, 4)
+                    }
                     // 차단·신고 결과 한 줄(신고 접수 · 차단 되돌림). 목록과 같은 값을 그린다 — 둘은 동시에 서지 않는다.
                     if let notice = store.blockNotice {
                         InlineNotice(text: notice, kind: store.blockNoticeIsError ? .error : .info)
@@ -88,6 +93,14 @@ struct MessagesConversationView: View {
                         await Task.yield()
                         proxy.scrollTo(Self.bottomAnchorID, anchor: .bottom)
                     }
+                }
+            }
+            // 지난 쪽을 붙인 직후 — 붙이기 전 맨 위 말을 다시 위에 맞춘다(읽던 자리를 지킨다).
+            .onChange(of: store.olderScrollAnchor) { _, anchor in
+                guard let anchor else { return }
+                Task { @MainActor in
+                    await Task.yield()
+                    proxy.scrollTo(anchor.messageID, anchor: .top)
                 }
             }
             .onChange(of: items.last?.id) { _, _ in
@@ -860,6 +873,30 @@ struct MessagesPendingBubbleRow: View {
         .accessibilityElement(children: .ignore)
         // 줄 라벨은 서식 기호를 벗겨 읽는다(위 말풍선 줄 라벨과 같은 함수).
         .accessibilityLabel(Text("나: \(ChatMarkdown.plainPreview(item.body)), " + (item.state == .sending ? "보내는 중" : "보냄")))
+    }
+}
+/// 대화 맨 위 '이전 대화 더 보기' 줄(폰 1.0.19). 받는 중은 돌고 · 실패는 다시 누를 수 있고 · 끝이면 회색 글만.
+struct MessagesOlderRow: View {
+    let state: MessagesOlderRowState
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                if state == .loading { ProgressView().controlSize(.small) }
+                Text(state.title)
+                    .font(.footnote.weight(state.isTappable ? .semibold : .regular))
+                    .foregroundStyle(state == .failed ? MobileTheme.pending : (state.isTappable ? MobileTheme.accent : MobileTheme.label3Text))
+            }
+            .padding(.horizontal, 14)
+            .frame(minHeight: 32)
+            .background(Capsule().fill(state.isTappable ? MobileTheme.accentTint : Color.clear))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!state.isTappable)
+        .frame(maxWidth: .infinity)
+        .accessibilityHint(Text(state.isTappable ? MessageNoticeText.olderTooltip : ""))
     }
 }
 #endif

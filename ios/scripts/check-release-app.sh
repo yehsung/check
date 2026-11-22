@@ -152,17 +152,17 @@ if [[ -f "$app_bin" ]]; then
   feature_report="$(python3 - "$app_bin" <<'PY'
 import sys
 
-# 횟수 `None` = **아직 안 쟀다**(아카이브로 확정한다). 0 이면 막고, 수는 알리기만 한다.
+# 횟수 `None` = **아직 안 쟀다**(아카이브로 확정한다). 0 이면 막고, 수는 알리기만 한다. 1.0.19 일곱 줄은 11-23 빌드 35 아카이브로 재서 1회로 확정.
 want = [
     # 1.0.19 — 맥 0.3.83~0.3.87 이식 판(대표 #d_xygj8oZRFlfH "추천안대로 한 판(1.0.19)에 전부"). 이 판에서 폰이 처음 싣는 글자다
-    # (코어 글자도 폰이 이 판에서 처음 링크한다 — 1.0.18 바이너리에 없다). 기대 횟수는 build 35 아카이브로 잰 뒤 박는다.
-    ("기다리는 방이 없어요 · 방을 만들어 두고 일하세요", None),          # 1:1 대기방 절(코어 `DuelRoomText.emptyRooms`)
-    ("입력칸의 글도 함께 보내요", None),                              # 메시지 사진 미리 보기(코어 `MessagePhotoText.captionNote`)
-    ("이전 대화 더 보기", None),                                     # 30일 더 보기(코어 `MessageNoticeText.olderButtonTitle`)
-    ("남의 이름·대화가 찍혔는지 확인해 주세요 · 나와 운영자만 봐요", None),  # 제보 캡처 경고(코어 `FeedbackShotText.privacyWarning`)
-    ("이전 확성기 더 보기", None),                                   # 지난 확성기(코어 `MegaphoneFeedText.loadMore`)
-    ("파란 칸 안에, 다른 돌과 겹치지 않게 놓아 주세요", None),          # 알까기 안내(`AlkkagiPhoneGuideText.placeRejected`)
-    ("근무 중인 사람 중엔 맞는 이름이 없어요", None),                  # 거르기 칸(`MessagesPresenceFilterText.noMatchWorking`)
+    # (코어 글자도 폰이 이 판에서 처음 링크한다 — 1.0.18 바이너리에 없다). 기대 횟수는 build 35 아카이브 실측(11-23, 일곱 줄 모두 1회).
+    ("기다리는 방이 없어요 · 방을 만들어 두고 일하세요", 1),          # 1:1 대기방 절(코어 `DuelRoomText.emptyRooms`)
+    ("입력칸의 글도 함께 보내요", 1),                              # 메시지 사진 미리 보기(코어 `MessagePhotoText.captionNote`)
+    ("이전 대화 더 보기", 1),                                     # 30일 더 보기(코어 `MessageNoticeText.olderButtonTitle`)
+    ("남의 이름·대화가 찍혔는지 확인해 주세요 · 나와 운영자만 봐요", 1),  # 제보 캡처 경고(코어 `FeedbackShotText.privacyWarning`)
+    ("이전 확성기 더 보기", 1),                                   # 지난 확성기(코어 `MegaphoneFeedText.loadMore`)
+    ("파란 칸 안에, 다른 돌과 겹치지 않게 놓아 주세요", 1),          # 알까기 안내(`AlkkagiPhoneGuideText.placeRejected`)
+    ("근무 중인 사람 중엔 맞는 이름이 없어요", 1),                  # 거르기 칸(`MessagesPresenceFilterText.noMatchWorking`)
     # 1.0.18 — 앞 버전 것을 **한 줄만** 바닥으로 남긴다(기능이 통째로 빠진 바이너리를 막는 그물). build 34 아카이브 실측 1회.
     ("리치 마작 4인 대국 · 방을 열어 초대하거나 혼자 연습해요", 1),
 ]

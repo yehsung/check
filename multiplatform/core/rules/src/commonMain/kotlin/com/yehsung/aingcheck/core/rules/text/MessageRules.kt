@@ -37,6 +37,23 @@ object MessageNoticeText {
     const val invalid = "지금은 메시지를 보낼 수 없어요. 잠시 후 다시 시도해 주세요"
     fun tooLong(maxLength: Int? = null): String = "메시지는 ${maxLength ?: MessageBody.maxLength}자까지예요. 줄여서 보내 주세요"
     val expiry: String get() = "${historyHours}시간이 지난 메시지는 사라져요"
+
+    // ── 이전 대화 더 보기(맥 0.3.86 · 아이폰 1.0.19 · 판 9 — Swift MessageHistoryPaging.swift 의 MessageNoticeText 확장 그대로) ──
+    /** 서버가 메시지를 지우기 전까지 두는 날수(서버 `message_store_days()`). 24시간 머리([historyHours])와 **다른 값**이다. */
+    const val storeDays = 30
+    /** "이전 대화 더 보기" 한 번의 요청이 받는 건수(서버 범위 1~100). */
+    const val olderPageLimit = 50
+    /** 한 번 누를 때 최대 몇 번까지 이어 묻는가(첫 누름은 커서 없이 최신부터 받아 24시간 머리와 겹친 쪽을 건너뛰어야 한다). */
+    val olderCatchUpRequests: Int get() = historyLimit / olderPageLimit + 1
+    const val olderButtonTitle = "이전 대화 더 보기"
+    const val olderLoading = "이전 대화를 불러오는 중…"
+    const val olderFailed = "이전 대화를 못 불러왔어요 · 다시 시도"
+    const val olderEnd = "더 이전 대화가 없어요"
+    val olderTooltip: String get() = "${storeDays}일 안의 이전 대화를 불러와요"
+    /** 보관 안내(새 서버 — `message_page` 가 한 번이라도 성공한 뒤에만 쓴다). 옛 [expiry] 는 그대로다. */
+    val storeExpiry: String get() = "${storeDays}일이 지난 메시지는 사라져요"
+    /** 사진만 보낸 줄의 대체 글(서버 `message_photo_fallback_body()` — 와이어 상수와 한 값). */
+    const val photoFallbackBody = com.yehsung.aingcheck.core.wire.messages.MessagePhotoWire.photoFallbackBody
 }
 
 /** 규칙이 읽는 이력 한 줄의 사실(전선 `MessageHistoryEntry` 의 투영). */

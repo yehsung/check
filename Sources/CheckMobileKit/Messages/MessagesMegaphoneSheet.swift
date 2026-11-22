@@ -28,6 +28,17 @@ struct MessagesMegaphoneSheet: View {
                         .font(.subheadline)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
+                    // 지난 확성기(폰 1.0.19 — 맥 작성기 설명 줄 끝의 문과 같은 자리 · 같은 글자). 서버가 모른다고 했을 때만 숨는다.
+                    if store.showsMegaphoneFeedEntry {
+                        NavigationLink {
+                            MessagesMegaphoneFeedView(store: store)
+                        } label: {
+                            Text(MegaphoneFeedText.entryLink)
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(MobileTheme.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
                     field(mega)
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(mega.infoLine(now: now))
@@ -62,7 +73,11 @@ struct MessagesMegaphoneSheet: View {
             }
             .sheetCloseButton { dismiss() }
         }
-        .onAppear { mega.open() }
+        .onAppear {
+            mega.open()
+            // 작성기를 여는 순간(다음 자연스러운 진입) — 닫혔던 '지난 확성기' 문을 모름으로 되돌린다. 요청은 없다(코어 `rearm`).
+            store.megaphoneFeed.rearm()
+        }
         .onDisappear { mega.close() }
     }
 

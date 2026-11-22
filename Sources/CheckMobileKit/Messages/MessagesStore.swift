@@ -30,6 +30,9 @@ package final class MessagesStore {
     /// 확성기(📢 1.0.7) 작성 스토어 — **맥과 같은 코어 스토어**(`MegaphoneStore`)다. 호스트는 오목·체스·상점과 같은 하나
     /// (`context.gomokuHost` — 루비 미러를 한 칸으로 나눠 쓴다). 화면은 메시지 탭 위 📢 버튼의 시트(`MessagesMegaphoneSheet`).
     @ObservationIgnored package let megaphone: MegaphoneStore
+    /// 지난 확성기(최근 30일 모아 보기 — 폰 1.0.19 · 맥 0.3.86 과 같은 코어 스토어 `MegaphoneFeedStore`). 문은 작성 시트의 '지난 확성기 ›'.
+    /// 부르는 자리는 사람이 누른 자리뿐이다(페이지 열기 · 더 보기 · 다시 시도 · 페이지가 떠 있는 동안의 실시간 신호 — 코어 머리말 ③).
+    @ObservationIgnored package let megaphoneFeed: MegaphoneFeedStore
 
     // MARK: 이력 · 읽음
 
@@ -165,6 +168,7 @@ package final class MessagesStore {
         let clock = context.clock
         megaphone.clock = { clock.now() }
         self.megaphone = megaphone
+        self.megaphoneFeed = MegaphoneFeedStore(host: context.gomokuHost)
         // 등록은 네트워크가 아니다. 핸들러가 스스로 로그인·active·세대를 확인한다(등록은 reset 뒤에도 살아 있다).
         registrations.append(context.onMessageActivity { [weak self] in self?.realtimeMessageActivity() })
         registrations.append(context.onMessageRead { [weak self] in self?.realtimeMessageRead() })
@@ -217,6 +221,7 @@ package final class MessagesStore {
         directoryLoading = false
         directoryFailed = false
         directoryPresenceFilter = .all
+        megaphoneFeed.reset()
         hiddenBlockedPeerIDs = []
         blockedPeople = []
         blocksLoaded = false
@@ -554,6 +559,16 @@ package final class MessagesStore {
         let presence = directoryPresenceFilter
         return presence == .all ? found : found.filter(presence.admits)
     }
+
+    /// 지난 확성기 페이지가 그리는 목록 — 차단으로 걷어낸 사람의 글은 곧바로 뺀다(원본은 서버가 답한 그대로 · 맥 `visibleMegaphoneFeed`).
+    package var visibleMegaphoneFeed: [MegaphoneFeedItem] {
+        let items = megaphoneFeed.items
+        guard !hiddenBlockedPeerIDs.isEmpty else { return items }
+        return items.filter { item in item.senderID.map { !hiddenBlockedPeerIDs.contains($0) } ?? true }
+    }
+
+    /// 작성 시트에 '지난 확성기 ›' 문을 세우는가 — 서버에 함수가 없다고 들었을 때(닫힘)만 숨는다. 모르면 선다(누르면 그때 묻는다).
+    package var showsMegaphoneFeedEntry: Bool { megaphoneFeed.isAvailable != false }
 
     /// 거르기 칸 고르기. 같은 값은 쓰지 않는다(관찰 무효화로 시트 body 가 헛돌지 않게). 네트워크는 건드리지 않는다.
     package func selectDirectoryPresenceFilter(_ filter: MessagesPresenceFilter) {

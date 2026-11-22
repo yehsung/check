@@ -268,6 +268,8 @@ public final class MobileAppModel {
         links.games = games
         links.me = me
         links.megaphoneBanner = megaphoneBanner
+        // 지난 확성기(폰 1.0.19): 같은 'megaphone' 신호로 열린 페이지만 다시 읽는다(러너는 약한 참조).
+        realtime.megaphoneFeed = messages.megaphoneFeed
         // 배너 미룸(계약 — 폰 배너): 시트·대결 화면·미니게임 판. 바뀌는 순간은 배너 오버레이가 `syncMegaphoneBannerDeferral()` 로 알린다.
         megaphoneBanner.isBannerDeferred = { [weak self] in self?.isMegaphoneBannerDeferred ?? false }
         // 필터가 켜지거나 꺼지면 메시지함이 요약 함수 짝을 다시 맞춘다 — refresh 가 실시간·푸시 어느 길로 왔든.

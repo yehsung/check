@@ -62,6 +62,8 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var mahjong: MahjongStore?
     /// 확성기 배너 신호(`megaphone`)를 받을 스토어(앱 모델이 붙인다 — 오목·테트리스 칸과 같은 꼴).
     @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
+    /// 지난 확성기(폰 1.0.19) — 페이지가 열려 있을 때만 같은 'megaphone' 신호로 첫 쪽을 다시 읽는다(배너 스토어와 따로).
+    @ObservationIgnored package weak var megaphoneFeed: MegaphoneFeedStore?
 
     /// 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 테스트는 크게 두고 `flushCoalescedSignals()` 를 직접 부른다.
     /// 메시지 활동은 이 창의 **앞쪽**(조용하던 창의 첫 신호)을 곧바로 갚고 창 안의 나머지를 창 끝에 한 번 갚는다 —
@@ -202,6 +204,7 @@ package final class MobileRealtimeRunner {
 
     /// 배너 스토어가 `megaphone_inbox` 를 다시 읽는다(겹친 호출은 코어가 하나로 모은다). 새 항목이 있으면 배너가 뜨고 메시지함 필터 id 가 는다.
     private func requestMegaphoneRefresh() {
+        if let feed = megaphoneFeed, feed.isOpen { feed.refresh() }
         guard let banner = megaphoneBanner else { return }
         Task { @MainActor in await banner.refresh() }
     }

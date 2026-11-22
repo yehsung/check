@@ -204,6 +204,10 @@ final class CheckOverlayController {
     }
     /// 수리 사다리 1단(뷰 이동 없음). 시험이 횟수를 세려고 감쌀 수 있다.
     var panelSpaceRepair: @MainActor (NSWindow) -> Void = { OverlayPanelRepair.reapplyCollectionBehavior($0) }
+    /// 렌더러 박동 창(`renderHeartbeatSeconds`)의 수면. 프로덕션은 실제 `Task.sleep`. 이 태스크는 취소하지 않는다(로그 한 줄뿐).
+    var renderHeartbeatSleep: @Sendable (Double) async -> Void = {
+        try? await Task.sleep(for: .seconds($0))
+    }
 
     private let store: WorkTimerStore
     /// 드래그로 옮긴 위치를 영속하는 저장소(테스트 격리를 위해 주입 가능).
@@ -439,6 +443,9 @@ final class CheckOverlayController {
     /// `updateWorking` 재진입 래치. AppKit 이 우리 자신의 프레임 변경 도중에 SwiftUI 를 평가해
     /// `.onChange` → updateWorking 을 되부르는 것을 막는다(자세한 이유는 updateWorking 주석).
     private var isUpdatingWorking = false
+    /// 래치가 삼킨 재진입 호출 수(단조 증가). 래치를 빌려 쓰는 쪽(표시 직전 갱신 · 울트라 세우기)이 자기 구간에서 이 값이 올랐는지 보고,
+    /// 올랐을 때만 끝난 뒤 스토어와 한 번 맞춘다 — 삼킨 것이 없으면 아무것도 하지 않는다(기존 흐름을 건드리지 않는다).
+    private var reentrantUpdatesSwallowed = 0
     /// 직전 updateWorking 이 관측한 **근무 여부**([F5] 쿨다운 리셋의 전이 판정 근거). shouldBeVisible 과
     /// 별개다 — 그쪽은 표시 여부(근무 AND 오버레이 켜짐)라, 캐릭터를 꺼 둔 사용자는 근무가 끝나도
     /// 표시 전이가 없어 표시 기준으로는 리셋이 영영 죽는다.
@@ -510,6 +517,15 @@ final class CheckOverlayController {
     private var rebuildRenotifyGraceUntil: Date?
     /// 재생성 전 SCNView·Metal 장치(반론 R5 — 재확인 로그가 "같은 것인가"를 적는다).
     private var rebuildViewIdentity: (view: ObjectIdentifier?, device: UInt64?)?
+
+    /// 렌더러 박동을 재는 창(초). 표시 · peek · 울트라 수신 · 재생성 뒤 이만큼 그린 프레임 수를 한 줄로 남긴다(반론 (c)·D1).
+    static let renderHeartbeatSeconds: Double = 2.0
+    /// 마지막 렌더러 박동(헤드리스 검증 지점 — 로그와 같은 값).
+    private(set) var lastRenderHeartbeat: RenderHeartbeat?
+    /// 마지막 수리 재확인까지 그린 프레임 수(수리 시점부터 — 반론 R5. 헤드리스 검증 지점).
+    private(set) var lastSpaceRepairFrames: UInt64?
+    /// 수리 시점의 프레임 수(재확인이 차이를 적는다).
+    private var spaceRepairFrameMark: UInt64 = 0
 
     init(
         store: WorkTimerStore,
@@ -669,7 +685,10 @@ final class CheckOverlayController {
         //   그런데 그 중첩 호출이 먼저 끝까지 달려 orderOut 까지 해 버리면, 바깥 호출은 "이미 숨겨진 창"을
         //   보고 `wasVisible && panel.isVisible` 을 놓쳐 **근무종료 인사를 통째로 건너뛴다** —
         //   사용자는 "수고했어!" 없이 캐릭터가 사라지는 걸 본다(울트라 격발 중 종료에서 실제로 났다).
-        if isUpdatingWorking { return }
+        if isUpdatingWorking {
+            reentrantUpdatesSwallowed &+= 1
+            return
+        }
         isUpdatingWorking = true
         defer { isUpdatingWorking = false }
         // ★ [F5] 근무 → 비근무 **실전이**에서 넛지 쿨다운을 즉시 만료한다(v0.2.36). 서버가 하트비트 10분
@@ -2584,7 +2603,28 @@ final class CheckOverlayController {
         //   실측 총 8.68초 — "격발은 최대 ultraSeconds + grace" 라는 계약이 느린 기기에서만 조용히 깨진다.
         let takeoverStart = Date()
 
+        // ★ 격발을 **세우는 동안** updateWorking 래치를 잡는다(저장·복원). 세우는 도중 AppKit·SwiftUI 가 밀린 `.onChange` 를
+        //   동기로 흘리면(표시 직전 수리의 flush · 새로 만든 창의 첫 orderFront — OverlaySpaceRebuildTests RP1 실측) 그 호출이
+        //   "격발 중 근무 전이"로 보고 반쯤 선 격발을 철거한 뒤, 이 함수가 남은 줄(덮은 뒤 갈아입기 · 울트라 동작)을 원복 상태 없이
+        //   그대로 이어 갔다 — 보낸 사람 캐릭터가 원복되지 않는 등 반쪽 상태가 남는다. 삼킨 전이는 아래에서 **다 세운 뒤에**
+        //   스토어와 맞춘다(삼킨 것이 있을 때만) — 그때는 격발을 정상 경로(endUltraTakeover)로 접는다(updateWorking 의 기존 계약).
+        let outerLatch = isUpdatingWorking
+        let swallowedBefore = reentrantUpdatesSwallowed
         if !isRefresh {
+            isUpdatingWorking = true
+            defer { isUpdatingWorking = outerLatch }
+            // 걸린 채 남은 렌더 정지 사유를 걷는다(설계 §3.3) — 숨김 상태에서 받은 울트라는 깜빡임 tick 이 없다.
+            // 아래 표시 직전 갱신보다 **앞**이다: 걸린 화면 슬립 사유가 남아 있으면 그 갱신이 '세션 못 씀'으로 건너뛴다.
+            reconcileStaleRenderSuspension()
+            // ★ 숨어 있던 창이 Space 소속을 잃었으면 **덮기 전에** 고친다(설계 §3.2). 크롬 전체 화면에서 받은 울트라가
+            //   첫 프레임부터 보이게 하는 유일한 자리다 — 사후 감지로만 하면 격발 5초 중 1.5초 이상을 잃는다.
+            //   갈아입기보다 앞인 이유: 재생성은 호스팅 뷰를 새 창으로 옮기는데, 옮긴 뒤에 갈아입어야 붙잡는 씬이 같다.
+            // ★ 그리고 **원복 상태(`ultraRestoreState`)를 세우기 전**이다. 수리가 updateWorking 을 되부르면(1단 flush 가 흘린 SwiftUI
+            //   onChange · 2단의 스토어 대조) 그 호출은 "격발 중 근무 전이"로 보고 반쯤 세운 격발을 철거한다 — 그 뒤 이 함수가 화면을
+            //   덮으면 원복할 사람이 없는 전체 화면 창이 남았다(리뷰 재현). 갱신 자신도 래치를 잡지만, 격발이 아직 없는 세계에서
+            //   고치면 어느 쪽이 뚫려도 격발은 그 뒤에 **최종 창과 프레임으로** 세워진다.
+            let wasHidden = !panel.isVisible
+            if wasHidden { refreshPanelBeforeShowingIfDegraded(.ultraStart) }
             ultraRestoreState = UltraRestoreState(
                 frame: panel.frame,
                 hadMouseMonitor: mouseMoveMonitor != nil,
@@ -2600,8 +2640,6 @@ final class CheckOverlayController {
             removeMouseMoveMonitor()
             pinIgnoresMouseEvents(true)
             engine.invalidateBodyHitCache()   // 뷰 크기가 바뀌면 캐시된 투영 rect 는 옛 좌표계의 거짓말이다
-            // 걸린 채 남은 렌더 정지 사유를 걷는다(설계 §3.3) — 숨김 상태에서 받은 울트라는 깜빡임 tick 이 없다.
-            reconcileStaleRenderSuspension()
             engine.isUltraActive = true
             engine.renderActive = true
             // ★ display: **false** 여야 한다. true 면 AppKit 이 여기서 표시 패스를 강제하고, 그 패스가
@@ -2618,12 +2656,7 @@ final class CheckOverlayController {
             // ★ **nil 이어도 반드시 부른다.** `if let` 으로 감싸면 보낸 사람이 캐릭터를 안 고른 경우
             //   (= 캐릭터 이전 버전을 쓰는 사람 전부) 교체가 통째로 생략되어 **내 캐릭터가 나를 덮친다.**
             //   nil 은 "안 바꿈"이 아니라 "아잉"이다 — 판정은 applyUltraCharacter 안에 한 곳만 둔다.
-            //
-            // ★ 숨어 있던 창이 Space 소속을 잃었으면 **덮기 전에** 고친다(설계 §3.2). 크롬 전체 화면에서 받은 울트라가
-            //   첫 프레임부터 보이게 하는 유일한 자리다 — 사후 감지로만 하면 격발 5초 중 1.5초 이상을 잃는다.
-            //   갈아입기보다 앞인 이유: 재생성은 호스팅 뷰를 새 창으로 옮기는데, 옮긴 뒤에 갈아입어야 붙잡는 씬이 같다.
-            let wasHidden = !panel.isVisible
-            if wasHidden { refreshPanelBeforeShowingIfDegraded(.ultraStart) }
+            //   (Space 소속 표시 직전 갱신은 이 블록 맨 앞, 원복 상태보다 먼저 끝났다.)
             applyUltraCharacter(characterID)
             onUltraWillCoverScreen?()
             panel.setFrame(Self.ultraPanelFrame(in: ultraScreenFrame()), display: false)
@@ -2637,6 +2670,7 @@ final class CheckOverlayController {
         }
         engine.request(.ultraPoked(bubbleText: text))
         armUltraRestore(startedAt: takeoverStart)
+        if !outerLatch && reentrantUpdatesSwallowed != swallowedBefore { scheduleDeferredVisibilityReconcile() }
         // 울트라를 받을 때마다 한 줄(반론 (c) 판별 로그): 그 순간 창이 지금 Space 에 있었는가. "울트라가 안 보였다"는 다음 신고를
         // 창 소속(이 로그가 no) · 렌더러(yes 인데 안 보임)로 바로 가른다. 재수신은 확인을 다시 걸지 않는다(창이 그대로다).
         logPanelPresence(isRefresh ? "ultra refresh" : "ultra received")
@@ -3161,6 +3195,27 @@ final class CheckOverlayController {
         let healed: Bool?
     }
 
+    /// 렌더러 박동 한 번(반론 (c)·D1 판별 로그). "캐릭터가 안 보였다"는 다음 신고를 셋으로 가른다:
+    /// 창이 지금 Space 에 없음(H1 — 소속 줄의 onCurrentSpace=no) · 몸이 없음(H4 — `bodyMissing`) · 렌더 루프가 죽음(H3 — `rendererStalled`).
+    struct RenderHeartbeat: Equatable, Sendable {
+        let label: String
+        /// 창(`renderHeartbeatSeconds`) 동안 그린 프레임 수.
+        let frames: UInt64
+        let renderActive: Bool
+        let renderSuspended: Bool
+        /// 호스팅 뷰 안에 SCNView 가 서 있는가(지연 마운트 래치가 섰는가).
+        let viewMounted: Bool
+        /// 엔진에 씬이 붙어 있는가(`engine.attachedScene != nil`).
+        let sceneAttached: Bool
+        /// 창이 실제로 화면에 보이는가(`occlusionState.contains(.visible)`). 다른 창에 다 가려진 창은 프레임을 안 받을 수 있다.
+        let windowVisible: Bool
+
+        /// 그려야 하는데(표시 의도 · 정지 사유 없음) 붙은 씬이 없다 — 창은 떠도 몸이 빈다(H4).
+        var bodyMissing: Bool { renderActive && !renderSuspended && !sceneAttached }
+        /// 그려야 하고 몸도 붙어 있고 창도 보이는데 프레임이 0 이다 — 렌더 루프가 죽었다(H3). 가려진 창은 판정하지 않는다(오탐 방지).
+        var rendererStalled: Bool { renderActive && !renderSuspended && sceneAttached && windowVisible && frames == 0 }
+    }
+
     /// 재생성 까닭(로그에 남는다).
     enum PanelRebuildReason: String, Sendable {
         /// 2회 연속 지금 Space 에 없었고, 이번 고장에서 1단을 이미 썼다.
@@ -3271,14 +3326,36 @@ final class CheckOverlayController {
     ///
     /// 1회 판정이다(2회 규칙 없음). 오탐을 막는 것은 둘이다: ① 한 번도 올린 적 없는 창은 묻지 않는다(SkyLight 가 `[]` 를 준다),
     /// ② 프로덕션 판정은 비공개 "없음"과 공개 `!isOnActiveSpace` 가 **둘 다** 일 때만 없음이다(실측: 정상 숨은 창 true, 새 창 true).
+    ///
+    /// ★ **수리하는 동안 `updateWorking` 래치를 잡는다(저장·복원).** 이 함수는 beginPeek · beginUltraTakeover 한복판(울트라는 아직
+    ///   반쯤 세운 상태)에서 불리는데, 수리가 그 자리에서 `updateWorking` 을 되부를 수 있다 — 1단의 `CATransaction.flush()` 는 밀린
+    ///   SwiftUI `.onChange` 를 **동기로** 흘리고(시험 실측: 숨은 창에서 flush 직후 shouldBeVisible 이 바뀌었다), 2단은 스토어 대조를
+    ///   한다. 스토어가 막 근무로 바뀐 순간이면 그 호출이 `endUltraTakeover(restoresVisibility:false)` 로 반쯤 세운 격발을 철거하고,
+    ///   돌아온 beginUltraTakeover 가 원복 상태도 타이머도 없는 **화면만 한 창**을 남겼다(리뷰 재현 · OverlaySpaceRebuildTests RP1·RP2).
+    ///   래치가 삼킨 진짜 전이는 같은 값으로 다시 오지 않으므로(SwiftUI 는 이미 흘렸다고 본다) 호출자가 끝난 **뒤에** 한 번 맞춘다
+    ///   (삼킨 것이 있을 때만). 래치를 이미 쥔 쪽(updateWorking 의 표시 전이 · 울트라 세우기) 안에서 불렸으면 그쪽이 맞춘다.
     @discardableResult
     func refreshPanelBeforeShowingIfDegraded(_ event: SpaceCheckEvent) -> Bool {
         guard !panel.isVisible, panelHasBeenOrderedIn, panel.windowNumber > 0 else { return false }
         guard spaceCheckSessionUsable else { return false }
         guard let presence = spacePresence(panel), presence.isMissing else { return false }
         noteMembership(presence, via: event)
-        if case .repaired = repairPanelSpace(presence: presence, reason: .preShow) { return true }
-        return false
+        let outerLatch = isUpdatingWorking
+        let swallowedBefore = reentrantUpdatesSwallowed
+        isUpdatingWorking = true
+        let outcome = repairPanelSpace(presence: presence, reason: .preShow)
+        isUpdatingWorking = outerLatch
+        if !outerLatch && reentrantUpdatesSwallowed != swallowedBefore { scheduleDeferredVisibilityReconcile() }
+        guard case .repaired = outcome else { return false }
+        return true
+    }
+
+    /// 래치가 삼켰을지 모를 근무 전이를 **지금 진행 중인 호출(beginPeek · beginUltraTakeover)이 끝난 뒤** 맞춘다.
+    /// 격발 중이면 그 전이가 격발을 정상 경로로 접는다 — 근무 상태가 격발 중 바뀌었을 때의 기존 계약과 같다(updateWorking 주석).
+    private func scheduleDeferredVisibilityReconcile() {
+        Task { @MainActor [weak self] in
+            self?.reconcileIntendedVisibilityAfterRebuild()
+        }
     }
 
     /// 사다리를 한 단 오른다. 이번 고장에서 아직 아무것도 안 했으면 1단, 1단을 이미 썼으면 2단(재생성).
@@ -3335,8 +3412,10 @@ final class CheckOverlayController {
             "overlay panel rebuilt reason=\(reason.rawValue, privacy: .public) n=\(self.panelRebuildTimes.count, privacy: .public)/h total=\(self.panelRebuilds, privacy: .public) orderedIn=\(wasOrderedIn, privacy: .public) ultra=\(self.isUltraActive, privacy: .public) peek=\(self.isPeekArmed, privacy: .public) after=\(self.lastSpaceEvent.rawValue, privacy: .public)"
         )
         scheduleSpaceRepairVerify(.rebuild)
+        scheduleRenderHeartbeat("rebuild")   // 반론 R5: 옮겨 실은 SCNView 가 새 창에서 실제로 그리는가
         // 반론 R4: 옮기는 동안 래치가 동기 재통지를 삼켰다 — 그중 진짜 전이가 있었으면 여기서 한 번 맞춘다.
-        // updateWorking 안(표시 직전 갱신)에서 불렸으면 바깥 호출이 끝까지 맞추므로 건드리지 않는다.
+        // 래치 안(updateWorking 의 표시 전이 · 표시 직전 갱신)에서 불렸으면 래치를 쥔 쪽이 맞추므로 건드리지 않는다 — 특히 표시 직전
+        // 갱신은 beginUltraTakeover 한복판이라 여기서 updateWorking 을 부르면 반쯤 세운 격발을 철거한다(refreshPanelBeforeShowingIfDegraded).
         if !priorLatch { reconcileIntendedVisibilityAfterRebuild() }
         return true
     }
@@ -3365,10 +3444,11 @@ final class CheckOverlayController {
         return wasOrderedIn
     }
 
-    /// 반론 R4 — 표시 의도(`shouldBeVisible`)가 스토어(근무 중 && 캐릭터 켬)와 어긋났으면 정상 경로로 한 번 맞춘다.
+    /// 반론 R4 — 표시 의도(`shouldBeVisible`)가 스토어(근무 중 && 캐릭터 켬)와 어긋났거나, 마지막으로 본 근무 여부가 스토어와
+    /// 다르면(캐릭터를 꺼 둔 사용자의 근무 전이 — 표시 의도는 그대로라 앞 조건만으로는 못 본다) 정상 경로로 한 번 맞춘다.
     private func reconcileIntendedVisibilityAfterRebuild() {
         let working = store.snapshot.isWorking
-        if (working && store.isOverlayEnabled) != shouldBeVisible {
+        if (working && store.isOverlayEnabled) != shouldBeVisible || working != wasWorkingAtLastUpdate {
             updateWorking(working)
         }
     }
@@ -3377,6 +3457,7 @@ final class CheckOverlayController {
     private func scheduleSpaceRepairVerify(_ rung: PanelRepairRung) {
         spaceRepairVerifyTask?.cancel()
         spaceRepairVerifyGeneration &+= 1
+        spaceRepairFrameMark = engine.renderFrameCounter.count
         let generation = spaceRepairVerifyGeneration
         let sleep = spaceCheckSleep
         let delay = Self.spaceCheckDelaySeconds
@@ -3397,8 +3478,12 @@ final class CheckOverlayController {
         lastSpaceRepairVerdict = SpaceRepairVerdict(rung: rung, healed: healed)
         let healedText = healed.map { $0 ? "true" : "false" } ?? (orderedIn ? "unknown" : "unknown-hidden")
         let identity = identityNote(for: rung)
+        // 반론 R5: 수리 뒤 실제로 그렸는가(프레임 수)와 몸이 붙었는가를 같은 줄에 — healed=true 인데 프레임 0 이면 렌더러 쪽이다.
+        let frames = engine.renderFrameCounter.count &- spaceRepairFrameMark
+        lastSpaceRepairFrames = frames
+        let sceneText = engine.attachedScene == nil ? "nil" : "ok"
         Self.spaceLogger.notice(
-            "overlay panel repair verified step=\(rung == .rebuild ? 2 : 1, privacy: .public) \(rung.rawValue, privacy: .public) healed=\(healedText, privacy: .public) members=\(presence.map { self.membershipText($0) } ?? "?", privacy: .public) sticky=\(Self.stickyText(self.panel), privacy: .public)\(identity, privacy: .public)"
+            "overlay panel repair verified step=\(rung == .rebuild ? 2 : 1, privacy: .public) \(rung.rawValue, privacy: .public) healed=\(healedText, privacy: .public) members=\(presence.map { self.membershipText($0) } ?? "?", privacy: .public) sticky=\(Self.stickyText(self.panel), privacy: .public)\(identity, privacy: .public) frames=\(frames, privacy: .public) scene=\(sceneText, privacy: .public) render=\(self.engine.renderActive && !self.engine.renderSuspended ? "active" : "idle", privacy: .public)"
         )
         switch healed {
         case .some(true):
@@ -3426,12 +3511,48 @@ final class CheckOverlayController {
     }
 
     /// 표시 전이·울트라 수신마다 한 줄(반론 (c) 판별 로그): 그 순간 창이 지금 Space 에 있었는가(yes/no/unknown).
+    /// 그리고 2초 뒤 렌더러 박동 한 줄(그린 프레임 수 · 몸이 붙었는가) — 둘을 짝으로 읽으면 H1·H3·H4 가 갈린다.
     private func logPanelPresence(_ label: String) {
         let presence = spacePresence(panel)
         let onCurrent = presence.map { $0.isMissing ? "no" : "yes" } ?? "unknown"
         Self.spaceLogger.notice(
             "overlay \(label, privacy: .public) onCurrentSpace=\(onCurrent, privacy: .public) members=\(presence.map { self.membershipText($0) } ?? "?", privacy: .public)"
         )
+        scheduleRenderHeartbeat(label)
+    }
+
+    /// `renderHeartbeatSeconds` 뒤 그 사이 그린 프레임 수와 몸 상태를 남긴다(반론 (c)·D1·R5). 취소하지 않는다 — 겹쳐도 각자 한 줄이다.
+    func scheduleRenderHeartbeat(_ label: String) {
+        let start = engine.renderFrameCounter.count
+        let sleep = renderHeartbeatSleep
+        Task { @MainActor [weak self] in
+            await sleep(Self.renderHeartbeatSeconds)
+            self?.recordRenderHeartbeat(label, since: start)
+        }
+    }
+
+    /// 박동 한 줄을 남긴다(시험이 직접 부를 수 있다). 몸이 없거나 렌더 루프가 죽었으면 `.error`(며칠 남는다), 아니면 `.notice`.
+    @discardableResult
+    func recordRenderHeartbeat(_ label: String, since start: UInt64) -> RenderHeartbeat {
+        let scn = contentHostingView.flatMap { Self.firstSCNView(in: $0) }
+        let beat = RenderHeartbeat(
+            label: label,
+            frames: engine.renderFrameCounter.count &- start,
+            renderActive: engine.renderActive,
+            renderSuspended: engine.renderSuspended,
+            viewMounted: scn != nil,
+            sceneAttached: engine.attachedScene != nil,
+            windowVisible: panel.isVisible && panel.occlusionState.contains(.visible)
+        )
+        lastRenderHeartbeat = beat
+        let line = "overlay heartbeat \(label) frames\(Int(Self.renderHeartbeatSeconds))s=\(beat.frames) render=\(beat.renderActive ? "active" : "idle") suspended=\(beat.renderSuspended ? "yes" : "no") view=\(beat.viewMounted ? "ok" : "none") scene=\(beat.sceneAttached ? "ok" : "nil") window=\(beat.windowVisible ? "visible" : "hidden")"
+        if beat.bodyMissing || beat.rendererStalled {
+            let verdict = beat.bodyMissing ? "bodyMissing" : "rendererStalled"
+            Self.spaceLogger.error("\(line, privacy: .public) \(verdict, privacy: .public)")
+        } else {
+            Self.spaceLogger.notice("\(line, privacy: .public)")
+        }
+        return beat
     }
 
     /// 소속 진단: "그 화면의 Space 전부"에서 줄어든 **첫 전이**를 `.error` 로 남긴다(원인 규명용 — 기본 수준 로그는 이 맥에서

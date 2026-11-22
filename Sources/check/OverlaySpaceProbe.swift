@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import QuartzCore
+import SceneKit
 
 // 캐릭터 패널이 "모든 Space" 소속을 잃는 고장(2026-11-22 대표 맥 실측)의 감지 도구.
 //
@@ -249,5 +250,34 @@ enum OverlayPanelRepair {
         panel.collectionBehavior = []
         CATransaction.flush()
         panel.collectionBehavior = original
+    }
+}
+
+/// 캐릭터 3D 뷰의 렌더러 박동(반론 D1·R5 판별 로그 전용). SCNView 의 `SCNSceneRendererDelegate` 로 꽂혀 **그린 프레임 수**만 센다.
+///
+/// 왜 따로 세는가: 창 소속(H1)은 위 질의가 가르지만, "창은 지금 Space 에 있는데 몸이 안 그려진다"(H3 — Metal 렌더 루프가 죽음)는
+/// 소속 로그로는 멀쩡한 창과 구별되지 않는다. 프로브 실측으로 SceneKit 은 Space 밖에서도 계속 그렸으므로 이 수는 H1 이 아니라
+/// H3 의 신호다(소속 로그와 짝으로 읽는다). 렌더 스레드에서 불리므로 잠금으로 센다 — 프레임당 잠금 한 번, 유휴 FPS 에서 무시할 비용.
+/// 엔진이 강하게 쥔다(`ReactionEngine.renderFrameCounter`) — `SCNView.delegate` 는 weak 다.
+final class OverlayRenderFrameCounter: NSObject, SCNSceneRendererDelegate, @unchecked Sendable {
+    private let lock = NSLock()
+    private var frames: UInt64 = 0
+
+    /// 지금까지 그린 프레임 수(단조 증가).
+    var count: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return frames
+    }
+
+    /// 한 프레임을 센다(렌더러 콜백 · 시험).
+    func noteFrame() {
+        lock.lock()
+        frames &+= 1
+        lock.unlock()
+    }
+
+    func renderer(_ renderer: any SCNSceneRenderer, didRenderScene scene: SCNScene, atTime time: TimeInterval) {
+        noteFrame()
     }
 }

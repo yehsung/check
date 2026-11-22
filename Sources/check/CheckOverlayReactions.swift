@@ -299,6 +299,9 @@ final class ReactionEngine {
     }
     /// 렌더 FPS 를 조절하기 위한 SCNView 참조(attach 에서 makeNSView 가 전달). 뷰 수명은 SwiftUI 소유라 weak.
     @ObservationIgnored private weak var attachedView: SCNView?
+    /// 렌더러 박동(그린 프레임 수). makeNSView 가 SCNView 의 delegate 로 꽂는다 — `SCNView.delegate` 가 weak 라 여기서 쥔다.
+    /// 컨트롤러의 판별 로그(표시·peek·울트라 수신·재생성 뒤 2초 프레임 수)만 읽는다. 렌더 동작에는 아무 영향이 없다.
+    @ObservationIgnored let renderFrameCounter = OverlayRenderFrameCounter()
     @ObservationIgnored private var modelExtent: CGFloat = 1
     @ObservationIgnored private var greetingClearTask: Task<Void, Never>?
     /// 리액션 재생이 끝나면 FPS 를 유휴(idleFPS)로 되돌리는 태스크. 새 리액션이 들어오면 다시 스케줄된다.

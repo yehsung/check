@@ -10,6 +10,7 @@ import Testing
 //
 // 여기 시험은 전부 **고장을 일부러 주입하고** 회복(또는 지켜야 할 비회복)을 단언한다.
 //  · `OverlaySpaceRebuildTests`: 소속 질의를 주입(창 정체성으로 "망가짐"을 기억하는 가짜)해 감지·사다리·재생성·가드·배선을 잰다.
+//    RP*: 표시 직전 수리 도중 재진입한 근무 전이(리뷰 지적 2·3) · HB*: 렌더러 박동 판별 로그(반론 D1·R5, 리뷰 지적 1).
 //  · `OverlaySpaceRealWindowServerTests`: 진짜 윈도우 서버에서 **자기 시험 창**의 소속을 SkyLight 로 실제로 빼고(대표 맥과
 //    같은 모양), 실제 경로가 고친 창의 **실제 소속**에 현재 Space 가 들었는지 잰다. 적용할 수 없는 맥이면 까닭을 남기고 건너뛴다.
 // 패널은 전부 알파 0 · 클릭 통과(CheckMousePanel) · 캡처 제외이고 키 창이 되지 않는다(`CheckPanelVisibility`).
@@ -65,11 +66,15 @@ final class OSRWorld {
         return isDegraded(window) ? Self.missing : Self.healthy
     }
 
+    /// 1단 수리 직후(실제 재적용 뒤) 불린다. 시험이 "수리 도중 들어온 재통지"를 확정적으로 만드는 자리.
+    var onReapply: ((NSWindow) -> Void)?
+
     func reapply(_ window: NSWindow) {
         reapplyCalls += 1
         reapplyWhileVisible.append(window.isVisible)
         OverlayPanelRepair.reapplyCollectionBehavior(window)
         if reapplyHeals { heal(window) }
+        onReapply?(window)
     }
 
     func sleep(_ seconds: Double) async {
@@ -639,6 +644,30 @@ struct OverlaySpaceRebuildTests {
         #expect(h.controller.shouldBeVisible)
     }
 
+    @Test("T11b 래치를 쥔 자리에서 부른 재생성은 그 래치를 풀지 않는다(호출자가 누구든 저장·복원)")
+    func t11bRebuildNeverReleasesALatchItDidNotTake() throws {
+        // T11 은 표시 직전 갱신 경로만 본다 — 그 갱신이 래치를 스스로 저장·복원하므로, 재생성 안의 복원이 깨져도 T11 은 초록이다.
+        // 여기서는 래치 안(updateWorking 의 표시 순간 진단이 질의를 부르는 자리)에서 재생성을 **직접** 부른다.
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        h.world.gated = true
+        var rebuilt = false
+        var outcomes: [CheckOverlayController.SpaceCheckOutcome] = []
+        h.world.onPresence = { [weak controller = h.controller] _ in
+            guard let controller, !rebuilt else { return }
+            rebuilt = true
+            _ = controller.rebuildPanel(reason: .manual)
+            outcomes.append(controller.runSpaceCheck(event: .blinkTick))
+        }
+        h.startWorking()
+        h.world.onPresence = nil
+        #expect(rebuilt, "updateWorking 안에서 질의가 안 불렸다 — 이 시험이 아무것도 못 본다")
+        #expect(h.controller.panelRebuilds == 1)
+        #expect(outcomes == [.skipped(.busy)], "재생성이 바깥 updateWorking 의 래치를 풀었다: \(outcomes)")
+        #expect(h.controller.runSpaceCheck(event: .blinkTick) != .skipped(.busy), "바깥 호출이 끝났는데도 래치가 남았다")
+        #expect(h.panel.isVisible)
+    }
+
     // MARK: R1 — 호스팅 뷰를 옮긴 뒤 SwiftUI 재통지(런루프를 실제로 돌린다)
 
     @Test("R1a peek 중 재생성 뒤 런루프를 돌려도 peek·말풍선·창이 살아 있다")
@@ -731,6 +760,295 @@ struct OverlaySpaceRebuildTests {
         #expect(h.controller.rebuildPanel(reason: .manual))
         #expect(h.controller.shouldBeVisible, "재생성이 스토어와 어긋난 표시 의도를 그대로 뒀다")
         #expect(h.panel.isVisible)
+    }
+
+    // MARK: RP — 표시 직전 수리 중 재진입한 근무 전이(리뷰 지적 2·3)
+    //
+    // 표시 직전 수리는 beginPeek · beginUltraTakeover 한복판에서 돈다. 그때 스토어가 막 근무로 바뀌어 있으면(SwiftUI onChange 가
+    // 아직 안 옴) 수리가 updateWorking 을 되불렀다 — 1단은 `CATransaction.flush()` 가 밀린 onChange 를 **동기로** 흘리고(이 맥 실측:
+    // 숨은 창에서 flush 직후 shouldBeVisible 이 바뀌었다), 2단은 스토어 대조를 한다. 그 호출이 반쯤 세운 격발을 철거하고 함수가
+    // 그대로 화면을 덮어, 원복할 사람이 없는 전체 화면 창이 남았다(수정 전 코드에서 RP1·RP2·RP2b 가 빨갰다).
+
+    @Test("RP1 울트라 표시 직전 재생성(2단) 때 스토어가 이미 근무 중이어도 격발이 반쯤 철거된 채 남지 않는다")
+    func rp1UltraPreShowRebuildWithPendingWorkTransitionStaysCoherent() async throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        let old = try await osrSpendRungOneThenHide(h)
+        // 스토어는 근무 중이 됐는데 SwiftUI onChange 가 아직 안 온 세계(반론 R4 가 맞추려는 바로 그 어긋남).
+        h.store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+        try #require(!h.controller.shouldBeVisible, "통지가 이미 와 버렸다 — 이 시험이 아무것도 못 본다")
+        h.ultra()
+        #expect(h.controller.panelRebuilds == 1, "표시 직전 재생성이 안 일어났다 — 이 시험이 아무것도 못 본다")
+        #expect(h.panel !== old)
+        osrExpectUltraCoherent(h, "격발 직후")
+        #expect(h.controller.isUltraActive, "격발이 다 세워지기도 전에 철거됐다")
+        let settled = await osrWaitUntil { h.controller.shouldBeVisible }
+        #expect(settled, "밀린 근무 전이를 끝내 맞추지 않았다")
+        osrExpectUltraCoherent(h, "근무 전이 뒤")
+        #expect(h.panel.isVisible)
+        #expect(!old.isVisible)
+    }
+
+    @Test("RP2 울트라 표시 직전 1단 수리 도중 근무 전이가 들어와도 격발이 반쯤 철거된 채 남지 않는다")
+    func rp2UltraPreShowReapplyWithReentrantWorkTransitionStaysCoherent() async throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        try #require(await h.showThenHide(), "숨김 준비가 안 됐다")
+        osrSpin(0.2)
+        let old = h.panel
+        h.world.degrade(old)
+        h.world.reapplyHeals = true
+        h.world.gated = true
+        // 1단의 CATransaction.flush() 가 밀린 SwiftUI onChange 를 그 자리에서 흘리는 세계를 확정적으로 만든다.
+        var reentered = 0
+        h.world.onReapply = { [weak controller = h.controller, store = h.store] _ in
+            reentered += 1
+            controller?.updateWorking(store.snapshot.isWorking)
+        }
+        h.store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+        try #require(!h.controller.shouldBeVisible, "통지가 이미 와 버렸다 — 이 시험이 아무것도 못 본다")
+        h.ultra()
+        #expect(reentered == 1, "1단 수리가 안 돌았다 — 이 시험이 아무것도 못 본다")
+        #expect(h.controller.panelRebuilds == 0)
+        osrExpectUltraCoherent(h, "격발 직후")
+        #expect(h.controller.isUltraActive, "격발이 다 세워지기도 전에 철거됐다")
+        let settled = await osrWaitUntil { h.controller.shouldBeVisible }
+        #expect(settled, "삼킨 근무 전이를 끝내 맞추지 않았다")
+        osrExpectUltraCoherent(h, "근무 전이 뒤")
+        #expect(h.panel.isVisible)
+    }
+
+    @Test("RP2b 시험 훅 없이 실제 1단 flush 가 흘린 onChange 도 격발을 철거하지 않고, 삼킨 전이는 끝난 뒤에 맞춘다")
+    func rp2bRealFlushRenotifyIsDeferredNotLost() async throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        try #require(await h.showThenHide(), "숨김 준비가 안 됐다")
+        osrSpin(0.2)
+        h.world.degrade(h.panel)
+        h.world.reapplyHeals = true
+        h.world.gated = true
+        h.store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+        try #require(!h.controller.shouldBeVisible, "통지가 이미 와 버렸다 — 이 시험이 아무것도 못 본다")
+        h.ultra()
+        #expect(h.world.reapplyCalls == 1, "1단 수리가 안 돌았다 — 이 시험이 아무것도 못 본다")
+        #expect(h.controller.panelRebuilds == 0, "1단 도중 흘린 onChange 가 표시 직전 재생성까지 겹쳐 불렀다")
+        osrExpectUltraCoherent(h, "격발 직후")
+        #expect(h.controller.isUltraActive, "격발이 다 세워지기도 전에 철거됐다")
+        // flush 가 래치 안에서 흘린 onChange 는 SwiftUI 가 "이미 흘렸다"고 본다 — 다시 안 온다. 미뤄 둔 대조만이 맞춘다.
+        let settled = await osrWaitUntil(maxPolls: 150) { h.controller.shouldBeVisible }
+        #expect(settled, "래치가 삼킨 근무 전이가 영영 안 맞춰졌다(표시 의도가 스토어와 어긋난 채 남았다)")
+        osrExpectUltraCoherent(h, "근무 전이 뒤")
+        #expect(h.panel.isVisible)
+    }
+
+    @Test("RP3 peek 표시 직전 수리 도중 근무 전이가 들어와도 끝나면 근무 표시로 맞춰진다(1단 · 2단)")
+    func rp3PeekPreShowRepairWithPendingWorkTransitionSettlesToWorking() async throws {
+        // 1단
+        do {
+            let h = OSRHarness()
+            defer { h.tearDown() }
+            try #require(await h.showThenHide(), "숨김 준비가 안 됐다")
+            osrSpin(0.2)
+            h.world.degrade(h.panel)
+            h.world.reapplyHeals = true
+            h.world.gated = true
+            h.world.onReapply = { [weak controller = h.controller, store = h.store] _ in
+                controller?.updateWorking(store.snapshot.isWorking)
+            }
+            h.store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+            try #require(!h.controller.shouldBeVisible)
+            h.poke()
+            #expect(h.world.reapplyCalls == 1)
+            #expect(h.controller.panelRebuilds == 0)
+            #expect(h.panel.isVisible)
+            let settled = await osrWaitUntil(maxPolls: 150) { h.controller.shouldBeVisible }
+            #expect(settled, "삼킨 근무 전이를 맞추지 않았다")
+            #expect(h.panel.isVisible)
+            #expect(h.panel.frame.size == CheckOverlayController.panelSize)
+        }
+        // 2단
+        do {
+            let h = OSRHarness()
+            defer { h.tearDown() }
+            let old = try await osrSpendRungOneThenHide(h)
+            h.store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+            try #require(!h.controller.shouldBeVisible)
+            h.poke()
+            #expect(h.controller.panelRebuilds == 1)
+            #expect(h.panel !== old)
+            #expect(h.panel.isVisible)
+            let settled = await osrWaitUntil(maxPolls: 150) { h.controller.shouldBeVisible }
+            #expect(settled, "삼킨 근무 전이를 맞추지 않았다")
+            #expect(h.panel.isVisible)
+            #expect(!old.isVisible)
+        }
+    }
+
+    @Test("RP3b peek 표시 직전 1단의 실제 flush 가 흘린 onChange 는 수리 안에서 재생성을 겹쳐 부르지 않고, 끝난 뒤 근무 표시로 맞춘다")
+    func rp3bPeekRealFlushDoesNotNestARebuildAndSettles() async throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        try #require(await h.showThenHide(), "숨김 준비가 안 됐다")
+        osrSpin(0.2)
+        let old = h.panel
+        h.world.degrade(old)
+        h.world.reapplyHeals = true
+        h.world.gated = true
+        h.store.snapshot = WorkStatusSnapshot(status: .working, elapsedSeconds: 0)
+        try #require(!h.controller.shouldBeVisible, "통지가 이미 와 버렸다 — 이 시험이 아무것도 못 본다")
+        h.poke()
+        #expect(h.world.reapplyCalls == 1, "1단 수리가 안 돌았다 — 이 시험이 아무것도 못 본다")
+        // 래치가 없으면: flush 가 흘린 updateWorking(true) → 표시 전이의 표시 직전 갱신이 아직 안 나은 같은 창을 보고 → 1단을 이미
+        // 썼으니 재생성 — 1단 한복판에 2단이 겹친다(시간당 3회 상한을 헛되이 태우고, 1단 재확인이 2단 재확인을 덮는다).
+        #expect(h.controller.panelRebuilds == 0, "1단 도중 흘린 onChange 가 재생성을 겹쳐 불렀다")
+        #expect(h.panel === old)
+        #expect(h.panel.isVisible)
+        let settled = await osrWaitUntil(maxPolls: 150) { h.controller.shouldBeVisible }
+        #expect(settled, "래치가 삼킨 근무 전이가 영영 안 맞춰졌다(SwiftUI 는 이미 흘렸다고 본다)")
+        #expect(h.panel.isVisible)
+        #expect(h.panel.frame.size == CheckOverlayController.panelSize)
+    }
+
+    // MARK: HB — 렌더러 박동(반론 (c)·D1·R5 판별 로그)
+
+    @Test("HB1 캐릭터 SCNView 의 렌더러 delegate 가 엔진의 프레임 계수기다")
+    func hb1FrameCounterIsTheSCNViewDelegate() async throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        h.startWorking()
+        let mounted = await osrWaitUntil(maxPolls: 300) { osrFirstSCNView(in: h.panel.contentView) != nil }
+        try #require(mounted, "SCNView 가 안 섰다")
+        let scn = try #require(osrFirstSCNView(in: h.panel.contentView))
+        #expect((scn.delegate as AnyObject?) === h.controller.engine.renderFrameCounter,
+                "프레임 계수기가 SCNView 에 안 꽂혔다 — 박동이 늘 0 프레임이라 멀쩡한 창이 '렌더 루프 죽음'으로 찍힌다")
+        // 계수기는 렌더러 콜백 하나를 한 프레임으로 센다.
+        let counter = OverlayRenderFrameCounter()
+        counter.renderer(scn, didRenderScene: SCNScene(), atTime: 0)
+        counter.renderer(scn, didRenderScene: SCNScene(), atTime: 0)
+        #expect(counter.count == 2)
+    }
+
+    @Test("HB2 표시 · peek · 울트라 수신 · 재생성마다 2초 박동을 남기고, 그 창 동안 그린 프레임을 센다")
+    func hb2HeartbeatFollowsEveryShowPath() async throws {
+        #expect(CheckOverlayController.renderHeartbeatSeconds == 2.0)
+        func arm(_ h: OSRHarness) {
+            let counter = h.controller.engine.renderFrameCounter
+            // 박동 창 동안 7 프레임을 그린 세계(실제 렌더러가 더 그려도 된다 — 하한만 본다).
+            h.controller.renderHeartbeatSleep = { _ in for _ in 0..<7 { counter.noteFrame() } }
+        }
+        func beat(_ h: OSRHarness, _ label: String) async -> CheckOverlayController.RenderHeartbeat? {
+            _ = await osrWaitUntil(maxPolls: 300) { h.controller.lastRenderHeartbeat?.label == label }
+            return h.controller.lastRenderHeartbeat?.label == label ? h.controller.lastRenderHeartbeat : nil
+        }
+        // 표시
+        do {
+            let h = OSRHarness()
+            defer { h.tearDown() }
+            arm(h)
+            h.startWorking()
+            let b = await beat(h, "shown")
+            #expect(b != nil, "표시 뒤 박동이 없다")
+            #expect((b?.frames ?? 0) >= 7, "박동이 그 창의 프레임을 안 셌다: \(String(describing: b))")
+            #expect(b?.renderActive == true)
+        }
+        // peek
+        do {
+            let h = OSRHarness()
+            defer { h.tearDown() }
+            arm(h)
+            h.poke()
+            let b = await beat(h, "peek shown")
+            #expect(b != nil, "peek 뒤 박동이 없다")
+            #expect((b?.frames ?? 0) >= 7)
+        }
+        // 울트라 수신
+        do {
+            let h = OSRHarness()
+            defer { h.tearDown() }
+            arm(h)
+            h.ultra()
+            let b = await beat(h, "ultra received")
+            #expect(b != nil, "울트라 수신 뒤 박동이 없다")
+            #expect((b?.frames ?? 0) >= 7)
+        }
+        // 재생성(반론 R5 — 옮겨 실은 SCNView 가 새 창에서 그리는가)
+        do {
+            let h = OSRHarness()
+            defer { h.tearDown() }
+            h.world.gated = true
+            h.startWorking()
+            arm(h)
+            #expect(h.controller.rebuildPanel(reason: .manual))
+            let b = await beat(h, "rebuild")
+            #expect(b != nil, "재생성 뒤 박동이 없다")
+            #expect((b?.frames ?? 0) >= 7)
+        }
+    }
+
+    @Test("HB3 그려야 하는데 씬이 떨어져 있으면 '몸 없음', 몸은 있는데 0 프레임이면 '렌더 루프 죽음'으로 적는다")
+    func hb3HeartbeatFlagsBodyMissingAndStalledRenderer() async throws {
+        typealias B = CheckOverlayController.RenderHeartbeat
+        // 순수 판정
+        func b(frames: UInt64, active: Bool = true, suspended: Bool = false, scene: Bool = true, visible: Bool = true) -> B {
+            B(label: "x", frames: frames, renderActive: active, renderSuspended: suspended,
+              viewMounted: true, sceneAttached: scene, windowVisible: visible)
+        }
+        #expect(b(frames: 0).rendererStalled)
+        #expect(!b(frames: 3).rendererStalled)
+        #expect(!b(frames: 0, suspended: true).rendererStalled, "정지 사유가 있는데 렌더 루프 죽음으로 적었다")
+        #expect(!b(frames: 0, active: false).rendererStalled, "숨긴 창을 렌더 루프 죽음으로 적었다")
+        #expect(!b(frames: 0, visible: false).rendererStalled, "다른 창에 가려진 창을 렌더 루프 죽음으로 적었다")
+        #expect(b(frames: 9, scene: false).bodyMissing)
+        #expect(!b(frames: 9, active: false, scene: false).bodyMissing)
+        #expect(!b(frames: 9, suspended: true, scene: false).bodyMissing)
+
+        // 실제 컨트롤러: 씬을 떼면 같은 줄이 '몸 없음'이 된다
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        h.startWorking()
+        let mounted = await osrWaitUntil(maxPolls: 300) { osrFirstSCNView(in: h.panel.contentView) != nil }
+        try #require(mounted, "SCNView 가 안 섰다")
+        let scn = try #require(osrFirstSCNView(in: h.panel.contentView))
+        let healthy = h.controller.recordRenderHeartbeat("probe", since: h.controller.engine.renderFrameCounter.count)
+        #expect(healthy.viewMounted && healthy.sceneAttached && !healthy.bodyMissing, "기준선: \(healthy)")
+        let scene = scn.scene
+        scn.scene = nil
+        let missing = h.controller.recordRenderHeartbeat("probe", since: h.controller.engine.renderFrameCounter.count)
+        scn.scene = scene
+        #expect(!missing.sceneAttached)
+        #expect(missing.bodyMissing, "씬이 떨어졌는데 몸 없음으로 안 적었다: \(missing)")
+        #expect(h.controller.lastRenderHeartbeat == missing)
+    }
+
+    @Test("HB4 수리 재확인 줄은 수리 뒤 그린 프레임 수를 적는다(반론 R5)")
+    func hb4RepairVerifyRecordsFramesSinceRepair() throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        h.world.gated = true
+        h.startWorking()
+        h.world.degrade(h.panel)
+        h.world.reapplyHeals = true
+        #expect(h.controller.runSpaceCheck(event: .spaceChanged) == .miss(streak: 1))
+        #expect(h.controller.runSpaceCheck(event: .spaceChanged) == .repaired(.reapplyCollectionBehavior))
+        let counter = h.controller.engine.renderFrameCounter
+        for _ in 0..<5 { counter.noteFrame() }
+        #expect(h.controller.verifySpaceRepair(.reapplyCollectionBehavior) == true)
+        #expect((h.controller.lastSpaceRepairFrames ?? 0) >= 5, "재확인 줄이 수리 뒤 프레임을 안 셌다")
+    }
+
+    @Test("HB5 실제 SceneKit 이 표시된 캐릭터를 그리면 계수기가 오른다",
+          .enabled(if: CGDisplayIsAsleep(CGMainDisplayID()) == 0, "메인 화면이 자고 있다 — 실제 렌더러가 안 돈다"))
+    func hb5RealRendererAdvancesTheCounter() async throws {
+        let h = OSRHarness()
+        defer { h.tearDown() }
+        h.startWorking()
+        let mounted = await osrWaitUntil(maxPolls: 300) { osrFirstSCNView(in: h.panel.contentView) != nil }
+        try #require(mounted, "SCNView 가 안 섰다")
+        let counter = h.controller.engine.renderFrameCounter
+        let start = counter.count
+        let advanced = await osrWaitUntil(maxPolls: 150) { counter.count > start }
+        print("HB5 frames start=\(start) now=\(counter.count)")
+        #expect(advanced, "표시 중인 SCNView 가 3초 동안 한 프레임도 안 그렸다(계수기 배선 또는 렌더러)")
     }
 
     // MARK: T14 · T15 — H2 렌더 정지 안전밸브
@@ -906,6 +1224,24 @@ struct OverlaySpaceRebuildTests {
     }
 }
 
+/// 격발 상태와 창 모양이 서로 맞는가. 격발 중이면 화면만 한 창 · 클릭 통과 못 박기 · 마감이 다 있어야 하고, 아니면 작은 창 ·
+/// 못 박기 없음이어야 한다. "isUltraActive 는 false 인데 창은 화면만 하다"(원복할 사람이 없는 격발)를 잡는다.
+@MainActor
+func osrExpectUltraCoherent(_ h: OSRHarness, _ stage: String, sourceLocation: SourceLocation = #_sourceLocation) {
+    let c = h.controller
+    let small = h.panel.frame.size == CheckOverlayController.panelSize
+    if c.isUltraActive {
+        #expect(!small, "\(stage): 격발 중인데 창이 작다", sourceLocation: sourceLocation)
+        #expect(c.pinnedIgnoresMouseEventsValue == true, "\(stage): 격발 중인데 클릭 통과 못 박기가 없다", sourceLocation: sourceLocation)
+        #expect(c.ultraDeadline != nil, "\(stage): 격발 중인데 마감이 없다", sourceLocation: sourceLocation)
+        #expect(c.engine.isUltraActive, "\(stage): 컨트롤러는 격발 중인데 엔진은 아니다", sourceLocation: sourceLocation)
+    } else {
+        #expect(small, "\(stage): 격발이 끝났는데 창이 화면만 하다 \(h.panel.frame)", sourceLocation: sourceLocation)
+        #expect(c.pinnedIgnoresMouseEventsValue == nil, "\(stage): 격발이 끝났는데 못 박기가 남았다", sourceLocation: sourceLocation)
+        #expect(!c.engine.isUltraActive, "\(stage): 격발이 끝났는데 엔진은 격발 중이다", sourceLocation: sourceLocation)
+    }
+}
+
 /// 숨김 + "이번 고장에서 1단을 이미 썼다"(재확인 전에 근무가 끝났다)를 만든다. 망가진 옛 창을 돌려준다.
 @MainActor
 private func osrSpendRungOneThenHide(_ h: OSRHarness) async throws -> NSPanel {
@@ -997,32 +1333,65 @@ struct OverlaySpaceRealWindowServerTests {
         return ok ? last : nil
     }
 
+    /// 시험의 전제 — 시험 창이 놓인 화면의 현재 Space 와 그 화면의 Space 수(리뷰 지적 5).
+    ///
+    /// 이 스위트는 사용자가 쓰는 맥에서 돈다. 시험 도중 사용자가 Space 를 옮기거나(주입이 남겨 둔 두 Space 로 가면 "없음" 단언이
+    /// 깨진다) 전체 화면을 열고 닫으면(Space 수가 바뀌어 `full` 비교가 깨진다) 전제가 무너진다 — 그때는 실패가 아니라 **취소**다.
+    private struct SpaceLayout: Equatable, CustomStringConvertible {
+        let current: UInt64
+        let displaySpaceCount: Int?
+        var description: String { "current=\(current) spaces=\(displaySpaceCount.map(String.init) ?? "?")" }
+    }
+
+    private func layout(of panel: NSWindow) -> SpaceLayout? {
+        OverlaySpaceProbe.skyLightReading(windowNumber: panel.windowNumber)
+            .map { SpaceLayout(current: $0.current, displaySpaceCount: $0.displaySpaceCount) }
+    }
+
+    /// 단언 직전에 부른다: 전제가 그대로가 아니면 취소한다.
+    private func cancelIfLayoutChanged(_ h: OSRHarness, since baseline: SpaceLayout) throws {
+        let now = layout(of: h.panel)
+        guard now == baseline else {
+            print("OverlaySpaceRealWindowServer: 시험 도중 Space 구성이 바뀌었다(\(baseline) → \(now.map(\.description) ?? "nil")) — 취소")
+            try Test.cancel("the Space layout changed during the test (user activity)")
+        }
+    }
+
     /// 표시 → 첫 커밋 뒤 소속이 현재 Space 를 담을 때까지. 안 되면 이 맥에서는 적용할 수 없다(건너뜀).
-    private func showAndMeasure(_ h: OSRHarness) async throws -> Int {
+    /// 건강한 소속 수와, 그때의 Space 구성(전제)을 돌려준다.
+    private func showAndMeasure(_ h: OSRHarness) async throws -> (full: Int, layout: SpaceLayout) {
         h.startWorking()
         guard let healthy = await waitHealthy(h, full: nil, timeout: 100) else {
             print("OverlaySpaceRealWindowServer: 새로 띄운 창이 현재 Space 를 끝내 못 받았다 — 건너뜀")
             try Test.cancel("fresh panel never reported the current Space")
         }
-        return healthy.spaces.count
+        return (healthy.spaces.count, SpaceLayout(current: healthy.current, displaySpaceCount: healthy.displaySpaceCount))
     }
 
     /// 주입하는 동안은 컨트롤러 자신의 확인이 끼어들지 않게 세션을 '못 씀'으로 둔다(주입 직후 단언이 이미 고쳐진 창을 보지 않게).
     /// 시험이 고칠 차례에 `sessionUsable = true` 로 되돌린다.
-    private func inject(_ h: OSRHarness) async throws {
+    private func inject(_ h: OSRHarness, baseline: SpaceLayout) async throws {
         h.world.sessionUsable = false
         guard await OSRSkyLightFault.dropCurrentSpace(of: h.panel) else {
+            try cancelIfLayoutChanged(h, since: baseline)
             print("OverlaySpaceRealWindowServer: 윈도우 서버가 주입한 소속 빼기를 받지 않았다(단일 Space 맥 등) — 건너뜀")
             try Test.cancel("injection did not take")
         }
+        try cancelIfLayoutChanged(h, since: baseline)
     }
 
-    @Test("실제: 주입한 소속 상실을 감지하고, 실제 경로(Space 전환 확인)가 현재 Space 를 되돌린다 · 내렸다 올리기로는 안 낫는다")
+    /// 수리 재확인이 끝날 때까지(healed 가 정해질 때까지) 기다린다.
+    private func waitVerdict(_ h: OSRHarness) async -> CheckOverlayController.SpaceRepairVerdict? {
+        _ = await osrWaitUntil(maxPolls: 200) { h.controller.lastSpaceRepairVerdict?.healed != nil }
+        return h.controller.lastSpaceRepairVerdict
+    }
+
+    @Test("실제: 주입한 소속 상실을 감지하고, 실제 경로(Space 전환 확인)의 1단이 현재 Space 를 되돌린다 · 내렸다 올리기로는 안 낫는다")
     func realDegradationIsDetectedAndHealedByTheScheduledPath() async throws {
         let h = realHarness()
         defer { h.tearDown() }
-        let full = try await showAndMeasure(h)
-        try await inject(h)
+        let (full, baseline) = try await showAndMeasure(h)
+        try await inject(h, baseline: baseline)
         let panel = h.panel
         #expect(OverlaySpaceProbe.presence(of: panel)?.isMissing == true, "감지기가 실제 고장을 못 봤다")
         #expect(OverlaySpaceProbe.publicSaysMissing(panel), "공개 신호가 실제 고장을 못 봤다")
@@ -1032,30 +1401,56 @@ struct OverlaySpaceRealWindowServerTests {
         try? await Task.sleep(for: .milliseconds(200))
         panel.orderFrontRegardless()
         try? await Task.sleep(for: .milliseconds(300))
+        try cancelIfLayoutChanged(h, since: baseline)
         #expect(OverlaySpaceProbe.presence(of: panel)?.isMissing == true, "다시 올리기가 저절로 고쳤다 — 주입이 실측 모양이 아니다")
 
         h.world.sessionUsable = true
         h.controller.scheduleSpaceCheck(.spaceChanged)
         let healed = await waitHealthy(h, full: full)
+        let verdict = await waitVerdict(h)
+        try cancelIfLayoutChanged(h, since: baseline)
         #expect(healed != nil, "실제 경로가 현재 Space 를 되돌리지 못했다")
         if let healed { #expect(healed.spaces.count == full) }
-        let verified = await osrWaitUntil(maxPolls: 200) { h.controller.lastSpaceRepairVerdict?.healed == true }
-        #expect(verified, "재확인이 나았다고 기록하지 않았다: \(String(describing: h.controller.lastSpaceRepairVerdict))")
-        #expect(h.controller.panelRebuilds <= 1)
-        print("OverlaySpaceRealWindowServer scheduled: full=\(full) rung=\(String(describing: h.controller.lastSpaceRepairVerdict?.rung)) rebuilds=\(h.controller.panelRebuilds)")
+        // 리뷰 지적 4: 고친 것이 **1단**이어야 한다. 1단이 실제 창에서 죽으면 2단(재생성)이 대신 고쳐 예전엔 이 시험이 초록이었다
+        // (flush 를 지운 변이로 재현) — 그러면 모든 고장이 R1 위험·시간당 3회 상한을 지닌 재생성으로 간다.
+        #expect(verdict == .init(rung: .reapplyCollectionBehavior, healed: true),
+                "1단(collectionBehavior 재적용)이 실제 창을 못 고쳤다: \(String(describing: verdict))")
+        #expect(h.controller.panelRebuilds == 0, "1단이 못 고쳐 재생성으로 넘어갔다")
+        #expect(h.panel === panel)
+        print("OverlaySpaceRealWindowServer scheduled: full=\(full) verdict=\(String(describing: verdict)) rebuilds=\(h.controller.panelRebuilds)")
+    }
+
+    @Test("실제: 1단(collectionBehavior 재적용) 하나만으로 실제 소속에 현재 Space 가 돌아온다 — 2단 없이")
+    func realReapplyAloneRestoresMembership() async throws {
+        let h = realHarness()
+        defer { h.tearDown() }
+        let (full, baseline) = try await showAndMeasure(h)
+        try await inject(h, baseline: baseline)
+        let panel = h.panel
+        try #require(OverlaySpaceProbe.presence(of: panel)?.isMissing == true, "주입 뒤인데 감지기가 '있음'이라 한다")
+        let behavior = panel.collectionBehavior
+        OverlayPanelRepair.reapplyCollectionBehavior(panel)
+        #expect(panel.collectionBehavior == behavior, "1단이 원래 collectionBehavior 를 되돌려 놓지 않았다")
+        let healed = await waitHealthy(h, full: full, timeout: 100)
+        try cancelIfLayoutChanged(h, since: baseline)
+        #expect(healed != nil, "1단이 실제 창의 현재 Space 를 되돌리지 못했다(두 대입이 따로 커밋되지 않았다?)")
+        #expect(h.panel === panel)
+        #expect(h.controller.panelRebuilds == 0)
+        print("OverlaySpaceRealWindowServer reapply: full=\(full) healed=\(String(describing: healed))")
     }
 
     @Test("실제: 재생성한 새 창의 실제 소속에 현재 Space 가 들고, 그 화면의 Space 전부다")
     func realRebuiltPanelJoinsTheCurrentSpace() async throws {
         let h = realHarness()
         defer { h.tearDown() }
-        let full = try await showAndMeasure(h)
-        try await inject(h)
+        let (full, baseline) = try await showAndMeasure(h)
+        try await inject(h, baseline: baseline)
         let old = h.panel
         let content = try #require(old.contentView)
         #expect(h.controller.rebuildPanel(reason: .manual))
         #expect(h.panel !== old)
         let healed = await waitHealthy(h, full: full)
+        try cancelIfLayoutChanged(h, since: baseline)
         #expect(healed != nil, "새 창이 현재 Space 를 못 받았다")
         if let healed {
             #expect(healed.spaces.contains(healed.current))
@@ -1068,25 +1463,34 @@ struct OverlaySpaceRealWindowServerTests {
         print("OverlaySpaceRealWindowServer rebuild: full=\(full) new=\(String(describing: healed))")
     }
 
-    @Test("실제: 숨은 채 망가진 창은 다음 표시(근무 시작) 직전에 고쳐져 현재 Space 에 뜬다")
+    @Test("실제: 숨은 채 망가진 창은 다음 표시(근무 시작) 직전 1단으로 고쳐져 현재 Space 에 뜬다")
     func realHiddenDegradedPanelIsFixedBeforeTheNextShow() async throws {
         let h = realHarness()
         defer { h.tearDown() }
-        let full = try await showAndMeasure(h)
-        try await inject(h)
+        let (full, baseline) = try await showAndMeasure(h)
+        try await inject(h, baseline: baseline)
         h.stopWorking()
         let hidden = await osrWaitUntil(maxPolls: 200) { !h.panel.isVisible }
         try #require(hidden, "숨김 준비가 안 됐다")
+        try cancelIfLayoutChanged(h, since: baseline)
         guard OverlaySpaceProbe.presence(of: h.panel)?.isMissing == true else {
             print("OverlaySpaceRealWindowServer: 숨은 망가진 창을 감지기가 못 봤다 — 이 맥에서 숨은 창 판정이 다르다, 건너뜀")
             try Test.cancel("hidden degraded panel not reported missing")
         }
         osrSpin(CheckOverlayController.farewellHideDeadline + 0.15)
         h.world.sessionUsable = true
+        let panel = h.panel
         h.startWorking()
         #expect(h.panel.isVisible)
         let healed = await waitHealthy(h, full: full)
+        let verdict = await waitVerdict(h)
+        try cancelIfLayoutChanged(h, since: baseline)
         #expect(healed != nil, "표시 직전 수리 뒤에도 현재 Space 에 없다")
-        print("OverlaySpaceRealWindowServer preShow: full=\(full) rebuilds=\(h.controller.panelRebuilds) verdict=\(String(describing: h.controller.lastSpaceRepairVerdict))")
+        // 리뷰 지적 4: 표시 직전 수리도 1단이 실제로 고쳐야 한다(숨은 창에서 — 프로브 실측과 같은 모양).
+        #expect(verdict == .init(rung: .reapplyCollectionBehavior, healed: true),
+                "표시 직전 1단이 실제 창을 못 고쳤다: \(String(describing: verdict))")
+        #expect(h.controller.panelRebuilds == 0, "표시 직전 1단이 못 고쳐 재생성으로 넘어갔다")
+        #expect(h.panel === panel)
+        print("OverlaySpaceRealWindowServer preShow: full=\(full) rebuilds=\(h.controller.panelRebuilds) verdict=\(String(describing: verdict))")
     }
 }

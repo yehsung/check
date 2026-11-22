@@ -1415,6 +1415,8 @@ struct CheckCharacter3DView: NSViewRepresentable {
         // 30 으로 올렸다가 되돌린다(attach 가 뷰를 받아 상태에 맞춰 조절).
         view.antialiasingMode = .multisampling2X
         view.preferredFramesPerSecond = ReactionEngine.idleFPS
+        // 렌더러 박동(판별 로그 — 반론 D1): 그린 프레임만 센다. 씬이 없어도(H4) 꽂아 두어야 "몸 없음"과 "렌더 루프 죽음"이 갈린다.
+        if let engine { view.delegate = engine.renderFrameCounter }
         Self.applyRenderState(active: effectiveActive, to: view)
         if let engine,
            let root = scene?.rootNode,

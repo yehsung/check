@@ -201,6 +201,7 @@ struct GamesAlkkagiBoardView: View {
                     .offset(x: -Self.fallMargin, y: -Self.fallMargin)
                     .allowsHitTesting(false)
                 }
+                .overlay { guideOverlay(side: side) }
                 .offset(shakeOffset)
         }
         .aspectRatio(1, contentMode: .fit)
@@ -209,9 +210,39 @@ struct GamesAlkkagiBoardView: View {
                 Color.clear.onChange(of: context.date) { _, _ in model.tick() }
             }
         }
-        .onAppear { model.haptic = { [haptics] event in haptics.play(event) } }
+        .onAppear {
+            model.haptic = { [haptics] event in haptics.play(event) }
+            // 손 안내 횟수는 이 기기에 기억한다(앱 표준 스위트 — 시험은 모델에 시험 스위트를 직접 넣는다).
+            if model.guideDefaults == nil { model.guideDefaults = .standard }
+        }
         .onChange(of: dragIsActive) { _, active in
             if !active { model.finishGesture() }
+        }
+    }
+
+    // MARK: 판 위 안내(폰 1.0.19 — 맥 0.3.86 C안 · 대표 "뭘 하라는건지 모르겠어")
+
+    /// 숨겨 놓기: 판 **가운데 빈 띠**(두 진영 사이 — 돌이 못 오는 곳)에 큰 안내 한 줄.
+    /// 쏘기 차례: 손이 내 돌을 뒤로 당기고 날아갈 쪽을 화살로 보여 준다(돌을 잡으면 사라지고, 세 번 쏘고 나면 더 안 나온다).
+    @ViewBuilder
+    private func guideOverlay(side: CGFloat) -> some View {
+        if let hint = model.pullHintStone {
+            GamesAlkkagiPullHint(stone: hint, mine: model.guideSide, reduced: reduceMotion)
+                .frame(width: side, height: side)
+                .allowsHitTesting(false)
+        }
+        if let text = model.guideBandText {
+            Text(text)
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .padding(.horizontal, 14)
+                .frame(height: 32)
+                .background(Capsule().fill(MobileTheme.accent.opacity(0.92)))
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                .padding(.horizontal, 8)
+                .allowsHitTesting(false)
         }
     }
 
@@ -227,9 +258,9 @@ struct GamesAlkkagiBoardView: View {
             GamesAlkkagiDrawing.board(context: context, size: size)
             let scale = size.width / AlkkagiGame.boardSize
             if model.game.phase == .placing, let player = placingPlayer {
-                let y: CGFloat = player == .black ? size.height / 2 : 0
-                context.fill(Path(CGRect(x: 0, y: y, width: size.width, height: size.height / 2)),
-                             with: .color(MobileTheme.accent.opacity(0.12)))
+                // 둘 수 있는 **실제** 칸만 파랗게 + 점선 + '내 진영', 그 밖은 어둡게(옛 그림은 판 절반을 12% 로만 칠해 거의 안 보였고
+                // 300~320 은 칠했는데 못 뒀다 — 맥 0.3.86 과 같은 고침).
+                GamesAlkkagiGuideDrawing.zones(context: context, size: size, mine: player)
             }
             for stone in model.game.stones where stone.isPlaced && !stone.isOut {
                 GamesAlkkagiDrawing.stone(stone, context: context, scale: scale, selected: stone.id == model.selectedID,
@@ -237,6 +268,9 @@ struct GamesAlkkagiBoardView: View {
             }
             if let selected = model.selectedStone, model.game.phase == .aiming {
                 GamesAlkkagiDrawing.aim(stone: selected, pull: model.pull, context: context, scale: scale)
+            }
+            if model.guideIsMyAim {
+                GamesAlkkagiGuideDrawing.myStones(context: context, scale: scale, stones: model.game.stones, mine: model.guideSide)
             }
             if let preview = model.placementPoint, let id = model.dragPlacementID,
                let stone = model.game.stones.first(where: { $0.id == id }) {
@@ -310,6 +344,112 @@ final class GamesAlkkagiHaptics {
         case .launch(let strength): rigid.impactOccurred(intensity: CGFloat(min(1, max(0.3, strength))))
         case .impact(let strength): heavy.impactOccurred(intensity: CGFloat(min(1, max(0.3, strength))))
         }
+    }
+}
+/// 안내 그림(폰 1.0.19 — 맥 `AlkkagiGuideDrawing` 과 같은 그림 · 폰 판 폭(약 350pt)에 맞춰 글자만 한 단계 작게).
+enum GamesAlkkagiGuideDrawing {
+    /// 숨겨 놓기: 내 칸만 파랗게 + 점선 테두리 + '내 진영' 이름표, 그 밖(상대 칸 + 가운데 빈 띠)은 어둡게.
+    static func zones(context: GraphicsContext, size: CGSize, mine: AlkkagiGame.Player) {
+        let s = size.width / AlkkagiGame.boardSize
+        let blackTop = AlkkagiPhoneGuideGeometry.blackZoneTop * s, whiteBottom = AlkkagiPhoneGuideGeometry.whiteZoneBottom * s
+        let lower = CGRect(x: 0, y: blackTop, width: size.width, height: size.height - blackTop)
+        let upper = CGRect(x: 0, y: 0, width: size.width, height: whiteBottom)
+        let mineRect = mine == .black ? lower : upper
+        let theirRect = mine == .black ? upper : lower
+        let outside = mine == .black ? CGRect(x: 0, y: 0, width: size.width, height: blackTop)
+                                     : CGRect(x: 0, y: whiteBottom, width: size.width, height: size.height - whiteBottom)
+        context.fill(Path(outside), with: .color(.black.opacity(0.48)))
+        context.fill(Path(mineRect), with: .color(MobileTheme.accent.opacity(0.55)))
+        context.stroke(Path(roundedRect: mineRect.insetBy(dx: 3, dy: 3), cornerRadius: 8),
+                       with: .color(MobileTheme.accent), style: StrokeStyle(lineWidth: 2.5, dash: [10, 5]))
+        let mineLabel = context.resolve(Text(AlkkagiPhoneGuideText.mineZone).font(.footnote.weight(.heavy)).foregroundStyle(.white))
+        let labelSize = mineLabel.measure(in: CGSize(width: 200, height: 40))
+        let labelY = mine == .black ? mineRect.maxY - 18 : mineRect.minY + 18
+        let pill = CGRect(x: mineRect.midX - labelSize.width / 2 - 10, y: labelY - labelSize.height / 2 - 4,
+                          width: labelSize.width + 20, height: labelSize.height + 8)
+        context.fill(Path(roundedRect: pill, cornerRadius: pill.height / 2), with: .color(MobileTheme.accent))
+        context.draw(mineLabel, at: CGPoint(x: mineRect.midX, y: labelY))
+        let theirLabel = context.resolve(Text(AlkkagiPhoneGuideText.theirZone).font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white.opacity(0.6)))
+        context.draw(theirLabel, at: CGPoint(x: theirRect.midX, y: theirRect.midY))
+    }
+
+    /// 쏘기 차례: 쏠 수 있는 내 돌마다 초록 고리(뒤집기의 '둘 수 있는 곳' 점처럼).
+    static func myStones(context: GraphicsContext, scale: Double, stones: [AlkkagiGame.Stone], mine: AlkkagiGame.Player) {
+        let r = AlkkagiGame.stoneRadius * scale + 4
+        for stone in stones where stone.owner == mine && stone.isPlaced && !stone.isOut {
+            let p = CGPoint(x: stone.position.x * scale, y: stone.position.y * scale)
+            context.stroke(Path(ellipseIn: CGRect(x: p.x - r, y: p.y - r, width: r * 2, height: r * 2)),
+                           with: .color(MobileTheme.working.opacity(0.9)), lineWidth: 2.5)
+        }
+    }
+
+    /// 손 안내 한 장면. `pullFraction` 0…1 = 손이 당긴 정도(1 = 끝까지), `release` 0…1 = 놓은 뒤 화살이 밝아지는 정도.
+    static func pullHint(context: GraphicsContext, scale: Double, stone: AlkkagiGame.Stone, mine: AlkkagiGame.Player,
+                         pullFraction: Double, release: Double) {
+        // 흑(아래)은 아래로 당겨 위로, 백(위)은 위로 당겨 아래로 쏜다. 판 밖으로 손이 나가지 않게 당김 길이를 줄인다.
+        let back: Double = mine == .black ? 1 : -1
+        let p = CGPoint(x: stone.position.x * scale, y: stone.position.y * scale)
+        let r = AlkkagiGame.stoneRadius * scale
+        let room = mine == .black ? (AlkkagiGame.boardSize - stone.position.y) : stone.position.y
+        let fullReach = max(24, min(62, room - 18))
+        let pullEnd = CGPoint(x: p.x + 18 * scale * pullFraction, y: p.y + back * fullReach * pullFraction * scale)
+        let fullEnd = CGPoint(x: p.x + 18 * scale, y: p.y + back * fullReach * scale)
+        if pullFraction > 0.02 {
+            var pullPath = Path()
+            pullPath.move(to: p)
+            pullPath.addLine(to: pullEnd)
+            context.stroke(pullPath, with: .color(.white.opacity(0.95)), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, dash: [5, 4]))
+        }
+        // 날아갈 쪽(반대) 화살 — 당긴 반대 방향. 당기기 전에는 기본 방향(상대 쪽 · 조금 비스듬히).
+        let dx = pullFraction > 0.02 ? p.x - pullEnd.x : -18 * scale
+        let dy = pullFraction > 0.02 ? p.y - pullEnd.y : -back * 62 * scale
+        let len = max(1, (dx * dx + dy * dy).squareRoot())
+        let ux = dx / len, uy = dy / len
+        let start = CGPoint(x: p.x + ux * (r + 5), y: p.y + uy * (r + 5))
+        let tip = CGPoint(x: p.x + ux * (r + 78 * scale), y: p.y + uy * (r + 78 * scale))
+        let arrow = MobileTheme.working.opacity(0.55 + 0.4 * max(pullFraction, release))
+        var flyPath = Path()
+        flyPath.move(to: start)
+        flyPath.addLine(to: tip)
+        context.stroke(flyPath, with: .color(arrow), style: StrokeStyle(lineWidth: 3.5, lineCap: .round))
+        var head = Path()
+        head.move(to: tip)
+        head.addLine(to: CGPoint(x: tip.x - ux * 11 - uy * 7, y: tip.y - uy * 11 + ux * 7))
+        head.addLine(to: CGPoint(x: tip.x - ux * 11 + uy * 7, y: tip.y - uy * 11 - ux * 7))
+        head.closeSubpath()
+        context.fill(head, with: .color(arrow))
+        // 손 · 말풍선(손 옆, 판 안쪽으로)
+        let hand = context.resolve(Text(Image(systemName: "hand.point.up.left.fill")).font(.system(size: 24)).foregroundStyle(.white))
+        context.draw(hand, at: CGPoint(x: pullEnd.x + 8, y: pullEnd.y + back * 6))
+        let label = context.resolve(Text(AlkkagiPhoneGuideText.handHint).font(.caption.weight(.bold)).foregroundStyle(.black))
+        let size = label.measure(in: CGSize(width: 240, height: 30))
+        let bubbleAt = CGPoint(x: fullEnd.x + 8, y: fullEnd.y + back * 6)
+        let toLeft = bubbleAt.x + 26 + size.width + 16 > AlkkagiGame.boardSize * scale
+        let anchor = CGPoint(x: toLeft ? bubbleAt.x - 26 - size.width / 2 - 8 : bubbleAt.x + 26 + size.width / 2 + 8, y: bubbleAt.y)
+        let bubble = CGRect(x: anchor.x - size.width / 2 - 8, y: anchor.y - size.height / 2 - 5,
+                            width: size.width + 16, height: size.height + 10)
+        context.fill(Path(roundedRect: bubble, cornerRadius: bubble.height / 2), with: .color(.white.opacity(0.95)))
+        context.draw(label, at: anchor)
+    }
+}
+
+/// 손 안내 — 판 위 덮개(입력을 막지 않는다). 동작 줄이기를 켜면 끝까지 당긴 한 장면으로 멈춘다.
+struct GamesAlkkagiPullHint: View {
+    let stone: AlkkagiGame.Stone
+    let mine: AlkkagiGame.Player
+    let reduced: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduced)) { context in
+            let phase = reduced ? (pull: 1.0, release: 0.0)
+                : AlkkagiPhoneGuideGeometry.pullHintPhase(context.date.timeIntervalSinceReferenceDate)
+            Canvas { canvas, size in
+                GamesAlkkagiGuideDrawing.pullHint(context: canvas, scale: size.width / AlkkagiGame.boardSize, stone: stone, mine: mine,
+                                                  pullFraction: phase.pull, release: phase.release)
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 #endif

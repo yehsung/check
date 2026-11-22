@@ -104,28 +104,82 @@ package final class GamesAlkkagiBoardModel {
         return launch.direction * (-sin(launch.age * 38) * exp(-launch.age * 17) * launch.power * 6)
     }
 
-    /// 상태 한 줄(맥 `status` 와 같은 서열 — 폰 손짓 글자만 다르다).
+    /// 상태 한 줄(맥 `status` 와 같은 서열 · 같은 안내 글 — 폰 손짓 꼬리만 다르다). 폰 1.0.19 부터 C안 안내 글(`AlkkagiPhoneGuideText`).
     package var status: String {
         if let onlineStore, let state = onlineStore.state {
             if onlineStore.isBusy { return AlkkagiPhoneText.waitBusy }
             if state.phase == .finished { return AlkkagiPhoneText.outcomeTitle(onlineStore.outcome) }
             if state.phase == .rolling { return AlkkagiPhoneText.rolling }
             if state.phase == .placing {
-                return state.myReady ? AlkkagiPhoneText.placingReadyWaiting : AlkkagiPhoneText.placingMine(state.myColor)
+                return state.myReady ? AlkkagiPhoneGuideText.placedWaiting
+                    : AlkkagiPhoneGuideText.placing(side: state.myColor, placed: game.placedCount(state.myColor), player: nil)
             }
             if !onlineStore.isMyTurn {
                 let peer = state.currentPlayer == .black ? state.black : state.white
-                return AlkkagiPhoneText.opponentTurn(name: peer.displayName)
+                return AlkkagiPhoneGuideText.opponentTurn(peer.displayName)
             }
         }
+        // 연습 판(한 폰 둘이)은 흑 · 백을 글에 넣는다. 서버 판은 늘 '나'.
+        let player: AlkkagiGame.Player? = isOnline ? nil : game.currentPlayer
         switch game.phase {
-        case .placing: return AlkkagiPhoneText.placingPractice(game.currentPlayer)
-        case .aiming where game.isFirstShotLimited:
-            return selectedID == nil ? AlkkagiPhoneText.firstShotHint : AlkkagiPhoneText.firstShotRelease
-        case .aiming: return selectedID == nil ? AlkkagiPhoneText.aimHint(game.currentPlayer) : AlkkagiPhoneText.aimRelease
+        case .placing:
+            return AlkkagiPhoneGuideText.placing(side: game.currentPlayer, placed: game.placedCount(game.currentPlayer), player: player)
+        // 판의 첫 수(흑)는 힘이 60%까지(선후 맞춤) — 연습 판 · 서버 판 같은 안내.
+        case .aiming:
+            return AlkkagiPhoneGuideText.aiming(player: player, holding: selectedID != nil, firstShotLimited: game.isFirstShotLimited)
         case .rolling: return AlkkagiPhoneText.rolling
         case .finished: return AlkkagiPhoneText.practiceResult(game.result)
         }
+    }
+
+    // MARK: 안내(폰 1.0.19 — 맥 0.3.86 C안)
+
+    /// 손 안내를 몇 번 쏠 때까지 보여 주나(이 기기에서 쏜 횟수 — 익숙해지면 사라진다). 맥과 같은 3.
+    package static let pullHintShotLimit = 3
+    package static let pullHintShotsKey = "alkkagi.pullHintShots"
+    /// 손 안내 횟수를 기억할 곳. 앱은 판 화면이 `.standard` 를 넣고(`GamesAlkkagiBoardView`), 시험은 시험 전용 스위트를 넣는다.
+    /// nil 이면 이 판에서만 센다(표준 스위트에 쓰지 않는다 — 시험 잔재 사고, PreferencesLeakGateTests).
+    @ObservationIgnored package var guideDefaults: UserDefaults? {
+        didSet { pullHintShots = guideDefaults?.integer(forKey: Self.pullHintShotsKey) ?? pullHintShots }
+    }
+    /// 손 안내를 본 채로 쏜 횟수.
+    package private(set) var pullHintShots = 0
+
+    /// 숨겨 놓기에서 내가 아직 준비 전인가.
+    package var guideIsMyPlacing: Bool {
+        guard game.phase == .placing else { return false }
+        if let onlineStore { return onlineStore.state?.myReady == false }
+        return true
+    }
+
+    /// 쏘기 차례가 나고 아직 돌을 안 잡았는가.
+    package var guideIsMyAim: Bool {
+        guard game.phase == .aiming, selectedID == nil else { return false }
+        if let onlineStore { return onlineStore.isMyTurn }
+        return true
+    }
+
+    /// 안내가 가리키는 쪽 — 서버 판은 나, 연습 판(한 폰 둘이)은 지금 차례인 쪽.
+    package var guideSide: AlkkagiGame.Player { isOnline ? myColor : game.currentPlayer }
+
+    /// 손 안내를 붙일 내 돌(판 가운데에 가장 가까운 돌) — 안내가 필요 없으면 nil.
+    package var pullHintStone: AlkkagiGame.Stone? {
+        guard guideIsMyAim, pullHintShots < Self.pullHintShotLimit else { return nil }
+        return AlkkagiPhoneGuideGeometry.hintStone(game.stones, mine: guideSide)
+    }
+
+    /// 숨겨 놓기 · 판 가운데 띠 글(내가 놓을 차례일 때만).
+    package var guideBandText: String? {
+        guard guideIsMyPlacing else { return nil }
+        let side = isOnline ? myColor : game.currentPlayer
+        return AlkkagiPhoneGuideText.band(side: side, placed: game.placedCount(side))
+    }
+
+    /// 쐈다 — 손 안내를 보던 중이면 한 번 센다.
+    private func countPullHintShot(hinted: Bool) {
+        guard hinted, pullHintShots < Self.pullHintShotLimit else { return }
+        pullHintShots += 1
+        guideDefaults?.set(pullHintShots, forKey: Self.pullHintShotsKey)
     }
 
     // MARK: 손짓(판 좌표 — 화면이 pt 를 판 600 칸으로 바꿔 넘긴다)
@@ -169,7 +223,7 @@ package final class GamesAlkkagiBoardModel {
             guard let id = dragPlacementID, let at = placementPoint else { return }
             if let onlineStore {
                 guard game.canPlace(stoneID: id, at: at) else {
-                    notice = AlkkagiPhoneText.placementInvalid
+                    notice = AlkkagiPhoneGuideText.placeRejected
                     return
                 }
                 Task { [weak self] in await onlineStore.place(stoneID: id, at: at); self?.synchronizeOnline(force: true) }
@@ -180,7 +234,7 @@ package final class GamesAlkkagiBoardModel {
                 notice = nil
                 haptic?(.place)
             } else {
-                notice = AlkkagiPhoneText.placementInvalid
+                notice = AlkkagiPhoneGuideText.placeRejected
             }
             return
         }
@@ -188,7 +242,10 @@ package final class GamesAlkkagiBoardModel {
         let shotPull = pull
         let shotPower = power
         let actionID = UUID()
+        // 손 안내를 보던 차례였나(돌을 잡기 전 — 잡으면 안내는 사라진다). 쏜 뒤 한 번 센다.
+        let hinted = pullHintShots < Self.pullHintShotLimit
         if game.shoot(stoneID: id, pull: pull) {
+            countPullHintShot(hinted: hinted)
             launch = AlkkagiPhoneLaunch(stoneID: id, direction: pull * (-1 / pull.length), power: shotPower)
             hitStop = 0; hitStopSpent = 0
             haptic?(.launch(0.3 + shotPower * 0.6))
@@ -388,5 +445,30 @@ package final class GamesAlkkagiBoardModel {
         onlineMatchID = state.id
         onlineRevision = state.revision
         placementID = game.stones.first { $0.owner == state.myColor && !$0.isPlaced }?.id
+    }
+}
+
+/// 안내 그림의 순수 값(폰 1.0.19 — 맥 `AlkkagiGuideDrawing` 의 셈 부분). 그리기는 iOS 화면(`GamesAlkkagiGuideDrawing`)이 한다.
+package enum AlkkagiPhoneGuideGeometry {
+    /// 숨겨 놓기에서 돌을 둘 수 있는 칸의 경계(판 좌표) — `AlkkagiGame.canPlace` 와 같은 값(시험이 둘을 맞춰 본다).
+    package static let blackZoneTop: Double = 320
+    package static let whiteZoneBottom: Double = 280
+
+    /// 손 안내를 붙일 돌: 판 가운데(가로)에 가장 가까운 내 돌.
+    package static func hintStone(_ stones: [AlkkagiGame.Stone], mine: AlkkagiGame.Player) -> AlkkagiGame.Stone? {
+        stones.filter { $0.owner == mine && $0.isPlaced && !$0.isOut }
+            .min { abs($0.position.x - AlkkagiGame.boardSize / 2) < abs($1.position.x - AlkkagiGame.boardSize / 2) }
+    }
+
+    /// 손 안내 움직임(2초 한 바퀴): 0~0.9초 당김 → 1.2초까지 버팀 → 놓음(화살이 밝아지고 손이 돌아간다). 맥과 같은 박자.
+    package static func pullHintPhase(_ t: Double) -> (pull: Double, release: Double) {
+        let cycle = t.truncatingRemainder(dividingBy: 2.0)
+        if cycle < 0.9 {
+            let x = cycle / 0.9
+            return (x * x * (3 - 2 * x), 0)
+        }
+        if cycle < 1.2 { return (1, 0) }
+        let x = min(1, (cycle - 1.2) / 0.8)
+        return (0, 1 - x)
     }
 }

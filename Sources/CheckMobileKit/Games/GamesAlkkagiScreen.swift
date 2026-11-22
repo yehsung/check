@@ -10,6 +10,8 @@ struct GamesAlkkagiScreen: View {
     let store: GamesStore
     @State private var stakeTarget: AlkkagiLobbyUser?
     @State private var practicing = false
+    /// 처음 한 번 따라 하기를 봤는가(폰 1.0.19 — 맥 `AlkkagiFirstTimeCoach` 의 짝 · 이 기기 표준 스위트).
+    @AppStorage(AlkkagiPhoneFirstTimeCoach.seenKey) private var coachSeen = false
 
     var body: some View {
         let alkkagi = store.alkkagi
@@ -60,6 +62,10 @@ struct GamesAlkkagiScreen: View {
                     .font(.footnote)
                     .foregroundStyle(MobileTheme.label2)
                     .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+                // 처음 한 번 따라 하기 — 로비에서만(판 · 연습 · 관전 중엔 시간이 흐른다). [알겠어요]로 닫으면 다시 저절로 안 뜬다.
+                if AlkkagiPhoneFirstTimeCoach.shows(seen: coachSeen) {
+                    GamesAlkkagiCoachCard { coachSeen = true }
+                }
                 // 문이 닫혔을 때 코어는 같은 글('곧 열려요' · '업데이트')을 알림 칸에도 싣는다 — 아래 상태 줄과 겹치면 한 번만 보인다
                 // (11-10 시뮬레이터 캡처에서 두 줄로 겹쳐 보였다).
                 if let notice = alkkagi.notice, notice != Self.availabilityLine(alkkagi.availability) {
@@ -405,6 +411,41 @@ struct GamesAlkkagiRankingSection: View {
             }
         }
         .task { await alkkagi.refreshRanking() }
+    }
+}
+/// 처음 하는 알까기 — 세 줄 따라 하기 카드(맥 `AlkkagiFirstTimeCoach` 와 같은 세 줄 · [알겠어요]).
+struct GamesAlkkagiCoachCard: View {
+    let onDone: () -> Void
+
+    var body: some View {
+        InsetGroup {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(AlkkagiPhoneFirstTimeCoach.title)
+                    .font(.headline)
+                    .accessibilityAddTraits(.isHeader)
+                ForEach(Array(AlkkagiPhoneFirstTimeCoach.steps.enumerated()), id: \.offset) { _, step in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: step.icon)
+                            .font(.title3)
+                            .foregroundStyle(MobileTheme.accent)
+                            .frame(width: 28)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title)
+                                .font(.subheadline.weight(.semibold))
+                                .fixedSize(horizontal: false, vertical: true)
+                            Text(step.detail)
+                                .font(.footnote)
+                                .foregroundStyle(MobileTheme.label2)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+                AingButton(AlkkagiPhoneFirstTimeCoach.done, kind: .filled, size: .md, fillsWidth: true) { onDone() }
+            }
+            .padding(MobileTheme.cardPadding)
+        }
     }
 }
 #endif

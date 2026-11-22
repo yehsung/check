@@ -92,24 +92,10 @@ struct GamesAlkkagiMatchView: View {
             }
             if let notice = model.notice { return (notice, MobileTheme.pending) }
             if alkkagi.isMyTurn, state.phase != .finished { return (model.status, MobileTheme.working) }
+            if state.phase == .placing, !state.myReady { return (model.status, MobileTheme.working) }
             return (model.status, MobileTheme.label2)
         }()
-        return HStack(spacing: 8) {
-            Text(headline.0)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(headline.1)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 4)
-            if model.selectedID != nil {
-                Text(AlkkagiPhoneText.power(model.power))
-                    .font(.footnote.weight(.bold))
-                    .monospacedDigit()
-                    .foregroundStyle(MobileTheme.accent)
-            }
-        }
-        .frame(minHeight: 22)
-        .accessibilityElement(children: .combine)
+        return GamesAlkkagiStatusBox(text: headline.0, tint: headline.1, power: model.selectedID != nil ? model.power : nil)
     }
 
     @ViewBuilder
@@ -148,21 +134,8 @@ struct GamesAlkkagiPracticeView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .layoutPriority(-1)
             practiceRow(.black, game: game)
-            HStack(spacing: 8) {
-                Text(model.notice ?? model.status)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(model.notice == nil ? MobileTheme.label2 : MobileTheme.pending)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 4)
-                if model.selectedID != nil {
-                    Text(AlkkagiPhoneText.power(model.power))
-                        .font(.footnote.weight(.bold))
-                        .monospacedDigit()
-                        .foregroundStyle(MobileTheme.accent)
-                }
-            }
-            .frame(minHeight: 22)
+            GamesAlkkagiStatusBox(text: model.notice ?? model.status, tint: practiceTint(game),
+                                  power: model.selectedID != nil ? model.power : nil)
             if game.phase == .placing {
                 GamesAlkkagiPlacementBar(model: model, ready: false)
             }
@@ -189,6 +162,15 @@ struct GamesAlkkagiPracticeView: View {
                     Text(AlkkagiPhoneText.practiceSubtitle).font(.caption)
                 }
             }
+        }
+    }
+
+    /// 연습 판 상태 색: 안내(놓기 실패) 주황 · 놓기 · 쏘기 차례 초록 · 굴림 · 끝 회색.
+    private func practiceTint(_ game: AlkkagiGame) -> Color {
+        if model.notice != nil { return MobileTheme.pending }
+        switch game.phase {
+        case .placing, .aiming: return MobileTheme.working
+        case .rolling, .finished: return MobileTheme.label2
         }
     }
 
@@ -449,6 +431,42 @@ struct GamesAlkkagiResultCard: View {
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(MobileTheme.surface))
+        .accessibilityElement(children: .combine)
+    }
+}
+/// 상태 상자(폰 1.0.19 — 맥 0.3.86 C안의 '오목처럼 큰 글 + 상태 색 상자'). 내 차례 초록 · 기다림 회색 · 경고 주황.
+struct GamesAlkkagiStatusBox: View {
+    let text: String
+    let tint: Color
+    /// 조준 중이면 힘(0…1).
+    let power: Double?
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(tint)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            if let power {
+                Text(AlkkagiPhoneText.power(power))
+                    .font(.subheadline.weight(.bold))
+                    .monospacedDigit()
+                    .foregroundStyle(MobileTheme.accent)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+        .background {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(MobileTheme.surface)
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(tint.opacity(0.12))
+            }
+        }
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(tint.opacity(0.45), lineWidth: 1.5))
         .accessibilityElement(children: .combine)
     }
 }

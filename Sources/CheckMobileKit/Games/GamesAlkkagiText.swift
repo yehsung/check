@@ -101,18 +101,7 @@ package enum AlkkagiPhoneText {
     package static let waitBusy = "잠시만 기다려 주세요"
     package static let rolling = "돌이 멈추면 차례가 바뀌어요"
     package static let placingHelpOnline = "30초 동안 동시에 숨겨 놓아요. 둘 다 준비하거나 시간이 끝날 때까지 상대 돌은 보이지 않아요."
-    package static let placingHelpPractice = "내 영역에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동으로 놓여요."
-    package static let placingReadyWaiting = "준비 완료 · 상대를 기다리고 있어요"
-    package static func placingMine(_ player: AlkkagiGame.Player) -> String { "\(stoneTitle(player)) 숨겨 놓는 중 · 내 영역을 눌러 주세요" }
-    package static func placingPractice(_ player: AlkkagiGame.Player) -> String { "\(stoneTitle(player)) 놓는 중 · 내 영역을 눌러 놓아요" }
-    package static func aimHint(_ player: AlkkagiGame.Player) -> String { "\(stoneTitle(player)) 차례 — 내 돌을 눌러 뒤로 당겨 보세요" }
-    /// 폰 손짓 안내(맥 "놓으면 발사해요 · Esc로 취소" 의 폰 꼴 — Esc 가 없다. 돌 위로 되돌려 놓으면 힘이 0 이라 쏘지 않는다).
-    package static let aimRelease = "놓으면 날아가요 · 돌 위로 되돌리면 취소"
-    /// 판의 첫 수(흑)는 힘이 60%(당김 81)까지 — 선후 맞춤(대표 #d_5KuZ3DGTw6BY · 맥 0.3.84 · 서버 20261112150000 이 저장 전에 같은 값으로 줄인다).
-    /// 앞 줄은 맥 `AlkkagiLocalModel.status` 와 같은 글이다.
-    package static let firstShotHint = "첫 수는 힘이 60%까지예요 — 돌을 뒤로 당겨 보세요"
-    package static let firstShotRelease = "첫 수는 힘 60%까지 · 놓으면 날아가요 · 돌 위로 되돌리면 취소"
-    package static let placementInvalid = "내 영역 안에서 돌이 겹치지 않게 놓아 주세요"
+    package static let placingHelpPractice = "파란 칸에 돌 5개를 놓거나 옮겨 주세요. 시간이 끝나면 남은 돌은 자동으로 놓여요."
     package static func placementDone(_ placed: Int) -> String { "배치 완료 (\(placed)/5)" }
     package static let readyDone = "준비 완료"
     package static func power(_ value: Double) -> String { "힘 \(Int((min(1, max(0, value)) * 100).rounded(.down)))%" }
@@ -215,4 +204,66 @@ package enum AlkkagiPhoneText {
         if user.isFocused { return (focused, false) }
         return (user.isWorking ? working : available, true)
     }
+}
+
+// MARK: - 안내(폰 1.0.19 — 맥 0.3.86 `AlkkagiGuideText` · C안의 폰 짝)
+//
+// 대표 11-10 "알까기 어디다 돌 둬야되는지 판 구분도 별로 안되어있고 어떻게 할지 유도해주는게 너무 약해. 뭘 하라는건지 모르겠어"
+// → 맥 #d_cjxnVZpLHWw5 "C안" → 폰 대표 #d_xygj8oZRFlfH "추천안대로 한 판(1.0.19)에 전부"(5번 알까기 안내).
+// 맥과 같은 글자다. 다른 것은 손짓 꼬리 하나 — 맥 "Esc로 취소" 자리가 폰은 "돌 위로 되돌리면 취소"(1.0.18 손짓 안내와 같은 말 — 1.0.19 에 상태 글은 전부 이 묶음으로 옮겼다).
+package enum AlkkagiPhoneGuideText {
+    /// 판 위 '아래 · 위' — 판은 돌리지 않는다(흑은 아래, 백은 위).
+    package static func sideWord(_ side: AlkkagiGame.Player) -> String { side == .black ? "아래" : "위" }
+
+    /// 숨겨 놓기 · 판 가운데 띠.
+    package static func band(side: AlkkagiGame.Player, placed: Int) -> String {
+        "내 진영(\(sideWord(side)) 파란 칸)에 돌 5개를 놓으세요 · \(placed)/5"
+    }
+
+    /// 숨겨 놓기 · 상태 줄. `player` 는 연습 판(한 폰 둘이)에서만 — 흑 · 백 차례를 글에 넣는다.
+    package static func placing(side: AlkkagiGame.Player, placed: Int, player: AlkkagiGame.Player?) -> String {
+        let body = "\(sideWord(side)) 파란 칸에 \(player == nil ? "내 " : "")돌 5개를 놓으세요 (\(placed)/5)"
+        return player.map { "\(AlkkagiPhoneText.stoneTitle($0)) 차례 — \(body)" } ?? body
+    }
+
+    package static let placedWaiting = "준비 완료 — 상대가 놓기를 기다려요"
+    package static let placeRejected = "파란 칸 안에, 다른 돌과 겹치지 않게 놓아 주세요"
+
+    package static func opponentTurn(_ name: String) -> String { "\(AlkkagiPhoneText.displayName(name))님이 쏠 차례예요 — 기다려 주세요" }
+
+    /// 폰 취소 손짓(맥 "Esc로 취소" 자리).
+    package static let cancelTail = "돌 위로 되돌리면 취소"
+
+    /// 쏘기 차례 · 상태 줄. 첫 수(흑)는 힘 60% 를 함께 말한다(선후 맞춤).
+    package static func aiming(player: AlkkagiGame.Player?, holding: Bool, firstShotLimited: Bool) -> String {
+        if holding {
+            return firstShotLimited ? "첫 수는 힘 60%까지 · 놓으면 반대쪽으로 날아가요 · \(cancelTail)"
+                : "놓으면 반대쪽으로 날아가요 · \(cancelTail)"
+        }
+        let who = player.map { "\(AlkkagiPhoneText.stoneTitle($0)) 차례" } ?? "내 차례"
+        return "\(who) — \(player == nil ? "내 " : "")돌을 뒤로 당겼다 놓으세요\(firstShotLimited ? " (첫 수는 힘 60%까지)" : "")"
+    }
+
+    /// 손 안내 말풍선.
+    package static let handHint = "뒤로 당겼다 놓기"
+    /// 판 위 진영 이름표.
+    package static let mineZone = "내 진영"
+    package static let theirZone = "상대 진영"
+}
+
+/// 처음 한 번 따라 하기 — 알까기 화면을 처음 열 때 로비 위에 한 번(시간이 흐르지 않는 곳). [알겠어요]로 닫으면 다시 저절로 안 뜬다.
+/// 맥 `AlkkagiFirstTimeCoach` 와 같은 세 줄 · 같은 낱말.
+package enum AlkkagiPhoneFirstTimeCoach {
+    /// '봤음' 기억 키(앱 표준 스위트 — 화면의 `@AppStorage`).
+    package static let seenKey = "alkkagi.firstTimeCoachSeen"
+    package static let title = "처음 하는 알까기"
+    package static let done = "알겠어요"
+    package static let steps: [(icon: String, title: String, detail: String)] = [
+        ("hand.tap.fill", "파란 칸(내 진영)에 내 돌 5개를 숨겨 놓아요", "상대는 둘 다 놓을 때까지 못 봐요 · 30초"),
+        ("hand.draw.fill", "내 차례가 오면 내 돌을 뒤로 당겼다 놓아요", "당긴 반대쪽으로 날아가요 · 한 수 30초"),
+        ("arrow.up.right.circle.fill", "상대 돌을 판 밖으로 모두 밀어내면 이겨요", "내 돌도 밖으로 나가면 빠져요"),
+    ]
+
+    /// 띄울까: 로비가 보이고 · 아직 안 봤을 때만(판 · 연습 · 관전 중엔 시간이 흐르니 로비에서만 — 화면이 로비일 때만 그린다).
+    package static func shows(seen: Bool) -> Bool { !seen }
 }

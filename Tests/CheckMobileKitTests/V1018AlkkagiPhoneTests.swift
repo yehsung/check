@@ -54,7 +54,7 @@ struct V1018AlkkagiPhoneTests {
         }
         // 영역 밖(위 반)은 안 놓인다 — 안내가 선다.
         place(100, 100)
-        #expect(model.game.placedCount(.black) == 0 && model.notice == AlkkagiPhoneText.placementInvalid)
+        #expect(model.game.placedCount(.black) == 0 && model.notice == AlkkagiPhoneGuideText.placeRejected)
         for x in [80.0, 190, 300, 410, 520] { place(x, 470) }
         #expect(model.game.placedCount(.black) == 5)
         model.confirmPlacement()
@@ -62,13 +62,13 @@ struct V1018AlkkagiPhoneTests {
         for x in [80.0, 190, 300, 410, 520] { place(x, 130) }
         model.confirmPlacement()
         #expect(model.game.phase == .aiming && model.game.currentPlayer == .black)
-        // 판의 첫 수(흑)는 힘 60%까지(맥 0.3.84 · 서버 20261112150000) — 안내가 먼저 그 말을 한다.
-        #expect(model.status == AlkkagiPhoneText.firstShotHint)
+        // 판의 첫 수(흑)는 힘 60%까지(맥 0.3.84 · 서버 20261112150000) — 안내가 그 말을 함께 한다(1.0.19 C안 글).
+        #expect(model.status == "흑돌 차례 — 돌을 뒤로 당겼다 놓으세요 (첫 수는 힘 60%까지)")
 
         // 손가락 잡기 반경: 돌 중심에서 30(반지름 20 의 1.5배) 떨어져도 잡는다(맥 마우스보다 넓다).
         haptics = []
         model.aim(start: AlkkagiVector(x: 300 + 30, y: 470), translation: AlkkagiVector(x: 0, y: 60))
-        #expect(model.selectedID != nil && model.status == AlkkagiPhoneText.firstShotRelease)
+        #expect(model.selectedID != nil && model.status == "첫 수는 힘 60%까지 · 놓으면 반대쪽으로 날아가요 · 돌 위로 되돌리면 취소")
         #expect(model.power > 0.4 && model.power < 0.5)
         model.aim(start: AlkkagiVector(x: 330, y: 470), translation: AlkkagiVector(x: 0, y: 200))
         #expect(abs(model.pull.length - AlkkagiGame.firstShotMaxPull) < 1e-9 && abs(model.power - 0.6) < 1e-9,
@@ -84,7 +84,7 @@ struct V1018AlkkagiPhoneTests {
             model.tick(now: now)
         }
         #expect(model.game.phase == .aiming && model.game.currentPlayer == .white, "굴림이 멈추면 백 차례다: \(model.game.phase)")
-        #expect(model.status == AlkkagiPhoneText.aimHint(.white), "둘째 수부터는 보통 안내")
+        #expect(model.status == "백돌 차례 — 돌을 뒤로 당겼다 놓으세요", "둘째 수부터는 보통 안내")
         let firstWhite = model.game.stones.first { $0.owner == .white && !$0.isOut }!
         model.aim(start: firstWhite.position, translation: AlkkagiVector(x: 0, y: -200))
         #expect(model.power == 1, "둘째 수부터는 maxPull 에서 멈춘다")
@@ -114,7 +114,7 @@ struct V1018AlkkagiPhoneTests {
         model.attachOnline(store)
         #expect(model.isOnline && model.myColor == .white)
         #expect(model.game.phase == .placing && model.game.currentPlayer == .white, "숨긴 배치는 내 색으로 선다")
-        #expect(model.status == AlkkagiPhoneText.placingMine(.white))
+        #expect(model.status == "위 파란 칸에 내 돌 5개를 놓으세요 (0/5)")
         #expect(!model.canInteract, "서비스가 없는 스토어(시험)에서는 손댈 수 없다 — 판 진행 문은 코어가 쥔다")
 
         // 서버 판이 조준으로 넘어오면(새 revision) 그 판으로 갈아 끼운다.
@@ -125,7 +125,7 @@ struct V1018AlkkagiPhoneTests {
                                    myReady: true, opponentReady: true, stake: 5)
         model.synchronizeOnline()
         #expect(model.game.phase == .aiming && model.game.currentPlayer == .black)
-        #expect(model.status == AlkkagiPhoneText.opponentTurn(name: "상대"))
+        #expect(model.status == "상대님이 쏠 차례예요 — 기다려 주세요")
         model.restartPractice()
         #expect(model.game.phase == .aiming, "서버 판을 연습 새 판으로 지웠다")
     }

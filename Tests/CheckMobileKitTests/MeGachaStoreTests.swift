@@ -52,7 +52,7 @@ struct MeGachaStoreTests {
         let store = harness.me
         // 전제는 **번들이 실제로 싣는 번호**다. 1.0.18 은 9 다 — robot · 금 · 무지개 · 케이크 둘 · 이슬 · 빼빼로 · 흑우 · 루비 · 개발 초상이 모두 번들에 있어서
         // (`AingCharacterArt.knownIDs`), 번호는 누적으로 9 까지 올라간다. 뽑기 문턱 자체는 2 그대로다(`supportsGacha`).
-        #expect(store.shopProtocolVersion == ShopWire.devProtocol,
+        #expect(store.shopProtocolVersion == ShopWire.santaProtocol,
                 "전제: 이 번들은 9 를 보낸다(robot + 금 + 무지개 + 케이크 둘 + 이슬 + 빼빼로 + 흑우 + 루비 + 개발 초상)")
         #expect(ShopWire.supportsGacha(protocolVersion: store.shopProtocolVersion), "전제: 이 번호로 뽑기가 열린다")
 
@@ -101,7 +101,7 @@ struct MeGachaStoreTests {
         #expect(Set(first.keys) == ["p_protocol", "p_request_id"], "본문 \(first)")
         // 9 다(1.0.18 번들 — 개발 아잉이까지 그린다 · 번호는 누적). 3 이상이어야 무지개가 확률표에 있다 —
         // 2 를 실으면 서버가 무지개를 뺀 7줄로 추첨해 무지개가 영영 안 나온다.
-        #expect(first["p_protocol"] as? Int == ShopWire.devProtocol)
+        #expect(first["p_protocol"] as? Int == ShopWire.santaProtocol)
         let firstID = try #require(first["p_request_id"] as? String)
         #expect(UUID(uuidString: firstID) != nil && firstID == firstID.lowercased(), "request_id 가 소문자 uuid 가 아니다: \(firstID)")
         let newResult = try #require(store.lastGachaResult)
@@ -314,7 +314,7 @@ struct MeGachaStoreTests {
         let body = try #require(harness.requests(rpc: "gacha_exchange").first?.jsonBody)
         #expect(Set(body.keys) == ["p_character_id", "p_protocol", "p_request_id"], "본문 \(body)")
         // 번호 9(1.0.18 번들) — 3 이상이어야 서버 교환표에 무지개(조각 20)가 있다. 2 를 실으면 무지개 교환이 `needs_update` 로 거절된다.
-        #expect(body["p_character_id"] as? String == "squirrel" && body["p_protocol"] as? Int == ShopWire.devProtocol)
+        #expect(body["p_character_id"] as? String == "squirrel" && body["p_protocol"] as? Int == ShopWire.santaProtocol)
         #expect(store.isOwned("squirrel") && store.gachaShards == 3)
         #expect(store.exchangeNotice == "교환했어요: 다람쥐" && !store.isExchangeNoticeError)
         #expect(store.rubyBalance == 120, "교환이 루비를 움직였다")

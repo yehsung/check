@@ -105,7 +105,9 @@ struct MeCharacterCardTests {
                         CharacterCatalog.builtInCakeChocoAing, CharacterCatalog.builtInIsulAing,
                         // 폰 1.0.18: 빼빼로(상자에 글자 없는 폰 판 초상) · 흑우 · 루비 · 개발에 찌든 아잉이 — 코어 내장 순서 그대로.
                         CharacterCatalog.builtInPeperoAing, CharacterCatalog.builtInHwooAing, CharacterCatalog.builtInRubyAing,
-                        CharacterCatalog.builtInDevAing] {
+                        CharacterCatalog.builtInDevAing,
+                        // 폰 1.0.19: 지역 아잉이 둘(부산 · 서울 — 우리 센터 선물) · 산타 아잉이(크리스마스 선물) — 코어 내장 순서 그대로.
+                        CharacterCatalog.builtInBusanAing, CharacterCatalog.builtInSeoulAing, CharacterCatalog.builtInSantaAing] {
             result.append(try builtInSource(id: builtIn.id, displayName: builtIn.displayName))
         }
         let charactersDir = repoRoot.appendingPathComponent("Sources/check/Characters")
@@ -154,10 +156,8 @@ struct MeCharacterCardTests {
     @Test("원천: 내장 캐릭터 카드는 폰이 싣는 초상에서 굽는다 — 이슬 대체 그림으로 바꿔 끼운 판에서 다시 구워도 상표 그림이 카드로 돌아오지 않는다(검토 지적)")
     func builtInCardsBakeFromPhonePortraits() throws {
         let sources = try Self.sources()
-        // 폰 1.0.18 부터 내장 열이 폰 카드다(빼빼로 · 흑우 · 루비 · 개발 포함). 지역 아잉이 둘(부산 · 서울 — 맥 0.3.85 먼저)은 폰 카드가 아직 없다(다음 폰 판).
-        let builtIns = [CharacterCatalog.builtInAingID] + CharacterCatalog.builtIns.map(\.id)
-            .filter { $0 != CharacterCatalog.builtInAingID && $0 != CharacterCatalog.busanAingID && $0 != CharacterCatalog.seoulAingID
-                && $0 != CharacterCatalog.santaAingID }   // 산타 아잉이(맥 먼저 — 크리스마스 선물)도 폰 카드가 없다
+        // 폰 1.0.19 부터 내장 열 전부가 폰 카드다(지역 아잉이 둘 · 산타 포함).
+        let builtIns = [CharacterCatalog.builtInAingID] + CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.builtInAingID }
         for id in builtIns {
             let source = try #require(sources.first { $0.id == id }, "\(id) 카드 원천이 없다")
             let phone = try Self.builtInPortraitURL(id)
@@ -210,10 +210,14 @@ struct MeCharacterCardTests {
         // 순서: 내장이 코어 순서로 먼저(케이크는 정렬이면 금보다 앞이다 — 그 우연에 기대지 않는다).
         // 이슬 아잉이(맥 0.3.74 먼저 → 폰 1.0.17 — 코어 내장 여섯째): 카드가 박혔으므로 접히지 않는다. 1.0.16 은 이 값을 몰라 아잉으로 접었다.
         // 폰 1.0.18: 빼빼로(일곱째) · 흑우(여덟째) · 루비(아홉째) · 개발에 찌든 아잉이(열째)도 카드가 박혔다 — 내장 열이 코어 순서로 먼저 서고,
-        // 착용값이 아잉으로 접히지 않는다(1.0.17 은 넷을 몰라 아잉으로 접었다). 지역 아잉이 둘(열하나째 · 열둘째 — 맥 0.3.85 먼저)은 폰 카드가 아직 없어 빼고 잰다.
-        #expect(Array(MeCharacterCards.knownIDs.prefix(10))
-                == CharacterCatalog.builtIns.map(\.id).filter { $0 != CharacterCatalog.busanAingID && $0 != CharacterCatalog.seoulAingID
-                    && $0 != CharacterCatalog.santaAingID })   // 산타 아잉이(열셋째 — 맥 먼저)도 폰 카드가 없다
+        // 착용값이 아잉으로 접히지 않는다(1.0.17 은 넷을 몰라 아잉으로 접었다).
+        // 폰 1.0.19: 지역 아잉이 둘(열하나째 · 열둘째) · 산타(열셋째)도 카드가 박혔다 — 내장 열셋이 코어 순서로 먼저 선다.
+        #expect(Array(MeCharacterCards.knownIDs.prefix(13)) == CharacterCatalog.builtIns.map(\.id))
+        for (id, name) in [(CharacterCatalog.busanAingID, "부산 갈매기 아잉이"), (CharacterCatalog.seoulAingID, "서울의 밤 아잉이"),
+                           (CharacterCatalog.santaAingID, "산타 아잉이")] {
+            #expect(MeCharacterCards.equippedID(fromServer: id) == id, "\(id) 착용값이 아잉으로 접혔다")
+            #expect(MeCharacterCards.displayName(for: id) == name)
+        }
         #expect(MeCharacterCards.knownIDs.contains(CharacterCatalog.isulAingID))
         #expect(MeCharacterCards.equippedID(fromServer: CharacterCatalog.isulAingID) == CharacterCatalog.isulAingID)
         #expect(MeCharacterCards.equippedID(fromServer: " aing_isul ") == CharacterCatalog.isulAingID)

@@ -26,7 +26,8 @@ import Testing
         // (`Resources/aing_cake_<맛>-<표정>.png`, 생성기 `scripts/make-cake-aing.swift` 가 맥 · 폰 사본을 바이트 그대로 굽는다).
         // 폰 1.0.17(맥 0.3.74 먼저)에 이슬 아잉이('술 한잔' 선물 전용)가 들어와 **12 캐릭터 · 24장**이 됐다 — 같은 자리
         // (`Resources/aing_isul-<표정>.png`, 생성기 `scripts/make-isul-aing.swift` 는 맥 사본만 굽고 폰 사본은 그 파일을 바이트 그대로 복사했다).
-        #expect(AingCharacterArt.knownIDs.count == 16, "폰 초상 명단이 16 캐릭터가 아니다(1.0.18 — 빼빼로 · 흑우 · 루비 · 개발): \(AingCharacterArt.knownIDs)")
+        // 폰 1.0.18 에 빼빼로 · 흑우 · 루비 · 개발이 들어와 16, 폰 1.0.19 에 지역 아잉이 둘(부산 · 서울) · 산타가 들어와 **19 캐릭터 · 38장**.
+        #expect(AingCharacterArt.knownIDs.count == 19, "폰 초상 명단이 19 캐릭터가 아니다(1.0.19 — 부산 · 서울 · 산타): \(AingCharacterArt.knownIDs)")
         #expect(AingCharacterArt.knownIDs.contains("aing_isul"),
                 "이슬 아잉이(폰 1.0.17)가 폰 초상 명단에 없다 — 폰이 능력 번호 5 를 못 말해 술 선물을 못 받고, 이슬 착용자는 아잉으로 선다")
         #expect(AingCharacterArt.knownIDs.contains("aing_cake_strawberry") && AingCharacterArt.knownIDs.contains("aing_cake_choco"),
@@ -59,7 +60,7 @@ import Testing
                 comparedWithMac += 1
             }
         }
-        #expect(comparedWithMac == 30, "맥 원본과 대조한 초상이 30장(16 캐릭터 × 2 − 빼빼로 2)이 아니다: \(comparedWithMac)장")
+        #expect(comparedWithMac == 36, "맥 원본과 대조한 초상이 36장(19 캐릭터 × 2 − 빼빼로 2)이 아니다: \(comparedWithMac)장")
     }
 
     @Test("초상 id 목록은 앱 캐릭터 카드(MeCharacterCards)와 같고, 착용값 접기도 같다")

@@ -30,7 +30,7 @@ struct MeIsulProtocolPinTests {
         #expect(Self.portraitFileExists(CharacterCatalog.isulAingID), "이슬 초상 두 장이 폰 번들에 없다")
         let derived = ShopWire.protocolVersion(drawableCharacterIDs: known)
         // 1.0.18 은 빼빼로 · 흑우 · 루비 · 개발까지 그려 9 다(`MePeperoProtocolPinTests`) — 이슬 문(5)은 누적이라 넘는다.
-        #expect(derived == ShopWire.devProtocol, Comment(rawValue: "목록 \(known) → \(derived)"))
+        #expect(derived == ShopWire.santaProtocol, Comment(rawValue: "목록 \(known) → \(derived)"))
         #expect(ShopWire.supportsCakeGift(protocolVersion: derived))
         #expect(ShopWire.supportsDrinkGift(protocolVersion: derived))
         #expect(CharacterGiftKind.drink.isSupported(protocolVersion: derived))
@@ -43,11 +43,11 @@ struct MeIsulProtocolPinTests {
         #expect(ShopWire.protocolVersion(drawableCharacterIDs: known.filter { $0 != CharacterCatalog.cakeChocoAingID }) == ShopWire.rainbowProtocol)
     }
 
-    @Test("스토어가 싣는 번호도 번들 번호다(1.0.18 = 9 · 번호를 박지 않는다 — `MeStore.drawableCharacterIDs` 기본값이 이 목록)")
+    @Test("스토어가 싣는 번호도 번들 번호다(1.0.19 = 11 · 번호를 박지 않는다 — `MeStore.drawableCharacterIDs` 기본값이 이 목록)")
     @MainActor
     func storeProtocolIsFive() async {
         let harness = await RankMeHarness(label: "me-isul-protocol") { _ in nil }
         defer { harness.tearDown() }
-        #expect(harness.me.shopProtocolVersion == ShopWire.devProtocol)
+        #expect(harness.me.shopProtocolVersion == ShopWire.santaProtocol)
     }
 }

@@ -48,7 +48,7 @@ struct MeGachaMachineTests {
         #expect(!store.isPulling && harness.requests(rpc: "shop_state").count == 2)
         let firstBody = try #require(harness.requests(rpc: "gacha_pull").last?.jsonBody)
         // 1.0.18 번들은 9 를 싣는다(빼빼로 · 흑우 · 루비 · 개발 초상까지 그릴 수 있다 — 번호는 누적이다).
-        #expect(Set(firstBody.keys) == ["p_protocol", "p_request_id"] && firstBody["p_protocol"] as? Int == ShopWire.devProtocol)
+        #expect(Set(firstBody.keys) == ["p_protocol", "p_request_id"] && firstBody["p_protocol"] as? Int == ShopWire.santaProtocol)
 
         // ② 중복(여우) — 칩이 0 → 1 로 오른다.
         harness.enqueue("gacha_pull", Fixture.pullOK("fox", duplicate: true, shards: 1, ruby: 100))

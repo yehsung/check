@@ -32,6 +32,11 @@ public enum AingCharacterArt {
     /// 저절로 **9** 가 된다(번호는 누적이라 넷이 한 묶음이다 — 빼빼로가 없으면 6 에서 멈춘다). 빼빼로 초상은 **상자에 '빼빼로' 글자가 없는
     /// 판**이다(상표 대비 — `pepero-aing/art-alt`, 맥 원본과 픽셀이 다르다 · `BaseComponentTests` 가 이 한 캐릭터만 따로 잰다).
     ///
+    /// 폰 1.0.19: 지역 아잉이 둘(`aing_busan` 부산 갈매기 · `aing_seoul` 서울의 밤 — 우리 센터 선물 전용, 맥 0.3.85) · 산타 아잉이(`aing_santa` —
+    /// 크리스마스 선물 전용, 맥 0.3.87)가 들어와 **19 캐릭터**가 됐고, 능력 번호가 저절로 **11** 이 된다(지역 둘이 다 있어야 10, 그 위에 산타가
+    /// 있어야 11 — `ShopWire.protocolVersion`). 10 을 말하면 서버가 지역 행 · 우리 센터 선물(`kind: "region"`, `region_gift_ensure`)을,
+    /// 11 을 말하면 산타 행 · 크리스마스 선물(`kind: "santa"`)을 내려 준다. 세 초상 모두 맥 원본과 같은 픽셀이다.
+    ///
     /// ★ 이 목록이 상점 능력 번호의 재료다(`MeStore.drawableCharacterIDs` → `ShopWire.protocolVersion`), 그리고 번호는
     ///   **누적**이다: `robot` 까지면 1, `aing_gold` 까지면 2, `aing_rainbow` 까지 있어야 **3** 이다. 폰이 3 을 말해야 서버가
     ///   무지개 행(목록 · 확률표 8줄 정수 · 교환표 `shard_costs.aing_rainbow = 20`)을 내려 준다 — 2 를 말하면 서버는 무지개를
@@ -42,7 +47,7 @@ public enum AingCharacterArt {
     ///   `MeCakeGiftTests`(4) · `MeIsulProtocolPinTests`(5)다.
     public static let knownIDs: [String] = [
         "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul",
-        "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev",
+        "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul", "aing_santa",
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
     ]
 

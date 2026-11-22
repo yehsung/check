@@ -18,7 +18,7 @@ struct MePeperoProtocolPinTests {
         let four = [CharacterCatalog.peperoAingID, CharacterCatalog.hwooAingID, CharacterCatalog.rubyAingID, CharacterCatalog.devAingID]
         for id in four { #expect(known.contains(id), Comment(rawValue: "\(id) 가 없다: \(known)")) }
         let derived = ShopWire.protocolVersion(drawableCharacterIDs: known)
-        #expect(derived == ShopWire.devProtocol, Comment(rawValue: "목록 \(known) → \(derived)"))
+        #expect(derived == ShopWire.santaProtocol, Comment(rawValue: "목록 \(known) → \(derived)"))
         // 반대 방향(번호가 목록에서 파생된다): 빼빼로가 빠지면 5 · 흑우 6 · 루비 7 · 개발 8.
         let expectations: [(String, Int)] = [(CharacterCatalog.peperoAingID, ShopWire.isulProtocol), (CharacterCatalog.hwooAingID, ShopWire.peperoProtocol),
                                             (CharacterCatalog.rubyAingID, ShopWire.hwooProtocol), (CharacterCatalog.devAingID, ShopWire.rubyProtocol)]

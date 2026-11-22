@@ -168,6 +168,9 @@ package final class MeStore {
     /// 마지막으로 선물을 **물으러 떠난** 시각(10분 스로틀 — `cakeGiftCheckInterval`). 계정이 바뀌면 비운다.
     @ObservationIgnored package internal(set) var cakeGiftCheckedAt: Date?
     @ObservationIgnored var cakeGiftLoading = false
+    /// 우리 센터 선물(지역 아잉이 — 능력 번호 10)을 서버에 마련해 달라고 **이 세대에 이미 말했는가**(`region_gift_ensure` — 세대당 한 번 ·
+    /// 멱등). 폰 1.0.19 · 맥 `regionGiftEnsuredGeneration` 의 짝. 계정이 바뀌면 세대가 바뀌어 다시 말한다.
+    @ObservationIgnored var regionGiftEnsuredGeneration: Int?
     /// 이 실행에서 **실제로 화면에 선**(시트 뷰의 onAppear) 선물 id — **실행당 한 번**은 이 기록으로 센다. 스토어가 시트를 세웠어도
     /// 화면에 못 섰으면(다른 시트 · 대국 화면) 쓰지 않은 것이다. 로그아웃(`reset`)에도 비우지 않는다(같은 실행에서 같은 선물을 두 번 띄우지 않는다).
     @ObservationIgnored package internal(set) var cakeGiftAutoShownIDs: Set<String> = []
@@ -409,6 +412,7 @@ package final class MeStore {
         cakeGiftSheet = nil
         cakeGiftSheetOnScreen = false
         cakeGiftCheckedAt = nil
+        regionGiftEnsuredGeneration = nil
         cakeGiftLoading = false
         cakeGiftReopening = false
         cakeGiftFollowUpPending = false

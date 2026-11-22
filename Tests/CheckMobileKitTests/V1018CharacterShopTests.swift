@@ -67,7 +67,7 @@ struct V1018CharacterShopTests {
                                              reward: 5, target: 10, progress: 3, achieved: false, claimed: false)
         #expect(MeText.missionProgress(ruby) == "3/10")
     }
-    @Test("개발 미션 받기: achievement_character_claim 에 키 · 번호 9 를 싣는다 · 떠 있는 동안 다시 눌러도 요청 하나")
+    @Test("개발 미션 받기: achievement_character_claim 에 키 · 번들 번호(1.0.19 = 11)를 싣는다 · 떠 있는 동안 다시 눌러도 요청 하나")
     @MainActor
     func devMissionClaimRequest() async throws {
         let harness = await RankMeHarness(label: "v1018-dev-claim") { request in
@@ -81,6 +81,6 @@ struct V1018CharacterShopTests {
         let sent = harness.requests(rpc: "achievement_character_claim")
         #expect(sent.count == 1, "떠 있는 동안 두 번째 누름이 또 보냈다: \(sent.count)")
         let body = try #require(sent.first?.jsonBody)
-        #expect(body["p_key"] as? String == DevAingMission.key && body["p_protocol"] as? Int == ShopWire.devProtocol, "\(body)")
+        #expect(body["p_key"] as? String == DevAingMission.key && body["p_protocol"] as? Int == ShopWire.santaProtocol, "\(body)")
     }
 }

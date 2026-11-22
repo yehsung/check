@@ -120,6 +120,14 @@ extension MeStore {
         cakeGiftLoading = true
         defer { if isCurrent("cakeGift", serial) { cakeGiftLoading = false } }
         let service = context.service
+        // 우리 센터 선물(지역 아잉이 — 능력 번호 10, 폰 1.0.19): 조회 **전에** 서버에 마련해 달라고 한다(세대당 한 번 · 멱등 — 센터가 없거나
+        // 이미 받았으면 아무것도 안 바뀐다). 실패해도 조회는 그대로 한다(다음 조회 박자에 다시 말한다). 맥 `refreshCakeGift` 와 같은 순서.
+        if ShopWire.supportsRegionGift(protocolVersion: protocolVersion), regionGiftEnsuredGeneration != generation {
+            let ensured = try? await context.withMobileSessionRetry { session in
+                try await service.ensureRegionGift(accessToken: session.accessToken, protocolVersion: protocolVersion)
+            }
+            if ensured != nil, generation == context.generation { regionGiftEnsuredGeneration = generation }
+        }
         do {
             let offer = try await context.withMobileSessionRetry { session in
                 try await service.fetchCharacterGiftPending(accessToken: session.accessToken, protocolVersion: protocolVersion)
@@ -227,11 +235,11 @@ extension MeStore {
         switch kind {
         case .birthday: return CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
         case .drink: return DrinkGiftText.notice(for: outcome, name: MeCharacterName.display)
-        // 빼빼로(맥 0.3.77 먼저 · 능력 6): 폰은 능력 5 라 서버가 이 선물을 보이지 않는다(다음 폰 판). 그래도 갈래는 코어 글자로 닫는다.
+        // 빼빼로(맥 0.3.77 먼저 · 능력 6 — 폰 1.0.18 부터 받는다).
         case .pepero: return PeperoGiftText.notice(for: outcome, name: MeCharacterName.display)
-        // 우리 센터 선물(지역 아잉이 — 맥 먼저 · 능력 10): 폰은 서버가 이 선물을 안 보인다. 실패 줄은 생일과 한 벌.
+        // 우리 센터 선물(지역 아잉이 — 능력 10 · 폰 1.0.19 부터 받는다). 실패 줄은 생일과 한 벌(맥과 같은 갈래).
         case .region: return CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
-        // 크리스마스 선물(산타 아잉이 — 맥 먼저 · 능력 11): 폰은 산타를 그리지 않아 서버가 이 선물을 안 보인다. 갈래는 코어 글자로 닫는다.
+        // 크리스마스 선물(산타 아잉이 — 능력 11 · 폰 1.0.19 부터 받는다).
         case .santa: return SantaGiftText.notice(for: outcome, name: MeCharacterName.display)
         }
     }

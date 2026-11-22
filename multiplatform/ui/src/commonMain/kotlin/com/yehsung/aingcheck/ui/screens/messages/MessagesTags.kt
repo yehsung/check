@@ -35,6 +35,8 @@ object MessagesTags {
     const val NEW_CONVERSATION_SEARCH = "new-conversation-search"
     /** 지난 확성기(판 9) — 작성 시트의 문 · 페이지 · 줄 · 더 보기. */
     const val MEGAPHONE_FEED_ENTRY = "megaphone-feed-entry"
+    /** 대화 맨 위 '이전 대화 더 보기' 줄(판 9). */
+    const val OLDER_ROW = "conversation-older-row"
     const val MEGAPHONE_FEED_PAGE = "megaphone-feed-page"
     fun megaphoneFeedRow(id: String) = "megaphone-feed-row-$id"
     const val MEGAPHONE_FEED_MORE = "megaphone-feed-more"

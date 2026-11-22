@@ -30,7 +30,12 @@ data class MessageEntry(val wire: MessageHistoryEntry) : MessageEntryFacts {
     override val createdAt: Double get() = wire.createdAt.timeIntervalSince1970
 
     val createdDate: SwiftDate get() = wire.createdAt
-    val body: String get() = wire.body
+    /**
+     * 말풍선 글. 사진만 보낸 줄(지난 쪽 · 판 9 — 글은 비고 사진 칸만 있다)은 사진을 못 그리는 자리의 대체 글('📷 사진' — 서버
+     * `message_photo_fallback_body()` · 맥 `MessageNoticeText.photoFallbackBody` 와 같은 글)로 읽는다. 사진을 그리는 말풍선은 [wire] 의 사진 칸을 본다.
+     */
+    val body: String
+        get() = if (wire.body.isEmpty() && wire.photo != null) com.yehsung.aingcheck.core.wire.messages.MessagePhotoWire.photoFallbackBody else wire.body
     val readByPeer: Boolean? get() = wire.readByPeer
     val avatarURL: SwiftURL? get() = wire.peerAvatarURL
 }

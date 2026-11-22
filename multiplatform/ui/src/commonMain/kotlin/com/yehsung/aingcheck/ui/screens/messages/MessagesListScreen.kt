@@ -327,7 +327,7 @@ private fun CountBadge(text: String) {
 
 /** 보관 규칙 한 줄("⏱ 24시간이 지난 메시지는 사라져요") — 목록 그룹 아래 · 대화 맨 위가 같은 모양이다. */
 @Composable
-fun ExpiryNote(modifier: Modifier = Modifier, centered: Boolean = false) {
+fun ExpiryNote(modifier: Modifier = Modifier, centered: Boolean = false, text: String = MessageNoticeText.expiry) {
     val colors = AingTheme.colors
     Row(
         modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
@@ -336,7 +336,7 @@ fun ExpiryNote(modifier: Modifier = Modifier, centered: Boolean = false) {
     ) {
         AingIcon(sf("timer", AppIcon.Timer), contentDescription = null, size = 14.dp, tint = colors.label2)
         Spacer(Modifier.size(4.dp))
-        Text(MessageNoticeText.expiry, style = if (centered) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal)
+        Text(text, style = if (centered) MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Normal)
             else MaterialTheme.typography.bodySmall, color = colors.label2)
     }
 }

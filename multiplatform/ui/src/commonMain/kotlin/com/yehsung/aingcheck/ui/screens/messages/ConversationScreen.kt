@@ -14,6 +14,13 @@
 // ([복사] · [모두 선택] · [번역] + [이 메시지 신고하기])가 뜬다(ChatBubbleSelection.kt). 이모티콘 말풍선 · 꺼진 조립(Windows)은 예전 길게 누르기 메뉴 그대로다.
 package com.yehsung.aingcheck.ui.screens.messages
 
+import androidx.compose.ui.semantics.stateDescription
+import com.yehsung.aingcheck.core.rules.text.MessageNoticeText
+import com.yehsung.aingcheck.core.stores.messages.loadOlderMessages
+import com.yehsung.aingcheck.core.stores.messages.olderRowState
+import com.yehsung.aingcheck.core.stores.messages.expiryNotice
+import com.yehsung.aingcheck.core.stores.messages.MessagesOlderScrollAnchor
+import com.yehsung.aingcheck.core.stores.messages.MessagesOlderRowState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -199,6 +206,11 @@ fun ConversationScreen(
                 onReportMessage = { entry -> reportTarget = MessagesReportTarget(peerID, entry.peerName, entry.id, entry.body) },
                 formatting = formatting,
                 modifier = Modifier.widthIn(max = READABLE_WIDTH),
+                // 이전 대화 더 보기(판 9 · 아이폰 1.0.19 — 메시지 30일 보관). 서버를 부르는 자리는 이 줄 하나다.
+                expiryText = store.expiryNotice,
+                olderRow = store.olderRowState(peerID),
+                onOlder = { store.loadOlderMessages(peerID) },
+                olderAnchor = store.olderScrollAnchor,
             )
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -353,9 +365,19 @@ private fun ConversationList(
     onReportMessage: (MessageEntry) -> Unit,
     formatting: Boolean = false,
     modifier: Modifier = Modifier,
+    expiryText: String = MessageNoticeText.expiry,
+    olderRow: MessagesOlderRowState? = null,
+    onOlder: () -> Unit = {},
+    olderAnchor: MessagesOlderScrollAnchor? = null,
 ) {
     val colors = AingTheme.colors
     val listState = rememberLazyListState()
+    // 지난 쪽을 붙인 직후 — 붙이기 전 맨 위 말을 다시 위에 맞춘다(읽던 자리를 지킨다). 뒤집힌 목록이라 줄 번호는 끝에서 센다.
+    LaunchedEffect(olderAnchor?.serial) {
+        val anchor = olderAnchor ?: return@LaunchedEffect
+        val index = items.asReversed().indexOfFirst { it.id == anchor.messageID }
+        if (index >= 0) listState.scrollToItem(index)
+    }
     val follow = remember { MessagesScrollFollow() }
     var showsNewButton by remember { mutableStateOf(false) }
     val density = LocalDensity.current.density
@@ -405,7 +427,10 @@ private fun ConversationList(
             if (blockNotice != null) {
                 item("block-notice") { InlineNotice(blockNotice, if (blockNoticeIsError) NoticeKind.Error else NoticeKind.Info, Modifier.padding(bottom = 4.dp)) }
             }
-            item("expiry") { ExpiryNote(Modifier.padding(top = 8.dp, bottom = 2.dp), centered = true) }
+            if (olderRow != null) {
+                item("older") { MessagesOlderRow(olderRow, onOlder, Modifier.padding(bottom = 4.dp)) }
+            }
+            item("expiry") { ExpiryNote(Modifier.padding(top = 8.dp, bottom = 2.dp), centered = true, text = expiryText) }
         }
         if (showsNewButton) {
             Box(
@@ -727,3 +752,34 @@ private fun PendingBubbleRow(item: MessagesPendingOutgoing, stickerArt: StickerA
 /** 시험·미리보기: 입력칸 상태 하나(바깥이 쥔다). */
 @Composable
 fun rememberComposerState(initial: String = ""): TextFieldState = rememberTextFieldState(initial)
+
+/** 대화 맨 위 '이전 대화 더 보기' 줄(판 9 · 아이폰 1.0.19 MessagesOlderRow). 받는 중은 돌고 · 실패는 다시 누를 수 있고 · 끝이면 회색 글만. */
+@Composable
+fun MessagesOlderRow(state: MessagesOlderRowState, onTap: () -> Unit, modifier: Modifier = Modifier) {
+    val colors = AingTheme.colors
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Row(
+            Modifier.heightIn(min = 32.dp)
+                .background(if (state.isTappable) colors.accentTint else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
+                .clickable(enabled = state.isTappable, role = Role.Button, onClick = onTap)
+                .semantics { if (state.isTappable) stateDescription = MessageNoticeText.olderTooltip }
+                .padding(horizontal = 14.dp)
+                .testTag(MessagesTags.OLDER_ROW),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (state == MessagesOlderRowState.loading) {
+                androidx.compose.material3.CircularProgressIndicator(Modifier.size(14.dp), strokeWidth = 2.dp)
+            }
+            Text(
+                state.title,
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = if (state.isTappable) FontWeight.SemiBold else FontWeight.Normal),
+                color = when {
+                    state == MessagesOlderRowState.failed -> colors.pending
+                    state.isTappable -> colors.accent
+                    else -> colors.label3Text
+                },
+            )
+        }
+    }
+}

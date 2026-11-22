@@ -478,6 +478,9 @@ package final class TetrisDuelStore {
 
     /// 네트워크·세션·루비 미러를 빌리는 곳(약참조). nil 이면 미리보기·렌더 테스트용이라 네트워크를 한 건도 내지 않는다.
     @ObservationIgnored package private(set) weak var host: (any TetrisDuelStoreHost)?
+    /// 루비 잔액을 마지막으로 옮긴 응답의 `server_now_ms`(늦은 응답 가드 — 길건너 검토 RV-C-2 와 같은 꼴, 11-23).
+    /// 이보다 옛 응답(정산 뒤 닿은 옛 상태 · 옛 로비)의 잔액은 버린다.
+    @ObservationIgnored private var rubyServerNowMs: Double?
 
     package init(host: (any TetrisDuelStoreHost)? = nil) {
         self.host = host
@@ -872,7 +875,7 @@ package final class TetrisDuelStore {
             if users != mapped { users = mapped }
         }
         if let me = response.me {
-            applyRuby(me.rubyBalance)
+            applyRuby(me.rubyBalance, serverNowMs: response.serverNowMs)
             let fresh = TetrisDuelRecord(wins: me.wins ?? 0, losses: me.losses ?? 0, draws: me.draws ?? 0)
             if record != fresh { record = fresh }
             // ★ 신청을 옮기기 **전에** 적는다 — 보낸 신청이 판으로 이어졌는지(becameMatch)를 이 값으로 가른다.
@@ -999,7 +1002,7 @@ package final class TetrisDuelStore {
     package func applyState(_ payload: TetrisStatePayload, receivedAt: TimeInterval? = nil) -> StateApplyOutcome {
         guard let id = payload.matchId?.lowercased(), !id.isEmpty else { return .ignored }
         noteServerNow(payload.serverNowMs)
-        applyRuby(payload.rubyBalance)
+        applyRuby(payload.rubyBalance, serverNowMs: payload.serverNowMs)
         let status = payload.status ?? ""
         switch status {
         case "pending":
@@ -1151,8 +1154,15 @@ package final class TetrisDuelStore {
         // 말풍선 문은 **보이고 안 가려진** 창만 닫는다(2026-11-03 — 오목 · 체스와 같은 수리). 로비 창을 띄운 채 다른 전체 화면 앱 ·
         // 다른 스페이스에 있는 사람은 화면이 말하지 못하고 폴링도 멈춰 있어, 판이 열린 것을 알릴 길이 말풍선뿐이다(준비 30초).
         let windowWasVisible = isWindowVisible && !isWindowOccluded
-        // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
-        if incoming.contains(where: { $0.id == id }) { incoming.removeAll { $0.id == id } }
+        if !isFinished, previous?.id != id || previous?.isFinished == true {
+            // 판이 서는 순간 서버(respond)는 두 사람의 다른 테트리스 대기 신청을 전부 닫았다 — 받는 쪽은 respond 가 걷지만
+            // 보낸 쪽 기기(5초 조회 · 초인종이 판을 데려온 쪽)에는 닫힌 받은 신청이 남아 판 내내 메뉴바 점 · 배너가 섰다
+            // (길건너 검토 RV-C-4 와 같은 꼴, 11-23). 판 중엔 새 신청이 올 수 없다(상대가 대국 중이면 서버가 target_busy).
+            if !incoming.isEmpty { incoming = [] }
+        } else if incoming.contains(where: { $0.id == id }) {
+            // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
+            incoming.removeAll { $0.id == id }
+        }
         if outgoing?.id == id { outgoing = nil }
         if match != next { match = next }
         // 내 판을 보고 있는 사람 수. **`match` 대입 뒤**에 적는다 — 그 didSet 이 관전을 내리며 수를 0 으로 되돌린다.
@@ -1199,7 +1209,7 @@ package final class TetrisDuelStore {
             noteActionFailure(error)
         case .success(let response):
             noteServerNow(response.serverNowMs)
-            applyRuby(response.rubyBalance)
+            applyRuby(response.rubyBalance, serverNowMs: response.serverNowMs)
             setNotice(TetrisDuelNoticeText.challenge(response.status, need: response.need, have: response.have))
             if response.status != .ok {
                 Self.logger.notice("challenge refused status=\(response.status.rawValue, privacy: .public)")
@@ -1241,7 +1251,7 @@ package final class TetrisDuelStore {
             noteActionFailure(error)
         case .success(let response):
             noteServerNow(response.serverNowMs)
-            applyRuby(response.rubyBalance)
+            applyRuby(response.rubyBalance, serverNowMs: response.serverNowMs)
             setNotice(TetrisDuelNoticeText.cancel(response.status))
             switch response.status {
             case .ok, .notFound, .notPending, .expired:
@@ -1275,7 +1285,7 @@ package final class TetrisDuelStore {
         case .success(let response):
             let receivedAt = uptime()
             noteServerNow(response.serverNowMs)
-            applyRuby(response.rubyBalance)
+            applyRuby(response.rubyBalance, serverNowMs: response.serverNowMs)
             setNotice(TetrisDuelNoticeText.respond(
                 accept: accept, response.status, side: response.side, need: response.need, have: response.have))
             if response.status != .ok {
@@ -1323,7 +1333,7 @@ package final class TetrisDuelStore {
         case .success(let response):
             let receivedAt = uptime()
             noteServerNow(response.serverNowMs)
-            applyRuby(response.rubyBalance)
+            applyRuby(response.rubyBalance, serverNowMs: response.serverNowMs)
             setNotice(TetrisDuelNoticeText.resign(response.status))
             if response.status == .unsupportedClient { noteUpdateRequired() }
             // 다른 기기가 두는 판이다 — 서버는 정산하지 않았다. 이 판에서 물러난다(머리말 ⑩).
@@ -1507,6 +1517,7 @@ package final class TetrisDuelStore {
         if isBusy { isBusy = false }
         if isWindowVisible { isWindowVisible = false }
         if rubyBalance != nil { rubyBalance = nil }
+        rubyServerNowMs = nil
         if !hiddenPeerIDs.isEmpty { hiddenPeerIDs = [] }
         if lobbyLoadFailed { lobbyLoadFailed = false }
         if hasLoadedLobby { hasLoadedLobby = false }
@@ -1667,8 +1678,15 @@ package final class TetrisDuelStore {
             + "reason=\(new?.endReason?.rawValue ?? "none") sameMatch=\(sameMatch)"
     }
 
-    func applyRuby(_ value: Int?) {
+    /// 서버 잔액을 스토어 · 앱 미러로 옮긴다. 늦은 응답 가드(길건너 검토 RV-C-2 와 같은 꼴, 11-23): 이미 옮긴 잔액보다 **먼저**
+    /// 서버가 만든 응답(정산 뒤 닿은 옛 상태 — 판 값은 `.ignored` 인 그 응답 · 옛 로비)의 잔액은 버린다(103 을 97 로 되감지 않게).
+    /// 서버 시각이 없는 응답은 예전처럼 옮긴다.
+    func applyRuby(_ value: Int?, serverNowMs: Double?) {
         guard let value else { return }
+        if let at = serverNowMs, at.isFinite, at > 0 {
+            if let last = rubyServerNowMs, at < last { return }
+            rubyServerNowMs = at
+        }
         if rubyBalance != value { rubyBalance = value }
         if let host, host.rubyBalance != value { host.rubyBalance = value }
     }

@@ -321,6 +321,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         messages = MessagesStore(
             context, scope, env.collation, megaphoneHost = PhoneMegaphoneHost(context, ruby), focusSendGate = true, chatMarkdown = true,
         )
+        // 메시지 사진(판 9): 줄이기가 있는 조립(Android)만 [사진] 버튼이 선다.
+        messages.photoEncoder = env.photoEncoder
         megaphoneBanner = MegaphoneBannerStore(PhoneMegaphoneHost(context, ruby), scope, env.prefs, clock = { env.clock.now() })
         rankings = RankingsStore(context, scope, env.collation)
         gamesContext = PhoneGamesContext(context, PhoneGomokuLink(gomoku), PhoneChessLink(chess))

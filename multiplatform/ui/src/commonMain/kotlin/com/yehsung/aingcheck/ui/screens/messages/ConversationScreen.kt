@@ -14,6 +14,9 @@
 // ([복사] · [모두 선택] · [번역] + [이 메시지 신고하기])가 뜬다(ChatBubbleSelection.kt). 이모티콘 말풍선 · 꺼진 조립(Windows)은 예전 길게 누르기 메뉴 그대로다.
 package com.yehsung.aingcheck.ui.screens.messages
 
+import com.yehsung.aingcheck.core.stores.messages.cancelPhotoDraftFromPreview
+import com.yehsung.aingcheck.core.stores.messages.photoDraft
+import com.yehsung.aingcheck.core.wire.messages.MessagePhotoText
 import androidx.compose.ui.semantics.stateDescription
 import com.yehsung.aingcheck.core.rules.text.MessageNoticeText
 import com.yehsung.aingcheck.core.stores.messages.loadOlderMessages
@@ -158,6 +161,8 @@ fun ConversationScreen(
     onLeave: () -> Unit = onBack,
     modifier: Modifier = Modifier,
     composerState: TextFieldState? = null,
+    /** 시스템 사진 고르기를 여는 곳(판 9 — Android 껍데기가 넣는다 · Windows v1 은 null → [사진] 버튼 없음). */
+    onPickPhoto: (() -> Unit)? = null,
 ) {
     val colors = AingTheme.colors
     val token = rememberSaveable(peerID) { Uuid.random().toString() }
@@ -183,6 +188,12 @@ fun ConversationScreen(
     val peerDisplayName = store.peerName(peerID) ?: MessagesConversationHeader.fallbackTitle
     val stickerArt = rememberStickerArt()
     val scope = rememberCoroutineScope()
+    // 메시지 사진(판 9): 크게 보는 사진 · 말풍선이 그림을 받는 묶음.
+    var photoViewer by remember(peerID) { mutableStateOf<com.yehsung.aingcheck.core.wire.models.MessagePhotoAttachment?>(null) }
+    // 사진을 다룰 수 없는 조립(Windows v1 동결)은 묶음이 없다 → 사진 줄은 예전처럼 글('📷 사진')로 그린다.
+    val photoHooks = remember(store, store.photoEncoder != null) {
+        if (store.photoEncoder == null) null else MessagesPhotoHooks.of(store) { photoViewer = it }
+    }
 
     Column(modifier.fillMaxSize().background(colors.background).imePadding().testTag(MessagesTags.CONVERSATION_SCREEN)) {
         ConversationTopBar(
@@ -211,14 +222,15 @@ fun ConversationScreen(
                 olderRow = store.olderRowState(peerID),
                 onOlder = { store.loadOlderMessages(peerID) },
                 olderAnchor = store.olderScrollAnchor,
+                photoHooks = photoHooks,
             )
         }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Box(Modifier.widthIn(max = READABLE_WIDTH)) {
                 if (composerState != null) {
-                    MessageComposer(store, peerID, onStickerSheet = { showsStickers = true }, state = composerState)
+                    MessageComposer(store, peerID, onStickerSheet = { showsStickers = true }, state = composerState, onPickPhoto = onPickPhoto)
                 } else {
-                    MessageComposer(store, peerID, onStickerSheet = { showsStickers = true })
+                    MessageComposer(store, peerID, onStickerSheet = { showsStickers = true }, onPickPhoto = onPickPhoto)
                 }
             }
         }
@@ -256,6 +268,18 @@ fun ConversationScreen(
             )
         }
     }
+    // 고른 사진 미리 보기(보내기 전 — 보내는 중엔 밀어 닫기를 막는다) · 사진 크게 보기.
+    store.photoDraft(peerID)?.let { draft ->
+        ModalPresenceMark()
+        ModalBottomSheet(
+            onDismissRequest = { store.cancelPhotoDraftFromPreview() },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != androidx.compose.material3.SheetValue.Hidden || !store.isSending }),
+            containerColor = colors.background,
+        ) {
+            MessagesPhotoPreviewSheet(store, peerID, draft)
+        }
+    }
+    photoViewer?.let { photo -> photoHooks?.let { MessagesPhotoViewer(photo, it, onClose = { photoViewer = null }) } }
     if (showsStickers) {
         ModalPresenceMark()
         ModalBottomSheet(onDismissRequest = { showsStickers = false }, containerColor = colors.background) {
@@ -369,6 +393,7 @@ private fun ConversationList(
     olderRow: MessagesOlderRowState? = null,
     onOlder: () -> Unit = {},
     olderAnchor: MessagesOlderScrollAnchor? = null,
+    photoHooks: MessagesPhotoHooks? = null,
 ) {
     val colors = AingTheme.colors
     val listState = rememberLazyListState()
@@ -414,6 +439,7 @@ private fun ConversationList(
                         onReport = if (item.line.entry.isMine) null else ({ onReportMessage(item.line.entry) }),
                         formatting = formatting,
                         modifier = Modifier.padding(top = if (item.line.startsGroup) 7.dp else 0.dp),
+                        photoHooks = photoHooks,
                     )
                     is MessagesConversationItem.pending -> PendingBubbleRow(item.item, stickerArt, formatting)
                 }
@@ -502,8 +528,12 @@ private fun BubbleRow(
     onReport: (() -> Unit)?,
     formatting: Boolean = false,
     modifier: Modifier = Modifier,
+    photoHooks: MessagesPhotoHooks? = null,
 ) {
     val entry = line.entry
+    // 사진 말풍선(판 9): 그림 · (있으면) 설명 글. 그림을 그릴 묶음이 없는 조립(Windows v1)은 예전처럼 글('📷 사진')로 그린다.
+    val photo = entry.wire.photo?.takeIf { photoHooks != null }
+    val photoCaption = if (photo != null) entry.wire.body.takeIf { com.yehsung.aingcheck.core.rules.text.MessageBody.hasVisibleContent(it) } else null
     val clipboard = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
     var menu by remember { mutableStateOf(false) }
@@ -511,7 +541,11 @@ private fun BubbleRow(
     val open: (String) -> Unit = { address -> ChatBubbleMarkdown.follow(address) { runCatching { uriHandler.openUri(it) } } }
     val links = if (formatting) remember(entry.body) { ChatBubbleMarkdown.linkActions(AingStickerText.preview(entry.body)) } else emptyList()
     // 줄 라벨: 서식이 켜졌으면 기호를 벗겨 읽는다(아이폰 1.0.17 — plainPreview 는 이모티콘 규칙을 먼저 거친다). 링크가 여는 곳은 링크마다 단 동작 이름이 말한다.
-    val spoken = if (formatting) ChatMarkdown.plainPreview(entry.body) else AingStickerText.preview(entry.body)
+    val spoken = when {
+        photo != null -> listOfNotNull(MessagePhotoText.photoAccessibility, photoCaption).joinToString(", ")
+        formatting -> ChatMarkdown.plainPreview(entry.body)
+        else -> AingStickerText.preview(entry.body)
+    }
     val description = buildList {
         add((if (entry.isMine) "나" else entry.peerName) + ": " + spoken)
         add(line.clockText)
@@ -533,7 +567,13 @@ private fun BubbleRow(
             Spacer(Modifier.size(6.dp, 1.dp))
         }
         Box(Modifier.weight(1f, fill = false)) {
-            if (formatting) {
+            if (photo != null && photoHooks != null) {
+                Column(horizontalAlignment = if (entry.isMine) Alignment.End else Alignment.Start, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // 길게 누르면 [신고](받은 사진만 — 내 사진은 메뉴가 없다).
+                    MessagesPhotoBubble(photo, photoHooks, entry.id, onLongPress = onReport?.let { { menu = true } })
+                    if (photoCaption != null) BubbleContent(photoCaption, entry.isMine, stickerArt, isPending = false)
+                }
+            } else if (formatting) {
                 // 서식 말풍선: 한 번 누르면 그 자리의 링크를 연다(고르는 중이 아닐 때) · 길게 누르면 글 말풍선은 고르기, 이모티콘 말풍선은 메뉴.
                 // 판정하는 자리는 BubbleContent 와 같은 StickerArt 두 함수다(그림이면 그림 메뉴, 그림을 못 읽어 글자로 접혔으면 글 말풍선 — 아이폰과 같다).
                 val sticker = StickerArt.drawable(entry.body, stickerArt) != null || StickerArt.isPendingArt(entry.body, stickerArt)
@@ -546,7 +586,7 @@ private fun BubbleRow(
                 }
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
+                if (photo == null) DropdownMenuItem(
                     text = { Text(ConversationText.copy) },
                     leadingIcon = { AingIcon(sf("doc.on.doc", AppIcon.ContentCopy), null, size = 20.dp) },
                     onClick = { menu = false; clipboard.setText(AnnotatedString(entry.body)) },

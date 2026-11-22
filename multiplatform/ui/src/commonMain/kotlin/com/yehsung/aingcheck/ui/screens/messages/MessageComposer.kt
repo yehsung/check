@@ -10,6 +10,8 @@
 // INV-MessagesComposerView-db024955 이식: 줄바꿈은 키보드의 return(엔터)이다 — 키보드 동작에 보내기를 걸지 않는다(onKeyboardAction 없음). 보내기는 단추 하나.
 package com.yehsung.aingcheck.ui.screens.messages
 
+import com.yehsung.aingcheck.core.stores.messages.canSendPhoto
+import com.yehsung.aingcheck.core.stores.messages.showsPhotoButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,6 +71,8 @@ fun MessageComposer(
     modifier: Modifier = Modifier,
     onStickerSheet: () -> Unit,
     state: TextFieldState = rememberSaveable(peerID, saver = TextFieldState.Saver) { TextFieldState(store.draft(peerID)) },
+    /** 시스템 사진 고르기를 여는 곳(판 9 — Android 껍데기가 넣는다 · Windows v1 은 null → [사진] 버튼 없음). */
+    onPickPhoto: (() -> Unit)? = null,
 ) {
     val colors = AingTheme.colors
     // 칸 ↔ 스토어 초안(상대별 · 대화를 나갔다 와도 남는다). 조합 중에는 바깥 값으로 덮지 않는다(FieldStoreSync).
@@ -127,6 +131,8 @@ fun MessageComposer(
         }
         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             StickerButton(onStickerSheet)
+            // [사진](판 9 · 아이폰 1.0.19) — 시스템 사진 고르기(권한 창 없음). 문이 닫힌 세션엔 서지 않는다(다음 대화 열기에 다시).
+            if (onPickPhoto != null && store.showsPhotoButton(peerID)) PhotoButton(store, peerID, onPickPhoto)
             val shape = RoundedCornerShape((MessagesComposerRules.minimumTouchTarget / 2).dp)
             Row(
                 Modifier
@@ -198,6 +204,28 @@ private fun StickerButton(onClick: () -> Unit) {
             Image(art, contentDescription = null, modifier = Modifier.size(metrics.visibleDiameter.dp))
         } else if (state is StickerArtState.Ready) {
             AingIcon(sf("face.smiling", AppIcon.Mood), null, size = (metrics.visibleDiameter * 0.7).dp, tint = colors.label2)
+        }
+    }
+}
+
+/** 입력칸 왼쪽 바깥의 사진 단추(판 9). 고르면 줄인 뒤 미리 보기 시트가 뜬다(대화 화면이 그린다). 줄이는 중이면 도는 표시. */
+@Composable
+private fun PhotoButton(store: MessagesStore, peerID: String, onPick: () -> Unit) {
+    val colors = AingTheme.colors
+    val metrics = MessagesComposerRules.sendButtonMetrics(MessagesComposerRules.minimumTouchTarget)
+    val enabled = store.canSendPhoto(peerID)
+    Box(
+        Modifier
+            .size(metrics.diameter.dp)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onPick)
+            .semantics { contentDescription = com.yehsung.aingcheck.core.wire.messages.MessagePhotoText.buttonLabel }
+            .testTag(MessagesTags.PHOTO_BUTTON),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (store.photoPreparing) {
+            CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+        } else {
+            AingIcon(sf("photo", AppIcon.Image), null, size = (metrics.visibleDiameter * 0.62).dp, tint = if (enabled) colors.accent else colors.label3)
         }
     }
 }

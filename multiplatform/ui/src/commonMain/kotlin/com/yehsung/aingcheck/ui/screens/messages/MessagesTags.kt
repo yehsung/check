@@ -57,4 +57,12 @@ object MessagesTags {
     const val REPORT_DETAIL = "report-detail"
     const val REPORT_ALSO_BLOCK = "report-also-block"
     const val REPORT_SUBMIT = "report-submit"
+    /** 판 9 — 메시지 사진(입력줄 [사진] · 말풍선 · 미리 보기 · 크게 보기). */
+    const val PHOTO_BUTTON = "messages-photo-button"
+    const val PHOTO_PREVIEW = "messages-photo-preview"
+    const val PHOTO_PREVIEW_SEND = "messages-photo-preview-send"
+    const val PHOTO_PREVIEW_CANCEL = "messages-photo-preview-cancel"
+    const val PHOTO_VIEWER = "messages-photo-viewer"
+    const val PHOTO_VIEWER_CLOSE = "messages-photo-viewer-close"
+    fun photoBubble(id: String) = "messages-photo-bubble:$id"
 }

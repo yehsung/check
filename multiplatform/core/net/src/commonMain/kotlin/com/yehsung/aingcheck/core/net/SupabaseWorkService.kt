@@ -186,6 +186,18 @@ class SupabaseWorkService(
         return RawResponse(response.status.value, response.body<ByteArray>())
     }
 
+    /**
+     * 서명 URL 받기(판 9 메시지 사진 — Swift `downloadSignedObject`). 서명이 곧 허락이라 **로그인 토큰도 apikey 도 싣지 않는다**
+     * (서명 응답이 절대 URL 로 다른 호스트를 가리켜도 토큰이 새지 않게). http(s) 가 아니면 부르지 않는다(호출부가 거른다).
+     */
+    suspend fun rawGetUnauthenticated(absoluteURL: String): RawResponse {
+        val response = client.request(absoluteURL) {
+            this.method = HttpMethod.Get
+            header("Accept", "*/*")
+        }
+        return RawResponse(response.status.value, response.body<ByteArray>())
+    }
+
     fun serviceError(statusCode: Int, data: ByteArray): SupabaseWorkServiceError = ServiceErrorClassifier.classify(statusCode, data)
 
     /** Swift `parseDate` — 소수초 포매터 먼저, 실패하면 기본 포매터(C§4 #30). */

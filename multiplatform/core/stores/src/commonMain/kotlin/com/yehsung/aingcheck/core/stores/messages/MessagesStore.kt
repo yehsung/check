@@ -299,6 +299,44 @@ class MessagesStore(
     var isSending: Boolean by mutableStateOf(false)
         private set
 
+    /** 사진 보내기(MessagesStorePhotos.kt)가 쓰는 두 문 — 설정자는 이 파일 안에 닫아 둔 채 이 둘로만 바꾼다. */
+    internal fun noteSendNotice(peerID: String, notice: String?) {
+        sendNotices = if (notice == null) sendNotices - peerID else sendNotices + (peerID to notice)
+    }
+
+    internal fun markSending(value: Boolean) {
+        if (isSending != value) isSending = value
+    }
+
+    // ---------------------------------------------------------------- 메시지 사진(판 9 · 아이폰 1.0.19 5b6ab3ac · 맥 0.3.86 — MessagesStorePhotos.kt)
+
+    /** 사진 줄이기(앱 조립이 넣는다 — Android BitmapFactory). null 이면 [사진] 버튼이 없다(Windows v1 동결 · 시험 기본). */
+    var photoEncoder: com.yehsung.aingcheck.core.stores.me.PhotoEncoding? = null
+    /** 상대별 사진 칸 표(메시지 id → 사진 · 설명). 24시간 머리는 사진 칸이 없어 따로 배우고 **그릴 때만** 얹는다. */
+    var photoMeta: Map<String, Map<String, MessagesPhotoMeta>> by mutableStateOf(emptyMap())
+        internal set
+    /** 사진 칸 조회(message_page)가 되는 서버인가: null 모름 · false 함수 없음(다음 대화 열기까지 안 묻는다) · true. */
+    var photoMetaAvailable: Boolean? by mutableStateOf(null)
+        internal set
+    /** 이 세션에 사진 보내기 문이 닫혔다(문 닫힘 · 함수 · 버킷 없음) — [사진] 버튼을 다음 대화 열기까지 숨긴다. */
+    var photoSendClosed: Boolean by mutableStateOf(false)
+        internal set
+    /** 고른 사진(미리 보기 · 보내기 전). */
+    var photoDraft: MessagesPhotoDraft? by mutableStateOf(null)
+        internal set
+    /** 고른 사진을 줄이는 중. */
+    var photoPreparing: Boolean by mutableStateOf(false)
+        internal set
+    /** 사진 그림 캐시(메모리 · 경로 열쇠). */
+    val photoImages = MessagesPhotoImageCache()
+    internal var photoRuntime = MessagesPhotoRuntime()
+    /** 시험이 넣는 그림 받기(없으면 서버에서 서명 URL 로 받는다). */
+    var photoDataLoader: (suspend (String) -> ByteArray)? = null
+    /** 사진 줄이기를 돌릴 자리(시험은 시험 디스패처). */
+    var photoComputeContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Default
+    /** 사진 파일 이름 · 전송 키(소문자 uuid). 시험이 고정한다. */
+    var newPhotoID: () -> String = { Uuid.random().toString().lowercase() }
+
     // ---------------------------------------------------------------- 집중 모드(판 7 · 대표 요청 5·6 — 규칙은 MessagesFocusRules · [focusSendGate] 가 켰을 때만)
 
     /**
@@ -410,6 +448,7 @@ class MessagesStore(
         directoryPresenceFilter = MessagesPresenceFilter.all
         clearOlderMessages()
         olderAvailable = null
+        resetPhotoState()
         hiddenBlockedPeerIDs = emptySet()
         blockedPeople = emptyList()
         blocksLoaded = false
@@ -710,7 +749,7 @@ class MessagesStore(
      * 켜짐으로 들여 [보내기] 잠금과 사유 줄이 따라오게 한다(맥 `adoptServerSenderFocused` 의 폰 짝). 폰은 PATCH 가 없어 맥의 의도 번호가 필요 없다 —
      * 그 전에 띄운 조회의 답만 낡은 것으로 버린다(`myFocusAppliedSerial`).
      */
-    private fun adoptServerSenderFocused() {
+    internal fun adoptServerSenderFocused() {
         runtime.myFocusAppliedSerial = runtime.nextSerial()
         if (myFocusMode != true) myFocusMode = true
     }
@@ -786,6 +825,8 @@ class MessagesStore(
         runtime.shownConversations.removeAll { it.first == token }
         runtime.shownConversations += token to peerID
         openConversationPeerID = peerID
+        // 사진(판 9): 닫힌 문 · 함수 없음 숨김을 되돌리고, 다른 사람의 사진 상태를 걷고, 사진 칸을 한 번 묻는다.
+        armPhotoMeta(peerID)
         syncRouterVisibility()
         if (!isSignedIn) return
         legacyReadStamps = legacyReadStamps + (peerID to context.clock.now().timeIntervalSince1970)
@@ -800,8 +841,11 @@ class MessagesStore(
         runtime.shownConversations.removeAll { it.first == token }
         val current = runtime.shownConversations.lastOrNull()?.second
         if (openConversationPeerID != current) openConversationPeerID = current
-        // 대화를 다 닫으면 지난 쪽을 비운다(다시 열면 다시 누른다 — 맥 패널 닫기 · 아이폰과 같다).
-        if (current == null) clearOlderMessages()
+        // 대화를 다 닫으면 지난 쪽 · 사진 칸 · 고른 사진을 비운다(다시 열면 다시 묻는다 — 맥 패널 닫기 · 아이폰과 같다). 그림 캐시는 남는다.
+        if (current == null) {
+            clearOlderMessages()
+            clearPhotoConversation()
+        }
         syncRouterVisibility()
     }
 
@@ -898,6 +942,8 @@ class MessagesStore(
                     }
                     // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
                     if (succeeded) runtime.serverKnowsSendKey = response.messageId != null
+                    // 이 폰이 보낸 말은 사진 칸을 물어본 것으로 친다(글이라 물을 것이 없다 — 보낼 때마다 묻지 않게).
+                    if (succeeded) noteMessageSentForPhotos(response.messageId, peerID)
                     // 확정 답 — 이 키·이 (상대, 본문)의 기억을 지운다.
                     runtime.unconfirmedSends.removeAll { it.key == localID || (it.peerUserID == peerID && it.body == body) }
                 },
@@ -1065,7 +1111,11 @@ class MessagesStore(
             )
             // 24시간 머리가 미끄러졌으면 지난 쪽을 받은 상대의 빠진 옛 줄을 지난 쪽 끝으로 옮긴다(대화 가운데가 비지 않게 — 판 9).
             carryOlderMessagesAcrossHeadSlide(threads.flatMap { it.messages }.map { it.wire }, sorted.map { it.wire })
-            if (history != sorted) history = sorted
+            if (history != sorted) {
+                history = sorted
+                // 열린 대화에 사진 칸을 모르는 말이 생겼으면 합쳐서 한 번 묻는다(사진 ②).
+                noteHeadChangedForPhotos()
+            }
             if (loaded.hasReadReceipts) {
                 val snapshot = MessageHistoryReadSnapshot(serial, loaded.serverOrder)
                 if (historySnapshot != snapshot) historySnapshot = snapshot
@@ -1458,7 +1508,10 @@ class MessagesStore(
         val owner = runtime
         for (entry in additions) owner.localArrivalSerials[entry.id] = owner.nextSerial()
         val merged = (history + additions).sortedForMessageHistory(historySnapshot?.serverOrder, owner.localArrivalSerials)
-        if (history != merged) history = merged
+        if (history != merged) {
+            history = merged
+            noteHeadChangedForPhotos()
+        }
         evaluateReadMarking()
         return additions.size
     }

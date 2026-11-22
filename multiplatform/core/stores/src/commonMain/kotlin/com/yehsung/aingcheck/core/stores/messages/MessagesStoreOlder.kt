@@ -41,8 +41,8 @@ enum class MessagesOlderRowState {
 fun MessagesStore.conversationMessages(peerID: String): List<MessageEntry> {
     val head = thread(peerID)?.messages ?: emptyList()
     val older = olderPages[peerID]
-    if (peerID in hiddenBlockedPeerIDs || older.isNullOrEmpty()) return head
-    return MessageOlderHistoryRules.merged(older, head.map { it.wire }).map(::MessageEntry)
+    if (peerID in hiddenBlockedPeerIDs || older.isNullOrEmpty()) return photoDisplayed(head, peerID)
+    return photoDisplayed(MessageOlderHistoryRules.merged(older, head.map { it.wire }).map(::MessageEntry), peerID)
 }
 
 /** 대화 맨 위 줄. 함수가 없는 서버면 null — 화면은 이것 하나만 본다(게이트 짝: loadOlderMessages 가드와 같은 조건). */
@@ -96,6 +96,8 @@ suspend fun MessagesStore.performLoadOlderMessages(peer: String) {
             val next = MessageOlderHistoryRules.prepending(page.entries, older, head)
             val added = next.size - older.size
             if (added > 0) olderPages = olderPages + (peer to next)
+            // 사진 칸도 배운다: 이 쪽이 머리와 겹친 줄(머리가 이겨 지난 쪽에서 빠진다)의 사진도 그려지게(맥 · 아이폰과 같다).
+            absorbPhotoMeta(page.entries, peer)
             // 커서는 뒤로만 간다 — 서버가 커서를 무시해 같은 쪽을 다시 줘도 끝없이 묻지 않는다.
             var advanced = false
             val oldest = page.oldestCursor

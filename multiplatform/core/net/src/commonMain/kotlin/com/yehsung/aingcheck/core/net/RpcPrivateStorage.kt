@@ -5,7 +5,10 @@ package com.yehsung.aingcheck.core.net
 import com.yehsung.aingcheck.core.wire.SupabaseWorkServiceError
 import com.yehsung.aingcheck.core.wire.json.SwiftJson
 import com.yehsung.aingcheck.core.wire.json.swiftTry
+import com.yehsung.aingcheck.core.wire.messages.MessagePhotoWire
 import com.yehsung.aingcheck.core.wire.messages.PrivateStorage
+import com.yehsung.aingcheck.core.wire.messages.SendPhotoMessageRequest
+import com.yehsung.aingcheck.core.wire.messages.SendPhotoMessageResponse
 import com.yehsung.aingcheck.core.wire.models.FeedbackAttachOutcome
 import com.yehsung.aingcheck.core.wire.models.FeedbackAttachShotRequest
 import com.yehsung.aingcheck.core.wire.models.FeedbackAttachShotResponse
@@ -86,4 +89,57 @@ suspend fun SupabaseWorkService.attachFeedbackShot(accessToken: String, reportID
 suspend fun SupabaseWorkService.fetchFeedbackShots(accessToken: String, reportIDs: List<String>): Map<String, List<FeedbackShot>> {
     val data = send(FeedbackShotWire.listPath, "POST", emptyList(), encode(FeedbackShotsRequest.serializer(), FeedbackShotsRequest(reportIDs.map { it.lowercase() })), accessToken, null)
     return FeedbackShotWire.grouped(decode(ListSerializer(FeedbackShotRow.serializer()), data))
+}
+
+// ---------------------------------------------------------------- 서명 URL(보기는 서명 URL — 계약 v2)
+
+/** 서명 응답 → 받을 URL. 상대 경로(`/object/sign/…`)면 `<projectURL>/storage/v1` 를 앞에 붙인다. 못 읽으면 null. */
+fun signedObjectURL(data: ByteArray, projectURL: String): String? {
+    val obj = swiftTry { SwiftJson.parse(data.decodeToString()) as? JsonObject } ?: return null
+    val value = ((obj["signedURL"] as? JsonPrimitive)?.contentOrNull ?: (obj["signedUrl"] as? JsonPrimitive)?.contentOrNull)
+        ?.takeIf { it.isNotEmpty() } ?: return null
+    if (value.startsWith("http://") || value.startsWith("https://")) return value
+    val base = projectURL.trimEnd('/')
+    val tail = if (value.startsWith("/")) value else "/$value"
+    val prefix = if (tail.startsWith("/storage/v1/")) "" else "/storage/v1"
+    return base + prefix + tail
+}
+
+/**
+ * 서명 → 받기 한 번에(Swift `downloadPrivateObjectViaSignedURL`). 두 왕복이 한 함수라 withSessionRetry 로 감싸면 서명이 만료된 재시도도
+ * 새 서명부터 다시 한다. 서명 본문은 키 하나(`expiresIn` — 스네이크로 바꾸면 저장소가 400)라 직접 만든다.
+ */
+suspend fun SupabaseWorkService.downloadPrivateObjectViaSignedURL(bucket: String, path: String, expiresIn: Long, accessToken: String): ByteArray {
+    requireSafe(bucket, path)
+    val body = """{"expiresIn":${maxOf(1L, expiresIn)}}""".encodeToByteArray()
+    val signed = rawRequest("/storage/v1/object/sign/$bucket/$path", "POST", emptyList(), body, "application/json", accessToken, null, emptyMap())
+    if (signed.statusCode !in 200..299) throw privateStorageError(signed.statusCode, signed.body, PrivateStorageOperation.read)
+    val url = signedObjectURL(signed.body, projectURL) ?: throw SupabaseWorkServiceError.InvalidResponse(200)
+    if (!(url.startsWith("https://") || url.startsWith("http://"))) throw PrivateStorageError.invalidPath
+    val r = rawGetUnauthenticated(url)
+    if (r.statusCode !in 200..299) throw privateStorageError(r.statusCode, r.body, PrivateStorageOperation.read)
+    return r.body
+}
+
+// ---------------------------------------------------------------- 메시지 사진(판 9 · 아이폰 1.0.19 5b6ab3ac · 맥 0.3.86)
+
+/** `send_photo_message` 경로. */
+const val SEND_PHOTO_MESSAGE_PATH = "/rest/v1/rpc/send_photo_message"
+
+/** 사진 JPEG 를 올린다(POST /storage/v1/object/message-photos/<path> · image/jpeg · **x-upsert 없음**). 경로가 서버 모양이 아니면 요청을 내지 않는다. */
+suspend fun SupabaseWorkService.uploadMessagePhoto(accessToken: String, path: String, data: ByteArray) {
+    if (!MessagePhotoWire.isServerShaped(path)) throw PrivateStorageError.invalidPath
+    uploadPrivateObject(MessagePhotoWire.bucket, path, data, PrivateStorage.jpegContentType, accessToken)
+}
+
+/** `send_photo_message` 한 번. 함수가 없는 서버(404/PGRST202)는 그대로 던진다 — 숨길지는 스토어가 정한다. */
+suspend fun SupabaseWorkService.sendPhotoMessage(accessToken: String, request: SendPhotoMessageRequest): SendPhotoMessageResponse {
+    val data = send(SEND_PHOTO_MESSAGE_PATH, "POST", emptyList(), encode(SendPhotoMessageRequest.serializer(), request), accessToken, null)
+    return decode(SendPhotoMessageResponse.serializer(), data)
+}
+
+/** 사진 바이트를 받는다(서명 URL). 경로가 서버 모양이 아니면 요청을 내지 않는다. */
+suspend fun SupabaseWorkService.fetchMessagePhotoData(accessToken: String, path: String): ByteArray {
+    if (!MessagePhotoWire.isServerShaped(path)) throw PrivateStorageError.invalidPath
+    return downloadPrivateObjectViaSignedURL(MessagePhotoWire.bucket, path, MessagePhotoWire.signedURLSeconds, accessToken)
 }

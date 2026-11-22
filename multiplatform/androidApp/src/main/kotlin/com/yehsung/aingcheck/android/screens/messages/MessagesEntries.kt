@@ -4,6 +4,8 @@
 // 목적지 값(Dest.*)은 셸(W1-g)의 것을 쓴다 — 이 파일은 라우트 상수(신고 대상 글자 · 라우트 → 메시지 탭 경로)와 진입 함수만 둔다.
 package com.yehsung.aingcheck.android.screens.messages
 
+import kotlinx.coroutines.launch
+import com.yehsung.aingcheck.core.stores.messages.preparePhoto
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.yehsung.aingcheck.android.nav.Dest
@@ -93,7 +95,24 @@ fun MessagesListEntry(store: MessagesStore, open: (Any) -> Unit, modifier: Modif
  */
 @Composable
 fun ConversationEntry(store: MessagesStore, peerId: String, back: () -> Unit, leaveToList: () -> Unit, modifier: Modifier = Modifier) {
-    ConversationScreen(store, peerId, onBack = back, onLeave = leaveToList, modifier = modifier)
+    // 메시지 사진(판 9 · 아이폰 1.0.19 PhotosPicker 의 짝): 시스템 사진 고르기(PickVisualMedia — 권한 창 없음)로 한 장. 원본은 메인 밖에서 읽어
+    // 스토어에 넘긴다(줄이기 · 미리 보기는 스토어 · 대화 화면). 못 읽었으면 빈 자료로 넘겨 '사진을 읽지 못했어요'를 세운다(조용히 끝내지 않는다).
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val data = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+            }
+            store.preparePhoto(data ?: ByteArray(0), peerId)
+        }
+    }
+    ConversationScreen(store, peerId, onBack = back, onLeave = leaveToList, modifier = modifier, onPickPhoto = {
+        picker.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly))
+    })
 }
 
 /** 새 대화 시트(Dest.NewConversationSheet). 사람을 고르면 시트를 닫고 그 대화를 연다. */

@@ -77,7 +77,7 @@ object MegaphoneFeedDecode {
         if (!MessageBody.hasVisibleContent(text)) return null
         val millis = row.createdEpochMs ?: (cursor / 1000)
         val sender = nonEmpty(row.senderId)
-        val name = (row.senderDisplayName ?: "").trim()
+        val name = TextScalars.trimmingWhitespacesAndNewlines(row.senderDisplayName ?: "")
         val mine = nonEmpty(me)
         val own = row.isMine ?: (sender != null && mine != null && sender.lowercase() == mine.lowercase())
         return MegaphoneFeedItem(
@@ -100,5 +100,5 @@ object MegaphoneFeedDecode {
         return MegaphoneFeedPage(items, hasMore = limit > 0 && wireRowCount >= limit)
     }
 
-    private fun nonEmpty(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }
+    private fun nonEmpty(value: String?): String? = value?.let { TextScalars.trimmingWhitespacesAndNewlines(it) }?.takeIf { it.isNotEmpty() }
 }

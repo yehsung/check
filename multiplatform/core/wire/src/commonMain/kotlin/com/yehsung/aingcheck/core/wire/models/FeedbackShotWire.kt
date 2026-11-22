@@ -5,6 +5,7 @@ import com.yehsung.aingcheck.core.wire.SwiftDate
 import com.yehsung.aingcheck.core.wire.json.SwiftDecodableSerializer
 import com.yehsung.aingcheck.core.wire.json.SwiftDecoding
 import com.yehsung.aingcheck.core.wire.messages.PrivateStorage
+import com.yehsung.aingcheck.core.wire.text.WireScalars
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -35,7 +36,7 @@ object FeedbackShotWire {
 
     /** submit_feedback 이 돌려준 값 → 제보 id(소문자 uuid). uuid 모양이 아니면 null — 제보는 보낸 것으로 치고 캡처만 못 붙인다. */
     fun reportID(raw: String?): String? {
-        val trimmed = raw?.trim() ?: return null
+        val trimmed = raw?.let { WireScalars.trimSwiftWhitespaces(it) } ?: return null
         val groups = trimmed.split("-")
         if (groups.map { it.length } != listOf(8, 4, 4, 4, 12)) return null
         if (!groups.all { g -> g.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' } }) return null
@@ -43,7 +44,7 @@ object FeedbackShotWire {
     }
 
     /** 목록 행이 준 경로를 믿어도 되는가(빈 값 · 이상한 글자 · `..` 는 버린다). */
-    fun acceptedPath(raw: String?): String? = raw?.trim()?.takeIf { PrivateStorage.isSafeObjectPath(it) }
+    fun acceptedPath(raw: String?): String? = raw?.let { WireScalars.trimSwiftWhitespaces(it) }?.takeIf { PrivateStorage.isSafeObjectPath(it) }
 
     /** feedback_shots 행들 → 제보 id(소문자)별 캡처. 쓸 수 없는 행은 버리고, 붙인 순서(시각 → id)로 세운 뒤 **상한까지만**. */
     fun grouped(rows: List<FeedbackShotRow>): Map<String, List<FeedbackShot>> {

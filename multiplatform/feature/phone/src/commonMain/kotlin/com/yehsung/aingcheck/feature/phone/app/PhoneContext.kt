@@ -138,6 +138,9 @@ class PhoneContext(
     /** 코어 1:1 알까기 스토어(판 8). null = 이 조립에 없다(떼어 내기 깃발). */
     var alkkagi: com.yehsung.aingcheck.core.stores.alkkagi.AlkkagiOnlineStore? = null
 
+    /** 1:1 대기방(판 9 · 아이폰 1.0.19 MobileContext.duelRooms) — 앱에 하나. */
+    var duelRooms: com.yehsung.aingcheck.core.stores.rooms.DuelRoomStore? = null
+
     /** 코어 아잉 마작 스토어(판 8). null = 이 조립에 없다(떼어 내기 깃발). */
     var mahjong: com.yehsung.aingcheck.core.stores.mahjong.MahjongStore? = null
 

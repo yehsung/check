@@ -96,6 +96,8 @@ internal fun GomokuLobby(games: GamesStore, gomoku: GomokuStore, roster: GamesLo
         gomoku.notice?.let { Spacer(Modifier.height(AingDimens.rowSpacing)); BoardNotice(it) }
         GomokuIncomingSection(gomoku)
         GomokuOutgoingSection(gomoku)
+        // 1:1 대기방(판 9) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위(문이 닫혀 있으면 자리가 없다).
+        com.yehsung.aingcheck.ui.games.rooms.GamesDuelRoomsSection(games.context.duelRooms, com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.gomoku)
         Spacer(Modifier.height(AingDimens.rowSpacing))
         GomokuAIEntryCard(gomoku, onPlay = { state.showsAIPicker = true })
         GomokuOpponentsSection(games, gomoku, roster, onChallenge = { state.stakeTarget = it })

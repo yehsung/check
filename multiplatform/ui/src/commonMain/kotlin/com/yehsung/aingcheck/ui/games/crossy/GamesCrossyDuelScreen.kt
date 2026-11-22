@@ -201,6 +201,8 @@ private fun CrossyDuelLobby(store: GamesStore, duel: CrossyDuelStore, myUserID: 
             SectionHeader(CrossyDuelPhoneText.outgoingTitle, padded = true)
             InsetGroup { CrossyDuelOutgoingRow(duel, outgoing) }
         }
+        // 1:1 대기방(판 9) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+        com.yehsung.aingcheck.ui.games.rooms.GamesDuelRoomsSection(store.context.duelRooms, com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.crossyDuel)
         SectionHeader(CrossyDuelPhoneText.usersTitle, padded = true)
         InsetGroup { CrossyDuelUsers(duel, blockedBy, onChallenge) }
         SectionHeader(CrossyDuelPhoneText.recordTitle, padded = true)

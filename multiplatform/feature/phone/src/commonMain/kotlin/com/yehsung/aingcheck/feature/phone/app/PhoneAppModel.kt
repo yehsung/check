@@ -1,6 +1,7 @@
 // 원본: Sources/CheckMobileKit/App/MobileAppModel.swift · Sources/CheckMobileKit/App/MobileEnvironment.swift(조립 재료) @ 3bd04bd
 package com.yehsung.aingcheck.feature.phone.app
 
+import com.yehsung.aingcheck.core.stores.rooms.adoptRoomMatch
 import com.yehsung.aingcheck.core.foundation.platform.Collation
 import com.yehsung.aingcheck.core.foundation.platform.InstallationIdentity
 import com.yehsung.aingcheck.core.foundation.platform.KeyValueStore
@@ -310,6 +311,29 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         context.reversi = reversi
         context.crossyDuel = crossyDuel
         context.alkkagi = alkkagi
+        // 1:1 대기방(판 9 · 아이폰 1.0.19 — 맥 0.3.83 과 같은 코어 스토어 · 서버 duel-rooms). 방에서 선 판은 이 기기가 연 판이다 —
+        // 방장(숨이 '시작됨')과 참가자(참가 ok) 모두 그 게임 스토어가 받아(adoptRoomMatch) 원래 길로 판 화면을 연다. 문(서버 duel__capable 의
+        // android 갈래)이 닫혀 있으면 로비에 절이 없다.
+        val rooms = com.yehsung.aingcheck.core.stores.rooms.DuelRoomStore(
+            scope, com.yehsung.aingcheck.core.stores.rooms.DuelRoomLiveService(context), clockMs = { env.clock.now().timeIntervalSince1970 * 1000 },
+        )
+        rooms.rubyBalanceSource = { ruby.rubyBalance }
+        val adoptRoomMatch: (com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame, String) -> Unit = { game, matchID ->
+            scope.launch {
+                when (game) {
+                    com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.gomoku -> gomoku.adoptRoomMatch(matchID)
+                    com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.chess -> chess.adoptRoomMatch(matchID)
+                    com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.tetris -> tetris.adoptRoomMatch(matchID)
+                    com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.reversi -> reversi?.adoptRoomMatch(matchID)
+                    com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.crossyDuel -> crossyDuel?.adoptRoomMatch(matchID)
+                    com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.alkkagi -> alkkagi?.adoptRoomMatch(matchID)
+                }
+            }
+        }
+        rooms.onRoomStarted = adoptRoomMatch
+        rooms.onJoined = adoptRoomMatch
+        realtime.duelRooms = { rooms.handleGameSignal() }
+        context.duelRooms = rooms
         context.mahjong = mahjong
         context.characters = characters
 
@@ -561,6 +585,8 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         crossyDuel?.reset()
         // 1:1 알까기도 같은 사슬이다(배선 값 — 서비스 · 호스트 · 주 스위치는 남긴다).
         alkkagi?.reset()
+        // 1:1 대기방도 같은 사슬이다(앞 사람의 방 · 숨 · 목록이 다음 사람 화면에 남지 않게). 서비스 배선은 그대로 둔다.
+        context.duelRooms?.reset()
         // 아잉 마작도 같은 사슬이다 — 연습판 봇 · 깨우기 · 폴링이 살아 있으면 다음 사람 화면에 앞 계정의 방 · 판이 남는다.
         mahjong?.reset()
         ruby.rubyBalance = null

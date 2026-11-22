@@ -437,6 +437,8 @@ internal fun ReversiLobby(games: GamesStore, reversi: ReversiStore, state: Rever
                     }
                     ReversiBlockedByOtherGame(games)
                     ReversiOutgoing(reversi)
+                    // 1:1 대기방(판 9) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+                    com.yehsung.aingcheck.ui.games.rooms.GamesDuelRoomsSection(games.context.duelRooms, com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.reversi)
                     Spacer(Modifier.height(AingDimens.rowSpacing))
                     ReversiAIEntryCard(reversi, onPlay = { state.showsAIColorSheet = true })
                     ReversiOpponents(games, reversi, onChallenge = { state.stakeTarget = it })

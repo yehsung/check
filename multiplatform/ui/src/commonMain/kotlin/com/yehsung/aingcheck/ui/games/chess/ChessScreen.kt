@@ -412,6 +412,8 @@ internal fun ChessLobby(games: GamesStore, chess: ChessStore, roster: GamesLobby
         }
         ChessIncoming(games, chess, state)
         ChessOutgoing(chess)
+        // 1:1 대기방(판 9) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+        com.yehsung.aingcheck.ui.games.rooms.GamesDuelRoomsSection(games.context.duelRooms, com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.chess)
         Spacer(Modifier.height(AingDimens.rowSpacing))
         // 로봇과 두기 — 사람 목록 바로 위. 판돈도 순위도 없고 로그인을 보지 않는다.
         ChessRobotEntry(chess, onOpen = { state.robotScreenOpen = true })

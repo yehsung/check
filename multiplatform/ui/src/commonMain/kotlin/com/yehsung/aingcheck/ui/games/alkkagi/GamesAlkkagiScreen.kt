@@ -182,6 +182,8 @@ private fun AlkkagiLobby(store: GamesStore, alkkagi: AlkkagiOnlineStore, myUserI
             SectionHeader(AlkkagiPhoneText.outgoingTitle, padded = true)
             InsetGroup { OutgoingRow(alkkagi, sent) }
         }
+        // 1:1 대기방(판 9) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+        com.yehsung.aingcheck.ui.games.rooms.GamesDuelRoomsSection(store.context.duelRooms, com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.alkkagi)
         SectionHeader(AlkkagiPhoneText.usersTitle, padded = true)
         InsetGroup { Users(alkkagi, blockedBy, onChallenge) }
         if (alkkagi.spectatorFeaturesEnabled) {

@@ -128,4 +128,7 @@ interface GamesContext : GamesMiniGameContext {
 
     /** 루비 **공유 미러**(Swift `context.gomokuHost.rubyBalance`) — 오목·체스·테트리스·상점이 한 칸에 쓴다. 모르면 null. */
     val sharedRubyBalance: Long?
+
+    /** 1:1 대기방(판 9 — 여섯 게임 로비가 같은 스토어를 본다 · 내 방은 어느 게임이든 하나). 없으면(Windows v1 동결) 로비에 절이 없다. */
+    val duelRooms: com.yehsung.aingcheck.core.stores.rooms.DuelRoomStore? get() = null
 }

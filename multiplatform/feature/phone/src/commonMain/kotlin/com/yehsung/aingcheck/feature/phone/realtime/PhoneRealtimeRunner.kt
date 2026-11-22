@@ -86,6 +86,9 @@ class PhoneRealtimeRunner(
     var alkkagi: RealtimeSignalReceiver? = null
     var mahjong: RealtimeSignalReceiver? = null
 
+    /** 1:1 대기방(판 9 · 아이폰 1.0.19) — 여섯 게임 초인종이 오면 내 방이 열려 있을 때 바로 숨을 쉰다(방에 사람이 들어온 신호일 수 있다 · 1초에 한 번). */
+    var duelRooms: (() -> Unit)? = null
+
     /** 확성기 배너 신호('megaphone')를 받을 자리(조립이 붙인다 — 배너 스토어 refresh). 비어 있으면 아무 일도 안 한다(같은 묶음의 ring 이 메시지를 갚는다). */
     var megaphone: (() -> Unit)? = null
 
@@ -235,6 +238,7 @@ class PhoneRealtimeRunner(
 
     private fun run(out: List<RealtimeEffect>, now: SwiftDate) {
         for (effect in out) {
+            if (isDuelRoomGameSignal(effect)) duelRooms?.invoke()
             effects += effect
             if (effects.size > EFFECT_LOG_LIMIT) effects.subList(0, effects.size - EFFECT_LOG_LIMIT).clear()
             when (effect) {
@@ -467,7 +471,13 @@ class PhoneRealtimeRunner(
         pendingRead = false
     }
 
-    private companion object {
+    companion object {
+        /** 대기방이 숨을 쉴 게임 초인종인가(맥 WorkTimerStore.isDuelRoomGameSignal · 아이폰과 같은 여섯). */
+        fun isDuelRoomGameSignal(effect: RealtimeEffect): Boolean = when (effect) {
+            RealtimeEffect.GomokuSignal, RealtimeEffect.ChessSignal, RealtimeEffect.TetrisSignal, RealtimeEffect.ReversiSignal,
+            RealtimeEffect.CrossyDuelSignal, RealtimeEffect.AlkkagiSignal -> true
+            else -> false
+        }
         const val EFFECT_LOG_LIMIT = 50
     }
 }

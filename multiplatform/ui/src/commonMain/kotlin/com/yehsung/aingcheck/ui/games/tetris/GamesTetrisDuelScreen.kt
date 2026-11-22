@@ -215,6 +215,8 @@ private fun TetrisLobby(
             InlineNotice(it, Modifier.padding(top = AingDimens.rowSpacing), NoticeKind.Warning)
         }
         OutgoingSection(store, now)
+        // 1:1 대기방(판 9) — 시간이 흐르는 신청 바로 아래 · 사람 · 순위 칸 위.
+        com.yehsung.aingcheck.ui.games.rooms.GamesDuelRoomsSection(store.context.duelRooms, com.yehsung.aingcheck.core.wire.rooms.DuelRoomGame.tetris)
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(top = AingDimens.rowSpacing)) {
             GamesTetrisLobbyTab.entries.forEachIndexed { index, value ->
                 SegmentedButton(

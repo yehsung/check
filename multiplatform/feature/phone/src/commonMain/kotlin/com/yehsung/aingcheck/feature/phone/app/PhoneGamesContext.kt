@@ -57,6 +57,8 @@ class PhoneGamesContext(private val phone: PhoneContext, override val gomoku: Ph
     override val sharedRubyBalance: Long?
         get() = phone.ruby.rubyBalance
 
+    override val duelRooms: com.yehsung.aingcheck.core.stores.rooms.DuelRoomStore? get() = phone.duelRooms
+
     override fun refreshAchievementsAfterGameResult(game: String) = phone.refreshAchievementsAfterGameResult(game)
 }
 

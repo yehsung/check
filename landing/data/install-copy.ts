@@ -23,26 +23,31 @@ export const INSTALL_COPY = {
   qrCaption: "카메라로 찍으면 App Store가 열려요.",
 } as const;
 
-// ─── 안드로이드 — Play 스토어 출시 준비 중(docs/v3/brief.md §12) ───────────────────────────────────────────────
-// 2026-10-30 에 넣은 베타 세 단계(구글 그룹 가입 → 웹에서 테스터 되기 → Play 스토어 설치)는 11-03 에 내렸다. 그날 Play 비공개 테스트의
-// 테스터가 구글 그룹에서 이메일 목록으로 바뀌어(구글 검토 중), 검토가 통과되면 그룹으로 가입한 사람은 앱을 받을 수 없다.
-// 대표 결재(11-03): "검토 통과 때 안내 내리고 '출시 준비 중'으로" — 정식 출시 때 스토어 링크로 바꾼다.
-// [ANDROID-LAUNCH] 정식 출시 때 바꿀 자리마다 이 표식이 있다(`grep -rn ANDROID-LAUNCH`): 이 상수 · 설치 절 카드 · 히어로 · 아웃트로 · 선택 창 ·
-// FAQ 2번 답 · llms.txt · LINKS.androidStore · 시험(android.test.ts · android-smoke.mjs). 출시 때는 카드에 [Play 스토어에서 받기](LINKS.androidStore)
-// 버튼을 두고 글자를 바꾼다.
+// ─── 안드로이드 — Play 스토어 정식 출시(docs/v3/brief.md §12.8) ───────────────────────────────────────────────
+// 10-30 베타 세 단계(구글 그룹 → 웹 테스터 → Play 설치)는 11-03 에 내리고 스토어 공개 전까지 안내 한 줄만 두었다(§12.7).
+// 11-20 Play 스토어 정식 출시(판 8 · 대한민국 100% — 대표 결재 #d_MpzLv9qhvDuP "판 8로 대한민국에 전체 출시") → 스토어 버튼으로 바꾼다.
+// 기기마다 자기 스토어(대표 결재 #d_88MQEAwesX78 "기기마다 자기 스토어" — 11-21): 아이폰엔 App Store, 안드로이드엔 Google Play 가 같은 자리에.
+//   히어로 · 아웃트로(폰 · 태블릿) = 안드로이드 기기면 App Store 배지 자리에 Google Play 공식 배지(PlayStoreBadge) · 메뉴바 = 'App Store' 자리에 'Play 스토어' ·
+//   컴퓨터 아웃트로 줄 = App Store 배지 옆에 Google Play 배지(둘 다) · 설치 절 안드로이드 카드 = Google Play 배지 · 선택 창 = [아이폰] · [안드로이드] 칩.
+//   모두 LINKS.androidStore 새 탭.
+// FAQ 2번 답 맨 끝 · llms.txt 안드로이드 줄은 line 하나를 쓴다. 안드로이드 최소 OS 버전은 적지 않는다(모른다 — 지어내지 않는다).
 // 이 파일은 node --test 가 바로 읽어야 해서(JSON import 0) 주소를 가져오지 않는다.
 
 export const ANDROID_COPY = {
   /** 설치 절 카드 제목(h3) */
   title: "안드로이드",
   /** 카드 한 줄 = FAQ 2번 답 맨 끝 문장 = llms.txt 안드로이드 줄(정본 하나) */
-  line: "안드로이드 앱은 Play 스토어 출시를 준비하고 있어요.",
-  /** 설치 선택 창 휴대폰 줄 — 이름 · [아이폰] 칩 · 안드로이드 상태 글자(CHOOSER_COPY 가 가리킨다) */
+  line: "안드로이드 앱은 Play 스토어에서 받을 수 있어요.",
+  /** Google Play 배지 alt(배지 글자 그대로 — App Store 배지 alt 와 같은 원칙) */
+  badgeAlt: "Google Play에서 다운로드",
+  /** 메뉴바 버튼(안드로이드 기기) — 아이폰의 'App Store' 자리 */
+  nav: "Play 스토어",
+  /** 설치 선택 창 휴대폰 줄 — 이름 · [아이폰] 칩 · [안드로이드] 칩(CHOOSER_COPY 가 가리킨다) */
   chooserRow: "휴대폰 앱",
   chooserIphone: "아이폰",
-  chooserAndroid: "안드로이드 출시 준비 중",
+  chooserAndroid: "안드로이드",
   /** 폰 첫 화면(안드로이드 기기) 버튼 줄 아래 메타 — 히어로 */
-  phoneMeta: "무료 · 안드로이드 출시 준비 중 · macOS 14 이상",
+  phoneMeta: "무료 · 안드로이드 · macOS 14 이상",
 } as const;
 
 /** 릴리스 MB('30.1' 꼴 — 숫자와 점뿐). FigureString 의 한 갈래라 .t-facts 에 그대로 넣을 수 있다. */
@@ -121,7 +126,7 @@ export const CHOOSER_COPY = {
   phoneTitle: ANDROID_COPY.chooserRow,
   /** 휴대폰 줄 칩 1(App Store 새 탭) */
   phoneIphone: ANDROID_COPY.chooserIphone,
-  /** 휴대폰 줄 안드로이드 상태 글자(링크 아님 — 출시 준비 중 · [ANDROID-LAUNCH]) */
+  /** 휴대폰 줄 칩 2(Play 스토어 새 탭) */
   phoneAndroid: ANDROID_COPY.chooserAndroid,
   /** 맨 아래 링크(/#install) */
   more: "설치 방법 자세히 보기",

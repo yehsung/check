@@ -96,6 +96,14 @@ package nonisolated enum ShopWire {
     package static let regionProtocol = 10
     /// 이 번호를 요구하는 캐릭터 — 지역 아잉이 둘(`CharacterCatalog.regionGiftBuiltInIDs`).
     package static let regionCharacterIDs = CharacterCatalog.regionGiftBuiltInIDs
+    /// 산타 아잉이(크리스마스 기간 선물 전용)가 든 명단과 크리스마스 선물(`character_gift_pending` 의 `kind = 'santa'` · 그 수령)을 받을 수 있는 번호.
+    /// 서버 `character_prices.min_protocol = 11` 인 행이 산타이고, 11 미만인 클라에게는 그 행이 **아예 안 보이며**(가진 사람에게도 — 빼빼로 p ≥ 6 ·
+    /// 지역 p ≥ 10 과 같은 게이트), 산타 선물은 조회에 안 실리고 수령은 `needs_update` 다.
+    /// ★ 그림(초상 · 3D 마감)이 붙기 전엔 어느 빌드도 이 번호를 말하지 않는다 — 맥 `drawableCharacterIDs` 에 산타가 없으면 10 에 머문다.
+    ///   폰(CheckMobileKit · iOS)은 산타 그림이 없어 지금 말하는 번호 그대로다.
+    package static let santaProtocol = 11
+    /// 이 번호를 요구하는 캐릭터 — 산타 하나(`CharacterCatalog.santaGiftBuiltInIDs`).
+    package static let santaCharacterIDs = CharacterCatalog.santaGiftBuiltInIDs
 
     /// 이 빌드가 **그릴 수 있는** 캐릭터 id 들 → 서버에 말할 번호.
     ///
@@ -121,6 +129,8 @@ package nonisolated enum ShopWire {
     ///   조각 20개로 '아잉 그림의 흑우'를 바꾸게 된다.
     ///   8(v0.3.78 루비 아잉이)도 같다: 여기까지 전부 **와** 루비를 그릴 수 있을 때만. 8 을 말하면 서버가 루비 행을 내려 주므로, 그림이 없으면
     ///   루비 1000개로 '아잉 그림의 루비 아잉이'를 사게 된다.
+    ///   11(산타 아잉이)도 같다: 여기까지 전부(지역 두 센터까지) **와** 산타를 그릴 수 있을 때만. 11 을 말하면 서버가 산타 행 · 크리스마스 선물을
+    ///   내려 주므로, 그림이 없으면 '아잉 그림의 산타 아잉이'를 받게 된다.
     package static func protocolVersion(drawableCharacterIDs: some Sequence<String>) -> Int {
         let drawable = Set(drawableCharacterIDs)
         guard drawable.contains(robotCharacterID) else { return legacyProtocol }
@@ -132,7 +142,8 @@ package nonisolated enum ShopWire {
         guard hwooCharacterIDs.allSatisfy(drawable.contains) else { return peperoProtocol }
         guard rubyCharacterIDs.allSatisfy(drawable.contains) else { return hwooProtocol }
         guard devCharacterIDs.allSatisfy(drawable.contains) else { return rubyProtocol }
-        return regionCharacterIDs.allSatisfy(drawable.contains) ? regionProtocol : devProtocol
+        guard regionCharacterIDs.allSatisfy(drawable.contains) else { return devProtocol }
+        return santaCharacterIDs.allSatisfy(drawable.contains) ? santaProtocol : regionProtocol
     }
 
     /// 이 번호로 생일 선물(케이크 아잉이)을 조회 · 수령할 수 있는가(서버 `character_gift_pending` · `claim_character_gift` 의
@@ -155,6 +166,11 @@ package nonisolated enum ShopWire {
     /// 이 번호로 우리 센터 선물(지역 아잉이)을 마련 · 조회 · 수령할 수 있는가(서버 `region_gift_ensure` · `claim_character_gift` 의 문턱 10).
     package static func supportsRegionGift(protocolVersion: Int) -> Bool {
         protocolVersion >= regionProtocol
+    }
+
+    /// 이 번호로 크리스마스 선물(산타 아잉이)을 받을 수 있는가(서버 `claim_character_gift` 의 산타 선물 문턱 `p_protocol >= 11` 과 같다).
+    package static func supportsSantaGift(protocolVersion: Int) -> Bool {
+        protocolVersion >= santaProtocol
     }
 
     /// 이 번호로 뽑기를 쓸 수 있는가(서버 `gacha_pull`·`gacha_exchange` 의 `p_protocol >= 2` 와 같은 문턱).

@@ -57,6 +57,8 @@ test("Outro.tsx: #outro · 넓은 벌(≥768·iOS 아님) = 다운로드 → bre
   const brew = wide.indexOf("<BrewPill");
   const badge = wide.indexOf("<AppStoreBadge");
   assert.ok(dl > 0 && brew > dl && badge > brew, "§8 순서(넓은 벌): Mac용 다운로드 · brew 알약 · App Store 배지");
+  // 기기마다 자기 스토어(§12.8 · #d_88MQEAwesX78): 컴퓨터 줄은 App Store 다음에 Google Play 배지(둘 다)
+  assert.ok(wide.indexOf("<PlayStoreBadge") > badge, "넓은 벌: App Store 배지 다음 Google Play 배지");
   assert.match(wide, /<DownloadCTA[^>]*placement="outro"/);
   assert.match(wide, /<div className="[^"]*hidden[^"]*tab:flex[^"]*desk:flex[^"]*\[html\[data-platform=ios\]_&\]:hidden/, "넓은 벌은 ≥768 · iOS 아님");
   assert.ok(narrow.indexOf("<AppStoreBadge") < narrow.indexOf("LINKS.install"), "§9.4.4: 폰은 배지가 먼저(히어로와 같은 순서)");

@@ -9,7 +9,7 @@
 // 창(role="dialog", 비모달, 접근 이름 CHOOSER_COPY.ariaLabel): thick 유리 판 하나를 document.body 로 포털한다(절의 isolate·overflow 밖).
 //   z: 메뉴바 창(fixed) = 메뉴바(--z-nav 50) 위 60 · 히어로·아웃트로 창(absolute) = 메뉴바 바로 아래 49 — 열어 둔 채 스크롤해도 메뉴바를 덮지 않는다.
 //   내용 순서: Homebrew 제목 + [복사](진짜 복사 — BREW.install) · 한 줄 · 명령(한 줄) / 구분선 / DMG 줄 전체 = /api/download 링크 /
-//   휴대폰 앱 줄(§12 — 칩 [아이폰] = App Store 새 탭 · 안드로이드는 링크 없는 글자 '안드로이드 출시 준비 중') / 설치 방법 자세히 보기(/#install).
+//   휴대폰 앱 줄(§12.8 — 칩 [아이폰] = App Store 새 탭 · [안드로이드] = Play 스토어 새 탭) / 설치 방법 자세히 보기(/#install).
 // 자리: computePlacement(chooser-logic.ts — 순수 함수, 값 시험). 열 때 · 창 크기가 바뀔 때 · 메뉴바 창은 스크롤할 때 · 방아쇠(조상)의 등장 애니메이션이
 //   도는 동안 매 프레임 JS 로 잰다(CSS anchor 없음 — Safari 도 같다). 기준은 방아쇠 + CTA 줄([data-chooser-row]) — 폭이 좁아 brew 알약이 아래 줄로
 //   내려가면 창이 알약을 반쯤 덮지 않게 줄 아래에 연다. 메뉴바 방아쇠는 fixed, 나머지는 문서 기준 absolute(스크롤하면 방아쇠와 함께 간다).
@@ -392,10 +392,17 @@ export function InstallChooser({ placement, label, ariaLabel, className, meta }:
                 >
                   {CHOOSER_COPY.phoneIphone}
                 </a>
-                {/* [ANDROID-LAUNCH] 정식 출시 때 [안드로이드] 칩(LINKS.androidStore · 새 탭 · close(true))으로 바꾼다 */}
-                <span data-chooser-android="" className="ic-soon">
+                <a
+                  href={LINKS.androidStore}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  tabIndex={0}
+                  data-cta="chooser-android"
+                  className="gbtn gbtn--chip ic-chip"
+                  onClick={() => close(true)}
+                >
                   {CHOOSER_COPY.phoneAndroid}
-                </span>
+                </a>
               </div>
             </div>
             <a href={LINKS.install} tabIndex={0} data-cta="chooser-install" className="ic-more" onClick={() => close(false)}>

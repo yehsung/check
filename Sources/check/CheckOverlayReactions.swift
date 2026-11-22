@@ -299,6 +299,9 @@ final class ReactionEngine {
     }
     /// 렌더 FPS 를 조절하기 위한 SCNView 참조(attach 에서 makeNSView 가 전달). 뷰 수명은 SwiftUI 소유라 weak.
     @ObservationIgnored private weak var attachedView: SCNView?
+    /// 렌더러 박동(그린 프레임 수). makeNSView 가 SCNView 의 delegate 로 꽂는다 — `SCNView.delegate` 가 weak 라 여기서 쥔다.
+    /// 컨트롤러의 판별 로그(표시·peek·울트라 수신·재생성 뒤 2초 프레임 수)만 읽는다. 렌더 동작에는 아무 영향이 없다.
+    @ObservationIgnored let renderFrameCounter = OverlayRenderFrameCounter()
     @ObservationIgnored private var modelExtent: CGFloat = 1
     @ObservationIgnored private var greetingClearTask: Task<Void, Never>?
     /// 리액션 재생이 끝나면 FPS 를 유휴(idleFPS)로 되돌리는 태스크. 새 리액션이 들어오면 다시 스케줄된다.
@@ -619,14 +622,20 @@ final class ReactionEngine {
         // 부산 갈매기 아잉이도 같은 메시라 자기 표식(`RegionAingFinish.busanMarkerName`)으로 가른다.
         if RegionAingFinish.isBusan(character) { return CharacterCatalog.busanAingID }
         if RegionAingFinish.isSeoul(character) { return CharacterCatalog.seoulAingID }
+        // 산타 아잉이도 같은 메시(팔 접기는 셰이더가 한다)라 자기 표식(`SantaAingFinish.markerName`)으로 가른다.
+        if SantaAingFinish.isSanta(character) { return CharacterCatalog.santaAingID }
         return CharacterCatalog.builtInAingID
     }
 
     /// 울트라 격발 자세 — 지금 서 있는 캐릭터로 고른다(격발은 발신자 캐릭터로 갈아입은 **뒤** 요청되므로 그 캐릭터의 자세다).
-    /// 빼빼로만 따로다(`ReactionActions.UltraRagePose.pepero` 주석 — 상자 밑 몸 · 막대 잘림). 재생(`perform`)과 재-attach 되재생
-    /// (`reactionAction(for:)`)이 둘 다 여기서 읽는다.
+    /// 빼빼로 · 산타만 따로다(`ReactionActions.UltraRagePose.pepero` 주석 — 상자 밑 몸 · 막대 잘림 · `.santa` 주석 — 스트레치에서 털 방울 잘림).
+    /// 재생(`perform`)과 재-attach 되재생(`reactionAction(for:)`)이 둘 다 여기서 읽는다.
     var ultraRagePose: ReactionActions.UltraRagePose {
-        currentCharacterID == CharacterCatalog.peperoAingID ? .pepero : .standard
+        switch currentCharacterID {
+        case CharacterCatalog.peperoAingID: .pepero
+        case CharacterCatalog.santaAingID: .santa
+        default: .standard
+        }
     }
 
     /// 헤드리스 검증 지점: 지금 몰고 있는 것이 스프라이트인가.
@@ -1711,7 +1720,7 @@ enum ReactionActions {
     /// 스케일 진동을 키운다. moveBy 쌍이 정확히 상쇄되므로 드리프트가 0 이다(poked 와 같은 규약) —
     /// 안 그러면 5초 뒤 원래 자리로 못 돌아와 작은 패널로 복귀했을 때 캐릭터가 창 밖으로 나가 있다.
     /// 총 0.36 + 4.16 + 0.48 = 5.00s, scale·euler·position 모두 identity 로 끝난다.
-    /// 자세(`pose`)는 캐릭터마다 엔진이 고른다(`ReactionEngine.ultraRagePose`) — 기본은 `.standard`, 빼빼로만 `.pepero`.
+    /// 자세(`pose`)는 캐릭터마다 엔진이 고른다(`ReactionEngine.ultraRagePose`) — 기본은 `.standard`, 빼빼로는 `.pepero`, 산타는 `.santa`.
     static func ultraPoked(extent: CGFloat, pose: UltraRagePose = .standard) -> SCNAction {
         let identity = SCNVector3(1, 1, 1)
         let jitter = extent * 0.06
@@ -1780,6 +1789,11 @@ enum ReactionActions {
         /// 0.11–0.13). 그래서 x 기울기를 없애고(밑에서 보는 구도가 안 생긴다) z 를 28° 로 줄이고 연출 내내 extent × 0.11 내려 세운다 — 실측(앱 씬):
         /// 위 여백 plus 0.050 · minus 0.047 · 임팩트 스트레치 0.021 · 아래 여백 ≥ 0.18(`V0377PeperoMac3DTests.ultraRageKeepsTheBoxAndSticksInFrame`).
         static let pepero = UltraRagePose(tiltX: 0, rollZ: 28, lift: 0.6, drop: 0.11)
+        /// 산타 아잉이(검토 수리). 털 방울 꼭대기(≈ 1.08)가 아잉 머리 위로 솟아, 기본 자세면 임팩트 스트레치(y × 1.32)에서 털 방울이 프레임 위로
+        /// 프레임 높이의 0.042 만큼 나갔다(이슬 뚜껑은 같은 자리에서 0.016 — 2.6배). 기울기 · 흔들림은 기본 그대로 두고 연출 내내 extent × 0.10
+        /// 내려 세운다(빼빼로와 같은 내려 세우기) — 실측(앱 씬, 280×340 · 945²): 위 여백 스트레치 0.024 · plus 0.206 · minus 0.162,
+        /// 아래 여백 ≥ 0.17(`SantaAingMac3DTests.framingKeepsThePompomInside` — 0.08 이면 스트레치 0.012 로 모자랐다).
+        static let santa = UltraRagePose(tiltX: 12, rollZ: 34, lift: 0.6, drop: 0.10)
     }
 
     /// 발광 한쪽 끝(sign > 0 = plus · 아니면 minus)에서 wrapper 가 서는 자세 — `ultraPoked` 의 rage 가 실제로 지나는 값이다

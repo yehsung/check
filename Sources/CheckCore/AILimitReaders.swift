@@ -456,17 +456,22 @@ package struct AILimitClaudeReader: Sendable {
     private let fetch: AILimitHTTPFetcher
     private let securityTool: URL
     private let appVersion: String
+    private let keychainAccount: String?
 
+    /// - Parameter keychainAccount: 먼저 고를 키체인 계정 이름. 기본값은 **맥 사용자 이름**이다 — Claude Code 가
+    ///   자기 로그인을 그 이름으로 적고 읽는다(11-12 실측: 진짜 항목의 계정 = 사용자 이름).
     package init(
         runner: @escaping AILimitCommandRunner,
         fetch: @escaping AILimitHTTPFetcher,
         securityTool: URL = URL(fileURLWithPath: "/usr/bin/security"),
-        appVersion: String
+        appVersion: String,
+        keychainAccount: String? = NSUserName()
     ) {
         self.runner = runner
         self.fetch = fetch
         self.securityTool = securityTool
         self.appVersion = appVersion
+        self.keychainAccount = keychainAccount.flatMap { $0.isEmpty ? nil : $0 }
     }
 
     /// 키체인에서 읽은 것 중 **우리가 쓰는 것만**. refreshToken 은 담지 않는다 — 담을 자리가 없으면 쓸 수도 없다.
@@ -512,23 +517,48 @@ package struct AILimitClaudeReader: Sendable {
     }
 
     /// 자격증명을 읽는다. 실패는 전부 "Claude 행만 조용히 숨긴다"로 접힌다(기능 전체가 죽지 않는다).
+    ///
+    /// ## 계정 이름으로 **먼저** 고른다
+    /// 같은 이름(`Claude Code-credentials`)의 항목이 **둘** 생길 수 있다. 11-12 실측: 사용자 이름 없이 뜬 시험용
+    /// Claude 가 계정 `unknown` 으로 **토큰이 빈** 항목(로그아웃 표시)을 하나 더 만들었고, 계정을 지정하지 않은
+    /// 조회가 그 빈 쪽을 집어 Claude 줄이 '연동 안 됨'으로 사라졌다. Claude Code 는 사용자 이름으로 골라 읽어 멀쩡했다.
+    /// 그래서 사용자 이름으로 먼저 읽고, 그 항목이 없거나 쓸 수 없을 때만 예전처럼 이름 없이 읽는다.
+    /// 승인 대화상자 타임아웃(`.blocked`)이면 두 번째 조회도 같은 창에 막히므로 바로 돌려준다.
     package func credentials() async -> Result<Credentials, AILimitReadError> {
+        if let keychainAccount {
+            let named = await lookup(arguments: [
+                "find-generic-password", "-s", Self.keychainService, "-a", keychainAccount, "-w"
+            ])
+            // 읽었으면 끝. 승인 창 타임아웃이면 이름 없는 조회도 같은 창에 막히니 그대로 돌려준다.
+            // 그 밖(항목 없음 · 빈 토큰 · 모양 모름 · 다른 거부)은 예전 조회로 한 번 더 본다.
+            if case .success = named.result { return named.result }
+            if named.timedOut { return named.result }
+        }
+        return await lookup(arguments: ["find-generic-password", "-s", Self.keychainService, "-w"]).result
+    }
+
+    private func lookup(arguments: [String]) async -> (result: Result<Credentials, AILimitReadError>, timedOut: Bool) {
         let output = await runner(AILimitCommand(
             executable: securityTool,
-            arguments: ["find-generic-password", "-s", Self.keychainService, "-w"],
+            arguments: arguments,
             timeout: Self.keychainTimeout
         ))
+        return (Self.credentials(from: output), output.timedOut)
+    }
+
+    /// `security` 한 번의 결과를 자격증명 또는 실패로 접는다(순수).
+    private static func credentials(from output: AILimitCommandOutput) -> Result<Credentials, AILimitReadError> {
         if output.launchFailed { return .failure(AILimitReadError(.notInstalled)) }
         // 타임아웃 = 승인 대화상자가 떠 있고 사용자가 아직(또는 끝내) 응답하지 않았다 → 조용히 숨긴다.
         if output.timedOut { return .failure(AILimitReadError(.blocked)) }
-        if output.status == Self.keychainItemNotFoundStatus {
+        if output.status == keychainItemNotFoundStatus {
             return .failure(AILimitReadError(.notInstalled))
         }
         // 그 밖의 0 아닌 종료는 거부(errSecUserCanceled)·잠긴 키체인·권한 없음이 섞여 있다. 어느 쪽이든
         // 우리가 사용자에게 시킬 일이 없고, 영구히 막힌 상태일 수 있다 — 조용히 숨긴다.
         if output.status != 0 { return .failure(AILimitReadError(.blocked)) }
         guard !output.stdout.isEmpty else { return .failure(AILimitReadError(.notLoggedIn)) }
-        return Self.parseCredentials(output.stdout)
+        return parseCredentials(output.stdout)
     }
 
     /// 사용량 응답에서 **5시간·주간 두 창만** 뽑는다.

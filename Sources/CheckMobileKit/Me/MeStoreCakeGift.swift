@@ -231,6 +231,8 @@ extension MeStore {
         case .pepero: return PeperoGiftText.notice(for: outcome, name: MeCharacterName.display)
         // 우리 센터 선물(지역 아잉이 — 맥 먼저 · 능력 10): 폰은 서버가 이 선물을 안 보인다. 실패 줄은 생일과 한 벌.
         case .region: return CakeGiftText.notice(for: outcome, name: MeCharacterName.display)
+        // 크리스마스 선물(산타 아잉이 — 맥 먼저 · 능력 11): 폰은 산타를 그리지 않아 서버가 이 선물을 안 보인다. 갈래는 코어 글자로 닫는다.
+        case .santa: return SantaGiftText.notice(for: outcome, name: MeCharacterName.display)
         }
     }
 
@@ -389,6 +391,7 @@ extension CharacterGiftKind {
         case .drink: return "🥂"
         case .pepero: return "🍫"
         case .region: return "📍"
+        case .santa: return "🎄"
         }
     }
 }

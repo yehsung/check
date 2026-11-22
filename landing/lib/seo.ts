@@ -43,6 +43,7 @@ export const LOGO = { path: "/assets/brand/icon-256.webp", width: 256, height: 2
 export type SeoLinks = {
   readonly github: string;
   readonly appStore: string;
+  readonly androidStore: string;
   readonly dmgLatest: string;
   readonly zipLatest: string;
   readonly releases: string;
@@ -265,12 +266,11 @@ export interface LlmsInput {
 }
 
 /**
- * llms.txt 설치 묶음의 안드로이드 한 줄(docs/v3/brief.md §12 — 설치 절 안드로이드 카드 글자 그대로): '- Android: {한 줄}'.
- * Play 스토어 출시 준비 중이라 주소가 없다(10-30 베타 세 단계 주소는 11-03 에 내렸다). 안드로이드 MobileApplication LD 도 싣지 않는다.
- * [ANDROID-LAUNCH] 정식 출시 때 '- Android: [Play 스토어](LINKS.androidStore) — …' 꼴로 바꾸고 LD 를 다시 본다.
+ * llms.txt 설치 묶음의 안드로이드 한 줄(docs/v3/brief.md §12.8 — iPhone 줄과 같은 꼴 · 설치 절 카드 한 줄 그대로):
+ * '- Android: [Play 스토어](스토어 주소) — {한 줄}'. 안드로이드 MobileApplication LD 는 아직 싣지 않는다(이번엔 문구·링크만 — §12.8).
  */
-export function androidLine(): string {
-  return `- Android: ${ANDROID_COPY.line}`;
+export function androidLine(storeUrl: string): string {
+  return `- Android: [Play 스토어](${storeUrl}) — ${ANDROID_COPY.line}`;
 }
 
 /** 내비 링크 경로(data/site-links NAV_LINKS) — llms.txt 본문 묶음의 이름표가 이 내비 이름이다. */
@@ -303,7 +303,7 @@ export function llmsTxt({ links, brewInstall, choice, live, publishedAt, footerL
       `- Homebrew: \`${brewInstall}\` — ${INSTALL_COPY.sub}`,
       `- DMG: [${choice.label}](${downloadUrl}) — ${dmgMeta}. ${INSTALL_COPY.dmgLine}`,
       `- iPhone: [App Store](${links.appStore}) — ${INSTALL_COPY.iphoneMeta}`,
-      androidLine(),
+      androidLine(links.androidStore),
       `- [GitHub 릴리스](${links.releases})${releaseNote}`,
     ]),
     ...block(nav(NAV_HREF.features), FEATURE_COPY.map((c) => `- ${c.title.join(" ")}: ${c.body}`)),

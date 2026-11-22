@@ -257,6 +257,10 @@ struct MissionClaimContext {
     /// 캐릭터 보상 미션 받기(v0.3.81 — `achievement_character_claim`). 떠 있음 · 실패는 누적 집합(`inFlightKeys` · `failedKeys`)을
     /// 같이 쓴다(키가 겹치지 않는다). 줄은 `mission.characterID` 가 있으면 이리로 보낸다.
     var claimCharacter: (String) -> Void = { _ in }
+    /// 묶음 머리 [모두 받기](제보 11-17 — `MissionClaimAll.swift`). 키 없는 받기: 누적은 `achievement_claim(null)`(루비 미션만 —
+    /// 캐릭터 보상은 그 요청이 안 준다) · 일일은 `daily_mission_claim(null)`. 떠 있음 · 실패는 위 집합을 같이 쓴다(스토어 자리 `*`).
+    var claimAllAchievements: () -> Void = {}
+    var claimAllDaily: () -> Void = {}
 
     func isInFlight(_ key: String) -> Bool {
         inFlightKeys.contains(key) || inFlightKeys.contains(WorkTimerStore.achievementClaimAllSlot)
@@ -715,6 +719,10 @@ struct MissionGroupHeader: View {
     var note: String? = nil
     /// 오른쪽 "받을 보상 N개"(0 이면 없음).
     var pendingCount: Int = 0
+    /// [N개 모두 받기](제보 11-17). 있으면 "받을 보상 N개" 자리에 선다 — 수는 그 버튼이 실제로 받는 수다(`MissionClaimAllOffer`).
+    var claimAll: MissionClaimAllOffer? = nil
+
+    @Environment(\.missionClaim) private var claim
 
     var body: some View {
         HStack(spacing: 6) {
@@ -730,8 +738,13 @@ struct MissionGroupHeader: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
             }
-            Spacer(minLength: 4)
-            if let hint = AchievementCopy.pendingHint(pendingCount) {
+            Spacer(minLength: Self.spacerMinLength(hasClaimAll: claimAll != nil))
+            if let claimAll {
+                // 폭만 잡는다(높이 0) — 머리 줄 높이 · 글자 자리가 버튼이 없을 때와 같다. 누르는 버튼은 아래 overlay 다.
+                claimAllButton(claimAll)
+                    .hidden()
+                    .frame(height: 0)
+            } else if let hint = AchievementCopy.pendingHint(pendingCount) {
                 Text(hint)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(CheckTheme.accent)
@@ -741,7 +754,20 @@ struct MissionGroupHeader: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: MissionGroupLayout.headerHeight - 6, alignment: .bottom)
+        // 머리 줄 아래 끝에 맞춰 선다(16pt — 위 여백 6pt 중 2pt 를 쓴다, 머리 20pt 밖으로 안 나간다).
+        .overlay(alignment: .bottomTrailing) {
+            if let claimAll { claimAllButton(claimAll) }
+        }
         .padding(.top, 6)
+    }
+
+    /// 안내와 오른쪽 끝(힌트 · [모두 받기] 자리) 사이 Spacer 의 최소 폭. 버튼이 서면 0 — HStack 간격 6 + 6 만으로 12pt 가 벌어지고,
+    /// 일일 머리 + 가장 긴 버튼('12개 모두 받기' — 서버 일일 열두 줄)이 '스크롤 막대 항상 보기' 폭(292 − 17pt)에도 안내를 줄이지 않고
+    /// 들어간다(검토 지적 2026-11-18 · 시험이 잰다). 버튼이 없으면 예전 그대로 4.
+    static func spacerMinLength(hasClaimAll: Bool) -> CGFloat { hasClaimAll ? 0 : 4 }
+
+    private func claimAllButton(_ offer: MissionClaimAllOffer) -> MissionClaimAllButton {
+        MissionClaimAllButton(offer: offer, busy: claim.isClaimAllBusy(offer.group)) { claim.claimAll(offer.group) }
     }
 }
 
@@ -780,7 +806,8 @@ struct AchievementSectionView: View {
     var body: some View {
         if state != .hidden {
             VStack(spacing: AchievementSectionLayout.rowSpacing) {
-                MissionGroupHeader(title: AchievementCopy.sectionTitle, pendingCount: pendingCount)
+                MissionGroupHeader(title: AchievementCopy.sectionTitle, pendingCount: pendingCount,
+                                   claimAll: MissionClaimAllOffer.achievement(state))
                 switch state {
                 case .hidden:
                     EmptyView()

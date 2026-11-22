@@ -43,7 +43,7 @@ test('CHOOSER_COPY = 승인된 글자 그대로', () => {
     dmgTitle: 'DMG 파일 직접 내려받기',
     phoneTitle: '휴대폰 앱',
     phoneIphone: '아이폰',
-    phoneAndroid: '안드로이드 출시 준비 중',
+    phoneAndroid: '안드로이드',
     more: '설치 방법 자세히 보기',
   });
   // 한 줄은 설치 절 부제와 같은 상수(따로 적지 않는다)
@@ -328,7 +328,8 @@ test('iOS: 메뉴바 = App Store 버튼 · hero/outro 는 아무것도 그리지
   assert.match(ios, /<a href=\{LINKS\.appStore\} target="_blank" rel="noopener noreferrer"/);
   assert.ok(!/InstallChooser|chooser\(/.test(ios), 'iOS 벌엔 선택 창 없음');
   assert.match(CTA, /<span className=\{VIS\.mac\}>\{main\}<\/span>/);
-  assert.match(CTA, /<span className=\{VIS\.other\}>\{main\}<\/span>/);
+  // other 벌: 메뉴바만 안드로이드 기기 갈래(Play 스토어 — §12.8), hero·outro 는 main 그대로
+  assert.match(CTA, /<span className=\{VIS\.other\}>\s*\{placement === "nav" \? \([\s\S]*?\) : \(\s*main\s*\)\}\s*<\/span>/);
 });
 
 test('히어로·아웃트로: 폰/iOS 벌(App Store 배지 먼저 → /#install)은 그대로 · 넓은 벌 = 릴리스 넘김 · CTA 줄 표식 · 방아쇠 이름 = 보이는 글자', () => {
@@ -394,40 +395,40 @@ test('창: role=dialog · 접근 이름 · body 포털 · 순서(Homebrew → �
   assert.match(portal, /<DownloadGlyph \/>/, '내려받기 아이콘');
 });
 
-test('소스 계약 — 창: 휴대폰 앱 줄(§12 · §12.7) — DMG 줄 아래 · 자세히 보기 위 · 칩 [아이폰](App Store 새 탭 · 닫고 방아쇠로) · 안드로이드는 링크 아닌 글자(출시 준비 중)', () => {
+test('소스 계약 — 창: 휴대폰 앱 줄(§12 · §12.8) — DMG 줄 아래 · 자세히 보기 위 · 칩 [아이폰](App Store) · [안드로이드](Play 스토어) — 둘 다 새 탭 · 닫고 방아쇠로', () => {
   const portal = CHOOSER.slice(CHOOSER.indexOf('createPortal('));
-  const order = ['CHOOSER_COPY.dmgTitle', 'className="ic-phone"', 'CHOOSER_COPY.phoneTitle', 'href={LINKS.appStore}', 'CHOOSER_COPY.phoneIphone', 'className="ic-soon"', 'CHOOSER_COPY.phoneAndroid', 'data-cta="chooser-install"'];
+  const order = ['CHOOSER_COPY.dmgTitle', 'className="ic-phone"', 'CHOOSER_COPY.phoneTitle', 'href={LINKS.appStore}', 'CHOOSER_COPY.phoneIphone', 'href={LINKS.androidStore}', 'CHOOSER_COPY.phoneAndroid', 'data-cta="chooser-install"'];
   let at = -1;
   for (const s of order) {
     const i = portal.indexOf(s, at + 1);
     assert.ok(i > at, `순서: ${s}`);
     at = i;
   }
-  const iphone = /<a\s+href=\{LINKS\.appStore\}[\s\S]*?(?<!=)>/.exec(portal)?.[0] ?? '';
-  assert.match(iphone, /target="_blank"/);
-  assert.match(iphone, /rel="noopener noreferrer"/);
-  assert.match(iphone, /data-cta="chooser-iphone"/);
-  assert.match(iphone, /onClick=\{\(\) => close\(true\)\}/, '새 탭 = 닫고 방아쇠로(DMG 줄과 같다)');
-  assert.match(iphone, /tabIndex=\{0\}/, 'Safari 에서도 Tab 이 선다');
-  assert.match(iphone, /className="gbtn gbtn--chip ic-chip"/, '유리 칩');
-  // 안드로이드 = <span>(링크·tabIndex 없음 — Tab 고리 밖)
-  assert.match(portal, /<span data-chooser-android="" className="ic-soon">\s*\{CHOOSER_COPY\.phoneAndroid\}\s*<\/span>/);
-  assert.ok(!portal.includes('LINKS.android'), '안드로이드 링크 0');
+  for (const [href, cta] of [['LINKS\\.appStore', 'chooser-iphone'], ['LINKS\\.androidStore', 'chooser-android']]) {
+    const chip = new RegExp(`<a\\s+href=\\{${href}\\}[\\s\\S]*?(?<!=)>`).exec(portal)?.[0] ?? '';
+    assert.match(chip, /target="_blank"/, cta);
+    assert.match(chip, /rel="noopener noreferrer"/, cta);
+    assert.ok(chip.includes(`data-cta="${cta}"`), cta);
+    assert.match(chip, /onClick=\{\(\) => close\(true\)\}/, `${cta}: 새 탭 = 닫고 방아쇠로(DMG 줄과 같다)`);
+    assert.match(chip, /tabIndex=\{0\}/, `${cta}: Safari 에서도 Tab 이 선다`);
+    assert.match(chip, /className="gbtn gbtn--chip ic-chip"/, `${cta}: 유리 칩`);
+  }
+  assert.ok(!portal.includes('ic-soon'), '링크 아닌 글자(.ic-soon) 0');
   // 포커스 고리: 창 안의 보이는 a[href] 전부(칩 포함)를 nextFocusIndex 로 돈다 — 칩만 따로 빼는 선택자 없음
   assert.match(CHOOSER, /querySelectorAll<HTMLElement>\('a\[href\], button:not\(\[disabled\]\)'\)/);
-  // CSS: 이름 + 칩 + 글자 한 줄(이름 nowrap · 오른쪽 묶음 flex none · 글자 nowrap)
+  // CSS: 이름 + 칩 둘 한 줄(이름 nowrap · 오른쪽 묶음 flex none)
   const row = /\.ic-phone \{([^}]*)\}/.exec(CSS)?.[1] ?? '';
   assert.match(row, /display:\s*flex/);
   assert.match(row, /justify-content:\s*space-between/);
   assert.match(/\.ic-phone__title \{([^}]*)\}/.exec(CSS)?.[1] ?? '', /white-space:\s*nowrap/);
   assert.match(/\.ic-phone__chips \{([^}]*)\}/.exec(CSS)?.[1] ?? '', /flex:\s*none/);
-  assert.match(/\.ic-soon \{([^}]*)\}/.exec(CSS)?.[1] ?? '', /white-space:\s*nowrap/);
+  assert.ok(!CSS.includes('.ic-soon'), '.ic-soon 규칙 0');
 });
 
-test('어림 — 휴대폰 줄 폭: 창 안쪽(380 − 좌우 패딩 40 = 340) 안에 이름 + [아이폰] 칩 + 안드로이드 글자가 한 줄로 든다(글자 폭 어림 — 한글 1em · 공백 .26em · 실측 한 줄은 scripts/android-smoke.mjs)', () => {
+test('어림 — 휴대폰 줄 폭: 창 안쪽(380 − 좌우 패딩 40 = 340) 안에 이름 + [아이폰] · [안드로이드] 칩이 한 줄로 든다(글자 폭 어림 — 한글 1em · 공백 .26em · 실측 한 줄은 scripts/android-smoke.mjs)', () => {
   const em = (s: string) => [...s].reduce((w, ch) => w + (/[가-힣]/.test(ch) ? 1 : ch === ' ' ? 0.26 : 0.6), 0);
   const chip = (s: string) => em(s) * 13.5 + 13 * 2; // .gbtn--chip 13.5px · 좌우 13px
-  const width = em(CHOOSER_COPY.phoneTitle) * 13.5 + 12 + chip(CHOOSER_COPY.phoneIphone) + 10 + em(CHOOSER_COPY.phoneAndroid) * 13;
+  const width = em(CHOOSER_COPY.phoneTitle) * 13.5 + 12 + chip(CHOOSER_COPY.phoneIphone) + 10 + chip(CHOOSER_COPY.phoneAndroid);
   assert.ok(width < 340 - 2, `${Math.round(width)}px`);
 });
 

@@ -5,6 +5,12 @@
     "h": 40,
     "bytes": 9260
   },
+  "brand/googleplay-badge-ko": {
+    "src": "/assets/brand/googleplay-badge-ko.png?v=bace074b",
+    "w": 646,
+    "h": 192,
+    "bytes": 15010
+  },
   "brand/icon-256": {
     "src": "/assets/brand/icon-256.webp?v=6b86bede",
     "w": 256,

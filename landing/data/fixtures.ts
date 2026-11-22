@@ -38,7 +38,7 @@ export type AssetKey =
   | 'ui/chess-board'           // 700×700 — 1:1 체스 판만
   | 'ui/tetris-duel'           // 1200×865 — 1:1 테트리스 두 사람 카드+판(사용자 지정 크롭 — brief §9.5)
   // 브랜드
-  | 'brand/appstore-badge-ko-black' | 'brand/qr-appstore' | 'brand/qr-android-beta' | 'brand/icon-64' | 'brand/icon-256'
+  | 'brand/appstore-badge-ko-black' | 'brand/googleplay-badge-ko' | 'brand/qr-appstore' | 'brand/qr-android-beta' | 'brand/icon-64' | 'brand/icon-256'
   // v2 새 키 11개(SPEC §6.3 · §9.2 — 크롭·리사이즈만, docs/v2/requests/assets.md 의 w·h)
   | 'ui/header-on-lg'          // 1264×428
   | 'ui/menubar-0000-lg'       // 463×132
@@ -83,8 +83,8 @@ export const LINKS = {
   terms: 'https://yehsung.github.io/check/terms', github: 'https://github.com/yehsung/check',
   issues: 'https://github.com/yehsung/check/issues', licenses: '/licenses',
   install: '/#install', // 폰(< 768)·iOS 의 'Mac용 다운로드'·메뉴바 [다운로드] — DMG 대신 설치 절로(docs/v3/brief.md §9.2 · §9.4)
-  // 안드로이드(docs/v3/brief.md §12): Play 스토어 출시 준비 중. 베타 세 단계(구글 그룹 · 웹 테스터 등록)는 11-03 에 내렸다.
-  // [ANDROID-LAUNCH] 정식 출시 때 설치 절 카드 버튼이 이 주소로 간다(지금은 화면 어디에도 쓰지 않는다 — 비로그인이면 404).
+  // 안드로이드(docs/v3/brief.md §12.8): 11-20 Play 스토어 정식 출시 — 설치 절 카드 · 폰 첫 화면 · 선택 창 칩이 이 주소로 간다(새 탭).
+  // 지역 코드(hl·gl)는 넣지 않는다(App Store 주소와 같다 — 스토어가 사용자 지역으로 연다).
   androidStore: 'https://play.google.com/store/apps/details?id=com.yehsung.aingcheck',
   android: '/#android', // 설치 절 안드로이드 카드(옛 QR·공유 링크가 이 자리로 온다)
 } as const;

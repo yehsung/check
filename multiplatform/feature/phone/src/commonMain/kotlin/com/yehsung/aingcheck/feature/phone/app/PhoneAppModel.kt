@@ -92,6 +92,8 @@ class PhoneEnvironment(
     /** 이 빌드가 초상을 그릴 수 있는 캐릭터 id(캐릭터 한 표 — 모르는 id 를 입은 사람은 이니셜). */
     val knownCharacterIDs: List<String>,
     val logger: Logger? = null,
+    /** 사진 줄이기(판 9 — 제보 캡처 · Android BitmapFactory). null 이면 캡처 입구가 숨는다(시험 기본). */
+    val photoEncoder: com.yehsung.aingcheck.core.stores.me.PhotoEncoding? = null,
     /** 데모 조립(stub 변형). 스토어는 이 값으로 동작을 바꾸지 않는다 — 설명 시트만 띄우지 않는다. */
     val isDemo: Boolean = false,
     /**
@@ -327,6 +329,7 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         // "기본값이니 지워도 되겠지"로 지우지 마라(PhoneAppModelTest 가 잰다).
         games.miniGames.phonePauseRules = true
         me = MeStore(context, scope, env.drawableCharacters)
+        me.photoEncoder = env.photoEncoder
         work = PhoneWorkController(now, ruby, weeklyWorkDidChange = { me.weeklyWorkDidChange() }, reloadWidgets = env.reloadWidgetTimelines)
         widgetSink = NowWidgetSnapshotSink(
             now = now,

@@ -37,11 +37,13 @@ suspend fun MeStore.sendFeedback() {
     val appVersion = context.appInfo.feedbackAppVersion
     val osVersion = context.appInfo.osVersion
     val generation = context.generation
+    // 이번 전송에 실을 캡처(붙이기 줄이 숨었으면 없다 — 판 9 · 아이폰 1.0.19). 손에 쥔 사본으로 올린다.
+    val shots = feedbackShotsForSend
     isSendingFeedback = true
     feedbackNotice = null
     try {
         val service = context.service
-        try {
+        val returnedID = try {
             context.withSessionRetry { s -> service.submitFeedback(s.accessToken, kind, body, appVersion, osVersion) }
         } catch (e: Throwable) {
             if (generation != context.generation) return
@@ -52,6 +54,13 @@ suspend fun MeStore.sendFeedback() {
         if (generation != context.generation) return
         feedbackDraft = ""
         feedbackNotice = FeedbackText.sendSuccess
+        // 글이 먼저 갔다 — 캡처는 그 제보 폴더에 올리고 붙인다(실패해도 제보는 보낸 것 · 글을 다시 보내지 않는다).
+        if (shots.isEmpty()) {
+            discardUnsentFeedbackShots()
+        } else {
+            finishFeedbackShotsAfterSubmit(shots, returnedID, generation)
+            if (generation != context.generation) return
+        }
         loadFeedback()
     } finally {
         if (generation == context.generation) isSendingFeedback = false
@@ -85,6 +94,8 @@ suspend fun MeStore.loadFeedback() {
         if (generation != context.generation || !isCurrent("feedback", serial)) return
         val mine = MeText.sortedFeedback(reports.filter { it.userID == me })
         if (feedbackList != mine) feedbackList = mine
+        // 목록 옆 캡처 칩(판 9): 목록이 비어 있지 않으면 **한 번에** 캡처 행을 받는다(새 자동 호출은 이 하나뿐 — 맥 · 아이폰과 같다).
+        if (mine.isNotEmpty() && feedbackShotsShown) launch { loadFeedbackShots(mine, generation) }
         feedbackState.hasLoaded = true
         feedbackState.loadedAt = context.clock.now()
         val latest = mine.mapNotNull { it.adminNoteAt }.maxOrNull()
@@ -134,6 +145,7 @@ fun MeStore.didReceiveFeedbackReplyPush(@Suppress("UNUSED_PARAMETER") reportID: 
 
 fun MeStore.feedbackDidAppear() {
     isFeedbackVisible = true
+    rearmFeedbackShots()
     if (!context.sessionStore.isSignedIn) return
     launch { loadFeedback() }
     launch { loadFeedbackReplyLatest() }

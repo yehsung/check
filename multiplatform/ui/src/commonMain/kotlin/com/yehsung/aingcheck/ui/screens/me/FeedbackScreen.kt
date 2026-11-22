@@ -5,6 +5,21 @@
 // 글자 수를 자르지 않는다(조합 중 한글이 깨진다 — E§8). 넘친 초안은 [보내기]가 막는다.
 package com.yehsung.aingcheck.ui.screens.me
 
+import com.yehsung.aingcheck.ui.screens.session.kit.sf
+import org.jetbrains.compose.resources.decodeToImageBitmap
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import com.yehsung.aingcheck.core.stores.me.removeFeedbackShot
+import com.yehsung.aingcheck.core.stores.me.feedbackShotRoom
+import com.yehsung.aingcheck.core.stores.me.canEditFeedbackShots
+import com.yehsung.aingcheck.core.stores.me.feedbackShotCount
+import com.yehsung.aingcheck.core.stores.me.feedbackShotAttachShown
+import com.yehsung.aingcheck.core.wire.models.FeedbackShotText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -88,6 +103,10 @@ object FeedbackTags {
     const val COUNTER = "feedback-counter"
     fun kind(kind: FeedbackKind) = "feedback-kind:${kind.rawValue}"
     fun row(id: String) = "feedback-row:$id"
+    /** 판 9 — 화면 캡처 줄 · 고르기 · 목록 칩. */
+    const val SHOTS = "feedback-shots"
+    const val SHOT_PICK = "feedback-shot-pick"
+    const val SHOT_CHIP = "feedback-shot-chip"
 }
 
 /** 내 제보 목록이 비었을 때의 카드(Swift listContent 의 세 갈래). */
@@ -132,7 +151,13 @@ private fun statusInk(colors: AingColors, tone: MeText.FeedbackStatusTone) = whe
 }
 
 @Composable
-fun FeedbackScreen(store: MeStore, scope: CoroutineScope, modifier: Modifier = Modifier) {
+fun FeedbackScreen(
+    store: MeStore,
+    scope: CoroutineScope,
+    modifier: Modifier = Modifier,
+    /** 시스템 사진 고르기를 여는 곳(판 9 — Android 앱 껍데기가 넣는다 · 데스크톱 Windows v1 은 null → 캡처 줄이 없다). */
+    onPickShots: (() -> Unit)? = null,
+) {
     val colors = AingTheme.colors
     var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
     val list = rememberLazyListState()
@@ -153,7 +178,7 @@ fun FeedbackScreen(store: MeStore, scope: CoroutineScope, modifier: Modifier = M
         contentPadding = PaddingValues(horizontal = AingDimens.sideMargin, vertical = AingDimens.rowSpacing),
         verticalArrangement = Arrangement.spacedBy(AingDimens.rowSpacing),
     ) {
-        item(key = "compose") { ComposeCard(store, scope) }
+        item(key = "compose") { ComposeCard(store, scope, onPickShots) }
         item(key = "mine") { SectionTitle(FeedbackText.mineTitle, Modifier.padding(top = 8.dp)) }
         if (store.feedbackList.isEmpty()) {
             item(key = "empty") {
@@ -176,6 +201,7 @@ fun FeedbackScreen(store: MeStore, scope: CoroutineScope, modifier: Modifier = M
                         isExpanded = report.id in expanded,
                         isFocused = store.focusedReportID == report.id,
                         isUnseenReply = store.isUnseenReply(report),
+                        shotCount = store.feedbackShotCount(report.id),
                         toggle = { expanded = FeedbackScreenRules.toggled(expanded, report.id) },
                     )
                 }
@@ -185,7 +211,7 @@ fun FeedbackScreen(store: MeStore, scope: CoroutineScope, modifier: Modifier = M
 }
 
 @Composable
-private fun ComposeCard(store: MeStore, scope: CoroutineScope) {
+private fun ComposeCard(store: MeStore, scope: CoroutineScope, onPickShots: (() -> Unit)?) {
     val colors = AingTheme.colors
     AingCard {
         SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
@@ -224,6 +250,8 @@ private fun ComposeCard(store: MeStore, scope: CoroutineScope) {
                 modifier = Modifier.testTag(FeedbackTags.COUNTER),
             )
         }
+        // 화면 캡처(판 9 · 아이폰 1.0.19 — 맥 0.3.86 과 같은 계약 · 최대 3장 · 글이 먼저 가고 그 제보에 붙는다).
+        if (onPickShots != null && store.feedbackShotAttachShown) ShotsRow(store, onPickShots)
         store.feedbackNotice?.let { InlineNotice(it, FeedbackScreenRules.noticeKind(it)) }
         AingButton(
             if (store.isSendingFeedback) FeedbackText.sending else FeedbackText.sendAction,
@@ -238,7 +266,7 @@ private fun ComposeCard(store: MeStore, scope: CoroutineScope) {
 }
 
 @Composable
-private fun FeedbackRow(report: FeedbackReport, now: SwiftDate, isExpanded: Boolean, isFocused: Boolean, isUnseenReply: Boolean, toggle: () -> Unit) {
+private fun FeedbackRow(report: FeedbackReport, now: SwiftDate, isExpanded: Boolean, isFocused: Boolean, isUnseenReply: Boolean, shotCount: Int = 0, toggle: () -> Unit) {
     val colors = AingTheme.colors
     val shape = RoundedCornerShape(AingDimens.groupRadius)
     val (ink, tint) = statusInk(colors, MeText.feedbackStatusTone(report.status))
@@ -256,6 +284,14 @@ private fun FeedbackRow(report: FeedbackReport, now: SwiftDate, isExpanded: Bool
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             AingChipLabel(report.status.label, tint = ink, background = tint)
             Text(FeedbackScreenRules.headerLine(report, now), style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = colors.label2)
+            // 이 제보에 붙은 화면 캡처 수(판 9 — 0 이면 칩이 없다 · 크게 보기는 맥에만).
+            if (shotCount > 0) {
+                Box(Modifier.weight(1f))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.testTag(FeedbackTags.SHOT_CHIP)) {
+                    AingIcon(sf("photo", AppIcon.Image), contentDescription = null, size = 12.dp, tint = colors.label2)
+                    Text(FeedbackShotText.chip(shotCount), style = MaterialTheme.typography.labelSmall, color = colors.label2)
+                }
+            }
         }
         Text(
             report.body,
@@ -284,6 +320,52 @@ private fun FeedbackRow(report: FeedbackReport, now: SwiftDate, isExpanded: Bool
                     Text(reply, style = MaterialTheme.typography.bodyMedium, color = colors.label, maxLines = if (isExpanded) Int.MAX_VALUE else 3, overflow = TextOverflow.Ellipsis)
                 }
             }
+        }
+    }
+}
+
+/** 캡처 줄: 이름 · n/3 · [이미지 고르기](시스템 사진 고르기 — 권한 창 없음) · 붙인 썸네일(✕ 빼기) · 붙인 동안 늘 보이는 경고 한 줄(아이폰 1.0.19 shotsRow). */
+@OptIn(org.jetbrains.compose.resources.ExperimentalResourceApi::class)
+@Composable
+private fun ShotsRow(store: MeStore, onPick: () -> Unit) {
+    val colors = AingTheme.colors
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.testTag(FeedbackTags.SHOTS)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(FeedbackShotText.rowTitle, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.label)
+            Text(FeedbackShotText.attachedCount(store.feedbackShots.size), style = MaterialTheme.typography.labelSmall, color = colors.label2)
+            Box(Modifier.weight(1f))
+            val enabled = store.canEditFeedbackShots && store.feedbackShotRoom > 0
+            Row(
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onPick).padding(4.dp).testTag(FeedbackTags.SHOT_PICK),
+            ) {
+                AingIcon(sf("photo.on.rectangle", AppIcon.PhotoLibrary), contentDescription = null, size = 16.dp, tint = if (enabled) colors.accent else colors.label3Text)
+                Text(FeedbackShotText.pickAction, style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold), color = if (enabled) colors.accent else colors.label3Text)
+            }
+        }
+        if (store.feedbackShots.isEmpty() && !store.feedbackShotPreparing) {
+            Text(FeedbackShotText.limitHint, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = colors.label2)
+        } else {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for (shot in store.feedbackShots) {
+                    val bitmap = remember(shot.id) { runCatching { shot.jpeg.decodeToImageBitmap() }.getOrNull() }
+                    Box(Modifier.size(72.dp, 96.dp).clip(RoundedCornerShape(8.dp)).background(colors.fill)) {
+                        if (bitmap != null) androidx.compose.foundation.Image(bitmap, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+                        Box(
+                            Modifier.align(Alignment.TopEnd).padding(2.dp).size(26.dp).background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .clickable(enabled = !store.isSendingFeedback, role = Role.Button) { store.removeFeedbackShot(shot.id) }
+                                .semantics { contentDescription = FeedbackShotText.removeAction },
+                            contentAlignment = Alignment.Center,
+                        ) { AingIcon(AppIcon.Close, contentDescription = null, size = 14.dp, tint = Color.White) }
+                    }
+                }
+                if (store.feedbackShotPreparing) {
+                    Box(Modifier.size(72.dp, 96.dp).semantics { contentDescription = FeedbackShotText.preparing }, contentAlignment = Alignment.Center) {
+                        androidx.compose.material3.CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                    }
+                }
+            }
+            Text(FeedbackShotText.privacyWarning, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Normal), color = colors.pending)
         }
     }
 }

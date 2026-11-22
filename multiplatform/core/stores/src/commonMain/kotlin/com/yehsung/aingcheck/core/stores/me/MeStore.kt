@@ -398,6 +398,26 @@ class MeStore(
     var feedbackReplyLatestAt by mutableStateOf<SwiftDate?>(null)
         internal set
 
+    // 제보 화면 캡처(판 9 · 아이폰 1.0.19 6a6141ce · 맥 0.3.86 — MeStoreFeedbackShots.kt).
+    /** 사진 줄이기(앱 조립이 넣는다 — Android BitmapFactory). null 이면 캡처 입구 전체가 숨는다(데스크톱 Windows v1 동결 · 시험 기본). */
+    var photoEncoder: PhotoEncoding? = null
+    /** 붙여 둔 캡처(보내기 전 · 최대 3장 · 줄인 JPEG). */
+    var feedbackShots by mutableStateOf<List<MeFeedbackShotDraft>>(emptyList())
+        internal set
+    /** 고른 사진을 줄이는 중. */
+    var feedbackShotPreparing by mutableStateOf(false)
+        internal set
+    /** 서버에 캡처 함수 · 버킷이 없다(404 · PGRST202) — 입구를 숨긴다. 제보 화면을 다시 열면 다시 묻는다. */
+    var feedbackShotServerMissing by mutableStateOf(false)
+        internal set
+    /** 붙이기가 문 닫힘(unsupported_client)을 말했다 — 붙이기 줄만 숨긴다. 제보 화면을 다시 열면 다시 묻는다. */
+    var feedbackShotDoorClosed by mutableStateOf(false)
+        internal set
+    /** 내 제보마다 붙은 캡처(목록 뒤 feedback_shots 한 번). */
+    var feedbackShotsByReport by mutableStateOf<Map<String, List<com.yehsung.aingcheck.core.wire.models.FeedbackShot>>>(emptyMap())
+        internal set
+    internal var feedbackShotPrepareSerial = 0
+
     /** 딥링크·알림이 가리킨 제보 — 목록에서 펼치고 강조한다. */
     var focusedReportID by mutableStateOf<String?>(null)
         internal set
@@ -579,6 +599,12 @@ class MeStore(
         isSendingFeedback = false
         feedbackNotice = null
         feedbackList = emptyList()
+        feedbackShots = emptyList()
+        feedbackShotPreparing = false
+        feedbackShotServerMissing = false
+        feedbackShotDoorClosed = false
+        feedbackShotsByReport = emptyMap()
+        feedbackShotPrepareSerial += 1
         feedbackState.reset()
         feedbackReplyLatestAt = null
         feedbackReplySeenAt = null

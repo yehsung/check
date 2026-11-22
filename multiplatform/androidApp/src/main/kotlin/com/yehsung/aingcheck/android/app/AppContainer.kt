@@ -175,6 +175,7 @@ class AppContainer(
                 drawableCharacters = CharacterArt.drawableCharacterSource,
                 knownCharacterIDs = CharacterArt.portraitIds,
                 logger = logger,
+                photoEncoder = com.yehsung.aingcheck.android.photo.AndroidPhotoEncoder,
                 // 1:1 길건너 판 표시 프레임(둘째 소켓 — 판 8). 시험 프로세스면 생성기가 null 을 돌려준다(초인종 소켓과 같은 판정).
                 frameSocketFactory = {
                     KtorBroadcastFrameSocket.create(

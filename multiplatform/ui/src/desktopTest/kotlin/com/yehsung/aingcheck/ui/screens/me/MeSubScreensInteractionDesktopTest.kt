@@ -5,6 +5,10 @@
 // 기준선(다른 입력): 빈 초안의 [보내기] · 확인을 취소한 [차단 해제] · 안 가진 캐릭터 누름은 요청을 보내지 않는다.
 package com.yehsung.aingcheck.ui.screens.me
 
+import com.yehsung.aingcheck.core.stores.me.feedbackDidDisappear
+import com.yehsung.aingcheck.core.stores.me.feedbackDidAppear
+import com.yehsung.aingcheck.core.stores.me.attachFeedbackShots
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
@@ -107,6 +111,54 @@ class MeSubScreensInteractionDesktopTest {
             assertTrue("위젯이 안 보여요" in body && "\"p_app_version\":\"Android 0.1.0 (1)\"" in body, "보낸 본문 · 앱 버전: $body")
             assertEquals("", store.feedbackDraft, "보낸 뒤에만 초안을 비운다")
             onNodeWithText(FeedbackText.sendSuccess).assertExists()
+        }
+    }
+
+    /**
+     * 판 9 — 제보 화면 캡처(아이폰 1.0.19 V1019FeedbackShotTests.wiring 의 짝). 사진 고르기 자리를 넘긴 Android 껍데기에서만 캡처 줄이 서고,
+     * [이미지 고르기]가 그 자리를 부르며, 붙인 동안 경고 한 줄 · 목록 줄에 "캡처 N장" 칩. 기준선 = 고르기 자리가 없는 데스크톱(Windows v1)은 줄도 칩도 없다.
+     */
+    @Test
+    fun feedbackShotsRowAndChipAppearOnlyWherePhotosCanBePicked() = runTest {
+        val report = "d0000000-0000-4000-8000-00000000fb02"
+        val h = signedIn { r ->
+            if (r.path == "/rest/v1/rpc/feedback_shots") """[{"report_id":"$report","attachment_id":"a1","path":"u/$report/a.jpg","width":40,"height":30,"created_epoch_ms":1}]""" else null
+        }
+        advanceUntilIdle()
+        val store = h.meStore()
+        var picks = 0
+        var pickable by mutableStateOf(false)
+        runComposeUiTest {
+            show { FeedbackScreen(store, h.storeScope, onPickShots = if (pickable) ({ picks += 1 }) else null) }
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            // 기준선: 줄이기도 고르기도 없으면 캡처 줄 · 칩 · 조회가 없다.
+            onNodeWithTag(FeedbackTags.SHOTS).assertDoesNotExist()
+            assertEquals(0, h.calls("/rest/v1/rpc/feedback_shots"))
+
+            store.photoEncoder = com.yehsung.aingcheck.core.stores.me.PhotoEncoding { data -> com.yehsung.aingcheck.core.stores.me.EncodedPhoto(data, 40, 30) }
+            pickable = true
+            store.feedbackDidDisappear()
+            store.feedbackDidAppear()
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            onNodeWithTag(FeedbackTags.SHOTS).assertExists()
+            onNodeWithText(com.yehsung.aingcheck.core.wire.models.FeedbackShotText.attachedCount(0)).assertExists()
+            onNodeWithText(com.yehsung.aingcheck.core.wire.models.FeedbackShotText.privacyWarning).assertDoesNotExist()
+            onNodeWithTag(FeedbackTags.SHOT_PICK).performClick()
+            assertEquals(1, picks, "[이미지 고르기]가 사진 고르기를 열지 않았다")
+            store.attachFeedbackShots(listOf(byteArrayOf(1, 2, 3)))
+            testScheduler.advanceUntilIdle()
+            waitForIdle()
+            onNodeWithText(com.yehsung.aingcheck.core.wire.models.FeedbackShotText.attachedCount(1)).assertExists()
+            onNodeWithText(com.yehsung.aingcheck.core.wire.models.FeedbackShotText.privacyWarning).assertExists()
+            onNodeWithContentDescription(com.yehsung.aingcheck.core.wire.models.FeedbackShotText.removeAction).performClick()
+            waitForIdle()
+            assertEquals(0, store.feedbackShots.size, "✕ 가 캡처를 빼지 않았다")
+            // 목록 줄의 칩.
+            assertEquals(1, h.calls("/rest/v1/rpc/feedback_shots"))
+            onNodeWithTag(FeedbackTags.LIST).performScrollToNode(hasTestTag(FeedbackTags.row(report)))
+            onNodeWithText(com.yehsung.aingcheck.core.wire.models.FeedbackShotText.chip(1)).assertExists()
         }
     }
 

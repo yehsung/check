@@ -9,6 +9,8 @@ import com.yehsung.aingcheck.core.wire.models.MessagePhotoAttachment
  * 견주므로 **소문자**로 만든다. 이상한 값이 서명 URL 을 엉뚱한 곳으로 돌리지 못하게 안전 글자만 받는다.
  */
 object PrivateStorage {
+    const val jpegContentType = "image/jpeg"
+
     /** `<owner 소문자>/<name 소문자>.<ext>`. */
     fun objectPath(owner: String, name: String, ext: String = "jpg"): String = "${owner.lowercase()}/${name.lowercase()}.${ext.lowercase()}"
 

@@ -449,6 +449,11 @@ class TetrisDuelStore(
     var serverClockOffset: Double = 0.0
         private set
     private var hasServerClockOffset = false
+    /**
+     * 루비 잔액을 마지막으로 옮긴 응답의 `server_now_ms`(늦은 응답 가드 — 맥 · 폰 b4d39f4e 와 같은 모양, 길건너 rubyServerNowMs 와 같은 꼴).
+     * 이보다 옛 응답(정산 뒤 닿은 옛 상태 · 옛 로비)의 잔액은 버린다.
+     */
+    private var rubyServerNowMs: Double? = null
     var resetGeneration: Int = 0
         private set
 
@@ -616,7 +621,7 @@ class TetrisDuelStore(
             if (users != mapped) users = mapped
         }
         response.me?.let { me ->
-            applyRuby(me.rubyBalance)
+            applyRuby(me.rubyBalance, response.serverNowMs)
             val fresh = TetrisDuelRecord(
                 wins = me.wins?.clampedInt() ?: 0, losses = me.losses?.clampedInt() ?: 0, draws = me.draws?.clampedInt() ?: 0,
             )
@@ -751,7 +756,7 @@ class TetrisDuelStore(
     fun applyState(payload: TetrisStatePayload, receivedAt: Double? = null): StateApplyOutcome {
         val id = payload.matchId?.lowercase()?.takeIf { it.isNotEmpty() } ?: return StateApplyOutcome.ignored
         noteServerNow(payload.serverNowMs)
-        applyRuby(payload.rubyBalance)
+        applyRuby(payload.rubyBalance, payload.serverNowMs)
         val status = payload.status ?: ""
         when (status) {
             "pending" -> {
@@ -883,8 +888,15 @@ class TetrisDuelStore(
         val justFinished = isFinished && base?.isFinished == false
         val previous = match
         val windowWasVisible = isWindowVisible
-        // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
-        if (incoming.any { it.id == id }) incoming = incoming.filter { it.id != id }
+        if (!isFinished && (previous?.id != id || previous?.isFinished == true)) {
+            // 판이 서는 순간 서버(respond)는 두 사람의 다른 테트리스 대기 신청을 전부 닫았다 — 받는 쪽은 respond 가 걷지만
+            // 보낸 쪽 기기(5초 조회 · 초인종이 판을 데려온 쪽)에는 닫힌 받은 신청이 남아 판 내내(만료 60초까지) 점 · 배너가 섰다
+            // (맥 · 폰 b4d39f4e · 길건너 검토 RV-C-4 와 같은 꼴, 11-23). 판 중엔 새 신청이 올 수 없다(상대가 대국 중이면 target_busy).
+            if (incoming.isNotEmpty()) incoming = emptyList()
+        } else if (incoming.any { it.id == id }) {
+            // 이 판이 신청이었으면 카드를 걷는다(수락된 쪽·내가 수락한 쪽 모두).
+            incoming = incoming.filter { it.id != id }
+        }
         if (outgoing?.id == id) outgoing = null
         if (match != next) match = next
         // 내 판을 보고 있는 사람 수. **`match` 대입 뒤**에 적는다 — 그 setter 가 관전을 내리며 수를 0 으로 되돌린다.
@@ -934,7 +946,7 @@ class TetrisDuelStore(
                 is DuelCall.Success -> {
                     val response = result.value
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance)
+                    applyRuby(response.rubyBalance, response.serverNowMs)
                     setNotice(TetrisDuelNoticeText.challenge(response.status, response.need, response.have))
                     if (response.status != TetrisRPCStatus.ok) logNotice("challenge refused status=${response.status.rawValue}")
                     when (response.status) {
@@ -979,7 +991,7 @@ class TetrisDuelStore(
                 is DuelCall.Success -> {
                     val response = result.value
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance)
+                    applyRuby(response.rubyBalance, response.serverNowMs)
                     setNotice(TetrisDuelNoticeText.cancel(response.status))
                     when (response.status) {
                         TetrisRPCStatus.ok, TetrisRPCStatus.notFound, TetrisRPCStatus.notPending, TetrisRPCStatus.expired -> {
@@ -1018,7 +1030,7 @@ class TetrisDuelStore(
                     val response = result.value
                     val receivedAt = uptime()
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance)
+                    applyRuby(response.rubyBalance, response.serverNowMs)
                     setNotice(TetrisDuelNoticeText.respond(accept, response.status, response.side, response.need, response.have))
                     if (response.status != TetrisRPCStatus.ok) logNotice("respond refused status=${response.status.rawValue}")
                     when (response.status) {
@@ -1066,7 +1078,7 @@ class TetrisDuelStore(
                     val response = result.value
                     val receivedAt = uptime()
                     noteServerNow(response.serverNowMs)
-                    applyRuby(response.rubyBalance)
+                    applyRuby(response.rubyBalance, response.serverNowMs)
                     setNotice(TetrisDuelNoticeText.resign(response.status))
                     if (response.status == TetrisRPCStatus.unsupportedClient) noteUpdateRequired()
                     // 다른 기기가 두는 판이다 — 서버는 정산하지 않았다. 이 판에서 물러난다(머리말 ⑩).
@@ -1237,6 +1249,7 @@ class TetrisDuelStore(
         if (isBusy) isBusy = false
         if (isWindowVisible) isWindowVisible = false
         if (rubyBalance != null) rubyBalance = null
+        rubyServerNowMs = null
         if (hiddenPeerIDs.isNotEmpty()) hiddenPeerIDs = emptySet()
         if (lobbyLoadFailed) lobbyLoadFailed = false
         if (hasLoadedLobby) hasLoadedLobby = false
@@ -1347,8 +1360,17 @@ class TetrisDuelStore(
         if (notice != text) notice = text
     }
 
-    internal fun applyRuby(value: Long?) {
+    /**
+     * 서버 잔액을 스토어 · 앱 미러로 옮긴다. 늦은 응답 가드(맥 · 폰 b4d39f4e, 11-23): 이미 옮긴 잔액보다 **먼저** 서버가 만든 응답(정산 뒤 닿은
+     * 옛 상태 — 판 값은 ignored 인 그 응답 · 옛 로비)의 잔액은 버린다(103 을 97 로 되감지 않게). 서버 시각이 없는 응답은 예전처럼 옮긴다.
+     */
+    internal fun applyRuby(value: Long?, serverNowMs: Double?) {
         if (value == null) return
+        if (serverNowMs != null && serverNowMs.isFinite() && serverNowMs > 0) {
+            val last = rubyServerNowMs
+            if (last != null && serverNowMs < last) return
+            rubyServerNowMs = serverNowMs
+        }
         if (rubyBalance != value) rubyBalance = value
         val host = host ?: return
         if (host.rubyBalance != value) host.rubyBalance = value

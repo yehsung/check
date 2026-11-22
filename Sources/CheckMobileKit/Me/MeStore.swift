@@ -279,6 +279,18 @@ package final class MeStore {
     package internal(set) var isFeedbackVisible = false
     /// 이 계정이 '봤다'고 적어 둔 마지막 답장 시각(공용 suite, 계정별 키).
     package internal(set) var feedbackReplySeenAt: Date?
+    // 제보 화면 캡처(폰 1.0.19 — 맥 0.3.86 · `MeStoreFeedbackShots.swift`).
+    /// 붙여 둔 캡처(보내기 전 · 최대 3장 · 줄인 JPEG).
+    package internal(set) var feedbackShots: [MeFeedbackShotDraft] = []
+    /// 고른 사진을 줄이는 중.
+    package internal(set) var feedbackShotPreparing = false
+    /// 서버에 캡처 함수 · 버킷이 없다(404 · PGRST202) — 입구를 숨긴다. 제보 화면을 다시 열면 다시 묻는다.
+    package internal(set) var feedbackShotServerMissing = false
+    /// 붙이기가 문 닫힘(`unsupported_client`)을 말했다 — 붙이기 줄만 숨긴다. 제보 화면을 다시 열면 다시 묻는다.
+    package internal(set) var feedbackShotDoorClosed = false
+    /// 내 제보마다 붙은 캡처(목록 뒤 `feedback_shots` 한 번).
+    package internal(set) var feedbackShotsByReport: [String: [FeedbackShot]] = [:]
+    @ObservationIgnored var feedbackShotPrepareSerial = 0
 
     // MARK: 설정
     package internal(set) var tokenUsagePublic = true
@@ -472,6 +484,12 @@ package final class MeStore {
         feedbackReplySeenAt = nil
         focusedReportID = nil
         feedbackFocusSerial = 0
+        feedbackShots = []
+        feedbackShotPreparing = false
+        feedbackShotServerMissing = false
+        feedbackShotDoorClosed = false
+        feedbackShotsByReport = [:]
+        feedbackShotPrepareSerial += 1
         tokenUsagePublic = true
         tokenUsagePublicLoaded = false
         miniGamePublic = true

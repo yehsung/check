@@ -24,17 +24,26 @@ extension MeStore {
         let appVersion = context.appInfo.feedbackAppVersion
         let osVersion = context.appInfo.osVersion
         let generation = context.generation
+        // 이번 전송에 실을 캡처(붙이기 줄이 숨었으면 없다 — 폰 1.0.19). 손에 쥔 사본으로 올린다.
+        let shots = feedbackShotsForSend
         isSendingFeedback = true
         feedbackNotice = nil
         defer { if generation == context.generation { isSendingFeedback = false } }
         let service = context.service
         do {
-            _ = try await context.withMobileSessionRetry { session in
+            let returnedID = try await context.withMobileSessionRetry { session in
                 try await service.submitFeedback(accessToken: session.accessToken, kind: kind, body: body, appVersion: appVersion, osVersion: osVersion)
             }
             guard generation == context.generation else { return }
             feedbackDraft = ""
             feedbackNotice = FeedbackText.sendSuccess
+            // 글이 먼저 갔다 — 캡처는 그 제보 폴더에 올리고 붙인다(실패해도 제보는 보낸 것 · 글을 다시 보내지 않는다).
+            if shots.isEmpty {
+                discardUnsentFeedbackShots()
+            } else {
+                await finishFeedbackShotsAfterSubmit(shots, returnedID: returnedID, generation: generation)
+                guard generation == context.generation else { return }
+            }
             await loadFeedback()
         } catch {
             guard generation == context.generation else { return }
@@ -60,6 +69,8 @@ extension MeStore {
             guard generation == context.generation, isCurrent("feedback", serial) else { return }
             let mine = MeText.sortedFeedback(reports.filter { $0.userID == me })
             if feedbackList != mine { feedbackList = mine }
+            // 목록 옆 캡처 칩(폰 1.0.19): 목록이 비어 있지 않으면 **한 번에** 캡처 행을 받는다(새 자동 호출은 이 하나뿐 — 맥과 같다).
+            launch { [weak self] in await self?.loadFeedbackShots(for: mine, generation: generation) }
             feedbackState.hasLoaded = true
             feedbackState.loadedAt = context.clock.now()
             if let latest = mine.compactMap(\.adminNoteAt).max(), latest > (feedbackReplyLatestAt ?? .distantPast) {
@@ -122,6 +133,7 @@ extension MeStore {
 
     package func feedbackDidAppear() {
         isFeedbackVisible = true
+        rearmFeedbackShots()
         guard context.session.isSignedIn else { return }
         launch { [weak self] in await self?.loadFeedback() }
         launch { [weak self] in await self?.loadFeedbackReplyLatest() }

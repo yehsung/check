@@ -1,5 +1,6 @@
 #if os(iOS)
 import CheckCore
+import PhotosUI
 import SwiftUI
 
 /// 제보: 쓰기(종류 · 본문 1000자 · 자동 첨부 안내) + 내가 보낸 제보(상태 · 답장). 딥링크 `feedback/<id>` 는 그 제보를 펼쳐 보인다.
@@ -7,6 +8,8 @@ struct MeFeedbackView: View {
     let store: MeStore
     @State private var expanded: Set<String> = []
     @FocusState private var editorFocused: Bool
+    /// 사진 고르기로 고른 것(받는 즉시 원본을 읽어 스토어에 넘기고 비운다 — 폰 1.0.19 제보 캡처).
+    @State private var pickedShots: [PhotosPickerItem] = []
 
     var body: some View {
         @Bindable var store = store
@@ -89,6 +92,10 @@ struct MeFeedbackView: View {
                     .foregroundStyle(FeedbackComposer.isCounterWarning(store.feedbackDraft) ? MobileTheme.pending : MobileTheme.label2)
                     .fixedSize()
             }
+            // 화면 캡처(폰 1.0.19 — 맥 0.3.86 과 같은 계약 · 최대 3장 · 글이 먼저 가고 그 제보에 붙는다).
+            if store.feedbackShotAttachShown {
+                shotsRow(store: store)
+            }
             if let notice = store.feedbackNotice {
                 InlineNotice(text: notice, kind: FeedbackText.isSuccessNotice(notice) ? .info : .warning)
             }
@@ -101,6 +108,75 @@ struct MeFeedbackView: View {
                 Task { await store.sendFeedback() }
             }
             .disabled(!store.canSendFeedback)
+        }
+    }
+
+    /// 캡처 줄: 이름 · n/3 · [이미지 고르기](시스템 사진 고르기 — 권한 창 없음) · 붙인 썸네일(✕ 빼기) · 붙인 동안 늘 보이는 경고 한 줄.
+    private func shotsRow(store: MeStore) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(FeedbackShotText.rowTitle)
+                    .font(.subheadline.weight(.semibold))
+                Text(FeedbackShotText.attachedCount(store.feedbackShots.count))
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(MobileTheme.label2)
+                Spacer(minLength: 4)
+                PhotosPicker(selection: $pickedShots, maxSelectionCount: max(1, store.feedbackShotRoom), matching: .images) {
+                    Label(FeedbackShotText.pickAction, systemImage: "photo.on.rectangle")
+                        .font(.footnote.weight(.semibold))
+                }
+                .disabled(!store.canEditFeedbackShots || store.feedbackShotRoom == 0)
+            }
+            if store.feedbackShots.isEmpty, !store.feedbackShotPreparing {
+                Text(FeedbackShotText.limitHint)
+                    .font(.caption)
+                    .foregroundStyle(MobileTheme.label2)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(store.feedbackShots) { shot in
+                            Image(decorative: shot.preview.image, scale: 1)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 72, height: 96)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                .overlay(alignment: .topTrailing) {
+                                    Button { store.removeFeedbackShot(id: shot.id) } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3)
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, .black.opacity(0.6))
+                                    }
+                                    .buttonStyle(.plain)
+                                    .disabled(store.isSendingFeedback)
+                                    .accessibilityLabel(Text(FeedbackShotText.removeAction))
+                                    .padding(2)
+                                }
+                        }
+                        if store.feedbackShotPreparing {
+                            ProgressView()
+                                .frame(width: 72, height: 96)
+                                .accessibilityLabel(Text(FeedbackShotText.preparing))
+                        }
+                    }
+                }
+                Text(FeedbackShotText.privacyWarning)
+                    .font(.caption)
+                    .foregroundStyle(MobileTheme.pending)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .onChange(of: pickedShots) { _, items in
+            guard !items.isEmpty else { return }
+            Task { @MainActor in
+                var datas: [Data] = []
+                for item in items {
+                    if let data = try? await item.loadTransferable(type: Data.self) { datas.append(data) }
+                }
+                pickedShots = []
+                store.attachFeedbackShots(datas: datas)
+            }
         }
     }
 
@@ -129,6 +205,7 @@ struct MeFeedbackView: View {
                     isExpanded: expanded.contains(report.id),
                     isFocused: store.focusedReportID == report.id,
                     isUnseenReply: store.isUnseenReply(report),
+                    shotCount: store.feedbackShotCount(forReport: report.id),
                     toggle: {
                         if expanded.contains(report.id) { expanded.remove(report.id) } else { expanded.insert(report.id) }
                     }
@@ -145,6 +222,8 @@ struct MeFeedbackRow: View {
     let isExpanded: Bool
     let isFocused: Bool
     let isUnseenReply: Bool
+    /// 이 제보에 붙은 화면 캡처 수(폰 1.0.19 — 0 이면 칩이 없다).
+    var shotCount: Int = 0
     let toggle: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -158,6 +237,13 @@ struct MeFeedbackRow: View {
                         .font(.caption)
                         .foregroundStyle(MobileTheme.label2)
                         .fixedSize(horizontal: false, vertical: true)
+                    if shotCount > 0 {
+                        Label(FeedbackShotText.chip(shotCount), systemImage: "photo")
+                            .labelStyle(.titleAndIcon)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(MobileTheme.label2)
+                            .fixedSize()
+                    }
                     Spacer(minLength: 0)
                 }
                 Text(report.body)

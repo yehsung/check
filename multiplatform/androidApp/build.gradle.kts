@@ -162,6 +162,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.androidx.activity.compose)
+    // Play 권장 조치 — Firebase(play-services-base · basement)가 끌어오는 fragment 1.1.0 을 최신 안정판으로 덮는다(libs.versions.toml 주석).
+    implementation(libs.androidx.fragment)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.datastore.preferences)

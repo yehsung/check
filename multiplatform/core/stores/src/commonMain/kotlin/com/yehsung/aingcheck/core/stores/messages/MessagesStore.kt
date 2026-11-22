@@ -116,6 +116,24 @@ class MessagesStore(
     /** 확성기(📢 1.0.7) 작성 스토어 — 맥과 같은 코어 스토어. 화면은 메시지 탭 위 📢 버튼의 시트. */
     val megaphone: MegaphoneStore = MegaphoneStore(megaphoneHost, scope, clock = { context.clock.now() })
 
+    /**
+     * 지난 확성기(최근 30일 모아 보기 — 판 9 · 아이폰 1.0.19 94975fa8 · 맥 0.3.86 과 같은 코어 스토어 [MegaphoneFeedStore]). 문은 확성기 작성 시트의
+     * '지난 확성기 ›'. 부르는 자리는 사람이 누른 자리뿐이다(페이지 열기 · 더 보기 · 다시 시도 · 페이지가 떠 있는 동안의 실시간 신호).
+     */
+    val megaphoneFeed: MegaphoneFeedStore = MegaphoneFeedStore(megaphoneHost, scope)
+
+    /** 지난 확성기 페이지가 그리는 목록 — 차단으로 걷어낸 사람의 글은 곧바로 뺀다(원본은 서버가 답한 그대로 · 맥 `visibleMegaphoneFeed`). */
+    val visibleMegaphoneFeed: List<com.yehsung.aingcheck.core.rules.text.MegaphoneFeedItem>
+        get() {
+            val items = megaphoneFeed.items
+            val hidden = hiddenBlockedPeerIDs
+            if (hidden.isEmpty()) return items
+            return items.filter { item -> item.senderID?.let { it !in hidden } ?: true }
+        }
+
+    /** 작성 시트에 '지난 확성기 ›' 문을 세우는가 — 서버에 함수가 없다고 들었을 때(닫힘)만 숨는다. 모르면 선다(누르면 그때 묻는다). */
+    val showsMegaphoneFeedEntry: Boolean get() = megaphoneFeed.isAvailable != false
+
     /** 지금 탭 스토어(약참조 자리 — Swift `context.links.now`). 사람들의 근무 여부·센터 판의 재료다. 조립이 채운다. */
     var nowStore: NowStore? = null
 
@@ -390,6 +408,7 @@ class MessagesStore(
         myFocusMode = null
         // 확성기 글·요청 id·정보도 계정에 묶인다 — 남기면 다음 사람이 앞 사람의 글을 보고 그 id 로 묻는다.
         megaphone.reset()
+        megaphoneFeed.reset()
         router?.visibleConversationPeerID = null
     }
 

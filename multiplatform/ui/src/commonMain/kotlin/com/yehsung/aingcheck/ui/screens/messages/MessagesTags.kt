@@ -33,6 +33,11 @@ object MessagesTags {
 
     const val NEW_CONVERSATION_SHEET = "new-conversation-sheet"
     const val NEW_CONVERSATION_SEARCH = "new-conversation-search"
+    /** 지난 확성기(판 9) — 작성 시트의 문 · 페이지 · 줄 · 더 보기. */
+    const val MEGAPHONE_FEED_ENTRY = "megaphone-feed-entry"
+    const val MEGAPHONE_FEED_PAGE = "megaphone-feed-page"
+    fun megaphoneFeedRow(id: String) = "megaphone-feed-row-$id"
+    const val MEGAPHONE_FEED_MORE = "megaphone-feed-more"
     /** 사람 찾기 거르기 칸(판 9) — 칸마다 꼬리표 `new-conversation-presence-<all|working|away>`. */
     const val NEW_CONVERSATION_PRESENCE = "new-conversation-presence"
     fun presenceSegment(name: String) = "new-conversation-presence-$name"

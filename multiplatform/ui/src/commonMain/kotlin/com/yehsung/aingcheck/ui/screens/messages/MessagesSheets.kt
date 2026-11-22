@@ -58,6 +58,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.yehsung.aingcheck.core.rules.text.AingSticker
 import com.yehsung.aingcheck.core.rules.text.AingStickerText
+import com.yehsung.aingcheck.core.rules.text.MegaphoneFeedText
 import com.yehsung.aingcheck.core.rules.text.MegaphoneText
 import com.yehsung.aingcheck.core.stores.messages.MessagesComposerRules
 import com.yehsung.aingcheck.core.stores.messages.MessagesFocusText
@@ -320,6 +321,14 @@ fun MessagesMegaphoneSheet(store: MessagesStore, rubyBalance: Long?, onClose: ()
     // 칸 ↔ 확성기 초안(대화 입력줄과 같은 한 벌 — 조합 중에는 덮지 않는다 · 보내면 스토어가 비운 글이 칸에 선다).
     BindFieldToStore(field, rememberFieldStoreSync(mega), read = { mega.draft }, write = { mega.setDraft(it) })
     val ruby = rememberRubyArt(17f)
+    // 지난 확성기(판 9 · 아이폰 1.0.19): 작성 시트를 여는 순간(다음 자연스러운 진입) 닫혔던 문을 모름으로 되돌린다 — 요청은 없다(코어 rearm).
+    // 문을 누르면 같은 시트 안에서 페이지로 넘어간다(작성 초안 · 작성 스토어의 열림은 그대로 — 위 DisposableEffect 가 쥔다).
+    var showsFeed by remember { mutableStateOf(false) }
+    LaunchedEffect(store) { store.megaphoneFeed.rearm() }
+    if (showsFeed) {
+        MessagesMegaphoneFeedPage(store, onBack = { showsFeed = false }, modifier = modifier)
+        return
+    }
 
     fun commitThen(action: () -> Unit) {
         // 조합 글은 이미 글 안에 있다(Compose) — 확정 글로 싣고 동작한다.
@@ -341,6 +350,14 @@ fun MessagesMegaphoneSheet(store: MessagesStore, rubyBalance: Long?, onClose: ()
             verticalArrangement = Arrangement.spacedBy(AingDimens.space3),
         ) {
             Text(MegaphoneText.explainer, style = MaterialTheme.typography.bodyMedium, color = colors.label2)
+            // 지난 확성기 문(맥 작성기 설명 줄 끝 · 아이폰 작성 시트 설명 아래와 같은 글자). 서버가 모른다고 했을 때만 숨는다.
+            if (store.showsMegaphoneFeedEntry) {
+                Text(
+                    MegaphoneFeedText.entryLink,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = colors.accent,
+                    modifier = Modifier.clickable(role = Role.Button) { showsFeed = true }.testTag(MessagesTags.MEGAPHONE_FEED_ENTRY),
+                )
+            }
             AingTextInput(
                 field, MegaphoneText.placeholder,
                 Modifier.fillMaxWidth().heightIn(min = 96.dp)

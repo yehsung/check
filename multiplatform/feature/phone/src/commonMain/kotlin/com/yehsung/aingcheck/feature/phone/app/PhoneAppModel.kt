@@ -350,7 +350,11 @@ class PhoneAppModel(val environment: PhoneEnvironment) {
         megaphoneBanner.isBannerDeferred = { isMegaphoneBannerDeferred }
         // 필터가 켜지거나 꺼지면 메시지함이 요약 함수 짝을 다시 맞춘다 — refresh 가 실시간·푸시 어느 길로 왔든(Swift f3360b47).
         megaphoneBanner.onCapabilityChange = { messages.megaphoneFilterDidSettle() }
-        realtime.megaphone = { scope.launch { megaphoneBanner.refresh() } }
+        realtime.megaphone = {
+            scope.launch { megaphoneBanner.refresh() }
+            // 지난 확성기(판 9 · 아이폰 1.0.19): 같은 'megaphone' 신호로 **열린 페이지만** 다시 읽는다(배너 스토어와 따로 · 자동 호출 없음).
+            if (messages.megaphoneFeed.isOpen) messages.megaphoneFeed.refresh()
+        }
         messages.megaphone.onSent = { body, megaphoneID ->
             megaphoneBanner.presentOwn(body, me.displayName.orEmpty(), me.avatarURL, megaphoneID)
         }

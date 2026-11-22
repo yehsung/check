@@ -918,7 +918,11 @@ enum TetrisWireJSON {
         await harness.signIn()
         harness.games.tetrisScreenDidAppear()
         #expect(await waits.wait { harness.tetris.hasLoadedLobby && harness.tetris.ranking != nil })
+        let lobbyIncoming = harness.tetris.incoming
         #expect(applyLiveState(harness, startAtMs: harness.serverNowMs - 1_000, meReady: true))
+        // 11-23: 판이 서는 순간 서버가 닫은 받은 신청을 걷는다(길건너 검토 RV-C-4 와 같은 꼴) — 실제 서버에선 판과 대기 신청이
+        // 함께 있을 수 없다. 로그아웃이 받은 신청까지 거두는지 재려고 로비에서 읽은 신청을 다시 둔다.
+        if harness.tetris.incoming.isEmpty { harness.tetris.incoming = lobbyIncoming }
         // 기준선: 거둘 것이 실제로 있어야 아래 '비었다'가 뜻을 가진다.
         #expect(harness.tetris.match != nil, "거둘 판이 없다 — 이 테스트가 공허해진다")
         #expect(!harness.tetris.incoming.isEmpty, "거둘 받은 신청이 없다")

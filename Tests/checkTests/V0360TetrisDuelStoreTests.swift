@@ -1424,3 +1424,106 @@ struct V0369TetrisOneWriterStoreTests {
         #expect(try tdDecode(TetrisStatePayload.self, tdJSON(nullDevice)).myDevice == nil)
     }
 }
+
+// MARK: - 늦은 응답의 루비 되감기 · 판이 선 뒤 남는 닫힌 받은 신청(11-23)
+//
+// 11-06 길건너 1:1 적대 검토(RV-C-2 · RV-C-4)에서 찾고 "테트리스도 같은 꼴"로 적어 둔 결함 둘(대표 #d_1ud0gpD3pncN '작은 정리').
+// 길건너는 10686e96 으로 고쳤다 — 같은 모양으로 옮긴다. 고치기 전(main 3a04c60c)에는 두 시험이 빨갛다.
+
+@MainActor
+@Suite("테트리스 대결 — 늦은 응답의 루비 되감기 · 판이 선 뒤 남는 닫힌 받은 신청")
+struct TetrisDuelStaleResponseTests {
+    /// 루비(돈 · 늦은 응답): 정산된 판의 잔액(이김 → 103)을 **정산 전에 만들어진** 응답이 늦게 닿아 되감는다.
+    /// `applyState` 는 늦은 응답 가드(끝난 판의 진행 중 스냅숏 → .ignored)보다 **앞에서** 루비를 옮기고, 로비는 순서 가드가 없다 —
+    /// 둘 다 server_now_ms 가 더 옛 값인데도 잔액(스토어 · 앱 미러)을 덮었다.
+    @Test("정산 뒤 닿은 옛 상태(.ignored)·옛 로비가 루비 잔액을 되감지 않는다(기준선: 더 새 응답은 덮는다)")
+    func staleResponsesDoNotRewindRuby() async throws {
+        let script = TDScript()
+        let (store, _, _, _) = tdMake("stale-ruby", script: script)
+        let owner = try #require(store.host as? TDHost)
+        let playing = TDPlayer(id: tdMe, name: "나", ready: true, seq: 4)
+        let rivalPlaying = TDPlayer(id: tdRival, name: "라이벌", ready: true, seq: 4)
+        // 진행 중(판돈 3 을 낸 잔액 97) — 이 응답은 정산 **전**(서버 시각 t0) 서버가 만든 것이다.
+        let older = tdJSON(tdState(nowMs: tdNowMs, startAtMs: tdNowMs - 60_000, me: playing, opponent: rivalPlaying, ruby: 97))
+        #expect(store.applyState(try tdDecode(TetrisStatePayload.self, older)) == .applied)
+        #expect(store.rubyBalance == 97)
+        // 정산(이김 +6 → 103) — 서버 시각 t0 + 2초.
+        let settled = tdJSON(tdState("finished", nowMs: tdNowMs + 2_000, startAtMs: tdNowMs - 60_000, me: playing,
+                                     opponent: rivalPlaying, result: "challenger_win", winner: tdMe, endReason: "topout",
+                                     ruby: 103))
+        #expect(store.applyState(try tdDecode(TetrisStatePayload.self, settled)) == .applied)
+        #expect(store.match?.isFinished == true)
+        #expect(store.rubyBalance == 103 && owner.rubyBalance == 103)
+        // ① 늦게 닿은 옛 상태(진행 중 · 서버 시각 t0) — 판 값은 버려진다(.ignored). 루비도 버려져야 한다.
+        #expect(store.applyState(try tdDecode(TetrisStatePayload.self, older)) == .ignored)
+        #expect(store.rubyBalance == 103, "버린 옛 상태가 루비 잔액을 되감았다: \(store.rubyBalance ?? -1)")
+        #expect(owner.rubyBalance == 103, "버린 옛 상태가 앱 루비 미러를 되감았다: \(owner.rubyBalance ?? -1)")
+        // ② 늦게 닿은 옛 로비(서버 시각 t0 · 잔액 100).
+        await store.applyLobby(try tdDecode(TetrisLobbyResponse.self, tdLobby()))
+        #expect(store.rubyBalance == 103, "정산 전 로비가 늦게 닿아 루비 잔액을 되감았다: \(store.rubyBalance ?? -1)")
+        #expect(owner.rubyBalance == 103)
+        // 기준선: 더 새 응답(서버 시각 t0 + 4초 · 잔액 110)은 덮는다.
+        let newer = tdJSON(tdState("finished", nowMs: tdNowMs + 4_000, startAtMs: tdNowMs - 60_000, me: playing,
+                                   opponent: rivalPlaying, result: "challenger_win", winner: tdMe, endReason: "topout",
+                                   ruby: 110))
+        #expect(store.applyState(try tdDecode(TetrisStatePayload.self, newer)) == .applied)
+        #expect(store.rubyBalance == 110 && owner.rubyBalance == 110)
+        // 로그아웃(reset) 뒤에는 처음부터 — 다음 사람의 첫 응답이 서버 시각이 옛 값이어도 옮긴다.
+        store.reset()
+        #expect(store.applyState(try tdDecode(TetrisStatePayload.self, older)) == .applied)
+        #expect(store.rubyBalance == 97)
+    }
+
+    /// 닫힌 받은 신청(메뉴바 점 · 사이드바 점 · 팝오버 [수락] 배너): 내가 보낸 신청이 수락돼 판이 서는 순간, 서버는 두 사람의
+    /// **다른** 대기 신청을 전부 닫는다. 받는 쪽은 respond 가 로컬 카드를 걷지만 이 기기는 보낸 쪽이다 — 닫힌 받은 신청이 남아
+    /// 판 내내(만료 60초까지) 점과 배너가 선다. 판 중에는 로비 폴링이 없고 초인종도 판 상태만 읽는다.
+    @Test("보낸 신청이 판이 되면 닫힌 다른 받은 신청이 화면 값에 남지 않는다(기준선: 판 전엔 보인다)")
+    func challengerDropsClosedIncomingWhenMatchStarts() async throws {
+        let script = TDScript()
+        let server = TDServer()
+        let other = "00000000-0000-0000-0000-0000000000c3"
+        let otherInvite: [String: Any] = ["match_id": "c0de0000-0000-4000-8000-0000000000ee",
+                                          "from": ["id": other, "display_name": "씨"], "stake": 3,
+                                          "expires_at_ms": tdNowMs + 50_000]
+        // 받은 신청 하나(씨 → 나, 다른 판 id) + 내가 보낸 신청 하나(나 → 라이벌).
+        script.stand("tetris_lobby", tdLobby(incoming: [otherInvite], outgoing: tdInvite(peerKey: "to")))
+        let (store, clock, host, _) = tdMake("closed-incoming", script: script)
+        await store.refreshLobby()
+        #expect(store.visibleIncoming?.peer.id == other)                // 기준선: 판 전엔 보인다
+        #expect(store.outgoing?.id == tdMatch)
+        // 라이벌이 수락했다(서버는 이 순간 씨의 신청도 닫았다). 보낸 신청 5초 조회가 판을 데려온다.
+        server.edit { $0.opponent.ready = false }
+        script.stand("tetris_state", tdEnvelope(state: server.state()))
+        script.stand("tetris_lobby", tdLobby(active: tdMatch))
+        store.isWindowVisible = true
+        await store.pollTick(at: clock.wall.addingTimeInterval(6))
+        #expect(tdCount(host, "tetris_state") == 1)
+        #expect(store.match?.id == tdMatch && store.phase == .ready)
+        #expect(store.visibleIncoming == nil, "판이 선 순간 닫힌 받은 신청을 걷지 않았다")
+        // 초인종(수락 · 시작)은 진행 중 판이면 그 판 상태만 읽는다 — 로비를 다시 읽지 않는다(걷을 기회가 없다).
+        await tdRing(store)
+        #expect(tdCount(host, "tetris_lobby") == 1, "판 중 초인종이 로비를 읽었다 — 이 시험의 전제가 바뀌었다")
+        #expect(store.visibleIncoming == nil,
+                "닫힌 받은 신청이 판 중에 남았다(메뉴바 점 · 팝오버 [수락] 배너): \(store.visibleIncoming?.peer.displayName ?? "")")
+        #expect(store.incoming.isEmpty)
+    }
+
+    /// 대조: 끝난 판을 처음 받을 때(판이 끝난 뒤 앱을 연 경우 등)는 받은 신청을 걷지 않는다 — 판이 끝난 뒤 새로 온 신청일 수 있다.
+    @Test("대조: 끝난 판을 처음 받으면 받은 신청을 그대로 둔다(판이 끝난 뒤 온 신청)")
+    func finishedMatchKeepsIncoming() async throws {
+        let script = TDScript()
+        let other = "00000000-0000-0000-0000-0000000000c3"
+        let otherInvite: [String: Any] = ["match_id": "c0de0000-0000-4000-8000-0000000000ee",
+                                          "from": ["id": other, "display_name": "씨"], "stake": 3,
+                                          "expires_at_ms": tdNowMs + 50_000]
+        script.stand("tetris_lobby", tdLobby(incoming: [otherInvite]))
+        let (store, _, _, _) = tdMake("finished-keeps", script: script)
+        await store.refreshLobby()
+        #expect(store.visibleIncoming?.peer.id == other)
+        let finished = tdJSON(tdState("finished", startAtMs: tdNowMs - 60_000, result: "challenger_win", winner: tdMe,
+                                      endReason: "topout"))
+        #expect(store.applyState(try tdDecode(TetrisStatePayload.self, finished)) == .applied)
+        #expect(store.match?.isFinished == true)
+        #expect(store.visibleIncoming?.peer.id == other, "끝난 판을 받았다고 판 뒤에 온 신청까지 걷었다")
+    }
+}

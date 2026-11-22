@@ -387,7 +387,8 @@ struct V1017BubbleSelectionContractTests {
         #expect(report.contains("BlockReportText.reportMessageAction") && report.contains("attributes: .destructive"))
         let fromMenu = try BS17.block(of: "private func reportFromMenu()", in: view)
         #expect(fromMenu.contains("onReport?()"))
-        #expect(code.contains("MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })"))
+        // 폰 1.0.19: 사진 묶음(photoContext · onOpenPhoto)이 뒤에 붙었다 — 신고 문은 그대로 받은 말풍선만.
+        #expect(code.contains("MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) },"))
         let content = try BS17.block(of: "private var bubbleContent: some View", in: code)
         #expect(content.contains("MessagesBubbleText(text: AingStickerText.preview(for: line.entry.body), isMine: line.entry.isMine, onReport: onReport,"),
                 "글 말풍선이 신고 문을 못 받는다")
@@ -426,8 +427,9 @@ struct V1017BubbleSelectionContractTests {
     /// 글 말풍선에는 길게 누름 메뉴(들어 올림 미리보기)가 없고, 이모티콘 말풍선에만 예전 메뉴 [복사](원문) · [신고]가 남는다.
     @Test func 길게누름_메뉴는_이모티콘_말풍선에만_남는다() throws {
         let code = try BS17.code(BS17.conversationPath)
-        #expect(BS17.count(".contextMenu {", in: code) == 1, "길게 누름 메뉴가 이모티콘 말풍선 밖에도 있다")
-        #expect(BS17.count(".contextMenuPreview", in: code) == 1, "들어 올림 미리보기 모양이 이모티콘 말풍선 밖에도 있다")
+        // 폰 1.0.19: 사진 말풍선도 길게 누름 메뉴([신고] — 받은 사진만)를 갖는다 — 글 칸이 아니라 그림이라 iOS 고르기와 겹치지 않는다.
+        #expect(BS17.count(".contextMenu {", in: code) == 2, "길게 누름 메뉴가 이모티콘 · 사진 말풍선 밖에도 있다")
+        #expect(BS17.count(".contextMenuPreview", in: code) == 2, "들어 올림 미리보기 모양이 이모티콘 · 사진 말풍선 밖에도 있다")
         let content = try BS17.block(of: "private var bubbleContent: some View", in: code)
         let parts = content.components(separatedBy: "} else {")
         try #require(parts.count == 2, "갈래가 둘이 아니다")

@@ -32,14 +32,15 @@ struct V1019MessageOlderTests {
         let token = UUID()
         h.store.conversationDidAppear(peerID: Self.peer, token: token)
         await h.settle()
-        #expect(h.count("message_page") == 0, "대화를 열기만 했는데 지난 쪽을 불렀다")
+        // 대화를 열면 사진 칸 조회(p_limit 30)는 한 번 나간다(메시지 사진 ②) — 지난 쪽(p_limit 50)은 버튼을 눌러야만이다.
+        #expect(h.bodies("message_page").filter { $0.contains("\"p_limit\":50") }.isEmpty, "대화를 열기만 했는데 지난 쪽을 불렀다")
         #expect(h.store.olderRowState(for: Self.peer) == .button)
         #expect(h.store.expiryNotice == MessageNoticeText.expiry, "성공 전에는 24시간 문장")
         let unreadBefore = h.store.badgeCount
 
         await h.store.performLoadOlderMessages(peerID: Self.peer)
         await h.settle()
-        let body = try #require(h.bodies("message_page").first)
+        let body = try #require(h.bodies("message_page").first { $0.contains("\"p_limit\":50") })
         #expect(body.contains("\"p_peer\":\"\(Self.peer)\"") && body.contains("\"p_before_us\":null") && body.contains("\"p_limit\":50"), "\(body)")
         let ids = h.store.conversationMessages(for: Self.peer).map(\.id)
         #expect(ids == ["old-1", "old-2", "head-1"], "\(ids)")
@@ -69,9 +70,12 @@ struct V1019MessageOlderTests {
         await h.settle()
         #expect(h.store.olderAvailable == false && h.store.olderRowState(for: Self.peer) == nil && !h.store.olderFailed)
         h.store.conversationDidDisappear(token: token)
-        let calls = h.count("message_page")
+        // 지난 쪽(p_limit 50) 요청 수만 센다 — 대화를 다시 열면 사진 칸 조회(p_limit 30)는 다시 나간다(메시지 사진 ②).
+        func olderCalls() -> Int { h.bodies("message_page").filter { $0.contains("\"p_limit\":50") }.count }
+        let calls = olderCalls()
         h.store.conversationDidAppear(peerID: Self.peer, token: UUID())
-        #expect(h.store.olderRowState(for: Self.peer) == .button && h.count("message_page") == calls)
+        await h.settle()
+        #expect(h.store.olderRowState(for: Self.peer) == .button && olderCalls() == calls)
     }
 
     @Test("배선: 대화 화면이 맨 위 줄 · 30일 문장 · 붙인 뒤 제자리 맞추기를 스토어 값으로만 그린다 — 주석을 걷고 본다")

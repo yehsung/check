@@ -29,6 +29,8 @@ struct MessagesConversationView: View {
     @State private var reportTarget: MessagesReportTarget?
 
     private static let bottomAnchorID = "messages-bottom-anchor"
+    /// 크게 보는 사진(폰 1.0.19).
+    @State private var photoViewer: MessagePhotoAttachment?
 
     var body: some View {
         let items = store.conversationItems(for: peerID)
@@ -192,6 +194,14 @@ struct MessagesConversationView: View {
                 onClose: { reportTarget = nil }
             )
         }
+        // 사진 크게 보기(폰 1.0.19) · 고른 사진 미리 보기(보내기 전 — 보내는 중엔 밀어 닫기를 막는다).
+        .fullScreenCover(item: $photoViewer) { photo in
+            MessagesPhotoViewer(photo: photo, context: store.photoContext) { photoViewer = nil }
+        }
+        .sheet(item: Binding(get: { store.photoDraft(for: peerID) }, set: { if $0 == nil { store.cancelPhotoDraftFromPreview() } })) { draft in
+            MessagesPhotoPreviewSheet(store: store, peerID: peerID, draft: draft)
+                .interactiveDismissDisabled(store.isSending)
+        }
         .onAppear { store.conversationDidAppear(peerID: peerID, token: token) }
         .onDisappear { store.conversationDidDisappear(token: token) }
         #if DEBUG
@@ -275,7 +285,8 @@ struct MessagesConversationView: View {
             MessagesPokeLogRow(line: line)
         case .bubble(let line):
             // 신고는 **받은 말풍선만**이다 — 내 말을 내가 신고하는 길은 만들지 않는다(그 메뉴는 뜻이 없다).
-            MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })
+            MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) },
+                              photoContext: store.photoContext, onOpenPhoto: { photoViewer = $0 })
                 // 말한 쪽이 바뀌면 조금 더 띄운다(시안 `.b-gap` 10 = 줄 간격 3 + 7).
                 .padding(.top, line.startsGroup ? 7 : 0)
         case .pending(let pending):
@@ -398,6 +409,10 @@ struct MessagesBubbleRow: View {
     let line: MessagesBubbleLine
     /// 길게 눌러 이 메시지를 신고한다. nil 이면 메뉴에 신고가 없다(내 말풍선).
     var onReport: (() -> Void)?
+    /// 사진 말풍선이 그림을 받는 묶음(폰 1.0.19 — 사진이 없는 줄은 안 쓴다).
+    var photoContext: MessagesPhotoBubbleContext?
+    /// 사진을 눌러 크게 본다.
+    var onOpenPhoto: ((MessagePhotoAttachment) -> Void)?
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
@@ -467,7 +482,24 @@ struct MessagesBubbleRow: View {
     /// 길게 누르기는 갈래마다 다르다: 그림은 SwiftUI 메뉴(`stickerMenu` · 그림 사각형 미리보기), 글자는 글 칸의 iOS 고르기 · 편집 메뉴다.
     @ViewBuilder
     private var bubbleContent: some View {
-        if let drawn = AingStickerArt.drawable(for: line.entry.body) {
+        if let photo = line.entry.photo {
+            // 사진 말풍선(폰 1.0.19) — 그림 · (있으면) 설명 글. 길게 누르면 [신고](받은 사진만).
+            VStack(alignment: line.entry.isMine ? .trailing : .leading, spacing: MessagePhotoLayout.captionSpacing) {
+                MessagesPhotoBubble(photo: photo, context: photoContext) { onOpenPhoto?(photo) }
+                    .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: MessagesPhotoBubble.corner, style: .continuous))
+                    .contextMenu {
+                        if let onReport {
+                            Button(role: .destructive, action: onReport) {
+                                Label(BlockReportText.reportMessageAction, systemImage: MessagesBubbleSelection.reportSymbol)
+                            }
+                        }
+                    }
+                if let caption = line.entry.photoCaption {
+                    MessagesBubbleText(text: caption, isMine: line.entry.isMine, onReport: onReport,
+                                       wholeCopyRaw: MessagesBubbleSelection.wholeCopyRaw(body: caption))
+                }
+            }
+        } else if let drawn = AingStickerArt.drawable(for: line.entry.body) {
             MessagesStickerBubble(art: drawn.art)
                 .contentShape(.contextMenuPreview, Rectangle())
                 .contextMenu { stickerMenu }
@@ -516,7 +548,9 @@ struct MessagesBubbleRow: View {
     ///   링크가 여는 곳은 링크마다 단 동작 이름이 말한다("링크 열기: 글 (호스트)").
     private var accessibilityText: String {
         let entry = line.entry
-        var parts = [(entry.isMine ? "나" : entry.peerName) + ": " + ChatMarkdown.plainPreview(entry.body), line.clockText]
+        let spoken = entry.photo == nil ? ChatMarkdown.plainPreview(entry.body)
+            : [MessagePhotoText.photoAccessibility, entry.photoCaption].compactMap { $0 }.joined(separator: ", ")
+        var parts = [(entry.isMine ? "나" : entry.peerName) + ": " + spoken, line.clockText]
         if line.showsUnreadOne { parts.append(MessagesConversationRules.unreadOneAccessibilityLabel) }
         return parts.joined(separator: ", ")
     }
@@ -897,6 +931,142 @@ struct MessagesOlderRow: View {
         .disabled(!state.isTappable)
         .frame(maxWidth: .infinity)
         .accessibilityHint(Text(state.isTappable ? MessageNoticeText.olderTooltip : ""))
+    }
+}
+// MARK: - 사진(폰 1.0.19 — 맥 0.3.86 메시지 사진의 폰 짝)
+
+extension MessagePhotoAttachment: Identifiable {
+    package var id: String { path }
+}
+
+/// 사진 말풍선 — 그림(받는 중 · 실패면 눌러 다시) · 누르면 크게. 크기는 코어 규칙(비율 · 하한 60 · 폰 상한 220×260).
+struct MessagesPhotoBubble: View {
+    static let corner: CGFloat = 14
+    static let maxSize = CGSize(width: 220, height: 260)
+
+    let photo: MessagePhotoAttachment
+    let context: MessagesPhotoBubbleContext?
+    let onOpen: () -> Void
+
+    var body: some View {
+        let size = MessagePhotoLayout.bubbleSize(width: photo.width, height: photo.height,
+                                                 maxWidth: Self.maxSize.width, maxHeight: Self.maxSize.height)
+        let state = context?.state(for: photo.path)
+        Button {
+            if state == .failed { context?.retry(photo.path) } else { onOpen() }
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: Self.corner, style: .continuous).fill(MobileTheme.fill)
+                if let image = context?.image(for: photo.path) {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else if state == .failed {
+                    VStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise")
+                        Text(MessagePhotoText.unavailable).font(.caption2)
+                    }
+                    .foregroundStyle(MobileTheme.label2)
+                } else {
+                    ProgressView().accessibilityLabel(Text(MessagePhotoText.loadingLabel))
+                }
+            }
+            .frame(width: size.width, height: size.height)
+            .clipShape(RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: Self.corner, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(MessagePhotoText.openLabel))
+        .onAppear { context?.request(photo.path) }
+    }
+}
+
+/// 크게 보기 — 검은 바탕 · 화면에 맞춘 그림 · [닫기]. 저장 버튼은 없다(사진 보관함 쓰기 권한을 묻지 않는다).
+struct MessagesPhotoViewer: View {
+    let photo: MessagePhotoAttachment
+    let context: MessagesPhotoBubbleContext
+    let onClose: () -> Void
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Color.black.ignoresSafeArea()
+            Group {
+                if let image = context.image(for: photo.path) {
+                    Image(decorative: image, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else if context.state(for: photo.path) == .failed {
+                    Text(MessagePhotoText.unavailable).foregroundStyle(.white)
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel(Text(MessagePhotoText.photoAccessibility))
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(Circle().fill(.white.opacity(0.18)))
+            }
+            .accessibilityLabel(Text(MessagePhotoText.viewerClose))
+            .padding(.leading, MobileTheme.sideMargin)
+            .padding(.top, 8)
+        }
+        .onAppear { context.request(photo.path) }
+    }
+}
+
+/// 고른 사진 미리 보기 — 그림 · (입력칸에 글이 있으면) "입력칸의 글도 함께 보내요" + 그 글 · [보내기] · [취소].
+struct MessagesPhotoPreviewSheet: View {
+    let store: MessagesStore
+    let peerID: String
+    let draft: MessagesPhotoDraft
+
+    var body: some View {
+        let caption = store.draft(for: peerID).trimmingCharacters(in: .whitespacesAndNewlines)
+        VStack(spacing: 0) {
+            SheetHeader(MessagePhotoText.previewTitle, onClose: { store.cancelPhotoDraftFromPreview() })
+                .disabled(store.isSending)
+            ScrollView {
+                VStack(alignment: .leading, spacing: MobileTheme.space3) {
+                    Image(decorative: draft.preview.image, scale: 1)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 360)
+                        .clipShape(RoundedRectangle(cornerRadius: MobileTheme.innerRadius, style: .continuous))
+                        .accessibilityLabel(Text(MessagePhotoText.photoAccessibility))
+                    if !caption.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(MessagePhotoText.captionNote)
+                                .font(.caption)
+                                .foregroundStyle(MobileTheme.label2)
+                            Text(caption)
+                                .font(.subheadline)
+                                .foregroundStyle(MobileTheme.label)
+                                .lineLimit(4)
+                        }
+                    }
+                    if let notice = MessagesComposerRules.noticeLine(focus: store.focusBlock(for: peerID), sendNotice: store.sendNotices[peerID]) {
+                        InlineNotice(text: notice, kind: .warning)
+                    }
+                    AingButton(store.isSending ? MessagePhotoText.sending : MessagePhotoText.previewSend, kind: .filled,
+                               size: .lg, fillsWidth: true, isBusy: store.isSending) {
+                        store.sendPhotoDraft(to: peerID)
+                    }
+                    .disabled(!store.canSendPhoto(to: peerID))
+                    AingButton(MessagePhotoText.previewCancel, kind: .gray, size: .lg, fillsWidth: true) {
+                        store.cancelPhotoDraftFromPreview()
+                    }
+                    .disabled(store.isSending)
+                }
+                .padding(.horizontal, MobileTheme.sideMargin)
+                .padding(.vertical, MobileTheme.space3)
+            }
+        }
+        .background(MobileTheme.background.ignoresSafeArea())
+        .presentationDetents([.large])
     }
 }
 #endif

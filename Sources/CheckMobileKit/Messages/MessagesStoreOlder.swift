@@ -39,8 +39,10 @@ extension MessagesStore {
     /// 대화에 그릴 메시지 — 지난 쪽 + 24시간 머리(다시 정렬하지 않고 잇는다 · 머리에 있는 id 는 지난 쪽에서 뺀다 · 내 말 읽음은 머리를 따른다).
     package func conversationMessages(for peerID: String) -> [MessageHistoryEntry] {
         let head = thread(for: peerID)?.messages ?? []
-        guard !hiddenBlockedPeerIDs.contains(peerID), let older = olderPages[peerID], !older.isEmpty else { return head }
-        return MessageOlderHistoryRules.merged(older: older, head: head)
+        guard !hiddenBlockedPeerIDs.contains(peerID), let older = olderPages[peerID], !older.isEmpty else {
+            return photoDisplayed(head, peer: peerID)
+        }
+        return photoDisplayed(MessageOlderHistoryRules.merged(older: older, head: head), peer: peerID)
     }
 
     /// 대화 맨 위 줄. 함수가 없는 서버면 nil — 뷰는 이것 하나만 본다(게이트 짝: `loadOlderMessages` 가드와 같은 조건).
@@ -91,6 +93,8 @@ extension MessagesStore {
                 }
                 guard isCurrent() else { return }
                 if olderAvailable != true { olderAvailable = true }
+                // 사진 칸도 배운다: 이 쪽이 머리와 겹친 줄(머리가 이겨 지난 쪽에서 빠진다)의 사진도 그려지게(맥과 같다).
+                absorbPhotoMeta(page.entries, peer: peer)
                 // 붙인 뒤 위에 맞출 줄 — 붙이기 **직전** 화면 맨 위의 메시지.
                 let anchorID = conversationMessages(for: peer).first?.id
                 let older = olderPages[peer] ?? []

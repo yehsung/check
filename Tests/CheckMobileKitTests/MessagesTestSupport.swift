@@ -54,6 +54,12 @@ final class MessagesStubServer: @unchecked Sendable {
         lock.lock(); overrides[rpc] = responder; lock.unlock()
     }
 
+    /// RPC 가 아닌 경로(저장소 올리기 · 받기 — 폰 1.0.19 메시지 사진)에 먼저 물어볼 응답기. 앞부분이 맞는 첫 응답기를 쓴다.
+    func overridePath(prefix: String, _ responder: @escaping @Sendable (MobileStubRequest) -> MobileStubResponse?) {
+        lock.lock(); pathOverrides.append((prefix, responder)); lock.unlock()
+    }
+    private var pathOverrides: [(String, @Sendable (MobileStubRequest) -> MobileStubResponse?)] = []
+
     func setRows(_ value: [Row]) { lock.lock(); rows = value; lock.unlock() }
     func appendRow(_ value: Row) { lock.lock(); rows.append(value); lock.unlock() }
     /// 빈 문자열이면 "함수 없음"(옛 서버).
@@ -85,6 +91,11 @@ final class MessagesStubServer: @unchecked Sendable {
             return request.rpcName.flatMap { overrides[$0] }
         }()
         if let overrideResponder, let response = overrideResponder(request) { return response }
+        let pathResponder: (@Sendable (MobileStubRequest) -> MobileStubResponse?)? = {
+            lock.lock(); defer { lock.unlock() }
+            return pathOverrides.first { request.path.hasPrefix($0.0) }?.1
+        }()
+        if let pathResponder, let response = pathResponder(request) { return response }
         lock.lock(); defer { lock.unlock() }
         switch request.rpcName {
         case "client_release": return BaseStub.releaseOK
@@ -172,16 +183,19 @@ struct MessagesHarness {
     }
 
     /// 로그인된 채로 시작해 scene active 까지(첫 활성화 새로고침이 끝날 때까지 기다린다).
-    static func make(active: Bool = true, configure: (MessagesStubServer) -> Void = { _ in }) async -> MessagesHarness {
+    /// `userID` — 로그인 계정. 기본은 `me`("user-me"). 사진 경로(`<uuid>/<uuid>.jpg` — 폰 1.0.19)처럼 uuid 계정이 필요한 시험만 바꾼다.
+    static func make(active: Bool = true, userID: String = me,
+                     configure: (MessagesStubServer) -> Void = { _ in }) async -> MessagesHarness {
         let host = BaseStub.makeHost("messages")
         let server = MessagesStubServer()
         configure(server)
         MobileStubURLProtocol.register(host: host) { server.respond($0) }
         let storage = BaseStub.makeStorage()
         let vault = InMemoryTokenVault()
-        vault.write(firstAccessToken, key: AingKeychain.accessTokenKey)
+        vault.write(userID == me ? firstAccessToken : BaseStub.jwt(exp: MobileClock.demoInstant.addingTimeInterval(7200), subject: userID),
+                    key: AingKeychain.accessTokenKey)
         vault.write("refresh-me", key: AingKeychain.refreshTokenKey)
-        storage.defaults.set(me, forKey: AingSharedKeys.userID)
+        storage.defaults.set(userID, forKey: AingSharedKeys.userID)
         let clock = BaseTestClock()
         let transport = BaseFakeTransport()
         let environment = MobileEnvironment(

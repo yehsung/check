@@ -476,7 +476,7 @@ struct V1017ChatMarkdownCopyTests {
         let menu = try CM17.block(of: "private var stickerMenu: some View", in: code)
         #expect(menu.contains("MessagesBubbleCopy.copy(line.entry.body)"), "[복사]가 원문이 아니다")
         #expect(menu.contains("if let onReport {"), "[신고]가 신고 문이 있을 때만 뜨지 않는다")
-        #expect(code.contains("MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) })"),
+        #expect(code.contains("MessagesBubbleRow(line: line, onReport: line.entry.isMine ? nil : { reportMessage(line.entry) },"),
                 "[신고]가 받은 말풍선에만 있지 않다")
         let report = try CM17.block(of: "private func reportMessage(", in: code)
         #expect(report.contains("messageBody: entry.body") && !report.contains("plainPreview"), "서버로 가는 신고 본문이 원문이 아니다")

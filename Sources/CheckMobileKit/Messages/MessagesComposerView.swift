@@ -1,5 +1,6 @@
 #if os(iOS)
 import CheckCore
+import PhotosUI
 import SwiftUI
 import UIKit
 
@@ -18,6 +19,8 @@ struct MessagesComposerView: View {
     @State private var editorHeight: CGFloat = 44
     /// 아잉이 이모티콘 고르는 시트가 떠 있는가(1.0.12).
     @State private var stickerSheetShown = false
+    /// 고른 사진(폰 1.0.19 — 받는 즉시 원본을 읽어 스토어에 넘기고 비운다).
+    @State private var pickedPhoto: PhotosPickerItem?
     /// 보내기 원 지름: 44 를 본문 글자 크기로 키운 값(상한·하한은 `MessagesComposerRules.sendButtonMetrics`).
     @ScaledMetric(relativeTo: .body) private var scaledSendDiameter: CGFloat = CGFloat(MessagesComposerRules.minimumTouchTarget)
 
@@ -47,6 +50,10 @@ struct MessagesComposerView: View {
             // 시안 B 04: 입력칸 하나(surface 캡슐 · 0.5pt 선) 안 오른쪽에 보내기 원. 흰 띠를 깔지 않는다 — 바탕과 같은 면에 입력칸만 뜬다.
             // 이모티콘 버튼은 캡슐 **왼쪽 바깥**이다(1.0.12) — 캡슐 안에 넣으면 글자 시작점이 밀려 자리표시가 잘린다.
             HStack(alignment: .bottom, spacing: 6) {
+                // [사진](폰 1.0.19) — 시스템 사진 고르기(권한 창 없음). 문이 닫힌 세션엔 서지 않는다(다음 대화 열기에 다시).
+                if store.showsPhotoButton(for: peerID) {
+                    photoButton(sendMetrics)
+                }
                 stickerButton(sendMetrics)
                 HStack(alignment: .bottom, spacing: 0) {
                     ZStack(alignment: .topLeading) {
@@ -103,6 +110,36 @@ struct MessagesComposerView: View {
         .background(MobileTheme.background.ignoresSafeArea(edges: .bottom))
         .sheet(isPresented: $stickerSheetShown) {
             MessagesStickerSheet(store: store, peerID: peerID)
+        }
+    }
+
+    /// 입력칸 왼쪽 바깥의 사진 버튼(폰 1.0.19). 고르면 줄인 뒤 미리 보기 시트가 뜬다(대화 화면 `.sheet(item:)`).
+    private func photoButton(_ metrics: MessagesComposerRules.SendButtonMetrics) -> some View {
+        PhotosPicker(selection: $pickedPhoto, matching: .images) {
+            Group {
+                if store.photoPreparing {
+                    ProgressView()
+                } else {
+                    Image(systemName: "photo")
+                        .font(.system(size: CGFloat(metrics.visibleDiameter) * 0.62, weight: .medium))
+                        .foregroundStyle(store.canSendPhoto(to: peerID) ? MobileTheme.accent : MobileTheme.label3)
+                }
+            }
+            .frame(width: CGFloat(metrics.visibleDiameter), height: CGFloat(metrics.visibleDiameter))
+            .frame(width: CGFloat(metrics.diameter), height: CGFloat(metrics.diameter))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!store.canSendPhoto(to: peerID))
+        .accessibilityLabel(Text(MessagePhotoText.buttonHelp))
+        .onChange(of: pickedPhoto) { _, item in
+            guard let item else { return }
+            Task { @MainActor in
+                let data = try? await item.loadTransferable(type: Data.self)
+                pickedPhoto = nil
+                // 못 읽었으면(아이클라우드에서 못 받음 등) 빈 자료로 넘겨 '사진을 읽지 못했어요'를 세운다(조용히 끝내지 않는다).
+                store.preparePhoto(data: data ?? Data(), for: peerID)
+            }
         }
     }
 

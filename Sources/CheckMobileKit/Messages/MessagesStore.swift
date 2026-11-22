@@ -90,6 +90,24 @@ package final class MessagesStore {
     /// 날아가던 응답을 버리는 순번(비우기 · 상대 바꾸기 · 로그아웃이 올린다).
     @ObservationIgnored package internal(set) var olderRequestToken = 0
 
+    // MARK: 메시지 사진(폰 1.0.19 — 맥 0.3.86 `WorkTimerStoreMessagePhotos` 의 폰 짝 · `MessagesStorePhotos.swift`)
+
+    /// 상대별 사진 칸 표(메시지 id → 사진 · 설명). 24시간 머리는 사진 칸이 없어 따로 배우고 **그릴 때만** 얹는다.
+    package internal(set) var photoMeta: [String: [String: MessagesPhotoMeta]] = [:]
+    /// 사진 칸 조회(`message_page`)가 되는 서버인가: nil 모름 · false 함수 없음(다음 대화 열기까지 안 묻는다) · true.
+    package internal(set) var photoMetaAvailable: Bool?
+    /// 이 세션에 사진 보내기 문이 닫혔다(문 닫힘 · 함수 · 버킷 없음) — [사진] 버튼을 다음 대화 열기까지 숨긴다.
+    package internal(set) var photoSendClosed = false
+    /// 고른 사진(미리 보기 · 보내기 전).
+    package internal(set) var photoDraft: MessagesPhotoDraft?
+    /// 고른 사진을 줄이는 중.
+    package internal(set) var photoPreparing = false
+    /// 사진 그림 캐시(메모리 · 경로 열쇠).
+    @ObservationIgnored package let photoImages = MessagesPhotoImageCache()
+    @ObservationIgnored var photoRuntime = MessagesPhotoRuntime()
+    /// 시험이 넣는 그림 받기(없으면 서버에서 서명 URL 로 받는다).
+    @ObservationIgnored package var photoDataLoader: (@Sendable @MainActor (String) async throws -> Data)?
+
     /// 사람 찾기 거르기 칸(폰 1.0.19 — `MessagesPresenceFilter`). 앱이 켜져 있는 동안 남고 로그아웃하면 전체.
     package private(set) var directoryPresenceFilter: MessagesPresenceFilter = .all
 
@@ -137,9 +155,9 @@ package final class MessagesStore {
     /// 왕복 중 안내를 세우려고 열었는데, 그리드는 **시트** 안에 있어서 입력줄의 이 한 줄이 시트에 **가려** 안
     /// 보인다. 그래서 그 안내는 시트가 자기 `@State` 로 들고(`MessagesStickerSheet`), 이 문은 다시 닫혔다.
     /// 쓰는 자리가 없는 접근 확대는 남겨 두지 않는다.
-    package private(set) var sendNotices: [String: String] = [:]
+    package internal(set) var sendNotices: [String: String] = [:]
     /// 전송 왕복 중인가. **한 번에 하나** — 순서가 곧 상대가 읽는 순서라 두 전송을 나란히 띄우지 않는다.
-    package private(set) var isSending = false
+    package internal(set) var isSending = false
 
     // MARK: 집중 모드 (1.0.17 · 대표 요청 5·6 — 규칙은 `MessagesFocusRules`)
 
@@ -241,6 +259,7 @@ package final class MessagesStore {
         megaphoneFeed.reset()
         clearOlderMessages()
         olderAvailable = nil
+        resetPhotoState()
         hiddenBlockedPeerIDs = []
         blockedPeople = []
         blocksLoaded = false
@@ -558,7 +577,7 @@ package final class MessagesStore {
     /// 서버가 보내기를 **내** 집중으로 거절했다(`sender_focused` — 20261108121000). 이 폰은 몰랐다(알았으면 `focusBlock` 이 요청 전에 막았다) —
     /// 맥에서 켰다. 켜짐으로 들여 [보내기] 잠금과 사유 줄이 따라오게 한다(맥 `adoptServerSenderFocused` 의 폰 짝). 폰은 PATCH 가 없어
     /// 맥의 의도 번호가 필요 없다 — 그 전에 띄운 조회의 답만 낡은 것으로 버린다(`myFocusAppliedSerial`).
-    private func adoptServerSenderFocused() {
+    func adoptServerSenderFocused() {
         runtime.myFocusAppliedSerial = runtime.nextSerial()
         if myFocusMode != true { myFocusMode = true }
     }
@@ -646,6 +665,8 @@ package final class MessagesStore {
             clearOlderMessages()
         }
         rearmOlderMessagesAvailability()
+        // 사진: 닫힌 문 · 함수 없음 숨김을 되돌리고, 다른 사람의 사진 상태를 걷고, 사진 칸을 한 번 묻는다.
+        armPhotoMeta(for: peerID)
         runtime.shownConversations.removeAll { $0.token == token }
         runtime.shownConversations.append((token, peerID))
         openConversationPeerID = peerID
@@ -666,8 +687,11 @@ package final class MessagesStore {
         runtime.shownConversations.removeAll { $0.token == token }
         let current = runtime.shownConversations.last?.peerID
         if openConversationPeerID != current { openConversationPeerID = current }
-        // 대화를 다 닫으면 지난 쪽을 비운다(다시 열면 다시 누른다 — 맥 패널 닫기와 같다).
-        if current == nil { clearOlderMessages() }
+        // 대화를 다 닫으면 지난 쪽 · 사진 칸 · 고른 사진을 비운다(다시 열면 다시 묻는다 — 맥 패널 닫기와 같다). 그림 캐시는 남는다.
+        if current == nil {
+            clearOlderMessages()
+            clearPhotoConversation()
+        }
         syncRouterVisibility()
     }
 
@@ -793,6 +817,8 @@ package final class MessagesStore {
                 // 깃발은 **마지막 ok** 가 정한다 — message_id 없는 ok 는 키를 모르는 판이다(서버 되돌림 · 코어가 옛 모양으로 되물었다).
                 // 한 번 선 깃발을 그대로 두면 되돌린 서버에서 재시도가 두 통을 만든다. 거절 status 는 판을 말하지 않으니 건드리지 않는다.
                 if succeeded { self.runtime.serverKnowsSendKey = response.messageId != nil }
+                // 이 폰이 보낸 말은 사진 칸을 물어본 것으로 친다(글이라 물을 것이 없다 — 보낼 때마다 묻지 않게).
+                if succeeded { self.noteMessageSentForPhotos(messageID: response.messageId, peer: peerID) }
                 // 확정 답 — 이 키·이 (상대, 본문)의 기억을 지운다(성공이면 다음 같은 말은 새 말이고, 거절이면 저장된 것이 없다).
                 self.runtime.unconfirmedSends.removeAll {
                     $0.key == localID || ($0.peerUserID == peerID && $0.body == body)
@@ -986,7 +1012,11 @@ package final class MessagesStore {
             let sorted = loaded.entries.sortedForMessageHistory(serverOrder: loaded.hasReadReceipts ? loaded.serverOrder : nil)
             // 24시간 머리가 미끄러졌으면 지난 쪽을 받은 상대의 빠진 옛 줄을 지난 쪽 끝으로 옮긴다(대화 가운데가 비지 않게 — 1.0.19).
             carryOlderMessagesAcrossHeadSlide(previousHead: threads.flatMap(\.messages), nextHead: sorted)
-            if history != sorted { history = sorted }
+            if history != sorted {
+                history = sorted
+                // 열린 대화에 사진 칸을 모르는 말이 생겼으면 합쳐서 한 번 묻는다(사진 ②).
+                noteHeadChangedForPhotos()
+            }
             if loaded.hasReadReceipts {
                 let snapshot = MessageHistoryReadSnapshot(serial: serial, serverOrder: loaded.serverOrder)
                 if historySnapshot != snapshot { historySnapshot = snapshot }

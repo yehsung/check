@@ -68,24 +68,26 @@ data class CharacterManifest(
         ruby,
         /** 개발에 찌든 아잉이(맥 0.3.81 미션 보상 · 판 8). 희귀가 아니다. */
         dev,
-        /** 부산 갈매기 아잉이(지역 — Android 는 그림이 없다). 희귀가 아니다. */
+        /** 부산 갈매기 아잉이(지역 — 판 9 부터 정지 초상). 희귀가 아니다. */
         busan,
-        /** 서울의 밤 아잉이(지역 — Android 는 그림이 없다). 희귀가 아니다. */
+        /** 서울의 밤 아잉이(지역 — 판 9 부터 정지 초상). 희귀가 아니다. */
         seoul,
+        /** 산타 아잉이(맥 0.3.87 크리스마스 선물 · 판 9 부터 정지 초상). 희귀가 아니다. */
+        santa,
         ;
 
         /** 희귀(뽑기 전용 내장 — 황금 · 무지개). 확률표 강조 · 결과 연출 · 교환 목록 맨 위가 이 값으로 갈린다. */
         val isRare: Boolean
             get() = when (this) {
                 gold, rainbow -> true
-                standard, cakeStrawberry, cakeChoco, isul, pepero, hwoo, ruby, dev, busan, seoul -> false
+                standard, cakeStrawberry, cakeChoco, isul, pepero, hwoo, ruby, dev, busan, seoul, santa -> false
             }
 
         /** 케이크 마감(딸기 · 초코)인가. */
         val isCake: Boolean
             get() = when (this) {
                 cakeStrawberry, cakeChoco -> true
-                standard, gold, rainbow, isul, pepero, hwoo, ruby, dev, busan, seoul -> false
+                standard, gold, rainbow, isul, pepero, hwoo, ruby, dev, busan, seoul, santa -> false
             }
 
         companion object {
@@ -102,6 +104,7 @@ data class CharacterManifest(
                 CharacterCatalog.isDevAing(characterID) -> dev
                 characterID == CharacterCatalog.busanAingID -> busan
                 characterID == CharacterCatalog.seoulAingID -> seoul
+                CharacterCatalog.isSantaAing(characterID) -> santa
                 else -> standard
             }
         }

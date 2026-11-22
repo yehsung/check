@@ -3,6 +3,7 @@ package com.yehsung.aingcheck.core.rules.character
 
 import com.yehsung.aingcheck.core.wire.character.BuiltInCharacterIds
 import com.yehsung.aingcheck.core.wire.character.RegionAingNames
+import com.yehsung.aingcheck.core.wire.character.SantaAingNames
 
 /**
  * 이 빌드가 세울 수 있는 캐릭터 전부. **안전망이 이 타입의 존재 이유다** — 번들이 비어도(또는 전부 깨져도) 아잉이 있고,
@@ -101,13 +102,16 @@ class CharacterCatalog(entries: List<Entry>) {
         const val seoulAingID = BuiltInCharacterIds.seoulAingID
         val builtInBusanAing = CharacterManifest(id = busanAingID, displayName = RegionAingNames.busanDisplayName, kind = CharacterManifest.Kind.scene3D)
         val builtInSeoulAing = CharacterManifest(id = seoulAingID, displayName = RegionAingNames.seoulDisplayName, kind = CharacterManifest.Kind.scene3D)
+        /** 산타 아잉이(맥 0.3.87 · 크리스마스 기간 선물 전용 — 시안 S3 '수염 산타'). Android 는 정지 초상만 그린다. */
+        const val santaAingID = BuiltInCharacterIds.santaAingID
+        val builtInSantaAing = CharacterManifest(id = santaAingID, displayName = SantaAingNames.santaDisplayName, kind = CharacterManifest.Kind.scene3D)
 
         /**
          * 내장 항목 전부 — **표시 순서 그대로**(아잉, 황금, 무지개, 딸기, 초코, 이슬, 빼빼로, 흑우, 루비, 개발, 부산, 서울).
          */
         val builtIns: List<CharacterManifest> = listOf(
             builtInAing, builtInGoldAing, builtInRainbowAing, builtInCakeStrawberryAing, builtInCakeChocoAing, builtInIsulAing,
-            builtInPeperoAing, builtInHwooAing, builtInRubyAing, builtInDevAing, builtInBusanAing, builtInSeoulAing,
+            builtInPeperoAing, builtInHwooAing, builtInRubyAing, builtInDevAing, builtInBusanAing, builtInSeoulAing, builtInSantaAing,
         )
 
         /** 앞뒤 공백·대소문자를 봐주지 않는다(서버 값은 정확히 그 id 다). */
@@ -130,6 +134,7 @@ class CharacterCatalog(entries: List<Entry>) {
         fun isRubyAing(id: String?): Boolean = BuiltInCharacterIds.isRubyAing(id)
         fun isDevAing(id: String?): Boolean = BuiltInCharacterIds.isDevAing(id)
         fun isRegionAing(id: String?): Boolean = BuiltInCharacterIds.isRegionAing(id)
+        fun isSantaAing(id: String?): Boolean = BuiltInCharacterIds.isSantaAing(id)
 
         /** 조각 교환으로만 얻는 내장(흑우) — 뽑기 전용의 부분집합(얻는 길 문구 "조각 N개로 교환"). */
         fun isShardOnlyBuiltIn(id: String?): Boolean = BuiltInCharacterIds.isShardOnlyBuiltIn(id)
@@ -161,6 +166,7 @@ class CharacterCatalog(entries: List<Entry>) {
 
         /** 우리 센터 선물 내장(부산 → 서울). 상점 번호 10 의 재료다(두 센터 그림이 다 있어야). */
         val regionGiftBuiltInIDs: List<String> = BuiltInCharacterIds.regionGiftBuiltInIDs
+        val santaGiftBuiltInIDs: List<String> = BuiltInCharacterIds.santaGiftBuiltInIDs
 
         /** 선물 전용 내장 **전부**(생일 → 술 → 빼빼로 → 지역, 표시 순서) — '루비로 못 산다 · 잠긴 칸' 뜻으로만. 케이크 뜻 자리에 쓰지 마라(설계서 §2). */
         val giftOnlyBuiltInIDs: List<String> = BuiltInCharacterIds.giftOnlyBuiltInIDs

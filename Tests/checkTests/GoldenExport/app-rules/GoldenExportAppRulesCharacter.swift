@@ -63,6 +63,7 @@ struct GoldenExportAppRulesCharacter {
         case .dev: return "dev"
         case .busan: return "busan"
         case .seoul: return "seoul"
+        case .santa: return "santa"
         }
     }
 

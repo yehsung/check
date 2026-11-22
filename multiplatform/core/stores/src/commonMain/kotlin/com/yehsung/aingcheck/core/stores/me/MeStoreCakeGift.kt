@@ -2,6 +2,8 @@
 // 원본: Sources/check/WorkTimerStoreCakeGift.swift @ 12624739 (맥 0.3.74 — 종류를 아는 박자 · ⑤ 다음 선물 · ⑥ 종류 문구 · 종류를 실어 옮기는 보유 거름)
 package com.yehsung.aingcheck.core.stores.me
 
+import com.yehsung.aingcheck.core.net.ensureRegionGift
+import kotlin.coroutines.cancellation.CancellationException
 import com.yehsung.aingcheck.core.net.AuthErrorDisposition
 import com.yehsung.aingcheck.core.net.AuthErrorRules
 import com.yehsung.aingcheck.core.net.claimCharacterGift
@@ -113,6 +115,18 @@ suspend fun MeStore.loadCakeGift() {
     cakeGiftLoading = true
     try {
         val service = context.service
+        // 우리 센터 선물(지역 아잉이 — 번호 10): 조회 **전에** 서버에 마련해 달라고 한다(세대당 한 번 · 멱등 — 센터가 없거나 이미 받았으면
+        // 아무것도 안 바뀐다). 실패해도 조회는 그대로 한다(다음 조회 박자에 다시 말한다). 맥 WorkTimerStoreCakeGift.refreshCakeGift 와 같은 순서.
+        if (ShopWire.supportsRegionGift(protocolVersion) && regionGiftEnsuredGeneration != generation) {
+            val ensured = try {
+                context.withSessionRetry { s -> service.ensureRegionGift(s.accessToken, protocolVersion.toLong()) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                null
+            }
+            if (ensured != null && generation == context.generation) regionGiftEnsuredGeneration = generation
+        }
         val offer = try {
             context.withSessionRetry { s -> service.fetchCharacterGiftPending(s.accessToken, protocolVersion.toLong()) }
         } catch (e: Throwable) {

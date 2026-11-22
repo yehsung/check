@@ -9,6 +9,7 @@
 //   Sources/check/Resources/aing_isul-<표정>.png(맥 0.3.74 이슬 아잉이 — 그림 갈아 끼우는 자리는 ui/build.gradle.kts `isulPortraitSource` 하나) → files/characters/aing_isul/…
 //   Sources/check/Resources/aing_{hwoo,ruby,dev}-<표정>.png · Sources/CheckMobileShared/Resources/Portraits/aing_pepero-<표정>.png(폰 판 — 상자 글자 없음)
 //     → files/characters/<id>/…(판 8 — 아이폰 1.0.18 의 새 아잉이 넷. 넷이 다 실려야 상점 번호 9)
+//   Sources/check/Resources/aing_{busan,seoul,santa}-<표정>.png(판 9 — 지역 둘 · 산타, 아이폰 1.0.19 폰 판과 같은 바이트) → 번호 10 · 11
 //   Sources/CheckMobileKit/Resources/Art/{ruby,ruby-48,ruby-96,stage-<id>-neutral}.png    → files/art/…
 //   Sources/CheckCore/Resources/Stickers/sticker-<이름>.png(0.3.62 아잉이 이모티콘)           → files/stickers/…
 // 스프라이트 아틀라스(atlas.png)는 싣지 않는다 — 살아 있는 캐릭터는 구운 자산(W0-d·W5)이 맡는다.
@@ -33,6 +34,7 @@ object CharacterArt {
     val portraitIds: List<String> = listOf(
         "aing", "aing_gold", "aing_rainbow", "aing_cake_strawberry", "aing_cake_choco", "aing_isul",
         "aing_pepero", "aing_hwoo", "aing_ruby", "aing_dev",
+        "aing_busan", "aing_seoul", "aing_santa",
         "fox", "ghost", "jellyfish", "robot", "shiba", "squirrel",
     )
 

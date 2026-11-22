@@ -96,17 +96,17 @@ class CharacterShopGoldenTest {
         assertEquals(builtins.string("cakeChocoAingID"), CharacterCatalog.cakeChocoAingID)
         assertJson(builtins["gachaOnlyBuiltInIDs"], arr(CharacterCatalog.gachaOnlyBuiltInIDs.map(::s)), "gachaOnlyBuiltInIDs")
         assertJson(builtins["giftOnlyBuiltInIDs"], arr(CharacterCatalog.giftOnlyBuiltInIDs.map(::s)), "giftOnlyBuiltInIDs")
-        // 이슬(0.3.74) · 빼빼로(0.3.77) · 지역(0.3.85): 선물 전용 전부 = 생일(케이크 둘) + 술(이슬) + 빼빼로 + 지역 둘. 케이크 뜻 자리(상점 번호 4 ·
-        // 생일 선택지)는 생일 목록만 쓴다(설계서 §2).
+        // 이슬(0.3.74) · 빼빼로(0.3.77) · 지역(0.3.85) · 산타(0.3.87 · 판 9): 선물 전용 전부 = 생일(케이크 둘) + 술(이슬) + 빼빼로 + 지역 둘 + 산타.
+        // 케이크 뜻 자리(상점 번호 4 · 생일 선택지)는 생일 목록만 쓴다(설계서 §2).
         assertEquals(
             CharacterCatalog.birthdayGiftBuiltInIDs + CharacterCatalog.drinkGiftBuiltInIDs + CharacterCatalog.peperoGiftBuiltInIDs +
-                CharacterCatalog.regionGiftBuiltInIDs,
-            CharacterCatalog.giftOnlyBuiltInIDs, "선물 전용 = 생일 + 술 + 빼빼로 + 지역",
+                CharacterCatalog.regionGiftBuiltInIDs + CharacterCatalog.santaGiftBuiltInIDs,
+            CharacterCatalog.giftOnlyBuiltInIDs, "선물 전용 = 생일 + 술 + 빼빼로 + 지역 + 산타",
         )
         assertEquals(listOf(CharacterCatalog.cakeStrawberryAingID, CharacterCatalog.cakeChocoAingID), CharacterCatalog.birthdayGiftBuiltInIDs, "생일 = 케이크 둘")
         assertEquals(listOf(CharacterCatalog.isulAingID), CharacterCatalog.drinkGiftBuiltInIDs, "술 = 이슬 하나")
         assertEquals(builtins.array("builtIns")[5].jsonObject.string("id"), CharacterCatalog.isulAingID, "이슬 id(여섯째)")
-        assertEquals(builtins.array("builtIns").last().jsonObject.string("id"), CharacterCatalog.seoulAingID, "내장 끝 = 서울의 밤 아잉이")
+        assertEquals(builtins.array("builtIns").last().jsonObject.string("id"), CharacterCatalog.santaAingID, "내장 끝 = 산타 아잉이(판 9)")
         assertEquals(builtins.string("charactersSubdirectory"), CharacterCatalog.charactersSubdirectory)
         var ids = 0
         for (case in golden.cases.filter { it.string("id").startsWith("id-") }) {

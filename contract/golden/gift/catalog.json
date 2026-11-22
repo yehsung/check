@@ -74,6 +74,12 @@
           "finish": "seoul",
           "id": "aing_seoul",
           "kind": "scene3D"
+        },
+        {
+          "displayName": "산타 아잉이",
+          "finish": "santa",
+          "id": "aing_santa",
+          "kind": "scene3D"
         }
       ],
       "cakeChocoAingID": "aing_cake_choco",
@@ -90,7 +96,8 @@
         "aing_isul",
         "aing_pepero",
         "aing_busan",
-        "aing_seoul"
+        "aing_seoul",
+        "aing_santa"
       ],
       "goldAingID": "aing_gold",
       "id": "builtins",
@@ -421,7 +428,8 @@
         "aing_ruby",
         "aing_dev",
         "aing_busan",
-        "aing_seoul"
+        "aing_seoul",
+        "aing_santa"
       ],
       "bundled": [],
       "displayNames": [
@@ -436,7 +444,8 @@
         "루비 아잉이",
         "개발에 찌든 아잉이",
         "부산 갈매기 아잉이",
-        "서울의 밤 아잉이"
+        "서울의 밤 아잉이",
+        "산타 아잉이"
       ],
       "id": "catalog-0"
     },
@@ -454,6 +463,7 @@
         "aing_dev",
         "aing_busan",
         "aing_seoul",
+        "aing_santa",
         "fox",
         "robot"
       ],
@@ -480,6 +490,7 @@
         "개발에 찌든 아잉이",
         "부산 갈매기 아잉이",
         "서울의 밤 아잉이",
+        "산타 아잉이",
         "여우",
         "로봇"
       ],
@@ -499,6 +510,7 @@
         "aing_dev",
         "aing_busan",
         "aing_seoul",
+        "aing_santa",
         "alpha",
         "zeta"
       ],
@@ -537,6 +549,7 @@
         "개발에 찌든 아잉이",
         "부산 갈매기 아잉이",
         "서울의 밤 아잉이",
+        "산타 아잉이",
         "알파",
         "제타"
       ],

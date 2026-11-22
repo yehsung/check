@@ -55,17 +55,24 @@ object ShopWire {
 
     /**
      * 지역 아잉이(부산 · 서울 — 우리 센터 선물)와 그 선물을 받는 번호. **두 센터를 다** 그릴 수 있을 때만 말한다. Android 판 8 은 지역 그림을
-     * 싣지 않아 9 에 머문다(안드로이드 범위 밖 — 아이폰 1.0.18 에도 없다).
+     * 싣지 않아 9 에 머물렀다 — 판 9(아이폰 1.0.19 와 같이)부터 싣는다.
      */
     const val regionProtocol = 10
     val regionCharacterIDs: List<String> get() = CharacterCatalog.regionGiftBuiltInIDs
+
+    /**
+     * 산타 아잉이(맥 0.3.87 크리스마스 기간 선물 전용)와 크리스마스 선물을 받는 번호. 서버 `character_prices.min_protocol = 11` 인 행이 산타이고,
+     * 11 미만에게는 그 행이 아예 안 보이며(가진 사람에게도) 산타 선물은 조회에 안 실리고 수령은 `needs_update` 다. 판 9 는 지역 둘 · 산타 그림을 다 실어 11.
+     */
+    const val santaProtocol = 11
+    val santaCharacterIDs: List<String> get() = CharacterCatalog.santaGiftBuiltInIDs
 
     /**
      * 그릴 수 있는 id 들 → 서버에 말할 번호.
      * INV-ShopProtocol-c8e9aa64 이식: **번호는 누적이다** — 서버 게이트는 `min_protocol <= p_protocol` 이라 2 를 보내면 1 짜리(robot)도 받는다.
      * 그래서 앞 번호의 캐릭터를 전부 그릴 수 있을 때만 다음 번호를 말한다(건너뛰어 말할 수 없다 — 보수적인 쪽으로 틀린다). 4 는 케이크 **둘 다**,
      * 5 는 여기까지 전부 **와** 이슬(로봇 · 금 · 무지개 · 케이크 둘 · 이슬을 전부 그리는 빌드). 이슬만 있고 케이크가 하나라도 빠지면 3 에 머문다.
-     * 6 · 7 · 8 · 9 · 10 도 같다 — 빼빼로 · 흑우 · 루비 · 개발 · 지역 둘을 차례로 다 그릴 수 있을 때만(Android 판 8 은 9).
+     * 6 · 7 · 8 · 9 · 10 · 11 도 같다 — 빼빼로 · 흑우 · 루비 · 개발 · 지역 둘 · 산타를 차례로 다 그릴 수 있을 때만(Android 판 8 은 9 · 판 9 는 11).
      */
     fun protocolVersion(drawableCharacterIDs: Iterable<String>): Int {
         val drawable = drawableCharacterIDs.toSet()
@@ -78,7 +85,8 @@ object ShopWire {
         if (!hwooCharacterIDs.all { it in drawable }) return peperoProtocol
         if (!rubyCharacterIDs.all { it in drawable }) return hwooProtocol
         if (!devCharacterIDs.all { it in drawable }) return rubyProtocol
-        return if (regionCharacterIDs.all { it in drawable }) regionProtocol else devProtocol
+        if (!regionCharacterIDs.all { it in drawable }) return devProtocol
+        return if (santaCharacterIDs.all { it in drawable }) santaProtocol else regionProtocol
     }
 
     /** 생일 선물을 조회 · 수령할 수 있는가(서버 문턱 `p_protocol >= 4`). 판정의 권위는 서버다 — 헛왕복을 줄이는 문이다. */
@@ -93,8 +101,11 @@ object ShopWire {
     /** 빼빼로 선물을 받을 수 있는가(서버 문턱 `p_protocol >= 6`). */
     fun supportsPeperoGift(protocolVersion: Int): Boolean = protocolVersion >= peperoProtocol
 
-    /** 우리 센터 선물을 마련 · 조회 · 수령할 수 있는가(서버 문턱 10). Android 판 8 은 늘 거짓이다. */
+    /** 우리 센터 선물을 마련 · 조회 · 수령할 수 있는가(서버 문턱 10). Android 판 8 은 늘 거짓이었다 — 판 9 는 지역 그림을 싣는다. */
     fun supportsRegionGift(protocolVersion: Int): Boolean = protocolVersion >= regionProtocol
+
+    /** 크리스마스 선물(산타 아잉이)을 받을 수 있는가(서버 수령 문턱 `p_protocol >= 11`). */
+    fun supportsSantaGift(protocolVersion: Int): Boolean = protocolVersion >= santaProtocol
 
     /** 뽑기를 쓸 수 있는가(`p_protocol >= 2`). 화면을 여는 판정은 이것이 아니라 `shop_state.gacha` 의 유무다. */
     fun supportsGacha(protocolVersion: Int): Boolean = protocolVersion >= goldProtocol

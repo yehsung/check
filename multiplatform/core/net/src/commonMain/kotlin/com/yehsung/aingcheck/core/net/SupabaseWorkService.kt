@@ -71,6 +71,8 @@ class SupabaseWorkService(
         const val markConversationReadPath = "/rest/v1/rpc/mark_conversation_read"
         const val appUserCharactersPath = "/rest/v1/rpc/app_user_characters"
         const val characterGiftPendingPath = "/rest/v1/rpc/character_gift_pending"
+        /** 우리 센터 선물 마련(맥 0.3.85 · 서버 20261113100000 — 판 9). */
+        const val regionGiftEnsurePath = "/rest/v1/rpc/region_gift_ensure"
         const val claimCharacterGiftPath = "/rest/v1/rpc/claim_character_gift"
         const val gachaPullPath = "/rest/v1/rpc/gacha_pull"
         const val gachaExchangePath = "/rest/v1/rpc/gacha_exchange"

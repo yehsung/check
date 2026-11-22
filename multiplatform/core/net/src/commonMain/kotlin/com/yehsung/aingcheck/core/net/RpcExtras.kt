@@ -10,6 +10,9 @@ import com.yehsung.aingcheck.core.wire.gift.CharacterGiftClaimResponse
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftOffer
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftPendingRequest
 import com.yehsung.aingcheck.core.wire.gift.CharacterGiftPendingResponse
+import com.yehsung.aingcheck.core.wire.gift.CharacterGiftKind
+import com.yehsung.aingcheck.core.wire.gift.RegionGiftEnsureRequest
+import com.yehsung.aingcheck.core.wire.gift.RegionGiftEnsureResponse
 import com.yehsung.aingcheck.core.wire.models.AILimitPrefsServerRow
 import com.yehsung.aingcheck.core.wire.models.AILimitServerRow
 import com.yehsung.aingcheck.core.wire.models.AppUserCharacterRow
@@ -147,6 +150,25 @@ suspend fun SupabaseWorkService.fetchCharacterGiftPending(accessToken: String, p
     }
     val offer = decode(CharacterGiftPendingResponse.serializer(), data).offer ?: return null
     return if (offer.kind.isSupported(protocolVersion.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong()).toInt())) offer else null
+}
+
+/**
+ * 우리 센터 선물을 마련해 달라고 한다(Swift `ensureRegionGift` — 멱등: 이미 받았거나 열린 선물이 있거나 센터가 없으면 아무것도 안 바뀐다).
+ * 번호가 지역 문턱(10) 미만이면 부르지 않는다(null — 그 빌드는 지역 아잉이를 못 그린다). 함수가 없는 서버(PGRST202 · 404)도 null(오류가 아니다).
+ * 그 밖의 실패는 던진다(부르는 쪽이 삼키고 다음 박자에 다시 말한다).
+ */
+suspend fun SupabaseWorkService.ensureRegionGift(accessToken: String, protocolVersion: Long): RegionGiftEnsureResponse? {
+    if (protocolVersion < CharacterGiftKind.region.minProtocol) return null
+    val data = try {
+        send(
+            SupabaseWorkService.regionGiftEnsurePath, "POST", emptyList(),
+            encode(RegionGiftEnsureRequest.serializer(), RegionGiftEnsureRequest(protocolVersion)), accessToken, null,
+        )
+    } catch (e: SupabaseWorkServiceError) {
+        if (ServiceErrorClassifier.isMissingFunction(e)) return null
+        throw e
+    }
+    return decode(RegionGiftEnsureResponse.serializer(), data)
 }
 
 suspend fun SupabaseWorkService.claimCharacterGift(accessToken: String, giftID: String, characterID: String, protocolVersion: Long): CharacterGiftClaimResponse {

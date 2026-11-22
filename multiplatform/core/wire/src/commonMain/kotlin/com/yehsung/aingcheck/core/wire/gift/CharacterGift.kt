@@ -37,6 +37,9 @@ enum class CharacterGiftKind(val wireValue: String) {
 
     /** 우리 센터 선물(지역 아잉이 — 번호 10). Android 판 8 은 번호 10 을 말하지 않아 서버가 이 종류를 싣지 않는다(종류만 안다). */
     region("region"),
+
+    /** 크리스마스 선물(맥 0.3.87 · 12-21~25 기간 선물) — 산타 아잉이 하나, 고를 것 없이 받는다(번호 11). 안 받은 선물은 기간 뒤 서버가 거둔다. */
+    santa("santa"),
     ;
 
     /** 이 종류의 선물로 받는 내장 캐릭터 — **표시 순서 그대로**(생일 = 딸기 → 초코 · 술 = 이슬). 선물 선택지는 이 목록으로 거른다. */
@@ -46,6 +49,7 @@ enum class CharacterGiftKind(val wireValue: String) {
             drink -> BuiltInCharacterIds.drinkGiftBuiltInIDs
             pepero -> BuiltInCharacterIds.peperoGiftBuiltInIDs
             region -> BuiltInCharacterIds.regionGiftBuiltInIDs
+            santa -> BuiltInCharacterIds.santaGiftBuiltInIDs
         }
 
     /**
@@ -58,6 +62,7 @@ enum class CharacterGiftKind(val wireValue: String) {
             drink -> 5
             pepero -> 6
             region -> 10
+            santa -> 11
         }
 
     /** 이 번호의 빌드가 이 종류의 선물을 받을 수 있는가(번호는 누적). */

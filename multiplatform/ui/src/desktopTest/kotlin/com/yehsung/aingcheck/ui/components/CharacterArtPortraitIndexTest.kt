@@ -27,7 +27,7 @@ class CharacterArtPortraitIndexTest {
         assertEquals(onDisk, index, "목록은 실린 파일 그대로(손 목록이 아니다)")
         val expected = CharacterArt.portraitIds.flatMap { id -> CharacterExpression.entries.map { "$id-${it.fileSuffix}" } }.sorted()
         assertEquals(expected, index, "번들 = 초상 16 × 2(케이크 둘 · 이슬 · 판 8 새 아잉이 넷 포함)")
-        assertEquals(32, index.size, "초상 16 × 2")
+        assertEquals(38, index.size, "초상 19 × 2(판 9 — 지역 둘 · 산타)")
     }
 
     @Test
@@ -41,8 +41,11 @@ class CharacterArtPortraitIndexTest {
         assertEquals(drawable, runBlocking { CharacterArt.drawableCharacterSource.drawableCharacterIDs() }, "스토어에 꽂는 재료가 같은 집합")
         assertEquals(false, CharacterArt.drawableCharacterSource.takesDrinkGift, "스토어의 이슬 접기 문도 같은 플랫폼 문(검토 ISUL-1 — 데스크톱은 이슬을 아잉으로 접는다)")
         val index = runBlocking { CharacterArt.portraitResourceNames() }
-        // Android(판 8) 문 = 같은 그림 묶음에서 개발 아잉이까지 → 9(지역 둘은 그림이 없어 10 은 아니다). 이슬 한 장만 빠져도 4 로 내려간다.
-        assertEquals(ShopWire.devProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index, takesDrinkGift = true)), "Android: 개발 아잉이까지 → 9")
+        // Android(판 9) 문 = 같은 그림 묶음에서 지역 둘 · 산타까지 → 11(판 8 은 지역 그림이 없어 9 였다). 이슬 한 장만 빠져도 4 로 내려간다.
+        assertEquals(ShopWire.santaProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index, takesDrinkGift = true)), "Android: 산타까지 → 11")
+        assertEquals(ShopWire.regionProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_santa-negative", takesDrinkGift = true)), "산타 한 장 빠지면 10")
+        assertEquals(ShopWire.devProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_seoul-neutral", takesDrinkGift = true)), "서울 한 장 빠지면 9(산타가 있어도)")
+        assertEquals(ShopWire.devProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_busan-negative", takesDrinkGift = true)), "부산 한 장 빠지면 9")
         assertEquals(ShopWire.rubyProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_dev-neutral", takesDrinkGift = true)), "개발 한 장 빠지면 8")
         assertEquals(ShopWire.isulProtocol, ShopWire.protocolVersion(CharacterArt.drawableFor(index - "aing_pepero-negative", takesDrinkGift = true)), "빼빼로 빠지면 5")
         assertEquals(CharacterArt.portraitIds.toSet(), CharacterArt.drawableFor(index, takesDrinkGift = true))

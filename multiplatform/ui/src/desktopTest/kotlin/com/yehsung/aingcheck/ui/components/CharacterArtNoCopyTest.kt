@@ -30,9 +30,9 @@ class CharacterArtNoCopyTest {
     fun noCopyOfCharacterArtUnderMultiplatform() {
         val repo = DesktopSnapshots.repoRoot
         val src = originals(repo)
-        // 초상 16×2(1b8260d 케이크 딸기·초코 · 12624739 이슬 · 판 8 빼빼로 · 흑우 · 루비 · 개발) + 빼빼로 폰 판 2(맥 판과 둘 다 원본)
-        // + 매니페스트 6 + 루비 3 + 무대 6 + 이모티콘 6 = 55
-        assertTrue(src.size == 55, "원본 그림을 ${src.size}개 찾았다(55 이어야 한다): ${src.map { it.name }}")
+        // 초상 19×2(1b8260d 케이크 딸기·초코 · 12624739 이슬 · 판 8 빼빼로 · 흑우 · 루비 · 개발 · 판 9 부산 · 서울 · 산타) + 빼빼로 폰 판 2(맥 판과 둘 다 원본)
+        // + 매니페스트 6 + 루비 3 + 무대 6 + 이모티콘 6 = 61
+        assertTrue(src.size == 61, "원본 그림을 ${src.size}개 찾았다(61 이어야 한다): ${src.map { it.name }}")
         assertTrue(src.count { it.name.startsWith("sticker-") } == 6, "이모티콘 원본: ${src.filter { it.name.startsWith("sticker-") }.map { it.name }}")
         val copies = findCopies(DesktopSnapshots.mpRoot, src.associateBy { sha(it) })
         assertTrue(copies.isEmpty(), "multiplatform/ 에 원본 그림 사본이 있다(Gradle Sync 로 읽어야 한다):\n" + copies.joinToString("\n"))

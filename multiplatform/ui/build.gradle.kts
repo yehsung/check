@@ -84,8 +84,10 @@ val syncCharacterArt = tasks.register<Sync>("aingcheckSyncCharacterArt") {
     }
     // 판 8(아이폰 1.0.18 맞추기): 흑우(조각 교환 전용) · 루비(상점 1000) · 개발에 찌든 아잉이(누적 근무 100시간 미션 보상) — 맥 원본 그대로
     //   (폰 Portraits 와 바이트까지 같다). 빼빼로만 폰 판(상자에 글자 없는 그림 — 기억 pepero-aing-decisions '폰은 상자에 글자 없는 판')을 싣는다.
-    //   상점 번호는 그림 집합에서 파생된다(ShopWire.protocolVersion) — 넷이 다 실려야 9, 지역 아잉이(10)는 싣지 않는다(안드로이드 범위 밖).
-    for (id in listOf("aing_hwoo", "aing_ruby", "aing_dev")) {
+    //   상점 번호는 그림 집합에서 파생된다(ShopWire.protocolVersion) — 넷이 다 실려야 9.
+    // 판 9(아이폰 1.0.19 맞추기): 지역 아잉이 둘(부산 갈매기 · 서울의 밤 — 우리 센터 선물, 번호 10) · 산타 아잉이(크리스마스 선물, 번호 11)도
+    //   맥 원본 그대로(아이폰 1.0.19 의 폰 Portraits 와 바이트까지 같다 — 11-23 cmp). 다섯이 다 실려야 11.
+    for (id in listOf("aing_hwoo", "aing_ruby", "aing_dev", "aing_busan", "aing_seoul", "aing_santa")) {
         from(repoDir.resolve("Sources/check/Resources")) {
             include("$id-neutral.png", "$id-negative.png")
             rename("^$id-(neutral|negative)\\.png$", "portrait-$1.png")

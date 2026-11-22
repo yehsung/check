@@ -38,14 +38,16 @@ object BuiltInCharacterIds {
 
     /** 서울의 밤 아잉이(지역 아잉이 — 서울 센터 선물, 번호 10). 부산과 같다. */
     const val seoulAingID = RegionAingNames.seoulID
+    /** 산타 아잉이(맥 0.3.87 · 크리스마스 기간 선물 전용 — `gift_kind = 'santa'` · 번호 11). 판 9 부터 초상을 싣는다. */
+    const val santaAingID = SantaAingNames.santaID
 
     /**
-     * 내장 순서(아잉 · 금 · 무지개 · 딸기 · 초코 · 이슬 · 빼빼로 · 흑우 · 루비 · 개발 · 부산 · 서울) — 맥 `CharacterCatalog.builtIns` 그대로.
+     * 내장 순서(아잉 · 금 · 무지개 · 딸기 · 초코 · 이슬 · 빼빼로 · 흑우 · 루비 · 개발 · 부산 · 서울 · 산타) — 맥 `CharacterCatalog.builtIns` 그대로.
      * 지역 둘은 Android 에 그림이 없어도 목록에는 선다(남이 입은 지역 아잉이 id 를 '모르는 값'으로 접지 않는다 — 그림은 아잉으로 폴백).
      */
     val builtInIDs: List<String> = listOf(
         builtInAingID, goldAingID, rainbowAingID, cakeStrawberryAingID, cakeChocoAingID, isulAingID,
-        peperoAingID, hwooAingID, rubyAingID, devAingID, busanAingID, seoulAingID,
+        peperoAingID, hwooAingID, rubyAingID, devAingID, busanAingID, seoulAingID, santaAingID,
     )
 
     fun isGoldAing(id: String?): Boolean = id == goldAingID
@@ -98,13 +100,15 @@ object BuiltInCharacterIds {
 
     /** 지역 아잉이(부산 · 서울)인가 — 센터 선물 전용. */
     fun isRegionAing(id: String?): Boolean = isBusanAing(id) || isSeoulAing(id)
+    /** 산타 아잉이인가(정확히 `aing_santa` 만). */
+    fun isSantaAing(id: String?): Boolean = id == santaAingID
 
     /**
      * 선물로만 받는 내장 **전부**(케이크 둘 · 이슬 — 뽑기 전용이 아니다). '루비로 못 산다 · 잠긴 칸' 뜻으로만 쓴다.
      * ★ 케이크(생일) 뜻 자리(생일 선물 선택지 · 상점 번호 4 의 재료)에는 [birthdayGiftBuiltInIDs] 를 쓴다 — 이슬을 섞으면 이슬 그림이 없는
      *   빌드가 번호 3 으로 떨어져 케이크 선물까지 잃는다(설계서 isul-aing/SPEC.md §2).
      */
-    fun isGiftOnlyBuiltIn(id: String?): Boolean = isCakeAing(id) || isIsulAing(id) || isPeperoAing(id) || isRegionAing(id)
+    fun isGiftOnlyBuiltIn(id: String?): Boolean = isCakeAing(id) || isIsulAing(id) || isPeperoAing(id) || isRegionAing(id) || isSantaAing(id)
 
     /** 생일 선물 내장(딸기 → 초코). */
     val birthdayGiftBuiltInIDs: List<String> = listOf(cakeStrawberryAingID, cakeChocoAingID)
@@ -117,7 +121,10 @@ object BuiltInCharacterIds {
 
     /** 우리 센터 선물(지역 아잉이) 내장 — 부산 → 서울. 지역 뜻 자리(번호 10)는 이 목록이다 — 두 센터 그림이 다 붙어야 10 을 말한다. */
     val regionGiftBuiltInIDs: List<String> = listOf(busanAingID, seoulAingID)
+    /** 크리스마스 선물 내장 — 산타 하나. 산타 뜻 자리(번호 11 · 크리스마스 선물 선택지)는 이 목록이다(루돌프는 따로 기획 — 섞지 않는다). */
+    val santaGiftBuiltInIDs: List<String> = listOf(santaAingID)
 
-    /** 선물 전용 내장 전부(생일 → 술 → 빼빼로 → 지역, 표시 순서) — [isGiftOnlyBuiltIn] 과 같은 집합. */
-    val giftOnlyBuiltInIDs: List<String> = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs + peperoGiftBuiltInIDs + regionGiftBuiltInIDs
+    /** 선물 전용 내장 전부(생일 → 술 → 빼빼로 → 지역 → 산타, 표시 순서) — [isGiftOnlyBuiltIn] 과 같은 집합. */
+    val giftOnlyBuiltInIDs: List<String> = birthdayGiftBuiltInIDs + drinkGiftBuiltInIDs + peperoGiftBuiltInIDs + regionGiftBuiltInIDs +
+        santaGiftBuiltInIDs
 }

@@ -450,6 +450,32 @@
             false
           ],
           "wireValue": "region"
+        },
+        {
+          "builtInIDs": [
+            "aing_santa"
+          ],
+          "copy": {
+            "body": "착한 아잉이에게 산타가 찾아왔어요",
+            "claimFailed": "받지 못했어요. 잠시 후 다시 시도해 주세요",
+            "closeButton": "닫기",
+            "confirmButton": "선물 열기",
+            "lockedCaption": "크리스마스 선물",
+            "lockedHint": "크리스마스에만 주는 선물이에요. 루비나 뽑기로는 얻을 수 없어요.",
+            "reopenButton": "선물 열기",
+            "reopenTitle": "띵동! 산타 선물이 기다려요 🎁",
+            "title": "띵동! 산타 왔어요 🎁",
+            "wearNowButton": "지금 입기"
+          },
+          "minProtocol": 11,
+          "supported": [
+            false,
+            false,
+            false,
+            false,
+            false
+          ],
+          "wireValue": "santa"
         }
       ],
       "supportedProtocols": [

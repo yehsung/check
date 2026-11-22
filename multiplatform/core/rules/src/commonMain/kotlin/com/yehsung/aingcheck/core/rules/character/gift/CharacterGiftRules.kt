@@ -188,6 +188,27 @@ object RegionGiftText {
     fun reopenTitle(center: String?): String = "${centerLabel(center)} 선물이 기다려요"
 }
 
+/**
+ * 크리스마스 선물 문구(산타 아잉이 — Swift `SantaGiftText` 글자 그대로, 대표 #d_4wR1Qzn9OKmt "C 띵동! 산타 왔어요 🎁").
+ * 기간은 대표 #d_jdcyBSon9oZ3 "A 크리스마스 주간(12-21~25)" — 거두는 시각은 서버가 쥐고 클라는 모른다.
+ */
+object SantaGiftText {
+    const val title = "띵동! 산타 왔어요 🎁"
+    const val body = "착한 아잉이에게 산타가 찾아왔어요"
+    const val confirmButton = "선물 열기"
+    const val wearNowButton = CakeGiftText.wearNowButton
+    const val closeButton = CakeGiftText.closeButton
+    const val lockedCaption = "크리스마스 선물"
+    const val lockedHint = "크리스마스에만 주는 선물이에요. 루비나 뽑기로는 얻을 수 없어요."
+    const val reopenTitle = "띵동! 산타 선물이 기다려요 🎁"
+    const val reopenButton = "선물 열기"
+    const val claimFailed = CakeGiftText.claimFailed
+
+    fun received(name: String): String = CakeGiftText.received(name)
+
+    fun notice(outcome: CharacterGiftClaimOutcome, name: (String) -> String): String? = CakeGiftText.notice(outcome, name)
+}
+
 /** 선물 종류 하나의 문구 묶음 — 화면이 종류로 갈라 그릴 때 [CharacterGiftKind.copy] 로 받는다(글자는 [CakeGiftText] · [DrinkGiftText] · [PeperoGiftText] · [RegionGiftText] 한 곳). */
 data class CharacterGiftCopy(
     val title: String,
@@ -247,6 +268,15 @@ data class CharacterGiftCopy(
 
         /** 우리 센터 선물(센터를 모를 때의 "우리 센터" 판). */
         val region: CharacterGiftCopy = region(null)
+
+        /** 크리스마스 선물(산타 아잉이 — 문구는 [SantaGiftText]). */
+        val santa = CharacterGiftCopy(
+            title = SantaGiftText.title, body = SantaGiftText.body, confirmButton = SantaGiftText.confirmButton,
+            wearNowButton = SantaGiftText.wearNowButton, closeButton = SantaGiftText.closeButton,
+            lockedCaption = SantaGiftText.lockedCaption, lockedHint = SantaGiftText.lockedHint,
+            reopenTitle = SantaGiftText.reopenTitle, reopenButton = SantaGiftText.reopenButton,
+            claimFailed = SantaGiftText.claimFailed,
+        )
     }
 }
 
@@ -257,6 +287,7 @@ val CharacterGiftKind.copy: CharacterGiftCopy
         CharacterGiftKind.drink -> CharacterGiftCopy.drink
         CharacterGiftKind.pepero -> CharacterGiftCopy.pepero
         CharacterGiftKind.region -> CharacterGiftCopy.region
+        CharacterGiftKind.santa -> CharacterGiftCopy.santa
     }
 
 /** 이 종류에서 캐릭터 `id` 를 주는 선물의 문구 묶음 — 우리 센터 선물은 그 아잉이의 센터 이름이 든 판, 나머지는 [copy] 그대로(Swift `copy(for:)`). */
@@ -275,4 +306,5 @@ val CharacterGiftKind.shopMinProtocol: Int
         CharacterGiftKind.drink -> ShopWire.isulProtocol
         CharacterGiftKind.pepero -> ShopWire.peperoProtocol
         CharacterGiftKind.region -> ShopWire.regionProtocol
+        CharacterGiftKind.santa -> ShopWire.santaProtocol
     }

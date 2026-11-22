@@ -259,6 +259,12 @@ class MeStore(
     internal var cakeGiftCheckedAt: SwiftDate? = null
     internal var cakeGiftLoading = false
 
+    /**
+     * 우리 센터 선물을 마련해 달라고 서버에 말한 세대(판 9 — 맥 `regionGiftEnsuredGeneration`). 세대당 한 번 · 성공(또는 함수 없음 아닌 응답)일 때만 적는다 —
+     * 실패면 다음 선물 조회 박자에 다시 말한다. 계정이 바뀌면 세대가 바뀌어 저절로 다시 말한다.
+     */
+    internal var regionGiftEnsuredGeneration: Int? = null
+
     /** 이 실행에서 **실제로 화면에 선** 선물 id — 실행당 한 번. 로그아웃에도 비우지 않는다. */
     internal var cakeGiftAutoShownIDs: Set<String> = emptySet()
 

@@ -218,7 +218,7 @@
       "swiftSources": {
         "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
         "Sources/check/CheckWorkNudge.swift": "3b0e7931f58481d5d22651f64fd6405821e963b896c8124c59f960d0c31e6a4b",
-        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6"
+        "Sources/check/WorkTimerStore.swift": "28856ea3460942ea1fd4fd510d56184932766f6f69d2ffe829291f4c163a8fff"
       }
     },
     "desktop-work-policy/laps": {
@@ -228,7 +228,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/MilestoneTracker.swift": "1d1123bc6893b926ac9f120be56c66f9662fedf2745a2ccd711a8153640662e6",
-        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6"
+        "Sources/check/WorkTimerStore.swift": "28856ea3460942ea1fd4fd510d56184932766f6f69d2ffe829291f4c163a8fff"
       }
     },
     "desktop-work-policy/nudge": {
@@ -247,7 +247,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/SupabaseWorkServiceMacOnly.swift": "a484fc6bdb1d93f3055c22ad761de7f31afaab5b52474217d36a711724e26bea",
-        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6",
+        "Sources/check/WorkTimerStore.swift": "28856ea3460942ea1fd4fd510d56184932766f6f69d2ffe829291f4c163a8fff",
         "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
@@ -257,7 +257,7 @@
         "Tests/checkTests/GoldenExport/desktop-work-state/GoldenExportDesktopWorkState.swift": "9e9d3f76971d461810543bc05d01c60ff781f0b3b8d768c582fa9b6ab3bdd551"
       },
       "swiftSources": {
-        "Sources/check/WorkTimerStore.swift": "aba8cf0808243c08aa2f9e95056dc075554fcab7f4bac0ecde96da55606d00c6",
+        "Sources/check/WorkTimerStore.swift": "28856ea3460942ea1fd4fd510d56184932766f6f69d2ffe829291f4c163a8fff",
         "Sources/check/WorkTimerStoreSync.swift": "12c8751846aa5f6ddc405a3e484c614a9aa9426b2eddf908cb429f65cfcc881d"
       }
     },
@@ -348,7 +348,7 @@
     "gacha/character-kit": {
       "file": "1e71e39e3bc67cc177c2589b01bfb8bd34222077158650668ae1ca4d8969220f",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "f1686e86cb7d2b38c2f182a8d5bfce2d320b7e14684cb25c6ff6429eba5fbbd6"
       },
       "swiftSources": {
         "Sources/CheckCore/CharacterKit/CharacterManifest.swift": "f1e735ed10006e2001bb19806e4303a0754000c3e9326f531dad2f62e085d53f",
@@ -360,11 +360,11 @@
     "gacha/odds": {
       "file": "ea82887d4eff11dccf3cc328e83d7a64d671cdac930b604ba87606f6f93cf7e5",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "f1686e86cb7d2b38c2f182a8d5bfce2d320b7e14684cb25c6ff6429eba5fbbd6"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
-        "Sources/CheckCore/CharacterKit/GoldAing.swift": "bf84fdee11248bdb6cbd19af8ca09ca1a5662c744af9e3c65a505e96f8de133a",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "ebb79c96069132fc6608e01ec759450f79e6e444f54da022acb539026bda23a9",
+        "Sources/CheckCore/CharacterKit/GoldAing.swift": "1a7cb379a903c8e2b0b831c92da00d67af9135fe4f0ded162854da981b8ca8a1",
         "Sources/CheckCore/CheckCoreShared.swift": "0d5ec08c13082a3b143375ee2f2297b801ece54c0226642e396ff895153913a6",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e"
       }
@@ -372,34 +372,34 @@
     "gacha/shop-protocol": {
       "file": "b1c0de0995d87ff982cb7a16cdb6d50c14da80664740175023ca0e2a0424532c",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "f1686e86cb7d2b38c2f182a8d5bfce2d320b7e14684cb25c6ff6429eba5fbbd6"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
-        "Sources/CheckCore/ShopProtocol.swift": "6985b3a8b63d0b8eeb19e6a233fdacf56450ae4e13522b406391c7a22313bc1d"
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "ebb79c96069132fc6608e01ec759450f79e6e444f54da022acb539026bda23a9",
+        "Sources/CheckCore/ShopProtocol.swift": "6bf3163779849d071521c50788d826113547c28350bba31e8c21f55481ce4717"
       }
     },
     "gift/catalog": {
-      "file": "55a8c78e3ccd29ccb875f3d0415d7967966ca767ca151d2743289a5cfd277c9d",
+      "file": "f87701368b325eb4fdbf6d105c5abe0cba4a5c82bbfb3878bcd9453fdb82e5cd",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "f1686e86cb7d2b38c2f182a8d5bfce2d320b7e14684cb25c6ff6429eba5fbbd6"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
-        "Sources/CheckCore/CharacterKit/GoldAing.swift": "bf84fdee11248bdb6cbd19af8ca09ca1a5662c744af9e3c65a505e96f8de133a",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "ebb79c96069132fc6608e01ec759450f79e6e444f54da022acb539026bda23a9",
+        "Sources/CheckCore/CharacterKit/GoldAing.swift": "1a7cb379a903c8e2b0b831c92da00d67af9135fe4f0ded162854da981b8ca8a1",
         "Sources/CheckCore/CharacterKit/RainbowAing.swift": "9f4b85de6835b71c84a742bc1ecc32528138ea3b6605070b45644f9462b79f1b",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e"
       }
     },
     "gift/claim": {
-      "file": "f6ee98b6e6582750f18ece05ab66b4c19e067d30f441c662c1dbbd13759e7d3f",
+      "file": "265dcbe643fe3211ff0126ddf768b79835f2b1dfb77b859e36ac0cd98fc4a9c8",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "f1686e86cb7d2b38c2f182a8d5bfce2d320b7e14684cb25c6ff6429eba5fbbd6"
       },
       "swiftSources": {
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
-        "Sources/CheckCore/ShopProtocol.swift": "6985b3a8b63d0b8eeb19e6a233fdacf56450ae4e13522b406391c7a22313bc1d"
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "ebb79c96069132fc6608e01ec759450f79e6e444f54da022acb539026bda23a9",
+        "Sources/CheckCore/ShopProtocol.swift": "6bf3163779849d071521c50788d826113547c28350bba31e8c21f55481ce4717"
       }
     },
     "insights/computation": {
@@ -481,7 +481,7 @@
     "missions/achievements": {
       "file": "076fbd1109999b8f5db341254ef3f3579312033fd0b31d7d8b8a0dc0a0d7780f",
       "generator": {
-        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "2059f2e64cb6bd3d6345810d191210f2887a65bb3d234529cc8251bec94537fa"
+        "Tests/checkTests/GoldenExport/app-rules/GoldenExportAppRulesCharacter.swift": "f1686e86cb7d2b38c2f182a8d5bfce2d320b7e14684cb25c6ff6429eba5fbbd6"
       },
       "swiftSources": {
         "Sources/CheckCore/Achievements.swift": "b3ee4a432d9ee49427d916d0c3b2315100736b22a8bbb8818ccba5ceb19847dc",
@@ -920,7 +920,7 @@
         "Tests/checkTests/GoldenExport/token-usage/GoldenExportAILimit.swift": "ac40f2fc974f1e55b87f2faea245c52cab535405366fb27b0a633e7eeb0741a1"
       },
       "swiftSources": {
-        "Sources/CheckCore/AILimitReaders.swift": "385ceb099bba32a7daa6926895911513143b0180d989db99361e86c37598e9ef",
+        "Sources/CheckCore/AILimitReaders.swift": "6da91e2330cc4a479452d0ff3fee7a23e9cf67f4c7d85522224218f6a4928c26",
         "Sources/CheckCore/JWTClaims.swift": "0407210adfa860fba34286985ee6f97baab8bddc644f95caf170c341bfa3b696"
       }
     },
@@ -1011,7 +1011,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1035,7 +1035,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1059,7 +1059,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1083,7 +1083,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1107,7 +1107,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1131,7 +1131,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1167,7 +1167,7 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/Gacha.swift": "fb858bb45b7a9b77d10c183a5ecca62a6028f297fb2452df5b8fbba72dcf9e3e",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
@@ -1201,7 +1201,7 @@
       "swiftSources": {
         "Sources/CheckCore/Achievements.swift": "b3ee4a432d9ee49427d916d0c3b2315100736b22a8bbb8818ccba5ceb19847dc",
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
         "Sources/CheckCore/ChessWire.swift": "3dff655974750734d716c1e628e78da0d192c98aabf8f10de3a01d672f661643",
         "Sources/CheckCore/DailyMissions.swift": "70668d28a2ea4513288689182454e08768461dd8863da4bebc873e2ee0e3b9ca",
         "Sources/CheckCore/DuelRPC.swift": "b83c80d0632d669dd62fccd924447bdfdf25cb510b9f55e665c5160d6fe6680b",
@@ -1241,8 +1241,8 @@
       },
       "swiftSources": {
         "Sources/CheckCore/AppUserCharacters.swift": "7049379d541d218946ddec1cbd10cf04eb2e6fd7b54588a3932eb3af3e8f7221",
-        "Sources/CheckCore/CharacterGift.swift": "661a6a8ca8a1799c2b80515fd536cbeea1483bc89fce12068bd3367a62c9830d",
-        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "257dfefe0a69d8c10112a48aa75b48eddbfa2ac149e5228058a138b965de9740",
+        "Sources/CheckCore/CharacterGift.swift": "ca36da0377a5b907c9a13c82e95a8fc21814e36291af9fd56b1828bcec69f120",
+        "Sources/CheckCore/CharacterKit/CharacterCatalog.swift": "ebb79c96069132fc6608e01ec759450f79e6e444f54da022acb539026bda23a9",
         "Sources/CheckCore/MessagePokeLog.swift": "866b8bc5fe80ab89ce6216db9d6f8b18ade6fdc48c1c38a19b8b7db9b6fcceff",
         "Sources/CheckCore/SupabaseWorkModels.swift": "52b6195154b2c8618cf0ee80825eee6769d91ae26d022e927e15e25b01b2352c",
         "Sources/CheckCore/SupabaseWorkService.swift": "d51f3abad36ebf92705380b6152990256ae58ad101962040ffeae4fceb80b519",

@@ -114,6 +114,8 @@ struct GamesChessScreen: View {
                 blockedByOtherGame
                 incoming
                 outgoing
+                // 1:1 대기방(폰 1.0.19) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+                GamesDuelRoomsSection(store: store.context.duelRooms, game: .chess)
                 // 로봇과 두기 — 사람 목록 바로 위, 시간이 흐르는 것(받은·보낸 신청)보다 아래.
                 // 판돈도 순위도 없고 **로그인을 보지 않는다**(화면 머리말).
                 GamesChessAISection(store: chess)

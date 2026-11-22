@@ -258,6 +258,8 @@ struct GamesTetrisDuelScreen: View {
                 notice
                 blockedByOtherGame
                 outgoing
+                // 1:1 대기방(폰 1.0.19) — 시간이 흐르는 신청 바로 아래 · 사람 · 순위 칸 위.
+                GamesDuelRoomsSection(store: store.context.duelRooms, game: .tetris)
                 tabPicker
                 switch tab {
                 case .opponents:

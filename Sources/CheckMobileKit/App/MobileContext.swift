@@ -58,6 +58,8 @@ package struct MobileContext {
     /// 캐릭터 한 표(사람 아바타 = 사진 → 착용 캐릭터 → 이니셜). 나 탭이 내 착용을 바꾸면 `noteMyEquipped` 로 내 칸을 바로 고치고,
     /// 지금 탭이 위젯 근무 중 얼굴에 캐릭터를 싣는다. 화면은 환경값 `\.appUserCharacters` 로 읽는다.
     package let characters: AppUserCharacterStore
+    /// 1:1 대기방(폰 1.0.19 — 맥과 같은 코어 `DuelRoomStore`). 앱에 하나 — 여섯 게임 로비가 같은 스토어를 본다(내 방은 어느 게임이든 하나).
+    package let duelRooms: DuelRoomStore
 
     package init(
         service: SupabaseWorkService,
@@ -80,7 +82,8 @@ package struct MobileContext {
         isDemo: Bool,
         links: MobileStoreLinks,
         appearance: MobileAppearanceStore,
-        characters: AppUserCharacterStore
+        characters: AppUserCharacterStore,
+        duelRooms: DuelRoomStore = DuelRoomStore()
     ) {
         self.service = service
         self.session = session
@@ -103,6 +106,7 @@ package struct MobileContext {
         self.links = links
         self.appearance = appearance
         self.characters = characters
+        self.duelRooms = duelRooms
     }
 
     /// 지금 세션 세대. 응답 적용 전에 캡처값과 비교한다.

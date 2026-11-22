@@ -64,6 +64,16 @@ package final class MobileRealtimeRunner {
     @ObservationIgnored package weak var megaphoneBanner: MegaphoneBannerStore?
     /// 지난 확성기(폰 1.0.19) — 페이지가 열려 있을 때만 같은 'megaphone' 신호로 첫 쪽을 다시 읽는다(배너 스토어와 따로).
     @ObservationIgnored package weak var megaphoneFeed: MegaphoneFeedStore?
+    /// 1:1 대기방(폰 1.0.19) — 여섯 게임 초인종이 오면 내 방이 열려 있을 때 바로 숨을 쉰다(방에 사람이 들어온 신호일 수 있다 · 1초에 한 번).
+    @ObservationIgnored package weak var duelRooms: DuelRoomStore?
+
+    /// 대기방이 숨을 쉴 게임 초인종인가(맥 `WorkTimerStore.isDuelRoomGameSignal` 과 같은 여섯).
+    package nonisolated static func isDuelRoomGameSignal(_ effect: RealtimeEffect) -> Bool {
+        switch effect {
+        case .gomokuSignal, .chessSignal, .tetrisSignal, .reversiSignal, .crossyDuelSignal, .alkkagiSignal: true
+        default: false
+        }
+    }
 
     /// 메시지 활동(`.drain`·`.catchUp`)·읽음 신호를 모으는 창(초). 테스트는 크게 두고 `flushCoalescedSignals()` 를 직접 부른다.
     /// 메시지 활동은 이 창의 **앞쪽**(조용하던 창의 첫 신호)을 곧바로 갚고 창 안의 나머지를 창 끝에 한 번 갚는다 —
@@ -222,6 +232,7 @@ package final class MobileRealtimeRunner {
         for effect in effects {
             effectLog.append(effect)
             if effectLog.count > 50 { effectLog.removeFirst(effectLog.count - 50) }
+            if Self.isDuelRoomGameSignal(effect) { duelRooms?.handleGameSignal() }
             switch effect {
             case .alkkagiSignal:
                 // 1:1 알까기(맥 0.3.80 · 폰 1.0.18). 신청 · 수락 · 배치 · 쏘기 · 정산이 이 초인종으로 온다 — 직렬화된 재조회 한 번.

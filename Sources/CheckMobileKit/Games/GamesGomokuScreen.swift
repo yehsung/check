@@ -174,6 +174,8 @@ struct GamesGomokuLobby: View {
                 }
                 invites
                 outgoing
+                // 1:1 대기방(폰 1.0.19) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위(문이 닫혀 있으면 자리가 없다).
+                GamesDuelRoomsSection(store: store.context.duelRooms, game: .gomoku)
                 // AI 와 두기(1.0.1) — 사람 목록 바로 위. 받은·보낸 신청(시간이 흐르는 것)보다 아래다.
                 GamesGomokuAIEntryCard(store: gomoku, onPlay: onPlayAI)
                     .padding(.top, MobileTheme.rowSpacing)

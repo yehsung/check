@@ -212,6 +212,26 @@ public final class MobileAppModel {
         realtime.megaphoneBanner = megaphoneBanner
         let appearance = MobileAppearanceStore(defaults: env.appearanceDefaults ?? env.storage.defaults)
         let characters = AppUserCharacterStore(session: session, clock: env.clock)
+        // 1:1 대기방(폰 1.0.19 — 맥 0.3.83 과 같은 코어 스토어 · 서버 duel-rooms). 방에서 선 판은 이 기기가 연 판이다 —
+        // 방장(숨이 '시작됨')과 참가자(참가 ok) 모두 그 게임 스토어가 받아(`adoptRoomMatch`) 원래 길로 판 화면을 연다.
+        let duelRooms = DuelRoomStore(clock: { clock.now() })
+        duelRooms.attach(host: host)
+        duelRooms.rubyBalanceSource = { [weak host] in host?.rubyBalance }
+        let adoptRoomMatch: @MainActor (DuelRoomGame, String) -> Void = { [weak gomoku, weak chess, weak tetris, weak reversi, weak crossyDuel, weak alkkagi] game, matchID in
+            Task { @MainActor in
+                switch game {
+                case .gomoku: await gomoku?.adoptRoomMatch(matchID)
+                case .chess: await chess?.adoptRoomMatch(matchID)
+                case .tetris: await tetris?.adoptRoomMatch(matchID)
+                case .reversi: await reversi?.adoptRoomMatch(matchID)
+                case .crossyDuel: await crossyDuel?.adoptRoomMatch(matchID)
+                case .alkkagi: await alkkagi?.adoptRoomMatch(matchID)
+                }
+            }
+        }
+        duelRooms.onRoomStarted = adoptRoomMatch
+        duelRooms.onJoined = adoptRoomMatch
+        realtime.duelRooms = duelRooms
         let context = MobileContext(
             service: env.service,
             session: session,
@@ -233,7 +253,8 @@ public final class MobileAppModel {
             isDemo: env.isDemo,
             links: links,
             appearance: appearance,
-            characters: characters
+            characters: characters,
+            duelRooms: duelRooms
         )
 
         self.session = session
@@ -422,6 +443,8 @@ public final class MobileAppModel {
         alkkagi.reset()
         // 아잉 마작도 같은 사슬이다(앞 사람의 방 · 판 · 초대 · 연습판이 다음 사람 화면에 남지 않게). 장부 · 보조 설정은 사용자별 · 기기 값이라 둔다.
         mahjong.reset()
+        // 1:1 대기방도 같은 사슬이다(앞 사람의 방 · 숨 · 목록이 다음 사람 화면에 남지 않게). 서비스 배선은 그대로 둔다.
+        context.duelRooms.reset()
         gomokuHost.rubyBalance = nil
         router.reset()
         widgetSnapshots.forgetCurrent()

@@ -282,6 +282,8 @@ struct GamesReversiScreen: View {
                     notice
                     blockedByOtherGame
                     outgoing
+                    // 1:1 대기방(폰 1.0.19) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+                    GamesDuelRoomsSection(store: store.context.duelRooms, game: .reversi)
                     GamesReversiAIEntryCard(store: reversi, onPlay: { showsAIColorSheet = true })
                         .padding(.top, MobileTheme.rowSpacing)
                     opponents

@@ -58,6 +58,8 @@ struct GamesCrossyDuelScreen: View {
                     SectionHeader(CrossyDuelPhoneText.outgoingTitle)
                     InsetGroup { GamesCrossyDuelOutgoingRow(store: store, invite: outgoing) }
                 }
+                // 1:1 대기방(폰 1.0.19) — 시간이 흐르는 신청 바로 아래 · 사람 목록 위.
+                GamesDuelRoomsSection(store: store.context.duelRooms, game: .crossyDuel, parentSpaced: true)
                 SectionHeader(CrossyDuelPhoneText.usersTitle)
                 InsetGroup { users(blockedBy: blockedBy) }
                 SectionHeader(CrossyDuelPhoneText.recordTitle)

@@ -22,7 +22,7 @@ import Foundation
 // ④ **날을 넘긴 줄에는 [받기]가 없다.** 넘김 판정은 코어(`DailyMissionStatus.rows(serverNowMs:)`)가 하고, 이 파일은 그 줄만
 //    그린다 — 그래서 받을 수(머리의 "받을 보상 N개")에도 어제 줄이 끼지 않는다(인수인계 §5-1 · §5-9).
 // ⑤ **일일의 떠 있음 · 실패는 누적과 따로 센다**(인수인계 §5-8). 장부가 아예 두 벌이다(`MeStore.dailyMissionClaimsInFlight` ·
-//    `dailyMissionClaimFailedKeys` — `MeStoreAchievements.swift`) — 그래서 한쪽 [전부 받기]가 성공해도 다른 쪽 줄의 실패
+//    `dailyMissionClaimFailedKeys` — `MeStoreAchievements.swift`) — 그래서 한쪽 [모두 받기]가 성공해도 다른 쪽 줄의 실패
 //    문장은 그대로 선다. 이 파일은 그 값을 읽기만 한다(`store.dailyMissionClaimDidFail(_:)` · `isClaimingDailyMission(_:)`).
 
 // MARK: - 절을 어떻게 그리는가(순수)
@@ -58,6 +58,10 @@ package enum MeDailyMissionSection: Equatable, Sendable {
         if case .loaded(_, let count, _) = self { return count }
         return 0
     }
+
+    /// 머리에 [모두 받기]를 세우는가 — 받을 것이 **둘 이상**일 때만(하나뿐이면 그 줄 [받기]와 같은 일을 하는 버튼이 둘이 된다 —
+    /// 도전 미션 머리와 같은 규칙 · 맥 0.3.87 `MissionClaimAllOffer` 와 같은 문턱). 폰 1.0.19.
+    package var showsClaimAll: Bool { claimableCount > 1 }
 
     package var claimableRuby: Int {
         if case .loaded(_, _, let ruby) = self { return ruby }
@@ -135,7 +139,7 @@ struct MeDailyMissionsSection: View {
         let section = store.dailyMissionSection
         if case .loaded(let rows, let claimableCount, _) = section {
             VStack(alignment: .leading, spacing: MobileTheme.rowSpacing) {
-                header(claimableCount: claimableCount)
+                header(claimableCount: claimableCount, showsClaimAll: section.showsClaimAll)
                 VStack(alignment: .leading, spacing: MeAchievementLayout.rowSpacing) {
                     ForEach(rows) { MeDailyMissionRow(store: store, mission: $0) }
                 }
@@ -146,24 +150,37 @@ struct MeDailyMissionsSection: View {
         }
     }
 
-    /// 소제목 + 오른쪽 "받을 보상 N개", 그 아래 회색 한 줄 "자정에 초기화 · 안 받으면 사라져요".
-    /// [전부 받기] 는 **없다** — 일일은 줄마다 5루비라 한 번에 받는 것보다 그 줄에서 받는 손맛이 요점이다(맥도 없다).
+    /// 소제목 + 오른쪽 "받을 보상 N개" · [모두 받기], 그 아래 회색 한 줄 "자정에 초기화 · 안 받으면 사라져요".
+    /// [모두 받기]는 받을 것이 둘 이상일 때만 선다(`MeDailyMissionSection.showsClaimAll`). 폰 1.0.18 까지는 없었다 —
+    /// 제보(11-17, 서울 "미션 루비 모두 수령 기능 좀 추가해주세요") · 맥 0.3.87 · 대표 #d_xygj8oZRFlfH 로 1.0.19 에 넣는다.
+    /// 받는 길은 낱개와 같은 한 길(`claimAllDailyMissions` → `claimDailyMission(key: nil)` — 날 넘김 처리까지 같다).
     @ViewBuilder
-    private func header(claimableCount: Int) -> some View {
-        VStack(alignment: .leading, spacing: MobileTheme.space1) {
-            HStack(alignment: .firstTextBaseline, spacing: MobileTheme.space2) {
-                Text(MeText.dailyMissionsTitle)
-                    .font(.headline)
-                    .foregroundStyle(MobileTheme.label)
+    private func header(claimableCount: Int, showsClaimAll: Bool) -> some View {
+        let title = Text(MeText.dailyMissionsTitle)
+            .font(.headline)
+            .foregroundStyle(MobileTheme.label)
+            .accessibilityAddTraits(.isHeader)
+        let trailing = HStack(spacing: MobileTheme.space2) {
+            if let hint = MeText.claimPendingHint(claimableCount) {
+                Text(hint)
+                    .font(.footnote.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(MobileTheme.accent)
                     .lineLimit(1)
-                    .accessibilityAddTraits(.isHeader)
-                Spacer(minLength: MobileTheme.space1)
-                if let hint = MeText.claimPendingHint(claimableCount) {
-                    Text(hint)
-                        .font(.footnote.weight(.semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(MobileTheme.accent)
-                        .lineLimit(1)
+            }
+            if showsClaimAll { claimAllButton }
+        }
+        VStack(alignment: .leading, spacing: MobileTheme.space1) {
+            // 좁은 폭(큰 글자)에서는 도전 미션 머리처럼 오른쪽 묶음이 제목 아래로 내려간다.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: MobileTheme.space2) {
+                    title.lineLimit(1)
+                    Spacer(minLength: MobileTheme.space1)
+                    trailing
+                }
+                VStack(alignment: .leading, spacing: MobileTheme.space2) {
+                    title.fixedSize(horizontal: false, vertical: true)
+                    trailing
                 }
             }
             Text(MeText.dailyMissionsResetNote)
@@ -172,6 +189,14 @@ struct MeDailyMissionsSection: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
         }
+    }
+
+    private var claimAllButton: some View {
+        AingButton(MeText.claimAllButton, kind: .tinted, size: .sm,
+                   isBusy: store.isClaimingDailyMission(MeStore.achievementClaimAllSlot)) {
+            store.claimAllDailyMissions()
+        }
+        .accessibilityLabel(Text(MeText.claimAllAccessibility(store.dailyMissionClaimableRuby)))
     }
 }
 

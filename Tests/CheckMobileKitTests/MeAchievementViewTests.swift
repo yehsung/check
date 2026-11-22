@@ -308,9 +308,9 @@ struct MeAchievementViewTests {
 
     @Test("문구: [전부 받기] · '받을 수 있어요' — 그리고 미션 제목 · 보상 숫자는 여전히 서버 몫이다")
     func newCopy() throws {
-        #expect(MeText.claimAllButton == "전부 받기")
-        #expect(MeText.claimAllAccessibility(75) == "전부 받기, 루비 75개")
-        #expect(MeText.claimAllAccessibility(-1) == "전부 받기, 루비 0개")
+        #expect(MeText.claimAllButton == "모두 받기")
+        #expect(MeText.claimAllAccessibility(75) == "모두 받기, 루비 75개")
+        #expect(MeText.claimAllAccessibility(-1) == "모두 받기, 루비 0개")
         #expect(MeText.claimableMark == "받을 수 있어요")
         // 기존 낱말은 한 글자도 안 바뀌었다(맥과 한 벌).
         #expect(MeText.missionsTitle == "누적 미션" && MeText.claimButton == "받기" && MeText.claimedMark == "받음")

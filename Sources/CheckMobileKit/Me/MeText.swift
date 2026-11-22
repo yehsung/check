@@ -405,7 +405,8 @@ package enum MeText {
     package static let claimButton = "받기"
     /// 절 머리의 [전부 받기] — 받을 줄이 **둘 이상**일 때만 선다(하나뿐이면 그 줄의 [받기]와 같은 일을 하는 버튼이 둘이 된다).
     /// 맥 미션 화면에는 이 버튼이 없다(줄이 다섯 줄 창에 다 보인다) — 폰은 절이 스크롤 안이라 머리에서 한 번에 받게 한다.
-    package static let claimAllButton = "전부 받기"
+    /// 폰 1.0.19 부터 맥 0.3.87 과 같은 낱말 '모두 받기'(제보 원문 "모두 수령") — 일일 · 도전 두 묶음이 같은 버튼이다.
+    package static let claimAllButton = "모두 받기"
     /// 받은 줄의 표시(진행 숫자 자리). 체크 기호는 화면이 그린다(주간 칸 칩과 같은 관용구) — 글자는 "받음" 하나다
     /// (맥 `MissionCopy.claimedChip` · 주간 칩 꼬리 `weeklyGrantSuffix` 와 같은 낱말).
     package static let claimedMark = weeklyGrantSuffix

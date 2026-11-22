@@ -70,6 +70,8 @@ package final class MessagesStore {
     package private(set) var directoryLoaded = false
     package private(set) var directoryLoading = false
     package private(set) var directoryFailed = false
+    /// 사람 찾기 거르기 칸(폰 1.0.19 — `MessagesPresenceFilter`). 앱이 켜져 있는 동안 남고 로그아웃하면 전체.
+    package private(set) var directoryPresenceFilter: MessagesPresenceFilter = .all
 
     // MARK: 차단 · 신고 (앱스토어 1.2 — 규칙과 문구는 코어 `BlockReportRules`(맥과 한 벌), 동작은 `MessagesBlockStore.swift`)
 
@@ -214,6 +216,7 @@ package final class MessagesStore {
         directoryLoaded = false
         directoryLoading = false
         directoryFailed = false
+        directoryPresenceFilter = .all
         hiddenBlockedPeerIDs = []
         blockedPeople = []
         blocksLoaded = false
@@ -543,6 +546,19 @@ package final class MessagesStore {
         // 정렬 입력은 **언제나 명시적으로** 넘긴다(코어 `sortedForPokeDisplay` 의 기본값에 기대지 않는다 —
         // 0.3.65 에서 기본값이 빠지고 인자가 하나 더 붙는다).
         return MessagesDirectoryRules.filter(visible, query: query, unreadPeerIDs: sortUnreadPeerIDs)
+    }
+
+    /// 사람 찾기에 **보일 사람** — 이름 찾기(`filteredDirectory`) 결과에서 거르기 칸에 안 드는 사람을 뺀다(순서 그대로 · AND).
+    package func visibleDirectory(query: String) -> [PokeDirectoryEntry] {
+        let found = filteredDirectory(query: query)
+        let presence = directoryPresenceFilter
+        return presence == .all ? found : found.filter(presence.admits)
+    }
+
+    /// 거르기 칸 고르기. 같은 값은 쓰지 않는다(관찰 무효화로 시트 body 가 헛돌지 않게). 네트워크는 건드리지 않는다.
+    package func selectDirectoryPresenceFilter(_ filter: MessagesPresenceFilter) {
+        guard directoryPresenceFilter != filter else { return }
+        directoryPresenceFilter = filter
     }
 
     // MARK: - 화면 사건(탭 화면이 부른다)

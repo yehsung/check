@@ -16,7 +16,9 @@ struct MessagesNewConversationSheet: View {
     @State private var query = ""
 
     var body: some View {
-        let people = store.filteredDirectory(query: query)
+        // 이름 찾기 + 거르기 칸(폰 1.0.19 · 맥 0.3.87 '전체 · 근무중 · 자리비움') — 빼기만, 순서 그대로.
+        let people = store.visibleDirectory(query: query)
+        let presence = store.directoryPresenceFilter
         let working = people.filter(\.isWorking)
         let others = people.filter { !$0.isWorking }
         // 집중 중인 사람은 **한 번** 받아 줄마다 묻는다(`MessagesStore.focusedPeerIDs` — 줄마다 `isPeerFocused` 를 부르면 명부 둘을 줄 수만큼 다시 겹친다).
@@ -38,13 +40,18 @@ struct MessagesNewConversationSheet: View {
                     LoadingRow()
                         .cardSegmentRow(.single)
                 } else if people.isEmpty {
+                    if !store.directory.isEmpty { presenceFilterRow(presence) }
+                    // 칸 때문에 비었으면 칸의 말(맥과 같은 문구), 아니면 원래 말(빈 명부 · 이름 못 찾음).
+                    let isSearching = !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    let presenceEmpty = MessagesPresenceFilterText.empty(presence: presence, isSearching: isSearching)
                     EmptyStateView(
                         systemImage: "person.crop.circle.badge.questionmark",
-                        title: query.isEmpty ? "대화할 사람이 아직 없어요" : "‘\(query)’ 이름을 찾지 못했어요",
-                        message: query.isEmpty ? nil : "이름이나 초성(예: ㅎㄱ)으로 찾아보세요"
+                        title: presenceEmpty ?? (query.isEmpty ? "대화할 사람이 아직 없어요" : "‘\(query)’ 이름을 찾지 못했어요"),
+                        message: presenceEmpty == nil && !query.isEmpty ? "이름이나 초성(예: ㅎㄱ)으로 찾아보세요" : nil
                     )
                     .cardListPlainRow()
                 } else {
+                    presenceFilterRow(presence)
                     if !working.isEmpty {
                         group(title: "근무 중 \(working.count)", people: working, focused: focused, isFirst: true)
                     }
@@ -76,6 +83,22 @@ struct MessagesNewConversationSheet: View {
             .refreshable { store.refreshPeopleDirectories() }
         }
         .onAppear { store.loadDirectory() }
+    }
+
+    /// 거르기 칸 한 줄(검색 칸 아래 · 첫 묶음 위). 고른 칸은 스토어에 남는다(로그아웃하면 전체).
+    private func presenceFilterRow(_ presence: MessagesPresenceFilter) -> some View {
+        Picker(MessagesPresenceFilterText.groupLabel, selection: Binding(
+            get: { presence },
+            set: { store.selectDirectoryPresenceFilter($0) }
+        )) {
+            ForEach(MessagesPresenceFilter.allCases, id: \.self) { filter in
+                Text(filter.label).tag(filter)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel(Text(MessagesPresenceFilterText.groupLabel))
+        .padding(.horizontal, MobileTheme.titleMargin - MobileTheme.sideMargin)
+        .cardListPlainRow(top: 8, bottom: 6)
     }
 
     @ViewBuilder

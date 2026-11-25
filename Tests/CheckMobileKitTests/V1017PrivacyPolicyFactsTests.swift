@@ -26,7 +26,7 @@ struct V1017PrivacyPolicyFactsTests {
     static let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
     static func privacyLines() throws -> [String] {
-        let text = try String(contentsOf: root.appendingPathComponent("docs/privacy.md"), encoding: .utf8)
+        /* 지금 출시된 앱이 따르는 판(11-30까지 시행). 그룹 개편을 켜는 날 새 판 docs/privacy.md 로 옮긴다. */ let text = try String(contentsOf: root.appendingPathComponent("docs/privacy-2026-11-11.md"), encoding: .utf8)
         return text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     }
 

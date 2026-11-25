@@ -1771,7 +1771,7 @@ struct AILimitsMacUploadTests {
     @Test
     func uploadedColumnsMatchTheTwoPublicDocuments() throws {
         let root = try amRepositoryRoot()
-        let privacy = try String(contentsOf: root.appendingPathComponent("docs/privacy.md"), encoding: .utf8)
+        /* 지금 출시된 앱이 따르는 판(11-30까지 시행). 그룹 개편을 켜는 날 새 판 docs/privacy.md 로 옮긴다. */ let privacy = try String(contentsOf: root.appendingPathComponent("docs/privacy-2026-11-11.md"), encoding: .utf8)
         let internalDoc = try String(contentsOf: root.appendingPathComponent("docs/ai-limits.md"), encoding: .utf8)
 
         // 공개 약속의 **그 한 줄**만 본다 — 문서 어딘가에 글자가 있다는 것으로는 '약속했다'가 아니다.

@@ -636,7 +636,7 @@ func 처리방침이_신고_본문_스냅숏을_적는다() throws {
     #expect(!flat.contains("grant select, update, delete on public.content_reports"),
             "신고에 DELETE 를 열었다면 '기한 없이 남는다'가 아니다 — 처리방침 문장과 함께 이 테스트를 고쳐라")
 
-    let privacy = try String(contentsOf: try repositoryRoot().appendingPathComponent("docs/privacy.md"), encoding: .utf8)
+    /* 지금 출시된 앱이 따르는 판(11-30까지 시행). 그룹 개편을 켜는 날 새 판 docs/privacy.md 로 옮긴다. */ let privacy = try String(contentsOf: try repositoryRoot().appendingPathComponent("docs/privacy-2026-11-11.md"), encoding: .utf8)
     let lines = privacy.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
 
     let messageBullet = try #require(lines.first { $0.contains("1:1 메시지(") }, "처리방침에 1:1 메시지 항목이 없다")

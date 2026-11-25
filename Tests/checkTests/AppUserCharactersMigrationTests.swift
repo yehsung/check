@@ -285,7 +285,7 @@ func 처리방침은_착용_캐릭터가_아바타_자리에_보인다고_적는
     var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     var privacyURL: URL?
     while directory.path != "/" {
-        let candidate = directory.appendingPathComponent("docs/privacy.md")
+        /* 지금 출시된 앱이 따르는 판(11-30까지 시행). 그룹 개편을 켜는 날 새 판 docs/privacy.md 로 옮긴다. */ let candidate = directory.appendingPathComponent("docs/privacy-2026-11-11.md")
         if FileManager.default.fileExists(atPath: candidate.path) { privacyURL = candidate; break }
         directory = directory.deletingLastPathComponent()
     }
@@ -322,7 +322,7 @@ func 처리방침은_사진을_올린_사람의_착용값도_전달되고_사진
     var directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
     var privacyURL: URL?
     while directory.path != "/" {
-        let candidate = directory.appendingPathComponent("docs/privacy.md")
+        /* 지금 출시된 앱이 따르는 판(11-30까지 시행). 그룹 개편을 켜는 날 새 판 docs/privacy.md 로 옮긴다. */ let candidate = directory.appendingPathComponent("docs/privacy-2026-11-11.md")
         if FileManager.default.fileExists(atPath: candidate.path) { privacyURL = candidate; break }
         directory = directory.deletingLastPathComponent()
     }

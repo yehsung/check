@@ -551,7 +551,7 @@ import Testing
     @Test("문서 계약: 이용약관 페이지가 나가고(무관용 · 24시간 · 신고/차단 사용법 · 처리방침 링크) 지원 페이지가 그 자리를 알린다")
     func termsDocument() throws {
         let root = IntegrationContractTests.root
-        let terms = try String(contentsOf: root.appendingPathComponent("docs/terms.md"), encoding: .utf8)
+        /* 지금 출시된 앱이 따르는 판(11-30까지 시행). 그룹 개편을 켜는 날 새 판 docs/terms.md 로 옮긴다. */ let terms = try String(contentsOf: root.appendingPathComponent("docs/terms-2026-09-18.md"), encoding: .utf8)
         #expect(terms.contains("permalink: /terms"), "가입 화면 링크(/terms)와 페이지 주소가 갈렸다")
         #expect(terms.contains("아잉체크"), "약관이 앱 이름을 말하지 않는다")
         for word in ["괴롭힘", "혐오", "음란물", "스팸"] {

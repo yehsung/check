@@ -1,0 +1,10 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["MQ2KQK37WD.com.yehsung.aingcheck"],
+        "components": [{ "/": "/g/*", "comment": "그룹 초대 링크(DV-14)" }]
+      }
+    ]
+  }
+}

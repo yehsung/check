@@ -91,27 +91,30 @@ function privacyBlock(start: string): string {
   return rest.slice(0, end < 0 ? undefined : end).join('\n');
 }
 
-test('②-3 대국 게임 이름 — 처리방침과 이 페이지가 같은 게임을 말한다(지워지는 것 · 진행 중 판 정리)', () => {
+test('②-3 대국 게임 이름 — 처리방침과 이 페이지가 같은 갈래로 말한다(지워지는 것 · 진행 중 판 정리)', () => {
   const deleted = listBlock('DELETED');
   const also = listBlock('ALSO');
-  const policyDeleted = privacyBlock('지워지는 것:');
-  const policyAlso = privacyBlock('같이 처리되는 것:');
+  // 2026-12-01 판 처리방침은 계정 삭제 절을 굵은 머리(**지워지는 것** · **같이 처리되는 것**)로 쓰고, 1:1 판은 '1:1 대결'로 묶어 말한다.
+  const policyDeleted = privacyBlock('**지워지는 것**');
+  const policyAlso = privacyBlock('**같이 처리되는 것**');
   for (const g of [...DUEL_GAMES, ...GROUP_GAMES]) {
     assert.ok(deleted.includes(g), `페이지 지워지는 것에 '${g}'`);
     assert.ok(also.includes(g), `페이지 같이 처리되는 것에 '${g}'`);
-    assert.ok(policyDeleted.includes(g), `처리방침 지워지는 것에 '${g}'`);
-    assert.ok(policyAlso.includes(g), `처리방침 같이 처리되는 것에 '${g}'`);
   }
+  assert.ok(policyDeleted.includes('대결 기록'), '처리방침 지워지는 것에 대결 기록');
+  for (const g of GROUP_GAMES) assert.ok(policyAlso.includes(g), `처리방침 같이 처리되는 것에 '${g}'`);
   // 1:1 은 '진 것으로', 아잉 큐브는 '기권' — 두 문서가 같은 갈래로 말한다.
   const duelLine = also.split('\n').find((l) => l.includes('내가 진 것으로')) ?? '';
   for (const g of DUEL_GAMES) assert.ok(duelLine.includes(g), `페이지 1:1 정산 줄에 '${g}'`);
   assert.ok(also.split('\n').some((l) => l.includes('아잉 큐브') && l.includes('기권')), '페이지 아잉 큐브 기권 줄');
   const policyDuel = policyAlso.split('\n').find((l) => l.includes('내가 진 것으로')) ?? '';
-  for (const g of DUEL_GAMES) assert.ok(policyDuel.includes(g), `처리방침 1:1 정산 줄에 '${g}'`);
+  assert.ok(policyDuel.includes('1:1 대결'), '처리방침 1:1 정산 줄');
   assert.ok(policyAlso.split('\n').some((l) => l.includes('아잉 큐브') && l.includes('기권')), '처리방침 아잉 큐브 기권 줄');
   // 아잉 마작(폰 1.0.18)은 '자리 비움'으로 남은 셋이 끝까지 둔다 — 두 문서가 같은 갈래로 말한다.
   assert.ok(also.split('\n').some((l) => l.includes('아잉 마작') && l.includes('자리 비움')), '페이지 아잉 마작 자리 비움 줄');
   assert.ok(policyAlso.split('\n').some((l) => l.includes('아잉 마작') && l.includes('자리 비움')), '처리방침 아잉 마작 자리 비움 줄');
+  // 탈퇴자 메시지 한 달(MV-06)은 두 문서 모두에.
+  assert.ok(policyAlso.includes('한 달 동안 남긴 뒤'), '처리방침 탈퇴자 메시지 한 달');
   // 아잉 큐브의 남는 것(같은 판 다른 사람 기록 · 진행 기록)은 페이지 '남는 것'에도 있다.
   assert.ok(listBlock('KEPT').includes('아잉 큐브'), '페이지 남는 것에 아잉 큐브');
 });

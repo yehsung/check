@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.yehsung.aingcheck",
+      "sha256_cert_fingerprints": [
+        "0C:4D:18:8A:8A:1B:39:0F:F2:7B:45:51:17:AB:FE:20:05:60:F1:CC:B9:BE:41:67:39:F7:22:85:71:D2:F9:BE",
+        "9D:E5:59:76:BA:29:36:D3:0B:87:3D:09:71:98:5F:5F:97:B8:0B:6D:5D:FA:FB:EC:1B:99:BC:F0:0C:F6:6F:3C"
+      ]
+    }
+  }
+]

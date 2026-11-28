@@ -130,7 +130,7 @@ test('LINKS: 그룹·테스터 주소 0 · 스토어 주소(지역 코드 없음
     assert.ok(!src.includes('play.google.com'), `${path} 가 스토어 주소 글자를 쓴다`);
     if (src.includes('LINKS.androidStore')) users.push(path);
   }
-  assert.deepEqual(users.sort(), ['components/install/InstallChooser.tsx', 'components/ui/DownloadCTA.tsx', 'components/ui/PlayStoreBadge.tsx']);
+  assert.deepEqual(users.sort(), ['app/g/[code]/InviteActions.tsx', 'components/install/InstallChooser.tsx', 'components/ui/DownloadCTA.tsx', 'components/ui/PlayStoreBadge.tsx']);
 });
 
 test('선택 창 휴대폰 줄 글자 = ANDROID_COPY 를 가리킨다(정본 하나)', () => {

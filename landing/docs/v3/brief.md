@@ -434,3 +434,10 @@ check 개발 확인: 판 8(1.0.0) 11-20 밤 대한민국 100% 공개 · 스토�
   - 설치 선택 창: 링크 아닌 글자 대신 칩 `안드로이드`(`chooser-android` — 열면 창을 닫고 방아쇠로, 아이폰 칩과 같다). `.ic-soon` 은 지웠다.
 - llms.txt: `- Android: [Play 스토어](LINKS.androidStore) — {한 줄}`(iPhone 줄과 같은 꼴). JSON-LD 의 안드로이드 MobileApplication 은 이번엔 넣지 않았다(문구·링크만 — 넣을지는 따로).
 - `[ANDROID-LAUNCH]` 표식은 다 썼으니 지웠다. 내린 베타 안내(구글 그룹 · 테스터 주소 · '안드로이드 베타')는 여전히 화면 어디에도 없다(android.test · android-smoke 가 잰다).
+
+## 13. 그룹 초대 링크 `/g/<코드>` (구조 개편 DV-14, 2026-11-25)
+
+- 서버 렌더로 `team_preview(p_code)`(anon·읽기만)를 불러 그룹 이름·인원·주간 목표·승인제 여부를 보여 준다. 캐시하지 않고(코드는 바뀌고 만료된다) 검색에 올리지 않는다(noindex). 그룹 이름은 본문에만 — 제목·미리보기(OG)에는 싣지 않는다. 그룹 이름은 사람이 지은 글자라 시스템 글꼴로 그린다.
+- 기기별(첫 페인트 전 `data-platform`·`data-android` 로 CSS 가 고름): 아이폰 = App Store 배지 + 코드(Safari 스마트 배너가 이 주소를 앱에 넘김, 앱이 있으면 링크가 앱으로 바로 열림) · 안드로이드 = '앱에서 열기'(intent, 없으면 Play) + Play 배지 + 코드 · 컴퓨터 = 코드와 복사 + 'Mac용 다운로드' + 두 스토어(§12.8 짝 노출).
+- 상태 문구: 없는 코드 · 기간 지남 · 횟수 다 참 · 가득 참(이 넷은 코드를 숨김) · 그룹 기능이 곧 열림(켜는 날 전) · 불러오지 못함(코드는 보임).
+- 앱 열기 파일: `/.well-known/apple-app-site-association`(팀 ID·번들 `com.yehsung.aingcheck`, `/g/*`) · `/.well-known/assetlinks.json`(패키지 `com.yehsung.aingcheck` · Play 앱 서명 키·업로드 키 SHA-256, check 개발 11-26 값). 둘 다 `application/json`(vercel.json).
